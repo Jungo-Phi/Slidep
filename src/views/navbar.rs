@@ -15,6 +15,9 @@ pub fn Navbar() -> Element {
 
         div {
             id: "navbar",
+            h1 {
+                "Slidep!"
+            }
             Link {
                 to: Route::Home {},
                 "Home"

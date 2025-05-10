@@ -1,0 +1,11 @@
+C:\Users\arnol\Documents\slidep-alpha\slidep\target\debug\deps\libconvert_case-4ac0990b55af2047.rmeta: C:\Users\arnol\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\convert_case-0.6.0\src\lib.rs C:\Users\arnol\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\convert_case-0.6.0\src\case.rs C:\Users\arnol\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\convert_case-0.6.0\src\converter.rs C:\Users\arnol\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\convert_case-0.6.0\src\pattern.rs C:\Users\arnol\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\convert_case-0.6.0\src\segmentation.rs
+
+C:\Users\arnol\Documents\slidep-alpha\slidep\target\debug\deps\libconvert_case-4ac0990b55af2047.rlib: C:\Users\arnol\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\convert_case-0.6.0\src\lib.rs C:\Users\arnol\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\convert_case-0.6.0\src\case.rs C:\Users\arnol\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\convert_case-0.6.0\src\converter.rs C:\Users\arnol\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\convert_case-0.6.0\src\pattern.rs C:\Users\arnol\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\convert_case-0.6.0\src\segmentation.rs
+
+C:\Users\arnol\Documents\slidep-alpha\slidep\target\debug\deps\convert_case-4ac0990b55af2047.d: C:\Users\arnol\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\convert_case-0.6.0\src\lib.rs C:\Users\arnol\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\convert_case-0.6.0\src\case.rs C:\Users\arnol\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\convert_case-0.6.0\src\converter.rs C:\Users\arnol\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\convert_case-0.6.0\src\pattern.rs C:\Users\arnol\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\convert_case-0.6.0\src\segmentation.rs
+
+C:\Users\arnol\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\convert_case-0.6.0\src\lib.rs:
+C:\Users\arnol\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\convert_case-0.6.0\src\case.rs:
+C:\Users\arnol\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\convert_case-0.6.0\src\converter.rs:
+C:\Users\arnol\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\convert_case-0.6.0\src\pattern.rs:
+C:\Users\arnol\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\convert_case-0.6.0\src\segmentation.rs:

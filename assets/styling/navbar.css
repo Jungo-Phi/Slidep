@@ -1,6 +1,11 @@
 #navbar {
   display: flex;
   flex-direction: row;
+  align-items: center;
+}
+
+#navbar h1 {
+  padding: 20px;
 }
 
 #navbar a {

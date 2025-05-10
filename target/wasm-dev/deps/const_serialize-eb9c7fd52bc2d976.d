@@ -1,0 +1,10 @@
+C:\Users\arnol\Documents\slidep-alpha\slidep\target\wasm-dev\deps\libconst_serialize-eb9c7fd52bc2d976.rmeta: C:\Users\arnol\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\const-serialize-0.6.2\src\lib.rs C:\Users\arnol\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\const-serialize-0.6.2\src\const_buffers.rs C:\Users\arnol\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\const-serialize-0.6.2\src\const_vec.rs C:\Users\arnol\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\const-serialize-0.6.2\src\../README.md
+
+C:\Users\arnol\Documents\slidep-alpha\slidep\target\wasm-dev\deps\libconst_serialize-eb9c7fd52bc2d976.rlib: C:\Users\arnol\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\const-serialize-0.6.2\src\lib.rs C:\Users\arnol\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\const-serialize-0.6.2\src\const_buffers.rs C:\Users\arnol\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\const-serialize-0.6.2\src\const_vec.rs C:\Users\arnol\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\const-serialize-0.6.2\src\../README.md
+
+C:\Users\arnol\Documents\slidep-alpha\slidep\target\wasm-dev\deps\const_serialize-eb9c7fd52bc2d976.d: C:\Users\arnol\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\const-serialize-0.6.2\src\lib.rs C:\Users\arnol\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\const-serialize-0.6.2\src\const_buffers.rs C:\Users\arnol\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\const-serialize-0.6.2\src\const_vec.rs C:\Users\arnol\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\const-serialize-0.6.2\src\../README.md
+
+C:\Users\arnol\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\const-serialize-0.6.2\src\lib.rs:
+C:\Users\arnol\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\const-serialize-0.6.2\src\const_buffers.rs:
+C:\Users\arnol\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\const-serialize-0.6.2\src\const_vec.rs:
+C:\Users\arnol\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\const-serialize-0.6.2\src\../README.md:
