@@ -2349,6 +2349,9 @@ name = "kinematics"
 version = "0.1.0"
 dependencies = [
  "dioxus",
+ "dioxus-web",
+ "wasm-bindgen",
+ "web-sys",
 ]
 
 [[package]]

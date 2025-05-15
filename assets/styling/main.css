@@ -1,8 +1,8 @@
 body {
-    background-color: #0f1116;
-    color: #ffffff;
+    background-color: #ffedc6;
+    color: #001d59;
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    margin: 20px;
+    margin: 0px;
 }
 
 #hero {
@@ -23,17 +23,18 @@ body {
 }
 
 #links a {
-    color: white;
+    color: #001d59;
+    background: #ffbe80;
     text-decoration: none;
     margin-top: 20px;
     margin: 10px 0px;
-    border: white 1px solid;
+    border: black 1px solid;
     border-radius: 5px;
     padding: 10px;
 }
 
 #links a:hover {
-    background-color: #1f1f1f;
+    background-color: #ea4600;
     cursor: pointer;
 }
 
