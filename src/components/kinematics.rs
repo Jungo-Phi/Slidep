@@ -75,8 +75,7 @@ pub fn Kinematics() -> Element {
                         let rot = rot.then_rotate(-angle);
                         let pos: Point2D<f64, ElementSpace> = rot.transform_point(start_pos);
                         rsx! {
-                            rect { x: pos.x, y: pos.y, width: w, height: 20, fill: "#b7e2ff", stroke: "#001d59", stroke_width: 2, transform: "rotate({angle.to_degrees()})" }
-                            line { x1: start_pos.x, y1: start_pos.y, x2: mouse_pos().x, y2: mouse_pos().y, style: "stroke:red;stroke-width:2" }
+                            rect { x: pos.x, y: pos.y - 10., width: w, height: 20, fill: "#b7e2ff", stroke: "#001d59", stroke_width: 2, transform: "rotate({angle.to_degrees()})" }
                         }
                     } else {
                         rsx! {
