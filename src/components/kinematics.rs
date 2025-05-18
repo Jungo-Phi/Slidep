@@ -53,6 +53,15 @@ impl KinSpace {
 }
 
 
+fn close_to_node(pos: Point2D<f64, ElementSpace>) -> Option<usize> {
+    let nodes = use_context::<KinSpace>().nodes;
+    for (node, node_pos) in nodes.iter().enumerate() {
+        if node_pos.distance_to(pos) < 12. { return Some(node); }
+    }
+    return None;
+}
+
+
 fn place_objects(mut mode: Signal<Mode>, mouse_pos: Point2D<f64, ElementSpace>) -> Element {
     let mut nodes = use_context::<KinSpace>().nodes;
     let mut beams = use_context::<KinSpace>().beams;
@@ -71,12 +80,18 @@ fn place_objects(mut mode: Signal<Mode>, mouse_pos: Point2D<f64, ElementSpace>) 
             }
         }
         Mode::PlacingBeamStart => {
+            let mut pos = mouse_pos;
             rsx! {
+                {
+                    if let Some(node) = close_to_node(mouse_pos) {
+                        pos = nodes.read()[node];
+                    }
+                }
                 rect {
                     onmousedown: move |event: MouseEvent| { if event.held_buttons() == MouseButton::Primary {
                         mode.set(Mode::PlacingBeamEnd { start: mouse_pos });
                     } },
-                    x: mouse_pos.x - 4., y: mouse_pos.y - 4., width: 8, height: 8, fill: "#b7e2ff", stroke: "#001d59", stroke_width: 2
+                    x: pos.x - 4., y: pos.y - 4., width: 8, height: 8, fill: "#b7e2ff", stroke: "#001d59", stroke_width: 2
                 }
             }
         }
@@ -100,17 +115,6 @@ fn place_objects(mut mode: Signal<Mode>, mouse_pos: Point2D<f64, ElementSpace>) 
 }
 
 
-fn draw_objects() -> Element {
-    let nodes = use_context::<KinSpace>().nodes;
-    let beams = use_context::<KinSpace>().beams;
-    
-    rsx!{
-        for (start_node, end_node) in beams().iter() {
-            {draw_beam(nodes()[*start_node], nodes()[*end_node])}
-        }
-    }
-}
-
 fn draw_beam(start: Point2D<f64, ElementSpace>, end: Point2D<f64, ElementSpace>) -> Element {
     let delta = end - start;
     let angle = delta.angle_from_x_axis();
@@ -133,8 +137,10 @@ pub fn Kinematics() -> Element {
     
     use_effect(move || {
         let keydown_handler = Closure::wrap(Box::new(move |event: web_sys::KeyboardEvent| {
-            // debug.set(format!("keycode:{:?} mod:{:?}", event.code(), event.modifiers()));
-            debug.set(format!("Key pressed: {} {}", event.code(), event.composed()));
+            debug.set(format!("Key pressed: {}", event.code()));
+            if !event.ctrl_key() {
+                if event.code() == "Escape" { mode.set(Mode::Idle) }
+            }
         }) as Box<dyn FnMut(_)>);
         
         web_sys::window()
@@ -145,10 +151,9 @@ pub fn Kinematics() -> Element {
         (|| {})()
     });
     
-    
     rsx! {
         div { dir: "ltr", fill: "#ffbe80",
-            button { onclick: move |_| { mode.set(Mode::Idle) }, "Escape" }
+            button { onclick: move |_| { }, "Clear all" }
             button { onclick: move |_| { mode.set(Mode::PlacingPivot) }, "Pivot" }
             button { onclick: move |_| { mode.set(Mode::PlacingSlider) }, "Slider" }
             button { onclick: move |_| { mode.set(Mode::PlacingGround) }, "Ground" }
