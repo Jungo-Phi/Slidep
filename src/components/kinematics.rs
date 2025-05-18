@@ -1,14 +1,20 @@
 use dioxus::prelude::*;
 use dioxus_elements::geometry::ElementSpace;
 use dioxus_elements::geometry::euclid::{Point2D, Transform2D, Angle};
+use dioxus_elements::input_data::MouseButton;
+
+use dioxus::web::WebEventExt;
+use wasm_bindgen::prelude::*;
 
 
+#[derive(Clone)]
 enum Mode {
     Idle,
     PlacingPivot,
     PlacingSlider,
     PlacingGround,
-    PlacingBeam { pos: Option<Point2D<f64, ElementSpace>> },
+    PlacingBeamStart,
+    PlacingBeamEnd { start: Point2D<f64, ElementSpace> },
 }
 
 
@@ -21,14 +27,100 @@ enum KinElement {
 
 struct WorldSpace;
 
+#[derive(Copy, Clone)]
 struct KinSpace {
-    nodes: Vec<Point2D<f64, WorldSpace>>,
-    beams: Vec<(usize, usize)>, // (node, node)
-    coincidences: Vec<(usize, usize)>, // (node, beam)
-    fixations: Vec<(usize, usize)>, // (beam, beam)
-    sliders: Vec<(usize, Vec<usize>)>, // (node, beam)
-    pivots: Vec<(usize, Vec<usize>)>, // (node, beams)
-    grounds: Vec<(usize, KinElement, usize)>, // (node, kin:element+id)
+    nodes: Signal<Vec<Point2D<f64, ElementSpace>>>,
+    beams: Signal<Vec<(usize, usize)>>, // (node, node)
+    coincidences: Signal<Vec<(usize, usize)>>, // (node, beam)
+    fixations: Signal<Vec<(usize, usize)>>, // (beam, beam)
+    sliders: Signal<Vec<(usize, Vec<usize>)>>, // (node, beam)
+    pivots: Signal<Vec<(usize, Vec<usize>)>>, // (node, beams)
+    grounds: Signal<Vec<(usize, KinElement, usize)>>, // (node, kin:element+id)
+}
+
+impl KinSpace {
+    fn new() -> Self {
+        Self {
+            nodes: Signal::new(Vec::new()),
+            beams: Signal::new(Vec::new()),
+            coincidences: Signal::new(Vec::new()),
+            fixations: Signal::new(Vec::new()),
+            sliders: Signal::new(Vec::new()),
+            pivots: Signal::new(Vec::new()),
+            grounds: Signal::new(Vec::new()),
+        }
+    }
+}
+
+
+fn place_objects(mut mode: Signal<Mode>, mouse_pos: Point2D<f64, ElementSpace>) -> Element {
+    let mut nodes = use_context::<KinSpace>().nodes;
+    let mut beams = use_context::<KinSpace>().beams;
+    
+    match mode() {
+        Mode::PlacingPivot => {
+            rsx! {
+                circle { cx: mouse_pos.x, cy: mouse_pos.y, r: 8, fill: "#ffbe80", stroke: "#001d59", stroke_width: 2 }
+                circle { cx: mouse_pos.x, cy: mouse_pos.y, r: 4, fill: "#ffedc6", stroke: "#001d59", stroke_width: 2 }
+            }
+        }
+        Mode::PlacingSlider => {
+            rsx! {
+                rect { x: mouse_pos.x - 13., y: mouse_pos.y - 7., width: 26, height: 14, fill: "#ffbe80", stroke: "#001d59", stroke_width: 2, rx: 2 }
+                rect { x: mouse_pos.x - 8., y: mouse_pos.y - 3., width:16, height: 6, fill: "#ffedc6", stroke: "#001d59", stroke_width: 2, rx: 1 }
+            }
+        }
+        Mode::PlacingBeamStart => {
+            rsx! {
+                rect {
+                    onmousedown: move |event: MouseEvent| { if event.held_buttons() == MouseButton::Primary {
+                        mode.set(Mode::PlacingBeamEnd { start: mouse_pos });
+                    } },
+                    x: mouse_pos.x - 4., y: mouse_pos.y - 4., width: 8, height: 8, fill: "#b7e2ff", stroke: "#001d59", stroke_width: 2
+                }
+            }
+        }
+        Mode::PlacingBeamEnd { start } => {
+            let delta = mouse_pos - start;
+            let angle = delta.angle_from_x_axis();
+            let pos: Point2D<f64, ElementSpace> = Transform2D::new(1., 0., 0., 1., 0., 0.).then_rotate(-angle).transform_point(start);
+            rsx! {
+                rect {
+                    onmousedown: move |event: MouseEvent| { if event.held_buttons() == MouseButton::Primary {
+                        mode.set(Mode::PlacingBeamStart);
+                        beams.push((nodes.len(), nodes.len() + 1));
+                        nodes.push(start);
+                        nodes.push(mouse_pos);
+                    } },
+                    x: pos.x, y: pos.y - 4., width: start.distance_to(mouse_pos), height: 8, fill: "#b7e2ff", stroke: "#001d59", stroke_width: 2, transform: "rotate({angle.to_degrees()})" }
+            }
+        }
+        _ => rsx! {}
+    }
+}
+
+
+fn draw_objects() -> Element {
+    let nodes = use_context::<KinSpace>().nodes;
+    let beams = use_context::<KinSpace>().beams;
+    
+    rsx!{
+        for (start_node, end_node) in beams().iter() {
+            {draw_beam(nodes()[*start_node], nodes()[*end_node])}
+        }
+    }
+}
+
+fn draw_beam(start: Point2D<f64, ElementSpace>, end: Point2D<f64, ElementSpace>) -> Element {
+    let delta = end - start;
+    let angle = delta.angle_from_x_axis();
+    let pos: Point2D<f64, ElementSpace> = Transform2D::new(1., 0., 0., 1., 0., 0.).then_rotate(-angle).transform_point(start);
+    
+    rsx!{
+        rect {
+            x: pos.x, y: pos.y - 4., width: start.distance_to(end), height: 8, fill: "#b7e2ff", stroke: "#001d59", stroke_width: 2, transform: "rotate({angle.to_degrees()})"
+        }
+    }
 }
 
 
@@ -37,53 +129,44 @@ pub fn Kinematics() -> Element {
     let mut debug = use_signal(|| "".to_string());
     let mut mode = use_signal(|| Mode::Idle);
     let mut mouse_pos = use_signal(|| Point2D::zero());
+    let kin_space = use_context_provider(|| KinSpace::new());
+    
+    use_effect(move || {
+        let keydown_handler = Closure::wrap(Box::new(move |event: web_sys::KeyboardEvent| {
+            // debug.set(format!("keycode:{:?} mod:{:?}", event.code(), event.modifiers()));
+            debug.set(format!("Key pressed: {} {}", event.code(), event.composed()));
+        }) as Box<dyn FnMut(_)>);
+        
+        web_sys::window()
+            .unwrap()
+            .add_event_listener_with_callback("keydown", keydown_handler.as_ref().unchecked_ref())
+            .unwrap();
+        keydown_handler.forget();
+        (|| {})()
+    });
+    
     
     rsx! {
-        div { dir: "ltr",
+        div { dir: "ltr", fill: "#ffbe80",
             button { onclick: move |_| { mode.set(Mode::Idle) }, "Escape" }
             button { onclick: move |_| { mode.set(Mode::PlacingPivot) }, "Pivot" }
             button { onclick: move |_| { mode.set(Mode::PlacingSlider) }, "Slider" }
             button { onclick: move |_| { mode.set(Mode::PlacingGround) }, "Ground" }
-            button { onclick: move |_| { mode.set(Mode::PlacingBeam { pos: Some(Point2D::new(500., 300.)) }) }, "Beam" }
+            button { onclick: move |_| { mode.set(Mode::PlacingBeamStart) }, "Beam" }
             " debug: {debug}"
         }
-        svg {
-            onmousemove: move |event: MouseEvent| { mouse_pos.set(event.element_coordinates()) },
-            onkeypress: move |event: KeyboardEvent| { if event.key() == Key::Escape { mode.set(Mode::Idle) }; debug.set(format!("{:?}", event)) },
-            width: "1200", height: "600",
-            rect { width: "100%", height: "100%", fill: "none", stroke: "#001d59" }
-            circle { cx: 500, cy: 620, r: 50, fill: "#db5000" }
-            match *mode.read() {
-                Mode::PlacingPivot => {
-                    rsx! {
-                        circle { cx: mouse_pos().x, cy: mouse_pos().y, r: 8, fill: "#ffbe80", stroke: "#001d59", stroke_width: 2 }
-                        circle { cx: mouse_pos().x, cy: mouse_pos().y, r: 4, fill: "#ffedc6", stroke: "#001d59", stroke_width: 2 }
-                    }
+        div{ tabindex: "0", style: "height: 100vh; outline: none;",
+            svg { width: "100%", height: "100%",
+                onmousemove: move |event: MouseEvent| {
+                    mouse_pos.set(event.element_coordinates());
+                },
+                circle { cx: 500, cy: 620, r: 50, fill: "#db5000" }
+                
+                for (start_node, end_node) in kin_space.beams.read().iter() {
+                    {draw_beam(kin_space.nodes.read()[*start_node], kin_space.nodes.read()[*end_node])}
                 }
-                Mode::PlacingSlider => {
-                    rsx! {
-                        rect { x: mouse_pos().x - 13., y: mouse_pos().y - 7., width: 26, height: 14, fill: "#ffbe80", stroke: "#001d59", stroke_width: 2, rx: 2 }
-                        rect { x: mouse_pos().x - 8., y: mouse_pos().y - 3., width:16, height: 6, fill: "#ffedc6", stroke: "#001d59", stroke_width: 2, rx: 1 }
-                    }
-                }
-                Mode::PlacingBeam { pos } => {
-                    if let Some(start_pos) = pos {
-                        let delta = mouse_pos() - start_pos;
-                        let w = mouse_pos().distance_to(start_pos);
-                        let angle = delta.angle_from_x_axis();
-                        let rot = Transform2D::new(1., 0., 0., 1., 0., 0.);
-                        let rot = rot.then_rotate(-angle);
-                        let pos: Point2D<f64, ElementSpace> = rot.transform_point(start_pos);
-                        rsx! {
-                            rect { x: pos.x, y: pos.y - 10., width: w, height: 20, fill: "#b7e2ff", stroke: "#001d59", stroke_width: 2, transform: "rotate({angle.to_degrees()})" }
-                        }
-                    } else {
-                        rsx! {
-                            rect { x: mouse_pos().x - 4., y: mouse_pos().y - 4., width: 8, height: 8, fill: "#b7e2ff", stroke: "#001d59", stroke_width: 2 }
-                        }
-                    }
-                }
-                _ => rsx! {}
+                
+                { place_objects(mode, mouse_pos()) }
             }
         }
     }

@@ -2,7 +2,9 @@ body {
     background-color: #ffedc6;
     color: #001d59;
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    margin: 0px;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
 }
 
 #hero {
