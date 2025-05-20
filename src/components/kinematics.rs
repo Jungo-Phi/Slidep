@@ -65,6 +65,7 @@ fn close_to_node(pos: Point2D<f64, ElementSpace>) -> Option<usize> {
 fn place_objects(mut mode: Signal<Mode>, mouse_pos: Point2D<f64, ElementSpace>) -> Element {
     let mut nodes = use_context::<KinSpace>().nodes;
     let mut beams = use_context::<KinSpace>().beams;
+    let mut pivots = use_context::<KinSpace>().pivots;
     
     match mode() {
         Mode::PlacingPivot => {
@@ -80,34 +81,54 @@ fn place_objects(mut mode: Signal<Mode>, mouse_pos: Point2D<f64, ElementSpace>) 
             }
         }
         Mode::PlacingBeamStart => {
-            let mut pos = mouse_pos;
+            let pos = if let Some(node) = close_to_node(mouse_pos) {
+                nodes.read()[node]
+            } else { mouse_pos };
             rsx! {
-                {
-                    if let Some(node) = close_to_node(mouse_pos) {
-                        pos = nodes.read()[node];
-                    }
-                }
                 rect {
                     onmousedown: move |event: MouseEvent| { if event.held_buttons() == MouseButton::Primary {
-                        mode.set(Mode::PlacingBeamEnd { start: mouse_pos });
+                        mode.set(Mode::PlacingBeamEnd { start: pos });
                     } },
                     x: pos.x - 4., y: pos.y - 4., width: 8, height: 8, fill: "#b7e2ff", stroke: "#001d59", stroke_width: 2
                 }
             }
         }
         Mode::PlacingBeamEnd { start } => {
-            let delta = mouse_pos - start;
+            let end = if let Some(node) = close_to_node(mouse_pos) {
+                nodes.read()[node]
+            } else { mouse_pos };
+            let delta = end - start;
             let angle = delta.angle_from_x_axis();
-            let pos: Point2D<f64, ElementSpace> = Transform2D::new(1., 0., 0., 1., 0., 0.).then_rotate(-angle).transform_point(start);
+            let rot_pos: Point2D<f64, ElementSpace> = Transform2D::new(1., 0., 0., 1., 0., 0.).then_rotate(-angle).transform_point(start);
             rsx! {
                 rect {
                     onmousedown: move |event: MouseEvent| { if event.held_buttons() == MouseButton::Primary {
+                        let start_id = if let Some(start_id) = nodes().iter().position(|&pos| pos == start) {
+                            let mut adjascent_beams = vec![beams.len()];
+                            for (beam_id, beam) in beams.iter().enumerate() {
+                                if (start_id == beam.0) || (start_id == beam.1) { adjascent_beams.push(beam_id) }
+                            }
+                            pivots.push((start_id, adjascent_beams));
+                            start_id
+                        } else {
+                            nodes.push(start);
+                            nodes.len() - 1
+                        };
+                        let end_id = if let Some(end_id) = nodes().iter().position(|&pos| pos == end) {
+                            let mut adjascent_beams = vec![beams.len()];
+                            for (beam_id, beam) in beams.iter().enumerate() {
+                                if (end_id == beam.0) || (end_id == beam.1) { adjascent_beams.push(beam_id) }
+                            }
+                            pivots.push((end_id, adjascent_beams));
+                            end_id
+                        } else {
+                            nodes.push(end);
+                            nodes.len() - 1
+                        };
+                        beams.push((start_id, end_id));
                         mode.set(Mode::PlacingBeamStart);
-                        beams.push((nodes.len(), nodes.len() + 1));
-                        nodes.push(start);
-                        nodes.push(mouse_pos);
                     } },
-                    x: pos.x, y: pos.y - 4., width: start.distance_to(mouse_pos), height: 8, fill: "#b7e2ff", stroke: "#001d59", stroke_width: 2, transform: "rotate({angle.to_degrees()})" }
+                    x: rot_pos.x, y: rot_pos.y - 4., width: start.distance_to(end), height: 8, fill: "#b7e2ff", stroke: "#001d59", stroke_width: 2, transform: "rotate({angle.to_degrees()})" }
             }
         }
         _ => rsx! {}
@@ -119,11 +140,18 @@ fn draw_beam(start: Point2D<f64, ElementSpace>, end: Point2D<f64, ElementSpace>)
     let delta = end - start;
     let angle = delta.angle_from_x_axis();
     let pos: Point2D<f64, ElementSpace> = Transform2D::new(1., 0., 0., 1., 0., 0.).then_rotate(-angle).transform_point(start);
-    
     rsx!{
         rect {
             x: pos.x, y: pos.y - 4., width: start.distance_to(end), height: 8, fill: "#b7e2ff", stroke: "#001d59", stroke_width: 2, transform: "rotate({angle.to_degrees()})"
         }
+    }
+}
+
+
+fn draw_pivot(pos: Point2D<f64, ElementSpace>) -> Element {
+    rsx! {
+        circle { cx: pos.x, cy: pos.y, r: 8, fill: "#ffbe80", stroke: "#001d59", stroke_width: 2 }
+        circle { cx: pos.x, cy: pos.y, r: 4, fill: "#b7e2ff", stroke: "#001d59", stroke_width: 2 }
     }
 }
 
@@ -137,7 +165,7 @@ pub fn Kinematics() -> Element {
     
     use_effect(move || {
         let keydown_handler = Closure::wrap(Box::new(move |event: web_sys::KeyboardEvent| {
-            debug.set(format!("Key pressed: {}", event.code()));
+            debug.set(format!("Key pressed: {} - nodes:{:?} beams:{:?}", event.code(), kin_space.nodes.read(), kin_space.beams.read()));
             if !event.ctrl_key() {
                 if event.code() == "Escape" { mode.set(Mode::Idle) }
             }
@@ -169,6 +197,10 @@ pub fn Kinematics() -> Element {
                 
                 for (start_node, end_node) in kin_space.beams.read().iter() {
                     {draw_beam(kin_space.nodes.read()[*start_node], kin_space.nodes.read()[*end_node])}
+                }
+                
+                for (node, beams) in kin_space.pivots.read().iter() {
+                    {draw_pivot(kin_space.nodes.read()[*node])}
                 }
                 
                 { place_objects(mode, mouse_pos()) }
