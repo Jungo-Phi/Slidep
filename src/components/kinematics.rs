@@ -1,13 +1,17 @@
 use dioxus::prelude::*;
 use dioxus_elements::geometry::ElementSpace;
-use dioxus_elements::geometry::euclid::{Point2D, Transform2D, Angle};
+use dioxus_elements::geometry::euclid::{Angle, Point2D, Transform2D, Vector2D};
 use dioxus_elements::input_data::MouseButton;
 
 use dioxus::web::WebEventExt;
 use wasm_bindgen::prelude::*;
 
 
-#[derive(Clone)]
+// --  BLUE  --  fill: "#b7e2ff"; stroke: "#001d59"
+// -- ORANGE --  fill: "#ffbe80"; stroke: "#db5000"
+
+
+#[derive(Debug, Clone)]
 enum Mode {
     Idle,
     PlacingPivot,
@@ -15,6 +19,7 @@ enum Mode {
     PlacingGround,
     PlacingBeamStart,
     PlacingBeamEnd { start: Point2D<f64, ElementSpace> },
+    Moving { beam: usize, lerp_to_start: Vector2D<f64, ElementSpace>, lerp_to_end: Vector2D<f64, ElementSpace> },
 }
 
 
@@ -29,8 +34,9 @@ struct WorldSpace;
 
 #[derive(Copy, Clone)]
 struct KinSpace {
+    mode: Signal<Mode>,
     nodes: Signal<Vec<Point2D<f64, ElementSpace>>>,
-    beams: Signal<Vec<(usize, usize)>>, // (node, node)
+    beams: Signal<Vec<(usize, usize, f64)>>, // (start_node, end_node, length)
     coincidences: Signal<Vec<(usize, usize)>>, // (node, beam)
     fixations: Signal<Vec<(usize, usize)>>, // (beam, beam)
     sliders: Signal<Vec<(usize, Vec<usize>)>>, // (node, beam)
@@ -41,6 +47,7 @@ struct KinSpace {
 impl KinSpace {
     fn new() -> Self {
         Self {
+            mode: Signal::new(Mode::Idle),
             nodes: Signal::new(Vec::new()),
             beams: Signal::new(Vec::new()),
             coincidences: Signal::new(Vec::new()),
@@ -62,7 +69,8 @@ fn close_to_node(pos: Point2D<f64, ElementSpace>) -> Option<usize> {
 }
 
 
-fn place_objects(mut mode: Signal<Mode>, mouse_pos: Point2D<f64, ElementSpace>) -> Element {
+fn place_objects(mouse_pos: Point2D<f64, ElementSpace>) -> Element {
+    let mut mode = use_context::<KinSpace>().mode;
     let mut nodes = use_context::<KinSpace>().nodes;
     let mut beams = use_context::<KinSpace>().beams;
     let mut pivots = use_context::<KinSpace>().pivots;
@@ -125,7 +133,7 @@ fn place_objects(mut mode: Signal<Mode>, mouse_pos: Point2D<f64, ElementSpace>) 
                             nodes.push(end);
                             nodes.len() - 1
                         };
-                        beams.push((start_id, end_id));
+                        beams.push((start_id, end_id, (end - start).length()));
                         mode.set(Mode::PlacingBeamStart);
                     } },
                     x: rot_pos.x, y: rot_pos.y - 4., width: start.distance_to(end), height: 8, fill: "#b7e2ff", stroke: "#001d59", stroke_width: 2, transform: "rotate({angle.to_degrees()})" }
@@ -136,12 +144,29 @@ fn place_objects(mut mode: Signal<Mode>, mouse_pos: Point2D<f64, ElementSpace>) 
 }
 
 
-fn draw_beam(start: Point2D<f64, ElementSpace>, end: Point2D<f64, ElementSpace>) -> Element {
+fn draw_beam(beam: usize, mouse_pos: Point2D<f64, ElementSpace>) -> Element {
+    let mut mode = use_context::<KinSpace>().mode;
+    let mut nodes = use_context::<KinSpace>().nodes;
+    let mut beams = use_context::<KinSpace>().beams;
+    
+    let (start_node, end_node, length) = beams()[beam];
+    let start = nodes()[start_node];
+    let end = nodes()[end_node];
+    
     let delta = end - start;
     let angle = delta.angle_from_x_axis();
     let pos: Point2D<f64, ElementSpace> = Transform2D::new(1., 0., 0., 1., 0., 0.).then_rotate(-angle).transform_point(start);
     rsx!{
         rect {
+            onmousedown: move |_event: MouseEvent| { {
+                let d1 = (nodes()[start_node] - mouse_pos).length();
+                let d2 = (nodes()[end_node] - mouse_pos).length();
+                let t = d1 / (d1 + d2);
+                let lerp_to_start = nodes()[start_node] - mouse_pos; // nodes()[start_node].lerp(nodes()[end_node], t).to_vector();
+                let lerp_to_end = nodes()[end_node] - mouse_pos; // nodes()[start_node].lerp(nodes()[end_node], 1. - t).to_vector();
+                mode.set(Mode::Moving{ beam, lerp_to_start, lerp_to_end });
+            } },
+            onmouseup: move |_event: MouseEvent| {mode.set(Mode::Idle) },
             x: pos.x, y: pos.y - 4., width: start.distance_to(end), height: 8, fill: "#b7e2ff", stroke: "#001d59", stroke_width: 2, transform: "rotate({angle.to_degrees()})"
         }
     }
@@ -156,18 +181,40 @@ fn draw_pivot(pos: Point2D<f64, ElementSpace>) -> Element {
 }
 
 
+fn moving(mouse_pos: Point2D<f64, ElementSpace>) {
+    let mode = use_context::<KinSpace>().mode;
+    let mut nodes = use_context::<KinSpace>().nodes;
+    let beams = use_context::<KinSpace>().beams;
+    
+    if let Mode::Moving { beam, lerp_to_start, lerp_to_end } = mode() {
+        let (start_node, end_node, length) = beams()[beam];
+        nodes.with_mut(|nodes_mut| {
+            //let x = nodes_mut;
+            let x = nodes_mut[start_node] - mouse_pos;
+            nodes_mut[start_node] = mouse_pos + x; //lerp_to_start;
+            nodes_mut[end_node] = mouse_pos + lerp_to_end;
+            } );
+    }
+}
+
+
+fn move_node(node: usize, pos: Point2D<f64, ElementSpace>) {
+    let mut nodes = use_context::<KinSpace>().nodes;
+    nodes.with_mut(|nodes_mut| { nodes_mut[node] = pos; } );
+}
+
+
 #[component]
 pub fn Kinematics() -> Element {
     let mut debug = use_signal(|| "".to_string());
-    let mut mode = use_signal(|| Mode::Idle);
     let mut mouse_pos = use_signal(|| Point2D::zero());
-    let kin_space = use_context_provider(|| KinSpace::new());
+    let mut kin_space = use_context_provider(|| KinSpace::new());
     
     use_effect(move || {
         let keydown_handler = Closure::wrap(Box::new(move |event: web_sys::KeyboardEvent| {
-            debug.set(format!("Key pressed: {} - nodes:{:?} beams:{:?}", event.code(), kin_space.nodes.read(), kin_space.beams.read()));
+            //debug.set(format!("Key pressed: {} - nodes:{:?} beams:{:?}", event.code(), kin_space.nodes.read(), kin_space.beams.read()));
             if !event.ctrl_key() {
-                if event.code() == "Escape" { mode.set(Mode::Idle) }
+                if event.code() == "Escape" { kin_space.mode.set(Mode::Idle) }
             }
         }) as Box<dyn FnMut(_)>);
         
@@ -179,13 +226,21 @@ pub fn Kinematics() -> Element {
         (|| {})()
     });
     
+    use_effect(move || {
+        debug.set(format!("Mode: {:?}", kin_space.mode));
+    });
+    
+    use_effect(move || {
+        moving(mouse_pos());
+    });
+    
     rsx! {
         div { dir: "ltr", fill: "#ffbe80",
             button { onclick: move |_| { }, "Clear all" }
-            button { onclick: move |_| { mode.set(Mode::PlacingPivot) }, "Pivot" }
-            button { onclick: move |_| { mode.set(Mode::PlacingSlider) }, "Slider" }
-            button { onclick: move |_| { mode.set(Mode::PlacingGround) }, "Ground" }
-            button { onclick: move |_| { mode.set(Mode::PlacingBeamStart) }, "Beam" }
+            button { onclick: move |_| { kin_space.mode.set(Mode::PlacingPivot) }, "Pivot" }
+            button { onclick: move |_| { kin_space.mode.set(Mode::PlacingSlider) }, "Slider" }
+            button { onclick: move |_| { kin_space.mode.set(Mode::PlacingGround) }, "Ground" }
+            button { onclick: move |_| { kin_space.mode.set(Mode::PlacingBeamStart) }, "Beam" }
             " debug: {debug}"
         }
         div{ tabindex: "0", style: "height: 100vh; outline: none;",
@@ -195,15 +250,17 @@ pub fn Kinematics() -> Element {
                 },
                 circle { cx: 500, cy: 620, r: 50, fill: "#db5000" }
                 
-                for (start_node, end_node) in kin_space.beams.read().iter() {
-                    {draw_beam(kin_space.nodes.read()[*start_node], kin_space.nodes.read()[*end_node])}
+                for (beam, _) in kin_space.beams.read().iter().enumerate() {
+                    {
+                        draw_beam(beam, mouse_pos())
+                    }
                 }
                 
                 for (node, beams) in kin_space.pivots.read().iter() {
                     {draw_pivot(kin_space.nodes.read()[*node])}
                 }
                 
-                { place_objects(mode, mouse_pos()) }
+                { place_objects(mouse_pos()) }
             }
         }
     }
