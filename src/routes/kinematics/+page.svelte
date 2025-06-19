@@ -6,15 +6,14 @@
 		Node,
 		Point,
 		translate_beam,
-		over_beam,
-		over_node,
 		beam_coords,
-		pull_beam,
+		pull_beam_pos_to_point,
 		pull_beam_by_end,
 		get_error,
 		apply_constrain,
 		get_actions,
 		get_elements,
+		hover_what,
 	} from '$lib/utils';
 	import type { Beam, Slider, Slidep, Pivot, Fixation } from '$lib/utils';
 
@@ -23,59 +22,34 @@
 
 	const Mode = {
 		Idle: 'idle',
+		Moving: 'moving',
 		Animate: 'animate',
-		AnimateNode: 'animate node',
-		AnimateBeam: 'animate beam',
+		Animating: 'animating',
 		PlacingSlider: 'placing slider',
 		PlacingPivot: 'placing pivot',
 		PlacingBeam1: 'placing beam 1',
 		PlacingBeam2: 'placing beam 2',
 		PlacingGround: 'placing ground',
-		MovingNode: 'moving node',
-		MovingBeam: 'moving beam',
 	} as const;
 
 	type ModeKeys = typeof Mode[keyof typeof Mode];
 
 	let mode: ModeKeys = Mode.Idle;
+	let startBeamPos: Point; // mode = 'PlacingBeam2'
+	let hover: Node | BeamPos | undefined;
+	let grabbed: Node | BeamPos | undefined;
+	let beamIdCounter: number = 0;
+
 	let mouse = $state(new Point());
 	let cursor = $state('auto');
 	let animateCheckbox: HTMLElement | null;
 
-	let startBeamPos: Point; // mode = 'PlacingBeam2'
-	let grabbedBeam: BeamPos | undefined; // mode = 'MovingBeam'
-	let grabbedNode: Node | undefined; // mode = 'MovingNode'
-	let beamIdCounter: number = 0;
-
-	let overNode: Node | undefined;
-	let overBeam: BeamPos | undefined;
 
 	let beams: Array<Beam> = [];
 	let sliders: Array<Slider> = [];
 	let slideps: Array<Slidep> = [];
 	let pivots: Array<Pivot> = [];
 	let fixations: Array<Fixation> = [];
-	
-	// *** DEBUG ***
-	/*
-	beams.push({type: 'beam', a: new Point(600, 250), b: new Point(800, 250), groundA: false, groundB: false, objects: [], id: 1});
-	beams.push({type: 'beam', a: new Point(800, 250), b: new Point(800, 450), groundA: false, groundB: false, objects: [], id: 2});
-	beams.push({type: 'beam', a: new Point(800, 450), b: new Point(600, 450), groundA: false, groundB: false, objects: [], id: 3});
-	beams.push({type: 'beam', a: new Point(600, 450), b: new Point(600, 250), groundA: false, groundB: false, objects: [], id: 4});
-	pivots.push({type: 'pivot', pos: new Point(600, 250), rotBeams: [new BeamPos(beams[0], 0), new BeamPos(beams[3], 1)], ground: false});
-	pivots.push({type: 'pivot', pos: new Point(800, 250), rotBeams: [new BeamPos(beams[0], 1), new BeamPos(beams[1], 0)], ground: false});
-	pivots.push({type: 'pivot', pos: new Point(800, 450), rotBeams: [new BeamPos(beams[1], 1), new BeamPos(beams[2], 0)], ground: false});
-	pivots.push({type: 'pivot', pos: new Point(600, 450), rotBeams: [new BeamPos(beams[2], 1), new BeamPos(beams[3], 0)], ground: false});
-	beams[0].objects.push([pivots[0], 0], [pivots[1], 1]);
-	beams[1].objects.push([pivots[1], 0], [pivots[2], 1]);
-	beams[2].objects.push([pivots[2], 0], [pivots[3], 1]);
-	beams[3].objects.push([pivots[3], 0], [pivots[0], 1]);
-
-	mode = Mode.AnimateNode;
-	cursor = 'crosshair';
-	let n = 0;
-	*/
-	// *** DEBUG ***
 
 	let canvas: HTMLCanvasElement;
 	let ctx: CanvasRenderingContext2D | null;
@@ -103,40 +77,38 @@
 	}
 
 	function update_mouse() {
-		overNode = over_node(
+		hover = hover_what(
 			beams,
 			sliders,
 			slideps,
 			pivots,
 			fixations,
 			mouse,
+			HOVER_WIDTH,
 			HOVER_RADIUS,
-			grabbedNode
+			grabbed,
 		);
-		overBeam = over_beam(beams, mouse, HOVER_WIDTH, grabbedNode, grabbedBeam);
 
-		if (mode != 'animate node' && mode != 'animate beam') {
-			if (overNode != undefined) {
-				mouse = overNode.pos.clone();
-			} else if (overBeam != undefined) {
-				mouse = overBeam.get_pos();
+		if (mode != 'animating') {
+			if (hover != undefined) {
+				if (hover instanceof Node) {
+					mouse = hover.pos.clone();
+				} else {
+					mouse = hover.get_pos();
+				}
 			}
 		}
-		// *** DEBUG ***
-		// mouse = new Point(400, 250);
-		// grabbedNode = new Node(mouse.clone(), [beams[0], beams[1]], pivots[1]);
-		// *** DEBUG ***
 
 		switch (mode) {
 			case 'idle':
-				if (overNode != undefined || overBeam != undefined) {
+				if (hover != undefined) {
 					cursor = 'grab';
 				} else {
 					cursor = 'auto';
 				}
 				break;
-			case 'animate node':
-				if (grabbedNode == undefined) {
+			case 'animating':
+				if (grabbed == undefined) {
 					break;
 				}
 
@@ -161,86 +133,61 @@
 
 				// Pull BEAM / ELEMENT to mouse
 				let firstElement: Beam | Slider | Slidep | Pivot | Fixation;
-				if (grabbedNode.object == null) {
-					firstElement = grabbedNode.beams[0];
-					pull_beam_by_end(firstElement, mouse, beam_coords(firstElement, grabbedNode.pos)[0] > 0.5);
-					apply_constrain(firstElement);
+				// TODO : Appliquer la contrainte de la souris en limitant la distance parcourue
+				if (grabbed instanceof Node) {
+					if (grabbed.object == null) {
+						firstElement = grabbed.beams[0];
+						pull_beam_by_end(firstElement, mouse, beam_coords(firstElement, grabbed.pos)[0] > 0.5);
+					} else {
+						firstElement = grabbed.object;
+						firstElement.pos = mouse.clone();
+					}
 				} else {
-					firstElement = grabbedNode.object;
-					firstElement.pos = mouse.clone();
+					firstElement = grabbed.beam;
+					pull_beam_pos_to_point(grabbed, mouse);
 				}
 				// Generate list of beams and objects : from mouse to ground(s)
 				let elements = get_elements([firstElement]);
 				let actions = get_actions(elements);
-
-				console.log("elements : ", elements);
-				console.log("actions : ", actions);
+				console.log("elements", elements);
+				console.log("actions", actions);
 				
 				// LOOP until error < lambda {
-				for (let i = 0; i < 1; i++) {
+				for (let i = 0; i < 100; i++) {
 					for (let action of actions) {
-						apply_constrain(action);
+						apply_constrain(action, 0.5);
 					}
-					/*
-					for (let action of actions.toSorted(() => Math.random()-0.5 )) {
-						// Beam : Pull connected ELEMENTS
-						// Element : Pull BEAMS by appling constrains
-						switch (action.type) {
-							case 'beam':
-								action.objects.forEach(object => {
-									object[0].pos.update(action.a.lerp(action.b, object[1]));
-								});
-								break;
-							case 'slider':
-								break;
-							case 'slidep':
-								break;
-							case 'pivot':
-								for (let beamPos of action.rotBeams) {
-									// if (ignoreBeams.includes(beamPos.beam)) { continue; }
-									pull_beam(beamPos, action.pos);
-								}
-								break;
-							case 'fixation':
-								break;
+					for (let action of actions.toReversed()) {
+						apply_constrain(action, 0.5);
+					}
+					if (get_error(sliders, slideps, pivots, fixations) < 0.001) {
+						break;
+					}
+				}
+				break;
+			case 'moving':
+				if (grabbed == undefined) {
+					break;
+				}
+				if (grabbed instanceof Node) {
+					for (let beam of grabbed.beams) {
+						if (beam.a.is_equal(grabbed.pos)) {
+							beam.a = mouse.clone();
+						} else {
+							beam.b = mouse.clone();
 						}
 					}
-					*/
-					for (let action of actions.toReversed()) {
-						apply_constrain(action);
+					if (grabbed.object != null) {
+						grabbed.object.pos = mouse.clone();
 					}
+					grabbed.pos = mouse.clone();
+					// TODO : move attached beams
+					// move attached nodes
+				} else {
+					translate_beam(grabbed, mouse);
+					// TODO : move attached nodes
 				}
-				break;
-			case 'animate beam':
-				if (grabbedBeam == undefined) {
-					break;
-				}
-				pull_beam(grabbedBeam, mouse);
-				break;
-			case 'moving node':
-				if (grabbedNode == undefined) {
-					break;
-				}
-				for (let beam of grabbedNode.beams) {
-					if (beam.a.is_equal(grabbedNode.pos)) {
-						beam.a = mouse.clone();
-					} else {
-						beam.b = mouse.clone();
-					}
-				}
-				if (grabbedNode.object != null) {
-					grabbedNode.object.pos = mouse.clone();
-				}
-				grabbedNode.pos = mouse.clone();
-				// TODO : move attached beams
-				// move attached nodes
-				break;
-			case 'moving beam':
-				if (grabbedBeam == undefined) {
-					break;
-				}
-				translate_beam(grabbedBeam, mouse);
-				// TODO : move attached nodes
+				
 				break;
 		}
 		draw();
@@ -253,108 +200,137 @@
 			let pos = mouse.clone();
 			switch (mode) {
 				case 'idle':
-					if (overNode != undefined) {
-						grabbedNode = overNode;
-						mode = Mode.MovingNode;
-						cursor = 'grabbing';
-					} else if (overBeam != undefined) {
-						grabbedBeam = overBeam;
-						mode = Mode.MovingBeam;
+					if (hover != undefined) {
+						grabbed = hover;
+						mode = Mode.Moving;
 						cursor = 'grabbing';
 					}
 					break;
 				case 'animate':
-					if (overNode != undefined) {
-						grabbedNode = overNode;
-						mode = Mode.AnimateNode;
-					} else if (overBeam != undefined) {
-						grabbedBeam = overBeam;
-						mode = Mode.AnimateBeam;
+					if (hover != undefined) {
+						if (hover instanceof Node) {
+							let fixedBeam = false;
+							hover.beams.forEach(beam => {
+								if (beam.groundA || beam.groundB) { fixedBeam = true; }
+							});
+							if (!((hover.object != null && hover.object.type != 'fixation' && hover.object.ground) || fixedBeam)) {
+								grabbed = hover;
+								mode = Mode.Animating;
+							}
+						} else {
+							if (!(hover.beam.groundA || hover.beam.groundA)) {
+								grabbed = hover;
+								mode = Mode.Animating;
+							}
+						}
 					}
 					break;
 				case 'placing slider':
-					let slideBeam: Beam | undefined = undefined;
-					let fixedBeams: Array<BeamPos> = [];
-					if (overNode != undefined) {
-						if (overNode.object == null) {
-							fixedBeams = overNode.beams.map((beam) => new BeamPos(beam, beam_coords(beam, pos)[0]));
-						} else {
-							switch (overNode.object.type) {
-								case 'slider':
-								case 'slidep':
-									return;
-								case 'pivot':
-									let pivotBeam = overNode.object.rotBeams[0];
-									if (pivotBeam != null && pivotBeam.k != 0 && pivotBeam.k != 1) {
-										slideBeam = pivotBeam.beam;
-									}
-									fixedBeams = overNode.beams
-										.map((beam) => new BeamPos(beam, beam_coords(beam, pos)[0]))
-										.filter((b) => b.beam !== slideBeam);
-									pivots = pivots.filter((obj) => obj !== overNode.object);
-									slideps.push({
-										type: 'slidep',
-										pos,
-										slideBeam,
-										rotBeams: fixedBeams,
-										ground: false
-									});
-									return;
-								case 'fixation':
-									let fixationBeam = overNode.object.fixedBeams[0];
-									if (overNode.object.fixedBeams[0] != null) {
-										slideBeam = fixationBeam.beam;
-									}
-									fixedBeams = overNode.beams
-										.map((beam) => new BeamPos(beam, beam_coords(beam, pos)[0]))
-										.filter((b) => b.beam !== slideBeam);
-									fixations = fixations.filter((obj) => obj !== overNode.object);
-									break;
+					let newSlider: Slider = { type: 'slider', pos, dir: new Point(1, 0), slideBeam: undefined, fixedBeams: [], ground: false };
+					if (hover != undefined) {
+						if (hover instanceof Node) {
+							if (hover.object == null) {
+								newSlider.fixedBeams = hover.beams.map(beam => [
+									new BeamPos(beam, beam_coords(beam, pos)[0]),
+									0 // addAngle
+								]);
+							} else {
+								switch (hover.object.type) {
+									case 'slider':
+									case 'slidep':
+										return;
+									case 'pivot':
+										let pivotBeam = hover.object.rotBeams[0];
+										if (pivotBeam != null && pivotBeam.k != 0 && pivotBeam.k != 1) {
+											newSlider.slideBeam = pivotBeam.beam;
+										}
+										newSlider.fixedBeams = hover.beams
+											.filter(beam => beam !== newSlider.slideBeam)
+											.map(beam => [
+												new BeamPos(beam, beam_coords(beam, pos)[0]),
+												0 // addAngle
+											]);
+										pivots = pivots.filter((obj) => obj !== hover.object);
+										
+										hover.object.rotBeams.toReversed().forEach(beamPos => {
+											if ((beamPos.k != 0) && (beamPos.k != 1)) {
+												newSlider.dir = beamPos.beam.b.sub(beamPos.beam.a);
+											}
+										});
+										slideps.push({
+											type: 'slidep',
+											pos,
+											dir: newSlider.dir,
+											slideBeam: newSlider.slideBeam,
+											rotBeams: newSlider.fixedBeams.map(b => b[0]),
+											ground: false
+										});
+										return;
+									case 'fixation':
+										let fixationBeam = hover.object.fixedBeams[0];
+										if (hover.object.fixedBeams[0] != null) {
+											newSlider.slideBeam = fixationBeam[0].beam;
+										}
+										newSlider.fixedBeams = hover.beams
+											.filter(beam => beam !== newSlider.slideBeam)
+											.map(beam => [
+												new BeamPos(beam, beam_coords(beam, pos)[0]),
+												0 // addAngle
+											]);
+										fixations = fixations.filter((obj) => obj !== hover.object);
+										newSlider.dir = hover.object.fixedBeams[0][0].beam.b.sub(hover.object.fixedBeams[0][0].beam.a);
+										break;
+								}
 							}
+						} else {
+							newSlider.slideBeam = hover.beam;
+							newSlider.dir = newSlider.slideBeam.b.sub(newSlider.slideBeam.a);
+							newSlider.slideBeam.objects.push([newSlider, 0]);
 						}
-					} else if (overBeam != undefined) {
-						slideBeam = overBeam.beam;
 					}
-					sliders.push({ type: 'slider', pos, slideBeam, fixedBeams, ground: false });
+					sliders.push(newSlider);
 					break;
 				case 'placing pivot':
 					let newPivot: Pivot = { type: 'pivot', pos, rotBeams: [], ground: false };
 
-					if (overNode != undefined) {
-						if (overNode.object == null) {
-							newPivot.rotBeams = overNode.beams.map((beam) => {
-								return new BeamPos(beam, beam_coords(beam, pos)[0]);
-							});
-							pivots.push(newPivot);
-							overNode.beams.forEach(beam => {
-								beam.objects.push([newPivot, + (beam_coords(beam, overNode.pos)[0] > 0.5)]);
-							});
-						} else {
-							switch (overNode.object.type) {
-								case 'slider':
-									let slider = overNode.object;
-									slideps.push({
-										type: 'slidep',
-										pos,
-										slideBeam: slider.slideBeam,
-										rotBeams: slider.fixedBeams,
-										ground: false
-									});
-									sliders = sliders.filter((obj) => obj !== overNode.object);
-									break;
-								case 'fixation':
-									newPivot.rotBeams = overNode.object.fixedBeams;
-									fixations = fixations.filter((obj) => obj !== overNode.object);
-									pivots.push(newPivot);
-									break;
-							}
-						}
-					} else if (overBeam != undefined) {
-						newPivot.rotBeams.push(overBeam);
+					if (hover == undefined) {
 						pivots.push(newPivot);
-						overBeam.beam.objects.push([newPivot, overBeam.k]);
 					} else {
-						pivots.push(newPivot);
+						if (hover instanceof Node) {
+							if (hover.object == null) {
+								newPivot.rotBeams = hover.beams.map((beam) => {
+									return new BeamPos(beam, beam_coords(beam, pos)[0]);
+								});
+								pivots.push(newPivot);
+								hover.beams.forEach(beam => {
+									beam.objects.push([newPivot, + (beam_coords(beam, hover.pos)[0] > 0.5)]);
+								});
+							} else {
+								switch (hover.object.type) {
+									case 'slider':
+										let slider = hover.object;
+										slideps.push({
+											type: 'slidep',
+											pos,
+											dir: hover.object.dir,
+											slideBeam: slider.slideBeam,
+											rotBeams: slider.fixedBeams.map(b => b[0]),
+											ground: false
+										});
+										sliders = sliders.filter((obj) => obj !== hover.object);
+										break;
+									case 'fixation':
+										newPivot.rotBeams = hover.object.fixedBeams.map(b => b[0]);
+										fixations = fixations.filter((obj) => obj !== hover.object);
+										pivots.push(newPivot);
+										break;
+								}
+							}
+						} else {
+							newPivot.rotBeams.push(hover);
+							pivots.push(newPivot);
+							hover.beam.objects.push([newPivot, hover.k]);
+						}
 					}
 					break;
 				case 'placing beam 1':
@@ -362,16 +338,16 @@
 					mode = Mode.PlacingBeam2;
 					break;
 				case 'placing beam 2':
-					let startOverNode = over_node(
+					let startHover = hover_what(
 						beams,
 						sliders,
 						slideps,
 						pivots,
 						fixations,
 						startBeamPos,
+						HOVER_WIDTH,
 						HOVER_RADIUS
 					);
-					let startOverBeam = over_beam(beams, startBeamPos, HOVER_WIDTH);
 					beamIdCounter += 1;
 					let newBeam: Beam = {
 						type: 'beam',
@@ -383,138 +359,166 @@
 						id: beamIdCounter
 					};
 
-					if (startOverNode != undefined) {
-						if (startOverNode.object == null) {
-							if (startOverNode.beams.length > 0) {
-								let fixedBeams = startOverNode.beams.map((beam) => {
-									return new BeamPos(beam, beam_coords(beam, startBeamPos)[0]);
-								});
-								fixedBeams.push(new BeamPos(newBeam, 0));
-								fixations.push({ type: 'fixation', pos: startBeamPos, fixedBeams });
+					if (startHover != undefined) {
+						if (startHover instanceof Node) {
+							if (startHover.object == null) {
+								if (startHover.beams.length > 0) {
+									let fixedBeams: Array<[BeamPos, number]> = startHover.beams.map(beam => [
+										new BeamPos(beam, beam_coords(beam, startBeamPos)[0]),
+										0 // addAngle
+									]);
+									fixedBeams.push([
+										new BeamPos(newBeam, 0),
+										0 // addAngle
+									]);
+									fixations.push({ type: 'fixation', pos: startBeamPos, fixedBeams });
+								}
+							} else {
+								switch (startHover.object.type) {
+									case 'slider':
+									case 'fixation':
+										startHover.object.fixedBeams.push([
+											new BeamPos(newBeam, beam_coords(newBeam, startBeamPos)[0]),
+											0 // addAngle
+										]);
+										break;
+									case 'slidep':
+									case 'pivot':
+										startHover.object.rotBeams.push(
+											new BeamPos(newBeam, beam_coords(newBeam, startBeamPos)[0])
+										);
+										newBeam.objects.push([startHover.object, 0]);
+										break;
+								}
 							}
 						} else {
-							switch (startOverNode.object.type) {
-								case 'slider':
-								case 'fixation':
-									startOverNode.object.fixedBeams.push(
-										new BeamPos(newBeam, beam_coords(newBeam, startBeamPos)[0])
-									);
-									break;
-								case 'slidep':
-								case 'pivot':
-									startOverNode.object.rotBeams.push(
-										new BeamPos(newBeam, beam_coords(newBeam, startBeamPos)[0])
-									);
-									newBeam.objects.push([startOverNode.object, 0]);
-									break;
-							}
+							fixations.push({
+								type: 'fixation',
+								pos: startBeamPos,
+								fixedBeams: [[
+									startHover,
+									0 // addAngle
+								], [
+									new BeamPos(newBeam, 0),
+									0 // addAngle
+								]]
+							});
 						}
-					} else if (startOverBeam != undefined) {
-						fixations.push({
-							type: 'fixation',
-							pos: startBeamPos,
-							fixedBeams: [startOverBeam, new BeamPos(newBeam, 0)]
-						});
 					}
-					if (overNode != undefined) {
-						if (overNode.object == null) {
-							if (overNode.beams.length > 0) {
-								let fixedBeams = overNode.beams.map((beam) => {
-									return new BeamPos(beam, beam_coords(beam, mouse)[0]);
-								});
-								fixedBeams.push(new BeamPos(newBeam, 1));
-								fixations.push({ type: 'fixation', pos: mouse.clone(), fixedBeams });
+					if (hover != undefined) {
+						if (hover instanceof Node) {
+							if (hover.object == null) {
+								if (hover.beams.length > 0) {
+									let fixedBeams: Array<[BeamPos, number]> = hover.beams.map(beam => [
+										new BeamPos(beam, beam_coords(beam, mouse)[0]),
+										0 // addAngle
+									]);
+									fixedBeams.push([
+										new BeamPos(newBeam, 1),
+										0 // addAngle
+									]);
+									fixations.push({ type: 'fixation', pos: mouse.clone(), fixedBeams });
+								}
+							} else {
+								switch (hover.object.type) {
+									case 'slider':
+									case 'fixation':
+										hover.object.fixedBeams.push([
+											new BeamPos(newBeam, beam_coords(newBeam, mouse)[0]),
+											0 // addAngle
+										]);
+										break;
+									case 'slidep':
+									case 'pivot':
+										hover.object.rotBeams.push(new BeamPos(newBeam, beam_coords(newBeam, mouse)[0]));
+										newBeam.objects.push([hover.object, 1]);
+										break;
+								}
 							}
 						} else {
-							switch (overNode.object.type) {
-								case 'slider':
-								case 'fixation':
-									overNode.object.fixedBeams.push(
-										new BeamPos(newBeam, beam_coords(newBeam, mouse)[0])
-									);
-									break;
-								case 'slidep':
-								case 'pivot':
-									overNode.object.rotBeams.push(new BeamPos(newBeam, beam_coords(newBeam, mouse)[0]));
-									newBeam.objects.push([overNode.object, 1]);
-									break;
-							}
+							fixations.push({
+								type: 'fixation',
+								pos: mouse.clone(),
+								fixedBeams: [[
+									hover,
+									0 // addAngle
+								], [
+									new BeamPos(newBeam, 1),
+									0 // addAngle
+								]]
+							});
 						}
-					} else if (overBeam != undefined) {
-						fixations.push({
-							type: 'fixation',
-							pos: mouse.clone(),
-							fixedBeams: [overBeam, new BeamPos(newBeam, 1)]
-						});
 					}
 					beams.push(newBeam);
 					mode = Mode.PlacingBeam1;
 					break;
 				case 'placing ground':
-					if (overNode != undefined) {
-						if (overNode.object != null) {
-							switch (overNode.object.type) {
-								case 'slidep':
-								case 'pivot':
-								case 'slider':
-									overNode.object.ground = !overNode.object.ground;
-									break;
-								case 'fixation':
-									let closestBeam = overNode.beams[0];
-									let dist = Infinity;
-									let aToB = true;
-									overNode.object.fixedBeams.forEach(beamPos => {
-										let newDist = beamPos.beam.a.distance_to(mouse);
-										if (newDist < dist) {
-											dist = newDist;
-											aToB = true;
-											closestBeam = beamPos.beam;
+					if (hover != undefined) {
+						if (hover instanceof Node) {
+							if (hover.object != null) {
+								switch (hover.object.type) {
+									case 'slidep':
+									case 'pivot':
+									case 'slider':
+										hover.object.ground = !hover.object.ground;
+										break;
+									case 'fixation':
+										let closestBeam = hover.beams[0];
+										let dist = Infinity;
+										let aToB = true;
+										hover.object.fixedBeams.forEach(beamPos => {
+											let newDist = beamPos[0].beam.a.distance_to(mouse);
+											if (newDist < dist) {
+												dist = newDist;
+												aToB = true;
+												closestBeam = beamPos[0].beam;
+											}
+											newDist = beamPos[0].beam.b.distance_to(mouse);
+											if (newDist < dist) {
+												dist = newDist;
+												aToB = false;
+												closestBeam = beamPos[0].beam;
+											}
+										});
+										if (aToB) {
+											closestBeam.groundA = !closestBeam.groundA;
+										} else {
+											closestBeam.groundB = !closestBeam.groundB;
 										}
-										newDist = beamPos.beam.b.distance_to(mouse);
-										if (newDist < dist) {
-											dist = newDist;
-											aToB = false;
-											closestBeam = beamPos.beam;
-										}
-									});
-									if (aToB) {
-										closestBeam.groundA = !closestBeam.groundA;
+										break;
+								}
+							} else {
+								if (hover.beams[0].a.is_equal(mouse)) {
+									if (hover.beams[0].groundB) {
+										hover.beams[0].groundB = false;
+										hover.beams[0].groundA = true;
 									} else {
-										closestBeam.groundB = !closestBeam.groundB;
+										hover.beams[0].groundA = !hover.beams[0].groundA;
 									}
-									break;
-							}
-						} else {
-							if (overNode.beams[0].a.is_equal(mouse)) {
-								if (overNode.beams[0].groundB) {
-									overNode.beams[0].groundB = false;
-									overNode.beams[0].groundA = true;
 								} else {
-									overNode.beams[0].groundA = !overNode.beams[0].groundA;
-								}
-							} else {
-								if (overNode.beams[0].groundA) {
-									overNode.beams[0].groundA = false;
-									overNode.beams[0].groundB = true;
-								} else {
-									overNode.beams[0].groundB = !overNode.beams[0].groundB;
+									if (hover.beams[0].groundA) {
+										hover.beams[0].groundA = false;
+										hover.beams[0].groundB = true;
+									} else {
+										hover.beams[0].groundB = !hover.beams[0].groundB;
+									}
 								}
 							}
-						}
-					} else if (overBeam != undefined) {
-						if (overBeam.k < 0.5) {
-							if (overBeam.beam.groundB) {
-								overBeam.beam.groundB = false;
-								overBeam.beam.groundA = true;
-							} else {
-								overBeam.beam.groundA = !overBeam.beam.groundA;
-							}
 						} else {
-							if (overBeam.beam.groundA) {
-								overBeam.beam.groundA = false;
-								overBeam.beam.groundB = true;
+							if (hover.k < 0.5) {
+								if (hover.beam.groundB) {
+									hover.beam.groundB = false;
+									hover.beam.groundA = true;
+								} else {
+									hover.beam.groundA = !hover.beam.groundA;
+								}
 							} else {
-								overBeam.beam.groundB = !overBeam.beam.groundB;
+								if (hover.beam.groundA) {
+									hover.beam.groundA = false;
+									hover.beam.groundB = true;
+								} else {
+									hover.beam.groundB = !hover.beam.groundB;
+								}
 							}
 						}
 					}
@@ -524,29 +528,21 @@
 			// Right button
 			mode = Mode.Idle;
 			cursor = 'auto';
+			animateCheckbox.checked = false;
 		}
 		draw();
 	}
 
 	function onpointerup(event: PointerEvent) {
 		switch (mode) {
-			case 'animate node':
+			case 'animating':
 				mode = Mode.Animate;
-				grabbedNode = undefined;
+				grabbed = undefined;
 				break;
-			case 'animate beam':
-				mode = Mode.Animate;
-				grabbedBeam = undefined;
-				break;
-			case 'moving node':
+			case 'moving':
 				mode = Mode.Idle;
 				cursor = 'auto';
-				grabbedNode = undefined;
-				break;
-			case 'moving beam':
-				mode = Mode.Idle;
-				cursor = 'auto';
-				grabbedBeam = undefined;
+				grabbed = undefined;
 				break;
 		}
 		update_mouse();
@@ -557,44 +553,39 @@
 			case 'Escape':
 				mode = Mode.Idle;
 				cursor = 'auto';
-				if (animateCheckbox != null) {
-					animateCheckbox.checked = false;
-				}
+				animateCheckbox.checked = false;
 				break;
 			case 'a':
-				mode = Mode.Animate;
-				cursor = 'crosshair';
-				if (animateCheckbox != null) {
+				if (animateCheckbox.checked) {
+					mode = Mode.Idle;
+					cursor = 'auto';
+					animateCheckbox.checked = false;
+				} else {
+					mode = Mode.Animate;
+					cursor = 'crosshair';
 					animateCheckbox.checked = true;
 				}
 				break;
 			case 's':
 				mode = Mode.PlacingSlider;
 				cursor = 'none';
-				if (animateCheckbox != null) {
-					animateCheckbox.checked = false;
-				}
+				animateCheckbox.checked = false;
 				break;
 			case 'p':
 				mode = Mode.PlacingPivot;
 				cursor = 'none';
-				if (animateCheckbox != null) {
-					animateCheckbox.checked = false;
-				}
+				animateCheckbox.checked = false;
 				break;
 			case 'b':
 				mode = Mode.PlacingBeam1;
 				cursor = 'none';
-				if (animateCheckbox != null) {
-					animateCheckbox.checked = false;
-				}
+				animateCheckbox.checked = false;
 				break;
 			case 'g':
+				// TODO : add ground while placing another object
 				mode = Mode.PlacingGround;
 				cursor = 'none';
-				if (animateCheckbox != null) {
-					animateCheckbox.checked = false;
-				}
+				animateCheckbox.checked = false;
 				break;
 		}
 		update_mouse();
@@ -618,10 +609,11 @@
 		ctx.font = '16px Arial';
 		ctx.fillStyle = '#db5000';
 		ctx.fillText(mode, 10, 20);
-		ctx.fillText('sliders: ' + sliders.length, 10, 60);
-		ctx.fillText('pivots: ' + pivots.length, 10, 80);
-		ctx.fillText('slideps: ' + slideps.length, 10, 100);
-		ctx.fillText('fixations: ' + fixations.length, 10, 120);
+		ctx.fillText('beams: ' + beams.length, 10, 50);
+		ctx.fillText('sliders: ' + sliders.length, 10, 70);
+		ctx.fillText('pivots: ' + pivots.length, 10, 90);
+		ctx.fillText('slideps: ' + slideps.length, 10, 110);
+		ctx.fillText('fixations: ' + fixations.length, 10, 130);
 		let nbGrounds = 0;
 		beams.forEach(beam => {
 			if (beam.groundA || beam.groundB) {
@@ -643,151 +635,160 @@
 				nbGrounds += 1;
 			}
 		});
-		ctx.fillText('grounds: ' + nbGrounds, 10, 140);
-		ctx.fillText('error: ' + get_error(sliders, slideps, pivots, fixations).toFixed(4), 10, 160);
+		ctx.fillText('grounds: ' + nbGrounds, 10, 150);
+		ctx.fillText('error: ' + get_error(sliders, slideps, pivots, fixations).toFixed(4), 10, 170);
 
-		if (overNode != undefined) {
-			if (overNode.object == undefined) {
-				let isA = '(start)';
-				if (overNode.beams[0].b == overNode.pos) {
-					isA = '(end)';
+		if (hover != undefined) {
+			if (hover instanceof Node) {
+				if (hover.object == undefined) {
+					let isA = '(start)';
+					if (hover.beams[0].b == hover.pos) {
+						isA = '(end)';
+					}
+					ctx.fillText('[ Beam ' + hover.beams[0].id + ' ]  ' + isA, 140, 60);
+				} else {
+					ctx.fillText('[ ' + hover.object.type + ' ]', 140, 60);
+					switch (hover.object.type) {
+						case 'slider':
+							ctx.fillText(
+								'fixed Beams: [' +
+									hover.object.fixedBeams.map((beam) => {
+										return beam[0].beam.id;
+									}) +
+									']',
+								140,
+								80
+							);
+							ctx.fillText('slide Beam: ' + hover.object.slideBeam?.id, 140, 100);
+							break;
+						case 'slidep':
+							ctx.fillText(
+								'rot Beams: [' +
+									hover.object.rotBeams.map((beam) => {
+										return beam.beam.id;
+									}) +
+									']',
+								140,
+								80
+							);
+							ctx.fillText('slide Beam: ' + hover.object.slideBeam?.id, 140, 100);
+							break;
+						case 'pivot':
+							ctx.fillText(
+								'rot Beams: [' +
+									hover.object.rotBeams.map((beam) => {
+										return beam.beam.id;
+									}) +
+									']',
+								140,
+								80
+							);
+							break;
+						case 'fixation':
+							ctx.fillText(
+								'fixed Beams: [' +
+									hover.object.fixedBeams.map((beam) => {
+										return beam[0].beam.id;
+									}) +
+									']',
+								140,
+								80
+							);
+							break;
+					}
 				}
-				ctx.fillText('[ Beam ' + overNode.beams[0].id + ' ]  ' + isA, 140, 60);
 			} else {
-				ctx.fillText('[ ' + overNode.object.type + ' ]', 140, 60);
-				switch (overNode.object.type) {
-					case 'slider':
-						ctx.fillText(
-							'fixed Beams: [' +
-								overNode.object.fixedBeams.map((beam) => {
-									return beam.beam.id;
-								}) +
-								']',
-							140,
-							80
-						);
-						ctx.fillText('slide Beam: ' + overNode.object.slideBeam?.id, 140, 100);
-						break;
-					case 'slidep':
-						ctx.fillText(
-							'rot Beams: [' +
-								overNode.object.rotBeams.map((beam) => {
-									return beam.beam.id;
-								}) +
-								']',
-							140,
-							80
-						);
-						ctx.fillText('slide Beam: ' + overNode.object.slideBeam?.id, 140, 100);
-						break;
-					case 'pivot':
-						ctx.fillText(
-							'rot Beams: [' +
-								overNode.object.rotBeams.map((beam) => {
-									return beam.beam.id;
-								}) +
-								']',
-							140,
-							80
-						);
-						break;
-					case 'fixation':
-						ctx.fillText(
-							'fixed Beams: [' +
-								overNode.object.fixedBeams.map((beam) => {
-									return beam.beam.id;
-								}) +
-								']',
-							140,
-							80
-						);
-						break;
+				ctx.fillText('[ Beam ' + hover.beam.id + ' ]  k: ' + hover.k.toFixed(3), 150, 60);
+				for (let i = 0; i < hover.beam.objects.length; i++) {
+					let [objectType, k] = hover.beam.objects[i];
+					ctx.fillText(objectType.type + '   k: ' + k.toFixed(3), 150, 80 + i * 20);
 				}
-			}
-		} else if (overBeam != undefined) {
-			ctx.fillText('[ Beam ' + overBeam.beam.id + ' ]  k: ' + overBeam.k.toFixed(3), 150, 60);
-			for (let i = 0; i < overBeam.beam.objects.length; i++) {
-				let [objectType, k] = overBeam.beam.objects[i];
-				ctx.fillText(objectType.type + '  k: ' + k.toFixed(3), 150, 80 + i * 20);
 			}
 		}
 
+		// TODO : Show UNCONNECTED Beams and pivot differently
+		// TODO : Handle ovelapping beams (as a node ?)
+
 		// HIGHLIGHT color
-		if (mode == 'moving node' && grabbedNode != undefined) {
-			highlight_node(grabbedNode.pos);
-		} else if (mode == 'moving beam' && grabbedBeam != undefined) {
-			highlight_beam(grabbedBeam.beam.a, grabbedBeam.beam.b);
-		} else if (mode == 'animate node') {
-		} else if (mode == 'animate beam') {
-		} else if (overNode != undefined) {
-			if (mode == Mode.Animate) {
+		if (mode == 'moving' && grabbed != undefined) {
+			if (grabbed instanceof Node) {
+				highlight_node(grabbed.pos);
+			} else {
+				highlight_beam(grabbed.beam.a, grabbed.beam.b);
+			}
+		} else if (mode == 'animating') {
+			// TODO add something ?
+		} else if (mode == 'animate' && hover != undefined) {
+			if (hover instanceof Node) {
 				let fixedBeam = false;
-				overNode.beams.forEach(beam => {
+				hover.beams.forEach(beam => {
 					if (beam.groundA || beam.groundB) { fixedBeam = true; }
 				});
-				if (!((overNode.object != null && overNode.object.type != 'fixation' && overNode.object.ground) || fixedBeam)) {
-					highlight_node(overNode.pos);
+				if (!((hover.object != null && hover.object.type != 'fixation' && hover.object.ground) || fixedBeam)) {
+					highlight_node(hover.pos);
 				}
 			} else {
-				highlight_node(overNode.pos);
+				if (!(hover.beam.groundA || hover.beam.groundB)) {
+					highlight_beam(hover.beam.a, hover.beam.b);
+					//highlight_node(hover.pos());
+				}
 			}
-		} else if (overBeam != undefined) {
-			if (mode == Mode.Animate) {
-				if (!(overBeam.beam.groundA || overBeam.beam.groundB)) {
-					highlight_beam(overBeam.beam.a, overBeam.beam.b);
-					//highlight_node(overBeam.pos());
-				}
+		} else if (hover != undefined) {
+			if (hover instanceof Node) {
+				highlight_node(hover.pos);
 			} else {
-				highlight_beam(overBeam.beam.a, overBeam.beam.b);
+				highlight_beam(hover.beam.a, hover.beam.b);
 			}
 		}
 
 		if (mode == Mode.PlacingGround) {
 			let p = mouse.clone();
 			let dir = new Point();
-			if (overNode != undefined) {
-				if (overNode.object != null) {
-					if (overNode.object.type == 'slider' && overNode.object.slideBeam != undefined) {
-						dir = overNode.object.slideBeam.b.sub(overNode.object.slideBeam.a);
-					} else if (overNode.object.type == 'fixation') {
-						let closestBeam = overNode.beams[0];
-						let dist = Infinity;
-						let aToB = true;
-						overNode.object.fixedBeams.forEach(beamP => {
-							let newDist = beamP.beam.a.distance_to(mouse);
-							if (newDist < dist) {
-								dist = newDist;
-								aToB = true;
-								closestBeam = beamP.beam;
+			if (hover != undefined) {
+				if (hover instanceof Node) {
+					if (hover.object != null) {
+						if (hover.object.type == 'slider' && hover.object.slideBeam != undefined) {
+							dir = hover.object.slideBeam.b.sub(hover.object.slideBeam.a);
+						} else if (hover.object.type == 'fixation') {
+							let closestBeam = hover.beams[0];
+							let dist = Infinity;
+							let aToB = true;
+							hover.object.fixedBeams.forEach(beamP => {
+								let newDist = beamP[0].beam.a.distance_to(mouse);
+								if (newDist < dist) {
+									dist = newDist;
+									aToB = true;
+									closestBeam = beamP[0].beam;
+								}
+								newDist = beamP[0].beam.b.distance_to(mouse);
+								if (newDist < dist) {
+									dist = newDist;
+									aToB = false;
+									closestBeam = beamP[0].beam;
+								}
+							});
+							if (aToB) {
+								dir = closestBeam.b.sub(closestBeam.a).perp();
+							} else {
+								dir = closestBeam.a.sub(closestBeam.b).perp();
 							}
-							newDist = beamP.beam.b.distance_to(mouse);
-							if (newDist < dist) {
-								dist = newDist;
-								aToB = false;
-								closestBeam = beamP.beam;
-							}
-						});
-						if (aToB) {
-							dir = closestBeam.b.sub(closestBeam.a).perp();
+						}
+					} else {
+						if (hover.beams[0].a.is_equal(mouse)) {
+							dir = hover.beams[0].b.sub(hover.beams[0].a).perp();
 						} else {
-							dir = closestBeam.a.sub(closestBeam.b).perp();
+							dir = hover.beams[0].a.sub(hover.beams[0].b).perp();
 						}
 					}
 				} else {
-					if (overNode.beams[0].a.is_equal(mouse)) {
-						dir = overNode.beams[0].b.sub(overNode.beams[0].a).perp();
+					highlight_node(p);
+					if (hover.k < 0.5) {
+						dir = hover.beam.b.sub(hover.beam.a).perp();
+						p = hover.beam.a;
 					} else {
-						dir = overNode.beams[0].a.sub(overNode.beams[0].b).perp();
+						dir = hover.beam.a.sub(hover.beam.b).perp();
+						p = hover.beam.b;
 					}
-				}
-			} else if (overBeam != undefined) {
-				highlight_node(p);
-				if (overBeam.k < 0.5) {
-					dir = overBeam.beam.b.sub(overBeam.beam.a).perp();
-					p = overBeam.beam.a;
-				} else {
-					dir = overBeam.beam.a.sub(overBeam.beam.b).perp();
-					p = overBeam.beam.b;
 				}
 			}
 			draw_ground(p, dir);
@@ -795,31 +796,36 @@
 		fixations.forEach(fixation => {
 			draw_fixation_bottom(fixation.pos);
 		});
+		let startHover: Node | BeamPos | undefined = undefined;
 		if (mode == Mode.PlacingBeam2) {
-			let startOverNode = over_node(
+			startHover = hover_what(
 				beams,
 				sliders,
 				slideps,
 				pivots,
 				fixations,
 				startBeamPos,
+				HOVER_WIDTH,
 				HOVER_RADIUS
 			);
-			let startOverBeam = over_beam(beams, startBeamPos, HOVER_WIDTH);
 
-			if (startOverNode != undefined) {
-				if (startOverNode.object == null && startOverNode.beams.length > 0) {
+			if (startHover != undefined) {
+				if (startHover instanceof Node) {
+					if (startHover.object == null && startHover.beams.length > 0) {
+						draw_fixation_bottom(startBeamPos);
+					}
+				} else if (startHover != undefined) {
 					draw_fixation_bottom(startBeamPos);
 				}
-			} else if (startOverBeam != undefined) {
-				draw_fixation_bottom(startBeamPos);
 			}
-			if (overNode != undefined) {
-				if (overNode.object == null && overNode.beams.length > 0) {
-					draw_fixation_bottom(overNode.pos);
+			if (hover != undefined) {
+				if (hover instanceof Node) {
+					if (hover.object == null && hover.beams.length > 0) {
+						draw_fixation_bottom(hover.pos);
+					}
+				} else {
+					draw_fixation_bottom(hover.get_pos());
 				}
-			} else if (overBeam != undefined) {
-				draw_fixation_bottom(overBeam.get_pos());
 			}
 		}
 		beams.forEach(beam => {
@@ -846,47 +852,38 @@
 			draw_fixation_top(fixation.pos);
 		});
 		if (mode == Mode.PlacingBeam2) {
-			let startOverNode = over_node(
-				beams,
-				sliders,
-				slideps,
-				pivots,
-				fixations,
-				startBeamPos,
-				HOVER_RADIUS
-			);
-			let startOverBeam = over_beam(beams, startBeamPos, HOVER_WIDTH);
-
-			if (startOverNode != undefined) {
-				if (startOverNode.object == null && startOverNode.beams.length > 0) {
+			if (startHover != undefined) {
+					if (startHover instanceof Node) {
+					if (startHover.object == null && startHover.beams.length > 0) {
+						draw_fixation_top(startBeamPos);
+					}
+				} else if (startHover != undefined) {
 					draw_fixation_top(startBeamPos);
 				}
-			} else if (startOverBeam != undefined) {
-				draw_fixation_top(startBeamPos);
 			}
-			if (overNode != undefined) {
-				if (overNode.object == null && overNode.beams.length > 0) {
-					draw_fixation_top(overNode.pos);
+			if (hover != undefined) {
+				if (hover instanceof Node) {
+					if (hover.object == null && hover.beams.length > 0) {
+						draw_fixation_top(hover.pos);
+					}
+				} else {
+					draw_fixation_top(hover.get_pos());
 				}
-			} else if (overBeam != undefined) {
-				draw_fixation_top(overBeam.get_pos());
 			}
 		}
+		pivots.forEach(pivot => {
+			if (pivot.ground) {
+				draw_ground(pivot.pos, new Point());
+			}
+			draw_pivot(pivot.pos);
+		});
 		sliders.forEach(slider => {
-			let dir = new Point();
-			if (slider.slideBeam != undefined) {
-				dir = slider.slideBeam.b.sub(slider.slideBeam.a);
-			}
 			if (slider.ground) {
-				draw_ground(slider.pos, dir);
+				draw_ground(slider.pos, slider.dir);
 			}
-			draw_slider(slider.pos, dir);
+			draw_slider(slider.pos, slider.dir);
 		});
 		slideps.forEach(slidep => {
-			let dir = new Point();
-			if (slidep.slideBeam != undefined) {
-				dir = slidep.slideBeam.b.sub(slidep.slideBeam.a);
-			}
 			let overDirs = slidep.rotBeams.map((beamP) => {
 				if (beamP.beam.a.is_equal(slidep.pos)) {
 					return beamP.beam.b.sub(beamP.beam.a);
@@ -895,27 +892,18 @@
 				}
 			});
 			if (mode == Mode.PlacingBeam2) {
-				let startOverNode = over_node(
-					beams,
-					sliders,
-					slideps,
-					pivots,
-					fixations,
-					startBeamPos,
-					HOVER_RADIUS
-				);
-				if (startOverNode != undefined && startBeamPos.is_equal(slidep.pos)) {
-					if (startOverNode.object != null && startOverNode.object.type == 'slidep') {
+				if (startHover != undefined && startHover instanceof Node && startBeamPos.is_near_equal(slidep.pos)) {
+					if (startHover.object != null && startHover.object.type == 'slidep') {
 						overDirs.push(mouse.sub(startBeamPos));
 					}
 				}
-				if (overNode != undefined && mouse.is_equal(slidep.pos)) {
-					if (overNode.object != null && overNode.object.type == 'slidep') {
+				if (hover != undefined && hover instanceof Node && mouse.is_near_equal(slidep.pos)) {
+					if (hover.object != null && hover.object.type == 'slidep') {
 						overDirs.push(startBeamPos.sub(mouse));
 					}
 				}
 			}
-			draw_slidep(slidep.pos, dir, overDirs);
+			draw_slidep(slidep.pos, slidep.dir, overDirs);
 			if (slidep.ground) {
 				draw_ground(slidep.pos, new Point());
 			}
@@ -924,45 +912,42 @@
 		if (mode == Mode.PlacingSlider) {
 			let p = mouse.clone();
 			let dir = new Point();
-			if (overNode != undefined) {
-				if (overNode.object != null) {
-					switch (overNode.object.type) {
-						case 'slider':
-							if (overNode.object.slideBeam != undefined) {
-								dir = overNode.object.slideBeam.b.sub(overNode.object.slideBeam.a);
-							}
-							break;
-						case 'slidep':
-							if (overNode.object.slideBeam != undefined) {
-								dir = overNode.object.slideBeam.b.sub(overNode.object.slideBeam.a);
-							}
-							break;
-						case 'pivot':
-							let pivotBeam = overNode.object.rotBeams[0];
-							if (pivotBeam != null && pivotBeam.k != 0 && pivotBeam.k != 1) {
-								dir = pivotBeam.beam.b.sub(pivotBeam.beam.a);
-							}
-							break;
-						case 'fixation':
-							let fixationBeam = overNode.object.fixedBeams[0];
-							if (overNode.object.fixedBeams[0] != null) {
-								dir = fixationBeam.beam.b.sub(fixationBeam.beam.a);
-							}
-							break;
+			if (hover != undefined) {
+				if (hover instanceof Node) {
+					if (hover.object != null) {
+						switch (hover.object.type) {
+							case 'slider':
+								if (hover.object.slideBeam != undefined) {
+									dir = hover.object.slideBeam.b.sub(hover.object.slideBeam.a);
+								}
+								break;
+							case 'slidep':
+								if (hover.object.slideBeam != undefined) {
+									dir = hover.object.slideBeam.b.sub(hover.object.slideBeam.a);
+								}
+								break;
+							case 'pivot':
+								hover.object.rotBeams.toReversed().forEach(beamPos => {
+									if ((beamPos.k != 0) && (beamPos.k != 1)) {
+										dir = beamPos.beam.b.sub(beamPos.beam.a);
+									}
+								});
+								break;
+							case 'fixation':
+								let fixationBeam = hover.object.fixedBeams[0];
+								if (hover.object.fixedBeams[0] != null) {
+									dir = fixationBeam[0].beam.b.sub(fixationBeam[0].beam.a);
+								}
+								break;
+						}
 					}
+				} else {
+					p = hover.get_pos();
+					dir = hover.beam.b.sub(hover.beam.a);
 				}
-			} else if (overBeam != undefined) {
-				p = overBeam.get_pos();
-				dir = overBeam.beam.b.sub(overBeam.beam.a);
 			}
 			draw_slider(p, dir);
 		}
-		pivots.forEach(pivot => {
-			if (pivot.ground) {
-				draw_ground(pivot.pos, new Point());
-			}
-			draw_pivot(pivot.pos);
-		});
 		if (mode == Mode.PlacingPivot) {
 			draw_pivot(mouse);
 		}
