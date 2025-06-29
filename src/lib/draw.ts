@@ -1,95 +1,344 @@
-import type { Beam, HoverOn } from '$lib/types';
-import { TAU, Point } from '$lib/types';
+import type { Mode, HoverOn, KinState } from '$lib/types';
+import {
+	MY_BACKGROUND,
+	Rod,
+	TAU,
+	Point2,
+	MY_ORANGE,
+	MY_BORDER,
+	MY_BLUE,
+	HOVER_COLOR,
+	MY_TRANSPARENT,
+	MY_TRANSBORDER
+} from '$lib/types';
+import { get_hover_pos } from './placing-elements';
+
+/**
+ * Draw kinematic space
+ */
+export function draw_kinspace(
+	ctx: CanvasRenderingContext2D,
+	kinState: KinState,
+	mode: Mode,
+	hoverOn: HoverOn,
+	pos: Point2
+) {
+	let hover_pos = get_hover_pos(pos, hoverOn);
+
+	if (mode.type === 'animate') {
+		// not hilight if grounded
+		switch (hoverOn.type) {
+			case 'rod pos':
+			case 'overlapping rods':
+				if (!(hoverOn.rodPos.rod.groundA || hoverOn.rodPos.rod.groundB)) {
+					highlight_rod(ctx, hoverOn.rodPos.rod, HOVER_COLOR);
+				}
+				break;
+			case 'rod end':
+				if (!(hoverOn.rod.groundA || hoverOn.rod.groundB)) {
+					highlight_point(ctx, hover_pos, HOVER_COLOR);
+				}
+				break;
+			case 'slider':
+			case 'slidep':
+			case 'pivot':
+				if (!hoverOn.object.ground) {
+					highlight_point(ctx, hover_pos, HOVER_COLOR);
+				}
+				break;
+			case 'fixation':
+				if (
+					hoverOn.object.fixedRods.every(
+						(rodPos) => !(rodPos[0].rod.groundA || rodPos[0].rod.groundB)
+					)
+				) {
+					highlight_point(ctx, hover_pos, HOVER_COLOR);
+				}
+				break;
+		}
+	}
+	if (mode.type === 'placing ground') {
+		draw_ground_placement(ctx, hoverOn, hover_pos);
+	}
+	// fixations bottom
+	kinState.fixations.forEach((fixation) => {
+		draw_fixation_bottom(ctx, fixation.pos);
+	});
+	if (mode.type === 'placing rod end') {
+		switch (mode.startHoverOn.type) {
+			case 'rod pos':
+			case 'rod end':
+				draw_fixation_bottom(ctx, mode.startPos);
+		}
+		switch (hoverOn.type) {
+			case 'rod pos':
+			case 'overlapping rods':
+			case 'rod end':
+				draw_fixation_bottom(ctx, hover_pos);
+		}
+	}
+	// rods (+ grounds)
+	kinState.rods.forEach((rod) => {
+		if (rod.groundA) {
+			draw_ground(ctx, rod.a, rod.dir().perp());
+		}
+		if (rod.groundB) {
+			draw_ground(ctx, rod.b, rod.dir().perp().mul(-1));
+		}
+		draw_rod(ctx, rod);
+	});
+	// placing rod start/end
+	if (mode.type === 'placing rod start') {
+		if (mode.ground) {
+			draw_ground(ctx, hover_pos, new Point2());
+		}
+		if (!pos.is_equal(hover_pos)) {
+			draw_rod_start(ctx, pos, true);
+		}
+		draw_rod_start(ctx, hover_pos, false);
+	} else if (mode.type === 'placing rod end') {
+		let rod = new Rod(mode.startPos, hover_pos, 0);
+		if (mode.startGround) {
+			draw_ground(
+				ctx,
+				mode.startPos,
+				hover_pos.is_equal(mode.startPos) ? new Point2() : rod.dir().perp()
+			);
+		}
+		if (mode.ground) {
+			draw_ground(
+				ctx,
+				pos,
+				rod.dir().perp().mul(-1)
+			);
+		}
+		draw_rod(ctx, rod);
+		if (!pos.is_equal(hover_pos)) {
+			draw_rod_start(ctx, pos, true);
+		}
+	}
+	// fixations top
+	kinState.fixations.forEach((fixation) => {
+		draw_fixation_top(ctx, fixation.pos);
+	});
+	if (mode.type === 'placing rod end') {
+		switch (mode.startHoverOn.type) {
+			case 'rod pos':
+			case 'rod end':
+				draw_fixation_top(ctx, mode.startPos);
+		}
+		switch (hoverOn.type) {
+			case 'rod pos':
+			case 'overlapping rods':
+			case 'rod end':
+				draw_fixation_top(ctx, hover_pos);
+		}
+	}
+	// sliders (+ grounds)
+	kinState.sliders.forEach((slider) => {
+		if (slider.ground) {
+			draw_ground(ctx, slider.pos.add(slider.dir.perp().mul(2)), slider.dir);
+		}
+		draw_slider(ctx, slider.pos, slider.dir, slider.slideRod !== undefined, false);
+	});
+	// slideps (+ grounds)
+	kinState.slideps.forEach((slidep) => {
+		let overDirs = slidep.rotRods.map((rodP) =>
+			rodP.rod.a.is_near_equal(slidep.pos) ? rodP.rod.dir() : rodP.rod.dir().mul(-1)
+		);
+		if (mode.type === 'placing rod end') {
+			if (mode.startHoverOn.type === 'slidep') {
+				if (mode.startPos.is_near_equal(slidep.pos) && !mode.startPos.is_near_equal(hover_pos)) {
+					overDirs.push(hover_pos.sub(mode.startPos));
+				}
+			}
+			if (hoverOn.type === 'slidep') {
+				if (hover_pos.is_near_equal(slidep.pos) && !mode.startPos.is_near_equal(hover_pos)) {
+					overDirs.push(mode.startPos.sub(hover_pos));
+				}
+			}
+		}
+		draw_slidep(ctx, slidep.pos, slidep.dir, overDirs);
+		if (slidep.ground) {
+			draw_ground(ctx, slidep.pos.add(new Point2(0, 2)), new Point2());
+		}
+		draw_pivot(
+			ctx,
+			slidep.pos,
+			slidep.slideRod !== undefined || slidep.rotRods.length !== 0,
+			false
+		);
+	});
+	// placing slider
+	if (mode.type === 'placing slider') {
+		let dir = new Point2();
+		switch (hoverOn.type) {
+			case 'rod pos':
+			case 'overlapping rods':
+				dir = hoverOn.rodPos.rod.dir();
+				break;
+			case 'pivot':
+				hoverOn.object.rotRods.toReversed().forEach((rodPos) => {
+					if (rodPos.k !== 0 && rodPos.k !== 1) {
+						dir = rodPos.rod.dir();
+					}
+				});
+				break;
+			case 'fixation':
+				let fixationRod = hoverOn.object.fixedRods[0];
+				if (hoverOn.object.fixedRods[0] !== null) {
+					dir = fixationRod[0].rod.dir();
+				}
+				break;
+		}
+		if (!(hoverOn.type === 'slider' || hoverOn.type === 'slidep')) {
+			if (mode.ground) {
+				draw_ground(ctx, hover_pos.add(new Point2(0, 2)), dir);
+			}
+			if (!pos.is_equal(hover_pos)) {
+				draw_slider(ctx, pos, dir, hoverOn.type === 'rod pos' || hoverOn.type === 'fixation', true);
+			}
+			draw_slider(
+				ctx,
+				hover_pos,
+				dir,
+				hoverOn.type === 'rod pos' || hoverOn.type === 'fixation',
+				false
+			);
+		}
+	}
+	// pivots (+ grounds)
+	kinState.pivots.forEach((pivot) => {
+		if (pivot.ground) {
+			draw_ground(ctx, pivot.pos.add(new Point2(0, 2)), new Point2());
+		}
+		draw_pivot(ctx, pivot.pos, pivot.rotRods.length !== 0, false);
+	});
+	// placing pivot
+	if (mode.type === 'placing pivot') {
+		if (mode.ground) {
+			draw_ground(ctx, hover_pos.add(new Point2(0, 2)), new Point2());
+		}
+		let fill = false;
+		switch (hoverOn.type) {
+			case 'rod pos':
+			case 'overlapping rods':
+			case 'rod end':
+			case 'fixation':
+				fill = true;
+				break;
+			case 'slider':
+			case 'slidep':
+				fill = hoverOn.object.slideRod !== undefined;
+				break;
+			case 'pivot':
+				fill = hoverOn.object.rotRods.length !== 0;
+		}
+		if (!pos.is_equal(hover_pos)) {
+			draw_pivot(ctx, pos, fill, true);
+		}
+		draw_pivot(ctx, hover_pos, fill, false);
+	}
+}
 
 /**
  * Ground an element in the kinematic space.\
  * Placing a ground on where there is already one will delete it.
  */
-export function draw_ground_placement(ctx: CanvasRenderingContext2D, hoverOn: HoverOn, pos: Point) {
-	let dir = new Point(1, 0);
+export function draw_ground_placement(
+	ctx: CanvasRenderingContext2D,
+	hoverOn: HoverOn,
+	pos: Point2
+) {
+	let dir = new Point2(1, 0);
 	bigSwitch: switch (hoverOn.type) {
-		case 'beam pos':
-			highlight_node(ctx, pos);
-			for (let object of hoverOn.beamPos.beam.objects) {
-				if (object[1] === +(hoverOn.beamPos.k > 0.5)) {
-					switch (object[0].type) {
+		case 'rod pos':
+		case 'overlapping rods':
+			highlight_point(ctx, pos, MY_ORANGE);
+			for (let [object, k] of hoverOn.rodPos.rod.objects) {
+				if (k === +(hoverOn.rodPos.k > 0.5)) {
+					switch (object.type) {
 						case 'slider':
+							dir = object.dir;
 						case 'slidep':
 						case 'pivot':
-							pos = object[0].pos;
+							pos = object.pos;
 							break bigSwitch;
 					}
 				}
 			}
-			if (hoverOn.beamPos.k > 0.5) {
-				dir = hoverOn.beamPos.beam.dir().perp().mul(-1);
-				pos = hoverOn.beamPos.beam.b;
+			if (hoverOn.rodPos.k > 0.5) {
+				dir = hoverOn.rodPos.rod.dir().perp().mul(-1);
+				pos = hoverOn.rodPos.rod.b;
 			} else {
-				dir = hoverOn.beamPos.beam.dir().perp();
-				pos = hoverOn.beamPos.beam.a;
+				dir = hoverOn.rodPos.rod.dir().perp();
+				pos = hoverOn.rodPos.rod.a;
 			}
 			break;
-		case 'beam end':
+		case 'rod end':
 			if (hoverOn.isEnd) {
-				dir = hoverOn.beam.dir().perp().mul(-1);
+				dir = hoverOn.rod.dir().perp().mul(-1);
 			} else {
-				dir = hoverOn.beam.dir().perp();
+				dir = hoverOn.rod.dir().perp();
 			}
 			break;
 		case 'slider':
-			if (hoverOn.object.slideBeam !== undefined) {
-				dir = hoverOn.object.slideBeam.dir();
-			}
+			dir = hoverOn.object.dir;
+			pos = pos.add(hoverOn.object.dir.perp().mul(2));
+			break;
+		case 'slidep':
+		case 'pivot':
+			pos = pos.add(new Point2(0, 2));
 			break;
 		case 'fixation':
-			let closestBeam = hoverOn.object.fixedBeams[0][0].beam;
+			let closestRod = hoverOn.object.fixedRods[0][0].rod;
 			let dist = Infinity;
 			let aToB = true;
-			hoverOn.object.fixedBeams.forEach((beamPos) => {
-				let newDist = beamPos[0].beam.a.distance_to(pos);
+			hoverOn.object.fixedRods.forEach((rodPos) => {
+				let newDist = rodPos[0].rod.a.distance_to(pos);
 				if (newDist < dist) {
 					dist = newDist;
 					aToB = true;
-					closestBeam = beamPos[0].beam;
+					closestRod = rodPos[0].rod;
 				}
-				newDist = beamPos[0].beam.b.distance_to(pos);
+				newDist = rodPos[0].rod.b.distance_to(pos);
 				if (newDist < dist) {
 					dist = newDist;
 					aToB = false;
-					closestBeam = beamPos[0].beam;
+					closestRod = rodPos[0].rod;
 				}
 			});
 			if (aToB) {
-				dir = closestBeam.dir().perp();
+				dir = closestRod.dir().perp();
 			} else {
-				dir = closestBeam.dir().perp().mul(-1);
+				dir = closestRod.dir().perp().mul(-1);
 			}
 			break;
 	}
 	draw_ground(ctx, pos, dir);
 }
 
-export function highlight_node(ctx: CanvasRenderingContext2D, pos: Point) {
+export function highlight_point(ctx: CanvasRenderingContext2D, pos: Point2, color: string) {
 	const grad = ctx.createRadialGradient(pos.x, pos.y, 4, pos.x, pos.y, 25);
-	grad.addColorStop(0, '#ffbe80');
-	grad.addColorStop(1, '#ffbe8000');
+	grad.addColorStop(0, color);
+	grad.addColorStop(1, color + '00');
 	ctx.beginPath();
 	ctx.arc(pos.x, pos.y, 25, 0, TAU);
 	ctx.fillStyle = grad;
 	ctx.fill();
 }
 
-export function highlight_beam(ctx: CanvasRenderingContext2D, beam: Beam) {
+export function highlight_rod(ctx: CanvasRenderingContext2D, rod: Rod, color: string) {
 	const width = 26;
-	let delta = beam.dir();
+	let delta = rod.b.sub(rod.a);
 	let angle = delta.angle_rad();
-	let pR = beam.a.rotate_rad(-angle);
+	let pR = rod.a.rotate_rad(-angle);
 	ctx.rotate(angle);
 	const grad = ctx.createLinearGradient(pR.x, pR.y - width / 2, pR.x, pR.y + width / 2);
-	grad.addColorStop(0, '#ffbe8000');
-	grad.addColorStop(0.25, '#ffbe80');
-	grad.addColorStop(0.75, '#ffbe80');
-	grad.addColorStop(1, '#ffbe8000');
+	grad.addColorStop(0, color + '00');
+	grad.addColorStop(0.25, color);
+	grad.addColorStop(0.75, color);
+	grad.addColorStop(1, color + '00');
 	ctx.fillStyle = grad;
 	ctx.roundRect(
 		pR.x - width / 3,
@@ -103,53 +352,76 @@ export function highlight_beam(ctx: CanvasRenderingContext2D, beam: Beam) {
 	ctx.rotate(-angle);
 }
 
-export function draw_fixation_bottom(ctx: CanvasRenderingContext2D, pos: Point) {
+export function draw_fixation_bottom(ctx: CanvasRenderingContext2D, pos: Point2) {
 	ctx.beginPath();
 	ctx.arc(pos.x, pos.y, 8, 0, TAU);
-	ctx.fillStyle = '#001d59';
+	ctx.fillStyle = MY_BORDER;
 	ctx.fill();
 }
 
-export function draw_fixation_top(ctx: CanvasRenderingContext2D, pos: Point) {
+export function draw_fixation_top(ctx: CanvasRenderingContext2D, pos: Point2) {
 	ctx.beginPath();
 	ctx.arc(pos.x, pos.y, 6, 0, TAU);
-	ctx.fillStyle = '#b7e2ff';
+	ctx.fillStyle = MY_BLUE;
 	ctx.fill();
 }
 
-export function draw_pivot(ctx: CanvasRenderingContext2D, pos: Point) {
-	ctx.strokeStyle = '#001d59';
+export function draw_pivot(
+	ctx: CanvasRenderingContext2D,
+	pos: Point2,
+	fill: boolean,
+	transparent: boolean
+) {
+	let tr = transparent ? MY_TRANSPARENT : '';
+	ctx.strokeStyle = MY_BORDER + (transparent ? MY_TRANSBORDER : '');
 	ctx.lineWidth = 2;
 	ctx.beginPath();
 	ctx.arc(pos.x, pos.y, 8, 0, TAU);
-	ctx.fillStyle = '#ffbe80';
+	ctx.fillStyle = MY_ORANGE + tr;
 	ctx.fill();
 	ctx.stroke();
 	ctx.beginPath();
 	ctx.arc(pos.x, pos.y, 4, 0, TAU);
-	ctx.fillStyle = '#b7e2ff';
+	ctx.fillStyle = fill ? MY_BLUE + tr : MY_BACKGROUND + tr;
 	ctx.fill();
 	ctx.stroke();
 }
 
-export function draw_beam(ctx: CanvasRenderingContext2D, beam: Beam) {
-	ctx.lineCap = 'square';
-	ctx.strokeStyle = '#001d59';
+export function draw_rod_start(ctx: CanvasRenderingContext2D, pos: Point2, transparent: boolean) {
+	ctx.strokeStyle = MY_BORDER + (transparent ? MY_TRANSBORDER : '');
+	ctx.lineWidth = 2;
 	ctx.beginPath();
-	ctx.moveTo(beam.a.x, beam.a.y);
-	ctx.lineTo(beam.b.x, beam.b.y);
+	ctx.rect(pos.x - 4, pos.y - 4, 8, 8);
+	ctx.fillStyle = MY_BLUE + (transparent ? MY_TRANSPARENT : '');
+	ctx.fill();
+	ctx.stroke();
+}
+
+export function draw_rod(ctx: CanvasRenderingContext2D, rod: Rod) {
+	ctx.lineCap = 'square';
+	ctx.strokeStyle = MY_BORDER;
+	ctx.beginPath();
+	ctx.moveTo(rod.a.x, rod.a.y);
+	ctx.lineTo(rod.b.x, rod.b.y);
 	ctx.lineWidth = 8;
 	ctx.stroke();
-	ctx.strokeStyle = '#b7e2ff';
+	ctx.strokeStyle = MY_BLUE;
 	ctx.beginPath();
-	ctx.moveTo(beam.a.x, beam.a.y);
-	ctx.lineTo(beam.b.x, beam.b.y);
+	ctx.moveTo(rod.a.x, rod.a.y);
+	ctx.lineTo(rod.b.x, rod.b.y);
 	ctx.lineWidth = 4;
 	ctx.stroke();
 }
 
-export function draw_slider(ctx: CanvasRenderingContext2D, pos: Point, dir: Point) {
-	ctx.strokeStyle = '#001d59';
+export function draw_slider(
+	ctx: CanvasRenderingContext2D,
+	pos: Point2,
+	dir: Point2,
+	fill: boolean,
+	transparent: boolean
+) {
+	let tr = transparent ? MY_TRANSPARENT : '';
+	ctx.strokeStyle = MY_BORDER + (transparent ? MY_TRANSBORDER : '');
 	ctx.lineWidth = 2;
 
 	let angle = dir.angle_rad();
@@ -158,13 +430,13 @@ export function draw_slider(ctx: CanvasRenderingContext2D, pos: Point, dir: Poin
 
 	ctx.beginPath();
 	ctx.roundRect(pR.x - 12, pR.y - 7, 24, 14, [2]);
-	ctx.fillStyle = '#ffbe80';
+	ctx.fillStyle = MY_ORANGE + tr;
 	ctx.fill();
 	ctx.stroke();
 
 	ctx.beginPath();
 	ctx.rect(pR.x - 7, pR.y - 3, 14, 6);
-	ctx.fillStyle = '#b7e2ff';
+	ctx.fillStyle = fill ? MY_BLUE + tr : MY_BACKGROUND + tr;
 	ctx.fill();
 	ctx.stroke();
 
@@ -173,11 +445,11 @@ export function draw_slider(ctx: CanvasRenderingContext2D, pos: Point, dir: Poin
 
 export function draw_slidep(
 	ctx: CanvasRenderingContext2D,
-	pos: Point,
-	dir: Point,
-	overDirs: Point[]
+	pos: Point2,
+	dir: Point2,
+	overDirs: Point2[]
 ) {
-	ctx.strokeStyle = '#001d59';
+	ctx.strokeStyle = MY_BORDER;
 	ctx.lineWidth = 2;
 
 	let angle = dir.angle_rad();
@@ -193,7 +465,7 @@ export function draw_slidep(
 	ctx.fill();
 	ctx.stroke();
 
-	ctx.fillStyle = '#ffbe80';
+	ctx.fillStyle = MY_ORANGE;
 	ctx.fillRect(pR.x - 11, pR.y - 6, 22, 12);
 	ctx.fillStyle = '#ffbe80b0';
 	ctx.fillRect(pR.x - 8, pR.y - 7, 16, 14);
@@ -203,14 +475,14 @@ export function draw_slidep(
 	ctx.lineCap = 'butt';
 	for (let overDir of overDirs) {
 		let b = pos.add(overDir.normalize().mul(15));
-		ctx.strokeStyle = '#001d59';
+		ctx.strokeStyle = MY_BORDER;
 		ctx.beginPath();
 		ctx.moveTo(pos.x, pos.y);
 		ctx.lineTo(b.x, b.y);
 		ctx.lineWidth = 8;
 		ctx.stroke();
 		b = pos.add(overDir.normalize().mul(16));
-		ctx.strokeStyle = '#b7e2ff';
+		ctx.strokeStyle = MY_BLUE;
 		ctx.beginPath();
 		ctx.moveTo(pos.x, pos.y);
 		ctx.lineTo(b.x, b.y);
@@ -219,36 +491,32 @@ export function draw_slidep(
 	}
 }
 
-export function draw_ground(ctx: CanvasRenderingContext2D, pos: Point, dir: Point) {
+export function draw_ground(ctx: CanvasRenderingContext2D, pos: Point2, dir: Point2) {
 	let angle = dir.angle_rad();
-	let pR = pos.rotate_rad(-angle).add(new Point(0, 4));
+	let pR = pos.rotate_rad(-angle).add(new Point2(0, 4));
 	ctx.rotate(angle);
 
-	ctx.strokeStyle = '#001d59';
+	ctx.strokeStyle = MY_BORDER;
 	ctx.lineCap = 'butt';
 	ctx.lineWidth = 4;
 	ctx.beginPath();
 	ctx.moveTo(pR.x, pR.y);
-	ctx.lineTo(pR.x, pR.y + 8);
+	ctx.lineTo(pR.x, pR.y + 6);
 	ctx.stroke();
 
 	ctx.lineCap = 'round';
-	ctx.lineWidth = 2.5;
-	ctx.beginPath();
-	ctx.moveTo(pR.x - 12, pR.y + 8.5);
-	ctx.lineTo(pR.x + 12, pR.y + 8.5);
-	ctx.stroke();
-
 	ctx.lineWidth = 2;
 	ctx.beginPath();
-	ctx.moveTo(pR.x - 12, pR.y + 9);
-	ctx.lineTo(pR.x - 6, pR.y + 18);
-	ctx.moveTo(pR.x - 6, pR.y + 9);
-	ctx.lineTo(pR.x, pR.y + 18);
-	ctx.moveTo(pR.x, pR.y + 9);
-	ctx.lineTo(pR.x + 6, pR.y + 18);
-	ctx.moveTo(pR.x + 6, pR.y + 9);
-	ctx.lineTo(pR.x + 12, pR.y + 18);
+	ctx.moveTo(pR.x - 12, pR.y + 6.5);
+	ctx.lineTo(pR.x + 12, pR.y + 6.5);
+	ctx.moveTo(pR.x - 12, pR.y + 7);
+	ctx.lineTo(pR.x - 6, pR.y + 16);
+	ctx.moveTo(pR.x - 6, pR.y + 7);
+	ctx.lineTo(pR.x, pR.y + 16);
+	ctx.moveTo(pR.x, pR.y + 7);
+	ctx.lineTo(pR.x + 6, pR.y + 16);
+	ctx.moveTo(pR.x + 6, pR.y + 7);
+	ctx.lineTo(pR.x + 12, pR.y + 16);
 	ctx.stroke();
 
 	ctx.rotate(-angle);

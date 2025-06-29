@@ -1,53 +1,38 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import type { KinState, GrabElem, HoverOn, KinElem } from '$lib/types';
-	import { Beam, Point, HOVER_RADIUS, TAU, Mode } from '$lib/types';
+	import type { Mode, HoverOn, KinState } from '$lib/types';
+	import { Point2, HOVER_RADIUS, TAU, MY_RED, Rod } from '$lib/types';
+	import { get_error, animate, drag } from '$lib/animation';
 	import {
-		translate_beam,
-		pull_beam_pos_to_point,
-		get_error,
-		apply_constrain,
-		get_actions,
-		get_elements
-	} from '$lib/utils';
-	import {
-		get_grab_elem,
 		get_hover_on,
-		place_beam,
+		place_rod,
 		place_ground,
 		place_pivot,
-		place_slider
+		place_slider,
+		get_hover_pos
 	} from '$lib/placing-elements';
-	import {
-		draw_beam,
-		draw_fixation_bottom,
-		draw_fixation_top,
-		draw_ground,
-		draw_ground_placement,
-		draw_pivot,
-		draw_slidep,
-		draw_slider,
-		highlight_beam,
-		highlight_node
-	} from '$lib/draw';
+	import { draw_kinspace } from '$lib/draw';
+	import { erase } from '$lib/utils';
 
-	let mode: (typeof Mode)[keyof typeof Mode] = Mode.Idle;
-	let startBeamPos: Point; // mode = 'PlacingBeamEnd'
-	let startBeamHoverOn: HoverOn; // mode = 'PlacingBeamEnd'
+	let mode: Mode = { type: 'idle' };
+	let mouse: Point2 = $state(new Point2());
 	let hoverOn: HoverOn = { type: 'void' };
-	let grabbed: GrabElem; // mode = 'Grabbing' | 'Animating'
-	let beamIdCounter: number = 0;
+	let rodIdCounter: number = 0;
 
-	let mouse = $state(new Point());
 	let cursor = $state('auto');
-	let kinState: KinState = { beams: [], sliders: [], slideps: [], pivots: [], fixations: [] };
+	let kinState: KinState = { rods: [], sliders: [], slideps: [], pivots: [], fixations: [] };
 
 	let canvas: HTMLCanvasElement;
-	let ctx: CanvasRenderingContext2D | null;
-	let animateCheckbox: HTMLInputElement;
+	let ctx: CanvasRenderingContext2D;
 
+	// TODO : rod-hover on pivot/slider
+	// TODO : show degrees of freedom
+	// TODO : progressive aniamtions
 	// TODO : k < 1 does shit
-	// TODO : beam -> rod / barre
+	// TODO : ctrl Z
+	// TODO : cotation / dimention (D)
+	// TODO : save file
+	// TODO : black and white mode
 
 	onMount(() => {
 		const rect = canvas.getBoundingClientRect();
@@ -56,7 +41,10 @@
 		canvas.width = rect.width * dpr;
 		canvas.height = rect.height * dpr;
 		// Re-get context after canvas size change (canvas size change resets context)
-		ctx = canvas.getContext('2d');
+		let newCtx = canvas.getContext('2d');
+		if (newCtx !== null) {
+			ctx = newCtx;
+		}
 		// Set the display size (CSS pixels)
 		canvas.style.width = rect.width + 'px';
 		canvas.style.height = rect.height + 'px';
@@ -71,111 +59,24 @@
 	}
 
 	function update_mouse() {
-		hoverOn = get_hover_on(
-			kinState,
-			mouse,
-			mode === Mode.Animating || mode === Mode.Grabbing ? grabbed : undefined
-		);
-		if (mode !== Mode.Animating) {
-			switch (hoverOn.type) {
-				case 'beam pos':
-					mouse = hoverOn.beamPos.get_pos();
-					break;
-				case 'beam end':
-					mouse = hoverOn.isEnd ? hoverOn.beam.b.clone() : hoverOn.beam.a.clone();
-					break;
-				case 'slider':
-				case 'slidep':
-				case 'pivot':
-				case 'fixation':
-					mouse = hoverOn.object.pos.clone();
-					break;
-			}
-		}
-		switch (mode) {
-			case Mode.Idle:
+		let ignore = mode.type === 'animating' || mode.type === 'dragging' ? mode.grabbed : undefined;
+		hoverOn = get_hover_on(kinState, mode, mouse, ignore);
+		switch (mode.type) {
+			case 'idle':
 				if (hoverOn.type === 'void') {
 					cursor = 'auto';
 				} else {
 					cursor = 'grab';
 				}
 				break;
-			case Mode.Animating:
-				// (3) :
-				// Generate list of all connected elements (beams and objects) recursively : from mouse (to ground)
-				// Generate list of actions from elements list (constrain, beam, constrain)
-				//
-				// LOOP until error < lambda {
-				//     Pull BEAM / ELEMENT to mouse
-				//     iter list {
-				//         (IGNORE GROUND)
-				//         Beam : Pull connected OBJECTS
-				//         Object : Pull BEAMS by appling constrains
-				//     }
-				//
-				//     iter list reversed {
-				//         Beam : Pull connected OBJECTS
-				//         Object : Pull BEAMS by appling constrains
-				//     }
-				// }
-
-				// Pull BEAM / ELEMENT to mouse
-				let firstElement: KinElem;
-				// TODO : Appliquer la contrainte de la souris en limitant la distance parcourue
-				switch (grabbed.type) {
-					case 'beam pos':
-						firstElement = grabbed.beam;
-						pull_beam_pos_to_point(grabbed, mouse);
-						break;
-					case 'slider':
-					case 'slidep':
-					case 'pivot':
-					case 'fixation':
-						firstElement = grabbed;
-						firstElement.pos = mouse.clone();
-						break;
-				}
-				// Generate list of beams and objects : from mouse to ground(s)
-				let elements = get_elements([firstElement]);
-				let actions = get_actions(elements);
-				console.log('elements', elements);
-				console.log('actions', actions);
-
-				// LOOP until error < lambda {
-				for (let i = 0; i < 20; i++) {
-					for (let action of actions) {
-						apply_constrain(action, 0.5);
-					}
-					for (let action of actions.toReversed()) {
-						apply_constrain(action, 0.5);
-					}
-					if (get_error(kinState) < 0.001) {
-						break;
-					}
-				}
+			case 'animating':
+				animate(kinState, mode.grabbed, mouse.clone());
 				break;
-			case Mode.Grabbing:
-				switch (grabbed.type) {
-					case 'beam pos':
-						if (grabbed.k === 0) {
-						} else if (grabbed.k === 1) {
-						} else {
-							translate_beam(grabbed, mouse);
-							// TODO : move attached nodes
-						}
-
-						break;
-					case 'slider':
-					case 'slidep':
-					case 'pivot':
-					case 'fixation':
-						grabbed.pos = mouse.clone();
-						// TODO : move attached beams
-						// move attached nodes
-						break;
-				}
-
+			case 'dragging':
+				drag(kinState, mode.grabbed, mouse.clone());
 				break;
+			case 'erasing':
+				erase(kinState, hoverOn);
 		}
 		draw();
 	}
@@ -183,92 +84,125 @@
 	function onpointerdown(event: PointerEvent) {
 		if (event.button === 0) {
 			// Left button
-			// TODO : placing objet on beam -> ground change
-			let pos = mouse.clone();
-			if (hoverOn.type !== 'void') {
-				grabbed = get_grab_elem(hoverOn);
-			}
-			switch (mode) {
-				case Mode.Idle:
-					if (hoverOn.type !== 'void') {
-						mode = Mode.Grabbing;
-						cursor = Mode.Grabbing;
+			let pos = get_hover_pos(mouse, hoverOn);
+
+			switch (mode.type) {
+				case 'idle':
+					switch (hoverOn.type) {
+						case 'rod pos':
+							mode = { type: 'dragging', grabbed: hoverOn.rodPos };
+							cursor = 'grabbing';
+							break;
+						case 'overlapping rods':
+							mode = { type: 'dragging', grabbed: hoverOn.rodPos };
+							cursor = 'grabbing';
+							break;
+						case 'rod end':
+							mode = { type: 'dragging', grabbed: hoverOn.rod.rod_pos(+hoverOn.isEnd) };
+							cursor = 'grabbing';
+							break;
+						case 'slider':
+						case 'slidep':
+						case 'pivot':
+						case 'fixation':
+							mode = { type: 'dragging', grabbed: hoverOn.object };
+							cursor = 'grabbing';
 					}
 					break;
-				case Mode.Animate:
+				case 'animate':
 					switch (hoverOn.type) {
-						case 'void':
-							break;
-						case 'beam pos':
-							if (!(hoverOn.beamPos.beam.groundA || hoverOn.beamPos.beam.groundB)) {
-								mode = Mode.Animating;
+						case 'rod pos':
+							if (!(hoverOn.rodPos.rod.groundA || hoverOn.rodPos.rod.groundB)) {
+								mode = { type: 'animating', grabbed: hoverOn.rodPos };
 							}
 							break;
-						case 'beam end':
-							if (!(hoverOn.beam.groundA || hoverOn.beam.groundB)) {
-								mode = Mode.Animating;
+						case 'overlapping rods':
+							if (!(hoverOn.rodPos.rod.groundA || hoverOn.rodPos.rod.groundB)) {
+								mode = { type: 'animating', grabbed: hoverOn.rodPos };
+							}
+							break;
+						case 'rod end':
+							if (!(hoverOn.rod.groundA || hoverOn.rod.groundB)) {
+								mode = { type: 'animating', grabbed: hoverOn.rod.rod_pos(+hoverOn.isEnd) };
 							}
 							break;
 						case 'slider':
 						case 'slidep':
 						case 'pivot':
 							if (!hoverOn.object.ground) {
-								mode = Mode.Animating;
+								mode = { type: 'animating', grabbed: hoverOn.object };
 							}
 							break;
 						case 'fixation':
 							if (
-								hoverOn.object.fixedBeams.every(
-									(beamPos) => !(beamPos[0].beam.groundA || beamPos[0].beam.groundB)
+								hoverOn.object.fixedRods.every(
+									(rodPos) => !(rodPos[0].rod.groundA || rodPos[0].rod.groundB)
 								)
 							) {
-								mode = Mode.Animating;
+								mode = { type: 'animating', grabbed: hoverOn.object };
 							}
-							break;
 					}
 					break;
-				case Mode.PlacingSlider:
-					place_slider(kinState, hoverOn, pos);
+				case 'erase':
+					erase(kinState, hoverOn);
+					mode = { type: 'erasing' };
 					break;
-				case Mode.PlacingPivot:
-					place_pivot(kinState, hoverOn, pos);
+				case 'placing slider':
+					place_slider(kinState, hoverOn, pos, mode.ground);
 					break;
-				case Mode.PlacingBeamStart:
-					startBeamPos = mouse.clone();
-					startBeamHoverOn = hoverOn;
-					mode = Mode.PlacingBeamEnd;
+				case 'placing pivot':
+					place_pivot(kinState, hoverOn, pos, mode.ground);
 					break;
-				case Mode.PlacingBeamEnd:
-					if (startBeamPos.distance_to(mouse) < HOVER_RADIUS) {
-						mode = Mode.PlacingBeamStart;
+				case 'placing rod start':
+					mode = {
+						type: 'placing rod end',
+						startPos: pos,
+						startHoverOn: hoverOn,
+						startGround: mode.ground,
+						ground: false
+					};
+					break;
+				case 'placing rod end':
+					if (mode.startPos.distance_to(pos) < HOVER_RADIUS) {
+						mode = { type: 'placing rod start', ground: false };
 						break;
 					}
-					beamIdCounter += 1;
-					place_beam(kinState, startBeamHoverOn, startBeamPos, hoverOn, pos, beamIdCounter);
-					mode = Mode.PlacingBeamStart;
+					rodIdCounter += 1;
+					place_rod(
+						kinState,
+						mode.startHoverOn,
+						mode.startPos,
+						mode.startGround,
+						hoverOn,
+						pos,
+						mode.ground,
+						rodIdCounter
+					);
+					mode = { type: 'placing rod start', ground: mode.startGround };
 					break;
-				case Mode.PlacingGround:
-					place_ground(hoverOn, mouse);
+				case 'placing ground':
+					place_ground(hoverOn, pos);
 					break;
 			}
 		} else if (event.button === 2) {
 			// Right button
-			mode = Mode.Idle;
+			mode = { type: 'idle' };
 			cursor = 'auto';
-			animateCheckbox.checked = false;
 		}
-		draw();
+		update_mouse();
 	}
 
 	function onpointerup(event: PointerEvent) {
-		switch (mode) {
-			case Mode.Animating:
-				mode = Mode.Animate;
+		switch (mode.type) {
+			case 'animating':
+				mode = { type: 'animate' };
 				break;
-			case Mode.Grabbing:
-				mode = Mode.Idle;
+			case 'dragging':
+				mode = { type: 'idle' };
 				cursor = 'auto';
 				break;
+			case 'erasing':
+				mode = { type: 'erase' };
 		}
 		update_mouse();
 	}
@@ -276,41 +210,91 @@
 	function onKeyDown(event: KeyboardEvent) {
 		switch (event.key) {
 			case 'Escape':
-				mode = Mode.Idle;
+				mode = { type: 'idle' };
 				cursor = 'auto';
-				animateCheckbox.checked = false;
 				break;
-			case 'a':
-				if (animateCheckbox.checked) {
-					mode = Mode.Idle;
+			case ' ':
+				if (mode.type === 'animate' || mode.type === 'animating') {
+					mode = { type: 'idle' };
 					cursor = 'auto';
-					animateCheckbox.checked = false;
+					break;
 				} else {
-					mode = Mode.Animate;
-					cursor = 'crosshair';
-					animateCheckbox.checked = true;
+					mode = { type: 'animate' };
+					cursor = 'move';
+				}
+				break;
+			case 'g':
+			case 'G':
+				switch (mode.type) {
+					case 'idle':
+					case 'dragging':
+					case 'animate':
+					case 'animating':
+					case 'erasing':
+					case 'dimension constraint':
+					case 'horizontal constraint':
+					case 'vertical constraint':
+					case 'normal constraint':
+						mode = { type: 'placing ground' };
+						cursor = 'none';
+						break;
+					case 'placing slider':
+					case 'placing pivot':
+					case 'placing rod start':
+						if (mode.ground) {
+							mode = { type: 'placing ground' };
+						} else {
+							mode.ground = true;
+						}
+						break;
+					case 'placing rod end':
+						if (mode.ground) {
+							mode = { type: 'placing ground' };
+						} else {
+							mode.startGround = false;
+							mode.ground = true;
+						}
 				}
 				break;
 			case 's':
-				mode = Mode.PlacingSlider;
+			case 'S':
+				mode = { type: 'placing slider', ground: false };
 				cursor = 'none';
-				animateCheckbox.checked = false;
 				break;
 			case 'p':
-				mode = Mode.PlacingPivot;
+			case 'P':
+				mode = { type: 'placing pivot', ground: false };
 				cursor = 'none';
-				animateCheckbox.checked = false;
 				break;
-			case 'b':
-				mode = Mode.PlacingBeamStart;
+			case 'r':
+			case 'R':
+				mode = { type: 'placing rod start', ground: false };
 				cursor = 'none';
-				animateCheckbox.checked = false;
 				break;
-			case 'g':
-				// TODO : add ground while placing another object
-				mode = Mode.PlacingGround;
-				cursor = 'none';
-				animateCheckbox.checked = false;
+			case 'e':
+			case 'E':
+				mode = { type: 'erase' };
+				cursor = 'crosshair';
+				break;
+			case 'd':
+			case 'D':
+				mode = { type: 'dimension constraint' };
+				cursor = 'auto';
+				break;
+			case 'h':
+			case 'H':
+				mode = { type: 'horizontal constraint' };
+				cursor = 'auto';
+				break;
+			case 'v':
+			case 'V':
+				mode = { type: 'vertical constraint' };
+				cursor = 'auto';
+				break;
+			case 'n':
+			case 'N':
+				mode = { type: 'normal constraint' };
+				cursor = 'auto';
 				break;
 		}
 		update_mouse();
@@ -322,26 +306,26 @@
 		ctx.clearRect(0, 0, canvas.width, canvas.height);
 		/*
 		// Sun
-		ctx.fillStyle = '#db5000';
+		ctx.fillStyle = MY_RED;
 		ctx.beginPath();
 		ctx.arc(canvas.width / 2, canvas.height - 300, 50, 0, TAU);
 		ctx.fill();
 		// Sea
-		ctx.fillStyle = '#b7e2ff';
+		ctx.fillStyle = MY_BLUE;
 		ctx.fillRect(0, canvas.height - 300, canvas.width, canvas.height);
 		*/
 		// Debug text
 		ctx.font = '16px Arial';
-		ctx.fillStyle = '#db5000';
-		ctx.fillText(mode, 10, 20);
-		ctx.fillText('beams: ' + kinState.beams.length, 10, 50);
+		ctx.fillStyle = MY_RED;
+		ctx.fillText(mode.type, 10, 20);
+		ctx.fillText('rods: ' + kinState.rods.length, 10, 50);
 		ctx.fillText('sliders: ' + kinState.sliders.length, 10, 70);
 		ctx.fillText('pivots: ' + kinState.pivots.length, 10, 90);
 		ctx.fillText('slideps: ' + kinState.slideps.length, 10, 110);
 		ctx.fillText('fixations: ' + kinState.fixations.length, 10, 130);
 		let nbGrounds = 0;
-		kinState.beams.forEach((beam) => {
-			if (beam.groundA || beam.groundB) {
+		kinState.rods.forEach((rod) => {
+			if (rod.groundA || rod.groundB) {
 				nbGrounds += 1;
 			}
 		});
@@ -368,53 +352,55 @@
 			case 'void':
 				ctx.fillText('' + mouse, 140, 50);
 				break;
-			case 'beam pos':
+			case 'rod pos':
 				ctx.fillText(
-					'[ Beam ' + hoverOn.beamPos.beam.id + ' ]  k: ' + hoverOn.beamPos.k.toFixed(3),
+					'[ Rod ' + hoverOn.rodPos.rod.id + ' ]  k: ' + hoverOn.rodPos.k.toFixed(3),
 					140,
 					50
 				);
-				for (let i = 0; i < hoverOn.beamPos.beam.objects.length; i++) {
-					let [objectType, k] = hoverOn.beamPos.beam.objects[i];
+				for (let i = 0; i < hoverOn.rodPos.rod.objects.length; i++) {
+					let [objectType, k] = hoverOn.rodPos.rod.objects[i];
 					ctx.fillText(objectType.type + '   k: ' + k.toFixed(3), 150, 70 + i * 20);
 				}
 				break;
-			case 'beam end':
+			case 'rod end':
 				let end = hoverOn.isEnd ? '(end)' : '(start)';
-				ctx.fillText('[ Beam ' + hoverOn.beam.id + ' ]  ' + end, 140, 50);
+				ctx.fillText('[ Rod ' + hoverOn.rod.id + ' ]  ' + end, 140, 50);
 				break;
 			case 'slider':
+			case 'rod-hover slider':
 				ctx.fillText('[ ' + hoverOn.object.type + ' ]', 140, 50);
 				ctx.fillText(
-					'fixed Beams: [' +
-						hoverOn.object.fixedBeams.map((beam) => {
-							return beam[0].beam.id;
+					'fixed Rods: [' +
+						hoverOn.object.fixedRods.map((rod) => {
+							return rod[0].rod.id;
 						}) +
 						']',
 					140,
 					70
 				);
-				ctx.fillText('slide Beam: ' + hoverOn.object.slideBeam?.id, 140, 100);
+				ctx.fillText('slide Rod: ' + hoverOn.object.slideRod?.id, 140, 100);
 				break;
 			case 'slidep':
+			case 'rod-hover slidep':
 				ctx.fillText('[ ' + hoverOn.object.type + ' ]', 140, 50);
 				ctx.fillText(
-					'rot Beams: [' +
-						hoverOn.object.rotBeams.map((beam) => {
-							return beam.beam.id;
+					'rot Rods: [' +
+						hoverOn.object.rotRods.map((rod) => {
+							return rod.rod.id;
 						}) +
 						']',
 					140,
 					70
 				);
-				ctx.fillText('slide Beam: ' + hoverOn.object.slideBeam?.id, 140, 90);
+				ctx.fillText('slide Rod: ' + hoverOn.object.slideRod?.id, 140, 90);
 				break;
 			case 'pivot':
 				ctx.fillText('[ ' + hoverOn.object.type + ' ]', 140, 50);
 				ctx.fillText(
-					'rot Beams: [' +
-						hoverOn.object.rotBeams.map((beam) => {
-							return beam.beam.id;
+					'rot Rods: [' +
+						hoverOn.object.rotRods.map((rod) => {
+							return rod.rod.id;
 						}) +
 						']',
 					140,
@@ -424,203 +410,38 @@
 			case 'fixation':
 				ctx.fillText('[ ' + hoverOn.object.type + ' ]', 140, 50);
 				ctx.fillText(
-					'fixed Beams: [' +
-						hoverOn.object.fixedBeams.map((beam) => {
-							return beam[0].beam.id;
+					'fixed Rods: [' +
+						hoverOn.object.fixedRods.map(([rodPos, dir]) => {
+							return rodPos.rod.id;
 						}) +
 						']',
 					140,
 					70
 				);
 				break;
+			case 'overlapping rods':
+				ctx.fillText('[ ' + hoverOn.rodPos.get_pos() + ' ]', 140, 50);
+				ctx.fillText(
+					'fixed Rods: [' +
+						hoverOn.rodsPositions.map((rodPos) => {
+							return rodPos.rod.id;
+						}) +
+						']',
+					140,
+					70
+				);
 		}
 
-		// TODO : Show UNCONNECTED Beams and pivot differently
-		// TODO : Handle ovelapping beams (as a node ?)
-
-		// HIGHLIGHT color
-		if (mode === Mode.Grabbing) {
-			if (grabbed.type === 'beam pos') {
-				highlight_beam(ctx, grabbed.beam);
-			} else {
-				highlight_node(ctx, grabbed.pos);
-			}
-		} else if (mode === Mode.Animate) {
-			switch (hoverOn.type) {
-				case 'beam pos':
-					if (!(hoverOn.beamPos.beam.groundA || hoverOn.beamPos.beam.groundB)) {
-						highlight_beam(ctx, hoverOn.beamPos.beam);
-					}
-					break;
-				case 'beam end':
-					if (!(hoverOn.beam.groundA || hoverOn.beam.groundB)) {
-						highlight_node(ctx, mouse);
-					}
-					break;
-				case 'slider':
-				case 'slidep':
-				case 'pivot':
-					if (!hoverOn.object.ground) {
-						highlight_node(ctx, mouse);
-					}
-					break;
-				case 'fixation':
-					if (
-						hoverOn.object.fixedBeams.every(
-							(beamPos) => !(beamPos[0].beam.groundA || beamPos[0].beam.groundB)
-						)
-					) {
-						highlight_node(ctx, mouse);
-					}
-					break;
-			}
-		} else if (mode !== Mode.Animating) {
-			switch (hoverOn.type) {
-				case 'beam pos':
-					highlight_beam(ctx, hoverOn.beamPos.beam);
-				case 'beam end':
-				case 'slider':
-				case 'slidep':
-				case 'pivot':
-				case 'fixation':
-					highlight_node(ctx, mouse);
-			}
-		}
-		if (mode === Mode.PlacingGround) {
-			draw_ground_placement(ctx, hoverOn, mouse.clone());
-		}
-		kinState.fixations.forEach((fixation) => {
-			draw_fixation_bottom(ctx, fixation.pos);
-		});
-		if (mode === Mode.PlacingBeamEnd) {
-			switch (startBeamHoverOn.type) {
-				case 'beam pos':
-				case 'beam end':
-					draw_fixation_bottom(ctx, startBeamPos);
-			}
-			switch (hoverOn.type) {
-				case 'beam pos':
-				case 'beam end':
-					draw_fixation_bottom(ctx, mouse);
-			}
-		}
-		kinState.beams.forEach((beam) => {
-			if (beam.groundA) {
-				draw_ground(ctx, beam.a, beam.dir().perp());
-			}
-			if (beam.groundB) {
-				draw_ground(ctx, beam.b, beam.dir().perp().mul(-1));
-			}
-			draw_beam(ctx, beam);
-		});
-		if (mode === Mode.PlacingBeamStart) {
-			ctx.strokeStyle = '#001d59';
-			ctx.lineWidth = 2;
-			ctx.beginPath();
-			ctx.rect(mouse.x - 4, mouse.y - 4, 8, 8);
-			ctx.fillStyle = '#b7e2ff';
-			ctx.fill();
-			ctx.stroke();
-		} else if (mode === Mode.PlacingBeamEnd) {
-			draw_beam(ctx, new Beam(startBeamPos, mouse, 0));
-		}
-		kinState.fixations.forEach((fixation) => {
-			draw_fixation_top(ctx, fixation.pos);
-		});
-		if (mode === Mode.PlacingBeamEnd) {
-			switch (startBeamHoverOn.type) {
-				case 'beam pos':
-				case 'beam end':
-					draw_fixation_top(ctx, startBeamPos);
-			}
-			switch (hoverOn.type) {
-				case 'beam pos':
-				case 'beam end':
-					draw_fixation_top(ctx, mouse);
-			}
-		}
-		kinState.pivots.forEach((pivot) => {
-			if (pivot.ground) {
-				draw_ground(ctx, pivot.pos, new Point());
-			}
-			draw_pivot(ctx, pivot.pos);
-		});
-		kinState.sliders.forEach((slider) => {
-			if (slider.ground) {
-				draw_ground(ctx, slider.pos, slider.dir);
-			}
-			draw_slider(ctx, slider.pos, slider.dir);
-		});
-		kinState.slideps.forEach((slidep) => {
-			let overDirs = slidep.rotBeams.map((beamP) => {
-				if (beamP.beam.a.is_equal(slidep.pos)) {
-					return beamP.beam.dir();
-				} else {
-					return beamP.beam.dir().mul(-1);
-				}
-			});
-			if (mode === Mode.PlacingBeamEnd) {
-				switch (startBeamHoverOn.type) {
-					case 'slidep':
-						if (startBeamPos.is_near_equal(slidep.pos)) {
-							overDirs.push(mouse.sub(startBeamPos));
-						}
-				}
-				switch (hoverOn.type) {
-					case 'slidep':
-						if (mouse.is_near_equal(slidep.pos)) {
-							overDirs.push(startBeamPos.sub(mouse));
-						}
-				}
-			}
-			draw_slidep(ctx, slidep.pos, slidep.dir, overDirs);
-			if (slidep.ground) {
-				draw_ground(ctx, slidep.pos, new Point());
-			}
-			draw_pivot(ctx, slidep.pos);
-		});
-		if (mode === Mode.PlacingSlider) {
-			let pos = mouse.clone();
-			let dir = new Point();
-			switch (hoverOn.type) {
-				case 'beam pos':
-					pos = hoverOn.beamPos.get_pos();
-					dir = hoverOn.beamPos.beam.dir();
-					break;
-				case 'slider':
-				case 'slidep':
-					// TODO : do not draw_slider;
-					break;
-				case 'pivot':
-					hoverOn.object.rotBeams.toReversed().forEach((beamPos) => {
-						if (beamPos.k !== 0 && beamPos.k !== 1) {
-							dir = beamPos.beam.dir();
-						}
-					});
-					break;
-				case 'fixation':
-					let fixationBeam = hoverOn.object.fixedBeams[0];
-					if (hoverOn.object.fixedBeams[0] !== null) {
-						dir = fixationBeam[0].beam.dir();
-					}
-					break;
-			}
-			if (!(hoverOn.type === 'slider' || hoverOn.type === 'slidep')) {
-				draw_slider(ctx, pos, dir);
-			}
-		}
-		if (mode === Mode.PlacingPivot) {
-			draw_pivot(ctx, mouse);
-		}
-
-		kinState.beams.forEach((beam) => {
-			let p = beam.a.add(beam.b).div(2);
+		draw_kinspace(ctx, kinState, mode, hoverOn, mouse.clone());
+		// Debug : rod number
+		kinState.rods.forEach((rod) => {
+			let p = rod.a.add(rod.b).div(2);
 			ctx.beginPath();
 			ctx.arc(p.x, p.y, 9, 0, TAU);
 			ctx.fillStyle = '#ffffffd0';
 			ctx.fill();
 			ctx.fillStyle = '#000000d0';
-			ctx.fillText(beam.id.toString(), p.x - 4, p.y + 5);
+			ctx.fillText(rod.id.toString(), p.x - 4, p.y + 5);
 		});
 	}
 </script>
@@ -630,64 +451,113 @@
 	<div class="topnav">
 		<a href="/">Slidep</a>
 		<div class="toolbar">
-			<button
-				onclick={() => {
-					mode = Mode.PlacingSlider;
-					cursor = 'none';
-					animateCheckbox.checked = false;
-				}}
-				title="Slider (s)"
-				>Slider
-			</button>
-			<button
-				onclick={() => {
-					mode = Mode.PlacingPivot;
-					cursor = 'none';
-					animateCheckbox.checked = false;
-				}}
-				title="Pivot (p)"
-			>
-				Pivot
-			</button>
-			<button
-				onclick={() => {
-					mode = Mode.PlacingBeamStart;
-					cursor = 'none';
-					animateCheckbox.checked = false;
-				}}
-				title="Rod (b)"
-			>
-				Rod
-			</button>
-			<button
-				onclick={() => {
-					mode = Mode.PlacingGround;
-					cursor = 'none';
-					animateCheckbox.checked = false;
-				}}
-				title="Ground (g)"
-			>
-				Ground
-			</button>
-			|
-			<div>
-				<input
-					bind:this={animateCheckbox}
+			<div class="subbar">
+				<button
 					onclick={() => {
-						if (animateCheckbox.checked) {
-							mode = Mode.Animate;
-							cursor = 'crosshair';
-						} else {
-							mode = Mode.Idle;
+						mode = { type: 'erase' };
+						cursor = 'crosshair';
+					}}
+					title="Eraser (E)"
+				>
+					<img src="/icons/eraser.svg" alt="eraser" />
+				</button>
+			</div>
+			<div class="subbar">
+				<button
+					onclick={() => {
+						mode = { type: 'placing rod start', ground: false };
+						cursor = 'none';
+					}}
+					title="Rod (R)"
+				>
+					<img src="/icons/rod.svg" alt="rod" />
+				</button>
+				<button
+					onclick={() => {
+						mode = { type: 'placing slider', ground: false };
+						cursor = 'none';
+					}}
+					title="Slider (S)"
+				>
+					<img src="/icons/slider.svg" alt="slider" />
+				</button>
+				<button
+					onclick={() => {
+						mode = { type: 'placing pivot', ground: false };
+						cursor = 'none';
+					}}
+					title="Pivot (P)"
+				>
+					<img src="/icons/pivot.svg" alt="pivot" />
+				</button>
+				<button
+					onclick={() => {
+						mode = { type: 'placing ground' };
+						cursor = 'none';
+					}}
+					title="Ground (G)"
+				>
+					<img src="/icons/ground.svg" alt="ground" />
+				</button>
+			</div>
+			<div class="subbar">
+				<button
+					onclick={() => {
+						mode = { type: 'dimension constraint' };
+						cursor = 'auto';
+					}}
+					title="Dimension (D)"
+				>
+					<img src="/icons/dimention.svg" alt="dimention" />
+				</button>
+				<button
+					onclick={() => {
+						mode = { type: 'horizontal constraint' };
+						cursor = 'auto';
+					}}
+					title="Horizontal (H)"
+				>
+					<img src="/icons/horizontal.svg" alt="dimention" />
+				</button>
+				<button
+					onclick={() => {
+						mode = { type: 'vertical constraint' };
+						cursor = 'auto';
+					}}
+					title="Vertical (V)"
+				>
+					<img src="/icons/vertical.svg" alt="dimention" />
+				</button>
+				<button
+					onclick={() => {
+						mode = { type: 'normal constraint' };
+						cursor = 'auto';
+					}}
+					title="Normal (N)"
+				>
+					<img src="/icons/normal.svg" alt="dimention" />
+				</button>
+			</div>
+			<div class="subbar">
+				<button
+					onclick={() => {
+						if (mode.type === 'animate' || mode.type === 'animating') {
+							mode = { type: 'idle' };
 							cursor = 'auto';
+						} else {
+							mode = { type: 'animate' };
+							cursor = 'move';
 						}
 					}}
-					type="checkbox"
-					class="hidden"
-					name="cb"
-					id="cb"
-				/>
-				<label for="cb">Animate</label>
+					title="Animate (Space)"
+				>
+					<img
+						src="/icons/{mode.type === 'animate' || mode.type === 'animating'
+							? 'stop'
+							: 'play'}.svg"
+						alt="play/stop"
+					/>
+				</button>
 			</div>
 		</div>
 	</div>
@@ -712,6 +582,11 @@
 		height: 100%;
 		overflow: hidden;
 	}
+	.main-canvas {
+		width: 100%;
+		height: 100%;
+		display: block;
+	}
 	.app-container {
 		display: grid;
 		grid-template-rows: auto 1fr;
@@ -723,6 +598,7 @@
 	.topnav {
 		background-color: #ffbe80;
 		overflow: hidden;
+		height: 48px;
 	}
 	.topnav a {
 		float: left;
@@ -733,59 +609,28 @@
 		font-size: 24px;
 		font-weight: bolder;
 	}
-	.main-canvas {
-		width: 100%;
-		height: 100%;
-		display: block;
-	}
 	.toolbar {
-		margin-right: 60pt;
 		display: flex;
 		justify-content: center;
-		height: 100%;
 		align-items: center;
+		margin-right: 60pt;
+		height: 100%;
+		gap: 12px;
+	}
+	.subbar {
+		display: flex;
+		gap: 2px;
+		background-color: #ffedc6;
+		border-radius: 5px;
+		overflow: hidden;
 	}
 	button {
 		display: inline-block;
-		background-color: #b7e2ff;
-		color: #001d59;
-		font-size: medium;
-		padding: 0pt 2pt;
-		border-radius: 2pt;
-		border: #001d59 solid 2pt;
-		margin: 4pt;
+		border: solid #ffedc6 2pt;
+		border-radius: 3.5pt;
 		cursor: pointer;
 	}
 	button:hover {
-		background-color: #97c2df;
-	}
-
-	.hidden {
-		position: absolute;
-		visibility: hidden;
-		opacity: 0;
-	}
-	input[type='checkbox'] + label {
-		display: inline-block;
-		background-color: #b7e2ff;
-		color: #001d59;
-		font-size: medium;
-		padding: 0pt 2pt;
-		border-radius: 2pt;
-		border: #001d59 solid 2pt;
-		margin: 4pt;
-		cursor: pointer;
-	}
-	input[type='checkbox'] + label:hover {
-		background-color: #97c2df;
-	}
-
-	input[type='checkbox']:checked + label {
-		background-color: #ffedc6;
-		color: #db5000;
-		border-color: #db5000;
-	}
-	input[type='checkbox']:checked + label:hover {
-		background-color: #dfcda6;
+		border: solid #db5000 2pt;
 	}
 </style>

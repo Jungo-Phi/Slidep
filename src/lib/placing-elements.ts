@@ -6,231 +6,277 @@ import type {
 	KinState,
 	GrabElem,
 	HoverOn,
-	HoverOnStuff
+	Mode,
+	RodPos
 } from '$lib/types';
-import { Point, Beam, BeamPos, HOVER_RADIUS, HOVER_WIDTH } from '$lib/types';
+import { Point2, Rod, HOVER_RADIUS, HOVER_WIDTH } from '$lib/types';
 
-import { is_beam_in_elem } from '$lib/utils';
+import { is_rod_in_elem } from '$lib/utils';
 
 /**
- * Returns the kind of object / beam / position you are hovering on.
+ * Returns the kind of object / rod / position you are hovering on.
  */
 export function get_hover_on(
 	kinState: KinState,
-	pos: Point,
+	mode: Mode,
+	pos: Point2,
 	ignore: GrabElem | undefined
 ): HoverOn {
 	for (let object of kinState.sliders) {
-		if (ignore === undefined || object !== ignore) {
-			if (object.pos.distance_to(pos) < HOVER_RADIUS) {
-				return { type: 'slider', object };
-			}
+		if ((ignore === undefined || object !== ignore) && object.pos.distance_to(pos) < HOVER_RADIUS) {
+			return { type: 'slider', object };
 		}
 	}
 	for (let object of kinState.slideps) {
-		if (ignore === undefined || object !== ignore) {
-			if (object.pos.distance_to(pos) < HOVER_RADIUS) {
-				return { type: 'slidep', object };
-			}
+		if ((ignore === undefined || object !== ignore) && object.pos.distance_to(pos) < HOVER_RADIUS) {
+			return { type: 'slidep', object };
 		}
 	}
 	for (let object of kinState.pivots) {
-		if (ignore === undefined || object !== ignore) {
-			if (object.pos.distance_to(pos) < HOVER_RADIUS) {
-				return { type: 'pivot', object };
-			}
+		if ((ignore === undefined || object !== ignore) && object.pos.distance_to(pos) < HOVER_RADIUS) {
+			return { type: 'pivot', object };
 		}
 	}
 	for (let object of kinState.fixations) {
-		if (ignore === undefined || object !== ignore) {
-			if (object.pos.distance_to(pos) < HOVER_RADIUS) {
-				return { type: 'fixation', object };
+		if ((ignore === undefined || object !== ignore) && object.pos.distance_to(pos) < HOVER_RADIUS) {
+			return { type: 'fixation', object };
+		}
+	}
+	for (let rod of kinState.rods) {
+		if (ignore === undefined || !is_rod_in_elem(rod, ignore)) {
+			if (rod.a.distance_to(pos) < HOVER_RADIUS) {
+				return { type: 'rod end', rod, isEnd: false };
+			}
+			if (rod.b.distance_to(pos) < HOVER_RADIUS) {
+				return { type: 'rod end', rod, isEnd: true };
 			}
 		}
 	}
-	for (let beam of kinState.beams) {
-		if (ignore === undefined || !is_beam_in_elem(beam, ignore)) {
-			if (beam.a.distance_to(pos) < HOVER_RADIUS) {
-				return { type: 'beam end', beam, isEnd: false };
+
+	if (mode.type === 'placing rod end') {
+		let rod = new Rod(mode.startPos, pos, 0);
+		for (let object of kinState.sliders) {
+			if (
+				(ignore === undefined || object !== ignore) &&
+				rod.k_coord(object.pos) < 1 &&
+				rod.distance_to(object.pos) < HOVER_WIDTH &&
+				object.pos.distance_to(pos) >= HOVER_RADIUS
+			) {
+				return { type: 'rod-hover slider', object, startPos: mode.startPos };
 			}
-			if (beam.b.distance_to(pos) < HOVER_RADIUS) {
-				return { type: 'beam end', beam, isEnd: true };
+		}
+		for (let object of kinState.slideps) {
+			if (
+				(ignore === undefined || object !== ignore) &&
+				rod.k_coord(object.pos) < 1 &&
+				rod.distance_to(object.pos) < HOVER_WIDTH &&
+				object.pos.distance_to(pos) >= HOVER_RADIUS
+			) {
+				return { type: 'rod-hover slidep', object, startPos: mode.startPos };
 			}
 		}
 	}
 
 	let hoverOn: HoverOn = { type: 'void' };
 	let width = HOVER_WIDTH;
-	for (let beam of kinState.beams) {
-		let [k, dist] = beam.coords(pos);
+	for (let rod of kinState.rods) {
+		let [k, dist] = rod.coords(pos);
 		if (dist < width && 0 < k && k < 1) {
-			width = dist;
-			if (ignore === undefined || (ignore !== undefined && !is_beam_in_elem(beam, ignore))) {
-				hoverOn = { type: 'beam pos', beamPos: new BeamPos(beam, k) };
+			if (ignore === undefined || !is_rod_in_elem(rod, ignore)) {
+				switch (hoverOn.type) {
+					case 'void':
+						hoverOn = { type: 'rod pos', rodPos: rod.rod_pos(k) };
+						break;
+					case 'rod pos':
+						let rodPos: RodPos = hoverOn.rodPos.rod.intersection_rod_pos(rod);
+						hoverOn = {
+							type: 'overlapping rods',
+							rodPos,
+							rodsPositions: [rodPos, rod.closest_rod_pos(rodPos.get_pos())]
+						};
+						break;
+					case 'overlapping rods':
+						hoverOn.rodsPositions.push(rod.closest_rod_pos(hoverOn.rodPos.get_pos()));
+				}
 			}
 		}
 	}
 	return hoverOn;
 }
 
-/**
- * Returns the grabbed element corresponding to the stuff that is hovered on.
- */
-export function get_grab_elem(hoverOn: HoverOnStuff): GrabElem {
+export function get_hover_pos(pos: Point2, hoverOn: HoverOn): Point2 {
 	switch (hoverOn.type) {
-		case 'beam pos':
-			return hoverOn.beamPos;
-		case 'beam end':
-			return new BeamPos(hoverOn.beam, +hoverOn.isEnd);
+		case 'rod pos':
+		case 'overlapping rods':
+			return hoverOn.rodPos.get_pos();
+		case 'rod end':
+			return hoverOn.isEnd ? hoverOn.rod.b.clone() : hoverOn.rod.a.clone();
 		case 'slider':
 		case 'slidep':
 		case 'pivot':
 		case 'fixation':
-			return hoverOn.object;
+			return hoverOn.object.pos.clone();
+		case 'rod-hover slider':
+		case 'rod-hover slidep':
+			return new Rod(hoverOn.startPos, hoverOn.object.pos, 0).closest_pos(pos);
 	}
+	return pos.clone();
 }
 
 /**
- * Place a beam in the kinematic space.\
- * A fixation will be created when placing a beam on another.
+ * Place a rod in the kinematic space.\
+ * A fixation will be created when placing a rod on another.
  */
-export function place_beam(
+export function place_rod(
 	kinState: KinState,
 	hoverOnStart: HoverOn,
-	startPos: Point,
+	startPos: Point2,
+	startGround: boolean,
 	hoverOnEnd: HoverOn,
-	endPos: Point,
+	endPos: Point2,
+	ground: boolean,
 	id: number
 ) {
-	let newBeam = new Beam(startPos, endPos, id);
-	let fixedBeams: [BeamPos, number][];
+	// TODO : rod-hover
+	// TODO : add ground while placing another object
+	let newRod = new Rod(startPos, endPos, id);
+	newRod.groundA = startGround;
+	newRod.groundB = ground;
 	let newFixation: Fixation;
-
 	let pos = [startPos, endPos];
 	let hoverOn = [hoverOnStart, hoverOnEnd];
 	for (let i of [0, 1]) {
 		switch (hoverOn[i].type) {
-			case 'beam pos':
-				fixedBeams = [
-					[hoverOn[i].beamPos, hoverOn[i].beamPos.beam.angle_rad()],
-					[new BeamPos(newBeam, i), newBeam.angle_rad()]
-				];
-				newFixation = { type: 'fixation', pos: pos[i], fixedBeams };
+			case 'rod pos':
+				newFixation = {
+					type: 'fixation',
+					pos: pos[i].clone(),
+					fixedRods: [
+						[hoverOn[i].rodPos, hoverOn[i].rodPos.rod.dir()],
+						[newRod.rod_pos(i), newRod.dir()]
+					]
+				};
 				kinState.fixations.push(newFixation);
-				hoverOn[i].beamPos.beam.objects.push([newFixation, hoverOn[i].beamPos.k]);
-				newBeam.objects.push([newFixation, i]);
+				hoverOn[i].rodPos.rod.objects.push([newFixation, hoverOn[i].rodPos.k]);
+				newRod.objects.push([newFixation, i]);
 				break;
-			case 'beam end':
-				fixedBeams = [
-					[new BeamPos(hoverOn[i].beam, +hoverOn[i].isEnd), hoverOn[i].beam.angle_rad()],
-					[new BeamPos(newBeam, i), newBeam.angle_rad()]
-				];
-				newFixation = { type: 'fixation', pos: pos[i], fixedBeams };
+			case 'rod end':
+				newFixation = {
+					type: 'fixation',
+					pos: pos[i].clone(),
+					fixedRods: [
+						[hoverOn[i].rod.rod_pos(+hoverOn[i].isEnd), hoverOn[i].rod.dir()],
+						[newRod.rod_pos(i), newRod.dir()]
+					]
+				};
 				kinState.fixations.push(newFixation);
-				hoverOn[i].beam.objects.push([newFixation, +hoverOn[i].isEnd]);
-				newBeam.objects.push([newFixation, i]);
+				hoverOn[i].rod.objects.push([newFixation, +hoverOn[i].isEnd]);
+				newRod.objects.push([newFixation, i]);
 				break;
 			case 'slider':
 			case 'fixation':
-				hoverOn[i].object.fixedBeams.push([
-					newBeam.closest_beam_pos(pos[i]),
-					newBeam.closest_beam_pos(pos[i]).beam.angle_rad()
+				hoverOn[i].object.fixedRods.push([
+					newRod.closest_rod_pos(pos[i]),
+					newRod.closest_rod_pos(pos[i]).rod.dir()
 				]);
-				newBeam.objects.push([hoverOn[i].object, i]);
+				newRod.objects.push([hoverOn[i].object, i]);
 				break;
 			case 'slidep':
 			case 'pivot':
-				hoverOn[i].object.rotBeams.push(newBeam.closest_beam_pos(pos[i]));
-				newBeam.objects.push([hoverOn[i].object, i]);
+				hoverOn[i].object.rotRods.push(newRod.closest_rod_pos(pos[i]));
+				newRod.objects.push([hoverOn[i].object, i]);
 				break;
 		}
 	}
-	kinState.beams.push(newBeam);
+	kinState.rods.push(newRod);
 }
 
 /**
  * Place a slider in the kinematic space.\
  * A slidep will be created when placing a slider on a pivot.
  */
-export function place_slider(kinState: KinState, hoverOn: HoverOn, pos: Point) {
+export function place_slider(kinState: KinState, hoverOn: HoverOn, pos: Point2, ground: boolean) {
+	// TODO : add ground while placing another object
 	let newSlider: Slider = {
 		type: 'slider',
 		pos,
-		dir: new Point(1, 0),
-		slideBeam: undefined,
-		fixedBeams: [],
-		ground: false
+		dir: new Point2(1, 0),
+		dirOrigin: new Point2(1, 0),
+		slideRod: undefined,
+		fixedRods: [],
+		ground
 	};
 	switch (hoverOn.type) {
-		case 'beam pos':
-			newSlider.slideBeam = hoverOn.beamPos.beam;
-			newSlider.dir = newSlider.slideBeam.dir();
-			newSlider.slideBeam.objects.push([newSlider, hoverOn.beamPos.k]);
+		case 'rod pos':
+			newSlider.slideRod = hoverOn.rodPos.rod;
+			newSlider.dir = newSlider.slideRod.dir();
+			newSlider.dirOrigin = newSlider.slideRod.dir();
+			newSlider.slideRod.objects.push([newSlider, hoverOn.rodPos.k]);
 			break;
-		case 'beam end':
-			newSlider.fixedBeams = [
-				[new BeamPos(hoverOn.beam, +hoverOn.isEnd), hoverOn.beam.angle_rad()]
-			];
-			hoverOn.beam.objects.push([newSlider, +hoverOn.isEnd]);
+		case 'rod end':
+			newSlider.fixedRods = [[hoverOn.rod.rod_pos(+hoverOn.isEnd), hoverOn.rod.dir()]];
+			hoverOn.rod.objects.push([newSlider, +hoverOn.isEnd]);
 			break;
 		case 'slider':
 		case 'slidep':
 			return;
 		case 'pivot':
-			let pivotBeam = hoverOn.object.rotBeams.at(0);
-			if (pivotBeam !== undefined && pivotBeam.k !== 0 && pivotBeam.k !== 1) {
-				newSlider.slideBeam = pivotBeam.beam;
+			let pivotRod = hoverOn.object.rotRods.at(0);
+			if (pivotRod !== undefined && pivotRod.k !== 0 && pivotRod.k !== 1) {
+				newSlider.slideRod = pivotRod.rod;
 			}
-			newSlider.fixedBeams = hoverOn.object.rotBeams
-				.filter((beamPos) => beamPos.beam !== newSlider.slideBeam)
-				.map((beamPos) => [beamPos, beamPos.beam.angle_rad()]);
-			hoverOn.object.rotBeams.toReversed().forEach((beamPos) => {
-				if (beamPos.k !== 0 && beamPos.k !== 1) {
-					newSlider.dir = beamPos.beam.dir();
+			newSlider.fixedRods = hoverOn.object.rotRods
+				.filter((rodPos) => rodPos.rod !== newSlider.slideRod)
+				.map((rodPos) => [rodPos, rodPos.rod.dir()]);
+			hoverOn.object.rotRods.toReversed().forEach((rodPos) => {
+				if (rodPos.k !== 0 && rodPos.k !== 1) {
+					newSlider.dir = rodPos.rod.dir();
+					newSlider.dirOrigin = rodPos.rod.dir();
 				}
 			});
 			let newSlidep: Slidep = {
 				type: 'slidep',
 				pos,
 				dir: newSlider.dir,
-				slideBeam: newSlider.slideBeam,
-				rotBeams: newSlider.fixedBeams.map((b) => b[0]),
+				slideRod: newSlider.slideRod,
+				rotRods: newSlider.fixedRods.map((b) => b[0]),
 				ground: false
 			};
 
 			kinState.slideps.push(newSlidep);
 			kinState.pivots.splice(kinState.pivots.indexOf(hoverOn.object), 1);
-			newSlidep.rotBeams.forEach((beamPos) => {
-				let k = beamPos.beam.objects.splice(
-					beamPos.beam.objects.map((obj) => obj[0]).indexOf(hoverOn.object),
+			newSlidep.rotRods.forEach((rodPos) => {
+				let k = rodPos.rod.objects.splice(
+					rodPos.rod.objects.map((obj) => obj[0]).indexOf(hoverOn.object),
 					1
 				)[0][1];
-				beamPos.beam.objects.push([newSlidep, k]);
+				rodPos.rod.objects.push([newSlidep, k]);
 			});
-			if (newSlidep.slideBeam !== undefined) {
-				let k = newSlidep.slideBeam.objects.splice(
-					newSlidep.slideBeam.objects.map((obj) => obj[0]).indexOf(hoverOn.object),
+			if (newSlidep.slideRod !== undefined) {
+				let k = newSlidep.slideRod.objects.splice(
+					newSlidep.slideRod.objects.map((obj) => obj[0]).indexOf(hoverOn.object),
 					1
 				)[0][1];
-				newSlidep.slideBeam.objects.push([newSlidep, k]);
+				newSlidep.slideRod.objects.push([newSlidep, k]);
 			}
 			return;
 		case 'fixation':
-			let fixationBeam = hoverOn.object.fixedBeams.at(0);
-			if (fixationBeam !== undefined) {
-				newSlider.slideBeam = fixationBeam[0].beam;
+			let fixationRod = hoverOn.object.fixedRods.at(0);
+			if (fixationRod !== undefined) {
+				newSlider.slideRod = fixationRod[0].rod;
 			}
-			newSlider.fixedBeams = hoverOn.object.fixedBeams
-				.filter((beamPos) => beamPos[0].beam !== newSlider.slideBeam)
-				.map((beamPos) => [beamPos[0], beamPos[0].beam.angle_rad()]);
+			newSlider.fixedRods = hoverOn.object.fixedRods
+				.filter(([rodPos, dir]) => rodPos.rod !== newSlider.slideRod)
+				.map(([rodPos, dir]) => [rodPos, rodPos.rod.dir()]);
 			kinState.fixations = kinState.fixations.filter((obj) => obj !== hoverOn.object);
-			newSlider.dir = hoverOn.object.fixedBeams[0][0].beam.dir();
-			hoverOn.object.fixedBeams.forEach((beamPos) => {
-				let k = beamPos[0].beam.objects.splice(
-					beamPos[0].beam.objects.map((obj) => obj[0]).indexOf(hoverOn.object),
+			newSlider.dir = hoverOn.object.fixedRods[0][0].rod.dir();
+			newSlider.dirOrigin = hoverOn.object.fixedRods[0][0].rod.dir();
+			hoverOn.object.fixedRods.forEach(([rodPos, dir]) => {
+				let k = rodPos.rod.objects.splice(
+					rodPos.rod.objects.map((obj) => obj[0]).indexOf(hoverOn.object),
 					1
 				)[0][1];
-				beamPos[0].beam.objects.push([newSlider, k]);
+				rodPos.rod.objects.push([newSlider, k]);
 			});
 			break;
 	}
@@ -241,55 +287,56 @@ export function place_slider(kinState: KinState, hoverOn: HoverOn, pos: Point) {
  * Place a pivot in the kinematic space.\
  * A slidep will be created when placing a pivot on a slider.
  */
-export function place_pivot(kinState: KinState, hoverOn: HoverOn, pos: Point) {
-	let newPivot: Pivot = { type: 'pivot', pos, rotBeams: [], ground: false };
+export function place_pivot(kinState: KinState, hoverOn: HoverOn, pos: Point2, ground: boolean) {
+	// TODO : add ground while placing another object
+	let newPivot: Pivot = { type: 'pivot', pos, rotRods: [], ground };
 	switch (hoverOn.type) {
-		case 'beam pos':
-			newPivot.rotBeams.push(hoverOn.beamPos);
-			hoverOn.beamPos.beam.objects.push([newPivot, hoverOn.beamPos.k]);
+		case 'rod pos':
+			newPivot.rotRods.push(hoverOn.rodPos);
+			hoverOn.rodPos.rod.objects.push([newPivot, hoverOn.rodPos.k]);
 			break;
-		case 'beam end':
-			newPivot.rotBeams = [new BeamPos(hoverOn.beam, +hoverOn.isEnd)];
-			hoverOn.beam.objects.push([newPivot, +hoverOn.isEnd]);
+		case 'rod end':
+			newPivot.rotRods = [hoverOn.rod.rod_pos(+hoverOn.isEnd)];
+			hoverOn.rod.objects.push([newPivot, +hoverOn.isEnd]);
 			break;
 		case 'slider':
 			let newSlidep: Slidep = {
 				type: 'slidep',
 				pos,
 				dir: hoverOn.object.dir,
-				slideBeam: hoverOn.object.slideBeam,
-				rotBeams: hoverOn.object.fixedBeams.map((b) => b[0]),
+				slideRod: hoverOn.object.slideRod,
+				rotRods: hoverOn.object.fixedRods.map((b) => b[0]),
 				ground: false
 			};
 			kinState.slideps.push(newSlidep);
 			kinState.sliders.splice(kinState.sliders.indexOf(hoverOn.object), 1);
-			newSlidep.rotBeams.forEach((beamPos) => {
-				let k = beamPos.beam.objects.splice(
-					beamPos.beam.objects.map((obj) => obj[0]).indexOf(hoverOn.object),
+			newSlidep.rotRods.forEach((rodPos) => {
+				let k = rodPos.rod.objects.splice(
+					rodPos.rod.objects.map((obj) => obj[0]).indexOf(hoverOn.object),
 					1
 				)[0][1];
-				beamPos.beam.objects.push([newSlidep, k]);
+				rodPos.rod.objects.push([newSlidep, k]);
 			});
-			if (newSlidep.slideBeam !== undefined) {
-				let k = newSlidep.slideBeam.objects.splice(
-					newSlidep.slideBeam.objects.map((obj) => obj[0]).indexOf(hoverOn.object),
+			if (newSlidep.slideRod !== undefined) {
+				let k = newSlidep.slideRod.objects.splice(
+					newSlidep.slideRod.objects.map((obj) => obj[0]).indexOf(hoverOn.object),
 					1
 				)[0][1];
-				newSlidep.slideBeam.objects.push([newSlidep, k]);
+				newSlidep.slideRod.objects.push([newSlidep, k]);
 			}
 			return;
 		case 'slidep':
 		case 'pivot':
 			return;
 		case 'fixation':
-			newPivot.rotBeams = hoverOn.object.fixedBeams.map((b) => b[0]);
+			newPivot.rotRods = hoverOn.object.fixedRods.map((b) => b[0]);
 			kinState.fixations.splice(kinState.fixations.indexOf(hoverOn.object), 1);
-			hoverOn.object.fixedBeams.forEach((beamPos) => {
-				let k = beamPos[0].beam.objects.splice(
-					beamPos[0].beam.objects.map((obj) => obj[0]).indexOf(hoverOn.object),
+			hoverOn.object.fixedRods.forEach(([rodPos, dir]) => {
+				let k = rodPos.rod.objects.splice(
+					rodPos.rod.objects.map((obj) => obj[0]).indexOf(hoverOn.object),
 					1
 				)[0][1];
-				beamPos[0].beam.objects.push([newPivot, k]);
+				rodPos.rod.objects.push([newPivot, k]);
 			});
 			break;
 	}
@@ -300,11 +347,11 @@ export function place_pivot(kinState: KinState, hoverOn: HoverOn, pos: Point) {
  * Ground an element in the kinematic space.\
  * Placing a ground on where there is already one will delete it.
  */
-export function place_ground(hoverOn: HoverOn, pos: Point) {
+export function place_ground(hoverOn: HoverOn, pos: Point2) {
 	switch (hoverOn.type) {
-		case 'beam pos':
-			for (let object of hoverOn.beamPos.beam.objects) {
-				if (object[1] === +(hoverOn.beamPos.k > 0.5)) {
+		case 'rod pos':
+			for (let object of hoverOn.rodPos.rod.objects) {
+				if (object[1] === +(hoverOn.rodPos.k > 0.5)) {
 					switch (object[0].type) {
 						case 'slider':
 						case 'slidep':
@@ -314,36 +361,36 @@ export function place_ground(hoverOn: HoverOn, pos: Point) {
 					}
 				}
 			}
-			if (hoverOn.beamPos.k > 0.5) {
-				if (hoverOn.beamPos.beam.groundA) {
-					hoverOn.beamPos.beam.groundA = false;
-					hoverOn.beamPos.beam.groundB = true;
+			if (hoverOn.rodPos.k > 0.5) {
+				if (hoverOn.rodPos.rod.groundA) {
+					hoverOn.rodPos.rod.groundA = false;
+					hoverOn.rodPos.rod.groundB = true;
 				} else {
-					hoverOn.beamPos.beam.groundB = !hoverOn.beamPos.beam.groundB;
+					hoverOn.rodPos.rod.groundB = !hoverOn.rodPos.rod.groundB;
 				}
 			} else {
-				if (hoverOn.beamPos.beam.groundB) {
-					hoverOn.beamPos.beam.groundB = false;
-					hoverOn.beamPos.beam.groundA = true;
+				if (hoverOn.rodPos.rod.groundB) {
+					hoverOn.rodPos.rod.groundB = false;
+					hoverOn.rodPos.rod.groundA = true;
 				} else {
-					hoverOn.beamPos.beam.groundA = !hoverOn.beamPos.beam.groundA;
+					hoverOn.rodPos.rod.groundA = !hoverOn.rodPos.rod.groundA;
 				}
 			}
 			break;
-		case 'beam end':
+		case 'rod end':
 			if (hoverOn.isEnd) {
-				if (hoverOn.beam.groundA) {
-					hoverOn.beam.groundA = false;
-					hoverOn.beam.groundB = true;
+				if (hoverOn.rod.groundA) {
+					hoverOn.rod.groundA = false;
+					hoverOn.rod.groundB = true;
 				} else {
-					hoverOn.beam.groundB = !hoverOn.beam.groundB;
+					hoverOn.rod.groundB = !hoverOn.rod.groundB;
 				}
 			} else {
-				if (hoverOn.beam.groundB) {
-					hoverOn.beam.groundB = false;
-					hoverOn.beam.groundA = true;
+				if (hoverOn.rod.groundB) {
+					hoverOn.rod.groundB = false;
+					hoverOn.rod.groundA = true;
 				} else {
-					hoverOn.beam.groundA = !hoverOn.beam.groundA;
+					hoverOn.rod.groundA = !hoverOn.rod.groundA;
 				}
 			}
 			break;
@@ -353,27 +400,27 @@ export function place_ground(hoverOn: HoverOn, pos: Point) {
 			hoverOn.object.ground = !hoverOn.object.ground;
 			break;
 		case 'fixation':
-			let closestBeam = hoverOn.object.fixedBeams[0][0].beam;
+			let closestRod = hoverOn.object.fixedRods[0][0].rod;
 			let dist = Infinity;
 			let aToB = true;
-			hoverOn.object.fixedBeams.forEach((beamPos) => {
-				let newDist = beamPos[0].beam.a.distance_to(pos);
+			hoverOn.object.fixedRods.forEach(([rodPos, dir]) => {
+				let newDist = rodPos.rod.a.distance_to(pos);
 				if (newDist < dist) {
 					dist = newDist;
 					aToB = true;
-					closestBeam = beamPos[0].beam;
+					closestRod = rodPos.rod;
 				}
-				newDist = beamPos[0].beam.b.distance_to(pos);
+				newDist = rodPos.rod.b.distance_to(pos);
 				if (newDist < dist) {
 					dist = newDist;
 					aToB = false;
-					closestBeam = beamPos[0].beam;
+					closestRod = rodPos.rod;
 				}
 			});
 			if (aToB) {
-				closestBeam.groundA = !closestBeam.groundA;
+				closestRod.groundA = !closestRod.groundA;
 			} else {
-				closestBeam.groundB = !closestBeam.groundB;
+				closestRod.groundB = !closestRod.groundB;
 			}
 			break;
 	}
