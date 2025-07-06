@@ -13,7 +13,7 @@
 
 	<div class="center">
 		<div>
-			<a class="button" href="/statics">Statics</a>
+			<!-- <a class="button" href="/statics">Statics</a> -->
 		</div>
 		<div>
 			<a class="button" href="/kinematics">Kinematics</a>
