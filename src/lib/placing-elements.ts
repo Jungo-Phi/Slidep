@@ -7,11 +7,14 @@ import type {
 	GrabElem,
 	HoverOn,
 	Mode,
-	RodPos
+	RodPos,
+	KinObject,
+	KinElem
 } from '$lib/types';
 import { Point2, Rod, HOVER_RADIUS, HOVER_WIDTH } from '$lib/types';
 
-import { is_rod_in_elem } from '$lib/utils';
+import { is_rod_in_elem, translate_rod } from '$lib/utils';
+import { constrain_kinspace } from './constraints';
 
 /**
  * Returns the kind of object / rod / position you are hovering on.
@@ -22,28 +25,56 @@ export function get_hover_on(
 	pos: Point2,
 	ignore: GrabElem | undefined
 ): HoverOn {
+	let ignoreObject: KinElem | undefined = undefined;
+	if (ignore !== undefined) {
+		switch (ignore.type) {
+			case 'rod pos':
+				ignoreObject = ignore.rodPos.rod;
+				break;
+			case 'rod end':
+				ignoreObject = ignore.rod;
+				break;
+			case 'slider':
+			case 'slidep':
+			case 'pivot':
+			case 'fixation':
+				ignoreObject = ignore.object;
+		}
+	}
 	for (let object of kinState.sliders) {
-		if ((ignore === undefined || object !== ignore) && object.pos.distance_to(pos) < HOVER_RADIUS) {
+		if (
+			(ignoreObject === undefined || object !== ignoreObject) &&
+			object.pos.distance_to(pos) < HOVER_RADIUS
+		) {
 			return { type: 'slider', object };
 		}
 	}
 	for (let object of kinState.slideps) {
-		if ((ignore === undefined || object !== ignore) && object.pos.distance_to(pos) < HOVER_RADIUS) {
+		if (
+			(ignoreObject === undefined || object !== ignoreObject) &&
+			object.pos.distance_to(pos) < HOVER_RADIUS
+		) {
 			return { type: 'slidep', object };
 		}
 	}
 	for (let object of kinState.pivots) {
-		if ((ignore === undefined || object !== ignore) && object.pos.distance_to(pos) < HOVER_RADIUS) {
+		if (
+			(ignoreObject === undefined || object !== ignoreObject) &&
+			object.pos.distance_to(pos) < HOVER_RADIUS
+		) {
 			return { type: 'pivot', object };
 		}
 	}
 	for (let object of kinState.fixations) {
-		if ((ignore === undefined || object !== ignore) && object.pos.distance_to(pos) < HOVER_RADIUS) {
+		if (
+			(ignoreObject === undefined || object !== ignoreObject) &&
+			object.pos.distance_to(pos) < HOVER_RADIUS
+		) {
 			return { type: 'fixation', object };
 		}
 	}
 	for (let rod of kinState.rods) {
-		if (ignore === undefined || !is_rod_in_elem(rod, ignore)) {
+		if (ignoreObject === undefined || !is_rod_in_elem(rod, ignoreObject)) {
 			if (rod.a.distance_to(pos) < HOVER_RADIUS) {
 				return { type: 'rod end', rod, isEnd: false };
 			}
@@ -54,25 +85,39 @@ export function get_hover_on(
 	}
 
 	if (mode.type === 'placing rod end') {
-		let rod = new Rod(mode.startPos, pos, 0);
 		for (let object of kinState.sliders) {
+			let rod = new Rod(mode.startPos, object.pos, 0);
 			if (
-				(ignore === undefined || object !== ignore) &&
-				rod.k_coord(object.pos) < 1 &&
-				rod.distance_to(object.pos) < HOVER_WIDTH &&
+				(ignoreObject === undefined || object !== ignoreObject) &&
+				object.slideRod === undefined &&
+				rod.k_coord(pos) > 1 &&
+				rod.distance_to(pos) < HOVER_WIDTH &&
 				object.pos.distance_to(pos) >= HOVER_RADIUS
 			) {
 				return { type: 'rod-hover slider', object, startPos: mode.startPos };
 			}
 		}
 		for (let object of kinState.slideps) {
+			let rod = new Rod(mode.startPos, object.pos, 0);
 			if (
-				(ignore === undefined || object !== ignore) &&
-				rod.k_coord(object.pos) < 1 &&
-				rod.distance_to(object.pos) < HOVER_WIDTH &&
+				(ignoreObject === undefined || object !== ignoreObject) &&
+				object.slideRod === undefined &&
+				rod.k_coord(pos) > 1 &&
+				rod.distance_to(pos) < HOVER_WIDTH &&
 				object.pos.distance_to(pos) >= HOVER_RADIUS
 			) {
 				return { type: 'rod-hover slidep', object, startPos: mode.startPos };
+			}
+		}
+		for (let object of kinState.pivots) {
+			let rod = new Rod(mode.startPos, object.pos, 0);
+			if (
+				(ignoreObject === undefined || object !== ignoreObject) &&
+				rod.k_coord(pos) > 1 &&
+				rod.distance_to(pos) < HOVER_WIDTH &&
+				object.pos.distance_to(pos) >= HOVER_RADIUS
+			) {
+				return { type: 'rod-hover pivot', object, startPos: mode.startPos };
 			}
 		}
 	}
@@ -82,7 +127,7 @@ export function get_hover_on(
 	for (let rod of kinState.rods) {
 		let [k, dist] = rod.coords(pos);
 		if (dist < width && 0 < k && k < 1) {
-			if (ignore === undefined || !is_rod_in_elem(rod, ignore)) {
+			if (ignoreObject === undefined || !is_rod_in_elem(rod, ignoreObject)) {
 				switch (hoverOn.type) {
 					case 'void':
 						hoverOn = { type: 'rod pos', rodPos: rod.rod_pos(k) };
@@ -118,9 +163,44 @@ export function get_hover_pos(pos: Point2, hoverOn: HoverOn): Point2 {
 			return hoverOn.object.pos.clone();
 		case 'rod-hover slider':
 		case 'rod-hover slidep':
+		case 'rod-hover pivot':
 			return new Rod(hoverOn.startPos, hoverOn.object.pos, 0).closest_pos(pos);
 	}
 	return pos.clone();
+}
+
+/**
+ * Drags an element to the target point without affecting the whole structure.
+ */
+export function drag(kinState: KinState, grabbed: GrabElem, hoverOn: HoverOn, target: Point2) {
+	switch (grabbed.type) {
+		case 'rod pos':
+			translate_rod(grabbed.rodPos, target);
+			constrain_kinspace(kinState, grabbed.rodPos.rod);
+			// TODO : move attached nodes
+			break;
+		case 'rod end':
+			if (grabbed.isEnd) {
+				grabbed.rod.b = target;
+			} else {
+				grabbed.rod.a = target;
+			}
+			constrain_kinspace(kinState, grabbed.rod);
+			/*
+			grabbed.rod.objects.forEach(([object, k]) => {
+				object.pos = grabbed.rod.rod_pos(k).get_pos();
+			});
+			*/
+			break;
+		case 'slider':
+		case 'slidep':
+		case 'pivot':
+		case 'fixation':
+			grabbed.object.pos = target;
+			constrain_kinspace(kinState, grabbed.object);
+		// TODO : move attached rods
+		// move attached nodes
+	}
 }
 
 /**
@@ -137,7 +217,6 @@ export function place_rod(
 	ground: boolean,
 	id: number
 ) {
-	// TODO : rod-hover
 	// TODO : add ground while placing another object
 	let newRod = new Rod(startPos, endPos, id);
 	newRod.groundA = startGround;
@@ -159,6 +238,9 @@ export function place_rod(
 				kinState.fixations.push(newFixation);
 				hoverOn[i].rodPos.rod.objects.push([newFixation, hoverOn[i].rodPos.k]);
 				newRod.objects.push([newFixation, i]);
+				break;
+			case 'overlapping rods':
+				// TODO
 				break;
 			case 'rod end':
 				newFixation = {
@@ -186,6 +268,15 @@ export function place_rod(
 				hoverOn[i].object.rotRods.push(newRod.closest_rod_pos(pos[i]));
 				newRod.objects.push([hoverOn[i].object, i]);
 				break;
+			case 'rod-hover slidep':
+			case 'rod-hover slider':
+				hoverOn[i].object.slideRod = newRod;
+				hoverOn[i].object.dir = newRod.dir();
+				newRod.objects.push([hoverOn[i].object, newRod.k_coord(hoverOn[i].object.pos)]);
+				break;
+			case 'rod-hover pivot':
+				hoverOn[i].object.rotRods.push(newRod.closest_rod_pos(hoverOn[i].object.pos));
+				newRod.objects.push([hoverOn[i].object, newRod.k_coord(hoverOn[i].object.pos)]);
 		}
 	}
 	kinState.rods.push(newRod);
@@ -212,6 +303,9 @@ export function place_slider(kinState: KinState, hoverOn: HoverOn, pos: Point2, 
 			newSlider.dir = newSlider.slideRod.dir();
 			newSlider.dirOrigin = newSlider.slideRod.dir();
 			newSlider.slideRod.objects.push([newSlider, hoverOn.rodPos.k]);
+			break;
+		case 'overlapping rods':
+			// TODO
 			break;
 		case 'rod end':
 			newSlider.fixedRods = [[hoverOn.rod.rod_pos(+hoverOn.isEnd), hoverOn.rod.dir()]];
@@ -295,6 +389,9 @@ export function place_pivot(kinState: KinState, hoverOn: HoverOn, pos: Point2, g
 			newPivot.rotRods.push(hoverOn.rodPos);
 			hoverOn.rodPos.rod.objects.push([newPivot, hoverOn.rodPos.k]);
 			break;
+		case 'overlapping rods':
+			// TODO
+			break;
 		case 'rod end':
 			newPivot.rotRods = [hoverOn.rod.rod_pos(+hoverOn.isEnd)];
 			hoverOn.rod.objects.push([newPivot, +hoverOn.isEnd]);
@@ -350,6 +447,7 @@ export function place_pivot(kinState: KinState, hoverOn: HoverOn, pos: Point2, g
 export function place_ground(hoverOn: HoverOn, pos: Point2) {
 	switch (hoverOn.type) {
 		case 'rod pos':
+		case 'overlapping rods':
 			for (let object of hoverOn.rodPos.rod.objects) {
 				if (object[1] === +(hoverOn.rodPos.k > 0.5)) {
 					switch (object[0].type) {

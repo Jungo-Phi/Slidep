@@ -1,68 +1,8 @@
-import type { Rod, GrabElem, KinElem, KinState } from '$lib/types';
+import type { Rod, GrabElem, KinElem, KinState, HoverOn } from '$lib/types';
 import { Point2, RodPos } from '$lib/types';
+import { pull_rod, pull_rod_by_end, pull_rod_pos, pull_rod_to_line, rotate_rod } from './utils';
 
-function translate_rod(rodPos: RodPos, target: Point2) {
-	let delta = target.sub(rodPos.get_pos());
-	rodPos.rod.a.update(rodPos.rod.a.add(delta));
-	rodPos.rod.b.update(rodPos.rod.b.add(delta));
-}
 
-function pull_rod_pos_to_point(rodPos: RodPos, target: Point2) {
-	// Calculates the movement with smallest energy
-	if (rodPos.k === 0) {
-		pull_rod_by_end(rodPos.rod, target, false);
-		return;
-	} else if (rodPos.k === 1) {
-		pull_rod_by_end(rodPos.rod, target, true);
-		return;
-	}
-	let l = rodPos.rod.a.distance_to(rodPos.rod.b);
-	let d = target
-		.mul(2 - 1 / rodPos.k)
-		.sub(rodPos.rod.a)
-		.add(rodPos.rod.b.mul(1 / rodPos.k - 1))
-		.normalize();
-	rodPos.rod.a.update(target.sub(d.mul(l * rodPos.k)));
-	rodPos.rod.b.update(target.add(d.mul(l * (1 - rodPos.k))));
-}
-
-function pull_rod_to_line(rod: Rod, point: Point2, dir: Point2) {
-	// Calculates the movement with smallest energy
-	let center = rod.a.add(rod.b).div(2);
-	let centerToPoint = point.sub(center);
-	let delta = centerToPoint.project(dir.perp());
-	let angle = dir.angle_rad() - rod.b.sub(rod.a).angle_rad();
-
-	let center_to_a = rod.a.sub(center);
-	let center_to_b = rod.b.sub(center);
-
-	rod.a.update(center.add(delta).add(center_to_a.rotate_rad(angle)));
-	rod.b.update(center.add(delta).add(center_to_b.rotate_rad(angle)));
-}
-
-function pull_rod_to_point(rod: Rod, target: Point2) {
-	// Calculates the movement with smallest energy
-	pull_rod_pos_to_point(rod.closest_rod_pos(target), target);
-}
-
-function pull_rod_by_end(rod: Rod, target: Point2, isEnd: boolean) {
-	let l = rod.a.distance_to(rod.b);
-	if (isEnd) {
-		rod.b.update(target);
-		rod.a.update(target.sub(target.sub(rod.a).normalize().mul(l)));
-	} else {
-		rod.a.update(target);
-		rod.b.update(target.sub(target.sub(rod.b).normalize().mul(l)));
-	}
-}
-
-function rotate_rod(rod: Rod, angle: number) {
-	let center = rod.a.add(rod.b).div(2);
-	let center_to_a = rod.a.sub(center);
-	let center_to_b = rod.b.sub(center);
-	rod.a.update(center.add(center_to_a.rotate_deg(angle)));
-	rod.b.update(center.add(center_to_b.rotate_deg(angle)));
-}
 
 /**
  * Returns the summed error of rods and constrains.
@@ -115,26 +55,64 @@ export function get_error(kinState: KinState): number {
 export function animate(kinState: KinState, grabbed: GrabElem, target: Point2) {
 	// Pull BEAM / ELEMENT to mouse
 	let firstElement: KinElem;
+	let source;
 	// TODO : Appliquer la contrainte de la souris incrémentalement + en limitant la distance parcourue
-	switch (grabbed.type) {
-		case 'rod pos':
-			firstElement = grabbed.rod;
-			pull_rod_pos_to_point(grabbed, target);
-			break;
-		case 'slider':
-		case 'slidep':
-		case 'pivot':
-		case 'fixation':
-			firstElement = grabbed;
-			firstElement.pos = target;
-			break;
+	for (let i = 0; i < 10; i++) {
+		switch (grabbed.type) {
+			case 'rod pos':
+				source = grabbed.rodPos.get_pos();
+				break;
+			case 'rod end':
+				if (grabbed.isEnd) {
+					source = grabbed.rod.b;
+				} else {
+					source = grabbed.rod.a;
+				}
+				break;
+			case 'slider':
+			case 'slidep':
+			case 'pivot':
+			case 'fixation':
+				source = grabbed.object.pos;
+		}
+		target = target.sub(source).limit_length(100 - i * 10).add(source);
+		switch (grabbed.type) {
+			case 'rod pos':
+				firstElement = grabbed.rodPos.rod;
+				pull_rod_pos(grabbed.rodPos, target);
+				break;
+			case 'rod end':
+				firstElement = grabbed.rod;
+				pull_rod_by_end(firstElement, target, grabbed.isEnd);
+				break;
+			case 'slider':
+			case 'slidep':
+			case 'pivot':
+			case 'fixation':
+				firstElement = grabbed.object;
+				firstElement.pos.update(target);
+		}
+		constrain_kinspace(kinState, firstElement);
 	}
+}
+
+
+/**
+ * Generate list of all connected elements (rods and objects) recursively : from mouse (to ground)\
+ * Generate list of actions from elements list (constrain, rod, constrain)\
+ * LOOP until error < lambda {\
+ *  - Pull BEAM / ELEMENT to mouse\
+ *  - iter list + list reversed {\
+ *  - - (IGNORE GROUND)\
+ *  - - Rod : Pull connected OBJECTS\
+ *  - - Object : Pull BEAMS by appling constrains\
+ *  - }\
+ * }
+ */
+export function constrain_kinspace(kinState: KinState, firstElement: KinElem) {
 	// Generate list of rods and objects : from mouse to ground(s)
 	let elements = get_elements([firstElement]);
 	let actions = get_actions(elements);
-	console.log('elements', elements);
-	console.log('actions', actions);
-
 	// LOOP until error < lambda OR max iterations {
 	for (let i = 0; i < 100; i++) {
 		for (let action of actions) {
@@ -146,31 +124,6 @@ export function animate(kinState: KinState, grabbed: GrabElem, target: Point2) {
 		if (get_error(kinState) < 0.001) {
 			break;
 		}
-	}
-}
-
-/**
- * Drags an element to the target point without affecting the whole structure.
- */
-export function drag(kinState: KinState, grabbed: GrabElem, target: Point2) {
-	switch (grabbed.type) {
-		case 'rod pos':
-			if (grabbed.k === 0) {
-			} else if (grabbed.k === 1) {
-			} else {
-				translate_rod(grabbed, target);
-				// TODO : move attached nodes
-			}
-
-			break;
-		case 'slider':
-		case 'slidep':
-		case 'pivot':
-		case 'fixation':
-			grabbed.pos = target;
-			// TODO : move attached rods
-			// move attached nodes
-			break;
 	}
 }
 
@@ -221,7 +174,7 @@ export function apply_constrain(element: KinElem) {
 			for (let [rodPos, _dir] of element.fixedRods) {
 				if (!(rodPos.rod.groundA || rodPos.rod.groundB)) {
 					let half_pos = rodPos.get_pos().lerp(element.pos, 0.5);
-					pull_rod_pos_to_point(rodPos, half_pos);
+					pull_rod_pos(rodPos, half_pos);
 				}
 			}
 			meanDirOrigin = element.fixedRods
@@ -261,7 +214,7 @@ export function apply_constrain(element: KinElem) {
 					!(element.slideRod.groundA || element.slideRod.groundB)
 				) {
 					let half_pos = element.slideRod.a.lerp(element.pos, 0.5);
-					pull_rod_to_point(element.slideRod, half_pos);
+					pull_rod(element.slideRod, half_pos);
 					rotate_rod(element.slideRod, tot * 0.5);
 				}
 			}
@@ -272,14 +225,14 @@ export function apply_constrain(element: KinElem) {
 				!(element.slideRod.groundA || element.slideRod.groundB)
 			) {
 				let half_pos = element.slideRod.a.lerp(element.pos, 0.5);
-				pull_rod_to_point(element.slideRod, half_pos);
-				pull_rod_to_point(element.slideRod, half_pos);
+				pull_rod(element.slideRod, half_pos);
+				pull_rod(element.slideRod, half_pos);
 			}
 		case 'pivot':
 			for (let rodPos of element.rotRods) {
 				if (!(rodPos.rod.groundA || rodPos.rod.groundB)) {
 					let half_pos = rodPos.get_pos().lerp(element.pos, 0.5);
-					pull_rod_pos_to_point(rodPos, half_pos);
+					pull_rod_pos(rodPos, half_pos);
 				}
 			}
 			break;
@@ -287,7 +240,7 @@ export function apply_constrain(element: KinElem) {
 			for (let [rodPos, _dir] of element.fixedRods) {
 				if (!(rodPos.rod.groundA || rodPos.rod.groundB)) {
 					let half_pos = rodPos.get_pos().lerp(element.pos, 0.5);
-					pull_rod_pos_to_point(rodPos, half_pos);
+					pull_rod_pos(rodPos, half_pos);
 				}
 			}
 			meanDirOrigin = element.fixedRods.reduce(

@@ -1,18 +1,19 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import type { Mode, HoverOn, KinState } from '$lib/types';
-	import { Point2, HOVER_RADIUS, TAU, MY_RED, Rod } from '$lib/types';
-	import { get_error, animate, drag } from '$lib/animation';
+	import { Point2, HOVER_RADIUS, TAU, MY_RED } from '$lib/types';
+	import { get_error, animate } from '$lib/constraints';
 	import {
 		get_hover_on,
 		place_rod,
 		place_ground,
 		place_pivot,
 		place_slider,
-		get_hover_pos
+		get_hover_pos,
+		drag
 	} from '$lib/placing-elements';
 	import { draw_kinspace } from '$lib/draw';
-	import { erase } from '$lib/utils';
+	import { erase, is_grounded } from '$lib/utils';
 
 	let mode: Mode = { type: 'idle' };
 	let mouse: Point2 = $state(new Point2());
@@ -25,14 +26,19 @@
 	let canvas: HTMLCanvasElement;
 	let ctx: CanvasRenderingContext2D;
 
-	// TODO : rod-hover on pivot/slider
-	// TODO : show degrees of freedom
+	// TODO : grabbing -drag
+	// TODO : constraints
 	// TODO : progressive aniamtions
 	// TODO : k < 1 does shit
 	// TODO : ctrl Z
+	// TODO : slider limit ?
 	// TODO : cotation / dimention (D)
 	// TODO : save file
+	// TODO : front page
+	// TODO : sélection multiple ?
+	// TODO : 'draw path curves' option ?
 	// TODO : black and white mode
+	// TODO : 3D ?
 
 	onMount(() => {
 		const rect = canvas.getBoundingClientRect();
@@ -59,7 +65,8 @@
 	}
 
 	function update_mouse() {
-		let ignore = mode.type === 'animating' || mode.type === 'dragging' ? mode.grabbed : undefined;
+		// TODO : ignore ground when animate
+		let ignore = mode.type === 'animating' || mode.type === 'grabbing' ? mode.grabbed : undefined;
 		hoverOn = get_hover_on(kinState, mode, mouse, ignore);
 		switch (mode.type) {
 			case 'idle':
@@ -72,8 +79,8 @@
 			case 'animating':
 				animate(kinState, mode.grabbed, mouse.clone());
 				break;
-			case 'dragging':
-				drag(kinState, mode.grabbed, mouse.clone());
+			case 'grabbing':
+				drag(kinState, mode.grabbed, hoverOn, mouse.clone());
 				break;
 			case 'erasing':
 				erase(kinState, hoverOn);
@@ -85,66 +92,39 @@
 		if (event.button === 0) {
 			// Left button
 			let pos = get_hover_pos(mouse, hoverOn);
-
+			let type: 'grabbing' | 'animating' = 'grabbing';
 			switch (mode.type) {
+				case 'animate':
+					if (is_grounded(hoverOn)) {
+						break;
+					}
+					type = 'animating';
 				case 'idle':
 					switch (hoverOn.type) {
 						case 'rod pos':
-							mode = { type: 'dragging', grabbed: hoverOn.rodPos };
-							cursor = 'grabbing';
-							break;
 						case 'overlapping rods':
-							mode = { type: 'dragging', grabbed: hoverOn.rodPos };
-							cursor = 'grabbing';
+							mode = { type, grabbed: { type : 'rod pos', rodPos: hoverOn.rodPos } };
 							break;
 						case 'rod end':
-							mode = { type: 'dragging', grabbed: hoverOn.rod.rod_pos(+hoverOn.isEnd) };
-							cursor = 'grabbing';
+							mode = { type, grabbed: { type : 'rod end', rod: hoverOn.rod, isEnd: hoverOn.isEnd } };
 							break;
 						case 'slider':
+							mode = { type, grabbed: { type: 'slider', object: hoverOn.object } };
+							break;
 						case 'slidep':
+							mode = { type, grabbed: { type: 'slidep', object: hoverOn.object } };
+							break;
 						case 'pivot':
+							mode = { type, grabbed: { type: 'pivot', object: hoverOn.object } };
+							break;
 						case 'fixation':
-							mode = { type: 'dragging', grabbed: hoverOn.object };
-							cursor = 'grabbing';
+							mode = { type, grabbed: { type: 'fixation', object: hoverOn.object } };
 					}
-					break;
-				case 'animate':
-					switch (hoverOn.type) {
-						case 'rod pos':
-							if (!(hoverOn.rodPos.rod.groundA || hoverOn.rodPos.rod.groundB)) {
-								mode = { type: 'animating', grabbed: hoverOn.rodPos };
-							}
-							break;
-						case 'overlapping rods':
-							if (!(hoverOn.rodPos.rod.groundA || hoverOn.rodPos.rod.groundB)) {
-								mode = { type: 'animating', grabbed: hoverOn.rodPos };
-							}
-							break;
-						case 'rod end':
-							if (!(hoverOn.rod.groundA || hoverOn.rod.groundB)) {
-								mode = { type: 'animating', grabbed: hoverOn.rod.rod_pos(+hoverOn.isEnd) };
-							}
-							break;
-						case 'slider':
-						case 'slidep':
-						case 'pivot':
-							if (!hoverOn.object.ground) {
-								mode = { type: 'animating', grabbed: hoverOn.object };
-							}
-							break;
-						case 'fixation':
-							if (
-								hoverOn.object.fixedRods.every(
-									(rodPos) => !(rodPos[0].rod.groundA || rodPos[0].rod.groundB)
-								)
-							) {
-								mode = { type: 'animating', grabbed: hoverOn.object };
-							}
+					if (type === 'grabbing') {
+						cursor = 'grabbing';
 					}
 					break;
 				case 'erase':
-					erase(kinState, hoverOn);
 					mode = { type: 'erasing' };
 					break;
 				case 'placing slider':
@@ -197,7 +177,8 @@
 			case 'animating':
 				mode = { type: 'animate' };
 				break;
-			case 'dragging':
+			case 'grabbing':
+				// TODO : connect grabElem & hoverOn
 				mode = { type: 'idle' };
 				cursor = 'auto';
 				break;
@@ -227,7 +208,7 @@
 			case 'G':
 				switch (mode.type) {
 					case 'idle':
-					case 'dragging':
+					case 'grabbing':
 					case 'animate':
 					case 'animating':
 					case 'erasing':
@@ -324,28 +305,48 @@
 		ctx.fillText('slideps: ' + kinState.slideps.length, 10, 110);
 		ctx.fillText('fixations: ' + kinState.fixations.length, 10, 130);
 		let nbGrounds = 0;
+		let degrees_of_freedom = 0;
 		kinState.rods.forEach((rod) => {
 			if (rod.groundA || rod.groundB) {
 				nbGrounds += 1;
+			} else {
+				degrees_of_freedom += 3;
 			}
 		});
 		kinState.sliders.forEach((slider) => {
 			if (slider.ground) {
 				nbGrounds += 1;
+			} else {
+				degrees_of_freedom += 3;
 			}
+			degrees_of_freedom -= 2 * +(slider.slideRod !== undefined);
+			degrees_of_freedom -= 3 * slider.fixedRods.length;
 		});
 		kinState.slideps.forEach((slidep) => {
 			if (slidep.ground) {
 				nbGrounds += 1;
+			} else {
+				degrees_of_freedom += 2;
 			}
+			degrees_of_freedom -= +(slidep.slideRod !== undefined);
+			degrees_of_freedom -= 2 * slidep.rotRods.length;
 		});
 		kinState.pivots.forEach((pivot) => {
 			if (pivot.ground) {
 				nbGrounds += 1;
+			} else {
+				degrees_of_freedom += 2;
 			}
+			degrees_of_freedom -= 2 * pivot.rotRods.length;
+		});
+		kinState.fixations.forEach((fixation) => {
+			degrees_of_freedom += 3;
+			degrees_of_freedom -= 3 * fixation.fixedRods.length;
 		});
 		ctx.fillText('grounds: ' + nbGrounds, 10, 150);
-		ctx.fillText('error: ' + get_error(kinState).toFixed(4), 10, 170);
+		ctx.fillText('error: ' + get_error(kinState).toFixed(4), 10, 180);
+		// TODO : afficher les zones de sur-contraintes et sous-contraintes
+		ctx.fillText('Degrees of freedom : ' + degrees_of_freedom, 10, 210);
 
 		ctx.fillText('over : ' + hoverOn.type, 140, 20);
 		switch (hoverOn.type) {
@@ -396,6 +397,7 @@
 				ctx.fillText('slide Rod: ' + hoverOn.object.slideRod?.id, 140, 90);
 				break;
 			case 'pivot':
+			case 'rod-hover pivot':
 				ctx.fillText('[ ' + hoverOn.object.type + ' ]', 140, 50);
 				ctx.fillText(
 					'rot Rods: [' +
@@ -434,15 +436,17 @@
 
 		draw_kinspace(ctx, kinState, mode, hoverOn, mouse.clone());
 		// Debug : rod number
+		/*
 		kinState.rods.forEach((rod) => {
 			let p = rod.a.add(rod.b).div(2);
 			ctx.beginPath();
 			ctx.arc(p.x, p.y, 9, 0, TAU);
-			ctx.fillStyle = '#ffffffd0';
+			ctx.fillStyle = '#ffffffb0';
 			ctx.fill();
-			ctx.fillStyle = '#000000d0';
+			ctx.fillStyle = '#000000b0';
 			ctx.fillText(rod.id.toString(), p.x - 4, p.y + 5);
 		});
+		*/
 	}
 </script>
 
@@ -452,112 +456,120 @@
 		<a href="/">Slidep</a>
 		<div class="toolbar">
 			<div class="subbar">
-				<button
-					onclick={() => {
-						mode = { type: 'erase' };
-						cursor = 'crosshair';
-					}}
-					title="Eraser (E)"
-				>
-					<img src="/icons/eraser.svg" alt="eraser" />
-				</button>
+				<div class="iconbar">
+					<button
+						onclick={() => {
+							mode = { type: 'erase' };
+							cursor = 'crosshair';
+						}}
+						title="Eraser (E)"
+					>
+						<img src="/icons/eraser.svg" alt="an eraser" width="32px" />
+					</button>
+					<button
+						onclick={() => {
+							mode = { type: 'placing rod start', ground: false };
+							cursor = 'none';
+						}}
+						title="Rod (R)"
+					>
+						<img src="/icons/rod.svg" alt="a thick line" width="32px" />
+					</button>
+					<button
+						onclick={() => {
+							mode = { type: 'placing slider', ground: false };
+							cursor = 'none';
+						}}
+						title="Slider (S)"
+					>
+						<img src="/icons/slider.svg" alt="a hollowed rectangle" width="32px" />
+					</button>
+					<button
+						onclick={() => {
+							mode = { type: 'placing pivot', ground: false };
+							cursor = 'none';
+						}}
+						title="Pivot (P)"
+					>
+						<img src="/icons/pivot.svg" alt="a hollowed circle" width="32px" />
+					</button>
+					<button
+						onclick={() => {
+							mode = { type: 'placing ground' };
+							cursor = 'none';
+						}}
+						title="Ground (G)"
+					>
+						<img src="/icons/ground.svg" alt="the ground symbol" width="32px" />
+					</button>
+				</div>
+				Tools
 			</div>
 			<div class="subbar">
-				<button
-					onclick={() => {
-						mode = { type: 'placing rod start', ground: false };
-						cursor = 'none';
-					}}
-					title="Rod (R)"
-				>
-					<img src="/icons/rod.svg" alt="rod" />
-				</button>
-				<button
-					onclick={() => {
-						mode = { type: 'placing slider', ground: false };
-						cursor = 'none';
-					}}
-					title="Slider (S)"
-				>
-					<img src="/icons/slider.svg" alt="slider" />
-				</button>
-				<button
-					onclick={() => {
-						mode = { type: 'placing pivot', ground: false };
-						cursor = 'none';
-					}}
-					title="Pivot (P)"
-				>
-					<img src="/icons/pivot.svg" alt="pivot" />
-				</button>
-				<button
-					onclick={() => {
-						mode = { type: 'placing ground' };
-						cursor = 'none';
-					}}
-					title="Ground (G)"
-				>
-					<img src="/icons/ground.svg" alt="ground" />
-				</button>
-			</div>
-			<div class="subbar">
-				<button
-					onclick={() => {
-						mode = { type: 'dimension constraint' };
-						cursor = 'auto';
-					}}
-					title="Dimension (D)"
-				>
-					<img src="/icons/dimention.svg" alt="dimention" />
-				</button>
-				<button
-					onclick={() => {
-						mode = { type: 'horizontal constraint' };
-						cursor = 'auto';
-					}}
-					title="Horizontal (H)"
-				>
-					<img src="/icons/horizontal.svg" alt="dimention" />
-				</button>
-				<button
-					onclick={() => {
-						mode = { type: 'vertical constraint' };
-						cursor = 'auto';
-					}}
-					title="Vertical (V)"
-				>
-					<img src="/icons/vertical.svg" alt="dimention" />
-				</button>
-				<button
-					onclick={() => {
-						mode = { type: 'normal constraint' };
-						cursor = 'auto';
-					}}
-					title="Normal (N)"
-				>
-					<img src="/icons/normal.svg" alt="dimention" />
-				</button>
-			</div>
-			<div class="subbar">
-				<button
-					onclick={() => {
-						if (mode.type === 'animate' || mode.type === 'animating') {
-							mode = { type: 'idle' };
+				<div class="iconbar">
+					<button
+						onclick={() => {
+							mode = { type: 'dimension constraint' };
 							cursor = 'auto';
-						} else {
-							mode = { type: 'animate' };
-							cursor = 'move';
-						}
-					}}
-					title="Animate (Space)"
-				>
-					<img
-						src="/icons/{mode.type === 'animate' || mode.type === 'animating'
-							? 'stop'
-							: 'play'}.svg"
-						alt="play/stop"
-					/>
-				</button>
+						}}
+						title="Dimension (D)"
+					>
+						<img src="/icons/dimention.svg" alt="a line with arrows on both ends" width="32px" />
+					</button>
+					<button
+						onclick={() => {
+							mode = { type: 'horizontal constraint' };
+							cursor = 'auto';
+						}}
+						title="Horizontal (H)"
+					>
+						<img src="/icons/horizontal.svg" alt="a horizontal line" width="32px" />
+					</button>
+					<button
+						onclick={() => {
+							mode = { type: 'vertical constraint' };
+							cursor = 'auto';
+						}}
+						title="Vertical (V)"
+					>
+						<img src="/icons/vertical.svg" alt="a vertical line" width="32px" />
+					</button>
+					<button
+						onclick={() => {
+							mode = { type: 'normal constraint' };
+							cursor = 'auto';
+						}}
+						title="Normal (N)"
+					>
+						<img src="/icons/normal.svg" alt="two lines forming a T" width="32px" />
+					</button>
+				</div>
+				Constraints
+			</div>
+			<div class="subbar">
+				<div class="iconbar">
+					<button
+						onclick={() => {
+							if (mode.type === 'animate' || mode.type === 'animating') {
+								mode = { type: 'idle' };
+								cursor = 'auto';
+							} else {
+								mode = { type: 'animate' };
+								cursor = 'move';
+							}
+						}}
+						title="Animate (Space)"
+					>
+						<img
+							src="/icons/{mode.type === 'animate' || mode.type === 'animating'
+								? 'stop'
+								: 'play'}.svg"
+							alt="play/stop"
+							width="32px"
+						/>
+					</button>
+				</div>
+				Animation
 			</div>
 		</div>
 	</div>
@@ -598,7 +610,8 @@
 	.topnav {
 		background-color: #ffbe80;
 		overflow: hidden;
-		height: 48px;
+		height: 60px;
+		padding-top: 5px;
 	}
 	.topnav a {
 		float: left;
@@ -606,18 +619,25 @@
 		text-align: center;
 		padding: 4px 6px;
 		text-decoration: none;
-		font-size: 24px;
+		font-size: 28px;
 		font-weight: bolder;
 	}
 	.toolbar {
 		display: flex;
 		justify-content: center;
 		align-items: center;
-		margin-right: 60pt;
+		margin-right: 70pt;
 		height: 100%;
 		gap: 12px;
 	}
 	.subbar {
+		display: flex;
+		flex-flow: column;
+		align-items: center;
+		font-size: 12px;
+		color: #001d59;
+	}
+	.iconbar {
 		display: flex;
 		gap: 2px;
 		background-color: #ffedc6;

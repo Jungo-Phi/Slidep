@@ -15,7 +15,7 @@ export const MY_TRANSBORDER = '40';
 
 export type Mode =
 	| { type: 'idle' }
-	| { type: 'dragging'; grabbed: GrabElem }
+	| { type: 'grabbing'; grabbed: GrabElem }
 	| { type: 'animate' }
 	| { type: 'animating'; grabbed: GrabElem }
 	| { type: 'erase' }
@@ -62,7 +62,6 @@ export type Fixation = {
 
 export type KinObject = Slider | Slidep | Pivot | Fixation;
 export type KinElem = Rod | KinObject;
-export type GrabElem = RodPos | KinObject;
 
 export type HoverOn =
 	| { type: 'void' }
@@ -74,7 +73,16 @@ export type HoverOn =
 	| { type: 'pivot'; object: Pivot }
 	| { type: 'fixation'; object: Fixation }
 	| { type: 'rod-hover slider'; startPos: Point2; object: Slider }
-	| { type: 'rod-hover slidep'; startPos: Point2; object: Slidep };
+	| { type: 'rod-hover slidep'; startPos: Point2; object: Slidep }
+	| { type: 'rod-hover pivot'; startPos: Point2; object: Pivot };
+
+export type GrabElem =
+	| { type: 'rod pos'; rodPos: RodPos }
+	| { type: 'rod end'; rod: Rod; isEnd: boolean }
+	| { type: 'slider'; object: Slider }
+	| { type: 'slidep'; object: Slidep }
+	| { type: 'pivot'; object: Pivot }
+	| { type: 'fixation'; object: Fixation };
 
 export type KinState = {
 	rods: Rod[];
@@ -139,7 +147,7 @@ export class Rod {
 		let c = this.b.sub(this.a);
 		let d = rod.b.sub(rod.a);
 		let k = (a.x / b.x - a.y / b.y) / (c.y / d.y - c.x / d.x);
-		if (k === Infinity) {
+		if (Number.isNaN(k)) {
 			k = (a.y / b.y - a.x / b.x) / (c.x / d.x - c.y / d.y);
 		}
 		// let k2 = c.x / d.x * k1 + a.x / b.x;
@@ -154,7 +162,7 @@ export class Rod {
 		let aToP = pos.sub(this.a);
 		let k_vec = aToP.project(rodVec);
 		let k = k_vec.x / rodVec.x;
-		if (k === Infinity) {
+		if (Number.isNaN(k)) {
 			k = k_vec.y / rodVec.y;
 		}
 		let dist = Math.sqrt(Math.abs(aToP.length_squared() - k_vec.length_squared()));
@@ -266,6 +274,12 @@ export class Point2 {
 			return new Point2(1, 0);
 		}
 		return this.div(this.length());
+	}
+	limit_length(length: number): Point2 {
+		if (this.length() < length) {
+			return this.clone();
+		}
+		return this.normalize().mul(length);
 	}
 
 	update(rhs: Point2) {

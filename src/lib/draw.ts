@@ -12,6 +12,7 @@ import {
 	MY_TRANSBORDER
 } from '$lib/types';
 import { get_hover_pos } from './placing-elements';
+import { is_grounded } from './utils';
 
 /**
  * Draw kinematic space
@@ -24,39 +25,72 @@ export function draw_kinspace(
 	pos: Point2
 ) {
 	let hover_pos = get_hover_pos(pos, hoverOn);
-
-	if (mode.type === 'animate') {
-		// not hilight if grounded
-		switch (hoverOn.type) {
-			case 'rod pos':
-			case 'overlapping rods':
-				if (!(hoverOn.rodPos.rod.groundA || hoverOn.rodPos.rod.groundB)) {
+	// hilight
+	switch (mode.type) {
+		case 'idle':
+		case 'grabbing':
+		case 'erase':
+		case 'erasing':
+		case 'placing slider':
+		case 'placing pivot':
+		case 'placing rod start':
+		case 'placing rod end':
+		case 'placing ground':
+		case 'dimension constraint':
+		case 'horizontal constraint':
+		case 'vertical constraint':
+		case 'normal constraint':
+			switch (hoverOn.type) {
+				case 'rod pos':
 					highlight_rod(ctx, hoverOn.rodPos.rod, HOVER_COLOR);
-				}
-				break;
-			case 'rod end':
-				if (!(hoverOn.rod.groundA || hoverOn.rod.groundB)) {
+					break;
+				case 'overlapping rods':
+				case 'rod end':
+				case 'slider':
+				case 'slidep':
+				case 'pivot':
+				case 'fixation':
 					highlight_point(ctx, hover_pos, HOVER_COLOR);
-				}
+					break;
+				case 'rod-hover slider':
+				case 'rod-hover slidep':
+				case 'rod-hover pivot':
+					highlight_point(ctx, hoverOn.object.pos, HOVER_COLOR);
+			}
+			break;
+		case 'animate':
+			if (is_grounded(hoverOn)) {
 				break;
-			case 'slider':
-			case 'slidep':
-			case 'pivot':
-				if (!hoverOn.object.ground) {
+			}
+			switch (hoverOn.type) {
+				case 'rod pos':
+				case 'overlapping rods':
+					highlight_rod(ctx, hoverOn.rodPos.rod, HOVER_COLOR);
+					break;
+				case 'rod end':
+				case 'slider':
+				case 'slidep':
+				case 'pivot':
+				case 'fixation':
 					highlight_point(ctx, hover_pos, HOVER_COLOR);
-				}
-				break;
-			case 'fixation':
-				if (
-					hoverOn.object.fixedRods.every(
-						(rodPos) => !(rodPos[0].rod.groundA || rodPos[0].rod.groundB)
-					)
-				) {
-					highlight_point(ctx, hover_pos, HOVER_COLOR);
-				}
-				break;
-		}
+			}
+			break;
+		case 'animating':
+			switch (mode.grabbed.type) {
+				case 'rod pos':
+					highlight_point(ctx, mode.grabbed.rodPos.get_pos(), HOVER_COLOR);
+					break;
+				case 'rod end':
+					highlight_point(ctx, (mode.grabbed.isEnd) ? mode.grabbed.rod.b : mode.grabbed.rod.a, HOVER_COLOR);
+					break;
+				case 'slider':
+				case 'slidep':
+				case 'pivot':
+				case 'fixation':
+					highlight_point(ctx, mode.grabbed.object.pos, HOVER_COLOR);
+			}
 	}
+
 	if (mode.type === 'placing ground') {
 		draw_ground_placement(ctx, hoverOn, hover_pos);
 	}
@@ -106,11 +140,7 @@ export function draw_kinspace(
 			);
 		}
 		if (mode.ground) {
-			draw_ground(
-				ctx,
-				pos,
-				rod.dir().perp().mul(-1)
-			);
+			draw_ground(ctx, pos, rod.dir().perp().mul(-1));
 		}
 		draw_rod(ctx, rod);
 		if (!pos.is_equal(hover_pos)) {
@@ -136,10 +166,16 @@ export function draw_kinspace(
 	}
 	// sliders (+ grounds)
 	kinState.sliders.forEach((slider) => {
-		if (slider.ground) {
-			draw_ground(ctx, slider.pos.add(slider.dir.perp().mul(2)), slider.dir);
+		let dir = slider.dir.clone();
+		let fill = slider.slideRod !== undefined;
+		if (hoverOn.type === 'rod-hover slider' && hoverOn.object === slider) {
+			dir = hover_pos.sub(hoverOn.startPos).normalize();
+			fill = true;
 		}
-		draw_slider(ctx, slider.pos, slider.dir, slider.slideRod !== undefined, false);
+		if (slider.ground) {
+			draw_ground(ctx, slider.pos.add(dir.perp().mul(2)), dir);
+		}
+		draw_slider(ctx, slider.pos, dir, fill, false);
 	});
 	// slideps (+ grounds)
 	kinState.slideps.forEach((slidep) => {
@@ -158,7 +194,11 @@ export function draw_kinspace(
 				}
 			}
 		}
-		draw_slidep(ctx, slidep.pos, slidep.dir, overDirs);
+		let dir = slidep.dir.clone();
+		if (hoverOn.type === 'rod-hover slidep' && hoverOn.object === slidep) {
+			dir = hover_pos.sub(hoverOn.startPos).normalize();
+		}
+		draw_slidep(ctx, slidep.pos, dir, overDirs);
 		if (slidep.ground) {
 			draw_ground(ctx, slidep.pos.add(new Point2(0, 2)), new Point2());
 		}
@@ -177,6 +217,10 @@ export function draw_kinspace(
 			case 'overlapping rods':
 				dir = hoverOn.rodPos.rod.dir();
 				break;
+			case 'slider':
+			case 'slidep':
+				dir = hoverOn.object.dir;
+				break;
 			case 'pivot':
 				hoverOn.object.rotRods.toReversed().forEach((rodPos) => {
 					if (rodPos.k !== 0 && rodPos.k !== 1) {
@@ -191,13 +235,17 @@ export function draw_kinspace(
 				}
 				break;
 		}
+		if (mode.ground) {
+			draw_ground(
+				ctx,
+				hover_pos.add(new Point2(0, 2)),
+				hoverOn.type === 'slidep' ? new Point2() : dir
+			);
+		}
+		if (!pos.is_equal(hover_pos)) {
+			draw_slider(ctx, pos, dir, hoverOn.type === 'rod pos' || hoverOn.type === 'fixation', true);
+		}
 		if (!(hoverOn.type === 'slider' || hoverOn.type === 'slidep')) {
-			if (mode.ground) {
-				draw_ground(ctx, hover_pos.add(new Point2(0, 2)), dir);
-			}
-			if (!pos.is_equal(hover_pos)) {
-				draw_slider(ctx, pos, dir, hoverOn.type === 'rod pos' || hoverOn.type === 'fixation', true);
-			}
 			draw_slider(
 				ctx,
 				hover_pos,
@@ -209,10 +257,13 @@ export function draw_kinspace(
 	}
 	// pivots (+ grounds)
 	kinState.pivots.forEach((pivot) => {
+		let fill =
+			pivot.rotRods.length !== 0 ||
+			(hoverOn.type === 'rod-hover pivot' && hoverOn.object === pivot);
 		if (pivot.ground) {
 			draw_ground(ctx, pivot.pos.add(new Point2(0, 2)), new Point2());
 		}
-		draw_pivot(ctx, pivot.pos, pivot.rotRods.length !== 0, false);
+		draw_pivot(ctx, pivot.pos, fill, false);
 	});
 	// placing pivot
 	if (mode.type === 'placing pivot') {
