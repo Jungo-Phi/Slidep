@@ -562,7 +562,7 @@
 						title="Animate (Space)"
 					>
 						<img
-							src="/icons/{mode.type === 'animate' || mode.type === 'animating'
+							src="{base}/icons/{mode.type === 'animate' || mode.type === 'animating'
 								? 'stop'
 								: 'play'}.svg"
 							alt="play/stop"
