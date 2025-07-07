@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { base } from '$app/paths';
 	import type { Mode, HoverOn, KinState } from '$lib/types';
 	import { Point2, HOVER_RADIUS, TAU, MY_RED } from '$lib/types';
 	import { get_error, animate } from '$lib/constraints';
@@ -453,7 +454,7 @@
 <div class="app-container">
 	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Montserrat" />
 	<div class="topnav">
-		<a href="/">Slidep</a>
+		<a href="{base}/">Slidep</a>
 		<div class="toolbar">
 			<div class="subbar">
 				<div class="iconbar">

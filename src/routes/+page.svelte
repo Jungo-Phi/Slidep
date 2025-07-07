@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { base } from '$app/paths';
 </script>
 
 <head>
@@ -8,15 +9,15 @@
 <body>
 	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Montserrat" />
 	<div class="topnav">
-		<a href="/">Slidep</a>
+		<a href="{base}/">Slidep</a>
 	</div>
 
 	<div class="center">
 		<div>
-			<!-- <a class="button" href="/statics">Statics</a> -->
+			<!-- <a class="button" href="{base}/statics">Statics</a> -->
 		</div>
 		<div>
-			<a class="button" href="/kinematics">Kinematics</a>
+			<a class="button" href="{base}/kinematics">Kinematics</a>
 		</div>
 	</div>
 </body>
