@@ -465,7 +465,7 @@
 						}}
 						title="Eraser (E)"
 					>
-						<img src="/icons/eraser.svg" alt="an eraser" width="32px" />
+						<img src="{base}/icons/eraser.svg" alt="an eraser" width="32px" />
 					</button>
 					<button
 						onclick={() => {
@@ -474,7 +474,7 @@
 						}}
 						title="Rod (R)"
 					>
-						<img src="/icons/rod.svg" alt="a thick line" width="32px" />
+						<img src="{base}/icons/rod.svg" alt="a thick line" width="32px" />
 					</button>
 					<button
 						onclick={() => {
@@ -483,7 +483,7 @@
 						}}
 						title="Slider (S)"
 					>
-						<img src="/icons/slider.svg" alt="a hollowed rectangle" width="32px" />
+						<img src="{base}/icons/slider.svg" alt="a hollowed rectangle" width="32px" />
 					</button>
 					<button
 						onclick={() => {
@@ -492,7 +492,7 @@
 						}}
 						title="Pivot (P)"
 					>
-						<img src="/icons/pivot.svg" alt="a hollowed circle" width="32px" />
+						<img src="{base}/icons/pivot.svg" alt="a hollowed circle" width="32px" />
 					</button>
 					<button
 						onclick={() => {
@@ -501,7 +501,7 @@
 						}}
 						title="Ground (G)"
 					>
-						<img src="/icons/ground.svg" alt="the ground symbol" width="32px" />
+						<img src="{base}/icons/ground.svg" alt="the ground symbol" width="32px" />
 					</button>
 				</div>
 				Tools
@@ -515,7 +515,7 @@
 						}}
 						title="Dimension (D)"
 					>
-						<img src="/icons/dimention.svg" alt="a line with arrows on both ends" width="32px" />
+						<img src="{base}/icons/dimention.svg" alt="a line with arrows on both ends" width="32px" />
 					</button>
 					<button
 						onclick={() => {
@@ -524,7 +524,7 @@
 						}}
 						title="Horizontal (H)"
 					>
-						<img src="/icons/horizontal.svg" alt="a horizontal line" width="32px" />
+						<img src="{base}/icons/horizontal.svg" alt="a horizontal line" width="32px" />
 					</button>
 					<button
 						onclick={() => {
@@ -533,7 +533,7 @@
 						}}
 						title="Vertical (V)"
 					>
-						<img src="/icons/vertical.svg" alt="a vertical line" width="32px" />
+						<img src="{base}/icons/vertical.svg" alt="a vertical line" width="32px" />
 					</button>
 					<button
 						onclick={() => {
@@ -542,7 +542,7 @@
 						}}
 						title="Normal (N)"
 					>
-						<img src="/icons/normal.svg" alt="two lines forming a T" width="32px" />
+						<img src="{base}/icons/normal.svg" alt="two lines forming a T" width="32px" />
 					</button>
 				</div>
 				Constraints
