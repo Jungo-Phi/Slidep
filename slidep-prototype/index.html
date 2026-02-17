@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Slidep Prototype</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app">
+        <header class="header">
+            <h1>Slidep</h1>
+            <nav>
+                <button id="createBtn" class="nav-btn active">Create</button>
+                <button id="iterateBtn" class="nav-btn">Iterate</button>
+                <button id="shareBtn" class="nav-btn">Share</button>
+            </nav>
+        </header>
+
+        <div class="main-content">
+            <aside class="sidebar" id="elementPalette">
+                <h3>Elements</h3>
+                <div class="element-grid">
+                    <div class="element-item" data-type="bar">
+                        <div class="element-icon">━</div>
+                        <span>Bar</span>
+                    </div>
+                    <div class="element-item" data-type="joint">
+                        <div class="element-icon">●</div>
+                        <span>Joint</span>
+                    </div>
+                    <div class="element-item" data-type="motor">
+                        <div class="element-icon">⚙</div>
+                        <span>Motor</span>
+                    </div>
+                    <div class="element-item" data-type="spring">
+                        <div class="element-icon">~</div>
+                        <span>Spring</span>
+                    </div>
+                </div>
+            </aside>
+
+            <main class="canvas-container">
+                <canvas id="mechanismCanvas" width="800" height="600"></canvas>
+                <div class="simulation-controls">
+                    <button id="playBtn">▶ Play</button>
+                    <button id="pauseBtn">⏸ Pause</button>
+                    <button id="resetBtn">↻ Reset</button>
+                </div>
+            </main>
+
+            <aside class="sidebar" id="propertiesPanel">
+                <h3>Properties</h3>
+                <div id="propertiesContent">
+                    <p>Select an element to edit its properties</p>
+                </div>
+            </aside>
+        </div>
+
+        <div id="galleryModal" class="modal hidden">
+            <div class="modal-content">
+                <span class="close">&times;</span>
+                <h2>Community Gallery</h2>
+                <div id="galleryGrid" class="gallery-grid">
+                    <!-- Gallery items will be populated here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
