@@ -3,33 +3,16 @@
  * Controls for running and managing simulations
  */
 
-import React from 'react';
-import {
-  Box,
-  Paper,
-  Typography,
-  IconButton,
-  Slider,
-  Tooltip,
-  Chip,
-  Divider,
-} from '@mui/material';
-import {
-  Pause as PauseIcon,
-  Timeline as TrajectoryIcon,
-  ShowChart as ForceIcon,
-  RotateRight as MomentIcon,
-  Replay as ReplayIcon,
-} from '@mui/icons-material';
+import React from "react";
+import { Box, Paper } from "@mui/material"; // import {Box, Paper, Typography, IconButton, Slider, Tooltip, Chip, Divider} from '@mui/material';
+// import {Pause as PauseIcon, Timeline as TrajectoryIcon, ShowChart as ForceIcon, RotateRight as MomentIcon, Replay as ReplayIcon} from '@mui/icons-material';
 
-import playIconUrl from '../../assets/icons/palette/play.svg';
-import stopIconUrl from '../../assets/icons/palette/stop.svg';
+// import playIconUrl from '../../assets/icons/palette/play.svg';
+// import stopIconUrl from '../../assets/icons/palette/stop.svg';
 
-import { SimulationSpeed } from '../../types';
+// import { SimulationSpeed } from '../../types';
 
-/**
- * Speed marks for slider
- */
+/*
 const SPEED_MARKS = [
   { value: 0.25, label: '0.25x' },
   { value: 0.5, label: '0.5x' },
@@ -37,44 +20,28 @@ const SPEED_MARKS = [
   { value: 2, label: '2x' },
   { value: 4, label: '4x' },
 ];
+ */
 
 /**
  * SimulationControls component
  */
-export const SimulationControls: React.FC<{ isTopBar?: boolean }> = ({ isTopBar = false }) => {
-  /**
-   * Handle play/pause toggle
-   */
-  const handlePlayPause = () => {
-    if (status === 'running') {
-      pause();
-    } else if (status === 'paused') {
-      resume();
-    } else {
-      start();
-    }
-  };
+export const SimulationControls: React.FC<{ isTopBar?: boolean }> = ({
+  isTopBar = false,
+}) => {
+  //const handlePlayPause = () => {};
 
-  /**
-   * Handle speed change
-   */
-  const handleSpeedChange = (_: Event, value: number | number[]) => {
-    setSpeed(value as SimulationSpeed);
-  };
+  //const handleSpeedChange = (_: Event, value: number | number[]) => {setSpeed(value as SimulationSpeed); };
 
-  /**
-   * Format time display
-   */
+  /*
   const formatTime = (ms: number): string => {
     const seconds = Math.floor(ms / 1000);
     const minutes = Math.floor(seconds / 60);
     const remainingSeconds = seconds % 60;
     return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
   };
+  */
 
-  /**
-   * Get status color
-   */
+  /*
   const getStatusColor = (): 'default' | 'primary' | 'success' | 'warning' => {
     switch (status) {
       case 'running':
@@ -85,10 +52,12 @@ export const SimulationControls: React.FC<{ isTopBar?: boolean }> = ({ isTopBar 
         return 'default';
     }
   };
+   */
 
   if (isTopBar) {
     return (
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+      <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+        {/*
         <Tooltip title={status === 'running' ? 'Pause' : 'Démarrer'}>
           <IconButton
             onClick={handlePlayPause}
@@ -145,6 +114,7 @@ export const SimulationControls: React.FC<{ isTopBar?: boolean }> = ({ isTopBar 
             sx={{ height: 20, fontSize: '0.65rem', borderColor: 'rgba(0,0,0,0.1)' }}
           />
         </Box>
+        */}
       </Box>
     );
   }
@@ -153,16 +123,16 @@ export const SimulationControls: React.FC<{ isTopBar?: boolean }> = ({ isTopBar 
     <Paper
       elevation={0}
       sx={{
-        position: 'absolute',
+        position: "absolute",
         bottom: 16,
-        left: '50%',
-        transform: 'translateX(-50%)',
+        left: "50%",
+        transform: "translateX(-50%)",
         width: 400,
         padding: 2,
         zIndex: 1000,
       }}
     >
-      {/* Status and time */}
+      {/*
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
         <Chip
           label={status.toUpperCase()}
@@ -179,7 +149,6 @@ export const SimulationControls: React.FC<{ isTopBar?: boolean }> = ({ isTopBar 
         </Box>
       </Box>
 
-      {/* Main controls */}
       <Box sx={{ display: 'flex', justifyContent: 'center', gap: 1, mb: 2 }}>
         <Tooltip title={status === 'running' ? 'Pause' : 'Démarrer'}>
           <IconButton
@@ -234,7 +203,6 @@ export const SimulationControls: React.FC<{ isTopBar?: boolean }> = ({ isTopBar 
 
       <Divider sx={{ my: 2 }} />
 
-      {/* Speed control */}
       <Box sx={{ px: 2 }}>
         <Typography variant="caption" color="text.secondary" gutterBottom>
           Vitesse de simulation
@@ -253,7 +221,6 @@ export const SimulationControls: React.FC<{ isTopBar?: boolean }> = ({ isTopBar 
 
       <Divider sx={{ my: 2 }} />
 
-      {/* Visualization toggles */}
       <Box sx={{ display: 'flex', justifyContent: 'center', gap: 1 }}>
         <Tooltip title="Afficher les trajectoires">
           <IconButton
@@ -285,6 +252,7 @@ export const SimulationControls: React.FC<{ isTopBar?: boolean }> = ({ isTopBar 
           </IconButton>
         </Tooltip>
       </Box>
+      */}
     </Paper>
   );
 };

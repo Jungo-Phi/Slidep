@@ -144,9 +144,6 @@ export const MechanicalCanvas: React.FC<MechanicalCanvasProps> = ({
         case "ChangeGearAngle":
           text += "  angle : " + action.newAngle.toFixed(2);
           break;
-        case "MoveElements":
-          text += " : delta=" + action.delta;
-          break;
         case "ConnectsFixedEdges":
         case "ConnectsRotatingEdges":
         case "ConnectsParentBeam":

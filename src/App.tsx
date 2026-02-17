@@ -22,7 +22,7 @@ import {
   Undo as UndoIcon,
   Redo as RedoIcon,
 } from "@mui/icons-material";
-import { lightTheme, darkTheme, highContrastTheme } from "./lib/mui-theme";
+import { lightTheme } from "./lib/mui-theme"; // import { lightTheme, darkTheme, highContrastTheme } from "./lib/mui-theme";
 import logoUrl from "./assets/icons/palette/logo.svg";
 import MechanicalCanvas from "./components/mechanical-canvas/MechanicalCanvas";
 import { ElementPalette } from "./components/element-palette";
@@ -57,9 +57,7 @@ export interface UserPreferences {
   autoSaveInterval: number; // in seconds
 }
 
-/**
- * Default preferences
- */
+/*
 const DEFAULT_PREFERENCES: UserPreferences = {
   theme: "light",
   gridVisible: true,
@@ -67,6 +65,7 @@ const DEFAULT_PREFERENCES: UserPreferences = {
   autoSave: true,
   autoSaveInterval: 30,
 };
+*/
 
 /**
  * App component

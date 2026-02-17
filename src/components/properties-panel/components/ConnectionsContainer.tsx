@@ -160,7 +160,7 @@ export const ConnectionsContainer: React.FC<ConnectionsContainerProps> = ({
         draggedElement,
         containerType,
         insertIndex,
-        mechanism.mechanicalElements,
+        //mechanism.mechanicalElements,
       ),
     );
 

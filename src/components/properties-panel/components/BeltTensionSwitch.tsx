@@ -29,7 +29,7 @@ export const BeltTensionSwitch: React.FC<BeltTensionSwitchProps> = ({
         alignItems: "center",
       }}
     >
-      {/*<Typography variant="body2">{tightened ? "Tight" : "Loose"}</Typography>*/}
+      <Typography variant="body2">{tightened ? "Tight" : "Loose"}</Typography>
       <IconButton
         onClick={toggleTight}
         size="small"

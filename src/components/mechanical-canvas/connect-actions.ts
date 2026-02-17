@@ -252,7 +252,7 @@ export function connect_element(
   connectedElement: MechanicalElement,
   containerType: ConnectsActionType,
   insertIndex: number,
-  mechanicalElements: MechanicalElement[],
+  //mechanicalElements: MechanicalElement[],
 ): Action {
   if (containerType === "ConnectsAttachedGears") {
     // const belt = get_mechanical_element_from_id(element.id, mechanicalElements) as BeltElement;

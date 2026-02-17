@@ -721,13 +721,8 @@ export function draw_dimention_angle(
   if ((alpha - beta + TAU) % TAU < TAU / 2) {
     [alpha, beta] = [beta, alpha];
   }
-  const angle = (beta - alpha + TAU) % TAU;
-  const center = origin.add(
-    Point2.from_polar(
-      radius,
-      (((alpha + TAU) % TAU) + ((beta + TAU) % TAU)) / 2,
-    ),
-  );
+  //const angle = (beta - alpha + TAU) % TAU;
+  //const center = origin.add(Point2.from_polar(radius, (((alpha + TAU) % TAU) + ((beta + TAU) % TAU)) / 2));
   //const e = d * Math.sin(angle / 2);
   //origin = origin.add(center.sub(origin).normalize().mul(d));
   const start = origin.add(new Point2(radius, 0).rotate(alpha + 3 / radius));

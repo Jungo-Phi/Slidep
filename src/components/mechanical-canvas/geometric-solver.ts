@@ -120,8 +120,8 @@ export function resolveGeometricConstraints(
   let maxError = 0;
 
   // Store initial positions for clamping if needed
-  const initialPositions = new Map(positions);
-  const initialRadii = new Map(radii);
+  //const initialPositions = new Map(positions);
+  //const initialRadii = new Map(radii);
 
   for (let i = 0; i < iterations; i++) {
     maxError = 0;

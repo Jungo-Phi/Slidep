@@ -29,7 +29,7 @@ export const GroundSwitch: React.FC<GroundSwitchProps> = ({
         alignItems: "center",
       }}
     >
-      {/*<Typography variant="body2">{grounded ? "Grounded" : "Free"}</Typography>*/}
+      <Typography variant="body2">{grounded ? "Grounded" : "Free"}</Typography>
       <IconButton
         onClick={toggleGround}
         size="small"
