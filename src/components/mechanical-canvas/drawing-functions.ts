@@ -794,18 +794,14 @@ export function draw_gear_ratio(ctx: CanvasRenderingContext2D, value: number) {
   ctx.font = "16px Arial";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-
   let text = valueToRatioParts(value).join(":");
   const metrics = ctx.measureText(text);
-
   ctx.strokeStyle = "grey";
-  ctx.fillStyle = COLORS.BACKGROUND; // COLORS.BACKGROUND + COLORS.ICON_TRANSPARENCY;
+  ctx.fillStyle = COLORS.BACKGROUND + COLORS.ICON_TRANSPARENCY;
   ctx.beginPath();
-  ctx.roundRect(-metrics.width / 2, -20 / 2, metrics.width, 20, 4);
+  ctx.roundRect(-metrics.width / 2 - 4, -20 / 2, metrics.width + 8, 20, 10);
   ctx.stroke();
   ctx.fill();
-  ctx.fillStyle = COLORS.BACKGROUND;
-  ctx.fillRect(-metrics.width / 2 - 3, -10, metrics.width + 6, 18);
   ctx.fillStyle = COLORS.STROKE;
   ctx.fillText(text, 0, 0);
 }

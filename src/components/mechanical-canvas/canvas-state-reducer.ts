@@ -1006,11 +1006,17 @@ export function canvasStateReducer(
                 value: startGear.radius / endGear.radius,
               },
             });
+            setCanvasState({
+              type: "EditingConstraint",
+              constraintID: IDcounter.current,
+              value: startGear.radius / endGear.radius,
+            });
             IDcounter.current++;
+          } else {
+            setCanvasState({
+              type: "GearRatioConstraintStart",
+            });
           }
-          setCanvasState({
-            type: "GearRatioConstraintStart",
-          });
           break;
         case "EditingConstraint":
           setCanvasState({ type: "Selecting" });
