@@ -16,7 +16,6 @@ export function resolveGeometricConstraints(
   constraintElements: ConstraintElement[],
   triggerAction: Action,
 ): Action[] {
-  // If the action is just moving a constraint label/icon, don't resolve
   if (triggerAction.type === "MoveConstraint") {
     return [triggerAction];
   }
@@ -108,20 +107,16 @@ export function resolveGeometricConstraints(
         triggerAction.element.type === "equal" ||
         triggerAction.element.type === "gear-ratio"
       ) {
-        // Add the new constraint to the list for the relaxation loop
         constraintElements = [...constraintElements, triggerAction.element];
       }
       break;
   }
 
   // 3. PBD Relaxation Loop
+  /*
   const iterations = 150; // High iterations to ensure rigidity
   const epsilon = 0.000001; // Very tight tolerance
   let maxError = 0;
-
-  // Store initial positions for clamping if needed
-  //const initialPositions = new Map(positions);
-  //const initialRadii = new Map(radii);
 
   for (let i = 0; i < iterations; i++) {
     maxError = 0;
@@ -462,6 +457,7 @@ export function resolveGeometricConstraints(
       }
     }
   }
+  */
 
   // 5. Generate resulting actions
   const resultActions: Action[] = [triggerAction];

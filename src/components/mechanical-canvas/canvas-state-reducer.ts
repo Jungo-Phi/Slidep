@@ -407,7 +407,7 @@ export function canvasStateReducer(
                 fixedEdgesIDs: [],
                 meshedGearsIDs: [],
                 fixedGearsIDs: [],
-                meshedBeltID: undefined,
+                attachedBeltID: undefined,
               };
               break;
           }

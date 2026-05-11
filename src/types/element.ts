@@ -138,7 +138,7 @@ export interface GearElement extends BaseNodeElement {
   fixedEdgesIDs: ID[];
   meshedGearsIDs: ID[];
   fixedGearsIDs: ID[];
-  meshedBeltID?: ID;
+  attachedBeltID?: ID;
 }
 
 /** Base interface for Edge elements (defined by two points) */

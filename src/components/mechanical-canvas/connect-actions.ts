@@ -94,8 +94,8 @@ export function get_connection_pair_type(
     return "ConnectsFixedGears";
   }
   if (
-    "meshedBeltID" in connectedElement &&
-    connectedElement.meshedBeltID === elementID
+    "attachedBeltID" in connectedElement &&
+    connectedElement.attachedBeltID === elementID
   ) {
     return "ConnectsAttachedBelt";
   }
@@ -154,8 +154,8 @@ export function get_connections(
       }
       break;
     case "ConnectsAttachedBelt":
-      if ("meshedBeltID" in element) {
-        return element.meshedBeltID ? [element.meshedBeltID] : [];
+      if ("attachedBeltID" in element) {
+        return element.attachedBeltID ? [element.attachedBeltID] : [];
       }
       break;
   }
@@ -194,7 +194,7 @@ export function get_connection_types(
   if ("fixedGearsIDs" in element) {
     connectionTypes.push("ConnectsFixedGears");
   }
-  if ("meshedBeltID" in element) {
+  if ("attachedBeltID" in element) {
     connectionTypes.push("ConnectsAttachedBelt");
   }
   return connectionTypes;

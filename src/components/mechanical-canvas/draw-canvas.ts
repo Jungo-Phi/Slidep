@@ -264,7 +264,7 @@ export function drawMechanicalCanvas(
                   rotatingEdgesIDs: [],
                   meshedGearsIDs: [],
                   fixedGearsIDs: [],
-                  meshedBeltID: element.id,
+                  attachedBeltID: element.id,
                 };
                 attachedGears.splice(state.section / 2, 0, {
                   gear: newGear,
@@ -308,7 +308,7 @@ export function drawMechanicalCanvas(
                 rotatingEdgesIDs: [],
                 meshedGearsIDs: [],
                 fixedGearsIDs: [],
-                meshedBeltID: element.id,
+                attachedBeltID: element.id,
               };
               attachedGears.splice(hoveredPart.section / 2, 0, {
                 gear: newGear,

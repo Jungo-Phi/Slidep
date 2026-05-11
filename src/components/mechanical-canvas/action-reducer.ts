@@ -339,13 +339,13 @@ export function actionReducer(
           action.elementID,
           mechanism.mechanicalElements,
         );
-        if (!("meshedBeltID" in element)) {
+        if (!("attachedBeltID" in element)) {
           break;
         }
         if (action.disconnect !== revert) {
-          element.meshedBeltID = undefined;
+          element.attachedBeltID = undefined;
         } else {
-          element.meshedBeltID = action.connectID;
+          element.attachedBeltID = action.connectID;
         }
         break;
     }
