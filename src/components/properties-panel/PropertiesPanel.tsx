@@ -11,6 +11,7 @@ import {
 } from "@mui/icons-material";
 import {
   Action,
+  ActionBundleType,
   Mechanism,
   MechanismMetadata,
   SimulationConfig,
@@ -24,7 +25,10 @@ import ElementProperties from "./ElementProperties";
 interface PropertiesPanelProps {
   setCanvasState: (state: CanvasState) => void;
   canvasState: CanvasState;
-  updateMechanism: (actions: Action[]) => void;
+  updateMechanism: (
+    actions: Action[],
+    actionBundleType: ActionBundleType,
+  ) => void;
   mechanism: Mechanism;
   setHoveredPart: (hoveredPart: HoveredPart) => void;
   setMetaData: (metadata: MechanismMetadata) => void;

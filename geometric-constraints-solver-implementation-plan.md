@@ -47,45 +47,49 @@ Le solveur fonctionne en quatre phases :
 - **Identification des nœuds du graphe (positions)** :
   - Chaque Node
   - Les 2 extrémités des Edges
-  - Le point de saisie de l'action
+  - Le point de saisie de l'action (si il y en a un)
 - **Identification des arêtes du graphe (contraintes)** :
   - Les liaisons entre éléments :
     - ConnectsParentBeam, ConnectsFixedNodesBody : Contrainte de position sur un segment définit par les 2 extrémités du beam
     - ConnectsFixedNodeStart, ConnectsFixedNodeEnd : Contrainte de coïncidence
     - ConnectsFixedEdges : Contrainte de coïncidence + angle(s) relatif(s)
     - ConnectsRotatingEdges, ConnectsFixedGears : Contrainte de coïncidence
-    - ConnectsMeshedGears : Contrainte de distance des centres égale à la somme des rayons
+    - ConnectsMeshedGears : Contrainte tangeance (distance des centres égale à la somme des rayons)
     - ConnectsAttachedBelt, ConnectsAttachedGears  : TODO
-  - Chaque élément contrainte
   - Une contrainte avec le point de saisie :
     - Sur un node : Contrainte de coïncidence
     - Sur une gear tooth : Contrainte d'ancrage de la gear au sol + contrainte de rayon égal à la distance au centre
     - Sur un beam body : Contrainte de position sur un segment définit par les 2 extrémités du beam
     - Sur une extrémité de beam : Contrainte de coïncidence
+    - Autre : pas de point de saisie
+  - Chaque élément contrainte
 
 **Phase B : Adaptation du graphe de dépendances**
 
 C'est ici qu'on détermine les variations de comportement du solveur. Les points suivants sont pensés pour maintenir à chaque mouvement le méchanisme majoritairement statique avec des changements essentiellement autour du point de saisie, tant que possible.
 
-- **Mise en forme hiérarchique** :
-  - L'arbre est analysé pour déterminer si une hiérarchie simple permet une résolution.
-  - En haut de cette hiérarchie se trouvent le point de saisie et les éléments `Grounded` puis on redescent jusqu'aux points complètement libres.
-  - On forme ainsi un arbre de dépendances en partant du point de saisie, noeud par noeud, jusqu'à avoir exploré toutes les connexions.
-  - On pourra donc ignorer les éléments détachés.
-- **On ajoutera les contraintes suivantes, tant que cela de surcontraint pas le méchanisme (dans l'ordre en partant du bas de l'arbre) :**
-  - Position d'un node sur un beam (à quelle proportion il est plus proche d'une extrémité que d'une autre)
-  - Maintient de la longueur d'un beam (seulement si il n'y a pas déjà une contrainte de longueur sur le beam)
-  - Maintient de l'orientation d'un beam (pour qu'il reste parallèle à sa position de départ)
-  - Si un beam est saisi par une de ses extrémités, on n'ajoutera pas de contrainte de longueur ni d'orientation sur ce beam.
+- **Fusion des éléments coincidents**
+- **Calcul de l'ordre (élimine les éléments détachés)**
+  - On commence par les points libres, puis dans l'ordre depuis l'opposé du point sélectionné jusqu'à l'atteindre (tri topologique) BFS.
+- **Version simplifiée :**
+  1.  Node sélectionné : si ancré ALORS enlever l'ancrage.
+  2.  Beam body sélectionné : si joint ancré connecté ALORS enlever l'ancrage.
+  3.  Beam extrémité sélectionné : ancrage de l'autre extrémité.
+  4.  Maintien de la position (**ratio**) sur un beam : A moins de grab le node lui-meme, transformer \[OnSegment -> AtSegmentRatio\].
+  5.  Beam sélectionné : si il y a **3 ou plus** degré de liberté ALORS contrainte de **parallélisme**.
+  6.  Beam sélectionné : si il y a **3 ou plus** degré de liberté ALORS contrainte de **longueur**.
+  7.  ChangingGearRadius sélectionné : si il y a **3 ou plus** degré de liberté ALORS contrainte de **position** de l'engrenage.
+  8.  MovingGear sélectionné : si il y a **2 ou plus** degré de liberté ALORS contrainte de **rayon** de l'engrenage.
+  9.  Autres beams (dans l'ORDRE) : si il y a **3 ou plus** degré de liberté ALORS contrainte de **parallélisme**.
+  10. Autres beams (dans l'ORDRE) : si il y a **3 ou plus** degré de liberté ALORS contrainte de **longueur**.
 
-#### **Phase C : Résolution (Hybride Propagation + PBD)**
+#### **Phase C : Résolution PBD (Position Based Dynamics)**
 
-1.  **Propagation Initiale (BFS)** : Pour les systèmes simples (arborescents), on déplace les éléments de proche en proche.
-2.  **Relaxation PBD (Position Based Dynamics)** : Pour les cycles et les systèmes sur-contraints.
-    - Pour chaque contrainte $C\_i$ :
-      - Calculer le gradient de correction $\\Delta P$.
-      - Appliquer $\\Delta P$ aux positions des points impliqués, pondéré par leur "masse" (0 pour les ancres, 1 pour les points libres).
-    - Répéter $N$ fois (ex: 10 itérations).
+- Pour chaque contrainte $C\_i$ :
+  - Calculer le gradient de correction $\\Delta P$.
+  - Appliquer $\\Delta P$ aux positions des points impliqués, pondéré par leur "masse" (0 pour les ancres, 1 pour les points libres).
+- Répéter dans l'ordre inverse.
+- Répéter $N$ fois (ex: 10 itérations).
 
 #### **Phase D : Génération des Actions de Sortie**
 

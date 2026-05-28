@@ -17,15 +17,31 @@
 - ~Belt placement direction of last gear is not reliable~
 - ~Placer Ground sur des Edges et intersection d'edges~
 - Placer join à la jonction des Beams
-- Créer des éléments de dimension
-- Créer des éléments de contrainte
+- ~Créer des éléments de dimension~
+- ~Créer des éléments de contrainte~
 - Raccourcis qui fonctionnent même si le canvas est pas focus
+- ~Boutons Crtl+Z~
+- Avec un click sans mouvement -> sélectionné, puis si mouvement, passer de sélectionné -> movingX
+- Supprimer contraintes quand on supprime élément
+- Qu'est-ce qui se passe si on appuie sur Crtl+Z alors qu'on a pas laché un élément ?
+- ~TODO : Differentiate between drag and drop : ajouter un élément tampon à mouse release "Blank"~
+- (move apart disconnected elements ?)
+- MoveEdgeBody : deltaStart -> k
+- ~ActionReducer : remove elements managed by "UpdatePositionsToValidState"~
+- ~Sélection multiple doit ignorer les contraintes et dimensions~
+- ~Toujours enlever le blank (Ajouter à la fin de lastAction**s**)~
+- Ajouter "repelDistance" pour éloigner les contraintes détachées
+- Rester dans dimension après en avoir placé une
+- Appliquer "UpdateToValidState" apres contrainte H/V
+- Régler de bordel de "connect-actions"
+- "Undo" connection (Join) ne s'est pas appliqué en bidirectionnel !
 
 ## Features UX secondaires
 
 - ~Faire les nouveaux icons~
 - ~Ajouter les sens de rotation des engrenages dans les connections~
 - Ajouter les ratios des engrenages dans les connections
+- (Ignorer BeamBodyHover lors du déplacement d'un beam ?)
 - Faire que drop une connection dans un container simple échange les connections
 - (Supprimer les joints quand ils ne sont connectés qu'à 1 élément ?)
 - Change CanvasState on delete element
@@ -34,11 +50,12 @@
 ## Features visuelles nice to have
 
 - ~Plus beau logo~
-- Visuel des pivot/slider/slidep connecté = remplit
+- ~Visuel des pivot/slider/slidep connecté = remplit~
+- Arrondir le chiffre affiché des dimmensions
 - Rendre les connections drag & drop plus propres
 - Hover Delete button / Element name
 - Hover en couleur ?
 - Hover edgeEnd fait aussi le body ?
 - Limiter la longueur des edges au placement et déplacement
 - Limiter la position des dimmentions pour la lisibilité
-- Move dimention with edge
+- Déplacer les dimentions avec les élements associés

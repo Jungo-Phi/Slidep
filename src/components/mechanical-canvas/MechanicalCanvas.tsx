@@ -15,14 +15,22 @@ import {
   get_constraint_element_from_id,
 } from "./connect-actions";
 import { get_hovered_part } from "./get-hover";
-import type { EdgeElement, ID } from "../../types";
+import type {
+  ActionBundleType,
+  ActionType,
+  EdgeElement,
+  ID,
+} from "../../types";
 import { HoveredPart } from "../../types/hovered-part";
 import { ConstraintEditor } from "./ConstraintEditor";
 
 interface MechanicalCanvasProps {
   setCanvasState: (state: CanvasState) => void;
   canvasState: CanvasState;
-  updateMechanism: (actions: Action[]) => void;
+  updateMechanism: (
+    actions: Action[],
+    actionBundleType: ActionBundleType,
+  ) => void;
   mechanism: Mechanism;
   setHoveredPart: (hoveredPart: HoveredPart) => void;
   hoveredPart: HoveredPart;
@@ -90,6 +98,7 @@ export const MechanicalCanvas: React.FC<MechanicalCanvasProps> = ({
 
     // Dessine les actions récentes (DEBUG)
     let actions = mechanism.history.flat();
+    actions = actions.filter((a) => a.type !== "Blank");
     if (actions.length > 8) {
       actions = actions.slice(-8);
     }
@@ -112,7 +121,7 @@ export const MechanicalCanvas: React.FC<MechanicalCanvasProps> = ({
         case "GroundNode":
           text += " : " + action.id.toString().padStart(3, "0");
           break;
-        case "SwitchMeshedGearDirection":
+        case "SwitchAttachedGearDirection":
           text += " : " + (action.direction ? "counterclockwise" : "clockwise");
           break;
         case "TightenBelt":
@@ -127,10 +136,6 @@ export const MechanicalCanvas: React.FC<MechanicalCanvasProps> = ({
             action.id.toString().padStart(3, "0") +
             " : " +
             action.newPosition;
-          break;
-        case "ChangeEdgeLength":
-          text +=
-            " " + action.id.toString().padStart(3, "0") + " : " + action.delta;
           break;
         case "MoveElements":
         case "ChangeMass":
@@ -420,7 +425,7 @@ export const MechanicalCanvas: React.FC<MechanicalCanvasProps> = ({
               setCanvasState({ type: "Selecting" });
               return;
             }
-            let actionType: any;
+            let actionType: ActionType;
             switch (constraint.type) {
               case "dimension-edge":
                 actionType = "ChangeDimensionEdgeValue";
@@ -442,14 +447,17 @@ export const MechanicalCanvas: React.FC<MechanicalCanvasProps> = ({
                 break;
             }
             if (actionType) {
-              updateMechanism([
-                {
-                  type: actionType,
-                  id: constraint.id,
-                  newValue: newValue,
-                  oldValue: constraint.value,
-                },
-              ]);
+              updateMechanism(
+                [
+                  {
+                    type: actionType,
+                    id: constraint.id,
+                    newValue: newValue,
+                    oldValue: constraint.value,
+                  },
+                ],
+                "ChangeDimension",
+              );
             }
             setCanvasState({ type: "Selecting" });
           }}

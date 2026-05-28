@@ -1,7 +1,7 @@
 import { Point2, ZERO } from "../../types/point2";
 import type { CanvasState } from "../../types/canvas-state";
 import { get_hovered_elements_by_rect } from "./get-hover";
-import { Action, CanvasEvent } from "../../types/actions";
+import { Action, ActionBundleType, CanvasEvent } from "../../types/actions";
 import { HoveredPart } from "../../types/hovered-part";
 import {
   BeltElement,
@@ -22,7 +22,6 @@ import {
   get_mechanical_element_from_id,
 } from "./connect-actions";
 import { is_on_left_side_of_belt } from "../../utils/belt-geom";
-import { resolveGeometricConstraints } from "./geometric-solver";
 
 export function canvasStateReducer(
   state: CanvasState,
@@ -32,12 +31,16 @@ export function canvasStateReducer(
   event: CanvasEvent,
   mechanicalElements: MechanicalElement[],
   constraintElements: ConstraintElement[],
-  updateMechanism: (actions: Action[]) => void,
+  updateMechanism: (
+    actions: Action[],
+    actionBundleType: ActionBundleType,
+  ) => void,
   undoMechanism: () => void,
   redoMechanism: () => void,
   IDcounter: React.MutableRefObject<number>,
 ) {
   let actions: Action[] = [];
+  let actionBundleType: ActionBundleType | undefined = undefined;
   switch (event.type) {
     case "MouseLeftButtonDown":
       switch (state.type) {
@@ -128,6 +131,7 @@ export function canvasStateReducer(
                 // odd section : gear part
                 const gearIndex = (hoveredPart.section - 1) / 2;
                 const gearId = belt.attachedGearsIDs[gearIndex].id;
+                actionBundleType = "Connects";
                 actions.push({
                   type: "ConnectsAttachedBelt",
                   disconnect: true,
@@ -230,6 +234,7 @@ export function canvasStateReducer(
             });
             break;
           }
+          actionBundleType = "Other";
           actions.push(
             ...delete_element(
               get_mechanical_element_from_id(
@@ -369,7 +374,6 @@ export function canvasStateReducer(
                 id: newElementId,
                 position: hoveredPart.position,
                 isGrounded: false,
-                angle: 0,
                 parentBeamID: undefined,
                 fixedEdgesIDs: [],
               };
@@ -399,7 +403,6 @@ export function canvasStateReducer(
                 id: newElementId,
                 position: state.startHover.position,
                 isGrounded: false,
-                angle: state.startHover.position.angle_to(hoveredPart.position),
                 radius: state.startHover.position.distance_to(
                   hoveredPart.position,
                 ),
@@ -411,6 +414,7 @@ export function canvasStateReducer(
               };
               break;
           }
+          actionBundleType = "Other";
           actions.push({
             type: "CreateElement",
             element: newElement,
@@ -537,9 +541,11 @@ export function canvasStateReducer(
                 id: IDcounter.current,
               };
               IDcounter.current++;
+              actionBundleType = "Other";
               actions.push({ type: "CreateElement", element: newJoin });
               break;
             case "Node":
+              actionBundleType = "Other";
               actions.push({
                 type: "GroundNode",
                 id: hoveredPart.id,
@@ -560,6 +566,7 @@ export function canvasStateReducer(
                 id: IDcounter.current,
               };
               IDcounter.current++;
+              actionBundleType = "Other";
               actions.push({ type: "CreateElement", element: newJoin });
               const connect_actions = connect_elements(
                 mechanicalElements,
@@ -626,6 +633,7 @@ export function canvasStateReducer(
               mechanicalElements,
             ) as EdgeElement;
             const value = edge.positionStart.distance_to(edge.positionEnd);
+            actionBundleType = "Other";
             actions.push({
               type: "CreateElement",
               element: {
@@ -651,6 +659,7 @@ export function canvasStateReducer(
             mechanicalElements,
           ) as NodeElement;
           const value = startNode.position.distance_to(endNode.position);
+          actionBundleType = "Other";
           actions.push({
             type: "CreateElement",
             element: {
@@ -679,6 +688,7 @@ export function canvasStateReducer(
             edge.positionStart,
             edge.positionEnd,
           );
+          actionBundleType = "Other";
           actions.push({
             type: "CreateElement",
             element: {
@@ -710,6 +720,7 @@ export function canvasStateReducer(
           const value3 = startEdge.positionEnd
             .sub(startEdge.positionStart)
             .angle_to_deg(endEdge.positionEnd.sub(endEdge.positionStart));
+          actionBundleType = "Other";
           actions.push({
             type: "CreateElement",
             element: {
@@ -735,6 +746,7 @@ export function canvasStateReducer(
             mechanicalElements,
           ) as GearElement;
           const value4 = gear.radius;
+          actionBundleType = "Other";
           actions.push({
             type: "CreateElement",
             element: {
@@ -765,6 +777,7 @@ export function canvasStateReducer(
                 hoveredPart.id,
                 mechanicalElements,
               ) as EdgeElement;
+              actionBundleType = "Other";
               if (
                 Math.abs(edge.positionEnd.x - edge.positionStart.x) >
                 Math.abs(edge.positionEnd.y - edge.positionStart.y)
@@ -800,6 +813,7 @@ export function canvasStateReducer(
               state.startNodeID,
               mechanicalElements,
             ) as NodeElement;
+            actionBundleType = "Other";
             if (
               Math.abs(hoveredPart.position.x - startNode.position.x) >
               Math.abs(hoveredPart.position.y - startNode.position.y)
@@ -853,6 +867,7 @@ export function canvasStateReducer(
             const position = startEdge.positionStart
               .lerp(startEdge.positionEnd, 0.5)
               .lerp(endEdge.positionStart.lerp(endEdge.positionEnd, 0.5), 0.5);
+            actionBundleType = "Other";
             actions.push({
               type: "CreateElement",
               element: {
@@ -890,6 +905,7 @@ export function canvasStateReducer(
             const position = startEdge.positionStart
               .lerp(startEdge.positionEnd, 0.5)
               .lerp(endEdge.positionStart.lerp(endEdge.positionEnd, 0.5), 0.5);
+            actionBundleType = "Other";
             actions.push({
               type: "CreateElement",
               element: {
@@ -932,6 +948,7 @@ export function canvasStateReducer(
             const position = startEdge.positionStart
               .lerp(startEdge.positionEnd, 0.5)
               .lerp(endEdge.positionStart.lerp(endEdge.positionEnd, 0.5), 0.5);
+            actionBundleType = "Other";
             actions.push({
               type: "CreateElement",
               element: {
@@ -959,6 +976,7 @@ export function canvasStateReducer(
               mechanicalElements,
             ) as GearElement;
             const position = startGear.position.lerp(endGear.position, 0.5);
+            actionBundleType = "Other";
             actions.push({
               type: "CreateElement",
               element: {
@@ -995,6 +1013,7 @@ export function canvasStateReducer(
               mechanicalElements,
             ) as GearElement;
             const position = startGear.position.lerp(endGear.position, 0.5);
+            actionBundleType = "Other";
             actions.push({
               type: "CreateElement",
               element: {
@@ -1027,6 +1046,7 @@ export function canvasStateReducer(
     case "MouseMove":
       switch (state.type) {
         case "MovingNode":
+          actionBundleType = "MoveElement";
           actions.push({
             type: "MoveNode",
             id: state.elementID,
@@ -1035,6 +1055,7 @@ export function canvasStateReducer(
           });
           break;
         case "MovingEdgeStartPoint":
+          actionBundleType = "MoveElement";
           actions.push({
             type: "MoveEdgeStart",
             id: state.elementID,
@@ -1043,6 +1064,7 @@ export function canvasStateReducer(
           });
           break;
         case "MovingEdgeEndPoint":
+          actionBundleType = "MoveElement";
           actions.push({
             type: "MoveEdgeEnd",
             id: state.elementID,
@@ -1051,6 +1073,7 @@ export function canvasStateReducer(
           });
           break;
         case "MovingEdgeBody":
+          actionBundleType = "MoveElement";
           actions.push({
             type: "MoveEdgeBody",
             id: state.elementID,
@@ -1064,6 +1087,7 @@ export function canvasStateReducer(
             state.elementID,
             mechanicalElements,
           ) as GearElement;
+          actionBundleType = "MoveElement";
           actions.push({
             type: "ChangeGearRadius",
             id: state.elementID,
@@ -1074,7 +1098,6 @@ export function canvasStateReducer(
         case "SelectingMultiple":
           const newHoveredElementsIds = get_hovered_elements_by_rect(
             mechanicalElements,
-            constraintElements,
             state.startPos,
             hoveredPart.position,
           );
@@ -1091,6 +1114,7 @@ export function canvasStateReducer(
           state.hoveredElementIDs = newHoveredElementsIds;
           break;
         case "MovingSelectionMultiple":
+          actionBundleType = "MoveElement";
           actions.push({
             type: "MoveElements",
             elementIDs: state.elementIDs,
@@ -1101,7 +1125,6 @@ export function canvasStateReducer(
         case "ErasingMultiple":
           state.hoveredElementIDs = get_hovered_elements_by_rect(
             mechanicalElements,
-            constraintElements,
             state.startPos,
             hoveredPart.position,
           );
@@ -1110,6 +1133,7 @@ export function canvasStateReducer(
           if (hoveredPart.position !== oldPosition) {
             state.hasMoved = true;
           }
+          actionBundleType = "MoveConstraint";
           actions.push({
             type: "MoveConstraint",
             id: state.constraintID,
@@ -1167,6 +1191,7 @@ export function canvasStateReducer(
               };
               break;
           }
+          actionBundleType = "Connects";
           actions.push(
             ...connect_elements(
               mechanicalElements,
@@ -1179,6 +1204,10 @@ export function canvasStateReducer(
               elementPart,
             ),
           );
+          if (actions.length === 0) {
+            actionBundleType = "Other";
+            actions.push({ type: "Blank" });
+          }
           setCanvasState({
             type: "SelectedElement",
             elementID: state.elementID,
@@ -1190,6 +1219,7 @@ export function canvasStateReducer(
               state.elementID,
               mechanicalElements,
             ) as BeltElement;
+            actionBundleType = "Connects";
             actions.push(
               ...connect_gear_and_belt(
                 hoveredPart.id,
@@ -1215,6 +1245,7 @@ export function canvasStateReducer(
               hoveredPart.id,
               mechanicalElements,
             ) as BeltElement;
+            actionBundleType = "Connects";
             actions.push(
               ...connect_gear_and_belt(
                 state.elementID,
@@ -1234,7 +1265,11 @@ export function canvasStateReducer(
               ),
             );
           } else if (hoveredPart.type === "GearTooth") {
+            actionBundleType = "Connects";
             actions.push(...connect_gears(state.elementID, hoveredPart.id));
+          } else {
+            actionBundleType = "Other";
+            actions.push({ type: "Blank" });
           }
           setCanvasState({
             type: "SelectedElement",
@@ -1264,12 +1299,15 @@ export function canvasStateReducer(
           });
           break;
         case "MovingSelectionMultiple":
+          actionBundleType = "Other";
+          actions.push({ type: "Blank" });
           setCanvasState({
             type: "SelectedMultiple",
             elementIDs: state.elementIDs,
           });
           break;
         case "ErasingMultiple":
+          actionBundleType = "Other";
           state.hoveredElementIDs.forEach((elementId: ID) => {
             actions.push(
               ...delete_element(
@@ -1320,6 +1358,7 @@ export function canvasStateReducer(
         case "Delete":
           switch (state.type) {
             case "SelectedElement":
+              actionBundleType = "Other";
               actions.push(
                 ...delete_element(
                   get_mechanical_element_from_id(
@@ -1332,6 +1371,7 @@ export function canvasStateReducer(
               setCanvasState({ type: "Selecting" });
               break;
             case "SelectedMultiple":
+              actionBundleType = "Other";
               state.elementIDs.forEach((elementId: ID) => {
                 actions.push(
                   ...delete_element(
@@ -1414,14 +1454,7 @@ export function canvasStateReducer(
       break;
   }
 
-  if (actions.length > 0) {
-    const resolvedActions = actions.flatMap((action) =>
-      resolveGeometricConstraints(
-        mechanicalElements,
-        constraintElements,
-        action,
-      ),
-    );
-    updateMechanism(resolvedActions);
+  if (actions.length > 0 && actionBundleType !== undefined) {
+    updateMechanism(actions, actionBundleType);
   }
 }

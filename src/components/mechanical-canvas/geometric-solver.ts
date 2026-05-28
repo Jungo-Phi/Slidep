@@ -2,11 +2,229 @@ import {
   Action,
   ConstraintElement,
   MechanicalElement,
-  ID,
   GearElement,
   BeltElement,
+  EdgeElement,
+  ActionBundleType,
 } from "../../types";
 import { Point2 } from "../../types/point2";
+import { get_mechanical_element_from_id } from "./connect-actions";
+
+/** Kinds of (non oriented) connections between points. */
+export type Link =
+  | { type: "Coincidence"; ddl: 2; key1: string; key2: string }
+  | { type: "Distance"; ddl: 1; key1: string; key2: string; distance: number }
+  | {
+      type: "DistanceToLine";
+      ddl: 1;
+      key1: string;
+      key2: string;
+      key3: string;
+      distance: number;
+    }
+  | { type: "OnSegment"; ddl: 1; key1: string; key2: string; key3: string }
+  | {
+      type: "AtSegmentRatio";
+      ddl: 2;
+      key1: string;
+      key2: string;
+      key3: string;
+      t: number;
+    }
+  | {
+      type: "KeepOrientation";
+      ddl: 1;
+      key1: string;
+      key2: string;
+      direction: Point2;
+    }
+  | {
+      type: "Angle";
+      ddl: 1;
+      key1: string;
+      key2: string;
+      key3: string;
+      key4: string;
+      angle: number;
+    }
+  | { type: "Radius"; ddl: 1; key1: string; radius: number }
+  | { type: "Horizontal"; ddl: 1; key1: string; key2: string }
+  | { type: "Vertical"; ddl: 1; key1: string; key2: string }
+  | {
+      type: "Normal";
+      ddl: 1;
+      key1: string;
+      key2: string;
+      key3: string;
+      key4: string;
+    }
+  | {
+      type: "Parallel";
+      ddl: 1;
+      key1: string;
+      key2: string;
+      key3: string;
+      key4: string;
+    }
+  | {
+      type: "EqualLength";
+      ddl: 1;
+      key1: string;
+      key2: string;
+      key3: string;
+      key4: string;
+    }
+  | { type: "GearMeshing"; ddl: 1; key1: string; key2: string }
+  | { type: "GearRatio"; ddl: 1; key1: string; key2: string; ratio: number };
+
+function constraint_to_link(element: ConstraintElement): Link {
+  switch (element.type) {
+    case "dimension-edge":
+      return {
+        type: "Distance",
+        ddl: 1,
+        key1: `${element.edgeID}:start`,
+        key2: `${element.edgeID}:end`,
+        distance: element.value,
+      };
+    case "dimension-node-to-node":
+      return {
+        type: "Distance",
+        ddl: 1,
+        key1: `${element.startNodeID}:start`,
+        key2: `${element.endNodeID}:end`,
+        distance: element.value,
+      };
+    case "dimension-edge-to-node":
+      return {
+        type: "DistanceToLine",
+        ddl: 1,
+        key1: `${element.edgeID}:start`,
+        key2: `${element.edgeID}:end`,
+        key3: `${element.nodeID}:pos`,
+        distance: element.value,
+      };
+    case "dimension-angle":
+      return {
+        type: "Angle",
+        ddl: 1,
+        key1: `${element.startEdgeID}:start`,
+        key2: `${element.startEdgeID}:end`,
+        key3: `${element.endEdgeID}:start`,
+        key4: `${element.endEdgeID}:end`,
+        angle: element.value,
+      };
+    case "dimension-radius":
+      return {
+        type: "Radius",
+        ddl: 1,
+        key1: `${element.gearID}:pos`,
+        radius: element.value,
+      };
+    case "horizontal-align-edge":
+      return {
+        type: "Horizontal",
+        ddl: 1,
+        key1: `${element.edgeID}:start`,
+        key2: `${element.edgeID}:end`,
+      };
+    case "horizontal-align-nodes":
+      return {
+        type: "Horizontal",
+        ddl: 1,
+        key1: `${element.startNodeID}:start`,
+        key2: `${element.endNodeID}:end`,
+      };
+    case "vertical-align-edge":
+      return {
+        type: "Vertical",
+        ddl: 1,
+        key1: `${element.edgeID}:start`,
+        key2: `${element.edgeID}:end`,
+      };
+    case "vertical-align-nodes":
+      return {
+        type: "Vertical",
+        ddl: 1,
+        key1: `${element.startNodeID}:start`,
+        key2: `${element.endNodeID}:end`,
+      };
+    case "normal":
+      return {
+        type: "Normal",
+        ddl: 1,
+        key1: `${element.startEdgeID}:start`,
+        key2: `${element.startEdgeID}:end`,
+        key3: `${element.endEdgeID}:start`,
+        key4: `${element.endEdgeID}:end`,
+      };
+    case "parallel":
+      return {
+        type: "Parallel",
+        ddl: 1,
+        key1: `${element.startEdgeID}:start`,
+        key2: `${element.startEdgeID}:end`,
+        key3: `${element.endEdgeID}:start`,
+        key4: `${element.endEdgeID}:end`,
+      };
+    case "equal":
+      return {
+        type: "EqualLength",
+        ddl: 1,
+        key1: `${element.startEdgeID}:start`,
+        key2: `${element.startEdgeID}:end`,
+        key3: `${element.endEdgeID}:start`,
+        key4: `${element.endEdgeID}:end`,
+      };
+    case "gear-ratio":
+      return {
+        type: "GearRatio",
+        ddl: 1,
+        key1: `${element.startGearID}:pos`,
+        key2: `${element.endGearID}:end`,
+        ratio: element.value,
+      };
+  }
+}
+
+/**
+ * Returns parsed positions and radii of mechanism / key: "elementID:part"
+ */
+export function getPositions(mechanicalElements: MechanicalElement[]): {
+  positions: Map<string, Point2>;
+  radii: Map<string, number>;
+} {
+  const positions = new Map<string, Point2>();
+  const radii = new Map<string, number>();
+  mechanicalElements.forEach((element) => {
+    if ("position" in element) {
+      positions.set(`${element.id}:pos`, element.position);
+      if ("radius" in element) radii.set(`${element.id}:pos`, element.radius);
+      // if ("angle" in element) angles.set(element.id, element.angle);
+    } else {
+      positions.set(`${element.id}:start`, element.positionStart);
+      positions.set(`${element.id}:end`, element.positionEnd);
+    }
+  });
+  return { positions, radii };
+}
+
+/**
+ * get_degrees_of_liberty(positions, radii, links)
+ */
+function get_degrees_of_liberty(
+  positions: Map<string, Point2>,
+  radii: Map<string, number>,
+  posMasses: Map<string, number>,
+  links: Link[],
+): number {
+  return (
+    positions.size * 2 +
+    radii.size -
+    links.map((link) => link.ddl).reduce((a, b) => a + b, 0) -
+    [...posMasses.values()].filter((mass) => mass === 0).length * 2
+  );
+}
 
 /**
  * Resolves geometric constraints for a given mechanism and a triggering action.
@@ -14,517 +232,505 @@ import { Point2 } from "../../types/point2";
 export function resolveGeometricConstraints(
   mechanicalElements: MechanicalElement[],
   constraintElements: ConstraintElement[],
+  actionBundleType: ActionBundleType,
   triggerAction: Action,
-): Action[] {
-  if (triggerAction.type === "MoveConstraint") {
-    return [triggerAction];
-  }
+): {
+  positions: Map<string, Point2>;
+  radii: Map<string, number>;
+} {
+  console.log("<! " + actionBundleType + " : " + triggerAction.type + " !>");
 
-  // 1. Initialize positions and parameters from current state
+  // *
+  // Phase A : Création du graphe de dépendances
+  // *
+
+  // 1. Initialize nodes (positions) of the dependency graph
   const positions = new Map<string, Point2>(); // key: "elementID:part"
-  const masses = new Map<string, number>(); // 0 = fixed, 1 = free
-  const radii = new Map<ID, number>();
-  const angles = new Map<ID, number>();
+  const radii = new Map<string, number>();
+  const posMasses = new Map<string, number>(); // 0 = fixed, 1 = free
+  const radMasses = new Map<string, number>(); // 0 = fixed, 1 = free
+  let links: Link[] = [];
 
-  mechanicalElements.forEach((el) => {
-    if ("position" in el) {
-      positions.set(`${el.id}:pos`, el.position);
-      masses.set(`${el.id}:pos`, el.isGrounded ? 0 : 1);
-      if ("radius" in el) radii.set(el.id, el.radius);
-      if ("angle" in el) angles.set(el.id, el.angle);
+  mechanicalElements.forEach((element) => {
+    if ("position" in element) {
+      positions.set(`${element.id}:pos`, element.position);
+      posMasses.set(`${element.id}:pos`, element.isGrounded ? 0 : 1);
+      if ("radius" in element) {
+        radii.set(`${element.id}:pos`, element.radius);
+        radMasses.set(`${element.id}:pos`, 1);
+      }
+      // if ("angle" in element) angles.set(element.id, element.angle);
     } else {
-      positions.set(`${el.id}:start`, el.positionStart);
-      positions.set(`${el.id}:end`, el.positionEnd);
-      masses.set(`${el.id}:start`, 1);
-      masses.set(`${el.id}:end`, 1);
+      positions.set(`${element.id}:start`, element.positionStart);
+      positions.set(`${element.id}:end`, element.positionEnd);
+      posMasses.set(`${element.id}:start`, 1);
+      posMasses.set(`${element.id}:end`, 1);
     }
   });
 
-  // 2. Apply the trigger action and set its target as an anchor (mass 0)
-  switch (triggerAction.type) {
-    case "MoveNode":
-      positions.set(`${triggerAction.id}:pos`, triggerAction.newPosition);
-      // The dragged point has a mass of 1.0, same as other free points.
-      // It is NOT an anchor. It's just a point that starts at a new position.
-      masses.set(`${triggerAction.id}:pos`, 1);
-      break;
-    case "MoveEdgeStart":
-      positions.set(`${triggerAction.id}:start`, triggerAction.newPosition);
-      masses.set(`${triggerAction.id}:start`, 1);
-      break;
-    case "MoveEdgeEnd":
-      positions.set(`${triggerAction.id}:end`, triggerAction.newPosition);
-      masses.set(`${triggerAction.id}:end`, 1);
-      break;
-    case "MoveEdgeBody":
-      const edge = mechanicalElements.find((e) => e.id === triggerAction.id);
-      if (edge && "positionStart" in edge) {
-        const delta = triggerAction.newPosition.sub(triggerAction.oldPosition);
-        positions.set(
-          `${triggerAction.id}:start`,
-          edge.positionStart.add(delta),
-        );
-        positions.set(`${triggerAction.id}:end`, edge.positionEnd.add(delta));
-        masses.set(`${triggerAction.id}:start`, 1);
-        masses.set(`${triggerAction.id}:end`, 1);
+  // 2. Initialize edges (links) of the dependency graph
+  constraintElements.forEach((constraint_element) => {
+    links.push(constraint_to_link(constraint_element));
+  });
+  // Connections (looking from edges to avoid duplicates)
+  mechanicalElements.forEach((element) => {
+    if ("positionStart" in element) {
+      if (element.fixedNodeStartID !== undefined) {
+        links.push({
+          type: "Coincidence",
+          ddl: 2,
+          key1: `${element.fixedNodeStartID}:pos`,
+          key2: `${element.id}:start`,
+        });
       }
-      break;
-    case "ChangeGearRadius":
-      radii.set(triggerAction.id, triggerAction.newRadius);
-      // For radius changes, we don't anchor the position, but we might want to
-      // mark the gear as "high priority" in the solver if we had a more complex mass system.
-      break;
-    case "ChangeDimensionRadiusValue":
-      radii.set(triggerAction.id, triggerAction.newValue);
-      break;
-    case "ChangeDimensionEdgeValue":
-    case "ChangeDimensionNodeToNodeValue":
-    case "ChangeDimensionEdgeToNodeValue":
-    case "ChangeDimensionAngleValue":
-      // These actions update the constraint value before resolution
-      const constraint = constraintElements.find(
-        (c) => c.id === triggerAction.id,
-      );
-      if (constraint && "value" in constraint) {
-        (constraint as any).value = triggerAction.newValue;
+      if (element.fixedNodeEndID !== undefined) {
+        links.push({
+          type: "Coincidence",
+          ddl: 2,
+          key1: `${element.fixedNodeEndID}:pos`,
+          key2: `${element.id}:end`,
+        });
       }
-      break;
-    case "CreateElement":
-      // If we create a mechanical element, it's already in the list or will be applied.
-      // If we create a constraint, we want the system to solve for it immediately.
+      if (element.type === "beam") {
+        element.fixedNodesBodyIDs.forEach((nodeId) => {
+          links.push({
+            type: "OnSegment",
+            ddl: 1,
+            key1: `${element.id}:start`,
+            key2: `${element.id}:end`,
+            key3: `${nodeId}:pos`,
+          });
+        });
+      }
+    }
+    if (element.type === "gear" && element.meshedGearsIDs.length > 0) {
+      element.meshedGearsIDs.forEach((meshedId) => {
+        links.push({
+          type: "GearMeshing",
+          ddl: 1,
+          key1: `${element.id}:pos`,
+          key2: `${meshedId}:pos`,
+        });
+      });
+      element.fixedGearsIDs.forEach((fixedId) => {
+        links.push({
+          type: "Coincidence",
+          ddl: 2,
+          key1: `${element.id}:pos`,
+          key2: `${fixedId}:pos`,
+        });
+      });
+    }
+  });
+
+  // Point de départ et point de saisie
+  let grabID: string = "grab";
+  switch (actionBundleType) {
+    case "MoveElement":
       if (
-        triggerAction.element.type === "dimension-edge" ||
-        triggerAction.element.type === "dimension-node-to-node" ||
-        triggerAction.element.type === "dimension-edge-to-node" ||
-        triggerAction.element.type === "dimension-angle" ||
-        triggerAction.element.type === "dimension-radius" ||
-        triggerAction.element.type === "horizontal-align-edge" ||
-        triggerAction.element.type === "horizontal-align-nodes" ||
-        triggerAction.element.type === "vertical-align-edge" ||
-        triggerAction.element.type === "vertical-align-nodes" ||
-        triggerAction.element.type === "normal" ||
-        triggerAction.element.type === "parallel" ||
-        triggerAction.element.type === "equal" ||
-        triggerAction.element.type === "gear-ratio"
-      ) {
-        constraintElements = [...constraintElements, triggerAction.element];
+        triggerAction.type !== "MoveNode" &&
+        triggerAction.type !== "MoveEdgeStart" &&
+        triggerAction.type !== "MoveEdgeEnd" &&
+        triggerAction.type !== "MoveEdgeBody" &&
+        triggerAction.type !== "MoveElements" &&
+        triggerAction.type !== "ChangeGearRadius" &&
+        triggerAction.type !== "ChangeGearAngle" &&
+        triggerAction.type !== "ChangeEdgeLength"
+      )
+        throw console.error("impossible");
+
+      // Resolve with GRAB
+      let grabPoint: Point2 | undefined = undefined;
+      let grabConnectionID: string | undefined = undefined;
+
+      switch (triggerAction.type) {
+        case "MoveNode":
+          grabPoint = triggerAction.newPosition;
+          grabConnectionID = `${triggerAction.id}:pos`;
+          break;
+        case "MoveEdgeStart":
+          grabPoint = triggerAction.newPosition;
+          grabConnectionID = `${triggerAction.id}:start`;
+          break;
+        case "MoveEdgeEnd":
+          grabPoint = triggerAction.newPosition;
+          grabConnectionID = `${triggerAction.id}:end`;
+          break;
+        case "MoveEdgeBody":
+          const movedEdge = mechanicalElements.find(
+            (e) => e.id === triggerAction.id,
+          )! as EdgeElement;
+          links.push({
+            type: "AtSegmentRatio",
+            ddl: 2,
+            key1: `${triggerAction.id}:start`,
+            key2: `${triggerAction.id}:end`,
+            key3: `grab_bridge`,
+            t: movedEdge.positionStart
+              .add(triggerAction.deltaStart)
+              .parameter_on_segment(
+                movedEdge.positionStart,
+                movedEdge.positionEnd,
+              ),
+          });
+          positions.set(`grab_bridge`, triggerAction.newPosition); // TODO : vérifier
+          posMasses.set(`grab_bridge`, 1);
+          grabPoint = triggerAction.newPosition;
+          grabConnectionID = `grab_bridge`;
+          // Beam sélectionné : si joint ancré connecté ALORS enlever l'ancrage.
+          links.forEach((link) => {
+            if (link.type === "Coincidence") {
+              if (
+                link.key1 === `${triggerAction.id}:start` ||
+                link.key1 === `${triggerAction.id}:end`
+              )
+                posMasses.set(link.key2, 1); // TODO : AND "link.key2" should be a join
+              if (
+                link.key2 === `${triggerAction.id}:start` ||
+                link.key2 === `${triggerAction.id}:end`
+              )
+                posMasses.set(link.key1, 1); // TODO : AND "link.key2" should be a join
+            } else if (link.type === "AtSegmentRatio") {
+              if (
+                link.key1 === `${triggerAction.id}:start` &&
+                link.key2 === `${triggerAction.id}:end`
+              ) {
+                posMasses.set(link.key3, 1); // TODO : AND "link.key2" should be a join
+              }
+            }
+          });
+          break;
+        case "MoveElements":
+          // move and remove anchor from dragged elements
+          triggerAction.elementIDs.forEach((elementID) => {
+            const element = get_mechanical_element_from_id(
+              elementID,
+              mechanicalElements,
+            );
+            if ("position" in element) {
+              positions.set(
+                `${element.id}:pos`,
+                positions.get(`${element.id}:pos`)!.add(triggerAction.delta),
+              );
+              posMasses.set(`${element.id}:pos`, 1);
+            } else {
+              positions.set(
+                `${element.id}:start`,
+                positions.get(`${element.id}:start`)!.add(triggerAction.delta),
+              );
+              positions.set(
+                `${element.id}:end`,
+                positions.get(`${element.id}:end`)!.add(triggerAction.delta),
+              );
+            }
+          });
+          break;
+        case "ChangeGearRadius":
+        case "ChangeGearAngle":
+          // Grab gear when changing it's radius/angle
+          const gear = mechanicalElements.find(
+            (e) => e.id === triggerAction.id,
+          )! as GearElement;
+          grabPoint = gear.position; // TODO : grabRadius ?
+          grabConnectionID = `${triggerAction.id}:pos`;
+          switch (triggerAction.type) {
+            case "ChangeGearRadius":
+              links.push({
+                type: "Radius",
+                ddl: 1,
+                key1: grabConnectionID,
+                radius: triggerAction.newRadius,
+              });
+              break;
+            case "ChangeGearAngle":
+              // TODO : ignore gear angles for now
+              break;
+          }
+          break;
+        case "ChangeEdgeLength":
+          links.push({
+            type: "Distance",
+            ddl: 1,
+            key1: `${triggerAction.id}:start`,
+            key2: `${triggerAction.id}:end`,
+            distance: triggerAction.newLength,
+          });
+          break;
+      }
+      if (grabPoint !== undefined && grabConnectionID !== undefined) {
+        positions.set(grabID, grabPoint);
+        posMasses.set(grabID, 0.5); // Mass of grab is not 1 so it's less rigid    TODO : limit grab amplitude
+        links.push({
+          type: "Coincidence",
+          ddl: 2,
+          key1: grabID,
+          key2: grabConnectionID,
+        });
+        posMasses.set(grabConnectionID, 1); // Node sélectionné : enlever l'ancrage.
       }
       break;
   }
 
-  // 3. PBD Relaxation Loop
-  /*
-  const iterations = 150; // High iterations to ensure rigidity
-  const epsilon = 0.000001; // Very tight tolerance
-  let maxError = 0;
+  // *
+  // Phase B : Adaptation du graphe de dépendances
+  // *
+
+  // Fuse coincidence links
+  links.forEach((lc) => {
+    if (lc.type === "Coincidence") {
+      const k1 = lc.key1;
+      const k2 = lc.key2;
+      const k_new = [k1, k2].join(",");
+      links.forEach((link) => {
+        if ("key1" in link && (link.key1 === k1 || link.key1 === k2))
+          link.key1 = k_new;
+        if ("key2" in link && (link.key2 === k1 || link.key2 === k2))
+          link.key2 = k_new;
+        if ("key3" in link && (link.key3 === k1 || link.key3 === k2))
+          link.key3 = k_new;
+        if ("key4" in link && (link.key4 === k1 || link.key4 === k2))
+          link.key4 = k_new;
+      });
+      positions.set(k_new, positions.get(k1)!.lerp(positions.get(k2)!, 0.5));
+      positions.delete(k1);
+      positions.delete(k2);
+      posMasses.set(k_new, Math.min(posMasses.get(k1)!, posMasses.get(k2)!));
+      posMasses.delete(k1);
+      posMasses.delete(k2);
+    }
+  });
+  links = links.filter((link) => link.type !== "Coincidence");
+
+  //links = links.filter((link) => link.type !== "Coincidence");
+
+  // Maintien de la position (ratio) sur un beam : A moins de grab le node lui-meme
+  links.forEach((link, index) => {
+    if (link.type === "OnSegment" && link.key3 !== grabID) {
+      const pos = positions.get(link.key3)!;
+      const start = positions.get(link.key1)!;
+      const end = positions.get(link.key2)!;
+      links[index] = {
+        type: "AtSegmentRatio",
+        ddl: 2,
+        key1: link.key1,
+        key2: link.key2,
+        key3: link.key3,
+        t: pos.parameter_on_segment(start, end),
+      };
+    }
+  });
+
+  let ddl: number;
+
+  // Beam sélectionné
+  if (triggerAction.type === "MoveEdgeBody") {
+    const movedEdge = mechanicalElements.find(
+      (e) => e.id === triggerAction.id,
+    )! as EdgeElement;
+    // Si il y a 3 ou plus degré de liberté ALORS contrainte de parallélisme.
+    ddl = get_degrees_of_liberty(positions, radii, posMasses, links);
+    if (ddl >= 3) {
+      links.push({
+        type: "KeepOrientation",
+        ddl: 1,
+        key1: `${triggerAction.id}:start`,
+        key2: `${triggerAction.id}:end`,
+        direction: movedEdge.positionEnd.sub(movedEdge.positionStart),
+      });
+    }
+    // Si il y a 3 ou plus degré de liberté ALORS contrainte de longueur.
+    ddl = get_degrees_of_liberty(positions, radii, posMasses, links);
+    if (ddl >= 3) {
+      links.push({
+        type: "Distance",
+        ddl: 1,
+        key1: `${triggerAction.id}:start`,
+        key2: `${triggerAction.id}:end`,
+        distance: movedEdge.positionEnd.distance_to(movedEdge.positionStart),
+      });
+    }
+  }
+
+  // ChangingGearRadius sélectionné
+  if (triggerAction.type === "ChangeGearRadius") {
+    ddl = get_degrees_of_liberty(positions, radii, posMasses, links);
+    // Si il y a 3 ou plus degré de liberté ALORS contrainte de position de l'engrenage.
+    if (ddl >= 3) {
+      posMasses.set(`${triggerAction.id}:pos`, 0);
+    }
+  }
+  // MovingGear sélectionné
+  if (triggerAction.type === "MoveNode") {
+    ddl = get_degrees_of_liberty(positions, radii, posMasses, links);
+    // Si il y a 2 ou plus degré de liberté ALORS contrainte de rayon de l'engrenage.
+    if (ddl >= 2) {
+      radMasses.set(`${triggerAction.id}:pos`, 0);
+    }
+  }
+
+  // TODO : Autres beams (dans l'ORDRE) : si il y a 3 ou plus degré de liberté ALORS contrainte de parallélisme.
+  // TODO : Autres beams (dans l'ORDRE) : si il y a 3 ou plus degré de liberté ALORS contrainte de longueur.
+
+  // start with last link, which is Grab Coincidence if there is one
+  let startLinkIndex: number = links.length - 1;
+
+  // TODO : Ordonner la liste
+  console.log("links : ");
+  links.forEach((link) => {
+    console.log(link);
+  });
+  ddl = get_degrees_of_liberty(positions, radii, posMasses, links);
+  console.log("DDL : ", ddl);
+
+  // 3. PBD (Position Based Dynamics)
+  const iterations = 20; // High iterations to ensure rigidity 150 ???
+  const epsilon = 0.000_001; // Very tight tolerance, why not 0.1 ?
+  let maxError: number = 0;
+
+  const constraintStiffness = 0.8;
 
   for (let i = 0; i < iterations; i++) {
     maxError = 0;
 
-    // A. Structural Constraints (Coincidence & Body) - High Stiffness
-    // We run coincidence multiple times per iteration to ensure rigid connections
-    for (let j = 0; j < 10; j++) {
-      mechanicalElements.forEach((el) => {
-        if ("positionStart" in el) {
-          if (el.fixedNodeStartID !== undefined) {
-            applyCoincidenceConstraint(
-              positions,
-              masses,
-              `${el.id}:start`,
-              `${el.fixedNodeStartID}:pos`,
-              1.0,
-            );
-          }
-          if (el.fixedNodeEndID !== undefined) {
-            applyCoincidenceConstraint(
-              positions,
-              masses,
-              `${el.id}:end`,
-              `${el.fixedNodeEndID}:pos`,
-              1.0,
-            );
-          }
-        }
+    links.forEach((link) => {
+      switch (link.type) {
+        case "Coincidence":
+          maxError += applyCoincidenceConstraint(
+            positions,
+            posMasses,
+            link.key1,
+            link.key2,
+            constraintStiffness,
+          );
+          break;
+        case "Distance":
+          maxError += applyDistanceConstraint(
+            positions,
+            posMasses,
+            link.key1,
+            link.key2,
+            link.distance,
+            constraintStiffness,
+          );
+          break;
+        case "DistanceToLine":
+          maxError += applyDistanceToLineConstraint(
+            positions,
+            posMasses,
+            link.key1,
+            link.key2,
+            link.key3,
+            link.distance,
+            constraintStiffness,
+          );
+          break;
+        case "OnSegment":
+          maxError += applyOnSegmentConstraint(
+            positions,
+            posMasses,
+            link.key1,
+            link.key2,
+            link.key3,
+            constraintStiffness,
+          );
+          break;
+        case "AtSegmentRatio":
+          maxError += applyAtSegmentRatioConstraint(
+            positions,
+            posMasses,
+            link.key1,
+            link.key2,
+            link.key3,
+            link.t,
+            constraintStiffness,
+          );
+          break;
+        case "KeepOrientation":
+          maxError += applyKeepOrientationConstraint(
+            positions,
+            posMasses,
+            link.key1,
+            link.key2,
+            link.direction,
+            constraintStiffness,
+          );
+          break;
+        case "Angle":
+        case "Radius":
+          break;
+        case "Horizontal":
+          maxError += applyHorizontalConstraint(
+            positions,
+            posMasses,
+            link.key1,
+            link.key2,
+            constraintStiffness,
+          );
+          break;
+        case "Vertical":
+          maxError += applyVerticalConstraint(
+            positions,
+            posMasses,
+            link.key1,
+            link.key2,
+            constraintStiffness,
+          );
+          break;
+        case "Normal":
+        case "Parallel":
+          break;
+        case "EqualLength":
+          maxError += applyEqualLengthConstraint(
+            positions,
+            posMasses,
+            link.key1,
+            link.key2,
+            link.key3,
+            link.key4,
+            constraintStiffness,
+          );
+          break;
+        case "GearMeshing":
+        case "GearRatio":
+      }
+    });
+
+    if (maxError < epsilon) {
+      console.log("iterations : ", i);
+      break;
+    }
+  }
+
+  console.log("Error : ", maxError);
+
+  // Decouple coincidence links
+  [...positions.keys()].forEach((combined_keys) => {
+    const keys = combined_keys.split(",");
+    if (keys.length > 1) {
+      keys.forEach((key) => {
+        positions.set(key, positions.get(combined_keys)!);
       });
-    }
-
-    mechanicalElements.forEach((el) => {
-      if ("positionStart" in el) {
-        if (el.type === "beam") {
-          el.fixedNodesBodyIDs.forEach((nodeId) => {
-            maxError = Math.max(
-              maxError,
-              applyBodyConstraint(
-                positions,
-                masses,
-                `${nodeId}:pos`,
-                `${el.id}:start`,
-                `${el.id}:end`,
-                1.0,
-              ),
-            );
-          });
-        }
-      }
-      if (el.type === "slider" || el.type === "slidep") {
-        if (el.parentBeamID !== undefined) {
-          maxError = Math.max(
-            maxError,
-            applyBodyConstraint(
-              positions,
-              masses,
-              `${el.id}:pos`,
-              `${el.parentBeamID}:start`,
-              `${el.parentBeamID}:end`,
-              1.0,
-            ),
-          );
-        }
-      }
-
-      // Belt Tangency Constraint
-      if (el.type === "belt" && el.tight && el.attachedGearsIDs.length >= 2) {
-        applyBeltTangencyConstraint(
-          positions,
-          masses,
-          el,
-          mechanicalElements,
-          radii,
-        );
-      }
-
-      // Gear Meshing Constraint (Tangency)
-      if (el.type === "gear" && el.meshedGearsIDs.length > 0) {
-        el.meshedGearsIDs.forEach((meshedId) => {
-          applyGearMeshingConstraint(positions, masses, radii, el.id, meshedId);
-        });
-      }
-    });
-
-    // B. Explicit Constraints - High Stiffness
-    const constraintStiffness = 1.0; // Dimensions are now rigid
-    constraintElements.forEach((c) => {
-      switch (c.type) {
-        case "dimension-edge":
-          maxError = Math.max(
-            maxError,
-            applyDistanceConstraint(
-              positions,
-              masses,
-              `${c.edgeID}:start`,
-              `${c.edgeID}:end`,
-              c.value,
-              constraintStiffness,
-            ),
-          );
-          break;
-        case "dimension-node-to-node":
-          maxError = Math.max(
-            maxError,
-            applyDistanceConstraint(
-              positions,
-              masses,
-              `${c.startNodeID}:pos`,
-              `${c.endNodeID}:pos`,
-              c.value,
-              constraintStiffness,
-            ),
-          );
-          break;
-        case "dimension-edge-to-node":
-          maxError = Math.max(
-            maxError,
-            applyDistanceToLineConstraint(
-              positions,
-              masses,
-              `${c.nodeID}:pos`,
-              `${c.edgeID}:start`,
-              `${c.edgeID}:end`,
-              c.value,
-              constraintStiffness,
-            ),
-          );
-          break;
-        case "dimension-angle":
-          maxError = Math.max(
-            maxError,
-            applyAngleConstraint(
-              positions,
-              masses,
-              `${c.startEdgeID}:start`,
-              `${c.startEdgeID}:end`,
-              `${c.endEdgeID}:start`,
-              `${c.endEdgeID}:end`,
-              c.value,
-              constraintStiffness,
-            ),
-          );
-          break;
-        case "dimension-radius":
-          radii.set(c.gearID, c.value);
-          break;
-        case "horizontal-align-nodes":
-          applyAlignConstraint(
-            positions,
-            masses,
-            `${c.startNodeID}:pos`,
-            `${c.endNodeID}:pos`,
-            "horizontal",
-            constraintStiffness,
-          );
-          break;
-        case "vertical-align-nodes":
-          applyAlignConstraint(
-            positions,
-            masses,
-            `${c.startNodeID}:pos`,
-            `${c.endNodeID}:pos`,
-            "vertical",
-            constraintStiffness,
-          );
-          break;
-        case "parallel":
-          applyParallelConstraint(
-            positions,
-            masses,
-            `${c.startEdgeID}:start`,
-            `${c.startEdgeID}:end`,
-            `${c.endEdgeID}:start`,
-            `${c.endEdgeID}:end`,
-            constraintStiffness,
-          );
-          break;
-        case "normal":
-          applyNormalConstraint(
-            positions,
-            masses,
-            `${c.startEdgeID}:start`,
-            `${c.startEdgeID}:end`,
-            `${c.endEdgeID}:start`,
-            `${c.endEdgeID}:end`,
-            constraintStiffness,
-          );
-          break;
-        case "horizontal-align-edge":
-          applyAlignConstraint(
-            positions,
-            masses,
-            `${c.edgeID}:start`,
-            `${c.edgeID}:end`,
-            "horizontal",
-            constraintStiffness,
-          );
-          break;
-        case "vertical-align-edge":
-          applyAlignConstraint(
-            positions,
-            masses,
-            `${c.edgeID}:start`,
-            `${c.edgeID}:end`,
-            "vertical",
-            constraintStiffness,
-          );
-          break;
-        case "equal":
-          maxError = Math.max(
-            maxError,
-            applyEqualLengthConstraint(
-              positions,
-              masses,
-              `${c.startEdgeID}:start`,
-              `${c.startEdgeID}:end`,
-              `${c.endEdgeID}:start`,
-              `${c.endEdgeID}:end`,
-              constraintStiffness,
-            ),
-          );
-          break;
-        case "gear-ratio":
-          applyGearRatioConstraint(radii, c.startGearID, c.endGearID, c.value);
-          break;
-      }
-    });
-
-    // Final pass of coincidence to ensure rigid connections win over dimensions
-    mechanicalElements.forEach((el) => {
-      if ("positionStart" in el) {
-        if (el.fixedNodeStartID !== undefined) {
-          maxError = Math.max(
-            maxError,
-            applyCoincidenceConstraint(
-              positions,
-              masses,
-              `${el.id}:start`,
-              `${el.fixedNodeStartID}:pos`,
-              1.0,
-            ),
-          );
-        }
-        if (el.fixedNodeEndID !== undefined) {
-          maxError = Math.max(
-            maxError,
-            applyCoincidenceConstraint(
-              positions,
-              masses,
-              `${el.id}:end`,
-              `${el.fixedNodeEndID}:pos`,
-              1.0,
-            ),
-          );
-        }
-      }
-    });
-
-    if (maxError < epsilon) break;
-  }
-
-  // 4. Post-Resolution Validation & Clamping
-  // If the error is still too high, it means the system is over-constrained or the target is unreachable.
-  // In this case, we want to "clamp" the result to the nearest valid state.
-  if (maxError > 0.01) {
-    // Strategy: If we were moving a point, and the system couldn't follow,
-    // we update the trigger action to the solved position (the "limit" of the movement).
-    if (
-      triggerAction.type === "MoveNode" ||
-      triggerAction.type === "MoveEdgeStart" ||
-      triggerAction.type === "MoveEdgeEnd"
-    ) {
-      const key =
-        triggerAction.type === "MoveNode"
-          ? `${triggerAction.id}:pos`
-          : triggerAction.type === "MoveEdgeStart"
-            ? `${triggerAction.id}:start`
-            : `${triggerAction.id}:end`;
-
-      const solvedPos = positions.get(key)!;
-      const targetPos = triggerAction.newPosition;
-
-      // If the solved position is far from the target, it means the target was illegal.
-      if (solvedPos.distance_to(targetPos) > 0.01) {
-        (triggerAction as any).newPosition = solvedPos;
-      }
-    } else if (
-      triggerAction.type === "ChangeGearRadius" ||
-      triggerAction.type === "ChangeDimensionRadiusValue" ||
-      triggerAction.type === "ChangeDimensionEdgeValue" ||
-      triggerAction.type === "ChangeDimensionNodeToNodeValue" ||
-      triggerAction.type === "ChangeDimensionEdgeToNodeValue" ||
-      triggerAction.type === "ChangeDimensionAngleValue"
-    ) {
-      if (
-        triggerAction.type === "ChangeGearRadius" ||
-        triggerAction.type === "ChangeDimensionRadiusValue"
-      ) {
-        const solvedRadius = radii.get(triggerAction.id)!;
-        const targetRadius =
-          triggerAction.type === "ChangeGearRadius"
-            ? triggerAction.newRadius
-            : triggerAction.newValue;
-
-        if (Math.abs(solvedRadius - targetRadius) > 0.1) {
-          if (triggerAction.type === "ChangeGearRadius") {
-            triggerAction.newRadius = solvedRadius;
-          } else {
-            triggerAction.newValue = solvedRadius;
-          }
-        }
-      } else {
-        // For other dimensions, we check if the constraint is satisfied
-        const constraint = constraintElements.find(
-          (c) => c.id === triggerAction.id,
-        );
-        if (constraint && "value" in constraint) {
-          // If the system couldn't reach the target value, we should ideally
-          // find the "closest valid value". Since PBD already relaxed the system
-          // to a valid state, we can measure the actual distance/angle in the solved state.
-          let actualValue = (constraint as any).value;
-
-          if (constraint.type === "dimension-edge") {
-            const p1 = positions.get(`${constraint.edgeID}:start`)!;
-            const p2 = positions.get(`${constraint.edgeID}:end`)!;
-            actualValue = p1.distance_to(p2);
-          } else if (constraint.type === "dimension-node-to-node") {
-            const p1 = positions.get(`${constraint.startNodeID}:pos`)!;
-            const p2 = positions.get(`${constraint.endNodeID}:pos`)!;
-            actualValue = p1.distance_to(p2);
-          }
-          // ... other types could be added here
-
-          if (Math.abs(actualValue - triggerAction.newValue) > 0.1) {
-            triggerAction.newValue = actualValue;
-          }
-        }
-      }
-    }
-  }
-  */
-
-  // 5. Generate resulting actions
-  const resultActions: Action[] = [triggerAction];
-  positions.forEach((newPos, key) => {
-    const [idStr, part] = key.split(":");
-    const id = parseInt(idStr);
-    const el = mechanicalElements.find((e) => e.id === id);
-    if (!el) return;
-
-    const oldPos =
-      part === "pos"
-        ? (el as any).position
-        : part === "start"
-          ? (el as any).positionStart
-          : (el as any).positionEnd;
-    if (oldPos && oldPos.distance_to(newPos) > 0.001) {
-      if (part === "pos") {
-        resultActions.push({
-          type: "MoveNode",
-          id,
-          newPosition: newPos,
-          oldPosition: oldPos,
-        });
-      } else if (part === "start") {
-        resultActions.push({
-          type: "MoveEdgeStart",
-          id,
-          newPosition: newPos,
-          oldPosition: oldPos,
-        });
-      } else if (part === "end") {
-        resultActions.push({
-          type: "MoveEdgeEnd",
-          id,
-          newPosition: newPos,
-          oldPosition: oldPos,
-        });
-      }
+      positions.delete(combined_keys);
     }
   });
 
-  radii.forEach((newRadius, id) => {
-    const el = mechanicalElements.find((e) => e.id === id) as GearElement;
-    if (el && Math.abs(el.radius - newRadius) > 0.001) {
-      resultActions.push({
-        type: "ChangeGearRadius",
-        id,
-        newRadius,
-        oldRadius: el.radius,
-      });
-    }
-  });
-
-  return resultActions;
+  return {
+    positions: positions,
+    radii: radii,
+  };
 }
 
 function applyCoincidenceConstraint(
   positions: Map<string, Point2>,
-  masses: Map<string, number>,
+  posMasses: Map<string, number>,
   key1: string,
   key2: string,
   stiffness: number = 1.0,
 ): number {
   const p1 = positions.get(key1);
   const p2 = positions.get(key2);
-  const w1 = masses.get(key1) ?? 1;
-  const w2 = masses.get(key2) ?? 1;
+  const w1 = posMasses.get(key1) ?? 1;
+  const w2 = posMasses.get(key2) ?? 1;
   if (!p1 || !p2) return 0;
 
   const totalW = w1 + w2;
@@ -542,7 +748,7 @@ function applyCoincidenceConstraint(
 
 function applyDistanceConstraint(
   positions: Map<string, Point2>,
-  masses: Map<string, number>,
+  posMasses: Map<string, number>,
   key1: string,
   key2: string,
   targetDist: number,
@@ -550,28 +756,29 @@ function applyDistanceConstraint(
 ): number {
   const p1 = positions.get(key1);
   const p2 = positions.get(key2);
-  const w1 = masses.get(key1) ?? 1;
-  const w2 = masses.get(key2) ?? 1;
+  const w1 = posMasses.get(key1) ?? 1;
+  const w2 = posMasses.get(key2) ?? 1;
   if (!p1 || !p2) return 0;
 
   const totalW = w1 + w2;
   if (totalW === 0) return 0;
 
   const delta = p2.sub(p1);
-  const currentDist = delta.length();
-  if (currentDist === 0) return targetDist;
-
-  const error = Math.abs(currentDist - targetDist);
-  const diff = (currentDist - targetDist) / currentDist;
+  if (delta.length_squared() === 0) {
+    // TODO move apart "repelDistance"
+    return targetDist;
+  }
+  const error = delta.length() - targetDist;
+  const diff = error / delta.length();
 
   positions.set(key1, p1.add(delta.mul(diff * (w1 / totalW) * stiffness)));
   positions.set(key2, p2.sub(delta.mul(diff * (w2 / totalW) * stiffness)));
-  return error;
+  return Math.abs(error);
 }
 
 function applyDistanceToLineConstraint(
   positions: Map<string, Point2>,
-  masses: Map<string, number>,
+  posMasses: Map<string, number>,
   keyNode: string,
   keyStart: string,
   keyEnd: string,
@@ -579,61 +786,174 @@ function applyDistanceToLineConstraint(
   stiffness: number = 1.0,
 ): number {
   const pNode = positions.get(keyNode);
-  const pStart = positions.get(keyStart);
-  const pEnd = positions.get(keyEnd);
-  if (!pNode || !pStart || !pEnd) return 0;
+  const start = positions.get(keyStart);
+  const end = positions.get(keyEnd);
+  if (!pNode || !start || !end) return 0;
 
-  const currentDist = pNode.distance_to_line(pStart, pEnd);
+  const currentDist = pNode.distance_to_line(start, end);
   const error = Math.abs(currentDist - targetDist);
 
   // Simple projection to satisfy distance
-  const proj = pNode.project_on_line(pStart, pEnd);
+  const proj = pNode.project_on_line(start, end);
   const vec = pNode.sub(proj);
   const len = vec.length();
   if (len === 0) {
     // If node is on line, move it in perpendicular direction
-    const perp = pEnd.sub(pStart).perp().normalize().mul(targetDist);
-    if (masses.get(keyNode) !== 0)
+    const perp = end.sub(start).perp().normalize().mul(targetDist);
+    if (posMasses.get(keyNode) !== 0)
       positions.set(keyNode, pNode.lerp(proj.add(perp), stiffness));
   } else {
     const corrected = proj.add(vec.mul(targetDist / len));
-    if (masses.get(keyNode) !== 0)
+    if (posMasses.get(keyNode) !== 0)
       positions.set(keyNode, pNode.lerp(corrected, stiffness));
   }
   return error;
 }
 
-function applyBodyConstraint(
+function applyOnSegmentConstraint(
   positions: Map<string, Point2>,
-  masses: Map<string, number>,
+  posMasses: Map<string, number>,
   keyNode: string,
   keyStart: string,
   keyEnd: string,
   stiffness: number = 1.0,
 ): number {
   const pNode = positions.get(keyNode);
-  const pStart = positions.get(keyStart);
-  const pEnd = positions.get(keyEnd);
-  const wNode = masses.get(keyNode) ?? 1;
-  if (!pNode || !pStart || !pEnd || wNode === 0) return 0;
+  const start = positions.get(keyStart);
+  const end = positions.get(keyEnd);
+  const wNode = posMasses.get(keyNode) ?? 1;
+  const wStart = posMasses.get(keyStart) ?? 1;
+  const wEnd = posMasses.get(keyEnd) ?? 1;
+  if (!pNode || !start || !end) return 0;
 
-  const ab = pEnd.sub(pStart);
-  const lenSq = ab.length_squared();
-  if (lenSq === 0) return pNode.distance_to(pStart);
+  const totalW = (2 * wNode + wStart + wEnd) / 2; // TODO : vérifier risque d'oscillation avec "wEnd" bloqué
+  if (totalW === 0) return 0;
 
-  let t = pNode.sub(pStart).dot(ab) / lenSq;
   const margin = 0.05;
-  t = Math.max(margin, Math.min(1 - margin, t));
+  const t = Math.max(
+    margin,
+    Math.min(1 - margin, pNode.parameter_on_segment(start, end)),
+  );
+  const delta = pNode.sub(start.lerp(end, t));
+  const error = delta.length();
 
-  const projected = pStart.add(ab.mul(t));
-  const error = pNode.distance_to(projected);
-  positions.set(keyNode, pNode.lerp(projected, stiffness));
+  positions.set(keyNode, pNode.sub(delta.mul((wNode / totalW) * stiffness)));
+  positions.set(keyStart, start.add(delta.mul((wStart / totalW) * stiffness)));
+  positions.set(keyEnd, end.add(delta.mul((wEnd / totalW) * stiffness)));
+  return error;
+}
+
+function applyAtSegmentRatioConstraint(
+  positions: Map<string, Point2>,
+  posMasses: Map<string, number>,
+  keyNode: string,
+  keyStart: string,
+  keyEnd: string,
+  t: number,
+  stiffness: number = 1.0,
+): number {
+  const pNode = positions.get(keyNode);
+  const start = positions.get(keyStart);
+  const end = positions.get(keyEnd);
+  const wNode = posMasses.get(keyNode) ?? 1;
+  const wStart = posMasses.get(keyStart) ?? 1;
+  const wEnd = posMasses.get(keyEnd) ?? 1;
+  if (!pNode || !start || !end) return 0;
+
+  const totalW = (2 * wNode + wStart + wEnd) / 2; // TODO : vérifier risque d'oscillation avec "wEnd" bloqué
+  if (totalW === 0) return 0;
+
+  const delta = pNode.sub(start.lerp(end, t));
+  const error = delta.length();
+
+  positions.set(keyNode, pNode.sub(delta.mul((wNode / totalW) * stiffness)));
+  positions.set(keyStart, start.add(delta.mul((wStart / totalW) * stiffness)));
+  positions.set(keyEnd, end.add(delta.mul((wEnd / totalW) * stiffness)));
+  return error;
+}
+
+function applyKeepOrientationConstraint(
+  positions: Map<string, Point2>,
+  posMasses: Map<string, number>,
+  keyStart: string,
+  keyEnd: string,
+  direction: Point2,
+  stiffness: number = 1.0,
+): number {
+  const start = positions.get(keyStart);
+  const end = positions.get(keyEnd);
+  const wStart = posMasses.get(keyStart) ?? 1;
+  const wEnd = posMasses.get(keyEnd) ?? 1;
+  if (!start || !end) return 0;
+
+  const totalW = wStart + wEnd;
+  if (totalW === 0) return 0;
+
+  const midPoint = start.lerp(end, 0.5);
+  const projStart = start.project_on_line(midPoint, midPoint.add(direction));
+  const projEnd = end.project_on_line(midPoint, midPoint.add(direction));
+  const error = start.distance_to(projStart);
+
+  positions.set(keyStart, start.lerp(projStart, (wStart / totalW) * stiffness));
+  positions.set(keyEnd, end.lerp(projEnd, (wEnd / totalW) * stiffness));
+  return error;
+}
+
+function applyHorizontalConstraint(
+  positions: Map<string, Point2>,
+  posMasses: Map<string, number>,
+  keyStart: string,
+  keyEnd: string,
+  stiffness: number = 1.0,
+): number {
+  const start = positions.get(keyStart);
+  const end = positions.get(keyEnd);
+  const wStart = posMasses.get(keyStart) ?? 1;
+  const wEnd = posMasses.get(keyEnd) ?? 1;
+  if (!start || !end) return 0;
+
+  const totalW = wStart + wEnd;
+  if (totalW === 0) return 0;
+
+  const midPointY = (start.y + end.y) / 2;
+  const projStart = new Point2(start.x, midPointY);
+  const projEnd = new Point2(end.x, midPointY);
+  const error = Math.abs(midPointY - start.y);
+
+  positions.set(keyStart, start.lerp(projStart, (wStart / totalW) * stiffness));
+  positions.set(keyEnd, end.lerp(projEnd, (wEnd / totalW) * stiffness));
+  return error;
+}
+
+function applyVerticalConstraint(
+  positions: Map<string, Point2>,
+  posMasses: Map<string, number>,
+  keyStart: string,
+  keyEnd: string,
+  stiffness: number = 1.0,
+): number {
+  const start = positions.get(keyStart);
+  const end = positions.get(keyEnd);
+  const wStart = posMasses.get(keyStart) ?? 1;
+  const wEnd = posMasses.get(keyEnd) ?? 1;
+  if (!start || !end) return 0;
+
+  const totalW = wStart + wEnd;
+  if (totalW === 0) return 0;
+
+  const midPointX = (start.x + end.x) / 2;
+  const projStart = new Point2(midPointX, start.y);
+  const projEnd = new Point2(midPointX, end.y);
+  const error = Math.abs(midPointX - start.x);
+
+  positions.set(keyStart, start.lerp(projStart, (wStart / totalW) * stiffness));
+  positions.set(keyEnd, end.lerp(projEnd, (wEnd / totalW) * stiffness));
   return error;
 }
 
 function applyAlignConstraint(
   positions: Map<string, Point2>,
-  masses: Map<string, number>,
+  posMasses: Map<string, number>,
   key1: string,
   key2: string,
   type: "horizontal" | "vertical",
@@ -641,8 +961,8 @@ function applyAlignConstraint(
 ) {
   const p1 = positions.get(key1);
   const p2 = positions.get(key2);
-  const w1 = masses.get(key1) ?? 1;
-  const w2 = masses.get(key2) ?? 1;
+  const w1 = posMasses.get(key1) ?? 1;
+  const w2 = posMasses.get(key2) ?? 1;
   if (!p1 || !p2 || (w1 === 0 && w2 === 0)) return;
 
   const totalW = w1 + w2;
@@ -659,7 +979,7 @@ function applyAlignConstraint(
 
 function applyParallelConstraint(
   positions: Map<string, Point2>,
-  masses: Map<string, number>,
+  posMasses: Map<string, number>,
   s1: string,
   e1: string,
   s2: string,
@@ -682,13 +1002,13 @@ function applyParallelConstraint(
   const center2 = ps2.lerp(pe2, 0.5);
   const halfV2 = rotatedV2.mul(0.5);
 
-  if (masses.get(s2) !== 0) positions.set(s2, center2.sub(halfV2));
-  if (masses.get(e2) !== 0) positions.set(e2, center2.add(halfV2));
+  if (posMasses.get(s2) !== 0) positions.set(s2, center2.sub(halfV2));
+  if (posMasses.get(e2) !== 0) positions.set(e2, center2.add(halfV2));
 }
 
 function applyNormalConstraint(
   positions: Map<string, Point2>,
-  masses: Map<string, number>,
+  posMasses: Map<string, number>,
   s1: string,
   e1: string,
   s2: string,
@@ -711,13 +1031,13 @@ function applyNormalConstraint(
   const center2 = ps2.lerp(pe2, 0.5);
   const halfV2 = rotatedV2.mul(0.5);
 
-  if (masses.get(s2) !== 0) positions.set(s2, center2.sub(halfV2));
-  if (masses.get(e2) !== 0) positions.set(e2, center2.add(halfV2));
+  if (posMasses.get(s2) !== 0) positions.set(s2, center2.sub(halfV2));
+  if (posMasses.get(e2) !== 0) positions.set(e2, center2.add(halfV2));
 }
 
 function applyAngleConstraint(
   positions: Map<string, Point2>,
-  masses: Map<string, number>,
+  posMasses: Map<string, number>,
   s1: string,
   e1: string,
   s2: string,
@@ -741,14 +1061,14 @@ function applyAngleConstraint(
   const center2 = ps2.lerp(pe2, 0.5);
   const halfV2 = rotatedV2.mul(0.5);
 
-  if (masses.get(s2) !== 0) positions.set(s2, center2.sub(halfV2));
-  if (masses.get(e2) !== 0) positions.set(e2, center2.add(halfV2));
+  if (posMasses.get(s2) !== 0) positions.set(s2, center2.sub(halfV2));
+  if (posMasses.get(e2) !== 0) positions.set(e2, center2.add(halfV2));
   return error;
 }
 
 function applyEqualLengthConstraint(
   positions: Map<string, Point2>,
-  masses: Map<string, number>,
+  posMasses: Map<string, number>,
   s1: string,
   e1: string,
   s2: string,
@@ -766,15 +1086,15 @@ function applyEqualLengthConstraint(
   const avgLen = (len1 + len2) / 2;
   const error = Math.abs(len1 - len2);
 
-  applyDistanceConstraint(positions, masses, s1, e1, avgLen, stiffness);
-  applyDistanceConstraint(positions, masses, s2, e2, avgLen, stiffness);
+  applyDistanceConstraint(positions, posMasses, s1, e1, avgLen, stiffness);
+  applyDistanceConstraint(positions, posMasses, s2, e2, avgLen, stiffness);
   return error;
 }
 
 function applyGearRatioConstraint(
-  radii: Map<ID, number>,
-  id1: ID,
-  id2: ID,
+  radii: Map<string, number>,
+  id1: string,
+  id2: string,
   ratio: number,
 ) {
   const r1 = radii.get(id1);
@@ -787,10 +1107,10 @@ function applyGearRatioConstraint(
 
 function applyGearMeshingConstraint(
   positions: Map<string, Point2>,
-  masses: Map<string, number>,
-  radii: Map<ID, number>,
-  id1: ID,
-  id2: ID,
+  posMasses: Map<string, number>,
+  radii: Map<string, number>,
+  id1: string,
+  id2: string,
 ) {
   const p1 = positions.get(`${id1}:pos`);
   const p2 = positions.get(`${id2}:pos`);
@@ -801,7 +1121,7 @@ function applyGearMeshingConstraint(
   const targetDist = r1 + r2;
   applyDistanceConstraint(
     positions,
-    masses,
+    posMasses,
     `${id1}:pos`,
     `${id2}:pos`,
     targetDist,
@@ -810,10 +1130,10 @@ function applyGearMeshingConstraint(
 
 function applyBeltTangencyConstraint(
   positions: Map<string, Point2>,
-  masses: Map<string, number>,
+  posMasses: Map<string, number>,
   belt: BeltElement,
   mechanicalElements: MechanicalElement[],
-  radii: Map<ID, number>,
+  radii: Map<string, number>,
 ) {
   const firstGear = mechanicalElements.find(
     (e) => e.id === belt.attachedGearsIDs[0].id,
@@ -837,8 +1157,8 @@ function applyBeltTangencyConstraint(
     belt.attachedGearsIDs[belt.attachedGearsIDs.length - 1].direction,
   );
 
-  if (masses.get(`${belt.id}:start`) !== 0)
+  if (posMasses.get(`${belt.id}:start`) !== 0)
     positions.set(`${belt.id}:start`, p1.add(link.start));
-  if (masses.get(`${belt.id}:end`) !== 0)
+  if (posMasses.get(`${belt.id}:end`) !== 0)
     positions.set(`${belt.id}:end`, p2.add(link.end));
 }

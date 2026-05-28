@@ -9,27 +9,42 @@ export type CanvasEvent =
   | { type: "MouseRightButtonDown" }
   | { type: "KeyDown"; key: string; crtlKey: boolean };
 
+export type ActionBundleType =
+  | "MoveElement"
+  | "MoveConstraint"
+  | "ChangeConstant"
+  | "ChangeDimension"
+  | "Connects"
+  | "Other";
+
 /** Supported action types */
-export type ActionType = OtherActionType | ConnectsActionType;
+export type ActionType =
+  | OtherActionType
+  | ChangeConstantActionType
+  | MoveElementActionType
+  | ChangeDimensionActionType
+  | ConnectsActionType;
 
 export type OtherActionType =
-  | "CreateElement"
-  | "DeleteElement"
+  | "MoveConstraint"
+  | "GroundNode"
+  | "TightenBelt"
+  | "SwitchAttachedGearDirection"
+  | "Blank";
+export type ChangeConstantActionType =
+  | "ChangeMass"
+  | "ChangeStiffness"
+  | "ChangeDamping";
+export type MoveElementActionType =
   | "MoveNode"
   | "MoveEdgeStart"
   | "MoveEdgeEnd"
   | "MoveEdgeBody"
   | "MoveElements"
-  | "MoveConstraint"
-  | "ChangeEdgeLength"
-  | "GroundNode"
-  | "TightenBelt"
-  | "SwitchMeshedGearDirection"
   | "ChangeGearRadius"
   | "ChangeGearAngle"
-  | "ChangeMass"
-  | "ChangeStiffness"
-  | "ChangeDamping"
+  | "ChangeEdgeLength";
+export type ChangeDimensionActionType =
   | "ChangeDimensionEdgeValue"
   | "ChangeDimensionNodeToNodeValue"
   | "ChangeDimensionEdgeToNodeValue"
@@ -52,6 +67,7 @@ export type ConnectsArrayActionType =
   | "ConnectsMeshedGears"
   | "ConnectsAttachedGears"
   | "ConnectsFixedGears";
+export type CreationActionType = "CreateElement" | "DeleteElement";
 
 /** Actions that can be performed on the mechanism - And reversed for crtl+Z */
 export type Action =
@@ -74,11 +90,10 @@ export type Action =
       delta: Point2;
     }
   | { type: "MoveConstraint"; id: ID; newPosition: Point2; oldPosition: Point2 }
-  | { type: "ChangeEdgeLength"; id: ID; delta: number }
   | { type: "GroundNode"; id: ID; grounded: boolean }
   | { type: "TightenBelt"; id: ID; tightened: boolean }
   | {
-      type: "SwitchMeshedGearDirection";
+      type: "SwitchAttachedGearDirection";
       id: ID;
       index: number;
       direction: boolean;
@@ -95,6 +110,7 @@ export type Action =
       newAngle: number;
       oldAngle: number;
     }
+  | { type: "ChangeEdgeLength"; id: ID; newLength: number; oldLength: number }
   | {
       type: "ChangeMass";
       id: ID;
@@ -212,4 +228,23 @@ export type Action =
       disconnect: boolean;
       elementID: ID;
       connectID: ID;
+    }
+  | {
+      type: "UpdatePositionsToValidState";
+      masterActionType:
+        | MoveElementActionType
+        | ChangeDimensionActionType
+        | ConnectsActionType
+        | CreationActionType;
+      newPositions: {
+        positions: Map<string, Point2>;
+        radii: Map<string, number>;
+      };
+      oldPositions: {
+        positions: Map<string, Point2>;
+        radii: Map<string, number>;
+      };
+    }
+  | {
+      type: "Blank";
     };

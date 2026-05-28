@@ -314,6 +314,8 @@ export function delete_element(
  * Connects an element (elementPart) to another (hoveredPart) based on the hovered part.
  *
  * Returns the actions to perform bidirectional connections and handles special cases (connections transfer, fusion, etc.)
+ *
+ * All connections are allowed, the element (grabbed) takes over.
  */
 export function connect_elements(
   mechanicalElements: MechanicalElement[],
@@ -337,6 +339,15 @@ export function connect_elements(
   ) as MechanicalElement;
   let actions: Action[] = [];
 
+  console.log(
+    "CONNECT ELEMENT : ",
+    element.type,
+    elementPart,
+    " TO HOVERED :",
+    hoveredElement.type,
+    hoveredPart,
+  ); // DEBUG
+
   switch (elementPart.type) {
     case "Node":
       const node = element as NodeElement;
@@ -348,22 +359,75 @@ export function connect_elements(
             // Fuse them into a Slidep
             let slidep: SlidepElement = {
               type: "slidep",
-              angle: hoveredNode.angle,
+              parentBeamID: hoveredNode.parentBeamID,
               rotatingEdgesIDs: node.rotatingEdgesIDs.concat(
                 hoveredNode.fixedEdgesIDs,
               ),
               position: hoveredNode.position,
               isGrounded: node.isGrounded || hoveredNode.isGrounded,
-              id: node.id,
+              id: hoveredNode.id,
             };
             actions.push({ type: "DeleteElement", element: node });
             actions.push({ type: "DeleteElement", element: hoveredNode });
             actions.push({ type: "CreateElement", element: slidep });
+            node.rotatingEdgesIDs.forEach((edgeID) => {
+              const connectedEdge = get_mechanical_element_from_id(
+                edgeID,
+                mechanicalElements,
+              ) as EdgeElement;
+              if (connectedEdge.fixedNodeEndID === node.id) {
+                actions.push({
+                  type: "ConnectsFixedNodeEnd",
+                  disconnect: true,
+                  elementID: edgeID,
+                  connectID: node.id,
+                });
+                actions.push({
+                  type: "ConnectsFixedNodeEnd",
+                  disconnect: false,
+                  elementID: edgeID,
+                  connectID: hoveredNode.id,
+                });
+              }
+              if (connectedEdge.fixedNodeStartID === node.id) {
+                actions.push({
+                  type: "ConnectsFixedNodeStart",
+                  disconnect: true,
+                  elementID: edgeID,
+                  connectID: node.id,
+                });
+                actions.push({
+                  type: "ConnectsFixedNodeStart",
+                  disconnect: false,
+                  elementID: edgeID,
+                  connectID: hoveredNode.id,
+                });
+              }
+              if (
+                "fixedNodesBodyIDs" in connectedEdge &&
+                connectedEdge.fixedNodesBodyIDs.includes(node.id)
+              ) {
+                actions.push({
+                  type: "ConnectsFixedNodesBody",
+                  disconnect: true,
+                  elementID: edgeID,
+                  connectID: node.id,
+                  index: 0, // TODO : remove at corresponding index
+                });
+                actions.push({
+                  type: "ConnectsFixedNodesBody",
+                  disconnect: false,
+                  elementID: edgeID,
+                  connectID: hoveredNode.id,
+                  index: 0,
+                });
+              }
+            });
           } else if (node.type === "slider" && hoveredNode.type === "pivot") {
             // Fuse them into a Slidep
             let slidep: SlidepElement = {
               type: "slidep",
-              angle: node.angle,
+              parentBeamID: node.parentBeamID,
               rotatingEdgesIDs: node.fixedEdgesIDs.concat(
                 hoveredNode.rotatingEdgesIDs,
               ),
@@ -468,8 +532,10 @@ function connect_node_and_edge(
   edgePart: "start" | "end" | "body",
 ): Action[] {
   let actions: Action[] = [];
-
+  console.log(node);
   if ("parentBeamID" in node && edgePart === "body") {
+    console.log("parentBeamID Node, edgePart body");
+
     actions.push({
       type: "ConnectsParentBeam",
       disconnect: false,

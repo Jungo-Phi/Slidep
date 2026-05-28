@@ -162,12 +162,19 @@ export function draw_hover_edge_end(ctx: CanvasRenderingContext2D) {
   ctx.stroke();
 }
 
-export function draw_pivot(ctx: CanvasRenderingContext2D) {
+export function draw_pivot(ctx: CanvasRenderingContext2D, filled: boolean) {
   ctx.beginPath();
   ctx.arc(0, 0, DIM.PIVOT_OUTER_RADIUS, 0, TAU);
   ctx.arc(0, 0, DIM.PIVOT_INNER_RADIUS, 0, TAU);
   ctx.fillStyle = COLORS.FILL_NODE;
   ctx.fill("evenodd");
+
+  if (filled) {
+    ctx.beginPath();
+    ctx.arc(0, 0, DIM.PIVOT_INNER_RADIUS, 0, TAU);
+    ctx.fillStyle = COLORS.FILL_BODY;
+    ctx.fill();
+  }
 
   ctx.shadowBlur = 0;
   ctx.beginPath();
@@ -199,7 +206,7 @@ export function draw_slider(ctx: CanvasRenderingContext2D) {
   ctx.stroke();
 }
 
-export function draw_slidep(ctx: CanvasRenderingContext2D) {
+export function draw_slidep(ctx: CanvasRenderingContext2D, filled: boolean) {
   ctx.beginPath();
   ctx.roundRect(
     -DIM.SLIDEP_OUTER_WIDTH / 2,
@@ -233,6 +240,13 @@ export function draw_slidep(ctx: CanvasRenderingContext2D) {
   ctx.arc(0, 0, DIM.PIVOT_INNER_RADIUS, 0, TAU);
   ctx.fillStyle = COLORS.FILL_NODE;
   ctx.fill("evenodd");
+
+  if (filled) {
+    ctx.beginPath();
+    ctx.arc(0, 0, DIM.PIVOT_INNER_RADIUS, 0, TAU);
+    ctx.fillStyle = COLORS.FILL_BODY;
+    ctx.fill();
+  }
 
   ctx.shadowBlur = 0;
   ctx.beginPath();

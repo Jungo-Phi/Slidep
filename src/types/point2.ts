@@ -137,61 +137,65 @@ export class Point2 {
     );
   }
 
+  /**
+   * Calcule la proportion t (entre 0 et 1 idéalement, ou étendu si besoin)
+   * telle que this = start + t * (end - start).\
+   * Si le point n'est pas sur la ligne, il est projeté orthogonalement.
+   */
+  public parameter_on_segment(start: Point2, end: Point2): number {
+    const delta = end.sub(start);
+    if (delta === ZERO) return 0;
+    return this.sub(start).dot(delta) / delta.length_squared();
+  }
+
   /** Projection onto a line defined by two points */
-  public project_on_line(lineStart: Point2, lineEnd: Point2): Point2 {
-    const delta = lineEnd.sub(lineStart);
-    return lineStart.add(
-      delta.mul(this.sub(lineStart).dot(delta)).div(delta.length_squared()),
+  public project_on_line(start: Point2, end: Point2): Point2 {
+    const delta = end.sub(start);
+    return start.add(
+      delta.mul(this.sub(start).dot(delta)).div(delta.length_squared()),
     );
   }
 
   /** Smallest vector from a line (defined by two points) to this point */
-  public reject_on_line(lineStart: Point2, lineEnd: Point2): Point2 {
-    const delta = lineEnd.sub(lineStart);
-    return lineStart.add(
+  public reject_on_line(start: Point2, end: Point2): Point2 {
+    const delta = end.sub(start);
+    return start.add(
       delta
         .perp()
-        .mul(this.sub(lineStart).dot(delta.perp()))
+        .mul(this.sub(start).dot(delta.perp()))
         .div(delta.length_squared()),
     );
   }
 
   /** Length of projection onto a line defined by two points */
-  public scalar_projection_on_line(lineStart: Point2, lineEnd: Point2): number {
-    return this.sub(lineStart).dot(lineEnd.sub(lineStart).normalize());
+  public scalar_projection_on_line(start: Point2, end: Point2): number {
+    return this.sub(start).dot(end.sub(start).normalize());
   }
 
   /** Distance to a line defined by two points */
-  public distance_to_line(lineStart: Point2, lineEnd: Point2): number {
-    return Math.abs(
-      this.sub(lineStart).dot(lineEnd.sub(lineStart).perp().normalize()),
-    );
+  public distance_to_line(start: Point2, end: Point2): number {
+    return Math.abs(this.sub(start).dot(end.sub(start).perp().normalize()));
   }
 
   /** Distance to a line defined by two points */
-  public is_on_left_side_of_line(lineStart: Point2, lineEnd: Point2): boolean {
-    return (
-      this.sub(lineStart).dot(lineEnd.sub(lineStart).perp().normalize()) <= 0
-    );
+  public is_on_left_side_of_line(start: Point2, end: Point2): boolean {
+    return this.sub(start).dot(end.sub(start).perp().normalize()) <= 0;
   }
 
   /**
    * Distance to a segment defined by two points
    */
-  public distance_to_segment(lineStart: Point2, lineEnd: Point2): number {
-    const scalar_projection = this.scalar_projection_on_line(
-      lineStart,
-      lineEnd,
-    );
-    if (scalar_projection <= 0) return this.distance_to(lineStart);
-    if (scalar_projection >= lineStart.distance_to(lineEnd))
-      return this.distance_to(lineEnd);
-    return this.distance_to_line(lineStart, lineEnd);
+  public distance_to_segment(start: Point2, end: Point2): number {
+    const scalar_projection = this.scalar_projection_on_line(start, end);
+    if (scalar_projection <= 0) return this.distance_to(start);
+    if (scalar_projection >= start.distance_to(end))
+      return this.distance_to(end);
+    return this.distance_to_line(start, end);
   }
 
   /** Reflect this point across a line defined by two points */
-  public reflect(lineStart: Point2, lineEnd: Point2): Point2 {
-    const projection = this.project_on_line(lineStart, lineEnd);
+  public reflect(start: Point2, end: Point2): Point2 {
+    const projection = this.project_on_line(start, end);
     return new Point2(2 * projection.x - this.x, 2 * projection.y - this.y);
   }
 

@@ -1,6 +1,7 @@
 import React from "react";
 import {
   Action,
+  ActionBundleType,
   CanvasState,
   ConnectsActionType,
   MechanicalElement,
@@ -21,6 +22,7 @@ import {
   get_connections,
 } from "../../mechanical-canvas/connect-actions";
 import { HoveredPart } from "../../../types/hovered-part";
+import stopIconUrl from "../../../assets/icons/palette/stop.svg";
 
 interface ConnectionProps {
   element: MechanicalElement;
@@ -28,7 +30,10 @@ interface ConnectionProps {
   containerType: ConnectsActionType;
   setHoveredPart: (hoveredPart: HoveredPart) => void;
   setCanvasState: (state: CanvasState) => void;
-  updateMechanism: (actions: Action[]) => void;
+  updateMechanism: (
+    actions: Action[],
+    actionBundleType: ActionBundleType,
+  ) => void;
   mechanism: Mechanism;
 }
 
@@ -41,6 +46,45 @@ const Connection: React.FC<ConnectionProps> = ({
   updateMechanism,
   mechanism,
 }) => {
+  if (connectedElement === undefined)
+    return (
+      <Box
+        sx={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          background: "#FF000055",
+        }}
+        border={1}
+        borderColor={"#00000025"}
+        borderRadius={2}
+      >
+        <IconButton title="Select" size="small" sx={{ my: -2 }}>
+          <Box
+            component="img"
+            src={stopIconUrl}
+            sx={{
+              width: 24,
+              height: 24,
+              display: "block",
+              mx: -0.25,
+              my: -0.75,
+              filter: "brightness(0.25) invert(1)",
+            }}
+          />
+        </IconButton>
+
+        <Box>
+          <Typography variant={"body2"} fontWeight={500}>
+            Unfound
+          </Typography>
+        </Box>
+        <IconButton title="Disconnect" size="small">
+          <LinkOffIcon fontSize="small" color="error" sx={{ my: -0.5 }} />
+        </IconButton>
+      </Box>
+    );
+
   const icon = get_element_icon(connectedElement.type);
 
   const handleMouseEnter = () => {
@@ -86,27 +130,33 @@ const Connection: React.FC<ConnectionProps> = ({
       index = get_connections(element, "ConnectsAttachedGears").indexOf(
         connectedElement.id,
       );
-      updateMechanism([
-        {
-          type: "SwitchMeshedGearDirection",
-          id: element.id,
-          index,
-          direction: !element.attachedGearsIDs[index].direction,
-        },
-      ]);
+      updateMechanism(
+        [
+          {
+            type: "SwitchAttachedGearDirection",
+            id: element.id,
+            index,
+            direction: !element.attachedGearsIDs[index].direction,
+          },
+        ],
+        "Other",
+      );
     } else if (connectedElement.type === "belt") {
       index = get_connections(
         connectedElement,
         "ConnectsAttachedGears",
       ).indexOf(element.id);
-      updateMechanism([
-        {
-          type: "SwitchMeshedGearDirection",
-          id: connectedElement.id,
-          index,
-          direction: !connectedElement.attachedGearsIDs[index].direction,
-        },
-      ]);
+      updateMechanism(
+        [
+          {
+            type: "SwitchAttachedGearDirection",
+            id: connectedElement.id,
+            index,
+            direction: !connectedElement.attachedGearsIDs[index].direction,
+          },
+        ],
+        "Other",
+      );
     }
   };
 
@@ -116,20 +166,23 @@ const Connection: React.FC<ConnectionProps> = ({
       element.id,
       connectedElement,
     );
-    updateMechanism([
-      disconnect_element(
-        element,
-        connectedElement,
-        containerType,
-        mechanism.mechanicalElements,
-      ),
-      disconnect_element(
-        connectedElement,
-        element,
-        connection_pair_type,
-        mechanism.mechanicalElements,
-      ),
-    ]);
+    updateMechanism(
+      [
+        disconnect_element(
+          element,
+          connectedElement,
+          containerType,
+          mechanism.mechanicalElements,
+        ),
+        disconnect_element(
+          connectedElement,
+          element,
+          connection_pair_type,
+          mechanism.mechanicalElements,
+        ),
+      ],
+      "Connects",
+    );
   };
 
   return (

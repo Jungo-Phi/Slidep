@@ -30,6 +30,7 @@ import { PropertiesPanel } from "./components/properties-panel/PropertiesPanel";
 import { CanvasState } from "./types/canvas-state";
 import {
   Action,
+  ActionBundleType,
   DEFAULT_METADATA,
   DEFAULT_SIMULATION_CONFIG,
   DEFAULT_SIMULATION_STATE,
@@ -44,6 +45,10 @@ import { HoveredPart } from "./types/hovered-part";
 import { actionReducer } from "./components/mechanical-canvas/action-reducer";
 import { preload_element_icons } from "./components/element-palette/elementIcon";
 import { COLORS } from "./constants/rendering-specs";
+import {
+  getPositions,
+  resolveGeometricConstraints,
+} from "./components/mechanical-canvas/geometric-solver";
 //import { SimulationControls } from './components/simulation-controls';
 
 /**
@@ -101,68 +106,217 @@ const App: React.FC = () => {
 
   const IDcounter = useRef(1);
 
-  const updateMechanism = (actions: Action[]) => {
-    let newHistory = [...mechanism.history, actions];
-    // bundle Move actions
-    const action = actions[0];
-    if (
-      (action.type === "MoveNode" ||
-        action.type === "MoveEdgeStart" ||
-        action.type === "MoveEdgeEnd" ||
-        action.type === "MoveEdgeBody" ||
-        action.type === "MoveElements" ||
-        action.type === "ChangeEdgeLength" ||
-        action.type === "ChangeStiffness" ||
-        action.type === "ChangeDamping" ||
-        action.type === "ChangeMass" ||
-        action.type === "ChangeGearRadius" ||
-        action.type === "ChangeGearAngle" ||
-        action.type === "MoveConstraint") &&
-      mechanism.history.length > 0
-    ) {
-      let lastAction = mechanism.history.slice(-1)[0][0];
-      if (action.type === lastAction.type) {
+  const updateMechanism = (
+    actions: Action[],
+    actionBundleType: ActionBundleType,
+  ) => {
+    const newAction = actions[0];
+    let newActions = actions;
+    let lastActions: Action[];
+    let lastAction: Action;
+    let secondToLastAction: Action;
+
+    let newHistory: Action[][] | undefined = undefined;
+
+    switch (actionBundleType) {
+      case "MoveConstraint":
+      case "ChangeConstant":
+        if (
+          newAction.type !== "MoveConstraint" &&
+          newAction.type !== "ChangeMass" &&
+          newAction.type !== "ChangeStiffness" &&
+          newAction.type !== "ChangeDamping"
+        )
+          throw console.error("impossible");
+        if (mechanism.history.length === 0) break;
+        lastActions = mechanism.history[mechanism.history.length - 1];
+        if (lastActions.length < 1) break;
+        lastAction = lastActions[lastActions.length - 1];
+        if (newAction.type !== lastAction.type) break;
         switch (lastAction.type) {
-          case "MoveNode":
-          case "MoveEdgeStart":
-          case "MoveEdgeEnd":
-          case "MoveEdgeBody":
-            if (action.type === lastAction.type) {
-              lastAction.newPosition = action.newPosition;
-            }
-            break;
-          case "MoveElements":
-            if (action.type === lastAction.type) {
-              lastAction.delta = lastAction.delta.add(action.delta);
-            }
-            break;
-          case "ChangeEdgeLength":
           case "ChangeStiffness":
           case "ChangeDamping":
           case "ChangeMass":
-            if (action.type === lastAction.type) {
-              lastAction.delta += action.delta;
-            }
-            break;
-          case "ChangeGearRadius":
-            if (action.type === lastAction.type) {
-              lastAction.newRadius = action.newRadius;
-            }
-            break;
-          case "ChangeGearAngle":
-            if (action.type === lastAction.type) {
-              lastAction.newAngle = action.newAngle;
+            if (newAction.type === lastAction.type) {
+              lastAction.delta += newAction.delta;
             }
             break;
           case "MoveConstraint":
-            if (action.type === lastAction.type) {
-              lastAction.newPosition = action.newPosition;
+            if (newAction.type === lastAction.type) {
+              lastAction.newPosition = newAction.newPosition;
             }
             break;
         }
         newHistory = [...mechanism.history];
-      }
+        break;
+      case "MoveElement":
+        if (
+          newAction.type !== "MoveNode" &&
+          newAction.type !== "MoveEdgeStart" &&
+          newAction.type !== "MoveEdgeEnd" &&
+          newAction.type !== "MoveEdgeBody" &&
+          newAction.type !== "MoveElements" &&
+          newAction.type !== "ChangeGearRadius" &&
+          newAction.type !== "ChangeGearAngle" &&
+          newAction.type !== "ChangeEdgeLength"
+        )
+          throw console.error("impossible");
+
+        const oldPositionsM = getPositions(mechanism.mechanicalElements);
+        const newPositionsM = resolveGeometricConstraints(
+          mechanism.mechanicalElements,
+          mechanism.constraintElements,
+          actionBundleType,
+          newAction,
+        );
+        newActions = [
+          ...actions,
+          {
+            type: "UpdatePositionsToValidState",
+            masterActionType: newAction.type,
+            newPositions: newPositionsM,
+            oldPositions: oldPositionsM,
+          },
+        ];
+        if (mechanism.history.length === 0) break;
+        lastActions = mechanism.history[mechanism.history.length - 1];
+        if (lastActions.length < 2) break;
+        lastAction = lastActions[lastActions.length - 1];
+        secondToLastAction = lastActions[lastActions.length - 2];
+        if (
+          lastAction.type !== "UpdatePositionsToValidState" ||
+          newAction.type !== lastAction.masterActionType
+        )
+          break;
+        newHistory = [...mechanism.history];
+        lastAction.newPositions = newPositionsM;
+        if (secondToLastAction.type !== newAction.type)
+          throw console.error("impossible");
+        switch (secondToLastAction.type) {
+          case "MoveNode":
+          case "MoveEdgeStart":
+          case "MoveEdgeEnd":
+          case "MoveEdgeBody":
+            if (secondToLastAction.type !== newAction.type)
+              throw console.error("impossible");
+            secondToLastAction.newPosition = newAction.newPosition;
+            break;
+          case "MoveElements":
+            if (secondToLastAction.type !== newAction.type)
+              throw console.error("impossible");
+            secondToLastAction.delta = secondToLastAction.delta.add(
+              newAction.delta,
+            );
+            break;
+          case "ChangeGearRadius":
+            if (secondToLastAction.type !== newAction.type)
+              throw console.error("impossible");
+            secondToLastAction.newRadius = newAction.newRadius;
+            break;
+          case "ChangeGearAngle":
+            if (secondToLastAction.type !== newAction.type)
+              throw console.error("impossible");
+            secondToLastAction.newAngle = newAction.newAngle;
+            break;
+          case "ChangeEdgeLength":
+            if (secondToLastAction.type !== newAction.type)
+              throw console.error("impossible");
+            secondToLastAction.newLength = newAction.newLength;
+            break;
+        }
+        break;
+      case "ChangeDimension":
+        if (
+          newAction.type !== "ChangeDimensionEdgeValue" &&
+          newAction.type !== "ChangeDimensionNodeToNodeValue" &&
+          newAction.type !== "ChangeDimensionEdgeToNodeValue" &&
+          newAction.type !== "ChangeDimensionAngleValue" &&
+          newAction.type !== "ChangeDimensionRadiusValue" &&
+          newAction.type !== "ChangeGearRatioValue"
+        )
+          throw console.error("impossible");
+
+        const tempMechanismD = actionReducer(mechanism, actions, false);
+        const oldPositionsD = getPositions(mechanism.mechanicalElements);
+        const newPositionsD = resolveGeometricConstraints(
+          tempMechanismD.mechanicalElements,
+          tempMechanismD.constraintElements,
+          actionBundleType,
+          newAction,
+        );
+        newActions = [
+          ...actions,
+          {
+            type: "UpdatePositionsToValidState",
+            masterActionType: newAction.type,
+            newPositions: newPositionsD,
+            oldPositions: oldPositionsD,
+          },
+        ];
+        if (mechanism.history.length === 0) break;
+        lastActions = mechanism.history[mechanism.history.length - 1];
+        if (lastActions.length < 2) break;
+        lastAction = lastActions[lastActions.length - 1];
+        secondToLastAction = lastActions[lastActions.length - 2];
+        if (
+          lastAction.type !== "UpdatePositionsToValidState" ||
+          newAction.type !== lastAction.masterActionType
+        )
+          break;
+        newHistory = [...mechanism.history];
+        lastAction.newPositions = newPositionsD;
+        if (secondToLastAction.type !== newAction.type)
+          throw console.error("impossible");
+        secondToLastAction.newValue = newAction.newValue;
+        break;
+      case "Connects":
+        if (
+          newAction.type !== "ConnectsParentBeam" &&
+          newAction.type !== "ConnectsFixedNodeStart" &&
+          newAction.type !== "ConnectsFixedNodeEnd" &&
+          newAction.type !== "ConnectsAttachedBelt" &&
+          newAction.type !== "ConnectsFixedEdges" &&
+          newAction.type !== "ConnectsRotatingEdges" &&
+          newAction.type !== "ConnectsFixedNodesBody" &&
+          newAction.type !== "ConnectsMeshedGears" &&
+          newAction.type !== "ConnectsAttachedGears" &&
+          newAction.type !== "ConnectsFixedGears" &&
+          newAction.type !== "CreateElement" &&
+          newAction.type !== "DeleteElement"
+        )
+          throw console.error("impossible");
+
+        const tempMechanismC = actionReducer(mechanism, actions, false);
+        const oldPositionsC = getPositions(mechanism.mechanicalElements);
+        const newPositionsC = resolveGeometricConstraints(
+          tempMechanismC.mechanicalElements,
+          tempMechanismC.constraintElements,
+          actionBundleType,
+          newAction,
+        );
+        newActions = [
+          ...actions,
+          {
+            type: "UpdatePositionsToValidState",
+            masterActionType: newAction.type,
+            newPositions: newPositionsC,
+            oldPositions: oldPositionsC,
+          },
+        ];
+        break;
+      case "Other":
+        if (newAction.type == "Blank") {
+          if (mechanism.history.length === 0) break;
+          mechanism.history[mechanism.history.length - 1].push(newAction);
+          newHistory = [...mechanism.history];
+        }
     }
+
+    if (newHistory === undefined) {
+      newHistory = [...mechanism.history, newActions];
+    }
+
+    // update mechanism
     let newMechanism = {
       history: newHistory,
       future: [],
@@ -171,42 +325,38 @@ const App: React.FC = () => {
       viewport: { ...mechanism.viewport },
       metadata: { ...mechanism.metadata },
     };
-    setMechanism(actionReducer(newMechanism, actions, false));
+    setMechanism(actionReducer(newMechanism, newActions, false));
   };
 
   const undoMechanism = () => {
     // Undo (ctrl+Z)
-    if (mechanism.history.length === 0) {
-      return;
-    }
-    let actions = mechanism.history.slice(-1)[0];
+    if (mechanism.history.length === 0) return;
+    let lastActions = mechanism.history.slice(-1)[0];
     let newMechanism = {
       history: [...mechanism.history.slice(0, -1)],
-      future: [...mechanism.future, [...actions]],
+      future: [...mechanism.future, [...lastActions]],
       mechanicalElements: [...mechanism.mechanicalElements],
       constraintElements: [...mechanism.constraintElements],
       viewport: { ...mechanism.viewport },
       metadata: { ...mechanism.metadata },
     };
-    actions.reverse();
-    setMechanism(actionReducer(newMechanism, actions, true));
+    lastActions.reverse();
+    setMechanism(actionReducer(newMechanism, lastActions, true));
   };
 
   const redoMechanism = () => {
     // Redo (ctrl+Y)
-    if (mechanism.future.length === 0) {
-      return;
-    }
-    let actions = mechanism.future.slice(-1)[0];
+    if (mechanism.future.length === 0) return;
+    let nextActions = mechanism.future.slice(-1)[0];
     let newMechanism = {
-      history: [...mechanism.history, [...actions]],
+      history: [...mechanism.history, [...nextActions]],
       future: [...mechanism.future.slice(0, -1)],
       mechanicalElements: [...mechanism.mechanicalElements],
       constraintElements: [...mechanism.constraintElements],
       viewport: { ...mechanism.viewport },
       metadata: { ...mechanism.metadata },
     };
-    setMechanism(actionReducer(newMechanism, actions, false));
+    setMechanism(actionReducer(newMechanism, nextActions, false));
   };
 
   const setMetaData = (metadata: MechanismMetadata) => {
@@ -311,12 +461,22 @@ const App: React.FC = () => {
               }}
             >
               <Tooltip title="Annuler (Ctrl+Z)">
-                <IconButton size="medium" color="inherit" aria-label="Annuler">
+                <IconButton
+                  size="medium"
+                  color="inherit"
+                  aria-label="Annuler"
+                  onClick={() => undoMechanism()}
+                >
                   <UndoIcon fontSize="medium" />
                 </IconButton>
               </Tooltip>
               <Tooltip title="Rétablir (Ctrl+Y)">
-                <IconButton size="medium" color="inherit" aria-label="Rétablir">
+                <IconButton
+                  size="medium"
+                  color="inherit"
+                  aria-label="Rétablir"
+                  onClick={() => redoMechanism()}
+                >
                   <RedoIcon fontSize="medium" />
                 </IconButton>
               </Tooltip>

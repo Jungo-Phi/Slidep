@@ -6,6 +6,7 @@ import {
   BeltElement,
   GearElement,
   UnionElement,
+  Point2,
 } from "../../types";
 import {
   get_constraint_element_from_id,
@@ -51,6 +52,7 @@ export function actionReducer(
           }
         }
         break;
+      /*
       case "MoveNode":
       case "MoveEdgeStart":
       case "MoveEdgeEnd":
@@ -100,6 +102,33 @@ export function actionReducer(
           }
         }
         break;
+      case "ChangeGearRadius":
+        element = get_mechanical_element_from_id(
+          action.id,
+          mechanism.mechanicalElements,
+        ) as GearElement;
+        element.radius = revert ? action.oldRadius : action.newRadius;
+        break;
+      case "ChangeGearAngle":
+        element = get_mechanical_element_from_id(
+          action.id,
+          mechanism.mechanicalElements,
+        ) as GearElement;
+        element.angle = revert ? action.oldAngle : action.newAngle;
+        break;
+      case "ChangeEdgeLength":
+        const edgeElement = get_mechanical_element_from_id(
+          action.id,
+          mechanism.mechanicalElements,
+        ) as EdgeElement;
+        const endExtention = edgeElement.positionEnd
+          .sub(edgeElement.positionStart)
+          .normalize()
+          .mul(((action.newLength - action.oldLength) / 2) * (revert ? -1 : 1));
+        edgeElement.positionStart = edgeElement.positionStart.sub(endExtention);
+        edgeElement.positionEnd = edgeElement.positionEnd.add(endExtention);
+        break;
+      */
       case "MoveConstraint":
         element = get_constraint_element_from_id(
           action.id,
@@ -120,20 +149,6 @@ export function actionReducer(
         if ("value" in element) {
           element.value = revert ? action.oldValue : action.newValue;
         }
-        break;
-      case "ChangeGearRadius":
-        element = get_mechanical_element_from_id(
-          action.id,
-          mechanism.mechanicalElements,
-        ) as GearElement;
-        element.radius = revert ? action.oldRadius : action.newRadius;
-        break;
-      case "ChangeGearAngle":
-        element = get_mechanical_element_from_id(
-          action.id,
-          mechanism.mechanicalElements,
-        ) as GearElement;
-        element.angle = revert ? action.oldAngle : action.newAngle;
         break;
       case "ChangeMass":
         element = get_mechanical_element_from_id(
@@ -165,18 +180,6 @@ export function actionReducer(
         }
         element.damping += action.delta * (revert ? -1 : 1);
         break;
-      case "ChangeEdgeLength":
-        const edgeElement = get_mechanical_element_from_id(
-          action.id,
-          mechanism.mechanicalElements,
-        ) as EdgeElement;
-        const endExtention = edgeElement.positionEnd
-          .sub(edgeElement.positionStart)
-          .normalize()
-          .mul((action.delta / 2) * (revert ? -1 : 1));
-        edgeElement.positionStart = edgeElement.positionStart.sub(endExtention);
-        edgeElement.positionEnd = edgeElement.positionEnd.add(endExtention);
-        break;
       case "GroundNode":
         const node = get_mechanical_element_from_id(
           action.id,
@@ -192,7 +195,7 @@ export function actionReducer(
           ) as BeltElement
         ).tight = action.tightened !== revert;
         break;
-      case "SwitchMeshedGearDirection":
+      case "SwitchAttachedGearDirection":
         const belt = get_mechanical_element_from_id(
           action.id,
           mechanism.mechanicalElements,
@@ -347,6 +350,36 @@ export function actionReducer(
         } else {
           element.attachedBeltID = action.connectID;
         }
+        break;
+      case "UpdatePositionsToValidState":
+        let positions: Map<string, Point2>;
+        let radii: Map<string, number>;
+        if (revert) {
+          positions = action.oldPositions.positions;
+          radii = action.oldPositions.radii;
+        } else {
+          positions = action.newPositions.positions;
+          radii = action.newPositions.radii;
+        }
+
+        let position: Point2 | undefined;
+        let radius: number | undefined;
+        mechanism.mechanicalElements.forEach((element) => {
+          if ("position" in element) {
+            position = positions.get(`${element.id}:pos`);
+            if (position !== undefined) element.position = position;
+            if ("radius" in element) {
+              radius = radii.get(`${element.id}:pos`);
+              if (radius !== undefined) element.radius = radius;
+            }
+            // if ("angle" in element) angles.set(element.id, element.angle);
+          } else {
+            position = positions.get(`${element.id}:start`);
+            if (position !== undefined) element.positionStart = position;
+            position = positions.get(`${element.id}:end`);
+            if (position !== undefined) element.positionEnd = position;
+          }
+        });
         break;
     }
   });

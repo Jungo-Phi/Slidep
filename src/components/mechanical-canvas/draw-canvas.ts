@@ -6,6 +6,7 @@ import {
   STROKE_WIDTHS,
 } from "../../constants/rendering-specs";
 import {
+  BeamElement,
   ConstraintElement,
   EdgeElement,
   GearElement,
@@ -144,8 +145,14 @@ export function drawMechanicalCanvas(
         case "mass":
           ctx.save();
           ctx.translate(element.position.x, element.position.y);
-          if ("angle" in element) {
-            ctx.rotate(element.angle);
+          if ("parentBeamID" in element && element.parentBeamID !== undefined) {
+            const parentBeam = get_mechanical_element_from_id(
+              element.parentBeamID,
+              mechanicalElements,
+            ) as BeamElement;
+            ctx.rotate(
+              parentBeam.positionStart.angle_to(parentBeam.positionEnd),
+            );
           }
           if (element.isGrounded && element.type !== "gear") {
             draw_ground(ctx);
@@ -155,10 +162,10 @@ export function drawMechanicalCanvas(
               draw_slider(ctx);
               break;
             case "pivot":
-              draw_pivot(ctx);
+              draw_pivot(ctx, element.rotatingEdgesIDs.length > 0);
               break;
             case "slidep":
-              draw_slidep(ctx);
+              draw_slidep(ctx, element.rotatingEdgesIDs.length > 0);
               break;
             case "join":
               draw_join(ctx);
@@ -179,17 +186,25 @@ export function drawMechanicalCanvas(
               } else {
                 ctx.lineWidth = STROKE_WIDTHS.STANDARD;
               }
-              ctx.rotate(-element.angle);
               if (element.isGrounded) {
                 draw_ground(ctx);
               }
-              draw_pivot(ctx);
+              draw_pivot(
+                ctx,
+                element.rotatingEdgesIDs.length > 0 ||
+                  element.fixedEdgesIDs.length > 0,
+              );
               break;
             case "mass":
               draw_mass(ctx);
               break;
           }
           ctx.restore();
+          draw_dimention_text(
+            ctx,
+            element.position.sub(new Point2(0, 20)),
+            element.id.toString().padStart(3, "0"),
+          ); // DEBUG
           break;
         case "beam":
         case "spring":
@@ -222,6 +237,13 @@ export function drawMechanicalCanvas(
             draw_hover_edge_end(ctx);
           }
           ctx.restore();
+          draw_dimention_text(
+            ctx,
+            element.positionEnd
+              .lerp(element.positionStart, 0.5)
+              .sub(new Point2(0, 15)),
+            element.id.toString().padStart(3, "0"),
+          ); // DEBUG
           break;
         case "belt":
           // console.log("attachedGearsIDs: ", element.attachedGearsIDs);
@@ -258,7 +280,6 @@ export function drawMechanicalCanvas(
                   id: 0,
                   position: hoveredPart.position,
                   isGrounded: false,
-                  angle: 0,
                   radius: INTERACTION_SPECS.BELT_GRAB_RADIUS,
                   fixedEdgesIDs: [],
                   rotatingEdgesIDs: [],
@@ -300,7 +321,6 @@ export function drawMechanicalCanvas(
                 id: 0,
                 position: state.startHover.position,
                 isGrounded: false,
-                angle: 0,
                 radius: state.startHover.position.distance_to(
                   hoveredPart.position,
                 ),
@@ -482,10 +502,10 @@ export function drawMechanicalCanvas(
           break;
         case "PlacingGearStart":
           draw_gear(ctx, DIM.DEFAULT_GEAR_RADIUS);
-          draw_pivot(ctx);
+          draw_pivot(ctx, false);
           break;
         case "PlacingPivot":
-          draw_pivot(ctx);
+          draw_pivot(ctx, false);
           break;
         case "PlacingSlider":
           draw_slider(ctx);
@@ -520,7 +540,7 @@ export function drawMechanicalCanvas(
           break;
         case "PlacingGearRadius":
           draw_gear(ctx, delta.length());
-          draw_pivot(ctx);
+          draw_pivot(ctx, false);
           break;
       }
       break;

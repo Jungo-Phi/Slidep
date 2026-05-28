@@ -97,7 +97,6 @@ export interface BaseNodeElement extends BaseElement {
 /** Slider element - allows linear motion along a beam */
 export interface SliderElement extends BaseNodeElement {
   type: "slider";
-  angle: number;
   parentBeamID?: ID;
   fixedEdgesIDs: ID[];
 }
@@ -111,7 +110,6 @@ export interface PivotElement extends BaseNodeElement {
 /** Slidep element (Pivot on a Slider) - allows linear motion along a beam and rotational motion */
 export interface SlidepElement extends BaseNodeElement {
   type: "slidep";
-  angle: number;
   parentBeamID?: ID;
   rotatingEdgesIDs: ID[];
 }
@@ -132,7 +130,6 @@ export interface MassElement extends BaseNodeElement {
 /** Gear element - rotational transmission with teeth */
 export interface GearElement extends BaseNodeElement {
   type: "gear";
-  angle: number;
   radius: number;
   rotatingEdgesIDs: ID[];
   fixedEdgesIDs: ID[];

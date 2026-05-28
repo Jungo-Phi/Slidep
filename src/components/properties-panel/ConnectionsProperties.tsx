@@ -6,6 +6,7 @@ import {
   Action,
   Mechanism,
   ConnectsActionType,
+  ActionBundleType,
 } from "../../types";
 import { ConnectionsContainer } from "./components/ConnectionsContainer";
 import { HoveredPart } from "../../types/hovered-part";
@@ -14,7 +15,10 @@ interface ConnectionsPropertiesProps {
   element: MechanicalElement;
   setHoveredPart: (hoveredPart: HoveredPart) => void;
   setCanvasState: (state: CanvasState) => void;
-  updateMechanism: (actions: Action[]) => void;
+  updateMechanism: (
+    actions: Action[],
+    actionBundleType: ActionBundleType,
+  ) => void;
   mechanism: Mechanism;
 }
 

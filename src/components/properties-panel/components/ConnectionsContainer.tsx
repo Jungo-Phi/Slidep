@@ -13,6 +13,7 @@ import {
   Action,
   Mechanism,
   ConnectsActionType,
+  ActionBundleType,
 } from "../../../types";
 import Connection from "./ConnectionComponent";
 import {
@@ -39,7 +40,10 @@ interface ConnectionsContainerProps {
   containerType: ConnectsActionType;
   setHoveredPart: (hoveredPart: HoveredPart) => void;
   setCanvasState: (state: CanvasState) => void;
-  updateMechanism: (actions: Action[]) => void;
+  updateMechanism: (
+    actions: Action[],
+    actionBundleType: ActionBundleType,
+  ) => void;
   mechanism: Mechanism;
   draggedItem: {
     id: ID;
@@ -164,7 +168,7 @@ export const ConnectionsContainer: React.FC<ConnectionsContainerProps> = ({
       ),
     );
 
-    updateMechanism(actions);
+    updateMechanism(actions, "Connects");
     setDraggedItem(null);
     setDragOverIndex(null);
   };

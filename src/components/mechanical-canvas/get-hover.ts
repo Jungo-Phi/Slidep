@@ -642,7 +642,6 @@ export function get_hovered_part(
  */
 export function get_hovered_elements_by_rect(
   mechanicalElements: MechanicalElement[],
-  constraintElements: ConstraintElement[],
   rectStart: Point2,
   rectEnd: Point2,
 ): ID[] {
@@ -676,11 +675,5 @@ export function get_hovered_elements_by_rect(
         break;
     }
   }
-  for (const element of constraintElements) {
-    if (element.position.is_in_rect(rectStart, rectEnd)) {
-      hoveredElements.push(element.id);
-    }
-  }
-
   return hoveredElements;
 }
