@@ -49,6 +49,7 @@ import {
   getPositions,
   resolveGeometricConstraints,
 } from "./components/mechanical-canvas/geometric-solver";
+import { cloneMechanism, serializeMechanism } from "./utils/serialization";
 //import { SimulationControls } from './components/simulation-controls';
 
 /**
@@ -236,8 +237,12 @@ const App: React.FC = () => {
         )
           throw console.error("impossible");
 
-        const tempMechanismD = actionReducer(mechanism, actions, false);
         const oldPositionsD = getPositions(mechanism.mechanicalElements);
+        const tempMechanismD = actionReducer(
+          cloneMechanism(mechanism),
+          actions,
+          false,
+        );
         const newPositionsD = resolveGeometricConstraints(
           tempMechanismD.mechanicalElements,
           tempMechanismD.constraintElements,
@@ -286,8 +291,12 @@ const App: React.FC = () => {
         )
           throw console.error("impossible");
 
-        const tempMechanismC = actionReducer(mechanism, actions, false);
         const oldPositionsC = getPositions(mechanism.mechanicalElements);
+        const tempMechanismC = actionReducer(
+          cloneMechanism(mechanism),
+          actions,
+          false,
+        );
         const newPositionsC = resolveGeometricConstraints(
           tempMechanismC.mechanicalElements,
           tempMechanismC.constraintElements,

@@ -18,6 +18,8 @@ export function actionReducer(
   actions: Action[],
   revert: boolean,
 ): Mechanism {
+  let mechanicalElements = [...mechanism.mechanicalElements];
+  let constraintElements = [...mechanism.constraintElements];
   let element: UnionElement;
   actions.forEach((action) => {
     switch (action.type) {
@@ -36,19 +38,19 @@ export function actionReducer(
           action.element.type === "belt"
         ) {
           if (revert !== (action.type === "DeleteElement")) {
-            mechanism.mechanicalElements = mechanism.mechanicalElements.filter(
+            mechanicalElements = mechanicalElements.filter(
               (element) => element.id !== action.element.id,
             );
           } else {
-            mechanism.mechanicalElements.push(action.element);
+            mechanicalElements.push(action.element);
           }
         } else {
           if (revert !== (action.type === "DeleteElement")) {
-            mechanism.constraintElements = mechanism.constraintElements.filter(
+            constraintElements = constraintElements.filter(
               (element) => element.id !== action.element.id,
             );
           } else {
-            mechanism.constraintElements.push(action.element);
+            constraintElements.push(action.element);
           }
         }
         break;
@@ -59,7 +61,7 @@ export function actionReducer(
       case "MoveEdgeBody":
         element = get_mechanical_element_from_id(
           action.id,
-          mechanism.mechanicalElements,
+          mechanicalElements,
         );
         if (action.type === "MoveNode") {
           if (!("position" in element)) break;
@@ -85,7 +87,7 @@ export function actionReducer(
         }
         break;
       case "MoveElements":
-        for (const element of mechanism.mechanicalElements) {
+        for (const element of mechanicalElements) {
           if (action.elementIDs.includes(element.id)) {
             if ("position" in element) {
               element.position = element.position.add(
@@ -105,21 +107,21 @@ export function actionReducer(
       case "ChangeGearRadius":
         element = get_mechanical_element_from_id(
           action.id,
-          mechanism.mechanicalElements,
+          mechanicalElements,
         ) as GearElement;
         element.radius = revert ? action.oldRadius : action.newRadius;
         break;
       case "ChangeGearAngle":
         element = get_mechanical_element_from_id(
           action.id,
-          mechanism.mechanicalElements,
+          mechanicalElements,
         ) as GearElement;
         element.angle = revert ? action.oldAngle : action.newAngle;
         break;
       case "ChangeEdgeLength":
         const edgeElement = get_mechanical_element_from_id(
           action.id,
-          mechanism.mechanicalElements,
+          mechanicalElements,
         ) as EdgeElement;
         const endExtention = edgeElement.positionEnd
           .sub(edgeElement.positionStart)
@@ -130,10 +132,7 @@ export function actionReducer(
         break;
       */
       case "MoveConstraint":
-        element = get_constraint_element_from_id(
-          action.id,
-          mechanism.constraintElements,
-        );
+        element = get_constraint_element_from_id(action.id, constraintElements);
         element.position = revert ? action.oldPosition : action.newPosition;
         break;
       case "ChangeDimensionEdgeValue":
@@ -142,39 +141,27 @@ export function actionReducer(
       case "ChangeDimensionAngleValue":
       case "ChangeDimensionRadiusValue":
       case "ChangeGearRatioValue":
-        element = get_constraint_element_from_id(
-          action.id,
-          mechanism.constraintElements,
-        );
+        element = get_constraint_element_from_id(action.id, constraintElements);
         if ("value" in element) {
           element.value = revert ? action.oldValue : action.newValue;
         }
         break;
       case "ChangeMass":
-        element = get_mechanical_element_from_id(
-          action.id,
-          mechanism.mechanicalElements,
-        );
+        element = get_mechanical_element_from_id(action.id, mechanicalElements);
         if (element.type !== "mass") {
           break;
         }
         element.mass += action.delta * (revert ? -1 : 1);
         break;
       case "ChangeStiffness":
-        element = get_mechanical_element_from_id(
-          action.id,
-          mechanism.mechanicalElements,
-        );
+        element = get_mechanical_element_from_id(action.id, mechanicalElements);
         if (element.type !== "spring") {
           break;
         }
         element.stiffness += action.delta * (revert ? -1 : 1);
         break;
       case "ChangeDamping":
-        element = get_mechanical_element_from_id(
-          action.id,
-          mechanism.mechanicalElements,
-        );
+        element = get_mechanical_element_from_id(action.id, mechanicalElements);
         if (element.type !== "damper") {
           break;
         }
@@ -183,7 +170,7 @@ export function actionReducer(
       case "GroundNode":
         const node = get_mechanical_element_from_id(
           action.id,
-          mechanism.mechanicalElements,
+          mechanicalElements,
         ) as NodeElement;
         node.isGrounded = action.grounded !== revert;
         break;
@@ -191,14 +178,14 @@ export function actionReducer(
         (
           get_mechanical_element_from_id(
             action.id,
-            mechanism.mechanicalElements,
+            mechanicalElements,
           ) as BeltElement
         ).tight = action.tightened !== revert;
         break;
       case "SwitchAttachedGearDirection":
         const belt = get_mechanical_element_from_id(
           action.id,
-          mechanism.mechanicalElements,
+          mechanicalElements,
         ) as BeltElement;
         belt.attachedGearsIDs[action.index].direction =
           action.direction !== revert;
@@ -206,7 +193,7 @@ export function actionReducer(
       case "ConnectsFixedEdges":
         element = get_mechanical_element_from_id(
           action.elementID,
-          mechanism.mechanicalElements,
+          mechanicalElements,
         );
         if (!("fixedEdgesIDs" in element)) {
           break;
@@ -220,7 +207,7 @@ export function actionReducer(
       case "ConnectsRotatingEdges":
         element = get_mechanical_element_from_id(
           action.elementID,
-          mechanism.mechanicalElements,
+          mechanicalElements,
         );
         if (!("rotatingEdgesIDs" in element)) {
           break;
@@ -234,7 +221,7 @@ export function actionReducer(
       case "ConnectsParentBeam":
         element = get_mechanical_element_from_id(
           action.elementID,
-          mechanism.mechanicalElements,
+          mechanicalElements,
         );
         if (!("parentBeamID" in element)) {
           break;
@@ -248,7 +235,7 @@ export function actionReducer(
       case "ConnectsFixedNodeStart":
         element = get_mechanical_element_from_id(
           action.elementID,
-          mechanism.mechanicalElements,
+          mechanicalElements,
         );
         if (!("fixedNodeStartID" in element)) {
           break;
@@ -262,7 +249,7 @@ export function actionReducer(
       case "ConnectsFixedNodeEnd":
         element = get_mechanical_element_from_id(
           action.elementID,
-          mechanism.mechanicalElements,
+          mechanicalElements,
         );
         if (!("fixedNodeEndID" in element)) {
           break;
@@ -276,7 +263,7 @@ export function actionReducer(
       case "ConnectsFixedNodesBody":
         element = get_mechanical_element_from_id(
           action.elementID,
-          mechanism.mechanicalElements,
+          mechanicalElements,
         );
         if (!("fixedNodesBodyIDs" in element)) {
           break;
@@ -290,7 +277,7 @@ export function actionReducer(
       case "ConnectsMeshedGears":
         element = get_mechanical_element_from_id(
           action.elementID,
-          mechanism.mechanicalElements,
+          mechanicalElements,
         );
         if (!("meshedGearsIDs" in element)) {
           break;
@@ -304,7 +291,7 @@ export function actionReducer(
       case "ConnectsAttachedGears":
         element = get_mechanical_element_from_id(
           action.elementID,
-          mechanism.mechanicalElements,
+          mechanicalElements,
         );
         if (!("attachedGearsIDs" in element)) {
           break;
@@ -317,16 +304,11 @@ export function actionReducer(
             direction: action.direction,
           });
         }
-        console.log(
-          "ConnectsAttachedGears: ",
-          action.disconnect,
-          element.attachedGearsIDs,
-        );
         break;
       case "ConnectsFixedGears":
         element = get_mechanical_element_from_id(
           action.elementID,
-          mechanism.mechanicalElements,
+          mechanicalElements,
         );
         if (!("fixedGearsIDs" in element)) {
           break;
@@ -340,7 +322,7 @@ export function actionReducer(
       case "ConnectsAttachedBelt":
         element = get_mechanical_element_from_id(
           action.elementID,
-          mechanism.mechanicalElements,
+          mechanicalElements,
         );
         if (!("attachedBeltID" in element)) {
           break;
@@ -364,7 +346,7 @@ export function actionReducer(
 
         let position: Point2 | undefined;
         let radius: number | undefined;
-        mechanism.mechanicalElements.forEach((element) => {
+        mechanicalElements.forEach((element) => {
           if ("position" in element) {
             position = positions.get(`${element.id}:pos`);
             if (position !== undefined) element.position = position;
@@ -383,5 +365,12 @@ export function actionReducer(
         break;
     }
   });
-  return mechanism;
+  return {
+    history: mechanism.history,
+    future: mechanism.future,
+    mechanicalElements: mechanicalElements,
+    constraintElements: constraintElements,
+    viewport: mechanism.viewport,
+    metadata: mechanism.metadata,
+  };
 }

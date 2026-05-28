@@ -532,10 +532,7 @@ function connect_node_and_edge(
   edgePart: "start" | "end" | "body",
 ): Action[] {
   let actions: Action[] = [];
-  console.log(node);
   if ("parentBeamID" in node && edgePart === "body") {
-    console.log("parentBeamID Node, edgePart body");
-
     actions.push({
       type: "ConnectsParentBeam",
       disconnect: false,

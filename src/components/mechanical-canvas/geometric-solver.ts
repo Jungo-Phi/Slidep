@@ -238,7 +238,7 @@ export function resolveGeometricConstraints(
   positions: Map<string, Point2>;
   radii: Map<string, number>;
 } {
-  console.log("<! " + actionBundleType + " : " + triggerAction.type + " !>");
+  //console.log("<resolveGeometricConstraints : " + actionBundleType + " : " + triggerAction.type + " !>");
 
   // *
   // Phase A : Création du graphe de dépendances
@@ -575,12 +575,14 @@ export function resolveGeometricConstraints(
   let startLinkIndex: number = links.length - 1;
 
   // TODO : Ordonner la liste
+  /*
   console.log("links : ");
   links.forEach((link) => {
     console.log(link);
   });
   ddl = get_degrees_of_liberty(positions, radii, posMasses, links);
   console.log("DDL : ", ddl);
+  */
 
   // 3. PBD (Position Based Dynamics)
   const iterations = 20; // High iterations to ensure rigidity 150 ???
@@ -696,12 +698,12 @@ export function resolveGeometricConstraints(
     });
 
     if (maxError < epsilon) {
-      console.log("iterations : ", i);
+      //console.log("iterations : ", i);
       break;
     }
   }
 
-  console.log("Error : ", maxError);
+  //console.log("Error : ", maxError);
 
   // Decouple coincidence links
   [...positions.keys()].forEach((combined_keys) => {

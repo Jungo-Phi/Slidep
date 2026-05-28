@@ -5,6 +5,10 @@
 
 import { Action } from "./actions";
 import { MechanicalElement, ConstraintElement } from "./element";
+import {
+  SerializedConstraintElement,
+  SerializedMechanicalElement,
+} from "./serialized";
 
 /**
  * Mechanism metadata
@@ -73,6 +77,15 @@ export interface Mechanism {
  */
 export interface SlidepFile {
   version: string;
-  mechanism: Mechanism;
+  mechanism: SerializedMechanism;
   exportedAt: string;
+}
+
+export interface SerializedMechanism {
+  metadata: MechanismMetadata;
+  viewport: ViewportState;
+  mechanicalElements: SerializedMechanicalElement[];
+  constraintElements: SerializedConstraintElement[];
+  history: SerializedAction[][];
+  future: SerializedAction[][];
 }

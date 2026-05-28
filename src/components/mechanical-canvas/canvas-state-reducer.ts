@@ -69,98 +69,21 @@ export function canvasStateReducer(
               }
             }
           }
-          switch (hoveredPart.type) {
-            case "Void":
-              // Clic sur une zone vide du canvas
-              setCanvasState({
-                type: "SelectingMultiple",
-                startPos: hoveredPart.position,
-                elementIDs: [],
-                hoveredElementIDs: [],
-              });
-              break;
-            case "Node":
-              setCanvasState({ type: "MovingNode", elementID: hoveredPart.id });
-              break;
-            case "Edge":
-              switch (hoveredPart.part) {
-                case "start":
-                  setCanvasState({
-                    type: "MovingEdgeStartPoint",
-                    elementID: hoveredPart.id,
-                  });
-                  break;
-                case "end":
-                  setCanvasState({
-                    type: "MovingEdgeEndPoint",
-                    elementID: hoveredPart.id,
-                  });
-                  break;
-                case "body":
-                  const edge = get_mechanical_element_from_id(
-                    hoveredPart.id,
-                    mechanicalElements,
-                  ) as EdgeElement;
-                  setCanvasState({
-                    type: "MovingEdgeBody",
-                    elementID: hoveredPart.id,
-                    deltaStart: hoveredPart.position.sub(edge.positionStart),
-                  });
-                  break;
-              }
-              break;
-            case "GearTooth":
-              setCanvasState({
-                type: "ChangingGearRadius",
-                elementID: hoveredPart.id,
-              });
-              break;
-            case "BeltBody":
-              const belt = get_mechanical_element_from_id(
-                hoveredPart.id,
-                mechanicalElements,
-              ) as BeltElement;
-              if (hoveredPart.section % 2 === 0) {
-                // even section : straight part
-                setCanvasState({
-                  type: "MovingBeltBody",
-                  elementID: hoveredPart.id,
-                  section: hoveredPart.section,
-                });
-              } else {
-                // odd section : gear part
-                const gearIndex = (hoveredPart.section - 1) / 2;
-                const gearId = belt.attachedGearsIDs[gearIndex].id;
-                actionBundleType = "Connects";
-                actions.push({
-                  type: "ConnectsAttachedBelt",
-                  disconnect: true,
-                  elementID: gearId,
-                  connectID: belt.id,
-                });
-                actions.push({
-                  type: "ConnectsAttachedGears",
-                  disconnect: true,
-                  elementID: belt.id,
-                  connectID: gearId,
-                  index: gearIndex,
-                  direction: belt.attachedGearsIDs[gearIndex].direction,
-                });
-                setCanvasState({
-                  type: "MovingBeltBody",
-                  elementID: hoveredPart.id,
-                  section: hoveredPart.section - 1,
-                });
-              }
-              break;
-            case "Constraint":
-              setCanvasState({
-                type: "MovingConstraint",
-                constraintID: hoveredPart.id,
-                hasMoved: false,
-              });
-              break;
+          if (hoveredPart.type === "Void") {
+            // Clic sur une zone vide du canvas
+            setCanvasState({
+              type: "SelectingMultiple",
+              startPos: hoveredPart.position,
+              elementIDs: [],
+              hoveredElementIDs: [],
+            });
+            break;
           }
+          setCanvasState({
+            type: "SelectedElement",
+            elementID: hoveredPart.id,
+            isMouseDown: true,
+          });
           break;
         case "SelectedMultiple":
           // Clic sur une zone vide du canvas
@@ -196,6 +119,7 @@ export function canvasStateReducer(
                   setCanvasState({
                     type: "SelectedElement",
                     elementID: element.id,
+                    isMouseDown: false,
                   });
                   break;
                 }
@@ -1045,6 +969,92 @@ export function canvasStateReducer(
 
     case "MouseMove":
       switch (state.type) {
+        case "SelectedElement":
+          if (!state.isMouseDown) break;
+          switch (hoveredPart.type) {
+            case "Node":
+              setCanvasState({ type: "MovingNode", elementID: hoveredPart.id });
+              break;
+            case "Edge":
+              switch (hoveredPart.part) {
+                case "start":
+                  setCanvasState({
+                    type: "MovingEdgeStartPoint",
+                    elementID: hoveredPart.id,
+                  });
+                  break;
+                case "end":
+                  setCanvasState({
+                    type: "MovingEdgeEndPoint",
+                    elementID: hoveredPart.id,
+                  });
+                  break;
+                case "body":
+                  const edge = get_mechanical_element_from_id(
+                    hoveredPart.id,
+                    mechanicalElements,
+                  ) as EdgeElement;
+                  setCanvasState({
+                    type: "MovingEdgeBody",
+                    elementID: hoveredPart.id,
+                    deltaStart: hoveredPart.position.sub(edge.positionStart),
+                  });
+                  break;
+              }
+              break;
+            case "GearTooth":
+              setCanvasState({
+                type: "ChangingGearRadius",
+                elementID: hoveredPart.id,
+              });
+              break;
+            case "BeltBody":
+              const belt = get_mechanical_element_from_id(
+                hoveredPart.id,
+                mechanicalElements,
+              ) as BeltElement;
+              if (hoveredPart.section % 2 === 0) {
+                // even section : straight part
+                setCanvasState({
+                  type: "MovingBeltBody",
+                  elementID: hoveredPart.id,
+                  section: hoveredPart.section,
+                });
+              } else {
+                // odd section : gear part
+                const gearIndex = (hoveredPart.section - 1) / 2;
+                const gearId = belt.attachedGearsIDs[gearIndex].id;
+                actionBundleType = "Connects";
+                actions.push({
+                  type: "ConnectsAttachedBelt",
+                  disconnect: true,
+                  elementID: gearId,
+                  connectID: belt.id,
+                });
+                actions.push({
+                  type: "ConnectsAttachedGears",
+                  disconnect: true,
+                  elementID: belt.id,
+                  connectID: gearId,
+                  index: gearIndex,
+                  direction: belt.attachedGearsIDs[gearIndex].direction,
+                });
+                setCanvasState({
+                  type: "MovingBeltBody",
+                  elementID: hoveredPart.id,
+                  section: hoveredPart.section - 1,
+                });
+              }
+              break;
+            case "Constraint":
+              setCanvasState({
+                type: "MovingConstraint",
+                constraintID: hoveredPart.id,
+                hasMoved: false,
+              });
+              break;
+          }
+          break;
         case "MovingNode":
           actionBundleType = "MoveElement";
           actions.push({
@@ -1146,6 +1156,9 @@ export function canvasStateReducer(
 
     case "MouseLeftButtonUp":
       switch (state.type) {
+        case "SelectedElement":
+          state.isMouseDown = false;
+          break;
         case "MovingNode":
         case "MovingEdgeStartPoint":
         case "MovingEdgeEndPoint":
@@ -1211,6 +1224,7 @@ export function canvasStateReducer(
           setCanvasState({
             type: "SelectedElement",
             elementID: state.elementID,
+            isMouseDown: false,
           });
           break;
         case "MovingBeltBody":
@@ -1237,6 +1251,7 @@ export function canvasStateReducer(
           setCanvasState({
             type: "SelectedElement",
             elementID: state.elementID,
+            isMouseDown: false,
           });
           break;
         case "ChangingGearRadius":
@@ -1274,6 +1289,7 @@ export function canvasStateReducer(
           setCanvasState({
             type: "SelectedElement",
             elementID: state.elementID,
+            isMouseDown: false,
           });
           break;
         case "SelectingMultiple":
@@ -1289,6 +1305,7 @@ export function canvasStateReducer(
               setCanvasState({
                 type: "SelectedElement",
                 elementID: element.id,
+                isMouseDown: false,
               });
               break;
             }
@@ -1323,6 +1340,7 @@ export function canvasStateReducer(
             setCanvasState({
               type: "SelectedElement",
               elementID: state.constraintID,
+              isMouseDown: false,
             });
           } else if (state.constraintID) {
             const constraint = get_constraint_element_from_id(
@@ -1339,6 +1357,7 @@ export function canvasStateReducer(
               setCanvasState({
                 type: "SelectedElement",
                 elementID: state.constraintID,
+                isMouseDown: false,
               });
             }
           }
