@@ -29,7 +29,7 @@ const EmptyContainer: React.FC = ({}) => {
         flexDirection: "column",
       }}
     >
-      No elements
+      Pas d'éléments
     </Typography>
   );
 };
@@ -203,7 +203,14 @@ export const ConnectionsContainer: React.FC<ConnectionsContainerProps> = ({
           bgcolor: "#0001",
         }}
         border={1}
-        borderRadius={3}
+        borderRadius={
+          containerType === "ConnectsParentBeam" ||
+          containerType === "ConnectsFixedNodeStart" ||
+          containerType === "ConnectsFixedNodeEnd" ||
+          containerType === "ConnectsAttachedBelt"
+            ? 3
+            : 2.4
+        }
         borderColor={"#00000000"}
         paddingLeft={0.2}
         paddingRight={
@@ -335,7 +342,7 @@ export const ConnectionsContainer: React.FC<ConnectionsContainerProps> = ({
                               my: -1,
                             }}
                           >
-                            <DragIndicatorIcon sx={{ fontSize: 24 }} />
+                            <DragIndicatorIcon />
                           </Box>
                           <Connection
                             element={element}

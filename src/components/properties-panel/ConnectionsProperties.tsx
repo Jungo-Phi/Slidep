@@ -43,7 +43,7 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
             display: "flex",
             gap: 2,
             justifyContent: "space-between",
-            alignItems: "center",
+            alignItems: "start",
             flexDirection: "column",
           }}
         >
@@ -66,7 +66,7 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
             display: "flex",
             gap: 2,
             justifyContent: "space-between",
-            alignItems: "center",
+            alignItems: "start",
             flexDirection: "column",
           }}
         >
@@ -99,7 +99,7 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
             display: "flex",
             gap: 2,
             justifyContent: "space-between",
-            alignItems: "center",
+            alignItems: "start",
             flexDirection: "column",
           }}
         >
@@ -133,7 +133,7 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
             display: "flex",
             gap: 2,
             justifyContent: "space-between",
-            alignItems: "center",
+            alignItems: "start",
             flexDirection: "column",
           }}
         >
@@ -156,7 +156,7 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
             display: "flex",
             gap: 2,
             justifyContent: "space-between",
-            alignItems: "center",
+            alignItems: "start",
             flexDirection: "column",
           }}
         >
@@ -219,7 +219,7 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
             display: "flex",
             gap: 2,
             justifyContent: "space-between",
-            alignItems: "center",
+            alignItems: "start",
             flexDirection: "column",
           }}
         >
@@ -263,7 +263,7 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
             display: "flex",
             gap: 2,
             justifyContent: "space-between",
-            alignItems: "center",
+            alignItems: "start",
             flexDirection: "column",
           }}
         >
@@ -296,7 +296,7 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
             display: "flex",
             gap: 2,
             justifyContent: "space-between",
-            alignItems: "center",
+            alignItems: "start",
             flexDirection: "column",
           }}
         >

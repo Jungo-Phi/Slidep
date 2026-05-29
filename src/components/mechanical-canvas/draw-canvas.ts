@@ -200,11 +200,6 @@ export function drawMechanicalCanvas(
               break;
           }
           ctx.restore();
-          draw_dimention_text(
-            ctx,
-            element.position.sub(new Point2(0, 20)),
-            element.id.toString().padStart(3, "0"),
-          ); // DEBUG
           break;
         case "beam":
         case "spring":
@@ -237,13 +232,6 @@ export function drawMechanicalCanvas(
             draw_hover_edge_end(ctx);
           }
           ctx.restore();
-          draw_dimention_text(
-            ctx,
-            element.positionEnd
-              .lerp(element.positionStart, 0.5)
-              .sub(new Point2(0, 15)),
-            element.id.toString().padStart(3, "0"),
-          ); // DEBUG
           break;
         case "belt":
           // console.log("attachedGearsIDs: ", element.attachedGearsIDs);
@@ -605,7 +593,7 @@ export function drawMechanicalCanvas(
         draw_dimention_text(
           ctx,
           nodeD.position.lerp(hoveredPart.position, 0.5),
-          nodeD.position.distance_to(hoveredPart.position).toFixed(1),
+          nodeD.position.distance_to(hoveredPart.position),
         );
       }
 

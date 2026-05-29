@@ -26,8 +26,8 @@ export const COLORS = {
 
   // Transparency
   ICON_TRANSPARENCY: "D0", // 80% opacity
-  GEAR_TRANSPARENCY: "80", // 50% opacity
-  HOVER: "#00000020", // 12.5% opacity
+  HALF_TRANSPARENCY: "80", // 50% opacity
+  HOVER: "#00000020", //§ 12.5% opacity
 } as const;
 
 export const STROKE_WIDTHS = {
@@ -44,6 +44,7 @@ export const LINE_STYLES = {
 export const HIT_TOLERANCE = {
   EDGE: 10,
   NODE: 14,
+  CONSTRAINT: 20,
 } as const;
 
 export const INTERACTION_SPECS = {
@@ -134,9 +135,9 @@ export const DRAWING_ORDER: UnionElement["type"][] = [
   "beam",
   "damper",
   "spring",
-  "join",
   "gear",
   "belt",
+  "join",
   "slidep",
   "slider",
   "pivot",

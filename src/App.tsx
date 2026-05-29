@@ -49,7 +49,7 @@ import {
   getPositions,
   resolveGeometricConstraints,
 } from "./components/mechanical-canvas/geometric-solver";
-import { cloneMechanism, serializeMechanism } from "./utils/serialization";
+import { cloneMechanism } from "./utils/serialization";
 //import { SimulationControls } from './components/simulation-controls';
 
 /**

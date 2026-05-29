@@ -15,6 +15,7 @@ import { COLORS } from "../../../constants/rendering-specs";
 interface ElementDisplayProps {
   element: UnionElement;
   size: "small" | "medium" | "large";
+  bold: boolean;
   setHoveredPart: (hoveredPart: HoveredPart) => void;
   setCanvasState: (state: CanvasState) => void;
   updateMechanism: (
@@ -26,13 +27,17 @@ interface ElementDisplayProps {
 const ElementDisplayComponent: React.FC<ElementDisplayProps> = ({
   element,
   size,
+  bold,
   setHoveredPart,
   setCanvasState,
 }) => {
-  const icon = get_element_icon(element.type);
+  const icon = get_element_icon(
+    element === undefined ? undefined : element.type,
+  );
   const element_name = shown_element_name(element);
 
   const handleMouseEnter = () => {
+    if (element === undefined) return;
     let hoveredPart: HoveredPart;
     if ("radius" in element) {
       hoveredPart = {
@@ -64,6 +69,7 @@ const ElementDisplayComponent: React.FC<ElementDisplayProps> = ({
 
   const handleSelect = (e: React.MouseEvent) => {
     e.stopPropagation();
+    if (element === undefined) return;
     setCanvasState({
       type: "SelectedElement",
       elementID: element.id,
@@ -102,7 +108,6 @@ const ElementDisplayComponent: React.FC<ElementDisplayProps> = ({
         <Box
           component="img"
           src={icon}
-          alt={element.type}
           draggable={false}
           sx={{
             width: size === "small" ? 24 : size === "medium" ? 32 : 40,
@@ -113,8 +118,9 @@ const ElementDisplayComponent: React.FC<ElementDisplayProps> = ({
           variant={
             size === "small" ? "body2" : size === "medium" ? "body1" : "h5"
           }
-          fontWeight={500}
+          fontWeight={bold ? 800 : 500}
           color={COLORS.STROKE}
+          sx={{ letterSpacing: bold ? "-0.02em" : "normal" }}
         >
           {element_name}
         </Typography>

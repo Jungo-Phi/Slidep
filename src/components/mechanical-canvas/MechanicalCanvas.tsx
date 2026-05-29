@@ -83,18 +83,6 @@ export const MechanicalCanvas: React.FC<MechanicalCanvasProps> = ({
       mechanism.mechanicalElements,
       mechanism.constraintElements,
     );
-    /*
-    // Dessine un point à hovered
-    ctx.fillStyle = "RED";
-    ctx.beginPath();
-    ctx.arc(hoveredPart.position.x, hoveredPart.position.y, 3, 0, 2 * Math.PI);
-    ctx.fill();
-    // Dessine un point à mousePosition
-    ctx.fillStyle = "GREEN";
-    ctx.beginPath();
-    ctx.arc(mousePosition.x, mousePosition.y, 2, 0, 2 * Math.PI);
-    ctx.fill();
-    */
 
     // Dessine les actions récentes (DEBUG)
     let actions = mechanism.history.flat();
@@ -407,18 +395,18 @@ export const MechanicalCanvas: React.FC<MechanicalCanvasProps> = ({
       {canvasState.type === "EditingConstraint" && (
         <ConstraintEditor
           constraint={get_constraint_element_from_id(
-            canvasState.constraintID,
+            canvasState.elementID,
             mechanism.constraintElements,
           )}
           position={
             get_constraint_element_from_id(
-              canvasState.constraintID,
+              canvasState.elementID,
               mechanism.constraintElements,
             ).position
           }
           onCommit={(newValue) => {
             const constraint = get_constraint_element_from_id(
-              canvasState.constraintID,
+              canvasState.elementID,
               mechanism.constraintElements,
             );
             if (!("value" in constraint)) {
@@ -459,9 +447,19 @@ export const MechanicalCanvas: React.FC<MechanicalCanvasProps> = ({
                 "ChangeDimension",
               );
             }
-            setCanvasState({ type: "Selecting" });
+            setCanvasState({
+              type: "SelectedElement",
+              elementID: constraint.id,
+              isMouseDown: false,
+            });
           }}
-          onCancel={() => setCanvasState({ type: "Selecting" })}
+          onCancel={(constraint) =>
+            setCanvasState({
+              type: "SelectedElement",
+              elementID: constraint.id,
+              isMouseDown: false,
+            })
+          }
         />
       )}
     </Box>

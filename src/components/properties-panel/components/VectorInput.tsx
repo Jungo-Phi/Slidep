@@ -33,9 +33,6 @@ export const VectorInput: React.FC<VectorInputProps> = ({
             label="X"
             value={x}
             onChange={(newX) => setPos(new Point2(newX, y))}
-            onIncrement={() => setPos(new Point2(x + 1, y))}
-            onDecrement={() => setPos(new Point2(x - 1, y))}
-            width={90}
           />
         </Box>
 
@@ -44,9 +41,6 @@ export const VectorInput: React.FC<VectorInputProps> = ({
             label="Y"
             value={y}
             onChange={(newY) => setPos(new Point2(x, newY))}
-            onIncrement={() => setPos(new Point2(x, y + 1))}
-            onDecrement={() => setPos(new Point2(x, y - 1))}
-            width={90}
           />
         </Box>
       </Box>

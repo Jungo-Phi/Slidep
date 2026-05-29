@@ -6,7 +6,7 @@ import { COLORS, STROKE_WIDTHS, DIM } from "../../constants/rendering-specs";
 import { Point2 as Point2 } from "../../types/point2";
 import { get_element_icon } from "../element-palette/elementIcon";
 import { UnionElement } from "../../types";
-import { valueToRatioParts } from "./ConstraintEditor";
+import { valueToRatioParts } from "../../utils/string-math";
 
 const TAU = 2 * Math.PI;
 
@@ -501,7 +501,7 @@ export function draw_gear(ctx: CanvasRenderingContext2D, radius: number) {
     ctx.moveTo(Math.cos(angle) * r1, Math.sin(angle) * r1);
     ctx.arc(Math.cos(angle) * r1, Math.sin(angle) * r1, r2, 0, TAU);
   }
-  ctx.fillStyle = COLORS.FILL_BODY + COLORS.GEAR_TRANSPARENCY;
+  ctx.fillStyle = COLORS.FILL_BODY + COLORS.HALF_TRANSPARENCY;
   ctx.fill("evenodd");
 
   ctx.beginPath();
@@ -613,19 +613,23 @@ export function draw_dimention(
 export function draw_dimention_text(
   ctx: CanvasRenderingContext2D,
   position: Point2,
-  text: string,
+  value: number,
+  extension: string = "",
 ) {
+  const text = (Math.round(value * 10) / 10).toString() + extension;
   ctx.font = "16px Arial";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   const metrics = ctx.measureText(text);
   ctx.fillStyle = COLORS.BACKGROUND;
-  ctx.fillRect(
-    position.x - metrics.width / 2 - 3,
-    position.y - 10,
-    metrics.width + 6,
-    18,
+  ctx.roundRect(
+    position.x - metrics.width / 2 - 10 / 2,
+    position.y - 24 / 2 - 1,
+    metrics.width + 10,
+    24,
+    5,
   );
+  ctx.fill();
   ctx.fillStyle = COLORS.STROKE;
   ctx.fillText(text, position.x, position.y);
 }
@@ -665,7 +669,7 @@ export function draw_dimention_parallel(
   ctx.stroke();
 
   draw_dimention(ctx, start.add(np.mul(offset)), end.add(np.mul(offset)));
-  draw_dimention_text(ctx, position, value.toString());
+  draw_dimention_text(ctx, position, value);
 }
 
 export function draw_dimention_to_segment(
@@ -711,7 +715,7 @@ export function draw_dimention_to_segment(
     point.add(np.mul(offset)),
     oppositePoint.add(np.mul(offset)),
   );
-  draw_dimention_text(ctx, position, value.toString());
+  draw_dimention_text(ctx, position, value);
 }
 
 export function draw_dimention_angle(
@@ -767,7 +771,7 @@ export function draw_dimention_angle(
   // TODO : add arc to position
   // TODO : add straight lines
 
-  draw_dimention_text(ctx, position, value.toString() + " °");
+  draw_dimention_text(ctx, position, value, " °");
 }
 
 export function draw_dimention_radius(
@@ -801,19 +805,25 @@ export function draw_dimention_radius(
 
   ctx.restore();
 
-  draw_dimention_text(ctx, position, value.toString());
+  draw_dimention_text(ctx, position, value);
 }
 
 export function draw_gear_ratio(ctx: CanvasRenderingContext2D, value: number) {
   ctx.font = "16px Arial";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  let text = valueToRatioParts(value).join(":");
+  let text = valueToRatioParts(value).join(" : ");
   const metrics = ctx.measureText(text);
-  ctx.strokeStyle = "grey";
+  ctx.strokeStyle = COLORS.STROKE;
   ctx.fillStyle = COLORS.BACKGROUND + COLORS.ICON_TRANSPARENCY;
   ctx.beginPath();
-  ctx.roundRect(-metrics.width / 2 - 4, -20 / 2, metrics.width + 8, 20, 10);
+  ctx.roundRect(
+    -metrics.width / 2 - 14 / 2,
+    -28 / 2,
+    metrics.width + 14,
+    28,
+    28 / 2,
+  );
   ctx.stroke();
   ctx.fill();
   ctx.fillStyle = COLORS.STROKE;

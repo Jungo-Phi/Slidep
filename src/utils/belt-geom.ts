@@ -1,30 +1,6 @@
 import { get_mechanical_element_from_id } from "../components/mechanical-canvas/connect-actions";
 import { BeltElement, GearElement, MechanicalElement, Point2 } from "../types";
 
-// TODO : delete this useless function
-export function get_meshed_gears(
-  attachedGears: { gear: GearElement; direction: boolean }[],
-): {
-  center: Point2;
-  radius: number;
-  direction: boolean;
-}[] {
-  let meshedGears: {
-    center: Point2;
-    radius: number;
-    direction: boolean;
-  }[] = [];
-  for (let i = 0; i < attachedGears.length; i++) {
-    const attachedGear = attachedGears[i];
-    meshedGears.push({
-      center: attachedGear.gear.position,
-      radius: attachedGear.gear.radius,
-      direction: attachedGear.direction,
-    });
-  }
-  return meshedGears;
-}
-
 export function get_gear_angles(
   positionStart: Point2,
   positionEnd: Point2,

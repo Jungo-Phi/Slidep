@@ -1129,38 +1129,3 @@ function applyGearMeshingConstraint(
     targetDist,
   );
 }
-
-function applyBeltTangencyConstraint(
-  positions: Map<string, Point2>,
-  posMasses: Map<string, number>,
-  belt: BeltElement,
-  mechanicalElements: MechanicalElement[],
-  radii: Map<string, number>,
-) {
-  const firstGear = mechanicalElements.find(
-    (e) => e.id === belt.attachedGearsIDs[0].id,
-  ) as GearElement;
-  const lastGear = mechanicalElements.find(
-    (e) => e.id === belt.attachedGearsIDs[belt.attachedGearsIDs.length - 1].id,
-  ) as GearElement;
-  if (!firstGear || !lastGear) return;
-
-  const p1 = positions.get(`${firstGear.id}:pos`) || firstGear.position;
-  const p2 = positions.get(`${lastGear.id}:pos`) || lastGear.position;
-  const r1 = radii.get(firstGear.id) ?? firstGear.radius;
-  const r2 = radii.get(lastGear.id) ?? lastGear.radius;
-
-  const link = Point2.circles_link(
-    p1,
-    r1,
-    belt.attachedGearsIDs[0].direction,
-    p2,
-    r2,
-    belt.attachedGearsIDs[belt.attachedGearsIDs.length - 1].direction,
-  );
-
-  if (posMasses.get(`${belt.id}:start`) !== 0)
-    positions.set(`${belt.id}:start`, p1.add(link.start));
-  if (posMasses.get(`${belt.id}:end`) !== 0)
-    positions.set(`${belt.id}:end`, p2.add(link.end));
-}

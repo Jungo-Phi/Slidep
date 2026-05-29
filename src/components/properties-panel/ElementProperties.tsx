@@ -3,30 +3,27 @@
  * Displays properties for element elements
  */
 
-import { Box, IconButton, Divider, Typography } from "@mui/material";
+import { Box, IconButton, Divider } from "@mui/material";
 import DeleteIcon from "@mui/icons-material/Delete";
-import {
-  MechanicalElement,
-  shown_element_name,
-  UnionElement,
-} from "../../types/element";
+import { MechanicalElement } from "../../types/element";
 import VectorInput from "./components/VectorInput";
 import GroundSwitch from "./components/GroundSwitch";
 import BeltTensionSwitch from "./components/BeltTensionSwitch";
-import LockableNumberInput from "./components/LockableNumberInput";
-import { CanvasState, Action, Mechanism, ActionBundleType } from "../../types";
-import { get_element_icon } from "../element-palette/elementIcon";
-import ConnectionsProperties from "./ConnectionsProperties";
 import {
-  delete_element,
-  get_mechanical_element_from_id,
-} from "./../mechanical-canvas/connect-actions";
+  CanvasState,
+  Action,
+  Mechanism,
+  ActionBundleType,
+  ZERO,
+} from "../../types";
+import ConnectionsProperties from "./ConnectionsProperties";
+import { delete_element } from "./../mechanical-canvas/connect-actions";
 import { HoveredPart } from "../../types/hovered-part";
 import NumberInput from "./components/NumberInput";
 import ElementDisplay from "./components/ElementDisplay";
 
 interface ElementPropertiesProps {
-  element: UnionElement;
+  element: MechanicalElement;
   setHoveredPart: (hoveredPart: HoveredPart) => void;
   setCanvasState: (state: CanvasState) => void;
   updateMechanism: (
@@ -43,6 +40,36 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
   updateMechanism,
   mechanism,
 }) => {
+  const handleMouseEnter = () => {
+    let hoveredPart: HoveredPart;
+    if ("radius" in element) {
+      hoveredPart = {
+        type: "GearTooth",
+        position: element.position,
+        id: element.id,
+      };
+    } else if ("position" in element) {
+      hoveredPart = {
+        type: "Node",
+        position: element.position,
+        id: element.id,
+        beamBodyHover: false,
+      };
+    } else {
+      hoveredPart = {
+        type: "Edge",
+        position: element.positionStart.lerp(element.positionEnd, 0.5),
+        id: element.id,
+        part: "body",
+      };
+    }
+    setHoveredPart(hoveredPart);
+  };
+
+  const handleMouseLeave = () => {
+    setHoveredPart({ type: "Void", position: ZERO });
+  };
+
   return (
     <Box>
       <Box
@@ -56,6 +83,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
         <ElementDisplay
           element={element}
           size="medium"
+          bold={false}
           setHoveredPart={setHoveredPart}
           setCanvasState={setCanvasState}
           updateMechanism={updateMechanism}
@@ -69,129 +97,14 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
             )
           }
           title="Supprimer"
+          onMouseEnter={handleMouseEnter}
+          onMouseLeave={handleMouseLeave}
         >
           <DeleteIcon />
         </IconButton>
       </Box>
 
       <Divider sx={{ my: 2 }} />
-
-      {"value" in element && (
-        <Box
-          sx={{
-            display: "flex",
-            direction: "row",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 4,
-          }}
-        >
-          <NumberInput
-            value={element.value}
-            onChange={(value: number) =>
-              updateMechanism(
-                [
-                  {
-                    type: "ChangeDimensionEdgeValue",
-                    id: element.id,
-                    newValue: value,
-                    oldValue: element.value,
-                  },
-                ],
-                "ChangeDimension",
-              )
-            }
-            onIncrement={() =>
-              updateMechanism(
-                [
-                  {
-                    type: "ChangeDimensionEdgeValue",
-                    id: element.id,
-                    newValue: element.value + 1,
-                    oldValue: element.value,
-                  },
-                ],
-                "ChangeDimension",
-              )
-            }
-            onDecrement={() =>
-              updateMechanism(
-                [
-                  {
-                    type: "ChangeDimensionEdgeValue",
-                    id: element.id,
-                    newValue: element.value - 1,
-                    oldValue: element.value,
-                  },
-                ],
-                "ChangeDimension",
-              )
-            }
-            label="Value" //"Value"
-          />
-        </Box>
-      )}
-
-      {"edgeID" in element && (
-        <Box
-          sx={{
-            display: "flex",
-            direction: "row",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 4,
-          }}
-        >
-          <Divider sx={{ my: 2 }} />
-          <Box
-            sx={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              pr: 0.5,
-            }}
-            border={1}
-            borderColor={"#00000025"}
-            borderRadius={2}
-          >
-            <IconButton title="Select" size="small" sx={{ my: -2 }}>
-              <Box
-                component="img"
-                src={get_element_icon(
-                  get_mechanical_element_from_id(
-                    element.edgeID,
-                    mechanism.mechanicalElements,
-                  ).type,
-                )}
-                alt={
-                  get_mechanical_element_from_id(
-                    element.edgeID,
-                    mechanism.mechanicalElements,
-                  ).type
-                }
-                sx={{
-                  width: 24,
-                  height: 24,
-                  display: "block",
-                  mx: -0.25,
-                  my: -0.75,
-                }}
-              />
-            </IconButton>
-
-            <Box>
-              <Typography variant={"body2"} fontWeight={500}>
-                {shown_element_name(
-                  get_mechanical_element_from_id(
-                    element.edgeID,
-                    mechanism.mechanicalElements,
-                  ),
-                )}
-              </Typography>
-            </Box>
-          </Box>
-        </Box>
-      )}
 
       {"position" in element && "isGrounded" in element && (
         <Box
@@ -220,7 +133,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                 "MoveElement",
               )
             }
-            label="" //"Position"
+            label=""
           />
           <GroundSwitch
             grounded={element.isGrounded}
@@ -293,7 +206,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
               mt: 1,
             }}
           >
-            <LockableNumberInput
+            <NumberInput
               label="Longueur"
               value={element.positionStart.distance_to(element.positionEnd)}
               onChange={(length) =>
@@ -311,44 +224,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                   "ChangeDimension",
                 )
               }
-              onIncrement={() =>
-                updateMechanism(
-                  [
-                    {
-                      type: "ChangeEdgeLength",
-                      id: element.id,
-                      newLength:
-                        element.positionStart.distance_to(element.positionEnd) +
-                        1,
-                      oldLength: element.positionStart.distance_to(
-                        element.positionEnd,
-                      ),
-                    },
-                  ],
-                  "ChangeDimension",
-                )
-              }
-              onDecrement={() =>
-                updateMechanism(
-                  [
-                    {
-                      type: "ChangeEdgeLength",
-                      id: element.id,
-                      newLength:
-                        element.positionStart.distance_to(element.positionEnd) -
-                        1,
-                      oldLength: element.positionStart.distance_to(
-                        element.positionEnd,
-                      ),
-                    },
-                  ],
-                  "ChangeDimension",
-                )
-              }
-              lockable={true}
-              locked={false} // TODO : connect to a DimensionEdge (if not belt)
-              onToggleLock={() => {}}
-              width={120}
+              large={true}
             />
             {element.type === "belt" && (
               <BeltTensionSwitch
@@ -391,7 +267,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                 mt: 2,
               }}
             >
-              <LockableNumberInput
+              <NumberInput
                 label="Mass (kg)"
                 value={element.mass}
                 onChange={(mass) =>
@@ -406,22 +282,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                     "ChangeConstant",
                   )
                 }
-                onIncrement={() =>
-                  updateMechanism(
-                    [{ type: "ChangeMass", id: element.id, delta: 1 }],
-                    "ChangeConstant",
-                  )
-                }
-                onDecrement={() =>
-                  updateMechanism(
-                    [{ type: "ChangeMass", id: element.id, delta: -1 }],
-                    "ChangeConstant",
-                  )
-                }
-                lockable={false}
-                locked={false}
-                onToggleLock={() => {}}
-                width={120}
+                large={true}
               />
             </Box>
           )}
@@ -435,7 +296,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                 mt: 2,
               }}
             >
-              <LockableNumberInput
+              <NumberInput
                 label="Radius (kg)"
                 value={element.radius}
                 onChange={(radius) =>
@@ -451,36 +312,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                     "MoveElement",
                   )
                 }
-                onIncrement={() =>
-                  updateMechanism(
-                    [
-                      {
-                        type: "ChangeGearRadius",
-                        id: element.id,
-                        newRadius: element.radius + 1,
-                        oldRadius: element.radius,
-                      },
-                    ],
-                    "MoveElement",
-                  )
-                }
-                onDecrement={() =>
-                  updateMechanism(
-                    [
-                      {
-                        type: "ChangeGearRadius",
-                        id: element.id,
-                        newRadius: element.radius - 1,
-                        oldRadius: element.radius,
-                      },
-                    ],
-                    "MoveElement",
-                  )
-                }
-                lockable={false}
-                locked={false}
-                onToggleLock={() => {}}
-                width={120}
+                large={true}
               />
             </Box>
           )}
@@ -494,7 +326,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                 mt: 2,
               }}
             >
-              <LockableNumberInput
+              <NumberInput
                 label="Stifness (N/m)"
                 value={element.stiffness}
                 onChange={(stiffness) =>
@@ -509,22 +341,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                     "ChangeConstant",
                   )
                 }
-                onIncrement={() =>
-                  updateMechanism(
-                    [{ type: "ChangeStiffness", id: element.id, delta: 1 }],
-                    "ChangeConstant",
-                  )
-                }
-                onDecrement={() =>
-                  updateMechanism(
-                    [{ type: "ChangeStiffness", id: element.id, delta: -1 }],
-                    "ChangeConstant",
-                  )
-                }
-                lockable={false}
-                locked={false}
-                onToggleLock={() => {}}
-                width={120}
+                large={true}
               />
             </Box>
           )}
@@ -538,7 +355,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                 mt: 2,
               }}
             >
-              <LockableNumberInput
+              <NumberInput
                 label="Damping (N·s/m)"
                 value={element.damping}
                 onChange={(damping) =>
@@ -553,22 +370,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                     "ChangeConstant",
                   )
                 }
-                onIncrement={() =>
-                  updateMechanism(
-                    [{ type: "ChangeDamping", id: element.id, delta: 1 }],
-                    "ChangeConstant",
-                  )
-                }
-                onDecrement={() =>
-                  updateMechanism(
-                    [{ type: "ChangeDamping", id: element.id, delta: -1 }],
-                    "ChangeConstant",
-                  )
-                }
-                lockable={false}
-                locked={false}
-                onToggleLock={() => {}}
-                width={120}
+                large={true}
               />
             </Box>
           )}

@@ -114,5 +114,5 @@ export type CanvasState =
   | { type: "EqualConstraintGear"; startGearID: ID }
   | { type: "GearRatioConstraintStart" }
   | { type: "GearRatioConstraintGear"; startGearID: ID }
-  | { type: "MovingConstraint"; constraintID: ID; hasMoved: boolean } // hasMoved is used to know if a mouse button release means we want to edit the constraint
-  | { type: "EditingConstraint"; constraintID: ID; value: number };
+  | { type: "MovingConstraint"; constraintID: ID }
+  | { type: "EditingConstraint"; elementID: ID; value: number };

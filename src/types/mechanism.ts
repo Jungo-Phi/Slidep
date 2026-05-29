@@ -6,6 +6,7 @@
 import { Action } from "./actions";
 import { MechanicalElement, ConstraintElement } from "./element";
 import {
+  SerializedAction,
   SerializedConstraintElement,
   SerializedMechanicalElement,
 } from "./serialized";

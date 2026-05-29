@@ -15,6 +15,7 @@ import normalIconUrl from "../../assets/icons/palette/normal.svg";
 import parallelIconUrl from "../../assets/icons/palette/parallel.svg";
 import equalIconUrl from "../../assets/icons/palette/equal.svg";
 import ratioIconUrl from "../../assets/icons/palette/ratio.svg";
+import logoIconUrl from "../../assets/icons/palette/logo.svg";
 
 import { ElementType } from "../../types";
 
@@ -51,7 +52,7 @@ export const preload_element_icons = (): void => {
   });
 };
 
-export const get_element_icon = (type: ElementType): string => {
+export const get_element_icon = (type: ElementType | undefined): string => {
   switch (type) {
     case "pivot":
       return pivotIconUrl;
@@ -94,4 +95,5 @@ export const get_element_icon = (type: ElementType): string => {
     case "gear-ratio":
       return ratioIconUrl;
   }
+  return logoIconUrl;
 };

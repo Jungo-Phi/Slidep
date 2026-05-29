@@ -36,8 +36,9 @@
 - Régler de bordel de "connect-actions"
 - "Undo" connection (Join) ne s'est pas appliqué en bidirectionnel !
 - Change NumberInput instant update to -> delayed update
-- Change Focused element on Undo
-- Unified Property pannel look
+- Change Focus on Undo
+- Unified Property pannel look with dimensions
+- Change edge length ne fonctionne pas
 
 ## Features UX secondaires
 
@@ -55,10 +56,10 @@
 - ~Plus beau logo~
 - ~Visuel des pivot/slider/slidep connecté = remplit~
 - Arrondir le chiffre affiché des dimmensions
+- ~Reskin de conection container~
 - Rendre les connections drag & drop plus propres
-- Hover Delete button / Element name
+- ~Hover Delete button / Element name~
 - Hover en couleur ?
-- Hover edgeEnd fait aussi le body ?
 - Limiter la longueur des edges au placement et déplacement
-- Limiter la position des dimmentions pour la lisibilité
+- Rejeper la position des dimensions des éléments pour la lisibilité
 - Déplacer les dimentions avec les élements associés

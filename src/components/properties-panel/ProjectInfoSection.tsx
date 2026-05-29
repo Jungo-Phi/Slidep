@@ -92,7 +92,7 @@ export const ProjectInfoSection: React.FC<ProjectInfoSectionProps> = ({
       <Box sx={{ mb: 1.5 }}>
         <TextField
           fullWidth
-          label="Auteur"
+          label="Auteur·rice·x"
           value={projectInfo.author}
           onChange={(e) => handleInfoChange("author", e.target.value)}
           size="small"

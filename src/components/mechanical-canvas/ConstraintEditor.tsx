@@ -3,27 +3,13 @@ import { TextField, Typography, Box } from "@mui/material";
 import { ConstraintElement } from "../../types/element";
 import { Point2 } from "../../types/point2";
 import { COLORS } from "../../constants/rendering-specs";
+import { valueToRatioParts } from "../../utils/string-math";
 
 interface ConstraintEditorProps {
   constraint: ConstraintElement;
   position: Point2;
   onCommit: (newValue: number) => void;
-  onCancel: () => void;
-}
-
-/**
- * Helper to convert a decimal value to a ratio string (e.g., 0.5 -> "1:2")
- */
-export function valueToRatioParts(value: number): [string, string] {
-  if (value === 0) return ["0", "1"];
-  const tolerance = 1.0e-6;
-  for (let d = 1; d <= 20; d++) {
-    const n = Math.round(value * d);
-    if (Math.abs(value - n / d) < tolerance) {
-      return [n.toString(), d.toString()];
-    }
-  }
-  return [value.toFixed(1), "1"];
+  onCancel: (constraint: ConstraintElement) => void;
 }
 
 export const ConstraintEditor: React.FC<ConstraintEditorProps> = ({
@@ -61,10 +47,10 @@ export const ConstraintEditor: React.FC<ConstraintEditorProps> = ({
       if (!isNaN(v1) && !isNaN(v2) && v2 !== 0) {
         onCommit(v1 / v2);
       } else {
-        onCancel();
+        onCancel(constraint);
       }
     } else if (e.key === "Escape") {
-      onCancel();
+      onCancel(constraint);
     } else if (constraint.type === "gear-ratio") {
       if (e.key === "ArrowRight") {
         const isAtEnd =
@@ -101,8 +87,8 @@ export const ConstraintEditor: React.FC<ConstraintEditorProps> = ({
       padding: "4px 2px",
       textAlign: "center",
       color: COLORS.STROKE,
-      fontSize: "16px", // Match canvas font size
-      fontFamily: "Arial", // Match canvas font family
+      fontSize: "16px", // Match canvas font size & family
+      fontFamily: "Arial",
       caretColor: COLORS.STROKE,
     },
   };
@@ -114,8 +100,9 @@ export const ConstraintEditor: React.FC<ConstraintEditorProps> = ({
           sx={{
             display: "flex",
             alignItems: "center",
+            height: "32px",
             border: `2px solid ${COLORS.STROKE}`,
-            borderRadius: "4px",
+            borderRadius: "16px",
             backgroundColor: "white",
             padding: "0 4px",
           }}
@@ -131,19 +118,19 @@ export const ConstraintEditor: React.FC<ConstraintEditorProps> = ({
                 (e.relatedTarget !== inputRef2.current &&
                   !inputRef2.current?.contains(e.relatedTarget as Node))
               )
-                onCancel();
+                onCancel(constraint);
             }}
             inputRef={inputRef1}
             autoComplete="off"
             sx={{
               ...commonInputStyles,
-              width: `${Math.max(20, val1.length * 9 + 10)}px`,
+              width: `${Math.max(18, val1.length * 9 + 10)}px`,
             }}
           />
           <Typography
             sx={{
               color: COLORS.STROKE,
-              mx: -0.4,
+              mx: -0.3,
               userSelect: "none",
               fontSize: "16px",
               fontFamily: "Arial",
@@ -162,13 +149,13 @@ export const ConstraintEditor: React.FC<ConstraintEditorProps> = ({
                 (e.relatedTarget !== inputRef1.current &&
                   !inputRef1.current?.contains(e.relatedTarget as Node))
               )
-                onCancel();
+                onCancel(constraint);
             }}
             inputRef={inputRef2}
             autoComplete="off"
             sx={{
               ...commonInputStyles,
-              width: `${Math.max(20, val2.length * 9 + 10)}px`,
+              width: `${Math.max(18, val2.length * 9 + 10)}px`,
             }}
           />
         </Box>
@@ -181,7 +168,7 @@ export const ConstraintEditor: React.FC<ConstraintEditorProps> = ({
           display: "flex",
           alignItems: "center",
           border: `2px solid ${COLORS.STROKE}`,
-          borderRadius: "4px",
+          borderRadius: "6px",
           backgroundColor: "white",
           padding: "0 4px",
         }}
@@ -191,7 +178,7 @@ export const ConstraintEditor: React.FC<ConstraintEditorProps> = ({
           value={val1}
           onChange={(e) => setVal1(filterInput(e.target.value))}
           onKeyDown={handleKeyDown}
-          onBlur={onCancel}
+          onBlur={() => onCancel(constraint)}
           inputRef={inputRef1}
           autoComplete="off"
           sx={{
@@ -225,11 +212,12 @@ export const ConstraintEditor: React.FC<ConstraintEditorProps> = ({
         top: position.y,
         transform: "translate(-50%, -50%)",
         zIndex: 1000,
-        boxShadow: 3,
-        borderRadius: "4px",
+        boxShadow: 4,
+        borderRadius: constraint.type === "gear-ratio" ? "16px" : "6px",
       }}
     >
       {renderContent()}
     </Box>
   );
 };
+export { valueToRatioParts };

@@ -59,6 +59,7 @@ export function get_hovered_part_of_element(
         case "Erasing":
         case "GearRatioConstraintStart":
         case "GearRatioConstraintGear":
+        case "EditingConstraint":
           // center + gear perimeter
           if (distance <= HIT_TOLERANCE.NODE) {
             return {
@@ -264,6 +265,7 @@ export function get_hovered_part_of_element(
         case "DimensionStart":
         case "DimensionNode":
         case "DimensionEdge":
+        case "EditingConstraint":
           // body & ends
           if (mousePos.distance_to(edge.positionStart) <= HIT_TOLERANCE.NODE) {
             return {
@@ -386,6 +388,7 @@ export function get_hovered_part_of_element(
         case "Erasing":
         case "ChangingGearRadius":
         case "PlacingGearRadius":
+        case "EditingConstraint":
           // body + ends
           if (
             state.type !== "ChangingGearRadius" &&
@@ -575,7 +578,7 @@ export function get_hovered_part_of_element(
     case "parallel":
     case "equal":
     case "gear-ratio":
-      if (mousePos.distance_to(element.position) <= HIT_TOLERANCE.NODE) {
+      if (mousePos.distance_to(element.position) <= HIT_TOLERANCE.CONSTRAINT) {
         return {
           type: "Constraint",
           position: element.position.clone(),

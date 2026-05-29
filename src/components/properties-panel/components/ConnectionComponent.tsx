@@ -7,7 +7,7 @@ import {
   MechanicalElement,
   Mechanism,
 } from "../../../types";
-import { Box, IconButton, Typography } from "@mui/material";
+import { Box, IconButton } from "@mui/material";
 import {
   LinkOff as LinkOffIcon,
   RotateLeft as RotateLeftIcon,
@@ -19,7 +19,6 @@ import {
   get_connections,
 } from "../../mechanical-canvas/connect-actions";
 import { HoveredPart } from "../../../types/hovered-part";
-import stopIconUrl from "../../../assets/icons/palette/stop.svg";
 import ElementDisplay from "./ElementDisplay";
 import { COLORS } from "../../../constants/rendering-specs";
 
@@ -45,45 +44,6 @@ const Connection: React.FC<ConnectionProps> = ({
   updateMechanism,
   mechanism,
 }) => {
-  if (connectedElement === undefined)
-    return (
-      <Box
-        sx={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          background: "#FF000055",
-        }}
-        border={1}
-        borderColor={"#00000025"}
-        borderRadius={2}
-      >
-        <IconButton title="Select" size="small" sx={{ my: -2 }}>
-          <Box
-            component="img"
-            src={stopIconUrl}
-            sx={{
-              width: 24,
-              height: 24,
-              display: "block",
-              mx: -0.25,
-              my: -0.75,
-              filter: "brightness(0.25) invert(1)",
-            }}
-          />
-        </IconButton>
-
-        <Box>
-          <Typography variant={"body2"} fontWeight={500}>
-            Unfound
-          </Typography>
-        </Box>
-        <IconButton title="Disconnect" size="small">
-          <LinkOffIcon fontSize="small" color="error" sx={{ my: -0.5 }} />
-        </IconButton>
-      </Box>
-    );
-
   const handleSwitchMeshedGearDirection = (e: React.MouseEvent) => {
     e.stopPropagation();
     let index: number;
@@ -123,6 +83,7 @@ const Connection: React.FC<ConnectionProps> = ({
 
   const handleDisconnect = (e: React.MouseEvent) => {
     e.stopPropagation();
+    if (connectedElement === undefined) return;
     const connection_pair_type = get_connection_pair_type(
       element.id,
       connectedElement,
@@ -152,7 +113,10 @@ const Connection: React.FC<ConnectionProps> = ({
         display: "flex",
         justifyContent: "space-between",
         alignItems: "center",
-        bgcolor: COLORS.BACKGROUND,
+        bgcolor:
+          connectedElement === undefined
+            ? COLORS.DELETION_BOX + COLORS.HALF_TRANSPARENCY
+            : COLORS.BACKGROUND,
       }}
       border={2}
       borderColor={"#00000025"}
@@ -161,6 +125,7 @@ const Connection: React.FC<ConnectionProps> = ({
       <ElementDisplay
         element={connectedElement}
         size="small"
+        bold={false}
         setHoveredPart={setHoveredPart}
         setCanvasState={setCanvasState}
         updateMechanism={updateMechanism}
@@ -182,7 +147,8 @@ const Connection: React.FC<ConnectionProps> = ({
       <>
         {(() => {
           if (
-            (element.type === "belt" &&
+            (connectedElement !== undefined &&
+              element.type === "belt" &&
               containerType === "ConnectsAttachedGears") ||
             containerType === "ConnectsAttachedBelt"
           ) {
