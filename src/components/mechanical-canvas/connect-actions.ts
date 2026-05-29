@@ -8,6 +8,7 @@ import type {
   MechanicalElement,
   NodeElement,
   SlidepElement,
+  UnionElement,
 } from "../../types/element";
 import { Action, ConnectsActionType } from "../../types";
 import { HoveredPart } from "../../types/hovered-part";
@@ -281,31 +282,44 @@ export function connect_element(
  * Returns the actions to erase the connections of linked elements and the deletion itself.
  */
 export function delete_element(
-  element: MechanicalElement,
+  element: UnionElement,
   mechanicalElements: MechanicalElement[],
 ): Action[] {
   let actions: Action[] = [];
   console.log("Delete: ", element.type, element.id.toString().padStart(3, "0"));
-  get_connection_types(element).forEach((connectionType) => {
-    get_connections(element, connectionType).forEach((connectedElementID) => {
-      const connectedElement = get_mechanical_element_from_id(
-        connectedElementID,
-        mechanicalElements,
-      );
-      const connection_pair_type = get_connection_pair_type(
-        element.id,
-        connectedElement,
-      );
-      actions.push(
-        disconnect_element(
-          connectedElement,
-          element,
-          connection_pair_type,
+  if (
+    element.type === "beam" ||
+    element.type === "belt" ||
+    element.type === "damper" ||
+    element.type === "gear" ||
+    element.type === "join" ||
+    element.type === "mass" ||
+    element.type === "pivot" ||
+    element.type === "slidep" ||
+    element.type === "slider" ||
+    element.type === "spring"
+  ) {
+    get_connection_types(element).forEach((connectionType) => {
+      get_connections(element, connectionType).forEach((connectedElementID) => {
+        const connectedElement = get_mechanical_element_from_id(
+          connectedElementID,
           mechanicalElements,
-        ),
-      );
+        );
+        const connection_pair_type = get_connection_pair_type(
+          element.id,
+          connectedElement,
+        );
+        actions.push(
+          disconnect_element(
+            connectedElement,
+            element,
+            connection_pair_type,
+            mechanicalElements,
+          ),
+        );
+      });
     });
-  });
+  }
   actions.push({ type: "DeleteElement", element });
   return actions;
 }

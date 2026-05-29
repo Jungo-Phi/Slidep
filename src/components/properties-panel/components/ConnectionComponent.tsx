@@ -6,8 +6,6 @@ import {
   ConnectsActionType,
   MechanicalElement,
   Mechanism,
-  shown_element_name,
-  ZERO,
 } from "../../../types";
 import { Box, IconButton, Typography } from "@mui/material";
 import {
@@ -15,7 +13,6 @@ import {
   RotateLeft as RotateLeftIcon,
   RotateRight as RotateRightIcon,
 } from "@mui/icons-material";
-import { get_element_icon } from "../../element-palette/elementIcon";
 import {
   disconnect_element,
   get_connection_pair_type,
@@ -23,6 +20,8 @@ import {
 } from "../../mechanical-canvas/connect-actions";
 import { HoveredPart } from "../../../types/hovered-part";
 import stopIconUrl from "../../../assets/icons/palette/stop.svg";
+import ElementDisplay from "./ElementDisplay";
+import { COLORS } from "../../../constants/rendering-specs";
 
 interface ConnectionProps {
   element: MechanicalElement;
@@ -84,44 +83,6 @@ const Connection: React.FC<ConnectionProps> = ({
         </IconButton>
       </Box>
     );
-
-  const icon = get_element_icon(connectedElement.type);
-
-  const handleMouseEnter = () => {
-    let hoveredPart: HoveredPart;
-    if ("position" in connectedElement) {
-      hoveredPart = {
-        type: "Node",
-        position: connectedElement.position,
-        id: connectedElement.id,
-        beamBodyHover: false,
-      };
-    } else {
-      // Edge
-      hoveredPart = {
-        type: "Edge",
-        position: connectedElement.positionStart.lerp(
-          connectedElement.positionEnd,
-          0.5,
-        ),
-        id: connectedElement.id,
-        part: "body",
-      };
-    }
-    setHoveredPart(hoveredPart);
-  };
-
-  const handleMouseLeave = () => {
-    setHoveredPart({ type: "Void", position: ZERO });
-  };
-
-  const handleSelect = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setCanvasState({
-      type: "SelectedElement",
-      elementID: connectedElement.id,
-    });
-  };
 
   const handleSwitchMeshedGearDirection = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -191,40 +152,32 @@ const Connection: React.FC<ConnectionProps> = ({
         display: "flex",
         justifyContent: "space-between",
         alignItems: "center",
+        bgcolor: COLORS.BACKGROUND,
       }}
-      border={1}
+      border={2}
       borderColor={"#00000025"}
-      borderRadius={2}
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
+      borderRadius={5}
     >
-      <IconButton
-        onClick={handleSelect}
-        title="Select"
+      <ElementDisplay
+        element={connectedElement}
         size="small"
-        sx={{ my: -2 }}
+        setHoveredPart={setHoveredPart}
+        setCanvasState={setCanvasState}
+        updateMechanism={updateMechanism}
+      ></ElementDisplay>
+      <IconButton
+        sx={{
+          borderRadius: 5,
+          "&:hover": {
+            backgroundColor: "#00000025",
+          },
+          my: -0.5,
+        }}
+        onClick={handleDisconnect}
+        title="Disconnect"
+        size="small"
       >
-        <Box
-          component="img"
-          src={icon}
-          alt={connectedElement.type}
-          sx={{
-            width: 24,
-            height: 24,
-            display: "block",
-            mx: -0.25,
-            my: -0.75,
-          }}
-        />
-      </IconButton>
-
-      <Box>
-        <Typography variant={"body2"} fontWeight={500}>
-          {shown_element_name(connectedElement)}
-        </Typography>
-      </Box>
-      <IconButton onClick={handleDisconnect} title="Disconnect" size="small">
-        <LinkOffIcon fontSize="small" color="error" sx={{ my: -0.5 }} />
+        <LinkOffIcon sx={{ my: -0.4 }} fontSize="small" color="error" />
       </IconButton>
       <>
         {(() => {
@@ -254,28 +207,42 @@ const Connection: React.FC<ConnectionProps> = ({
               if (direction) {
                 return (
                   <IconButton
+                    sx={{
+                      borderRadius: 5,
+                      "&:hover": {
+                        backgroundColor: "#00000025",
+                      },
+                      my: -0.5,
+                    }}
                     onClick={handleSwitchMeshedGearDirection}
-                    title="Switch rotation direction"
+                    title="Switch direction"
                     size="small"
                   >
                     <RotateLeftIcon
                       fontSize="small"
                       color="secondary"
-                      sx={{ my: -0.5 }}
+                      sx={{ mx: -0.2, my: -0.4 }}
                     />
                   </IconButton>
                 );
               } else {
                 return (
                   <IconButton
+                    sx={{
+                      borderRadius: 5,
+                      "&:hover": {
+                        backgroundColor: "#00000025",
+                      },
+                      my: -0.5,
+                    }}
                     onClick={handleSwitchMeshedGearDirection}
-                    title="Switch rotation direction"
+                    title="Switch direction"
                     size="small"
                   >
                     <RotateRightIcon
                       fontSize="small"
                       color="secondary"
-                      sx={{ my: -0.5 }}
+                      sx={{ mx: -0.2, my: -0.4 }}
                     />
                   </IconButton>
                 );

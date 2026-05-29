@@ -38,7 +38,15 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
   switch (element.type) {
     case "pivot":
       return (
-        <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap" }}>
+        <Box
+          sx={{
+            display: "flex",
+            gap: 2,
+            justifyContent: "space-between",
+            alignItems: "center",
+            flexDirection: "column",
+          }}
+        >
           <ConnectionsContainer
             element={element}
             containerType="ConnectsRotatingEdges"
@@ -53,7 +61,15 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
       );
     case "slider":
       return (
-        <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap" }}>
+        <Box
+          sx={{
+            display: "flex",
+            gap: 2,
+            justifyContent: "space-between",
+            alignItems: "center",
+            flexDirection: "column",
+          }}
+        >
           <ConnectionsContainer
             element={element}
             containerType="ConnectsFixedEdges"
@@ -78,7 +94,15 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
       );
     case "slidep":
       return (
-        <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap" }}>
+        <Box
+          sx={{
+            display: "flex",
+            gap: 2,
+            justifyContent: "space-between",
+            alignItems: "center",
+            flexDirection: "column",
+          }}
+        >
           <ConnectionsContainer
             element={element}
             containerType="ConnectsRotatingEdges"
@@ -104,7 +128,15 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
     case "join":
     case "mass":
       return (
-        <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap" }}>
+        <Box
+          sx={{
+            display: "flex",
+            gap: 2,
+            justifyContent: "space-between",
+            alignItems: "center",
+            flexDirection: "column",
+          }}
+        >
           <ConnectionsContainer
             element={element}
             containerType="ConnectsFixedEdges"
@@ -119,7 +151,15 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
       );
     case "gear":
       return (
-        <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap" }}>
+        <Box
+          sx={{
+            display: "flex",
+            gap: 2,
+            justifyContent: "space-between",
+            alignItems: "center",
+            flexDirection: "column",
+          }}
+        >
           <ConnectionsContainer
             element={element}
             containerType="ConnectsFixedEdges"
@@ -174,7 +214,15 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
       );
     case "beam":
       return (
-        <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap" }}>
+        <Box
+          sx={{
+            display: "flex",
+            gap: 2,
+            justifyContent: "space-between",
+            alignItems: "center",
+            flexDirection: "column",
+          }}
+        >
           <ConnectionsContainer
             element={element}
             containerType="ConnectsFixedNodeStart"
@@ -210,7 +258,15 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
     case "spring":
     case "damper":
       return (
-        <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap" }}>
+        <Box
+          sx={{
+            display: "flex",
+            gap: 2,
+            justifyContent: "space-between",
+            alignItems: "center",
+            flexDirection: "column",
+          }}
+        >
           <ConnectionsContainer
             element={element}
             containerType="ConnectsFixedNodeStart"
@@ -235,7 +291,15 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
       );
     case "belt":
       return (
-        <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap" }}>
+        <Box
+          sx={{
+            display: "flex",
+            gap: 2,
+            justifyContent: "space-between",
+            alignItems: "center",
+            flexDirection: "column",
+          }}
+        >
           <ConnectionsContainer
             element={element}
             containerType="ConnectsFixedNodeStart"

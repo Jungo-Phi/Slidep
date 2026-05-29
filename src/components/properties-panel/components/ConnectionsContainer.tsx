@@ -1,12 +1,6 @@
-import React, { useState } from "react";
-import {
-  Box,
-  Typography,
-  List,
-  ListItem,
-  ListItemButton,
-  Card,
-} from "@mui/material";
+import React, { useRef, useState } from "react";
+import { Box, Typography, List, ListItem } from "@mui/material";
+import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
 import { ID, MechanicalElement } from "../../../types/element";
 import {
   CanvasState,
@@ -27,8 +21,13 @@ const EmptyContainer: React.FC = ({}) => {
   return (
     <Typography
       variant="caption"
-      color="text.secondary"
-      sx={{ fontStyle: "italic" }}
+      color="textDisabled"
+      sx={{
+        fontWeight: "500",
+        display: "flex",
+        alignItems: "center",
+        flexDirection: "column",
+      }}
     >
       No elements
     </Typography>
@@ -173,8 +172,16 @@ export const ConnectionsContainer: React.FC<ConnectionsContainerProps> = ({
     setDragOverIndex(null);
   };
 
+  const dragImageRef = useRef<HTMLLIElement>(null);
+
   return (
-    <Box>
+    <Box
+      sx={{
+        display: "flex",
+        alignItems: "inherit",
+        flexDirection: "column",
+      }}
+    >
       <Typography variant="subtitle2">
         {containerType
           .replace("Connects", "")
@@ -189,12 +196,24 @@ export const ConnectionsContainer: React.FC<ConnectionsContainerProps> = ({
           .split("S")
           .join(" S")}
       </Typography>
-      <Card
-        elevation={2}
+
+      <Box
         sx={{
-          p: 1,
-          minWidth: 150,
+          minWidth: 128,
+          bgcolor: "#0001",
         }}
+        border={1}
+        borderRadius={3}
+        borderColor={"#00000000"}
+        paddingLeft={0.2}
+        paddingRight={
+          containerType === "ConnectsParentBeam" ||
+          containerType === "ConnectsFixedNodeStart" ||
+          containerType === "ConnectsFixedNodeEnd" ||
+          containerType === "ConnectsAttachedBelt"
+            ? 0
+            : 0.8
+        }
         onDragOver={(e) => handleDragOver(e)}
         onDrop={handleDrop}
         onDragLeave={handleDragLeave}
@@ -211,19 +230,36 @@ export const ConnectionsContainer: React.FC<ConnectionsContainerProps> = ({
               }
               const connectedId = connections[0];
               return (
-                <ListItemButton
-                  draggable
-                  onDragStart={() =>
-                    handleDragStart(connectedId, 0, containerType)
-                  }
-                  sx={{
-                    borderRadius: 1,
-                    "&:hover": {
-                      backgroundColor: "#00000025",
-                    },
-                    height: 20,
-                  }}
-                >
+                <ListItem ref={dragImageRef} disablePadding sx={{ my: -0.12 }}>
+                  <Box
+                    draggable
+                    onDragStart={(e) => {
+                      if (dragImageRef.current) {
+                        e.dataTransfer.setDragImage(
+                          dragImageRef.current,
+                          8,
+                          12,
+                        );
+                      }
+                      handleDragStart(connectedId, 0, containerType);
+                    }}
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      width: 18,
+                      height: 24,
+                      color: "text.disabled",
+                      flexShrink: 0,
+                      borderRadius: 1,
+                      "&:hover": {
+                        backgroundColor: "#00000025",
+                      },
+                      my: -1,
+                    }}
+                  >
+                    <DragIndicatorIcon sx={{ fontSize: 24 }} />
+                  </Box>
                   <Connection
                     element={element}
                     connectedElement={
@@ -238,7 +274,7 @@ export const ConnectionsContainer: React.FC<ConnectionsContainerProps> = ({
                     updateMechanism={updateMechanism}
                     mechanism={mechanism}
                   />
-                </ListItemButton>
+                </ListItem>
               );
             case "ConnectsFixedEdges":
             case "ConnectsRotatingEdges":
@@ -263,35 +299,58 @@ export const ConnectionsContainer: React.FC<ConnectionsContainerProps> = ({
                             }}
                           />
                         )}
-                        <ListItem disablePadding sx={{ mb: 0.5, p: 0 }}>
-                          <ListItemButton
+                        <ListItem
+                          ref={dragImageRef}
+                          disablePadding
+                          sx={{ my: -0.12 }}
+                        >
+                          <Box
                             draggable
-                            onDragStart={() =>
-                              handleDragStart(connectedId, index, containerType)
-                            }
+                            onDragStart={(e) => {
+                              if (dragImageRef.current) {
+                                e.dataTransfer.setDragImage(
+                                  dragImageRef.current,
+                                  8,
+                                  12,
+                                );
+                              }
+                              handleDragStart(
+                                connectedId,
+                                index,
+                                containerType,
+                              );
+                            }}
                             sx={{
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              width: 18,
+                              height: 24,
+                              color: "text.disabled",
+                              flexShrink: 0,
                               borderRadius: 1,
                               "&:hover": {
                                 backgroundColor: "#00000025",
                               },
-                              height: 20,
+                              my: -1,
                             }}
                           >
-                            <Connection
-                              element={element}
-                              connectedElement={
-                                mechanism.mechanicalElements.find(
-                                  (element: MechanicalElement) =>
-                                    element.id === connectedId,
-                                ) as MechanicalElement
-                              }
-                              containerType={containerType}
-                              setHoveredPart={setHoveredPart}
-                              setCanvasState={setCanvasState}
-                              updateMechanism={updateMechanism}
-                              mechanism={mechanism}
-                            />
-                          </ListItemButton>
+                            <DragIndicatorIcon sx={{ fontSize: 24 }} />
+                          </Box>
+                          <Connection
+                            element={element}
+                            connectedElement={
+                              mechanism.mechanicalElements.find(
+                                (element: MechanicalElement) =>
+                                  element.id === connectedId,
+                              ) as MechanicalElement
+                            }
+                            containerType={containerType}
+                            setHoveredPart={setHoveredPart}
+                            setCanvasState={setCanvasState}
+                            updateMechanism={updateMechanism}
+                            mechanism={mechanism}
+                          />
                         </ListItem>
                       </React.Fragment>
                     ),
@@ -316,7 +375,7 @@ export const ConnectionsContainer: React.FC<ConnectionsContainerProps> = ({
               );
           }
         })()}
-      </Card>
+      </Box>
     </Box>
   );
 };

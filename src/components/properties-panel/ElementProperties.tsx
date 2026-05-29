@@ -5,7 +5,11 @@
 
 import { Box, IconButton, Divider, Typography } from "@mui/material";
 import DeleteIcon from "@mui/icons-material/Delete";
-import { MechanicalElement, shown_element_name } from "../../types/element";
+import {
+  MechanicalElement,
+  shown_element_name,
+  UnionElement,
+} from "../../types/element";
 import VectorInput from "./components/VectorInput";
 import GroundSwitch from "./components/GroundSwitch";
 import BeltTensionSwitch from "./components/BeltTensionSwitch";
@@ -13,11 +17,16 @@ import LockableNumberInput from "./components/LockableNumberInput";
 import { CanvasState, Action, Mechanism, ActionBundleType } from "../../types";
 import { get_element_icon } from "../element-palette/elementIcon";
 import ConnectionsProperties from "./ConnectionsProperties";
-import { delete_element } from "./../mechanical-canvas/connect-actions";
+import {
+  delete_element,
+  get_mechanical_element_from_id,
+} from "./../mechanical-canvas/connect-actions";
 import { HoveredPart } from "../../types/hovered-part";
+import NumberInput from "./components/NumberInput";
+import ElementDisplay from "./components/ElementDisplay";
 
 interface ElementPropertiesProps {
-  element: MechanicalElement;
+  element: UnionElement;
   setHoveredPart: (hoveredPart: HoveredPart) => void;
   setCanvasState: (state: CanvasState) => void;
   updateMechanism: (
@@ -34,8 +43,6 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
   updateMechanism,
   mechanism,
 }) => {
-  const icon = get_element_icon(element.type);
-
   return (
     <Box>
       <Box
@@ -46,23 +53,13 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
           my: -1,
         }}
       >
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-          <Box
-            component="img"
-            src={icon}
-            alt={element.type}
-            sx={{
-              width: 32,
-              height: 32,
-              display: "block",
-            }}
-          />
-          <Box>
-            <Typography variant={"body1"} fontWeight={500}>
-              {shown_element_name(element)}
-            </Typography>
-          </Box>
-        </Box>
+        <ElementDisplay
+          element={element}
+          size="medium"
+          setHoveredPart={setHoveredPart}
+          setCanvasState={setCanvasState}
+          updateMechanism={updateMechanism}
+        ></ElementDisplay>
         <IconButton
           color="error"
           onClick={() =>
@@ -79,7 +76,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
 
       <Divider sx={{ my: 2 }} />
 
-      {"position" in element && (
+      {"value" in element && (
         <Box
           sx={{
             display: "flex",
@@ -87,6 +84,124 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
             alignItems: "center",
             justifyContent: "center",
             gap: 4,
+          }}
+        >
+          <NumberInput
+            value={element.value}
+            onChange={(value: number) =>
+              updateMechanism(
+                [
+                  {
+                    type: "ChangeDimensionEdgeValue",
+                    id: element.id,
+                    newValue: value,
+                    oldValue: element.value,
+                  },
+                ],
+                "ChangeDimension",
+              )
+            }
+            onIncrement={() =>
+              updateMechanism(
+                [
+                  {
+                    type: "ChangeDimensionEdgeValue",
+                    id: element.id,
+                    newValue: element.value + 1,
+                    oldValue: element.value,
+                  },
+                ],
+                "ChangeDimension",
+              )
+            }
+            onDecrement={() =>
+              updateMechanism(
+                [
+                  {
+                    type: "ChangeDimensionEdgeValue",
+                    id: element.id,
+                    newValue: element.value - 1,
+                    oldValue: element.value,
+                  },
+                ],
+                "ChangeDimension",
+              )
+            }
+            label="Value" //"Value"
+          />
+        </Box>
+      )}
+
+      {"edgeID" in element && (
+        <Box
+          sx={{
+            display: "flex",
+            direction: "row",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 4,
+          }}
+        >
+          <Divider sx={{ my: 2 }} />
+          <Box
+            sx={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              pr: 0.5,
+            }}
+            border={1}
+            borderColor={"#00000025"}
+            borderRadius={2}
+          >
+            <IconButton title="Select" size="small" sx={{ my: -2 }}>
+              <Box
+                component="img"
+                src={get_element_icon(
+                  get_mechanical_element_from_id(
+                    element.edgeID,
+                    mechanism.mechanicalElements,
+                  ).type,
+                )}
+                alt={
+                  get_mechanical_element_from_id(
+                    element.edgeID,
+                    mechanism.mechanicalElements,
+                  ).type
+                }
+                sx={{
+                  width: 24,
+                  height: 24,
+                  display: "block",
+                  mx: -0.25,
+                  my: -0.75,
+                }}
+              />
+            </IconButton>
+
+            <Box>
+              <Typography variant={"body2"} fontWeight={500}>
+                {shown_element_name(
+                  get_mechanical_element_from_id(
+                    element.edgeID,
+                    mechanism.mechanicalElements,
+                  ),
+                )}
+              </Typography>
+            </Box>
+          </Box>
+        </Box>
+      )}
+
+      {"position" in element && "isGrounded" in element && (
+        <Box
+          sx={{
+            display: "flex",
+            direction: "row",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 4,
+            mb: -1,
           }}
         >
           <VectorInput
@@ -462,21 +577,24 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
 
       <Divider sx={{ my: 2 }} />
 
-      <Box>
-        <ConnectionsProperties
-          element={element}
-          setHoveredPart={setHoveredPart}
-          setCanvasState={setCanvasState}
-          updateMechanism={updateMechanism}
-          mechanism={mechanism}
-        ></ConnectionsProperties>
-      </Box>
-
-      {element.type === "belt" && (
+      {(element.type === "beam" ||
+        element.type === "belt" ||
+        element.type === "damper" ||
+        element.type === "gear" ||
+        element.type === "join" ||
+        element.type === "mass" ||
+        element.type === "pivot" ||
+        element.type === "slidep" ||
+        element.type === "slider" ||
+        element.type === "spring") && (
         <Box>
-          <Typography>
-            {element.attachedGearsIDs.map((id) => id + " ")}
-          </Typography>
+          <ConnectionsProperties
+            element={element}
+            setHoveredPart={setHoveredPart}
+            setCanvasState={setCanvasState}
+            updateMechanism={updateMechanism}
+            mechanism={mechanism}
+          ></ConnectionsProperties>
         </Box>
       )}
     </Box>

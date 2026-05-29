@@ -16,11 +16,13 @@ import {
   MechanismMetadata,
   SimulationConfig,
   SimulationState,
+  UnionElement,
 } from "../../types";
 import { HoveredPart } from "../../types/hovered-part";
 import { CanvasState } from "../../types/canvas-state";
 import { ProjectInfoSection } from "./ProjectInfoSection";
 import ElementProperties from "./ElementProperties";
+import { COLORS } from "../../constants/rendering-specs";
 
 interface PropertiesPanelProps {
   setCanvasState: (state: CanvasState) => void;
@@ -75,7 +77,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
         display: "flex",
         flexDirection: "column",
         zIndex: 1000,
-        backgroundColor: "background.paper",
+        backgroundColor: COLORS.BACKGROUND,
         overflow: "hidden",
         borderRadius: 1,
         boxShadow: 3,
@@ -115,9 +117,15 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
               {/* Affichage des propriétés de l'élément sélectionné */}
               <>
                 {(() => {
-                  const element = mechanism.mechanicalElements.find(
-                    (el) => el.id === canvasState.elementID,
-                  );
+                  let element: UnionElement | undefined =
+                    mechanism.mechanicalElements.find(
+                      (el) => el.id === canvasState.elementID,
+                    );
+                  if (element === undefined) {
+                    element = mechanism.constraintElements.find(
+                      (el) => el.id === canvasState.elementID,
+                    );
+                  }
                   if (element) {
                     return (
                       <ElementProperties
@@ -130,7 +138,11 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                     );
                   }
                   return (
-                    <Typography variant="body2">Élément introuvable</Typography>
+                    <Typography variant="body2">
+                      Élément "
+                      {canvasState.elementID.toString().padStart(3, "0")} "
+                      introuvable
+                    </Typography>
                   );
                 })()}
               </>

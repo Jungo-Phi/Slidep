@@ -35,12 +35,14 @@
 - Appliquer "UpdateToValidState" apres contrainte H/V
 - Régler de bordel de "connect-actions"
 - "Undo" connection (Join) ne s'est pas appliqué en bidirectionnel !
+- Change NumberInput instant update to -> delayed update
+- Change Focused element on Undo
+- Unified Property pannel look
 
 ## Features UX secondaires
 
 - ~Faire les nouveaux icons~
 - ~Ajouter les sens de rotation des engrenages dans les connections~
-- Focus sur l'élément placé
 - Ajouter les ratios des engrenages dans les connections
 - (Ignorer BeamBodyHover lors du déplacement d'un beam ?)
 - Faire que drop une connection dans un container simple échange les connections
