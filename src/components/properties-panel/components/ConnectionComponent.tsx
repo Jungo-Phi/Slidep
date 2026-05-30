@@ -112,6 +112,7 @@ const Connection: React.FC<ConnectionProps> = ({
       sx={{
         display: "flex",
         justifyContent: "space-between",
+        flexDirection: "row",
         alignItems: "center",
         bgcolor:
           connectedElement === undefined
@@ -137,9 +138,10 @@ const Connection: React.FC<ConnectionProps> = ({
             backgroundColor: "#00000025",
           },
           my: -0.5,
+          ml: "-4px",
         }}
         onClick={handleDisconnect}
-        title="Disconnect"
+        title="Déconnecter"
         size="small"
       >
         <LinkOffIcon sx={{ my: -0.4 }} fontSize="small" color="error" />
@@ -179,9 +181,10 @@ const Connection: React.FC<ConnectionProps> = ({
                         backgroundColor: "#00000025",
                       },
                       my: -0.5,
+                      ml: "-4px",
                     }}
                     onClick={handleSwitchMeshedGearDirection}
-                    title="Switch direction"
+                    title="Inverser la direction"
                     size="small"
                   >
                     <RotateLeftIcon
@@ -200,9 +203,10 @@ const Connection: React.FC<ConnectionProps> = ({
                         backgroundColor: "#00000025",
                       },
                       my: -0.5,
+                      ml: "-4px",
                     }}
                     onClick={handleSwitchMeshedGearDirection}
-                    title="Switch direction"
+                    title="Inverser la direction"
                     size="small"
                   >
                     <RotateRightIcon

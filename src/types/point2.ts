@@ -237,12 +237,12 @@ export class Point2 {
     let b = end2.sub(start2);
     let c = end1.sub(start1);
     let d = end2.sub(start2);
-    let k = (a.x / b.x - a.y / b.y) / (c.y / d.y - c.x / d.x);
-    if (Number.isNaN(k)) {
-      k = (a.y / b.y - a.x / b.x) / (c.x / d.x - c.y / d.y);
+    let t = (a.x / b.x - a.y / b.y) / (c.y / d.y - c.x / d.x);
+    if (Number.isNaN(t)) {
+      t = (a.y / b.y - a.x / b.x) / (c.x / d.x - c.y / d.y);
     }
     // let k2 = c.x / d.x * k1 + a.x / b.x;
-    return start1.lerp(end1, k);
+    return start1.lerp(end1, t);
   }
 
   /** Renvoie un segment (`start` to `end`) tangeant aux 2 cercles. direction {false: clockwise, true: anticlockwise}*/

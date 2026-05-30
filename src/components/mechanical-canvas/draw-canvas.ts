@@ -98,13 +98,25 @@ export function drawMechanicalCanvas(
         (state.type === "SelectedMultiple" &&
           state.elementIDs.includes(element.id)) ||
         (state.type === "MovingSelectionMultiple" &&
-          state.elementIDs.includes(element.id));
+          state.elementIDs.includes(element.id)) ||
+        (state.type === "EqualConstraintGear" &&
+          state.startGearID === element.id) ||
+        (state.type === "EqualConstraintEdge" &&
+          state.startEdgeID === element.id) ||
+        (state.type === "NormalConstraintEdge" &&
+          state.startEdgeID === element.id) ||
+        (state.type === "ParallelConstraintEdge" &&
+          state.startEdgeID === element.id) ||
+        (state.type === "GearRatioConstraintGear" &&
+          state.startGearID === element.id) ||
+        (state.type === "HorizontalVerticalConstraintNode" &&
+          state.startNodeID === element.id);
       const isEraseHovered =
         (state.type === "Erasing" &&
           hoveredPart.type !== "Void" &&
           hoveredPart.id === element.id) ||
         (state.type === "ErasingMultiple" &&
-          state.hoveredElementIDs.includes(element.id));
+          state.hoveredElementIDs.includes(element.id)); // <- TODO : add erase coloring here
       const isEdgeEndHovered =
         hoveredPart !== null &&
         hoveredPart.type === "Edge" &&
@@ -515,7 +527,7 @@ export function drawMechanicalCanvas(
     case "PlacingGearRadius":
       delta = hoveredPart.position.sub(state.startHover.position);
       ctx.translate(state.startHover.position.x, state.startHover.position.y);
-      ctx.rotate(delta.angle());
+      if (state.type !== "PlacingGearRadius") ctx.rotate(delta.angle());
       switch (state.type) {
         case "PlacingBeamEnd":
           draw_beam(ctx, delta.length());

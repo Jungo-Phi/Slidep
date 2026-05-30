@@ -19,47 +19,62 @@
 - Placer join à la jonction des Beams
 - ~Créer des éléments de dimension~
 - ~Créer des éléments de contrainte~
-- Raccourcis qui fonctionnent même si le canvas est pas focus
+- ~Raccourcis qui fonctionnent même si le canvas est pas focus~
 - ~Boutons Crtl+Z~
 - ~Avec un click sans mouvement -> sélectionné, puis si mouvement, passer de sélectionné -> movingX~
 - Supprimer contraintes quand on supprime élément
 - Qu'est-ce qui se passe si on appuie sur Crtl+Z alors qu'on a pas laché un élément ?
 - ~TODO : Differentiate between drag and drop : ajouter un élément tampon à mouse release "Blank"~
-- (move apart disconnected elements ?)
-- MoveEdgeBody : deltaStart -> ~k~ **t**
+- MoveEdgeBody : deltaStart -> t
 - ~ActionReducer : remove elements managed by "UpdatePositionsToValidState"~
 - ~Sélection multiple doit ignorer les contraintes et dimensions~
 - ~Toujours enlever le blank (Ajouter à la fin de lastAction**s**)~
-- Ajouter "repelDistance" pour éloigner les contraintes détachées
-- Rester dans dimension après en avoir placé une
-- Appliquer "UpdateToValidState" apres contrainte H/V
+- Ajouter "repelDistance" pour éloigner les contraintes détachées : move apart disconnected elements
+- ~Rester dans dimension après en avoir placé une~
+- ~Appliquer "UpdateToValidState" apres contrainte H/V~
+- ~Enlever temps de chargement des icons contraintes dans le canvas~
+- ~Afficher en "Selected" l'élément premier de "startPlacingX"~
 - Régler de bordel de "connect-actions"
+- select stuff when state = placingConstraint ?
 - "Undo" connection (Join) ne s'est pas appliqué en bidirectionnel !
-- Change NumberInput instant update to -> delayed update
-- Change Focus on Undo
-- Unified Property pannel look with dimensions
-- Change edge length ne fonctionne pas
+- Delete (eraser) ne fonctionne pas !
+- Hover delete dans le controle panel applique le meme style que eraser
+- ~Change NumberInput instant update to -> delayed update~
+- ~Change Focus on Undo~
+- ~Unified Property pannel look with dimensions~
+- Change edge length ne fonctionne pas + devrais changer la contrainte associées s'il y en a une
+- ~Hover dimension~
+- hover : ignorer contraintes when placing mechanical elements
+- ~Dimension Radius~
+- Compléter le geometric-solver
+- Empecher les contraintes sur le même élément (DDL analyser)
+- Sauvgarder / Charger méchanisme
+- Movement et zoom de la grille
+- Afficher / cacher les contraintes
+- Implémenter algorithme de cinématique (reprendre geometric-solver)
+- Implémenter algorithme de statique (matrices)
+- Implémenter algorithme de dynamique PBD
 
 ## Features UX secondaires
 
 - ~Faire les nouveaux icons~
 - ~Ajouter les sens de rotation des engrenages dans les connections~
-- Ajouter les ratios des engrenages dans les connections
+- ~Ajouter les ratios des engrenages dans les connections~
 - (Ignorer BeamBodyHover lors du déplacement d'un beam ?)
 - Faire que drop une connection dans un container simple échange les connections
 - (Supprimer les joints quand ils ne sont connectés qu'à 1 élément ?)
-- Change CanvasState on delete element
+- ~Change CanvasState on delete element~
 - Placing beam series / only one if hold down when placing ? (like in OnShape)
 
 ## Features visuelles nice to have
 
 - ~Plus beau logo~
 - ~Visuel des pivot/slider/slidep connecté = remplit~
-- Arrondir le chiffre affiché des dimmensions
+- ~Arrondir le chiffre affiché des dimmensions~
 - ~Reskin de conection container~
-- Rendre les connections drag & drop plus propres
+- ~Rendre les connections drag & drop plus propres~
 - ~Hover Delete button / Element name~
 - Hover en couleur ?
 - Limiter la longueur des edges au placement et déplacement
-- Rejeper la position des dimensions des éléments pour la lisibilité
+- Rejeter la position des dimensions des éléments pour la lisibilité
 - Déplacer les dimentions avec les élements associés

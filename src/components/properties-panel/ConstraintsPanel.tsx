@@ -130,6 +130,11 @@ export const ConstraintsPanel: React.FC<ConstraintsPanelProps> = ({
                               )
                             }
                             label=""
+                            suffix={
+                              constraint.type === "dimension-angle"
+                                ? "°"
+                                : undefined
+                            }
                           />
                         );
                       case "gear-ratio":

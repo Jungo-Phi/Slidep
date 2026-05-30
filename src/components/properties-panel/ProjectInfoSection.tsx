@@ -27,26 +27,29 @@ export const ProjectInfoSection: React.FC<ProjectInfoSectionProps> = ({
   onProjectInfoChange,
 }) => {
   // TODO : simplifier
+  const now = new Date();
   const [projectInfo, setProjectInfo] = useState<ProjectMetadata>({
     name: mechanism.metadata.name,
     description: mechanism.metadata.description,
     author: mechanism.metadata.author,
     version: mechanism.metadata.version,
-    createdAt: new Date(mechanism.metadata.createdAt).toLocaleDateString(),
-    modifiedAt: new Date(mechanism.metadata.modifiedAt).toLocaleDateString(),
+    createdAt: now.toLocaleDateString(),
+    modifiedAt: now.toLocaleDateString(),
   });
 
   // Mettez à jour le state local si le mechanism.metadata change (ex: lors du chargement d'un nouveau projet)
+  /*
   React.useEffect(() => {
     setProjectInfo({
       name: mechanism.metadata.name,
       description: mechanism.metadata.description,
       author: mechanism.metadata.author,
       version: mechanism.metadata.version,
-      createdAt: new Date(mechanism.metadata.createdAt).toLocaleDateString(),
-      modifiedAt: new Date(mechanism.metadata.modifiedAt).toLocaleDateString(),
+      createdAt: mechanism.metadata.createdAt,
+      modifiedAt: mechanism.metadata.modifiedAt,
     });
   }, [mechanism.metadata]);
+  */
 
   const handleInfoChange = (field: keyof ProjectMetadata, value: string) => {
     const updatedInfo = {
@@ -137,27 +140,42 @@ export const ProjectInfoSection: React.FC<ProjectInfoSectionProps> = ({
       <Box
         sx={{
           display: "flex",
-          justifyContent: "space-between",
           alignItems: "center",
-          marginRight: 1,
+          gap: 1,
+          mx: 1,
         }}
       >
-        <Typography variant="body2">Nombre d'éléments :</Typography>
+        <Typography variant="body2">Éléments :</Typography>
         <Typography variant="body1" fontWeight={500}>
           {mechanism.mechanicalElements.length}
         </Typography>
       </Box>
+
       <Box
         sx={{
           display: "flex",
-          justifyContent: "space-between",
           alignItems: "center",
-          marginRight: 1,
+          gap: 1,
+          mx: 1,
         }}
       >
-        <Typography variant="body2">Nombre de contraintes :</Typography>
+        <Typography variant="body2">Contraintes :</Typography>
         <Typography variant="body1" fontWeight={500}>
           {mechanism.constraintElements.length}
+        </Typography>
+      </Box>
+
+      <Box
+        sx={{
+          display: "flex",
+          alignItems: "center",
+          gap: 1,
+          mx: 1,
+        }}
+      >
+        <Typography variant="body2">Degrés de liberté :</Typography>
+        <Typography variant="body1" fontWeight={500}>
+          ?
         </Typography>
       </Box>
     </Box>

@@ -313,6 +313,40 @@ const App: React.FC = () => {
           },
         ];
         break;
+      case "CreateConstraint":
+        if (
+          newAction.type !== "CreateElement" ||
+          (newAction.element.type !== "horizontal-align-edge" &&
+            newAction.element.type !== "horizontal-align-nodes" &&
+            newAction.element.type !== "vertical-align-edge" &&
+            newAction.element.type !== "vertical-align-nodes" &&
+            newAction.element.type !== "normal" &&
+            newAction.element.type !== "parallel" &&
+            newAction.element.type !== "equal")
+        )
+          break;
+        const oldPositionsCC = getPositions(mechanism.mechanicalElements);
+        const tempMechanismCC = actionReducer(
+          cloneMechanism(mechanism),
+          actions,
+          false,
+        );
+        const newPositionsCC = resolveGeometricConstraints(
+          tempMechanismCC.mechanicalElements,
+          tempMechanismCC.constraintElements,
+          actionBundleType,
+          newAction,
+        );
+        newActions = [
+          ...actions,
+          {
+            type: "UpdatePositionsToValidState",
+            masterActionType: newAction.type,
+            newPositions: newPositionsCC,
+            oldPositions: oldPositionsCC,
+          },
+        ];
+        break;
       case "Other":
         if (newAction.type == "Blank") {
           if (mechanism.history.length === 0) break;
@@ -334,7 +368,20 @@ const App: React.FC = () => {
       viewport: { ...mechanism.viewport },
       metadata: { ...mechanism.metadata },
     };
-    setMechanism(actionReducer(newMechanism, newActions, false));
+    const updatedMechanism = actionReducer(newMechanism, newActions, false);
+    setMechanism(updatedMechanism);
+
+    if (canvasState.type !== "SelectedElement") return;
+    if (
+      updatedMechanism.mechanicalElements.find(
+        (el) => el.id === canvasState.elementID,
+      ) === undefined &&
+      updatedMechanism.constraintElements.find(
+        (el) => el.id === canvasState.elementID,
+      ) === undefined
+    ) {
+      setCanvasState({ type: "Selecting" });
+    }
   };
 
   const undoMechanism = () => {
@@ -350,7 +397,20 @@ const App: React.FC = () => {
       metadata: { ...mechanism.metadata },
     };
     lastActions.reverse();
-    setMechanism(actionReducer(newMechanism, lastActions, true));
+    const updatedMechanism = actionReducer(newMechanism, lastActions, true);
+    setMechanism(updatedMechanism);
+
+    if (canvasState.type !== "SelectedElement") return;
+    if (
+      updatedMechanism.mechanicalElements.find(
+        (el) => el.id === canvasState.elementID,
+      ) === undefined &&
+      updatedMechanism.constraintElements.find(
+        (el) => el.id === canvasState.elementID,
+      ) === undefined
+    ) {
+      setCanvasState({ type: "Selecting" });
+    }
   };
 
   const redoMechanism = () => {
@@ -529,6 +589,7 @@ const App: React.FC = () => {
           <ElementPalette
             setCanvasState={setCanvasState}
             canvasState={canvasState}
+            mechanism={mechanism}
           />
           <PropertiesPanel
             setCanvasState={setCanvasState}

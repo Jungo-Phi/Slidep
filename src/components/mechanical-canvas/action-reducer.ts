@@ -1,10 +1,8 @@
 import {
   Action,
-  EdgeElement,
   Mechanism,
   NodeElement,
   BeltElement,
-  GearElement,
   UnionElement,
   Point2,
 } from "../../types";

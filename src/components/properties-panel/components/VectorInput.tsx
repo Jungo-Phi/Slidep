@@ -12,38 +12,39 @@ interface VectorInputProps {
   x: number;
   y: number;
   setPos: (pos: Point2) => void;
-  label: string;
+  label?: string;
 }
 
 export const VectorInput: React.FC<VectorInputProps> = ({
   x,
   y,
   setPos,
-  label,
+  label = "",
 }) => {
   return (
-    <Box sx={{ display: "flex", alignItems: "center" }}>
-      <Typography variant="body2" sx={{ mr: 1 }}>
-        {label}
-      </Typography>
-
-      <Box>
-        <Box sx={{ mb: 1 }}>
-          <NumberInput
-            label="X"
-            value={x}
-            onChange={(newX) => setPos(new Point2(newX, y))}
-          />
-        </Box>
-
-        <Box sx={{ mb: 1 }}>
-          <NumberInput
-            label="Y"
-            value={y}
-            onChange={(newY) => setPos(new Point2(x, newY))}
-          />
-        </Box>
-      </Box>
+    <Box
+      sx={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        gap: 1,
+      }}
+    >
+      {label && (
+        <Typography variant="body2" marginBottom={-0.5}>
+          {label}
+        </Typography>
+      )}
+      <NumberInput
+        label="X"
+        value={x}
+        onChange={(newX) => setPos(new Point2(newX, y))}
+      />
+      <NumberInput
+        label="Y"
+        value={y}
+        onChange={(newY) => setPos(new Point2(x, newY))}
+      />
     </Box>
   );
 };

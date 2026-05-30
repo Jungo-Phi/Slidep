@@ -20,6 +20,18 @@ export function draw_element_icon(
   ctx: CanvasRenderingContext2D,
   element: UnionElement,
 ) {
+  ctx.strokeStyle = ctx.lineWidth === 2 ? "grey" : COLORS.STROKE;
+  ctx.fillStyle = COLORS.BACKGROUND + COLORS.ICON_TRANSPARENCY;
+  ctx.beginPath();
+  ctx.roundRect(
+    -DIM.ICON_SIZE / 2,
+    -DIM.ICON_SIZE / 2,
+    DIM.ICON_SIZE,
+    DIM.ICON_SIZE,
+    4,
+  );
+  ctx.stroke();
+  ctx.fill();
   const iconUrl = get_element_icon(element.type);
   let img = iconImageCache.get(iconUrl);
   if (!img) {
@@ -27,28 +39,14 @@ export function draw_element_icon(
     img.src = iconUrl;
     iconImageCache.set(iconUrl, img);
   }
-
-  if (img.complete) {
-    ctx.strokeStyle = "grey";
-    ctx.fillStyle = COLORS.BACKGROUND + COLORS.ICON_TRANSPARENCY;
-    ctx.beginPath();
-    ctx.roundRect(
-      -DIM.ICON_SIZE / 2,
-      -DIM.ICON_SIZE / 2,
-      DIM.ICON_SIZE,
-      DIM.ICON_SIZE,
-      4,
-    );
-    ctx.stroke();
-    ctx.fill();
-    ctx.drawImage(
-      img,
-      -DIM.ICON_SIZE / 2,
-      -DIM.ICON_SIZE / 2,
-      DIM.ICON_SIZE,
-      DIM.ICON_SIZE,
-    );
-  }
+  if (!img.complete) return;
+  ctx.drawImage(
+    img,
+    -DIM.ICON_SIZE / 2,
+    -DIM.ICON_SIZE / 2,
+    DIM.ICON_SIZE,
+    DIM.ICON_SIZE,
+  );
 }
 
 export function draw_grid(
@@ -579,10 +577,7 @@ export function draw_dimention(
   start: Point2,
   end: Point2,
 ) {
-  ctx.lineCap = "butt";
-  ctx.strokeStyle = COLORS.STROKE;
-  ctx.fillStyle = COLORS.STROKE;
-  ctx.lineWidth = 2;
+  ctx.fillStyle = ctx.strokeStyle;
 
   const delta = end.sub(start);
   const length = delta.length();
@@ -603,8 +598,8 @@ export function draw_dimention(
   ctx.fill();
 
   ctx.beginPath();
-  ctx.moveTo(5, 0);
-  ctx.lineTo(length - 5, 0);
+  ctx.moveTo(15, 0);
+  ctx.lineTo(length - 15, 0);
   ctx.stroke();
 
   ctx.restore();
@@ -622,15 +617,20 @@ export function draw_dimention_text(
   ctx.textBaseline = "middle";
   const metrics = ctx.measureText(text);
   ctx.fillStyle = COLORS.BACKGROUND;
+  ctx.beginPath();
   ctx.roundRect(
-    position.x - metrics.width / 2 - 10 / 2,
-    position.y - 24 / 2 - 1,
-    metrics.width + 10,
-    24,
+    position.x - metrics.width / 2 - 14 / 2,
+    position.y - 26 / 2 - 1,
+    metrics.width + 14,
+    26,
     5,
   );
   ctx.fill();
-  ctx.fillStyle = COLORS.STROKE;
+  if (ctx.lineWidth > 2) {
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+  ctx.fillStyle = ctx.strokeStyle;
   ctx.fillText(text, position.x, position.y);
 }
 
@@ -641,8 +641,8 @@ export function draw_dimention_parallel(
   position: Point2,
   value: number,
 ) {
-  ctx.lineCap = "butt";
-  ctx.strokeStyle = COLORS.STROKE;
+  ctx.fillStyle = ctx.strokeStyle;
+  const widthStart = ctx.lineWidth;
   ctx.lineWidth = 1;
 
   const delta = end.sub(start);
@@ -662,7 +662,7 @@ export function draw_dimention_parallel(
   ctx.stroke();
 
   const offset_center = start.lerp(end, 0.5).add(np.mul(offset));
-  ctx.lineWidth = 2;
+  ctx.lineWidth = widthStart;
   ctx.beginPath();
   ctx.moveTo(offset_center.x, offset_center.y);
   ctx.lineTo(position.x, position.y);
@@ -680,8 +680,8 @@ export function draw_dimention_to_segment(
   position: Point2,
   value: number,
 ) {
-  ctx.lineCap = "butt";
-  ctx.strokeStyle = COLORS.STROKE;
+  ctx.fillStyle = ctx.strokeStyle;
+  const widthStart = ctx.lineWidth;
   ctx.lineWidth = 1;
 
   const delta = end.sub(start);
@@ -704,7 +704,7 @@ export function draw_dimention_to_segment(
   ctx.stroke();
 
   const offset_center = point.lerp(oppositePoint, 0.5).add(np.mul(offset));
-  ctx.lineWidth = 2;
+  ctx.lineWidth = widthStart;
   ctx.beginPath();
   ctx.moveTo(offset_center.x, offset_center.y);
   ctx.lineTo(position.x, position.y);
@@ -727,10 +727,7 @@ export function draw_dimention_angle(
   position: Point2,
   value: number,
 ) {
-  ctx.lineCap = "butt";
-  ctx.strokeStyle = COLORS.STROKE;
-  ctx.fillStyle = COLORS.STROKE;
-  ctx.lineWidth = 2;
+  ctx.fillStyle = ctx.strokeStyle;
 
   const origin = Point2.lines_intersection(start1, end1, start2, end2);
   const radius = origin.distance_to(position);
@@ -781,10 +778,7 @@ export function draw_dimention_radius(
   position: Point2,
   value: number,
 ) {
-  ctx.lineCap = "butt";
-  ctx.strokeStyle = COLORS.STROKE;
-  ctx.fillStyle = COLORS.STROKE;
-  ctx.lineWidth = 2;
+  ctx.fillStyle = ctx.strokeStyle;
 
   const delta = position.sub(center);
   const length = delta.length();
@@ -794,12 +788,21 @@ export function draw_dimention_radius(
 
   ctx.beginPath();
   ctx.moveTo(radius, 0);
-  ctx.lineTo(radius - 18, -6);
-  ctx.lineTo(radius - 18, 6);
+  if (length > radius) {
+    ctx.lineTo(radius + 18, 6);
+    ctx.lineTo(radius + 18, -6);
+  } else {
+    ctx.lineTo(radius - 18, -6);
+    ctx.lineTo(radius - 18, 6);
+  }
   ctx.fill();
 
   ctx.beginPath();
-  ctx.moveTo(5, 0);
+  if (length > radius) {
+    ctx.moveTo(radius + 5, 0);
+  } else {
+    ctx.moveTo(5, 0);
+  }
   ctx.lineTo(Math.max(radius - 5, length), 0);
   ctx.stroke();
 
@@ -814,7 +817,6 @@ export function draw_gear_ratio(ctx: CanvasRenderingContext2D, value: number) {
   ctx.textBaseline = "middle";
   let text = valueToRatioParts(value).join(" : ");
   const metrics = ctx.measureText(text);
-  ctx.strokeStyle = COLORS.STROKE;
   ctx.fillStyle = COLORS.BACKGROUND + COLORS.ICON_TRANSPARENCY;
   ctx.beginPath();
   ctx.roundRect(
@@ -826,6 +828,6 @@ export function draw_gear_ratio(ctx: CanvasRenderingContext2D, value: number) {
   );
   ctx.stroke();
   ctx.fill();
-  ctx.fillStyle = COLORS.STROKE;
+  ctx.fillStyle = ctx.strokeStyle;
   ctx.fillText(text, 0, 0);
 }

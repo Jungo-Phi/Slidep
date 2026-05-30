@@ -25,22 +25,24 @@ export const BeltTensionSwitch: React.FC<BeltTensionSwitchProps> = ({
     <Box
       sx={{
         display: "flex",
-        flexDirection: "column",
+        flexDirection: "row",
         alignItems: "center",
+        gap: 0.5,
       }}
     >
-      <Typography variant="body2">{tightened ? "Tight" : "Loose"}</Typography>
       <IconButton
         onClick={toggleTight}
         size="small"
         sx={{ border: 1, borderColor: "#00000020" }}
+        title={tightened ? "Libérer la courroie" : "Tendre la courroie"}
       >
-        <img
+        <Box
+          component="img"
           src={tightened ? tightBeltIconUrl : looseBeltIconUrl}
-          alt={tightened ? "Tight belt" : "loose belt"}
           style={{ width: 28, height: 28 }}
         />
       </IconButton>
+      <Typography variant="body2">{tightened ? "Tendue" : "Libre"}</Typography>
     </Box>
   );
 };

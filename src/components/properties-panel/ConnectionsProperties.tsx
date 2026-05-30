@@ -41,9 +41,9 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
         <Box
           sx={{
             display: "flex",
-            gap: 2,
-            justifyContent: "space-between",
-            alignItems: "start",
+            gap: 1,
+            justifyContent: "space-evenly",
+            alignItems: "center",
             flexDirection: "column",
           }}
         >
@@ -64,15 +64,15 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
         <Box
           sx={{
             display: "flex",
-            gap: 2,
-            justifyContent: "space-between",
-            alignItems: "start",
-            flexDirection: "column",
+            gap: 1,
+            justifyContent: "space-evenly",
+            alignItems: "center",
+            flexDirection: "row",
           }}
         >
           <ConnectionsContainer
             element={element}
-            containerType="ConnectsFixedEdges"
+            containerType="ConnectsParentBeam"
             setHoveredPart={setHoveredPart}
             setCanvasState={setCanvasState}
             updateMechanism={updateMechanism}
@@ -82,7 +82,7 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
           />
           <ConnectionsContainer
             element={element}
-            containerType="ConnectsParentBeam"
+            containerType="ConnectsFixedEdges"
             setHoveredPart={setHoveredPart}
             setCanvasState={setCanvasState}
             updateMechanism={updateMechanism}
@@ -97,15 +97,15 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
         <Box
           sx={{
             display: "flex",
-            gap: 2,
-            justifyContent: "space-between",
-            alignItems: "start",
-            flexDirection: "column",
+            gap: 1,
+            justifyContent: "space-evenly",
+            alignItems: "center",
+            flexDirection: "row",
           }}
         >
           <ConnectionsContainer
             element={element}
-            containerType="ConnectsRotatingEdges"
+            containerType="ConnectsParentBeam"
             setHoveredPart={setHoveredPart}
             setCanvasState={setCanvasState}
             updateMechanism={updateMechanism}
@@ -115,7 +115,7 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
           />
           <ConnectionsContainer
             element={element}
-            containerType="ConnectsParentBeam"
+            containerType="ConnectsRotatingEdges"
             setHoveredPart={setHoveredPart}
             setCanvasState={setCanvasState}
             updateMechanism={updateMechanism}
@@ -131,9 +131,9 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
         <Box
           sx={{
             display: "flex",
-            gap: 2,
-            justifyContent: "space-between",
-            alignItems: "start",
+            gap: 1,
+            justifyContent: "space-evenly",
+            alignItems: "center",
             flexDirection: "column",
           }}
         >
@@ -154,52 +154,72 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
         <Box
           sx={{
             display: "flex",
-            gap: 2,
-            justifyContent: "space-between",
-            alignItems: "start",
+            gap: 1,
+            justifyContent: "space-evenly",
+            alignItems: "center",
             flexDirection: "column",
           }}
         >
-          <ConnectionsContainer
-            element={element}
-            containerType="ConnectsFixedEdges"
-            setHoveredPart={setHoveredPart}
-            setCanvasState={setCanvasState}
-            updateMechanism={updateMechanism}
-            mechanism={mechanism}
-            draggedItem={draggedItem}
-            setDraggedItem={setDraggedItem}
-          />
-          <ConnectionsContainer
-            element={element}
-            containerType="ConnectsRotatingEdges"
-            setHoveredPart={setHoveredPart}
-            setCanvasState={setCanvasState}
-            updateMechanism={updateMechanism}
-            mechanism={mechanism}
-            draggedItem={draggedItem}
-            setDraggedItem={setDraggedItem}
-          />
-          <ConnectionsContainer
-            element={element}
-            containerType="ConnectsMeshedGears"
-            setHoveredPart={setHoveredPart}
-            setCanvasState={setCanvasState}
-            updateMechanism={updateMechanism}
-            mechanism={mechanism}
-            draggedItem={draggedItem}
-            setDraggedItem={setDraggedItem}
-          />
-          <ConnectionsContainer
-            element={element}
-            containerType="ConnectsFixedGears"
-            setHoveredPart={setHoveredPart}
-            setCanvasState={setCanvasState}
-            updateMechanism={updateMechanism}
-            mechanism={mechanism}
-            draggedItem={draggedItem}
-            setDraggedItem={setDraggedItem}
-          />
+          <Box
+            sx={{
+              display: "flex",
+              gap: 1,
+              justifyContent: "space-evenly",
+              alignItems: "center",
+              flexDirection: "row",
+            }}
+          >
+            <ConnectionsContainer
+              element={element}
+              containerType="ConnectsFixedEdges"
+              setHoveredPart={setHoveredPart}
+              setCanvasState={setCanvasState}
+              updateMechanism={updateMechanism}
+              mechanism={mechanism}
+              draggedItem={draggedItem}
+              setDraggedItem={setDraggedItem}
+            />
+            <ConnectionsContainer
+              element={element}
+              containerType="ConnectsRotatingEdges"
+              setHoveredPart={setHoveredPart}
+              setCanvasState={setCanvasState}
+              updateMechanism={updateMechanism}
+              mechanism={mechanism}
+              draggedItem={draggedItem}
+              setDraggedItem={setDraggedItem}
+            />
+          </Box>
+          <Box
+            sx={{
+              display: "flex",
+              gap: 1,
+              justifyContent: "space-evenly",
+              alignItems: "center",
+              flexDirection: "row",
+            }}
+          >
+            <ConnectionsContainer
+              element={element}
+              containerType="ConnectsMeshedGears"
+              setHoveredPart={setHoveredPart}
+              setCanvasState={setCanvasState}
+              updateMechanism={updateMechanism}
+              mechanism={mechanism}
+              draggedItem={draggedItem}
+              setDraggedItem={setDraggedItem}
+            />
+            <ConnectionsContainer
+              element={element}
+              containerType="ConnectsFixedGears"
+              setHoveredPart={setHoveredPart}
+              setCanvasState={setCanvasState}
+              updateMechanism={updateMechanism}
+              mechanism={mechanism}
+              draggedItem={draggedItem}
+              setDraggedItem={setDraggedItem}
+            />
+          </Box>
           <ConnectionsContainer
             element={element}
             containerType="ConnectsAttachedBelt"
@@ -217,35 +237,45 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
         <Box
           sx={{
             display: "flex",
-            gap: 2,
-            justifyContent: "space-between",
-            alignItems: "start",
+            gap: 1,
+            justifyContent: "space-evenly",
+            alignItems: "center",
             flexDirection: "column",
           }}
         >
-          <ConnectionsContainer
-            element={element}
-            containerType="ConnectsFixedNodeStart"
-            setHoveredPart={setHoveredPart}
-            setCanvasState={setCanvasState}
-            updateMechanism={updateMechanism}
-            mechanism={mechanism}
-            draggedItem={draggedItem}
-            setDraggedItem={setDraggedItem}
-          />
+          <Box
+            sx={{
+              display: "flex",
+              gap: 1,
+              justifyContent: "space-evenly",
+              alignItems: "center",
+              flexDirection: "row",
+            }}
+          >
+            <ConnectionsContainer
+              element={element}
+              containerType="ConnectsFixedNodeStart"
+              setHoveredPart={setHoveredPart}
+              setCanvasState={setCanvasState}
+              updateMechanism={updateMechanism}
+              mechanism={mechanism}
+              draggedItem={draggedItem}
+              setDraggedItem={setDraggedItem}
+            />
+            <ConnectionsContainer
+              element={element}
+              containerType="ConnectsFixedNodeEnd"
+              setHoveredPart={setHoveredPart}
+              setCanvasState={setCanvasState}
+              updateMechanism={updateMechanism}
+              mechanism={mechanism}
+              draggedItem={draggedItem}
+              setDraggedItem={setDraggedItem}
+            />
+          </Box>
           <ConnectionsContainer
             element={element}
             containerType="ConnectsFixedNodesBody"
-            setHoveredPart={setHoveredPart}
-            setCanvasState={setCanvasState}
-            updateMechanism={updateMechanism}
-            mechanism={mechanism}
-            draggedItem={draggedItem}
-            setDraggedItem={setDraggedItem}
-          />
-          <ConnectionsContainer
-            element={element}
-            containerType="ConnectsFixedNodeEnd"
             setHoveredPart={setHoveredPart}
             setCanvasState={setCanvasState}
             updateMechanism={updateMechanism}
@@ -261,10 +291,10 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
         <Box
           sx={{
             display: "flex",
-            gap: 2,
-            justifyContent: "space-between",
-            alignItems: "start",
-            flexDirection: "column",
+            gap: 1,
+            justifyContent: "space-evenly",
+            alignItems: "center",
+            flexDirection: "row",
           }}
         >
           <ConnectionsContainer
@@ -294,35 +324,45 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
         <Box
           sx={{
             display: "flex",
-            gap: 2,
-            justifyContent: "space-between",
-            alignItems: "start",
+            gap: 1,
+            justifyContent: "space-evenly",
+            alignItems: "center",
             flexDirection: "column",
           }}
         >
-          <ConnectionsContainer
-            element={element}
-            containerType="ConnectsFixedNodeStart"
-            setHoveredPart={setHoveredPart}
-            setCanvasState={setCanvasState}
-            updateMechanism={updateMechanism}
-            mechanism={mechanism}
-            draggedItem={draggedItem}
-            setDraggedItem={setDraggedItem}
-          />
+          <Box
+            sx={{
+              display: "flex",
+              gap: 1,
+              justifyContent: "space-evenly",
+              alignItems: "center",
+              flexDirection: "row",
+            }}
+          >
+            <ConnectionsContainer
+              element={element}
+              containerType="ConnectsFixedNodeStart"
+              setHoveredPart={setHoveredPart}
+              setCanvasState={setCanvasState}
+              updateMechanism={updateMechanism}
+              mechanism={mechanism}
+              draggedItem={draggedItem}
+              setDraggedItem={setDraggedItem}
+            />
+            <ConnectionsContainer
+              element={element}
+              containerType="ConnectsFixedNodeEnd"
+              setHoveredPart={setHoveredPart}
+              setCanvasState={setCanvasState}
+              updateMechanism={updateMechanism}
+              mechanism={mechanism}
+              draggedItem={draggedItem}
+              setDraggedItem={setDraggedItem}
+            />
+          </Box>
           <ConnectionsContainer
             element={element}
             containerType="ConnectsAttachedGears"
-            setHoveredPart={setHoveredPart}
-            setCanvasState={setCanvasState}
-            updateMechanism={updateMechanism}
-            mechanism={mechanism}
-            draggedItem={draggedItem}
-            setDraggedItem={setDraggedItem}
-          />
-          <ConnectionsContainer
-            element={element}
-            containerType="ConnectsFixedNodeEnd"
             setHoveredPart={setHoveredPart}
             setCanvasState={setCanvasState}
             updateMechanism={updateMechanism}

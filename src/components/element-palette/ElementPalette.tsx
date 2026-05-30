@@ -33,6 +33,8 @@ import ratioIconUrl from "../../assets/icons/palette/ratio.svg";
 
 import { CanvasState, CanvasStateType } from "../../types/canvas-state";
 import { COLORS } from "../../constants/rendering-specs";
+import { get_constraint_element_from_id } from "../mechanical-canvas/connect-actions";
+import { Mechanism } from "../../types";
 
 /**
  * Element definition for palette
@@ -42,7 +44,9 @@ interface PaletteElement {
   tooltip: string;
   iconSrc: string;
   goToStateType: CanvasStateType;
-  hilightStateTypes: CanvasStateType[];
+  hilightRule: (state: CanvasState, mechanism: Mechanism) => boolean;
+  hilightColor: string;
+  hilightHoverColor: string;
 }
 
 /**
@@ -57,26 +61,32 @@ const PALETTE_GROUPS: { title: string; elements: PaletteElement[] }[] = [
         tooltip: "Select (Esc)",
         iconSrc: selectIconUrl,
         goToStateType: "Selecting",
-        hilightStateTypes: [
-          "Selecting",
-          "SelectingMultiple",
-          "SelectedMultiple",
-          "MovingSelectionMultiple",
-          "SelectedElement",
-          "MovingNode",
-          "MovingEdgeStartPoint",
-          "MovingEdgeEndPoint",
-          "MovingEdgeBody",
-          "MovingConstraint",
-          "EditingConstraint",
-        ],
+        hilightRule: (state) =>
+          [
+            "Selecting",
+            "SelectingMultiple",
+            "SelectedMultiple",
+            "MovingSelectionMultiple",
+            "SelectedElement",
+            "MovingNode",
+            "MovingEdgeStartPoint",
+            "MovingEdgeEndPoint",
+            "MovingEdgeBody",
+            "MovingConstraint",
+          ].includes(state.type) ||
+          (state.type === "EditingConstraint" && !state.isPlacing),
+        hilightColor: COLORS.SELECTION_BOX,
+        hilightHoverColor: COLORS.SELECTION_STROKE,
       },
       {
         label: "Gomme",
         tooltip: "Eraser (A)",
         iconSrc: eraserIconUrl,
         goToStateType: "Erasing",
-        hilightStateTypes: ["Erasing", "ErasingMultiple"],
+        hilightRule: (state) =>
+          state.type === "Erasing" || state.type === "ErasingMultiple",
+        hilightColor: COLORS.DELETION_BOX,
+        hilightHoverColor: COLORS.DELETION_STROKE,
       },
     ],
   },
@@ -88,42 +98,57 @@ const PALETTE_GROUPS: { title: string; elements: PaletteElement[] }[] = [
         tooltip: "Pivot (P)",
         iconSrc: pivotIconUrl,
         goToStateType: "PlacingPivot",
-        hilightStateTypes: ["PlacingPivot"],
+        hilightRule: (state) => state.type === "PlacingPivot",
+        hilightColor: COLORS.ORANGE,
+        hilightHoverColor: COLORS.ORANGE_STROKE,
       },
       {
         label: "Glissière",
         tooltip: "Slider (S)",
         iconSrc: sliderIconUrl,
         goToStateType: "PlacingSlider",
-        hilightStateTypes: ["PlacingSlider"],
+        hilightRule: (state) => state.type === "PlacingSlider",
+        hilightColor: COLORS.ORANGE,
+        hilightHoverColor: COLORS.ORANGE_STROKE,
       },
       {
         label: "Masse",
         tooltip: "Mass (M)",
         iconSrc: massIconUrl,
         goToStateType: "PlacingMass",
-        hilightStateTypes: ["PlacingMass"],
+        hilightRule: (state) => state.type === "PlacingMass",
+        hilightColor: COLORS.ORANGE,
+        hilightHoverColor: COLORS.ORANGE_STROKE,
       },
       {
         label: "Jointure",
         tooltip: "Join (J)",
         iconSrc: joinIconUrl,
         goToStateType: "PlacingJoin",
-        hilightStateTypes: ["PlacingJoin"],
+        hilightRule: (state) => state.type === "PlacingJoin",
+        hilightColor: COLORS.ORANGE,
+        hilightHoverColor: COLORS.ORANGE_STROKE,
       },
       {
         label: "Courroie",
         tooltip: "Belt (T)",
         iconSrc: beltIconUrl,
         goToStateType: "PlacingBeltStart",
-        hilightStateTypes: ["PlacingBeltStart", "PlacingBeltEnd"],
+        hilightRule: (state) =>
+          state.type === "PlacingBeltStart" || state.type === "PlacingBeltEnd",
+        hilightColor: COLORS.ORANGE,
+        hilightHoverColor: COLORS.ORANGE_STROKE,
       },
       {
         label: "Engrenage",
         tooltip: "Gear (Q)",
         iconSrc: gearIconUrl,
         goToStateType: "PlacingGearStart",
-        hilightStateTypes: ["PlacingGearStart", "PlacingGearRadius"],
+        hilightRule: (state) =>
+          state.type === "PlacingGearStart" ||
+          state.type === "PlacingGearRadius",
+        hilightColor: COLORS.ORANGE,
+        hilightHoverColor: COLORS.ORANGE_STROKE,
       },
     ],
   },
@@ -135,28 +160,41 @@ const PALETTE_GROUPS: { title: string; elements: PaletteElement[] }[] = [
         tooltip: "Beam (B)",
         iconSrc: beamIconUrl,
         goToStateType: "PlacingBeamStart",
-        hilightStateTypes: ["PlacingBeamStart", "PlacingBeamEnd"],
+        hilightRule: (state) =>
+          state.type === "PlacingBeamStart" || state.type === "PlacingBeamEnd",
+        hilightColor: COLORS.ORANGE,
+        hilightHoverColor: COLORS.ORANGE_STROKE,
       },
       {
         label: "Sol",
         tooltip: "Ground (G)",
         iconSrc: groundIconUrl,
         goToStateType: "PlacingGround",
-        hilightStateTypes: ["PlacingGround"],
+        hilightRule: (state) => state.type === "PlacingGround",
+        hilightColor: COLORS.ORANGE,
+        hilightHoverColor: COLORS.ORANGE_STROKE,
       },
       {
         label: "Amortisseur",
         tooltip: "Damper (C)",
         iconSrc: damperIconUrl,
         goToStateType: "PlacingDamperStart",
-        hilightStateTypes: ["PlacingDamperStart", "PlacingDamperEnd"],
+        hilightRule: (state) =>
+          state.type === "PlacingDamperStart" ||
+          state.type === "PlacingDamperEnd",
+        hilightColor: COLORS.ORANGE,
+        hilightHoverColor: COLORS.ORANGE_STROKE,
       },
       {
         label: "Ressort",
         tooltip: "Spring (K)",
         iconSrc: springIconUrl,
         goToStateType: "PlacingSpringStart",
-        hilightStateTypes: ["PlacingSpringStart", "PlacingSpringEnd"],
+        hilightRule: (state) =>
+          state.type === "PlacingSpringStart" ||
+          state.type === "PlacingSpringEnd",
+        hilightColor: COLORS.ORANGE,
+        hilightHoverColor: COLORS.ORANGE_STROKE,
       },
     ],
   },
@@ -168,72 +206,90 @@ const PALETTE_GROUPS: { title: string; elements: PaletteElement[] }[] = [
         tooltip: "Dimension (D)",
         iconSrc: dimensionIconUrl,
         goToStateType: "DimensionStart",
-        hilightStateTypes: [
-          "DimensionStart",
-          "DimensionNode",
-          "DimensionEdge",
-          "DimensionEdgeToNode",
-          "DimensionNodeToNode",
-          "DimensionAngle",
-          "DimensionRadius",
-        ],
+        hilightRule: (state, mechanism) =>
+          [
+            "DimensionStart",
+            "DimensionNode",
+            "DimensionEdge",
+            "DimensionEdgeToNode",
+            "DimensionNodeToNode",
+            "DimensionAngle",
+            "DimensionRadius",
+          ].includes(state.type) ||
+          (state.type === "EditingConstraint" &&
+            state.isPlacing &&
+            get_constraint_element_from_id(
+              state.elementID,
+              mechanism.constraintElements,
+            )!.type !== "gear-ratio"),
+        hilightColor: COLORS.ORANGE,
+        hilightHoverColor: COLORS.ORANGE_STROKE,
       },
       {
         label: "Alignement horizontal / vertical",
         tooltip: "Horizontal/Vertical alignement  (H)",
         iconSrc: horizontalVerticalAlignIconUrl,
         goToStateType: "HorizontalVerticalConstraintStart",
-        hilightStateTypes: [
-          "HorizontalVerticalConstraintStart",
-          "HorizontalVerticalConstraintNode",
-        ],
+        hilightRule: (state) =>
+          state.type === "HorizontalVerticalConstraintStart" ||
+          state.type === "HorizontalVerticalConstraintNode",
+        hilightColor: COLORS.ORANGE,
+        hilightHoverColor: COLORS.ORANGE_STROKE,
       },
       {
         label: "Perpendiculaire",
         tooltip: "Normal (N)",
         iconSrc: normalIconUrl,
         goToStateType: "NormalConstraintStart",
-        hilightStateTypes: ["NormalConstraintStart", "NormalConstraintEdge"],
+        hilightRule: (state) =>
+          state.type === "NormalConstraintStart" ||
+          state.type === "NormalConstraintEdge",
+        hilightColor: COLORS.ORANGE,
+        hilightHoverColor: COLORS.ORANGE_STROKE,
       },
       {
         label: "Parallèle",
         tooltip: "Parallel (L)",
         iconSrc: parallelIconUrl,
         goToStateType: "ParallelConstraintStart",
-        hilightStateTypes: [
-          "ParallelConstraintStart",
-          "ParallelConstraintEdge",
-        ],
+        hilightRule: (state) =>
+          state.type === "ParallelConstraintStart" ||
+          state.type === "ParallelConstraintEdge",
+        hilightColor: COLORS.ORANGE,
+        hilightHoverColor: COLORS.ORANGE_STROKE,
       },
       {
         label: "Longueurs égales",
         tooltip: "Equal lengths (E)",
         iconSrc: equalIconUrl,
         goToStateType: "EqualConstraintStart",
-        hilightStateTypes: [
-          "EqualConstraintStart",
-          "EqualConstraintEdge",
-          "EqualConstraintGear",
-        ],
+        hilightRule: (state) =>
+          state.type === "EqualConstraintStart" ||
+          state.type === "EqualConstraintEdge" ||
+          state.type === "EqualConstraintGear",
+        hilightColor: COLORS.ORANGE,
+        hilightHoverColor: COLORS.ORANGE_STROKE,
       },
       {
         label: "Rapport d'engrenages",
         tooltip: "Gear ratio (R)",
         iconSrc: ratioIconUrl,
         goToStateType: "GearRatioConstraintStart",
-        hilightStateTypes: [
-          "GearRatioConstraintStart",
-          "GearRatioConstraintGear",
-        ],
+        hilightRule: (state, mechanism) =>
+          state.type === "GearRatioConstraintStart" ||
+          state.type === "GearRatioConstraintGear" ||
+          (state.type === "EditingConstraint" &&
+            state.isPlacing &&
+            get_constraint_element_from_id(
+              state.elementID,
+              mechanism.constraintElements,
+            )!.type === "gear-ratio"),
+        hilightColor: COLORS.ORANGE,
+        hilightHoverColor: COLORS.ORANGE_STROKE,
       },
     ],
   },
 ];
-
-interface ElementPaletteProps {
-  setCanvasState: (state: CanvasState) => void;
-  canvasState: CanvasState;
-}
 
 /**
  * Preload all icons to improve performance by loading them in memory before they are needed
@@ -269,9 +325,16 @@ const ALL_PALETTE_ICON_URLS = [
   ratioIconUrl,
 ];
 
+interface ElementPaletteProps {
+  setCanvasState: (state: CanvasState) => void;
+  canvasState: CanvasState;
+  mechanism: Mechanism;
+}
+
 export const ElementPalette: React.FC<ElementPaletteProps> = ({
   setCanvasState,
   canvasState,
+  mechanism,
 }) => {
   const SIZE = 32;
   const PADDING = 4;
@@ -377,33 +440,13 @@ export const ElementPalette: React.FC<ElementPaletteProps> = ({
                     width: SIZE + 2 * PADDING,
                     height: SIZE + 2 * PADDING,
                     borderRadius: 0.75,
-                    backgroundColor:
-                      canvasState.type &&
-                      element.hilightStateTypes.includes(canvasState.type)
-                        ? PALETTE_GROUPS[0].elements[0].hilightStateTypes.includes(
-                            canvasState.type,
-                          )
-                          ? COLORS.SELECTION_BOX
-                          : PALETTE_GROUPS[0].elements[1].hilightStateTypes.includes(
-                                canvasState.type,
-                              )
-                            ? COLORS.DELETION_BOX
-                            : COLORS.ORANGE
-                        : "transparent",
+                    backgroundColor: element.hilightRule(canvasState, mechanism)
+                      ? element.hilightColor
+                      : "transparent",
                     "&:hover": {
-                      background:
-                        canvasState.type &&
-                        element.hilightStateTypes.includes(canvasState.type)
-                          ? PALETTE_GROUPS[0].elements[0].hilightStateTypes.includes(
-                              canvasState.type,
-                            )
-                            ? COLORS.SELECTION_STROKE
-                            : PALETTE_GROUPS[0].elements[1].hilightStateTypes.includes(
-                                  canvasState.type,
-                                )
-                              ? COLORS.DELETION_STROKE
-                              : COLORS.ORANGE_STROKE
-                          : COLORS.HOVER,
+                      background: element.hilightRule(canvasState, mechanism)
+                        ? element.hilightHoverColor
+                        : COLORS.HOVER,
                     },
                   }}
                   aria-label={element.label}
@@ -418,7 +461,7 @@ export const ElementPalette: React.FC<ElementPaletteProps> = ({
                       display: "block",
                       filter:
                         canvasState.type &&
-                        element.hilightStateTypes.includes(canvasState.type)
+                        element.hilightRule(canvasState, mechanism)
                           ? "brightness(0) invert(1)"
                           : "none",
                     }}

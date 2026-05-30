@@ -115,4 +115,9 @@ export type CanvasState =
   | { type: "GearRatioConstraintStart" }
   | { type: "GearRatioConstraintGear"; startGearID: ID }
   | { type: "MovingConstraint"; constraintID: ID }
-  | { type: "EditingConstraint"; elementID: ID; value: number };
+  | {
+      type: "EditingConstraint";
+      elementID: ID;
+      value: number;
+      isPlacing: boolean;
+    };

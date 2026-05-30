@@ -57,8 +57,6 @@ export function get_hovered_part_of_element(
         case "PlacingBeltEnd":
         case "DimensionStart":
         case "Erasing":
-        case "GearRatioConstraintStart":
-        case "GearRatioConstraintGear":
         case "EditingConstraint":
           // center + gear perimeter
           if (distance <= HIT_TOLERANCE.NODE) {
@@ -103,6 +101,7 @@ export function get_hovered_part_of_element(
         case "DimensionEdge":
         case "HorizontalVerticalConstraintStart":
         case "HorizontalVerticalConstraintNode":
+          if (element.type === "mass" && state.type === "PlacingGround") break; // cannot place ground on mass
           // center
           if (distance <= HIT_TOLERANCE.NODE) {
             return {
@@ -238,6 +237,9 @@ export function get_hovered_part_of_element(
             }
           }
           break;
+        case "GearRatioConstraintStart":
+        case "GearRatioConstraintGear":
+        case "EqualConstraintStart":
         case "EqualConstraintGear":
           // Only gear teehts
           if (node.type !== "gear") break;

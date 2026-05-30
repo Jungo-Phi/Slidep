@@ -46,7 +46,7 @@ const palette = {
   },
   background: {
     default: "#FFF9EB",
-    paper: "#FFEDC6",
+    paper: "#fdecc9",
   },
   text: {
     primary: "#001D59",

@@ -3,7 +3,6 @@ import {
   ConstraintElement,
   MechanicalElement,
   GearElement,
-  BeltElement,
   EdgeElement,
   ActionBundleType,
 } from "../../types";
@@ -572,7 +571,7 @@ export function resolveGeometricConstraints(
   // TODO : Autres beams (dans l'ORDRE) : si il y a 3 ou plus degré de liberté ALORS contrainte de longueur.
 
   // start with last link, which is Grab Coincidence if there is one
-  let startLinkIndex: number = links.length - 1;
+  // let startLinkIndex: number = links.length - 1;
 
   // TODO : Ordonner la liste
   /*
@@ -589,22 +588,13 @@ export function resolveGeometricConstraints(
   const epsilon = 0.000_001; // Very tight tolerance, why not 0.1 ?
   let maxError: number = 0;
 
-  const constraintStiffness = 0.8;
+  const constraintStiffness = 0.99;
 
   for (let i = 0; i < iterations; i++) {
     maxError = 0;
 
     links.forEach((link) => {
       switch (link.type) {
-        case "Coincidence":
-          maxError += applyCoincidenceConstraint(
-            positions,
-            posMasses,
-            link.key1,
-            link.key2,
-            constraintStiffness,
-          );
-          break;
         case "Distance":
           maxError += applyDistanceConstraint(
             positions,
@@ -658,7 +648,22 @@ export function resolveGeometricConstraints(
           );
           break;
         case "Angle":
+          maxError += applyAngleConstraint(
+            positions,
+            posMasses,
+            link.key1,
+            link.key2,
+            link.key3,
+            link.key4,
+            constraintStiffness,
+          );
+          break;
         case "Radius":
+          const radius = radii.get(link.key1)!;
+          const wRadius = radMasses.get(link.key1)!;
+          const error = radius - link.radius;
+          radii.set(link.key1, radius + error * wRadius * constraintStiffness);
+          maxError += error;
           break;
         case "Horizontal":
           maxError += applyHorizontalConstraint(
@@ -679,7 +684,26 @@ export function resolveGeometricConstraints(
           );
           break;
         case "Normal":
+          maxError += applyNormalConstraint(
+            positions,
+            posMasses,
+            link.key1,
+            link.key2,
+            link.key3,
+            link.key4,
+            constraintStiffness,
+          );
+          break;
         case "Parallel":
+          maxError += applyParallelConstraint(
+            positions,
+            posMasses,
+            link.key1,
+            link.key2,
+            link.key3,
+            link.key4,
+            constraintStiffness,
+          );
           break;
         case "EqualLength":
           maxError += applyEqualLengthConstraint(
@@ -693,7 +717,25 @@ export function resolveGeometricConstraints(
           );
           break;
         case "GearMeshing":
+          maxError += applyGearMeshingConstraint(
+            positions,
+            posMasses,
+            radii,
+            radMasses,
+            link.key1,
+            link.key2,
+            constraintStiffness,
+          );
+          break;
         case "GearRatio":
+          maxError += applyGearRatioConstraint(
+            radii,
+            radMasses,
+            link.key1,
+            link.key2,
+            constraintStiffness,
+          );
+          break;
       }
     });
 
@@ -720,32 +762,6 @@ export function resolveGeometricConstraints(
     positions: positions,
     radii: radii,
   };
-}
-
-function applyCoincidenceConstraint(
-  positions: Map<string, Point2>,
-  posMasses: Map<string, number>,
-  key1: string,
-  key2: string,
-  stiffness: number = 1.0,
-): number {
-  const p1 = positions.get(key1);
-  const p2 = positions.get(key2);
-  const w1 = posMasses.get(key1) ?? 1;
-  const w2 = posMasses.get(key2) ?? 1;
-  if (!p1 || !p2) return 0;
-
-  const totalW = w1 + w2;
-  if (totalW === 0) return 0; // Both are absolute anchors (mass 0)
-
-  const delta = p2.sub(p1);
-  const error = delta.length();
-
-  // Correction is proportional to inverse mass (w)
-  // If w1 is 0 (anchor), it doesn't move. If w1 is 1 (free), it moves more.
-  positions.set(key1, p1.add(delta.mul((w1 / totalW) * stiffness)));
-  positions.set(key2, p2.sub(delta.mul((w2 / totalW) * stiffness)));
-  return error;
 }
 
 function applyDistanceConstraint(
@@ -953,32 +969,6 @@ function applyVerticalConstraint(
   return error;
 }
 
-function applyAlignConstraint(
-  positions: Map<string, Point2>,
-  posMasses: Map<string, number>,
-  key1: string,
-  key2: string,
-  type: "horizontal" | "vertical",
-  stiffness: number = 1.0,
-) {
-  const p1 = positions.get(key1);
-  const p2 = positions.get(key2);
-  const w1 = posMasses.get(key1) ?? 1;
-  const w2 = posMasses.get(key2) ?? 1;
-  if (!p1 || !p2 || (w1 === 0 && w2 === 0)) return;
-
-  const totalW = w1 + w2;
-  if (type === "horizontal") {
-    const avgY = (p1.y * w2 + p2.y * w1) / totalW;
-    positions.set(key1, p1.lerp(new Point2(p1.x, avgY), stiffness));
-    positions.set(key2, p2.lerp(new Point2(p2.x, avgY), stiffness));
-  } else {
-    const avgX = (p1.x * w2 + p2.x * w1) / totalW;
-    positions.set(key1, p1.lerp(new Point2(avgX, p1.y), stiffness));
-    positions.set(key2, p2.lerp(new Point2(avgX, p2.y), stiffness));
-  }
-}
-
 function applyParallelConstraint(
   positions: Map<string, Point2>,
   posMasses: Map<string, number>,
@@ -987,12 +977,12 @@ function applyParallelConstraint(
   s2: string,
   e2: string,
   stiffness: number = 1.0,
-) {
+): number {
   const ps1 = positions.get(s1);
   const pe1 = positions.get(e1);
   const ps2 = positions.get(s2);
   const pe2 = positions.get(e2);
-  if (!ps1 || !pe1 || !ps2 || !pe2) return;
+  if (!ps1 || !pe1 || !ps2 || !pe2) return 0;
 
   const v1 = pe1.sub(ps1);
   const v2 = pe2.sub(ps2);
@@ -1006,6 +996,7 @@ function applyParallelConstraint(
 
   if (posMasses.get(s2) !== 0) positions.set(s2, center2.sub(halfV2));
   if (posMasses.get(e2) !== 0) positions.set(e2, center2.add(halfV2));
+  return error;
 }
 
 function applyNormalConstraint(
@@ -1016,12 +1007,12 @@ function applyNormalConstraint(
   s2: string,
   e2: string,
   stiffness: number = 1.0,
-) {
+): number {
   const ps1 = positions.get(s1);
   const pe1 = positions.get(e1);
   const ps2 = positions.get(s2);
   const pe2 = positions.get(e2);
-  if (!ps1 || !pe1 || !ps2 || !pe2) return;
+  if (!ps1 || !pe1 || !ps2 || !pe2) return 0;
 
   const v1 = pe1.sub(ps1);
   const v2 = pe2.sub(ps2);
@@ -1035,6 +1026,7 @@ function applyNormalConstraint(
 
   if (posMasses.get(s2) !== 0) positions.set(s2, center2.sub(halfV2));
   if (posMasses.get(e2) !== 0) positions.set(e2, center2.add(halfV2));
+  return error;
 }
 
 function applyAngleConstraint(
@@ -1093,32 +1085,20 @@ function applyEqualLengthConstraint(
   return error;
 }
 
-function applyGearRatioConstraint(
-  radii: Map<string, number>,
-  id1: string,
-  id2: string,
-  ratio: number,
-) {
-  const r1 = radii.get(id1);
-  const r2 = radii.get(id2);
-  if (r1 === undefined || r2 === undefined) return;
-
-  // R1 / R2 = ratio => R2 = R1 / ratio
-  radii.set(id2, r1 / ratio);
-}
-
 function applyGearMeshingConstraint(
   positions: Map<string, Point2>,
   posMasses: Map<string, number>,
   radii: Map<string, number>,
+  radMasses: Map<string, number>,
   id1: string,
   id2: string,
-) {
+  stiffness: number = 1.0,
+): number {
   const p1 = positions.get(`${id1}:pos`);
   const p2 = positions.get(`${id2}:pos`);
   const r1 = radii.get(id1);
   const r2 = radii.get(id2);
-  if (!p1 || !p2 || r1 === undefined || r2 === undefined) return;
+  if (!p1 || !p2 || r1 === undefined || r2 === undefined) return 0;
 
   const targetDist = r1 + r2;
   applyDistanceConstraint(
@@ -1128,4 +1108,22 @@ function applyGearMeshingConstraint(
     `${id2}:pos`,
     targetDist,
   );
+  return error;
+}
+
+function applyGearRatioConstraint(
+  radii: Map<string, number>,
+  radMasses: Map<string, number>,
+  id1: string,
+  id2: string,
+  ratio: number,
+  stiffness: number = 1.0,
+): number {
+  const r1 = radii.get(id1);
+  const r2 = radii.get(id2);
+  if (r1 === undefined || r2 === undefined) return 0;
+
+  // R1 / R2 = ratio => R2 = R1 / ratio
+  radii.set(id2, r1 / ratio);
+  return error;
 }

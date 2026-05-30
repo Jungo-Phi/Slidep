@@ -73,7 +73,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
         position: "absolute",
         right: 16,
         top: 16,
-        width: closed ? 150 : 300,
+        width: closed ? 150 : 320,
         maxHeight: "calc(100% - 32px)",
         display: "flex",
         flexDirection: "column",

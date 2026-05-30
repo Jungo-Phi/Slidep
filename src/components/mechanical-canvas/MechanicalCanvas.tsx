@@ -247,13 +247,28 @@ export const MechanicalCanvas: React.FC<MechanicalCanvasProps> = ({
       mouseDelta: new Point2(event.movementX, event.movementY),
     });
   };
-  const onKeyDownHandler = (event: React.KeyboardEvent<HTMLCanvasElement>) => {
-    handleEvent({
-      type: "KeyDown",
-      key: event.key,
-      crtlKey: event.ctrlKey,
-    });
+  const isTypingInInput = (): boolean => {
+    const active = document.activeElement;
+    if (!active) return false;
+    const tag = active.tagName.toLowerCase();
+    if (tag === "input" || tag === "textarea" || tag === "select") return true;
+    if ((active as HTMLElement).isContentEditable) return true;
+    return false;
   };
+
+  useEffect(() => {
+    const handleGlobalKeyDown = (event: KeyboardEvent) => {
+      if (isTypingInInput()) return;
+      handleEvent({
+        type: "KeyDown",
+        key: event.key,
+        crtlKey: event.ctrlKey,
+      });
+    };
+    document.addEventListener("keydown", handleGlobalKeyDown);
+    return () => document.removeEventListener("keydown", handleGlobalKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canvasState, mechanism, hoveredPart, mousePosition, oldPosition]);
 
   function handleEvent(event: CanvasEvent) {
     let excluded_elements: ID[] = [];
@@ -386,7 +401,6 @@ export const MechanicalCanvas: React.FC<MechanicalCanvasProps> = ({
         onMouseUp={onMouseUpHandler}
         onMouseDown={onMouseDownHandler}
         onMouseMove={onMouseMoveHandler}
-        onKeyDown={onKeyDownHandler}
         onContextMenu={onContextMenuHandler}
         tabIndex={0}
         aria-label="Canvas de conception mécanique"
@@ -409,10 +423,8 @@ export const MechanicalCanvas: React.FC<MechanicalCanvasProps> = ({
               canvasState.elementID,
               mechanism.constraintElements,
             );
-            if (!("value" in constraint)) {
-              setCanvasState({ type: "Selecting" });
-              return;
-            }
+            if (!("value" in constraint)) return;
+
             let actionType: ActionType;
             switch (constraint.type) {
               case "dimension-edge":
@@ -447,19 +459,40 @@ export const MechanicalCanvas: React.FC<MechanicalCanvasProps> = ({
                 "ChangeDimension",
               );
             }
-            setCanvasState({
-              type: "SelectedElement",
-              elementID: constraint.id,
-              isMouseDown: false,
-            });
+            if (canvasState.isPlacing) {
+              if (constraint.type === "gear-ratio") {
+                setCanvasState({ type: "GearRatioConstraintStart" });
+              } else {
+                setCanvasState({ type: "DimensionStart" });
+              }
+            } else {
+              setCanvasState({
+                type: "SelectedElement",
+                elementID: constraint.id,
+                isMouseDown: false,
+              });
+            }
           }}
-          onCancel={(constraint) =>
-            setCanvasState({
-              type: "SelectedElement",
-              elementID: constraint.id,
-              isMouseDown: false,
-            })
-          }
+          onCancel={(constraint) => {
+            if (canvasState.isPlacing) {
+              updateMechanism(
+                [
+                  {
+                    type: "DeleteElement",
+                    element: constraint,
+                  },
+                ],
+                "Other",
+              );
+              setCanvasState({ type: "Selecting" });
+            } else {
+              setCanvasState({
+                type: "SelectedElement",
+                elementID: constraint.id,
+                isMouseDown: false,
+              });
+            }
+          }}
         />
       )}
     </Box>

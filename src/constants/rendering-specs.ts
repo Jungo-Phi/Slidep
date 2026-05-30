@@ -6,9 +6,9 @@ import { UnionElement } from "../types";
 
 export const COLORS = {
   // Canvas colors
-  BACKGROUND: "#FFEDC6", // Crème doux
-  GRID: "#F1DFB9",
-  GRID_MAJOR: "#E8D7B0",
+  BACKGROUND: "#fdecc9", // Crème doux
+  GRID: "#f6e5c3",
+  GRID_MAJOR: "#ecdbb8",
 
   // Element colors
   STROKE: "#001D59", // Bleu foncé
@@ -146,6 +146,7 @@ export const DRAWING_ORDER: UnionElement["type"][] = [
   "dimension-node-to-node",
   "dimension-edge",
   "dimension-angle",
+  "dimension-radius",
   "horizontal-align-edge",
   "horizontal-align-nodes",
   "vertical-align-edge",

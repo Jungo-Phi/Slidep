@@ -86,7 +86,7 @@ const ElementDisplayComponent: React.FC<ElementDisplayProps> = ({
         },
       }}
       onClick={handleSelect}
-      title="Select"
+      title="Sélectionner"
       size={size}
     >
       <Box

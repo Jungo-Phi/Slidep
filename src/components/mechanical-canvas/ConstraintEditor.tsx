@@ -100,11 +100,11 @@ export const ConstraintEditor: React.FC<ConstraintEditorProps> = ({
           sx={{
             display: "flex",
             alignItems: "center",
-            height: "32px",
+            height: "36px",
             border: `2px solid ${COLORS.STROKE}`,
-            borderRadius: "16px",
+            borderRadius: "18px",
             backgroundColor: "white",
-            padding: "0 4px",
+            padding: "0 6px",
           }}
         >
           <TextField
@@ -213,7 +213,7 @@ export const ConstraintEditor: React.FC<ConstraintEditorProps> = ({
         transform: "translate(-50%, -50%)",
         zIndex: 1000,
         boxShadow: 4,
-        borderRadius: constraint.type === "gear-ratio" ? "16px" : "6px",
+        borderRadius: constraint.type === "gear-ratio" ? "18px" : "6px",
       }}
     >
       {renderContent()}

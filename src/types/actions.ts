@@ -15,6 +15,7 @@ export type ActionBundleType =
   | "ChangeConstant"
   | "ChangeDimension"
   | "Connects"
+  | "CreateConstraint"
   | "Other";
 
 /** Supported action types */

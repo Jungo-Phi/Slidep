@@ -25,21 +25,20 @@ export const GroundSwitch: React.FC<GroundSwitchProps> = ({
     <Box
       sx={{
         display: "flex",
-        flexDirection: "column",
+        flexDirection: "row",
         alignItems: "center",
+        gap: 0.5,
       }}
     >
-      <Typography variant="body2">{grounded ? "Grounded" : "Free"}</Typography>
       <IconButton
         onClick={toggleGround}
         size="small"
         sx={{ border: 1, borderColor: "#00000020" }}
+        title={grounded ? "Libérer" : "Ancrer"}
       >
-        <img
-          src={grounded ? groundIconUrl : ungroundIconUrl}
-          alt={grounded ? "Grounded" : "Free"}
-        />
+        <Box component="img" src={grounded ? groundIconUrl : ungroundIconUrl} />
       </IconButton>
+      <Typography variant="body2">{grounded ? "Ancré" : "Libre"}</Typography>
     </Box>
   );
 };

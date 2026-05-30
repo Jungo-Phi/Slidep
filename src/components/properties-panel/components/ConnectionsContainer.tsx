@@ -263,9 +263,10 @@ export const ConnectionsContainer: React.FC<ConnectionsContainerProps> = ({
                         backgroundColor: "#00000025",
                       },
                       my: -1,
+                      mr: "-2px",
                     }}
                   >
-                    <DragIndicatorIcon sx={{ fontSize: 24 }} />
+                    <DragIndicatorIcon />
                   </Box>
                   <Connection
                     element={element}
@@ -340,6 +341,7 @@ export const ConnectionsContainer: React.FC<ConnectionsContainerProps> = ({
                                 backgroundColor: "#00000025",
                               },
                               my: -1,
+                              mr: "-2px",
                             }}
                           >
                             <DragIndicatorIcon />
