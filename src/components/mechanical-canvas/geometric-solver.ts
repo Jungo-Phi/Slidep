@@ -630,9 +630,9 @@ export function resolveGeometricConstraints(
           maxError += applyAtSegmentRatioConstraint(
             positions,
             posMasses,
-            link.key1,
-            link.key2,
-            link.key3,
+            link.key3, // keyNode  (le point à contraindre)
+            link.key1, // keyStart (début du segment)
+            link.key2, // keyEnd   (fin du segment)
             link.t,
             constraintStiffness,
           );
@@ -764,6 +764,9 @@ export function resolveGeometricConstraints(
   };
 }
 
+/** Contraint la distance entre deux points à valoir targetDist.
+ * L'erreur (écart à la distance cible) est corrigée le long de l'axe p1→p2 :
+ * chaque point est déplacé proportionnellement à sa masse (w/totalW) et à stiffness. */
 function applyDistanceConstraint(
   positions: Map<string, Point2>,
   posMasses: Map<string, number>,
@@ -794,6 +797,9 @@ function applyDistanceConstraint(
   return Math.abs(error);
 }
 
+/** Contraint la distance perpendiculaire entre un point (keyNode) et une droite
+ * définie par (keyStart, keyEnd). Chaque point est déplacé proportionnellement
+ * à sa masse pour réduire l'erreur. */
 function applyDistanceToLineConstraint(
   positions: Map<string, Point2>,
   posMasses: Map<string, number>,
@@ -806,28 +812,47 @@ function applyDistanceToLineConstraint(
   const pNode = positions.get(keyNode);
   const start = positions.get(keyStart);
   const end = positions.get(keyEnd);
+  const wNode = posMasses.get(keyNode) ?? 1;
+  const wStart = posMasses.get(keyStart) ?? 1;
+  const wEnd = posMasses.get(keyEnd) ?? 1;
   if (!pNode || !start || !end) return 0;
 
-  const currentDist = pNode.distance_to_line(start, end);
-  const error = Math.abs(currentDist - targetDist);
-
-  // Simple projection to satisfy distance
+  // Vecteur perpendiculaire normalisé de la droite, pointant vers le nœud
   const proj = pNode.project_on_line(start, end);
-  const vec = pNode.sub(proj);
+  const vec = pNode.sub(proj); // vecteur perp du pied de perp vers le nœud
   const len = vec.length();
+
+  let perpDir: Point2;
   if (len === 0) {
-    // If node is on line, move it in perpendicular direction
-    const perp = end.sub(start).perp().normalize().mul(targetDist);
-    if (posMasses.get(keyNode) !== 0)
-      positions.set(keyNode, pNode.lerp(proj.add(perp), stiffness));
+    // Nœud sur la ligne : on choisit une direction perpendiculaire arbitraire
+    perpDir = end.sub(start).perp().normalize();
   } else {
-    const corrected = proj.add(vec.mul(targetDist / len));
-    if (posMasses.get(keyNode) !== 0)
-      positions.set(keyNode, pNode.lerp(corrected, stiffness));
+    perpDir = vec.mul(1 / len);
   }
-  return error;
+
+  const currentDist = len;
+  const error = currentDist - targetDist; // signé : positif = trop loin
+
+  // On pondère : wNode bouge le nœud, (wStart+wEnd)/2 bouge la ligne.
+  const wLine = (wStart + wEnd) / 2;
+  const totalW = wNode + wLine;
+  if (totalW === 0) return 0;
+
+  // Déplacement du nœud : le ramène vers la ligne de "error * wNode/totalW"
+  const nodeCorrection = perpDir.mul(-error * (wNode / totalW) * stiffness);
+  if (wNode !== 0) positions.set(keyNode, pNode.add(nodeCorrection));
+
+  // Déplacement des extrémités : la ligne s'éloigne du nœud de "error * wLine/totalW"
+  const lineCorrection = perpDir.mul(error * (wLine / totalW) * stiffness);
+  if (wStart !== 0) positions.set(keyStart, start.add(lineCorrection));
+  if (wEnd !== 0) positions.set(keyEnd, end.add(lineCorrection));
+
+  return Math.abs(error);
 }
 
+/** Contraint un point (keyNode) à rester sur le segment (keyStart, keyEnd).
+ * Le paramètre t est recalculé à chaque itération (projection libre sur le segment),
+ * avec une marge pour éviter les extrémités. Chaque point est déplacé selon sa masse. */
 function applyOnSegmentConstraint(
   positions: Map<string, Point2>,
   posMasses: Map<string, number>,
@@ -861,6 +886,10 @@ function applyOnSegmentConstraint(
   return error;
 }
 
+/** Contraint un point (keyNode) à se trouver exactement au ratio t fixe sur le
+ * segment (keyStart, keyEnd), i.e. à la position lerp(start, end, t).
+ * Contrairement à OnSegment, t est constant (ratio mémorisé au moment du grab).
+ * Chaque point est déplacé selon sa masse. */
 function applyAtSegmentRatioConstraint(
   positions: Map<string, Point2>,
   posMasses: Map<string, number>,
@@ -890,6 +919,9 @@ function applyAtSegmentRatioConstraint(
   return error;
 }
 
+/** Contraint le segment (keyStart, keyEnd) à rester parallèle à une direction fixe.
+ * Chaque extrémité est projetée sur la droite passant par le milieu du segment
+ * avec cette direction, en proportion de sa masse. */
 function applyKeepOrientationConstraint(
   positions: Map<string, Point2>,
   posMasses: Map<string, number>,
@@ -912,11 +944,18 @@ function applyKeepOrientationConstraint(
   const projEnd = end.project_on_line(midPoint, midPoint.add(direction));
   const error = start.distance_to(projStart);
 
-  positions.set(keyStart, start.lerp(projStart, (wStart / totalW) * stiffness));
-  positions.set(keyEnd, end.lerp(projEnd, (wEnd / totalW) * stiffness));
+  if (wStart !== 0)
+    positions.set(
+      keyStart,
+      start.lerp(projStart, (wStart / totalW) * stiffness),
+    );
+  if (wEnd !== 0)
+    positions.set(keyEnd, end.lerp(projEnd, (wEnd / totalW) * stiffness));
   return error;
 }
 
+/** Contraint les deux points à avoir la même coordonnée Y (alignement horizontal).
+ * Le Y cible est la moyenne pondérée des Y des deux points selon leurs masses. */
 function applyHorizontalConstraint(
   positions: Map<string, Point2>,
   posMasses: Map<string, number>,
@@ -933,16 +972,31 @@ function applyHorizontalConstraint(
   const totalW = wStart + wEnd;
   if (totalW === 0) return 0;
 
-  const midPointY = (start.y + end.y) / 2;
-  const projStart = new Point2(start.x, midPointY);
-  const projEnd = new Point2(end.x, midPointY);
-  const error = Math.abs(midPointY - start.y);
+  // Y cible : moyenne pondérée par les masses (les points légers bougent plus)
+  const targetY = (start.y * wStart + end.y * wEnd) / totalW;
+  const error = Math.abs(start.y - end.y);
 
-  positions.set(keyStart, start.lerp(projStart, (wStart / totalW) * stiffness));
-  positions.set(keyEnd, end.lerp(projEnd, (wEnd / totalW) * stiffness));
+  if (wStart !== 0)
+    positions.set(
+      keyStart,
+      new Point2(
+        start.x,
+        start.y + (targetY - start.y) * (wStart / totalW) * stiffness,
+      ),
+    );
+  if (wEnd !== 0)
+    positions.set(
+      keyEnd,
+      new Point2(
+        end.x,
+        end.y + (targetY - end.y) * (wEnd / totalW) * stiffness,
+      ),
+    );
   return error;
 }
 
+/** Contraint les deux points à avoir la même coordonnée X (alignement vertical).
+ * Le X cible est la moyenne pondérée des X des deux points selon leurs masses. */
 function applyVerticalConstraint(
   positions: Map<string, Point2>,
   posMasses: Map<string, number>,
@@ -959,16 +1013,33 @@ function applyVerticalConstraint(
   const totalW = wStart + wEnd;
   if (totalW === 0) return 0;
 
-  const midPointX = (start.x + end.x) / 2;
-  const projStart = new Point2(midPointX, start.y);
-  const projEnd = new Point2(midPointX, end.y);
-  const error = Math.abs(midPointX - start.x);
+  // X cible : moyenne pondérée par les masses (les points légers bougent plus)
+  const targetX = (start.x * wStart + end.x * wEnd) / totalW;
+  const error = Math.abs(start.x - end.x);
 
-  positions.set(keyStart, start.lerp(projStart, (wStart / totalW) * stiffness));
-  positions.set(keyEnd, end.lerp(projEnd, (wEnd / totalW) * stiffness));
+  if (wStart !== 0)
+    positions.set(
+      keyStart,
+      new Point2(
+        start.x + (targetX - start.x) * (wStart / totalW) * stiffness,
+        start.y,
+      ),
+    );
+  if (wEnd !== 0)
+    positions.set(
+      keyEnd,
+      new Point2(
+        end.x + (targetX - end.x) * (wEnd / totalW) * stiffness,
+        end.y,
+      ),
+    );
   return error;
 }
 
+/** Contraint deux segments à être parallèles.
+ * L'angle résiduel (diff) est distribué entre les deux segments au prorata
+ * de leurs masses totales : le segment le plus léger tourne davantage.
+ * Chaque segment pivote autour de son propre centre. */
 function applyParallelConstraint(
   positions: Map<string, Point2>,
   posMasses: Map<string, number>,
@@ -986,19 +1057,41 @@ function applyParallelConstraint(
 
   const v1 = pe1.sub(ps1);
   const v2 = pe2.sub(ps2);
-  const angle1 = v1.angle();
-  const angle2 = v2.angle();
-  const diff = angle2 - angle1;
 
-  const rotatedV2 = v2.rotate(-diff * stiffness);
+  // Différence d'angle à corriger (modulo π car les segments ne sont pas orientés)
+  let diff = v2.angle() - v1.angle();
+  // Ramener diff dans [-π/2, π/2] pour choisir la correction la plus courte
+  while (diff > Math.PI / 2) diff -= Math.PI;
+  while (diff < -Math.PI / 2) diff += Math.PI;
+
+  const error = Math.abs(diff);
+
+  // Masses totales de chaque segment
+  const w1 = (posMasses.get(s1) ?? 1) + (posMasses.get(e1) ?? 1);
+  const w2 = (posMasses.get(s2) ?? 1) + (posMasses.get(e2) ?? 1);
+  const totalW = w1 + w2;
+  if (totalW === 0) return 0;
+
+  // Segment 1 : tourne de +diff * (w1/totalW) * stiffness
+  const rot1 = diff * (w1 / totalW) * stiffness;
+  const center1 = ps1.lerp(pe1, 0.5);
+  const half1 = v1.mul(0.5).rotate(rot1);
+  if (posMasses.get(s1) !== 0) positions.set(s1, center1.sub(half1));
+  if (posMasses.get(e1) !== 0) positions.set(e1, center1.add(half1));
+
+  // Segment 2 : tourne de -diff * (w2/totalW) * stiffness
+  const rot2 = -diff * (w2 / totalW) * stiffness;
   const center2 = ps2.lerp(pe2, 0.5);
-  const halfV2 = rotatedV2.mul(0.5);
+  const half2 = v2.mul(0.5).rotate(rot2);
+  if (posMasses.get(s2) !== 0) positions.set(s2, center2.sub(half2));
+  if (posMasses.get(e2) !== 0) positions.set(e2, center2.add(half2));
 
-  if (posMasses.get(s2) !== 0) positions.set(s2, center2.sub(halfV2));
-  if (posMasses.get(e2) !== 0) positions.set(e2, center2.add(halfV2));
   return error;
 }
 
+/** Contraint deux segments à être perpendiculaires (angle = π/2 entre eux).
+ * Identique à applyParallelConstraint mais la cible est un angle de 90°.
+ * La correction angulaire est distribuée entre les deux segments selon leurs masses. */
 function applyNormalConstraint(
   positions: Map<string, Point2>,
   posMasses: Map<string, number>,
@@ -1016,19 +1109,40 @@ function applyNormalConstraint(
 
   const v1 = pe1.sub(ps1);
   const v2 = pe2.sub(ps2);
-  const angle1 = v1.angle();
-  const angle2 = v2.angle();
-  const diff = angle2 - (angle1 + Math.PI / 2);
 
-  const rotatedV2 = v2.rotate(-diff * stiffness);
+  // Différence par rapport à la cible de 90° (π/2)
+  let diff = v2.angle() - (v1.angle() + Math.PI / 2);
+  // Ramener diff dans [-π/2, π/2]
+  while (diff > Math.PI / 2) diff -= Math.PI;
+  while (diff < -Math.PI / 2) diff += Math.PI;
+
+  const error = Math.abs(diff);
+
+  const w1 = (posMasses.get(s1) ?? 1) + (posMasses.get(e1) ?? 1);
+  const w2 = (posMasses.get(s2) ?? 1) + (posMasses.get(e2) ?? 1);
+  const totalW = w1 + w2;
+  if (totalW === 0) return 0;
+
+  // Segment 1 : tourne dans le sens positif
+  const rot1 = diff * (w1 / totalW) * stiffness;
+  const center1 = ps1.lerp(pe1, 0.5);
+  const half1 = v1.mul(0.5).rotate(rot1);
+  if (posMasses.get(s1) !== 0) positions.set(s1, center1.sub(half1));
+  if (posMasses.get(e1) !== 0) positions.set(e1, center1.add(half1));
+
+  // Segment 2 : tourne dans le sens négatif
+  const rot2 = -diff * (w2 / totalW) * stiffness;
   const center2 = ps2.lerp(pe2, 0.5);
-  const halfV2 = rotatedV2.mul(0.5);
+  const half2 = v2.mul(0.5).rotate(rot2);
+  if (posMasses.get(s2) !== 0) positions.set(s2, center2.sub(half2));
+  if (posMasses.get(e2) !== 0) positions.set(e2, center2.add(half2));
 
-  if (posMasses.get(s2) !== 0) positions.set(s2, center2.sub(halfV2));
-  if (posMasses.get(e2) !== 0) positions.set(e2, center2.add(halfV2));
   return error;
 }
 
+/** Contraint l'angle orienté entre deux segments à valoir targetAngle.
+ * La correction angulaire est distribuée entre les deux segments au prorata
+ * de leurs masses totales respectives. */
 function applyAngleConstraint(
   positions: Map<string, Point2>,
   posMasses: Map<string, number>,
@@ -1048,18 +1162,40 @@ function applyAngleConstraint(
   const v1 = pe1.sub(ps1);
   const v2 = pe2.sub(ps2);
   const currentAngle = v2.angle() - v1.angle();
-  const error = Math.abs(currentAngle - targetAngle);
-  const diff = currentAngle - targetAngle;
 
-  const rotatedV2 = v2.rotate(-diff * stiffness);
+  // Différence à corriger, ramenée dans [-π, π]
+  let diff = currentAngle - targetAngle;
+  while (diff > Math.PI) diff -= 2 * Math.PI;
+  while (diff < -Math.PI) diff += 2 * Math.PI;
+
+  const error = Math.abs(diff);
+
+  const w1 = (posMasses.get(s1) ?? 1) + (posMasses.get(e1) ?? 1);
+  const w2 = (posMasses.get(s2) ?? 1) + (posMasses.get(e2) ?? 1);
+  const totalW = w1 + w2;
+  if (totalW === 0) return 0;
+
+  // Segment 1 : tourne dans le sens positif pour réduire diff
+  const rot1 = diff * (w1 / totalW) * stiffness;
+  const center1 = ps1.lerp(pe1, 0.5);
+  const half1 = v1.mul(0.5).rotate(rot1);
+  if (posMasses.get(s1) !== 0) positions.set(s1, center1.sub(half1));
+  if (posMasses.get(e1) !== 0) positions.set(e1, center1.add(half1));
+
+  // Segment 2 : tourne dans le sens négatif pour réduire diff
+  const rot2 = -diff * (w2 / totalW) * stiffness;
   const center2 = ps2.lerp(pe2, 0.5);
-  const halfV2 = rotatedV2.mul(0.5);
+  const half2 = v2.mul(0.5).rotate(rot2);
+  if (posMasses.get(s2) !== 0) positions.set(s2, center2.sub(half2));
+  if (posMasses.get(e2) !== 0) positions.set(e2, center2.add(half2));
 
-  if (posMasses.get(s2) !== 0) positions.set(s2, center2.sub(halfV2));
-  if (posMasses.get(e2) !== 0) positions.set(e2, center2.add(halfV2));
   return error;
 }
 
+/** Contraint deux segments à avoir la même longueur.
+ * La longueur cible est la moyenne pondérée des deux longueurs selon les masses
+ * totales de chaque segment : le segment le plus léger s'adapte davantage.
+ * Délègue ensuite à applyDistanceConstraint pour chaque segment. */
 function applyEqualLengthConstraint(
   positions: Map<string, Point2>,
   posMasses: Map<string, number>,
@@ -1077,14 +1213,24 @@ function applyEqualLengthConstraint(
 
   const len1 = pe1.sub(ps1).length();
   const len2 = pe2.sub(ps2).length();
-  const avgLen = (len1 + len2) / 2;
+
+  const w1 = (posMasses.get(s1) ?? 1) + (posMasses.get(e1) ?? 1);
+  const w2 = (posMasses.get(s2) ?? 1) + (posMasses.get(e2) ?? 1);
+  const totalW = w1 + w2;
+  const targetLen =
+    totalW > 0 ? (len1 * w1 + len2 * w2) / totalW : (len1 + len2) / 2;
+
   const error = Math.abs(len1 - len2);
 
-  applyDistanceConstraint(positions, posMasses, s1, e1, avgLen, stiffness);
-  applyDistanceConstraint(positions, posMasses, s2, e2, avgLen, stiffness);
+  applyDistanceConstraint(positions, posMasses, s1, e1, targetLen, stiffness);
+  applyDistanceConstraint(positions, posMasses, s2, e2, targetLen, stiffness);
   return error;
 }
 
+/** Contraint la distance entre deux centres d'engrenages à être exactement r1+r2
+ * (condition d'engrènement). La correction est distribuée entre les positions et
+ * les rayons selon leurs masses : si les centres sont bloqués, ce sont les rayons
+ * qui s'adaptent, et inversement. */
 function applyGearMeshingConstraint(
   positions: Map<string, Point2>,
   posMasses: Map<string, number>,
@@ -1098,19 +1244,46 @@ function applyGearMeshingConstraint(
   const p2 = positions.get(`${id2}:pos`);
   const r1 = radii.get(id1);
   const r2 = radii.get(id2);
+  const wPos1 = posMasses.get(`${id1}:pos`) ?? 1;
+  const wPos2 = posMasses.get(`${id2}:pos`) ?? 1;
+  const wRad1 = radMasses.get(id1) ?? 1;
+  const wRad2 = radMasses.get(id2) ?? 1;
   if (!p1 || !p2 || r1 === undefined || r2 === undefined) return 0;
 
+  const dist = p1.distance_to(p2);
   const targetDist = r1 + r2;
-  applyDistanceConstraint(
-    positions,
-    posMasses,
-    `${id1}:pos`,
-    `${id2}:pos`,
-    targetDist,
-  );
-  return error;
+  const error = dist - targetDist; // signé : positif = trop éloignés
+
+  // Poids total : positions (comptent pour 1 chacune) + rayons (comptent pour 1 chacun)
+  // Un rayon corrige l'erreur de distance de 1 pour 1, comme un point.
+  const totalW = wPos1 + wPos2 + wRad1 + wRad2;
+  if (totalW === 0) return 0;
+
+  // Correction des positions : rapproche/éloigne les centres le long de leur axe
+  if (wPos1 !== 0 || wPos2 !== 0) {
+    const posW = wPos1 + wPos2;
+    applyDistanceConstraint(
+      positions,
+      posMasses,
+      `${id1}:pos`,
+      `${id2}:pos`,
+      targetDist,
+      (posW / totalW) * stiffness,
+    );
+  }
+
+  // Correction des rayons : augmente/diminue r1 et r2 pour résorber le reste de l'erreur.
+  // Les deux rayons bougent dans le même sens (tous deux grandissent si dist > r1+r2).
+  const radCorrection = error * stiffness;
+  if (wRad1 !== 0) radii.set(id1, r1 + radCorrection * (wRad1 / totalW));
+  if (wRad2 !== 0) radii.set(id2, r2 + radCorrection * (wRad2 / totalW));
+
+  return Math.abs(error);
 }
 
+/** Contraint le rapport des rayons de deux engrenages à valoir `ratio` (r1/r2 = ratio).
+ * La correction est distribuée entre les deux rayons selon leurs masses :
+ * le rayon libre bougera davantage que le rayon ancré. */
 function applyGearRatioConstraint(
   radii: Map<string, number>,
   radMasses: Map<string, number>,
@@ -1121,9 +1294,33 @@ function applyGearRatioConstraint(
 ): number {
   const r1 = radii.get(id1);
   const r2 = radii.get(id2);
+  const w1 = radMasses.get(id1) ?? 1;
+  const w2 = radMasses.get(id2) ?? 1;
   if (r1 === undefined || r2 === undefined) return 0;
 
-  // R1 / R2 = ratio => R2 = R1 / ratio
-  radii.set(id2, r1 / ratio);
+  const totalW = w1 + w2;
+  if (totalW === 0) return 0;
+
+  // Rayon cible pour chaque engrenage en supposant r1/r2 = ratio :
+  // r1_target = sqrt(r1 * r2 * ratio), r2_target = r1_target / ratio
+  // Approche simplifiée : on cherche le scale s tel que (r1*s) / (r2/s) = ratio
+  // => s² = ratio * r2 / r1, s = sqrt(ratio * r2 / r1)
+  // Mais on distribue juste la correction proportionnellement aux masses :
+  const currentRatio = r1 / r2;
+  const ratioError = currentRatio - ratio; // signé
+  const error = Math.abs(ratioError);
+
+  // Correction : on ajuste r1 à la baisse et r2 à la hausse (ou inversement)
+  // de façon à réduire l'erreur de ratio, pondéré par les masses.
+  // dr1 = -ratioError * r2 * (w1/totalW) * stiffness  (dérivée de r1/r2 par r1 = 1/r2)
+  // dr2 = +ratioError * r1/r2² * r2 * (w2/totalW) * stiffness = ratioError * r1/r2 * ...
+  // Simplifié : on tire les deux rayons vers la cible commune weighted-average.
+  const targetR1 = ratio * r2; // r1 si r2 est fixe
+  const targetR2 = r1 / ratio; // r2 si r1 est fixe
+  if (w1 !== 0)
+    radii.set(id1, r1 + (targetR1 - r1) * (w1 / totalW) * stiffness);
+  if (w2 !== 0)
+    radii.set(id2, r2 + (targetR2 - r2) * (w2 / totalW) * stiffness);
+
   return error;
 }

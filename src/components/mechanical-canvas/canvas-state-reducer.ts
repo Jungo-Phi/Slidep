@@ -47,7 +47,7 @@ export function canvasStateReducer(
         case "Selecting":
         case "SelectedElement":
         case "EditingConstraint":
-          if (state.type !== "Selecting") {
+          if (state.type === "SelectedElement") {
             // Logique pour la sélection multiple avec Shift
             if (event.shiftKey) {
               if (hoveredPart.type === "Void") {
@@ -67,6 +67,22 @@ export function canvasStateReducer(
                   type: "SelectedMultiple",
                   elementIDs: [state.elementID, hoveredPart.id],
                 });
+              }
+            } else if (
+              hoveredPart.type !== "Void" &&
+              hoveredPart.id === state.elementID
+            ) {
+              const constraint = constraintElements.find(
+                (element) => element.id === state.elementID,
+              );
+              if (constraint !== undefined && "value" in constraint) {
+                setCanvasState({
+                  type: "EditingConstraint",
+                  elementID: state.elementID,
+                  value: constraint.value,
+                  isPlacing: false,
+                });
+                break;
               }
             }
           }
@@ -1177,16 +1193,6 @@ export function canvasStateReducer(
       switch (state.type) {
         case "SelectedElement":
           state.isMouseDown = false;
-          const constraint = constraintElements.find(
-            (element) => element.id === state.elementID,
-          );
-          if (constraint === undefined || !("value" in constraint)) break;
-          setCanvasState({
-            type: "EditingConstraint",
-            elementID: state.elementID,
-            value: constraint.value,
-            isPlacing: false,
-          });
           break;
         case "MovingNode":
         case "MovingEdgeStartPoint":

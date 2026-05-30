@@ -44,7 +44,7 @@
 - ~Unified Property pannel look with dimensions~
 - Change edge length ne fonctionne pas + devrais changer la contrainte associées s'il y en a une
 - ~Hover dimension~
-- hover : ignorer contraintes when placing mechanical elements
+- hover : ignorer contraintes when placing mechanical elements or movingEdge
 - ~Dimension Radius~
 - Compléter le geometric-solver
 - Empecher les contraintes sur le même élément (DDL analyser)
@@ -64,7 +64,7 @@
 - Faire que drop une connection dans un container simple échange les connections
 - (Supprimer les joints quand ils ne sont connectés qu'à 1 élément ?)
 - ~Change CanvasState on delete element~
-- Placing beam series / only one if hold down when placing ? (like in OnShape)
+- Placing beam series / only one if hold down when placing (like in OnShape) ?
 
 ## Features visuelles nice to have
 
