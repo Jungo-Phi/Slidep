@@ -21,7 +21,7 @@ export function draw_element_icon(
   element: UnionElement,
 ) {
   ctx.strokeStyle = ctx.lineWidth === 2 ? "grey" : COLORS.STROKE;
-  ctx.fillStyle = COLORS.BACKGROUND + COLORS.ICON_TRANSPARENCY;
+  ctx.fillStyle = COLORS.BACKGROUND;
   ctx.beginPath();
   ctx.roundRect(
     -DIM.ICON_SIZE / 2,

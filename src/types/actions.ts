@@ -43,7 +43,6 @@ export type MoveElementActionType =
   | "MoveEdgeBody"
   | "MoveElements"
   | "ChangeGearRadius"
-  | "ChangeGearAngle"
   | "ChangeEdgeLength";
 export type ChangeDimensionActionType =
   | "ChangeDimensionEdgeValue"
@@ -104,12 +103,6 @@ export type Action =
       id: ID;
       newRadius: number;
       oldRadius: number;
-    }
-  | {
-      type: "ChangeGearAngle";
-      id: ID;
-      newAngle: number;
-      oldAngle: number;
     }
   | { type: "ChangeEdgeLength"; id: ID; newLength: number; oldLength: number }
   | {

@@ -109,13 +109,6 @@ export function actionReducer(
         ) as GearElement;
         element.radius = revert ? action.oldRadius : action.newRadius;
         break;
-      case "ChangeGearAngle":
-        element = get_mechanical_element_from_id(
-          action.id,
-          mechanicalElements,
-        ) as GearElement;
-        element.angle = revert ? action.oldAngle : action.newAngle;
-        break;
       case "ChangeEdgeLength":
         const edgeElement = get_mechanical_element_from_id(
           action.id,

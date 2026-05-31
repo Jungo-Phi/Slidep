@@ -158,7 +158,6 @@ const App: React.FC = () => {
           newAction.type !== "MoveEdgeBody" &&
           newAction.type !== "MoveElements" &&
           newAction.type !== "ChangeGearRadius" &&
-          newAction.type !== "ChangeGearAngle" &&
           newAction.type !== "ChangeEdgeLength"
         )
           throw console.error("impossible");
@@ -213,11 +212,6 @@ const App: React.FC = () => {
             if (secondToLastAction.type !== newAction.type)
               throw console.error("impossible");
             secondToLastAction.newRadius = newAction.newRadius;
-            break;
-          case "ChangeGearAngle":
-            if (secondToLastAction.type !== newAction.type)
-              throw console.error("impossible");
-            secondToLastAction.newAngle = newAction.newAngle;
             break;
           case "ChangeEdgeLength":
             if (secondToLastAction.type !== newAction.type)

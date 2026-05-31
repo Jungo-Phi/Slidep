@@ -35,10 +35,12 @@
 - ~Enlever temps de chargement des icons contraintes dans le canvas~
 - ~Afficher en "Selected" l'élément premier de "startPlacingX"~
 - Régler de bordel de "connect-actions"
-- select stuff when state = placingConstraint ?
+- Connecter les "fixedGears"
+- Click dans le vide quand state==placingConstraint -> state=Selecting
 - "Undo" connection (Join) ne s'est pas appliqué en bidirectionnel !
 - Delete (eraser) ne fonctionne pas !
 - Hover delete dans le controle panel applique le meme style que eraser
+- Hilight corresponding elements when hovering constraint
 - ~Change NumberInput instant update to -> delayed update~
 - ~Change Focus on Undo~
 - ~Unified Property pannel look with dimensions~

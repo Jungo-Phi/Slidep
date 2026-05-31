@@ -74,7 +74,8 @@ export type Link =
       key4: string;
     }
   | { type: "GearMeshing"; ddl: 1; key1: string; key2: string }
-  | { type: "GearRatio"; ddl: 1; key1: string; key2: string; ratio: number };
+  | { type: "GearRatio"; ddl: 1; key1: string; key2: string; ratio: number }
+  | { type: "HandleGrab"; ddl: 1; grabbedKey: string; value: Point2 | number };
 
 function constraint_to_link(element: ConstraintElement): Link {
   switch (element.type) {
@@ -180,7 +181,7 @@ function constraint_to_link(element: ConstraintElement): Link {
         type: "GearRatio",
         ddl: 1,
         key1: `${element.startGearID}:pos`,
-        key2: `${element.endGearID}:end`,
+        key2: `${element.endGearID}:pos`,
         ratio: element.value,
       };
   }
@@ -258,7 +259,6 @@ export function resolveGeometricConstraints(
         radii.set(`${element.id}:pos`, element.radius);
         radMasses.set(`${element.id}:pos`, 1);
       }
-      // if ("angle" in element) angles.set(element.id, element.angle);
     } else {
       positions.set(`${element.id}:start`, element.positionStart);
       positions.set(`${element.id}:end`, element.positionEnd);
@@ -302,28 +302,46 @@ export function resolveGeometricConstraints(
         });
       }
     }
-    if (element.type === "gear" && element.meshedGearsIDs.length > 0) {
+    if (element.type === "gear") {
       element.meshedGearsIDs.forEach((meshedId) => {
-        links.push({
-          type: "GearMeshing",
-          ddl: 1,
-          key1: `${element.id}:pos`,
-          key2: `${meshedId}:pos`,
-        });
+        if (
+          links.filter(
+            (link) =>
+              link.type === "GearMeshing" &&
+              link.key2 === `${element.id}:pos` &&
+              link.key1 === `${meshedId}:pos`,
+          ).length === 0
+        ) {
+          links.push({
+            type: "GearMeshing",
+            ddl: 1,
+            key1: `${element.id}:pos`,
+            key2: `${meshedId}:pos`,
+          });
+        }
       });
       element.fixedGearsIDs.forEach((fixedId) => {
-        links.push({
-          type: "Coincidence",
-          ddl: 2,
-          key1: `${element.id}:pos`,
-          key2: `${fixedId}:pos`,
-        });
+        if (
+          links.filter(
+            (link) =>
+              link.type === "Coincidence" &&
+              link.key2 === `${element.id}:pos` &&
+              link.key1 === `${fixedId}:pos`,
+          ).length === 0
+        ) {
+          links.push({
+            type: "Coincidence",
+            ddl: 2,
+            key1: `${element.id}:pos`,
+            key2: `${fixedId}:pos`,
+          });
+        }
       });
     }
   });
 
-  // Point de départ et point de saisie
-  let grabID: string = "grab";
+  let grabPoint: Point2 | number | undefined = undefined;
+  let grabConnectionID: string | undefined = undefined;
   switch (actionBundleType) {
     case "MoveElement":
       if (
@@ -333,14 +351,9 @@ export function resolveGeometricConstraints(
         triggerAction.type !== "MoveEdgeBody" &&
         triggerAction.type !== "MoveElements" &&
         triggerAction.type !== "ChangeGearRadius" &&
-        triggerAction.type !== "ChangeGearAngle" &&
         triggerAction.type !== "ChangeEdgeLength"
       )
         throw console.error("impossible");
-
-      // Resolve with GRAB
-      let grabPoint: Point2 | undefined = undefined;
-      let grabConnectionID: string | undefined = undefined;
 
       switch (triggerAction.type) {
         case "MoveNode":
@@ -372,7 +385,7 @@ export function resolveGeometricConstraints(
                 movedEdge.positionEnd,
               ),
           });
-          positions.set(`grab_bridge`, triggerAction.newPosition); // TODO : vérifier
+          positions.set(`grab_bridge`, triggerAction.newPosition);
           posMasses.set(`grab_bridge`, 1);
           grabPoint = triggerAction.newPosition;
           grabConnectionID = `grab_bridge`;
@@ -425,26 +438,10 @@ export function resolveGeometricConstraints(
           });
           break;
         case "ChangeGearRadius":
-        case "ChangeGearAngle":
-          // Grab gear when changing it's radius/angle
-          const gear = mechanicalElements.find(
-            (e) => e.id === triggerAction.id,
-          )! as GearElement;
-          grabPoint = gear.position; // TODO : grabRadius ?
+          // TODO : Anchor gear when changing it's radius
+          // const gear = mechanicalElements.find((e) => e.id === triggerAction.id)! as GearElement;
+          grabPoint = triggerAction.newRadius;
           grabConnectionID = `${triggerAction.id}:pos`;
-          switch (triggerAction.type) {
-            case "ChangeGearRadius":
-              links.push({
-                type: "Radius",
-                ddl: 1,
-                key1: grabConnectionID,
-                radius: triggerAction.newRadius,
-              });
-              break;
-            case "ChangeGearAngle":
-              // TODO : ignore gear angles for now
-              break;
-          }
           break;
         case "ChangeEdgeLength":
           links.push({
@@ -456,18 +453,26 @@ export function resolveGeometricConstraints(
           });
           break;
       }
-      if (grabPoint !== undefined && grabConnectionID !== undefined) {
-        positions.set(grabID, grabPoint);
-        posMasses.set(grabID, 0.5); // Mass of grab is not 1 so it's less rigid    TODO : limit grab amplitude
-        links.push({
-          type: "Coincidence",
-          ddl: 2,
-          key1: grabID,
-          key2: grabConnectionID,
-        });
-        posMasses.set(grabConnectionID, 1); // Node sélectionné : enlever l'ancrage.
-      }
       break;
+    case "ChangeDimension":
+    case "Connects":
+    case "CreateConstraint":
+  }
+
+  if (grabPoint !== undefined && grabConnectionID !== undefined) {
+    // TODO : limit grab amplitude
+    // Enlever l'ancrage du node sélectionné
+    if (typeof grabPoint === "number") {
+      radMasses.set(grabConnectionID, 1);
+    } else {
+      posMasses.set(grabConnectionID, 1);
+    }
+    links.push({
+      type: "HandleGrab",
+      ddl: 1,
+      grabbedKey: grabConnectionID,
+      value: grabPoint,
+    });
   }
 
   // *
@@ -490,6 +495,7 @@ export function resolveGeometricConstraints(
         if ("key4" in link && (link.key4 === k1 || link.key4 === k2))
           link.key4 = k_new;
       });
+      // TODO : maintenir la position des ancres
       positions.set(k_new, positions.get(k1)!.lerp(positions.get(k2)!, 0.5));
       positions.delete(k1);
       positions.delete(k2);
@@ -504,7 +510,7 @@ export function resolveGeometricConstraints(
 
   // Maintien de la position (ratio) sur un beam : A moins de grab le node lui-meme
   links.forEach((link, index) => {
-    if (link.type === "OnSegment" && link.key3 !== grabID) {
+    if (link.type === "OnSegment") {
       const pos = positions.get(link.key3)!;
       const start = positions.get(link.key1)!;
       const end = positions.get(link.key2)!;
@@ -574,21 +580,19 @@ export function resolveGeometricConstraints(
   // let startLinkIndex: number = links.length - 1;
 
   // TODO : Ordonner la liste
-  /*
-  console.log("links : ");
-  links.forEach((link) => {
-    console.log(link);
-  });
+
+  console.log("pos : [", [...positions.keys()].join("  "), "]");
+  console.log("links : [", links.map((link) => link.type).join(", "), "]");
   ddl = get_degrees_of_liberty(positions, radii, posMasses, links);
   console.log("DDL : ", ddl);
-  */
 
   // 3. PBD (Position Based Dynamics)
-  const iterations = 20; // High iterations to ensure rigidity 150 ???
+  const iterations = 50; // High iterations to ensure rigidity 150 ???
   const epsilon = 0.000_001; // Very tight tolerance, why not 0.1 ?
   let maxError: number = 0;
 
-  const constraintStiffness = 0.99;
+  const constraintStiffness = 0.9;
+  const grabStiffness = 0.5;
 
   for (let i = 0; i < iterations; i++) {
     maxError = 0;
@@ -609,9 +613,9 @@ export function resolveGeometricConstraints(
           maxError += applyDistanceToLineConstraint(
             positions,
             posMasses,
-            link.key1,
-            link.key2,
-            link.key3,
+            link.key3, // keyNode  (le nœud à contraindre)
+            link.key1, // keyStart (début du segment)
+            link.key2, // keyEnd   (fin du segment)
             link.distance,
             constraintStiffness,
           );
@@ -733,14 +737,24 @@ export function resolveGeometricConstraints(
             radMasses,
             link.key1,
             link.key2,
+            link.ratio,
             constraintStiffness,
+          );
+          break;
+        case "HandleGrab":
+          maxError += applyHandleGrabConstraint(
+            positions,
+            radii,
+            link.grabbedKey,
+            link.value,
+            grabStiffness,
           );
           break;
       }
     });
 
     if (maxError < epsilon) {
-      //console.log("iterations : ", i);
+      console.log("Iterations : ", i);
       break;
     }
   }
@@ -762,6 +776,30 @@ export function resolveGeometricConstraints(
     positions: positions,
     radii: radii,
   };
+}
+
+/** Approche une position ou un rayon vers targetValue.
+ * La valeur de 'stiffness' doit être en dessous de 1 pour une attraction moins forte que les autres contraintes. */
+function applyHandleGrabConstraint(
+  positions: Map<string, Point2>,
+  radii: Map<string, number>,
+  key: string,
+  targetValue: Point2 | number,
+  stiffness: number = 0.5,
+): number {
+  if (typeof targetValue === "number") {
+    // Radius
+    const r = radii.get(key);
+    if (!r) return 0;
+    radii.set(key, r * stiffness + targetValue * (1 - stiffness));
+    return Math.abs(r - targetValue);
+  } else {
+    // Position
+    const p = positions.get(key);
+    if (!p) return 0;
+    positions.set(key, p.lerp(targetValue, stiffness));
+    return p.distance_to(targetValue);
+  }
 }
 
 /** Contraint la distance entre deux points à valoir targetDist.
@@ -1227,6 +1265,8 @@ function applyEqualLengthConstraint(
   return error;
 }
 
+const MIN_GEAR_RADIUS = 20;
+
 /** Contraint la distance entre deux centres d'engrenages à être exactement r1+r2
  * (condition d'engrènement). La correction est distribuée entre les positions et
  * les rayons selon leurs masses : si les centres sont bloqués, ce sont les rayons
@@ -1236,18 +1276,18 @@ function applyGearMeshingConstraint(
   posMasses: Map<string, number>,
   radii: Map<string, number>,
   radMasses: Map<string, number>,
-  id1: string,
-  id2: string,
+  g1: string,
+  g2: string,
   stiffness: number = 1.0,
 ): number {
-  const p1 = positions.get(`${id1}:pos`);
-  const p2 = positions.get(`${id2}:pos`);
-  const r1 = radii.get(id1);
-  const r2 = radii.get(id2);
-  const wPos1 = posMasses.get(`${id1}:pos`) ?? 1;
-  const wPos2 = posMasses.get(`${id2}:pos`) ?? 1;
-  const wRad1 = radMasses.get(id1) ?? 1;
-  const wRad2 = radMasses.get(id2) ?? 1;
+  const p1 = positions.get(g1);
+  const p2 = positions.get(g2);
+  const r1 = radii.get(g1);
+  const r2 = radii.get(g2);
+  const wPos1 = posMasses.get(g1) ?? 1;
+  const wPos2 = posMasses.get(g2) ?? 1;
+  const wRad1 = radMasses.get(g1) ?? 1;
+  const wRad2 = radMasses.get(g2) ?? 1;
   if (!p1 || !p2 || r1 === undefined || r2 === undefined) return 0;
 
   const dist = p1.distance_to(p2);
@@ -1265,8 +1305,8 @@ function applyGearMeshingConstraint(
     applyDistanceConstraint(
       positions,
       posMasses,
-      `${id1}:pos`,
-      `${id2}:pos`,
+      g1,
+      g2,
       targetDist,
       (posW / totalW) * stiffness,
     );
@@ -1275,9 +1315,16 @@ function applyGearMeshingConstraint(
   // Correction des rayons : augmente/diminue r1 et r2 pour résorber le reste de l'erreur.
   // Les deux rayons bougent dans le même sens (tous deux grandissent si dist > r1+r2).
   const radCorrection = error * stiffness;
-  if (wRad1 !== 0) radii.set(id1, r1 + radCorrection * (wRad1 / totalW));
-  if (wRad2 !== 0) radii.set(id2, r2 + radCorrection * (wRad2 / totalW));
-
+  if (wRad1 !== 0)
+    radii.set(
+      g1,
+      Math.max(MIN_GEAR_RADIUS, r1 + radCorrection * (wRad1 / totalW)),
+    );
+  if (wRad2 !== 0)
+    radii.set(
+      g2,
+      Math.max(MIN_GEAR_RADIUS, r2 + radCorrection * (wRad2 / totalW)),
+    );
   return Math.abs(error);
 }
 
@@ -1287,15 +1334,15 @@ function applyGearMeshingConstraint(
 function applyGearRatioConstraint(
   radii: Map<string, number>,
   radMasses: Map<string, number>,
-  id1: string,
-  id2: string,
+  g1: string,
+  g2: string,
   ratio: number,
   stiffness: number = 1.0,
 ): number {
-  const r1 = radii.get(id1);
-  const r2 = radii.get(id2);
-  const w1 = radMasses.get(id1) ?? 1;
-  const w2 = radMasses.get(id2) ?? 1;
+  const r1 = radii.get(g1);
+  const r2 = radii.get(g2);
+  const w1 = radMasses.get(g1) ?? 1;
+  const w2 = radMasses.get(g2) ?? 1;
   if (r1 === undefined || r2 === undefined) return 0;
 
   const totalW = w1 + w2;
@@ -1318,9 +1365,21 @@ function applyGearRatioConstraint(
   const targetR1 = ratio * r2; // r1 si r2 est fixe
   const targetR2 = r1 / ratio; // r2 si r1 est fixe
   if (w1 !== 0)
-    radii.set(id1, r1 + (targetR1 - r1) * (w1 / totalW) * stiffness);
+    radii.set(
+      g1,
+      Math.max(
+        MIN_GEAR_RADIUS,
+        r1 + (targetR1 - r1) * (w1 / totalW) * stiffness,
+      ),
+    );
   if (w2 !== 0)
-    radii.set(id2, r2 + (targetR2 - r2) * (w2 / totalW) * stiffness);
+    radii.set(
+      g2,
+      Math.max(
+        MIN_GEAR_RADIUS,
+        r2 + (targetR2 - r2) * (w2 / totalW) * stiffness,
+      ),
+    );
 
   return error;
 }
