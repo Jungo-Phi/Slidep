@@ -64,410 +64,105 @@ export const ConstraintsPanel: React.FC<ConstraintsPanelProps> = ({
           display: "flex",
           alignItems: "center",
           flexDirection: "column",
-          gap: "2px",
         }}
       >
         {mechanism.constraintElements.map((constraint, index) => (
           <React.Fragment key={index}>
-            <ListItem
-              disablePadding
-              sx={{
-                display: "flex",
-                alignItems: "center",
-              }}
-            >
+            <ListItem disablePadding>
               <Box
                 sx={{
                   display: "flex",
-                  alignItems: "start",
-                  flexDirection: "column",
+                  justifyContent: "space-between",
+                  alignItems: "center",
                   width: "100%",
-                  gap: 0.15,
+                  bgcolor: COLORS.BACKGROUND,
                 }}
+                border={2}
+                borderColor={"#00000025"}
+                borderRadius={5}
+                marginY={"-1px"}
               >
-                <Box
+                <ElementDisplay
+                  element={constraint}
+                  size="medium"
+                  bold={constraint.id === constraintID}
+                  setHoveredPart={setHoveredPart}
+                  setCanvasState={setCanvasState}
+                  updateMechanism={updateMechanism}
+                ></ElementDisplay>
+
+                {(() => {
+                  switch (constraint.type) {
+                    case "dimension-edge":
+                    case "dimension-node-to-node":
+                    case "dimension-edge-to-node":
+                    case "dimension-angle":
+                    case "dimension-radius":
+                      return (
+                        <NumberInput
+                          value={constraint.value}
+                          onChange={(value: number) =>
+                            updateMechanism(
+                              [
+                                {
+                                  type: "ChangeDimensionEdgeValue",
+                                  id: constraint.id,
+                                  newValue: value,
+                                  oldValue: constraint.value,
+                                },
+                              ],
+                              "ChangeDimension",
+                            )
+                          }
+                          label=""
+                          suffix={
+                            constraint.type === "dimension-angle"
+                              ? "°"
+                              : undefined
+                          }
+                        />
+                      );
+                    case "gear-ratio":
+                      return (
+                        <RatioInput
+                          value={constraint.value}
+                          onChange={(value: number) =>
+                            updateMechanism(
+                              [
+                                {
+                                  type: "ChangeGearRatioValue",
+                                  id: constraint.id,
+                                  newValue: value,
+                                  oldValue: constraint.value,
+                                },
+                              ],
+                              "ChangeDimension",
+                            )
+                          }
+                        />
+                      );
+                  }
+                })()}
+                <IconButton
                   sx={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    width: "100%",
-                    bgcolor: COLORS.BACKGROUND,
+                    borderRadius: 5,
+                    "&:hover": {
+                      backgroundColor: "#00000025",
+                    },
+                    my: -0.5,
                   }}
-                  border={2}
-                  borderColor={"#00000025"}
-                  borderRadius={5}
+                  onMouseEnter={() => handleMouseEnter(constraint)}
+                  onMouseLeave={handleMouseLeave}
+                  onClick={() =>
+                    updateMechanism(
+                      [{ type: "DeleteElement", element: constraint }],
+                      "Other",
+                    )
+                  }
+                  title="Supprimer"
                 >
-                  <ElementDisplay
-                    element={constraint}
-                    size="medium"
-                    bold={constraint.id === constraintID}
-                    setHoveredPart={setHoveredPart}
-                    setCanvasState={setCanvasState}
-                    updateMechanism={updateMechanism}
-                  ></ElementDisplay>
-
-                  {(() => {
-                    switch (constraint.type) {
-                      case "dimension-edge":
-                      case "dimension-node-to-node":
-                      case "dimension-edge-to-node":
-                      case "dimension-angle":
-                      case "dimension-radius":
-                        return (
-                          <NumberInput
-                            value={constraint.value}
-                            onChange={(value: number) =>
-                              updateMechanism(
-                                [
-                                  {
-                                    type: "ChangeDimensionEdgeValue",
-                                    id: constraint.id,
-                                    newValue: value,
-                                    oldValue: constraint.value,
-                                  },
-                                ],
-                                "ChangeDimension",
-                              )
-                            }
-                            label=""
-                            suffix={
-                              constraint.type === "dimension-angle"
-                                ? "°"
-                                : undefined
-                            }
-                          />
-                        );
-                      case "gear-ratio":
-                        return (
-                          <RatioInput
-                            value={constraint.value}
-                            onChange={(value: number) =>
-                              updateMechanism(
-                                [
-                                  {
-                                    type: "ChangeGearRatioValue",
-                                    id: constraint.id,
-                                    newValue: value,
-                                    oldValue: constraint.value,
-                                  },
-                                ],
-                                "ChangeDimension",
-                              )
-                            }
-                          />
-                        );
-                    }
-                  })()}
-                  <IconButton
-                    sx={{
-                      borderRadius: 5,
-                      "&:hover": {
-                        backgroundColor: "#00000025",
-                      },
-                      my: -0.5,
-                    }}
-                    onMouseEnter={() => handleMouseEnter(constraint)}
-                    onMouseLeave={handleMouseLeave}
-                    onClick={() =>
-                      updateMechanism(
-                        [{ type: "DeleteElement", element: constraint }],
-                        "Other",
-                      )
-                    }
-                    title="Supprimer"
-                  >
-                    <DeleteIcon sx={{ width: 18, height: 18 }} color="error" />
-                  </IconButton>
-                </Box>
-
-                {constraint.id === constraintID && (
-                  <Box
-                    marginLeft={1}
-                    marginBottom={0.5}
-                    marginTop={0.5}
-                    sx={{
-                      display: "flex",
-                      gap: 0.3,
-                      bgcolor: "#0005",
-                      borderRadius: 5,
-                    }}
-                    padding={"2px"}
-                  >
-                    {(() => {
-                      switch (constraint.type) {
-                        case "dimension-edge":
-                        case "horizontal-align-edge":
-                        case "vertical-align-edge":
-                          return (
-                            <>
-                              <Box
-                                sx={{
-                                  display: "flex",
-                                  bgcolor: COLORS.BACKGROUND,
-                                  borderRadius: 5,
-                                }}
-                              >
-                                <ElementDisplay
-                                  element={get_mechanical_element_from_id(
-                                    constraint.edgeID,
-                                    mechanism.mechanicalElements,
-                                  )}
-                                  size="small"
-                                  setHoveredPart={setHoveredPart}
-                                  setCanvasState={setCanvasState}
-                                  updateMechanism={updateMechanism}
-                                  bold={false}
-                                ></ElementDisplay>
-                              </Box>
-                            </>
-                          );
-                        case "dimension-node-to-node":
-                          return (
-                            <>
-                              <Box
-                                sx={{
-                                  display: "flex",
-                                  bgcolor: COLORS.BACKGROUND,
-                                  borderRadius: 5,
-                                }}
-                              >
-                                <ElementDisplay
-                                  element={get_mechanical_element_from_id(
-                                    constraint.startNodeID,
-                                    mechanism.mechanicalElements,
-                                  )}
-                                  size="small"
-                                  setHoveredPart={setHoveredPart}
-                                  setCanvasState={setCanvasState}
-                                  updateMechanism={updateMechanism}
-                                  bold={false}
-                                ></ElementDisplay>
-                              </Box>
-                              <Box
-                                sx={{
-                                  display: "flex",
-                                  bgcolor: COLORS.BACKGROUND,
-                                  borderRadius: 5,
-                                }}
-                              >
-                                <ElementDisplay
-                                  element={get_mechanical_element_from_id(
-                                    constraint.endNodeID,
-                                    mechanism.mechanicalElements,
-                                  )}
-                                  size="small"
-                                  setHoveredPart={setHoveredPart}
-                                  setCanvasState={setCanvasState}
-                                  updateMechanism={updateMechanism}
-                                  bold={false}
-                                ></ElementDisplay>
-                              </Box>
-                            </>
-                          );
-                        case "dimension-edge-to-node":
-                          return (
-                            <>
-                              <Box
-                                sx={{
-                                  display: "flex",
-                                  bgcolor: COLORS.BACKGROUND,
-                                  borderRadius: 5,
-                                }}
-                              >
-                                <ElementDisplay
-                                  element={get_mechanical_element_from_id(
-                                    constraint.edgeID,
-                                    mechanism.mechanicalElements,
-                                  )}
-                                  size="small"
-                                  setHoveredPart={setHoveredPart}
-                                  setCanvasState={setCanvasState}
-                                  updateMechanism={updateMechanism}
-                                  bold={false}
-                                ></ElementDisplay>
-                              </Box>
-                              <Box
-                                sx={{
-                                  display: "flex",
-                                  bgcolor: COLORS.BACKGROUND,
-                                  borderRadius: 5,
-                                }}
-                              >
-                                <ElementDisplay
-                                  element={get_mechanical_element_from_id(
-                                    constraint.nodeID,
-                                    mechanism.mechanicalElements,
-                                  )}
-                                  size="small"
-                                  setHoveredPart={setHoveredPart}
-                                  setCanvasState={setCanvasState}
-                                  updateMechanism={updateMechanism}
-                                  bold={false}
-                                ></ElementDisplay>
-                              </Box>
-                            </>
-                          );
-                        case "dimension-angle":
-                        case "normal":
-                        case "parallel":
-                        case "equal":
-                          return (
-                            <>
-                              <Box
-                                sx={{
-                                  display: "flex",
-                                  bgcolor: COLORS.BACKGROUND,
-                                  borderRadius: 5,
-                                }}
-                              >
-                                <ElementDisplay
-                                  element={get_mechanical_element_from_id(
-                                    constraint.startEdgeID,
-                                    mechanism.mechanicalElements,
-                                  )}
-                                  size="small"
-                                  setHoveredPart={setHoveredPart}
-                                  setCanvasState={setCanvasState}
-                                  updateMechanism={updateMechanism}
-                                  bold={false}
-                                ></ElementDisplay>
-                              </Box>
-                              <Box
-                                sx={{
-                                  display: "flex",
-                                  bgcolor: COLORS.BACKGROUND,
-                                  borderRadius: 5,
-                                }}
-                              >
-                                <ElementDisplay
-                                  element={get_mechanical_element_from_id(
-                                    constraint.endEdgeID,
-                                    mechanism.mechanicalElements,
-                                  )}
-                                  size="small"
-                                  setHoveredPart={setHoveredPart}
-                                  setCanvasState={setCanvasState}
-                                  updateMechanism={updateMechanism}
-                                  bold={false}
-                                ></ElementDisplay>
-                              </Box>
-                            </>
-                          );
-                        case "dimension-radius":
-                          return (
-                            <>
-                              <Box
-                                sx={{
-                                  display: "flex",
-                                  bgcolor: COLORS.BACKGROUND,
-                                  borderRadius: 5,
-                                }}
-                              >
-                                <ElementDisplay
-                                  element={get_mechanical_element_from_id(
-                                    constraint.gearID,
-                                    mechanism.mechanicalElements,
-                                  )}
-                                  size="small"
-                                  setHoveredPart={setHoveredPart}
-                                  setCanvasState={setCanvasState}
-                                  updateMechanism={updateMechanism}
-                                  bold={false}
-                                ></ElementDisplay>
-                              </Box>
-                            </>
-                          );
-                        case "horizontal-align-nodes":
-                        case "vertical-align-nodes":
-                          return (
-                            <>
-                              <Box
-                                sx={{
-                                  display: "flex",
-                                  bgcolor: COLORS.BACKGROUND,
-                                  borderRadius: 5,
-                                }}
-                              >
-                                <ElementDisplay
-                                  element={get_mechanical_element_from_id(
-                                    constraint.startNodeID,
-                                    mechanism.mechanicalElements,
-                                  )}
-                                  size="small"
-                                  setHoveredPart={setHoveredPart}
-                                  setCanvasState={setCanvasState}
-                                  updateMechanism={updateMechanism}
-                                  bold={false}
-                                ></ElementDisplay>
-                              </Box>
-                              <Box
-                                sx={{
-                                  display: "flex",
-                                  bgcolor: COLORS.BACKGROUND,
-                                  borderRadius: 5,
-                                }}
-                              >
-                                <ElementDisplay
-                                  element={get_mechanical_element_from_id(
-                                    constraint.endNodeID,
-                                    mechanism.mechanicalElements,
-                                  )}
-                                  size="small"
-                                  setHoveredPart={setHoveredPart}
-                                  setCanvasState={setCanvasState}
-                                  updateMechanism={updateMechanism}
-                                  bold={false}
-                                ></ElementDisplay>
-                              </Box>
-                            </>
-                          );
-                        case "gear-ratio":
-                          return (
-                            <>
-                              <Box
-                                sx={{
-                                  display: "flex",
-                                  bgcolor: COLORS.BACKGROUND,
-                                  borderRadius: 5,
-                                }}
-                              >
-                                <ElementDisplay
-                                  element={get_mechanical_element_from_id(
-                                    constraint.startGearID,
-                                    mechanism.mechanicalElements,
-                                  )}
-                                  size="small"
-                                  setHoveredPart={setHoveredPart}
-                                  setCanvasState={setCanvasState}
-                                  updateMechanism={updateMechanism}
-                                  bold={false}
-                                ></ElementDisplay>
-                              </Box>
-                              <Box
-                                sx={{
-                                  display: "flex",
-                                  bgcolor: COLORS.BACKGROUND,
-                                  borderRadius: 5,
-                                }}
-                              >
-                                <ElementDisplay
-                                  element={get_mechanical_element_from_id(
-                                    constraint.endGearID,
-                                    mechanism.mechanicalElements,
-                                  )}
-                                  size="small"
-                                  setHoveredPart={setHoveredPart}
-                                  setCanvasState={setCanvasState}
-                                  updateMechanism={updateMechanism}
-                                  bold={false}
-                                ></ElementDisplay>
-                              </Box>
-                            </>
-                          );
-                      }
-                    })()}
-                  </Box>
-                )}
+                  <DeleteIcon sx={{ width: 18, height: 18 }} color="error" />
+                </IconButton>
               </Box>
             </ListItem>
           </React.Fragment>

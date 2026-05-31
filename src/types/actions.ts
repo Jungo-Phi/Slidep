@@ -1,4 +1,5 @@
 import { ID, UnionElement } from "./element";
+import { Nodes } from "./kinematic-solver-links";
 import { Point2 } from "./point2";
 
 /** Events captured on the canvas */
@@ -230,14 +231,8 @@ export type Action =
         | ChangeDimensionActionType
         | ConnectsActionType
         | CreationActionType;
-      newPositions: {
-        positions: Map<string, Point2>;
-        radii: Map<string, number>;
-      };
-      oldPositions: {
-        positions: Map<string, Point2>;
-        radii: Map<string, number>;
-      };
+      newNodes: Nodes;
+      oldNodes: Nodes;
     }
   | {
       type: "Blank";

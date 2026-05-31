@@ -616,22 +616,27 @@ export function draw_dimention_text(
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   const metrics = ctx.measureText(text);
+
+  const lastShadowBlur = ctx.shadowBlur;
+  const lastShadowColor = ctx.shadowColor;
+  ctx.shadowBlur = 5;
+  ctx.shadowColor = COLORS.BACKGROUND;
   ctx.fillStyle = COLORS.BACKGROUND;
   ctx.beginPath();
   ctx.roundRect(
-    position.x - metrics.width / 2 - 14 / 2,
-    position.y - 26 / 2 - 1,
-    metrics.width + 14,
-    26,
+    position.x - metrics.width / 2 - 8 / 2,
+    position.y - 22 / 2 - 1,
+    metrics.width + 8,
+    22,
     5,
   );
   ctx.fill();
-  if (ctx.lineWidth > 2) {
-    ctx.lineWidth = 2;
-    ctx.stroke();
-  }
+  ctx.shadowBlur = ctx.lineWidth > 2 ? 2 : lastShadowBlur;
+  ctx.shadowColor = ctx.lineWidth > 2 ? COLORS.STROKE : lastShadowColor;
   ctx.fillStyle = ctx.strokeStyle;
   ctx.fillText(text, position.x, position.y);
+  ctx.shadowBlur = lastShadowBlur;
+  ctx.shadowColor = lastShadowColor;
 }
 
 export function draw_dimention_parallel(

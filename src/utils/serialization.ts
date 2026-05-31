@@ -23,47 +23,48 @@ function dp(s: SerializedPoint2): Point2 {
   return new Point2(s.x, s.y);
 }
 
-function serializePositionMap(
+function serializePointsMap(
   m: Map<string, Point2>,
 ): [string, SerializedPoint2][] {
   return [...m.entries()].map(([k, v]) => [k, sp(v)]);
 }
 
-function serializeRadiiMap(m: Map<string, number>): [string, number][] {
+function serializeNumbersMap(m: Map<string, number>): [string, number][] {
   return [...m.entries()];
 }
 
-function deserializePositionMap(
+function deserializePointsMap(
   entries: [string, SerializedPoint2][],
 ): Map<string, Point2> {
   return new Map(entries.map(([k, v]) => [k, dp(v)]));
 }
 
-function deserializeRadiiMap(entries: [string, number][]): Map<string, number> {
+function deserializeNumbersMap(
+  entries: [string, number][],
+): Map<string, number> {
   return new Map(entries);
 }
 
 // ─── Serialize / Deserialize Action ───────────────────────────────────────────
 
 export function serializeAction(a: Action): SerializedAction {
+  console.log(a);
   switch (a.type) {
     // Contient un UnionElement avec des Point2 imbriqués → déléguer
     case "CreateElement":
     case "DeleteElement": {
-      const isMechanical = (
-        [
-          "pivot",
-          "slider",
-          "slidep",
-          "join",
-          "mass",
-          "gear",
-          "beam",
-          "spring",
-          "damper",
-          "belt",
-        ] as string[]
-      ).includes(a.element.type);
+      const isMechanical = [
+        "pivot",
+        "slider",
+        "slidep",
+        "join",
+        "mass",
+        "gear",
+        "beam",
+        "spring",
+        "damper",
+        "belt",
+      ].includes(a.element.type);
 
       return {
         type: a.type,
@@ -78,13 +79,17 @@ export function serializeAction(a: Action): SerializedAction {
       return {
         type: a.type,
         masterActionType: a.masterActionType,
-        newPositions: {
-          positions: serializePositionMap(a.newPositions.positions),
-          radii: serializeRadiiMap(a.newPositions.radii),
+        newNodes: {
+          positions: serializePointsMap(a.newNodes.positions),
+          radii: serializeNumbersMap(a.newNodes.radii),
+          posMasses: serializeNumbersMap(a.newNodes.posMasses),
+          radMasses: serializeNumbersMap(a.newNodes.radMasses),
         },
-        oldPositions: {
-          positions: serializePositionMap(a.oldPositions.positions),
-          radii: serializeRadiiMap(a.oldPositions.radii),
+        oldNodes: {
+          positions: serializePointsMap(a.oldNodes.positions),
+          radii: serializeNumbersMap(a.oldNodes.radii),
+          posMasses: serializeNumbersMap(a.oldNodes.posMasses),
+          radMasses: serializeNumbersMap(a.oldNodes.radMasses),
         },
       };
 
@@ -131,13 +136,17 @@ export function deserializeAction(s: SerializedAction): Action {
       return {
         type: s.type,
         masterActionType: s.masterActionType,
-        newPositions: {
-          positions: deserializePositionMap(s.newPositions.positions),
-          radii: deserializeRadiiMap(s.newPositions.radii),
+        newNodes: {
+          positions: deserializePointsMap(s.newNodes.positions),
+          radii: deserializeNumbersMap(s.newNodes.radii),
+          posMasses: deserializeNumbersMap(s.newNodes.posMasses),
+          radMasses: deserializeNumbersMap(s.newNodes.radMasses),
         },
-        oldPositions: {
-          positions: deserializePositionMap(s.oldPositions.positions),
-          radii: deserializeRadiiMap(s.oldPositions.radii),
+        oldNodes: {
+          positions: deserializePointsMap(s.oldNodes.positions),
+          radii: deserializeNumbersMap(s.oldNodes.radii),
+          posMasses: deserializeNumbersMap(s.oldNodes.posMasses),
+          radMasses: deserializeNumbersMap(s.oldNodes.radMasses),
         },
       };
 

@@ -37,6 +37,7 @@
 - Régler de bordel de "connect-actions"
 - Connecter les "fixedGears"
 - Click dans le vide quand state==placingConstraint -> state=Selecting
+- Click dans Dimension quand state==placingStartDimension -> Editing
 - "Undo" connection (Join) ne s'est pas appliqué en bidirectionnel !
 - Delete (eraser) ne fonctionne pas !
 - Hover delete dans le controle panel applique le meme style que eraser
@@ -46,7 +47,12 @@
 - ~Unified Property pannel look with dimensions~
 - Change edge length ne fonctionne pas + devrais changer la contrainte associées s'il y en a une
 - ~Hover dimension~
+- Connecter une courroie à un engrenage avec une extrémité (en plus de la longueur)
+- hover des boutons dans le property pannel
 - hover : ignorer contraintes when placing mechanical elements or movingEdge
+- Min Gear radius placing
+- slider angle placing
+- empecher de placer une belt sur un gear déjà connecté
 - ~Dimension Radius~
 - ~Compléter le geometric-solver~
 - geometric solver - radius constraint

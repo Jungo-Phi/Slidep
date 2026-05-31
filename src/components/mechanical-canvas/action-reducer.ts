@@ -52,76 +52,6 @@ export function actionReducer(
           }
         }
         break;
-      /*
-      case "MoveNode":
-      case "MoveEdgeStart":
-      case "MoveEdgeEnd":
-      case "MoveEdgeBody":
-        element = get_mechanical_element_from_id(
-          action.id,
-          mechanicalElements,
-        );
-        if (action.type === "MoveNode") {
-          if (!("position" in element)) break;
-          element.position = revert ? action.oldPosition : action.newPosition;
-        } else if (action.type === "MoveEdgeStart") {
-          if (!("positionStart" in element)) break;
-          element.positionStart = revert
-            ? action.oldPosition
-            : action.newPosition;
-        } else if (action.type === "MoveEdgeEnd") {
-          if (!("positionEnd" in element)) break;
-          element.positionEnd = revert
-            ? action.oldPosition
-            : action.newPosition;
-        } else {
-          if (!("positionStart" in element) || !("positionEnd" in element))
-            break;
-          const delta = element.positionEnd.sub(element.positionStart);
-          element.positionStart = revert
-            ? action.oldPosition.sub(action.deltaStart)
-            : action.newPosition.sub(action.deltaStart);
-          element.positionEnd = element.positionStart.add(delta);
-        }
-        break;
-      case "MoveElements":
-        for (const element of mechanicalElements) {
-          if (action.elementIDs.includes(element.id)) {
-            if ("position" in element) {
-              element.position = element.position.add(
-                action.delta.mul(revert ? -1 : 1),
-              );
-            } else {
-              element.positionStart = element.positionStart.add(
-                action.delta.mul(revert ? -1 : 1),
-              );
-              element.positionEnd = element.positionEnd.add(
-                action.delta.mul(revert ? -1 : 1),
-              );
-            }
-          }
-        }
-        break;
-      case "ChangeGearRadius":
-        element = get_mechanical_element_from_id(
-          action.id,
-          mechanicalElements,
-        ) as GearElement;
-        element.radius = revert ? action.oldRadius : action.newRadius;
-        break;
-      case "ChangeEdgeLength":
-        const edgeElement = get_mechanical_element_from_id(
-          action.id,
-          mechanicalElements,
-        ) as EdgeElement;
-        const endExtention = edgeElement.positionEnd
-          .sub(edgeElement.positionStart)
-          .normalize()
-          .mul(((action.newLength - action.oldLength) / 2) * (revert ? -1 : 1));
-        edgeElement.positionStart = edgeElement.positionStart.sub(endExtention);
-        edgeElement.positionEnd = edgeElement.positionEnd.add(endExtention);
-        break;
-      */
       case "MoveConstraint":
         element = get_constraint_element_from_id(action.id, constraintElements);
         element.position = revert ? action.oldPosition : action.newPosition;
@@ -328,11 +258,11 @@ export function actionReducer(
         let positions: Map<string, Point2>;
         let radii: Map<string, number>;
         if (revert) {
-          positions = action.oldPositions.positions;
-          radii = action.oldPositions.radii;
+          positions = action.oldNodes.positions;
+          radii = action.oldNodes.radii;
         } else {
-          positions = action.newPositions.positions;
-          radii = action.newPositions.radii;
+          positions = action.newNodes.positions;
+          radii = action.newNodes.radii;
         }
 
         let position: Point2 | undefined;

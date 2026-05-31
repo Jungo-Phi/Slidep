@@ -121,11 +121,49 @@ export function drawMechanicalCanvas(
         hoveredPart !== null &&
         hoveredPart.type === "Edge" &&
         hoveredPart.part !== "body";
-      const isHovered =
+
+      let isHovered =
         hoveredPart.type !== "Void" &&
         hoveredPart.id === element.id &&
         state.type !== "Erasing" &&
         !isEdgeEndHovered;
+      if (hoveredPart.type !== "Void") {
+        const constraint = constraintElements.find(
+          (element) => element.id === hoveredPart.id,
+        );
+        if (constraint) {
+          switch (constraint.type) {
+            case "horizontal-align-edge":
+            case "vertical-align-edge":
+              if (element.id === constraint.edgeID) isHovered = true;
+              break;
+            case "horizontal-align-nodes":
+            case "vertical-align-nodes":
+              if (
+                element.id === constraint.startNodeID ||
+                element.id === constraint.endNodeID
+              )
+                isHovered = true;
+              break;
+            case "normal":
+            case "parallel":
+            case "equal":
+              if (
+                element.id === constraint.startEdgeID ||
+                element.id === constraint.endEdgeID
+              )
+                isHovered = true;
+              break;
+            case "gear-ratio":
+              if (
+                element.id === constraint.startGearID ||
+                element.id === constraint.endGearID
+              )
+                isHovered = true;
+              break;
+          }
+        }
+      }
 
       ctx.shadowBlur = 0;
       ctx.globalAlpha = 1;

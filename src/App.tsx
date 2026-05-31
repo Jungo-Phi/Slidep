@@ -37,6 +37,7 @@ import {
   DEFAULT_VIEWPORT,
   Mechanism,
   MechanismMetadata,
+  Nodes,
   SimulationConfig,
   SimulationState,
   ZERO,
@@ -45,11 +46,9 @@ import { HoveredPart } from "./types/hovered-part";
 import { actionReducer } from "./components/mechanical-canvas/action-reducer";
 import { preload_element_icons } from "./components/element-palette/elementIcon";
 import { COLORS } from "./constants/rendering-specs";
-import {
-  getPositions,
-  resolveGeometricConstraints,
-} from "./components/mechanical-canvas/geometric-solver";
 import { cloneMechanism } from "./utils/serialization";
+import { resolveGeometricConstraints } from "./components/solver/geometric-solver";
+import { get_nodes } from "./components/solver/parsing";
 //import { SimulationControls } from './components/simulation-controls';
 
 /**
@@ -116,6 +115,8 @@ const App: React.FC = () => {
     let lastActions: Action[];
     let lastAction: Action;
     let secondToLastAction: Action;
+    let oldNodes: Nodes;
+    let newNodes: Nodes;
 
     let newHistory: Action[][] | undefined = undefined;
 
@@ -162,10 +163,9 @@ const App: React.FC = () => {
         )
           throw console.error("impossible");
 
-        const oldPositionsM = getPositions(mechanism.mechanicalElements);
-        const newPositionsM = resolveGeometricConstraints(
-          mechanism.mechanicalElements,
-          mechanism.constraintElements,
+        oldNodes = get_nodes(mechanism.mechanicalElements);
+        newNodes = resolveGeometricConstraints(
+          mechanism,
           actionBundleType,
           newAction,
         );
@@ -174,8 +174,8 @@ const App: React.FC = () => {
           {
             type: "UpdatePositionsToValidState",
             masterActionType: newAction.type,
-            newPositions: newPositionsM,
-            oldPositions: oldPositionsM,
+            newNodes,
+            oldNodes,
           },
         ];
         if (mechanism.history.length === 0) break;
@@ -189,7 +189,7 @@ const App: React.FC = () => {
         )
           break;
         newHistory = [...mechanism.history];
-        lastAction.newPositions = newPositionsM;
+        lastAction.newNodes = newNodes;
         if (secondToLastAction.type !== newAction.type)
           throw console.error("impossible");
         switch (secondToLastAction.type) {
@@ -231,15 +231,9 @@ const App: React.FC = () => {
         )
           throw console.error("impossible");
 
-        const oldPositionsD = getPositions(mechanism.mechanicalElements);
-        const tempMechanismD = actionReducer(
-          cloneMechanism(mechanism),
-          actions,
-          false,
-        );
-        const newPositionsD = resolveGeometricConstraints(
-          tempMechanismD.mechanicalElements,
-          tempMechanismD.constraintElements,
+        oldNodes = get_nodes(mechanism.mechanicalElements);
+        newNodes = resolveGeometricConstraints(
+          actionReducer(cloneMechanism(mechanism), actions, false),
           actionBundleType,
           newAction,
         );
@@ -248,11 +242,15 @@ const App: React.FC = () => {
           {
             type: "UpdatePositionsToValidState",
             masterActionType: newAction.type,
-            newPositions: newPositionsD,
-            oldPositions: oldPositionsD,
+            newNodes,
+            oldNodes,
           },
         ];
-        if (mechanism.history.length === 0) break;
+        if (
+          mechanism.history.length === 0 ||
+          newAction.type === "ChangeGearRatioValue"
+        )
+          break;
         lastActions = mechanism.history[mechanism.history.length - 1];
         if (lastActions.length < 2) break;
         lastAction = lastActions[lastActions.length - 1];
@@ -263,7 +261,7 @@ const App: React.FC = () => {
         )
           break;
         newHistory = [...mechanism.history];
-        lastAction.newPositions = newPositionsD;
+        lastAction.newNodes = newNodes;
         if (secondToLastAction.type !== newAction.type)
           throw console.error("impossible");
         secondToLastAction.newValue = newAction.newValue;
@@ -285,15 +283,9 @@ const App: React.FC = () => {
         )
           throw console.error("impossible");
 
-        const oldPositionsC = getPositions(mechanism.mechanicalElements);
-        const tempMechanismC = actionReducer(
-          cloneMechanism(mechanism),
-          actions,
-          false,
-        );
-        const newPositionsC = resolveGeometricConstraints(
-          tempMechanismC.mechanicalElements,
-          tempMechanismC.constraintElements,
+        oldNodes = get_nodes(mechanism.mechanicalElements);
+        newNodes = resolveGeometricConstraints(
+          actionReducer(cloneMechanism(mechanism), actions, false),
           actionBundleType,
           newAction,
         );
@@ -302,8 +294,8 @@ const App: React.FC = () => {
           {
             type: "UpdatePositionsToValidState",
             masterActionType: newAction.type,
-            newPositions: newPositionsC,
-            oldPositions: oldPositionsC,
+            newNodes,
+            oldNodes,
           },
         ];
         break;
@@ -319,15 +311,9 @@ const App: React.FC = () => {
             newAction.element.type !== "equal")
         )
           break;
-        const oldPositionsCC = getPositions(mechanism.mechanicalElements);
-        const tempMechanismCC = actionReducer(
-          cloneMechanism(mechanism),
-          actions,
-          false,
-        );
-        const newPositionsCC = resolveGeometricConstraints(
-          tempMechanismCC.mechanicalElements,
-          tempMechanismCC.constraintElements,
+        oldNodes = get_nodes(mechanism.mechanicalElements);
+        newNodes = resolveGeometricConstraints(
+          actionReducer(cloneMechanism(mechanism), actions, false),
           actionBundleType,
           newAction,
         );
@@ -336,8 +322,8 @@ const App: React.FC = () => {
           {
             type: "UpdatePositionsToValidState",
             masterActionType: newAction.type,
-            newPositions: newPositionsCC,
-            oldPositions: oldPositionsCC,
+            newNodes,
+            oldNodes,
           },
         ];
         break;
