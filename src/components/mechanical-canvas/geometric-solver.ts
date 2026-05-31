@@ -2,7 +2,6 @@ import {
   Action,
   ConstraintElement,
   MechanicalElement,
-  GearElement,
   EdgeElement,
   ActionBundleType,
 } from "../../types";
@@ -224,84 +223,6 @@ function get_degrees_of_liberty(
     links.map((link) => link.ddl).reduce((a, b) => a + b, 0) -
     [...posMasses.values()].filter((mass) => mass === 0).length * 2
   );
-}
-
-function link_to_str(link: Link): string {
-  switch (link.type) {
-    case "Coincidence":
-      return `coincidence(${link.key1} = ${link.key2})`;
-    case "Distance":
-      return `distance(${link.key1} — ${link.key2} = ${link.distance})`;
-    case "DistanceToLine":
-      return `distanceToLine(${link.key3} to ${link.key1}—${link.key2} = ${link.distance})`;
-    case "OnSegment":
-      return `onSegment(${link.key3} on ${link.key1}—${link.key2})`;
-    case "AtSegmentRatio":
-      return `atSegmentRatio(${link.key3} at t=${link.t.toFixed(2)} on ${link.key1}—${link.key2})`;
-    case "KeepOrientation":
-      return `keepOrientation(${link.key1}—${link.key2} dir=(${link.direction.x.toFixed(1)},${link.direction.y.toFixed(1)}))`;
-    case "Angle":
-      return `angle(${link.key1}—${link.key2} to ${link.key3}—${link.key4} = ${((link.angle * 180) / Math.PI).toFixed(1)}°)`;
-    case "Radius":
-      return `radius(${link.key1} = ${link.radius})`;
-    case "Horizontal":
-      return `horizontal(${link.key1}—${link.key2})`;
-    case "Vertical":
-      return `vertical(${link.key1}—${link.key2})`;
-    case "Normal":
-      return `normal(${link.key1}—${link.key2} ⊥ ${link.key3}—${link.key4})`;
-    case "Parallel":
-      return `parallel(${link.key1}—${link.key2} ∥ ${link.key3}—${link.key4})`;
-    case "EqualLength":
-      return `equalLength(${link.key1}—${link.key2} = ${link.key3}—${link.key4})`;
-    case "GearMeshing":
-      return `gearMeshing(${link.key1} ⚙ ${link.key2})`;
-    case "GearRatio":
-      return `gearRatio(${link.key1} / ${link.key2} = ${link.ratio})`;
-    case "HandleGrab":
-      const val =
-        typeof link.value === "number"
-          ? link.value.toFixed(1)
-          : `(${link.value.x.toFixed(1)}, ${link.value.y.toFixed(1)})`;
-      return `handleGrab(${link.grabbedKey} → ${val})`;
-  }
-}
-
-function link_to_str_min(link: Link): string {
-  switch (link.type) {
-    case "Coincidence":
-      return `coincidence`;
-    case "Distance":
-      return `Dist(${link.distance})`;
-    case "DistanceToLine":
-      return `DistToLine(${link.distance})`;
-    case "OnSegment":
-      return `onSegment`;
-    case "AtSegmentRatio":
-      return `atSegmentRatio(t=${link.t.toFixed(2)})`;
-    case "KeepOrientation":
-      return `keepOrientation(dir=(${link.direction.x.toFixed(1)},${link.direction.y.toFixed(1)}))`;
-    case "Angle":
-      return `Angle(${((link.angle * 180) / Math.PI).toFixed(1)}°)`;
-    case "Radius":
-      return `Radius(${link.radius})`;
-    case "Horizontal":
-      return `Horizontal`;
-    case "Vertical":
-      return `Vertical`;
-    case "Normal":
-      return `Normal`;
-    case "Parallel":
-      return `Parallel`;
-    case "EqualLength":
-      return `Equal()`;
-    case "GearMeshing":
-      return `GearMeshing`;
-    case "GearRatio":
-      return `GearRatio(${link.ratio})`;
-    case "HandleGrab":
-      return `Grab`;
-  }
 }
 
 function keys_of(link: Link): string[] {
@@ -759,7 +680,7 @@ export function resolveGeometricConstraints(
   links = sort_links(links, posMasses);
 
   // console.log("pos : ", [...positions.keys()]);
-  //console.log("links : ", links.map((link) => link_to_str_min(link)));
+  //console.log("links : ", links);
   ddl = get_degrees_of_liberty(positions, radii, posMasses, links);
   console.log("DDL : ", ddl);
 

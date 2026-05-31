@@ -7,7 +7,6 @@ import {
   SerializedMechanism,
 } from "../types";
 import {
-  Serialized,
   SerializedAction,
   SerializedConstraintElement,
   SerializedMechanicalElement,
@@ -181,8 +180,8 @@ export function serializeConstraintElement(
   return JSON.parse(JSON.stringify(e));
 }
 
-function revivePoints<T extends object>(s: Serialized<T>): T {
-  const result = { ...s } as Record<string, unknown>;
+function revivePoints(s: Record<string, unknown>): Record<string, unknown> {
+  const result = { ...s };
 
   for (const key of ["position", "positionStart", "positionEnd"] as const) {
     if (key in result) {
@@ -191,19 +190,23 @@ function revivePoints<T extends object>(s: Serialized<T>): T {
     }
   }
 
-  return result as T;
+  return result;
 }
 
 export function deserializeMechanicalElement(
   serializedMechanicalElement: SerializedMechanicalElement,
 ): MechanicalElement {
-  return revivePoints(serializedMechanicalElement);
+  return revivePoints(
+    serializedMechanicalElement as unknown as Record<string, unknown>,
+  ) as unknown as MechanicalElement;
 }
 
 export function deserializeConstraintElement(
   serializedConstraintElement: SerializedConstraintElement,
 ): ConstraintElement {
-  return revivePoints(serializedConstraintElement);
+  return revivePoints(
+    serializedConstraintElement as unknown as Record<string, unknown>,
+  ) as unknown as ConstraintElement;
 }
 
 export function cloneMechanicalElement(
