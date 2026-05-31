@@ -132,8 +132,8 @@ function constraint_to_link(element: ConstraintElement): Link {
       return {
         type: "Horizontal",
         ddl: 1,
-        key1: `${element.startNodeID}:start`,
-        key2: `${element.endNodeID}:end`,
+        key1: `${element.startNodeID}:pos`,
+        key2: `${element.endNodeID}:pos`,
       };
     case "vertical-align-edge":
       return {
@@ -146,8 +146,8 @@ function constraint_to_link(element: ConstraintElement): Link {
       return {
         type: "Vertical",
         ddl: 1,
-        key1: `${element.startNodeID}:start`,
-        key2: `${element.endNodeID}:end`,
+        key1: `${element.startNodeID}:pos`,
+        key2: `${element.endNodeID}:pos`,
       };
     case "normal":
       return {
@@ -224,6 +224,177 @@ function get_degrees_of_liberty(
     links.map((link) => link.ddl).reduce((a, b) => a + b, 0) -
     [...posMasses.values()].filter((mass) => mass === 0).length * 2
   );
+}
+
+function link_to_str(link: Link): string {
+  switch (link.type) {
+    case "Coincidence":
+      return `coincidence(${link.key1} = ${link.key2})`;
+    case "Distance":
+      return `distance(${link.key1} — ${link.key2} = ${link.distance})`;
+    case "DistanceToLine":
+      return `distanceToLine(${link.key3} to ${link.key1}—${link.key2} = ${link.distance})`;
+    case "OnSegment":
+      return `onSegment(${link.key3} on ${link.key1}—${link.key2})`;
+    case "AtSegmentRatio":
+      return `atSegmentRatio(${link.key3} at t=${link.t.toFixed(2)} on ${link.key1}—${link.key2})`;
+    case "KeepOrientation":
+      return `keepOrientation(${link.key1}—${link.key2} dir=(${link.direction.x.toFixed(1)},${link.direction.y.toFixed(1)}))`;
+    case "Angle":
+      return `angle(${link.key1}—${link.key2} to ${link.key3}—${link.key4} = ${((link.angle * 180) / Math.PI).toFixed(1)}°)`;
+    case "Radius":
+      return `radius(${link.key1} = ${link.radius})`;
+    case "Horizontal":
+      return `horizontal(${link.key1}—${link.key2})`;
+    case "Vertical":
+      return `vertical(${link.key1}—${link.key2})`;
+    case "Normal":
+      return `normal(${link.key1}—${link.key2} ⊥ ${link.key3}—${link.key4})`;
+    case "Parallel":
+      return `parallel(${link.key1}—${link.key2} ∥ ${link.key3}—${link.key4})`;
+    case "EqualLength":
+      return `equalLength(${link.key1}—${link.key2} = ${link.key3}—${link.key4})`;
+    case "GearMeshing":
+      return `gearMeshing(${link.key1} ⚙ ${link.key2})`;
+    case "GearRatio":
+      return `gearRatio(${link.key1} / ${link.key2} = ${link.ratio})`;
+    case "HandleGrab":
+      const val =
+        typeof link.value === "number"
+          ? link.value.toFixed(1)
+          : `(${link.value.x.toFixed(1)}, ${link.value.y.toFixed(1)})`;
+      return `handleGrab(${link.grabbedKey} → ${val})`;
+  }
+}
+
+function link_to_str_min(link: Link): string {
+  switch (link.type) {
+    case "Coincidence":
+      return `coincidence`;
+    case "Distance":
+      return `Dist(${link.distance})`;
+    case "DistanceToLine":
+      return `DistToLine(${link.distance})`;
+    case "OnSegment":
+      return `onSegment`;
+    case "AtSegmentRatio":
+      return `atSegmentRatio(t=${link.t.toFixed(2)})`;
+    case "KeepOrientation":
+      return `keepOrientation(dir=(${link.direction.x.toFixed(1)},${link.direction.y.toFixed(1)}))`;
+    case "Angle":
+      return `Angle(${((link.angle * 180) / Math.PI).toFixed(1)}°)`;
+    case "Radius":
+      return `Radius(${link.radius})`;
+    case "Horizontal":
+      return `Horizontal`;
+    case "Vertical":
+      return `Vertical`;
+    case "Normal":
+      return `Normal`;
+    case "Parallel":
+      return `Parallel`;
+    case "EqualLength":
+      return `Equal()`;
+    case "GearMeshing":
+      return `GearMeshing`;
+    case "GearRatio":
+      return `GearRatio(${link.ratio})`;
+    case "HandleGrab":
+      return `Grab`;
+  }
+}
+
+function keys_of(link: Link): string[] {
+  switch (link.type) {
+    case "Radius":
+      return [link.key1];
+    case "Coincidence":
+    case "Distance":
+    case "Horizontal":
+    case "Vertical":
+    case "GearMeshing":
+    case "GearRatio":
+      return [link.key1, link.key2];
+    case "DistanceToLine":
+    case "OnSegment":
+    case "AtSegmentRatio":
+      return [link.key1, link.key2, link.key3];
+    case "Angle":
+    case "Normal":
+    case "Parallel":
+    case "EqualLength":
+      return [link.key1, link.key2, link.key3, link.key4];
+    case "KeepOrientation":
+      return [link.key1, link.key2];
+    case "HandleGrab":
+      return [link.grabbedKey];
+  }
+}
+
+function sort_links(links: Link[], posMasses: Map<string, number>): Link[] {
+  // 1. Construire l'index clé → liens qui la touchent
+  const key_to_links = new Map<string, number[]>();
+  links.forEach((link, i) => {
+    keys_of(link).forEach((k) => {
+      if (!key_to_links.has(k)) key_to_links.set(k, []);
+      key_to_links.get(k)!.push(i);
+    });
+  });
+
+  // 2. BFS : priorité aux liens touchant une clé ancrée (masse = 0)
+  const visited = new Array(links.length).fill(false);
+  const result: Link[] = [];
+  const queue: number[] = [];
+
+  // Amorcer avec les HandleGrab en dernier, ancres en premier
+  const grab_indices: number[] = [];
+  links.forEach((link, i) => {
+    if (link.type === "HandleGrab") {
+      grab_indices.push(i);
+      visited[i] = true;
+    }
+  });
+
+  // Seed unique : le premier lien touchant une clé de masse 0
+  const first_anchored = links.findIndex(
+    (link, i) =>
+      !visited[i] && keys_of(link).some((k) => posMasses.get(k) === 0),
+  );
+  if (first_anchored !== -1) {
+    queue.push(first_anchored);
+    visited[first_anchored] = true;
+  }
+  // Si rien d'ancré, partir du premier lien non-visité
+  if (queue.length === 0 && links.length > 0) {
+    queue.push(0);
+    visited[0] = true;
+  }
+
+  while (
+    queue.length > 0 ||
+    result.length + grab_indices.length < links.length
+  ) {
+    if (queue.length === 0) {
+      // Composante isolée : trouver le prochain lien non-visité
+      const next = links.findIndex((_, i) => !visited[i]);
+      if (next === -1) break;
+      queue.push(next);
+      visited[next] = true;
+    }
+    const idx = queue.shift()!;
+    result.push(links[idx]);
+    // Voisins : tous les liens partageant une clé
+    keys_of(links[idx]).forEach((k) => {
+      key_to_links.get(k)?.forEach((j) => {
+        if (!visited[j]) {
+          visited[j] = true;
+          queue.push(j);
+        }
+      });
+    });
+  }
+
+  return [...result, ...grab_indices.map((i) => links[i])];
 }
 
 /**
@@ -438,7 +609,7 @@ export function resolveGeometricConstraints(
           });
           break;
         case "ChangeGearRadius":
-          // TODO : Anchor gear when changing it's radius
+          // TODO : Anchor gear when changing it's radius Mais seulement si DDL ok
           // const gear = mechanicalElements.find((e) => e.id === triggerAction.id)! as GearElement;
           grabPoint = triggerAction.newRadius;
           grabConnectionID = `${triggerAction.id}:pos`;
@@ -460,7 +631,6 @@ export function resolveGeometricConstraints(
   }
 
   if (grabPoint !== undefined && grabConnectionID !== undefined) {
-    // TODO : limit grab amplitude
     // Enlever l'ancrage du node sélectionné
     if (typeof grabPoint === "number") {
       radMasses.set(grabConnectionID, 1);
@@ -494,8 +664,12 @@ export function resolveGeometricConstraints(
           link.key3 = k_new;
         if ("key4" in link && (link.key4 === k1 || link.key4 === k2))
           link.key4 = k_new;
+        if (
+          "grabbedKey" in link &&
+          (link.grabbedKey === k1 || link.grabbedKey === k2)
+        )
+          link.grabbedKey = k_new;
       });
-      // TODO : maintenir la position des ancres
       positions.set(k_new, positions.get(k1)!.lerp(positions.get(k2)!, 0.5));
       positions.delete(k1);
       positions.delete(k2);
@@ -506,14 +680,16 @@ export function resolveGeometricConstraints(
   });
   links = links.filter((link) => link.type !== "Coincidence");
 
-  //links = links.filter((link) => link.type !== "Coincidence");
-
-  // Maintien de la position (ratio) sur un beam : A moins de grab le node lui-meme
+  // Maintien de la position (ratio) sur un beam, à moins de grab le node lui-meme OU que le node soit ancré
   links.forEach((link, index) => {
-    if (link.type === "OnSegment") {
-      const pos = positions.get(link.key3)!;
+    if (
+      link.type === "OnSegment" &&
+      link.key3 !== grabConnectionID &&
+      posMasses.get(link.key3)!
+    ) {
       const start = positions.get(link.key1)!;
       const end = positions.get(link.key2)!;
+      const pos = positions.get(link.key3)!;
       links[index] = {
         type: "AtSegmentRatio",
         ddl: 2,
@@ -576,190 +752,218 @@ export function resolveGeometricConstraints(
   // TODO : Autres beams (dans l'ORDRE) : si il y a 3 ou plus degré de liberté ALORS contrainte de parallélisme.
   // TODO : Autres beams (dans l'ORDRE) : si il y a 3 ou plus degré de liberté ALORS contrainte de longueur.
 
-  // start with last link, which is Grab Coincidence if there is one
+  // start with last link, which is HandleGrab if there is one
   // let startLinkIndex: number = links.length - 1;
 
-  // TODO : Ordonner la liste
+  // Ordonner la liste
+  links = sort_links(links, posMasses);
 
-  console.log("pos : [", [...positions.keys()].join("  "), "]");
-  console.log("links : [", links.map((link) => link.type).join(", "), "]");
+  // console.log("pos : ", [...positions.keys()]);
+  //console.log("links : ", links.map((link) => link_to_str_min(link)));
   ddl = get_degrees_of_liberty(positions, radii, posMasses, links);
   console.log("DDL : ", ddl);
 
   // 3. PBD (Position Based Dynamics)
-  const iterations = 50; // High iterations to ensure rigidity 150 ???
-  const epsilon = 0.000_001; // Very tight tolerance, why not 0.1 ?
-  let maxError: number = 0;
+  const nbIterations = 150; // High iterations to ensure rigidity
+  const epsilon = 0.000_001; // Very tight tolerance (why not 0.1 ?)
 
-  const constraintStiffness = 0.9;
+  const nbGrabIterations = 10; // stop grab after `nbGrabIterations` to not stretch the mechanism
   const grabStiffness = 0.5;
+  const maxGrabAmplitude = 10;
 
-  for (let i = 0; i < iterations; i++) {
+  let maxError: number = 0;
+  for (let i = 0; i < nbIterations; i++) {
     maxError = 0;
 
     links.forEach((link) => {
       switch (link.type) {
         case "Distance":
-          maxError += applyDistanceConstraint(
-            positions,
-            posMasses,
-            link.key1,
-            link.key2,
-            link.distance,
-            constraintStiffness,
+          maxError = Math.max(
+            maxError,
+            applyDistanceConstraint(
+              positions,
+              posMasses,
+              link.key1,
+              link.key2,
+              link.distance,
+            ),
           );
           break;
         case "DistanceToLine":
-          maxError += applyDistanceToLineConstraint(
-            positions,
-            posMasses,
-            link.key3, // keyNode  (le nœud à contraindre)
-            link.key1, // keyStart (début du segment)
-            link.key2, // keyEnd   (fin du segment)
-            link.distance,
-            constraintStiffness,
+          maxError = Math.max(
+            maxError,
+            applyDistanceToLineConstraint(
+              positions,
+              posMasses,
+              link.key1,
+              link.key2,
+              link.key3,
+              link.distance,
+            ),
           );
           break;
         case "OnSegment":
-          maxError += applyOnSegmentConstraint(
-            positions,
-            posMasses,
-            link.key1,
-            link.key2,
-            link.key3,
-            constraintStiffness,
+          maxError = Math.max(
+            maxError,
+            applyOnSegmentConstraint(
+              positions,
+              posMasses,
+              link.key1,
+              link.key2,
+              link.key3,
+            ),
           );
           break;
         case "AtSegmentRatio":
-          maxError += applyAtSegmentRatioConstraint(
-            positions,
-            posMasses,
-            link.key3, // keyNode  (le point à contraindre)
-            link.key1, // keyStart (début du segment)
-            link.key2, // keyEnd   (fin du segment)
-            link.t,
-            constraintStiffness,
+          maxError = Math.max(
+            maxError,
+            applyAtSegmentRatioConstraint(
+              positions,
+              posMasses,
+              link.key1,
+              link.key2,
+              link.key3,
+              link.t,
+            ),
           );
           break;
         case "KeepOrientation":
-          maxError += applyKeepOrientationConstraint(
-            positions,
-            posMasses,
-            link.key1,
-            link.key2,
-            link.direction,
-            constraintStiffness,
+          maxError = Math.max(
+            maxError,
+            applyKeepOrientationConstraint(
+              positions,
+              posMasses,
+              link.key1,
+              link.key2,
+              link.direction,
+            ),
           );
           break;
         case "Angle":
-          maxError += applyAngleConstraint(
-            positions,
-            posMasses,
-            link.key1,
-            link.key2,
-            link.key3,
-            link.key4,
-            constraintStiffness,
+          maxError = Math.max(
+            maxError,
+            applyAngleConstraint(
+              positions,
+              posMasses,
+              link.key1,
+              link.key2,
+              link.key3,
+              link.key4,
+              link.angle,
+            ),
           );
           break;
         case "Radius":
+          const stiffness = 1.0;
           const radius = radii.get(link.key1)!;
           const wRadius = radMasses.get(link.key1)!;
           const error = radius - link.radius;
-          radii.set(link.key1, radius + error * wRadius * constraintStiffness);
-          maxError += error;
+          radii.set(link.key1, radius - error * wRadius * stiffness);
+          maxError = Math.max(maxError, error);
           break;
         case "Horizontal":
-          maxError += applyHorizontalConstraint(
-            positions,
-            posMasses,
-            link.key1,
-            link.key2,
-            constraintStiffness,
+          maxError = Math.max(
+            maxError,
+            applyHorizontalConstraint(
+              positions,
+              posMasses,
+              link.key1,
+              link.key2,
+            ),
           );
           break;
         case "Vertical":
-          maxError += applyVerticalConstraint(
-            positions,
-            posMasses,
-            link.key1,
-            link.key2,
-            constraintStiffness,
+          maxError = Math.max(
+            maxError,
+            applyVerticalConstraint(positions, posMasses, link.key1, link.key2),
           );
           break;
         case "Normal":
-          maxError += applyNormalConstraint(
-            positions,
-            posMasses,
-            link.key1,
-            link.key2,
-            link.key3,
-            link.key4,
-            constraintStiffness,
+          maxError = Math.max(
+            maxError,
+            applyNormalConstraint(
+              positions,
+              posMasses,
+              link.key1,
+              link.key2,
+              link.key3,
+              link.key4,
+            ),
           );
           break;
         case "Parallel":
-          maxError += applyParallelConstraint(
-            positions,
-            posMasses,
-            link.key1,
-            link.key2,
-            link.key3,
-            link.key4,
-            constraintStiffness,
+          maxError = Math.max(
+            maxError,
+            applyParallelConstraint(
+              positions,
+              posMasses,
+              link.key1,
+              link.key2,
+              link.key3,
+              link.key4,
+            ),
           );
           break;
         case "EqualLength":
-          maxError += applyEqualLengthConstraint(
-            positions,
-            posMasses,
-            link.key1,
-            link.key2,
-            link.key3,
-            link.key4,
-            constraintStiffness,
+          maxError = Math.max(
+            maxError,
+            applyEqualLengthConstraint(
+              positions,
+              posMasses,
+              link.key1,
+              link.key2,
+              link.key3,
+              link.key4,
+            ),
           );
           break;
         case "GearMeshing":
-          maxError += applyGearMeshingConstraint(
-            positions,
-            posMasses,
-            radii,
-            radMasses,
-            link.key1,
-            link.key2,
-            constraintStiffness,
+          maxError = Math.max(
+            maxError,
+            applyGearMeshingConstraint(
+              positions,
+              posMasses,
+              radii,
+              radMasses,
+              link.key1,
+              link.key2,
+            ),
           );
           break;
         case "GearRatio":
-          maxError += applyGearRatioConstraint(
-            radii,
-            radMasses,
-            link.key1,
-            link.key2,
-            link.ratio,
-            constraintStiffness,
+          maxError = Math.max(
+            maxError,
+            applyGearRatioConstraint(
+              radii,
+              radMasses,
+              link.key1,
+              link.key2,
+              link.ratio,
+            ),
           );
           break;
         case "HandleGrab":
-          maxError += applyHandleGrabConstraint(
-            positions,
-            radii,
-            link.grabbedKey,
-            link.value,
-            grabStiffness,
+          if (i > nbGrabIterations) break;
+          maxError = Math.max(
+            maxError,
+            applyHandleGrabConstraint(
+              positions,
+              radii,
+              link.grabbedKey,
+              link.value,
+              grabStiffness,
+              maxGrabAmplitude,
+            ),
           );
           break;
       }
     });
 
     if (maxError < epsilon) {
-      console.log("Iterations : ", i);
+      console.log("nbIterations : ", i);
       break;
     }
   }
-
-  //console.log("Error : ", maxError);
 
   // Decouple coincidence links
   [...positions.keys()].forEach((combined_keys) => {
@@ -786,19 +990,28 @@ function applyHandleGrabConstraint(
   key: string,
   targetValue: Point2 | number,
   stiffness: number = 0.5,
+  maxAmplitude: number = 10,
 ): number {
   if (typeof targetValue === "number") {
     // Radius
     const r = radii.get(key);
     if (!r) return 0;
-    radii.set(key, r * stiffness + targetValue * (1 - stiffness));
-    return Math.abs(r - targetValue);
+    const delta = targetValue - r;
+    let target = delta * stiffness;
+    if (target > maxAmplitude) target = maxAmplitude;
+    if (target < -maxAmplitude) target = -maxAmplitude;
+    radii.set(key, r + target);
+    return Math.abs(delta);
   } else {
     // Position
     const p = positions.get(key);
     if (!p) return 0;
-    positions.set(key, p.lerp(targetValue, stiffness));
-    return p.distance_to(targetValue);
+    const delta = targetValue.sub(p);
+    let target = delta.mul(stiffness);
+    if (target.length() > maxAmplitude)
+      target = delta.scale_to_length(maxAmplitude);
+    positions.set(key, p.add(target));
+    return delta.length();
   }
 }
 
@@ -824,7 +1037,6 @@ function applyDistanceConstraint(
 
   const delta = p2.sub(p1);
   if (delta.length_squared() === 0) {
-    // TODO move apart "repelDistance"
     return targetDist;
   }
   const error = delta.length() - targetDist;
@@ -841,9 +1053,9 @@ function applyDistanceConstraint(
 function applyDistanceToLineConstraint(
   positions: Map<string, Point2>,
   posMasses: Map<string, number>,
-  keyNode: string,
   keyStart: string,
   keyEnd: string,
+  keyNode: string,
   targetDist: number,
   stiffness: number = 1.0,
 ): number {
@@ -888,15 +1100,17 @@ function applyDistanceToLineConstraint(
   return Math.abs(error);
 }
 
+const EDGE_END_MARGIN = 15;
+
 /** Contraint un point (keyNode) à rester sur le segment (keyStart, keyEnd).
  * Le paramètre t est recalculé à chaque itération (projection libre sur le segment),
  * avec une marge pour éviter les extrémités. Chaque point est déplacé selon sa masse. */
 function applyOnSegmentConstraint(
   positions: Map<string, Point2>,
   posMasses: Map<string, number>,
-  keyNode: string,
   keyStart: string,
   keyEnd: string,
+  keyNode: string,
   stiffness: number = 1.0,
 ): number {
   const pNode = positions.get(keyNode);
@@ -910,10 +1124,13 @@ function applyOnSegmentConstraint(
   const totalW = (2 * wNode + wStart + wEnd) / 2; // TODO : vérifier risque d'oscillation avec "wEnd" bloqué
   if (totalW === 0) return 0;
 
-  const margin = 0.05;
+  const edgeLength = start.distance_to(end);
   const t = Math.max(
-    margin,
-    Math.min(1 - margin, pNode.parameter_on_segment(start, end)),
+    EDGE_END_MARGIN / edgeLength,
+    Math.min(
+      pNode.parameter_on_segment(start, end),
+      1 - EDGE_END_MARGIN / edgeLength,
+    ),
   );
   const delta = pNode.sub(start.lerp(end, t));
   const error = delta.length();
@@ -931,9 +1148,9 @@ function applyOnSegmentConstraint(
 function applyAtSegmentRatioConstraint(
   positions: Map<string, Point2>,
   posMasses: Map<string, number>,
-  keyNode: string,
   keyStart: string,
   keyEnd: string,
+  keyNode: string,
   t: number,
   stiffness: number = 1.0,
 ): number {
@@ -1010,27 +1227,20 @@ function applyHorizontalConstraint(
   const totalW = wStart + wEnd;
   if (totalW === 0) return 0;
 
-  // Y cible : moyenne pondérée par les masses (les points légers bougent plus)
-  const targetY = (start.y * wStart + end.y * wEnd) / totalW;
-  const error = Math.abs(start.y - end.y);
+  const error = start.y - end.y;
 
   if (wStart !== 0)
     positions.set(
       keyStart,
-      new Point2(
-        start.x,
-        start.y + (targetY - start.y) * (wStart / totalW) * stiffness,
-      ),
+      new Point2(start.x, start.y - error * (wStart / totalW) * stiffness),
     );
-  if (wEnd !== 0)
+  if (wEnd !== 0) {
     positions.set(
       keyEnd,
-      new Point2(
-        end.x,
-        end.y + (targetY - end.y) * (wEnd / totalW) * stiffness,
-      ),
+      new Point2(end.x, end.y + error * (wEnd / totalW) * stiffness),
     );
-  return error;
+  }
+  return Math.abs(error);
 }
 
 /** Contraint les deux points à avoir la même coordonnée X (alignement vertical).
@@ -1051,27 +1261,19 @@ function applyVerticalConstraint(
   const totalW = wStart + wEnd;
   if (totalW === 0) return 0;
 
-  // X cible : moyenne pondérée par les masses (les points légers bougent plus)
-  const targetX = (start.x * wStart + end.x * wEnd) / totalW;
-  const error = Math.abs(start.x - end.x);
+  const error = start.x - end.x;
 
   if (wStart !== 0)
     positions.set(
       keyStart,
-      new Point2(
-        start.x + (targetX - start.x) * (wStart / totalW) * stiffness,
-        start.y,
-      ),
+      new Point2(start.x - error * (wStart / totalW) * stiffness, start.y),
     );
   if (wEnd !== 0)
     positions.set(
       keyEnd,
-      new Point2(
-        end.x + (targetX - end.x) * (wEnd / totalW) * stiffness,
-        end.y,
-      ),
+      new Point2(end.x + error * (wEnd / totalW) * stiffness, end.y),
     );
-  return error;
+  return Math.abs(error);
 }
 
 /** Contraint deux segments à être parallèles.

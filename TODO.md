@@ -48,7 +48,10 @@
 - ~Hover dimension~
 - hover : ignorer contraintes when placing mechanical elements or movingEdge
 - ~Dimension Radius~
-- Compléter le geometric-solver
+- ~Compléter le geometric-solver~
+- geometric solver - radius constraint
+- "applyHorizontalConstraint()" avec une extrémité ancrée ne fonctionne pas
+- hilight element on hover "disconnect" on element panel
 - Empecher les contraintes sur le même élément (DDL analyser)
 - Sauvgarder / Charger méchanisme
 - Movement et zoom de la grille
