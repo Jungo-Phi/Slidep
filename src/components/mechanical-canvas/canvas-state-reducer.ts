@@ -19,6 +19,7 @@ import {
   connect_gears,
   delete_element,
   get_constraint_element_from_id,
+  get_element_from_id,
   get_mechanical_element_from_id,
 } from "./connect-actions";
 import { is_on_left_side_of_belt } from "../../utils/belt-geom";
@@ -51,7 +52,6 @@ export function canvasStateReducer(
             // Logique pour la sélection multiple avec Shift
             if (event.shiftKey) {
               if (hoveredPart.type === "Void") {
-                // Clic sur une zone vide du canvas
                 setCanvasState({
                   type: "SelectingMultiple",
                   startPos: hoveredPart.position,
@@ -87,7 +87,6 @@ export function canvasStateReducer(
             }
           }
           if (hoveredPart.type === "Void") {
-            // Clic sur une zone vide du canvas
             setCanvasState({
               type: "SelectingMultiple",
               startPos: hoveredPart.position,
@@ -103,7 +102,6 @@ export function canvasStateReducer(
           });
           break;
         case "SelectedMultiple":
-          // Clic sur une zone vide du canvas
           if (hoveredPart.type === "Void") {
             if (event.shiftKey) {
               setCanvasState({
@@ -167,7 +165,6 @@ export function canvasStateReducer(
           break;
         case "Erasing":
           if (hoveredPart.type === "Void") {
-            // Clic sur une zone vide du canvas
             setCanvasState({
               type: "ErasingMultiple",
               startPos: hoveredPart.position,
@@ -178,9 +175,10 @@ export function canvasStateReducer(
           actionBundleType = "Other";
           actions.push(
             ...delete_element(
-              get_mechanical_element_from_id(
+              get_element_from_id(
                 hoveredPart.id,
                 mechanicalElements,
+                constraintElements,
               ),
               mechanicalElements,
             ),
@@ -1371,7 +1369,11 @@ export function canvasStateReducer(
           state.hoveredElementIDs.forEach((elementId: ID) => {
             actions.push(
               ...delete_element(
-                get_mechanical_element_from_id(elementId, mechanicalElements),
+                get_element_from_id(
+                  elementId,
+                  mechanicalElements,
+                  constraintElements,
+                ),
                 mechanicalElements,
               ),
             );
@@ -1401,20 +1403,16 @@ export function canvasStateReducer(
           switch (state.type) {
             case "SelectedElement":
               actionBundleType = "Other";
-              const element = mechanicalElements.find(
-                (element) => element.id === state.elementID,
-              );
-              if (element) {
-                actions.push(...delete_element(element, mechanicalElements));
-              } else {
-                actions.push({
-                  type: "DeleteElement",
-                  element: get_constraint_element_from_id(
+              actions.push(
+                ...delete_element(
+                  get_element_from_id(
                     state.elementID,
+                    mechanicalElements,
                     constraintElements,
                   ),
-                });
-              }
+                  mechanicalElements,
+                ),
+              );
               setCanvasState({ type: "Selecting" });
               break;
             case "SelectedMultiple":
@@ -1422,9 +1420,10 @@ export function canvasStateReducer(
               state.elementIDs.forEach((elementId: ID) => {
                 actions.push(
                   ...delete_element(
-                    get_mechanical_element_from_id(
+                    get_element_from_id(
                       elementId,
                       mechanicalElements,
+                      constraintElements,
                     ),
                     mechanicalElements,
                   ),

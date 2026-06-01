@@ -41,6 +41,8 @@ import {
   draw_dimention_radius,
   draw_dimention,
   draw_dimention_text,
+  draw_join_bottom,
+  draw_join_top,
 } from "./drawing-functions";
 import { get_mechanical_element_from_id } from "./connect-actions";
 import {
@@ -80,7 +82,26 @@ export function drawMechanicalCanvas(
     mechanicalElements as UnionElement[]
   ).concat(constraintElements);
 
-  // Dessine les éléments dans l'ordre défini par DRAWING_ORDER
+  ctx.shadowBlur = 0;
+  ctx.globalAlpha = 1;
+  ctx.strokeStyle = COLORS.STROKE;
+  for (const element of allElements.filter(
+    (element) => element.type === "join",
+  )) {
+    if (
+      (hoveredPart.type !== "Void" &&
+        hoveredPart.deleting &&
+        hoveredPart.id === element.id) ||
+      (state.type === "ErasingMultiple" &&
+        state.hoveredElementIDs.includes(element.id))
+    )
+      continue;
+    ctx.save();
+    ctx.translate(element.position.x, element.position.y);
+    draw_join_bottom(ctx);
+    ctx.restore();
+  }
+
   DRAWING_ORDER.forEach((type) => {
     const elements = allElements.filter((element) => element.type === type);
     for (const element of elements) {
@@ -119,9 +140,19 @@ export function drawMechanicalCanvas(
         (state.type === "ErasingMultiple" &&
           state.hoveredElementIDs.includes(element.id));
       const isEdgeEndHovered =
-        hoveredPart !== null &&
         hoveredPart.type === "Edge" &&
-        hoveredPart.part !== "body";
+        hoveredPart.part !== "body" &&
+        hoveredPart.id === element.id &&
+        ![
+          "PlacingPivot",
+          "PlacingSlider",
+          "PlacingJoin",
+          "PlacingMass",
+          "PlacingBeamStart",
+          "PlacingSpringStart",
+          "PlacingDamperStart",
+          "PlacingBeltStart",
+        ].includes(state.type);
 
       let isHovered =
         hoveredPart.type !== "Void" &&
@@ -198,6 +229,7 @@ export function drawMechanicalCanvas(
           ctx.save();
           ctx.translate(element.position.x, element.position.y);
           if ("parentBeamID" in element && element.parentBeamID) {
+            // slider & slidep
             const parentBeam = get_mechanical_element_from_id(
               element.parentBeamID,
               mechanicalElements,
@@ -220,7 +252,11 @@ export function drawMechanicalCanvas(
               draw_slidep(ctx, element.rotatingEdgesIDs.length > 0);
               break;
             case "join":
-              draw_join(ctx);
+              if (isHovered || isSelected || isEraseHovered) {
+                draw_join(ctx);
+              } else {
+                draw_join_top(ctx);
+              }
               break;
             case "gear":
               if (
@@ -262,7 +298,12 @@ export function drawMechanicalCanvas(
           ctx.rotate(delta.angle());
           switch (element.type) {
             case "beam":
-              draw_beam(ctx, delta.length());
+              draw_beam(
+                ctx,
+                delta.length(),
+                Boolean(element.fixedNodeStartID),
+                Boolean(element.fixedNodeEndID),
+              );
               break;
             case "spring":
               draw_spring(ctx, delta.length());
@@ -271,12 +312,7 @@ export function drawMechanicalCanvas(
               draw_damper(ctx, delta.length());
               break;
           }
-          if (
-            hoveredPart.type !== "Void" &&
-            hoveredPart.id === element.id &&
-            hoveredPart.type === "Edge" &&
-            hoveredPart.part !== "body"
-          ) {
+          if (isEdgeEndHovered) {
             ctx.lineWidth = STROKE_WIDTHS.THICK;
             if (hoveredPart.part === "end") {
               ctx.translate(delta.length(), 0);
@@ -286,7 +322,6 @@ export function drawMechanicalCanvas(
           ctx.restore();
           break;
         case "belt":
-          // console.log("attachedGearsIDs: ", element.attachedGearsIDs);
           let attachedGears = element.attachedGearsIDs.map(
             ({ id, direction }) => {
               return {
@@ -392,6 +427,17 @@ export function drawMechanicalCanvas(
             element.positionEnd,
             gearAngles,
           );
+          if (isEdgeEndHovered) {
+            ctx.lineWidth = STROKE_WIDTHS.THICK;
+            const delta =
+              hoveredPart.part === "end"
+                ? element.positionEnd
+                : element.positionStart;
+            ctx.save();
+            ctx.translate(delta.x, delta.y);
+            draw_hover_edge_end(ctx);
+            ctx.restore();
+          }
           break;
         case "dimension-edge":
           const edgeD = get_mechanical_element_from_id(

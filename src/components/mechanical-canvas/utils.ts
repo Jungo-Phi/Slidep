@@ -1,6 +1,8 @@
 import {
   BeamElement,
+  ConstraintElement,
   HoveredPart,
+  ID,
   MechanicalElement,
   NodeElement,
   UnionElement,
@@ -98,4 +100,56 @@ export function element_to_hovered_part(
         deleting,
       };
   }
+}
+
+export function connected_constraints(
+  elementID: ID,
+  constraints: ConstraintElement[],
+): ID[] {
+  const connectedConstraintsIDs: ID[] = [];
+  constraints.forEach((constraint) => {
+    switch (constraint.type) {
+      case "dimension-edge":
+      case "horizontal-align-edge":
+      case "vertical-align-edge":
+        if (constraint.edgeID === elementID)
+          connectedConstraintsIDs.push(constraint.id);
+        break;
+      case "dimension-node-to-node":
+      case "horizontal-align-nodes":
+      case "vertical-align-nodes":
+        if (
+          constraint.startNodeID === elementID ||
+          constraint.endNodeID === elementID
+        )
+          connectedConstraintsIDs.push(constraint.id);
+        break;
+      case "dimension-edge-to-node":
+        if (constraint.nodeID === elementID || constraint.edgeID === elementID)
+          connectedConstraintsIDs.push(constraint.id);
+        break;
+      case "dimension-angle":
+      case "normal":
+      case "parallel":
+      case "equal":
+        if (
+          constraint.startEdgeID === elementID ||
+          constraint.endEdgeID === elementID
+        )
+          connectedConstraintsIDs.push(constraint.id);
+        break;
+      case "dimension-radius":
+        if (constraint.gearID === elementID)
+          connectedConstraintsIDs.push(constraint.id);
+        break;
+      case "gear-ratio":
+        if (
+          constraint.startGearID === elementID ||
+          constraint.endGearID === elementID
+        )
+          connectedConstraintsIDs.push(constraint.id);
+        break;
+    }
+  });
+  return connectedConstraintsIDs;
 }

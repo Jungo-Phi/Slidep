@@ -33,6 +33,23 @@ export function get_constraint_element_from_id(
   throw new Error(`Constraint element with id "${id}" not found`);
 }
 
+/** Returns the element, mechanical or constraint, from the id. */
+export function get_element_from_id(
+  id: ID,
+  mechanicalElements: MechanicalElement[],
+  constraintElements: ConstraintElement[],
+): UnionElement {
+  const mechanicalElement = mechanicalElements.find(
+    (element) => element.id === id,
+  );
+  if (mechanicalElement) return mechanicalElement;
+  const constraintElement = constraintElements.find(
+    (element) => element.id === id,
+  );
+  if (constraintElement) return constraintElement;
+  throw new Error(`Mechanical element with id "${id}" not found`);
+}
+
 /** Returns the complementary connection pair type of an element to another. */
 export function get_connection_pair_type(
   elementID: ID,

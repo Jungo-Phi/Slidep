@@ -1,8 +1,3 @@
-/**
- * Main App component for slidep
- * Mechanical mechanism design and simulation application
- */
-
 import React, { useState, useRef, useEffect } from "react";
 import {
   ThemeProvider,
@@ -51,9 +46,6 @@ import { resolveGeometricConstraints } from "./components/solver/geometric-solve
 import { get_nodes } from "./components/solver/parsing";
 //import { SimulationControls } from './components/simulation-controls';
 
-/**
- * User preferences
- */
 export interface UserPreferences {
   theme: string;
   gridVisible: boolean;

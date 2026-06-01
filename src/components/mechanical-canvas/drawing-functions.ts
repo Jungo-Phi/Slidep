@@ -141,11 +141,12 @@ export function draw_ground(ctx: CanvasRenderingContext2D) {
 
 /** Dessine un carré pour les Edges à l'état "PlacingStart" */
 export function draw_start_edge_end(ctx: CanvasRenderingContext2D) {
-  ctx.beginPath();
-  ctx.rect(-DIM.SQUARE / 2, -DIM.SQUARE / 2, DIM.SQUARE, DIM.SQUARE);
+  const sideL = DIM.BEAM_WIDTH + STROKE_WIDTHS.STANDARD;
+  const sideS = DIM.BEAM_WIDTH - STROKE_WIDTHS.STANDARD;
+  ctx.fillStyle = COLORS.STROKE;
+  ctx.fillRect(-sideL / 2, -sideL / 2, sideL, sideL);
   ctx.fillStyle = COLORS.FILL_BODY;
-  ctx.fill();
-  ctx.stroke();
+  ctx.fillRect(-sideS / 2, -sideS / 2, sideS, sideS);
 }
 
 export function draw_belt_end(ctx: CanvasRenderingContext2D) {
@@ -255,6 +256,20 @@ export function draw_slidep(ctx: CanvasRenderingContext2D, filled: boolean) {
   ctx.stroke();
 }
 
+export function draw_join_bottom(ctx: CanvasRenderingContext2D) {
+  ctx.beginPath();
+  ctx.arc(0, 0, DIM.JOIN_RADIUS + ctx.lineWidth / 2, 0, TAU);
+  ctx.fillStyle = ctx.strokeStyle;
+  ctx.fill();
+}
+
+export function draw_join_top(ctx: CanvasRenderingContext2D) {
+  ctx.beginPath();
+  ctx.arc(0, 0, DIM.JOIN_RADIUS - ctx.lineWidth / 2 - 0.5, 0, TAU);
+  ctx.fillStyle = COLORS.FILL_BODY;
+  ctx.fill();
+}
+
 /**
  * Dessine une jonction (join)
  */
@@ -263,9 +278,7 @@ export function draw_join(ctx: CanvasRenderingContext2D) {
   ctx.arc(0, 0, DIM.JOIN_RADIUS, 0, TAU);
   ctx.fillStyle = COLORS.FILL_BODY;
   ctx.fill();
-  ctx.shadowBlur = 0;
   ctx.stroke();
-  ctx.beginPath();
 }
 
 /**
@@ -294,20 +307,27 @@ export function draw_mass(ctx: CanvasRenderingContext2D) {
 }
 
 /** Dessine une poutre (beam) */
-export function draw_beam(ctx: CanvasRenderingContext2D, length: number) {
-  const stokeColor = ctx.strokeStyle;
-  const widthChange = ctx.lineWidth - STROKE_WIDTHS.STANDARD;
-  ctx.lineCap = "square";
-  ctx.beginPath();
-  ctx.moveTo(0, 0);
-  ctx.lineTo(length, 0);
-  ctx.lineWidth = DIM.BEAM_WIDTH + widthChange;
-  ctx.strokeStyle = stokeColor;
-  ctx.stroke();
-  ctx.strokeStyle = COLORS.FILL_BODY;
-  ctx.lineWidth = DIM.BEAM_WIDTH - 2 * STROKE_WIDTHS.STANDARD - widthChange;
-  ctx.stroke();
-  ctx.strokeStyle = stokeColor;
+export function draw_beam(
+  ctx: CanvasRenderingContext2D,
+  length: number,
+  isStartJoin: boolean = false,
+  isEndJoin: boolean = false,
+) {
+  const sideL = DIM.BEAM_WIDTH - STROKE_WIDTHS.STANDARD + ctx.lineWidth;
+  const sideS = DIM.BEAM_WIDTH - STROKE_WIDTHS.STANDARD - ctx.lineWidth;
+  const startJoin = isStartJoin
+    ? DIM.JOIN_RADIUS + STROKE_WIDTHS.STANDARD + 1
+    : 0;
+  const endJoin = isEndJoin ? DIM.JOIN_RADIUS + STROKE_WIDTHS.STANDARD + 1 : 0;
+  ctx.fillStyle = ctx.strokeStyle;
+  ctx.fillRect(
+    -sideL / 2 + startJoin,
+    -sideL / 2,
+    length + sideL - endJoin - startJoin,
+    sideL,
+  );
+  ctx.fillStyle = COLORS.FILL_BODY;
+  ctx.fillRect(-sideS / 2, -sideS / 2, length + sideS, sideS);
 }
 
 /**

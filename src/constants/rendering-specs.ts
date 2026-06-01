@@ -63,7 +63,6 @@ export const CURSOR_STYLE = {
 /** Element dimensions from UX specification */
 export const DIM = {
   // General
-  SQUARE: 8,
   TAC: 20,
   ICON_SIZE: 24,
 
@@ -92,7 +91,7 @@ export const DIM = {
   PIVOT_OUTER_RADIUS: 9,
   PIVOT_INNER_RADIUS: 4,
   // Join
-  JOIN_RADIUS: 5,
+  JOIN_RADIUS: 5.5,
 
   // Slider
   SLIDER_OUTER_WIDTH: 24,
@@ -110,7 +109,7 @@ export const DIM = {
   GEAR_TEETH_SIZE: 6,
 
   // Belt
-  BELT_WIDTH: 4,
+  BELT_WIDTH: 3,
   END_RADIUS: 4,
 
   // Ground

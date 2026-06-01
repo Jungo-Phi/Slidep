@@ -42,9 +42,11 @@
 - Ajouter InputBox lors du placement des beams
 - Placing beam series / only one if hold down when placing (like in OnShape) ?
 - "Undo" connection (Join) ne s'est pas appliqué en bidirectionnel !
-- Delete (eraser) ne fonctionne pas !
+- ~Delete (eraser) ne fonctionne pas avec les contraintes~
+- ~Refaire icon joint~
+- Dimension edge to node bug
 - group deletion should hilight constraints of hovered elements
-- Hover delete dans le controle panel applique le meme style que eraser
+- ~Hover delete dans le controle panel applique le meme style que eraser~
 - geometric-solver : distanceConstraint est en conflit avec AtEdgeRatio vraisemblablement
 - ~Hilight corresponding elements when hovering constraint~
 - ~Change NumberInput instant update to -> delayed update~
