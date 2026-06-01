@@ -18,7 +18,6 @@ import {
   connect_gear_and_belt,
   connect_gears,
   delete_element,
-  get_constraint_element_from_id,
   get_element_from_id,
   get_mechanical_element_from_id,
 } from "./connect-actions";
