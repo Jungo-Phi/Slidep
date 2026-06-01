@@ -74,7 +74,7 @@ export type ConstraintElement =
 export type ID = number;
 
 export function shown_element_name(element: UnionElement | undefined): String {
-  if (element === undefined) return "introuvable";
+  if (!element) return "introuvable";
   let name: string = element.type;
   if (name.includes("dimension")) name = "dimension";
   if (name.includes("horizontal")) name = "horizontal";

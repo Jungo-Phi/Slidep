@@ -1,8 +1,4 @@
-/**
- * Utility functions for hover detection in mechanical canvas
- */
-
-import type {
+import {
   MechanicalElement,
   ConstraintElement,
   EdgeElement,
@@ -11,15 +7,16 @@ import type {
   UnionElement,
   ID,
   BeltElement,
-} from "../../types/element";
-import { HoveredPart } from "../../types/hovered-part";
-import { Point2 } from "../../types/point2";
+  CanvasState,
+  HoveredPart,
+  Point2,
+} from "../../types";
 import {
   HIT_TOLERANCE,
   DRAWING_ORDER,
   INTERACTION_SPECS,
+  DIM,
 } from "../../constants/rendering-specs";
-import { CanvasState } from "../../types";
 import { get_mechanical_element_from_id } from "./connect-actions";
 import { get_gear_angles } from "../../utils/belt-geom";
 
@@ -30,16 +27,17 @@ export function get_hovered_part_of_element(
   mousePos: Point2,
   state: CanvasState,
 ): HoveredPart | null {
-  if (
-    state.type === "MovingEdgeBody" &&
-    (
-      get_mechanical_element_from_id(
-        state.elementID,
-        mechanicalElements,
-      ) as EdgeElement
-    ).type !== "beam"
-  )
-    return null;
+  if (state.type === "MovingEdgeBody") {
+    const edge = get_mechanical_element_from_id(
+      state.elementID,
+      mechanicalElements,
+    ) as EdgeElement;
+    if (edge.type === "beam") {
+      // TODO : rejeter les éléments directement connectés
+    } else {
+      return null;
+    }
+  }
   switch (element.type) {
     case "pivot":
     case "slider":
@@ -64,6 +62,7 @@ export function get_hovered_part_of_element(
               type: "Node",
               position: node.position.clone(),
               id: node.id,
+              deleting: state.type === "Erasing",
               beamBodyHover: false,
             };
           }
@@ -80,6 +79,7 @@ export function get_hovered_part_of_element(
                 .mul(node.radius)
                 .add(node.position),
               id: node.id,
+              deleting: state.type === "Erasing",
             };
           }
           break;
@@ -109,6 +109,7 @@ export function get_hovered_part_of_element(
               position: node.position.clone(),
               id: node.id,
               beamBodyHover: false,
+              deleting: false,
             };
           }
           break;
@@ -121,6 +122,7 @@ export function get_hovered_part_of_element(
               type: "Node",
               position: node.position.clone(),
               id: node.id,
+              deleting: false,
               beamBodyHover: false,
             };
           }
@@ -142,6 +144,7 @@ export function get_hovered_part_of_element(
                   node.position,
                 ),
                 id: node.id,
+                deleting: false,
                 beamBodyHover: true,
               };
             }
@@ -165,6 +168,7 @@ export function get_hovered_part_of_element(
                     node.position,
                   ),
                   id: node.id,
+                  deleting: false,
                   beamBodyHover: true,
                 };
               }
@@ -184,6 +188,7 @@ export function get_hovered_part_of_element(
                     node.position,
                   ),
                   id: node.id,
+                  deleting: false,
                   beamBodyHover: true,
                 };
               }
@@ -207,6 +212,7 @@ export function get_hovered_part_of_element(
                     mousePos.sub(node.position).normalize().mul(node.radius),
                   ),
                   id: node.id,
+                  deleting: false,
                 };
               case "ChangingGearRadius":
                 const gear = get_mechanical_element_from_id(
@@ -222,6 +228,7 @@ export function get_hovered_part_of_element(
                       .mul(node.radius),
                   ),
                   id: node.id,
+                  deleting: false,
                 };
               case "PlacingGearRadius":
                 return {
@@ -233,6 +240,7 @@ export function get_hovered_part_of_element(
                       .mul(node.radius),
                   ),
                   id: node.id,
+                  deleting: false,
                 };
             }
           }
@@ -251,6 +259,7 @@ export function get_hovered_part_of_element(
               type: "GearTooth",
               position: node.position.clone(),
               id: node.id,
+              deleting: false,
             };
           }
       }
@@ -274,6 +283,7 @@ export function get_hovered_part_of_element(
               type: "Edge",
               position: edge.positionStart.clone(),
               id: edge.id,
+              deleting: state.type === "Erasing",
               part: "start",
             };
           }
@@ -282,6 +292,7 @@ export function get_hovered_part_of_element(
               type: "Edge",
               position: edge.positionEnd.clone(),
               id: edge.id,
+              deleting: state.type === "Erasing",
               part: "end",
             };
           }
@@ -298,6 +309,7 @@ export function get_hovered_part_of_element(
                 edge.positionEnd,
               ),
               id: edge.id,
+              deleting: state.type === "Erasing",
               part: "body",
             };
           }
@@ -326,6 +338,7 @@ export function get_hovered_part_of_element(
               type: "Edge",
               position: edge.positionStart.clone(),
               id: edge.id,
+              deleting: false,
               part: "start",
             };
           }
@@ -334,6 +347,7 @@ export function get_hovered_part_of_element(
               type: "Edge",
               position: edge.positionEnd.clone(),
               id: edge.id,
+              deleting: false,
               part: "end",
             };
           }
@@ -351,6 +365,7 @@ export function get_hovered_part_of_element(
                 edge.positionEnd,
               ),
               id: edge.id,
+              deleting: false,
               part: "body",
             };
           }
@@ -375,6 +390,7 @@ export function get_hovered_part_of_element(
                 edge.positionEnd,
               ),
               id: edge.id,
+              deleting: false,
               part: "body",
             };
           }
@@ -403,6 +419,7 @@ export function get_hovered_part_of_element(
                 type: "Edge",
                 position: belt.positionStart.clone(),
                 id: belt.id,
+                deleting: state.type === "Erasing",
                 part: "start",
               };
             }
@@ -411,6 +428,7 @@ export function get_hovered_part_of_element(
                 type: "Edge",
                 position: belt.positionEnd.clone(),
                 id: belt.id,
+                deleting: state.type === "Erasing",
                 part: "end",
               };
             }
@@ -456,6 +474,7 @@ export function get_hovered_part_of_element(
                     .mul(radius)
                     .add(center),
                   id: belt.id,
+                  deleting: state.type === "Erasing",
                   section: 2 * i + 1,
                 };
               }
@@ -510,6 +529,7 @@ export function get_hovered_part_of_element(
                       .extend_length(INTERACTION_SPECS.GEAR_ON_BELT_GROW)
                       .add(gearPos),
                     id: belt.id,
+                    deleting: false,
                     section: 2 * i,
                   };
                 }
@@ -518,6 +538,7 @@ export function get_hovered_part_of_element(
                   type: "BeltBody",
                   position: mousePos.project_on_line(start, end),
                   id: belt.id,
+                  deleting: state.type === "Erasing",
                   section: 2 * i,
                 };
               }
@@ -553,6 +574,7 @@ export function get_hovered_part_of_element(
               type: "Edge",
               position: belt.positionStart.clone(),
               id: belt.id,
+              deleting: false,
               part: "start",
             };
           }
@@ -561,6 +583,7 @@ export function get_hovered_part_of_element(
               type: "Edge",
               position: belt.positionEnd.clone(),
               id: belt.id,
+              deleting: false,
               part: "end",
             };
           }
@@ -585,6 +608,7 @@ export function get_hovered_part_of_element(
           type: "Constraint",
           position: element.position.clone(),
           id: element.id,
+          deleting: state.type === "Erasing",
         };
       }
       break;
@@ -609,6 +633,28 @@ export function get_hovered_part(
   const elements: UnionElement[] = (
     mechanicalElements as UnionElement[]
   ).concat(constraintElements);
+
+  let position = mousePos.clone();
+  if (
+    (state.type === "PlacingBeamEnd" ||
+      state.type === "PlacingSpringEnd" ||
+      state.type === "PlacingDamperEnd" ||
+      state.type === "PlacingBeltEnd") &&
+    mousePos.distance_to(state.startHover.position) < DIM.MIN_EDGE_LENGTH
+  ) {
+    const delta = mousePos.sub(state.startHover.position);
+    position = state.startHover.position.add(
+      delta.scale_to_length(DIM.MIN_EDGE_LENGTH),
+    );
+  } else if (
+    state.type === "PlacingGearRadius" &&
+    mousePos.distance_to(state.startHover.position) < DIM.MIN_GEAR_RADIUS
+  ) {
+    const delta = mousePos.sub(state.startHover.position);
+    position = state.startHover.position.add(
+      delta.scale_to_length(DIM.MIN_GEAR_RADIUS),
+    );
+  }
   for (const type of hover_order) {
     if (
       (type === "dimension-edge" ||
@@ -632,13 +678,13 @@ export function get_hovered_part(
       const hoveredPart = get_hovered_part_of_element(
         element,
         mechanicalElements,
-        mousePos,
+        position,
         state,
       );
       if (hoveredPart) return hoveredPart;
     }
   }
-  return { type: "Void", position: mousePos.clone() };
+  return { type: "Void", position };
 }
 
 /**

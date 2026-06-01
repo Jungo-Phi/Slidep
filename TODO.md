@@ -36,12 +36,17 @@
 - ~Afficher en "Selected" l'élément premier de "startPlacingX"~
 - Régler de bordel de "connect-actions"
 - Connecter les "fixedGears"
-- Click dans le vide quand state==placingConstraint -> state=Selecting
+- Click dans le vide quand state==placingConstraint -> state=Selecting ?
 - Click dans Dimension quand state==placingStartDimension -> Editing
+- Changer le mouseIcon quand PlacingConstraint (cross?)
+- Ajouter InputBox lors du placement des beams
+- Placing beam series / only one if hold down when placing (like in OnShape) ?
 - "Undo" connection (Join) ne s'est pas appliqué en bidirectionnel !
 - Delete (eraser) ne fonctionne pas !
+- group deletion should hilight constraints of hovered elements
 - Hover delete dans le controle panel applique le meme style que eraser
-- Hilight corresponding elements when hovering constraint
+- geometric-solver : distanceConstraint est en conflit avec AtEdgeRatio vraisemblablement
+- ~Hilight corresponding elements when hovering constraint~
 - ~Change NumberInput instant update to -> delayed update~
 - ~Change Focus on Undo~
 - ~Unified Property pannel look with dimensions~
@@ -50,8 +55,8 @@
 - Connecter une courroie à un engrenage avec une extrémité (en plus de la longueur)
 - hover des boutons dans le property pannel
 - hover : ignorer contraintes when placing mechanical elements or movingEdge
-- Min Gear radius placing
-- slider angle placing
+- ~Min Gear radius placing~
+- ~slider angle placing~
 - empecher de placer une belt sur un gear déjà connecté
 - ~Dimension Radius~
 - ~Compléter le geometric-solver~
@@ -75,7 +80,6 @@
 - Faire que drop une connection dans un container simple échange les connections
 - (Supprimer les joints quand ils ne sont connectés qu'à 1 élément ?)
 - ~Change CanvasState on delete element~
-- Placing beam series / only one if hold down when placing (like in OnShape) ?
 
 ## Features visuelles nice to have
 

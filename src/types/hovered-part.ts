@@ -8,23 +8,27 @@ export type HoveredPart =
       type: "Node";
       position: Point2;
       id: ID;
+      deleting: boolean;
       beamBodyHover: boolean;
     }
   | {
       type: "Edge";
       position: Point2;
       id: ID;
+      deleting: boolean;
       part: "start" | "end" | "body";
     }
   | {
       type: "GearTooth";
       position: Point2;
       id: ID;
+      deleting: boolean;
     }
   | {
       type: "BeltBody";
       position: Point2;
       id: ID;
+      deleting: boolean;
       section: number;
     }
-  | { type: "Constraint"; position: Point2; id: ID };
+  | { type: "Constraint"; position: Point2; id: ID; deleting: boolean };

@@ -75,7 +75,7 @@ export function canvasStateReducer(
               const constraint = constraintElements.find(
                 (element) => element.id === state.elementID,
               );
-              if (constraint !== undefined && "value" in constraint) {
+              if (constraint && "value" in constraint) {
                 setCanvasState({
                   type: "EditingConstraint",
                   elementID: state.elementID,
@@ -371,6 +371,7 @@ export function canvasStateReducer(
                   type: "Edge",
                   position: newElement.positionStart,
                   id: newElement.id,
+                  deleting: false,
                   part: "start",
                 },
               ),
@@ -382,6 +383,7 @@ export function canvasStateReducer(
               type: "Node",
               position: hoveredPart.position,
               id: newElement.id,
+              deleting: false,
               beamBodyHover: false,
             };
           } else {
@@ -389,6 +391,7 @@ export function canvasStateReducer(
               type: "Edge",
               position: hoveredPart.position,
               id: newElement.id,
+              deleting: false,
               part:
                 hoveredPart.type === "Node" && hoveredPart.beamBodyHover
                   ? "body"
@@ -518,6 +521,7 @@ export function canvasStateReducer(
                   type: "Node",
                   position: hoveredPart.position,
                   id: newJoin.id,
+                  deleting: false,
                   beamBodyHover: false,
                 },
               );
@@ -1205,6 +1209,7 @@ export function canvasStateReducer(
                 type: "Node",
                 position: hoveredPart.position,
                 id: state.elementID,
+                deleting: false,
                 beamBodyHover: false,
               };
               break;
@@ -1213,6 +1218,7 @@ export function canvasStateReducer(
                 type: "Edge",
                 position: hoveredPart.position,
                 id: state.elementID,
+                deleting: false,
                 part:
                   hoveredPart.type === "Node" && hoveredPart.beamBodyHover
                     ? "body"
@@ -1224,6 +1230,7 @@ export function canvasStateReducer(
                 type: "Edge",
                 position: hoveredPart.position,
                 id: state.elementID,
+                deleting: false,
                 part:
                   hoveredPart.type === "Node" && hoveredPart.beamBodyHover
                     ? "body"
@@ -1235,6 +1242,7 @@ export function canvasStateReducer(
                 type: "Edge",
                 position: hoveredPart.position,
                 id: state.elementID,
+                deleting: false,
                 part: "body",
               };
               break;
@@ -1396,7 +1404,7 @@ export function canvasStateReducer(
               const element = mechanicalElements.find(
                 (element) => element.id === state.elementID,
               );
-              if (element !== undefined) {
+              if (element) {
                 actions.push(...delete_element(element, mechanicalElements));
               } else {
                 actions.push({
@@ -1493,7 +1501,7 @@ export function canvasStateReducer(
       break;
   }
 
-  if (actions.length > 0 && actionBundleType !== undefined) {
+  if (actions.length > 0 && actionBundleType) {
     updateMechanism(actions, actionBundleType);
   }
 }

@@ -321,6 +321,7 @@ export const MechanicalCanvas: React.FC<MechanicalCanvasProps> = ({
         type: "Edge",
         position: canvasState.startHover.position,
         id: -1,
+        deleting: false,
         part: "start",
       };
     }
@@ -341,6 +342,7 @@ export const MechanicalCanvas: React.FC<MechanicalCanvasProps> = ({
             type: "Edge",
             position: belt.positionStart,
             id: belt.id,
+            deleting: false,
             part: "start",
           };
         } else if (
@@ -351,6 +353,7 @@ export const MechanicalCanvas: React.FC<MechanicalCanvasProps> = ({
             type: "Edge",
             position: belt.positionEnd,
             id: belt.id,
+            deleting: false,
             part: "end",
           };
         }

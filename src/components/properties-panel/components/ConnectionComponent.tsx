@@ -83,7 +83,7 @@ const Connection: React.FC<ConnectionProps> = ({
 
   const handleDisconnect = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (connectedElement === undefined) return;
+    if (!connectedElement) return;
     const connection_pair_type = get_connection_pair_type(
       element.id,
       connectedElement,
@@ -114,10 +114,9 @@ const Connection: React.FC<ConnectionProps> = ({
         justifyContent: "space-between",
         flexDirection: "row",
         alignItems: "center",
-        bgcolor:
-          connectedElement === undefined
-            ? COLORS.DELETION_BOX + COLORS.HALF_TRANSPARENCY
-            : COLORS.BACKGROUND,
+        bgcolor: !connectedElement
+          ? COLORS.DELETION_BOX + COLORS.HALF_TRANSPARENCY
+          : COLORS.BACKGROUND,
       }}
       border={2}
       borderColor={"#00000025"}
@@ -126,7 +125,6 @@ const Connection: React.FC<ConnectionProps> = ({
       <ElementDisplay
         element={connectedElement}
         size="small"
-        bold={false}
         setHoveredPart={setHoveredPart}
         setCanvasState={setCanvasState}
         updateMechanism={updateMechanism}
@@ -149,7 +147,7 @@ const Connection: React.FC<ConnectionProps> = ({
       <>
         {(() => {
           if (
-            (connectedElement !== undefined &&
+            (connectedElement &&
               element.type === "belt" &&
               containerType === "ConnectsAttachedGears") ||
             containerType === "ConnectsAttachedBelt"

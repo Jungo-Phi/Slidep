@@ -335,7 +335,7 @@ const App: React.FC = () => {
         }
     }
 
-    if (newHistory === undefined) {
+    if (!newHistory) {
       newHistory = [...mechanism.history, newActions];
     }
 
@@ -353,12 +353,12 @@ const App: React.FC = () => {
 
     if (canvasState.type !== "SelectedElement") return;
     if (
-      updatedMechanism.mechanicalElements.find(
+      !updatedMechanism.mechanicalElements.find(
         (el) => el.id === canvasState.elementID,
-      ) === undefined &&
-      updatedMechanism.constraintElements.find(
+      ) &&
+      !updatedMechanism.constraintElements.find(
         (el) => el.id === canvasState.elementID,
-      ) === undefined
+      )
     ) {
       setCanvasState({ type: "Selecting" });
     }
@@ -382,12 +382,12 @@ const App: React.FC = () => {
 
     if (canvasState.type !== "SelectedElement") return;
     if (
-      updatedMechanism.mechanicalElements.find(
+      !updatedMechanism.mechanicalElements.find(
         (el) => el.id === canvasState.elementID,
-      ) === undefined &&
-      updatedMechanism.constraintElements.find(
+      ) &&
+      !updatedMechanism.constraintElements.find(
         (el) => el.id === canvasState.elementID,
-      ) === undefined
+      )
     ) {
       setCanvasState({ type: "Selecting" });
     }

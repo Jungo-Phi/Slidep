@@ -35,7 +35,7 @@ export function resolveGeometricConstraints(
   // Connections (looking from edges to avoid duplicates)
   mechanism.mechanicalElements.forEach((element) => {
     if ("positionStart" in element) {
-      if (element.fixedNodeStartID !== undefined) {
+      if (element.fixedNodeStartID) {
         links.push({
           type: "Coincidence",
           ddl: 2,
@@ -43,7 +43,7 @@ export function resolveGeometricConstraints(
           key2: `${element.id}:start`,
         });
       }
-      if (element.fixedNodeEndID !== undefined) {
+      if (element.fixedNodeEndID) {
         links.push({
           type: "Coincidence",
           ddl: 2,
@@ -226,7 +226,7 @@ export function resolveGeometricConstraints(
     case "CreateConstraint":
   }
 
-  if (grabPoint !== undefined && grabConnectionID !== undefined) {
+  if (grabPoint && grabConnectionID) {
     // Enlever l'ancrage du node sélectionné
     if (typeof grabPoint === "number") {
       nodes.radMasses.set(grabConnectionID, 1);

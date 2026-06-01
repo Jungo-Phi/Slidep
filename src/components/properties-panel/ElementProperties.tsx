@@ -21,6 +21,7 @@ import { delete_element } from "./../mechanical-canvas/connect-actions";
 import { HoveredPart } from "../../types/hovered-part";
 import NumberInput from "./components/NumberInput";
 import ElementDisplay from "./components/ElementDisplay";
+import { element_to_hovered_part } from "../mechanical-canvas/utils";
 
 interface ElementPropertiesProps {
   element: MechanicalElement;
@@ -41,29 +42,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
   mechanism,
 }) => {
   const handleMouseEnter = () => {
-    let hoveredPart: HoveredPart;
-    if ("radius" in element) {
-      hoveredPart = {
-        type: "GearTooth",
-        position: element.position,
-        id: element.id,
-      };
-    } else if ("position" in element) {
-      hoveredPart = {
-        type: "Node",
-        position: element.position,
-        id: element.id,
-        beamBodyHover: false,
-      };
-    } else {
-      hoveredPart = {
-        type: "Edge",
-        position: element.positionStart.lerp(element.positionEnd, 0.5),
-        id: element.id,
-        part: "body",
-      };
-    }
-    setHoveredPart(hoveredPart);
+    setHoveredPart(element_to_hovered_part(element, true));
   };
 
   const handleMouseLeave = () => {
@@ -83,7 +62,6 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
         <ElementDisplay
           element={element}
           size="medium"
-          bold={false}
           setHoveredPart={setHoveredPart}
           setCanvasState={setCanvasState}
           updateMechanism={updateMechanism}

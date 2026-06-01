@@ -11,11 +11,11 @@ import { Box, IconButton, Typography } from "@mui/material";
 import { get_element_icon } from "../../element-palette/elementIcon";
 import { HoveredPart } from "../../../types/hovered-part";
 import { COLORS } from "../../../constants/rendering-specs";
+import { element_to_hovered_part } from "../../mechanical-canvas/utils";
 
 interface ElementDisplayProps {
   element: UnionElement;
   size: "small" | "medium" | "large";
-  bold: boolean;
   setHoveredPart: (hoveredPart: HoveredPart) => void;
   setCanvasState: (state: CanvasState) => void;
   updateMechanism: (
@@ -27,40 +27,15 @@ interface ElementDisplayProps {
 const ElementDisplayComponent: React.FC<ElementDisplayProps> = ({
   element,
   size,
-  bold,
   setHoveredPart,
   setCanvasState,
 }) => {
-  const icon = get_element_icon(
-    element === undefined ? undefined : element.type,
-  );
+  const icon = get_element_icon(!element ? undefined : element.type);
   const element_name = shown_element_name(element);
 
   const handleMouseEnter = () => {
-    if (element === undefined) return;
-    let hoveredPart: HoveredPart;
-    if ("radius" in element) {
-      hoveredPart = {
-        type: "GearTooth",
-        position: element.position,
-        id: element.id,
-      };
-    } else if ("position" in element) {
-      hoveredPart = {
-        type: "Node",
-        position: element.position,
-        id: element.id,
-        beamBodyHover: false,
-      };
-    } else {
-      hoveredPart = {
-        type: "Edge",
-        position: element.positionStart.lerp(element.positionEnd, 0.5),
-        id: element.id,
-        part: "body",
-      };
-    }
-    setHoveredPart(hoveredPart);
+    if (!element) return;
+    setHoveredPart(element_to_hovered_part(element));
   };
 
   const handleMouseLeave = () => {
@@ -69,7 +44,7 @@ const ElementDisplayComponent: React.FC<ElementDisplayProps> = ({
 
   const handleSelect = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (element === undefined) return;
+    if (!element) return;
     setCanvasState({
       type: "SelectedElement",
       elementID: element.id,
@@ -118,9 +93,8 @@ const ElementDisplayComponent: React.FC<ElementDisplayProps> = ({
           variant={
             size === "small" ? "body2" : size === "medium" ? "body1" : "h5"
           }
-          fontWeight={bold ? 800 : 500}
+          fontWeight={500}
           color={COLORS.STROKE}
-          sx={{ letterSpacing: bold ? "-0.02em" : "normal" }}
         >
           {element_name}
         </Typography>

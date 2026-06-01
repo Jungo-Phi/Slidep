@@ -1,7 +1,5 @@
+import { DIM } from "../../constants/rendering-specs";
 import { Point2 } from "../../types";
-
-const EDGE_END_MARGIN = 15;
-const MIN_GEAR_RADIUS = 20;
 
 /** Approche une position ou un rayon vers targetValue.
  * La valeur de 'stiffness' doit être en dessous de 1 pour une attraction moins forte que les autres contraintes. */
@@ -145,10 +143,10 @@ export function applyOnSegmentConstraint(
 
   const edgeLength = start.distance_to(end);
   const t = Math.max(
-    EDGE_END_MARGIN / edgeLength,
+    DIM.EDGE_END_MARGIN / edgeLength,
     Math.min(
       pNode.parameter_on_segment(start, end),
-      1 - EDGE_END_MARGIN / edgeLength,
+      1 - DIM.EDGE_END_MARGIN / edgeLength,
     ),
   );
   const delta = pNode.sub(start.lerp(end, t));
@@ -507,7 +505,7 @@ export function applyGearMeshingConstraint(
   const wPos2 = posMasses.get(g2) ?? 1;
   const wRad1 = radMasses.get(g1) ?? 1;
   const wRad2 = radMasses.get(g2) ?? 1;
-  if (!p1 || !p2 || r1 === undefined || r2 === undefined) return 0;
+  if (!p1 || !p2 || !r1 || !r2) return 0;
 
   const dist = p1.distance_to(p2);
   const targetDist = r1 + r2;
@@ -537,12 +535,12 @@ export function applyGearMeshingConstraint(
   if (wRad1 !== 0)
     radii.set(
       g1,
-      Math.max(MIN_GEAR_RADIUS, r1 + radCorrection * (wRad1 / totalW)),
+      Math.max(DIM.MIN_GEAR_RADIUS, r1 + radCorrection * (wRad1 / totalW)),
     );
   if (wRad2 !== 0)
     radii.set(
       g2,
-      Math.max(MIN_GEAR_RADIUS, r2 + radCorrection * (wRad2 / totalW)),
+      Math.max(DIM.MIN_GEAR_RADIUS, r2 + radCorrection * (wRad2 / totalW)),
     );
   return Math.abs(error);
 }
@@ -562,7 +560,7 @@ export function applyGearRatioConstraint(
   const r2 = radii.get(g2);
   const w1 = radMasses.get(g1) ?? 1;
   const w2 = radMasses.get(g2) ?? 1;
-  if (r1 === undefined || r2 === undefined) return 0;
+  if (!r1 || !r2) return 0;
 
   const totalW = w1 + w2;
   if (totalW === 0) return 0;
@@ -587,7 +585,7 @@ export function applyGearRatioConstraint(
     radii.set(
       g1,
       Math.max(
-        MIN_GEAR_RADIUS,
+        DIM.MIN_GEAR_RADIUS,
         r1 + (targetR1 - r1) * (w1 / totalW) * stiffness,
       ),
     );
@@ -595,7 +593,7 @@ export function applyGearRatioConstraint(
     radii.set(
       g2,
       Math.max(
-        MIN_GEAR_RADIUS,
+        DIM.MIN_GEAR_RADIUS,
         r2 + (targetR2 - r2) * (w2 / totalW) * stiffness,
       ),
     );

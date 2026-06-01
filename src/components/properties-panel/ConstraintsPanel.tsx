@@ -16,10 +16,9 @@ import {
 import { HoveredPart } from "../../types/hovered-part";
 import NumberInput from "./components/NumberInput";
 import ElementDisplay from "./components/ElementDisplay";
-import { get_mechanical_element_from_id } from "../mechanical-canvas/connect-actions";
-import { COLORS } from "../../constants/rendering-specs";
 import React from "react";
 import RatioInput from "./components/RatioInput";
+import { element_to_hovered_part } from "../mechanical-canvas/utils";
 
 interface ConstraintsPanelProps {
   constraintID: ID;
@@ -40,13 +39,7 @@ export const ConstraintsPanel: React.FC<ConstraintsPanelProps> = ({
   mechanism,
 }) => {
   const handleMouseEnter = (constraint: ConstraintElement) => {
-    const hoveredPart: HoveredPart = {
-      type: "Node",
-      position: constraint.position,
-      id: constraint.id,
-      beamBodyHover: false,
-    };
-    setHoveredPart(hoveredPart);
+    setHoveredPart(element_to_hovered_part(constraint, true));
   };
 
   const handleMouseLeave = () => {
@@ -75,17 +68,17 @@ export const ConstraintsPanel: React.FC<ConstraintsPanelProps> = ({
                   justifyContent: "space-between",
                   alignItems: "center",
                   width: "100%",
-                  bgcolor: COLORS.BACKGROUND,
                 }}
                 border={2}
-                borderColor={"#00000025"}
+                borderColor={
+                  constraint.id === constraintID ? "#00000080" : "#00000025"
+                }
                 borderRadius={5}
                 marginY={"-1px"}
               >
                 <ElementDisplay
                   element={constraint}
                   size="medium"
-                  bold={constraint.id === constraintID}
                   setHoveredPart={setHoveredPart}
                   setCanvasState={setCanvasState}
                   updateMechanism={updateMechanism}

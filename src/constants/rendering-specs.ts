@@ -63,12 +63,14 @@ export const CURSOR_STYLE = {
 /** Element dimensions from UX specification */
 export const DIM = {
   // General
-  CORNER_RADIUS: 2,
   SQUARE: 8,
-  ENDPOINT_RADIUS: 7,
-  MIN_EDGE_LENGTH: 50,
   TAC: 20,
   ICON_SIZE: 24,
+
+  // Edges
+  EDGE_ENDPOINT_RADIUS: 7,
+  MIN_EDGE_LENGTH: 30,
+  EDGE_END_MARGIN: 15,
 
   // Beam
   BEAM_WIDTH: 8,
@@ -97,13 +99,14 @@ export const DIM = {
   SLIDER_OUTER_HEIGHT: 14,
   SLIDER_INNER_WIDTH: 14,
   SLIDER_INNER_HEIGHT: 6,
+  SLIDER_RADIUS: 2,
 
   // Slidep
   SLIDEP_OUTER_WIDTH: 28,
 
   // Gear
   DEFAULT_GEAR_RADIUS: 40,
-  MIN_GEAR_RADIUS: 20,
+  MIN_GEAR_RADIUS: 25,
   GEAR_TEETH_SIZE: 6,
 
   // Belt
@@ -120,7 +123,7 @@ export const DIM = {
 export const DIMENSION_SPECS = {
   ARROW_SIZE: 18,
   ARROW_WING_LENGTH: 7,
-  ARROW_WING_ANGLE: 18,
+  ARROW_WING_WIDTH: 18,
   TEXT_FONT: "16px Arial",
   TEXT_ALIGN: "center",
   TEXT_BASELINE: "middle",

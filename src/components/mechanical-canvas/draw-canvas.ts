@@ -47,6 +47,7 @@ import {
   get_gear_angles,
   is_on_left_side_of_belt,
 } from "../../utils/belt-geom";
+import { node_on_beam_body } from "./utils";
 
 /*
  * Dessine tous les éléments du canvas.
@@ -112,11 +113,11 @@ export function drawMechanicalCanvas(
         (state.type === "HorizontalVerticalConstraintNode" &&
           state.startNodeID === element.id);
       const isEraseHovered =
-        (state.type === "Erasing" &&
-          hoveredPart.type !== "Void" &&
+        (hoveredPart.type !== "Void" &&
+          hoveredPart.deleting &&
           hoveredPart.id === element.id) ||
         (state.type === "ErasingMultiple" &&
-          state.hoveredElementIDs.includes(element.id)); // <- TODO : add erase coloring here
+          state.hoveredElementIDs.includes(element.id));
       const isEdgeEndHovered =
         hoveredPart !== null &&
         hoveredPart.type === "Edge" &&
@@ -125,7 +126,7 @@ export function drawMechanicalCanvas(
       let isHovered =
         hoveredPart.type !== "Void" &&
         hoveredPart.id === element.id &&
-        state.type !== "Erasing" &&
+        !hoveredPart.deleting &&
         !isEdgeEndHovered;
       if (hoveredPart.type !== "Void") {
         const constraint = constraintElements.find(
@@ -180,7 +181,8 @@ export function drawMechanicalCanvas(
         ctx.shadowColor = COLORS.SELECTION_HALO;
         ctx.strokeStyle = COLORS.SELECTION_STROKE;
         ctx.shadowBlur = INTERACTION_SPECS.HALO_SIZE;
-      } else if (isEraseHovered) {
+      }
+      if (isEraseHovered) {
         // Add red stroke and make semi-transparent if element is hovered for deletion
         ctx.strokeStyle = COLORS.DELETION_STROKE;
         ctx.globalAlpha = INTERACTION_SPECS.DELETION_OPACITY;
@@ -195,7 +197,7 @@ export function drawMechanicalCanvas(
         case "mass":
           ctx.save();
           ctx.translate(element.position.x, element.position.y);
-          if ("parentBeamID" in element && element.parentBeamID !== undefined) {
+          if ("parentBeamID" in element && element.parentBeamID) {
             const parentBeam = get_mechanical_element_from_id(
               element.parentBeamID,
               mechanicalElements,
@@ -546,6 +548,26 @@ export function drawMechanicalCanvas(
           draw_pivot(ctx, false);
           break;
         case "PlacingSlider":
+          let hoveredBeam;
+          if (hoveredPart.type === "Edge" && hoveredPart.part === "body") {
+            hoveredBeam = get_mechanical_element_from_id(
+              hoveredPart.id,
+              mechanicalElements,
+            ) as BeamElement;
+          } else if (hoveredPart.type === "Node") {
+            hoveredBeam = node_on_beam_body(
+              get_mechanical_element_from_id(
+                hoveredPart.id,
+                mechanicalElements,
+              ) as NodeElement,
+              mechanicalElements,
+            );
+          }
+          if (hoveredBeam) {
+            ctx.rotate(
+              hoveredBeam.positionStart.angle_to(hoveredBeam.positionEnd),
+            );
+          }
           draw_slider(ctx);
           break;
         case "PlacingJoin":

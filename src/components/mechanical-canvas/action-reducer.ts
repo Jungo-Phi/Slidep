@@ -270,17 +270,17 @@ export function actionReducer(
         mechanicalElements.forEach((element) => {
           if ("position" in element) {
             position = positions.get(`${element.id}:pos`);
-            if (position !== undefined) element.position = position;
+            if (position) element.position = position;
             if ("radius" in element) {
               radius = radii.get(`${element.id}:pos`);
-              if (radius !== undefined) element.radius = radius;
+              if (radius) element.radius = radius;
             }
             // if ("angle" in element) angles.set(element.id, element.angle);
           } else {
             position = positions.get(`${element.id}:start`);
-            if (position !== undefined) element.positionStart = position;
+            if (position) element.positionStart = position;
             position = positions.get(`${element.id}:end`);
-            if (position !== undefined) element.positionEnd = position;
+            if (position) element.positionEnd = position;
           }
         });
         break;

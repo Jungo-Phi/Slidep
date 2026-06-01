@@ -20,7 +20,7 @@ export function draw_element_icon(
   ctx: CanvasRenderingContext2D,
   element: UnionElement,
 ) {
-  ctx.strokeStyle = ctx.lineWidth === 2 ? "grey" : COLORS.STROKE;
+  //ctx.strokeStyle = ctx.lineWidth === 2 ? "grey" : COLORS.STROKE;
   ctx.fillStyle = COLORS.BACKGROUND;
   ctx.beginPath();
   ctx.roundRect(
@@ -156,7 +156,7 @@ export function draw_belt_end(ctx: CanvasRenderingContext2D) {
 
 export function draw_hover_edge_end(ctx: CanvasRenderingContext2D) {
   ctx.beginPath();
-  ctx.arc(0, 0, DIM.ENDPOINT_RADIUS, 0, TAU);
+  ctx.arc(0, 0, DIM.EDGE_ENDPOINT_RADIUS, 0, TAU);
   ctx.stroke();
 }
 
@@ -190,7 +190,7 @@ export function draw_slider(ctx: CanvasRenderingContext2D) {
     -DIM.SLIDER_OUTER_HEIGHT / 2,
     DIM.SLIDER_OUTER_WIDTH,
     DIM.SLIDER_OUTER_HEIGHT,
-    DIM.CORNER_RADIUS,
+    DIM.SLIDER_RADIUS,
   );
   ctx.rect(
     -DIM.SLIDER_INNER_WIDTH / 2,
@@ -211,7 +211,7 @@ export function draw_slidep(ctx: CanvasRenderingContext2D, filled: boolean) {
     -DIM.SLIDER_OUTER_HEIGHT / 2,
     DIM.SLIDEP_OUTER_WIDTH,
     DIM.SLIDER_OUTER_HEIGHT,
-    DIM.CORNER_RADIUS,
+    DIM.SLIDER_RADIUS,
   );
   ctx.stroke();
   ctx.rect(
@@ -229,7 +229,7 @@ export function draw_slidep(ctx: CanvasRenderingContext2D, filled: boolean) {
     -DIM.SLIDER_OUTER_HEIGHT / 2,
     DIM.SLIDEP_OUTER_WIDTH,
     DIM.SLIDER_OUTER_HEIGHT,
-    DIM.CORNER_RADIUS,
+    DIM.SLIDER_RADIUS,
   );
   ctx.stroke();
   // Pivot
@@ -278,7 +278,7 @@ export function draw_mass(ctx: CanvasRenderingContext2D) {
     -DIM.MASS_SIZE / 2,
     DIM.MASS_SIZE,
     DIM.MASS_SIZE,
-    DIM.CORNER_RADIUS,
+    DIM.SLIDER_RADIUS,
   );
   ctx.fillStyle = COLORS.FILL_BODY;
   ctx.fill();
@@ -319,7 +319,7 @@ export function draw_spring(
   restLength: number | undefined = undefined,
 ) {
   let coilNb;
-  if (restLength === undefined) {
+  if (!restLength) {
     coilNb = Math.max(Math.floor(length / 16), DIM.SPRING_MIN_COILS);
   } else {
     coilNb = Math.max(Math.floor(restLength / 16), DIM.SPRING_MIN_COILS);
@@ -406,7 +406,7 @@ export function draw_damper(
 ) {
   let start_x;
   let piston_x;
-  if (restLength === undefined) {
+  if (!restLength) {
     start_x = length / 4;
     piston_x = (length - 2 * DIM.TAC) / 2;
   } else {
