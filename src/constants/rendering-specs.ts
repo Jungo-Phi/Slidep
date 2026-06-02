@@ -18,7 +18,8 @@ export const COLORS = {
   ORANGE_STROKE: "#9c4211", // Orange foncé
 
   // Interaction colors
-  SELECTION_STROKE: "#d7530b", // "#6595d0" Bleu gris foncé
+  SELECTION_STROKE: "#6595d0", // "#d7530b"
+  SELECTION_FILL: "#b7e2ff", // FILL_BODY
   SELECTION_BOX: "#7190e5", // Bleu gris clair
   DELETION_STROKE: "#a4315d", // Rouge
   DELETION_BOX: "#ed5e71", // Rouge
@@ -29,7 +30,8 @@ export const COLORS = {
   HOVER: "#00000020", //§ 12.5% opacity
 } as const;
 
-export const SELECTION_FILTER = "saturate(6) hue-rotate(177deg) brightness(2)";
+export const ICON_SELECTION_FILTER = "brightness(5)"; // "saturate(6) hue-rotate(177deg) brightness(2)";
+export const FILL_SELECTION_FILTER = "brightness(1.2)";
 
 export const STROKE_WIDTHS = {
   STANDARD: 2,
@@ -136,6 +138,11 @@ export const DIMENSION_SPECS = {
 
 /** Ordre de dessin des éléments sur le canvas */
 export const DRAWING_ORDER: UnionElement["type"][] = [
+  "dimension-edge-to-node",
+  "dimension-node-to-node",
+  "dimension-edge",
+  "dimension-angle",
+  "dimension-radius",
   "beam",
   "damper",
   "spring",
@@ -146,11 +153,6 @@ export const DRAWING_ORDER: UnionElement["type"][] = [
   "slider",
   "pivot",
   "mass",
-  "dimension-edge-to-node",
-  "dimension-node-to-node",
-  "dimension-edge",
-  "dimension-angle",
-  "dimension-radius",
   "horizontal-align-edge",
   "horizontal-align-nodes",
   "vertical-align-edge",

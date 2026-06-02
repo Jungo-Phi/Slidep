@@ -6,8 +6,10 @@ import {
   COLORS,
   STROKE_WIDTHS,
   DIM,
-  SELECTION_FILTER,
   INTERACTION_SPECS,
+  DIMENSION_SPECS,
+  ICON_SELECTION_FILTER,
+  FILL_SELECTION_FILTER,
 } from "../../constants/rendering-specs";
 import { Point2 as Point2 } from "../../types/point2";
 import { get_element_icon } from "../element-palette/elementIcon";
@@ -18,32 +20,6 @@ const TAU = 2 * Math.PI;
 
 // Cache pour les images d'icônes préchargées
 const iconImageCache = new Map<string, HTMLImageElement>();
-
-export function draw_element_icon(
-  ctx: CanvasRenderingContext2D,
-  element: UnionElement,
-) {
-  const side = DIM.ICON_SIZE;
-  const isSelected = ctx.shadowBlur !== 0;
-  if (ctx.lineWidth === 2 && ctx.shadowBlur === 0) ctx.strokeStyle = "grey";
-  ctx.fillStyle = COLORS.BACKGROUND + COLORS.ICON_TRANSPARENCY;
-  ctx.beginPath();
-  ctx.roundRect(-side / 2 - 1, -side / 2 - 1, side + 2, side + 2, 4);
-  ctx.stroke();
-  ctx.shadowColor = COLORS.BACKGROUND;
-  ctx.shadowBlur = INTERACTION_SPECS.ICON_HALO_SIZE;
-  ctx.fill();
-  const iconUrl = get_element_icon(element.type);
-  let img = iconImageCache.get(iconUrl);
-  if (!img) {
-    img = new Image();
-    img.src = iconUrl;
-    iconImageCache.set(iconUrl, img);
-  }
-  if (!img.complete) return;
-  if (isSelected) ctx.filter = SELECTION_FILTER;
-  ctx.drawImage(img, -side / 2, -side / 2, side, side);
-}
 
 export function draw_grid(
   ctx: CanvasRenderingContext2D,
@@ -137,9 +113,10 @@ export function draw_ground(ctx: CanvasRenderingContext2D) {
 export function draw_start_edge_end(ctx: CanvasRenderingContext2D) {
   const sideL = DIM.BEAM_WIDTH + STROKE_WIDTHS.STANDARD;
   const sideS = DIM.BEAM_WIDTH - STROKE_WIDTHS.STANDARD;
-  ctx.fillStyle = COLORS.STROKE;
+  const oldFillStyle = ctx.fillStyle;
+  ctx.fillStyle = ctx.strokeStyle;
   ctx.fillRect(-sideL / 2, -sideL / 2, sideL, sideL);
-
+  ctx.fillStyle = oldFillStyle;
   ctx.fillRect(-sideS / 2, -sideS / 2, sideS, sideS);
 }
 
@@ -282,10 +259,8 @@ export function draw_mass(ctx: CanvasRenderingContext2D) {
   ctx.stroke();
 
   ctx.fillStyle = ctx.strokeStyle;
-  ctx.font = "12px Verdana";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillText("M", 0, 0);
+  ctx.font = "14px Verdana";
+  draw_text(ctx, "M");
 }
 
 export function draw_beam(
@@ -334,7 +309,7 @@ export function draw_spring(
   // Spires en arrière-plan
   ctx.lineCap = "round";
   ctx.lineWidth = STROKE_WIDTHS.SPIRE + widthChange;
-  ctx.filter = `saturate(0.5) brightness(${ctx.fillStyle !== COLORS.FILL_BODY ? 1 : 3})`;
+  ctx.filter = `saturate(0.5) brightness(3)`;
   for (let i = 1; i <= coilNb - 1; i++) {
     ctx.beginPath();
     ctx.moveTo(deca(i, 0.25), DIM.SPRING_COIL_RADIUS);
@@ -471,10 +446,8 @@ export function draw_damper(
 }
 
 export function draw_gear(ctx: CanvasRenderingContext2D, radius: number) {
-  if (radius < DIM.MIN_GEAR_RADIUS) {
-    // Raise error ?
-    radius = DIM.MIN_GEAR_RADIUS;
-  }
+  if (radius < DIM.MIN_GEAR_RADIUS) radius = DIM.MIN_GEAR_RADIUS;
+
   //const teethCount = Math.floor(radius * 0.5);
   const r1 = (radius + DIM.PIVOT_OUTER_RADIUS) / 2;
   const r2 = (radius - DIM.PIVOT_OUTER_RADIUS) / 3;
@@ -490,7 +463,11 @@ export function draw_gear(ctx: CanvasRenderingContext2D, radius: number) {
     ctx.arc(Math.cos(angle) * r1, Math.sin(angle) * r1, r2, 0, TAU);
   }
   ctx.fillStyle += COLORS.HALF_TRANSPARENCY;
+
+  const oldShadowBlur = ctx.shadowBlur;
+  ctx.shadowBlur = 0;
   ctx.fill("evenodd");
+  ctx.shadowBlur = oldShadowBlur;
 
   ctx.beginPath();
   ctx.arc(0, 0, radius, 0, TAU);
@@ -595,45 +572,6 @@ export function draw_dimention(
   ctx.restore();
 }
 
-export function draw_dimention_text(
-  ctx: CanvasRenderingContext2D,
-  position: Point2,
-  value: number,
-  extension: string = "",
-) {
-  const text = (Math.round(value * 10) / 10).toString() + extension;
-  ctx.font = "16px Arial";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  const metrics = ctx.measureText(text);
-
-  let lastShadowBlur = ctx.shadowBlur;
-  let lastShadowColor = ctx.shadowColor;
-  ctx.shadowBlur = INTERACTION_SPECS.ICON_HALO_SIZE;
-  ctx.shadowColor = COLORS.BACKGROUND;
-  ctx.fillStyle = COLORS.BACKGROUND + COLORS.ICON_TRANSPARENCY;
-  ctx.beginPath();
-  ctx.roundRect(
-    position.x - metrics.width / 2 - 8 / 2,
-    position.y - 22 / 2 - 1,
-    metrics.width + 8,
-    22,
-    5,
-  );
-  ctx.fill();
-
-  ctx.shadowBlur = lastShadowBlur;
-  ctx.shadowColor = lastShadowColor;
-  ctx.fillStyle = ctx.strokeStyle;
-  ctx.fillText(text, position.x, position.y);
-
-  if (ctx.lineWidth > 2) {
-    ctx.shadowBlur = 2;
-    ctx.shadowColor = ctx.strokeStyle as string;
-    ctx.fillText(text, position.x, position.y);
-  }
-}
-
 export function draw_dimention_parallel(
   ctx: CanvasRenderingContext2D,
   start: Point2,
@@ -669,7 +607,10 @@ export function draw_dimention_parallel(
   ctx.stroke();
 
   draw_dimention(ctx, start.add(np.mul(offset)), end.add(np.mul(offset)));
-  draw_dimention_text(ctx, position, value);
+  ctx.save();
+  ctx.translate(position.x, position.y);
+  draw_dimention_text(ctx, value);
+  ctx.restore();
 }
 
 export function draw_dimention_to_segment(
@@ -715,7 +656,10 @@ export function draw_dimention_to_segment(
     point.add(np.mul(offset)),
     oppositePoint.add(np.mul(offset)),
   );
-  draw_dimention_text(ctx, position, value);
+  ctx.save();
+  ctx.translate(position.x, position.y);
+  draw_dimention_text(ctx, value);
+  ctx.restore();
 }
 
 export function draw_dimention_angle(
@@ -768,7 +712,10 @@ export function draw_dimention_angle(
   // TODO : add arc to position
   // TODO : add straight lines
 
-  draw_dimention_text(ctx, position, value, " °");
+  ctx.save();
+  ctx.translate(position.x, position.y);
+  draw_dimention_text(ctx, value, " °");
+  ctx.restore();
 }
 
 export function draw_dimention_radius(
@@ -807,21 +754,54 @@ export function draw_dimention_radius(
   ctx.stroke();
 
   ctx.restore();
+  ctx.save();
+  ctx.translate(position.x, position.y);
+  draw_dimention_text(ctx, value);
+  ctx.restore();
+}
 
-  draw_dimention_text(ctx, position, value);
+export function draw_dimention_text(
+  ctx: CanvasRenderingContext2D,
+  value: number,
+  extension: string = "",
+) {
+  ctx.font = DIMENSION_SPECS.TEXT_FONT;
+  ctx.textAlign = DIMENSION_SPECS.TEXT_ALIGN;
+  ctx.textBaseline = DIMENSION_SPECS.TEXT_BASELINE;
+  const text = (Math.round(value * 10) / 10).toString() + extension;
+  const metrics = ctx.measureText(text);
+
+  const lastShadowBlur = ctx.shadowBlur;
+  const lastShadowColor = ctx.shadowColor;
+  ctx.shadowBlur = INTERACTION_SPECS.ICON_HALO_SIZE;
+  ctx.shadowColor = COLORS.BACKGROUND;
+  ctx.fillStyle = COLORS.BACKGROUND + COLORS.ICON_TRANSPARENCY;
+  ctx.beginPath();
+  ctx.roundRect(
+    -metrics.width / 2 - 8 / 2,
+    -22 / 2 - 1,
+    metrics.width + 8,
+    22,
+    5,
+  );
+  ctx.fill();
+
+  ctx.shadowBlur = lastShadowBlur;
+  ctx.shadowColor = lastShadowColor;
+  ctx.fillStyle = ctx.strokeStyle;
+  draw_text(ctx, text);
 }
 
 export function draw_gear_ratio(ctx: CanvasRenderingContext2D, value: number) {
-  ctx.font = "16px Arial";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  let text = valueToRatioParts(value).join(" : ");
+  ctx.font = DIMENSION_SPECS.TEXT_FONT;
+  ctx.textAlign = DIMENSION_SPECS.TEXT_ALIGN;
+  ctx.textBaseline = DIMENSION_SPECS.TEXT_BASELINE;
+  const text = valueToRatioParts(value).join(" : ");
   const metrics = ctx.measureText(text);
+  const isSelected = ctx.shadowBlur !== 0;
 
-  let lastShadowBlur = ctx.shadowBlur;
-  let lastShadowColor = ctx.shadowColor;
-  ctx.shadowBlur = INTERACTION_SPECS.ICON_HALO_SIZE;
-  ctx.fillStyle = COLORS.BACKGROUND + COLORS.ICON_TRANSPARENCY;
+  const lastStrokeStyle = ctx.strokeStyle;
+  if (ctx.lineWidth === 2 && ctx.shadowBlur === 0) ctx.strokeStyle = "grey";
   ctx.beginPath();
   ctx.roundRect(
     -metrics.width / 2 - 14 / 2,
@@ -831,12 +811,49 @@ export function draw_gear_ratio(ctx: CanvasRenderingContext2D, value: number) {
     28 / 2,
   );
   ctx.stroke();
+  const lastShadowBlur = ctx.shadowBlur;
+  const lastShadowColor = ctx.shadowColor;
+  ctx.shadowBlur = INTERACTION_SPECS.ICON_HALO_SIZE;
   ctx.shadowColor = COLORS.BACKGROUND;
+  ctx.fillStyle = COLORS.BACKGROUND + COLORS.ICON_TRANSPARENCY;
+  if (isSelected) ctx.filter = ICON_SELECTION_FILTER;
   ctx.fill();
-
   ctx.shadowBlur = lastShadowBlur;
   ctx.shadowColor = lastShadowColor;
-  ctx.fillStyle = ctx.strokeStyle;
+  ctx.strokeStyle = lastStrokeStyle;
+  draw_text(ctx, text);
+}
+
+export function draw_element_icon(
+  ctx: CanvasRenderingContext2D,
+  element: UnionElement,
+) {
+  const side = DIM.ICON_SIZE;
+  const isSelected = ctx.shadowBlur !== 0;
+  if (ctx.lineWidth === 2 && ctx.shadowBlur === 0) ctx.strokeStyle = "grey";
+  ctx.beginPath();
+  ctx.roundRect(-side / 2 - 1, -side / 2 - 1, side + 2, side + 2, 4);
+  ctx.stroke();
+  ctx.shadowBlur = INTERACTION_SPECS.ICON_HALO_SIZE;
+  ctx.shadowColor = COLORS.BACKGROUND;
+  ctx.fillStyle = COLORS.BACKGROUND + COLORS.ICON_TRANSPARENCY;
+  if (isSelected) ctx.filter = FILL_SELECTION_FILTER;
+  ctx.fill();
+  const iconUrl = get_element_icon(element.type);
+  let img = iconImageCache.get(iconUrl);
+  if (!img) {
+    img = new Image();
+    img.src = iconUrl;
+    iconImageCache.set(iconUrl, img);
+  }
+  if (!img.complete) return;
+  if (isSelected) ctx.filter = ICON_SELECTION_FILTER;
+  ctx.drawImage(img, -side / 2, -side / 2, side, side);
+}
+
+export function draw_text(ctx: CanvasRenderingContext2D, text: string) {
+  ctx.fillStyle = COLORS.STROKE; // ctx.strokeStyle;
+  ctx.filter = "none";
   ctx.fillText(text, 0, 0);
 
   if (ctx.lineWidth > 2) {

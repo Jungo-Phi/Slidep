@@ -327,12 +327,8 @@ const App: React.FC = () => {
           newHistory = [...mechanism.history];
         }
     }
+    if (!newHistory) newHistory = [...mechanism.history, newActions];
 
-    if (!newHistory) {
-      newHistory = [...mechanism.history, newActions];
-    }
-
-    // update mechanism
     let newMechanism = {
       history: newHistory,
       future: [],

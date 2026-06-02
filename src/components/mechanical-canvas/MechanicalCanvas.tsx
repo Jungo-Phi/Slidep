@@ -57,6 +57,7 @@ export const MechanicalCanvas: React.FC<MechanicalCanvasProps> = ({
   const [mousePosition, setmousePosition] = useState(ZERO);
   const [oldPosition, setOldPosition] = useState(ZERO);
   const [isMouseDown, setMouseDown] = useState(false);
+  const [cursor, setCursor] = useState("default");
 
   const render = useCallback(() => {
     const canvas = canvasRef.current;
@@ -207,6 +208,33 @@ export const MechanicalCanvas: React.FC<MechanicalCanvasProps> = ({
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, [render]);
+
+  useEffect(() => {
+    setCursor(
+      [
+        "DimensionStart",
+        "DimensionNode",
+        "DimensionEdge",
+        "DimensionNodeToNode",
+        "DimensionEdgeToNode",
+        "DimensionAngle",
+        "DimensionRadius",
+        "HorizontalVerticalConstraintStart",
+        "HorizontalVerticalConstraintNode",
+        "NormalConstraintStart",
+        "NormalConstraintEdge",
+        "ParallelConstraintStart",
+        "ParallelConstraintEdge",
+        "EqualConstraintStart",
+        "EqualConstraintEdge",
+        "EqualConstraintGear",
+        "GearRatioConstraintStart",
+        "GearRatioConstraintGear",
+      ].includes(canvasState.type)
+        ? "crosshair"
+        : "default",
+    );
+  }, [canvasState]);
 
   const onMouseUpHandler = (event: React.MouseEvent<HTMLCanvasElement>) => {
     setMouseDown(false);
@@ -405,6 +433,7 @@ export const MechanicalCanvas: React.FC<MechanicalCanvasProps> = ({
           width: "100%",
           height: "100%",
           backgroundColor: COLORS.BACKGROUND,
+          cursor,
         }}
         onMouseUp={onMouseUpHandler}
         onMouseDown={onMouseDownHandler}

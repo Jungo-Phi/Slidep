@@ -1,7 +1,3 @@
-/**
- * ElementPalette component
- * Displays available mechanical elements for state selection
- */
 import React, { useEffect, useState } from "react";
 import {
   Box,
@@ -421,7 +417,6 @@ export const ElementPalette: React.FC<ElementPaletteProps> = ({
               gridTemplateColumns: `repeat(${columns}, ${SIZE + 2 * PADDING}px)`,
               gap: 2,
               justifyItems: "center",
-              width: "100%",
             }}
           >
             {group.elements.map((element) => (

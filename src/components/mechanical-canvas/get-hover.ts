@@ -250,7 +250,13 @@ export function get_hovered_part_of_element(
         case "EqualConstraintStart":
         case "EqualConstraintGear":
           // Only gear teehts
-          if (node.type !== "gear") break;
+          if (
+            node.type !== "gear" ||
+            ((state.type === "GearRatioConstraintGear" ||
+              state.type === "EqualConstraintGear") &&
+              state.startGearID === node.id)
+          )
+            break;
           if (
             distance <= node.radius + HIT_TOLERANCE.NODE / 2 &&
             distance > node.radius - HIT_TOLERANCE.NODE / 2
@@ -273,9 +279,6 @@ export function get_hovered_part_of_element(
         case "SelectedMultiple":
         case "SelectedElement":
         case "Erasing":
-        case "DimensionStart":
-        case "DimensionNode":
-        case "DimensionEdge":
         case "EditingConstraint":
           // body & ends
           if (mousePos.distance_to(edge.positionStart) <= HIT_TOLERANCE.NODE) {
@@ -377,6 +380,9 @@ export function get_hovered_part_of_element(
         case "ParallelConstraintEdge":
         case "EqualConstraintStart":
         case "EqualConstraintEdge":
+        case "DimensionStart":
+        case "DimensionNode":
+        case "DimensionEdge":
           if (
             mousePos.distance_to_segment(
               edge.positionStart,
@@ -672,7 +678,7 @@ export function get_hovered_part(
       !constraints_visible
     )
       continue;
-    const one_type_elements = elements.filter((e) => e.type === type);
+    const one_type_elements = elements.filter((e) => e.type === type).reverse();
     for (const element of one_type_elements) {
       if (excluded_elements.includes(element.id)) continue;
       const hoveredPart = get_hovered_part_of_element(

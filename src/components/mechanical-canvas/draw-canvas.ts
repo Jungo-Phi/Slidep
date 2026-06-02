@@ -1,6 +1,7 @@
 import {
   COLORS,
   DIM,
+  DIMENSION_SPECS,
   DRAWING_ORDER,
   INTERACTION_SPECS,
   STROKE_WIDTHS,
@@ -85,6 +86,9 @@ export function drawMechanicalCanvas(
   ctx.shadowBlur = 0;
   ctx.globalAlpha = 1;
   ctx.strokeStyle = COLORS.STROKE;
+  ctx.fillStyle = COLORS.FILL_BODY;
+  ctx.textAlign = DIMENSION_SPECS.TEXT_ALIGN;
+  ctx.textBaseline = DIMENSION_SPECS.TEXT_BASELINE;
   for (const element of allElements.filter(
     (element) => element.type === "join",
   )) {
@@ -121,6 +125,7 @@ export function drawMechanicalCanvas(
           state.elementIDs.includes(element.id)) ||
         (state.type === "MovingSelectionMultiple" &&
           state.elementIDs.includes(element.id)) ||
+        (state.type === "MovingConstraint" && state.elementID === element.id) ||
         (state.type === "EqualConstraintGear" &&
           state.startGearID === element.id) ||
         (state.type === "EqualConstraintEdge" &&
@@ -218,7 +223,7 @@ export function drawMechanicalCanvas(
         // Add blue halo and blue stroke if element is selected/moving
         ctx.shadowColor = COLORS.SELECTION_STROKE;
         ctx.strokeStyle = COLORS.SELECTION_STROKE;
-        ctx.fillStyle = COLORS.FILL_NODE;
+        ctx.fillStyle = COLORS.SELECTION_FILL;
         ctx.shadowBlur = INTERACTION_SPECS.SELECTION_HALO_SIZE;
       }
       if (isEraseHovered) {
@@ -721,11 +726,14 @@ export function drawMechanicalCanvas(
         );
       } else {
         draw_dimention(ctx, nodeD.position, hoveredPart.position);
+        ctx.save();
+        const mid = nodeD.position.lerp(hoveredPart.position, 0.5);
+        ctx.translate(mid.x, mid.y);
         draw_dimention_text(
           ctx,
-          nodeD.position.lerp(hoveredPart.position, 0.5),
           nodeD.position.distance_to(hoveredPart.position),
         );
+        ctx.restore();
       }
 
       break;

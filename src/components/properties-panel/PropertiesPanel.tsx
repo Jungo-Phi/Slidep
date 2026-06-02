@@ -75,8 +75,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
         );
       if (mechanicalElement) {
         title += " de l'élément";
-      }
-      if (
+      } else if (
         mechanism.constraintElements.find(
           (el) => el.id === canvasState.elementID,
         )

@@ -38,7 +38,7 @@
 - Connecter les "fixedGears"
 - (Click dans le vide quand state==placingConstraint -> state=Selecting ?)
 - Click dans Dimension quand state==placingStartDimension -> Editing
-- Changer le mouseIcon quand PlacingConstraint (cross?)
+- ~Changer le mouseIcon quand PlacingConstraint (cross?)~
 - (Ajouter InputBox lors du placement des beams ?)
 - Placing beam series / only one if hold down when placing (like in OnShape)
 - "Undo" connection (Join) ne s'est pas appliqué en bidirectionnel !
@@ -91,7 +91,7 @@
 - ~Reskin de conection container~
 - ~Rendre les connections drag & drop plus propres~
 - ~Hover Delete button / Element name~
-- Hover en couleur ?
-- Limiter la longueur des edges au placement et déplacement
+- ~Hover en couleur ?~
+- ~Limiter la longueur des edges au placement et déplacement~
 - Rejeter la position des dimensions des éléments pour la lisibilité
 - Déplacer les dimentions avec les élements associés
