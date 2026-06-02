@@ -36,16 +36,16 @@
 - ~Afficher en "Selected" l'élément premier de "startPlacingX"~
 - Régler de bordel de "connect-actions"
 - Connecter les "fixedGears"
-- Click dans le vide quand state==placingConstraint -> state=Selecting ?
+- (Click dans le vide quand state==placingConstraint -> state=Selecting ?)
 - Click dans Dimension quand state==placingStartDimension -> Editing
 - Changer le mouseIcon quand PlacingConstraint (cross?)
-- Ajouter InputBox lors du placement des beams
-- Placing beam series / only one if hold down when placing (like in OnShape) ?
+- (Ajouter InputBox lors du placement des beams ?)
+- Placing beam series / only one if hold down when placing (like in OnShape)
 - "Undo" connection (Join) ne s'est pas appliqué en bidirectionnel !
 - ~Delete (eraser) ne fonctionne pas avec les contraintes~
 - ~Refaire icon joint~
 - Dimension edge to node bug
-- group deletion should hilight constraints of hovered elements
+- ~group deletion should hilight constraints of hovered elements~
 - ~Hover delete dans le controle panel applique le meme style que eraser~
 - geometric-solver : distanceConstraint est en conflit avec AtEdgeRatio vraisemblablement
 - ~Hilight corresponding elements when hovering constraint~
@@ -55,7 +55,7 @@
 - Change edge length ne fonctionne pas + devrais changer la contrainte associées s'il y en a une
 - ~Hover dimension~
 - Connecter une courroie à un engrenage avec une extrémité (en plus de la longueur)
-- hover des boutons dans le property pannel
+- hover des inputs dans le property pannel
 - hover : ignorer contraintes when placing mechanical elements or movingEdge
 - ~Min Gear radius placing~
 - ~slider angle placing~

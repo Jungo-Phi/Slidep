@@ -2,7 +2,13 @@
  * Fonctions de dessin pour les éléments mécaniques
  */
 
-import { COLORS, STROKE_WIDTHS, DIM } from "../../constants/rendering-specs";
+import {
+  COLORS,
+  STROKE_WIDTHS,
+  DIM,
+  SELECTION_FILTER,
+  INTERACTION_SPECS,
+} from "../../constants/rendering-specs";
 import { Point2 as Point2 } from "../../types/point2";
 import { get_element_icon } from "../element-palette/elementIcon";
 import { UnionElement } from "../../types";
@@ -13,24 +19,19 @@ const TAU = 2 * Math.PI;
 // Cache pour les images d'icônes préchargées
 const iconImageCache = new Map<string, HTMLImageElement>();
 
-/**
- * Dessine une icône d'élément sur le canvas à la position actuelle (après translation)
- */
 export function draw_element_icon(
   ctx: CanvasRenderingContext2D,
   element: UnionElement,
 ) {
-  //ctx.strokeStyle = ctx.lineWidth === 2 ? "grey" : COLORS.STROKE;
-  ctx.fillStyle = COLORS.BACKGROUND;
+  const side = DIM.ICON_SIZE;
+  const isSelected = ctx.shadowBlur !== 0;
+  if (ctx.lineWidth === 2 && ctx.shadowBlur === 0) ctx.strokeStyle = "grey";
+  ctx.fillStyle = COLORS.BACKGROUND + COLORS.ICON_TRANSPARENCY;
   ctx.beginPath();
-  ctx.roundRect(
-    -DIM.ICON_SIZE / 2,
-    -DIM.ICON_SIZE / 2,
-    DIM.ICON_SIZE,
-    DIM.ICON_SIZE,
-    4,
-  );
+  ctx.roundRect(-side / 2 - 1, -side / 2 - 1, side + 2, side + 2, 4);
   ctx.stroke();
+  ctx.shadowColor = COLORS.BACKGROUND;
+  ctx.shadowBlur = INTERACTION_SPECS.ICON_HALO_SIZE;
   ctx.fill();
   const iconUrl = get_element_icon(element.type);
   let img = iconImageCache.get(iconUrl);
@@ -40,13 +41,8 @@ export function draw_element_icon(
     iconImageCache.set(iconUrl, img);
   }
   if (!img.complete) return;
-  ctx.drawImage(
-    img,
-    -DIM.ICON_SIZE / 2,
-    -DIM.ICON_SIZE / 2,
-    DIM.ICON_SIZE,
-    DIM.ICON_SIZE,
-  );
+  if (isSelected) ctx.filter = SELECTION_FILTER;
+  ctx.drawImage(img, -side / 2, -side / 2, side, side);
 }
 
 export function draw_grid(
@@ -104,9 +100,7 @@ export function draw_grid(
 
   ctx.restore();
 }
-/**
- * Dessine le symbole de masse (ground)
- */
+
 export function draw_ground(ctx: CanvasRenderingContext2D) {
   const widthChange = ctx.lineWidth - STROKE_WIDTHS.STANDARD;
   ctx.save();
@@ -139,17 +133,18 @@ export function draw_ground(ctx: CanvasRenderingContext2D) {
   ctx.restore();
 }
 
-/** Dessine un carré pour les Edges à l'état "PlacingStart" */
+/** Dessine un carré pour les Edges à l'état "PlacingStartX" */
 export function draw_start_edge_end(ctx: CanvasRenderingContext2D) {
   const sideL = DIM.BEAM_WIDTH + STROKE_WIDTHS.STANDARD;
   const sideS = DIM.BEAM_WIDTH - STROKE_WIDTHS.STANDARD;
   ctx.fillStyle = COLORS.STROKE;
   ctx.fillRect(-sideL / 2, -sideL / 2, sideL, sideL);
-  ctx.fillStyle = COLORS.FILL_BODY;
+
   ctx.fillRect(-sideS / 2, -sideS / 2, sideS, sideS);
 }
 
 export function draw_belt_end(ctx: CanvasRenderingContext2D) {
+  ctx.fillStyle = ctx.strokeStyle;
   ctx.beginPath();
   ctx.arc(0, 0, DIM.END_RADIUS, 0, TAU);
   ctx.fill();
@@ -175,7 +170,6 @@ export function draw_pivot(ctx: CanvasRenderingContext2D, filled: boolean) {
     ctx.fill();
   }
 
-  ctx.shadowBlur = 0;
   ctx.beginPath();
   ctx.arc(0, 0, DIM.PIVOT_OUTER_RADIUS, 0, TAU);
   ctx.stroke();
@@ -201,7 +195,6 @@ export function draw_slider(ctx: CanvasRenderingContext2D) {
   );
   ctx.fillStyle = COLORS.FILL_NODE;
   ctx.fill("evenodd");
-  ctx.shadowBlur = 0;
   ctx.stroke();
 }
 
@@ -223,7 +216,6 @@ export function draw_slidep(ctx: CanvasRenderingContext2D, filled: boolean) {
   );
   ctx.fillStyle = COLORS.FILL_NODE;
   ctx.fill("evenodd");
-  ctx.shadowBlur = 0;
   ctx.beginPath();
   ctx.roundRect(
     -DIM.SLIDEP_OUTER_WIDTH / 2,
@@ -247,7 +239,6 @@ export function draw_slidep(ctx: CanvasRenderingContext2D, filled: boolean) {
     ctx.fill();
   }
 
-  ctx.shadowBlur = 0;
   ctx.beginPath();
   ctx.arc(0, 0, DIM.PIVOT_OUTER_RADIUS, 0, TAU);
   ctx.stroke();
@@ -266,24 +257,18 @@ export function draw_join_bottom(ctx: CanvasRenderingContext2D) {
 export function draw_join_top(ctx: CanvasRenderingContext2D) {
   ctx.beginPath();
   ctx.arc(0, 0, DIM.JOIN_RADIUS - ctx.lineWidth / 2 - 0.5, 0, TAU);
-  ctx.fillStyle = COLORS.FILL_BODY;
+
   ctx.fill();
 }
 
-/**
- * Dessine une jonction (join)
- */
 export function draw_join(ctx: CanvasRenderingContext2D) {
   ctx.beginPath();
   ctx.arc(0, 0, DIM.JOIN_RADIUS, 0, TAU);
-  ctx.fillStyle = COLORS.FILL_BODY;
+
   ctx.fill();
   ctx.stroke();
 }
 
-/**
- * Dessine une masse (mass)
- */
 export function draw_mass(ctx: CanvasRenderingContext2D) {
   ctx.beginPath();
   ctx.roundRect(
@@ -293,46 +278,33 @@ export function draw_mass(ctx: CanvasRenderingContext2D) {
     DIM.MASS_SIZE,
     DIM.SLIDER_RADIUS,
   );
-  ctx.fillStyle = COLORS.FILL_BODY;
   ctx.fill();
-  ctx.shadowBlur = 0;
   ctx.stroke();
 
-  // Dessine un M
-  ctx.fillStyle = COLORS.STROKE;
+  ctx.fillStyle = ctx.strokeStyle;
   ctx.font = "12px Verdana";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillText("M", 0, 0);
 }
 
-/** Dessine une poutre (beam) */
 export function draw_beam(
   ctx: CanvasRenderingContext2D,
   length: number,
   isStartJoin: boolean = false,
   isEndJoin: boolean = false,
 ) {
-  const sideL = DIM.BEAM_WIDTH - STROKE_WIDTHS.STANDARD + ctx.lineWidth;
+  const sL = DIM.BEAM_WIDTH - STROKE_WIDTHS.STANDARD + ctx.lineWidth;
   const sideS = DIM.BEAM_WIDTH - STROKE_WIDTHS.STANDARD - ctx.lineWidth;
-  const startJoin = isStartJoin
-    ? DIM.JOIN_RADIUS + STROKE_WIDTHS.STANDARD + 1
-    : 0;
-  const endJoin = isEndJoin ? DIM.JOIN_RADIUS + STROKE_WIDTHS.STANDARD + 1 : 0;
+  const startJ = isStartJoin ? DIM.JOIN_RADIUS + STROKE_WIDTHS.STANDARD + 1 : 0;
+  const endJ = isEndJoin ? DIM.JOIN_RADIUS + STROKE_WIDTHS.STANDARD + 1 : 0;
+  const oldFillStyle = ctx.fillStyle;
   ctx.fillStyle = ctx.strokeStyle;
-  ctx.fillRect(
-    -sideL / 2 + startJoin,
-    -sideL / 2,
-    length + sideL - endJoin - startJoin,
-    sideL,
-  );
-  ctx.fillStyle = COLORS.FILL_BODY;
+  ctx.fillRect(-sL / 2 + startJ, -sL / 2, length + sL - endJ - startJ, sL);
+  ctx.fillStyle = oldFillStyle;
   ctx.fillRect(-sideS / 2, -sideS / 2, length + sideS, sideS);
 }
 
-/**
- * Dessine un ressort (spring)
- */
 export function draw_spring(
   ctx: CanvasRenderingContext2D,
   length: number,
@@ -355,19 +327,21 @@ export function draw_spring(
     );
   };
 
-  const stokeColor = ctx.strokeStyle;
+  const oldStrokeStyle = ctx.strokeStyle;
+  const oldFillStyle = ctx.fillStyle;
   const widthChange = ctx.lineWidth - STROKE_WIDTHS.STANDARD;
 
   // Spires en arrière-plan
   ctx.lineCap = "round";
   ctx.lineWidth = STROKE_WIDTHS.SPIRE + widthChange;
-  ctx.strokeStyle = COLORS.SELECTION_STROKE;
+  ctx.filter = `saturate(0.5) brightness(${ctx.fillStyle !== COLORS.FILL_BODY ? 1 : 3})`;
   for (let i = 1; i <= coilNb - 1; i++) {
     ctx.beginPath();
     ctx.moveTo(deca(i, 0.25), DIM.SPRING_COIL_RADIUS);
     ctx.lineTo(deca(i, 0.75), -DIM.SPRING_COIL_RADIUS);
     ctx.stroke();
   }
+  ctx.filter = "none";
 
   // Barre de fond
   ctx.lineCap = "square";
@@ -375,35 +349,35 @@ export function draw_spring(
   ctx.moveTo(DIM.TAC, 0);
   ctx.lineTo(length - DIM.TAC, 0);
   ctx.lineWidth = DIM.SPRING_INNER_WIDTH + widthChange;
-  ctx.strokeStyle = stokeColor;
+  ctx.strokeStyle = oldStrokeStyle;
   ctx.stroke();
-  ctx.strokeStyle = COLORS.FILL_BODY;
+  ctx.strokeStyle = oldFillStyle;
   ctx.lineWidth =
     DIM.SPRING_INNER_WIDTH - 2 * STROKE_WIDTHS.STANDARD - widthChange;
   ctx.stroke();
-  ctx.strokeStyle = stokeColor;
+  ctx.strokeStyle = oldStrokeStyle;
   // Start
   ctx.beginPath();
   ctx.moveTo(0, 0);
   ctx.lineTo(DIM.TAC - DIM.BEAM_WIDTH / 2, 0);
   ctx.lineWidth = DIM.BEAM_WIDTH + widthChange;
-  ctx.strokeStyle = stokeColor;
+  ctx.strokeStyle = oldStrokeStyle;
   ctx.stroke();
-  ctx.strokeStyle = COLORS.FILL_BODY;
+  ctx.strokeStyle = oldFillStyle;
   ctx.lineWidth = DIM.BEAM_WIDTH - 2 * STROKE_WIDTHS.STANDARD - widthChange;
   ctx.stroke();
-  ctx.strokeStyle = stokeColor;
+  ctx.strokeStyle = oldStrokeStyle;
   // End
   ctx.beginPath();
   ctx.moveTo(length - DIM.TAC + DIM.BEAM_WIDTH / 2, 0);
   ctx.lineTo(length, 0);
   ctx.lineWidth = DIM.BEAM_WIDTH + widthChange;
-  ctx.strokeStyle = stokeColor;
+  ctx.strokeStyle = oldStrokeStyle;
   ctx.stroke();
-  ctx.strokeStyle = COLORS.FILL_BODY;
+  ctx.strokeStyle = oldFillStyle;
   ctx.lineWidth = DIM.BEAM_WIDTH - 2 * STROKE_WIDTHS.STANDARD - widthChange;
   ctx.stroke();
-  ctx.strokeStyle = stokeColor;
+  ctx.strokeStyle = oldStrokeStyle;
 
   // Spires en premier-plan
   ctx.lineCap = "round";
@@ -416,9 +390,6 @@ export function draw_spring(
   }
 }
 
-/**
- * Dessine un amortisseur (damper)
- */
 export function draw_damper(
   ctx: CanvasRenderingContext2D,
   length: number,
@@ -435,7 +406,7 @@ export function draw_damper(
       ((length - 2 * DIM.TAC) / 4) *
       (1 + 3 * Math.exp(-Math.pow(length / restLength / 2, 2)));
   }
-  const stokeColor = ctx.strokeStyle;
+  const oldStrokeStyle = ctx.strokeStyle;
   const widthChange = ctx.lineWidth - STROKE_WIDTHS.STANDARD;
 
   // End
@@ -444,12 +415,12 @@ export function draw_damper(
   ctx.moveTo(length - DIM.TAC + DIM.BEAM_WIDTH / 2 - 1, 0);
   ctx.lineTo(length, 0);
   ctx.lineWidth = DIM.BEAM_WIDTH + widthChange;
-  ctx.strokeStyle = stokeColor;
+  ctx.strokeStyle = oldStrokeStyle;
   ctx.stroke();
-  ctx.strokeStyle = COLORS.FILL_BODY;
+  ctx.strokeStyle = ctx.fillStyle;
   ctx.lineWidth = DIM.BEAM_WIDTH - 2 * STROKE_WIDTHS.STANDARD - widthChange;
   ctx.stroke();
-  ctx.strokeStyle = stokeColor;
+  ctx.strokeStyle = oldStrokeStyle;
 
   // Cylinder body
   ctx.beginPath();
@@ -467,24 +438,24 @@ export function draw_damper(
   ctx.moveTo(DIM.TAC, 0);
   ctx.lineTo(piston_x + DIM.TAC / 2, 0);
   ctx.lineWidth = DIM.DAMPER_INNER_WIDTH + widthChange;
-  ctx.strokeStyle = stokeColor;
+  ctx.strokeStyle = oldStrokeStyle;
   ctx.stroke();
-  ctx.strokeStyle = COLORS.FILL_BODY;
+  ctx.strokeStyle = ctx.fillStyle;
   ctx.lineWidth =
     DIM.DAMPER_INNER_WIDTH - 2 * STROKE_WIDTHS.STANDARD - widthChange;
   ctx.stroke();
-  ctx.strokeStyle = stokeColor;
+  ctx.strokeStyle = oldStrokeStyle;
   // Start
   ctx.beginPath();
   ctx.moveTo(0, 0);
   ctx.lineTo(DIM.TAC - DIM.BEAM_WIDTH / 2 + 1, 0);
   ctx.lineWidth = DIM.BEAM_WIDTH + widthChange;
-  ctx.strokeStyle = stokeColor;
+  ctx.strokeStyle = oldStrokeStyle;
   ctx.stroke();
-  ctx.strokeStyle = COLORS.FILL_BODY;
+  ctx.strokeStyle = ctx.fillStyle;
   ctx.lineWidth = DIM.BEAM_WIDTH - 2 * STROKE_WIDTHS.STANDARD - widthChange;
   ctx.stroke();
-  ctx.strokeStyle = stokeColor;
+  ctx.strokeStyle = oldStrokeStyle;
 
   // Valve
   ctx.beginPath();
@@ -494,7 +465,6 @@ export function draw_damper(
     DIM.DAMPER_PISTON_WIDTH,
     DIM.DAMPER_CYLINDER_DIAMETER - 6,
   );
-  ctx.fillStyle = COLORS.FILL_BODY;
   ctx.lineWidth = STROKE_WIDTHS.STANDARD + widthChange;
   ctx.fill();
   ctx.stroke();
@@ -519,7 +489,7 @@ export function draw_gear(ctx: CanvasRenderingContext2D, radius: number) {
     ctx.moveTo(Math.cos(angle) * r1, Math.sin(angle) * r1);
     ctx.arc(Math.cos(angle) * r1, Math.sin(angle) * r1, r2, 0, TAU);
   }
-  ctx.fillStyle = COLORS.FILL_BODY + COLORS.HALF_TRANSPARENCY;
+  ctx.fillStyle += COLORS.HALF_TRANSPARENCY;
   ctx.fill("evenodd");
 
   ctx.beginPath();
@@ -637,11 +607,11 @@ export function draw_dimention_text(
   ctx.textBaseline = "middle";
   const metrics = ctx.measureText(text);
 
-  const lastShadowBlur = ctx.shadowBlur;
-  const lastShadowColor = ctx.shadowColor;
-  ctx.shadowBlur = 5;
+  let lastShadowBlur = ctx.shadowBlur;
+  let lastShadowColor = ctx.shadowColor;
+  ctx.shadowBlur = INTERACTION_SPECS.ICON_HALO_SIZE;
   ctx.shadowColor = COLORS.BACKGROUND;
-  ctx.fillStyle = COLORS.BACKGROUND;
+  ctx.fillStyle = COLORS.BACKGROUND + COLORS.ICON_TRANSPARENCY;
   ctx.beginPath();
   ctx.roundRect(
     position.x - metrics.width / 2 - 8 / 2,
@@ -651,12 +621,17 @@ export function draw_dimention_text(
     5,
   );
   ctx.fill();
-  ctx.shadowBlur = ctx.lineWidth > 2 ? 2 : lastShadowBlur;
-  ctx.shadowColor = ctx.lineWidth > 2 ? COLORS.STROKE : lastShadowColor;
-  ctx.fillStyle = ctx.strokeStyle;
-  ctx.fillText(text, position.x, position.y);
+
   ctx.shadowBlur = lastShadowBlur;
   ctx.shadowColor = lastShadowColor;
+  ctx.fillStyle = ctx.strokeStyle;
+  ctx.fillText(text, position.x, position.y);
+
+  if (ctx.lineWidth > 2) {
+    ctx.shadowBlur = 2;
+    ctx.shadowColor = ctx.strokeStyle as string;
+    ctx.fillText(text, position.x, position.y);
+  }
 }
 
 export function draw_dimention_parallel(
@@ -842,6 +817,10 @@ export function draw_gear_ratio(ctx: CanvasRenderingContext2D, value: number) {
   ctx.textBaseline = "middle";
   let text = valueToRatioParts(value).join(" : ");
   const metrics = ctx.measureText(text);
+
+  let lastShadowBlur = ctx.shadowBlur;
+  let lastShadowColor = ctx.shadowColor;
+  ctx.shadowBlur = INTERACTION_SPECS.ICON_HALO_SIZE;
   ctx.fillStyle = COLORS.BACKGROUND + COLORS.ICON_TRANSPARENCY;
   ctx.beginPath();
   ctx.roundRect(
@@ -852,7 +831,17 @@ export function draw_gear_ratio(ctx: CanvasRenderingContext2D, value: number) {
     28 / 2,
   );
   ctx.stroke();
+  ctx.shadowColor = COLORS.BACKGROUND;
   ctx.fill();
+
+  ctx.shadowBlur = lastShadowBlur;
+  ctx.shadowColor = lastShadowColor;
   ctx.fillStyle = ctx.strokeStyle;
   ctx.fillText(text, 0, 0);
+
+  if (ctx.lineWidth > 2) {
+    ctx.shadowBlur = 2;
+    ctx.shadowColor = ctx.strokeStyle as string;
+    ctx.fillText(text, 0, 0);
+  }
 }

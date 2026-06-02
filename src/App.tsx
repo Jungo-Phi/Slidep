@@ -300,7 +300,8 @@ const App: React.FC = () => {
             newAction.element.type !== "vertical-align-nodes" &&
             newAction.element.type !== "normal" &&
             newAction.element.type !== "parallel" &&
-            newAction.element.type !== "equal")
+            newAction.element.type !== "equal" &&
+            newAction.element.type !== "gear-ratio")
         )
           break;
         oldNodes = get_nodes(mechanism.mechanicalElements);

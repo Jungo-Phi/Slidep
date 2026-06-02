@@ -36,7 +36,11 @@ export const GroundSwitch: React.FC<GroundSwitchProps> = ({
         sx={{ border: 1, borderColor: "#00000020" }}
         title={grounded ? "Libérer" : "Ancrer"}
       >
-        <Box component="img" src={grounded ? groundIconUrl : ungroundIconUrl} />
+        <Box
+          component="img"
+          style={{ width: 28, height: 28 }}
+          src={grounded ? groundIconUrl : ungroundIconUrl}
+        />
       </IconButton>
       <Typography variant="body2">{grounded ? "Ancré" : "Libre"}</Typography>
     </Box>

@@ -152,6 +152,7 @@ const components: ThemeOptions["components"] = {
     styleOverrides: {
       root: {
         borderRadius: 8,
+        // ":hover": { backgroundColor: "#00000025" },
       },
     },
   },

@@ -12,23 +12,24 @@ export const COLORS = {
 
   // Element colors
   STROKE: "#001D59", // Bleu foncé
-  FILL_BODY: "#B7E2FF", // Bleu Ciel
-  FILL_NODE: "#FFBE80", // Orange doux
+  FILL_BODY: "#b7e2ff", // Bleu Ciel
+  FILL_NODE: "#ffbe80", // Orange doux
   ORANGE: "#d7530b", // Orange foncé
   ORANGE_STROKE: "#9c4211", // Orange foncé
 
   // Interaction colors
-  SELECTION_STROKE: "#4a65a1", // Bleu gris foncé
-  SELECTION_HALO: "#6595d0", // Bleu
+  SELECTION_STROKE: "#d7530b", // "#6595d0" Bleu gris foncé
   SELECTION_BOX: "#7190e5", // Bleu gris clair
   DELETION_STROKE: "#a4315d", // Rouge
   DELETION_BOX: "#ed5e71", // Rouge
 
   // Transparency
-  ICON_TRANSPARENCY: "D0", // 80% opacity
+  ICON_TRANSPARENCY: "C8", // 75% opacity
   HALF_TRANSPARENCY: "80", // 50% opacity
   HOVER: "#00000020", //§ 12.5% opacity
 } as const;
+
+export const SELECTION_FILTER = "saturate(6) hue-rotate(177deg) brightness(2)";
 
 export const STROKE_WIDTHS = {
   STANDARD: 2,
@@ -48,7 +49,8 @@ export const HIT_TOLERANCE = {
 } as const;
 
 export const INTERACTION_SPECS = {
-  HALO_SIZE: 10,
+  SELECTION_HALO_SIZE: 10,
+  ICON_HALO_SIZE: 5,
   DELETION_OPACITY: 0.3,
   GHOST_PREVIEW_OPACITY: 0.6,
   GEAR_ON_BELT_GROW: 15,

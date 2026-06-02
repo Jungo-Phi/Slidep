@@ -56,6 +56,7 @@ export const MechanicalCanvas: React.FC<MechanicalCanvasProps> = ({
 
   const [mousePosition, setmousePosition] = useState(ZERO);
   const [oldPosition, setOldPosition] = useState(ZERO);
+  const [isMouseDown, setMouseDown] = useState(false);
 
   const render = useCallback(() => {
     const canvas = canvasRef.current;
@@ -208,7 +209,7 @@ export const MechanicalCanvas: React.FC<MechanicalCanvasProps> = ({
   }, [render]);
 
   const onMouseUpHandler = (event: React.MouseEvent<HTMLCanvasElement>) => {
-    // event.preventDefault();
+    setMouseDown(false);
     setmousePosition(
       new Point2(event.clientX, event.clientY).sub(canvasOffsetRef.current),
     );
@@ -219,8 +220,7 @@ export const MechanicalCanvas: React.FC<MechanicalCanvasProps> = ({
     }
   };
   const onMouseDownHandler = (event: React.MouseEvent<HTMLCanvasElement>) => {
-    // Met le focus sur le canvas pour que les événements clavier fonctionnent
-    event.currentTarget.focus();
+    setMouseDown(true);
     setmousePosition(
       new Point2(event.clientX, event.clientY).sub(canvasOffsetRef.current),
     );
@@ -265,7 +265,14 @@ export const MechanicalCanvas: React.FC<MechanicalCanvasProps> = ({
     document.addEventListener("keydown", handleGlobalKeyDown);
     return () => document.removeEventListener("keydown", handleGlobalKeyDown);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canvasState, mechanism, hoveredPart, mousePosition, oldPosition]);
+  }, [
+    canvasState,
+    mechanism,
+    hoveredPart,
+    mousePosition,
+    oldPosition,
+    isMouseDown,
+  ]);
 
   function handleEvent(event: CanvasEvent) {
     let excluded_elements: ID[] = [];
@@ -287,7 +294,7 @@ export const MechanicalCanvas: React.FC<MechanicalCanvasProps> = ({
     }
     if (canvasState.type === "MovingConstraint") {
       const constraint = get_constraint_element_from_id(
-        canvasState.constraintID,
+        canvasState.elementID,
         mechanism.constraintElements,
       );
       excluded_elements.push(constraint.id);
@@ -366,6 +373,7 @@ export const MechanicalCanvas: React.FC<MechanicalCanvasProps> = ({
       setCanvasState,
       newHoveredPart,
       oldPosition,
+      isMouseDown,
       event,
       mechanism.mechanicalElements,
       mechanism.constraintElements,
@@ -469,7 +477,6 @@ export const MechanicalCanvas: React.FC<MechanicalCanvasProps> = ({
               setCanvasState({
                 type: "SelectedElement",
                 elementID: constraint.id,
-                isMouseDown: false,
               });
             }
           }}
@@ -489,7 +496,6 @@ export const MechanicalCanvas: React.FC<MechanicalCanvasProps> = ({
               setCanvasState({
                 type: "SelectedElement",
                 elementID: constraint.id,
-                isMouseDown: false,
               });
             }
           }}

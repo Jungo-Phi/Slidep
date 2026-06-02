@@ -22,7 +22,6 @@ import { HoveredPart } from "../../types/hovered-part";
 import { CanvasState } from "../../types/canvas-state";
 import { ProjectInfoSection } from "./ProjectInfoSection";
 import ElementProperties from "./ElementProperties";
-import { COLORS } from "../../constants/rendering-specs";
 import ConstraintsPanel from "./ConstraintsPanel";
 
 interface PropertiesPanelProps {
@@ -67,6 +66,30 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
     });
   };
 
+  let title = "Propriétés";
+  if (!closed) {
+    if ("elementID" in canvasState) {
+      const mechanicalElement: MechanicalElement | undefined =
+        mechanism.mechanicalElements.find(
+          (el) => el.id === canvasState.elementID,
+        );
+      if (mechanicalElement) {
+        title += " de l'élément";
+      }
+      if (
+        mechanism.constraintElements.find(
+          (el) => el.id === canvasState.elementID,
+        )
+      ) {
+        title = " Contraintes";
+      } else {
+        title = "Erreur";
+      }
+    } else {
+      title += " générales";
+    }
+  }
+
   return (
     <Paper
       sx={{
@@ -78,7 +101,6 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
         display: "flex",
         flexDirection: "column",
         zIndex: 1000,
-        backgroundColor: COLORS.BACKGROUND,
         overflow: "hidden",
         borderRadius: 1,
         boxShadow: 3,
@@ -101,7 +123,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
         title={closed ? "Ouvrir le panneau" : "Réduire le panneau"}
       >
         <Typography variant="subtitle1" fontWeight={500}>
-          Propriétés
+          {title}
         </Typography>
         {closed ? (
           <ExpandIcon fontSize="medium" />
@@ -111,11 +133,10 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
       </Box>
 
       {!closed && (
-        <Box sx={{ p: 2, flexGrow: 1, overflow: "auto" }}>
+        <Box sx={{ p: 2, overflow: "auto" }}>
           {/* Contenu du panneau de propriétés */}
           {"elementID" in canvasState ? (
             <Box>
-              {/* Affichage des propriétés de l'élément sélectionné */}
               <>
                 {(() => {
                   const mechanicalElement: MechanicalElement | undefined =
@@ -154,23 +175,6 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                       {canvasState.elementID.toString().padStart(3, "0")} "
                       introuvable
                     </Typography>
-                  );
-                })()}
-              </>
-            </Box>
-          ) : "constraintID" in canvasState ? (
-            <Box>
-              {/* Affichage des propriétés de l'élément sélectionné */}
-              <>
-                {(() => {
-                  return (
-                    <ConstraintsPanel
-                      constraintID={canvasState.constraintID}
-                      setHoveredPart={setHoveredPart}
-                      setCanvasState={setCanvasState}
-                      updateMechanism={updateMechanism}
-                      mechanism={mechanism}
-                    />
                   );
                 })()}
               </>

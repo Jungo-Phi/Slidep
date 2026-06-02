@@ -63,7 +63,7 @@ export type CanvasState =
       hoveredElementIDs: ID[];
     } // User has started a drag to select multiple elements
   | { type: "SelectedMultiple"; elementIDs: ID[] }
-  | { type: "SelectedElement"; elementID: ID; isMouseDown: boolean }
+  | { type: "SelectedElement"; elementID: ID }
   | { type: "MovingNode"; elementID: ID }
   | { type: "MovingEdgeStartPoint"; elementID: ID } // Moving the start point of an edge
   | { type: "MovingEdgeEndPoint"; elementID: ID } // Moving the end point of an edge
@@ -114,7 +114,7 @@ export type CanvasState =
   | { type: "EqualConstraintGear"; startGearID: ID }
   | { type: "GearRatioConstraintStart" }
   | { type: "GearRatioConstraintGear"; startGearID: ID }
-  | { type: "MovingConstraint"; constraintID: ID }
+  | { type: "MovingConstraint"; elementID: ID }
   | {
       type: "EditingConstraint";
       elementID: ID;

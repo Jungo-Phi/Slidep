@@ -48,7 +48,6 @@ const ElementDisplayComponent: React.FC<ElementDisplayProps> = ({
     setCanvasState({
       type: "SelectedElement",
       elementID: element.id,
-      isMouseDown: false,
     });
   };
 
@@ -56,21 +55,21 @@ const ElementDisplayComponent: React.FC<ElementDisplayProps> = ({
     <IconButton
       sx={{
         borderRadius: 5,
+        padding: size === "small" ? "4px" : size === "medium" ? "6px" : "8px",
         "&:hover": {
           backgroundColor: "#00000025",
         },
       }}
       onClick={handleSelect}
       title="Sélectionner"
-      size={size}
     >
       <Box
         sx={{
           display: "flex",
+          flexDirection: "row",
           alignItems: "center",
-          gap: size === "small" ? 0.25 : size === "medium" ? 0.75 : 1.5,
-          mx: size === "small" ? -0.75 : size === "medium" ? -1 : -1.5,
-          my: size === "small" ? -0.75 : size === "medium" ? -1 : -1.5,
+          gap: size === "small" ? 0 : "6px",
+          m: "-5px",
           borderRadius: 5,
           pl: 0.25,
           pr: 0.75,
@@ -85,13 +84,13 @@ const ElementDisplayComponent: React.FC<ElementDisplayProps> = ({
           src={icon}
           draggable={false}
           sx={{
-            width: size === "small" ? 24 : size === "medium" ? 32 : 40,
-            height: size === "small" ? 24 : size === "medium" ? 32 : 40,
+            width: size === "small" ? 24 : size === "medium" ? 28 : 32,
+            height: size === "small" ? 24 : size === "medium" ? 28 : 32,
           }}
         />
         <Typography
           variant={
-            size === "small" ? "body2" : size === "medium" ? "body1" : "h5"
+            size === "small" ? "caption" : size === "medium" ? "body2" : "body1"
           }
           fontWeight={500}
           color={COLORS.STROKE}

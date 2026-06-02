@@ -47,135 +47,123 @@ export const ConstraintsPanel: React.FC<ConstraintsPanelProps> = ({
   };
 
   return (
-    <Box>
-      <Typography variant="body1" fontWeight={500} marginLeft={1}>
-        Contraintes
-      </Typography>
-
-      <List
-        sx={{
-          display: "flex",
-          alignItems: "center",
-          flexDirection: "column",
-        }}
-      >
-        {mechanism.constraintElements.map((constraint, index) => (
-          <React.Fragment key={index}>
-            <ListItem disablePadding>
-              <Box
-                sx={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  width: "100%",
-                }}
-                border={2}
-                borderColor={
-                  constraint.id === constraintID ? "#00000080" : "#00000025"
-                }
-                borderRadius={5}
-                marginY={"-1px"}
-              >
-                <ElementDisplay
-                  element={constraint}
-                  size="medium"
-                  setHoveredPart={setHoveredPart}
-                  setCanvasState={setCanvasState}
-                  updateMechanism={updateMechanism}
-                ></ElementDisplay>
-
-                {(() => {
-                  switch (constraint.type) {
-                    case "dimension-edge":
-                    case "dimension-node-to-node":
-                    case "dimension-edge-to-node":
-                    case "dimension-angle":
-                    case "dimension-radius":
-                      return (
-                        <NumberInput
-                          value={constraint.value}
-                          onChange={(value: number) =>
-                            updateMechanism(
-                              [
-                                {
-                                  type: "ChangeDimensionEdgeValue",
-                                  id: constraint.id,
-                                  newValue: value,
-                                  oldValue: constraint.value,
-                                },
-                              ],
-                              "ChangeDimension",
-                            )
-                          }
-                          label=""
-                          suffix={
-                            constraint.type === "dimension-angle"
-                              ? "°"
-                              : undefined
-                          }
-                        />
-                      );
-                    case "gear-ratio":
-                      return (
-                        <RatioInput
-                          value={constraint.value}
-                          onChange={(value: number) =>
-                            updateMechanism(
-                              [
-                                {
-                                  type: "ChangeGearRatioValue",
-                                  id: constraint.id,
-                                  newValue: value,
-                                  oldValue: constraint.value,
-                                },
-                              ],
-                              "ChangeDimension",
-                            )
-                          }
-                        />
-                      );
-                  }
-                })()}
-                <IconButton
-                  sx={{
-                    borderRadius: 5,
-                    "&:hover": {
-                      backgroundColor: "#00000025",
-                    },
-                    my: -0.5,
-                  }}
-                  onMouseEnter={() => handleMouseEnter(constraint)}
-                  onMouseLeave={handleMouseLeave}
-                  onClick={() =>
-                    updateMechanism(
-                      [{ type: "DeleteElement", element: constraint }],
-                      "Other",
-                    )
-                  }
-                  title="Supprimer"
-                >
-                  <DeleteIcon sx={{ width: 18, height: 18 }} color="error" />
-                </IconButton>
-              </Box>
-            </ListItem>
-          </React.Fragment>
-        ))}
-        {mechanism.constraintElements.length === 0 && (
-          <Typography
-            variant="caption"
-            color="textDisabled"
+    <List
+      sx={{
+        display: "flex",
+        alignItems: "center",
+        flexDirection: "column",
+      }}
+    >
+      {mechanism.constraintElements.map((constraint, index) => (
+        <React.Fragment key={index}>
+          <ListItem
+            disablePadding
             sx={{
-              fontWeight: "500",
               display: "flex",
+              justifyContent: "space-between",
               alignItems: "center",
-              flexDirection: "column",
+              width: "100%",
+              marginY: "-1px",
             }}
           >
-            Pas de contraintes
-          </Typography>
-        )}
-      </List>
-    </Box>
+            <Box
+              border={2}
+              borderColor={
+                constraint.id === constraintID ? "#00000080" : "#00000025"
+              }
+              borderRadius={5}
+            >
+              <ElementDisplay
+                element={constraint}
+                size="medium"
+                setHoveredPart={setHoveredPart}
+                setCanvasState={setCanvasState}
+                updateMechanism={updateMechanism}
+              ></ElementDisplay>
+            </Box>
+
+            {(() => {
+              switch (constraint.type) {
+                case "dimension-edge":
+                case "dimension-node-to-node":
+                case "dimension-edge-to-node":
+                case "dimension-angle":
+                case "dimension-radius":
+                  return (
+                    <NumberInput
+                      value={constraint.value}
+                      onChange={(value: number) =>
+                        updateMechanism(
+                          [
+                            {
+                              type: "ChangeDimensionEdgeValue",
+                              id: constraint.id,
+                              newValue: value,
+                              oldValue: constraint.value,
+                            },
+                          ],
+                          "ChangeDimension",
+                        )
+                      }
+                      label=""
+                      suffix={
+                        constraint.type === "dimension-angle" ? "°" : undefined
+                      }
+                    />
+                  );
+                case "gear-ratio":
+                  return (
+                    <RatioInput
+                      value={constraint.value}
+                      onChange={(value: number) =>
+                        updateMechanism(
+                          [
+                            {
+                              type: "ChangeGearRatioValue",
+                              id: constraint.id,
+                              newValue: value,
+                              oldValue: constraint.value,
+                            },
+                          ],
+                          "ChangeDimension",
+                        )
+                      }
+                    />
+                  );
+              }
+            })()}
+            <IconButton
+              color="error"
+              onMouseEnter={() => handleMouseEnter(constraint)}
+              onMouseLeave={handleMouseLeave}
+              onClick={() =>
+                updateMechanism(
+                  [{ type: "DeleteElement", element: constraint }],
+                  "Other",
+                )
+              }
+              title="Supprimer"
+            >
+              <DeleteIcon sx={{ width: 20, height: 20 }} />
+            </IconButton>
+          </ListItem>
+        </React.Fragment>
+      ))}
+      {mechanism.constraintElements.length === 0 && (
+        <Typography
+          variant="caption"
+          color="textDisabled"
+          sx={{
+            fontWeight: "500",
+            display: "flex",
+            alignItems: "center",
+            flexDirection: "column",
+          }}
+        >
+          Pas de contraintes
+        </Typography>
+      )}
+    </List>
   );
 };
 

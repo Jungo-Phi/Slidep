@@ -38,8 +38,8 @@ export const BeltTensionSwitch: React.FC<BeltTensionSwitchProps> = ({
       >
         <Box
           component="img"
-          src={tightened ? tightBeltIconUrl : looseBeltIconUrl}
           style={{ width: 28, height: 28 }}
+          src={tightened ? tightBeltIconUrl : looseBeltIconUrl}
         />
       </IconButton>
       <Typography variant="body2">{tightened ? "Tendue" : "Libre"}</Typography>

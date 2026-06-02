@@ -49,7 +49,7 @@ import {
   get_gear_angles,
   is_on_left_side_of_belt,
 } from "../../utils/belt-geom";
-import { node_on_beam_body } from "./utils";
+import { connected_constraints, node_on_beam_body } from "./utils";
 
 /*
  * Dessine tous les éléments du canvas.
@@ -136,13 +136,22 @@ export function drawMechanicalCanvas(
       const isEraseHovered =
         (hoveredPart.type !== "Void" &&
           hoveredPart.deleting &&
-          hoveredPart.id === element.id) ||
+          (hoveredPart.id === element.id ||
+            connected_constraints(hoveredPart.id, constraintElements).includes(
+              element.id,
+            ))) ||
         (state.type === "ErasingMultiple" &&
-          state.hoveredElementIDs.includes(element.id));
+          [
+            ...state.hoveredElementIDs,
+            ...state.hoveredElementIDs
+              .map((id) => connected_constraints(id, constraintElements))
+              .flat(),
+          ].includes(element.id));
       const isEdgeEndHovered =
         hoveredPart.type === "Edge" &&
         hoveredPart.part !== "body" &&
         hoveredPart.id === element.id &&
+        !isEraseHovered &&
         ![
           "PlacingPivot",
           "PlacingSlider",
@@ -199,19 +208,18 @@ export function drawMechanicalCanvas(
 
       ctx.shadowBlur = 0;
       ctx.globalAlpha = 1;
+      ctx.filter = "none";
       ctx.strokeStyle = COLORS.STROKE;
-
-      // Make lines thicker if hovered
-      ctx.lineWidth =
-        isHovered && !isEdgeEndHovered
-          ? STROKE_WIDTHS.THICK
-          : STROKE_WIDTHS.STANDARD;
+      ctx.fillStyle = COLORS.FILL_BODY;
+      ctx.lineWidth = STROKE_WIDTHS.STANDARD;
+      if (isHovered && !isEdgeEndHovered) ctx.lineWidth = STROKE_WIDTHS.THICK;
 
       if (isSelected) {
         // Add blue halo and blue stroke if element is selected/moving
-        ctx.shadowColor = COLORS.SELECTION_HALO;
+        ctx.shadowColor = COLORS.SELECTION_STROKE;
         ctx.strokeStyle = COLORS.SELECTION_STROKE;
-        ctx.shadowBlur = INTERACTION_SPECS.HALO_SIZE;
+        ctx.fillStyle = COLORS.FILL_NODE;
+        ctx.shadowBlur = INTERACTION_SPECS.SELECTION_HALO_SIZE;
       }
       if (isEraseHovered) {
         // Add red stroke and make semi-transparent if element is hovered for deletion
@@ -527,7 +535,10 @@ export function drawMechanicalCanvas(
         case "parallel":
         case "equal":
           ctx.save();
-          ctx.translate(element.position.x, element.position.y);
+          ctx.translate(
+            Math.round(element.position.x),
+            Math.round(element.position.y),
+          );
           draw_element_icon(ctx, element);
           ctx.restore();
           break;
@@ -544,9 +555,11 @@ export function drawMechanicalCanvas(
   // Draw  state specific elements
   ctx.save();
   ctx.shadowBlur = 0;
-  ctx.strokeStyle = COLORS.STROKE;
-  ctx.lineWidth = STROKE_WIDTHS.STANDARD;
   ctx.globalAlpha = 1;
+  ctx.filter = "none";
+  ctx.strokeStyle = COLORS.STROKE;
+  ctx.fillStyle = COLORS.FILL_BODY;
+  ctx.lineWidth = STROKE_WIDTHS.STANDARD;
   let delta: Point2;
   switch (state.type) {
     case "Selecting":

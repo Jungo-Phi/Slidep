@@ -94,15 +94,6 @@ const PALETTE_GROUPS: { title: string; elements: PaletteElement[] }[] = [
     title: "Liaisons",
     elements: [
       {
-        label: "Pivot",
-        tooltip: "Pivot (P)",
-        iconSrc: pivotIconUrl,
-        goToStateType: "PlacingPivot",
-        hilightRule: (state) => state.type === "PlacingPivot",
-        hilightColor: COLORS.ORANGE,
-        hilightHoverColor: COLORS.ORANGE_STROKE,
-      },
-      {
         label: "Glissière",
         tooltip: "Slider (S)",
         iconSrc: sliderIconUrl,
@@ -112,20 +103,11 @@ const PALETTE_GROUPS: { title: string; elements: PaletteElement[] }[] = [
         hilightHoverColor: COLORS.ORANGE_STROKE,
       },
       {
-        label: "Masse",
-        tooltip: "Mass (M)",
-        iconSrc: massIconUrl,
-        goToStateType: "PlacingMass",
-        hilightRule: (state) => state.type === "PlacingMass",
-        hilightColor: COLORS.ORANGE,
-        hilightHoverColor: COLORS.ORANGE_STROKE,
-      },
-      {
-        label: "Jointure",
-        tooltip: "Join (J)",
-        iconSrc: joinIconUrl,
-        goToStateType: "PlacingJoin",
-        hilightRule: (state) => state.type === "PlacingJoin",
+        label: "Pivot",
+        tooltip: "Pivot (P)",
+        iconSrc: pivotIconUrl,
+        goToStateType: "PlacingPivot",
+        hilightRule: (state) => state.type === "PlacingPivot",
         hilightColor: COLORS.ORANGE,
         hilightHoverColor: COLORS.ORANGE_STROKE,
       },
@@ -156,6 +138,15 @@ const PALETTE_GROUPS: { title: string; elements: PaletteElement[] }[] = [
     title: "Structure",
     elements: [
       {
+        label: "Jointure",
+        tooltip: "Join (J)",
+        iconSrc: joinIconUrl,
+        goToStateType: "PlacingJoin",
+        hilightRule: (state) => state.type === "PlacingJoin",
+        hilightColor: COLORS.ORANGE,
+        hilightHoverColor: COLORS.ORANGE_STROKE,
+      },
+      {
         label: "Poutre",
         tooltip: "Beam (B)",
         iconSrc: beamIconUrl,
@@ -174,6 +165,11 @@ const PALETTE_GROUPS: { title: string; elements: PaletteElement[] }[] = [
         hilightColor: COLORS.ORANGE,
         hilightHoverColor: COLORS.ORANGE_STROKE,
       },
+    ],
+  },
+  {
+    title: "Dynamique",
+    elements: [
       {
         label: "Amortisseur",
         tooltip: "Damper (C)",
@@ -193,6 +189,15 @@ const PALETTE_GROUPS: { title: string; elements: PaletteElement[] }[] = [
         hilightRule: (state) =>
           state.type === "PlacingSpringStart" ||
           state.type === "PlacingSpringEnd",
+        hilightColor: COLORS.ORANGE,
+        hilightHoverColor: COLORS.ORANGE_STROKE,
+      },
+      {
+        label: "Masse",
+        tooltip: "Mass (M)",
+        iconSrc: massIconUrl,
+        goToStateType: "PlacingMass",
+        hilightRule: (state) => state.type === "PlacingMass",
         hilightColor: COLORS.ORANGE,
         hilightHoverColor: COLORS.ORANGE_STROKE,
       },
@@ -226,6 +231,35 @@ const PALETTE_GROUPS: { title: string; elements: PaletteElement[] }[] = [
         hilightHoverColor: COLORS.ORANGE_STROKE,
       },
       {
+        label: "Rapport d'engrenages",
+        tooltip: "Gear ratio (R)",
+        iconSrc: ratioIconUrl,
+        goToStateType: "GearRatioConstraintStart",
+        hilightRule: (state, mechanism) =>
+          state.type === "GearRatioConstraintStart" ||
+          state.type === "GearRatioConstraintGear" ||
+          (state.type === "EditingConstraint" &&
+            state.isPlacing &&
+            get_constraint_element_from_id(
+              state.elementID,
+              mechanism.constraintElements,
+            )!.type === "gear-ratio"),
+        hilightColor: COLORS.ORANGE,
+        hilightHoverColor: COLORS.ORANGE_STROKE,
+      },
+      {
+        label: "Longueurs égales",
+        tooltip: "Equal lengths (E)",
+        iconSrc: equalIconUrl,
+        goToStateType: "EqualConstraintStart",
+        hilightRule: (state) =>
+          state.type === "EqualConstraintStart" ||
+          state.type === "EqualConstraintEdge" ||
+          state.type === "EqualConstraintGear",
+        hilightColor: COLORS.ORANGE,
+        hilightHoverColor: COLORS.ORANGE_STROKE,
+      },
+      {
         label: "Alignement horizontal / vertical",
         tooltip: "Horizontal/Vertical alignement  (H)",
         iconSrc: horizontalVerticalAlignIconUrl,
@@ -255,35 +289,6 @@ const PALETTE_GROUPS: { title: string; elements: PaletteElement[] }[] = [
         hilightRule: (state) =>
           state.type === "ParallelConstraintStart" ||
           state.type === "ParallelConstraintEdge",
-        hilightColor: COLORS.ORANGE,
-        hilightHoverColor: COLORS.ORANGE_STROKE,
-      },
-      {
-        label: "Longueurs égales",
-        tooltip: "Equal lengths (E)",
-        iconSrc: equalIconUrl,
-        goToStateType: "EqualConstraintStart",
-        hilightRule: (state) =>
-          state.type === "EqualConstraintStart" ||
-          state.type === "EqualConstraintEdge" ||
-          state.type === "EqualConstraintGear",
-        hilightColor: COLORS.ORANGE,
-        hilightHoverColor: COLORS.ORANGE_STROKE,
-      },
-      {
-        label: "Rapport d'engrenages",
-        tooltip: "Gear ratio (R)",
-        iconSrc: ratioIconUrl,
-        goToStateType: "GearRatioConstraintStart",
-        hilightRule: (state, mechanism) =>
-          state.type === "GearRatioConstraintStart" ||
-          state.type === "GearRatioConstraintGear" ||
-          (state.type === "EditingConstraint" &&
-            state.isPlacing &&
-            get_constraint_element_from_id(
-              state.elementID,
-              mechanism.constraintElements,
-            )!.type === "gear-ratio"),
         hilightColor: COLORS.ORANGE,
         hilightHoverColor: COLORS.ORANGE_STROKE,
       },

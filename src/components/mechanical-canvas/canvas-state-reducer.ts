@@ -28,6 +28,7 @@ export function canvasStateReducer(
   setCanvasState: (state: CanvasState) => void,
   hoveredPart: HoveredPart,
   oldPosition: Point2,
+  isMouseDown: boolean,
   event: CanvasEvent,
   mechanicalElements: MechanicalElement[],
   constraintElements: ConstraintElement[],
@@ -67,22 +68,6 @@ export function canvasStateReducer(
                   elementIDs: [state.elementID, hoveredPart.id],
                 });
               }
-            } else if (
-              hoveredPart.type !== "Void" &&
-              hoveredPart.id === state.elementID
-            ) {
-              const constraint = constraintElements.find(
-                (element) => element.id === state.elementID,
-              );
-              if (constraint && "value" in constraint) {
-                setCanvasState({
-                  type: "EditingConstraint",
-                  elementID: state.elementID,
-                  value: constraint.value,
-                  isPlacing: false,
-                });
-                break;
-              }
             }
           }
           if (hoveredPart.type === "Void") {
@@ -94,10 +79,13 @@ export function canvasStateReducer(
             });
             break;
           }
+          const constraint = constraintElements.find(
+            (element) => element.id === hoveredPart.id,
+          );
+          if (constraint && "value" in constraint) break;
           setCanvasState({
             type: "SelectedElement",
             elementID: hoveredPart.id,
-            isMouseDown: true,
           });
           break;
         case "SelectedMultiple":
@@ -133,7 +121,6 @@ export function canvasStateReducer(
                   setCanvasState({
                     type: "SelectedElement",
                     elementID: element.id,
-                    isMouseDown: false,
                   });
                   break;
                 }
@@ -999,9 +986,21 @@ export function canvasStateReducer(
       break;
 
     case "MouseMove":
+      if (!isMouseDown) break;
       switch (state.type) {
+        case "Selecting":
+          if (hoveredPart.type === "Void") break;
+          const constraint = constraintElements.find(
+            (element) => element.id === hoveredPart.id,
+          );
+          if (constraint && "value" in constraint) {
+            setCanvasState({
+              type: "SelectedElement",
+              elementID: hoveredPart.id,
+            });
+          }
+          break;
         case "SelectedElement":
-          if (!state.isMouseDown) break;
           switch (hoveredPart.type) {
             case "Node":
               setCanvasState({ type: "MovingNode", elementID: hoveredPart.id });
@@ -1080,7 +1079,7 @@ export function canvasStateReducer(
             case "Constraint":
               setCanvasState({
                 type: "MovingConstraint",
-                constraintID: hoveredPart.id,
+                elementID: hoveredPart.id,
               });
               break;
           }
@@ -1182,7 +1181,7 @@ export function canvasStateReducer(
           actionBundleType = "MoveConstraint";
           actions.push({
             type: "MoveConstraint",
-            id: state.constraintID,
+            id: state.elementID,
             newPosition: hoveredPart.position,
             oldPosition,
           });
@@ -1192,8 +1191,34 @@ export function canvasStateReducer(
 
     case "MouseLeftButtonUp":
       switch (state.type) {
+        case "Selecting":
+          if (hoveredPart.type === "Void") break;
+          setCanvasState({
+            type: "SelectedElement",
+            elementID: hoveredPart.id,
+          });
+          break;
         case "SelectedElement":
-          state.isMouseDown = false;
+          if (hoveredPart.type === "Void") break;
+          if (hoveredPart.id === state.elementID) {
+            const constraint = constraintElements.find(
+              (element) => element.id === hoveredPart.id,
+            );
+            if (constraint && "value" in constraint) {
+              setCanvasState({
+                type: "EditingConstraint",
+                elementID: state.elementID,
+                value: constraint.value,
+                isPlacing: false,
+              });
+              break;
+            }
+          } else {
+            setCanvasState({
+              type: "SelectedElement",
+              elementID: hoveredPart.id,
+            });
+          }
           break;
         case "MovingNode":
         case "MovingEdgeStartPoint":
@@ -1264,7 +1289,6 @@ export function canvasStateReducer(
           setCanvasState({
             type: "SelectedElement",
             elementID: state.elementID,
-            isMouseDown: false,
           });
           break;
         case "MovingBeltBody":
@@ -1291,7 +1315,6 @@ export function canvasStateReducer(
           setCanvasState({
             type: "SelectedElement",
             elementID: state.elementID,
-            isMouseDown: false,
           });
           break;
         case "ChangingGearRadius":
@@ -1329,7 +1352,6 @@ export function canvasStateReducer(
           setCanvasState({
             type: "SelectedElement",
             elementID: state.elementID,
-            isMouseDown: false,
           });
           break;
         case "SelectingMultiple":
@@ -1345,7 +1367,6 @@ export function canvasStateReducer(
               setCanvasState({
                 type: "SelectedElement",
                 elementID: element.id,
-                isMouseDown: false,
               });
               break;
             }
@@ -1382,8 +1403,7 @@ export function canvasStateReducer(
         case "MovingConstraint":
           setCanvasState({
             type: "SelectedElement",
-            elementID: state.constraintID,
-            isMouseDown: false,
+            elementID: state.elementID,
           });
           break;
       }

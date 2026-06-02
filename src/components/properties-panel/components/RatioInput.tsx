@@ -85,7 +85,7 @@ export const RatioInput: React.FC<RatioInputProps> = ({ value, onChange }) => {
         display: "flex",
         alignItems: "center",
         height: "32px",
-        border: `1px solid ${"#000000" + COLORS.HALF_TRANSPARENCY}`,
+        border: `1px solid ${"#0005"}`,
         "&:hover": {
           border: `1px solid ${COLORS.STROKE}`,
         },

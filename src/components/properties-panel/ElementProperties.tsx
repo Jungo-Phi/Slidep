@@ -54,6 +54,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
       <Box
         sx={{
           display: "flex",
+          flexDirection: "row",
           justifyContent: "space-between",
           alignItems: "center",
           my: -1,
@@ -61,7 +62,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
       >
         <ElementDisplay
           element={element}
-          size="medium"
+          size="large"
           setHoveredPart={setHoveredPart}
           setCanvasState={setCanvasState}
           updateMechanism={updateMechanism}
