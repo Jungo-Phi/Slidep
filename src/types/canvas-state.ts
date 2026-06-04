@@ -51,7 +51,8 @@ export type CanvasStateType =
   | "GearRatioConstraintStart"
   | "GearRatioConstraintGear"
   | "MovingConstraint"
-  | "EditingConstraint";
+  | "EditingConstraint"
+  | "Simulating";
 
 // Define the possible states of the canvas interaction
 export type CanvasState =
@@ -120,4 +121,5 @@ export type CanvasState =
       elementID: ID;
       value: number;
       isPlacing: boolean;
-    };
+    }
+  | { type: "Simulating" };

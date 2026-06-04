@@ -29,6 +29,7 @@ import {
 } from "@mui/icons-material";
 import { lightTheme } from "./lib/mui-theme"; // import { lightTheme, darkTheme, highContrastTheme } from "./lib/mui-theme";
 import logoUrl from "./assets/icons/palette/logo.svg";
+import playIconUrl from "./assets/icons/palette/play.svg";
 import MechanicalCanvas from "./components/mechanical-canvas/MechanicalCanvas";
 import { ElementPalette } from "./components/element-palette";
 import { PropertiesPanel } from "./components/properties-panel/PropertiesPanel";
@@ -54,7 +55,6 @@ import { COLORS } from "./constants/rendering-specs";
 import { cloneMechanism } from "./utils/serialization";
 import { resolveGeometricConstraints } from "./components/solver/geometric-solver";
 import { get_nodes } from "./components/solver/parsing";
-//import { SimulationControls } from './components/simulation-controls';
 
 export interface UserPreferences {
   theme: string;
@@ -608,8 +608,30 @@ const App: React.FC = () => {
               </Box>
             </Box>
 
-            {/* Center: Simulation controls */}
-            <Box sx={{ flex: 0 }}>{/* <SimulationControls isTopBar /> */}</Box>
+            {/* Center: Play simulation */}
+            <IconButton
+              sx={{
+                backgroundColor: "primary.main",
+                color: "primary.contrastText",
+                fontSize: "large",
+                paddingLeft: 0.5,
+                paddingY: 0.5,
+              }}
+              onClick={() => setCanvasState({ type: "Simulating" })}
+            >
+              <Box
+                component="img"
+                src={playIconUrl}
+                alt="Démarrer"
+                sx={{
+                  width: 28,
+                  height: 28,
+                  display: "block",
+                  filter: "brightness(0) invert(1)",
+                }}
+              />
+              Lancer la simulation
+            </IconButton>
 
             {/* Right side: Undo/Redo, Settings */}
             <Box
@@ -704,7 +726,7 @@ const App: React.FC = () => {
 
                   <Box>Code :</Box>
                   <a href="https://github.com/Jungo-Phi/Slidep">
-                    https://github.com/Jungo-Phi/Slidep
+                    github.com/Jungo-Phi/Slidep
                   </a>
                 </DialogContent>
               </Dialog>

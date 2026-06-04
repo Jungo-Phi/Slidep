@@ -23,6 +23,7 @@ import { CanvasState } from "../../types/canvas-state";
 import { ProjectInfoSection } from "./ProjectInfoSection";
 import ElementProperties from "./ElementProperties";
 import ConstraintsPanel from "./ConstraintsPanel";
+import SimulationControls from "../simulation-controls";
 
 interface PropertiesPanelProps {
   setCanvasState: (state: CanvasState) => void;
@@ -68,7 +69,9 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
 
   let title = "Propriétés";
   if (!closed) {
-    if ("elementID" in canvasState) {
+    if (canvasState.type === "Simulating") {
+      title = "Contrôles de la simulation";
+    } else if ("elementID" in canvasState) {
       const mechanicalElement: MechanicalElement | undefined =
         mechanism.mechanicalElements.find(
           (el) => el.id === canvasState.elementID,
@@ -95,7 +98,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
         position: "absolute",
         right: 16,
         top: 16,
-        width: closed ? 150 : 320,
+        width: closed ? 150 : 300,
         maxHeight: "calc(100% - 32px)",
         display: "flex",
         flexDirection: "column",
@@ -134,7 +137,9 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
       {!closed && (
         <Box sx={{ p: 2, overflow: "auto" }}>
           {/* Contenu du panneau de propriétés */}
-          {"elementID" in canvasState ? (
+          {canvasState.type === "Simulating" ? (
+            <SimulationControls />
+          ) : "elementID" in canvasState ? (
             <Box>
               <>
                 {(() => {

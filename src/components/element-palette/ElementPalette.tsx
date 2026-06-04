@@ -32,9 +32,6 @@ import { COLORS } from "../../constants/rendering-specs";
 import { get_constraint_element_from_id } from "../mechanical-canvas/connect-actions";
 import { Mechanism } from "../../types";
 
-/**
- * Element definition for palette
- */
 interface PaletteElement {
   label: string;
   tooltip: string;
@@ -45,10 +42,7 @@ interface PaletteElement {
   hilightHoverColor: string;
 }
 
-/**
- * Palette elements grouped by function
- */
-const PALETTE_GROUPS: { title: string; elements: PaletteElement[] }[] = [
+const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
   {
     title: "Interface",
     elements: [
@@ -292,6 +286,95 @@ const PALETTE_GROUPS: { title: string; elements: PaletteElement[] }[] = [
   },
 ];
 
+const SIMULATION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
+  {
+    title: "Interface",
+    elements: [
+      {
+        label: "Selection",
+        tooltip: "Select (Esc)",
+        iconSrc: selectIconUrl,
+        goToStateType: "Selecting",
+        hilightRule: (state) =>
+          [
+            "Selecting",
+            "SelectingMultiple",
+            "SelectedMultiple",
+            "MovingSelectionMultiple",
+            "SelectedElement",
+            "MovingNode",
+            "MovingEdgeStartPoint",
+            "MovingEdgeEndPoint",
+            "MovingEdgeBody",
+            "MovingConstraint",
+          ].includes(state.type) ||
+          (state.type === "EditingConstraint" && !state.isPlacing),
+        hilightColor: COLORS.SELECTION_BOX,
+        hilightHoverColor: COLORS.SELECTION_STROKE,
+      },
+      {
+        label: "Gomme",
+        tooltip: "Eraser (A)",
+        iconSrc: eraserIconUrl,
+        goToStateType: "Erasing",
+        hilightRule: (state) =>
+          state.type === "Erasing" || state.type === "ErasingMultiple",
+        hilightColor: COLORS.DELETION_BOX,
+        hilightHoverColor: COLORS.DELETION_STROKE,
+      },
+    ],
+  },
+  {
+    title: "Liaisons",
+    elements: [
+      {
+        label: "Pivot",
+        tooltip: "Pivot (P)",
+        iconSrc: pivotIconUrl,
+        goToStateType: "PlacingPivot",
+        hilightRule: (state) => state.type === "PlacingPivot",
+        hilightColor: COLORS.ORANGE,
+        hilightHoverColor: COLORS.ORANGE_STROKE,
+      },
+      {
+        label: "Engrenage",
+        tooltip: "Gear (Q)",
+        iconSrc: gearIconUrl,
+        goToStateType: "PlacingGearStart",
+        hilightRule: (state) =>
+          state.type === "PlacingGearStart" ||
+          state.type === "PlacingGearRadius",
+        hilightColor: COLORS.ORANGE,
+        hilightHoverColor: COLORS.ORANGE_STROKE,
+      },
+    ],
+  },
+  {
+    title: "Structure",
+    elements: [
+      {
+        label: "Poutre",
+        tooltip: "Beam (B)",
+        iconSrc: beamIconUrl,
+        goToStateType: "PlacingBeamStart",
+        hilightRule: (state) =>
+          state.type === "PlacingBeamStart" || state.type === "PlacingBeamEnd",
+        hilightColor: COLORS.ORANGE,
+        hilightHoverColor: COLORS.ORANGE_STROKE,
+      },
+      {
+        label: "Sol",
+        tooltip: "Ground (G)",
+        iconSrc: groundIconUrl,
+        goToStateType: "PlacingGround",
+        hilightRule: (state) => state.type === "PlacingGround",
+        hilightColor: COLORS.ORANGE,
+        hilightHoverColor: COLORS.ORANGE_STROKE,
+      },
+    ],
+  },
+];
+
 /**
  * Preload all icons to improve performance by loading them in memory before they are needed
  */
@@ -357,7 +440,10 @@ export const ElementPalette: React.FC<ElementPaletteProps> = ({
       const rowHeight = (SIZE + 2 * PADDING) * 3;
       const rowsThatFit = Math.max(1, Math.floor(availableHeight / rowHeight));
       const maxIconsInGroup = Math.max(
-        ...PALETTE_GROUPS.map((g) => g.elements.length),
+        ...(canvasState.type === "Simulating"
+          ? SIMULATION_PALETTE
+          : EDITION_PALETTE
+        ).map((g) => g.elements.length),
         1,
       );
       setColumns(Math.max(2, Math.ceil(maxIconsInGroup / rowsThatFit)));
@@ -392,9 +478,12 @@ export const ElementPalette: React.FC<ElementPaletteProps> = ({
         scrollbarWidth: "none",
       }}
     >
-      {PALETTE_GROUPS.map((group) => (
+      {(canvasState.type === "Simulating"
+        ? SIMULATION_PALETTE
+        : EDITION_PALETTE
+      ).map((group) => (
         <section key={group.title}>
-          {group !== PALETTE_GROUPS[0] && (
+          {group.title !== "Interface" && (
             <>
               <Divider variant="fullWidth" flexItem sx={{ mb: 0.8, mt: 0.4 }} />
               <Typography

@@ -348,6 +348,7 @@ export function drawMechanicalCanvas(
           );
           switch (state.type) {
             case "MovingBeltBody":
+              if (state.elementID !== element.id) break;
               if (hoveredPart.type === "GearTooth") {
                 const gear = get_mechanical_element_from_id(
                   hoveredPart.id,
@@ -492,7 +493,8 @@ export function drawMechanicalCanvas(
             state.type === "EditingConstraint" &&
             state.elementID === element.id
           )
-            ctx.save();
+            break;
+          ctx.save();
           ctx.translate(element.position.x, element.position.y);
           draw_dimention_text(ctx, element.value);
           ctx.restore();
@@ -517,7 +519,8 @@ export function drawMechanicalCanvas(
             state.type === "EditingConstraint" &&
             state.elementID === element.id
           )
-            ctx.save();
+            break;
+          ctx.save();
           ctx.translate(element.position.x, element.position.y);
           draw_dimention_text(ctx, element.value);
           ctx.restore();
@@ -543,7 +546,8 @@ export function drawMechanicalCanvas(
             state.type === "EditingConstraint" &&
             state.elementID === element.id
           )
-            ctx.save();
+            break;
+          ctx.save();
           ctx.translate(element.position.x, element.position.y);
           draw_dimention_text(ctx, element.value, " °");
           ctx.restore();
@@ -563,7 +567,8 @@ export function drawMechanicalCanvas(
             state.type === "EditingConstraint" &&
             state.elementID === element.id
           )
-            ctx.save();
+            break;
+          ctx.save();
           ctx.translate(element.position.x, element.position.y);
           draw_dimention_text(ctx, element.value);
           ctx.restore();

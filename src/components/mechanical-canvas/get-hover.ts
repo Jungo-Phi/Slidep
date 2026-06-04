@@ -68,7 +68,12 @@ export function get_hovered_part_of_element(
               beamBodyHover: false,
             };
           }
-          if (node.type !== "gear") break;
+          if (
+            node.type !== "gear" ||
+            state.type === "PlacingBeltStart" ||
+            (state.type === "PlacingBeltEnd" && node.attachedBeltID)
+          )
+            break;
           if (
             distance <= node.radius + HIT_TOLERANCE.NODE / 2 &&
             distance > node.radius - HIT_TOLERANCE.NODE / 2
@@ -200,7 +205,11 @@ export function get_hovered_part_of_element(
         case "ChangingGearRadius":
         case "PlacingGearRadius":
           // Gear on gear teehts -> contact point
-          if (node.type !== "gear") break;
+          if (
+            node.type !== "gear" ||
+            (state.type === "MovingBeltBody" && node.attachedBeltID)
+          )
+            break;
           if (
             distance <= node.radius + HIT_TOLERANCE.NODE / 2 &&
             distance > node.radius - HIT_TOLERANCE.NODE / 2

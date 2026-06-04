@@ -84,7 +84,7 @@
 - Faire le panneau des paramètres
 - bug : les infos du projet doivent se mettre à jour au chargement d'un nouveau méchanisme
 - (Ignorer BeamBodyHover lors du déplacement d'un beam ?)
-- Faire que drop une connection dans un container simple échange les connections
+- Enlever le système de grag and drop des connections pour passer à des boutons de transfer aux endroits spécifiques
 - (Supprimer les joints quand ils ne sont connectés qu'à 1 élément ?)
 - ~Change CanvasState on delete element~
 
@@ -100,3 +100,4 @@
 - ~Limiter la longueur des edges au placement et déplacement~
 - Rejeter la position des dimensions des éléments pour la lisibilité
 - Déplacer les dimentions avec les élements associés
+- Renommer les éléments
