@@ -12,6 +12,7 @@ import type {
 } from "../../types/element";
 import { Action, ConnectsActionType } from "../../types";
 import { HoveredPart } from "../../types/hovered-part";
+import { connected_constraints } from "./utils";
 
 /** Returns the mechanical element from the id. */
 export function get_mechanical_element_from_id(
@@ -33,7 +34,7 @@ export function get_constraint_element_from_id(
   throw new Error(`Constraint element with id "${id}" not found`);
 }
 
-/** Returns the element, mechanical or constraint, from the id. */
+/** Returns the element (mechanical or constraint) from the id. */
 export function get_element_from_id(
   id: ID,
   mechanicalElements: MechanicalElement[],
@@ -296,14 +297,20 @@ export function connect_element(
 /**
  * Deletes an element.
  *
- * Returns the actions to erase the connections of linked elements and the deletion itself.
+ * Returns actions to remove the connections of linked elements, delete connected constraints and delete the element itself.
  */
 export function delete_element(
-  element: UnionElement,
+  elementID: ID,
   mechanicalElements: MechanicalElement[],
+  constraintElements: ConstraintElement[],
 ): Action[] {
   let actions: Action[] = [];
-  console.log("Delete: ", element.type, element.id.toString().padStart(3, "0"));
+  const element = get_element_from_id(
+    elementID,
+    mechanicalElements,
+    constraintElements,
+  );
+  // console.log("Delete: ", element.type, element.id.toString().padStart(3, "0"));
   if (
     element.type === "beam" ||
     element.type === "belt" ||
@@ -316,10 +323,16 @@ export function delete_element(
     element.type === "slider" ||
     element.type === "spring"
   ) {
+    connected_constraints(elementID, constraintElements).forEach((id) =>
+      actions.push({
+        type: "DeleteElement",
+        element: get_constraint_element_from_id(id, constraintElements),
+      }),
+    );
     get_connection_types(element).forEach((connectionType) => {
-      get_connections(element, connectionType).forEach((connectedElementID) => {
+      get_connections(element, connectionType).forEach((id) => {
         const connectedElement = get_mechanical_element_from_id(
-          connectedElementID,
+          id,
           mechanicalElements,
         );
         const connection_pair_type = get_connection_pair_type(

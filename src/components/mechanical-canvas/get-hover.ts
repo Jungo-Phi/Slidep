@@ -27,6 +27,8 @@ export function get_hovered_part_of_element(
   mousePos: Point2,
   state: CanvasState,
 ): HoveredPart | null {
+  if (state.type === "SelectingMultiple" || state.type === "ErasingMultiple")
+    return null;
   if (state.type === "MovingEdgeBody") {
     const edge = get_mechanical_element_from_id(
       state.elementID,
@@ -96,7 +98,6 @@ export function get_hovered_part_of_element(
         case "PlacingSlider":
         case "PlacingJoin":
         case "PlacingMass":
-        case "SelectingMultiple":
         case "DimensionNode":
         case "DimensionEdge":
         case "HorizontalVerticalConstraintStart":
@@ -609,6 +610,50 @@ export function get_hovered_part_of_element(
     case "parallel":
     case "equal":
     case "gear-ratio":
+      switch (state.type) {
+        case "MovingNode":
+        case "MovingEdgeStartPoint":
+        case "MovingEdgeEndPoint":
+        case "MovingEdgeBody":
+        case "MovingBeltBody":
+        case "ChangingGearRadius":
+        case "MovingSelectionMultiple":
+        case "PlacingBeamStart":
+        case "PlacingBeamEnd":
+        case "PlacingSpringStart":
+        case "PlacingSpringEnd":
+        case "PlacingDamperStart":
+        case "PlacingDamperEnd":
+        case "PlacingBeltStart":
+        case "PlacingBeltEnd":
+        case "PlacingPivot":
+        case "PlacingSlider":
+        case "PlacingJoin":
+        case "PlacingMass":
+        case "PlacingGearStart":
+        case "PlacingGearRadius":
+        case "PlacingGround":
+        case "DimensionStart":
+        case "DimensionNode":
+        case "DimensionEdge":
+        case "DimensionNodeToNode":
+        case "DimensionEdgeToNode":
+        case "DimensionAngle":
+        case "DimensionRadius":
+        case "HorizontalVerticalConstraintStart":
+        case "HorizontalVerticalConstraintNode":
+        case "NormalConstraintStart":
+        case "NormalConstraintEdge":
+        case "ParallelConstraintStart":
+        case "ParallelConstraintEdge":
+        case "EqualConstraintStart":
+        case "EqualConstraintEdge":
+        case "EqualConstraintGear":
+        case "GearRatioConstraintStart":
+        case "GearRatioConstraintGear":
+        case "MovingConstraint":
+          break;
+      }
       if (mousePos.distance_to(element.position) <= HIT_TOLERANCE.CONSTRAINT) {
         return {
           type: "Constraint",

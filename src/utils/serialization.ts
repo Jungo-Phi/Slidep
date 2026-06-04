@@ -156,7 +156,6 @@ export function deserializeAction(s: SerializedAction): Action {
       const pointFields = [
         "newPosition",
         "oldPosition",
-        "deltaStart",
         "newPos",
         "delta",
       ] as const;

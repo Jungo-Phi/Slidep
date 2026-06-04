@@ -138,7 +138,7 @@ export class Point2 {
   }
 
   /**
-   * Calcule la proportion t (entre 0 et 1 idéalement, ou étendu si besoin)
+   * Calcule la proportion t entre 0 et 1 (étendu si dépasse)
    * telle que this = start + t * (end - start).\
    * Si le point n'est pas sur la ligne, il est projeté orthogonalement.
    */

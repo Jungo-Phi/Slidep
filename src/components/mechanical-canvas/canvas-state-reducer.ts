@@ -18,7 +18,6 @@ import {
   connect_gear_and_belt,
   connect_gears,
   delete_element,
-  get_element_from_id,
   get_mechanical_element_from_id,
 } from "./connect-actions";
 import { is_on_left_side_of_belt } from "../../utils/belt-geom";
@@ -161,12 +160,9 @@ export function canvasStateReducer(
           actionBundleType = "Other";
           actions.push(
             ...delete_element(
-              get_element_from_id(
-                hoveredPart.id,
-                mechanicalElements,
-                constraintElements,
-              ),
+              hoveredPart.id,
               mechanicalElements,
+              constraintElements,
             ),
           );
           setCanvasState({ type: "Erasing" });
@@ -1027,7 +1023,10 @@ export function canvasStateReducer(
                   setCanvasState({
                     type: "MovingEdgeBody",
                     elementID: hoveredPart.id,
-                    deltaStart: hoveredPart.position.sub(edge.positionStart),
+                    t: hoveredPart.position.parameter_on_segment(
+                      edge.positionStart,
+                      edge.positionEnd,
+                    ),
                   });
                   break;
               }
@@ -1120,7 +1119,7 @@ export function canvasStateReducer(
           actions.push({
             type: "MoveEdgeBody",
             id: state.elementID,
-            deltaStart: state.deltaStart,
+            t: state.t,
             newPosition: hoveredPart.position,
             oldPosition,
           });
@@ -1389,12 +1388,9 @@ export function canvasStateReducer(
           state.hoveredElementIDs.forEach((elementId: ID) => {
             actions.push(
               ...delete_element(
-                get_element_from_id(
-                  elementId,
-                  mechanicalElements,
-                  constraintElements,
-                ),
+                elementId,
                 mechanicalElements,
+                constraintElements,
               ),
             );
           });
@@ -1424,27 +1420,21 @@ export function canvasStateReducer(
               actionBundleType = "Other";
               actions.push(
                 ...delete_element(
-                  get_element_from_id(
-                    state.elementID,
-                    mechanicalElements,
-                    constraintElements,
-                  ),
+                  state.elementID,
                   mechanicalElements,
+                  constraintElements,
                 ),
               );
               setCanvasState({ type: "Selecting" });
               break;
             case "SelectedMultiple":
               actionBundleType = "Other";
-              state.elementIDs.forEach((elementId: ID) => {
+              state.elementIDs.forEach((elementID: ID) => {
                 actions.push(
                   ...delete_element(
-                    get_element_from_id(
-                      elementId,
-                      mechanicalElements,
-                      constraintElements,
-                    ),
+                    elementID,
                     mechanicalElements,
+                    constraintElements,
                   ),
                 );
               });

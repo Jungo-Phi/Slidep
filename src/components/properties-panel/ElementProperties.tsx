@@ -157,7 +157,11 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
           color="error"
           onClick={() =>
             updateMechanism(
-              delete_element(element, mechanism.mechanicalElements),
+              delete_element(
+                element.id,
+                mechanism.mechanicalElements,
+                mechanism.constraintElements,
+              ),
               "Other",
             )
           }

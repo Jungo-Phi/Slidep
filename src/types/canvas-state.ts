@@ -67,7 +67,7 @@ export type CanvasState =
   | { type: "MovingNode"; elementID: ID }
   | { type: "MovingEdgeStartPoint"; elementID: ID } // Moving the start point of an edge
   | { type: "MovingEdgeEndPoint"; elementID: ID } // Moving the end point of an edge
-  | { type: "MovingEdgeBody"; elementID: ID; deltaStart: Point2 } // Moving the entire edge by its body
+  | { type: "MovingEdgeBody"; elementID: ID; t: number } // Moving the entire edge by its body, grabbed at proportion `t`
   | { type: "MovingBeltBody"; elementID: ID; section: number } // Moving a section of a belt
   | { type: "ChangingGearRadius"; elementID: ID }
   | { type: "MovingSelectionMultiple"; elementIDs: ID[]; delta: Point2 } // Multiple selected elements are being dragged

@@ -276,7 +276,14 @@ export const MechanicalCanvas: React.FC<MechanicalCanvasProps> = ({
     const active = document.activeElement;
     if (!active) return false;
     const tag = active.tagName.toLowerCase();
-    if (tag === "input" || tag === "textarea" || tag === "select") return true;
+    if (
+      tag === "input" ||
+      tag === "menu" ||
+      tag === "dialog" ||
+      tag === "textarea" ||
+      tag === "select"
+    )
+      return true; // TODO : trouver une méthode plus fiable
     if ((active as HTMLElement).isContentEditable) return true;
     return false;
   };

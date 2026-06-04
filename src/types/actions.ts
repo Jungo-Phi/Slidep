@@ -80,7 +80,7 @@ export type Action =
   | {
       type: "MoveEdgeBody";
       id: ID;
-      deltaStart: Point2;
+      t: number;
       newPosition: Point2;
       oldPosition: Point2;
     }

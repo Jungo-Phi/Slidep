@@ -43,6 +43,10 @@ export const ConstraintEditor: React.FC<ConstraintEditorProps> = ({
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
       const v1 = parseFloat(val1);
+      if (v1 === 0) {
+        onCancel(constraint);
+        return;
+      }
       const v2 = constraint.type === "gear-ratio" ? parseFloat(val2) : 1;
       if (!isNaN(v1) && !isNaN(v2) && v2 !== 0) {
         onCommit(v1 / v2);

@@ -8,14 +8,24 @@ import {
   IconButton,
   Tooltip,
   Typography,
+  MenuItem,
+  Menu,
+  Divider,
+  Dialog,
+  DialogTitle,
+  DialogContent,
 } from "@mui/material";
 import {
-  Save as SaveIcon,
-  FolderOpen as OpenIcon,
-  Add as NewIcon,
-  Settings as SettingsIcon,
-  Undo as UndoIcon,
-  Redo as RedoIcon,
+  Menu as MenuIcon,
+  Settings,
+  Undo,
+  Redo,
+  Save,
+  Language,
+  Info,
+  AddCircle,
+  Folder,
+  Close,
 } from "@mui/icons-material";
 import { lightTheme } from "./lib/mui-theme"; // import { lightTheme, darkTheme, highContrastTheme } from "./lib/mui-theme";
 import logoUrl from "./assets/icons/palette/logo.svg";
@@ -401,6 +411,74 @@ const App: React.FC = () => {
     setMechanism({ ...mechanism, metadata });
   };
 
+  const [menuAnchorEl, setMenuAnchorEl] = React.useState<null | HTMLElement>(
+    null,
+  );
+  const menuOpen = Boolean(menuAnchorEl);
+  const handleMenuClick = (event: React.MouseEvent<HTMLElement>) => {
+    setMenuAnchorEl(event.currentTarget);
+  };
+  const handleMenuClose = () => {
+    setMenuAnchorEl(null);
+  };
+
+  const handleMenuButtonNew = () => {
+    // TODO : Demander "Voulez-vous enregistrer le mécanisme actuel avant d'en créer un nouveau ?"
+    setMechanism({
+      metadata: DEFAULT_METADATA,
+      viewport: DEFAULT_VIEWPORT,
+      mechanicalElements: [],
+      constraintElements: [],
+      history: [],
+      future: [],
+    });
+    setMenuAnchorEl(null);
+  };
+  const handleMenuButtonOpen = () => {
+    // TODO : Demander "Voulez-vous enregistrer le mécanisme actuel avant d'en ouvrir un autre ?"
+    // TODO : Ouvrir le système de fichiers "ouvrir"
+    setMenuAnchorEl(null);
+  };
+  const handleMenuButtonSave = () => {
+    // TODO : Ouvrir le système de fichiers "sauvgarder"
+    setMenuAnchorEl(null);
+  };
+
+  const [settingsOpen, setSettingsOpen] = useState<boolean>(false);
+  const handleSettingsOpen = () => {
+    setSettingsOpen(true);
+  };
+  const handleSettingsClose = () => {
+    setSettingsOpen(false);
+    setMenuAnchorEl(null);
+  };
+
+  const [infoOpen, setInfoOpen] = useState<boolean>(false);
+  const handleInfoOpen = () => {
+    setInfoOpen(true);
+  };
+  const handleInfoClose = () => {
+    setInfoOpen(false);
+  };
+
+  const [language, setlanguage] = useState<string>("Français");
+  const [langAnchorEl, setLangAnchorEl] = React.useState<null | HTMLElement>(
+    null,
+  );
+  const langOpen = Boolean(langAnchorEl);
+  const handleLangClick = (event: React.MouseEvent<HTMLElement>) => {
+    setLangAnchorEl(event.currentTarget);
+  };
+  const handleLangClose = () => {
+    setLangAnchorEl(null);
+  };
+  const handleSelectLang = (newLanguage: string) => {
+    setlanguage(newLanguage);
+    setLangAnchorEl(null);
+  };
+
+  const LANGUAGES = ["Deutsch", "English", "Español", "Français"];
+
   return (
     <ThemeProvider theme={currentTheme}>
       <CssBaseline />
@@ -417,7 +495,7 @@ const App: React.FC = () => {
           position="static"
           elevation={0}
           sx={{
-            backgroundColor: "oklch(0.85 0.11 64)",
+            backgroundColor: COLORS.FILL_NODE,
             border: "none",
             borderRadius: 0,
           }}
@@ -428,11 +506,10 @@ const App: React.FC = () => {
             sx={{
               display: "flex",
               justifyContent: "space-between",
-              ml: 1,
-              mr: 1,
+              mx: 1,
             }}
           >
-            {/* Left side: Logo, File actions, Name */}
+            {/* Left side: Logo, File actions */}
             <Box
               sx={{ display: "flex", alignItems: "center", gap: 1, flex: 1 }}
             >
@@ -459,29 +536,75 @@ const App: React.FC = () => {
               </Typography>
 
               <Box sx={{ display: "flex", gap: 0.5, mr: 2 }}>
-                <Tooltip title="Nouveau mécanisme">
+                <Tooltip title="Menu">
                   <IconButton
-                    size="medium"
                     color="inherit"
-                    aria-label="Nouveau"
+                    aria-expanded={menuOpen}
+                    onClick={handleMenuClick}
                   >
-                    <NewIcon fontSize="medium" />
+                    <MenuIcon />
                   </IconButton>
                 </Tooltip>
-                <Tooltip title="Ouvrir">
-                  <IconButton size="medium" color="inherit" aria-label="Ouvrir">
-                    <OpenIcon fontSize="medium" />
-                  </IconButton>
-                </Tooltip>
-                <Tooltip title="Sauvegarder">
-                  <IconButton
-                    size="medium"
-                    color="inherit"
-                    aria-label="Sauvegarder"
+                <Menu
+                  anchorEl={menuAnchorEl}
+                  open={menuOpen}
+                  onClose={handleMenuClose}
+                >
+                  <MenuItem
+                    onClick={handleMenuButtonNew}
+                    disableRipple
+                    sx={{ gap: 1, marginLeft: -0.5 }}
                   >
-                    <SaveIcon fontSize="medium" />
-                  </IconButton>
-                </Tooltip>
+                    <AddCircle />
+                    Nouveau
+                  </MenuItem>
+                  <MenuItem
+                    onClick={handleMenuButtonOpen}
+                    disableRipple
+                    sx={{ gap: 1, marginLeft: -0.5 }}
+                  >
+                    <Folder />
+                    Ouvrir
+                  </MenuItem>
+                  <MenuItem
+                    onClick={handleMenuButtonSave}
+                    disableRipple
+                    sx={{ gap: 1, marginLeft: -0.5 }}
+                  >
+                    <Save />
+                    Enregistrer
+                  </MenuItem>
+                  <Divider sx={{ my: 0.5 }} />
+                  <MenuItem
+                    onClick={handleSettingsOpen}
+                    disableRipple
+                    sx={{ gap: 1, marginLeft: -0.5 }}
+                  >
+                    <Settings />
+                    Paramètres
+                  </MenuItem>
+                  <Dialog open={settingsOpen} onClose={handleSettingsClose}>
+                    <DialogTitle fontSize={"large"} sx={{ mb: -2 }}>
+                      Paramètres
+                    </DialogTitle>
+                    <IconButton
+                      onClick={handleSettingsClose}
+                      sx={{
+                        position: "absolute",
+                        right: 8,
+                        top: 8,
+                      }}
+                    >
+                      <Close />
+                    </IconButton>
+                    <DialogContent>
+                      <Typography>Afficher les contraintes</Typography>
+                      <Typography>Aimanter à la grille</Typography>
+                      <Typography>Thème (Couleurs)</Typography>
+                      <Typography>Style des éléments</Typography>
+                    </DialogContent>
+                  </Dialog>
+                </Menu>
               </Box>
             </Box>
 
@@ -499,34 +622,92 @@ const App: React.FC = () => {
               }}
             >
               <Tooltip title="Annuler (Ctrl+Z)">
-                <IconButton
-                  size="medium"
-                  color="inherit"
-                  aria-label="Annuler"
-                  onClick={() => undoMechanism()}
-                >
-                  <UndoIcon fontSize="medium" />
+                <IconButton color="inherit" onClick={() => undoMechanism()}>
+                  <Undo />
                 </IconButton>
               </Tooltip>
               <Tooltip title="Rétablir (Ctrl+Y)">
-                <IconButton
-                  size="medium"
-                  color="inherit"
-                  aria-label="Rétablir"
-                  onClick={() => redoMechanism()}
-                >
-                  <RedoIcon fontSize="medium" />
+                <IconButton color="inherit" onClick={() => redoMechanism()}>
+                  <Redo />
                 </IconButton>
               </Tooltip>
-              <Tooltip title="Paramètres">
+
+              <Tooltip title="Langue">
                 <IconButton
-                  size="medium"
                   color="inherit"
-                  aria-label="Paramètres"
+                  aria-expanded={langOpen}
+                  onClick={handleLangClick}
+                  sx={{ gap: 0.5 }}
                 >
-                  <SettingsIcon fontSize="medium" />
+                  <Language />
+                  {language.slice(0, 2)}
                 </IconButton>
               </Tooltip>
+              <Menu
+                anchorEl={langAnchorEl}
+                open={langOpen}
+                onClose={handleLangClose}
+                slotProps={{
+                  paper: {
+                    style: {
+                      maxHeight: 175,
+                    },
+                  },
+                }}
+              >
+                {LANGUAGES.map((lang) => (
+                  <MenuItem
+                    key={lang}
+                    selected={lang === language}
+                    onClick={() => handleSelectLang(lang)}
+                    disableRipple
+                  >
+                    {lang}
+                  </MenuItem>
+                ))}
+              </Menu>
+              <Tooltip title="Info">
+                <IconButton color="inherit" onClick={handleInfoOpen}>
+                  <Info />
+                </IconButton>
+              </Tooltip>
+              <Dialog open={infoOpen} onClose={handleInfoClose}>
+                <DialogTitle fontSize={"large"}>Infos</DialogTitle>
+                <IconButton
+                  onClick={handleInfoClose}
+                  sx={() => ({
+                    position: "absolute",
+                    right: 8,
+                    top: 8,
+                  })}
+                >
+                  <Close />
+                </IconButton>
+                <DialogContent dividers>
+                  <Typography gutterBottom>
+                    Cras mattis consectetur purus sit amet fermentum. Cras justo
+                    odio, dapibus ac facilisis in, egestas eget quam. Morbi leo
+                    risus, porta ac consectetur ac, vestibulum at eros.
+                  </Typography>
+
+                  <Typography gutterBottom>
+                    Cras mattis consectetur purus sit amet fermentum. Cras justo
+                    odio, dapibus ac facilisis in, egestas eget quam. Morbi leo
+                    risus, porta ac consectetur ac, vestibulum at eros.
+                  </Typography>
+                </DialogContent>
+                <DialogContent>
+                  <Box>Contact :</Box>
+                  <a href="mailto:arnaud.jungo@slidep.ch">
+                    arnaud.jungo@slidep.ch
+                  </a>
+
+                  <Box>Code :</Box>
+                  <a href="https://github.com/Jungo-Phi/Slidep">
+                    https://github.com/Jungo-Phi/Slidep
+                  </a>
+                </DialogContent>
+              </Dialog>
             </Box>
           </Toolbar>
         </AppBar>

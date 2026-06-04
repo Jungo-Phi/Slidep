@@ -577,7 +577,6 @@ export function draw_dimention_parallel(
   start: Point2,
   end: Point2,
   position: Point2,
-  value: number,
 ) {
   ctx.fillStyle = ctx.strokeStyle;
   const widthStart = ctx.lineWidth;
@@ -607,10 +606,6 @@ export function draw_dimention_parallel(
   ctx.stroke();
 
   draw_dimention(ctx, start.add(np.mul(offset)), end.add(np.mul(offset)));
-  ctx.save();
-  ctx.translate(position.x, position.y);
-  draw_dimention_text(ctx, value);
-  ctx.restore();
 }
 
 export function draw_dimention_to_segment(
@@ -619,7 +614,6 @@ export function draw_dimention_to_segment(
   start: Point2,
   end: Point2,
   position: Point2,
-  value: number,
 ) {
   ctx.fillStyle = ctx.strokeStyle;
   const widthStart = ctx.lineWidth;
@@ -656,10 +650,6 @@ export function draw_dimention_to_segment(
     point.add(np.mul(offset)),
     oppositePoint.add(np.mul(offset)),
   );
-  ctx.save();
-  ctx.translate(position.x, position.y);
-  draw_dimention_text(ctx, value);
-  ctx.restore();
 }
 
 export function draw_dimention_angle(
@@ -669,7 +659,6 @@ export function draw_dimention_angle(
   start2: Point2,
   end2: Point2,
   position: Point2,
-  value: number,
 ) {
   ctx.fillStyle = ctx.strokeStyle;
 
@@ -711,11 +700,6 @@ export function draw_dimention_angle(
   ctx.stroke();
   // TODO : add arc to position
   // TODO : add straight lines
-
-  ctx.save();
-  ctx.translate(position.x, position.y);
-  draw_dimention_text(ctx, value, " °");
-  ctx.restore();
 }
 
 export function draw_dimention_radius(
@@ -723,7 +707,6 @@ export function draw_dimention_radius(
   center: Point2,
   radius: number,
   position: Point2,
-  value: number,
 ) {
   ctx.fillStyle = ctx.strokeStyle;
 
@@ -753,10 +736,6 @@ export function draw_dimention_radius(
   ctx.lineTo(Math.max(radius - 5, length), 0);
   ctx.stroke();
 
-  ctx.restore();
-  ctx.save();
-  ctx.translate(position.x, position.y);
-  draw_dimention_text(ctx, value);
   ctx.restore();
 }
 

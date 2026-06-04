@@ -31,7 +31,7 @@ export const RatioInput: React.FC<RatioInputProps> = ({ value, onChange }) => {
     if (e.key === "Enter") {
       const v1 = parseFloat(val1);
       const v2 = parseFloat(val2);
-      if (!isNaN(v1) && !isNaN(v2) && v2 !== 0) {
+      if (!isNaN(v1) && !isNaN(v2) && v1 !== 0 && v2 !== 0) {
         onChange(v1 / v2);
       }
       inputRef1.current?.blur();

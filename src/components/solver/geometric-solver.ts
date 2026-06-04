@@ -130,21 +130,13 @@ export function resolveGeometricConstraints(
           grabConnectionID = `${triggerAction.id}:end`;
           break;
         case "MoveEdgeBody":
-          const movedEdge = mechanism.mechanicalElements.find(
-            (e) => e.id === triggerAction.id,
-          )! as EdgeElement;
           links.push({
             type: "AtSegmentRatio",
             ddl: 2,
             key1: `${triggerAction.id}:start`,
             key2: `${triggerAction.id}:end`,
             key3: `grab_bridge`,
-            t: movedEdge.positionStart
-              .add(triggerAction.deltaStart)
-              .parameter_on_segment(
-                movedEdge.positionStart,
-                movedEdge.positionEnd,
-              ),
+            t: triggerAction.t,
           });
           nodes.positions.set(`grab_bridge`, triggerAction.newPosition);
           nodes.posMasses.set(`grab_bridge`, 1);

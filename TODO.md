@@ -22,10 +22,10 @@
 - ~Raccourcis qui fonctionnent même si le canvas est pas focus~
 - ~Boutons Crtl+Z~
 - ~Avec un click sans mouvement -> sélectionné, puis si mouvement, passer de sélectionné -> movingX~
-- Supprimer contraintes quand on supprime élément
+- ~Supprimer contraintes quand on supprime élément~
 - Qu'est-ce qui se passe si on appuie sur Crtl+Z alors qu'on a pas laché un élément ?
 - ~TODO : Differentiate between drag and drop : ajouter un élément tampon à mouse release "Blank"~
-- MoveEdgeBody : deltaStart -> t
+- ~MoveEdgeBody : deltaStart -> t~
 - ~ActionReducer : remove elements managed by "UpdatePositionsToValidState"~
 - ~Sélection multiple doit ignorer les contraintes et dimensions~
 - ~Toujours enlever le blank (Ajouter à la fin de lastAction**s**)~
@@ -78,6 +78,11 @@
 - ~Faire les nouveaux icons~
 - ~Ajouter les sens de rotation des engrenages dans les connections~
 - ~Ajouter les ratios des engrenages dans les connections~
+- ~Faire les menus de fichiers, paramètres, langues et infos~
+- Changer les textes avec les langues
+- Mettre les infos du projet
+- Faire le panneau des paramètres
+- bug : les infos du projet doivent se mettre à jour au chargement d'un nouveau méchanisme
 - (Ignorer BeamBodyHover lors du déplacement d'un beam ?)
 - Faire que drop une connection dans un container simple échange les connections
 - (Supprimer les joints quand ils ne sont connectés qu'à 1 élément ?)
