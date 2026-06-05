@@ -11,6 +11,7 @@ import {
   ConstraintElement,
   EdgeElement,
   GearElement,
+  ID,
   MechanicalElement,
   NodeElement,
   Point2,
@@ -29,7 +30,7 @@ import {
   draw_join,
   draw_mass,
   draw_pivot,
-  draw_slidep,
+  draw_slidep_bottom,
   draw_slider,
   draw_spring,
   draw_start_edge_end,
@@ -44,6 +45,7 @@ import {
   draw_dimention_text,
   draw_join_bottom,
   draw_join_top,
+  draw_slidep_rep,
 } from "./drawing-functions";
 import { get_mechanical_element_from_id } from "./connect-actions";
 import {
@@ -51,6 +53,128 @@ import {
   is_on_left_side_of_belt,
 } from "../../utils/belt-geom";
 import { connected_constraints, node_on_beam_body } from "./utils";
+
+function is_selected(elementID: ID, state: CanvasState): boolean {
+  return (
+    (state.type === "SelectedElement" && state.elementID === elementID) ||
+    (state.type === "MovingNode" && state.elementID === elementID) ||
+    (state.type === "MovingEdgeStartPoint" && state.elementID === elementID) ||
+    (state.type === "MovingEdgeEndPoint" && state.elementID === elementID) ||
+    (state.type === "MovingEdgeBody" && state.elementID === elementID) ||
+    (state.type === "ChangingGearRadius" && state.elementID === elementID) ||
+    (state.type === "SelectingMultiple" &&
+      state.elementIDs.includes(elementID)) ||
+    (state.type === "SelectedMultiple" &&
+      state.elementIDs.includes(elementID)) ||
+    (state.type === "MovingSelectionMultiple" &&
+      state.elementIDs.includes(elementID)) ||
+    (state.type === "MovingConstraint" && state.elementID === elementID) ||
+    (state.type === "EqualConstraintGear" && state.startGearID === elementID) ||
+    (state.type === "EqualConstraintEdge" && state.startEdgeID === elementID) ||
+    (state.type === "NormalConstraintEdge" &&
+      state.startEdgeID === elementID) ||
+    (state.type === "ParallelConstraintEdge" &&
+      state.startEdgeID === elementID) ||
+    (state.type === "GearRatioConstraintGear" &&
+      state.startGearID === elementID) ||
+    (state.type === "HorizontalVerticalConstraintNode" &&
+      state.startNodeID === elementID)
+  );
+}
+
+function is_erase_hovered(
+  elementID: ID,
+  hoveredPart: HoveredPart,
+  state: CanvasState,
+  constraintElements: ConstraintElement[],
+): boolean {
+  return (
+    (hoveredPart.type !== "Void" &&
+      hoveredPart.deleting &&
+      (hoveredPart.id === elementID ||
+        connected_constraints(hoveredPart.id, constraintElements).includes(
+          elementID,
+        ))) ||
+    (state.type === "ErasingMultiple" &&
+      [
+        ...state.hoveredElementIDs,
+        ...state.hoveredElementIDs
+          .map((id) => connected_constraints(id, constraintElements))
+          .flat(),
+      ].includes(elementID))
+  );
+}
+
+function is_edge_end_hovered(
+  elementID: ID,
+  hoveredPart: HoveredPart,
+  state: CanvasState,
+): boolean {
+  return (
+    hoveredPart.type === "Edge" &&
+    hoveredPart.part !== "body" &&
+    hoveredPart.id === elementID &&
+    !(
+      (hoveredPart.deleting && hoveredPart.id === elementID) ||
+      (state.type === "ErasingMultiple" &&
+        state.hoveredElementIDs.includes(elementID))
+    ) &&
+    ![
+      "PlacingPivot",
+      "PlacingSlider",
+      "PlacingJoin",
+      "PlacingMass",
+      "PlacingBeamStart",
+      "PlacingSpringStart",
+      "PlacingDamperStart",
+      "PlacingBeltStart",
+    ].includes(state.type)
+  );
+}
+
+function is_hovered(
+  elementID: ID,
+  hoveredPart: HoveredPart,
+  state: CanvasState,
+  constraintElements: ConstraintElement[],
+): boolean {
+  if (hoveredPart.type === "Void") return false;
+  if (
+    hoveredPart.id === elementID &&
+    !hoveredPart.deleting &&
+    !is_edge_end_hovered(elementID, hoveredPart, state)
+  )
+    return true;
+
+  const constraint = constraintElements.find((el) => el.id === hoveredPart.id);
+  if (!constraint) return false;
+
+  switch (constraint.type) {
+    case "horizontal-align-edge":
+    case "vertical-align-edge":
+      return elementID === constraint.edgeID;
+    case "horizontal-align-nodes":
+    case "vertical-align-nodes":
+      return (
+        elementID === constraint.startNodeID ||
+        elementID === constraint.endNodeID
+      );
+    case "normal":
+    case "parallel":
+    case "equal":
+      return (
+        elementID === constraint.startEdgeID ||
+        elementID === constraint.endEdgeID
+      );
+    case "gear-ratio":
+      return (
+        elementID === constraint.startGearID ||
+        elementID === constraint.endGearID
+      );
+    default:
+      return false;
+  }
+}
 
 /*
  * Dessine tous les éléments du canvas.
@@ -109,107 +233,24 @@ export function drawMechanicalCanvas(
   DRAWING_ORDER.forEach((type) => {
     const elements = allElements.filter((element) => element.type === type);
     for (const element of elements) {
-      const isSelected =
-        (state.type === "SelectedElement" && state.elementID === element.id) ||
-        (state.type === "MovingNode" && state.elementID === element.id) ||
-        (state.type === "MovingEdgeStartPoint" &&
-          state.elementID === element.id) ||
-        (state.type === "MovingEdgeEndPoint" &&
-          state.elementID === element.id) ||
-        (state.type === "MovingEdgeBody" && state.elementID === element.id) ||
-        (state.type === "ChangingGearRadius" &&
-          state.elementID === element.id) ||
-        (state.type === "SelectingMultiple" &&
-          state.elementIDs.includes(element.id)) ||
-        (state.type === "SelectedMultiple" &&
-          state.elementIDs.includes(element.id)) ||
-        (state.type === "MovingSelectionMultiple" &&
-          state.elementIDs.includes(element.id)) ||
-        (state.type === "MovingConstraint" && state.elementID === element.id) ||
-        (state.type === "EqualConstraintGear" &&
-          state.startGearID === element.id) ||
-        (state.type === "EqualConstraintEdge" &&
-          state.startEdgeID === element.id) ||
-        (state.type === "NormalConstraintEdge" &&
-          state.startEdgeID === element.id) ||
-        (state.type === "ParallelConstraintEdge" &&
-          state.startEdgeID === element.id) ||
-        (state.type === "GearRatioConstraintGear" &&
-          state.startGearID === element.id) ||
-        (state.type === "HorizontalVerticalConstraintNode" &&
-          state.startNodeID === element.id);
-      const isEraseHovered =
-        (hoveredPart.type !== "Void" &&
-          hoveredPart.deleting &&
-          (hoveredPart.id === element.id ||
-            connected_constraints(hoveredPart.id, constraintElements).includes(
-              element.id,
-            ))) ||
-        (state.type === "ErasingMultiple" &&
-          [
-            ...state.hoveredElementIDs,
-            ...state.hoveredElementIDs
-              .map((id) => connected_constraints(id, constraintElements))
-              .flat(),
-          ].includes(element.id));
-      const isEdgeEndHovered =
-        hoveredPart.type === "Edge" &&
-        hoveredPart.part !== "body" &&
-        hoveredPart.id === element.id &&
-        !isEraseHovered &&
-        ![
-          "PlacingPivot",
-          "PlacingSlider",
-          "PlacingJoin",
-          "PlacingMass",
-          "PlacingBeamStart",
-          "PlacingSpringStart",
-          "PlacingDamperStart",
-          "PlacingBeltStart",
-        ].includes(state.type);
-
-      let isHovered =
-        hoveredPart.type !== "Void" &&
-        hoveredPart.id === element.id &&
-        !hoveredPart.deleting &&
-        !isEdgeEndHovered;
-      if (hoveredPart.type !== "Void") {
-        const constraint = constraintElements.find(
-          (element) => element.id === hoveredPart.id,
-        );
-        if (constraint) {
-          switch (constraint.type) {
-            case "horizontal-align-edge":
-            case "vertical-align-edge":
-              if (element.id === constraint.edgeID) isHovered = true;
-              break;
-            case "horizontal-align-nodes":
-            case "vertical-align-nodes":
-              if (
-                element.id === constraint.startNodeID ||
-                element.id === constraint.endNodeID
-              )
-                isHovered = true;
-              break;
-            case "normal":
-            case "parallel":
-            case "equal":
-              if (
-                element.id === constraint.startEdgeID ||
-                element.id === constraint.endEdgeID
-              )
-                isHovered = true;
-              break;
-            case "gear-ratio":
-              if (
-                element.id === constraint.startGearID ||
-                element.id === constraint.endGearID
-              )
-                isHovered = true;
-              break;
-          }
-        }
-      }
+      const isSelected = is_selected(element.id, state);
+      const isEraseHovered = is_erase_hovered(
+        element.id,
+        hoveredPart,
+        state,
+        constraintElements,
+      );
+      const isEdgeEndHovered = is_edge_end_hovered(
+        element.id,
+        hoveredPart,
+        state,
+      );
+      let isHovered = is_hovered(
+        element.id,
+        hoveredPart,
+        state,
+        constraintElements,
+      );
 
       ctx.shadowBlur = 0;
       ctx.globalAlpha = 1;
@@ -217,17 +258,18 @@ export function drawMechanicalCanvas(
       ctx.strokeStyle = COLORS.STROKE;
       ctx.fillStyle = COLORS.FILL_BODY;
       ctx.lineWidth = STROKE_WIDTHS.STANDARD;
-      if (isHovered && !isEdgeEndHovered) ctx.lineWidth = STROKE_WIDTHS.THICK;
 
+      // Thicken the stroke if element is hovered
+      if (isHovered && !isEdgeEndHovered) ctx.lineWidth = STROKE_WIDTHS.THICK;
+      // Add blue halo and blue stroke if element is selected
       if (isSelected) {
-        // Add blue halo and blue stroke if element is selected/moving
         ctx.shadowColor = COLORS.SELECTION_STROKE;
         ctx.strokeStyle = COLORS.SELECTION_STROKE;
         ctx.fillStyle = COLORS.SELECTION_FILL;
         ctx.shadowBlur = INTERACTION_SPECS.SELECTION_HALO_SIZE;
       }
+      // Add red stroke and make semi-transparent if element is to be deleted
       if (isEraseHovered) {
-        // Add red stroke and make semi-transparent if element is hovered for deletion
         ctx.strokeStyle = COLORS.DELETION_STROKE;
         ctx.globalAlpha = INTERACTION_SPECS.DELETION_OPACITY;
       }
@@ -262,7 +304,76 @@ export function drawMechanicalCanvas(
               draw_pivot(ctx, element.rotatingEdgesIDs.length > 0);
               break;
             case "slidep":
-              draw_slidep(ctx, element.rotatingEdgesIDs.length > 0);
+              draw_slidep_bottom(ctx);
+              // Draw tiny pieces of rotating edges between slider and pivot part
+              if (element.parentBeamID) {
+                const parentBeam = get_mechanical_element_from_id(
+                  element.parentBeamID,
+                  mechanicalElements,
+                ) as BeamElement;
+                ctx.rotate(
+                  -parentBeam.positionStart.angle_to(parentBeam.positionEnd),
+                );
+              }
+              [...element.rotatingEdgesIDs].reverse().forEach((edgeID) => {
+                const edge = get_mechanical_element_from_id(
+                  edgeID,
+                  mechanicalElements,
+                ) as EdgeElement;
+
+                const oldShadowBlur = ctx.shadowBlur;
+                const oldGlobalAlpha = ctx.globalAlpha;
+                const oldStrokeStyle = ctx.strokeStyle;
+                const oldFillStyle = ctx.fillStyle;
+                const oldLineWidth = ctx.lineWidth;
+                ctx.shadowBlur = 0;
+                ctx.globalAlpha = 1;
+                ctx.strokeStyle = COLORS.STROKE;
+                ctx.fillStyle = COLORS.FILL_BODY;
+                ctx.lineWidth = STROKE_WIDTHS.STANDARD;
+
+                if (is_hovered(edge.id, hoveredPart, state, constraintElements))
+                  ctx.lineWidth = STROKE_WIDTHS.THICK;
+
+                if (is_selected(edge.id, state)) {
+                  // Add blue halo and blue stroke if element is selected/moving
+                  ctx.strokeStyle = COLORS.SELECTION_STROKE;
+                  ctx.fillStyle = COLORS.SELECTION_FILL;
+                }
+                if (
+                  !is_erase_hovered(
+                    edge.id,
+                    hoveredPart,
+                    state,
+                    constraintElements,
+                  )
+                ) {
+                  ctx.save();
+                  ctx.rotate(edge.positionStart.angle_to(edge.positionEnd));
+                  if (edge.fixedNodeStartID === element.id) {
+                    draw_slidep_rep(ctx, true, false);
+                  } else if (edge.fixedNodeEndID === element.id) {
+                    draw_slidep_rep(ctx, false, true);
+                  } else if (
+                    "fixedNodesBodyIDs" in edge &&
+                    edge.fixedNodesBodyIDs.includes(element.id)
+                  ) {
+                    draw_slidep_rep(ctx, true, true);
+                  }
+                  ctx.restore();
+                }
+
+                ctx.shadowBlur = oldShadowBlur;
+                ctx.globalAlpha = oldGlobalAlpha;
+                ctx.strokeStyle = oldStrokeStyle;
+                ctx.fillStyle = oldFillStyle;
+                ctx.lineWidth = oldLineWidth;
+              });
+              draw_pivot(
+                ctx,
+                Boolean(element.parentBeamID) ||
+                  element.rotatingEdgesIDs.length > 0,
+              );
               break;
             case "join":
               if (isHovered || isSelected || isEraseHovered) {
@@ -325,7 +436,7 @@ export function drawMechanicalCanvas(
               draw_damper(ctx, delta.length());
               break;
           }
-          if (isEdgeEndHovered) {
+          if (isEdgeEndHovered && hoveredPart.type === "Edge") {
             ctx.lineWidth = STROKE_WIDTHS.THICK;
             if (hoveredPart.part === "end") {
               ctx.translate(delta.length(), 0);
@@ -441,7 +552,7 @@ export function drawMechanicalCanvas(
             element.positionEnd,
             gearAngles,
           );
-          if (isEdgeEndHovered) {
+          if (isEdgeEndHovered && hoveredPart.type === "Edge") {
             ctx.lineWidth = STROKE_WIDTHS.THICK;
             const delta =
               hoveredPart.part === "end"

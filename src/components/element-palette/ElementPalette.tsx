@@ -26,6 +26,7 @@ import horizontalVerticalAlignIconUrl from "../../assets/icons/palette/horizonta
 import normalIconUrl from "../../assets/icons/palette/normal.svg";
 import parallelIconUrl from "../../assets/icons/palette/parallel.svg";
 import ratioIconUrl from "../../assets/icons/palette/ratio.svg";
+import forceIconUrl from "../../assets/icons/palette/force.svg";
 
 import { CanvasState, CanvasStateType } from "../../types/canvas-state";
 import { COLORS } from "../../constants/rendering-specs";
@@ -291,41 +292,27 @@ const SIMULATION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
     title: "Interface",
     elements: [
       {
-        label: "Selection",
-        tooltip: "Select (Esc)",
-        iconSrc: selectIconUrl,
-        goToStateType: "Selecting",
-        hilightRule: (state) =>
-          [
-            "Selecting",
-            "SelectingMultiple",
-            "SelectedMultiple",
-            "MovingSelectionMultiple",
-            "SelectedElement",
-            "MovingNode",
-            "MovingEdgeStartPoint",
-            "MovingEdgeEndPoint",
-            "MovingEdgeBody",
-            "MovingConstraint",
-          ].includes(state.type) ||
-          (state.type === "EditingConstraint" && !state.isPlacing),
-        hilightColor: COLORS.SELECTION_BOX,
-        hilightHoverColor: COLORS.SELECTION_STROKE,
+        label: "Grabing",
+        tooltip: "Grab (X)",
+        iconSrc: pivotIconUrl,
+        goToStateType: "Simulating",
+        hilightRule: (state) => state.type === "Simulating",
+        hilightColor: COLORS.ORANGE,
+        hilightHoverColor: COLORS.ORANGE_STROKE,
       },
       {
-        label: "Gomme",
-        tooltip: "Eraser (A)",
-        iconSrc: eraserIconUrl,
-        goToStateType: "Erasing",
-        hilightRule: (state) =>
-          state.type === "Erasing" || state.type === "ErasingMultiple",
-        hilightColor: COLORS.DELETION_BOX,
-        hilightHoverColor: COLORS.DELETION_STROKE,
+        label: "Force",
+        tooltip: "Force (F)",
+        iconSrc: forceIconUrl,
+        goToStateType: "ParallelConstraintStart",
+        hilightRule: (_state) => false,
+        hilightColor: COLORS.ORANGE,
+        hilightHoverColor: COLORS.ORANGE_STROKE,
       },
     ],
   },
   {
-    title: "Liaisons",
+    title: "Statique",
     elements: [
       {
         label: "Pivot",
@@ -350,7 +337,7 @@ const SIMULATION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
     ],
   },
   {
-    title: "Structure",
+    title: "Cinématique",
     elements: [
       {
         label: "Poutre",
@@ -420,8 +407,8 @@ export const ElementPalette: React.FC<ElementPaletteProps> = ({
   canvasState,
   mechanism,
 }) => {
-  const SIZE = 32;
-  const PADDING = 4;
+  const SIZE = 28;
+  const PADDING = 2;
 
   /** Handle state selection by clicking on an button */
   const handleElementClick = (stateType: CanvasStateType) => {
@@ -485,14 +472,13 @@ export const ElementPalette: React.FC<ElementPaletteProps> = ({
         <section key={group.title}>
           {group.title !== "Interface" && (
             <>
-              <Divider variant="fullWidth" flexItem sx={{ mb: 0.8, mt: 0.4 }} />
+              <Divider variant="fullWidth" flexItem sx={{ mx: -1, my: 0.5 }} />
               <Typography
                 sx={{
                   textAlign: "center",
-                  fontSize: "0.6rem",
-                  fontWeight: 700,
+                  fontSize: "0.65rem",
+                  fontWeight: 800,
                   color: "text.disabled",
-                  textTransform: "uppercase",
                 }}
               >
                 {group.title}

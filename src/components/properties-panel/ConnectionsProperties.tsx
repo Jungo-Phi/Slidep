@@ -171,7 +171,7 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
           >
             <ConnectionsContainer
               element={element}
-              containerType="ConnectsFixedEdges"
+              containerType="ConnectsRotatingEdges"
               setHoveredPart={setHoveredPart}
               setCanvasState={setCanvasState}
               updateMechanism={updateMechanism}
@@ -181,7 +181,7 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
             />
             <ConnectionsContainer
               element={element}
-              containerType="ConnectsRotatingEdges"
+              containerType="ConnectsFixedEdges"
               setHoveredPart={setHoveredPart}
               setCanvasState={setCanvasState}
               updateMechanism={updateMechanism}

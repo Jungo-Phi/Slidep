@@ -35,7 +35,7 @@
 - ~Enlever temps de chargement des icons contraintes dans le canvas~
 - ~Afficher en "Selected" l'élément premier de "startPlacingX"~
 - Régler de bordel de "connect-actions"
-- Connecter les "fixedGears"
+- ~Connecter les "fixedGears"~
 - (Click dans le vide quand state==placingConstraint -> state=Selecting ?)
 - Click dans Dimension quand state==placingStartDimension -> Editing
 - ~Changer le mouseIcon quand PlacingConstraint (cross?)~
@@ -56,13 +56,14 @@
 - ~Hover dimension~
 - Connecter une courroie à un engrenage avec une extrémité (en plus de la longueur)
 - hover des inputs dans le property pannel
-- hover : ignorer contraintes when placing mechanical elements or movingEdge
+- ~hover : ignorer contraintes when placing mechanical elements or movingEdge~
 - ~Min Gear radius placing~
 - ~slider angle placing~
-- empecher de placer une belt sur un gear déjà connecté
+- ~empecher de placer une belt sur un gear déjà connecté~
 - ~Dimension Radius~
 - ~Compléter le geometric-solver~
 - geometric solver - radius constraint
+- bug : crtl+Z déplacement contraintes
 - "applyHorizontalConstraint()" avec une extrémité ancrée ne fonctionne pas
 - hilight element on hover "disconnect" on element panel
 - Empecher les contraintes sur le même élément (DDL analyser)
@@ -101,3 +102,4 @@
 - Rejeter la position des dimensions des éléments pour la lisibilité
 - Déplacer les dimentions avec les élements associés
 - Renommer les éléments
+- Draw Slideps rotating beams over slider

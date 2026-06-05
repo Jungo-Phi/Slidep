@@ -12,7 +12,7 @@ import type {
 } from "../../types/element";
 import { Action, ConnectsActionType } from "../../types";
 import { HoveredPart } from "../../types/hovered-part";
-import { connected_constraints } from "./utils";
+import { connected_constraints, node_on_beam_body } from "./utils";
 
 /** Returns the mechanical element from the id. */
 export function get_mechanical_element_from_id(
@@ -237,17 +237,14 @@ export function disconnect_element(
       element.id,
       mechanicalElements,
     ) as BeltElement;
-    console.log(
-      "get_connections: ",
-      get_connections(connectedElement, containerType),
-    );
+    console.log("get_connections: ", get_connections(element, containerType));
     return {
       type: containerType,
       disconnect: true,
       elementID: element.id,
       connectID: connectedElement.id,
-      index: get_connections(connectedElement, containerType).indexOf(
-        element.id,
+      index: get_connections(element, containerType).indexOf(
+        connectedElement.id,
       ),
       direction: belt.attachedGearsIDs.find(
         (gear) => gear.id === connectedElement.id,
@@ -259,8 +256,8 @@ export function disconnect_element(
       disconnect: true,
       elementID: element.id,
       connectID: connectedElement.id,
-      index: get_connections(connectedElement, containerType).indexOf(
-        element.id,
+      index: get_connections(element, containerType).indexOf(
+        connectedElement.id,
       ),
     };
   }
@@ -355,6 +352,127 @@ export function delete_element(
 }
 
 /**
+ * Transfer les éléments connectés à `edge` de `source` à `dest`
+ *
+ * Returns the actions to perform disconnections and connections.
+ */
+function transfer_edge_connections_to_node(
+  edgeID: ID,
+  sourceNodeID: ID,
+  destNodeID: ID,
+  mechanicalElements: MechanicalElement[],
+) {
+  const actions: Action[] = [];
+  const connectedEdge = get_mechanical_element_from_id(
+    edgeID,
+    mechanicalElements,
+  ) as EdgeElement;
+  if (connectedEdge.fixedNodeEndID === sourceNodeID) {
+    actions.push({
+      type: "ConnectsFixedNodeEnd",
+      disconnect: true,
+      elementID: edgeID,
+      connectID: sourceNodeID,
+    });
+    actions.push({
+      type: "ConnectsFixedNodeEnd",
+      disconnect: false,
+      elementID: edgeID,
+      connectID: destNodeID,
+    });
+  }
+  if (connectedEdge.fixedNodeStartID === sourceNodeID) {
+    actions.push({
+      type: "ConnectsFixedNodeStart",
+      disconnect: true,
+      elementID: edgeID,
+      connectID: sourceNodeID,
+    });
+    actions.push({
+      type: "ConnectsFixedNodeStart",
+      disconnect: false,
+      elementID: edgeID,
+      connectID: destNodeID,
+    });
+  }
+  if (
+    "fixedNodesBodyIDs" in connectedEdge &&
+    connectedEdge.fixedNodesBodyIDs.includes(sourceNodeID)
+  ) {
+    actions.push({
+      type: "ConnectsFixedNodesBody",
+      disconnect: true,
+      elementID: edgeID,
+      connectID: sourceNodeID,
+      index: get_connections(connectedEdge, "ConnectsFixedNodesBody").indexOf(
+        sourceNodeID,
+      ),
+    });
+    actions.push({
+      type: "ConnectsFixedNodesBody",
+      disconnect: false,
+      elementID: edgeID,
+      connectID: destNodeID,
+      index: 0,
+    });
+  }
+  return actions;
+}
+
+/**
+ * Transfer les éléments connectés à `source` à `dest` pour des nodes (par de gears).
+ *
+ * Exemple : rotatingEdgeID(2).endID = 1
+ * -> transfer_connection_id(node(1), node(3))
+ * -> rotatingEdgeID(2).endID = 3
+ *
+ * Returns the actions to perform disconnections and connections.
+ */
+function transfer_node_connection_id(
+  source: NodeElement,
+  dest: NodeElement,
+  mechanicalElements: MechanicalElement[],
+): Action[] {
+  const actions: Action[] = [];
+
+  if ("parentBeamID" in source && source.parentBeamID) {
+    actions.push(
+      ...transfer_edge_connections_to_node(
+        source.parentBeamID,
+        source.id,
+        dest.id,
+        mechanicalElements,
+      ),
+    );
+  }
+  if ("fixedEdgesIDs" in source) {
+    source.fixedEdgesIDs.forEach((edgeID) => {
+      actions.push(
+        ...transfer_edge_connections_to_node(
+          edgeID,
+          source.id,
+          dest.id,
+          mechanicalElements,
+        ),
+      );
+    });
+  }
+  if ("rotatingEdgesIDs" in source) {
+    source.rotatingEdgesIDs.forEach((edgeID) => {
+      actions.push(
+        ...transfer_edge_connections_to_node(
+          edgeID,
+          source.id,
+          dest.id,
+          mechanicalElements,
+        ),
+      );
+    });
+  }
+  return actions;
+}
+
+/**
  * Connects an element (elementPart) to another (hoveredPart) based on the hovered part.
  *
  * Returns the actions to perform bidirectional connections and handles special cases (connections transfer, fusion, etc.)
@@ -381,7 +499,7 @@ export function connect_elements(
     hoveredPart.id,
     mechanicalElements,
   ) as MechanicalElement;
-  let actions: Action[] = [];
+  const actions: Action[] = [];
 
   console.log(
     "CONNECT ELEMENT : ",
@@ -401,7 +519,7 @@ export function connect_elements(
           const hoveredNode = hoveredElement as NodeElement;
           if (node.type === "pivot" && hoveredNode.type === "slider") {
             // Fuse them into a Slidep
-            let slidep: SlidepElement = {
+            const slidep: SlidepElement = {
               type: "slidep",
               parentBeamID: hoveredNode.parentBeamID,
               rotatingEdgesIDs: node.rotatingEdgesIDs.concat(
@@ -414,91 +532,52 @@ export function connect_elements(
             actions.push({ type: "DeleteElement", element: node });
             actions.push({ type: "DeleteElement", element: hoveredNode });
             actions.push({ type: "CreateElement", element: slidep });
-            node.rotatingEdgesIDs.forEach((edgeID) => {
-              const connectedEdge = get_mechanical_element_from_id(
-                edgeID,
+            actions.push(
+              ...transfer_node_connection_id(
+                node,
+                hoveredNode,
                 mechanicalElements,
-              ) as EdgeElement;
-              if (connectedEdge.fixedNodeEndID === node.id) {
-                actions.push({
-                  type: "ConnectsFixedNodeEnd",
-                  disconnect: true,
-                  elementID: edgeID,
-                  connectID: node.id,
-                });
-                actions.push({
-                  type: "ConnectsFixedNodeEnd",
-                  disconnect: false,
-                  elementID: edgeID,
-                  connectID: hoveredNode.id,
-                });
-              }
-              if (connectedEdge.fixedNodeStartID === node.id) {
-                actions.push({
-                  type: "ConnectsFixedNodeStart",
-                  disconnect: true,
-                  elementID: edgeID,
-                  connectID: node.id,
-                });
-                actions.push({
-                  type: "ConnectsFixedNodeStart",
-                  disconnect: false,
-                  elementID: edgeID,
-                  connectID: hoveredNode.id,
-                });
-              }
-              if (
-                "fixedNodesBodyIDs" in connectedEdge &&
-                connectedEdge.fixedNodesBodyIDs.includes(node.id)
-              ) {
-                actions.push({
-                  type: "ConnectsFixedNodesBody",
-                  disconnect: true,
-                  elementID: edgeID,
-                  connectID: node.id,
-                  index: 0, // TODO : remove at corresponding index
-                });
-                actions.push({
-                  type: "ConnectsFixedNodesBody",
-                  disconnect: false,
-                  elementID: edgeID,
-                  connectID: hoveredNode.id,
-                  index: 0,
-                });
-              }
-            });
+              ),
+            );
           } else if (node.type === "slider" && hoveredNode.type === "pivot") {
             // Fuse them into a Slidep
-            let slidep: SlidepElement = {
+            const parentBeam = node_on_beam_body(
+              hoveredNode,
+              mechanicalElements,
+            );
+            const parentBeamID = node.parentBeamID
+              ? node.parentBeamID
+              : parentBeam
+                ? parentBeam.id
+                : undefined;
+            const slidep: SlidepElement = {
               type: "slidep",
-              parentBeamID: node.parentBeamID,
-              rotatingEdgesIDs: node.fixedEdgesIDs.concat(
-                hoveredNode.rotatingEdgesIDs,
-              ),
+              parentBeamID,
+              rotatingEdgesIDs: node.fixedEdgesIDs
+                .concat(hoveredNode.rotatingEdgesIDs)
+                .filter((edgeID) => edgeID !== parentBeamID),
               position: hoveredNode.position,
               isGrounded: node.isGrounded || hoveredNode.isGrounded,
-              id: node.id,
+              id: hoveredNode.id,
             };
-            // TODO : update the connections of the slidep
             actions.push({ type: "DeleteElement", element: node });
             actions.push({ type: "DeleteElement", element: hoveredNode });
             actions.push({ type: "CreateElement", element: slidep });
+            actions.push(
+              ...transfer_node_connection_id(
+                node,
+                hoveredNode,
+                mechanicalElements,
+              ),
+            );
           } else if (node.type === "gear" && hoveredNode.type === "gear") {
-            actions.push({
-              type: "ConnectsFixedGears",
-              disconnect: false,
-              elementID: node.id,
-              connectID: hoveredNode.id,
-              index: 0,
-            });
-            actions.push({
-              type: "ConnectsFixedGears",
-              disconnect: false,
-              elementID: hoveredNode.id,
-              connectID: node.id,
-              index: 0,
-            });
+            actions.push(
+              ...connect_gears(node.id, hoveredNode.id, "ConnectsFixedGears"),
+            );
           } else {
+            // not slider + pivot OR gear + gear
+            node.type;
+            hoveredNode.type;
             // TODO : Replace the hovered node and inherit its connections
           }
           break;
@@ -576,7 +655,7 @@ function connect_node_and_edge(
   edgePart: "start" | "end" | "body",
 ): Action[] {
   let actions: Action[] = [];
-  if ("parentBeamID" in node && edgePart === "body") {
+  if ("parentBeamID" in node && !node.parentBeamID && edgePart === "body") {
     actions.push({
       type: "ConnectsParentBeam",
       disconnect: false,
@@ -630,17 +709,21 @@ function connect_node_and_edge(
 }
 
 /** Connects two gears together. */
-export function connect_gears(gear1ID: ID, gear2ID: ID): Action[] {
+export function connect_gears(
+  gear1ID: ID,
+  gear2ID: ID,
+  connectionType: "ConnectsMeshedGears" | "ConnectsFixedGears",
+): Action[] {
   let actions: Action[] = [];
   actions.push({
-    type: "ConnectsMeshedGears",
+    type: connectionType,
     disconnect: false,
     elementID: gear1ID,
     connectID: gear2ID,
     index: 0,
   });
   actions.push({
-    type: "ConnectsMeshedGears",
+    type: connectionType,
     disconnect: false,
     elementID: gear2ID,
     connectID: gear1ID,

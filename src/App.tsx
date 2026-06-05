@@ -23,13 +23,14 @@ import {
   Save,
   Language,
   Info,
-  AddCircle,
-  Folder,
+  FolderOpen,
   Close,
+  Add,
 } from "@mui/icons-material";
 import { lightTheme } from "./lib/mui-theme"; // import { lightTheme, darkTheme, highContrastTheme } from "./lib/mui-theme";
 import logoUrl from "./assets/icons/palette/logo.svg";
 import playIconUrl from "./assets/icons/palette/play.svg";
+import selectIconUrl from "./assets/icons/palette/select.svg";
 import MechanicalCanvas from "./components/mechanical-canvas/MechanicalCanvas";
 import { ElementPalette } from "./components/element-palette";
 import { PropertiesPanel } from "./components/properties-panel/PropertiesPanel";
@@ -552,35 +553,35 @@ const App: React.FC = () => {
                 >
                   <MenuItem
                     onClick={handleMenuButtonNew}
-                    disableRipple
                     sx={{ gap: 1, marginLeft: -0.5 }}
+                    disableRipple
                   >
-                    <AddCircle />
+                    <Add fontSize="small" />
                     Nouveau
                   </MenuItem>
                   <MenuItem
                     onClick={handleMenuButtonOpen}
-                    disableRipple
                     sx={{ gap: 1, marginLeft: -0.5 }}
+                    disableRipple
                   >
-                    <Folder />
+                    <FolderOpen fontSize="small" />
                     Ouvrir
                   </MenuItem>
                   <MenuItem
                     onClick={handleMenuButtonSave}
-                    disableRipple
                     sx={{ gap: 1, marginLeft: -0.5 }}
+                    disableRipple
                   >
-                    <Save />
+                    <Save fontSize="small" />
                     Enregistrer
                   </MenuItem>
                   <Divider sx={{ my: 0.5 }} />
                   <MenuItem
                     onClick={handleSettingsOpen}
-                    disableRipple
                     sx={{ gap: 1, marginLeft: -0.5 }}
+                    disableRipple
                   >
-                    <Settings />
+                    <Settings fontSize="small" />
                     Paramètres
                   </MenuItem>
                   <Dialog open={settingsOpen} onClose={handleSettingsClose}>
@@ -611,26 +612,53 @@ const App: React.FC = () => {
             {/* Center: Play simulation */}
             <IconButton
               sx={{
-                backgroundColor: "primary.main",
-                color: "primary.contrastText",
+                color:
+                  canvasState.type === "Simulating"
+                    ? "text.primary"
+                    : "primary.main",
+                "&:hover": {
+                  backgroundColor:
+                    canvasState.type === "Simulating"
+                      ? COLORS.SELECTION_BOX
+                      : "primary.main",
+                  color: "primary.contrastText",
+                  img: {
+                    filter: "brightness(0) invert(1)",
+                  },
+                  border: 0,
+                },
+                border: canvasState.type === "Simulating" ? 0 : 2,
                 fontSize: "large",
                 paddingLeft: 0.5,
                 paddingY: 0.5,
+                gap: canvasState.type === "Simulating" ? 0.8 : 0.2,
               }}
-              onClick={() => setCanvasState({ type: "Simulating" })}
+              onClick={() =>
+                setCanvasState({
+                  type:
+                    canvasState.type === "Simulating"
+                      ? "Selecting"
+                      : "Simulating",
+                })
+              }
             >
               <Box
                 component="img"
-                src={playIconUrl}
+                src={
+                  canvasState.type === "Simulating"
+                    ? selectIconUrl
+                    : playIconUrl
+                }
                 alt="Démarrer"
                 sx={{
                   width: 28,
                   height: 28,
                   display: "block",
-                  filter: "brightness(0) invert(1)",
                 }}
               />
-              Lancer la simulation
+              {canvasState.type === "Simulating"
+                ? "Revenir à l'édition"
+                : "Lancer la simulation"}
             </IconButton>
 
             {/* Right side: Undo/Redo, Settings */}

@@ -374,13 +374,14 @@ export function resolveGeometricConstraints(
 
   // console.log("pos : ", [...nodes.positions.keys()]);
   //console.log("links : ", links);
-  ddl = get_degrees_of_freedom(
+  /*
+  console.log("DDL : ", get_degrees_of_freedom(
     nodes.positions,
     nodes.radii,
     nodes.posMasses,
     links,
-  );
-  console.log("DDL : ", ddl);
+  ));
+  */
 
   // 3. PBD (Position Based Dynamics)
   const solvedNodes = PBD_kinematic_solver(

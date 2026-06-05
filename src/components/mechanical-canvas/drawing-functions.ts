@@ -175,7 +175,7 @@ export function draw_slider(ctx: CanvasRenderingContext2D) {
   ctx.stroke();
 }
 
-export function draw_slidep(ctx: CanvasRenderingContext2D, filled: boolean) {
+export function draw_slidep_bottom(ctx: CanvasRenderingContext2D) {
   ctx.beginPath();
   ctx.roundRect(
     -DIM.SLIDEP_OUTER_WIDTH / 2,
@@ -184,7 +184,6 @@ export function draw_slidep(ctx: CanvasRenderingContext2D, filled: boolean) {
     DIM.SLIDER_OUTER_HEIGHT,
     DIM.SLIDER_RADIUS,
   );
-  ctx.stroke();
   ctx.rect(
     -DIM.SLIDER_INNER_WIDTH / 2,
     -DIM.SLIDER_INNER_HEIGHT / 2,
@@ -202,26 +201,23 @@ export function draw_slidep(ctx: CanvasRenderingContext2D, filled: boolean) {
     DIM.SLIDER_RADIUS,
   );
   ctx.stroke();
-  // Pivot
-  ctx.beginPath();
-  ctx.arc(0, 0, DIM.PIVOT_OUTER_RADIUS, 0, TAU);
-  ctx.arc(0, 0, DIM.PIVOT_INNER_RADIUS, 0, TAU);
-  ctx.fillStyle = COLORS.FILL_NODE;
-  ctx.fill("evenodd");
-
-  if (filled) {
-    ctx.beginPath();
-    ctx.arc(0, 0, DIM.PIVOT_INNER_RADIUS, 0, TAU);
-    ctx.fillStyle = COLORS.FILL_BODY;
-    ctx.fill();
-  }
-
-  ctx.beginPath();
-  ctx.arc(0, 0, DIM.PIVOT_OUTER_RADIUS, 0, TAU);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.arc(0, 0, DIM.PIVOT_INNER_RADIUS, 0, TAU);
-  ctx.stroke();
+}
+export function draw_slidep_rep(
+  ctx: CanvasRenderingContext2D,
+  start: boolean,
+  end: boolean,
+) {
+  const startN = start ? 1 : 0;
+  const endN = end ? 1 : 0;
+  const sideL = DIM.BEAM_WIDTH - STROKE_WIDTHS.STANDARD + ctx.lineWidth;
+  const sideS = DIM.BEAM_WIDTH - STROKE_WIDTHS.STANDARD - ctx.lineWidth;
+  const C = DIM.SLIDEP_OUTER_WIDTH / 2 + DIM.SLIDER_INNER_HEIGHT / 2;
+  const D = C + 0.5;
+  const oldFillStyle = ctx.fillStyle;
+  ctx.fillStyle = ctx.strokeStyle;
+  ctx.fillRect(-C * endN, -sideL / 2, C * (startN + endN), sideL);
+  ctx.fillStyle = oldFillStyle;
+  ctx.fillRect(-D * endN, -sideS / 2, D * (startN + endN), sideS);
 }
 
 export function draw_join_bottom(ctx: CanvasRenderingContext2D) {

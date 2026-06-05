@@ -340,20 +340,31 @@ export function canvasStateReducer(
             type: "CreateElement",
             element: newElement,
           });
-          if ("startHover" in state && "positionStart" in newElement) {
+          if (
+            "startHover" in state &&
+            ("positionStart" in newElement || newElement.type === "gear")
+          ) {
             actions.push(
               ...connect_elements(
                 mechanicalElements,
                 IDcounter,
                 state.startHover,
                 newElement,
-                {
-                  type: "Edge",
-                  position: newElement.positionStart,
-                  id: newElement.id,
-                  deleting: false,
-                  part: "start",
-                },
+                newElement.type === "gear"
+                  ? {
+                      type: "Node",
+                      position: newElement.position,
+                      id: newElement.id,
+                      deleting: false,
+                      beamBodyHover: false,
+                    }
+                  : {
+                      type: "Edge",
+                      position: newElement.positionStart,
+                      id: newElement.id,
+                      deleting: false,
+                      part: "start",
+                    },
               ),
             );
           }
@@ -378,15 +389,17 @@ export function canvasStateReducer(
                   : "end",
             };
           }
-          actions.push(
-            ...connect_elements(
-              mechanicalElements,
-              IDcounter,
-              hoveredPart,
-              newElement,
-              elementPart,
-            ),
-          );
+          if (newElement.type !== "gear") {
+            actions.push(
+              ...connect_elements(
+                mechanicalElements,
+                IDcounter,
+                hoveredPart,
+                newElement,
+                elementPart,
+              ),
+            );
+          }
           if (state.type === "PlacingBeltEnd") {
             for (let i = 0; i < state.attachedGearsIDs.length; i++) {
               actions.push(
@@ -444,12 +457,6 @@ export function canvasStateReducer(
               break;
             case "PlacingGearRadius":
               setCanvasState({ type: "PlacingGearStart" });
-              break;
-            case "PlacingPivot":
-            case "PlacingSlider":
-            case "PlacingJoin":
-            case "PlacingMass":
-              // Remains in the same state
               break;
           }
           break;
