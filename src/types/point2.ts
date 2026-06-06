@@ -83,6 +83,26 @@ export class Point2 {
     return this.mul(scalar / lenght);
   }
 
+  /** Scales the length to a minimum value if length is lower, conserving the direction */
+  public limit_length_min(min: number): Point2 {
+    const lenght = this.length();
+    if (lenght < min) {
+      if (lenght === 0) return new Point2(min, 0);
+      return this.mul(min / lenght);
+    }
+    return this;
+  }
+
+  /** Scales the length to a minimum value if length is lower, conserving the direction */
+  public limit_length_max(max: number): Point2 {
+    const lenght = this.length();
+    if (lenght > max) {
+      if (lenght === 0) return new Point2(max, 0);
+      return this.mul(max / lenght);
+    }
+    return this;
+  }
+
   /** Appends to the length, conserving the direction */
   public extend_length(scalar: number): Point2 {
     return Point2.from_polar(this.length() + scalar, this.angle());

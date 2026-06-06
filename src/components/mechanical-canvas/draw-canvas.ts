@@ -298,7 +298,14 @@ export function drawMechanicalCanvas(
           }
           switch (element.type) {
             case "slider":
-              draw_slider(ctx);
+              if (element.fixedEdgesIDs.length > 0 && !element.parentBeamID) {
+                ctx.fillStyle = COLORS.BACKGROUND;
+              }
+              draw_slider(
+                ctx,
+                Boolean(element.parentBeamID) ||
+                  element.fixedEdgesIDs.length > 0,
+              );
               break;
             case "pivot":
               draw_pivot(ctx, element.rotatingEdgesIDs.length > 0);
@@ -789,7 +796,7 @@ export function drawMechanicalCanvas(
               hoveredBeam.positionStart.angle_to(hoveredBeam.positionEnd),
             );
           }
-          draw_slider(ctx);
+          draw_slider(ctx, false);
           break;
         case "PlacingJoin":
           draw_join(ctx);

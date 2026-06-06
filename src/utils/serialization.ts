@@ -48,7 +48,6 @@ function deserializeNumbersMap(
 // ─── Serialize / Deserialize Action ───────────────────────────────────────────
 
 export function serializeAction(a: Action): SerializedAction {
-  console.log(a);
   switch (a.type) {
     // Contient un UnionElement avec des Point2 imbriqués → déléguer
     case "CreateElement":

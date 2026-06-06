@@ -26,9 +26,7 @@ export function applyHandleGrabConstraint(
     const p = positions.get(key);
     if (!p) return 0;
     const delta = targetValue.sub(p);
-    let target = delta.mul(stiffness);
-    if (target.length() > maxAmplitude)
-      target = delta.scale_to_length(maxAmplitude);
+    let target = delta.mul(stiffness).limit_length_max(maxAmplitude);
     positions.set(key, p.add(target));
     return delta.length();
   }

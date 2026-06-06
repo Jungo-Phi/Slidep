@@ -21,6 +21,7 @@ import {
   get_mechanical_element_from_id,
 } from "./connect-actions";
 import { is_on_left_side_of_belt } from "../../utils/belt-geom";
+import { DIM } from "../../constants/rendering-specs";
 
 export function canvasStateReducer(
   state: CanvasState,
@@ -346,8 +347,6 @@ export function canvasStateReducer(
           ) {
             actions.push(
               ...connect_elements(
-                mechanicalElements,
-                IDcounter,
                 state.startHover,
                 newElement,
                 newElement.type === "gear"
@@ -365,6 +364,9 @@ export function canvasStateReducer(
                       deleting: false,
                       part: "start",
                     },
+                IDcounter,
+                mechanicalElements,
+                constraintElements,
               ),
             );
           }
@@ -392,11 +394,12 @@ export function canvasStateReducer(
           if (newElement.type !== "gear") {
             actions.push(
               ...connect_elements(
-                mechanicalElements,
-                IDcounter,
                 hoveredPart,
                 newElement,
                 elementPart,
+                IDcounter,
+                mechanicalElements,
+                constraintElements,
               ),
             );
           }
@@ -439,7 +442,13 @@ export function canvasStateReducer(
                 ),
               );
             } else if (hoveredPart.type === "GearTooth") {
-              actions.push(...connect_gears(newElementId, hoveredPart.id));
+              actions.push(
+                ...connect_gears(
+                  newElementId,
+                  hoveredPart.id,
+                  "ConnectsMeshedGears",
+                ),
+              );
             }
           }
           switch (state.type) {
@@ -500,8 +509,6 @@ export function canvasStateReducer(
               actionBundleType = "Other";
               actions.push({ type: "CreateElement", element: newJoin });
               const connect_actions = connect_elements(
-                mechanicalElements,
-                IDcounter,
                 hoveredPart,
                 newJoin,
                 {
@@ -511,6 +518,9 @@ export function canvasStateReducer(
                   deleting: false,
                   beamBodyHover: false,
                 },
+                IDcounter,
+                mechanicalElements,
+                constraintElements,
               );
               actions.push(...connect_actions);
               break;
@@ -1102,21 +1112,41 @@ export function canvasStateReducer(
           break;
         case "MovingEdgeStartPoint":
           if (hoveredPart.position === oldPosition) break;
+          const positionEnd = (
+            get_mechanical_element_from_id(
+              state.elementID,
+              mechanicalElements,
+            ) as EdgeElement
+          ).positionEnd;
           actionBundleType = "MoveElement";
           actions.push({
             type: "MoveEdgeStart",
             id: state.elementID,
-            newPosition: hoveredPart.position,
+            newPosition: positionEnd.add(
+              hoveredPart.position
+                .sub(positionEnd)
+                .limit_length_min(DIM.MIN_EDGE_LENGTH),
+            ),
             oldPosition,
           });
           break;
         case "MovingEdgeEndPoint":
           if (hoveredPart.position === oldPosition) break;
+          const positionStart = (
+            get_mechanical_element_from_id(
+              state.elementID,
+              mechanicalElements,
+            ) as EdgeElement
+          ).positionStart;
           actionBundleType = "MoveElement";
           actions.push({
             type: "MoveEdgeEnd",
             id: state.elementID,
-            newPosition: hoveredPart.position,
+            newPosition: positionStart.add(
+              hoveredPart.position
+                .sub(positionStart)
+                .limit_length_min(DIM.MIN_EDGE_LENGTH),
+            ),
             oldPosition,
           });
           break;
@@ -1141,7 +1171,10 @@ export function canvasStateReducer(
           actions.push({
             type: "ChangeGearRadius",
             id: state.elementID,
-            newRadius: gear.position.distance_to(hoveredPart.position),
+            newRadius: Math.max(
+              DIM.MIN_GEAR_RADIUS,
+              gear.position.distance_to(hoveredPart.position),
+            ),
             oldRadius: gear.radius,
           });
           break;
@@ -1278,14 +1311,15 @@ export function canvasStateReducer(
           actionBundleType = "Connects";
           actions.push(
             ...connect_elements(
-              mechanicalElements,
-              IDcounter,
               hoveredPart,
               get_mechanical_element_from_id(
                 state.elementID,
                 mechanicalElements,
               ),
               elementPart,
+              IDcounter,
+              mechanicalElements,
+              constraintElements,
             ),
           );
           if (actions.length === 0) {
@@ -1350,7 +1384,13 @@ export function canvasStateReducer(
             );
           } else if (hoveredPart.type === "GearTooth") {
             actionBundleType = "Connects";
-            actions.push(...connect_gears(state.elementID, hoveredPart.id));
+            actions.push(
+              ...connect_gears(
+                state.elementID,
+                hoveredPart.id,
+                "ConnectsMeshedGears",
+              ),
+            );
           } else {
             actionBundleType = "Other";
             actions.push({ type: "Blank" });

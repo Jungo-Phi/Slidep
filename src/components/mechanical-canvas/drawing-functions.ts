@@ -155,7 +155,7 @@ export function draw_pivot(ctx: CanvasRenderingContext2D, filled: boolean) {
   ctx.stroke();
 }
 
-export function draw_slider(ctx: CanvasRenderingContext2D) {
+export function draw_slider(ctx: CanvasRenderingContext2D, filled: boolean) {
   ctx.beginPath();
   ctx.roundRect(
     -DIM.SLIDER_OUTER_WIDTH / 2,
@@ -170,8 +170,18 @@ export function draw_slider(ctx: CanvasRenderingContext2D) {
     DIM.SLIDER_INNER_WIDTH,
     DIM.SLIDER_INNER_HEIGHT,
   );
+  const oldFillStyle = ctx.fillStyle;
   ctx.fillStyle = COLORS.FILL_NODE;
   ctx.fill("evenodd");
+  if (filled) {
+    ctx.fillStyle = oldFillStyle;
+    ctx.fillRect(
+      -DIM.SLIDER_INNER_WIDTH / 2,
+      -DIM.SLIDER_INNER_HEIGHT / 2,
+      DIM.SLIDER_INNER_WIDTH,
+      DIM.SLIDER_INNER_HEIGHT,
+    );
+  }
   ctx.stroke();
 }
 

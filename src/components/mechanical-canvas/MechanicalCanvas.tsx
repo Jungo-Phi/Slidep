@@ -444,6 +444,7 @@ export const MechanicalCanvas: React.FC<MechanicalCanvasProps> = ({
         }}
         onMouseUp={onMouseUpHandler}
         onMouseDown={onMouseDownHandler}
+        onMouseEnter={onMouseUpHandler}
         onMouseMove={onMouseMoveHandler}
         onContextMenu={onContextMenuHandler}
         tabIndex={0}

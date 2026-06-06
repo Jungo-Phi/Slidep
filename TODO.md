@@ -34,7 +34,7 @@
 - ~Appliquer "UpdateToValidState" apres contrainte H/V~
 - ~Enlever temps de chargement des icons contraintes dans le canvas~
 - ~Afficher en "Selected" l'élément premier de "startPlacingX"~
-- Régler de bordel de "connect-actions"
+- ~Régler le bordel de "connect-actions"~
 - ~Connecter les "fixedGears"~
 - (Click dans le vide quand state==placingConstraint -> state=Selecting ?)
 - Click dans Dimension quand state==placingStartDimension -> Editing

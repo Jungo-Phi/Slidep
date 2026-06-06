@@ -320,12 +320,6 @@ export function delete_element(
     element.type === "slider" ||
     element.type === "spring"
   ) {
-    connected_constraints(elementID, constraintElements).forEach((id) =>
-      actions.push({
-        type: "DeleteElement",
-        element: get_constraint_element_from_id(id, constraintElements),
-      }),
-    );
     get_connection_types(element).forEach((connectionType) => {
       get_connections(element, connectionType).forEach((id) => {
         const connectedElement = get_mechanical_element_from_id(
@@ -348,11 +342,17 @@ export function delete_element(
     });
   }
   actions.push({ type: "DeleteElement", element });
+  connected_constraints(elementID, constraintElements).forEach((id) =>
+    actions.push({
+      type: "DeleteElement",
+      element: get_constraint_element_from_id(id, constraintElements),
+    }),
+  );
   return actions;
 }
 
 /**
- * Transfer les éléments connectés à `edge` de `source` à `dest`
+ * Transfer les éléments connectés à `edge` de `sourceNodeID` à `destNodeID`
  *
  * Returns the actions to perform disconnections and connections.
  */
@@ -420,7 +420,70 @@ function transfer_edge_connections_to_node(
 }
 
 /**
- * Transfer les éléments connectés à `source` à `dest` pour des nodes (par de gears).
+ * Transfer les connections de `sourceNode` à des edges vers `destNode` (sauf pour AttachedBelt).
+ *
+ * Returns the actions to perform disconnections and connections.
+ */
+function transfer_internal_connections(
+  sourceNode: NodeElement,
+  destNode: NodeElement,
+): Action[] {
+  const actions: Action[] = [];
+
+  if ("parentBeamID" in sourceNode && sourceNode.parentBeamID) {
+    if ("parentBeamID" in destNode && !destNode.parentBeamID) {
+      actions.push({
+        type: "ConnectsParentBeam",
+        disconnect: false,
+        elementID: destNode.id,
+        connectID: sourceNode.parentBeamID,
+      });
+    } else {
+      actions.push({
+        type:
+          "fixedEdgesIDs" in destNode
+            ? "ConnectsFixedEdges"
+            : "ConnectsRotatingEdges",
+        disconnect: false,
+        elementID: destNode.id,
+        connectID: sourceNode.parentBeamID,
+        index: 0,
+      });
+    }
+  }
+  if ("fixedEdgesIDs" in sourceNode) {
+    sourceNode.fixedEdgesIDs.forEach((edgeID) => {
+      actions.push({
+        type:
+          "fixedEdgesIDs" in destNode
+            ? "ConnectsFixedEdges"
+            : "ConnectsRotatingEdges",
+        disconnect: false,
+        elementID: destNode.id,
+        connectID: edgeID,
+        index: 0,
+      });
+    });
+  }
+  if ("rotatingEdgesIDs" in sourceNode) {
+    sourceNode.rotatingEdgesIDs.forEach((edgeID) => {
+      actions.push({
+        type:
+          "rotatingEdgesIDs" in destNode
+            ? "ConnectsRotatingEdges"
+            : "ConnectsFixedEdges",
+        disconnect: false,
+        elementID: destNode.id,
+        connectID: edgeID,
+        index: 0,
+      });
+    });
+  }
+  return actions;
+}
+
+/**
+ * Transfer les connections des edges à `sourceNode` vers `destNode` (sauf pour AttachedBelt).
  *
  * Exemple : rotatingEdgeID(2).endID = 1
  * -> transfer_connection_id(node(1), node(3))
@@ -428,42 +491,42 @@ function transfer_edge_connections_to_node(
  *
  * Returns the actions to perform disconnections and connections.
  */
-function transfer_node_connection_id(
-  source: NodeElement,
-  dest: NodeElement,
+function transfer_external_connections(
+  sourceNode: NodeElement,
+  destNode: NodeElement,
   mechanicalElements: MechanicalElement[],
 ): Action[] {
   const actions: Action[] = [];
 
-  if ("parentBeamID" in source && source.parentBeamID) {
+  if ("parentBeamID" in sourceNode && sourceNode.parentBeamID) {
     actions.push(
       ...transfer_edge_connections_to_node(
-        source.parentBeamID,
-        source.id,
-        dest.id,
+        sourceNode.parentBeamID,
+        sourceNode.id,
+        destNode.id,
         mechanicalElements,
       ),
     );
   }
-  if ("fixedEdgesIDs" in source) {
-    source.fixedEdgesIDs.forEach((edgeID) => {
+  if ("fixedEdgesIDs" in sourceNode) {
+    sourceNode.fixedEdgesIDs.forEach((edgeID) => {
       actions.push(
         ...transfer_edge_connections_to_node(
           edgeID,
-          source.id,
-          dest.id,
+          sourceNode.id,
+          destNode.id,
           mechanicalElements,
         ),
       );
     });
   }
-  if ("rotatingEdgesIDs" in source) {
-    source.rotatingEdgesIDs.forEach((edgeID) => {
+  if ("rotatingEdgesIDs" in sourceNode) {
+    sourceNode.rotatingEdgesIDs.forEach((edgeID) => {
       actions.push(
         ...transfer_edge_connections_to_node(
           edgeID,
-          source.id,
-          dest.id,
+          sourceNode.id,
+          destNode.id,
           mechanicalElements,
         ),
       );
@@ -473,25 +536,83 @@ function transfer_node_connection_id(
 }
 
 /**
- * Connects an element (elementPart) to another (hoveredPart) based on the hovered part.
+ * Transfer les connections des contraintes à `sourceNode` vers `destNode`.
+ *
+ * Si le transfer n'est pas possible, les supprimer.
+ *
+ * Returns the actions to perform disconnections and connections.
+ */
+function transfer_constraint_connections(
+  sourceNodeID: ID,
+  destNodeID: ID,
+  constraintElements: ConstraintElement[],
+): Action[] {
+  const actions: Action[] = [];
+
+  constraintElements.forEach((constraint) => {
+    switch (constraint.type) {
+      case "dimension-node-to-node":
+      case "horizontal-align-nodes":
+      case "vertical-align-nodes":
+        if (constraint.startNodeID === sourceNodeID) {
+          const newConstraint = { ...constraint };
+          newConstraint.startNodeID = destNodeID;
+          actions.push({ type: "DeleteElement", element: constraint });
+          actions.push({ type: "CreateElement", element: newConstraint });
+        } else if (constraint.endNodeID === sourceNodeID) {
+          const newConstraint = { ...constraint };
+          newConstraint.endNodeID = destNodeID;
+          actions.push({ type: "DeleteElement", element: constraint });
+          actions.push({ type: "CreateElement", element: newConstraint });
+        }
+        break;
+      case "dimension-edge-to-node":
+        if (constraint.nodeID === sourceNodeID) {
+          const newConstraint = { ...constraint };
+          newConstraint.nodeID = destNodeID;
+          actions.push({ type: "DeleteElement", element: constraint });
+          actions.push({ type: "CreateElement", element: newConstraint });
+        }
+        break;
+      case "dimension-radius":
+        if (constraint.gearID === sourceNodeID) {
+          actions.push({ type: "DeleteElement", element: constraint });
+        }
+        break;
+      case "gear-ratio":
+        if (
+          constraint.startGearID === sourceNodeID ||
+          constraint.endGearID === sourceNodeID
+        ) {
+          actions.push({ type: "DeleteElement", element: constraint });
+        }
+        break;
+    }
+  });
+  return actions;
+}
+
+/**
+ * Connects an element (selectedPart) to another (hoveredPart).
  *
  * Returns the actions to perform bidirectional connections and handles special cases (connections transfer, fusion, etc.)
  *
- * All connections are allowed, the element (grabbed) takes over.
+ * All connections are allowed, the selectedElement takes over.
  */
 export function connect_elements(
-  mechanicalElements: MechanicalElement[],
-  IDcounter: React.MutableRefObject<number>,
   hoveredPart: HoveredPart,
-  element: MechanicalElement,
-  elementPart: HoveredPart,
+  selectedElement: MechanicalElement,
+  selectedPart: HoveredPart,
+  IDcounter: React.MutableRefObject<number>,
+  mechanicalElements: MechanicalElement[],
+  constraintElements: ConstraintElement[],
 ): Action[] {
   if (
     hoveredPart.type === "Void" ||
     hoveredPart.type === "Constraint" ||
-    elementPart.type === "Void" ||
-    elementPart.type === "Constraint" ||
-    hoveredPart.id === elementPart.id
+    selectedPart.type === "Void" ||
+    selectedPart.type === "Constraint" ||
+    hoveredPart.id === selectedPart.id
   ) {
     return [];
   }
@@ -503,101 +624,147 @@ export function connect_elements(
 
   console.log(
     "CONNECT ELEMENT : ",
-    element.type,
-    elementPart,
+    selectedElement.type,
+    selectedPart,
     " TO HOVERED :",
     hoveredElement.type,
     hoveredPart,
   ); // DEBUG
 
-  switch (elementPart.type) {
+  switch (selectedPart.type) {
     case "Node":
-      const node = element as NodeElement;
+      const selectedNode = selectedElement as NodeElement;
       switch (hoveredPart.type) {
         case "Node":
           // NODE on NODE
           const hoveredNode = hoveredElement as NodeElement;
-          if (node.type === "pivot" && hoveredNode.type === "slider") {
-            // Fuse them into a Slidep
+          if (selectedNode.type === "pivot" && hoveredNode.type === "slider") {
             const slidep: SlidepElement = {
               type: "slidep",
               parentBeamID: hoveredNode.parentBeamID,
-              rotatingEdgesIDs: node.rotatingEdgesIDs.concat(
+              rotatingEdgesIDs: selectedNode.rotatingEdgesIDs.concat(
                 hoveredNode.fixedEdgesIDs,
               ),
               position: hoveredNode.position,
-              isGrounded: node.isGrounded || hoveredNode.isGrounded,
-              id: hoveredNode.id,
+              isGrounded: selectedNode.isGrounded || hoveredNode.isGrounded,
+              id: selectedNode.id,
             };
-            actions.push({ type: "DeleteElement", element: node });
+            actions.push({ type: "DeleteElement", element: selectedNode });
             actions.push({ type: "DeleteElement", element: hoveredNode });
             actions.push({ type: "CreateElement", element: slidep });
             actions.push(
-              ...transfer_node_connection_id(
-                node,
+              ...transfer_external_connections(
                 hoveredNode,
+                selectedNode,
                 mechanicalElements,
               ),
             );
-          } else if (node.type === "slider" && hoveredNode.type === "pivot") {
+            actions.push(
+              ...transfer_constraint_connections(
+                hoveredNode.id,
+                selectedNode.id,
+                constraintElements,
+              ),
+            );
+          } else if (
+            selectedNode.type === "slider" &&
+            hoveredNode.type === "pivot"
+          ) {
             // Fuse them into a Slidep
             const parentBeam = node_on_beam_body(
               hoveredNode,
               mechanicalElements,
             );
-            const parentBeamID = node.parentBeamID
-              ? node.parentBeamID
+            const parentBeamID = selectedNode.parentBeamID
+              ? selectedNode.parentBeamID
               : parentBeam
                 ? parentBeam.id
                 : undefined;
             const slidep: SlidepElement = {
               type: "slidep",
               parentBeamID,
-              rotatingEdgesIDs: node.fixedEdgesIDs
+              rotatingEdgesIDs: selectedNode.fixedEdgesIDs
                 .concat(hoveredNode.rotatingEdgesIDs)
                 .filter((edgeID) => edgeID !== parentBeamID),
               position: hoveredNode.position,
-              isGrounded: node.isGrounded || hoveredNode.isGrounded,
-              id: hoveredNode.id,
+              isGrounded: selectedNode.isGrounded || hoveredNode.isGrounded,
+              id: selectedNode.id,
             };
-            actions.push({ type: "DeleteElement", element: node });
+            actions.push({ type: "DeleteElement", element: selectedNode });
             actions.push({ type: "DeleteElement", element: hoveredNode });
             actions.push({ type: "CreateElement", element: slidep });
             actions.push(
-              ...transfer_node_connection_id(
-                node,
+              ...transfer_external_connections(
                 hoveredNode,
+                selectedNode,
                 mechanicalElements,
               ),
             );
-          } else if (node.type === "gear" && hoveredNode.type === "gear") {
             actions.push(
-              ...connect_gears(node.id, hoveredNode.id, "ConnectsFixedGears"),
+              ...transfer_constraint_connections(
+                hoveredNode.id,
+                selectedNode.id,
+                constraintElements,
+              ),
+            );
+          } else if (
+            selectedNode.type === "gear" &&
+            hoveredNode.type === "gear"
+          ) {
+            actions.push(
+              ...connect_gears(
+                selectedNode.id,
+                hoveredNode.id,
+                "ConnectsFixedGears",
+              ),
             );
           } else {
-            // not slider + pivot OR gear + gear
-            node.type;
-            hoveredNode.type;
-            // TODO : Replace the hovered node and inherit its connections
+            // Takeover de selectedNode sur hoveredNode
+            actions.push({ type: "DeleteElement", element: hoveredNode });
+            actions.push(
+              ...transfer_internal_connections(hoveredNode, selectedNode),
+            );
+            actions.push(
+              ...transfer_external_connections(
+                hoveredNode,
+                selectedNode,
+                mechanicalElements,
+              ),
+            );
+            actions.push(
+              ...transfer_constraint_connections(
+                hoveredNode.id,
+                selectedNode.id,
+                constraintElements,
+              ),
+            );
           }
           break;
         case "Edge":
           // NODE on EDGE
           const hoveredEdge = hoveredElement as EdgeElement;
           actions.push(
-            ...connect_node_and_edge(node, hoveredEdge, hoveredPart.part),
+            ...connect_node_and_edge(
+              selectedNode,
+              hoveredEdge,
+              hoveredPart.part,
+            ),
           );
           break;
       }
       break;
     case "Edge":
-      const edge = element as EdgeElement;
+      const selectedEdge = selectedElement as EdgeElement;
       switch (hoveredPart.type) {
         case "Node":
           // EDGE on NODE
           const hoveredNode = hoveredElement as NodeElement;
           actions.push(
-            ...connect_node_and_edge(hoveredNode, edge, elementPart.part),
+            ...connect_node_and_edge(
+              hoveredNode,
+              selectedEdge,
+              selectedPart.part,
+            ),
           );
           break;
         case "Edge":
@@ -616,12 +783,14 @@ export function connect_elements(
           actions.push(
             ...connect_node_and_edge(join, hoveredEdge, hoveredPart.part),
           );
-          actions.push(...connect_node_and_edge(join, edge, elementPart.part));
+          actions.push(
+            ...connect_node_and_edge(join, selectedEdge, selectedPart.part),
+          );
           break;
       }
       break;
     case "GearTooth":
-      const gear = element as GearElement;
+      const selectedGear = selectedElement as GearElement;
       switch (hoveredPart.type) {
         case "GearTooth":
           // GEAR on GEAR
@@ -629,7 +798,7 @@ export function connect_elements(
           actions.push({
             type: "ConnectsMeshedGears",
             disconnect: false,
-            elementID: gear.id,
+            elementID: selectedGear.id,
             connectID: hoveredGear.id,
             index: 0,
           });
@@ -637,13 +806,15 @@ export function connect_elements(
             type: "ConnectsMeshedGears",
             disconnect: false,
             elementID: hoveredGear.id,
-            connectID: gear.id,
+            connectID: selectedGear.id,
             index: 0,
           });
           break;
       }
       break;
   }
+
+  console.log("connect_elements : ", actions);
 
   return actions;
 }

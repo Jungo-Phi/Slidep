@@ -662,23 +662,21 @@ export function get_hovered_part(
 
   let position = mousePos.clone();
   if (
-    (state.type === "PlacingBeamEnd" ||
-      state.type === "PlacingSpringEnd" ||
-      state.type === "PlacingDamperEnd" ||
-      state.type === "PlacingBeltEnd") &&
-    mousePos.distance_to(state.startHover.position) < DIM.MIN_EDGE_LENGTH
+    state.type === "PlacingBeamEnd" ||
+    state.type === "PlacingSpringEnd" ||
+    state.type === "PlacingDamperEnd" ||
+    state.type === "PlacingBeltEnd"
   ) {
-    const delta = mousePos.sub(state.startHover.position);
     position = state.startHover.position.add(
-      delta.scale_to_length(DIM.MIN_EDGE_LENGTH),
+      mousePos
+        .sub(state.startHover.position)
+        .limit_length_min(DIM.MIN_EDGE_LENGTH),
     );
-  } else if (
-    state.type === "PlacingGearRadius" &&
-    mousePos.distance_to(state.startHover.position) < DIM.MIN_GEAR_RADIUS
-  ) {
-    const delta = mousePos.sub(state.startHover.position);
+  } else if (state.type === "PlacingGearRadius") {
     position = state.startHover.position.add(
-      delta.scale_to_length(DIM.MIN_GEAR_RADIUS),
+      mousePos
+        .sub(state.startHover.position)
+        .limit_length_min(DIM.MIN_GEAR_RADIUS),
     );
   }
   for (const type of hover_order) {
