@@ -158,14 +158,122 @@ export class Point2 {
   }
 
   /**
-   * Calcule la proportion t entre 0 et 1 (étendu si dépasse)
-   * telle que this = start + t * (end - start).\
+   * Calcule la proportion **t** entre 0 et 1 (étendu si dépasse)
+   * tel que : this = start.lerp(end, t)
+   *
    * Si le point n'est pas sur la ligne, il est projeté orthogonalement.
    */
   public parameter_on_segment(start: Point2, end: Point2): number {
     const delta = end.sub(start);
     if (delta === ZERO) return 0;
     return this.sub(start).dot(delta) / delta.length_squared();
+  }
+
+  /**
+   * Renvoie les coordonées du point dans les coordonnées locales du segment **Point2(t, d)**.
+   *
+   * Ou **t** est la proportion entre 0 et 1 (étendu si dépasse).
+   *
+   * Et **d** est la distance au segment (gauche négatif, droite positif).
+   */
+  public to_segment_coordinates(start: Point2, end: Point2): Point2 {
+    const delta = end.sub(start);
+    if (delta === ZERO) return ZERO;
+    return new Point2(
+      this.sub(start).dot(delta) / delta.length_squared(),
+      this.sub(start).dot(delta.perp().normalize()),
+    );
+  }
+
+  /**
+   * Renvoie les coordonnées locales du point sur le segment **Point2(t, d)** en coordonées globales.
+   *
+   * Ou **t** est la proportion entre 0 et 1 (étendu si dépasse).
+   *
+   * Et **d** est la distance au segment (gauche négatif, droite positif).
+   */
+  public from_segment_coordinates(start: Point2, end: Point2): Point2 {
+    const delta = end.sub(start);
+    if (delta === ZERO) return start;
+    return start.lerp(end, this.x).add(delta.perp().normalize().mul(this.y));
+  }
+
+  /**
+   * Renvoie les coordonées du point dans les coordonnées locales de la paire de segments **Point2(t1, t2)**.
+   *
+   * Ou **t** est la proportion entre 0 et 1 (étendu si dépasse).
+   */
+  public to_double_segment_coordinates(
+    start1: Point2,
+    end1: Point2,
+    start2: Point2,
+    end2: Point2,
+  ): Point2 {
+    const delta1 = end1.sub(start1);
+    const delta2 = end2.sub(start2);
+    if (delta1 === ZERO || delta2 === ZERO) return ZERO;
+    return new Point2(
+      this.sub(start1).dot(delta1) / delta1.length_squared(),
+      this.sub(start2).dot(delta2) / delta2.length_squared(),
+    );
+  }
+
+  /**
+   * Renvoie les coordonnées locales du point sur la paire de segments **Point2(t1, t2)** en coordonées globales.
+   *
+   * Ou **t** est la proportion entre 0 et 1 (étendu si dépasse).
+   */
+  public from_double_segment_coordinates(
+    start1: Point2,
+    end1: Point2,
+    start2: Point2,
+    end2: Point2,
+  ): Point2 | null {
+    const delta1 = end1.sub(start1);
+    if (delta1 === ZERO) return start1;
+    const delta2 = end2.sub(start2);
+    if (delta2 === ZERO) return start2;
+
+    const pos1 = start1.lerp(end1, this.x);
+    const pos2 = start2.lerp(end2, this.y);
+    return Point2.lines_intersection(
+      pos1,
+      pos1.add(delta1.perp()),
+      pos2,
+      pos2.add(delta2.perp()),
+    );
+  }
+
+  /**
+   * Renvoie les coordonées du point dans les coordonnées locales de la paire de segments **Point2(r, a)**.
+   *
+   * Ou **r** est le rayon vers le point de croisement et *a* la proportion entre 0 et 1 de l'angle.
+   */
+  public to_polar_segments_coordinates(
+    start1: Point2,
+    end1: Point2,
+    start2: Point2,
+    end2: Point2,
+  ): Point2 | null {
+    const origin = Point2.lines_intersection(start1, end1, start2, end2);
+    if (!origin) return null;
+    return new Point2(this.distance_to(origin), this.sub(origin).angle()); // TODO : proportion de l'angle
+  }
+
+  /**
+   * Renvoie les coordonnées locales du point sur la paire de segments **Point2(r, a)** en coordonées globales.
+   *
+   * Ou **r** est le rayon vers le point de croisement et *a* la proportion entre 0 et 1 de l'angle.
+   */
+  public from_polar_segments_coordinates(
+    start1: Point2,
+    end1: Point2,
+    start2: Point2,
+    end2: Point2,
+  ): Point2 | null {
+    const origin = Point2.lines_intersection(start1, end1, start2, end2);
+    if (!origin) return null;
+    return origin.add(Point2.from_polar(this.x, this.y)); // TODO : proportion de l'angle
   }
 
   /** Projection onto a line defined by two points */
@@ -246,23 +354,22 @@ export class Point2 {
     return this.x >= xMin && this.x <= xMax && this.y >= yMin && this.y <= yMax;
   }
 
-  /** Le point d'intersection de 2 droites, chacune définie par 2 points */
+  /** Le point d'intersection de 2 droites, chacune définie par 2 points. */
   public static lines_intersection(
     start1: Point2,
     end1: Point2,
     start2: Point2,
     end2: Point2,
-  ): Point2 {
-    let a = start1.sub(start2);
-    let b = end2.sub(start2);
-    let c = end1.sub(start1);
-    let d = end2.sub(start2);
-    let t = (a.x / b.x - a.y / b.y) / (c.y / d.y - c.x / d.x);
-    if (Number.isNaN(t)) {
-      t = (a.y / b.y - a.x / b.x) / (c.x / d.x - c.y / d.y);
-    }
-    // let k2 = c.x / d.x * k1 + a.x / b.x;
-    return start1.lerp(end1, t);
+  ): Point2 | null {
+    const delta1 = end1.sub(start1);
+    const delta2 = end2.sub(start2);
+    const deltaStart = start1.sub(start2);
+    const denominator = delta2.y * delta1.x - delta2.x * delta1.y;
+    if (denominator === 0) return null; // Droites parallèles
+    return start1.lerp(
+      end1,
+      (delta2.x * deltaStart.y - delta2.y * deltaStart.x) / denominator,
+    );
   }
 
   /** Renvoie un segment (`start` to `end`) tangeant aux 2 cercles. direction {false: clockwise, true: anticlockwise}*/

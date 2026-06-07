@@ -33,6 +33,20 @@ export function get_nodes(mechanicalElements: MechanicalElement[]): Nodes {
   return { positions, radii, posMasses, radMasses };
 }
 
+/**
+ * Returns parsed positions constraints / key: "constraintID:position"
+ */
+export function get_constraint_nodes(
+  constraintElements: ConstraintElement[],
+): Map<string, Point2> {
+  const positions = new Map<string, Point2>();
+
+  constraintElements.forEach((constraint) => {
+    positions.set(`${constraint.id}:pos`, constraint.position);
+  });
+  return positions;
+}
+
 /*
  * Parse a `ConstraintElement` to `Link` for solvers to use
  */

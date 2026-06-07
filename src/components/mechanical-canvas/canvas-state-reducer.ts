@@ -38,7 +38,7 @@ export function canvasStateReducer(
   ) => void,
   undoMechanism: () => void,
   redoMechanism: () => void,
-  onMouseUpHandler: (event: React.MouseEvent<HTMLCanvasElement>) => void,
+  onMouseUpHandler: () => void,
   IDcounter: React.MutableRefObject<number>,
 ) {
   let actions: Action[] = [];
@@ -1533,6 +1533,7 @@ export function canvasStateReducer(
           setCanvasState({ type: "EqualConstraintStart" });
           break;
         case "h":
+        case "v":
           setCanvasState({ type: "HorizontalVerticalConstraintStart" });
           break;
         case "n":

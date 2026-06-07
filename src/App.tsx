@@ -55,7 +55,10 @@ import { preload_element_icons } from "./components/element-palette/elementIcon"
 import { COLORS } from "./constants/rendering-specs";
 import { cloneMechanism } from "./utils/serialization";
 import { resolveGeometricConstraints } from "./components/solver/geometric-solver";
-import { get_nodes } from "./components/solver/parsing";
+import {
+  get_constraint_nodes as get_constraint_positions,
+  get_nodes,
+} from "./components/solver/parsing";
 import { get_hovered_part } from "./components/mechanical-canvas/get-hover";
 
 export interface UserPreferences {
@@ -169,6 +172,9 @@ const App: React.FC = () => {
           throw console.error("impossible");
 
         oldNodes = get_nodes(mechanism.mechanicalElements);
+        get_constraint_positions(mechanism.constraintElements).forEach(
+          (pos, key) => oldNodes.positions.set(key, pos),
+        );
         newNodes = resolveGeometricConstraints(
           mechanism,
           actionBundleType,
@@ -237,6 +243,9 @@ const App: React.FC = () => {
           throw console.error("impossible");
 
         oldNodes = get_nodes(mechanism.mechanicalElements);
+        get_constraint_positions(mechanism.constraintElements).forEach(
+          (pos, key) => oldNodes.positions.set(key, pos),
+        );
         newNodes = resolveGeometricConstraints(
           actionReducer(cloneMechanism(mechanism), actions, false),
           actionBundleType,
@@ -289,6 +298,9 @@ const App: React.FC = () => {
           throw console.error("impossible");
 
         oldNodes = get_nodes(mechanism.mechanicalElements);
+        get_constraint_positions(mechanism.constraintElements).forEach(
+          (pos, key) => oldNodes.positions.set(key, pos),
+        );
         newNodes = resolveGeometricConstraints(
           actionReducer(cloneMechanism(mechanism), actions, false),
           actionBundleType,
@@ -318,6 +330,10 @@ const App: React.FC = () => {
         )
           break;
         oldNodes = get_nodes(mechanism.mechanicalElements);
+        get_constraint_positions(mechanism.constraintElements).forEach(
+          (pos, key) => oldNodes.positions.set(key, pos),
+        );
+
         newNodes = resolveGeometricConstraints(
           actionReducer(cloneMechanism(mechanism), actions, false),
           actionBundleType,

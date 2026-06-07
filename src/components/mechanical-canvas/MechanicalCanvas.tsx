@@ -7,7 +7,6 @@ import { Point2, ZERO } from "../../types/point2";
 import { Action, CanvasEvent } from "../../types/actions";
 import { canvasStateReducer } from "./canvas-state-reducer";
 import { CanvasState } from "../../types/canvas-state";
-import { shown_element_name } from "../../types";
 import { get_constraint_element_from_id } from "./connect-actions";
 import { get_hovered_part } from "./get-hover";
 import type { ActionBundleType, ActionType } from "../../types";
@@ -77,6 +76,7 @@ export const MechanicalCanvas: React.FC<MechanicalCanvasProps> = ({
     );
 
     // Dessine les actions récentes (DEBUG)
+    /*
     let actions = mechanism.history.flat();
     actions = actions.filter((a) => a.type !== "Blank");
     if (actions.length > 8) {
@@ -187,6 +187,7 @@ export const MechanicalCanvas: React.FC<MechanicalCanvasProps> = ({
         break;
     }
     ctx.fillText(text, 900, 30);
+    */
   }, [canvasState, mechanism, hoveredPart]);
 
   useEffect(() => {

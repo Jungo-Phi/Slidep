@@ -64,7 +64,8 @@
 - geometric solver - radius constraint
 - ~bug : crtl+Z déplacement contraintes~
 - "applyHorizontalConstraint()" avec une extrémité ancrée ne fonctionne pas
-- hilight element on hover "disconnect" on element panel
+- Compléter la contrainte d'angle
+- Interdire les angles de 0° 180° et -180°
 - Empecher les contraintes sur le même élément (DDL analyser)
 - Sauvgarder / Charger méchanisme
 - Movement et zoom de la grille
@@ -79,6 +80,7 @@
 - ~Ajouter les sens de rotation des engrenages dans les connections~
 - ~Ajouter les ratios des engrenages dans les connections~
 - ~Faire les menus de fichiers, paramètres, langues et infos~
+- ~Change CanvasState on delete element~
 - Changer les textes avec les langues
 - Mettre les infos du projet
 - Faire le panneau des paramètres
@@ -86,7 +88,6 @@
 - (Ignorer BeamBodyHover lors du déplacement d'un beam ?)
 - Enlever le système de drag and drop des connections pour passer à des boutons de transfer aux endroits spécifiques
 - (Supprimer les joints quand ils ne sont connectés qu'à 1 élément ?)
-- ~Change CanvasState on delete element~
 
 ## Features visuelles nice to have
 
@@ -99,7 +100,10 @@
 - ~Hover en couleur ?~
 - ~Limiter la longueur des edges au placement et déplacement~
 - Rejeter la position des dimensions des éléments pour la lisibilité
-- Déplacer les dimentions avec les élements associés
+- ~Déplacer les dimentions avec les élements associés~
 - Renommer les éléments
 - Draw Slideps rotating beams over slider
 - (Click dans le vide quand state==placingConstraint -> state=Selecting ?)
+- hilight element on hover "disconnect" on element panel
+- shift+click on single element doesnt work
+- H/V pour mode

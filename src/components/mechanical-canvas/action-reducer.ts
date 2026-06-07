@@ -275,13 +275,16 @@ export function actionReducer(
               radius = radii.get(`${element.id}:pos`);
               if (radius) element.radius = radius;
             }
-            // if ("angle" in element) angles.set(element.id, element.angle);
           } else {
             position = positions.get(`${element.id}:start`);
             if (position) element.positionStart = position;
             position = positions.get(`${element.id}:end`);
             if (position) element.positionEnd = position;
           }
+        });
+        constraintElements.forEach((element) => {
+          position = positions.get(`${element.id}:pos`);
+          if (position) element.position = position;
         });
         break;
     }

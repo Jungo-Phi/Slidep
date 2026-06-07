@@ -385,8 +385,8 @@ export function resolveGeometricConstraints(
 
   // 3. PBD (Position Based Dynamics)
   const solvedNodes = PBD_kinematic_solver(
-    nodes.positions,
-    nodes.radii,
+    new Map(nodes.positions),
+    new Map(nodes.radii),
     nodes.posMasses,
     nodes.radMasses,
     links,
@@ -394,6 +394,15 @@ export function resolveGeometricConstraints(
   );
 
   // Decouple fused elements
+  [...nodes.positions.keys()].forEach((combined_keys) => {
+    const keys = combined_keys.split(",");
+    if (keys.length > 1) {
+      keys.forEach((key) => {
+        nodes.positions.set(key, nodes.positions.get(combined_keys)!);
+      });
+      nodes.positions.delete(combined_keys);
+    }
+  });
   [...solvedNodes.positions.keys()].forEach((combined_keys) => {
     const keys = combined_keys.split(",");
     if (keys.length > 1) {
@@ -404,6 +413,177 @@ export function resolveGeometricConstraints(
         );
       });
       solvedNodes.positions.delete(combined_keys);
+    }
+  });
+
+  // Update constraint positions
+  mechanism.constraintElements.forEach((constraint) => {
+    switch (constraint.type) {
+      case "dimension-edge":
+      case "horizontal-align-edge":
+      case "vertical-align-edge":
+      case "dimension-node-to-node":
+      case "horizontal-align-nodes":
+      case "vertical-align-nodes":
+        const isEdge =
+          constraint.type === "dimension-edge" ||
+          constraint.type === "horizontal-align-edge" ||
+          constraint.type === "vertical-align-edge";
+        const oldStart = nodes.positions.get(
+          isEdge
+            ? `${constraint.edgeID}:start`
+            : `${constraint.startNodeID}:pos`,
+        );
+        const oldEnd = nodes.positions.get(
+          isEdge ? `${constraint.edgeID}:end` : `${constraint.endNodeID}:pos`,
+        );
+        const newStart = solvedNodes.positions.get(
+          isEdge
+            ? `${constraint.edgeID}:start`
+            : `${constraint.startNodeID}:pos`,
+        );
+        const newEnd = solvedNodes.positions.get(
+          isEdge ? `${constraint.edgeID}:end` : `${constraint.endNodeID}:pos`,
+        );
+        if (!oldStart || !oldEnd || !newStart || !newEnd) break;
+        solvedNodes.positions.set(
+          `${constraint.id}:pos`,
+          constraint.position
+            .to_segment_coordinates(oldStart, oldEnd)
+            .from_segment_coordinates(newStart, newEnd),
+        );
+        break;
+      case "dimension-edge-to-node":
+        const oldEdgeStart = nodes.positions.get(`${constraint.edgeID}:start`);
+        const oldEdgeEnd = nodes.positions.get(`${constraint.edgeID}:end`);
+        const oldNode = nodes.positions.get(`${constraint.nodeID}:pos`);
+        const newEdgeStart = solvedNodes.positions.get(
+          `${constraint.edgeID}:start`,
+        );
+        const newEdgeEnd = solvedNodes.positions.get(
+          `${constraint.edgeID}:end`,
+        );
+        const newNode = solvedNodes.positions.get(`${constraint.nodeID}:pos`);
+        if (
+          !oldEdgeStart ||
+          !oldEdgeEnd ||
+          !oldNode ||
+          !newEdgeStart ||
+          !newEdgeEnd ||
+          !newNode
+        )
+          break;
+        const local = constraint.position.to_segment_coordinates(
+          oldEdgeStart,
+          oldEdgeEnd,
+        );
+        local.y *=
+          newNode.distance_to_line(newEdgeStart, newEdgeEnd) /
+          oldNode.distance_to_line(oldEdgeStart, oldEdgeEnd);
+        solvedNodes.positions.set(
+          `${constraint.id}:pos`,
+          local.from_segment_coordinates(newEdgeStart, newEdgeEnd),
+        );
+        break;
+      case "dimension-angle":
+      case "normal":
+      case "parallel":
+      case "equal":
+        const oldStartEdgeStart = nodes.positions.get(
+          `${constraint.startEdgeID}:start`,
+        );
+        const oldStartEdgeEnd = nodes.positions.get(
+          `${constraint.startEdgeID}:end`,
+        );
+        const oldEndEdgeStart = nodes.positions.get(
+          `${constraint.endEdgeID}:start`,
+        );
+        const oldEndEdgeEnd = nodes.positions.get(
+          `${constraint.endEdgeID}:end`,
+        );
+        const newStartEdgeStart = solvedNodes.positions.get(
+          `${constraint.startEdgeID}:start`,
+        );
+        const newStartEdgeEnd = solvedNodes.positions.get(
+          `${constraint.startEdgeID}:end`,
+        );
+        const newEndEdgeStart = solvedNodes.positions.get(
+          `${constraint.endEdgeID}:start`,
+        );
+        const newEndEdgeEnd = solvedNodes.positions.get(
+          `${constraint.endEdgeID}:end`,
+        );
+        if (
+          !oldStartEdgeStart ||
+          !oldStartEdgeEnd ||
+          !oldEndEdgeStart ||
+          !oldEndEdgeEnd ||
+          !newStartEdgeStart ||
+          !newStartEdgeEnd ||
+          !newEndEdgeStart ||
+          !newEndEdgeEnd
+        )
+          break;
+        const localD = constraint.position.to_polar_segments_coordinates(
+          oldStartEdgeStart,
+          oldStartEdgeEnd,
+          oldEndEdgeStart,
+          oldEndEdgeEnd,
+        );
+        if (!localD) break;
+        const globalD = localD.from_polar_segments_coordinates(
+          newStartEdgeStart,
+          newStartEdgeEnd,
+          newEndEdgeStart,
+          newEndEdgeEnd,
+        );
+        if (!globalD) break;
+        solvedNodes.positions.set(`${constraint.id}:pos`, globalD);
+        break;
+      case "dimension-radius":
+        const oldPos = nodes.positions.get(`${constraint.gearID}:pos`);
+        const oldRadius = nodes.radii.get(`${constraint.gearID}:pos`);
+        const newPos = solvedNodes.positions.get(`${constraint.gearID}:pos`);
+        const newRadius = solvedNodes.radii.get(`${constraint.gearID}:pos`);
+        if (!oldPos || !oldRadius || !newPos || !newRadius) break;
+        solvedNodes.positions.set(
+          `${constraint.id}:pos`,
+          newPos.add(
+            constraint.position.sub(oldPos).mul(newRadius / oldRadius),
+          ),
+        );
+        break;
+      case "gear-ratio":
+        const oldGearStartPos = nodes.positions.get(
+          `${constraint.startGearID}:pos`,
+        );
+        const oldGearEndPos = nodes.positions.get(
+          `${constraint.endGearID}:pos`,
+        );
+        const newGearStartPos = solvedNodes.positions.get(
+          `${constraint.startGearID}:pos`,
+        );
+        const newGearEndPos = solvedNodes.positions.get(
+          `${constraint.endGearID}:pos`,
+        );
+        if (
+          !oldGearStartPos ||
+          !oldGearEndPos ||
+          !newGearStartPos ||
+          !newGearEndPos
+        )
+          break;
+        const localG = constraint.position.to_segment_coordinates(
+          oldGearStartPos,
+          oldGearEndPos,
+        );
+        localG.y *=
+          newGearStartPos.distance_to(newGearEndPos) /
+          oldGearStartPos.distance_to(oldGearEndPos);
+        solvedNodes.positions.set(
+          `${constraint.id}:pos`,
+          localG.from_segment_coordinates(newGearStartPos, newGearEndPos),
+        );
     }
   });
 

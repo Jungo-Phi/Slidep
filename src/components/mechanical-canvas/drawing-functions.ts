@@ -549,13 +549,41 @@ export function draw_dimention(
   ctx: CanvasRenderingContext2D,
   start: Point2,
   end: Point2,
+  position: Point2,
+  value: number,
+  hideText: boolean = false,
 ) {
   ctx.fillStyle = ctx.strokeStyle;
+  const widthStart = ctx.lineWidth;
+  ctx.lineWidth = 1;
 
   const delta = end.sub(start);
   const length = delta.length();
+  const t = position.parameter_on_segment(start, end);
+  const np = delta.perp().normalize();
+  const offset = position.sub(start).dot(np);
+  const side = position.is_on_left_side_of_line(start, end) ? -1 : 1;
+
+  const startPos = start.add(np.mul(7 * side));
+  const offsetStart = start.add(np.mul(offset).extend_length(5));
+  ctx.beginPath();
+  ctx.moveTo(startPos.x, startPos.y);
+  ctx.lineTo(offsetStart.x, offsetStart.y);
+  ctx.stroke();
+
+  const endPos = end.add(np.mul(7 * side));
+  const offsetEnd = end.add(np.mul(offset).extend_length(5));
+  ctx.beginPath();
+  ctx.moveTo(endPos.x, endPos.y);
+  ctx.lineTo(offsetEnd.x, offsetEnd.y);
+  ctx.stroke();
+
+  ctx.lineWidth = widthStart;
+
+  // Draw dimention
+
   ctx.save();
-  ctx.translate(start.x, start.y);
+  ctx.translate(start.x + np.x * offset, start.y + np.y * offset);
   ctx.rotate(delta.angle());
 
   ctx.beginPath();
@@ -571,47 +599,17 @@ export function draw_dimention(
   ctx.fill();
 
   ctx.beginPath();
-  ctx.moveTo(15, 0);
-  ctx.lineTo(length - 15, 0);
+  ctx.moveTo(t < 0 ? length * t + 16 : 17.5, 0);
+  ctx.lineTo(t > 1 ? length * t - 16 : length - 17.5, 0);
   ctx.stroke();
 
   ctx.restore();
-}
 
-export function draw_dimention_parallel(
-  ctx: CanvasRenderingContext2D,
-  start: Point2,
-  end: Point2,
-  position: Point2,
-) {
-  ctx.fillStyle = ctx.strokeStyle;
-  const widthStart = ctx.lineWidth;
-  ctx.lineWidth = 1;
-
-  const delta = end.sub(start);
-  const np = delta.perp().normalize();
-  const offset = position.sub(start).dot(np);
-
-  const offset_start = start.add(np.mul(offset).extend_length(5));
-  ctx.beginPath();
-  ctx.moveTo(start.x, start.y);
-  ctx.lineTo(offset_start.x, offset_start.y);
-  ctx.stroke();
-
-  const offset_end = end.add(np.mul(offset).extend_length(5));
-  ctx.beginPath();
-  ctx.moveTo(end.x, end.y);
-  ctx.lineTo(offset_end.x, offset_end.y);
-  ctx.stroke();
-
-  const offset_center = start.lerp(end, 0.5).add(np.mul(offset));
-  ctx.lineWidth = widthStart;
-  ctx.beginPath();
-  ctx.moveTo(offset_center.x, offset_center.y);
-  ctx.lineTo(position.x, position.y);
-  ctx.stroke();
-
-  draw_dimention(ctx, start.add(np.mul(offset)), end.add(np.mul(offset)));
+  if (hideText) return;
+  ctx.save();
+  ctx.translate(position.x, position.y);
+  draw_dimention_text(ctx, value);
+  ctx.restore();
 }
 
 export function draw_dimention_to_segment(
@@ -620,42 +618,78 @@ export function draw_dimention_to_segment(
   start: Point2,
   end: Point2,
   position: Point2,
+  value: number,
+  hideText: boolean = false,
 ) {
   ctx.fillStyle = ctx.strokeStyle;
   const widthStart = ctx.lineWidth;
   ctx.lineWidth = 1;
 
-  const delta = end.sub(start);
-  const np = delta.normalize();
+  const ts = position.parameter_on_segment(start, end);
   const oppositePoint = point.project_on_line(start, end);
-  const offset = position
-    .sub(point)
-    .dot(point.sub(oppositePoint).perp().normalize());
+  const delta = point.sub(oppositePoint);
+  const length = delta.length();
+  const t = position.parameter_on_segment(oppositePoint, point);
+  const np = end.sub(start).normalize();
+  const offset = position.sub(oppositePoint).dot(np);
+  const side =
+    (position.is_on_left_side_of_line(oppositePoint, point) ? -1 : 1) *
+    (position.is_on_left_side_of_line(start, end) ? -1 : 1);
 
-  const offset_start = point.add(np.mul(offset).extend_length(5));
+  if (ts < 0 || ts > 1) {
+    const startPos = ts < 0.5 ? start.sub(np.mul(7)) : end.add(np.mul(7));
+    const offsetStart = oppositePoint.add(
+      np.mul(offset).extend_length((ts < 0.5 ? 5 : -5) * side),
+    );
+    ctx.beginPath();
+    ctx.moveTo(startPos.x, startPos.y);
+    ctx.lineTo(offsetStart.x, offsetStart.y);
+    ctx.stroke();
+  }
+
+  const endPos = point.sub(np.mul(7 * side));
+  const offsetEnd = point.add(np.mul(offset).extend_length(5));
   ctx.beginPath();
-  ctx.moveTo(point.x, point.y);
-  ctx.lineTo(offset_start.x, offset_start.y);
+  ctx.moveTo(endPos.x, endPos.y);
+  ctx.lineTo(offsetEnd.x, offsetEnd.y);
   ctx.stroke();
 
-  const offset_end = oppositePoint.add(np.mul(offset).extend_length(5));
-  ctx.beginPath();
-  ctx.moveTo(oppositePoint.x, oppositePoint.y);
-  ctx.lineTo(offset_end.x, offset_end.y); // TODO : hide line if it's on the segment
-  ctx.stroke();
-
-  const offset_center = point.lerp(oppositePoint, 0.5).add(np.mul(offset));
   ctx.lineWidth = widthStart;
+
+  // Draw dimention
+
+  ctx.save();
+  ctx.translate(
+    oppositePoint.add(np.mul(offset)).x,
+    oppositePoint.add(np.mul(offset)).y,
+  );
+  ctx.rotate(delta.angle());
+
+  const startOffset = ts > 0 && ts < 1 ? DIM.BEAM_WIDTH / 2 - 1 : 0;
   ctx.beginPath();
-  ctx.moveTo(offset_center.x, offset_center.y);
-  ctx.lineTo(position.x, position.y);
+  ctx.moveTo(startOffset, 0);
+  ctx.lineTo(startOffset + 18, -6);
+  ctx.lineTo(startOffset + 18, 6);
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.moveTo(length, 0);
+  ctx.lineTo(length - 18, -6);
+  ctx.lineTo(length - 18, 6);
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.moveTo(t < 0 ? length * t + 16 : 17.5, 0);
+  ctx.lineTo(t > 1 ? length * t - 16 : length - 17.5, 0);
   ctx.stroke();
 
-  draw_dimention(
-    ctx,
-    point.add(np.mul(offset)),
-    oppositePoint.add(np.mul(offset)),
-  );
+  ctx.restore();
+
+  if (hideText) return;
+  ctx.save();
+  ctx.translate(position.x, position.y);
+  draw_dimention_text(ctx, value);
+  ctx.restore();
 }
 
 export function draw_dimention_angle(
@@ -665,10 +699,13 @@ export function draw_dimention_angle(
   start2: Point2,
   end2: Point2,
   position: Point2,
+  value: number,
+  hideText: boolean = false,
 ) {
   ctx.fillStyle = ctx.strokeStyle;
 
   const origin = Point2.lines_intersection(start1, end1, start2, end2);
+  if (!origin) return;
   const radius = origin.distance_to(position);
   let alpha = start1.angle_to(end1);
   let beta = start2.angle_to(end2);
@@ -706,6 +743,11 @@ export function draw_dimention_angle(
   ctx.stroke();
   // TODO : add arc to position
   // TODO : add straight lines
+  if (hideText) return;
+  ctx.save();
+  ctx.translate(position.x, position.y);
+  draw_dimention_text(ctx, value, " °");
+  ctx.restore();
 }
 
 export function draw_dimention_radius(
@@ -713,6 +755,8 @@ export function draw_dimention_radius(
   center: Point2,
   radius: number,
   position: Point2,
+  value: number,
+  hideText: boolean = false,
 ) {
   ctx.fillStyle = ctx.strokeStyle;
 
@@ -742,6 +786,12 @@ export function draw_dimention_radius(
   ctx.lineTo(Math.max(radius - 5, length), 0);
   ctx.stroke();
 
+  ctx.restore();
+
+  if (hideText) return;
+  ctx.save();
+  ctx.translate(position.x, position.y);
+  draw_dimention_text(ctx, value);
   ctx.restore();
 }
 

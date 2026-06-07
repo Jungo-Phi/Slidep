@@ -35,14 +35,12 @@ import {
   draw_spring,
   draw_start_edge_end,
   draw_belt_end,
-  draw_dimention_parallel,
   draw_element_icon,
   draw_gear_ratio,
   draw_dimention_angle,
   draw_dimention_to_segment,
   draw_dimention_radius,
   draw_dimention,
-  draw_dimention_text,
   draw_join_bottom,
   draw_join_top,
   draw_slidep_rep,
@@ -576,21 +574,15 @@ export function drawMechanicalCanvas(
             element.edgeID,
             mechanicalElements,
           ) as EdgeElement;
-          draw_dimention_parallel(
+          draw_dimention(
             ctx,
             edgeD.positionStart,
             edgeD.positionEnd,
             element.position,
-          );
-          if (
+            element.value,
             state.type === "EditingConstraint" &&
-            state.elementID === element.id
-          )
-            break;
-          ctx.save();
-          ctx.translate(element.position.x, element.position.y);
-          draw_dimention_text(ctx, element.value);
-          ctx.restore();
+              state.elementID === element.id,
+          );
           break;
         case "dimension-node-to-node":
           const startNode = get_mechanical_element_from_id(
@@ -601,21 +593,15 @@ export function drawMechanicalCanvas(
             element.endNodeID,
             mechanicalElements,
           ) as NodeElement;
-          draw_dimention_parallel(
+          draw_dimention(
             ctx,
             startNode.position,
             endNode.position,
             element.position,
-          );
-          if (
+            element.value,
             state.type === "EditingConstraint" &&
-            state.elementID === element.id
-          )
-            break;
-          ctx.save();
-          ctx.translate(element.position.x, element.position.y);
-          draw_dimention_text(ctx, element.value);
-          ctx.restore();
+              state.elementID === element.id,
+          );
           break;
         case "dimension-edge-to-node":
           const edge = get_mechanical_element_from_id(
@@ -632,16 +618,10 @@ export function drawMechanicalCanvas(
             edge.positionStart,
             edge.positionEnd,
             element.position,
-          );
-          if (
+            element.value,
             state.type === "EditingConstraint" &&
-            state.elementID === element.id
-          )
-            break;
-          ctx.save();
-          ctx.translate(element.position.x, element.position.y);
-          draw_dimention_text(ctx, element.value);
-          ctx.restore();
+              state.elementID === element.id,
+          );
           break;
         case "dimension-angle":
           const startEdge = get_mechanical_element_from_id(
@@ -659,16 +639,10 @@ export function drawMechanicalCanvas(
             endEdge.positionStart,
             endEdge.positionEnd,
             element.position,
-          );
-          if (
+            element.value,
             state.type === "EditingConstraint" &&
-            state.elementID === element.id
-          )
-            break;
-          ctx.save();
-          ctx.translate(element.position.x, element.position.y);
-          draw_dimention_text(ctx, element.value, " °");
-          ctx.restore();
+              state.elementID === element.id,
+          );
           break;
         case "dimension-radius":
           const gear = get_mechanical_element_from_id(
@@ -680,16 +654,10 @@ export function drawMechanicalCanvas(
             gear.position,
             gear.radius,
             element.position,
-          );
-          if (
+            element.value,
             state.type === "EditingConstraint" &&
-            state.elementID === element.id
-          )
-            break;
-          ctx.save();
-          ctx.translate(element.position.x, element.position.y);
-          draw_dimention_text(ctx, element.value);
-          ctx.restore();
+              state.elementID === element.id,
+          );
           break;
         case "horizontal-align-edge":
         case "horizontal-align-nodes":
@@ -886,24 +854,16 @@ export function drawMechanicalCanvas(
           edge.positionStart,
           edge.positionEnd,
           hoveredPart.position,
-        );
-        ctx.save();
-        ctx.translate(hoveredPart.position.x, hoveredPart.position.y);
-        draw_dimention_text(
-          ctx,
           nodeD.position.distance_to_line(edge.positionStart, edge.positionEnd),
         );
-        ctx.restore();
       } else {
-        draw_dimention(ctx, nodeD.position, hoveredPart.position);
-        ctx.save();
-        const mid = nodeD.position.lerp(hoveredPart.position, 0.5);
-        ctx.translate(mid.x, mid.y);
-        draw_dimention_text(
+        draw_dimention(
           ctx,
+          nodeD.position,
+          hoveredPart.position,
+          nodeD.position.lerp(hoveredPart.position, 0.5),
           nodeD.position.distance_to(hoveredPart.position),
         );
-        ctx.restore();
       }
 
       break;
@@ -914,19 +874,13 @@ export function drawMechanicalCanvas(
       ) as EdgeElement;
       switch (hoveredPart.type) {
         case "Void":
-          draw_dimention_parallel(
+          draw_dimention(
             ctx,
             edgeD.positionStart,
             edgeD.positionEnd,
             hoveredPart.position,
-          );
-          ctx.save();
-          ctx.translate(hoveredPart.position.x, hoveredPart.position.y);
-          draw_dimention_text(
-            ctx,
             edgeD.positionStart.distance_to(edgeD.positionEnd),
           );
-          ctx.restore();
           break;
         case "Node":
           draw_dimention_to_segment(
@@ -937,37 +891,32 @@ export function drawMechanicalCanvas(
             hoveredPart.position
               .project_on_line(edgeD.positionStart, edgeD.positionEnd)
               .lerp(hoveredPart.position, 0.5),
-          );
-          ctx.save();
-          ctx.translate(hoveredPart.position.x, hoveredPart.position.y);
-          draw_dimention_text(
-            ctx,
             hoveredPart.position.distance_to_line(
               edgeD.positionStart,
               edgeD.positionEnd,
             ),
           );
-          ctx.restore();
           break;
         case "Edge":
           const endEdge = get_mechanical_element_from_id(
             hoveredPart.id,
             mechanicalElements,
           ) as EdgeElement;
-          const cross = Point2.lines_intersection(
+          const intersection = Point2.lines_intersection(
             edgeD.positionStart,
             edgeD.positionEnd,
             endEdge.positionStart,
             endEdge.positionEnd,
           );
-          const position = cross.add(
+          if (!intersection) break;
+          const position = intersection.add(
             hoveredPart.position
-              .sub(cross)
+              .sub(intersection)
               .slerp(
                 edgeD.positionEnd
-                  .sub(cross)
+                  .sub(intersection)
                   .normalize()
-                  .mul(hoveredPart.position.distance_to(cross)),
+                  .mul(hoveredPart.position.distance_to(intersection)),
                 0.25,
               ), // TODO
           );
@@ -978,17 +927,10 @@ export function drawMechanicalCanvas(
             endEdge.positionStart,
             endEdge.positionEnd,
             position,
-          );
-          ctx.save();
-          ctx.translate(position.x, position.y);
-          draw_dimention_text(
-            ctx,
             edgeD.positionEnd
               .sub(edgeD.positionStart)
               .angle_to_deg(endEdge.positionEnd.sub(endEdge.positionStart)),
-            " °",
           );
-          ctx.restore();
           break;
       }
 
@@ -1002,19 +944,13 @@ export function drawMechanicalCanvas(
         state.endNodeID,
         mechanicalElements,
       ) as NodeElement;
-      draw_dimention_parallel(
+      draw_dimention(
         ctx,
         startNode.position,
         endNode.position,
         hoveredPart.position,
-      );
-      ctx.save();
-      ctx.translate(hoveredPart.position.x, hoveredPart.position.y);
-      draw_dimention_text(
-        ctx,
         startNode.position.distance_to(endNode.position),
       );
-      ctx.restore();
       break;
     case "DimensionEdgeToNode":
       const edge = get_mechanical_element_from_id(
@@ -1031,11 +967,6 @@ export function drawMechanicalCanvas(
         edge.positionStart,
         edge.positionEnd,
         hoveredPart.position,
-      );
-      ctx.save();
-      ctx.translate(hoveredPart.position.x, hoveredPart.position.y);
-      draw_dimention_text(
-        ctx,
         node.position.distance_to_line(edge.positionStart, edge.positionEnd),
       );
       ctx.restore();
@@ -1056,16 +987,10 @@ export function drawMechanicalCanvas(
         endEdge.positionStart,
         endEdge.positionEnd,
         hoveredPart.position,
-      );
-      ctx.save();
-      ctx.translate(hoveredPart.position.x, hoveredPart.position.y);
-      draw_dimention_text(
-        ctx,
         startEdge.positionEnd
           .sub(startEdge.positionStart)
           .angle_to_deg(endEdge.positionEnd.sub(endEdge.positionStart)),
       );
-      ctx.restore();
       break;
     case "DimensionRadius":
       const gear = get_mechanical_element_from_id(
@@ -1077,11 +1002,8 @@ export function drawMechanicalCanvas(
         gear.position,
         gear.radius,
         hoveredPart.position,
+        gear.radius,
       );
-      ctx.save();
-      ctx.translate(hoveredPart.position.x, hoveredPart.position.y);
-      draw_dimention_text(ctx, gear.radius);
-      ctx.restore();
       break;
   }
   ctx.restore();

@@ -252,7 +252,7 @@ const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
       },
       {
         label: "Alignement horizontal / vertical",
-        tooltip: "Horizontal/Vertical alignement  (H)",
+        tooltip: "Horizontal/Vertical alignement  (H/V)",
         iconSrc: horizontalVerticalAlignIconUrl,
         goToStateType: "HorizontalVerticalConstraintStart",
         hilightRule: (state) =>
