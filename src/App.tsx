@@ -56,6 +56,7 @@ import { COLORS } from "./constants/rendering-specs";
 import { cloneMechanism } from "./utils/serialization";
 import { resolveGeometricConstraints } from "./components/solver/geometric-solver";
 import { get_nodes } from "./components/solver/parsing";
+import { get_hovered_part } from "./components/mechanical-canvas/get-hover";
 
 export interface UserPreferences {
   theme: string;
@@ -138,6 +139,7 @@ const App: React.FC = () => {
         if (lastActions.length < 1) break;
         lastAction = lastActions[lastActions.length - 1];
         if (newAction.type !== lastAction.type) break;
+        if (newAction.id !== lastAction.id) break;
         switch (lastAction.type) {
           case "ChangeStiffness":
           case "ChangeDamping":
@@ -350,6 +352,16 @@ const App: React.FC = () => {
     };
     const updatedMechanism = actionReducer(newMechanism, newActions, false);
     setMechanism(updatedMechanism);
+
+    setHoveredPart(
+      get_hovered_part(
+        updatedMechanism.mechanicalElements,
+        updatedMechanism.constraintElements,
+        true, // TODO : Add parameter to toggle showing constraints
+        hoveredPart.position,
+        canvasState,
+      ),
+    );
 
     if (canvasState.type !== "SelectedElement") return;
     if (

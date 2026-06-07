@@ -38,6 +38,7 @@ export function canvasStateReducer(
   ) => void,
   undoMechanism: () => void,
   redoMechanism: () => void,
+  onMouseUpHandler: (event: React.MouseEvent<HTMLCanvasElement>) => void,
   IDcounter: React.MutableRefObject<number>,
 ) {
   let actions: Action[] = [];
@@ -1544,12 +1545,14 @@ export function canvasStateReducer(
           if (!event.crtlKey) {
             break;
           }
+          onMouseUpHandler();
           undoMechanism();
           break;
         case "y":
           if (!event.crtlKey) {
             break;
           }
+          onMouseUpHandler();
           redoMechanism();
           break;
       }

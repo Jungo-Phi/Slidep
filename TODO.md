@@ -2,13 +2,13 @@
 
 ## Features fonctionnelles importantes
 
-- Bug Delete
+- ~Bug Delete~
 - ~Bug ChangingGearSize~
 - ~add MovingBeltBody canvasState~
 - ~Bouton : tendre courroie~
 - ~Compléter les nouvelles actions de "TightenBelt"~
-- Hover : beltHover state + beams intersection
-- if movingBelt : ~No hover on gear with connection to belt~ + hover start
+- ~if movingBelt : No hover on gear with connection to belt~
+- Connect belt ends
 - ~Connecter les engrenages ensemble~
 - ~Gear ratios pour engrenages~
 - ~Compléter les connect-actions pour les engrenages et courroies~
@@ -23,7 +23,7 @@
 - ~Boutons Crtl+Z~
 - ~Avec un click sans mouvement -> sélectionné, puis si mouvement, passer de sélectionné -> movingX~
 - ~Supprimer contraintes quand on supprime élément~
-- Qu'est-ce qui se passe si on appuie sur Crtl+Z alors qu'on a pas laché un élément ?
+- ~Qu'est-ce qui se passe si on appuie sur Crtl+Z alors qu'on a pas laché un élément ? mouseUp~
 - ~TODO : Differentiate between drag and drop : ajouter un élément tampon à mouse release "Blank"~
 - ~MoveEdgeBody : deltaStart -> t~
 - ~ActionReducer : remove elements managed by "UpdatePositionsToValidState"~
@@ -36,7 +36,6 @@
 - ~Afficher en "Selected" l'élément premier de "startPlacingX"~
 - ~Régler le bordel de "connect-actions"~
 - ~Connecter les "fixedGears"~
-- (Click dans le vide quand state==placingConstraint -> state=Selecting ?)
 - Click dans Dimension quand state==placingStartDimension -> Editing
 - ~Changer le mouseIcon quand PlacingConstraint (cross?)~
 - (Ajouter InputBox lors du placement des beams ?)
@@ -63,7 +62,7 @@
 - ~Dimension Radius~
 - ~Compléter le geometric-solver~
 - geometric solver - radius constraint
-- bug : crtl+Z déplacement contraintes
+- ~bug : crtl+Z déplacement contraintes~
 - "applyHorizontalConstraint()" avec une extrémité ancrée ne fonctionne pas
 - hilight element on hover "disconnect" on element panel
 - Empecher les contraintes sur le même élément (DDL analyser)
@@ -85,7 +84,7 @@
 - Faire le panneau des paramètres
 - bug : les infos du projet doivent se mettre à jour au chargement d'un nouveau méchanisme
 - (Ignorer BeamBodyHover lors du déplacement d'un beam ?)
-- Enlever le système de grag and drop des connections pour passer à des boutons de transfer aux endroits spécifiques
+- Enlever le système de drag and drop des connections pour passer à des boutons de transfer aux endroits spécifiques
 - (Supprimer les joints quand ils ne sont connectés qu'à 1 élément ?)
 - ~Change CanvasState on delete element~
 
@@ -103,3 +102,4 @@
 - Déplacer les dimentions avec les élements associés
 - Renommer les éléments
 - Draw Slideps rotating beams over slider
+- (Click dans le vide quand state==placingConstraint -> state=Selecting ?)

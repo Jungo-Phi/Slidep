@@ -17,7 +17,12 @@ import {
   INTERACTION_SPECS,
   DIM,
 } from "../../constants/rendering-specs";
-import { get_mechanical_element_from_id } from "./connect-actions";
+import {
+  get_connection_types,
+  get_connections,
+  get_constraint_element_from_id,
+  get_mechanical_element_from_id,
+} from "./connect-actions";
 import { get_gear_angles } from "../../utils/belt-geom";
 
 /** Returns the hovered part of the element, or null if no part is hovered. */
@@ -649,16 +654,42 @@ export function get_hovered_part_of_element(
 export function get_hovered_part(
   mechanicalElements: MechanicalElement[],
   constraintElements: ConstraintElement[],
-  excluded_elements: ID[],
   constraints_visible: boolean,
   mousePos: Point2,
   state: CanvasState,
 ): HoveredPart {
-  const hover_order = [...DRAWING_ORDER];
-  hover_order.reverse();
-  const elements: UnionElement[] = (
-    mechanicalElements as UnionElement[]
-  ).concat(constraintElements);
+  const excluded_elements: ID[] = [];
+  if (
+    state.type === "MovingNode" ||
+    state.type === "MovingEdgeStartPoint" ||
+    state.type === "MovingEdgeEndPoint" ||
+    state.type === "MovingEdgeBody" ||
+    state.type === "ChangingGearRadius"
+  ) {
+    const element = get_mechanical_element_from_id(
+      state.elementID,
+      mechanicalElements,
+    );
+    excluded_elements.push(element.id);
+    get_connection_types(element).forEach((connectionType) => {
+      excluded_elements.push(...get_connections(element, connectionType));
+    });
+  }
+  if (state.type === "MovingConstraint") {
+    const constraint = get_constraint_element_from_id(
+      state.elementID,
+      constraintElements,
+    );
+    excluded_elements.push(constraint.id);
+  }
+  if (state.type === "PlacingBeltEnd") {
+    excluded_elements.push(...state.attachedGearsIDs.map(({ id }) => id));
+  } else if (
+    state.type === "PlacingBeamEnd" &&
+    (state.startHover.type === "Node" || state.startHover.type === "Edge")
+  ) {
+    excluded_elements.push(state.startHover.id);
+  }
 
   let position = mousePos.clone();
   if (
@@ -679,6 +710,13 @@ export function get_hovered_part(
         .limit_length_min(DIM.MIN_GEAR_RADIUS),
     );
   }
+
+  const elements: UnionElement[] = (
+    mechanicalElements as UnionElement[]
+  ).concat(constraintElements);
+
+  const hover_order = [...DRAWING_ORDER];
+  hover_order.reverse();
   for (const type of hover_order) {
     if (
       (type === "dimension-edge" ||
@@ -706,6 +744,52 @@ export function get_hovered_part(
         state,
       );
       if (hoveredPart) return hoveredPart;
+    }
+  }
+  // Belt end over belt start
+  if (
+    state.type === "PlacingBeltEnd" &&
+    mousePos.distance_to(state.startHover.position) <= HIT_TOLERANCE.NODE
+  ) {
+    return {
+      type: "Edge",
+      position: state.startHover.position,
+      id: -1,
+      deleting: false,
+      part: "start",
+    };
+  } else if (
+    state.type === "MovingEdgeStartPoint" ||
+    state.type === "MovingEdgeEndPoint"
+  ) {
+    const belt = get_mechanical_element_from_id(
+      state.elementID,
+      mechanicalElements,
+    ) as EdgeElement;
+    if (belt.type === "belt") {
+      if (
+        state.type === "MovingEdgeEndPoint" &&
+        mousePos.distance_to(belt.positionStart) <= HIT_TOLERANCE.NODE
+      ) {
+        return {
+          type: "Edge",
+          position: belt.positionStart,
+          id: belt.id,
+          deleting: false,
+          part: "start",
+        };
+      } else if (
+        state.type === "MovingEdgeStartPoint" &&
+        mousePos.distance_to(belt.positionEnd) <= HIT_TOLERANCE.NODE
+      ) {
+        return {
+          type: "Edge",
+          position: belt.positionEnd,
+          id: belt.id,
+          deleting: false,
+          part: "end",
+        };
+      }
     }
   }
   return { type: "Void", position };

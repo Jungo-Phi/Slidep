@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState, useCallback } from "react";
-import { COLORS, HIT_TOLERANCE } from "../../constants/rendering-specs";
+import { COLORS } from "../../constants/rendering-specs";
 import { Box } from "@mui/material";
 import { drawMechanicalCanvas } from "./draw-canvas";
 import { Mechanism } from "../../types/mechanism";
@@ -8,19 +8,9 @@ import { Action, CanvasEvent } from "../../types/actions";
 import { canvasStateReducer } from "./canvas-state-reducer";
 import { CanvasState } from "../../types/canvas-state";
 import { shown_element_name } from "../../types";
-import {
-  get_connection_types,
-  get_connections,
-  get_mechanical_element_from_id,
-  get_constraint_element_from_id,
-} from "./connect-actions";
+import { get_constraint_element_from_id } from "./connect-actions";
 import { get_hovered_part } from "./get-hover";
-import type {
-  ActionBundleType,
-  ActionType,
-  EdgeElement,
-  ID,
-} from "../../types";
+import type { ActionBundleType, ActionType } from "../../types";
 import { HoveredPart } from "../../types/hovered-part";
 import { ConstraintEditor } from "./ConstraintEditor";
 
@@ -236,16 +226,11 @@ export const MechanicalCanvas: React.FC<MechanicalCanvasProps> = ({
     );
   }, [canvasState]);
 
-  const onMouseUpHandler = (event: React.MouseEvent<HTMLCanvasElement>) => {
+  const onMouseUpHandler = () => {
     setMouseDown(false);
-    setmousePosition(
-      new Point2(event.clientX, event.clientY).sub(canvasOffsetRef.current),
-    );
-    if (event.button === 0) {
-      handleEvent({
-        type: "MouseLeftButtonUp",
-      });
-    }
+    handleEvent({
+      type: "MouseLeftButtonUp",
+    });
   };
   const onMouseDownHandler = (event: React.MouseEvent<HTMLCanvasElement>) => {
     setMouseDown(true);
@@ -310,97 +295,13 @@ export const MechanicalCanvas: React.FC<MechanicalCanvasProps> = ({
   ]);
 
   function handleEvent(event: CanvasEvent) {
-    let excluded_elements: ID[] = [];
-    if (
-      canvasState.type === "MovingNode" ||
-      canvasState.type === "MovingEdgeStartPoint" ||
-      canvasState.type === "MovingEdgeEndPoint" ||
-      canvasState.type === "MovingEdgeBody" ||
-      canvasState.type === "ChangingGearRadius"
-    ) {
-      const element = get_mechanical_element_from_id(
-        canvasState.elementID,
-        mechanism.mechanicalElements,
-      );
-      excluded_elements.push(element.id);
-      get_connection_types(element).forEach((connectionType) => {
-        excluded_elements.push(...get_connections(element, connectionType));
-      });
-    }
-    if (canvasState.type === "MovingConstraint") {
-      const constraint = get_constraint_element_from_id(
-        canvasState.elementID,
-        mechanism.constraintElements,
-      );
-      excluded_elements.push(constraint.id);
-    }
-    if (canvasState.type === "PlacingBeltEnd") {
-      excluded_elements = excluded_elements.concat(
-        canvasState.attachedGearsIDs.map(({ id }) => id),
-      );
-    } else if (
-      canvasState.type === "PlacingBeamEnd" &&
-      (canvasState.startHover.type === "Node" ||
-        canvasState.startHover.type === "Edge")
-    ) {
-      excluded_elements.push(canvasState.startHover.id);
-    }
-    let newHoveredPart = get_hovered_part(
+    const newHoveredPart = get_hovered_part(
       mechanism.mechanicalElements,
       mechanism.constraintElements,
-      excluded_elements,
       true, // TODO : Add parameter to toggle showing constraints
       mousePosition,
       canvasState,
     );
-    // Belt end over belt start
-    if (
-      canvasState.type === "PlacingBeltEnd" &&
-      mousePosition.distance_to(canvasState.startHover.position) <=
-        HIT_TOLERANCE.NODE
-    ) {
-      newHoveredPart = {
-        type: "Edge",
-        position: canvasState.startHover.position,
-        id: -1,
-        deleting: false,
-        part: "start",
-      };
-    }
-    if (
-      canvasState.type === "MovingEdgeStartPoint" ||
-      canvasState.type === "MovingEdgeEndPoint"
-    ) {
-      const belt = get_mechanical_element_from_id(
-        canvasState.elementID,
-        mechanism.mechanicalElements,
-      ) as EdgeElement;
-      if (belt.type === "belt") {
-        if (
-          canvasState.type === "MovingEdgeEndPoint" &&
-          mousePosition.distance_to(belt.positionStart) <= HIT_TOLERANCE.NODE
-        ) {
-          newHoveredPart = {
-            type: "Edge",
-            position: belt.positionStart,
-            id: belt.id,
-            deleting: false,
-            part: "start",
-          };
-        } else if (
-          canvasState.type === "MovingEdgeStartPoint" &&
-          mousePosition.distance_to(belt.positionEnd) <= HIT_TOLERANCE.NODE
-        ) {
-          newHoveredPart = {
-            type: "Edge",
-            position: belt.positionEnd,
-            id: belt.id,
-            deleting: false,
-            part: "end",
-          };
-        }
-      }
-    }
     setHoveredPart(newHoveredPart);
 
     canvasStateReducer(
@@ -415,6 +316,7 @@ export const MechanicalCanvas: React.FC<MechanicalCanvasProps> = ({
       updateMechanism,
       undoMechanism,
       redoMechanism,
+      onMouseUpHandler,
       IDcounter,
     );
     setOldPosition(hoveredPart.position.clone());
