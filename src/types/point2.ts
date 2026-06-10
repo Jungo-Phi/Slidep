@@ -45,12 +45,15 @@ export class Point2 {
     );
   }
 
-  /** Calculate angle to another point in radians */
+  /** Calculate the angle to another point in radians */
   public angle_to(other: Point2): number {
-    return Math.atan2(other.y - this.y, other.x - this.x);
+    let delta = other.angle() - this.angle();
+    if (delta < -Math.PI) delta += 2 * Math.PI;
+    if (delta > Math.PI) delta -= 2 * Math.PI;
+    return delta;
   }
 
-  /** Calculate angle to another point in degrees */
+  /** Calculate the angle to another point in degrees */
   public angle_to_deg(other: Point2): number {
     return (this.angle_to(other) * 180) / Math.PI;
   }
@@ -257,7 +260,12 @@ export class Point2 {
   ): Point2 | null {
     const origin = Point2.lines_intersection(start1, end1, start2, end2);
     if (!origin) return null;
-    return new Point2(this.distance_to(origin), this.sub(origin).angle()); // TODO : proportion de l'angle
+    const pos_dir = this.sub(origin);
+    const delta1 = end1.sub(start1);
+    return new Point2(
+      this.distance_to(origin),
+      delta1.angle_to(pos_dir) / delta1.angle_to(end2.sub(start2)),
+    );
   }
 
   /**
@@ -273,7 +281,13 @@ export class Point2 {
   ): Point2 | null {
     const origin = Point2.lines_intersection(start1, end1, start2, end2);
     if (!origin) return null;
-    return origin.add(Point2.from_polar(this.x, this.y)); // TODO : proportion de l'angle
+    const delta1 = end1.sub(start1);
+    return origin.add(
+      Point2.from_polar(
+        this.x,
+        delta1.angle() + delta1.angle_to(end2.sub(start2)) * this.y,
+      ),
+    );
   }
 
   /** Projection onto a line defined by two points */

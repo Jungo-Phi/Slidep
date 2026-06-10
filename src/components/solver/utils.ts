@@ -1,19 +1,14 @@
-import { Link, Point2 } from "../../types";
+import { Link, Nodes } from "../../types";
 
 /**
  * get_degrees_of_liberty(positions, radii, links)
  */
-export function get_degrees_of_freedom(
-  positions: Map<string, Point2>,
-  radii: Map<string, number>,
-  posMasses: Map<string, number>,
-  links: Link[],
-): number {
+export function get_degrees_of_freedom(nodes: Nodes, links: Link[]): number {
   return (
-    positions.size * 2 +
-    radii.size -
+    nodes.positions.size * 2 +
+    nodes.radii.size -
     links.map((link) => link.ddl).reduce((a, b) => a + b, 0) -
-    [...posMasses.values()].filter((mass) => mass === 0).length * 2
+    [...nodes.posMasses.values()].filter((mass) => mass === 0).length * 2
   );
 }
 

@@ -1,8 +1,3 @@
-/**
- * PropertiesPanel component
- * Displays and allows editing of selected element properties
- */
-
 import React, { useState } from "react";
 import { Box, Paper, Typography } from "@mui/material";
 import {
@@ -34,7 +29,7 @@ interface PropertiesPanelProps {
   ) => void;
   mechanism: Mechanism;
   setHoveredPart: (hoveredPart: HoveredPart) => void;
-  setMetaData: (metadata: MechanismMetadata) => void;
+  updateMetadata: (metadata: MechanismMetadata) => void;
   setSimulationState: (state: SimulationState) => void;
   simulationState: SimulationState;
   setSimulationConfig: (config: SimulationConfig) => void;
@@ -47,7 +42,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
   updateMechanism,
   mechanism,
   setHoveredPart,
-  setMetaData,
+  updateMetadata,
 }) => {
   const [closed, setClosed] = useState<boolean>(false);
 
@@ -56,7 +51,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
   };
 
   const handleProjectInfoChange = (info: any) => {
-    setMetaData({
+    updateMetadata({
       ...mechanism.metadata,
       name: info.name,
       description: info.description,
@@ -186,7 +181,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
           ) : (
             <ProjectInfoSection
               mechanism={mechanism}
-              onProjectInfoChange={handleProjectInfoChange}
+              updateMetadata={handleProjectInfoChange}
             />
           )}
         </Box>

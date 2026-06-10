@@ -24,7 +24,7 @@
 - ~Avec un click sans mouvement -> sélectionné, puis si mouvement, passer de sélectionné -> movingX~
 - ~Supprimer contraintes quand on supprime élément~
 - ~Qu'est-ce qui se passe si on appuie sur Crtl+Z alors qu'on a pas laché un élément ? mouseUp~
-- ~TODO : Differentiate between drag and drop : ajouter un élément tampon à mouse release "Blank"~
+- ~Differentiate between drag and drop : ajouter un élément tampon à mouse release "Blank"~
 - ~MoveEdgeBody : deltaStart -> t~
 - ~ActionReducer : remove elements managed by "UpdatePositionsToValidState"~
 - ~Sélection multiple doit ignorer les contraintes et dimensions~
@@ -73,6 +73,7 @@
 - Implémenter algorithme de cinématique (reprendre geometric-solver)
 - Implémenter algorithme de statique (matrices)
 - Implémenter algorithme de dynamique PBD
+- Créer un système d'unités (zoom de base : 1px = 1mm)
 
 ## Features UX secondaires
 
@@ -85,9 +86,7 @@
 - Mettre les infos du projet
 - Faire le panneau des paramètres
 - bug : les infos du projet doivent se mettre à jour au chargement d'un nouveau méchanisme
-- (Ignorer BeamBodyHover lors du déplacement d'un beam ?)
 - Enlever le système de drag and drop des connections pour passer à des boutons de transfer aux endroits spécifiques
-- (Supprimer les joints quand ils ne sont connectés qu'à 1 élément ?)
 
 ## Features visuelles nice to have
 
@@ -99,11 +98,19 @@
 - ~Hover Delete button / Element name~
 - ~Hover en couleur ?~
 - ~Limiter la longueur des edges au placement et déplacement~
-- Rejeter la position des dimensions des éléments pour la lisibilité
+- Éloigner les contraintes des éléments pour la lisibilité
 - ~Déplacer les dimentions avec les élements associés~
 - Renommer les éléments
-- Draw Slideps rotating beams over slider
-- (Click dans le vide quand state==placingConstraint -> state=Selecting ?)
+- ~Draw Slideps rotating beams over slider~
+- Click dans le vide quand state==placingConstraint -> state=Selecting
 - hilight element on hover "disconnect" on element panel
 - shift+click on single element doesnt work
-- H/V pour mode
+- Hover interdire les éléments directement connectés et l'élément lui-meme pour dimentions
+- interdire les charactères et symbole spéciaux (et signe - selon l'input) dans number input
+- Mettre des onglets au panneau de proprietés
+- Les dimension ne se déplaces pas lors des déplacements de groupe
+- Changer l'apparence des extrémités de spring et damper comme pour beam
+- Ajouter un tag editor (property pannel + gallery)
+- Adapter le thumbnail generator pour cropper sur le mécanisme
+- (Ignorer BeamBodyHover lors du déplacement d'un beam ?)
+- (Supprimer les joints quand ils ne sont connectés qu'à 1 élément ?)

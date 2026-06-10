@@ -1,7 +1,7 @@
 /**
  * Helper to convert a decimal value to a ratio string (e.g., 0.5 -> "1:2")
  */
-export function valueToRatioParts(
+export function value_to_ratio_parts(
   value: number,
   limit: number = 100,
 ): [string, string] {
@@ -25,4 +25,13 @@ export function valueToRatioParts(
     }
   }
   return ["1", "1"];
+}
+
+export function format_date(timestamp: number): string {
+  return new Intl.DateTimeFormat("fr-FR", {
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(timestamp));
 }

@@ -480,7 +480,7 @@ export function get_hovered_part_of_element(
               const { center, radius, startAngle, endAngle, direction } =
                 gearAngles[i];
               const distance = mousePos.distance_to(center);
-              const angle = center.angle_to(mousePos);
+              const angle = mousePos.sub(center).angle();
               if (
                 distance <= radius + HIT_TOLERANCE.NODE / 2 &&
                 distance > radius - HIT_TOLERANCE.NODE / 2 &&

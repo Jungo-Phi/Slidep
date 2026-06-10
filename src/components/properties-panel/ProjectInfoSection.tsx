@@ -1,45 +1,31 @@
-/**
- * ProjectInfoSection component
- * Displays general project information and canvas statistics
- * Shown when no element is selected
- */
-
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Box, Typography, TextField, Divider } from "@mui/material";
-import { Mechanism } from "../../types";
+import { Mechanism, MechanismMetadata } from "../../types";
+import { get_degrees_of_freedom } from "../solver/utils";
+import { get_links, get_nodes } from "../solver/parsing";
+import { format_date } from "../../utils/string-math";
 
 interface ProjectInfoSectionProps {
   mechanism: Mechanism;
-  onProjectInfoChange?: (info: ProjectMetadata) => void;
-}
-
-interface ProjectMetadata {
-  name: string;
-  description: string;
-  author: string;
-  version: string;
-  createdAt: string;
-  modifiedAt: string;
+  updateMetadata: (metadata: MechanismMetadata) => void;
 }
 
 export const ProjectInfoSection: React.FC<ProjectInfoSectionProps> = ({
   mechanism,
-  onProjectInfoChange,
+  updateMetadata,
 }) => {
-  // TODO : simplifier
-  const now = new Date();
-  const [projectInfo, setProjectInfo] = useState<ProjectMetadata>({
+  const [projectInfo, setProjectInfo] = useState<MechanismMetadata>({
     name: mechanism.metadata.name,
     description: mechanism.metadata.description,
     author: mechanism.metadata.author,
     version: mechanism.metadata.version,
-    createdAt: now.toLocaleDateString(),
-    modifiedAt: now.toLocaleDateString(),
+    createdAt: mechanism.metadata.createdAt,
+    modifiedAt: mechanism.metadata.modifiedAt,
+    tags: mechanism.metadata.tags,
+    thumbnail: mechanism.metadata.thumbnail,
   });
 
-  // Mettez à jour le state local si le mechanism.metadata change (ex: lors du chargement d'un nouveau projet)
-  /*
-  React.useEffect(() => {
+  useEffect(() => {
     setProjectInfo({
       name: mechanism.metadata.name,
       description: mechanism.metadata.description,
@@ -47,25 +33,18 @@ export const ProjectInfoSection: React.FC<ProjectInfoSectionProps> = ({
       version: mechanism.metadata.version,
       createdAt: mechanism.metadata.createdAt,
       modifiedAt: mechanism.metadata.modifiedAt,
+      tags: mechanism.metadata.tags,
+      thumbnail: mechanism.metadata.thumbnail,
     });
   }, [mechanism.metadata]);
-  */
 
-  const handleInfoChange = (field: keyof ProjectMetadata, value: string) => {
+  const handleInfoChange = (field: keyof MechanismMetadata, value: string) => {
     const updatedInfo = {
       ...projectInfo,
       [field]: value,
-      modifiedAt: new Date().toLocaleDateString(),
     };
     setProjectInfo(updatedInfo);
-    if (onProjectInfoChange) {
-      // Convertir les dates en ISOString pour la sauvegarde
-      onProjectInfoChange({
-        ...updatedInfo,
-        createdAt: mechanism.metadata.createdAt,
-        modifiedAt: new Date().toISOString(),
-      });
-    }
+    updateMetadata({ ...updatedInfo });
   };
 
   return (
@@ -111,7 +90,9 @@ export const ProjectInfoSection: React.FC<ProjectInfoSectionProps> = ({
           >
             Créé le :
           </Typography>
-          <Typography variant="body2">{projectInfo.createdAt}</Typography>
+          <Typography variant="body2">
+            {format_date(projectInfo.createdAt)}
+          </Typography>
         </Box>
         <Box sx={{ flexGrow: 1 }}>
           <Typography
@@ -121,7 +102,9 @@ export const ProjectInfoSection: React.FC<ProjectInfoSectionProps> = ({
           >
             Modifié le :
           </Typography>
-          <Typography variant="body2">{projectInfo.modifiedAt}</Typography>
+          <Typography variant="body2">
+            {format_date(projectInfo.modifiedAt)}
+          </Typography>
         </Box>
         <Box sx={{ flexGrow: 1 }}>
           <Typography
@@ -175,7 +158,13 @@ export const ProjectInfoSection: React.FC<ProjectInfoSectionProps> = ({
       >
         <Typography variant="body2">Degrés de liberté :</Typography>
         <Typography variant="body1" fontWeight={500}>
-          ?
+          {get_degrees_of_freedom(
+            get_nodes(mechanism.mechanicalElements),
+            get_links(
+              mechanism.mechanicalElements,
+              mechanism.constraintElements,
+            ),
+          )}
         </Typography>
       </Box>
     </Box>

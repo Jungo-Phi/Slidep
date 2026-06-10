@@ -111,7 +111,9 @@ export function PBD_kinematic_solver(
               link.key2,
               link.key3,
               link.key4,
-              link.angle,
+              link.flipStart,
+              link.flipEnd,
+              link.angle_rad,
             ),
           );
           break;

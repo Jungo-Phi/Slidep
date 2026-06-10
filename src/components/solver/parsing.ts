@@ -85,7 +85,9 @@ export function constraint_to_link(element: ConstraintElement): Link {
         key2: `${element.startEdgeID}:end`,
         key3: `${element.endEdgeID}:start`,
         key4: `${element.endEdgeID}:end`,
-        angle: element.value,
+        flipStart: element.flipStart,
+        flipEnd: element.flipEnd,
+        angle_rad: (element.value * Math.PI) / 180,
       };
     case "dimension-radius":
       return {
@@ -158,4 +160,86 @@ export function constraint_to_link(element: ConstraintElement): Link {
         ratio: element.value,
       };
   }
+}
+
+/*
+ * Parse a Elements to Links for solvers to use
+ */
+export function get_links(
+  mechanicalElements: MechanicalElement[],
+  constraintElements: ConstraintElement[],
+): Link[] {
+  const links: Link[] = [];
+  constraintElements.forEach((constraint) => {
+    links.push(constraint_to_link(constraint));
+  });
+
+  mechanicalElements.forEach((element) => {
+    if ("positionStart" in element) {
+      if (element.fixedNodeStartID) {
+        links.push({
+          type: "Coincidence",
+          ddl: 2,
+          key1: `${element.fixedNodeStartID}:pos`,
+          key2: `${element.id}:start`,
+        });
+      }
+      if (element.fixedNodeEndID) {
+        links.push({
+          type: "Coincidence",
+          ddl: 2,
+          key1: `${element.fixedNodeEndID}:pos`,
+          key2: `${element.id}:end`,
+        });
+      }
+      if (element.type === "beam") {
+        element.fixedNodesBodyIDs.forEach((nodeId) => {
+          links.push({
+            type: "OnSegment",
+            ddl: 1,
+            key1: `${element.id}:start`,
+            key2: `${element.id}:end`,
+            key3: `${nodeId}:pos`,
+          });
+        });
+      }
+    }
+    if (element.type === "gear") {
+      element.meshedGearsIDs.forEach((meshedId) => {
+        if (
+          links.filter(
+            (link) =>
+              link.type === "GearMeshing" &&
+              link.key2 === `${element.id}:pos` &&
+              link.key1 === `${meshedId}:pos`,
+          ).length === 0
+        ) {
+          links.push({
+            type: "GearMeshing",
+            ddl: 1,
+            key1: `${element.id}:pos`,
+            key2: `${meshedId}:pos`,
+          });
+        }
+      });
+      element.fixedGearsIDs.forEach((fixedId) => {
+        if (
+          links.filter(
+            (link) =>
+              link.type === "Coincidence" &&
+              link.key2 === `${element.id}:pos` &&
+              link.key1 === `${fixedId}:pos`,
+          ).length === 0
+        ) {
+          links.push({
+            type: "Coincidence",
+            ddl: 2,
+            key1: `${element.id}:pos`,
+            key2: `${fixedId}:pos`,
+          });
+        }
+      });
+    }
+  });
+  return links;
 }

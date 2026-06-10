@@ -14,7 +14,7 @@ import {
 import { Point2 as Point2 } from "../../types/point2";
 import { get_element_icon } from "../element-palette/elementIcon";
 import { UnionElement } from "../../types";
-import { valueToRatioParts } from "../../utils/string-math";
+import { value_to_ratio_parts } from "../../utils/string-math";
 
 const TAU = 2 * Math.PI;
 
@@ -698,6 +698,8 @@ export function draw_dimention_angle(
   end1: Point2,
   start2: Point2,
   end2: Point2,
+  flipStart: boolean,
+  flipEnd: boolean,
   position: Point2,
   value: number,
   hideText: boolean = false,
@@ -706,18 +708,22 @@ export function draw_dimention_angle(
 
   const origin = Point2.lines_intersection(start1, end1, start2, end2);
   if (!origin) return;
-  const radius = origin.distance_to(position);
-  let alpha = start1.angle_to(end1);
-  let beta = start2.angle_to(end2);
+
+  let alpha = end1
+    .sub(start1)
+    .mul(flipStart ? -1 : 1)
+    .angle();
+  let beta = end2
+    .sub(start2)
+    .mul(flipEnd ? -1 : 1)
+    .angle();
   if ((alpha - beta + TAU) % TAU < TAU / 2) {
     [alpha, beta] = [beta, alpha];
   }
-  //const angle = (beta - alpha + TAU) % TAU;
-  //const center = origin.add(Point2.from_polar(radius, (((alpha + TAU) % TAU) + ((beta + TAU) % TAU)) / 2));
-  //const e = d * Math.sin(angle / 2);
-  //origin = origin.add(center.sub(origin).normalize().mul(d));
-  const start = origin.add(new Point2(radius, 0).rotate(alpha + 3 / radius));
-  const end = origin.add(new Point2(radius, 0).rotate(beta - 3 / radius));
+  const radius = origin.distance_to(position);
+  const start = origin.add(Point2.from_polar(radius, alpha + 3 / radius));
+  const end = origin.add(Point2.from_polar(radius, beta - 3 / radius));
+
   let p1 = new Point2(-7, 18).rotate(alpha);
   let p2 = new Point2(7, 18).rotate(alpha);
   ctx.beginPath();
@@ -725,6 +731,7 @@ export function draw_dimention_angle(
   ctx.lineTo(start.x + p1.x, start.y + p1.y);
   ctx.lineTo(start.x + p2.x, start.y + p2.y);
   ctx.fill();
+
   p1 = new Point2(-7, 18).rotate(beta);
   p2 = new Point2(7, 18).rotate(beta);
   ctx.beginPath();
@@ -732,6 +739,7 @@ export function draw_dimention_angle(
   ctx.lineTo(end.x - p1.x, end.y - p1.y);
   ctx.lineTo(end.x - p2.x, end.y - p2.y);
   ctx.fill();
+
   ctx.beginPath();
   ctx.arc(
     origin.x,
@@ -741,8 +749,10 @@ export function draw_dimention_angle(
     beta - 18 / radius,
   );
   ctx.stroke();
+
   // TODO : add arc to position
   // TODO : add straight lines
+
   if (hideText) return;
   ctx.save();
   ctx.translate(position.x, position.y);
@@ -831,7 +841,7 @@ export function draw_gear_ratio(ctx: CanvasRenderingContext2D, value: number) {
   ctx.font = DIMENSION_SPECS.TEXT_FONT;
   ctx.textAlign = DIMENSION_SPECS.TEXT_ALIGN;
   ctx.textBaseline = DIMENSION_SPECS.TEXT_BASELINE;
-  const text = valueToRatioParts(value).join(" : ");
+  const text = value_to_ratio_parts(value).join(" : ");
   const metrics = ctx.measureText(text);
   const isSelected = ctx.shadowBlur !== 0;
 

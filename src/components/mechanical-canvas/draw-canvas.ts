@@ -51,6 +51,7 @@ import {
   is_on_left_side_of_belt,
 } from "../../utils/belt-geom";
 import { connected_constraints, node_on_beam_body } from "./utils";
+import { get_angle_dim_direction } from "../../utils/angle-math";
 
 function is_selected(elementID: ID, state: CanvasState): boolean {
   return (
@@ -288,7 +289,7 @@ export function drawMechanicalCanvas(
               mechanicalElements,
             ) as BeamElement;
             ctx.rotate(
-              parentBeam.positionStart.angle_to(parentBeam.positionEnd),
+              parentBeam.positionEnd.sub(parentBeam.positionStart).angle(),
             );
           }
           if (element.isGrounded && element.type !== "gear") {
@@ -317,7 +318,7 @@ export function drawMechanicalCanvas(
                   mechanicalElements,
                 ) as BeamElement;
                 ctx.rotate(
-                  -parentBeam.positionStart.angle_to(parentBeam.positionEnd),
+                  -parentBeam.positionEnd.sub(parentBeam.positionStart).angle(),
                 );
               }
               [...element.rotatingEdgesIDs].reverse().forEach((edgeID) => {
@@ -354,7 +355,7 @@ export function drawMechanicalCanvas(
                   )
                 ) {
                   ctx.save();
-                  ctx.rotate(edge.positionStart.angle_to(edge.positionEnd));
+                  ctx.rotate(edge.positionEnd.sub(edge.positionStart).angle());
                   if (edge.fixedNodeStartID === element.id) {
                     draw_slidep_rep(ctx, true, false);
                   } else if (edge.fixedNodeEndID === element.id) {
@@ -638,6 +639,8 @@ export function drawMechanicalCanvas(
             startEdge.positionEnd,
             endEdge.positionStart,
             endEdge.positionEnd,
+            element.flipStart,
+            element.flipEnd,
             element.position,
             element.value,
             state.type === "EditingConstraint" &&
@@ -761,7 +764,7 @@ export function drawMechanicalCanvas(
           }
           if (hoveredBeam) {
             ctx.rotate(
-              hoveredBeam.positionStart.angle_to(hoveredBeam.positionEnd),
+              hoveredBeam.positionEnd.sub(hoveredBeam.positionStart).angle(),
             );
           }
           draw_slider(ctx, false);
@@ -909,27 +912,38 @@ export function drawMechanicalCanvas(
             endEdge.positionEnd,
           );
           if (!intersection) break;
-          const position = intersection.add(
-            hoveredPart.position
-              .sub(intersection)
-              .slerp(
-                edgeD.positionEnd
-                  .sub(intersection)
-                  .normalize()
-                  .mul(hoveredPart.position.distance_to(intersection)),
-                0.25,
-              ), // TODO
+
+          const angleDimDirection = get_angle_dim_direction(
+            edgeD.positionStart,
+            edgeD.positionEnd,
+            endEdge.positionStart,
+            endEdge.positionEnd,
+            hoveredPart.position,
           );
+          if (!angleDimDirection) break;
+          const { flipStart, flipEnd, angle } = angleDimDirection;
+
+          const pos_dir = hoveredPart.position.sub(intersection);
+          const position = intersection.add(
+            pos_dir.slerp(
+              edgeD.positionEnd
+                .sub(intersection)
+                .normalize()
+                .mul(pos_dir.length()),
+              0.5,
+            ),
+          );
+
           draw_dimention_angle(
             ctx,
             edgeD.positionStart,
             edgeD.positionEnd,
             endEdge.positionStart,
             endEdge.positionEnd,
+            flipStart,
+            flipEnd,
             position,
-            edgeD.positionEnd
-              .sub(edgeD.positionStart)
-              .angle_to_deg(endEdge.positionEnd.sub(endEdge.positionStart)),
+            angle,
           );
           break;
       }
@@ -980,16 +994,27 @@ export function drawMechanicalCanvas(
         state.endEdgeID,
         mechanicalElements,
       ) as EdgeElement;
+
+      const angleDimDirection = get_angle_dim_direction(
+        startEdge.positionStart,
+        startEdge.positionEnd,
+        endEdge.positionStart,
+        endEdge.positionEnd,
+        hoveredPart.position,
+      );
+      if (!angleDimDirection) break;
+      const { flipStart, flipEnd, angle } = angleDimDirection;
+
       draw_dimention_angle(
         ctx,
         startEdge.positionStart,
         startEdge.positionEnd,
         endEdge.positionStart,
         endEdge.positionEnd,
+        flipStart,
+        flipEnd,
         hoveredPart.position,
-        startEdge.positionEnd
-          .sub(startEdge.positionStart)
-          .angle_to_deg(endEdge.positionEnd.sub(endEdge.positionStart)),
+        angle,
       );
       break;
     case "DimensionRadius":

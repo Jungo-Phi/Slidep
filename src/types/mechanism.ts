@@ -1,8 +1,3 @@
-/**
- * Types for mechanisms in slidep
- * A mechanism is a collection of elements and connections
- */
-
 import { Action } from "./actions";
 import { MechanicalElement, ConstraintElement } from "./element";
 import {
@@ -10,60 +5,42 @@ import {
   SerializedConstraintElement,
   SerializedMechanicalElement,
 } from "./serialized";
+import { DBSchema } from "idb";
 
-/**
- * Mechanism metadata
- */
 export interface MechanismMetadata {
   name: string;
   description: string;
   author: string;
-  createdAt: string;
-  modifiedAt: string;
+  createdAt: number;
+  modifiedAt: number;
   version: string;
   tags: string[];
+  thumbnail: string; // DataURL (ex: "data:image/png;base64,...")
 }
 
-/**
- * Default mechanism metadata
- */
 export const DEFAULT_METADATA: MechanismMetadata = {
   name: "Nouveau mécanisme",
   description: "",
   author: "",
-  createdAt: new Date().toISOString(),
-  modifiedAt: new Date().toISOString(),
+  createdAt: 0,
+  modifiedAt: 0,
   version: "1.0.0",
   tags: [],
+  thumbnail: "",
 };
 
-/**
- * Mechanism viewport state
- */
 export interface ViewportState {
   zoom: number;
   panX: number;
   panY: number;
-  gridVisible: boolean;
-  gridSize: number;
-  constraintsVisible: boolean;
 }
 
-/**
- * Default viewport state
- */
 export const DEFAULT_VIEWPORT: ViewportState = {
   zoom: 1,
   panX: 0,
   panY: 0,
-  gridVisible: true,
-  gridSize: 20,
-  constraintsVisible: true,
 };
 
-/**
- * Complete mechanism representation
- */
 export interface Mechanism {
   metadata: MechanismMetadata;
   viewport: ViewportState;
@@ -73,15 +50,6 @@ export interface Mechanism {
   future: Action[][];
 }
 
-/**
- * Mechanism file format for export/import
- */
-export interface SlidepFile {
-  version: string;
-  mechanism: SerializedMechanism;
-  exportedAt: string;
-}
-
 export interface SerializedMechanism {
   metadata: MechanismMetadata;
   viewport: ViewportState;
@@ -89,4 +57,12 @@ export interface SerializedMechanism {
   constraintElements: SerializedConstraintElement[];
   history: SerializedAction[][];
   future: SerializedAction[][];
+}
+
+export interface SlidepDB extends DBSchema {
+  mechanisms: {
+    key: number;
+    value: SerializedMechanism;
+    indexes: { "by-date": number };
+  };
 }

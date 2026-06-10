@@ -396,8 +396,10 @@ export function applyNormalConstraint(
 }
 
 /** Contraint l'angle orienté entre deux segments à valoir targetAngle.
- * La correction angulaire est distribuée entre les deux segments au prorata
- * de leurs masses totales respectives. */
+ * Les vecteurs directeurs sont potentiellement inversés selon flipStart/flipEnd avant calcul.
+ * La correction angulaire est distribuée entre les deux segments au prorata de leurs masses.
+ * Chaque segment pivote autour de son propre centre.
+ */
 export function applyAngleConstraint(
   positions: Map<string, Point2>,
   posMasses: Map<string, number>,
@@ -405,6 +407,8 @@ export function applyAngleConstraint(
   e1: string,
   s2: string,
   e2: string,
+  flipStart: boolean,
+  flipEnd: boolean,
   targetAngle: number,
   stiffness: number = 1.0,
 ): number {
@@ -412,33 +416,52 @@ export function applyAngleConstraint(
   const pe1 = positions.get(e1);
   const ps2 = positions.get(s2);
   const pe2 = positions.get(e2);
+
   if (!ps1 || !pe1 || !ps2 || !pe2) return 0;
 
-  const v1 = pe1.sub(ps1);
-  const v2 = pe2.sub(ps2);
-  const currentAngle = v2.angle() - v1.angle();
+  // 1. Calcul des vecteurs effectifs en tenant compte des flips
+  // Le vecteur de base est toujours (fin - début). Si flip=true, on l'inverse.
+  let v1 = pe1.sub(ps1);
+  if (flipStart) v1 = v1.mul(-1);
 
-  // Différence à corriger, ramenée dans [-π, π]
+  let v2 = pe2.sub(ps2);
+  if (flipEnd) v2 = v2.mul(-1);
+
+  // 2. Calcul de l'erreur angulaire
+  // angle_to renvoie la différence ramenée dans [-PI, PI]
+  const currentAngle = v1.angle_to(v2);
+
+  // Différence entre l'angle actuel et l'angle cible, ramenée dans [-PI, PI]
   let diff = currentAngle - targetAngle;
   while (diff > Math.PI) diff -= 2 * Math.PI;
   while (diff < -Math.PI) diff += 2 * Math.PI;
 
   const error = Math.abs(diff);
+  if (error < 0.0001) return 0; // Déjà satisfait
 
+  // 3. Calcul des masses totales par segment
   const w1 = (posMasses.get(s1) ?? 1) + (posMasses.get(e1) ?? 1);
   const w2 = (posMasses.get(s2) ?? 1) + (posMasses.get(e2) ?? 1);
   const totalW = w1 + w2;
+
   if (totalW === 0) return 0;
 
-  // Segment 1 : tourne dans le sens positif pour réduire diff
+  // 4. Application des rotations
+  // Pour réduire l'écart 'diff', on tourne v1 de +rot1 et v2 de -rot2
+  // La somme des rotations doit égaler diff (en valeur absolue relative)
   const rot1 = diff * (w1 / totalW) * stiffness;
+  const rot2 = -diff * (w2 / totalW) * stiffness;
+
+  // Rotation du segment 1 autour de son centre
   const center1 = ps1.lerp(pe1, 0.5);
   const half1 = v1.mul(0.5).rotate(rot1);
+  // Note: v1 est peut-être inversé par rapport au stockage physique,
+  // mais la rotation s'applique géométriquement de la même façon.
+  // On reconstruit les positions à partir du centre et du demi-vecteur tourné.
   if (posMasses.get(s1) !== 0) positions.set(s1, center1.sub(half1));
   if (posMasses.get(e1) !== 0) positions.set(e1, center1.add(half1));
 
-  // Segment 2 : tourne dans le sens négatif pour réduire diff
-  const rot2 = -diff * (w2 / totalW) * stiffness;
+  // Rotation du segment 2 autour de son centre
   const center2 = ps2.lerp(pe2, 0.5);
   const half2 = v2.mul(0.5).rotate(rot2);
   if (posMasses.get(s2) !== 0) positions.set(s2, center2.sub(half2));

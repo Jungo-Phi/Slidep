@@ -274,26 +274,48 @@ export function deserializeMechanism(
   };
 }
 
-// Cloner
 export function cloneMechanism(mechanism: Mechanism): Mechanism {
   return deserializeMechanism(serializeMechanism(mechanism));
 }
 
-// Sauvegarder
-/*
-{
-  const json = JSON.stringify(serializeMechanism(mechanism));
-  localStorage.setItem("mechanism", json);
-  // ou : await fetch("/api/save", { method: "POST", body: json });
-}
-*/
+export function saveToFile(data: any, filename: string = "data.slidep") {
+  const jsonString = JSON.stringify(data, null, 2); // Formaté pour la lisibilité
+  const blob = new Blob([jsonString], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
 
-// Charger
-/*
-{
-  const raw = localStorage.getItem("mechanism");
-  if (raw) {
-    mechanism = deserializeMechanism(JSON.parse(raw));
-  }
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
-*/
+
+export function loadFromFile(): Promise<any> {
+  return new Promise((resolve, reject) => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".slidep";
+
+    input.onchange = (e: Event) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        try {
+          const content = event.target?.result as string;
+          const data = JSON.parse(content);
+          resolve(data);
+        } catch (err) {
+          reject("Erreur lors de la lecture du JSON");
+        }
+      };
+      reader.readAsText(file);
+    };
+
+    input.click();
+  });
+}

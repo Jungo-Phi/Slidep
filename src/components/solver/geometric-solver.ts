@@ -2,14 +2,13 @@ import {
   Action,
   EdgeElement,
   ActionBundleType,
-  Link,
   Point2,
   Nodes,
   Mechanism,
 } from "../../types";
 import { get_mechanical_element_from_id } from "../mechanical-canvas/connect-actions";
 import { get_degrees_of_freedom, sort_links } from "./utils";
-import { constraint_to_link, get_nodes } from "./parsing";
+import { get_links, get_nodes } from "./parsing";
 import { PBD_kinematic_solver } from "./PBD_kinematic_solver";
 
 /**
@@ -25,81 +24,12 @@ export function resolveGeometricConstraints(
   // *
 
   // 1. Initialize nodes (positions and radii) of the dependency graph
-  const nodes = get_nodes(mechanism.mechanicalElements);
-  let links: Link[] = [];
-
   // 2. Initialize edges (links) of the dependency graph
-  mechanism.constraintElements.forEach((constraint_element) => {
-    links.push(constraint_to_link(constraint_element));
-  });
-  // Connections (looking from edges to avoid duplicates)
-  mechanism.mechanicalElements.forEach((element) => {
-    if ("positionStart" in element) {
-      if (element.fixedNodeStartID) {
-        links.push({
-          type: "Coincidence",
-          ddl: 2,
-          key1: `${element.fixedNodeStartID}:pos`,
-          key2: `${element.id}:start`,
-        });
-      }
-      if (element.fixedNodeEndID) {
-        links.push({
-          type: "Coincidence",
-          ddl: 2,
-          key1: `${element.fixedNodeEndID}:pos`,
-          key2: `${element.id}:end`,
-        });
-      }
-      if (element.type === "beam") {
-        element.fixedNodesBodyIDs.forEach((nodeId) => {
-          links.push({
-            type: "OnSegment",
-            ddl: 1,
-            key1: `${element.id}:start`,
-            key2: `${element.id}:end`,
-            key3: `${nodeId}:pos`,
-          });
-        });
-      }
-    }
-    if (element.type === "gear") {
-      element.meshedGearsIDs.forEach((meshedId) => {
-        if (
-          links.filter(
-            (link) =>
-              link.type === "GearMeshing" &&
-              link.key2 === `${element.id}:pos` &&
-              link.key1 === `${meshedId}:pos`,
-          ).length === 0
-        ) {
-          links.push({
-            type: "GearMeshing",
-            ddl: 1,
-            key1: `${element.id}:pos`,
-            key2: `${meshedId}:pos`,
-          });
-        }
-      });
-      element.fixedGearsIDs.forEach((fixedId) => {
-        if (
-          links.filter(
-            (link) =>
-              link.type === "Coincidence" &&
-              link.key2 === `${element.id}:pos` &&
-              link.key1 === `${fixedId}:pos`,
-          ).length === 0
-        ) {
-          links.push({
-            type: "Coincidence",
-            ddl: 2,
-            key1: `${element.id}:pos`,
-            key2: `${fixedId}:pos`,
-          });
-        }
-      });
-    }
-  });
+  const nodes = get_nodes(mechanism.mechanicalElements);
+  let links = get_links(
+    mechanism.mechanicalElements,
+    mechanism.constraintElements,
+  );
 
   let grabPoint: Point2 | number | undefined = undefined;
   let grabConnectionID: string | undefined = undefined;
@@ -303,12 +233,7 @@ export function resolveGeometricConstraints(
       (e) => e.id === triggerAction.id,
     )! as EdgeElement;
     // Si il y a 3 ou plus degré de liberté ALORS contrainte de parallélisme.
-    ddl = get_degrees_of_freedom(
-      nodes.positions,
-      nodes.radii,
-      nodes.posMasses,
-      links,
-    );
+    ddl = get_degrees_of_freedom(nodes, links);
     if (ddl >= 3) {
       links.push({
         type: "KeepOrientation",
@@ -319,12 +244,7 @@ export function resolveGeometricConstraints(
       });
     }
     // Si il y a 3 ou plus degré de liberté ALORS contrainte de longueur.
-    ddl = get_degrees_of_freedom(
-      nodes.positions,
-      nodes.radii,
-      nodes.posMasses,
-      links,
-    );
+    ddl = get_degrees_of_freedom(nodes, links);
     if (ddl >= 3) {
       links.push({
         type: "Distance",
@@ -338,12 +258,7 @@ export function resolveGeometricConstraints(
 
   // ChangingGearRadius sélectionné
   if (triggerAction.type === "ChangeGearRadius") {
-    ddl = get_degrees_of_freedom(
-      nodes.positions,
-      nodes.radii,
-      nodes.posMasses,
-      links,
-    );
+    ddl = get_degrees_of_freedom(nodes, links);
     // Si il y a 3 ou plus degré de liberté ALORS contrainte de position de l'engrenage.
     if (ddl >= 3) {
       nodes.posMasses.set(`${triggerAction.id}:pos`, 0);
@@ -351,12 +266,7 @@ export function resolveGeometricConstraints(
   }
   // MovingGear sélectionné
   if (triggerAction.type === "MoveNode") {
-    ddl = get_degrees_of_freedom(
-      nodes.positions,
-      nodes.radii,
-      nodes.posMasses,
-      links,
-    );
+    ddl = get_degrees_of_freedom(nodes, links);
     // Si il y a 2 ou plus degré de liberté ALORS contrainte de rayon de l'engrenage.
     if (ddl >= 2) {
       nodes.radMasses.set(`${triggerAction.id}:pos`, 0);
@@ -375,12 +285,7 @@ export function resolveGeometricConstraints(
   // console.log("pos : ", [...nodes.positions.keys()]);
   //console.log("links : ", links);
   /*
-  console.log("DDL : ", get_degrees_of_freedom(
-    nodes.positions,
-    nodes.radii,
-    nodes.posMasses,
-    links,
-  ));
+  console.log("DDL : ", get_degrees_of_freedom(nodes, links));
   */
 
   // 3. PBD (Position Based Dynamics)
@@ -390,7 +295,7 @@ export function resolveGeometricConstraints(
     nodes.posMasses,
     nodes.radMasses,
     links,
-    150,
+    200,
   );
 
   // Decouple fused elements

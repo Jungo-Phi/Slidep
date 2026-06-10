@@ -42,7 +42,9 @@ export type Link =
       key2: string;
       key3: string;
       key4: string;
-      angle: number;
+      flipStart: boolean;
+      flipEnd: boolean;
+      angle_rad: number;
     }
   | { type: "Radius"; ddl: 1; key1: string; radius: number }
   | { type: "Horizontal"; ddl: 1; key1: string; key2: string }

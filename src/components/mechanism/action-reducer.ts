@@ -9,7 +9,7 @@ import {
 import {
   get_constraint_element_from_id,
   get_mechanical_element_from_id,
-} from "./connect-actions";
+} from "../mechanical-canvas/connect-actions";
 
 export function actionReducer(
   mechanism: Mechanism,

@@ -215,6 +215,8 @@ export interface DimentionAngle extends ConstraintBaseElement {
   type: "dimension-angle";
   startEdgeID: ID;
   endEdgeID: ID;
+  flipStart: boolean;
+  flipEnd: boolean;
   value: number;
 }
 

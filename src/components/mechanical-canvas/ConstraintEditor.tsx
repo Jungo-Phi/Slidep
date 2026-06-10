@@ -3,7 +3,7 @@ import { TextField, Typography, Box } from "@mui/material";
 import { ConstraintElement } from "../../types/element";
 import { Point2 } from "../../types/point2";
 import { COLORS } from "../../constants/rendering-specs";
-import { valueToRatioParts } from "../../utils/string-math";
+import { value_to_ratio_parts } from "../../utils/string-math";
 
 interface ConstraintEditorProps {
   constraint: ConstraintElement;
@@ -27,7 +27,7 @@ export const ConstraintEditor: React.FC<ConstraintEditorProps> = ({
   useEffect(() => {
     if ("value" in constraint) {
       if (constraint.type === "gear-ratio") {
-        const [n, d] = valueToRatioParts(constraint.value);
+        const [n, d] = value_to_ratio_parts(constraint.value);
         setVal1(n);
         setVal2(d);
       } else {
@@ -224,4 +224,4 @@ export const ConstraintEditor: React.FC<ConstraintEditorProps> = ({
     </Box>
   );
 };
-export { valueToRatioParts };
+export { value_to_ratio_parts as valueToRatioParts };

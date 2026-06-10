@@ -22,6 +22,7 @@ import {
 } from "./connect-actions";
 import { is_on_left_side_of_belt } from "../../utils/belt-geom";
 import { DIM } from "../../constants/rendering-specs";
+import { get_angle_dim_direction } from "../../utils/angle-math";
 
 export function canvasStateReducer(
   state: CanvasState,
@@ -673,9 +674,16 @@ export function canvasStateReducer(
             state.endEdgeID,
             mechanicalElements,
           ) as EdgeElement;
-          const value3 = startEdge.positionEnd
-            .sub(startEdge.positionStart)
-            .angle_to_deg(endEdge.positionEnd.sub(endEdge.positionStart));
+          const angleDimDirection = get_angle_dim_direction(
+            startEdge.positionStart,
+            startEdge.positionEnd,
+            endEdge.positionStart,
+            endEdge.positionEnd,
+            hoveredPart.position,
+          );
+          if (!angleDimDirection) break;
+          const { flipStart, flipEnd, angle } = angleDimDirection;
+
           actionBundleType = "CreateConstraint";
           actions.push({
             type: "CreateElement",
@@ -685,13 +693,15 @@ export function canvasStateReducer(
               id: elementID3,
               startEdgeID: state.startEdgeID,
               endEdgeID: state.endEdgeID,
-              value: value3,
+              flipStart,
+              flipEnd,
+              value: angle,
             },
           });
           setCanvasState({
             type: "EditingConstraint",
             elementID: elementID3,
-            value: value3,
+            value: angle,
             isPlacing: true,
           });
           break;

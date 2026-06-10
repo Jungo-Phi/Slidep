@@ -14,18 +14,20 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
+  Chip,
+  CircularProgress,
 } from "@mui/material";
 import {
   Menu as MenuIcon,
   Settings,
   Undo,
   Redo,
-  Save,
   Language,
   Info,
-  FolderOpen,
   Close,
-  Add,
+  Download,
+  FileOpen,
+  Apps,
 } from "@mui/icons-material";
 import { lightTheme } from "./lib/mui-theme"; // import { lightTheme, darkTheme, highContrastTheme } from "./lib/mui-theme";
 import logoUrl from "./assets/icons/palette/logo.svg";
@@ -44,29 +46,35 @@ import {
   DEFAULT_VIEWPORT,
   Mechanism,
   MechanismMetadata,
-  Nodes,
+  SerializedMechanism,
   SimulationConfig,
   SimulationState,
+  SlidepDB,
   ZERO,
 } from "./types";
 import { HoveredPart } from "./types/hovered-part";
-import { actionReducer } from "./components/mechanical-canvas/action-reducer";
+import { actionReducer } from "./components/mechanism/action-reducer";
 import { preload_element_icons } from "./components/element-palette/elementIcon";
 import { COLORS } from "./constants/rendering-specs";
-import { cloneMechanism } from "./utils/serialization";
-import { resolveGeometricConstraints } from "./components/solver/geometric-solver";
 import {
-  get_constraint_nodes as get_constraint_positions,
-  get_nodes,
-} from "./components/solver/parsing";
+  deserializeMechanism,
+  loadFromFile,
+  saveToFile,
+  serializeMechanism,
+} from "./utils/serialization";
 import { get_hovered_part } from "./components/mechanical-canvas/get-hover";
+import { update_mechanism } from "./components/mechanism/update-mechanism";
+import MechanismsGallery from "./components/mechanisms-gallery/MechanismsGallery";
+import { openDB } from "idb";
+import { generateThumbnail } from "./utils/thumbnail-generator";
+import { debounce } from "./utils/debounce";
 
 export interface UserPreferences {
   theme: string;
   gridVisible: boolean;
   snapToGrid: boolean;
-  autoSave: boolean;
-  autoSaveInterval: number; // in seconds
+  constraintsVisible: boolean;
+  gridSize: number;
 }
 
 /*
@@ -74,26 +82,32 @@ const DEFAULT_PREFERENCES: UserPreferences = {
   theme: "light",
   gridVisible: true,
   snapToGrid: true,
-  autoSave: true,
-  autoSaveInterval: 30,
+  constraintsVisible: true;
+  gridSize: 50;
 };
 */
 
-/**
- * App component
- */
 const App: React.FC = () => {
   const [canvasState, setCanvasState] = useState<CanvasState>({
     type: "Selecting",
   });
   const [mechanism, setMechanism] = useState<Mechanism>({
-    metadata: DEFAULT_METADATA,
+    metadata: {
+      ...DEFAULT_METADATA,
+      createdAt: Date.now(),
+      modifiedAt: Date.now(),
+    },
     viewport: DEFAULT_VIEWPORT,
     mechanicalElements: [],
     constraintElements: [],
     history: [],
     future: [],
   });
+  const mechanismRef = useRef<Mechanism>(mechanism);
+  useEffect(() => {
+    mechanismRef.current = mechanism;
+  }, [mechanism]);
+
   const [hoveredPart, setHoveredPart] = useState<HoveredPart>({
     type: "Void",
     position: ZERO,
@@ -106,6 +120,20 @@ const App: React.FC = () => {
   );
   const currentTheme = lightTheme;
 
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  const dbVersion = 3;
+  const [saveStatus, setSaveStatus] = useState<
+    "idle" | "saved" | "saving" | "error"
+  >("idle");
+
+  const [galleryOpen, setGalleryOpen] = useState(false);
+  const [savedMechanisms, setSavedMechanisms] = useState<SerializedMechanism[]>(
+    [],
+  );
+
+  const [simHover, setSimHover] = useState(false);
+
   /** Preload all icons when the app starts */
   useEffect(() => {
     preload_element_icons();
@@ -113,261 +141,24 @@ const App: React.FC = () => {
 
   const IDcounter = useRef(1);
 
+  const updateMetadata = (metadata: MechanismMetadata) => {
+    setMechanism({ ...mechanism, metadata });
+    setSaveStatus("saving");
+    debouncedSave();
+  };
+
   const updateMechanism = (
     actions: Action[],
     actionBundleType: ActionBundleType,
   ) => {
-    const newAction = actions[0];
-    let newActions = actions;
-    let lastActions: Action[];
-    let lastAction: Action;
-    let secondToLastAction: Action;
-    let oldNodes: Nodes;
-    let newNodes: Nodes;
-
-    let newHistory: Action[][] | undefined = undefined;
-
-    switch (actionBundleType) {
-      case "MoveConstraint":
-      case "ChangeConstant":
-        if (
-          newAction.type !== "MoveConstraint" &&
-          newAction.type !== "ChangeMass" &&
-          newAction.type !== "ChangeStiffness" &&
-          newAction.type !== "ChangeDamping"
-        )
-          throw console.error("impossible");
-        if (mechanism.history.length === 0) break;
-        lastActions = mechanism.history[mechanism.history.length - 1];
-        if (lastActions.length < 1) break;
-        lastAction = lastActions[lastActions.length - 1];
-        if (newAction.type !== lastAction.type) break;
-        if (newAction.id !== lastAction.id) break;
-        switch (lastAction.type) {
-          case "ChangeStiffness":
-          case "ChangeDamping":
-          case "ChangeMass":
-            if (newAction.type === lastAction.type) {
-              lastAction.delta += newAction.delta;
-            }
-            break;
-          case "MoveConstraint":
-            if (newAction.type === lastAction.type) {
-              lastAction.newPosition = newAction.newPosition;
-            }
-            break;
-        }
-        newHistory = [...mechanism.history];
-        break;
-      case "MoveElement":
-        if (
-          newAction.type !== "MoveNode" &&
-          newAction.type !== "MoveEdgeStart" &&
-          newAction.type !== "MoveEdgeEnd" &&
-          newAction.type !== "MoveEdgeBody" &&
-          newAction.type !== "MoveElements" &&
-          newAction.type !== "ChangeGearRadius" &&
-          newAction.type !== "ChangeEdgeLength"
-        )
-          throw console.error("impossible");
-
-        oldNodes = get_nodes(mechanism.mechanicalElements);
-        get_constraint_positions(mechanism.constraintElements).forEach(
-          (pos, key) => oldNodes.positions.set(key, pos),
-        );
-        newNodes = resolveGeometricConstraints(
-          mechanism,
-          actionBundleType,
-          newAction,
-        );
-        newActions = [
-          ...actions,
-          {
-            type: "UpdatePositionsToValidState",
-            masterActionType: newAction.type,
-            newNodes,
-            oldNodes,
-          },
-        ];
-        if (mechanism.history.length === 0) break;
-        lastActions = mechanism.history[mechanism.history.length - 1];
-        if (lastActions.length < 2) break;
-        lastAction = lastActions[lastActions.length - 1];
-        secondToLastAction = lastActions[lastActions.length - 2];
-        if (
-          lastAction.type !== "UpdatePositionsToValidState" ||
-          newAction.type !== lastAction.masterActionType
-        )
-          break;
-        newHistory = [...mechanism.history];
-        lastAction.newNodes = newNodes;
-        if (secondToLastAction.type !== newAction.type)
-          throw console.error("impossible");
-        switch (secondToLastAction.type) {
-          case "MoveNode":
-          case "MoveEdgeStart":
-          case "MoveEdgeEnd":
-          case "MoveEdgeBody":
-            if (secondToLastAction.type !== newAction.type)
-              throw console.error("impossible");
-            secondToLastAction.newPosition = newAction.newPosition;
-            break;
-          case "MoveElements":
-            if (secondToLastAction.type !== newAction.type)
-              throw console.error("impossible");
-            secondToLastAction.delta = secondToLastAction.delta.add(
-              newAction.delta,
-            );
-            break;
-          case "ChangeGearRadius":
-            if (secondToLastAction.type !== newAction.type)
-              throw console.error("impossible");
-            secondToLastAction.newRadius = newAction.newRadius;
-            break;
-          case "ChangeEdgeLength":
-            if (secondToLastAction.type !== newAction.type)
-              throw console.error("impossible");
-            secondToLastAction.newLength = newAction.newLength;
-            break;
-        }
-        break;
-      case "ChangeDimension":
-        if (
-          newAction.type !== "ChangeDimensionEdgeValue" &&
-          newAction.type !== "ChangeDimensionNodeToNodeValue" &&
-          newAction.type !== "ChangeDimensionEdgeToNodeValue" &&
-          newAction.type !== "ChangeDimensionAngleValue" &&
-          newAction.type !== "ChangeDimensionRadiusValue" &&
-          newAction.type !== "ChangeGearRatioValue"
-        )
-          throw console.error("impossible");
-
-        oldNodes = get_nodes(mechanism.mechanicalElements);
-        get_constraint_positions(mechanism.constraintElements).forEach(
-          (pos, key) => oldNodes.positions.set(key, pos),
-        );
-        newNodes = resolveGeometricConstraints(
-          actionReducer(cloneMechanism(mechanism), actions, false),
-          actionBundleType,
-          newAction,
-        );
-        newActions = [
-          ...actions,
-          {
-            type: "UpdatePositionsToValidState",
-            masterActionType: newAction.type,
-            newNodes,
-            oldNodes,
-          },
-        ];
-        if (
-          mechanism.history.length === 0 ||
-          newAction.type === "ChangeGearRatioValue"
-        )
-          break;
-        lastActions = mechanism.history[mechanism.history.length - 1];
-        if (lastActions.length < 2) break;
-        lastAction = lastActions[lastActions.length - 1];
-        secondToLastAction = lastActions[lastActions.length - 2];
-        if (
-          lastAction.type !== "UpdatePositionsToValidState" ||
-          newAction.type !== lastAction.masterActionType
-        )
-          break;
-        newHistory = [...mechanism.history];
-        lastAction.newNodes = newNodes;
-        if (secondToLastAction.type !== newAction.type)
-          throw console.error("impossible");
-        secondToLastAction.newValue = newAction.newValue;
-        break;
-      case "Connects":
-        if (
-          newAction.type !== "ConnectsParentBeam" &&
-          newAction.type !== "ConnectsFixedNodeStart" &&
-          newAction.type !== "ConnectsFixedNodeEnd" &&
-          newAction.type !== "ConnectsAttachedBelt" &&
-          newAction.type !== "ConnectsFixedEdges" &&
-          newAction.type !== "ConnectsRotatingEdges" &&
-          newAction.type !== "ConnectsFixedNodesBody" &&
-          newAction.type !== "ConnectsMeshedGears" &&
-          newAction.type !== "ConnectsAttachedGears" &&
-          newAction.type !== "ConnectsFixedGears" &&
-          newAction.type !== "CreateElement" &&
-          newAction.type !== "DeleteElement"
-        )
-          throw console.error("impossible");
-
-        oldNodes = get_nodes(mechanism.mechanicalElements);
-        get_constraint_positions(mechanism.constraintElements).forEach(
-          (pos, key) => oldNodes.positions.set(key, pos),
-        );
-        newNodes = resolveGeometricConstraints(
-          actionReducer(cloneMechanism(mechanism), actions, false),
-          actionBundleType,
-          newAction,
-        );
-        newActions = [
-          ...actions,
-          {
-            type: "UpdatePositionsToValidState",
-            masterActionType: newAction.type,
-            newNodes,
-            oldNodes,
-          },
-        ];
-        break;
-      case "CreateConstraint":
-        if (
-          newAction.type !== "CreateElement" ||
-          (newAction.element.type !== "horizontal-align-edge" &&
-            newAction.element.type !== "horizontal-align-nodes" &&
-            newAction.element.type !== "vertical-align-edge" &&
-            newAction.element.type !== "vertical-align-nodes" &&
-            newAction.element.type !== "normal" &&
-            newAction.element.type !== "parallel" &&
-            newAction.element.type !== "equal" &&
-            newAction.element.type !== "gear-ratio")
-        )
-          break;
-        oldNodes = get_nodes(mechanism.mechanicalElements);
-        get_constraint_positions(mechanism.constraintElements).forEach(
-          (pos, key) => oldNodes.positions.set(key, pos),
-        );
-
-        newNodes = resolveGeometricConstraints(
-          actionReducer(cloneMechanism(mechanism), actions, false),
-          actionBundleType,
-          newAction,
-        );
-        newActions = [
-          ...actions,
-          {
-            type: "UpdatePositionsToValidState",
-            masterActionType: newAction.type,
-            newNodes,
-            oldNodes,
-          },
-        ];
-        break;
-      case "Other":
-        if (newAction.type == "Blank") {
-          if (mechanism.history.length === 0) break;
-          mechanism.history[mechanism.history.length - 1].push(newAction);
-          newHistory = [...mechanism.history];
-        }
-    }
-    if (!newHistory) newHistory = [...mechanism.history, newActions];
-
-    let newMechanism = {
-      history: newHistory,
-      future: [],
-      mechanicalElements: [...mechanism.mechanicalElements],
-      constraintElements: [...mechanism.constraintElements],
-      viewport: { ...mechanism.viewport },
-      metadata: { ...mechanism.metadata },
-    };
-    const updatedMechanism = actionReducer(newMechanism, newActions, false);
+    const updatedMechanism = update_mechanism(
+      mechanism,
+      actions,
+      actionBundleType,
+    );
     setMechanism(updatedMechanism);
+    setSaveStatus("saving");
+    debouncedSave();
 
     setHoveredPart(
       get_hovered_part(
@@ -381,15 +172,15 @@ const App: React.FC = () => {
 
     if (canvasState.type !== "SelectedElement") return;
     if (
-      !updatedMechanism.mechanicalElements.find(
+      updatedMechanism.mechanicalElements.find(
         (el) => el.id === canvasState.elementID,
-      ) &&
-      !updatedMechanism.constraintElements.find(
+      ) ||
+      updatedMechanism.constraintElements.find(
         (el) => el.id === canvasState.elementID,
       )
-    ) {
-      setCanvasState({ type: "Selecting" });
-    }
+    )
+      return;
+    setCanvasState({ type: "Selecting" });
   };
 
   const undoMechanism = () => {
@@ -436,9 +227,52 @@ const App: React.FC = () => {
     setMechanism(actionReducer(newMechanism, nextActions, false));
   };
 
-  const setMetaData = (metadata: MechanismMetadata) => {
-    setMechanism({ ...mechanism, metadata });
+  const performSaveToDB = async () => {
+    setSaveStatus("saving");
+    try {
+      let thumbnailData = "";
+      if (canvasRef.current) {
+        thumbnailData = await generateThumbnail(canvasRef.current);
+      }
+      const db = await openDB<SlidepDB>("SlidepDB", dbVersion, {
+        upgrade(db) {
+          if (!db.objectStoreNames.contains("mechanisms")) {
+            const store = db.createObjectStore("mechanisms", {
+              keyPath: "metadata.createdAt",
+            });
+            store.createIndex("by-date", "metadata.modifiedAt");
+          }
+        },
+      });
+      const mechanismToSave = {
+        ...mechanismRef.current,
+        metadata: {
+          ...mechanismRef.current.metadata,
+          thumbnail: thumbnailData,
+          modifiedAt: Date.now(),
+        },
+      };
+      await db.put("mechanisms", serializeMechanism(mechanismToSave));
+      setSaveStatus("saved");
+
+      // Mise à jour de la galerie si ouverte
+      if (galleryOpen) {
+        const allRecords = await db.getAll("mechanisms");
+        setSavedMechanisms(allRecords);
+      }
+    } catch (error) {
+      console.error("Erreur lors de la sauvegarde auto :", error);
+      setSaveStatus("error");
+    }
   };
+
+  // Création de la fonction debouncée (attend 2s après la dernière modif)
+  // On le fait dans un useEffect pour ne pas recréer la fonction à chaque rendu
+  const debouncedSave = useRef(
+    debounce(() => {
+      performSaveToDB();
+    }, 1500),
+  ).current;
 
   const [menuAnchorEl, setMenuAnchorEl] = React.useState<null | HTMLElement>(
     null,
@@ -451,25 +285,74 @@ const App: React.FC = () => {
     setMenuAnchorEl(null);
   };
 
-  const handleMenuButtonNew = () => {
-    // TODO : Demander "Voulez-vous enregistrer le mécanisme actuel avant d'en créer un nouveau ?"
+  const handleOpenGallery = async () => {
+    const db = await openDB<SlidepDB>("SlidepDB", dbVersion, {
+      upgrade(db) {
+        if (!db.objectStoreNames.contains("mechanisms")) {
+          // La clé est maintenant metadata.createdAt
+          const store = db.createObjectStore("mechanisms", {
+            keyPath: "metadata.createdAt",
+          });
+          store.createIndex("by-date", "metadata.modifiedAt");
+        }
+      },
+    });
+
+    const allRecords = await db.getAll("mechanisms");
+    setSavedMechanisms(allRecords);
+    setGalleryOpen(true);
+  };
+
+  const handleLoadFromGallery = (mechanismRecord: SerializedMechanism) => {
+    setMechanism(deserializeMechanism(mechanismRecord));
+    setGalleryOpen(false);
+    // Optionnel : Afficher un snackbar "Mécanisme chargé"
+    console.log("Loaded new mechanism.");
+    console.log(deserializeMechanism(mechanismRecord));
+  };
+
+  const handleDeleteFromGallery = async (createdAtId: number) => {
+    if (!window.confirm("Supprimer ce mécanisme définitivement ?")) return;
+
+    const db = await openDB<SlidepDB>("SlidepDB", dbVersion);
+    await db.delete("mechanisms", createdAtId);
+
+    setSavedMechanisms((prev) =>
+      prev.filter((r) => r.metadata.createdAt !== createdAtId),
+    );
+    // Optionnel : Afficher un snackbar "Mécanisme supprimé"
+    console.log("Deleted mechanism.");
+  };
+
+  const handleNewFromGallery = () => {
     setMechanism({
-      metadata: DEFAULT_METADATA,
+      metadata: {
+        ...DEFAULT_METADATA,
+        createdAt: Date.now(),
+        modifiedAt: Date.now(),
+      },
       viewport: DEFAULT_VIEWPORT,
       mechanicalElements: [],
       constraintElements: [],
       history: [],
       future: [],
     });
-    setMenuAnchorEl(null);
+    setGalleryOpen(false);
+    setSaveStatus("idle");
   };
-  const handleMenuButtonOpen = () => {
-    // TODO : Demander "Voulez-vous enregistrer le mécanisme actuel avant d'en ouvrir un autre ?"
-    // TODO : Ouvrir le système de fichiers "ouvrir"
+
+  const handleMenuButtonUpload = () => {
+    loadFromFile().then((data) => setMechanism(deserializeMechanism(data)));
+    setSaveStatus("saving");
+    debouncedSave();
     setMenuAnchorEl(null);
+    return;
   };
-  const handleMenuButtonSave = () => {
-    // TODO : Ouvrir le système de fichiers "sauvgarder"
+  const handleMenuButtonDownload = () => {
+    saveToFile(
+      serializeMechanism(mechanism),
+      `${mechanism.metadata.name}.slidep`,
+    );
     setMenuAnchorEl(null);
   };
 
@@ -564,7 +447,7 @@ const App: React.FC = () => {
                 Slidep
               </Typography>
 
-              <Box sx={{ display: "flex", gap: 0.5, mr: 2 }}>
+              <Box sx={{ display: "flex", gap: 0.5, ml: 1 }}>
                 <Tooltip title="Menu">
                   <IconButton
                     color="inherit"
@@ -580,28 +463,20 @@ const App: React.FC = () => {
                   onClose={handleMenuClose}
                 >
                   <MenuItem
-                    onClick={handleMenuButtonNew}
+                    onClick={handleMenuButtonUpload}
                     sx={{ gap: 1, marginLeft: -0.5 }}
                     disableRipple
                   >
-                    <Add fontSize="small" />
-                    Nouveau
+                    <FileOpen fontSize="small" />
+                    Importer
                   </MenuItem>
                   <MenuItem
-                    onClick={handleMenuButtonOpen}
+                    onClick={handleMenuButtonDownload}
                     sx={{ gap: 1, marginLeft: -0.5 }}
                     disableRipple
                   >
-                    <FolderOpen fontSize="small" />
-                    Ouvrir
-                  </MenuItem>
-                  <MenuItem
-                    onClick={handleMenuButtonSave}
-                    sx={{ gap: 1, marginLeft: -0.5 }}
-                    disableRipple
-                  >
-                    <Save fontSize="small" />
-                    Enregistrer
+                    <Download fontSize="small" />
+                    Exporter
                   </MenuItem>
                   <Divider sx={{ my: 0.5 }} />
                   <MenuItem
@@ -635,59 +510,134 @@ const App: React.FC = () => {
                   </Dialog>
                 </Menu>
               </Box>
+              <Tooltip title="Mes mécanismes">
+                <IconButton color="inherit" onClick={handleOpenGallery}>
+                  <Apps />
+                </IconButton>
+              </Tooltip>
+            </Box>
+
+            {/* Center: Name and status */}
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                gap: 1.5,
+              }}
+            >
+              <Typography variant="h6">{mechanism.metadata.name}</Typography>
+
+              {saveStatus !== "saving" && (
+                <Tooltip
+                  title={
+                    saveStatus === "saved"
+                      ? "Sauvgardé"
+                      : saveStatus === "error"
+                        ? "Erreur de sauvgarde"
+                        : ""
+                  }
+                >
+                  <Box
+                    sx={{
+                      width: 10,
+                      height: 10,
+                      borderRadius: "50%",
+                      backgroundColor:
+                        saveStatus === "saved"
+                          ? "success.main"
+                          : saveStatus === "error"
+                            ? "error.main"
+                            : "transparent",
+                      transition: "background-color 0.3s ease",
+                      boxShadow:
+                        saveStatus === "saved"
+                          ? "0 0 4px rgba(76, 175, 80, 0.6)"
+                          : "none",
+                    }}
+                  />
+                </Tooltip>
+              )}
+
+              {saveStatus === "saving" && (
+                <Tooltip title={"Sauvgarde en cours..."}>
+                  <CircularProgress
+                    size={12}
+                    color="inherit"
+                    sx={{ m: "-1px" }}
+                  />
+                </Tooltip>
+              )}
             </Box>
 
             {/* Center: Play simulation */}
-            <IconButton
+            <Box
               sx={{
-                color:
-                  canvasState.type === "Simulating"
-                    ? "text.primary"
-                    : "primary.main",
-                "&:hover": {
-                  backgroundColor:
-                    canvasState.type === "Simulating"
-                      ? COLORS.SELECTION_BOX
-                      : "primary.main",
-                  color: "primary.contrastText",
-                  img: {
-                    filter: "brightness(0) invert(1)",
-                  },
-                  border: 0,
-                },
-                border: canvasState.type === "Simulating" ? 0 : 2,
-                fontSize: "large",
-                paddingLeft: 0.5,
-                paddingY: 0.5,
-                gap: canvasState.type === "Simulating" ? 0.8 : 0.2,
+                display: "flex",
+                justifyContent: "center",
+                width: 200,
+                mr: -5,
               }}
-              onClick={() =>
-                setCanvasState({
-                  type:
-                    canvasState.type === "Simulating"
-                      ? "Selecting"
-                      : "Simulating",
-                })
-              }
             >
-              <Box
-                component="img"
-                src={
+              <Chip
+                label={
                   canvasState.type === "Simulating"
-                    ? selectIconUrl
-                    : playIconUrl
+                    ? simHover
+                      ? "Retour à l'édition"
+                      : "Simulation"
+                    : simHover
+                      ? "Lancer la simulation"
+                      : "Édition"
                 }
-                alt="Démarrer"
+                icon={
+                  <Box
+                    component="img"
+                    src={
+                      (canvasState.type === "Simulating") !== simHover
+                        ? playIconUrl
+                        : selectIconUrl
+                    }
+                    sx={{ width: 18, height: 18 }}
+                  />
+                }
+                variant={simHover ? "filled" : "outlined"}
+                onMouseEnter={() => setSimHover(true)}
+                onMouseLeave={() => setSimHover(false)}
+                onClick={() => {
+                  setCanvasState({
+                    type:
+                      canvasState.type === "Simulating"
+                        ? "Selecting"
+                        : "Simulating",
+                  });
+                  setSimHover(false);
+                }}
                 sx={{
-                  width: 28,
-                  height: 28,
-                  display: "block",
+                  height: 32,
+                  fontWeight: 600,
+                  fontSize: "0.85rem",
+                  pl: 0.5,
+                  color: simHover
+                    ? "primary.contrastText"
+                    : canvasState.type === "Simulating"
+                      ? "primary.main"
+                      : "secondary.main",
+                  borderColor: simHover
+                    ? "primary.contrastText"
+                    : canvasState.type === "Simulating"
+                      ? "primary.main"
+                      : "secondary.main",
+                  img: {
+                    filter: simHover ? "brightness(0) invert(1)" : "none",
+                  },
+                  "&:hover": {
+                    backgroundColor:
+                      canvasState.type === "Simulating"
+                        ? COLORS.SELECTION_BOX
+                        : "primary.main",
+                  },
                 }}
               />
-              {canvasState.type === "Simulating"
-                ? "Revenir à l'édition"
-                : "Lancer la simulation"}
-            </IconButton>
+            </Box>
 
             {/* Right side: Undo/Redo, Settings */}
             <Box
@@ -762,16 +712,40 @@ const App: React.FC = () => {
                   <Close />
                 </IconButton>
                 <DialogContent dividers>
-                  <Typography gutterBottom>
-                    Cras mattis consectetur purus sit amet fermentum. Cras justo
-                    odio, dapibus ac facilisis in, egestas eget quam. Morbi leo
-                    risus, porta ac consectetur ac, vestibulum at eros.
+                  <Typography gutterBottom align="justify">
+                    Slidep a d'abord été pensé comme l'application que j'aurais
+                    aimé avoir en tant qu'étudiant en ingénierie mécanique.
                   </Typography>
 
-                  <Typography gutterBottom>
-                    Cras mattis consectetur purus sit amet fermentum. Cras justo
-                    odio, dapibus ac facilisis in, egestas eget quam. Morbi leo
-                    risus, porta ac consectetur ac, vestibulum at eros.
+                  <Typography gutterBottom align="justify">
+                    La méthode par éléments finis (FEM) m'a toujours facinée. On
+                    arrive avec un modèle mathématique simple à recréer un
+                    comportement physique réel. Mais même si les interfaces se
+                    sont améliorées, les Ansys et Abaqus restent des outils
+                    complexes et souvent très chères. De plus, les pièces un peu
+                    complexes demandent vite beaucoup de temps et de ressources.
+                    C'est pour ça que j'ai toujours eu une fixette sur les
+                    éléments de type poutre. Avec les poutres, on peut faire des
+                    éléments finis en temps réel ! J'ai toujours eu envie de
+                    créer un outil basé dessus.
+                  </Typography>
+
+                  <Typography gutterBottom align="justify">
+                    C'est Slidep : De la simulation en temps réel avec des
+                    éléments simples, le tout dans une interface facile d'accès.
+                    C'est l'étape intermédiaire entre les shémas papier crayon
+                    et le solveur par éléments finits. Mais pour prétendre
+                    remplacer le papier crayon, il faudrais pouvoir créer tous
+                    les mécanismes ! C'est pour cela qu'à l'avenir, j'aimerais
+                    faire évoluer Slidep pour gérer les collisions, dessiner en
+                    3D, voire même faire de la dynamique des fluides !
+                  </Typography>
+
+                  <Typography gutterBottom align="justify">
+                    Implémenter ces changement à l'avenir me demandera plus que
+                    de la patience, mais des moyens. Alors si vous avez des
+                    idées, partagez les ! Si vous savez coder, contribuez ! Et
+                    si vous avec de l'argent, financez !
                   </Typography>
                 </DialogContent>
                 <DialogContent>
@@ -779,7 +753,6 @@ const App: React.FC = () => {
                   <a href="mailto:arnaud.jungo@slidep.ch">
                     arnaud.jungo@slidep.ch
                   </a>
-
                   <Box>Code :</Box>
                   <a href="https://github.com/Jungo-Phi/Slidep">
                     github.com/Jungo-Phi/Slidep
@@ -802,6 +775,7 @@ const App: React.FC = () => {
         >
           {/* Canvas */}
           <MechanicalCanvas
+            ref={canvasRef}
             setCanvasState={setCanvasState}
             canvasState={canvasState}
             updateMechanism={updateMechanism}
@@ -825,7 +799,7 @@ const App: React.FC = () => {
             updateMechanism={updateMechanism}
             mechanism={mechanism}
             setHoveredPart={setHoveredPart}
-            setMetaData={setMetaData}
+            updateMetadata={updateMetadata}
             setSimulationState={setSimulationState}
             simulationState={simulationState}
             setSimulationConfig={setSimulationConfig}
@@ -833,6 +807,14 @@ const App: React.FC = () => {
           />
         </Box>
       </Box>
+      <MechanismsGallery
+        open={galleryOpen}
+        onClose={() => setGalleryOpen(false)}
+        mechanismRecords={savedMechanisms}
+        onLoad={handleLoadFromGallery}
+        onDelete={handleDeleteFromGallery}
+        onNew={handleNewFromGallery}
+      />
     </ThemeProvider>
   );
 };
