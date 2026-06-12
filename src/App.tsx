@@ -104,9 +104,6 @@ const App: React.FC = () => {
     future: [],
   });
   const mechanismRef = useRef<Mechanism>(mechanism);
-  useEffect(() => {
-    mechanismRef.current = mechanism;
-  }, [mechanism]);
 
   const [hoveredPart, setHoveredPart] = useState<HoveredPart>({
     type: "Void",
@@ -123,6 +120,7 @@ const App: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const dbVersion = 3;
+  const DEBOUNCE_AUTOSAVE_TIME = 1000; // 1000 ms = 1s
   const [saveStatus, setSaveStatus] = useState<
     "idle" | "saved" | "saving" | "error"
   >("idle");
@@ -134,10 +132,56 @@ const App: React.FC = () => {
 
   const [simHover, setSimHover] = useState(false);
 
+  useEffect(() => {
+    mechanismRef.current = mechanism;
+  }, [mechanism]);
+
   /** Preload all icons when the app starts */
   useEffect(() => {
     preload_element_icons();
   }, []);
+
+  /** Charger le dernier mécanisme au démarrage de l'application */
+  useEffect(() => {
+    const loadLastMechanism = async () => {
+      try {
+        const db = await openDB<SlidepDB>("SlidepDB", dbVersion, {
+          upgrade(db) {
+            if (!db.objectStoreNames.contains("mechanisms")) {
+              const store = db.createObjectStore("mechanisms", {
+                keyPath: "metadata.createdAt",
+              });
+              store.createIndex("by-date", "metadata.modifiedAt");
+            }
+          },
+        });
+
+        const allRecords = await db.getAll("mechanisms");
+        if (allRecords.length > 0) {
+          const sorted = allRecords.sort(
+            (a, b) => b.metadata.modifiedAt - a.metadata.modifiedAt,
+          );
+
+          const lastMechanism = sorted[0];
+          setMechanism(deserializeMechanism(lastMechanism));
+
+          setSaveStatus("saved");
+          console.log(
+            "Dernier mécanisme chargé :",
+            lastMechanism.metadata.name,
+          );
+        } else {
+          console.log(
+            "Aucun mécanisme sauvegardé. Démarrage sur un projet vide.",
+          );
+        }
+      } catch (error) {
+        console.error("Erreur lors du chargement automatique :", error);
+      }
+    };
+
+    loadLastMechanism();
+  }, []); // Le tableau vide assure que ça ne se lance qu'une fois au démarrage
 
   const IDcounter = useRef(1);
 
@@ -198,6 +242,8 @@ const App: React.FC = () => {
     lastActions.reverse();
     const updatedMechanism = actionReducer(newMechanism, lastActions, true);
     setMechanism(updatedMechanism);
+    setSaveStatus("saving");
+    debouncedSave();
 
     if (canvasState.type !== "SelectedElement") return;
     if (
@@ -225,6 +271,8 @@ const App: React.FC = () => {
       metadata: { ...mechanism.metadata },
     };
     setMechanism(actionReducer(newMechanism, nextActions, false));
+    setSaveStatus("saving");
+    debouncedSave();
   };
 
   const performSaveToDB = async () => {
@@ -266,12 +314,10 @@ const App: React.FC = () => {
     }
   };
 
-  // Création de la fonction debouncée (attend 2s après la dernière modif)
-  // On le fait dans un useEffect pour ne pas recréer la fonction à chaque rendu
   const debouncedSave = useRef(
     debounce(() => {
       performSaveToDB();
-    }, 1500),
+    }, DEBOUNCE_AUTOSAVE_TIME),
   ).current;
 
   const [menuAnchorEl, setMenuAnchorEl] = React.useState<null | HTMLElement>(
