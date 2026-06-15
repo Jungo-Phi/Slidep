@@ -20,27 +20,25 @@ import {
   delete_element,
   get_mechanical_element_from_id,
 } from "./connect-actions";
-import { is_on_left_side_of_belt } from "../../utils/belt-geom";
+import {
+  is_on_left_side_of_belt,
+  resolve_angle_constraint_quadrant,
+} from "../../utils";
 import { DIM } from "../../constants/rendering-specs";
-import { get_angle_dim_direction } from "../../utils/angle-math";
 
 export function canvasStateReducer(
   state: CanvasState,
-  setCanvasState: (state: CanvasState) => void,
   hoveredPart: HoveredPart,
   oldPosition: Point2,
-  isMouseDown: boolean,
+  mouseButtonDown: "none" | "left" | "right",
   event: CanvasEvent,
   mechanicalElements: MechanicalElement[],
   constraintElements: ConstraintElement[],
-  updateMechanism: (
-    actions: Action[],
-    actionBundleType: ActionBundleType,
-  ) => void,
+  setCanvasState: (state: CanvasState) => void,
+  applyActions: (actions: Action[], actionBundleType: ActionBundleType) => void,
   undoMechanism: () => void,
   redoMechanism: () => void,
   onMouseUpHandler: () => void,
-  IDcounter: React.MutableRefObject<number>,
 ) {
   let actions: Action[] = [];
   let actionBundleType: ActionBundleType | undefined = undefined;
@@ -235,8 +233,7 @@ export function canvasStateReducer(
             break;
           }
           let newElement: MechanicalElement;
-          const newElementId = IDcounter.current;
-          IDcounter.current++;
+          const newElementId = crypto.randomUUID();
           switch (state.type) {
             case "PlacingBeamEnd":
               newElement = {
@@ -366,7 +363,6 @@ export function canvasStateReducer(
                       deleting: false,
                       part: "start",
                     },
-                IDcounter,
                 mechanicalElements,
                 constraintElements,
               ),
@@ -399,7 +395,6 @@ export function canvasStateReducer(
                 hoveredPart,
                 newElement,
                 elementPart,
-                IDcounter,
                 mechanicalElements,
                 constraintElements,
               ),
@@ -480,9 +475,8 @@ export function canvasStateReducer(
                 fixedEdgesIDs: [],
                 position: hoveredPart.position,
                 isGrounded: true,
-                id: IDcounter.current,
+                id: crypto.randomUUID(),
               };
-              IDcounter.current++;
               actionBundleType = "Other";
               actions.push({ type: "CreateElement", element: newJoin });
               break;
@@ -505,9 +499,8 @@ export function canvasStateReducer(
                 fixedEdgesIDs: [],
                 position: hoveredPart.position,
                 isGrounded: true,
-                id: IDcounter.current,
+                id: crypto.randomUUID(),
               };
-              IDcounter.current++;
               actionBundleType = "Other";
               actions.push({ type: "CreateElement", element: newJoin });
               const connect_actions = connect_elements(
@@ -520,7 +513,6 @@ export function canvasStateReducer(
                   deleting: false,
                   beamBodyHover: false,
                 },
-                IDcounter,
                 mechanicalElements,
                 constraintElements,
               );
@@ -572,8 +564,7 @@ export function canvasStateReducer(
             });
             break;
           } else if (hoveredPart.type === "Void") {
-            const elementID = IDcounter.current;
-            IDcounter.current++;
+            const elementID = crypto.randomUUID();
             const edge = get_mechanical_element_from_id(
               state.edgeID,
               mechanicalElements,
@@ -598,9 +589,8 @@ export function canvasStateReducer(
             });
           }
           break;
-        case "DimensionNodeToNode":
-          const elementID = IDcounter.current;
-          IDcounter.current++;
+        case "DimensionNodeToNode": {
+          const elementID = crypto.randomUUID();
           const startNode = get_mechanical_element_from_id(
             state.startNodeID,
             mechanicalElements,
@@ -629,9 +619,9 @@ export function canvasStateReducer(
             isPlacing: true,
           });
           break;
-        case "DimensionEdgeToNode":
-          const elementID2 = IDcounter.current;
-          IDcounter.current++;
+        }
+        case "DimensionEdgeToNode": {
+          const elementID = crypto.randomUUID();
           const node = get_mechanical_element_from_id(
             state.nodeID,
             mechanicalElements,
@@ -640,7 +630,7 @@ export function canvasStateReducer(
             state.edgeID,
             mechanicalElements,
           ) as EdgeElement;
-          const value2 = node.position.distance_to_line(
+          const value = node.position.distance_to_line(
             edge.positionStart,
             edge.positionEnd,
           );
@@ -650,22 +640,22 @@ export function canvasStateReducer(
             element: {
               type: "dimension-edge-to-node",
               position: hoveredPart.position,
-              id: elementID2,
+              id: elementID,
               nodeID: state.nodeID,
               edgeID: state.edgeID,
-              value: value2,
+              value,
             },
           });
           setCanvasState({
             type: "EditingConstraint",
-            elementID: elementID2,
-            value: value2,
+            elementID,
+            value,
             isPlacing: true,
           });
           break;
-        case "DimensionAngle":
-          const elementID3 = IDcounter.current;
-          IDcounter.current++;
+        }
+        case "DimensionAngle": {
+          const elementID = crypto.randomUUID();
           const startEdge = get_mechanical_element_from_id(
             state.startEdgeID,
             mechanicalElements,
@@ -674,15 +664,16 @@ export function canvasStateReducer(
             state.endEdgeID,
             mechanicalElements,
           ) as EdgeElement;
-          const angleDimDirection = get_angle_dim_direction(
+          const angleConstraintQuadrant = resolve_angle_constraint_quadrant(
             startEdge.positionStart,
             startEdge.positionEnd,
             endEdge.positionStart,
             endEdge.positionEnd,
             hoveredPart.position,
           );
-          if (!angleDimDirection) break;
-          const { flipStart, flipEnd, angle } = angleDimDirection;
+          if (!angleConstraintQuadrant) break;
+          const { flipStart, flipEnd, couterClockwise, angle } =
+            angleConstraintQuadrant;
 
           actionBundleType = "CreateConstraint";
           actions.push({
@@ -690,47 +681,49 @@ export function canvasStateReducer(
             element: {
               type: "dimension-angle",
               position: hoveredPart.position,
-              id: elementID3,
+              id: elementID,
               startEdgeID: state.startEdgeID,
               endEdgeID: state.endEdgeID,
               flipStart,
               flipEnd,
+              couterClockwise,
               value: angle,
             },
           });
           setCanvasState({
             type: "EditingConstraint",
-            elementID: elementID3,
+            elementID: elementID,
             value: angle,
             isPlacing: true,
           });
           break;
-        case "DimensionRadius":
-          const elementID4 = IDcounter.current;
-          IDcounter.current++;
+        }
+        case "DimensionRadius": {
+          const elementID = crypto.randomUUID();
           const gear = get_mechanical_element_from_id(
             state.gearID,
             mechanicalElements,
           ) as GearElement;
-          const value4 = gear.radius;
+          const value = gear.radius;
           actionBundleType = "CreateConstraint";
           actions.push({
             type: "CreateElement",
             element: {
               type: "dimension-radius",
               position: hoveredPart.position,
-              id: elementID4,
+              id: elementID,
               gearID: state.gearID,
-              value: value4,
+              value,
             },
           });
           setCanvasState({
             type: "EditingConstraint",
-            elementID: elementID4,
-            value: value4,
+            elementID,
+            value,
             isPlacing: true,
           });
           break;
+        }
         case "HorizontalVerticalConstraintStart":
           switch (hoveredPart.type) {
             case "Node":
@@ -755,7 +748,7 @@ export function canvasStateReducer(
                   element: {
                     type: "horizontal-align-edge",
                     position: edge.positionStart.lerp(edge.positionEnd, 0.5),
-                    id: IDcounter.current,
+                    id: crypto.randomUUID(),
                     edgeID: edge.id,
                   },
                 });
@@ -765,12 +758,11 @@ export function canvasStateReducer(
                   element: {
                     type: "vertical-align-edge",
                     position: edge.positionStart.lerp(edge.positionEnd, 0.5),
-                    id: IDcounter.current,
+                    id: crypto.randomUUID(),
                     edgeID: edge.id,
                   },
                 });
               }
-              IDcounter.current++;
               break;
           }
           break;
@@ -791,7 +783,7 @@ export function canvasStateReducer(
                 element: {
                   type: "horizontal-align-nodes",
                   position: startNode.position.lerp(hoveredPart.position, 0.5),
-                  id: IDcounter.current,
+                  id: crypto.randomUUID(),
                   startNodeID: state.startNodeID,
                   endNodeID: hoveredPart.id,
                 },
@@ -802,13 +794,12 @@ export function canvasStateReducer(
                 element: {
                   type: "vertical-align-nodes",
                   position: startNode.position.lerp(hoveredPart.position, 0.5),
-                  id: IDcounter.current,
+                  id: crypto.randomUUID(),
                   startNodeID: state.startNodeID,
                   endNodeID: hoveredPart.id,
                 },
               });
             }
-            IDcounter.current++;
           }
           setCanvasState({
             type: "HorizontalVerticalConstraintStart",
@@ -841,12 +832,11 @@ export function canvasStateReducer(
               element: {
                 type: "normal",
                 position,
-                id: IDcounter.current,
+                id: crypto.randomUUID(),
                 startEdgeID: startEdge.id,
                 endEdgeID: endEdge.id,
               },
             });
-            IDcounter.current++;
           }
           setCanvasState({
             type: "NormalConstraintStart",
@@ -879,12 +869,11 @@ export function canvasStateReducer(
               element: {
                 type: "parallel",
                 position,
-                id: IDcounter.current,
+                id: crypto.randomUUID(),
                 startEdgeID: startEdge.id,
                 endEdgeID: endEdge.id,
               },
             });
-            IDcounter.current++;
           }
           setCanvasState({
             type: "ParallelConstraintStart",
@@ -922,12 +911,11 @@ export function canvasStateReducer(
               element: {
                 type: "equal",
                 position,
-                id: IDcounter.current,
+                id: crypto.randomUUID(),
                 startEdgeID: startEdge.id,
                 endEdgeID: endEdge.id,
               },
             });
-            IDcounter.current++;
           }
           setCanvasState({
             type: "EqualConstraintStart",
@@ -950,13 +938,12 @@ export function canvasStateReducer(
               element: {
                 type: "gear-ratio",
                 position,
-                id: IDcounter.current,
+                id: crypto.randomUUID(),
                 startGearID: startGear.id,
                 endGearID: endGear.id,
                 value: 1,
               },
             });
-            IDcounter.current++;
           }
           setCanvasState({
             type: "EqualConstraintStart",
@@ -972,6 +959,7 @@ export function canvasStateReducer(
           break;
         case "GearRatioConstraintGear":
           if (hoveredPart.type === "GearTooth") {
+            const elementID = crypto.randomUUID();
             const startGear = get_mechanical_element_from_id(
               state.startGearID,
               mechanicalElements,
@@ -987,7 +975,7 @@ export function canvasStateReducer(
               element: {
                 type: "gear-ratio",
                 position,
-                id: IDcounter.current,
+                id: elementID,
                 startGearID: startGear.id,
                 endGearID: endGear.id,
                 value: startGear.radius / endGear.radius,
@@ -995,11 +983,10 @@ export function canvasStateReducer(
             });
             setCanvasState({
               type: "EditingConstraint",
-              elementID: IDcounter.current,
+              elementID: elementID,
               value: startGear.radius / endGear.radius,
               isPlacing: true,
             });
-            IDcounter.current++;
           } else {
             setCanvasState({
               type: "GearRatioConstraintStart",
@@ -1010,7 +997,7 @@ export function canvasStateReducer(
       break;
 
     case "MouseMove":
-      if (!isMouseDown) break;
+      if (mouseButtonDown !== "left") break;
       switch (state.type) {
         case "Selecting":
           if (hoveredPart.type === "Void") break;
@@ -1112,7 +1099,7 @@ export function canvasStateReducer(
           }
           break;
         case "MovingNode":
-          if (hoveredPart.position === oldPosition) break;
+          if (hoveredPart.position.equals(oldPosition)) break;
           actionBundleType = "MoveElement";
           actions.push({
             type: "MoveNode",
@@ -1122,7 +1109,7 @@ export function canvasStateReducer(
           });
           break;
         case "MovingEdgeStartPoint":
-          if (hoveredPart.position === oldPosition) break;
+          if (hoveredPart.position.equals(oldPosition)) break;
           const positionEnd = (
             get_mechanical_element_from_id(
               state.elementID,
@@ -1142,7 +1129,7 @@ export function canvasStateReducer(
           });
           break;
         case "MovingEdgeEndPoint":
-          if (hoveredPart.position === oldPosition) break;
+          if (hoveredPart.position.equals(oldPosition)) break;
           const positionStart = (
             get_mechanical_element_from_id(
               state.elementID,
@@ -1162,7 +1149,7 @@ export function canvasStateReducer(
           });
           break;
         case "MovingEdgeBody":
-          if (hoveredPart.position === oldPosition) break;
+          if (hoveredPart.position.equals(oldPosition)) break;
           actionBundleType = "MoveElement";
           actions.push({
             type: "MoveEdgeBody",
@@ -1173,7 +1160,7 @@ export function canvasStateReducer(
           });
           break;
         case "ChangingGearRadius":
-          if (hoveredPart.position === oldPosition) break;
+          if (hoveredPart.position.equals(oldPosition)) break;
           const gear = get_mechanical_element_from_id(
             state.elementID,
             mechanicalElements,
@@ -1190,26 +1177,31 @@ export function canvasStateReducer(
           });
           break;
         case "SelectingMultiple":
-          if (hoveredPart.position === oldPosition) break;
+          if (hoveredPart.position.equals(oldPosition)) break;
           const newHoveredElementsIds = get_hovered_elements_by_rect(
             mechanicalElements,
             state.startPos,
             hoveredPart.position,
           );
-          state.elementIDs.push(
-            ...newHoveredElementsIds.filter(
-              (elementId) => !state.elementIDs.includes(elementId),
+          const updatedIDs = [
+            ...state.elementIDs.filter(
+              (id) =>
+                newHoveredElementsIds.includes(id) ||
+                !state.hoveredElementIDs.includes(id),
             ),
-          );
-          state.elementIDs = state.elementIDs.filter(
-            (elementId) =>
-              newHoveredElementsIds.includes(elementId) ||
-              !state.hoveredElementIDs.includes(elementId),
-          );
-          state.hoveredElementIDs = newHoveredElementsIds;
+            ...newHoveredElementsIds.filter(
+              (id) => !state.elementIDs.includes(id),
+            ),
+          ];
+          setCanvasState({
+            type: "SelectingMultiple",
+            startPos: state.startPos,
+            elementIDs: updatedIDs,
+            hoveredElementIDs: newHoveredElementsIds,
+          });
           break;
         case "MovingSelectionMultiple":
-          if (hoveredPart.position === oldPosition) break;
+          if (hoveredPart.position.equals(oldPosition)) break;
           actionBundleType = "MoveElement";
           actions.push({
             type: "MoveElements",
@@ -1219,15 +1211,19 @@ export function canvasStateReducer(
           });
           break;
         case "ErasingMultiple":
-          if (hoveredPart.position === oldPosition) break;
-          state.hoveredElementIDs = get_hovered_elements_by_rect(
-            mechanicalElements,
-            state.startPos,
-            hoveredPart.position,
-          );
+          if (hoveredPart.position.equals(oldPosition)) break;
+          setCanvasState({
+            type: "ErasingMultiple",
+            startPos: state.startPos,
+            hoveredElementIDs: get_hovered_elements_by_rect(
+              mechanicalElements,
+              state.startPos,
+              hoveredPart.position,
+            ),
+          });
           break;
         case "MovingConstraint":
-          if (hoveredPart.position === oldPosition) break;
+          if (hoveredPart.position.equals(oldPosition)) break;
           actionBundleType = "MoveConstraint";
           actions.push({
             type: "MoveConstraint",
@@ -1239,7 +1235,8 @@ export function canvasStateReducer(
       }
       break;
 
-    case "MouseLeftButtonUp":
+    case "MouseButtonUp":
+      if (mouseButtonDown !== "left") break;
       switch (state.type) {
         case "Selecting":
           if (hoveredPart.type === "Void") break;
@@ -1328,7 +1325,6 @@ export function canvasStateReducer(
                 mechanicalElements,
               ),
               elementPart,
-              IDcounter,
               mechanicalElements,
               constraintElements,
             ),
@@ -1553,16 +1549,12 @@ export function canvasStateReducer(
           setCanvasState({ type: "ParallelConstraintStart" });
           break;
         case "z":
-          if (!event.crtlKey) {
-            break;
-          }
+          if (!event.ctrlKey) break;
           onMouseUpHandler();
           undoMechanism();
           break;
         case "y":
-          if (!event.crtlKey) {
-            break;
-          }
+          if (!event.ctrlKey) break;
           onMouseUpHandler();
           redoMechanism();
           break;
@@ -1571,6 +1563,6 @@ export function canvasStateReducer(
   }
 
   if (actions.length > 0 && actionBundleType) {
-    updateMechanism(actions, actionBundleType);
+    applyActions(actions, actionBundleType);
   }
 }

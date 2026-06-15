@@ -19,14 +19,12 @@ import { ProjectInfoSection } from "./ProjectInfoSection";
 import ElementProperties from "./ElementProperties";
 import ConstraintsPanel from "./ConstraintsPanel";
 import SimulationControls from "../simulation-controls";
+import { legible_id } from "../../utils";
 
 interface PropertiesPanelProps {
   setCanvasState: (state: CanvasState) => void;
   canvasState: CanvasState;
-  updateMechanism: (
-    actions: Action[],
-    actionBundleType: ActionBundleType,
-  ) => void;
+  applyActions: (actions: Action[], actionBundleType: ActionBundleType) => void;
   mechanism: Mechanism;
   setHoveredPart: (hoveredPart: HoveredPart) => void;
   updateMetadata: (metadata: MechanismMetadata) => void;
@@ -39,7 +37,7 @@ interface PropertiesPanelProps {
 export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
   setCanvasState,
   canvasState,
-  updateMechanism,
+  applyActions,
   mechanism,
   setHoveredPart,
   updateMetadata,
@@ -148,7 +146,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                         element={mechanicalElement}
                         setHoveredPart={setHoveredPart}
                         setCanvasState={setCanvasState}
-                        updateMechanism={updateMechanism}
+                        applyActions={applyActions}
                         mechanism={mechanism}
                       />
                     );
@@ -163,16 +161,14 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                         constraintID={canvasState.elementID}
                         setHoveredPart={setHoveredPart}
                         setCanvasState={setCanvasState}
-                        updateMechanism={updateMechanism}
+                        applyActions={applyActions}
                         mechanism={mechanism}
                       />
                     );
                   }
                   return (
                     <Typography variant="body2">
-                      Élément "
-                      {canvasState.elementID.toString().padStart(3, "0")} "
-                      introuvable
+                      Élément "{legible_id(canvasState.elementID)} " introuvable
                     </Typography>
                   );
                 })()}

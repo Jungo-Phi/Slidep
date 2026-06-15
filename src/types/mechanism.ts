@@ -1,9 +1,11 @@
 import { Action } from "./actions";
 import { MechanicalElement, ConstraintElement } from "./element";
+import { Point2 } from "./point2";
 import {
   SerializedAction,
   SerializedConstraintElement,
   SerializedMechanicalElement,
+  SerializedViewportState,
 } from "./serialized";
 import { DBSchema } from "idb";
 
@@ -29,17 +31,17 @@ export const DEFAULT_METADATA: MechanismMetadata = {
   thumbnail: "",
 };
 
+export type ScreenPoint = Point2;
+export type WorldPoint = Point2;
+
+export type ViewportChange =
+  | { type: "Pan"; delta: ScreenPoint }
+  | { type: "Zoom"; deltaY: number; center: ScreenPoint };
+
 export interface ViewportState {
   zoom: number;
-  panX: number;
-  panY: number;
+  pan: ScreenPoint;
 }
-
-export const DEFAULT_VIEWPORT: ViewportState = {
-  zoom: 1,
-  panX: 0,
-  panY: 0,
-};
 
 export interface Mechanism {
   metadata: MechanismMetadata;
@@ -52,7 +54,7 @@ export interface Mechanism {
 
 export interface SerializedMechanism {
   metadata: MechanismMetadata;
-  viewport: ViewportState;
+  viewport: SerializedViewportState;
   mechanicalElements: SerializedMechanicalElement[];
   constraintElements: SerializedConstraintElement[];
   history: SerializedAction[][];

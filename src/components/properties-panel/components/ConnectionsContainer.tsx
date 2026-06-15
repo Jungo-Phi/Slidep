@@ -39,10 +39,7 @@ interface ConnectionsContainerProps {
   containerType: ConnectsActionType;
   setHoveredPart: (hoveredPart: HoveredPart) => void;
   setCanvasState: (state: CanvasState) => void;
-  updateMechanism: (
-    actions: Action[],
-    actionBundleType: ActionBundleType,
-  ) => void;
+  applyActions: (actions: Action[], actionBundleType: ActionBundleType) => void;
   mechanism: Mechanism;
   draggedItem: {
     id: ID;
@@ -63,7 +60,7 @@ export const ConnectionsContainer: React.FC<ConnectionsContainerProps> = ({
   containerType,
   setHoveredPart,
   setCanvasState,
-  updateMechanism,
+  applyActions,
   mechanism,
   draggedItem,
   setDraggedItem,
@@ -167,7 +164,7 @@ export const ConnectionsContainer: React.FC<ConnectionsContainerProps> = ({
       ),
     );
 
-    updateMechanism(actions, "Connects");
+    applyActions(actions, "Connects");
     setDraggedItem(null);
     setDragOverIndex(null);
   };
@@ -279,7 +276,7 @@ export const ConnectionsContainer: React.FC<ConnectionsContainerProps> = ({
                     containerType={containerType}
                     setHoveredPart={setHoveredPart}
                     setCanvasState={setCanvasState}
-                    updateMechanism={updateMechanism}
+                    applyActions={applyActions}
                     mechanism={mechanism}
                   />
                 </ListItem>
@@ -357,7 +354,7 @@ export const ConnectionsContainer: React.FC<ConnectionsContainerProps> = ({
                             containerType={containerType}
                             setHoveredPart={setHoveredPart}
                             setCanvasState={setCanvasState}
-                            updateMechanism={updateMechanism}
+                            applyActions={applyActions}
                             mechanism={mechanism}
                           />
                         </ListItem>

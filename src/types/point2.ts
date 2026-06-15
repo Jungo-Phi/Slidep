@@ -116,7 +116,7 @@ export class Point2 {
   }
 
   public toString(): string {
-    return `[${this.x},${this.y}]`;
+    return `[${this.x.toFixed(1)},${this.y.toFixed(1)}]`;
   }
 
   public clone(): Point2 {
@@ -386,7 +386,7 @@ export class Point2 {
     );
   }
 
-  /** Renvoie un segment (`start` to `end`) tangeant aux 2 cercles. direction {false: clockwise, true: anticlockwise}*/
+  /** Renvoie un segment (`start` to `end`) tangeant aux 2 cercles. direction {false: clockwise, true: counterClockwise}*/
   public static circles_link(
     center1: Point2,
     radius1: number,

@@ -25,11 +25,11 @@ export function PBD_kinematic_solver(
   posMasses: Map<string, number>,
   radMasses: Map<string, number>,
   links: Link[],
-  nbIterations: number = 100,
+  nbIterations: number = 200,
   epsilon: number = 0.000_001,
 ): Nodes {
   // stop grab after `nbGrabIterations` to not stretch the mechanism
-  const nbGrabIterations = 10;
+  const nbGrabIterations = 20;
   const grabStiffness = 0.5;
   const maxGrabAmplitude = 10;
 
@@ -113,6 +113,7 @@ export function PBD_kinematic_solver(
               link.key4,
               link.flipStart,
               link.flipEnd,
+              link.couterClockwise,
               link.angle_rad,
             ),
           );

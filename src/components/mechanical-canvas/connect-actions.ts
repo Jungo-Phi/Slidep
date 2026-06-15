@@ -13,6 +13,7 @@ import type {
 import { Action, ConnectsActionType } from "../../types";
 import { HoveredPart } from "../../types/hovered-part";
 import { connected_constraints, node_on_beam_body } from "./utils";
+import { legible_id } from "../../utils";
 
 /** Returns the mechanical element from the id. */
 export function get_mechanical_element_from_id(
@@ -21,7 +22,7 @@ export function get_mechanical_element_from_id(
 ): MechanicalElement {
   const element = mechanicalElements.find((element) => element.id === id);
   if (element) return element;
-  throw new Error(`Mechanical element with id "${id}" not found`);
+  throw new Error(`Mechanical element with id "${legible_id(id)}" not found`);
 }
 
 /** Returns the constraint element from the id. */
@@ -31,7 +32,7 @@ export function get_constraint_element_from_id(
 ): ConstraintElement {
   const element = constraintElements.find((element) => element.id === id);
   if (element) return element;
-  throw new Error(`Constraint element with id "${id}" not found`);
+  throw new Error(`Constraint element with id "${legible_id(id)}" not found`);
 }
 
 /** Returns the element (mechanical or constraint) from the id. */
@@ -48,7 +49,7 @@ export function get_element_from_id(
     (element) => element.id === id,
   );
   if (constraintElement) return constraintElement;
-  throw new Error(`Mechanical element with id "${id}" not found`);
+  throw new Error(`Mechanical element with id "${legible_id(id)}" not found`);
 }
 
 /** Returns the complementary connection pair type of an element to another. */
@@ -603,7 +604,6 @@ export function connect_elements(
   hoveredPart: HoveredPart,
   selectedElement: MechanicalElement,
   selectedPart: HoveredPart,
-  IDcounter: React.MutableRefObject<number>,
   mechanicalElements: MechanicalElement[],
   constraintElements: ConstraintElement[],
 ): Action[] {
@@ -776,9 +776,8 @@ export function connect_elements(
             fixedEdgesIDs: [],
             position: hoveredPart.position,
             isGrounded: false,
-            id: IDcounter.current,
+            id: crypto.randomUUID(),
           };
-          IDcounter.current++;
           actions.push({ type: "CreateElement", element: join });
           actions.push(
             ...connect_node_and_edge(join, hoveredEdge, hoveredPart.part),

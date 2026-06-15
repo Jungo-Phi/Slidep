@@ -1,38 +1,45 @@
-import React, {
-  useRef,
-  useEffect,
-  useState,
-  useCallback,
-  forwardRef,
-} from "react";
+import React, { useRef, useEffect, useCallback, forwardRef } from "react";
+import {
+  Action,
+  ActionBundleType,
+  ActionType,
+  CanvasEvent,
+  CanvasState,
+  HoveredPart,
+  Mechanism,
+  Point2,
+  ViewportChange,
+  ZERO,
+} from "../../types";
 import { COLORS } from "../../constants/rendering-specs";
 import { Box } from "@mui/material";
 import { drawMechanicalCanvas } from "./draw-canvas";
-import { Mechanism } from "../../types/mechanism";
-import { Point2, ZERO } from "../../types/point2";
-import { Action, CanvasEvent } from "../../types/actions";
 import { canvasStateReducer } from "./canvas-state-reducer";
-import { CanvasState } from "../../types/canvas-state";
 import { get_constraint_element_from_id } from "./connect-actions";
 import { get_hovered_part } from "./get-hover";
-import type { ActionBundleType, ActionType } from "../../types";
-import { HoveredPart } from "../../types/hovered-part";
 import { ConstraintEditor } from "./ConstraintEditor";
+import { world_to_screen, screen_to_world } from "./viewport";
+
+function mergeRefs<T>(...refs: React.Ref<T>[]) {
+  return (node: T | null) => {
+    refs.forEach((ref) => {
+      if (!ref) return;
+      if (typeof ref === "function") ref(node);
+      else (ref as React.MutableRefObject<T | null>).current = node;
+    });
+  };
+}
 
 interface MechanicalCanvasProps {
-  ref: React.MutableRefObject<HTMLCanvasElement | null>;
   setCanvasState: (state: CanvasState) => void;
   canvasState: CanvasState;
-  updateMechanism: (
-    actions: Action[],
-    actionBundleType: ActionBundleType,
-  ) => void;
+  applyActions: (actions: Action[], actionBundleType: ActionBundleType) => void;
+  changeViewport: (viewportChange: ViewportChange) => void;
   mechanism: Mechanism;
   setHoveredPart: (hoveredPart: HoveredPart) => void;
   hoveredPart: HoveredPart;
   undoMechanism: () => void;
   redoMechanism: () => void;
-  IDcounter: React.MutableRefObject<number>;
 }
 
 export const MechanicalCanvas = forwardRef<
@@ -43,34 +50,33 @@ export const MechanicalCanvas = forwardRef<
     {
       setCanvasState,
       canvasState,
-      updateMechanism,
+      applyActions,
+      changeViewport,
       mechanism,
       setHoveredPart,
       hoveredPart,
       undoMechanism,
       redoMechanism,
-      IDcounter,
     },
     ref,
   ) => {
+    const canvasOffsetRef = useRef(ZERO);
+    const mousePositionRef = useRef(ZERO);
+    const oldPositionRef = useRef(ZERO);
+    const pendingPanRef = useRef<Point2>(ZERO);
+    const pendingZoomRef = useRef<{ deltaY: number; center: Point2 } | null>(
+      null,
+    );
+    const mouseButtonDownRef = useRef<"none" | "left" | "right">("none");
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
-    const canvasOffsetRef = useRef(ZERO);
+    const mechanismRef = useRef(mechanism);
+    const hoveredPartRef = useRef(hoveredPart);
+    const canvasStateRef = useRef(canvasState);
 
-    const [mousePosition, setmousePosition] = useState(ZERO);
-    const [oldPosition, setOldPosition] = useState(ZERO);
-    const [isMouseDown, setMouseDown] = useState(false);
-    const [cursor, setCursor] = useState("default");
-
-    useEffect(() => {
-      if (canvasRef.current && ref) {
-        if ("current" in ref) {
-          ref.current = canvasRef.current;
-        } else if (typeof ref === "function") {
-          ref(canvasRef.current);
-        }
-      }
-    }, [ref]);
+    mechanismRef.current = mechanism;
+    hoveredPartRef.current = hoveredPart;
+    canvasStateRef.current = canvasState;
 
     const render = useCallback(() => {
       const canvas = canvasRef.current;
@@ -93,195 +99,132 @@ export const MechanicalCanvas = forwardRef<
         ctx,
         canvas.width,
         canvas.height,
-        hoveredPart,
-        canvasState,
-        mechanism.mechanicalElements,
-        mechanism.constraintElements,
+        hoveredPartRef.current,
+        canvasStateRef.current,
+        mechanismRef.current.mechanicalElements,
+        mechanismRef.current.constraintElements,
+        mechanismRef.current.viewport,
       );
-
-      // Dessine les actions récentes (DEBUG)
-      /*
-    let actions = mechanism.history.flat();
-    actions = actions.filter((a) => a.type !== "Blank");
-    if (actions.length > 8) {
-      actions = actions.slice(-8);
-    }
-    actions.reverse();
-    ctx.font = "12px Verdana";
-    ctx.textAlign = "left";
-    ctx.textBaseline = "bottom";
-    ctx.shadowBlur = 1;
-    ctx.shadowColor = "black";
-    ctx.globalAlpha = 1;
-    ctx.fillStyle = COLORS.STROKE;
-    let i = 0;
-    actions.forEach((action) => {
-      let text: string = action.type;
-      switch (action.type) {
-        case "CreateElement":
-        case "DeleteElement":
-          text += " : " + shown_element_name(action.element);
-          break;
-        case "GroundNode":
-          text += " : " + action.id.toString().padStart(3, "0");
-          break;
-        case "SwitchAttachedGearDirection":
-          text += " : " + (action.direction ? "counterclockwise" : "clockwise");
-          break;
-        case "TightenBelt":
-          text += " : " + (action.tightened ? "tighten" : "loosen");
-          break;
-        case "MoveNode":
-        case "MoveEdgeStart":
-        case "MoveEdgeEnd":
-        case "MoveEdgeBody":
-          text +=
-            " " +
-            action.id.toString().padStart(3, "0") +
-            " : " +
-            action.newPosition;
-          break;
-        case "MoveElements":
-        case "ChangeMass":
-        case "ChangeStiffness":
-        case "ChangeDamping":
-          text += " : " + action.delta;
-          break;
-        case "ChangeGearRadius":
-          text += "  radius : " + action.newRadius.toFixed(1);
-          break;
-        case "ConnectsFixedEdges":
-        case "ConnectsRotatingEdges":
-        case "ConnectsParentBeam":
-        case "ConnectsFixedNodeStart":
-        case "ConnectsFixedNodeEnd":
-        case "ConnectsFixedNodesBody":
-        case "ConnectsMeshedGears":
-        case "ConnectsAttachedGears":
-        case "ConnectsFixedGears":
-        case "ConnectsAttachedBelt":
-          text +=
-            (action.disconnect ? " - x -" : " -o-") +
-            " : " +
-            action.connectID.toString().padStart(3, "0") +
-            " on " +
-            action.elementID.toString().padStart(3, "0");
-          break;
-      }
-      ctx.fillText(
-        mechanism.history.flat().length - i + " " + text,
-        160,
-        30 + 18 * i,
-      );
-      ctx.shadowBlur = 0;
-      i += 1;
-    });
-
-    // Dessine l'état du canvas (StateCanvas)
-    let text: string = canvasState.type;
-    ctx.fillText(text, 600, 30);
-
-    // Dessine l'élément survolé (DEBUG)
-    text = hoveredPart.type;
-    switch (hoveredPart.type) {
-      case "Node":
-        text +=
-          hoveredPart.id.toString().padStart(3, "0") +
-          (hoveredPart.beamBodyHover ? " - beamHover" : "");
-        break;
-      case "Edge":
-        text +=
-          " " +
-          hoveredPart.id.toString().padStart(3, "0") +
-          " - " +
-          hoveredPart.part;
-        break;
-      case "GearTooth":
-        text += " " + hoveredPart.id.toString().padStart(3, "0");
-        break;
-      case "BeltBody":
-        text +=
-          " " +
-          hoveredPart.id.toString().padStart(3, "0") +
-          "  section : " +
-          hoveredPart.section;
-        break;
-      case "Constraint":
-        text += hoveredPart.id.toString().padStart(3, "0");
-        break;
-    }
-    ctx.fillText(text, 900, 30);
-    */
-    }, [canvasState, mechanism, hoveredPart]);
+    }, []);
 
     useEffect(() => {
-      render();
-    }, [render, canvasState, mechanism, hoveredPart]);
+      let rafId: number;
+      const loop = () => {
+        if (pendingPanRef.current.x !== 0 || pendingPanRef.current.y !== 0) {
+          changeViewport({ type: "Pan", delta: pendingPanRef.current });
+          pendingPanRef.current = ZERO;
+        }
+        if (pendingZoomRef.current) {
+          changeViewport({
+            type: "Zoom",
+            deltaY: pendingZoomRef.current.deltaY,
+            center: pendingZoomRef.current.center,
+          });
+          pendingZoomRef.current = null;
+        }
+        render();
+        rafId = requestAnimationFrame(loop);
+      };
+      rafId = requestAnimationFrame(loop);
+      return () => cancelAnimationFrame(rafId);
+    }, [render, changeViewport]);
 
     useEffect(() => {
+      // TODO : Center viewoprt on resize
       const handleResize = () => render();
       window.addEventListener("resize", handleResize);
       return () => window.removeEventListener("resize", handleResize);
     }, [render]);
 
-    useEffect(() => {
-      setCursor(
-        [
-          "DimensionStart",
-          "DimensionNode",
-          "DimensionEdge",
-          "DimensionNodeToNode",
-          "DimensionEdgeToNode",
-          "DimensionAngle",
-          "DimensionRadius",
-          "HorizontalVerticalConstraintStart",
-          "HorizontalVerticalConstraintNode",
-          "NormalConstraintStart",
-          "NormalConstraintEdge",
-          "ParallelConstraintStart",
-          "ParallelConstraintEdge",
-          "EqualConstraintStart",
-          "EqualConstraintEdge",
-          "EqualConstraintGear",
-          "GearRatioConstraintStart",
-          "GearRatioConstraintGear",
-        ].includes(canvasState.type)
-          ? "crosshair"
-          : "default",
-      );
-    }, [canvasState]);
-
     const onMouseUpHandler = () => {
-      setMouseDown(false);
       handleEvent({
-        type: "MouseLeftButtonUp",
+        type: "MouseButtonUp",
       });
+      mouseButtonDownRef.current = "none";
     };
+
     const onMouseDownHandler = (event: React.MouseEvent<HTMLCanvasElement>) => {
-      setMouseDown(true);
-      setmousePosition(
-        new Point2(event.clientX, event.clientY).sub(canvasOffsetRef.current),
+      mousePositionRef.current = new Point2(event.clientX, event.clientY).sub(
+        canvasOffsetRef.current,
       );
       if (event.button === 0) {
+        mouseButtonDownRef.current = "left";
         handleEvent({
           type: "MouseLeftButtonDown",
           shiftKey: event.shiftKey,
         });
       } else if (event.button === 2) {
+        mouseButtonDownRef.current = "right";
         handleEvent({
           type: "MouseRightButtonDown",
         });
       }
     };
+
     const onMouseMoveHandler = (event: React.MouseEvent<HTMLCanvasElement>) => {
-      setmousePosition(
-        new Point2(event.clientX, event.clientY).sub(canvasOffsetRef.current),
-      );
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const rect = canvas.getBoundingClientRect();
+
+      const x = (event.clientX - rect.left) * (canvas.width / rect.width);
+      const y = (event.clientY - rect.top) * (canvas.height / rect.height);
+      const newPos = new Point2(x, y);
+
+      mousePositionRef.current = newPos;
+
       handleEvent({
         type: "MouseMove",
         mouseDelta: new Point2(event.movementX, event.movementY),
       });
     };
+
+    const handleEvent = useCallback(
+      (event: CanvasEvent) => {
+        if (
+          event.type === "MouseMove" &&
+          mouseButtonDownRef.current === "right"
+        ) {
+          pendingPanRef.current = pendingPanRef.current.add(event.mouseDelta);
+          return;
+        }
+
+        const newHoveredPart = get_hovered_part(
+          mechanismRef.current.mechanicalElements,
+          mechanismRef.current.constraintElements,
+          true, // TODO : Add parameter to toggle showing constraints
+          screen_to_world(
+            mousePositionRef.current,
+            mechanismRef.current.viewport,
+          ),
+          canvasStateRef.current,
+        );
+        setHoveredPart(newHoveredPart);
+
+        canvasStateReducer(
+          canvasStateRef.current,
+          newHoveredPart,
+          oldPositionRef.current,
+          mouseButtonDownRef.current,
+          event,
+          mechanismRef.current.mechanicalElements,
+          mechanismRef.current.constraintElements,
+          setCanvasState,
+          applyActions,
+          undoMechanism,
+          redoMechanism,
+          onMouseUpHandler,
+        );
+        oldPositionRef.current = newHoveredPart.position.clone();
+      },
+      [
+        applyActions,
+        undoMechanism,
+        redoMechanism,
+        setCanvasState,
+        setHoveredPart,
+      ],
+    );
+
     const isTypingInInput = (): boolean => {
       const active = document.activeElement;
       if (!active) return false;
@@ -304,54 +247,84 @@ export const MechanicalCanvas = forwardRef<
         handleEvent({
           type: "KeyDown",
           key: event.key,
-          crtlKey: event.ctrlKey,
+          ctrlKey: event.ctrlKey,
         });
       };
       document.addEventListener("keydown", handleGlobalKeyDown);
       return () => document.removeEventListener("keydown", handleGlobalKeyDown);
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [
-      canvasState,
-      mechanism,
-      hoveredPart,
-      mousePosition,
-      oldPosition,
-      isMouseDown,
-    ]);
+    }, [handleEvent]);
 
-    function handleEvent(event: CanvasEvent) {
-      const newHoveredPart = get_hovered_part(
-        mechanism.mechanicalElements,
-        mechanism.constraintElements,
-        true, // TODO : Add parameter to toggle showing constraints
-        mousePosition,
-        canvasState,
-      );
-      setHoveredPart(newHoveredPart);
+    useEffect(() => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
 
-      canvasStateReducer(
-        canvasState,
-        setCanvasState,
-        newHoveredPart,
-        oldPosition,
-        isMouseDown,
-        event,
-        mechanism.mechanicalElements,
-        mechanism.constraintElements,
-        updateMechanism,
-        undoMechanism,
-        redoMechanism,
-        onMouseUpHandler,
-        IDcounter,
-      );
-      setOldPosition(hoveredPart.position.clone());
-    }
+      const handleWheel = (event: WheelEvent) => {
+        event.preventDefault();
+
+        const rect = canvas.getBoundingClientRect();
+        const center = new Point2(
+          (event.clientX - rect.left) * (canvas.width / rect.width),
+          (event.clientY - rect.top) * (canvas.height / rect.height),
+        );
+
+        const { deltaX, deltaY, ctrlKey, metaKey } = event;
+
+        if (ctrlKey || metaKey) {
+          if (pendingZoomRef.current) {
+            pendingZoomRef.current.deltaY += deltaY;
+            pendingZoomRef.current.center = center;
+          } else {
+            pendingZoomRef.current = {
+              deltaY,
+              center,
+            };
+          }
+        } else {
+          const delta = new Point2(-deltaX, -deltaY);
+          pendingPanRef.current = pendingPanRef.current.add(delta);
+        }
+      };
+
+      canvas.addEventListener("wheel", handleWheel, { passive: false });
+      return () => canvas.removeEventListener("wheel", handleWheel);
+    }, []);
 
     const onContextMenuHandler = (
       event: React.MouseEvent<HTMLCanvasElement>,
     ) => {
       event.preventDefault();
     };
+
+    const cursor = [
+      "DimensionStart",
+      "DimensionNode",
+      "DimensionEdge",
+      "DimensionNodeToNode",
+      "DimensionEdgeToNode",
+      "DimensionAngle",
+      "DimensionRadius",
+      "HorizontalVerticalConstraintStart",
+      "HorizontalVerticalConstraintNode",
+      "NormalConstraintStart",
+      "NormalConstraintEdge",
+      "ParallelConstraintStart",
+      "ParallelConstraintEdge",
+      "EqualConstraintStart",
+      "EqualConstraintEdge",
+      "EqualConstraintGear",
+      "GearRatioConstraintStart",
+      "GearRatioConstraintGear",
+    ].includes(canvasState.type)
+      ? "crosshair"
+      : "default";
+
+    const editingConstraint =
+      canvasState.type === "EditingConstraint"
+        ? get_constraint_element_from_id(
+            canvasState.elementID,
+            mechanism.constraintElements,
+          )
+        : null;
 
     return (
       <Box
@@ -364,12 +337,13 @@ export const MechanicalCanvas = forwardRef<
         }}
       >
         <canvas
-          ref={canvasRef}
+          ref={mergeRefs(canvasRef, ref)}
           style={{
             width: "100%",
             height: "100%",
             backgroundColor: COLORS.BACKGROUND,
             cursor,
+            touchAction: "none",
           }}
           onMouseUp={onMouseUpHandler}
           onMouseDown={onMouseDownHandler}
@@ -380,27 +354,18 @@ export const MechanicalCanvas = forwardRef<
           aria-label="Canvas de conception mécanique"
           role="img"
         />
-        {canvasState.type === "EditingConstraint" && (
+        {editingConstraint && (
           <ConstraintEditor
-            constraint={get_constraint_element_from_id(
-              canvasState.elementID,
-              mechanism.constraintElements,
+            constraint={editingConstraint}
+            position={world_to_screen(
+              editingConstraint.position,
+              mechanism.viewport,
             )}
-            position={
-              get_constraint_element_from_id(
-                canvasState.elementID,
-                mechanism.constraintElements,
-              ).position
-            }
             onCommit={(newValue) => {
-              const constraint = get_constraint_element_from_id(
-                canvasState.elementID,
-                mechanism.constraintElements,
-              );
-              if (!("value" in constraint)) return;
+              if (!("value" in editingConstraint)) return;
 
               let actionType: ActionType;
-              switch (constraint.type) {
+              switch (editingConstraint.type) {
                 case "dimension-edge":
                   actionType = "ChangeDimensionEdgeValue";
                   break;
@@ -421,20 +386,23 @@ export const MechanicalCanvas = forwardRef<
                   break;
               }
               if (actionType) {
-                updateMechanism(
+                applyActions(
                   [
                     {
                       type: actionType,
-                      id: constraint.id,
+                      id: editingConstraint.id,
                       newValue: newValue,
-                      oldValue: constraint.value,
+                      oldValue: editingConstraint.value,
                     },
                   ],
                   "ChangeDimension",
                 );
               }
-              if (canvasState.isPlacing) {
-                if (constraint.type === "gear-ratio") {
+              if (
+                canvasState.type === "EditingConstraint" &&
+                canvasState.isPlacing
+              ) {
+                if (editingConstraint.type === "gear-ratio") {
                   setCanvasState({ type: "GearRatioConstraintStart" });
                 } else {
                   setCanvasState({ type: "DimensionStart" });
@@ -442,13 +410,16 @@ export const MechanicalCanvas = forwardRef<
               } else {
                 setCanvasState({
                   type: "SelectedElement",
-                  elementID: constraint.id,
+                  elementID: editingConstraint.id,
                 });
               }
             }}
             onCancel={(constraint) => {
-              if (canvasState.isPlacing) {
-                updateMechanism(
+              if (
+                canvasState.type === "EditingConstraint" &&
+                canvasState.isPlacing
+              ) {
+                applyActions(
                   [
                     {
                       type: "DeleteElement",

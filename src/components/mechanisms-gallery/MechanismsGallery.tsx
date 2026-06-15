@@ -22,7 +22,7 @@ import {
   Settings,
 } from "@mui/icons-material";
 import { SerializedMechanism } from "../../types";
-import { format_date } from "../../utils/string-math";
+import { format_date } from "../../utils";
 
 interface MechanismsGalleryProps {
   open: boolean;
@@ -30,7 +30,7 @@ interface MechanismsGalleryProps {
   mechanismRecords: SerializedMechanism[];
   onLoad: (mechanismRecord: SerializedMechanism) => void;
   onDelete: (createdAtId: number) => void;
-  onNew: () => void; // Nouvelle prop pour créer un mécanisme
+  onNew: () => void;
 }
 
 export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
@@ -67,7 +67,9 @@ export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
           pb: 1,
         }}
       >
-        <Typography variant="h6">Mes mécanismes</Typography>
+        <Typography fontSize={"large"} fontWeight={500}>
+          Mes mécanismes
+        </Typography>
         <IconButton onClick={onClose} size="small">
           <Close />
         </IconButton>
@@ -75,7 +77,7 @@ export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
 
       <DialogContent dividers sx={{ bgcolor: "background.default", pt: 2 }}>
         <Grid container spacing={2}>
-          {/* 1. Carte "Nouveau Mécanisme" (Toujours en première position) */}
+          {/* 1. Carte "Nouveau Mécanisme" (En première position) */}
           <Grid size={{ xs: 12, sm: 6, md: 4, lg: 3 }}>
             <Card
               onClick={onNew}

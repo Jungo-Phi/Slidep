@@ -62,11 +62,14 @@
 - ~Dimension Radius~
 - ~Compléter le geometric-solver~
 - geometric solver - radius constraint
-- ~bug : crtl+Z déplacement contraintes~
-- "applyHorizontalConstraint()" avec une extrémité ancrée ne fonctionne pas
-- Compléter la contrainte d'angle
+- ~bug : ctrl+Z déplacement contraintes~
+- ~"applyHorizontalConstraint()" avec une extrémité ancrée ne fonctionne pas~
+- ~Dimension sur des nodes ne marche pas~
+- ~Mettre le counterID dans Mechanism~
+- ~Compléter la contrainte d'angle~
 - Interdire les angles de 0° 180° et -180°
 - Empecher les contraintes sur le même élément (DDL analyser)
+- Reset CanvasState quand on change de mécanisme
 - Sauvgarder / Charger méchanisme
 - Movement et zoom de la grille
 - Afficher / cacher les contraintes
@@ -74,6 +77,7 @@
 - Implémenter algorithme de statique (matrices)
 - Implémenter algorithme de dynamique PBD
 - Créer un système d'unités (zoom de base : 1px = 1mm)
+- Ajouter un bouton "Recontrer la vue"
 
 ## Features UX secondaires
 
@@ -112,5 +116,12 @@
 - Changer l'apparence des extrémités de spring et damper comme pour beam
 - Ajouter un tag editor (property pannel + gallery)
 - Adapter le thumbnail generator pour cropper sur le mécanisme
+- Remove flicked on "Lancer la simulation" button hover 
 - (Ignorer BeamBodyHover lors du déplacement d'un beam ?)
 - (Supprimer les joints quand ils ne sont connectés qu'à 1 élément ?)
+
+Analyse générale de la cohérence et de l'utilisation des éléments React (useEffect, useCallback, useRef, etc.)
+
+Ex: Est-ce que je ne devrais pas utiliser un useCallback avec updateMetadata ?
+
+Et lors d'un zoom, il y a souvent un décalage, l'image se centre sur un point décalé de la souris. Mais il n'est pas énorme, ce qui me fait penser que ce n'est pas une erreur de calcul dans changeViewport, mais quelque part plus tôt dans le choix de change.center.

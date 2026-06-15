@@ -27,10 +27,7 @@ interface ElementPropertiesProps {
   element: MechanicalElement;
   setHoveredPart: (hoveredPart: HoveredPart) => void;
   setCanvasState: (state: CanvasState) => void;
-  updateMechanism: (
-    actions: Action[],
-    actionBundleType: ActionBundleType,
-  ) => void;
+  applyActions: (actions: Action[], actionBundleType: ActionBundleType) => void;
   mechanism: Mechanism;
 }
 
@@ -38,7 +35,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
   element,
   setHoveredPart,
   setCanvasState,
-  updateMechanism,
+  applyActions,
   mechanism,
 }) => {
   const handleMouseEnter = () => {
@@ -62,17 +59,18 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
       >
         <ElementDisplay
           element={element}
-          size="large"
           setHoveredPart={setHoveredPart}
           setCanvasState={setCanvasState}
-          updateMechanism={updateMechanism}
+          applyActions={applyActions}
+          size="large"
+          editable={true}
         ></ElementDisplay>
 
         {"isGrounded" in element && element.type !== "mass" && (
           <GroundSwitch
             grounded={element.isGrounded}
             setGround={(grounded) =>
-              updateMechanism(
+              applyActions(
                 [{ type: "GroundNode", id: element.id, grounded }],
                 "Other",
               )
@@ -83,7 +81,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
           <BeltTensionSwitch
             tightened={element.tight}
             setTight={(tightened) =>
-              updateMechanism(
+              applyActions(
                 [
                   {
                     type: "TightenBelt",
@@ -101,7 +99,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
             label="kg"
             value={element.mass}
             onChange={(mass) =>
-              updateMechanism(
+              applyActions(
                 [
                   {
                     type: "ChangeMass",
@@ -120,7 +118,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
             label="N/m"
             value={element.stiffness}
             onChange={(stiffness) =>
-              updateMechanism(
+              applyActions(
                 [
                   {
                     type: "ChangeStiffness",
@@ -139,7 +137,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
             label="N·s/m"
             value={element.damping}
             onChange={(damping) =>
-              updateMechanism(
+              applyActions(
                 [
                   {
                     type: "ChangeDamping",
@@ -156,7 +154,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
         <IconButton
           color="error"
           onClick={() =>
-            updateMechanism(
+            applyActions(
               delete_element(
                 element.id,
                 mechanism.mechanicalElements,
@@ -189,7 +187,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
             x={element.position.x}
             y={element.position.y}
             setPos={(pos) =>
-              updateMechanism(
+              applyActions(
                 [
                   {
                     type: "MoveNode",
@@ -206,7 +204,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
             <NumberInput
               value={element.radius}
               onChange={(radius) =>
-                updateMechanism(
+                applyActions(
                   [
                     {
                       type: "ChangeGearRadius",
@@ -239,7 +237,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
             x={element.positionStart.x}
             y={element.positionStart.y}
             setPos={(pos) =>
-              updateMechanism(
+              applyActions(
                 [
                   {
                     type: "MoveEdgeStart",
@@ -255,7 +253,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
           <NumberInput
             value={element.positionStart.distance_to(element.positionEnd)}
             onChange={(length) =>
-              updateMechanism(
+              applyActions(
                 [
                   {
                     type: "ChangeEdgeLength",
@@ -276,7 +274,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
             x={element.positionEnd.x}
             y={element.positionEnd.y}
             setPos={(pos) =>
-              updateMechanism(
+              applyActions(
                 [
                   {
                     type: "MoveEdgeEnd",
@@ -308,7 +306,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
           element={element}
           setHoveredPart={setHoveredPart}
           setCanvasState={setCanvasState}
-          updateMechanism={updateMechanism}
+          applyActions={applyActions}
           mechanism={mechanism}
         ></ConnectionsProperties>
       )}

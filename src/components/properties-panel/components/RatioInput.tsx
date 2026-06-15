@@ -1,7 +1,7 @@
 import React, { useRef, useState, useEffect, useCallback } from "react";
 import { TextField, Box, Typography } from "@mui/material";
 import { COLORS } from "../../../constants/rendering-specs";
-import { value_to_ratio_parts } from "../../../utils/string-math";
+import { value_to_ratio_parts } from "../../../utils";
 
 interface RatioInputProps {
   value: number;

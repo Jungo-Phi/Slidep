@@ -24,10 +24,7 @@ interface ConstraintsPanelProps {
   constraintID: ID;
   setHoveredPart: (hoveredPart: HoveredPart) => void;
   setCanvasState: (state: CanvasState) => void;
-  updateMechanism: (
-    actions: Action[],
-    actionBundleType: ActionBundleType,
-  ) => void;
+  applyActions: (actions: Action[], actionBundleType: ActionBundleType) => void;
   mechanism: Mechanism;
 }
 
@@ -35,7 +32,7 @@ export const ConstraintsPanel: React.FC<ConstraintsPanelProps> = ({
   constraintID,
   setHoveredPart,
   setCanvasState,
-  updateMechanism,
+  applyActions: applyActions,
   mechanism,
 }) => {
   const handleMouseEnter = (constraint: ConstraintElement) => {
@@ -75,10 +72,11 @@ export const ConstraintsPanel: React.FC<ConstraintsPanelProps> = ({
             >
               <ElementDisplay
                 element={constraint}
-                size="medium"
                 setHoveredPart={setHoveredPart}
                 setCanvasState={setCanvasState}
-                updateMechanism={updateMechanism}
+                applyActions={applyActions}
+                size="medium"
+                editable={true}
               ></ElementDisplay>
             </Box>
 
@@ -93,7 +91,7 @@ export const ConstraintsPanel: React.FC<ConstraintsPanelProps> = ({
                     <NumberInput
                       value={constraint.value}
                       onChange={(value: number) =>
-                        updateMechanism(
+                        applyActions(
                           [
                             {
                               type: "ChangeDimensionEdgeValue",
@@ -116,7 +114,7 @@ export const ConstraintsPanel: React.FC<ConstraintsPanelProps> = ({
                     <RatioInput
                       value={constraint.value}
                       onChange={(value: number) =>
-                        updateMechanism(
+                        applyActions(
                           [
                             {
                               type: "ChangeGearRatioValue",
@@ -137,7 +135,7 @@ export const ConstraintsPanel: React.FC<ConstraintsPanelProps> = ({
               onMouseEnter={() => handleMouseEnter(constraint)}
               onMouseLeave={handleMouseLeave}
               onClick={() =>
-                updateMechanism(
+                applyActions(
                   [{ type: "DeleteElement", element: constraint }],
                   "Other",
                 )

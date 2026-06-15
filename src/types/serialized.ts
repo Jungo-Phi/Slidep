@@ -1,4 +1,10 @@
-import { Action, ConstraintElement, MechanicalElement, Point2 } from "../types";
+import {
+  Action,
+  ConstraintElement,
+  MechanicalElement,
+  Point2,
+  ViewportState,
+} from "../types";
 
 export type SerializedPoint2 = { x: number; y: number };
 
@@ -14,4 +20,5 @@ export type Serialized<T> = T extends Point2
 
 export type SerializedMechanicalElement = Serialized<MechanicalElement>;
 export type SerializedConstraintElement = Serialized<ConstraintElement>;
+export type SerializedViewportState = Serialized<ViewportState>;
 export type SerializedAction = Serialized<Action>;

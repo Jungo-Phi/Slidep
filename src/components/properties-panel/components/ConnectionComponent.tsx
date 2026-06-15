@@ -28,10 +28,7 @@ interface ConnectionProps {
   containerType: ConnectsActionType;
   setHoveredPart: (hoveredPart: HoveredPart) => void;
   setCanvasState: (state: CanvasState) => void;
-  updateMechanism: (
-    actions: Action[],
-    actionBundleType: ActionBundleType,
-  ) => void;
+  applyActions: (actions: Action[], actionBundleType: ActionBundleType) => void;
   mechanism: Mechanism;
 }
 
@@ -41,7 +38,7 @@ const Connection: React.FC<ConnectionProps> = ({
   containerType,
   setHoveredPart,
   setCanvasState,
-  updateMechanism,
+  applyActions,
   mechanism,
 }) => {
   const handleSwitchMeshedGearDirection = (e: React.MouseEvent) => {
@@ -51,7 +48,7 @@ const Connection: React.FC<ConnectionProps> = ({
       index = get_connections(element, "ConnectsAttachedGears").indexOf(
         connectedElement.id,
       );
-      updateMechanism(
+      applyActions(
         [
           {
             type: "SwitchAttachedGearDirection",
@@ -67,7 +64,7 @@ const Connection: React.FC<ConnectionProps> = ({
         connectedElement,
         "ConnectsAttachedGears",
       ).indexOf(element.id);
-      updateMechanism(
+      applyActions(
         [
           {
             type: "SwitchAttachedGearDirection",
@@ -88,7 +85,7 @@ const Connection: React.FC<ConnectionProps> = ({
       element.id,
       connectedElement,
     );
-    updateMechanism(
+    applyActions(
       [
         disconnect_element(
           element,
@@ -124,10 +121,11 @@ const Connection: React.FC<ConnectionProps> = ({
     >
       <ElementDisplay
         element={connectedElement}
-        size="small"
         setHoveredPart={setHoveredPart}
         setCanvasState={setCanvasState}
-        updateMechanism={updateMechanism}
+        applyActions={applyActions}
+        size="small"
+        editable={false}
       ></ElementDisplay>
       <IconButton
         sx={{

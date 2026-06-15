@@ -16,6 +16,7 @@ import {
   NodeElement,
   Point2,
   UnionElement,
+  ViewportState,
 } from "../../types";
 import { HoveredPart } from "../../types/hovered-part";
 import { CanvasState } from "../../types/canvas-state";
@@ -39,7 +40,7 @@ import {
   draw_gear_ratio,
   draw_dimention_angle,
   draw_dimention_to_segment,
-  draw_dimention_radius,
+  draw_dimension_radius,
   draw_dimention,
   draw_join_bottom,
   draw_join_top,
@@ -49,9 +50,9 @@ import { get_mechanical_element_from_id } from "./connect-actions";
 import {
   get_gear_angles,
   is_on_left_side_of_belt,
-} from "../../utils/belt-geom";
+  resolve_angle_constraint_quadrant,
+} from "../../utils";
 import { connected_constraints, node_on_beam_body } from "./utils";
-import { get_angle_dim_direction } from "../../utils/angle-math";
 
 function is_selected(elementID: ID, state: CanvasState): boolean {
   return (
@@ -186,21 +187,16 @@ export function drawMechanicalCanvas(
   state: CanvasState,
   mechanicalElements: MechanicalElement[],
   constraintElements: ConstraintElement[],
+  viewport: ViewportState,
 ) {
   // Efface le canvas
   ctx.clearRect(0, 0, width, height);
-
   // Dessine la grille
-  draw_grid(ctx, width, height);
+  draw_grid(ctx, width, height, viewport);
 
-  //const viewport = currentMechanism?.viewport;
-  //const zoom = 1; //viewport?.zoom || 1;
-  //const panX = 0; //viewport?.panX || 0;
-  //const panY = 0; //viewport?.panY || 0;
-
-  //ctx.save();
-  //ctx.translate(panX, panY);
-  //ctx.scale(zoom, zoom);
+  ctx.save();
+  ctx.translate(viewport.pan.x, viewport.pan.y); // TODO : décaler au milieu ?
+  ctx.scale(viewport.zoom, viewport.zoom);
 
   const allElements: UnionElement[] = (
     mechanicalElements as UnionElement[]
@@ -483,7 +479,7 @@ export function drawMechanicalCanvas(
               } else {
                 const newGear: GearElement = {
                   type: "gear",
-                  id: 0,
+                  id: `----`,
                   position: hoveredPart.position,
                   isGrounded: false,
                   radius: INTERACTION_SPECS.BELT_GRAB_RADIUS,
@@ -524,7 +520,7 @@ export function drawMechanicalCanvas(
               if (hoveredPart.type !== "BeltBody") break;
               const newGear: GearElement = {
                 type: "gear",
-                id: 0,
+                id: `----`,
                 position: state.startHover.position,
                 isGrounded: false,
                 radius: state.startHover.position.distance_to(
@@ -652,7 +648,7 @@ export function drawMechanicalCanvas(
             element.gearID,
             mechanicalElements,
           ) as GearElement;
-          draw_dimention_radius(
+          draw_dimension_radius(
             ctx,
             gear.position,
             gear.radius,
@@ -913,15 +909,15 @@ export function drawMechanicalCanvas(
           );
           if (!intersection) break;
 
-          const angleDimDirection = get_angle_dim_direction(
+          const angleConstraintQuadrant = resolve_angle_constraint_quadrant(
             edgeD.positionStart,
             edgeD.positionEnd,
             endEdge.positionStart,
             endEdge.positionEnd,
             hoveredPart.position,
           );
-          if (!angleDimDirection) break;
-          const { flipStart, flipEnd, angle } = angleDimDirection;
+          if (!angleConstraintQuadrant) break;
+          const { flipStart, flipEnd, angle } = angleConstraintQuadrant;
 
           const pos_dir = hoveredPart.position.sub(intersection);
           const position = intersection.add(
@@ -995,15 +991,15 @@ export function drawMechanicalCanvas(
         mechanicalElements,
       ) as EdgeElement;
 
-      const angleDimDirection = get_angle_dim_direction(
+      const angleConstraintQuadrant = resolve_angle_constraint_quadrant(
         startEdge.positionStart,
         startEdge.positionEnd,
         endEdge.positionStart,
         endEdge.positionEnd,
         hoveredPart.position,
       );
-      if (!angleDimDirection) break;
-      const { flipStart, flipEnd, angle } = angleDimDirection;
+      if (!angleConstraintQuadrant) break;
+      const { flipStart, flipEnd, angle } = angleConstraintQuadrant;
 
       draw_dimention_angle(
         ctx,
@@ -1022,7 +1018,7 @@ export function drawMechanicalCanvas(
         state.gearID,
         mechanicalElements,
       ) as GearElement;
-      draw_dimention_radius(
+      draw_dimension_radius(
         ctx,
         gear.position,
         gear.radius,
@@ -1031,5 +1027,6 @@ export function drawMechanicalCanvas(
       );
       break;
   }
+  ctx.restore();
   ctx.restore();
 }

@@ -44,6 +44,7 @@ export type Link =
       key4: string;
       flipStart: boolean;
       flipEnd: boolean;
+      couterClockwise: boolean;
       angle_rad: number;
     }
   | { type: "Radius"; ddl: 1; key1: string; radius: number }

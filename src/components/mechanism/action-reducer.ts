@@ -8,6 +8,7 @@ import {
 } from "../../types";
 import {
   get_constraint_element_from_id,
+  get_element_from_id,
   get_mechanical_element_from_id,
 } from "../mechanical-canvas/connect-actions";
 
@@ -18,6 +19,7 @@ export function actionReducer(
 ): Mechanism {
   let mechanicalElements = [...mechanism.mechanicalElements];
   let constraintElements = [...mechanism.constraintElements];
+  let viewport = { ...mechanism.viewport };
   let element: UnionElement;
   actions.forEach((action) => {
     switch (action.type) {
@@ -51,6 +53,14 @@ export function actionReducer(
             constraintElements.push(action.element);
           }
         }
+        break;
+      case "UpdateElementName":
+        element = get_element_from_id(
+          action.id,
+          mechanicalElements,
+          constraintElements,
+        );
+        element.name = revert ? action.oldName : action.newName;
         break;
       case "MoveConstraint":
         element = get_constraint_element_from_id(action.id, constraintElements);
@@ -290,11 +300,11 @@ export function actionReducer(
     }
   });
   return {
-    history: mechanism.history,
-    future: mechanism.future,
+    metadata: mechanism.metadata,
+    viewport: viewport,
     mechanicalElements: mechanicalElements,
     constraintElements: constraintElements,
-    viewport: mechanism.viewport,
-    metadata: mechanism.metadata,
+    history: mechanism.history,
+    future: mechanism.future,
   };
 }

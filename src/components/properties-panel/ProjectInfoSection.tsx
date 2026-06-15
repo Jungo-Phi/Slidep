@@ -3,7 +3,7 @@ import { Box, Typography, TextField, Divider } from "@mui/material";
 import { Mechanism, MechanismMetadata } from "../../types";
 import { get_degrees_of_freedom } from "../solver/utils";
 import { get_links, get_nodes } from "../solver/parsing";
-import { format_date } from "../../utils/string-math";
+import { format_date } from "../../utils";
 
 interface ProjectInfoSectionProps {
   mechanism: Mechanism;

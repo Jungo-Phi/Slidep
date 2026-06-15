@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import {
   ThemeProvider,
   CssBaseline,
@@ -43,13 +43,15 @@ import {
   DEFAULT_METADATA,
   DEFAULT_SIMULATION_CONFIG,
   DEFAULT_SIMULATION_STATE,
-  DEFAULT_VIEWPORT,
   Mechanism,
   MechanismMetadata,
+  Point2,
+  ScreenPoint,
   SerializedMechanism,
   SimulationConfig,
   SimulationState,
   SlidepDB,
+  ViewportChange,
   ZERO,
 } from "./types";
 import { HoveredPart } from "./types/hovered-part";
@@ -57,17 +59,17 @@ import { actionReducer } from "./components/mechanism/action-reducer";
 import { preload_element_icons } from "./components/element-palette/elementIcon";
 import { COLORS } from "./constants/rendering-specs";
 import {
-  deserializeMechanism,
-  loadFromFile,
-  saveToFile,
-  serializeMechanism,
+  deserialize_mechanism,
+  load_from_file,
+  save_to_file,
+  serialize_mechanism,
 } from "./utils/serialization";
-import { get_hovered_part } from "./components/mechanical-canvas/get-hover";
-import { update_mechanism } from "./components/mechanism/update-mechanism";
+import { apply_actions } from "./components/mechanism/apply-actions";
 import MechanismsGallery from "./components/mechanisms-gallery/MechanismsGallery";
 import { openDB } from "idb";
 import { generateThumbnail } from "./utils/thumbnail-generator";
 import { debounce } from "./utils/debounce";
+import { screen_to_world } from "./components/mechanical-canvas/viewport";
 
 export interface UserPreferences {
   theme: string;
@@ -82,10 +84,15 @@ const DEFAULT_PREFERENCES: UserPreferences = {
   theme: "light",
   gridVisible: true,
   snapToGrid: true,
-  constraintsVisible: true;
-  gridSize: 50;
+  constraintsVisible: true,
+  gridSize: 50,
 };
 */
+
+const DB_VERSION = 3;
+const DEBOUNCE_AUTOSAVE_TIME = 1000; // 1000 ms = 1s
+const VIEWPORT_ZOOM_SENSITIVITY = 250; // Nombre de "crans" de molette nécessaires pour multiplier le zoom par 2
+const LANGUAGES = ["Deutsch", "English", "Español", "Français"];
 
 const App: React.FC = () => {
   const [canvasState, setCanvasState] = useState<CanvasState>({
@@ -97,13 +104,12 @@ const App: React.FC = () => {
       createdAt: Date.now(),
       modifiedAt: Date.now(),
     },
-    viewport: DEFAULT_VIEWPORT,
+    viewport: { zoom: 1, pan: ZERO },
     mechanicalElements: [],
     constraintElements: [],
     history: [],
     future: [],
   });
-  const mechanismRef = useRef<Mechanism>(mechanism);
 
   const [hoveredPart, setHoveredPart] = useState<HoveredPart>({
     type: "Void",
@@ -117,10 +123,6 @@ const App: React.FC = () => {
   );
   const currentTheme = lightTheme;
 
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-
-  const dbVersion = 3;
-  const DEBOUNCE_AUTOSAVE_TIME = 1000; // 1000 ms = 1s
   const [saveStatus, setSaveStatus] = useState<
     "idle" | "saved" | "saving" | "error"
   >("idle");
@@ -130,159 +132,152 @@ const App: React.FC = () => {
     [],
   );
 
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const canvasStateRef = useRef<CanvasState>(canvasState);
+  const mechanismRef = useRef<Mechanism>(mechanism);
+  const galleryOpenRef = useRef(galleryOpen);
+
   const [simHover, setSimHover] = useState(false);
 
   useEffect(() => {
     mechanismRef.current = mechanism;
   }, [mechanism]);
 
-  /** Preload all icons when the app starts */
   useEffect(() => {
-    preload_element_icons();
+    canvasStateRef.current = canvasState;
+  }, [canvasState]);
+
+  useEffect(() => {
+    galleryOpenRef.current = galleryOpen;
+  }, [galleryOpen]);
+
+  const debouncedSave = useRef(
+    debounce(() => {
+      performSaveToDB();
+    }, DEBOUNCE_AUTOSAVE_TIME),
+  ).current;
+
+  const updateMetadata = useCallback(
+    (metadata: MechanismMetadata) => {
+      setMechanism((prevMechanism) => ({ ...prevMechanism, metadata }));
+      setSaveStatus("saving");
+      debouncedSave();
+    },
+    [debouncedSave],
+  );
+
+  const changeViewport = useCallback((change: ViewportChange) => {
+    setMechanism((prevMechanism) => {
+      const ov = prevMechanism.viewport;
+      let pan: ScreenPoint;
+      let zoom = ov.zoom;
+      if (change.type === "Pan") {
+        pan = ov.pan.add(change.delta);
+      } else {
+        const zoomFactor = 2 ** (-change.deltaY / VIEWPORT_ZOOM_SENSITIVITY);
+        zoom *= zoomFactor;
+        pan = change.center.sub(screen_to_world(change.center, ov).mul(zoom));
+      }
+      return { ...prevMechanism, viewport: { pan, zoom } };
+    });
   }, []);
 
-  /** Charger le dernier mécanisme au démarrage de l'application */
-  useEffect(() => {
-    const loadLastMechanism = async () => {
-      try {
-        const db = await openDB<SlidepDB>("SlidepDB", dbVersion, {
-          upgrade(db) {
-            if (!db.objectStoreNames.contains("mechanisms")) {
-              const store = db.createObjectStore("mechanisms", {
-                keyPath: "metadata.createdAt",
-              });
-              store.createIndex("by-date", "metadata.modifiedAt");
-            }
-          },
-        });
-
-        const allRecords = await db.getAll("mechanisms");
-        if (allRecords.length > 0) {
-          const sorted = allRecords.sort(
-            (a, b) => b.metadata.modifiedAt - a.metadata.modifiedAt,
-          );
-
-          const lastMechanism = sorted[0];
-          setMechanism(deserializeMechanism(lastMechanism));
-
-          setSaveStatus("saved");
-          console.log(
-            "Dernier mécanisme chargé :",
-            lastMechanism.metadata.name,
-          );
-        } else {
-          console.log(
-            "Aucun mécanisme sauvegardé. Démarrage sur un projet vide.",
-          );
+  const applyActions = useCallback(
+    (actions: Action[], actionBundleType: ActionBundleType) => {
+      setMechanism((prevMechanism) => {
+        const newMechanism = apply_actions(
+          prevMechanism,
+          actions,
+          actionBundleType,
+        );
+        const cs = canvasStateRef.current;
+        if (
+          cs.type === "SelectedElement" &&
+          !newMechanism.mechanicalElements.find((e) => e.id === cs.elementID) &&
+          !newMechanism.constraintElements.find((e) => e.id === cs.elementID)
+        ) {
+          setCanvasState({ type: "Selecting" });
         }
-      } catch (error) {
-        console.error("Erreur lors du chargement automatique :", error);
+        return newMechanism;
+      });
+      setSaveStatus("saving");
+      debouncedSave();
+    },
+    [debouncedSave],
+  );
+
+  const undoMechanism = useCallback(() => {
+    if (mechanismRef.current.history.length === 0) return;
+    setMechanism((prevMechanism) => {
+      const lastActionsForUndo = [
+        ...prevMechanism.history.slice(-1)[0],
+      ].reverse();
+      let newMechanism = actionReducer(
+        {
+          ...prevMechanism,
+          history: [...prevMechanism.history.slice(0, -1)],
+          future: [...prevMechanism.future, prevMechanism.history.slice(-1)[0]],
+        },
+        lastActionsForUndo,
+        true,
+      );
+      const currentState = canvasStateRef.current;
+      if (
+        currentState.type === "SelectedElement" &&
+        !newMechanism.mechanicalElements.find(
+          (el) => el.id === currentState.elementID,
+        ) &&
+        !newMechanism.constraintElements.find(
+          (el) => el.id === currentState.elementID,
+        )
+      ) {
+        setCanvasState({ type: "Selecting" });
       }
-    };
-
-    loadLastMechanism();
-  }, []); // Le tableau vide assure que ça ne se lance qu'une fois au démarrage
-
-  const IDcounter = useRef(1);
-
-  const updateMetadata = (metadata: MechanismMetadata) => {
-    setMechanism({ ...mechanism, metadata });
+      return newMechanism;
+    });
     setSaveStatus("saving");
     debouncedSave();
-  };
+  }, [debouncedSave]);
 
-  const updateMechanism = (
-    actions: Action[],
-    actionBundleType: ActionBundleType,
-  ) => {
-    const updatedMechanism = update_mechanism(
-      mechanism,
-      actions,
-      actionBundleType,
-    );
-    setMechanism(updatedMechanism);
+  const redoMechanism = useCallback(() => {
+    if (mechanismRef.current.future.length === 0) return;
+    setMechanism((prevMechanism) => {
+      let nextActions = prevMechanism.future.slice(-1)[0];
+      let newMechanism = actionReducer(
+        {
+          ...prevMechanism,
+          history: [...prevMechanism.history, [...nextActions]],
+          future: [...prevMechanism.future.slice(0, -1)],
+        },
+        nextActions,
+        false,
+      );
+      const currentState = canvasStateRef.current;
+      if (
+        currentState.type === "SelectedElement" &&
+        !newMechanism.mechanicalElements.find(
+          (el) => el.id === currentState.elementID,
+        ) &&
+        !newMechanism.constraintElements.find(
+          (el) => el.id === currentState.elementID,
+        )
+      ) {
+        setCanvasState({ type: "Selecting" });
+      }
+      return newMechanism;
+    });
     setSaveStatus("saving");
     debouncedSave();
+  }, [debouncedSave]);
 
-    setHoveredPart(
-      get_hovered_part(
-        updatedMechanism.mechanicalElements,
-        updatedMechanism.constraintElements,
-        true, // TODO : Add parameter to toggle showing constraints
-        hoveredPart.position,
-        canvasState,
-      ),
-    );
-
-    if (canvasState.type !== "SelectedElement") return;
-    if (
-      updatedMechanism.mechanicalElements.find(
-        (el) => el.id === canvasState.elementID,
-      ) ||
-      updatedMechanism.constraintElements.find(
-        (el) => el.id === canvasState.elementID,
-      )
-    )
-      return;
-    setCanvasState({ type: "Selecting" });
-  };
-
-  const undoMechanism = () => {
-    // Undo (ctrl+Z)
-    if (mechanism.history.length === 0) return;
-    let lastActions = mechanism.history.slice(-1)[0];
-    let newMechanism = {
-      history: [...mechanism.history.slice(0, -1)],
-      future: [...mechanism.future, [...lastActions]],
-      mechanicalElements: [...mechanism.mechanicalElements],
-      constraintElements: [...mechanism.constraintElements],
-      viewport: { ...mechanism.viewport },
-      metadata: { ...mechanism.metadata },
-    };
-    lastActions.reverse();
-    const updatedMechanism = actionReducer(newMechanism, lastActions, true);
-    setMechanism(updatedMechanism);
-    setSaveStatus("saving");
-    debouncedSave();
-
-    if (canvasState.type !== "SelectedElement") return;
-    if (
-      !updatedMechanism.mechanicalElements.find(
-        (el) => el.id === canvasState.elementID,
-      ) &&
-      !updatedMechanism.constraintElements.find(
-        (el) => el.id === canvasState.elementID,
-      )
-    ) {
-      setCanvasState({ type: "Selecting" });
-    }
-  };
-
-  const redoMechanism = () => {
-    // Redo (ctrl+Y)
-    if (mechanism.future.length === 0) return;
-    let nextActions = mechanism.future.slice(-1)[0];
-    let newMechanism = {
-      history: [...mechanism.history, [...nextActions]],
-      future: [...mechanism.future.slice(0, -1)],
-      mechanicalElements: [...mechanism.mechanicalElements],
-      constraintElements: [...mechanism.constraintElements],
-      viewport: { ...mechanism.viewport },
-      metadata: { ...mechanism.metadata },
-    };
-    setMechanism(actionReducer(newMechanism, nextActions, false));
-    setSaveStatus("saving");
-    debouncedSave();
-  };
-
-  const performSaveToDB = async () => {
+  const performSaveToDB = useCallback(async () => {
     setSaveStatus("saving");
     try {
       let thumbnailData = "";
       if (canvasRef.current) {
         thumbnailData = await generateThumbnail(canvasRef.current);
       }
-      const db = await openDB<SlidepDB>("SlidepDB", dbVersion, {
+      const db = await openDB<SlidepDB>("SlidepDB", DB_VERSION, {
         upgrade(db) {
           if (!db.objectStoreNames.contains("mechanisms")) {
             const store = db.createObjectStore("mechanisms", {
@@ -300,25 +295,18 @@ const App: React.FC = () => {
           modifiedAt: Date.now(),
         },
       };
-      await db.put("mechanisms", serializeMechanism(mechanismToSave));
+      await db.put("mechanisms", serialize_mechanism(mechanismToSave));
       setSaveStatus("saved");
 
-      // Mise à jour de la galerie si ouverte
-      if (galleryOpen) {
+      if (galleryOpenRef.current) {
         const allRecords = await db.getAll("mechanisms");
         setSavedMechanisms(allRecords);
       }
     } catch (error) {
-      console.error("Erreur lors de la sauvegarde auto :", error);
+      console.error("Erreur lors de la sauvegarde :", error);
       setSaveStatus("error");
     }
-  };
-
-  const debouncedSave = useRef(
-    debounce(() => {
-      performSaveToDB();
-    }, DEBOUNCE_AUTOSAVE_TIME),
-  ).current;
+  }, []);
 
   const [menuAnchorEl, setMenuAnchorEl] = React.useState<null | HTMLElement>(
     null,
@@ -331,8 +319,8 @@ const App: React.FC = () => {
     setMenuAnchorEl(null);
   };
 
-  const handleOpenGallery = async () => {
-    const db = await openDB<SlidepDB>("SlidepDB", dbVersion, {
+  const handleOpenGallery = useCallback(async () => {
+    const db = await openDB<SlidepDB>("SlidepDB", DB_VERSION, {
       upgrade(db) {
         if (!db.objectStoreNames.contains("mechanisms")) {
           // La clé est maintenant metadata.createdAt
@@ -347,37 +335,43 @@ const App: React.FC = () => {
     const allRecords = await db.getAll("mechanisms");
     setSavedMechanisms(allRecords);
     setGalleryOpen(true);
-  };
+  }, []);
 
-  const handleLoadFromGallery = (mechanismRecord: SerializedMechanism) => {
-    setMechanism(deserializeMechanism(mechanismRecord));
-    setGalleryOpen(false);
-    // Optionnel : Afficher un snackbar "Mécanisme chargé"
-    console.log("Loaded new mechanism.");
-    console.log(deserializeMechanism(mechanismRecord));
-  };
+  const handleLoadFromGallery = useCallback(
+    (mechanismRecord: SerializedMechanism) => {
+      setMechanism(deserialize_mechanism(mechanismRecord));
+      setGalleryOpen(false);
+      // TODO : Afficher un snackbar "Mécanisme chargé"
+    },
+    [],
+  );
 
-  const handleDeleteFromGallery = async (createdAtId: number) => {
+  const handleDeleteFromGallery = useCallback(async (createdAtId: number) => {
     if (!window.confirm("Supprimer ce mécanisme définitivement ?")) return;
 
-    const db = await openDB<SlidepDB>("SlidepDB", dbVersion);
+    const db = await openDB<SlidepDB>("SlidepDB", DB_VERSION);
     await db.delete("mechanisms", createdAtId);
 
     setSavedMechanisms((prev) =>
       prev.filter((r) => r.metadata.createdAt !== createdAtId),
     );
-    // Optionnel : Afficher un snackbar "Mécanisme supprimé"
-    console.log("Deleted mechanism.");
-  };
+    // TODO : Afficher un snackbar "Mécanisme supprimé"
+  }, []);
 
-  const handleNewFromGallery = () => {
+  const handleNewFromGallery = useCallback(() => {
+    const currentCanvas = canvasRef.current;
+    if (!currentCanvas) return;
+
     setMechanism({
       metadata: {
         ...DEFAULT_METADATA,
         createdAt: Date.now(),
         modifiedAt: Date.now(),
       },
-      viewport: DEFAULT_VIEWPORT,
+      viewport: {
+        zoom: 1,
+        pan: new Point2(currentCanvas.width / 2, currentCanvas.height / 2),
+      },
       mechanicalElements: [],
       constraintElements: [],
       history: [],
@@ -385,21 +379,25 @@ const App: React.FC = () => {
     });
     setGalleryOpen(false);
     setSaveStatus("idle");
-  };
+  }, []);
 
   const handleMenuButtonUpload = () => {
-    loadFromFile().then((data) => setMechanism(deserializeMechanism(data)));
-    setSaveStatus("saving");
-    debouncedSave();
     setMenuAnchorEl(null);
-    return;
+    load_from_file()
+      .then((data) => {
+        setMechanism(deserialize_mechanism(data));
+        setSaveStatus("saving");
+        debouncedSave();
+      })
+      .catch(() => setSaveStatus("error"));
   };
+
   const handleMenuButtonDownload = () => {
-    saveToFile(
-      serializeMechanism(mechanism),
+    setMenuAnchorEl(null);
+    save_to_file(
+      serialize_mechanism(mechanism),
       `${mechanism.metadata.name}.slidep`,
     );
-    setMenuAnchorEl(null);
   };
 
   const [settingsOpen, setSettingsOpen] = useState<boolean>(false);
@@ -407,8 +405,8 @@ const App: React.FC = () => {
     setSettingsOpen(true);
   };
   const handleSettingsClose = () => {
-    setSettingsOpen(false);
     setMenuAnchorEl(null);
+    setSettingsOpen(false);
   };
 
   const [infoOpen, setInfoOpen] = useState<boolean>(false);
@@ -435,7 +433,11 @@ const App: React.FC = () => {
     setLangAnchorEl(null);
   };
 
-  const LANGUAGES = ["Deutsch", "English", "Español", "Français"];
+  /** App starts */
+  useEffect(() => {
+    preload_element_icons();
+    handleOpenGallery();
+  }, [handleOpenGallery]);
 
   return (
     <ThemeProvider theme={currentTheme}>
@@ -533,27 +535,6 @@ const App: React.FC = () => {
                     <Settings fontSize="small" />
                     Paramètres
                   </MenuItem>
-                  <Dialog open={settingsOpen} onClose={handleSettingsClose}>
-                    <DialogTitle fontSize={"large"} sx={{ mb: -2 }}>
-                      Paramètres
-                    </DialogTitle>
-                    <IconButton
-                      onClick={handleSettingsClose}
-                      sx={{
-                        position: "absolute",
-                        right: 8,
-                        top: 8,
-                      }}
-                    >
-                      <Close />
-                    </IconButton>
-                    <DialogContent>
-                      <Typography>Afficher les contraintes</Typography>
-                      <Typography>Aimanter à la grille</Typography>
-                      <Typography>Thème (Couleurs)</Typography>
-                      <Typography>Style des éléments</Typography>
-                    </DialogContent>
-                  </Dialog>
                 </Menu>
               </Box>
               <Tooltip title="Mes mécanismes">
@@ -577,9 +558,9 @@ const App: React.FC = () => {
                 <Tooltip
                   title={
                     saveStatus === "saved"
-                      ? "Sauvgardé"
+                      ? "Sauvegardé"
                       : saveStatus === "error"
-                        ? "Erreur de sauvgarde"
+                        ? "Erreur de sauvegarde"
                         : ""
                   }
                 >
@@ -605,7 +586,7 @@ const App: React.FC = () => {
               )}
 
               {saveStatus === "saving" && (
-                <Tooltip title={"Sauvgarde en cours..."}>
+                <Tooltip title={"Sauvegarde en cours..."}>
                   <CircularProgress
                     size={12}
                     color="inherit"
@@ -779,8 +760,8 @@ const App: React.FC = () => {
                   <Typography gutterBottom align="justify">
                     C'est Slidep : De la simulation en temps réel avec des
                     éléments simples, le tout dans une interface facile d'accès.
-                    C'est l'étape intermédiaire entre les shémas papier crayon
-                    et le solveur par éléments finits. Mais pour prétendre
+                    C'est l'étape intermédiaire entre les schémas papier crayon
+                    et le solveur par éléments finis. Mais pour prétendre
                     remplacer le papier crayon, il faudrais pouvoir créer tous
                     les mécanismes ! C'est pour cela qu'à l'avenir, j'aimerais
                     faire évoluer Slidep pour gérer les collisions, dessiner en
@@ -791,7 +772,7 @@ const App: React.FC = () => {
                     Implémenter ces changement à l'avenir me demandera plus que
                     de la patience, mais des moyens. Alors si vous avez des
                     idées, partagez les ! Si vous savez coder, contribuez ! Et
-                    si vous avec de l'argent, financez !
+                    si vous avez de l'argent, financez !
                   </Typography>
                 </DialogContent>
                 <DialogContent>
@@ -803,6 +784,27 @@ const App: React.FC = () => {
                   <a href="https://github.com/Jungo-Phi/Slidep">
                     github.com/Jungo-Phi/Slidep
                   </a>
+                </DialogContent>
+              </Dialog>
+              <Dialog open={settingsOpen} onClose={handleSettingsClose}>
+                <DialogTitle fontSize={"large"} sx={{ mb: -2 }}>
+                  Paramètres
+                </DialogTitle>
+                <IconButton
+                  onClick={handleSettingsClose}
+                  sx={{
+                    position: "absolute",
+                    right: 8,
+                    top: 8,
+                  }}
+                >
+                  <Close />
+                </IconButton>
+                <DialogContent>
+                  <Typography>Afficher les contraintes</Typography>
+                  <Typography>Aimanter à la grille</Typography>
+                  <Typography>Thème (Couleurs)</Typography>
+                  <Typography>Style des éléments</Typography>
                 </DialogContent>
               </Dialog>
             </Box>
@@ -824,13 +826,13 @@ const App: React.FC = () => {
             ref={canvasRef}
             setCanvasState={setCanvasState}
             canvasState={canvasState}
-            updateMechanism={updateMechanism}
+            applyActions={applyActions}
+            changeViewport={changeViewport}
             mechanism={mechanism}
             setHoveredPart={setHoveredPart}
             hoveredPart={hoveredPart}
             undoMechanism={undoMechanism}
             redoMechanism={redoMechanism}
-            IDcounter={IDcounter}
           />
 
           {/* Floating panels */}
@@ -842,7 +844,7 @@ const App: React.FC = () => {
           <PropertiesPanel
             setCanvasState={setCanvasState}
             canvasState={canvasState}
-            updateMechanism={updateMechanism}
+            applyActions={applyActions}
             mechanism={mechanism}
             setHoveredPart={setHoveredPart}
             updateMetadata={updateMetadata}

@@ -64,8 +64,8 @@ export function constraint_to_link(element: ConstraintElement): Link {
       return {
         type: "Distance",
         ddl: 1,
-        key1: `${element.startNodeID}:start`,
-        key2: `${element.endNodeID}:end`,
+        key1: `${element.startNodeID}:pos`,
+        key2: `${element.endNodeID}:pos`,
         distance: element.value,
       };
     case "dimension-edge-to-node":
@@ -87,6 +87,7 @@ export function constraint_to_link(element: ConstraintElement): Link {
         key4: `${element.endEdgeID}:end`,
         flipStart: element.flipStart,
         flipEnd: element.flipEnd,
+        couterClockwise: element.couterClockwise,
         angle_rad: (element.value * Math.PI) / 180,
       };
     case "dimension-radius":

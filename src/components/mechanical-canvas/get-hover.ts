@@ -23,7 +23,7 @@ import {
   get_constraint_element_from_id,
   get_mechanical_element_from_id,
 } from "./connect-actions";
-import { get_gear_angles } from "../../utils/belt-geom";
+import { get_gear_angles } from "../../utils";
 
 /** Returns the hovered part of the element, or null if no part is hovered. */
 export function get_hovered_part_of_element(
@@ -754,7 +754,7 @@ export function get_hovered_part(
     return {
       type: "Edge",
       position: state.startHover.position,
-      id: -1,
+      id: `----`,
       deleting: false,
       part: "start",
     };

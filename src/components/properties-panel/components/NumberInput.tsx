@@ -109,12 +109,19 @@ export const NumberInput: React.FC<NumberInputProps> = ({
     [holdDelay, holdInterval, onChange, step],
   );
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setLocalValue(e.target.value);
+  const filterInput = (val: string) => {
+    return val.replace(/[^0-9.]/g, "").replace(/(\..\*)\./g, "$1");
   };
 
   return (
-    <Box sx={{ position: "relative", display: "inline-block", width }}>
+    <Box
+      sx={{
+        position: "relative",
+        display: "inline-block",
+        minWidth: width,
+        width,
+      }}
+    >
       {suffix && (
         <>
           {/* Hidden ruler: measures rendered text width */}
@@ -159,7 +166,7 @@ export const NumberInput: React.FC<NumberInputProps> = ({
         label={label}
         type="number"
         value={localValue}
-        onChange={handleChange}
+        onChange={(e) => setLocalValue(filterInput(e.target.value))}
         inputRef={inputRef}
         onKeyDown={(e) => {
           if (e.key === "Enter") {

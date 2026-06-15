@@ -9,6 +9,8 @@ export const COLORS = {
   BACKGROUND: "#fdecc9", // Crème doux
   GRID: "#f6e5c3",
   GRID_MAJOR: "#ecdbb8",
+  GRID_LARGER: "#decead",
+  GRID_AXIS: "#d3c5a6",
 
   // Element colors
   STROKE: "#001D59", // Bleu foncé

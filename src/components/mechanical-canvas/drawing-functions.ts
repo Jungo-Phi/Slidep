@@ -13,8 +13,8 @@ import {
 } from "../../constants/rendering-specs";
 import { Point2 as Point2 } from "../../types/point2";
 import { get_element_icon } from "../element-palette/elementIcon";
-import { UnionElement } from "../../types";
-import { value_to_ratio_parts } from "../../utils/string-math";
+import { UnionElement, ViewportState } from "../../types";
+import { value_to_ratio_parts } from "../../utils";
 
 const TAU = 2 * Math.PI;
 
@@ -25,56 +25,109 @@ export function draw_grid(
   ctx: CanvasRenderingContext2D,
   width: number,
   height: number,
+  viewport: ViewportState,
 ) {
-  if (!true) return;
+  const zoom = viewport.zoom;
+  const panX = viewport.pan.x;
+  const panY = viewport.pan.y;
+  const largerGridInterval = 500;
+  const majorGridInterval = 100;
+  const gridSize = 25;
 
-  //const viewport = currentMechanism?.viewport;
-  const zoom = 1; //viewport?.zoom || 1;
-  const panX = 0; //viewport?.panX || 0;
-  const panY = 0; //viewport?.panY || 0;
-  const gridSize = 25; //preferences.gridSize;
-
-  ctx.save();
-  ctx.translate(panX, panY);
-  ctx.scale(zoom, zoom);
-
-  // Dessine les lignes de grille mineures
   ctx.strokeStyle = COLORS.GRID;
-  ctx.lineWidth = 1 / zoom;
+  ctx.lineWidth = 1;
 
-  for (let x = 0; x <= width / zoom; x += gridSize) {
+  const worldLeft = -panX / zoom;
+  const worldTop = -panY / zoom;
+  const worldRight = (width - panX) / zoom;
+  const worldBottom = (height - panY) / zoom;
+
+  const startX = Math.ceil(worldLeft / gridSize) * gridSize;
+  const startY = Math.ceil(worldTop / gridSize) * gridSize;
+
+  // Dessin vertical
+  for (let x = startX; x <= worldRight; x += gridSize) {
+    const screenX = x * zoom + panX;
     ctx.beginPath();
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x, height / zoom);
+    ctx.moveTo(screenX, 0);
+    ctx.lineTo(screenX, height);
     ctx.stroke();
   }
 
-  for (let y = 0; y <= height / zoom; y += gridSize) {
+  // Dessin horizontal
+  for (let y = startY; y <= worldBottom; y += gridSize) {
+    const screenY = y * zoom + panY;
     ctx.beginPath();
-    ctx.moveTo(0, y);
-    ctx.lineTo(width / zoom, y);
+    ctx.moveTo(0, screenY);
+    ctx.lineTo(width, screenY);
     ctx.stroke();
   }
 
-  // Dessine les lignes de grille majeures (toutes les 5 cellules)
+  // --- Lignes majeures ---
   ctx.strokeStyle = COLORS.GRID_MAJOR;
-  ctx.lineWidth = 1 / zoom;
 
-  for (let x = 0; x <= width / zoom; x += gridSize * 5) {
+  const startMajorX =
+    Math.ceil(worldLeft / majorGridInterval) * majorGridInterval;
+  const startMajorY =
+    Math.ceil(worldTop / majorGridInterval) * majorGridInterval;
+
+  // Dessin vertical majeur
+  for (let x = startMajorX; x <= worldRight; x += majorGridInterval) {
+    const screenX = x * zoom + panX;
     ctx.beginPath();
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x, height / zoom);
+    ctx.moveTo(screenX, 0);
+    ctx.lineTo(screenX, height);
     ctx.stroke();
   }
 
-  for (let y = 0; y <= height / zoom; y += gridSize * 5) {
+  // Dessin horizontal majeur
+  for (let y = startMajorY; y <= worldBottom; y += majorGridInterval) {
+    const screenY = y * zoom + panY;
     ctx.beginPath();
-    ctx.moveTo(0, y);
-    ctx.lineTo(width / zoom, y);
+    ctx.moveTo(0, screenY);
+    ctx.lineTo(width, screenY);
     ctx.stroke();
   }
 
-  ctx.restore();
+  // --- Lignes plus larges ---
+  ctx.strokeStyle = COLORS.GRID_LARGER;
+
+  const startLargerX =
+    Math.ceil(worldLeft / largerGridInterval) * largerGridInterval;
+  const startLargerY =
+    Math.ceil(worldTop / largerGridInterval) * largerGridInterval;
+
+  // Dessin vertical majeur
+  for (let x = startLargerX; x <= worldRight; x += largerGridInterval) {
+    const screenX = x * zoom + panX;
+    ctx.beginPath();
+    ctx.moveTo(screenX, 0);
+    ctx.lineTo(screenX, height);
+    ctx.stroke();
+  }
+
+  // Dessin horizontal majeur
+  for (let y = startLargerY; y <= worldBottom; y += largerGridInterval) {
+    const screenY = y * zoom + panY;
+    ctx.beginPath();
+    ctx.moveTo(0, screenY);
+    ctx.lineTo(width, screenY);
+    ctx.stroke();
+  }
+
+  ctx.strokeStyle = COLORS.GRID_AXIS;
+
+  // Vertical axis
+  ctx.beginPath();
+  ctx.moveTo(panX, 0);
+  ctx.lineTo(panX, height);
+  ctx.stroke();
+
+  // Horizontal axis
+  ctx.beginPath();
+  ctx.moveTo(0, panY);
+  ctx.lineTo(width, panY);
+  ctx.stroke();
 }
 
 export function draw_ground(ctx: CanvasRenderingContext2D) {
@@ -760,7 +813,7 @@ export function draw_dimention_angle(
   ctx.restore();
 }
 
-export function draw_dimention_radius(
+export function draw_dimension_radius(
   ctx: CanvasRenderingContext2D,
   center: Point2,
   radius: number,

@@ -283,7 +283,7 @@ export function resolveGeometricConstraints(
   links = sort_links(links, nodes.posMasses);
 
   // console.log("pos : ", [...nodes.positions.keys()]);
-  //console.log("links : ", links);
+  // console.log("links : ", links);
   /*
   console.log("DDL : ", get_degrees_of_freedom(nodes, links));
   */
@@ -295,7 +295,7 @@ export function resolveGeometricConstraints(
     nodes.posMasses,
     nodes.radMasses,
     links,
-    200,
+    300,
   );
 
   // Decouple fused elements
@@ -429,18 +429,14 @@ export function resolveGeometricConstraints(
           !newEndEdgeEnd
         )
           break;
-        const localD = constraint.position.to_polar_segments_coordinates(
-          oldStartEdgeStart,
-          oldStartEdgeEnd,
-          oldEndEdgeStart,
-          oldEndEdgeEnd,
+        const localD = constraint.position.to_segment_coordinates(
+          oldStartEdgeStart.lerp(oldStartEdgeEnd, 0.5),
+          oldEndEdgeStart.lerp(oldEndEdgeEnd, 0.5),
         );
         if (!localD) break;
-        const globalD = localD.from_polar_segments_coordinates(
-          newStartEdgeStart,
-          newStartEdgeEnd,
-          newEndEdgeStart,
-          newEndEdgeEnd,
+        const globalD = localD.from_segment_coordinates(
+          newStartEdgeStart.lerp(newStartEdgeEnd, 0.5),
+          newEndEdgeStart.lerp(newEndEdgeEnd, 0.5),
         );
         if (!globalD) break;
         solvedNodes.positions.set(`${constraint.id}:pos`, globalD);

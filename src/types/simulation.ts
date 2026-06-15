@@ -46,7 +46,7 @@ export interface Moment {
   elementId: ID;
   point: Point2;
   magnitude: number;
-  direction: "clockwise" | "counterclockwise";
+  direction: "clockwise" | "counterClockwise";
 }
 
 /**

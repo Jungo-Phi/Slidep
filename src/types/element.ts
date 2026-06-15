@@ -71,26 +71,13 @@ export type ConstraintElement =
   | EqualEdges
   | GearRatio;
 
-export type ID = number;
-
-export function shown_element_name(element: UnionElement | undefined): String {
-  if (!element) return "introuvable";
-  let name: string = element.type;
-  if (name.includes("dimension")) name = "dimension";
-  if (name.includes("horizontal")) name = "horizontal";
-  if (name.includes("vertical")) name = "vertical";
-  return (
-    name.charAt(0).toUpperCase() +
-    name.slice(1) +
-    " " +
-    element.id.toString().padStart(3, "0")
-  );
-}
+export type ID = `${string}-${string}-${string}-${string}-${string}`; // UUID
 
 /** Base interface for all elements */
 export interface BaseElement {
   type: ElementType;
   id: ID;
+  name?: string;
 }
 
 /** Base interface for Node elements (defined by a position) */
@@ -174,7 +161,7 @@ export interface DamperElement extends BaseEdgeElement {
  *
  * The order of connected Gears (with directions) is the path of the belt from start to end
  *
- * Direction {true: counterclockwise, false: clockwise}
+ * Direction {true: counterClockwise, false: clockwise}
  */
 export interface BeltElement extends BaseEdgeElement {
   type: "belt";
@@ -217,6 +204,7 @@ export interface DimentionAngle extends ConstraintBaseElement {
   endEdgeID: ID;
   flipStart: boolean;
   flipEnd: boolean;
+  couterClockwise: boolean;
   value: number;
 }
 

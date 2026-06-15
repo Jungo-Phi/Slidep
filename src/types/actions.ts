@@ -5,10 +5,10 @@ import { Point2 } from "./point2";
 /** Events captured on the canvas */
 export type CanvasEvent =
   | { type: "MouseLeftButtonDown"; shiftKey: boolean }
-  | { type: "MouseLeftButtonUp" }
+  | { type: "MouseButtonUp" }
   | { type: "MouseMove"; mouseDelta: Point2 }
   | { type: "MouseRightButtonDown" }
-  | { type: "KeyDown"; key: string; crtlKey: boolean };
+  | { type: "KeyDown"; key: string; ctrlKey: boolean };
 
 export type ActionBundleType =
   | "MoveElement"
@@ -70,10 +70,11 @@ export type ConnectsArrayActionType =
   | "ConnectsFixedGears";
 export type CreationActionType = "CreateElement" | "DeleteElement";
 
-/** Actions that can be performed on the mechanism - And reversed for crtl+Z */
+/** Actions that can be performed on the mechanism - And reversed for ctrl+Z */
 export type Action =
   | { type: "CreateElement"; element: UnionElement }
   | { type: "DeleteElement"; element: UnionElement }
+  | { type: "UpdateElementName"; id: ID; newName?: string; oldName?: string }
   | { type: "MoveNode"; id: ID; newPosition: Point2; oldPosition: Point2 }
   | { type: "MoveEdgeStart"; id: ID; newPosition: Point2; oldPosition: Point2 }
   | { type: "MoveEdgeEnd"; id: ID; newPosition: Point2; oldPosition: Point2 }

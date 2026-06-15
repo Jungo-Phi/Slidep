@@ -5,12 +5,14 @@ import {
   Mechanism,
   Point2,
   SerializedMechanism,
+  ViewportState,
 } from "../types";
 import {
   SerializedAction,
   SerializedConstraintElement,
   SerializedMechanicalElement,
   SerializedPoint2,
+  SerializedViewportState,
 } from "../types/serialized";
 
 // --- Helper functions
@@ -23,35 +25,32 @@ function dp(s: SerializedPoint2): Point2 {
   return new Point2(s.x, s.y);
 }
 
-function serializePointsMap(
+function serialize_points_map(
   m: Map<string, Point2>,
 ): [string, SerializedPoint2][] {
   return [...m.entries()].map(([k, v]) => [k, sp(v)]);
 }
 
-function serializeNumbersMap(m: Map<string, number>): [string, number][] {
+function serialize_numbers_map(m: Map<string, number>): [string, number][] {
   return [...m.entries()];
 }
 
-function deserializePointsMap(
+function deserialize_points_map(
   entries: [string, SerializedPoint2][],
 ): Map<string, Point2> {
   return new Map(entries.map(([k, v]) => [k, dp(v)]));
 }
 
-function deserializeNumbersMap(
+function deserialize_numbers_map(
   entries: [string, number][],
 ): Map<string, number> {
   return new Map(entries);
 }
 
-// ─── Serialize / Deserialize Action ───────────────────────────────────────────
-
-export function serializeAction(a: Action): SerializedAction {
+function serialize_action(a: Action): SerializedAction {
   switch (a.type) {
-    // Contient un UnionElement avec des Point2 imbriqués → déléguer
     case "CreateElement":
-    case "DeleteElement": {
+    case "DeleteElement":
       const isMechanical = [
         "pivot",
         "slider",
@@ -68,39 +67,32 @@ export function serializeAction(a: Action): SerializedAction {
       return {
         type: a.type,
         element: isMechanical
-          ? serializeMechanicalElement(a.element as MechanicalElement)
-          : serializeConstraintElement(a.element as ConstraintElement),
+          ? serialize_mechanical_element(a.element as MechanicalElement)
+          : serialize_constraint_element(a.element as ConstraintElement),
       } as SerializedAction;
-    }
-
-    // Contient des Map<string, Point2> et Map<string, number>
     case "UpdatePositionsToValidState":
       return {
         type: a.type,
         masterActionType: a.masterActionType,
         newNodes: {
-          positions: serializePointsMap(a.newNodes.positions),
-          radii: serializeNumbersMap(a.newNodes.radii),
-          posMasses: serializeNumbersMap(a.newNodes.posMasses),
-          radMasses: serializeNumbersMap(a.newNodes.radMasses),
+          positions: serialize_points_map(a.newNodes.positions),
+          radii: serialize_numbers_map(a.newNodes.radii),
+          posMasses: serialize_numbers_map(a.newNodes.posMasses),
+          radMasses: serialize_numbers_map(a.newNodes.radMasses),
         },
         oldNodes: {
-          positions: serializePointsMap(a.oldNodes.positions),
-          radii: serializeNumbersMap(a.oldNodes.radii),
-          posMasses: serializeNumbersMap(a.oldNodes.posMasses),
-          radMasses: serializeNumbersMap(a.oldNodes.radMasses),
+          positions: serialize_points_map(a.oldNodes.positions),
+          radii: serialize_numbers_map(a.oldNodes.radii),
+          posMasses: serialize_numbers_map(a.oldNodes.posMasses),
+          radMasses: serialize_numbers_map(a.oldNodes.radMasses),
         },
       };
-
-    // Tous les autres cas : Point2 sont propriétés directes → JSON suffit
     default:
       return JSON.parse(JSON.stringify(a));
   }
 }
 
-// ─── deserializeAction ────────────────────────────────────────────────────────
-
-export function deserializeAction(s: SerializedAction): Action {
+function deserialize_action(s: SerializedAction): Action {
   switch (s.type) {
     case "CreateElement":
     case "DeleteElement": {
@@ -122,34 +114,31 @@ export function deserializeAction(s: SerializedAction): Action {
       return {
         type: s.type,
         element: isMechanical
-          ? deserializeMechanicalElement(
+          ? deserialize_mechanical_element(
               s.element as SerializedMechanicalElement,
             )
-          : deserializeConstraintElement(
+          : deserialize_constraint_element(
               s.element as SerializedConstraintElement,
             ),
       } as Action;
     }
-
     case "UpdatePositionsToValidState":
       return {
         type: s.type,
         masterActionType: s.masterActionType,
         newNodes: {
-          positions: deserializePointsMap(s.newNodes.positions),
-          radii: deserializeNumbersMap(s.newNodes.radii),
-          posMasses: deserializeNumbersMap(s.newNodes.posMasses),
-          radMasses: deserializeNumbersMap(s.newNodes.radMasses),
+          positions: deserialize_points_map(s.newNodes.positions),
+          radii: deserialize_numbers_map(s.newNodes.radii),
+          posMasses: deserialize_numbers_map(s.newNodes.posMasses),
+          radMasses: deserialize_numbers_map(s.newNodes.radMasses),
         },
         oldNodes: {
-          positions: deserializePointsMap(s.oldNodes.positions),
-          radii: deserializeNumbersMap(s.oldNodes.radii),
-          posMasses: deserializeNumbersMap(s.oldNodes.posMasses),
-          radMasses: deserializeNumbersMap(s.oldNodes.radMasses),
+          positions: deserialize_points_map(s.oldNodes.positions),
+          radii: deserialize_numbers_map(s.oldNodes.radii),
+          posMasses: deserialize_numbers_map(s.oldNodes.posMasses),
+          radMasses: deserialize_numbers_map(s.oldNodes.radMasses),
         },
       };
-
-    // Tous les autres cas : reconstruire les Point2 par nom de champ
     default: {
       const result = { ...s } as Record<string, unknown>;
       const pointFields = [
@@ -169,116 +158,117 @@ export function deserializeAction(s: SerializedAction): Action {
   }
 }
 
-export function cloneAction(a: Action): Action {
-  return deserializeAction(serializeAction(a));
-}
-
-// ─── Serialize / Deserialize Elements ────────────────────────────────────────
-
-export function serializeMechanicalElement(
+function serialize_mechanical_element(
   e: MechanicalElement,
 ): SerializedMechanicalElement {
   return JSON.parse(JSON.stringify(e));
 }
 
-export function serializeConstraintElement(
+function serialize_constraint_element(
   e: ConstraintElement,
 ): SerializedConstraintElement {
   return JSON.parse(JSON.stringify(e));
 }
 
-function revivePoints(s: Record<string, unknown>): Record<string, unknown> {
-  const result = { ...s };
+function serialize_viewport(e: ViewportState): SerializedViewportState {
+  return JSON.parse(JSON.stringify(e));
+}
 
-  for (const key of ["position", "positionStart", "positionEnd"] as const) {
-    if (key in result) {
-      const p = result[key] as SerializedPoint2;
-      result[key] = new Point2(p.x, p.y);
+function isSerializedPoint(p: unknown): p is SerializedPoint2 {
+  return (
+    typeof p === "object" &&
+    p !== null &&
+    "x" in p &&
+    "y" in p &&
+    typeof (p as any).x === "number" &&
+    typeof (p as any).y === "number"
+  );
+}
+
+function revive_points(s: Record<string, unknown>): Record<string, unknown> {
+  const result = { ...s };
+  for (const key in result) {
+    const value = result[key];
+    if (isSerializedPoint(value)) {
+      result[key] = new Point2(value.x, value.y);
     }
   }
-
   return result;
 }
 
-export function deserializeMechanicalElement(
+function deserialize_mechanical_element(
   serializedMechanicalElement: SerializedMechanicalElement,
 ): MechanicalElement {
-  return revivePoints(
+  return revive_points(
     serializedMechanicalElement as unknown as Record<string, unknown>,
   ) as unknown as MechanicalElement;
 }
 
-export function deserializeConstraintElement(
+function deserialize_constraint_element(
   serializedConstraintElement: SerializedConstraintElement,
 ): ConstraintElement {
-  return revivePoints(
+  return revive_points(
     serializedConstraintElement as unknown as Record<string, unknown>,
   ) as unknown as ConstraintElement;
 }
 
-export function cloneMechanicalElement(
-  e: MechanicalElement,
-): MechanicalElement {
-  return deserializeMechanicalElement(serializeMechanicalElement(e));
+function deserialize_viewport(
+  serializedViewport: SerializedViewportState,
+): ViewportState {
+  return revive_points(
+    serializedViewport as unknown as Record<string, unknown>,
+  ) as unknown as ViewportState;
 }
 
-export function cloneConstraintElement(
-  e: ConstraintElement,
-): ConstraintElement {
-  return deserializeConstraintElement(serializeConstraintElement(e));
-}
-
-// ─── Serialize / Deserialize Mechanism ────────────────────────────────────────
-
-export function serializeMechanism(mechanism: Mechanism): SerializedMechanism {
+export function serialize_mechanism(mechanism: Mechanism): SerializedMechanism {
   return {
     metadata: { ...mechanism.metadata },
-    viewport: { ...mechanism.viewport },
+    viewport: serialize_viewport(mechanism.viewport),
     mechanicalElements: mechanism.mechanicalElements.map(
-      serializeMechanicalElement,
+      serialize_mechanical_element,
     ),
     constraintElements: mechanism.constraintElements.map(
-      serializeConstraintElement,
+      serialize_constraint_element,
     ),
     history: mechanism.history.map((actions) =>
-      actions.map((action) => serializeAction(action)),
+      actions.map((action) => serialize_action(action)),
     ),
     future: mechanism.future.map((actions) =>
-      actions.map((action) => serializeAction(action)),
+      actions.map((action) => serialize_action(action)),
     ),
   };
 }
 
-export function deserializeMechanism(
+export function deserialize_mechanism(
   serializedMechanism: SerializedMechanism,
 ): Mechanism {
   return {
     metadata: { ...serializedMechanism.metadata },
-    viewport: { ...serializedMechanism.viewport },
+    viewport: deserialize_viewport(serializedMechanism.viewport),
     mechanicalElements: serializedMechanism.mechanicalElements.map(
-      deserializeMechanicalElement,
+      deserialize_mechanical_element,
     ),
     constraintElements: serializedMechanism.constraintElements.map(
-      deserializeConstraintElement,
+      deserialize_constraint_element,
     ),
     history: serializedMechanism.history.map((serializedActions) =>
       serializedActions.map((serializedAction) =>
-        deserializeAction(serializedAction),
+        deserialize_action(serializedAction),
       ),
     ),
     future: serializedMechanism.future.map((serializedActions) =>
       serializedActions.map((serializedAction) =>
-        deserializeAction(serializedAction),
+        deserialize_action(serializedAction),
       ),
     ),
   };
 }
 
-export function cloneMechanism(mechanism: Mechanism): Mechanism {
-  return deserializeMechanism(serializeMechanism(mechanism));
+export function clone_mechanism(mechanism: Mechanism): Mechanism {
+  return deserialize_mechanism(serialize_mechanism(mechanism));
 }
 
-export function saveToFile(data: any, filename: string = "data.slidep") {
+export function save_to_file(data: any, filename: string = "data.slidep") {
   const jsonString = JSON.stringify(data, null, 2); // Formaté pour la lisibilité
   const blob = new Blob([jsonString], { type: "application/json" });
   const url = URL.createObjectURL(blob);
@@ -293,7 +283,7 @@ export function saveToFile(data: any, filename: string = "data.slidep") {
   URL.revokeObjectURL(url);
 }
 
-export function loadFromFile(): Promise<any> {
+export function load_from_file(): Promise<any> {
   return new Promise((resolve, reject) => {
     const input = document.createElement("input");
     input.type = "file";

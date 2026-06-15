@@ -3,7 +3,7 @@ import { TextField, Typography, Box } from "@mui/material";
 import { ConstraintElement } from "../../types/element";
 import { Point2 } from "../../types/point2";
 import { COLORS } from "../../constants/rendering-specs";
-import { value_to_ratio_parts } from "../../utils/string-math";
+import { value_to_ratio_parts } from "../../utils";
 
 interface ConstraintEditorProps {
   constraint: ConstraintElement;
