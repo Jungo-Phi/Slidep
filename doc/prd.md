@@ -1,21 +1,6 @@
----
-stepsCompleted: [1, 2, 3, 4, 6, 7, 8, 9, 10, 11]
-inputDocuments:
-  [
-    "_bmad-output/analysis/brainstorming-session-2026-01-09.md",
-    "_bmad-output/planning-artifacts/mechanical-elements-description.md",
-  ]
-workflowType: "prd"
-lastStep: 11
-briefCount: 0
-researchCount: 0
-brainstormingCount: 1
-projectDocsCount: 0
----
-
 # Product Requirements Document - slidep
 
-**Author:** humain
+**Author:** Arnaud
 **Date:** 2026-01-10T10:31:04.218Z (Updated: 2026-01-12)
 
 ## Résumé Exécutif

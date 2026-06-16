@@ -2,126 +2,125 @@
 
 ## Features fonctionnelles importantes
 
-- ~Bug Delete~
-- ~Bug ChangingGearSize~
-- ~add MovingBeltBody canvasState~
-- ~Bouton : tendre courroie~
-- ~Compléter les nouvelles actions de "TightenBelt"~
-- ~if movingBelt : No hover on gear with connection to belt~
-- Connect belt ends
-- ~Connecter les engrenages ensemble~
-- ~Gear ratios pour engrenages~
-- ~Compléter les connect-actions pour les engrenages et courroies~
-- ~hover Belt~
-- Belt hover (gear section) is not reliable
-- ~Belt placement direction of last gear is not reliable~
-- ~Placer Ground sur des Edges et intersection d'edges~
-- Placer join à la jonction des Beams
-- ~Créer des éléments de dimension~
-- ~Créer des éléments de contrainte~
-- ~Raccourcis qui fonctionnent même si le canvas est pas focus~
-- ~Boutons Crtl+Z~
-- ~Avec un click sans mouvement -> sélectionné, puis si mouvement, passer de sélectionné -> movingX~
-- ~Supprimer contraintes quand on supprime élément~
-- ~Qu'est-ce qui se passe si on appuie sur Crtl+Z alors qu'on a pas laché un élément ? mouseUp~
-- ~Differentiate between drag and drop : ajouter un élément tampon à mouse release "Blank"~
-- ~MoveEdgeBody : deltaStart -> t~
-- ~ActionReducer : remove elements managed by "UpdatePositionsToValidState"~
-- ~Sélection multiple doit ignorer les contraintes et dimensions~
-- ~Toujours enlever le blank (Ajouter à la fin de lastAction**s**)~
-- Ajouter "repelDistance" pour éloigner les contraintes détachées : move apart disconnected elements
-- ~Rester dans dimension après en avoir placé une~
-- ~Appliquer "UpdateToValidState" apres contrainte H/V~
-- ~Enlever temps de chargement des icons contraintes dans le canvas~
-- ~Afficher en "Selected" l'élément premier de "startPlacingX"~
-- ~Régler le bordel de "connect-actions"~
-- ~Connecter les "fixedGears"~
-- Click dans Dimension quand state==placingStartDimension -> Editing
-- ~Changer le mouseIcon quand PlacingConstraint (cross?)~
-- (Ajouter InputBox lors du placement des beams ?)
-- Placing beam series / only one if hold down when placing (like in OnShape)
-- "Undo" connection (Join) ne s'est pas appliqué en bidirectionnel !
-- ~Delete (eraser) ne fonctionne pas avec les contraintes~
-- ~Refaire icon joint~
-- Dimension edge to node bug
-- ~group deletion should hilight constraints of hovered elements~
-- ~Hover delete dans le controle panel applique le meme style que eraser~
-- geometric-solver : distanceConstraint est en conflit avec AtEdgeRatio vraisemblablement
-- ~Hilight corresponding elements when hovering constraint~
-- ~Change NumberInput instant update to -> delayed update~
-- ~Change Focus on Undo~
-- ~Unified Property pannel look with dimensions~
-- Change edge length ne fonctionne pas + devrais changer la contrainte associées s'il y en a une
-- ~Hover dimension~
-- Connecter une courroie à un engrenage avec une extrémité (en plus de la longueur)
-- hover des inputs dans le property pannel
-- ~hover : ignorer contraintes when placing mechanical elements or movingEdge~
-- ~Min Gear radius placing~
-- ~slider angle placing~
-- ~empecher de placer une belt sur un gear déjà connecté~
-- ~Dimension Radius~
-- ~Compléter le geometric-solver~
-- geometric solver - radius constraint
-- ~bug : ctrl+Z déplacement contraintes~
-- ~"applyHorizontalConstraint()" avec une extrémité ancrée ne fonctionne pas~
-- ~Dimension sur des nodes ne marche pas~
-- ~Mettre le counterID dans Mechanism~
-- ~Compléter la contrainte d'angle~
-- Interdire les angles de 0° 180° et -180°
-- Empecher les contraintes sur le même élément (DDL analyser)
-- Reset CanvasState quand on change de mécanisme
-- Sauvgarder / Charger méchanisme
-- Movement et zoom de la grille
-- Afficher / cacher les contraintes
-- Implémenter algorithme de cinématique (reprendre geometric-solver)
-- Implémenter algorithme de statique (matrices)
-- Implémenter algorithme de dynamique PBD
-- Créer un système d'unités (zoom de base : 1px = 1mm)
-- Ajouter un bouton "Recontrer la vue"
+* \~Bug Delete\~
+* \~Bug ChangingGearSize\~
+* \~add MovingBeltBody canvasState\~
+* \~Bouton : tendre courroie\~
+* \~Compléter les nouvelles actions de "TightenBelt"\~
+* \~if movingBelt : No hover on gear with connection to belt\~
+* Connect belt ends
+* \~Connecter les engrenages ensemble\~
+* \~Gear ratios pour engrenages\~
+* \~Compléter les connect-actions pour les engrenages et courroies\~
+* \~hover Belt\~
+* Belt hover (gear section) is not reliable
+* \~Belt placement direction of last gear is not reliable\~
+* \~Placer Ground sur des Edges et intersection d'edges\~
+* Placer join à la jonction des Beams
+* \~Créer des éléments de dimension\~
+* \~Créer des éléments de contrainte\~
+* \~Raccourcis qui fonctionnent même si le canvas est pas focus\~
+* \~Boutons Crtl+Z\~
+* \~Avec un click sans mouvement -> sélectionné, puis si mouvement, passer de sélectionné -> movingX\~
+* \~Supprimer contraintes quand on supprime élément\~
+* \~Qu'est-ce qui se passe si on appuie sur Crtl+Z alors qu'on a pas laché un élément ? mouseUp\~
+* \~Differentiate between drag and drop : ajouter un élément tampon à mouse release "Blank"\~
+* \~MoveEdgeBody : deltaStart -> t\~
+* \~ActionReducer : remove elements managed by "UpdatePositionsToValidState"\~
+* \~Sélection multiple doit ignorer les contraintes et dimensions\~
+* \~Toujours enlever le blank (Ajouter à la fin de lastAction**s**)\~
+* Ajouter "repelDistance" pour éloigner les contraintes détachées : move apart disconnected elements
+* \~Rester dans dimension après en avoir placé une\~
+* \~Appliquer "UpdateToValidState" apres contrainte H/V\~
+* \~Enlever temps de chargement des icons contraintes dans le canvas\~
+* \~Afficher en "Selected" l'élément premier de "startPlacingX"\~
+* \~Régler le bordel de "connect-actions"\~
+* \~Connecter les "fixedGears"\~
+* Click dans Dimension quand state==placingStartDimension -> Editing
+* \~Changer le mouseIcon quand PlacingConstraint (cross?)\~
+* (Ajouter InputBox lors du placement des beams ?)
+* Placing beam series / only one if hold down when placing (like in OnShape)
+* "Undo" connection (Join) ne s'est pas appliqué en bidirectionnel !
+* \~Delete (eraser) ne fonctionne pas avec les contraintes\~
+* \~Refaire icon joint\~
+* Dimension edge to node bug
+* \~group deletion should hilight constraints of hovered elements\~
+* \~Hover delete dans le controle panel applique le meme style que eraser\~
+* geometric-solver : distanceConstraint est en conflit avec AtEdgeRatio vraisemblablement
+* \~Hilight corresponding elements when hovering constraint\~
+* \~Change NumberInput instant update to -> delayed update\~
+* \~Change Focus on Undo\~
+* \~Unified Property pannel look with dimensions\~
+* Change edge length ne fonctionne pas + devrais changer la contrainte associées s'il y en a une
+* \~Hover dimension\~
+* Connecter une courroie à un engrenage avec une extrémité (en plus de la longueur)
+* hover des inputs dans le property pannel
+* \~hover : ignorer contraintes when placing mechanical elements or movingEdge\~
+* \~Min Gear radius placing\~
+* \~slider angle placing\~
+* \~empecher de placer une belt sur un gear déjà connecté\~
+* \~Dimension Radius\~
+* \~Compléter le geometric-solver\~
+* geometric solver - radius constraint
+* \~bug : ctrl+Z déplacement contraintes\~
+* \~"applyHorizontalConstraint()" avec une extrémité ancrée ne fonctionne pas\~
+* \~Dimension sur des nodes ne marche pas\~
+* \~Mettre le counterID dans Mechanism\~
+* \~Compléter la contrainte d'angle\~
+* Interdire les angles de 0° 180° et -180°
+* Empecher les contraintes sur le même élément (DDL analyser)
+* Reset CanvasState quand on change de mécanisme
+* Sauvgarder / Charger méchanisme
+* Movement et zoom de la grille
+* Afficher / cacher les contraintes
+* Implémenter algorithme de cinématique (reprendre geometric-solver)
+* Implémenter algorithme de statique (matrices)
+* Implémenter algorithme de dynamique PBD
+* Créer un système d'unités (zoom de base : 1px = 1mm)
+* Ajouter un bouton "Recontrer la vue"
 
 ## Features UX secondaires
 
-- ~Faire les nouveaux icons~
-- ~Ajouter les sens de rotation des engrenages dans les connections~
-- ~Ajouter les ratios des engrenages dans les connections~
-- ~Faire les menus de fichiers, paramètres, langues et infos~
-- ~Change CanvasState on delete element~
-- Changer les textes avec les langues
-- Mettre les infos du projet
-- Faire le panneau des paramètres
-- bug : les infos du projet doivent se mettre à jour au chargement d'un nouveau méchanisme
-- Enlever le système de drag and drop des connections pour passer à des boutons de transfer aux endroits spécifiques
+* \~Faire les nouveaux icons\~
+* \~Ajouter les sens de rotation des engrenages dans les connections\~
+* \~Ajouter les ratios des engrenages dans les connections\~
+* \~Faire les menus de fichiers, paramètres, langues et infos\~
+* \~Change CanvasState on delete element\~
+* Changer les textes avec les langues
+* Mettre les infos du projet
+* Faire le panneau des paramètres
+* bug : les infos du projet doivent se mettre à jour au chargement d'un nouveau méchanisme
+* Enlever le système de drag and drop des connections pour passer à des boutons de transfer aux endroits spécifiques
+* La sélection multiple d'éléments du même type permet de modifier leurs paramètres simultanément
 
 ## Features visuelles nice to have
 
-- ~Plus beau logo~
-- ~Visuel des pivot/slider/slidep connecté = remplit~
-- ~Arrondir le chiffre affiché des dimmensions~
-- ~Reskin de conection container~
-- ~Rendre les connections drag & drop plus propres~
-- ~Hover Delete button / Element name~
-- ~Hover en couleur ?~
-- ~Limiter la longueur des edges au placement et déplacement~
-- Éloigner les contraintes des éléments pour la lisibilité
-- ~Déplacer les dimentions avec les élements associés~
-- Renommer les éléments
-- ~Draw Slideps rotating beams over slider~
-- Click dans le vide quand state==placingConstraint -> state=Selecting
-- hilight element on hover "disconnect" on element panel
-- shift+click on single element doesnt work
-- Hover interdire les éléments directement connectés et l'élément lui-meme pour dimentions
-- interdire les charactères et symbole spéciaux (et signe - selon l'input) dans number input
-- Mettre des onglets au panneau de proprietés
-- Les dimension ne se déplaces pas lors des déplacements de groupe
-- Changer l'apparence des extrémités de spring et damper comme pour beam
-- Ajouter un tag editor (property pannel + gallery)
-- Adapter le thumbnail generator pour cropper sur le mécanisme
-- Remove flicked on "Lancer la simulation" button hover 
-- (Ignorer BeamBodyHover lors du déplacement d'un beam ?)
-- (Supprimer les joints quand ils ne sont connectés qu'à 1 élément ?)
+* \~Plus beau logo\~
+* \~Visuel des pivot/slider/slidep connecté = remplit\~
+* \~Arrondir le chiffre affiché des dimmensions\~
+* \~Reskin de conection container\~
+* \~Rendre les connections drag \& drop plus propres\~
+* \~Hover Delete button / Element name\~
+* \~Hover en couleur ?\~
+* \~Limiter la longueur des edges au placement et déplacement\~
+* Éloigner les contraintes des éléments pour la lisibilité
+* \~Déplacer les dimentions avec les élements associés\~
+* Renommer les éléments
+* \~Draw Slideps rotating beams over slider\~
+* Click dans le vide quand state==placingConstraint -> state=Selecting
+* hilight element on hover "disconnect" on element panel
+* shift+click on single element doesnt work
+* Hover interdire les éléments directement connectés et l'élément lui-meme pour dimentions
+* interdire les charactères et symbole spéciaux (et signe - selon l'input) dans number input
+* Mettre des onglets au panneau de proprietés
+* Les dimension ne se déplaces pas lors des déplacements de groupe
+* Changer l'apparence des extrémités de spring et damper comme pour beam
+* Ajouter un tag editor (property pannel + gallery)
+* Adapter le thumbnail generator pour cropper sur le mécanisme
+* Remove flicked on "Lancer la simulation" button hover
+* Enlever scroll de la barre d'outils
+* Ajouter "Angle" dans les edges
+* Passer les previews dans la bibliothèque en AVIF lossless
+* (Ignorer BeamBodyHover lors du déplacement d'un beam ?)
+* (Supprimer les joints quand ils ne sont connectés qu'à 1 élément ?)
 
-Analyse générale de la cohérence et de l'utilisation des éléments React (useEffect, useCallback, useRef, etc.)
-
-Ex: Est-ce que je ne devrais pas utiliser un useCallback avec updateMetadata ?
-
-Et lors d'un zoom, il y a souvent un décalage, l'image se centre sur un point décalé de la souris. Mais il n'est pas énorme, ce qui me fait penser que ce n'est pas une erreur de calcul dans changeViewport, mais quelque part plus tôt dans le choix de change.center.

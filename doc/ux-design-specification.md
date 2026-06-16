@@ -1,18 +1,6 @@
----
-
-stepsCompleted: \[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14\]  
-inputDocuments:  
-\[  
-"\_bmad-output/planning-artifacts/prd.md",  
-"\_bmad-output/planning-artifacts/mechanical-elements-description.md",  
-\]  
-lastStep: 14
-
----
-
 # UX Design Specification slidep
 
-**Author:** humain  
+**Author:** Arnaud  
 **Date:** 2026-01-10T13:38:37.164Z (Updated: 2026-01-13)
 
 ---
