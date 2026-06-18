@@ -28,7 +28,7 @@ import parallelIconUrl from "../../assets/icons/palette/parallel.svg";
 import ratioIconUrl from "../../assets/icons/palette/ratio.svg";
 import forceIconUrl from "../../assets/icons/palette/force.svg";
 
-import { CanvasState, CanvasStateType } from "../../types/canvas-state";
+import { CanvasState, CanvasStateType, AppMode } from "../../types";
 import { COLORS } from "../../constants/rendering-specs";
 import { get_constraint_element_from_id } from "../mechanical-canvas/connect-actions";
 import { Mechanism } from "../../types";
@@ -400,12 +400,14 @@ interface ElementPaletteProps {
   setCanvasState: (state: CanvasState) => void;
   canvasState: CanvasState;
   mechanism: Mechanism;
+  appMode: AppMode;
 }
 
 export const ElementPalette: React.FC<ElementPaletteProps> = ({
   setCanvasState,
   canvasState,
   mechanism,
+  appMode,
 }) => {
   const SIZE = 28;
   const PADDING = 2;
@@ -427,7 +429,7 @@ export const ElementPalette: React.FC<ElementPaletteProps> = ({
       const rowHeight = (SIZE + 2 * PADDING) * 3;
       const rowsThatFit = Math.max(1, Math.floor(availableHeight / rowHeight));
       const maxIconsInGroup = Math.max(
-        ...(canvasState.type === "Simulating"
+        ...(appMode !== "edition"
           ? SIMULATION_PALETTE
           : EDITION_PALETTE
         ).map((g) => g.elements.length),
@@ -465,7 +467,7 @@ export const ElementPalette: React.FC<ElementPaletteProps> = ({
         scrollbarWidth: "none",
       }}
     >
-      {(canvasState.type === "Simulating"
+      {(appMode !== "edition"
         ? SIMULATION_PALETTE
         : EDITION_PALETTE
       ).map((group) => (

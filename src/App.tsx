@@ -40,16 +40,17 @@ import { CanvasState } from "./types/canvas-state";
 import {
   Action,
   ActionBundleType,
+  AppMode,
   DEFAULT_METADATA,
+  DEFAULT_RUNTIME_STATE,
   DEFAULT_SIMULATION_CONFIG,
-  DEFAULT_SIMULATION_STATE,
   Mechanism,
   MechanismMetadata,
   Point2,
+  RuntimeState,
   ScreenPoint,
   SerializedMechanism,
   SimulationConfig,
-  SimulationState,
   SlidepDB,
   ViewportChange,
   ZERO,
@@ -115,8 +116,9 @@ const App: React.FC = () => {
     type: "Void",
     position: ZERO,
   });
-  const [simulationState, setSimulationState] = useState<SimulationState>(
-    DEFAULT_SIMULATION_STATE,
+  const [appMode, setAppMode] = useState<AppMode>("edition");
+  const [runtimeState, setRuntimeState] = useState<RuntimeState>(
+    DEFAULT_RUNTIME_STATE,
   );
   const [simulationConfig, setSimulationConfig] = useState<SimulationConfig>(
     DEFAULT_SIMULATION_CONFIG,
@@ -607,7 +609,7 @@ const App: React.FC = () => {
             >
               <Chip
                 label={
-                  canvasState.type === "Simulating"
+                  appMode !== "edition"
                     ? simHover
                       ? "Retour à l'édition"
                       : "Simulation"
@@ -619,7 +621,7 @@ const App: React.FC = () => {
                   <Box
                     component="img"
                     src={
-                      (canvasState.type === "Simulating") !== simHover
+                      (appMode !== "edition") !== simHover
                         ? playIconUrl
                         : selectIconUrl
                     }
@@ -630,12 +632,13 @@ const App: React.FC = () => {
                 onMouseEnter={() => setSimHover(true)}
                 onMouseLeave={() => setSimHover(false)}
                 onClick={() => {
-                  setCanvasState({
-                    type:
-                      canvasState.type === "Simulating"
-                        ? "Selecting"
-                        : "Simulating",
-                  });
+                  if (appMode !== "edition") {
+                    setAppMode("edition");
+                    setCanvasState({ type: "Selecting" });
+                  } else {
+                    setAppMode("dynamic");
+                    setCanvasState({ type: "Simulating" });
+                  }
                   setSimHover(false);
                 }}
                 sx={{
@@ -645,12 +648,12 @@ const App: React.FC = () => {
                   pl: 0.5,
                   color: simHover
                     ? "primary.contrastText"
-                    : canvasState.type === "Simulating"
+                    : appMode !== "edition"
                       ? "primary.main"
                       : "secondary.main",
                   borderColor: simHover
                     ? "primary.contrastText"
-                    : canvasState.type === "Simulating"
+                    : appMode !== "edition"
                       ? "primary.main"
                       : "secondary.main",
                   img: {
@@ -658,7 +661,7 @@ const App: React.FC = () => {
                   },
                   "&:hover": {
                     backgroundColor:
-                      canvasState.type === "Simulating"
+                      appMode !== "edition"
                         ? COLORS.SELECTION_BOX
                         : "primary.main",
                   },
@@ -840,6 +843,7 @@ const App: React.FC = () => {
             setCanvasState={setCanvasState}
             canvasState={canvasState}
             mechanism={mechanism}
+            appMode={appMode}
           />
           <PropertiesPanel
             setCanvasState={setCanvasState}
@@ -848,10 +852,11 @@ const App: React.FC = () => {
             mechanism={mechanism}
             setHoveredPart={setHoveredPart}
             updateMetadata={updateMetadata}
-            setSimulationState={setSimulationState}
-            simulationState={simulationState}
+            setRuntimeState={setRuntimeState}
+            runtimeState={runtimeState}
             setSimulationConfig={setSimulationConfig}
             simulationConfig={simulationConfig}
+            appMode={appMode}
           />
         </Box>
       </Box>

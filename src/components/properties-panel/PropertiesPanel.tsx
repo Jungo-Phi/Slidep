@@ -7,11 +7,12 @@ import {
 import {
   Action,
   ActionBundleType,
+  AppMode,
   MechanicalElement,
   Mechanism,
   MechanismMetadata,
+  RuntimeState,
   SimulationConfig,
-  SimulationState,
 } from "../../types";
 import { HoveredPart } from "../../types/hovered-part";
 import { CanvasState } from "../../types/canvas-state";
@@ -21,17 +22,18 @@ import ConstraintsPanel from "./ConstraintsPanel";
 import SimulationControls from "../simulation-controls";
 import { legible_id } from "../../utils";
 
-interface PropertiesPanelProps {
+export interface PropertiesPanelProps {
   setCanvasState: (state: CanvasState) => void;
   canvasState: CanvasState;
   applyActions: (actions: Action[], actionBundleType: ActionBundleType) => void;
   mechanism: Mechanism;
   setHoveredPart: (hoveredPart: HoveredPart) => void;
   updateMetadata: (metadata: MechanismMetadata) => void;
-  setSimulationState: (state: SimulationState) => void;
-  simulationState: SimulationState;
+  setRuntimeState: (state: RuntimeState) => void;
+  runtimeState: RuntimeState;
   setSimulationConfig: (config: SimulationConfig) => void;
   simulationConfig: SimulationConfig;
+  appMode: AppMode;
 }
 
 export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
@@ -41,6 +43,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
   mechanism,
   setHoveredPart,
   updateMetadata,
+  appMode,
 }) => {
   const [closed, setClosed] = useState<boolean>(false);
 
@@ -62,7 +65,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
 
   let title = "Propriétés";
   if (!closed) {
-    if (canvasState.type === "Simulating") {
+    if (appMode !== "edition") {
       title = "Contrôles de la simulation";
     } else if ("elementID" in canvasState) {
       const mechanicalElement: MechanicalElement | undefined =
@@ -130,7 +133,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
       {!closed && (
         <Box sx={{ p: 2, overflow: "auto" }}>
           {/* Contenu du panneau de propriétés */}
-          {canvasState.type === "Simulating" ? (
+          {appMode !== "edition" ? (
             <SimulationControls />
           ) : "elementID" in canvasState ? (
             <Box>
