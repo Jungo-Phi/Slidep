@@ -3,7 +3,7 @@
  * Displays properties for element elements
  */
 
-import { Box, IconButton, Divider } from "@mui/material";
+import { Box, IconButton, Divider, List, ListItem } from "@mui/material";
 import DeleteIcon from "@mui/icons-material/Delete";
 import { MechanicalElement } from "../../types/element";
 import VectorInput from "./components/VectorInput";
@@ -22,9 +22,10 @@ import { HoveredPart } from "../../types/hovered-part";
 import NumberInput from "./components/NumberInput";
 import ElementDisplay from "./components/ElementDisplay";
 import { element_to_hovered_part } from "../mechanical-canvas/utils";
+import React from "react";
 
 interface ElementPropertiesProps {
-  element: MechanicalElement;
+  element: MechanicalElement | undefined;
   setHoveredPart: (hoveredPart: HoveredPart) => void;
   setCanvasState: (state: CanvasState) => void;
   applyActions: (actions: Action[], actionBundleType: ActionBundleType) => void;
@@ -38,23 +39,87 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
   applyActions,
   mechanism,
 }) => {
-  const handleMouseEnter = () => {
-    setHoveredPart(element_to_hovered_part(element, true));
+  const handleMouseEnter = (el: MechanicalElement) => {
+    setHoveredPart(element_to_hovered_part(el, true));
   };
 
   const handleMouseLeave = () => {
     setHoveredPart({ type: "Void", position: ZERO });
   };
 
+  if (!element) {
+    return (
+      <Box>
+        <Box sx={{ textAlign: "center", p: 4, pb: 2 }}>
+          <Box sx={{ fontSize: "0.875rem", color: "text.disabled" }}>
+            Sélectionnez un élément pour voir ses propriétés
+          </Box>
+        </Box>
+        {mechanism.mechanicalElements.length > 0 && (
+          <List
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              flexDirection: "column",
+              mx: 2,
+              my: 1,
+            }}
+          >
+            {mechanism.mechanicalElements.map((element, index) => (
+              <React.Fragment key={index}>
+                <ListItem
+                  disablePadding
+                  sx={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    width: "100%",
+                    marginY: "-1px",
+                  }}
+                >
+                  <Box border={2} borderColor={"#00000025"} borderRadius={5}>
+                    <ElementDisplay
+                      element={element}
+                      setHoveredPart={setHoveredPart}
+                      setCanvasState={setCanvasState}
+                      applyActions={applyActions}
+                      size="medium"
+                      editable={true}
+                    ></ElementDisplay>
+                  </Box>
+
+                  <IconButton
+                    color="error"
+                    onMouseEnter={() => handleMouseEnter(element)}
+                    onMouseLeave={handleMouseLeave}
+                    onClick={() =>
+                      applyActions(
+                        [{ type: "DeleteElement", element }],
+                        "Other",
+                      )
+                    }
+                    title="Supprimer"
+                  >
+                    <DeleteIcon sx={{ width: 20, height: 20 }} />
+                  </IconButton>
+                </ListItem>
+              </React.Fragment>
+            ))}
+          </List>
+        )}
+      </Box>
+    );
+  }
+
   return (
-    <Box>
+    <Box sx={{ mb: 1 }}>
       <Box
         sx={{
           display: "flex",
           flexDirection: "row",
           justifyContent: "space-between",
           alignItems: "center",
-          my: -1,
+          m: 1,
         }}
       >
         <ElementDisplay
@@ -164,14 +229,14 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
             )
           }
           title="Supprimer"
-          onMouseEnter={handleMouseEnter}
+          onMouseEnter={(_e) => handleMouseEnter(element)}
           onMouseLeave={handleMouseLeave}
         >
           <DeleteIcon />
         </IconButton>
       </Box>
 
-      <Divider sx={{ my: 2 }} />
+      <Divider sx={{ my: 1 }} />
 
       {"position" in element && (
         <Box
@@ -181,6 +246,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
             alignItems: "center",
             justifyContent: "center",
             gap: 2,
+            m: 1,
           }}
         >
           <VectorInput
@@ -231,6 +297,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
             alignItems: "center",
             justifyContent: "center",
             gap: 2,
+            m: 1,
           }}
         >
           <VectorInput
@@ -290,7 +357,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
         </Box>
       )}
 
-      <Divider sx={{ mt: 2, mb: 1 }} />
+      <Divider sx={{ my: 1 }} />
 
       {(element.type === "beam" ||
         element.type === "belt" ||

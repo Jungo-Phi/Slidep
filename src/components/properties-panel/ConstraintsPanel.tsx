@@ -35,6 +35,15 @@ export const ConstraintsPanel: React.FC<ConstraintsPanelProps> = ({
   applyActions: applyActions,
   mechanism,
 }) => {
+  if (mechanism.constraintElements.length === 0) {
+    return (
+      <Box sx={{ textAlign: "center", p: 4 }}>
+        <Box sx={{ fontSize: "0.875rem", color: "text.disabled" }}>
+          Pas encore de contrainte créée
+        </Box>
+      </Box>
+    );
+  }
   const handleMouseEnter = (constraint: ConstraintElement) => {
     setHoveredPart(element_to_hovered_part(constraint, true));
   };
@@ -49,6 +58,8 @@ export const ConstraintsPanel: React.FC<ConstraintsPanelProps> = ({
         display: "flex",
         alignItems: "center",
         flexDirection: "column",
+        mx: 2,
+        my: 1,
       }}
     >
       {mechanism.constraintElements.map((constraint, index) => (
@@ -147,20 +158,6 @@ export const ConstraintsPanel: React.FC<ConstraintsPanelProps> = ({
           </ListItem>
         </React.Fragment>
       ))}
-      {mechanism.constraintElements.length === 0 && (
-        <Typography
-          variant="caption"
-          color="textDisabled"
-          sx={{
-            fontWeight: "500",
-            display: "flex",
-            alignItems: "center",
-            flexDirection: "column",
-          }}
-        >
-          Pas de contraintes
-        </Typography>
-      )}
     </List>
   );
 };

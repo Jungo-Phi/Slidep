@@ -160,7 +160,8 @@ export interface RuntimeState {
 export interface SimulationConfig {
   maxIterations: number;
   convergenceTolerance: number;
-  gravity: Point2;
+  gravity: boolean;
+  collisions: boolean;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -170,7 +171,8 @@ export interface SimulationConfig {
 export const DEFAULT_SIMULATION_CONFIG: SimulationConfig = {
   maxIterations: 100,
   convergenceTolerance: 0.001,
-  gravity: new Point2(0, 9.81),
+  gravity: true,
+  collisions: false,
 };
 
 export const DEFAULT_OVERLAY_STATE: OverlayState = {

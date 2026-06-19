@@ -28,7 +28,7 @@ import parallelIconUrl from "../../assets/icons/palette/parallel.svg";
 import ratioIconUrl from "../../assets/icons/palette/ratio.svg";
 import forceIconUrl from "../../assets/icons/palette/force.svg";
 
-import { CanvasState, CanvasStateType, AppMode } from "../../types";
+import { CanvasState, CanvasStateType } from "../../types";
 import { COLORS } from "../../constants/rendering-specs";
 import { get_constraint_element_from_id } from "../mechanical-canvas/connect-actions";
 import { Mechanism } from "../../types";
@@ -285,76 +285,42 @@ const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
       },
     ],
   },
-];
-
-const SIMULATION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
   {
-    title: "Interface",
+    title: "Simulation",
     elements: [
-      {
-        label: "Grabing",
-        tooltip: "Grab (X)",
-        iconSrc: pivotIconUrl,
-        goToStateType: "Simulating",
-        hilightRule: (state) => state.type === "Simulating",
-        hilightColor: COLORS.ORANGE,
-        hilightHoverColor: COLORS.ORANGE_STROKE,
-      },
       {
         label: "Force",
         tooltip: "Force (F)",
         iconSrc: forceIconUrl,
-        goToStateType: "ParallelConstraintStart",
-        hilightRule: (_state) => false,
-        hilightColor: COLORS.ORANGE,
-        hilightHoverColor: COLORS.ORANGE_STROKE,
-      },
-    ],
-  },
-  {
-    title: "Statique",
-    elements: [
-      {
-        label: "Pivot",
-        tooltip: "Pivot (P)",
-        iconSrc: pivotIconUrl,
-        goToStateType: "PlacingPivot",
-        hilightRule: (state) => state.type === "PlacingPivot",
+        goToStateType: "PlacingForce",
+        hilightRule: (state) => state.type === "PlacingForce",
         hilightColor: COLORS.ORANGE,
         hilightHoverColor: COLORS.ORANGE_STROKE,
       },
       {
-        label: "Engrenage",
-        tooltip: "Gear (Q)",
-        iconSrc: gearIconUrl,
-        goToStateType: "PlacingGearStart",
-        hilightRule: (state) =>
-          state.type === "PlacingGearStart" ||
-          state.type === "PlacingGearRadius",
-        hilightColor: COLORS.ORANGE,
-        hilightHoverColor: COLORS.ORANGE_STROKE,
-      },
-    ],
-  },
-  {
-    title: "Cinématique",
-    elements: [
-      {
-        label: "Poutre",
-        tooltip: "Beam (B)",
-        iconSrc: beamIconUrl,
-        goToStateType: "PlacingBeamStart",
-        hilightRule: (state) =>
-          state.type === "PlacingBeamStart" || state.type === "PlacingBeamEnd",
+        label: "Moment",
+        tooltip: "Moment (O)",
+        iconSrc: "",
+        goToStateType: "PlacingMoment",
+        hilightRule: (state) => state.type === "PlacingMoment",
         hilightColor: COLORS.ORANGE,
         hilightHoverColor: COLORS.ORANGE_STROKE,
       },
       {
-        label: "Sol",
-        tooltip: "Ground (G)",
-        iconSrc: groundIconUrl,
-        goToStateType: "PlacingGround",
-        hilightRule: (state) => state.type === "PlacingGround",
+        label: "Moteur",
+        tooltip: "Motor (W)",
+        iconSrc: "",
+        goToStateType: "PlacingMotor",
+        hilightRule: (state) => state.type === "PlacingMotor",
+        hilightColor: COLORS.ORANGE,
+        hilightHoverColor: COLORS.ORANGE_STROKE,
+      },
+      {
+        label: "Balise",
+        tooltip: "Balise (Z)",
+        iconSrc: "",
+        goToStateType: "PlacingBalise",
+        hilightRule: (state) => state.type === "PlacingBalise",
         hilightColor: COLORS.ORANGE,
         hilightHoverColor: COLORS.ORANGE_STROKE,
       },
@@ -400,14 +366,12 @@ interface ElementPaletteProps {
   setCanvasState: (state: CanvasState) => void;
   canvasState: CanvasState;
   mechanism: Mechanism;
-  appMode: AppMode;
 }
 
 export const ElementPalette: React.FC<ElementPaletteProps> = ({
   setCanvasState,
   canvasState,
   mechanism,
-  appMode,
 }) => {
   const SIZE = 28;
   const PADDING = 2;
@@ -429,10 +393,7 @@ export const ElementPalette: React.FC<ElementPaletteProps> = ({
       const rowHeight = (SIZE + 2 * PADDING) * 3;
       const rowsThatFit = Math.max(1, Math.floor(availableHeight / rowHeight));
       const maxIconsInGroup = Math.max(
-        ...(appMode !== "edition"
-          ? SIMULATION_PALETTE
-          : EDITION_PALETTE
-        ).map((g) => g.elements.length),
+        ...EDITION_PALETTE.map((g) => g.elements.length),
         1,
       );
       setColumns(Math.max(2, Math.ceil(maxIconsInGroup / rowsThatFit)));
@@ -467,10 +428,7 @@ export const ElementPalette: React.FC<ElementPaletteProps> = ({
         scrollbarWidth: "none",
       }}
     >
-      {(appMode !== "edition"
-        ? SIMULATION_PALETTE
-        : EDITION_PALETTE
-      ).map((group) => (
+      {EDITION_PALETTE.map((group) => (
         <section key={group.title}>
           {group.title !== "Interface" && (
             <>

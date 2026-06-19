@@ -19,6 +19,7 @@ import { get_constraint_element_from_id } from "./connect-actions";
 import { get_hovered_part } from "./get-hover";
 import { ConstraintEditor } from "./ConstraintEditor";
 import { world_to_screen, screen_to_world } from "./viewport";
+import { draw_grid } from "./drawing-functions";
 
 function mergeRefs<T>(...refs: React.Ref<T>[]) {
   return (node: T | null) => {
@@ -94,17 +95,32 @@ export const MechanicalCanvas = forwardRef<
       // Met à jour l'offset du canvas
       canvasOffsetRef.current = new Point2(rect.left, rect.top);
 
-      // Dessine les éléments
-      drawMechanicalCanvas(
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      draw_grid(
         ctx,
         canvas.width,
         canvas.height,
+        mechanismRef.current.viewport,
+      );
+
+      ctx.save();
+      ctx.translate(
+        mechanismRef.current.viewport.pan.x,
+        mechanismRef.current.viewport.pan.y,
+      );
+      ctx.scale(
+        mechanismRef.current.viewport.zoom,
+        mechanismRef.current.viewport.zoom,
+      );
+
+      drawMechanicalCanvas(
+        ctx,
         hoveredPartRef.current,
         canvasStateRef.current,
         mechanismRef.current.mechanicalElements,
         mechanismRef.current.constraintElements,
-        mechanismRef.current.viewport,
       );
+      ctx.restore();
     }, []);
 
     useEffect(() => {

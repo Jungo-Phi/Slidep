@@ -52,7 +52,10 @@ export type CanvasStateType =
   | "GearRatioConstraintGear"
   | "MovingConstraint"
   | "EditingConstraint"
-  | "Simulating";
+  | "PlacingForce"
+  | "PlacingMoment"
+  | "PlacingMotor"
+  | "PlacingBalise";
 
 // Define the possible states of the canvas interaction
 export type CanvasState =
@@ -122,4 +125,7 @@ export type CanvasState =
       value: number;
       isPlacing: boolean;
     }
-  | { type: "Simulating" };
+  | { type: "PlacingForce" }
+  | { type: "PlacingMoment" }
+  | { type: "PlacingMotor" }
+  | { type: "PlacingBalise" };

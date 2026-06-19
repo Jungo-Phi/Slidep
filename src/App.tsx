@@ -14,25 +14,36 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
-  Chip,
+  ToggleButtonGroup,
+  ToggleButton,
   CircularProgress,
+  Chip,
+  Button,
 } from "@mui/material";
 import {
-  Menu as MenuIcon,
+  CenterFocusStrong,
+  FirstPage,
+  PlayArrow,
+  Pause,
+  LastPage,
   Settings,
-  Undo,
-  Redo,
   Language,
   Info,
   Close,
   Download,
   FileOpen,
   Apps,
+  Undo,
+  Redo,
+  Add,
+  Gif,
+  Bolt,
+  GridView,
+  KeyboardArrowDown,
+  RestartAlt,
 } from "@mui/icons-material";
 import { lightTheme } from "./lib/mui-theme"; // import { lightTheme, darkTheme, highContrastTheme } from "./lib/mui-theme";
 import logoUrl from "./assets/icons/palette/logo.svg";
-import playIconUrl from "./assets/icons/palette/play.svg";
-import selectIconUrl from "./assets/icons/palette/select.svg";
 import MechanicalCanvas from "./components/mechanical-canvas/MechanicalCanvas";
 import { ElementPalette } from "./components/element-palette";
 import { PropertiesPanel } from "./components/properties-panel/PropertiesPanel";
@@ -47,6 +58,7 @@ import {
   Mechanism,
   MechanismMetadata,
   Point2,
+  PropertiesPanelTab,
   RuntimeState,
   ScreenPoint,
   SerializedMechanism,
@@ -139,7 +151,29 @@ const App: React.FC = () => {
   const mechanismRef = useRef<Mechanism>(mechanism);
   const galleryOpenRef = useRef(galleryOpen);
 
-  const [simHover, setSimHover] = useState(false);
+  const [activeTab, setActiveTab] = useState<PropertiesPanelTab>("project");
+  const userSelectedTabRef = useRef(false);
+
+  // Sync active tab with canvas selection (only when user hasn't manually selected)
+  useEffect(() => {
+    if (userSelectedTabRef.current) {
+      userSelectedTabRef.current = false;
+      return;
+    }
+    const cs = canvasState;
+    if ("elementID" in cs) {
+      const mechanicalElement = mechanism.mechanicalElements.find(
+        (el) => el.id === cs.elementID,
+      );
+      if (mechanicalElement) {
+        setActiveTab("element");
+      } else if (
+        mechanism.constraintElements.find((el) => el.id === cs.elementID)
+      ) {
+        setActiveTab("constraints");
+      }
+    }
+  }, [canvasState, mechanism]);
 
   useEffect(() => {
     mechanismRef.current = mechanism;
@@ -322,10 +356,10 @@ const App: React.FC = () => {
   };
 
   const handleOpenGallery = useCallback(async () => {
+    setMenuAnchorEl(null);
     const db = await openDB<SlidepDB>("SlidepDB", DB_VERSION, {
       upgrade(db) {
         if (!db.objectStoreNames.contains("mechanisms")) {
-          // La clé est maintenant metadata.createdAt
           const store = db.createObjectStore("mechanisms", {
             keyPath: "metadata.createdAt",
           });
@@ -361,6 +395,7 @@ const App: React.FC = () => {
   }, []);
 
   const handleNewFromGallery = useCallback(() => {
+    setMenuAnchorEl(null);
     const currentCanvas = canvasRef.current;
     if (!currentCanvas) return;
 
@@ -438,7 +473,7 @@ const App: React.FC = () => {
   /** App starts */
   useEffect(() => {
     preload_element_icons();
-    handleOpenGallery();
+    //handleOpenGallery();
   }, [handleOpenGallery]);
 
   return (
@@ -462,256 +497,539 @@ const App: React.FC = () => {
             borderRadius: 0,
           }}
         >
+          {/* ── Toolbar principale ── */}
           <Toolbar
             variant="dense"
             disableGutters
             sx={{
               display: "flex",
+              alignItems: "center",
               justifyContent: "space-between",
-              mx: 1,
+              px: 1,
+              gap: 1,
+              minHeight: "40px !important",
             }}
           >
-            {/* Left side: Logo, File actions */}
-            <Box
-              sx={{ display: "flex", alignItems: "center", gap: 1, flex: 1 }}
-            >
-              <Box
-                component="img"
-                src={logoUrl}
-                alt="Slidep"
-                sx={{
-                  height: 32,
-                  display: "block",
-                }}
-              />
-              <Typography
-                sx={{
-                  textAlign: "center",
-                  fontSize: "1.8em",
-                  fontWeight: 700,
-                  color: COLORS.ORANGE,
-                  textTransform: "uppercase",
-                  letterSpacing: "-0.04em",
-                }}
-              >
-                Slidep
-              </Typography>
-
-              <Box sx={{ display: "flex", gap: 0.5, ml: 1 }}>
-                <Tooltip title="Menu">
-                  <IconButton
-                    color="inherit"
-                    aria-expanded={menuOpen}
-                    onClick={handleMenuClick}
-                  >
-                    <MenuIcon />
-                  </IconButton>
-                </Tooltip>
-                <Menu
-                  anchorEl={menuAnchorEl}
-                  open={menuOpen}
-                  onClose={handleMenuClose}
-                >
-                  <MenuItem
-                    onClick={handleMenuButtonUpload}
-                    sx={{ gap: 1, marginLeft: -0.5 }}
-                    disableRipple
-                  >
-                    <FileOpen fontSize="small" />
-                    Importer
-                  </MenuItem>
-                  <MenuItem
-                    onClick={handleMenuButtonDownload}
-                    sx={{ gap: 1, marginLeft: -0.5 }}
-                    disableRipple
-                  >
-                    <Download fontSize="small" />
-                    Exporter
-                  </MenuItem>
-                  <Divider sx={{ my: 0.5 }} />
-                  <MenuItem
-                    onClick={handleSettingsOpen}
-                    sx={{ gap: 1, marginLeft: -0.5 }}
-                    disableRipple
-                  >
-                    <Settings fontSize="small" />
-                    Paramètres
-                  </MenuItem>
-                </Menu>
-              </Box>
-              <Tooltip title="Mes mécanismes">
-                <IconButton color="inherit" onClick={handleOpenGallery}>
-                  <Apps />
-                </IconButton>
-              </Tooltip>
-            </Box>
-
-            {/* Center: Name and status */}
-            <Box
-              sx={{
-                display: "flex",
-                alignItems: "center",
-                gap: 1.5,
-              }}
-            >
-              <Typography variant="h6">{mechanism.metadata.name}</Typography>
-
-              {saveStatus !== "saving" && (
-                <Tooltip
-                  title={
-                    saveStatus === "saved"
-                      ? "Sauvegardé"
-                      : saveStatus === "error"
-                        ? "Erreur de sauvegarde"
-                        : ""
-                  }
-                >
-                  <Box
-                    sx={{
-                      width: 10,
-                      height: 10,
-                      borderRadius: "50%",
-                      backgroundColor:
-                        saveStatus === "saved"
-                          ? "success.main"
-                          : saveStatus === "error"
-                            ? "error.main"
-                            : "transparent",
-                      transition: "background-color 0.3s ease",
-                      boxShadow:
-                        saveStatus === "saved"
-                          ? "0 0 4px rgba(76, 175, 80, 0.6)"
-                          : "none",
-                    }}
-                  />
-                </Tooltip>
-              )}
-
-              {saveStatus === "saving" && (
-                <Tooltip title={"Sauvegarde en cours..."}>
-                  <CircularProgress
-                    size={12}
-                    color="inherit"
-                    sx={{ m: "-1px" }}
-                  />
-                </Tooltip>
-              )}
-            </Box>
-
-            {/* Center: Play simulation */}
-            <Box
-              sx={{
-                display: "flex",
-                justifyContent: "center",
-                width: 200,
-                mr: -5,
-              }}
-            >
-              <Chip
-                label={
-                  appMode !== "edition"
-                    ? simHover
-                      ? "Retour à l'édition"
-                      : "Simulation"
-                    : simHover
-                      ? "Lancer la simulation"
-                      : "Édition"
-                }
-                icon={
-                  <Box
-                    component="img"
-                    src={
-                      (appMode !== "edition") !== simHover
-                        ? playIconUrl
-                        : selectIconUrl
-                    }
-                    sx={{ width: 18, height: 18 }}
-                  />
-                }
-                variant={simHover ? "filled" : "outlined"}
-                onMouseEnter={() => setSimHover(true)}
-                onMouseLeave={() => setSimHover(false)}
-                onClick={() => {
-                  if (appMode !== "edition") {
-                    setAppMode("edition");
-                    setCanvasState({ type: "Selecting" });
-                  } else {
-                    setAppMode("dynamic");
-                    setCanvasState({ type: "Simulating" });
-                  }
-                  setSimHover(false);
-                }}
-                sx={{
-                  height: 32,
-                  fontWeight: 600,
-                  fontSize: "0.85rem",
-                  pl: 0.5,
-                  color: simHover
-                    ? "primary.contrastText"
-                    : appMode !== "edition"
-                      ? "primary.main"
-                      : "secondary.main",
-                  borderColor: simHover
-                    ? "primary.contrastText"
-                    : appMode !== "edition"
-                      ? "primary.main"
-                      : "secondary.main",
-                  img: {
-                    filter: simHover ? "brightness(0) invert(1)" : "none",
-                  },
-                  "&:hover": {
-                    backgroundColor:
-                      appMode !== "edition"
-                        ? COLORS.SELECTION_BOX
-                        : "primary.main",
-                  },
-                }}
-              />
-            </Box>
-
-            {/* Right side: Undo/Redo, Settings */}
+            {/* ── Zone 1 : Logo + Bibliothèque + Nom du projet (Gauche) ── */}
             <Box
               sx={{
                 display: "flex",
                 alignItems: "center",
                 gap: 0.5,
                 flex: 1,
-                justifyContent: "flex-end",
+                minWidth: 0,
               }}
             >
-              <Tooltip title="Annuler (Ctrl+Z)">
-                <IconButton color="inherit" onClick={() => undoMechanism()}>
-                  <Undo />
-                </IconButton>
-              </Tooltip>
-              <Tooltip title="Rétablir (Ctrl+Y)">
-                <IconButton color="inherit" onClick={() => redoMechanism()}>
-                  <Redo />
+              {/* Logo */}
+              <Box
+                component="img"
+                src={logoUrl}
+                alt="Slidep"
+                sx={{ height: 26, display: "block", flexShrink: 0 }}
+              />
+              <Typography
+                sx={{
+                  fontSize: "1.5em",
+                  fontWeight: 700,
+                  color: COLORS.ORANGE,
+                  letterSpacing: "-0.04em",
+                  flexShrink: 0,
+                  lineHeight: 1,
+                }}
+              >
+                Slidep
+              </Typography>
+
+              <Divider orientation="vertical" flexItem sx={{ mx: 1 }} />
+
+              {/* Bouton Bibliothèque — accès direct à la galerie */}
+              <Tooltip title="Bibliothèque de mécanismes">
+                <IconButton
+                  color="inherit"
+                  size="small"
+                  onClick={handleOpenGallery}
+                  sx={{ m: -1 }}
+                >
+                  <Apps sx={{ fontSize: 20 }} />
                 </IconButton>
               </Tooltip>
 
+              <Divider orientation="vertical" flexItem sx={{ mx: 1 }} />
+
+              {/* Nom du projet + pastille */}
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 0.75,
+                  minWidth: 0,
+                  overflow: "hidden",
+                }}
+              >
+                <Typography
+                  variant="body2"
+                  fontWeight={400}
+                  noWrap
+                  sx={{ maxWidth: 180, opacity: 0.9 }}
+                >
+                  {mechanism.metadata.name}
+                </Typography>
+
+                {saveStatus === "saving" ? (
+                  <Tooltip title="Sauvegarde en cours...">
+                    <CircularProgress
+                      size={8}
+                      color="inherit"
+                      sx={{ flexShrink: 0, opacity: 0.7 }}
+                    />
+                  </Tooltip>
+                ) : (
+                  <Tooltip
+                    title={
+                      saveStatus === "saved"
+                        ? "Sauvegardé"
+                        : saveStatus === "error"
+                          ? "Erreur de sauvegarde"
+                          : ""
+                    }
+                  >
+                    <Box
+                      sx={{
+                        width: 7,
+                        height: 7,
+                        borderRadius: "50%",
+                        flexShrink: 0,
+                        backgroundColor:
+                          saveStatus === "saved"
+                            ? "success.main"
+                            : saveStatus === "error"
+                              ? "error.main"
+                              : "transparent",
+                        transition: "background-color 0.3s ease",
+                        boxShadow:
+                          saveStatus === "saved"
+                            ? "0 0 4px rgba(76,175,80,0.7)"
+                            : "none",
+                      }}
+                    />
+                  </Tooltip>
+                )}
+              </Box>
+            </Box>
+
+            {/* ── Zone 2 : Cockpit de Simulation (Centre) ── */}
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                gap: 0.75,
+                flexShrink: 0,
+              }}
+            >
+              {/* Sélecteur de mode */}
+              <ToggleButtonGroup
+                value={appMode}
+                exclusive
+                size="small"
+                onChange={(_e, newMode: AppMode) => {
+                  if (!newMode) return;
+                  setAppMode(newMode);
+                }}
+                sx={{
+                  "& .MuiToggleButton-root": {
+                    px: 1.25,
+                    py: 0.2,
+                    fontSize: "0.72rem",
+                    fontWeight: 600,
+                    textTransform: "none",
+                    color: "text.secondary",
+                    borderColor: "divider",
+                    "&.Mui-selected": {
+                      color: "primary.contrastText",
+                      backgroundColor: "primary.main",
+                      "&:hover": { backgroundColor: "primary.dark" },
+                    },
+                  },
+                }}
+              >
+                <ToggleButton value="edition">Édition</ToggleButton>
+                <ToggleButton value="static">Statique</ToggleButton>
+                <ToggleButton value="kinematic">Cinématique</ToggleButton>
+                <ToggleButton value="dynamic">Dynamique</ToggleButton>
+              </ToggleButtonGroup>
+
+              <Divider flexItem sx={{ mx: 1 }} />
+
+              {/* Contrôles temporels — toujours affichés, grisés en mode Édition */}
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 0.5,
+                  opacity: appMode === "edition" ? 0.3 : 1,
+                  pointerEvents: appMode === "edition" ? "none" : "auto",
+                  transition: "opacity 0.2s ease",
+                }}
+              >
+                <Tooltip title="Réinitialiser">
+                  <IconButton
+                    size="small"
+                    color="inherit"
+                    onClick={() =>
+                      setRuntimeState((prev) => ({
+                        ...prev,
+                        time: 0,
+                        isPlaying: false,
+                        current: null,
+                        history: [],
+                      }))
+                    }
+                    sx={{ p: 0.4 }}
+                  >
+                    <RestartAlt sx={{ fontSize: 20 }} />
+                  </IconButton>
+                </Tooltip>
+
+                <Tooltip title="Aller au début">
+                  <IconButton
+                    size="small"
+                    color="inherit"
+                    onClick={() =>
+                      setRuntimeState((prev) => ({
+                        ...prev,
+                        time: 0,
+                        isPlaying: false,
+                      }))
+                    }
+                    sx={{ p: 0.4 }}
+                  >
+                    <FirstPage sx={{ fontSize: 20 }} />
+                  </IconButton>
+                </Tooltip>
+
+                <Tooltip title={runtimeState.isPlaying ? "Pause" : "Play"}>
+                  <IconButton
+                    size="small"
+                    onClick={() =>
+                      setRuntimeState((prev) => ({
+                        ...prev,
+                        isPlaying: !prev.isPlaying,
+                      }))
+                    }
+                    sx={{
+                      bgcolor: "primary.main",
+                      color: "primary.contrastText",
+                      "&:hover": { bgcolor: "primary.dark" },
+                      p: 0.5,
+                    }}
+                  >
+                    {runtimeState.isPlaying ? (
+                      <Pause sx={{ fontSize: 20 }} />
+                    ) : (
+                      <PlayArrow sx={{ fontSize: 20 }} />
+                    )}
+                  </IconButton>
+                </Tooltip>
+
+                <Tooltip title="Aller à la fin">
+                  <IconButton size="small" color="inherit" sx={{ p: 0.4 }}>
+                    <LastPage sx={{ fontSize: 20 }} />
+                  </IconButton>
+                </Tooltip>
+
+                <Typography
+                  variant="caption"
+                  sx={{
+                    fontVariantNumeric: "tabular-nums",
+                    minWidth: 52,
+                    textAlign: "right",
+                    fontSize: "0.72rem",
+                    opacity: 0.85,
+                  }}
+                >
+                  t = {runtimeState.time.toFixed(1)} s
+                </Typography>
+              </Box>
+
+              {/* Vitesse : boutons segmentés */}
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  opacity: appMode === "edition" ? 0.3 : 1,
+                  pointerEvents: appMode === "edition" ? "none" : "auto",
+                  transition: "opacity 0.2s ease",
+                }}
+              >
+                <ToggleButtonGroup
+                  value={runtimeState.speed}
+                  exclusive
+                  size="small"
+                  onChange={(_e, val) => {
+                    if (val === null) return;
+                    setRuntimeState((prev) => ({ ...prev, speed: val }));
+                  }}
+                  sx={{
+                    "& .MuiToggleButton-root": {
+                      px: 0.6,
+                      py: 0.2,
+                      fontSize: "0.65rem",
+                      fontWeight: 600,
+                      textTransform: "none",
+                      color: "text.secondary",
+                      borderColor: "divider",
+                      minWidth: 0,
+                      lineHeight: 1.4,
+                      "&.Mui-selected": {
+                        color: "primary.contrastText",
+                        backgroundColor: "primary.main",
+                        "&:hover": { backgroundColor: "primary.dark" },
+                      },
+                    },
+                  }}
+                >
+                  {[0.25, 0.5, 1, 2, 4].map((s) => (
+                    <ToggleButton key={s} value={s}>
+                      {s < 1 ? `${s}×` : `${s}×`}
+                    </ToggleButton>
+                  ))}
+                </ToggleButtonGroup>
+              </Box>
+
+              {/* Toggles Gravité / Collisions */}
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  opacity: appMode === "edition" ? 0.3 : 1,
+                  pointerEvents: appMode === "edition" ? "none" : "auto",
+                  transition: "opacity 0.2s ease",
+                  gap: 0.5,
+                }}
+              >
+                <Tooltip
+                  title={
+                    simulationConfig.gravity
+                      ? "Gravité activée"
+                      : "Gravité désactivée"
+                  }
+                >
+                  <Chip
+                    icon={<Bolt sx={{ fontSize: "14px !important" }} />}
+                    label="Gravité"
+                    size="small"
+                    clickable
+                    onClick={() =>
+                      setSimulationConfig((prev) => ({
+                        ...prev,
+                        gravity: !prev.gravity,
+                      }))
+                    }
+                    color={simulationConfig.gravity ? "primary" : "default"}
+                    variant={simulationConfig.gravity ? "filled" : "outlined"}
+                    sx={{
+                      fontSize: "0.68rem",
+                      height: 22,
+                      borderColor: COLORS.STROKE,
+                      "& .MuiChip-label": { px: 1 },
+                    }}
+                  />
+                </Tooltip>
+                <Tooltip
+                  title={
+                    simulationConfig.collisions
+                      ? "Collisions activées"
+                      : "Collisions désactivées"
+                  }
+                >
+                  <Chip
+                    icon={<Bolt sx={{ fontSize: "14px !important" }} />}
+                    label="Collisions"
+                    size="small"
+                    clickable
+                    onClick={() =>
+                      setSimulationConfig((prev) => ({
+                        ...prev,
+                        collisions: !prev.collisions,
+                      }))
+                    }
+                    color={simulationConfig.collisions ? "primary" : "default"}
+                    variant={
+                      simulationConfig.collisions ? "filled" : "outlined"
+                    }
+                    sx={{
+                      fontSize: "0.68rem",
+                      height: 22,
+                      borderColor: COLORS.STROKE,
+                      "& .MuiChip-label": { px: 1 },
+                    }}
+                  />
+                </Tooltip>
+              </Box>
+            </Box>
+
+            {/* ── Zone 3 : Outils & Config (Droite) ── */}
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                gap: 0.25,
+                flex: 1,
+                justifyContent: "flex-end",
+              }}
+            >
+              {/* Recentrer */}
+              <Tooltip title="Recentrer la vue">
+                <IconButton
+                  color="inherit"
+                  size="small"
+                  onClick={() => {
+                    const currentCanvas = canvasRef.current;
+                    if (!currentCanvas) return;
+                    setMechanism((prev) => ({
+                      ...prev,
+                      viewport: {
+                        zoom: 1,
+                        pan: new Point2(
+                          currentCanvas.width / 2,
+                          currentCanvas.height / 2,
+                        ),
+                      },
+                    }));
+                  }}
+                  disabled={
+                    canvasRef.current
+                      ? mechanism.viewport.zoom === 1 &&
+                        mechanism.viewport.pan.equals(
+                          new Point2(
+                            canvasRef.current!.width / 2,
+                            canvasRef.current!.height / 2,
+                          ),
+                        )
+                      : true
+                  }
+                >
+                  <CenterFocusStrong sx={{ fontSize: 20 }} />
+                </IconButton>
+              </Tooltip>
+
+              {/* Undo / Redo */}
+              <Tooltip title="Annuler (Ctrl+Z)">
+                <span>
+                  <IconButton
+                    color="inherit"
+                    size="small"
+                    onClick={() => undoMechanism()}
+                    disabled={mechanism.history.length === 0}
+                  >
+                    <Undo sx={{ fontSize: 20 }} />
+                  </IconButton>
+                </span>
+              </Tooltip>
+              <Tooltip title="Rétablir (Ctrl+Y)">
+                <span>
+                  <IconButton
+                    color="inherit"
+                    size="small"
+                    onClick={() => redoMechanism()}
+                    disabled={mechanism.future.length === 0}
+                  >
+                    <Redo sx={{ fontSize: 20 }} />
+                  </IconButton>
+                </span>
+              </Tooltip>
+
+              <Divider
+                orientation="vertical"
+                flexItem
+                sx={{ ml: 0.75, mr: 0.5, my: 0.25 }}
+              />
+
+              {/* Menu Fichier — bouton textuel */}
+              <Button
+                color="inherit"
+                size="small"
+                onClick={handleMenuClick}
+                endIcon={
+                  <KeyboardArrowDown
+                    sx={{ ml: -0.5, fontSize: "16px !important", opacity: 0.7 }}
+                  />
+                }
+                sx={{
+                  fontSize: "0.75rem",
+                  fontWeight: 600,
+                  textTransform: "none",
+                  px: 1,
+                  py: 0.5,
+                  minWidth: 0,
+                  letterSpacing: 0,
+                }}
+              >
+                Fichier
+              </Button>
+              <Menu
+                anchorEl={menuAnchorEl}
+                open={menuOpen}
+                onClose={handleMenuClose}
+              >
+                <MenuItem
+                  onClick={handleNewFromGallery}
+                  sx={{ gap: 1, fontSize: "14px" }}
+                  disableRipple
+                >
+                  <Add fontSize="small" />
+                  Nouveau projet
+                </MenuItem>
+                <Divider sx={{ my: 0.5 }} />
+                <MenuItem
+                  onClick={handleMenuButtonUpload}
+                  sx={{ gap: 1, fontSize: "14px" }}
+                  disableRipple
+                >
+                  <FileOpen fontSize="small" />
+                  Importer
+                </MenuItem>
+                <MenuItem
+                  onClick={handleMenuButtonDownload}
+                  sx={{ gap: 1, fontSize: "14px" }}
+                  disableRipple
+                >
+                  <Download fontSize="small" />
+                  Exporter le mécanisme
+                </MenuItem>
+                <MenuItem
+                  onClick={handleMenuButtonDownload}
+                  sx={{ gap: 1, fontSize: "14px" }}
+                  disableRipple
+                >
+                  <Gif fontSize="small" />
+                  Exporter une animation
+                </MenuItem>
+              </Menu>
+
+              {/* Langue */}
               <Tooltip title="Langue">
                 <IconButton
                   color="inherit"
+                  size="small"
                   aria-expanded={langOpen}
                   onClick={handleLangClick}
-                  sx={{ gap: 0.5 }}
+                  sx={{
+                    gap: 0.4,
+                    fontSize: "0.72rem",
+                    fontWeight: 700,
+                    px: 0.75,
+                  }}
                 >
-                  <Language />
-                  {language.slice(0, 2)}
+                  <Language sx={{ fontSize: 20 }} />
+                  {language.slice(0, 2).toUpperCase()}
                 </IconButton>
               </Tooltip>
               <Menu
                 anchorEl={langAnchorEl}
                 open={langOpen}
                 onClose={handleLangClose}
-                slotProps={{
-                  paper: {
-                    style: {
-                      maxHeight: 175,
-                    },
-                  },
-                }}
+                slotProps={{ paper: { style: { maxHeight: 175 } } }}
               >
                 {LANGUAGES.map((lang) => (
                   <MenuItem
@@ -724,94 +1042,35 @@ const App: React.FC = () => {
                   </MenuItem>
                 ))}
               </Menu>
-              <Tooltip title="Info">
-                <IconButton color="inherit" onClick={handleInfoOpen}>
-                  <Info />
+
+              {/* Paramètres */}
+              <Tooltip title="Paramètres">
+                <IconButton
+                  color="inherit"
+                  size="small"
+                  onClick={handleSettingsOpen}
+                >
+                  <Settings sx={{ fontSize: 20 }} />
                 </IconButton>
               </Tooltip>
-              <Dialog open={infoOpen} onClose={handleInfoClose}>
-                <DialogTitle fontSize={"large"}>Infos</DialogTitle>
+
+              {/* À propos */}
+              <Tooltip title="À propos de Slidep">
                 <IconButton
-                  onClick={handleInfoClose}
-                  sx={() => ({
-                    position: "absolute",
-                    right: 8,
-                    top: 8,
-                  })}
+                  color="inherit"
+                  size="small"
+                  onClick={handleInfoOpen}
                 >
-                  <Close />
+                  <Info sx={{ fontSize: 20 }} />
                 </IconButton>
-                <DialogContent dividers>
-                  <Typography gutterBottom align="justify">
-                    Slidep a d'abord été pensé comme l'application que j'aurais
-                    aimé avoir en tant qu'étudiant en ingénierie mécanique.
-                  </Typography>
-
-                  <Typography gutterBottom align="justify">
-                    La méthode par éléments finis (FEM) m'a toujours facinée. On
-                    arrive avec un modèle mathématique simple à recréer un
-                    comportement physique réel. Mais même si les interfaces se
-                    sont améliorées, les Ansys et Abaqus restent des outils
-                    complexes et souvent très chères. De plus, les pièces un peu
-                    complexes demandent vite beaucoup de temps et de ressources.
-                    C'est pour ça que j'ai toujours eu une fixette sur les
-                    éléments de type poutre. Avec les poutres, on peut faire des
-                    éléments finis en temps réel ! J'ai toujours eu envie de
-                    créer un outil basé dessus.
-                  </Typography>
-
-                  <Typography gutterBottom align="justify">
-                    C'est Slidep : De la simulation en temps réel avec des
-                    éléments simples, le tout dans une interface facile d'accès.
-                    C'est l'étape intermédiaire entre les schémas papier crayon
-                    et le solveur par éléments finis. Mais pour prétendre
-                    remplacer le papier crayon, il faudrais pouvoir créer tous
-                    les mécanismes ! C'est pour cela qu'à l'avenir, j'aimerais
-                    faire évoluer Slidep pour gérer les collisions, dessiner en
-                    3D, voire même faire de la dynamique des fluides !
-                  </Typography>
-
-                  <Typography gutterBottom align="justify">
-                    Implémenter ces changement à l'avenir me demandera plus que
-                    de la patience, mais des moyens. Alors si vous avez des
-                    idées, partagez les ! Si vous savez coder, contribuez ! Et
-                    si vous avez de l'argent, financez !
-                  </Typography>
-                </DialogContent>
-                <DialogContent>
-                  <Box>Contact :</Box>
-                  <a href="mailto:arnaud.jungo@slidep.ch">
-                    arnaud.jungo@slidep.ch
-                  </a>
-                  <Box>Code :</Box>
-                  <a href="https://github.com/Jungo-Phi/Slidep">
-                    github.com/Jungo-Phi/Slidep
-                  </a>
-                </DialogContent>
-              </Dialog>
-              <Dialog open={settingsOpen} onClose={handleSettingsClose}>
-                <DialogTitle fontSize={"large"} sx={{ mb: -2 }}>
-                  Paramètres
-                </DialogTitle>
-                <IconButton
-                  onClick={handleSettingsClose}
-                  sx={{
-                    position: "absolute",
-                    right: 8,
-                    top: 8,
-                  }}
-                >
-                  <Close />
-                </IconButton>
-                <DialogContent>
-                  <Typography>Afficher les contraintes</Typography>
-                  <Typography>Aimanter à la grille</Typography>
-                  <Typography>Thème (Couleurs)</Typography>
-                  <Typography>Style des éléments</Typography>
-                </DialogContent>
-              </Dialog>
+              </Tooltip>
             </Box>
           </Toolbar>
+
+          {/* ── Barre de progression temporelle (sous la toolbar) ── */}
+          {/*
+          
+          */}
         </AppBar>
 
         {/* Main content area */}
@@ -839,11 +1098,87 @@ const App: React.FC = () => {
           />
 
           {/* Floating panels */}
+          {appMode !== "edition" && (
+            <Box
+              elevation={0}
+              sx={{
+                position: "absolute",
+                left: "50%",
+                top: 16,
+                boxSizing: "border-box",
+                display: "flex",
+                alignItems: "center",
+                gap: 1,
+                p: 0.5,
+                zIndex: 1000,
+                maxHeight: "calc(100vh - 32px)",
+                overflowY: "auto",
+                backgroundColor: "#fff",
+                minWidth: "300px",
+              }}
+            >
+              <Box
+                sx={{
+                  flex: 1,
+                  height: 5,
+                  borderRadius: 3,
+                  backgroundColor: "rgba(255,255,255,0.2)",
+                  position: "relative",
+                  cursor: "pointer",
+                  "&:hover .timeline-thumb": { transform: "scale(1.4)" },
+                }}
+                onClick={(e) => {
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const ratio = (e.clientX - rect.left) / rect.width;
+                  const maxTime = runtimeState.current
+                    ? runtimeState.current.timestamp
+                    : 30;
+                  setRuntimeState((prev) => ({
+                    ...prev,
+                    time: Math.max(0, Math.min(maxTime, ratio * maxTime)),
+                    isPlaying: false,
+                  }));
+                }}
+              >
+                <Box
+                  sx={{
+                    position: "absolute",
+                    left: 0,
+                    top: 0,
+                    height: "100%",
+                    borderRadius: 3,
+                    backgroundColor: "primary.main",
+                    width: `${((runtimeState.time / (runtimeState.current ? runtimeState.current.timestamp : 30)) * 100).toFixed(2)}%`,
+                    transition: runtimeState.isPlaying
+                      ? "none"
+                      : "width 0.1s ease",
+                  }}
+                />
+                <Box
+                  className="timeline-thumb"
+                  sx={{
+                    position: "absolute",
+                    top: "50%",
+                    left: `${((runtimeState.time / (runtimeState.current ? runtimeState.current.timestamp : 30)) * 100).toFixed(2)}%`,
+                    transform: "translate(-50%, -50%)",
+                    width: 11,
+                    height: 11,
+                    borderRadius: "50%",
+                    backgroundColor: "primary.contrastText",
+                    border: "2px solid",
+                    borderColor: "primary.main",
+                    boxShadow: "0 1px 3px rgba(0,0,0,0.25)",
+                    transition: "transform 0.15s ease",
+                    pointerEvents: "none",
+                  }}
+                />
+              </Box>
+            </Box>
+          )}
           <ElementPalette
             setCanvasState={setCanvasState}
             canvasState={canvasState}
             mechanism={mechanism}
-            appMode={appMode}
           />
           <PropertiesPanel
             setCanvasState={setCanvasState}
@@ -857,6 +1192,8 @@ const App: React.FC = () => {
             setSimulationConfig={setSimulationConfig}
             simulationConfig={simulationConfig}
             appMode={appMode}
+            activeTab={activeTab}
+            setActiveTab={setActiveTab}
           />
         </Box>
       </Box>
@@ -868,6 +1205,83 @@ const App: React.FC = () => {
         onDelete={handleDeleteFromGallery}
         onNew={handleNewFromGallery}
       />
+      <Dialog open={infoOpen} onClose={handleInfoClose}>
+        <DialogTitle fontSize={"large"}>Infos</DialogTitle>
+        <IconButton
+          onClick={handleInfoClose}
+          sx={() => ({
+            position: "absolute",
+            right: 8,
+            top: 8,
+          })}
+        >
+          <Close />
+        </IconButton>
+        <DialogContent dividers>
+          <Typography gutterBottom align="justify">
+            Slidep a d'abord été pensé comme l'application que j'aurais aimé
+            avoir en tant qu'étudiant en ingénierie mécanique.
+          </Typography>
+
+          <Typography gutterBottom align="justify">
+            La méthode par éléments finis (FEM) m'a toujours facinée. On arrive
+            avec un modèle mathématique simple à recréer un comportement
+            physique réel. Mais même si les interfaces se sont améliorées, les
+            Ansys et Abaqus restent des outils complexes et souvent très chères.
+            De plus, les pièces un peu complexes demandent vite beaucoup de
+            temps et de ressources. C'est pour ça que j'ai toujours eu une
+            fixette sur les éléments de type poutre. Avec les poutres, on peut
+            faire des éléments finis en temps réel ! J'ai toujours eu envie de
+            créer un outil basé dessus.
+          </Typography>
+
+          <Typography gutterBottom align="justify">
+            C'est Slidep : De la simulation en temps réel avec des éléments
+            simples, le tout dans une interface facile d'accès. C'est l'étape
+            intermédiaire entre les schémas papier crayon et le solveur par
+            éléments finis. Mais pour prétendre remplacer le papier crayon, il
+            faudrais pouvoir créer tous les mécanismes ! C'est pour cela qu'à
+            l'avenir, j'aimerais faire évoluer Slidep pour gérer les collisions,
+            dessiner en 3D, voire même faire de la dynamique des fluides !
+          </Typography>
+
+          <Typography gutterBottom align="justify">
+            Implémenter ces changement à l'avenir me demandera plus que de la
+            patience, mais des moyens. Alors si vous avez des idées, partagez
+            les ! Si vous savez coder, contribuez ! Et si vous avez de l'argent,
+            financez !
+          </Typography>
+        </DialogContent>
+        <DialogContent>
+          <Box>Contact :</Box>
+          <a href="mailto:arnaud.jungo@slidep.ch">arnaud.jungo@slidep.ch</a>
+          <Box>Code :</Box>
+          <a href="https://github.com/Jungo-Phi/Slidep">
+            github.com/Jungo-Phi/Slidep
+          </a>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={settingsOpen} onClose={handleSettingsClose}>
+        <DialogTitle fontSize={"large"} sx={{ mb: -2 }}>
+          Paramètres
+        </DialogTitle>
+        <IconButton
+          onClick={handleSettingsClose}
+          sx={{
+            position: "absolute",
+            right: 8,
+            top: 8,
+          }}
+        >
+          <Close />
+        </IconButton>
+        <DialogContent>
+          <Typography>Afficher les contraintes</Typography>
+          <Typography>Aimanter à la grille</Typography>
+          <Typography>Thème (Couleurs)</Typography>
+          <Typography>Style des éléments</Typography>
+        </DialogContent>
+      </Dialog>
     </ThemeProvider>
   );
 };

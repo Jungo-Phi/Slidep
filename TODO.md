@@ -7,6 +7,7 @@
 ## ✅ Terminées
 
 ### Édition & Canvas
+
 - ~Bug Delete~
 - ~Bug ChangingGearSize~
 - ~add MovingBeltBody canvasState~
@@ -60,6 +61,7 @@
 - ~Compléter la contrainte d'angle~
 
 ### UX & UI
+
 - ~Faire les nouveaux icons~
 - ~Ajouter les sens de rotation des engrenages dans les connections~
 - ~Ajouter les ratios des engrenages dans les connections~
@@ -75,28 +77,32 @@
 - ~Limiter la longueur des edges au placement et déplacement~
 - ~Déplacer les dimentions avec les élements associés~
 - ~Draw Slideps rotating beams over slider~
+- ~Pastille de sauvegarde : 🟢 Vert / ⟳ Spinner / 🔴 Rouge — _spinner et vert faits, rouge à tester_~
 
 ---
 
 ## 🚧 En cours / Partiellement fait
 
 ### Architecture & Modes
-- Séparer `AppMode` (édition/statique/cinématique/dynamique) de `CanvasState` — *types créés, propagation en cours*
-- Implémenter `RuntimeState` (remplace `SimulationState`) — *types créés, à brancher*
+
+- Séparer `AppMode` (édition/statique/cinématique/dynamique) de `CanvasState` — _types créés, propagation en cours_
+- Implémenter `RuntimeState` (remplace `SimulationState`) — _types créés, à brancher_
 
 ### Top Bar
-- Pastille de sauvegarde : 🟢 Vert / ⟳ Spinner / 🔴 Rouge — *spinner et vert faits, rouge à tester*
-- Sauvegarder / Charger mécanisme — *IndexedDB ok, fichier .slidep ok, import .dxf non*
+
+- Sauvegarder / Charger mécanisme — _IndexedDB ok, fichier .slidep ok, import .dxf non_
 
 ### Panneau latéral
-- Analyse DDL basique : indicateur global — *partiellement fait dans ProjectInfoSection*
-- Onglets au panneau de propriétés — *structure prête, à implémenter*
+
+- Analyse DDL basique : indicateur global — _partiellement fait dans ProjectInfoSection_
+- Onglets au panneau de propriétés — _structure prête, à implémenter_
 
 ---
 
 ## 📋 Édition — Fonctionnelles
 
 ### Éléments & Connexions
+
 - Connect belt ends
 - Placer join à la jonction des Beams
 - Connecter une courroie à un engrenage avec une extrémité (en plus de la longueur)
@@ -109,6 +115,7 @@
 - (Supprimer les joints quand ils ne sont connectés qu'à 1 élément ?)
 
 ### Contraintes & Solver géométrique
+
 - Ajouter "repelDistance" pour éloigner les contraintes détachées : move apart disconnected elements
 - geometric-solver : distanceConstraint est en conflit avec AtEdgeRatio vraisemblablement
 - geometric solver - radius constraint
@@ -116,6 +123,7 @@
 - Empecher les contraintes sur le même élément (DDL analyser)
 
 ### Interactions Canvas
+
 - Click dans Dimension quand state==placingStartDimension -> Editing
 - Dimension edge to node bug
 - Belt hover (gear section) is not reliable
@@ -125,6 +133,7 @@
 - hilight element on hover "disconnect" on element panel
 
 ### Données & Persistance
+
 - Reset CanvasState quand on change de mécanisme
 - Movement et zoom de la grille
 - Afficher / cacher les contraintes
@@ -136,12 +145,14 @@
 ## 📋 Simulation — Solvers & Modes
 
 ### Phase 1 (MVP)
+
 - Implémenter algorithme de cinématique (reprendre geometric-solver)
 - Implémenter algorithme de dynamique PBD (temps, gravité, inertie, chocs)
 - Interface Top Bar avec contrôles temporels complets (timeline, speed, play/pause)
 - Panneau latéral : onglet **Analyse**
 
 ### Phase 2
+
 - Implémenter algorithme de statique (matrices, ΣF=0)
 - Solver Statique algébrique (résolution d'inconnues)
 - Onglet "Analyse" avancé (détail des sous-systèmes)
@@ -152,11 +163,13 @@
 ## 📋 Top Bar — Spécifié dans Architecture.md
 
 ### Zone 2 : Cockpit de Simulation
+
 - Sélecteur de Mode : boutons segmentés [Édition] [Statique] [Cinématique] [Dynamique]
 - Timeline : curseur horizontal pour naviguer manuellement dans le temps
 - Réglages de simulation : toggles Gravité, Collisions
 
 ### Zone 3 : Outils, Navigation & Historique
+
 - Menu "Paramètres" (⚙️) avec sous-menus complets :
   - Vue : aimanter à la grille, afficher la grille, afficher les contraintes géométriques
   - Thème : Clair / Sombre / Auto
@@ -165,6 +178,7 @@
 - Bouton "Info" (i) : modale crédits + liens contribution
 
 ### Logo
+
 - Hover : transformation en mécanisme animé minimaliste (engrenages, bielles) pendant 2-3s
 - Clic : ouverture plateforme communautaire
 
@@ -173,6 +187,7 @@
 ## 📋 Panneau latéral — Spécifié dans Architecture.md
 
 ### Onglet "Élément" — Sections manquantes
+
 - Section "Géométrie & Connexions" : afficher vitesse actuelle en mode simulation
 - Section "Propriétés Physiques" : champs Couple, Frottement (en plus de Masse, Raideur)
 - Section "Visualisation" (Overlays Légers) : toggles Forces, Vitesses sur le canvas
@@ -183,6 +198,7 @@
   - Suppression individuelle des mesures, disparition de la balise si dernière supprimée
 
 ### Onglet "Analyse" (onglet 4, entièrement non implémenté)
+
 - Infos générales : énergie totale du système, bilan des forces externes
 - Contrôles globaux des overlays : afficher/cacher tous les overlays d'un type
   - Types : Forces de Réaction, Vitesses, Contraintes (poutres colorées), Path
@@ -211,12 +227,14 @@
 ## 📋 Interactions Avancées — Spécifié dans Architecture.md
 
 ### Transitions
+
 - Retour au mode Édition : les pièces reprennent la position qu'elles avaient avant la simulation
 - Modification topologie en simulation : pause auto + bascule temporaire Édition
 - Modification paramètres en simulation : Hot-Reload sans pause (même en cours de simulation)
 - Feedback visuel Hot-Reload : champ clignote brièvement (bordure verte) pour confirmer la prise en compte par le solver
 
 ### Erreurs et Conflits
+
 - Instabilité physique (solver PBD diverge / explosion) : pause auto + snackbar d'erreur
 - Conflit cinématique (deux moteurs incompatibles) : surlignage rouge des éléments conflictuels, panneau contextuel bascule sur onglet Analyse avec message explicatif
 
@@ -251,4 +269,4 @@
 
 ---
 
-*Document réorganisé le 2026-06-18*
+_Document réorganisé le 2026-06-18_

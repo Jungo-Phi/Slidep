@@ -1,8 +1,10 @@
-import React, { useState } from "react";
-import { Box, Paper, Typography } from "@mui/material";
+import React from "react";
+import { Box, Paper, Tabs, Tab } from "@mui/material";
 import {
-  KeyboardArrowUp as CollapseIcon,
-  KeyboardArrowDown as ExpandIcon,
+  Folder as ProjectIcon,
+  Build as ElementIcon,
+  Straighten as ConstraintsIcon,
+  Assessment as AnalysisIcon,
 } from "@mui/icons-material";
 import {
   Action,
@@ -11,6 +13,7 @@ import {
   MechanicalElement,
   Mechanism,
   MechanismMetadata,
+  PropertiesPanelTab,
   RuntimeState,
   SimulationConfig,
 } from "../../types";
@@ -19,8 +22,7 @@ import { CanvasState } from "../../types/canvas-state";
 import { ProjectInfoSection } from "./ProjectInfoSection";
 import ElementProperties from "./ElementProperties";
 import ConstraintsPanel from "./ConstraintsPanel";
-import SimulationControls from "../simulation-controls";
-import { legible_id } from "../../utils";
+import AnalysisPanel from "./AnalysisPanel";
 
 export interface PropertiesPanelProps {
   setCanvasState: (state: CanvasState) => void;
@@ -34,6 +36,8 @@ export interface PropertiesPanelProps {
   setSimulationConfig: (config: SimulationConfig) => void;
   simulationConfig: SimulationConfig;
   appMode: AppMode;
+  activeTab: PropertiesPanelTab;
+  setActiveTab: (tab: PropertiesPanelTab) => void;
 }
 
 export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
@@ -44,13 +48,9 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
   setHoveredPart,
   updateMetadata,
   appMode,
+  activeTab,
+  setActiveTab,
 }) => {
-  const [closed, setClosed] = useState<boolean>(false);
-
-  const togglePanel = () => {
-    setClosed(!closed);
-  };
-
   const handleProjectInfoChange = (info: any) => {
     updateMetadata({
       ...mechanism.metadata,
@@ -63,30 +63,12 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
     });
   };
 
-  let title = "Propriétés";
-  if (!closed) {
-    if (appMode !== "edition") {
-      title = "Contrôles de la simulation";
-    } else if ("elementID" in canvasState) {
-      const mechanicalElement: MechanicalElement | undefined =
-        mechanism.mechanicalElements.find(
-          (el) => el.id === canvasState.elementID,
-        );
-      if (mechanicalElement) {
-        title += " de l'élément";
-      } else if (
-        mechanism.constraintElements.find(
-          (el) => el.id === canvasState.elementID,
-        )
-      ) {
-        title = " Contraintes";
-      } else {
-        title = "Erreur";
-      }
-    } else {
-      title += " générales";
-    }
-  }
+  const handleTabChange = (
+    _event: React.SyntheticEvent,
+    newValue: PropertiesPanelTab,
+  ) => {
+    setActiveTab(newValue);
+  };
 
   return (
     <Paper
@@ -94,7 +76,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
         position: "absolute",
         right: 16,
         top: 16,
-        width: closed ? 150 : 300,
+        width: 300,
         maxHeight: "calc(100% - 32px)",
         display: "flex",
         flexDirection: "column",
@@ -104,87 +86,110 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
         boxShadow: 3,
       }}
     >
-      {/* Header */}
       <Box
         sx={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          p: closed ? 0.5 : 1.5,
-          pl: closed ? 1 : 2,
           backgroundColor: "primary.main",
           color: "primary.contrastText",
-          cursor: "pointer",
-          "&:hover": { backgroundColor: "primary.dark" },
         }}
-        onClick={togglePanel}
-        title={closed ? "Ouvrir le panneau" : "Réduire le panneau"}
       >
-        <Typography variant="subtitle1" fontWeight={500}>
-          {title}
-        </Typography>
-        {closed ? (
-          <ExpandIcon fontSize="medium" />
-        ) : (
-          <CollapseIcon fontSize="medium" />
-        )}
+        <Tabs
+          value={activeTab}
+          onChange={handleTabChange}
+          textColor="inherit"
+          tabIndex={0}
+          sx={{
+            minHeight: 40,
+            height: 40,
+            "& .MuiTabs-flexContainer": {
+              justifyContent: "space-around",
+            },
+            "& .MuiTab-root": {
+              px: 2,
+              my: -0.5,
+              fontWeight: "bold",
+              "&.Mui-selected": {
+                color: "#fff",
+              },
+            },
+            "& .MuiTabs-indicator": {
+              backgroundColor: "#fff",
+              height: 3,
+              borderRadius: "3px 3px 0 0",
+            },
+          }}
+        >
+          {[
+            { id: "project", icon: ProjectIcon, label: "Projet" },
+            { id: "element", icon: ElementIcon, label: "Élément" },
+            { id: "constraints", icon: ConstraintsIcon, label: "Contraintes" },
+            { id: "analysis", icon: AnalysisIcon, label: "Analyse" },
+          ].map((tab) => {
+            return (
+              <Tab
+                key={tab.id}
+                value={tab.id}
+                icon={
+                  <Box
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 0.5,
+                    }}
+                  >
+                    <tab.icon fontSize="small" />
+                    {activeTab === tab.id && (
+                      <span
+                        style={{
+                          fontSize: "0.75rem",
+                          whiteSpace: "nowrap",
+                          lineHeight: 1.2,
+                        }}
+                      >
+                        {tab.label}
+                      </span>
+                    )}
+                  </Box>
+                }
+                label=""
+                sx={{
+                  minWidth: "auto",
+                  justifyContent: "center",
+                }}
+              />
+            );
+          })}
+        </Tabs>
       </Box>
 
-      {!closed && (
-        <Box sx={{ p: 2, overflow: "auto" }}>
-          {/* Contenu du panneau de propriétés */}
-          {appMode !== "edition" ? (
-            <SimulationControls />
-          ) : "elementID" in canvasState ? (
-            <Box>
-              <>
-                {(() => {
-                  const mechanicalElement: MechanicalElement | undefined =
-                    mechanism.mechanicalElements.find(
-                      (el) => el.id === canvasState.elementID,
-                    );
-                  if (mechanicalElement) {
-                    return (
-                      <ElementProperties
-                        element={mechanicalElement}
-                        setHoveredPart={setHoveredPart}
-                        setCanvasState={setCanvasState}
-                        applyActions={applyActions}
-                        mechanism={mechanism}
-                      />
-                    );
-                  }
-                  if (
-                    mechanism.constraintElements.find(
-                      (el) => el.id === canvasState.elementID,
-                    )
-                  ) {
-                    return (
-                      <ConstraintsPanel
-                        constraintID={canvasState.elementID}
-                        setHoveredPart={setHoveredPart}
-                        setCanvasState={setCanvasState}
-                        applyActions={applyActions}
-                        mechanism={mechanism}
-                      />
-                    );
-                  }
-                  return (
-                    <Typography variant="body2">
-                      Élément "{legible_id(canvasState.elementID)} " introuvable
-                    </Typography>
-                  );
-                })()}
-              </>
-            </Box>
-          ) : (
-            <ProjectInfoSection
-              mechanism={mechanism}
-              updateMetadata={handleProjectInfoChange}
-            />
-          )}
-        </Box>
-      )}
+      <Box sx={{ overflow: "auto", flexGrow: 1 }}>
+        {activeTab === "project" && (
+          <ProjectInfoSection
+            mechanism={mechanism}
+            updateMetadata={handleProjectInfoChange}
+          />
+        )}
+        {activeTab === "element" && (
+          <ElementProperties
+            element={mechanism.mechanicalElements.find(
+              (el) => el.id === (canvasState as any).elementID,
+            )}
+            setHoveredPart={setHoveredPart}
+            setCanvasState={setCanvasState}
+            applyActions={applyActions}
+            mechanism={mechanism}
+          />
+        )}
+        {activeTab === "constraints" && (
+          <ConstraintsPanel
+            constraintID={(canvasState as any).elementID}
+            setHoveredPart={setHoveredPart}
+            setCanvasState={setCanvasState}
+            applyActions={applyActions}
+            mechanism={mechanism}
+          />
+        )}
+        {activeTab === "analysis" && <AnalysisPanel mechanism={mechanism} />}
+      </Box>
     </Paper>
   );
 };

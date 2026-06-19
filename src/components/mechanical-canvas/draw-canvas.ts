@@ -16,7 +16,6 @@ import {
   NodeElement,
   Point2,
   UnionElement,
-  ViewportState,
 } from "../../types";
 import { HoveredPart } from "../../types/hovered-part";
 import { CanvasState } from "../../types/canvas-state";
@@ -26,7 +25,6 @@ import {
   draw_hover_edge_end,
   draw_damper,
   draw_gear,
-  draw_grid,
   draw_ground,
   draw_join,
   draw_mass,
@@ -181,23 +179,11 @@ function is_hovered(
  */
 export function drawMechanicalCanvas(
   ctx: CanvasRenderingContext2D,
-  width: number,
-  height: number,
   hoveredPart: HoveredPart,
   state: CanvasState,
   mechanicalElements: MechanicalElement[],
   constraintElements: ConstraintElement[],
-  viewport: ViewportState,
 ) {
-  // Efface le canvas
-  ctx.clearRect(0, 0, width, height);
-  // Dessine la grille
-  draw_grid(ctx, width, height, viewport);
-
-  ctx.save();
-  ctx.translate(viewport.pan.x, viewport.pan.y); // TODO : décaler au milieu ?
-  ctx.scale(viewport.zoom, viewport.zoom);
-
   const allElements: UnionElement[] = (
     mechanicalElements as UnionElement[]
   ).concat(constraintElements);
@@ -1027,6 +1013,5 @@ export function drawMechanicalCanvas(
       );
       break;
   }
-  ctx.restore();
   ctx.restore();
 }

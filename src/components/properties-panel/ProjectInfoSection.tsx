@@ -48,8 +48,15 @@ export const ProjectInfoSection: React.FC<ProjectInfoSectionProps> = ({
   };
 
   return (
-    <Box>
-      <Box sx={{ mb: 1.5 }}>
+    <Box sx={{ my: 2 }}>
+      <Box
+        sx={{
+          display: "flex",
+          flexDirection: "column",
+          gap: 1.5,
+          mx: 2,
+        }}
+      >
         <TextField
           fullWidth
           label="Nom du projet"
@@ -57,9 +64,7 @@ export const ProjectInfoSection: React.FC<ProjectInfoSectionProps> = ({
           onChange={(e) => handleInfoChange("name", e.target.value)}
           size="small"
         />
-      </Box>
 
-      <Box sx={{ mb: 1.5 }}>
         <TextField
           fullWidth
           label="Description"
@@ -69,9 +74,7 @@ export const ProjectInfoSection: React.FC<ProjectInfoSectionProps> = ({
           onChange={(e) => handleInfoChange("description", e.target.value)}
           size="small"
         />
-      </Box>
 
-      <Box sx={{ mb: 1.5 }}>
         <TextField
           fullWidth
           label="Auteur·rice·x"
@@ -81,8 +84,14 @@ export const ProjectInfoSection: React.FC<ProjectInfoSectionProps> = ({
         />
       </Box>
 
-      <Box sx={{ mb: 1.5, mt: 1, display: "flex", gap: 1 }}>
-        <Box sx={{ flexGrow: 1 }}>
+      <Box
+        sx={{
+          m: 2,
+          display: "flex",
+          justifyContent: "space-between",
+        }}
+      >
+        <Box>
           <Typography
             variant="caption"
             color="text.secondary"
@@ -94,7 +103,7 @@ export const ProjectInfoSection: React.FC<ProjectInfoSectionProps> = ({
             {format_date(projectInfo.createdAt)}
           </Typography>
         </Box>
-        <Box sx={{ flexGrow: 1 }}>
+        <Box>
           <Typography
             variant="caption"
             color="text.secondary"
@@ -106,7 +115,7 @@ export const ProjectInfoSection: React.FC<ProjectInfoSectionProps> = ({
             {format_date(projectInfo.modifiedAt)}
           </Typography>
         </Box>
-        <Box sx={{ flexGrow: 1 }}>
+        <Box>
           <Typography
             variant="caption"
             color="text.secondary"
@@ -118,54 +127,41 @@ export const ProjectInfoSection: React.FC<ProjectInfoSectionProps> = ({
         </Box>
       </Box>
 
-      <Divider sx={{ my: 2 }} />
+      <Divider />
 
       <Box
         sx={{
           display: "flex",
-          alignItems: "center",
-          gap: 1,
-          mx: 1,
+          flexDirection: "column",
+          gap: 0.5,
+          m: 2,
         }}
       >
-        <Typography variant="body2">Éléments :</Typography>
-        <Typography variant="body1" fontWeight={500}>
-          {mechanism.mechanicalElements.length}
-        </Typography>
-      </Box>
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            gap: 1,
+          }}
+        >
+          <Typography variant="body2">Éléments :</Typography>
+          <Typography variant="body1" fontWeight={500}>
+            {mechanism.mechanicalElements.length}
+          </Typography>
+        </Box>
 
-      <Box
-        sx={{
-          display: "flex",
-          alignItems: "center",
-          gap: 1,
-          mx: 1,
-        }}
-      >
-        <Typography variant="body2">Contraintes :</Typography>
-        <Typography variant="body1" fontWeight={500}>
-          {mechanism.constraintElements.length}
-        </Typography>
-      </Box>
-
-      <Box
-        sx={{
-          display: "flex",
-          alignItems: "center",
-          gap: 1,
-          mx: 1,
-        }}
-      >
-        <Typography variant="body2">Degrés de liberté :</Typography>
-        <Typography variant="body1" fontWeight={500}>
-          {get_degrees_of_freedom(
-            get_nodes(mechanism.mechanicalElements),
-            get_links(
-              mechanism.mechanicalElements,
-              mechanism.constraintElements,
-            ),
-          )}
-        </Typography>
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            gap: 1,
+          }}
+        >
+          <Typography variant="body2">Contraintes :</Typography>
+          <Typography variant="body1" fontWeight={500}>
+            {mechanism.constraintElements.length}
+          </Typography>
+        </Box>
       </Box>
     </Box>
   );

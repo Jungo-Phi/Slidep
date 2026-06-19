@@ -630,7 +630,6 @@ export function get_hovered_part_of_element(
         case "SelectedElement":
         case "Erasing":
         case "EditingConstraint":
-        case "Simulating":
           if (
             mousePos.distance_to(element.position) <= HIT_TOLERANCE.CONSTRAINT
           ) {
