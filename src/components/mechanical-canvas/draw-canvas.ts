@@ -728,21 +728,19 @@ export function drawMechanicalCanvas(
         case "PlacingPivot":
           draw_pivot(ctx, false);
           break;
-        case "PlacingSlider":
+        case "PlacingSlider": {
           let hoveredBeam;
           if (hoveredPart.type === "Edge" && hoveredPart.part === "body") {
-            hoveredBeam = get_mechanical_element_from_id(
-              hoveredPart.id,
-              mechanicalElements,
-            ) as BeamElement;
+            hoveredBeam = mechanicalElements.find(
+              (e) => e.id === hoveredPart.id,
+            ) as BeamElement | undefined;
           } else if (hoveredPart.type === "Node") {
-            hoveredBeam = node_on_beam_body(
-              get_mechanical_element_from_id(
-                hoveredPart.id,
-                mechanicalElements,
-              ) as NodeElement,
-              mechanicalElements,
-            );
+            const hoveredNode = mechanicalElements.find(
+              (e) => e.id === hoveredPart.id,
+            ) as NodeElement | undefined;
+            if (hoveredNode) {
+              hoveredBeam = node_on_beam_body(hoveredNode, mechanicalElements);
+            }
           }
           if (hoveredBeam) {
             ctx.rotate(
@@ -751,6 +749,7 @@ export function drawMechanicalCanvas(
           }
           draw_slider(ctx, false);
           break;
+        }
         case "PlacingJoin":
           draw_join(ctx);
           break;

@@ -4,6 +4,8 @@
 
 ---
 
+- Theme uniformisation
+
 ## ✅ Terminées
 
 ### Édition & Canvas

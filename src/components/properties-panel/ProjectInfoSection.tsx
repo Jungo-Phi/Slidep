@@ -1,7 +1,15 @@
-import React, { useEffect, useState } from "react";
-import { Box, Typography, TextField, Divider } from "@mui/material";
+import React, { useEffect, useMemo, useState } from "react";
+import {
+  Alert,
+  AlertTitle,
+  Box,
+  Divider,
+  TextField,
+  Typography,
+} from "@mui/material";
+import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
 import { Mechanism, MechanismMetadata } from "../../types";
-import { format_date } from "../../utils";
+import { format_date, validate_mechanism } from "../../utils";
 
 interface ProjectInfoSectionProps {
   mechanism: Mechanism;
@@ -12,6 +20,12 @@ export const ProjectInfoSection: React.FC<ProjectInfoSectionProps> = ({
   mechanism,
   updateMetadata,
 }) => {
+  const validationErrors = useMemo(
+    () => validate_mechanism(mechanism),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [mechanism.mechanicalElements, mechanism.constraintElements],
+  );
+
   const [projectInfo, setProjectInfo] = useState<MechanismMetadata>({
     name: mechanism.metadata.name,
     description: mechanism.metadata.description,
@@ -161,6 +175,45 @@ export const ProjectInfoSection: React.FC<ProjectInfoSectionProps> = ({
           </Typography>
         </Box>
       </Box>
+
+      {validationErrors !== null && (
+        <>
+          <Divider />
+          <Alert
+            severity="error"
+            icon={false}
+            sx={{
+              py: 0.5,
+              borderRadius: 0,
+              border: "none",
+              boxShadow: "none",
+              mb: -2,
+            }}
+          >
+            <AlertTitle
+              sx={{
+                fontSize: "0.85rem",
+                mb: 0.5,
+                display: "flex",
+                alignItems: "center",
+                gap: 0.5,
+              }}
+            >
+              <ErrorOutlineIcon fontSize="small" />
+              {validationErrors.length} erreur
+              {validationErrors.length > 1 ? "s" : ""} détectée
+              {validationErrors.length > 1 ? "s" : ""}
+            </AlertTitle>
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 0.25 }}>
+              {validationErrors.map((err, i) => (
+                <Box key={i} sx={{ fontSize: "0.72rem" }}>
+                  • {err.message}
+                </Box>
+              ))}
+            </Box>
+          </Alert>
+        </>
+      )}
     </Box>
   );
 };

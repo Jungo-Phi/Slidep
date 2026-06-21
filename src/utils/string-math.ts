@@ -1,8 +1,9 @@
 import { ID, UnionElement } from "../types";
 
 /**
- * Formate l'id d'un élément pour le rendre lisible.
+ * Formate un UUID pour le rendre lisible.
  */
+/*
 export function legible_id(id: ID): string {
   const alphabet = "abcdefghijklmnopqrstuvwxyz";
   return id
@@ -11,6 +12,81 @@ export function legible_id(id: ID): string {
     .map((char, i) => (i ? char : char.toUpperCase()))
     .join("")
     .substring(0, 3);
+}
+*/
+
+/**
+ * Génère un code lisible de 4 lettres (ex: "Talo", "Mira", "Beno").
+ * Exclut Q, W, X, Y, Z pour une lisibilité maximale.
+ * Empêche les fins de mots dures (ex: "kp", "tz", "gd").
+ */
+export function legible_id(id: ID): string {
+  const parts = id.toLowerCase().match(/[0-9a-f]+/g);
+  if (!parts || parts.length < 5) {
+    throw new Error("ID invalide");
+  }
+
+  // 1. Alphabets "Propres" (21 lettres)
+  // Voyelles classiques (5)
+  const voyelles = "aeiou";
+  // Consonnes standards (16) : on enlève q, w, x, y, z
+  const consonnes = "bcdfghjklmnpqrstv";
+  // Consonnes de fin autorisées (6) : uniquement les liquides/nasales/sifflantes douces (l, m, n, r, s, v)
+  // On exclut les occlusives (b, d, g, k, p, t) et les frottantes dures (f) en position finale après une consonne.
+  const consonnes_finales = "lmnrsv";
+
+  // 2. Définition des structures (Le "Plan")
+  // On évite les structures qui finissent par 2 consonnes dures.
+  const structures = [
+    // Structures classiques (60% des cas)
+    { pattern: "CVCV", map: [consonnes, voyelles, consonnes, voyelles] }, // Talo
+    {
+      pattern: "VCVC",
+      map: [voyelles, consonnes, voyelles, consonnes_finales],
+    }, // Arno (fin douce garantie)
+    { pattern: "CVCV2", map: [consonnes, voyelles, consonnes, voyelles] }, // Redondance pour pondérer
+
+    // Structures avec diphtongues (20% des cas)
+    {
+      pattern: "CVVC",
+      map: [consonnes, voyelles, voyelles, consonnes_finales],
+    }, // Loic, Maud
+    {
+      pattern: "VCCV",
+      map: [voyelles, consonnes, consonnes_finales, voyelles],
+    }, // Elsa, Olaf (la 3ème est douce)
+
+    // Structures terminant par consonne unique (20% des cas)
+    {
+      pattern: "CVCf",
+      map: [consonnes, voyelles, consonnes, consonnes_finales],
+    }, // Talm, Berc
+  ];
+
+  // 3. Sélection de la structure (basée sur la 1ère section)
+  const selector = parseInt(parts[0].substring(0, 8), 16);
+  const structureIndex = selector % structures.length;
+  const currentStructure = structures[structureIndex];
+
+  // 4. Génération des 4 lettres (sections 2 à 5)
+  const result: string[] = [];
+
+  for (let i = 0; i < 4; i++) {
+    const charSet = currentStructure.map[i];
+    const hexSegment = parts[i + 1].substring(0, 4);
+    const num = parseInt(hexSegment, 16);
+
+    let char = charSet[num % charSet.length];
+
+    // Majuscule en tête
+    if (i === 0) {
+      char = char.toUpperCase();
+    }
+
+    result.push(char);
+  }
+
+  return result.join("");
 }
 
 /**

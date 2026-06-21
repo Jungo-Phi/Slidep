@@ -19,6 +19,7 @@ import {
   CircularProgress,
   Chip,
   Button,
+  Snackbar,
 } from "@mui/material";
 import {
   CenterFocusStrong,
@@ -153,6 +154,11 @@ const App: React.FC = () => {
   const galleryOpenRef = useRef(galleryOpen);
   const timelineTrackRef = useRef<HTMLDivElement | null>(null);
   const runtimeStateRef = useRef<RuntimeState>(DEFAULT_RUNTIME_STATE);
+
+  const [snackbar, setSnackbar] = useState<{
+    open: boolean;
+    message: string;
+  }>({ open: false, message: "" });
 
   const [activeTab, setActiveTab] = useState<PropertiesPanelTab>("project");
   const userSelectedTabRef = useRef(false);
@@ -384,7 +390,7 @@ const App: React.FC = () => {
     (mechanismRecord: SerializedMechanism) => {
       setMechanism(deserialize_mechanism(mechanismRecord));
       setGalleryOpen(false);
-      // TODO : Afficher un snackbar "Mécanisme chargé"
+      setSnackbar({ open: true, message: "Mécanisme chargé" });
     },
     [],
   );
@@ -398,7 +404,7 @@ const App: React.FC = () => {
     setSavedMechanisms((prev) =>
       prev.filter((r) => r.metadata.createdAt !== createdAtId),
     );
-    // TODO : Afficher un snackbar "Mécanisme supprimé"
+    setSnackbar({ open: true, message: "Mécanisme supprimé" });
   }, []);
 
   const handleNewFromGallery = useCallback(() => {
@@ -480,7 +486,7 @@ const App: React.FC = () => {
   /** App starts */
   useEffect(() => {
     preload_element_icons();
-    //handleOpenGallery();
+    handleOpenGallery();
   }, [handleOpenGallery]);
 
   return (
@@ -1356,6 +1362,50 @@ const App: React.FC = () => {
           <Typography>Style des éléments</Typography>
         </DialogContent>
       </Dialog>
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={3000}
+        onClose={() => setSnackbar((prev) => ({ ...prev, open: false }))}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      >
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            gap: 1.5,
+            pl: 2,
+            pr: 1.5,
+            py: 1,
+            borderRadius: 999,
+            backgroundColor: "#0008",
+            backdropFilter: "blur(6px)",
+            color: "#FFF",
+            fontSize: "0.85rem",
+            fontWeight: 500,
+          }}
+        >
+          <Typography
+            sx={{
+              fontSize: "inherit",
+              fontWeight: "inherit",
+              color: "inherit",
+            }}
+          >
+            {snackbar.message}
+          </Typography>
+          <IconButton
+            size="small"
+            onClick={() => setSnackbar((prev) => ({ ...prev, open: false }))}
+            sx={{
+              color: "rgba(255,255,255,0.6)",
+              p: 0.25,
+              "&:hover": { color: "#fff" },
+            }}
+          >
+            <Close sx={{ fontSize: 14 }} />
+          </IconButton>
+        </Box>
+      </Snackbar>
     </ThemeProvider>
   );
 };
