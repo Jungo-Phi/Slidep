@@ -27,6 +27,9 @@ import normalIconUrl from "../../assets/icons/palette/normal.svg";
 import parallelIconUrl from "../../assets/icons/palette/parallel.svg";
 import ratioIconUrl from "../../assets/icons/palette/ratio.svg";
 import forceIconUrl from "../../assets/icons/palette/force.svg";
+import momentIconUrl from "../../assets/icons/palette/moment.svg";
+import motorIconUrl from "../../assets/icons/palette/motor.svg";
+import tagIconUrl from "../../assets/icons/palette/tag.svg";
 
 import { CanvasState, CanvasStateType } from "../../types";
 import { COLORS } from "../../constants/rendering-specs";
@@ -300,7 +303,7 @@ const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
       {
         label: "Moment",
         tooltip: "Moment (O)",
-        iconSrc: "",
+        iconSrc: momentIconUrl,
         goToStateType: "PlacingMoment",
         hilightRule: (state) => state.type === "PlacingMoment",
         hilightColor: COLORS.ORANGE,
@@ -309,7 +312,7 @@ const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
       {
         label: "Moteur",
         tooltip: "Motor (W)",
-        iconSrc: "",
+        iconSrc: motorIconUrl,
         goToStateType: "PlacingMotor",
         hilightRule: (state) => state.type === "PlacingMotor",
         hilightColor: COLORS.ORANGE,
@@ -318,7 +321,7 @@ const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
       {
         label: "Balise",
         tooltip: "Balise (Z)",
-        iconSrc: "",
+        iconSrc: tagIconUrl,
         goToStateType: "PlacingBalise",
         hilightRule: (state) => state.type === "PlacingBalise",
         hilightColor: COLORS.ORANGE,

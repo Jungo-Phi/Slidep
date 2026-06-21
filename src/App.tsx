@@ -35,12 +35,11 @@ import {
   Apps,
   Undo,
   Redo,
-  Add,
   Gif,
-  Bolt,
-  GridView,
   KeyboardArrowDown,
   RestartAlt,
+  KeyboardDoubleArrowDown,
+  JoinInner,
 } from "@mui/icons-material";
 import { lightTheme } from "./lib/mui-theme"; // import { lightTheme, darkTheme, highContrastTheme } from "./lib/mui-theme";
 import logoUrl from "./assets/icons/palette/logo.svg";
@@ -132,6 +131,8 @@ const App: React.FC = () => {
   const [runtimeState, setRuntimeState] = useState<RuntimeState>(
     DEFAULT_RUNTIME_STATE,
   );
+  const [timelineHovered, setTimelineHovered] = useState(false);
+  const [timelineDragging, setTimelineDragging] = useState(false);
   const [simulationConfig, setSimulationConfig] = useState<SimulationConfig>(
     DEFAULT_SIMULATION_CONFIG,
   );
@@ -150,6 +151,8 @@ const App: React.FC = () => {
   const canvasStateRef = useRef<CanvasState>(canvasState);
   const mechanismRef = useRef<Mechanism>(mechanism);
   const galleryOpenRef = useRef(galleryOpen);
+  const timelineTrackRef = useRef<HTMLDivElement | null>(null);
+  const runtimeStateRef = useRef<RuntimeState>(DEFAULT_RUNTIME_STATE);
 
   const [activeTab, setActiveTab] = useState<PropertiesPanelTab>("project");
   const userSelectedTabRef = useRef(false);
@@ -186,6 +189,10 @@ const App: React.FC = () => {
   useEffect(() => {
     galleryOpenRef.current = galleryOpen;
   }, [galleryOpen]);
+
+  useEffect(() => {
+    runtimeStateRef.current = runtimeState;
+  }, [runtimeState]);
 
   const debouncedSave = useRef(
     debounce(() => {
@@ -637,7 +644,7 @@ const App: React.FC = () => {
                 }}
                 sx={{
                   "& .MuiToggleButton-root": {
-                    px: 1.25,
+                    px: 1,
                     py: 0.2,
                     fontSize: "0.72rem",
                     fontWeight: 600,
@@ -658,7 +665,7 @@ const App: React.FC = () => {
                 <ToggleButton value="dynamic">Dynamique</ToggleButton>
               </ToggleButtonGroup>
 
-              <Divider flexItem sx={{ mx: 1 }} />
+              <Divider flexItem sx={{ mx: 0.5 }} />
 
               {/* Contrôles temporels — toujours affichés, grisés en mode Édition */}
               <Box
@@ -736,20 +743,9 @@ const App: React.FC = () => {
                     <LastPage sx={{ fontSize: 20 }} />
                   </IconButton>
                 </Tooltip>
-
-                <Typography
-                  variant="caption"
-                  sx={{
-                    fontVariantNumeric: "tabular-nums",
-                    minWidth: 52,
-                    textAlign: "right",
-                    fontSize: "0.72rem",
-                    opacity: 0.85,
-                  }}
-                >
-                  t = {runtimeState.time.toFixed(1)} s
-                </Typography>
               </Box>
+
+              <Divider flexItem sx={{ mx: 0.5 }} />
 
               {/* Vitesse : boutons segmentés */}
               <Box
@@ -796,6 +792,8 @@ const App: React.FC = () => {
                 </ToggleButtonGroup>
               </Box>
 
+              <Divider flexItem sx={{ mx: 0.5 }} />
+
               {/* Toggles Gravité / Collisions */}
               <Box
                 sx={{
@@ -804,7 +802,7 @@ const App: React.FC = () => {
                   opacity: appMode === "edition" ? 0.3 : 1,
                   pointerEvents: appMode === "edition" ? "none" : "auto",
                   transition: "opacity 0.2s ease",
-                  gap: 0.5,
+                  gap: 1.5,
                 }}
               >
                 <Tooltip
@@ -815,7 +813,16 @@ const App: React.FC = () => {
                   }
                 >
                   <Chip
-                    icon={<Bolt sx={{ fontSize: "14px !important" }} />}
+                    icon={
+                      <KeyboardDoubleArrowDown
+                        sx={{
+                          fontSize: "14px !important",
+                          color: simulationConfig.gravity
+                            ? "primary.contrastText"
+                            : "inherit",
+                        }}
+                      />
+                    }
                     label="Gravité"
                     size="small"
                     clickable
@@ -825,13 +832,31 @@ const App: React.FC = () => {
                         gravity: !prev.gravity,
                       }))
                     }
-                    color={simulationConfig.gravity ? "primary" : "default"}
-                    variant={simulationConfig.gravity ? "filled" : "outlined"}
+                    variant="outlined"
                     sx={{
                       fontSize: "0.68rem",
                       height: 22,
-                      borderColor: COLORS.STROKE,
-                      "& .MuiChip-label": { px: 1 },
+                      borderColor: simulationConfig.gravity
+                        ? "primary.main"
+                        : COLORS.STROKE,
+                      backgroundColor: simulationConfig.gravity
+                        ? "primary.main"
+                        : "transparent",
+                      color: simulationConfig.gravity
+                        ? "primary.contrastText"
+                        : "inherit",
+                      "& .MuiChip-icon": {
+                        color: simulationConfig.gravity
+                          ? "primary.contrastText"
+                          : "inherit",
+                      },
+                      "& .MuiChip-label": { pr: 1 },
+                      "&.MuiChip-clickable:hover": {
+                        backgroundColor: simulationConfig.gravity
+                          ? COLORS.ORANGE_STROKE
+                          : "action.hover",
+                      },
+                      pl: 0.2,
                     }}
                   />
                 </Tooltip>
@@ -843,7 +868,16 @@ const App: React.FC = () => {
                   }
                 >
                   <Chip
-                    icon={<Bolt sx={{ fontSize: "14px !important" }} />}
+                    icon={
+                      <JoinInner
+                        sx={{
+                          fontSize: "14px !important",
+                          color: simulationConfig.collisions
+                            ? "primary.contrastText"
+                            : "inherit",
+                        }}
+                      />
+                    }
                     label="Collisions"
                     size="small"
                     clickable
@@ -853,15 +887,31 @@ const App: React.FC = () => {
                         collisions: !prev.collisions,
                       }))
                     }
-                    color={simulationConfig.collisions ? "primary" : "default"}
-                    variant={
-                      simulationConfig.collisions ? "filled" : "outlined"
-                    }
+                    variant="outlined"
                     sx={{
                       fontSize: "0.68rem",
                       height: 22,
-                      borderColor: COLORS.STROKE,
-                      "& .MuiChip-label": { px: 1 },
+                      borderColor: simulationConfig.collisions
+                        ? "primary.main"
+                        : COLORS.STROKE,
+                      backgroundColor: simulationConfig.collisions
+                        ? "primary.main"
+                        : "transparent",
+                      color: simulationConfig.collisions
+                        ? "primary.contrastText"
+                        : "inherit",
+                      "& .MuiChip-icon": {
+                        color: simulationConfig.collisions
+                          ? "primary.contrastText"
+                          : "inherit",
+                      },
+                      "& .MuiChip-label": { pr: 1 },
+                      "&.MuiChip-clickable:hover": {
+                        backgroundColor: simulationConfig.collisions
+                          ? COLORS.ORANGE_STROKE
+                          : "action.hover",
+                      },
+                      pl: 0.2,
                     }}
                   />
                 </Tooltip>
@@ -972,15 +1022,6 @@ const App: React.FC = () => {
                 open={menuOpen}
                 onClose={handleMenuClose}
               >
-                <MenuItem
-                  onClick={handleNewFromGallery}
-                  sx={{ gap: 1, fontSize: "14px" }}
-                  disableRipple
-                >
-                  <Add fontSize="small" />
-                  Nouveau projet
-                </MenuItem>
-                <Divider sx={{ my: 0.5 }} />
                 <MenuItem
                   onClick={handleMenuButtonUpload}
                   sx={{ gap: 1, fontSize: "14px" }}
@@ -1098,80 +1139,113 @@ const App: React.FC = () => {
           />
 
           {/* Floating panels */}
+
+          {/* Timeline */}
           {appMode !== "edition" && (
             <Box
-              elevation={0}
               sx={{
                 position: "absolute",
                 left: "50%",
-                top: 16,
-                boxSizing: "border-box",
+                top: 8,
+                transform: "translateX(-50%)",
+                zIndex: 1000,
                 display: "flex",
                 alignItems: "center",
-                gap: 1,
-                p: 0.5,
-                zIndex: 1000,
-                maxHeight: "calc(100vh - 32px)",
-                overflowY: "auto",
-                backgroundColor: "#fff",
-                minWidth: "300px",
+                backgroundColor: COLORS.FILL_NODE,
+                borderRadius: 999,
+                boxShadow: 3,
+                px: 1.5,
+                width: "min(480px, 55vw)",
+                height: 24,
               }}
             >
               <Box
+                ref={timelineTrackRef}
                 sx={{
                   flex: 1,
-                  height: 5,
-                  borderRadius: 3,
-                  backgroundColor: "rgba(255,255,255,0.2)",
+                  height: "100%",
+                  display: "flex",
+                  alignItems: "center",
                   position: "relative",
                   cursor: "pointer",
-                  "&:hover .timeline-thumb": { transform: "scale(1.4)" },
                 }}
-                onClick={(e) => {
-                  const rect = e.currentTarget.getBoundingClientRect();
-                  const ratio = (e.clientX - rect.left) / rect.width;
-                  const maxTime = runtimeState.current
-                    ? runtimeState.current.timestamp
-                    : 30;
-                  setRuntimeState((prev) => ({
-                    ...prev,
-                    time: Math.max(0, Math.min(maxTime, ratio * maxTime)),
-                    isPlaying: false,
-                  }));
+                onMouseEnter={() => setTimelineHovered(true)}
+                onMouseLeave={() => setTimelineHovered(false)}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  setTimelineDragging(true);
+                  const rect =
+                    timelineTrackRef.current!.getBoundingClientRect();
+                  const seek = (clientX: number) => {
+                    const ratio = Math.max(
+                      0,
+                      Math.min(1, (clientX - rect.left) / rect.width),
+                    );
+                    const maxTime = runtimeStateRef.current.current
+                      ? runtimeStateRef.current.current.timestamp
+                      : 30;
+                    setRuntimeState((prev) => ({
+                      ...prev,
+                      time: ratio * maxTime,
+                      isPlaying: false,
+                    }));
+                  };
+                  seek(e.clientX);
+                  const onMove = (ev: MouseEvent) => seek(ev.clientX);
+                  const onUp = () => {
+                    setTimelineDragging(false);
+                    document.removeEventListener("mousemove", onMove);
+                    document.removeEventListener("mouseup", onUp);
+                  };
+                  document.addEventListener("mousemove", onMove);
+                  document.addEventListener("mouseup", onUp);
                 }}
               >
+                {/* Rail */}
                 <Box
                   sx={{
                     position: "absolute",
                     left: 0,
-                    top: 0,
-                    height: "100%",
-                    borderRadius: 3,
-                    backgroundColor: "primary.main",
-                    width: `${((runtimeState.time / (runtimeState.current ? runtimeState.current.timestamp : 30)) * 100).toFixed(2)}%`,
-                    transition: runtimeState.isPlaying
-                      ? "none"
-                      : "width 0.1s ease",
+                    right: 0,
+                    height: 4,
+                    borderRadius: 2,
+                    backgroundColor: "rgba(0,0,0,0.1)",
                   }}
                 />
+                {/* Fill */}
                 <Box
-                  className="timeline-thumb"
                   sx={{
                     position: "absolute",
-                    top: "50%",
-                    left: `${((runtimeState.time / (runtimeState.current ? runtimeState.current.timestamp : 30)) * 100).toFixed(2)}%`,
-                    transform: "translate(-50%, -50%)",
-                    width: 11,
-                    height: 11,
-                    borderRadius: "50%",
-                    backgroundColor: "primary.contrastText",
-                    border: "2px solid",
-                    borderColor: "primary.main",
-                    boxShadow: "0 1px 3px rgba(0,0,0,0.25)",
-                    transition: "transform 0.15s ease",
-                    pointerEvents: "none",
+                    left: 0,
+                    height: 5,
+                    borderRadius: 3,
+                    backgroundColor: COLORS.ORANGE,
+                    width: `${((runtimeState.time / (runtimeState.current ? runtimeState.current.timestamp : 30)) * 100).toFixed(2)}%`,
                   }}
                 />
+                {/* Thumb */}
+                <Tooltip
+                  title={`t = ${runtimeState.time.toFixed(1)} s`}
+                  placement="bottom"
+                  open={timelineHovered || timelineDragging}
+                >
+                  <Box
+                    sx={{
+                      position: "absolute",
+                      top: "50%",
+                      left: `${((runtimeState.time / (runtimeState.current ? runtimeState.current.timestamp : 30)) * 100).toFixed(2)}%`,
+                      transform: `translate(-50%, -50%) scale(${timelineHovered || timelineDragging ? 1.3 : 1})`,
+                      width: 12,
+                      height: 12,
+                      borderRadius: "50%",
+                      backgroundColor: "white",
+                      border: "2px solid",
+                      borderColor: COLORS.ORANGE,
+                      boxShadow: "0 1px 4px rgba(0,0,0,0.3)",
+                      pointerEvents: "none",
+                    }}
+                  />
+                </Tooltip>
               </Box>
             </Box>
           )}

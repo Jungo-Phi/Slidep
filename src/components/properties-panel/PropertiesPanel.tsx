@@ -10,7 +10,6 @@ import {
   Action,
   ActionBundleType,
   AppMode,
-  MechanicalElement,
   Mechanism,
   MechanismMetadata,
   PropertiesPanelTab,
@@ -188,7 +187,9 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
             mechanism={mechanism}
           />
         )}
-        {activeTab === "analysis" && <AnalysisPanel mechanism={mechanism} />}
+        {activeTab === "analysis" && (
+          <AnalysisPanel mechanism={mechanism} appMode={appMode} />
+        )}
       </Box>
     </Paper>
   );

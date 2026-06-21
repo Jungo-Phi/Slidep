@@ -18,6 +18,7 @@ import {
   connect_gear_and_belt,
   connect_gears,
   delete_element,
+  delete_elements,
   get_mechanical_element_from_id,
 } from "./connect-actions";
 import {
@@ -68,6 +69,7 @@ export function canvasStateReducer(
                   elementIDs: [state.elementID, hoveredPart.id],
                 });
               }
+              break;
             }
           }
           if (hoveredPart.type === "Void") {
@@ -145,8 +147,11 @@ export function canvasStateReducer(
               delta: ZERO,
             });
           } else {
-            // Click on another element
-            // TODO : copy code from l.62
+            // Click on element not in selection without Shift → select only that element
+            setCanvasState({
+              type: "SelectedElement",
+              elementID: hoveredPart.id,
+            });
           }
           break;
         case "Erasing":
@@ -1439,15 +1444,13 @@ export function canvasStateReducer(
           break;
         case "ErasingMultiple":
           actionBundleType = "Other";
-          state.hoveredElementIDs.forEach((elementId: ID) => {
-            actions.push(
-              ...delete_element(
-                elementId,
-                mechanicalElements,
-                constraintElements,
-              ),
-            );
-          });
+          actions.push(
+            ...delete_elements(
+              state.hoveredElementIDs,
+              mechanicalElements,
+              constraintElements,
+            ),
+          );
           setCanvasState({ type: "Erasing" });
           break;
         case "MovingConstraint":
@@ -1483,15 +1486,13 @@ export function canvasStateReducer(
               break;
             case "SelectedMultiple":
               actionBundleType = "Other";
-              state.elementIDs.forEach((elementID: ID) => {
-                actions.push(
-                  ...delete_element(
-                    elementID,
-                    mechanicalElements,
-                    constraintElements,
-                  ),
-                );
-              });
+              actions.push(
+                ...delete_elements(
+                  state.elementIDs,
+                  mechanicalElements,
+                  constraintElements,
+                ),
+              );
               setCanvasState({ type: "Selecting" });
               break;
           }

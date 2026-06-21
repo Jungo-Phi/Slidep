@@ -15,15 +15,19 @@ import {
   Visibility,
   Add,
 } from "@mui/icons-material";
-import { Mechanism } from "../../types";
+import { AppMode, Mechanism } from "../../types";
 import { get_degrees_of_freedom } from "../solver/utils";
 import { get_links, get_nodes } from "../solver/parsing";
 
 interface AnalysisPanelProps {
   mechanism: Mechanism;
+  appMode: AppMode;
 }
 
-export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({ mechanism }) => {
+export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
+  mechanism,
+  appMode,
+}) => {
   const [overlays, setOverlays] = React.useState({
     forces: false,
     velocities: false,
@@ -154,6 +158,15 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({ mechanism }) => {
             }
           />
         </Box>
+      </Box>
+
+      <Divider />
+
+      {/* App Mode */}
+      <Box sx={{ mx: 2 }}>
+        <Typography variant="subtitle2" fontWeight={600} gutterBottom>
+          {appMode}
+        </Typography>
       </Box>
 
       <Divider />

@@ -464,7 +464,7 @@ export function draw_damper(
     length - DIM.TAC - start_x,
     DIM.DAMPER_CYLINDER_DIAMETER,
   );
-  ctx.lineWidth = STROKE_WIDTHS.THICK + widthChange;
+  ctx.lineWidth = STROKE_WIDTHS.STANDARD + widthChange;
   ctx.stroke();
 
   // Barre centrale

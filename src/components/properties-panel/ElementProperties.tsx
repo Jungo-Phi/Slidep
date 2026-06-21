@@ -48,14 +48,15 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
   };
 
   if (!element) {
+    const hasElements = mechanism.mechanicalElements.length > 0;
     return (
       <Box>
-        <Box sx={{ textAlign: "center", p: 4, pb: 2 }}>
+        <Box sx={{ textAlign: "center", p: 4, pb: hasElements ? 2 : 4 }}>
           <Box sx={{ fontSize: "0.875rem", color: "text.disabled" }}>
             Sélectionnez un élément pour voir ses propriétés
           </Box>
         </Box>
-        {mechanism.mechanicalElements.length > 0 && (
+        {hasElements && (
           <List
             sx={{
               display: "flex",

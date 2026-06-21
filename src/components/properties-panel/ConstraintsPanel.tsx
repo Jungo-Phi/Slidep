@@ -3,7 +3,7 @@
  * Displays properties for element elements
  */
 
-import { Box, IconButton, List, Typography, ListItem } from "@mui/material";
+import { Box, IconButton, List, ListItem } from "@mui/material";
 import DeleteIcon from "@mui/icons-material/Delete";
 import { ConstraintElement, ID } from "../../types/element";
 import {
@@ -39,7 +39,7 @@ export const ConstraintsPanel: React.FC<ConstraintsPanelProps> = ({
     return (
       <Box sx={{ textAlign: "center", p: 4 }}>
         <Box sx={{ fontSize: "0.875rem", color: "text.disabled" }}>
-          Pas encore de contrainte créée
+          Pas encore de contrainte
         </Box>
       </Box>
     );

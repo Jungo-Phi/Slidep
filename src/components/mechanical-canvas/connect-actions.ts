@@ -353,6 +353,133 @@ export function delete_element(
 }
 
 /**
+ * Applies a single structural action (Delete or Connect/Disconnect) to mutable
+ * simulated-state arrays. Used by delete_elements to maintain correct indices
+ * between successive deletions within the same batch.
+ */
+function apply_to_sim_state(
+  action: Action,
+  simMech: MechanicalElement[],
+  simConst: ConstraintElement[],
+) {
+  if (action.type === "DeleteElement") {
+    const mi = simMech.findIndex((e) => e.id === action.element.id);
+    if (mi !== -1) { simMech.splice(mi, 1); return; }
+    const ci = simConst.findIndex((e) => e.id === action.element.id);
+    if (ci !== -1) simConst.splice(ci, 1);
+    return;
+  }
+  if (!("elementID" in action)) return;
+  const el = simMech.find((e) => e.id === action.elementID);
+  if (!el) return;
+  switch (action.type) {
+    case "ConnectsFixedEdges":
+      if ("fixedEdgesIDs" in el)
+        action.disconnect
+          ? el.fixedEdgesIDs.splice(action.index, 1)
+          : el.fixedEdgesIDs.splice(action.index, 0, action.connectID);
+      break;
+    case "ConnectsFixedNodesBody":
+      if ("fixedNodesBodyIDs" in el)
+        action.disconnect
+          ? el.fixedNodesBodyIDs.splice(action.index, 1)
+          : el.fixedNodesBodyIDs.splice(action.index, 0, action.connectID);
+      break;
+    case "ConnectsRotatingEdges":
+      if ("rotatingEdgesIDs" in el)
+        action.disconnect
+          ? el.rotatingEdgesIDs.splice(action.index, 1)
+          : el.rotatingEdgesIDs.splice(action.index, 0, action.connectID);
+      break;
+    case "ConnectsMeshedGears":
+      if ("meshedGearsIDs" in el)
+        action.disconnect
+          ? el.meshedGearsIDs.splice(action.index, 1)
+          : el.meshedGearsIDs.splice(action.index, 0, action.connectID);
+      break;
+    case "ConnectsFixedGears":
+      if ("fixedGearsIDs" in el)
+        action.disconnect
+          ? el.fixedGearsIDs.splice(action.index, 1)
+          : el.fixedGearsIDs.splice(action.index, 0, action.connectID);
+      break;
+    case "ConnectsAttachedGears":
+      if ("attachedGearsIDs" in el)
+        action.disconnect
+          ? el.attachedGearsIDs.splice(action.index, 1)
+          : el.attachedGearsIDs.splice(action.index, 0, {
+              id: action.connectID,
+              direction: action.direction,
+            });
+      break;
+    case "ConnectsFixedNodeStart":
+      if ("fixedNodeStartID" in el)
+        el.fixedNodeStartID = action.disconnect ? undefined : action.connectID;
+      break;
+    case "ConnectsFixedNodeEnd":
+      if ("fixedNodeEndID" in el)
+        el.fixedNodeEndID = action.disconnect ? undefined : action.connectID;
+      break;
+    case "ConnectsParentBeam":
+      if ("parentBeamID" in el)
+        el.parentBeamID = action.disconnect ? undefined : action.connectID;
+      break;
+    case "ConnectsAttachedBelt":
+      if ("attachedBeltID" in el)
+        el.attachedBeltID = action.disconnect ? undefined : action.connectID;
+      break;
+  }
+}
+
+/**
+ * Deletes multiple elements as a single consistent action bundle.
+ *
+ * Each element is deleted against the state as it looks after all prior
+ * deletions in the batch — so indices are always correct and no action
+ * ever references an already-deleted element.
+ */
+export function delete_elements(
+  elementIDs: ID[],
+  mechanicalElements: MechanicalElement[],
+  constraintElements: ConstraintElement[],
+): Action[] {
+  // Shallow-clone with deep-copied mutable arrays so the simulation
+  // never touches the caller's state.
+  const simMech: MechanicalElement[] = mechanicalElements.map((el) => ({
+    ...el,
+    ...("fixedEdgesIDs" in el && { fixedEdgesIDs: [...el.fixedEdgesIDs] }),
+    ...("rotatingEdgesIDs" in el && { rotatingEdgesIDs: [...el.rotatingEdgesIDs] }),
+    ...("meshedGearsIDs" in el && { meshedGearsIDs: [...el.meshedGearsIDs] }),
+    ...("fixedGearsIDs" in el && { fixedGearsIDs: [...el.fixedGearsIDs] }),
+    ...("fixedNodesBodyIDs" in el && { fixedNodesBodyIDs: [...el.fixedNodesBodyIDs] }),
+    ...("attachedGearsIDs" in el && {
+      attachedGearsIDs: el.attachedGearsIDs.map((g) => ({ ...g })),
+    }),
+  } as MechanicalElement));
+  const simConst: ConstraintElement[] = [...constraintElements];
+
+  const allActions: Action[] = [];
+
+  for (const id of elementIDs) {
+    // Skip if a previous deletion in this batch already removed this element
+    // (e.g. a constraint shared by two deleted mechanical elements).
+    const exists =
+      simMech.find((e) => e.id === id) ?? simConst.find((e) => e.id === id);
+    if (!exists) continue;
+
+    const stepActions = delete_element(id, simMech, simConst);
+    allActions.push(...stepActions);
+
+    // Advance the simulation so the next iteration sees correct state.
+    for (const action of stepActions) {
+      apply_to_sim_state(action, simMech, simConst);
+    }
+  }
+
+  return allActions;
+}
+
+/**
  * Transfer les éléments connectés à `edge` de `sourceNodeID` à `destNodeID`
  *
  * Returns the actions to perform disconnections and connections.

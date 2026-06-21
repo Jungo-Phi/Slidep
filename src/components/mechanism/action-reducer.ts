@@ -1,6 +1,7 @@
 import {
   Action,
   Mechanism,
+  MechanicalElement,
   NodeElement,
   BeltElement,
   UnionElement,
@@ -12,13 +13,40 @@ import {
   get_mechanical_element_from_id,
 } from "../mechanical-canvas/connect-actions";
 
+/**
+ * Shallow-clone a mechanical element with all its mutable array fields deep-copied.
+ *
+ * This prevents React StrictMode's double-invocation of state updaters from causing duplicate entries when actionReducer splices into shared array references.
+ */
+function clone_mechanical_element(el: MechanicalElement): MechanicalElement {
+  return {
+    ...el,
+    ...("fixedEdgesIDs" in el && { fixedEdgesIDs: [...el.fixedEdgesIDs] }),
+    ...("rotatingEdgesIDs" in el && {
+      rotatingEdgesIDs: [...el.rotatingEdgesIDs],
+    }),
+    ...("meshedGearsIDs" in el && { meshedGearsIDs: [...el.meshedGearsIDs] }),
+    ...("fixedGearsIDs" in el && { fixedGearsIDs: [...el.fixedGearsIDs] }),
+    ...("fixedNodesBodyIDs" in el && {
+      fixedNodesBodyIDs: [...el.fixedNodesBodyIDs],
+    }),
+    ...("attachedGearsIDs" in el && {
+      attachedGearsIDs: el.attachedGearsIDs.map((g) => ({ ...g })),
+    }),
+  } as MechanicalElement;
+}
+
 export function actionReducer(
   mechanism: Mechanism,
   actions: Action[],
   revert: boolean,
 ): Mechanism {
-  let mechanicalElements = [...mechanism.mechanicalElements];
-  let constraintElements = [...mechanism.constraintElements];
+  let mechanicalElements = mechanism.mechanicalElements.map(
+    clone_mechanical_element,
+  );
+  let constraintElements = mechanism.constraintElements.map((ce) => ({
+    ...ce,
+  }));
   let viewport = { ...mechanism.viewport };
   let element: UnionElement;
   actions.forEach((action) => {
@@ -42,7 +70,9 @@ export function actionReducer(
               (element) => element.id !== action.element.id,
             );
           } else {
-            mechanicalElements.push(action.element);
+            mechanicalElements.push(
+              clone_mechanical_element(action.element as MechanicalElement),
+            );
           }
         } else {
           if (revert !== (action.type === "DeleteElement")) {
