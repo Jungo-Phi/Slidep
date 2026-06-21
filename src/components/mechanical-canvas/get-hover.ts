@@ -753,7 +753,7 @@ export function get_hovered_part(
     return {
       type: "Edge",
       position: state.startHover.position,
-      id: `----`,
+      id: "----",
       deleting: false,
       part: "start",
     };

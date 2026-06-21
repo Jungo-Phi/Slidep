@@ -510,16 +510,18 @@ export function applyGearMeshingConstraint(
   radMasses: Map<string, number>,
   g1: string,
   g2: string,
+  rg1: string,
+  rg2: string,
   stiffness: number = 1.0,
 ): number {
   const p1 = positions.get(g1);
   const p2 = positions.get(g2);
-  const r1 = radii.get(g1);
-  const r2 = radii.get(g2);
+  const r1 = radii.get(rg1);
+  const r2 = radii.get(rg2);
   const wPos1 = posMasses.get(g1) ?? 1;
   const wPos2 = posMasses.get(g2) ?? 1;
-  const wRad1 = radMasses.get(g1) ?? 1;
-  const wRad2 = radMasses.get(g2) ?? 1;
+  const wRad1 = radMasses.get(rg1) ?? 1;
+  const wRad2 = radMasses.get(rg2) ?? 1;
   if (!p1 || !p2 || !r1 || !r2) return 0;
 
   const dist = p1.distance_to(p2);
@@ -549,12 +551,12 @@ export function applyGearMeshingConstraint(
   const radCorrection = error * stiffness;
   if (wRad1 !== 0)
     radii.set(
-      g1,
+      rg1,
       Math.max(DIM.MIN_GEAR_RADIUS, r1 + radCorrection * (wRad1 / totalW)),
     );
   if (wRad2 !== 0)
     radii.set(
-      g2,
+      rg2,
       Math.max(DIM.MIN_GEAR_RADIUS, r2 + radCorrection * (wRad2 / totalW)),
     );
   return Math.abs(error);

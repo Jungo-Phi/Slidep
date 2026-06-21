@@ -16,7 +16,8 @@ export type ValidationErrorCode =
   | "SELF_REFERENCE"
   | "MISSING_REFERENCE"
   | "WRONG_TYPE"
-  | "MISSING_BIDIRECTIONAL";
+  | "MISSING_BIDIRECTIONAL"
+  | "SAME_AXLE_MESH";
 
 export interface MechanismValidationError {
   code: ValidationErrorCode;
@@ -69,6 +70,7 @@ export function validate_mechanism(
 
   // Uses shown_element_name when the element exists, legible_id as fallback.
   function name(id: ID): string {
+    if (!id) return "<ID manquant>";
     const el = allByID.get(id);
     return el ? shown_element_name(el) : legible_id(id);
   }
@@ -92,6 +94,14 @@ export function validate_mechanism(
     refID: ID,
     field: string,
   ): MechanicalElement | undefined {
+    if (!refID) {
+      errors.push({
+        code: "MISSING_REFERENCE",
+        message: `${name(sourceID)} (${field}): ID de référence absent.`,
+        elementID: sourceID,
+      });
+      return undefined;
+    }
     const el = mechByID.get(refID);
     if (!el) {
       errors.push({
@@ -120,6 +130,7 @@ export function validate_mechanism(
   }
 
   function no_self(sourceID: ID, refID: ID, field: string) {
+    if (!refID) return;
     if (refID === sourceID) {
       errors.push({
         code: "SELF_REFERENCE",
@@ -189,7 +200,13 @@ export function validate_mechanism(
         const edge = ref(el.id, edgeID, "fixedEdgesIDs");
         if (!edge) continue;
         if (!EDGE_TYPES.has(edge.type)) {
-          wrong_type(el.id, edgeID, "fixedEdgesIDs", [...EDGE_TYPES], edge.type);
+          wrong_type(
+            el.id,
+            edgeID,
+            "fixedEdgesIDs",
+            [...EDGE_TYPES],
+            edge.type,
+          );
           continue;
         }
         if (!edge_refs_node(edge, el.id)) {
@@ -202,7 +219,7 @@ export function validate_mechanism(
       }
     }
 
-    // rotatingEdgesIDs (pivot, slidep, gear)
+    // rotatingEdgesIDs (pivot, slidep)
     if ("rotatingEdgesIDs" in el) {
       const node = el as NodeElement & { rotatingEdgesIDs: ID[] };
       no_dupes(el.id, node.rotatingEdgesIDs, "rotatingEdgesIDs");
@@ -211,7 +228,13 @@ export function validate_mechanism(
         const edge = ref(el.id, edgeID, "rotatingEdgesIDs");
         if (!edge) continue;
         if (!EDGE_TYPES.has(edge.type)) {
-          wrong_type(el.id, edgeID, "rotatingEdgesIDs", [...EDGE_TYPES], edge.type);
+          wrong_type(
+            el.id,
+            edgeID,
+            "rotatingEdgesIDs",
+            [...EDGE_TYPES],
+            edge.type,
+          );
           continue;
         }
         if (!edge_refs_node(edge, el.id)) {
@@ -242,6 +265,33 @@ export function validate_mechanism(
       }
     }
 
+    // parentAxleID (gear) → doit pointer sur un pivot/slidep qui a ce gear dans fixedGearsIDs
+    if (el.type === "gear") {
+      const gear = el as GearElement;
+      no_self(el.id, gear.parentAxleID, "parentAxleID");
+      const parent = ref(el.id, gear.parentAxleID, "parentAxleID");
+      if (parent) {
+        if (parent.type !== "pivot" && parent.type !== "slidep") {
+          wrong_type(
+            el.id,
+            gear.parentAxleID,
+            "parentAxleID",
+            ["pivot", "slidep"],
+            parent.type,
+          );
+        } else if (
+          !("fixedGearsIDs" in parent) ||
+          !(parent as { fixedGearsIDs: ID[] }).fixedGearsIDs.includes(el.id)
+        ) {
+          missing_bidi(
+            el.id,
+            gear.parentAxleID,
+            `${name(el.id)} (parentAxleID → ${name(gear.parentAxleID)}): le nœud parent ne contient pas cet engrenage dans fixedGearsIDs.`,
+          );
+        }
+      }
+    }
+
     // meshedGearsIDs (gear)
     if ("meshedGearsIDs" in el) {
       const gear = el as GearElement;
@@ -254,33 +304,43 @@ export function validate_mechanism(
           wrong_type(el.id, gearID, "meshedGearsIDs", ["gear"], other.type);
           continue;
         }
-        if (!(other as GearElement).meshedGearsIDs.includes(el.id)) {
-          missing_bidi(
-            el.id,
-            gearID,
-            `${name(el.id)} (meshedGearsIDs → ${name(gearID)}): connexion non réciproque.`,
-          );
+        const otherGear = other as GearElement;
+        if (
+          gear.parentAxleID &&
+          otherGear.parentAxleID &&
+          gear.parentAxleID === otherGear.parentAxleID &&
+          el.id < gearID
+        ) {
+          errors.push({
+            code: "SAME_AXLE_MESH",
+            message: `${name(el.id)} et ${name(gearID)} partagent le même axle (${name(gear.parentAxleID)}) et ne peuvent pas être engrenés.`,
+            elementID: el.id,
+            relatedID: gearID,
+          });
+        }
+        if (!otherGear.meshedGearsIDs.includes(el.id)) {
+          missing_bidi(el.id, gearID, `${name(el.id)} (meshedGearsIDs → ${name(gearID)}): connexion non réciproque.`);
         }
       }
     }
 
-    // fixedGearsIDs (gear)
+    // fixedGearsIDs (pivot, slidep) → chaque entrée doit être un gear dont parentAxleID pointe sur ce nœud
     if ("fixedGearsIDs" in el) {
-      const gear = el as GearElement;
-      no_dupes(el.id, gear.fixedGearsIDs, "fixedGearsIDs");
-      for (const gearID of gear.fixedGearsIDs) {
+      const node = el as { id: ID; fixedGearsIDs: ID[] };
+      no_dupes(el.id, node.fixedGearsIDs, "fixedGearsIDs");
+      for (const gearID of node.fixedGearsIDs) {
         no_self(el.id, gearID, "fixedGearsIDs");
-        const other = ref(el.id, gearID, "fixedGearsIDs");
-        if (!other) continue;
-        if (other.type !== "gear") {
-          wrong_type(el.id, gearID, "fixedGearsIDs", ["gear"], other.type);
+        const gear = ref(el.id, gearID, "fixedGearsIDs");
+        if (!gear) continue;
+        if (gear.type !== "gear") {
+          wrong_type(el.id, gearID, "fixedGearsIDs", ["gear"], gear.type);
           continue;
         }
-        if (!(other as GearElement).fixedGearsIDs.includes(el.id)) {
+        if ((gear as GearElement).parentAxleID !== el.id) {
           missing_bidi(
             el.id,
             gearID,
-            `${name(el.id)} (fixedGearsIDs → ${name(gearID)}): connexion non réciproque.`,
+            `${name(el.id)} (fixedGearsIDs → ${name(gearID)}): l'engrenage ne référence pas ce nœud comme parentAxleID.`,
           );
         }
       }
@@ -315,7 +375,13 @@ export function validate_mechanism(
         const node = ref(el.id, nodeID, "fixedNodesBodyIDs");
         if (!node) continue;
         if (!is_node(node)) {
-          wrong_type(el.id, nodeID, "fixedNodesBodyIDs", [...NODE_TYPES], node.type);
+          wrong_type(
+            el.id,
+            nodeID,
+            "fixedNodesBodyIDs",
+            [...NODE_TYPES],
+            node.type,
+          );
           continue;
         }
         if (!node_refs_edge(node, el.id)) {
@@ -358,7 +424,13 @@ export function validate_mechanism(
       const node = ref(el.id, nodeID, "fixedNodeStartID");
       if (node) {
         if (!is_node(node)) {
-          wrong_type(el.id, nodeID, "fixedNodeStartID", [...NODE_TYPES], node.type);
+          wrong_type(
+            el.id,
+            nodeID,
+            "fixedNodeStartID",
+            [...NODE_TYPES],
+            node.type,
+          );
         } else if (!node_refs_edge(node, el.id)) {
           missing_bidi(
             el.id,
@@ -376,7 +448,13 @@ export function validate_mechanism(
       const node = ref(el.id, nodeID, "fixedNodeEndID");
       if (node) {
         if (!is_node(node)) {
-          wrong_type(el.id, nodeID, "fixedNodeEndID", [...NODE_TYPES], node.type);
+          wrong_type(
+            el.id,
+            nodeID,
+            "fixedNodeEndID",
+            [...NODE_TYPES],
+            node.type,
+          );
         } else if (!node_refs_edge(node, el.id)) {
           missing_bidi(
             el.id,

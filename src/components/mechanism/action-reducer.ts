@@ -294,6 +294,20 @@ export function actionReducer(
           element.attachedBeltID = action.connectID;
         }
         break;
+      case "ConnectsParentAxle":
+        element = get_mechanical_element_from_id(
+          action.elementID,
+          mechanicalElements,
+        );
+        if (!("parentAxleID" in element)) {
+          break;
+        }
+        if (action.disconnect !== revert) {
+          (element as { parentAxleID: string }).parentAxleID = "----";
+        } else {
+          (element as { parentAxleID: string }).parentAxleID = action.connectID;
+        }
+        break;
       case "UpdatePositionsToValidState":
         let positions: Map<string, Point2>;
         let radii: Map<string, number>;
@@ -312,7 +326,7 @@ export function actionReducer(
             position = positions.get(`${element.id}:pos`);
             if (position) element.position = position;
             if ("radius" in element) {
-              radius = radii.get(`${element.id}:pos`);
+              radius = radii.get(`${element.id}:rad`);
               if (radius) element.radius = radius;
             }
           } else {

@@ -127,10 +127,8 @@ export function resolveGeometricConstraints(
           });
           break;
         case "ChangeGearRadius":
-          // TODO : Anchor gear when changing it's radius Mais seulement si DDL ok
-          // const gear = mechanicalElements.find((e) => e.id === triggerAction.id)! as GearElement;
           grabPoint = triggerAction.newRadius;
-          grabConnectionID = `${triggerAction.id}:pos`;
+          grabConnectionID = `${triggerAction.id}:rad`;
           break;
         case "ChangeEdgeLength":
           links.push({
@@ -161,6 +159,32 @@ export function resolveGeometricConstraints(
       grabbedKey: grabConnectionID,
       value: grabPoint,
     });
+  }
+
+  // Ancrages pré-fusion : les clés individuelles disparaissent après la fusion Coincidence ;
+  // Math.min() propagera ensuite ces valeurs à la clé fusionnée.
+  if (triggerAction.type === "ChangeGearRadius") {
+    const preFuseDdl = get_degrees_of_freedom(nodes, links);
+    if (preFuseDdl >= 3) {
+      nodes.posMasses.set(`${triggerAction.id}:pos`, 0);
+    }
+  }
+  if (triggerAction.type === "MoveNode") {
+    const movedEl = mechanism.mechanicalElements.find(
+      (e) => e.id === triggerAction.id,
+    );
+    if (movedEl) {
+      if ("radius" in movedEl) {
+        nodes.radMasses.set(`${triggerAction.id}:rad`, 0);
+      }
+      if ("fixedGearsIDs" in movedEl) {
+        (movedEl as { fixedGearsIDs: string[] }).fixedGearsIDs.forEach(
+          (gearId) => {
+            nodes.radMasses.set(`${gearId}:rad`, 0);
+          },
+        );
+      }
+    }
   }
 
   // *
@@ -256,23 +280,6 @@ export function resolveGeometricConstraints(
     }
   }
 
-  // ChangingGearRadius sélectionné
-  if (triggerAction.type === "ChangeGearRadius") {
-    ddl = get_degrees_of_freedom(nodes, links);
-    // Si il y a 3 ou plus degré de liberté ALORS contrainte de position de l'engrenage.
-    if (ddl >= 3) {
-      nodes.posMasses.set(`${triggerAction.id}:pos`, 0);
-    }
-  }
-  // MovingGear sélectionné
-  if (triggerAction.type === "MoveNode") {
-    ddl = get_degrees_of_freedom(nodes, links);
-    // Si il y a 2 ou plus degré de liberté ALORS contrainte de rayon de l'engrenage.
-    if (ddl >= 2) {
-      nodes.radMasses.set(`${triggerAction.id}:pos`, 0);
-    }
-  }
-
   // TODO : Autres beams (dans l'ORDRE) : si il y a 3 ou plus degré de liberté ALORS contrainte de parallélisme.
   // TODO : Autres beams (dans l'ORDRE) : si il y a 3 ou plus degré de liberté ALORS contrainte de longueur.
 
@@ -320,7 +327,6 @@ export function resolveGeometricConstraints(
       solvedNodes.positions.delete(combined_keys);
     }
   });
-
   // Update constraint positions
   mechanism.constraintElements.forEach((constraint) => {
     switch (constraint.type) {

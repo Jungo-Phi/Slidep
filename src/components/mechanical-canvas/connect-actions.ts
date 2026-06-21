@@ -60,65 +60,64 @@ export function get_connection_pair_type(
   if (
     "fixedEdgesIDs" in connectedElement &&
     connectedElement.fixedEdgesIDs.includes(elementID)
-  ) {
+  )
     return "ConnectsFixedEdges";
-  }
+
   if (
     "rotatingEdgesIDs" in connectedElement &&
     connectedElement.rotatingEdgesIDs.includes(elementID)
-  ) {
+  )
     return "ConnectsRotatingEdges";
-  }
+
   if (
     "parentBeamID" in connectedElement &&
     connectedElement.parentBeamID === elementID
-  ) {
+  )
     return "ConnectsParentBeam";
-  }
+
   if (
     "fixedNodeStartID" in connectedElement &&
     connectedElement.fixedNodeStartID === elementID
-  ) {
+  )
     return "ConnectsFixedNodeStart";
-  }
+
   if (
     "fixedNodeEndID" in connectedElement &&
     connectedElement.fixedNodeEndID === elementID
-  ) {
+  )
     return "ConnectsFixedNodeEnd";
-  }
+
   if (
     "fixedNodesBodyIDs" in connectedElement &&
     connectedElement.fixedNodesBodyIDs.includes(elementID)
-  ) {
+  )
     return "ConnectsFixedNodesBody";
-  }
+
+  if (
+    "parentAxleID" in connectedElement &&
+    connectedElement.parentAxleID === elementID
+  )
+    return "ConnectsParentAxle";
   if (
     "meshedGearsIDs" in connectedElement &&
     connectedElement.meshedGearsIDs.includes(elementID)
-  ) {
+  )
     return "ConnectsMeshedGears";
-  }
+
   if (
     "attachedGearsIDs" in connectedElement &&
     connectedElement.attachedGearsIDs.some(
       (attachedGear) => attachedGear.id === elementID,
     )
-  ) {
+  )
     return "ConnectsAttachedGears";
-  }
-  if (
-    "fixedGearsIDs" in connectedElement &&
-    connectedElement.fixedGearsIDs.includes(elementID)
-  ) {
-    return "ConnectsFixedGears";
-  }
+
   if (
     "attachedBeltID" in connectedElement &&
     connectedElement.attachedBeltID === elementID
-  ) {
+  )
     return "ConnectsAttachedBelt";
-  }
+
   throw new Error("Connection pair type has not been found !");
 }
 
@@ -129,54 +128,52 @@ export function get_connections(
 ): ID[] {
   switch (connectionType) {
     case "ConnectsFixedEdges":
-      if ("fixedEdgesIDs" in element) {
-        return element.fixedEdgesIDs;
-      }
+      if ("fixedEdgesIDs" in element) return element.fixedEdgesIDs;
+
       break;
     case "ConnectsRotatingEdges":
-      if ("rotatingEdgesIDs" in element) {
-        return element.rotatingEdgesIDs;
-      }
+      if ("rotatingEdgesIDs" in element) return element.rotatingEdgesIDs;
+
       break;
     case "ConnectsParentBeam":
-      if ("parentBeamID" in element) {
+      if ("parentBeamID" in element)
         return element.parentBeamID ? [element.parentBeamID] : [];
-      }
+
       break;
     case "ConnectsFixedNodeStart":
-      if ("fixedNodeStartID" in element) {
+      if ("fixedNodeStartID" in element)
         return element.fixedNodeStartID ? [element.fixedNodeStartID] : [];
-      }
+
       break;
     case "ConnectsFixedNodeEnd":
-      if ("fixedNodeEndID" in element) {
+      if ("fixedNodeEndID" in element)
         return element.fixedNodeEndID ? [element.fixedNodeEndID] : [];
-      }
+
       break;
     case "ConnectsFixedNodesBody":
-      if ("fixedNodesBodyIDs" in element) {
-        return element.fixedNodesBodyIDs;
-      }
+      if ("fixedNodesBodyIDs" in element) return element.fixedNodesBodyIDs;
+
+      break;
+    case "ConnectsParentAxle":
+      if ("parentAxleID" in element) return [element.parentAxleID];
       break;
     case "ConnectsMeshedGears":
-      if ("meshedGearsIDs" in element) {
-        return element.meshedGearsIDs;
-      }
+      if ("meshedGearsIDs" in element) return element.meshedGearsIDs;
+
       break;
     case "ConnectsAttachedGears":
-      if ("attachedGearsIDs" in element) {
+      if ("attachedGearsIDs" in element)
         return element.attachedGearsIDs.map((attachedGear) => attachedGear.id);
-      }
+
       break;
     case "ConnectsFixedGears":
-      if ("fixedGearsIDs" in element) {
-        return element.fixedGearsIDs;
-      }
+      if ("fixedGearsIDs" in element) return element.fixedGearsIDs;
+
       break;
     case "ConnectsAttachedBelt":
-      if ("attachedBeltID" in element) {
+      if ("attachedBeltID" in element)
         return element.attachedBeltID ? [element.attachedBeltID] : [];
-      }
+
       break;
   }
   return [];
@@ -187,36 +184,21 @@ export function get_connection_types(
   element: MechanicalElement,
 ): ConnectsActionType[] {
   let connectionTypes: ConnectsActionType[] = [];
-  if ("fixedEdgesIDs" in element) {
-    connectionTypes.push("ConnectsFixedEdges");
-  }
-  if ("rotatingEdgesIDs" in element) {
+  if ("fixedEdgesIDs" in element) connectionTypes.push("ConnectsFixedEdges");
+  if ("rotatingEdgesIDs" in element)
     connectionTypes.push("ConnectsRotatingEdges");
-  }
-  if ("parentBeamID" in element) {
-    connectionTypes.push("ConnectsParentBeam");
-  }
-  if ("fixedNodeStartID" in element) {
+  if ("fixedGearsIDs" in element) connectionTypes.push("ConnectsFixedGears");
+  if ("parentBeamID" in element) connectionTypes.push("ConnectsParentBeam");
+  if ("fixedNodeStartID" in element)
     connectionTypes.push("ConnectsFixedNodeStart");
-  }
-  if ("fixedNodeEndID" in element) {
-    connectionTypes.push("ConnectsFixedNodeEnd");
-  }
-  if ("fixedNodesBodyIDs" in element) {
+  if ("fixedNodeEndID" in element) connectionTypes.push("ConnectsFixedNodeEnd");
+  if ("fixedNodesBodyIDs" in element)
     connectionTypes.push("ConnectsFixedNodesBody");
-  }
-  if ("meshedGearsIDs" in element) {
-    connectionTypes.push("ConnectsMeshedGears");
-  }
-  if ("attachedGearsIDs" in element) {
+  if ("parentAxleID" in element) connectionTypes.push("ConnectsParentAxle");
+  if ("meshedGearsIDs" in element) connectionTypes.push("ConnectsMeshedGears");
+  if ("attachedGearsIDs" in element)
     connectionTypes.push("ConnectsAttachedGears");
-  }
-  if ("fixedGearsIDs" in element) {
-    connectionTypes.push("ConnectsFixedGears");
-  }
-  if ("attachedBeltID" in element) {
-    connectionTypes.push("ConnectsAttachedBelt");
-  }
+  if ("attachedBeltID" in element) connectionTypes.push("ConnectsAttachedBelt");
   return connectionTypes;
 }
 
@@ -296,11 +278,13 @@ export function connect_element(
  * Deletes an element.
  *
  * Returns actions to remove the connections of linked elements, delete connected constraints and delete the element itself.
+ * When `isCascade` is true (gear deleted as part of parent pivot/slidep deletion), skips the parent fixedGearsIDs disconnect.
  */
 export function delete_element(
   elementID: ID,
   mechanicalElements: MechanicalElement[],
   constraintElements: ConstraintElement[],
+  isCascade: boolean = false,
 ): Action[] {
   let actions: Action[] = [];
   const element = get_element_from_id(
@@ -308,7 +292,6 @@ export function delete_element(
     mechanicalElements,
     constraintElements,
   );
-  // console.log("Delete: ", element.type, element.id.toString().padStart(3, "0"));
   if (
     element.type === "beam" ||
     element.type === "belt" ||
@@ -341,6 +324,42 @@ export function delete_element(
         );
       });
     });
+
+    // Gear: disconnect from parent pivot/slidep's fixedGearsIDs list
+    if (element.type === "gear" && !isCascade) {
+      const parent = mechanicalElements.find(
+        (e) =>
+          "fixedGearsIDs" in e && (e as any).fixedGearsIDs.includes(element.id),
+      );
+      if (parent && "fixedGearsIDs" in parent) {
+        actions.push({
+          type: "ConnectsFixedGears",
+          disconnect: true,
+          elementID: parent.id,
+          connectID: element.id,
+          index: (parent.fixedGearsIDs as ID[]).indexOf(element.id),
+        });
+      }
+    }
+
+    // Pivot/Slidep: cascade delete all attached gears
+    if (
+      (element.type === "pivot" || element.type === "slidep") &&
+      element.fixedGearsIDs.length > 0
+    ) {
+      element.fixedGearsIDs.forEach((gearID) => {
+        if (mechanicalElements.find((e) => e.id === gearID)) {
+          actions.push(
+            ...delete_element(
+              gearID,
+              mechanicalElements,
+              constraintElements,
+              true,
+            ),
+          );
+        }
+      });
+    }
   }
   actions.push({ type: "DeleteElement", element });
   connected_constraints(elementID, constraintElements).forEach((id) =>
@@ -364,7 +383,10 @@ function apply_to_sim_state(
 ) {
   if (action.type === "DeleteElement") {
     const mi = simMech.findIndex((e) => e.id === action.element.id);
-    if (mi !== -1) { simMech.splice(mi, 1); return; }
+    if (mi !== -1) {
+      simMech.splice(mi, 1);
+      return;
+    }
     const ci = simConst.findIndex((e) => e.id === action.element.id);
     if (ci !== -1) simConst.splice(ci, 1);
     return;
@@ -428,6 +450,10 @@ function apply_to_sim_state(
       if ("attachedBeltID" in el)
         el.attachedBeltID = action.disconnect ? undefined : action.connectID;
       break;
+    case "ConnectsParentAxle":
+      if ("parentAxleID" in el)
+        el.parentAxleID = action.disconnect ? "----" : action.connectID;
+      break;
   }
 }
 
@@ -445,17 +471,26 @@ export function delete_elements(
 ): Action[] {
   // Shallow-clone with deep-copied mutable arrays so the simulation
   // never touches the caller's state.
-  const simMech: MechanicalElement[] = mechanicalElements.map((el) => ({
-    ...el,
-    ...("fixedEdgesIDs" in el && { fixedEdgesIDs: [...el.fixedEdgesIDs] }),
-    ...("rotatingEdgesIDs" in el && { rotatingEdgesIDs: [...el.rotatingEdgesIDs] }),
-    ...("meshedGearsIDs" in el && { meshedGearsIDs: [...el.meshedGearsIDs] }),
-    ...("fixedGearsIDs" in el && { fixedGearsIDs: [...el.fixedGearsIDs] }),
-    ...("fixedNodesBodyIDs" in el && { fixedNodesBodyIDs: [...el.fixedNodesBodyIDs] }),
-    ...("attachedGearsIDs" in el && {
-      attachedGearsIDs: el.attachedGearsIDs.map((g) => ({ ...g })),
-    }),
-  } as MechanicalElement));
+  const simMech: MechanicalElement[] = mechanicalElements.map(
+    (el) =>
+      ({
+        ...el,
+        ...("fixedEdgesIDs" in el && { fixedEdgesIDs: [...el.fixedEdgesIDs] }),
+        ...("rotatingEdgesIDs" in el && {
+          rotatingEdgesIDs: [...el.rotatingEdgesIDs],
+        }),
+        ...("meshedGearsIDs" in el && {
+          meshedGearsIDs: [...el.meshedGearsIDs],
+        }),
+        ...("fixedGearsIDs" in el && { fixedGearsIDs: [...el.fixedGearsIDs] }),
+        ...("fixedNodesBodyIDs" in el && {
+          fixedNodesBodyIDs: [...el.fixedNodesBodyIDs],
+        }),
+        ...("attachedGearsIDs" in el && {
+          attachedGearsIDs: el.attachedGearsIDs.map((g) => ({ ...g })),
+        }),
+      }) as MechanicalElement,
+  );
   const simConst: ConstraintElement[] = [...constraintElements];
 
   const allActions: Action[] = [];
@@ -604,6 +639,30 @@ function transfer_internal_connections(
         elementID: destNode.id,
         connectID: edgeID,
         index: 0,
+      });
+    });
+  }
+  // Transférer les gears du source (pivot/slidep) vers le dest
+  if ("fixedGearsIDs" in sourceNode && "fixedGearsIDs" in destNode) {
+    sourceNode.fixedGearsIDs.forEach((gearID) => {
+      actions.push({
+        type: "ConnectsFixedGears",
+        disconnect: false,
+        elementID: destNode.id,
+        connectID: gearID,
+        index: 0,
+      });
+      actions.push({
+        type: "ConnectsParentAxle",
+        disconnect: true,
+        elementID: gearID,
+        connectID: sourceNode.id,
+      });
+      actions.push({
+        type: "ConnectsParentAxle",
+        disconnect: false,
+        elementID: gearID,
+        connectID: destNode.id,
       });
     });
   }
@@ -772,6 +831,7 @@ export function connect_elements(
               rotatingEdgesIDs: selectedNode.rotatingEdgesIDs.concat(
                 hoveredNode.fixedEdgesIDs,
               ),
+              fixedGearsIDs: selectedNode.fixedGearsIDs,
               position: hoveredNode.position,
               isGrounded: selectedNode.isGrounded || hoveredNode.isGrounded,
               id: selectedNode.id,
@@ -797,7 +857,8 @@ export function connect_elements(
             selectedNode.type === "slider" &&
             hoveredNode.type === "pivot"
           ) {
-            // Fuse them into a Slidep
+            // Fuse them into a Slidep — symétrique au cas pivot+slider :
+            // le slidep hérite de l'ID du pivot pour que gear.parentAxleID reste valide.
             const parentBeam = node_on_beam_body(
               hoveredNode,
               mechanicalElements,
@@ -813,38 +874,34 @@ export function connect_elements(
               rotatingEdgesIDs: selectedNode.fixedEdgesIDs
                 .concat(hoveredNode.rotatingEdgesIDs)
                 .filter((edgeID) => edgeID !== parentBeamID),
+              fixedGearsIDs: hoveredNode.fixedGearsIDs,
               position: hoveredNode.position,
               isGrounded: selectedNode.isGrounded || hoveredNode.isGrounded,
-              id: selectedNode.id,
+              id: hoveredNode.id,
             };
             actions.push({ type: "DeleteElement", element: selectedNode });
             actions.push({ type: "DeleteElement", element: hoveredNode });
             actions.push({ type: "CreateElement", element: slidep });
             actions.push(
               ...transfer_external_connections(
-                hoveredNode,
                 selectedNode,
+                hoveredNode,
                 mechanicalElements,
               ),
             );
             actions.push(
               ...transfer_constraint_connections(
-                hoveredNode.id,
                 selectedNode.id,
+                hoveredNode.id,
                 constraintElements,
               ),
             );
           } else if (
-            selectedNode.type === "gear" &&
+            selectedNode.type === "gear" ||
             hoveredNode.type === "gear"
           ) {
-            actions.push(
-              ...connect_gears(
-                selectedNode.id,
-                hoveredNode.id,
-                "ConnectsFixedGears",
-              ),
-            );
+            // Les interactions gear↔node se font via GearTooth (dents), pas le centre.
+            // Le centre du gear appartient à son pivot parent.
           } else {
             // Takeover de selectedNode sur hoveredNode
             actions.push({ type: "DeleteElement", element: hoveredNode });
@@ -1005,11 +1062,11 @@ function connect_node_and_edge(
   return actions;
 }
 
-/** Connects two gears together. */
+/** Connects two gears together (meshing only). */
 export function connect_gears(
   gear1ID: ID,
   gear2ID: ID,
-  connectionType: "ConnectsMeshedGears" | "ConnectsFixedGears",
+  connectionType: "ConnectsMeshedGears",
 ): Action[] {
   let actions: Action[] = [];
   actions.push({

@@ -5,6 +5,10 @@
 ---
 
 - Theme uniformisation
+- Afficher erreurs de contraintes non respectées (error > 1)
+- Afficher "shown_name d'un élément au hover de celui-ci ?
+- empecher parentAxle ET meshed gear sur le meme gear au hover (new + moving)
+- placer un gear sur un slidep reste en slidep
 
 ## ✅ Terminées
 

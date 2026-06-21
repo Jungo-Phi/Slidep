@@ -74,6 +74,6 @@ export type Link =
       key3: string;
       key4: string;
     }
-  | { type: "GearMeshing"; ddl: 1; key1: string; key2: string }
+  | { type: "GearMeshing"; ddl: 1; key1: string; key2: string; radKey1: string; radKey2: string }
   | { type: "GearRatio"; ddl: 1; key1: string; key2: string; ratio: number }
   | { type: "HandleGrab"; ddl: 1; grabbedKey: string; value: Point2 | number };

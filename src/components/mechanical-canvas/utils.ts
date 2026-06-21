@@ -15,12 +15,13 @@ export function node_on_beam_body(
 ): BeamElement | undefined {
   switch (node.type) {
     case "pivot":
-    case "gear":
       for (const edgeID of node.rotatingEdgesIDs) {
         const beam = get_mechanical_element_from_id(edgeID, mechanicalElements);
         if (beam.type === "beam" && beam.fixedNodesBodyIDs.includes(node.id))
           return beam;
       }
+      break;
+    case "gear":
       break;
     case "slider":
     case "slidep":

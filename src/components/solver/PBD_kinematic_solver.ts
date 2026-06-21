@@ -192,6 +192,8 @@ export function PBD_kinematic_solver(
               radMasses,
               link.key1,
               link.key2,
+              link.radKey1,
+              link.radKey2,
             ),
           );
           break;

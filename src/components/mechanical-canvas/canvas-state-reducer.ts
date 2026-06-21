@@ -12,6 +12,7 @@ import {
   JoinElement,
   MechanicalElement,
   NodeElement,
+  PivotElement,
 } from "../../types";
 import {
   connect_elements,
@@ -237,6 +238,77 @@ export function canvasStateReducer(
             });
             break;
           }
+          // PlacingGearRadius: atomically create a pivot + gear pair
+          if (state.type === "PlacingGearRadius") {
+            const pivotId = crypto.randomUUID() as ID;
+            const gearId = crypto.randomUUID() as ID;
+            const newPivot: PivotElement = {
+              type: "pivot",
+              id: pivotId,
+              position: state.startHover.position,
+              isGrounded: false,
+              rotatingEdgesIDs: [],
+              fixedGearsIDs: [gearId],
+            };
+            const newGear: GearElement = {
+              type: "gear",
+              id: gearId,
+              position: state.startHover.position,
+              isGrounded: false,
+              radius: state.startHover.position.distance_to(
+                hoveredPart.position,
+              ),
+              parentAxleID: pivotId,
+              fixedEdgesIDs: [],
+              meshedGearsIDs: [],
+              attachedBeltID: undefined,
+            };
+            actionBundleType = "Other";
+            actions.push(
+              { type: "CreateElement", element: newPivot },
+              { type: "CreateElement", element: newGear },
+            );
+            actions.push(
+              ...connect_elements(
+                state.startHover,
+                newPivot,
+                {
+                  type: "Node",
+                  position: newPivot.position,
+                  id: pivotId,
+                  deleting: false,
+                  beamBodyHover: false,
+                },
+                mechanicalElements,
+                constraintElements,
+              ),
+            );
+            if (hoveredPart.type === "BeltBody") {
+              const belt = get_mechanical_element_from_id(
+                hoveredPart.id,
+                mechanicalElements,
+              ) as BeltElement;
+              actions.push(
+                ...connect_gear_and_belt(
+                  gearId,
+                  hoveredPart.id,
+                  hoveredPart.section,
+                  is_on_left_side_of_belt(
+                    state.startHover.position,
+                    belt,
+                    hoveredPart.section,
+                    mechanicalElements,
+                  ),
+                ),
+              );
+            } else if (hoveredPart.type === "GearTooth") {
+              actions.push(
+                ...connect_gears(gearId, hoveredPart.id, "ConnectsMeshedGears"),
+              );
+            }
+            setCanvasState({ type: "PlacingGearStart" });
+            break;
+          }
           let newElement: MechanicalElement;
           const newElementId = crypto.randomUUID();
           switch (state.type) {
@@ -292,6 +364,7 @@ export function canvasStateReducer(
                 position: hoveredPart.position,
                 isGrounded: false,
                 rotatingEdgesIDs: [],
+                fixedGearsIDs: [],
               };
               break;
             case "PlacingSlider":
@@ -323,51 +396,24 @@ export function canvasStateReducer(
                 mass: 1,
               };
               break;
-            case "PlacingGearRadius":
-              newElement = {
-                type: "gear",
-                id: newElementId,
-                position: state.startHover.position,
-                isGrounded: false,
-                radius: state.startHover.position.distance_to(
-                  hoveredPart.position,
-                ),
-                rotatingEdgesIDs: [],
-                fixedEdgesIDs: [],
-                meshedGearsIDs: [],
-                fixedGearsIDs: [],
-                attachedBeltID: undefined,
-              };
-              break;
           }
           actionBundleType = "Other";
           actions.push({
             type: "CreateElement",
             element: newElement,
           });
-          if (
-            "startHover" in state &&
-            ("positionStart" in newElement || newElement.type === "gear")
-          ) {
+          if ("startHover" in state && "positionStart" in newElement) {
             actions.push(
               ...connect_elements(
                 state.startHover,
                 newElement,
-                newElement.type === "gear"
-                  ? {
-                      type: "Node",
-                      position: newElement.position,
-                      id: newElement.id,
-                      deleting: false,
-                      beamBodyHover: false,
-                    }
-                  : {
-                      type: "Edge",
-                      position: newElement.positionStart,
-                      id: newElement.id,
-                      deleting: false,
-                      part: "start",
-                    },
+                {
+                  type: "Edge",
+                  position: newElement.positionStart,
+                  id: newElement.id,
+                  deleting: false,
+                  part: "start",
+                },
                 mechanicalElements,
                 constraintElements,
               ),
@@ -394,17 +440,15 @@ export function canvasStateReducer(
                   : "end",
             };
           }
-          if (newElement.type !== "gear") {
-            actions.push(
-              ...connect_elements(
-                hoveredPart,
-                newElement,
-                elementPart,
-                mechanicalElements,
-                constraintElements,
-              ),
-            );
-          }
+          actions.push(
+            ...connect_elements(
+              hoveredPart,
+              newElement,
+              elementPart,
+              mechanicalElements,
+              constraintElements,
+            ),
+          );
           if (state.type === "PlacingBeltEnd") {
             for (let i = 0; i < state.attachedGearsIDs.length; i++) {
               actions.push(
@@ -424,34 +468,6 @@ export function canvasStateReducer(
                 },
               );
             }
-          } else if (state.type === "PlacingGearRadius") {
-            if (hoveredPart.type === "BeltBody") {
-              const belt = get_mechanical_element_from_id(
-                hoveredPart.id,
-                mechanicalElements,
-              ) as BeltElement;
-              actions.push(
-                ...connect_gear_and_belt(
-                  newElementId,
-                  hoveredPart.id,
-                  hoveredPart.section,
-                  is_on_left_side_of_belt(
-                    state.startHover.position,
-                    belt,
-                    hoveredPart.section,
-                    mechanicalElements,
-                  ),
-                ),
-              );
-            } else if (hoveredPart.type === "GearTooth") {
-              actions.push(
-                ...connect_gears(
-                  newElementId,
-                  hoveredPart.id,
-                  "ConnectsMeshedGears",
-                ),
-              );
-            }
           }
           switch (state.type) {
             case "PlacingBeamEnd":
@@ -465,9 +481,6 @@ export function canvasStateReducer(
               break;
             case "PlacingBeltEnd":
               setCanvasState({ type: "PlacingBeltStart" });
-              break;
-            case "PlacingGearRadius":
-              setCanvasState({ type: "PlacingGearStart" });
               break;
           }
           break;

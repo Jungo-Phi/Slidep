@@ -204,6 +204,7 @@ export const ConnectionsContainer: React.FC<ConnectionsContainerProps> = ({
           containerType === "ConnectsParentBeam" ||
           containerType === "ConnectsFixedNodeStart" ||
           containerType === "ConnectsFixedNodeEnd" ||
+          containerType === "ConnectsParentAxle" ||
           containerType === "ConnectsAttachedBelt"
             ? 3
             : 2.4
@@ -227,6 +228,7 @@ export const ConnectionsContainer: React.FC<ConnectionsContainerProps> = ({
             case "ConnectsParentBeam":
             case "ConnectsFixedNodeStart":
             case "ConnectsFixedNodeEnd":
+            case "ConnectsParentAxle":
             case "ConnectsAttachedBelt":
               const connections = get_connections(element, containerType);
               if (connections.length === 0) {

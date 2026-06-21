@@ -93,10 +93,18 @@ export interface SliderElement extends BaseNodeElement {
   fixedEdgesIDs: ID[];
 }
 
+export interface MotorConfig {
+  parentBeamID?: ID; // null = sol (seulement si le pivot est groundé)
+  speed: number;
+  enabled: boolean;
+}
+
 /** Pivot element - allows rotational motion */
 export interface PivotElement extends BaseNodeElement {
   type: "pivot";
   rotatingEdgesIDs: ID[];
+  fixedGearsIDs: ID[];
+  motor?: MotorConfig;
 }
 
 /** Slidep element (Pivot on a Slider) - allows linear motion along a beam and rotational motion */
@@ -104,6 +112,7 @@ export interface SlidepElement extends BaseNodeElement {
   type: "slidep";
   parentBeamID?: ID;
   rotatingEdgesIDs: ID[];
+  fixedGearsIDs: ID[];
 }
 
 /** Join element - rigid connection between edges */
@@ -123,10 +132,9 @@ export interface MassElement extends BaseNodeElement {
 export interface GearElement extends BaseNodeElement {
   type: "gear";
   radius: number;
-  rotatingEdgesIDs: ID[];
-  fixedEdgesIDs: ID[];
+  parentAxleID: ID; // PivotElement ou SlidepElement (jamais null)
+  fixedEdgesIDs: ID[]; // poutres rigidement attachées au périmètre
   meshedGearsIDs: ID[];
-  fixedGearsIDs: ID[];
   attachedBeltID?: ID;
 }
 

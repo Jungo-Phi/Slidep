@@ -389,11 +389,7 @@ export function drawMechanicalCanvas(
               if (element.isGrounded) {
                 draw_ground(ctx);
               }
-              draw_pivot(
-                ctx,
-                element.rotatingEdgesIDs.length > 0 ||
-                  element.fixedEdgesIDs.length > 0,
-              );
+              draw_pivot(ctx, element.fixedEdgesIDs.length > 0);
               break;
             case "mass":
               draw_mass(ctx);
@@ -465,14 +461,13 @@ export function drawMechanicalCanvas(
               } else {
                 const newGear: GearElement = {
                   type: "gear",
-                  id: `----`,
+                  id: "----",
                   position: hoveredPart.position,
                   isGrounded: false,
                   radius: INTERACTION_SPECS.BELT_GRAB_RADIUS,
+                  parentAxleID: "----",
                   fixedEdgesIDs: [],
-                  rotatingEdgesIDs: [],
                   meshedGearsIDs: [],
-                  fixedGearsIDs: [],
                   attachedBeltID: element.id,
                 };
                 attachedGears.splice(state.section / 2, 0, {
@@ -506,16 +501,15 @@ export function drawMechanicalCanvas(
               if (hoveredPart.type !== "BeltBody") break;
               const newGear: GearElement = {
                 type: "gear",
-                id: `----`,
+                id: "----",
                 position: state.startHover.position,
                 isGrounded: false,
                 radius: state.startHover.position.distance_to(
                   hoveredPart.position,
                 ),
+                parentAxleID: "----",
                 fixedEdgesIDs: [],
-                rotatingEdgesIDs: [],
                 meshedGearsIDs: [],
-                fixedGearsIDs: [],
                 attachedBeltID: element.id,
               };
               attachedGears.splice(hoveredPart.section / 2, 0, {

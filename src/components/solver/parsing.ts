@@ -20,8 +20,8 @@ export function get_nodes(mechanicalElements: MechanicalElement[]): Nodes {
       positions.set(`${element.id}:pos`, element.position);
       posMasses.set(`${element.id}:pos`, element.isGrounded ? 0 : 1);
       if ("radius" in element) {
-        radii.set(`${element.id}:pos`, element.radius);
-        radMasses.set(`${element.id}:pos`, 1);
+        radii.set(`${element.id}:rad`, element.radius);
+        radMasses.set(`${element.id}:rad`, 1);
       }
     } else {
       positions.set(`${element.id}:start`, element.positionStart);
@@ -94,7 +94,7 @@ export function constraint_to_link(element: ConstraintElement): Link {
       return {
         type: "Radius",
         ddl: 1,
-        key1: `${element.gearID}:pos`,
+        key1: `${element.gearID}:rad`,
         radius: element.value,
       };
     case "horizontal-align-edge":
@@ -156,8 +156,8 @@ export function constraint_to_link(element: ConstraintElement): Link {
       return {
         type: "GearRatio",
         ddl: 1,
-        key1: `${element.startGearID}:pos`,
-        key2: `${element.endGearID}:pos`,
+        key1: `${element.startGearID}:rad`,
+        key2: `${element.endGearID}:rad`,
         ratio: element.value,
       };
   }
@@ -220,25 +220,20 @@ export function get_links(
             ddl: 1,
             key1: `${element.id}:pos`,
             key2: `${meshedId}:pos`,
+            radKey1: `${element.id}:rad`,
+            radKey2: `${meshedId}:rad`,
           });
         }
       });
-      element.fixedGearsIDs.forEach((fixedId) => {
-        if (
-          links.filter(
-            (link) =>
-              link.type === "Coincidence" &&
-              link.key2 === `${element.id}:pos` &&
-              link.key1 === `${fixedId}:pos`,
-          ).length === 0
-        ) {
-          links.push({
-            type: "Coincidence",
-            ddl: 2,
-            key1: `${element.id}:pos`,
-            key2: `${fixedId}:pos`,
-          });
-        }
+    }
+    if (element.type === "pivot" || element.type === "slidep") {
+      element.fixedGearsIDs.forEach((gearId) => {
+        links.push({
+          type: "Coincidence",
+          ddl: 2,
+          key1: `${element.id}:pos`,
+          key2: `${gearId}:pos`,
+        });
       });
     }
   });

@@ -60,6 +60,7 @@ export type ConnectsUnitActionType =
   | "ConnectsParentBeam"
   | "ConnectsFixedNodeStart"
   | "ConnectsFixedNodeEnd"
+  | "ConnectsParentAxle"
   | "ConnectsAttachedBelt";
 export type ConnectsArrayActionType =
   | "ConnectsFixedEdges"
@@ -196,6 +197,12 @@ export type Action =
       elementID: ID;
       connectID: ID;
       index: number;
+    }
+  | {
+      type: "ConnectsParentAxle";
+      disconnect: boolean;
+      elementID: ID;
+      connectID: ID;
     }
   | {
       type: "ConnectsMeshedGears";

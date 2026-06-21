@@ -54,6 +54,16 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
             draggedItem={draggedItem}
             setDraggedItem={setDraggedItem}
           />
+          <ConnectionsContainer
+            element={element}
+            containerType="ConnectsFixedGears"
+            setHoveredPart={setHoveredPart}
+            setCanvasState={setCanvasState}
+            applyActions={applyActions}
+            mechanism={mechanism}
+            draggedItem={draggedItem}
+            setDraggedItem={setDraggedItem}
+          />
         </Box>
       );
     case "slider":
@@ -64,7 +74,7 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
             gap: 1,
             justifyContent: "space-evenly",
             alignItems: "center",
-            flexDirection: "row",
+            flexDirection: "column",
           }}
         >
           <ConnectionsContainer
@@ -97,7 +107,7 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
             gap: 1,
             justifyContent: "space-evenly",
             alignItems: "center",
-            flexDirection: "row",
+            flexDirection: "column",
           }}
         >
           <ConnectionsContainer
@@ -113,6 +123,16 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
           <ConnectionsContainer
             element={element}
             containerType="ConnectsRotatingEdges"
+            setHoveredPart={setHoveredPart}
+            setCanvasState={setCanvasState}
+            applyActions={applyActions}
+            mechanism={mechanism}
+            draggedItem={draggedItem}
+            setDraggedItem={setDraggedItem}
+          />
+          <ConnectionsContainer
+            element={element}
+            containerType="ConnectsFixedGears"
             setHoveredPart={setHoveredPart}
             setCanvasState={setCanvasState}
             applyActions={applyActions}
@@ -146,7 +166,7 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
           />
         </Box>
       );
-    case "gear":
+    case "gear": {
       return (
         <Box
           sx={{
@@ -157,66 +177,16 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
             flexDirection: "column",
           }}
         >
-          <Box
-            sx={{
-              display: "flex",
-              gap: 1,
-              justifyContent: "space-evenly",
-              alignItems: "center",
-              flexDirection: "row",
-            }}
-          >
-            <ConnectionsContainer
-              element={element}
-              containerType="ConnectsRotatingEdges"
-              setHoveredPart={setHoveredPart}
-              setCanvasState={setCanvasState}
-              applyActions={applyActions}
-              mechanism={mechanism}
-              draggedItem={draggedItem}
-              setDraggedItem={setDraggedItem}
-            />
-            <ConnectionsContainer
-              element={element}
-              containerType="ConnectsFixedEdges"
-              setHoveredPart={setHoveredPart}
-              setCanvasState={setCanvasState}
-              applyActions={applyActions}
-              mechanism={mechanism}
-              draggedItem={draggedItem}
-              setDraggedItem={setDraggedItem}
-            />
-          </Box>
-          <Box
-            sx={{
-              display: "flex",
-              gap: 1,
-              justifyContent: "space-evenly",
-              alignItems: "center",
-              flexDirection: "row",
-            }}
-          >
-            <ConnectionsContainer
-              element={element}
-              containerType="ConnectsMeshedGears"
-              setHoveredPart={setHoveredPart}
-              setCanvasState={setCanvasState}
-              applyActions={applyActions}
-              mechanism={mechanism}
-              draggedItem={draggedItem}
-              setDraggedItem={setDraggedItem}
-            />
-            <ConnectionsContainer
-              element={element}
-              containerType="ConnectsFixedGears"
-              setHoveredPart={setHoveredPart}
-              setCanvasState={setCanvasState}
-              applyActions={applyActions}
-              mechanism={mechanism}
-              draggedItem={draggedItem}
-              setDraggedItem={setDraggedItem}
-            />
-          </Box>
+          <ConnectionsContainer
+            element={element}
+            containerType="ConnectsParentAxle"
+            setHoveredPart={setHoveredPart}
+            setCanvasState={setCanvasState}
+            applyActions={applyActions}
+            mechanism={mechanism}
+            draggedItem={draggedItem}
+            setDraggedItem={setDraggedItem}
+          />
           <ConnectionsContainer
             element={element}
             containerType="ConnectsAttachedBelt"
@@ -227,8 +197,29 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
             draggedItem={draggedItem}
             setDraggedItem={setDraggedItem}
           />
+          <ConnectionsContainer
+            element={element}
+            containerType="ConnectsMeshedGears"
+            setHoveredPart={setHoveredPart}
+            setCanvasState={setCanvasState}
+            applyActions={applyActions}
+            mechanism={mechanism}
+            draggedItem={draggedItem}
+            setDraggedItem={setDraggedItem}
+          />
+          <ConnectionsContainer
+            element={element}
+            containerType="ConnectsFixedEdges"
+            setHoveredPart={setHoveredPart}
+            setCanvasState={setCanvasState}
+            applyActions={applyActions}
+            mechanism={mechanism}
+            draggedItem={draggedItem}
+            setDraggedItem={setDraggedItem}
+          />
         </Box>
       );
+    }
     case "beam":
       return (
         <Box

@@ -15,34 +15,34 @@
   // Sémantique : tous les rotatingEdgesIDs sauf parentBeam forment un seul corps rigide entraîné par le moteur.
   ```
 
-- [ ] **Modifier `PivotElement`** — ajouter `fixedGears` et `motor` :
+- [ ] **Modifier `PivotElement`** — ajouter `fixedGearsIDs` et `motor` :
 
   ```typescript
   interface PivotElement extends BaseNodeElement {
     type: "pivot";
     rotatingEdgesIDs: ID[];
-    fixedGears: ID[]; // engrenages dont le centre est ce pivot
+    fixedGearsIDs: ID[]; // engrenages dont le centre est ce pivot
     motor?: MotorConfig;
   }
   ```
 
-- [ ] **Modifier `SlidepElement`** — ajouter `fixedGears` (pas de moteur) :
+- [ ] **Modifier `SlidepElement`** — ajouter `fixedGearsIDs` (pas de moteur) :
 
   ```typescript
   interface SlidepElement extends BaseNodeElement {
     type: "slidep";
     parentBeamID?: ID;
     rotatingEdgesIDs: ID[];
-    fixedGears: ID[]; // engrenages dont le centre est ce slidep
+    fixedGearsIDs: ID[]; // engrenages dont le centre est ce slidep
   }
   ```
 
-- [ ] **Modifier `GearElement`** — supprimer `rotatingEdgesIDs` et `fixedGearsIDs`, ajouter `parentNodeID` :
+- [ ] **Modifier `GearElement`** — supprimer `rotatingEdgesIDs` et `fixedGearsIDs`, ajouter `parentAxleID` :
   ```typescript
   interface GearElement extends BaseNodeElement {
     type: "gear";
     radius: number;
-    parentNodeID: ID; // PivotElement ou SlidepElement (jamais null)
+    parentAxleID: ID; // PivotElement ou SlidepElement (jamais null)
     fixedEdgesIDs: ID[]; // poutres rigidement attachées au périmètre de l'engrenage
     meshedGearsIDs: ID[];
     attachedBeltID?: ID;
@@ -59,14 +59,14 @@
 
 ### Logique de suppression
 
-- [ ] **Suppression d'un pivot avec `fixedGears`** — supprimer aussi les engrenages associés (cascade).
-- [ ] **Suppression d'un engrenage** — supprimer la référence dans `pivot.fixedGears`.
+- [ ] **Suppression d'un pivot avec `fixedGearsIDs`** — supprimer aussi les engrenages associés (cascade).
+- [ ] **Suppression d'un engrenage** — supprimer la référence dans `pivot.fixedGearsIDs`.
 
 ---
 
 ### Solveur géométrique
 
-- [ ] **Couplage de position gear ↔ parentNode** — la position de l'engrenage est toujours égale à celle de son `parentNodeID` (déjà géré par le geometric-solver selon l'auteur, à vérifier/implémenter).
+- [ ] **Couplage de position gear ↔ parentNode** — la position de l'engrenage est toujours égale à celle de son `parentAxleID` (déjà géré par le geometric-solver selon l'auteur, à vérifier/implémenter).
 
 ---
 
@@ -79,7 +79,7 @@
 ### Panneau propriétés
 
 - [ ] **PivotElement** — ajouter une section moteur (toggle enabled, champ speed, sélecteur parentBeam parmi `rotatingEdgesIDs`).
-- [ ] **GearElement** — afficher `parentNodeID` en lecture seule (référence vers le pivot/slidep parent).
+- [ ] **GearElement** — afficher `parentAxleID` en lecture seule (référence vers le pivot/slidep parent).
 
 ---
 
@@ -91,5 +91,5 @@
 
 ### Sérialisation (`serialized.ts`, `serialization.ts`)
 
-- [ ] **Mettre à jour les types sérialisés** pour refléter les nouveaux champs (`parentNodeID`, `fixedGears`, `motor`).
+- [ ] **Mettre à jour les types sérialisés** pour refléter les nouveaux champs (`parentAxleID`, `fixedGearsIDs`, `motor`).
 - [ ] **Migration** des mécanismes sauvegardés au format précédent (si nécessaire).
