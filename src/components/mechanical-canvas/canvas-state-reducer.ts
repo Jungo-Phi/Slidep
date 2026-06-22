@@ -50,28 +50,26 @@ export function canvasStateReducer(
         case "Selecting":
         case "SelectedElement":
         case "EditingConstraint":
-          if (state.type === "SelectedElement") {
-            // Logique pour la sélection multiple avec Shift
-            if (event.shiftKey) {
-              if (hoveredPart.type === "Void") {
-                setCanvasState({
-                  type: "SelectingMultiple",
-                  startPos: hoveredPart.position,
-                  elementIDs: [state.elementID],
-                  hoveredElementIDs: [],
-                });
-              } else if (hoveredPart.id === state.elementID) {
-                // Clic sur l'élément déjà sélectionné
-                setCanvasState({ type: "Selecting" });
-              } else {
-                // Clic sur un nouvel élément
-                setCanvasState({
-                  type: "SelectedMultiple",
-                  elementIDs: [state.elementID, hoveredPart.id],
-                });
-              }
-              break;
+          // Logique pour la sélection multiple avec Shift
+          if (state.type === "SelectedElement" && event.shiftKey) {
+            if (hoveredPart.type === "Void") {
+              setCanvasState({
+                type: "SelectingMultiple",
+                startPos: hoveredPart.position,
+                elementIDs: [state.elementID],
+                hoveredElementIDs: [],
+              });
+            } else if (hoveredPart.id === state.elementID) {
+              // Clic sur l'élément déjà sélectionné
+              setCanvasState({ type: "Selecting" });
+            } else {
+              // Clic sur un nouvel élément
+              setCanvasState({
+                type: "SelectedMultiple",
+                elementIDs: [state.elementID, hoveredPart.id],
+              });
             }
+            break;
           }
           if (hoveredPart.type === "Void") {
             setCanvasState({
@@ -1516,35 +1514,8 @@ export function canvasStateReducer(
         case "b":
           setCanvasState({ type: "PlacingBeamStart" });
           break;
-        case "g":
-          setCanvasState({ type: "PlacingGround" });
-          break;
-        case "p":
-          setCanvasState({ type: "PlacingPivot" });
-          break;
-        case "s":
-          setCanvasState({ type: "PlacingSlider" });
-          break;
-        case "j":
-          setCanvasState({ type: "PlacingJoin" });
-          break;
-        case "q":
-          setCanvasState({ type: "PlacingGearStart" });
-          break;
-        case "r":
-          setCanvasState({ type: "GearRatioConstraintStart" });
-          break;
-        case "t":
-          setCanvasState({ type: "PlacingBeltStart" });
-          break;
-        case "k":
-          setCanvasState({ type: "PlacingSpringStart" });
-          break;
         case "c":
           setCanvasState({ type: "PlacingDamperStart" });
-          break;
-        case "m":
-          setCanvasState({ type: "PlacingMass" });
           break;
         case "d":
           setCanvasState({ type: "DimensionStart" });
@@ -1552,25 +1523,69 @@ export function canvasStateReducer(
         case "e":
           setCanvasState({ type: "EqualConstraintStart" });
           break;
+        case "f":
+          setCanvasState({ type: "PlacingForceStart" });
+          break;
+        case "g":
+          setCanvasState({ type: "PlacingGearStart" });
+          break;
         case "h":
-        case "v":
           setCanvasState({ type: "HorizontalVerticalConstraintStart" });
           break;
-        case "n":
-          setCanvasState({ type: "NormalConstraintStart" });
+        case "i":
+          setCanvasState({ type: "PlacingTag" });
+          break;
+        case "j":
+          setCanvasState({ type: "PlacingJoin" });
+          break;
+        case "k":
+          setCanvasState({ type: "PlacingSpringStart" });
           break;
         case "l":
           setCanvasState({ type: "ParallelConstraintStart" });
           break;
-        case "z":
-          if (!event.ctrlKey) break;
-          onMouseUpHandler();
-          undoMechanism();
+        case "m":
+          setCanvasState({ type: "PlacingMass" });
+          break;
+        case "n":
+          setCanvasState({ type: "NormalConstraintStart" });
+          break;
+        case "o":
+          setCanvasState({ type: "PlacingMoment" });
+          break;
+        case "p":
+          setCanvasState({ type: "PlacingPivot" });
+          break;
+        case "q":
+          setCanvasState({ type: "GearRatioConstraintStart" });
+          break;
+        case "r":
+          setCanvasState({ type: "PlacingGround" });
+          break;
+        case "s":
+          setCanvasState({ type: "PlacingSlider" });
+          break;
+        case "t":
+          setCanvasState({ type: "PlacingBeltStart" });
+          break;
+        case "u":
+          setCanvasState({ type: "PlacingDistributedForce" });
+          break;
+        case "v":
+          setCanvasState({ type: "HorizontalVerticalConstraintStart" });
+          break;
+        case "w":
+          setCanvasState({ type: "PlacingMotor" });
           break;
         case "y":
           if (!event.ctrlKey) break;
           onMouseUpHandler();
           redoMechanism();
+          break;
+        case "z":
+          if (!event.ctrlKey) break;
+          onMouseUpHandler();
+          undoMechanism();
           break;
       }
       break;

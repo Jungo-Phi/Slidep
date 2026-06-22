@@ -25,6 +25,7 @@ export type CanvasStateType =
   | "PlacingDamperEnd"
   | "PlacingBeltStart"
   | "PlacingBeltEnd"
+  | "PlacingMotor"
   | "PlacingPivot"
   | "PlacingSlider"
   | "PlacingJoin"
@@ -32,6 +33,11 @@ export type CanvasStateType =
   | "PlacingGearStart"
   | "PlacingGearRadius"
   | "PlacingGround"
+  | "PlacingForceStart"
+  | "PlacingForceEnd"
+  | "PlacingDistributedForce"
+  | "PlacingMoment"
+  | "PlacingTag"
   | "DimensionStart"
   | "DimensionNode"
   | "DimensionEdge"
@@ -51,11 +57,7 @@ export type CanvasStateType =
   | "GearRatioConstraintStart"
   | "GearRatioConstraintGear"
   | "MovingConstraint"
-  | "EditingConstraint"
-  | "PlacingForce"
-  | "PlacingMoment"
-  | "PlacingMotor"
-  | "PlacingBalise";
+  | "EditingConstraint";
 
 // Define the possible states of the canvas interaction
 export type CanvasState =
@@ -89,6 +91,7 @@ export type CanvasState =
       startHover: HoveredPart;
       attachedGearsIDs: { id: ID; direction: boolean }[];
     } // Placing a 'belt' element, defining its gear connections / end point
+  | { type: "PlacingMotor" }
   | { type: "PlacingPivot" }
   | { type: "PlacingSlider" }
   | { type: "PlacingJoin" }
@@ -96,6 +99,11 @@ export type CanvasState =
   | { type: "PlacingGearStart" } // Placing a 'gear' element's center
   | { type: "PlacingGearRadius"; startHover: HoveredPart } // Placing a 'gear' element, defining its radius
   | { type: "PlacingGround" }
+  | { type: "PlacingForceStart" }
+  | { type: "PlacingForceEnd"; startHover: HoveredPart }
+  | { type: "PlacingDistributedForce" }
+  | { type: "PlacingMoment" }
+  | { type: "PlacingTag" }
   | { type: "DimensionStart" } // Dimensioning tool active
   | { type: "DimensionNode"; nodeID: ID } // Dimension from a node to ?
   | { type: "DimensionEdge"; edgeID: ID } // Dimension of an edge / from an edge to ?
@@ -124,8 +132,4 @@ export type CanvasState =
       elementID: ID;
       value: number;
       isPlacing: boolean;
-    }
-  | { type: "PlacingForce" }
-  | { type: "PlacingMoment" }
-  | { type: "PlacingMotor" }
-  | { type: "PlacingBalise" };
+    };

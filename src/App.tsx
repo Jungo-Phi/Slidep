@@ -181,6 +181,8 @@ const App: React.FC = () => {
       ) {
         setActiveTab("constraints");
       }
+    } else {
+      setActiveTab("project");
     }
   }, [canvasState, mechanism]);
 

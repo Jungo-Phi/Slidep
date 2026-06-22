@@ -270,7 +270,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
           {element.type === "gear" && (
             <NumberInput
               value={element.radius}
-              onChange={(radius) =>
+              onChange={(radius) => {
                 applyActions(
                   [
                     {
@@ -281,8 +281,8 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                     },
                   ],
                   "MoveElement",
-                )
-              }
+                );
+              }}
               label="Rayon"
               large={true}
             />
@@ -320,21 +320,39 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
           />
           <NumberInput
             value={element.positionStart.distance_to(element.positionEnd)}
-            onChange={(length) =>
-              applyActions(
-                [
-                  {
-                    type: "ChangeEdgeLength",
-                    id: element.id,
-                    newLength: length,
-                    oldLength: element.positionStart.distance_to(
-                      element.positionEnd,
-                    ),
-                  },
-                ],
-                "ChangeDimension",
-              )
-            }
+            onChange={(length) => {
+              const linkedDim = mechanism.constraintElements.find(
+                (c) =>
+                  c.type === "dimension-edge" && c.edgeID === element.id,
+              );
+              if (linkedDim && linkedDim.type === "dimension-edge") {
+                applyActions(
+                  [
+                    {
+                      type: "ChangeDimensionEdgeValue",
+                      id: linkedDim.id,
+                      newValue: length,
+                      oldValue: linkedDim.value,
+                    },
+                  ],
+                  "ChangeDimension",
+                );
+              } else {
+                applyActions(
+                  [
+                    {
+                      type: "ChangeEdgeLength",
+                      id: element.id,
+                      newLength: length,
+                      oldLength: element.positionStart.distance_to(
+                        element.positionEnd,
+                      ),
+                    },
+                  ],
+                  "MoveElement",
+                );
+              }
+            }}
             large={true}
             label="Longueur"
           />

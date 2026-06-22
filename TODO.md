@@ -9,6 +9,12 @@
 - Afficher "shown_name d'un élément au hover de celui-ci ?
 - empecher parentAxle ET meshed gear sur le meme gear au hover (new + moving)
 - placer un gear sur un slidep reste en slidep
+- responsive : top bar, element palette
+- responsive 2 : mobile mode
+- taille des forces log autour d'un longueur de base Lb=100
+- les contraintes ne suivent pas quand on bouge un groupe d'éléments
+- placer force
+- Move element en 2 frames n'est pas fiable
 
 ## ✅ Terminées
 
@@ -133,7 +139,7 @@
 - Click dans Dimension quand state==placingStartDimension -> Editing
 - Dimension edge to node bug
 - Belt hover (gear section) is not reliable
-- shift+click on single element doesnt work
+- ~shift+click on single element doesnt work~
 - Hover interdire les éléments directement connectés et l'élément lui-meme pour dimentions
 - Click dans le vide quand state==placingConstraint -> state=Selecting
 - hilight element on hover "disconnect" on element panel

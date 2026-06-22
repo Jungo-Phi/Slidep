@@ -27,6 +27,7 @@ import normalIconUrl from "../../assets/icons/palette/normal.svg";
 import parallelIconUrl from "../../assets/icons/palette/parallel.svg";
 import ratioIconUrl from "../../assets/icons/palette/ratio.svg";
 import forceIconUrl from "../../assets/icons/palette/force.svg";
+import distributedForceIconUrl from "../../assets/icons/palette/distributed-force.svg";
 import momentIconUrl from "../../assets/icons/palette/moment.svg";
 import motorIconUrl from "../../assets/icons/palette/motor.svg";
 import tagIconUrl from "../../assets/icons/palette/tag.svg";
@@ -117,7 +118,7 @@ const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
       },
       {
         label: "Engrenage",
-        tooltip: "Gear (Q)",
+        tooltip: "Gear (G)",
         iconSrc: gearIconUrl,
         goToStateType: "PlacingGearStart",
         hilightRule: (state) =>
@@ -152,7 +153,7 @@ const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
       },
       {
         label: "Sol",
-        tooltip: "Ground (G)",
+        tooltip: "Ground (R)",
         iconSrc: groundIconUrl,
         goToStateType: "PlacingGround",
         hilightRule: (state) => state.type === "PlacingGround",
@@ -195,6 +196,15 @@ const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
         hilightColor: COLORS.ORANGE,
         hilightHoverColor: COLORS.ORANGE_STROKE,
       },
+      {
+        label: "Moteur",
+        tooltip: "Motor (W)",
+        iconSrc: motorIconUrl,
+        goToStateType: "PlacingMotor",
+        hilightRule: (state) => state.type === "PlacingMotor",
+        hilightColor: COLORS.ORANGE,
+        hilightHoverColor: COLORS.ORANGE_STROKE,
+      },
     ],
   },
   {
@@ -226,7 +236,7 @@ const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
       },
       {
         label: "Rapport d'engrenages",
-        tooltip: "Gear ratio (R)",
+        tooltip: "Gear ratio (Q)",
         iconSrc: ratioIconUrl,
         goToStateType: "GearRatioConstraintStart",
         hilightRule: (state, mechanism) =>
@@ -295,8 +305,19 @@ const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
         label: "Force",
         tooltip: "Force (F)",
         iconSrc: forceIconUrl,
-        goToStateType: "PlacingForce",
-        hilightRule: (state) => state.type === "PlacingForce",
+        goToStateType: "PlacingForceStart",
+        hilightRule: (state) =>
+          state.type === "PlacingForceStart" ||
+          state.type === "PlacingForceEnd",
+        hilightColor: COLORS.ORANGE,
+        hilightHoverColor: COLORS.ORANGE_STROKE,
+      },
+      {
+        label: "Force répartie",
+        tooltip: "Distributed Force (U)",
+        iconSrc: distributedForceIconUrl,
+        goToStateType: "PlacingDistributedForce",
+        hilightRule: (state) => state.type === "PlacingDistributedForce",
         hilightColor: COLORS.ORANGE,
         hilightHoverColor: COLORS.ORANGE_STROKE,
       },
@@ -310,20 +331,11 @@ const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
         hilightHoverColor: COLORS.ORANGE_STROKE,
       },
       {
-        label: "Moteur",
-        tooltip: "Motor (W)",
-        iconSrc: motorIconUrl,
-        goToStateType: "PlacingMotor",
-        hilightRule: (state) => state.type === "PlacingMotor",
-        hilightColor: COLORS.ORANGE,
-        hilightHoverColor: COLORS.ORANGE_STROKE,
-      },
-      {
         label: "Balise",
-        tooltip: "Balise (Z)",
+        tooltip: "Tag (I)",
         iconSrc: tagIconUrl,
-        goToStateType: "PlacingBalise",
-        hilightRule: (state) => state.type === "PlacingBalise",
+        goToStateType: "PlacingTag",
+        hilightRule: (state) => state.type === "PlacingTag",
         hilightColor: COLORS.ORANGE,
         hilightHoverColor: COLORS.ORANGE_STROKE,
       },

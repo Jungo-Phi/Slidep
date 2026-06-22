@@ -8,8 +8,49 @@ import {
   Typography,
 } from "@mui/material";
 import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
+import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import { Mechanism, MechanismMetadata } from "../../types";
-import { format_date, validate_mechanism } from "../../utils";
+import {
+  compute_constraint_violations,
+  ConstraintViolationCategory,
+  format_date,
+  validate_mechanism,
+  ValidationErrorCode,
+} from "../../utils";
+
+const ERROR_CODE_COLORS: Record<ValidationErrorCode, string> = {
+  DUPLICATE_ID: "#b71c1c",
+  DUPLICATE_IN_LIST: "#b71c1c",
+  SELF_REFERENCE: "#880e4f",
+  MISSING_REFERENCE: "#4527a0",
+  WRONG_TYPE: "#6a1b9a",
+  MISSING_BIDIRECTIONAL: "#004d40",
+  SAME_AXLE_MESH: "#bf360c",
+};
+
+const ERROR_CODE_LABELS: Record<ValidationErrorCode, string> = {
+  DUPLICATE_ID: "dup",
+  DUPLICATE_IN_LIST: "dup",
+  SELF_REFERENCE: "ref",
+  MISSING_REFERENCE: "ref",
+  WRONG_TYPE: "typ",
+  MISSING_BIDIRECTIONAL: "bdi",
+  SAME_AXLE_MESH: "axl",
+};
+
+const CATEGORY_COLORS: Record<ConstraintViolationCategory, string> = {
+  dimension: "#1565c0",
+  alignment: "#6a1b9a",
+  geometric: "#00695c",
+  liaison: "#e65100",
+};
+
+const CATEGORY_LABELS: Record<ConstraintViolationCategory, string> = {
+  dimension: "dim",
+  alignment: "ali",
+  geometric: "géo",
+  liaison: "lia",
+};
 
 interface ProjectInfoSectionProps {
   mechanism: Mechanism;
@@ -22,6 +63,12 @@ export const ProjectInfoSection: React.FC<ProjectInfoSectionProps> = ({
 }) => {
   const validationErrors = useMemo(
     () => validate_mechanism(mechanism),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [mechanism.mechanicalElements, mechanism.constraintElements],
+  );
+
+  const constraintViolations = useMemo(
+    () => compute_constraint_violations(mechanism),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [mechanism.mechanicalElements, mechanism.constraintElements],
   );
@@ -206,8 +253,95 @@ export const ProjectInfoSection: React.FC<ProjectInfoSectionProps> = ({
             </AlertTitle>
             <Box sx={{ display: "flex", flexDirection: "column", gap: 0.25 }}>
               {validationErrors.map((err, i) => (
-                <Box key={i} sx={{ fontSize: "0.72rem" }}>
-                  • {err.message}
+                <Box
+                  key={i}
+                  sx={{
+                    fontSize: "0.72rem",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 0.5,
+                  }}
+                >
+                  <Box
+                    component="span"
+                    sx={{
+                      fontSize: "0.6rem",
+                      fontWeight: 700,
+                      px: 0.5,
+                      py: "1px",
+                      borderRadius: "3px",
+                      bgcolor: ERROR_CODE_COLORS[err.code],
+                      color: "white",
+                      flexShrink: 0,
+                      lineHeight: 1.4,
+                    }}
+                  >
+                    {ERROR_CODE_LABELS[err.code]}
+                  </Box>
+                  {err.message}
+                </Box>
+              ))}
+            </Box>
+          </Alert>
+        </>
+      )}
+
+      {constraintViolations !== null && (
+        <>
+          <Divider />
+          <Alert
+            severity="warning"
+            icon={false}
+            sx={{
+              py: 0.5,
+              borderRadius: 0,
+              border: "none",
+              boxShadow: "none",
+              mb: -2,
+            }}
+          >
+            <AlertTitle
+              sx={{
+                fontSize: "0.85rem",
+                mb: 0.5,
+                display: "flex",
+                alignItems: "center",
+                gap: 0.5,
+              }}
+            >
+              <WarningAmberIcon fontSize="small" />
+              {constraintViolations.length} contrainte
+              {constraintViolations.length > 1 ? "s" : ""} non respectée
+              {constraintViolations.length > 1 ? "s" : ""}
+            </AlertTitle>
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 0.25 }}>
+              {constraintViolations.map((v, i) => (
+                <Box
+                  key={i}
+                  sx={{
+                    fontSize: "0.72rem",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 0.5,
+                  }}
+                >
+                  <Box
+                    component="span"
+                    sx={{
+                      fontSize: "0.6rem",
+                      fontWeight: 700,
+                      px: 0.5,
+                      py: "1px",
+                      borderRadius: "3px",
+                      bgcolor: CATEGORY_COLORS[v.category],
+                      color: "white",
+                      flexShrink: 0,
+                      lineHeight: 1.4,
+                    }}
+                  >
+                    {CATEGORY_LABELS[v.category]}
+                  </Box>
+                  {v.message}
                 </Box>
               ))}
             </Box>
