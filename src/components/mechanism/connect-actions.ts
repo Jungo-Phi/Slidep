@@ -2,9 +2,11 @@ import type {
   BeltElement,
   ConstraintElement,
   EdgeElement,
+  ForceElement,
   GearElement,
   ID,
   JoinElement,
+  LoadElement,
   MechanicalElement,
   NodeElement,
   SlidepElement,
@@ -117,6 +119,12 @@ export function get_connection_pair_type(
     connectedElement.attachedBeltID === elementID
   )
     return "ConnectsAttachedBelt";
+
+  if (
+    "fixedGearsIDs" in connectedElement &&
+    (connectedElement.fixedGearsIDs as ID[]).includes(elementID)
+  )
+    return "ConnectsFixedGears";
 
   throw new Error("Connection pair type has not been found !");
 }
@@ -304,43 +312,28 @@ export function delete_element(
     element.type === "slider" ||
     element.type === "spring"
   ) {
-    get_connection_types(element).forEach((connectionType) => {
-      get_connections(element, connectionType).forEach((id) => {
-        const connectedElement = get_mechanical_element_from_id(
-          id,
-          mechanicalElements,
-        );
-        const connection_pair_type = get_connection_pair_type(
-          element.id,
-          connectedElement,
-        );
-        actions.push(
-          disconnect_element(
-            connectedElement,
-            element,
-            connection_pair_type,
+    get_connection_types(element)
+      .filter((ct) => !(isCascade && ct === "ConnectsParentAxle"))
+      .forEach((connectionType) => {
+        get_connections(element, connectionType).forEach((id) => {
+          const connectedElement = get_mechanical_element_from_id(
+            id,
             mechanicalElements,
-          ),
-        );
-      });
-    });
-
-    // Gear: disconnect from parent pivot/slidep's fixedGearsIDs list
-    if (element.type === "gear" && !isCascade) {
-      const parent = mechanicalElements.find(
-        (e) =>
-          "fixedGearsIDs" in e && (e as any).fixedGearsIDs.includes(element.id),
-      );
-      if (parent && "fixedGearsIDs" in parent) {
-        actions.push({
-          type: "ConnectsFixedGears",
-          disconnect: true,
-          elementID: parent.id,
-          connectID: element.id,
-          index: (parent.fixedGearsIDs as ID[]).indexOf(element.id),
+          );
+          const connection_pair_type = get_connection_pair_type(
+            element.id,
+            connectedElement,
+          );
+          actions.push(
+            disconnect_element(
+              connectedElement,
+              element,
+              connection_pair_type,
+              mechanicalElements,
+            ),
+          );
         });
-      }
-    }
+      });
 
     // Pivot/Slidep: cascade delete all attached gears
     if (
@@ -792,6 +785,7 @@ export function connect_elements(
   selectedPart: HoveredPart,
   mechanicalElements: MechanicalElement[],
   constraintElements: ConstraintElement[],
+  loads: LoadElement[] = [],
 ): Action[] {
   if (
     hoveredPart.type === "Void" ||
@@ -824,7 +818,11 @@ export function connect_elements(
         case "Node":
           // NODE on NODE
           const hoveredNode = hoveredElement as NodeElement;
-          if (selectedNode.type === "pivot" && hoveredNode.type === "slider") {
+          if (
+            selectedNode.type === "pivot" &&
+            !selectedNode.motor &&
+            hoveredNode.type === "slider"
+          ) {
             const slidep: SlidepElement = {
               type: "slidep",
               parentBeamID: hoveredNode.parentBeamID,
@@ -926,6 +924,7 @@ export function connect_elements(
               selectedNode,
               hoveredEdge,
               hoveredPart.part,
+              loads,
             ),
           );
           break;
@@ -942,6 +941,7 @@ export function connect_elements(
               hoveredNode,
               selectedEdge,
               selectedPart.part,
+              loads,
             ),
           );
           break;
@@ -958,10 +958,10 @@ export function connect_elements(
           };
           actions.push({ type: "CreateElement", element: join });
           actions.push(
-            ...connect_node_and_edge(join, hoveredEdge, hoveredPart.part),
+            ...connect_node_and_edge(join, hoveredEdge, hoveredPart.part, loads),
           );
           actions.push(
-            ...connect_node_and_edge(join, selectedEdge, selectedPart.part),
+            ...connect_node_and_edge(join, selectedEdge, selectedPart.part, loads),
           );
           break;
       }
@@ -1001,6 +1001,7 @@ function connect_node_and_edge(
   node: NodeElement,
   edge: EdgeElement,
   edgePart: "start" | "end" | "body",
+  loads: LoadElement[] = [],
 ): Action[] {
   let actions: Action[] = [];
   if ("parentBeamID" in node && !node.parentBeamID && edgePart === "body") {
@@ -1052,6 +1053,29 @@ function connect_node_and_edge(
         connectID: node.id,
         index: 0,
       });
+  }
+  if (edgePart !== "body") {
+    const edgeForces = loads.filter(
+      (l): l is ForceElement =>
+        l.type === "force" && l.targetID === edge.id && l.anchor === edgePart,
+    );
+    const nodeHasForce = loads.some(
+      (l) => l.type === "force" && l.targetID === node.id,
+    );
+    for (const ef of edgeForces) {
+      actions.push({ type: "DeleteElement", element: ef });
+      if (!nodeHasForce) {
+        actions.push({
+          type: "CreateElement",
+          element: {
+            type: "force",
+            id: crypto.randomUUID() as ID,
+            targetID: node.id,
+            vector: ef.vector,
+          },
+        });
+      }
+    }
   }
   return actions;
 }

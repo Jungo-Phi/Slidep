@@ -115,6 +115,16 @@ export class Point2 {
     return this.x === other.x && this.y === other.y;
   }
 
+  /** Returns a new point with the x coordinate flipped */
+  public mirrorX(): Point2 {
+    return new Point2(-this.x, this.y);
+  }
+
+  /** Returns a new point with the y coordinate flipped */
+  public mirrorY(): Point2 {
+    return new Point2(this.x, -this.y);
+  }
+
   public toString(): string {
     return `[${this.x.toFixed(1)},${this.y.toFixed(1)}]`;
   }

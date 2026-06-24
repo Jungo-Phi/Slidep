@@ -316,8 +316,10 @@ const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
         label: "Force répartie",
         tooltip: "Distributed Force (U)",
         iconSrc: distributedForceIconUrl,
-        goToStateType: "PlacingDistributedForce",
-        hilightRule: (state) => state.type === "PlacingDistributedForce",
+        goToStateType: "PlacingDistributedForceStart",
+        hilightRule: (state) =>
+          state.type === "PlacingDistributedForceStart" ||
+          state.type === "PlacingDistributedForceEnd",
         hilightColor: COLORS.ORANGE,
         hilightHoverColor: COLORS.ORANGE_STROKE,
       },
@@ -447,7 +449,11 @@ export const ElementPalette: React.FC<ElementPaletteProps> = ({
         <section key={group.title}>
           {group.title !== "Interface" && (
             <>
-              <Divider variant="fullWidth" flexItem sx={{ mx: -1, my: 0.5 }} />
+              <Divider
+                variant="fullWidth"
+                flexItem
+                sx={{ mx: -0.5, my: 0.5 }}
+              />
               <Typography
                 sx={{
                   textAlign: "center",

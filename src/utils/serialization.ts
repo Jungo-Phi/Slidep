@@ -211,9 +211,24 @@ function revive_points(s: Record<string, unknown>): Record<string, unknown> {
 function deserialize_mechanical_element(
   serializedMechanicalElement: SerializedMechanicalElement,
 ): MechanicalElement {
-  return revive_points(
+  const el = revive_points(
     serializedMechanicalElement as unknown as Record<string, unknown>,
-  ) as unknown as MechanicalElement;
+  ) as unknown as Record<string, unknown>;
+
+  // Restore optional connection fields lost by JSON.stringify (undefined → absent from JSON)
+  const t = el.type as string;
+  if (t === "beam" || t === "spring" || t === "damper" || t === "belt") {
+    if (!("fixedNodeStartID" in el)) el.fixedNodeStartID = undefined;
+    if (!("fixedNodeEndID" in el)) el.fixedNodeEndID = undefined;
+  }
+  if (t === "slider" || t === "slidep") {
+    if (!("parentBeamID" in el)) el.parentBeamID = undefined;
+  }
+  if (t === "gear") {
+    if (!("attachedBeltID" in el)) el.attachedBeltID = undefined;
+  }
+
+  return el as unknown as MechanicalElement;
 }
 
 function deserialize_constraint_element(

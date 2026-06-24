@@ -5,6 +5,7 @@ import {
   ID,
   MechanicalElement,
   NodeElement,
+  PivotElement,
   UnionElement,
 } from "../types/element";
 import { Point2 } from "../types/point2";
@@ -18,7 +19,8 @@ export type ValidationErrorCode =
   | "MISSING_REFERENCE"
   | "WRONG_TYPE"
   | "MISSING_BIDIRECTIONAL"
-  | "SAME_AXLE_MESH";
+  | "SAME_AXLE_MESH"
+  | "CONTRADICTORY_MOTOR";
 
 export interface MechanismValidationError {
   code: ValidationErrorCode;
@@ -56,6 +58,7 @@ function has_body_ids(el: MechanicalElement): el is BeamElement {
  * - All referenced IDs exist and are of the correct element type
  * - All connections are bidirectional
  * - All constraint references point to existing elements of the right type
+ * - Motors are grounded OR have a parentAxle
  */
 export function validate_mechanism(
   mechanism: Mechanism,
@@ -266,6 +269,40 @@ export function validate_mechanism(
       }
     }
 
+    // motor (pivot) → XOR : pivot groundé (sans parentBeamID) OU parentBeamID défini (sans isGrounded)
+    if (el.type === "pivot") {
+      const pivot = el as PivotElement;
+      if (pivot.motor !== undefined) {
+        const motor = pivot.motor;
+        if (pivot.isGrounded && motor.parentBeamID !== undefined) {
+          errors.push({
+            code: "CONTRADICTORY_MOTOR",
+            message: `${name(el.id)} (motor): le pivot est ancré au sol et a un parentBeamID — ces deux conditions sont mutuellement exclusives.`,
+            elementID: el.id,
+            relatedID: motor.parentBeamID,
+          });
+        } else if (!pivot.isGrounded && motor.parentBeamID === undefined) {
+          errors.push({
+            code: "MISSING_REFERENCE",
+            message: `${name(el.id)} (motor.parentBeamID): le pivot n'est pas ancré au sol, donc le moteur doit avoir un parentBeamID.`,
+            elementID: el.id,
+          });
+        } else if (motor.parentBeamID !== undefined) {
+          no_self(el.id, motor.parentBeamID, "motor.parentBeamID");
+          const beam = ref(el.id, motor.parentBeamID, "motor.parentBeamID");
+          if (beam && beam.type !== "beam") {
+            wrong_type(
+              el.id,
+              motor.parentBeamID,
+              "motor.parentBeamID",
+              ["beam"],
+              beam.type,
+            );
+          }
+        }
+      }
+    }
+
     // parentAxleID (gear) → doit pointer sur un pivot/slidep qui a ce gear dans fixedGearsIDs
     if (el.type === "gear") {
       const gear = el as GearElement;
@@ -320,7 +357,11 @@ export function validate_mechanism(
           });
         }
         if (!otherGear.meshedGearsIDs.includes(el.id)) {
-          missing_bidi(el.id, gearID, `${name(el.id)} (meshedGearsIDs → ${name(gearID)}): connexion non réciproque.`);
+          missing_bidi(
+            el.id,
+            gearID,
+            `${name(el.id)} (meshedGearsIDs → ${name(gearID)}): connexion non réciproque.`,
+          );
         }
       }
     }
@@ -614,8 +655,13 @@ export function compute_constraint_violations(
     unit: "px" | "°" | "ratio",
   ) {
     const thr =
-      unit === "px" ? thresholdPx : unit === "°" ? thresholdDeg : thresholdRatio;
-    if (error > thr) violations.push({ elementID, category, message, error, unit });
+      unit === "px"
+        ? thresholdPx
+        : unit === "°"
+          ? thresholdDeg
+          : thresholdRatio;
+    if (error > thr)
+      violations.push({ elementID, category, message, error, unit });
   }
 
   // ── Constraint elements ──────────────────────────────────────────────────────
@@ -627,7 +673,13 @@ export function compute_constraint_violations(
         if (!e) break;
         const len = e.start.distance_to(e.end);
         const err = Math.abs(len - cel.value);
-        add(cel.id, "dimension", `${n}: ${len.toFixed(1)} ≠ ${cel.value} px (Δ ${err.toFixed(2)} px)`, err, "px");
+        add(
+          cel.id,
+          "dimension",
+          `${n}: ${len.toFixed(1)} ≠ ${cel.value} px (Δ ${err.toFixed(2)} px)`,
+          err,
+          "px",
+        );
         break;
       }
       case "dimension-node-to-node": {
@@ -636,7 +688,13 @@ export function compute_constraint_violations(
         if (!p1 || !p2) break;
         const dist = p1.distance_to(p2);
         const err = Math.abs(dist - cel.value);
-        add(cel.id, "dimension", `${n}: ${dist.toFixed(1)} ≠ ${cel.value} px (Δ ${err.toFixed(2)} px)`, err, "px");
+        add(
+          cel.id,
+          "dimension",
+          `${n}: ${dist.toFixed(1)} ≠ ${cel.value} px (Δ ${err.toFixed(2)} px)`,
+          err,
+          "px",
+        );
         break;
       }
       case "dimension-edge-to-node": {
@@ -645,7 +703,13 @@ export function compute_constraint_violations(
         if (!e || !p) break;
         const dist = p.distance_to_line(e.start, e.end);
         const err = Math.abs(dist - cel.value);
-        add(cel.id, "dimension", `${n}: ${dist.toFixed(1)} ≠ ${cel.value} px (Δ ${err.toFixed(2)} px)`, err, "px");
+        add(
+          cel.id,
+          "dimension",
+          `${n}: ${dist.toFixed(1)} ≠ ${cel.value} px (Δ ${err.toFixed(2)} px)`,
+          err,
+          "px",
+        );
         break;
       }
       case "dimension-angle": {
@@ -658,27 +722,45 @@ export function compute_constraint_violations(
         if (cel.flipEnd) v2 = v2.mul(-1);
         const currentRad = v1.angle_to(v2);
         const targetRad =
-          (cel.value * Math.PI) / 180 * (cel.couterClockwise ? -1 : 1);
+          ((cel.value * Math.PI) / 180) * (cel.couterClockwise ? -1 : 1);
         let diff = currentRad - targetRad;
         if (diff > Math.PI) diff -= 2 * Math.PI;
         if (diff < -Math.PI) diff += 2 * Math.PI;
         const errDeg = (Math.abs(diff) * 180) / Math.PI;
         const currentDeg = (currentRad * 180) / Math.PI;
-        add(cel.id, "dimension", `${n}: ${currentDeg.toFixed(1)}° ≠ ${cel.value}° (Δ ${errDeg.toFixed(2)}°)`, errDeg, "°");
+        add(
+          cel.id,
+          "dimension",
+          `${n}: ${currentDeg.toFixed(1)}° ≠ ${cel.value}° (Δ ${errDeg.toFixed(2)}°)`,
+          errDeg,
+          "°",
+        );
         break;
       }
       case "dimension-radius": {
         const r = radii.get(cel.gearID);
         if (r === undefined) break;
         const err = Math.abs(r - cel.value);
-        add(cel.id, "dimension", `${n}: ${r.toFixed(1)} ≠ ${cel.value} px (Δ ${err.toFixed(2)} px)`, err, "px");
+        add(
+          cel.id,
+          "dimension",
+          `${n}: ${r.toFixed(1)} ≠ ${cel.value} px (Δ ${err.toFixed(2)} px)`,
+          err,
+          "px",
+        );
         break;
       }
       case "horizontal-align-edge": {
         const e = edgePos.get(cel.edgeID);
         if (!e) break;
         const err = Math.abs(e.start.y - e.end.y);
-        add(cel.id, "alignment", `${n}: non horizontal (Δy ${err.toFixed(2)} px)`, err, "px");
+        add(
+          cel.id,
+          "alignment",
+          `${n}: non horizontal (Δy ${err.toFixed(2)} px)`,
+          err,
+          "px",
+        );
         break;
       }
       case "horizontal-align-nodes": {
@@ -686,14 +768,26 @@ export function compute_constraint_violations(
         const p2 = nodePos.get(cel.endNodeID);
         if (!p1 || !p2) break;
         const err = Math.abs(p1.y - p2.y);
-        add(cel.id, "alignment", `${n}: non horizontal (Δy ${err.toFixed(2)} px)`, err, "px");
+        add(
+          cel.id,
+          "alignment",
+          `${n}: non horizontal (Δy ${err.toFixed(2)} px)`,
+          err,
+          "px",
+        );
         break;
       }
       case "vertical-align-edge": {
         const e = edgePos.get(cel.edgeID);
         if (!e) break;
         const err = Math.abs(e.start.x - e.end.x);
-        add(cel.id, "alignment", `${n}: non vertical (Δx ${err.toFixed(2)} px)`, err, "px");
+        add(
+          cel.id,
+          "alignment",
+          `${n}: non vertical (Δx ${err.toFixed(2)} px)`,
+          err,
+          "px",
+        );
         break;
       }
       case "vertical-align-nodes": {
@@ -701,7 +795,13 @@ export function compute_constraint_violations(
         const p2 = nodePos.get(cel.endNodeID);
         if (!p1 || !p2) break;
         const err = Math.abs(p1.x - p2.x);
-        add(cel.id, "alignment", `${n}: non vertical (Δx ${err.toFixed(2)} px)`, err, "px");
+        add(
+          cel.id,
+          "alignment",
+          `${n}: non vertical (Δx ${err.toFixed(2)} px)`,
+          err,
+          "px",
+        );
         break;
       }
       case "normal": {
@@ -714,7 +814,13 @@ export function compute_constraint_violations(
         while (diff > Math.PI / 2) diff -= Math.PI;
         while (diff < -Math.PI / 2) diff += Math.PI;
         const errDeg = (Math.abs(diff) * 180) / Math.PI;
-        add(cel.id, "geometric", `${n}: non perpendiculaire (Δ ${errDeg.toFixed(2)}°)`, errDeg, "°");
+        add(
+          cel.id,
+          "geometric",
+          `${n}: non perpendiculaire (Δ ${errDeg.toFixed(2)}°)`,
+          errDeg,
+          "°",
+        );
         break;
       }
       case "parallel": {
@@ -727,7 +833,13 @@ export function compute_constraint_violations(
         while (diff > Math.PI / 2) diff -= Math.PI;
         while (diff < -Math.PI / 2) diff += Math.PI;
         const errDeg = (Math.abs(diff) * 180) / Math.PI;
-        add(cel.id, "geometric", `${n}: non parallèle (Δ ${errDeg.toFixed(2)}°)`, errDeg, "°");
+        add(
+          cel.id,
+          "geometric",
+          `${n}: non parallèle (Δ ${errDeg.toFixed(2)}°)`,
+          errDeg,
+          "°",
+        );
         break;
       }
       case "equal": {
@@ -737,7 +849,13 @@ export function compute_constraint_violations(
         const len1 = e1.start.distance_to(e1.end);
         const len2 = e2.start.distance_to(e2.end);
         const err = Math.abs(len1 - len2);
-        add(cel.id, "geometric", `${n}: longueurs inégales ${len1.toFixed(1)} vs ${len2.toFixed(1)} px (Δ ${err.toFixed(2)} px)`, err, "px");
+        add(
+          cel.id,
+          "geometric",
+          `${n}: longueurs inégales ${len1.toFixed(1)} vs ${len2.toFixed(1)} px (Δ ${err.toFixed(2)} px)`,
+          err,
+          "px",
+        );
         break;
       }
       case "gear-ratio": {
@@ -746,7 +864,13 @@ export function compute_constraint_violations(
         if (r1 === undefined || r2 === undefined || r2 === 0) break;
         const current = r1 / r2;
         const err = Math.abs(current - cel.value);
-        add(cel.id, "geometric", `${n}: rapport ${current.toFixed(3)} ≠ ${cel.value} (Δ ${err.toFixed(4)})`, err, "ratio");
+        add(
+          cel.id,
+          "geometric",
+          `${n}: rapport ${current.toFixed(3)} ≠ ${cel.value} (Δ ${err.toFixed(4)})`,
+          err,
+          "ratio",
+        );
         break;
       }
     }
@@ -763,7 +887,13 @@ export function compute_constraint_violations(
       if (!p) continue;
       const err = p.distance_to_segment(e.start, e.end);
       const nodeName = shown_element_name(mechByID.get(nodeID));
-      add(el.id, "liaison", `${nodeName} hors de ${beamName} (Δ ${err.toFixed(2)} px)`, err, "px");
+      add(
+        el.id,
+        "liaison",
+        `${nodeName} hors de ${beamName} (Δ ${err.toFixed(2)} px)`,
+        err,
+        "px",
+      );
     }
   }
 
@@ -778,7 +908,13 @@ export function compute_constraint_violations(
       if (p) {
         const err = p.distance_to(e.start);
         const nodeName = shown_element_name(mechByID.get(el.fixedNodeStartID));
-        add(el.id, "liaison", `${nodeName} ↔ début de ${edgeName} (Δ ${err.toFixed(2)} px)`, err, "px");
+        add(
+          el.id,
+          "liaison",
+          `${nodeName} ↔ début de ${edgeName} (Δ ${err.toFixed(2)} px)`,
+          err,
+          "px",
+        );
       }
     }
     if (el.fixedNodeEndID) {
@@ -786,7 +922,13 @@ export function compute_constraint_violations(
       if (p) {
         const err = p.distance_to(e.end);
         const nodeName = shown_element_name(mechByID.get(el.fixedNodeEndID));
-        add(el.id, "liaison", `${nodeName} ↔ fin de ${edgeName} (Δ ${err.toFixed(2)} px)`, err, "px");
+        add(
+          el.id,
+          "liaison",
+          `${nodeName} ↔ fin de ${edgeName} (Δ ${err.toFixed(2)} px)`,
+          err,
+          "px",
+        );
       }
     }
   }
@@ -810,7 +952,13 @@ export function compute_constraint_violations(
       const target = r1 + r2;
       const err = Math.abs(dist - target);
       const gear2Name = shown_element_name(mechByID.get(meshedID));
-      add(el.id, "liaison", `Tangence ${gear1Name}↔${gear2Name}: ${dist.toFixed(1)} ≠ ${target.toFixed(1)} px (Δ ${err.toFixed(2)} px)`, err, "px");
+      add(
+        el.id,
+        "liaison",
+        `Tangence ${gear1Name}↔${gear2Name}: ${dist.toFixed(1)} ≠ ${target.toFixed(1)} px (Δ ${err.toFixed(2)} px)`,
+        err,
+        "px",
+      );
     }
   }
 
@@ -825,7 +973,13 @@ export function compute_constraint_violations(
       if (!gearPos) continue;
       const err = axlePos.distance_to(gearPos);
       const gearName = shown_element_name(mechByID.get(gearID));
-      add(el.id, "liaison", `${gearName} désaligné de son axe ${axleName} (Δ ${err.toFixed(2)} px)`, err, "px");
+      add(
+        el.id,
+        "liaison",
+        `${gearName} désaligné de son axe ${axleName} (Δ ${err.toFixed(2)} px)`,
+        err,
+        "px",
+      );
     }
   }
 

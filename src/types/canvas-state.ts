@@ -37,7 +37,8 @@ export type CanvasStateType =
   | "PlacingGround"
   | "PlacingForceStart"
   | "PlacingForceEnd"
-  | "PlacingDistributedForce"
+  | "PlacingDistributedForceStart"
+  | "PlacingDistributedForceEnd"
   | "PlacingMoment"
   | "PlacingProbe"
   | "DimensionStart"
@@ -111,7 +112,8 @@ export type CanvasState =
   | { type: "PlacingGround" }
   | { type: "PlacingForceStart" }
   | { type: "PlacingForceEnd"; startHover: HoveredPart }
-  | { type: "PlacingDistributedForce" }
+  | { type: "PlacingDistributedForceStart" }
+  | { type: "PlacingDistributedForceEnd"; startHover: HoveredPart }
   | { type: "PlacingMoment" }
   | { type: "PlacingProbe" }
   | { type: "DimensionStart" } // Dimensioning tool active

@@ -4,17 +4,11 @@
 
 ### À faire maintenant
 
-- Supprimer le gear si on supprime l'axe
-- placer un pivot quand on place un moteur
-- Ajouter le choix du parent beam dans le moteur
-- Transférer les forces de edgeStart/edgeEnd à node quand on en place par dessus
-- probe ajoutée 2 par 2 quand il y en a déjà une ???
-- ctrl+Z avec distributed force ne marche pas bien
-- Ajouter PlacingDistributedForce START + END
-- Enlever scroll de la barre d'outils
-- uniformiser le type du moteur
-- Afficher l'icon et nom moteur à la place de pivot (si moteur bien sûr)
 - Ajouter un modificateur "ligne" pour la force répartie
+- canvas-state-reducer refactor (séparer en plusieurs fichiers)
+- probe ajoutée 2 par 2 quand il y en a déjà une ???
+- Ouverture du sélecteur de métriques (Force, Vitesse, Position, Angle) au placement d'un probe
+- ctrl+Z avec distributed force ne marche pas bien
 
 ### À faire rapidement
 
@@ -22,7 +16,8 @@
 - ctrl+Y/Z ne change pas le panneau de propriétés
 - flicker dans la transition de property pannel de element à project
 - Snap to grid
-- Afficher / cacher les contraintes (mais toujours affichées dans l'onglet de contraintes)
+- Afficher / cacher les contraintes (mais toujours affichées dans l'onglet de contraintes) / Contraintes plus petites ? / Afficher quand on hover sur l'élément lié avec un cooldown ?
+- Prefered force direction
 - Faire le panneau de paramètre propre
 - Move element en 2 frames n'est pas fiable
 - Les contraintes et dimensions ne suivent pas lors des déplacements de groupe d'éléments
@@ -45,17 +40,19 @@
 ### À faire plus tard
 
 - Zoom sans scale les éléments eux-même ?
+- Mirror Y le canvas ?
 - Régler le hover du texte de ElementDisplay
 - responsive : top bar, element palette
+- Snap force et distributed force aux perpendiculaires lors du placement
 - Revenir au dernier mode de simulation avec SPACE (sauvegarde)
 - Afficher / Cacher les probes
 - hover et sélection des probes (= élément lié)
-- Ouverture du sélecteur de métriques (Force, Vitesse, Position, Angle) au placement d'un probe
 - Gestion des probes (Mesures Temporelles) :
   - Configuration par probe : métrique, toggle graphique
   - Zone de graphiques : courbes superposées ou séparées (Valeur vs Temps), export CSV, export image
   - Nomenclature : distinguer "Contrainte" (MPa / Matériau) des contraintes géométriques
 - placer un gear sur un slidep reste en slidep
+- Ajouter le choix du parent beam dans le moteur
 - Belt hover (gear section) is not reliable
 - Empecher de placer une belt sur un gear avec le même axisID
 - Hover et Click dans sur les dimension pour les éditer quand state==placingStartDimension
@@ -96,6 +93,7 @@
 - Ajouter "repelDistance" pour éloigner les contraintes détachées : move apart disconnected elements
 - hilight element on hover "disconnect" on element panel ?
 - afficher ground avec les 4 directions cardinales
+- changer le style du ground sur le moteur
 - afficher les forces en 2 modes (toe to head / head to toe)
 - Ajouter "Angle" dans les edges
 - Afficher la dimension dans le panneau de propriétés d'un edge

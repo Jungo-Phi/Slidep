@@ -26,6 +26,7 @@ const ERROR_CODE_COLORS: Record<ValidationErrorCode, string> = {
   WRONG_TYPE: "#6a1b9a",
   MISSING_BIDIRECTIONAL: "#004d40",
   SAME_AXLE_MESH: "#bf360c",
+  CONTRADICTORY_MOTOR: "#3162ab",
 };
 
 const ERROR_CODE_LABELS: Record<ValidationErrorCode, string> = {
@@ -36,6 +37,7 @@ const ERROR_CODE_LABELS: Record<ValidationErrorCode, string> = {
   WRONG_TYPE: "typ",
   MISSING_BIDIRECTIONAL: "bdi",
   SAME_AXLE_MESH: "axl",
+  CONTRADICTORY_MOTOR: "mot",
 };
 
 const CATEGORY_COLORS: Record<ConstraintViolationCategory, string> = {

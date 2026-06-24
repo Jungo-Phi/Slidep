@@ -85,24 +85,7 @@ export function actionReducer(
           if (revert !== (action.type === "DeleteElement")) {
             loads = loads.filter((l) => l.id !== action.element.id);
           } else {
-            const incoming = action.element as LoadElement;
-            // Replace existing load on same target (1 force per node/anchor, 1 moment per edge/gear)
-            if (incoming.type === "force") {
-              loads = loads.filter(
-                (l) =>
-                  !(
-                    l.type === "force" &&
-                    l.targetID === incoming.targetID &&
-                    l.anchor === incoming.anchor
-                  ),
-              );
-            } else if (incoming.type === "moment") {
-              loads = loads.filter(
-                (l) =>
-                  !(l.type === "moment" && l.targetID === incoming.targetID),
-              );
-            }
-            loads.push(incoming);
+            loads.push(action.element as LoadElement);
           }
         } else {
           if (revert !== (action.type === "DeleteElement")) {

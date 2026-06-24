@@ -149,6 +149,7 @@ export const DRAWING_ORDER: UnionElement["type"][] = [
   "beam",
   "damper",
   "spring",
+  // TODO : "motor",
   "gear",
   "belt",
   "join",

@@ -48,7 +48,6 @@ export function get_hovered_part_of_element(
     }
   }
   if (element.type === "mass" && state.type === "PlacingGround") return null; // cannot place ground on mass
-  if (element.type !== "pivot" && state.type === "PlacingMotor") return null; // can place motor only on pivot
   if (
     element.type === "gear" &&
     state.type === "PlacingGearRadius" &&
@@ -108,6 +107,7 @@ export function get_hovered_part_of_element(
         case "PlacingGearStart":
         case "PlacingGround":
         case "PlacingPivot":
+        case "PlacingMotor":
         case "PlacingSlider":
         case "PlacingJoin":
         case "PlacingMass":
@@ -117,12 +117,15 @@ export function get_hovered_part_of_element(
         case "DimensionEdge":
         case "HorizontalVerticalConstraintStart":
         case "HorizontalVerticalConstraintNode":
-        case "PlacingMotor":
         case "MovingEdgeStartPoint":
         case "MovingEdgeEndPoint":
         case "PlacingBeamEnd":
           // center
-          if (distance <= HIT_TOLERANCE.NODE) {
+          const hit_radius =
+            node.type === "pivot" && node.motor
+              ? DIM.MOTOR_RADIUS
+              : HIT_TOLERANCE.NODE;
+          if (distance <= hit_radius) {
             return {
               type: "Node",
               position: node.position.clone(),
@@ -391,7 +394,7 @@ export function get_hovered_part_of_element(
             };
           }
           break;
-        case "PlacingDistributedForce":
+        case "PlacingDistributedForceStart":
           // beam body only
           if (
             edge.type === "beam" &&
@@ -445,6 +448,7 @@ export function get_hovered_part_of_element(
         case "PlacingBeltStart":
         case "PlacingBeltEnd":
         case "PlacingPivot":
+        case "PlacingMotor":
         case "PlacingSlider":
         case "PlacingJoin":
         case "PlacingMass":
@@ -679,6 +683,7 @@ export function get_hovered_part_of_element(
         case "PlacingBeltStart":
         case "PlacingBeltEnd":
         case "PlacingPivot":
+        case "PlacingMotor":
         case "PlacingSlider":
         case "PlacingJoin":
         case "PlacingMass":

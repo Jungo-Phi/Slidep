@@ -161,6 +161,7 @@ export const MechanicalCanvas = forwardRef<
     };
 
     const onMouseDownHandler = (event: React.MouseEvent<HTMLCanvasElement>) => {
+      window.getSelection()?.removeAllRanges();
       mousePositionRef.current = new Point2(event.clientX, event.clientY).sub(
         canvasOffsetRef.current,
       );

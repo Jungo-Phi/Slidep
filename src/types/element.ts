@@ -109,7 +109,7 @@ export interface SliderElement extends BaseNodeElement {
 }
 
 export interface MotorConfig {
-  parentBeamID?: ID; // null = sol (seulement si le pivot est groundé)
+  parentBeamID?: ID; // undefined = sol (seulement si le pivot est groundé)
   speed: number;
 }
 

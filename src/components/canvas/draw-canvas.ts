@@ -885,6 +885,9 @@ export function drawMechanicalCanvas(
           draw_ground(ctx);
           break;
         case "PlacingMotor":
+          ctx.translate(0, 7);
+          draw_ground(ctx);
+          ctx.translate(0, -7);
           draw_motor(ctx);
           draw_pivot(ctx, false);
           break;
@@ -893,16 +896,15 @@ export function drawMechanicalCanvas(
     case "PlacingForceStart":
     case "PlacingForceEnd":
     case "PlacingMoment":
-    case "PlacingDistributedForce":
+    case "PlacingDistributedForceStart":
+    case "PlacingDistributedForceEnd":
+      ctx.strokeStyle = COLORS.ORANGE;
+      ctx.fillStyle = COLORS.ORANGE;
       switch (state.type) {
         case "PlacingForceStart":
-          ctx.strokeStyle = COLORS.ORANGE;
-          ctx.fillStyle = COLORS.ORANGE;
           draw_force(ctx, hoveredPart.position, new Point2(0, -50));
           break;
         case "PlacingForceEnd":
-          ctx.strokeStyle = COLORS.ORANGE;
-          ctx.fillStyle = COLORS.ORANGE;
           draw_force(
             ctx,
             state.startHover.position,
@@ -910,13 +912,9 @@ export function drawMechanicalCanvas(
           );
           break;
         case "PlacingMoment":
-          ctx.strokeStyle = COLORS.ORANGE;
-          ctx.fillStyle = COLORS.ORANGE;
           draw_moment(ctx, hoveredPart.position, 1, true);
           break;
-        case "PlacingDistributedForce":
-          ctx.strokeStyle = COLORS.ORANGE;
-          ctx.fillStyle = COLORS.ORANGE;
+        case "PlacingDistributedForceStart":
           if (hoveredPart.type === "Edge") {
             const hBeam = mechanicalElements.find(
               (e) => e.id === hoveredPart.id && e.type === "beam",
@@ -936,15 +934,33 @@ export function drawMechanicalCanvas(
               );
             }
           } else {
-            const perp = new Point2(0, 50);
+            const delta = new Point2(0, 50);
             draw_distributed_force(
               ctx,
-              hoveredPart.position.sub(new Point2(100, 0)),
-              hoveredPart.position.add(new Point2(100, 0)),
-              perp,
-              perp,
+              hoveredPart.position.sub(new Point2(50, 0)),
+              hoveredPart.position.add(new Point2(50, 0)),
+              delta,
+              delta,
+              4,
             );
           }
+          break;
+        case "PlacingDistributedForceEnd":
+          if (state.startHover.type !== "Edge") break;
+          const beam = get_mechanical_element_from_id(
+            state.startHover.id,
+            mechanicalElements,
+          ) as BeamElement;
+          const delta = hoveredPart.position.sub(
+            beam.positionStart.lerp(beam.positionEnd, 0.5),
+          );
+          draw_distributed_force(
+            ctx,
+            beam.positionStart,
+            beam.positionEnd,
+            delta,
+            delta,
+          );
           break;
       }
       break;

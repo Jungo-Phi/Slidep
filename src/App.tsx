@@ -174,7 +174,8 @@ const App: React.FC = () => {
       if (
         mechanism.mechanicalElements.find(
           (el) => el.id === canvasState.elementID,
-        )
+        ) ||
+        mechanism.loads.find((el) => el.id === canvasState.elementID)
       ) {
         setActiveTab("elements");
       } else if (
