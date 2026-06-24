@@ -9,6 +9,8 @@ import {
   BeltElement,
   CanvasState,
   HoveredPart,
+  LoadElement,
+  BeamElement,
   Point2,
 } from "../../types";
 import {
@@ -22,7 +24,7 @@ import {
   get_connections,
   get_constraint_element_from_id,
   get_mechanical_element_from_id,
-} from "./connect-actions";
+} from "../mechanism/connect-actions";
 import { get_gear_angles } from "../../utils";
 
 /** Returns the hovered part of the element, or null if no part is hovered. */
@@ -45,13 +47,46 @@ export function get_hovered_part_of_element(
       return null;
     }
   }
+  if (element.type === "mass" && state.type === "PlacingGround") return null; // cannot place ground on mass
+  if (element.type !== "pivot" && state.type === "PlacingMotor") return null; // can place motor only on pivot
+  if (
+    element.type === "gear" &&
+    state.type === "PlacingGearRadius" &&
+    state.startHover.type === "Node" &&
+    state.startHover.id === element.parentAxleID
+  )
+    return null; // cannot place a gear on another AND mesh them
+  if (state.type === "MovingNode" && "fixedGearsIDs" in element) {
+    const node = get_mechanical_element_from_id(
+      state.elementID,
+      mechanicalElements,
+    ) as NodeElement;
+    if (
+      "fixedGearsIDs" in node &&
+      node.fixedGearsIDs
+        .map((nodeGearID) =>
+          element.fixedGearsIDs
+            .map((elementGearID) =>
+              (
+                get_mechanical_element_from_id(
+                  elementGearID,
+                  mechanicalElements,
+                ) as GearElement
+              ).meshedGearsIDs.includes(nodeGearID),
+            )
+            .some(Boolean),
+        )
+        .some(Boolean)
+    )
+      return null;
+  } // cannot move an axle with fixed gear meshed with another on the other's parent axle
+
   switch (element.type) {
     case "pivot":
     case "slider":
     case "slidep":
     case "join":
-    case "mass":
-    case "gear":
+    case "mass": {
       const node = element as NodeElement;
       const distance = mousePos.distance_to(node.position);
       switch (state.type) {
@@ -63,38 +98,6 @@ export function get_hovered_part_of_element(
         case "DimensionStart":
         case "Erasing":
         case "EditingConstraint":
-          // center + gear perimeter
-          if (distance <= HIT_TOLERANCE.NODE) {
-            return {
-              type: "Node",
-              position: node.position.clone(),
-              id: node.id,
-              deleting: state.type === "Erasing",
-              beamBodyHover: false,
-            };
-          }
-          if (
-            node.type !== "gear" ||
-            state.type === "PlacingBeltStart" ||
-            (state.type === "PlacingBeltEnd" && node.attachedBeltID)
-          )
-            break;
-          if (
-            distance <= node.radius + HIT_TOLERANCE.NODE / 2 &&
-            distance > node.radius - HIT_TOLERANCE.NODE / 2
-          ) {
-            return {
-              type: "GearTooth",
-              position: mousePos
-                .sub(node.position)
-                .normalize()
-                .mul(node.radius)
-                .add(node.position),
-              id: node.id,
-              deleting: state.type === "Erasing",
-            };
-          }
-          break;
         case "MovingNode":
         case "MovingEdgeBody":
         case "PlacingBeamStart":
@@ -108,35 +111,35 @@ export function get_hovered_part_of_element(
         case "PlacingSlider":
         case "PlacingJoin":
         case "PlacingMass":
+        case "PlacingForceStart":
+        case "PlacingProbe":
         case "DimensionNode":
         case "DimensionEdge":
         case "HorizontalVerticalConstraintStart":
         case "HorizontalVerticalConstraintNode":
-          if (element.type === "mass" && state.type === "PlacingGround") break; // cannot place ground on mass
+        case "PlacingMotor":
+        case "MovingEdgeStartPoint":
+        case "MovingEdgeEndPoint":
+        case "PlacingBeamEnd":
           // center
           if (distance <= HIT_TOLERANCE.NODE) {
             return {
               type: "Node",
               position: node.position.clone(),
               id: node.id,
-              beamBodyHover: false,
-              deleting: false,
-            };
-          }
-          break;
-        case "MovingEdgeStartPoint":
-        case "MovingEdgeEndPoint":
-        case "PlacingBeamEnd":
-          // Center + beam BodyHover
-          if (distance <= HIT_TOLERANCE.NODE) {
-            return {
-              type: "Node",
-              position: node.position.clone(),
-              id: node.id,
-              deleting: false,
+              deleting: state.type === "Erasing",
               beamBodyHover: false,
             };
           }
+
+          // beam BodyHover
+          if (
+            state.type !== "MovingEdgeStartPoint" &&
+            state.type !== "MovingEdgeEndPoint" &&
+            state.type !== "PlacingBeamEnd"
+          )
+            break;
+
           if (state.type === "PlacingBeamEnd") {
             if (
               node.position.distance_to_segment(
@@ -159,132 +162,147 @@ export function get_hovered_part_of_element(
                 beamBodyHover: true,
               };
             }
-          } else {
-            const edge = get_mechanical_element_from_id(
-              state.elementID,
-              mechanicalElements,
-            );
-            if (edge.type !== "beam") break;
-            if (state.type === "MovingEdgeStartPoint") {
-              if (
-                node.position.distance_to_segment(edge.positionEnd, mousePos) <=
-                  HIT_TOLERANCE.EDGE &&
-                mousePos.distance_to_line(edge.positionEnd, node.position) <=
-                  HIT_TOLERANCE.EDGE
-              ) {
-                return {
-                  type: "Node",
-                  position: mousePos.project_on_line(
-                    edge.positionEnd,
-                    node.position,
-                  ),
-                  id: node.id,
-                  deleting: false,
-                  beamBodyHover: true,
-                };
-              }
-            } else {
-              if (
-                node.position.distance_to_segment(
-                  edge.positionStart,
-                  mousePos,
-                ) <= HIT_TOLERANCE.EDGE &&
-                mousePos.distance_to_line(edge.positionStart, node.position) <=
-                  HIT_TOLERANCE.EDGE
-              ) {
-                return {
-                  type: "Node",
-                  position: mousePos.project_on_line(
-                    edge.positionStart,
-                    node.position,
-                  ),
-                  id: node.id,
-                  deleting: false,
-                  beamBodyHover: true,
-                };
-              }
+            break;
+          }
+          const edge = get_mechanical_element_from_id(
+            state.elementID,
+            mechanicalElements,
+          );
+          if (edge.type !== "beam") break;
+
+          if (state.type === "MovingEdgeStartPoint") {
+            if (
+              node.position.distance_to_segment(edge.positionEnd, mousePos) <=
+                HIT_TOLERANCE.EDGE &&
+              mousePos.distance_to_line(edge.positionEnd, node.position) <=
+                HIT_TOLERANCE.EDGE
+            ) {
+              return {
+                type: "Node",
+                position: mousePos.project_on_line(
+                  edge.positionEnd,
+                  node.position,
+                ),
+                id: node.id,
+                deleting: false,
+                beamBodyHover: true,
+              };
             }
+          } else if (
+            node.position.distance_to_segment(edge.positionStart, mousePos) <=
+              HIT_TOLERANCE.EDGE &&
+            mousePos.distance_to_line(edge.positionStart, node.position) <=
+              HIT_TOLERANCE.EDGE
+          ) {
+            return {
+              type: "Node",
+              position: mousePos.project_on_line(
+                edge.positionStart,
+                node.position,
+              ),
+              id: node.id,
+              deleting: false,
+              beamBodyHover: true,
+            };
           }
           break;
+      }
+      break;
+    }
+    case "gear": {
+      const gear = element as GearElement;
+      const distance = mousePos.distance_to(gear.position);
+      if (
+        distance > gear.radius + HIT_TOLERANCE.NODE / 2 ||
+        distance < gear.radius - HIT_TOLERANCE.NODE / 2
+      )
+        break;
+      switch (state.type) {
+        case "Selecting":
+        case "SelectedElement":
+        case "SelectedMultiple":
+        case "PlacingBeltStart":
+        case "PlacingBeltEnd":
+        case "DimensionStart":
+        case "Erasing":
+        case "EditingConstraint":
+          // gear perimeter
+          // if (state.type === "PlacingBeltEnd" && gear.attachedBeltID) break; // TODO : return node startBeltEnd
+          return {
+            type: "GearTooth",
+            position: mousePos
+              .sub(gear.position)
+              .normalize()
+              .mul(gear.radius)
+              .add(gear.position),
+            id: gear.id,
+            deleting: state.type === "Erasing",
+          };
         case "MovingBeltBody":
+          if (gear.attachedBeltID) break;
+          return {
+            type: "GearTooth",
+            position: gear.position.add(
+              mousePos.sub(gear.position).normalize().mul(gear.radius),
+            ),
+            id: gear.id,
+            deleting: false,
+          };
         case "ChangingGearRadius":
+          const gear2 = get_mechanical_element_from_id(
+            state.elementID,
+            mechanicalElements,
+          ) as GearElement;
+          return {
+            type: "GearTooth",
+            position: gear.position.add(
+              gear2.position.sub(gear.position).normalize().mul(gear.radius),
+            ),
+            id: gear.id,
+            deleting: false,
+          };
         case "PlacingGearRadius":
           // Gear on gear teehts -> contact point
-          if (
-            node.type !== "gear" ||
-            (state.type === "MovingBeltBody" && node.attachedBeltID)
-          )
-            break;
-          if (
-            distance <= node.radius + HIT_TOLERANCE.NODE / 2 &&
-            distance > node.radius - HIT_TOLERANCE.NODE / 2
-          ) {
-            switch (state.type) {
-              case "MovingBeltBody":
-                return {
-                  type: "GearTooth",
-                  position: node.position.add(
-                    mousePos.sub(node.position).normalize().mul(node.radius),
-                  ),
-                  id: node.id,
-                  deleting: false,
-                };
-              case "ChangingGearRadius":
-                const gear = get_mechanical_element_from_id(
-                  state.elementID,
-                  mechanicalElements,
-                ) as GearElement;
-                return {
-                  type: "GearTooth",
-                  position: node.position.add(
-                    gear.position
-                      .sub(node.position)
-                      .normalize()
-                      .mul(node.radius),
-                  ),
-                  id: node.id,
-                  deleting: false,
-                };
-              case "PlacingGearRadius":
-                return {
-                  type: "GearTooth",
-                  position: node.position.add(
-                    state.startHover.position
-                      .sub(node.position)
-                      .normalize()
-                      .mul(node.radius),
-                  ),
-                  id: node.id,
-                  deleting: false,
-                };
-            }
-          }
-          break;
+          return {
+            type: "GearTooth",
+            position: gear.position.add(
+              state.startHover.position
+                .sub(gear.position)
+                .normalize()
+                .mul(gear.radius),
+            ),
+            id: gear.id,
+            deleting: false,
+          };
+        case "PlacingMoment":
+          // Moment on gear perimeter
+          return {
+            type: "GearTooth",
+            position: gear.position.clone(),
+            id: gear.id,
+            deleting: false,
+          };
         case "GearRatioConstraintStart":
         case "GearRatioConstraintGear":
         case "EqualConstraintStart":
         case "EqualConstraintGear":
           // Only gear teehts
           if (
-            node.type !== "gear" ||
+            gear.type !== "gear" ||
             ((state.type === "GearRatioConstraintGear" ||
               state.type === "EqualConstraintGear") &&
-              state.startGearID === node.id)
+              state.startGearID === gear.id)
           )
             break;
-          if (
-            distance <= node.radius + HIT_TOLERANCE.NODE / 2 &&
-            distance > node.radius - HIT_TOLERANCE.NODE / 2
-          ) {
-            return {
-              type: "GearTooth",
-              position: node.position.clone(),
-              id: node.id,
-              deleting: false,
-            };
-          }
+          return {
+            type: "GearTooth",
+            position: gear.position.clone(),
+            id: gear.id,
+            deleting: false,
+          };
       }
       break;
+    }
     case "beam":
     case "spring":
     case "damper":
@@ -328,6 +346,88 @@ export function get_hovered_part_of_element(
               ),
               id: edge.id,
               deleting: state.type === "Erasing",
+              part: "body",
+            };
+          }
+          break;
+        case "PlacingForceStart":
+          // endpoints only (no body) — force anchors at node or edge endpoint
+          if (mousePos.distance_to(edge.positionStart) <= HIT_TOLERANCE.NODE) {
+            return {
+              type: "Edge",
+              position: edge.positionStart.clone(),
+              id: edge.id,
+              deleting: false,
+              part: "start",
+            };
+          }
+          if (mousePos.distance_to(edge.positionEnd) <= HIT_TOLERANCE.NODE) {
+            return {
+              type: "Edge",
+              position: edge.positionEnd.clone(),
+              id: edge.id,
+              deleting: false,
+              part: "end",
+            };
+          }
+          break;
+        case "PlacingMoment":
+          // body of any edge (not just beam)
+          if (
+            mousePos.distance_to_segment(
+              edge.positionStart,
+              edge.positionEnd,
+            ) <= HIT_TOLERANCE.EDGE
+          ) {
+            return {
+              type: "Edge",
+              position: mousePos.project_on_line(
+                edge.positionStart,
+                edge.positionEnd,
+              ),
+              id: edge.id,
+              deleting: false,
+              part: "body",
+            };
+          }
+          break;
+        case "PlacingDistributedForce":
+          // beam body only
+          if (
+            edge.type === "beam" &&
+            mousePos.distance_to_segment(
+              edge.positionStart,
+              edge.positionEnd,
+            ) <= HIT_TOLERANCE.EDGE
+          ) {
+            return {
+              type: "Edge",
+              position: mousePos.project_on_line(
+                edge.positionStart,
+                edge.positionEnd,
+              ),
+              id: edge.id,
+              deleting: false,
+              part: "body",
+            };
+          }
+          break;
+        case "PlacingProbe":
+          // body of any edge
+          if (
+            mousePos.distance_to_segment(
+              edge.positionStart,
+              edge.positionEnd,
+            ) <= HIT_TOLERANCE.EDGE
+          ) {
+            return {
+              type: "Edge",
+              position: mousePos.project_on_line(
+                edge.positionStart,
+                edge.positionEnd,
+              ),
+              id: edge.id,
+              deleting: false,
               part: "body",
             };
           }
@@ -656,6 +756,7 @@ export function get_hovered_part(
   constraints_visible: boolean,
   mousePos: Point2,
   state: CanvasState,
+  loads: LoadElement[] = [],
 ): HoveredPart {
   const excluded_elements: ID[] = [];
   if (
@@ -788,6 +889,109 @@ export function get_hovered_part(
           deleting: false,
           part: "end",
         };
+      }
+    }
+  }
+  // Load hover detection (selection modes only)
+  if (
+    state.type === "Selecting" ||
+    state.type === "SelectedElement" ||
+    state.type === "SelectedMultiple"
+  ) {
+    for (const load of loads) {
+      if (load.type === "force") {
+        const target = mechanicalElements.find((e) => e.id === load.targetID);
+        if (!target) continue;
+        let base: Point2;
+        if ("position" in target) {
+          base = (target as NodeElement).position;
+        } else {
+          const edge = target as EdgeElement;
+          base = load.anchor === "end" ? edge.positionEnd : edge.positionStart;
+        }
+        const tip = base.add(load.vector);
+        // Tip handle
+        if (mousePos.distance_to(tip) <= HIT_TOLERANCE.NODE) {
+          return {
+            type: "ForceTip",
+            position: tip,
+            id: load.id,
+            deleting: false,
+          };
+        }
+        // Arrow body
+        if (mousePos.distance_to_segment(base, tip) <= HIT_TOLERANCE.EDGE) {
+          return {
+            type: "Load",
+            position: mousePos.project_on_line(base, tip),
+            id: load.id,
+            deleting: false,
+          };
+        }
+      } else if (load.type === "moment") {
+        const target = mechanicalElements.find((e) => e.id === load.targetID);
+        if (!target) continue;
+        const center =
+          "position" in target
+            ? (target as NodeElement).position
+            : (target as EdgeElement).positionStart.lerp(
+                (target as EdgeElement).positionEnd,
+                0.5,
+              );
+        const dist = mousePos.distance_to(center);
+        const radius = 18 + Math.min(Math.abs(load.value) * 2, 20);
+        if (
+          dist <= radius + HIT_TOLERANCE.EDGE &&
+          dist >= radius - HIT_TOLERANCE.EDGE
+        ) {
+          return {
+            type: "Load",
+            position: center,
+            id: load.id,
+            deleting: false,
+          };
+        }
+      } else if (load.type === "distributed-force") {
+        const beam = mechanicalElements.find(
+          (e) => e.id === load.beamID && e.type === "beam",
+        ) as BeamElement | undefined;
+        if (!beam) continue;
+        const tipStart = beam.positionStart.add(load.vectorStart);
+        const tipEnd = beam.positionEnd.add(load.vectorEnd);
+        // Tip handles
+        if (mousePos.distance_to(tipStart) <= HIT_TOLERANCE.NODE) {
+          return {
+            type: "DistributedForceTip",
+            position: tipStart,
+            id: load.id,
+            end: "start",
+            deleting: false,
+          };
+        }
+        if (mousePos.distance_to(tipEnd) <= HIT_TOLERANCE.NODE) {
+          return {
+            type: "DistributedForceTip",
+            position: tipEnd,
+            id: load.id,
+            end: "end",
+            deleting: false,
+          };
+        }
+        // Body: near beam segment
+        if (
+          mousePos.distance_to_segment(beam.positionStart, beam.positionEnd) <=
+          HIT_TOLERANCE.EDGE
+        ) {
+          return {
+            type: "Load",
+            position: mousePos.project_on_line(
+              beam.positionStart,
+              beam.positionEnd,
+            ),
+            id: load.id,
+            deleting: false,
+          };
+        }
       }
     }
   }

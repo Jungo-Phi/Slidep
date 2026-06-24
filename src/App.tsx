@@ -42,12 +42,7 @@ import {
   KeyboardDoubleArrowDown,
   JoinInner,
 } from "@mui/icons-material";
-import { lightTheme } from "./lib/mui-theme"; // import { lightTheme, darkTheme, highContrastTheme } from "./lib/mui-theme";
 import logoUrl from "./assets/icons/palette/logo.svg";
-import MechanicalCanvas from "./components/mechanical-canvas/MechanicalCanvas";
-import { ElementPalette } from "./components/element-palette";
-import { PropertiesPanel } from "./components/properties-panel/PropertiesPanel";
-import { CanvasState } from "./types/canvas-state";
 import {
   Action,
   ActionBundleType,
@@ -67,22 +62,27 @@ import {
   ViewportChange,
   ZERO,
 } from "./types";
-import { HoveredPart } from "./types/hovered-part";
-import { actionReducer } from "./components/mechanism/action-reducer";
-import { preload_element_icons } from "./components/element-palette/elementIcon";
-import { COLORS } from "./constants/rendering-specs";
 import {
   deserialize_mechanism,
   load_from_file,
   save_to_file,
   serialize_mechanism,
-} from "./utils/serialization";
+  debounce,
+  generateThumbnail,
+  screen_to_world,
+} from "./utils";
+import { lightTheme } from "./lib/mui-theme"; // import { lightTheme, darkTheme, highContrastTheme } from "./lib/mui-theme";
+import MechanicalCanvas from "./components/canvas/MechanicalCanvas";
+import { ElementPalette } from "./components/element-palette";
+import { PropertiesPanel } from "./components/properties-panel/PropertiesPanel";
+import { CanvasState } from "./types/canvas-state";
+import { HoveredPart } from "./types/hovered-part";
+import { actionReducer } from "./components/mechanism/action-reducer";
+import { preload_element_icons } from "./components/element-palette/elementIcon";
+import { COLORS } from "./constants/rendering-specs";
 import { apply_actions } from "./components/mechanism/apply-actions";
 import MechanismsGallery from "./components/mechanisms-gallery/MechanismsGallery";
 import { openDB } from "idb";
-import { generateThumbnail } from "./utils/thumbnail-generator";
-import { debounce } from "./utils/debounce";
-import { screen_to_world } from "./components/mechanical-canvas/viewport";
 
 export interface UserPreferences {
   theme: string;
@@ -120,6 +120,7 @@ const App: React.FC = () => {
     viewport: { zoom: 1, pan: ZERO },
     mechanicalElements: [],
     constraintElements: [],
+    loads: [],
     history: [],
     future: [],
   });
@@ -161,30 +162,55 @@ const App: React.FC = () => {
   }>({ open: false, message: "" });
 
   const [activeTab, setActiveTab] = useState<PropertiesPanelTab>("project");
-  const userSelectedTabRef = useRef(false);
+  const [prevCanvasState, setPrevCanvasState] =
+    useState<CanvasState>(canvasState);
 
-  // Sync active tab with canvas selection (only when user hasn't manually selected)
-  useEffect(() => {
-    if (userSelectedTabRef.current) {
-      userSelectedTabRef.current = false;
-      return;
-    }
-    const cs = canvasState;
-    if ("elementID" in cs) {
-      const mechanicalElement = mechanism.mechanicalElements.find(
-        (el) => el.id === cs.elementID,
-      );
-      if (mechanicalElement) {
-        setActiveTab("element");
+  // Derived state pattern: sync tab with canvas state during render, not in useEffect.
+  // This prevents a one-frame flash where old tab content renders with new canvas state
+  // (e.g. element list appearing briefly before switching to project tab on deselect).
+  if (prevCanvasState !== canvasState) {
+    setPrevCanvasState(canvasState);
+    if ("elementID" in canvasState) {
+      if (
+        mechanism.mechanicalElements.find(
+          (el) => el.id === canvasState.elementID,
+        )
+      ) {
+        setActiveTab("elements");
       } else if (
-        mechanism.constraintElements.find((el) => el.id === cs.elementID)
+        mechanism.constraintElements.find(
+          (el) => el.id === canvasState.elementID,
+        )
       ) {
         setActiveTab("constraints");
       }
+    } else if (
+      [
+        "DimensionStart",
+        "DimensionNode",
+        "DimensionEdge",
+        "DimensionNodeToNode",
+        "DimensionEdgeToNode",
+        "DimensionAngle",
+        "DimensionRadius",
+        "HorizontalVerticalConstraintStart",
+        "HorizontalVerticalConstraintNode",
+        "NormalConstraintStart",
+        "NormalConstraintEdge",
+        "ParallelConstraintStart",
+        "ParallelConstraintEdge",
+        "EqualConstraintStart",
+        "EqualConstraintEdge",
+        "EqualConstraintGear",
+        "GearRatioConstraintStart",
+        "GearRatioConstraintGear",
+      ].includes(canvasState.type)
+    ) {
+      setActiveTab("constraints");
     } else {
       setActiveTab("project");
     }
-  }, [canvasState, mechanism]);
+  }
 
   useEffect(() => {
     mechanismRef.current = mechanism;
@@ -426,6 +452,7 @@ const App: React.FC = () => {
       },
       mechanicalElements: [],
       constraintElements: [],
+      loads: [],
       history: [],
       future: [],
     });

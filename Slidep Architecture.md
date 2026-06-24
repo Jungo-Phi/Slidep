@@ -101,7 +101,7 @@ _C'est la zone "Interaction et Configuration". Elle regroupe les outils de manip
   - **Structure** (Join, Poutre, Sol)
   - **Dynamique** (Amortisseur, Ressort, Masse, Moteur)
   - **Contraintes** (Dimension, Ratio, Égale, Alignement, Perpendiculaire, Parallèle)
-  - **Simulation** (Force, Force répartie, Moment, Balise)
+  - **Simulation** (Force, Force répartie, Moment, Probe)
 - **Comportement Intelligent en Simulation :**
   - Les outils de **Simulation** (Forces, Moteurs) : Restent actifs pour permettre l'ajustement en temps réel sans pause.
   - Les autres outils : Leur clic déclenche une **Pause Automatique** et un retour temporaire en contexte "Édition" pour permettre la modification topologique en toute sécurité.
@@ -129,11 +129,11 @@ Un panneau unique à 4 onglets qui s'adapte dynamiquement au mode actif et à la
     - **Hot-Reload :** Modification possible en temps réel pendant la simulation.
   - **Section "Visualisation" (Overlays Légers) :**
     - Toggles simples pour l'affichage temporaire sur le canvas (Forces, Vitesses, etc.).
-  - **Section "Mesures & Graphiques" (Création de Balises) :**
+  - **Section "Mesures & Graphiques" (Création de Probes) :**
     - Bouton d'action : `[+ Ajouter une mesure]`.
     - **Action :** Ouvre un sélecteur de métrique (Force, Vitesse, Position, Angle).
-    - **Résultat :** Crée une **Balise** visible sur le canvas et ajoute un "Jetons" (Chips) actifs.
-    - **Action :** Cliquer sur le ✕ supprime cette mesure spécifique. Si on supprime la dernière, la balise visuelle disparaît du canvas.
+    - **Résultat :** Crée une **Probe** visible sur le canvas et ajoute un "Jetons" (Chips) actifs.
+    - **Action :** Cliquer sur le ✕ supprime cette mesure spécifique. Si on supprime la dernière, la probe visuelle disparaît du canvas.
 
   Visuel :
   Titre : Mesures actives
@@ -159,10 +159,10 @@ Un panneau unique à 4 onglets qui s'adapte dynamiquement au mode actif et à la
   - Indicateur global (ex: "DDL = 0 : Isostatique")
   - Décomposition par sous-systèmes indépendants.
   - Liste textuelle des libertés/blocages avec interaction (survol = surlignage canvas).
-- **Gestion des Balises (Mesures Temporelles) :**
-  - Deux boutons permettant d'Afficher / Cacher toutes les balises.
-  - **Liste des Balises Actives :** Affiche les éléments placé via la barre d'outils où ceux où l'utilisateur a cliqué sur "Suivre cette valeur" dans l'onglet Élément.
-  - **Configuration par Balise :**
+- **Gestion des Probes (Mesures Temporelles) :**
+  - Deux boutons permettant d'Afficher / Cacher toutes les probes.
+  - **Liste des Probes Actives :** Affiche les éléments placé via la barre d'outils où ceux où l'utilisateur a cliqué sur "Suivre cette valeur" dans l'onglet Élément.
+  - **Configuration par Probe :**
     - Sélection de la métrique (Déplacement X/Y, Vitesse, Force, Contrainte).
     - Toggle d'affichage du graphique correspondant.
     - Toggle d'affichage de la sonde visuelle sur le canvas.

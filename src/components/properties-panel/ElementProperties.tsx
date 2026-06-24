@@ -3,9 +3,23 @@
  * Displays properties for element elements
  */
 
-import { Box, IconButton, Divider, List, ListItem } from "@mui/material";
+import {
+  Box,
+  IconButton,
+  Divider,
+  List,
+  ListItem,
+  Typography,
+  Chip,
+  Switch,
+  FormControlLabel,
+} from "@mui/material";
 import DeleteIcon from "@mui/icons-material/Delete";
-import { MechanicalElement } from "../../types/element";
+import {
+  LoadElement,
+  MechanicalElement,
+  PivotElement,
+} from "../../types/element";
 import VectorInput from "./components/VectorInput";
 import GroundSwitch from "./components/GroundSwitch";
 import BeltTensionSwitch from "./components/BeltTensionSwitch";
@@ -14,18 +28,152 @@ import {
   Action,
   Mechanism,
   ActionBundleType,
+  Point2,
   ZERO,
 } from "../../types";
 import ConnectionsProperties from "./ConnectionsProperties";
-import { delete_element } from "./../mechanical-canvas/connect-actions";
+import { delete_element } from "../mechanism/connect-actions";
 import { HoveredPart } from "../../types/hovered-part";
 import NumberInput from "./components/NumberInput";
 import ElementDisplay from "./components/ElementDisplay";
-import { element_to_hovered_part } from "../mechanical-canvas/utils";
+import { element_to_hovered_part } from "../canvas/utils";
 import React from "react";
+
+interface MotorSectionProps {
+  pivot: PivotElement;
+  applyActions: (actions: Action[], actionBundleType: ActionBundleType) => void;
+}
+
+const MotorSection: React.FC<MotorSectionProps> = ({ pivot, applyActions }) => {
+  const motor = pivot.motor;
+  return (
+    <>
+      <Divider sx={{ my: 1 }} />
+      <Box sx={{ px: 2, pb: 1 }}>
+        <FormControlLabel
+          control={
+            <Switch
+              size="small"
+              checked={!!motor}
+              onChange={(e) =>
+                applyActions(
+                  [
+                    {
+                      type: "SetMotorConfig",
+                      id: pivot.id,
+                      newConfig: e.target.checked
+                        ? { speed: motor?.speed ?? 1 }
+                        : undefined,
+                      oldConfig: motor,
+                    },
+                  ],
+                  "Other",
+                )
+              }
+            />
+          }
+          label={<Typography variant="caption">Moteur</Typography>}
+        />
+        {motor && (
+          <Box sx={{ mt: 0.5 }}>
+            <NumberInput
+              label="tr/s"
+              value={motor.speed}
+              onChange={(speed) =>
+                applyActions(
+                  [
+                    {
+                      type: "SetMotorConfig",
+                      id: pivot.id,
+                      newConfig: { ...motor, speed },
+                      oldConfig: motor,
+                    },
+                  ],
+                  "ChangeConstant",
+                )
+              }
+              accent={true}
+            />
+          </Box>
+        )}
+      </Box>
+    </>
+  );
+};
+
+function load_label(load: LoadElement): string {
+  if (load.type === "force") {
+    const mag = Math.round(Math.sqrt(load.vector.x ** 2 + load.vector.y ** 2));
+    return `Force${load.anchor ? ` (${load.anchor})` : ""} — ${mag} N`;
+  }
+  if (load.type === "moment") return `Moment — ${load.value} N·m`;
+  return "Force répartie";
+}
+
+interface LoadsSectionProps {
+  element: MechanicalElement;
+  loads: LoadElement[];
+  applyActions: (actions: Action[], actionBundleType: ActionBundleType) => void;
+}
+
+const LoadsSection: React.FC<LoadsSectionProps> = ({
+  element,
+  loads,
+  applyActions,
+}) => {
+  const elementLoads = loads.filter((l) => {
+    if (l.type === "force" || l.type === "moment")
+      return l.targetID === element.id;
+    if (l.type === "distributed-force") return l.beamID === element.id;
+    return false;
+  });
+  if (elementLoads.length === 0) return null;
+  return (
+    <>
+      <Divider sx={{ my: 1 }} />
+      <Box sx={{ px: 1, pb: 1 }}>
+        <Typography variant="caption" color="text.secondary" sx={{ px: 1 }}>
+          Charges appliquées
+        </Typography>
+        <List dense disablePadding>
+          {elementLoads.map((load) => (
+            <ListItem
+              key={load.id}
+              disablePadding
+              sx={{
+                display: "flex",
+                justifyContent: "space-between",
+                py: 0.25,
+              }}
+            >
+              <Chip
+                label={load_label(load)}
+                size="small"
+                sx={{ fontSize: "0.75rem", bgcolor: "#ffe0cc" }}
+              />
+              <IconButton
+                size="small"
+                color="error"
+                onClick={() =>
+                  applyActions(
+                    [{ type: "DeleteElement", element: load }],
+                    "Other",
+                  )
+                }
+              >
+                <DeleteIcon sx={{ width: 16, height: 16 }} />
+              </IconButton>
+            </ListItem>
+          ))}
+        </List>
+      </Box>
+    </>
+  );
+};
 
 interface ElementPropertiesProps {
   element: MechanicalElement | undefined;
+  selectedLoad?: LoadElement;
   setHoveredPart: (hoveredPart: HoveredPart) => void;
   setCanvasState: (state: CanvasState) => void;
   applyActions: (actions: Action[], actionBundleType: ActionBundleType) => void;
@@ -34,6 +182,7 @@ interface ElementPropertiesProps {
 
 export const ElementProperties: React.FC<ElementPropertiesProps> = ({
   element,
+  selectedLoad,
   setHoveredPart,
   setCanvasState,
   applyActions,
@@ -46,6 +195,97 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
   const handleMouseLeave = () => {
     setHoveredPart({ type: "Void", position: ZERO });
   };
+
+  if (!element && selectedLoad) {
+    return (
+      <Box sx={{ p: 2 }}>
+        <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: "bold" }}>
+          {selectedLoad.type === "force"
+            ? "Force"
+            : selectedLoad.type === "moment"
+              ? "Moment"
+              : "Force répartie"}
+        </Typography>
+        {selectedLoad.type === "force" && (
+          <>
+            <Typography variant="caption" color="text.secondary">
+              Vecteur (x, y)
+            </Typography>
+            <Box sx={{ display: "flex", gap: 1, mt: 0.5, mb: 1 }}>
+              <NumberInput
+                label="x"
+                value={selectedLoad.vector.x}
+                onChange={(x) =>
+                  applyActions(
+                    [
+                      {
+                        type: "MoveForceVector",
+                        id: selectedLoad.id,
+                        newVector: new Point2(x, selectedLoad.vector.y),
+                        oldVector: selectedLoad.vector,
+                      },
+                    ],
+                    "Other",
+                  )
+                }
+              />
+              <NumberInput
+                label="y"
+                value={selectedLoad.vector.y}
+                onChange={(y) =>
+                  applyActions(
+                    [
+                      {
+                        type: "MoveForceVector",
+                        id: selectedLoad.id,
+                        newVector: new Point2(selectedLoad.vector.x, y),
+                        oldVector: selectedLoad.vector,
+                      },
+                    ],
+                    "Other",
+                  )
+                }
+              />
+            </Box>
+          </>
+        )}
+        {selectedLoad.type === "moment" && (
+          <Box sx={{ mt: 0.5, mb: 1 }}>
+            <NumberInput
+              label="N·m"
+              value={selectedLoad.value}
+              onChange={(v) =>
+                applyActions(
+                  [
+                    {
+                      type: "ChangeMomentValue",
+                      id: selectedLoad.id,
+                      newValue: v,
+                      oldValue: selectedLoad.value,
+                    },
+                  ],
+                  "ChangeConstant",
+                )
+              }
+              accent={true}
+            />
+          </Box>
+        )}
+        <IconButton
+          size="small"
+          color="error"
+          onClick={() =>
+            applyActions(
+              [{ type: "DeleteElement", element: selectedLoad }],
+              "Other",
+            )
+          }
+        >
+          <DeleteIcon fontSize="small" />
+        </IconButton>
+      </Box>
+    );
+  }
 
   if (!element) {
     const hasElements = mechanism.mechanicalElements.length > 0;
@@ -322,8 +562,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
             value={element.positionStart.distance_to(element.positionEnd)}
             onChange={(length) => {
               const linkedDim = mechanism.constraintElements.find(
-                (c) =>
-                  c.type === "dimension-edge" && c.edgeID === element.id,
+                (c) => c.type === "dimension-edge" && c.edgeID === element.id,
               );
               if (linkedDim && linkedDim.type === "dimension-edge") {
                 applyActions(
@@ -396,6 +635,19 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
           mechanism={mechanism}
         ></ConnectionsProperties>
       )}
+
+      {element.type === "pivot" && (
+        <MotorSection
+          pivot={element as PivotElement}
+          applyActions={applyActions}
+        />
+      )}
+
+      <LoadsSection
+        element={element}
+        loads={mechanism.loads}
+        applyActions={applyActions}
+      />
     </Box>
   );
 };

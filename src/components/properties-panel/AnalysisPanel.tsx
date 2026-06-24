@@ -35,20 +35,20 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
     path: false,
   });
 
-  const [tags, setTags] = React.useState<string[]>([]);
+  const [probes, setProbes] = React.useState<string[]>([]);
 
   const toggleOverlay = (key: keyof typeof overlays) => {
     setOverlays((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
-  const addTag = () => {
+  const addProbe = () => {
     const metrics = ["Vitesse", "Force", "Position", "Angle"];
     const randomMetric = metrics[Math.floor(Math.random() * metrics.length)];
-    setTags((prev) => [...prev, randomMetric]);
+    setProbes((prev) => [...prev, randomMetric]);
   };
 
-  const removeTag = (index: number) => {
-    setTags((prev) => prev.filter((_, i) => i !== index));
+  const removeProbe = (index: number) => {
+    setProbes((prev) => prev.filter((_, i) => i !== index));
   };
 
   const ddl = get_degrees_of_freedom(
@@ -171,23 +171,23 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
 
       <Divider />
 
-      {/* Balises / Mesures */}
+      {/* Mesures sondes */}
       <Box sx={{ mx: 2 }}>
         <Typography variant="subtitle2" fontWeight={600} gutterBottom>
-          Balises actives
+          Sondes actives
         </Typography>
         <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5, mb: 1 }}>
-          {tags.length === 0 && (
+          {probes.length === 0 && (
             <Typography variant="caption" color="text.disabled">
-              Aucune balise active
+              Aucune sonde active
             </Typography>
           )}
-          {tags.map((tag, index) => (
+          {probes.map((probe, index) => (
             <Chip
               key={index}
-              label={tag}
+              label={probe}
               size="small"
-              onDelete={() => removeTag(index)}
+              onDelete={() => removeProbe(index)}
               icon={<ShowChart fontSize="small" />}
             />
           ))}
@@ -196,7 +196,7 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
           size="small"
           variant="outlined"
           startIcon={<Add />}
-          onClick={addTag}
+          onClick={addProbe}
           fullWidth
         >
           Ajouter une mesure

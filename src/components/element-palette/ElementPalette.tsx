@@ -30,11 +30,11 @@ import forceIconUrl from "../../assets/icons/palette/force.svg";
 import distributedForceIconUrl from "../../assets/icons/palette/distributed-force.svg";
 import momentIconUrl from "../../assets/icons/palette/moment.svg";
 import motorIconUrl from "../../assets/icons/palette/motor.svg";
-import tagIconUrl from "../../assets/icons/palette/tag.svg";
+import probeIconUrl from "../../assets/icons/palette/probe.svg";
 
 import { CanvasState, CanvasStateType } from "../../types";
 import { COLORS } from "../../constants/rendering-specs";
-import { get_constraint_element_from_id } from "../mechanical-canvas/connect-actions";
+import { get_constraint_element_from_id } from "../mechanism/connect-actions";
 import { Mechanism } from "../../types";
 
 interface PaletteElement {
@@ -331,11 +331,11 @@ const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
         hilightHoverColor: COLORS.ORANGE_STROKE,
       },
       {
-        label: "Balise",
-        tooltip: "Tag (I)",
-        iconSrc: tagIconUrl,
-        goToStateType: "PlacingTag",
-        hilightRule: (state) => state.type === "PlacingTag",
+        label: "Sonde",
+        tooltip: "Probe (I)",
+        iconSrc: probeIconUrl,
+        goToStateType: "PlacingProbe",
+        hilightRule: (state) => state.type === "PlacingProbe",
         hilightColor: COLORS.ORANGE,
         hilightHoverColor: COLORS.ORANGE_STROKE,
       },

@@ -31,4 +31,13 @@ export type HoveredPart =
       deleting: boolean;
       section: number;
     }
-  | { type: "Constraint"; position: Point2; id: ID; deleting: boolean };
+  | { type: "Constraint"; position: Point2; id: ID; deleting: boolean }
+  | { type: "Load"; position: Point2; id: ID; deleting: boolean }
+  | { type: "ForceTip"; position: Point2; id: ID; deleting: boolean }
+  | {
+      type: "DistributedForceTip";
+      position: Point2;
+      id: ID;
+      end: "start" | "end";
+      deleting: boolean;
+    };

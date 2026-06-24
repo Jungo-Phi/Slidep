@@ -97,6 +97,7 @@ export function shown_element_name(element: UnionElement | undefined): string {
   if (element.name) return element.name;
 
   let name: string = element.type;
+  if (element.type === "pivot" && element.motor) name = "motor";
   if (name.includes("dimension")) name = "dimension";
   if (name.includes("horizontal")) name = "horizontal";
   if (name.includes("vertical")) name = "vertical";

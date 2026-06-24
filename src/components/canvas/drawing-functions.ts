@@ -265,23 +265,6 @@ export function draw_slidep_bottom(ctx: CanvasRenderingContext2D) {
   );
   ctx.stroke();
 }
-export function draw_slidep_rep(
-  ctx: CanvasRenderingContext2D,
-  start: boolean,
-  end: boolean,
-) {
-  const startN = start ? 1 : 0;
-  const endN = end ? 1 : 0;
-  const sideL = DIM.BEAM_WIDTH - STROKE_WIDTHS.STANDARD + ctx.lineWidth;
-  const sideS = DIM.BEAM_WIDTH - STROKE_WIDTHS.STANDARD - ctx.lineWidth;
-  const C = DIM.SLIDEP_OUTER_WIDTH / 2 + DIM.SLIDER_INNER_HEIGHT / 2;
-  const D = C + 0.5;
-  const oldFillStyle = ctx.fillStyle;
-  ctx.fillStyle = ctx.strokeStyle;
-  ctx.fillRect(-C * endN, -sideL / 2, C * (startN + endN), sideL);
-  ctx.fillStyle = oldFillStyle;
-  ctx.fillRect(-D * endN, -sideS / 2, D * (startN + endN), sideS);
-}
 
 export function draw_join_bottom(ctx: CanvasRenderingContext2D) {
   ctx.beginPath();
@@ -937,7 +920,7 @@ export function draw_element_icon(
   ctx.fillStyle = COLORS.BACKGROUND + COLORS.ICON_TRANSPARENCY;
   if (isSelected) ctx.filter = FILL_SELECTION_FILTER;
   ctx.fill();
-  const iconUrl = get_element_icon(element.type);
+  const iconUrl = get_element_icon(element);
   let img = iconImageCache.get(iconUrl);
   if (!img) {
     img = new Image();
@@ -958,5 +941,155 @@ export function draw_text(ctx: CanvasRenderingContext2D, text: string) {
     ctx.shadowBlur = 2;
     ctx.shadowColor = ctx.strokeStyle as string;
     ctx.fillText(text, 0, 0);
+  }
+}
+
+// ─── Load element drawing ─────────────────────────────────────────────────────
+
+const ARROWHEAD_LENGTH = 12;
+const ARROWHEAD_ANGLE = Math.PI / 7;
+
+/** Draws a single force arrow from `base` in direction+magnitude of `vector` (world units). */
+export function draw_force(
+  ctx: CanvasRenderingContext2D,
+  base: Point2,
+  vector: Point2,
+) {
+  const tip = base.add(vector);
+  const len = vector.length();
+  if (len < 1) return;
+  const dir = vector.mul(1 / len);
+
+  ctx.save();
+
+  ctx.beginPath();
+  ctx.moveTo(base.x, base.y);
+  ctx.lineTo(tip.x, tip.y);
+  ctx.stroke();
+
+  // Arrowhead
+  ctx.beginPath();
+  const left = tip.sub(
+    new Point2(
+      dir.x * Math.cos(ARROWHEAD_ANGLE) - dir.y * Math.sin(ARROWHEAD_ANGLE),
+      dir.x * Math.sin(ARROWHEAD_ANGLE) + dir.y * Math.cos(ARROWHEAD_ANGLE),
+    ).mul(ARROWHEAD_LENGTH),
+  );
+  const right = tip.sub(
+    new Point2(
+      dir.x * Math.cos(-ARROWHEAD_ANGLE) - dir.y * Math.sin(-ARROWHEAD_ANGLE),
+      dir.x * Math.sin(-ARROWHEAD_ANGLE) + dir.y * Math.cos(-ARROWHEAD_ANGLE),
+    ).mul(ARROWHEAD_LENGTH),
+  );
+  ctx.moveTo(tip.x, tip.y);
+  ctx.lineTo(left.x, left.y);
+  ctx.moveTo(tip.x, tip.y);
+  ctx.lineTo(right.x, right.y);
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+/** Draws a curved moment arrow (arc with arrowhead) centered at `center`. */
+export function draw_moment(
+  ctx: CanvasRenderingContext2D,
+  center: Point2,
+  value: number,
+  clockwise: boolean,
+) {
+  const radius = 18 + Math.min(Math.abs(value) * 2, 20);
+  const sweep = (clockwise ? 1 : -1) * (Math.PI * 1.3);
+  const startAngle = -Math.PI * 0.65;
+  const endAngle = startAngle + sweep;
+
+  ctx.save();
+
+  ctx.beginPath();
+  ctx.arc(center.x, center.y, radius, startAngle, endAngle, !clockwise);
+  ctx.stroke();
+
+  // Arrowhead at end of arc
+  const tipAngle = endAngle;
+  const tangentAngle = tipAngle + (clockwise ? Math.PI / 2 : -Math.PI / 2);
+  const tipX = center.x + radius * Math.cos(tipAngle);
+  const tipY = center.y + radius * Math.sin(tipAngle);
+  const headLen = ARROWHEAD_LENGTH * 0.8;
+  ctx.beginPath();
+  ctx.moveTo(tipX, tipY);
+  ctx.lineTo(
+    tipX - headLen * Math.cos(tangentAngle - ARROWHEAD_ANGLE),
+    tipY - headLen * Math.sin(tangentAngle - ARROWHEAD_ANGLE),
+  );
+  ctx.moveTo(tipX, tipY);
+  ctx.lineTo(
+    tipX - headLen * Math.cos(tangentAngle + ARROWHEAD_ANGLE),
+    tipY - headLen * Math.sin(tangentAngle + ARROWHEAD_ANGLE),
+  );
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+/** Draws a motor indicator: rotating arrow arc centered at origin (pivot must be translated). */
+export function draw_motor(ctx: CanvasRenderingContext2D) {
+  ctx.beginPath();
+  ctx.arc(0, 0, DIM.MOTOR_RADIUS, 0, TAU);
+  ctx.arc(0, 0, DIM.PIVOT_INNER_RADIUS, 0, TAU);
+  ctx.fill("evenodd");
+
+  ctx.beginPath();
+  ctx.arc(0, 0, DIM.MOTOR_RADIUS, 0, TAU);
+  ctx.stroke();
+
+  const inner = DIM.PIVOT_OUTER_RADIUS + 3;
+  const outer = DIM.MOTOR_RADIUS;
+
+  ctx.beginPath();
+  ctx.moveTo(inner, 0);
+  ctx.lineTo(outer, 0);
+  ctx.moveTo(0, inner);
+  ctx.lineTo(0, outer);
+  ctx.moveTo(-inner, 0);
+  ctx.lineTo(-outer, 0);
+  ctx.moveTo(0, -inner);
+  ctx.lineTo(0, -outer);
+  ctx.lineWidth += 0.5;
+  ctx.stroke();
+  ctx.lineWidth -= 0.5;
+}
+
+/** Draws a small probe indicator (circle with crosshair). */
+export function draw_probe(ctx: CanvasRenderingContext2D) {
+  const r = 6;
+  ctx.save();
+  ctx.strokeStyle = COLORS.ORANGE;
+  ctx.fillStyle = COLORS.ORANGE;
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.arc(0, 0, r, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(-r, 0);
+  ctx.lineTo(r, 0);
+  ctx.moveTo(0, -r);
+  ctx.lineTo(0, r);
+  ctx.stroke();
+  ctx.restore();
+}
+
+/** Draws evenly-spaced force arrows along a beam segment. */
+export function draw_distributed_force(
+  ctx: CanvasRenderingContext2D,
+  start: Point2,
+  end: Point2,
+  vectorStart: Point2,
+  vectorEnd: Point2,
+  steps: number = 5,
+) {
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    const base = start.lerp(end, t);
+    const vec = vectorStart.lerp(vectorEnd, t);
+    draw_force(ctx, base, vec);
   }
 }

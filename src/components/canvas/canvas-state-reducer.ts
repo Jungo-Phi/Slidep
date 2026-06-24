@@ -4,13 +4,18 @@ import { get_hovered_elements_by_rect } from "./get-hover";
 import { Action, ActionBundleType, CanvasEvent } from "../../types/actions";
 import { HoveredPart } from "../../types/hovered-part";
 import {
+  BeamElement,
   BeltElement,
   ConstraintElement,
+  DistributedForceElement,
   EdgeElement,
+  ForceElement,
   GearElement,
   ID,
   JoinElement,
+  LoadElement,
   MechanicalElement,
+  MomentElement,
   NodeElement,
   PivotElement,
 } from "../../types";
@@ -21,7 +26,7 @@ import {
   delete_element,
   delete_elements,
   get_mechanical_element_from_id,
-} from "./connect-actions";
+} from "../mechanism/connect-actions";
 import {
   is_on_left_side_of_belt,
   resolve_angle_constraint_quadrant,
@@ -41,6 +46,7 @@ export function canvasStateReducer(
   undoMechanism: () => void,
   redoMechanism: () => void,
   onMouseUpHandler: () => void,
+  loads: LoadElement[] = [],
 ) {
   let actions: Action[] = [];
   let actionBundleType: ActionBundleType | undefined = undefined;
@@ -79,6 +85,44 @@ export function canvasStateReducer(
               hoveredElementIDs: [],
             });
             break;
+          }
+          if (hoveredPart.type === "Load") {
+            setCanvasState({
+              type: "SelectedElement",
+              elementID: hoveredPart.id,
+            });
+            break;
+          }
+          if (hoveredPart.type === "ForceTip") {
+            const load = loads.find(
+              (l) => l.id === hoveredPart.id && l.type === "force",
+            );
+            if (load && load.type === "force") {
+              setCanvasState({
+                type: "MovingForceTip",
+                loadID: load.id,
+                startPos: hoveredPart.position,
+                oldVector: load.vector,
+              });
+              break;
+            }
+          }
+          if (hoveredPart.type === "DistributedForceTip") {
+            const load = loads.find(
+              (l) => l.id === hoveredPart.id && l.type === "distributed-force",
+            );
+            if (load && load.type === "distributed-force") {
+              const oldVector =
+                hoveredPart.end === "start" ? load.vectorStart : load.vectorEnd;
+              setCanvasState({
+                type: "MovingDistributedForceTip",
+                loadID: load.id,
+                end: hoveredPart.end,
+                startPos: hoveredPart.position,
+                oldVector,
+              });
+              break;
+            }
           }
           const constraint = constraintElements.find(
             (element) => element.id === hoveredPart.id,
@@ -194,6 +238,30 @@ export function canvasStateReducer(
             startHover: hoveredPart,
           });
           break;
+        case "PlacingForceStart":
+          setCanvasState({ type: "PlacingForceEnd", startHover: hoveredPart });
+          break;
+        case "PlacingMotor": {
+          if (hoveredPart.type === "Node") {
+            const pivot = mechanicalElements.find(
+              (e) => e.id === hoveredPart.id && e.type === "pivot",
+            ) as PivotElement | undefined;
+            if (pivot) {
+              const oldConfig = pivot.motor;
+              const newConfig = oldConfig
+                ? undefined
+                : { speed: 1, enabled: true };
+              actionBundleType = "Other";
+              actions.push({
+                type: "SetMotorConfig",
+                id: pivot.id,
+                newConfig,
+                oldConfig,
+              });
+            }
+          }
+          break;
+        }
         case "PlacingBeamEnd":
         case "PlacingSpringEnd":
         case "PlacingDamperEnd":
@@ -252,7 +320,6 @@ export function canvasStateReducer(
               type: "gear",
               id: gearId,
               position: state.startHover.position,
-              isGrounded: false,
               radius: state.startHover.position.distance_to(
                 hoveredPart.position,
               ),
@@ -300,9 +367,7 @@ export function canvasStateReducer(
                 ),
               );
             } else if (hoveredPart.type === "GearTooth") {
-              actions.push(
-                ...connect_gears(gearId, hoveredPart.id, "ConnectsMeshedGears"),
-              );
+              actions.push(...connect_gears(gearId, hoveredPart.id));
             }
             setCanvasState({ type: "PlacingGearStart" });
             break;
@@ -536,6 +601,81 @@ export function canvasStateReducer(
               break;
           }
           break;
+        case "PlacingForceEnd": {
+          if (state.startHover.type !== "Void") {
+            const anchor =
+              state.startHover.type === "Edge" &&
+              state.startHover.part !== "body"
+                ? state.startHover.part
+                : undefined;
+            const newForce: ForceElement = {
+              type: "force",
+              id: crypto.randomUUID() as ID,
+              targetID: state.startHover.id,
+              anchor,
+              vector: hoveredPart.position.sub(state.startHover.position),
+            };
+            actionBundleType = "Other";
+            actions.push({ type: "CreateElement", element: newForce });
+          }
+          setCanvasState({ type: "PlacingForceStart" });
+          break;
+        }
+        case "PlacingMoment": {
+          if (hoveredPart.type === "Edge" || hoveredPart.type === "GearTooth") {
+            const newMoment: MomentElement = {
+              type: "moment",
+              id: crypto.randomUUID() as ID,
+              targetID: hoveredPart.id,
+              value: 1,
+              clockwise: true,
+            };
+            actionBundleType = "Other";
+            actions.push({ type: "CreateElement", element: newMoment });
+          }
+          break;
+        }
+        case "PlacingDistributedForce": {
+          if (hoveredPart.type === "Edge") {
+            const beam = get_mechanical_element_from_id(
+              hoveredPart.id,
+              mechanicalElements,
+            ) as BeamElement;
+            if (beam.type === "beam") {
+              const perp = beam.positionEnd
+                .sub(beam.positionStart)
+                .normalize()
+                .perp();
+              const defaultMag =
+                beam.positionStart.distance_to(beam.positionEnd) * 0.25;
+              const defaultVec = perp.mul(defaultMag);
+              const newDistForce: DistributedForceElement = {
+                type: "distributed-force",
+                id: crypto.randomUUID() as ID,
+                beamID: hoveredPart.id,
+                vectorStart: defaultVec,
+                vectorEnd: defaultVec,
+              };
+              actionBundleType = "Other";
+              actions.push({ type: "CreateElement", element: newDistForce });
+            }
+          }
+          break;
+        }
+        case "PlacingProbe": {
+          if (
+            hoveredPart.type !== "Void" &&
+            hoveredPart.type !== "Constraint"
+          ) {
+            actionBundleType = "Other";
+            actions.push({
+              type: "AddProbe",
+              elementID: hoveredPart.id,
+              metric: "position-x",
+            });
+          }
+          break;
+        }
         case "DimensionStart":
           if (hoveredPart.type === "Node") {
             setCanvasState({ type: "DimensionNode", nodeID: hoveredPart.id });
@@ -1175,6 +1315,35 @@ export function canvasStateReducer(
             oldPosition,
           });
           break;
+        case "MovingForceTip": {
+          if (hoveredPart.position.equals(oldPosition)) break;
+          const newVec = state.oldVector.add(
+            hoveredPart.position.sub(state.startPos),
+          );
+          actionBundleType = "MoveLoad";
+          actions.push({
+            type: "MoveForceVector",
+            id: state.loadID,
+            newVector: newVec,
+            oldVector: state.oldVector,
+          });
+          break;
+        }
+        case "MovingDistributedForceTip": {
+          if (hoveredPart.position.equals(oldPosition)) break;
+          const newVec = state.oldVector.add(
+            hoveredPart.position.sub(state.startPos),
+          );
+          actionBundleType = "MoveLoad";
+          actions.push({
+            type: "MoveDistributedForceVector",
+            id: state.loadID,
+            end: state.end,
+            newVector: newVec,
+            oldVector: state.oldVector,
+          });
+          break;
+        }
         case "ChangingGearRadius":
           if (hoveredPart.position.equals(oldPosition)) break;
           const gear = get_mechanical_element_from_id(
@@ -1407,13 +1576,7 @@ export function canvasStateReducer(
             );
           } else if (hoveredPart.type === "GearTooth") {
             actionBundleType = "Connects";
-            actions.push(
-              ...connect_gears(
-                state.elementID,
-                hoveredPart.id,
-                "ConnectsMeshedGears",
-              ),
-            );
+            actions.push(...connect_gears(state.elementID, hoveredPart.id));
           } else {
             actionBundleType = "Other";
             actions.push({ type: "Blank" });
@@ -1469,6 +1632,10 @@ export function canvasStateReducer(
             type: "SelectedElement",
             elementID: state.elementID,
           });
+          break;
+        case "MovingForceTip":
+        case "MovingDistributedForceTip":
+          setCanvasState({ type: "Selecting" });
           break;
       }
       break;
@@ -1533,7 +1700,7 @@ export function canvasStateReducer(
           setCanvasState({ type: "HorizontalVerticalConstraintStart" });
           break;
         case "i":
-          setCanvasState({ type: "PlacingTag" });
+          setCanvasState({ type: "PlacingProbe" });
           break;
         case "j":
           setCanvasState({ type: "PlacingJoin" });

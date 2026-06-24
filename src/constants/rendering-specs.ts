@@ -20,11 +20,12 @@ export const COLORS = {
   ORANGE_STROKE: "#9c4211", // Orange foncé
 
   // Interaction colors
-  SELECTION_STROKE: "#6595d0", // "#d7530b"
+  SELECTION_STROKE: "#6595d0",
   SELECTION_FILL: "#b7e2ff", // FILL_BODY
-  SELECTION_BOX: "#7190e5", // Bleu gris clair
-  DELETION_STROKE: "#a4315d", // Rouge
-  DELETION_BOX: "#ed5e71", // Rouge
+  SELECTION_BOX: "#7190e5",
+  DELETION_STROKE: "#a4315d",
+  DELETION_BOX: "#ed5e71",
+  SELECTION_ORANGE: "#ff621e",
 
   // Transparency
   ICON_TRANSPARENCY: "C8", // 75% opacity
@@ -96,8 +97,10 @@ export const DIM = {
   // Pivot
   PIVOT_OUTER_RADIUS: 9,
   PIVOT_INNER_RADIUS: 4,
+  // Motor
+  MOTOR_RADIUS: 20,
   // Join
-  JOIN_RADIUS: 5.5,
+  JOIN_RADIUS: 6,
 
   // Slider
   SLIDER_OUTER_WIDTH: 24,
@@ -123,6 +126,9 @@ export const DIM = {
   GROUND_HEIGHT: 10,
   GROUND_BAR_HEIGHT: 6,
   GROUND_VERTICAL_OFFSET: 6,
+
+  // Probe
+  PROBE_OFFSET: 28,
 } as const;
 
 export const DIMENSION_SPECS = {
@@ -140,11 +146,6 @@ export const DIMENSION_SPECS = {
 
 /** Ordre de dessin des éléments sur le canvas */
 export const DRAWING_ORDER: UnionElement["type"][] = [
-  "dimension-edge-to-node",
-  "dimension-node-to-node",
-  "dimension-edge",
-  "dimension-angle",
-  "dimension-radius",
   "beam",
   "damper",
   "spring",
@@ -155,6 +156,11 @@ export const DRAWING_ORDER: UnionElement["type"][] = [
   "slider",
   "pivot",
   "mass",
+  "dimension-edge-to-node",
+  "dimension-node-to-node",
+  "dimension-edge",
+  "dimension-angle",
+  "dimension-radius",
   "horizontal-align-edge",
   "horizontal-align-nodes",
   "vertical-align-edge",
@@ -163,4 +169,7 @@ export const DRAWING_ORDER: UnionElement["type"][] = [
   "parallel",
   "equal",
   "gear-ratio",
+  "force",
+  "moment",
+  "distributed-force",
 ];

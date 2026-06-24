@@ -14,7 +14,7 @@ import {
   connect_element,
   disconnect_element,
   get_connections,
-} from "../../mechanical-canvas/connect-actions";
+} from "../../mechanism/connect-actions";
 import { HoveredPart } from "../../../types/hovered-part";
 
 const EmptyContainer: React.FC = ({}) => {

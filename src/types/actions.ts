@@ -1,4 +1,4 @@
-import { ID, UnionElement } from "./element";
+import { ID, MotorConfig, ProbeMetric, UnionElement } from "./element";
 import { Nodes } from "./kinematic-solver-links";
 import { Point2 } from "./point2";
 
@@ -17,6 +17,7 @@ export type ActionBundleType =
   | "ChangeDimension"
   | "Connects"
   | "CreateConstraint"
+  | "MoveLoad"
   | "Other";
 
 /** Supported action types */
@@ -242,6 +243,22 @@ export type Action =
       newNodes: Nodes;
       oldNodes: Nodes;
     }
+  | { type: "Blank" }
+  | { type: "MoveForceVector"; id: ID; newVector: Point2; oldVector: Point2 }
   | {
-      type: "Blank";
+      type: "MoveDistributedForceVector";
+      id: ID;
+      end: "start" | "end";
+      newVector: Point2;
+      oldVector: Point2;
+    }
+  | { type: "ChangeMomentValue"; id: ID; newValue: number; oldValue: number }
+  | { type: "FlipMomentDirection"; id: ID }
+  | { type: "AddProbe"; elementID: ID; metric: ProbeMetric }
+  | { type: "RemoveProbe"; elementID: ID; index: number }
+  | {
+      type: "SetMotorConfig";
+      id: ID;
+      newConfig: MotorConfig | undefined;
+      oldConfig: MotorConfig | undefined;
     };

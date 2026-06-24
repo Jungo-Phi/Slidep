@@ -1,5 +1,6 @@
 import beamIconUrl from "../../assets/icons/palette/beam.svg";
 import pivotIconUrl from "../../assets/icons/palette/pivot.svg";
+import motorIconUrl from "../../assets/icons/palette/motor.svg";
 import sliderIconUrl from "../../assets/icons/palette/slider.svg";
 import slidepIconUrl from "../../assets/icons/palette/slidep.svg";
 import joinIconUrl from "../../assets/icons/palette/join.svg";
@@ -15,14 +16,18 @@ import normalIconUrl from "../../assets/icons/palette/normal.svg";
 import parallelIconUrl from "../../assets/icons/palette/parallel.svg";
 import equalIconUrl from "../../assets/icons/palette/equal.svg";
 import ratioIconUrl from "../../assets/icons/palette/ratio.svg";
+import forceIconUrl from "../../assets/icons/palette/force.svg";
+import momentIconUrl from "../../assets/icons/palette/moment.svg";
+import distributedForceIconUrl from "../../assets/icons/palette/distributed-force.svg";
 import logoIconUrl from "../../assets/icons/palette/logo.svg";
 
-import { ElementType } from "../../types";
+import { UnionElement } from "../../types";
 
 /** All icon URLs for preloading */
 const ALL_ELEMENT_ICON_URLS = [
   beamIconUrl,
   pivotIconUrl,
+  motorIconUrl,
   sliderIconUrl,
   slidepIconUrl,
   joinIconUrl,
@@ -52,9 +57,11 @@ export const preload_element_icons = (): void => {
   });
 };
 
-export const get_element_icon = (type: ElementType | undefined): string => {
-  switch (type) {
+export const get_element_icon = (element: UnionElement | undefined): string => {
+  if (!element) return logoIconUrl;
+  switch (element.type) {
     case "pivot":
+      if (element.motor) return motorIconUrl;
       return pivotIconUrl;
     case "slider":
       return sliderIconUrl;
@@ -64,14 +71,14 @@ export const get_element_icon = (type: ElementType | undefined): string => {
       return joinIconUrl;
     case "mass":
       return massIconUrl;
+    case "gear":
+      return gearIconUrl;
     case "beam":
       return beamIconUrl;
     case "spring":
       return springIconUrl;
     case "damper":
       return damperIconUrl;
-    case "gear":
-      return gearIconUrl;
     case "belt":
       return beltIconUrl;
     case "dimension-edge":
@@ -94,6 +101,11 @@ export const get_element_icon = (type: ElementType | undefined): string => {
       return equalIconUrl;
     case "gear-ratio":
       return ratioIconUrl;
+    case "force":
+      return forceIconUrl;
+    case "moment":
+      return momentIconUrl;
+    case "distributed-force":
+      return distributedForceIconUrl;
   }
-  return logoIconUrl;
 };

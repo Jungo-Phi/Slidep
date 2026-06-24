@@ -18,7 +18,7 @@ import NumberInput from "./components/NumberInput";
 import ElementDisplay from "./components/ElementDisplay";
 import React from "react";
 import RatioInput from "./components/RatioInput";
-import { element_to_hovered_part } from "../mechanical-canvas/utils";
+import { element_to_hovered_part } from "../canvas/utils";
 
 interface ConstraintsPanelProps {
   constraintID: ID;

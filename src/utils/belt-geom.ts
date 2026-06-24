@@ -1,4 +1,4 @@
-import { get_mechanical_element_from_id } from "../components/mechanical-canvas/connect-actions";
+import { get_mechanical_element_from_id } from "../components/mechanism/connect-actions";
 import { BeltElement, GearElement, MechanicalElement, Point2 } from "../types";
 
 export function get_gear_angles(

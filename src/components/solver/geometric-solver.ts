@@ -6,7 +6,7 @@ import {
   Nodes,
   Mechanism,
 } from "../../types";
-import { get_mechanical_element_from_id } from "../mechanical-canvas/connect-actions";
+import { get_mechanical_element_from_id } from "../mechanism/connect-actions";
 import { get_degrees_of_freedom, sort_links } from "./utils";
 import { get_links, get_nodes } from "./parsing";
 import { PBD_kinematic_solver } from "./PBD_kinematic_solver";

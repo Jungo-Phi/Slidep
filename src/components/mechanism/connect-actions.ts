@@ -12,7 +12,7 @@ import type {
 } from "../../types/element";
 import { Action, ConnectsActionType } from "../../types";
 import { HoveredPart } from "../../types/hovered-part";
-import { connected_constraints, node_on_beam_body } from "./utils";
+import { connected_constraints, node_on_beam_body } from "../canvas/utils";
 import { legible_id } from "../../utils";
 
 /** Returns the mechanical element from the id. */
@@ -896,12 +896,6 @@ export function connect_elements(
                 constraintElements,
               ),
             );
-          } else if (
-            selectedNode.type === "gear" ||
-            hoveredNode.type === "gear"
-          ) {
-            // Les interactions gear↔node se font via GearTooth (dents), pas le centre.
-            // Le centre du gear appartient à son pivot parent.
           } else {
             // Takeover de selectedNode sur hoveredNode
             actions.push({ type: "DeleteElement", element: hoveredNode });
@@ -1063,27 +1057,23 @@ function connect_node_and_edge(
 }
 
 /** Connects two gears together (meshing only). */
-export function connect_gears(
-  gear1ID: ID,
-  gear2ID: ID,
-  connectionType: "ConnectsMeshedGears",
-): Action[] {
-  let actions: Action[] = [];
-  actions.push({
-    type: connectionType,
-    disconnect: false,
-    elementID: gear1ID,
-    connectID: gear2ID,
-    index: 0,
-  });
-  actions.push({
-    type: connectionType,
-    disconnect: false,
-    elementID: gear2ID,
-    connectID: gear1ID,
-    index: 0,
-  });
-  return actions;
+export function connect_gears(gear1ID: ID, gear2ID: ID): Action[] {
+  return [
+    {
+      type: "ConnectsMeshedGears",
+      disconnect: false,
+      elementID: gear1ID,
+      connectID: gear2ID,
+      index: 0,
+    },
+    {
+      type: "ConnectsMeshedGears",
+      disconnect: false,
+      elementID: gear2ID,
+      connectID: gear1ID,
+      index: 0,
+    },
+  ];
 }
 
 /** Connects a gear and a belt bidirectionally. */

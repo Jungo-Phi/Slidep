@@ -17,7 +17,7 @@ import {
   disconnect_element,
   get_connection_pair_type,
   get_connections,
-} from "../../mechanical-canvas/connect-actions";
+} from "../../mechanism/connect-actions";
 import { HoveredPart } from "../../../types/hovered-part";
 import ElementDisplay from "./ElementDisplay";
 import { COLORS } from "../../../constants/rendering-specs";

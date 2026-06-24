@@ -119,7 +119,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
         >
           {[
             { id: "project", icon: ProjectIcon, label: "Projet" },
-            { id: "element", icon: ElementIcon, label: "Élément" },
+            { id: "elements", icon: ElementIcon, label: "Éléments" },
             { id: "constraints", icon: ConstraintsIcon, label: "Contraintes" },
             { id: "analysis", icon: AnalysisIcon, label: "Analyse" },
           ].map((tab) => {
@@ -167,10 +167,13 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
             updateMetadata={handleProjectInfoChange}
           />
         )}
-        {activeTab === "element" && (
+        {activeTab === "elements" && (
           <ElementProperties
             element={mechanism.mechanicalElements.find(
               (el) => el.id === (canvasState as any).elementID,
+            )}
+            selectedLoad={mechanism.loads.find(
+              (l) => l.id === (canvasState as any).elementID,
             )}
             setHoveredPart={setHoveredPart}
             setCanvasState={setCanvasState}

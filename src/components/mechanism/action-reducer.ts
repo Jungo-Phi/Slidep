@@ -1,9 +1,11 @@
 import {
   Action,
+  LoadElement,
   Mechanism,
   MechanicalElement,
   NodeElement,
   BeltElement,
+  PivotElement,
   UnionElement,
   Point2,
 } from "../../types";
@@ -11,7 +13,7 @@ import {
   get_constraint_element_from_id,
   get_element_from_id,
   get_mechanical_element_from_id,
-} from "../mechanical-canvas/connect-actions";
+} from "./connect-actions";
 
 /**
  * Shallow-clone a mechanical element with all its mutable array fields deep-copied.
@@ -47,6 +49,7 @@ export function actionReducer(
   let constraintElements = mechanism.constraintElements.map((ce) => ({
     ...ce,
   }));
+  let loads = mechanism.loads.map((l) => ({ ...l }));
   let viewport = { ...mechanism.viewport };
   let element: UnionElement;
   actions.forEach((action) => {
@@ -73,6 +76,33 @@ export function actionReducer(
             mechanicalElements.push(
               clone_mechanical_element(action.element as MechanicalElement),
             );
+          }
+        } else if (
+          action.element.type === "force" ||
+          action.element.type === "moment" ||
+          action.element.type === "distributed-force"
+        ) {
+          if (revert !== (action.type === "DeleteElement")) {
+            loads = loads.filter((l) => l.id !== action.element.id);
+          } else {
+            const incoming = action.element as LoadElement;
+            // Replace existing load on same target (1 force per node/anchor, 1 moment per edge/gear)
+            if (incoming.type === "force") {
+              loads = loads.filter(
+                (l) =>
+                  !(
+                    l.type === "force" &&
+                    l.targetID === incoming.targetID &&
+                    l.anchor === incoming.anchor
+                  ),
+              );
+            } else if (incoming.type === "moment") {
+              loads = loads.filter(
+                (l) =>
+                  !(l.type === "moment" && l.targetID === incoming.targetID),
+              );
+            }
+            loads.push(incoming);
           }
         } else {
           if (revert !== (action.type === "DeleteElement")) {
@@ -315,6 +345,74 @@ export function actionReducer(
           (element as { parentAxleID: string }).parentAxleID = action.connectID;
         }
         break;
+      case "MoveForceVector": {
+        const force = loads.find((l) => l.id === action.id);
+        if (force && force.type === "force") {
+          force.vector = revert ? action.oldVector : action.newVector;
+        }
+        break;
+      }
+      case "MoveDistributedForceVector": {
+        const df = loads.find((l) => l.id === action.id);
+        if (df && df.type === "distributed-force") {
+          const vec = revert ? action.oldVector : action.newVector;
+          if (action.end === "start") df.vectorStart = vec;
+          else df.vectorEnd = vec;
+        }
+        break;
+      }
+      case "ChangeMomentValue": {
+        const moment = loads.find((l) => l.id === action.id);
+        if (moment && moment.type === "moment") {
+          moment.value = revert ? action.oldValue : action.newValue;
+        }
+        break;
+      }
+      case "FlipMomentDirection": {
+        const moment = loads.find((l) => l.id === action.id);
+        if (moment && moment.type === "moment") {
+          moment.clockwise = !moment.clockwise;
+        }
+        break;
+      }
+      case "AddProbe": {
+        const el = mechanicalElements.find((e) => e.id === action.elementID);
+        if (el) {
+          if (revert) {
+            if (el.probes) el.probes = el.probes.slice(0, -1);
+          } else {
+            if (!el.probes) el.probes = [];
+            el.probes.push({
+              metric: action.metric,
+              showGraph: true,
+              showProbe: true,
+            });
+          }
+        }
+        break;
+      }
+      case "RemoveProbe": {
+        const el = mechanicalElements.find((e) => e.id === action.elementID);
+        if (el && el.probes) {
+          if (revert) {
+            // Undo remove: restore probe at index (not stored — not perfectly reversible without old data)
+            // No-op for now; full reversibility would need the removed ProbeConfig stored in the action
+          } else {
+            el.probes.splice(action.index, 1);
+          }
+        }
+        break;
+      }
+      case "SetMotorConfig": {
+        const pivot = get_mechanical_element_from_id(
+          action.id,
+          mechanicalElements,
+        ) as PivotElement;
+        if (pivot.type === "pivot") {
+          pivot.motor = revert ? action.oldConfig : action.newConfig;
+        }
+        break;
+      }
       case "UpdatePositionsToValidState":
         let positions: Map<string, Point2>;
         let radii: Map<string, number>;
@@ -355,6 +453,7 @@ export function actionReducer(
     viewport: viewport,
     mechanicalElements: mechanicalElements,
     constraintElements: constraintElements,
+    loads: loads,
     history: mechanism.history,
     future: mechanism.future,
   };

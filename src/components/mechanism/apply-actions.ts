@@ -237,6 +237,31 @@ export function apply_actions(
         },
       ];
       break;
+    case "MoveLoad":
+      if (
+        newAction.type !== "MoveForceVector" &&
+        newAction.type !== "MoveDistributedForceVector"
+      )
+        break;
+      if (mechanism.history.length === 0) break;
+      lastActions = mechanism.history[mechanism.history.length - 1];
+      if (lastActions.length < 1) break;
+      lastAction = lastActions[lastActions.length - 1];
+      if (newAction.type !== lastAction.type || newAction.id !== lastAction.id)
+        break;
+      switch (lastAction.type) {
+        case "MoveForceVector":
+          if (newAction.type !== "MoveForceVector") break;
+          lastAction.newVector = newAction.newVector;
+          break;
+        case "MoveDistributedForceVector":
+          if (newAction.type !== "MoveDistributedForceVector") break;
+          if (newAction.end !== lastAction.end) break;
+          lastAction.newVector = newAction.newVector;
+          break;
+      }
+      newHistory = [...mechanism.history];
+      break;
     case "Other":
       if (newAction.type == "Blank") {
         if (mechanism.history.length === 0) break;
@@ -251,6 +276,7 @@ export function apply_actions(
     future: [],
     mechanicalElements: [...mechanism.mechanicalElements],
     constraintElements: [...mechanism.constraintElements],
+    loads: [...mechanism.loads],
     viewport: { ...mechanism.viewport },
     metadata: { ...mechanism.metadata },
   };

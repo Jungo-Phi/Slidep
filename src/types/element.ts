@@ -6,7 +6,10 @@
 import { Point2 } from "./point2";
 
 /** Union type for all element types */
-export type ElementType = MechanicalElementType | ConstraintElementType;
+export type ElementType =
+  | MechanicalElementType
+  | ConstraintElementType
+  | LoadElementType;
 
 /** Supported mechanical element types */
 export type MechanicalElementType = NodeType | EdgeType;
@@ -16,6 +19,9 @@ export type NodeType = "pivot" | "slider" | "slidep" | "join" | "mass" | "gear";
 
 /** Supported edge element types */
 export type EdgeType = "beam" | "spring" | "damper" | "belt";
+
+/** Supported load element types */
+export type LoadElementType = "force" | "moment" | "distributed-force";
 
 /** Supported constraint element types */
 export type ConstraintElementType =
@@ -34,10 +40,16 @@ export type ConstraintElementType =
   | "gear-ratio";
 
 /** Union type for all element types */
-export type UnionElement = MechanicalElement | ConstraintElement;
+export type UnionElement = MechanicalElement | ConstraintElement | LoadElement;
+
+/** Union type for all load element types */
+export type LoadElement =
+  | ForceElement
+  | MomentElement
+  | DistributedForceElement;
 
 /** Union type for all mechanical element types */
-export type MechanicalElement = NodeElement | EdgeElement;
+export type MechanicalElement = NodeElement | BodyElement | EdgeElement;
 
 /** Supported node elements */
 export type NodeElement =
@@ -45,8 +57,10 @@ export type NodeElement =
   | SliderElement
   | SlidepElement
   | JoinElement
-  | MassElement
-  | GearElement;
+  | MassElement;
+
+/** Supported body elements */
+export type BodyElement = GearElement;
 
 /** Supported edge elements */
 export type EdgeElement =
@@ -78,6 +92,7 @@ export interface BaseElement {
   type: ElementType;
   id: ID;
   name?: string;
+  probes?: ProbeConfig[];
 }
 
 /** Base interface for Node elements (defined by a position) */
@@ -96,7 +111,6 @@ export interface SliderElement extends BaseNodeElement {
 export interface MotorConfig {
   parentBeamID?: ID; // null = sol (seulement si le pivot est groundé)
   speed: number;
-  enabled: boolean;
 }
 
 /** Pivot element - allows rotational motion */
@@ -128,8 +142,13 @@ export interface MassElement extends BaseNodeElement {
   mass: number;
 }
 
+/** Base interface for Body elements (defined by a position and angle) */
+export interface BaseBodyElement extends BaseElement {
+  position: Point2;
+}
+
 /** Gear element - rotational transmission with teeth */
-export interface GearElement extends BaseNodeElement {
+export interface GearElement extends BaseBodyElement {
   type: "gear";
   radius: number;
   parentAxleID: ID; // PivotElement ou SlidepElement (jamais null)
@@ -284,4 +303,53 @@ export interface GearRatio extends ConstraintBaseElement {
   startGearID: ID;
   endGearID: ID;
   value: number;
+}
+
+// ─── Load elements ────────────────────────────────────────────────────────────
+
+/** Force applied to a node or an edge endpoint */
+export interface ForceElement {
+  type: "force";
+  id: ID;
+  name?: string;
+  targetID: ID;
+  anchor?: "start" | "end"; // only for edge targets
+  vector: Point2; // direction + magnitude in world coordinates
+}
+
+/** Moment applied to an edge or a gear (never a node) */
+export interface MomentElement {
+  type: "moment";
+  id: ID;
+  name?: string;
+  targetID: ID;
+  value: number;
+  clockwise: boolean;
+}
+
+/** Distributed force along a beam — two draggable vectors at each endpoint */
+export interface DistributedForceElement {
+  type: "distributed-force";
+  id: ID;
+  name?: string;
+  beamID: ID;
+  vectorStart: Point2;
+  vectorEnd: Point2;
+}
+
+// ─── Probes ───────────────────────────────────────────────────────────────────
+
+export type ProbeMetric =
+  | "position-x"
+  | "position-y"
+  | "velocity-x"
+  | "velocity-y"
+  | "force"
+  | "moment"
+  | "stress";
+
+export interface ProbeConfig {
+  metric: ProbeMetric;
+  showGraph: boolean;
+  showProbe: boolean;
 }

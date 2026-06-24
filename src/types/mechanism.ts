@@ -1,9 +1,10 @@
 import { Action } from "./actions";
-import { MechanicalElement, ConstraintElement } from "./element";
+import { MechanicalElement, ConstraintElement, LoadElement } from "./element";
 import { Point2 } from "./point2";
 import {
   SerializedAction,
   SerializedConstraintElement,
+  SerializedLoadElement,
   SerializedMechanicalElement,
   SerializedViewportState,
 } from "./serialized";
@@ -48,6 +49,7 @@ export interface Mechanism {
   viewport: ViewportState;
   mechanicalElements: MechanicalElement[];
   constraintElements: ConstraintElement[];
+  loads: LoadElement[];
   history: Action[][];
   future: Action[][];
 }
@@ -57,6 +59,7 @@ export interface SerializedMechanism {
   viewport: SerializedViewportState;
   mechanicalElements: SerializedMechanicalElement[];
   constraintElements: SerializedConstraintElement[];
+  loads: SerializedLoadElement[];
   history: SerializedAction[][];
   future: SerializedAction[][];
 }

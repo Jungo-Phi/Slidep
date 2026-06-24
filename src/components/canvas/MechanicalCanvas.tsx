@@ -11,14 +11,14 @@ import {
   ViewportChange,
   ZERO,
 } from "../../types";
+import { world_to_screen, screen_to_world } from "../../utils";
 import { COLORS } from "../../constants/rendering-specs";
 import { Box } from "@mui/material";
 import { drawMechanicalCanvas } from "./draw-canvas";
 import { canvasStateReducer } from "./canvas-state-reducer";
-import { get_constraint_element_from_id } from "./connect-actions";
+import { get_constraint_element_from_id } from "../mechanism/connect-actions";
 import { get_hovered_part } from "./get-hover";
 import { ConstraintEditor } from "./ConstraintEditor";
-import { world_to_screen, screen_to_world } from "./viewport";
 import { draw_grid } from "./drawing-functions";
 
 function mergeRefs<T>(...refs: React.Ref<T>[]) {
@@ -119,6 +119,7 @@ export const MechanicalCanvas = forwardRef<
         canvasStateRef.current,
         mechanismRef.current.mechanicalElements,
         mechanismRef.current.constraintElements,
+        mechanismRef.current.loads,
       );
       ctx.restore();
     }, []);
@@ -213,6 +214,7 @@ export const MechanicalCanvas = forwardRef<
             mechanismRef.current.viewport,
           ),
           canvasStateRef.current,
+          mechanismRef.current.loads,
         );
         setHoveredPart(newHoveredPart);
 
@@ -229,6 +231,7 @@ export const MechanicalCanvas = forwardRef<
           undoMechanism,
           redoMechanism,
           onMouseUpHandler,
+          mechanismRef.current.loads,
         );
         oldPositionRef.current = newHoveredPart.position.clone();
       },

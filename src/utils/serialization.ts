@@ -1,6 +1,7 @@
 import {
   Action,
   ConstraintElement,
+  LoadElement,
   MechanicalElement,
   Mechanism,
   Point2,
@@ -10,6 +11,7 @@ import {
 import {
   SerializedAction,
   SerializedConstraintElement,
+  SerializedLoadElement,
   SerializedMechanicalElement,
   SerializedPoint2,
   SerializedViewportState,
@@ -170,6 +172,16 @@ function serialize_constraint_element(
   return JSON.parse(JSON.stringify(e));
 }
 
+function serialize_load_element(e: LoadElement): SerializedLoadElement {
+  return JSON.parse(JSON.stringify(e));
+}
+
+function deserialize_load_element(s: SerializedLoadElement): LoadElement {
+  return revive_points(
+    s as unknown as Record<string, unknown>,
+  ) as unknown as LoadElement;
+}
+
 function serialize_viewport(e: ViewportState): SerializedViewportState {
   return JSON.parse(JSON.stringify(e));
 }
@@ -230,6 +242,7 @@ export function serialize_mechanism(mechanism: Mechanism): SerializedMechanism {
     constraintElements: mechanism.constraintElements.map(
       serialize_constraint_element,
     ),
+    loads: mechanism.loads.map((l) => serialize_load_element(l)),
     history: mechanism.history.map((actions) =>
       actions.map((action) => serialize_action(action)),
     ),
@@ -251,6 +264,7 @@ export function deserialize_mechanism(
     constraintElements: serializedMechanism.constraintElements.map(
       deserialize_constraint_element,
     ),
+    loads: (serializedMechanism.loads ?? []).map(deserialize_load_element),
     history: serializedMechanism.history.map((serializedActions) =>
       serializedActions.map((serializedAction) =>
         deserialize_action(serializedAction),

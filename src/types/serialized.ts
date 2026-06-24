@@ -1,6 +1,7 @@
 import {
   Action,
   ConstraintElement,
+  LoadElement,
   MechanicalElement,
   Point2,
   ViewportState,
@@ -20,5 +21,6 @@ export type Serialized<T> = T extends Point2
 
 export type SerializedMechanicalElement = Serialized<MechanicalElement>;
 export type SerializedConstraintElement = Serialized<ConstraintElement>;
+export type SerializedLoadElement = Serialized<LoadElement>;
 export type SerializedViewportState = Serialized<ViewportState>;
 export type SerializedAction = Serialized<Action>;

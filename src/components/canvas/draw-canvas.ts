@@ -9,13 +9,18 @@ import {
 import {
   BeamElement,
   ConstraintElement,
+  DistributedForceElement,
   EdgeElement,
+  ForceElement,
   GearElement,
   ID,
+  LoadElement,
   MechanicalElement,
+  MomentElement,
   NodeElement,
   Point2,
   UnionElement,
+  ZERO,
 } from "../../types";
 import { HoveredPart } from "../../types/hovered-part";
 import { CanvasState } from "../../types/canvas-state";
@@ -42,9 +47,13 @@ import {
   draw_dimention,
   draw_join_bottom,
   draw_join_top,
-  draw_slidep_rep,
+  draw_force,
+  draw_moment,
+  draw_distributed_force,
+  draw_motor,
+  draw_probe,
 } from "./drawing-functions";
-import { get_mechanical_element_from_id } from "./connect-actions";
+import { get_mechanical_element_from_id } from "../mechanism/connect-actions";
 import {
   get_gear_angles,
   is_on_left_side_of_belt,
@@ -174,6 +183,63 @@ function is_hovered(
   }
 }
 
+/**
+ * Draw tiny pieces of edges to make them appear over some part.
+ */
+export function draw_edge_fake_end(
+  ctx: CanvasRenderingContext2D,
+  edge: EdgeElement,
+  elementID: ID,
+  hoveredPart: HoveredPart,
+  state: CanvasState,
+  constraintElements: ConstraintElement[],
+  length: number,
+) {
+  if (is_erase_hovered(edge.id, hoveredPart, state, constraintElements)) return;
+
+  const oldShadowBlur = ctx.shadowBlur;
+  const oldGlobalAlpha = ctx.globalAlpha;
+  const oldStrokeStyle = ctx.strokeStyle;
+  const oldFillStyle = ctx.fillStyle;
+  const oldLineWidth = ctx.lineWidth;
+  ctx.shadowBlur = 0;
+  ctx.globalAlpha = 1;
+  ctx.strokeStyle = COLORS.STROKE;
+  ctx.fillStyle = COLORS.FILL_BODY;
+  ctx.lineWidth = STROKE_WIDTHS.STANDARD;
+
+  if (is_hovered(edge.id, hoveredPart, state, constraintElements))
+    ctx.lineWidth = STROKE_WIDTHS.THICK;
+
+  if (is_selected(edge.id, state)) {
+    ctx.strokeStyle = COLORS.SELECTION_STROKE;
+    ctx.fillStyle = COLORS.SELECTION_FILL;
+  }
+
+  ctx.save();
+  ctx.rotate(edge.positionEnd.sub(edge.positionStart).angle());
+
+  const start = edge.fixedNodeEndID === elementID ? 0 : 1;
+  const end = edge.fixedNodeStartID === elementID ? 0 : 1;
+  const sideL = DIM.BEAM_WIDTH - STROKE_WIDTHS.STANDARD + ctx.lineWidth;
+  const sideS = DIM.BEAM_WIDTH - STROKE_WIDTHS.STANDARD - ctx.lineWidth;
+  const C = length + DIM.SLIDER_INNER_HEIGHT / 2;
+  const D = C + 0.5;
+  const oldFillStyle2 = ctx.fillStyle;
+  ctx.fillStyle = ctx.strokeStyle;
+  ctx.fillRect(-C * end, -sideL / 2, C * (start + end), sideL);
+  ctx.fillStyle = oldFillStyle2;
+  ctx.fillRect(-D * end, -sideS / 2, D * (start + end), sideS);
+
+  ctx.restore();
+
+  ctx.shadowBlur = oldShadowBlur;
+  ctx.globalAlpha = oldGlobalAlpha;
+  ctx.strokeStyle = oldStrokeStyle;
+  ctx.fillStyle = oldFillStyle;
+  ctx.lineWidth = oldLineWidth;
+}
+
 /*
  * Dessine tous les éléments du canvas.
  */
@@ -183,10 +249,11 @@ export function drawMechanicalCanvas(
   state: CanvasState,
   mechanicalElements: MechanicalElement[],
   constraintElements: ConstraintElement[],
+  loads: LoadElement[] = [],
 ) {
-  const allElements: UnionElement[] = (
-    mechanicalElements as UnionElement[]
-  ).concat(constraintElements);
+  const allElements: UnionElement[] = (mechanicalElements as UnionElement[])
+    .concat(constraintElements)
+    .concat(loads);
 
   ctx.shadowBlur = 0;
   ctx.globalAlpha = 1;
@@ -214,6 +281,10 @@ export function drawMechanicalCanvas(
   DRAWING_ORDER.forEach((type) => {
     const elements = allElements.filter((element) => element.type === type);
     for (const element of elements) {
+      const isLoadElement =
+        element.type === "force" ||
+        element.type === "moment" ||
+        element.type === "distributed-force";
       const isSelected = is_selected(element.id, state);
       const isEraseHovered = is_erase_hovered(
         element.id,
@@ -236,17 +307,24 @@ export function drawMechanicalCanvas(
       ctx.shadowBlur = 0;
       ctx.globalAlpha = 1;
       ctx.filter = "none";
-      ctx.strokeStyle = COLORS.STROKE;
-      ctx.fillStyle = COLORS.FILL_BODY;
+      ctx.strokeStyle = isLoadElement ? COLORS.ORANGE : COLORS.STROKE;
+      ctx.fillStyle = isLoadElement ? COLORS.ORANGE : COLORS.FILL_BODY;
       ctx.lineWidth = STROKE_WIDTHS.STANDARD;
 
       // Thicken the stroke if element is hovered
       if (isHovered && !isEdgeEndHovered) ctx.lineWidth = STROKE_WIDTHS.THICK;
       // Add blue halo and blue stroke if element is selected
       if (isSelected) {
-        ctx.shadowColor = COLORS.SELECTION_STROKE;
-        ctx.strokeStyle = COLORS.SELECTION_STROKE;
-        ctx.fillStyle = COLORS.SELECTION_FILL;
+        if (isLoadElement) ctx.lineWidth += 1;
+        ctx.shadowColor = isLoadElement
+          ? COLORS.ORANGE
+          : COLORS.SELECTION_STROKE;
+        ctx.strokeStyle = isLoadElement
+          ? COLORS.SELECTION_ORANGE
+          : COLORS.SELECTION_STROKE;
+        ctx.fillStyle = isLoadElement
+          ? COLORS.SELECTION_ORANGE
+          : COLORS.SELECTION_FILL;
         ctx.shadowBlur = INTERACTION_SPECS.SELECTION_HALO_SIZE;
       }
       // Add red stroke and make semi-transparent if element is to be deleted
@@ -260,7 +338,6 @@ export function drawMechanicalCanvas(
         case "slider":
         case "slidep":
         case "join":
-        case "gear":
         case "mass":
           ctx.save();
           ctx.translate(element.position.x, element.position.y);
@@ -274,8 +351,10 @@ export function drawMechanicalCanvas(
               parentBeam.positionEnd.sub(parentBeam.positionStart).angle(),
             );
           }
-          if (element.isGrounded && element.type !== "gear") {
+          if (element.isGrounded) {
+            if (element.type === "pivot" && element.motor) ctx.translate(0, 7);
             draw_ground(ctx);
+            if (element.type === "pivot" && element.motor) ctx.translate(0, -7);
           }
           switch (element.type) {
             case "slider":
@@ -288,12 +367,34 @@ export function drawMechanicalCanvas(
                   element.fixedEdgesIDs.length > 0,
               );
               break;
-            case "pivot":
+            case "pivot": {
+              if (element.motor) {
+                draw_motor(ctx);
+                const rotatingEdges = [...element.rotatingEdgesIDs];
+                rotatingEdges.filter(
+                  (el) => el !== element.motor!.parentBeamID,
+                );
+                rotatingEdges.reverse().forEach((edgeID) => {
+                  const edge = get_mechanical_element_from_id(
+                    edgeID,
+                    mechanicalElements,
+                  ) as EdgeElement;
+                  draw_edge_fake_end(
+                    ctx,
+                    edge,
+                    element.id,
+                    hoveredPart,
+                    state,
+                    constraintElements,
+                    DIM.MOTOR_RADIUS,
+                  );
+                });
+              }
               draw_pivot(ctx, element.rotatingEdgesIDs.length > 0);
               break;
+            }
             case "slidep":
               draw_slidep_bottom(ctx);
-              // Draw tiny pieces of rotating edges between slider and pivot part
               if (element.parentBeamID) {
                 const parentBeam = get_mechanical_element_from_id(
                   element.parentBeamID,
@@ -308,54 +409,15 @@ export function drawMechanicalCanvas(
                   edgeID,
                   mechanicalElements,
                 ) as EdgeElement;
-
-                const oldShadowBlur = ctx.shadowBlur;
-                const oldGlobalAlpha = ctx.globalAlpha;
-                const oldStrokeStyle = ctx.strokeStyle;
-                const oldFillStyle = ctx.fillStyle;
-                const oldLineWidth = ctx.lineWidth;
-                ctx.shadowBlur = 0;
-                ctx.globalAlpha = 1;
-                ctx.strokeStyle = COLORS.STROKE;
-                ctx.fillStyle = COLORS.FILL_BODY;
-                ctx.lineWidth = STROKE_WIDTHS.STANDARD;
-
-                if (is_hovered(edge.id, hoveredPart, state, constraintElements))
-                  ctx.lineWidth = STROKE_WIDTHS.THICK;
-
-                if (is_selected(edge.id, state)) {
-                  // Add blue halo and blue stroke if element is selected/moving
-                  ctx.strokeStyle = COLORS.SELECTION_STROKE;
-                  ctx.fillStyle = COLORS.SELECTION_FILL;
-                }
-                if (
-                  !is_erase_hovered(
-                    edge.id,
-                    hoveredPart,
-                    state,
-                    constraintElements,
-                  )
-                ) {
-                  ctx.save();
-                  ctx.rotate(edge.positionEnd.sub(edge.positionStart).angle());
-                  if (edge.fixedNodeStartID === element.id) {
-                    draw_slidep_rep(ctx, true, false);
-                  } else if (edge.fixedNodeEndID === element.id) {
-                    draw_slidep_rep(ctx, false, true);
-                  } else if (
-                    "fixedNodesBodyIDs" in edge &&
-                    edge.fixedNodesBodyIDs.includes(element.id)
-                  ) {
-                    draw_slidep_rep(ctx, true, true);
-                  }
-                  ctx.restore();
-                }
-
-                ctx.shadowBlur = oldShadowBlur;
-                ctx.globalAlpha = oldGlobalAlpha;
-                ctx.strokeStyle = oldStrokeStyle;
-                ctx.fillStyle = oldFillStyle;
-                ctx.lineWidth = oldLineWidth;
+                draw_edge_fake_end(
+                  ctx,
+                  edge,
+                  element.id,
+                  hoveredPart,
+                  state,
+                  constraintElements,
+                  DIM.SLIDEP_OUTER_WIDTH / 2,
+                );
               });
               draw_pivot(
                 ctx,
@@ -370,31 +432,16 @@ export function drawMechanicalCanvas(
                 draw_join_top(ctx);
               }
               break;
-            case "gear":
-              if (
-                hoveredPart.type === "Node" &&
-                hoveredPart.id === element.id
-              ) {
-                ctx.lineWidth = STROKE_WIDTHS.STANDARD;
-              }
-              draw_gear(ctx, element.radius);
-              if (
-                hoveredPart.type === "Node" &&
-                hoveredPart.id === element.id
-              ) {
-                ctx.lineWidth = STROKE_WIDTHS.THICK;
-              } else {
-                ctx.lineWidth = STROKE_WIDTHS.STANDARD;
-              }
-              if (element.isGrounded) {
-                draw_ground(ctx);
-              }
-              draw_pivot(ctx, element.fixedEdgesIDs.length > 0);
-              break;
             case "mass":
               draw_mass(ctx);
               break;
           }
+          ctx.restore();
+          break;
+        case "gear":
+          ctx.save();
+          ctx.translate(element.position.x, element.position.y);
+          draw_gear(ctx, element.radius);
           ctx.restore();
           break;
         case "beam":
@@ -463,7 +510,6 @@ export function drawMechanicalCanvas(
                   type: "gear",
                   id: "----",
                   position: hoveredPart.position,
-                  isGrounded: false,
                   radius: INTERACTION_SPECS.BELT_GRAB_RADIUS,
                   parentAxleID: "----",
                   fixedEdgesIDs: [],
@@ -503,7 +549,6 @@ export function drawMechanicalCanvas(
                 type: "gear",
                 id: "----",
                 position: state.startHover.position,
-                isGrounded: false,
                 radius: state.startHover.position.distance_to(
                   hoveredPart.position,
                 ),
@@ -653,6 +698,69 @@ export function drawMechanicalCanvas(
           draw_element_icon(ctx, element);
           ctx.restore();
           break;
+        case "force": {
+          const load = element as ForceElement;
+          const target = mechanicalElements.find((e) => e.id === load.targetID);
+          if (!target) break;
+          let base: Point2;
+          if ("position" in target) {
+            base = (target as NodeElement).position;
+          } else {
+            const edge = target as EdgeElement;
+            base =
+              load.anchor === "end" ? edge.positionEnd : edge.positionStart;
+          }
+          ctx.save();
+          ctx.translate(base.x, base.y);
+          draw_force(ctx, ZERO, load.vector);
+          if (hoveredPart.type === "ForceTip" && hoveredPart.id === load.id) {
+            ctx.translate(load.vector.x, load.vector.y);
+            draw_hover_edge_end(ctx);
+          }
+          ctx.restore();
+          break;
+        }
+        case "moment": {
+          const load = element as MomentElement;
+          const target = mechanicalElements.find((e) => e.id === load.targetID);
+          if (!target) break;
+          const center =
+            "position" in target
+              ? (target as NodeElement).position
+              : (target as EdgeElement).positionStart.lerp(
+                  (target as EdgeElement).positionEnd,
+                  0.5,
+                );
+          draw_moment(ctx, center, load.value, load.clockwise);
+          break;
+        }
+        case "distributed-force": {
+          const load = element as DistributedForceElement;
+          const beam = mechanicalElements.find(
+            (e) => e.id === load.beamID && e.type === "beam",
+          ) as BeamElement | undefined;
+          if (!beam) break;
+          draw_distributed_force(
+            ctx,
+            beam.positionStart,
+            beam.positionEnd,
+            load.vectorStart,
+            load.vectorEnd,
+          );
+          if (
+            hoveredPart.type === "DistributedForceTip" &&
+            hoveredPart.id === load.id
+          ) {
+            const tipStart = beam.positionStart.add(load.vectorStart);
+            const tipEnd = beam.positionEnd.add(load.vectorEnd);
+            const pos = hoveredPart.end === "start" ? tipStart : tipEnd;
+            ctx.save();
+            ctx.translate(pos.x, pos.y);
+            draw_hover_edge_end(ctx);
+            ctx.restore();
+          }
+          break;
+        }
         case "gear-ratio":
           if (
             state.type === "EditingConstraint" &&
@@ -667,6 +775,28 @@ export function drawMechanicalCanvas(
       }
     }
   });
+
+  // Draw probes on top of all elements
+  for (const el of mechanicalElements) {
+    if (!el.probes || el.probes.length === 0) continue;
+    const pos =
+      "position" in el
+        ? (el as NodeElement).position
+        : (el as EdgeElement).positionStart.lerp(
+            (el as EdgeElement).positionEnd,
+            0.5,
+          );
+    for (let i = 0; i < el.probes.length; i++) {
+      const offset = new Point2(
+        i * 16 - (el.probes.length - 1) * 8,
+        -DIM.PROBE_OFFSET,
+      );
+      ctx.save();
+      ctx.translate(pos.add(offset).x, pos.add(offset).y);
+      draw_probe(ctx);
+      ctx.restore();
+    }
+  }
 
   // Draw  state specific elements
   ctx.save();
@@ -705,6 +835,7 @@ export function drawMechanicalCanvas(
     case "PlacingJoin":
     case "PlacingMass":
     case "PlacingGround":
+    case "PlacingMotor":
       ctx.translate(hoveredPart.position.x, hoveredPart.position.y);
       switch (state.type) {
         case "PlacingBeamStart":
@@ -752,6 +883,68 @@ export function drawMechanicalCanvas(
           break;
         case "PlacingGround":
           draw_ground(ctx);
+          break;
+        case "PlacingMotor":
+          draw_motor(ctx);
+          draw_pivot(ctx, false);
+          break;
+      }
+      break;
+    case "PlacingForceStart":
+    case "PlacingForceEnd":
+    case "PlacingMoment":
+    case "PlacingDistributedForce":
+      switch (state.type) {
+        case "PlacingForceStart":
+          ctx.strokeStyle = COLORS.ORANGE;
+          ctx.fillStyle = COLORS.ORANGE;
+          draw_force(ctx, hoveredPart.position, new Point2(0, -50));
+          break;
+        case "PlacingForceEnd":
+          ctx.strokeStyle = COLORS.ORANGE;
+          ctx.fillStyle = COLORS.ORANGE;
+          draw_force(
+            ctx,
+            state.startHover.position,
+            hoveredPart.position.sub(state.startHover.position),
+          );
+          break;
+        case "PlacingMoment":
+          ctx.strokeStyle = COLORS.ORANGE;
+          ctx.fillStyle = COLORS.ORANGE;
+          draw_moment(ctx, hoveredPart.position, 1, true);
+          break;
+        case "PlacingDistributedForce":
+          ctx.strokeStyle = COLORS.ORANGE;
+          ctx.fillStyle = COLORS.ORANGE;
+          if (hoveredPart.type === "Edge") {
+            const hBeam = mechanicalElements.find(
+              (e) => e.id === hoveredPart.id && e.type === "beam",
+            ) as BeamElement | undefined;
+            if (hBeam) {
+              const perp = hBeam.positionEnd
+                .sub(hBeam.positionStart)
+                .perp()
+                .normalize()
+                .mul(50);
+              draw_distributed_force(
+                ctx,
+                hBeam.positionStart,
+                hBeam.positionEnd,
+                perp,
+                perp,
+              );
+            }
+          } else {
+            const perp = new Point2(0, 50);
+            draw_distributed_force(
+              ctx,
+              hoveredPart.position.sub(new Point2(100, 0)),
+              hoveredPart.position.add(new Point2(100, 0)),
+              perp,
+              perp,
+            );
+          }
           break;
       }
       break;
@@ -1004,6 +1197,12 @@ export function drawMechanicalCanvas(
         hoveredPart.position,
         gear.radius,
       );
+      break;
+    case "PlacingProbe":
+      let pos = hoveredPart.position.clone();
+      if (hoveredPart.type !== "Void") pos.y -= DIM.PROBE_OFFSET;
+      ctx.translate(pos.x, pos.y);
+      draw_probe(ctx);
       break;
   }
   ctx.restore();

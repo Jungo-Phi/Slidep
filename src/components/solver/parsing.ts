@@ -18,7 +18,11 @@ export function get_nodes(mechanicalElements: MechanicalElement[]): Nodes {
   mechanicalElements.forEach((element) => {
     if ("position" in element) {
       positions.set(`${element.id}:pos`, element.position);
-      posMasses.set(`${element.id}:pos`, element.isGrounded ? 0 : 1);
+      if ("isGrounded" in element) {
+        posMasses.set(`${element.id}:pos`, element.isGrounded ? 0 : 1);
+      } else {
+        posMasses.set(`${element.id}:pos`, 1);
+      }
       if ("radius" in element) {
         radii.set(`${element.id}:rad`, element.radius);
         radMasses.set(`${element.id}:rad`, 1);

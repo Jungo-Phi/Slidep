@@ -5,9 +5,8 @@ import {
   ID,
   MechanicalElement,
   NodeElement,
-  UnionElement,
 } from "../../types";
-import { get_mechanical_element_from_id } from "./connect-actions";
+import { get_mechanical_element_from_id } from "../mechanism/connect-actions";
 
 export function node_on_beam_body(
   node: NodeElement,
@@ -20,8 +19,6 @@ export function node_on_beam_body(
         if (beam.type === "beam" && beam.fixedNodesBodyIDs.includes(node.id))
           return beam;
       }
-      break;
-    case "gear":
       break;
     case "slider":
     case "slidep":
@@ -47,7 +44,7 @@ export function node_on_beam_body(
 }
 
 export function element_to_hovered_part(
-  element: UnionElement,
+  element: MechanicalElement | ConstraintElement,
   deleting: boolean = false,
 ): HoveredPart {
   switch (element.type) {

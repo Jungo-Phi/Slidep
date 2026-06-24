@@ -1,4 +1,4 @@
-import { ScreenPoint, ViewportState, WorldPoint } from "../../types";
+import { ScreenPoint, ViewportState, WorldPoint } from "../types";
 
 export function screen_to_world(
   screenPos: ScreenPoint,

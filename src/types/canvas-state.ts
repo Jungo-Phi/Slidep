@@ -12,6 +12,8 @@ export type CanvasStateType =
   | "MovingEdgeBody"
   | "MovingBeltBody"
   | "ChangingGearRadius"
+  | "MovingForceTip"
+  | "MovingDistributedForceTip"
   | "SelectingMultiple"
   | "SelectedMultiple"
   | "MovingSelectionMultiple"
@@ -37,7 +39,7 @@ export type CanvasStateType =
   | "PlacingForceEnd"
   | "PlacingDistributedForce"
   | "PlacingMoment"
-  | "PlacingTag"
+  | "PlacingProbe"
   | "DimensionStart"
   | "DimensionNode"
   | "DimensionEdge"
@@ -76,6 +78,14 @@ export type CanvasState =
   | { type: "MovingEdgeBody"; elementID: ID; t: number } // Moving the entire edge by its body, grabbed at proportion `t`
   | { type: "MovingBeltBody"; elementID: ID; section: number } // Moving a section of a belt
   | { type: "ChangingGearRadius"; elementID: ID }
+  | { type: "MovingForceTip"; loadID: ID; startPos: Point2; oldVector: Point2 }
+  | {
+      type: "MovingDistributedForceTip";
+      loadID: ID;
+      end: "start" | "end";
+      startPos: Point2;
+      oldVector: Point2;
+    }
   | { type: "MovingSelectionMultiple"; elementIDs: ID[]; delta: Point2 } // Multiple selected elements are being dragged
   | { type: "Erasing" } // Eraser tool active
   | { type: "ErasingMultiple"; startPos: Point2; hoveredElementIDs: ID[] } // User has started a drag to delete multiple elements
@@ -103,7 +113,7 @@ export type CanvasState =
   | { type: "PlacingForceEnd"; startHover: HoveredPart }
   | { type: "PlacingDistributedForce" }
   | { type: "PlacingMoment" }
-  | { type: "PlacingTag" }
+  | { type: "PlacingProbe" }
   | { type: "DimensionStart" } // Dimensioning tool active
   | { type: "DimensionNode"; nodeID: ID } // Dimension from a node to ?
   | { type: "DimensionEdge"; edgeID: ID } // Dimension of an edge / from an edge to ?

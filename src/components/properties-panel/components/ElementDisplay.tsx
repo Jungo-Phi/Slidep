@@ -10,7 +10,7 @@ import { Box, IconButton, Typography, TextField } from "@mui/material";
 import { get_element_icon } from "../../element-palette/elementIcon";
 import { HoveredPart } from "../../../types/hovered-part";
 import { COLORS } from "../../../constants/rendering-specs";
-import { element_to_hovered_part } from "../../mechanical-canvas/utils";
+import { element_to_hovered_part } from "../../canvas/utils";
 import { shown_element_name } from "../../../utils";
 
 interface ElementDisplayProps {
@@ -30,7 +30,7 @@ const ElementDisplayComponent: React.FC<ElementDisplayProps> = ({
   size,
   editable,
 }) => {
-  const icon = get_element_icon(!element ? undefined : element.type);
+  const icon = get_element_icon(element);
   const initialName = shown_element_name(element);
 
   const [inputValue, setInputValue] = useState(initialName);
@@ -75,7 +75,13 @@ const ElementDisplayComponent: React.FC<ElementDisplayProps> = ({
 
   const handleMouseEnter = () => {
     if (!element || isEditing) return;
-    setHoveredPart(element_to_hovered_part(element));
+    if (
+      element.type !== "force" &&
+      element.type !== "moment" &&
+      element.type !== "distributed-force"
+    ) {
+      setHoveredPart(element_to_hovered_part(element));
+    }
   };
 
   const handleMouseLeave = () => {
