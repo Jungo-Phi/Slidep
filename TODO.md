@@ -4,29 +4,10 @@
 
 ### À faire maintenant
 
-- Ajouter un modificateur "ligne" pour la force répartie
-- canvas-state-reducer refactor (séparer en plusieurs fichiers)
-- probe ajoutée 2 par 2 quand il y en a déjà une ???
-- Ouverture du sélecteur de métriques (Force, Vitesse, Position, Angle) au placement d'un probe
 - ctrl+Z avec distributed force ne marche pas bien
-
-### À faire rapidement
-
 - Reset CanvasState quand on change de mécanisme
 - ctrl+Y/Z ne change pas le panneau de propriétés
-- flicker dans la transition de property pannel de element à project
 - Snap to grid
-- Afficher / cacher les contraintes (mais toujours affichées dans l'onglet de contraintes) / Contraintes plus petites ? / Afficher quand on hover sur l'élément lié avec un cooldown ?
-- Prefered force direction
-- Faire le panneau de paramètre propre
-- Move element en 2 frames n'est pas fiable
-- Les contraintes et dimensions ne suivent pas lors des déplacements de groupe d'éléments
-- Laisser le panneau de propriétés dans contraintes quand on a placé une contrainte
-- Click dans le vide quand state==placingConstraint/placingForce -> state=Selecting
-- Changer l'apparence des extrémités de spring et damper comme pour beam
-- Sélection multiple doit hilight les contraintes liées aux éléments sélectionnés (comme group deletion)
-- hover des inputs dans le property pannel -> hilight canvas
-- Ne pas update le nom si on ne l'a pas changé
 
 ### [ Simulation cinématique ]
 
@@ -36,6 +17,23 @@
 - Placer Force pendant la simulation modifie le mécanisme
 - message snackbar "les forces ne sont pas prises en compte en cinématique" si force placée en cinématique
 - Autres outils : clic → pause auto + bascule temporaire en contexte Édition (à préciser)
+
+### À faire rapidement
+
+- Afficher / cacher les contraintes (mais toujours affichées dans l'onglet de contraintes) / Contraintes plus petites ? / Afficher quand on hover sur l'élément lié avec un cooldown ?
+- Afficher selected quand moving force
+- Prefered force direction
+- Faire le panneau de paramètre propre
+- Les contraintes et dimensions ne suivent pas lors des déplacements de groupe d'éléments
+- Laisser le panneau de propriétés dans contraintes quand on a placé une contrainte
+- Ajouter un modificateur "ligne" pour la force répartie
+- probe ajoutée 2 par 2 quand il y en a déjà une ???
+- Ouverture du sélecteur de métriques (Force, Vitesse, Position, Angle) au placement d'un probe
+- Click dans le vide quand state==placingConstraint/placingForce -> state=Selecting
+- Changer l'apparence des extrémités de spring et damper comme pour beam
+- Sélection multiple doit hilight les contraintes liées aux éléments sélectionnés (comme group deletion)
+- hover des inputs dans le property pannel -> hilight canvas
+- Ne pas update le nom si on ne l'a pas changé
 
 ### À faire plus tard
 
@@ -57,6 +55,7 @@
 - Empecher de placer une belt sur un gear avec le même axisID
 - Hover et Click dans sur les dimension pour les éditer quand state==placingStartDimension
 - Ignorer BeamBodyHover lors du déplacement d'un beam
+- Move element en 2 frames n'est pas fiable
 - Placing Edges/Force avec hold down
 - Placing beam series / only one if hold down when placing (like in OnShape)
 - Sélection multiple d'éléments du même type -> modifier paramètres simultanément (IU adaptée + actions multiples)

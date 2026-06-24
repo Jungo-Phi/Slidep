@@ -1086,8 +1086,8 @@ export function draw_distributed_force(
   vectorEnd: Point2,
   steps: number = 5,
 ) {
-  for (let i = 0; i <= steps - 1; i++) {
-    const t = (i + 0.5) / steps;
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
     draw_force(ctx, start.lerp(end, t), vectorStart.lerp(vectorEnd, t));
   }
 }
