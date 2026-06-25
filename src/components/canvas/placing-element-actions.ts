@@ -22,6 +22,7 @@ import {
   get_mechanical_element_from_id,
 } from "../mechanism/connect-actions";
 import { is_on_left_side_of_belt } from "../../utils";
+import { PHYSICS } from "../../constants/rendering-specs";
 
 export type MouseDownResult = {
   actions: Action[];
@@ -265,7 +266,9 @@ function handle_place_element(
     );
     if (node.type === "pivot") {
       const oldConfig = node.motor;
-      const newConfig = oldConfig ? undefined : { speed: 1 };
+      const newConfig = oldConfig
+        ? undefined
+        : { speed: PHYSICS.DEFAULT_MOTOR_SPEED };
       const actions: Action[] = [
         { type: "SetMotorConfig", id: node.id, newConfig, oldConfig },
       ];
@@ -434,7 +437,10 @@ function handle_place_element(
         isGrounded: state.type === "PlacingMotor",
         rotatingEdgesIDs: [],
         fixedGearsIDs: [],
-        motor: state.type === "PlacingMotor" ? { speed: 1 } : undefined,
+        motor:
+          state.type === "PlacingMotor"
+            ? { speed: PHYSICS.DEFAULT_MOTOR_SPEED }
+            : undefined,
       };
       break;
     case "PlacingSlider":

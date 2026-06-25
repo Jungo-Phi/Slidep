@@ -36,6 +36,11 @@ export const COLORS = {
 export const ICON_SELECTION_FILTER = "brightness(5)"; // "saturate(6) hue-rotate(177deg) brightness(2)";
 export const FILL_SELECTION_FILTER = "brightness(1.2)";
 
+export const PHYSICS = {
+  DEFAULT_MOTOR_SPEED: 5, // tr/min
+  GRAVITY: 10, // m/s^2
+} as const;
+
 export const STROKE_WIDTHS = {
   STANDARD: 2,
   THICK: 3.5, // Hovered, Selection, Deletion

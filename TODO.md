@@ -83,6 +83,7 @@
 
 ### À faire quand tout le reste est fait
 
+- Passage en PWA (progressive web app)
 - Ajouter "repelDistance" pour éloigner les contraintes détachées : move apart disconnected elements
 - hilight element on hover "disconnect" on element panel ?
 - afficher ground avec les 4 directions cardinales

@@ -9,7 +9,6 @@ import {
   HoveredPart,
   Mechanism,
   Point2,
-  SimulationMode,
   ViewportChange,
   ZERO,
 } from "../../types";
@@ -44,7 +43,7 @@ interface MechanicalCanvasProps {
   undoMechanism: () => void;
   redoMechanism: () => void;
   setAppMode: (mode: AppMode) => void;
-  lastSimulationMode: SimulationMode;
+  onSpaceKey: () => void;
   snapToGrid: boolean;
   showGrid: boolean;
 }
@@ -65,7 +64,7 @@ export const MechanicalCanvas = forwardRef<
       undoMechanism,
       redoMechanism,
       setAppMode,
-      lastSimulationMode,
+      onSpaceKey,
       snapToGrid,
       showGrid,
     },
@@ -84,6 +83,8 @@ export const MechanicalCanvas = forwardRef<
     const mechanismRef = useRef(mechanism);
     const hoveredPartRef = useRef(hoveredPart);
     const canvasStateRef = useRef(canvasState);
+    const onSpaceKeyRef = useRef(onSpaceKey);
+    onSpaceKeyRef.current = onSpaceKey;
 
     mechanismRef.current = mechanism;
     hoveredPartRef.current = hoveredPart;
@@ -231,6 +232,20 @@ export const MechanicalCanvas = forwardRef<
           pendingPanRef.current = pendingPanRef.current.add(event.mouseDelta);
           return;
         }
+        if (event.type === "KeyDown" && event.key === " ") {
+          onSpaceKeyRef.current();
+          setCanvasState({ type: "Selecting" });
+          return;
+        }
+        if (
+          event.type === "KeyDown" &&
+          event.key === "Escape" &&
+          canvasStateRef.current.type === "Selecting"
+        ) {
+          setAppMode("edition");
+          setCanvasState({ type: "Selecting" });
+          return;
+        }
         const currMech = mechanismRef.current;
 
         let newHoveredPart = get_hovered_part(
@@ -261,22 +276,6 @@ export const MechanicalCanvas = forwardRef<
         }
         setHoveredPart(newHoveredPart);
 
-        if (event.type === "KeyDown" && event.key === " ") {
-          setAppMode(lastSimulationMode);
-          if (canvasStateRef.current.type !== "Selecting")
-            setCanvasState({ type: "Selecting" });
-          return;
-        }
-
-        if (
-          event.type === "KeyDown" &&
-          event.key === "Escape" &&
-          canvasStateRef.current.type === "Selecting"
-        ) {
-          setAppMode("edition");
-          return;
-        }
-
         canvasStateReducer(
           canvasStateRef.current,
           newHoveredPart,
@@ -301,7 +300,6 @@ export const MechanicalCanvas = forwardRef<
         setCanvasState,
         setHoveredPart,
         setAppMode,
-        lastSimulationMode,
         snapToGrid,
       ],
     );

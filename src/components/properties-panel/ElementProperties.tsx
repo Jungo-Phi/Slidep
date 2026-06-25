@@ -61,9 +61,10 @@ const MotorSection: React.FC<MotorSectionProps> = ({ pivot, applyActions }) => {
                     {
                       type: "SetMotorConfig",
                       id: pivot.id,
-                      newConfig: e.target.checked
-                        ? { speed: motor?.speed ?? 1 }
-                        : undefined,
+                      newConfig:
+                        e.target.checked && motor
+                          ? { speed: motor.speed }
+                          : undefined,
                       oldConfig: motor,
                     },
                   ],
@@ -77,7 +78,7 @@ const MotorSection: React.FC<MotorSectionProps> = ({ pivot, applyActions }) => {
         {motor && (
           <Box sx={{ mt: 0.5 }}>
             <NumberInput
-              label="tr/s"
+              label="tr/min"
               value={motor.speed}
               onChange={(speed) =>
                 applyActions(

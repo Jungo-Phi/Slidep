@@ -134,6 +134,20 @@ export interface StaticAnalysisResult {
 }
 
 // ─────────────────────────────────────────────────────────────
+// Kinematic snapshot: raw solver positions at a given pseudo-time
+// ─────────────────────────────────────────────────────────────
+
+export interface KinematicSnapshot {
+  t: number;
+  /** Solver-keyed positions: "${id}:pos", "${id}:start", "${id}:end" */
+  positions: Map<string, Point2>;
+  /** Solver-keyed radii: "${id}:rad" */
+  radii: Map<string, number>;
+  /** Cumulative rotation angle (rad) for each gear ID */
+  gearAngles: Map<ID, number>;
+}
+
+// ─────────────────────────────────────────────────────────────
 // Main runtime state
 // ─────────────────────────────────────────────────────────────
 
@@ -148,6 +162,9 @@ export interface RuntimeState {
 
   // History for timeline (sampled, e.g. every 10ms)
   history: PhysicsSnapshot[];
+
+  /** Recorded kinematic snapshots (incremental, sampled at 30 fps of sim-time) */
+  kinematicSnapshots: KinematicSnapshot[];
 
   // Overlays
   overlays: OverlayState;
@@ -193,6 +210,7 @@ export const DEFAULT_RUNTIME_STATE: RuntimeState = {
   speed: 1,
   current: null,
   history: [],
+  kinematicSnapshots: [],
   overlays: DEFAULT_OVERLAY_STATE,
 };
 
