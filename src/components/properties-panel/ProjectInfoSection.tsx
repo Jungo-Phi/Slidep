@@ -84,6 +84,7 @@ export const ProjectInfoSection: React.FC<ProjectInfoSectionProps> = ({
     modifiedAt: mechanism.metadata.modifiedAt,
     tags: mechanism.metadata.tags,
     thumbnail: mechanism.metadata.thumbnail,
+    lastSimulationMode: mechanism.metadata.lastSimulationMode,
   });
 
   useEffect(() => {
@@ -96,6 +97,7 @@ export const ProjectInfoSection: React.FC<ProjectInfoSectionProps> = ({
       modifiedAt: mechanism.metadata.modifiedAt,
       tags: mechanism.metadata.tags,
       thumbnail: mechanism.metadata.thumbnail,
+      lastSimulationMode: mechanism.metadata.lastSimulationMode,
     });
   }, [mechanism.metadata]);
 
