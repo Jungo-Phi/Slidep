@@ -4,7 +4,6 @@
 
 ### À faire maintenant
 
-- ctrl+Z avec distributed force ne marche pas bien
 - Reset CanvasState quand on change de mécanisme
 - ctrl+Y/Z ne change pas le panneau de propriétés
 - Snap to grid
@@ -22,6 +21,7 @@
 
 - Afficher / cacher les contraintes (mais toujours affichées dans l'onglet de contraintes) / Contraintes plus petites ? / Afficher quand on hover sur l'élément lié avec un cooldown ?
 - Afficher selected quand moving force
+- Ajouter des "Blank" avec les forces
 - Prefered force direction
 - Faire le panneau de paramètre propre
 - Les contraintes et dimensions ne suivent pas lors des déplacements de groupe d'éléments

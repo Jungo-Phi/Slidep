@@ -37,11 +37,22 @@ export function get_constraint_element_from_id(
   throw new Error(`Constraint element with id "${legible_id(id)}" not found`);
 }
 
+/** Returns the load element from the id. */
+export function get_load_element_from_id(
+  id: ID,
+  loadElements: LoadElement[],
+): LoadElement {
+  const element = loadElements.find((element) => element.id === id);
+  if (element) return element;
+  throw new Error(`Load element with id "${legible_id(id)}" not found`);
+}
+
 /** Returns the element (mechanical or constraint) from the id. */
 export function get_element_from_id(
   id: ID,
   mechanicalElements: MechanicalElement[],
   constraintElements: ConstraintElement[],
+  loadElements: LoadElement[],
 ): UnionElement {
   const mechanicalElement = mechanicalElements.find(
     (element) => element.id === id,
@@ -51,7 +62,11 @@ export function get_element_from_id(
     (element) => element.id === id,
   );
   if (constraintElement) return constraintElement;
-  throw new Error(`Mechanical element with id "${legible_id(id)}" not found`);
+  const loadElement = loadElements.find((element) => element.id === id);
+  if (loadElement) return loadElement;
+  throw new Error(
+    `Mechanical/Constraint/Load element with id "${legible_id(id)}" not found`,
+  );
 }
 
 /** Returns the complementary connection pair type of an element to another. */
@@ -292,6 +307,7 @@ export function delete_element(
   elementID: ID,
   mechanicalElements: MechanicalElement[],
   constraintElements: ConstraintElement[],
+  loadElements: LoadElement[],
   isCascade: boolean = false,
 ): Action[] {
   let actions: Action[] = [];
@@ -299,6 +315,7 @@ export function delete_element(
     elementID,
     mechanicalElements,
     constraintElements,
+    loadElements,
   );
   if (
     element.type === "beam" ||
@@ -347,6 +364,7 @@ export function delete_element(
               gearID,
               mechanicalElements,
               constraintElements,
+              loadElements,
               true,
             ),
           );
@@ -373,15 +391,20 @@ function apply_to_sim_state(
   action: Action,
   simMech: MechanicalElement[],
   simConst: ConstraintElement[],
+  simLoad: LoadElement[],
 ) {
   if (action.type === "DeleteElement") {
-    const mi = simMech.findIndex((e) => e.id === action.element.id);
-    if (mi !== -1) {
-      simMech.splice(mi, 1);
+    const mechIndex = simMech.findIndex((e) => e.id === action.element.id);
+    if (mechIndex !== -1) {
+      simMech.splice(mechIndex, 1);
       return;
     }
-    const ci = simConst.findIndex((e) => e.id === action.element.id);
-    if (ci !== -1) simConst.splice(ci, 1);
+    const constraintIndex = simConst.findIndex(
+      (e) => e.id === action.element.id,
+    );
+    if (constraintIndex !== -1) simConst.splice(constraintIndex, 1);
+    const loadIndex = simLoad.findIndex((e) => e.id === action.element.id);
+    if (loadIndex !== -1) simLoad.splice(loadIndex, 1);
     return;
   }
   if (!("elementID" in action)) return;
@@ -461,6 +484,7 @@ export function delete_elements(
   elementIDs: ID[],
   mechanicalElements: MechanicalElement[],
   constraintElements: ConstraintElement[],
+  loadElements: LoadElement[],
 ): Action[] {
   // Shallow-clone with deep-copied mutable arrays so the simulation
   // never touches the caller's state.
@@ -485,6 +509,7 @@ export function delete_elements(
       }) as MechanicalElement,
   );
   const simConst: ConstraintElement[] = [...constraintElements];
+  const simLoad: LoadElement[] = [...loadElements];
 
   const allActions: Action[] = [];
 
@@ -492,15 +517,17 @@ export function delete_elements(
     // Skip if a previous deletion in this batch already removed this element
     // (e.g. a constraint shared by two deleted mechanical elements).
     const exists =
-      simMech.find((e) => e.id === id) ?? simConst.find((e) => e.id === id);
+      simMech.find((e) => e.id === id) ??
+      simConst.find((e) => e.id === id) ??
+      simLoad.find((e) => e.id === id);
     if (!exists) continue;
 
-    const stepActions = delete_element(id, simMech, simConst);
+    const stepActions = delete_element(id, simMech, simConst, simLoad);
     allActions.push(...stepActions);
 
     // Advance the simulation so the next iteration sees correct state.
     for (const action of stepActions) {
-      apply_to_sim_state(action, simMech, simConst);
+      apply_to_sim_state(action, simMech, simConst, simLoad);
     }
   }
 
@@ -958,10 +985,20 @@ export function connect_elements(
           };
           actions.push({ type: "CreateElement", element: join });
           actions.push(
-            ...connect_node_and_edge(join, hoveredEdge, hoveredPart.part, loads),
+            ...connect_node_and_edge(
+              join,
+              hoveredEdge,
+              hoveredPart.part,
+              loads,
+            ),
           );
           actions.push(
-            ...connect_node_and_edge(join, selectedEdge, selectedPart.part, loads),
+            ...connect_node_and_edge(
+              join,
+              selectedEdge,
+              selectedPart.part,
+              loads,
+            ),
           );
           break;
       }

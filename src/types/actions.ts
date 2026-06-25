@@ -246,11 +246,12 @@ export type Action =
   | { type: "Blank" }
   | { type: "MoveForceVector"; id: ID; newVector: Point2; oldVector: Point2 }
   | {
-      type: "MoveDistributedForceVector";
+      type: "MoveDistributedForceVectors";
       id: ID;
-      end: "start" | "end";
-      newVector: Point2;
-      oldVector: Point2;
+      newVectorStart: Point2;
+      oldVectorStart: Point2;
+      newVectorEnd: Point2;
+      oldVectorEnd: Point2;
     }
   | { type: "ChangeMomentValue"; id: ID; newValue: number; oldValue: number }
   | { type: "FlipMomentDirection"; id: ID }

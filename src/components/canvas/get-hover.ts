@@ -966,33 +966,43 @@ export function get_hovered_part(
         // Tip handles
         if (mousePos.distance_to(tipStart) <= HIT_TOLERANCE.NODE) {
           return {
-            type: "DistributedForceTip",
+            type: "DistributedForce",
             position: tipStart,
             id: load.id,
-            end: "start",
+            part: "start",
             deleting: false,
           };
         }
         if (mousePos.distance_to(tipEnd) <= HIT_TOLERANCE.NODE) {
           return {
-            type: "DistributedForceTip",
+            type: "DistributedForce",
             position: tipEnd,
             id: load.id,
-            end: "end",
+            part: "end",
             deleting: false,
           };
         }
-        // Body: near beam segment
+        // Both tips: near segment between tips
         if (
-          mousePos.distance_to_segment(beam.positionStart, beam.positionEnd) <=
-          HIT_TOLERANCE.EDGE
+          mousePos.distance_to_segment(tipStart, tipEnd) <= HIT_TOLERANCE.EDGE
         ) {
           return {
+            type: "DistributedForce",
+            position: mousePos.project_on_line(tipStart, tipEnd),
+            id: load.id,
+            part: "body",
+            deleting: false,
+          };
+        }
+        // Body: Area between segment and beam
+        if (
+          mousePos.distance_to_segment(beam.positionStart, beam.positionEnd) <=
+          30
+        ) {
+          // TODO : calculer si on est dans la surface
+          return {
             type: "Load",
-            position: mousePos.project_on_line(
-              beam.positionStart,
-              beam.positionEnd,
-            ),
+            position: mousePos,
             id: load.id,
             deleting: false,
           };

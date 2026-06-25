@@ -35,9 +35,9 @@ export type HoveredPart =
   | { type: "Load"; position: Point2; id: ID; deleting: boolean }
   | { type: "ForceTip"; position: Point2; id: ID; deleting: boolean }
   | {
-      type: "DistributedForceTip";
+      type: "DistributedForce";
       position: Point2;
       id: ID;
-      end: "start" | "end";
+      part: "start" | "end" | "body";
       deleting: boolean;
     };

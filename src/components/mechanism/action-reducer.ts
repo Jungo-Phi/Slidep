@@ -8,10 +8,14 @@ import {
   PivotElement,
   UnionElement,
   Point2,
+  ForceElement,
+  DistributedForceElement,
+  MomentElement,
 } from "../../types";
 import {
   get_constraint_element_from_id,
   get_element_from_id,
+  get_load_element_from_id,
   get_mechanical_element_from_id,
 } from "./connect-actions";
 
@@ -49,7 +53,7 @@ export function actionReducer(
   let constraintElements = mechanism.constraintElements.map((ce) => ({
     ...ce,
   }));
-  let loads = mechanism.loads.map((l) => ({ ...l }));
+  let loadElements = mechanism.loads.map((l) => ({ ...l })); // TODO : clone_load ?
   let viewport = { ...mechanism.viewport };
   let element: UnionElement;
   actions.forEach((action) => {
@@ -83,9 +87,11 @@ export function actionReducer(
           action.element.type === "distributed-force"
         ) {
           if (revert !== (action.type === "DeleteElement")) {
-            loads = loads.filter((l) => l.id !== action.element.id);
+            loadElements = loadElements.filter(
+              (l) => l.id !== action.element.id,
+            );
           } else {
-            loads.push(action.element as LoadElement);
+            loadElements.push(action.element as LoadElement);
           }
         } else {
           if (revert !== (action.type === "DeleteElement")) {
@@ -102,6 +108,7 @@ export function actionReducer(
           action.id,
           mechanicalElements,
           constraintElements,
+          loadElements,
         );
         element.name = revert ? action.oldName : action.newName;
         break;
@@ -329,33 +336,40 @@ export function actionReducer(
         }
         break;
       case "MoveForceVector": {
-        const force = loads.find((l) => l.id === action.id);
-        if (force && force.type === "force") {
-          force.vector = revert ? action.oldVector : action.newVector;
-        }
+        const force = get_load_element_from_id(
+          action.id,
+          loadElements,
+        ) as ForceElement;
+        force.vector = revert ? action.oldVector : action.newVector;
         break;
       }
-      case "MoveDistributedForceVector": {
-        const df = loads.find((l) => l.id === action.id);
-        if (df && df.type === "distributed-force") {
-          const vec = revert ? action.oldVector : action.newVector;
-          if (action.end === "start") df.vectorStart = vec;
-          else df.vectorEnd = vec;
-        }
+      case "MoveDistributedForceVectors": {
+        const distForce = get_load_element_from_id(
+          action.id,
+          loadElements,
+        ) as DistributedForceElement;
+        distForce.vectorStart = revert
+          ? action.oldVectorStart
+          : action.newVectorStart;
+        distForce.vectorEnd = revert
+          ? action.oldVectorEnd
+          : action.newVectorEnd;
         break;
       }
       case "ChangeMomentValue": {
-        const moment = loads.find((l) => l.id === action.id);
-        if (moment && moment.type === "moment") {
-          moment.value = revert ? action.oldValue : action.newValue;
-        }
+        const moment = get_load_element_from_id(
+          action.id,
+          loadElements,
+        ) as MomentElement;
+        moment.value = revert ? action.oldValue : action.newValue;
         break;
       }
       case "FlipMomentDirection": {
-        const moment = loads.find((l) => l.id === action.id);
-        if (moment && moment.type === "moment") {
-          moment.clockwise = !moment.clockwise;
-        }
+        const moment = get_load_element_from_id(
+          action.id,
+          loadElements,
+        ) as MomentElement;
+        moment.clockwise = !moment.clockwise;
         break;
       }
       case "AddProbe": {
@@ -436,7 +450,7 @@ export function actionReducer(
     viewport: viewport,
     mechanicalElements: mechanicalElements,
     constraintElements: constraintElements,
-    loads: loads,
+    loads: loadElements,
     history: mechanism.history,
     future: mechanism.future,
   };

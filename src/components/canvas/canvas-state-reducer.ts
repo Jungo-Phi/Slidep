@@ -4,9 +4,12 @@ import { get_hovered_elements_by_rect } from "./get-hover";
 import { Action, ActionBundleType, CanvasEvent } from "../../types/actions";
 import { HoveredPart } from "../../types/hovered-part";
 import {
+  BeamElement,
   BeltElement,
   ConstraintElement,
+  DistributedForceElement,
   EdgeElement,
+  ForceElement,
   GearElement,
   ID,
   LoadElement,
@@ -18,6 +21,7 @@ import {
   connect_gears,
   delete_element,
   delete_elements,
+  get_load_element_from_id,
   get_mechanical_element_from_id,
 } from "../mechanism/connect-actions";
 import { is_on_left_side_of_belt } from "../../utils";
@@ -38,7 +42,7 @@ export function canvasStateReducer(
   undoMechanism: () => void,
   redoMechanism: () => void,
   onMouseUpHandler: () => void,
-  loads: LoadElement[] = [],
+  loadElements: LoadElement[] = [],
 ) {
   let actions: Action[] = [];
   let actionBundleType: ActionBundleType | undefined = undefined;
@@ -86,35 +90,21 @@ export function canvasStateReducer(
             break;
           }
           if (hoveredPart.type === "ForceTip") {
-            const load = loads.find(
-              (l) => l.id === hoveredPart.id && l.type === "force",
-            );
-            if (load && load.type === "force") {
-              setCanvasState({
-                type: "MovingForceTip",
-                loadID: load.id,
-                startPos: hoveredPart.position,
-                oldVector: load.vector,
-              });
-              break;
-            }
+            const load = get_load_element_from_id(hoveredPart.id, loadElements);
+            setCanvasState({
+              type: "MovingForce",
+              elementID: load.id,
+            });
+            break;
           }
-          if (hoveredPart.type === "DistributedForceTip") {
-            const load = loads.find(
-              (l) => l.id === hoveredPart.id && l.type === "distributed-force",
-            );
-            if (load && load.type === "distributed-force") {
-              const oldVector =
-                hoveredPart.end === "start" ? load.vectorStart : load.vectorEnd;
-              setCanvasState({
-                type: "MovingDistributedForceTip",
-                loadID: load.id,
-                end: hoveredPart.end,
-                startPos: hoveredPart.position,
-                oldVector,
-              });
-              break;
-            }
+          if (hoveredPart.type === "DistributedForce") {
+            const load = get_load_element_from_id(hoveredPart.id, loadElements);
+            setCanvasState({
+              type: "MovingDistributedForce",
+              elementID: load.id,
+              part: hoveredPart.part,
+            });
+            break;
           }
           const constraint = constraintElements.find(
             (element) => element.id === hoveredPart.id,
@@ -204,6 +194,7 @@ export function canvasStateReducer(
               hoveredPart.id,
               mechanicalElements,
               constraintElements,
+              loadElements,
             ),
           );
           setCanvasState({ type: "Erasing" });
@@ -235,7 +226,7 @@ export function canvasStateReducer(
             hoveredPart,
             mechanicalElements,
             constraintElements,
-            loads,
+            loadElements,
           );
           if (r.newCanvasState) setCanvasState(r.newCanvasState);
           actions = r.actions;
@@ -435,32 +426,75 @@ export function canvasStateReducer(
             oldPosition,
           });
           break;
-        case "MovingForceTip": {
+        case "MovingForce": {
           if (hoveredPart.position.equals(oldPosition)) break;
-          const newVec = state.oldVector.add(
-            hoveredPart.position.sub(state.startPos),
+          const force = get_load_element_from_id(
+            state.elementID,
+            loadElements,
+          ) as ForceElement;
+          const targetEle = get_mechanical_element_from_id(
+            force.targetID,
+            mechanicalElements,
           );
+          const targetPos =
+            "position" in targetEle
+              ? targetEle.position
+              : force.anchor === "start"
+                ? targetEle.positionStart
+                : targetEle.positionEnd;
           actionBundleType = "MoveLoad";
           actions.push({
             type: "MoveForceVector",
-            id: state.loadID,
-            newVector: newVec,
-            oldVector: state.oldVector,
+            id: state.elementID,
+            newVector: hoveredPart.position.sub(targetPos),
+            oldVector: force.vector,
           });
           break;
         }
-        case "MovingDistributedForceTip": {
+        case "MovingDistributedForce": {
           if (hoveredPart.position.equals(oldPosition)) break;
-          const newVec = state.oldVector.add(
-            hoveredPart.position.sub(state.startPos),
-          );
+          const distForce = get_load_element_from_id(
+            state.elementID,
+            loadElements,
+          ) as DistributedForceElement;
+          const beam = get_mechanical_element_from_id(
+            distForce.beamID,
+            mechanicalElements,
+          ) as BeamElement;
           actionBundleType = "MoveLoad";
+          let newVectorStart = distForce.vectorStart;
+          let newVectorEnd = distForce.vectorEnd;
+          switch (state.part) {
+            case "start":
+              newVectorStart = hoveredPart.position.sub(beam.positionStart);
+              break;
+            case "end":
+              newVectorEnd = hoveredPart.position.sub(beam.positionEnd);
+              break;
+            case "body":
+              // TODO : régler
+              const delta = newVectorEnd
+                .add(beam.positionEnd)
+                .sub(newVectorStart.add(beam.positionStart));
+              const t = hoveredPart.position.parameter_on_segment(
+                newVectorStart.add(beam.positionStart),
+                newVectorEnd.add(beam.positionEnd),
+              );
+              newVectorStart = hoveredPart.position
+                .sub(beam.positionStart)
+                .add(delta.lerp(ZERO, 1 - t));
+              newVectorEnd = hoveredPart.position
+                .sub(beam.positionEnd)
+                .sub(ZERO.lerp(delta, t));
+              break;
+          }
           actions.push({
-            type: "MoveDistributedForceVector",
-            id: state.loadID,
-            end: state.end,
-            newVector: newVec,
-            oldVector: state.oldVector,
+            type: "MoveDistributedForceVectors",
+            id: state.elementID,
+            newVectorStart,
+            oldVectorStart: distForce.vectorStart,
+            newVectorEnd,
+            oldVectorEnd: distForce.vectorEnd,
           });
           break;
         }
@@ -632,7 +666,7 @@ export function canvasStateReducer(
               elementPart,
               mechanicalElements,
               constraintElements,
-              loads,
+              loadElements,
             ),
           );
           if (actions.length === 0) {
@@ -744,6 +778,7 @@ export function canvasStateReducer(
               state.hoveredElementIDs,
               mechanicalElements,
               constraintElements,
+              loadElements,
             ),
           );
           setCanvasState({ type: "Erasing" });
@@ -754,8 +789,8 @@ export function canvasStateReducer(
             elementID: state.elementID,
           });
           break;
-        case "MovingForceTip":
-        case "MovingDistributedForceTip":
+        case "MovingForce":
+        case "MovingDistributedForce":
           setCanvasState({ type: "Selecting" });
           break;
       }
@@ -782,6 +817,7 @@ export function canvasStateReducer(
                   state.elementID,
                   mechanicalElements,
                   constraintElements,
+                  loadElements,
                 ),
               );
               setCanvasState({ type: "Selecting" });
@@ -793,6 +829,7 @@ export function canvasStateReducer(
                   state.elementIDs,
                   mechanicalElements,
                   constraintElements,
+                  loadElements,
                 ),
               );
               setCanvasState({ type: "Selecting" });

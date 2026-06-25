@@ -465,6 +465,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                 element.id,
                 mechanism.mechanicalElements,
                 mechanism.constraintElements,
+                mechanism.loads,
               ),
               "Other",
             )

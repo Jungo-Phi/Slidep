@@ -748,16 +748,23 @@ export function drawMechanicalCanvas(
             load.vectorEnd,
           );
           if (
-            hoveredPart.type === "DistributedForceTip" &&
+            hoveredPart.type === "DistributedForce" &&
             hoveredPart.id === load.id
           ) {
             const tipStart = beam.positionStart.add(load.vectorStart);
             const tipEnd = beam.positionEnd.add(load.vectorEnd);
-            const pos = hoveredPart.end === "start" ? tipStart : tipEnd;
-            ctx.save();
-            ctx.translate(pos.x, pos.y);
-            draw_hover_edge_end(ctx);
-            ctx.restore();
+            if (hoveredPart.part === "body") {
+              ctx.beginPath();
+              ctx.moveTo(tipStart.x, tipStart.y);
+              ctx.lineTo(tipEnd.x, tipEnd.y);
+              ctx.stroke();
+            } else {
+              const pos = hoveredPart.part === "start" ? tipStart : tipEnd;
+              ctx.save();
+              ctx.translate(pos.x, pos.y);
+              draw_hover_edge_end(ctx);
+              ctx.restore();
+            }
           }
           break;
         }

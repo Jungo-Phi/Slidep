@@ -79,13 +79,11 @@ export type CanvasState =
   | { type: "MovingEdgeBody"; elementID: ID; t: number } // Moving the entire edge by its body, grabbed at proportion `t`
   | { type: "MovingBeltBody"; elementID: ID; section: number } // Moving a section of a belt
   | { type: "ChangingGearRadius"; elementID: ID }
-  | { type: "MovingForceTip"; loadID: ID; startPos: Point2; oldVector: Point2 }
+  | { type: "MovingForce"; elementID: ID }
   | {
-      type: "MovingDistributedForceTip";
-      loadID: ID;
-      end: "start" | "end";
-      startPos: Point2;
-      oldVector: Point2;
+      type: "MovingDistributedForce";
+      elementID: ID;
+      part: "start" | "end" | "body";
     }
   | { type: "MovingSelectionMultiple"; elementIDs: ID[]; delta: Point2 } // Multiple selected elements are being dragged
   | { type: "Erasing" } // Eraser tool active
