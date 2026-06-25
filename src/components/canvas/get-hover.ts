@@ -28,7 +28,7 @@ import {
 import { get_gear_angles } from "../../utils";
 
 /** Returns the hovered part of the element, or null if no part is hovered. */
-export function get_hovered_part_of_element(
+function get_hovered_part_of_element(
   element: UnionElement,
   mechanicalElements: MechanicalElement[],
   mousePos: Point2,
@@ -758,10 +758,10 @@ export function get_hovered_part_of_element(
 export function get_hovered_part(
   mechanicalElements: MechanicalElement[],
   constraintElements: ConstraintElement[],
+  loads: LoadElement[] = [],
   constraints_visible: boolean,
   mousePos: Point2,
   state: CanvasState,
-  loads: LoadElement[] = [],
 ): HoveredPart {
   const excluded_elements: ID[] = [];
   if (

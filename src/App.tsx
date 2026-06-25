@@ -20,6 +20,8 @@ import {
   Chip,
   Button,
   Snackbar,
+  Switch,
+  FormControlLabel,
 } from "@mui/material";
 import {
   CenterFocusStrong,
@@ -70,6 +72,8 @@ import {
   debounce,
   generateThumbnail,
   screen_to_world,
+  getStorageItem,
+  setStorageItem,
 } from "./utils";
 import { lightTheme } from "./lib/mui-theme"; // import { lightTheme, darkTheme, highContrastTheme } from "./lib/mui-theme";
 import MechanicalCanvas from "./components/canvas/MechanicalCanvas";
@@ -83,24 +87,6 @@ import { COLORS } from "./constants/rendering-specs";
 import { apply_actions } from "./components/mechanism/apply-actions";
 import MechanismsGallery from "./components/mechanisms-gallery/MechanismsGallery";
 import { openDB } from "idb";
-
-export interface UserPreferences {
-  theme: string;
-  gridVisible: boolean;
-  snapToGrid: boolean;
-  constraintsVisible: boolean;
-  gridSize: number;
-}
-
-/*
-const DEFAULT_PREFERENCES: UserPreferences = {
-  theme: "light",
-  gridVisible: true,
-  snapToGrid: true,
-  constraintsVisible: true,
-  gridSize: 50,
-};
-*/
 
 const DB_VERSION = 3;
 const DEBOUNCE_AUTOSAVE_TIME = 1000; // 1000 ms = 1s
@@ -130,6 +116,21 @@ const App: React.FC = () => {
     position: ZERO,
   });
   const [appMode, setAppMode] = useState<AppMode>("edition");
+  const [snapToGrid, setSnapToGrid] = useState<boolean>(
+    getStorageItem<boolean>("snapToGrid", true),
+  );
+  const [showGrid, setShowGrid] = useState<boolean>(
+    getStorageItem<boolean>("showGrid", true),
+  );
+
+  useEffect(() => {
+    setStorageItem("snapToGrid", snapToGrid);
+  }, [snapToGrid]);
+
+  useEffect(() => {
+    setStorageItem("showGrid", showGrid);
+  }, [showGrid]);
+
   const [runtimeState, setRuntimeState] = useState<RuntimeState>(
     DEFAULT_RUNTIME_STATE,
   );
@@ -419,6 +420,8 @@ const App: React.FC = () => {
     (mechanismRecord: SerializedMechanism) => {
       setMechanism(deserialize_mechanism(mechanismRecord));
       setGalleryOpen(false);
+      setCanvasState({ type: "Selecting" });
+      setAppMode("edition");
       setSnackbar({ open: true, message: "Mécanisme chargé" });
     },
     [],
@@ -480,13 +483,14 @@ const App: React.FC = () => {
     );
   };
 
-  const [settingsOpen, setSettingsOpen] = useState<boolean>(false);
-  const handleSettingsOpen = () => {
-    setSettingsOpen(true);
+  const [settingsAnchorEl, setSettingsAnchorEl] = useState<null | HTMLElement>(
+    null,
+  );
+  const handleSettingsOpen = (event: React.MouseEvent<HTMLElement>) => {
+    setSettingsAnchorEl(event.currentTarget);
   };
   const handleSettingsClose = () => {
-    setMenuAnchorEl(null);
-    setSettingsOpen(false);
+    setSettingsAnchorEl(null);
   };
 
   const [infoOpen, setInfoOpen] = useState<boolean>(false);
@@ -677,6 +681,11 @@ const App: React.FC = () => {
                 onChange={(_e, newMode: AppMode) => {
                   if (!newMode) return;
                   setAppMode(newMode);
+                  if (newMode !== "edition")
+                    updateMetadata({
+                      ...mechanism.metadata,
+                      lastSimulationMode: newMode,
+                    });
                 }}
                 sx={{
                   "& .MuiToggleButton-root": {
@@ -1057,6 +1066,8 @@ const App: React.FC = () => {
                 anchorEl={menuAnchorEl}
                 open={menuOpen}
                 onClose={handleMenuClose}
+                anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+                transformOrigin={{ vertical: "top", horizontal: "right" }}
               >
                 <MenuItem
                   onClick={handleMenuButtonUpload}
@@ -1106,6 +1117,8 @@ const App: React.FC = () => {
                 anchorEl={langAnchorEl}
                 open={langOpen}
                 onClose={handleLangClose}
+                anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+                transformOrigin={{ vertical: "top", horizontal: "right" }}
                 slotProps={{ paper: { style: { maxHeight: 175 } } }}
               >
                 {LANGUAGES.map((lang) => (
@@ -1130,6 +1143,55 @@ const App: React.FC = () => {
                   <Settings sx={{ fontSize: 20 }} />
                 </IconButton>
               </Tooltip>
+              <Menu
+                anchorEl={settingsAnchorEl}
+                open={Boolean(settingsAnchorEl)}
+                onClose={handleSettingsClose}
+                anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+                transformOrigin={{ vertical: "top", horizontal: "right" }}
+              >
+                <MenuItem disableRipple>
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={showGrid}
+                        size="small"
+                        onChange={(e) => setShowGrid(e.target.checked)}
+                      />
+                    }
+                    label="Afficher la grille"
+                  />
+                </MenuItem>
+                <MenuItem disableRipple>
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={snapToGrid}
+                        size="small"
+                        onChange={(e) => setSnapToGrid(e.target.checked)}
+                      />
+                    }
+                    label="Aimanter à la grille"
+                  />
+                </MenuItem>
+                <MenuItem disabled sx={{ fontSize: "0.85rem" }}>
+                  Taille de la grille (100mm)
+                </MenuItem>
+                <Divider />
+                <MenuItem disableRipple disabled>
+                  <FormControlLabel
+                    control={<Switch size="small" disabled />}
+                    label="Afficher les contraintes"
+                  />
+                </MenuItem>
+                <Divider />
+                <MenuItem disabled sx={{ fontSize: "0.85rem" }}>
+                  Thème (Couleurs)
+                </MenuItem>
+                <MenuItem disabled sx={{ fontSize: "0.85rem" }}>
+                  Style des éléments
+                </MenuItem>
+              </Menu>
 
               {/* À propos */}
               <Tooltip title="À propos de Slidep">
@@ -1172,6 +1234,10 @@ const App: React.FC = () => {
             hoveredPart={hoveredPart}
             undoMechanism={undoMechanism}
             redoMechanism={redoMechanism}
+            setAppMode={setAppMode}
+            lastSimulationMode={mechanism.metadata.lastSimulationMode}
+            snapToGrid={snapToGrid}
+            showGrid={showGrid}
           />
 
           {/* Floating panels */}
@@ -1369,27 +1435,6 @@ const App: React.FC = () => {
           <a href="https://github.com/Jungo-Phi/Slidep">
             github.com/Jungo-Phi/Slidep
           </a>
-        </DialogContent>
-      </Dialog>
-      <Dialog open={settingsOpen} onClose={handleSettingsClose}>
-        <DialogTitle fontSize={"large"} sx={{ mb: -2 }}>
-          Paramètres
-        </DialogTitle>
-        <IconButton
-          onClick={handleSettingsClose}
-          sx={{
-            position: "absolute",
-            right: 8,
-            top: 8,
-          }}
-        >
-          <Close />
-        </IconButton>
-        <DialogContent>
-          <Typography>Afficher les contraintes</Typography>
-          <Typography>Aimanter à la grille</Typography>
-          <Typography>Thème (Couleurs)</Typography>
-          <Typography>Style des éléments</Typography>
         </DialogContent>
       </Dialog>
       <Snackbar

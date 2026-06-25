@@ -1,4 +1,5 @@
 import { Action } from "./actions";
+import { SimulationMode } from "./app-mode";
 import { MechanicalElement, ConstraintElement, LoadElement } from "./element";
 import { Point2 } from "./point2";
 import {
@@ -19,6 +20,7 @@ export interface MechanismMetadata {
   version: string;
   tags: string[];
   thumbnail: string; // DataURL (ex: "data:image/png;base64,...")
+  lastSimulationMode: SimulationMode;
 }
 
 export const DEFAULT_METADATA: MechanismMetadata = {
@@ -30,6 +32,7 @@ export const DEFAULT_METADATA: MechanismMetadata = {
   version: "1.0.0",
   tags: [],
   thumbnail: "",
+  lastSimulationMode: "dynamic",
 };
 
 export type ScreenPoint = Point2;

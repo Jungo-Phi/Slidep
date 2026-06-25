@@ -30,9 +30,6 @@ export function draw_grid(
   const zoom = viewport.zoom;
   const panX = viewport.pan.x;
   const panY = viewport.pan.y;
-  const largerGridInterval = 500;
-  const majorGridInterval = 100;
-  const gridSize = 25;
 
   ctx.strokeStyle = COLORS.GRID;
   ctx.lineWidth = 1;
@@ -42,11 +39,11 @@ export function draw_grid(
   const worldRight = (width - panX) / zoom;
   const worldBottom = (height - panY) / zoom;
 
-  const startX = Math.ceil(worldLeft / gridSize) * gridSize;
-  const startY = Math.ceil(worldTop / gridSize) * gridSize;
+  const startX = Math.ceil(worldLeft / DIM.GRID_SIZE) * DIM.GRID_SIZE;
+  const startY = Math.ceil(worldTop / DIM.GRID_SIZE) * DIM.GRID_SIZE;
 
   // Dessin vertical
-  for (let x = startX; x <= worldRight; x += gridSize) {
+  for (let x = startX; x <= worldRight; x += DIM.GRID_SIZE) {
     const screenX = x * zoom + panX;
     ctx.beginPath();
     ctx.moveTo(screenX, 0);
@@ -55,7 +52,7 @@ export function draw_grid(
   }
 
   // Dessin horizontal
-  for (let y = startY; y <= worldBottom; y += gridSize) {
+  for (let y = startY; y <= worldBottom; y += DIM.GRID_SIZE) {
     const screenY = y * zoom + panY;
     ctx.beginPath();
     ctx.moveTo(0, screenY);
@@ -66,13 +63,11 @@ export function draw_grid(
   // --- Lignes majeures ---
   ctx.strokeStyle = COLORS.GRID_MAJOR;
 
-  const startMajorX =
-    Math.ceil(worldLeft / majorGridInterval) * majorGridInterval;
-  const startMajorY =
-    Math.ceil(worldTop / majorGridInterval) * majorGridInterval;
+  const startMajorX = Math.ceil(worldLeft / DIM.GRID_MAJOR) * DIM.GRID_MAJOR;
+  const startMajorY = Math.ceil(worldTop / DIM.GRID_MAJOR) * DIM.GRID_MAJOR;
 
   // Dessin vertical majeur
-  for (let x = startMajorX; x <= worldRight; x += majorGridInterval) {
+  for (let x = startMajorX; x <= worldRight; x += DIM.GRID_MAJOR) {
     const screenX = x * zoom + panX;
     ctx.beginPath();
     ctx.moveTo(screenX, 0);
@@ -81,7 +76,7 @@ export function draw_grid(
   }
 
   // Dessin horizontal majeur
-  for (let y = startMajorY; y <= worldBottom; y += majorGridInterval) {
+  for (let y = startMajorY; y <= worldBottom; y += DIM.GRID_MAJOR) {
     const screenY = y * zoom + panY;
     ctx.beginPath();
     ctx.moveTo(0, screenY);
@@ -92,13 +87,11 @@ export function draw_grid(
   // --- Lignes plus larges ---
   ctx.strokeStyle = COLORS.GRID_LARGER;
 
-  const startLargerX =
-    Math.ceil(worldLeft / largerGridInterval) * largerGridInterval;
-  const startLargerY =
-    Math.ceil(worldTop / largerGridInterval) * largerGridInterval;
+  const startLargerX = Math.ceil(worldLeft / DIM.GRID_LARGER) * DIM.GRID_LARGER;
+  const startLargerY = Math.ceil(worldTop / DIM.GRID_LARGER) * DIM.GRID_LARGER;
 
   // Dessin vertical majeur
-  for (let x = startLargerX; x <= worldRight; x += largerGridInterval) {
+  for (let x = startLargerX; x <= worldRight; x += DIM.GRID_LARGER) {
     const screenX = x * zoom + panX;
     ctx.beginPath();
     ctx.moveTo(screenX, 0);
@@ -107,27 +100,13 @@ export function draw_grid(
   }
 
   // Dessin horizontal majeur
-  for (let y = startLargerY; y <= worldBottom; y += largerGridInterval) {
+  for (let y = startLargerY; y <= worldBottom; y += DIM.GRID_LARGER) {
     const screenY = y * zoom + panY;
     ctx.beginPath();
     ctx.moveTo(0, screenY);
     ctx.lineTo(width, screenY);
     ctx.stroke();
   }
-
-  ctx.strokeStyle = COLORS.GRID_AXIS;
-
-  // Vertical axis
-  ctx.beginPath();
-  ctx.moveTo(panX, 0);
-  ctx.lineTo(panX, height);
-  ctx.stroke();
-
-  // Horizontal axis
-  ctx.beginPath();
-  ctx.moveTo(0, panY);
-  ctx.lineTo(width, panY);
-  ctx.stroke();
 }
 
 export function draw_ground(ctx: CanvasRenderingContext2D) {

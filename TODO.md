@@ -2,15 +2,8 @@
 
 ---
 
-### À faire maintenant
-
-- Reset CanvasState quand on change de mécanisme
-- ctrl+Y/Z ne change pas le panneau de propriétés
-- Snap to grid
-
 ### [ Simulation cinématique ]
 
-- Activer la simulation avec SPACE
 - Afficher les trajectoires
 - Analise des degrés de libertés en sous-parties
 - Placer Force pendant la simulation modifie le mécanisme
@@ -25,7 +18,7 @@
 - Prefered force direction
 - Faire le panneau de paramètre propre
 - Les contraintes et dimensions ne suivent pas lors des déplacements de groupe d'éléments
-- Laisser le panneau de propriétés dans contraintes quand on a placé une contrainte
+- Comportement étrange dans vectorInput à régler
 - Ajouter un modificateur "ligne" pour la force répartie
 - probe ajoutée 2 par 2 quand il y en a déjà une ???
 - Ouverture du sélecteur de métriques (Force, Vitesse, Position, Angle) au placement d'un probe
@@ -40,6 +33,7 @@
 - Zoom sans scale les éléments eux-même ?
 - Mirror Y le canvas ?
 - Régler le hover du texte de ElementDisplay
+- N'afficher QUE les éléments connectés dans connectionProperties ?
 - responsive : top bar, element palette
 - Snap force et distributed force aux perpendiculaires lors du placement
 - Revenir au dernier mode de simulation avec SPACE (sauvegarde)

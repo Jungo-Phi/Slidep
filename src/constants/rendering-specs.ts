@@ -51,6 +51,7 @@ export const HIT_TOLERANCE = {
   EDGE: 10,
   NODE: 14,
   CONSTRAINT: 20,
+  SNAP_TO_GRID: 6,
 } as const;
 
 export const INTERACTION_SPECS = {
@@ -72,6 +73,11 @@ export const DIM = {
   // General
   TAC: 20,
   ICON_SIZE: 24,
+
+  // GRID
+  GRID_LARGER: 500,
+  GRID_MAJOR: 100,
+  GRID_SIZE: 25,
 
   // Edges
   EDGE_ENDPOINT_RADIUS: 7,

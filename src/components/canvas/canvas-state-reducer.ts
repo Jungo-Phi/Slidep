@@ -802,9 +802,6 @@ export function canvasStateReducer(
 
     case "KeyDown":
       switch (event.key) {
-        case "Space":
-          // TODO : GoTo Cinématique
-          break;
         case "Escape":
           setCanvasState({ type: "Selecting" });
           break;

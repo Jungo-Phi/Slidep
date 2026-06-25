@@ -3,16 +3,18 @@ import {
   Action,
   ActionBundleType,
   ActionType,
+  AppMode,
   CanvasEvent,
   CanvasState,
   HoveredPart,
   Mechanism,
   Point2,
+  SimulationMode,
   ViewportChange,
   ZERO,
 } from "../../types";
 import { world_to_screen, screen_to_world } from "../../utils";
-import { COLORS } from "../../constants/rendering-specs";
+import { COLORS, DIM, HIT_TOLERANCE } from "../../constants/rendering-specs";
 import { Box } from "@mui/material";
 import { drawMechanicalCanvas } from "./draw-canvas";
 import { canvasStateReducer } from "./canvas-state-reducer";
@@ -41,6 +43,10 @@ interface MechanicalCanvasProps {
   hoveredPart: HoveredPart;
   undoMechanism: () => void;
   redoMechanism: () => void;
+  setAppMode: (mode: AppMode) => void;
+  lastSimulationMode: SimulationMode;
+  snapToGrid: boolean;
+  showGrid: boolean;
 }
 
 export const MechanicalCanvas = forwardRef<
@@ -58,6 +64,10 @@ export const MechanicalCanvas = forwardRef<
       hoveredPart,
       undoMechanism,
       redoMechanism,
+      setAppMode,
+      lastSimulationMode,
+      snapToGrid,
+      showGrid,
     },
     ref,
   ) => {
@@ -96,12 +106,28 @@ export const MechanicalCanvas = forwardRef<
       canvasOffsetRef.current = new Point2(rect.left, rect.top);
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      draw_grid(
-        ctx,
-        canvas.width,
-        canvas.height,
-        mechanismRef.current.viewport,
-      );
+      if (showGrid)
+        draw_grid(
+          ctx,
+          canvas.width,
+          canvas.height,
+          mechanismRef.current.viewport,
+        );
+
+      // Draw axes
+      ctx.strokeStyle = COLORS.GRID_AXIS;
+      // Vertical axis
+      const panX = mechanismRef.current.viewport.pan.x;
+      ctx.beginPath();
+      ctx.moveTo(panX, 0);
+      ctx.lineTo(panX, canvas.height);
+      ctx.stroke();
+      // Horizontal axis
+      const panY = mechanismRef.current.viewport.pan.y;
+      ctx.beginPath();
+      ctx.moveTo(0, panY);
+      ctx.lineTo(canvas.width, panY);
+      ctx.stroke();
 
       ctx.save();
       ctx.translate(
@@ -122,7 +148,7 @@ export const MechanicalCanvas = forwardRef<
         mechanismRef.current.loads,
       );
       ctx.restore();
-    }, []);
+    }, [showGrid]);
 
     useEffect(() => {
       let rafId: number;
@@ -205,19 +231,51 @@ export const MechanicalCanvas = forwardRef<
           pendingPanRef.current = pendingPanRef.current.add(event.mouseDelta);
           return;
         }
+        const currMech = mechanismRef.current;
 
-        const newHoveredPart = get_hovered_part(
-          mechanismRef.current.mechanicalElements,
-          mechanismRef.current.constraintElements,
+        let newHoveredPart = get_hovered_part(
+          currMech.mechanicalElements,
+          currMech.constraintElements,
+          currMech.loads,
           true, // TODO : Add parameter to toggle showing constraints
-          screen_to_world(
-            mousePositionRef.current,
-            mechanismRef.current.viewport,
-          ),
+          screen_to_world(mousePositionRef.current, currMech.viewport),
           canvasStateRef.current,
-          mechanismRef.current.loads,
         );
+        if (snapToGrid && newHoveredPart.type === "Void") {
+          const rdx =
+            Math.round(newHoveredPart.position.x / DIM.GRID_MAJOR) *
+            DIM.GRID_MAJOR;
+          if (
+            Math.abs(rdx - newHoveredPart.position.x) <
+            HIT_TOLERANCE.SNAP_TO_GRID / currMech.viewport.zoom
+          )
+            newHoveredPart.position.x = rdx;
+          const rdy =
+            Math.round(newHoveredPart.position.y / DIM.GRID_MAJOR) *
+            DIM.GRID_MAJOR;
+          if (
+            Math.abs(rdy - newHoveredPart.position.y) <
+            HIT_TOLERANCE.SNAP_TO_GRID / currMech.viewport.zoom
+          )
+            newHoveredPart.position.y = rdy;
+        }
         setHoveredPart(newHoveredPart);
+
+        if (event.type === "KeyDown" && event.key === " ") {
+          setAppMode(lastSimulationMode);
+          if (canvasStateRef.current.type !== "Selecting")
+            setCanvasState({ type: "Selecting" });
+          return;
+        }
+
+        if (
+          event.type === "KeyDown" &&
+          event.key === "Escape" &&
+          canvasStateRef.current.type === "Selecting"
+        ) {
+          setAppMode("edition");
+          return;
+        }
 
         canvasStateReducer(
           canvasStateRef.current,
@@ -225,14 +283,14 @@ export const MechanicalCanvas = forwardRef<
           oldPositionRef.current,
           mouseButtonDownRef.current,
           event,
-          mechanismRef.current.mechanicalElements,
-          mechanismRef.current.constraintElements,
+          currMech.mechanicalElements,
+          currMech.constraintElements,
           setCanvasState,
           applyActions,
           undoMechanism,
           redoMechanism,
           onMouseUpHandler,
-          mechanismRef.current.loads,
+          currMech.loads,
         );
         oldPositionRef.current = newHoveredPart.position.clone();
       },
@@ -242,6 +300,9 @@ export const MechanicalCanvas = forwardRef<
         redoMechanism,
         setCanvasState,
         setHoveredPart,
+        setAppMode,
+        lastSimulationMode,
+        snapToGrid,
       ],
     );
 
@@ -264,6 +325,7 @@ export const MechanicalCanvas = forwardRef<
     useEffect(() => {
       const handleGlobalKeyDown = (event: KeyboardEvent) => {
         if (isTypingInInput()) return;
+        if (event.key === " ") event.preventDefault();
         handleEvent({
           type: "KeyDown",
           key: event.key,

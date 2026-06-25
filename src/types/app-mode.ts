@@ -1,4 +1,5 @@
-export type AppMode = "edition" | "static" | "kinematic" | "dynamic";
+export type AppMode = "edition" | SimulationMode;
+export type SimulationMode = "static" | "kinematic" | "dynamic";
 export type PropertiesPanelTab =
   | "project"
   | "elements"
