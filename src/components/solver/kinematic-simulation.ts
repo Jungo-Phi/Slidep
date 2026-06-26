@@ -121,6 +121,7 @@ export function compute_kinematic_snapshot(
   t: number,
   prevSnapshot: KinematicSnapshot | null,
   motorPhases: Map<ID, MotorPhase[]> = new Map(),
+  grab?: { key: string; target: Point2 },
 ): KinematicSnapshot {
   const nodes = get_nodes(mechanism.mechanicalElements);
   let links = get_links(
@@ -165,6 +166,10 @@ export function compute_kinematic_snapshot(
   // would be invalid. We use Angle constraints there instead, because a slider does
   // NOT rotate: the angle between the parent beam and each rigidly-attached beam is
   // preserved regardless of the slider's position along the parent beam.
+
+  // Beams endpoint de joins/sliders groundés avec triangle insuffisant :
+  // ancrage post-warm-start (voir étape 2c).
+  const groundedNeedsPin: Array<{ beam: BeamElement; flip: boolean }> = [];
 
   // Seed to avoid duplicates for angle constraints (slider case)
   const angleConstrainedPairs = new Set<string>();
@@ -258,6 +263,27 @@ export function compute_kinematic_snapshot(
         });
       });
     }
+
+    // ── KeepOrientation: parent beam d'un slider groundé ─────────────────
+    // Le beam peut pivoter autour du point fixe via OnSegment sans ce verrou.
+    // KeepOrientation fixe sa direction tout en laissant la translation libre.
+    if (node.type === "slider" && node.isGrounded) {
+      bodyBeams.forEach((b) => {
+        const dB = b.positionEnd.sub(b.positionStart);
+        if (dB.length_squared() < 1e-12) return;
+        links.push({
+          type: "KeepOrientation",
+          ddl: 1,
+          key1: `${b.id}:start`,
+          key2: `${b.id}:end`,
+          direction: dB.normalize(),
+        });
+      });
+    }
+    // Endpoint beams sans triangle → mémoriser pour ancrage post-warm-start (étape 2c).
+    if ((node.type === "join" || node.type === "slider") && node.isGrounded && freeEndpoints.length < 2) {
+      endpointConns.forEach(({ beam, flip }) => groundedNeedsPin.push({ beam, flip }));
+    }
   });
 
   // ── 1. Warm start ─────────────────────────────────────────
@@ -271,6 +297,16 @@ export function compute_kinematic_snapshot(
       if (nodes.radii.has(key)) nodes.radii.set(key, rad);
     });
   }
+
+  // ── 2c. Pin des extrémités libres soudées à un join/slider groundé ──────
+  // Après le warm-start, on réinitialise la position à la géométrie initiale
+  // et on fige la masse pour que le solveur ne puisse pas faire tourner le beam.
+  groundedNeedsPin.forEach(({ beam: b, flip }) => {
+    const freeKey = flip ? `${b.id}:start` : `${b.id}:end`;
+    const freePos = flip ? b.positionStart : b.positionEnd;
+    nodes.positions.set(freeKey, freePos);
+    nodes.posMasses.set(freeKey, 0);
+  });
 
   // ── 2. Motor constraints: pin driven beam endpoints ───────
   // Only grounded motors (parentBeamID === undefined) for now.
@@ -316,6 +352,11 @@ export function compute_kinematic_snapshot(
     });
   });
 
+  // ── 2b. Grab constraint: pin grabbed key to mouse target ──────
+  if (grab) {
+    links.push({ type: "HandleGrab", ddl: 1, grabbedKey: grab.key, value: grab.target });
+  }
+
   // ── 3. Fuse coincidence links ──────────────────────────────
   // Critical for connection integrity: merges coincident node/edge-endpoint pairs
   // into a single solver key so they are guaranteed to stay at the same position.
@@ -335,6 +376,8 @@ export function compute_kinematic_snapshot(
         link.key3 = k_new;
       if ("key4" in link && (link.key4 === k1 || link.key4 === k2))
         link.key4 = k_new;
+      if (link.type === "HandleGrab" && (link.grabbedKey === k1 || link.grabbedKey === k2))
+        link.grabbedKey = k_new;
     });
 
     const p1 = nodes.positions.get(k1);
@@ -354,6 +397,35 @@ export function compute_kinematic_snapshot(
     nodes.posMasses.delete(k2);
   });
   links = links.filter((link) => link.type !== "Coincidence");
+
+  // ── 3b. OnSegment → AtSegmentRatio pour les nœuds de corps fixes ──────
+  // Dans geometric-solver, tous les OnSegment non-groundés sont convertis en
+  // AtSegmentRatio pour mémoriser la position courante sur le beam (lignes 231-249).
+  // En simulation : les sliders/slideps non-groundés glissent librement → OnSegment
+  // conservé. Les joins/masses sont solidaires → AtSegmentRatio au ratio courant.
+  links.forEach((link, index) => {
+    if (link.type !== "OnSegment") return;
+    if ((nodes.posMasses.get(link.key3) ?? 0) === 0) return; // groundé : beam passe à travers
+    const rawIds = link.key3.split(",").map((p) => p.split(":")[0]);
+    const isSlider = rawIds.some((id) =>
+      mechanism.mechanicalElements.some(
+        (e) => e.id === id && (e.type === "slider" || e.type === "slidep"),
+      ),
+    );
+    if (isSlider) return;
+    const start = nodes.positions.get(link.key1);
+    const end = nodes.positions.get(link.key2);
+    const pos = nodes.positions.get(link.key3);
+    if (!start || !end || !pos) return;
+    links[index] = {
+      type: "AtSegmentRatio",
+      ddl: 2,
+      key1: link.key1,
+      key2: link.key2,
+      key3: link.key3,
+      t: pos.parameter_on_segment(start, end),
+    };
+  });
 
   // ── 4. Sort links (anchored nodes first for better convergence) ──
   links = sort_links(links, nodes.posMasses);

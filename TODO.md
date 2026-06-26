@@ -4,12 +4,7 @@
 
 ### [ Simulation cinématique ]
 
-- Afficher les trajectoires
-- Analise des degrés de libertés en sous-parties
-- Placer Force pendant la simulation modifie le mécanisme
-- message snackbar "les forces ne sont pas prises en compte en cinématique" si force placée en cinématique
-- Autres outils : clic → pause auto + bascule temporaire en contexte Édition (à préciser)
-- ctrl+z en simulation doit faire revenir en édition
+- Parfois, arriver à la fin du replay fait continuer la simulation
 
 ### À faire rapidement
 
@@ -28,6 +23,10 @@
 - Sélection multiple doit hilight les contraintes liées aux éléments sélectionnés (comme group deletion)
 - hover des inputs dans le property pannel -> hilight canvas
 - Ne pas update le nom si on ne l'a pas changé
+- Ne pas appliquer les contraintes (perp, norm, etc.) pendant la simulation, elles font retourner en édition ?
+- Afficher les trajectoires
+- Analise des degrés de libertés en sous-parties
+- Remplacer un node par un autre doit transféfer le ground
 
 ### À faire plus tard
 
@@ -61,7 +60,7 @@
 - Polish de dimensionAngle: arrondir les angles de 0° / 180°, traits extérieurs pour les petits angles
 - Hover interdire les éléments directement connectés et l'élément lui-meme pour dimentions
 - Empecher les contraintes sur le même élément (DDL analyser)
-- geometric-solver : Maintenir les longueurs des beams si possible. Maintenir l'orientation ce celui modifié si possible
+- geometric-solver : Maintenir les longueurs des beams si possible. Maintenir l'orientation ce celui modifié si possible. Ignorer des grounds si nécessaire.
 - Panneau d'analyse : Liste textuelle des libertés/blocages avec interaction (survol = surlignage canvas)
 - Ajouter des "Blank" quand on change une valeur depuis les propriétés
 - Connect belt ends
@@ -92,6 +91,7 @@
 
 ### À faire quand tout le reste est fait
 
+- Mettre l'icon sélectionné en bord blanc au lieu de full blanc
 - Passage en PWA (progressive web app)
 - Ajouter "repelDistance" pour éloigner les contraintes détachées : move apart disconnected elements
 - hilight element on hover "disconnect" on element panel ?
@@ -101,6 +101,7 @@
 - Ajouter "Angle" dans les edges
 - Afficher la dimension dans le panneau de propriétés d'un edge
 - Afficher le ratio avec une autre gear dans les connections de l'élément
+- Paremètre "Afficher les cercles" (trajectoires)
 - Option de colorer les éléments
 - Créer un système d'unités (zoom de base : 1px = 1mm) à mettre dans les paramètres
 - taille des forces log autour d'un longueur de base Lb=100 ?

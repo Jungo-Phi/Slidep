@@ -9,6 +9,7 @@ import {
 } from "@mui/material";
 
 import selectIconUrl from "../../assets/icons/palette/select.svg";
+import selectSimIconUrl from "../../assets/icons/palette/select-sim.svg";
 import beamIconUrl from "../../assets/icons/palette/beam.svg";
 import groundIconUrl from "../../assets/icons/palette/ground.svg";
 import pivotIconUrl from "../../assets/icons/palette/pivot.svg";
@@ -48,10 +49,13 @@ interface PaletteElement {
   label: string;
   tooltip: string;
   iconSrc: string;
+  simIconSrc?: string;
   goToStateType: CanvasStateType;
   hilightRule: (state: CanvasState, mechanism: Mechanism) => boolean;
   hilightColor: string;
   hilightHoverColor: string;
+  simHilightColor?: string;
+  simHilightHoverColor?: string;
   simBehavior: SimBehavior;
 }
 
@@ -63,6 +67,7 @@ const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
         label: "Selection",
         tooltip: "Select (Esc)",
         iconSrc: selectIconUrl,
+        simIconSrc: selectSimIconUrl,
         goToStateType: "Selecting",
         simBehavior: "observational",
         hilightRule: (state) =>
@@ -77,10 +82,13 @@ const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
             "MovingEdgeEndPoint",
             "MovingEdgeBody",
             "MovingConstraint",
+            "SimulationDragging",
           ].includes(state.type) ||
           (state.type === "EditingConstraint" && !state.isPlacing),
         hilightColor: COLORS.SELECTION_BOX,
         hilightHoverColor: COLORS.SELECTION_STROKE,
+        simHilightColor: COLORS.ORANGE,
+        simHilightHoverColor: COLORS.ORANGE_STROKE,
       },
       {
         label: "Gomme",
@@ -519,7 +527,19 @@ export const ElementPalette: React.FC<ElementPaletteProps> = ({
               justifyItems: "center",
             }}
           >
-            {group.elements.map((element) => (
+            {group.elements.map((element) => {
+              const isSimMode = appMode !== "edition";
+              const isHighlighted = element.hilightRule(canvasState, mechanism);
+              const hilightColor = isSimMode && element.simHilightColor
+                ? element.simHilightColor
+                : element.hilightColor;
+              const hilightHoverColor = isSimMode && element.simHilightHoverColor
+                ? element.simHilightHoverColor
+                : element.hilightHoverColor;
+              const iconSrc = isSimMode && element.simIconSrc
+                ? element.simIconSrc
+                : element.iconSrc;
+              return (
               <Tooltip
                 key={element.goToStateType}
                 title={element.tooltip}
@@ -540,12 +560,12 @@ export const ElementPalette: React.FC<ElementPaletteProps> = ({
                     width: SIZE + 2 * PADDING,
                     height: SIZE + 2 * PADDING,
                     borderRadius: 0.75,
-                    backgroundColor: element.hilightRule(canvasState, mechanism)
-                      ? element.hilightColor
+                    backgroundColor: isHighlighted
+                      ? hilightColor
                       : "transparent",
                     "&:hover": {
-                      background: element.hilightRule(canvasState, mechanism)
-                        ? element.hilightHoverColor
+                      background: isHighlighted
+                        ? hilightHoverColor
                         : COLORS.HOVER,
                     },
                   }}
@@ -553,22 +573,22 @@ export const ElementPalette: React.FC<ElementPaletteProps> = ({
                 >
                   <Box
                     component="img"
-                    src={element.iconSrc}
+                    src={iconSrc}
                     alt={element.label}
                     sx={{
                       width: SIZE,
                       height: SIZE,
                       display: "block",
                       filter:
-                        canvasState.type &&
-                        element.hilightRule(canvasState, mechanism)
+                        canvasState.type && isHighlighted
                           ? "brightness(0) invert(1)"
                           : "none",
                     }}
                   />
                 </IconButton>
               </Tooltip>
-            ))}
+              );
+            })}
           </div>
         </section>
       ))}

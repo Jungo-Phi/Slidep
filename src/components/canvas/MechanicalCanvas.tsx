@@ -34,7 +34,22 @@ function mergeRefs<T>(...refs: React.Ref<T>[]) {
 
 // Keys that place or delete structural elements → exit simulation to edition
 const STRUCTURAL_KEYS = new Set([
-  "a", "b", "c", "f", "g", "j", "k", "m", "o", "p", "r", "s", "t", "u", "w", "Delete",
+  "a",
+  "b",
+  "c",
+  "f",
+  "g",
+  "j",
+  "k",
+  "m",
+  "o",
+  "p",
+  "r",
+  "s",
+  "t",
+  "u",
+  "w",
+  "Delete",
 ]);
 // Keys that place constraints/dimensions → pause simulation
 const CONSTRAINT_KEYS = new Set(["d", "e", "h", "l", "n", "q", "v"]);
@@ -49,10 +64,13 @@ interface MechanicalCanvasProps {
   hoveredPart: HoveredPart;
   undoMechanism: () => void;
   redoMechanism: () => void;
+  appMode: AppMode;
   setAppMode: (mode: AppMode) => void;
   onSpaceKey: () => void;
   onExitToEdition: () => void;
   onPauseSim: () => void;
+  onSimulationGrab: (key: string, target: Point2) => void;
+  onSimulationGrabEnd: () => void;
   snapToGrid: boolean;
   showGrid: boolean;
 }
@@ -72,10 +90,13 @@ export const MechanicalCanvas = forwardRef<
       hoveredPart,
       undoMechanism,
       redoMechanism,
+      appMode,
       setAppMode,
       onSpaceKey,
       onExitToEdition,
       onPauseSim,
+      onSimulationGrab,
+      onSimulationGrabEnd,
       snapToGrid,
       showGrid,
     },
@@ -100,6 +121,12 @@ export const MechanicalCanvas = forwardRef<
     onExitToEditionRef.current = onExitToEdition;
     const onPauseSimRef = useRef(onPauseSim);
     onPauseSimRef.current = onPauseSim;
+    const onSimulationGrabRef = useRef(onSimulationGrab);
+    onSimulationGrabRef.current = onSimulationGrab;
+    const onSimulationGrabEndRef = useRef(onSimulationGrabEnd);
+    onSimulationGrabEndRef.current = onSimulationGrabEnd;
+    const appModeRef = useRef(appMode);
+    appModeRef.current = appMode;
 
     mechanismRef.current = mechanism;
     hoveredPartRef.current = hoveredPart;
@@ -309,6 +336,9 @@ export const MechanicalCanvas = forwardRef<
           redoMechanism,
           onMouseUpHandler,
           currMech.loads,
+          appModeRef.current !== "edition",
+          onSimulationGrabRef.current,
+          onSimulationGrabEndRef.current,
         );
         oldPositionRef.current = newHoveredPart.position.clone();
       },
@@ -394,28 +424,35 @@ export const MechanicalCanvas = forwardRef<
       event.preventDefault();
     };
 
-    const cursor = [
-      "DimensionStart",
-      "DimensionNode",
-      "DimensionEdge",
-      "DimensionNodeToNode",
-      "DimensionEdgeToNode",
-      "DimensionAngle",
-      "DimensionRadius",
-      "HorizontalVerticalConstraintStart",
-      "HorizontalVerticalConstraintNode",
-      "NormalConstraintStart",
-      "NormalConstraintEdge",
-      "ParallelConstraintStart",
-      "ParallelConstraintEdge",
-      "EqualConstraintStart",
-      "EqualConstraintEdge",
-      "EqualConstraintGear",
-      "GearRatioConstraintStart",
-      "GearRatioConstraintGear",
-    ].includes(canvasState.type)
-      ? "crosshair"
-      : "default";
+    const cursor =
+      canvasState.type === "SimulationDragging"
+        ? "grabbing"
+        : appMode !== "edition" &&
+            ["Selecting", "SelectedElement"].includes(canvasState.type) &&
+            hoveredPart.type !== "Void"
+          ? "grab"
+          : [
+                "DimensionStart",
+                "DimensionNode",
+                "DimensionEdge",
+                "DimensionNodeToNode",
+                "DimensionEdgeToNode",
+                "DimensionAngle",
+                "DimensionRadius",
+                "HorizontalVerticalConstraintStart",
+                "HorizontalVerticalConstraintNode",
+                "NormalConstraintStart",
+                "NormalConstraintEdge",
+                "ParallelConstraintStart",
+                "ParallelConstraintEdge",
+                "EqualConstraintStart",
+                "EqualConstraintEdge",
+                "EqualConstraintGear",
+                "GearRatioConstraintStart",
+                "GearRatioConstraintGear",
+              ].includes(canvasState.type)
+            ? "crosshair"
+            : "default";
 
     const editingConstraint =
       canvasState.type === "EditingConstraint"

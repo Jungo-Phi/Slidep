@@ -216,6 +216,7 @@ export function PBD_kinematic_solver(
             applyHandleGrabConstraint(
               positions,
               radii,
+              posMasses,
               link.grabbedKey,
               link.value,
               grabStiffness,

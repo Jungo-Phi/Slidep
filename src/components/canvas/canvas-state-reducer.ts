@@ -43,6 +43,9 @@ export function canvasStateReducer(
   redoMechanism: () => void,
   onMouseUpHandler: () => void,
   loadElements: LoadElement[] = [],
+  isSimulating: boolean = false,
+  onSimulationGrab: (key: string, target: Point2) => void = () => {},
+  onSimulationGrabEnd: () => void = () => {},
 ) {
   let actions: Action[] = [];
   let actionBundleType: ActionBundleType | undefined = undefined;
@@ -52,6 +55,19 @@ export function canvasStateReducer(
         case "Selecting":
         case "SelectedElement":
         case "EditingConstraint":
+          // En simulation : pas de multi-sélection, pas de Moving* sur click
+          if (isSimulating) {
+            if (hoveredPart.type === "Void") {
+              setCanvasState({ type: "Selecting" });
+              break;
+            }
+            const simConstraint = constraintElements.find(
+              (element) => element.id === hoveredPart.id,
+            );
+            if (simConstraint && "value" in simConstraint) break;
+            setCanvasState({ type: "SelectedElement", elementID: hoveredPart.id });
+            break;
+          }
           // Logique pour la sélection multiple avec Shift
           if (state.type === "SelectedElement" && event.shiftKey) {
             if (hoveredPart.type === "Void") {
@@ -279,6 +295,37 @@ export function canvasStateReducer(
           }
           break;
         case "SelectedElement":
+          if (isSimulating) {
+            let simKey: string | null = null;
+            let simElementID: ID | null = null;
+            if (hoveredPart.type === "Node" || hoveredPart.type === "GearTooth") {
+              simKey = `${hoveredPart.id}:pos`;
+              simElementID = hoveredPart.id;
+            } else if (hoveredPart.type === "Edge") {
+              simElementID = hoveredPart.id;
+              if (hoveredPart.part === "start") simKey = `${hoveredPart.id}:start`;
+              else if (hoveredPart.part === "end") simKey = `${hoveredPart.id}:end`;
+              else {
+                const simEdge = get_mechanical_element_from_id(
+                  hoveredPart.id,
+                  mechanicalElements,
+                ) as EdgeElement;
+                const dStart = hoveredPart.position.distance_to(simEdge.positionStart);
+                const dEnd = hoveredPart.position.distance_to(simEdge.positionEnd);
+                simKey = dStart <= dEnd
+                  ? `${hoveredPart.id}:start`
+                  : `${hoveredPart.id}:end`;
+              }
+            }
+            if (simKey && simElementID) {
+              setCanvasState({
+                type: "SimulationDragging",
+                grabbedKey: simKey,
+                elementID: simElementID,
+              });
+            }
+            break;
+          }
           switch (hoveredPart.type) {
             case "Node":
               setCanvasState({ type: "MovingNode", elementID: hoveredPart.id });
@@ -571,6 +618,9 @@ export function canvasStateReducer(
             oldPosition,
           });
           break;
+        case "SimulationDragging":
+          onSimulationGrab(state.grabbedKey, hoveredPart.position);
+          break;
       }
       break;
 
@@ -792,6 +842,10 @@ export function canvasStateReducer(
         case "MovingForce":
         case "MovingDistributedForce":
           setCanvasState({ type: "Selecting" });
+          break;
+        case "SimulationDragging":
+          onSimulationGrabEnd();
+          setCanvasState({ type: "SelectedElement", elementID: state.elementID });
           break;
       }
       break;

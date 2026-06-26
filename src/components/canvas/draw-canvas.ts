@@ -341,8 +341,7 @@ export function drawMechanicalCanvas(
         case "mass":
           ctx.save();
           ctx.translate(element.position.x, element.position.y);
-          if ("parentBeamID" in element && element.parentBeamID) {
-            // slider & slidep
+          if (element.type === "slider" && element.parentBeamID) {
             const parentBeam = get_mechanical_element_from_id(
               element.parentBeamID,
               mechanicalElements,
@@ -355,6 +354,15 @@ export function drawMechanicalCanvas(
             if (element.type === "pivot" && element.motor) ctx.translate(0, 7);
             draw_ground(ctx);
             if (element.type === "pivot" && element.motor) ctx.translate(0, -7);
+          }
+          if (element.type === "slidep" && element.parentBeamID) {
+            const parentBeam = get_mechanical_element_from_id(
+              element.parentBeamID,
+              mechanicalElements,
+            ) as BeamElement;
+            ctx.rotate(
+              parentBeam.positionEnd.sub(parentBeam.positionStart).angle(),
+            );
           }
           switch (element.type) {
             case "slider":

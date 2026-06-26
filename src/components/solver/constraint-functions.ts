@@ -6,6 +6,7 @@ import { Point2 } from "../../types";
 export function applyHandleGrabConstraint(
   positions: Map<string, Point2>,
   radii: Map<string, number>,
+  posMasses: Map<string, number>,
   key: string,
   targetValue: Point2 | number,
   stiffness: number = 0.5,
@@ -22,7 +23,8 @@ export function applyHandleGrabConstraint(
     radii.set(key, r + target);
     return Math.abs(delta);
   } else {
-    // Position
+    // Position — respect mass (grounded elements cannot be moved)
+    if ((posMasses.get(key) ?? 1) === 0) return 0;
     const p = positions.get(key);
     if (!p) return 0;
     const delta = targetValue.sub(p);

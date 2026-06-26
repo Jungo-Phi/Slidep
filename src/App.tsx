@@ -142,6 +142,7 @@ const App: React.FC = () => {
   const [runtimeState, setRuntimeState] = useState<RuntimeState>(
     DEFAULT_RUNTIME_STATE,
   );
+  const [grabSnapshot, setGrabSnapshot] = useState<KinematicSnapshot | null>(null);
   const [timelineHovered, setTimelineHovered] = useState(false);
   const [timelineDragging, setTimelineDragging] = useState(false);
   const [simulationConfig, setSimulationConfig] = useState<SimulationConfig>(
@@ -170,6 +171,7 @@ const App: React.FC = () => {
   const kinematicRef = useRef({ mechanism, runtimeState, appMode });
   kinematicRef.current = { mechanism, runtimeState, appMode };
   const kinematicLastWallTime = useRef<number | null>(null);
+  const kinematicGrabRef = useRef<{ key: string; target: Point2 } | null>(null);
   // History length when simulation mode was last entered — used to distinguish
   // edition-mode actions from simulation-mode actions on undo.
   const simStartHistoryLengthRef = useRef<number>(0);
@@ -325,7 +327,7 @@ const App: React.FC = () => {
               : existingSnaps.length > 0
                 ? existingSnaps[existingSnaps.length - 1]
                 : null;
-          newSnaps.push(compute_kinematic_snapshot(mech, t, prevSnap, rs.motorPhases));
+          newSnaps.push(compute_kinematic_snapshot(mech, t, prevSnap, rs.motorPhases, kinematicGrabRef.current ?? undefined));
           t += RECORD_DT;
         }
 
@@ -775,6 +777,28 @@ const App: React.FC = () => {
     }
   }, [appMode, mechanism.metadata.lastSimulationMode]);
 
+  const handleSimulationGrab = useCallback((key: string, target: Point2) => {
+    // Feed the grab into the RAF loop for snapshot recording
+    kinematicGrabRef.current = { key, target };
+    const { mechanism: mech, runtimeState: rs } = kinematicRef.current;
+    // Start playback if paused
+    if (!rs.isPlaying) {
+      setRuntimeState((prev) => ({ ...prev, isPlaying: true }));
+    }
+    // Also compute an immediate display snapshot for sub-frame responsiveness
+    const snaps = rs.kinematicSnapshots;
+    const idx = snaps.length > 0
+      ? Math.min(Math.max(0, Math.floor(rs.time / RECORD_DT)), snaps.length - 1)
+      : -1;
+    const prevSnap = idx >= 0 ? snaps[idx] : null;
+    setGrabSnapshot(compute_kinematic_snapshot(mech, rs.time, prevSnap, rs.motorPhases, { key, target }));
+  }, []);
+
+  const handleSimulationGrabEnd = useCallback(() => {
+    kinematicGrabRef.current = null;
+    setGrabSnapshot(null);
+  }, []);
+
   // Derive the display mechanism: use simulated positions when in kinematic mode
   const currentKinematicSnapshot = (() => {
     if (appMode !== "kinematic" || runtimeState.kinematicSnapshots.length === 0)
@@ -786,8 +810,9 @@ const App: React.FC = () => {
     return runtimeState.kinematicSnapshots[idx];
   })();
 
-  const displayMechanism = currentKinematicSnapshot
-    ? apply_snapshot_to_mechanism(mechanism, currentKinematicSnapshot)
+  const activeSnapshot = grabSnapshot ?? currentKinematicSnapshot;
+  const displayMechanism = activeSnapshot
+    ? apply_snapshot_to_mechanism(mechanism, activeSnapshot)
     : mechanism;
 
   /** App starts */
@@ -1521,6 +1546,7 @@ const App: React.FC = () => {
             hoveredPart={hoveredPart}
             undoMechanism={undoMechanism}
             redoMechanism={redoMechanism}
+            appMode={appMode}
             setAppMode={setAppMode}
             onSpaceKey={handleSpaceKey}
             onExitToEdition={() => {
@@ -1530,6 +1556,8 @@ const App: React.FC = () => {
             onPauseSim={() =>
               setRuntimeState((prev) => ({ ...prev, isPlaying: false }))
             }
+            onSimulationGrab={handleSimulationGrab}
+            onSimulationGrabEnd={handleSimulationGrabEnd}
             snapToGrid={snapToGrid}
             showGrid={showGrid}
           />
