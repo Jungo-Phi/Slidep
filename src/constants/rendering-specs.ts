@@ -37,7 +37,7 @@ export const ICON_SELECTION_FILTER = "brightness(5)"; // "saturate(6) hue-rotate
 export const FILL_SELECTION_FILTER = "brightness(1.2)";
 
 export const PHYSICS = {
-  DEFAULT_MOTOR_SPEED: 5, // tr/min
+  DEFAULT_MOTOR_SPEED: 10, // tr/min
   GRAVITY: 10, // m/s^2
 } as const;
 
@@ -56,7 +56,7 @@ export const HIT_TOLERANCE = {
   EDGE: 10,
   NODE: 14,
   CONSTRAINT: 20,
-  SNAP_TO_GRID: 6,
+  SNAP_TO_GRID: 8,
 } as const;
 
 export const INTERACTION_SPECS = {
@@ -125,7 +125,7 @@ export const DIM = {
 
   // Gear
   DEFAULT_GEAR_RADIUS: 40,
-  MIN_GEAR_RADIUS: 25,
+  MIN_GEAR_RADIUS: 30,
   GEAR_TEETH_SIZE: 6,
 
   // Belt

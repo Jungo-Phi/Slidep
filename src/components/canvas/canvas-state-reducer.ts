@@ -870,7 +870,7 @@ export function canvasStateReducer(
           setCanvasState({ type: "ParallelConstraintStart" });
           break;
         case "m":
-          setCanvasState({ type: "PlacingMass" });
+          setCanvasState({ type: "PlacingMotor" });
           break;
         case "n":
           setCanvasState({ type: "NormalConstraintStart" });
@@ -900,7 +900,7 @@ export function canvasStateReducer(
           setCanvasState({ type: "HorizontalVerticalConstraintStart" });
           break;
         case "w":
-          setCanvasState({ type: "PlacingMotor" });
+          setCanvasState({ type: "PlacingMass" });
           break;
         case "y":
           if (!event.ctrlKey) break;

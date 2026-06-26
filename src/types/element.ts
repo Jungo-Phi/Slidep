@@ -145,6 +145,7 @@ export interface MassElement extends BaseNodeElement {
 /** Base interface for Body elements (defined by a position and angle) */
 export interface BaseBodyElement extends BaseElement {
   position: Point2;
+  angle: number;
 }
 
 /** Gear element - rotational transmission with teeth */

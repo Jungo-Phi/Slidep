@@ -441,6 +441,7 @@ export function drawMechanicalCanvas(
         case "gear":
           ctx.save();
           ctx.translate(element.position.x, element.position.y);
+          ctx.rotate(element.angle);
           draw_gear(ctx, element.radius);
           ctx.restore();
           break;
@@ -510,6 +511,7 @@ export function drawMechanicalCanvas(
                   type: "gear",
                   id: "----",
                   position: hoveredPart.position,
+                  angle: 0,
                   radius: INTERACTION_SPECS.BELT_GRAB_RADIUS,
                   parentAxleID: "----",
                   fixedEdgesIDs: [],
@@ -549,6 +551,7 @@ export function drawMechanicalCanvas(
                 type: "gear",
                 id: "----",
                 position: state.startHover.position,
+                angle: 0,
                 radius: state.startHover.position.distance_to(
                   hoveredPart.position,
                 ),

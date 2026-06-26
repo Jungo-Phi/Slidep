@@ -9,6 +9,7 @@
 - Placer Force pendant la simulation modifie le mécanisme
 - message snackbar "les forces ne sont pas prises en compte en cinématique" si force placée en cinématique
 - Autres outils : clic → pause auto + bascule temporaire en contexte Édition (à préciser)
+- ctrl+z en simulation doit faire revenir en édition
 
 ### À faire rapidement
 
@@ -30,6 +31,7 @@
 
 ### À faire plus tard
 
+- Adapter snap to grid aux états adéquats
 - Zoom sans scale les éléments eux-même ?
 - Mirror Y le canvas ?
 - Régler le hover du texte de ElementDisplay
@@ -59,12 +61,19 @@
 - Polish de dimensionAngle: arrondir les angles de 0° / 180°, traits extérieurs pour les petits angles
 - Hover interdire les éléments directement connectés et l'élément lui-meme pour dimentions
 - Empecher les contraintes sur le même élément (DDL analyser)
+- geometric-solver : Maintenir les longueurs des beams si possible. Maintenir l'orientation ce celui modifié si possible
 - Panneau d'analyse : Liste textuelle des libertés/blocages avec interaction (survol = surlignage canvas)
 - Ajouter des "Blank" quand on change une valeur depuis les propriétés
 - Connect belt ends
-- Placer join à la jonction des Beams
 - Connecter une courroie à un engrenage avec une extrémité (en plus de la longueur)
+- Les courroies sont de 2 types :
+  - Extrémités connectées : Doivent avoir minimum 2 engrenages connectés, peuvent fairent des tours à l'infinis, UN élément peut être connecté sur le "pseudo-edge" allant du point tangeant de l'engrenage côté start du point tangeant de l'engrenage côté end.
+  - Extrémités distinctes : un élément peut être connecté sur chaque "pseudo-edge" allant du point tangeant de l'engrenage adjascent à start/end.
+- Dans tous les cas, les courroies impose un ratio aux engrenages connectés
+- On ne peut PAS connecter des extrémités de courroies différents ensemble
+- Placer join à la jonction des Beams
 - Éloigner les contraintes des éléments pour la lisibilité (à préciser)
+- Améliorer la contrainte d'angle (transformée en longueurs) pour les edges parallèles
 - Panneau d'explications "Statique/Cinématique/Dynamique"
 - Adapter le thumbnail generator pour cadrer sur le mécanisme
 - Passer les thumbnail dans la bibliothèque en AVIF lossless

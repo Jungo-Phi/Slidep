@@ -1,22 +1,66 @@
-import { GearElement, ID, Mechanism, Point2 } from "../../types";
-import { KinematicSnapshot } from "../../types/runtime-state";
+import { BeamElement, GearElement, ID, Mechanism, Point2 } from "../../types";
+import { KinematicSnapshot, MotorPhase } from "../../types/runtime-state";
 import { get_links, get_nodes } from "./parsing";
 import { PBD_kinematic_solver } from "./PBD_kinematic_solver";
 import { sort_links } from "./utils";
 
 const RECORD_DT = 1 / 30; // 30 fps of simulated time
 
-/** Compute cumulative gear rotation angles at time t, propagating from motor pivots. */
-function compute_gear_angles(mechanism: Mechanism, t: number): Map<ID, number> {
+/**
+ * Resolve cumulative motor angle at time t, honouring phase events recorded
+ * each time the motor speed was changed during simulation.
+ * Without phase events: θ = ω₀·t (anchored at t=0).
+ * With phase events: θ = phase.theta + phase.omega·(t - phase.t)
+ * using the last recorded phase whose t ≤ requested t.
+ */
+export function resolveMotorAngle(
+  pivotId: ID,
+  t: number,
+  omega: number,
+  motorPhases: Map<ID, MotorPhase[]>,
+): number {
+  const phases = motorPhases.get(pivotId);
+  if (!phases || phases.length === 0) return omega * t;
+  // Phases are ordered ascending by t; find the last one at or before t
+  let active: MotorPhase | undefined;
+  for (const p of phases) {
+    if (p.t <= t) active = p;
+    else break;
+  }
+  if (!active) return omega * t;
+  return active.theta + active.omega * (t - active.t);
+}
+
+/** Compute cumulative gear rotation angles at time t, propagating from motor pivots.
+ *  Each gear's angle = gearRatio * resolveMotorAngle(pivotId, t, pivotOmega, motorPhases)
+ *  so phase events recorded on speed changes are correctly honoured throughout the gear train. */
+function compute_gear_angles(
+  mechanism: Mechanism,
+  t: number,
+  motorPhases: Map<ID, MotorPhase[]>,
+): Map<ID, number> {
   const angles = new Map<ID, number>();
   const visited = new Set<ID>();
-  const queue: { gearId: ID; omega: number }[] = [];
+  // ratio: cumulative gear ratio relative to the driving motor pivot
+  // pivotId / pivotOmega: the source motor, needed for resolveMotorAngle
+  const queue: { gearId: ID; ratio: number; pivotId: ID; pivotOmega: number }[] = [];
 
+  // Build axle → [gearIds] lookup so co-axial gears share the same ratio
+  const coAxleGears = new Map<ID, ID[]>();
+  mechanism.mechanicalElements.forEach((el) => {
+    if (el.type !== "gear") return;
+    const list = coAxleGears.get(el.parentAxleID) ?? [];
+    list.push(el.id);
+    coAxleGears.set(el.parentAxleID, list);
+  });
+
+  // Seed from motor pivots
   mechanism.mechanicalElements.forEach((el) => {
     if (el.type !== "pivot" || !el.motor) return;
-    const omega = el.motor.speed * ((2 * Math.PI) / 60); // rad/s
+    const pivotOmega = el.motor.speed * ((2 * Math.PI) / 60);
     el.fixedGearsIDs.forEach((gearId) => {
-      if (!visited.has(gearId)) queue.push({ gearId, omega });
+      if (!visited.has(gearId))
+        queue.push({ gearId, ratio: 1, pivotId: el.id, pivotOmega });
     });
   });
 
@@ -25,21 +69,36 @@ function compute_gear_angles(mechanism: Mechanism, t: number): Map<ID, number> {
     if (visited.has(item.gearId)) continue;
     visited.add(item.gearId);
 
-    angles.set(item.gearId, item.omega * t);
+    // angle = ratio * phase-aware motor angle
+    angles.set(
+      item.gearId,
+      item.ratio * resolveMotorAngle(item.pivotId, t, item.pivotOmega, motorPhases),
+    );
 
     const gear = mechanism.mechanicalElements.find(
       (e) => e.id === item.gearId && e.type === "gear",
     ) as GearElement | undefined;
     if (!gear) continue;
 
+    // Co-axial gears: same ratio and same source pivot
+    coAxleGears.get(gear.parentAxleID)?.forEach((coGearId) => {
+      if (!visited.has(coGearId))
+        queue.push({ gearId: coGearId, ratio: item.ratio, pivotId: item.pivotId, pivotOmega: item.pivotOmega });
+    });
+
+    // Meshed gears: inverted ratio
     gear.meshedGearsIDs.forEach((meshedId) => {
       if (visited.has(meshedId)) return;
       const meshedGear = mechanism.mechanicalElements.find(
         (e) => e.id === meshedId && e.type === "gear",
       ) as GearElement | undefined;
       if (!meshedGear) return;
-      const meshedOmega = -item.omega * (gear.radius / meshedGear.radius);
-      queue.push({ gearId: meshedId, omega: meshedOmega });
+      queue.push({
+        gearId: meshedId,
+        ratio: item.ratio * (-gear.radius / meshedGear.radius),
+        pivotId: item.pivotId,
+        pivotOmega: item.pivotOmega,
+      });
     });
   }
 
@@ -61,6 +120,7 @@ export function compute_kinematic_snapshot(
   mechanism: Mechanism,
   t: number,
   prevSnapshot: KinematicSnapshot | null,
+  motorPhases: Map<ID, MotorPhase[]> = new Map(),
 ): KinematicSnapshot {
   const nodes = get_nodes(mechanism.mechanicalElements);
   let links = get_links(
@@ -89,6 +149,113 @@ export function compute_kinematic_snapshot(
         key1: k1,
         key2: k2,
         distance: el.positionEnd.sub(el.positionStart).length(),
+      });
+    }
+  });
+
+  // Rigidity constraints at join/slider/mass nodes.
+  //
+  // For join/mass: use Distance constraints between free endpoints of connected
+  // beams (triangle rigidity). Body beams have both endpoints free, so we include
+  // both. distancePairs already covers beam lengths, so closed trusses are
+  // automatically skipped (no redundant constraints). Star spanning tree = N_free−1.
+  //
+  // For slider: the parent beam (body connection) can MOVE — the slider translates
+  // along it, so distances between its endpoints and the attached beams' endpoints
+  // would be invalid. We use Angle constraints there instead, because a slider does
+  // NOT rotate: the angle between the parent beam and each rigidly-attached beam is
+  // preserved regardless of the slider's position along the parent beam.
+
+  // Seed to avoid duplicates for angle constraints (slider case)
+  const angleConstrainedPairs = new Set<string>();
+  mechanism.constraintElements.forEach((c) => {
+    if (
+      c.type === "dimension-angle" ||
+      c.type === "normal" ||
+      c.type === "parallel"
+    )
+      angleConstrainedPairs.add([c.startEdgeID, c.endEdgeID].sort().join("|"));
+  });
+
+  mechanism.mechanicalElements.forEach((node) => {
+    if (node.type !== "join" && node.type !== "slider" && node.type !== "mass")
+      return;
+
+    // Classify beams connected to this node
+    const endpointConns: Array<{ beam: BeamElement; flip: boolean }> = [];
+    const bodyBeams: BeamElement[] = [];
+
+    mechanism.mechanicalElements.forEach((el) => {
+      if (el.type !== "beam") return;
+      const b = el as BeamElement;
+      if (b.fixedNodeStartID === node.id)
+        endpointConns.push({ beam: b, flip: false }); // free end = b:end
+      else if (b.fixedNodeEndID === node.id)
+        endpointConns.push({ beam: b, flip: true }); // free end = b:start
+      else if (b.fixedNodesBodyIDs.includes(node.id)) bodyBeams.push(b);
+    });
+
+    // ── Distance: endpoint + join/mass body connections ───────────────────
+    const freeEndpoints: Array<{ key: string; pos: Point2 }> = [];
+    endpointConns.forEach(({ beam: b, flip }) => {
+      freeEndpoints.push(
+        flip
+          ? { key: `${b.id}:start`, pos: b.positionStart }
+          : { key: `${b.id}:end`, pos: b.positionEnd },
+      );
+    });
+    if (node.type !== "slider") {
+      // join/mass body beams: both endpoints are free
+      bodyBeams.forEach((b) => {
+        freeEndpoints.push({ key: `${b.id}:start`, pos: b.positionStart });
+        freeEndpoints.push({ key: `${b.id}:end`, pos: b.positionEnd });
+      });
+    }
+
+    if (freeEndpoints.length >= 2) {
+      const ref = freeEndpoints[0];
+      for (let i = 1; i < freeEndpoints.length; i++) {
+        const ep = freeEndpoints[i];
+        if (distancePairs.has(`${ref.key}|${ep.key}`)) continue;
+        const d = ref.pos.distance_to(ep.pos);
+        if (d < 1e-6) continue;
+        distancePairs.add(`${ref.key}|${ep.key}`);
+        distancePairs.add(`${ep.key}|${ref.key}`);
+        links.push({
+          type: "Distance",
+          ddl: 1,
+          key1: ref.key,
+          key2: ep.key,
+          distance: d,
+        });
+      }
+    }
+
+    // ── Angle: slider parent beam vs each rigidly-attached beam ──────────
+    if (node.type === "slider") {
+      bodyBeams.forEach((parentBeam) => {
+        const dParent = parentBeam.positionEnd.sub(parentBeam.positionStart);
+        endpointConns.forEach(({ beam: b, flip }) => {
+          const pairKey = [parentBeam.id, b.id].sort().join("|");
+          if (angleConstrainedPairs.has(pairKey)) return;
+          angleConstrainedPairs.add(pairKey);
+
+          const dB = b.positionEnd.sub(b.positionStart);
+          const virtDB = flip ? dB.mul(-1) : dB; // outward from N on b
+
+          links.push({
+            type: "Angle",
+            ddl: 1,
+            key1: `${parentBeam.id}:start`,
+            key2: `${parentBeam.id}:end`,
+            key3: `${b.id}:start`,
+            key4: `${b.id}:end`,
+            flipStart: false,
+            flipEnd: flip,
+            couterClockwise: false,
+            angle_rad: dParent.angle_to(virtDB),
+          });
+        });
       });
     }
   });
@@ -137,7 +304,7 @@ export function compute_kinematic_snapshot(
       if (L < 1e-6) return;
 
       const theta0 = Math.atan2(initialDir.y, initialDir.x);
-      const theta = theta0 + omega * t;
+      const theta = theta0 + resolveMotorAngle(el.id, t, omega, motorPhases);
 
       const pivotPos = nodes.positions.get(pivotKey) ?? el.position;
       const targetPos = pivotPos.add(
@@ -215,7 +382,7 @@ export function compute_kinematic_snapshot(
     t,
     positions: new Map(result.positions),
     radii: new Map(result.radii),
-    gearAngles: compute_gear_angles(mechanism, t),
+    gearAngles: compute_gear_angles(mechanism, t, motorPhases),
   };
 }
 
@@ -232,11 +399,13 @@ export function apply_snapshot_to_mechanism(
       const pos = snapshot.positions.get(`${el.id}:pos`);
       if (!pos) return el;
       if (el.type === "gear") {
+        const ang = snapshot.gearAngles.get(el.id);
         const rad = snapshot.radii.get(`${el.id}:rad`);
         return {
           ...el,
           position: pos,
-          ...(rad !== undefined ? { radius: rad } : {}),
+          ...(ang ? { angle: ang } : {}),
+          ...(rad ? { radius: rad } : {}),
         };
       }
       return { ...el, position: pos };

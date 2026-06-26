@@ -15,7 +15,7 @@ import {
 import { world_to_screen, screen_to_world } from "../../utils";
 import { COLORS, DIM, HIT_TOLERANCE } from "../../constants/rendering-specs";
 import { Box } from "@mui/material";
-import { drawMechanicalCanvas } from "./draw-canvas";
+import { drawMechanicalCanvas as draw_mechanical_canvas } from "./draw-canvas";
 import { canvasStateReducer } from "./canvas-state-reducer";
 import { get_constraint_element_from_id } from "../mechanism/connect-actions";
 import { get_hovered_part } from "./get-hover";
@@ -32,6 +32,13 @@ function mergeRefs<T>(...refs: React.Ref<T>[]) {
   };
 }
 
+// Keys that place or delete structural elements → exit simulation to edition
+const STRUCTURAL_KEYS = new Set([
+  "a", "b", "c", "f", "g", "j", "k", "m", "o", "p", "r", "s", "t", "u", "w", "Delete",
+]);
+// Keys that place constraints/dimensions → pause simulation
+const CONSTRAINT_KEYS = new Set(["d", "e", "h", "l", "n", "q", "v"]);
+
 interface MechanicalCanvasProps {
   setCanvasState: (state: CanvasState) => void;
   canvasState: CanvasState;
@@ -44,6 +51,8 @@ interface MechanicalCanvasProps {
   redoMechanism: () => void;
   setAppMode: (mode: AppMode) => void;
   onSpaceKey: () => void;
+  onExitToEdition: () => void;
+  onPauseSim: () => void;
   snapToGrid: boolean;
   showGrid: boolean;
 }
@@ -65,6 +74,8 @@ export const MechanicalCanvas = forwardRef<
       redoMechanism,
       setAppMode,
       onSpaceKey,
+      onExitToEdition,
+      onPauseSim,
       snapToGrid,
       showGrid,
     },
@@ -85,6 +96,10 @@ export const MechanicalCanvas = forwardRef<
     const canvasStateRef = useRef(canvasState);
     const onSpaceKeyRef = useRef(onSpaceKey);
     onSpaceKeyRef.current = onSpaceKey;
+    const onExitToEditionRef = useRef(onExitToEdition);
+    onExitToEditionRef.current = onExitToEdition;
+    const onPauseSimRef = useRef(onPauseSim);
+    onPauseSimRef.current = onPauseSim;
 
     mechanismRef.current = mechanism;
     hoveredPartRef.current = hoveredPart;
@@ -140,7 +155,7 @@ export const MechanicalCanvas = forwardRef<
         mechanismRef.current.viewport.zoom,
       );
 
-      drawMechanicalCanvas(
+      draw_mechanical_canvas(
         ctx,
         hoveredPartRef.current,
         canvasStateRef.current,
@@ -236,6 +251,10 @@ export const MechanicalCanvas = forwardRef<
           onSpaceKeyRef.current();
           setCanvasState({ type: "Selecting" });
           return;
+        }
+        if (event.type === "KeyDown") {
+          if (STRUCTURAL_KEYS.has(event.key)) onExitToEditionRef.current();
+          else if (CONSTRAINT_KEYS.has(event.key)) onPauseSimRef.current();
         }
         if (
           event.type === "KeyDown" &&

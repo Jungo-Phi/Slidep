@@ -134,6 +134,19 @@ export interface StaticAnalysisResult {
 }
 
 // ─────────────────────────────────────────────────────────────
+// Motor phase: enables continuous angle when motor speed changes mid-sim
+// ─────────────────────────────────────────────────────────────
+
+export interface MotorPhase {
+  /** Simulation time at which this phase starts */
+  t: number;
+  /** Cumulative angle (rad) accumulated up to t */
+  theta: number;
+  /** Angular velocity (rad/s) from t onwards */
+  omega: number;
+}
+
+// ─────────────────────────────────────────────────────────────
 // Kinematic snapshot: raw solver positions at a given pseudo-time
 // ─────────────────────────────────────────────────────────────
 
@@ -165,6 +178,10 @@ export interface RuntimeState {
 
   /** Recorded kinematic snapshots (incremental, sampled at 30 fps of sim-time) */
   kinematicSnapshots: KinematicSnapshot[];
+
+  /** Per-motor phase history for continuous angle across speed changes.
+   *  Key = PivotElement ID. Appended each time motor speed changes in simulation. */
+  motorPhases: Map<ID, MotorPhase[]>;
 
   // Overlays
   overlays: OverlayState;
@@ -211,41 +228,6 @@ export const DEFAULT_RUNTIME_STATE: RuntimeState = {
   current: null,
   history: [],
   kinematicSnapshots: [],
+  motorPhases: new Map(),
   overlays: DEFAULT_OVERLAY_STATE,
-};
-
-// ─────────────────────────────────────────────────────────────
-// Legacy default (for gradual migration)
-// ─────────────────────────────────────────────────────────────
-
-export interface SimulationState {
-  status: SimulationStatus;
-  speed: SimulationSpeed;
-  currentTime: number;
-  deltaTime: number;
-  frameCount: number;
-  fps: number;
-  elementStates: Map<ID, ElementPhysicsState>;
-  trajectories: TrajectoryPoint[];
-  showTrajectories: boolean;
-  showForces: boolean;
-  showMoments: boolean;
-  blockages: BlockageInfo[];
-  staticAnalysis: StaticAnalysisResult | null;
-}
-
-export const DEFAULT_SIMULATION_STATE: SimulationState = {
-  status: "stopped",
-  speed: 1,
-  currentTime: 0,
-  deltaTime: 0,
-  frameCount: 0,
-  fps: 0,
-  elementStates: new Map(),
-  trajectories: [],
-  showTrajectories: false,
-  showForces: false,
-  showMoments: false,
-  blockages: [],
-  staticAnalysis: null,
 };

@@ -32,10 +32,17 @@ import momentIconUrl from "../../assets/icons/palette/moment.svg";
 import motorIconUrl from "../../assets/icons/palette/motor.svg";
 import probeIconUrl from "../../assets/icons/palette/probe.svg";
 
-import { CanvasState, CanvasStateType } from "../../types";
+import { AppMode, CanvasState, CanvasStateType } from "../../types";
 import { COLORS } from "../../constants/rendering-specs";
 import { get_constraint_element_from_id } from "../mechanism/connect-actions";
 import { Mechanism } from "../../types";
+
+/** How clicking this palette button behaves when simulation is active.
+ *  - "structural"   : exits to edition first (elements, forces)
+ *  - "constraint"   : pauses simulation, stays in sim mode (dimensions, constraints)
+ *  - "observational": no sim effect (probes)
+ */
+type SimBehavior = "structural" | "constraint" | "observational";
 
 interface PaletteElement {
   label: string;
@@ -45,6 +52,7 @@ interface PaletteElement {
   hilightRule: (state: CanvasState, mechanism: Mechanism) => boolean;
   hilightColor: string;
   hilightHoverColor: string;
+  simBehavior: SimBehavior;
 }
 
 const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
@@ -56,6 +64,7 @@ const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
         tooltip: "Select (Esc)",
         iconSrc: selectIconUrl,
         goToStateType: "Selecting",
+        simBehavior: "observational",
         hilightRule: (state) =>
           [
             "Selecting",
@@ -78,6 +87,7 @@ const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
         tooltip: "Eraser (A)",
         iconSrc: eraserIconUrl,
         goToStateType: "Erasing",
+        simBehavior: "structural",
         hilightRule: (state) =>
           state.type === "Erasing" || state.type === "ErasingMultiple",
         hilightColor: COLORS.DELETION_BOX,
@@ -93,6 +103,7 @@ const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
         tooltip: "Slider (S)",
         iconSrc: sliderIconUrl,
         goToStateType: "PlacingSlider",
+        simBehavior: "structural",
         hilightRule: (state) => state.type === "PlacingSlider",
         hilightColor: COLORS.ORANGE,
         hilightHoverColor: COLORS.ORANGE_STROKE,
@@ -102,6 +113,7 @@ const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
         tooltip: "Pivot (P)",
         iconSrc: pivotIconUrl,
         goToStateType: "PlacingPivot",
+        simBehavior: "structural",
         hilightRule: (state) => state.type === "PlacingPivot",
         hilightColor: COLORS.ORANGE,
         hilightHoverColor: COLORS.ORANGE_STROKE,
@@ -111,6 +123,7 @@ const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
         tooltip: "Belt (T)",
         iconSrc: beltIconUrl,
         goToStateType: "PlacingBeltStart",
+        simBehavior: "structural",
         hilightRule: (state) =>
           state.type === "PlacingBeltStart" || state.type === "PlacingBeltEnd",
         hilightColor: COLORS.ORANGE,
@@ -121,6 +134,7 @@ const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
         tooltip: "Gear (G)",
         iconSrc: gearIconUrl,
         goToStateType: "PlacingGearStart",
+        simBehavior: "structural",
         hilightRule: (state) =>
           state.type === "PlacingGearStart" ||
           state.type === "PlacingGearRadius",
@@ -137,6 +151,7 @@ const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
         tooltip: "Join (J)",
         iconSrc: joinIconUrl,
         goToStateType: "PlacingJoin",
+        simBehavior: "structural",
         hilightRule: (state) => state.type === "PlacingJoin",
         hilightColor: COLORS.ORANGE,
         hilightHoverColor: COLORS.ORANGE_STROKE,
@@ -146,6 +161,7 @@ const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
         tooltip: "Beam (B)",
         iconSrc: beamIconUrl,
         goToStateType: "PlacingBeamStart",
+        simBehavior: "structural",
         hilightRule: (state) =>
           state.type === "PlacingBeamStart" || state.type === "PlacingBeamEnd",
         hilightColor: COLORS.ORANGE,
@@ -156,6 +172,7 @@ const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
         tooltip: "Ground (R)",
         iconSrc: groundIconUrl,
         goToStateType: "PlacingGround",
+        simBehavior: "structural",
         hilightRule: (state) => state.type === "PlacingGround",
         hilightColor: COLORS.ORANGE,
         hilightHoverColor: COLORS.ORANGE_STROKE,
@@ -170,6 +187,7 @@ const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
         tooltip: "Damper (C)",
         iconSrc: damperIconUrl,
         goToStateType: "PlacingDamperStart",
+        simBehavior: "structural",
         hilightRule: (state) =>
           state.type === "PlacingDamperStart" ||
           state.type === "PlacingDamperEnd",
@@ -181,6 +199,7 @@ const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
         tooltip: "Spring (K)",
         iconSrc: springIconUrl,
         goToStateType: "PlacingSpringStart",
+        simBehavior: "structural",
         hilightRule: (state) =>
           state.type === "PlacingSpringStart" ||
           state.type === "PlacingSpringEnd",
@@ -189,18 +208,20 @@ const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
       },
       {
         label: "Masse",
-        tooltip: "Mass (M)",
+        tooltip: "Mass (W)",
         iconSrc: massIconUrl,
         goToStateType: "PlacingMass",
+        simBehavior: "structural",
         hilightRule: (state) => state.type === "PlacingMass",
         hilightColor: COLORS.ORANGE,
         hilightHoverColor: COLORS.ORANGE_STROKE,
       },
       {
         label: "Moteur",
-        tooltip: "Motor (W)",
+        tooltip: "Motor (M)",
         iconSrc: motorIconUrl,
         goToStateType: "PlacingMotor",
+        simBehavior: "structural",
         hilightRule: (state) => state.type === "PlacingMotor",
         hilightColor: COLORS.ORANGE,
         hilightHoverColor: COLORS.ORANGE_STROKE,
@@ -215,6 +236,7 @@ const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
         tooltip: "Dimension (D)",
         iconSrc: dimensionIconUrl,
         goToStateType: "DimensionStart",
+        simBehavior: "constraint",
         hilightRule: (state, mechanism) =>
           [
             "DimensionStart",
@@ -239,6 +261,7 @@ const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
         tooltip: "Gear ratio (Q)",
         iconSrc: ratioIconUrl,
         goToStateType: "GearRatioConstraintStart",
+        simBehavior: "constraint",
         hilightRule: (state, mechanism) =>
           state.type === "GearRatioConstraintStart" ||
           state.type === "GearRatioConstraintGear" ||
@@ -256,6 +279,7 @@ const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
         tooltip: "Equal lengths (E)",
         iconSrc: equalIconUrl,
         goToStateType: "EqualConstraintStart",
+        simBehavior: "constraint",
         hilightRule: (state) =>
           state.type === "EqualConstraintStart" ||
           state.type === "EqualConstraintEdge" ||
@@ -268,6 +292,7 @@ const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
         tooltip: "Horizontal/Vertical alignement  (H/V)",
         iconSrc: horizontalVerticalAlignIconUrl,
         goToStateType: "HorizontalVerticalConstraintStart",
+        simBehavior: "constraint",
         hilightRule: (state) =>
           state.type === "HorizontalVerticalConstraintStart" ||
           state.type === "HorizontalVerticalConstraintNode",
@@ -279,6 +304,7 @@ const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
         tooltip: "Normal (N)",
         iconSrc: normalIconUrl,
         goToStateType: "NormalConstraintStart",
+        simBehavior: "constraint",
         hilightRule: (state) =>
           state.type === "NormalConstraintStart" ||
           state.type === "NormalConstraintEdge",
@@ -290,6 +316,7 @@ const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
         tooltip: "Parallel (L)",
         iconSrc: parallelIconUrl,
         goToStateType: "ParallelConstraintStart",
+        simBehavior: "constraint",
         hilightRule: (state) =>
           state.type === "ParallelConstraintStart" ||
           state.type === "ParallelConstraintEdge",
@@ -306,6 +333,7 @@ const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
         tooltip: "Force (F)",
         iconSrc: forceIconUrl,
         goToStateType: "PlacingForceStart",
+        simBehavior: "structural",
         hilightRule: (state) =>
           state.type === "PlacingForceStart" ||
           state.type === "PlacingForceEnd",
@@ -317,6 +345,7 @@ const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
         tooltip: "Distributed Force (U)",
         iconSrc: distributedForceIconUrl,
         goToStateType: "PlacingDistributedForceStart",
+        simBehavior: "structural",
         hilightRule: (state) =>
           state.type === "PlacingDistributedForceStart" ||
           state.type === "PlacingDistributedForceEnd",
@@ -328,6 +357,7 @@ const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
         tooltip: "Moment (O)",
         iconSrc: momentIconUrl,
         goToStateType: "PlacingMoment",
+        simBehavior: "structural",
         hilightRule: (state) => state.type === "PlacingMoment",
         hilightColor: COLORS.ORANGE,
         hilightHoverColor: COLORS.ORANGE_STROKE,
@@ -337,6 +367,7 @@ const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
         tooltip: "Probe (I)",
         iconSrc: probeIconUrl,
         goToStateType: "PlacingProbe",
+        simBehavior: "observational",
         hilightRule: (state) => state.type === "PlacingProbe",
         hilightColor: COLORS.ORANGE,
         hilightHoverColor: COLORS.ORANGE_STROKE,
@@ -383,19 +414,32 @@ interface ElementPaletteProps {
   setCanvasState: (state: CanvasState) => void;
   canvasState: CanvasState;
   mechanism: Mechanism;
+  appMode: AppMode;
+  onExitToEdition: () => void;
+  onPauseSim: () => void;
 }
 
 export const ElementPalette: React.FC<ElementPaletteProps> = ({
   setCanvasState,
   canvasState,
   mechanism,
+  appMode,
+  onExitToEdition,
+  onPauseSim,
 }) => {
   const SIZE = 28;
   const PADDING = 2;
 
-  /** Handle state selection by clicking on an button */
-  const handleElementClick = (stateType: CanvasStateType) => {
-    setCanvasState({ type: stateType } as CanvasState);
+  const handleElementClick = (element: PaletteElement) => {
+    if (appMode !== "edition") {
+      if (element.simBehavior === "structural") {
+        onExitToEdition();
+      } else if (element.simBehavior === "constraint") {
+        onPauseSim();
+      }
+      // "observational" → no sim side-effect
+    }
+    setCanvasState({ type: element.goToStateType } as CanvasState);
   };
 
   // Preload icons on mount to improve performance
@@ -485,11 +529,11 @@ export const ElementPalette: React.FC<ElementPaletteProps> = ({
                 onOpen={() => {}}
               >
                 <IconButton
-                  onClick={() => handleElementClick(element.goToStateType)}
+                  onClick={() => handleElementClick(element)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" || e.key === " ") {
                       e.preventDefault();
-                      handleElementClick(element.goToStateType);
+                      handleElementClick(element);
                     }
                   }}
                   sx={{

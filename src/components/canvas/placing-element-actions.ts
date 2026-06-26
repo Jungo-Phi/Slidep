@@ -327,6 +327,7 @@ function handle_place_element(
       type: "gear",
       id: gearId,
       position: state.startHover.position,
+      angle: 0,
       radius: state.startHover.position.distance_to(hoveredPart.position),
       parentAxleID: pivotId,
       fixedEdgesIDs: [],

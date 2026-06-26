@@ -50,6 +50,7 @@ import {
   ActionBundleType,
   AppMode,
   DEFAULT_METADATA,
+  ID,
   DEFAULT_RUNTIME_STATE,
   DEFAULT_SIMULATION_CONFIG,
   Mechanism,
@@ -83,8 +84,9 @@ import {
   RECORD_DT,
   apply_snapshot_to_mechanism,
   compute_kinematic_snapshot,
+  resolveMotorAngle,
 } from "./components/solver/kinematic-simulation";
-import { KinematicSnapshot } from "./types/runtime-state";
+import { KinematicSnapshot, MotorPhase } from "./types/runtime-state";
 import { CanvasState } from "./types/canvas-state";
 import { HoveredPart } from "./types/hovered-part";
 import { actionReducer } from "./components/mechanism/action-reducer";
@@ -168,6 +170,9 @@ const App: React.FC = () => {
   const kinematicRef = useRef({ mechanism, runtimeState, appMode });
   kinematicRef.current = { mechanism, runtimeState, appMode };
   const kinematicLastWallTime = useRef<number | null>(null);
+  // History length when simulation mode was last entered — used to distinguish
+  // edition-mode actions from simulation-mode actions on undo.
+  const simStartHistoryLengthRef = useRef<number>(0);
 
   const [snackbar, setSnackbar] = useState<{
     open: boolean;
@@ -182,8 +187,11 @@ const App: React.FC = () => {
   // This prevents a one-frame flash where old tab content renders with new canvas state
   // (e.g. element list appearing briefly before switching to project tab on deselect).
   if (prevCanvasState !== canvasState) {
+    // TODO : mettre aussi à jour quand on change activeTab
     setPrevCanvasState(canvasState);
-    if ("elementID" in canvasState) {
+    if (appMode !== "edition") {
+      setActiveTab("analysis"); // TODO : permettre aussi de sélectionner des éléments
+    } else if ("elementID" in canvasState) {
       if (
         mechanism.mechanicalElements.find(
           (el) => el.id === canvasState.elementID,
@@ -245,11 +253,15 @@ const App: React.FC = () => {
   // Reset kinematic state on every mode change (fresh start each time)
   useEffect(() => {
     kinematicLastWallTime.current = null;
+    if (appMode !== "edition") {
+      simStartHistoryLengthRef.current = mechanismRef.current.history.length;
+    }
     setRuntimeState((prev) => ({
       ...prev,
       isPlaying: false,
       time: 0,
       kinematicSnapshots: [],
+      motorPhases: new Map(),
     }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appMode]);
@@ -313,7 +325,7 @@ const App: React.FC = () => {
               : existingSnaps.length > 0
                 ? existingSnaps[existingSnaps.length - 1]
                 : null;
-          newSnaps.push(compute_kinematic_snapshot(mech, t, prevSnap));
+          newSnaps.push(compute_kinematic_snapshot(mech, t, prevSnap, rs.motorPhases));
           t += RECORD_DT;
         }
 
@@ -390,6 +402,46 @@ const App: React.FC = () => {
         }
         return newMechanism;
       });
+      // In simulation mode, invalidate future snapshots and record motor phases
+      // for any speed change so the motor angle stays continuous.
+      if (kinematicRef.current.appMode !== "edition") {
+        const currentTime = kinematicRef.current.runtimeState.time;
+
+        // Detect motor speed changes in this batch
+        const motorSpeedChanges: Array<{ id: ID; oldOmega: number; newOmega: number }> = [];
+        actions.forEach((action) => {
+          if (action.type !== "SetMotorConfig") return;
+          if (action.newConfig?.speed === undefined) return;
+          const pivot = mechanismRef.current.mechanicalElements.find(
+            (e) => e.id === action.id && e.type === "pivot",
+          );
+          if (!pivot || !("motor" in pivot) || !pivot.motor) return;
+          const oldOmega = pivot.motor.speed * ((2 * Math.PI) / 60);
+          const newOmega = action.newConfig.speed * ((2 * Math.PI) / 60);
+          if (oldOmega !== newOmega)
+            motorSpeedChanges.push({ id: action.id, oldOmega, newOmega });
+        });
+
+        setRuntimeState((prev) => {
+          // Truncate future snapshots
+          const kinematicSnapshots = prev.kinematicSnapshots.filter(
+            (s) => s.t <= currentTime,
+          );
+          // Record new motor phases for speed changes
+          if (motorSpeedChanges.length === 0)
+            return { ...prev, kinematicSnapshots };
+          const motorPhases = new Map(prev.motorPhases);
+          motorSpeedChanges.forEach(({ id, oldOmega, newOmega }) => {
+            const theta = resolveMotorAngle(id, currentTime, oldOmega, prev.motorPhases);
+            const phases: MotorPhase[] = [
+              ...(motorPhases.get(id) ?? []),
+              { t: currentTime, theta, omega: newOmega },
+            ];
+            motorPhases.set(id, phases);
+          });
+          return { ...prev, kinematicSnapshots, motorPhases };
+        });
+      }
       setSaveStatus("saving");
       debouncedSave();
     },
@@ -398,6 +450,11 @@ const App: React.FC = () => {
 
   const undoMechanism = useCallback(() => {
     if (mechanismRef.current.history.length === 0) return;
+
+    const isInSim = kinematicRef.current.appMode !== "edition";
+    // Read BEFORE setMechanism mutates history
+    const lastBundle = mechanismRef.current.history.slice(-1)[0];
+
     setMechanism((prevMechanism) => {
       const lastActionsForUndo = [
         ...prevMechanism.history.slice(-1)[0],
@@ -425,12 +482,59 @@ const App: React.FC = () => {
       }
       return newMechanism;
     });
+
+    if (isInSim) {
+      const isEditionAction =
+        mechanismRef.current.history.length <= simStartHistoryLengthRef.current;
+      if (isEditionAction) {
+        // Undoing an action made before entering simulation → exit to edition.
+        // The mode-change useEffect will reset kinematicSnapshots and motorPhases.
+        setAppMode("edition");
+      } else {
+        const currentTime = kinematicRef.current.runtimeState.time;
+        const motorSpeedChanges: Array<{ id: ID; oldOmega: number; newOmega: number }> = [];
+        lastBundle.forEach((action) => {
+          if (
+            action.type !== "SetMotorConfig" ||
+            action.newConfig?.speed === undefined ||
+            action.oldConfig?.speed === undefined
+          )
+            return;
+          const oldOmega = action.newConfig.speed * ((2 * Math.PI) / 60);
+          const newOmega = action.oldConfig.speed * ((2 * Math.PI) / 60);
+          if (oldOmega !== newOmega)
+            motorSpeedChanges.push({ id: action.id, oldOmega, newOmega });
+        });
+        setRuntimeState((prev) => {
+          const kinematicSnapshots = prev.kinematicSnapshots.filter(
+            (s) => s.t <= currentTime,
+          );
+          if (motorSpeedChanges.length === 0) return { ...prev, kinematicSnapshots };
+          const motorPhases = new Map(prev.motorPhases);
+          motorSpeedChanges.forEach(({ id, oldOmega, newOmega }) => {
+            const theta = resolveMotorAngle(id, currentTime, oldOmega, prev.motorPhases);
+            const phases: MotorPhase[] = [
+              ...(motorPhases.get(id) ?? []),
+              { t: currentTime, theta, omega: newOmega },
+            ];
+            motorPhases.set(id, phases);
+          });
+          return { ...prev, kinematicSnapshots, motorPhases };
+        });
+      }
+    }
+
     setSaveStatus("saving");
     debouncedSave();
   }, [debouncedSave]);
 
   const redoMechanism = useCallback(() => {
     if (mechanismRef.current.future.length === 0) return;
+
+    const isInSim = kinematicRef.current.appMode !== "edition";
+    // Read BEFORE setMechanism mutates future
+    const nextBundle = mechanismRef.current.future.slice(-1)[0];
+
     setMechanism((prevMechanism) => {
       let nextActions = prevMechanism.future.slice(-1)[0];
       let newMechanism = actionReducer(
@@ -456,6 +560,40 @@ const App: React.FC = () => {
       }
       return newMechanism;
     });
+
+    if (isInSim) {
+      const currentTime = kinematicRef.current.runtimeState.time;
+      const motorSpeedChanges: Array<{ id: ID; oldOmega: number; newOmega: number }> = [];
+      nextBundle.forEach((action) => {
+        if (
+          action.type !== "SetMotorConfig" ||
+          action.newConfig?.speed === undefined ||
+          action.oldConfig?.speed === undefined
+        )
+          return;
+        const oldOmega = action.oldConfig.speed * ((2 * Math.PI) / 60);
+        const newOmega = action.newConfig.speed * ((2 * Math.PI) / 60);
+        if (oldOmega !== newOmega)
+          motorSpeedChanges.push({ id: action.id, oldOmega, newOmega });
+      });
+      setRuntimeState((prev) => {
+        const kinematicSnapshots = prev.kinematicSnapshots.filter(
+          (s) => s.t <= currentTime,
+        );
+        if (motorSpeedChanges.length === 0) return { ...prev, kinematicSnapshots };
+        const motorPhases = new Map(prev.motorPhases);
+        motorSpeedChanges.forEach(({ id, oldOmega, newOmega }) => {
+          const theta = resolveMotorAngle(id, currentTime, oldOmega, prev.motorPhases);
+          const phases: MotorPhase[] = [
+            ...(motorPhases.get(id) ?? []),
+            { t: currentTime, theta, omega: newOmega },
+          ];
+          motorPhases.set(id, phases);
+        });
+        return { ...prev, kinematicSnapshots, motorPhases };
+      });
+    }
+
     setSaveStatus("saving");
     debouncedSave();
   }, [debouncedSave]);
@@ -631,7 +769,7 @@ const App: React.FC = () => {
   const handleSpaceKey = useCallback(() => {
     if (appMode === "edition") {
       setAppMode(mechanism.metadata.lastSimulationMode);
-      setRuntimeState((prev) => ({ ...prev, isPlaying: true }));
+      setRuntimeState((prev) => ({ ...prev, isPlaying: true })); // TODO : est appliqué, mais remit à false l'instant d'après
     } else {
       setRuntimeState((prev) => ({ ...prev, isPlaying: !prev.isPlaying }));
     }
@@ -870,6 +1008,7 @@ const App: React.FC = () => {
                         current: null,
                         history: [],
                         kinematicSnapshots: [],
+                        motorPhases: new Map(),
                       }))
                     }
                     sx={{ p: 0.4 }}
@@ -1384,6 +1523,13 @@ const App: React.FC = () => {
             redoMechanism={redoMechanism}
             setAppMode={setAppMode}
             onSpaceKey={handleSpaceKey}
+            onExitToEdition={() => {
+              setAppMode("edition");
+              setRuntimeState((prev) => ({ ...prev, isPlaying: false }));
+            }}
+            onPauseSim={() =>
+              setRuntimeState((prev) => ({ ...prev, isPlaying: false }))
+            }
             snapToGrid={snapToGrid}
             showGrid={showGrid}
           />
@@ -1391,138 +1537,147 @@ const App: React.FC = () => {
           {/* Floating panels */}
 
           {/* Timeline */}
-          {appMode !== "edition" && (() => {
-            const snaps = runtimeState.kinematicSnapshots;
-            const timelineMax =
-              appMode === "kinematic" && snaps.length > 0
-                ? snaps[snaps.length - 1].t
-                : runtimeState.current
-                  ? runtimeState.current.timestamp
-                  : 30;
-            const timelinePct = Math.min(
-              100,
-              (runtimeState.time / timelineMax) * 100,
-            ).toFixed(2);
-            return (
-              <Box
-                sx={{
-                  position: "absolute",
-                  left: "50%",
-                  top: 8,
-                  transform: "translateX(-50%)",
-                  zIndex: 1000,
-                  display: "flex",
-                  alignItems: "center",
-                  backgroundColor: COLORS.FILL_NODE,
-                  borderRadius: 999,
-                  boxShadow: 3,
-                  px: 1.5,
-                  width: "min(480px, 55vw)",
-                  height: 24,
-                }}
-              >
+          {appMode !== "edition" &&
+            (() => {
+              const snaps = runtimeState.kinematicSnapshots;
+              const timelineMax =
+                appMode === "kinematic" && snaps.length > 0
+                  ? snaps[snaps.length - 1].t
+                  : runtimeState.current
+                    ? runtimeState.current.timestamp
+                    : 30;
+              const timelinePct = Math.min(
+                100,
+                (runtimeState.time / timelineMax) * 100,
+              ).toFixed(2);
+              return (
                 <Box
-                  ref={timelineTrackRef}
                   sx={{
-                    flex: 1,
-                    height: "100%",
+                    position: "absolute",
+                    left: "50%",
+                    top: 8,
+                    transform: "translateX(-50%)",
+                    zIndex: 1000,
                     display: "flex",
                     alignItems: "center",
-                    position: "relative",
-                    cursor: "pointer",
-                  }}
-                  onMouseEnter={() => setTimelineHovered(true)}
-                  onMouseLeave={() => setTimelineHovered(false)}
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    setTimelineDragging(true);
-                    const rect =
-                      timelineTrackRef.current!.getBoundingClientRect();
-                    const seek = (clientX: number) => {
-                      const ratio = Math.max(
-                        0,
-                        Math.min(1, (clientX - rect.left) / rect.width),
-                      );
-                      const rs = runtimeStateRef.current;
-                      const maxTime =
-                        appMode === "kinematic" &&
-                        rs.kinematicSnapshots.length > 0
-                          ? rs.kinematicSnapshots[
-                              rs.kinematicSnapshots.length - 1
-                            ].t
-                          : rs.current
-                            ? rs.current.timestamp
-                            : 30;
-                      setRuntimeState((prev) => ({
-                        ...prev,
-                        time: ratio * maxTime,
-                        isPlaying: false,
-                      }));
-                    };
-                    seek(e.clientX);
-                    const onMove = (ev: MouseEvent) => seek(ev.clientX);
-                    const onUp = () => {
-                      setTimelineDragging(false);
-                      document.removeEventListener("mousemove", onMove);
-                      document.removeEventListener("mouseup", onUp);
-                    };
-                    document.addEventListener("mousemove", onMove);
-                    document.addEventListener("mouseup", onUp);
+                    backgroundColor: COLORS.FILL_NODE,
+                    borderRadius: 999,
+                    boxShadow: 3,
+                    px: 1.5,
+                    width: "min(480px, 55vw)",
+                    height: 24,
                   }}
                 >
-                  {/* Rail */}
                   <Box
+                    ref={timelineTrackRef}
                     sx={{
-                      position: "absolute",
-                      left: 0,
-                      right: 0,
-                      height: 4,
-                      borderRadius: 2,
-                      backgroundColor: "rgba(0,0,0,0.1)",
+                      flex: 1,
+                      height: "100%",
+                      display: "flex",
+                      alignItems: "center",
+                      position: "relative",
+                      cursor: "pointer",
                     }}
-                  />
-                  {/* Fill */}
-                  <Box
-                    sx={{
-                      position: "absolute",
-                      left: 0,
-                      height: 5,
-                      borderRadius: 3,
-                      backgroundColor: COLORS.ORANGE,
-                      width: `${timelinePct}%`,
+                    onMouseEnter={() => setTimelineHovered(true)}
+                    onMouseLeave={() => setTimelineHovered(false)}
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      setTimelineDragging(true);
+                      const rect =
+                        timelineTrackRef.current!.getBoundingClientRect();
+                      const seek = (clientX: number) => {
+                        const ratio = Math.max(
+                          0,
+                          Math.min(1, (clientX - rect.left) / rect.width),
+                        );
+                        const rs = runtimeStateRef.current;
+                        const maxTime =
+                          appMode === "kinematic" &&
+                          rs.kinematicSnapshots.length > 0
+                            ? rs.kinematicSnapshots[
+                                rs.kinematicSnapshots.length - 1
+                              ].t
+                            : rs.current
+                              ? rs.current.timestamp
+                              : 30;
+                        setRuntimeState((prev) => ({
+                          ...prev,
+                          time: ratio * maxTime,
+                          isPlaying: false,
+                        }));
+                      };
+                      seek(e.clientX);
+                      const onMove = (ev: MouseEvent) => seek(ev.clientX);
+                      const onUp = () => {
+                        setTimelineDragging(false);
+                        document.removeEventListener("mousemove", onMove);
+                        document.removeEventListener("mouseup", onUp);
+                      };
+                      document.addEventListener("mousemove", onMove);
+                      document.addEventListener("mouseup", onUp);
                     }}
-                  />
-                  {/* Thumb */}
-                  <Tooltip
-                    title={`t = ${runtimeState.time.toFixed(1)} s`}
-                    placement="bottom"
-                    open={timelineHovered || timelineDragging}
                   >
+                    {/* Rail */}
                     <Box
                       sx={{
                         position: "absolute",
-                        top: "50%",
-                        left: `${timelinePct}%`,
-                        transform: `translate(-50%, -50%) scale(${timelineHovered || timelineDragging ? 1.3 : 1})`,
-                        width: 12,
-                        height: 12,
-                        borderRadius: "50%",
-                        backgroundColor: "white",
-                        border: "2px solid",
-                        borderColor: COLORS.ORANGE,
-                        boxShadow: "0 1px 4px rgba(0,0,0,0.3)",
-                        pointerEvents: "none",
+                        left: 0,
+                        right: 0,
+                        height: 4,
+                        borderRadius: 2,
+                        backgroundColor: "rgba(0,0,0,0.1)",
                       }}
                     />
-                  </Tooltip>
+                    {/* Fill */}
+                    <Box
+                      sx={{
+                        position: "absolute",
+                        left: 0,
+                        height: 5,
+                        borderRadius: 3,
+                        backgroundColor: COLORS.ORANGE,
+                        width: `${timelinePct}%`,
+                      }}
+                    />
+                    {/* Thumb */}
+                    <Tooltip
+                      title={`t = ${runtimeState.time.toFixed(1)} s`}
+                      placement="bottom"
+                      open={timelineHovered || timelineDragging}
+                    >
+                      <Box
+                        sx={{
+                          position: "absolute",
+                          top: "50%",
+                          left: `${timelinePct}%`,
+                          transform: `translate(-50%, -50%) scale(${timelineHovered || timelineDragging ? 1.3 : 1})`,
+                          width: 12,
+                          height: 12,
+                          borderRadius: "50%",
+                          backgroundColor: "white",
+                          border: "2px solid",
+                          borderColor: COLORS.ORANGE,
+                          boxShadow: "0 1px 4px rgba(0,0,0,0.3)",
+                          pointerEvents: "none",
+                        }}
+                      />
+                    </Tooltip>
+                  </Box>
                 </Box>
-              </Box>
-            );
-          })()}
+              );
+            })()}
           <ElementPalette
             setCanvasState={setCanvasState}
             canvasState={canvasState}
             mechanism={mechanism}
+            appMode={appMode}
+            onExitToEdition={() => {
+              setAppMode("edition");
+              setRuntimeState((prev) => ({ ...prev, isPlaying: false }));
+            }}
+            onPauseSim={() =>
+              setRuntimeState((prev) => ({ ...prev, isPlaying: false }))
+            }
           />
           <PropertiesPanel
             setCanvasState={setCanvasState}
