@@ -1,9 +1,9 @@
-import { Action, ActionBundleType, Mechanism, Nodes } from "../../types";
+import { Action, ActionBundleType, GeomNodes, Mechanism } from "../../types";
 
 import { resolveGeometricConstraints } from "../solver/geometric-solver";
 import {
   get_constraint_nodes as get_constraint_positions,
-  get_nodes,
+  get_geom_nodes,
 } from "../solver/parsing";
 import { clone_mechanism } from "../../utils";
 import { actionReducer } from "./action-reducer";
@@ -18,8 +18,8 @@ export function apply_actions(
   let lastActions: Action[];
   let lastAction: Action;
   let secondToLastAction: Action;
-  let oldNodes: Nodes;
-  let newNodes: Nodes;
+  let oldNodes: GeomNodes;
+  let newNodes: GeomNodes;
 
   let newHistory: Action[][] | undefined = undefined;
 
@@ -65,7 +65,7 @@ export function apply_actions(
       )
         break;
 
-      oldNodes = get_nodes(mechanism.mechanicalElements);
+      oldNodes = get_geom_nodes(mechanism.mechanicalElements);
       get_constraint_positions(mechanism.constraintElements).forEach(
         (pos, key) => oldNodes.positions.set(key, pos),
       );
@@ -131,7 +131,7 @@ export function apply_actions(
       )
         break;
 
-      oldNodes = get_nodes(mechanism.mechanicalElements);
+      oldNodes = get_geom_nodes(mechanism.mechanicalElements);
       get_constraint_positions(mechanism.constraintElements).forEach(
         (pos, key) => oldNodes.positions.set(key, pos),
       );
@@ -185,7 +185,7 @@ export function apply_actions(
       )
         break;
 
-      oldNodes = get_nodes(mechanism.mechanicalElements);
+      oldNodes = get_geom_nodes(mechanism.mechanicalElements);
       get_constraint_positions(mechanism.constraintElements).forEach(
         (pos, key) => oldNodes.positions.set(key, pos),
       );
@@ -217,7 +217,7 @@ export function apply_actions(
           newAction.element.type !== "gear-ratio")
       )
         break;
-      oldNodes = get_nodes(mechanism.mechanicalElements);
+      oldNodes = get_geom_nodes(mechanism.mechanicalElements);
       get_constraint_positions(mechanism.constraintElements).forEach(
         (pos, key) => oldNodes.positions.set(key, pos),
       );

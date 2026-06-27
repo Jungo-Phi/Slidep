@@ -16,6 +16,7 @@ import {
   RuntimeState,
   SimulationConfig,
 } from "../../types";
+import { ConstraintResidual } from "../../types/runtime-state";
 import { HoveredPart } from "../../types/hovered-part";
 import { CanvasState } from "../../types/canvas-state";
 import { ProjectInfoSection } from "./ProjectInfoSection";
@@ -37,6 +38,7 @@ export interface PropertiesPanelProps {
   appMode: AppMode;
   activeTab: PropertiesPanelTab;
   setActiveTab: (tab: PropertiesPanelTab) => void;
+  unsatisfied: ConstraintResidual[];
 }
 
 export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
@@ -49,6 +51,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
   appMode,
   activeTab,
   setActiveTab,
+  unsatisfied,
 }) => {
   const handleProjectInfoChange = (info: any) => {
     updateMetadata({
@@ -191,7 +194,14 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
           />
         )}
         {activeTab === "analysis" && (
-          <AnalysisPanel mechanism={mechanism} appMode={appMode} />
+          <AnalysisPanel
+            mechanism={mechanism}
+            appMode={appMode}
+            applyActions={applyActions}
+            setHoveredPart={setHoveredPart}
+            setCanvasState={setCanvasState}
+            unsatisfied={unsatisfied}
+          />
         )}
       </Box>
     </Paper>

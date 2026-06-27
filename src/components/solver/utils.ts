@@ -1,13 +1,34 @@
-import { Link, Nodes } from "../../types";
+import { GeomNodes, Link, SimNodes } from "../../types";
 
 /**
- * get_degrees_of_liberty(positions, radii, links)
+ * Degrees of freedom for the geometric solver (edition).
+ * Variables: positions (×2) + gear radii (×1), minus link DOF and anchored positions.
  */
-export function get_degrees_of_freedom(nodes: Nodes, links: Link[]): number {
+export function get_geom_degrees_of_freedom(
+  nodes: GeomNodes,
+  links: Link[],
+): number {
   return (
     nodes.positions.size * 2 +
     nodes.radii.size -
-    links.map((link) => link.ddl).reduce((a, b) => a + b, 0) -
+    links.map((link) => link.ddl).reduce((a: number, b: number) => a + b, 0) -
+    [...nodes.posMasses.values()].filter((mass) => mass === 0).length * 2
+  );
+}
+
+/**
+ * Degrees of freedom for the kinematic simulation.
+ * Variables: positions (×2) + gear angles (×1), minus link DOF and anchored
+ * positions. Angles are never anchored, so they carry no mass term.
+ */
+export function get_sim_degrees_of_freedom(
+  nodes: SimNodes,
+  links: Link[],
+): number {
+  return (
+    nodes.positions.size * 2 +
+    nodes.angles.size -
+    links.map((link) => link.ddl).reduce((a: number, b: number) => a + b, 0) -
     [...nodes.posMasses.values()].filter((mass) => mass === 0).length * 2
   );
 }
@@ -18,14 +39,15 @@ function keys_of(link: Link): string[] {
       return [link.key1];
     case "Coincidence":
     case "Distance":
+    case "Spring":
     case "Horizontal":
     case "Vertical":
     case "GearMeshing":
     case "GearRatio":
       return [link.key1, link.key2];
     case "DistanceToLine":
-    case "OnSegment":
-    case "AtSegmentRatio":
+    case "SlideOnSegment":
+    case "FixedOnSegment":
       return [link.key1, link.key2, link.key3];
     case "Angle":
     case "Normal":
@@ -34,6 +56,18 @@ function keys_of(link: Link): string[] {
       return [link.key1, link.key2, link.key3, link.key4];
     case "KeepOrientation":
       return [link.key1, link.key2];
+    case "MotorBeam":
+      return [link.pivotKey, link.drivenKey];
+    case "MotorAngle":
+      return [link.angleKey];
+    case "GearMeshAngle":
+      return [link.angleKey1, link.angleKey2, link.posKey1, link.posKey2];
+    case "CoaxialAngle":
+      return [link.angleKey1, link.angleKey2];
+    case "GearPerimeterPin":
+      return [link.nodeKey, link.centerKey, link.angleKey];
+    case "BeamFollowsAngle":
+      return [link.pivotKey, link.drivenKey, link.angleKey];
     case "HandleGrab":
       return [link.grabbedKey];
   }

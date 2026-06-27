@@ -134,30 +134,28 @@ export interface StaticAnalysisResult {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Motor phase: enables continuous angle when motor speed changes mid-sim
-// ─────────────────────────────────────────────────────────────
-
-export interface MotorPhase {
-  /** Simulation time at which this phase starts */
-  t: number;
-  /** Cumulative angle (rad) accumulated up to t */
-  theta: number;
-  /** Angular velocity (rad/s) from t onwards */
-  omega: number;
-}
-
-// ─────────────────────────────────────────────────────────────
 // Kinematic snapshot: raw solver positions at a given pseudo-time
 // ─────────────────────────────────────────────────────────────
 
+/** A constraint the solver could not satisfy at this frame (e.g. a blocked
+ *  mechanism). `residual` mixes px (distance) and rad (angle) — a rough
+ *  severity indicator, not a physical quantity. */
+export interface ConstraintResidual {
+  /** Owning element, to reference / highlight on the canvas. */
+  owner: ID;
+  /** Link type, for labeling (e.g. "Distance", "MotorBeam"). */
+  type: string;
+  residual: number;
+}
+
 export interface KinematicSnapshot {
   t: number;
-  /** Solver-keyed positions: "${id}:pos", "${id}:start", "${id}:end" */
+  /** Solver-keyed positions: bare "${id}" for nodes/bodies, "${id}:start"/"${id}:end" for edges */
   positions: Map<string, Point2>;
-  /** Solver-keyed radii: "${id}:rad" */
-  radii: Map<string, number>;
-  /** Cumulative rotation angle (rad) for each gear ID */
-  gearAngles: Map<ID, number>;
+  /** Solver-keyed gear rotation angles (rad), bare "${id}" */
+  angles: Map<string, number>;
+  /** Constraints left unsatisfied at this frame (empty/undefined when all met). */
+  unsatisfied?: ConstraintResidual[];
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -178,10 +176,6 @@ export interface RuntimeState {
 
   /** Recorded kinematic snapshots (incremental, sampled at 30 fps of sim-time) */
   kinematicSnapshots: KinematicSnapshot[];
-
-  /** Per-motor phase history for continuous angle across speed changes.
-   *  Key = PivotElement ID. Appended each time motor speed changes in simulation. */
-  motorPhases: Map<ID, MotorPhase[]>;
 
   // Overlays
   overlays: OverlayState;
@@ -228,6 +222,5 @@ export const DEFAULT_RUNTIME_STATE: RuntimeState = {
   current: null,
   history: [],
   kinematicSnapshots: [],
-  motorPhases: new Map(),
   overlays: DEFAULT_OVERLAY_STATE,
 };

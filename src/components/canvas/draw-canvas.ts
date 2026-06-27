@@ -470,10 +470,10 @@ export function drawMechanicalCanvas(
               );
               break;
             case "spring":
-              draw_spring(ctx, delta.length());
+              draw_spring(ctx, delta.length(), element.restLength);
               break;
             case "damper":
-              draw_damper(ctx, delta.length());
+              draw_damper(ctx, delta.length(), element.restLength);
               break;
           }
           if (isEdgeEndHovered && hoveredPart.type === "Edge") {
@@ -522,7 +522,7 @@ export function drawMechanicalCanvas(
                   angle: 0,
                   radius: INTERACTION_SPECS.BELT_GRAB_RADIUS,
                   parentAxleID: "----",
-                  fixedEdgesIDs: [],
+                  fixedNodesIDs: [],
                   meshedGearsIDs: [],
                   attachedBeltID: element.id,
                 };
@@ -564,7 +564,7 @@ export function drawMechanicalCanvas(
                   hoveredPart.position,
                 ),
                 parentAxleID: "----",
-                fixedEdgesIDs: [],
+                fixedNodesIDs: [],
                 meshedGearsIDs: [],
                 attachedBeltID: element.id,
               };

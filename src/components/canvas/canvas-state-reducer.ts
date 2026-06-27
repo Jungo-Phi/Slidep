@@ -44,7 +44,11 @@ export function canvasStateReducer(
   onMouseUpHandler: () => void,
   loadElements: LoadElement[] = [],
   isSimulating: boolean = false,
-  onSimulationGrab: (key: string, target: Point2) => void = () => {},
+  onSimulationGrab: (
+    key: string,
+    target: Point2,
+    bodyRatio?: number,
+  ) => void = () => {},
   onSimulationGrabEnd: () => void = () => {},
 ) {
   let actions: Action[] = [];
@@ -298,23 +302,25 @@ export function canvasStateReducer(
           if (isSimulating) {
             let simKey: string | null = null;
             let simElementID: ID | null = null;
+            let bodyRatio: number | undefined = undefined;
             if (hoveredPart.type === "Node" || hoveredPart.type === "GearTooth") {
-              simKey = `${hoveredPart.id}:pos`;
+              simKey = hoveredPart.id;
               simElementID = hoveredPart.id;
             } else if (hoveredPart.type === "Edge") {
               simElementID = hoveredPart.id;
               if (hoveredPart.part === "start") simKey = `${hoveredPart.id}:start`;
               else if (hoveredPart.part === "end") simKey = `${hoveredPart.id}:end`;
               else {
+                // Body grab: pull the beam at the grabbed ratio.
                 const simEdge = get_mechanical_element_from_id(
                   hoveredPart.id,
                   mechanicalElements,
                 ) as EdgeElement;
-                const dStart = hoveredPart.position.distance_to(simEdge.positionStart);
-                const dEnd = hoveredPart.position.distance_to(simEdge.positionEnd);
-                simKey = dStart <= dEnd
-                  ? `${hoveredPart.id}:start`
-                  : `${hoveredPart.id}:end`;
+                simKey = hoveredPart.id;
+                bodyRatio = hoveredPart.position.parameter_on_segment(
+                  simEdge.positionStart,
+                  simEdge.positionEnd,
+                );
               }
             }
             if (simKey && simElementID) {
@@ -322,6 +328,7 @@ export function canvasStateReducer(
                 type: "SimulationDragging",
                 grabbedKey: simKey,
                 elementID: simElementID,
+                bodyRatio,
               });
             }
             break;
@@ -619,7 +626,7 @@ export function canvasStateReducer(
           });
           break;
         case "SimulationDragging":
-          onSimulationGrab(state.grabbedKey, hoveredPart.position);
+          onSimulationGrab(state.grabbedKey, hoveredPart.position, state.bodyRatio);
           break;
       }
       break;

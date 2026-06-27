@@ -28,6 +28,7 @@ function clone_mechanical_element(el: MechanicalElement): MechanicalElement {
   return {
     ...el,
     ...("fixedEdgesIDs" in el && { fixedEdgesIDs: [...el.fixedEdgesIDs] }),
+    ...("fixedNodesIDs" in el && { fixedNodesIDs: [...el.fixedNodesIDs] }),
     ...("rotatingEdgesIDs" in el && {
       rotatingEdgesIDs: [...el.rotatingEdgesIDs],
     }),
@@ -425,10 +426,10 @@ export function actionReducer(
         let radius: number | undefined;
         mechanicalElements.forEach((element) => {
           if ("position" in element) {
-            position = positions.get(`${element.id}:pos`);
+            position = positions.get(element.id);
             if (position) element.position = position;
             if ("radius" in element) {
-              radius = radii.get(`${element.id}:rad`);
+              radius = radii.get(element.id);
               if (radius) element.radius = radius;
             }
           } else {
@@ -439,7 +440,7 @@ export function actionReducer(
           }
         });
         constraintElements.forEach((element) => {
-          position = positions.get(`${element.id}:pos`);
+          position = positions.get(element.id);
           if (position) element.position = position;
         });
         break;

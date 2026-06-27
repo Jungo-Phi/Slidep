@@ -69,7 +69,7 @@ interface MechanicalCanvasProps {
   onSpaceKey: () => void;
   onExitToEdition: () => void;
   onPauseSim: () => void;
-  onSimulationGrab: (key: string, target: Point2) => void;
+  onSimulationGrab: (key: string, target: Point2, bodyRatio?: number) => void;
   onSimulationGrabEnd: () => void;
   snapToGrid: boolean;
   showGrid: boolean;

@@ -1,5 +1,5 @@
 import { ID, MotorConfig, ProbeMetric, UnionElement } from "./element";
-import { Nodes } from "./kinematic-solver-links";
+import { GeomNodes } from "./kinematic-solver-links";
 import { Point2 } from "./point2";
 
 /** Events captured on the canvas */
@@ -240,8 +240,8 @@ export type Action =
         | ChangeDimensionActionType
         | ConnectsActionType
         | CreationActionType;
-      newNodes: Nodes;
-      oldNodes: Nodes;
+      newNodes: GeomNodes;
+      oldNodes: GeomNodes;
     }
   | { type: "Blank" }
   | { type: "MoveForceVector"; id: ID; newVector: Point2; oldVector: Point2 }

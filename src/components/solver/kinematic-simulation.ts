@@ -1,384 +1,82 @@
-import { BeamElement, GearElement, ID, Mechanism, Point2 } from "../../types";
-import { KinematicSnapshot, MotorPhase } from "../../types/runtime-state";
-import { get_links, get_nodes } from "./parsing";
+import { ID, Link, Mechanism, Point2, SimNodes } from "../../types";
+import {
+  ConstraintResidual,
+  KinematicSnapshot,
+} from "../../types/runtime-state";
+import { get_links_simulation, get_sim_nodes } from "./parsing";
 import { PBD_kinematic_solver } from "./PBD_kinematic_solver";
 import { sort_links } from "./utils";
 
-const RECORD_DT = 1 / 30; // 30 fps of simulated time
+const RECORD_DT = 1 / 120; // 120 fps of simulated time
+
+/** A motor is reported blocked when, over the frame, the driven element advanced
+ *  by less than this fraction of its commanded increment ω·dt. */
+const MOTOR_BLOCK_FRACTION = 0.5;
+
+/** Per-frame motor check: where the driver was before the solve and how far it
+ *  was asked to move, so we can compare against what it actually achieved. */
+type MotorCheck = {
+  owner: ID;
+  type: "MotorBeam" | "MotorAngle";
+  cur: number; // angle before the solve (rad)
+  expected: number; // commanded increment ω·dt (rad)
+  pivotKey?: string;
+  drivenKey?: string;
+  angleKey?: string;
+};
 
 /**
- * Resolve cumulative motor angle at time t, honouring phase events recorded
- * each time the motor speed was changed during simulation.
- * Without phase events: θ = ω₀·t (anchored at t=0).
- * With phase events: θ = phase.theta + phase.omega·(t - phase.t)
- * using the last recorded phase whose t ≤ requested t.
+ * Compiled, frozen simulation model. Built once when entering simulation and
+ * reused every frame: only the latest positions/angles are fed back in, the
+ * masses and links never change until we return to edition.
  */
-export function resolveMotorAngle(
-  pivotId: ID,
-  t: number,
-  omega: number,
-  motorPhases: Map<ID, MotorPhase[]>,
-): number {
-  const phases = motorPhases.get(pivotId);
-  if (!phases || phases.length === 0) return omega * t;
-  // Phases are ordered ascending by t; find the last one at or before t
-  let active: MotorPhase | undefined;
-  for (const p of phases) {
-    if (p.t <= t) active = p;
-    else break;
-  }
-  if (!active) return omega * t;
-  return active.theta + active.omega * (t - active.t);
+export type SimulationModel = {
+  /** Initial positions/angles + frozen masses (fused keys for coincident points). */
+  nodes: SimNodes;
+  /** Links: already fused (Coincidence), FixedOnSegment, and sorted. */
+  links: Link[];
+  /** Maps an original solver key to its fused key (for grab translation). */
+  keyMap: Map<string, string>;
+};
+
+/** A grab during simulation: either a node/endpoint key, or an edge body at ratio t. */
+export type SimGrab =
+  | { key: string; target: Point2 }
+  | { edgeID: string; t: number; target: Point2 };
+
+function wrap_angle(a: number): number {
+  while (a > Math.PI) a -= 2 * Math.PI;
+  while (a <= -Math.PI) a += 2 * Math.PI;
+  return a;
 }
 
-/** Compute cumulative gear rotation angles at time t, propagating from motor pivots.
- *  Each gear's angle = gearRatio * resolveMotorAngle(pivotId, t, pivotOmega, motorPhases)
- *  so phase events recorded on speed changes are correctly honoured throughout the gear train. */
-function compute_gear_angles(
-  mechanism: Mechanism,
-  t: number,
-  motorPhases: Map<ID, MotorPhase[]>,
-): Map<ID, number> {
-  const angles = new Map<ID, number>();
-  const visited = new Set<ID>();
-  // ratio: cumulative gear ratio relative to the driving motor pivot
-  // pivotId / pivotOmega: the source motor, needed for resolveMotorAngle
-  const queue: { gearId: ID; ratio: number; pivotId: ID; pivotOmega: number }[] = [];
-
-  // Build axle → [gearIds] lookup so co-axial gears share the same ratio
-  const coAxleGears = new Map<ID, ID[]>();
-  mechanism.mechanicalElements.forEach((el) => {
-    if (el.type !== "gear") return;
-    const list = coAxleGears.get(el.parentAxleID) ?? [];
-    list.push(el.id);
-    coAxleGears.set(el.parentAxleID, list);
-  });
-
-  // Seed from motor pivots
-  mechanism.mechanicalElements.forEach((el) => {
-    if (el.type !== "pivot" || !el.motor) return;
-    const pivotOmega = el.motor.speed * ((2 * Math.PI) / 60);
-    el.fixedGearsIDs.forEach((gearId) => {
-      if (!visited.has(gearId))
-        queue.push({ gearId, ratio: 1, pivotId: el.id, pivotOmega });
-    });
-  });
-
-  while (queue.length > 0) {
-    const item = queue.shift()!;
-    if (visited.has(item.gearId)) continue;
-    visited.add(item.gearId);
-
-    // angle = ratio * phase-aware motor angle
-    angles.set(
-      item.gearId,
-      item.ratio * resolveMotorAngle(item.pivotId, t, item.pivotOmega, motorPhases),
-    );
-
-    const gear = mechanism.mechanicalElements.find(
-      (e) => e.id === item.gearId && e.type === "gear",
-    ) as GearElement | undefined;
-    if (!gear) continue;
-
-    // Co-axial gears: same ratio and same source pivot
-    coAxleGears.get(gear.parentAxleID)?.forEach((coGearId) => {
-      if (!visited.has(coGearId))
-        queue.push({ gearId: coGearId, ratio: item.ratio, pivotId: item.pivotId, pivotOmega: item.pivotOmega });
-    });
-
-    // Meshed gears: inverted ratio
-    gear.meshedGearsIDs.forEach((meshedId) => {
-      if (visited.has(meshedId)) return;
-      const meshedGear = mechanism.mechanicalElements.find(
-        (e) => e.id === meshedId && e.type === "gear",
-      ) as GearElement | undefined;
-      if (!meshedGear) return;
-      queue.push({
-        gearId: meshedId,
-        ratio: item.ratio * (-gear.radius / meshedGear.radius),
-        pivotId: item.pivotId,
-        pivotOmega: item.pivotOmega,
-      });
-    });
+/** Position-bearing key fields are rewritten on coincidence fusion; angle key
+ *  fields (angleKey…) are left untouched — angles live in a separate map. */
+function rewrite_position_keys(link: Link, from: (k: string) => string): void {
+  const l = link as Record<string, unknown>;
+  for (const f of ["key1", "key2", "key3", "key4", "grabbedKey", "pivotKey", "drivenKey", "posKey1", "posKey2", "nodeKey", "centerKey"]) {
+    if (typeof l[f] === "string") l[f] = from(l[f] as string);
   }
-
-  return angles;
 }
 
 /**
- * Compute the kinematic snapshot at pseudo-time t.
- *
- * Mirrors the geometric-solver pipeline:
- *  1. Warm-start positions from the previous snapshot
- *  2. Pin motor-driven beam endpoints
- *  3. Fuse coincidence links (same as resolveGeometricConstraints)
- *  4. Sort links (anchored nodes first)
- *  5. PBD solve
- *  6. Decouple fused keys back to original format
+ * Compile the frozen simulation model from a mechanism (called on entering
+ * simulation). Parses sim nodes + links, fuses coincidence links, sorts.
  */
-export function compute_kinematic_snapshot(
-  mechanism: Mechanism,
-  t: number,
-  prevSnapshot: KinematicSnapshot | null,
-  motorPhases: Map<ID, MotorPhase[]> = new Map(),
-  grab?: { key: string; target: Point2 },
-): KinematicSnapshot {
-  const nodes = get_nodes(mechanism.mechanicalElements);
-  let links = get_links(
-    mechanism.mechanicalElements,
-    mechanism.constraintElements,
-  );
+export function compile_simulation_model(mechanism: Mechanism): SimulationModel {
+  const nodes = get_sim_nodes(mechanism.mechanicalElements);
+  let links = get_links_simulation(mechanism.mechanicalElements, nodes);
+  const keyMap = new Map<string, string>();
 
-  // Add a rigid-length constraint for every beam that doesn't already have one.
-  // dimension-edge constraints produce Distance links on the same key pair, so
-  // we track those first to avoid duplicates.
-  const distancePairs = new Set<string>();
-  links.forEach((link) => {
-    if (link.type === "Distance") {
-      distancePairs.add(`${link.key1}|${link.key2}`);
-      distancePairs.add(`${link.key2}|${link.key1}`);
-    }
-  });
-  mechanism.mechanicalElements.forEach((el) => {
-    if (el.type !== "beam") return;
-    const k1 = `${el.id}:start`;
-    const k2 = `${el.id}:end`;
-    if (!distancePairs.has(`${k1}|${k2}`)) {
-      links.push({
-        type: "Distance",
-        ddl: 1,
-        key1: k1,
-        key2: k2,
-        distance: el.positionEnd.sub(el.positionStart).length(),
-      });
-    }
-  });
-
-  // Rigidity constraints at join/slider/mass nodes.
-  //
-  // For join/mass: use Distance constraints between free endpoints of connected
-  // beams (triangle rigidity). Body beams have both endpoints free, so we include
-  // both. distancePairs already covers beam lengths, so closed trusses are
-  // automatically skipped (no redundant constraints). Star spanning tree = N_free−1.
-  //
-  // For slider: the parent beam (body connection) can MOVE — the slider translates
-  // along it, so distances between its endpoints and the attached beams' endpoints
-  // would be invalid. We use Angle constraints there instead, because a slider does
-  // NOT rotate: the angle between the parent beam and each rigidly-attached beam is
-  // preserved regardless of the slider's position along the parent beam.
-
-  // Beams endpoint de joins/sliders groundés avec triangle insuffisant :
-  // ancrage post-warm-start (voir étape 2c).
-  const groundedNeedsPin: Array<{ beam: BeamElement; flip: boolean }> = [];
-
-  // Seed to avoid duplicates for angle constraints (slider case)
-  const angleConstrainedPairs = new Set<string>();
-  mechanism.constraintElements.forEach((c) => {
-    if (
-      c.type === "dimension-angle" ||
-      c.type === "normal" ||
-      c.type === "parallel"
-    )
-      angleConstrainedPairs.add([c.startEdgeID, c.endEdgeID].sort().join("|"));
-  });
-
-  mechanism.mechanicalElements.forEach((node) => {
-    if (node.type !== "join" && node.type !== "slider" && node.type !== "mass")
-      return;
-
-    // Classify beams connected to this node
-    const endpointConns: Array<{ beam: BeamElement; flip: boolean }> = [];
-    const bodyBeams: BeamElement[] = [];
-
-    mechanism.mechanicalElements.forEach((el) => {
-      if (el.type !== "beam") return;
-      const b = el as BeamElement;
-      if (b.fixedNodeStartID === node.id)
-        endpointConns.push({ beam: b, flip: false }); // free end = b:end
-      else if (b.fixedNodeEndID === node.id)
-        endpointConns.push({ beam: b, flip: true }); // free end = b:start
-      else if (b.fixedNodesBodyIDs.includes(node.id)) bodyBeams.push(b);
-    });
-
-    // ── Distance: endpoint + join/mass body connections ───────────────────
-    const freeEndpoints: Array<{ key: string; pos: Point2 }> = [];
-    endpointConns.forEach(({ beam: b, flip }) => {
-      freeEndpoints.push(
-        flip
-          ? { key: `${b.id}:start`, pos: b.positionStart }
-          : { key: `${b.id}:end`, pos: b.positionEnd },
-      );
-    });
-    if (node.type !== "slider") {
-      // join/mass body beams: both endpoints are free
-      bodyBeams.forEach((b) => {
-        freeEndpoints.push({ key: `${b.id}:start`, pos: b.positionStart });
-        freeEndpoints.push({ key: `${b.id}:end`, pos: b.positionEnd });
-      });
-    }
-
-    if (freeEndpoints.length >= 2) {
-      const ref = freeEndpoints[0];
-      for (let i = 1; i < freeEndpoints.length; i++) {
-        const ep = freeEndpoints[i];
-        if (distancePairs.has(`${ref.key}|${ep.key}`)) continue;
-        const d = ref.pos.distance_to(ep.pos);
-        if (d < 1e-6) continue;
-        distancePairs.add(`${ref.key}|${ep.key}`);
-        distancePairs.add(`${ep.key}|${ref.key}`);
-        links.push({
-          type: "Distance",
-          ddl: 1,
-          key1: ref.key,
-          key2: ep.key,
-          distance: d,
-        });
-      }
-    }
-
-    // ── Angle: slider parent beam vs each rigidly-attached beam ──────────
-    if (node.type === "slider") {
-      bodyBeams.forEach((parentBeam) => {
-        const dParent = parentBeam.positionEnd.sub(parentBeam.positionStart);
-        endpointConns.forEach(({ beam: b, flip }) => {
-          const pairKey = [parentBeam.id, b.id].sort().join("|");
-          if (angleConstrainedPairs.has(pairKey)) return;
-          angleConstrainedPairs.add(pairKey);
-
-          const dB = b.positionEnd.sub(b.positionStart);
-          const virtDB = flip ? dB.mul(-1) : dB; // outward from N on b
-
-          links.push({
-            type: "Angle",
-            ddl: 1,
-            key1: `${parentBeam.id}:start`,
-            key2: `${parentBeam.id}:end`,
-            key3: `${b.id}:start`,
-            key4: `${b.id}:end`,
-            flipStart: false,
-            flipEnd: flip,
-            couterClockwise: false,
-            angle_rad: dParent.angle_to(virtDB),
-          });
-        });
-      });
-    }
-
-    // ── KeepOrientation: parent beam d'un slider groundé ─────────────────
-    // Le beam peut pivoter autour du point fixe via OnSegment sans ce verrou.
-    // KeepOrientation fixe sa direction tout en laissant la translation libre.
-    if (node.type === "slider" && node.isGrounded) {
-      bodyBeams.forEach((b) => {
-        const dB = b.positionEnd.sub(b.positionStart);
-        if (dB.length_squared() < 1e-12) return;
-        links.push({
-          type: "KeepOrientation",
-          ddl: 1,
-          key1: `${b.id}:start`,
-          key2: `${b.id}:end`,
-          direction: dB.normalize(),
-        });
-      });
-    }
-    // Endpoint beams sans triangle → mémoriser pour ancrage post-warm-start (étape 2c).
-    if ((node.type === "join" || node.type === "slider") && node.isGrounded && freeEndpoints.length < 2) {
-      endpointConns.forEach(({ beam, flip }) => groundedNeedsPin.push({ beam, flip }));
-    }
-  });
-
-  // ── 1. Warm start ─────────────────────────────────────────
-  if (prevSnapshot) {
-    prevSnapshot.positions.forEach((pos, key) => {
-      if (nodes.positions.has(key)) {
-        nodes.positions.set(key, new Point2(pos.x, pos.y));
-      }
-    });
-    prevSnapshot.radii.forEach((rad, key) => {
-      if (nodes.radii.has(key)) nodes.radii.set(key, rad);
-    });
-  }
-
-  // ── 2c. Pin des extrémités libres soudées à un join/slider groundé ──────
-  // Après le warm-start, on réinitialise la position à la géométrie initiale
-  // et on fige la masse pour que le solveur ne puisse pas faire tourner le beam.
-  groundedNeedsPin.forEach(({ beam: b, flip }) => {
-    const freeKey = flip ? `${b.id}:start` : `${b.id}:end`;
-    const freePos = flip ? b.positionStart : b.positionEnd;
-    nodes.positions.set(freeKey, freePos);
-    nodes.posMasses.set(freeKey, 0);
-  });
-
-  // ── 2. Motor constraints: pin driven beam endpoints ───────
-  // Only grounded motors (parentBeamID === undefined) for now.
-  mechanism.mechanicalElements.forEach((el) => {
-    if (el.type !== "pivot" || !el.motor) return;
-    if (el.motor.parentBeamID !== undefined) return;
-
-    const omega = el.motor.speed * ((2 * Math.PI) / 60); // rad/s
-
-    el.rotatingEdgesIDs.forEach((beamId) => {
-      const beam = mechanism.mechanicalElements.find((b) => b.id === beamId);
-      if (!beam || !("positionStart" in beam)) return;
-
-      let pivotKey: string;
-      let drivenKey: string;
-      let initialDir: Point2;
-
-      if (beam.fixedNodeStartID === el.id) {
-        pivotKey = `${beamId}:start`;
-        drivenKey = `${beamId}:end`;
-        initialDir = beam.positionEnd.sub(beam.positionStart);
-      } else if (beam.fixedNodeEndID === el.id) {
-        pivotKey = `${beamId}:end`;
-        drivenKey = `${beamId}:start`;
-        initialDir = beam.positionStart.sub(beam.positionEnd);
-      } else {
-        return;
-      }
-
-      const L = initialDir.length();
-      if (L < 1e-6) return;
-
-      const theta0 = Math.atan2(initialDir.y, initialDir.x);
-      const theta = theta0 + resolveMotorAngle(el.id, t, omega, motorPhases);
-
-      const pivotPos = nodes.positions.get(pivotKey) ?? el.position;
-      const targetPos = pivotPos.add(
-        new Point2(Math.cos(theta) * L, Math.sin(theta) * L),
-      );
-
-      nodes.positions.set(drivenKey, targetPos);
-      nodes.posMasses.set(drivenKey, 0); // pin at motor-computed position
-    });
-  });
-
-  // ── 2b. Grab constraint: pin grabbed key to mouse target ──────
-  if (grab) {
-    links.push({ type: "HandleGrab", ddl: 1, grabbedKey: grab.key, value: grab.target });
-  }
-
-  // ── 3. Fuse coincidence links ──────────────────────────────
-  // Critical for connection integrity: merges coincident node/edge-endpoint pairs
-  // into a single solver key so they are guaranteed to stay at the same position.
-  // Mirrors the Phase B fusion in resolveGeometricConstraints.
+  // ── Fuse coincidence links (guarantees coincident points stay together) ──
   links.forEach((lc) => {
     if (lc.type !== "Coincidence") return;
     const k1 = lc.key1;
     const k2 = lc.key2;
     const k_new = [k1, k2].join(",");
 
-    links.forEach((link) => {
-      if ("key1" in link && (link.key1 === k1 || link.key1 === k2))
-        link.key1 = k_new;
-      if ("key2" in link && (link.key2 === k1 || link.key2 === k2))
-        link.key2 = k_new;
-      if ("key3" in link && (link.key3 === k1 || link.key3 === k2))
-        link.key3 = k_new;
-      if ("key4" in link && (link.key4 === k1 || link.key4 === k2))
-        link.key4 = k_new;
-      if (link.type === "HandleGrab" && (link.grabbedKey === k1 || link.grabbedKey === k2))
-        link.grabbedKey = k_new;
-    });
+    const remap = (k: string) => (k === k1 || k === k2 ? k_new : k);
+    links.forEach((link) => rewrite_position_keys(link, remap));
 
     const p1 = nodes.positions.get(k1);
     const p2 = nodes.positions.get(k2);
@@ -388,79 +86,188 @@ export function compute_kinematic_snapshot(
     );
     nodes.positions.delete(k1);
     nodes.positions.delete(k2);
-
     nodes.posMasses.set(
       k_new,
       Math.min(nodes.posMasses.get(k1) ?? 1, nodes.posMasses.get(k2) ?? 1),
     );
     nodes.posMasses.delete(k1);
     nodes.posMasses.delete(k2);
+
+    // Record key → fused key (incl. previously fused keys mapping forward).
+    keyMap.set(k1, k_new);
+    keyMap.set(k2, k_new);
+    keyMap.forEach((v, k) => {
+      if (v === k1 || v === k2) keyMap.set(k, k_new);
+    });
   });
   links = links.filter((link) => link.type !== "Coincidence");
 
-  // ── 3b. OnSegment → AtSegmentRatio pour les nœuds de corps fixes ──────
-  // Dans geometric-solver, tous les OnSegment non-groundés sont convertis en
-  // AtSegmentRatio pour mémoriser la position courante sur le beam (lignes 231-249).
-  // En simulation : les sliders/slideps non-groundés glissent librement → OnSegment
-  // conservé. Les joins/masses sont solidaires → AtSegmentRatio au ratio courant.
-  links.forEach((link, index) => {
-    if (link.type !== "OnSegment") return;
-    if ((nodes.posMasses.get(link.key3) ?? 0) === 0) return; // groundé : beam passe à travers
-    const rawIds = link.key3.split(",").map((p) => p.split(":")[0]);
-    const isSlider = rawIds.some((id) =>
-      mechanism.mechanicalElements.some(
-        (e) => e.id === id && (e.type === "slider" || e.type === "slidep"),
-      ),
-    );
-    if (isSlider) return;
-    const start = nodes.positions.get(link.key1);
-    const end = nodes.positions.get(link.key2);
-    const pos = nodes.positions.get(link.key3);
-    if (!start || !end || !pos) return;
-    links[index] = {
-      type: "AtSegmentRatio",
-      ddl: 2,
-      key1: link.key1,
-      key2: link.key2,
-      key3: link.key3,
-      t: pos.parameter_on_segment(start, end),
-    };
-  });
-
-  // ── 4. Sort links (anchored nodes first for better convergence) ──
+  // ── Sort links (anchored nodes first for better convergence) ──
   links = sort_links(links, nodes.posMasses);
 
-  // ── 5. PBD solve ──────────────────────────────────────────
-  const result = PBD_kinematic_solver(
-    nodes.positions,
-    nodes.radii,
-    nodes.posMasses,
-    nodes.radMasses,
-    links,
-    300,
-  );
+  return { nodes, links, keyMap };
+}
 
-  // ── 6. Decouple fused keys back to original format ────────
-  [...result.positions.keys()].forEach((combined) => {
-    const keys = combined.split(",");
-    if (keys.length > 1) {
-      const pos = result.positions.get(combined)!;
-      keys.forEach((key) => result.positions.set(key, pos));
-      result.positions.delete(combined);
+/**
+ * Advance the simulation by one frame.
+ *
+ * Warm-starts from the previous positions/angles, refreshes the motor targets
+ * (target = current real angle + ω·dt — no backlog when blocked) and the
+ * continuous line-of-centres angle of gear meshes, then runs PBD on the frozen
+ * links. The model's motor/mesh links are updated in place (they are simulation
+ * state, not pure values).
+ */
+export function step_simulation(
+  model: SimulationModel,
+  t: number,
+  prevPositions: Map<string, Point2> | null,
+  prevAngles: Map<string, number> | null,
+  dt: number = RECORD_DT,
+  grab?: SimGrab,
+): KinematicSnapshot {
+  const positions = new Map(model.nodes.positions);
+  const angles = new Map(model.nodes.angles);
+
+  // ── Warm start (fused keys take the previous position of any of their parts) ──
+  if (prevPositions) {
+    positions.forEach((_, fusedKey) => {
+      const part = fusedKey.split(",")[0];
+      const p = prevPositions.get(part) ?? prevPositions.get(fusedKey);
+      if (p) positions.set(fusedKey, new Point2(p.x, p.y));
+    });
+  }
+  if (prevAngles) {
+    angles.forEach((_, key) => {
+      const a = prevAngles.get(key);
+      if (a !== undefined) angles.set(key, a);
+    });
+  }
+
+  // ── Refresh per-frame motor targets and gear-mesh line-of-centres angle ──
+  const motorChecks: MotorCheck[] = [];
+  model.links.forEach((link) => {
+    if (link.type === "MotorBeam") {
+      const pivot = positions.get(link.pivotKey);
+      const driven = positions.get(link.drivenKey);
+      if (pivot && driven) {
+        const cur = driven.sub(pivot).angle();
+        link.targetAngle = cur + link.omega * dt;
+        if (link.owner !== undefined && link.omega * dt !== 0)
+          motorChecks.push({
+            owner: link.owner,
+            type: "MotorBeam",
+            cur,
+            expected: link.omega * dt,
+            pivotKey: link.pivotKey,
+            drivenKey: link.drivenKey,
+          });
+      }
+    } else if (link.type === "MotorAngle") {
+      const cur = angles.get(link.angleKey);
+      if (cur !== undefined) {
+        link.targetAngle = cur + link.omega * dt;
+        if (link.owner !== undefined && link.omega * dt !== 0)
+          motorChecks.push({
+            owner: link.owner,
+            type: "MotorAngle",
+            cur,
+            expected: link.omega * dt,
+            angleKey: link.angleKey,
+          });
+      }
+    } else if (link.type === "GearMeshAngle") {
+      const p1 = positions.get(link.posKey1);
+      const p2 = positions.get(link.posKey2);
+      if (p1 && p2) {
+        const raw = p2.sub(p1).angle();
+        link.alpha = link.alpha + wrap_angle(raw - link.alpha);
+      }
     }
   });
 
+  // ── Grab (transient, this frame only) ──
+  let links = model.links;
+  if (grab && "edgeID" in grab) {
+    // Body grab: pull a bridge node sitting at ratio t along the beam.
+    const startKey =
+      model.keyMap.get(`${grab.edgeID}:start`) ?? `${grab.edgeID}:start`;
+    const endKey = model.keyMap.get(`${grab.edgeID}:end`) ?? `${grab.edgeID}:end`;
+    positions.set("grab_bridge", new Point2(grab.target.x, grab.target.y));
+    links = [
+      ...model.links,
+      { type: "FixedOnSegment", ddl: 2, key1: startKey, key2: endKey, key3: "grab_bridge", t: grab.t },
+      { type: "HandleGrab", ddl: 1, grabbedKey: "grab_bridge", value: grab.target },
+    ];
+  } else if (grab) {
+    links = [
+      ...model.links,
+      {
+        type: "HandleGrab",
+        ddl: 1,
+        grabbedKey: model.keyMap.get(grab.key) ?? grab.key,
+        value: grab.target,
+      },
+    ];
+  }
+
+  // ── PBD solve ──
+  const result = PBD_kinematic_solver(
+    positions,
+    new Map<string, number>(),
+    model.nodes.posMasses,
+    new Map<string, number>(),
+    links,
+    300,
+    undefined,
+    angles,
+    true, // collect unsatisfied-constraint diagnostics
+  );
+
+  // ── Decouple fused keys back to individual keys ──
+  const outPositions = new Map<string, Point2>();
+  result.positions.forEach((p, fusedKey) => {
+    fusedKey.split(",").forEach((k) => outPositions.set(k, p));
+  });
+
+  // ── Motor-block detection ──
+  // The motor's own constraint residual stays tiny when blocked (target =
+  // current + ω·dt, no backlog), so a generic residual threshold misses it.
+  // Instead compare what the driver actually advanced this frame against its
+  // commanded increment: well below it ⇒ blocked.
+  const motorBlocks: ConstraintResidual[] = [];
+  for (const m of motorChecks) {
+    let achieved: number | undefined;
+    if (m.type === "MotorBeam") {
+      const p = result.positions.get(m.pivotKey!);
+      const d = result.positions.get(m.drivenKey!);
+      if (p && d) achieved = wrap_angle(d.sub(p).angle() - m.cur);
+    } else {
+      const a = result.angles.get(m.angleKey!);
+      if (a !== undefined) achieved = wrap_angle(a - m.cur);
+    }
+    if (achieved === undefined) continue;
+    if (Math.abs(achieved) < Math.abs(m.expected) * MOTOR_BLOCK_FRACTION)
+      motorBlocks.push({
+        owner: m.owner,
+        type: m.type,
+        residual: Math.abs(m.expected - achieved),
+      });
+  }
+
+  const unsatisfied = [...(result.unsatisfied ?? []), ...motorBlocks];
+
   return {
     t,
-    positions: new Map(result.positions),
-    radii: new Map(result.radii),
-    gearAngles: compute_gear_angles(mechanism, t, motorPhases),
+    positions: outPositions,
+    angles: new Map(result.angles),
+    unsatisfied: unsatisfied.length > 0 ? unsatisfied : undefined,
   };
 }
 
 /**
- * Apply a kinematic snapshot's positions to a mechanism copy for rendering.
- * Does NOT modify the original mechanism (editing state).
+ * Apply a kinematic snapshot's positions/angles to a mechanism copy for
+ * rendering. Does NOT modify the original mechanism (editing state). Radii are
+ * unchanged in simulation, so gears keep their edit-time radius.
  */
 export function apply_snapshot_to_mechanism(
   mechanism: Mechanism,
@@ -468,27 +275,28 @@ export function apply_snapshot_to_mechanism(
 ): Mechanism {
   const newElements = mechanism.mechanicalElements.map((el) => {
     if ("position" in el) {
-      const pos = snapshot.positions.get(`${el.id}:pos`);
+      const pos = snapshot.positions.get(el.id);
       if (!pos) return el;
       if (el.type === "gear") {
-        const ang = snapshot.gearAngles.get(el.id);
-        const rad = snapshot.radii.get(`${el.id}:rad`);
-        return {
-          ...el,
-          position: pos,
-          ...(ang ? { angle: ang } : {}),
-          ...(rad ? { radius: rad } : {}),
-        };
+        const ang = snapshot.angles.get(el.id);
+        return { ...el, position: pos, ...(ang !== undefined ? { angle: ang } : {}) };
       }
       return { ...el, position: pos };
     } else {
-      // Edge element (beam, spring, damper, belt)
       const start = snapshot.positions.get(`${el.id}:start`);
       const end = snapshot.positions.get(`${el.id}:end`);
+      // Springs/dampers: freeze the natural (rest) length from the edit-time
+      // positions so the drawing keeps a fixed coil/piston count while the
+      // simulated length stretches or compresses.
+      const restLength =
+        el.type === "spring" || el.type === "damper"
+          ? el.positionStart.distance_to(el.positionEnd)
+          : undefined;
       return {
         ...el,
         ...(start ? { positionStart: start } : {}),
         ...(end ? { positionEnd: end } : {}),
+        ...(restLength !== undefined ? { restLength } : {}),
       };
     }
   });

@@ -330,7 +330,7 @@ function handle_place_element(
       angle: 0,
       radius: state.startHover.position.distance_to(hoveredPart.position),
       parentAxleID: pivotId,
-      fixedEdgesIDs: [],
+      fixedNodesIDs: [],
       meshedGearsIDs: [],
       attachedBeltID: undefined,
     };

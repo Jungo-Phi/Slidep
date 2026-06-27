@@ -3,12 +3,12 @@ import {
   EdgeElement,
   ActionBundleType,
   Point2,
-  Nodes,
+  GeomNodes,
   Mechanism,
 } from "../../types";
 import { get_mechanical_element_from_id } from "../mechanism/connect-actions";
-import { get_degrees_of_freedom, sort_links } from "./utils";
-import { get_links, get_nodes } from "./parsing";
+import { get_geom_degrees_of_freedom, sort_links } from "./utils";
+import { get_links_geometric, get_geom_nodes } from "./parsing";
 import { PBD_kinematic_solver } from "./PBD_kinematic_solver";
 
 /**
@@ -18,15 +18,15 @@ export function resolveGeometricConstraints(
   mechanism: Mechanism,
   actionBundleType: ActionBundleType,
   triggerAction: Action,
-): Nodes {
+): GeomNodes {
   // *
   // Phase A : Création du graphe de dépendances
   // *
 
   // 1. Initialize nodes (positions and radii) of the dependency graph
   // 2. Initialize edges (links) of the dependency graph
-  const nodes = get_nodes(mechanism.mechanicalElements);
-  let links = get_links(
+  const nodes = get_geom_nodes(mechanism.mechanicalElements);
+  let links = get_links_geometric(
     mechanism.mechanicalElements,
     mechanism.constraintElements,
   );
@@ -49,7 +49,7 @@ export function resolveGeometricConstraints(
       switch (triggerAction.type) {
         case "MoveNode":
           grabPoint = triggerAction.newPosition;
-          grabConnectionID = `${triggerAction.id}:pos`;
+          grabConnectionID = `${triggerAction.id}`;
           break;
         case "MoveEdgeStart":
           grabPoint = triggerAction.newPosition;
@@ -61,7 +61,7 @@ export function resolveGeometricConstraints(
           break;
         case "MoveEdgeBody":
           links.push({
-            type: "AtSegmentRatio",
+            type: "FixedOnSegment",
             ddl: 2,
             key1: `${triggerAction.id}:start`,
             key2: `${triggerAction.id}:end`,
@@ -85,7 +85,7 @@ export function resolveGeometricConstraints(
                 link.key2 === `${triggerAction.id}:end`
               )
                 nodes.posMasses.set(link.key1, 1); // TODO : AND "link.key2" should be a join
-            } else if (link.type === "AtSegmentRatio") {
+            } else if (link.type === "FixedOnSegment") {
               if (
                 link.key1 === `${triggerAction.id}:start` &&
                 link.key2 === `${triggerAction.id}:end`
@@ -104,12 +104,12 @@ export function resolveGeometricConstraints(
             );
             if ("position" in element) {
               nodes.positions.set(
-                `${element.id}:pos`,
+                `${element.id}`,
                 nodes.positions
-                  .get(`${element.id}:pos`)!
+                  .get(`${element.id}`)!
                   .add(triggerAction.delta),
               );
-              nodes.posMasses.set(`${element.id}:pos`, 1);
+              nodes.posMasses.set(`${element.id}`, 1);
             } else {
               nodes.positions.set(
                 `${element.id}:start`,
@@ -128,7 +128,7 @@ export function resolveGeometricConstraints(
           break;
         case "ChangeGearRadius":
           grabPoint = triggerAction.newRadius;
-          grabConnectionID = `${triggerAction.id}:rad`;
+          grabConnectionID = `${triggerAction.id}`;
           break;
         case "ChangeEdgeLength":
           links.push({
@@ -164,9 +164,9 @@ export function resolveGeometricConstraints(
   // Ancrages pré-fusion : les clés individuelles disparaissent après la fusion Coincidence ;
   // Math.min() propagera ensuite ces valeurs à la clé fusionnée.
   if (triggerAction.type === "ChangeGearRadius") {
-    const preFuseDdl = get_degrees_of_freedom(nodes, links);
+    const preFuseDdl = get_geom_degrees_of_freedom(nodes, links);
     if (preFuseDdl >= 3) {
-      nodes.posMasses.set(`${triggerAction.id}:pos`, 0);
+      nodes.posMasses.set(`${triggerAction.id}`, 0);
     }
   }
   if (triggerAction.type === "MoveNode") {
@@ -175,12 +175,12 @@ export function resolveGeometricConstraints(
     );
     if (movedEl) {
       if ("radius" in movedEl) {
-        nodes.radMasses.set(`${triggerAction.id}:rad`, 0);
+        nodes.radMasses.set(`${triggerAction.id}`, 0);
       }
       if ("fixedGearsIDs" in movedEl) {
         (movedEl as { fixedGearsIDs: string[] }).fixedGearsIDs.forEach(
           (gearId) => {
-            nodes.radMasses.set(`${gearId}:rad`, 0);
+            nodes.radMasses.set(`${gearId}`, 0);
           },
         );
       }
@@ -231,7 +231,7 @@ export function resolveGeometricConstraints(
   // Maintien de la position (ratio) sur un beam, à moins de grab le node lui-meme OU que le node soit ancré
   links.forEach((link, index) => {
     if (
-      link.type === "OnSegment" &&
+      link.type === "SlideOnSegment" &&
       link.key3 !== grabConnectionID &&
       nodes.posMasses.get(link.key3)!
     ) {
@@ -239,7 +239,7 @@ export function resolveGeometricConstraints(
       const end = nodes.positions.get(link.key2)!;
       const pos = nodes.positions.get(link.key3)!;
       links[index] = {
-        type: "AtSegmentRatio",
+        type: "FixedOnSegment",
         ddl: 2,
         key1: link.key1,
         key2: link.key2,
@@ -257,7 +257,7 @@ export function resolveGeometricConstraints(
       (e) => e.id === triggerAction.id,
     )! as EdgeElement;
     // Si il y a 3 ou plus degré de liberté ALORS contrainte de parallélisme.
-    ddl = get_degrees_of_freedom(nodes, links);
+    ddl = get_geom_degrees_of_freedom(nodes, links);
     if (ddl >= 3) {
       links.push({
         type: "KeepOrientation",
@@ -268,7 +268,7 @@ export function resolveGeometricConstraints(
       });
     }
     // Si il y a 3 ou plus degré de liberté ALORS contrainte de longueur.
-    ddl = get_degrees_of_freedom(nodes, links);
+    ddl = get_geom_degrees_of_freedom(nodes, links);
     if (ddl >= 3) {
       links.push({
         type: "Distance",
@@ -292,7 +292,7 @@ export function resolveGeometricConstraints(
   // console.log("pos : ", [...nodes.positions.keys()]);
   // console.log("links : ", links);
   /*
-  console.log("DDL : ", get_degrees_of_freedom(nodes, links));
+  console.log("DDL : ", get_geom_degrees_of_freedom(nodes, links));
   */
 
   // 3. PBD (Position Based Dynamics)
@@ -343,22 +343,22 @@ export function resolveGeometricConstraints(
         const oldStart = nodes.positions.get(
           isEdge
             ? `${constraint.edgeID}:start`
-            : `${constraint.startNodeID}:pos`,
+            : `${constraint.startNodeID}`,
         );
         const oldEnd = nodes.positions.get(
-          isEdge ? `${constraint.edgeID}:end` : `${constraint.endNodeID}:pos`,
+          isEdge ? `${constraint.edgeID}:end` : `${constraint.endNodeID}`,
         );
         const newStart = solvedNodes.positions.get(
           isEdge
             ? `${constraint.edgeID}:start`
-            : `${constraint.startNodeID}:pos`,
+            : `${constraint.startNodeID}`,
         );
         const newEnd = solvedNodes.positions.get(
-          isEdge ? `${constraint.edgeID}:end` : `${constraint.endNodeID}:pos`,
+          isEdge ? `${constraint.edgeID}:end` : `${constraint.endNodeID}`,
         );
         if (!oldStart || !oldEnd || !newStart || !newEnd) break;
         solvedNodes.positions.set(
-          `${constraint.id}:pos`,
+          `${constraint.id}`,
           constraint.position
             .to_segment_coordinates(oldStart, oldEnd)
             .from_segment_coordinates(newStart, newEnd),
@@ -367,14 +367,14 @@ export function resolveGeometricConstraints(
       case "dimension-edge-to-node":
         const oldEdgeStart = nodes.positions.get(`${constraint.edgeID}:start`);
         const oldEdgeEnd = nodes.positions.get(`${constraint.edgeID}:end`);
-        const oldNode = nodes.positions.get(`${constraint.nodeID}:pos`);
+        const oldNode = nodes.positions.get(`${constraint.nodeID}`);
         const newEdgeStart = solvedNodes.positions.get(
           `${constraint.edgeID}:start`,
         );
         const newEdgeEnd = solvedNodes.positions.get(
           `${constraint.edgeID}:end`,
         );
-        const newNode = solvedNodes.positions.get(`${constraint.nodeID}:pos`);
+        const newNode = solvedNodes.positions.get(`${constraint.nodeID}`);
         if (
           !oldEdgeStart ||
           !oldEdgeEnd ||
@@ -392,7 +392,7 @@ export function resolveGeometricConstraints(
           newNode.distance_to_line(newEdgeStart, newEdgeEnd) /
           oldNode.distance_to_line(oldEdgeStart, oldEdgeEnd);
         solvedNodes.positions.set(
-          `${constraint.id}:pos`,
+          `${constraint.id}`,
           local.from_segment_coordinates(newEdgeStart, newEdgeEnd),
         );
         break;
@@ -445,16 +445,16 @@ export function resolveGeometricConstraints(
           newEndEdgeStart.lerp(newEndEdgeEnd, 0.5),
         );
         if (!globalD) break;
-        solvedNodes.positions.set(`${constraint.id}:pos`, globalD);
+        solvedNodes.positions.set(`${constraint.id}`, globalD);
         break;
       case "dimension-radius":
-        const oldPos = nodes.positions.get(`${constraint.gearID}:pos`);
-        const oldRadius = nodes.radii.get(`${constraint.gearID}:pos`);
-        const newPos = solvedNodes.positions.get(`${constraint.gearID}:pos`);
-        const newRadius = solvedNodes.radii.get(`${constraint.gearID}:pos`);
+        const oldPos = nodes.positions.get(`${constraint.gearID}`);
+        const oldRadius = nodes.radii.get(`${constraint.gearID}`);
+        const newPos = solvedNodes.positions.get(`${constraint.gearID}`);
+        const newRadius = solvedNodes.radii.get(`${constraint.gearID}`);
         if (!oldPos || !oldRadius || !newPos || !newRadius) break;
         solvedNodes.positions.set(
-          `${constraint.id}:pos`,
+          `${constraint.id}`,
           newPos.add(
             constraint.position.sub(oldPos).mul(newRadius / oldRadius),
           ),
@@ -462,16 +462,16 @@ export function resolveGeometricConstraints(
         break;
       case "gear-ratio":
         const oldGearStartPos = nodes.positions.get(
-          `${constraint.startGearID}:pos`,
+          `${constraint.startGearID}`,
         );
         const oldGearEndPos = nodes.positions.get(
-          `${constraint.endGearID}:pos`,
+          `${constraint.endGearID}`,
         );
         const newGearStartPos = solvedNodes.positions.get(
-          `${constraint.startGearID}:pos`,
+          `${constraint.startGearID}`,
         );
         const newGearEndPos = solvedNodes.positions.get(
-          `${constraint.endGearID}:pos`,
+          `${constraint.endGearID}`,
         );
         if (
           !oldGearStartPos ||
@@ -488,7 +488,7 @@ export function resolveGeometricConstraints(
           newGearStartPos.distance_to(newGearEndPos) /
           oldGearStartPos.distance_to(oldGearEndPos);
         solvedNodes.positions.set(
-          `${constraint.id}:pos`,
+          `${constraint.id}`,
           localG.from_segment_coordinates(newGearStartPos, newGearEndPos),
         );
     }

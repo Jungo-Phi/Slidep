@@ -144,4 +144,10 @@ export type CanvasState =
       value: number;
       isPlacing: boolean;
     }
-  | { type: "SimulationDragging"; grabbedKey: string; elementID: ID };
+  | {
+      type: "SimulationDragging";
+      grabbedKey: string;
+      elementID: ID;
+      /** Set when grabbing an edge on its body: ratio along the edge (grabbedKey = edgeID). */
+      bodyRatio?: number;
+    };

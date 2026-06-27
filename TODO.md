@@ -4,11 +4,16 @@
 
 ### [ Simulation cinématique ]
 
+- Pas de moteur + sur-contraint, on affiche quoi ?
+- Moteur tourne dans le cas ???
+- Afficher les trajectoires
 - Parfois, arriver à la fin du replay fait continuer la simulation
+- Moteur non grounded (parentBeamID)
 
 ### À faire rapidement
 
 - Afficher / cacher les contraintes (mais toujours affichées dans l'onglet de contraintes) / Contraintes plus petites ? / Afficher quand on hover sur l'élément lié avec un cooldown ?
+- Fication de nodes/beams sur les gears perimeter
 - Afficher selected quand moving force
 - Ajouter des "Blank" avec les forces
 - Prefered force direction
@@ -27,6 +32,7 @@
 - Afficher les trajectoires
 - Analise des degrés de libertés en sous-parties
 - Remplacer un node par un autre doit transféfer le ground
+- Refactor en enlevant le actionBundleType ?
 
 ### À faire plus tard
 
@@ -121,6 +127,7 @@
 - Afficher le nombre de pièces comme un tag
 - Logo animé
 - Exporter une animation : générer .gif, .mp4 de la simulation (options durée, FPS, zoom)
+- Ajouter engrenage couronne pour train épicycloïdal
 
 ### [ Simulation STATIQUE ]
 

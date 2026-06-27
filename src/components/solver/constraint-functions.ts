@@ -122,7 +122,7 @@ export function applyDistanceToLineConstraint(
 /** Contraint un point (keyNode) à rester sur le segment (keyStart, keyEnd).
  * Le paramètre t est recalculé à chaque itération (projection libre sur le segment),
  * avec une marge pour éviter les extrémités. Chaque point est déplacé selon sa masse. */
-export function applyOnSegmentConstraint(
+export function applySlideOnSegmentConstraint(
   positions: Map<string, Point2>,
   posMasses: Map<string, number>,
   keyStart: string,
@@ -162,7 +162,7 @@ export function applyOnSegmentConstraint(
  * segment (keyStart, keyEnd), i.e. à la position lerp(start, end, t).
  * Contrairement à OnSegment, t est constant (ratio mémorisé au moment du grab).
  * Chaque point est déplacé selon sa masse. */
-export function applyAtSegmentRatioConstraint(
+export function applyFixedOnSegmentConstraint(
   positions: Map<string, Point2>,
   posMasses: Map<string, number>,
   keyStart: string,
@@ -618,4 +618,177 @@ export function applyGearRatioConstraint(
     );
 
   return error;
+}
+
+/** Wrap an angle difference to (−π, π]. */
+function wrap_angle(a: number): number {
+  while (a > Math.PI) a -= 2 * Math.PI;
+  while (a <= -Math.PI) a += 2 * Math.PI;
+  return a;
+}
+
+/** Moteur sur beam : fait tourner `drivenKey` autour de `pivotKey` vers l'angle
+ * absolu `targetAngle` (angle monde de pivot→driven). Contrainte à priorité
+ * normale : si le mécanisme est bloqué, le résidu subsiste sans état invalide. */
+export function applyMotorBeamConstraint(
+  positions: Map<string, Point2>,
+  posMasses: Map<string, number>,
+  pivotKey: string,
+  drivenKey: string,
+  targetAngle: number,
+  stiffness: number = 1.0,
+): number {
+  if ((posMasses.get(drivenKey) ?? 1) === 0) return 0;
+  const pivot = positions.get(pivotKey);
+  const driven = positions.get(drivenKey);
+  if (!pivot || !driven) return 0;
+
+  const v = driven.sub(pivot);
+  if (v.length_squared() < 1e-12) return 0;
+  const diff = wrap_angle(targetAngle - v.angle());
+  positions.set(drivenKey, pivot.add(v.rotate(diff * stiffness)));
+  return Math.abs(diff);
+}
+
+/** Moteur sur engrenage : pousse le nœud d'angle `angleKey` vers `targetAngle`. */
+export function applyMotorAngleConstraint(
+  angles: Map<string, number>,
+  angleKey: string,
+  targetAngle: number,
+  stiffness: number = 1.0,
+): number {
+  const a = angles.get(angleKey);
+  if (a === undefined) return 0;
+  const diff = targetAngle - a; // cumulatif : pas de wrap
+  angles.set(angleKey, a + diff * stiffness);
+  return Math.abs(diff);
+}
+
+/** Engrènement épicycloïdal en espace d'angles (couche passive : n'écrit que les
+ * nœuds d'angle). `alpha` est l'angle continu de la ligne des centres.
+ * C = r1·((θ1−θ1₀) − Δα) + r2·((θ2−θ2₀) − Δα), Δα = alpha − alpha0. */
+export function applyGearMeshAngleConstraint(
+  angles: Map<string, number>,
+  angleKey1: string,
+  angleKey2: string,
+  r1: number,
+  r2: number,
+  theta1_0: number,
+  theta2_0: number,
+  alpha0: number,
+  alpha: number,
+  stiffness: number = 1.0,
+): number {
+  const a1 = angles.get(angleKey1);
+  const a2 = angles.get(angleKey2);
+  if (a1 === undefined || a2 === undefined) return 0;
+
+  const dAlpha = alpha - alpha0;
+  const C = r1 * (a1 - theta1_0 - dAlpha) + r2 * (a2 - theta2_0 - dAlpha);
+  const denom = r1 * r1 + r2 * r2;
+  if (denom === 0) return 0;
+
+  angles.set(angleKey1, a1 - (r1 * C * stiffness) / denom);
+  angles.set(angleKey2, a2 - (r2 * C * stiffness) / denom);
+  return Math.abs(C);
+}
+
+/** Nœud fixé au périmètre d'un engrenage : couple sa position à l'angle θ.
+ * On veut angle(N − centre) = θ + offset et |N − centre| = radius.
+ * Bidirectionnel : répartit la correction entre la rotation de N et l'angle θ. */
+export function applyGearPerimeterPinConstraint(
+  positions: Map<string, Point2>,
+  posMasses: Map<string, number>,
+  angles: Map<string, number>,
+  nodeKey: string,
+  centerKey: string,
+  angleKey: string,
+  radius: number,
+  offset: number,
+  stiffness: number = 1.0,
+): number {
+  const center = positions.get(centerKey);
+  const node = positions.get(nodeKey);
+  const theta = angles.get(angleKey);
+  if (!center || !node || theta === undefined) return 0;
+
+  const v = node.sub(center);
+  if (v.length_squared() < 1e-12) return 0;
+  const ang = v.angle();
+
+  const wN = posMasses.get(nodeKey) ?? 1;
+  // L'angle n'est jamais ancré (poids 1).
+  const denom = wN + 1;
+
+  let C = ang - theta - offset;
+  // wrap to (−π, π] for the shortest correction (angle node stays cumulative)
+  while (C > Math.PI) C -= 2 * Math.PI;
+  while (C <= -Math.PI) C += 2 * Math.PI;
+
+  const dAng = -C * (wN / denom) * stiffness;
+  const dTheta = (C / denom) * stiffness;
+  // Move N onto the perimeter at the corrected angle (enforces radius too).
+  if (wN !== 0)
+    positions.set(
+      nodeKey,
+      center.add(new Point2(Math.cos(ang + dAng), Math.sin(ang + dAng)).mul(radius)),
+    );
+  angles.set(angleKey, theta + dTheta);
+  return Math.abs(C) + Math.abs(v.length() - radius);
+}
+
+/** Beam attaché à un join fixé sur un engrenage : son orientation suit θ.
+ * Fait tourner `drivenKey` autour de `pivotKey` pour que
+ * angle(driven − pivot) = θ + offset (bidirectionnel avec θ). */
+export function applyBeamFollowsAngleConstraint(
+  positions: Map<string, Point2>,
+  posMasses: Map<string, number>,
+  angles: Map<string, number>,
+  pivotKey: string,
+  drivenKey: string,
+  angleKey: string,
+  offset: number,
+  stiffness: number = 1.0,
+): number {
+  const pivot = positions.get(pivotKey);
+  const driven = positions.get(drivenKey);
+  const theta = angles.get(angleKey);
+  if (!pivot || !driven || theta === undefined) return 0;
+
+  const v = driven.sub(pivot);
+  if (v.length_squared() < 1e-12) return 0;
+  const ang = v.angle();
+
+  const wD = posMasses.get(drivenKey) ?? 1;
+  // L'angle n'est jamais ancré (poids 1).
+  const denom = wD + 1;
+
+  let C = ang - theta - offset;
+  while (C > Math.PI) C -= 2 * Math.PI;
+  while (C <= -Math.PI) C += 2 * Math.PI;
+
+  const dAng = -C * (wD / denom) * stiffness;
+  const dTheta = (C / denom) * stiffness;
+  if (wD !== 0) positions.set(drivenKey, pivot.add(v.rotate(dAng)));
+  angles.set(angleKey, theta + dTheta);
+  return Math.abs(C);
+}
+
+/** Engrenages coaxiaux : θ1 − θ2 = offset (même rotation, offset constant). */
+export function applyCoaxialAngleConstraint(
+  angles: Map<string, number>,
+  angleKey1: string,
+  angleKey2: string,
+  offset: number,
+  stiffness: number = 1.0,
+): number {
+  const a1 = angles.get(angleKey1);
+  const a2 = angles.get(angleKey2);
+  if (a1 === undefined || a2 === undefined) return 0;
+
+  // Les angles ne sont jamais ancrés : correction répartie à parts égales.
+  const C = a1 - a2 - offset; // cumulatif : pas de wrap
+  angles.set(angleKey1, a1 - 0.5 * C * stiffness);
+  angles.set(angleKey2, a2 + 0.5 * C * stiffness);
+  return Math.abs(C);
 }

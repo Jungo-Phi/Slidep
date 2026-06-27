@@ -493,6 +493,7 @@ export function delete_elements(
       ({
         ...el,
         ...("fixedEdgesIDs" in el && { fixedEdgesIDs: [...el.fixedEdgesIDs] }),
+        ...("fixedNodesIDs" in el && { fixedNodesIDs: [...el.fixedNodesIDs] }),
         ...("rotatingEdgesIDs" in el && {
           rotatingEdgesIDs: [...el.rotatingEdgesIDs],
         }),

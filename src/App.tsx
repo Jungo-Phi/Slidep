@@ -50,7 +50,6 @@ import {
   ActionBundleType,
   AppMode,
   DEFAULT_METADATA,
-  ID,
   DEFAULT_RUNTIME_STATE,
   DEFAULT_SIMULATION_CONFIG,
   Mechanism,
@@ -82,11 +81,13 @@ import { ElementPalette } from "./components/element-palette";
 import { PropertiesPanel } from "./components/properties-panel/PropertiesPanel";
 import {
   RECORD_DT,
+  SimGrab,
+  SimulationModel,
   apply_snapshot_to_mechanism,
-  compute_kinematic_snapshot,
-  resolveMotorAngle,
+  compile_simulation_model,
+  step_simulation,
 } from "./components/solver/kinematic-simulation";
-import { KinematicSnapshot, MotorPhase } from "./types/runtime-state";
+import { KinematicSnapshot } from "./types/runtime-state";
 import { CanvasState } from "./types/canvas-state";
 import { HoveredPart } from "./types/hovered-part";
 import { actionReducer } from "./components/mechanism/action-reducer";
@@ -171,7 +172,9 @@ const App: React.FC = () => {
   const kinematicRef = useRef({ mechanism, runtimeState, appMode });
   kinematicRef.current = { mechanism, runtimeState, appMode };
   const kinematicLastWallTime = useRef<number | null>(null);
-  const kinematicGrabRef = useRef<{ key: string; target: Point2 } | null>(null);
+  const kinematicGrabRef = useRef<SimGrab | null>(null);
+  // Frozen simulation model, compiled on entering simulation and on edits during sim.
+  const simulationModelRef = useRef<SimulationModel | null>(null);
   // History length when simulation mode was last entered — used to distinguish
   // edition-mode actions from simulation-mode actions on undo.
   const simStartHistoryLengthRef = useRef<number>(0);
@@ -257,27 +260,50 @@ const App: React.FC = () => {
     kinematicLastWallTime.current = null;
     if (appMode !== "edition") {
       simStartHistoryLengthRef.current = mechanismRef.current.history.length;
+      // Compile the frozen simulation model from the current mechanism.
+      simulationModelRef.current = compile_simulation_model(mechanismRef.current);
+    } else {
+      simulationModelRef.current = null;
     }
     setRuntimeState((prev) => ({
       ...prev,
       isPlaying: false,
       time: 0,
       kinematicSnapshots: [],
-      motorPhases: new Map(),
     }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appMode]);
+
+  // Recompile the simulation model + truncate future snapshots whenever the
+  // mechanism is edited during simulation. Re-bake references from the current
+  // simulated state (apply the last snapshot first) so motor angle and gear
+  // rotations stay continuous across the edit.
+  useEffect(() => {
+    if (kinematicRef.current.appMode === "edition") return;
+    const rs = runtimeStateRef.current;
+    const snaps = rs.kinematicSnapshots;
+    const idx =
+      snaps.length > 0
+        ? Math.min(Math.max(0, Math.floor(rs.time / RECORD_DT)), snaps.length - 1)
+        : -1;
+    const baseSnap = idx >= 0 ? snaps[idx] : null;
+    const baseMech = baseSnap
+      ? apply_snapshot_to_mechanism(mechanism, baseSnap)
+      : mechanism;
+    simulationModelRef.current = compile_simulation_model(baseMech);
+    setRuntimeState((prev) => ({
+      ...prev,
+      kinematicSnapshots: prev.kinematicSnapshots.filter((s) => s.t <= rs.time),
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mechanism]);
 
   // RAF loop: records kinematic snapshots while playing in kinematic mode
   useEffect(() => {
     let rafId: number;
 
     const step = (wallTime: number) => {
-      const {
-        runtimeState: rs,
-        mechanism: mech,
-        appMode: mode,
-      } = kinematicRef.current;
+      const { runtimeState: rs, appMode: mode } = kinematicRef.current;
 
       if (mode !== "kinematic" || !rs.isPlaying) {
         kinematicLastWallTime.current = null;
@@ -317,17 +343,27 @@ const App: React.FC = () => {
         });
       } else {
         // Create mode: compute new snapshots
+        const model = simulationModelRef.current;
         const newTime = rs.time + simDt;
         const newSnaps: KinematicSnapshot[] = [];
         let t = frontier + RECORD_DT;
-        while (t <= newTime + RECORD_DT / 2) {
+        while (model && t <= newTime + RECORD_DT / 2) {
           const prevSnap =
             newSnaps.length > 0
               ? newSnaps[newSnaps.length - 1]
               : existingSnaps.length > 0
                 ? existingSnaps[existingSnaps.length - 1]
                 : null;
-          newSnaps.push(compute_kinematic_snapshot(mech, t, prevSnap, rs.motorPhases, kinematicGrabRef.current ?? undefined));
+          newSnaps.push(
+            step_simulation(
+              model,
+              t,
+              prevSnap?.positions ?? null,
+              prevSnap?.angles ?? null,
+              RECORD_DT,
+              kinematicGrabRef.current ?? undefined,
+            ),
+          );
           t += RECORD_DT;
         }
 
@@ -404,46 +440,8 @@ const App: React.FC = () => {
         }
         return newMechanism;
       });
-      // In simulation mode, invalidate future snapshots and record motor phases
-      // for any speed change so the motor angle stays continuous.
-      if (kinematicRef.current.appMode !== "edition") {
-        const currentTime = kinematicRef.current.runtimeState.time;
-
-        // Detect motor speed changes in this batch
-        const motorSpeedChanges: Array<{ id: ID; oldOmega: number; newOmega: number }> = [];
-        actions.forEach((action) => {
-          if (action.type !== "SetMotorConfig") return;
-          if (action.newConfig?.speed === undefined) return;
-          const pivot = mechanismRef.current.mechanicalElements.find(
-            (e) => e.id === action.id && e.type === "pivot",
-          );
-          if (!pivot || !("motor" in pivot) || !pivot.motor) return;
-          const oldOmega = pivot.motor.speed * ((2 * Math.PI) / 60);
-          const newOmega = action.newConfig.speed * ((2 * Math.PI) / 60);
-          if (oldOmega !== newOmega)
-            motorSpeedChanges.push({ id: action.id, oldOmega, newOmega });
-        });
-
-        setRuntimeState((prev) => {
-          // Truncate future snapshots
-          const kinematicSnapshots = prev.kinematicSnapshots.filter(
-            (s) => s.t <= currentTime,
-          );
-          // Record new motor phases for speed changes
-          if (motorSpeedChanges.length === 0)
-            return { ...prev, kinematicSnapshots };
-          const motorPhases = new Map(prev.motorPhases);
-          motorSpeedChanges.forEach(({ id, oldOmega, newOmega }) => {
-            const theta = resolveMotorAngle(id, currentTime, oldOmega, prev.motorPhases);
-            const phases: MotorPhase[] = [
-              ...(motorPhases.get(id) ?? []),
-              { t: currentTime, theta, omega: newOmega },
-            ];
-            motorPhases.set(id, phases);
-          });
-          return { ...prev, kinematicSnapshots, motorPhases };
-        });
-      }
+      // In simulation mode, edits trigger the [mechanism] effect which recompiles
+      // the model and truncates future snapshots — nothing extra to do here.
       setSaveStatus("saving");
       debouncedSave();
     },
@@ -454,8 +452,6 @@ const App: React.FC = () => {
     if (mechanismRef.current.history.length === 0) return;
 
     const isInSim = kinematicRef.current.appMode !== "edition";
-    // Read BEFORE setMechanism mutates history
-    const lastBundle = mechanismRef.current.history.slice(-1)[0];
 
     setMechanism((prevMechanism) => {
       const lastActionsForUndo = [
@@ -490,40 +486,10 @@ const App: React.FC = () => {
         mechanismRef.current.history.length <= simStartHistoryLengthRef.current;
       if (isEditionAction) {
         // Undoing an action made before entering simulation → exit to edition.
-        // The mode-change useEffect will reset kinematicSnapshots and motorPhases.
+        // The mode-change useEffect resets the kinematic state.
         setAppMode("edition");
-      } else {
-        const currentTime = kinematicRef.current.runtimeState.time;
-        const motorSpeedChanges: Array<{ id: ID; oldOmega: number; newOmega: number }> = [];
-        lastBundle.forEach((action) => {
-          if (
-            action.type !== "SetMotorConfig" ||
-            action.newConfig?.speed === undefined ||
-            action.oldConfig?.speed === undefined
-          )
-            return;
-          const oldOmega = action.newConfig.speed * ((2 * Math.PI) / 60);
-          const newOmega = action.oldConfig.speed * ((2 * Math.PI) / 60);
-          if (oldOmega !== newOmega)
-            motorSpeedChanges.push({ id: action.id, oldOmega, newOmega });
-        });
-        setRuntimeState((prev) => {
-          const kinematicSnapshots = prev.kinematicSnapshots.filter(
-            (s) => s.t <= currentTime,
-          );
-          if (motorSpeedChanges.length === 0) return { ...prev, kinematicSnapshots };
-          const motorPhases = new Map(prev.motorPhases);
-          motorSpeedChanges.forEach(({ id, oldOmega, newOmega }) => {
-            const theta = resolveMotorAngle(id, currentTime, oldOmega, prev.motorPhases);
-            const phases: MotorPhase[] = [
-              ...(motorPhases.get(id) ?? []),
-              { t: currentTime, theta, omega: newOmega },
-            ];
-            motorPhases.set(id, phases);
-          });
-          return { ...prev, kinematicSnapshots, motorPhases };
-        });
       }
+      // Otherwise the [mechanism] effect recompiles + truncates snapshots.
     }
 
     setSaveStatus("saving");
@@ -532,10 +498,6 @@ const App: React.FC = () => {
 
   const redoMechanism = useCallback(() => {
     if (mechanismRef.current.future.length === 0) return;
-
-    const isInSim = kinematicRef.current.appMode !== "edition";
-    // Read BEFORE setMechanism mutates future
-    const nextBundle = mechanismRef.current.future.slice(-1)[0];
 
     setMechanism((prevMechanism) => {
       let nextActions = prevMechanism.future.slice(-1)[0];
@@ -563,39 +525,7 @@ const App: React.FC = () => {
       return newMechanism;
     });
 
-    if (isInSim) {
-      const currentTime = kinematicRef.current.runtimeState.time;
-      const motorSpeedChanges: Array<{ id: ID; oldOmega: number; newOmega: number }> = [];
-      nextBundle.forEach((action) => {
-        if (
-          action.type !== "SetMotorConfig" ||
-          action.newConfig?.speed === undefined ||
-          action.oldConfig?.speed === undefined
-        )
-          return;
-        const oldOmega = action.oldConfig.speed * ((2 * Math.PI) / 60);
-        const newOmega = action.newConfig.speed * ((2 * Math.PI) / 60);
-        if (oldOmega !== newOmega)
-          motorSpeedChanges.push({ id: action.id, oldOmega, newOmega });
-      });
-      setRuntimeState((prev) => {
-        const kinematicSnapshots = prev.kinematicSnapshots.filter(
-          (s) => s.t <= currentTime,
-        );
-        if (motorSpeedChanges.length === 0) return { ...prev, kinematicSnapshots };
-        const motorPhases = new Map(prev.motorPhases);
-        motorSpeedChanges.forEach(({ id, oldOmega, newOmega }) => {
-          const theta = resolveMotorAngle(id, currentTime, oldOmega, prev.motorPhases);
-          const phases: MotorPhase[] = [
-            ...(motorPhases.get(id) ?? []),
-            { t: currentTime, theta, omega: newOmega },
-          ];
-          motorPhases.set(id, phases);
-        });
-        return { ...prev, kinematicSnapshots, motorPhases };
-      });
-    }
-
+    // In simulation, the [mechanism] effect recompiles + truncates snapshots.
     setSaveStatus("saving");
     debouncedSave();
   }, [debouncedSave]);
@@ -777,10 +707,16 @@ const App: React.FC = () => {
     }
   }, [appMode, mechanism.metadata.lastSimulationMode]);
 
-  const handleSimulationGrab = useCallback((key: string, target: Point2) => {
+  const handleSimulationGrab = useCallback((key: string, target: Point2, bodyRatio?: number) => {
     // Feed the grab into the RAF loop for snapshot recording
-    kinematicGrabRef.current = { key, target };
-    const { mechanism: mech, runtimeState: rs } = kinematicRef.current;
+    const grab: SimGrab =
+      bodyRatio !== undefined
+        ? { edgeID: key, t: bodyRatio, target }
+        : { key, target };
+    kinematicGrabRef.current = grab;
+    const { runtimeState: rs } = kinematicRef.current;
+    const model = simulationModelRef.current;
+    if (!model) return;
     // Start playback if paused
     if (!rs.isPlaying) {
       setRuntimeState((prev) => ({ ...prev, isPlaying: true }));
@@ -791,7 +727,16 @@ const App: React.FC = () => {
       ? Math.min(Math.max(0, Math.floor(rs.time / RECORD_DT)), snaps.length - 1)
       : -1;
     const prevSnap = idx >= 0 ? snaps[idx] : null;
-    setGrabSnapshot(compute_kinematic_snapshot(mech, rs.time, prevSnap, rs.motorPhases, { key, target }));
+    setGrabSnapshot(
+      step_simulation(
+        model,
+        rs.time,
+        prevSnap?.positions ?? null,
+        prevSnap?.angles ?? null,
+        RECORD_DT,
+        grab,
+      ),
+    );
   }, []);
 
   const handleSimulationGrabEnd = useCallback(() => {
@@ -1025,7 +970,13 @@ const App: React.FC = () => {
                   <IconButton
                     size="small"
                     color="inherit"
-                    onClick={() =>
+                    onClick={() => {
+                      // Recompile from the initial geometry so motor targets and
+                      // gear angles reset cleanly.
+                      if (appMode !== "edition")
+                        simulationModelRef.current = compile_simulation_model(
+                          mechanismRef.current,
+                        );
                       setRuntimeState((prev) => ({
                         ...prev,
                         time: 0,
@@ -1033,9 +984,8 @@ const App: React.FC = () => {
                         current: null,
                         history: [],
                         kinematicSnapshots: [],
-                        motorPhases: new Map(),
-                      }))
-                    }
+                      }));
+                    }}
                     sx={{ p: 0.4 }}
                   >
                     <RestartAlt sx={{ fontSize: 20 }} />
@@ -1721,6 +1671,7 @@ const App: React.FC = () => {
             appMode={appMode}
             activeTab={activeTab}
             setActiveTab={setActiveTab}
+            unsatisfied={activeSnapshot?.unsatisfied ?? []}
           />
         </Box>
       </Box>

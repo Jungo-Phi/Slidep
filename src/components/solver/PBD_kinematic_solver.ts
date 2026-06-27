@@ -1,23 +1,47 @@
-import { Link, Nodes, Point2 } from "../../types";
+import { Link, Point2 } from "../../types";
+import { ConstraintResidual } from "../../types/runtime-state";
 import {
   applyAngleConstraint,
-  applyAtSegmentRatioConstraint,
+  applyBeamFollowsAngleConstraint,
+  applyCoaxialAngleConstraint,
   applyDistanceConstraint,
   applyDistanceToLineConstraint,
   applyEqualLengthConstraint,
+  applyFixedOnSegmentConstraint,
+  applyGearMeshAngleConstraint,
   applyGearMeshingConstraint,
+  applyGearPerimeterPinConstraint,
   applyGearRatioConstraint,
   applyHandleGrabConstraint,
   applyHorizontalConstraint,
   applyKeepOrientationConstraint,
+  applyMotorAngleConstraint,
+  applyMotorBeamConstraint,
   applyNormalConstraint,
-  applyOnSegmentConstraint,
   applyParallelConstraint,
+  applySlideOnSegmentConstraint,
   applyVerticalConstraint,
 } from "./constraint-functions";
 
+export type SolverMaps = {
+  positions: Map<string, Point2>;
+  posMasses: Map<string, number>;
+  radii: Map<string, number>;
+  radMasses: Map<string, number>;
+  angles: Map<string, number>;
+  /** Constraints left unsatisfied (only filled when collectDiagnostics is set). */
+  unsatisfied?: ConstraintResidual[];
+};
+
+/** Above this residual (px for distances, rad for angles) a constraint is
+ *  reported as unsatisfied. Heuristic: well above the convergence epsilon, but
+ *  catches a genuinely violated (e.g. blocked) constraint. */
+const DIAGNOSTIC_TOLERANCE = 1;
+
 /*
- * PBD (Position Based Dynamics) kinematic solver
+ * PBD (Position Based Dynamics) solver shared by the geometric solver (edition)
+ * and the kinematic simulation. Geometric links use positions/radii; simulation
+ * links additionally use the angle maps.
  */
 export function PBD_kinematic_solver(
   positions: Map<string, Point2>,
@@ -27,95 +51,87 @@ export function PBD_kinematic_solver(
   links: Link[],
   nbIterations: number = 200,
   epsilon: number = 0.000_001,
-): Nodes {
+  angles: Map<string, number> = new Map(),
+  collectDiagnostics: boolean = false,
+): SolverMaps {
   // stop grab after `nbGrabIterations` to not stretch the mechanism
   const nbGrabIterations = 20;
   const grabStiffness = 0.5;
   const maxGrabAmplitude = 10;
 
+  // Per-link residual of the last executed iteration (for diagnostics). Springs
+  // (soft by design) and grabs (transient) are never recorded here.
+  const residuals = collectDiagnostics
+    ? new Array<number>(links.length).fill(0)
+    : null;
+
   let maxError: number = 0;
   for (let i = 0; i < nbIterations; i++) {
     maxError = 0;
 
-    links.forEach((link) => {
+    links.forEach((link, idx) => {
+      let err = 0;
+      let report = true; // surface in diagnostics
       switch (link.type) {
         case "Distance":
-          maxError = Math.max(
-            maxError,
-            applyDistanceConstraint(
-              positions,
-              posMasses,
-              link.key1,
-              link.key2,
-              link.distance,
-            ),
+          err = applyDistanceConstraint(
+            positions,
+            posMasses,
+            link.key1,
+            link.key2,
+            link.distance,
           );
           break;
         case "DistanceToLine":
-          maxError = Math.max(
-            maxError,
-            applyDistanceToLineConstraint(
-              positions,
-              posMasses,
-              link.key1,
-              link.key2,
-              link.key3,
-              link.distance,
-            ),
+          err = applyDistanceToLineConstraint(
+            positions,
+            posMasses,
+            link.key1,
+            link.key2,
+            link.key3,
+            link.distance,
           );
           break;
-        case "OnSegment":
-          maxError = Math.max(
-            maxError,
-            applyOnSegmentConstraint(
-              positions,
-              posMasses,
-              link.key1,
-              link.key2,
-              link.key3,
-            ),
+        case "SlideOnSegment":
+          err = applySlideOnSegmentConstraint(
+            positions,
+            posMasses,
+            link.key1,
+            link.key2,
+            link.key3,
           );
           break;
-        case "AtSegmentRatio":
-          maxError = Math.max(
-            maxError,
-            applyAtSegmentRatioConstraint(
-              positions,
-              posMasses,
-              link.key1,
-              link.key2,
-              link.key3,
-              link.t,
-            ),
+        case "FixedOnSegment":
+          err = applyFixedOnSegmentConstraint(
+            positions,
+            posMasses,
+            link.key1,
+            link.key2,
+            link.key3,
+            link.t,
           );
           break;
         case "KeepOrientation":
-          maxError = Math.max(
-            maxError,
-            applyKeepOrientationConstraint(
-              positions,
-              posMasses,
-              link.key1,
-              link.key2,
-              link.direction,
-            ),
+          err = applyKeepOrientationConstraint(
+            positions,
+            posMasses,
+            link.key1,
+            link.key2,
+            link.direction,
           );
           break;
         case "Angle":
-          maxError = Math.max(
-            maxError,
-            applyAngleConstraint(
-              positions,
-              posMasses,
-              link.key1,
-              link.key2,
-              link.key3,
-              link.key4,
-              link.flipStart,
-              link.flipEnd,
-              link.couterClockwise,
-              link.angle_rad,
-            ),
+          err = applyAngleConstraint(
+            positions,
+            posMasses,
+            link.key1,
+            link.key2,
+            link.key3,
+            link.key4,
+            link.flipStart,
+            link.flipEnd,
+            link.couterClockwise,
+            link.angle_rad,
           );
           break;
         case "Radius":
@@ -124,113 +140,188 @@ export function PBD_kinematic_solver(
           const wRadius = radMasses.get(link.key1)!;
           const error = radius - link.radius;
           radii.set(link.key1, radius - error * wRadius * stiffness);
-          maxError = Math.max(maxError, error);
+          err = Math.abs(error);
           break;
         case "Horizontal":
-          maxError = Math.max(
-            maxError,
-            applyHorizontalConstraint(
-              positions,
-              posMasses,
-              link.key1,
-              link.key2,
-            ),
+          err = applyHorizontalConstraint(
+            positions,
+            posMasses,
+            link.key1,
+            link.key2,
           );
           break;
         case "Vertical":
-          maxError = Math.max(
-            maxError,
-            applyVerticalConstraint(positions, posMasses, link.key1, link.key2),
+          err = applyVerticalConstraint(
+            positions,
+            posMasses,
+            link.key1,
+            link.key2,
           );
           break;
         case "Normal":
-          maxError = Math.max(
-            maxError,
-            applyNormalConstraint(
-              positions,
-              posMasses,
-              link.key1,
-              link.key2,
-              link.key3,
-              link.key4,
-            ),
+          err = applyNormalConstraint(
+            positions,
+            posMasses,
+            link.key1,
+            link.key2,
+            link.key3,
+            link.key4,
           );
           break;
         case "Parallel":
-          maxError = Math.max(
-            maxError,
-            applyParallelConstraint(
-              positions,
-              posMasses,
-              link.key1,
-              link.key2,
-              link.key3,
-              link.key4,
-            ),
+          err = applyParallelConstraint(
+            positions,
+            posMasses,
+            link.key1,
+            link.key2,
+            link.key3,
+            link.key4,
           );
           break;
         case "EqualLength":
-          maxError = Math.max(
-            maxError,
-            applyEqualLengthConstraint(
-              positions,
-              posMasses,
-              link.key1,
-              link.key2,
-              link.key3,
-              link.key4,
-            ),
+          err = applyEqualLengthConstraint(
+            positions,
+            posMasses,
+            link.key1,
+            link.key2,
+            link.key3,
+            link.key4,
           );
           break;
         case "GearMeshing":
-          maxError = Math.max(
-            maxError,
-            applyGearMeshingConstraint(
-              positions,
-              posMasses,
-              radii,
-              radMasses,
-              link.key1,
-              link.key2,
-              link.radKey1,
-              link.radKey2,
-            ),
+          err = applyGearMeshingConstraint(
+            positions,
+            posMasses,
+            radii,
+            radMasses,
+            link.key1,
+            link.key2,
+            link.radKey1,
+            link.radKey2,
           );
           break;
         case "GearRatio":
-          maxError = Math.max(
-            maxError,
-            applyGearRatioConstraint(
-              radii,
-              radMasses,
-              link.key1,
-              link.key2,
-              link.ratio,
-            ),
+          err = applyGearRatioConstraint(
+            radii,
+            radMasses,
+            link.key1,
+            link.key2,
+            link.ratio,
           );
           break;
+        case "MotorBeam":
+          err = applyMotorBeamConstraint(
+            positions,
+            posMasses,
+            link.pivotKey,
+            link.drivenKey,
+            link.targetAngle,
+          );
+          break;
+        case "MotorAngle":
+          err = applyMotorAngleConstraint(
+            angles,
+            link.angleKey,
+            link.targetAngle,
+          );
+          break;
+        case "GearMeshAngle":
+          err = applyGearMeshAngleConstraint(
+            angles,
+            link.angleKey1,
+            link.angleKey2,
+            link.r1,
+            link.r2,
+            link.theta1_0,
+            link.theta2_0,
+            link.alpha0,
+            link.alpha,
+          );
+          break;
+        case "CoaxialAngle":
+          err = applyCoaxialAngleConstraint(
+            angles,
+            link.angleKey1,
+            link.angleKey2,
+            link.offset,
+          );
+          break;
+        case "GearPerimeterPin":
+          err = applyGearPerimeterPinConstraint(
+            positions,
+            posMasses,
+            angles,
+            link.nodeKey,
+            link.centerKey,
+            link.angleKey,
+            link.radius,
+            link.offset,
+          );
+          break;
+        case "BeamFollowsAngle":
+          err = applyBeamFollowsAngleConstraint(
+            positions,
+            posMasses,
+            angles,
+            link.pivotKey,
+            link.drivenKey,
+            link.angleKey,
+            link.offset,
+          );
+          break;
+        case "Spring":
+          // Soft pull toward restLength. Deliberately NOT folded into maxError:
+          // a compliant spring fighting a rigid constraint never reaches zero
+          // residual, which would defeat the `maxError < epsilon` early-out.
+          // Rigid constraints alone define convergence; the spring just biases
+          // any remaining free DOF toward its rest length. Never reported.
+          applyDistanceConstraint(
+            positions,
+            posMasses,
+            link.key1,
+            link.key2,
+            link.restLength,
+            link.stiffness,
+          );
+          report = false;
+          break;
         case "HandleGrab":
+          // Transient interaction, not a constraint to report.
+          report = false;
           if (i > nbGrabIterations) break;
-          maxError = Math.max(
-            maxError,
-            applyHandleGrabConstraint(
-              positions,
-              radii,
-              posMasses,
-              link.grabbedKey,
-              link.value,
-              grabStiffness,
-              maxGrabAmplitude,
-            ),
+          err = applyHandleGrabConstraint(
+            positions,
+            radii,
+            posMasses,
+            link.grabbedKey,
+            link.value,
+            grabStiffness,
+            maxGrabAmplitude,
           );
           break;
       }
+
+      // Spring is soft by design → excluded from convergence; everything else
+      // (incl. the grab while active) drives maxError.
+      if (link.type !== "Spring") maxError = Math.max(maxError, err);
+      if (residuals && report) residuals[idx] = err;
     });
 
-    if (maxError < epsilon) {
-      console.log("nbIterations : ", i);
-      break;
-    }
+    if (maxError < epsilon) break;
   }
-  return { positions, radii, posMasses, radMasses };
+
+  // Build the unsatisfied-constraint list from the last iteration's residuals.
+  // Converged links sit below DIAGNOSTIC_TOLERANCE and are dropped; a blocked
+  // mechanism leaves the violated links above it.
+  let unsatisfied: ConstraintResidual[] | undefined;
+  if (residuals) {
+    unsatisfied = [];
+    links.forEach((link, idx) => {
+      const residual = residuals[idx];
+      if (residual > DIAGNOSTIC_TOLERANCE && link.owner !== undefined)
+        unsatisfied!.push({ owner: link.owner, type: link.type, residual });
+    });
+  }
+
+  return { positions, radii, posMasses, radMasses, angles, unsatisfied };
 }

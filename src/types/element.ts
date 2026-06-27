@@ -153,7 +153,7 @@ export interface GearElement extends BaseBodyElement {
   type: "gear";
   radius: number;
   parentAxleID: ID; // PivotElement ou SlidepElement (jamais null)
-  fixedEdgesIDs: ID[]; // poutres rigidement attachées au périmètre
+  fixedNodesIDs: ID[]; // join/pivot fixés au périmètre (tournent avec l'engrenage)
   meshedGearsIDs: ID[];
   attachedBeltID?: ID;
 }
@@ -176,12 +176,18 @@ export interface BeamElement extends BaseEdgeElement {
 export interface SpringElement extends BaseEdgeElement {
   type: "spring";
   stiffness: number;
+  /** Rendering only: natural length at simulation start, set on the displayed
+   *  copy by apply_snapshot_to_mechanism so the coil count stays fixed while the
+   *  drawn length varies (accordion). Undefined in edition. */
+  restLength?: number;
 }
 
 /** Damper element - energy dissipation */
 export interface DamperElement extends BaseEdgeElement {
   type: "damper";
   damping: number;
+  /** Rendering only: natural length at simulation start (see SpringElement). */
+  restLength?: number;
 }
 
 /**
