@@ -1015,7 +1015,9 @@ const App: React.FC = () => {
                   <ToggleButton value="edition">Édition</ToggleButton>
                 </Tooltip>
                 <Tooltip title="Étude de mécanismes immobiles [ ∑F = 0 ]. On pourra déterminer des variables qui permettent de respecter la condition d'équilibre des forces.">
-                  <ToggleButton value="static">Statique</ToggleButton>
+                  <ToggleButton value="static" disabled>
+                    Statique
+                  </ToggleButton>
                 </Tooltip>
                 <Tooltip title="Analyse du mouvement (pas de masses ou de forces).">
                   <ToggleButton value="kinematic">Cinématique</ToggleButton>

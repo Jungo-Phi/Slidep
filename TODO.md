@@ -95,7 +95,6 @@
 - Afficher les erreurs non respectées avec des messages (Attention / Brisée) au lieu de e=3.72
 - Mettre l'icon sélectionné en bord blanc au lieu de full blanc ?
 - Changer l'apparence des extrémités de spring et damper comme pour beam
-- Passage en PWA (progressive web app)
 - Ajouter "repelDistance" pour éloigner les contraintes détachées : move apart disconnected elements
 - hilight element on hover "disconnect" on element panel ?
 - afficher ground avec les 4 directions cardinales
