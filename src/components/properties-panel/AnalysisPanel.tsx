@@ -22,7 +22,6 @@ import {
   ActionBundleType,
   AppMode,
   HoveredPart,
-  ID,
   Mechanism,
   PivotElement,
 } from "../../types";
@@ -42,19 +41,6 @@ interface AnalysisPanelProps {
   setCanvasState: (state: CanvasState) => void;
   unsatisfied: ConstraintResidual[];
 }
-
-/** French noun for an element type, for referencing a constraint's owner. */
-const ELEMENT_NOUN: Record<string, string> = {
-  beam: "Poutre",
-  spring: "Ressort",
-  damper: "Amortisseur",
-  gear: "Engrenage",
-  pivot: "Pivot",
-  slider: "Glissière",
-  slidep: "Pivot glissant",
-  join: "Liaison",
-  mass: "Masse",
-};
 
 /** Short human label for a solver link type, shown as the violation kind. */
 const CONSTRAINT_NOUN: Record<string, string> = {
@@ -192,14 +178,6 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
   const motorPivots = mechanism.mechanicalElements.filter(
     (el): el is PivotElement => el.type === "pivot" && !!el.motor,
   );
-
-  const elementLabel = (id: ID): string => {
-    const el = mechanism.mechanicalElements.find((e) => e.id === id);
-    const noun = el ? (ELEMENT_NOUN[el.type] ?? "Élément") : "Élément";
-    return `${noun} ${id.slice(0, 6)}`;
-  };
-  // Unsatisfied constraints come from the kinematic solver; not shown in edition.
-  const showConstraints = appMode !== "edition";
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 2, my: 2 }}>
@@ -348,9 +326,8 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
 
       <Divider />
 
-      {/* Unsatisfied constraints — fixed-height body so the panel never jumps as
-          violations appear/disappear during the simulation. */}
-      {showConstraints && (
+      {/* Unsatisfied constraints */}
+      {appMode !== "edition" && (
         <>
           <Box sx={{ mx: 2 }}>
             <Box
