@@ -59,6 +59,14 @@ export function PBD_kinematic_solver(
   const grabStiffness = 0.5;
   const maxGrabAmplitude = 10;
 
+  // Motors are soft drivers: they must yield to hard geometric constraints
+  // (grounding, FixedOnSegment, Distance…) rather than fight them at equal
+  // strength. With stiffness < 1 a free motor still converges fully to its
+  // target over the iterations, but an over-constrained one (e.g. a grounded
+  // body node pinning the driven beam) loses the tug-of-war and is reported
+  // blocked instead of tearing the node off the beam.
+  const motorStiffness = 0.5;
+
   // Per-link residual of the last executed iteration (for diagnostics). Springs
   // (soft by design) and grabs (transient) are never recorded here.
   const residuals = collectDiagnostics
@@ -216,6 +224,7 @@ export function PBD_kinematic_solver(
             link.pivotKey,
             link.drivenKey,
             link.targetAngle,
+            motorStiffness,
           );
           break;
         case "MotorAngle":
@@ -223,6 +232,7 @@ export function PBD_kinematic_solver(
             angles,
             link.angleKey,
             link.targetAngle,
+            motorStiffness,
           );
           break;
         case "GearMeshAngle":

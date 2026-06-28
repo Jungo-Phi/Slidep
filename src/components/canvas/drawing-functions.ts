@@ -10,6 +10,7 @@ import {
   DIMENSION_SPECS,
   ICON_SELECTION_FILTER,
   FILL_SELECTION_FILTER,
+  FILL_DELETION_FILTER,
 } from "../../constants/rendering-specs";
 import { Point2 as Point2 } from "../../types/point2";
 import { get_element_icon } from "../element-palette/elementIcon";
@@ -887,10 +888,14 @@ export function draw_gear_ratio(ctx: CanvasRenderingContext2D, value: number) {
 export function draw_element_icon(
   ctx: CanvasRenderingContext2D,
   element: UnionElement,
+  deletionTint = false,
 ) {
   const side = DIM.ICON_SIZE;
   const isSelected = ctx.shadowBlur !== 0;
-  if (ctx.lineWidth === 2 && ctx.shadowBlur === 0) ctx.strokeStyle = "grey";
+  if (deletionTint) ctx.strokeStyle = COLORS.DELETION_BOX;
+  else if (ctx.lineWidth === 2 && ctx.shadowBlur === 0)
+    ctx.strokeStyle = "grey";
+  if (deletionTint) ctx.globalAlpha *= 0.5;
   ctx.beginPath();
   ctx.roundRect(-side / 2 - 1, -side / 2 - 1, side + 2, side + 2, 4);
   ctx.stroke();
@@ -898,6 +903,8 @@ export function draw_element_icon(
   ctx.shadowColor = COLORS.BACKGROUND;
   ctx.fillStyle = COLORS.BACKGROUND + COLORS.ICON_TRANSPARENCY;
   if (isSelected) ctx.filter = FILL_SELECTION_FILTER;
+  if (deletionTint) ctx.filter = FILL_DELETION_FILTER;
+
   ctx.fill();
   const iconUrl = get_element_icon(element);
   let img = iconImageCache.get(iconUrl);
@@ -909,6 +916,7 @@ export function draw_element_icon(
   if (!img.complete) return;
   if (isSelected) ctx.filter = ICON_SELECTION_FILTER;
   ctx.drawImage(img, -side / 2, -side / 2, side, side);
+  if (deletionTint) ctx.globalAlpha *= 2;
 }
 
 export function draw_text(ctx: CanvasRenderingContext2D, text: string) {

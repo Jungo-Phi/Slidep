@@ -33,8 +33,10 @@ export const COLORS = {
   HOVER: "#00000020", //§ 12.5% opacity
 } as const;
 
-export const ICON_SELECTION_FILTER = "brightness(5)"; // "saturate(6) hue-rotate(177deg) brightness(2)";
+export const ICON_SELECTION_FILTER = "brightness(5)";
 export const FILL_SELECTION_FILTER = "brightness(1.2)";
+export const FILL_DELETION_FILTER =
+  "saturate(1) hue-rotate(100deg) brightness(2.1)";
 
 export const PHYSICS = {
   DEFAULT_MOTOR_SPEED: 10, // tr/min
@@ -67,6 +69,18 @@ export const INTERACTION_SPECS = {
   GEAR_ON_BELT_GROW: 15,
   BELT_GRAB_RADIUS: 4,
 } as const;
+
+/**
+ * Durée (ms) pendant laquelle les badges de contraintes d'un élément restent
+ * affichés après avoir cessé de le survoler (hover-reveal en édition).
+ */
+export const CONSTRAINT_REVEAL_COOLDOWN_MS = 700;
+
+/**
+ * Durée (ms) du fondu de sortie, à la toute fin du cooldown : les badges sont à
+ * pleine opacité jusqu'à `COOLDOWN - FADE`, puis s'estompent vers 0.
+ */
+export const CONSTRAINT_REVEAL_FADE_MS = 150;
 
 export const CURSOR_STYLE = {
   HOVER: "grab",

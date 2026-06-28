@@ -49,9 +49,11 @@ import {
   Action,
   ActionBundleType,
   AppMode,
+  ConstraintElement,
   DEFAULT_METADATA,
   DEFAULT_RUNTIME_STATE,
   DEFAULT_SIMULATION_CONFIG,
+  ID,
   Mechanism,
   MechanismMetadata,
   Point2,
@@ -76,7 +78,9 @@ import {
   setStorageItem,
 } from "./utils";
 import { lightTheme } from "./lib/mui-theme"; // import { lightTheme, darkTheme, highContrastTheme } from "./lib/mui-theme";
-import MechanicalCanvas from "./components/canvas/MechanicalCanvas";
+import MechanicalCanvas, {
+  ConstraintChangeSignal,
+} from "./components/canvas/MechanicalCanvas";
 import { ElementPalette } from "./components/element-palette";
 import { PropertiesPanel } from "./components/properties-panel/PropertiesPanel";
 import {
@@ -143,7 +147,9 @@ const App: React.FC = () => {
   const [runtimeState, setRuntimeState] = useState<RuntimeState>(
     DEFAULT_RUNTIME_STATE,
   );
-  const [grabSnapshot, setGrabSnapshot] = useState<KinematicSnapshot | null>(null);
+  const [grabSnapshot, setGrabSnapshot] = useState<KinematicSnapshot | null>(
+    null,
+  );
   const [timelineHovered, setTimelineHovered] = useState(false);
   const [timelineDragging, setTimelineDragging] = useState(false);
   const [simulationConfig, setSimulationConfig] = useState<SimulationConfig>(
@@ -163,6 +169,9 @@ const App: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const canvasStateRef = useRef<CanvasState>(canvasState);
   const mechanismRef = useRef<Mechanism>(mechanism);
+  // Canal de retour visuel undo/redo des contraintes-icônes (lu par le canvas).
+  const constraintChangeRef = useRef<ConstraintChangeSignal | null>(null);
+  const constraintChangeSeqRef = useRef(0);
   const galleryOpenRef = useRef(galleryOpen);
   const timelineTrackRef = useRef<HTMLDivElement | null>(null);
   const runtimeStateRef = useRef<RuntimeState>(DEFAULT_RUNTIME_STATE);
@@ -194,9 +203,7 @@ const App: React.FC = () => {
   if (prevCanvasState !== canvasState) {
     // TODO : mettre aussi à jour quand on change activeTab
     setPrevCanvasState(canvasState);
-    if (appMode !== "edition") {
-      setActiveTab("analysis"); // TODO : permettre aussi de sélectionner des éléments
-    } else if ("elementID" in canvasState) {
+    if ("elementID" in canvasState) {
       if (
         mechanism.mechanicalElements.find(
           (el) => el.id === canvasState.elementID,
@@ -234,6 +241,8 @@ const App: React.FC = () => {
       ].includes(canvasState.type)
     ) {
       setActiveTab("constraints");
+    } else if (appMode !== "edition") {
+      setActiveTab("analysis");
     } else {
       setActiveTab("project");
     }
@@ -261,7 +270,9 @@ const App: React.FC = () => {
     if (appMode !== "edition") {
       simStartHistoryLengthRef.current = mechanismRef.current.history.length;
       // Compile the frozen simulation model from the current mechanism.
-      simulationModelRef.current = compile_simulation_model(mechanismRef.current);
+      simulationModelRef.current = compile_simulation_model(
+        mechanismRef.current,
+      );
     } else {
       simulationModelRef.current = null;
     }
@@ -284,7 +295,10 @@ const App: React.FC = () => {
     const snaps = rs.kinematicSnapshots;
     const idx =
       snaps.length > 0
-        ? Math.min(Math.max(0, Math.floor(rs.time / RECORD_DT)), snaps.length - 1)
+        ? Math.min(
+            Math.max(0, Math.floor(rs.time / RECORD_DT)),
+            snaps.length - 1,
+          )
         : -1;
     const baseSnap = idx >= 0 ? snaps[idx] : null;
     const baseMech = baseSnap
@@ -448,6 +462,41 @@ const App: React.FC = () => {
     [debouncedSave],
   );
 
+  // Repère les contraintes-icônes recréées/supprimées par un undo/redo pour que
+  // le canvas les fasse réapparaître (reveal) ou s'estomper (fantôme rouge). Les
+  // dimensions sont ignorées car toujours visibles.
+  const signalConstraintChange = useCallback(
+    (before: ConstraintElement[], after: ConstraintElement[]) => {
+      const beforeById = new Map(before.map((c) => [c.id, c]));
+      const afterById = new Map(after.map((c) => [c.id, c]));
+      const revealIDs: ID[] = [];
+      const removed: ConstraintElement[] = [];
+      for (const c of after) {
+        if (c.type.startsWith("dimension-")) continue;
+        const prev = beforeById.get(c.id);
+        // Recréée, déplacée ou éditée → la révéler.
+        if (
+          !prev ||
+          prev.position.x !== c.position.x ||
+          prev.position.y !== c.position.y ||
+          ("value" in prev && "value" in c && prev.value !== c.value)
+        )
+          revealIDs.push(c.id);
+      }
+      for (const c of before) {
+        if (c.type.startsWith("dimension-")) continue;
+        if (!afterById.has(c.id)) removed.push(c);
+      }
+      if (revealIDs.length === 0 && removed.length === 0) return;
+      constraintChangeRef.current = {
+        revealIDs,
+        removed,
+        seq: ++constraintChangeSeqRef.current,
+      };
+    },
+    [],
+  );
+
   const undoMechanism = useCallback(() => {
     if (mechanismRef.current.history.length === 0) return;
 
@@ -465,6 +514,10 @@ const App: React.FC = () => {
         },
         lastActionsForUndo,
         true,
+      );
+      signalConstraintChange(
+        prevMechanism.constraintElements,
+        newMechanism.constraintElements,
       );
       const currentState = canvasStateRef.current;
       if (
@@ -494,7 +547,7 @@ const App: React.FC = () => {
 
     setSaveStatus("saving");
     debouncedSave();
-  }, [debouncedSave]);
+  }, [debouncedSave, signalConstraintChange]);
 
   const redoMechanism = useCallback(() => {
     if (mechanismRef.current.future.length === 0) return;
@@ -509,6 +562,10 @@ const App: React.FC = () => {
         },
         nextActions,
         false,
+      );
+      signalConstraintChange(
+        prevMechanism.constraintElements,
+        newMechanism.constraintElements,
       );
       const currentState = canvasStateRef.current;
       if (
@@ -528,7 +585,7 @@ const App: React.FC = () => {
     // In simulation, the [mechanism] effect recompiles + truncates snapshots.
     setSaveStatus("saving");
     debouncedSave();
-  }, [debouncedSave]);
+  }, [debouncedSave, signalConstraintChange]);
 
   const performSaveToDB = useCallback(async () => {
     setSaveStatus("saving");
@@ -707,37 +764,44 @@ const App: React.FC = () => {
     }
   }, [appMode, mechanism.metadata.lastSimulationMode]);
 
-  const handleSimulationGrab = useCallback((key: string, target: Point2, bodyRatio?: number) => {
-    // Feed the grab into the RAF loop for snapshot recording
-    const grab: SimGrab =
-      bodyRatio !== undefined
-        ? { edgeID: key, t: bodyRatio, target }
-        : { key, target };
-    kinematicGrabRef.current = grab;
-    const { runtimeState: rs } = kinematicRef.current;
-    const model = simulationModelRef.current;
-    if (!model) return;
-    // Start playback if paused
-    if (!rs.isPlaying) {
-      setRuntimeState((prev) => ({ ...prev, isPlaying: true }));
-    }
-    // Also compute an immediate display snapshot for sub-frame responsiveness
-    const snaps = rs.kinematicSnapshots;
-    const idx = snaps.length > 0
-      ? Math.min(Math.max(0, Math.floor(rs.time / RECORD_DT)), snaps.length - 1)
-      : -1;
-    const prevSnap = idx >= 0 ? snaps[idx] : null;
-    setGrabSnapshot(
-      step_simulation(
-        model,
-        rs.time,
-        prevSnap?.positions ?? null,
-        prevSnap?.angles ?? null,
-        RECORD_DT,
-        grab,
-      ),
-    );
-  }, []);
+  const handleSimulationGrab = useCallback(
+    (key: string, target: Point2, bodyRatio?: number) => {
+      // Feed the grab into the RAF loop for snapshot recording
+      const grab: SimGrab =
+        bodyRatio !== undefined
+          ? { edgeID: key, t: bodyRatio, target }
+          : { key, target };
+      kinematicGrabRef.current = grab;
+      const { runtimeState: rs } = kinematicRef.current;
+      const model = simulationModelRef.current;
+      if (!model) return;
+      // Start playback if paused
+      if (!rs.isPlaying) {
+        setRuntimeState((prev) => ({ ...prev, isPlaying: true }));
+      }
+      // Also compute an immediate display snapshot for sub-frame responsiveness
+      const snaps = rs.kinematicSnapshots;
+      const idx =
+        snaps.length > 0
+          ? Math.min(
+              Math.max(0, Math.floor(rs.time / RECORD_DT)),
+              snaps.length - 1,
+            )
+          : -1;
+      const prevSnap = idx >= 0 ? snaps[idx] : null;
+      setGrabSnapshot(
+        step_simulation(
+          model,
+          rs.time,
+          prevSnap?.positions ?? null,
+          prevSnap?.angles ?? null,
+          RECORD_DT,
+          grab,
+        ),
+      );
+    },
+    [],
+  );
 
   const handleSimulationGrabEnd = useCallback(() => {
     kinematicGrabRef.current = null;
@@ -947,10 +1011,18 @@ const App: React.FC = () => {
                   },
                 }}
               >
-                <ToggleButton value="edition">Édition</ToggleButton>
-                <ToggleButton value="static">Statique</ToggleButton>
-                <ToggleButton value="kinematic">Cinématique</ToggleButton>
-                <ToggleButton value="dynamic">Dynamique</ToggleButton>
+                <Tooltip title="Éditer le mécanisme">
+                  <ToggleButton value="edition">Édition</ToggleButton>
+                </Tooltip>
+                <Tooltip title="Étude de mécanismes immobiles [ ∑F = 0 ]. On pourra déterminer des variables qui permettent de respecter la condition d'équilibre des forces.">
+                  <ToggleButton value="static">Statique</ToggleButton>
+                </Tooltip>
+                <Tooltip title="Analyse du mouvement (pas de masses ou de forces).">
+                  <ToggleButton value="kinematic">Cinématique</ToggleButton>
+                </Tooltip>
+                <Tooltip title="Combine la statique et la cinématique [ ∑F = ma ].">
+                  <ToggleButton value="dynamic">Dynamique</ToggleButton>
+                </Tooltip>
               </ToggleButtonGroup>
 
               <Divider flexItem sx={{ mx: 0.5 }} />
@@ -1497,6 +1569,8 @@ const App: React.FC = () => {
             undoMechanism={undoMechanism}
             redoMechanism={redoMechanism}
             appMode={appMode}
+            activeTab={activeTab}
+            constraintChangeRef={constraintChangeRef}
             setAppMode={setAppMode}
             onSpaceKey={handleSpaceKey}
             onExitToEdition={() => {

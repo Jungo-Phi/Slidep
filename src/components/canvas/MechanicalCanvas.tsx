@@ -6,19 +6,29 @@ import {
   AppMode,
   CanvasEvent,
   CanvasState,
+  ConstraintElement,
   HoveredPart,
+  ID,
   Mechanism,
   Point2,
+  PropertiesPanelTab,
   ViewportChange,
   ZERO,
 } from "../../types";
 import { world_to_screen, screen_to_world } from "../../utils";
-import { COLORS, DIM, HIT_TOLERANCE } from "../../constants/rendering-specs";
+import {
+  COLORS,
+  CONSTRAINT_REVEAL_COOLDOWN_MS,
+  CONSTRAINT_REVEAL_FADE_MS,
+  DIM,
+  HIT_TOLERANCE,
+} from "../../constants/rendering-specs";
 import { Box } from "@mui/material";
 import { drawMechanicalCanvas as draw_mechanical_canvas } from "./draw-canvas";
 import { canvasStateReducer } from "./canvas-state-reducer";
 import { get_constraint_element_from_id } from "../mechanism/connect-actions";
 import { get_hovered_part } from "./get-hover";
+import { compute_visible_constraints, connected_constraints } from "./utils";
 import { ConstraintEditor } from "./ConstraintEditor";
 import { draw_grid } from "./drawing-functions";
 
@@ -54,6 +64,18 @@ const STRUCTURAL_KEYS = new Set([
 // Keys that place constraints/dimensions → pause simulation
 const CONSTRAINT_KEYS = new Set(["d", "e", "h", "l", "n", "q", "v"]);
 
+/**
+ * Demande de retour visuel après un undo/redo touchant des contraintes-icônes :
+ * les `revealIDs` sont révélées (recréation ou déplacement/édition), les
+ * `removed` sont affichées en fantôme rouge qui s'estompe. `seq` est un compteur
+ * monotone pour ne traiter chaque signal qu'une fois.
+ */
+export interface ConstraintChangeSignal {
+  revealIDs: ID[];
+  removed: ConstraintElement[];
+  seq: number;
+}
+
 interface MechanicalCanvasProps {
   setCanvasState: (state: CanvasState) => void;
   canvasState: CanvasState;
@@ -65,6 +87,8 @@ interface MechanicalCanvasProps {
   undoMechanism: () => void;
   redoMechanism: () => void;
   appMode: AppMode;
+  activeTab: PropertiesPanelTab;
+  constraintChangeRef: React.MutableRefObject<ConstraintChangeSignal | null>;
   setAppMode: (mode: AppMode) => void;
   onSpaceKey: () => void;
   onExitToEdition: () => void;
@@ -91,6 +115,8 @@ export const MechanicalCanvas = forwardRef<
       undoMechanism,
       redoMechanism,
       appMode,
+      activeTab,
+      constraintChangeRef,
       setAppMode,
       onSpaceKey,
       onExitToEdition,
@@ -127,10 +153,86 @@ export const MechanicalCanvas = forwardRef<
     onSimulationGrabEndRef.current = onSimulationGrabEnd;
     const appModeRef = useRef(appMode);
     appModeRef.current = appMode;
+    const activeTabRef = useRef(activeTab);
+    activeTabRef.current = activeTab;
+    // Contrainte révélée au survol → timestamp du dernier survol (hover-reveal).
+    const revealMapRef = useRef<Map<ID, number>>(new Map());
+    // Fantômes des contraintes supprimées par undo/redo (objet + timestamp).
+    const ghostListRef = useRef<
+      Array<{ constraint: ConstraintElement; timestamp: number }>
+    >([]);
+    const lastConstraintChangeSeqRef = useRef(0);
 
     mechanismRef.current = mechanism;
     hoveredPartRef.current = hoveredPart;
     canvasStateRef.current = canvasState;
+
+    // Rafraîchit les contraintes révélées d'après l'élément (ou le badge) survolé.
+    // Appelé à chaque frame → les badges restent affichés tant qu'on survole,
+    // même sans bouger la souris.
+    const refreshRevealFromHover = useCallback((hovered: HoveredPart) => {
+      if (appModeRef.current !== "edition") return;
+      const now = performance.now();
+      if (
+        hovered.type === "Node" ||
+        hovered.type === "Edge" ||
+        hovered.type === "GearTooth" ||
+        hovered.type === "BeltBody"
+      ) {
+        for (const id of connected_constraints(
+          hovered.id,
+          mechanismRef.current.constraintElements,
+        ))
+          revealMapRef.current.set(id, now);
+      } else if (hovered.type === "Constraint") {
+        revealMapRef.current.set(hovered.id, now);
+      }
+    }, []);
+
+    // Map des contraintes visibles (id → opacité 0–1) pour dessin + hit-testing.
+    const computeVisibleConstraints = useCallback((): Map<ID, number> => {
+      refreshRevealFromHover(hoveredPartRef.current);
+      const now = performance.now();
+      const revealedOpacities = new Map<ID, number>();
+      for (const [id, ts] of revealMapRef.current) {
+        const age = now - ts;
+        if (age >= CONSTRAINT_REVEAL_COOLDOWN_MS) {
+          revealMapRef.current.delete(id);
+          continue;
+        }
+        // Pleine opacité, puis fondu sur les derniers CONSTRAINT_REVEAL_FADE_MS.
+        revealedOpacities.set(
+          id,
+          Math.min(1, (CONSTRAINT_REVEAL_COOLDOWN_MS - age) / CONSTRAINT_REVEAL_FADE_MS),
+        );
+      }
+      return compute_visible_constraints(
+        mechanismRef.current.constraintElements,
+        appModeRef.current,
+        activeTabRef.current,
+        revealedOpacities,
+        canvasStateRef.current,
+      );
+    }, [refreshRevealFromHover]);
+
+    // Traite un éventuel signal d'undo/redo : révèle les contraintes recréées et
+    // ajoute les supprimées à la liste des fantômes. N'agit qu'une fois par seq.
+    const processConstraintChange = useCallback(() => {
+      const change = constraintChangeRef.current;
+      if (!change || change.seq === lastConstraintChangeSeqRef.current) return;
+      lastConstraintChangeSeqRef.current = change.seq;
+      const now = performance.now();
+      const revealSet = new Set(change.revealIDs);
+      for (const id of change.revealIDs) revealMapRef.current.set(id, now);
+      // Une contrainte recréée annule son fantôme éventuel.
+      ghostListRef.current = ghostListRef.current.filter(
+        (g) => !revealSet.has(g.constraint.id),
+      );
+      for (const constraint of change.removed) {
+        revealMapRef.current.delete(constraint.id);
+        ghostListRef.current.push({ constraint, timestamp: now });
+      }
+    }, [constraintChangeRef]);
 
     const render = useCallback(() => {
       const canvas = canvasRef.current;
@@ -182,16 +284,44 @@ export const MechanicalCanvas = forwardRef<
         mechanismRef.current.viewport.zoom,
       );
 
+      // Retour visuel undo/redo : révèle les recréations, prépare les fantômes.
+      processConstraintChange();
+      const visibleConstraints = computeVisibleConstraints();
+
+      const now = performance.now();
+      const modelConstraints = mechanismRef.current.constraintElements;
+      const modelIDs = new Set(modelConstraints.map((c) => c.id));
+      const ghostIDs = new Set<ID>();
+      const ghostConstraints: ConstraintElement[] = [];
+      ghostListRef.current = ghostListRef.current.filter((g) => {
+        const age = now - g.timestamp;
+        if (age >= CONSTRAINT_REVEAL_COOLDOWN_MS) return false;
+        // Si la contrainte a été recréée entretemps, son fantôme est inutile.
+        if (modelIDs.has(g.constraint.id)) return false;
+        const opacity = Math.min(
+          1,
+          (CONSTRAINT_REVEAL_COOLDOWN_MS - age) / CONSTRAINT_REVEAL_FADE_MS,
+        );
+        visibleConstraints.set(g.constraint.id, opacity);
+        ghostIDs.add(g.constraint.id);
+        ghostConstraints.push(g.constraint);
+        return true;
+      });
+
       draw_mechanical_canvas(
         ctx,
         hoveredPartRef.current,
         canvasStateRef.current,
         mechanismRef.current.mechanicalElements,
-        mechanismRef.current.constraintElements,
+        ghostConstraints.length
+          ? [...modelConstraints, ...ghostConstraints]
+          : modelConstraints,
         mechanismRef.current.loads,
+        visibleConstraints,
+        ghostIDs,
       );
       ctx.restore();
-    }, [showGrid]);
+    }, [showGrid, computeVisibleConstraints, processConstraintChange]);
 
     useEffect(() => {
       let rafId: number;
@@ -298,7 +428,7 @@ export const MechanicalCanvas = forwardRef<
           currMech.mechanicalElements,
           currMech.constraintElements,
           currMech.loads,
-          true, // TODO : Add parameter to toggle showing constraints
+          computeVisibleConstraints(),
           screen_to_world(mousePositionRef.current, currMech.viewport),
           canvasStateRef.current,
         );
@@ -320,6 +450,11 @@ export const MechanicalCanvas = forwardRef<
           )
             newHoveredPart.position.y = rdy;
         }
+        // Hover-reveal : enregistre immédiatement le survol courant pour que le
+        // badge révélé soit cliquable dès cette frame (le rafraîchissement
+        // continu est assuré par computeVisibleConstraints dans la boucle rAF).
+        refreshRevealFromHover(newHoveredPart);
+
         setHoveredPart(newHoveredPart);
 
         canvasStateReducer(
@@ -350,6 +485,8 @@ export const MechanicalCanvas = forwardRef<
         setHoveredPart,
         setAppMode,
         snapToGrid,
+        computeVisibleConstraints,
+        refreshRevealFromHover,
       ],
     );
 

@@ -59,7 +59,11 @@ import {
   is_on_left_side_of_belt,
   resolve_angle_constraint_quadrant,
 } from "../../utils";
-import { connected_constraints, node_on_beam_body } from "./utils";
+import {
+  connected_constraints,
+  is_constraint_type,
+  node_on_beam_body,
+} from "./utils";
 
 function is_selected(elementID: ID, state: CanvasState): boolean {
   return (
@@ -250,6 +254,8 @@ export function drawMechanicalCanvas(
   mechanicalElements: MechanicalElement[],
   constraintElements: ConstraintElement[],
   loads: LoadElement[] = [],
+  visibleConstraints: Map<ID, number> = new Map(),
+  ghostConstraintIDs: Set<ID> = new Set(),
 ) {
   const allElements: UnionElement[] = (mechanicalElements as UnionElement[])
     .concat(constraintElements)
@@ -281,6 +287,12 @@ export function drawMechanicalCanvas(
   DRAWING_ORDER.forEach((type) => {
     const elements = allElements.filter((element) => element.type === type);
     for (const element of elements) {
+      // Skip constraints hidden by the current context (mode / tab / hover).
+      const constraintOpacity = is_constraint_type(element.type)
+        ? visibleConstraints.get(element.id)
+        : undefined;
+      if (is_constraint_type(element.type) && constraintOpacity === undefined)
+        continue;
       const isLoadElement =
         element.type === "force" ||
         element.type === "moment" ||
@@ -332,6 +344,13 @@ export function drawMechanicalCanvas(
         ctx.strokeStyle = COLORS.DELETION_STROKE;
         ctx.globalAlpha = INTERACTION_SPECS.DELETION_OPACITY;
       }
+      // Fade out revealed constraints at the end of their hover cooldown.
+      // Scoped: globalAlpha is reset to 1 at the start of each element iteration.
+      if (constraintOpacity !== undefined)
+        ctx.globalAlpha *= constraintOpacity;
+      // Tombstone of a just-deleted constraint (undo/redo feedback).
+      const isGhost = ghostConstraintIDs.has(element.id);
+      if (isGhost) ctx.strokeStyle = COLORS.DELETION_STROKE;
 
       switch (element.type) {
         case "pivot":
@@ -706,7 +725,7 @@ export function drawMechanicalCanvas(
             Math.round(element.position.x),
             Math.round(element.position.y),
           );
-          draw_element_icon(ctx, element);
+          draw_element_icon(ctx, element, isGhost);
           ctx.restore();
           break;
         case "force": {

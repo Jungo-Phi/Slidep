@@ -26,6 +26,7 @@ import {
   get_mechanical_element_from_id,
 } from "../mechanism/connect-actions";
 import { get_gear_angles } from "../../utils";
+import { is_constraint_type } from "./utils";
 
 /** Returns the hovered part of the element, or null if no part is hovered. */
 function get_hovered_part_of_element(
@@ -759,7 +760,7 @@ export function get_hovered_part(
   mechanicalElements: MechanicalElement[],
   constraintElements: ConstraintElement[],
   loads: LoadElement[] = [],
-  constraints_visible: boolean,
+  visibleConstraints: Map<ID, number>,
   mousePos: Point2,
   state: CanvasState,
 ): HoveredPart {
@@ -823,25 +824,15 @@ export function get_hovered_part(
   const hover_order = [...DRAWING_ORDER];
   hover_order.reverse();
   for (const type of hover_order) {
-    if (
-      (type === "dimension-edge" ||
-        type === "dimension-node-to-node" ||
-        type === "dimension-edge-to-node" ||
-        type === "dimension-angle" ||
-        type === "dimension-radius" ||
-        type === "horizontal-align-edge" ||
-        type === "horizontal-align-nodes" ||
-        type === "vertical-align-edge" ||
-        type === "vertical-align-nodes" ||
-        type === "normal" ||
-        type === "parallel" ||
-        type === "gear-ratio") &&
-      !constraints_visible
-    )
-      continue;
     const one_type_elements = elements.filter((e) => e.type === type).reverse();
     for (const element of one_type_elements) {
       if (excluded_elements.includes(element.id)) continue;
+      // Skip constraints hidden by the current context (mode / tab / hover).
+      if (
+        is_constraint_type(element.type) &&
+        !visibleConstraints.has(element.id)
+      )
+        continue;
       const hoveredPart = get_hovered_part_of_element(
         element,
         mechanicalElements,

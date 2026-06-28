@@ -1,12 +1,37 @@
 import {
+  AppMode,
   BeamElement,
+  CanvasState,
   ConstraintElement,
   HoveredPart,
   ID,
   MechanicalElement,
   NodeElement,
+  PropertiesPanelTab,
+  UnionElement,
 } from "../../types";
 import { get_mechanical_element_from_id } from "../mechanism/connect-actions";
+
+/** All constraint element types (dimensions + geometric badges). */
+const CONSTRAINT_TYPES = new Set<ConstraintElement["type"]>([
+  "dimension-edge",
+  "dimension-node-to-node",
+  "dimension-edge-to-node",
+  "dimension-angle",
+  "dimension-radius",
+  "horizontal-align-edge",
+  "horizontal-align-nodes",
+  "vertical-align-edge",
+  "vertical-align-nodes",
+  "normal",
+  "parallel",
+  "equal",
+  "gear-ratio",
+]);
+
+export function is_constraint_type(type: UnionElement["type"]): boolean {
+  return (CONSTRAINT_TYPES as Set<string>).has(type);
+}
 
 export function node_on_beam_body(
   node: NodeElement,
@@ -150,4 +175,49 @@ export function connected_constraints(
     }
   });
   return connectedConstraintsIDs;
+}
+
+/**
+ * Computes which constraints should be visible and at which opacity (0–1) given
+ * the current context. A constraint absent from the returned map is hidden
+ * (neither drawn nor hit-testable). Rules :
+ * - Onglet "constraints" : toutes les contraintes, opaques (prioritaire sur le mode).
+ * - Sinon en simulation : aucune contrainte.
+ * - Sinon (édition, autre onglet) : dimensions toujours opaques ; badges
+ *   géométriques uniquement pour les contraintes révélées au survol
+ *   (`revealedOpacities`, avec leur opacité de fondu).
+ * La contrainte en cours de sélection / déplacement / édition reste opaque.
+ */
+export function compute_visible_constraints(
+  constraints: ConstraintElement[],
+  appMode: AppMode,
+  activeTab: PropertiesPanelTab,
+  revealedOpacities: Map<ID, number>,
+  canvasState: CanvasState,
+): Map<ID, number> {
+  const visible = new Map<ID, number>();
+
+  if (activeTab === "constraints") {
+    for (const c of constraints) visible.set(c.id, 1);
+    return visible;
+  }
+
+  if (appMode !== "edition") return visible;
+
+  for (const c of constraints)
+    if (c.type.startsWith("dimension-")) visible.set(c.id, 1);
+
+  // Badges révélés au survol : conserve la plus forte opacité (ne baisse jamais
+  // une dimension déjà à 1).
+  for (const [id, opacity] of revealedOpacities)
+    visible.set(id, Math.max(visible.get(id) ?? 0, opacity));
+
+  if (
+    canvasState.type === "SelectedElement" ||
+    canvasState.type === "MovingConstraint" ||
+    canvasState.type === "EditingConstraint"
+  )
+    visible.set(canvasState.elementID, 1);
+
+  return visible;
 }

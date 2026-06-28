@@ -231,7 +231,7 @@ const ElementDisplayComponent: React.FC<ElementDisplayProps> = ({
               },
             }}
           />
-        ) : (
+        ) : editable ? (
           <Typography
             variant={
               size === "small"
@@ -247,7 +247,28 @@ const ElementDisplayComponent: React.FC<ElementDisplayProps> = ({
             sx={{
               ...textStyleCommon,
               fontSize: fontSizeValue,
-              cursor: editable ? "text" : "inherit",
+              cursor: "text",
+              userSelect: "none",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              display: "inline-block",
+            }}
+          >
+            {initialName}
+          </Typography>
+        ) : (
+          <Typography
+            variant={
+              size === "small"
+                ? "caption"
+                : size === "medium"
+                  ? "body2"
+                  : "body1"
+            }
+            sx={{
+              ...textStyleCommon,
+              fontSize: fontSizeValue,
+              cursor: "inherit",
               userSelect: "none",
               overflow: "hidden",
               textOverflow: "ellipsis",

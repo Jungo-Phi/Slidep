@@ -54,7 +54,19 @@ function wrap_angle(a: number): number {
  *  fields (angleKey…) are left untouched — angles live in a separate map. */
 function rewrite_position_keys(link: Link, from: (k: string) => string): void {
   const l = link as Record<string, unknown>;
-  for (const f of ["key1", "key2", "key3", "key4", "grabbedKey", "pivotKey", "drivenKey", "posKey1", "posKey2", "nodeKey", "centerKey"]) {
+  for (const f of [
+    "key1",
+    "key2",
+    "key3",
+    "key4",
+    "grabbedKey",
+    "pivotKey",
+    "drivenKey",
+    "posKey1",
+    "posKey2",
+    "nodeKey",
+    "centerKey",
+  ]) {
     if (typeof l[f] === "string") l[f] = from(l[f] as string);
   }
 }
@@ -63,7 +75,9 @@ function rewrite_position_keys(link: Link, from: (k: string) => string): void {
  * Compile the frozen simulation model from a mechanism (called on entering
  * simulation). Parses sim nodes + links, fuses coincidence links, sorts.
  */
-export function compile_simulation_model(mechanism: Mechanism): SimulationModel {
+export function compile_simulation_model(
+  mechanism: Mechanism,
+): SimulationModel {
   const nodes = get_sim_nodes(mechanism.mechanicalElements);
   let links = get_links_simulation(mechanism.mechanicalElements, nodes);
   const keyMap = new Map<string, string>();
@@ -191,12 +205,25 @@ export function step_simulation(
     // Body grab: pull a bridge node sitting at ratio t along the beam.
     const startKey =
       model.keyMap.get(`${grab.edgeID}:start`) ?? `${grab.edgeID}:start`;
-    const endKey = model.keyMap.get(`${grab.edgeID}:end`) ?? `${grab.edgeID}:end`;
+    const endKey =
+      model.keyMap.get(`${grab.edgeID}:end`) ?? `${grab.edgeID}:end`;
     positions.set("grab_bridge", new Point2(grab.target.x, grab.target.y));
     links = [
       ...model.links,
-      { type: "FixedOnSegment", ddl: 2, key1: startKey, key2: endKey, key3: "grab_bridge", t: grab.t },
-      { type: "HandleGrab", ddl: 1, grabbedKey: "grab_bridge", value: grab.target },
+      {
+        type: "FixedOnSegment",
+        ddl: 2,
+        key1: startKey,
+        key2: endKey,
+        key3: "grab_bridge",
+        t: grab.t,
+      },
+      {
+        type: "HandleGrab",
+        ddl: 1,
+        grabbedKey: "grab_bridge",
+        value: grab.target,
+      },
     ];
   } else if (grab) {
     links = [
@@ -254,7 +281,7 @@ export function step_simulation(
       });
   }
 
-  const unsatisfied = [...(result.unsatisfied ?? []), ...motorBlocks];
+  const unsatisfied = [...motorBlocks, ...(result.unsatisfied ?? [])];
 
   return {
     t,
@@ -279,7 +306,11 @@ export function apply_snapshot_to_mechanism(
       if (!pos) return el;
       if (el.type === "gear") {
         const ang = snapshot.angles.get(el.id);
-        return { ...el, position: pos, ...(ang !== undefined ? { angle: ang } : {}) };
+        return {
+          ...el,
+          position: pos,
+          ...(ang !== undefined ? { angle: ang } : {}),
+        };
       }
       return { ...el, position: pos };
     } else {

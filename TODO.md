@@ -2,33 +2,22 @@
 
 ---
 
-### [ Simulation cinématique ]
-
-- Pas de moteur + sur-contraint, on affiche quoi ?
-- Moteur tourne dans le cas ???
-- Afficher les trajectoires
-- Parfois, arriver à la fin du replay fait continuer la simulation
-- Moteur non grounded (parentBeamID)
-
 ### À faire rapidement
 
-- Afficher / cacher les contraintes (mais toujours affichées dans l'onglet de contraintes) / Contraintes plus petites ? / Afficher quand on hover sur l'élément lié avec un cooldown ?
-- Fication de nodes/beams sur les gears perimeter
+- Fixation de nodes/beams sur les gears perimeter
 - Afficher selected quand moving force
 - Ajouter des "Blank" avec les forces
-- Prefered force direction
-- Faire le panneau de paramètre propre
+- Adapter snap to grid aux états adéquats
 - Les contraintes et dimensions ne suivent pas lors des déplacements de groupe d'éléments
 - Comportement étrange dans vectorInput à régler
-- Ajouter un modificateur "ligne" pour la force répartie
+- Déboguer le modificateur "ligne" pour la force répartie
 - probe ajoutée 2 par 2 quand il y en a déjà une ???
 - Ouverture du sélecteur de métriques (Force, Vitesse, Position, Angle) au placement d'un probe
+- Afficher les trajectoires
 - Click dans le vide quand state==placingConstraint/placingForce -> state=Selecting
-- Changer l'apparence des extrémités de spring et damper comme pour beam
 - Sélection multiple doit hilight les contraintes liées aux éléments sélectionnés (comme group deletion)
 - hover des inputs dans le property pannel -> hilight canvas
 - Ne pas update le nom si on ne l'a pas changé
-- Ne pas appliquer les contraintes (perp, norm, etc.) pendant la simulation, elles font retourner en édition ?
 - Afficher les trajectoires
 - Analise des degrés de libertés en sous-parties
 - Remplacer un node par un autre doit transféfer le ground
@@ -36,10 +25,9 @@
 
 ### À faire plus tard
 
-- Adapter snap to grid aux états adéquats
 - Zoom sans scale les éléments eux-même ?
 - Mirror Y le canvas ?
-- Régler le hover du texte de ElementDisplay
+- Contraintes (et angle) aussi avec les forces
 - N'afficher QUE les éléments connectés dans connectionProperties ?
 - responsive : top bar, element palette
 - Snap force et distributed force aux perpendiculaires lors du placement
@@ -50,8 +38,10 @@
   - Configuration par probe : métrique, toggle graphique
   - Zone de graphiques : courbes superposées ou séparées (Valeur vs Temps), export CSV, export image
   - Nomenclature : distinguer "Contrainte" (MPa / Matériau) des contraintes géométriques
+- Faire le panneau de paramètre propre
 - placer un gear sur un slidep reste en slidep
-- Ajouter le choix du parent beam dans le moteur
+- Ajouter le choix du parent beam dans le moteur (afficher vitesse au lieu de ground en haut)
+- Simulation moteur non grounded (parentBeamID)
 - Belt hover (gear section) is not reliable
 - Empecher de placer une belt sur un gear avec le même axisID
 - Hover et Click dans sur les dimension pour les éditer quand state==placingStartDimension
@@ -67,6 +57,7 @@
 - Hover interdire les éléments directement connectés et l'élément lui-meme pour dimentions
 - Empecher les contraintes sur le même élément (DDL analyser)
 - geometric-solver : Maintenir les longueurs des beams si possible. Maintenir l'orientation ce celui modifié si possible. Ignorer des grounds si nécessaire.
+- Pas de moteur + sur-contraint, on affiche quoi ?
 - Panneau d'analyse : Liste textuelle des libertés/blocages avec interaction (survol = surlignage canvas)
 - Ajouter des "Blank" quand on change une valeur depuis les propriétés
 - Connect belt ends
@@ -82,6 +73,8 @@
 - Panneau d'explications "Statique/Cinématique/Dynamique"
 - Adapter le thumbnail generator pour cadrer sur le mécanisme
 - Passer les thumbnail dans la bibliothèque en AVIF lossless
+- Copié collé
+- Rewhole de ElementDisplay pour inclure d'autres éléments, fill, etc.
 
 ### [ Simulation dynamique ]
 
@@ -97,12 +90,17 @@
 
 ### À faire quand tout le reste est fait
 
-- Mettre l'icon sélectionné en bord blanc au lieu de full blanc
+- Code review
+- Afficher les positions (vecteurs) et longueurs des ressorts et amortisseurs en simulation (disabled)
+- Afficher les erreurs non respectées avec des messages (Attention / Brisée) au lieu de e=3.72
+- Mettre l'icon sélectionné en bord blanc au lieu de full blanc ?
+- Changer l'apparence des extrémités de spring et damper comme pour beam
 - Passage en PWA (progressive web app)
 - Ajouter "repelDistance" pour éloigner les contraintes détachées : move apart disconnected elements
 - hilight element on hover "disconnect" on element panel ?
 - afficher ground avec les 4 directions cardinales
 - changer le style du ground sur le moteur
+- Prefered force direction
 - afficher les forces en 2 modes (toe to head / head to toe)
 - Ajouter "Angle" dans les edges
 - Afficher la dimension dans le panneau de propriétés d'un edge
@@ -128,6 +126,9 @@
 - Logo animé
 - Exporter une animation : générer .gif, .mp4 de la simulation (options durée, FPS, zoom)
 - Ajouter engrenage couronne pour train épicycloïdal
+- Traits de construction ?
+- Contrainte de symétrie ?
+- Est-ce que les forces doivent tourner avec les éléments ?
 
 ### [ Simulation STATIQUE ]
 
