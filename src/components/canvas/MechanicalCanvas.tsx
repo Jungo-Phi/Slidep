@@ -203,7 +203,10 @@ export const MechanicalCanvas = forwardRef<
         // Pleine opacité, puis fondu sur les derniers CONSTRAINT_REVEAL_FADE_MS.
         revealedOpacities.set(
           id,
-          Math.min(1, (CONSTRAINT_REVEAL_COOLDOWN_MS - age) / CONSTRAINT_REVEAL_FADE_MS),
+          Math.min(
+            1,
+            (CONSTRAINT_REVEAL_COOLDOWN_MS - age) / CONSTRAINT_REVEAL_FADE_MS,
+          ),
         );
       }
       return compute_visible_constraints(
@@ -424,12 +427,16 @@ export const MechanicalCanvas = forwardRef<
         }
         const currMech = mechanismRef.current;
 
+        const worldMousePos = screen_to_world(
+          mousePositionRef.current,
+          currMech.viewport,
+        );
         let newHoveredPart = get_hovered_part(
           currMech.mechanicalElements,
           currMech.constraintElements,
           currMech.loads,
           computeVisibleConstraints(),
-          screen_to_world(mousePositionRef.current, currMech.viewport),
+          worldMousePos,
           canvasStateRef.current,
         );
         if (snapToGrid && newHoveredPart.type === "Void") {
@@ -450,9 +457,6 @@ export const MechanicalCanvas = forwardRef<
           )
             newHoveredPart.position.y = rdy;
         }
-        // Hover-reveal : enregistre immédiatement le survol courant pour que le
-        // badge révélé soit cliquable dès cette frame (le rafraîchissement
-        // continu est assuré par computeVisibleConstraints dans la boucle rAF).
         refreshRevealFromHover(newHoveredPart);
 
         setHoveredPart(newHoveredPart);
@@ -474,6 +478,7 @@ export const MechanicalCanvas = forwardRef<
           appModeRef.current !== "edition",
           onSimulationGrabRef.current,
           onSimulationGrabEndRef.current,
+          worldMousePos,
         );
         oldPositionRef.current = newHoveredPart.position.clone();
       },

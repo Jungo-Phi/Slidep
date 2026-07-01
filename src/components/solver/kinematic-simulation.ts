@@ -39,10 +39,12 @@ export type SimulationModel = {
   keyMap: Map<string, string>;
 };
 
-/** A grab during simulation: either a node/endpoint key, or an edge body at ratio t. */
+/** A grab during simulation: a node/endpoint key, an edge body at ratio t, or a
+ *  gear tooth (rotate the gear so the perimeter point at `angleOffset` follows). */
 export type SimGrab =
   | { key: string; target: Point2 }
-  | { edgeID: string; t: number; target: Point2 };
+  | { edgeID: string; t: number; target: Point2 }
+  | { gearID: string; angleOffset: number; radius: number; target: Point2 };
 
 function wrap_angle(a: number): number {
   while (a > Math.PI) a -= 2 * Math.PI;
@@ -222,6 +224,28 @@ export function step_simulation(
         type: "HandleGrab",
         ddl: 1,
         grabbedKey: "grab_bridge",
+        value: grab.target,
+      },
+    ];
+  } else if (grab && "gearID" in grab) {
+    // Gear-tooth grab: pin a bridge node on the perimeter (fixed angle offset)
+    // and pull it to the mouse — the GearPerimeterPin rotates the gear angle.
+    positions.set("grab_perimeter", new Point2(grab.target.x, grab.target.y));
+    links = [
+      ...model.links,
+      {
+        type: "GearPerimeterPin",
+        ddl: 2,
+        nodeKey: "grab_perimeter",
+        centerKey: model.keyMap.get(grab.gearID) ?? grab.gearID,
+        angleKey: grab.gearID,
+        radius: grab.radius,
+        offset: grab.angleOffset,
+      },
+      {
+        type: "HandleGrab",
+        ddl: 1,
+        grabbedKey: "grab_perimeter",
         value: grab.target,
       },
     ];

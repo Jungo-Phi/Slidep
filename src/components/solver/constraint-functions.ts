@@ -524,7 +524,9 @@ export function applyGearMeshingConstraint(
   const wPos2 = posMasses.get(g2) ?? 1;
   const wRad1 = radMasses.get(rg1) ?? 1;
   const wRad2 = radMasses.get(rg2) ?? 1;
-  if (!p1 || !p2 || !r1 || !r2) return 0;
+  // r1/r2 peuvent valoir 0 (pont de rayon nul utilisé par le grab de rayon) :
+  // on teste `undefined`, pas la fausseté, sinon la contrainte s'annule.
+  if (!p1 || !p2 || r1 === undefined || r2 === undefined) return 0;
 
   const dist = p1.distance_to(p2);
   const targetDist = r1 + r2;
@@ -695,7 +697,9 @@ export function applyGearMeshAngleConstraint(
 
 /** Nœud fixé au périmètre d'un engrenage : couple sa position à l'angle θ.
  * On veut angle(N − centre) = θ + offset et |N − centre| = radius.
- * Bidirectionnel : répartit la correction entre la rotation de N et l'angle θ. */
+ * Bidirectionnel : répartit la correction angulaire entre la rotation de N et
+ * l'angle θ, puis contraint le rayon en déplaçant N ET le centre selon leurs
+ * masses (si N est ancré, c'est le centre de l'engrenage qui bouge). */
 export function applyGearPerimeterPinConstraint(
   positions: Map<string, Point2>,
   posMasses: Map<string, number>,
@@ -727,14 +731,24 @@ export function applyGearPerimeterPinConstraint(
 
   const dAng = -C * (wN / denom) * stiffness;
   const dTheta = (C / denom) * stiffness;
-  // Move N onto the perimeter at the corrected angle (enforces radius too).
-  if (wN !== 0)
-    positions.set(
-      nodeKey,
-      center.add(new Point2(Math.cos(ang + dAng), Math.sin(ang + dAng)).mul(radius)),
-    );
+  // Correction angulaire : on tourne N autour du centre (le centre reste fixe
+  // pour cette partie) et on ajuste θ.
+  if (wN !== 0) positions.set(nodeKey, center.add(v.rotate(dAng)));
   angles.set(angleKey, theta + dTheta);
-  return Math.abs(C) + Math.abs(v.length() - radius);
+
+  // Correction du rayon : contraint |N − centre| = radius en déplaçant les deux
+  // points selon leurs masses. Le centre de l'engrenage bouge donc aussi pour
+  // résoudre la contrainte (indispensable quand N est ancré ailleurs).
+  const radiusError = applyDistanceConstraint(
+    positions,
+    posMasses,
+    nodeKey,
+    centerKey,
+    radius,
+    stiffness,
+  );
+
+  return Math.abs(C) + radiusError;
 }
 
 /** Beam attaché à un join fixé sur un engrenage : son orientation suit θ.

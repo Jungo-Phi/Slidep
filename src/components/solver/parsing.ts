@@ -64,6 +64,20 @@ export function get_geom_nodes(
       posMasses.set(`${element.id}:end`, 1);
     }
   });
+
+  // Nodes fixed to a gear perimeter get a virtual zero radius so a GearMeshing
+  // bridge (added in get_links_geometric) can pin them at |node − centre| =
+  // gear.radius while the gear radius stays a free DOF. radMass 0 keeps that
+  // virtual radius constant.
+  mechanicalElements.forEach((element) => {
+    if (element.type !== "gear") return;
+    element.fixedNodesBodyIDs.forEach((nodeId) => {
+      if (positions.has(nodeId) && !radii.has(nodeId)) {
+        radii.set(nodeId, 0);
+        radMasses.set(nodeId, 0);
+      }
+    });
+  });
   return { positions, radii, posMasses, radMasses };
 }
 
@@ -296,6 +310,19 @@ export function get_links_geometric(
           });
         }
       });
+      // Nodes pinned to the perimeter stay at |node − centre| = radius. The node
+      // acts as a zero-radius bridge (see get_geom_nodes), so the meshing keeps
+      // it on the perimeter as the radius or the centre moves.
+      element.fixedNodesBodyIDs.forEach((nodeId) => {
+        links.push({
+          type: "GearMeshing",
+          ddl: 1,
+          key1: element.id,
+          key2: nodeId,
+          radKey1: element.id,
+          radKey2: nodeId,
+        });
+      });
     }
     if (element.type === "pivot" || element.type === "slidep") {
       element.fixedGearsIDs.forEach((gearId) => {
@@ -390,10 +417,13 @@ export function get_links_simulation(
             element.positionStart,
             element.positionEnd,
           );
-          // Only sliders/slideps slide along the beam; joins/masses are frozen
-          // at their ratio (grounded ones are additionally anchored in
-          // add_rigidity_links).
-          const slides = node.type === "slider" || node.type === "slidep";
+          // Only sliders/slideps slide, and only along their OWN rail
+          // (parentBeam). A slider welded to any other beam's body — or a
+          // join/mass — is frozen at its ratio (FixedOnSegment); grounded ones
+          // are additionally anchored in add_rigidity_links.
+          const slides =
+            (node.type === "slider" || node.type === "slidep") &&
+            node.parentBeamID === element.id;
           links.push(
             slides
               ? {
@@ -519,7 +549,7 @@ export function get_links_simulation(
   mechanicalElements.forEach((element) => {
     if (element.type !== "gear") return;
     const gear = element as GearElement;
-    gear.fixedNodesIDs.forEach((nodeId) => {
+    gear.fixedNodesBodyIDs.forEach((nodeId) => {
       const node = byId.get(nodeId);
       if (!node || !("position" in node)) return;
       links.push({
@@ -532,7 +562,13 @@ export function get_links_simulation(
         offset: node.position.sub(gear.position).angle() - gear.angle,
         owner: nodeId,
       });
-      if (node.type !== "join") return;
+      // Rigid hubs (join/slider/mass — those with fixedEdgesIDs) make their
+      // welded beams rotate with the gear. Pivot/slidep are free hinges.
+      if (
+        !("fixedEdgesIDs" in node) ||
+        !("parentBeamID" in node && node.parentBeamID)
+      )
+        return;
       mechanicalElements.forEach((el) => {
         if (el.type !== "beam") return;
         const b = el as BeamElement;
@@ -541,10 +577,10 @@ export function get_links_simulation(
         if (b.fixedNodeStartID === nodeId) {
           drivenKey = `${b.id}:end`;
           dir = b.positionEnd.sub(b.positionStart);
-        } else if (b.fixedNodeEndID === nodeId) {
+        } else {
           drivenKey = `${b.id}:start`;
           dir = b.positionStart.sub(b.positionEnd);
-        } else return;
+        }
         if (dir.length_squared() < 1e-12) return;
         links.push({
           type: "BeamFollowsAngle",
@@ -678,6 +714,12 @@ function add_rigidity_links(
   },
 ): void {
   const grounded = "isGrounded" in node && node.isGrounded;
+  // When the hub is pinned to a gear perimeter, its welded beams' orientation is
+  // driven by the gear (BeamFollowsAngle) — a rail→beam orientation lock would
+  // fight it, so the slider skips its rigidity.
+  const pinnedToGear = mechanicalElements.some(
+    (e) => e.type === "gear" && e.fixedNodesBodyIDs.includes(node.id),
+  );
   const nodePos = "position" in node ? node.position : new Point2(0, 0);
   const anchor = (key: string) => nodes.posMasses.set(key, 0);
 
@@ -777,12 +819,22 @@ function add_rigidity_links(
       varSpokes.forEach(keepVarOrientation);
       return;
     }
-    // Non-grounded: preserve the angle between the rail and each attached edge.
-    bodyBeams.forEach((rail) => {
-      endpointBeams.forEach(({ beam: b, flip }) =>
-        lockAngle(rail, false, b, flip),
-      );
-      varSpokes.forEach((vs) => lockAngle(rail, false, vs.edge, vs.flip));
+    // Pinned to a gear: beams follow the gear angle (BeamFollowsAngle) — skip the
+    // rail→beam orientation lock that would conflict.
+    if (pinnedToGear) return;
+    // Non-grounded: a slider translates along its rail (parentBeam) without
+    // rotating, so every other welded edge keeps a fixed orientation relative to
+    // the rail. Welded body beams are additionally frozen on the slider in
+    // position (FixedOnSegment, in get_links_simulation).
+    const rail =
+      bodyBeams.find((b) => b.id === node.parentBeamID) ?? bodyBeams[0];
+    if (!rail) return;
+    endpointBeams.forEach(({ beam: b, flip }) =>
+      lockAngle(rail, false, b, flip),
+    );
+    varSpokes.forEach((vs) => lockAngle(rail, false, vs.edge, vs.flip));
+    bodyBeams.forEach((b) => {
+      if (b.id !== rail.id) lockAngle(rail, false, b, false);
     });
     return;
   }

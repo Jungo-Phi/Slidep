@@ -80,6 +80,7 @@ function get_hovered_part_of_element(
     )
       return null;
   } // cannot move an axle with fixed gear meshed with another on the other's parent axle
+  // if (state.type === "PlacingBeltEnd" && gear.attachedBeltID) break; // TODO : return node startBeltEnd
 
   switch (element.type) {
     case "pivot":
@@ -100,12 +101,15 @@ function get_hovered_part_of_element(
         case "EditingConstraint":
         case "MovingNode":
         case "MovingEdgeBody":
+        case "ChangingGearRadius":
         case "PlacingBeamStart":
+        case "PlacingBeamEnd":
         case "PlacingSpringStart":
         case "PlacingSpringEnd":
         case "PlacingDamperStart":
         case "PlacingDamperEnd":
         case "PlacingGearStart":
+        case "PlacingGearRadius":
         case "PlacingGround":
         case "PlacingPivot":
         case "PlacingMotor":
@@ -120,7 +124,6 @@ function get_hovered_part_of_element(
         case "HorizontalVerticalConstraintNode":
         case "MovingEdgeStartPoint":
         case "MovingEdgeEndPoint":
-        case "PlacingBeamEnd":
           // center
           const hit_radius =
             node.type === "pivot" && node.motor
@@ -230,8 +233,22 @@ function get_hovered_part_of_element(
         case "DimensionStart":
         case "Erasing":
         case "EditingConstraint":
+        case "MovingNode":
+        case "MovingEdgeBody":
+        case "PlacingBeamStart":
+        case "PlacingBeamEnd":
+        case "PlacingSpringStart":
+        case "PlacingSpringEnd":
+        case "PlacingDamperStart":
+        case "PlacingDamperEnd":
+        case "PlacingGround":
+        case "PlacingPivot":
+        case "PlacingMotor":
+        case "PlacingSlider":
+        case "PlacingJoin":
+        case "PlacingMass":
+        case "PlacingProbe":
           // gear perimeter
-          // if (state.type === "PlacingBeltEnd" && gear.attachedBeltID) break; // TODO : return node startBeltEnd
           return {
             type: "GearTooth",
             position: mousePos
@@ -448,12 +465,12 @@ function get_hovered_part_of_element(
         case "PlacingDamperEnd":
         case "PlacingBeltStart":
         case "PlacingBeltEnd":
+        case "PlacingGearStart":
         case "PlacingPivot":
         case "PlacingMotor":
         case "PlacingSlider":
         case "PlacingJoin":
         case "PlacingMass":
-        case "PlacingGearStart":
         case "PlacingGround":
           // body (only if beam) & ends
           if (mousePos.distance_to(edge.positionStart) <= HIT_TOLERANCE.NODE) {
@@ -503,6 +520,7 @@ function get_hovered_part_of_element(
         case "DimensionStart":
         case "DimensionNode":
         case "DimensionEdge":
+          // body
           if (
             mousePos.distance_to_segment(
               edge.positionStart,
@@ -521,6 +539,27 @@ function get_hovered_part_of_element(
             };
           }
           break;
+        case "PlacingGearRadius":
+        case "ChangingGearRadius":
+          // ends
+          if (mousePos.distance_to(edge.positionStart) <= HIT_TOLERANCE.NODE) {
+            return {
+              type: "Edge",
+              position: edge.positionStart.clone(),
+              id: edge.id,
+              deleting: false,
+              part: "start",
+            };
+          }
+          if (mousePos.distance_to(edge.positionEnd) <= HIT_TOLERANCE.NODE) {
+            return {
+              type: "Edge",
+              position: edge.positionEnd.clone(),
+              id: edge.id,
+              deleting: false,
+              part: "end",
+            };
+          }
       }
       break;
     case "belt":

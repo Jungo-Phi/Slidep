@@ -495,12 +495,14 @@ export function draw_gear(ctx: CanvasRenderingContext2D, radius: number) {
   ctx.arc(0, 0, radius, 0, TAU);
   ctx.stroke();
 
+  /*
   for (let i = 0; i < holesNb; i++) {
     ctx.beginPath();
     const angle = (i / holesNb) * TAU;
     ctx.arc(Math.cos(angle) * r1, Math.sin(angle) * r1, r2, 0, TAU);
     ctx.stroke();
   }
+  */
 
   // Dessine les dents
   /*

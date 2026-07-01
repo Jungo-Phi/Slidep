@@ -18,7 +18,7 @@ import {
 import {
   connect_elements,
   connect_gear_and_belt,
-  connect_gears,
+  connect_meshed_gears,
   delete_element,
   delete_elements,
   get_load_element_from_id,
@@ -26,8 +26,8 @@ import {
 } from "../mechanism/connect-actions";
 import { is_on_left_side_of_belt } from "../../utils";
 import { DIM } from "../../constants/rendering-specs";
-import { handle_placing_mouse_down as handle_placing_element } from "./placing-element-actions";
-import { handle_constraint_mouse_down as handle_placing_constraint } from "./placing-constraint-actions";
+import { handle_placing_element } from "./placing-element-actions";
+import { handle_placing_constraint } from "./placing-constraint-actions";
 
 export function canvasStateReducer(
   state: CanvasState,
@@ -48,10 +48,12 @@ export function canvasStateReducer(
     key: string,
     target: Point2,
     bodyRatio?: number,
+    gearPerimeter?: { gearID: ID; angleOffset: number; radius: number },
   ) => void = () => {},
   onSimulationGrabEnd: () => void = () => {},
+  worldMousePos: Point2 = ZERO,
 ) {
-  let actions: Action[] = [];
+  const actions: Action[] = [];
   let actionBundleType: ActionBundleType | undefined = undefined;
   switch (event.type) {
     case "MouseLeftButtonDown":
@@ -69,7 +71,10 @@ export function canvasStateReducer(
               (element) => element.id === hoveredPart.id,
             );
             if (simConstraint && "value" in simConstraint) break;
-            setCanvasState({ type: "SelectedElement", elementID: hoveredPart.id });
+            setCanvasState({
+              type: "SelectedElement",
+              elementID: hoveredPart.id,
+            });
             break;
           }
           // Logique pour la sélection multiple avec Shift
@@ -249,7 +254,7 @@ export function canvasStateReducer(
             loadElements,
           );
           if (r.newCanvasState) setCanvasState(r.newCanvasState);
-          actions = r.actions;
+          actions.push(...r.actions);
           if (r.actionBundleType) actionBundleType = r.actionBundleType;
           break;
         }
@@ -277,7 +282,7 @@ export function canvasStateReducer(
             mechanicalElements,
           );
           if (r.newCanvasState) setCanvasState(r.newCanvasState);
-          actions = r.actions;
+          actions.push(...r.actions);
           if (r.actionBundleType) actionBundleType = r.actionBundleType;
           break;
         }
@@ -303,13 +308,34 @@ export function canvasStateReducer(
             let simKey: string | null = null;
             let simElementID: ID | null = null;
             let bodyRatio: number | undefined = undefined;
-            if (hoveredPart.type === "Node" || hoveredPart.type === "GearTooth") {
+            let gearPerimeter:
+              | { gearID: ID; angleOffset: number; radius: number }
+              | undefined = undefined;
+            if (hoveredPart.type === "GearTooth") {
+              // Grab a gear tooth → rotate the gear: capture the angle offset of
+              // the grabbed point relative to the gear angle (held constant).
+              const grabbedGear = get_mechanical_element_from_id(
+                hoveredPart.id,
+                mechanicalElements,
+              ) as GearElement;
+              simKey = hoveredPart.id;
+              simElementID = hoveredPart.id;
+              gearPerimeter = {
+                gearID: hoveredPart.id,
+                angleOffset:
+                  worldMousePos.sub(grabbedGear.position).angle() -
+                  grabbedGear.angle,
+                radius: grabbedGear.radius,
+              };
+            } else if (hoveredPart.type === "Node") {
               simKey = hoveredPart.id;
               simElementID = hoveredPart.id;
             } else if (hoveredPart.type === "Edge") {
               simElementID = hoveredPart.id;
-              if (hoveredPart.part === "start") simKey = `${hoveredPart.id}:start`;
-              else if (hoveredPart.part === "end") simKey = `${hoveredPart.id}:end`;
+              if (hoveredPart.part === "start")
+                simKey = `${hoveredPart.id}:start`;
+              else if (hoveredPart.part === "end")
+                simKey = `${hoveredPart.id}:end`;
               else {
                 // Body grab: pull the beam at the grabbed ratio.
                 const simEdge = get_mechanical_element_from_id(
@@ -329,6 +355,7 @@ export function canvasStateReducer(
                 grabbedKey: simKey,
                 elementID: simElementID,
                 bodyRatio,
+                gearPerimeter,
               });
             }
             break;
@@ -526,20 +553,9 @@ export function canvasStateReducer(
               newVectorEnd = hoveredPart.position.sub(beam.positionEnd);
               break;
             case "body":
-              // TODO : régler
-              const delta = newVectorEnd
-                .add(beam.positionEnd)
-                .sub(newVectorStart.add(beam.positionStart));
-              const t = hoveredPart.position.parameter_on_segment(
-                newVectorStart.add(beam.positionStart),
-                newVectorEnd.add(beam.positionEnd),
-              );
-              newVectorStart = hoveredPart.position
-                .sub(beam.positionStart)
-                .add(delta.lerp(ZERO, 1 - t));
-              newVectorEnd = hoveredPart.position
-                .sub(beam.positionEnd)
-                .sub(ZERO.lerp(delta, t));
+              const delta = hoveredPart.position.sub(oldPosition);
+              newVectorStart = distForce.vectorStart.add(delta);
+              newVectorEnd = distForce.vectorEnd.add(delta);
               break;
           }
           actions.push({
@@ -553,20 +569,24 @@ export function canvasStateReducer(
           break;
         }
         case "ChangingGearRadius":
-          if (hoveredPart.position.equals(oldPosition)) break;
           const gear = get_mechanical_element_from_id(
             state.elementID,
             mechanicalElements,
           ) as GearElement;
+          // Grab a point on the perimeter and pull the gear toward the mouse
+          // (raw mouse, not the hovered part, so pinned nodes don't hijack it).
+          // The geometric solver decides whether the radius grows or the centre
+          // moves (radius-constrained / meshed) — see resolveGeometricConstraints.
           actionBundleType = "MoveElement";
           actions.push({
             type: "ChangeGearRadius",
             id: state.elementID,
             newRadius: Math.max(
               DIM.MIN_GEAR_RADIUS,
-              gear.position.distance_to(hoveredPart.position),
+              gear.position.distance_to(worldMousePos),
             ),
             oldRadius: gear.radius,
+            target: worldMousePos,
           });
           break;
         case "SelectingMultiple":
@@ -626,11 +646,17 @@ export function canvasStateReducer(
           });
           break;
         case "SimulationDragging":
-          onSimulationGrab(state.grabbedKey, hoveredPart.position, state.bodyRatio);
+          onSimulationGrab(
+            state.grabbedKey,
+            // For a gear-tooth grab, follow the raw mouse (rotation target),
+            // not the hovered part which could snap to another element.
+            state.gearPerimeter ? worldMousePos : hoveredPart.position,
+            state.bodyRatio,
+            state.gearPerimeter,
+          );
           break;
       }
       break;
-
     case "MouseButtonUp":
       if (mouseButtonDown !== "left") break;
       switch (state.type) {
@@ -788,7 +814,41 @@ export function canvasStateReducer(
             );
           } else if (hoveredPart.type === "GearTooth") {
             actionBundleType = "Connects";
-            actions.push(...connect_gears(state.elementID, hoveredPart.id));
+            actions.push(
+              ...connect_meshed_gears(state.elementID, hoveredPart.id),
+            );
+          } else if (
+            (hoveredPart.type === "Node" || hoveredPart.type === "Edge") &&
+            hoveredPart.id !==
+              (
+                get_mechanical_element_from_id(
+                  state.elementID,
+                  mechanicalElements,
+                ) as GearElement
+              ).parentAxleID
+          ) {
+            // Pin the dragged gear to the hovered node/edge (GEAR on NODE/EDGE).
+            // The gear's own axle is excluded so dragging the tooth toward the
+            // centre keeps resizing instead of self-pinning.
+            actionBundleType = "Connects";
+            actions.push(
+              ...connect_elements(
+                hoveredPart,
+                get_mechanical_element_from_id(
+                  state.elementID,
+                  mechanicalElements,
+                ),
+                {
+                  type: "GearTooth",
+                  position: hoveredPart.position,
+                  id: state.elementID,
+                  deleting: false,
+                },
+                mechanicalElements,
+                constraintElements,
+                loadElements,
+              ),
+            );
           } else {
             actionBundleType = "Other";
             actions.push({ type: "Blank" });
@@ -841,18 +901,23 @@ export function canvasStateReducer(
           setCanvasState({ type: "Erasing" });
           break;
         case "MovingConstraint":
+        case "MovingForce":
+        case "MovingDistributedForce":
+          if (actions.length === 0) {
+            actionBundleType = "Other";
+            actions.push({ type: "Blank" });
+          }
           setCanvasState({
             type: "SelectedElement",
             elementID: state.elementID,
           });
           break;
-        case "MovingForce":
-        case "MovingDistributedForce":
-          setCanvasState({ type: "Selecting" });
-          break;
         case "SimulationDragging":
           onSimulationGrabEnd();
-          setCanvasState({ type: "SelectedElement", elementID: state.elementID });
+          setCanvasState({
+            type: "SelectedElement",
+            elementID: state.elementID,
+          });
           break;
       }
       break;

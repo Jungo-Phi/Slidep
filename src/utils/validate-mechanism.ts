@@ -203,12 +203,23 @@ export function validate_mechanism(
         no_self(el.id, edgeID, "fixedEdgesIDs");
         const edge = ref(el.id, edgeID, "fixedEdgesIDs");
         if (!edge) continue;
+        // A gear pinned to this node's perimeter is also stored here.
+        if (edge.type === "gear") {
+          if (!edge.fixedNodesBodyIDs.includes(el.id)) {
+            missing_bidi(
+              el.id,
+              edgeID,
+              `${name(el.id)} (fixedEdgesIDs → ${name(edgeID)}): l'engrenage ne référence pas ce nœud en retour (fixedNodesBodyIDs).`,
+            );
+          }
+          continue;
+        }
         if (!EDGE_TYPES.has(edge.type)) {
           wrong_type(
             el.id,
             edgeID,
             "fixedEdgesIDs",
-            [...EDGE_TYPES],
+            [...EDGE_TYPES, "gear"],
             edge.type,
           );
           continue;
@@ -231,12 +242,23 @@ export function validate_mechanism(
         no_self(el.id, edgeID, "rotatingEdgesIDs");
         const edge = ref(el.id, edgeID, "rotatingEdgesIDs");
         if (!edge) continue;
+        // A gear pinned to this node's perimeter is also stored here.
+        if (edge.type === "gear") {
+          if (!edge.fixedNodesBodyIDs.includes(el.id)) {
+            missing_bidi(
+              el.id,
+              edgeID,
+              `${name(el.id)} (rotatingEdgesIDs → ${name(edgeID)}): l'engrenage ne référence pas ce nœud en retour (fixedNodesBodyIDs).`,
+            );
+          }
+          continue;
+        }
         if (!EDGE_TYPES.has(edge.type)) {
           wrong_type(
             el.id,
             edgeID,
             "rotatingEdgesIDs",
-            [...EDGE_TYPES],
+            [...EDGE_TYPES, "gear"],
             edge.type,
           );
           continue;
@@ -408,11 +430,10 @@ export function validate_mechanism(
       }
     }
 
-    // fixedNodesBodyIDs (beam)
+    // fixedNodesBodyIDs (beam/gear)
     if ("fixedNodesBodyIDs" in el) {
-      const beam = el as BeamElement;
-      no_dupes(el.id, beam.fixedNodesBodyIDs, "fixedNodesBodyIDs");
-      for (const nodeID of beam.fixedNodesBodyIDs) {
+      no_dupes(el.id, el.fixedNodesBodyIDs, "fixedNodesBodyIDs");
+      for (const nodeID of el.fixedNodesBodyIDs) {
         no_self(el.id, nodeID, "fixedNodesBodyIDs");
         const node = ref(el.id, nodeID, "fixedNodesBodyIDs");
         if (!node) continue;

@@ -105,6 +105,7 @@ const DB_VERSION = 3;
 const DEBOUNCE_AUTOSAVE_TIME = 1000; // 1000 ms = 1s
 const VIEWPORT_ZOOM_SENSITIVITY = 250; // Nombre de "crans" de molette nécessaires pour multiplier le zoom par 2
 const LANGUAGES = ["Deutsch", "English", "Español", "Français"];
+let condensed = true;
 
 const App: React.FC = () => {
   const [canvasState, setCanvasState] = useState<CanvasState>({
@@ -448,7 +449,8 @@ const App: React.FC = () => {
         if (
           cs.type === "SelectedElement" &&
           !newMechanism.mechanicalElements.find((e) => e.id === cs.elementID) &&
-          !newMechanism.constraintElements.find((e) => e.id === cs.elementID)
+          !newMechanism.constraintElements.find((e) => e.id === cs.elementID) &&
+          !newMechanism.loads.find((e) => e.id === cs.elementID)
         ) {
           setCanvasState({ type: "Selecting" });
         }
@@ -527,7 +529,8 @@ const App: React.FC = () => {
         ) &&
         !newMechanism.constraintElements.find(
           (el) => el.id === currentState.elementID,
-        )
+        ) &&
+        !newMechanism.loads.find((el) => el.id === currentState.elementID)
       ) {
         setCanvasState({ type: "Selecting" });
       }
@@ -575,7 +578,8 @@ const App: React.FC = () => {
         ) &&
         !newMechanism.constraintElements.find(
           (el) => el.id === currentState.elementID,
-        )
+        ) &&
+        !newMechanism.loads.find((el) => el.id === currentState.elementID)
       ) {
         setCanvasState({ type: "Selecting" });
       }
@@ -682,6 +686,8 @@ const App: React.FC = () => {
     const currentCanvas = canvasRef.current;
     if (!currentCanvas) return;
 
+    condensed = currentCanvas.width < 1400; // TODO : faire ça plus propre
+
     setMechanism({
       metadata: {
         ...DEFAULT_METADATA,
@@ -765,10 +771,21 @@ const App: React.FC = () => {
   }, [appMode, mechanism.metadata.lastSimulationMode]);
 
   const handleSimulationGrab = useCallback(
-    (key: string, target: Point2, bodyRatio?: number) => {
+    (
+      key: string,
+      target: Point2,
+      bodyRatio?: number,
+      gearPerimeter?: { gearID: string; angleOffset: number; radius: number },
+    ) => {
       // Feed the grab into the RAF loop for snapshot recording
-      const grab: SimGrab =
-        bodyRatio !== undefined
+      const grab: SimGrab = gearPerimeter
+        ? {
+            gearID: gearPerimeter.gearID,
+            angleOffset: gearPerimeter.angleOffset,
+            radius: gearPerimeter.radius,
+            target,
+          }
+        : bodyRatio !== undefined
           ? { edgeID: key, t: bodyRatio, target }
           : { key, target };
       kinematicGrabRef.current = grab;
@@ -1012,18 +1029,24 @@ const App: React.FC = () => {
                 }}
               >
                 <Tooltip title="Éditer le mécanisme">
-                  <ToggleButton value="edition">Édition</ToggleButton>
+                  <ToggleButton value="edition">
+                    {condensed ? "Édit" : "Édition"}
+                  </ToggleButton>
                 </Tooltip>
                 <Tooltip title="Étude de mécanismes immobiles [ ∑F = 0 ]. On pourra déterminer des variables qui permettent de respecter la condition d'équilibre des forces.">
                   <ToggleButton value="static" disabled>
-                    Statique
+                    {condensed ? "Stat" : "Statique"}
                   </ToggleButton>
                 </Tooltip>
                 <Tooltip title="Analyse du mouvement (pas de masses ou de forces).">
-                  <ToggleButton value="kinematic">Cinématique</ToggleButton>
+                  <ToggleButton value="kinematic">
+                    {condensed ? "Ciné" : "Cinématique"}
+                  </ToggleButton>
                 </Tooltip>
                 <Tooltip title="Combine la statique et la cinématique [ ∑F = ma ].">
-                  <ToggleButton value="dynamic">Dynamique</ToggleButton>
+                  <ToggleButton value="dynamic">
+                    {condensed ? "Dyna" : "Dynamique"}
+                  </ToggleButton>
                 </Tooltip>
               </ToggleButtonGroup>
 
@@ -1204,7 +1227,7 @@ const App: React.FC = () => {
                         }}
                       />
                     }
-                    label="Gravité"
+                    label={condensed ? null : "Gravité"}
                     size="small"
                     clickable
                     onClick={() =>
@@ -1231,7 +1254,7 @@ const App: React.FC = () => {
                           ? "primary.contrastText"
                           : "inherit",
                       },
-                      "& .MuiChip-label": { pr: 1 },
+                      "& .MuiChip-label": { pr: condensed ? 0.1 : 1 },
                       "&.MuiChip-clickable:hover": {
                         backgroundColor: simulationConfig.gravity
                           ? COLORS.ORANGE_STROKE
@@ -1259,7 +1282,7 @@ const App: React.FC = () => {
                         }}
                       />
                     }
-                    label="Collisions"
+                    label={condensed ? null : "Collisions"}
                     size="small"
                     clickable
                     onClick={() =>
@@ -1286,7 +1309,7 @@ const App: React.FC = () => {
                           ? "primary.contrastText"
                           : "inherit",
                       },
-                      "& .MuiChip-label": { pr: 1 },
+                      "& .MuiChip-label": { pr: condensed ? 0.1 : 1 },
                       "&.MuiChip-clickable:hover": {
                         backgroundColor: simulationConfig.collisions
                           ? COLORS.ORANGE_STROKE

@@ -18,7 +18,7 @@ import {
 import {
   connect_elements,
   connect_gear_and_belt,
-  connect_gears,
+  connect_meshed_gears,
   get_mechanical_element_from_id,
 } from "../mechanism/connect-actions";
 import { is_on_left_side_of_belt } from "../../utils";
@@ -59,7 +59,7 @@ type PlacingCanvasState = Extract<
   }
 >;
 
-export function handle_placing_mouse_down(
+export function handle_placing_element(
   state: PlacingCanvasState,
   hoveredPart: HoveredPart,
   mechanicalElements: MechanicalElement[],
@@ -97,11 +97,15 @@ export function handle_placing_mouse_down(
         newCanvasState: { type: "PlacingGearRadius", startHover: hoveredPart },
       };
     case "PlacingForceStart":
+      if (hoveredPart.type === "Void")
+        return {
+          actions: [],
+          newCanvasState: state,
+        };
       return {
         actions: [],
         newCanvasState: { type: "PlacingForceEnd", startHover: hoveredPart },
       };
-
     case "PlacingBeamEnd":
     case "PlacingSpringEnd":
     case "PlacingDamperEnd":
@@ -330,7 +334,7 @@ function handle_place_element(
       angle: 0,
       radius: state.startHover.position.distance_to(hoveredPart.position),
       parentAxleID: pivotId,
-      fixedNodesIDs: [],
+      fixedNodesBodyIDs: [],
       meshedGearsIDs: [],
       attachedBeltID: undefined,
     };
@@ -346,6 +350,19 @@ function handle_place_element(
           id: pivotId,
           deleting: false,
           beamBodyHover: false,
+        },
+        mechanicalElements,
+        constraintElements,
+        loads,
+      ),
+      ...connect_elements(
+        hoveredPart,
+        newGear,
+        {
+          type: "GearTooth",
+          position: hoveredPart.position,
+          id: gearId,
+          deleting: false,
         },
         mechanicalElements,
         constraintElements,
@@ -371,7 +388,7 @@ function handle_place_element(
         ),
       );
     } else if (hoveredPart.type === "GearTooth") {
-      actions.push(...connect_gears(gearId, hoveredPart.id));
+      actions.push(...connect_meshed_gears(gearId, hoveredPart.id));
     }
     return {
       actions,

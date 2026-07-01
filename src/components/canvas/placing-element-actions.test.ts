@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { handle_placing_mouse_down } from "./placing-element-actions";
+import { handle_placing_element } from "./placing-element-actions";
 import { Point2 } from "../../types/point2";
 import {
   BeamElement,
@@ -40,7 +40,7 @@ const edge = (
 describe("PlacingBeamStart", () => {
   it("retourne PlacingBeamEnd avec startHover = hoveredPart", () => {
     const hover = node(id("n1"));
-    const r = handle_placing_mouse_down(
+    const r = handle_placing_element(
       { type: "PlacingBeamStart" },
       hover,
       [],
@@ -48,7 +48,10 @@ describe("PlacingBeamStart", () => {
       [],
     );
     expect(r.actions).toHaveLength(0);
-    expect(r.newCanvasState).toEqual({ type: "PlacingBeamEnd", startHover: hover });
+    expect(r.newCanvasState).toEqual({
+      type: "PlacingBeamEnd",
+      startHover: hover,
+    });
   });
 });
 
@@ -60,7 +63,7 @@ describe("PlacingForceEnd", () => {
   const tipPos = { type: "Void" as const, position: P(0, -1) };
 
   it("startHover Void → aucune action, retour à PlacingForceStart", () => {
-    const r = handle_placing_mouse_down(
+    const r = handle_placing_element(
       { type: "PlacingForceEnd" as const, startHover: VOID },
       tipPos,
       [],
@@ -72,7 +75,7 @@ describe("PlacingForceEnd", () => {
   });
 
   it("pas de force existante → un seul CreateElement", () => {
-    const r = handle_placing_mouse_down(state, tipPos, [], [], []);
+    const r = handle_placing_element(state, tipPos, [], [], []);
     expect(r.actions).toHaveLength(1);
     expect(r.actions[0].type).toBe("CreateElement");
     expect(r.newCanvasState).toEqual({ type: "PlacingForceStart" });
@@ -86,7 +89,7 @@ describe("PlacingForceEnd", () => {
       anchor: undefined,
       vector: P(0, -5),
     };
-    const r = handle_placing_mouse_down(state, tipPos, [], [], [existing]);
+    const r = handle_placing_element(state, tipPos, [], [], [existing]);
     expect(r.actions).toHaveLength(2);
     expect(r.actions[0]).toEqual({ type: "DeleteElement", element: existing });
     expect(r.actions[1].type).toBe("CreateElement");
@@ -100,7 +103,7 @@ describe("PlacingForceEnd", () => {
       anchor: undefined,
       vector: P(0, -1),
     };
-    const r = handle_placing_mouse_down(state, tipPos, [], [], [other]);
+    const r = handle_placing_element(state, tipPos, [], [], [other]);
     expect(r.actions).toHaveLength(1);
     expect(r.actions[0].type).toBe("CreateElement");
   });
@@ -117,7 +120,7 @@ describe("PlacingForceEnd", () => {
       anchor: "end",
       vector: P(0, -1),
     };
-    const r = handle_placing_mouse_down(stateEdge, tipPos, [], [], [existing]);
+    const r = handle_placing_element(stateEdge, tipPos, [], [], [existing]);
     expect(r.actions).toHaveLength(1);
     expect(r.actions[0].type).toBe("CreateElement");
   });
@@ -134,7 +137,7 @@ describe("PlacingForceEnd", () => {
       anchor: "start",
       vector: P(0, -1),
     };
-    const r = handle_placing_mouse_down(stateEdge, tipPos, [], [], [existing]);
+    const r = handle_placing_element(stateEdge, tipPos, [], [], [existing]);
     expect(r.actions).toHaveLength(2);
     expect(r.actions[0].type).toBe("DeleteElement");
   });
@@ -146,18 +149,12 @@ describe("PlacingMoment", () => {
   const state = { type: "PlacingMoment" as const };
 
   it("hover Void → aucune action", () => {
-    const r = handle_placing_mouse_down(state, VOID, [], [], []);
+    const r = handle_placing_element(state, VOID, [], [], []);
     expect(r.actions).toHaveLength(0);
   });
 
   it("hover Edge, pas de moment existant → un seul CreateElement", () => {
-    const r = handle_placing_mouse_down(
-      state,
-      edge(id("beam1")),
-      [],
-      [],
-      [],
-    );
+    const r = handle_placing_element(state, edge(id("beam1")), [], [], []);
     expect(r.actions).toHaveLength(1);
     expect(r.actions[0].type).toBe("CreateElement");
   });
@@ -170,7 +167,7 @@ describe("PlacingMoment", () => {
       value: 5,
       clockwise: true,
     };
-    const r = handle_placing_mouse_down(
+    const r = handle_placing_element(
       state,
       edge(id("beam1")),
       [],
@@ -190,13 +187,7 @@ describe("PlacingMoment", () => {
       value: 3,
       clockwise: false,
     };
-    const r = handle_placing_mouse_down(
-      state,
-      edge(id("beam1")),
-      [],
-      [],
-      [other],
-    );
+    const r = handle_placing_element(state, edge(id("beam1")), [], [], [other]);
     expect(r.actions).toHaveLength(1);
     expect(r.actions[0].type).toBe("CreateElement");
   });
@@ -220,7 +211,13 @@ describe("PlacingDistributedForceEnd", () => {
   };
 
   it("pas de force répartie existante → un seul CreateElement", () => {
-    const r = handle_placing_mouse_down(state, { type: "Void" as const, position: P(2, -1) }, [beam], [], []);
+    const r = handle_placing_element(
+      state,
+      { type: "Void" as const, position: P(2, -1) },
+      [beam],
+      [],
+      [],
+    );
     expect(r.actions).toHaveLength(1);
     expect(r.actions[0].type).toBe("CreateElement");
     expect(r.newCanvasState).toEqual({ type: "PlacingDistributedForceStart" });
@@ -234,7 +231,13 @@ describe("PlacingDistributedForceEnd", () => {
       vectorStart: P(0, -1),
       vectorEnd: P(0, -1),
     };
-    const r = handle_placing_mouse_down(state, { type: "Void" as const, position: P(2, -1) }, [beam], [], [existing]);
+    const r = handle_placing_element(
+      state,
+      { type: "Void" as const, position: P(2, -1) },
+      [beam],
+      [],
+      [existing],
+    );
     expect(r.actions).toHaveLength(2);
     expect(r.actions[0]).toEqual({ type: "DeleteElement", element: existing });
     expect(r.actions[1].type).toBe("CreateElement");
@@ -248,7 +251,13 @@ describe("PlacingDistributedForceEnd", () => {
       vectorStart: P(0, -1),
       vectorEnd: P(0, -1),
     };
-    const r = handle_placing_mouse_down(state, { type: "Void" as const, position: P(2, -1) }, [beam], [], [other]);
+    const r = handle_placing_element(
+      state,
+      { type: "Void" as const, position: P(2, -1) },
+      [beam],
+      [],
+      [other],
+    );
     expect(r.actions).toHaveLength(1);
     expect(r.actions[0].type).toBe("CreateElement");
   });
@@ -260,18 +269,12 @@ describe("PlacingProbe", () => {
   const state = { type: "PlacingProbe" as const };
 
   it("hover Void → aucune action", () => {
-    const r = handle_placing_mouse_down(state, VOID, [], [], []);
+    const r = handle_placing_element(state, VOID, [], [], []);
     expect(r.actions).toHaveLength(0);
   });
 
   it("hover Node → AddProbe avec metric position-x", () => {
-    const r = handle_placing_mouse_down(
-      state,
-      node(id("n1")),
-      [],
-      [],
-      [],
-    );
+    const r = handle_placing_element(state, node(id("n1")), [], [], []);
     expect(r.actions).toHaveLength(1);
     expect(r.actions[0]).toEqual({
       type: "AddProbe",

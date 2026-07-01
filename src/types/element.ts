@@ -153,7 +153,7 @@ export interface GearElement extends BaseBodyElement {
   type: "gear";
   radius: number;
   parentAxleID: ID; // PivotElement ou SlidepElement (jamais null)
-  fixedNodesIDs: ID[]; // join/pivot fixés au périmètre (tournent avec l'engrenage)
+  fixedNodesBodyIDs: ID[];
   meshedGearsIDs: ID[];
   attachedBeltID?: ID;
 }

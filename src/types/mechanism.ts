@@ -32,7 +32,7 @@ export const DEFAULT_METADATA: MechanismMetadata = {
   version: "1.0.0",
   tags: [],
   thumbnail: "",
-  lastSimulationMode: "dynamic",
+  lastSimulationMode: "kinematic", // TODO : passer en "dynamic" quand le mode existe
 };
 
 export type ScreenPoint = Point2;

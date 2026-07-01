@@ -107,6 +107,7 @@ export type Action =
       id: ID;
       newRadius: number;
       oldRadius: number;
+      target: Point2;
     }
   | { type: "ChangeEdgeLength"; id: ID; newLength: number; oldLength: number }
   | {

@@ -28,7 +28,6 @@ function clone_mechanical_element(el: MechanicalElement): MechanicalElement {
   return {
     ...el,
     ...("fixedEdgesIDs" in el && { fixedEdgesIDs: [...el.fixedEdgesIDs] }),
-    ...("fixedNodesIDs" in el && { fixedNodesIDs: [...el.fixedNodesIDs] }),
     ...("rotatingEdgesIDs" in el && {
       rotatingEdgesIDs: [...el.rotatingEdgesIDs],
     }),
@@ -116,13 +115,6 @@ export function actionReducer(
       case "MoveConstraint":
         element = get_constraint_element_from_id(action.id, constraintElements);
         element.position = revert ? action.oldPosition : action.newPosition;
-        break;
-      case "ChangeGearRadius":
-        constraintElements.forEach((el) => {
-          if (el.type === "dimension-radius" && el.gearID === action.id) {
-            el.value = revert ? action.oldRadius : action.newRadius;
-          }
-        });
         break;
       case "ChangeDimensionEdgeValue":
       case "ChangeDimensionNodeToNodeValue":

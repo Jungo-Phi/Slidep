@@ -4,27 +4,24 @@
 
 ### À faire rapidement
 
-- Fixation de nodes/beams sur les gears perimeter
-- Afficher selected quand moving force
-- Ajouter des "Blank" avec les forces
+- Passer au simple click pour lancer la simulation
 - Adapter snap to grid aux états adéquats
+- La sim change quand on pan/zoom (débloque des moteurs)
 - Les contraintes et dimensions ne suivent pas lors des déplacements de groupe d'éléments
 - Comportement étrange dans vectorInput à régler
-- Déboguer le modificateur "ligne" pour la force répartie
 - probe ajoutée 2 par 2 quand il y en a déjà une ???
 - Ouverture du sélecteur de métriques (Force, Vitesse, Position, Angle) au placement d'un probe
 - Afficher les trajectoires
-- Click dans le vide quand state==placingConstraint/placingForce -> state=Selecting
 - Sélection multiple doit hilight les contraintes liées aux éléments sélectionnés (comme group deletion)
 - hover des inputs dans le property pannel -> hilight canvas
 - Ne pas update le nom si on ne l'a pas changé
-- Afficher les trajectoires
 - Analise des degrés de libertés en sous-parties
 - Remplacer un node par un autre doit transféfer le ground
 - Refactor en enlevant le actionBundleType ?
 
 ### À faire plus tard
 
+- En simulation, en attrapant un point sur gearTooth et en le tirant vers l'intérieur, la roue tourne de façon incontrôlable
 - Zoom sans scale les éléments eux-même ?
 - Mirror Y le canvas ?
 - Contraintes (et angle) aussi avec les forces
@@ -47,11 +44,11 @@
 - Hover et Click dans sur les dimension pour les éditer quand state==placingStartDimension
 - Ignorer BeamBodyHover lors du déplacement d'un beam
 - Move element en 2 frames n'est pas fiable
+- Séparer click de move
 - Placing Edges/Force avec hold down
 - Placing beam series / only one if hold down when placing (like in OnShape)
 - Sélection multiple d'éléments du même type -> modifier paramètres simultanément (IU adaptée + actions multiples)
 - Finir les traits de DimensionAngle
-- ChangingGearSize devrait aussi la faire bouger (fake gear + tangeancy constraint)
 - Enlever le système de drag and drop, passer à des boutons de transfer aux endroits spécifiques
 - Polish de dimensionAngle: arrondir les angles de 0° / 180°, traits extérieurs pour les petits angles
 - Hover interdire les éléments directement connectés et l'élément lui-meme pour dimentions
@@ -70,11 +67,16 @@
 - Placer join à la jonction des Beams
 - Éloigner les contraintes des éléments pour la lisibilité (à préciser)
 - Améliorer la contrainte d'angle (transformée en longueurs) pour les edges parallèles
-- Panneau d'explications "Statique/Cinématique/Dynamique"
 - Adapter le thumbnail generator pour cadrer sur le mécanisme
 - Passer les thumbnail dans la bibliothèque en AVIF lossless
 - Copié collé
 - Rewhole de ElementDisplay pour inclure d'autres éléments, fill, etc.
+- Ajouter "Angle" dans les edges
+- Afficher la dimension dans le panneau de propriétés d'un edge
+- Afficher le ratio avec une autre gear dans les connections de l'élément
+- Afficher les contraintes non respectées avec des messages (Attention / Brisée) au lieu de e=3.72
+- Afficher les contraintes non respectées en couleur sur le canvas
+- Bouton "Recentrer" calcul à partir des positions des éléments
 
 ### [ Simulation dynamique ]
 
@@ -90,9 +92,9 @@
 
 ### À faire quand tout le reste est fait
 
+- Refactor App.tsx (make shorter)
 - Code review
 - Afficher les positions (vecteurs) et longueurs des ressorts et amortisseurs en simulation (disabled)
-- Afficher les erreurs non respectées avec des messages (Attention / Brisée) au lieu de e=3.72
 - Mettre l'icon sélectionné en bord blanc au lieu de full blanc ?
 - Changer l'apparence des extrémités de spring et damper comme pour beam
 - Ajouter "repelDistance" pour éloigner les contraintes détachées : move apart disconnected elements
@@ -101,14 +103,12 @@
 - changer le style du ground sur le moteur
 - Prefered force direction
 - afficher les forces en 2 modes (toe to head / head to toe)
-- Ajouter "Angle" dans les edges
-- Afficher la dimension dans le panneau de propriétés d'un edge
-- Afficher le ratio avec une autre gear dans les connections de l'élément
-- Paremètre "Afficher les cercles" (trajectoires)
+- Paramètre "Afficher les cercles" (trajectoires)
 - Option de colorer les éléments
 - Créer un système d'unités (zoom de base : 1px = 1mm) à mettre dans les paramètres
 - taille des forces log autour d'un longueur de base Lb=100 ?
 - afficher le sens de rotation du moteur sur une des 4 directions cardinales (seulement au hover ?)
+- S'assurer que la police est toujours la même
 - Afficher "shown_name d'un élément au hover de celui-ci ?
 - Ajouter InputBox lors du placement des beams ? (définir sa longueur)
 - Changer les textes avec les langues

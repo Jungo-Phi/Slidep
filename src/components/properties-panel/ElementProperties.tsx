@@ -520,6 +520,12 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                       id: element.id,
                       newRadius: radius,
                       oldRadius: element.radius,
+                      // No mouse here: aim the perimeter grab straight out along
+                      // +x at the requested radius so the solver resolves to it.
+                      target: new Point2(
+                        element.position.x + radius,
+                        element.position.y,
+                      ),
                     },
                   ],
                   "MoveElement",

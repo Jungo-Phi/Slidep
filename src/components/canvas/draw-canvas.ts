@@ -73,6 +73,9 @@ function is_selected(elementID: ID, state: CanvasState): boolean {
     (state.type === "MovingEdgeEndPoint" && state.elementID === elementID) ||
     (state.type === "MovingEdgeBody" && state.elementID === elementID) ||
     (state.type === "ChangingGearRadius" && state.elementID === elementID) ||
+    (state.type === "MovingForce" && state.elementID === elementID) ||
+    (state.type === "MovingDistributedForce" &&
+      state.elementID === elementID) ||
     (state.type === "SelectingMultiple" &&
       state.elementIDs.includes(elementID)) ||
     (state.type === "SelectedMultiple" &&
@@ -346,8 +349,7 @@ export function drawMechanicalCanvas(
       }
       // Fade out revealed constraints at the end of their hover cooldown.
       // Scoped: globalAlpha is reset to 1 at the start of each element iteration.
-      if (constraintOpacity !== undefined)
-        ctx.globalAlpha *= constraintOpacity;
+      if (constraintOpacity !== undefined) ctx.globalAlpha *= constraintOpacity;
       // Tombstone of a just-deleted constraint (undo/redo feedback).
       const isGhost = ghostConstraintIDs.has(element.id);
       if (isGhost) ctx.strokeStyle = COLORS.DELETION_STROKE;
@@ -405,10 +407,12 @@ export function drawMechanicalCanvas(
                   const edge = get_mechanical_element_from_id(
                     edgeID,
                     mechanicalElements,
-                  ) as EdgeElement;
+                  );
+                  // rotatingEdgesIDs may also reference a pinned gear — skip it.
+                  if (!("positionStart" in edge)) return;
                   draw_edge_fake_end(
                     ctx,
-                    edge,
+                    edge as EdgeElement,
                     element.id,
                     hoveredPart,
                     state,
@@ -435,10 +439,12 @@ export function drawMechanicalCanvas(
                 const edge = get_mechanical_element_from_id(
                   edgeID,
                   mechanicalElements,
-                ) as EdgeElement;
+                );
+                // rotatingEdgesIDs may also reference a pinned gear — skip it.
+                if (!("positionStart" in edge)) return;
                 draw_edge_fake_end(
                   ctx,
-                  edge,
+                  edge as EdgeElement,
                   element.id,
                   hoveredPart,
                   state,
@@ -541,7 +547,7 @@ export function drawMechanicalCanvas(
                   angle: 0,
                   radius: INTERACTION_SPECS.BELT_GRAB_RADIUS,
                   parentAxleID: "----",
-                  fixedNodesIDs: [],
+                  fixedNodesBodyIDs: [],
                   meshedGearsIDs: [],
                   attachedBeltID: element.id,
                 };
@@ -583,7 +589,7 @@ export function drawMechanicalCanvas(
                   hoveredPart.position,
                 ),
                 parentAxleID: "----",
-                fixedNodesIDs: [],
+                fixedNodesBodyIDs: [],
                 meshedGearsIDs: [],
                 attachedBeltID: element.id,
               };

@@ -35,7 +35,7 @@ type ConstraintCanvasState = Extract<
   }
 >;
 
-export function handle_constraint_mouse_down(
+export function handle_placing_constraint(
   state: ConstraintCanvasState,
   hoveredPart: HoveredPart,
   mechanicalElements: MechanicalElement[],

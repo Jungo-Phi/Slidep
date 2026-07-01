@@ -31,6 +31,17 @@ export function resolveGeometricConstraints(
     mechanism.constraintElements,
   );
 
+  // Un rayon dimensionné est fixe : on l'ancre (radMass 0) à sa valeur cible.
+  // Aucune contrainte (engrènement, pin de périmètre, grab…) ne peut alors le
+  // modifier — le nœud épinglé suit le rayon au lieu de le changer. Sans
+  // dimension, radMass reste 1 : le rayon est un DDL libre, redimensionnable.
+  mechanism.constraintElements.forEach((c) => {
+    if (c.type === "dimension-radius" && nodes.radii.has(c.gearID)) {
+      nodes.radii.set(c.gearID, c.value);
+      nodes.radMasses.set(c.gearID, 0);
+    }
+  });
+
   let grabPoint: Point2 | number | undefined = undefined;
   let grabConnectionID: string | undefined = undefined;
   switch (actionBundleType) {
@@ -126,10 +137,34 @@ export function resolveGeometricConstraints(
             }
           });
           break;
-        case "ChangeGearRadius":
-          grabPoint = triggerAction.newRadius;
-          grabConnectionID = `${triggerAction.id}`;
+        case "ChangeGearRadius": {
+          // Grab a point that slides on the gear perimeter and pull it toward
+          // the mouse. A `GearMeshing` link against a zero-radius bridge keeps
+          // |centre − bridge| = radius (radius stays a DOF), so the solver
+          // shares the correction between the radius and the centre position.
+          const center = nodes.positions.get(`${triggerAction.id}`);
+          const radius = nodes.radii.get(`${triggerAction.id}`);
+          if (center && radius !== undefined) {
+            const dir = triggerAction.target.sub(center);
+            const u =
+              dir.length_squared() > 1e-9 ? dir.normalize() : new Point2(1, 0);
+            nodes.positions.set("grab_perimeter", center.add(u.mul(radius)));
+            nodes.posMasses.set("grab_perimeter", 1);
+            nodes.radii.set("grab_perimeter", 0);
+            nodes.radMasses.set("grab_perimeter", 0);
+            links.push({
+              type: "GearMeshing",
+              ddl: 1,
+              key1: `${triggerAction.id}`,
+              key2: "grab_perimeter",
+              radKey1: `${triggerAction.id}`,
+              radKey2: "grab_perimeter",
+            });
+            grabPoint = triggerAction.target;
+            grabConnectionID = "grab_perimeter";
+          }
           break;
+        }
         case "ChangeEdgeLength":
           links.push({
             type: "Distance",
@@ -164,8 +199,19 @@ export function resolveGeometricConstraints(
   // Ancrages pré-fusion : les clés individuelles disparaissent après la fusion Coincidence ;
   // Math.min() propagera ensuite ces valeurs à la clé fusionnée.
   if (triggerAction.type === "ChangeGearRadius") {
-    const preFuseDdl = get_geom_degrees_of_freedom(nodes, links);
-    if (preFuseDdl >= 3) {
+    // Keep the centre stable only when the radius is free to grow (no mesh and
+    // no radius dimension). When meshed or radius-constrained, the centre must
+    // stay free so the gear can move to keep tangency / honour the held radius.
+    const gearEl = get_mechanical_element_from_id(
+      triggerAction.id,
+      mechanism.mechanicalElements,
+    );
+    const hasMesh =
+      "meshedGearsIDs" in gearEl && gearEl.meshedGearsIDs.length > 0;
+    const hasRadiusDim = mechanism.constraintElements.some(
+      (c) => c.type === "dimension-radius" && c.gearID === triggerAction.id,
+    );
+    if (!hasMesh && !hasRadiusDim) {
       nodes.posMasses.set(`${triggerAction.id}`, 0);
     }
   }

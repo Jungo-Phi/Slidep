@@ -13,6 +13,7 @@ import type {
   UnionElement,
 } from "../../types/element";
 import { Action, ConnectsActionType } from "../../types";
+import { Point2 } from "../../types/point2";
 import { HoveredPart } from "../../types/hovered-part";
 import { connected_constraints, node_on_beam_body } from "../canvas/utils";
 import { legible_id } from "../../utils";
@@ -493,7 +494,6 @@ export function delete_elements(
       ({
         ...el,
         ...("fixedEdgesIDs" in el && { fixedEdgesIDs: [...el.fixedEdgesIDs] }),
-        ...("fixedNodesIDs" in el && { fixedNodesIDs: [...el.fixedNodesIDs] }),
         ...("rotatingEdgesIDs" in el && {
           rotatingEdgesIDs: [...el.rotatingEdgesIDs],
         }),
@@ -547,10 +547,30 @@ function transfer_edge_connections_to_node(
   mechanicalElements: MechanicalElement[],
 ) {
   const actions: Action[] = [];
-  const connectedEdge = get_mechanical_element_from_id(
-    edgeID,
-    mechanicalElements,
-  ) as EdgeElement;
+  const connected = get_mechanical_element_from_id(edgeID, mechanicalElements);
+  // A node's fixedEdges/rotatingEdges may also reference a pinned gear: transfer
+  // the gear-side pin (fixedNodesBodyIDs) from source to dest instead.
+  if (connected.type === "gear") {
+    const index = connected.fixedNodesBodyIDs.indexOf(sourceNodeID);
+    if (index !== -1) {
+      actions.push({
+        type: "ConnectsFixedNodesBody",
+        disconnect: true,
+        elementID: edgeID,
+        connectID: sourceNodeID,
+        index,
+      });
+      actions.push({
+        type: "ConnectsFixedNodesBody",
+        disconnect: false,
+        elementID: edgeID,
+        connectID: destNodeID,
+        index: 0,
+      });
+    }
+    return actions;
+  }
+  const connectedEdge = connected as EdgeElement;
   if (connectedEdge.fixedNodeEndID === sourceNodeID) {
     actions.push({
       type: "ConnectsFixedNodeEnd",
@@ -815,6 +835,10 @@ export function connect_elements(
   constraintElements: ConstraintElement[],
   loads: LoadElement[] = [],
 ): Action[] {
+  // TODO : Handle placing edge start/end on gear tooth
+  // TODO : Handle placing gear tooth on edge start/end
+  // TODO : Handle placing node on gear tooth
+  // TODO : Handle placing gear tooth on node
   if (
     hoveredPart.type === "Void" ||
     hoveredPart.type === "Constraint" ||
@@ -956,6 +980,17 @@ export function connect_elements(
             ),
           );
           break;
+        case "GearTooth":
+          // NODE on GEAR
+          actions.push(
+            ...connect_node_and_edge(
+              selectedNode,
+              hoveredElement as GearElement,
+              "body",
+              loads,
+            ),
+          );
+          break;
       }
       break;
     case "Edge":
@@ -975,29 +1010,25 @@ export function connect_elements(
           break;
         case "Edge":
           // EDGE on EDGE
-          const hoveredEdge = hoveredElement as EdgeElement;
-          // Connect the two edges with a join
-          const join: JoinElement = {
-            type: "join",
-            fixedEdgesIDs: [],
-            position: hoveredPart.position,
-            isGrounded: false,
-            id: crypto.randomUUID(),
-          };
-          actions.push({ type: "CreateElement", element: join });
           actions.push(
-            ...connect_node_and_edge(
-              join,
-              hoveredEdge,
+            ...connect_two_edges(
+              hoveredElement as EdgeElement,
               hoveredPart.part,
-              loads,
-            ),
-          );
-          actions.push(
-            ...connect_node_and_edge(
-              join,
               selectedEdge,
               selectedPart.part,
+              hoveredPart.position,
+            ),
+          );
+          break;
+        case "GearTooth":
+          // EDGE on GEAR
+          actions.push(
+            ...connect_two_edges(
+              selectedEdge,
+              selectedPart.part,
+              hoveredElement as GearElement,
+              "body",
+              hoveredPart.position,
               loads,
             ),
           );
@@ -1007,23 +1038,35 @@ export function connect_elements(
     case "GearTooth":
       const selectedGear = selectedElement as GearElement;
       switch (hoveredPart.type) {
+        case "Node":
+          // GEAR on NODE
+          actions.push(
+            ...connect_node_and_edge(
+              hoveredElement as NodeElement,
+              selectedGear,
+              "body",
+              loads,
+            ),
+          );
+          break;
+        case "Edge":
+          // GEAR on EDGE
+          actions.push(
+            ...connect_two_edges(
+              hoveredElement as EdgeElement,
+              hoveredPart.part,
+              selectedGear,
+              "body",
+              hoveredPart.position,
+              loads,
+            ),
+          );
+          break;
         case "GearTooth":
           // GEAR on GEAR
-          const hoveredGear = hoveredElement as GearElement;
-          actions.push({
-            type: "ConnectsMeshedGears",
-            disconnect: false,
-            elementID: selectedGear.id,
-            connectID: hoveredGear.id,
-            index: 0,
-          });
-          actions.push({
-            type: "ConnectsMeshedGears",
-            disconnect: false,
-            elementID: hoveredGear.id,
-            connectID: selectedGear.id,
-            index: 0,
-          });
+          actions.push(
+            ...connect_meshed_gears(selectedGear.id, hoveredElement.id),
+          );
           break;
       }
       break;
@@ -1037,12 +1080,19 @@ export function connect_elements(
 /** Connects a node and an edge bidirectionally. */
 function connect_node_and_edge(
   node: NodeElement,
-  edge: EdgeElement,
+  edge: EdgeElement | GearElement,
   edgePart: "start" | "end" | "body",
   loads: LoadElement[] = [],
 ): Action[] {
   let actions: Action[] = [];
-  if ("parentBeamID" in node && !node.parentBeamID && edgePart === "body") {
+  if (
+    "parentBeamID" in node &&
+    !node.parentBeamID &&
+    edgePart === "body" &&
+    edge.type !== "gear"
+  ) {
+    // A gear is never a rail: a slider/slidep dropped on a gear body is fixed to
+    // it (fixedEdges / rotatingEdges below), not made to slide along it.
     actions.push({
       type: "ConnectsParentBeam",
       disconnect: false,
@@ -1092,34 +1142,59 @@ function connect_node_and_edge(
         index: 0,
       });
   }
-  if (edgePart !== "body") {
-    const edgeForces = loads.filter(
-      (l): l is ForceElement =>
-        l.type === "force" && l.targetID === edge.id && l.anchor === edgePart,
-    );
-    const nodeHasForce = loads.some(
-      (l) => l.type === "force" && l.targetID === node.id,
-    );
-    for (const ef of edgeForces) {
-      actions.push({ type: "DeleteElement", element: ef });
-      if (!nodeHasForce) {
-        actions.push({
-          type: "CreateElement",
-          element: {
-            type: "force",
-            id: crypto.randomUUID() as ID,
-            targetID: node.id,
-            vector: ef.vector,
-          },
-        });
-      }
+  if (edgePart === "body") return actions;
+
+  const edgeForces = loads.filter(
+    (l): l is ForceElement =>
+      l.type === "force" && l.targetID === edge.id && l.anchor === edgePart,
+  );
+  const nodeHasForce = loads.some(
+    (l) => l.type === "force" && l.targetID === node.id,
+  );
+  for (const ef of edgeForces) {
+    actions.push({ type: "DeleteElement", element: ef });
+    if (!nodeHasForce) {
+      actions.push({
+        type: "CreateElement",
+        element: {
+          type: "force",
+          id: crypto.randomUUID() as ID,
+          targetID: node.id,
+          vector: ef.vector,
+        },
+      });
     }
   }
   return actions;
 }
 
-/** Connects two gears together (meshing only). */
-export function connect_gears(gear1ID: ID, gear2ID: ID): Action[] {
+/**
+ * Connects 2 edges together (beam body / gear perimeter) by creating a join at the contact point.
+ */
+function connect_two_edges(
+  edge1: EdgeElement | GearElement,
+  edgePart1: "start" | "end" | "body",
+  edge2: EdgeElement | GearElement,
+  edgePart2: "start" | "end" | "body",
+  position: Point2,
+  loads: LoadElement[] = [],
+): Action[] {
+  const join: JoinElement = {
+    type: "join",
+    fixedEdgesIDs: [],
+    position,
+    isGrounded: false,
+    id: crypto.randomUUID(),
+  };
+  return [
+    { type: "CreateElement", element: join },
+    ...connect_node_and_edge(join, edge1, edgePart1, loads),
+    ...connect_node_and_edge(join, edge2, edgePart2, loads),
+  ];
+}
+
+/** Connects two gears together (meshing). */
+export function connect_meshed_gears(gear1ID: ID, gear2ID: ID): Action[] {
   return [
     {
       type: "ConnectsMeshedGears",

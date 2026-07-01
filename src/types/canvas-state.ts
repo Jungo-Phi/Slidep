@@ -150,4 +150,7 @@ export type CanvasState =
       elementID: ID;
       /** Set when grabbing an edge on its body: ratio along the edge (grabbedKey = edgeID). */
       bodyRatio?: number;
+      /** Set when grabbing a gear tooth: rotate the gear so the grabbed perimeter
+       *  point (fixed angle offset from the gear angle) follows the mouse. */
+      gearPerimeter?: { gearID: ID; angleOffset: number; radius: number };
     };
