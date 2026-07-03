@@ -15,11 +15,17 @@ import {
   FormControlLabel,
 } from "@mui/material";
 import DeleteIcon from "@mui/icons-material/Delete";
+import ShowChartIcon from "@mui/icons-material/ShowChart";
 import {
   LoadElement,
   MechanicalElement,
   PivotElement,
 } from "../../types/element";
+import {
+  PROBE_METRIC_LABELS,
+  available_probe_metrics,
+  toggled_probes,
+} from "../canvas/ProbeMetricSelector";
 import VectorInput from "./components/VectorInput";
 import GroundSwitch from "./components/GroundSwitch";
 import BeltTensionSwitch from "./components/BeltTensionSwitch";
@@ -29,6 +35,7 @@ import {
   Mechanism,
   ActionBundleType,
   Point2,
+  PropertiesPanelTab,
   ZERO,
 } from "../../types";
 import ConnectionsProperties from "./ConnectionsProperties";
@@ -97,6 +104,73 @@ const MotorSection: React.FC<MotorSectionProps> = ({ pivot, applyActions }) => {
             />
           </Box>
         )}
+      </Box>
+    </>
+  );
+};
+
+interface ProbesSectionProps {
+  element: MechanicalElement;
+  applyActions: (actions: Action[], actionBundleType: ActionBundleType) => void;
+  setActiveTab: (tab: PropertiesPanelTab) => void;
+}
+
+/** The measurements (probe metrics) taken on this element — compact toggle
+ *  chips (same availability as the canvas popover), with a shortcut to the
+ *  graphs in the analysis tab. */
+const ProbesSection: React.FC<ProbesSectionProps> = ({
+  element,
+  applyActions,
+  setActiveTab,
+}) => {
+  const probes = element.probes ?? [];
+  return (
+    <>
+      <Divider sx={{ my: 1 }} />
+      <Box sx={{ px: 2, pb: 1 }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+          <Typography variant="caption" color="text.secondary" sx={{ flex: 1 }}>
+            Mesures
+          </Typography>
+          {probes.length > 0 && (
+            <IconButton
+              size="small"
+              onClick={() => setActiveTab("analysis")}
+              title="Voir les graphiques"
+            >
+              <ShowChartIcon fontSize="small" />
+            </IconButton>
+          )}
+        </Box>
+        <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5, mt: 0.5 }}>
+          {available_probe_metrics(element).map((metric) => {
+            const active = probes.some((p) => p.metric === metric);
+            return (
+              <Chip
+                key={metric}
+                label={PROBE_METRIC_LABELS[metric]}
+                size="small"
+                clickable
+                variant={active ? "filled" : "outlined"}
+                color={active ? "primary" : "default"}
+                onClick={() =>
+                  applyActions(
+                    [
+                      {
+                        type: "SetProbes",
+                        elementID: element.id,
+                        newProbes: toggled_probes(element, metric),
+                        oldProbes: probes,
+                      },
+                    ],
+                    "Other",
+                  )
+                }
+                sx={{ height: 22 }}
+              />
+            );
+          })}
+        </Box>
       </Box>
     </>
   );
@@ -179,6 +253,7 @@ interface ElementPropertiesProps {
   setCanvasState: (state: CanvasState) => void;
   applyActions: (actions: Action[], actionBundleType: ActionBundleType) => void;
   mechanism: Mechanism;
+  setActiveTab: (tab: PropertiesPanelTab) => void;
 }
 
 export const ElementProperties: React.FC<ElementPropertiesProps> = ({
@@ -188,6 +263,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
   setCanvasState,
   applyActions,
   mechanism,
+  setActiveTab,
 }) => {
   const handleMouseEnter = (el: MechanicalElement) => {
     setHoveredPart(element_to_hovered_part(el, true));
@@ -655,6 +731,12 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
         element={element}
         loads={mechanism.loads}
         applyActions={applyActions}
+      />
+
+      <ProbesSection
+        element={element}
+        applyActions={applyActions}
+        setActiveTab={setActiveTab}
       />
     </Box>
   );

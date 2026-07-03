@@ -31,7 +31,7 @@ export interface PropertiesPanelProps {
   mechanism: Mechanism;
   setHoveredPart: (hoveredPart: HoveredPart) => void;
   updateMetadata: (metadata: MechanismMetadata) => void;
-  setRuntimeState: (state: RuntimeState) => void;
+  setRuntimeState: React.Dispatch<React.SetStateAction<RuntimeState>>;
   runtimeState: RuntimeState;
   setSimulationConfig: (config: SimulationConfig) => void;
   simulationConfig: SimulationConfig;
@@ -52,6 +52,8 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
   activeTab,
   setActiveTab,
   unsatisfied,
+  runtimeState,
+  setRuntimeState,
 }) => {
   const handleProjectInfoChange = (info: any) => {
     updateMetadata({
@@ -182,6 +184,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
             setCanvasState={setCanvasState}
             applyActions={applyActions}
             mechanism={mechanism}
+            setActiveTab={setActiveTab}
           />
         )}
         {activeTab === "constraints" && (
@@ -201,6 +204,8 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
             setHoveredPart={setHoveredPart}
             setCanvasState={setCanvasState}
             unsatisfied={unsatisfied}
+            runtimeState={runtimeState}
+            setRuntimeState={setRuntimeState}
           />
         )}
       </Box>

@@ -376,7 +376,9 @@ const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
         iconSrc: probeIconUrl,
         goToStateType: "PlacingProbe",
         simBehavior: "observational",
-        hilightRule: (state) => state.type === "PlacingProbe",
+        hilightRule: (state) =>
+          state.type === "PlacingProbe" ||
+          state.type === "PlacingProbeMetrics",
         hilightColor: COLORS.ORANGE,
         hilightHoverColor: COLORS.ORANGE_STROKE,
       },

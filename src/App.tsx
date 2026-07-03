@@ -183,11 +183,18 @@ const App: React.FC = () => {
   kinematicRef.current = { mechanism, runtimeState, appMode };
   const kinematicLastWallTime = useRef<number | null>(null);
   const kinematicGrabRef = useRef<SimGrab | null>(null);
+  // Set when the user presses Space in edition mode, so the mode-change effect
+  // starts playback immediately instead of resetting isPlaying to false.
+  const autoPlayOnEnterRef = useRef<boolean>(false);
   // Frozen simulation model, compiled on entering simulation and on edits during sim.
   const simulationModelRef = useRef<SimulationModel | null>(null);
   // History length when simulation mode was last entered — used to distinguish
   // edition-mode actions from simulation-mode actions on undo.
   const simStartHistoryLengthRef = useRef<number>(0);
+  // Set right before a mechanism update made only of probe-config actions
+  // (SetProbes): probes are observation-only, so these edits must not
+  // recompile the simulation model nor truncate the recorded snapshots.
+  const probeOnlyEditRef = useRef<boolean>(false);
 
   const [snackbar, setSnackbar] = useState<{
     open: boolean;
@@ -204,7 +211,13 @@ const App: React.FC = () => {
   if (prevCanvasState !== canvasState) {
     // TODO : mettre aussi à jour quand on change activeTab
     setPrevCanvasState(canvasState);
-    if ("elementID" in canvasState) {
+    if (
+      canvasState.type === "PlacingProbe" ||
+      canvasState.type === "PlacingProbeMetrics"
+    ) {
+      // Probe workflow: the probes and their graphs live in the analysis tab
+      setActiveTab("analysis");
+    } else if ("elementID" in canvasState) {
       if (
         mechanism.mechanicalElements.find(
           (el) => el.id === canvasState.elementID,
@@ -277,9 +290,13 @@ const App: React.FC = () => {
     } else {
       simulationModelRef.current = null;
     }
+    // Capture the flag synchronously: the setRuntimeState updater below runs
+    // later, after this line has already reset the ref to false.
+    const shouldAutoPlay = appMode !== "edition" && autoPlayOnEnterRef.current;
+    autoPlayOnEnterRef.current = false;
     setRuntimeState((prev) => ({
       ...prev,
-      isPlaying: false,
+      isPlaying: shouldAutoPlay,
       time: 0,
       kinematicSnapshots: [],
     }));
@@ -291,7 +308,12 @@ const App: React.FC = () => {
   // simulated state (apply the last snapshot first) so motor angle and gear
   // rotations stay continuous across the edit.
   useEffect(() => {
+    const probeOnly = probeOnlyEditRef.current;
+    probeOnlyEditRef.current = false;
     if (kinematicRef.current.appMode === "edition") return;
+    // Probe-config edits don't affect the simulated motion: keep the model
+    // and the already-recorded snapshots.
+    if (probeOnly) return;
     const rs = runtimeStateRef.current;
     const snaps = rs.kinematicSnapshots;
     const idx =
@@ -310,8 +332,15 @@ const App: React.FC = () => {
       ...prev,
       kinematicSnapshots: prev.kinematicSnapshots.filter((s) => s.t <= rs.time),
     }));
+    // Depend on geometry/topology only, not the whole mechanism: a viewport
+    // (pan/zoom) change keeps these array refs identical, so it no longer
+    // recompiles the simulation model nor truncates the snapshots.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mechanism]);
+  }, [
+    mechanism.mechanicalElements,
+    mechanism.constraintElements,
+    mechanism.loads,
+  ]);
 
   // RAF loop: records kinematic snapshots while playing in kinematic mode
   useEffect(() => {
@@ -439,6 +468,8 @@ const App: React.FC = () => {
 
   const applyActions = useCallback(
     (actions: Action[], actionBundleType: ActionBundleType) => {
+      if (actions.length > 0 && actions.every((a) => a.type === "SetProbes"))
+        probeOnlyEditRef.current = true;
       setMechanism((prevMechanism) => {
         const newMechanism = apply_actions(
           prevMechanism,
@@ -503,6 +534,10 @@ const App: React.FC = () => {
     if (mechanismRef.current.history.length === 0) return;
 
     const isInSim = kinematicRef.current.appMode !== "edition";
+    const probeOnly = mechanismRef.current.history
+      .slice(-1)[0]
+      .every((a) => a.type === "SetProbes");
+    if (probeOnly) probeOnlyEditRef.current = true;
 
     setMechanism((prevMechanism) => {
       const lastActionsForUndo = [
@@ -537,7 +572,7 @@ const App: React.FC = () => {
       return newMechanism;
     });
 
-    if (isInSim) {
+    if (isInSim && !probeOnly) {
       const isEditionAction =
         mechanismRef.current.history.length <= simStartHistoryLengthRef.current;
       if (isEditionAction) {
@@ -554,6 +589,13 @@ const App: React.FC = () => {
 
   const redoMechanism = useCallback(() => {
     if (mechanismRef.current.future.length === 0) return;
+
+    if (
+      mechanismRef.current.future
+        .slice(-1)[0]
+        .every((a) => a.type === "SetProbes")
+    )
+      probeOnlyEditRef.current = true;
 
     setMechanism((prevMechanism) => {
       let nextActions = prevMechanism.future.slice(-1)[0];
@@ -763,12 +805,35 @@ const App: React.FC = () => {
 
   const handleSpaceKey = useCallback(() => {
     if (appMode === "edition") {
+      // Arm auto-play so the mode-change effect starts the simulation instead
+      // of resetting isPlaying to false right after we set it.
+      autoPlayOnEnterRef.current = true;
       setAppMode(mechanism.metadata.lastSimulationMode);
-      setRuntimeState((prev) => ({ ...prev, isPlaying: true })); // TODO : est appliqué, mais remit à false l'instant d'après
     } else {
       setRuntimeState((prev) => ({ ...prev, isPlaying: !prev.isPlaying }));
     }
   }, [appMode, mechanism.metadata.lastSimulationMode]);
+
+  // Escape while the simulation is running behaves like the "Réinitialiser"
+  // button (reset to t=0 and stop); otherwise it exits to edition mode.
+  const handleEscapeKey = useCallback(() => {
+    if (appMode !== "edition" && runtimeStateRef.current.isPlaying) {
+      simulationModelRef.current = compile_simulation_model(
+        mechanismRef.current,
+      );
+      setRuntimeState((prev) => ({
+        ...prev,
+        time: 0,
+        isPlaying: false,
+        current: null,
+        history: [],
+        kinematicSnapshots: [],
+      }));
+    } else {
+      setAppMode("edition");
+      setRuntimeState((prev) => ({ ...prev, isPlaying: false }));
+    }
+  }, [appMode]);
 
   const handleSimulationGrab = useCallback(
     (
@@ -1052,18 +1117,16 @@ const App: React.FC = () => {
 
               <Divider flexItem sx={{ mx: 0.5 }} />
 
-              {/* Contrôles temporels — toujours affichés, grisés en mode Édition */}
+              {/* Contrôles temporels — Play/Pause toujours actif ; les autres
+                  boutons sont grisés en mode Édition. */}
               <Box
                 sx={{
                   display: "flex",
                   alignItems: "center",
                   gap: 0.5,
-                  opacity: appMode === "edition" ? 0.3 : 1,
-                  pointerEvents: appMode === "edition" ? "none" : "auto",
-                  transition: "opacity 0.2s ease",
                 }}
               >
-                <Tooltip title="Réinitialiser">
+                <Tooltip title="Réinitialiser (Esc)">
                   <IconButton
                     size="small"
                     color="inherit"
@@ -1083,7 +1146,12 @@ const App: React.FC = () => {
                         kinematicSnapshots: [],
                       }));
                     }}
-                    sx={{ p: 0.4 }}
+                    sx={{
+                      p: 0.4,
+                      opacity: appMode === "edition" ? 0.3 : 1,
+                      pointerEvents: appMode === "edition" ? "none" : "auto",
+                      transition: "opacity 0.2s ease",
+                    }}
                   >
                     <RestartAlt sx={{ fontSize: 20 }} />
                   </IconButton>
@@ -1100,21 +1168,25 @@ const App: React.FC = () => {
                         isPlaying: false,
                       }))
                     }
-                    sx={{ p: 0.4 }}
+                    sx={{
+                      p: 0.4,
+                      opacity: appMode === "edition" ? 0.3 : 1,
+                      pointerEvents: appMode === "edition" ? "none" : "auto",
+                      transition: "opacity 0.2s ease",
+                    }}
                   >
                     <FirstPage sx={{ fontSize: 20 }} />
                   </IconButton>
                 </Tooltip>
 
-                <Tooltip title={runtimeState.isPlaying ? "Pause" : "Play"}>
+                <Tooltip
+                  title={
+                    runtimeState.isPlaying ? "Pause (Space)" : "Play (Space)"
+                  }
+                >
                   <IconButton
                     size="small"
-                    onClick={() =>
-                      setRuntimeState((prev) => ({
-                        ...prev,
-                        isPlaying: !prev.isPlaying,
-                      }))
-                    }
+                    onClick={handleSpaceKey}
                     sx={{
                       bgcolor: "primary.main",
                       color: "primary.contrastText",
@@ -1134,7 +1206,12 @@ const App: React.FC = () => {
                   <IconButton
                     size="small"
                     color="inherit"
-                    sx={{ p: 0.4 }}
+                    sx={{
+                      p: 0.4,
+                      opacity: appMode === "edition" ? 0.3 : 1,
+                      pointerEvents: appMode === "edition" ? "none" : "auto",
+                      transition: "opacity 0.2s ease",
+                    }}
                     onClick={() =>
                       setRuntimeState((prev) => {
                         const snaps = prev.kinematicSnapshots;
@@ -1564,11 +1641,6 @@ const App: React.FC = () => {
               </Tooltip>
             </Box>
           </Toolbar>
-
-          {/* ── Barre de progression temporelle (sous la toolbar) ── */}
-          {/*
-          
-          */}
         </AppBar>
 
         {/* Main content area */}
@@ -1598,6 +1670,7 @@ const App: React.FC = () => {
             constraintChangeRef={constraintChangeRef}
             setAppMode={setAppMode}
             onSpaceKey={handleSpaceKey}
+            onEscapeKey={handleEscapeKey}
             onExitToEdition={() => {
               setAppMode("edition");
               setRuntimeState((prev) => ({ ...prev, isPlaying: false }));

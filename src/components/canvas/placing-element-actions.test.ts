@@ -273,14 +273,14 @@ describe("PlacingProbe", () => {
     expect(r.actions).toHaveLength(0);
   });
 
-  it("hover Node → AddProbe avec metric position-x", () => {
-    const r = handle_placing_element(state, node(id("n1")), [], [], []);
-    expect(r.actions).toHaveLength(1);
-    expect(r.actions[0]).toEqual({
-      type: "AddProbe",
+  it("hover Node → ouvre le sélecteur de métriques (PlacingProbeMetrics)", () => {
+    const hover = node(id("n1"), P(3, 4));
+    const r = handle_placing_element(state, hover, [], [], []);
+    expect(r.actions).toHaveLength(0);
+    expect(r.newCanvasState).toEqual({
+      type: "PlacingProbeMetrics",
       elementID: id("n1"),
-      metric: "position-x",
+      position: P(3, 4),
     });
-    expect(r.actionBundleType).toBe("Other");
   });
 });

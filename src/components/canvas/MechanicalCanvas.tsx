@@ -30,6 +30,7 @@ import { get_constraint_element_from_id } from "../mechanism/connect-actions";
 import { get_hovered_part } from "./get-hover";
 import { compute_visible_constraints, connected_constraints } from "./utils";
 import { ConstraintEditor } from "./ConstraintEditor";
+import { ProbeMetricSelector } from "./ProbeMetricSelector";
 import { draw_grid } from "./drawing-functions";
 
 function mergeRefs<T>(...refs: React.Ref<T>[]) {
@@ -91,6 +92,7 @@ interface MechanicalCanvasProps {
   constraintChangeRef: React.MutableRefObject<ConstraintChangeSignal | null>;
   setAppMode: (mode: AppMode) => void;
   onSpaceKey: () => void;
+  onEscapeKey: () => void;
   onExitToEdition: () => void;
   onPauseSim: () => void;
   onSimulationGrab: (key: string, target: Point2, bodyRatio?: number) => void;
@@ -119,6 +121,7 @@ export const MechanicalCanvas = forwardRef<
       constraintChangeRef,
       setAppMode,
       onSpaceKey,
+      onEscapeKey,
       onExitToEdition,
       onPauseSim,
       onSimulationGrab,
@@ -143,6 +146,8 @@ export const MechanicalCanvas = forwardRef<
     const canvasStateRef = useRef(canvasState);
     const onSpaceKeyRef = useRef(onSpaceKey);
     onSpaceKeyRef.current = onSpaceKey;
+    const onEscapeKeyRef = useRef(onEscapeKey);
+    onEscapeKeyRef.current = onEscapeKey;
     const onExitToEditionRef = useRef(onExitToEdition);
     onExitToEditionRef.current = onExitToEdition;
     const onPauseSimRef = useRef(onPauseSim);
@@ -421,7 +426,8 @@ export const MechanicalCanvas = forwardRef<
           event.key === "Escape" &&
           canvasStateRef.current.type === "Selecting"
         ) {
-          setAppMode("edition");
+          // Reset the running simulation, or exit to edition — decided in App.
+          onEscapeKeyRef.current();
           setCanvasState({ type: "Selecting" });
           return;
         }
@@ -439,7 +445,32 @@ export const MechanicalCanvas = forwardRef<
           worldMousePos,
           canvasStateRef.current,
         );
-        if (snapToGrid && newHoveredPart.type === "Void") {
+        if (
+          snapToGrid &&
+          newHoveredPart.type === "Void" &&
+          appMode === "edition" &&
+          (canvasStateRef.current.type === "ChangingGearRadius" ||
+            canvasStateRef.current.type === "MovingEdgeStartPoint" ||
+            canvasStateRef.current.type === "MovingEdgeEndPoint" ||
+            canvasStateRef.current.type === "MovingNode" ||
+            canvasStateRef.current.type === "PlacingBeamStart" ||
+            canvasStateRef.current.type === "PlacingBeamEnd" ||
+            canvasStateRef.current.type === "PlacingBeltStart" ||
+            canvasStateRef.current.type === "PlacingBeltEnd" ||
+            canvasStateRef.current.type === "PlacingSpringStart" ||
+            canvasStateRef.current.type === "PlacingSpringEnd" ||
+            canvasStateRef.current.type === "PlacingDamperStart" ||
+            canvasStateRef.current.type === "PlacingDamperEnd" ||
+            canvasStateRef.current.type === "PlacingGearStart" ||
+            canvasStateRef.current.type === "PlacingGearRadius" ||
+            canvasStateRef.current.type === "PlacingGround" ||
+            canvasStateRef.current.type === "PlacingJoin" ||
+            canvasStateRef.current.type === "PlacingMass" ||
+            canvasStateRef.current.type === "PlacingMoment" ||
+            canvasStateRef.current.type === "PlacingMotor" ||
+            canvasStateRef.current.type === "PlacingPivot" ||
+            canvasStateRef.current.type === "PlacingSlider")
+        ) {
           const rdx =
             Math.round(newHoveredPart.position.x / DIM.GRID_MAJOR) *
             DIM.GRID_MAJOR;
@@ -514,7 +545,14 @@ export const MechanicalCanvas = forwardRef<
     useEffect(() => {
       const handleGlobalKeyDown = (event: KeyboardEvent) => {
         if (isTypingInInput()) return;
-        if (event.key === " ") event.preventDefault();
+        // The probe metric popover handles its own keys (Enter/Escape)
+        if (canvasStateRef.current.type === "PlacingProbeMetrics") return;
+        if (event.key === " ") {
+          event.preventDefault();
+          // Space must only play/pause: drop the focus a UI control kept after
+          // being clicked, so Space doesn't re-activate it (button, switch…).
+          (document.activeElement as HTMLElement | null)?.blur?.();
+        }
         handleEvent({
           type: "KeyDown",
           key: event.key,
@@ -716,6 +754,44 @@ export const MechanicalCanvas = forwardRef<
             }}
           />
         )}
+        {canvasState.type === "PlacingProbeMetrics" &&
+          (() => {
+            const probedElement = mechanism.mechanicalElements.find(
+              (el) => el.id === canvasState.elementID,
+            );
+            if (!probedElement) return null;
+            return (
+              <ProbeMetricSelector
+                element={probedElement}
+                position={world_to_screen(
+                  canvasState.position,
+                  mechanism.viewport,
+                )}
+                onCommit={(newProbes) => {
+                  const oldProbes = probedElement.probes ?? [];
+                  const changed =
+                    newProbes.length !== oldProbes.length ||
+                    newProbes.some(
+                      (p, i) => p.metric !== oldProbes[i].metric,
+                    );
+                  if (changed)
+                    applyActions(
+                      [
+                        {
+                          type: "SetProbes",
+                          elementID: probedElement.id,
+                          newProbes,
+                          oldProbes,
+                        },
+                      ],
+                      "Other",
+                    );
+                  setCanvasState({ type: "PlacingProbe" });
+                }}
+                onCancel={() => setCanvasState({ type: "PlacingProbe" })}
+              />
+            );
+          })()}
       </Box>
     );
   },

@@ -44,6 +44,9 @@ export function resolveGeometricConstraints(
 
   let grabPoint: Point2 | number | undefined = undefined;
   let grabConnectionID: string | undefined = undefined;
+  // MoveElements mute nodes.positions avant le solve : on garde les positions
+  // d'origine pour que la mise à jour des contraintes voie un vrai "avant".
+  let preMovePositions: Map<string, Point2> | undefined = undefined;
   switch (actionBundleType) {
     case "MoveElement":
       if (
@@ -107,6 +110,7 @@ export function resolveGeometricConstraints(
           });
           break;
         case "MoveElements":
+          preMovePositions = new Map(nodes.positions);
           // move and remove anchor from dragged elements
           triggerAction.elementIDs.forEach((elementID) => {
             const element = get_mechanical_element_from_id(
@@ -373,6 +377,9 @@ export function resolveGeometricConstraints(
       solvedNodes.positions.delete(combined_keys);
     }
   });
+  if (preMovePositions) {
+    preMovePositions.forEach((pos, key) => nodes.positions.set(key, pos));
+  }
   // Update constraint positions
   mechanism.constraintElements.forEach((constraint) => {
     switch (constraint.type) {

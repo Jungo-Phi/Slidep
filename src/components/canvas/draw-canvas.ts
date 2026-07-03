@@ -819,7 +819,7 @@ export function drawMechanicalCanvas(
     }
   });
 
-  // Draw probes on top of all elements
+  // Draw probes on top of all elements (one indicator per probed element)
   for (const el of mechanicalElements) {
     if (!el.probes || el.probes.length === 0) continue;
     const pos =
@@ -829,16 +829,10 @@ export function drawMechanicalCanvas(
             (el as EdgeElement).positionEnd,
             0.5,
           );
-    for (let i = 0; i < el.probes.length; i++) {
-      const offset = new Point2(
-        i * 16 - (el.probes.length - 1) * 8,
-        -DIM.PROBE_OFFSET,
-      );
-      ctx.save();
-      ctx.translate(pos.add(offset).x, pos.add(offset).y);
-      draw_probe(ctx);
-      ctx.restore();
-    }
+    ctx.save();
+    ctx.translate(pos.x, pos.y - DIM.PROBE_OFFSET);
+    draw_probe(ctx);
+    ctx.restore();
   }
 
   // Draw  state specific elements
@@ -1261,6 +1255,11 @@ export function drawMechanicalCanvas(
       let pos = hoveredPart.position.clone();
       if (hoveredPart.type !== "Void") pos.y -= DIM.PROBE_OFFSET;
       ctx.translate(pos.x, pos.y);
+      draw_probe(ctx);
+      break;
+    case "PlacingProbeMetrics":
+      // Metric popover open: keep showing the probe on the clicked element
+      ctx.translate(state.position.x, state.position.y - DIM.PROBE_OFFSET);
       draw_probe(ctx);
       break;
   }

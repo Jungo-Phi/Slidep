@@ -41,6 +41,7 @@ export type CanvasStateType =
   | "PlacingDistributedForceEnd"
   | "PlacingMoment"
   | "PlacingProbe"
+  | "PlacingProbeMetrics"
   | "DimensionStart"
   | "DimensionNode"
   | "DimensionEdge"
@@ -115,6 +116,7 @@ export type CanvasState =
   | { type: "PlacingDistributedForceEnd"; startHover: HoveredPart }
   | { type: "PlacingMoment" }
   | { type: "PlacingProbe" }
+  | { type: "PlacingProbeMetrics"; elementID: ID; position: Point2 } // Metric selector popover open on a clicked element
   | { type: "DimensionStart" } // Dimensioning tool active
   | { type: "DimensionNode"; nodeID: ID } // Dimension from a node to ?
   | { type: "DimensionEdge"; edgeID: ID } // Dimension of an edge / from an edge to ?

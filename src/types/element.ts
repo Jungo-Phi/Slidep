@@ -92,6 +92,7 @@ export interface BaseElement {
   type: ElementType;
   id: ID;
   name?: string;
+  /** The element's probe: one config per measured metric (undefined/empty = no probe). */
   probes?: ProbeConfig[];
 }
 
@@ -346,17 +347,30 @@ export interface DistributedForceElement {
 
 // ─── Probes ───────────────────────────────────────────────────────────────────
 
+/** A metric family measured by a probe. One probe per element; the probe
+ *  carries one ProbeConfig per selected metric. */
 export type ProbeMetric =
-  | "position-x"
-  | "position-y"
-  | "velocity-x"
-  | "velocity-y"
-  | "force"
-  | "moment"
-  | "stress";
+  | "position"
+  | "velocity"
+  | "angle"
+  | "angular-velocity"
+  | "force";
+
+/** Which curves of a vector metric are plotted (display setting). Ignored for
+ *  scalar metrics (angle, angular velocity). */
+export interface ProbeComponents {
+  x: boolean;
+  y: boolean;
+  norm: boolean;
+}
 
 export interface ProbeConfig {
   metric: ProbeMetric;
-  showGraph: boolean;
-  showProbe: boolean;
+  components: ProbeComponents;
 }
+
+export const DEFAULT_PROBE_COMPONENTS: ProbeComponents = {
+  x: false,
+  y: false,
+  norm: true,
+};

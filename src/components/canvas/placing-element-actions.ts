@@ -229,11 +229,14 @@ export function handle_placing_element(
     case "PlacingProbe":
       if (hoveredPart.type === "Void" || hoveredPart.type === "Constraint")
         return { actions: [] };
+      // Open the metric selector popover anchored on the clicked element.
       return {
-        actions: [
-          { type: "AddProbe", elementID: hoveredPart.id, metric: "position-x" },
-        ],
-        actionBundleType: "Other",
+        actions: [],
+        newCanvasState: {
+          type: "PlacingProbeMetrics",
+          elementID: hoveredPart.id,
+          position: hoveredPart.position,
+        },
       };
   }
 }

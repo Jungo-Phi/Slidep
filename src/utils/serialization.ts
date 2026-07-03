@@ -228,6 +228,19 @@ function deserialize_mechanical_element(
     if (!("attachedBeltID" in el)) el.attachedBeltID = undefined;
   }
 
+  // Drop probes saved in the legacy placeholder format (metric "position-x"…)
+  if (Array.isArray(el.probes)) {
+    const validMetrics = ["position", "velocity", "angle", "force"];
+    const probes = (el.probes as Record<string, unknown>[]).filter(
+      (p) =>
+        p &&
+        validMetrics.includes(p.metric as string) &&
+        typeof p.components === "object",
+    );
+    if (probes.length > 0) el.probes = probes;
+    else delete el.probes;
+  }
+
   return el as unknown as MechanicalElement;
 }
 

@@ -2,6 +2,10 @@
   "permissions": {
     "allow": [
       "PowerShell(npx tsc --noEmit -p tsconfig.json; \"exit=$LASTEXITCODE\")"
+    ],
+    "deny": [
+      "Read(./TODO.md)",
+      "Edit(./TODO.md)"
     ]
   }
 }

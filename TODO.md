@@ -4,10 +4,10 @@
 
 ### À faire rapidement
 
-- Passer au simple click pour lancer la simulation
-- Adapter snap to grid aux états adéquats
-- La sim change quand on pan/zoom (débloque des moteurs)
-- Les contraintes et dimensions ne suivent pas lors des déplacements de groupe d'éléments
+- Reset state et appmode au nouveau mécanisme
+- remove duplicate link en connect gears
+- remove : la transparency affecte aussi les probes
+- Ajouter un fichier config ESLint
 - Comportement étrange dans vectorInput à régler
 - probe ajoutée 2 par 2 quand il y en a déjà une ???
 - Ouverture du sélecteur de métriques (Force, Vitesse, Position, Angle) au placement d'un probe
@@ -15,9 +15,20 @@
 - Sélection multiple doit hilight les contraintes liées aux éléments sélectionnés (comme group deletion)
 - hover des inputs dans le property pannel -> hilight canvas
 - Ne pas update le nom si on ne l'a pas changé
-- Analise des degrés de libertés en sous-parties
 - Remplacer un node par un autre doit transféfer le ground
-- Refactor en enlevant le actionBundleType ?
+- hover sur le graphique hover l'élément ?
+
+- geometric-solver : Maintenir les longueurs des beams si possible. Maintenir l'orientation ce celui modifié si possible. Ignorer des grounds si nécessaire.
+
+- Analise des degrés de libertés en sous-parties
+
+- Connect belt ends
+- Connecter une courroie à un engrenage avec une extrémité (en plus de la longueur)
+- Les courroies sont de 2 types :
+  - Extrémités connectées : Doivent avoir minimum 2 engrenages connectés, peuvent fairent des tours à l'infinis, UN élément peut être connecté sur le "pseudo-edge" allant du point tangeant de l'engrenage côté start du point tangeant de l'engrenage côté end.
+  - Extrémités distinctes : un élément peut être connecté sur chaque "pseudo-edge" allant du point tangeant de l'engrenage adjascent à start/end.
+- Dans tous les cas, les courroies impose un ratio aux engrenages connectés
+- On ne peut PAS connecter des extrémités de courroies différents ensemble
 
 ### À faire plus tard
 
@@ -53,17 +64,9 @@
 - Polish de dimensionAngle: arrondir les angles de 0° / 180°, traits extérieurs pour les petits angles
 - Hover interdire les éléments directement connectés et l'élément lui-meme pour dimentions
 - Empecher les contraintes sur le même élément (DDL analyser)
-- geometric-solver : Maintenir les longueurs des beams si possible. Maintenir l'orientation ce celui modifié si possible. Ignorer des grounds si nécessaire.
 - Pas de moteur + sur-contraint, on affiche quoi ?
 - Panneau d'analyse : Liste textuelle des libertés/blocages avec interaction (survol = surlignage canvas)
 - Ajouter des "Blank" quand on change une valeur depuis les propriétés
-- Connect belt ends
-- Connecter une courroie à un engrenage avec une extrémité (en plus de la longueur)
-- Les courroies sont de 2 types :
-  - Extrémités connectées : Doivent avoir minimum 2 engrenages connectés, peuvent fairent des tours à l'infinis, UN élément peut être connecté sur le "pseudo-edge" allant du point tangeant de l'engrenage côté start du point tangeant de l'engrenage côté end.
-  - Extrémités distinctes : un élément peut être connecté sur chaque "pseudo-edge" allant du point tangeant de l'engrenage adjascent à start/end.
-- Dans tous les cas, les courroies impose un ratio aux engrenages connectés
-- On ne peut PAS connecter des extrémités de courroies différents ensemble
 - Placer join à la jonction des Beams
 - Éloigner les contraintes des éléments pour la lisibilité (à préciser)
 - Améliorer la contrainte d'angle (transformée en longueurs) pour les edges parallèles
@@ -77,6 +80,8 @@
 - Afficher les contraintes non respectées avec des messages (Attention / Brisée) au lieu de e=3.72
 - Afficher les contraintes non respectées en couleur sur le canvas
 - Bouton "Recentrer" calcul à partir des positions des éléments
+
+- Refactor en enlevant le actionBundleType ?
 
 ### [ Simulation dynamique ]
 

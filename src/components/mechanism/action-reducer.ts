@@ -365,31 +365,11 @@ export function actionReducer(
         moment.clockwise = !moment.clockwise;
         break;
       }
-      case "AddProbe": {
+      case "SetProbes": {
         const el = mechanicalElements.find((e) => e.id === action.elementID);
         if (el) {
-          if (revert) {
-            if (el.probes) el.probes = el.probes.slice(0, -1);
-          } else {
-            if (!el.probes) el.probes = [];
-            el.probes.push({
-              metric: action.metric,
-              showGraph: true,
-              showProbe: true,
-            });
-          }
-        }
-        break;
-      }
-      case "RemoveProbe": {
-        const el = mechanicalElements.find((e) => e.id === action.elementID);
-        if (el && el.probes) {
-          if (revert) {
-            // Undo remove: restore probe at index (not stored — not perfectly reversible without old data)
-            // No-op for now; full reversibility would need the removed ProbeConfig stored in the action
-          } else {
-            el.probes.splice(action.index, 1);
-          }
+          const probes = revert ? action.oldProbes : action.newProbes;
+          el.probes = probes.length > 0 ? probes : undefined;
         }
         break;
       }

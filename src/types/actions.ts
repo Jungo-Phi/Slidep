@@ -1,4 +1,4 @@
-import { ID, MotorConfig, ProbeMetric, UnionElement } from "./element";
+import { ID, MotorConfig, ProbeConfig, UnionElement } from "./element";
 import { GeomNodes } from "./kinematic-solver-links";
 import { Point2 } from "./point2";
 
@@ -256,8 +256,12 @@ export type Action =
     }
   | { type: "ChangeMomentValue"; id: ID; newValue: number; oldValue: number }
   | { type: "FlipMomentDirection"; id: ID }
-  | { type: "AddProbe"; elementID: ID; metric: ProbeMetric }
-  | { type: "RemoveProbe"; elementID: ID; index: number }
+  | {
+      type: "SetProbes";
+      elementID: ID;
+      newProbes: ProbeConfig[];
+      oldProbes: ProbeConfig[];
+    }
   | {
       type: "SetMotorConfig";
       id: ID;
