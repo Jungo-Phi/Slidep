@@ -31,7 +31,11 @@ import { get_hovered_part } from "./get-hover";
 import { compute_visible_constraints, connected_constraints } from "./utils";
 import { ConstraintEditor } from "./ConstraintEditor";
 import { ProbeMetricSelector } from "./ProbeMetricSelector";
-import { draw_grid } from "./drawing-functions";
+import {
+  draw_grid,
+  draw_trajectory,
+  TrajectoryDisplay,
+} from "./drawing-functions";
 
 function mergeRefs<T>(...refs: React.Ref<T>[]) {
   return (node: T | null) => {
@@ -99,6 +103,8 @@ interface MechanicalCanvasProps {
   onSimulationGrabEnd: () => void;
   snapToGrid: boolean;
   showGrid: boolean;
+  /** Recorded trajectories of the probed elements (empty outside simulation). */
+  trajectories: TrajectoryDisplay[];
 }
 
 export const MechanicalCanvas = forwardRef<
@@ -128,6 +134,7 @@ export const MechanicalCanvas = forwardRef<
       onSimulationGrabEnd,
       snapToGrid,
       showGrid,
+      trajectories,
     },
     ref,
   ) => {
@@ -158,6 +165,8 @@ export const MechanicalCanvas = forwardRef<
     onSimulationGrabEndRef.current = onSimulationGrabEnd;
     const appModeRef = useRef(appMode);
     appModeRef.current = appMode;
+    const trajectoriesRef = useRef(trajectories);
+    trajectoriesRef.current = trajectories;
     const activeTabRef = useRef(activeTab);
     activeTabRef.current = activeTab;
     // Contrainte révélée au survol → timestamp du dernier survol (hover-reveal).
@@ -291,6 +300,10 @@ export const MechanicalCanvas = forwardRef<
         mechanismRef.current.viewport.zoom,
         mechanismRef.current.viewport.zoom,
       );
+
+      // Trajectoires des points sondés, sous les éléments du mécanisme.
+      for (const traj of trajectoriesRef.current)
+        draw_trajectory(ctx, traj.points, traj.headCount, traj.color);
 
       // Retour visuel undo/redo : révèle les recréations, prépare les fantômes.
       processConstraintChange();

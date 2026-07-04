@@ -373,6 +373,14 @@ export function actionReducer(
         }
         break;
       }
+      case "SetShowTrajectory": {
+        const el = mechanicalElements.find((e) => e.id === action.elementID);
+        if (el) {
+          const value = revert ? action.oldValue : action.newValue;
+          el.showTrajectory = value || undefined;
+        }
+        break;
+      }
       case "SetMotorConfig": {
         const pivot = get_mechanical_element_from_id(
           action.id,

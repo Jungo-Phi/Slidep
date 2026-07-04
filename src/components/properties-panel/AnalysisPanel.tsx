@@ -18,6 +18,8 @@ import {
   ShowChart,
   RotateRight,
   Visibility,
+  VisibilityOff,
+  Polyline,
   Add,
   WarningAmber,
   CheckCircleOutline,
@@ -36,6 +38,7 @@ import {
   ProbeConfig,
   ProbeMetric,
   ZERO,
+  is_node_element,
 } from "../../types";
 import { CanvasState } from "../../types/canvas-state";
 import { ConstraintResidual, RuntimeState } from "../../types/runtime-state";
@@ -93,6 +96,49 @@ const CONSTRAINT_NOUN: Record<string, string> = {
 };
 
 type DdlStatus = { label: string; color: string };
+
+interface OverlayRowProps {
+  icon: React.ReactNode;
+  label: string;
+  /** Whether the overlay is (at least partly) shown — drives which button is lit. */
+  active: boolean;
+  onShow: () => void;
+  onHide: () => void;
+}
+
+/** One overlay line: label + show/hide button pair. */
+const OverlayRow: React.FC<OverlayRowProps> = ({
+  icon,
+  label,
+  active,
+  onShow,
+  onHide,
+}) => (
+  <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+    {icon}
+    <Typography variant="body2" sx={{ flex: 1 }}>
+      {label}
+    </Typography>
+    <Tooltip title="Tout afficher">
+      <IconButton
+        size="small"
+        color={active ? "primary" : "default"}
+        onClick={onShow}
+      >
+        <Visibility fontSize="small" />
+      </IconButton>
+    </Tooltip>
+    <Tooltip title="Tout cacher">
+      <IconButton
+        size="small"
+        color={active ? "default" : "primary"}
+        onClick={onHide}
+      >
+        <VisibilityOff fontSize="small" />
+      </IconButton>
+    </Tooltip>
+  </Box>
+);
 
 const plural = (n: number) => (n > 1 ? "s" : "");
 
@@ -172,7 +218,6 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
     forces: false,
     velocities: false,
     constraints: false,
-    path: false,
   });
   const [superpose, setSuperpose] = React.useState(false);
   const [metricMenu, setMetricMenu] = React.useState<{
@@ -180,9 +225,27 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
     anchorEl: HTMLElement;
   } | null>(null);
 
-  const toggleOverlay = (key: keyof typeof overlays) => {
-    setOverlays((prev) => ({ ...prev, [key]: !prev[key] }));
+  const setOverlay = (key: keyof typeof overlays, shown: boolean) => {
+    setOverlays((prev) => ({ ...prev, [key]: shown }));
   };
+
+  /** Show/hide the trajectory of every node (observation-only actions:
+   *  the recorded snapshots are preserved). */
+  const setAllTrajectories = (show: boolean) => {
+    const actions: Action[] = mechanism.mechanicalElements
+      .filter(is_node_element)
+      .filter((el) => !!el.showTrajectory !== show)
+      .map((el) => ({
+        type: "SetShowTrajectory" as const,
+        elementID: el.id,
+        newValue: show,
+        oldValue: !!el.showTrajectory,
+      }));
+    if (actions.length > 0) applyActions(actions, "Other");
+  };
+  const anyTrajectoryShown = mechanism.mechanicalElements.some(
+    (el) => is_node_element(el) && el.showTrajectory,
+  );
 
   const probedElements = mechanism.mechanicalElements.filter(
     (el): el is MechanicalElement & { probes: ProbeConfig[] } =>
@@ -254,65 +317,33 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
       {/* Overlays */}
       <Box sx={{ mx: 2 }}>
         <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
-          <FormControlLabel
-            control={
-              <Switch
-                size="small"
-                checked={overlays.forces}
-                onChange={() => toggleOverlay("forces")}
-              />
-            }
-            label={
-              <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-                <ShowChart fontSize="small" />
-                <Typography variant="body2">Forces de réaction</Typography>
-              </Box>
-            }
+          <OverlayRow
+            icon={<ShowChart fontSize="small" />}
+            label="Forces de réaction"
+            active={overlays.forces}
+            onShow={() => setOverlay("forces", true)}
+            onHide={() => setOverlay("forces", false)}
           />
-          <FormControlLabel
-            control={
-              <Switch
-                size="small"
-                checked={overlays.velocities}
-                onChange={() => toggleOverlay("velocities")}
-              />
-            }
-            label={
-              <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-                <Timeline fontSize="small" />
-                <Typography variant="body2">Vitesses</Typography>
-              </Box>
-            }
+          <OverlayRow
+            icon={<Timeline fontSize="small" />}
+            label="Vitesses"
+            active={overlays.velocities}
+            onShow={() => setOverlay("velocities", true)}
+            onHide={() => setOverlay("velocities", false)}
           />
-          <FormControlLabel
-            control={
-              <Switch
-                size="small"
-                checked={overlays.constraints}
-                onChange={() => toggleOverlay("constraints")}
-              />
-            }
-            label={
-              <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-                <RotateRight fontSize="small" />
-                <Typography variant="body2">Contraintes (MPa)</Typography>
-              </Box>
-            }
+          <OverlayRow
+            icon={<RotateRight fontSize="small" />}
+            label="Contraintes (MPa)"
+            active={overlays.constraints}
+            onShow={() => setOverlay("constraints", true)}
+            onHide={() => setOverlay("constraints", false)}
           />
-          <FormControlLabel
-            control={
-              <Switch
-                size="small"
-                checked={overlays.path}
-                onChange={() => toggleOverlay("path")}
-              />
-            }
-            label={
-              <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-                <Visibility fontSize="small" />
-                <Typography variant="body2">Path (trajectoires)</Typography>
-              </Box>
-            }
+          <OverlayRow
+            icon={<Polyline fontSize="small" />}
+            label="Trajectoires"
+            active={anyTrajectoryShown}
+            onShow={() => setAllTrajectories(true)}
+            onHide={() => setAllTrajectories(false)}
           />
         </Box>
       </Box>
@@ -565,7 +596,15 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
                 const noComponentSelected =
                   series.t.length >= 2 && curves.length === 0;
                 return (
-                  <Box key={probe.metric}>
+                  <Box
+                    key={probe.metric}
+                    onMouseEnter={() =>
+                      setHoveredPart(element_to_hovered_part(el))
+                    }
+                    onMouseLeave={() =>
+                      setHoveredPart({ type: "Void", position: ZERO })
+                    }
+                  >
                     <Box
                       sx={{
                         display: "flex",

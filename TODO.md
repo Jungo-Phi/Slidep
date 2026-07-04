@@ -4,35 +4,25 @@
 
 ### À faire rapidement
 
-- Reset state et appmode au nouveau mécanisme
-- remove duplicate link en connect gears
-- remove : la transparency affecte aussi les probes
 - Ajouter un fichier config ESLint
 - Comportement étrange dans vectorInput à régler
-- probe ajoutée 2 par 2 quand il y en a déjà une ???
-- Ouverture du sélecteur de métriques (Force, Vitesse, Position, Angle) au placement d'un probe
-- Afficher les trajectoires
-- Sélection multiple doit hilight les contraintes liées aux éléments sélectionnés (comme group deletion)
-- hover des inputs dans le property pannel -> hilight canvas
-- Ne pas update le nom si on ne l'a pas changé
-- Remplacer un node par un autre doit transféfer le ground
-- hover sur le graphique hover l'élément ?
-
-- geometric-solver : Maintenir les longueurs des beams si possible. Maintenir l'orientation ce celui modifié si possible. Ignorer des grounds si nécessaire.
+- La contrainte d'angle (node on gearTooth) avec gear ne fonctionne pas correctement
 
 - Analise des degrés de libertés en sous-parties
 
-- Connect belt ends
-- Connecter une courroie à un engrenage avec une extrémité (en plus de la longueur)
 - Les courroies sont de 2 types :
   - Extrémités connectées : Doivent avoir minimum 2 engrenages connectés, peuvent fairent des tours à l'infinis, UN élément peut être connecté sur le "pseudo-edge" allant du point tangeant de l'engrenage côté start du point tangeant de l'engrenage côté end.
   - Extrémités distinctes : un élément peut être connecté sur chaque "pseudo-edge" allant du point tangeant de l'engrenage adjascent à start/end.
 - Dans tous les cas, les courroies impose un ratio aux engrenages connectés
-- On ne peut PAS connecter des extrémités de courroies différents ensemble
+- On ne peut PAS connecter des extrémités de courroies différentes ensemble ?
 
 ### À faire plus tard
 
+- hover des inputs dans le property pannel -> hilight canvas
+- Une erreur de sauvegarde -> pop-up "voulez-vous supprimer ce mécanisme ?"
+- geometric-solver : Maintenir les longueurs des beams si possible. Maintenir l'orientation ce celui modifié si possible. Ignorer des grounds si nécessaire.
 - En simulation, en attrapant un point sur gearTooth et en le tirant vers l'intérieur, la roue tourne de façon incontrôlable
+- En simulation, attraper un élément alors qu'on moteur tourne fait que la simulation n'avance que si on bouge la souris.
 - Zoom sans scale les éléments eux-même ?
 - Mirror Y le canvas ?
 - Contraintes (et angle) aussi avec les forces
@@ -46,6 +36,11 @@
   - Configuration par probe : métrique, toggle graphique
   - Zone de graphiques : courbes superposées ou séparées (Valeur vs Temps), export CSV, export image
   - Nomenclature : distinguer "Contrainte" (MPa / Matériau) des contraintes géométriques
+- changer curseur sur ElementDisplay
+- changer le curseur sur les graphiques
+- pin graphique ?
+- zoom graphique (horiznotal = dans le temps)
+- Afficher temps total de simu sur la progressbar
 - Faire le panneau de paramètre propre
 - placer un gear sur un slidep reste en slidep
 - Ajouter le choix du parent beam dans le moteur (afficher vitesse au lieu de ground en haut)

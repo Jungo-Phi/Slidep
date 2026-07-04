@@ -65,7 +65,11 @@ import {
   node_on_beam_body,
 } from "./utils";
 
-function is_selected(elementID: ID, state: CanvasState): boolean {
+function is_selected(
+  elementID: ID,
+  state: CanvasState,
+  constraintElements: ConstraintElement[],
+): boolean {
   return (
     (state.type === "SelectedElement" && state.elementID === elementID) ||
     (state.type === "MovingNode" && state.elementID === elementID) ||
@@ -76,12 +80,13 @@ function is_selected(elementID: ID, state: CanvasState): boolean {
     (state.type === "MovingForce" && state.elementID === elementID) ||
     (state.type === "MovingDistributedForce" &&
       state.elementID === elementID) ||
-    (state.type === "SelectingMultiple" &&
-      state.elementIDs.includes(elementID)) ||
-    (state.type === "SelectedMultiple" &&
-      state.elementIDs.includes(elementID)) ||
-    (state.type === "MovingSelectionMultiple" &&
-      state.elementIDs.includes(elementID)) ||
+    ((state.type === "SelectingMultiple" ||
+      state.type === "SelectedMultiple" ||
+      state.type === "MovingSelectionMultiple") &&
+      (state.elementIDs.includes(elementID) ||
+        state.elementIDs.some((id) =>
+          connected_constraints(id, constraintElements).includes(elementID),
+        ))) ||
     (state.type === "MovingConstraint" && state.elementID === elementID) ||
     (state.type === "EqualConstraintGear" && state.startGearID === elementID) ||
     (state.type === "EqualConstraintEdge" && state.startEdgeID === elementID) ||
@@ -218,7 +223,7 @@ export function draw_edge_fake_end(
   if (is_hovered(edge.id, hoveredPart, state, constraintElements))
     ctx.lineWidth = STROKE_WIDTHS.THICK;
 
-  if (is_selected(edge.id, state)) {
+  if (is_selected(edge.id, state, constraintElements)) {
     ctx.strokeStyle = COLORS.SELECTION_STROKE;
     ctx.fillStyle = COLORS.SELECTION_FILL;
   }
@@ -300,7 +305,7 @@ export function drawMechanicalCanvas(
         element.type === "force" ||
         element.type === "moment" ||
         element.type === "distributed-force";
-      const isSelected = is_selected(element.id, state);
+      const isSelected = is_selected(element.id, state, constraintElements);
       const isEraseHovered = is_erase_hovered(
         element.id,
         hoveredPart,
@@ -820,6 +825,8 @@ export function drawMechanicalCanvas(
   });
 
   // Draw probes on top of all elements (one indicator per probed element)
+  // globalAlpha may still hold the last constraint's fade-out opacity here.
+  ctx.globalAlpha = 1;
   for (const el of mechanicalElements) {
     if (!el.probes || el.probes.length === 0) continue;
     const pos =

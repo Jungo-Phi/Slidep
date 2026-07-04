@@ -59,6 +59,17 @@ export type NodeElement =
   | JoinElement
   | MassElement;
 
+/** Type guard: node elements — the only ones whose trajectory can be shown. */
+export function is_node_element(el: MechanicalElement): el is NodeElement {
+  return (
+    el.type === "pivot" ||
+    el.type === "slider" ||
+    el.type === "slidep" ||
+    el.type === "join" ||
+    el.type === "mass"
+  );
+}
+
 /** Supported body elements */
 export type BodyElement = GearElement;
 
@@ -94,6 +105,10 @@ export interface BaseElement {
   name?: string;
   /** The element's probe: one config per measured metric (undefined/empty = no probe). */
   probes?: ProbeConfig[];
+  /** Draw the element's trajectory on the canvas during simulation
+   *  (observation-only display setting, independent of probes).
+   *  Only meaningful on node elements. */
+  showTrajectory?: boolean;
 }
 
 /** Base interface for Node elements (defined by a position) */

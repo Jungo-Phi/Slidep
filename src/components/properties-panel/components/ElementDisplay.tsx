@@ -100,7 +100,7 @@ const ElementDisplayComponent: React.FC<ElementDisplayProps> = ({
 
   const handleNameChange = (newName: string) => {
     setInputValue(newName);
-    if (element && newName !== element.name) {
+    if (element && newName !== initialName) {
       applyActions(
         [
           {

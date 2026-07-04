@@ -18,7 +18,6 @@ import {
 import {
   connect_elements,
   connect_gear_and_belt,
-  connect_meshed_gears,
   get_mechanical_element_from_id,
 } from "../mechanism/connect-actions";
 import { is_on_left_side_of_belt } from "../../utils";
@@ -390,8 +389,6 @@ function handle_place_element(
           ),
         ),
       );
-    } else if (hoveredPart.type === "GearTooth") {
-      actions.push(...connect_meshed_gears(gearId, hoveredPart.id));
     }
     return {
       actions,

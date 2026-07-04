@@ -263,6 +263,12 @@ export type Action =
       oldProbes: ProbeConfig[];
     }
   | {
+      type: "SetShowTrajectory";
+      elementID: ID;
+      newValue: boolean;
+      oldValue: boolean;
+    }
+  | {
       type: "SetMotorConfig";
       id: ID;
       newConfig: MotorConfig | undefined;

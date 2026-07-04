@@ -219,5 +219,16 @@ export function compute_visible_constraints(
   )
     visible.set(canvasState.elementID, 1);
 
+  // Sélection multiple : révèle les contraintes liées aux éléments sélectionnés
+  // pour qu'elles reçoivent le highlight de sélection.
+  if (
+    canvasState.type === "SelectingMultiple" ||
+    canvasState.type === "SelectedMultiple" ||
+    canvasState.type === "MovingSelectionMultiple"
+  )
+    for (const id of canvasState.elementIDs)
+      for (const constraintID of connected_constraints(id, constraints))
+        visible.set(constraintID, 1);
+
   return visible;
 }

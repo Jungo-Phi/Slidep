@@ -1,4 +1,10 @@
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, {
+  useState,
+  useRef,
+  useEffect,
+  useCallback,
+  useMemo,
+} from "react";
 import {
   ThemeProvider,
   CssBaseline,
@@ -91,6 +97,8 @@ import {
   compile_simulation_model,
   step_simulation,
 } from "./components/solver/kinematic-simulation";
+import { get_probe_trajectories } from "./components/solver/probe-series";
+import { PROBE_ELEMENT_COLORS } from "./components/properties-panel/components/ProbeChart";
 import { KinematicSnapshot } from "./types/runtime-state";
 import { CanvasState } from "./types/canvas-state";
 import { HoveredPart } from "./types/hovered-part";
@@ -106,6 +114,15 @@ const DEBOUNCE_AUTOSAVE_TIME = 1000; // 1000 ms = 1s
 const VIEWPORT_ZOOM_SENSITIVITY = 250; // Nombre de "crans" de molette nécessaires pour multiplier le zoom par 2
 const LANGUAGES = ["Deutsch", "English", "Español", "Français"];
 let condensed = true;
+
+/** Observation-only bundles (probe configs, trajectory visibility) don't
+ *  affect the simulated motion: they must neither recompile the simulation
+ *  model nor truncate the recorded snapshots. */
+const is_observation_only_bundle = (actions: Action[]) =>
+  actions.length > 0 &&
+  actions.every(
+    (a) => a.type === "SetProbes" || a.type === "SetShowTrajectory",
+  );
 
 const App: React.FC = () => {
   const [canvasState, setCanvasState] = useState<CanvasState>({
@@ -191,9 +208,9 @@ const App: React.FC = () => {
   // History length when simulation mode was last entered — used to distinguish
   // edition-mode actions from simulation-mode actions on undo.
   const simStartHistoryLengthRef = useRef<number>(0);
-  // Set right before a mechanism update made only of probe-config actions
-  // (SetProbes): probes are observation-only, so these edits must not
-  // recompile the simulation model nor truncate the recorded snapshots.
+  // Set right before a mechanism update made only of observation actions
+  // (SetProbes, SetShowTrajectory): these edits must not recompile the
+  // simulation model nor truncate the recorded snapshots.
   const probeOnlyEditRef = useRef<boolean>(false);
 
   const [snackbar, setSnackbar] = useState<{
@@ -380,7 +397,11 @@ const App: React.FC = () => {
               ? prev.kinematicSnapshots[prev.kinematicSnapshots.length - 1].t
               : 0;
           const nextTime = prev.time + simDt;
-          if (nextTime >= prevFrontier) {
+          // Stop as soon as the next step would leave the replay zone
+          // (mirrors the `frontier > time + RECORD_DT / 2` mode test above),
+          // otherwise the cursor can land just under the frontier and the
+          // next frame falls through to create mode while still playing.
+          if (nextTime >= prevFrontier - RECORD_DT / 2) {
             return { ...prev, time: prevFrontier, isPlaying: false };
           }
           return { ...prev, time: nextTime };
@@ -468,8 +489,7 @@ const App: React.FC = () => {
 
   const applyActions = useCallback(
     (actions: Action[], actionBundleType: ActionBundleType) => {
-      if (actions.length > 0 && actions.every((a) => a.type === "SetProbes"))
-        probeOnlyEditRef.current = true;
+      if (is_observation_only_bundle(actions)) probeOnlyEditRef.current = true;
       setMechanism((prevMechanism) => {
         const newMechanism = apply_actions(
           prevMechanism,
@@ -534,9 +554,9 @@ const App: React.FC = () => {
     if (mechanismRef.current.history.length === 0) return;
 
     const isInSim = kinematicRef.current.appMode !== "edition";
-    const probeOnly = mechanismRef.current.history
-      .slice(-1)[0]
-      .every((a) => a.type === "SetProbes");
+    const probeOnly = is_observation_only_bundle(
+      mechanismRef.current.history.slice(-1)[0],
+    );
     if (probeOnly) probeOnlyEditRef.current = true;
 
     setMechanism((prevMechanism) => {
@@ -590,11 +610,7 @@ const App: React.FC = () => {
   const redoMechanism = useCallback(() => {
     if (mechanismRef.current.future.length === 0) return;
 
-    if (
-      mechanismRef.current.future
-        .slice(-1)[0]
-        .every((a) => a.type === "SetProbes")
-    )
+    if (is_observation_only_bundle(mechanismRef.current.future.slice(-1)[0]))
       probeOnlyEditRef.current = true;
 
     setMechanism((prevMechanism) => {
@@ -905,6 +921,27 @@ const App: React.FC = () => {
   const displayMechanism = activeSnapshot
     ? apply_snapshot_to_mechanism(mechanism, activeSnapshot)
     : mechanism;
+
+  // Trajectoires des éléments dont l'affichage est activé (showTrajectory),
+  // tracées sur le canvas pendant la simulation.
+  const trajectories = useMemo(() => {
+    if (appMode !== "kinematic" || runtimeState.kinematicSnapshots.length === 0)
+      return [];
+    return get_probe_trajectories(
+      mechanism.mechanicalElements,
+      runtimeState.kinematicSnapshots,
+      runtimeState.time,
+    ).map((traj, i) => ({
+      points: traj.points,
+      headCount: traj.headCount,
+      color: PROBE_ELEMENT_COLORS[i % PROBE_ELEMENT_COLORS.length],
+    }));
+  }, [
+    appMode,
+    mechanism.mechanicalElements,
+    runtimeState.kinematicSnapshots,
+    runtimeState.time,
+  ]);
 
   /** App starts */
   useEffect(() => {
@@ -1682,6 +1719,7 @@ const App: React.FC = () => {
             onSimulationGrabEnd={handleSimulationGrabEnd}
             snapToGrid={snapToGrid}
             showGrid={showGrid}
+            trajectories={trajectories}
           />
 
           {/* Floating panels */}

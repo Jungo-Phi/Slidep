@@ -1,4 +1,9 @@
-import { MechanicalElement, ProbeMetric } from "../../types/element";
+import {
+  ID,
+  MechanicalElement,
+  ProbeMetric,
+  is_node_element,
+} from "../../types/element";
 import { Point2 } from "../../types/point2";
 import { KinematicSnapshot } from "../../types/runtime-state";
 
@@ -39,6 +44,40 @@ function sample_angle(
   const start = snapshot.positions.get(`${element.id}:start`);
   const end = snapshot.positions.get(`${element.id}:end`);
   return start && end ? end.sub(start).angle() : undefined;
+}
+
+/** The recorded path of one element (canvas trajectory overlay). */
+export interface ProbeTrajectory {
+  elementID: ID;
+  points: Point2[];
+  /** Number of points at or before the playback time `time`. */
+  headCount: number;
+}
+
+/**
+ * Extract the trajectory of every node with `showTrajectory` on from the
+ * recorded kinematic snapshots, in mechanical-element order. Trajectories
+ * only apply to node elements (a single moving point).
+ */
+export function get_probe_trajectories(
+  elements: MechanicalElement[],
+  snapshots: KinematicSnapshot[],
+  time: number,
+): ProbeTrajectory[] {
+  const out: ProbeTrajectory[] = [];
+  for (const el of elements) {
+    if (!el.showTrajectory || !is_node_element(el)) continue;
+    const points: Point2[] = [];
+    let headCount = 0;
+    for (const snap of snapshots) {
+      const p = sample_position(el, snap);
+      if (!p) continue;
+      points.push(p);
+      if (snap.t <= time) headCount = points.length;
+    }
+    out.push({ elementID: el.id, points, headCount });
+  }
+  return out;
 }
 
 /**

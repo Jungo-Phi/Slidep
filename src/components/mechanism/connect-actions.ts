@@ -949,6 +949,13 @@ export function connect_elements(
           } else {
             // Takeover de selectedNode sur hoveredNode
             actions.push({ type: "DeleteElement", element: hoveredNode });
+            if (hoveredNode.isGrounded && !selectedNode.isGrounded) {
+              actions.push({
+                type: "GroundNode",
+                id: selectedNode.id,
+                grounded: true,
+              });
+            }
             actions.push(
               ...transfer_internal_connections(hoveredNode, selectedNode),
             );

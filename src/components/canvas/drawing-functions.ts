@@ -1080,3 +1080,44 @@ export function draw_distributed_force(
     draw_force(ctx, start.lerp(end, t), vectorStart.lerp(vectorEnd, t));
   }
 }
+
+/** A probed element's recorded path, ready to draw on the canvas. */
+export interface TrajectoryDisplay {
+  points: Point2[];
+  /** Number of points at or before the current playback time. */
+  headCount: number;
+  color: string;
+}
+
+/** Draws the trajectory of a probed point: the portion already travelled as a
+ *  solid line, the rest of the recording (ahead of the cursor) faded. */
+export function draw_trajectory(
+  ctx: CanvasRenderingContext2D,
+  points: Point2[],
+  headCount: number,
+  color: string,
+) {
+  if (points.length < 2) return;
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.5;
+  ctx.lineJoin = "round";
+  ctx.lineCap = "round";
+
+  const polyline = (from: number, to: number) => {
+    ctx.beginPath();
+    ctx.moveTo(points[from].x, points[from].y);
+    for (let i = from + 1; i <= to; i++) ctx.lineTo(points[i].x, points[i].y);
+    ctx.stroke();
+  };
+
+  if (headCount >= 2) {
+    ctx.globalAlpha = 0.8;
+    polyline(0, headCount - 1);
+  }
+  if (headCount < points.length) {
+    ctx.globalAlpha = 0.25;
+    polyline(Math.max(0, headCount - 1), points.length - 1);
+  }
+  ctx.restore();
+}

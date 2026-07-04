@@ -13,13 +13,19 @@ import {
   Chip,
   Switch,
   FormControlLabel,
+  Menu,
+  MenuItem,
+  Checkbox,
+  Button,
 } from "@mui/material";
 import DeleteIcon from "@mui/icons-material/Delete";
 import ShowChartIcon from "@mui/icons-material/ShowChart";
+import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import {
   LoadElement,
   MechanicalElement,
   PivotElement,
+  is_node_element,
 } from "../../types/element";
 import {
   PROBE_METRIC_LABELS,
@@ -115,62 +121,125 @@ interface ProbesSectionProps {
   setActiveTab: (tab: PropertiesPanelTab) => void;
 }
 
-/** The measurements (probe metrics) taken on this element — compact toggle
- *  chips (same availability as the canvas popover), with a shortcut to the
- *  graphs in the analysis tab. */
+/** The measurements (probe metrics) taken on this element, one labeled row
+ *  per role: active-metrics summary + "Mesures ▾" menu button (same checkbox
+ *  menu as the probe-placement popover), trajectory switch (nodes only, same
+ *  pattern as the Moteur/Ancrage switches), and a text shortcut to the graphs
+ *  in the analysis tab. */
 const ProbesSection: React.FC<ProbesSectionProps> = ({
   element,
   applyActions,
   setActiveTab,
 }) => {
   const probes = element.probes ?? [];
+  const [metricsAnchorEl, setMetricsAnchorEl] =
+    React.useState<null | HTMLElement>(null);
   return (
     <>
       <Divider sx={{ my: 1 }} />
-      <Box sx={{ px: 2, pb: 1 }}>
+      <Box
+        sx={{
+          px: 2,
+          pb: 1,
+          display: "flex",
+          flexDirection: "column",
+          gap: 0.25,
+        }}
+      >
+        <Typography variant="caption" color="text.secondary">
+          Mesures
+        </Typography>
         <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-          <Typography variant="caption" color="text.secondary" sx={{ flex: 1 }}>
-            Mesures
+          <Typography
+            variant="caption"
+            color={probes.length > 0 ? "text.primary" : "text.disabled"}
+            noWrap
+            sx={{ flex: 1, minWidth: 0 }}
+          >
+            {probes.length > 0
+              ? probes.map((p) => PROBE_METRIC_LABELS[p.metric]).join(" · ")
+              : "Aucune mesure"}
           </Typography>
-          {probes.length > 0 && (
-            <IconButton
-              size="small"
-              onClick={() => setActiveTab("analysis")}
-              title="Voir les graphiques"
-            >
-              <ShowChartIcon fontSize="small" />
-            </IconButton>
-          )}
+          <Button
+            size="small"
+            endIcon={<KeyboardArrowDownIcon sx={{ ml: -0.5 }} />}
+            onClick={(e) => setMetricsAnchorEl(e.currentTarget)}
+            sx={{ textTransform: "none", flexShrink: 0, py: 0, minWidth: 0 }}
+          >
+            Mesures
+          </Button>
         </Box>
-        <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5, mt: 0.5 }}>
-          {available_probe_metrics(element).map((metric) => {
-            const active = probes.some((p) => p.metric === metric);
-            return (
-              <Chip
-                key={metric}
-                label={PROBE_METRIC_LABELS[metric]}
+        {is_node_element(element) && (
+          <FormControlLabel
+            control={
+              <Switch
                 size="small"
-                clickable
-                variant={active ? "filled" : "outlined"}
-                color={active ? "primary" : "default"}
-                onClick={() =>
+                checked={!!element.showTrajectory}
+                onChange={() =>
                   applyActions(
                     [
                       {
-                        type: "SetProbes",
+                        type: "SetShowTrajectory",
                         elementID: element.id,
-                        newProbes: toggled_probes(element, metric),
-                        oldProbes: probes,
+                        newValue: !element.showTrajectory,
+                        oldValue: element.showTrajectory ?? false,
                       },
                     ],
                     "Other",
                   )
                 }
-                sx={{ height: 22 }}
               />
-            );
-          })}
-        </Box>
+            }
+            label={
+              <Typography variant="caption">Afficher la trajectoire</Typography>
+            }
+          />
+        )}
+        <Button
+          size="small"
+          startIcon={<ShowChartIcon />}
+          onClick={() => setActiveTab("analysis")}
+          sx={{
+            textTransform: "none",
+            alignSelf: "flex-start",
+            py: 0,
+            minWidth: 0,
+          }}
+        >
+          Voir les graphiques
+        </Button>
+        <Menu
+          anchorEl={metricsAnchorEl}
+          open={!!metricsAnchorEl}
+          onClose={() => setMetricsAnchorEl(null)}
+        >
+          {available_probe_metrics(element).map((metric) => (
+            <MenuItem
+              key={metric}
+              dense
+              onClick={() =>
+                applyActions(
+                  [
+                    {
+                      type: "SetProbes",
+                      elementID: element.id,
+                      newProbes: toggled_probes(element, metric),
+                      oldProbes: probes,
+                    },
+                  ],
+                  "Other",
+                )
+              }
+            >
+              <Checkbox
+                size="small"
+                checked={probes.some((p) => p.metric === metric)}
+                sx={{ p: 0.5, mr: 0.5 }}
+              />
+              {PROBE_METRIC_LABELS[metric]}
+            </MenuItem>
+          ))}
+        </Menu>
       </Box>
     </>
   );
