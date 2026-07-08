@@ -32,12 +32,18 @@ export type HoveredPart =
       section: number;
     }
   | { type: "Constraint"; position: Point2; id: ID; deleting: boolean }
-  | { type: "Load"; position: Point2; id: ID; deleting: boolean }
-  | { type: "ForceTip"; position: Point2; id: ID; deleting: boolean }
+  | {
+      type: "Force";
+      position: Point2;
+      id: ID;
+      part: "tip" | "body";
+      deleting: boolean;
+    }
   | {
       type: "DistributedForce";
       position: Point2;
       id: ID;
-      part: "start" | "end" | "body";
+      part: "start-tip" | "end-tip" | "line" | "body";
       deleting: boolean;
-    };
+    }
+  | { type: "Moment"; position: Point2; id: ID; deleting: boolean };

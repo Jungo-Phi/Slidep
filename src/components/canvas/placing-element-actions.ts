@@ -168,13 +168,13 @@ export function handle_placing_element(
       const newMoment: MomentElement = {
         type: "moment",
         id: crypto.randomUUID() as ID,
-        targetID: hoveredPart.id,
+        beamID: hoveredPart.id,
         value: 1,
         clockwise: true,
       };
       const actions: Action[] = [];
       const existingMoment = loads.find(
-        (l) => l.type === "moment" && l.targetID === newMoment.targetID,
+        (l) => l.type === "moment" && l.beamID === newMoment.beamID,
       );
       if (existingMoment)
         actions.push({ type: "DeleteElement", element: existingMoment });
@@ -286,6 +286,23 @@ function handle_place_element(
 
   // Add a gear to the belt route being defined
   if (state.type === "PlacingBeltEnd" && hoveredPart.type === "GearTooth") {
+    const newAttachedGearsIDs = [...state.attachedGearsIDs];
+    if (
+      state.startHover.type === "GearTooth" &&
+      state.attachedGearsIDs.length === 0 &&
+      hoveredPart.id !== state.startHover.id
+    ) {
+      const hoveredGear = get_mechanical_element_from_id(
+        state.startHover.id,
+        mechanicalElements,
+      ) as GearElement;
+      const direction =
+        hoveredGear.position
+          .sub(state.startHover.position)
+          .perp()
+          .dot(hoveredPart.position.sub(hoveredGear.position)) > 0;
+      newAttachedGearsIDs.push({ id: hoveredGear.id, direction });
+    }
     const hoveredGear = get_mechanical_element_from_id(
       hoveredPart.id,
       mechanicalElements,
@@ -304,15 +321,14 @@ function handle_place_element(
         )
         .perp()
         .dot(hoveredPart.position.sub(hoveredGear.position)) > 0;
+
+    newAttachedGearsIDs.push({ id: hoveredGear.id, direction });
     return {
       actions: [],
       newCanvasState: {
         type: "PlacingBeltEnd",
         startHover: state.startHover,
-        attachedGearsIDs: [
-          ...state.attachedGearsIDs,
-          { id: hoveredPart.id, direction },
-        ],
+        attachedGearsIDs: newAttachedGearsIDs,
       },
     };
   }
@@ -324,6 +340,8 @@ function handle_place_element(
     const newPivot: PivotElement = {
       type: "pivot",
       id: pivotId,
+      probes: [],
+      showTrajectory: false,
       position: state.startHover.position,
       isGrounded: false,
       rotatingEdgesIDs: [],
@@ -332,6 +350,7 @@ function handle_place_element(
     const newGear: GearElement = {
       type: "gear",
       id: gearId,
+      probes: [],
       position: state.startHover.position,
       angle: 0,
       radius: state.startHover.position.distance_to(hoveredPart.position),
@@ -405,6 +424,7 @@ function handle_place_element(
       newElement = {
         type: "beam",
         id: newElementId,
+        probes: [],
         positionStart: state.startHover.position,
         positionEnd: hoveredPart.position,
         fixedNodeStartID: undefined,
@@ -416,6 +436,7 @@ function handle_place_element(
       newElement = {
         type: "spring",
         id: newElementId,
+        probes: [],
         positionStart: state.startHover.position,
         positionEnd: hoveredPart.position,
         fixedNodeStartID: undefined,
@@ -427,6 +448,7 @@ function handle_place_element(
       newElement = {
         type: "damper",
         id: newElementId,
+        probes: [],
         positionStart: state.startHover.position,
         positionEnd: hoveredPart.position,
         fixedNodeStartID: undefined,
@@ -438,6 +460,7 @@ function handle_place_element(
       newElement = {
         type: "belt",
         id: newElementId,
+        probes: [],
         positionStart: state.startHover.position,
         positionEnd: hoveredPart.position,
         fixedNodeStartID: undefined,
@@ -451,6 +474,8 @@ function handle_place_element(
       newElement = {
         type: "pivot",
         id: newElementId,
+        probes: [],
+        showTrajectory: false,
         position: hoveredPart.position,
         isGrounded: state.type === "PlacingMotor",
         rotatingEdgesIDs: [],
@@ -465,6 +490,8 @@ function handle_place_element(
       newElement = {
         type: "slider",
         id: newElementId,
+        probes: [],
+        showTrajectory: false,
         position: hoveredPart.position,
         isGrounded: false,
         parentBeamID: undefined,
@@ -475,6 +502,8 @@ function handle_place_element(
       newElement = {
         type: "join",
         id: newElementId,
+        probes: [],
+        showTrajectory: false,
         position: hoveredPart.position,
         isGrounded: false,
         fixedEdgesIDs: [],
@@ -484,6 +513,8 @@ function handle_place_element(
       newElement = {
         type: "mass",
         id: newElementId,
+        probes: [],
+        showTrajectory: false,
         position: hoveredPart.position,
         isGrounded: false,
         fixedEdgesIDs: [],
@@ -595,10 +626,12 @@ function handle_place_ground(
     case "Void": {
       const newJoin: JoinElement = {
         type: "join",
+        id: crypto.randomUUID() as ID,
+        probes: [],
+        showTrajectory: false,
         fixedEdgesIDs: [],
         position: hoveredPart.position,
         isGrounded: true,
-        id: crypto.randomUUID() as ID,
       };
       return {
         actions: [{ type: "CreateElement", element: newJoin }],
@@ -624,10 +657,12 @@ function handle_place_ground(
     case "Edge": {
       const newJoin: JoinElement = {
         type: "join",
+        id: crypto.randomUUID() as ID,
+        probes: [],
+        showTrajectory: false,
         fixedEdgesIDs: [],
         position: hoveredPart.position,
         isGrounded: true,
-        id: crypto.randomUUID() as ID,
       };
       return {
         actions: [

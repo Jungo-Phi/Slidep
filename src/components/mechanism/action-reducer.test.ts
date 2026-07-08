@@ -31,6 +31,7 @@ function emptyMechanism(): Mechanism {
 const BEAM: BeamElement = {
   type: "beam",
   id: id("beam1"),
+  probes: [],
   positionStart: P(0, 0),
   positionEnd: P(1, 0),
   fixedNodeStartID: undefined,
@@ -41,6 +42,8 @@ const BEAM: BeamElement = {
 const PIVOT: PivotElement = {
   type: "pivot",
   id: id("pivot1"),
+  probes: [],
+  showTrajectory: false,
   position: P(0, 0),
   isGrounded: false,
   rotatingEdgesIDs: [],
@@ -58,7 +61,7 @@ const FORCE: ForceElement = {
 const MOMENT: MomentElement = {
   type: "moment",
   id: id("moment1"),
-  targetID: id("beam1"),
+  beamID: id("beam1"),
   value: 5,
   clockwise: true,
 };

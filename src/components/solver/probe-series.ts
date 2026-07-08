@@ -66,7 +66,7 @@ export function get_probe_trajectories(
 ): ProbeTrajectory[] {
   const out: ProbeTrajectory[] = [];
   for (const el of elements) {
-    if (!el.showTrajectory || !is_node_element(el)) continue;
+    if (!is_node_element(el) || !el.showTrajectory) continue;
     const points: Point2[] = [];
     let headCount = 0;
     for (const snap of snapshots) {

@@ -25,7 +25,7 @@ import {
   get_mechanical_element_from_id,
 } from "../mechanism/connect-actions";
 import { is_on_left_side_of_belt } from "../../utils";
-import { DIM } from "../../constants/rendering-specs";
+import { DIM, HIT_TOLERANCE } from "../../constants/rendering-specs";
 import { handle_placing_element } from "./placing-element-actions";
 import { handle_placing_constraint } from "./placing-constraint-actions";
 
@@ -52,6 +52,7 @@ export function canvasStateReducer(
   ) => void = () => {},
   onSimulationGrabEnd: () => void = () => {},
   worldMousePos: Point2 = ZERO,
+  viewportZoom: number = 1,
 ) {
   const actions: Action[] = [];
   let actionBundleType: ActionBundleType | undefined = undefined;
@@ -74,6 +75,8 @@ export function canvasStateReducer(
             setCanvasState({
               type: "SelectedElement",
               elementID: hoveredPart.id,
+              pendingHit: hoveredPart,
+              downPos: worldMousePos,
             });
             break;
           }
@@ -107,22 +110,31 @@ export function canvasStateReducer(
             });
             break;
           }
-          if (hoveredPart.type === "Load") {
+          if (
+            hoveredPart.type === "Moment" ||
+            ((hoveredPart.type === "Force" ||
+              hoveredPart.type === "DistributedForce") &&
+              hoveredPart.part === "body")
+          ) {
             setCanvasState({
               type: "SelectedElement",
               elementID: hoveredPart.id,
             });
             break;
-          }
-          if (hoveredPart.type === "ForceTip") {
+          } else if (
+            hoveredPart.type === "Force" &&
+            hoveredPart.part !== "body"
+          ) {
             const load = get_load_element_from_id(hoveredPart.id, loadElements);
             setCanvasState({
               type: "MovingForce",
               elementID: load.id,
             });
             break;
-          }
-          if (hoveredPart.type === "DistributedForce") {
+          } else if (
+            hoveredPart.type === "DistributedForce" &&
+            hoveredPart.part !== "body"
+          ) {
             const load = get_load_element_from_id(hoveredPart.id, loadElements);
             setCanvasState({
               type: "MovingDistributedForce",
@@ -134,10 +146,28 @@ export function canvasStateReducer(
           const constraint = constraintElements.find(
             (element) => element.id === hoveredPart.id,
           );
-          if (constraint && "value" in constraint) break;
+          if (constraint && "value" in constraint) {
+            // Dimension (contrainte à valeur) : on arme un drag potentiel comme
+            // pour n'importe quel élément, mais on garde le mode "édition au 2ᵉ
+            // clic" — armedForEdit n'est vrai que si elle était déjà sélectionnée.
+            // Pendant l'édition, on ne fait rien : le blur de l'input s'en charge.
+            if (state.type === "EditingConstraint") break;
+            setCanvasState({
+              type: "SelectedElement",
+              elementID: hoveredPart.id,
+              pendingHit: hoveredPart,
+              downPos: worldMousePos,
+              armedForEdit:
+                state.type === "SelectedElement" &&
+                state.elementID === hoveredPart.id,
+            });
+            break;
+          }
           setCanvasState({
             type: "SelectedElement",
             elementID: hoveredPart.id,
+            pendingHit: hoveredPart,
+            downPos: worldMousePos,
           });
           break;
         case "SelectedMultiple":
@@ -194,13 +224,16 @@ export function canvasStateReducer(
             setCanvasState({
               type: "MovingSelectionMultiple",
               elementIDs: state.elementIDs,
-              delta: ZERO,
+              grabbedID: hoveredPart.id,
+              hasMoved: false,
             });
           } else {
             // Click on element not in selection without Shift → select only that element
             setCanvasState({
               type: "SelectedElement",
               elementID: hoveredPart.id,
+              pendingHit: hoveredPart,
+              downPos: worldMousePos,
             });
           }
           break;
@@ -300,10 +333,24 @@ export function canvasStateReducer(
             setCanvasState({
               type: "SelectedElement",
               elementID: hoveredPart.id,
+              pendingHit: hoveredPart,
+              downPos: worldMousePos,
             });
           }
           break;
-        case "SelectedElement":
+        case "SelectedElement": {
+          // Le drag ne démarre qu'à partir de la cible capturée au mouseDown
+          // (`pendingHit`) et une fois le seuil de déplacement franchi. On
+          // s'appuie sur `pendingHit`, jamais sur le hover courant : la souris
+          // peut déjà être loin de l'élément si elle a bougé vite.
+          const hit = state.pendingHit;
+          if (
+            !hit ||
+            !state.downPos ||
+            worldMousePos.distance_to(state.downPos) <
+              HIT_TOLERANCE.DRAG_START / viewportZoom
+          )
+            break;
           if (isSimulating) {
             let simKey: string | null = null;
             let simElementID: ID | null = null;
@@ -311,39 +358,37 @@ export function canvasStateReducer(
             let gearPerimeter:
               | { gearID: ID; angleOffset: number; radius: number }
               | undefined = undefined;
-            if (hoveredPart.type === "GearTooth") {
+            if (hit.type === "GearTooth") {
               // Grab a gear tooth → rotate the gear: capture the angle offset of
               // the grabbed point relative to the gear angle (held constant).
               const grabbedGear = get_mechanical_element_from_id(
-                hoveredPart.id,
+                hit.id,
                 mechanicalElements,
               ) as GearElement;
-              simKey = hoveredPart.id;
-              simElementID = hoveredPart.id;
+              simKey = hit.id;
+              simElementID = hit.id;
               gearPerimeter = {
-                gearID: hoveredPart.id,
+                gearID: hit.id,
                 angleOffset:
                   worldMousePos.sub(grabbedGear.position).angle() -
                   grabbedGear.angle,
                 radius: grabbedGear.radius,
               };
-            } else if (hoveredPart.type === "Node") {
-              simKey = hoveredPart.id;
-              simElementID = hoveredPart.id;
-            } else if (hoveredPart.type === "Edge") {
-              simElementID = hoveredPart.id;
-              if (hoveredPart.part === "start")
-                simKey = `${hoveredPart.id}:start`;
-              else if (hoveredPart.part === "end")
-                simKey = `${hoveredPart.id}:end`;
+            } else if (hit.type === "Node") {
+              simKey = hit.id;
+              simElementID = hit.id;
+            } else if (hit.type === "Edge") {
+              simElementID = hit.id;
+              if (hit.part === "start") simKey = `${hit.id}:start`;
+              else if (hit.part === "end") simKey = `${hit.id}:end`;
               else {
                 // Body grab: pull the beam at the grabbed ratio.
                 const simEdge = get_mechanical_element_from_id(
-                  hoveredPart.id,
+                  hit.id,
                   mechanicalElements,
                 ) as EdgeElement;
-                simKey = hoveredPart.id;
-                bodyRatio = hoveredPart.position.parameter_on_segment(
+                simKey = hit.id;
+                bodyRatio = hit.position.parameter_on_segment(
                   simEdge.positionStart,
                   simEdge.positionEnd,
                 );
@@ -360,33 +405,33 @@ export function canvasStateReducer(
             }
             break;
           }
-          switch (hoveredPart.type) {
+          switch (hit.type) {
             case "Node":
-              setCanvasState({ type: "MovingNode", elementID: hoveredPart.id });
+              setCanvasState({ type: "MovingNode", elementID: hit.id });
               break;
             case "Edge":
-              switch (hoveredPart.part) {
+              switch (hit.part) {
                 case "start":
                   setCanvasState({
                     type: "MovingEdgeStartPoint",
-                    elementID: hoveredPart.id,
+                    elementID: hit.id,
                   });
                   break;
                 case "end":
                   setCanvasState({
                     type: "MovingEdgeEndPoint",
-                    elementID: hoveredPart.id,
+                    elementID: hit.id,
                   });
                   break;
                 case "body":
                   const edge = get_mechanical_element_from_id(
-                    hoveredPart.id,
+                    hit.id,
                     mechanicalElements,
                   ) as EdgeElement;
                   setCanvasState({
                     type: "MovingEdgeBody",
-                    elementID: hoveredPart.id,
-                    t: hoveredPart.position.parameter_on_segment(
+                    elementID: hit.id,
+                    t: hit.position.parameter_on_segment(
                       edge.positionStart,
                       edge.positionEnd,
                     ),
@@ -397,24 +442,24 @@ export function canvasStateReducer(
             case "GearTooth":
               setCanvasState({
                 type: "ChangingGearRadius",
-                elementID: hoveredPart.id,
+                elementID: hit.id,
               });
               break;
             case "BeltBody":
               const belt = get_mechanical_element_from_id(
-                hoveredPart.id,
+                hit.id,
                 mechanicalElements,
               ) as BeltElement;
-              if (hoveredPart.section % 2 === 0) {
+              if (hit.section % 2 === 0) {
                 // even section : straight part
                 setCanvasState({
                   type: "MovingBeltBody",
-                  elementID: hoveredPart.id,
-                  section: hoveredPart.section,
+                  elementID: hit.id,
+                  section: hit.section,
                 });
               } else {
                 // odd section : gear part
-                const gearIndex = (hoveredPart.section - 1) / 2;
+                const gearIndex = (hit.section - 1) / 2;
                 const gearId = belt.attachedGearsIDs[gearIndex].id;
                 actionBundleType = "Connects";
                 actions.push({
@@ -433,19 +478,20 @@ export function canvasStateReducer(
                 });
                 setCanvasState({
                   type: "MovingBeltBody",
-                  elementID: hoveredPart.id,
-                  section: hoveredPart.section - 1,
+                  elementID: hit.id,
+                  section: hit.section - 1,
                 });
               }
               break;
             case "Constraint":
               setCanvasState({
                 type: "MovingConstraint",
-                elementID: hoveredPart.id,
+                elementID: hit.id,
               });
               break;
           }
           break;
+        }
         case "MovingNode":
           if (hoveredPart.position.equals(oldPosition)) break;
           actionBundleType = "MoveElement";
@@ -456,46 +502,48 @@ export function canvasStateReducer(
             oldPosition,
           });
           break;
-        case "MovingEdgeStartPoint":
+        case "MovingEdgeStartPoint": {
           if (hoveredPart.position.equals(oldPosition)) break;
-          const positionEnd = (
-            get_mechanical_element_from_id(
-              state.elementID,
-              mechanicalElements,
-            ) as EdgeElement
-          ).positionEnd;
+          const edge = get_mechanical_element_from_id(
+            state.elementID,
+            mechanicalElements,
+          ) as EdgeElement;
           actionBundleType = "MoveElement";
           actions.push({
             type: "MoveEdgeStart",
             id: state.elementID,
-            newPosition: positionEnd.add(
+            newPosition: edge.positionEnd.add(
               hoveredPart.position
-                .sub(positionEnd)
-                .limit_length_min(DIM.MIN_EDGE_LENGTH),
+                .sub(edge.positionEnd)
+                .limit_length_min(
+                  edge.type === "belt" ? 0 : DIM.MIN_EDGE_LENGTH,
+                ),
             ),
             oldPosition,
           });
           break;
-        case "MovingEdgeEndPoint":
+        }
+        case "MovingEdgeEndPoint": {
           if (hoveredPart.position.equals(oldPosition)) break;
-          const positionStart = (
-            get_mechanical_element_from_id(
-              state.elementID,
-              mechanicalElements,
-            ) as EdgeElement
-          ).positionStart;
+          const edge = get_mechanical_element_from_id(
+            state.elementID,
+            mechanicalElements,
+          ) as EdgeElement;
           actionBundleType = "MoveElement";
           actions.push({
             type: "MoveEdgeEnd",
             id: state.elementID,
-            newPosition: positionStart.add(
+            newPosition: edge.positionStart.add(
               hoveredPart.position
-                .sub(positionStart)
-                .limit_length_min(DIM.MIN_EDGE_LENGTH),
+                .sub(edge.positionStart)
+                .limit_length_min(
+                  edge.type === "belt" ? 0 : DIM.MIN_EDGE_LENGTH,
+                ),
             ),
             oldPosition,
           });
           break;
+        }
         case "MovingEdgeBody":
           if (hoveredPart.position.equals(oldPosition)) break;
           actionBundleType = "MoveElement";
@@ -546,13 +594,13 @@ export function canvasStateReducer(
           let newVectorStart = distForce.vectorStart;
           let newVectorEnd = distForce.vectorEnd;
           switch (state.part) {
-            case "start":
+            case "start-tip":
               newVectorStart = hoveredPart.position.sub(beam.positionStart);
               break;
-            case "end":
+            case "end-tip":
               newVectorEnd = hoveredPart.position.sub(beam.positionEnd);
               break;
-            case "body":
+            case "line":
               const delta = hoveredPart.position.sub(oldPosition);
               newVectorStart = distForce.vectorStart.add(delta);
               newVectorEnd = distForce.vectorEnd.add(delta);
@@ -615,6 +663,9 @@ export function canvasStateReducer(
           break;
         case "MovingSelectionMultiple":
           if (hoveredPart.position.equals(oldPosition)) break;
+          if (!state.hasMoved) {
+            setCanvasState({ ...state, hasMoved: true });
+          }
           actionBundleType = "MoveElement";
           actions.push({
             type: "MoveElements",
@@ -670,6 +721,10 @@ export function canvasStateReducer(
         case "SelectedElement":
           if (hoveredPart.type === "Void") break;
           if (hoveredPart.id === state.elementID) {
+            // Clic (sans drag) sur l'élément déjà sélectionné : on n'édite que si
+            // c'était le 2ᵉ clic sur une dimension (armedForEdit). Sinon on reste
+            // simplement sélectionné.
+            if (!state.armedForEdit) break;
             const constraint = constraintElements.find(
               (element) => element.id === hoveredPart.id,
             );
@@ -881,6 +936,15 @@ export function canvasStateReducer(
           });
           break;
         case "MovingSelectionMultiple":
+          if (!state.hasMoved) {
+            // Simple clic (sans déplacement) sur un élément de la sélection
+            // multiple → ne sélectionner que cet élément.
+            setCanvasState({
+              type: "SelectedElement",
+              elementID: state.grabbedID,
+            });
+            break;
+          }
           actionBundleType = "Other";
           actions.push({ type: "Blank" });
           setCanvasState({

@@ -6,20 +6,38 @@
 
 - Ajouter un fichier config ESLint
 - Comportement étrange dans vectorInput à régler
-- La contrainte d'angle (node on gearTooth) avec gear ne fonctionne pas correctement
+- La contrainte d'angle (node on gearTooth) avec gear n'est pas respecté
+- Contrainte de ratio non respectée
 
 - Analise des degrés de libertés en sous-parties
 
-- Les courroies sont de 2 types :
-  - Extrémités connectées : Doivent avoir minimum 2 engrenages connectés, peuvent fairent des tours à l'infinis, UN élément peut être connecté sur le "pseudo-edge" allant du point tangeant de l'engrenage côté start du point tangeant de l'engrenage côté end.
-  - Extrémités distinctes : un élément peut être connecté sur chaque "pseudo-edge" allant du point tangeant de l'engrenage adjascent à start/end.
-- Dans tous les cas, les courroies impose un ratio aux engrenages connectés
-- On ne peut PAS connecter des extrémités de courroies différentes ensemble ?
+- Dessin de courroie tendue prend en compte les extrémitées
+- Créer la contrainte de courroie tendue (liée à une longueur ?)
+- Dans tous les cas, les courroies imposent un ratio aux engrenages connectés
+- Créer une validation : une courroie ne peut être tendue que si ses 2 extrémitées sont connectées et qu'il y a au moins 2 gears
+- Placer une courroie sur un engrenage en ayant déjà une doit briser la connection
 
 ### À faire plus tard
 
+- Unifier les "excluded_elements" et les conditions au début de "get_hover"
+- ground sur gearTooth ?
+- S'assurer qu'aucun élément du panneau de propriétés n'aie le focus (pas de "space = switch")
+- Transférer les propriétées de mesures au remplacement d'un node
+- Remplacemend d'un edge par un autre
+- Visuel belt sur gearTooth confusant
+- Visuel beltEnd sur gearTooth, enroulement à penser
+- Ajouter une validation pour les positions des beltEnds par rapport aux gears
+- Ajouter une validation pour que les beltEnds sur des gears aillent toujours de pair avec un "AttachedGearsIDs"
+- Click sur un élément dans une sélection multiple doit le séléctionner
+- MovingBeltBody doit hilight la belt
+- Afficher des "stand in" pendant que les icons chargent
+- Créer uns catégories de CanvasState pour rendre le code plus lisible et maintenable
+- ChangeGearRadius ne met pas sa position sur le hover
+- update le hover quand on change de state ?
+- Fusionner les actions : mouvement + connections
+- se déplacer dans le temps de la simu avec les flèches & afficher autre chose que 30s quand vide
+- le "ghost" de contrainte en rouge pour un ctrl+z devrait être barré
 - hover des inputs dans le property pannel -> hilight canvas
-- Une erreur de sauvegarde -> pop-up "voulez-vous supprimer ce mécanisme ?"
 - geometric-solver : Maintenir les longueurs des beams si possible. Maintenir l'orientation ce celui modifié si possible. Ignorer des grounds si nécessaire.
 - En simulation, en attrapant un point sur gearTooth et en le tirant vers l'intérieur, la roue tourne de façon incontrôlable
 - En simulation, attraper un élément alors qu'on moteur tourne fait que la simulation n'avance que si on bouge la souris.
@@ -49,8 +67,6 @@
 - Empecher de placer une belt sur un gear avec le même axisID
 - Hover et Click dans sur les dimension pour les éditer quand state==placingStartDimension
 - Ignorer BeamBodyHover lors du déplacement d'un beam
-- Move element en 2 frames n'est pas fiable
-- Séparer click de move
 - Placing Edges/Force avec hold down
 - Placing beam series / only one if hold down when placing (like in OnShape)
 - Sélection multiple d'éléments du même type -> modifier paramètres simultanément (IU adaptée + actions multiples)
@@ -92,6 +108,8 @@
 
 ### À faire quand tout le reste est fait
 
+- Une erreur de sauvegarde -> pop-up "voulez-vous supprimer ce mécanisme ?"
+- Erreur/Crash -> message d'erreur + proposer de créer un nouveau mécanisme ?
 - Refactor App.tsx (make shorter)
 - Code review
 - Afficher les positions (vecteurs) et longueurs des ressorts et amortisseurs en simulation (disabled)

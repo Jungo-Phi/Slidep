@@ -163,7 +163,7 @@ describe("PlacingMoment", () => {
     const existing: MomentElement = {
       type: "moment",
       id: id("moment1"),
-      targetID: id("beam1"),
+      beamID: id("beam1"),
       value: 5,
       clockwise: true,
     };
@@ -183,7 +183,7 @@ describe("PlacingMoment", () => {
     const other: MomentElement = {
       type: "moment",
       id: id("moment2"),
-      targetID: id("other"),
+      beamID: id("other"),
       value: 3,
       clockwise: false,
     };
@@ -199,6 +199,7 @@ describe("PlacingDistributedForceEnd", () => {
   const beam: BeamElement = {
     type: "beam",
     id: id("beam1"),
+    probes: [],
     positionStart: P(0, 0),
     positionEnd: P(4, 0),
     fixedNodeStartID: undefined,

@@ -270,34 +270,6 @@ export function disconnect_element(
   }
 }
 
-export function connect_element(
-  element: MechanicalElement,
-  connectedElement: MechanicalElement,
-  containerType: ConnectsActionType,
-  insertIndex: number,
-  //mechanicalElements: MechanicalElement[],
-): Action {
-  if (containerType === "ConnectsAttachedGears") {
-    // const belt = get_mechanical_element_from_id(element.id, mechanicalElements) as BeltElement;
-    return {
-      type: containerType,
-      disconnect: false,
-      elementID: connectedElement.id,
-      connectID: element.id,
-      index: insertIndex,
-      direction: false, // TODO : belt.attachedGearsIDs.find((gear) => gear.id === element.id)?.direction!,
-    };
-  } else {
-    return {
-      type: containerType,
-      disconnect: false,
-      elementID: connectedElement.id,
-      connectID: element.id,
-      index: insertIndex,
-    };
-  }
-}
-
 /**
  * Deletes an element.
  *
@@ -835,10 +807,6 @@ export function connect_elements(
   constraintElements: ConstraintElement[],
   loads: LoadElement[] = [],
 ): Action[] {
-  // TODO : Handle placing edge start/end on gear tooth
-  // TODO : Handle placing gear tooth on edge start/end
-  // TODO : Handle placing node on gear tooth
-  // TODO : Handle placing gear tooth on node
   if (
     hoveredPart.type === "Void" ||
     hoveredPart.type === "Constraint" ||
@@ -848,6 +816,46 @@ export function connect_elements(
   ) {
     return [];
   }
+  // Connect belt ends together
+  if (hoveredPart.id === "----") {
+    const join: JoinElement = {
+      type: "join",
+      id: crypto.randomUUID(),
+      probes: [],
+      showTrajectory: false,
+      fixedEdgesIDs: [],
+      position: hoveredPart.position,
+      isGrounded: false,
+    };
+    return [
+      { type: "CreateElement", element: join },
+      {
+        type: "ConnectsFixedEdges",
+        disconnect: false,
+        elementID: join.id,
+        connectID: selectedPart.id,
+        index: 0,
+      },
+      {
+        type: "ConnectsFixedNodeStart",
+        disconnect: false,
+        elementID: selectedPart.id,
+        connectID: join.id,
+      },
+      {
+        type: "ConnectsFixedNodeEnd",
+        disconnect: false,
+        elementID: selectedPart.id,
+        connectID: join.id,
+      },
+      {
+        type: "TightenBelt",
+        id: selectedPart.id,
+        tightened: true,
+      },
+    ];
+  }
+
   const hoveredElement = get_mechanical_element_from_id(
     hoveredPart.id,
     mechanicalElements,
@@ -877,6 +885,9 @@ export function connect_elements(
           ) {
             const slidep: SlidepElement = {
               type: "slidep",
+              id: selectedNode.id,
+              probes: [],
+              showTrajectory: false,
               parentBeamID: hoveredNode.parentBeamID,
               rotatingEdgesIDs: selectedNode.rotatingEdgesIDs.concat(
                 hoveredNode.fixedEdgesIDs,
@@ -884,7 +895,6 @@ export function connect_elements(
               fixedGearsIDs: selectedNode.fixedGearsIDs,
               position: hoveredNode.position,
               isGrounded: selectedNode.isGrounded || hoveredNode.isGrounded,
-              id: selectedNode.id,
             };
             actions.push({ type: "DeleteElement", element: selectedNode });
             actions.push({ type: "DeleteElement", element: hoveredNode });
@@ -920,6 +930,9 @@ export function connect_elements(
                 : undefined;
             const slidep: SlidepElement = {
               type: "slidep",
+              id: hoveredNode.id,
+              probes: [],
+              showTrajectory: false,
               parentBeamID,
               rotatingEdgesIDs: selectedNode.fixedEdgesIDs
                 .concat(hoveredNode.rotatingEdgesIDs)
@@ -927,7 +940,6 @@ export function connect_elements(
               fixedGearsIDs: hoveredNode.fixedGearsIDs,
               position: hoveredNode.position,
               isGrounded: selectedNode.isGrounded || hoveredNode.isGrounded,
-              id: hoveredNode.id,
             };
             actions.push({ type: "DeleteElement", element: selectedNode });
             actions.push({ type: "DeleteElement", element: hoveredNode });
@@ -1098,8 +1110,6 @@ function connect_node_and_edge(
     edgePart === "body" &&
     edge.type !== "gear"
   ) {
-    // A gear is never a rail: a slider/slidep dropped on a gear body is fixed to
-    // it (fixedEdges / rotatingEdges below), not made to slide along it.
     actions.push({
       type: "ConnectsParentBeam",
       disconnect: false,
@@ -1188,10 +1198,12 @@ function connect_two_edges(
 ): Action[] {
   const join: JoinElement = {
     type: "join",
+    id: crypto.randomUUID(),
+    probes: [],
+    showTrajectory: false,
     fixedEdgesIDs: [],
     position,
     isGrounded: false,
-    id: crypto.randomUUID(),
   };
   return [
     { type: "CreateElement", element: join },

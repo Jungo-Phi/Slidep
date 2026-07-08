@@ -129,41 +129,37 @@ function is_edge_end_hovered(
   hoveredPart: HoveredPart,
   state: CanvasState,
 ): boolean {
+  if (hoveredPart.type === "Void" || hoveredPart.id !== elementID) return false;
   return (
-    hoveredPart.type === "Edge" &&
-    hoveredPart.part !== "body" &&
-    hoveredPart.id === elementID &&
-    !(
-      (hoveredPart.deleting && hoveredPart.id === elementID) ||
-      (state.type === "ErasingMultiple" &&
-        state.hoveredElementIDs.includes(elementID))
-    ) &&
-    ![
-      "PlacingPivot",
-      "PlacingSlider",
-      "PlacingJoin",
-      "PlacingMass",
-      "PlacingBeamStart",
-      "PlacingSpringStart",
-      "PlacingDamperStart",
-      "PlacingBeltStart",
-    ].includes(state.type)
+    (hoveredPart.type === "Edge" &&
+      hoveredPart.part !== "body" &&
+      !hoveredPart.deleting &&
+      !(
+        state.type === "ErasingMultiple" &&
+        state.hoveredElementIDs.includes(elementID)
+      ) &&
+      ![
+        "PlacingPivot",
+        "PlacingSlider",
+        "PlacingJoin",
+        "PlacingMass",
+        "PlacingBeamStart",
+        "PlacingSpringStart",
+        "PlacingDamperStart",
+        "PlacingBeltStart",
+      ].includes(state.type)) ||
+    (hoveredPart.type === "Force" && hoveredPart.part === "tip") ||
+    (hoveredPart.type === "DistributedForce" && hoveredPart.part !== "body")
   );
 }
 
 function is_hovered(
   elementID: ID,
   hoveredPart: HoveredPart,
-  state: CanvasState,
   constraintElements: ConstraintElement[],
 ): boolean {
   if (hoveredPart.type === "Void") return false;
-  if (
-    hoveredPart.id === elementID &&
-    !hoveredPart.deleting &&
-    !is_edge_end_hovered(elementID, hoveredPart, state)
-  )
-    return true;
+  if (hoveredPart.id === elementID && !hoveredPart.deleting) return true;
 
   const constraint = constraintElements.find((el) => el.id === hoveredPart.id);
   if (!constraint) return false;
@@ -220,7 +216,7 @@ export function draw_edge_fake_end(
   ctx.fillStyle = COLORS.FILL_BODY;
   ctx.lineWidth = STROKE_WIDTHS.STANDARD;
 
-  if (is_hovered(edge.id, hoveredPart, state, constraintElements))
+  if (is_hovered(edge.id, hoveredPart, constraintElements))
     ctx.lineWidth = STROKE_WIDTHS.THICK;
 
   if (is_selected(edge.id, state, constraintElements)) {
@@ -317,12 +313,7 @@ export function drawMechanicalCanvas(
         hoveredPart,
         state,
       );
-      let isHovered = is_hovered(
-        element.id,
-        hoveredPart,
-        state,
-        constraintElements,
-      );
+      let isHovered = is_hovered(element.id, hoveredPart, constraintElements);
 
       ctx.shadowBlur = 0;
       ctx.globalAlpha = 1;
@@ -332,7 +323,13 @@ export function drawMechanicalCanvas(
       ctx.lineWidth = STROKE_WIDTHS.STANDARD;
 
       // Thicken the stroke if element is hovered
-      if (isHovered && !isEdgeEndHovered) ctx.lineWidth = STROKE_WIDTHS.THICK;
+      if (
+        (isHovered && !isEdgeEndHovered) ||
+        ((hoveredPart.type === "Force" ||
+          hoveredPart.type === "DistributedForce") &&
+          hoveredPart.id === element.id)
+      )
+        ctx.lineWidth = STROKE_WIDTHS.THICK;
       // Add blue halo and blue stroke if element is selected
       if (isSelected) {
         if (isLoadElement) ctx.lineWidth += 1;
@@ -548,6 +545,7 @@ export function drawMechanicalCanvas(
                 const newGear: GearElement = {
                   type: "gear",
                   id: "----",
+                  probes: [],
                   position: hoveredPart.position,
                   angle: 0,
                   radius: INTERACTION_SPECS.BELT_GRAB_RADIUS,
@@ -568,7 +566,11 @@ export function drawMechanicalCanvas(
               }
               break;
             case "ChangingGearRadius":
-              if (hoveredPart.type !== "BeltBody") break;
+              if (
+                hoveredPart.type !== "BeltBody" ||
+                hoveredPart.id !== element.id
+              )
+                break;
               const gear = get_mechanical_element_from_id(
                 state.elementID,
                 mechanicalElements,
@@ -584,10 +586,15 @@ export function drawMechanicalCanvas(
               });
               break;
             case "PlacingGearRadius":
-              if (hoveredPart.type !== "BeltBody") break;
+              if (
+                hoveredPart.type !== "BeltBody" ||
+                hoveredPart.id !== element.id
+              )
+                break;
               const newGear: GearElement = {
                 type: "gear",
                 id: "----",
+                probes: [],
                 position: state.startHover.position,
                 angle: 0,
                 radius: state.startHover.position.distance_to(
@@ -754,7 +761,7 @@ export function drawMechanicalCanvas(
           ctx.save();
           ctx.translate(base.x, base.y);
           draw_force(ctx, ZERO, load.vector);
-          if (hoveredPart.type === "ForceTip" && hoveredPart.id === load.id) {
+          if (isEdgeEndHovered && hoveredPart.type === "Force") {
             ctx.translate(load.vector.x, load.vector.y);
             draw_hover_edge_end(ctx);
           }
@@ -763,15 +770,11 @@ export function drawMechanicalCanvas(
         }
         case "moment": {
           const load = element as MomentElement;
-          const target = mechanicalElements.find((e) => e.id === load.targetID);
-          if (!target) break;
-          const center =
-            "position" in target
-              ? (target as NodeElement).position
-              : (target as EdgeElement).positionStart.lerp(
-                  (target as EdgeElement).positionEnd,
-                  0.5,
-                );
+          const beam = get_mechanical_element_from_id(
+            load.beamID,
+            mechanicalElements,
+          ) as BeamElement;
+          const center = beam.positionStart.lerp(beam.positionEnd, 0.5);
           draw_moment(ctx, center, load.value, load.clockwise);
           break;
         }
@@ -792,15 +795,16 @@ export function drawMechanicalCanvas(
             hoveredPart.type === "DistributedForce" &&
             hoveredPart.id === load.id
           ) {
-            const tipStart = beam.positionStart.add(load.vectorStart);
-            const tipEnd = beam.positionEnd.add(load.vectorEnd);
-            if (hoveredPart.part === "body") {
+            const startTip = beam.positionStart.add(load.vectorStart);
+            const endTip = beam.positionEnd.add(load.vectorEnd);
+            if (isEdgeEndHovered && hoveredPart.part === "line") {
+              // draw hover line
               ctx.beginPath();
-              ctx.moveTo(tipStart.x, tipStart.y);
-              ctx.lineTo(tipEnd.x, tipEnd.y);
+              ctx.moveTo(startTip.x, startTip.y);
+              ctx.lineTo(endTip.x, endTip.y);
               ctx.stroke();
-            } else {
-              const pos = hoveredPart.part === "start" ? tipStart : tipEnd;
+            } else if (isEdgeEndHovered && hoveredPart.part !== "body") {
+              const pos = hoveredPart.part === "start-tip" ? startTip : endTip;
               ctx.save();
               ctx.translate(pos.x, pos.y);
               draw_hover_edge_end(ctx);
@@ -1041,6 +1045,25 @@ export function drawMechanicalCanvas(
           direction,
         };
       });
+      if (
+        state.startHover.type === "GearTooth" &&
+        attachedGears.length === 0 &&
+        !(
+          hoveredPart.type === "GearTooth" &&
+          hoveredPart.id === state.startHover.id
+        )
+      ) {
+        const hoveredGear = get_mechanical_element_from_id(
+          state.startHover.id,
+          mechanicalElements,
+        ) as GearElement;
+        const direction =
+          hoveredGear.position
+            .sub(state.startHover.position)
+            .perp()
+            .dot(hoveredPart.position.sub(hoveredGear.position)) > 0;
+        attachedGears = [{ gear: hoveredGear, direction }];
+      }
       if (hoveredPart.type === "GearTooth") {
         const hoveredGear = get_mechanical_element_from_id(
           hoveredPart.id,

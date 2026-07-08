@@ -12,8 +12,8 @@ export type CanvasStateType =
   | "MovingEdgeBody"
   | "MovingBeltBody"
   | "ChangingGearRadius"
-  | "MovingForceTip"
-  | "MovingDistributedForceTip"
+  | "MovingForce"
+  | "MovingDistributedForce"
   | "SelectingMultiple"
   | "SelectedMultiple"
   | "MovingSelectionMultiple"
@@ -74,7 +74,21 @@ export type CanvasState =
       hoveredElementIDs: ID[];
     } // User has started a drag to select multiple elements
   | { type: "SelectedMultiple"; elementIDs: ID[] }
-  | { type: "SelectedElement"; elementID: ID }
+  | {
+      type: "SelectedElement";
+      elementID: ID;
+      /** Partie survolée capturée au mouseDown (identité fixe du drag potentiel).
+       *  Présente uniquement quand cet état vient d'un mouseDown sur l'élément :
+       *  la transition vers un état Moving* s'appuie dessus (et non sur le hover
+       *  courant), pour ne pas perdre la cible si la souris bouge trop vite. */
+      pendingHit?: HoveredPart;
+      /** Position monde de la souris au mouseDown, pour mesurer le seuil de drag. */
+      downPos?: Point2;
+      /** Vrai si un clic (sans drag) sur cet élément doit ouvrir l'édition au
+       *  relâchement. Réservé aux contraintes à valeur (dimensions) déjà
+       *  sélectionnées : 1er clic sélectionne, 2ᵉ clic édite. */
+      armedForEdit?: boolean;
+    }
   | { type: "MovingNode"; elementID: ID }
   | { type: "MovingEdgeStartPoint"; elementID: ID } // Moving the start point of an edge
   | { type: "MovingEdgeEndPoint"; elementID: ID } // Moving the end point of an edge
@@ -85,9 +99,14 @@ export type CanvasState =
   | {
       type: "MovingDistributedForce";
       elementID: ID;
-      part: "start" | "end" | "body";
+      part: "start-tip" | "end-tip" | "line";
     }
-  | { type: "MovingSelectionMultiple"; elementIDs: ID[]; delta: Point2 } // Multiple selected elements are being dragged
+  | {
+      type: "MovingSelectionMultiple";
+      elementIDs: ID[];
+      grabbedID: ID;
+      hasMoved: boolean;
+    } // Multiple selected elements are being dragged (grabbedID: the clicked element; hasMoved: whether an actual drag happened)
   | { type: "Erasing" } // Eraser tool active
   | { type: "ErasingMultiple"; startPos: Point2; hoveredElementIDs: ID[] } // User has started a drag to delete multiple elements
   | { type: "PlacingBeamStart" }

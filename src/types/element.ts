@@ -103,18 +103,14 @@ export interface BaseElement {
   type: ElementType;
   id: ID;
   name?: string;
-  /** The element's probe: one config per measured metric (undefined/empty = no probe). */
-  probes?: ProbeConfig[];
-  /** Draw the element's trajectory on the canvas during simulation
-   *  (observation-only display setting, independent of probes).
-   *  Only meaningful on node elements. */
-  showTrajectory?: boolean;
 }
 
 /** Base interface for Node elements (defined by a position) */
 export interface BaseNodeElement extends BaseElement {
   position: Point2;
   isGrounded: boolean;
+  probes: ProbeConfig[];
+  showTrajectory: boolean;
 }
 
 /** Slider element - allows linear motion along a beam */
@@ -162,6 +158,7 @@ export interface MassElement extends BaseNodeElement {
 export interface BaseBodyElement extends BaseElement {
   position: Point2;
   angle: number;
+  probes: ProbeConfig[];
 }
 
 /** Gear element - rotational transmission with teeth */
@@ -180,6 +177,7 @@ export interface BaseEdgeElement extends BaseElement {
   positionEnd: Point2;
   fixedNodeStartID?: ID;
   fixedNodeEndID?: ID;
+  probes: ProbeConfig[];
 }
 
 /** Beam element - rigid connection between two points */
@@ -331,33 +329,27 @@ export interface GearRatio extends ConstraintBaseElement {
 // ─── Load elements ────────────────────────────────────────────────────────────
 
 /** Force applied to a node or an edge endpoint */
-export interface ForceElement {
+export interface ForceElement extends BaseElement {
   type: "force";
-  id: ID;
-  name?: string;
   targetID: ID;
   anchor?: "start" | "end"; // only for edge targets
-  vector: Point2; // direction + magnitude in world coordinates
-}
-
-/** Moment applied to an edge or a gear (never a node) */
-export interface MomentElement {
-  type: "moment";
-  id: ID;
-  name?: string;
-  targetID: ID;
-  value: number;
-  clockwise: boolean;
+  vector: Point2;
 }
 
 /** Distributed force along a beam — two draggable vectors at each endpoint */
-export interface DistributedForceElement {
+export interface DistributedForceElement extends BaseElement {
   type: "distributed-force";
-  id: ID;
-  name?: string;
   beamID: ID;
   vectorStart: Point2;
   vectorEnd: Point2;
+}
+
+/** Moment applied to an edge or a gear (never a node) */
+export interface MomentElement extends BaseElement {
+  type: "moment";
+  beamID: ID;
+  value: number;
+  clockwise: boolean;
 }
 
 // ─── Probes ───────────────────────────────────────────────────────────────────

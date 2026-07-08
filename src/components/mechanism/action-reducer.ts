@@ -366,19 +366,19 @@ export function actionReducer(
         break;
       }
       case "SetProbes": {
-        const el = mechanicalElements.find((e) => e.id === action.elementID);
-        if (el) {
-          const probes = revert ? action.oldProbes : action.newProbes;
-          el.probes = probes.length > 0 ? probes : undefined;
-        }
+        const element = get_mechanical_element_from_id(
+          action.elementID,
+          mechanicalElements,
+        );
+        element.probes = revert ? action.oldProbes : action.newProbes;
         break;
       }
       case "SetShowTrajectory": {
-        const el = mechanicalElements.find((e) => e.id === action.elementID);
-        if (el) {
-          const value = revert ? action.oldValue : action.newValue;
-          el.showTrajectory = value || undefined;
-        }
+        const element = get_mechanical_element_from_id(
+          action.elementID,
+          mechanicalElements,
+        ) as NodeElement;
+        element.showTrajectory = revert ? action.oldValue : action.newValue;
         break;
       }
       case "SetMotorConfig": {

@@ -11,7 +11,6 @@ import {
 } from "../../../types";
 import Connection from "./ConnectionComponent";
 import {
-  connect_element,
   disconnect_element,
   get_connections,
 } from "../../mechanism/connect-actions";
@@ -133,7 +132,7 @@ export const ConnectionsContainer: React.FC<ConnectionsContainerProps> = ({
       (element: MechanicalElement) => element.id === draggedItem.id,
     ) as MechanicalElement;
     let removeIndex = draggedItem.index;
-    let insertIndex = dragOverIndex;
+    //let insertIndex = dragOverIndex;
     let actions: Action[] = [];
 
     if (
@@ -142,7 +141,7 @@ export const ConnectionsContainer: React.FC<ConnectionsContainerProps> = ({
     ) {
       // Moving within the same container
       // Adjust insert index if we removed item before the insert position
-      insertIndex = dragOverIndex - 1;
+      //insertIndex = dragOverIndex - 1;
     }
     // Remove from source container
     actions.push(
@@ -154,15 +153,7 @@ export const ConnectionsContainer: React.FC<ConnectionsContainerProps> = ({
       ),
     );
     // Add to target container
-    actions.push(
-      connect_element(
-        element,
-        draggedElement,
-        containerType,
-        insertIndex,
-        //mechanism.mechanicalElements,
-      ),
-    );
+    // actions.push(connect_element(element, draggedElement, containerType, insertIndex));
 
     applyActions(actions, "Connects");
     setDraggedItem(null);

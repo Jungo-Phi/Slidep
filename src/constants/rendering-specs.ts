@@ -59,6 +59,11 @@ export const HIT_TOLERANCE = {
   NODE: 14,
   CONSTRAINT: 20,
   SNAP_TO_GRID: 8,
+  // Distance (px écran) que la souris doit parcourir depuis le mouseDown avant
+  // qu'un clic ne bascule en déplacement. En dessous, c'est un clic ; au-dessus,
+  // un drag. Rend la distinction clic/déplacement indépendante du framerate et
+  // de la vitesse de la souris.
+  DRAG_START: 4,
 } as const;
 
 export const INTERACTION_SPECS = {
@@ -171,6 +176,9 @@ export const DIMENSION_SPECS = {
 
 /** Ordre de dessin des éléments sur le canvas */
 export const DRAWING_ORDER: UnionElement["type"][] = [
+  "force",
+  "moment",
+  "distributed-force",
   "beam",
   "damper",
   "spring",
@@ -195,7 +203,4 @@ export const DRAWING_ORDER: UnionElement["type"][] = [
   "parallel",
   "equal",
   "gear-ratio",
-  "force",
-  "moment",
-  "distributed-force",
 ];

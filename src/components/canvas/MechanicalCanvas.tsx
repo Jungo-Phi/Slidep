@@ -291,6 +291,10 @@ export const MechanicalCanvas = forwardRef<
       ctx.lineTo(canvas.width, panY);
       ctx.stroke();
 
+      // DEBUG
+      let text = `${hoveredPartRef.current.position.toString()} ${hoveredPartRef.current.type}`;
+      ctx.fillText(text, 1020, 40);
+
       ctx.save();
       ctx.translate(
         mechanismRef.current.viewport.pan.x,
@@ -373,6 +377,9 @@ export const MechanicalCanvas = forwardRef<
       return () => window.removeEventListener("resize", handleResize);
     }, [render]);
 
+    // Logique "bouton relâché" partagée : appelée par pointerup/pointercancel
+    // et par le reducer (undo/redo forcent un relâchement). Ne touche pas à la
+    // capture du pointeur (gérée dans les handlers pointer qui ont l'événement).
     const onMouseUpHandler = () => {
       handleEvent({
         type: "MouseButtonUp",
@@ -380,8 +387,16 @@ export const MechanicalCanvas = forwardRef<
       mouseButtonDownRef.current = "none";
     };
 
-    const onMouseDownHandler = (event: React.MouseEvent<HTMLCanvasElement>) => {
+    const onPointerDownHandler = (
+      event: React.PointerEvent<HTMLCanvasElement>,
+    ) => {
       window.getSelection()?.removeAllRanges();
+      // Capture le pointeur : une fois le bouton enfoncé, les pointermove /
+      // pointerup continuent d'arriver sur le canvas même si le curseur sort de
+      // ses limites. Un drag rapide qui déborde ne perd plus l'élément, et le
+      // relâchement hors canvas est toujours reçu (plus besoin du hack
+      // onMouseEnter qui forçait un "button up" au retour).
+      event.currentTarget.setPointerCapture(event.pointerId);
       mousePositionRef.current = new Point2(event.clientX, event.clientY).sub(
         canvasOffsetRef.current,
       );
@@ -399,7 +414,9 @@ export const MechanicalCanvas = forwardRef<
       }
     };
 
-    const onMouseMoveHandler = (event: React.MouseEvent<HTMLCanvasElement>) => {
+    const onPointerMoveHandler = (
+      event: React.PointerEvent<HTMLCanvasElement>,
+    ) => {
       const canvas = canvasRef.current;
       if (!canvas) return;
       const rect = canvas.getBoundingClientRect();
@@ -414,6 +431,14 @@ export const MechanicalCanvas = forwardRef<
         type: "MouseMove",
         mouseDelta: new Point2(event.movementX, event.movementY),
       });
+    };
+
+    const onPointerUpHandler = (
+      event: React.PointerEvent<HTMLCanvasElement>,
+    ) => {
+      if (event.currentTarget.hasPointerCapture(event.pointerId))
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      onMouseUpHandler();
     };
 
     const handleEvent = useCallback(
@@ -523,6 +548,7 @@ export const MechanicalCanvas = forwardRef<
           onSimulationGrabRef.current,
           onSimulationGrabEndRef.current,
           worldMousePos,
+          currMech.viewport.zoom,
         );
         oldPositionRef.current = newHoveredPart.position.clone();
       },
@@ -543,8 +569,24 @@ export const MechanicalCanvas = forwardRef<
       const active = document.activeElement;
       if (!active) return false;
       const tag = active.tagName.toLowerCase();
+      // Only text-like inputs should swallow shortcuts. A checkbox/radio/switch
+      // (MUI Switch is <input type="checkbox">) or a button must NOT count as
+      // "typing", otherwise Space toggles it instead of triggering play/pause.
+      if (tag === "input") {
+        const type = (active as HTMLInputElement).type.toLowerCase();
+        const NON_TEXT = new Set([
+          "checkbox",
+          "radio",
+          "button",
+          "submit",
+          "reset",
+          "range",
+          "color",
+          "file",
+        ]);
+        return !NON_TEXT.has(type);
+      }
       if (
-        tag === "input" ||
         tag === "menu" ||
         tag === "dialog" ||
         tag === "textarea" ||
@@ -674,10 +716,10 @@ export const MechanicalCanvas = forwardRef<
             cursor,
             touchAction: "none",
           }}
-          onMouseUp={onMouseUpHandler}
-          onMouseDown={onMouseDownHandler}
-          onMouseEnter={onMouseUpHandler}
-          onMouseMove={onMouseMoveHandler}
+          onPointerDown={onPointerDownHandler}
+          onPointerMove={onPointerMoveHandler}
+          onPointerUp={onPointerUpHandler}
+          onPointerCancel={onPointerUpHandler}
           onContextMenu={onContextMenuHandler}
           tabIndex={0}
           aria-label="Canvas de conception mécanique"
@@ -784,9 +826,7 @@ export const MechanicalCanvas = forwardRef<
                   const oldProbes = probedElement.probes ?? [];
                   const changed =
                     newProbes.length !== oldProbes.length ||
-                    newProbes.some(
-                      (p, i) => p.metric !== oldProbes[i].metric,
-                    );
+                    newProbes.some((p, i) => p.metric !== oldProbes[i].metric);
                   if (changed)
                     applyActions(
                       [

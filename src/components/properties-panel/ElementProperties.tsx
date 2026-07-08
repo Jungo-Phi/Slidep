@@ -266,9 +266,9 @@ const LoadsSection: React.FC<LoadsSectionProps> = ({
   applyActions,
 }) => {
   const elementLoads = loads.filter((l) => {
-    if (l.type === "force" || l.type === "moment")
-      return l.targetID === element.id;
+    if (l.type === "force") return l.targetID === element.id;
     if (l.type === "distributed-force") return l.beamID === element.id;
+    if (l.type === "moment") return l.beamID === element.id;
     return false;
   });
   if (elementLoads.length === 0) return null;

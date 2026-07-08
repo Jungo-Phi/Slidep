@@ -716,15 +716,24 @@ const App: React.FC = () => {
     setGalleryOpen(true);
   }, []);
 
+  // Repartir sur des réglages de simulation neufs (vitesse, gravité,
+  // collisions, lecture/temps, snapshots…) lorsqu'on change de mécanisme, pour
+  // ne pas hériter de ceux du mécanisme précédent.
+  const resetSimulationState = useCallback(() => {
+    setAppMode("edition");
+    setRuntimeState(DEFAULT_RUNTIME_STATE);
+    setSimulationConfig(DEFAULT_SIMULATION_CONFIG);
+  }, []);
+
   const handleLoadFromGallery = useCallback(
     (mechanismRecord: SerializedMechanism) => {
       setMechanism(deserialize_mechanism(mechanismRecord));
       setGalleryOpen(false);
       setCanvasState({ type: "Selecting" });
-      setAppMode("edition");
+      resetSimulationState();
       setSnackbar({ open: true, message: "Mécanisme chargé" });
     },
-    [],
+    [resetSimulationState],
   );
 
   const handleDeleteFromGallery = useCallback(async (createdAtId: number) => {
@@ -763,14 +772,18 @@ const App: React.FC = () => {
       future: [],
     });
     setGalleryOpen(false);
+    setCanvasState({ type: "Selecting" });
+    resetSimulationState();
     setSaveStatus("idle");
-  }, []);
+  }, [resetSimulationState]);
 
   const handleMenuButtonUpload = () => {
     setMenuAnchorEl(null);
     load_from_file()
       .then((data) => {
         setMechanism(deserialize_mechanism(data));
+        setCanvasState({ type: "Selecting" });
+        resetSimulationState();
         setSaveStatus("saving");
         debouncedSave();
       })
