@@ -1,4 +1,4 @@
-import { ID, Link, Mechanism, Point2, SimNodes } from "../../types";
+import { ID, Link, Mechanism, Point2, KinNodes } from "../../types";
 import { BeltVia, belt_wraps } from "../../utils/belt-path";
 import {
   ConstraintResidual,
@@ -33,7 +33,7 @@ type MotorCheck = {
  */
 export type SimulationModel = {
   /** Initial positions/angles + frozen masses (fused keys for coincident points). */
-  nodes: SimNodes;
+  nodes: KinNodes;
   /** Links: already fused (Coincidence), FixedOnSegment, and sorted. */
   links: Link[];
   /** Maps an original solver key to its fused key (for grab translation). */
@@ -130,60 +130,29 @@ function update_belt_disconnects(
 }
 
 /**
- * Rebuild the belt-transmission (BeltMeshAngle) chain for belts that just lost a
- * pulley: drop every mesh link they own and re-emit one per consecutive pair of
- * STILL-connected pulleys, with the reference angles baked from the current
- * angles — so the disconnected pulley stops being driven while its neighbours
- * stay coupled through the belt. Reset on recompile.
+ * Drop the belt links of pulleys that have just disconnected. With the shared
+ * travel φ this is trivial: remove the disconnected pulley's BeltPhaseGear (it
+ * stops being driven) — every other pulley (and the belt's free ends) stays
+ * coupled to the SAME φ, so transmission continues past it with no rebuild.
+ * Reset on recompile.
  */
 export function rewire_belt_mesh(
   links: Link[],
   belts: Extract<Link, { type: "BeltLength" }>[],
-  angles: Map<string, number>,
 ): Link[] {
-  const owners = new Set(belts.map((b) => b.owner).filter((o) => o !== undefined));
-  // Position keys of the pulleys that have just disconnected — their end-travel
-  // links must go too, else they keep driving the now-free pulley's angle.
-  const disconnectedKeys = new Set<string>();
+  const disconnectedAngleKeys = new Set<string>();
   for (const b of belts)
     b.disconnected?.forEach((d, i) => {
-      if (d) disconnectedKeys.add(b.gearPosKeys[i]);
+      if (!d) return;
+      disconnectedAngleKeys.add(b.gearAngleKeys[i]);
     });
-  const kept = links.filter((l) => {
-    if (
-      l.type === "BeltMeshAngle" &&
-      l.owner !== undefined &&
-      owners.has(l.owner)
-    )
-      return false;
-    if (l.type === "BeltEndTravel" && disconnectedKeys.has(l.gearPosKey))
+  return links.filter((l) => {
+    // A disconnected pulley just loses its no-slip coupling; every other pulley
+    // (and the belt's free ends) stays on the same φ, so transmission continues.
+    if (l.type === "BeltPhaseGear" && disconnectedAngleKeys.has(l.angleKey))
       return false;
     return true;
   });
-  for (const b of belts) {
-    const active = b.gearAngleKeys
-      .map((_, i) => i)
-      .filter((i) => !b.disconnected?.[i]);
-    const pairs = b.closed ? active.length : active.length - 1;
-    for (let k = 0; k < pairs; k++) {
-      const i = active[k];
-      const j = active[(k + 1) % active.length];
-      kept.push({
-        type: "BeltMeshAngle",
-        ddl: 1,
-        angleKey1: b.gearAngleKeys[i],
-        angleKey2: b.gearAngleKeys[j],
-        r1: b.radii[i],
-        r2: b.radii[j],
-        theta1_0: angles.get(b.gearAngleKeys[i]) ?? 0,
-        theta2_0: angles.get(b.gearAngleKeys[j]) ?? 0,
-        dir1: b.directions[i],
-        dir2: b.directions[j],
-        owner: b.owner,
-      });
-    }
-  }
-  return kept;
 }
 
 /** Position-bearing key fields are rewritten on coincidence fusion; angle key
@@ -351,17 +320,20 @@ export function step_simulation(
   // so it stops being driven while its neighbours stay coupled. Permanent for
   // the run (model mutated; reset on recompile).
   if (beltsToRewire.length > 0)
-    model.links = rewire_belt_mesh(model.links, beltsToRewire, angles);
+    model.links = rewire_belt_mesh(model.links, beltsToRewire);
 
   // Share each belt's continuous wraps (tracked on its BeltLength link) with its
-  // BeltPin, so a tight-belt junction travels around wound pulleys (>2π), not
-  // just the fractional arc. gearPosKeys order matches (both from the belt).
+  // BeltPin (tight) / BeltFreeEnds (loose), so a wound pulley/terminal travels
+  // around >2π smoothly, not just the fractional arc. gearPosKeys order matches.
   const wrapsByBelt = new Map<ID, number[]>();
   for (const link of model.links)
     if (link.type === "BeltLength" && link.owner !== undefined && link.wraps)
       wrapsByBelt.set(link.owner, link.wraps);
   for (const link of model.links)
-    if (link.type === "BeltPin" && link.owner !== undefined)
+    if (
+      (link.type === "BeltPin" || link.type === "BeltFreeEnds") &&
+      link.owner !== undefined
+    )
       link.wraps = wrapsByBelt.get(link.owner);
 
   // ── Grab (transient, this frame only) ──
@@ -478,7 +450,8 @@ export function step_simulation(
     const idx = (link.disconnected ?? [])
       .map((d, i) => (d ? i : -1))
       .filter((i) => i >= 0);
-    if (idx.length > 0) (disconnectedBeltGears ??= new Map()).set(link.owner, idx);
+    if (idx.length > 0)
+      (disconnectedBeltGears ??= new Map()).set(link.owner, idx);
     if (link.wraps) (beltWraps ??= new Map()).set(link.owner, [...link.wraps]);
   }
 

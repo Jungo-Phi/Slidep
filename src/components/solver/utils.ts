@@ -1,4 +1,4 @@
-import { GeomNodes, Link, SimNodes } from "../../types";
+import { GeomNodes, Link, KinNodes } from "../../types";
 
 /**
  * Degrees of freedom for the geometric solver (edition).
@@ -22,7 +22,7 @@ export function get_geom_degrees_of_freedom(
  * positions. Angles are never anchored, so they carry no mass term.
  */
 export function get_sim_degrees_of_freedom(
-  nodes: SimNodes,
+  nodes: KinNodes,
   links: Link[],
 ): number {
   return (
@@ -74,10 +74,10 @@ function keys_of(link: Link): string[] {
       return [link.nodeKey, ...link.gearPosKeys];
     case "BeltFollowsTangent":
       return [link.pivotKey, link.drivenKey, ...link.gearPosKeys];
-    case "BeltMeshAngle":
-      return [link.angleKey1, link.angleKey2];
-    case "BeltEndTravel":
-      return [link.nodeKey, link.gearPosKey];
+    case "BeltPhaseGear":
+      return [link.angleKey, link.phaseKey];
+    case "BeltFreeEnds":
+      return [link.startKey, link.endKey, ...link.gearPosKeys];
     case "BeamFollowsAngle":
       return [link.pivotKey, link.drivenKey, link.angleKey];
     case "HandleGrab":

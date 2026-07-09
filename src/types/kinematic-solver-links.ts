@@ -12,7 +12,7 @@ export type GeomNodes = {
 /** Nodes for the kinematic simulation: positions + gear angles.
  *  Radii are constants in simulation (baked into the links), not variables.
  *  Angles are never anchored, so they carry no mass map. */
-export type SimNodes = {
+export type KinNodes = {
   positions: Map<string, Point2>;
   posMasses: Map<string, number>;
   angles: Map<string, number>;
@@ -20,7 +20,7 @@ export type SimNodes = {
 
 /** Kinds of (non oriented) connections between points. */
 export type Link = {
-  /** User element this constraint belongs to, for diagnostics and canvas
+  /** Element this constraint belongs to, for diagnostics and canvas
    *  selection. Optional: purely internal links (Coincidence, grab) leave it
    *  unset and are never surfaced as "unsatisfied constraints". */
   owner?: ID;
@@ -90,42 +90,32 @@ export type Link = {
       key3: string;
       key4: string;
     }
-  | { type: "GearMeshing"; ddl: 1; key1: string; key2: string; radKey1: string; radKey2: string }
+  | {
+      type: "GearMeshing";
+      ddl: 1;
+      key1: string;
+      key2: string;
+      radKey1: string;
+      radKey2: string;
+    }
   | { type: "GearRatio"; ddl: 1; key1: string; key2: string; ratio: number }
-  // ── Belt links (simulation) ──────────────────────────────────────────────
-  // Inextensible belt: total geometric length (tangent runs + gear wraps) held
-  // at `length`. One global scalar constraint per belt — moving a pulley
-  // redistributes the whole loop to conserve length (belt transmission).
-  // `startKey`/`endKey` are the belt's terminal endpoints (fused to their anchor
-  // node); `gearPosKeys`/`radii`/`directions` describe the wrapped pulleys in
-  // path order (radii baked: fixed in simulation). Gradient wrt a centre =
-  // −(sum of adjacent tangent units). Simulation-only.
+  // Gradient wrt a centre = −(sum of adjacent tangent units). Simulation-only.
   | {
       type: "BeltLength";
       ddl: 1;
       startKey: string;
       endKey: string;
       gearPosKeys: string[];
-      // Bare gear ids (angle nodes — NOT fused), index-aligned to gearPosKeys,
-      // used to rebuild the mesh chain when a pulley disconnects.
       gearAngleKeys: string[];
       radii: number[];
       directions: boolean[];
       length: number;
-      // Tight belt → the closed gear cycle (start/end terminals unused); loose
-      // belt → open chain between the anchored terminals.
       closed: boolean;
-      // Simulation state (mutated per frame, reset on recompile): continuous
-      // wrap angle per pulley and whether it has lost contact (irreversible for
-      // the run). A disconnected pulley is skipped — the belt runs straight past.
+      // wrap angle per pulley
       wraps?: number[];
       disconnected?: boolean[];
     }
-  // Tight-belt junction: the join node `nodeKey` (fused start==end) lies on the
-  // belt outline — the nearest piece (segment or arc) of the CLOSED gear cycle —
-  // so the loop stays continuous anywhere the junction travels. Radii baked.
-  // Symmetric: J and the piece's bounding gear centre(s) move. Both solvers.
-  // (Arc tangency is structural here, so no "virtual duplicate gear" is needed.)
+  // Tight-belt junction (geometric-solver)
   | {
       type: "BeltJunction";
       ddl: 1;
@@ -138,7 +128,7 @@ export type Link = {
   // arc-length s = s0 + r_ref·ε_ref·(θ_ref − θ_ref0) — i.e. it travels as the
   // belt rotates (θ_ref = reference pulley angle, ε = dir?1:−1). Bidirectional:
   // dragging the node along the belt advances θ_ref (which turns every pulley via
-  // BeltMeshAngle), and pulling it off the belt snaps it back. Radii + refs baked.
+  // BeltPhaseGear), and pulling it off the belt snaps it back. Radii + refs baked.
   | {
       type: "BeltPin";
       ddl: 2;
@@ -147,33 +137,44 @@ export type Link = {
       radii: number[];
       directions: boolean[];
       refIndex: number;
-      // Reference pulley's angle node (bare gear id — NOT fused, unlike the
-      // position keys, since angles live in their own map).
       refAngleKey: string;
       s0: number;
       thetaRef0: number;
-      // Continuous wrap per pulley (copied each frame from the belt's BeltLength
-      // link) so the junction travels around wound pulleys (>2π), not only the
-      // fractional arc. Undefined until the first sim frame.
+      // Continuous wrap per pulley (copied from the belt's BeltLength link)
+      // so the junction travels around wound pulleys (>2π).
+      // Undefined until the first sim frame.
       wraps?: number[];
     }
-  // Belt end travel (simulation, loose belts): a terminal end rides its tangent
-  // to the adjacent pulley as the belt travels — the free length to the pulley's
-  // tangent point tracks `lfree0 + sign·r·ε·(θ − θ0)` (sign −1 at the start end,
-  // +1 at the end end). Bidirectional: pulling a free end turns the pulley; an
-  // anchored end blocks the travel (and thus the rotation). Baked geometry.
+  // Belt free ends (simulation, loose belts): ONE link per belt governing BOTH terminal endpoints together.
+  // The belt is inextensible, so the total drawn length is held at `length` (this pins the SUM of the two free runs).
+  // the shared travel φ drives their DIFFERENTIAL, so one run winds in as the other feeds out.
+  // When a run is exhausted its terminal winds onto its pulley and orbits with θ (start on gearPosKeys[0], end on gearPosKeys[last]),
+  // the loop stays length-correct and the motor never blocks. Bidirectional: dragging a free end advances φ.
   | {
-      type: "BeltEndTravel";
-      ddl: 1;
-      nodeKey: string;
-      gearPosKey: string;
-      radius: number;
-      direction: boolean;
-      refAngleKey: string; // adjacent pulley angle (bare gear id)
-      rEps: number; // radius · (direction ? −1 : 1)
-      sign: number; // −1 start terminal, +1 end terminal
-      lfree0: number;
-      thetaRef0: number;
+      type: "BeltFreeEnds";
+      ddl: 2;
+      startKey: string;
+      endKey: string;
+      gearPosKeys: string[];
+      gearAngleKeys: string[];
+      radii: number[];
+      directions: boolean[];
+      phaseKey: string; // belt travel φ `${beltId}:phi`
+      length: number; // L0, total inextensible belt length
+      diff0: number; // initial (fsStart − fsEnd), the differential reference
+      // A terminal already pinned on its pulley perimeter (winch: a join with a
+      // GearPerimeterPin) is driven EXTERNALLY — this link must not position it,
+      // only read it (its growing wound arc pulls the free end in). Baked at parse.
+      startExternal?: boolean;
+      endExternal?: boolean;
+      // Sim state: baked gear-relative angle of a terminal wound onto its pulley,
+      // undefined while the run is free.
+      startWind?: number;
+      endWind?: number;
+      // Sim state: continuous (unwrapped) wrap per pulley, copied each frame from
+      // the belt's BeltLength link, so a wound terminal's arc grows smoothly past
+      // 2π (no 0/2π seam jump that would snap the free end).
+      wraps?: number[];
     }
   // Belt follows tangent (simulation): a beam welded to the belt junction keeps
   // its orientation aligned with the belt tangent at the junction — angle(driven
@@ -195,26 +196,19 @@ export type Link = {
       thetaRef0: number;
       offset: number;
     }
-  // Belt rotation transmission (angle space): two consecutive wrapped gears keep
-  // equal belt surface speed rᵢ·Δθᵢ·εᵢ = rⱼ·Δθⱼ·εⱼ, εₖ = dirₖ?1:−1 (open belt
-  // → same sense, crossed → opposite). Like GearMeshAngle but "same surface".
-  // Corrects angle nodes only; radii + reference angles baked. Simulation-only.
+  // Belt no-slip (simulation): a wrapped pulley's rotation is tied to the belt's
+  // shared travel φ (a per-belt scalar in the angles map): r·ε·(θ − θ0) = φ,
+  // ε = dir?−1:1. Every pulley on the belt couples to the SAME φ, so they all
+  // transmit through it AND the belt ends / junction couple to the same φ. Corrects the angle node and φ.
   | {
-      type: "BeltMeshAngle";
+      type: "BeltPhaseGear";
       ddl: 1;
-      angleKey1: string;
-      angleKey2: string;
-      r1: number;
-      r2: number;
-      theta1_0: number;
-      theta2_0: number;
-      dir1: boolean;
-      dir2: boolean;
+      angleKey: string; // gear id (bare)
+      phaseKey: string; // belt travel scalar `${beltId}:phi` (bare)
+      r: number;
+      eps: number; // dir ? −1 : 1
+      theta0: number;
     }
-  // ── Simulation-only links ────────────────────────────────────────────────
-  // Motor driving a beam orientation: rotates `drivenKey` around `pivotKey`
-  // toward `targetAngle` (absolute world angle of pivot→driven). `targetAngle`
-  // is recomputed each frame = current angle + omega·dt (no backlog when blocked).
   | {
       type: "MotorBeam";
       ddl: 1;
@@ -223,13 +217,13 @@ export type Link = {
       omega: number;
       targetAngle: number;
     }
-  // Motor driving a gear angle node toward `targetAngle` (scalar).
-  | { type: "MotorAngle"; ddl: 1; angleKey: string; omega: number; targetAngle: number }
-  // Epicyclic gear meshing in angle space, frozen at sim start:
-  // r1·((θ1−θ1₀) − (α−α₀)) = −r2·((θ2−θ2₀) − (α−α₀)), α = angle(p2 − p1).
-  // Corrects angle nodes only. `alpha` is the continuous (unwrapped) line-of-centres
-  // angle, recomputed from positions each frame by step_simulation; `alpha0` is its
-  // frozen reference at sim start.
+  | {
+      type: "MotorAngle";
+      ddl: 1;
+      angleKey: string;
+      omega: number;
+      targetAngle: number;
+    }
   | {
       type: "GearMeshAngle";
       ddl: 1;
@@ -245,9 +239,13 @@ export type Link = {
       alpha: number;
     }
   // Co-axial gears: θ1 − θ2 = offset (same rotation, constant offset).
-  | { type: "CoaxialAngle"; ddl: 1; angleKey1: string; angleKey2: string; offset: number }
-  // A node (join/pivot) fixed to a gear perimeter: N = centre + radius·u(θ + offset).
-  // Bidirectional coupling between the node position and the gear angle node.
+  | {
+      type: "CoaxialAngle";
+      ddl: 1;
+      angleKey1: string;
+      angleKey2: string;
+      offset: number;
+    }
   | {
       type: "GearPerimeterPin";
       ddl: 2;
@@ -258,7 +256,6 @@ export type Link = {
       offset: number;
     }
   // A beam attached to a gear-fixed join: its orientation follows the gear angle
-  // (rotate `drivenKey` around `pivotKey` so angle(driven−pivot) = θ + offset).
   | {
       type: "BeamFollowsAngle";
       ddl: 1;
@@ -268,12 +265,6 @@ export type Link = {
       offset: number;
     }
   | { type: "HandleGrab"; ddl: 1; grabbedKey: string; value: Point2 | number }
-  // Compliant spring: soft attraction of key1↔key2 toward `restLength`.
-  // Removes NO degree of freedom (ddl 0): it only biases a free DOF toward the
-  // rest length, it never rigidly fixes the distance. `stiffness` is a per-
-  // iteration relaxation factor in [0,1) — a *relative* softness, not a physical
-  // k (this is a quasi-static solver: no mass, no inertia, no real force). Its
-  // residual is intentionally excluded from the solver's convergence error.
   | {
       type: "Spring";
       ddl: 0;

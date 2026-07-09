@@ -4,11 +4,11 @@ import { Link } from "../../types";
 import { PBD_kinematic_solver } from "./PBD_kinematic_solver";
 import { rewire_belt_mesh } from "./kinematic-simulation";
 import {
-  applyBeltEndTravelConstraint,
+  applyBeltFreeEndsConstraint,
   applyBeltLengthConstraint,
   applyBeltFollowsTangentConstraint,
   applyBeltJunctionConstraint,
-  applyBeltMeshAngleConstraint,
+  applyBeltPhaseGearConstraint,
   applyBeltPinConstraint,
 } from "./constraint-functions";
 import {
@@ -246,39 +246,40 @@ describe("BeltJunction constraint (closed cycle)", () => {
   });
 });
 
-describe("BeltMeshAngle constraint (rotation transmission)", () => {
-  // The constraint is symmetric (both angle nodes move). To read the transmission
-  // ratio we emulate a motor holding the driver g1 fixed each iteration.
+describe("BeltPhaseGear constraint (no-slip transmission via shared φ)", () => {
+  // Two pulleys coupled to the same belt travel φ. Drive g1 (held each iter, like
+  // a motor); read how g2 follows through φ.
   const drive = (
     r1: number,
     r2: number,
-    dir1: boolean,
-    dir2: boolean,
+    eps1: number,
+    eps2: number,
     driven: number,
   ): number => {
     const angles = new Map<string, number>([
       ["g1", driven],
       ["g2", 0],
+      ["phi", 0],
     ]);
-    for (let i = 0; i < 50; i++) {
+    for (let i = 0; i < 200; i++) {
       angles.set("g1", driven);
-      applyBeltMeshAngleConstraint(angles, "g1", "g2", r1, r2, 0, 0, dir1, dir2);
+      applyBeltPhaseGearConstraint(angles, "g1", "phi", r1, eps1, 0);
+      applyBeltPhaseGearConstraint(angles, "g2", "phi", r2, eps2, 0);
     }
     return angles.get("g2")!;
   };
 
-  it("makes an open belt (same wrap sense) spin both pulleys the same way", () => {
-    // Equal radii, same sense → equal rotation.
-    expect(drive(40, 40, false, false, 0.5)).toBeCloseTo(0.5, 6);
+  it("spins both pulleys the same way (same sense, equal radii)", () => {
+    expect(drive(40, 40, 1, 1, 0.5)).toBeCloseTo(0.5, 4);
   });
 
   it("scales rotation by the radius ratio", () => {
-    // r1·Δθ1 = r2·Δθ2 → Δθ2 = Δθ1 · r1/r2 = 1.0 · 20/40 = 0.5
-    expect(drive(20, 40, false, false, 1.0)).toBeCloseTo(0.5, 6);
+    // r1·ε1·θ1 = r2·ε2·θ2 → θ2 = θ1·r1/r2 = 1.0·20/40 = 0.5
+    expect(drive(20, 40, 1, 1, 1.0)).toBeCloseTo(0.5, 4);
   });
 
-  it("reverses the far pulley for a crossed belt (opposite wrap sense)", () => {
-    expect(drive(40, 40, false, true, 0.5)).toBeCloseTo(-0.5, 6);
+  it("reverses the far pulley for a crossed belt (opposite sense)", () => {
+    expect(drive(40, 40, 1, -1, 0.5)).toBeCloseTo(-0.5, 4);
   });
 });
 
@@ -547,56 +548,106 @@ describe("continuous wrap tracking (mid-sim disconnect signal)", () => {
   });
 });
 
-describe("BeltEndTravel constraint (loose belt ends travel)", () => {
-  const g = P(0, 0);
+describe("BeltFreeEnds constraint (loose belt, both ends ↔ φ)", () => {
   const r = 40;
   const dir = false;
-  const T0 = P(-200, 0);
-  const rEps = r * (dir ? -1 : 1); // 40
-  const sign = -1; // start terminal
-  const tangentPoint = (Tpos: Point2) =>
-    g.add(Point2.circles_link(g, r, dir, Tpos, 0, false).start);
-  const lfree0 = T0.distance_to(tangentPoint(T0));
+  const c = P(0, 0);
+  // "n" belt: start bottom-left, over the top of the gear, end bottom-right.
+  const start0 = P(-120, -120);
+  const end0 = P(120, -120);
+  const viasOf = (s: Point2, e: Point2): BeltVia[] => [
+    { pos: s, radius: 0, direction: false },
+    { pos: c, radius: r, direction: dir },
+    { pos: e, radius: 0, direction: false },
+  ];
+  const L0 = compute_belt_path(viasOf(start0, end0)).length;
+  const path0 = compute_belt_path(viasOf(start0, end0));
+  const diff0 =
+    start0.distance_to(path0.inPoints[0]) - end0.distance_to(path0.outPoints[1]);
+  const mkLink = (): Extract<Link, { type: "BeltFreeEnds" }> => ({
+    type: "BeltFreeEnds",
+    ddl: 2,
+    startKey: "start",
+    endKey: "end",
+    gearPosKeys: ["g"],
+    gearAngleKeys: ["g"],
+    radii: [r],
+    directions: [dir],
+    phaseKey: "phi",
+    length: L0,
+    diff0,
+  });
+  const setup = () => ({
+    positions: new Map<string, Point2>([
+      ["g", c.clone()], ["start", start0.clone()], ["end", end0.clone()],
+    ]),
+    posMasses: new Map<string, number>([["g", 0], ["start", 1], ["end", 1]]),
+    angles: new Map<string, number>([["g", 0], ["phi", 0]]),
+  });
+  const measure = (positions: Map<string, Point2>) =>
+    compute_belt_path(viasOf(positions.get("start")!, positions.get("end")!)).length;
 
-  it("the terminal follows a (softly-driven) pulley", () => {
-    const positions = new Map<string, Point2>([["T", T0.clone()], ["g", g.clone()]]);
-    const posMasses = new Map<string, number>([["T", 1], ["g", 0]]);
-    const angles = new Map<string, number>([["g", 0]]);
-    const dth = 0.1;
-    for (let i = 0; i < 400; i++) {
-      // Soft motor pulling θ → dth (as MotorAngle does), competing with travel.
-      const a = angles.get("g")!;
-      angles.set("g", a + (dth - a) * 0.5);
-      applyBeltEndTravelConstraint(
-        positions, posMasses, angles, "T", "g", r, dir, "g", rEps, sign, lfree0, 0,
-      );
+  it("conserves the total length as a motor drives φ (both directions)", () => {
+    for (const omega of [0.02, -0.02]) {
+      const { positions, posMasses, angles } = setup();
+      const link = mkLink();
+      for (let f = 0; f < 100; f++) {
+        const theta = angles.get("g")! + omega;
+        for (let it = 0; it < 200; it++) {
+          angles.set("g", theta); // motor pins θ
+          applyBeltPhaseGearConstraint(angles, "g", "phi", r, dir ? -1 : 1, 0);
+          applyBeltFreeEndsConstraint(positions, posMasses, angles, link);
+        }
+      }
+      expect(measure(positions)).toBeCloseTo(L0, 0); // length held
+      expect(Math.abs(angles.get("phi")!)).toBeGreaterThan(50); // motor ran freely
     }
-    // The motor reached its target and the free end followed to the matching
-    // free length lfree0 + sign·rEps·θ = lfree0 − 4.
-    expect(angles.get("g")!).toBeCloseTo(dth, 2);
-    const Tf = positions.get("T")!;
-    expect(Tf.distance_to(tangentPoint(Tf))).toBeCloseTo(lfree0 + sign * rEps * dth, 0);
-    expect(Tf.distance_to(T0)).toBeGreaterThan(1);
   });
 
-  it("is symmetric: pulling a free end turns the pulley", () => {
-    // Hold the end pulled 4px toward the pulley; the pulley must rotate.
-    const held = P(-196, 0);
-    const positions = new Map<string, Point2>([["T", held.clone()], ["g", g.clone()]]);
-    const posMasses = new Map<string, number>([["T", 1], ["g", 0]]);
-    const angles = new Map<string, number>([["g", 0]]);
-    for (let i = 0; i < 120; i++) {
-      positions.set("T", held.clone()); // grabbed
-      applyBeltEndTravelConstraint(
-        positions, posMasses, angles, "T", "g", r, dir, "g", rEps, sign, lfree0, 0,
-      );
+  it("is bidirectional: dragging a free end advances φ", () => {
+    const { positions, posMasses, angles } = setup();
+    const link = mkLink();
+    const held = P(-70, -70); // start dragged toward the gear
+    for (let it = 0; it < 400; it++) {
+      positions.set("start", held.clone()); // grabbed
+      applyBeltFreeEndsConstraint(positions, posMasses, angles, link);
     }
-    expect(angles.get("g")!).toBeGreaterThan(0.02); // pulley turned
+    expect(Math.abs(angles.get("phi")!)).toBeGreaterThan(5); // pulley turned
+  });
+
+  it("winds a terminal onto its pulley when exhausted (orbits, no block)", () => {
+    // Short belt so the start run exhausts quickly; the motor keeps turning.
+    const s = P(-60, -30);
+    const e = P(60, -30);
+    const vias = viasOf(s, e);
+    const pth = compute_belt_path(vias);
+    const link: Extract<Link, { type: "BeltFreeEnds" }> = {
+      ...mkLink(),
+      length: pth.length,
+      diff0: s.distance_to(pth.inPoints[0]) - e.distance_to(pth.outPoints[1]),
+    };
+    const positions = new Map<string, Point2>([["g", c.clone()], ["start", s.clone()], ["end", e.clone()]]);
+    const posMasses = new Map<string, number>([["g", 0], ["start", 1], ["end", 1]]);
+    const angles = new Map<string, number>([["g", 0], ["phi", 0]]);
+    let phiAtStall = 0;
+    for (let f = 0; f < 150; f++) {
+      const theta = angles.get("g")! + 0.02;
+      for (let it = 0; it < 200; it++) {
+        angles.set("g", theta);
+        applyBeltPhaseGearConstraint(angles, "g", "phi", r, dir ? -1 : 1, 0);
+        applyBeltFreeEndsConstraint(positions, posMasses, angles, link);
+      }
+      if (f === 80) phiAtStall = angles.get("phi")!;
+    }
+    expect(link.startWind).not.toBeUndefined(); // wound on
+    expect(angles.get("phi")! - phiAtStall).toBeGreaterThan(30); // still turning, no block
+    expect(measure(positions)).toBeCloseTo(pth.length, 0); // length conserved while wound
+    expect(positions.get("start")!.distance_to(c)).toBeCloseTo(r, 2); // orbiting the rim
   });
 });
 
-describe("belt mesh rewire on disconnect (3e)", () => {
-  it("re-links the transmission across a disconnected pulley", () => {
+describe("belt phase rewire on disconnect (3e)", () => {
+  it("drops the disconnected pulley's coupling; the rest stay on shared φ", () => {
     const belt: Extract<Link, { type: "BeltLength" }> = {
       type: "BeltLength",
       ddl: 1,
@@ -611,35 +662,25 @@ describe("belt mesh rewire on disconnect (3e)", () => {
       disconnected: [false, true, false], // middle pulley lost contact
       owner: "belt-1-1-1-1" as any,
     };
-    const oldMesh = (a: string, b: string): Link => ({
-      type: "BeltMeshAngle",
+    const phase = (g: string): Link => ({
+      type: "BeltPhaseGear",
       ddl: 1,
-      angleKey1: a,
-      angleKey2: b,
-      r1: 30,
-      r2: 30,
-      theta1_0: 0,
-      theta2_0: 0,
-      dir1: false,
-      dir2: false,
+      angleKey: g,
+      phaseKey: "belt-1-1-1-1:phi",
+      r: 30,
+      eps: 1,
+      theta0: 0,
       owner: "belt-1-1-1-1" as any,
     });
     const unrelated: Link = { type: "Radius", ddl: 1, key1: "x", radius: 5 };
-    const links = [oldMesh("g0", "g1"), oldMesh("g1", "g2"), unrelated];
-    const angles = new Map<string, number>([["g0", 1], ["g1", 2], ["g2", 3]]);
+    const links = [phase("g0"), phase("g1"), phase("g2"), unrelated];
 
-    const out = rewire_belt_mesh(links, [belt], angles);
-    const mesh = out.filter((l) => l.type === "BeltMeshAngle") as Extract<
-      Link,
-      { type: "BeltMeshAngle" }
-    >[];
-    // Exactly one mesh link now, directly coupling the surviving pulleys g0↔g2…
-    expect(mesh.length).toBe(1);
-    expect([mesh[0].angleKey1, mesh[0].angleKey2].sort()).toEqual(["g0", "g2"]);
-    // …with reference angles baked from the current state (1 and 3).
-    expect(mesh[0].theta1_0).toBe(1);
-    expect(mesh[0].theta2_0).toBe(3);
-    // Unrelated links are preserved.
+    const out = rewire_belt_mesh(links, [belt]);
+    const kept = out.filter(
+      (l) => l.type === "BeltPhaseGear",
+    ) as Extract<Link, { type: "BeltPhaseGear" }>[];
+    // g0 and g2 keep their coupling to φ (transmission continues); g1 dropped.
+    expect(kept.map((l) => l.angleKey).sort()).toEqual(["g0", "g2"]);
     expect(out.includes(unrelated)).toBe(true);
   });
 });

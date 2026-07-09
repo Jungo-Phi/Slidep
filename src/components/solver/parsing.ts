@@ -10,11 +10,16 @@ import {
   Link,
   MechanicalElement,
   Point2,
-  SimNodes,
+  KinNodes,
   SpringElement,
 } from "../../types";
 import { measure_belt_length } from "../../utils/belt-geom";
-import { BeltVia, belt_point_tangent, belt_project } from "../../utils/belt-path";
+import {
+  BeltVia,
+  belt_point_tangent,
+  belt_project,
+  compute_belt_path,
+} from "../../utils/belt-path";
 
 const COLLINEAR_AREA_EPS = 1; // px² — below this a triangulation chord is degenerate
 
@@ -90,7 +95,7 @@ export function get_geom_nodes(
  */
 export function get_sim_nodes(
   mechanicalElements: MechanicalElement[],
-): SimNodes {
+): KinNodes {
   const positions = new Map<string, Point2>();
   const posMasses = new Map<string, number>();
   const angles = new Map<string, number>();
@@ -249,7 +254,9 @@ export function constraint_to_link(element: ConstraintElement): Link {
     case "dimension-belt-length":
       // Needs the belt's gears/radii, unavailable here — built in
       // get_links_geometric (filtered out before this call).
-      throw new Error("dimension-belt-length is handled in get_links_geometric");
+      throw new Error(
+        "dimension-belt-length is handled in get_links_geometric",
+      );
   }
 }
 
@@ -424,51 +431,69 @@ export function belt_length_link(
   };
 }
 
-/** Belt end-travel links (simulation, loose belts): each terminal rides its
- *  tangent to the adjacent pulley as the belt runs. */
-function belt_end_travel_links(
+/** Belt free-ends link (simulation, loose belts): ONE link governing both
+ *  terminals — inextensible total length (their sum) + φ-driven differential.
+ *  Null for tight/empty belts. */
+function belt_free_ends_link(
   belt: BeltElement,
   byId: Map<ID, MechanicalElement>,
-): Link[] {
-  if (belt.tight || belt.attachedGearsIDs.length === 0) return [];
-  const mk = (
-    nodeKey: string,
-    entry: { id: ID; direction: boolean },
-    terminal: Point2,
-    sign: number,
-  ): Link | null => {
-    const g = gearById(entry.id, byId);
-    if (!g) return null;
-    // Terminal pinned ON the pulley rim (winch end): it orbits via
-    // GearPerimeterPin — BeltEndTravel (free tangent) would fight it, and its
-    // tangent point is degenerate. Skip it here.
-    if (terminal.distance_to(g.position) <= g.radius + 1) return null;
-    const dir = entry.direction;
-    const P = g.position.add(
-      Point2.circles_link(g.position, g.radius, dir, terminal, 0, false).start,
-    );
-    return {
-      type: "BeltEndTravel",
-      ddl: 1,
-      nodeKey,
-      gearPosKey: g.id,
-      radius: g.radius,
-      direction: dir,
-      refAngleKey: g.id,
-      rEps: g.radius * (dir ? -1 : 1),
-      sign,
-      lfree0: terminal.distance_to(P),
-      thetaRef0: g.angle,
-      owner: belt.id,
-    };
-  };
+  mechanicalElements: MechanicalElement[],
+): Link | null {
+  if (belt.tight || belt.attachedGearsIDs.length === 0) return null;
   const gears = belt.attachedGearsIDs;
-  const links: Link[] = [];
-  const start = mk(`${belt.id}:start`, gears[0], belt.positionStart, -1);
-  const end = mk(`${belt.id}:end`, gears[gears.length - 1], belt.positionEnd, 1);
-  if (start) links.push(start);
-  if (end) links.push(end);
-  return links;
+  const radii: number[] = [];
+  const directions: boolean[] = [];
+  const vias: BeltVia[] = [
+    { pos: belt.positionStart, radius: 0, direction: false },
+  ];
+  for (const { id, direction } of gears) {
+    const g = gearById(id, byId);
+    if (!g) return null;
+    radii.push(g.radius);
+    directions.push(direction);
+    vias.push({ pos: g.position, radius: g.radius, direction });
+  }
+  vias.push({ pos: belt.positionEnd, radius: 0, direction: false });
+
+  // Initial differential fsStart − fsEnd from the drawn geometry (the two
+  // terminal tangent runs), matching how the constraint measures them.
+  const path = compute_belt_path(vias);
+  const pairs = vias.length - 1;
+  const fsStart0 = belt.positionStart.distance_to(path.inPoints[0]);
+  const fsEnd0 = belt.positionEnd.distance_to(path.outPoints[pairs - 1]);
+
+  // A terminal whose fixed node is pinned on a gear perimeter (winch: a join with
+  // a GearPerimeterPin) is driven externally — this link must not position it,
+  // only account for its wound arc. Everything else is a genuine free end.
+  const perimeterPinned = new Set<ID>();
+  for (const el of mechanicalElements)
+    if (el.type === "gear")
+      (el as GearElement).fixedNodesBodyIDs.forEach((id) =>
+        perimeterPinned.add(id),
+      );
+  const startExternal =
+    belt.fixedNodeStartID !== undefined &&
+    perimeterPinned.has(belt.fixedNodeStartID);
+  const endExternal =
+    belt.fixedNodeEndID !== undefined &&
+    perimeterPinned.has(belt.fixedNodeEndID);
+
+  return {
+    type: "BeltFreeEnds",
+    ddl: 2,
+    startKey: `${belt.id}:start`,
+    endKey: `${belt.id}:end`,
+    gearPosKeys: gears.map(({ id }) => id),
+    gearAngleKeys: gears.map(({ id }) => id),
+    radii,
+    directions,
+    phaseKey: belt_phase_key(belt.id),
+    length: measure_belt_length(belt, mechanicalElements),
+    diff0: fsStart0 - fsEnd0,
+    startExternal,
+    endExternal,
+    owner: belt.id,
+  };
 }
 
 /** Build a byId lookup for a mechanism's elements. */
@@ -480,34 +505,34 @@ export function elements_by_id(
   return byId;
 }
 
-/** Belt rotation-transmission links (simulation): one BeltMeshAngle per pair of
- *  consecutive wrapped gears, plus the closure pair when the belt is tight. */
-function belt_mesh_angle_links(
+/** Belt phase key (its shared travel scalar) in the angles map. */
+const belt_phase_key = (beltId: ID): string => `${beltId}:phi`;
+
+/**
+ * Belt no-slip links (simulation): one BeltPhaseGear per wrapped pulley, all
+ * tying θ to the belt's SHARED travel φ. That transmits between every pulley
+ * and lets the ends/junction couple to the same φ. Seeds φ=0 in the angles map.
+ */
+function belt_phase_gear_links(
   belt: BeltElement,
   byId: Map<ID, MechanicalElement>,
+  nodes: KinNodes,
 ): Link[] {
-  const gears = belt.attachedGearsIDs;
-  if (gears.length < 2) return [];
+  if (belt.attachedGearsIDs.length === 0) return [];
+  const phaseKey = belt_phase_key(belt.id);
+  if (!nodes.angles.has(phaseKey)) nodes.angles.set(phaseKey, 0);
   const links: Link[] = [];
-  const pairs = gears.map((_, i) => [gears[i], gears[(i + 1) % gears.length]]);
-  // Interior pairs always; the wrap-around (closure) pair only when tight.
-  const count = belt.tight ? gears.length : gears.length - 1;
-  for (let i = 0; i < count; i++) {
-    const [a, b] = pairs[i];
-    const gA = gearById(a.id, byId);
-    const gB = gearById(b.id, byId);
-    if (!gA || !gB) continue;
+  for (const { id, direction } of belt.attachedGearsIDs) {
+    const g = gearById(id, byId);
+    if (!g) continue;
     links.push({
-      type: "BeltMeshAngle",
+      type: "BeltPhaseGear",
       ddl: 1,
-      angleKey1: a.id,
-      angleKey2: b.id,
-      r1: gA.radius,
-      r2: gB.radius,
-      theta1_0: gA.angle,
-      theta2_0: gB.angle,
-      dir1: a.direction,
-      dir2: b.direction,
+      angleKey: id,
+      phaseKey,
+      r: g.radius,
+      eps: direction ? -1 : 1,
+      theta0: g.angle,
       owner: belt.id,
     });
   }
@@ -652,7 +677,7 @@ export function get_links_geometric(
  */
 export function get_links_simulation(
   mechanicalElements: MechanicalElement[],
-  nodes: SimNodes,
+  nodes: KinNodes,
 ): Link[] {
   const links: Link[] = [];
   const byId = new Map<ID, MechanicalElement>();
@@ -905,10 +930,11 @@ export function get_links_simulation(
         ...belt_follows_tangent_links(element, byId, mechanicalElements),
       );
     } else {
-      // Loose belt: its terminals travel along their tangent as the belt runs.
-      links.push(...belt_end_travel_links(element, byId));
+      // Loose belt: one link governs both terminals (inextensible length + φ feed).
+      const freeEnds = belt_free_ends_link(element, byId, mechanicalElements);
+      if (freeEnds) links.push(freeEnds);
     }
-    links.push(...belt_mesh_angle_links(element, byId));
+    links.push(...belt_phase_gear_links(element, byId, nodes));
   });
 
   // ── Rigidity (joins / masses / sliders) ──────────────────────────────────
@@ -1023,7 +1049,7 @@ function add_rigidity_links(
   node: MechanicalElement,
   mechanicalElements: MechanicalElement[],
   links: Link[],
-  nodes: SimNodes,
+  nodes: KinNodes,
   pairs: {
     addDistancePair: (a: string, b: string) => void;
     hasDistancePair: (a: string, b: string) => boolean;

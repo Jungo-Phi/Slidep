@@ -3,11 +3,11 @@ import { ConstraintResidual } from "../../types/runtime-state";
 import {
   applyAngleConstraint,
   applyBeamFollowsAngleConstraint,
-  applyBeltEndTravelConstraint,
+  applyBeltFreeEndsConstraint,
   applyBeltFollowsTangentConstraint,
   applyBeltJunctionConstraint,
   applyBeltLengthConstraint,
-  applyBeltMeshAngleConstraint,
+  applyBeltPhaseGearConstraint,
   applyBeltPinConstraint,
   applyCoaxialAngleConstraint,
   applyDistanceConstraint,
@@ -281,33 +281,17 @@ export function PBD_kinematic_solver(
             link.offset,
           );
           break;
-        case "BeltEndTravel":
-          err = applyBeltEndTravelConstraint(
-            positions,
-            posMasses,
-            angles,
-            link.nodeKey,
-            link.gearPosKey,
-            link.radius,
-            link.direction,
-            link.refAngleKey,
-            link.rEps,
-            link.sign,
-            link.lfree0,
-            link.thetaRef0,
-          );
+        case "BeltFreeEnds":
+          err = applyBeltFreeEndsConstraint(positions, posMasses, angles, link);
           break;
-        case "BeltMeshAngle":
-          err = applyBeltMeshAngleConstraint(
+        case "BeltPhaseGear":
+          err = applyBeltPhaseGearConstraint(
             angles,
-            link.angleKey1,
-            link.angleKey2,
-            link.r1,
-            link.r2,
-            link.theta1_0,
-            link.theta2_0,
-            link.dir1,
-            link.dir2,
+            link.angleKey,
+            link.phaseKey,
+            link.r,
+            link.eps,
+            link.theta0,
           );
           break;
         case "MotorBeam":

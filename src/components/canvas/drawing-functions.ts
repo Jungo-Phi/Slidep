@@ -496,14 +496,12 @@ export function draw_gear(ctx: CanvasRenderingContext2D, radius: number) {
   ctx.arc(0, 0, radius, 0, TAU);
   ctx.stroke();
 
-  /*
   for (let i = 0; i < holesNb; i++) {
     ctx.beginPath();
     const angle = (i / holesNb) * TAU;
     ctx.arc(Math.cos(angle) * r1, Math.sin(angle) * r1, r2, 0, TAU);
     ctx.stroke();
   }
-  */
 
   // Dessine les dents
   /*
@@ -543,7 +541,7 @@ export function draw_belt(
     ctx.arc(
       gearAngle.center.x,
       gearAngle.center.y,
-      gearAngle.radius + 1.5,
+      gearAngle.radius,
       gearAngle.startAngle,
       gearAngle.endAngle,
       gearAngle.direction,
@@ -618,7 +616,9 @@ export function draw_belt_winding(
   ctx.beginPath();
   for (let i = 0; i <= steps; i++) {
     const a = (i / steps) * total;
-    const p = center.add(Point2.from_polar(baseRadius + (a / TAU) * dr, sign * a));
+    const p = center.add(
+      Point2.from_polar(baseRadius + (a / TAU) * dr, sign * a),
+    );
     if (i === 0) ctx.moveTo(p.x, p.y);
     else ctx.lineTo(p.x, p.y);
   }

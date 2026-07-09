@@ -323,6 +323,9 @@ export function drawMechanicalCanvas(
       ctx.strokeStyle = isLoadElement ? COLORS.ORANGE : COLORS.STROKE;
       ctx.fillStyle = isLoadElement ? COLORS.ORANGE : COLORS.FILL_BODY;
       ctx.lineWidth = STROKE_WIDTHS.STANDARD;
+      if (element.type === "gear") {
+        ctx.lineWidth = STROKE_WIDTHS.STANDARD / 2;
+      }
 
       // Thicken the stroke if element is hovered
       if (
