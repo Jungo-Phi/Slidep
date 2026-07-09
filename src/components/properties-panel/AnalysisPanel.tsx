@@ -381,43 +381,47 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
             <Typography variant="subtitle2" fontWeight={600} gutterBottom>
               Moteurs ({motorPivots.length})
             </Typography>
-            <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+            <Box
+              sx={{
+                borderRadius: 3,
+                backgroundColor: "action.hover",
+                display: "flex",
+                flexDirection: "column",
+                gap: 0.5,
+              }}
+            >
               {motorPivots.map((pivot) => (
-                <Box
-                  key={pivot.id}
-                  sx={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    gap: 1,
-                  }}
-                >
+                <Box key={pivot.id}>
                   <ElementDisplay
                     element={pivot}
                     setHoveredPart={setHoveredPart}
                     setCanvasState={setCanvasState}
                     applyActions={applyActions}
-                    size={"small"}
+                    size={"medium"}
                     editable={false}
-                  ></ElementDisplay>
-                  <NumberInput
-                    label="tr/min"
-                    value={pivot.motor!.speed}
-                    onChange={(speed) =>
-                      applyActions(
-                        [
-                          {
-                            type: "SetMotorConfig",
-                            id: pivot.id,
-                            newConfig: { ...pivot.motor!, speed },
-                            oldConfig: pivot.motor,
-                          },
-                        ],
-                        "ChangeConstant",
-                      )
+                    actions={
+                      <>
+                        <NumberInput
+                          label=""
+                          value={pivot.motor!.speed}
+                          onChange={(speed) =>
+                            applyActions(
+                              [
+                                {
+                                  type: "SetMotorConfig",
+                                  id: pivot.id,
+                                  newConfig: { ...pivot.motor!, speed },
+                                  oldConfig: pivot.motor,
+                                },
+                              ],
+                              "ChangeConstant",
+                            )
+                          }
+                          accent
+                        />
+                      </>
                     }
-                    accent
-                  />
+                  ></ElementDisplay>
                 </Box>
               ))}
             </Box>
@@ -584,7 +588,9 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
                   probe.metric !== "angular-velocity";
                 const curves: ChartCurve[] = series.curves
                   .filter((c) =>
-                    isVector ? probe.components[c.key as "x" | "y" | "norm"] : true,
+                    isVector
+                      ? probe.components[c.key as "x" | "y" | "norm"]
+                      : true,
                   )
                   .map((c) => ({
                     id: c.key,
@@ -714,7 +720,8 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
             const contributors = probedElements.filter((el) =>
               el.probes.some((p) => p.metric === metric),
             );
-            const isVector = metric !== "angle" && metric !== "angular-velocity";
+            const isVector =
+              metric !== "angle" && metric !== "angular-velocity";
             let unit = "";
             const curves: ChartCurve[] = contributors.flatMap((el) => {
               const series = get_probe_series(

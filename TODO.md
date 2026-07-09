@@ -28,6 +28,8 @@
 
 - unifier la méthode de catégories de canvasState dans get-hover et placing-element-actions
 
+- le hover delete de contrainte prend le meme style que le ghost de ctrl+y de supression
+- Clicker sur l'onglet éléments quand un élément est sélectionné le désélectionne
 - Unifier les "excluded_elements" et les conditions au début de "get_hover"
 - ground sur gearTooth ?
 - S'assurer qu'aucun élément du panneau de propriétés n'aie le focus (pas de "space = switch")

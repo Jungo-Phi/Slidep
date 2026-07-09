@@ -437,63 +437,66 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
   if (!element) {
     const hasElements = mechanism.mechanicalElements.length > 0;
     return (
-      <Box>
-        <Box sx={{ textAlign: "center", p: 4, pb: hasElements ? 2 : 4 }}>
-          <Box sx={{ fontSize: "0.875rem", color: "text.disabled" }}>
-            Sélectionnez un élément pour voir ses propriétés
-          </Box>
-        </Box>
-        {hasElements && (
-          <List
+      <Box
+        sx={{
+          borderRadius: 3,
+          margin: 2,
+          backgroundColor: "action.hover",
+        }}
+      >
+        <List
+          disablePadding
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            flexDirection: "column",
+            width: "100%",
+          }}
+        >
+          {mechanism.mechanicalElements.map((element, index) => (
+            <React.Fragment key={index}>
+              <ListItem disablePadding>
+                <ElementDisplay
+                  element={element}
+                  setHoveredPart={setHoveredPart}
+                  setCanvasState={setCanvasState}
+                  applyActions={applyActions}
+                  size="medium"
+                  editable={true}
+                  actions={
+                    <>
+                      <IconButton
+                        color="error"
+                        onMouseEnter={() => handleMouseEnter(element)}
+                        onMouseLeave={handleMouseLeave}
+                        onClick={() =>
+                          applyActions(
+                            [{ type: "DeleteElement", element }],
+                            "Other",
+                          )
+                        }
+                        title="Supprimer"
+                      >
+                        <DeleteIcon sx={{ width: 20, height: 20 }} />
+                      </IconButton>
+                    </>
+                  }
+                ></ElementDisplay>
+              </ListItem>
+            </React.Fragment>
+          ))}
+        </List>
+        {!hasElements && (
+          <Box
             sx={{
-              display: "flex",
-              alignItems: "center",
-              flexDirection: "column",
-              mx: 2,
-              my: 1,
+              padding: 2,
+              textAlign: "center",
+              fontSize: "0.875rem",
+              color: "text.disabled",
             }}
           >
-            {mechanism.mechanicalElements.map((element, index) => (
-              <React.Fragment key={index}>
-                <ListItem
-                  disablePadding
-                  sx={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    width: "100%",
-                    marginY: "-1px",
-                  }}
-                >
-                  <Box border={2} borderColor={"#00000025"} borderRadius={5}>
-                    <ElementDisplay
-                      element={element}
-                      setHoveredPart={setHoveredPart}
-                      setCanvasState={setCanvasState}
-                      applyActions={applyActions}
-                      size="medium"
-                      editable={true}
-                    ></ElementDisplay>
-                  </Box>
-
-                  <IconButton
-                    color="error"
-                    onMouseEnter={() => handleMouseEnter(element)}
-                    onMouseLeave={handleMouseLeave}
-                    onClick={() =>
-                      applyActions(
-                        [{ type: "DeleteElement", element }],
-                        "Other",
-                      )
-                    }
-                    title="Supprimer"
-                  >
-                    <DeleteIcon sx={{ width: 20, height: 20 }} />
-                  </IconButton>
-                </ListItem>
-              </React.Fragment>
-            ))}
-          </List>
+            Pas encore d'éléments
+          </Box>
         )}
       </Box>
     );
@@ -501,15 +504,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
 
   return (
     <Box sx={{ mb: 1 }}>
-      <Box
-        sx={{
-          display: "flex",
-          flexDirection: "row",
-          justifyContent: "space-between",
-          alignItems: "center",
-          m: 1,
-        }}
-      >
+      <Box margin={1}>
         <ElementDisplay
           element={element}
           setHoveredPart={setHoveredPart}
@@ -517,156 +512,160 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
           applyActions={applyActions}
           size="large"
           editable={true}
-        ></ElementDisplay>
-
-        {"isGrounded" in element && element.type !== "mass" && (
-          <GroundSwitch
-            grounded={element.isGrounded}
-            setGround={(grounded) =>
-              applyActions(
-                [{ type: "GroundNode", id: element.id, grounded }],
-                "Other",
-              )
-            }
-          />
-        )}
-        {element.type === "belt" && (
-          <BeltTensionSwitch
-            tightened={element.tight}
-            setTight={(tightened) =>
-              applyActions(
-                [
-                  {
-                    type: "TightenBelt",
-                    id: element.id,
-                    tightened,
-                  },
-                ],
-                "Other",
-              )
-            }
-          />
-        )}
-        {element.type === "belt" &&
-          (() => {
-            const beltDim = mechanism.constraintElements.find(
-              (c) =>
-                c.type === "dimension-belt-length" && c.beltID === element.id,
-            );
-            return (
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={!!beltDim}
-                    onChange={(_, checked) => {
-                      if (checked) {
-                        applyActions(
-                          [
-                            {
-                              type: "CreateElement",
-                              element: {
-                                type: "dimension-belt-length",
-                                id: crypto.randomUUID(),
-                                position: element.positionStart,
-                                beltID: element.id,
-                                value: measure_belt_length(
-                                  element,
-                                  mechanism.mechanicalElements,
-                                ),
-                              },
-                            },
-                          ],
-                          "CreateConstraint",
-                        );
-                      } else if (beltDim) {
-                        applyActions(
-                          [{ type: "DeleteElement", element: beltDim }],
-                          "Connects",
-                        );
+          actions={
+            <>
+              {"isGrounded" in element && element.type !== "mass" && (
+                <GroundSwitch
+                  grounded={element.isGrounded}
+                  setGround={(grounded) =>
+                    applyActions(
+                      [{ type: "GroundNode", id: element.id, grounded }],
+                      "Other",
+                    )
+                  }
+                />
+              )}
+              {element.type === "belt" && (
+                <BeltTensionSwitch
+                  tightened={element.tight}
+                  setTight={(tightened) =>
+                    applyActions(
+                      [
+                        {
+                          type: "TightenBelt",
+                          id: element.id,
+                          tightened,
+                        },
+                      ],
+                      "Other",
+                    )
+                  }
+                />
+              )}
+              {element.type === "belt" &&
+                (() => {
+                  const beltDim = mechanism.constraintElements.find(
+                    (c) =>
+                      c.type === "dimension-belt-length" &&
+                      c.beltID === element.id,
+                  );
+                  return (
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          checked={!!beltDim}
+                          onChange={(_, checked) => {
+                            if (checked) {
+                              applyActions(
+                                [
+                                  {
+                                    type: "CreateElement",
+                                    element: {
+                                      type: "dimension-belt-length",
+                                      id: crypto.randomUUID(),
+                                      position: element.positionStart,
+                                      beltID: element.id,
+                                      value: measure_belt_length(
+                                        element,
+                                        mechanism.mechanicalElements,
+                                      ),
+                                    },
+                                  },
+                                ],
+                                "CreateConstraint",
+                              );
+                            } else if (beltDim) {
+                              applyActions(
+                                [{ type: "DeleteElement", element: beltDim }],
+                                "Connects",
+                              );
+                            }
+                          }}
+                        />
                       }
-                    }}
-                  />
+                      label="Longueur fixée"
+                    />
+                  );
+                })()}
+              {element.type === "mass" && (
+                <NumberInput
+                  label="kg"
+                  value={element.mass}
+                  onChange={(mass) =>
+                    applyActions(
+                      [
+                        {
+                          type: "ChangeMass",
+                          id: element.id,
+                          delta: mass - element.mass,
+                        },
+                      ],
+                      "ChangeConstant",
+                    )
+                  }
+                  accent={true}
+                />
+              )}
+              {element.type === "spring" && (
+                <NumberInput
+                  label="N/m"
+                  value={element.stiffness}
+                  onChange={(stiffness) =>
+                    applyActions(
+                      [
+                        {
+                          type: "ChangeStiffness",
+                          id: element.id,
+                          delta: stiffness - element.stiffness,
+                        },
+                      ],
+                      "ChangeConstant",
+                    )
+                  }
+                  accent={true}
+                />
+              )}
+              {element.type === "damper" && (
+                <NumberInput
+                  label="N·s/m"
+                  value={element.damping}
+                  onChange={(damping) =>
+                    applyActions(
+                      [
+                        {
+                          type: "ChangeDamping",
+                          id: element.id,
+                          delta: damping - element.damping,
+                        },
+                      ],
+                      "ChangeConstant",
+                    )
+                  }
+                  accent={true}
+                />
+              )}
+              <IconButton
+                color="error"
+                onClick={() =>
+                  applyActions(
+                    delete_element(
+                      element.id,
+                      mechanism.mechanicalElements,
+                      mechanism.constraintElements,
+                      mechanism.loads,
+                    ),
+                    "Other",
+                  )
                 }
-                label="Longueur fixée"
-              />
-            );
-          })()}
-        {element.type === "mass" && (
-          <NumberInput
-            label="kg"
-            value={element.mass}
-            onChange={(mass) =>
-              applyActions(
-                [
-                  {
-                    type: "ChangeMass",
-                    id: element.id,
-                    delta: mass - element.mass,
-                  },
-                ],
-                "ChangeConstant",
-              )
-            }
-            accent={true}
-          />
-        )}
-        {element.type === "spring" && (
-          <NumberInput
-            label="N/m"
-            value={element.stiffness}
-            onChange={(stiffness) =>
-              applyActions(
-                [
-                  {
-                    type: "ChangeStiffness",
-                    id: element.id,
-                    delta: stiffness - element.stiffness,
-                  },
-                ],
-                "ChangeConstant",
-              )
-            }
-            accent={true}
-          />
-        )}
-        {element.type === "damper" && (
-          <NumberInput
-            label="N·s/m"
-            value={element.damping}
-            onChange={(damping) =>
-              applyActions(
-                [
-                  {
-                    type: "ChangeDamping",
-                    id: element.id,
-                    delta: damping - element.damping,
-                  },
-                ],
-                "ChangeConstant",
-              )
-            }
-            accent={true}
-          />
-        )}
-        <IconButton
-          color="error"
-          onClick={() =>
-            applyActions(
-              delete_element(
-                element.id,
-                mechanism.mechanicalElements,
-                mechanism.constraintElements,
-                mechanism.loads,
-              ),
-              "Other",
-            )
+                title="Supprimer"
+                onMouseEnter={(_e) => handleMouseEnter(element)}
+                onMouseLeave={handleMouseLeave}
+              >
+                <DeleteIcon />
+              </IconButton>
+            </>
           }
-          title="Supprimer"
-          onMouseEnter={(_e) => handleMouseEnter(element)}
-          onMouseLeave={handleMouseLeave}
-        >
-          <DeleteIcon />
-        </IconButton>
+        ></ElementDisplay>
       </Box>
 
       <Divider sx={{ my: 1 }} />

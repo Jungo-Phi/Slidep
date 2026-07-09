@@ -35,15 +35,6 @@ export const ConstraintsPanel: React.FC<ConstraintsPanelProps> = ({
   applyActions: applyActions,
   mechanism,
 }) => {
-  if (mechanism.constraintElements.length === 0) {
-    return (
-      <Box sx={{ textAlign: "center", p: 4 }}>
-        <Box sx={{ fontSize: "0.875rem", color: "text.disabled" }}>
-          Pas encore de contrainte
-        </Box>
-      </Box>
-    );
-  }
   const handleMouseEnter = (constraint: ConstraintElement) => {
     setHoveredPart(element_to_hovered_part(constraint, true));
   };
@@ -53,112 +44,129 @@ export const ConstraintsPanel: React.FC<ConstraintsPanelProps> = ({
   };
 
   return (
-    <List
+    <Box
       sx={{
-        display: "flex",
-        alignItems: "center",
-        flexDirection: "column",
-        mx: 2,
-        my: 1,
+        borderRadius: 3,
+        margin: 2,
+        backgroundColor: "action.hover",
       }}
     >
-      {mechanism.constraintElements.map((constraint, index) => (
-        <React.Fragment key={index}>
-          <ListItem
-            disablePadding
-            sx={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              width: "100%",
-              marginY: "-1px",
-            }}
-          >
-            <Box
-              border={2}
-              borderColor={
-                constraint.id === constraintID ? "#00000080" : "#00000025"
-              }
-              borderRadius={5}
-            >
-              <ElementDisplay
-                element={constraint}
-                setHoveredPart={setHoveredPart}
-                setCanvasState={setCanvasState}
-                applyActions={applyActions}
-                size="medium"
-                editable={true}
-              ></ElementDisplay>
-            </Box>
-
-            {(() => {
-              switch (constraint.type) {
-                case "dimension-edge":
-                case "dimension-node-to-node":
-                case "dimension-edge-to-node":
-                case "dimension-angle":
-                case "dimension-radius":
-                  return (
-                    <NumberInput
-                      value={constraint.value}
-                      onChange={(value: number) =>
-                        applyActions(
-                          [
-                            {
-                              type: "ChangeDimensionEdgeValue",
-                              id: constraint.id,
-                              newValue: value,
-                              oldValue: constraint.value,
-                            },
-                          ],
-                          "ChangeDimension",
-                        )
-                      }
-                      label=""
-                      suffix={
-                        constraint.type === "dimension-angle" ? "°" : undefined
-                      }
-                    />
-                  );
-                case "gear-ratio":
-                  return (
-                    <RatioInput
-                      value={constraint.value}
-                      onChange={(value: number) =>
-                        applyActions(
-                          [
-                            {
-                              type: "ChangeGearRatioValue",
-                              id: constraint.id,
-                              newValue: value,
-                              oldValue: constraint.value,
-                            },
-                          ],
-                          "ChangeDimension",
-                        )
-                      }
-                    />
-                  );
-              }
-            })()}
-            <IconButton
-              color="error"
-              onMouseEnter={() => handleMouseEnter(constraint)}
-              onMouseLeave={handleMouseLeave}
-              onClick={() =>
-                applyActions(
-                  [{ type: "DeleteElement", element: constraint }],
-                  "Other",
-                )
-              }
-              title="Supprimer"
-            >
-              <DeleteIcon sx={{ width: 20, height: 20 }} />
-            </IconButton>
-          </ListItem>
-        </React.Fragment>
-      ))}
-    </List>
+      <List
+        disablePadding
+        sx={{
+          display: "flex",
+          alignItems: "center",
+          flexDirection: "column",
+          width: "100%",
+        }}
+      >
+        {mechanism.constraintElements.map((constraint, index) => (
+          <React.Fragment key={index}>
+            <ListItem disablePadding>
+              <Box
+                sx={{
+                  border: constraint.id === constraintID ? 1 : 0,
+                  borderColor: "gray",
+                  borderRadius: 5,
+                  width: "100%",
+                }}
+              >
+                <ElementDisplay
+                  element={constraint}
+                  setHoveredPart={setHoveredPart}
+                  setCanvasState={setCanvasState}
+                  applyActions={applyActions}
+                  size="medium"
+                  editable={true}
+                  actions={
+                    <>
+                      {(() => {
+                        switch (constraint.type) {
+                          case "dimension-edge":
+                          case "dimension-node-to-node":
+                          case "dimension-edge-to-node":
+                          case "dimension-angle":
+                          case "dimension-radius":
+                            return (
+                              <NumberInput
+                                value={constraint.value}
+                                onChange={(value: number) =>
+                                  applyActions(
+                                    [
+                                      {
+                                        type: "ChangeDimensionEdgeValue",
+                                        id: constraint.id,
+                                        newValue: value,
+                                        oldValue: constraint.value,
+                                      },
+                                    ],
+                                    "ChangeDimension",
+                                  )
+                                }
+                                label=""
+                                suffix={
+                                  constraint.type === "dimension-angle"
+                                    ? "°"
+                                    : undefined
+                                }
+                              />
+                            );
+                          case "gear-ratio":
+                            return (
+                              <RatioInput
+                                value={constraint.value}
+                                onChange={(value: number) =>
+                                  applyActions(
+                                    [
+                                      {
+                                        type: "ChangeGearRatioValue",
+                                        id: constraint.id,
+                                        newValue: value,
+                                        oldValue: constraint.value,
+                                      },
+                                    ],
+                                    "ChangeDimension",
+                                  )
+                                }
+                              />
+                            );
+                        }
+                      })()}
+                      <IconButton
+                        color="error"
+                        onMouseEnter={() => handleMouseEnter(constraint)}
+                        onMouseLeave={handleMouseLeave}
+                        onClick={() =>
+                          applyActions(
+                            [{ type: "DeleteElement", element: constraint }],
+                            "Other",
+                          )
+                        }
+                        title="Supprimer"
+                      >
+                        <DeleteIcon sx={{ width: 20, height: 20 }} />
+                      </IconButton>
+                    </>
+                  }
+                ></ElementDisplay>
+              </Box>
+            </ListItem>
+          </React.Fragment>
+        ))}
+      </List>
+      {mechanism.constraintElements.length === 0 && (
+        <Box
+          sx={{
+            padding: 2,
+            textAlign: "center",
+            fontSize: "0.875rem",
+            color: "text.disabled",
+          }}
+        >
+          Pas encore de contraintes
+        </Box>
+      )}
+    </Box>
   );
 };
 

@@ -1,13 +1,7 @@
-import React, { useState } from "react";
+import React from "react";
 import { Box } from "@mui/material";
-import { ID, MechanicalElement } from "../../types/element";
-import {
-  CanvasState,
-  Action,
-  Mechanism,
-  ConnectsActionType,
-  ActionBundleType,
-} from "../../types";
+import { MechanicalElement } from "../../types/element";
+import { CanvasState, Action, Mechanism, ActionBundleType } from "../../types";
 import { ConnectionsContainer } from "./components/ConnectionsContainer";
 import { HoveredPart } from "../../types/hovered-part";
 
@@ -26,12 +20,6 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
   applyActions,
   mechanism,
 }) => {
-  const [draggedItem, setDraggedItem] = useState<{
-    id: ID;
-    index: number;
-    sourceType: ConnectsActionType;
-  } | null>(null);
-
   switch (element.type) {
     case "pivot":
       return (
@@ -51,8 +39,6 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
             setCanvasState={setCanvasState}
             applyActions={applyActions}
             mechanism={mechanism}
-            draggedItem={draggedItem}
-            setDraggedItem={setDraggedItem}
           />
           <ConnectionsContainer
             element={element}
@@ -61,8 +47,6 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
             setCanvasState={setCanvasState}
             applyActions={applyActions}
             mechanism={mechanism}
-            draggedItem={draggedItem}
-            setDraggedItem={setDraggedItem}
           />
         </Box>
       );
@@ -84,8 +68,6 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
             setCanvasState={setCanvasState}
             applyActions={applyActions}
             mechanism={mechanism}
-            draggedItem={draggedItem}
-            setDraggedItem={setDraggedItem}
           />
           <ConnectionsContainer
             element={element}
@@ -94,8 +76,6 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
             setCanvasState={setCanvasState}
             applyActions={applyActions}
             mechanism={mechanism}
-            draggedItem={draggedItem}
-            setDraggedItem={setDraggedItem}
           />
         </Box>
       );
@@ -117,8 +97,6 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
             setCanvasState={setCanvasState}
             applyActions={applyActions}
             mechanism={mechanism}
-            draggedItem={draggedItem}
-            setDraggedItem={setDraggedItem}
           />
           <ConnectionsContainer
             element={element}
@@ -127,8 +105,6 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
             setCanvasState={setCanvasState}
             applyActions={applyActions}
             mechanism={mechanism}
-            draggedItem={draggedItem}
-            setDraggedItem={setDraggedItem}
           />
           <ConnectionsContainer
             element={element}
@@ -137,8 +113,6 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
             setCanvasState={setCanvasState}
             applyActions={applyActions}
             mechanism={mechanism}
-            draggedItem={draggedItem}
-            setDraggedItem={setDraggedItem}
           />
         </Box>
       );
@@ -161,8 +135,6 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
             setCanvasState={setCanvasState}
             applyActions={applyActions}
             mechanism={mechanism}
-            draggedItem={draggedItem}
-            setDraggedItem={setDraggedItem}
           />
         </Box>
       );
@@ -184,8 +156,6 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
             setCanvasState={setCanvasState}
             applyActions={applyActions}
             mechanism={mechanism}
-            draggedItem={draggedItem}
-            setDraggedItem={setDraggedItem}
           />
           <ConnectionsContainer
             element={element}
@@ -194,8 +164,6 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
             setCanvasState={setCanvasState}
             applyActions={applyActions}
             mechanism={mechanism}
-            draggedItem={draggedItem}
-            setDraggedItem={setDraggedItem}
           />
           <ConnectionsContainer
             element={element}
@@ -204,8 +172,6 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
             setCanvasState={setCanvasState}
             applyActions={applyActions}
             mechanism={mechanism}
-            draggedItem={draggedItem}
-            setDraggedItem={setDraggedItem}
           />
           <ConnectionsContainer
             element={element}
@@ -214,8 +180,6 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
             setCanvasState={setCanvasState}
             applyActions={applyActions}
             mechanism={mechanism}
-            draggedItem={draggedItem}
-            setDraggedItem={setDraggedItem}
           />
         </Box>
       );
@@ -247,8 +211,6 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
               setCanvasState={setCanvasState}
               applyActions={applyActions}
               mechanism={mechanism}
-              draggedItem={draggedItem}
-              setDraggedItem={setDraggedItem}
             />
             <ConnectionsContainer
               element={element}
@@ -257,8 +219,6 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
               setCanvasState={setCanvasState}
               applyActions={applyActions}
               mechanism={mechanism}
-              draggedItem={draggedItem}
-              setDraggedItem={setDraggedItem}
             />
           </Box>
           <ConnectionsContainer
@@ -268,8 +228,6 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
             setCanvasState={setCanvasState}
             applyActions={applyActions}
             mechanism={mechanism}
-            draggedItem={draggedItem}
-            setDraggedItem={setDraggedItem}
           />
         </Box>
       );
@@ -292,8 +250,6 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
             setCanvasState={setCanvasState}
             applyActions={applyActions}
             mechanism={mechanism}
-            draggedItem={draggedItem}
-            setDraggedItem={setDraggedItem}
           />
           <ConnectionsContainer
             element={element}
@@ -302,8 +258,6 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
             setCanvasState={setCanvasState}
             applyActions={applyActions}
             mechanism={mechanism}
-            draggedItem={draggedItem}
-            setDraggedItem={setDraggedItem}
           />
         </Box>
       );
@@ -334,8 +288,6 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
               setCanvasState={setCanvasState}
               applyActions={applyActions}
               mechanism={mechanism}
-              draggedItem={draggedItem}
-              setDraggedItem={setDraggedItem}
             />
             <ConnectionsContainer
               element={element}
@@ -344,8 +296,6 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
               setCanvasState={setCanvasState}
               applyActions={applyActions}
               mechanism={mechanism}
-              draggedItem={draggedItem}
-              setDraggedItem={setDraggedItem}
             />
           </Box>
           <ConnectionsContainer
@@ -355,8 +305,6 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
             setCanvasState={setCanvasState}
             applyActions={applyActions}
             mechanism={mechanism}
-            draggedItem={draggedItem}
-            setDraggedItem={setDraggedItem}
           />
         </Box>
       );

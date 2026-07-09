@@ -7,7 +7,7 @@ import {
   MechanicalElement,
   Mechanism,
 } from "../../../types";
-import { Box, IconButton } from "@mui/material";
+import { IconButton } from "@mui/material";
 import {
   LinkOff as LinkOffIcon,
   RotateLeft as RotateLeftIcon,
@@ -20,7 +20,6 @@ import {
 } from "../../mechanism/connect-actions";
 import { HoveredPart } from "../../../types/hovered-part";
 import ElementDisplay from "./ElementDisplay";
-import { COLORS } from "../../../constants/rendering-specs";
 
 interface ConnectionProps {
   element: MechanicalElement;
@@ -104,120 +103,85 @@ const Connection: React.FC<ConnectionProps> = ({
     );
   };
 
+  const showDirectionButton =
+    (connectedElement &&
+      element.type === "belt" &&
+      containerType === "ConnectsAttachedGears") ||
+    containerType === "ConnectsAttachedBelt";
+
+  let direction = false;
+  if (showDirectionButton) {
+    if (element.type === "belt") {
+      direction =
+        element.attachedGearsIDs[
+          get_connections(element, "ConnectsAttachedGears").indexOf(
+            connectedElement.id,
+          )
+        ].direction;
+    } else if (connectedElement.type === "belt") {
+      direction =
+        connectedElement.attachedGearsIDs[
+          get_connections(connectedElement, "ConnectsAttachedGears").indexOf(
+            element.id,
+          )
+        ].direction;
+    }
+  }
+  const DirectionIcon = direction ? RotateLeftIcon : RotateRightIcon;
+
   return (
-    <Box
-      sx={{
-        display: "flex",
-        justifyContent: "space-between",
-        flexDirection: "row",
-        alignItems: "center",
-        bgcolor: !connectedElement
-          ? COLORS.DELETION_BOX + COLORS.HALF_TRANSPARENCY
-          : COLORS.BACKGROUND,
-      }}
-      border={2}
-      borderColor={"#00000025"}
-      borderRadius={5}
-    >
-      <ElementDisplay
-        element={connectedElement}
-        setHoveredPart={setHoveredPart}
-        setCanvasState={setCanvasState}
-        applyActions={applyActions}
-        size="small"
-        editable={false}
-      ></ElementDisplay>
-      <IconButton
-        sx={{
-          borderRadius: 5,
-          "&:hover": {
-            backgroundColor: "#00000025",
-          },
-          my: -0.5,
-          ml: "-4px",
-        }}
-        onClick={handleDisconnect}
-        title="Déconnecter"
-        size="small"
-      >
-        <LinkOffIcon sx={{ my: -0.4 }} fontSize="small" color="error" />
-      </IconButton>
-      <>
-        {(() => {
-          if (
-            (connectedElement &&
-              element.type === "belt" &&
-              containerType === "ConnectsAttachedGears") ||
-            containerType === "ConnectsAttachedBelt"
-          ) {
-            {
-              let direction = false;
-              if (element.type === "belt") {
-                direction =
-                  element.attachedGearsIDs[
-                    get_connections(element, "ConnectsAttachedGears").indexOf(
-                      connectedElement.id,
-                    )
-                  ].direction;
-              } else if (connectedElement.type === "belt") {
-                direction =
-                  connectedElement.attachedGearsIDs[
-                    get_connections(
-                      connectedElement,
-                      "ConnectsAttachedGears",
-                    ).indexOf(element.id)
-                  ].direction;
-              }
-              if (direction) {
-                return (
-                  <IconButton
-                    sx={{
-                      borderRadius: 5,
-                      "&:hover": {
-                        backgroundColor: "#00000025",
-                      },
-                      my: -0.5,
-                      ml: "-4px",
-                    }}
-                    onClick={handleSwitchMeshedGearDirection}
-                    title="Inverser la direction"
-                    size="small"
-                  >
-                    <RotateLeftIcon
-                      fontSize="small"
-                      color="secondary"
-                      sx={{ mx: -0.2, my: -0.4 }}
-                    />
-                  </IconButton>
-                );
-              } else {
-                return (
-                  <IconButton
-                    sx={{
-                      borderRadius: 5,
-                      "&:hover": {
-                        backgroundColor: "#00000025",
-                      },
-                      my: -0.5,
-                      ml: "-4px",
-                    }}
-                    onClick={handleSwitchMeshedGearDirection}
-                    title="Inverser la direction"
-                    size="small"
-                  >
-                    <RotateRightIcon
-                      fontSize="small"
-                      color="secondary"
-                      sx={{ mx: -0.2, my: -0.4 }}
-                    />
-                  </IconButton>
-                );
-              }
-            }
-          }
-        })()}
-      </>
-    </Box>
+    <ElementDisplay
+      element={connectedElement}
+      setHoveredPart={setHoveredPart}
+      setCanvasState={setCanvasState}
+      applyActions={applyActions}
+      size="small"
+      editable={false}
+      actions={
+        <>
+          {showDirectionButton && (
+            <IconButton
+              sx={{
+                borderRadius: 5,
+                "&:hover": {
+                  backgroundColor: "#00000025",
+                },
+                my: -0.5,
+                ml: -0.5,
+              }}
+              onClick={handleSwitchMeshedGearDirection}
+              title="Inverser la direction"
+              size="small"
+            >
+              <DirectionIcon
+                fontSize="small"
+                color="secondary"
+                sx={{ mx: -0.1, my: -0.4 }}
+              />
+            </IconButton>
+          )}
+          <IconButton
+            sx={{
+              borderRadius: 5,
+              "&:hover": {
+                backgroundColor: "#00000025",
+              },
+              my: -0.5,
+              ml: -0.5,
+            }}
+            onClick={handleDisconnect}
+            title="Déconnecter"
+            size="small"
+          >
+            <LinkOffIcon
+              sx={{ mx: -0.1, my: -0.4 }}
+              fontSize="small"
+              color="error"
+            />
+          </IconButton>
+        </>
+      }
+    ></ElementDisplay>
   );
 };
 

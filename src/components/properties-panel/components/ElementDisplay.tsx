@@ -20,6 +20,7 @@ interface ElementDisplayProps {
   applyActions: (actions: Action[], actionBundleType: ActionBundleType) => void;
   size: "small" | "medium" | "large";
   editable: boolean;
+  actions?: React.ReactNode;
 }
 
 const ElementDisplayComponent: React.FC<ElementDisplayProps> = ({
@@ -29,6 +30,7 @@ const ElementDisplayComponent: React.FC<ElementDisplayProps> = ({
   applyActions,
   size,
   editable,
+  actions,
 }) => {
   const icon = get_element_icon(element);
   const initialName = shown_element_name(element);
@@ -50,7 +52,6 @@ const ElementDisplayComponent: React.FC<ElementDisplayProps> = ({
     span.style.whiteSpace = "nowrap";
     span.style.fontWeight = fontWeight.toString();
     span.style.fontSize = fontSizeValue;
-    //span.style.fontFamily = '"Roboto", "Helvetica", "Arial", sans-serif';
     span.style.lineHeight = "1.5";
     span.textContent = text;
 
@@ -154,17 +155,20 @@ const ElementDisplayComponent: React.FC<ElementDisplayProps> = ({
     whiteSpace: "nowrap" as const,
   };
 
-  return (
+  const content = (
     <IconButton
       sx={{
         borderRadius: 5,
         padding: size === "small" ? "4px" : size === "medium" ? "6px" : "8px",
         "&:hover": {
-          backgroundColor: "#00000025",
+          backgroundColor: actions ? "transparent" : "#00000025",
         },
-        cursor: "default",
+        cursor: "pointer",
+        ...(actions && {
+          justifyContent: "flex-start",
+          minWidth: 0,
+        }),
       }}
-      onClick={handleSelect}
       disableRipple
     >
       <Box
@@ -181,8 +185,6 @@ const ElementDisplayComponent: React.FC<ElementDisplayProps> = ({
         }}
         border={1}
         borderColor={"#00000000"}
-        onMouseEnter={handleMouseEnter}
-        onMouseLeave={handleMouseLeave}
       >
         <Box
           component="img"
@@ -241,8 +243,6 @@ const ElementDisplayComponent: React.FC<ElementDisplayProps> = ({
                   : "body1"
             }
             onClick={handleTextClick}
-            onMouseEnter={handleMouseEnter}
-            onMouseLeave={handleMouseLeave}
             title={"Cliquer pour modifier le nom"}
             sx={{
               ...textStyleCommon,
@@ -280,6 +280,35 @@ const ElementDisplayComponent: React.FC<ElementDisplayProps> = ({
         )}
       </Box>
     </IconButton>
+  );
+
+  if (!actions) return content;
+
+  return (
+    <Box
+      sx={{
+        display: "flex",
+        alignItems: "center",
+        width: "100%",
+        borderRadius: 5,
+        cursor: "pointer",
+        justifyContent: "space-between",
+        "&:hover": {
+          backgroundColor: "#00000025",
+        },
+        "&:has(.element-display-actions:hover)": {
+          backgroundColor: "transparent",
+        },
+      }}
+      onClick={handleSelect}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+    >
+      {content}
+      <Box className="element-display-actions" sx={{ display: "contents" }}>
+        {actions}
+      </Box>
+    </Box>
   );
 };
 
