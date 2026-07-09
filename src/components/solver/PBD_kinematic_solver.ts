@@ -3,6 +3,12 @@ import { ConstraintResidual } from "../../types/runtime-state";
 import {
   applyAngleConstraint,
   applyBeamFollowsAngleConstraint,
+  applyBeltEndTravelConstraint,
+  applyBeltFollowsTangentConstraint,
+  applyBeltJunctionConstraint,
+  applyBeltLengthConstraint,
+  applyBeltMeshAngleConstraint,
+  applyBeltPinConstraint,
   applyCoaxialAngleConstraint,
   applyDistanceConstraint,
   applyDistanceToLineConstraint,
@@ -215,6 +221,93 @@ export function PBD_kinematic_solver(
             link.key1,
             link.key2,
             link.ratio,
+          );
+          break;
+        case "BeltLength":
+          err = applyBeltLengthConstraint(
+            positions,
+            posMasses,
+            link.startKey,
+            link.endKey,
+            link.gearPosKeys,
+            link.radii,
+            link.directions,
+            link.length,
+            link.closed,
+            link.disconnected,
+            link.wraps,
+          );
+          break;
+        case "BeltJunction":
+          err = applyBeltJunctionConstraint(
+            positions,
+            posMasses,
+            link.nodeKey,
+            link.gearPosKeys,
+            link.radii,
+            link.directions,
+          );
+          break;
+        case "BeltPin":
+          err = applyBeltPinConstraint(
+            positions,
+            posMasses,
+            angles,
+            link.nodeKey,
+            link.gearPosKeys,
+            link.radii,
+            link.directions,
+            link.refIndex,
+            link.refAngleKey,
+            link.s0,
+            link.thetaRef0,
+            link.wraps,
+          );
+          break;
+        case "BeltFollowsTangent":
+          err = applyBeltFollowsTangentConstraint(
+            positions,
+            posMasses,
+            angles,
+            link.pivotKey,
+            link.drivenKey,
+            link.gearPosKeys,
+            link.radii,
+            link.directions,
+            link.refIndex,
+            link.refAngleKey,
+            link.s0,
+            link.thetaRef0,
+            link.offset,
+          );
+          break;
+        case "BeltEndTravel":
+          err = applyBeltEndTravelConstraint(
+            positions,
+            posMasses,
+            angles,
+            link.nodeKey,
+            link.gearPosKey,
+            link.radius,
+            link.direction,
+            link.refAngleKey,
+            link.rEps,
+            link.sign,
+            link.lfree0,
+            link.thetaRef0,
+          );
+          break;
+        case "BeltMeshAngle":
+          err = applyBeltMeshAngleConstraint(
+            angles,
+            link.angleKey1,
+            link.angleKey2,
+            link.r1,
+            link.r2,
+            link.theta1_0,
+            link.theta2_0,
+            link.dir1,
+            link.dir2,
           );
           break;
         case "MotorBeam":

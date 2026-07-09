@@ -30,6 +30,7 @@ export type ConstraintElementType =
   | "dimension-edge-to-node"
   | "dimension-angle"
   | "dimension-radius"
+  | "dimension-belt-length"
   | "horizontal-align-edge"
   | "horizontal-align-nodes"
   | "vertical-align-edge"
@@ -87,6 +88,7 @@ export type ConstraintElement =
   | DimentionEdgeToNode
   | DimentionAngle
   | DimentionRadius
+  | DimentionBeltLength
   | HorizontalAlignEdge
   | HorizontalAlignNodes
   | VerticalAlignEdge
@@ -215,6 +217,13 @@ export interface BeltElement extends BaseEdgeElement {
   type: "belt";
   attachedGearsIDs: { id: ID; direction: boolean }[];
   tight: boolean;
+  /** Rendering only (simulation): indices into `attachedGearsIDs` of pulleys that
+   *  lost belt contact this run, so the belt is drawn straight past them.
+   *  Undefined in edition. */
+  disconnectedGearIndices?: number[];
+  /** Rendering only (simulation): continuous wrap angle per attached pulley;
+   *  |value| > 2π ⇒ the belt has wound onto it (drawn as extra turns). */
+  gearWraps?: number[];
 }
 
 /** Constraint element */
@@ -260,6 +269,13 @@ export interface DimentionAngle extends ConstraintBaseElement {
 export interface DimentionRadius extends ConstraintBaseElement {
   type: "dimension-radius";
   gearID: ID;
+  value: number;
+}
+
+/** Dimension belt length element - total length dimension of a belt */
+export interface DimentionBeltLength extends ConstraintBaseElement {
+  type: "dimension-belt-length";
+  beltID: ID;
   value: number;
 }
 

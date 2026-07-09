@@ -1,4 +1,5 @@
 import { ID, Link, Mechanism, Point2, SimNodes } from "../../types";
+import { BeltVia, belt_wraps } from "../../utils/belt-path";
 import {
   ConstraintResidual,
   KinematicSnapshot,
@@ -52,6 +53,139 @@ function wrap_angle(a: number): number {
   return a;
 }
 
+/**
+ * Per-frame belt-contact update (mutates the BeltLength link's sim state):
+ * tracks each still-connected pulley's continuous (unwrapped) wrap angle and, as
+ * soon as it crosses to ≤ 0 (contact lost), marks the pulley disconnected —
+ * irreversibly for the run (reset on recompile). The belt then runs straight
+ * past it (BeltLength skips it; the geometry of the remaining pulleys uses the
+ * reduced loop/chain).
+ */
+function update_belt_disconnects(
+  link: Extract<Link, { type: "BeltLength" }>,
+  positions: Map<string, Point2>,
+): boolean {
+  const n = link.gearPosKeys.length;
+  if (!link.disconnected) link.disconnected = new Array(n).fill(false);
+  let newlyDisconnected = false;
+
+  const activeIdx: number[] = [];
+  const vias: BeltVia[] = [];
+  if (!link.closed) {
+    const s = positions.get(link.startKey);
+    if (!s) return false;
+    vias.push({ pos: s, radius: 0, direction: false });
+  }
+  for (let i = 0; i < n; i++) {
+    if (link.disconnected[i]) continue;
+    const pos = positions.get(link.gearPosKeys[i]);
+    if (!pos) return false;
+    activeIdx.push(i);
+    vias.push({ pos, radius: link.radii[i], direction: link.directions[i] });
+  }
+  if (!link.closed) {
+    const e = positions.get(link.endKey);
+    if (!e) return false;
+    vias.push({ pos: e, radius: 0, direction: false });
+  }
+
+  const raw = belt_wraps(vias, link.closed);
+  const offset = link.closed ? 0 : 1; // via index of the first pulley
+  const seeding = !link.wraps;
+  if (!link.wraps) link.wraps = new Array(n).fill(0);
+  const TAU = 2 * Math.PI;
+  // A pulley an end is pinned on can't detach (belt anchored to it), and the
+  // last remaining pulley is never dropped (a gearless belt is degenerate).
+  const startPos = link.closed ? undefined : positions.get(link.startKey);
+  const endPos = link.closed ? undefined : positions.get(link.endKey);
+  const pinnedOn = (gi: number): boolean => {
+    const gc = positions.get(link.gearPosKeys[gi]);
+    if (!gc) return false;
+    return [startPos, endPos].some(
+      (p) => p && p.distance_to(gc) <= link.radii[gi] + 1,
+    );
+  };
+  activeIdx.forEach((gi, k) => {
+    const rawW = raw[offset + k];
+    if (seeding) {
+      link.wraps![gi] = rawW; // first frame: seed, never disconnect
+      return;
+    }
+    let delta = rawW - (((link.wraps![gi] % TAU) + TAU) % TAU);
+    while (delta > Math.PI) delta -= TAU;
+    while (delta <= -Math.PI) delta += TAU;
+    const cont = link.wraps![gi] + delta;
+    link.wraps![gi] = cont;
+    if (
+      cont <= 0 &&
+      !link.disconnected![gi] &&
+      activeIdx.length > 1 &&
+      !pinnedOn(gi)
+    ) {
+      link.disconnected![gi] = true;
+      newlyDisconnected = true;
+    }
+  });
+  return newlyDisconnected;
+}
+
+/**
+ * Rebuild the belt-transmission (BeltMeshAngle) chain for belts that just lost a
+ * pulley: drop every mesh link they own and re-emit one per consecutive pair of
+ * STILL-connected pulleys, with the reference angles baked from the current
+ * angles — so the disconnected pulley stops being driven while its neighbours
+ * stay coupled through the belt. Reset on recompile.
+ */
+export function rewire_belt_mesh(
+  links: Link[],
+  belts: Extract<Link, { type: "BeltLength" }>[],
+  angles: Map<string, number>,
+): Link[] {
+  const owners = new Set(belts.map((b) => b.owner).filter((o) => o !== undefined));
+  // Position keys of the pulleys that have just disconnected — their end-travel
+  // links must go too, else they keep driving the now-free pulley's angle.
+  const disconnectedKeys = new Set<string>();
+  for (const b of belts)
+    b.disconnected?.forEach((d, i) => {
+      if (d) disconnectedKeys.add(b.gearPosKeys[i]);
+    });
+  const kept = links.filter((l) => {
+    if (
+      l.type === "BeltMeshAngle" &&
+      l.owner !== undefined &&
+      owners.has(l.owner)
+    )
+      return false;
+    if (l.type === "BeltEndTravel" && disconnectedKeys.has(l.gearPosKey))
+      return false;
+    return true;
+  });
+  for (const b of belts) {
+    const active = b.gearAngleKeys
+      .map((_, i) => i)
+      .filter((i) => !b.disconnected?.[i]);
+    const pairs = b.closed ? active.length : active.length - 1;
+    for (let k = 0; k < pairs; k++) {
+      const i = active[k];
+      const j = active[(k + 1) % active.length];
+      kept.push({
+        type: "BeltMeshAngle",
+        ddl: 1,
+        angleKey1: b.gearAngleKeys[i],
+        angleKey2: b.gearAngleKeys[j],
+        r1: b.radii[i],
+        r2: b.radii[j],
+        theta1_0: angles.get(b.gearAngleKeys[i]) ?? 0,
+        theta2_0: angles.get(b.gearAngleKeys[j]) ?? 0,
+        dir1: b.directions[i],
+        dir2: b.directions[j],
+        owner: b.owner,
+      });
+    }
+  }
+  return kept;
+}
+
 /** Position-bearing key fields are rewritten on coincidence fusion; angle key
  *  fields (angleKey…) are left untouched — angles live in a separate map. */
 function rewrite_position_keys(link: Link, from: (k: string) => string): void {
@@ -68,9 +202,18 @@ function rewrite_position_keys(link: Link, from: (k: string) => string): void {
     "posKey2",
     "nodeKey",
     "centerKey",
+    // Belt links carry their position keys in dedicated fields.
+    "startKey",
+    "endKey",
+    "centerKeyA",
+    "centerKeyB",
+    "gearPosKey",
   ]) {
     if (typeof l[f] === "string") l[f] = from(l[f] as string);
   }
+  // BeltLength's wrapped-pulley centres live in an array.
+  if (Array.isArray(l.gearPosKeys))
+    l.gearPosKeys = (l.gearPosKeys as string[]).map(from);
 }
 
 /**
@@ -161,6 +304,7 @@ export function step_simulation(
 
   // ── Refresh per-frame motor targets and gear-mesh line-of-centres angle ──
   const motorChecks: MotorCheck[] = [];
+  const beltsToRewire: Extract<Link, { type: "BeltLength" }>[] = [];
   model.links.forEach((link) => {
     if (link.type === "MotorBeam") {
       const pivot = positions.get(link.pivotKey);
@@ -198,8 +342,27 @@ export function step_simulation(
         const raw = p2.sub(p1).angle();
         link.alpha = link.alpha + wrap_angle(raw - link.alpha);
       }
+    } else if (link.type === "BeltLength") {
+      if (update_belt_disconnects(link, positions)) beltsToRewire.push(link);
     }
   });
+
+  // A pulley just lost contact → rebuild the affected belts' transmission chain
+  // so it stops being driven while its neighbours stay coupled. Permanent for
+  // the run (model mutated; reset on recompile).
+  if (beltsToRewire.length > 0)
+    model.links = rewire_belt_mesh(model.links, beltsToRewire, angles);
+
+  // Share each belt's continuous wraps (tracked on its BeltLength link) with its
+  // BeltPin, so a tight-belt junction travels around wound pulleys (>2π), not
+  // just the fractional arc. gearPosKeys order matches (both from the belt).
+  const wrapsByBelt = new Map<ID, number[]>();
+  for (const link of model.links)
+    if (link.type === "BeltLength" && link.owner !== undefined && link.wraps)
+      wrapsByBelt.set(link.owner, link.wraps);
+  for (const link of model.links)
+    if (link.type === "BeltPin" && link.owner !== undefined)
+      link.wraps = wrapsByBelt.get(link.owner);
 
   // ── Grab (transient, this frame only) ──
   let links = model.links;
@@ -307,11 +470,25 @@ export function step_simulation(
 
   const unsatisfied = [...motorBlocks, ...(result.unsatisfied ?? [])];
 
+  // Collect per-belt disconnected pulleys and continuous wrap angles (for drawing).
+  let disconnectedBeltGears: Map<ID, number[]> | undefined;
+  let beltWraps: Map<ID, number[]> | undefined;
+  for (const link of model.links) {
+    if (link.type !== "BeltLength" || link.owner === undefined) continue;
+    const idx = (link.disconnected ?? [])
+      .map((d, i) => (d ? i : -1))
+      .filter((i) => i >= 0);
+    if (idx.length > 0) (disconnectedBeltGears ??= new Map()).set(link.owner, idx);
+    if (link.wraps) (beltWraps ??= new Map()).set(link.owner, [...link.wraps]);
+  }
+
   return {
     t,
     positions: outPositions,
     angles: new Map(result.angles),
     unsatisfied: unsatisfied.length > 0 ? unsatisfied : undefined,
+    disconnectedBeltGears,
+    beltWraps,
   };
 }
 
@@ -347,11 +524,21 @@ export function apply_snapshot_to_mechanism(
         el.type === "spring" || el.type === "damper"
           ? el.positionStart.distance_to(el.positionEnd)
           : undefined;
+      const disconnectedGearIndices =
+        el.type === "belt"
+          ? snapshot.disconnectedBeltGears?.get(el.id)
+          : undefined;
+      const gearWraps =
+        el.type === "belt" ? snapshot.beltWraps?.get(el.id) : undefined;
       return {
         ...el,
         ...(start ? { positionStart: start } : {}),
         ...(end ? { positionEnd: end } : {}),
         ...(restLength !== undefined ? { restLength } : {}),
+        ...(disconnectedGearIndices !== undefined
+          ? { disconnectedGearIndices }
+          : {}),
+        ...(gearWraps !== undefined ? { gearWraps } : {}),
       };
     }
   });

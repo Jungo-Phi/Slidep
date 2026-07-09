@@ -811,13 +811,12 @@ export function connect_elements(
     hoveredPart.type === "Void" ||
     hoveredPart.type === "Constraint" ||
     selectedPart.type === "Void" ||
-    selectedPart.type === "Constraint" ||
-    hoveredPart.id === selectedPart.id
+    selectedPart.type === "Constraint"
   ) {
     return [];
   }
   // Connect belt ends together
-  if (hoveredPart.id === "----") {
+  if (hoveredPart.id === "----" || hoveredPart.id === selectedPart.id) {
     const join: JoinElement = {
       type: "join",
       id: crypto.randomUUID(),

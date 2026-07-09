@@ -1153,12 +1153,12 @@ const App: React.FC = () => {
                     {condensed ? "Stat" : "Statique"}
                   </ToggleButton>
                 </Tooltip>
-                <Tooltip title="Analyse du mouvement (pas de masses ou de forces).">
+                <Tooltip title="Analyse du mouvement">
                   <ToggleButton value="kinematic">
                     {condensed ? "Ciné" : "Cinématique"}
                   </ToggleButton>
                 </Tooltip>
-                <Tooltip title="Combine la statique et la cinématique [ ∑F = ma ].">
+                <Tooltip title="Combine la statique et la cinématique [ ∑F = ma ]">
                   <ToggleButton value="dynamic">
                     {condensed ? "Dyna" : "Dynamique"}
                   </ToggleButton>

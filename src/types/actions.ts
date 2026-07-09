@@ -45,13 +45,15 @@ export type MoveElementActionType =
   | "MoveEdgeBody"
   | "MoveElements"
   | "ChangeGearRadius"
-  | "ChangeEdgeLength";
+  | "ChangeEdgeLength"
+  | "ChangeBeltLength";
 export type ChangeDimensionActionType =
   | "ChangeDimensionEdgeValue"
   | "ChangeDimensionNodeToNodeValue"
   | "ChangeDimensionEdgeToNodeValue"
   | "ChangeDimensionAngleValue"
   | "ChangeDimensionRadiusValue"
+  | "ChangeDimensionBeltLengthValue"
   | "ChangeGearRatioValue";
 
 export type ConnectsActionType =
@@ -110,6 +112,7 @@ export type Action =
       target: Point2;
     }
   | { type: "ChangeEdgeLength"; id: ID; newLength: number; oldLength: number }
+  | { type: "ChangeBeltLength"; id: ID; newLength: number; oldLength: number }
   | {
       type: "ChangeMass";
       id: ID;
@@ -151,6 +154,12 @@ export type Action =
     }
   | {
       type: "ChangeDimensionRadiusValue";
+      id: ID;
+      newValue: number;
+      oldValue: number;
+    }
+  | {
+      type: "ChangeDimensionBeltLengthValue";
       id: ID;
       newValue: number;
       oldValue: number;

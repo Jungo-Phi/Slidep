@@ -86,6 +86,7 @@ export const get_element_icon = (element: UnionElement | undefined): string => {
     case "dimension-edge-to-node":
     case "dimension-angle":
     case "dimension-radius":
+    case "dimension-belt-length":
       return dimensionIconUrl;
     case "horizontal-align-edge":
     case "horizontal-align-nodes":

@@ -121,6 +121,7 @@ export function actionReducer(
       case "ChangeDimensionEdgeToNodeValue":
       case "ChangeDimensionAngleValue":
       case "ChangeDimensionRadiusValue":
+      case "ChangeDimensionBeltLengthValue":
       case "ChangeGearRatioValue":
         element = get_constraint_element_from_id(action.id, constraintElements);
         if ("value" in element) {

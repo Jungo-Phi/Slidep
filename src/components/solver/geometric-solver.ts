@@ -8,7 +8,12 @@ import {
 } from "../../types";
 import { get_mechanical_element_from_id } from "../mechanism/connect-actions";
 import { get_geom_degrees_of_freedom, sort_links } from "./utils";
-import { get_links_geometric, get_geom_nodes } from "./parsing";
+import {
+  belt_length_link,
+  elements_by_id,
+  get_links_geometric,
+  get_geom_nodes,
+} from "./parsing";
 import { PBD_kinematic_solver } from "./PBD_kinematic_solver";
 
 /**
@@ -56,7 +61,8 @@ export function resolveGeometricConstraints(
         triggerAction.type !== "MoveEdgeBody" &&
         triggerAction.type !== "MoveElements" &&
         triggerAction.type !== "ChangeGearRadius" &&
-        triggerAction.type !== "ChangeEdgeLength"
+        triggerAction.type !== "ChangeEdgeLength" &&
+        triggerAction.type !== "ChangeBeltLength"
       )
         throw console.error("impossible");
 
@@ -178,6 +184,24 @@ export function resolveGeometricConstraints(
             distance: triggerAction.newLength,
           });
           break;
+        case "ChangeBeltLength": {
+          // Momentary inextensible-belt constraint: hold the whole loop at the
+          // requested length while the gears relax to satisfy it.
+          const belt = get_mechanical_element_from_id(
+            triggerAction.id,
+            mechanism.mechanicalElements,
+          );
+          if (belt && belt.type === "belt") {
+            const link = belt_length_link(
+              belt,
+              elements_by_id(mechanism.mechanicalElements),
+              mechanism.mechanicalElements,
+              triggerAction.newLength,
+            );
+            if (link) links.push(link);
+          }
+          break;
+        }
       }
       break;
     case "ChangeDimension":
@@ -261,6 +285,21 @@ export function resolveGeometricConstraints(
           (link.grabbedKey === k1 || link.grabbedKey === k2)
         )
           link.grabbedKey = k_new;
+        // Belt links hold their keys in dedicated fields / an array.
+        if (link.type === "BeltLength") {
+          if (link.startKey === k1 || link.startKey === k2)
+            link.startKey = k_new;
+          if (link.endKey === k1 || link.endKey === k2) link.endKey = k_new;
+          link.gearPosKeys = link.gearPosKeys.map((k) =>
+            k === k1 || k === k2 ? k_new : k,
+          );
+        }
+        if (link.type === "BeltJunction") {
+          if (link.nodeKey === k1 || link.nodeKey === k2) link.nodeKey = k_new;
+          link.gearPosKeys = link.gearPosKeys.map((k) =>
+            k === k1 || k === k2 ? k_new : k,
+          );
+        }
       });
       nodes.positions.set(
         k_new,

@@ -293,7 +293,10 @@ export const MechanicalCanvas = forwardRef<
 
       // DEBUG
       let text = `${hoveredPartRef.current.position.toString()} ${hoveredPartRef.current.type}`;
-      ctx.fillText(text, 1020, 40);
+      if ("part" in hoveredPartRef.current) {
+        text += ` ${hoveredPartRef.current.part}`;
+      }
+      ctx.fillText(text, 125, 40);
 
       ctx.save();
       ctx.translate(
@@ -391,11 +394,7 @@ export const MechanicalCanvas = forwardRef<
       event: React.PointerEvent<HTMLCanvasElement>,
     ) => {
       window.getSelection()?.removeAllRanges();
-      // Capture le pointeur : une fois le bouton enfoncé, les pointermove /
-      // pointerup continuent d'arriver sur le canvas même si le curseur sort de
-      // ses limites. Un drag rapide qui déborde ne perd plus l'élément, et le
-      // relâchement hors canvas est toujours reçu (plus besoin du hack
-      // onMouseEnter qui forçait un "button up" au retour).
+      // Capture le pointeur : une fois le bouton enfoncé, les pointermove / pointerup continuent d'arriver sur le canvas même si le curseur sort de ses limites.
       event.currentTarget.setPointerCapture(event.pointerId);
       mousePositionRef.current = new Point2(event.clientX, event.clientY).sub(
         canvasOffsetRef.current,
@@ -751,6 +750,9 @@ export const MechanicalCanvas = forwardRef<
                   break;
                 case "dimension-radius":
                   actionType = "ChangeDimensionRadiusValue";
+                  break;
+                case "dimension-belt-length":
+                  actionType = "ChangeDimensionBeltLengthValue";
                   break;
                 case "gear-ratio":
                   actionType = "ChangeGearRatioValue";

@@ -16,6 +16,7 @@ import { Point2 as Point2 } from "../../types/point2";
 import { get_element_icon } from "../element-palette/elementIcon";
 import { UnionElement, ViewportState } from "../../types";
 import { value_to_ratio_parts } from "../../utils";
+import { BeltVia, belt_pieces } from "../../utils/belt-path";
 
 const TAU = 2 * Math.PI;
 
@@ -561,6 +562,68 @@ export function draw_belt(
   ctx.translate(positionEnd.x, positionEnd.y);
   draw_belt_end(ctx);
   ctx.restore();
+}
+
+/**
+ * Draw a tight belt as a continuous closed loop around its pulleys (the gN→g0
+ * closure included), with no free ends. Unlike `draw_belt`, this is independent
+ * of the junction position, so the loop stays continuous wherever the join sits.
+ */
+export function draw_belt_loop(ctx: CanvasRenderingContext2D, vias: BeltVia[]) {
+  const arcs = belt_pieces(vias, true).filter((p) => p.kind === "arc");
+  if (arcs.length === 0) return;
+  const widthChange = ctx.lineWidth - STROKE_WIDTHS.STANDARD;
+  ctx.lineCap = "square";
+
+  ctx.beginPath();
+  arcs.forEach((arc) => {
+    // Straight tangent runs are the implicit lines the canvas draws between
+    // consecutive arcs; closePath() adds the final closure run.
+    const endAngle = arc.startAngle + (arc.direction ? -arc.wrap : arc.wrap);
+    ctx.arc(
+      arc.center.x,
+      arc.center.y,
+      arc.radius + DIM.BELT_WIDTH / 2,
+      arc.startAngle,
+      endAngle,
+      arc.direction,
+    );
+  });
+  ctx.closePath();
+  ctx.lineWidth = DIM.BELT_WIDTH + widthChange;
+  ctx.stroke();
+}
+
+/**
+ * Draw the extra turns of a belt wound onto a pulley (winch): a spiral growing
+ * outward by one belt width per turn, for `floor(|wrap| / 2π)` turns. The base
+ * (sub-2π) contact arc is already drawn by the belt path; this overlays the
+ * surplus so winding past a full turn reads as a coil instead of resetting.
+ */
+export function draw_belt_winding(
+  ctx: CanvasRenderingContext2D,
+  center: Point2,
+  baseRadius: number,
+  wrap: number,
+) {
+  const TAU = 2 * Math.PI;
+  const turns = Math.floor(Math.abs(wrap) / TAU);
+  if (turns < 1) return;
+  const sign = wrap < 0 ? -1 : 1;
+  const dr = DIM.BELT_WIDTH; // radial growth per full turn
+  const total = turns * TAU;
+  const steps = turns * 48;
+  const widthChange = ctx.lineWidth - STROKE_WIDTHS.STANDARD;
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  for (let i = 0; i <= steps; i++) {
+    const a = (i / steps) * total;
+    const p = center.add(Point2.from_polar(baseRadius + (a / TAU) * dr, sign * a));
+    if (i === 0) ctx.moveTo(p.x, p.y);
+    else ctx.lineTo(p.x, p.y);
+  }
+  ctx.lineWidth = DIM.BELT_WIDTH + widthChange;
+  ctx.stroke();
 }
 
 export function draw_dimention(

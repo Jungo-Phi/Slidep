@@ -1,5 +1,6 @@
 import {
   BeamElement,
+  BeltElement,
   ConstraintElement,
   DamperElement,
   EdgeElement,
@@ -12,6 +13,8 @@ import {
   SimNodes,
   SpringElement,
 } from "../../types";
+import { measure_belt_length } from "../../utils/belt-geom";
+import { BeltVia, belt_point_tangent, belt_project } from "../../utils/belt-path";
 
 const COLLINEAR_AREA_EPS = 1; // px² — below this a triangulation chord is degenerate
 
@@ -243,7 +246,272 @@ export function constraint_to_link(element: ConstraintElement): Link {
         key2: element.endGearID,
         ratio: element.value,
       };
+    case "dimension-belt-length":
+      // Needs the belt's gears/radii, unavailable here — built in
+      // get_links_geometric (filtered out before this call).
+      throw new Error("dimension-belt-length is handled in get_links_geometric");
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Belt links (shared builders)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const gearById = (
+  id: ID,
+  byId: Map<ID, MechanicalElement>,
+): GearElement | null => {
+  const g = byId.get(id);
+  return g && g.type === "gear" ? (g as GearElement) : null;
+};
+
+/**
+ * Tight-belt junction link: the join node (fused start==end) sits on the closure
+ * of the belt's last/first wrapped gears (its neighbours). Radii baked. Null for
+ * loose belts or belts with no gear. Used by both solvers.
+ */
+function belt_junction_link(
+  belt: BeltElement,
+  byId: Map<ID, MechanicalElement>,
+): Link | null {
+  if (!belt.tight || belt.attachedGearsIDs.length === 0) return null;
+  const radii: number[] = [];
+  for (const { id } of belt.attachedGearsIDs) {
+    const g = gearById(id, byId);
+    if (!g) return null;
+    radii.push(g.radius);
+  }
+  return {
+    type: "BeltJunction",
+    ddl: 1,
+    nodeKey: `${belt.id}:start`,
+    gearPosKeys: belt.attachedGearsIDs.map(({ id }) => id),
+    radii,
+    directions: belt.attachedGearsIDs.map(({ direction }) => direction),
+    owner: belt.id,
+  };
+}
+
+/**
+ * Belt pin (simulation): the junction node rides the tight belt and travels as
+ * it rotates. `s0` = the junction's arc-length on the closed loop at sim start;
+ * the reference pulley is the first attached gear. Null for loose/empty belts.
+ */
+function belt_pin_link(
+  belt: BeltElement,
+  byId: Map<ID, MechanicalElement>,
+): Link | null {
+  if (!belt.tight || belt.attachedGearsIDs.length === 0) return null;
+  const vias: BeltVia[] = [];
+  const gearPosKeys: string[] = [];
+  const radii: number[] = [];
+  const directions: boolean[] = [];
+  for (const { id, direction } of belt.attachedGearsIDs) {
+    const g = gearById(id, byId);
+    if (!g) return null;
+    vias.push({ pos: g.position, radius: g.radius, direction });
+    gearPosKeys.push(id);
+    radii.push(g.radius);
+    directions.push(direction);
+  }
+  const refGear = gearById(belt.attachedGearsIDs[0].id, byId)!;
+  return {
+    type: "BeltPin",
+    ddl: 2,
+    nodeKey: `${belt.id}:start`,
+    gearPosKeys,
+    radii,
+    directions,
+    refIndex: 0,
+    refAngleKey: belt.attachedGearsIDs[0].id,
+    s0: belt_project(vias, belt.positionStart, true).s,
+    thetaRef0: refGear.angle,
+    owner: belt.id,
+  };
+}
+
+/**
+ * Belt-follows-tangent links (simulation): each beam welded to the tight belt's
+ * junction join keeps its orientation aligned with the belt tangent there, so it
+ * rotates as the belt travels. Empty for loose/empty belts or no welded beam.
+ */
+function belt_follows_tangent_links(
+  belt: BeltElement,
+  byId: Map<ID, MechanicalElement>,
+  mechanicalElements: MechanicalElement[],
+): Link[] {
+  const joinId = belt.fixedNodeStartID;
+  if (!belt.tight || belt.attachedGearsIDs.length === 0 || !joinId) return [];
+  const vias: BeltVia[] = [];
+  const gearPosKeys: string[] = [];
+  const radii: number[] = [];
+  const directions: boolean[] = [];
+  for (const { id, direction } of belt.attachedGearsIDs) {
+    const g = gearById(id, byId);
+    if (!g) return [];
+    vias.push({ pos: g.position, radius: g.radius, direction });
+    gearPosKeys.push(id);
+    radii.push(g.radius);
+    directions.push(direction);
+  }
+  const s0 = belt_project(vias, belt.positionStart, true).s;
+  const tangentAngle = belt_point_tangent(vias, s0, true).tangent.angle();
+  const refGear = gearById(belt.attachedGearsIDs[0].id, byId)!;
+
+  const links: Link[] = [];
+  mechanicalElements.forEach((el) => {
+    if (el.type !== "beam") return;
+    const b = el as BeamElement;
+    let drivenKey: string;
+    let dir: Point2;
+    if (b.fixedNodeStartID === joinId) {
+      drivenKey = `${b.id}:end`;
+      dir = b.positionEnd.sub(b.positionStart);
+    } else if (b.fixedNodeEndID === joinId) {
+      drivenKey = `${b.id}:start`;
+      dir = b.positionStart.sub(b.positionEnd);
+    } else return;
+    if (dir.length_squared() < 1e-12) return;
+    links.push({
+      type: "BeltFollowsTangent",
+      ddl: 1,
+      pivotKey: joinId,
+      drivenKey,
+      gearPosKeys,
+      radii,
+      directions,
+      refIndex: 0,
+      refAngleKey: belt.attachedGearsIDs[0].id,
+      s0,
+      thetaRef0: refGear.angle,
+      offset: dir.angle() - tangentAngle,
+      owner: b.id,
+    });
+  });
+  return links;
+}
+
+/**
+ * Inextensible-belt total-length link: radii baked, target `length` (defaults to
+ * the current measured length). Null for a belt with no gear. Used by the
+ * simulation (transmission) and, on demand, by the edition length edit/dimension.
+ */
+export function belt_length_link(
+  belt: BeltElement,
+  byId: Map<ID, MechanicalElement>,
+  mechanicalElements: MechanicalElement[],
+  length?: number,
+): Link | null {
+  if (belt.attachedGearsIDs.length === 0) return null;
+  const radii: number[] = [];
+  for (const { id } of belt.attachedGearsIDs) {
+    const g = gearById(id, byId);
+    if (!g) return null;
+    radii.push(g.radius);
+  }
+  return {
+    type: "BeltLength",
+    ddl: 1,
+    startKey: `${belt.id}:start`,
+    endKey: `${belt.id}:end`,
+    gearPosKeys: belt.attachedGearsIDs.map(({ id }) => id),
+    gearAngleKeys: belt.attachedGearsIDs.map(({ id }) => id),
+    radii,
+    directions: belt.attachedGearsIDs.map(({ direction }) => direction),
+    length: length ?? measure_belt_length(belt, mechanicalElements),
+    closed: belt.tight, // tight → closed gear cycle; loose → open chain
+    owner: belt.id,
+  };
+}
+
+/** Belt end-travel links (simulation, loose belts): each terminal rides its
+ *  tangent to the adjacent pulley as the belt runs. */
+function belt_end_travel_links(
+  belt: BeltElement,
+  byId: Map<ID, MechanicalElement>,
+): Link[] {
+  if (belt.tight || belt.attachedGearsIDs.length === 0) return [];
+  const mk = (
+    nodeKey: string,
+    entry: { id: ID; direction: boolean },
+    terminal: Point2,
+    sign: number,
+  ): Link | null => {
+    const g = gearById(entry.id, byId);
+    if (!g) return null;
+    // Terminal pinned ON the pulley rim (winch end): it orbits via
+    // GearPerimeterPin — BeltEndTravel (free tangent) would fight it, and its
+    // tangent point is degenerate. Skip it here.
+    if (terminal.distance_to(g.position) <= g.radius + 1) return null;
+    const dir = entry.direction;
+    const P = g.position.add(
+      Point2.circles_link(g.position, g.radius, dir, terminal, 0, false).start,
+    );
+    return {
+      type: "BeltEndTravel",
+      ddl: 1,
+      nodeKey,
+      gearPosKey: g.id,
+      radius: g.radius,
+      direction: dir,
+      refAngleKey: g.id,
+      rEps: g.radius * (dir ? -1 : 1),
+      sign,
+      lfree0: terminal.distance_to(P),
+      thetaRef0: g.angle,
+      owner: belt.id,
+    };
+  };
+  const gears = belt.attachedGearsIDs;
+  const links: Link[] = [];
+  const start = mk(`${belt.id}:start`, gears[0], belt.positionStart, -1);
+  const end = mk(`${belt.id}:end`, gears[gears.length - 1], belt.positionEnd, 1);
+  if (start) links.push(start);
+  if (end) links.push(end);
+  return links;
+}
+
+/** Build a byId lookup for a mechanism's elements. */
+export function elements_by_id(
+  mechanicalElements: MechanicalElement[],
+): Map<ID, MechanicalElement> {
+  const byId = new Map<ID, MechanicalElement>();
+  mechanicalElements.forEach((el) => byId.set(el.id, el));
+  return byId;
+}
+
+/** Belt rotation-transmission links (simulation): one BeltMeshAngle per pair of
+ *  consecutive wrapped gears, plus the closure pair when the belt is tight. */
+function belt_mesh_angle_links(
+  belt: BeltElement,
+  byId: Map<ID, MechanicalElement>,
+): Link[] {
+  const gears = belt.attachedGearsIDs;
+  if (gears.length < 2) return [];
+  const links: Link[] = [];
+  const pairs = gears.map((_, i) => [gears[i], gears[(i + 1) % gears.length]]);
+  // Interior pairs always; the wrap-around (closure) pair only when tight.
+  const count = belt.tight ? gears.length : gears.length - 1;
+  for (let i = 0; i < count; i++) {
+    const [a, b] = pairs[i];
+    const gA = gearById(a.id, byId);
+    const gB = gearById(b.id, byId);
+    if (!gA || !gB) continue;
+    links.push({
+      type: "BeltMeshAngle",
+      ddl: 1,
+      angleKey1: a.id,
+      angleKey2: b.id,
+      r1: gA.radius,
+      r2: gB.radius,
+      theta1_0: gA.angle,
+      theta2_0: gB.angle,
+      dir1: a.direction,
+      dir2: b.direction,
+      owner: belt.id,
+    });
+  }
+  return links;
 }
 
 /*
@@ -256,7 +524,11 @@ export function get_links_geometric(
   constraintElements: ConstraintElement[],
 ): Link[] {
   const links: Link[] = [];
+  const byId = new Map<ID, MechanicalElement>();
+  mechanicalElements.forEach((el) => byId.set(el.id, el));
   constraintElements.forEach((constraint) => {
+    // Belt-length dimensions need the belt's gears (built in the belt loop below).
+    if (constraint.type === "dimension-belt-length") return;
     links.push(constraint_to_link(constraint));
   });
 
@@ -333,6 +605,26 @@ export function get_links_geometric(
           key2: gearId,
         });
       });
+    }
+    // Tight-belt junction stays on the belt outline (edition). The belt LENGTH
+    // is constrained in edition ONLY when the user pins it with a
+    // dimension-belt-length (otherwise the length is a free DOF).
+    if (element.type === "belt") {
+      const junction = belt_junction_link(element, byId);
+      if (junction) links.push(junction);
+
+      const dim = constraintElements.find(
+        (c) => c.type === "dimension-belt-length" && c.beltID === element.id,
+      );
+      if (dim && dim.type === "dimension-belt-length") {
+        const link = belt_length_link(
+          element,
+          byId,
+          mechanicalElements,
+          dim.value,
+        );
+        if (link) links.push(link);
+      }
     }
   });
   return links;
@@ -595,6 +887,30 @@ export function get_links_simulation(
     });
   });
 
+  // ── Belts ────────────────────────────────────────────────────────────────
+  // Inextensible loop (length), tight-belt junction, and rotation transmission
+  // (angle coupling of consecutive wrapped gears). Radii + reference angles are
+  // baked (fixed in simulation).
+  mechanicalElements.forEach((element) => {
+    if (element.type !== "belt") return;
+    // Inextensible loop/chain (closed for tight, open for loose).
+    const length = belt_length_link(element, byId, mechanicalElements);
+    if (length) links.push(length);
+    if (element.tight) {
+      // Tight belt: junction node rides the loop and travels as it rotates,
+      // carrying (and re-orienting) any beam welded to it.
+      const pin = belt_pin_link(element, byId);
+      if (pin) links.push(pin);
+      links.push(
+        ...belt_follows_tangent_links(element, byId, mechanicalElements),
+      );
+    } else {
+      // Loose belt: its terminals travel along their tangent as the belt runs.
+      links.push(...belt_end_travel_links(element, byId));
+    }
+    links.push(...belt_mesh_angle_links(element, byId));
+  });
+
   // ── Rigidity (joins / masses / sliders) ──────────────────────────────────
   mechanicalElements.forEach((node) => {
     if (node.type !== "join" && node.type !== "slider" && node.type !== "mass")
@@ -722,6 +1038,17 @@ function add_rigidity_links(
   );
   const nodePos = "position" in node ? node.position : new Point2(0, 0);
   const anchor = (key: string) => nodes.posMasses.set(key, 0);
+
+  // A tight belt's junction join is governed by BeltPin (position) and
+  // BeltFollowsTangent (welded-beam orientation); skip the generic hub rigidity
+  // so they don't fight it.
+  const isBeltJunction = mechanicalElements.some(
+    (e) =>
+      e.type === "belt" &&
+      e.tight &&
+      (e.fixedNodeStartID === node.id || e.fixedNodeEndID === node.id),
+  );
+  if (isBeltJunction) return;
 
   /** Lock the relative orientation of two edges welded to the hub (used when a
    *  varying length forbids triangulation). `flip` marks the END as welded. */

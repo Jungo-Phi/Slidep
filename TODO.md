@@ -11,13 +11,22 @@
 
 - Analise des degrés de libertés en sous-parties
 
-- Dessin de courroie tendue prend en compte les extrémitées
+- Grab la courroie pour la tourner en simu
+- Grab l'extrémité du beam opposée au joint sur une courroie ne perment pas de la faire tourner correctement.
 - Créer la contrainte de courroie tendue (liée à une longueur ?)
 - Dans tous les cas, les courroies imposent un ratio aux engrenages connectés
 - Créer une validation : une courroie ne peut être tendue que si ses 2 extrémitées sont connectées et qu'il y a au moins 2 gears
 - Placer une courroie sur un engrenage en ayant déjà une doit briser la connection
+- Fusionner les connections start/end dans belt quand tendue
+
+- C'est quoi le vite.config.ts Manifest ?
+- De temps en temps, le snap to grid ne marche pas
+- Placer un engrenage sur un moteur laisse le moteur
+- Placer beltEnd après beltStart sur gear fait pas le attached
 
 ### À faire plus tard
+
+- unifier la méthode de catégories de canvasState dans get-hover et placing-element-actions
 
 - Unifier les "excluded_elements" et les conditions au début de "get_hover"
 - ground sur gearTooth ?
@@ -50,10 +59,7 @@
 - Revenir au dernier mode de simulation avec SPACE (sauvegarde)
 - Afficher / Cacher les probes
 - hover et sélection des probes (= élément lié)
-- Gestion des probes (Mesures Temporelles) :
-  - Configuration par probe : métrique, toggle graphique
-  - Zone de graphiques : courbes superposées ou séparées (Valeur vs Temps), export CSV, export image
-  - Nomenclature : distinguer "Contrainte" (MPa / Matériau) des contraintes géométriques
+- export CSV / image des graphiques
 - changer curseur sur ElementDisplay
 - changer le curseur sur les graphiques
 - pin graphique ?

@@ -27,6 +27,8 @@ import { CanvasState } from "../../types/canvas-state";
 import {
   draw_beam,
   draw_belt,
+  draw_belt_loop,
+  draw_belt_winding,
   draw_hover_edge_end,
   draw_damper,
   draw_gear,
@@ -513,8 +515,13 @@ export function drawMechanicalCanvas(
           ctx.restore();
           break;
         case "belt":
-          let attachedGears = element.attachedGearsIDs.map(
-            ({ id, direction }) => {
+          // Pulleys that lost belt contact during simulation are drawn as if the
+          // belt ran straight past them (skipped from the path).
+          const disconnectedGears = new Set(
+            element.disconnectedGearIndices ?? [],
+          );
+          let attachedGears = element.attachedGearsIDs
+            .map(({ id, direction }) => {
               return {
                 gear: get_mechanical_element_from_id(
                   id,
@@ -522,8 +529,8 @@ export function drawMechanicalCanvas(
                 ) as GearElement,
                 direction,
               };
-            },
-          );
+            })
+            .filter((_, i) => !disconnectedGears.has(i));
           switch (state.type) {
             case "MovingBeltBody":
               if (state.elementID !== element.id) break;
@@ -616,27 +623,59 @@ export function drawMechanicalCanvas(
               });
               break;
           }
-          const gearAngles = get_gear_angles(
-            element.positionStart,
-            element.positionEnd,
-            attachedGears,
-          );
-          draw_belt(
-            ctx,
-            element.positionStart,
-            element.positionEnd,
-            gearAngles,
-          );
-          if (isEdgeEndHovered && hoveredPart.type === "Edge") {
-            ctx.lineWidth = STROKE_WIDTHS.THICK;
-            const delta =
-              hoveredPart.part === "end"
-                ? element.positionEnd
-                : element.positionStart;
-            ctx.save();
-            ctx.translate(delta.x, delta.y);
-            draw_hover_edge_end(ctx);
-            ctx.restore();
+          if (element.tight && attachedGears.length > 0) {
+            // Tight belt: continuous closed loop around the pulleys, drawn
+            // independently of the junction position (no free ends).
+            draw_belt_loop(
+              ctx,
+              attachedGears.map(({ gear, direction }) => ({
+                pos: gear.position,
+                radius: gear.radius,
+                direction,
+              })),
+            );
+          } else {
+            const gearAngles = get_gear_angles(
+              element.positionStart,
+              element.positionEnd,
+              attachedGears,
+            );
+            draw_belt(
+              ctx,
+              element.positionStart,
+              element.positionEnd,
+              gearAngles,
+            );
+            if (isEdgeEndHovered && hoveredPart.type === "Edge") {
+              ctx.lineWidth = STROKE_WIDTHS.THICK;
+              const delta =
+                hoveredPart.part === "end"
+                  ? element.positionEnd
+                  : element.positionStart;
+              ctx.save();
+              ctx.translate(delta.x, delta.y);
+              draw_hover_edge_end(ctx);
+              ctx.restore();
+            }
+          }
+          // Winch (simulation): pulleys the belt has wound onto (|wrap| > 2π)
+          // get their surplus turns drawn as a coil.
+          if (element.gearWraps) {
+            element.attachedGearsIDs.forEach(({ id }, i) => {
+              const w = element.gearWraps![i];
+              if (disconnectedGears.has(i) || w === undefined) return;
+              if (Math.abs(w) < 2 * Math.PI) return;
+              const gear = get_mechanical_element_from_id(
+                id,
+                mechanicalElements,
+              ) as GearElement;
+              draw_belt_winding(
+                ctx,
+                gear.position,
+                gear.radius + DIM.BELT_WIDTH / 2,
+                w,
+              );
+            });
           }
           break;
         case "dimension-edge":

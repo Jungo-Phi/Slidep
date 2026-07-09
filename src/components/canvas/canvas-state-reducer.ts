@@ -339,10 +339,7 @@ export function canvasStateReducer(
           }
           break;
         case "SelectedElement": {
-          // Le drag ne démarre qu'à partir de la cible capturée au mouseDown
-          // (`pendingHit`) et une fois le seuil de déplacement franchi. On
-          // s'appuie sur `pendingHit`, jamais sur le hover courant : la souris
-          // peut déjà être loin de l'élément si elle a bougé vite.
+          // Le drag ne démarre qu'à partir de la cible capturée au mouseDown (`pendingHit`) et une fois le seuil de déplacement franchi.
           const hit = state.pendingHit;
           if (
             !hit ||
@@ -721,9 +718,7 @@ export function canvasStateReducer(
         case "SelectedElement":
           if (hoveredPart.type === "Void") break;
           if (hoveredPart.id === state.elementID) {
-            // Clic (sans drag) sur l'élément déjà sélectionné : on n'édite que si
-            // c'était le 2ᵉ clic sur une dimension (armedForEdit). Sinon on reste
-            // simplement sélectionné.
+            // On n'édite une dimension seulement au 2ᵉ clic (armedForEdit).
             if (!state.armedForEdit) break;
             const constraint = constraintElements.find(
               (element) => element.id === hoveredPart.id,

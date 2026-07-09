@@ -66,6 +66,18 @@ function keys_of(link: Link): string[] {
       return [link.angleKey1, link.angleKey2];
     case "GearPerimeterPin":
       return [link.nodeKey, link.centerKey, link.angleKey];
+    case "BeltLength":
+      return [link.startKey, link.endKey, ...link.gearPosKeys];
+    case "BeltJunction":
+      return [link.nodeKey, ...link.gearPosKeys];
+    case "BeltPin":
+      return [link.nodeKey, ...link.gearPosKeys];
+    case "BeltFollowsTangent":
+      return [link.pivotKey, link.drivenKey, ...link.gearPosKeys];
+    case "BeltMeshAngle":
+      return [link.angleKey1, link.angleKey2];
+    case "BeltEndTravel":
+      return [link.nodeKey, link.gearPosKey];
     case "BeamFollowsAngle":
       return [link.pivotKey, link.drivenKey, link.angleKey];
     case "HandleGrab":

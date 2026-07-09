@@ -108,6 +108,7 @@ export function element_to_hovered_part(
     case "dimension-edge-to-node":
     case "dimension-angle":
     case "dimension-radius":
+    case "dimension-belt-length":
     case "horizontal-align-edge":
     case "horizontal-align-nodes":
     case "vertical-align-edge":
@@ -163,6 +164,10 @@ export function connected_constraints(
         break;
       case "dimension-radius":
         if (constraint.gearID === elementID)
+          connectedConstraintsIDs.push(constraint.id);
+        break;
+      case "dimension-belt-length":
+        if (constraint.beltID === elementID)
           connectedConstraintsIDs.push(constraint.id);
         break;
       case "gear-ratio":

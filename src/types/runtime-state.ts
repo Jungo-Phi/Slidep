@@ -156,6 +156,12 @@ export interface KinematicSnapshot {
   angles: Map<string, number>;
   /** Constraints left unsatisfied at this frame (empty/undefined when all met). */
   unsatisfied?: ConstraintResidual[];
+  /** Belt id → indices (into attachedGearsIDs) of pulleys that lost belt contact
+   *  during simulation, so the belt is drawn running straight past them. */
+  disconnectedBeltGears?: Map<ID, number[]>;
+  /** Belt id → continuous (unwrapped) wrap angle per attached pulley; magnitudes
+   *  above 2π mean the belt has wound onto that pulley (drawn as extra turns). */
+  beltWraps?: Map<ID, number[]>;
 }
 
 // ─────────────────────────────────────────────────────────────

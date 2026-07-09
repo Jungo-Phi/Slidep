@@ -61,7 +61,8 @@ export function apply_actions(
         newAction.type !== "MoveEdgeBody" &&
         newAction.type !== "MoveElements" &&
         newAction.type !== "ChangeGearRadius" &&
-        newAction.type !== "ChangeEdgeLength"
+        newAction.type !== "ChangeEdgeLength" &&
+        newAction.type !== "ChangeBeltLength"
       )
         break;
 
@@ -118,6 +119,10 @@ export function apply_actions(
           if (secondToLastAction.type !== newAction.type) break;
           secondToLastAction.newLength = newAction.newLength;
           break;
+        case "ChangeBeltLength":
+          if (secondToLastAction.type !== newAction.type) break;
+          secondToLastAction.newLength = newAction.newLength;
+          break;
       }
       break;
     case "ChangeDimension":
@@ -127,6 +132,7 @@ export function apply_actions(
         newAction.type !== "ChangeDimensionEdgeToNodeValue" &&
         newAction.type !== "ChangeDimensionAngleValue" &&
         newAction.type !== "ChangeDimensionRadiusValue" &&
+        newAction.type !== "ChangeDimensionBeltLengthValue" &&
         newAction.type !== "ChangeGearRatioValue"
       )
         break;
@@ -214,7 +220,8 @@ export function apply_actions(
           newAction.element.type !== "normal" &&
           newAction.element.type !== "parallel" &&
           newAction.element.type !== "equal" &&
-          newAction.element.type !== "gear-ratio")
+          newAction.element.type !== "gear-ratio" &&
+          newAction.element.type !== "dimension-belt-length")
       )
         break;
       oldNodes = get_geom_nodes(mechanism.mechanicalElements);

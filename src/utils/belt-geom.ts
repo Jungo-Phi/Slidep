@@ -1,5 +1,29 @@
 import { get_mechanical_element_from_id } from "../components/mechanism/connect-actions";
 import { BeltElement, GearElement, MechanicalElement, Point2 } from "../types";
+import { BeltVia, belt_pieces } from "./belt-path";
+
+/**
+ * Build the ordered via-points of a belt (start terminal → gears → end
+ * terminal) from the mechanism, resolving each attached gear. Shared by the
+ * length measurement and the geometric solver's belt-length constraint.
+ */
+export function get_belt_vias(
+  belt: BeltElement,
+  mechanicalElements: MechanicalElement[],
+): BeltVia[] {
+  const gears: BeltVia[] = belt.attachedGearsIDs.map(({ id, direction }) => {
+    const gear = get_mechanical_element_from_id(
+      id,
+      mechanicalElements,
+    ) as GearElement;
+    return { pos: gear.position, radius: gear.radius, direction };
+  });
+  return [
+    { pos: belt.positionStart, radius: 0, direction: false },
+    ...gears,
+    { pos: belt.positionEnd, radius: 0, direction: false },
+  ];
+}
 
 export function get_gear_angles(
   positionStart: Point2,
@@ -73,6 +97,26 @@ export function get_gear_angles(
     });
   }
   return gearAngles;
+}
+
+/**
+ * Mesure la longueur mécanique d'une courroie : segments droits tangents + arcs
+ * d'enroulement, au rayon brut (le `+BELT_WIDTH/2` du dessin est cosmétique).
+ * Une courroie **tendue** est une boucle fermée sur ses poulies ; une courroie
+ * libre est une chaîne ouverte entre ses extrémités.
+ */
+export function measure_belt_length(
+  belt: BeltElement,
+  mechanicalElements: MechanicalElement[],
+): number {
+  const vias = get_belt_vias(belt, mechanicalElements);
+  if (belt.tight) {
+    const gears = vias.slice(1, -1); // drop the start/end terminals
+    return belt_pieces(gears, true).reduce((acc, p) => acc + p.length, 0);
+  }
+  // Open chain via belt_pieces so a terminal wound onto its gear (winch) is
+  // measured through its arc, not a degenerate tangent.
+  return belt_pieces(vias, false).reduce((acc, p) => acc + p.length, 0);
 }
 
 /**

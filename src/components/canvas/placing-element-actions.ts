@@ -525,7 +525,16 @@ function handle_place_element(
 
   const actions: Action[] = [{ type: "CreateElement", element: newElement }];
 
-  if ("startHover" in state && "positionStart" in newElement) {
+  if (
+    "startHover" in state &&
+    "positionStart" in newElement &&
+    !(
+      state.type === "PlacingBeltEnd" &&
+      hoveredPart.type === "Edge" &&
+      hoveredPart.id === "----"
+    )
+  ) {
+    console.log("connected start hover");
     actions.push(
       ...connect_elements(
         state.startHover,

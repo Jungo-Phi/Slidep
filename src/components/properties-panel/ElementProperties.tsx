@@ -50,6 +50,7 @@ import { HoveredPart } from "../../types/hovered-part";
 import NumberInput from "./components/NumberInput";
 import ElementDisplay from "./components/ElementDisplay";
 import { element_to_hovered_part } from "../canvas/utils";
+import { measure_belt_length } from "../../utils/belt-geom";
 import React from "react";
 
 interface MotorSectionProps {
@@ -546,6 +547,50 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
             }
           />
         )}
+        {element.type === "belt" &&
+          (() => {
+            const beltDim = mechanism.constraintElements.find(
+              (c) =>
+                c.type === "dimension-belt-length" && c.beltID === element.id,
+            );
+            return (
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={!!beltDim}
+                    onChange={(_, checked) => {
+                      if (checked) {
+                        applyActions(
+                          [
+                            {
+                              type: "CreateElement",
+                              element: {
+                                type: "dimension-belt-length",
+                                id: crypto.randomUUID(),
+                                position: element.positionStart,
+                                beltID: element.id,
+                                value: measure_belt_length(
+                                  element,
+                                  mechanism.mechanicalElements,
+                                ),
+                              },
+                            },
+                          ],
+                          "CreateConstraint",
+                        );
+                      } else if (beltDim) {
+                        applyActions(
+                          [{ type: "DeleteElement", element: beltDim }],
+                          "Connects",
+                        );
+                      }
+                    }}
+                  />
+                }
+                label="Longueur fixée"
+              />
+            );
+          })()}
         {element.type === "mass" && (
           <NumberInput
             label="kg"
@@ -712,8 +757,51 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
             }
           />
           <NumberInput
-            value={element.positionStart.distance_to(element.positionEnd)}
+            value={
+              element.type === "belt"
+                ? measure_belt_length(element, mechanism.mechanicalElements)
+                : element.positionStart.distance_to(element.positionEnd)
+            }
             onChange={(length) => {
+              if (element.type === "belt") {
+                const beltDim = mechanism.constraintElements.find(
+                  (c) =>
+                    c.type === "dimension-belt-length" &&
+                    c.beltID === element.id,
+                );
+                if (beltDim && beltDim.type === "dimension-belt-length") {
+                  // Persistent dimension: update its value.
+                  applyActions(
+                    [
+                      {
+                        type: "ChangeDimensionBeltLengthValue",
+                        id: beltDim.id,
+                        newValue: length,
+                        oldValue: beltDim.value,
+                      },
+                    ],
+                    "ChangeDimension",
+                  );
+                } else {
+                  // Momentary inextensible-belt constraint (edition): the loop is
+                  // held at the requested length while the gears relax.
+                  applyActions(
+                    [
+                      {
+                        type: "ChangeBeltLength",
+                        id: element.id,
+                        newLength: length,
+                        oldLength: measure_belt_length(
+                          element,
+                          mechanism.mechanicalElements,
+                        ),
+                      },
+                    ],
+                    "MoveElement",
+                  );
+                }
+                return;
+              }
               const linkedDim = mechanism.constraintElements.find(
                 (c) => c.type === "dimension-edge" && c.edgeID === element.id,
               );
