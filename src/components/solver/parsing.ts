@@ -13,6 +13,7 @@ import {
   KinNodes,
   SpringElement,
 } from "../../types";
+import { DIM } from "../../constants/rendering-specs";
 import { measure_belt_length } from "../../utils/belt-geom";
 import {
   BeltVia,
@@ -399,9 +400,12 @@ function belt_follows_tangent_links(
 }
 
 /**
- * Inextensible-belt total-length link: radii baked, target `length` (defaults to
- * the current measured length). Null for a belt with no gear. Used by the
- * simulation (transmission) and, on demand, by the edition length edit/dimension.
+ * Inextensible-belt link — ONE per belt. Radii baked, target `length` (defaults to
+ * the current measured length). Null for a belt with no gear. For a TIGHT belt it
+ * just holds the closed loop's length; for a LOOSE belt it also governs the two
+ * terminals (φ-driven differential + winding), so it carries the extra open-belt
+ * fields (phaseKey, diff0, external winch flags). Used by the simulation and, on
+ * demand, by the edition length edit/dimension.
  */
 export function belt_length_link(
   belt: BeltElement,
@@ -410,36 +414,6 @@ export function belt_length_link(
   length?: number,
 ): Link | null {
   if (belt.attachedGearsIDs.length === 0) return null;
-  const radii: number[] = [];
-  for (const { id } of belt.attachedGearsIDs) {
-    const g = gearById(id, byId);
-    if (!g) return null;
-    radii.push(g.radius);
-  }
-  return {
-    type: "BeltLength",
-    ddl: 1,
-    startKey: `${belt.id}:start`,
-    endKey: `${belt.id}:end`,
-    gearPosKeys: belt.attachedGearsIDs.map(({ id }) => id),
-    gearAngleKeys: belt.attachedGearsIDs.map(({ id }) => id),
-    radii,
-    directions: belt.attachedGearsIDs.map(({ direction }) => direction),
-    length: length ?? measure_belt_length(belt, mechanicalElements),
-    closed: belt.tight, // tight → closed gear cycle; loose → open chain
-    owner: belt.id,
-  };
-}
-
-/** Belt free-ends link (simulation, loose belts): ONE link governing both
- *  terminals — inextensible total length (their sum) + φ-driven differential.
- *  Null for tight/empty belts. */
-function belt_free_ends_link(
-  belt: BeltElement,
-  byId: Map<ID, MechanicalElement>,
-  mechanicalElements: MechanicalElement[],
-): Link | null {
-  if (belt.tight || belt.attachedGearsIDs.length === 0) return null;
   const gears = belt.attachedGearsIDs;
   const radii: number[] = [];
   const directions: boolean[] = [];
@@ -455,15 +429,31 @@ function belt_free_ends_link(
   }
   vias.push({ pos: belt.positionEnd, radius: 0, direction: false });
 
-  // Initial differential fsStart − fsEnd from the drawn geometry (the two
-  // terminal tangent runs), matching how the constraint measures them.
+  const base = {
+    type: "BeltLength" as const,
+    ddl: 1 as const,
+    startKey: `${belt.id}:start`,
+    endKey: `${belt.id}:end`,
+    gearPosKeys: gears.map(({ id }) => id),
+    gearAngleKeys: gears.map(({ id }) => id),
+    radii,
+    directions,
+    length: length ?? measure_belt_length(belt, mechanicalElements),
+    closed: belt.tight, // tight → closed gear cycle; loose → open chain
+    owner: belt.id,
+  };
+  if (belt.tight) return base;
+
+  // ── Loose belt: open-belt terminal fields ──
+  // Initial differential fsStart − fsEnd from the drawn geometry (the two terminal
+  // tangent runs), matching how the constraint measures them.
   const path = compute_belt_path(vias);
   const pairs = vias.length - 1;
   const fsStart0 = belt.positionStart.distance_to(path.inPoints[0]);
   const fsEnd0 = belt.positionEnd.distance_to(path.outPoints[pairs - 1]);
 
-  // A terminal whose fixed node is pinned on a gear perimeter (winch: a join with
-  // a GearPerimeterPin) is driven externally — this link must not position it,
+  // A terminal whose fixed node is pinned on a gear perimeter (winch: a join with a
+  // GearPerimeterPin) is driven externally — the constraint must not position it,
   // only account for its wound arc. Everything else is a genuine free end.
   const perimeterPinned = new Set<ID>();
   for (const el of mechanicalElements)
@@ -478,21 +468,36 @@ function belt_free_ends_link(
     belt.fixedNodeEndID !== undefined &&
     perimeterPinned.has(belt.fixedNodeEndID);
 
+  // A terminal placed ON its pulley (on the toothed rim) but WITHOUT a join has no
+  // GearPerimeterPin to carry it — so pre-bake its wound state here: it then orbits
+  // with the gear from frame 1 (the runtime onGear trigger is tuned tight for a
+  // smooth mid-run winding and would miss a terminal already sitting on a tooth,
+  // which can be up to GEAR_TEETH_SIZE beyond the rim). Baked angle uses the seeded
+  // gear angle (get_sim_nodes seeds θ = gear.angle), so the frame-1 orbit is stable.
+  const g0 = gearById(gears[0].id, byId);
+  const gL = gearById(gears[gears.length - 1].id, byId);
+  const onGear = (t: Point2, g: GearElement | null) =>
+    !!g && t.distance_to(g.position) <= g.radius + DIM.GEAR_TEETH_SIZE + 1;
+  const startWind =
+    !startExternal && onGear(belt.positionStart, g0)
+      ? belt.positionStart.sub(g0!.position).angle() - g0!.angle
+      : undefined;
+  const endWind =
+    !endExternal && onGear(belt.positionEnd, gL)
+      ? belt.positionEnd.sub(gL!.position).angle() - gL!.angle
+      : undefined;
+
   return {
-    type: "BeltFreeEnds",
-    ddl: 2,
-    startKey: `${belt.id}:start`,
-    endKey: `${belt.id}:end`,
-    gearPosKeys: gears.map(({ id }) => id),
-    gearAngleKeys: gears.map(({ id }) => id),
-    radii,
-    directions,
+    ...base,
     phaseKey: belt_phase_key(belt.id),
-    length: measure_belt_length(belt, mechanicalElements),
     diff0: fsStart0 - fsEnd0,
     startExternal,
     endExternal,
-    owner: belt.id,
+    startWind,
+    endWind,
+    // φ starts at 0, so a pre-baked wound terminal wound on at φ = 0.
+    startWindPhi: startWind !== undefined ? 0 : undefined,
+    endWindPhi: endWind !== undefined ? 0 : undefined,
   };
 }
 
@@ -918,7 +923,8 @@ export function get_links_simulation(
   // baked (fixed in simulation).
   mechanicalElements.forEach((element) => {
     if (element.type !== "belt") return;
-    // Inextensible loop/chain (closed for tight, open for loose).
+    // Inextensible loop/chain — ONE link (closed for tight, open for loose). For a
+    // loose belt it also governs both terminals (length sum + φ differential).
     const length = belt_length_link(element, byId, mechanicalElements);
     if (length) links.push(length);
     if (element.tight) {
@@ -929,10 +935,6 @@ export function get_links_simulation(
       links.push(
         ...belt_follows_tangent_links(element, byId, mechanicalElements),
       );
-    } else {
-      // Loose belt: one link governs both terminals (inextensible length + φ feed).
-      const freeEnds = belt_free_ends_link(element, byId, mechanicalElements);
-      if (freeEnds) links.push(freeEnds);
     }
     links.push(...belt_phase_gear_links(element, byId, nodes));
   });

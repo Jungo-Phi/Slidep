@@ -3,7 +3,6 @@ import { ConstraintResidual } from "../../types/runtime-state";
 import {
   applyAngleConstraint,
   applyBeamFollowsAngleConstraint,
-  applyBeltFreeEndsConstraint,
   applyBeltFollowsTangentConstraint,
   applyBeltJunctionConstraint,
   applyBeltLengthConstraint,
@@ -224,19 +223,7 @@ export function PBD_kinematic_solver(
           );
           break;
         case "BeltLength":
-          err = applyBeltLengthConstraint(
-            positions,
-            posMasses,
-            link.startKey,
-            link.endKey,
-            link.gearPosKeys,
-            link.radii,
-            link.directions,
-            link.length,
-            link.closed,
-            link.disconnected,
-            link.wraps,
-          );
+          err = applyBeltLengthConstraint(positions, posMasses, angles, link);
           break;
         case "BeltJunction":
           err = applyBeltJunctionConstraint(
@@ -280,9 +267,6 @@ export function PBD_kinematic_solver(
             link.thetaRef0,
             link.offset,
           );
-          break;
-        case "BeltFreeEnds":
-          err = applyBeltFreeEndsConstraint(positions, posMasses, angles, link);
           break;
         case "BeltPhaseGear":
           err = applyBeltPhaseGearConstraint(

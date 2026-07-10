@@ -378,10 +378,11 @@ export function drawMechanicalCanvas(
               parentBeam.positionEnd.sub(parentBeam.positionStart).angle(),
             );
           }
-          if (element.isGrounded) {
-            if (element.type === "pivot" && element.motor) ctx.translate(0, 7);
+          if (
+            element.isGrounded &&
+            !(element.type === "pivot" && element.motor)
+          ) {
             draw_ground(ctx);
-            if (element.type === "pivot" && element.motor) ctx.translate(0, -7);
           }
           if (element.type === "slidep" && element.parentBeamID) {
             const parentBeam = get_mechanical_element_from_id(
@@ -405,7 +406,7 @@ export function drawMechanicalCanvas(
               break;
             case "pivot": {
               if (element.motor) {
-                draw_motor(ctx);
+                draw_motor(ctx, element.isGrounded);
                 const rotatingEdges = [...element.rotatingEdgesIDs];
                 rotatingEdges.filter(
                   (el) => el !== element.motor!.parentBeamID,
@@ -415,7 +416,6 @@ export function drawMechanicalCanvas(
                     edgeID,
                     mechanicalElements,
                   );
-                  // rotatingEdgesIDs may also reference a pinned gear — skip it.
                   if (!("positionStart" in edge)) return;
                   draw_edge_fake_end(
                     ctx,
@@ -424,7 +424,7 @@ export function drawMechanicalCanvas(
                     hoveredPart,
                     state,
                     constraintElements,
-                    DIM.MOTOR_RADIUS,
+                    DIM.MOTOR_RADIUS + DIM.MOTOR_CORNER_RADIUS + 1,
                   );
                 });
               }
@@ -975,10 +975,7 @@ export function drawMechanicalCanvas(
           draw_ground(ctx);
           break;
         case "PlacingMotor":
-          ctx.translate(0, 7);
-          draw_ground(ctx);
-          ctx.translate(0, -7);
-          draw_motor(ctx);
+          draw_motor(ctx, true);
           draw_pivot(ctx, false);
           break;
       }

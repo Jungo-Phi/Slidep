@@ -99,7 +99,15 @@ export type Link = {
       radKey2: string;
     }
   | { type: "GearRatio"; ddl: 1; key1: string; key2: string; ratio: number }
-  // Gradient wrt a centre = −(sum of adjacent tangent units). Simulation-only.
+  // Inextensible belt, ONE link per belt, both solvers' simulation path. Holds the
+  // total drawn length at `length`; gradient wrt a pulley centre = −(sum of adjacent
+  // tangent units). For a CLOSED (tight) belt that is all it does. For an OPEN
+  // (loose) belt it ALSO governs the two terminal endpoints: the length pins the SUM
+  // of their free runs while the shared travel φ drives their DIFFERENTIAL (one run
+  // winds in as the other feeds out), and an exhausted run winds onto its pulley and
+  // orbits with θ (start on gearPosKeys[0], end on gearPosKeys[last]) so the motor
+  // never blocks. Bidirectional: dragging a free end advances φ. (This absorbed the
+  // former separate BeltFreeEnds link.)
   | {
       type: "BeltLength";
       ddl: 1;
@@ -111,9 +119,33 @@ export type Link = {
       directions: boolean[];
       length: number;
       closed: boolean;
-      // wrap angle per pulley
+      // Continuous (unwrapped) wrap per pulley, tracked each frame; whole turns feed
+      // the length so winding past 2π stays smooth. disconnected = lost contact.
       wraps?: number[];
       disconnected?: boolean[];
+      // ── Open-belt terminal handling (unused when closed) ──
+      phaseKey?: string; // belt travel φ `${beltId}:phi`
+      diff0?: number; // initial (fsStart − fsEnd), the differential reference
+      // A terminal already pinned on its pulley perimeter (winch: a join with a
+      // GearPerimeterPin) is driven EXTERNALLY — this link must not position it,
+      // only read it (its growing wound arc pulls the free end in). Baked at parse.
+      startExternal?: boolean;
+      endExternal?: boolean;
+      // Sim state: baked gear-relative angle of a terminal wound onto its pulley
+      // (undefined while free), plus the belt travel φ at the moment it wound on —
+      // the wound/unwound decision is driven off φ (how far the belt has fed since),
+      // not the terminal's illusory tangent stub near the rim.
+      startWind?: number;
+      endWind?: number;
+      startWindPhi?: number;
+      endWindPhi?: number;
+      // Transient (per-frame): which terminal of THIS belt is currently grabbed.
+      // The length constraint drives φ to unwind the OPPOSITE (wound) end only when
+      // the user pulls a FREE terminal — that pull must be able to peel the belt off
+      // the far pulley. A motor turns the pulley directly (no φ coupling needed), and
+      // grabbing the wound end itself just detaches it (DETACH_TOL), so neither uses
+      // this path.
+      grabbedTerminal?: "start" | "end";
     }
   // Tight-belt junction (geometric-solver)
   | {
@@ -143,37 +175,6 @@ export type Link = {
       // Continuous wrap per pulley (copied from the belt's BeltLength link)
       // so the junction travels around wound pulleys (>2π).
       // Undefined until the first sim frame.
-      wraps?: number[];
-    }
-  // Belt free ends (simulation, loose belts): ONE link per belt governing BOTH terminal endpoints together.
-  // The belt is inextensible, so the total drawn length is held at `length` (this pins the SUM of the two free runs).
-  // the shared travel φ drives their DIFFERENTIAL, so one run winds in as the other feeds out.
-  // When a run is exhausted its terminal winds onto its pulley and orbits with θ (start on gearPosKeys[0], end on gearPosKeys[last]),
-  // the loop stays length-correct and the motor never blocks. Bidirectional: dragging a free end advances φ.
-  | {
-      type: "BeltFreeEnds";
-      ddl: 2;
-      startKey: string;
-      endKey: string;
-      gearPosKeys: string[];
-      gearAngleKeys: string[];
-      radii: number[];
-      directions: boolean[];
-      phaseKey: string; // belt travel φ `${beltId}:phi`
-      length: number; // L0, total inextensible belt length
-      diff0: number; // initial (fsStart − fsEnd), the differential reference
-      // A terminal already pinned on its pulley perimeter (winch: a join with a
-      // GearPerimeterPin) is driven EXTERNALLY — this link must not position it,
-      // only read it (its growing wound arc pulls the free end in). Baked at parse.
-      startExternal?: boolean;
-      endExternal?: boolean;
-      // Sim state: baked gear-relative angle of a terminal wound onto its pulley,
-      // undefined while the run is free.
-      startWind?: number;
-      endWind?: number;
-      // Sim state: continuous (unwrapped) wrap per pulley, copied each frame from
-      // the belt's BeltLength link, so a wound terminal's arc grows smoothly past
-      // 2π (no 0/2π seam jump that would snap the free end).
       wraps?: number[];
     }
   // Belt follows tangent (simulation): a beam welded to the belt junction keeps

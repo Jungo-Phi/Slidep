@@ -5,8 +5,7 @@
 
 import React from "react";
 import { Box, IconButton, Typography } from "@mui/material";
-import looseBeltIconUrl from "../../../assets/icons/palette/loose-belt.svg";
-import tightBeltIconUrl from "../../../assets/icons/palette/tight-belt.svg";
+import { icon } from "../../element-palette/iconDataUris";
 
 interface BeltTensionSwitchProps {
   tightened: boolean;
@@ -39,7 +38,7 @@ export const BeltTensionSwitch: React.FC<BeltTensionSwitchProps> = ({
         <Box
           component="img"
           style={{ width: 28, height: 28 }}
-          src={tightened ? tightBeltIconUrl : looseBeltIconUrl}
+          src={tightened ? icon("tight-belt") : icon("loose-belt")}
         />
       </IconButton>
       <Typography variant="body2">{tightened ? "Tendue" : "Libre"}</Typography>

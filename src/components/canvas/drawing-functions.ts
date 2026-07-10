@@ -1082,25 +1082,67 @@ export function draw_moment(
   ctx.restore();
 }
 
-/** Draws a motor indicator: rotating arrow arc centered at origin (pivot must be translated). */
-export function draw_motor(ctx: CanvasRenderingContext2D) {
+/** Draws a motor indicator (pivot must be translated). */
+export function draw_motor(ctx: CanvasRenderingContext2D, isGrounded: boolean) {
+  const bottom = DIM.MOTOR_RADIUS - 2;
+
   ctx.beginPath();
-  ctx.arc(0, 0, DIM.MOTOR_RADIUS, 0, TAU);
+  if (isGrounded) {
+    ctx.moveTo(-DIM.MOTOR_RADIUS, bottom);
+    ctx.arc(0, 0, DIM.MOTOR_RADIUS, TAU / 2, 0);
+    ctx.lineTo(DIM.MOTOR_RADIUS, bottom);
+  } else {
+    ctx.arc(0, 0, DIM.MOTOR_RADIUS, 0, TAU);
+  }
+  ctx.closePath();
+  if (isGrounded) {
+    ctx.arc(-DIM.MOTOR_RADIUS + 5, bottom - 5, 2, 0, TAU);
+    // ctx.arc(DIM.MOTOR_RADIUS - 5, bottom - 5, 2, 0, TAU);
+  }
   ctx.arc(0, 0, DIM.PIVOT_INNER_RADIUS, 0, TAU);
   ctx.fill("evenodd");
 
   ctx.beginPath();
-  ctx.arc(0, 0, DIM.MOTOR_RADIUS, 0, TAU);
+  if (isGrounded) {
+    ctx.arc(
+      -DIM.MOTOR_RADIUS + DIM.MOTOR_CORNER_RADIUS,
+      bottom - DIM.MOTOR_CORNER_RADIUS,
+      DIM.MOTOR_CORNER_RADIUS,
+      TAU / 4,
+      TAU / 2,
+    );
+    ctx.arc(0, 0, DIM.MOTOR_RADIUS, TAU / 2, 0);
+    ctx.arc(
+      DIM.MOTOR_RADIUS - DIM.MOTOR_CORNER_RADIUS,
+      bottom - DIM.MOTOR_CORNER_RADIUS,
+      DIM.MOTOR_CORNER_RADIUS,
+      0,
+      TAU / 4,
+    );
+  } else {
+    ctx.arc(0, 0, DIM.MOTOR_RADIUS, 0, TAU);
+  }
+  ctx.closePath();
   ctx.stroke();
+  if (isGrounded) {
+    ctx.lineWidth -= 0.5;
+    ctx.beginPath();
+    ctx.arc(-DIM.MOTOR_RADIUS + 5, bottom - 5, 2, 0, TAU);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(DIM.MOTOR_RADIUS - 5, bottom - 5, 2, 0, TAU);
+    ctx.stroke();
+    ctx.lineWidth += 0.5;
+  }
 
-  const inner = DIM.PIVOT_OUTER_RADIUS + 3;
-  const outer = DIM.MOTOR_RADIUS;
+  const inner = DIM.PIVOT_OUTER_RADIUS + 3.5;
+  const outer = DIM.MOTOR_RADIUS - 0.5;
 
   ctx.beginPath();
   ctx.moveTo(inner, 0);
   ctx.lineTo(outer, 0);
   ctx.moveTo(0, inner);
-  ctx.lineTo(0, outer);
+  ctx.lineTo(0, outer - (isGrounded ? 2 : 0));
   ctx.moveTo(-inner, 0);
   ctx.lineTo(-outer, 0);
   ctx.moveTo(0, -inner);

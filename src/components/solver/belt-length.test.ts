@@ -2,9 +2,8 @@ import { describe, it, expect } from "vitest";
 import { Point2 } from "../../types/point2";
 import { Link } from "../../types";
 import { PBD_kinematic_solver } from "./PBD_kinematic_solver";
-import { rewire_belt_mesh } from "./kinematic-simulation";
+import { rewire_belt_mesh, update_belt_disconnects } from "./kinematic-simulation";
 import {
-  applyBeltFreeEndsConstraint,
   applyBeltLengthConstraint,
   applyBeltFollowsTangentConstraint,
   applyBeltJunctionConstraint,
@@ -548,7 +547,7 @@ describe("continuous wrap tracking (mid-sim disconnect signal)", () => {
   });
 });
 
-describe("BeltFreeEnds constraint (loose belt, both ends ↔ φ)", () => {
+describe("BeltLength constraint — loose belt terminals ↔ φ", () => {
   const r = 40;
   const dir = false;
   const c = P(0, 0);
@@ -560,21 +559,22 @@ describe("BeltFreeEnds constraint (loose belt, both ends ↔ φ)", () => {
     { pos: c, radius: r, direction: dir },
     { pos: e, radius: 0, direction: false },
   ];
-  const L0 = compute_belt_path(viasOf(start0, end0)).length;
   const path0 = compute_belt_path(viasOf(start0, end0));
+  const L0 = path0.length;
   const diff0 =
     start0.distance_to(path0.inPoints[0]) - end0.distance_to(path0.outPoints[1]);
-  const mkLink = (): Extract<Link, { type: "BeltFreeEnds" }> => ({
-    type: "BeltFreeEnds",
-    ddl: 2,
+  const mkLink = (): Extract<Link, { type: "BeltLength" }> => ({
+    type: "BeltLength",
+    ddl: 1,
     startKey: "start",
     endKey: "end",
     gearPosKeys: ["g"],
     gearAngleKeys: ["g"],
     radii: [r],
     directions: [dir],
-    phaseKey: "phi",
     length: L0,
+    closed: false,
+    phaseKey: "phi",
     diff0,
   });
   const setup = () => ({
@@ -596,7 +596,7 @@ describe("BeltFreeEnds constraint (loose belt, both ends ↔ φ)", () => {
         for (let it = 0; it < 200; it++) {
           angles.set("g", theta); // motor pins θ
           applyBeltPhaseGearConstraint(angles, "g", "phi", r, dir ? -1 : 1, 0);
-          applyBeltFreeEndsConstraint(positions, posMasses, angles, link);
+          applyBeltLengthConstraint(positions, posMasses, angles, link);
         }
       }
       expect(measure(positions)).toBeCloseTo(L0, 0); // length held
@@ -610,7 +610,7 @@ describe("BeltFreeEnds constraint (loose belt, both ends ↔ φ)", () => {
     const held = P(-70, -70); // start dragged toward the gear
     for (let it = 0; it < 400; it++) {
       positions.set("start", held.clone()); // grabbed
-      applyBeltFreeEndsConstraint(positions, posMasses, angles, link);
+      applyBeltLengthConstraint(positions, posMasses, angles, link);
     }
     expect(Math.abs(angles.get("phi")!)).toBeGreaterThan(5); // pulley turned
   });
@@ -621,7 +621,7 @@ describe("BeltFreeEnds constraint (loose belt, both ends ↔ φ)", () => {
     const e = P(60, -30);
     const vias = viasOf(s, e);
     const pth = compute_belt_path(vias);
-    const link: Extract<Link, { type: "BeltFreeEnds" }> = {
+    const link: Extract<Link, { type: "BeltLength" }> = {
       ...mkLink(),
       length: pth.length,
       diff0: s.distance_to(pth.inPoints[0]) - e.distance_to(pth.outPoints[1]),
@@ -635,14 +635,106 @@ describe("BeltFreeEnds constraint (loose belt, both ends ↔ φ)", () => {
       for (let it = 0; it < 200; it++) {
         angles.set("g", theta);
         applyBeltPhaseGearConstraint(angles, "g", "phi", r, dir ? -1 : 1, 0);
-        applyBeltFreeEndsConstraint(positions, posMasses, angles, link);
+        applyBeltLengthConstraint(positions, posMasses, angles, link);
       }
       if (f === 80) phiAtStall = angles.get("phi")!;
     }
     expect(link.startWind).not.toBeUndefined(); // wound on
     expect(angles.get("phi")! - phiAtStall).toBeGreaterThan(30); // still turning, no block
-    expect(measure(positions)).toBeCloseTo(pth.length, 0); // length conserved while wound
     expect(positions.get("start")!.distance_to(c)).toBeCloseTo(r, 2); // orbiting the rim
+    expect(measure(positions)).toBeCloseTo(pth.length, 0); // length held while wound
+  });
+});
+
+describe("BeltLength — pull a free end: reel-in → wind → unwind → detach", () => {
+  // Single-pulley loose belt. Faithful per-frame sim (mirrors step_simulation's belt
+  // handling): update_belt_disconnects, mark the grabbed terminal, then PBD solve.
+  const r = 40;
+  const c = P(0, 0);
+  const viasOf = (s: Point2, e: Point2): BeltVia[] => [
+    { pos: s, radius: 0, direction: false },
+    { pos: c, radius: r, direction: false },
+    { pos: e, radius: 0, direction: false },
+  ];
+  const mkLink = (
+    s0: Point2,
+    e0: Point2,
+    wound?: { end?: boolean },
+  ): Extract<Link, { type: "BeltLength" }> => {
+    const path = compute_belt_path(viasOf(s0, e0));
+    const link: Extract<Link, { type: "BeltLength" }> = {
+      type: "BeltLength", ddl: 1, startKey: "start", endKey: "end",
+      gearPosKeys: ["g"], gearAngleKeys: ["g"], radii: [r], directions: [false],
+      length: path.length, closed: false, phaseKey: "phi",
+      diff0:
+        s0.distance_to(path.inPoints[0]) - e0.distance_to(path.outPoints[1]),
+      owner: "belt-x" as never,
+    };
+    if (wound?.end) {
+      link.endWind = e0.sub(c).angle();
+      link.endWindPhi = 0;
+    }
+    return link;
+  };
+  const runPull = (opts: {
+    start0: Point2;
+    end0: Point2;
+    startMass: number;
+    endMass: number;
+    grab: "start" | "end";
+    target: (f: number) => Point2;
+    frames: number;
+    wound?: { end?: boolean };
+  }) => {
+    const link = mkLink(opts.start0, opts.end0, opts.wound);
+    const positions = new Map<string, Point2>([
+      ["g", c.clone()], ["start", opts.start0.clone()], ["end", opts.end0.clone()],
+    ]);
+    const posMasses = new Map<string, number>([
+      ["g", 0], ["start", opts.startMass], ["end", opts.endMass],
+    ]);
+    const angles = new Map<string, number>([["g", 0], ["phi", 0]]);
+    for (let f = 0; f < opts.frames; f++) {
+      update_belt_disconnects(link, positions);
+      link.grabbedTerminal = opts.grab;
+      const links: Link[] = [
+        { type: "BeltPhaseGear", ddl: 1, angleKey: "g", phaseKey: "phi", r, eps: 1, theta0: 0 },
+        link,
+        { type: "HandleGrab", ddl: 1, grabbedKey: opts.grab, value: opts.target(f) },
+      ];
+      PBD_kinematic_solver(positions, new Map(), posMasses, new Map(), links, 300, undefined, angles);
+    }
+    return { link, positions, angles };
+  };
+
+  it("does not block: pulling start reels the far end in, winds it, then unwinds and detaches", () => {
+    // "n" belt, both ends free; drag start far down-left, well past full unwind.
+    const { link, angles } = runPull({
+      start0: P(-120, -120), end0: P(120, -120),
+      startMass: 1, endMass: 1, grab: "start",
+      target: (f) => {
+        const t = Math.min(1, f / 220);
+        return P(-120 - 700 * t, -120 - 700 * t);
+      },
+      frames: 240,
+    });
+    // The wound end fully unwound → pulley detached (belt peeled off), and φ advanced
+    // freely the whole time (never blocked).
+    expect(link.disconnected?.[0]).toBe(true);
+    expect(Math.abs(angles.get("phi")!)).toBeGreaterThan(200);
+  });
+
+  it("grabbing a WOUND end and pulling it radially off detaches it without spinning the pulley", () => {
+    // start anchored far left (tension), end pre-wound on the rim at the bottom.
+    const { link, angles } = runPull({
+      start0: P(-300, 0), end0: P(0, -40),
+      startMass: 0, endMass: 1, grab: "end",
+      target: (f) => P(0, -40 - 200 * Math.min(1, f / 100)),
+      frames: 140,
+      wound: { end: true },
+    });
+    expect(link.disconnected?.[0]).toBe(true); // peeled off and detached
+    expect(Math.abs(angles.get("g")!)).toBeLessThan(Math.PI); // no runaway spin
   });
 });
 
@@ -685,6 +777,28 @@ describe("belt phase rewire on disconnect (3e)", () => {
   });
 });
 
+describe("loose belt sheds its last pulley → inert (user-decided)", () => {
+  // s and e sit close together above g1, which now wraps the long way (raw wrap
+  // ≈ 4.67 rad > π): from the seeded 0.05 the continuous wrap has crossed the 0/2π
+  // seam to ≤ 0 → contact lost. g0 is already disconnected, so g1 is the LAST one.
+  const positions = new Map<string, Point2>([
+    ["s", P(-35, 80)], ["e", P(35, 80)], ["g0", P(0, 600)], ["g1", P(0, 0)],
+  ]);
+  const mkBelt = (closed: boolean): Extract<Link, { type: "BeltLength" }> => ({
+    type: "BeltLength", ddl: 1, startKey: "s", endKey: "e",
+    gearPosKeys: ["g0", "g1"], gearAngleKeys: ["g0", "g1"],
+    radii: [30, 30], directions: [false, true], length: 100, closed,
+    disconnected: [true, false], wraps: [0, 0.05], owner: "belt-x" as any,
+  });
+
+  it("disconnects even the LAST active pulley (loose → inert segment)", () => {
+    const belt = mkBelt(false);
+    const newly = update_belt_disconnects(belt, positions);
+    expect(belt.disconnected).toEqual([true, true]); // last pulley shed
+    expect(newly).toBe(true);
+  });
+});
+
 describe("winch geometry (Option A: end on a gear)", () => {
   // Belt: far start terminal → gear at origin → end pinned ON the gear rim.
   const mk = (endAngle: number): BeltVia[] => [
@@ -719,11 +833,19 @@ describe("BeltLength counts wound turns (continuous wrap)", () => {
     ]);
     const anchored = new Map<string, number>([["gA", 0], ["gB", 0]]);
     const len = (wraps: number[]) =>
-      applyBeltLengthConstraint(
-        positions, anchored, "s", "e",
-        ["gA", "gB"], [40, 40], [false, false],
-        0 /* target */, true /* closed */, undefined, wraps,
-      );
+      applyBeltLengthConstraint(positions, anchored, new Map(), {
+        type: "BeltLength",
+        ddl: 1,
+        startKey: "s",
+        endKey: "e",
+        gearPosKeys: ["gA", "gB"],
+        gearAngleKeys: ["gA", "gB"],
+        radii: [40, 40],
+        directions: [false, false],
+        length: 0,
+        closed: true,
+        wraps,
+      });
     const base = len([Math.PI, Math.PI]);
     const woundOnce = len([Math.PI + 2 * Math.PI, Math.PI]); // gA wound +1 turn
     expect(woundOnce - base).toBeCloseTo(40 * 2 * Math.PI, 3);

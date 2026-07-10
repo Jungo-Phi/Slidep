@@ -61,7 +61,7 @@ function wrap_angle(a: number): number {
  * past it (BeltLength skips it; the geometry of the remaining pulleys uses the
  * reduced loop/chain).
  */
-function update_belt_disconnects(
+export function update_belt_disconnects(
   link: Extract<Link, { type: "BeltLength" }>,
   positions: Map<string, Point2>,
 ): boolean {
@@ -94,16 +94,24 @@ function update_belt_disconnects(
   const seeding = !link.wraps;
   if (!link.wraps) link.wraps = new Array(n).fill(0);
   const TAU = 2 * Math.PI;
-  // A pulley an end is pinned on can't detach (belt anchored to it), and the
-  // last remaining pulley is never dropped (a gearless belt is degenerate).
+  // A pulley whose end is EXTERNALLY anchored to it (a winch/join with a
+  // GearPerimeterPin) can't detach — the belt is tied there. A plain WOUND end is
+  // NOT anchored: once it unwinds fully (its pulley's continuous wrap reaches 0)
+  // the belt has peeled off and the pulley detaches, freeing the end (that is how
+  // "pull one end until the other winds, then keep pulling" finishes — the wound
+  // end orbits, the wrap shrinks to a single contact point, then it lets go). A
+  // CLOSED (tight) belt keeps its last pulley (a gearless loop is degenerate); a
+  // LOOSE belt may shed even its last pulley → an inert free segment. User-decided.
   const startPos = link.closed ? undefined : positions.get(link.startKey);
   const endPos = link.closed ? undefined : positions.get(link.endKey);
-  const pinnedOn = (gi: number): boolean => {
+  const externallyPinnedOn = (gi: number): boolean => {
     const gc = positions.get(link.gearPosKeys[gi]);
     if (!gc) return false;
-    return [startPos, endPos].some(
-      (p) => p && p.distance_to(gc) <= link.radii[gi] + 1,
-    );
+    const ext: (Point2 | undefined)[] = [
+      link.startExternal ? startPos : undefined,
+      link.endExternal ? endPos : undefined,
+    ];
+    return ext.some((p) => p && p.distance_to(gc) <= link.radii[gi] + 1);
   };
   activeIdx.forEach((gi, k) => {
     const rawW = raw[offset + k];
@@ -119,11 +127,18 @@ function update_belt_disconnects(
     if (
       cont <= 0 &&
       !link.disconnected![gi] &&
-      activeIdx.length > 1 &&
-      !pinnedOn(gi)
+      (!link.closed || activeIdx.length > 1) &&
+      !externallyPinnedOn(gi)
     ) {
       link.disconnected![gi] = true;
       newlyDisconnected = true;
+      // A wound end riding this pulley just lost its last contact — release its
+      // wound state so the length constraint stops pinning it to the (now gone)
+      // rim and lets it go free.
+      if (!link.closed) {
+        if (gi === 0) link.startWind = undefined;
+        if (gi === n - 1) link.endWind = undefined;
+      }
     }
   });
   return newlyDisconnected;
@@ -323,17 +338,14 @@ export function step_simulation(
     model.links = rewire_belt_mesh(model.links, beltsToRewire);
 
   // Share each belt's continuous wraps (tracked on its BeltLength link) with its
-  // BeltPin (tight) / BeltFreeEnds (loose), so a wound pulley/terminal travels
-  // around >2π smoothly, not just the fractional arc. gearPosKeys order matches.
+  // BeltPin (tight-belt junction), so it travels around a wound pulley >2π smoothly,
+  // not just the fractional arc. gearPosKeys order matches (both from the belt).
   const wrapsByBelt = new Map<ID, number[]>();
   for (const link of model.links)
     if (link.type === "BeltLength" && link.owner !== undefined && link.wraps)
       wrapsByBelt.set(link.owner, link.wraps);
   for (const link of model.links)
-    if (
-      (link.type === "BeltPin" || link.type === "BeltFreeEnds") &&
-      link.owner !== undefined
-    )
+    if (link.type === "BeltPin" && link.owner !== undefined)
       link.wraps = wrapsByBelt.get(link.owner);
 
   // ── Grab (transient, this frame only) ──
@@ -395,6 +407,23 @@ export function step_simulation(
       },
     ];
   }
+
+  // Mark which terminal of each belt is grabbed THIS frame — the length constraint
+  // drives φ to unwind the OPPOSITE wound end only while the user pulls a terminal
+  // (a motor turns the pulley directly, so it needs no φ coupling and stays on the
+  // plain free-end length path). Transient: reset every frame.
+  const grabbedTerminalKey =
+    grab && "key" in grab ? (model.keyMap.get(grab.key) ?? grab.key) : undefined;
+  for (const link of model.links)
+    if (link.type === "BeltLength")
+      link.grabbedTerminal =
+        grabbedTerminalKey === undefined
+          ? undefined
+          : link.startKey === grabbedTerminalKey
+            ? "start"
+            : link.endKey === grabbedTerminalKey
+              ? "end"
+              : undefined;
 
   // ── PBD solve ──
   const result = PBD_kinematic_solver(

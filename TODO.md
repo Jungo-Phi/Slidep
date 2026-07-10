@@ -13,9 +13,8 @@
 
 - Grab la courroie pour la tourner en simu
 - Grab l'extrémité du beam opposée au joint sur une courroie ne perment pas de la faire tourner correctement.
-- Créer la contrainte de courroie tendue (liée à une longueur ?)
-- Dans tous les cas, les courroies imposent un ratio aux engrenages connectés
 - Créer une validation : une courroie ne peut être tendue que si ses 2 extrémitées sont connectées et qu'il y a au moins 2 gears
+- Créer une validation : une extrémité de courroie ne peut pas être à l'intérieur du gear adjascent
 - Placer une courroie sur un engrenage en ayant déjà une doit briser la connection
 - Fusionner les connections start/end dans belt quand tendue
 
@@ -28,6 +27,7 @@
 
 - unifier la méthode de catégories de canvasState dans get-hover et placing-element-actions
 
+- Option d'afficher la trajectoire avec des points
 - le hover delete de contrainte prend le meme style que le ghost de ctrl+y de supression
 - Clicker sur l'onglet éléments quand un élément est sélectionné le désélectionne
 - Unifier les "excluded_elements" et les conditions au début de "get_hover"

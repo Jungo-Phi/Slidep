@@ -147,10 +147,15 @@ export function belt_pieces(
   // Terminal wound onto its adjacent pulley (winch): if the start/end terminal
   // (r=0) sits on the first/last gear, that gear arcs straight to the terminal
   // point (no degenerate tangent segment). Its wrap then tracks the wound angle.
+  // Tolerance expressed as the residual tangent-stub length, not a raw distance:
+  // at distance d the stub is √(d²−r²), so d ≤ √(r² + STUB²) keeps the stub (and
+  // thus the discrete length drop when the terminal is treated as wound) ≤ STUB px.
+  const STUB = 1;
   const onGear = (t: number, g: number) =>
     n >= 2 &&
     vias[t].radius === 0 &&
-    vias[t].pos.distance_to(vias[g].pos) <= vias[g].radius + 1;
+    vias[t].pos.distance_to(vias[g].pos) <=
+      Math.sqrt(vias[g].radius * vias[g].radius + STUB * STUB);
   const startOnGear = !closed && onGear(0, 1);
   const endOnGear = !closed && onGear(n - 1, n - 2);
   if (startOnGear) arrival[1] = vias[0].pos;

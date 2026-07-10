@@ -129,6 +129,7 @@ export const DIM = {
   PIVOT_INNER_RADIUS: 4,
   // Motor
   MOTOR_RADIUS: 20,
+  MOTOR_CORNER_RADIUS: 3,
   // Join
   JOIN_RADIUS: 6,
 
@@ -179,11 +180,10 @@ export const DRAWING_ORDER: UnionElement["type"][] = [
   "force",
   "moment",
   "distributed-force",
+  "gear",
   "beam",
   "damper",
   "spring",
-  // TODO : "motor",
-  "gear",
   "belt",
   "join",
   "slidep",

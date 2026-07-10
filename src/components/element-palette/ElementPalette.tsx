@@ -8,30 +8,7 @@ import {
   Divider,
 } from "@mui/material";
 
-import selectIconUrl from "../../assets/icons/palette/select.svg";
-import selectSimIconUrl from "../../assets/icons/palette/select-sim.svg";
-import beamIconUrl from "../../assets/icons/palette/beam.svg";
-import groundIconUrl from "../../assets/icons/palette/ground.svg";
-import pivotIconUrl from "../../assets/icons/palette/pivot.svg";
-import sliderIconUrl from "../../assets/icons/palette/slider.svg";
-import joinIconUrl from "../../assets/icons/palette/join.svg";
-import eraserIconUrl from "../../assets/icons/palette/eraser.svg";
-import springIconUrl from "../../assets/icons/palette/spring.svg";
-import damperIconUrl from "../../assets/icons/palette/damper.svg";
-import gearIconUrl from "../../assets/icons/palette/gear.svg";
-import beltIconUrl from "../../assets/icons/palette/belt.svg";
-import massIconUrl from "../../assets/icons/palette/mass.svg";
-import dimensionIconUrl from "../../assets/icons/palette/dimention.svg";
-import equalIconUrl from "../../assets/icons/palette/equal.svg";
-import horizontalVerticalAlignIconUrl from "../../assets/icons/palette/horizontal-vertical.svg";
-import normalIconUrl from "../../assets/icons/palette/normal.svg";
-import parallelIconUrl from "../../assets/icons/palette/parallel.svg";
-import ratioIconUrl from "../../assets/icons/palette/ratio.svg";
-import forceIconUrl from "../../assets/icons/palette/force.svg";
-import distributedForceIconUrl from "../../assets/icons/palette/distributed-force.svg";
-import momentIconUrl from "../../assets/icons/palette/moment.svg";
-import motorIconUrl from "../../assets/icons/palette/motor.svg";
-import probeIconUrl from "../../assets/icons/palette/probe.svg";
+import { icon } from "./iconDataUris";
 
 import { AppMode, CanvasState, CanvasStateType } from "../../types";
 import { COLORS } from "../../constants/rendering-specs";
@@ -66,8 +43,8 @@ const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
       {
         label: "Selection",
         tooltip: "Select (Esc)",
-        iconSrc: selectIconUrl,
-        simIconSrc: selectSimIconUrl,
+        iconSrc: icon("select"),
+        simIconSrc: icon("select-sim"),
         goToStateType: "Selecting",
         simBehavior: "observational",
         hilightRule: (state) =>
@@ -93,7 +70,7 @@ const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
       {
         label: "Gomme",
         tooltip: "Eraser (A)",
-        iconSrc: eraserIconUrl,
+        iconSrc: icon("eraser"),
         goToStateType: "Erasing",
         simBehavior: "structural",
         hilightRule: (state) =>
@@ -109,7 +86,7 @@ const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
       {
         label: "Glissière",
         tooltip: "Slider (S)",
-        iconSrc: sliderIconUrl,
+        iconSrc: icon("slider"),
         goToStateType: "PlacingSlider",
         simBehavior: "structural",
         hilightRule: (state) => state.type === "PlacingSlider",
@@ -119,7 +96,7 @@ const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
       {
         label: "Pivot",
         tooltip: "Pivot (P)",
-        iconSrc: pivotIconUrl,
+        iconSrc: icon("pivot"),
         goToStateType: "PlacingPivot",
         simBehavior: "structural",
         hilightRule: (state) => state.type === "PlacingPivot",
@@ -129,7 +106,7 @@ const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
       {
         label: "Courroie",
         tooltip: "Belt (T)",
-        iconSrc: beltIconUrl,
+        iconSrc: icon("belt"),
         goToStateType: "PlacingBeltStart",
         simBehavior: "structural",
         hilightRule: (state) =>
@@ -140,7 +117,7 @@ const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
       {
         label: "Engrenage",
         tooltip: "Gear (G)",
-        iconSrc: gearIconUrl,
+        iconSrc: icon("gear"),
         goToStateType: "PlacingGearStart",
         simBehavior: "structural",
         hilightRule: (state) =>
@@ -157,7 +134,7 @@ const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
       {
         label: "Jointure",
         tooltip: "Join (J)",
-        iconSrc: joinIconUrl,
+        iconSrc: icon("join"),
         goToStateType: "PlacingJoin",
         simBehavior: "structural",
         hilightRule: (state) => state.type === "PlacingJoin",
@@ -167,7 +144,7 @@ const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
       {
         label: "Poutre",
         tooltip: "Beam (B)",
-        iconSrc: beamIconUrl,
+        iconSrc: icon("beam"),
         goToStateType: "PlacingBeamStart",
         simBehavior: "structural",
         hilightRule: (state) =>
@@ -178,7 +155,7 @@ const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
       {
         label: "Sol",
         tooltip: "Ground (R)",
-        iconSrc: groundIconUrl,
+        iconSrc: icon("ground"),
         goToStateType: "PlacingGround",
         simBehavior: "structural",
         hilightRule: (state) => state.type === "PlacingGround",
@@ -193,7 +170,7 @@ const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
       {
         label: "Amortisseur",
         tooltip: "Damper (C)",
-        iconSrc: damperIconUrl,
+        iconSrc: icon("damper"),
         goToStateType: "PlacingDamperStart",
         simBehavior: "structural",
         hilightRule: (state) =>
@@ -205,7 +182,7 @@ const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
       {
         label: "Ressort",
         tooltip: "Spring (K)",
-        iconSrc: springIconUrl,
+        iconSrc: icon("spring"),
         goToStateType: "PlacingSpringStart",
         simBehavior: "structural",
         hilightRule: (state) =>
@@ -217,7 +194,7 @@ const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
       {
         label: "Masse",
         tooltip: "Mass (W)",
-        iconSrc: massIconUrl,
+        iconSrc: icon("mass"),
         goToStateType: "PlacingMass",
         simBehavior: "structural",
         hilightRule: (state) => state.type === "PlacingMass",
@@ -227,7 +204,7 @@ const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
       {
         label: "Moteur",
         tooltip: "Motor (M)",
-        iconSrc: motorIconUrl,
+        iconSrc: icon("motor"),
         goToStateType: "PlacingMotor",
         simBehavior: "structural",
         hilightRule: (state) => state.type === "PlacingMotor",
@@ -242,7 +219,7 @@ const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
       {
         label: "Dimension",
         tooltip: "Dimension (D)",
-        iconSrc: dimensionIconUrl,
+        iconSrc: icon("dimention"),
         goToStateType: "DimensionStart",
         simBehavior: "constraint",
         hilightRule: (state, mechanism) =>
@@ -267,7 +244,7 @@ const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
       {
         label: "Rapport d'engrenages",
         tooltip: "Gear ratio (Q)",
-        iconSrc: ratioIconUrl,
+        iconSrc: icon("ratio"),
         goToStateType: "GearRatioConstraintStart",
         simBehavior: "constraint",
         hilightRule: (state, mechanism) =>
@@ -285,7 +262,7 @@ const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
       {
         label: "Longueurs égales",
         tooltip: "Equal lengths (E)",
-        iconSrc: equalIconUrl,
+        iconSrc: icon("equal"),
         goToStateType: "EqualConstraintStart",
         simBehavior: "constraint",
         hilightRule: (state) =>
@@ -298,7 +275,7 @@ const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
       {
         label: "Alignement horizontal / vertical",
         tooltip: "Horizontal/Vertical alignement  (H/V)",
-        iconSrc: horizontalVerticalAlignIconUrl,
+        iconSrc: icon("horizontal-vertical"),
         goToStateType: "HorizontalVerticalConstraintStart",
         simBehavior: "constraint",
         hilightRule: (state) =>
@@ -310,7 +287,7 @@ const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
       {
         label: "Perpendiculaire",
         tooltip: "Normal (N)",
-        iconSrc: normalIconUrl,
+        iconSrc: icon("normal"),
         goToStateType: "NormalConstraintStart",
         simBehavior: "constraint",
         hilightRule: (state) =>
@@ -322,7 +299,7 @@ const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
       {
         label: "Parallèle",
         tooltip: "Parallel (L)",
-        iconSrc: parallelIconUrl,
+        iconSrc: icon("parallel"),
         goToStateType: "ParallelConstraintStart",
         simBehavior: "constraint",
         hilightRule: (state) =>
@@ -339,7 +316,7 @@ const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
       {
         label: "Force",
         tooltip: "Force (F)",
-        iconSrc: forceIconUrl,
+        iconSrc: icon("force"),
         goToStateType: "PlacingForceStart",
         simBehavior: "structural",
         hilightRule: (state) =>
@@ -351,7 +328,7 @@ const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
       {
         label: "Force répartie",
         tooltip: "Distributed Force (U)",
-        iconSrc: distributedForceIconUrl,
+        iconSrc: icon("distributed-force"),
         goToStateType: "PlacingDistributedForceStart",
         simBehavior: "structural",
         hilightRule: (state) =>
@@ -363,7 +340,7 @@ const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
       {
         label: "Moment",
         tooltip: "Moment (O)",
-        iconSrc: momentIconUrl,
+        iconSrc: icon("moment"),
         goToStateType: "PlacingMoment",
         simBehavior: "structural",
         hilightRule: (state) => state.type === "PlacingMoment",
@@ -373,7 +350,7 @@ const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
       {
         label: "Sonde",
         tooltip: "Probe (I)",
-        iconSrc: probeIconUrl,
+        iconSrc: icon("probe"),
         goToStateType: "PlacingProbe",
         simBehavior: "observational",
         hilightRule: (state) =>
@@ -384,40 +361,6 @@ const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
       },
     ],
   },
-];
-
-/**
- * Preload all icons to improve performance by loading them in memory before they are needed
- */
-const preloadIcons = (iconUrls: string[]): void => {
-  if (typeof window === "undefined") return;
-
-  iconUrls.forEach((url) => {
-    const img = new Image();
-    img.src = url;
-  });
-};
-
-/** All icon URLs for preloading */
-const ALL_PALETTE_ICON_URLS = [
-  selectIconUrl,
-  beamIconUrl,
-  groundIconUrl,
-  pivotIconUrl,
-  sliderIconUrl,
-  joinIconUrl,
-  eraserIconUrl,
-  springIconUrl,
-  damperIconUrl,
-  gearIconUrl,
-  beltIconUrl,
-  massIconUrl,
-  dimensionIconUrl,
-  equalIconUrl,
-  horizontalVerticalAlignIconUrl,
-  normalIconUrl,
-  parallelIconUrl,
-  ratioIconUrl,
 ];
 
 interface ElementPaletteProps {
@@ -451,11 +394,6 @@ export const ElementPalette: React.FC<ElementPaletteProps> = ({
     }
     setCanvasState({ type: element.goToStateType } as CanvasState);
   };
-
-  // Preload icons on mount to improve performance
-  useEffect(() => {
-    preloadIcons(ALL_PALETTE_ICON_URLS);
-  }, []);
 
   const [columns, setColumns] = useState(2);
   useEffect(() => {

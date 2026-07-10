@@ -103,7 +103,6 @@ import { KinematicSnapshot } from "./types/runtime-state";
 import { CanvasState } from "./types/canvas-state";
 import { HoveredPart } from "./types/hovered-part";
 import { actionReducer } from "./components/mechanism/action-reducer";
-import { preload_element_icons } from "./components/element-palette/elementIcon";
 import { COLORS } from "./constants/rendering-specs";
 import { apply_actions } from "./components/mechanism/apply-actions";
 import MechanismsGallery from "./components/mechanisms-gallery/MechanismsGallery";
@@ -958,7 +957,6 @@ const App: React.FC = () => {
 
   /** App starts */
   useEffect(() => {
-    preload_element_icons();
     handleOpenGallery();
   }, [handleOpenGallery]);
 
