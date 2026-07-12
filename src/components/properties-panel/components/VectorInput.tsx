@@ -9,17 +9,17 @@ import NumberInput from "./NumberInput";
 import { Point2 } from "../../../types";
 
 interface VectorInputProps {
-  x: number;
-  y: number;
-  setPos: (pos: Point2) => void;
+  value: Point2;
+  onChange: (vector: Point2) => void;
   label?: string;
+  accent?: boolean;
 }
 
 export const VectorInput: React.FC<VectorInputProps> = ({
-  x,
-  y,
-  setPos,
+  value,
+  onChange,
   label = "",
+  accent = false,
 }) => {
   return (
     <Box
@@ -38,13 +38,15 @@ export const VectorInput: React.FC<VectorInputProps> = ({
       )}
       <NumberInput
         label="X"
-        value={x}
-        onChange={(newX) => setPos(new Point2(newX, y))}
+        value={value.x}
+        onChange={(newX) => onChange(new Point2(newX, value.y))}
+        accent={accent}
       />
       <NumberInput
         label="Y"
-        value={y}
-        onChange={(newY) => setPos(new Point2(x, newY))}
+        value={value.y}
+        onChange={(newY) => onChange(new Point2(value.x, newY))}
+        accent={accent}
       />
     </Box>
   );

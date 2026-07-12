@@ -39,6 +39,18 @@ export const ConnectionsContainer: React.FC<ConnectionsContainerProps> = ({
     containerType === "ConnectsAttachedGears" ||
     containerType === "ConnectsFixedGears";
   const connections = get_connections(element, containerType);
+  const containerName = containerType
+    .replace("Connects", "")
+    .split("N")
+    .join(" N")
+    .split("E")
+    .join(" E")
+    .split("B")
+    .join(" B")
+    .split("G")
+    .join(" G")
+    .split("S")
+    .join(" S");
 
   return (
     <Box
@@ -48,20 +60,7 @@ export const ConnectionsContainer: React.FC<ConnectionsContainerProps> = ({
         flexDirection: "column",
       }}
     >
-      <Typography variant="subtitle2">
-        {containerType
-          .replace("Connects", "")
-          .split("N")
-          .join(" N")
-          .split("E")
-          .join(" E")
-          .split("B")
-          .join(" B")
-          .split("G")
-          .join(" G")
-          .split("S")
-          .join(" S")}
-      </Typography>
+      <Typography variant="subtitle2">{containerName}</Typography>
 
       <Box
         sx={{

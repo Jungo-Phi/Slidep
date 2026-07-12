@@ -132,7 +132,7 @@ export function apply_actions(
         newAction.type !== "ChangeDimensionEdgeToNodeValue" &&
         newAction.type !== "ChangeDimensionAngleValue" &&
         newAction.type !== "ChangeDimensionRadiusValue" &&
-        newAction.type !== "ChangeDimensionBeltLengthValue" &&
+        newAction.type !== "ChangeDimensionBeltValue" &&
         newAction.type !== "ChangeGearRatioValue"
       )
         break;
@@ -187,7 +187,8 @@ export function apply_actions(
         newAction.type !== "ConnectsAttachedGears" &&
         newAction.type !== "ConnectsFixedGears" &&
         newAction.type !== "CreateElement" &&
-        newAction.type !== "DeleteElement"
+        newAction.type !== "DeleteElement" &&
+        newAction.type !== "TightenBelt"
       )
         break;
 
@@ -221,7 +222,7 @@ export function apply_actions(
           newAction.element.type !== "parallel" &&
           newAction.element.type !== "equal" &&
           newAction.element.type !== "gear-ratio" &&
-          newAction.element.type !== "dimension-belt-length")
+          newAction.element.type !== "dimension-belt")
       )
         break;
       oldNodes = get_geom_nodes(mechanism.mechanicalElements);
@@ -247,7 +248,7 @@ export function apply_actions(
     case "MoveLoad":
       if (
         newAction.type !== "MoveForceVector" &&
-        newAction.type !== "MoveDistributedForceVectors"
+        newAction.type !== "SetDistributedForce"
       )
         break;
       if (mechanism.history.length === 0) break;
@@ -261,10 +262,11 @@ export function apply_actions(
           if (newAction.type !== "MoveForceVector") break;
           lastAction.newVector = newAction.newVector;
           break;
-        case "MoveDistributedForceVectors":
-          if (newAction.type !== "MoveDistributedForceVectors") break;
-          lastAction.newVectorStart = newAction.newVectorStart;
-          lastAction.newVectorEnd = newAction.newVectorEnd;
+        case "SetDistributedForce":
+          if (newAction.type !== "SetDistributedForce") break;
+          lastAction.newDirection = newAction.newDirection;
+          lastAction.newMagnitudeStart = newAction.newMagnitudeStart;
+          lastAction.newMagnitudeEnd = newAction.newMagnitudeEnd;
           break;
       }
       newHistory = [...mechanism.history];

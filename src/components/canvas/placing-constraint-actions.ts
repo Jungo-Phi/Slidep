@@ -1,13 +1,17 @@
 import type { CanvasState } from "../../types/canvas-state";
 import type { HoveredPart } from "../../types/hovered-part";
 import {
+  BeltElement,
   EdgeElement,
   GearElement,
   MechanicalElement,
   NodeElement,
 } from "../../types";
 import { get_mechanical_element_from_id } from "../mechanism/connect-actions";
-import { resolve_angle_constraint_quadrant } from "../../utils";
+import {
+  measure_belt_length,
+  resolve_angle_constraint_quadrant,
+} from "../../utils";
 import type { MouseDownResult } from "./placing-element-actions";
 
 type ConstraintCanvasState = Extract<
@@ -21,6 +25,7 @@ type ConstraintCanvasState = Extract<
       | "DimensionEdgeToNode"
       | "DimensionAngle"
       | "DimensionRadius"
+      | "DimensionBelt"
       | "HorizontalVerticalConstraintStart"
       | "HorizontalVerticalConstraintNode"
       | "NormalConstraintStart"
@@ -269,6 +274,36 @@ export function handle_placing_constraint(
               position: hoveredPart.position,
               id: elementID,
               gearID: state.gearID,
+              value,
+            },
+          },
+        ],
+        actionBundleType: "CreateConstraint",
+        newCanvasState: {
+          type: "EditingConstraint",
+          elementID,
+          value,
+          isPlacing: true,
+        },
+      };
+    }
+
+    case "DimensionBelt": {
+      const elementID = crypto.randomUUID();
+      const belt = get_mechanical_element_from_id(
+        state.beltID,
+        mechanicalElements,
+      ) as BeltElement;
+      const value = measure_belt_length(belt, mechanicalElements);
+      return {
+        actions: [
+          {
+            type: "CreateElement",
+            element: {
+              type: "dimension-belt",
+              position: hoveredPart.position,
+              id: elementID,
+              beltID: state.beltID,
               value,
             },
           },

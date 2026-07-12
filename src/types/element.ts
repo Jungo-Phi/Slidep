@@ -30,7 +30,7 @@ export type ConstraintElementType =
   | "dimension-edge-to-node"
   | "dimension-angle"
   | "dimension-radius"
-  | "dimension-belt-length"
+  | "dimension-belt"
   | "horizontal-align-edge"
   | "horizontal-align-nodes"
   | "vertical-align-edge"
@@ -46,8 +46,8 @@ export type UnionElement = MechanicalElement | ConstraintElement | LoadElement;
 /** Union type for all load element types */
 export type LoadElement =
   | ForceElement
-  | MomentElement
-  | DistributedForceElement;
+  | DistributedForceElement
+  | MomentElement;
 
 /** Union type for all mechanical element types */
 export type MechanicalElement = NodeElement | BodyElement | EdgeElement;
@@ -88,7 +88,7 @@ export type ConstraintElement =
   | DimentionEdgeToNode
   | DimentionAngle
   | DimentionRadius
-  | DimentionBeltLength
+  | DimentionBelt
   | HorizontalAlignEdge
   | HorizontalAlignNodes
   | VerticalAlignEdge
@@ -273,8 +273,8 @@ export interface DimentionRadius extends ConstraintBaseElement {
 }
 
 /** Dimension belt length element - total length dimension of a belt */
-export interface DimentionBeltLength extends ConstraintBaseElement {
-  type: "dimension-belt-length";
+export interface DimentionBelt extends ConstraintBaseElement {
+  type: "dimension-belt";
   beltID: ID;
   value: number;
 }
@@ -344,20 +344,38 @@ export interface GearRatio extends ConstraintBaseElement {
 
 // ─── Load elements ────────────────────────────────────────────────────────────
 
+/**
+ * The reference frame a load's direction is expressed (and frozen) in.
+ *  - "world": the direction is absolute; the host may rotate under it.
+ *  - { mode: "edge", edgeID }: the direction is stored in the edge's local
+ *    frame (x = start→end axis, y = normal) and rotates with it — a follower
+ *    load. 0° = axial, 90° = normal.
+ * Loads default to "world".
+ */
+export type LoadFrame = "world" | { mode: "edge"; edgeID: ID };
+
 /** Force applied to a node or an edge endpoint */
 export interface ForceElement extends BaseElement {
   type: "force";
   targetID: ID;
   anchor?: "start" | "end"; // only for edge targets
+  /** Force vector, expressed in the active `frame`'s coordinates. */
   vector: Point2;
+  frame: LoadFrame;
 }
 
-/** Distributed force along a beam — two draggable vectors at each endpoint */
+/**
+ * Distributed force along a beam. A single `direction` (unit vector, expressed
+ * in the active `frame`) with a magnitude at each endpoint — a rectangular load
+ * when the two are equal, trapezoidal otherwise.
+ */
 export interface DistributedForceElement extends BaseElement {
   type: "distributed-force";
   beamID: ID;
-  vectorStart: Point2;
-  vectorEnd: Point2;
+  direction: Point2;
+  magnitudeStart: number;
+  magnitudeEnd: number;
+  frame: LoadFrame;
 }
 
 /** Moment applied to an edge or a gear (never a node) */

@@ -60,6 +60,7 @@ import {
   DEFAULT_RUNTIME_STATE,
   DEFAULT_SIMULATION_CONFIG,
   ID,
+  Link,
   Mechanism,
   MechanismMetadata,
   Point2,
@@ -194,22 +195,13 @@ const App: React.FC = () => {
   const runtimeStateRef = useRef<RuntimeState>(DEFAULT_RUNTIME_STATE);
 
   // ── Kinematic simulation refs ──────────────────────────────
-  // Live-updated every render so the RAF loop always reads fresh state
   const kinematicRef = useRef({ mechanism, runtimeState, appMode });
   kinematicRef.current = { mechanism, runtimeState, appMode };
   const kinematicLastWallTime = useRef<number | null>(null);
   const kinematicGrabRef = useRef<SimGrab | null>(null);
-  // Set when the user presses Space in edition mode, so the mode-change effect
-  // starts playback immediately instead of resetting isPlaying to false.
   const autoPlayOnEnterRef = useRef<boolean>(false);
-  // Frozen simulation model, compiled on entering simulation and on edits during sim.
   const simulationModelRef = useRef<SimulationModel | null>(null);
-  // History length when simulation mode was last entered — used to distinguish
-  // edition-mode actions from simulation-mode actions on undo.
   const simStartHistoryLengthRef = useRef<number>(0);
-  // Set right before a mechanism update made only of observation actions
-  // (SetProbes, SetShowTrajectory): these edits must not recompile the
-  // simulation model nor truncate the recorded snapshots.
   const probeOnlyEditRef = useRef<boolean>(false);
 
   const [snackbar, setSnackbar] = useState<{
@@ -257,6 +249,7 @@ const App: React.FC = () => {
         "DimensionEdgeToNode",
         "DimensionAngle",
         "DimensionRadius",
+        "DimensionBelt",
         "HorizontalVerticalConstraintStart",
         "HorizontalVerticalConstraintNode",
         "NormalConstraintStart",
@@ -524,7 +517,8 @@ const App: React.FC = () => {
       const revealIDs: ID[] = [];
       const removed: ConstraintElement[] = [];
       for (const c of after) {
-        if (c.type.startsWith("dimension-")) continue;
+        if (c.type.startsWith("dimension-") || c.type === "gear-ratio")
+          continue;
         const prev = beforeById.get(c.id);
         // Recréée, déplacée ou éditée → la révéler.
         if (
@@ -536,7 +530,8 @@ const App: React.FC = () => {
           revealIDs.push(c.id);
       }
       for (const c of before) {
-        if (c.type.startsWith("dimension-")) continue;
+        if (c.type.startsWith("dimension-") || c.type === "gear-ratio")
+          continue;
         if (!afterById.has(c.id)) removed.push(c);
       }
       if (revealIDs.length === 0 && removed.length === 0) return;
@@ -869,18 +864,21 @@ const App: React.FC = () => {
       target: Point2,
       bodyRatio?: number,
       gearPerimeter?: { gearID: string; angleOffset: number; radius: number },
+      beltPin?: Extract<Link, { type: "BeltPin" }>,
     ) => {
       // Feed the grab into the RAF loop for snapshot recording
-      const grab: SimGrab = gearPerimeter
-        ? {
-            gearID: gearPerimeter.gearID,
-            angleOffset: gearPerimeter.angleOffset,
-            radius: gearPerimeter.radius,
-            target,
-          }
-        : bodyRatio !== undefined
-          ? { edgeID: key, t: bodyRatio, target }
-          : { key, target };
+      const grab: SimGrab = beltPin
+        ? { beltPin, target }
+        : gearPerimeter
+          ? {
+              gearID: gearPerimeter.gearID,
+              angleOffset: gearPerimeter.angleOffset,
+              radius: gearPerimeter.radius,
+              target,
+            }
+          : bodyRatio !== undefined
+            ? { edgeID: key, t: bodyRatio, target }
+            : { key, target };
       kinematicGrabRef.current = grab;
       const { runtimeState: rs } = kinematicRef.current;
       const model = simulationModelRef.current;

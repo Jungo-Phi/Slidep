@@ -14,6 +14,7 @@ import {
   MomentElement,
   NodeElement,
   PivotElement,
+  Point2,
 } from "../../types";
 import {
   connect_elements,
@@ -21,6 +22,7 @@ import {
   get_mechanical_element_from_id,
 } from "../mechanism/connect-actions";
 import { is_on_left_side_of_belt } from "../../utils";
+import { force_display_value, force_stored_vector } from "../../utils/load-geom";
 import { PHYSICS } from "../../constants/rendering-specs";
 
 export type MouseDownResult = {
@@ -143,7 +145,10 @@ export function handle_placing_element(
         id: crypto.randomUUID() as ID,
         targetID: state.startHover.id,
         anchor,
-        vector: hoveredPart.position.sub(state.startHover.position),
+        vector: force_stored_vector(
+          hoveredPart.position.sub(state.startHover.position),
+        ),
+        frame: "world",
       };
       const actions: Action[] = [];
       const existingForce = loads.find(
@@ -201,6 +206,9 @@ export function handle_placing_element(
       const delta = hoveredPart.position.sub(
         beam.positionStart.lerp(beam.positionEnd, 0.5),
       );
+      const magnitude = force_display_value(delta.length());
+      const direction =
+        delta.length() > 1e-6 ? delta.normalize() : new Point2(0, -1);
       const beamID = state.startHover.id;
       const actions: Action[] = [];
       const existingDF = loads.find(
@@ -214,8 +222,10 @@ export function handle_placing_element(
           type: "distributed-force",
           id: crypto.randomUUID() as ID,
           beamID,
-          vectorStart: delta,
-          vectorEnd: delta,
+          direction,
+          magnitudeStart: magnitude,
+          magnitudeEnd: magnitude,
+          frame: "world",
         },
       });
       return {
@@ -622,7 +632,13 @@ function handle_place_element(
       break;
   }
 
-  return { actions, actionBundleType: "Other", newCanvasState };
+  // If placing the end closed the belt (landed on its start → connect_elements
+  // created a join + TightenBelt), the geometric solver must run so BeltJunction
+  // snaps the join onto the loop — like any TightenBelt path, not "Other".
+  const bundle: ActionBundleType = actions.some((a) => a.type === "TightenBelt")
+    ? "Connects"
+    : "Other";
+  return { actions, actionBundleType: bundle, newCanvasState };
 }
 
 function handle_place_ground(

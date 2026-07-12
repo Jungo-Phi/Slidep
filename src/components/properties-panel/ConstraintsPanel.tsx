@@ -78,7 +78,7 @@ export const ConstraintsPanel: React.FC<ConstraintsPanelProps> = ({
                   applyActions={applyActions}
                   size="medium"
                   editable={true}
-                  actions={
+                  trailingControls={
                     <>
                       {(() => {
                         switch (constraint.type) {

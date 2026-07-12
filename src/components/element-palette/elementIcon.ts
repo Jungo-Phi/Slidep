@@ -30,7 +30,7 @@ export const get_element_icon = (element: UnionElement | undefined): string => {
     case "dimension-edge-to-node":
     case "dimension-angle":
     case "dimension-radius":
-    case "dimension-belt-length":
+    case "dimension-belt":
       return icon("dimention");
     case "horizontal-align-edge":
     case "horizontal-align-nodes":

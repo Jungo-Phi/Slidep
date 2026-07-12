@@ -1,5 +1,6 @@
 import { HoveredPart } from "../types/hovered-part";
 import { ID } from "./element";
+import type { Link } from "./kinematic-solver-links";
 import type { Point2 } from "./point2";
 
 // Define the possible types of canvas states
@@ -49,6 +50,7 @@ export type CanvasStateType =
   | "DimensionEdgeToNode"
   | "DimensionAngle"
   | "DimensionRadius"
+  | "DimensionBelt"
   | "HorizontalVerticalConstraintStart"
   | "HorizontalVerticalConstraintNode"
   | "NormalConstraintStart"
@@ -77,23 +79,15 @@ export type CanvasState =
   | {
       type: "SelectedElement";
       elementID: ID;
-      /** Partie survolée capturée au mouseDown (identité fixe du drag potentiel).
-       *  Présente uniquement quand cet état vient d'un mouseDown sur l'élément :
-       *  la transition vers un état Moving* s'appuie dessus (et non sur le hover
-       *  courant), pour ne pas perdre la cible si la souris bouge trop vite. */
       pendingHit?: HoveredPart;
-      /** Position monde de la souris au mouseDown, pour mesurer le seuil de drag. */
       downPos?: Point2;
-      /** Vrai si un clic (sans drag) sur cet élément doit ouvrir l'édition au
-       *  relâchement. Réservé aux contraintes à valeur (dimensions) déjà
-       *  sélectionnées : 1er clic sélectionne, 2ᵉ clic édite. */
       armedForEdit?: boolean;
     }
   | { type: "MovingNode"; elementID: ID }
-  | { type: "MovingEdgeStartPoint"; elementID: ID } // Moving the start point of an edge
-  | { type: "MovingEdgeEndPoint"; elementID: ID } // Moving the end point of an edge
-  | { type: "MovingEdgeBody"; elementID: ID; t: number } // Moving the entire edge by its body, grabbed at proportion `t`
-  | { type: "MovingBeltBody"; elementID: ID; section: number } // Moving a section of a belt
+  | { type: "MovingEdgeStartPoint"; elementID: ID }
+  | { type: "MovingEdgeEndPoint"; elementID: ID }
+  | { type: "MovingEdgeBody"; elementID: ID; t: number }
+  | { type: "MovingBeltBody"; elementID: ID; section: number }
   | { type: "ChangingGearRadius"; elementID: ID }
   | { type: "MovingForce"; elementID: ID }
   | {
@@ -106,9 +100,9 @@ export type CanvasState =
       elementIDs: ID[];
       grabbedID: ID;
       hasMoved: boolean;
-    } // Multiple selected elements are being dragged (grabbedID: the clicked element; hasMoved: whether an actual drag happened)
-  | { type: "Erasing" } // Eraser tool active
-  | { type: "ErasingMultiple"; startPos: Point2; hoveredElementIDs: ID[] } // User has started a drag to delete multiple elements
+    }
+  | { type: "Erasing" }
+  | { type: "ErasingMultiple"; startPos: Point2; hoveredElementIDs: ID[] }
   | { type: "PlacingBeamStart" }
   | { type: "PlacingBeamEnd"; startHover: HoveredPart }
   | { type: "PlacingSpringStart" }
@@ -120,7 +114,7 @@ export type CanvasState =
       type: "PlacingBeltEnd";
       startHover: HoveredPart;
       attachedGearsIDs: { id: ID; direction: boolean }[];
-    } // Placing a 'belt' element, defining its gear connections / end point
+    }
   | { type: "PlacingMotor" }
   | { type: "PlacingPivot" }
   | { type: "PlacingSlider" }
@@ -143,10 +137,11 @@ export type CanvasState =
       type: "DimensionNodeToNode";
       startNodeID: ID;
       endNodeID: ID;
-    } // Dimension between two nodes
-  | { type: "DimensionEdgeToNode"; edgeID: ID; nodeID: ID } // Dimension between an edge and a node
-  | { type: "DimensionAngle"; startEdgeID: ID; endEdgeID: ID } // Angle dimension between two edges
-  | { type: "DimensionRadius"; gearID: ID } // Radius dimension of a gear
+    }
+  | { type: "DimensionEdgeToNode"; edgeID: ID; nodeID: ID }
+  | { type: "DimensionAngle"; startEdgeID: ID; endEdgeID: ID }
+  | { type: "DimensionRadius"; gearID: ID }
+  | { type: "DimensionBelt"; beltID: ID }
   | { type: "HorizontalVerticalConstraintStart" }
   | { type: "HorizontalVerticalConstraintNode"; startNodeID: ID }
   | { type: "NormalConstraintStart" }
@@ -169,9 +164,7 @@ export type CanvasState =
       type: "SimulationDragging";
       grabbedKey: string;
       elementID: ID;
-      /** Set when grabbing an edge on its body: ratio along the edge (grabbedKey = edgeID). */
       bodyRatio?: number;
-      /** Set when grabbing a gear tooth: rotate the gear so the grabbed perimeter
-       *  point (fixed angle offset from the gear angle) follows the mouse. */
       gearPerimeter?: { gearID: ID; angleOffset: number; radius: number };
+      beltPin?: Extract<Link, { type: "BeltPin" }>;
     };

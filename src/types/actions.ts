@@ -1,4 +1,10 @@
-import { ID, MotorConfig, ProbeConfig, UnionElement } from "./element";
+import {
+  ID,
+  LoadFrame,
+  MotorConfig,
+  ProbeConfig,
+  UnionElement,
+} from "./element";
 import { GeomNodes } from "./kinematic-solver-links";
 import { Point2 } from "./point2";
 
@@ -53,7 +59,7 @@ export type ChangeDimensionActionType =
   | "ChangeDimensionEdgeToNodeValue"
   | "ChangeDimensionAngleValue"
   | "ChangeDimensionRadiusValue"
-  | "ChangeDimensionBeltLengthValue"
+  | "ChangeDimensionBeltValue"
   | "ChangeGearRatioValue";
 
 export type ConnectsActionType =
@@ -159,7 +165,7 @@ export type Action =
       oldValue: number;
     }
   | {
-      type: "ChangeDimensionBeltLengthValue";
+      type: "ChangeDimensionBeltValue";
       id: ID;
       newValue: number;
       oldValue: number;
@@ -249,22 +255,26 @@ export type Action =
         | MoveElementActionType
         | ChangeDimensionActionType
         | ConnectsActionType
-        | CreationActionType;
+        | CreationActionType
+        | "TightenBelt";
       newNodes: GeomNodes;
       oldNodes: GeomNodes;
     }
   | { type: "Blank" }
   | { type: "MoveForceVector"; id: ID; newVector: Point2; oldVector: Point2 }
   | {
-      type: "MoveDistributedForceVectors";
+      type: "SetDistributedForce";
       id: ID;
-      newVectorStart: Point2;
-      oldVectorStart: Point2;
-      newVectorEnd: Point2;
-      oldVectorEnd: Point2;
+      newDirection: Point2;
+      oldDirection: Point2;
+      newMagnitudeStart: number;
+      oldMagnitudeStart: number;
+      newMagnitudeEnd: number;
+      oldMagnitudeEnd: number;
     }
   | { type: "ChangeMomentValue"; id: ID; newValue: number; oldValue: number }
   | { type: "FlipMomentDirection"; id: ID }
+  | { type: "SetLoadFrame"; id: ID; newFrame: LoadFrame; oldFrame: LoadFrame }
   | {
       type: "SetProbes";
       elementID: ID;

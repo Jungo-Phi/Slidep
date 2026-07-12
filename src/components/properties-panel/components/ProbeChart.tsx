@@ -53,8 +53,7 @@ interface ProbeChartProps {
 /**
  * Lightweight SVG time chart for probe metrics. Downsamples to roughly one
  * point per horizontal unit, auto-scales the y range, draws a cursor at the
- * current simulation time, and lets the user scrub time by clicking/dragging
- * like on the timeline.
+ * current simulation time, and the time can be changed by clicking/dragging like on the timeline.
  */
 export const ProbeChart: React.FC<ProbeChartProps> = ({
   curves,

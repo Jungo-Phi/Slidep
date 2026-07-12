@@ -396,6 +396,38 @@ export class Point2 {
     );
   }
 
+  /** Vérifie si un point est dans le quadrilatère de distributed-force définit par un segment, une direction et deux amplitudes
+   */
+  public is_in_distributed_force(
+    startPoint: Point2,
+    endPoint: Point2,
+    direction: Point2,
+    magnitudeStart: number,
+    magnitudeEnd: number,
+  ): boolean {
+    const vertices = [
+      startPoint,
+      startPoint.add(direction.mul(magnitudeStart)),
+      endPoint.add(direction.mul(magnitudeEnd)),
+      endPoint,
+    ];
+    let inside = false;
+    for (let i = 0; i < 4; i++) {
+      const current = vertices[i];
+      const next = vertices[(i + 1) % 4];
+      const intersect = current.y > this.y !== next.y > this.y;
+      if (intersect) {
+        const xIntersect =
+          ((next.x - current.x) * (this.y - current.y)) / (next.y - current.y) +
+          current.x;
+        if (xIntersect > this.x) {
+          inside = !inside;
+        }
+      }
+    }
+    return inside;
+  }
+
   /** Renvoie un segment (`start` to `end`) tangeant aux 2 cercles. direction {false: clockwise, true: counterClockwise}*/
   public static circles_link(
     center1: Point2,

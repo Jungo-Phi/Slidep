@@ -88,6 +88,7 @@ describe("PlacingForceEnd", () => {
       targetID: id("pivot1"),
       anchor: undefined,
       vector: P(0, -5),
+      frame: "world",
     };
     const r = handle_placing_element(state, tipPos, [], [], [existing]);
     expect(r.actions).toHaveLength(2);
@@ -102,6 +103,7 @@ describe("PlacingForceEnd", () => {
       targetID: id("other"),
       anchor: undefined,
       vector: P(0, -1),
+      frame: "world",
     };
     const r = handle_placing_element(state, tipPos, [], [], [other]);
     expect(r.actions).toHaveLength(1);
@@ -119,6 +121,7 @@ describe("PlacingForceEnd", () => {
       targetID: id("beam1"),
       anchor: "end",
       vector: P(0, -1),
+      frame: "world",
     };
     const r = handle_placing_element(stateEdge, tipPos, [], [], [existing]);
     expect(r.actions).toHaveLength(1);
@@ -136,6 +139,7 @@ describe("PlacingForceEnd", () => {
       targetID: id("beam1"),
       anchor: "start",
       vector: P(0, -1),
+      frame: "world",
     };
     const r = handle_placing_element(stateEdge, tipPos, [], [], [existing]);
     expect(r.actions).toHaveLength(2);
@@ -229,8 +233,10 @@ describe("PlacingDistributedForceEnd", () => {
       type: "distributed-force",
       id: id("df1"),
       beamID: id("beam1"),
-      vectorStart: P(0, -1),
-      vectorEnd: P(0, -1),
+      direction: P(0, -1),
+      magnitudeStart: 1,
+      magnitudeEnd: 1,
+      frame: "world",
     };
     const r = handle_placing_element(
       state,
@@ -249,8 +255,10 @@ describe("PlacingDistributedForceEnd", () => {
       type: "distributed-force",
       id: id("df2"),
       beamID: id("beam2"),
-      vectorStart: P(0, -1),
-      vectorEnd: P(0, -1),
+      direction: P(0, -1),
+      magnitudeStart: 1,
+      magnitudeEnd: 1,
+      frame: "world",
     };
     const r = handle_placing_element(
       state,

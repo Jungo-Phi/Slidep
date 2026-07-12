@@ -16,7 +16,7 @@ import { Point2 as Point2 } from "../../types/point2";
 import { get_element_icon } from "../element-palette/elementIcon";
 import { UnionElement, ViewportState } from "../../types";
 import { value_to_ratio_parts } from "../../utils";
-import { BeltVia, belt_pieces } from "../../utils/belt-path";
+import { BeltVia, BeltPiece, belt_pieces } from "../../utils/belt-path";
 
 const TAU = 2 * Math.PI;
 
@@ -468,6 +468,77 @@ export function draw_damper(
   ctx.stroke();
 }
 
+export function draw_motor(ctx: CanvasRenderingContext2D, isGrounded: boolean) {
+  const bottom = DIM.MOTOR_RADIUS - 2;
+
+  ctx.beginPath();
+  if (isGrounded) {
+    ctx.moveTo(-DIM.MOTOR_RADIUS, bottom);
+    ctx.arc(0, 0, DIM.MOTOR_RADIUS, TAU / 2, 0);
+    ctx.lineTo(DIM.MOTOR_RADIUS, bottom);
+  } else {
+    ctx.arc(0, 0, DIM.MOTOR_RADIUS, 0, TAU);
+  }
+  ctx.closePath();
+  if (isGrounded) {
+    ctx.moveTo(-DIM.MOTOR_RADIUS + 7, bottom);
+    ctx.arc(-DIM.MOTOR_RADIUS + 5, bottom - 5, 2, 0, TAU);
+    ctx.moveTo(DIM.MOTOR_RADIUS - 3, bottom - 5);
+    ctx.arc(DIM.MOTOR_RADIUS - 5, bottom - 5, 2, 0, TAU);
+  }
+  ctx.arc(0, 0, DIM.PIVOT_INNER_RADIUS, 0, TAU);
+  ctx.fill("evenodd");
+
+  ctx.beginPath();
+  if (isGrounded) {
+    ctx.arc(
+      -DIM.MOTOR_RADIUS + DIM.MOTOR_CORNER_RADIUS,
+      bottom - DIM.MOTOR_CORNER_RADIUS,
+      DIM.MOTOR_CORNER_RADIUS,
+      TAU / 4,
+      TAU / 2,
+    );
+    ctx.arc(0, 0, DIM.MOTOR_RADIUS, TAU / 2, 0);
+    ctx.arc(
+      DIM.MOTOR_RADIUS - DIM.MOTOR_CORNER_RADIUS,
+      bottom - DIM.MOTOR_CORNER_RADIUS,
+      DIM.MOTOR_CORNER_RADIUS,
+      0,
+      TAU / 4,
+    );
+  } else {
+    ctx.arc(0, 0, DIM.MOTOR_RADIUS, 0, TAU);
+  }
+  ctx.closePath();
+  ctx.stroke();
+  if (isGrounded) {
+    ctx.lineWidth -= 0.5;
+    ctx.beginPath();
+    ctx.arc(-DIM.MOTOR_RADIUS + 5, bottom - 5, 2, 0, TAU);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(DIM.MOTOR_RADIUS - 5, bottom - 5, 2, 0, TAU);
+    ctx.stroke();
+    ctx.lineWidth += 0.5;
+  }
+
+  const inner = DIM.PIVOT_OUTER_RADIUS + 4.5;
+  const outer = DIM.MOTOR_RADIUS - 1;
+
+  ctx.beginPath();
+  ctx.moveTo(inner, 0);
+  ctx.lineTo(outer, 0);
+  ctx.moveTo(0, inner);
+  ctx.lineTo(0, outer - (isGrounded ? 2 : 0));
+  ctx.moveTo(-inner, 0);
+  ctx.lineTo(-outer, 0);
+  ctx.moveTo(0, -inner);
+  ctx.lineTo(0, -outer);
+  ctx.lineWidth += 0.5;
+  ctx.stroke();
+  ctx.lineWidth -= 0.5;
+}
+
 export function draw_gear(ctx: CanvasRenderingContext2D, radius: number) {
   if (radius < DIM.MIN_GEAR_RADIUS) radius = DIM.MIN_GEAR_RADIUS;
 
@@ -563,65 +634,130 @@ export function draw_belt(
 }
 
 /**
+ * Winding of one belt arc: the belt climbs `growth` px total across the wrap
+ * (one BELT_WIDTH per turn) so surplus turns read as a coil, not a retraced
+ * circle. Applied at the arrival end (`atStart`) or the departure end; the other
+ * end stays on the rim. `growth` > 0 grows outward (the free run leaves from the
+ * top layer), < 0 inward (winch: keep the free run on the rim so it doesn't lean).
+ */
+export type BeltWinding = { growth: number; atStart: boolean };
+
+/**
+ * Radii at the arrival / departure ends of an arc given its optional winding.
+ * The grown end is kept ≥ 1px so an inward (winch) coil deep enough to reach the
+ * centre never flips across it.
+ */
+function belt_arc_radii(arc: BeltPiece, w?: BeltWinding): [number, number] {
+  const r = arc.radius;
+  if (!w) return [r, r];
+  const grown = Math.max(1, r + w.growth);
+  return w.atStart ? [grown, r] : [r, grown];
+}
+
+/**
+ * Append a belt arc to the current path as a polyline from `rStart` (at its
+ * arrival angle) to `rEnd` (at its departure angle), the radius interpolated
+ * across the swept wrap. rStart === rEnd → a plain circular arc; differing radii
+ * → a coil (spiral) that reaches both tangent runs — a belt wound past a full
+ * turn. The straight run into the arc is the implicit line from the current
+ * point to the first sampled point.
+ */
+function append_belt_arc(
+  ctx: CanvasRenderingContext2D,
+  arc: BeltPiece,
+  rStart: number,
+  rEnd: number,
+) {
+  const sign = arc.direction ? -1 : 1;
+  const steps = Math.max(8, Math.ceil((arc.wrap / TAU) * 48));
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    const angle = arc.startAngle + sign * arc.wrap * t;
+    const p = arc.center.add(
+      Point2.from_polar(rStart + (rEnd - rStart) * t, angle),
+    );
+    ctx.lineTo(p.x, p.y);
+  }
+}
+
+/**
+ * Draw a loose (open) belt from its ordered geometric pieces: the tangent runs
+ * from the start terminal, the gear arcs, and the run to the end terminal, plus
+ * the two end dots. `wraps` (continuous per-via wrap, simulation) sizes each arc
+ * so a pulley losing contact (wrap → 0) is drawn straight-past; `windings`
+ * (per via) turns a wound pulley's arc into a coil (see `draw_belt_loop`).
+ */
+export function draw_belt_open(
+  ctx: CanvasRenderingContext2D,
+  vias: BeltVia[],
+  wraps?: number[],
+  windings?: (BeltWinding | undefined)[],
+) {
+  if (vias.length < 2) return;
+  const pieces = belt_pieces(vias, false, wraps);
+  const widthChange = ctx.lineWidth - STROKE_WIDTHS.STANDARD;
+  ctx.lineCap = "square";
+
+  const start = vias[0].pos;
+  const end = vias[vias.length - 1].pos;
+  ctx.beginPath();
+  ctx.moveTo(start.x, start.y);
+  for (const piece of pieces) {
+    if (piece.kind === "segment") {
+      ctx.lineTo(piece.to.x, piece.to.y);
+    } else {
+      const [rStart, rEnd] = belt_arc_radii(piece, windings?.[piece.gearIndex]);
+      append_belt_arc(ctx, piece, rStart, rEnd);
+    }
+  }
+  ctx.lineTo(end.x, end.y);
+  ctx.lineWidth = DIM.BELT_WIDTH + widthChange;
+  ctx.stroke();
+
+  ctx.save();
+  ctx.translate(start.x, start.y);
+  draw_belt_end(ctx);
+  ctx.restore();
+
+  ctx.save();
+  ctx.translate(end.x, end.y);
+  draw_belt_end(ctx);
+  ctx.restore();
+}
+
+/**
  * Draw a tight belt as a continuous closed loop around its pulleys (the gN→g0
  * closure included), with no free ends. Unlike `draw_belt`, this is independent
  * of the junction position, so the loop stays continuous wherever the join sits.
+ *
+ * `wraps` (continuous per-via wrap, simulation) sizes each arc so a pulley
+ * losing contact (wrap → 0) is drawn straight-past. `windings` (per via) draws a
+ * pulley wound past a full turn as a coil whose ends reach both tangent runs,
+ * instead of the surplus retracing the same circle.
  */
-export function draw_belt_loop(ctx: CanvasRenderingContext2D, vias: BeltVia[]) {
-  const arcs = belt_pieces(vias, true).filter((p) => p.kind === "arc");
+export function draw_belt_loop(
+  ctx: CanvasRenderingContext2D,
+  vias: BeltVia[],
+  wraps?: number[],
+  windings?: (BeltWinding | undefined)[],
+) {
+  const arcs = belt_pieces(vias, true, wraps).filter((p) => p.kind === "arc");
   if (arcs.length === 0) return;
   const widthChange = ctx.lineWidth - STROKE_WIDTHS.STANDARD;
   ctx.lineCap = "square";
 
+  // Straight tangent runs are the implicit lines between consecutive arcs (each
+  // arc's first sampled point); closePath() adds the final closure run.
   ctx.beginPath();
-  arcs.forEach((arc) => {
-    // Straight tangent runs are the implicit lines the canvas draws between
-    // consecutive arcs; closePath() adds the final closure run.
-    const endAngle = arc.startAngle + (arc.direction ? -arc.wrap : arc.wrap);
-    ctx.arc(
-      arc.center.x,
-      arc.center.y,
-      arc.radius + DIM.BELT_WIDTH / 2,
-      arc.startAngle,
-      endAngle,
-      arc.direction,
-    );
+  arcs.forEach((arc, i) => {
+    const [rStart, rEnd] = belt_arc_radii(arc, windings?.[arc.gearIndex]);
+    if (i === 0) {
+      const p0 = arc.center.add(Point2.from_polar(rStart, arc.startAngle));
+      ctx.moveTo(p0.x, p0.y);
+    }
+    append_belt_arc(ctx, arc, rStart, rEnd);
   });
   ctx.closePath();
-  ctx.lineWidth = DIM.BELT_WIDTH + widthChange;
-  ctx.stroke();
-}
-
-/**
- * Draw the extra turns of a belt wound onto a pulley (winch): a spiral growing
- * outward by one belt width per turn, for `floor(|wrap| / 2π)` turns. The base
- * (sub-2π) contact arc is already drawn by the belt path; this overlays the
- * surplus so winding past a full turn reads as a coil instead of resetting.
- */
-export function draw_belt_winding(
-  ctx: CanvasRenderingContext2D,
-  center: Point2,
-  baseRadius: number,
-  wrap: number,
-) {
-  const TAU = 2 * Math.PI;
-  const turns = Math.floor(Math.abs(wrap) / TAU);
-  if (turns < 1) return;
-  const sign = wrap < 0 ? -1 : 1;
-  const dr = DIM.BELT_WIDTH; // radial growth per full turn
-  const total = turns * TAU;
-  const steps = turns * 48;
-  const widthChange = ctx.lineWidth - STROKE_WIDTHS.STANDARD;
-  ctx.lineCap = "round";
-  ctx.beginPath();
-  for (let i = 0; i <= steps; i++) {
-    const a = (i / steps) * total;
-    const p = center.add(
-      Point2.from_polar(baseRadius + (a / TAU) * dr, sign * a),
-    );
-    if (i === 0) ctx.moveTo(p.x, p.y);
-    else ctx.lineTo(p.x, p.y);
-  }
   ctx.lineWidth = DIM.BELT_WIDTH + widthChange;
   ctx.stroke();
 }
@@ -635,31 +771,34 @@ export function draw_dimention(
   hideText: boolean = false,
 ) {
   ctx.fillStyle = ctx.strokeStyle;
-  const widthStart = ctx.lineWidth;
-  ctx.lineWidth = 1;
 
   const delta = end.sub(start);
   const length = delta.length();
   const t = position.parameter_on_segment(start, end);
   const np = delta.perp().normalize();
   const offset = position.sub(start).dot(np);
-  const side = position.is_on_left_side_of_line(start, end) ? -1 : 1;
 
-  const startPos = start.add(np.mul(7 * side));
-  const offsetStart = start.add(np.mul(offset).extend_length(5));
-  ctx.beginPath();
-  ctx.moveTo(startPos.x, startPos.y);
-  ctx.lineTo(offsetStart.x, offsetStart.y);
-  ctx.stroke();
+  // draw side lines
 
-  const endPos = end.add(np.mul(7 * side));
-  const offsetEnd = end.add(np.mul(offset).extend_length(5));
-  ctx.beginPath();
-  ctx.moveTo(endPos.x, endPos.y);
-  ctx.lineTo(offsetEnd.x, offsetEnd.y);
-  ctx.stroke();
+  if (Math.abs(offset) > 10) {
+    const widthStart = ctx.lineWidth;
+    ctx.lineWidth = 1;
+    const side = position.is_on_left_side_of_line(start, end) ? -1 : 1;
+    const startPos = start.add(np.mul(7 * side));
+    const offsetStart = start.add(np.mul(offset).extend_length(5));
+    ctx.beginPath();
+    ctx.moveTo(startPos.x, startPos.y);
+    ctx.lineTo(offsetStart.x, offsetStart.y);
+    ctx.stroke();
 
-  ctx.lineWidth = widthStart;
+    const endPos = end.add(np.mul(7 * side));
+    const offsetEnd = end.add(np.mul(offset).extend_length(5));
+    ctx.beginPath();
+    ctx.moveTo(endPos.x, endPos.y);
+    ctx.lineTo(offsetEnd.x, offsetEnd.y);
+    ctx.stroke();
+    ctx.lineWidth = widthStart;
+  }
 
   // Draw dimention
 
@@ -1080,76 +1219,6 @@ export function draw_moment(
   ctx.stroke();
 
   ctx.restore();
-}
-
-/** Draws a motor indicator (pivot must be translated). */
-export function draw_motor(ctx: CanvasRenderingContext2D, isGrounded: boolean) {
-  const bottom = DIM.MOTOR_RADIUS - 2;
-
-  ctx.beginPath();
-  if (isGrounded) {
-    ctx.moveTo(-DIM.MOTOR_RADIUS, bottom);
-    ctx.arc(0, 0, DIM.MOTOR_RADIUS, TAU / 2, 0);
-    ctx.lineTo(DIM.MOTOR_RADIUS, bottom);
-  } else {
-    ctx.arc(0, 0, DIM.MOTOR_RADIUS, 0, TAU);
-  }
-  ctx.closePath();
-  if (isGrounded) {
-    ctx.arc(-DIM.MOTOR_RADIUS + 5, bottom - 5, 2, 0, TAU);
-    // ctx.arc(DIM.MOTOR_RADIUS - 5, bottom - 5, 2, 0, TAU);
-  }
-  ctx.arc(0, 0, DIM.PIVOT_INNER_RADIUS, 0, TAU);
-  ctx.fill("evenodd");
-
-  ctx.beginPath();
-  if (isGrounded) {
-    ctx.arc(
-      -DIM.MOTOR_RADIUS + DIM.MOTOR_CORNER_RADIUS,
-      bottom - DIM.MOTOR_CORNER_RADIUS,
-      DIM.MOTOR_CORNER_RADIUS,
-      TAU / 4,
-      TAU / 2,
-    );
-    ctx.arc(0, 0, DIM.MOTOR_RADIUS, TAU / 2, 0);
-    ctx.arc(
-      DIM.MOTOR_RADIUS - DIM.MOTOR_CORNER_RADIUS,
-      bottom - DIM.MOTOR_CORNER_RADIUS,
-      DIM.MOTOR_CORNER_RADIUS,
-      0,
-      TAU / 4,
-    );
-  } else {
-    ctx.arc(0, 0, DIM.MOTOR_RADIUS, 0, TAU);
-  }
-  ctx.closePath();
-  ctx.stroke();
-  if (isGrounded) {
-    ctx.lineWidth -= 0.5;
-    ctx.beginPath();
-    ctx.arc(-DIM.MOTOR_RADIUS + 5, bottom - 5, 2, 0, TAU);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.arc(DIM.MOTOR_RADIUS - 5, bottom - 5, 2, 0, TAU);
-    ctx.stroke();
-    ctx.lineWidth += 0.5;
-  }
-
-  const inner = DIM.PIVOT_OUTER_RADIUS + 3.5;
-  const outer = DIM.MOTOR_RADIUS - 0.5;
-
-  ctx.beginPath();
-  ctx.moveTo(inner, 0);
-  ctx.lineTo(outer, 0);
-  ctx.moveTo(0, inner);
-  ctx.lineTo(0, outer - (isGrounded ? 2 : 0));
-  ctx.moveTo(-inner, 0);
-  ctx.lineTo(-outer, 0);
-  ctx.moveTo(0, -inner);
-  ctx.lineTo(0, -outer);
-  ctx.lineWidth += 0.5;
-  ctx.stroke();
-  ctx.lineWidth -= 0.5;
 }
 
 /** Draws a small probe indicator (circle with crosshair). */

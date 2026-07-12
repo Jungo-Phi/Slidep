@@ -121,7 +121,7 @@ export function actionReducer(
       case "ChangeDimensionEdgeToNodeValue":
       case "ChangeDimensionAngleValue":
       case "ChangeDimensionRadiusValue":
-      case "ChangeDimensionBeltLengthValue":
+      case "ChangeDimensionBeltValue":
       case "ChangeGearRatioValue":
         element = get_constraint_element_from_id(action.id, constraintElements);
         if ("value" in element) {
@@ -337,17 +337,20 @@ export function actionReducer(
         force.vector = revert ? action.oldVector : action.newVector;
         break;
       }
-      case "MoveDistributedForceVectors": {
+      case "SetDistributedForce": {
         const distForce = get_load_element_from_id(
           action.id,
           loadElements,
         ) as DistributedForceElement;
-        distForce.vectorStart = revert
-          ? action.oldVectorStart
-          : action.newVectorStart;
-        distForce.vectorEnd = revert
-          ? action.oldVectorEnd
-          : action.newVectorEnd;
+        distForce.direction = revert
+          ? action.oldDirection
+          : action.newDirection;
+        distForce.magnitudeStart = revert
+          ? action.oldMagnitudeStart
+          : action.newMagnitudeStart;
+        distForce.magnitudeEnd = revert
+          ? action.oldMagnitudeEnd
+          : action.newMagnitudeEnd;
         break;
       }
       case "ChangeMomentValue": {
@@ -364,6 +367,13 @@ export function actionReducer(
           loadElements,
         ) as MomentElement;
         moment.clockwise = !moment.clockwise;
+        break;
+      }
+      case "SetLoadFrame": {
+        const load = get_load_element_from_id(action.id, loadElements) as
+          | ForceElement
+          | DistributedForceElement;
+        load.frame = revert ? action.oldFrame : action.newFrame;
         break;
       }
       case "SetProbes": {

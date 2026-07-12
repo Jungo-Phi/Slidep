@@ -1,5 +1,5 @@
 import { ID, Link, Mechanism, Point2, KinNodes } from "../../types";
-import { BeltVia, belt_wraps } from "../../utils/belt-path";
+import { BeltVia, belt_project, belt_wraps } from "../../utils/belt-path";
 import {
   ConstraintResidual,
   KinematicSnapshot,
@@ -45,7 +45,10 @@ export type SimulationModel = {
 export type SimGrab =
   | { key: string; target: Point2 }
   | { edgeID: string; t: number; target: Point2 }
-  | { gearID: string; angleOffset: number; radius: number; target: Point2 };
+  | { gearID: string; angleOffset: number; radius: number; target: Point2 }
+  // Grab an arbitrary point of a tight belt: a transient BeltPin (baked at grab
+  // start) rides the loop at the grabbed arc-length; pulling it rotates the belt.
+  | { beltPin: Extract<Link, { type: "BeltPin" }>; target: Point2 };
 
 function wrap_angle(a: number): number {
   while (a > Math.PI) a -= 2 * Math.PI;
@@ -123,6 +126,9 @@ export function update_belt_disconnects(
     while (delta > Math.PI) delta -= TAU;
     while (delta <= -Math.PI) delta += TAU;
     const cont = link.wraps![gi] + delta;
+    // Continuous (unwrapped) wrap = 2π·turns + fractional: a wound end coils past 2π
+    // like a capstan (bare gear OR winch) and unwinds smoothly back through the seam.
+    // The length is reconstructed from this continuous wrap (see the constraint).
     link.wraps![gi] = cont;
     if (
       cont <= 0 &&
@@ -168,6 +174,68 @@ export function rewire_belt_mesh(
       return false;
     return true;
   });
+}
+
+/**
+ * Re-bake the tight-belt junction constraints (BeltPin + BeltFollowsTangent) of
+ * belts that just lost a pulley. The junction rides the loop at
+ * s = s0 + rε·(θ − θ0); s0 is an arc-length on the loop, so when a pulley
+ * disconnects the loop shrinks, s0's meaning shifts, and the junction would JUMP.
+ * Fix (mirrors how rewire_belt_mesh re-bakes the mesh θ0): re-project the junction
+ * onto the REDUCED loop for a fresh s0 and reset θ0 to the current reference angle
+ * (so s = s0 at this frame → no jump). If the reference pulley itself disconnected
+ * (its θ is no longer coupled to φ), re-elect the first still-connected pulley.
+ * Called once per disconnect event; permanent for the run (reset on recompile).
+ */
+export function rebake_belt_pin_refs(
+  links: Link[],
+  belts: Extract<Link, { type: "BeltLength" }>[],
+  positions: Map<string, Point2>,
+  angles: Map<string, number>,
+): void {
+  for (const belt of belts) {
+    if (belt.owner === undefined) continue;
+    const disconnected = belt.disconnected;
+    // Reduced loop (still-connected pulleys) + active-via → original-gear map.
+    const vias: BeltVia[] = [];
+    const viaToGear: number[] = [];
+    for (let i = 0; i < belt.gearPosKeys.length; i++) {
+      if (disconnected?.[i]) continue;
+      const pos = positions.get(belt.gearPosKeys[i]);
+      if (!pos) continue;
+      vias.push({ pos, radius: belt.radii[i], direction: belt.directions[i] });
+      viaToGear.push(i);
+    }
+    if (vias.length < 2) continue;
+    const activeWraps = belt.wraps
+      ? viaToGear.map((g) => belt.wraps![g] ?? 0)
+      : undefined;
+    for (const link of links) {
+      if (
+        (link.type !== "BeltPin" && link.type !== "BeltFollowsTangent") ||
+        link.beltID !== belt.owner
+      )
+        continue;
+      // Re-elect a reference if the current one just disconnected.
+      if (disconnected?.[link.refIndex]) {
+        const newRef = viaToGear[0];
+        link.refIndex = newRef;
+        link.refAngleKey = link.gearAngleKeys[newRef];
+      }
+      const theta = angles.get(link.refAngleKey);
+      if (theta === undefined) continue;
+      const J =
+        link.type === "BeltPin"
+          ? positions.get(link.nodeKey)
+          : positions.get(link.pivotKey);
+      if (!J) continue;
+      // BeltPin's arc-length parametrization includes winding (wraps);
+      // BeltFollowsTangent's does not — match each constraint's own usage.
+      const projWraps = link.type === "BeltPin" ? activeWraps : undefined;
+      link.thetaRef0 = theta;
+      link.s0 = belt_project(vias, J, true, projWraps).s;
+    }
+  }
 }
 
 /** Position-bearing key fields are rewritten on coincidence fusion; angle key
@@ -332,21 +400,35 @@ export function step_simulation(
   });
 
   // A pulley just lost contact → rebuild the affected belts' transmission chain
-  // so it stops being driven while its neighbours stay coupled. Permanent for
-  // the run (model mutated; reset on recompile).
-  if (beltsToRewire.length > 0)
+  // so it stops being driven while its neighbours stay coupled, and re-bake the
+  // tight-belt junction refs onto the reduced loop so the junction doesn't jump.
+  // Permanent for the run (model mutated; reset on recompile).
+  if (beltsToRewire.length > 0) {
     model.links = rewire_belt_mesh(model.links, beltsToRewire);
+    rebake_belt_pin_refs(model.links, beltsToRewire, positions, angles);
+  }
 
-  // Share each belt's continuous wraps (tracked on its BeltLength link) with its
-  // BeltPin (tight-belt junction), so it travels around a wound pulley >2π smoothly,
-  // not just the fractional arc. gearPosKeys order matches (both from the belt).
+  // Share each belt's sim state — continuous wraps (so a wound pulley >2π is
+  // traversed smoothly, not just its fractional arc) and the disconnected mask
+  // (so the junction rides the same reduced loop the belt is drawn on) — from its
+  // BeltLength link with its BeltPin + BeltFollowsTangent links. gearPosKeys order
+  // matches (all built from the belt).
   const wrapsByBelt = new Map<ID, number[]>();
+  const disconnectedByBelt = new Map<ID, boolean[]>();
   for (const link of model.links)
-    if (link.type === "BeltLength" && link.owner !== undefined && link.wraps)
-      wrapsByBelt.set(link.owner, link.wraps);
-  for (const link of model.links)
-    if (link.type === "BeltPin" && link.owner !== undefined)
-      link.wraps = wrapsByBelt.get(link.owner);
+    if (link.type === "BeltLength" && link.owner !== undefined) {
+      if (link.wraps) wrapsByBelt.set(link.owner, link.wraps);
+      if (link.disconnected)
+        disconnectedByBelt.set(link.owner, link.disconnected);
+    }
+  for (const link of model.links) {
+    if (link.type === "BeltPin") {
+      link.wraps = wrapsByBelt.get(link.beltID);
+      link.disconnected = disconnectedByBelt.get(link.beltID);
+    } else if (link.type === "BeltFollowsTangent") {
+      link.disconnected = disconnectedByBelt.get(link.beltID);
+    }
+  }
 
   // ── Grab (transient, this frame only) ──
   let links = model.links;
@@ -396,15 +478,57 @@ export function step_simulation(
         value: grab.target,
       },
     ];
-  } else if (grab) {
+  } else if (grab && "beltPin" in grab) {
+    // Grab an arbitrary point of a tight belt: place a bridge node at the mouse,
+    // pin it to the loop at the grabbed arc-length (BeltPin), and pull it there —
+    // the pin advances the belt travel so the loop rotates with the point under
+    // the cursor. gearPosKeys were built unfused (grab start) → remap to the fused
+    // sim keys; refresh the per-frame wraps/disconnected from the belt.
+    const src = grab.beltPin;
+    const remap = (k: string) => model.keyMap.get(k) ?? k;
+    const pin: Extract<Link, { type: "BeltPin" }> = {
+      ...src,
+      gearPosKeys: src.gearPosKeys.map(remap),
+      startKey: src.startKey ? remap(src.startKey) : undefined,
+      endKey: src.endKey ? remap(src.endKey) : undefined,
+      wraps: wrapsByBelt.get(src.beltID),
+      disconnected: disconnectedByBelt.get(src.beltID),
+    };
+    positions.set(pin.nodeKey, new Point2(grab.target.x, grab.target.y));
     links = [
       ...model.links,
+      pin,
       {
         type: "HandleGrab",
         ddl: 1,
-        grabbedKey: model.keyMap.get(grab.key) ?? grab.key,
+        grabbedKey: pin.nodeKey,
         value: grab.target,
       },
+    ];
+  } else if (grab) {
+    const grabKey = model.keyMap.get(grab.key) ?? grab.key;
+    // A belt terminal can't be pulled INSIDE its adjacent gear (start↔first gear,
+    // end↔last gear) — the same rule as edition, enforced here with the live sim gear
+    // positions. It may reach the rim (winding) but never go inside.
+    let target = grab.target;
+    for (const link of model.links) {
+      if (link.type !== "BeltLength" || link.gearPosKeys.length === 0) continue;
+      const which =
+        link.startKey === grabKey ? 0
+        : link.endKey === grabKey ? link.gearPosKeys.length - 1
+        : -1;
+      if (which < 0) continue;
+      const gc = positions.get(link.gearPosKeys[which]);
+      if (!gc) break;
+      const v = target.sub(gc);
+      const d = v.length();
+      if (d > 1e-9 && d < link.radii[which])
+        target = gc.add(v.mul(link.radii[which] / d));
+      break;
+    }
+    links = [
+      ...model.links,
+      { type: "HandleGrab", ddl: 1, grabbedKey: grabKey, value: target },
     ];
   }
 

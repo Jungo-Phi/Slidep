@@ -12,6 +12,7 @@ import {
   ForceElement,
   GearElement,
   ID,
+  Link,
   LoadElement,
   MechanicalElement,
 } from "../../types";
@@ -25,9 +26,40 @@ import {
   get_mechanical_element_from_id,
 } from "../mechanism/connect-actions";
 import { is_on_left_side_of_belt } from "../../utils";
+import {
+  force_display_value,
+  force_stored_vector,
+  world_to_frame,
+} from "../../utils/load-geom";
+import { belt_body_grab_pin, elements_by_id } from "../solver/parsing";
 import { DIM, HIT_TOLERANCE } from "../../constants/rendering-specs";
 import { handle_placing_element } from "./placing-element-actions";
 import { handle_placing_constraint } from "./placing-constraint-actions";
+
+/**
+ * Keep a belt terminal from being dragged INSIDE its adjacent gear (a belt end can
+ * never enter the pulley it wraps): clamp its position to at least the gear radius
+ * from that gear's centre. It may sit ON the rim — that is a wound end — but never
+ * inside. `which` picks the adjacent gear: the belt's first attached gear for the
+ * start terminal, its last for the end.
+ */
+function clamp_belt_terminal_outside_gear(
+  pos: Point2,
+  edge: EdgeElement,
+  which: "start" | "end",
+  mechanicalElements: MechanicalElement[],
+): Point2 {
+  if (edge.type !== "belt") return pos;
+  const gears = (edge as BeltElement).attachedGearsIDs;
+  if (gears.length === 0) return pos;
+  const gearId = which === "start" ? gears[0].id : gears[gears.length - 1].id;
+  const gear = get_mechanical_element_from_id(gearId, mechanicalElements);
+  if (!gear || gear.type !== "gear") return pos;
+  const v = pos.sub(gear.position);
+  const d = v.length();
+  if (d >= gear.radius || d < 1e-9) return pos;
+  return gear.position.add(v.mul(gear.radius / d));
+}
 
 export function canvasStateReducer(
   state: CanvasState,
@@ -49,6 +81,7 @@ export function canvasStateReducer(
     target: Point2,
     bodyRatio?: number,
     gearPerimeter?: { gearID: ID; angleOffset: number; radius: number },
+    beltPin?: Extract<Link, { type: "BeltPin" }>,
   ) => void = () => {},
   onSimulationGrabEnd: () => void = () => {},
   worldMousePos: Point2 = ZERO,
@@ -298,6 +331,7 @@ export function canvasStateReducer(
         case "DimensionEdgeToNode":
         case "DimensionAngle":
         case "DimensionRadius":
+        case "DimensionBelt":
         case "HorizontalVerticalConstraintStart":
         case "HorizontalVerticalConstraintNode":
         case "NormalConstraintStart":
@@ -355,6 +389,8 @@ export function canvasStateReducer(
             let gearPerimeter:
               | { gearID: ID; angleOffset: number; radius: number }
               | undefined = undefined;
+            let beltPin: Extract<Link, { type: "BeltPin" }> | undefined =
+              undefined;
             if (hit.type === "GearTooth") {
               // Grab a gear tooth → rotate the gear: capture the angle offset of
               // the grabbed point relative to the gear angle (held constant).
@@ -374,6 +410,25 @@ export function canvasStateReducer(
             } else if (hit.type === "Node") {
               simKey = hit.id;
               simElementID = hit.id;
+            } else if (hit.type === "BeltBody") {
+              // Grab any point of a tight belt → rotate the belt with the point
+              // under the cursor: bake a transient BeltPin at the grabbed
+              // arc-length (from the live sim geometry).
+              const belt = get_mechanical_element_from_id(
+                hit.id,
+                mechanicalElements,
+              ) as BeltElement;
+              const pin = belt_body_grab_pin(
+                belt,
+                elements_by_id(mechanicalElements),
+                hit.position,
+                "grab_belt",
+              );
+              if (pin) {
+                simKey = hit.id;
+                simElementID = hit.id;
+                beltPin = pin;
+              }
             } else if (hit.type === "Edge") {
               simElementID = hit.id;
               if (hit.part === "start") simKey = `${hit.id}:start`;
@@ -398,6 +453,7 @@ export function canvasStateReducer(
                 elementID: simElementID,
                 bodyRatio,
                 gearPerimeter,
+                beltPin,
               });
             }
             break;
@@ -509,12 +565,17 @@ export function canvasStateReducer(
           actions.push({
             type: "MoveEdgeStart",
             id: state.elementID,
-            newPosition: edge.positionEnd.add(
-              hoveredPart.position
-                .sub(edge.positionEnd)
-                .limit_length_min(
-                  edge.type === "belt" ? 0 : DIM.MIN_EDGE_LENGTH,
-                ),
+            newPosition: clamp_belt_terminal_outside_gear(
+              edge.positionEnd.add(
+                hoveredPart.position
+                  .sub(edge.positionEnd)
+                  .limit_length_min(
+                    edge.type === "belt" ? 0 : DIM.MIN_EDGE_LENGTH,
+                  ),
+              ),
+              edge,
+              "start",
+              mechanicalElements,
             ),
             oldPosition,
           });
@@ -530,12 +591,17 @@ export function canvasStateReducer(
           actions.push({
             type: "MoveEdgeEnd",
             id: state.elementID,
-            newPosition: edge.positionStart.add(
-              hoveredPart.position
-                .sub(edge.positionStart)
-                .limit_length_min(
-                  edge.type === "belt" ? 0 : DIM.MIN_EDGE_LENGTH,
-                ),
+            newPosition: clamp_belt_terminal_outside_gear(
+              edge.positionStart.add(
+                hoveredPart.position
+                  .sub(edge.positionStart)
+                  .limit_length_min(
+                    edge.type === "belt" ? 0 : DIM.MIN_EDGE_LENGTH,
+                  ),
+              ),
+              edge,
+              "end",
+              mechanicalElements,
             ),
             oldPosition,
           });
@@ -572,7 +638,11 @@ export function canvasStateReducer(
           actions.push({
             type: "MoveForceVector",
             id: state.elementID,
-            newVector: hoveredPart.position.sub(targetPos),
+            newVector: world_to_frame(
+              force_stored_vector(hoveredPart.position.sub(targetPos)),
+              force.frame,
+              mechanicalElements,
+            ),
             oldVector: force.vector,
           });
           break;
@@ -588,28 +658,50 @@ export function canvasStateReducer(
             mechanicalElements,
           ) as BeamElement;
           actionBundleType = "MoveLoad";
-          let newVectorStart = distForce.vectorStart;
-          let newVectorEnd = distForce.vectorEnd;
+          // A distributed force has a single shared direction: tips set their own
+          // magnitude (and re-aim the whole load), the connecting bar re-aims only.
+          let newDirection = distForce.direction;
+          let newMagnitudeStart = distForce.magnitudeStart;
+          let newMagnitudeEnd = distForce.magnitudeEnd;
+          const setDirectionFromWorld = (worldVec: Point2) => {
+            if (worldVec.length() > 1e-6)
+              newDirection = world_to_frame(
+                worldVec.normalize(),
+                distForce.frame,
+                mechanicalElements,
+              );
+          };
           switch (state.part) {
-            case "start-tip":
-              newVectorStart = hoveredPart.position.sub(beam.positionStart);
+            case "start-tip": {
+              const worldVec = hoveredPart.position.sub(beam.positionStart);
+              setDirectionFromWorld(worldVec);
+              newMagnitudeStart = force_display_value(worldVec.length());
               break;
-            case "end-tip":
-              newVectorEnd = hoveredPart.position.sub(beam.positionEnd);
+            }
+            case "end-tip": {
+              const worldVec = hoveredPart.position.sub(beam.positionEnd);
+              setDirectionFromWorld(worldVec);
+              newMagnitudeEnd = force_display_value(worldVec.length());
               break;
-            case "line":
-              const delta = hoveredPart.position.sub(oldPosition);
-              newVectorStart = distForce.vectorStart.add(delta);
-              newVectorEnd = distForce.vectorEnd.add(delta);
+            }
+            case "line": {
+              const proj = hoveredPart.position.project_on_line(
+                beam.positionStart,
+                beam.positionEnd,
+              );
+              setDirectionFromWorld(hoveredPart.position.sub(proj));
               break;
+            }
           }
           actions.push({
-            type: "MoveDistributedForceVectors",
+            type: "SetDistributedForce",
             id: state.elementID,
-            newVectorStart,
-            oldVectorStart: distForce.vectorStart,
-            newVectorEnd,
-            oldVectorEnd: distForce.vectorEnd,
+            newDirection,
+            oldDirection: distForce.direction,
+            newMagnitudeStart,
+            oldMagnitudeStart: distForce.magnitudeStart,
+            newMagnitudeEnd,
+            oldMagnitudeEnd: distForce.magnitudeEnd,
           });
           break;
         }
@@ -696,11 +788,14 @@ export function canvasStateReducer(
         case "SimulationDragging":
           onSimulationGrab(
             state.grabbedKey,
-            // For a gear-tooth grab, follow the raw mouse (rotation target),
-            // not the hovered part which could snap to another element.
-            state.gearPerimeter ? worldMousePos : hoveredPart.position,
+            // For a gear-tooth or belt grab, follow the raw mouse (rotation
+            // target), not the hovered part which could snap to another element.
+            state.gearPerimeter || state.beltPin
+              ? worldMousePos
+              : hoveredPart.position,
             state.bodyRatio,
             state.gearPerimeter,
+            state.beltPin,
           );
           break;
       }

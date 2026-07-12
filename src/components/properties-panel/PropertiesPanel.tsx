@@ -174,12 +174,14 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
         )}
         {activeTab === "elements" && (
           <ElementProperties
-            element={mechanism.mechanicalElements.find(
-              (el) => el.id === (canvasState as any).elementID,
-            )}
-            selectedLoad={mechanism.loads.find(
-              (l) => l.id === (canvasState as any).elementID,
-            )}
+            element={
+              mechanism.mechanicalElements.find(
+                (el) => el.id === (canvasState as any).elementID,
+              ) ||
+              mechanism.loads.find(
+                (l) => l.id === (canvasState as any).elementID,
+              )
+            }
             setHoveredPart={setHoveredPart}
             setCanvasState={setCanvasState}
             applyActions={applyActions}

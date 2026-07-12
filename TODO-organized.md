@@ -26,7 +26,6 @@
 | Tâche                                                                                            | Priorité | Simplicité |  ?  |
 | ------------------------------------------------------------------------------------------------ | :------: | :--------: | :-: |
 | Comportement étrange dans `vectorInput` à régler                                                 |    🔴    |     🔨     |  ?  |
-| Ignorer `BeamBodyHover` lors du déplacement d'un beam                                            |    🟡    |     ⚡     |     |
 | `placer un gear sur un slidep reste en slidep`                                                   |    🟡    |     🔨     |  ?  |
 | Update le hover quand on change de state                                                         |    🟡    |     🔨     |     |
 | `MechanicalCanvas` : fiabiliser la détection du focus (input/dialog/…), `return true` provisoire |    🟡    |     🔨     |     |

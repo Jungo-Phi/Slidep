@@ -137,7 +137,7 @@ const Connection: React.FC<ConnectionProps> = ({
       applyActions={applyActions}
       size="small"
       editable={false}
-      actions={
+      trailingControls={
         <>
           {showDirectionButton && (
             <IconButton

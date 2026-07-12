@@ -20,7 +20,7 @@ interface ElementDisplayProps {
   applyActions: (actions: Action[], actionBundleType: ActionBundleType) => void;
   size: "small" | "medium" | "large";
   editable: boolean;
-  actions?: React.ReactNode;
+  trailingControls?: React.ReactNode;
 }
 
 const ElementDisplayComponent: React.FC<ElementDisplayProps> = ({
@@ -30,7 +30,7 @@ const ElementDisplayComponent: React.FC<ElementDisplayProps> = ({
   applyActions,
   size,
   editable,
-  actions,
+  trailingControls,
 }) => {
   const icon = get_element_icon(element);
   const initialName = shown_element_name(element);
@@ -161,10 +161,10 @@ const ElementDisplayComponent: React.FC<ElementDisplayProps> = ({
         borderRadius: 5,
         padding: size === "small" ? "4px" : size === "medium" ? "6px" : "8px",
         "&:hover": {
-          backgroundColor: actions ? "transparent" : "#00000025",
+          backgroundColor: trailingControls ? "transparent" : "#00000025",
         },
         cursor: "pointer",
-        ...(actions && {
+        ...(trailingControls && {
           justifyContent: "flex-start",
           minWidth: 0,
         }),
@@ -282,7 +282,7 @@ const ElementDisplayComponent: React.FC<ElementDisplayProps> = ({
     </IconButton>
   );
 
-  if (!actions) return content;
+  if (!trailingControls) return content;
 
   return (
     <Box
@@ -305,8 +305,12 @@ const ElementDisplayComponent: React.FC<ElementDisplayProps> = ({
       onMouseLeave={handleMouseLeave}
     >
       {content}
-      <Box className="element-display-actions" sx={{ display: "contents" }}>
-        {actions}
+      <Box
+        className="element-display-actions"
+        sx={{ display: "contents" }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {trailingControls}
       </Box>
     </Box>
   );

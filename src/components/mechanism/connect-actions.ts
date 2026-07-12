@@ -1177,6 +1177,7 @@ function connect_node_and_edge(
           id: crypto.randomUUID() as ID,
           targetID: node.id,
           vector: ef.vector,
+          frame: ef.frame,
         },
       });
     }

@@ -217,8 +217,8 @@ export function PBD_kinematic_solver(
           err = applyGearRatioConstraint(
             radii,
             radMasses,
-            link.key1,
-            link.key2,
+            link.radKey1,
+            link.radKey2,
             link.ratio,
           );
           break;
@@ -249,6 +249,10 @@ export function PBD_kinematic_solver(
             link.s0,
             link.thetaRef0,
             link.wraps,
+            link.disconnected,
+            link.closed ?? true,
+            link.startKey,
+            link.endKey,
           );
           break;
         case "BeltFollowsTangent":
@@ -266,6 +270,7 @@ export function PBD_kinematic_solver(
             link.s0,
             link.thetaRef0,
             link.offset,
+            link.disconnected,
           );
           break;
         case "BeltPhaseGear":

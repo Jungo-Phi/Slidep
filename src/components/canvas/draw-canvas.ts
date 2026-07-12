@@ -8,6 +8,7 @@ import {
 } from "../../constants/rendering-specs";
 import {
   BeamElement,
+  BeltElement,
   ConstraintElement,
   DistributedForceElement,
   EdgeElement,
@@ -28,7 +29,8 @@ import {
   draw_beam,
   draw_belt,
   draw_belt_loop,
-  draw_belt_winding,
+  draw_belt_open,
+  BeltWinding,
   draw_hover_edge_end,
   draw_damper,
   draw_gear,
@@ -57,8 +59,15 @@ import {
 } from "./drawing-functions";
 import { get_mechanical_element_from_id } from "../mechanism/connect-actions";
 import {
+  distributed_display_vectors,
+  force_base,
+  force_display_vector,
+  force_world_vector,
+} from "../../utils/load-geom";
+import {
   get_gear_angles,
   is_on_left_side_of_belt,
+  measure_belt_length,
   resolve_angle_constraint_quadrant,
 } from "../../utils";
 import {
@@ -66,6 +75,30 @@ import {
   is_constraint_type,
   node_on_beam_body,
 } from "./utils";
+
+const TAU = 2 * Math.PI;
+
+/**
+ * Per-via winding spec for a belt: a pulley wound past a full turn (|wrap| ≥ 2π)
+ * gets a coil growing one BELT_WIDTH per turn. It grows OUTWARD on the departure
+ * side by default; on a winch (a terminal pinned to the first/last pulley) it
+ * grows INWARD so the free (load) run stays on the rim and doesn't visually lean.
+ * `viaWraps` is index-aligned to the belt's vias (0 for the two terminals).
+ */
+function belt_windings(
+  viaWraps: (number | undefined)[],
+  startExternal: boolean,
+  endExternal: boolean,
+): (BeltWinding | undefined)[] {
+  const n = viaWraps.length;
+  return viaWraps.map((w, v) => {
+    if (w === undefined || Math.abs(w) < TAU) return undefined;
+    const growth = (Math.abs(w) / TAU) * DIM.BELT_WIDTH;
+    if (startExternal && v === 1) return { growth: -growth, atStart: true };
+    if (endExternal && v === n - 2) return { growth: -growth, atStart: false };
+    return { growth, atStart: false };
+  });
+}
 
 function is_selected(
   elementID: ID,
@@ -355,7 +388,6 @@ export function drawMechanicalCanvas(
         ctx.globalAlpha = INTERACTION_SPECS.DELETION_OPACITY;
       }
       // Fade out revealed constraints at the end of their hover cooldown.
-      // Scoped: globalAlpha is reset to 1 at the start of each element iteration.
       if (constraintOpacity !== undefined) ctx.globalAlpha *= constraintOpacity;
       // Tombstone of a just-deleted constraint (undo/redo feedback).
       const isGhost = ghostConstraintIDs.has(element.id);
@@ -628,7 +660,13 @@ export function drawMechanicalCanvas(
           }
           if (element.tight && attachedGears.length > 0) {
             // Tight belt: continuous closed loop around the pulleys, drawn
-            // independently of the junction position (no free ends).
+            // independently of the junction position (no free ends). In
+            // simulation, pass the tracked continuous wraps (filtered to the
+            // still-connected gears, same as attachedGears) so a pulley about to
+            // disconnect is drawn straight-past, not wrapped a full turn.
+            const loopWraps = element.gearWraps
+              ? element.gearWraps.filter((_, i) => !disconnectedGears.has(i))
+              : undefined;
             draw_belt_loop(
               ctx,
               attachedGears.map(({ gear, direction }) => ({
@@ -636,18 +674,49 @@ export function drawMechanicalCanvas(
                 radius: gear.radius,
                 direction,
               })),
+              loopWraps,
+              // A tight loop has no terminals, so any wound pulley coils outward.
+              loopWraps ? belt_windings(loopWraps, false, false) : undefined,
             );
           } else {
-            const gearAngles = get_gear_angles(
-              element.positionStart,
-              element.positionEnd,
-              attachedGears,
-            );
-            draw_belt(
+            // Loose belt: open path (start terminal → gears → end terminal). In
+            // simulation, pass the tracked continuous wraps (filtered to the
+            // still-connected gears) so a pulley about to disconnect is drawn
+            // straight-past, not wrapped a full turn.
+            const openWraps = element.gearWraps
+              ? element.gearWraps.filter((_, i) => !disconnectedGears.has(i))
+              : undefined;
+            const vias = [
+              { pos: element.positionStart, radius: 0, direction: false },
+              ...attachedGears.map(({ gear, direction }) => ({
+                pos: gear.position,
+                radius: gear.radius,
+                direction,
+              })),
+              { pos: element.positionEnd, radius: 0, direction: false },
+            ];
+            // A terminal pinned onto its adjacent pulley (winch) makes that
+            // pulley coil inward so the free run stays on the rim.
+            const startExternal =
+              !!element.fixedNodeStartID &&
+              attachedGears.length > 0 &&
+              attachedGears[0].gear.fixedNodesBodyIDs.includes(
+                element.fixedNodeStartID,
+              );
+            const endExternal =
+              !!element.fixedNodeEndID &&
+              attachedGears.length > 0 &&
+              attachedGears[
+                attachedGears.length - 1
+              ].gear.fixedNodesBodyIDs.includes(element.fixedNodeEndID);
+            const viaWraps = openWraps ? [0, ...openWraps, 0] : undefined;
+            draw_belt_open(
               ctx,
-              element.positionStart,
-              element.positionEnd,
-              gearAngles,
+              vias,
+              viaWraps,
+              viaWraps
+                ? belt_windings(viaWraps, startExternal, endExternal)
+                : undefined,
             );
             if (isEdgeEndHovered && hoveredPart.type === "Edge") {
               ctx.lineWidth = STROKE_WIDTHS.THICK;
@@ -660,25 +729,6 @@ export function drawMechanicalCanvas(
               draw_hover_edge_end(ctx);
               ctx.restore();
             }
-          }
-          // Winch (simulation): pulleys the belt has wound onto (|wrap| > 2π)
-          // get their surplus turns drawn as a coil.
-          if (element.gearWraps) {
-            element.attachedGearsIDs.forEach(({ id }, i) => {
-              const w = element.gearWraps![i];
-              if (disconnectedGears.has(i) || w === undefined) return;
-              if (Math.abs(w) < 2 * Math.PI) return;
-              const gear = get_mechanical_element_from_id(
-                id,
-                mechanicalElements,
-              ) as GearElement;
-              draw_belt_winding(
-                ctx,
-                gear.position,
-                gear.radius + DIM.BELT_WIDTH / 2,
-                w,
-              );
-            });
           }
           break;
         case "dimension-edge":
@@ -790,21 +840,16 @@ export function drawMechanicalCanvas(
           break;
         case "force": {
           const load = element as ForceElement;
-          const target = mechanicalElements.find((e) => e.id === load.targetID);
-          if (!target) break;
-          let base: Point2;
-          if ("position" in target) {
-            base = (target as NodeElement).position;
-          } else {
-            const edge = target as EdgeElement;
-            base =
-              load.anchor === "end" ? edge.positionEnd : edge.positionStart;
-          }
+          const base = force_base(load, mechanicalElements);
+          if (!base) break;
+          const displayVector = force_display_vector(
+            force_world_vector(load, mechanicalElements),
+          );
           ctx.save();
           ctx.translate(base.x, base.y);
-          draw_force(ctx, ZERO, load.vector);
+          draw_force(ctx, ZERO, displayVector);
           if (isEdgeEndHovered && hoveredPart.type === "Force") {
-            ctx.translate(load.vector.x, load.vector.y);
+            ctx.translate(displayVector.x, displayVector.y);
             draw_hover_edge_end(ctx);
           }
           ctx.restore();
@@ -826,19 +871,23 @@ export function drawMechanicalCanvas(
             (e) => e.id === load.beamID && e.type === "beam",
           ) as BeamElement | undefined;
           if (!beam) break;
+          const { displayStart, displayEnd } = distributed_display_vectors(
+            load,
+            mechanicalElements,
+          );
           draw_distributed_force(
             ctx,
             beam.positionStart,
             beam.positionEnd,
-            load.vectorStart,
-            load.vectorEnd,
+            displayStart,
+            displayEnd,
           );
           if (
             hoveredPart.type === "DistributedForce" &&
             hoveredPart.id === load.id
           ) {
-            const startTip = beam.positionStart.add(load.vectorStart);
-            const endTip = beam.positionEnd.add(load.vectorEnd);
+            const startTip = beam.positionStart.add(displayStart);
+            const endTip = beam.positionEnd.add(displayEnd);
             if (isEdgeEndHovered && hoveredPart.part === "line") {
               // draw hover line
               ctx.beginPath();
@@ -1318,6 +1367,21 @@ export function drawMechanicalCanvas(
         gear.radius,
         hoveredPart.position,
         gear.radius,
+      );
+      break;
+    case "DimensionBelt":
+      // TODO : draw_dimension_belt()
+      const belt = get_mechanical_element_from_id(
+        state.beltID,
+        mechanicalElements,
+      ) as BeltElement;
+      const length = measure_belt_length(belt, mechanicalElements);
+      draw_dimension_radius(
+        ctx,
+        belt.positionStart,
+        100,
+        hoveredPart.position,
+        length,
       );
       break;
     case "PlacingProbe":

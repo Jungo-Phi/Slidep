@@ -5,10 +5,12 @@ import {
   ConstraintElement,
   HoveredPart,
   ID,
+  LoadElement,
   MechanicalElement,
   NodeElement,
   PropertiesPanelTab,
   UnionElement,
+  ZERO,
 } from "../../types";
 import { get_mechanical_element_from_id } from "../mechanism/connect-actions";
 
@@ -69,7 +71,7 @@ export function node_on_beam_body(
 }
 
 export function element_to_hovered_part(
-  element: MechanicalElement | ConstraintElement,
+  element: MechanicalElement | ConstraintElement | LoadElement,
   deleting: boolean = false,
 ): HoveredPart {
   switch (element.type) {
@@ -108,7 +110,7 @@ export function element_to_hovered_part(
     case "dimension-edge-to-node":
     case "dimension-angle":
     case "dimension-radius":
-    case "dimension-belt-length":
+    case "dimension-belt":
     case "horizontal-align-edge":
     case "horizontal-align-nodes":
     case "vertical-align-edge":
@@ -120,6 +122,29 @@ export function element_to_hovered_part(
       return {
         type: "Constraint",
         position: element.position,
+        id: element.id,
+        deleting,
+      };
+    case "force":
+      return {
+        type: "Force",
+        position: ZERO,
+        id: element.id,
+        part: "body",
+        deleting,
+      };
+    case "moment":
+      return {
+        type: "DistributedForce",
+        position: ZERO,
+        id: element.id,
+        part: "body",
+        deleting,
+      };
+    case "distributed-force":
+      return {
+        type: "Moment",
+        position: ZERO,
         id: element.id,
         deleting,
       };
@@ -166,7 +191,7 @@ export function connected_constraints(
         if (constraint.gearID === elementID)
           connectedConstraintsIDs.push(constraint.id);
         break;
-      case "dimension-belt-length":
+      case "dimension-belt":
         if (constraint.beltID === elementID)
           connectedConstraintsIDs.push(constraint.id);
         break;
@@ -210,7 +235,8 @@ export function compute_visible_constraints(
   if (appMode !== "edition") return visible;
 
   for (const c of constraints)
-    if (c.type.startsWith("dimension-")) visible.set(c.id, 1);
+    if (c.type.startsWith("dimension-") || c.type === "gear-ratio")
+      visible.set(c.id, 1);
 
   // Badges révélés au survol : conserve la plus forte opacité (ne baisse jamais
   // une dimension déjà à 1).

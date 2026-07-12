@@ -101,6 +101,7 @@ export function shown_element_name(element: UnionElement | undefined): string {
   if (name.includes("dimension")) name = "dimension";
   if (name.includes("horizontal")) name = "horizontal";
   if (name.includes("vertical")) name = "vertical";
+  if (name === "distributed-force") name = "dist-force";
 
   return (
     name.charAt(0).toUpperCase() +
@@ -114,7 +115,10 @@ export function shown_element_name(element: UnionElement | undefined): string {
     element.type === "pivot" ||
     element.type === "slidep" ||
     element.type === "slider" ||
-    element.type === "spring"
+    element.type === "spring" ||
+    element.type === "force" ||
+    element.type === "distributed-force" ||
+    element.type === "moment"
       ? " " + legible_id(element.id)
       : "")
   );

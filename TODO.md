@@ -6,27 +6,39 @@
 
 - Ajouter un fichier config ESLint
 - Comportement étrange dans vectorInput à régler
-- La contrainte d'angle (node on gearTooth) avec gear n'est pas respecté
-- Contrainte de ratio non respectée
 
 - Analise des degrés de libertés en sous-parties
 
-- Grab la courroie pour la tourner en simu
-- Grab l'extrémité du beam opposée au joint sur une courroie ne perment pas de la faire tourner correctement.
+- Highlight de la flèche sur le canvas (tu t'en charges)
+- Afficher les valeurs des forces sur le canvas
+
+- Déconnecter un join de courroie fermée doit l'ouvrir.
 - Créer une validation : une courroie ne peut être tendue que si ses 2 extrémitées sont connectées et qu'il y a au moins 2 gears
 - Créer une validation : une extrémité de courroie ne peut pas être à l'intérieur du gear adjascent
+- Le rayon à l'intérieur doit être empecher aussi si on déplace gear sur belt
 - Placer une courroie sur un engrenage en ayant déjà une doit briser la connection
 - Fusionner les connections start/end dans belt quand tendue
+- Preview quand placingBeltEnd ou on joit les 2 bouts
+- Placer une courroie en la fermant devrait bouger le join et pas la courroie (position du nouveau join = nearest_on_belt)
+- Placer moment on gearTooth
+- Hover on closed belt est inconcistant
 
 - C'est quoi le vite.config.ts Manifest ?
 - De temps en temps, le snap to grid ne marche pas
 - Placer un engrenage sur un moteur laisse le moteur
 - Placer beltEnd après beltStart sur gear fait pas le attached
 
+- Contraintes (et angle) aussi avec les forces
+
 ### À faire plus tard
 
 - unifier la méthode de catégories de canvasState dans get-hover et placing-element-actions
 
+- Changer les noms "MoveForceVector" et "MoveDistributedForceVector"
+- enlever les undefined de "SelectedElement"
+- Ajouter la probe au hover de l'élément ?
+- Fusionner "force" et "distributed-force" dans le panneau d'éléments
+- Alt pour désactiver le snapping ?
 - Option d'afficher la trajectoire avec des points
 - le hover delete de contrainte prend le meme style que le ghost de ctrl+y de supression
 - Clicker sur l'onglet éléments quand un élément est sélectionné le désélectionne
@@ -54,7 +66,6 @@
 - En simulation, attraper un élément alors qu'on moteur tourne fait que la simulation n'avance que si on bouge la souris.
 - Zoom sans scale les éléments eux-même ?
 - Mirror Y le canvas ?
-- Contraintes (et angle) aussi avec les forces
 - N'afficher QUE les éléments connectés dans connectionProperties ?
 - responsive : top bar, element palette
 - Snap force et distributed force aux perpendiculaires lors du placement
@@ -74,7 +85,6 @@
 - Belt hover (gear section) is not reliable
 - Empecher de placer une belt sur un gear avec le même axisID
 - Hover et Click dans sur les dimension pour les éditer quand state==placingStartDimension
-- Ignorer BeamBodyHover lors du déplacement d'un beam
 - Placing Edges/Force avec hold down
 - Placing beam series / only one if hold down when placing (like in OnShape)
 - Sélection multiple d'éléments du même type -> modifier paramètres simultanément (IU adaptée + actions multiples)

@@ -4,6 +4,7 @@ import { DEFAULT_METADATA, Mechanism } from "../../types/mechanism";
 import { Point2 } from "../../types/point2";
 import {
   BeamElement,
+  DistributedForceElement,
   ForceElement,
   ID,
   MomentElement,
@@ -56,6 +57,7 @@ const FORCE: ForceElement = {
   targetID: id("pivot1"),
   anchor: undefined,
   vector: P(0, -1),
+  frame: "world",
 };
 
 const MOMENT: MomentElement = {
@@ -277,6 +279,74 @@ describe("actionReducer — MoveForceVector", () => {
     const f = result.loads[0] as ForceElement;
     expect(f.vector.x).toBe(0);
     expect(f.vector.y).toBe(-1);
+  });
+});
+
+// ─── SetDistributedForce ──────────────────────────────────────────────────────
+
+const DIST_FORCE: DistributedForceElement = {
+  type: "distributed-force",
+  id: id("df1"),
+  beamID: id("beam1"),
+  direction: P(0, -1),
+  magnitudeStart: 2,
+  magnitudeEnd: 4,
+  frame: "world",
+};
+
+describe("actionReducer — SetDistributedForce", () => {
+  it("met à jour direction et magnitudes (forward)", () => {
+    const mech = { ...emptyMechanism(), loads: [DIST_FORCE] };
+    const result = actionReducer(
+      mech,
+      [
+        {
+          type: "SetDistributedForce",
+          id: id("df1"),
+          oldDirection: DIST_FORCE.direction,
+          newDirection: P(1, 0),
+          oldMagnitudeStart: 2,
+          newMagnitudeStart: 5,
+          oldMagnitudeEnd: 4,
+          newMagnitudeEnd: 6,
+        },
+      ],
+      false,
+    );
+    const df = result.loads[0] as DistributedForceElement;
+    expect(df.direction.x).toBe(1);
+    expect(df.magnitudeStart).toBe(5);
+    expect(df.magnitudeEnd).toBe(6);
+  });
+
+  it("restaure les anciennes valeurs (revert=true)", () => {
+    const df0 = {
+      ...DIST_FORCE,
+      direction: P(1, 0),
+      magnitudeStart: 5,
+      magnitudeEnd: 6,
+    };
+    const mech = { ...emptyMechanism(), loads: [df0] };
+    const result = actionReducer(
+      mech,
+      [
+        {
+          type: "SetDistributedForce",
+          id: id("df1"),
+          oldDirection: P(0, -1),
+          newDirection: P(1, 0),
+          oldMagnitudeStart: 2,
+          newMagnitudeStart: 5,
+          oldMagnitudeEnd: 4,
+          newMagnitudeEnd: 6,
+        },
+      ],
+      true,
+    );
+    const df = result.loads[0] as DistributedForceElement;
+    expect(df.direction.y).toBe(-1);
+    expect(df.magnitudeStart).toBe(2);
+    expect(df.magnitudeEnd).toBe(4);
   });
 });
 

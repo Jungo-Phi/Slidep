@@ -28,6 +28,7 @@ import { drawMechanicalCanvas as draw_mechanical_canvas } from "./draw-canvas";
 import { canvasStateReducer } from "./canvas-state-reducer";
 import { get_constraint_element_from_id } from "../mechanism/connect-actions";
 import { get_hovered_part } from "./get-hover";
+import { snap_load_hover } from "./load-snap";
 import { compute_visible_constraints, connected_constraints } from "./utils";
 import { ConstraintEditor } from "./ConstraintEditor";
 import { ProbeMetricSelector } from "./ProbeMetricSelector";
@@ -525,6 +526,19 @@ export const MechanicalCanvas = forwardRef<
           )
             newHoveredPart.position.y = rdy;
         }
+        if (
+          snapToGrid &&
+          newHoveredPart.type === "Void" &&
+          appMode === "edition"
+        ) {
+          // Align load direction to world/beam axes (visual, like grid snap).
+          newHoveredPart.position = snap_load_hover(
+            canvasStateRef.current,
+            newHoveredPart.position,
+            currMech.mechanicalElements,
+            currMech.loads,
+          );
+        }
         refreshRevealFromHover(newHoveredPart);
 
         setHoveredPart(newHoveredPart);
@@ -673,6 +687,7 @@ export const MechanicalCanvas = forwardRef<
                 "DimensionEdgeToNode",
                 "DimensionAngle",
                 "DimensionRadius",
+                "DimensionBelt",
                 "HorizontalVerticalConstraintStart",
                 "HorizontalVerticalConstraintNode",
                 "NormalConstraintStart",
@@ -751,8 +766,8 @@ export const MechanicalCanvas = forwardRef<
                 case "dimension-radius":
                   actionType = "ChangeDimensionRadiusValue";
                   break;
-                case "dimension-belt-length":
-                  actionType = "ChangeDimensionBeltLengthValue";
+                case "dimension-belt":
+                  actionType = "ChangeDimensionBeltValue";
                   break;
                 case "gear-ratio":
                   actionType = "ChangeGearRatioValue";

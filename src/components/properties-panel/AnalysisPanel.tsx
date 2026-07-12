@@ -399,27 +399,25 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
                     applyActions={applyActions}
                     size={"medium"}
                     editable={false}
-                    actions={
-                      <>
-                        <NumberInput
-                          label=""
-                          value={pivot.motor!.speed}
-                          onChange={(speed) =>
-                            applyActions(
-                              [
-                                {
-                                  type: "SetMotorConfig",
-                                  id: pivot.id,
-                                  newConfig: { ...pivot.motor!, speed },
-                                  oldConfig: pivot.motor,
-                                },
-                              ],
-                              "ChangeConstant",
-                            )
-                          }
-                          accent
-                        />
-                      </>
+                    trailingControls={
+                      <NumberInput
+                        label=""
+                        value={pivot.motor!.speed}
+                        onChange={(speed) =>
+                          applyActions(
+                            [
+                              {
+                                type: "SetMotorConfig",
+                                id: pivot.id,
+                                newConfig: { ...pivot.motor!, speed },
+                                oldConfig: pivot.motor,
+                              },
+                            ],
+                            "ChangeConstant",
+                          )
+                        }
+                        accent
+                      />
                     }
                   ></ElementDisplay>
                 </Box>

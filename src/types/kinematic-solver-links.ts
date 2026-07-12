@@ -98,7 +98,19 @@ export type Link = {
       radKey1: string;
       radKey2: string;
     }
-  | { type: "GearRatio"; ddl: 1; key1: string; key2: string; ratio: number }
+  // Gear ratio (edition): r1/r2 = ratio. key1/key2 are the gear CENTRE keys (they
+  // participate in the position graph and are subject to Coincidence fusion, e.g.
+  // a gear fused with its axle); radKey1/radKey2 are the RADIUS-map keys (bare gear
+  // ids, never fused) — like GearMeshing, the radii must be read from unfused keys.
+  | {
+      type: "GearRatio";
+      ddl: 1;
+      key1: string;
+      key2: string;
+      radKey1: string;
+      radKey2: string;
+      ratio: number;
+    }
   // Inextensible belt, ONE link per belt, both solvers' simulation path. Holds the
   // total drawn length at `length`; gradient wrt a pulley centre = −(sum of adjacent
   // tangent units). For a CLOSED (tight) belt that is all it does. For an OPEN
@@ -106,8 +118,7 @@ export type Link = {
   // of their free runs while the shared travel φ drives their DIFFERENTIAL (one run
   // winds in as the other feeds out), and an exhausted run winds onto its pulley and
   // orbits with θ (start on gearPosKeys[0], end on gearPosKeys[last]) so the motor
-  // never blocks. Bidirectional: dragging a free end advances φ. (This absorbed the
-  // former separate BeltFreeEnds link.)
+  // never blocks. Bidirectional: dragging a free end advances φ.
   | {
       type: "BeltLength";
       ddl: 1;
@@ -132,13 +143,12 @@ export type Link = {
       startExternal?: boolean;
       endExternal?: boolean;
       // Sim state: baked gear-relative angle of a terminal wound onto its pulley
-      // (undefined while free), plus the belt travel φ at the moment it wound on —
-      // the wound/unwound decision is driven off φ (how far the belt has fed since),
-      // not the terminal's illusory tangent stub near the rim.
+      // (undefined while free). Winding is a purely GEOMETRIC contact test: a terminal
+      // within WIND_TOL of its rim is wound; it unwinds only when pulled clear past
+      // DETACH_TOL (a radial pull-off). A tangential drag keeps it wound and its rim
+      // pin turns the gear.
       startWind?: number;
       endWind?: number;
-      startWindPhi?: number;
-      endWindPhi?: number;
       // Transient (per-frame): which terminal of THIS belt is currently grabbed.
       // The length constraint drives φ to unwind the OPPOSITE (wound) end only when
       // the user pulls a FREE terminal — that pull must be able to peel the belt off
@@ -156,26 +166,39 @@ export type Link = {
       radii: number[];
       directions: boolean[];
     }
-  // Belt pin (simulation): the attached node `nodeKey` rides the tight belt at
+  // Belt pin (simulation): the attached node `nodeKey` rides the belt at
   // arc-length s = s0 + r_ref·ε_ref·(θ_ref − θ_ref0) — i.e. it travels as the
   // belt rotates (θ_ref = reference pulley angle, ε = dir?1:−1). Bidirectional:
   // dragging the node along the belt advances θ_ref (which turns every pulley via
   // BeltPhaseGear), and pulling it off the belt snaps it back. Radii + refs baked.
+  // A tight belt is a closed pulley loop; a loose belt is the open path
+  // start-terminal → pulleys → end-terminal (`closed:false` + startKey/endKey).
   | {
       type: "BeltPin";
       ddl: 2;
+      beltID: ID; // owning belt (owner is the belt too, kept for uniform lookup)
       nodeKey: string;
       gearPosKeys: string[];
+      gearAngleKeys: string[]; // bare gear ids, for reference re-election on disconnect
       radii: number[];
       directions: boolean[];
       refIndex: number;
       refAngleKey: string;
       s0: number;
       thetaRef0: number;
+      // Open (loose) belt: rides the open path with r=0 terminals. Absent/true =
+      // closed loop (tight junction).
+      closed?: boolean;
+      startKey?: string;
+      endKey?: string;
       // Continuous wrap per pulley (copied from the belt's BeltLength link)
       // so the junction travels around wound pulleys (>2π).
       // Undefined until the first sim frame.
       wraps?: number[];
+      // Pulleys that lost contact mid-sim (copied from BeltLength). The junction
+      // rides the REDUCED loop (disconnected gears skipped); s0/thetaRef0/refIndex
+      // are re-baked at the disconnect event so it doesn't jump.
+      disconnected?: boolean[];
     }
   // Belt follows tangent (simulation): a beam welded to the belt junction keeps
   // its orientation aligned with the belt tangent at the junction — angle(driven
@@ -186,9 +209,11 @@ export type Link = {
   | {
       type: "BeltFollowsTangent";
       ddl: 1;
+      beltID: ID; // owning belt (owner is the welded beam, so the belt is named here)
       pivotKey: string;
       drivenKey: string;
       gearPosKeys: string[];
+      gearAngleKeys: string[]; // bare gear ids, for reference re-election on disconnect
       radii: number[];
       directions: boolean[];
       refIndex: number;
@@ -196,6 +221,9 @@ export type Link = {
       s0: number;
       thetaRef0: number;
       offset: number;
+      // Pulleys that lost contact mid-sim (copied from BeltLength). The tangent is
+      // read from the REDUCED loop; s0/thetaRef0/refIndex re-baked at disconnect.
+      disconnected?: boolean[];
     }
   // Belt no-slip (simulation): a wrapped pulley's rotation is tied to the belt's
   // shared travel φ (a per-belt scalar in the angles map): r·ε·(θ − θ0) = φ,
