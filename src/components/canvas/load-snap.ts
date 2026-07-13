@@ -1,8 +1,8 @@
 /**
  * Visual direction snapping for loads: snaps the hovered position (like grid
  * snap) so a load's direction relative to its base aligns with the world axes
- * or the reference beam's axial/normal. Applied in MechanicalCanvas on the
- * hovered position, so the placement/drag preview visibly snaps.
+ * or a connected beam's axial/normal. Applied in MechanicalCanvas on the hovered
+ * position, so the placement/drag preview visibly snaps.
  */
 
 import type { CanvasState } from "../../types/canvas-state";
@@ -14,26 +14,24 @@ import type {
   MechanicalElement,
 } from "../../types";
 import { Point2 } from "../../types/point2";
-import { snap_direction } from "../../utils/load-geom";
-
-/** The reference edge whose axes a load snaps to: its frame edge if edge-framed,
- *  else the given fallback edge. */
-function reference_edge(
-  frame: ForceElement["frame"],
-  fallback: EdgeElement | undefined,
-  mechanicalElements: MechanicalElement[],
-): EdgeElement | undefined {
-  if (frame !== "world") {
-    const edge = mechanicalElements.find((e) => e.id === frame.edgeID);
-    if (edge && "positionStart" in edge) return edge as EdgeElement;
-  }
-  return fallback;
-}
+import { force_snap_edges, snap_direction } from "../../utils/load-geom";
 
 const as_edge = (
   el: MechanicalElement | LoadElement | undefined,
 ): EdgeElement | undefined =>
   el && "positionStart" in el ? (el as EdgeElement) : undefined;
+
+/** The load's own frame edge appended to `edges` (deduped), if any. */
+function with_frame_edge(
+  edges: EdgeElement[],
+  frame: ForceElement["frame"],
+  mechanicalElements: MechanicalElement[],
+): EdgeElement[] {
+  if (frame === "world") return edges;
+  const edge = as_edge(mechanicalElements.find((e) => e.id === frame.edgeID));
+  if (edge && !edges.some((e) => e.id === edge.id)) return [...edges, edge];
+  return edges;
+}
 
 /**
  * Return `position` snapped so that (position − base) aligns with a world or beam
@@ -45,15 +43,21 @@ export function snap_load_hover(
   mechanicalElements: MechanicalElement[],
   loadElements: LoadElement[],
 ): Point2 {
-  const snapAround = (base: Point2, edge: EdgeElement | undefined) =>
-    base.add(snap_direction(position.sub(base), edge));
+  const snapAround = (base: Point2, edges: EdgeElement[]) =>
+    base.add(snap_direction(position.sub(base), edges));
 
   switch (state.type) {
     case "PlacingForceEnd": {
       const startHover = state.startHover;
       if (startHover.type === "Void") return position;
-      const target = mechanicalElements.find((e) => e.id === startHover.id);
-      return snapAround(startHover.position, as_edge(target));
+      const anchor =
+        startHover.type === "Edge" && startHover.part !== "body"
+          ? startHover.part
+          : undefined;
+      return snapAround(
+        startHover.position,
+        force_snap_edges(startHover.id, anchor, mechanicalElements),
+      );
     }
     case "PlacingDistributedForceEnd": {
       const startHover = state.startHover;
@@ -62,7 +66,7 @@ export function snap_load_hover(
         mechanicalElements.find((e) => e.id === startHover.id),
       );
       if (!beam) return position;
-      return snapAround(beam.positionStart.lerp(beam.positionEnd, 0.5), beam);
+      return snapAround(beam.positionStart.lerp(beam.positionEnd, 0.5), [beam]);
     }
     case "MovingForce": {
       const force = loadElements.find((l) => l.id === state.elementID) as
@@ -79,7 +83,11 @@ export function snap_load_hover(
             : target.positionEnd;
       return snapAround(
         base,
-        reference_edge(force.frame, as_edge(target), mechanicalElements),
+        with_frame_edge(
+          force_snap_edges(force.targetID, force.anchor, mechanicalElements),
+          force.frame,
+          mechanicalElements,
+        ),
       );
     }
     case "MovingDistributedForce": {
@@ -89,14 +97,13 @@ export function snap_load_hover(
       if (!df) return position;
       const beam = as_edge(mechanicalElements.find((e) => e.id === df.beamID));
       if (!beam) return position;
-      const edge = reference_edge(df.frame, beam, mechanicalElements);
       const base =
         state.part === "start-tip"
           ? beam.positionStart
           : state.part === "end-tip"
             ? beam.positionEnd
             : position.project_on_line(beam.positionStart, beam.positionEnd);
-      return snapAround(base, edge);
+      return snapAround(base, [beam]);
     }
   }
   return position;

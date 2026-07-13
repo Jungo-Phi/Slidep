@@ -70,6 +70,25 @@ export function get_element_from_id(
   );
 }
 
+/**
+ * The mechanical element a selection resolves to: itself, or — when a load is
+ * selected — the element the load is applied to. A load has no panel of its own;
+ * it is shown (and edited) inside its host's properties.
+ */
+export function host_mechanical_element(
+  elementID: ID | undefined,
+  mechanicalElements: MechanicalElement[],
+  loadElements: LoadElement[],
+): MechanicalElement | undefined {
+  if (!elementID) return undefined;
+  const mechanicalElement = mechanicalElements.find((e) => e.id === elementID);
+  if (mechanicalElement) return mechanicalElement;
+  const load = loadElements.find((l) => l.id === elementID);
+  if (!load) return undefined;
+  const hostID = load.type === "force" ? load.targetID : load.beamID;
+  return mechanicalElements.find((e) => e.id === hostID);
+}
+
 /** Returns the complementary connection pair type of an element to another. */
 export function get_connection_pair_type(
   elementID: ID,
@@ -821,7 +840,7 @@ export function connect_elements(
       type: "join",
       id: crypto.randomUUID(),
       probes: [],
-      showTrajectory: false,
+      overlays: {},
       fixedEdgesIDs: [],
       position: hoveredPart.position,
       isGrounded: false,
@@ -886,7 +905,7 @@ export function connect_elements(
               type: "slidep",
               id: selectedNode.id,
               probes: [],
-              showTrajectory: false,
+              overlays: {},
               parentBeamID: hoveredNode.parentBeamID,
               rotatingEdgesIDs: selectedNode.rotatingEdgesIDs.concat(
                 hoveredNode.fixedEdgesIDs,
@@ -931,7 +950,7 @@ export function connect_elements(
               type: "slidep",
               id: hoveredNode.id,
               probes: [],
-              showTrajectory: false,
+              overlays: {},
               parentBeamID,
               rotatingEdgesIDs: selectedNode.fixedEdgesIDs
                 .concat(hoveredNode.rotatingEdgesIDs)
@@ -1035,6 +1054,7 @@ export function connect_elements(
               selectedEdge,
               selectedPart.part,
               hoveredPart.position,
+              loads,
             ),
           );
           break;
@@ -1200,7 +1220,7 @@ function connect_two_edges(
     type: "join",
     id: crypto.randomUUID(),
     probes: [],
-    showTrajectory: false,
+    overlays: {},
     fixedEdgesIDs: [],
     position,
     isGrounded: false,

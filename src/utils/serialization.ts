@@ -155,7 +155,13 @@ function deserialize_action(s: SerializedAction): Action {
           result[key] = dp(p);
         }
       }
-      return result as Action;
+      // Migration: SetShowTrajectory became the "trajectory" kind of the
+      // generic SetShowOverlay. Keep old history entries undoable.
+      if (result.type === "SetShowTrajectory") {
+        result.type = "SetShowOverlay";
+        result.kind = "trajectory";
+      }
+      return result as unknown as Action;
     }
   }
 }
@@ -227,6 +233,15 @@ function deserialize_mechanical_element(
   if (t === "gear") {
     if (!("attachedBeltID" in el)) el.attachedBeltID = undefined;
   }
+
+  // Migration: the per-element `showTrajectory` boolean became one flag among
+  // several in `overlays`. Files saved before the change carry the old field.
+  if ("showTrajectory" in el) {
+    if (el.showTrajectory)
+      el.overlays = { ...(el.overlays as object), trajectory: true };
+    delete el.showTrajectory;
+  }
+  if (typeof el.overlays !== "object" || el.overlays === null) el.overlays = {};
 
   // Drop probes saved in the legacy placeholder format (metric "position-x"…)
   if (Array.isArray(el.probes)) {

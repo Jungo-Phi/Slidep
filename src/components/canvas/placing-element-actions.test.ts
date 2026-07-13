@@ -204,6 +204,7 @@ describe("PlacingDistributedForceEnd", () => {
     type: "beam",
     id: id("beam1"),
     probes: [],
+    overlays: {},
     positionStart: P(0, 0),
     positionEnd: P(4, 0),
     fixedNodeStartID: undefined,

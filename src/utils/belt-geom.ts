@@ -114,8 +114,8 @@ export function measure_belt_length(
     const gears = vias.slice(1, -1); // drop the start/end terminals
     return belt_pieces(gears, true).reduce((acc, p) => acc + p.length, 0);
   }
-  // Open chain via belt_pieces so a terminal wound onto its gear (winch) is
-  // measured through its arc, not a degenerate tangent.
+  // Open chain: a terminal resting on its pulley's rim needs no special case — its
+  // tangent run is simply of length 0 and the arc already reaches it.
   return belt_pieces(vias, false).reduce((acc, p) => acc + p.length, 0);
 }
 

@@ -112,7 +112,7 @@ export interface BaseNodeElement extends BaseElement {
   position: Point2;
   isGrounded: boolean;
   probes: ProbeConfig[];
-  showTrajectory: boolean;
+  overlays: OverlayFlags;
 }
 
 /** Slider element - allows linear motion along a beam */
@@ -161,6 +161,7 @@ export interface BaseBodyElement extends BaseElement {
   position: Point2;
   angle: number;
   probes: ProbeConfig[];
+  overlays: OverlayFlags;
 }
 
 /** Gear element - rotational transmission with teeth */
@@ -180,6 +181,7 @@ export interface BaseEdgeElement extends BaseElement {
   fixedNodeStartID?: ID;
   fixedNodeEndID?: ID;
   probes: ProbeConfig[];
+  overlays: OverlayFlags;
 }
 
 /** Beam element - rigid connection between two points */
@@ -415,3 +417,53 @@ export const DEFAULT_PROBE_COMPONENTS: ProbeComponents = {
   y: false,
   norm: true,
 };
+
+// ─── Overlays ─────────────────────────────────────────────────────────────────
+
+/** A layer drawn over an element during simulation. Only `trajectory` is
+ *  rendered today; the other three carry state and controls, and light up on
+ *  the canvas once the solver/rendering side exists. */
+export type OverlayKind = "trajectory" | "force" | "velocity" | "stress";
+
+export const OVERLAY_KIND_ORDER: OverlayKind[] = [
+  "trajectory",
+  "force",
+  "velocity",
+  "stress",
+];
+
+/** Per-element overlay visibility. Absent key = hidden. */
+export type OverlayFlags = Partial<Record<OverlayKind, boolean>>;
+
+/**
+ * Which overlays make sense on this element — the honest denominator of the
+ * `n/total` counters in the "Afficher" menu.
+ *  - trajectory: a single moving point → nodes only;
+ *  - velocity: anything whose position is sampled (nodes, gears, edge midpoint);
+ *  - force: reaction forces live at the joints (nodes) and in the members (edges);
+ *  - stress (MPa): an internal effort in a member → edges only.
+ */
+export function available_overlays(element: MechanicalElement): OverlayKind[] {
+  const isNode = is_node_element(element);
+  const isEdge = "positionStart" in element;
+  return OVERLAY_KIND_ORDER.filter((kind) => {
+    switch (kind) {
+      case "trajectory":
+        return isNode;
+      case "velocity":
+        return true;
+      case "force":
+        return isNode || isEdge;
+      case "stress":
+        return isEdge;
+    }
+  });
+}
+
+/** Is `kind` currently shown on `element`? */
+export function overlay_shown(
+  element: MechanicalElement,
+  kind: OverlayKind,
+): boolean {
+  return !!element.overlays?.[kind];
+}

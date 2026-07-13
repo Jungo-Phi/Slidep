@@ -12,14 +12,10 @@ import {
   MenuItem,
   Checkbox,
   Tooltip,
+  List,
+  ListItem,
 } from "@mui/material";
 import {
-  Timeline,
-  ShowChart,
-  RotateRight,
-  Visibility,
-  VisibilityOff,
-  Polyline,
   Add,
   WarningAmber,
   CheckCircleOutline,
@@ -38,7 +34,6 @@ import {
   ProbeConfig,
   ProbeMetric,
   ZERO,
-  is_node_element,
 } from "../../types";
 import { CanvasState } from "../../types/canvas-state";
 import { ConstraintResidual, RuntimeState } from "../../types/runtime-state";
@@ -58,9 +53,10 @@ import ProbeChart, {
   PROBE_CURVE_COLORS,
   PROBE_ELEMENT_COLORS,
 } from "./components/ProbeChart";
-import { get_mechanical_element_from_id } from "../mechanism/connect-actions";
+import { get_element_from_id } from "../mechanism/connect-actions";
 import { element_to_hovered_part } from "../canvas/utils";
 import { shown_element_name } from "../../utils";
+import ElementMeasures from "./ElementMeasures";
 
 interface AnalysisPanelProps {
   mechanism: Mechanism;
@@ -71,6 +67,9 @@ interface AnalysisPanelProps {
   unsatisfied: ConstraintResidual[];
   runtimeState: RuntimeState;
   setRuntimeState: React.Dispatch<React.SetStateAction<RuntimeState>>;
+  /** The mechanical element the canvas selection points at (a selected load
+   *  resolves to its host), or undefined when nothing is selected. */
+  selectedElement: MechanicalElement | undefined;
 }
 
 /** Short human label for a solver link type, shown as the violation kind. */
@@ -96,49 +95,6 @@ const CONSTRAINT_NOUN: Record<string, string> = {
 };
 
 type DdlStatus = { label: string; color: string };
-
-interface OverlayRowProps {
-  icon: React.ReactNode;
-  label: string;
-  /** Whether the overlay is (at least partly) shown — drives which button is lit. */
-  active: boolean;
-  onShow: () => void;
-  onHide: () => void;
-}
-
-/** One overlay line: label + show/hide button pair. */
-const OverlayRow: React.FC<OverlayRowProps> = ({
-  icon,
-  label,
-  active,
-  onShow,
-  onHide,
-}) => (
-  <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-    {icon}
-    <Typography variant="body2" sx={{ flex: 1 }}>
-      {label}
-    </Typography>
-    <Tooltip title="Tout afficher">
-      <IconButton
-        size="small"
-        color={active ? "primary" : "default"}
-        onClick={onShow}
-      >
-        <Visibility fontSize="small" />
-      </IconButton>
-    </Tooltip>
-    <Tooltip title="Tout cacher">
-      <IconButton
-        size="small"
-        color={active ? "default" : "primary"}
-        onClick={onHide}
-      >
-        <VisibilityOff fontSize="small" />
-      </IconButton>
-    </Tooltip>
-  </Box>
-);
 
 const plural = (n: number) => (n > 1 ? "s" : "");
 
@@ -213,39 +169,13 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
   unsatisfied,
   runtimeState,
   setRuntimeState,
+  selectedElement,
 }) => {
-  const [overlays, setOverlays] = React.useState({
-    forces: false,
-    velocities: false,
-    constraints: false,
-  });
   const [superpose, setSuperpose] = React.useState(false);
   const [metricMenu, setMetricMenu] = React.useState<{
     elementID: ID;
     anchorEl: HTMLElement;
   } | null>(null);
-
-  const setOverlay = (key: keyof typeof overlays, shown: boolean) => {
-    setOverlays((prev) => ({ ...prev, [key]: shown }));
-  };
-
-  /** Show/hide the trajectory of every node (observation-only actions:
-   *  the recorded snapshots are preserved). */
-  const setAllTrajectories = (show: boolean) => {
-    const actions: Action[] = mechanism.mechanicalElements
-      .filter(is_node_element)
-      .filter((el) => !!el.showTrajectory !== show)
-      .map((el) => ({
-        type: "SetShowTrajectory" as const,
-        elementID: el.id,
-        newValue: show,
-        oldValue: !!el.showTrajectory,
-      }));
-    if (actions.length > 0) applyActions(actions, "Other");
-  };
-  const anyTrajectoryShown = mechanism.mechanicalElements.some(
-    (el) => is_node_element(el) && el.showTrajectory,
-  );
 
   const probedElements = mechanism.mechanicalElements.filter(
     (el): el is MechanicalElement & { probes: ProbeConfig[] } =>
@@ -314,41 +244,46 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 2, my: 2 }}>
-      {/* Overlays */}
-      <Box sx={{ mx: 2 }}>
-        <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
-          <OverlayRow
-            icon={<ShowChart fontSize="small" />}
-            label="Forces de réaction"
-            active={overlays.forces}
-            onShow={() => setOverlay("forces", true)}
-            onHide={() => setOverlay("forces", false)}
-          />
-          <OverlayRow
-            icon={<Timeline fontSize="small" />}
-            label="Vitesses"
-            active={overlays.velocities}
-            onShow={() => setOverlay("velocities", true)}
-            onHide={() => setOverlay("velocities", false)}
-          />
-          <OverlayRow
-            icon={<RotateRight fontSize="small" />}
-            label="Contraintes (MPa)"
-            active={overlays.constraints}
-            onShow={() => setOverlay("constraints", true)}
-            onHide={() => setOverlay("constraints", false)}
-          />
-          <OverlayRow
-            icon={<Polyline fontSize="small" />}
-            label="Trajectoires"
-            active={anyTrajectoryShown}
-            onShow={() => setAllTrajectories(true)}
-            onHide={() => setAllTrajectories(false)}
-          />
-        </Box>
-      </Box>
+      {appMode !== "edition" && (
+        <>
+          <Box
+            sx={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "left",
+              gap: 0.5,
+            }}
+          >
+            {selectedElement ? (
+              <ElementDisplay
+                element={selectedElement}
+                setHoveredPart={setHoveredPart}
+                setCanvasState={setCanvasState}
+                applyActions={applyActions}
+                size={"small"}
+                editable={false}
+              />
+            ) : (
+              <Typography
+                variant="subtitle2"
+                fontWeight={600}
+                sx={{ mx: 2 }}
+                gutterBottom
+              >
+                Élément sélectionné
+              </Typography>
+            )}
 
-      <Divider />
+            <ElementMeasures
+              element={selectedElement}
+              runtimeState={runtimeState}
+              reserveHeight
+            />
+          </Box>
+
+          <Divider />
+        </>
+      )}
 
       {/* DDL Indicator */}
       <Box sx={{ mx: 2 }}>
@@ -397,7 +332,7 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
                     setHoveredPart={setHoveredPart}
                     setCanvasState={setCanvasState}
                     applyActions={applyActions}
-                    size={"medium"}
+                    size={"small"}
                     editable={false}
                     trailingControls={
                       <NumberInput
@@ -419,7 +354,7 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
                         accent
                       />
                     }
-                  ></ElementDisplay>
+                  />
                 </Box>
               ))}
             </Box>
@@ -432,89 +367,110 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
       {/* Unsatisfied constraints */}
       {appMode !== "edition" && (
         <>
-          <Box sx={{ mx: 2 }}>
-            <Box
-              sx={{ display: "flex", alignItems: "center", gap: 0.75, mb: 0.5 }}
-            >
-              <Typography variant="subtitle2" fontWeight={600}>
-                Contraintes non respectées
-              </Typography>
-              {unsatisfied.length > 0 && (
-                <Chip
-                  size="small"
-                  color="error"
-                  label={unsatisfied.length}
-                  sx={{ height: 18, "& .MuiChip-label": { px: 0.75 } }}
-                />
-              )}
-            </Box>
-            <Box
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              marginX: 2,
+              gap: 0.75,
+              mb: -1,
+            }}
+          >
+            <Typography variant="subtitle2" fontWeight={600}>
+              Contraintes non respectées
+            </Typography>
+            {unsatisfied.length > 0 && (
+              <Chip
+                size="small"
+                color="error"
+                label={unsatisfied.length}
+                sx={{ height: 18, "& .MuiChip-label": { px: 0.75 } }}
+              />
+            )}
+          </Box>
+          {/* Hauteur stable mais pas grande : une seule ligne dans le cas
+              fréquent (tout est respecté), la boîte de 96 px seulement quand il
+              y a des violations — le saut de hauteur signifie alors quelque chose. */}
+          <Box
+            sx={{
+              height: unsatisfied.length === 0 ? "auto" : 96,
+              overflowY: "auto",
+              marginX: 2,
+              borderRadius: 3,
+              backgroundColor: "action.hover",
+            }}
+          >
+            <List
+              disablePadding
               sx={{
-                height: 96,
-                overflowY: "auto",
-                borderRadius: 1,
-                backgroundColor: "action.hover",
-                p: 0.5,
+                display: "flex",
+                alignItems: "center",
+                flexDirection: "column",
+                width: "100%",
               }}
             >
-              {unsatisfied.length === 0 ? (
-                <Box
+              {unsatisfied.map((constraint, index) => (
+                <React.Fragment key={index}>
+                  <ListItem disablePadding>
+                    <Box
+                      sx={{
+                        width: "100%",
+                      }}
+                    >
+                      <ElementDisplay // TODO : Pour des trainlingControls de type Typo dans ce cas, le hover doit aussi marcher sur ces éléments
+                        element={get_element_from_id(
+                          constraint.owner,
+                          mechanism.mechanicalElements,
+                          mechanism.constraintElements,
+                          mechanism.loads,
+                        )}
+                        setHoveredPart={setHoveredPart}
+                        setCanvasState={setCanvasState}
+                        applyActions={applyActions}
+                        size="small"
+                        editable={false}
+                        trailingControls={
+                          <>
+                            <WarningAmber fontSize="small" color="warning" />
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                            >
+                              {CONSTRAINT_NOUN[constraint.type] ??
+                                constraint.type}{" "}
+                              {`e = ${constraint.residual.toFixed(2)}`}
+                            </Typography>
+                          </>
+                        }
+                      />
+                    </Box>
+                  </ListItem>
+                </React.Fragment>
+              ))}
+            </List>
+            {unsatisfied.length === 0 && (
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 0.5,
+                  px: 1,
+                  py: 0.75,
+                }}
+              >
+                <CheckCircleOutline fontSize="small" color="success" />
+                <Typography
+                  noWrap
                   sx={{
-                    height: "100%",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: 0.5,
+                    fontSize: "0.8rem",
+                    color: "text.disabled",
                   }}
                 >
-                  <CheckCircleOutline fontSize="small" color="success" />
-                  <Typography variant="caption" color="text.secondary">
-                    Toutes les contraintes respectées
-                  </Typography>
-                </Box>
-              ) : (
-                unsatisfied.map((c, i) => (
-                  <Box
-                    key={`${c.owner}-${c.type}-${i}`}
-                    onClick={() =>
-                      setCanvasState({
-                        type: "SelectedElement",
-                        elementID: c.owner,
-                      })
-                    }
-                    sx={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 0.5,
-                      px: 0.5,
-                      py: 0.25,
-                      borderRadius: 0.5,
-                      cursor: "pointer",
-                      "&:hover": { backgroundColor: "action.selected" },
-                    }}
-                  >
-                    <ElementDisplay
-                      element={get_mechanical_element_from_id(
-                        c.owner,
-                        mechanism.mechanicalElements,
-                      )}
-                      setHoveredPart={setHoveredPart}
-                      setCanvasState={setCanvasState}
-                      applyActions={applyActions}
-                      size={"small"}
-                      editable={false}
-                    ></ElementDisplay>
-                    <WarningAmber fontSize="small" color="warning" />
-                    <Typography variant="caption" color="text.secondary">
-                      {CONSTRAINT_NOUN[c.type] ?? c.type}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {`e = ${c.residual.toFixed(2)}`}
-                    </Typography>
-                  </Box>
-                ))
-              )}
-            </Box>
+                  Toutes les contraintes sont respectées
+                </Typography>
+              </Box>
+            )}
           </Box>
 
           <Divider />
@@ -543,41 +499,38 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
         </Box>
 
         {!superposed &&
-          probedElements.map((el) => (
+          probedElements.map((element) => (
             <Box
-              key={el.id}
+              key={element.id}
               sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}
             >
               {/* Element header + metric edit menu */}
-              <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-                <Box sx={{ flex: 1, minWidth: 0 }}>
-                  <ElementDisplay
-                    element={el}
-                    setHoveredPart={setHoveredPart}
-                    setCanvasState={setCanvasState}
-                    applyActions={applyActions}
-                    size={"small"}
-                    editable={false}
-                  ></ElementDisplay>
-                </Box>
-                <Tooltip title="Choisir les mesures">
+              <ElementDisplay
+                element={element}
+                setHoveredPart={setHoveredPart}
+                setCanvasState={setCanvasState}
+                applyActions={applyActions}
+                size={"small"}
+                editable={false}
+                trailingControls={
                   <IconButton
                     size="small"
                     onClick={(e) =>
                       setMetricMenu({
-                        elementID: el.id,
+                        elementID: element.id,
                         anchorEl: e.currentTarget,
                       })
                     }
+                    title="Choisir les mesures"
                   >
                     <Tune fontSize="small" />
                   </IconButton>
-                </Tooltip>
-              </Box>
+                }
+              />
 
-              {el.probes.map((probe) => {
+              {element.probes.map((probe) => {
                 const series = get_probe_series(
-                  el,
+                  element,
                   probe.metric,
                   runtimeState.kinematicSnapshots,
                 );
@@ -603,7 +556,7 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
                   <Box
                     key={probe.metric}
                     onMouseEnter={() =>
-                      setHoveredPart(element_to_hovered_part(el))
+                      setHoveredPart(element_to_hovered_part(element))
                     }
                     onMouseLeave={() =>
                       setHoveredPart({ type: "Void", position: ZERO })
@@ -641,8 +594,8 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
                             clickable
                             onClick={() =>
                               setElementProbes(
-                                el,
-                                el.probes.map((p) =>
+                                element,
+                                element.probes.map((p) =>
                                   p.metric === probe.metric
                                     ? {
                                         ...p,
@@ -681,8 +634,8 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
                           sx={{ p: 0.25 }}
                           onClick={() =>
                             setElementProbes(
-                              el,
-                              el.probes.filter(
+                              element,
+                              element.probes.filter(
                                 (p) => p.metric !== probe.metric,
                               ),
                             )

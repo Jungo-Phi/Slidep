@@ -70,6 +70,7 @@ import {
   SerializedMechanism,
   SimulationConfig,
   SlidepDB,
+  UnionElement,
   ViewportChange,
   ZERO,
 } from "./types";
@@ -90,6 +91,7 @@ import MechanicalCanvas, {
 } from "./components/canvas/MechanicalCanvas";
 import { ElementPalette } from "./components/element-palette";
 import { PropertiesPanel } from "./components/properties-panel/PropertiesPanel";
+import { OverlaysMenu } from "./components/toolbar/OverlaysMenu";
 import {
   RECORD_DT,
   SimGrab,
@@ -110,18 +112,55 @@ import MechanismsGallery from "./components/mechanisms-gallery/MechanismsGallery
 import { openDB } from "idb";
 
 const DB_VERSION = 3;
-const DEBOUNCE_AUTOSAVE_TIME = 1000; // 1000 ms = 1s
+const DEBOUNCE_AUTOSAVE_TIME_MILLIS = 1000;
 const VIEWPORT_ZOOM_SENSITIVITY = 250; // Nombre de "crans" de molette nécessaires pour multiplier le zoom par 2
 const LANGUAGES = ["Deutsch", "English", "Español", "Français"];
 let condensed = true;
 
-/** Observation-only bundles (probe configs, trajectory visibility) don't
- *  affect the simulated motion: they must neither recompile the simulation
- *  model nor truncate the recorded snapshots. */
+/**
+ * The three classes an edit can fall into during a simulation.
+ *
+ *  - **observation** (probe configs, overlay visibility): affects neither the
+ *    model nor the snapshots — no recompile, no truncation.
+ *  - **parameter** (loads, motor speed): takes effect at the current time. The
+ *    past snapshots stay valid, the future ones are truncated and the motion is
+ *    recomputed from there. Does NOT leave simulation mode.
+ *  - **structure** (geometry, dimensions, ground, connections): forbidden at the
+ *    source by greying out the controls (ElementProperties); the exit to edition
+ *    remains only as a safety net.
+ */
+const OBSERVATION_ACTIONS: Action["type"][] = ["SetProbes", "SetShowOverlay"];
+
+const PARAMETER_ACTIONS: Action["type"][] = [
+  "SetMotorConfig",
+  "MoveForceVector",
+  "SetDistributedForce",
+  "ChangeMomentValue",
+  "FlipMomentDirection",
+  "SetLoadFrame",
+];
+
 const is_observation_only_bundle = (actions: Action[]) =>
   actions.length > 0 &&
-  actions.every(
-    (a) => a.type === "SetProbes" || a.type === "SetShowTrajectory",
+  actions.every((a) => OBSERVATION_ACTIONS.includes(a.type));
+
+/** A load creation/deletion is a parameter edit too (a load is an input, not
+ *  structure); any other Create/Delete is structural. */
+const is_load_element = (el: UnionElement) =>
+  el.type === "force" ||
+  el.type === "moment" ||
+  el.type === "distributed-force";
+
+const is_parameter_action = (a: Action) =>
+  PARAMETER_ACTIONS.includes(a.type) ||
+  ((a.type === "CreateElement" || a.type === "DeleteElement") &&
+    is_load_element(a.element));
+
+/** Structure edits are the ones the simulation cannot absorb: they still exit
+ *  to edition (the safety net behind the greyed-out controls). */
+const is_structure_bundle = (actions: Action[]) =>
+  actions.some(
+    (a) => !OBSERVATION_ACTIONS.includes(a.type) && !is_parameter_action(a),
   );
 
 const App: React.FC = () => {
@@ -216,6 +255,10 @@ const App: React.FC = () => {
   // Derived state pattern: sync tab with canvas state during render, not in useEffect.
   // This prevents a one-frame flash where old tab content renders with new canvas state
   // (e.g. element list appearing briefly before switching to project tab on deselect).
+  //
+  // The switch only happens in edition, where selecting means wanting to edit. In
+  // simulation, selecting means wanting to observe: the analysis tab stays put and
+  // shows the selected element's measures (ElementMeasures) instead.
   if (prevCanvasState !== canvasState) {
     // TODO : mettre aussi à jour quand on change activeTab
     setPrevCanvasState(canvasState);
@@ -225,49 +268,49 @@ const App: React.FC = () => {
     ) {
       // Probe workflow: the probes and their graphs live in the analysis tab
       setActiveTab("analysis");
-    } else if ("elementID" in canvasState) {
-      if (
-        mechanism.mechanicalElements.find(
-          (el) => el.id === canvasState.elementID,
-        ) ||
-        mechanism.loads.find((el) => el.id === canvasState.elementID)
-      ) {
-        setActiveTab("elements");
+    } else if (appMode === "edition") {
+      if ("elementID" in canvasState) {
+        if (
+          mechanism.mechanicalElements.find(
+            (el) => el.id === canvasState.elementID,
+          ) ||
+          mechanism.loads.find((el) => el.id === canvasState.elementID)
+        ) {
+          setActiveTab("elements");
+        } else if (
+          mechanism.constraintElements.find(
+            (el) => el.id === canvasState.elementID,
+          )
+        ) {
+          setActiveTab("constraints");
+        }
       } else if (
-        mechanism.constraintElements.find(
-          (el) => el.id === canvasState.elementID,
-        )
+        [
+          "DimensionStart",
+          "DimensionNode",
+          "DimensionEdge",
+          "DimensionNodeToNode",
+          "DimensionEdgeToNode",
+          "DimensionAngle",
+          "DimensionRadius",
+          "DimensionBelt",
+          "HorizontalVerticalConstraintStart",
+          "HorizontalVerticalConstraintNode",
+          "NormalConstraintStart",
+          "NormalConstraintEdge",
+          "ParallelConstraintStart",
+          "ParallelConstraintEdge",
+          "EqualConstraintStart",
+          "EqualConstraintEdge",
+          "EqualConstraintGear",
+          "GearRatioConstraintStart",
+          "GearRatioConstraintGear",
+        ].includes(canvasState.type)
       ) {
         setActiveTab("constraints");
+      } else {
+        setActiveTab("project");
       }
-    } else if (
-      [
-        "DimensionStart",
-        "DimensionNode",
-        "DimensionEdge",
-        "DimensionNodeToNode",
-        "DimensionEdgeToNode",
-        "DimensionAngle",
-        "DimensionRadius",
-        "DimensionBelt",
-        "HorizontalVerticalConstraintStart",
-        "HorizontalVerticalConstraintNode",
-        "NormalConstraintStart",
-        "NormalConstraintEdge",
-        "ParallelConstraintStart",
-        "ParallelConstraintEdge",
-        "EqualConstraintStart",
-        "EqualConstraintEdge",
-        "EqualConstraintGear",
-        "GearRatioConstraintStart",
-        "GearRatioConstraintGear",
-      ].includes(canvasState.type)
-    ) {
-      setActiveTab("constraints");
-    } else if (appMode !== "edition") {
-      setActiveTab("analysis");
-    } else {
-      setActiveTab("project");
     }
   }
 
@@ -296,6 +339,9 @@ const App: React.FC = () => {
       simulationModelRef.current = compile_simulation_model(
         mechanismRef.current,
       );
+      // Entering simulation is the one automatic switch to the analysis tab;
+      // from there, selecting elements no longer moves it.
+      setActiveTab("analysis");
     } else {
       simulationModelRef.current = null;
     }
@@ -451,7 +497,7 @@ const App: React.FC = () => {
   const debouncedSave = useRef(
     debounce(() => {
       performSaveToDB();
-    }, DEBOUNCE_AUTOSAVE_TIME),
+    }, DEBOUNCE_AUTOSAVE_TIME_MILLIS),
   ).current;
 
   const updateMetadata = useCallback(
@@ -482,6 +528,18 @@ const App: React.FC = () => {
   const applyActions = useCallback(
     (actions: Action[], actionBundleType: ActionBundleType) => {
       if (is_observation_only_bundle(actions)) probeOnlyEditRef.current = true;
+      // Safety net behind the greyed-out structure controls (ElementProperties):
+      // a structural edit invalidates the compiled model, so if one reaches us
+      // anyway we leave simulation rather than silently rebuild under the user.
+      // Parameter edits (loads, motor) stay in simulation: the [mechanism] effect
+      // recompiles from the current snapshot and truncates only the future.
+      if (
+        kinematicRef.current.appMode !== "edition" &&
+        is_structure_bundle(actions)
+      ) {
+        setAppMode("edition");
+        setRuntimeState((prev) => ({ ...prev, isPlaying: false }));
+      }
       setMechanism((prevMechanism) => {
         const newMechanism = apply_actions(
           prevMechanism,
@@ -1144,7 +1202,7 @@ const App: React.FC = () => {
                     {condensed ? "Édit" : "Édition"}
                   </ToggleButton>
                 </Tooltip>
-                <Tooltip title="Étude de mécanismes immobiles [ ∑F = 0 ]. On pourra déterminer des variables qui permettent de respecter la condition d'équilibre des forces.">
+                <Tooltip title="Étude de cas immobiles [ ∑F = 0 ]">
                   <ToggleButton value="static" disabled>
                     {condensed ? "Stat" : "Statique"}
                   </ToggleButton>
@@ -1155,7 +1213,7 @@ const App: React.FC = () => {
                   </ToggleButton>
                 </Tooltip>
                 <Tooltip title="Combine la statique et la cinématique [ ∑F = ma ]">
-                  <ToggleButton value="dynamic">
+                  <ToggleButton value="dynamic" disabled>
                     {condensed ? "Dyna" : "Dynamique"}
                   </ToggleButton>
                 </Tooltip>
@@ -1443,6 +1501,25 @@ const App: React.FC = () => {
                   />
                 </Tooltip>
               </Box>
+
+              <Divider flexItem sx={{ mx: 0.5 }} />
+
+              {/* Calques d'affichage — groupe distinct de gravité/collisions :
+                  ceux-là changent ce qui est calculé, celui-ci ce qui est montré. */}
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  opacity: appMode === "edition" ? 0.3 : 1,
+                  pointerEvents: appMode === "edition" ? "none" : "auto",
+                  transition: "opacity 0.2s ease",
+                }}
+              >
+                <OverlaysMenu
+                  mechanicalElements={mechanism.mechanicalElements}
+                  applyActions={applyActions}
+                />
+              </Box>
             </Box>
 
             {/* ── Zone 3 : Outils & Config (Droite) ── */}
@@ -1557,7 +1634,7 @@ const App: React.FC = () => {
                   disableRipple
                 >
                   <FileOpen fontSize="small" />
-                  Importer
+                  Importer un mécanisme
                 </MenuItem>
                 <MenuItem
                   onClick={handleMenuButtonDownload}
@@ -1567,6 +1644,7 @@ const App: React.FC = () => {
                   <Download fontSize="small" />
                   Exporter le mécanisme
                 </MenuItem>
+                <Divider />
                 <MenuItem
                   onClick={handleMenuButtonDownload}
                   sx={{ gap: 1, fontSize: "14px" }}
@@ -1742,7 +1820,7 @@ const App: React.FC = () => {
                   ? snaps[snaps.length - 1].t
                   : runtimeState.current
                     ? runtimeState.current.timestamp
-                    : 30;
+                    : 0;
               const timelinePct = Math.min(
                 100,
                 (runtimeState.time / timelineMax) * 100,
@@ -1796,7 +1874,7 @@ const App: React.FC = () => {
                               ].t
                             : rs.current
                               ? rs.current.timestamp
-                              : 30;
+                              : 0;
                         setRuntimeState((prev) => ({
                           ...prev,
                           time: ratio * maxTime,

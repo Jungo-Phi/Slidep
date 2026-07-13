@@ -12,6 +12,7 @@ import { HoveredPart } from "../../../types/hovered-part";
 import { COLORS } from "../../../constants/rendering-specs";
 import { element_to_hovered_part } from "../../canvas/utils";
 import { shown_element_name } from "../../../utils";
+import { useElementNavigation } from "../element-navigation";
 
 interface ElementDisplayProps {
   element: UnionElement;
@@ -21,6 +22,7 @@ interface ElementDisplayProps {
   size: "small" | "medium" | "large";
   editable: boolean;
   trailingControls?: React.ReactNode;
+  interactive?: boolean;
 }
 
 const ElementDisplayComponent: React.FC<ElementDisplayProps> = ({
@@ -31,9 +33,11 @@ const ElementDisplayComponent: React.FC<ElementDisplayProps> = ({
   size,
   editable,
   trailingControls,
+  interactive = true,
 }) => {
   const icon = get_element_icon(element);
   const initialName = shown_element_name(element);
+  const drillDown = useElementNavigation();
 
   const [inputValue, setInputValue] = useState(initialName);
   const [isEditing, setIsEditing] = useState(false);
@@ -75,14 +79,8 @@ const ElementDisplayComponent: React.FC<ElementDisplayProps> = ({
   };
 
   const handleMouseEnter = () => {
-    if (!element || isEditing) return;
-    if (
-      element.type !== "force" &&
-      element.type !== "moment" &&
-      element.type !== "distributed-force"
-    ) {
-      setHoveredPart(element_to_hovered_part(element));
-    }
+    if (!element || isEditing || !interactive) return;
+    setHoveredPart(element_to_hovered_part(element));
   };
 
   const handleMouseLeave = () => {
@@ -90,13 +88,17 @@ const ElementDisplayComponent: React.FC<ElementDisplayProps> = ({
     setHoveredPart({ type: "Void", position: ZERO });
   };
 
+  // Selecting from inside the panel is an explicit "tell me more about this
+  // one" gesture: it drills down to the elements tab, wherever the card sits.
+  // A canvas selection goes through neither of these and keeps the active tab.
   const handleSelect = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!element || isEditing) return;
+    if (!element || isEditing || !interactive) return;
     setCanvasState({
       type: "SelectedElement",
       elementID: element.id,
     });
+    drillDown();
   };
 
   const handleNameChange = (newName: string) => {
@@ -133,7 +135,7 @@ const ElementDisplayComponent: React.FC<ElementDisplayProps> = ({
 
   const handleTextClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (editable && !isEditing) {
+    if (editable && !isEditing && interactive) {
       updateWidth(initialName);
       setIsEditing(true);
     }
@@ -157,13 +159,22 @@ const ElementDisplayComponent: React.FC<ElementDisplayProps> = ({
 
   const content = (
     <IconButton
+      // With trailingControls the wrapper below carries the interactions for
+      // the whole row; on its own, the card must carry them itself — otherwise
+      // it shows a pointer cursor and a hover but does nothing on click.
+      {...(!trailingControls && {
+        onClick: handleSelect,
+        onMouseEnter: handleMouseEnter,
+        onMouseLeave: handleMouseLeave,
+      })}
       sx={{
         borderRadius: 5,
         padding: size === "small" ? "4px" : size === "medium" ? "6px" : "8px",
         "&:hover": {
-          backgroundColor: trailingControls ? "transparent" : "#00000025",
+          backgroundColor:
+            trailingControls || !interactive ? "transparent" : "#00000025",
         },
-        cursor: "pointer",
+        cursor: interactive ? "pointer" : "default",
         ...(trailingControls && {
           justifyContent: "flex-start",
           minWidth: 0,

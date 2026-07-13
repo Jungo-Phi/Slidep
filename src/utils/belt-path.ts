@@ -1,9 +1,7 @@
 import { Point2 } from "../types/point2";
 
 /**
- * A via-point of a belt path: a pulley the belt wraps (radius > 0, `direction`
- * = wrap sense, false: clockwise / true: counter-clockwise) or a terminal
- * endpoint (radius 0). The belt runs start terminal → gears… → end terminal.
+ * A via-point of a belt path: a pulley the belt wraps (radius > 0, `direction` = wrap sense, false: clockwise / true: counter-clockwise) or a terminal endpoint (radius 0).
  */
 export type BeltVia = { pos: Point2; radius: number; direction: boolean };
 
@@ -24,89 +22,28 @@ export function belt_arc_sweep(
   return span;
 }
 
-/** Geometry of a belt path: total length plus the pieces needed to derive it. */
-export type BeltPath = {
-  /** Total length: straight tangent runs + gear wraps. */
-  length: number;
-  /** Departure tangent point of pair `p` (on via `p`). */
-  outPoints: Point2[];
-  /** Arrival tangent point of pair `p` (on via `p + 1`). */
-  inPoints: Point2[];
-  /** Wrap angle at each via (0 for the two terminals). */
-  wrapAngles: number[];
-};
-
-/**
- * Reconstruct a belt path from its via-points, exactly as `draw_belt` /
- * `get_gear_angles` do: straight tangent segments between consecutive vias
- * (`Point2.circles_link`) and an arc wrapping each interior via.
- *
- * Uses the raw pulley radius (the `+BELT_WIDTH/2` in the drawing is purely
- * cosmetic), so this is the mechanical belt length.
- */
-export function compute_belt_path(vias: BeltVia[]): BeltPath {
-  const pairs = vias.length - 1;
-  const outPoints: Point2[] = [];
-  const inPoints: Point2[] = [];
-  let length = 0;
-
-  for (let p = 0; p < pairs; p++) {
-    const a = vias[p];
-    const b = vias[p + 1];
-    const { start, end } = Point2.circles_link(
-      a.pos,
-      a.radius,
-      a.direction,
-      b.pos,
-      b.radius,
-      b.direction,
-    );
-    const out = a.pos.add(start);
-    const inn = b.pos.add(end);
-    outPoints.push(out);
-    inPoints.push(inn);
-    length += out.distance_to(inn);
-  }
-
-  const wrapAngles: number[] = new Array(vias.length).fill(0);
-  for (let v = 1; v < vias.length - 1; v++) {
-    const arrival = inPoints[v - 1]; // belt reaches via v from the previous span
-    const departure = outPoints[v]; // belt leaves via v toward the next span
-    const center = vias[v].pos;
-    const wrap = belt_arc_sweep(
-      arrival.sub(center).angle(),
-      departure.sub(center).angle(),
-      vias[v].direction,
-    );
-    wrapAngles[v] = wrap;
-    length += vias[v].radius * wrap;
-  }
-
-  return { length, outPoints, inPoints, wrapAngles };
-}
-
-/**
- * One ordered piece of a belt path: a straight tangent run between two vias, or
- * an arc wrapping one via. `gearIndex`/`gearIndexB` are indices into the input
- * `vias` (for a segment, its two bounding vias). `startS` is the piece's
- * arc-length offset from the path start.
- */
-export type BeltPiece = {
-  kind: "segment" | "arc";
-  length: number;
-  startS: number;
-  gearIndex: number; // via wrapped (arc) or first via (segment)
-  gearIndexB: number; // second via (segment); = gearIndex for an arc
-  // segment
-  from: Point2;
-  to: Point2;
-  // arc
-  center: Point2;
-  radius: number;
-  startAngle: number;
-  wrap: number;
-  direction: boolean;
-};
+/** One ordered piece of a belt path: a straight tangent run between two vias, or an arc wrapping one via. */
+export type BeltPiece =
+  | {
+      kind: "segment";
+      length: number;
+      startS: number;
+      gearIndexA: number;
+      gearIndexB: number;
+      from: Point2;
+      to: Point2;
+    }
+  | {
+      kind: "arc";
+      length: number;
+      startS: number;
+      gearIndex: number;
+      center: Point2;
+      radius: number;
+      startAngle: number;
+      wrap: number;
+      direction: boolean;
+    };
 
 /**
  * Split a belt into its ordered geometric pieces (tangent segments + gear arcs).
@@ -144,23 +81,6 @@ export function belt_pieces(
     arrival[(p + 1) % n] = inn[p];
   }
 
-  // Terminal wound onto its adjacent pulley (winch): if the start/end terminal
-  // (r=0) sits on the first/last gear, that gear arcs straight to the terminal
-  // point (no degenerate tangent segment). Its wrap then tracks the wound angle.
-  // Tolerance expressed as the residual tangent-stub length, not a raw distance:
-  // at distance d the stub is √(d²−r²), so d ≤ √(r² + STUB²) keeps the stub (and
-  // thus the discrete length drop when the terminal is treated as wound) ≤ STUB px.
-  const STUB = 1;
-  const onGear = (t: number, g: number) =>
-    n >= 2 &&
-    vias[t].radius === 0 &&
-    vias[t].pos.distance_to(vias[g].pos) <=
-      Math.sqrt(vias[g].radius * vias[g].radius + STUB * STUB);
-  const startOnGear = !closed && onGear(0, 1);
-  const endOnGear = !closed && onGear(n - 1, n - 2);
-  if (startOnGear) arrival[1] = vias[0].pos;
-  if (endOnGear) departure[n - 2] = vias[n - 1].pos;
-
   const pieces: BeltPiece[] = [];
   let s = 0;
   const pushArc = (v: number) => {
@@ -181,9 +101,6 @@ export function belt_pieces(
       length,
       startS: s,
       gearIndex: v,
-      gearIndexB: v,
-      from: arr,
-      to: dep,
       center: c,
       radius: vias[v].radius,
       startAngle,
@@ -198,15 +115,10 @@ export function belt_pieces(
       kind: "segment",
       length,
       startS: s,
-      gearIndex: p,
+      gearIndexA: p,
       gearIndexB: (p + 1) % n,
       from: out[p],
       to: inn[p],
-      center: out[p],
-      radius: 0,
-      startAngle: 0,
-      wrap: 0,
-      direction: false,
     });
     s += length;
   };
@@ -217,10 +129,13 @@ export function belt_pieces(
       pushSeg(v);
     }
   } else {
+    // A terminal resting ON its pulley's rim is NOT a special case: circles_link
+    // then returns the radial rim point, so the run is emitted with length 0 and
+    // the arc already reaches the terminal. Keeping that degenerate run is what
+    // lets the length constraint recover its tangent point (and hence the no-slip
+    // coupling to the belt travel φ) while an end touches a pulley.
     for (let p = 0; p < pairCount; p++) {
-      // Skip the degenerate tangent to a terminal wound onto its gear.
-      const skipSeg = (p === 0 && startOnGear) || (p === n - 2 && endOnGear);
-      if (!skipSeg) pushSeg(p);
+      pushSeg(p);
       pushArc(p + 1);
     }
   }
@@ -236,6 +151,22 @@ export function belt_wraps(vias: BeltVia[], closed = false): number[] {
   for (const piece of belt_pieces(vias, closed))
     if (piece.kind === "arc") wraps[piece.gearIndex] = piece.wrap;
   return wraps;
+}
+
+/**
+ * Raw ARRIVAL rim angle (the arc's `startAngle`, ∈ (−π, π]) of each via, 0 for
+ * terminals / vias with no arc. Index-aligned to `vias`.
+ *
+ * This is the angle the belt touches down at. Together with the wrap it fixes the
+ * terminal's belt arc-length position IN THE PULLEY'S FRAME — the quantity the
+ * no-slip differential must be written in (see `applyBeltLengthConstraint`), because
+ * the free-strand length alone is a V at the tangency point and cannot be used.
+ */
+export function belt_arrivals(vias: BeltVia[], closed = false): number[] {
+  const arrivals = new Array(vias.length).fill(0);
+  for (const piece of belt_pieces(vias, closed))
+    if (piece.kind === "arc") arrivals[piece.gearIndex] = piece.startAngle;
+  return arrivals;
 }
 
 /**
@@ -276,7 +207,11 @@ export function nearest_point_on_piece(p: Point2, piece: BeltPiece): Point2 {
     return piece.from.lerp(piece.to, t);
   }
   // Arc: clamp the swept angle to [0, wrap] along the traversal direction.
-  const swept = belt_arc_sweep(piece.startAngle, p.sub(piece.center).angle(), piece.direction);
+  const swept = belt_arc_sweep(
+    piece.startAngle,
+    p.sub(piece.center).angle(),
+    piece.direction,
+  );
   const param =
     swept <= piece.wrap
       ? swept
@@ -299,11 +234,15 @@ export function belt_project(
   wraps?: number[],
 ): { s: number; point: Point2; tangent: Point2 } {
   const pieces = belt_pieces(vias, closed, wraps);
-  if (pieces.length === 0)
-    return { s: 0, point: p, tangent: new Point2(1, 0) };
+  if (pieces.length === 0) return { s: 0, point: p, tangent: new Point2(1, 0) };
   let bestDist = Infinity;
   let bestS = 0;
-  let bestPoint = pieces[0].from;
+  let bestPoint =
+    pieces[0].kind === "arc"
+      ? pieces[0].center.add(
+          Point2.from_polar(pieces[0].radius, pieces[0].startAngle),
+        )
+      : pieces[0].from;
   for (const piece of pieces) {
     const np = nearest_point_on_piece(p, piece);
     const d = p.distance_to(np);
@@ -313,8 +252,11 @@ export function belt_project(
     const local =
       piece.kind === "segment"
         ? piece.from.distance_to(np)
-        : belt_arc_sweep(piece.startAngle, np.sub(piece.center).angle(), piece.direction) *
-          piece.radius;
+        : belt_arc_sweep(
+            piece.startAngle,
+            np.sub(piece.center).angle(),
+            piece.direction,
+          ) * piece.radius;
     bestS = piece.startS + local;
   }
   return {
@@ -354,23 +296,30 @@ export function belt_point_tangent(
           point: piece.from.lerp(piece.to, t),
           tangent:
             dir.length_squared() > 1e-12 ? dir.normalize() : new Point2(1, 0),
-          curvature: 0, // straight run: tangent direction is constant
+          curvature: 0,
         };
       }
       const sign = piece.direction ? -1 : 1;
       const angle = piece.startAngle + (sign * local) / piece.radius;
       return {
         point: piece.center.add(Point2.from_polar(piece.radius, angle)),
-        tangent: new Point2(-Math.sin(angle), Math.cos(angle)).mul(sign),
-        curvature: sign / piece.radius, // d(tangent angle)/ds along the arc
+        tangent: Point2.from_polar(sign, angle).perp(),
+        curvature: sign / piece.radius,
       };
     }
     local -= piece.length;
   }
   const last = pieces[pieces.length - 1];
+  if (last.kind === "segment") {
+    return {
+      point: last.to,
+      tangent: last.to.sub(last.from).normalize(),
+      curvature: 0,
+    };
+  }
   return {
-    point: last.to,
-    tangent: last.to.sub(last.from).normalize(),
+    point: last.center.add(Point2.from_polar(last.radius, last.startS)),
+    tangent: Point2.from_polar(last.direction ? -1 : 1, last.startAngle).perp(),
     curvature: 0,
   };
 }

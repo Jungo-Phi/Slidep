@@ -807,17 +807,11 @@ export function applyBeamFollowsAngleConstraint(
 }
 
 /**
- * Courroie inextensible (simulation) : maintient la longueur géométrique totale
- * (segments tangents + arcs d'enroulement) à `targetLength`. Contrainte scalaire
- * globale unique par courroie — bouger une poulie redistribue toute la boucle
- * pour conserver la longueur (c'est la transmission de la courroie). Rayons
- * figés en simulation, donc bakés dans `radii`.
+ * Courroie inextensible (simulation) : maintient la longueur géométrique totale à `targetLength`.
+ * Bouger une poulie redistribue toute la boucle pour conserver la longueur (c'est la transmission de la courroie).
  *
- * Projection PBD de C = L − L₀ : chaque centre bouge de −C·w·∇/Σ(w·|∇|²), avec
- * (théorème de l'enveloppe, les points de tangence glissent librement)
- * ∂L/∂centre = −(somme des tangentes unitaires adjacentes). Les positions
- * fusionnées (ex. jonction start==end d'une courroie tendue) sont accumulées par
- * clé, donc une extrémité partagée reçoit la somme de ses deux contributions.
+ * Projection PBD de C = L − L₀ : chaque centre bouge de −C·w·∇/Σ(w·|∇|²), avec (théorème de l'enveloppe, les points de tangence glissent librement)
+ * ∂L/∂centre = −(somme des tangentes unitaires adjacentes).
  */
 export function applyBeltLengthConstraint(
   positions: Map<string, Point2>,
@@ -830,7 +824,6 @@ export function applyBeltLengthConstraint(
     startKey,
     endKey,
     gearPosKeys,
-    gearAngleKeys,
     radii,
     directions,
     length: targetLength,
@@ -839,40 +832,31 @@ export function applyBeltLengthConstraint(
     wraps,
   } = link;
 
-  // Vias: closed (tight) belt = the gear cycle; open (loose) belt = start terminal
-  // (r=0) → gears → end terminal (r=0). `viaKey[v]` = its position key; `viaGear[v]`
-  // = the original gear index (−1 for a terminal). Pulleys that lost contact
-  // mid-simulation are skipped (belt runs straight past them).
-  const vias: BeltVia[] = [];
+  // Vias: closed (tight) belt = the gear cycle
+  // open (loose) belt = start terminal (r=0) → gears → end terminal (r=0)
+  // `viaKey[v]` = its position key
+  // `viaGear[v]` = the original gear index (−1 for a terminal)
+  // Pulleys that lost contact mid-simulation are skipped (belt runs straight past them)
   const viaKey: string[] = [];
   const viaGear: number[] = [];
   if (!closed) {
-    const start = positions.get(startKey);
-    if (!start) return 0;
-    vias.push({ pos: start, radius: 0, direction: false });
+    if (!positions.has(startKey)) return 0;
     viaKey.push(startKey);
     viaGear.push(-1);
   }
   for (let i = 0; i < gearPosKeys.length; i++) {
     if (disconnected?.[i]) continue;
-    const pos = positions.get(gearPosKeys[i]);
-    if (!pos) return 0;
-    vias.push({ pos, radius: radii[i], direction: directions[i] });
+    if (!positions.has(gearPosKeys[i])) return 0;
     viaKey.push(gearPosKeys[i]);
     viaGear.push(i);
   }
   if (!closed) {
-    const end = positions.get(endKey);
-    if (!end) return 0;
-    vias.push({ pos: end, radius: 0, direction: false });
+    if (!positions.has(endKey)) return 0;
     viaKey.push(endKey);
     viaGear.push(-1);
   }
-  // A loose belt with NO active gears (none attached, or all detached mid-sim) is an
-  // inert straight segment — but it is still inextensible, so it holds its length
-  // like a beam: pin the distance between its two ends to L0. (A tight belt needs a
-  // gear; a gearless loop is degenerate → no-op.)
-  if (!closed && vias.length === 2)
+  // A loose belt with NO active gears is an inert straight segment
+  if (!closed && viaKey.length === 2)
     return applyDistanceConstraint(
       positions,
       posMasses,
@@ -881,19 +865,53 @@ export function applyBeltLengthConstraint(
       targetLength,
       stiffness,
     );
-  if (vias.length < (closed ? 2 : 3)) return 0;
-  const last = vias.length - 1;
+  if (viaKey.length < (closed ? 2 : 3)) return 0;
+  const last = viaKey.length - 1;
 
-  // Continuous per-via wrap (whole turns included) → a wound arc grows past 2π
-  // smoothly (no 0/2π seam jump). Terminal slots carry 0 (never read as arcs).
+  // ── Non-penetration FIRST, before any geometry is read ────────────────────
+  // A terminal can never sit inside its adjacent pulley. This has to run BEFORE the
+  // vias are sampled, because `circles_link` switches formula at d = r: outside, the
+  // run is a TANGENT (its gradient w.r.t. the gear centre is the tangent unit);
+  // inside, it degenerates to a RADIAL spoke (gradient = the radial unit). Sampling a
+  // terminal that has drifted inside — a grab, gravity, the previous iteration — hands
+  // the projection a gradient rotated by 90°, so the gear gets shoved sideways and the
+  // solver never settles. Symmetric: the pulley is pushed away too, by mobility.
+  const radialContact = (termKey: string, centerKey: string, rad: number) => {
+    const t = positions.get(termKey);
+    const cc = positions.get(centerKey);
+    if (!t || !cc) return;
+    const vv = t.sub(cc);
+    const dd = vv.length();
+    if (dd >= rad || dd < 1e-9) return;
+    const Cc = rad - dd;
+    const u = vv.mul(1 / dd);
+    const wT = posMasses.get(termKey) ?? 1;
+    const wC = posMasses.get(centerKey) ?? 1;
+    const tot = wT + wC;
+    if (tot === 0) return;
+    if (wT !== 0)
+      positions.set(termKey, t.add(u.mul(Cc * (wT / tot) * stiffness)));
+    if (wC !== 0)
+      positions.set(centerKey, cc.sub(u.mul(Cc * (wC / tot) * stiffness)));
+  };
+  if (!closed) {
+    radialContact(startKey, viaKey[1], radii[viaGear[1]]);
+    radialContact(endKey, viaKey[last - 1], radii[viaGear[last - 1]]);
+  }
+
+  // Vias, sampled from the now-valid positions (every terminal is on or outside its rim).
+  const vias: BeltVia[] = viaKey.map((key, v) => ({
+    pos: positions.get(key)!,
+    radius: viaGear[v] >= 0 ? radii[viaGear[v]] : 0,
+    direction: viaGear[v] >= 0 ? directions[viaGear[v]] : false,
+  }));
+
+  // Continuous per-via wrap (whole turns included) → a wound arc grows past 2π smoothly (no 0/2π seam jump). Terminal slots carry 0 (never read as arcs).
   const viaWraps = wraps
     ? viaGear.map((g) => (g >= 0 ? (wraps[g] ?? 0) : 0))
     : undefined;
 
-  // ∂L/∂centre = −(sum of adjacent tangent units): each straight span A→B adds −û
-  // to A and +û to B (envelope theorem: arcs add nothing to first-order
-  // translation). Accumulate per unique DOF (positions may be fused). For an open
-  // belt, also grab the two terminal runs (length + tangent point).
+  // ∂L/∂centre = −(sum of adjacent tangent units): each straight span A→B adds −û to A and +û to B (envelope theorem: arcs add nothing to first-order translation). Accumulate per unique DOF (positions may be fused). For an open belt, also grab the two terminal runs (length + tangent point).
   const pieces = belt_pieces(vias, closed, viaWraps);
   let length = 0;
   let fsStart = 0;
@@ -906,14 +924,10 @@ export function applyBeltLengthConstraint(
   for (const piece of pieces) {
     length += piece.length;
     if (piece.kind !== "segment") continue;
-    const d = piece.to.sub(piece.from);
-    if (d.length_squared() < 1e-12) continue;
-    const u = d.normalize();
-    // Terminals (viaGear −1) are excluded from the centre gradient — an open belt's
-    // ends ride their own tangent (projected below).
-    if (viaGear[piece.gearIndex] >= 0) add(viaKey[piece.gearIndex], u.mul(-1));
-    if (viaGear[piece.gearIndexB] >= 0) add(viaKey[piece.gearIndexB], u);
-    if (!closed && piece.gearIndex === 0) {
+    // Terminal runs are captured FIRST: they must survive a ZERO-LENGTH run (an end
+    // resting on its pulley's rim). Dropping them there would null PtanS/PtanE, hence
+    // uS/uE, hence C_diff below — the belt would silently stop being no-slip.
+    if (!closed && piece.gearIndexA === 0) {
       fsStart = piece.length;
       PtanS = piece.to;
     }
@@ -921,7 +935,85 @@ export function applyBeltLengthConstraint(
       fsEnd = piece.length;
       PtanE = piece.from;
     }
+    // A terminal run's tangent is read off the rim below (uS/uE), never off the run
+    // vector — which vanishes at contact. Its centre gradient is added there too.
+    if (!closed && (piece.gearIndexA === 0 || piece.gearIndexB === last)) continue;
+    const d = piece.to.sub(piece.from);
+    if (d.length_squared() < 1e-12) continue; // no direction to read off a null run
+    const u = d.normalize();
+    // Terminals (viaGear −1) are excluded from the centre gradient — an open belt's ends ride their own tangent (projected below).
+    if (viaGear[piece.gearIndexA] >= 0)
+      add(viaKey[piece.gearIndexA], u.mul(-1));
+    if (viaGear[piece.gearIndexB] >= 0) add(viaKey[piece.gearIndexB], u);
   }
+
+  // Outward unit tangent at each free terminal, taken from the pulley's RIM rather
+  // than from the run vector `terminal − Ptan`: that vector vanishes as the end
+  // reaches the rim, so neither its direction nor — above all — its SIGN can be read
+  // off it there. Belt travel at a rim point is perp(radial)·sign, sign = direction
+  // ? −1 : 1 (same convention as belt_point_tangent); the start run travels INTO its
+  // gear and the end run OUT of it, hence the flip on uS. Never degenerates.
+  const rimTravel = (Ptan: Point2, c: Point2, direction: boolean): Point2 =>
+    Ptan.sub(c)
+      .normalize()
+      .perp()
+      .mul(direction ? -1 : 1);
+  const uS =
+    !closed && PtanS
+      ? rimTravel(PtanS, vias[1].pos, vias[1].direction).mul(-1)
+      : null;
+  const uE =
+    !closed && PtanE
+      ? rimTravel(PtanE, vias[last - 1].pos, vias[last - 1].direction)
+      : null;
+
+  // ── The terminals' belt coordinate, IN THEIR PULLEY'S FRAME ────────────────
+  // The free-strand length fs is NOT a usable coordinate for a terminal: it is a **V**
+  // in the terminal's own tangential motion (fs = |t|, vertex at the tangency point), and
+  // its radial derivative is d/fs → ∞. Push a terminal through the vertex and fs grows
+  // back, so the differential's feedback sign flips and the end whips around the pulley.
+  //
+  //     h_S = fsStart − r₁·sign₁·ψ_arr      (ψ_arr = arrival rim angle on the first pulley)
+  //     h_E = fsEnd   + r_N·sign_N·ψ_dep    (ψ_dep = departure rim angle on the last)
+  //
+  // h is the terminal's belt ARC-LENGTH position measured in the pulley's frame. The two
+  // singular pieces (the √ in fs, the −√ in the rim angle) cancel exactly — the envelope
+  // theorem — leaving a gradient that is exactly the unit tangent uS/uE, everywhere,
+  // contact included. Monotone, so no V and no cap: reeling a free end past the tangency
+  // point simply UNWRAPS the pulley, which is the physics. Each end reads only its OWN
+  // rim angle, so ∂h_S/∂(end) = ∂h_E/∂(start) = 0 and the gradients stay uncoupled.
+  // No-slip then reads d(h_S) = −dφ and d(h_E) = +dφ.
+  const arcAt = (v: number) => {
+    const a = pieces.find((p) => p.kind === "arc" && p.gearIndex === v);
+    return a && a.kind === "arc" ? a : null;
+  };
+  // Continuous (unwrapped) arrival angle, tracked per frame; the raw atan2 would jump 2π
+  // at the ±π seam and inject 2πr of phantom belt into the residual.
+  const psiArr = (v: number, raw: number) => {
+    const cont = link.arrivals?.[viaGear[v]];
+    if (cont === undefined) return raw;
+    const TAU = 2 * Math.PI;
+    let d = raw - (((cont % TAU) + TAU) % TAU);
+    while (d > Math.PI) d -= TAU;
+    while (d <= -Math.PI) d += TAU;
+    return cont + d;
+  };
+  const arcS = closed ? null : arcAt(1);
+  const arcE = closed ? null : arcAt(last - 1);
+  const signOf = (v: number) => (vias[v].direction ? -1 : 1);
+  const hS = arcS
+    ? fsStart - vias[1].radius * signOf(1) * psiArr(1, arcS.startAngle)
+    : fsStart;
+  const hE = arcE
+    ? fsEnd +
+      vias[last - 1].radius *
+        signOf(last - 1) *
+        (psiArr(last - 1, arcE.startAngle) + signOf(last - 1) * arcE.wrap)
+    : fsEnd;
+  // Both terminal runs push their neighbouring gear centre along −(their own travel
+  // unit): −(−uS) for the start run's gear, −(uE) for the end run's.
+  if (uS) add(viaKey[1], uS.mul(-1));
+  if (uE) add(viaKey[last - 1], uE.mul(-1));
 
   const C = length - targetLength;
 
@@ -950,241 +1042,86 @@ export function applyBeltLengthConstraint(
   }
 
   // ── Loose belt (simulation): free centres + terminals + φ + winding, one proj ──
-  const phi = link.phaseKey !== undefined ? (angles.get(link.phaseKey) ?? 0) : 0;
+  const phi =
+    link.phaseKey !== undefined ? (angles.get(link.phaseKey) ?? 0) : 0;
   const startGear = viaGear[1]; // first ACTIVE gear (terminal's neighbour)
   const endGear = viaGear[last - 1];
-  const c0 = vias[1].pos;
-  const cN = vias[last - 1].pos;
-  const thetaS = angles.get(gearAngleKeys[startGear]);
-  const thetaE = angles.get(gearAngleKeys[endGear]);
-  const distS = positions.get(startKey)!.distance_to(c0);
-  const distE = positions.get(endKey)!.distance_to(cN);
 
-  const diffTarget = (link.diff0 ?? 0) - 2 * phi;
+  // A terminal JOINED to its adjacent pulley (winch) is NOT a free end. Its join's
+  // GearPerimeterPin carries it, and it feeds the belt through that pulley's growing
+  // ARC — which `length` already counts, via the continuous wrap. Treating it as a free
+  // strand did two harmful things: the differential dragged the pinned terminal along
+  // its tangent (fighting the pin, which fed the tug back as torque on θ), and φ was
+  // charged twice when only ONE end can actually pay out belt. Guard on the joined
+  // pulley still being the terminal's neighbour (it may have disconnected mid-run).
+  const startWound = !!link.startWound && startGear === 0;
+  const endWound = !!link.endWound && endGear === radii.length - 1;
+  if (startWound) fsStart = 0;
+  if (endWound) fsEnd = 0;
+  const nFree = (startWound ? 0 : 1) + (endWound ? 0 : 1);
 
-  // Winding is a purely GEOMETRIC contact test:
-  //  • wind ON once the terminal is within WIND_TOL of its rim;
-  //  • unwind ONLY when the terminal is pulled clear of the rim past DETACH_TOL — a
-  //    RADIAL pull-off. A tangential drag keeps the terminal ON the rim, so it stays
-  //    wound and its rim pin just turns the gear (dragging it tangentially makes φ
-  //    drift with no real feed-out, so φ itself cannot decide the wind/unwind).
-  const WIND_TOL = 2; // reel-in seats onto the rim this close
-  const DETACH_TOL = DIM.GEAR_TEETH_SIZE + 2; // beyond a tooth ⇒ a deliberate pull-off
-  // An inextensible belt cannot wind BOTH terminals onto the SAME pulley at once —
-  // there is no material to feed both, so both arcs would grow with the shared θ and
-  // the length would blow up. A terminal may wind only if the other is not already
-  // committed to that same gear (wound, or a winch/external end).
-  const otherOnGear = (
-    thisGear: number,
-    otherWind: number | undefined,
-    otherExternal: boolean | undefined,
-    otherGear: number,
-  ) => (otherWind !== undefined || !!otherExternal) && otherGear === thisGear;
-  if (!link.startExternal) {
-    if (
-      link.startWind === undefined &&
-      distS <= radii[startGear] + WIND_TOL &&
-      thetaS !== undefined &&
-      !otherOnGear(startGear, link.endWind, link.endExternal, endGear)
-    )
-      link.startWind = positions.get(startKey)!.sub(c0).angle() - thetaS;
-    else if (link.startWind !== undefined && distS > radii[startGear] + DETACH_TOL)
-      link.startWind = undefined;
-  }
-  if (!link.endExternal) {
-    if (
-      link.endWind === undefined &&
-      distE <= radii[endGear] + WIND_TOL &&
-      thetaE !== undefined &&
-      !otherOnGear(endGear, link.startWind, link.startExternal, startGear)
-    )
-      link.endWind = positions.get(endKey)!.sub(cN).angle() - thetaE;
-    else if (link.endWind !== undefined && distE > radii[endGear] + DETACH_TOL)
-      link.endWind = undefined;
-  }
+  // Travelling the belt by φ pays out φ of strand at each FREE end (with opposite
+  // signs), so the differential's reference drifts by nFree·φ — not always 2φ.
+  const diffTarget = (link.diff0 ?? 0) - nFree * phi;
 
-  // Winch (external) ends are pinned by their own GearPerimeterPin; a wound end (no
-  // join) is pinned here (pinWound, below). Both leave the length projection (weight
-  // 0) — the free end conserves length for them.
-  let wS = link.startExternal ? 0 : (posMasses.get(startKey) ?? 1);
-  let wE = link.endExternal ? 0 : (posMasses.get(endKey) ?? 1);
-  // A wound terminal is pinned on the rim like a GearPerimeterPin — bidirectional:
-  // the belt travelling carries it around, and dragging it TANGENTIALLY advances the
-  // belt (turns the gear). When the terminal is GRABBED we skip the RADIUS pin, so a
-  // RADIAL grab can pull it clear of the rim (past DETACH_TOL → it unwinds and
-  // detaches); the angle coupling stays, so a tangential grab still turns the gear.
-  const pinWound = (
-    key: string,
-    centerKey: string,
-    rad: number,
-    angleKey: string,
-    eps: number,
-    windRef: number,
-    grabbed: boolean,
-  ) => {
-    const c = positions.get(centerKey)!;
-    const node = positions.get(key)!;
-    const theta = angles.get(angleKey);
-    if (theta === undefined || link.phaseKey === undefined) return;
-    const v = node.sub(c);
-    if (v.length_squared() >= 1e-12) {
-      const wN = posMasses.get(key) ?? 1;
-      const denom = wN + 1; // terminal + φ, both magnitude 1 in belt-px space
-      let Ca = v.angle() - theta - windRef;
-      while (Ca > Math.PI) Ca -= 2 * Math.PI;
-      while (Ca <= -Math.PI) Ca += 2 * Math.PI;
-      // Project the angular mismatch in belt-px space over the terminal (arc, grad 1)
-      // and the belt travel φ (grad ε). Correcting through φ — not θ directly — shares
-      // the DOF with the length projection, so an inextensible belt can RESIST the
-      // winding (jam a motor) instead of the terminal orbiting free of the length. θ
-      // then follows φ via BeltPhaseGear, so this equals the old θ pin whenever the belt
-      // can feed.
-      const kpx = -(rad * Ca) / denom;
-      if (wN !== 0) positions.set(key, c.add(v.rotate((kpx * wN) / rad)));
-      angles.set(link.phaseKey, (angles.get(link.phaseKey) ?? 0) - kpx * eps);
-    }
-    // Seat the terminal on the rim by moving ONLY the terminal (the belt conforms to
-    // the gear's rim; it must not push the gear). Sharing this radius with the centre
-    // — as a plain Distance would — drags a FREE gear when the terminal is drawn a bit
-    // off the rim (on a tooth), so the whole thing jumps at sim launch. Skipped while
-    // grabbed (a radial grab must be able to pull the terminal off → DETACH_TOL).
-    if (!grabbed) {
-      const node2 = positions.get(key)!;
-      const vv = node2.sub(c);
-      const dd = vv.length();
-      if (dd > 1e-9) positions.set(key, c.add(vv.mul(rad / dd)));
-    }
-  };
-  const startWound =
-    !link.startExternal && link.startWind !== undefined && thetaS !== undefined;
-  const endWound =
-    !link.endExternal && link.endWind !== undefined && thetaE !== undefined;
-  if (startWound) {
-    pinWound(startKey, viaKey[1], radii[startGear], gearAngleKeys[startGear], directions[startGear] ? -1 : 1, link.startWind!, link.grabbedTerminal === "start");
-    wS = 0;
-  }
-  if (endWound) {
-    pinWound(endKey, viaKey[last - 1], radii[endGear], gearAngleKeys[endGear], directions[endGear] ? -1 : 1, link.endWind!, link.grabbedTerminal === "end");
-    wE = 0;
-  }
+  // A wound terminal gets weight 0 here: the belt never moves it, its join does.
+  const wS = startWound ? 0 : (posMasses.get(startKey) ?? 1);
+  const wE = endWound ? 0 : (posMasses.get(endKey) ?? 1);
 
-  // Stable outward tangent unit at a terminal, from the gear radius (not the noisy
-  // terminal−Ptan, which degenerates as the run vanishes near the rim).
-  const tangentDir = (term: Point2, Ptan: Point2, c: Point2): Point2 => {
-    const radial = Ptan.sub(c).normalize();
-    let u = new Point2(-radial.y, radial.x);
-    if (term.sub(Ptan).dot(u) < 0) u = u.mul(-1);
-    return u;
-  };
-  const s = positions.get(startKey)!;
-  const e = positions.get(endKey)!;
-  const uS = PtanS ? tangentDir(s, PtanS, c0) : null;
-  const uE = PtanE ? tangentDir(e, PtanE, cN) : null;
   const wSf = uS ? wS : 0;
   const wEf = uE ? wE : 0;
 
-  // When EXACTLY one end winds, its arc grows/shrinks with the belt travel φ:
-  // orbiting the terminal by dθ = dφ/(r·ε) grows its arc by r·dθ, so ∂length/∂φ = +1
-  // for a wound END, −1 for a wound START. Adding φ as a DOF of the length projection
-  // lets the length DRIVE or RESIST the gear through φ.
-  //
-  // It is engaged when the FREE (non-winding) end cannot passively absorb the length
-  // change — it is anchored, or externally held by a grab — AND the wound end is not
-  // itself being peeled off. When the free end CAN feed (mobile and not grabbed) it
-  // absorbs the change and φ just follows the transmission, so the coupling stays off
-  // and never fights a motor. (The grab is not a mode: it is what makes a terminal
-  // "externally held" — a snapshot cannot tell an end paid out by the motor from one
-  // pulled by hand, so who drives the belt is a genuine input, read via grabbedTerminal.)
-  //
-  // The projection uses a LIVE length whose wound arc is the CONTINUOUS wrap
-  // (r·|unwrapped wrap|), smooth across the 2π seam so a bare gear coils like a capstan.
-  const startWinding = startWound || !!link.startExternal;
-  const endWinding = endWound || !!link.endExternal;
-  const oneWound = startWinding !== endWinding;
-  const woundGrabbed =
-    (startWinding && link.grabbedTerminal === "start") ||
-    (endWinding && link.grabbedTerminal === "end");
-  const freeEndKey = startWinding ? endKey : startKey;
-  const freeEndGrabbed =
-    (startWinding && link.grabbedTerminal === "end") ||
-    (endWinding && link.grabbedTerminal === "start");
-  const freeEndCanFeed =
-    (posMasses.get(freeEndKey) ?? 1) !== 0 && !freeEndGrabbed;
-  let gPhi = 0;
-  let Cproj = C;
-  if (oneWound && !woundGrabbed && !freeEndCanFeed) {
-    const wgVia = startWinding ? 1 : last - 1; // via index of the winding gear
-    const wgIdx = startWinding ? startGear : endGear; // its gear index (into wraps)
-    const ref = link.wraps?.[wgIdx];
-    const TAU = 2 * Math.PI;
-    // Live length: the winding gear's arc from its LIVE geometric wrap, UNWRAPPED
-    // against the tracked continuous wrap (smooth through the seam).
-    let liveLen = 0;
-    for (const p of belt_pieces(vias, false)) {
-      if (p.kind === "arc" && p.gearIndex === wgVia && ref !== undefined) {
-        const cont = p.wrap + TAU * Math.round((ref - p.wrap) / TAU);
-        liveLen += p.radius * Math.abs(cont);
-      } else {
-        liveLen += p.length;
-      }
-    }
-    Cproj = liveLen - targetLength;
-    gPhi = startWinding ? -1 : 1;
-  }
-
-  // C_sum = total − L0 over free centres AND free terminals (one denom → correct
-  // mass-weighted distribution; moving a terminal δ along its tangent changes total
-  // by δ, the gear tangent point stays put). Plus φ when one end is wound (above).
+  // C_sum = total drawn length − L0, over free centres AND free terminals (each moves
+  // along its belt tangent; moving a terminal δ along its tangent changes total by δ, the
+  // gear tangent point stays put). One mass-weighted projection.
   const corr = new Map<string, Point2>();
   const addCorr = (key: string, v: Point2) =>
     corr.set(key, (corr.get(key) ?? new Point2(0, 0)).add(v));
-  let dPhiSum = 0;
-  let denom = wSf + wEf + gPhi * gPhi;
+  let denom = wSf + wEf;
   posGrad.forEach((grad, key) => {
     denom += (posMasses.get(key) ?? 1) * grad.length_squared();
   });
   if (denom > 1e-12) {
-    const k = -Cproj / denom;
+    const k = -C / denom;
     posGrad.forEach((grad, key) => {
       const w = posMasses.get(key) ?? 1;
       if (w !== 0) addCorr(key, grad.mul(k * w));
     });
     if (uS && wSf > 0) addCorr(startKey, uS.mul(k * wSf));
     if (uE && wEf > 0) addCorr(endKey, uE.mul(k * wEf));
-    dPhiSum = k * gPhi;
   }
 
-  // C_diff = (fsStart − fsEnd) − (diff0 − 2φ): the no-slip differential coupling φ to
-  // the two free runs. Active whenever NEITHER end is wound/winch — an anchored end is
-  // fine (it contributes a fixed run, weight 0, so it just doesn't move while the free
-  // end and φ resolve the coupling; both anchored ⇒ the run difference is fixed ⇒ φ is
-  // pinned ⇒ the belt is rigid). It is dropped only when an end is wound/external, where
-  // belt_pieces reports fs = 0 for it and its pull on φ is carried by its own
-  // pin/BeltPhaseGear (C_sum's φ term takes over).
+  // C_diff = (h_S − h_E) − (diff0 − nFree·φ): the no-slip differential coupling the FREE
+  // ends to the belt travel φ (feeding one end reels the other in). Bidirectional:
+  // dragging a free end advances φ, which turns every pulley via BeltPhaseGear. A wound
+  // end contributes nothing (weight 0) but the constraint still runs on the other one —
+  // that IS the winch: one end paying out, one end coiling.
+  //
+  // h, NOT the free-strand length: see the derivation above. d(h_S) = −dφ, d(h_E) = +dφ,
+  // so the residual is exactly (h_S − h_E) + nFree·φ − const, and ∇ = (+uS at start,
+  // −uE at end, +nFree on φ) — hence Σw|∇|² = wSf + wEf + nFree². Same gradients the
+  // projection already used; only the RESIDUAL changes, and that is what kills the V.
   let dPhi = 0;
-  if (uS && uE && !startWinding && !endWinding) {
-    const Cdiff = fsStart - fsEnd - diffTarget;
-    const denomD = wSf + wEf + 4;
-    addCorr(startKey, uS.mul((-Cdiff * wSf) / denomD));
-    addCorr(endKey, uE.mul((Cdiff * wEf) / denomD));
-    dPhi = (-Cdiff * 2) / denomD;
+  const diffRuns =
+    nFree > 0 && (startWound || uS !== null) && (endWound || uE !== null);
+  if (diffRuns) {
+    const Cdiff =
+      (startWound ? 0 : hS) - (endWound ? 0 : hE) - diffTarget;
+    const lambda = Cdiff / (wSf + wEf + nFree * nFree);
+    if (uS && wSf > 0) addCorr(startKey, uS.mul(-lambda * wSf));
+    if (uE && wEf > 0) addCorr(endKey, uE.mul(lambda * wEf));
+    dPhi = -lambda * nFree;
   }
 
+  // (No unilateral stop at the rim: h is monotone through the tangency point, so a free
+  // end reeled inward simply UNWRAPS its pulley instead of butting against it. The clamp
+  // that used to live here only existed to contain fs's V, and fs is gone.)
   corr.forEach((v, key) =>
     positions.set(key, positions.get(key)!.add(v.mul(stiffness))),
   );
-  // Accumulate on the CURRENT φ: pinWound (above) may already have advanced it, and
-  // its winding contribution must not be clobbered by the length/differential terms.
   if (link.phaseKey !== undefined)
-    angles.set(
-      link.phaseKey,
-      (angles.get(link.phaseKey) ?? phi) + (dPhi + dPhiSum) * stiffness,
-    );
-  // The wound end unwinding to a single contact point (its pulley's wrap → 0) is
-  // detected and committed as a disconnect by update_belt_disconnects (which
-  // tracks the CONTINUOUS wrap once per frame — the right granularity, and it
-  // never confuses a >2π winding for a near-zero raw wrap).
-  return Math.abs(oneWound ? Cproj : C);
+    angles.set(link.phaseKey, phi + dPhi * stiffness);
+  return Math.abs(C);
 }
 
 /**
@@ -1234,7 +1171,7 @@ export function applyBeltJunctionConstraint(
   if (best.kind === "segment") {
     // Move J and the segment's two bounding gears along the tangent normal
     // (translating both centres translates the tangent line exactly).
-    const keyA = gearPosKeys[best.gearIndex];
+    const keyA = gearPosKeys[best.gearIndexA];
     const keyB = gearPosKeys[best.gearIndexB];
     const cA = positions.get(keyA)!;
     const cB = positions.get(keyB)!;
@@ -1357,7 +1294,10 @@ export function applyBeltPinConstraint(
   // Tangential: share between sliding the node back and advancing the belt.
   let node = J;
   if (wJ !== 0) node = node.sub(T.mul(errT * (wJ / totalT) * stiffness));
-  angles.set(refAngleKey, thetaRef + (errT * (wTheta / totalT) * stiffness) / rEps);
+  angles.set(
+    refAngleKey,
+    thetaRef + (errT * (wTheta / totalT) * stiffness) / rEps,
+  );
 
   // Normal: pull the node back onto the belt, sharing with the pulley(s) bounding
   // the piece at s (terminals own no pulley), so dragging the node off the belt
@@ -1367,7 +1307,7 @@ export function applyBeltPinConstraint(
     ? [
         ...new Set(
           (piece.kind === "segment"
-            ? [viaGearKey[piece.gearIndex], viaGearKey[piece.gearIndexB]]
+            ? [viaGearKey[piece.gearIndexA], viaGearKey[piece.gearIndexB]]
             : [viaGearKey[piece.gearIndex]]
           ).filter((k): k is string => k !== null),
         ),
@@ -1397,7 +1337,9 @@ export function applyBeltPinConstraint(
 function piece_at_arclength(pieces: BeltPiece[], s: number, closed = true) {
   const total = pieces.reduce((a, p) => a + p.length, 0);
   if (pieces.length === 0 || total <= 0) return undefined;
-  let local = closed ? ((s % total) + total) % total : Math.max(0, Math.min(total, s));
+  let local = closed
+    ? ((s % total) + total) % total
+    : Math.max(0, Math.min(total, s));
   for (const p of pieces) {
     if (local <= p.length) return p;
     local -= p.length;

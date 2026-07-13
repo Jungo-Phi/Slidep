@@ -384,12 +384,15 @@ export function actionReducer(
         element.probes = revert ? action.oldProbes : action.newProbes;
         break;
       }
-      case "SetShowTrajectory": {
+      case "SetShowOverlay": {
         const element = get_mechanical_element_from_id(
           action.elementID,
           mechanicalElements,
-        ) as NodeElement;
-        element.showTrajectory = revert ? action.oldValue : action.newValue;
+        );
+        element.overlays = {
+          ...element.overlays,
+          [action.kind]: revert ? action.oldValue : action.newValue,
+        };
         break;
       }
       case "SetMotorConfig": {

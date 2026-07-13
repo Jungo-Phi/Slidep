@@ -177,9 +177,9 @@ export const DIMENSION_SPECS = {
 
 /** Ordre de dessin des éléments sur le canvas */
 export const DRAWING_ORDER: UnionElement["type"][] = [
+  "distributed-force",
   "force",
   "moment",
-  "distributed-force",
   "gear",
   "beam",
   "damper",
@@ -195,6 +195,7 @@ export const DRAWING_ORDER: UnionElement["type"][] = [
   "dimension-edge",
   "dimension-angle",
   "dimension-radius",
+  "dimension-belt",
   "horizontal-align-edge",
   "horizontal-align-nodes",
   "vertical-align-edge",

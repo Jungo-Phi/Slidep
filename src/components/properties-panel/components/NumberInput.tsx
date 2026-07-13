@@ -110,7 +110,7 @@ export const NumberInput: React.FC<NumberInputProps> = ({
   );
 
   const filterInput = (val: string) => {
-    return val.replace(/[^0-9.]/g, "").replace(/(\..\*)\./g, "$1");
+    return val.replace(/[^0-9.]/g, "").replace(/(\..\*)\./g, "$1"); // TODO : à vérifier
   };
 
   return (

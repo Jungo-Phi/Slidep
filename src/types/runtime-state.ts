@@ -49,24 +49,6 @@ export interface PhysicsSnapshot {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Overlays
-// ─────────────────────────────────────────────────────────────
-
-export interface OverlayConfig {
-  showTrajectory: boolean;
-  showForce: boolean;
-  showVelocity: boolean;
-  showMoment: boolean;
-  showReactionForce: boolean;
-  showStress: boolean;
-}
-
-export interface OverlayState {
-  global: OverlayConfig;
-  perElement: Map<ID, Partial<OverlayConfig>>;
-}
-
-// ─────────────────────────────────────────────────────────────
 // Legacy types kept for compatibility (will be migrated)
 // ─────────────────────────────────────────────────────────────
 
@@ -182,9 +164,6 @@ export interface RuntimeState {
 
   /** Recorded kinematic snapshots (incremental, sampled at 30 fps of sim-time) */
   kinematicSnapshots: KinematicSnapshot[];
-
-  // Overlays
-  overlays: OverlayState;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -209,18 +188,6 @@ export const DEFAULT_SIMULATION_CONFIG: SimulationConfig = {
   collisions: false,
 };
 
-export const DEFAULT_OVERLAY_STATE: OverlayState = {
-  global: {
-    showTrajectory: false,
-    showForce: false,
-    showVelocity: false,
-    showMoment: false,
-    showReactionForce: false,
-    showStress: false,
-  },
-  perElement: new Map(),
-};
-
 export const DEFAULT_RUNTIME_STATE: RuntimeState = {
   isPlaying: false,
   time: 0,
@@ -228,5 +195,4 @@ export const DEFAULT_RUNTIME_STATE: RuntimeState = {
   current: null,
   history: [],
   kinematicSnapshots: [],
-  overlays: DEFAULT_OVERLAY_STATE,
 };

@@ -23,12 +23,10 @@ export default defineConfig({
       },
       manifest: {
         name: "Slidep",
-        short_name: "Slidep",
-        description:
-          "Application de conception et simulation de mécanismes mécaniques 2D",
+        description: "Conception et simulation de mécanismes",
         lang: "fr",
-        theme_color: "#DB5000",
-        background_color: "#FFFFFF",
+        theme_color: "#d7530b",
+        background_color: "#fdecc9",
         display: "standalone",
         orientation: "any",
         start_url: "/",

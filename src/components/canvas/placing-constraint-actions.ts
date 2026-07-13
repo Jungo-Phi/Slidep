@@ -65,6 +65,11 @@ export function handle_placing_constraint(
             gearID: hoveredPart.id,
           },
         };
+      if (hoveredPart.type === "BeltBody")
+        return {
+          actions: [],
+          newCanvasState: { type: "DimensionBelt", beltID: hoveredPart.id },
+        };
       return { actions: [] };
 
     case "DimensionNode":

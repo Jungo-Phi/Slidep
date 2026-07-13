@@ -452,7 +452,11 @@ export const MechanicalCanvas = forwardRef<
         }
         if (event.type === "KeyDown" && event.key === " ") {
           onSpaceKeyRef.current();
-          setCanvasState({ type: "Selecting" });
+          // En édition, Espace lance la simulation : on repart d'un canvas
+          // propre. En simulation il ne fait que play/pause — garder la
+          // sélection, dont l'onglet Analyse affiche les grandeurs.
+          if (appModeRef.current === "edition")
+            setCanvasState({ type: "Selecting" });
           return;
         }
         if (event.type === "KeyDown") {

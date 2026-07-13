@@ -22,7 +22,13 @@ import {
   get_mechanical_element_from_id,
 } from "../mechanism/connect-actions";
 import { is_on_left_side_of_belt } from "../../utils";
-import { force_display_value, force_stored_vector } from "../../utils/load-geom";
+import {
+  force_display_value,
+  force_snap_edges,
+  force_stored_vector,
+  frame_from_snapped_direction,
+  world_to_frame,
+} from "../../utils/load-geom";
 import { PHYSICS } from "../../constants/rendering-specs";
 
 export type MouseDownResult = {
@@ -140,15 +146,26 @@ export function handle_placing_element(
           : undefined;
       if (state.startHover.type === "Void")
         return { actions: [], newCanvasState: { type: "PlacingForceStart" } };
+      // The hovered position is already direction-snapped (see snap_load_hover):
+      // if it landed on a connected edge's axial/normal, reference that edge.
+      const forceDelta = hoveredPart.position.sub(state.startHover.position);
+      const snapEdges = force_snap_edges(
+        state.startHover.id,
+        anchor,
+        mechanicalElements,
+      );
+      const forceFrame = frame_from_snapped_direction(forceDelta, snapEdges);
       const newForce: ForceElement = {
         type: "force",
         id: crypto.randomUUID() as ID,
         targetID: state.startHover.id,
         anchor,
-        vector: force_stored_vector(
-          hoveredPart.position.sub(state.startHover.position),
+        vector: world_to_frame(
+          force_stored_vector(forceDelta),
+          forceFrame,
+          mechanicalElements,
         ),
-        frame: "world",
+        frame: forceFrame,
       };
       const actions: Action[] = [];
       const existingForce = loads.find(
@@ -351,7 +368,7 @@ function handle_place_element(
       type: "pivot",
       id: pivotId,
       probes: [],
-      showTrajectory: false,
+      overlays: {},
       position: state.startHover.position,
       isGrounded: false,
       rotatingEdgesIDs: [],
@@ -361,6 +378,7 @@ function handle_place_element(
       type: "gear",
       id: gearId,
       probes: [],
+      overlays: {},
       position: state.startHover.position,
       angle: 0,
       radius: state.startHover.position.distance_to(hoveredPart.position),
@@ -435,6 +453,7 @@ function handle_place_element(
         type: "beam",
         id: newElementId,
         probes: [],
+        overlays: {},
         positionStart: state.startHover.position,
         positionEnd: hoveredPart.position,
         fixedNodeStartID: undefined,
@@ -447,6 +466,7 @@ function handle_place_element(
         type: "spring",
         id: newElementId,
         probes: [],
+        overlays: {},
         positionStart: state.startHover.position,
         positionEnd: hoveredPart.position,
         fixedNodeStartID: undefined,
@@ -459,6 +479,7 @@ function handle_place_element(
         type: "damper",
         id: newElementId,
         probes: [],
+        overlays: {},
         positionStart: state.startHover.position,
         positionEnd: hoveredPart.position,
         fixedNodeStartID: undefined,
@@ -471,6 +492,7 @@ function handle_place_element(
         type: "belt",
         id: newElementId,
         probes: [],
+        overlays: {},
         positionStart: state.startHover.position,
         positionEnd: hoveredPart.position,
         fixedNodeStartID: undefined,
@@ -485,7 +507,7 @@ function handle_place_element(
         type: "pivot",
         id: newElementId,
         probes: [],
-        showTrajectory: false,
+        overlays: {},
         position: hoveredPart.position,
         isGrounded: state.type === "PlacingMotor",
         rotatingEdgesIDs: [],
@@ -501,7 +523,7 @@ function handle_place_element(
         type: "slider",
         id: newElementId,
         probes: [],
-        showTrajectory: false,
+        overlays: {},
         position: hoveredPart.position,
         isGrounded: false,
         parentBeamID: undefined,
@@ -513,7 +535,7 @@ function handle_place_element(
         type: "join",
         id: newElementId,
         probes: [],
-        showTrajectory: false,
+        overlays: {},
         position: hoveredPart.position,
         isGrounded: false,
         fixedEdgesIDs: [],
@@ -524,7 +546,7 @@ function handle_place_element(
         type: "mass",
         id: newElementId,
         probes: [],
-        showTrajectory: false,
+        overlays: {},
         position: hoveredPart.position,
         isGrounded: false,
         fixedEdgesIDs: [],
@@ -653,7 +675,7 @@ function handle_place_ground(
         type: "join",
         id: crypto.randomUUID() as ID,
         probes: [],
-        showTrajectory: false,
+        overlays: {},
         fixedEdgesIDs: [],
         position: hoveredPart.position,
         isGrounded: true,
@@ -684,7 +706,7 @@ function handle_place_ground(
         type: "join",
         id: crypto.randomUUID() as ID,
         probes: [],
-        showTrajectory: false,
+        overlays: {},
         fixedEdgesIDs: [],
         position: hoveredPart.position,
         isGrounded: true,

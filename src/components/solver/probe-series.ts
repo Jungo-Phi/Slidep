@@ -3,6 +3,7 @@ import {
   MechanicalElement,
   ProbeMetric,
   is_node_element,
+  overlay_shown,
 } from "../../types/element";
 import { Point2 } from "../../types/point2";
 import { KinematicSnapshot } from "../../types/runtime-state";
@@ -55,8 +56,8 @@ export interface ProbeTrajectory {
 }
 
 /**
- * Extract the trajectory of every node with `showTrajectory` on from the
- * recorded kinematic snapshots, in mechanical-element order. Trajectories
+ * Extract the trajectory of every node whose `trajectory` overlay is on from
+ * the recorded kinematic snapshots, in mechanical-element order. Trajectories
  * only apply to node elements (a single moving point).
  */
 export function get_probe_trajectories(
@@ -66,7 +67,7 @@ export function get_probe_trajectories(
 ): ProbeTrajectory[] {
   const out: ProbeTrajectory[] = [];
   for (const el of elements) {
-    if (!is_node_element(el) || !el.showTrajectory) continue;
+    if (!is_node_element(el) || !overlay_shown(el, "trajectory")) continue;
     const points: Point2[] = [];
     let headCount = 0;
     for (const snap of snapshots) {
@@ -180,4 +181,39 @@ export function get_probe_series(
       // Not computed by the kinematic solver; static/dynamic will fill this in.
       return { t: [], curves: [], unit: "N" };
   }
+}
+
+/** One measured quantity of an element at a given instant. */
+export interface MetricSample {
+  metric: ProbeMetric;
+  unit: string;
+  /** One entry per curve of the metric ("x"/"y"/"norm", or "value"). Empty when
+   *  the metric has no data yet (no snapshots, or not computed in this mode). */
+  values: { key: ProbeCurveKey; value: number }[];
+}
+
+/**
+ * The instantaneous value of `metric` at simulation time `t`: the same series
+ * `get_probe_series` plots, sampled at the recorded time closest to `t`.
+ */
+export function get_metric_at(
+  element: MechanicalElement,
+  metric: ProbeMetric,
+  snapshots: KinematicSnapshot[],
+  t: number,
+): MetricSample {
+  const series = get_probe_series(element, metric, snapshots);
+  if (series.t.length === 0) return { metric, unit: series.unit, values: [] };
+
+  // Nearest recorded sample: the series time axis is uniform (RECORD_DT), but
+  // scan for the closest rather than assume it — snapshots can start late.
+  let best = 0;
+  for (let i = 1; i < series.t.length; i++) {
+    if (Math.abs(series.t[i] - t) < Math.abs(series.t[best] - t)) best = i;
+  }
+  return {
+    metric,
+    unit: series.unit,
+    values: series.curves.map((c) => ({ key: c.key, value: c.values[best] })),
+  };
 }

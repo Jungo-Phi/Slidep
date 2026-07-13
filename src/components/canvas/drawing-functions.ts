@@ -522,14 +522,16 @@ export function draw_motor(ctx: CanvasRenderingContext2D, isGrounded: boolean) {
     ctx.lineWidth += 0.5;
   }
 
-  const inner = DIM.PIVOT_OUTER_RADIUS + 4.5;
+  const inner = DIM.PIVOT_OUTER_RADIUS + 3.5;
   const outer = DIM.MOTOR_RADIUS - 1;
 
   ctx.beginPath();
   ctx.moveTo(inner, 0);
   ctx.lineTo(outer, 0);
-  ctx.moveTo(0, inner);
-  ctx.lineTo(0, outer - (isGrounded ? 2 : 0));
+  if (!isGrounded) {
+    ctx.moveTo(0, inner);
+    ctx.lineTo(0, outer);
+  }
   ctx.moveTo(-inner, 0);
   ctx.lineTo(-outer, 0);
   ctx.moveTo(0, -inner);
@@ -648,6 +650,7 @@ export type BeltWinding = { growth: number; atStart: boolean };
  * centre never flips across it.
  */
 function belt_arc_radii(arc: BeltPiece, w?: BeltWinding): [number, number] {
+  if (arc.kind !== "arc") return [0, 0];
   const r = arc.radius;
   if (!w) return [r, r];
   const grown = Math.max(1, r + w.growth);
@@ -668,6 +671,7 @@ function append_belt_arc(
   rStart: number,
   rEnd: number,
 ) {
+  if (arc.kind !== "arc") return [0, 0];
   const sign = arc.direction ? -1 : 1;
   const steps = Math.max(8, Math.ceil((arc.wrap / TAU) * 48));
   for (let i = 0; i <= steps; i++) {

@@ -9,31 +9,35 @@
 
 - Analise des degrés de libertés en sous-parties
 
-- Highlight de la flèche sur le canvas (tu t'en charges)
 - Afficher les valeurs des forces sur le canvas
 
 - Déconnecter un join de courroie fermée doit l'ouvrir.
 - Créer une validation : une courroie ne peut être tendue que si ses 2 extrémitées sont connectées et qu'il y a au moins 2 gears
 - Créer une validation : une extrémité de courroie ne peut pas être à l'intérieur du gear adjascent
-- Le rayon à l'intérieur doit être empecher aussi si on déplace gear sur belt
 - Placer une courroie sur un engrenage en ayant déjà une doit briser la connection
 - Fusionner les connections start/end dans belt quand tendue
 - Preview quand placingBeltEnd ou on joit les 2 bouts
 - Placer une courroie en la fermant devrait bouger le join et pas la courroie (position du nouveau join = nearest_on_belt)
 - Placer moment on gearTooth
 - Hover on closed belt est inconcistant
+- La dimension belt doit pouvoir changer les rayons en édition
 
-- C'est quoi le vite.config.ts Manifest ?
 - De temps en temps, le snap to grid ne marche pas
 - Placer un engrenage sur un moteur laisse le moteur
 - Placer beltEnd après beltStart sur gear fait pas le attached
 
-- Contraintes (et angle) aussi avec les forces
+- Distinguer en simulation (et en édition ?) grab pour déplacer un élément (pas de sélection) de click pour le sélectionner
+- Escape de placingProbe ne fait pas sortir de l'onglet analyse
 
 ### À faire plus tard
 
 - unifier la méthode de catégories de canvasState dans get-hover et placing-element-actions
 
+- Filtre du numberInput à vérifier + accepter (-) selon le type de valeur
+- Permettre des calculs dans numberInput
+- Penser le panneau de : plusieurs éléments sélectionnés
+- Force ref : ajouter gear et belt en plus des edges
+- Ajouter un title="xxx" à tous les trailing controls
 - Changer les noms "MoveForceVector" et "MoveDistributedForceVector"
 - enlever les undefined de "SelectedElement"
 - Ajouter la probe au hover de l'élément ?
@@ -41,12 +45,13 @@
 - Alt pour désactiver le snapping ?
 - Option d'afficher la trajectoire avec des points
 - le hover delete de contrainte prend le meme style que le ghost de ctrl+y de supression
-- Clicker sur l'onglet éléments quand un élément est sélectionné le désélectionne
+- Clicker sur l'onglet "éléments" quand un élément est sélectionné le désélectionne et passe à l'affichage en liste
 - Unifier les "excluded_elements" et les conditions au début de "get_hover"
 - ground sur gearTooth ?
 - S'assurer qu'aucun élément du panneau de propriétés n'aie le focus (pas de "space = switch")
 - Transférer les propriétées de mesures au remplacement d'un node
 - Remplacemend d'un edge par un autre
+- Remplacement d'une contrainte/dimension par une autre
 - Visuel belt sur gearTooth confusant
 - Visuel beltEnd sur gearTooth, enroulement à penser
 - Ajouter une validation pour les positions des beltEnds par rapport aux gears
@@ -58,7 +63,7 @@
 - ChangeGearRadius ne met pas sa position sur le hover
 - update le hover quand on change de state ?
 - Fusionner les actions : mouvement + connections
-- se déplacer dans le temps de la simu avec les flèches & afficher autre chose que 30s quand vide
+- se déplacer dans le temps de la simu avec les flèches
 - le "ghost" de contrainte en rouge pour un ctrl+z devrait être barré
 - hover des inputs dans le property pannel -> hilight canvas
 - geometric-solver : Maintenir les longueurs des beams si possible. Maintenir l'orientation ce celui modifié si possible. Ignorer des grounds si nécessaire.
@@ -76,7 +81,7 @@
 - changer curseur sur ElementDisplay
 - changer le curseur sur les graphiques
 - pin graphique ?
-- zoom graphique (horiznotal = dans le temps)
+- zoom graphique (horizontal = dans le temps)
 - Afficher temps total de simu sur la progressbar
 - Faire le panneau de paramètre propre
 - placer un gear sur un slidep reste en slidep
@@ -139,10 +144,11 @@
 - changer le style du ground sur le moteur
 - Prefered force direction
 - afficher les forces en 2 modes (toe to head / head to toe)
-- Paramètre "Afficher les cercles" (trajectoires)
 - Option de colorer les éléments
+- Comment rendre visible les ctrl+y/z invisibles ? Ou on s'en fout ?
+- Changer la contrainte same length gears -> ratio 1:1 en une vraie contrainte same lengths
+- Contrainte de distance entre edges parallèles (qui fait aussi contrainte de parallélisme ?)
 - Créer un système d'unités (zoom de base : 1px = 1mm) à mettre dans les paramètres
-- taille des forces log autour d'un longueur de base Lb=100 ?
 - afficher le sens de rotation du moteur sur une des 4 directions cardinales (seulement au hover ?)
 - S'assurer que la police est toujours la même
 - Afficher "shown_name d'un élément au hover de celui-ci ?

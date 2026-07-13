@@ -2,6 +2,7 @@ import {
   ID,
   LoadFrame,
   MotorConfig,
+  OverlayKind,
   ProbeConfig,
   UnionElement,
 } from "./element";
@@ -282,8 +283,9 @@ export type Action =
       oldProbes: ProbeConfig[];
     }
   | {
-      type: "SetShowTrajectory";
+      type: "SetShowOverlay";
       elementID: ID;
+      kind: OverlayKind;
       newValue: boolean;
       oldValue: boolean;
     }

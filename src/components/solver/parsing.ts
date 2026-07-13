@@ -563,83 +563,66 @@ export function belt_length_link(
   // end-to-end distance (beam-like) via its no-active-gears branch.
   if (belt.tight || gears.length === 0) return base;
 
-  // ── Loose belt: open-belt terminal fields ──
-  // A terminal whose fixed node is pinned on a gear perimeter (winch: a join with a
-  // GearPerimeterPin) is driven externally — the constraint must not position it,
-  // only account for its wound arc. Everything else is a genuine free end.
-  const perimeterPinned = new Set<ID>();
-  for (const el of mechanicalElements)
-    if (el.type === "gear")
-      (el as GearElement).fixedNodesBodyIDs.forEach((id) =>
-        perimeterPinned.add(id),
-      );
-  const startExternal =
-    belt.fixedNodeStartID !== undefined &&
-    perimeterPinned.has(belt.fixedNodeStartID);
-  const endExternal =
-    belt.fixedNodeEndID !== undefined &&
-    perimeterPinned.has(belt.fixedNodeEndID);
+  // ── Loose belt. A terminal is a free end UNLESS it is JOINed to its own adjacent
+  // pulley — that is the winch: the join's GearPerimeterPin carries the end around, and
+  // the belt is paid out by the pulley's ARC, not by a tangent strand. A STATIC property
+  // of the mechanism (the join is there or it is not), never a runtime state.
+  const woundOn = (nodeId: ID | undefined, gearId: ID | undefined): boolean => {
+    if (!nodeId || !gearId) return false;
+    const g = gearById(gearId, byId);
+    return !!g && g.fixedNodesBodyIDs.includes(nodeId);
+  };
+  const startWound = woundOn(belt.fixedNodeStartID, gears[0]?.id);
+  const endWound = woundOn(belt.fixedNodeEndID, gears[gears.length - 1]?.id);
 
-  // A terminal placed ON its pulley (on the toothed rim) but WITHOUT a join is
-  // pre-baked as WOUND: it orbits with the gear from frame 1 (the runtime onGear
-  // trigger is tuned tight for smooth mid-run winding and would miss a terminal
-  // already on a tooth, up to GEAR_TEETH_SIZE beyond the rim).
-  const g0 = gearById(gears[0].id, byId);
-  const gL = gearById(gears[gears.length - 1].id, byId);
-  const onGear = (t: Point2, g: GearElement | null) =>
-    !!g && t.distance_to(g.position) <= g.radius + DIM.GEAR_TEETH_SIZE + 1;
-  const startWoundPre = !startExternal && onGear(belt.positionStart, g0);
-  const endWoundPre = !endExternal && onGear(belt.positionEnd, gL);
-
-  // Snap a pre-baked wound terminal to the RIM (same angle) for the baked geometry.
-  // The sim seats it on the rim at frame 1 (pinWound); if the baked length/diff0 used
-  // the drawn (off-rim, tooth) position instead, they'd disagree with the wound state
-  // and a FREE gear would jump at launch to absorb the mismatch. Bake from the rim.
-  const snap = (t: Point2, g: GearElement) =>
-    g.position.add(t.sub(g.position).normalize().mul(g.radius));
-  const startPos =
-    startWoundPre && g0 ? snap(belt.positionStart, g0) : belt.positionStart;
-  const endPos =
-    endWoundPre && gL ? snap(belt.positionEnd, gL) : belt.positionEnd;
+  // Length + differential from the drawn geometry; belt_pieces matches how the constraint
+  // measures length, so it starts in equilibrium.
   const svias: BeltVia[] = [
-    { pos: startPos, radius: 0, direction: false },
+    { pos: belt.positionStart, radius: 0, direction: false },
     ...gears.map(({ id, direction }) => {
       const g = gearById(id, byId)!;
       return { pos: g.position, radius: g.radius, direction };
     }),
-    { pos: endPos, radius: 0, direction: false },
+    { pos: belt.positionEnd, radius: 0, direction: false },
   ];
-
-  // Length + differential from the rim-snapped geometry (wound terminals contribute a
-  // 0-length free run and their arc; free terminals their tangent run). belt_pieces
-  // matches how the constraint measures length, so the initial config is in equilibrium.
   const pieces = belt_pieces(svias, false);
   const last = svias.length - 1;
   let fsStart0 = 0;
   let fsEnd0 = 0;
   for (const pc of pieces) {
     if (pc.kind !== "segment") continue;
-    if (pc.gearIndex === 0) fsStart0 = pc.length;
+    if (pc.gearIndexA === 0) fsStart0 = pc.length;
     if (pc.gearIndexB === last) fsEnd0 = pc.length;
   }
+  // Reference for the no-slip differential, in the SAME coordinate the constraint uses:
+  // h = fs ∓ r·sign·ψ, the terminal's belt arc-length in its pulley's frame. (The raw
+  // strand length is a V at the tangency point and cannot serve — see the constraint.)
+  const arcAt = (v: number) => {
+    const a = pieces.find((p) => p.kind === "arc" && p.gearIndex === v);
+    return a && a.kind === "arc" ? a : null;
+  };
+  const signOf = (v: number) => (svias[v].direction ? -1 : 1);
+  const arcS = arcAt(1);
+  const arcE = arcAt(last - 1);
+  const hStart0 = arcS
+    ? fsStart0 - svias[1].radius * signOf(1) * arcS.startAngle
+    : fsStart0;
+  const hEnd0 = arcE
+    ? fsEnd0 +
+      svias[last - 1].radius *
+        signOf(last - 1) *
+        (arcE.startAngle + signOf(last - 1) * arcE.wrap)
+    : fsEnd0;
+
   const loopLength = pieces.reduce((a, p) => a + p.length, 0);
-
-  const startWind = startWoundPre
-    ? startPos.sub(g0!.position).angle() - g0!.angle
-    : undefined;
-  const endWind = endWoundPre
-    ? endPos.sub(gL!.position).angle() - gL!.angle
-    : undefined;
-
   return {
     ...base,
     length: length ?? loopLength,
     phaseKey: belt_phase_key(belt.id),
-    diff0: fsStart0 - fsEnd0,
-    startExternal,
-    endExternal,
-    startWind,
-    endWind,
+    // Only the FREE ends enter the differential's reference.
+    diff0: (startWound ? 0 : hStart0) - (endWound ? 0 : hEnd0),
+    startWound,
+    endWound,
   };
 }
 

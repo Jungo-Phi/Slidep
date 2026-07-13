@@ -203,28 +203,35 @@ function angle_diff(a: number, b: number): number {
 }
 
 const SNAP_TOLERANCE_RAD = (8 * Math.PI) / 180;
+/** Tolerance to recognise an already-snapped direction as an edge/world axis. */
+const SNAP_MATCH_RAD = (1 * Math.PI) / 180;
+
+/** World axes (H/V) plus each edge's axial and normal directions, as angles. */
+function snap_candidate_angles(edges: EdgeElement[]): number[] {
+  const candidates = [0, Math.PI / 2, Math.PI, -Math.PI / 2];
+  for (const edge of edges) {
+    const beamAngle = edge.positionEnd.sub(edge.positionStart).angle();
+    for (let k = 0; k < 4; k++) candidates.push(beamAngle + (k * Math.PI) / 2);
+  }
+  return candidates;
+}
 
 /**
  * Snap a world-space load direction to the nearest meaningful axis (magnitude
- * preserved): the world horizontal/vertical axes, plus — when `edge` is given —
- * the edge's axial and normal directions. Returns the vector unchanged when no
- * candidate is within tolerance. Exact angles stay reachable via the panel.
+ * preserved): the world horizontal/vertical axes, plus each given edge's axial
+ * and normal directions. Returns the vector unchanged when no candidate is
+ * within tolerance. Exact angles stay reachable via the panel.
  */
 export function snap_direction(
   worldVec: Point2,
-  edge: EdgeElement | undefined,
+  edges: EdgeElement[],
 ): Point2 {
   const len = worldVec.length();
   if (len < 1e-6) return worldVec;
   const angle = worldVec.angle();
-  const candidates = [0, Math.PI / 2, Math.PI, -Math.PI / 2];
-  if (edge) {
-    const beamAngle = edge.positionEnd.sub(edge.positionStart).angle();
-    for (let k = 0; k < 4; k++) candidates.push(beamAngle + (k * Math.PI) / 2);
-  }
   let best = angle;
   let bestDiff = SNAP_TOLERANCE_RAD;
-  for (const c of candidates) {
+  for (const c of snap_candidate_angles(edges)) {
     const diff = Math.abs(angle_diff(angle, c));
     if (diff < bestDiff) {
       bestDiff = diff;
@@ -232,4 +239,55 @@ export function snap_direction(
     }
   }
   return best === angle ? worldVec : Point2.from_polar(len, best);
+}
+
+/**
+ * Reference frame implied by an (already snapped) direction: the edge whose
+ * axial/normal it lies on, or "world" — world axes take priority, so a direction
+ * that is both world-aligned and edge-aligned stays "world" (e.g. gravity down a
+ * vertical beam is not captured as a follower load).
+ */
+export function frame_from_snapped_direction(
+  worldVec: Point2,
+  edges: EdgeElement[],
+): LoadFrame {
+  if (worldVec.length() < 1e-6) return "world";
+  const angle = worldVec.angle();
+  for (let k = 0; k < 4; k++)
+    if (Math.abs(angle_diff(angle, (k * Math.PI) / 2)) < SNAP_MATCH_RAD)
+      return "world";
+  for (const edge of edges) {
+    const beamAngle = edge.positionEnd.sub(edge.positionStart).angle();
+    for (let k = 0; k < 4; k++)
+      if (Math.abs(angle_diff(angle, beamAngle + (k * Math.PI) / 2)) < SNAP_MATCH_RAD)
+        return { mode: "edge", edgeID: edge.id };
+  }
+  return "world";
+}
+
+/**
+ * Edges a force anchored at (targetID, anchor) can snap to / reference: for a
+ * node target, all its attached edges; for an edge target, that edge plus the
+ * edges of the node fixed at the anchored endpoint.
+ */
+export function force_snap_edges(
+  targetID: ID,
+  anchor: "start" | "end" | undefined,
+  mechanicalElements: MechanicalElement[],
+): EdgeElement[] {
+  const target = mechanicalElements.find((e) => e.id === targetID);
+  if (!target) return [];
+  if (!("positionStart" in target))
+    return node_candidate_edges(target, mechanicalElements);
+  const edge = target as EdgeElement;
+  const edges: EdgeElement[] = [edge];
+  const nodeID = anchor === "end" ? edge.fixedNodeEndID : edge.fixedNodeStartID;
+  const node = nodeID
+    ? mechanicalElements.find((e) => e.id === nodeID)
+    : undefined;
+  if (node && !("positionStart" in node)) {
+    for (const e of node_candidate_edges(node, mechanicalElements))
+      if (!edges.some((x) => x.id === e.id)) edges.push(e);
+  }
+  return edges;
 }

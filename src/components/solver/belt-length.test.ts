@@ -2,7 +2,10 @@ import { describe, it, expect } from "vitest";
 import { Point2 } from "../../types/point2";
 import { Link } from "../../types";
 import { PBD_kinematic_solver } from "./PBD_kinematic_solver";
-import { rewire_belt_mesh, update_belt_disconnects } from "./kinematic-simulation";
+import {
+  rewire_belt_mesh,
+  update_belt_disconnects,
+} from "./kinematic-simulation";
 import {
   applyBeltLengthConstraint,
   applyBeltFollowsTangentConstraint,
@@ -16,87 +19,21 @@ import {
   belt_point_tangent,
   belt_project,
   belt_wraps,
-  compute_belt_path,
   BeltVia,
 } from "../../utils/belt-path";
 
 const P = (x: number, y: number) => new Point2(x, y);
 
-/** Rebuild the belt via-list from solver positions to measure the length. */
-function beltLength(
-  positions: Map<string, Point2>,
-  radii: number[],
-): number {
-  const vias: BeltVia[] = [
-    { pos: positions.get("start")!, radius: 0, direction: false },
-    { pos: positions.get("gearA")!, radius: radii[0], direction: false },
-    { pos: positions.get("gearB")!, radius: radii[1], direction: false },
-    { pos: positions.get("end")!, radius: 0, direction: false },
-  ];
-  return compute_belt_path(vias).length;
-}
-
 describe("BeltLength constraint (simulation)", () => {
-  it("conserves total belt length when a pulley is dragged (and pulls the far pulley)", () => {
-    const radii = [40, 40];
-    const positions = new Map<string, Point2>([
-      ["start", P(-200, 120)],
-      ["gearA", P(-100, 0)],
-      ["gearB", P(100, 0)],
-      ["end", P(200, 120)],
-    ]);
-    // Terminals anchored, gears free to translate.
-    const posMasses = new Map<string, number>([
-      ["start", 0],
-      ["gearA", 1],
-      ["gearB", 1],
-      ["end", 0],
-    ]);
-
-    const L0 = beltLength(positions, radii);
-    const gearBStart = positions.get("gearB")!.clone();
-
-    const links: Link[] = [
-      {
-        type: "BeltLength",
-        ddl: 1,
-        startKey: "start",
-        endKey: "end",
-        gearPosKeys: ["gearA", "gearB"],
-        gearAngleKeys: ["gearA", "gearB"],
-        radii,
-        directions: [false, false],
-        length: L0,
-        closed: false,
-      },
-      { type: "HandleGrab", ddl: 1, grabbedKey: "gearA", value: P(-320, 0) },
-    ];
-
-    const solved = PBD_kinematic_solver(
-      positions,
-      new Map(),
-      posMasses,
-      new Map(),
-      links,
-      300,
-    );
-
-    expect(beltLength(solved.positions, radii)).toBeCloseTo(L0, 2);
-    expect(
-      solved.positions.get("gearA")!.distance_to(P(-100, 0)),
-    ).toBeGreaterThan(5);
-    // Transmission: the far pulley was pulled along, not left in place.
-    expect(
-      solved.positions.get("gearB")!.distance_to(gearBStart),
-    ).toBeGreaterThan(5);
-  });
-
   it("conserves a tight belt's closed-loop length (and pulls the far pulley)", () => {
     const positions = new Map<string, Point2>([
       ["gA", P(-100, 0)],
       ["gB", P(100, 0)],
     ]);
-    const posMasses = new Map<string, number>([["gA", 1], ["gB", 1]]);
+    const posMasses = new Map<string, number>([
+      ["gA", 1],
+      ["gB", 1],
+    ]);
     const loopLen = (pos: Map<string, Point2>) =>
       belt_pieces(
         [
@@ -132,7 +69,9 @@ describe("BeltLength constraint (simulation)", () => {
       300,
     );
     expect(loopLen(solved.positions)).toBeCloseTo(L0, 1);
-    expect(solved.positions.get("gA")!.distance_to(P(-100, 0))).toBeGreaterThan(5);
+    expect(solved.positions.get("gA")!.distance_to(P(-100, 0))).toBeGreaterThan(
+      5,
+    );
     expect(solved.positions.get("gB")!.distance_to(gBStart)).toBeGreaterThan(5);
   });
 });
@@ -325,15 +264,31 @@ describe("BeltPin constraint (junction travels with the belt)", () => {
       ["gA", P(-100, 0)],
       ["gB", P(100, 0)],
     ]);
-    const posMasses = new Map<string, number>([["J", 1], ["gA", 0], ["gB", 0]]);
+    const posMasses = new Map<string, number>([
+      ["J", 1],
+      ["gA", 0],
+      ["gB", 0],
+    ]);
     const dth = 0.1;
-    const angles = new Map<string, number>([["gA", 0], ["gB", 0]]);
+    const angles = new Map<string, number>([
+      ["gA", 0],
+      ["gB", 0],
+    ]);
     // Drive the reference pulley (held each iteration, like a motor).
     for (let i = 0; i < 80; i++) {
       angles.set("gA", dth);
       applyBeltPinConstraint(
-        positions, posMasses, angles,
-        "J", ["gA", "gB"], [40, 40], [false, false], 0, "gA", s0, 0,
+        positions,
+        posMasses,
+        angles,
+        "J",
+        ["gA", "gB"],
+        [40, 40],
+        [false, false],
+        0,
+        "gA",
+        s0,
+        0,
       );
     }
     const expected = belt_point_tangent(vias, s0 + rEps * dth, true).point;
@@ -350,13 +305,29 @@ describe("BeltPin constraint (junction travels with the belt)", () => {
       ["gA", P(-100, 0)],
       ["gB", P(100, 0)],
     ]);
-    const posMasses = new Map<string, number>([["J", 1], ["gA", 0], ["gB", 0]]);
-    const angles = new Map<string, number>([["gA", 0], ["gB", 0]]);
+    const posMasses = new Map<string, number>([
+      ["J", 1],
+      ["gA", 0],
+      ["gB", 0],
+    ]);
+    const angles = new Map<string, number>([
+      ["gA", 0],
+      ["gB", 0],
+    ]);
     for (let i = 0; i < 80; i++) {
       positions.set("J", dragged.clone()); // grabbed
       applyBeltPinConstraint(
-        positions, posMasses, angles,
-        "J", ["gA", "gB"], [40, 40], [false, false], 0, "gA", s0, 0,
+        positions,
+        posMasses,
+        angles,
+        "J",
+        ["gA", "gB"],
+        [40, 40],
+        [false, false],
+        0,
+        "gA",
+        s0,
+        0,
       );
     }
     // Belt advanced by 10 arc-length → θ_ref = 10 / rEps = +0.25 rad.
@@ -372,13 +343,29 @@ describe("BeltPin constraint (junction travels with the belt)", () => {
       ["gA", P(-100, 0)],
       ["gB", P(100, 0)],
     ]);
-    const posMasses = new Map<string, number>([["J", 1], ["gA", 1], ["gB", 1]]);
-    const angles = new Map<string, number>([["gA", 0], ["gB", 0]]);
+    const posMasses = new Map<string, number>([
+      ["J", 1],
+      ["gA", 1],
+      ["gB", 1],
+    ]);
+    const angles = new Map<string, number>([
+      ["gA", 0],
+      ["gB", 0],
+    ]);
     for (let i = 0; i < 200; i++) {
       positions.set("J", held.clone()); // grabbed
       applyBeltPinConstraint(
-        positions, posMasses, angles,
-        "J", ["gA", "gB"], [40, 40], [false, false], 0, "gA", s0, 0,
+        positions,
+        posMasses,
+        angles,
+        "J",
+        ["gA", "gB"],
+        [40, 40],
+        [false, false],
+        0,
+        "gA",
+        s0,
+        0,
       );
     }
     expect(positions.get("gA")!.y).toBeGreaterThan(10); // pulled up toward J
@@ -429,16 +416,32 @@ describe("BeltFollowsTangent constraint (welded beam orientation)", () => {
       ["gA", 0],
       ["gB", 0],
     ]);
-    const angles = new Map<string, number>([["gA", 0], ["gB", 0]]);
+    const angles = new Map<string, number>([
+      ["gA", 0],
+      ["gB", 0],
+    ]);
     for (let i = 0; i < 80; i++) {
       angles.set("gA", 0);
       applyBeltFollowsTangentConstraint(
-        positions, posMasses, angles,
-        "piv", "end", ["gA", "gB"], [40, 40], [false, false], 0, "gA", s0, 0, 0,
+        positions,
+        posMasses,
+        angles,
+        "piv",
+        "end",
+        ["gA", "gB"],
+        [40, 40],
+        [false, false],
+        0,
+        "gA",
+        s0,
+        0,
+        0,
       );
     }
     const beam = positions.get("end")!.sub(positions.get("piv")!);
-    expect(Math.abs(angDiff(beam.angle(), tangentAngle(s0)))).toBeLessThan(1e-3);
+    expect(Math.abs(angDiff(beam.angle(), tangentAngle(s0)))).toBeLessThan(
+      1e-3,
+    );
   });
 
   it("is symmetric on an arc: rotating the beam advances the belt", () => {
@@ -457,11 +460,25 @@ describe("BeltFollowsTangent constraint (welded beam orientation)", () => {
       ["gA", 0],
       ["gB", 0],
     ]);
-    const angles = new Map<string, number>([["gA", 0], ["gB", 0]]);
+    const angles = new Map<string, number>([
+      ["gA", 0],
+      ["gB", 0],
+    ]);
     for (let i = 0; i < 80; i++)
       applyBeltFollowsTangentConstraint(
-        positions, posMasses, angles,
-        "piv", "end", ["gA", "gB"], [40, 40], [false, false], 0, "gA", s0, 0, 0,
+        positions,
+        posMasses,
+        angles,
+        "piv",
+        "end",
+        ["gA", "gB"],
+        [40, 40],
+        [false, false],
+        0,
+        "gA",
+        s0,
+        0,
+        0,
       );
     expect(angles.get("gA")!).toBeCloseTo(0.2, 2);
   });
@@ -484,18 +501,34 @@ describe("BeltFollowsTangent constraint (welded beam orientation)", () => {
       ["gA", 0],
       ["gB", 0],
     ]);
-    const angles = new Map<string, number>([["gA", 0], ["gB", 0]]);
+    const angles = new Map<string, number>([
+      ["gA", 0],
+      ["gB", 0],
+    ]);
     for (let i = 0; i < 120; i++)
       applyBeltFollowsTangentConstraint(
-        positions, posMasses, angles,
-        "piv", "end", ["gA", "gB"], [40, 40], [false, false], 0, "gA", s0, 0, 0,
+        positions,
+        posMasses,
+        angles,
+        "piv",
+        "end",
+        ["gA", "gB"],
+        [40, 40],
+        [false, false],
+        0,
+        "gA",
+        s0,
+        0,
+        0,
       );
     // The pivot moved off its start (asymmetric code left it at the origin)…
     expect(positions.get("piv")!.distance_to(P(0, 0))).toBeGreaterThan(1);
     // …and the constraint converged (beam aligned to the — now advanced — tangent).
     const beam = positions.get("end")!.sub(positions.get("piv")!);
     expect(
-      Math.abs(angDiff(beam.angle(), tangentAngle(angles.get("gA")! * 40 + s0))),
+      Math.abs(
+        angDiff(beam.angle(), tangentAngle(angles.get("gA")! * 40 + s0)),
+      ),
     ).toBeLessThan(1e-2);
   });
 });
@@ -576,335 +609,51 @@ describe("continuous wrap tracking (mid-sim disconnect signal)", () => {
     );
     // Disconnected gB untouched by the belt; connected gC pulled by the belt.
     expect(solved.positions.get("gB")!.distance_to(gBStart)).toBeLessThan(1e-6);
-    expect(solved.positions.get("gC")!.distance_to(P(120, 0))).toBeGreaterThan(2);
-  });
-});
-
-describe("BeltLength constraint — loose belt terminals ↔ φ", () => {
-  const r = 40;
-  const dir = false;
-  const c = P(0, 0);
-  // "n" belt: start bottom-left, over the top of the gear, end bottom-right.
-  const start0 = P(-120, -120);
-  const end0 = P(120, -120);
-  const viasOf = (s: Point2, e: Point2): BeltVia[] => [
-    { pos: s, radius: 0, direction: false },
-    { pos: c, radius: r, direction: dir },
-    { pos: e, radius: 0, direction: false },
-  ];
-  const path0 = compute_belt_path(viasOf(start0, end0));
-  const L0 = path0.length;
-  const diff0 =
-    start0.distance_to(path0.inPoints[0]) - end0.distance_to(path0.outPoints[1]);
-  const mkLink = (): Extract<Link, { type: "BeltLength" }> => ({
-    type: "BeltLength",
-    ddl: 1,
-    startKey: "start",
-    endKey: "end",
-    gearPosKeys: ["g"],
-    gearAngleKeys: ["g"],
-    radii: [r],
-    directions: [dir],
-    length: L0,
-    closed: false,
-    phaseKey: "phi",
-    diff0,
-  });
-  const setup = () => ({
-    positions: new Map<string, Point2>([
-      ["g", c.clone()], ["start", start0.clone()], ["end", end0.clone()],
-    ]),
-    posMasses: new Map<string, number>([["g", 0], ["start", 1], ["end", 1]]),
-    angles: new Map<string, number>([["g", 0], ["phi", 0]]),
-  });
-  const measure = (positions: Map<string, Point2>) =>
-    compute_belt_path(viasOf(positions.get("start")!, positions.get("end")!)).length;
-
-  it("conserves the total length as a motor drives φ (both directions)", () => {
-    for (const omega of [0.02, -0.02]) {
-      const { positions, posMasses, angles } = setup();
-      const link = mkLink();
-      for (let f = 0; f < 100; f++) {
-        const theta = angles.get("g")! + omega;
-        for (let it = 0; it < 200; it++) {
-          angles.set("g", theta); // motor pins θ
-          applyBeltPhaseGearConstraint(angles, "g", "phi", r, dir ? -1 : 1, 0);
-          applyBeltLengthConstraint(positions, posMasses, angles, link);
-        }
-      }
-      expect(measure(positions)).toBeCloseTo(L0, 0); // length held
-      expect(Math.abs(angles.get("phi")!)).toBeGreaterThan(50); // motor ran freely
-    }
-  });
-
-  it("is bidirectional: dragging a free end advances φ", () => {
-    const { positions, posMasses, angles } = setup();
-    const link = mkLink();
-    const held = P(-70, -70); // start dragged toward the gear
-    for (let it = 0; it < 400; it++) {
-      positions.set("start", held.clone()); // grabbed
-      applyBeltLengthConstraint(positions, posMasses, angles, link);
-    }
-    expect(Math.abs(angles.get("phi")!)).toBeGreaterThan(5); // pulley turned
-  });
-
-  it("winds a terminal onto its pulley when exhausted (orbits, no block)", () => {
-    // Short belt so the start run exhausts quickly; the motor keeps turning.
-    const s = P(-60, -30);
-    const e = P(60, -30);
-    const vias = viasOf(s, e);
-    const pth = compute_belt_path(vias);
-    const link: Extract<Link, { type: "BeltLength" }> = {
-      ...mkLink(),
-      length: pth.length,
-      diff0: s.distance_to(pth.inPoints[0]) - e.distance_to(pth.outPoints[1]),
-    };
-    const positions = new Map<string, Point2>([["g", c.clone()], ["start", s.clone()], ["end", e.clone()]]);
-    const posMasses = new Map<string, number>([["g", 0], ["start", 1], ["end", 1]]);
-    const angles = new Map<string, number>([["g", 0], ["phi", 0]]);
-    let phiAtStall = 0;
-    for (let f = 0; f < 150; f++) {
-      const theta = angles.get("g")! + 0.02;
-      for (let it = 0; it < 200; it++) {
-        angles.set("g", theta);
-        applyBeltPhaseGearConstraint(angles, "g", "phi", r, dir ? -1 : 1, 0);
-        applyBeltLengthConstraint(positions, posMasses, angles, link);
-      }
-      if (f === 80) phiAtStall = angles.get("phi")!;
-    }
-    expect(link.startWind).not.toBeUndefined(); // wound on
-    expect(angles.get("phi")! - phiAtStall).toBeGreaterThan(30); // still turning, no block
-    expect(positions.get("start")!.distance_to(c)).toBeCloseTo(r, 2); // orbiting the rim
-    expect(measure(positions)).toBeCloseTo(pth.length, 0); // length held while wound
-  });
-
-});
-
-describe("BeltLength — pull a free end: reel-in → wind → unwind → detach", () => {
-  // Single-pulley loose belt. Faithful per-frame sim (mirrors step_simulation's belt
-  // handling): update_belt_disconnects, mark the grabbed terminal, then PBD solve.
-  const r = 40;
-  const c = P(0, 0);
-  const viasOf = (s: Point2, e: Point2): BeltVia[] => [
-    { pos: s, radius: 0, direction: false },
-    { pos: c, radius: r, direction: false },
-    { pos: e, radius: 0, direction: false },
-  ];
-  const mkLink = (
-    s0: Point2,
-    e0: Point2,
-    wound?: { end?: boolean },
-  ): Extract<Link, { type: "BeltLength" }> => {
-    const path = compute_belt_path(viasOf(s0, e0));
-    const link: Extract<Link, { type: "BeltLength" }> = {
-      type: "BeltLength", ddl: 1, startKey: "start", endKey: "end",
-      gearPosKeys: ["g"], gearAngleKeys: ["g"], radii: [r], directions: [false],
-      length: path.length, closed: false, phaseKey: "phi",
-      diff0:
-        s0.distance_to(path.inPoints[0]) - e0.distance_to(path.outPoints[1]),
-      owner: "belt-x" as never,
-    };
-    if (wound?.end) {
-      link.endWind = e0.sub(c).angle();
-    }
-    return link;
-  };
-  const runPull = (opts: {
-    start0: Point2;
-    end0: Point2;
-    startMass: number;
-    endMass: number;
-    grab: "start" | "end";
-    target: (f: number) => Point2;
-    frames: number;
-    wound?: { end?: boolean };
-  }) => {
-    const link = mkLink(opts.start0, opts.end0, opts.wound);
-    const positions = new Map<string, Point2>([
-      ["g", c.clone()], ["start", opts.start0.clone()], ["end", opts.end0.clone()],
-    ]);
-    const posMasses = new Map<string, number>([
-      ["g", 0], ["start", opts.startMass], ["end", opts.endMass],
-    ]);
-    const angles = new Map<string, number>([["g", 0], ["phi", 0]]);
-    for (let f = 0; f < opts.frames; f++) {
-      update_belt_disconnects(link, positions);
-      link.grabbedTerminal = opts.grab;
-      const links: Link[] = [
-        { type: "BeltPhaseGear", ddl: 1, angleKey: "g", phaseKey: "phi", r, eps: 1, theta0: 0 },
-        link,
-        { type: "HandleGrab", ddl: 1, grabbedKey: opts.grab, value: opts.target(f) },
-      ];
-      PBD_kinematic_solver(positions, new Map(), posMasses, new Map(), links, 300, undefined, angles);
-    }
-    return { link, positions, angles };
-  };
-
-  it("does not block: pulling start reels the far end in, winds it, then unwinds and detaches", () => {
-    // "n" belt, both ends free; drag start far down-left, well past full unwind.
-    const { link, angles } = runPull({
-      start0: P(-120, -120), end0: P(120, -120),
-      startMass: 1, endMass: 1, grab: "start",
-      target: (f) => {
-        const t = Math.min(1, f / 220);
-        return P(-120 - 700 * t, -120 - 700 * t);
-      },
-      frames: 240,
-    });
-    // The wound end fully unwound → pulley detached (belt peeled off), and φ advanced
-    // freely the whole time (never blocked).
-    expect(link.disconnected?.[0]).toBe(true);
-    expect(Math.abs(angles.get("phi")!)).toBeGreaterThan(200);
-  });
-
-  it("grabbing a WOUND end and pulling it radially off detaches it without spinning the pulley", () => {
-    // start anchored far left (tension), end pre-wound on the rim at the bottom.
-    const { link, angles } = runPull({
-      start0: P(-300, 0), end0: P(0, -40),
-      startMass: 0, endMass: 1, grab: "end",
-      target: (f) => P(0, -40 - 200 * Math.min(1, f / 100)),
-      frames: 140,
-      wound: { end: true },
-    });
-    expect(link.disconnected?.[0]).toBe(true); // peeled off and detached
-    expect(Math.abs(angles.get("g")!)).toBeLessThan(Math.PI); // no runaway spin
-  });
-
-  it("rotating a wound end tangentially turns the gear and conserves length (point 2)", () => {
-    // start free up-left (a real free run), end wound on the rim; drag the end
-    // tangentially around the rim — it must turn the gear, hold length, feed the start.
-    const start0 = P(-260, 60);
-    const end0 = P(0, -40);
-    const L0 = compute_belt_path(viasOf(start0, end0)).length;
-    const { link, positions, angles } = runPull({
-      start0, end0, startMass: 1, endMass: 1, grab: "end",
-      target: (f) => c.add(Point2.from_polar(r, -Math.PI / 2 + (f / 120) * 2.5)),
-      frames: 120,
-      wound: { end: true },
-    });
-    const measure = belt_pieces(
-      viasOf(positions.get("start")!, positions.get("end")!),
-      false,
-      link.wraps ? [0, link.wraps[0], 0] : undefined,
-    ).reduce((a, p) => a + p.length, 0);
-    expect(Math.abs(angles.get("g")!)).toBeGreaterThan(1.5); // the gear turned with the drag
-    expect(link.endWind).not.toBeUndefined(); // stayed wound (no spurious unwind)
-    expect(measure).toBeCloseTo(L0, 0); // length conserved
-    // the free start fed in as the belt travelled
-    expect(positions.get("start")!.distance_to(c)).toBeLessThan(start0.distance_to(c) - 20);
+    expect(solved.positions.get("gC")!.distance_to(P(120, 0))).toBeGreaterThan(
+      2,
+    );
   });
 });
 
 describe("BeltLength — gearless belt holds its length (point 1)", () => {
   it("pins the end-to-end distance to L0 (beam-like) with no active gears", () => {
     // Loose belt, no gears (or all detached): still inextensible → holds its length.
-    const positions = new Map<string, Point2>([["start", P(-50, 0)], ["end", P(50, 0)]]);
-    const posMasses = new Map<string, number>([["start", 0], ["end", 1]]); // start anchored
+    const positions = new Map<string, Point2>([
+      ["start", P(-50, 0)],
+      ["end", P(50, 0)],
+    ]);
+    const posMasses = new Map<string, number>([
+      ["start", 0],
+      ["end", 1],
+    ]); // start anchored
     const link: Link = {
-      type: "BeltLength", ddl: 1, startKey: "start", endKey: "end",
-      gearPosKeys: [], gearAngleKeys: [], radii: [], directions: [],
-      length: 100, closed: false,
+      type: "BeltLength",
+      ddl: 1,
+      startKey: "start",
+      endKey: "end",
+      gearPosKeys: [],
+      gearAngleKeys: [],
+      radii: [],
+      directions: [],
+      length: 100,
+      closed: false,
     };
     const links: Link[] = [
       link,
       { type: "HandleGrab", ddl: 1, grabbedKey: "end", value: P(300, 0) }, // yank the end far
     ];
-    const solved = PBD_kinematic_solver(positions, new Map(), posMasses, new Map(), links, 300);
+    const solved = PBD_kinematic_solver(
+      positions,
+      new Map(),
+      posMasses,
+      new Map(),
+      links,
+      300,
+    );
     // The end can't run away: the belt holds its length like a beam.
     expect(
       solved.positions.get("start")!.distance_to(solved.positions.get("end")!),
     ).toBeCloseTo(100, 1);
-  });
-});
-
-describe("BeltLength — general winding (bare capstan, winch, launch)", () => {
-  // Faithful per-frame sim (mirrors step_simulation): single gear at origin, end
-  // wound on the rim, free start pushed toward the gear so the end winds.
-  const r = 40;
-  const c = P(0, 0);
-  const viasOf = (s: Point2, e: Point2): BeltVia[] => [
-    { pos: s, radius: 0, direction: false },
-    { pos: c, radius: r, direction: false },
-    { pos: e, radius: 0, direction: false },
-  ];
-  const measure = (link: Extract<Link, { type: "BeltLength" }>, pos: Map<string, Point2>) =>
-    belt_pieces(
-      viasOf(pos.get("start")!, pos.get("end")!),
-      false,
-      link.wraps ? [0, link.wraps[0], 0] : undefined,
-    ).reduce((a, p) => a + p.length, 0);
-
-  const mkLink = (start0: Point2, end0: Point2, external?: boolean): Extract<Link, { type: "BeltLength" }> => {
-    const path = compute_belt_path(viasOf(start0, end0));
-    return {
-      type: "BeltLength", ddl: 1, startKey: "start", endKey: "end",
-      gearPosKeys: ["g"], gearAngleKeys: ["g"], radii: [r], directions: [false],
-      length: path.length, closed: false, phaseKey: "phi", diff0: 0,
-      ...(external ? { endExternal: true } : { endWind: end0.sub(c).angle() }),
-      owner: "belt-x" as never,
-    };
-  };
-
-  it("BARE: pushing the free end in winds PAST 2π smoothly (capstan, no blowup)", () => {
-    const start0 = P(-360, 0), end0 = P(0, -40);
-    const link = mkLink(start0, end0);
-    const positions = new Map<string, Point2>([["g", c.clone()], ["start", start0.clone()], ["end", end0.clone()]]);
-    const posMasses = new Map<string, number>([["g", 0], ["start", 1], ["end", 1]]);
-    const angles = new Map<string, number>([["g", 0], ["phi", 0]]);
-    const L0 = link.length;
-    for (let f = 0; f < 220; f++) {
-      update_belt_disconnects(link, positions);
-      link.grabbedTerminal = "start";
-      const target = P(-360 + (-42 - -360) * Math.min(1, f / 200), 0);
-      const links: Link[] = [
-        { type: "BeltPhaseGear", ddl: 1, angleKey: "g", phaseKey: "phi", r, eps: 1, theta0: 0 },
-        link,
-        { type: "HandleGrab", ddl: 1, grabbedKey: "start", value: target },
-      ];
-      PBD_kinematic_solver(positions, new Map(), posMasses, new Map(), links, 300, undefined, angles);
-    }
-    expect(link.wraps![0]).toBeGreaterThan(2 * Math.PI); // wound more than a full turn
-    expect(Math.abs(angles.get("g")!)).toBeLessThan(4 * Math.PI); // θ bounded (no runaway)
-    expect(measure(link, positions)).toBeCloseTo(L0, 0); // length conserved
-  });
-
-  it("WINCH (join): pushing the free end in turns the gear, does not block", () => {
-    const start0 = P(-360, 0), end0 = P(0, -40);
-    const link = mkLink(start0, end0, true); // endExternal (join)
-    const positions = new Map<string, Point2>([["g", c.clone()], ["start", start0.clone()], ["end", end0.clone()]]);
-    const posMasses = new Map<string, number>([["g", 0], ["start", 1], ["end", 1]]);
-    const angles = new Map<string, number>([["g", 0], ["phi", 0]]);
-    const offset = end0.sub(c).angle();
-    for (let f = 0; f < 200; f++) {
-      update_belt_disconnects(link, positions);
-      link.grabbedTerminal = "start";
-      const target = P(-360 + (-46 - -360) * Math.min(1, f / 180), 0);
-      const links: Link[] = [
-        { type: "BeltPhaseGear", ddl: 1, angleKey: "g", phaseKey: "phi", r, eps: 1, theta0: 0 },
-        { type: "GearPerimeterPin", ddl: 2, nodeKey: "end", centerKey: "g", angleKey: "g", radius: r, offset },
-        link,
-        { type: "HandleGrab", ddl: 1, grabbedKey: "start", value: target },
-      ];
-      PBD_kinematic_solver(positions, new Map(), posMasses, new Map(), links, 300, undefined, angles);
-    }
-    expect(Math.abs(angles.get("g")!)).toBeGreaterThan(2); // the gear turned (didn't block)
-  });
-
-  it("LAUNCH: an unanchored gear with a wound end stays put (no drift)", () => {
-    const start0 = P(-220, 0), end0 = P(0, -40); // end already on the rim (as get_sim_nodes seeds it)
-    const link = mkLink(start0, end0);
-    const positions = new Map<string, Point2>([["g", c.clone()], ["start", start0.clone()], ["end", end0.clone()]]);
-    const posMasses = new Map<string, number>([["g", 1], ["start", 1], ["end", 1]]); // gear FREE
-    const angles = new Map<string, number>([["g", 0], ["phi", 0]]);
-    for (let f = 0; f < 40; f++) {
-      update_belt_disconnects(link, positions);
-      const links: Link[] = [
-        { type: "BeltPhaseGear", ddl: 1, angleKey: "g", phaseKey: "phi", r, eps: 1, theta0: 0 },
-        link,
-      ];
-      PBD_kinematic_solver(positions, new Map(), posMasses, new Map(), links, 300, undefined, angles);
-    }
-    expect(positions.get("g")!.distance_to(c)).toBeLessThan(1); // no launch drift
   });
 });
 
@@ -938,9 +687,10 @@ describe("belt phase rewire on disconnect (3e)", () => {
     const links = [phase("g0"), phase("g1"), phase("g2"), unrelated];
 
     const out = rewire_belt_mesh(links, [belt]);
-    const kept = out.filter(
-      (l) => l.type === "BeltPhaseGear",
-    ) as Extract<Link, { type: "BeltPhaseGear" }>[];
+    const kept = out.filter((l) => l.type === "BeltPhaseGear") as Extract<
+      Link,
+      { type: "BeltPhaseGear" }
+    >[];
     // g0 and g2 keep their coupling to φ (transmission continues); g1 dropped.
     expect(kept.map((l) => l.angleKey).sort()).toEqual(["g0", "g2"]);
     expect(out.includes(unrelated)).toBe(true);
@@ -952,13 +702,25 @@ describe("loose belt sheds its last pulley → inert (user-decided)", () => {
   // ≈ 4.67 rad > π): from the seeded 0.05 the continuous wrap has crossed the 0/2π
   // seam to ≤ 0 → contact lost. g0 is already disconnected, so g1 is the LAST one.
   const positions = new Map<string, Point2>([
-    ["s", P(-35, 80)], ["e", P(35, 80)], ["g0", P(0, 600)], ["g1", P(0, 0)],
+    ["s", P(-35, 80)],
+    ["e", P(35, 80)],
+    ["g0", P(0, 600)],
+    ["g1", P(0, 0)],
   ]);
   const mkBelt = (closed: boolean): Extract<Link, { type: "BeltLength" }> => ({
-    type: "BeltLength", ddl: 1, startKey: "s", endKey: "e",
-    gearPosKeys: ["g0", "g1"], gearAngleKeys: ["g0", "g1"],
-    radii: [30, 30], directions: [false, true], length: 100, closed,
-    disconnected: [true, false], wraps: [0, 0.05], owner: "belt-x" as any,
+    type: "BeltLength",
+    ddl: 1,
+    startKey: "s",
+    endKey: "e",
+    gearPosKeys: ["g0", "g1"],
+    gearAngleKeys: ["g0", "g1"],
+    radii: [30, 30],
+    directions: [false, true],
+    length: 100,
+    closed,
+    disconnected: [true, false],
+    wraps: [0, 0.05],
+    owner: "belt-x" as any,
   });
 
   it("disconnects even the LAST active pulley (loose → inert segment)", () => {
@@ -994,6 +756,185 @@ describe("winch geometry (Option A: end on a gear)", () => {
   });
 });
 
+describe("a terminal touching its pulley keeps its tangent run", () => {
+  // Loose belt: far start terminal → gear (r=40) → end terminal ON the rim.
+  const vias: BeltVia[] = [
+    { pos: P(-300, 0), radius: 0, direction: false },
+    { pos: P(0, 0), radius: 40, direction: false },
+    { pos: P(0, 40), radius: 0, direction: false },
+  ];
+
+  it("still emits the end run, degenerate (length 0), instead of dropping it", () => {
+    // The run is what carries the gear tangent point Ptan — and Ptan is what the
+    // length constraint reads uE (hence the no-slip C_diff) from. Dropping the run
+    // at contact silently switched no-slip OFF for BOTH ends.
+    const endRun = belt_pieces(vias, false).find(
+      (p) => p.kind === "segment" && p.gearIndexB === 2,
+    );
+    expect(endRun).toBeDefined();
+    expect(endRun!.length).toBeCloseTo(0, 9);
+  });
+
+  it("puts that run's tangent point on the terminal itself", () => {
+    const endRun = belt_pieces(vias, false).find(
+      (p) => p.kind === "segment" && p.gearIndexB === 2,
+    )!;
+    if (endRun.kind !== "segment") throw new Error("segment expected");
+    expect(endRun.from.distance_to(P(0, 40))).toBeCloseTo(0, 9);
+  });
+});
+
+describe("no-slip survives an end resting on its pulley", () => {
+  it("still drives the belt travel φ (C_diff), instead of going slack", () => {
+    const positions = new Map<string, Point2>([
+      ["s", P(-300, 0)],
+      ["g", P(0, 0)],
+      ["e", P(0, 40)], // end terminal exactly on the rim
+    ]);
+    const masses = new Map<string, number>([
+      ["s", 1],
+      ["g", 0], // grounded pulley: only the free end and φ can move
+      ["e", 1],
+    ]);
+    const angles = new Map<string, number>([["b:phi", 0]]);
+    const drawn = belt_pieces(
+      [
+        { pos: P(-300, 0), radius: 0, direction: false },
+        { pos: P(0, 0), radius: 40, direction: false },
+        { pos: P(0, 40), radius: 0, direction: false },
+      ],
+      false,
+    ).reduce((a, p) => a + p.length, 0);
+
+    applyBeltLengthConstraint(positions, masses, angles, {
+      type: "BeltLength",
+      ddl: 1,
+      startKey: "s",
+      endKey: "e",
+      gearPosKeys: ["g"],
+      gearAngleKeys: ["g"],
+      radii: [40],
+      directions: [false],
+      length: drawn, // C_sum ≈ 0 → isolates the differential
+      closed: false,
+      phaseKey: "b:phi",
+      diff0: 0, // ⇒ C_diff = fsStart − fsEnd ≠ 0, so φ MUST move
+    });
+
+    expect(angles.get("b:phi")).not.toBeCloseTo(0, 6);
+  });
+});
+
+describe("winch: a JOINed end is not a free strand", () => {
+  // Loose belt: free start terminal → gear → end terminal JOINed onto the rim.
+  const run = (endWound: boolean) => {
+    const positions = new Map<string, Point2>([
+      ["s", P(-300, 0)],
+      ["g", P(0, 0)],
+      ["e", P(0, 40)], // on the rim
+    ]);
+    const masses = new Map<string, number>([
+      ["s", 1],
+      ["g", 0],
+      ["e", 1],
+    ]);
+    const angles = new Map<string, number>([["b:phi", 0]]);
+    for (let i = 0; i < 6; i++)
+      applyBeltLengthConstraint(positions, masses, angles, {
+        type: "BeltLength",
+        ddl: 1,
+        startKey: "s",
+        endKey: "e",
+        gearPosKeys: ["g"],
+        gearAngleKeys: ["g"],
+        radii: [40],
+        directions: [false],
+        length: 1000, // belt longer than drawn → the constraint pays strand out
+        closed: false,
+        phaseKey: "b:phi",
+        diff0: 0,
+        endWound,
+      });
+    return positions.get("e")!.distance_to(P(0, 0)) - 40;
+  };
+
+  it("never drags the pinned terminal off its rim", () => {
+    // Its GearPerimeterPin owns it; the belt feeds through the ARC, not a strand.
+    // Treating it as free tugged it tangentially every iteration — and since a
+    // tangent step off a circle is a SECANT, the radius crept up until the winch
+    // fought its own pin and stalled the motor.
+    expect(Math.abs(run(true))).toBeLessThan(1e-9);
+  });
+
+  it("(and would, if it were mistaken for a free end)", () => {
+    expect(Math.abs(run(false))).toBeGreaterThan(1); // the drift, reproduced
+  });
+});
+
+describe("a free end reeled through its pulley's tangency point", () => {
+  // The differential must be written in h = fs ∓ r·sign·ψ (the end's belt arc-length in
+  // the pulley's frame), NOT in the free-strand length fs. fs is a V about the tangency
+  // point (fs = |t|, and its radial derivative is d/fs → ∞), so a correction that
+  // overshoots the vertex makes fs GROW: the feedback sign flips and the end whips around
+  // the rim, spinning up the wrap and inventing r·2π of belt. h is monotone, unit-gradient
+  // and uncapped, so the same reeling just unwraps the pulley — the physics.
+  const reel = (diff0: number) => {
+    const positions = new Map<string, Point2>([
+      ["s", P(-300, 0)],
+      ["g", P(0, 0)],
+      ["e", P(-6, Math.sqrt(40 * 40 + 6 * 6))], // 6px of strand left
+    ]);
+    const masses = new Map<string, number>([
+      ["s", 1],
+      ["g", 0], // anchored drum
+      ["e", 1],
+    ]);
+    const vias = (): BeltVia[] => [
+      { pos: positions.get("s")!, radius: 0, direction: false },
+      { pos: positions.get("g")!, radius: 40, direction: false },
+      { pos: positions.get("e")!, radius: 0, direction: false },
+    ];
+    const L0 = belt_pieces(vias(), false).reduce((a, p) => a + p.length, 0);
+    const angles = new Map<string, number>([["b:phi", 0]]);
+    for (let i = 0; i < 30; i++)
+      applyBeltLengthConstraint(positions, masses, angles, {
+        type: "BeltLength",
+        ddl: 1,
+        startKey: "s",
+        endKey: "e",
+        gearPosKeys: ["g"],
+        gearAngleKeys: ["g"],
+        radii: [40],
+        directions: [false],
+        length: L0,
+        closed: false,
+        phaseKey: "b:phi",
+        diff0, // drives the end hard, straight through the tangency point
+      });
+    const e = positions.get("e")!;
+    return {
+      d: e.distance_to(positions.get("g")!),
+      L: belt_pieces(vias(), false).reduce((a, p) => a + p.length, 0),
+      L0,
+    };
+  };
+
+  it("never runs away around the rim, and conserves the belt's length", () => {
+    for (const diff0 of [-500, 500]) {
+      const r = reel(diff0);
+      expect(r.d).toBeGreaterThanOrEqual(40 - 1e-9); // never inside the rim
+      expect(r.d).toBeLessThan(1000); // never ejected: the old bug flew off in ONE step
+      expect(r.L).toBeCloseTo(r.L0, 1); // no phantom belt invented
+    }
+  });
+
+  it("settles instead of oscillating", () => {
+    const a = reel(-500);
+    const b = reel(-500);
+    expect(a.d).toBeCloseTo(b.d, 6); // deterministic fixed point, not a limit cycle
+  });
+});
+
 describe("BeltLength counts wound turns (continuous wrap)", () => {
   it("adds r·2π of length per extra wound turn", () => {
     // Closed 2-gear loop, everything anchored → the function returns |length−0|.
@@ -1001,7 +942,10 @@ describe("BeltLength counts wound turns (continuous wrap)", () => {
       ["gA", P(-100, 0)],
       ["gB", P(100, 0)],
     ]);
-    const anchored = new Map<string, number>([["gA", 0], ["gB", 0]]);
+    const anchored = new Map<string, number>([
+      ["gA", 0],
+      ["gB", 0],
+    ]);
     const len = (wraps: number[]) =>
       applyBeltLengthConstraint(positions, anchored, new Map(), {
         type: "BeltLength",

@@ -784,6 +784,7 @@ function get_hovered_part_of_element(
     case "dimension-edge-to-node":
     case "dimension-angle":
     case "dimension-radius":
+    case "dimension-belt":
     case "horizontal-align-edge":
     case "horizontal-align-nodes":
     case "vertical-align-edge":

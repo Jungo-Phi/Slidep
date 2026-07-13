@@ -75,6 +75,7 @@ import {
   is_constraint_type,
   node_on_beam_body,
 } from "./utils";
+import { belt_project, BeltVia } from "../../utils/belt-path";
 
 const TAU = 2 * Math.PI;
 
@@ -93,7 +94,7 @@ function belt_windings(
   const n = viaWraps.length;
   return viaWraps.map((w, v) => {
     if (w === undefined || Math.abs(w) < TAU) return undefined;
-    const growth = (Math.abs(w) / TAU) * DIM.BELT_WIDTH;
+    const growth = (Math.abs(w) / TAU) * 4;
     if (startExternal && v === 1) return { growth: -growth, atStart: true };
     if (endExternal && v === n - 2) return { growth: -growth, atStart: false };
     return { growth, atStart: false };
@@ -588,6 +589,7 @@ export function drawMechanicalCanvas(
                   type: "gear",
                   id: "----",
                   probes: [],
+                  overlays: {},
                   position: hoveredPart.position,
                   angle: 0,
                   radius: INTERACTION_SPECS.BELT_GRAB_RADIUS,
@@ -637,6 +639,7 @@ export function drawMechanicalCanvas(
                 type: "gear",
                 id: "----",
                 probes: [],
+                overlays: {},
                 position: state.startHover.position,
                 angle: 0,
                 radius: state.startHover.position.distance_to(
@@ -821,6 +824,28 @@ export function drawMechanicalCanvas(
             element.value,
             state.type === "EditingConstraint" &&
               state.elementID === element.id,
+          );
+          break;
+        case "dimension-belt":
+          // TODO : draw_dimension_belt()
+          const belt = get_mechanical_element_from_id(
+            element.beltID,
+            mechanicalElements,
+          ) as BeltElement;
+          const vias: BeltVia[] = [];
+          for (const { id, direction } of belt.attachedGearsIDs) {
+            const gear = get_mechanical_element_from_id(
+              id,
+              mechanicalElements,
+            ) as GearElement;
+            vias.push({ pos: gear.position, radius: gear.radius, direction });
+          }
+          draw_dimension_radius(
+            ctx,
+            belt_project(vias, element.position, belt.tight).point,
+            1,
+            element.position,
+            element.value,
           );
           break;
         case "horizontal-align-edge":
@@ -1375,13 +1400,20 @@ export function drawMechanicalCanvas(
         state.beltID,
         mechanicalElements,
       ) as BeltElement;
-      const length = measure_belt_length(belt, mechanicalElements);
+      const vias: BeltVia[] = [];
+      for (const { id, direction } of belt.attachedGearsIDs) {
+        const gear = get_mechanical_element_from_id(
+          id,
+          mechanicalElements,
+        ) as GearElement;
+        vias.push({ pos: gear.position, radius: gear.radius, direction });
+      }
       draw_dimension_radius(
         ctx,
-        belt.positionStart,
-        100,
+        belt_project(vias, hoveredPart.position, belt.tight).point,
+        1,
         hoveredPart.position,
-        length,
+        measure_belt_length(belt, mechanicalElements),
       );
       break;
     case "PlacingProbe":

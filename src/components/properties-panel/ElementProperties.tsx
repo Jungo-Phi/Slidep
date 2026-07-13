@@ -22,6 +22,7 @@ import ShowChartIcon from "@mui/icons-material/ShowChart";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import RotateRightIcon from "@mui/icons-material/RotateRight";
 import RotateLeftIcon from "@mui/icons-material/RotateLeft";
+import PublicIcon from "@mui/icons-material/Public";
 import {
   DistributedForceElement,
   EdgeElement,
@@ -31,7 +32,8 @@ import {
   LoadFrame,
   MechanicalElement,
   PivotElement,
-  is_node_element,
+  available_overlays,
+  overlay_shown,
 } from "../../types/element";
 import {
   frame_to_world,
@@ -49,10 +51,12 @@ import BeltTensionSwitch from "./components/BeltTensionSwitch";
 import {
   CanvasState,
   Action,
+  AppMode,
   Mechanism,
   ActionBundleType,
   Point2,
   PropertiesPanelTab,
+  RuntimeState,
   ZERO,
 } from "../../types";
 import ConnectionsProperties from "./ConnectionsProperties";
@@ -60,8 +64,11 @@ import { delete_element } from "../mechanism/connect-actions";
 import { HoveredPart } from "../../types/hovered-part";
 import NumberInput from "./components/NumberInput";
 import ElementDisplay from "./components/ElementDisplay";
+import ElementMeasures from "./ElementMeasures";
+import { OVERLAY_LABELS, set_overlay } from "./overlay-actions";
 import { element_to_hovered_part } from "../canvas/utils";
 import { measure_belt_length } from "../../utils/belt-geom";
+import { COLORS } from "../../constants/rendering-specs";
 import React from "react";
 
 interface MotorSectionProps {
@@ -130,11 +137,6 @@ interface ProbesSectionProps {
   setActiveTab: (tab: PropertiesPanelTab) => void;
 }
 
-/** The measurements (probe metrics) taken on this element, one labeled row
- *  per role: active-metrics summary + "Mesures ▾" menu button (same checkbox
- *  menu as the probe-placement popover), trajectory switch (nodes only, same
- *  pattern as the Moteur/Ancrage switches), and a text shortcut to the graphs
- *  in the analysis tab. */
 const ProbesSection: React.FC<ProbesSectionProps> = ({
   element,
   applyActions,
@@ -176,32 +178,28 @@ const ProbesSection: React.FC<ProbesSectionProps> = ({
           Mesures
         </Button>
       </Box>
-      {is_node_element(element) && (
+      {/* Les calques applicables à cet élément (le contrôle par élément ; la
+          commande en masse vit dans le menu « Afficher » de la top-bar). */}
+      {available_overlays(element).map((kind) => (
         <FormControlLabel
+          key={kind}
           control={
             <Switch
               size="small"
-              checked={!!element.showTrajectory}
+              checked={overlay_shown(element, kind)}
               onChange={() =>
                 applyActions(
-                  [
-                    {
-                      type: "SetShowTrajectory",
-                      elementID: element.id,
-                      newValue: !element.showTrajectory,
-                      oldValue: element.showTrajectory ?? false,
-                    },
-                  ],
+                  set_overlay(element, kind, !overlay_shown(element, kind)),
                   "Other",
                 )
               }
             />
           }
           label={
-            <Typography variant="caption">Afficher la trajectoire</Typography>
+            <Typography variant="caption">{OVERLAY_LABELS[kind]}</Typography>
           }
         />
-      )}
+      ))}
       <Button
         size="small"
         startIcon={<ShowChartIcon />}
@@ -250,6 +248,32 @@ const ProbesSection: React.FC<ProbesSectionProps> = ({
     </Box>
   );
 };
+
+/**
+ * Wraps the controls that only make sense at design time (geometry, dimensions,
+ * ground, connections, deletion). In simulation they are greyed out: the panel
+ * itself teaches which quantities can change mid-run — a live load magnitude next
+ * to a greyed bar length says "this one, not that one" without any badge or text.
+ */
+const StructureOnly: React.FC<{
+  disabled: boolean;
+  /** Lay the children out in a row (for the header's trailing controls, which
+   *  the ElementDisplay would otherwise flow itself). */
+  row?: boolean;
+  children: React.ReactNode;
+}> = ({ disabled, row = false, children }) => (
+  <Box
+    sx={{
+      ...(row && { display: "flex", alignItems: "center" }),
+      opacity: disabled ? 0.3 : 1,
+      pointerEvents: disabled ? "none" : "auto",
+      transition: "opacity 0.2s ease",
+    }}
+    aria-disabled={disabled}
+  >
+    {children}
+  </Box>
+);
 
 const to_deg = (rad: number) => ((rad * 180) / Math.PI + 360) % 360;
 const to_rad = (deg: number) => (deg * Math.PI) / 180;
@@ -318,8 +342,39 @@ interface FrameControlProps {
   applyActions: (actions: Action[], actionBundleType: ActionBundleType) => void;
 }
 
+/** The "world frame" option, laid out like an ElementDisplay small row (globe
+ *  icon + label) so it lines up with the edge options. */
+const MondeLabel: React.FC = () => (
+  <Box sx={{ display: "flex", alignItems: "center", p: "4px" }}>
+    <Box
+      sx={{
+        display: "flex",
+        alignItems: "center",
+        gap: 0,
+        m: "-4px",
+        pl: 0.25,
+        pr: 0.75,
+      }}
+    >
+      <PublicIcon
+        sx={{ margin: "2px", width: 20, height: 20, color: COLORS.STROKE }}
+      />
+      <Typography
+        sx={{
+          fontSize: "0.75rem",
+          fontWeight: 500,
+          color: COLORS.STROKE,
+          lineHeight: 1.5,
+        }}
+      >
+        Monde
+      </Typography>
+    </Box>
+  </Box>
+);
+
 /** The load's reference frame: a single control showing the current reference
- *  (Monde, or the edge via ElementDisplay) that opens a menu of Monde + each
+ *  (Monde, or the edge via ElementDisplay) that opens a menu of World + each
  *  candidate edge. Hidden when no edge can be referenced. */
 const FrameControl: React.FC<FrameControlProps> = ({
   load,
@@ -342,9 +397,12 @@ const FrameControl: React.FC<FrameControlProps> = ({
       : undefined;
   const clearHover = () => setHoveredPart({ type: "Void", position: ZERO });
   const hoverEdge = (edge: EdgeElement) =>
-    setHoveredPart(element_to_hovered_part(edge, true));
+    setHoveredPart(element_to_hovered_part(edge, false));
   const choose = (frame: LoadFrame) => {
-    applyActions(frame_change_actions(load, frame, mechanicalElements), "Other");
+    applyActions(
+      frame_change_actions(load, frame, mechanicalElements),
+      "Other",
+    );
     setAnchorEl(null);
     clearHover();
   };
@@ -352,7 +410,7 @@ const FrameControl: React.FC<FrameControlProps> = ({
   return (
     <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
       <Typography variant="caption" color="text.secondary">
-        Repère
+        Repère :
       </Typography>
       <Box
         onClick={(e) => setAnchorEl(e.currentTarget)}
@@ -374,11 +432,10 @@ const FrameControl: React.FC<FrameControlProps> = ({
             applyActions={applyActions}
             size="small"
             editable={false}
+            interactive={false}
           />
         ) : (
-          <Typography variant="caption" sx={{ px: 0.5 }}>
-            Monde
-          </Typography>
+          <MondeLabel />
         )}
         <KeyboardArrowDownIcon fontSize="small" sx={{ ml: -0.5 }} />
       </Box>
@@ -392,9 +449,7 @@ const FrameControl: React.FC<FrameControlProps> = ({
           selected={load.frame === "world"}
           onClick={() => choose("world")}
         >
-          <Typography variant="body2" sx={{ px: 0.5 }}>
-            Monde
-          </Typography>
+          <MondeLabel />
         </MenuItem>
         {candidateEdges.map((edge) => (
           <MenuItem
@@ -412,6 +467,7 @@ const FrameControl: React.FC<FrameControlProps> = ({
               applyActions={applyActions}
               size="small"
               editable={false}
+              interactive={false}
             />
           </MenuItem>
         ))}
@@ -475,12 +531,10 @@ const LoadsSection: React.FC<LoadsSectionProps> = ({
             key={load.id}
             sx={{
               mt: 0.5,
-              borderRadius: 2,
+              borderRadius: 3,
               border: 1,
               borderColor:
                 load.id === selectedLoadID ? "primary.main" : "transparent",
-              backgroundColor:
-                load.id === selectedLoadID ? "action.selected" : "transparent",
             }}
           >
             <ElementDisplay
@@ -488,7 +542,7 @@ const LoadsSection: React.FC<LoadsSectionProps> = ({
               setHoveredPart={setHoveredPart}
               setCanvasState={setCanvasState}
               applyActions={applyActions}
-              size="small"
+              size="medium"
               editable={true}
               trailingControls={
                 <IconButton
@@ -500,6 +554,7 @@ const LoadsSection: React.FC<LoadsSectionProps> = ({
                       "Other",
                     )
                   }
+                  title="Supprimer"
                 >
                   <DeleteIcon sx={{ width: 16, height: 16 }} />
                 </IconButton>
@@ -512,7 +567,7 @@ const LoadsSection: React.FC<LoadsSectionProps> = ({
                 alignItems: "center",
                 gap: 1,
                 px: 1,
-                pb: 0.5,
+                py: 0.5,
               }}
             >
               {load.type === "force" && (
@@ -657,8 +712,7 @@ const LoadsSection: React.FC<LoadsSectionProps> = ({
                   </IconButton>
                 </>
               )}
-              {(load.type === "force" ||
-                load.type === "distributed-force") && (
+              {(load.type === "force" || load.type === "distributed-force") && (
                 <FrameControl
                   load={load}
                   candidateEdges={hostEdge ? [hostEdge] : nodeEdges}
@@ -683,6 +737,8 @@ interface ElementPropertiesProps {
   applyActions: (actions: Action[], actionBundleType: ActionBundleType) => void;
   mechanism: Mechanism;
   setActiveTab: (tab: PropertiesPanelTab) => void;
+  appMode: AppMode;
+  runtimeState: RuntimeState;
 }
 
 export const ElementProperties: React.FC<ElementPropertiesProps> = ({
@@ -692,7 +748,13 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
   applyActions,
   mechanism,
   setActiveTab,
+  appMode,
+  runtimeState,
 }) => {
+  // Structure (geometry, dimensions, ground, connections, deletion) is frozen
+  // during a simulation; parameters (loads, motor) and observation (probes,
+  // overlays) stay live.
+  const simulating = appMode !== "edition";
   // A load has no panel of its own: selecting one shows its host element, with
   // the load listed (and editable) in the host's "Charges appliquées" section.
   const element: MechanicalElement | undefined =
@@ -756,7 +818,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                   size="medium"
                   editable={true}
                   trailingControls={
-                    <>
+                    <StructureOnly disabled={simulating} row>
                       <IconButton
                         color="error"
                         onMouseEnter={() => handleMouseEnter(element)}
@@ -771,7 +833,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                       >
                         <DeleteIcon sx={{ width: 20, height: 20 }} />
                       </IconButton>
-                    </>
+                    </StructureOnly>
                   }
                 />
               </ListItem>
@@ -805,7 +867,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
           size="large"
           editable={true}
           trailingControls={
-            <>
+            <StructureOnly disabled={simulating} row>
               {"isGrounded" in element && element.type !== "mass" && (
                 <GroundSwitch
                   grounded={element.isGrounded}
@@ -954,7 +1016,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
               >
                 <DeleteIcon />
               </IconButton>
-            </>
+            </StructureOnly>
           }
         />
       </Box>
@@ -962,185 +1024,191 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
       <Divider sx={{ my: 1 }} />
 
       {"position" in element && (
-        <Box
-          sx={{
-            display: "flex",
-            direction: "row",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 2,
-            m: 1,
-          }}
-        >
-          <VectorInput
-            value={element.position}
-            onChange={(pos) =>
-              applyActions(
-                [
-                  {
-                    type: "MoveNode",
-                    id: element.id,
-                    newPosition: pos,
-                    oldPosition: element.position,
-                  },
-                ],
-                "MoveElement",
-              )
-            }
-          />
-          {element.type === "gear" && (
-            <NumberInput
-              value={element.radius}
-              onChange={(radius) => {
+        <StructureOnly disabled={simulating}>
+          <Box
+            sx={{
+              display: "flex",
+              direction: "row",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 2,
+              m: 1,
+            }}
+          >
+            <VectorInput
+              value={element.position}
+              onChange={(pos) =>
                 applyActions(
                   [
                     {
-                      type: "ChangeGearRadius",
+                      type: "MoveNode",
                       id: element.id,
-                      newRadius: radius,
-                      oldRadius: element.radius,
-                      // No mouse here: aim the perimeter grab straight out along
-                      // +x at the requested radius so the solver resolves to it.
-                      target: new Point2(
-                        element.position.x + radius,
-                        element.position.y,
-                      ),
+                      newPosition: pos,
+                      oldPosition: element.position,
                     },
                   ],
                   "MoveElement",
-                );
-              }}
-              label="Rayon"
-              large={true}
+                )
+              }
             />
-          )}
-        </Box>
-      )}
-
-      {"positionStart" in element && (
-        <Box
-          sx={{
-            display: "flex",
-            direction: "row",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 2,
-            m: 1,
-          }}
-        >
-          <VectorInput
-            value={element.positionStart}
-            onChange={(pos) =>
-              applyActions(
-                [
-                  {
-                    type: "MoveEdgeStart",
-                    id: element.id,
-                    newPosition: pos,
-                    oldPosition: element.positionStart,
-                  },
-                ],
-                "MoveElement",
-              )
-            }
-          />
-          <NumberInput
-            value={
-              element.type === "belt"
-                ? measure_belt_length(element, mechanism.mechanicalElements)
-                : element.positionStart.distance_to(element.positionEnd)
-            }
-            onChange={(length) => {
-              if (element.type === "belt") {
-                const beltDim = mechanism.constraintElements.find(
-                  (c) => c.type === "dimension-belt" && c.beltID === element.id,
-                );
-                if (beltDim && beltDim.type === "dimension-belt") {
-                  // Persistent dimension: update its value.
+            {element.type === "gear" && (
+              <NumberInput
+                value={element.radius}
+                onChange={(radius) => {
                   applyActions(
                     [
                       {
-                        type: "ChangeDimensionBeltValue",
-                        id: beltDim.id,
+                        type: "ChangeGearRadius",
+                        id: element.id,
+                        newRadius: radius,
+                        oldRadius: element.radius,
+                        // No mouse here: aim the perimeter grab straight out along
+                        // +x at the requested radius so the solver resolves to it.
+                        target: new Point2(
+                          element.position.x + radius,
+                          element.position.y,
+                        ),
+                      },
+                    ],
+                    "MoveElement",
+                  );
+                }}
+                label="Rayon"
+                large={true}
+              />
+            )}
+          </Box>
+        </StructureOnly>
+      )}
+
+      {"positionStart" in element && (
+        <StructureOnly disabled={simulating}>
+          <Box
+            sx={{
+              display: "flex",
+              direction: "row",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 2,
+              m: 1,
+            }}
+          >
+            <VectorInput
+              value={element.positionStart}
+              onChange={(pos) =>
+                applyActions(
+                  [
+                    {
+                      type: "MoveEdgeStart",
+                      id: element.id,
+                      newPosition: pos,
+                      oldPosition: element.positionStart,
+                    },
+                  ],
+                  "MoveElement",
+                )
+              }
+            />
+            <NumberInput
+              value={
+                element.type === "belt"
+                  ? measure_belt_length(element, mechanism.mechanicalElements)
+                  : element.positionStart.distance_to(element.positionEnd)
+              }
+              onChange={(length) => {
+                if (element.type === "belt") {
+                  const beltDim = mechanism.constraintElements.find(
+                    (c) =>
+                      c.type === "dimension-belt" && c.beltID === element.id,
+                  );
+                  if (beltDim && beltDim.type === "dimension-belt") {
+                    // Persistent dimension: update its value.
+                    applyActions(
+                      [
+                        {
+                          type: "ChangeDimensionBeltValue",
+                          id: beltDim.id,
+                          newValue: length,
+                          oldValue: beltDim.value,
+                        },
+                      ],
+                      "ChangeDimension",
+                    );
+                  } else {
+                    // Momentary inextensible-belt constraint (edition): the loop is
+                    // held at the requested length while the gears relax.
+                    applyActions(
+                      [
+                        {
+                          type: "ChangeBeltLength",
+                          id: element.id,
+                          newLength: length,
+                          oldLength: measure_belt_length(
+                            element,
+                            mechanism.mechanicalElements,
+                          ),
+                        },
+                      ],
+                      "MoveElement",
+                    );
+                  }
+                  return;
+                }
+                const linkedDim = mechanism.constraintElements.find(
+                  (c) => c.type === "dimension-edge" && c.edgeID === element.id,
+                );
+                if (linkedDim && linkedDim.type === "dimension-edge") {
+                  applyActions(
+                    [
+                      {
+                        type: "ChangeDimensionEdgeValue",
+                        id: linkedDim.id,
                         newValue: length,
-                        oldValue: beltDim.value,
+                        oldValue: linkedDim.value,
                       },
                     ],
                     "ChangeDimension",
                   );
                 } else {
-                  // Momentary inextensible-belt constraint (edition): the loop is
-                  // held at the requested length while the gears relax.
                   applyActions(
                     [
                       {
-                        type: "ChangeBeltLength",
+                        type: "ChangeEdgeLength",
                         id: element.id,
                         newLength: length,
-                        oldLength: measure_belt_length(
-                          element,
-                          mechanism.mechanicalElements,
+                        oldLength: element.positionStart.distance_to(
+                          element.positionEnd,
                         ),
                       },
                     ],
                     "MoveElement",
                   );
                 }
-                return;
-              }
-              const linkedDim = mechanism.constraintElements.find(
-                (c) => c.type === "dimension-edge" && c.edgeID === element.id,
-              );
-              if (linkedDim && linkedDim.type === "dimension-edge") {
+              }}
+              large={true}
+              label="Longueur"
+            />
+            <VectorInput
+              value={element.positionEnd}
+              onChange={(pos) =>
                 applyActions(
                   [
                     {
-                      type: "ChangeDimensionEdgeValue",
-                      id: linkedDim.id,
-                      newValue: length,
-                      oldValue: linkedDim.value,
-                    },
-                  ],
-                  "ChangeDimension",
-                );
-              } else {
-                applyActions(
-                  [
-                    {
-                      type: "ChangeEdgeLength",
+                      type: "MoveEdgeEnd",
                       id: element.id,
-                      newLength: length,
-                      oldLength: element.positionStart.distance_to(
-                        element.positionEnd,
-                      ),
+                      newPosition: pos,
+                      oldPosition: element.positionEnd,
                     },
                   ],
                   "MoveElement",
-                );
+                )
               }
-            }}
-            large={true}
-            label="Longueur"
-          />
-          <VectorInput
-            value={element.positionEnd}
-            onChange={(pos) =>
-              applyActions(
-                [
-                  {
-                    type: "MoveEdgeEnd",
-                    id: element.id,
-                    newPosition: pos,
-                    oldPosition: element.positionEnd,
-                  },
-                ],
-                "MoveElement",
-              )
-            }
-          />
-        </Box>
+            />
+          </Box>
+        </StructureOnly>
       )}
 
+      {/* Le moteur est un paramètre : réglable à chaud. */}
       {element.type === "pivot" && (
         <>
           <Divider sx={{ my: 1 }} />
@@ -1154,14 +1222,18 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
       {("position" in element || "positionStart" in element) && (
         <>
           <Divider sx={{ my: 1 }} />
-          <ConnectionsProperties
-            element={element}
-            setHoveredPart={setHoveredPart}
-            setCanvasState={setCanvasState}
-            applyActions={applyActions}
-            mechanism={mechanism}
-          />
+          <StructureOnly disabled={simulating}>
+            <ConnectionsProperties
+              element={element}
+              setHoveredPart={setHoveredPart}
+              setCanvasState={setCanvasState}
+              applyActions={applyActions}
+              mechanism={mechanism}
+            />
+          </StructureOnly>
           <Divider sx={{ my: 1 }} />
+          {/* Les charges sont des paramètres : leurs valeurs restent éditables
+              pendant la simulation (le mouvement change à partir de maintenant). */}
           <LoadsSection
             element={element}
             mechanicalElements={mechanism.mechanicalElements}
@@ -1177,6 +1249,14 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
             applyActions={applyActions}
             setActiveTab={setActiveTab}
           />
+          {/* Les grandeurs mesurées, sous les propriétés : approfondir depuis
+              l'onglet Analyse ne doit jamais faire perdre ce qu'on y voyait. */}
+          {simulating && (
+            <>
+              <Divider sx={{ my: 1 }} />
+              <ElementMeasures element={element} runtimeState={runtimeState} />
+            </>
+          )}
         </>
       )}
     </Box>

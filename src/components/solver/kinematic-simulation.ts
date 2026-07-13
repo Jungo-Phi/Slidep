@@ -1,5 +1,10 @@
 import { ID, Link, Mechanism, Point2, KinNodes } from "../../types";
-import { BeltVia, belt_project, belt_wraps } from "../../utils/belt-path";
+import {
+  BeltVia,
+  belt_arrivals,
+  belt_project,
+  belt_wraps,
+} from "../../utils/belt-path";
 import {
   ConstraintResidual,
   KinematicSnapshot,
@@ -93,58 +98,44 @@ export function update_belt_disconnects(
   }
 
   const raw = belt_wraps(vias, link.closed);
+  const rawArr = belt_arrivals(vias, link.closed);
   const offset = link.closed ? 0 : 1; // via index of the first pulley
   const seeding = !link.wraps;
   if (!link.wraps) link.wraps = new Array(n).fill(0);
+  if (!link.arrivals) link.arrivals = new Array(n).fill(0);
   const TAU = 2 * Math.PI;
-  // A pulley whose end is EXTERNALLY anchored to it (a winch/join with a
-  // GearPerimeterPin) can't detach — the belt is tied there. A plain WOUND end is
-  // NOT anchored: once it unwinds fully (its pulley's continuous wrap reaches 0)
-  // the belt has peeled off and the pulley detaches, freeing the end (that is how
-  // "pull one end until the other winds, then keep pulling" finishes — the wound
-  // end orbits, the wrap shrinks to a single contact point, then it lets go). A
-  // CLOSED (tight) belt keeps its last pulley (a gearless loop is degenerate); a
-  // LOOSE belt may shed even its last pulley → an inert free segment. User-decided.
-  const startPos = link.closed ? undefined : positions.get(link.startKey);
-  const endPos = link.closed ? undefined : positions.get(link.endKey);
-  const externallyPinnedOn = (gi: number): boolean => {
-    const gc = positions.get(link.gearPosKeys[gi]);
-    if (!gc) return false;
-    const ext: (Point2 | undefined)[] = [
-      link.startExternal ? startPos : undefined,
-      link.endExternal ? endPos : undefined,
-    ];
-    return ext.some((p) => p && p.distance_to(gc) <= link.radii[gi] + 1);
+  // Unwrap a raw angle onto the branch continuous with its previous value.
+  const unwrap = (rawA: number, prev: number) => {
+    let delta = rawA - (((prev % TAU) + TAU) % TAU);
+    while (delta > Math.PI) delta -= TAU;
+    while (delta <= -Math.PI) delta += TAU;
+    return prev + delta;
   };
+  // A pulley whose continuous wrap reaches 0 has lost belt contact (the belt straightens
+  // past it) and detaches. A CLOSED (tight) belt keeps its last pulley (a gearless loop is
+  // degenerate); a LOOSE belt may shed even its last pulley → an inert free segment.
   activeIdx.forEach((gi, k) => {
     const rawW = raw[offset + k];
     if (seeding) {
       link.wraps![gi] = rawW; // first frame: seed, never disconnect
+      link.arrivals![gi] = rawArr[offset + k];
       return;
     }
-    let delta = rawW - (((link.wraps![gi] % TAU) + TAU) % TAU);
-    while (delta > Math.PI) delta -= TAU;
-    while (delta <= -Math.PI) delta += TAU;
-    const cont = link.wraps![gi] + delta;
     // Continuous (unwrapped) wrap = 2π·turns + fractional: a wound end coils past 2π
-    // like a capstan (bare gear OR winch) and unwinds smoothly back through the seam.
-    // The length is reconstructed from this continuous wrap (see the constraint).
+    // (winch) and unwinds smoothly back through the seam.
+    const cont = unwrap(rawW, link.wraps![gi]);
     link.wraps![gi] = cont;
+    // The ARRIVAL rim angle, likewise unwrapped. BeltLength's no-slip differential is
+    // written in the pulley's frame (fs ± r·ψ), which needs ψ on a continuous branch —
+    // a raw atan2 would jump 2π at the ±π seam and inject 2πr of phantom belt.
+    link.arrivals![gi] = unwrap(rawArr[offset + k], link.arrivals![gi]);
     if (
       cont <= 0 &&
       !link.disconnected![gi] &&
-      (!link.closed || activeIdx.length > 1) &&
-      !externallyPinnedOn(gi)
+      (!link.closed || activeIdx.length > 1)
     ) {
       link.disconnected![gi] = true;
       newlyDisconnected = true;
-      // A wound end riding this pulley just lost its last contact — release its
-      // wound state so the length constraint stops pinning it to the (now gone)
-      // rim and lets it go free.
-      if (!link.closed) {
-        if (gi === 0) link.startWind = undefined;
-        if (gi === n - 1) link.endWind = undefined;
-      }
     }
   });
   return newlyDisconnected;
@@ -506,48 +497,15 @@ export function step_simulation(
       },
     ];
   } else if (grab) {
+    // A belt terminal that is dragged into its adjacent gear is pushed back out by the
+    // BeltLength constraint's radial non-penetration term (symmetric: it moves the gear
+    // too) — no pre-clamp of the grab target needed.
     const grabKey = model.keyMap.get(grab.key) ?? grab.key;
-    // A belt terminal can't be pulled INSIDE its adjacent gear (start↔first gear,
-    // end↔last gear) — the same rule as edition, enforced here with the live sim gear
-    // positions. It may reach the rim (winding) but never go inside.
-    let target = grab.target;
-    for (const link of model.links) {
-      if (link.type !== "BeltLength" || link.gearPosKeys.length === 0) continue;
-      const which =
-        link.startKey === grabKey ? 0
-        : link.endKey === grabKey ? link.gearPosKeys.length - 1
-        : -1;
-      if (which < 0) continue;
-      const gc = positions.get(link.gearPosKeys[which]);
-      if (!gc) break;
-      const v = target.sub(gc);
-      const d = v.length();
-      if (d > 1e-9 && d < link.radii[which])
-        target = gc.add(v.mul(link.radii[which] / d));
-      break;
-    }
     links = [
       ...model.links,
-      { type: "HandleGrab", ddl: 1, grabbedKey: grabKey, value: target },
+      { type: "HandleGrab", ddl: 1, grabbedKey: grabKey, value: grab.target },
     ];
   }
-
-  // Mark which terminal of each belt is grabbed THIS frame — the length constraint
-  // drives φ to unwind the OPPOSITE wound end only while the user pulls a terminal
-  // (a motor turns the pulley directly, so it needs no φ coupling and stays on the
-  // plain free-end length path). Transient: reset every frame.
-  const grabbedTerminalKey =
-    grab && "key" in grab ? (model.keyMap.get(grab.key) ?? grab.key) : undefined;
-  for (const link of model.links)
-    if (link.type === "BeltLength")
-      link.grabbedTerminal =
-        grabbedTerminalKey === undefined
-          ? undefined
-          : link.startKey === grabbedTerminalKey
-            ? "start"
-            : link.endKey === grabbedTerminalKey
-              ? "end"
-              : undefined;
 
   // ── PBD solve ──
   const result = PBD_kinematic_solver(

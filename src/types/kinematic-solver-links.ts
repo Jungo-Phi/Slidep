@@ -133,29 +133,24 @@ export type Link = {
       // Continuous (unwrapped) wrap per pulley, tracked each frame; whole turns feed
       // the length so winding past 2π stays smooth. disconnected = lost contact.
       wraps?: number[];
+      // Continuous (unwrapped) ARRIVAL rim angle per pulley — the angle the belt touches
+      // down at. The no-slip differential is written in the pulley's frame (fs ± r·ψ), so
+      // it needs ψ on a continuous branch. Tracked each frame alongside `wraps`.
+      arrivals?: number[];
       disconnected?: boolean[];
       // ── Open-belt terminal handling (unused when closed) ──
+      // The two terminals are just FREE ends: the length moves them (each along its belt
+      // tangent) and the no-slip differential couples them to the belt travel φ. They do
+      // NOT grip/wind — winding is done by attaching a terminal to a gear with a JOIN
+      // (its GearPerimeterPin carries it around).
       phaseKey?: string; // belt travel φ `${beltId}:phi`
-      diff0?: number; // initial (fsStart − fsEnd), the differential reference
-      // A terminal already pinned on its pulley perimeter (winch: a join with a
-      // GearPerimeterPin) is driven EXTERNALLY — this link must not position it,
-      // only read it (its growing wound arc pulls the free end in). Baked at parse.
-      startExternal?: boolean;
-      endExternal?: boolean;
-      // Sim state: baked gear-relative angle of a terminal wound onto its pulley
-      // (undefined while free). Winding is a purely GEOMETRIC contact test: a terminal
-      // within WIND_TOL of its rim is wound; it unwinds only when pulled clear past
-      // DETACH_TOL (a radial pull-off). A tangential drag keeps it wound and its rim
-      // pin turns the gear.
-      startWind?: number;
-      endWind?: number;
-      // Transient (per-frame): which terminal of THIS belt is currently grabbed.
-      // The length constraint drives φ to unwind the OPPOSITE (wound) end only when
-      // the user pulls a FREE terminal — that pull must be able to peel the belt off
-      // the far pulley. A motor turns the pulley directly (no φ coupling needed), and
-      // grabbing the wound end itself just detaches it (DETACH_TOL), so neither uses
-      // this path.
-      grabbedTerminal?: "start" | "end";
+      diff0?: number; // initial (fsStart − fsEnd), the differential reference, over the FREE ends only
+      // A terminal JOINED to its adjacent pulley (winch). Static: the join exists in the
+      // mechanism or it does not — never a runtime state. Such an end has no tangent
+      // strand: it pays the belt out through that pulley's ARC, and the length constraint
+      // must neither move it (its GearPerimeterPin owns it) nor charge φ for it.
+      startWound?: boolean;
+      endWound?: boolean;
     }
   // Tight-belt junction (geometric-solver)
   | {

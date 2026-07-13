@@ -87,6 +87,7 @@ export const ConstraintsPanel: React.FC<ConstraintsPanelProps> = ({
                           case "dimension-edge-to-node":
                           case "dimension-angle":
                           case "dimension-radius":
+                          case "dimension-belt":
                             return (
                               <NumberInput
                                 value={constraint.value}
@@ -148,7 +149,7 @@ export const ConstraintsPanel: React.FC<ConstraintsPanelProps> = ({
                       </IconButton>
                     </>
                   }
-                ></ElementDisplay>
+                />
               </Box>
             </ListItem>
           </React.Fragment>
