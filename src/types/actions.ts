@@ -274,7 +274,6 @@ export type Action =
       oldMagnitudeEnd: number;
     }
   | { type: "ChangeMomentValue"; id: ID; newValue: number; oldValue: number }
-  | { type: "FlipMomentDirection"; id: ID }
   | { type: "SetLoadFrame"; id: ID; newFrame: LoadFrame; oldFrame: LoadFrame }
   | {
       type: "SetProbes";

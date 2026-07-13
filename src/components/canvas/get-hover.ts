@@ -634,7 +634,7 @@ function get_hovered_part_of_element(
             direction,
           };
         });
-        let gearAngles = get_gear_angles(
+        const gearAngles = get_gear_angles(
           belt.positionStart,
           belt.positionEnd,
           attachedGears,

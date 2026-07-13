@@ -12,6 +12,20 @@ import Connection from "./ConnectionComponent";
 import { get_connections } from "../../mechanism/connect-actions";
 import { HoveredPart } from "../../../types/hovered-part";
 
+const CONTAINER_NAMES: Record<ConnectsActionType, string> = {
+  ConnectsAttachedBelt: "Belt",
+  ConnectsAttachedGears: "Gears",
+  ConnectsFixedEdges: "Fixed edges",
+  ConnectsParentBeam: "Parent",
+  ConnectsFixedNodeStart: "Start node",
+  ConnectsFixedNodeEnd: "End node",
+  ConnectsParentAxle: "Axle",
+  ConnectsRotatingEdges: "Rotating edges",
+  ConnectsFixedNodesBody: "Body nodes",
+  ConnectsMeshedGears: "Meshed gears",
+  ConnectsFixedGears: "Fixed gears",
+};
+
 interface ConnectionsContainerProps {
   element: MechanicalElement;
   containerType: ConnectsActionType;
@@ -39,6 +53,7 @@ export const ConnectionsContainer: React.FC<ConnectionsContainerProps> = ({
     containerType === "ConnectsAttachedGears" ||
     containerType === "ConnectsFixedGears";
   const connections = get_connections(element, containerType);
+  /*
   const containerName = containerType
     .replace("Connects", "")
     .split("N")
@@ -51,6 +66,8 @@ export const ConnectionsContainer: React.FC<ConnectionsContainerProps> = ({
     .join(" G")
     .split("S")
     .join(" S");
+  */
+  const containerName = CONTAINER_NAMES[containerType];
 
   return (
     <Box
@@ -68,7 +85,7 @@ export const ConnectionsContainer: React.FC<ConnectionsContainerProps> = ({
           minHeight: isListContainer ? 36 : 28,
           borderRadius: isListContainer ? 2.4 : 3,
           padding: "2px",
-          backgroundColor: "action.hover",
+          backgroundColor: "background.sunken",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",

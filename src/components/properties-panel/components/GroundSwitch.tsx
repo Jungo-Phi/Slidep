@@ -33,7 +33,7 @@ export const GroundSwitch: React.FC<GroundSwitchProps> = ({
       <IconButton
         onClick={toggleGround}
         size="small"
-        sx={{ border: 1, borderColor: "#00000020" }}
+        sx={{ border: 1, borderColor: "divider" }}
         title={grounded ? "Libérer" : "Ancrer"}
       >
         <Box

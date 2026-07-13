@@ -32,7 +32,7 @@ export const BeltTensionSwitch: React.FC<BeltTensionSwitchProps> = ({
       <IconButton
         onClick={toggleTight}
         size="small"
-        sx={{ border: 1, borderColor: "#00000020" }}
+        sx={{ border: 1, borderColor: "divider" }}
         title={tightened ? "Libérer la courroie" : "Tendre la courroie"}
       >
         <Box

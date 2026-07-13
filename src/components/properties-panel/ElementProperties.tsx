@@ -20,8 +20,6 @@ import {
 import DeleteIcon from "@mui/icons-material/Delete";
 import ShowChartIcon from "@mui/icons-material/ShowChart";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
-import RotateRightIcon from "@mui/icons-material/RotateRight";
-import RotateLeftIcon from "@mui/icons-material/RotateLeft";
 import PublicIcon from "@mui/icons-material/Public";
 import {
   DistributedForceElement,
@@ -63,12 +61,12 @@ import ConnectionsProperties from "./ConnectionsProperties";
 import { delete_element } from "../mechanism/connect-actions";
 import { HoveredPart } from "../../types/hovered-part";
 import NumberInput from "./components/NumberInput";
+import SignedNumberInput from "./components/SignedNumberInput";
 import ElementDisplay from "./components/ElementDisplay";
 import ElementMeasures from "./ElementMeasures";
 import { OVERLAY_LABELS, set_overlay } from "./overlay-actions";
 import { element_to_hovered_part } from "../canvas/utils";
 import { measure_belt_length } from "../../utils/belt-geom";
-import { COLORS } from "../../constants/rendering-specs";
 import React from "react";
 
 interface MotorSectionProps {
@@ -106,8 +104,8 @@ const MotorSection: React.FC<MotorSectionProps> = ({ pivot, applyActions }) => {
         label={<Typography variant="caption">Moteur</Typography>}
       />
       {motor && (
-        <Box sx={{ mt: 0.5 }}>
-          <NumberInput
+        <Box sx={{ mt: 0.5, display: "flex", alignItems: "center" }}>
+          <SignedNumberInput
             label="tr/min"
             value={motor.speed}
             onChange={(speed) =>
@@ -123,6 +121,7 @@ const MotorSection: React.FC<MotorSectionProps> = ({ pivot, applyActions }) => {
                 "ChangeConstant",
               )
             }
+            large={true}
             accent={true}
           />
         </Box>
@@ -357,13 +356,13 @@ const MondeLabel: React.FC = () => (
       }}
     >
       <PublicIcon
-        sx={{ margin: "2px", width: 20, height: 20, color: COLORS.STROKE }}
+        sx={{ margin: "2px", width: 20, height: 20, color: "text.primary" }}
       />
       <Typography
         sx={{
           fontSize: "0.75rem",
           fontWeight: 500,
-          color: COLORS.STROKE,
+          color: "text.primary",
           lineHeight: 1.5,
         }}
       >
@@ -421,7 +420,7 @@ const FrameControl: React.FC<FrameControlProps> = ({
           alignItems: "center",
           cursor: "pointer",
           borderRadius: 1,
-          "&:hover": { backgroundColor: "#00000015" },
+          "&:hover": { backgroundColor: "action.hover" },
         }}
       >
         {currentEdge ? (
@@ -588,6 +587,7 @@ const LoadsSection: React.FC<LoadsSectionProps> = ({
                         "MoveLoad",
                       )
                     }
+                    signed={false}
                   />
                   <NumberInput
                     label="°"
@@ -676,41 +676,23 @@ const LoadsSection: React.FC<LoadsSectionProps> = ({
                 </>
               )}
               {load.type === "moment" && (
-                <>
-                  <NumberInput
-                    label="N·m"
-                    value={load.value}
-                    onChange={(value) =>
-                      applyActions(
-                        [
-                          {
-                            type: "ChangeMomentValue",
-                            id: load.id,
-                            newValue: value,
-                            oldValue: load.value,
-                          },
-                        ],
-                        "MoveLoad",
-                      )
-                    }
-                  />
-                  <IconButton
-                    size="small"
-                    title={load.clockwise ? "Horaire" : "Anti-horaire"}
-                    onClick={() =>
-                      applyActions(
-                        [{ type: "FlipMomentDirection", id: load.id }],
-                        "Other",
-                      )
-                    }
-                  >
-                    {load.clockwise ? (
-                      <RotateRightIcon sx={{ width: 20, height: 20 }} />
-                    ) : (
-                      <RotateLeftIcon sx={{ width: 20, height: 20 }} />
-                    )}
-                  </IconButton>
-                </>
+                <SignedNumberInput
+                  label="N·m"
+                  value={load.value}
+                  onChange={(value) =>
+                    applyActions(
+                      [
+                        {
+                          type: "ChangeMomentValue",
+                          id: load.id,
+                          newValue: value,
+                          oldValue: load.value,
+                        },
+                      ],
+                      "MoveLoad",
+                    )
+                  }
+                />
               )}
               {(load.type === "force" || load.type === "distributed-force") && (
                 <FrameControl
@@ -795,7 +777,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
         sx={{
           borderRadius: 3,
           margin: 2,
-          backgroundColor: "action.hover",
+          backgroundColor: "background.sunken",
         }}
       >
         <List
@@ -957,6 +939,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                     )
                   }
                   accent={true}
+                  signed={false}
                 />
               )}
               {element.type === "spring" && (
@@ -976,6 +959,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                     )
                   }
                   accent={true}
+                  signed={false}
                 />
               )}
               {element.type === "damper" && (
@@ -995,6 +979,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                     )
                   }
                   accent={true}
+                  signed={false}
                 />
               )}
               <IconButton
@@ -1062,8 +1047,6 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                         id: element.id,
                         newRadius: radius,
                         oldRadius: element.radius,
-                        // No mouse here: aim the perimeter grab straight out along
-                        // +x at the requested radius so the solver resolves to it.
                         target: new Point2(
                           element.position.x + radius,
                           element.position.y,
@@ -1075,6 +1058,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                 }}
                 label="Rayon"
                 large={true}
+                signed={false}
               />
             )}
           </Box>
@@ -1135,8 +1119,6 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                       "ChangeDimension",
                     );
                   } else {
-                    // Momentary inextensible-belt constraint (edition): the loop is
-                    // held at the requested length while the gears relax.
                     applyActions(
                       [
                         {
@@ -1187,6 +1169,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
               }}
               large={true}
               label="Longueur"
+              signed={false}
             />
             <VectorInput
               value={element.positionEnd}

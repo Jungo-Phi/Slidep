@@ -28,6 +28,8 @@ import {
   Snackbar,
   Switch,
   FormControlLabel,
+  ListItemIcon,
+  alpha,
 } from "@mui/material";
 import {
   CenterFocusStrong,
@@ -49,6 +51,7 @@ import {
   RestartAlt,
   KeyboardDoubleArrowDown,
   JoinInner,
+  Check,
 } from "@mui/icons-material";
 import logoUrl from "./assets/icons/palette/logo.svg";
 import {
@@ -80,12 +83,12 @@ import {
   save_to_file,
   serialize_mechanism,
   debounce,
-  generateThumbnail,
   screen_to_world,
   getStorageItem,
   setStorageItem,
 } from "./utils";
-import { lightTheme } from "./lib/mui-theme"; // import { lightTheme, darkTheme, highContrastTheme } from "./lib/mui-theme";
+import { THEMES, DEFAULT_THEME, ThemeName } from "./lib/mui-theme";
+import { set_canvas_theme } from "./constants/rendering-specs";
 import MechanicalCanvas, {
   ConstraintChangeSignal,
 } from "./components/canvas/MechanicalCanvas";
@@ -106,7 +109,6 @@ import { KinematicSnapshot } from "./types/runtime-state";
 import { CanvasState } from "./types/canvas-state";
 import { HoveredPart } from "./types/hovered-part";
 import { actionReducer } from "./components/mechanism/action-reducer";
-import { COLORS } from "./constants/rendering-specs";
 import { apply_actions } from "./components/mechanism/apply-actions";
 import MechanismsGallery from "./components/mechanisms-gallery/MechanismsGallery";
 import { openDB } from "idb";
@@ -136,7 +138,6 @@ const PARAMETER_ACTIONS: Action["type"][] = [
   "MoveForceVector",
   "SetDistributedForce",
   "ChangeMomentValue",
-  "FlipMomentDirection",
   "SetLoadFrame",
 ];
 
@@ -212,7 +213,21 @@ const App: React.FC = () => {
   const [simulationConfig, setSimulationConfig] = useState<SimulationConfig>(
     DEFAULT_SIMULATION_CONFIG,
   );
-  const currentTheme = lightTheme;
+  // The canvas palette lives in a module binding rather than in React state, so
+  // it is repointed before the first paint of the new theme, not after it.
+  const [themeName, setThemeName] = useState<ThemeName>(() => {
+    const stored = getStorageItem<ThemeName>("theme", DEFAULT_THEME);
+    return stored in THEMES ? stored : DEFAULT_THEME;
+  });
+  useMemo(() => set_canvas_theme(themeName), [themeName]);
+
+  const changeTheme = (name: ThemeName) => {
+    setThemeName(name);
+    setStorageItem("theme", name);
+    handleSettingsClose();
+  };
+
+  const currentTheme = THEMES[themeName].mui;
 
   const [saveStatus, setSaveStatus] = useState<
     "idle" | "saved" | "saving" | "error"
@@ -355,7 +370,6 @@ const App: React.FC = () => {
       time: 0,
       kinematicSnapshots: [],
     }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appMode]);
 
   // Recompile the simulation model + truncate future snapshots whenever the
@@ -615,7 +629,7 @@ const App: React.FC = () => {
       const lastActionsForUndo = [
         ...prevMechanism.history.slice(-1)[0],
       ].reverse();
-      let newMechanism = actionReducer(
+      const newMechanism = actionReducer(
         {
           ...prevMechanism,
           history: [...prevMechanism.history.slice(0, -1)],
@@ -666,8 +680,8 @@ const App: React.FC = () => {
       probeOnlyEditRef.current = true;
 
     setMechanism((prevMechanism) => {
-      let nextActions = prevMechanism.future.slice(-1)[0];
-      let newMechanism = actionReducer(
+      const nextActions = prevMechanism.future.slice(-1)[0];
+      const newMechanism = actionReducer(
         {
           ...prevMechanism,
           history: [...prevMechanism.history, [...nextActions]],
@@ -704,10 +718,6 @@ const App: React.FC = () => {
   const performSaveToDB = useCallback(async () => {
     setSaveStatus("saving");
     try {
-      let thumbnailData = "";
-      if (canvasRef.current) {
-        thumbnailData = await generateThumbnail(canvasRef.current);
-      }
       const db = await openDB<SlidepDB>("SlidepDB", DB_VERSION, {
         upgrade(db) {
           if (!db.objectStoreNames.contains("mechanisms")) {
@@ -718,11 +728,12 @@ const App: React.FC = () => {
           }
         },
       });
+      // Pas de miniature encodée ici : la galerie redessine chaque mécanisme à
+      // l'ouverture, au thème courant.
       const mechanismToSave = {
         ...mechanismRef.current,
         metadata: {
           ...mechanismRef.current.metadata,
-          thumbnail: thumbnailData,
           modifiedAt: Date.now(),
         },
       };
@@ -1032,7 +1043,7 @@ const App: React.FC = () => {
           position="static"
           elevation={0}
           sx={{
-            backgroundColor: COLORS.FILL_NODE,
+            backgroundColor: "background.toolbar",
             border: "none",
             borderRadius: 0,
           }}
@@ -1071,7 +1082,7 @@ const App: React.FC = () => {
                 sx={{
                   fontSize: "1.5em",
                   fontWeight: 700,
-                  color: COLORS.ORANGE,
+                  color: "primary.main",
                   letterSpacing: "-0.04em",
                   flexShrink: 0,
                   lineHeight: 1,
@@ -1146,9 +1157,9 @@ const App: React.FC = () => {
                               ? "error.main"
                               : "transparent",
                         transition: "background-color 0.3s ease",
-                        boxShadow:
+                        boxShadow: (t) =>
                           saveStatus === "saved"
-                            ? "0 0 4px rgba(76,175,80,0.7)"
+                            ? `0 0 4px ${alpha(t.palette.success.light, 0.7)}`
                             : "none",
                       }}
                     />
@@ -1423,7 +1434,7 @@ const App: React.FC = () => {
                       height: 22,
                       borderColor: simulationConfig.gravity
                         ? "primary.main"
-                        : COLORS.STROKE,
+                        : "text.primary",
                       backgroundColor: simulationConfig.gravity
                         ? "primary.main"
                         : "transparent",
@@ -1438,7 +1449,7 @@ const App: React.FC = () => {
                       "& .MuiChip-label": { pr: condensed ? 0.1 : 1 },
                       "&.MuiChip-clickable:hover": {
                         backgroundColor: simulationConfig.gravity
-                          ? COLORS.ORANGE_STROKE
+                          ? "primary.dark"
                           : "action.hover",
                       },
                       pl: 0.2,
@@ -1478,7 +1489,7 @@ const App: React.FC = () => {
                       height: 22,
                       borderColor: simulationConfig.collisions
                         ? "primary.main"
-                        : COLORS.STROKE,
+                        : "text.primary",
                       backgroundColor: simulationConfig.collisions
                         ? "primary.main"
                         : "transparent",
@@ -1493,7 +1504,7 @@ const App: React.FC = () => {
                       "& .MuiChip-label": { pr: condensed ? 0.1 : 1 },
                       "&.MuiChip-clickable:hover": {
                         backgroundColor: simulationConfig.collisions
-                          ? COLORS.ORANGE_STROKE
+                          ? "primary.dark"
                           : "action.hover",
                       },
                       pl: 0.2,
@@ -1748,6 +1759,63 @@ const App: React.FC = () => {
                 <MenuItem disabled sx={{ fontSize: "0.85rem" }}>
                   Thème (Couleurs)
                 </MenuItem>
+                {(Object.keys(THEMES) as ThemeName[]).map((name, i, names) => {
+                  const { family, label, canvas } = THEMES[name];
+                  const startsFamily =
+                    i === 0 || THEMES[names[i - 1]].family !== family;
+                  return (
+                    <Box key={name}>
+                      {startsFamily && (
+                        <Typography
+                          variant="caption"
+                          sx={{
+                            display: "block",
+                            pl: 3,
+                            pt: 0.5,
+                            color: "text.disabled",
+                          }}
+                        >
+                          {family}
+                        </Typography>
+                      )}
+                      <MenuItem
+                        selected={name === themeName}
+                        onClick={() => changeTheme(name)}
+                        sx={{ pl: 3 }}
+                      >
+                        <ListItemIcon sx={{ minWidth: 28 }}>
+                          {name === themeName && (
+                            <Check sx={{ fontSize: 18 }} />
+                          )}
+                        </ListItemIcon>
+                        {label}
+                        {/* A swatch of the theme's ground and its two fills —
+                            faster to recognise than the name. */}
+                        <Box sx={{ display: "flex", gap: 0.25, ml: "auto" }}>
+                          {[
+                            canvas.BACKGROUND,
+                            canvas.FILL_BODY,
+                            canvas.FILL_NODE,
+                            canvas.ACCENT,
+                          ].map((c) => (
+                            <Box
+                              key={c}
+                              sx={{
+                                width: 10,
+                                height: 14,
+                                borderRadius: 0.5,
+                                backgroundColor: c,
+                                border: "1px solid",
+                                borderColor: "divider",
+                              }}
+                            />
+                          ))}
+                        </Box>
+                      </MenuItem>
+                    </Box>
+                  );
+                })}
+                <Divider />
                 <MenuItem disabled sx={{ fontSize: "0.85rem" }}>
                   Style des éléments
                 </MenuItem>
@@ -1835,7 +1903,7 @@ const App: React.FC = () => {
                     zIndex: 1000,
                     display: "flex",
                     alignItems: "center",
-                    backgroundColor: COLORS.FILL_NODE,
+                    backgroundColor: "background.toolbar",
                     borderRadius: 999,
                     boxShadow: 3,
                     px: 1.5,
@@ -1900,7 +1968,7 @@ const App: React.FC = () => {
                         right: 0,
                         height: 4,
                         borderRadius: 2,
-                        backgroundColor: "rgba(0,0,0,0.1)",
+                        backgroundColor: "action.hover",
                       }}
                     />
                     {/* Fill */}
@@ -1910,7 +1978,7 @@ const App: React.FC = () => {
                         left: 0,
                         height: 5,
                         borderRadius: 3,
-                        backgroundColor: COLORS.ORANGE,
+                        backgroundColor: "primary.main",
                         width: `${timelinePct}%`,
                       }}
                     />
@@ -1929,10 +1997,11 @@ const App: React.FC = () => {
                           width: 12,
                           height: 12,
                           borderRadius: "50%",
-                          backgroundColor: "white",
+                          backgroundColor: "common.white",
                           border: "2px solid",
-                          borderColor: COLORS.ORANGE,
-                          boxShadow: "0 1px 4px rgba(0,0,0,0.3)",
+                          borderColor: "primary.main",
+                          boxShadow: (t) =>
+                            `0 1px 4px ${alpha(t.palette.common.black, 0.3)}`,
                           pointerEvents: "none",
                         }}
                       />
@@ -2051,9 +2120,11 @@ const App: React.FC = () => {
             pr: 1.5,
             py: 1,
             borderRadius: 999,
-            backgroundColor: "#0008",
+            // Deliberately a dark scrim rather than a themed surface: the toast
+            // floats over the canvas and must stay legible against any drawing.
+            backgroundColor: (t) => alpha(t.palette.common.black, 0.53),
             backdropFilter: "blur(6px)",
-            color: "#FFF",
+            color: "common.white",
             fontSize: "0.85rem",
             fontWeight: 500,
           }}
@@ -2071,9 +2142,9 @@ const App: React.FC = () => {
             size="small"
             onClick={() => setSnackbar((prev) => ({ ...prev, open: false }))}
             sx={{
-              color: "rgba(255,255,255,0.6)",
+              color: (t) => alpha(t.palette.common.white, 0.6),
               p: 0.25,
-              "&:hover": { color: "#fff" },
+              "&:hover": { color: "common.white" },
             }}
           >
             <Close sx={{ fontSize: 14 }} />

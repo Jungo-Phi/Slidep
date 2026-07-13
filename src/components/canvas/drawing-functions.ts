@@ -1128,7 +1128,7 @@ export function draw_element_icon(
 }
 
 export function draw_text(ctx: CanvasRenderingContext2D, text: string) {
-  ctx.fillStyle = COLORS.STROKE; // ctx.strokeStyle;
+  ctx.fillStyle = COLORS.ELEMENT_STROKE; // ctx.strokeStyle;
   ctx.filter = "none";
   ctx.fillText(text, 0, 0);
 
@@ -1185,13 +1185,14 @@ export function draw_force(
   ctx.restore();
 }
 
-/** Draws a curved moment arrow (arc with arrowhead) centered at `center`. */
+/** Draws a curved moment arrow (arc with arrowhead) centered at `center`.
+ *  `value` is signed: positive is clockwise, negative counter-clockwise. */
 export function draw_moment(
   ctx: CanvasRenderingContext2D,
   center: Point2,
   value: number,
-  clockwise: boolean,
 ) {
+  const clockwise = value >= 0;
   const radius = 18 + Math.min(Math.abs(value) * 2, 20);
   const sweep = (clockwise ? 1 : -1) * (Math.PI * 1.3);
   const startAngle = -Math.PI * 0.65;
@@ -1229,8 +1230,8 @@ export function draw_moment(
 export function draw_probe(ctx: CanvasRenderingContext2D) {
   const r = 6;
   ctx.save();
-  ctx.strokeStyle = COLORS.ORANGE;
-  ctx.fillStyle = COLORS.ORANGE;
+  ctx.strokeStyle = COLORS.ACCENT;
+  ctx.fillStyle = COLORS.ACCENT;
   ctx.lineWidth = 1.5;
   ctx.beginPath();
   ctx.arc(0, 0, r, 0, Math.PI * 2);

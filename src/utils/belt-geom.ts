@@ -39,7 +39,7 @@ export function get_gear_angles(
   endAngle: number;
   direction: boolean;
 }[] {
-  let gearAngles: {
+  const gearAngles: {
     center: Point2;
     radius: number;
     startAngle: number;
@@ -138,7 +138,7 @@ export function is_on_left_side_of_belt(
         direction,
       };
     });
-  let gearAngles = get_gear_angles(
+  const gearAngles = get_gear_angles(
     belt.positionStart,
     belt.positionEnd,
     attachedGears,

@@ -380,12 +380,12 @@ export interface DistributedForceElement extends BaseElement {
   frame: LoadFrame;
 }
 
-/** Moment applied to an edge or a gear (never a node) */
+/** Moment applied to an edge or a gear (never a node).
+ *  `value` is signed: positive is clockwise, negative counter-clockwise. */
 export interface MomentElement extends BaseElement {
   type: "moment";
   beamID: ID;
   value: number;
-  clockwise: boolean;
 }
 
 // ─── Probes ───────────────────────────────────────────────────────────────────

@@ -66,7 +66,6 @@ const MOMENT: MomentElement = {
   id: id("moment1"),
   beamID: id("beam1"),
   value: 5,
-  clockwise: true,
 };
 
 // ─── CreateElement / DeleteElement — mechanical ───────────────────────────────
@@ -351,7 +350,7 @@ describe("actionReducer — SetDistributedForce", () => {
   });
 });
 
-// ─── ChangeMomentValue / FlipMomentDirection ──────────────────────────────────
+// ─── ChangeMomentValue ────────────────────────────────────────────────────────
 
 describe("actionReducer — moment", () => {
   it("ChangeMomentValue met à jour la valeur", () => {
@@ -372,14 +371,39 @@ describe("actionReducer — moment", () => {
     expect(m.value).toBe(10);
   });
 
-  it("FlipMomentDirection inverse le sens", () => {
+  it("ChangeMomentValue inverse le sens via le signe", () => {
     const mech = { ...emptyMechanism(), loads: [MOMENT] };
     const result = actionReducer(
       mech,
-      [{ type: "FlipMomentDirection", id: id("moment1") }],
+      [
+        {
+          type: "ChangeMomentValue",
+          id: id("moment1"),
+          oldValue: 5,
+          newValue: -5,
+        },
+      ],
       false,
     );
     const m = result.loads[0] as MomentElement;
-    expect(m.clockwise).toBe(false);
+    expect(m.value).toBe(-5);
+  });
+
+  it("ChangeMomentValue est annulable (revert)", () => {
+    const mech = { ...emptyMechanism(), loads: [MOMENT] };
+    const result = actionReducer(
+      mech,
+      [
+        {
+          type: "ChangeMomentValue",
+          id: id("moment1"),
+          oldValue: 5,
+          newValue: -5,
+        },
+      ],
+      true,
+    );
+    const m = result.loads[0] as MomentElement;
+    expect(m.value).toBe(5);
   });
 });

@@ -17,6 +17,7 @@ interface NumberInputProps {
   large?: boolean;
   suffix?: string;
   accent?: boolean;
+  signed?: boolean;
 }
 
 export const NumberInput: React.FC<NumberInputProps> = ({
@@ -27,6 +28,7 @@ export const NumberInput: React.FC<NumberInputProps> = ({
   large = false,
   suffix,
   accent = false,
+  signed = true,
 }) => {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -43,6 +45,7 @@ export const NumberInput: React.FC<NumberInputProps> = ({
   const longHoldDelay = 2000;
   const holdInterval = 60;
   const width = large ? 82 : 75;
+  const height = large ? 32 : 24;
   const rounding = 1;
 
   const [localValue, setLocalValue] = useState<string>(
@@ -110,7 +113,9 @@ export const NumberInput: React.FC<NumberInputProps> = ({
   );
 
   const filterInput = (val: string) => {
-    return val.replace(/[^0-9.]/g, "").replace(/(\..\*)\./g, "$1"); // TODO : à vérifier
+    const negative = signed && val.startsWith("-");
+    const digits = val.replace(/[^0-9.]/g, "").replace(/(\.[^.]*)\./g, "$1");
+    return (negative ? "-" : "") + digits;
   };
 
   return (
@@ -164,7 +169,8 @@ export const NumberInput: React.FC<NumberInputProps> = ({
 
       <TextField
         label={label}
-        type="number"
+        type="text"
+        inputProps={{ inputMode: "decimal" }}
         value={localValue}
         onChange={(e) => setLocalValue(filterInput(e.target.value))}
         inputRef={inputRef}
@@ -182,8 +188,7 @@ export const NumberInput: React.FC<NumberInputProps> = ({
         size="small"
         sx={{
           width: "100%",
-          "& input[type=number]": {
-            "-moz-appearance": "textfield",
+          "& input": {
             paddingY: "7px",
             paddingLeft: "8px",
             paddingRight: "-6px",
@@ -194,10 +199,10 @@ export const NumberInput: React.FC<NumberInputProps> = ({
             ...(accent && {
               backgroundColor: COLORS.FILL_NODE + COLORS.HALF_TRANSPARENCY,
               "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
-                borderColor: COLORS.ORANGE,
+                borderColor: "primary.main",
               },
               "&:hover .MuiOutlinedInput-notchedOutline": {
-                borderColor: COLORS.ORANGE,
+                borderColor: "primary.main",
               },
               "& .MuiOutlinedInput-notchedOutline": {
                 borderColor: COLORS.FILL_NODE,
@@ -205,9 +210,9 @@ export const NumberInput: React.FC<NumberInputProps> = ({
             }),
           },
           "& .MuiInputLabel-root": accent
-            ? { color: COLORS.ORANGE, fontWeight: 500 }
+            ? { color: "primary.main", fontWeight: 500 }
             : {},
-          height: label === "" ? 28 : 32,
+          height,
         }}
         InputProps={{
           endAdornment: (
@@ -222,7 +227,7 @@ export const NumberInput: React.FC<NumberInputProps> = ({
                   p: 0.25,
                   pb: 0,
                   fontSize: "18px",
-                  "&:hover": { backgroundColor: "#00000025" },
+                  "&:hover": { backgroundColor: "action.hover" },
                 }}
               >
                 <KeyboardArrowUp fontSize="inherit" sx={{ my: -0.25 }} />
@@ -237,7 +242,7 @@ export const NumberInput: React.FC<NumberInputProps> = ({
                   p: 0.25,
                   pt: 0,
                   fontSize: "18px",
-                  "&:hover": { backgroundColor: "#00000025" },
+                  "&:hover": { backgroundColor: "action.hover" },
                 }}
               >
                 <KeyboardArrowDown fontSize="inherit" sx={{ my: -0.25 }} />

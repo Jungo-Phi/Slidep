@@ -134,11 +134,11 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                 my: -0.5,
                 fontWeight: "bold",
                 "&.Mui-selected": {
-                  color: "#fff",
+                  color: "primary.contrastText",
                 },
               },
               "& .MuiTabs-indicator": {
-                backgroundColor: "#fff",
+                backgroundColor: "primary.contrastText",
                 height: 3,
                 borderRadius: "3px 3px 0 0",
               },

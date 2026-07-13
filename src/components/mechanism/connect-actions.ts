@@ -226,7 +226,7 @@ export function get_connections(
 export function get_connection_types(
   element: MechanicalElement,
 ): ConnectsActionType[] {
-  let connectionTypes: ConnectsActionType[] = [];
+  const connectionTypes: ConnectsActionType[] = [];
   if ("fixedEdgesIDs" in element) connectionTypes.push("ConnectsFixedEdges");
   if ("rotatingEdgesIDs" in element)
     connectionTypes.push("ConnectsRotatingEdges");
@@ -302,7 +302,7 @@ export function delete_element(
   loadElements: LoadElement[],
   isCascade: boolean = false,
 ): Action[] {
-  let actions: Action[] = [];
+  const actions: Action[] = [];
   const element = get_element_from_id(
     elementID,
     mechanicalElements,
@@ -1122,7 +1122,7 @@ function connect_node_and_edge(
   edgePart: "start" | "end" | "body",
   loads: LoadElement[] = [],
 ): Action[] {
-  let actions: Action[] = [];
+  const actions: Action[] = [];
   if (
     "parentBeamID" in node &&
     !node.parentBeamID &&

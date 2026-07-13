@@ -192,7 +192,6 @@ export function handle_placing_element(
         id: crypto.randomUUID() as ID,
         beamID: hoveredPart.id,
         value: 1,
-        clockwise: true,
       };
       const actions: Action[] = [];
       const existingMoment = loads.find(

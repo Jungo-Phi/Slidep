@@ -66,6 +66,7 @@ src/
 │   │   ├── draw-canvas.ts      ← Orchestration du rendu (z-order, sélection, hover)
 │   │   ├── drawing-functions.ts← Fonctions de dessin primitives (grille, pivot, ressort, cote...)
 │   │   ├── get-hover.ts        ← Hit detection (nœuds, liens, engrenages, courroies)
+│   │   ├── render-thumbnail.ts ← Rendu offscreen de la miniature (état neutre, cadrage ajusté)
 │   │   ├── connect-actions.ts  ← Logique de fusion/connexion entre éléments
 │   │   ├── ConstraintEditor.tsx← Éditeur flottant de valeurs de contraintes
 │   │   ├── viewport.ts         ← Conversion screen ↔ world
@@ -118,15 +119,15 @@ src/
 │   ├── index.ts                ← Barrel export
 │   ├── serialization.ts        ← Sérialisation / désérialisation / clone / fichier .slidep
 │   ├── storage.ts              ← Wrapper localStorage
-│   ├── thumbnail-generator.ts  ← Génération de miniature JPEG depuis le canvas
+│   ├── thumbnail-generator.ts  ← Encodage AVIF sans perte d'un canvas (miniature)
+│   ├── mechanism-bounds.ts     ← Boîte englobante monde du mécanisme (cadrage miniature)
 │   ├── debounce.ts             ← Utilitaire debounce
 │   ├── angle-math.ts           ← Quadrant pour cotation d'angle
 │   ├── belt-geom.ts            ← Géométrie des courroies (tangentes, arcs)
 │   └── string-math.ts          ← IDs lisibles, noms, ratios, dates
 │
 ├── lib/
-│   ├── mui-theme.ts            ← Thème MUI (light/dark/highContrast)
-│   └── mui-theme copy.ts       ← Copie / brouillon du thème
+│   └── mui-theme.ts            ← Thème MUI (light/dark/highContrast) — source unique des couleurs
 │
 ├── test/
 │   └── setup.ts                ← Setup Vitest (mocks localStorage, ResizeObserver, Canvas)

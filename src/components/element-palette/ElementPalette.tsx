@@ -36,7 +36,12 @@ interface PaletteElement {
   simBehavior: SimBehavior;
 }
 
-const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
+/**
+ * Built on demand rather than as a module constant: the icons and highlight
+ * colors it holds come from the active theme, and a constant would freeze them
+ * on whichever theme was loaded first.
+ */
+const edition_palette = (): { title: string; elements: PaletteElement[] }[] => [
   {
     title: "Interface",
     elements: [
@@ -64,8 +69,8 @@ const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
           (state.type === "EditingConstraint" && !state.isPlacing),
         hilightColor: COLORS.SELECTION_BOX,
         hilightHoverColor: COLORS.SELECTION_STROKE,
-        simHilightColor: COLORS.ORANGE,
-        simHilightHoverColor: COLORS.ORANGE_STROKE,
+        simHilightColor: COLORS.ACCENT,
+        simHilightHoverColor: COLORS.ACCENT_DARK,
       },
       {
         label: "Gomme",
@@ -90,8 +95,8 @@ const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
         goToStateType: "PlacingSlider",
         simBehavior: "structural",
         hilightRule: (state) => state.type === "PlacingSlider",
-        hilightColor: COLORS.ORANGE,
-        hilightHoverColor: COLORS.ORANGE_STROKE,
+        hilightColor: COLORS.ACCENT,
+        hilightHoverColor: COLORS.ACCENT_DARK,
       },
       {
         label: "Pivot",
@@ -100,8 +105,8 @@ const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
         goToStateType: "PlacingPivot",
         simBehavior: "structural",
         hilightRule: (state) => state.type === "PlacingPivot",
-        hilightColor: COLORS.ORANGE,
-        hilightHoverColor: COLORS.ORANGE_STROKE,
+        hilightColor: COLORS.ACCENT,
+        hilightHoverColor: COLORS.ACCENT_DARK,
       },
       {
         label: "Courroie",
@@ -111,8 +116,8 @@ const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
         simBehavior: "structural",
         hilightRule: (state) =>
           state.type === "PlacingBeltStart" || state.type === "PlacingBeltEnd",
-        hilightColor: COLORS.ORANGE,
-        hilightHoverColor: COLORS.ORANGE_STROKE,
+        hilightColor: COLORS.ACCENT,
+        hilightHoverColor: COLORS.ACCENT_DARK,
       },
       {
         label: "Engrenage",
@@ -123,8 +128,8 @@ const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
         hilightRule: (state) =>
           state.type === "PlacingGearStart" ||
           state.type === "PlacingGearRadius",
-        hilightColor: COLORS.ORANGE,
-        hilightHoverColor: COLORS.ORANGE_STROKE,
+        hilightColor: COLORS.ACCENT,
+        hilightHoverColor: COLORS.ACCENT_DARK,
       },
     ],
   },
@@ -138,8 +143,8 @@ const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
         goToStateType: "PlacingJoin",
         simBehavior: "structural",
         hilightRule: (state) => state.type === "PlacingJoin",
-        hilightColor: COLORS.ORANGE,
-        hilightHoverColor: COLORS.ORANGE_STROKE,
+        hilightColor: COLORS.ACCENT,
+        hilightHoverColor: COLORS.ACCENT_DARK,
       },
       {
         label: "Poutre",
@@ -149,8 +154,8 @@ const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
         simBehavior: "structural",
         hilightRule: (state) =>
           state.type === "PlacingBeamStart" || state.type === "PlacingBeamEnd",
-        hilightColor: COLORS.ORANGE,
-        hilightHoverColor: COLORS.ORANGE_STROKE,
+        hilightColor: COLORS.ACCENT,
+        hilightHoverColor: COLORS.ACCENT_DARK,
       },
       {
         label: "Sol",
@@ -159,8 +164,8 @@ const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
         goToStateType: "PlacingGround",
         simBehavior: "structural",
         hilightRule: (state) => state.type === "PlacingGround",
-        hilightColor: COLORS.ORANGE,
-        hilightHoverColor: COLORS.ORANGE_STROKE,
+        hilightColor: COLORS.ACCENT,
+        hilightHoverColor: COLORS.ACCENT_DARK,
       },
     ],
   },
@@ -176,8 +181,8 @@ const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
         hilightRule: (state) =>
           state.type === "PlacingDamperStart" ||
           state.type === "PlacingDamperEnd",
-        hilightColor: COLORS.ORANGE,
-        hilightHoverColor: COLORS.ORANGE_STROKE,
+        hilightColor: COLORS.ACCENT,
+        hilightHoverColor: COLORS.ACCENT_DARK,
       },
       {
         label: "Ressort",
@@ -188,8 +193,8 @@ const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
         hilightRule: (state) =>
           state.type === "PlacingSpringStart" ||
           state.type === "PlacingSpringEnd",
-        hilightColor: COLORS.ORANGE,
-        hilightHoverColor: COLORS.ORANGE_STROKE,
+        hilightColor: COLORS.ACCENT,
+        hilightHoverColor: COLORS.ACCENT_DARK,
       },
       {
         label: "Masse",
@@ -198,8 +203,8 @@ const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
         goToStateType: "PlacingMass",
         simBehavior: "structural",
         hilightRule: (state) => state.type === "PlacingMass",
-        hilightColor: COLORS.ORANGE,
-        hilightHoverColor: COLORS.ORANGE_STROKE,
+        hilightColor: COLORS.ACCENT,
+        hilightHoverColor: COLORS.ACCENT_DARK,
       },
       {
         label: "Moteur",
@@ -208,8 +213,8 @@ const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
         goToStateType: "PlacingMotor",
         simBehavior: "structural",
         hilightRule: (state) => state.type === "PlacingMotor",
-        hilightColor: COLORS.ORANGE,
-        hilightHoverColor: COLORS.ORANGE_STROKE,
+        hilightColor: COLORS.ACCENT,
+        hilightHoverColor: COLORS.ACCENT_DARK,
       },
     ],
   },
@@ -238,8 +243,8 @@ const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
               state.elementID,
               mechanism.constraintElements,
             )!.type !== "gear-ratio"),
-        hilightColor: COLORS.ORANGE,
-        hilightHoverColor: COLORS.ORANGE_STROKE,
+        hilightColor: COLORS.ACCENT,
+        hilightHoverColor: COLORS.ACCENT_DARK,
       },
       {
         label: "Rapport d'engrenages",
@@ -256,8 +261,8 @@ const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
               state.elementID,
               mechanism.constraintElements,
             )!.type === "gear-ratio"),
-        hilightColor: COLORS.ORANGE,
-        hilightHoverColor: COLORS.ORANGE_STROKE,
+        hilightColor: COLORS.ACCENT,
+        hilightHoverColor: COLORS.ACCENT_DARK,
       },
       {
         label: "Longueurs égales",
@@ -269,8 +274,8 @@ const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
           state.type === "EqualConstraintStart" ||
           state.type === "EqualConstraintEdge" ||
           state.type === "EqualConstraintGear",
-        hilightColor: COLORS.ORANGE,
-        hilightHoverColor: COLORS.ORANGE_STROKE,
+        hilightColor: COLORS.ACCENT,
+        hilightHoverColor: COLORS.ACCENT_DARK,
       },
       {
         label: "Alignement horizontal / vertical",
@@ -281,8 +286,8 @@ const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
         hilightRule: (state) =>
           state.type === "HorizontalVerticalConstraintStart" ||
           state.type === "HorizontalVerticalConstraintNode",
-        hilightColor: COLORS.ORANGE,
-        hilightHoverColor: COLORS.ORANGE_STROKE,
+        hilightColor: COLORS.ACCENT,
+        hilightHoverColor: COLORS.ACCENT_DARK,
       },
       {
         label: "Perpendiculaire",
@@ -293,8 +298,8 @@ const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
         hilightRule: (state) =>
           state.type === "NormalConstraintStart" ||
           state.type === "NormalConstraintEdge",
-        hilightColor: COLORS.ORANGE,
-        hilightHoverColor: COLORS.ORANGE_STROKE,
+        hilightColor: COLORS.ACCENT,
+        hilightHoverColor: COLORS.ACCENT_DARK,
       },
       {
         label: "Parallèle",
@@ -305,8 +310,8 @@ const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
         hilightRule: (state) =>
           state.type === "ParallelConstraintStart" ||
           state.type === "ParallelConstraintEdge",
-        hilightColor: COLORS.ORANGE,
-        hilightHoverColor: COLORS.ORANGE_STROKE,
+        hilightColor: COLORS.ACCENT,
+        hilightHoverColor: COLORS.ACCENT_DARK,
       },
     ],
   },
@@ -322,8 +327,8 @@ const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
         hilightRule: (state) =>
           state.type === "PlacingForceStart" ||
           state.type === "PlacingForceEnd",
-        hilightColor: COLORS.ORANGE,
-        hilightHoverColor: COLORS.ORANGE_STROKE,
+        hilightColor: COLORS.ACCENT,
+        hilightHoverColor: COLORS.ACCENT_DARK,
       },
       {
         label: "Force répartie",
@@ -334,8 +339,8 @@ const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
         hilightRule: (state) =>
           state.type === "PlacingDistributedForceStart" ||
           state.type === "PlacingDistributedForceEnd",
-        hilightColor: COLORS.ORANGE,
-        hilightHoverColor: COLORS.ORANGE_STROKE,
+        hilightColor: COLORS.ACCENT,
+        hilightHoverColor: COLORS.ACCENT_DARK,
       },
       {
         label: "Moment",
@@ -344,8 +349,8 @@ const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
         goToStateType: "PlacingMoment",
         simBehavior: "structural",
         hilightRule: (state) => state.type === "PlacingMoment",
-        hilightColor: COLORS.ORANGE,
-        hilightHoverColor: COLORS.ORANGE_STROKE,
+        hilightColor: COLORS.ACCENT,
+        hilightHoverColor: COLORS.ACCENT_DARK,
       },
       {
         label: "Sonde",
@@ -356,8 +361,8 @@ const EDITION_PALETTE: { title: string; elements: PaletteElement[] }[] = [
         hilightRule: (state) =>
           state.type === "PlacingProbe" ||
           state.type === "PlacingProbeMetrics",
-        hilightColor: COLORS.ORANGE,
-        hilightHoverColor: COLORS.ORANGE_STROKE,
+        hilightColor: COLORS.ACCENT,
+        hilightHoverColor: COLORS.ACCENT_DARK,
       },
     ],
   },
@@ -383,6 +388,10 @@ export const ElementPalette: React.FC<ElementPaletteProps> = ({
   const SIZE = 28;
   const PADDING = 2;
 
+  // Rebuilt on every render, which is how the icons and highlight colors follow
+  // a theme change: both are read from the active canvas palette at call time.
+  const palette = edition_palette();
+
   const handleElementClick = (element: PaletteElement) => {
     if (appMode !== "edition") {
       if (element.simBehavior === "structural") {
@@ -395,23 +404,22 @@ export const ElementPalette: React.FC<ElementPaletteProps> = ({
     setCanvasState({ type: element.goToStateType } as CanvasState);
   };
 
+  // Structural, not visual: the group sizes are the same under every theme.
+  const maxIconsInGroup = Math.max(...palette.map((g) => g.elements.length), 1);
+
   const [columns, setColumns] = useState(2);
   useEffect(() => {
     const computeColumns = () => {
       const availableHeight = window.innerHeight - 200;
       const rowHeight = (SIZE + 2 * PADDING) * 3;
       const rowsThatFit = Math.max(1, Math.floor(availableHeight / rowHeight));
-      const maxIconsInGroup = Math.max(
-        ...EDITION_PALETTE.map((g) => g.elements.length),
-        1,
-      );
       setColumns(Math.max(2, Math.ceil(maxIconsInGroup / rowsThatFit)));
     };
 
     computeColumns();
     window.addEventListener("resize", computeColumns);
     return () => window.removeEventListener("resize", computeColumns);
-  }, []);
+  }, [maxIconsInGroup]);
 
   return (
     <Paper
@@ -437,7 +445,7 @@ export const ElementPalette: React.FC<ElementPaletteProps> = ({
         scrollbarWidth: "none",
       }}
     >
-      {EDITION_PALETTE.map((group) => (
+      {palette.map((group) => (
         <section key={group.title}>
           {group.title !== "Interface" && (
             <>
@@ -506,7 +514,7 @@ export const ElementPalette: React.FC<ElementPaletteProps> = ({
                     "&:hover": {
                       background: isHighlighted
                         ? hilightHoverColor
-                        : COLORS.HOVER,
+                        : "action.hover",
                     },
                   }}
                   aria-label={element.label}

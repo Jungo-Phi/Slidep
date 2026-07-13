@@ -118,7 +118,7 @@ export const ElementMeasures: React.FC<ElementMeasuresProps> = ({
           overflowY: "auto",
         }),
         borderRadius: 3,
-        backgroundColor: "action.hover",
+        backgroundColor: "background.sunken",
         display: "flex",
         flexDirection: "column",
         justifyContent: element ? "flex-start" : "center",

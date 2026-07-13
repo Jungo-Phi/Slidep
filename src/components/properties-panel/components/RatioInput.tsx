@@ -1,6 +1,5 @@
 import React, { useRef, useState, useEffect, useCallback } from "react";
 import { TextField, Box, Typography } from "@mui/material";
-import { COLORS } from "../../../constants/rendering-specs";
 import { value_to_ratio_parts } from "../../../utils";
 
 interface RatioInputProps {
@@ -75,7 +74,7 @@ export const RatioInput: React.FC<RatioInputProps> = ({ value, onChange }) => {
     "& .MuiOutlinedInput-input": {
       padding: "4px 2px",
       textAlign: "center",
-      color: COLORS.STROKE,
+      color: "text.primary",
     },
   };
 
@@ -85,12 +84,17 @@ export const RatioInput: React.FC<RatioInputProps> = ({ value, onChange }) => {
         display: "flex",
         alignItems: "center",
         height: "32px",
-        border: `1px solid ${"#0005"}`,
+        border: "1px solid",
+        borderColor: "divider",
         "&:hover": {
-          border: `1px solid ${COLORS.STROKE}`,
+          borderColor: "text.primary",
         },
         "&:focus-within": {
-          border: `2px solid ${COLORS.ORANGE}`,
+          // Thicker on focus; the extra pixel is taken out of the padding so the
+          // content does not shift.
+          border: "2px solid",
+          borderColor: "primary.main",
+          padding: "0 3px",
         },
         borderRadius: "16px",
         padding: "0 4px",
@@ -118,7 +122,7 @@ export const RatioInput: React.FC<RatioInputProps> = ({ value, onChange }) => {
       />
       <Typography
         sx={{
-          color: COLORS.STROKE,
+          color: "text.primary",
           mx: -0.3,
         }}
       >

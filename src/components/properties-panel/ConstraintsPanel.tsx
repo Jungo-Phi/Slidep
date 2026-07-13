@@ -48,7 +48,7 @@ export const ConstraintsPanel: React.FC<ConstraintsPanelProps> = ({
       sx={{
         borderRadius: 3,
         margin: 2,
-        backgroundColor: "action.hover",
+        backgroundColor: "background.sunken",
       }}
     >
       <List
@@ -66,7 +66,7 @@ export const ConstraintsPanel: React.FC<ConstraintsPanelProps> = ({
               <Box
                 sx={{
                   border: constraint.id === constraintID ? 1 : 0,
-                  borderColor: "gray",
+                  borderColor: "divider",
                   borderRadius: 5,
                   width: "100%",
                 }}
@@ -110,6 +110,7 @@ export const ConstraintsPanel: React.FC<ConstraintsPanelProps> = ({
                                     ? "°"
                                     : undefined
                                 }
+                                signed={false}
                               />
                             );
                           case "gear-ratio":

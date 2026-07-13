@@ -6,10 +6,9 @@ import {
   UnionElement,
   ZERO,
 } from "../../../types";
-import { Box, IconButton, Typography, TextField } from "@mui/material";
+import { Box, IconButton, Typography, TextField, alpha } from "@mui/material";
 import { get_element_icon } from "../../element-palette/elementIcon";
 import { HoveredPart } from "../../../types/hovered-part";
-import { COLORS } from "../../../constants/rendering-specs";
 import { element_to_hovered_part } from "../../canvas/utils";
 import { shown_element_name } from "../../../utils";
 import { useElementNavigation } from "../element-navigation";
@@ -148,11 +147,11 @@ const ElementDisplayComponent: React.FC<ElementDisplayProps> = ({
   }, [inputValue, isEditing]);
 
   const iconSize = size === "small" ? 24 : size === "medium" ? 28 : 32;
-  const gap = size === "small" ? 0 : "6px";
+  const gap = size === "small" ? "1px" : "6px";
 
   const textStyleCommon = {
     fontWeight: fontWeight,
-    color: COLORS.STROKE,
+    color: "text.primary",
     lineHeight: 1.5,
     whiteSpace: "nowrap" as const,
   };
@@ -172,7 +171,7 @@ const ElementDisplayComponent: React.FC<ElementDisplayProps> = ({
         padding: size === "small" ? "4px" : size === "medium" ? "6px" : "8px",
         "&:hover": {
           backgroundColor:
-            trailingControls || !interactive ? "transparent" : "#00000025",
+            trailingControls || !interactive ? "transparent" : "action.hover",
         },
         cursor: interactive ? "pointer" : "default",
         ...(trailingControls && {
@@ -195,7 +194,7 @@ const ElementDisplayComponent: React.FC<ElementDisplayProps> = ({
           minWidth: 0,
         }}
         border={1}
-        borderColor={"#00000000"}
+        borderColor={"transparent"}
       >
         <Box
           component="img"
@@ -227,7 +226,9 @@ const ElementDisplayComponent: React.FC<ElementDisplayProps> = ({
                 padding: 0,
                 margin: 0,
                 textOverflow: "clip",
-                backgroundColor: "rgba(255, 255, 255, 0.8)",
+                // Translucent white, so the row's own background still shows
+                // through while the name is being edited.
+                backgroundColor: (t) => alpha(t.palette.common.white, 0.8),
                 borderRadius: "2px",
                 cursor: "text",
                 overflow: "hidden",
@@ -305,7 +306,7 @@ const ElementDisplayComponent: React.FC<ElementDisplayProps> = ({
         cursor: "pointer",
         justifyContent: "space-between",
         "&:hover": {
-          backgroundColor: "#00000025",
+          backgroundColor: "action.hover",
         },
         "&:has(.element-display-actions:hover)": {
           backgroundColor: "transparent",

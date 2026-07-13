@@ -248,7 +248,7 @@ export function draw_edge_fake_end(
   const oldLineWidth = ctx.lineWidth;
   ctx.shadowBlur = 0;
   ctx.globalAlpha = 1;
-  ctx.strokeStyle = COLORS.STROKE;
+  ctx.strokeStyle = COLORS.ELEMENT_STROKE;
   ctx.fillStyle = COLORS.FILL_BODY;
   ctx.lineWidth = STROKE_WIDTHS.STANDARD;
 
@@ -257,7 +257,7 @@ export function draw_edge_fake_end(
 
   if (is_selected(edge.id, state, constraintElements)) {
     ctx.strokeStyle = COLORS.SELECTION_STROKE;
-    ctx.fillStyle = COLORS.SELECTION_FILL;
+    ctx.fillStyle = COLORS.FILL_BODY;
   }
 
   ctx.save();
@@ -303,7 +303,7 @@ export function drawMechanicalCanvas(
 
   ctx.shadowBlur = 0;
   ctx.globalAlpha = 1;
-  ctx.strokeStyle = COLORS.STROKE;
+  ctx.strokeStyle = COLORS.ELEMENT_STROKE;
   ctx.fillStyle = COLORS.FILL_BODY;
   ctx.textAlign = DIMENSION_SPECS.TEXT_ALIGN;
   ctx.textBaseline = DIMENSION_SPECS.TEXT_BASELINE;
@@ -349,13 +349,13 @@ export function drawMechanicalCanvas(
         hoveredPart,
         state,
       );
-      let isHovered = is_hovered(element.id, hoveredPart, constraintElements);
+      const isHovered = is_hovered(element.id, hoveredPart, constraintElements);
 
       ctx.shadowBlur = 0;
       ctx.globalAlpha = 1;
       ctx.filter = "none";
-      ctx.strokeStyle = isLoadElement ? COLORS.ORANGE : COLORS.STROKE;
-      ctx.fillStyle = isLoadElement ? COLORS.ORANGE : COLORS.FILL_BODY;
+      ctx.strokeStyle = isLoadElement ? COLORS.ACCENT : COLORS.ELEMENT_STROKE;
+      ctx.fillStyle = isLoadElement ? COLORS.ACCENT : COLORS.FILL_BODY;
       ctx.lineWidth = STROKE_WIDTHS.STANDARD;
       if (element.type === "gear") {
         ctx.lineWidth = STROKE_WIDTHS.STANDARD / 2;
@@ -373,14 +373,14 @@ export function drawMechanicalCanvas(
       if (isSelected) {
         if (isLoadElement) ctx.lineWidth += 1;
         ctx.shadowColor = isLoadElement
-          ? COLORS.ORANGE
+          ? COLORS.ACCENT
           : COLORS.SELECTION_STROKE;
         ctx.strokeStyle = isLoadElement
-          ? COLORS.SELECTION_ORANGE
+          ? COLORS.SELECTION_ACCENT
           : COLORS.SELECTION_STROKE;
         ctx.fillStyle = isLoadElement
-          ? COLORS.SELECTION_ORANGE
-          : COLORS.SELECTION_FILL;
+          ? COLORS.SELECTION_ACCENT
+          : COLORS.FILL_BODY;
         ctx.shadowBlur = INTERACTION_SPECS.SELECTION_HALO_SIZE;
       }
       // Add red stroke and make semi-transparent if element is to be deleted
@@ -556,7 +556,7 @@ export function drawMechanicalCanvas(
           const disconnectedGears = new Set(
             element.disconnectedGearIndices ?? [],
           );
-          let attachedGears = element.attachedGearsIDs
+          const attachedGears = element.attachedGearsIDs
             .map(({ id, direction }) => {
               return {
                 gear: get_mechanical_element_from_id(
@@ -887,7 +887,7 @@ export function drawMechanicalCanvas(
             mechanicalElements,
           ) as BeamElement;
           const center = beam.positionStart.lerp(beam.positionEnd, 0.5);
-          draw_moment(ctx, center, load.value, load.clockwise);
+          draw_moment(ctx, center, load.value);
           break;
         }
         case "distributed-force": {
@@ -967,7 +967,7 @@ export function drawMechanicalCanvas(
   ctx.shadowBlur = 0;
   ctx.globalAlpha = 1;
   ctx.filter = "none";
-  ctx.strokeStyle = COLORS.STROKE;
+  ctx.strokeStyle = COLORS.ELEMENT_STROKE;
   ctx.fillStyle = COLORS.FILL_BODY;
   ctx.lineWidth = STROKE_WIDTHS.STANDARD;
   let delta: Point2;
@@ -1059,8 +1059,8 @@ export function drawMechanicalCanvas(
     case "PlacingMoment":
     case "PlacingDistributedForceStart":
     case "PlacingDistributedForceEnd":
-      ctx.strokeStyle = COLORS.ORANGE;
-      ctx.fillStyle = COLORS.ORANGE;
+      ctx.strokeStyle = COLORS.ACCENT;
+      ctx.fillStyle = COLORS.ACCENT;
       switch (state.type) {
         case "PlacingForceStart":
           draw_force(ctx, hoveredPart.position, new Point2(0, -50));
@@ -1073,7 +1073,7 @@ export function drawMechanicalCanvas(
           );
           break;
         case "PlacingMoment":
-          draw_moment(ctx, hoveredPart.position, 1, true);
+          draw_moment(ctx, hoveredPart.position, 1);
           break;
         case "PlacingDistributedForceStart":
           if (hoveredPart.type === "Edge") {
@@ -1417,7 +1417,7 @@ export function drawMechanicalCanvas(
       );
       break;
     case "PlacingProbe":
-      let pos = hoveredPart.position.clone();
+      const pos = hoveredPart.position.clone();
       if (hoveredPart.type !== "Void") pos.y -= DIM.PROBE_OFFSET;
       ctx.translate(pos.x, pos.y);
       draw_probe(ctx);

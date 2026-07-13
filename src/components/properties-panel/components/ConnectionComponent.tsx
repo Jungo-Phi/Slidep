@@ -144,7 +144,7 @@ const Connection: React.FC<ConnectionProps> = ({
               sx={{
                 borderRadius: 5,
                 "&:hover": {
-                  backgroundColor: "#00000025",
+                  backgroundColor: "action.hover",
                 },
                 my: -0.5,
                 ml: -0.5,
@@ -164,7 +164,7 @@ const Connection: React.FC<ConnectionProps> = ({
             sx={{
               borderRadius: 5,
               "&:hover": {
-                backgroundColor: "#00000025",
+                backgroundColor: "action.hover",
               },
               my: -0.5,
               ml: -0.5,

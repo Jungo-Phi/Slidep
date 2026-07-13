@@ -18,15 +18,20 @@ import {
   ValidationErrorCode,
 } from "../../utils";
 
+/**
+ * Categorical badge colors: they exist to tell the codes apart at a glance, not
+ * to carry a semantic role, so they are their own palette rather than theme
+ * tokens (the badges sit inside an Alert that already conveys error/warning).
+ */
 const ERROR_CODE_COLORS: Record<ValidationErrorCode, string> = {
-  DUPLICATE_ID: "#b71c1c",
-  DUPLICATE_IN_LIST: "#b71c1c",
-  SELF_REFERENCE: "#880e4f",
-  MISSING_REFERENCE: "#4527a0",
-  WRONG_TYPE: "#6a1b9a",
-  MISSING_BIDIRECTIONAL: "#004d40",
-  SAME_AXLE_MESH: "#bf360c",
-  CONTRADICTORY_MOTOR: "#3162ab",
+  DUPLICATE_ID: "#B71C1C",
+  DUPLICATE_IN_LIST: "#B71C1C",
+  SELF_REFERENCE: "#880E4F",
+  MISSING_REFERENCE: "#4527A0",
+  WRONG_TYPE: "#6A1B9A",
+  MISSING_BIDIRECTIONAL: "#004D40",
+  SAME_AXLE_MESH: "#BF360C",
+  CONTRADICTORY_MOTOR: "#3162AB",
 };
 
 const ERROR_CODE_LABELS: Record<ValidationErrorCode, string> = {
@@ -41,10 +46,10 @@ const ERROR_CODE_LABELS: Record<ValidationErrorCode, string> = {
 };
 
 const CATEGORY_COLORS: Record<ConstraintViolationCategory, string> = {
-  dimension: "#1565c0",
-  alignment: "#6a1b9a",
-  geometric: "#00695c",
-  liaison: "#e65100",
+  dimension: "#1565C0",
+  alignment: "#6A1B9A",
+  geometric: "#00695C",
+  liaison: "#E65100",
 };
 
 const CATEGORY_LABELS: Record<ConstraintViolationCategory, string> = {
@@ -83,7 +88,6 @@ export const ProjectInfoSection: React.FC<ProjectInfoSectionProps> = ({
     createdAt: mechanism.metadata.createdAt,
     modifiedAt: mechanism.metadata.modifiedAt,
     tags: mechanism.metadata.tags,
-    thumbnail: mechanism.metadata.thumbnail,
     lastSimulationMode: mechanism.metadata.lastSimulationMode,
   });
 
@@ -96,7 +100,6 @@ export const ProjectInfoSection: React.FC<ProjectInfoSectionProps> = ({
       createdAt: mechanism.metadata.createdAt,
       modifiedAt: mechanism.metadata.modifiedAt,
       tags: mechanism.metadata.tags,
-      thumbnail: mechanism.metadata.thumbnail,
       lastSimulationMode: mechanism.metadata.lastSimulationMode,
     });
   }, [mechanism.metadata]);
@@ -275,7 +278,7 @@ export const ProjectInfoSection: React.FC<ProjectInfoSectionProps> = ({
                       py: "1px",
                       borderRadius: "3px",
                       bgcolor: ERROR_CODE_COLORS[err.code],
-                      color: "white",
+                      color: "common.white",
                       flexShrink: 0,
                       lineHeight: 1.4,
                     }}
@@ -338,7 +341,7 @@ export const ProjectInfoSection: React.FC<ProjectInfoSectionProps> = ({
                       py: "1px",
                       borderRadius: "3px",
                       bgcolor: CATEGORY_COLORS[v.category],
-                      color: "white",
+                      color: "common.white",
                       flexShrink: 0,
                       lineHeight: 1.4,
                     }}

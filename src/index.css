@@ -19,41 +19,16 @@ body,
   overflow: hidden;
 }
 
+/*
+ * No colors here. Everything that carries one — the body background, the
+ * scrollbar, ::selection, :focus-visible — is themed, and so lives in the
+ * MuiCssBaseline overrides of `src/lib/mui-theme.ts`. A color written here
+ * would stay light when the user picks the dark theme.
+ */
 body {
   font-family: 'Source Sans 3', 'Source Sans Pro', 'Roboto', 'Helvetica', 'Arial', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: #FFF9EB;
-}
-
-/* Focus visible for accessibility */
-:focus-visible {
-  outline: 2px solid #DB5000;
-  outline-offset: 2px;
-}
-
-/* Scrollbar styling */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-::-webkit-scrollbar-track {
-  background: #f1f1f1;
-}
-
-::-webkit-scrollbar-thumb {
-  background: #bdbdbd;
-  border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: #9e9e9e;
-}
-
-/* Selection styling */
-::selection {
-  background-color: rgba(219, 80, 0, 0.2);
 }
 
 /* Canvas cursor styles */

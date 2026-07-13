@@ -54,7 +54,7 @@ export function actionReducer(
     ...ce,
   }));
   let loadElements = mechanism.loads.map((l) => ({ ...l })); // TODO : clone_load ?
-  let viewport = { ...mechanism.viewport };
+  const viewport = { ...mechanism.viewport };
   let element: UnionElement;
   actions.forEach((action) => {
     switch (action.type) {
@@ -359,14 +359,6 @@ export function actionReducer(
           loadElements,
         ) as MomentElement;
         moment.value = revert ? action.oldValue : action.newValue;
-        break;
-      }
-      case "FlipMomentDirection": {
-        const moment = get_load_element_from_id(
-          action.id,
-          loadElements,
-        ) as MomentElement;
-        moment.clockwise = !moment.clockwise;
         break;
       }
       case "SetLoadFrame": {

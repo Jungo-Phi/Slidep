@@ -479,7 +479,7 @@ export const MechanicalCanvas = forwardRef<
           mousePositionRef.current,
           currMech.viewport,
         );
-        let newHoveredPart = get_hovered_part(
+        const newHoveredPart = get_hovered_part(
           currMech.mechanicalElements,
           currMech.constraintElements,
           currMech.loads,

@@ -1,25 +1,32 @@
 import React, { useRef } from "react";
-import { Box, Typography } from "@mui/material";
+import { Box, Typography, useTheme, alpha } from "@mui/material";
 import { ProbeCurveKey } from "../../solver/probe-series";
-import { COLORS } from "../../../constants/rendering-specs";
 
-export const PROBE_CURVE_COLORS: Record<ProbeCurveKey, string> = {
-  x: "#e5484d",
-  y: "#2f81f7",
-  norm: "#8250df",
-  value: COLORS.ORANGE,
-};
+/**
+ * Categorical palette for the plotted curves. Unlike the UI's semantic roles,
+ * these are chosen for mutual distinguishability, so they are their own palette
+ * rather than theme tokens — the scalar curve is the one that borrows the
+ * theme's accent, which is why this is a function of it and not a constant.
+ */
+export const probe_curve_colors = (
+  accent: string,
+): Record<ProbeCurveKey, string> => ({
+  x: "#E5484D",
+  y: "#2F81F7",
+  norm: "#8250DF",
+  value: accent,
+});
 
 /** Colors used to distinguish elements in the superposed (comparison) mode. */
 export const PROBE_ELEMENT_COLORS = [
-  "#e5484d",
-  "#2f81f7",
-  "#2da44e",
-  "#8250df",
-  "#d4a72c",
-  "#fd7e14",
-  "#12a594",
-  "#d6409f",
+  "#E5484D",
+  "#2F81F7",
+  "#2DA44E",
+  "#8250DF",
+  "#D4A72C",
+  "#FD7E14",
+  "#12A594",
+  "#D6409F",
 ];
 
 /** One plotted curve: its own time axis + values (same length). */
@@ -62,6 +69,9 @@ export const ProbeChart: React.FC<ProbeChartProps> = ({
   onSeek,
 }) => {
   const svgRef = useRef<SVGSVGElement | null>(null);
+  // SVG paints through presentation attributes, not `sx`, so the theme tokens
+  // have to be resolved to values here rather than passed as role names.
+  const { palette } = useTheme();
   const plotted = curves.filter((c) => c.t.length >= 2);
   const hasData = plotted.length > 0;
 
@@ -155,7 +165,7 @@ export const ProbeChart: React.FC<ProbeChartProps> = ({
           x2={GUTTER - 2}
           y1={PAD_TOP}
           y2={VIEW_H - PAD_BOTTOM}
-          stroke="rgba(0,0,0,0.15)"
+          stroke={palette.divider}
           strokeWidth={0.5}
         />
         {/* Zero line */}
@@ -165,7 +175,9 @@ export const ProbeChart: React.FC<ProbeChartProps> = ({
             x2={VIEW_W - PAD_RIGHT}
             y1={toY(0)}
             y2={toY(0)}
-            stroke="rgba(0,0,0,0.2)"
+            // Deliberately stronger than the axis: the zero crossing is the one
+            // gridline that carries meaning.
+            stroke={alpha(palette.common.black, 0.2)}
             strokeWidth={0.5}
             strokeDasharray="3 3"
           />
@@ -199,7 +211,7 @@ export const ProbeChart: React.FC<ProbeChartProps> = ({
           x2={cursorX}
           y1={PAD_TOP}
           y2={VIEW_H - PAD_BOTTOM}
-          stroke={COLORS.ORANGE}
+          stroke={palette.primary.main}
           strokeWidth={0.8}
           opacity={0.6}
         />
@@ -208,7 +220,7 @@ export const ProbeChart: React.FC<ProbeChartProps> = ({
           x={GUTTER - 5}
           y={PAD_TOP + FONT_SIZE - 2}
           fontSize={FONT_SIZE}
-          fill="#777"
+          fill={palette.text.secondary}
           textAnchor="end"
         >
           {fmt(yMax)}
@@ -217,7 +229,7 @@ export const ProbeChart: React.FC<ProbeChartProps> = ({
           x={GUTTER - 5}
           y={VIEW_H - PAD_BOTTOM - 2}
           fontSize={FONT_SIZE}
-          fill="#777"
+          fill={palette.text.secondary}
           textAnchor="end"
         >
           {fmt(yMin)}
@@ -230,7 +242,7 @@ export const ProbeChart: React.FC<ProbeChartProps> = ({
     <Box
       sx={{
         borderRadius: 1,
-        backgroundColor: "action.hover",
+        backgroundColor: "background.sunken",
         overflow: "hidden",
       }}
     >

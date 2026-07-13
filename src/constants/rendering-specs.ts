@@ -3,35 +3,41 @@
  */
 
 import { UnionElement } from "../types";
+import {
+  CanvasPalette,
+  DEFAULT_THEME,
+  THEMES,
+  ThemeName,
+} from "../lib/mui-theme";
 
-export const COLORS = {
-  // Canvas colors
-  BACKGROUND: "#fdecc9", // Crème doux
-  GRID: "#f6e5c3",
-  GRID_MAJOR: "#ecdbb8",
-  GRID_LARGER: "#decead",
-  GRID_AXIS: "#d3c5a6",
-
-  // Element colors
-  STROKE: "#001D59", // Bleu foncé
-  FILL_BODY: "#b7e2ff", // Bleu Ciel
-  FILL_NODE: "#ffbe80", // Orange doux
-  ORANGE: "#d7530b", // Orange foncé
-  ORANGE_STROKE: "#9c4211", // Orange foncé
-
-  // Interaction colors
-  SELECTION_STROKE: "#6595d0",
-  SELECTION_FILL: "#b7e2ff", // FILL_BODY
-  SELECTION_BOX: "#7190e5",
-  DELETION_STROKE: "#a4315d",
-  DELETION_BOX: "#ed5e71",
-  SELECTION_ORANGE: "#ff621e",
-
-  // Transparency
+/** Alpha suffixes, appended to a hex color. Theme-independent. */
+const TRANSPARENCY = {
   ICON_TRANSPARENCY: "C8", // 75% opacity
   HALF_TRANSPARENCY: "80", // 50% opacity
-  HOVER: "#00000020", //§ 12.5% opacity
 } as const;
+
+/**
+ * Colors used to draw on the canvas, for the *currently selected theme*. Names
+ * state the role, not the hue, so that a change of accent does not turn every
+ * name into a lie.
+ *
+ * This binding is reassigned by `set_canvas_theme`. Drawing code may read
+ * `COLORS.X` freely — the canvas redraws every animation frame, so a theme
+ * switch shows up on the next one — but must not capture it in a module-level
+ * constant, which would freeze it on the theme active at import time.
+ *
+ * Do not use `COLORS` inside a React `sx` prop: UI components go through the
+ * theme's semantic roles (`text.primary`, `primary.main`, `action.hover`, …).
+ */
+export let COLORS: CanvasPalette & typeof TRANSPARENCY = {
+  ...THEMES[DEFAULT_THEME].canvas,
+  ...TRANSPARENCY,
+};
+
+/** Repoint the canvas palette. Call whenever the active theme changes. */
+export function set_canvas_theme(name: ThemeName): void {
+  COLORS = { ...THEMES[name].canvas, ...TRANSPARENCY };
+}
 
 export const ICON_SELECTION_FILTER = "brightness(5)";
 export const FILL_SELECTION_FILTER = "brightness(1.2)";

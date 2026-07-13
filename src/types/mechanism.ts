@@ -19,7 +19,6 @@ export interface MechanismMetadata {
   modifiedAt: number;
   version: string;
   tags: string[];
-  thumbnail: string; // DataURL (ex: "data:image/png;base64,...")
   lastSimulationMode: SimulationMode;
 }
 
@@ -31,7 +30,6 @@ export const DEFAULT_METADATA: MechanismMetadata = {
   modifiedAt: 0,
   version: "1.0.0",
   tags: [],
-  thumbnail: "",
   lastSimulationMode: "kinematic", // TODO : passer en "dynamic" quand le mode existe
 };
 

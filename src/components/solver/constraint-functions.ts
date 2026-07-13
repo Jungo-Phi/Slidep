@@ -35,7 +35,7 @@ export function applyHandleGrabConstraint(
     const p = positions.get(key);
     if (!p) return 0;
     const delta = targetValue.sub(p);
-    let target = delta.mul(stiffness).limit_length_max(maxAmplitude);
+    const target = delta.mul(stiffness).limit_length_max(maxAmplitude);
     positions.set(key, p.add(target));
     return delta.length();
   }
@@ -435,8 +435,8 @@ export function applyAngleConstraint(
 
   if (delta1.length_squared() === 0 || delta2.length_squared() === 0) return 0;
 
-  let virtV1 = flipStart ? delta1.mul(-1) : delta1;
-  let virtV2 = flipEnd ? delta2.mul(-1) : delta2;
+  const virtV1 = flipStart ? delta1.mul(-1) : delta1;
+  const virtV2 = flipEnd ? delta2.mul(-1) : delta2;
   const currentAngle = virtV1.angle_to(virtV2);
 
   let diff = currentAngle - targetAngle * (couterClockwise ? -1 : 1);

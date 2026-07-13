@@ -14,6 +14,7 @@ import {
   Tooltip,
   List,
   ListItem,
+  useTheme,
 } from "@mui/material";
 import {
   Add,
@@ -46,11 +47,11 @@ import {
   available_probe_metrics,
   toggled_probes,
 } from "../canvas/ProbeMetricSelector";
-import NumberInput from "./components/NumberInput";
+import SignedNumberInput from "./components/SignedNumberInput";
 import ElementDisplay from "./components/ElementDisplay";
 import ProbeChart, {
   ChartCurve,
-  PROBE_CURVE_COLORS,
+  probe_curve_colors,
   PROBE_ELEMENT_COLORS,
 } from "./components/ProbeChart";
 import { get_element_from_id } from "../mechanism/connect-actions";
@@ -171,6 +172,8 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
   setRuntimeState,
   selectedElement,
 }) => {
+  const { palette } = useTheme();
+  const curveColors = probe_curve_colors(palette.primary.main);
   const [superpose, setSuperpose] = React.useState(false);
   const [metricMenu, setMetricMenu] = React.useState<{
     elementID: ID;
@@ -297,7 +300,7 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
             gap: 0.5,
             p: 1,
             borderRadius: 1,
-            backgroundColor: "action.hover",
+            backgroundColor: "background.sunken",
           }}
         >
           <Typography variant="h6" fontWeight={700} color="primary">
@@ -319,7 +322,7 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
             <Box
               sx={{
                 borderRadius: 3,
-                backgroundColor: "action.hover",
+                backgroundColor: "background.sunken",
                 display: "flex",
                 flexDirection: "column",
                 gap: 0.5,
@@ -335,7 +338,7 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
                     size={"small"}
                     editable={false}
                     trailingControls={
-                      <NumberInput
+                      <SignedNumberInput
                         label=""
                         value={pivot.motor!.speed}
                         onChange={(speed) =>
@@ -397,7 +400,7 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
               overflowY: "auto",
               marginX: 2,
               borderRadius: 3,
-              backgroundColor: "action.hover",
+              backgroundColor: "background.sunken",
             }}
           >
             <List
@@ -545,7 +548,7 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
                   )
                   .map((c) => ({
                     id: c.key,
-                    color: PROBE_CURVE_COLORS[c.key],
+                    color: curveColors[c.key],
                     t: series.t,
                     values: c.values,
                   }));
@@ -614,15 +617,15 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
                               fontSize: "0.68rem",
                               fontWeight: 600,
                               color: probe.components[k]
-                                ? "#fff"
+                                ? "common.white"
                                 : "text.secondary",
                               backgroundColor: probe.components[k]
-                                ? PROBE_CURVE_COLORS[k]
-                                : "action.hover",
+                                ? curveColors[k]
+                                : "background.sunken",
                               "&:hover": {
                                 backgroundColor: probe.components[k]
-                                  ? PROBE_CURVE_COLORS[k]
-                                  : "action.selected",
+                                  ? curveColors[k]
+                                  : "action.hover",
                               },
                             }}
                           />

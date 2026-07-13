@@ -169,7 +169,6 @@ describe("PlacingMoment", () => {
       id: id("moment1"),
       beamID: id("beam1"),
       value: 5,
-      clockwise: true,
     };
     const r = handle_placing_element(
       state,
@@ -188,8 +187,7 @@ describe("PlacingMoment", () => {
       type: "moment",
       id: id("moment2"),
       beamID: id("other"),
-      value: 3,
-      clockwise: false,
+      value: -3,
     };
     const r = handle_placing_element(state, edge(id("beam1")), [], [], [other]);
     expect(r.actions).toHaveLength(1);

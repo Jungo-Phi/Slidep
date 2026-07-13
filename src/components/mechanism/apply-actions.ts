@@ -280,7 +280,7 @@ export function apply_actions(
   }
   if (!newHistory) newHistory = [...mechanism.history, newActions];
 
-  let newMechanism = {
+  const newMechanism = {
     history: newHistory,
     future: [],
     mechanicalElements: [...mechanism.mechanicalElements],

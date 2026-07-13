@@ -90,10 +90,12 @@ export const ConstraintEditor: React.FC<ConstraintEditorProps> = ({
     "& .MuiOutlinedInput-input": {
       padding: "4px 2px",
       textAlign: "center",
-      color: COLORS.STROKE,
+      color: "text.primary",
       fontSize: "16px", // Match canvas font size & family
       fontFamily: "Arial",
-      caretColor: COLORS.STROKE,
+      // Not a theme-resolvable key in `sx`, so it takes the canvas value; it is
+      // the same navy as `text.primary`.
+      caretColor: COLORS.ELEMENT_STROKE,
     },
   };
 
@@ -105,9 +107,12 @@ export const ConstraintEditor: React.FC<ConstraintEditorProps> = ({
             display: "flex",
             alignItems: "center",
             height: "36px",
-            border: `2px solid ${COLORS.STROKE}`,
+            border: "2px solid",
+            borderColor: "text.primary",
             borderRadius: "18px",
-            backgroundColor: "white",
+            // Pure white, not a themed cream: this floats over the canvas and has
+          // to stand out from it.
+          backgroundColor: "common.white",
             padding: "0 6px",
           }}
         >
@@ -133,7 +138,7 @@ export const ConstraintEditor: React.FC<ConstraintEditorProps> = ({
           />
           <Typography
             sx={{
-              color: COLORS.STROKE,
+              color: "text.primary",
               mx: -0.3,
               userSelect: "none",
               fontSize: "16px",
@@ -171,9 +176,12 @@ export const ConstraintEditor: React.FC<ConstraintEditorProps> = ({
         sx={{
           display: "flex",
           alignItems: "center",
-          border: `2px solid ${COLORS.STROKE}`,
+          border: "2px solid",
+          borderColor: "text.primary",
           borderRadius: "6px",
-          backgroundColor: "white",
+          // Pure white, not a themed cream: this floats over the canvas and has
+          // to stand out from it.
+          backgroundColor: "common.white",
           padding: "0 4px",
         }}
       >
@@ -193,7 +201,7 @@ export const ConstraintEditor: React.FC<ConstraintEditorProps> = ({
         {constraint.type === "dimension-angle" && (
           <Typography
             sx={{
-              color: COLORS.STROKE,
+              color: "text.primary",
               ml: -0.5,
               mr: 0.5,
               userSelect: "none",

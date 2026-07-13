@@ -33,7 +33,7 @@ const fps = 60;
 /**
  * SimulationControls component
  */
-export const SimulationControls: React.FC<{}> = ({}) => {
+export const SimulationControls: React.FC = () => {
   const [speed, setSpeed] = useState<number>(0);
   const handleSpeedChange = (_: Event, value: number) => {
     setSpeed(value);

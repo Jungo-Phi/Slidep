@@ -5,7 +5,6 @@ import {
   DialogContent,
   Grid,
   Card,
-  CardMedia,
   CardContent,
   Typography,
   Chip,
@@ -23,6 +22,7 @@ import {
 } from "@mui/icons-material";
 import { SerializedMechanism } from "../../types";
 import { format_date } from "../../utils";
+import MechanismThumbnail from "./MechanismThumbnail";
 
 interface MechanismsGalleryProps {
   open: boolean;
@@ -91,11 +91,11 @@ export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
                 cursor: "pointer",
                 border: "2px dashed",
                 borderColor: "divider",
-                bgcolor: "action.hover",
+                bgcolor: "background.sunken",
                 transition: "all 0.2s",
                 "&:hover": {
                   borderColor: "primary.main",
-                  bgcolor: "action.selected",
+                  bgcolor: "action.hover",
                   transform: "translateY(-2px)",
                 },
               }}
@@ -139,22 +139,8 @@ export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
                       borderColor: "divider",
                     }}
                   >
-                    {/* Miniature */}
-                    <Box sx={{ position: "relative", paddingTop: "100%" }}>
-                      <CardMedia
-                        component="img"
-                        image={mechanismRecord.metadata.thumbnail}
-                        alt={mechanismRecord.metadata.name}
-                        sx={{
-                          position: "absolute",
-                          top: 0,
-                          left: 0,
-                          width: "100%",
-                          height: "100%",
-                          objectFit: "contain",
-                        }}
-                      />
-                    </Box>
+                    {/* Miniature, redessinée au thème courant */}
+                    <MechanismThumbnail record={mechanismRecord} />
 
                     <Divider />
 
@@ -219,7 +205,7 @@ export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
                             display: "flex",
                             alignItems: "center",
                             gap: 0.5,
-                            bgcolor: "action.hover",
+                            bgcolor: "background.sunken",
                             px: 1,
                             py: 0.2,
                             borderRadius: 1,

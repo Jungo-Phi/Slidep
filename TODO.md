@@ -4,7 +4,6 @@
 
 ### À faire rapidement
 
-- Ajouter un fichier config ESLint
 - Comportement étrange dans vectorInput à régler
 
 - Analise des degrés de libertés en sous-parties
@@ -104,8 +103,6 @@
 - Placer join à la jonction des Beams
 - Éloigner les contraintes des éléments pour la lisibilité (à préciser)
 - Améliorer la contrainte d'angle (transformée en longueurs) pour les edges parallèles
-- Adapter le thumbnail generator pour cadrer sur le mécanisme
-- Passer les thumbnail dans la bibliothèque en AVIF lossless
 - Copié collé
 - Rewhole de ElementDisplay pour inclure d'autres éléments, fill, etc.
 - Ajouter "Angle" dans les edges
@@ -154,8 +151,6 @@
 - Afficher "shown_name d'un élément au hover de celui-ci ?
 - Ajouter InputBox lors du placement des beams ? (définir sa longueur)
 - Changer les textes avec les langues
-- Theme uniformisation
-- Ajouter les thèmes clair / sombre
 - Style des éléments : fil de fer, plein, couleurs
 - responsive : mobile mode
 - Tendre la courroie
