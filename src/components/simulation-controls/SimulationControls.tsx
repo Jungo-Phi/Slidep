@@ -15,8 +15,7 @@ import {
   Replay as ReplayIcon,
 } from "@mui/icons-material";
 
-import playIconUrl from "../../assets/icons/palette/play.svg";
-import stopIconUrl from "../../assets/icons/palette/stop.svg";
+import { icon } from "../element-palette/iconDataUris";
 import { SimulationStatus } from "../../types";
 
 const SPEED_MARKS = [
@@ -128,7 +127,7 @@ export const SimulationControls: React.FC = () => {
             ) : (
               <Box
                 component="img"
-                src={playIconUrl}
+                src={icon("play")}
                 alt="Démarrer"
                 sx={{
                   width: 28,
@@ -159,7 +158,7 @@ export const SimulationControls: React.FC = () => {
           >
             <Box
               component="img"
-              src={stopIconUrl}
+              src={icon("stop")}
               alt="Arrêter"
               sx={{
                 width: 28,

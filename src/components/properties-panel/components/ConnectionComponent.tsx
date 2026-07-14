@@ -108,7 +108,6 @@ const Connection: React.FC<ConnectionProps> = ({
       element.type === "belt" &&
       containerType === "ConnectsAttachedGears") ||
     containerType === "ConnectsAttachedBelt";
-
   let direction = false;
   if (showDirectionButton) {
     if (element.type === "belt") {
@@ -128,6 +127,9 @@ const Connection: React.FC<ConnectionProps> = ({
     }
   }
   const DirectionIcon = direction ? RotateLeftIcon : RotateRightIcon;
+  const showDisconnectButton =
+    containerType !== "ConnectsParentAxle" &&
+    containerType !== "ConnectsFixedGears";
 
   return (
     <ElementDisplay
@@ -160,25 +162,21 @@ const Connection: React.FC<ConnectionProps> = ({
               />
             </IconButton>
           )}
-          <IconButton
-            sx={{
-              borderRadius: 5,
-              "&:hover": {
-                backgroundColor: "action.hover",
-              },
-              my: -0.5,
-              ml: -0.5,
-            }}
-            onClick={handleDisconnect}
-            title="Déconnecter"
-            size="small"
-          >
-            <LinkOffIcon
-              sx={{ mx: -0.1, my: -0.4 }}
-              fontSize="small"
+          {showDisconnectButton && (
+            <IconButton
+              sx={{
+                borderRadius: 5,
+                my: -0.5,
+                ml: -0.5,
+              }}
               color="error"
-            />
-          </IconButton>
+              onClick={handleDisconnect}
+              title="Déconnecter"
+              size="small"
+            >
+              <LinkOffIcon sx={{ mx: -0.1, my: -0.4 }} fontSize="small" />
+            </IconButton>
+          )}
         </>
       }
     ></ElementDisplay>

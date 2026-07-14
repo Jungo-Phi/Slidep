@@ -12,8 +12,8 @@
  * hues are substituted for that theme's before the URI is built. Results are
  * cached per theme: the substitution runs once per icon per theme, not per draw.
  */
-import { COLORS } from "../../constants/rendering-specs";
-import { CanvasPalette } from "../../lib/mui-theme";
+import { ICON_COLORS } from "../../constants/rendering-specs";
+import { CanvasPalette } from "../../constants/mui-theme";
 
 const rawIcons = import.meta.glob("../../assets/icons/palette/*.svg", {
   query: "?raw",
@@ -37,15 +37,22 @@ const SOURCE_HUES: Record<string, keyof CanvasPalette> = {
   "#001d59": "ELEMENT_STROKE",
   "#193a6c": "ELEMENT_STROKE",
   "#000": "ELEMENT_STROKE",
+  black: "ELEMENT_STROKE",
   "rgb(219,80,0)": "ACCENT",
   "#db5000": "ACCENT",
   "rgb(183,226,255)": "FILL_BODY",
   "rgb(255,190,128)": "FILL_NODE",
   "#ffbe80": "FILL_NODE",
   "rgb(255,237,198)": "BACKGROUND",
+  white: "BACKGROUND",
 };
 
-const COLOR_LITERAL = /rgb\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*\)|#[0-9a-fA-F]{6}\b|#[0-9a-fA-F]{3}\b/g;
+// Colours appear in the sources as `rgb()`, as hex, and — in a few icons — as
+// the bare keywords `black` / `white`. Miss the keywords and those icons quietly
+// keep their classic colours, which is how the ground and motor icons stayed
+// navy on a dark canvas. Only whole words match, so an id can never be mangled.
+const COLOR_LITERAL =
+  /rgb\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*\)|#[0-9a-fA-F]{6}\b|#[0-9a-fA-F]{3}\b|\b(?:black|white)\b/g;
 
 const recolor = (svg: string, palette: CanvasPalette): string =>
   svg.replace(COLOR_LITERAL, (literal) => {
@@ -80,9 +87,12 @@ const icons_for = (palette: CanvasPalette): Record<string, string> => {
  * Data URI for a palette icon, by basename (e.g. `icon("beam")`), in the active
  * theme's colors. Call it at render/draw time — a module-level constant built
  * from it would freeze on whichever theme was active at import.
+ *
+ * Reads `ICON_COLORS`, not `COLORS`: during a theme fade the latter holds an
+ * intermediate palette, which would key a fresh set of URIs on every frame.
  */
 export const icon = (name: string): string => {
-  const uri = icons_for(COLORS)[name];
+  const uri = icons_for(ICON_COLORS)[name];
   if (!uri) throw new Error(`Unknown palette icon: ${name}`);
   return uri;
 };

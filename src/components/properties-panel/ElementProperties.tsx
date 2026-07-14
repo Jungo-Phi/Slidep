@@ -17,10 +17,12 @@ import {
   Checkbox,
   Button,
 } from "@mui/material";
-import DeleteIcon from "@mui/icons-material/Delete";
-import ShowChartIcon from "@mui/icons-material/ShowChart";
-import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
-import PublicIcon from "@mui/icons-material/Public";
+import {
+  Delete,
+  KeyboardArrowDown,
+  ShowChart,
+  Public,
+} from "@mui/icons-material";
 import {
   DistributedForceElement,
   EdgeElement,
@@ -170,7 +172,7 @@ const ProbesSection: React.FC<ProbesSectionProps> = ({
         </Typography>
         <Button
           size="small"
-          endIcon={<KeyboardArrowDownIcon sx={{ ml: -0.5 }} />}
+          endIcon={<KeyboardArrowDown sx={{ ml: -0.5 }} />}
           onClick={(e) => setMetricsAnchorEl(e.currentTarget)}
           sx={{ textTransform: "none", flexShrink: 0, py: 0, minWidth: 0 }}
         >
@@ -201,7 +203,7 @@ const ProbesSection: React.FC<ProbesSectionProps> = ({
       ))}
       <Button
         size="small"
-        startIcon={<ShowChartIcon />}
+        startIcon={<ShowChart />}
         onClick={() => setActiveTab("analysis")}
         sx={{
           textTransform: "none",
@@ -341,8 +343,6 @@ interface FrameControlProps {
   applyActions: (actions: Action[], actionBundleType: ActionBundleType) => void;
 }
 
-/** The "world frame" option, laid out like an ElementDisplay small row (globe
- *  icon + label) so it lines up with the edge options. */
 const MondeLabel: React.FC = () => (
   <Box sx={{ display: "flex", alignItems: "center", p: "4px" }}>
     <Box
@@ -355,7 +355,7 @@ const MondeLabel: React.FC = () => (
         pr: 0.75,
       }}
     >
-      <PublicIcon
+      <Public
         sx={{ margin: "2px", width: 20, height: 20, color: "text.primary" }}
       />
       <Typography
@@ -419,7 +419,7 @@ const FrameControl: React.FC<FrameControlProps> = ({
           display: "flex",
           alignItems: "center",
           cursor: "pointer",
-          borderRadius: 1,
+          borderRadius: 3,
           "&:hover": { backgroundColor: "action.hover" },
         }}
       >
@@ -436,7 +436,7 @@ const FrameControl: React.FC<FrameControlProps> = ({
         ) : (
           <MondeLabel />
         )}
-        <KeyboardArrowDownIcon fontSize="small" sx={{ ml: -0.5 }} />
+        <KeyboardArrowDown fontSize="small" sx={{ ml: -0.5 }} />
       </Box>
       <Menu
         anchorEl={anchorEl}
@@ -494,8 +494,8 @@ const LoadsSection: React.FC<LoadsSectionProps> = ({
   setCanvasState,
   applyActions,
 }) => {
-  // Reference edge(s) for the world/edge frame control. When the host is an edge
-  // (distributed force, or a force on an edge) that edge is the single reference.
+  // Reference edge(s) for the world/edge frame control.
+  // When the host is an edge (distributed force, or a force on an edge) that edge is the single reference.
   // For a force on a node, the candidates are the edges attached to it.
   const hostEdge: EdgeElement | undefined =
     "positionStart" in element ? (element as EdgeElement) : undefined;
@@ -554,8 +554,9 @@ const LoadsSection: React.FC<LoadsSectionProps> = ({
                     )
                   }
                   title="Supprimer"
+                  sx={{ borderRadius: 3 }}
                 >
-                  <DeleteIcon sx={{ width: 16, height: 16 }} />
+                  <Delete sx={{ width: 16, height: 16 }} />
                 </IconButton>
               }
             />
@@ -812,8 +813,9 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                           )
                         }
                         title="Supprimer"
+                        sx={{ borderRadius: 3 }}
                       >
-                        <DeleteIcon sx={{ width: 20, height: 20 }} />
+                        <Delete sx={{ width: 20, height: 20 }} />
                       </IconButton>
                     </StructureOnly>
                   }
@@ -849,159 +851,131 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
           size="large"
           editable={true}
           trailingControls={
-            <StructureOnly disabled={simulating} row>
-              {"isGrounded" in element && element.type !== "mass" && (
-                <GroundSwitch
-                  grounded={element.isGrounded}
-                  setGround={(grounded) =>
+            <>
+              <StructureOnly disabled={simulating} row>
+                {"isGrounded" in element && element.type !== "mass" && (
+                  <GroundSwitch
+                    grounded={element.isGrounded}
+                    setGround={(grounded) =>
+                      applyActions(
+                        [{ type: "GroundNode", id: element.id, grounded }],
+                        "Other",
+                      )
+                    }
+                  />
+                )}
+              </StructureOnly>
+              <StructureOnly disabled={simulating} row>
+                {element.type === "belt" && (
+                  <BeltTensionSwitch
+                    tightened={element.tight}
+                    setTight={(tightened) =>
+                      applyActions(
+                        [
+                          {
+                            type: "TightenBelt",
+                            id: element.id,
+                            tightened,
+                          },
+                        ],
+                        "Connects",
+                      )
+                    }
+                  />
+                )}
+              </StructureOnly>
+              <StructureOnly disabled={simulating} row>
+                {element.type === "mass" && (
+                  <NumberInput
+                    label="kg"
+                    value={element.mass}
+                    onChange={(mass) =>
+                      applyActions(
+                        [
+                          {
+                            type: "ChangeMass",
+                            id: element.id,
+                            delta: mass - element.mass,
+                          },
+                        ],
+                        "ChangeConstant",
+                      )
+                    }
+                    large={true}
+                    accent={true}
+                    signed={false}
+                  />
+                )}
+              </StructureOnly>
+              <StructureOnly disabled={simulating} row>
+                {element.type === "spring" && (
+                  <NumberInput
+                    label="N/m"
+                    value={element.stiffness}
+                    onChange={(stiffness) =>
+                      applyActions(
+                        [
+                          {
+                            type: "ChangeStiffness",
+                            id: element.id,
+                            delta: stiffness - element.stiffness,
+                          },
+                        ],
+                        "ChangeConstant",
+                      )
+                    }
+                    large={true}
+                    accent={true}
+                    signed={false}
+                  />
+                )}
+              </StructureOnly>
+              <StructureOnly disabled={simulating} row>
+                {element.type === "damper" && (
+                  <NumberInput
+                    label="N·s/m"
+                    value={element.damping}
+                    onChange={(damping) =>
+                      applyActions(
+                        [
+                          {
+                            type: "ChangeDamping",
+                            id: element.id,
+                            delta: damping - element.damping,
+                          },
+                        ],
+                        "ChangeConstant",
+                      )
+                    }
+                    large={true}
+                    accent={true}
+                    signed={false}
+                  />
+                )}
+              </StructureOnly>
+              <StructureOnly disabled={simulating} row>
+                <IconButton
+                  color="error"
+                  onClick={() =>
                     applyActions(
-                      [{ type: "GroundNode", id: element.id, grounded }],
+                      delete_element(
+                        element.id,
+                        mechanism.mechanicalElements,
+                        mechanism.constraintElements,
+                        mechanism.loads,
+                      ),
                       "Other",
                     )
                   }
-                />
-              )}
-              {element.type === "belt" && (
-                <BeltTensionSwitch
-                  tightened={element.tight}
-                  setTight={(tightened) =>
-                    applyActions(
-                      [
-                        {
-                          type: "TightenBelt",
-                          id: element.id,
-                          tightened,
-                        },
-                      ],
-                      "Connects",
-                    )
-                  }
-                />
-              )}
-              {element.type === "belt" &&
-                (() => {
-                  const beltDim = mechanism.constraintElements.find(
-                    (c) =>
-                      c.type === "dimension-belt" && c.beltID === element.id,
-                  );
-                  return (
-                    <FormControlLabel
-                      control={
-                        <Switch
-                          checked={!!beltDim}
-                          onChange={(_, checked) => {
-                            if (checked) {
-                              applyActions(
-                                [
-                                  {
-                                    type: "CreateElement",
-                                    element: {
-                                      type: "dimension-belt",
-                                      id: crypto.randomUUID(),
-                                      position: element.positionStart,
-                                      beltID: element.id,
-                                      value: measure_belt_length(
-                                        element,
-                                        mechanism.mechanicalElements,
-                                      ),
-                                    },
-                                  },
-                                ],
-                                "CreateConstraint",
-                              );
-                            } else if (beltDim) {
-                              applyActions(
-                                [{ type: "DeleteElement", element: beltDim }],
-                                "Connects",
-                              );
-                            }
-                          }}
-                        />
-                      }
-                      label="Longueur fixée"
-                    />
-                  );
-                })()}
-              {element.type === "mass" && (
-                <NumberInput
-                  label="kg"
-                  value={element.mass}
-                  onChange={(mass) =>
-                    applyActions(
-                      [
-                        {
-                          type: "ChangeMass",
-                          id: element.id,
-                          delta: mass - element.mass,
-                        },
-                      ],
-                      "ChangeConstant",
-                    )
-                  }
-                  accent={true}
-                  signed={false}
-                />
-              )}
-              {element.type === "spring" && (
-                <NumberInput
-                  label="N/m"
-                  value={element.stiffness}
-                  onChange={(stiffness) =>
-                    applyActions(
-                      [
-                        {
-                          type: "ChangeStiffness",
-                          id: element.id,
-                          delta: stiffness - element.stiffness,
-                        },
-                      ],
-                      "ChangeConstant",
-                    )
-                  }
-                  accent={true}
-                  signed={false}
-                />
-              )}
-              {element.type === "damper" && (
-                <NumberInput
-                  label="N·s/m"
-                  value={element.damping}
-                  onChange={(damping) =>
-                    applyActions(
-                      [
-                        {
-                          type: "ChangeDamping",
-                          id: element.id,
-                          delta: damping - element.damping,
-                        },
-                      ],
-                      "ChangeConstant",
-                    )
-                  }
-                  accent={true}
-                  signed={false}
-                />
-              )}
-              <IconButton
-                color="error"
-                onClick={() =>
-                  applyActions(
-                    delete_element(
-                      element.id,
-                      mechanism.mechanicalElements,
-                      mechanism.constraintElements,
-                      mechanism.loads,
-                    ),
-                    "Other",
-                  )
-                }
-                title="Supprimer"
-                onMouseEnter={(_e) => handleMouseEnter(element)}
-                onMouseLeave={handleMouseLeave}
-              >
-                <DeleteIcon />
-              </IconButton>
-            </StructureOnly>
+                  title="Supprimer"
+                  onMouseEnter={(_e) => handleMouseEnter(element)}
+                  onMouseLeave={handleMouseLeave}
+                  sx={{ borderRadius: 3 }}
+                >
+                  <Delete />
+                </IconButton>
+              </StructureOnly>
+            </>
           }
         />
       </Box>
@@ -1215,8 +1189,6 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
             />
           </StructureOnly>
           <Divider sx={{ my: 1 }} />
-          {/* Les charges sont des paramètres : leurs valeurs restent éditables
-              pendant la simulation (le mouvement change à partir de maintenant). */}
           <LoadsSection
             element={element}
             mechanicalElements={mechanism.mechanicalElements}

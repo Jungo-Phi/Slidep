@@ -22,7 +22,7 @@ body,
 /*
  * No colors here. Everything that carries one — the body background, the
  * scrollbar, ::selection, :focus-visible — is themed, and so lives in the
- * MuiCssBaseline overrides of `src/lib/mui-theme.ts`. A color written here
+ * MuiCssBaseline overrides of `src/constants/mui-theme.ts`. A color written here
  * would stay light when the user picks the dark theme.
  */
 body {

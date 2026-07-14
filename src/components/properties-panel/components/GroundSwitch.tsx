@@ -5,8 +5,9 @@
 
 import React from "react";
 import { Box, IconButton, Typography } from "@mui/material";
-import groundIconUrl from "../../../assets/icons/palette/ground.svg";
-import ungroundIconUrl from "../../../assets/icons/palette/unground.svg";
+// Through `icon()`, never a direct asset import: a direct import hands back the
+// raw file, which still carries the classic navy and stays navy on a dark canvas.
+import { icon } from "../../element-palette/iconDataUris";
 
 interface GroundSwitchProps {
   grounded: boolean;
@@ -39,7 +40,7 @@ export const GroundSwitch: React.FC<GroundSwitchProps> = ({
         <Box
           component="img"
           style={{ width: 28, height: 28 }}
-          src={grounded ? groundIconUrl : ungroundIconUrl}
+          src={icon(grounded ? "ground" : "unground")}
         />
       </IconButton>
       <Typography variant="body2">{grounded ? "Ancré" : "Libre"}</Typography>

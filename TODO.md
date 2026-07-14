@@ -4,10 +4,6 @@
 
 ### À faire rapidement
 
-- Comportement étrange dans vectorInput à régler
-
-- Analise des degrés de libertés en sous-parties
-
 - Afficher les valeurs des forces sur le canvas
 
 - Déconnecter un join de courroie fermée doit l'ouvrir.
@@ -21,12 +17,23 @@
 - Hover on closed belt est inconcistant
 - La dimension belt doit pouvoir changer les rayons en édition
 
-- De temps en temps, le snap to grid ne marche pas
 - Placer un engrenage sur un moteur laisse le moteur
 - Placer beltEnd après beltStart sur gear fait pas le attached
 
-- Distinguer en simulation (et en édition ?) grab pour déplacer un élément (pas de sélection) de click pour le sélectionner
 - Escape de placingProbe ne fait pas sortir de l'onglet analyse
+- ENTER et ESCAPE dans "auteur.ice.x" ou "nom de projet" devrait quitter la textBox
+- Afficher les trajectoires des edges (les 2 extrémités)
+- Changer couleur (icon + texte) de la contrainte sélectionnée au lieu du bord dans panneau contextuel
+- Ajouter disableInteractive à tous les tooltip
+- default damper length moves on simulation start
+
+- Ajouter boutons pour changer le parentBeam des slider et slideps
+- Le bouton dropDown pour changer le repère d'une force ne click pas sur toute la largeur de ElementDisplay
+- Utiliser le "bouton dropDown pour changer le repère d'une force" pour choisir l'ancrage d'un moteur
+- Afficher vitesse au lieu de ground en haut du moteur
+- Simulation moteur non grounded (parentBeamID)
+
+- Analise des degrés de libertés en sous-parties
 
 ### À faire plus tard
 
@@ -84,8 +91,6 @@
 - Afficher temps total de simu sur la progressbar
 - Faire le panneau de paramètre propre
 - placer un gear sur un slidep reste en slidep
-- Ajouter le choix du parent beam dans le moteur (afficher vitesse au lieu de ground en haut)
-- Simulation moteur non grounded (parentBeamID)
 - Belt hover (gear section) is not reliable
 - Empecher de placer une belt sur un gear avec le même axisID
 - Hover et Click dans sur les dimension pour les éditer quand state==placingStartDimension

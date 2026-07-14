@@ -28,8 +28,8 @@ import {
   Snackbar,
   Switch,
   FormControlLabel,
-  ListItemIcon,
   alpha,
+  ListItemIcon,
 } from "@mui/material";
 import {
   CenterFocusStrong,
@@ -51,9 +51,12 @@ import {
   RestartAlt,
   KeyboardDoubleArrowDown,
   JoinInner,
+  LightMode,
+  DarkMode,
+  SettingsBrightness,
   Check,
 } from "@mui/icons-material";
-import logoUrl from "./assets/icons/palette/logo.svg";
+import { icon } from "./components/element-palette/iconDataUris";
 import {
   Action,
   ActionBundleType,
@@ -87,7 +90,14 @@ import {
   getStorageItem,
   setStorageItem,
 } from "./utils";
-import { THEMES, DEFAULT_THEME, ThemeName } from "./lib/mui-theme";
+import {
+  THEMES,
+  THEME_FAMILIES,
+  DEFAULT_THEME,
+  resolve_theme,
+  ThemeMode,
+  ThemeName,
+} from "./constants/mui-theme";
 import { set_canvas_theme } from "./constants/rendering-specs";
 import MechanicalCanvas, {
   ConstraintChangeSignal,
@@ -164,6 +174,28 @@ const is_structure_bundle = (actions: Action[]) =>
     (a) => !OBSERVATION_ACTIONS.includes(a.type) && !is_parameter_action(a),
   );
 
+/**
+ * The ambience the whole app is in, whichever family it wears — the choice is
+ * global, as it is in the system it can defer to, and not a property of each
+ * family.
+ */
+const THEME_MODES: {
+  mode: ThemeMode;
+  title: string;
+  Icon: typeof LightMode;
+}[] = [
+  { mode: "light", title: "Clair", Icon: LightMode },
+  { mode: "dark", title: "Sombre", Icon: DarkMode },
+  { mode: "system", title: "Système", Icon: SettingsBrightness },
+];
+
+/**
+ * How long the pointer must rest on a theme before it is tried on. A swipe
+ * across the menu on the way somewhere else asks for nothing, and should
+ * repaint nothing.
+ */
+const THEME_PREVIEW_DELAY_MS = 100;
+
 const App: React.FC = () => {
   const [canvasState, setCanvasState] = useState<CanvasState>({
     type: "Selecting",
@@ -213,21 +245,86 @@ const App: React.FC = () => {
   const [simulationConfig, setSimulationConfig] = useState<SimulationConfig>(
     DEFAULT_SIMULATION_CONFIG,
   );
-  // The canvas palette lives in a module binding rather than in React state, so
-  // it is repointed before the first paint of the new theme, not after it.
-  const [themeName, setThemeName] = useState<ThemeName>(() => {
-    const stored = getStorageItem<ThemeName>("theme", DEFAULT_THEME);
-    return stored in THEMES ? stored : DEFAULT_THEME;
+  // A theme is chosen as a family and a mode, not as one of the six names: the
+  // name is what those two resolve to, once the browser has had its say on
+  // "système".
+  const [themeChoice, setThemeChoice] = useState<{
+    family: string;
+    mode: ThemeMode;
+  }>(() => {
+    const legacy = getStorageItem<ThemeName>("theme", DEFAULT_THEME);
+    const chosen = legacy in THEMES ? THEMES[legacy] : THEMES[DEFAULT_THEME];
+    return {
+      family: getStorageItem<string>("themeFamily", chosen.family),
+      mode: getStorageItem<ThemeMode>("themeMode", chosen.mode),
+    };
   });
-  useMemo(() => set_canvas_theme(themeName), [themeName]);
+  const [systemDark, setSystemDark] = useState(
+    () => window.matchMedia("(prefers-color-scheme: dark)").matches,
+  );
+  // "Système" keeps following the browser, even once the menu is closed.
+  useEffect(() => {
+    const query = window.matchMedia("(prefers-color-scheme: dark)");
+    const follow = (e: MediaQueryListEvent) => setSystemDark(e.matches);
+    query.addEventListener("change", follow);
+    return () => query.removeEventListener("change", follow);
+  }, []);
+  const themeName = resolve_theme(
+    themeChoice.family,
+    themeChoice.mode,
+    systemDark,
+  );
 
-  const changeTheme = (name: ThemeName) => {
-    setThemeName(name);
-    setStorageItem("theme", name);
-    handleSettingsClose();
+  // Resting on a theme in the menu tries it on: the whole app, canvas included,
+  // repaints. Only a click makes it stick — leaving the menu puts back the one
+  // that was chosen.
+  const [previewTheme, setPreviewTheme] = useState<ThemeName | null>(null);
+  const activeTheme = previewTheme ?? themeName;
+
+  const previewTimer = useRef<number | null>(null);
+  // Arms the preview, or — with `null` — disarms it and drops the one showing.
+  // The pointer must dwell: a theme swept over on the way to another is not a
+  // theme asked for.
+  const previewLater = useCallback((name: ThemeName | null) => {
+    if (previewTimer.current !== null) clearTimeout(previewTimer.current);
+    if (name === null) {
+      previewTimer.current = null;
+      setPreviewTheme(null);
+      return;
+    }
+    previewTimer.current = window.setTimeout(() => {
+      previewTimer.current = null;
+      setPreviewTheme(name);
+    }, THEME_PREVIEW_DELAY_MS);
+  }, []);
+  useEffect(
+    () => () => {
+      if (previewTimer.current !== null) clearTimeout(previewTimer.current);
+    },
+    [],
+  );
+
+  // The canvas palette lives in a module binding rather than in React state, so
+  // it is repointed before the first paint of the new theme, not after it. It
+  // then fades towards it, in step with the interface — except on the very
+  // first paint, which has no previous theme to fade from.
+  const themeEverApplied = useRef(false);
+  useMemo(() => {
+    set_canvas_theme(activeTheme, themeEverApplied.current ? undefined : 0);
+    themeEverApplied.current = true;
+  }, [activeTheme]);
+
+  // The menu stays open on a choice, as it does for the grid switches above it:
+  // ambience and family are two controls, and one is rarely set without a look
+  // at the other.
+  const changeTheme = (family: string, mode: ThemeMode) => {
+    setThemeChoice({ family, mode });
+    setStorageItem("themeFamily", family);
+    setStorageItem("themeMode", mode);
+    previewLater(null);
   };
 
-  const currentTheme = THEMES[themeName].mui;
+  const currentTheme = THEMES[activeTheme].mui;
 
   const [saveStatus, setSaveStatus] = useState<
     "idle" | "saved" | "saving" | "error"
@@ -1074,7 +1171,7 @@ const App: React.FC = () => {
               {/* Logo */}
               <Box
                 component="img"
-                src={logoUrl}
+                src={icon("logo")}
                 alt="Slidep"
                 sx={{ height: 26, display: "block", flexShrink: 0 }}
               />
@@ -1717,9 +1814,16 @@ const App: React.FC = () => {
               <Menu
                 anchorEl={settingsAnchorEl}
                 open={Boolean(settingsAnchorEl)}
-                onClose={handleSettingsClose}
+                onClose={() => {
+                  previewLater(null);
+                  handleSettingsClose();
+                }}
                 anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
                 transformOrigin={{ vertical: "top", horizontal: "right" }}
+                // Leaving the list — for another setting or out of the menu
+                // entirely — drops the preview, armed or showing, and restores
+                // the chosen theme.
+                MenuListProps={{ onMouseLeave: () => previewLater(null) }}
               >
                 <MenuItem disableRipple>
                   <FormControlLabel
@@ -1756,63 +1860,69 @@ const App: React.FC = () => {
                   />
                 </MenuItem>
                 <Divider />
-                <MenuItem disabled sx={{ fontSize: "0.85rem" }}>
-                  Thème (Couleurs)
-                </MenuItem>
-                {(Object.keys(THEMES) as ThemeName[]).map((name, i, names) => {
-                  const { family, label, canvas } = THEMES[name];
-                  const startsFamily =
-                    i === 0 || THEMES[names[i - 1]].family !== family;
-                  return (
-                    <Box key={name}>
-                      {startsFamily && (
-                        <Typography
-                          variant="caption"
-                          sx={{
-                            display: "block",
-                            pl: 3,
-                            pt: 0.5,
-                            color: "text.disabled",
-                          }}
-                        >
-                          {family}
-                        </Typography>
-                      )}
-                      <MenuItem
-                        selected={name === themeName}
-                        onClick={() => changeTheme(name)}
-                        sx={{ pl: 3 }}
+                <Box
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 3,
+                    pl: 3,
+                    pr: 2,
+                    py: 0.5,
+                  }}
+                >
+                  <Typography variant="body2" color="textDisabled">
+                    Thème
+                  </Typography>
+                  <ToggleButtonGroup
+                    exclusive
+                    size="medium"
+                    value={themeChoice.mode}
+                    onChange={(_, mode: ThemeMode | null) =>
+                      mode && changeTheme(themeChoice.family, mode)
+                    }
+                  >
+                    {THEME_MODES.map(({ mode, title, Icon }) => (
+                      <ToggleButton
+                        key={mode}
+                        value={mode}
+                        onMouseEnter={() =>
+                          previewLater(
+                            resolve_theme(themeChoice.family, mode, systemDark),
+                          )
+                        }
+                        sx={{ px: 1, py: 0.25, border: 0 }}
                       >
-                        <ListItemIcon sx={{ minWidth: 28 }}>
-                          {name === themeName && (
-                            <Check sx={{ fontSize: 18 }} />
-                          )}
-                        </ListItemIcon>
-                        {label}
-                        {/* A swatch of the theme's ground and its two fills —
-                            faster to recognise than the name. */}
-                        <Box sx={{ display: "flex", gap: 0.25, ml: "auto" }}>
-                          {[
-                            canvas.BACKGROUND,
-                            canvas.FILL_BODY,
-                            canvas.FILL_NODE,
-                            canvas.ACCENT,
-                          ].map((c) => (
-                            <Box
-                              key={c}
-                              sx={{
-                                width: 10,
-                                height: 14,
-                                borderRadius: 0.5,
-                                backgroundColor: c,
-                                border: "1px solid",
-                                borderColor: "divider",
-                              }}
-                            />
-                          ))}
-                        </Box>
-                      </MenuItem>
-                    </Box>
+                        <Tooltip title={title}>
+                          <Icon sx={{ fontSize: 18 }} />
+                        </Tooltip>
+                      </ToggleButton>
+                    ))}
+                  </ToggleButtonGroup>
+                </Box>
+                {/* The families, each shown in the ambience currently set. The
+                    grey name is the theme the pair resolves to, where the family
+                    does not already carry it (Fantaisie → Blueprint). */}
+                {THEME_FAMILIES.map((family) => {
+                  const resolved = resolve_theme(
+                    family.name,
+                    themeChoice.mode,
+                    systemDark,
+                  );
+                  return (
+                    <MenuItem
+                      key={family.name}
+                      selected={family.name === themeChoice.family}
+                      onClick={() => changeTheme(family.name, themeChoice.mode)}
+                      onMouseEnter={() => previewLater(resolved)}
+                    >
+                      <ListItemIcon>
+                        {family.name === themeChoice.family && (
+                          <Check sx={{ fontSize: 18 }} />
+                        )}
+                      </ListItemIcon>
+                      {family.name}
+                    </MenuItem>
                   );
                 })}
                 <Divider />
@@ -1860,7 +1970,6 @@ const App: React.FC = () => {
             appMode={appMode}
             activeTab={activeTab}
             constraintChangeRef={constraintChangeRef}
-            setAppMode={setAppMode}
             onSpaceKey={handleSpaceKey}
             onEscapeKey={handleEscapeKey}
             onExitToEdition={() => {

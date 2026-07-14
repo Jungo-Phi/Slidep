@@ -20,6 +20,11 @@ module.exports = {
   },
   plugins: ['react-refresh'],
   rules: {
+    // Bloquant, et pas seulement 'warn' (défaut de react-hooks/recommended) :
+    // une dep manquante fige une closure et casse le comportement à distance —
+    // p. ex. snapToGrid mort en édition parce que handleEvent avait capturé un
+    // appMode périmé. Le warning était bien émis, mais noyé dans le bruit.
+    'react-hooks/exhaustive-deps': 'error',
     'react-refresh/only-export-components': [
       'warn',
       { allowConstantExport: true },

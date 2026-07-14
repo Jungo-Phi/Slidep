@@ -4,11 +4,17 @@
 
 import { UnionElement } from "../types";
 import {
+  canvas_palette,
   CanvasPalette,
   DEFAULT_THEME,
+  mix_theme_specs,
+  THEME_SPECS,
+  THEME_TRANSITION_CLASS,
+  THEME_TRANSITION_MS,
   THEMES,
   ThemeName,
-} from "../lib/mui-theme";
+  ThemeSpec,
+} from "./mui-theme";
 
 /** Alpha suffixes, appended to a hex color. Theme-independent. */
 const TRANSPARENCY = {
@@ -34,9 +40,79 @@ export let COLORS: CanvasPalette & typeof TRANSPARENCY = {
   ...TRANSPARENCY,
 };
 
-/** Repoint the canvas palette. Call whenever the active theme changes. */
-export function set_canvas_theme(name: ThemeName): void {
-  COLORS = { ...THEMES[name].canvas, ...TRANSPARENCY };
+/**
+ * The palette the icons are drawn in. Always a theme's own palette, never an
+ * intermediate one: icons are SVG sources recolored into data URIs and cached
+ * per palette, so following the fade frame by frame would rebuild and re-decode
+ * every icon sixty times a second. They snap to the new theme instead, while
+ * the rest of the drawing fades under them.
+ */
+export let ICON_COLORS: CanvasPalette = THEMES[DEFAULT_THEME].canvas;
+
+/**
+ * The spec `COLORS` currently stands for — a theme's own, or, mid-fade, one
+ * blended between two. A fade interrupted by another theme change departs from
+ * here, and so never jumps.
+ */
+let current: ThemeSpec = THEME_SPECS[DEFAULT_THEME];
+
+/** The fade in flight, if any — a second theme change cuts it short. */
+let fade: number | null = null;
+
+/**
+ * Le fondu CSS de l'interface, joué en même temps que celui du canvas.
+ *
+ * Il ne vit que le temps du changement de thème : hors de là, la transition
+ * s'appliquerait aussi au survol et à la sélection, qu'elle rendrait mous.
+ */
+const set_ui_fading = (fading: boolean): void => {
+  document.documentElement.classList.toggle(THEME_TRANSITION_CLASS, fading);
+};
+
+/**
+ * Repoint the canvas palette, fading into it over `duration` ms. The canvas
+ * redraws every animation frame, so simply moving `COLORS` frame by frame is
+ * enough to make the drawing cross-fade with the rest of the interface.
+ *
+ * The fade runs linearly, like the interface's own CSS transitions: the ground
+ * under the drawing is painted in CSS, the grid on top of it in canvas, and two
+ * different curves would put one out of step with the other.
+ *
+ * Pass `duration = 0` to land on the new theme at once — on the first paint,
+ * where there is nothing to fade from.
+ */
+export function set_canvas_theme(
+  name: ThemeName,
+  duration: number = THEME_TRANSITION_MS,
+): void {
+  if (fade !== null) cancelAnimationFrame(fade);
+  fade = null;
+
+  ICON_COLORS = THEMES[name].canvas;
+  const target = THEME_SPECS[name];
+
+  if (duration <= 0) {
+    set_ui_fading(false);
+    current = target;
+    COLORS = { ...THEMES[name].canvas, ...TRANSPARENCY };
+    return;
+  }
+
+  set_ui_fading(true);
+  const from = current;
+  const start = performance.now();
+  const step = () => {
+    const t = Math.min(1, (performance.now() - start) / duration);
+    current = t < 1 ? mix_theme_specs(from, target, t) : target;
+    COLORS = { ...canvas_palette(current), ...TRANSPARENCY };
+    if (t < 1) {
+      fade = requestAnimationFrame(step);
+    } else {
+      fade = null;
+      set_ui_fading(false);
+    }
+  };
+  fade = requestAnimationFrame(step);
 }
 
 export const ICON_SELECTION_FILTER = "brightness(5)";

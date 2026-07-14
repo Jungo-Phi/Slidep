@@ -95,7 +95,6 @@ interface MechanicalCanvasProps {
   appMode: AppMode;
   activeTab: PropertiesPanelTab;
   constraintChangeRef: React.MutableRefObject<ConstraintChangeSignal | null>;
-  setAppMode: (mode: AppMode) => void;
   onSpaceKey: () => void;
   onEscapeKey: () => void;
   onExitToEdition: () => void;
@@ -126,7 +125,6 @@ export const MechanicalCanvas = forwardRef<
       appMode,
       activeTab,
       constraintChangeRef,
-      setAppMode,
       onSpaceKey,
       onEscapeKey,
       onExitToEdition,
@@ -177,6 +175,9 @@ export const MechanicalCanvas = forwardRef<
       Array<{ constraint: ConstraintElement; timestamp: number }>
     >([]);
     const lastConstraintChangeSeqRef = useRef(0);
+    // Renvoie vers le handleEvent courant : onMouseUpHandler est capturé dans le
+    // handleEvent mémoïsé, il doit rester stable sans figer la closure.
+    const handleEventRef = useRef<(event: CanvasEvent) => void>(() => {});
 
     mechanismRef.current = mechanism;
     hoveredPartRef.current = hoveredPart;
@@ -384,12 +385,12 @@ export const MechanicalCanvas = forwardRef<
     // Logique "bouton relâché" partagée : appelée par pointerup/pointercancel
     // et par le reducer (undo/redo forcent un relâchement). Ne touche pas à la
     // capture du pointeur (gérée dans les handlers pointer qui ont l'événement).
-    const onMouseUpHandler = () => {
-      handleEvent({
+    const onMouseUpHandler = useCallback(() => {
+      handleEventRef.current({
         type: "MouseButtonUp",
       });
       mouseButtonDownRef.current = "none";
-    };
+    }, []);
 
     const onPointerDownHandler = (
       event: React.PointerEvent<HTMLCanvasElement>,
@@ -490,7 +491,7 @@ export const MechanicalCanvas = forwardRef<
         if (
           snapToGrid &&
           newHoveredPart.type === "Void" &&
-          appMode === "edition" &&
+          appModeRef.current === "edition" &&
           (canvasStateRef.current.type === "ChangingGearRadius" ||
             canvasStateRef.current.type === "MovingEdgeStartPoint" ||
             canvasStateRef.current.type === "MovingEdgeEndPoint" ||
@@ -533,7 +534,7 @@ export const MechanicalCanvas = forwardRef<
         if (
           snapToGrid &&
           newHoveredPart.type === "Void" &&
-          appMode === "edition"
+          appModeRef.current === "edition"
         ) {
           // Align load direction to world/beam axes (visual, like grid snap).
           newHoveredPart.position = snap_load_hover(
@@ -575,12 +576,13 @@ export const MechanicalCanvas = forwardRef<
         redoMechanism,
         setCanvasState,
         setHoveredPart,
-        setAppMode,
         snapToGrid,
         computeVisibleConstraints,
         refreshRevealFromHover,
+        onMouseUpHandler,
       ],
     );
+    handleEventRef.current = handleEvent;
 
     const isTypingInInput = (): boolean => {
       const active = document.activeElement;
@@ -723,6 +725,12 @@ export const MechanicalCanvas = forwardRef<
           height: "100%",
           overflow: "hidden",
           position: "relative",
+          // The ground the drawing sits on. It belongs to the container, not to
+          // the (transparent, cleared every frame) canvas: as a theme role it
+          // cross-fades with the rest of the interface on a theme change, where
+          // a `COLORS` read baked into an inline style would freeze on whichever
+          // palette was current when React last rendered.
+          backgroundColor: "background.paper",
         }}
       >
         <canvas
@@ -730,7 +738,6 @@ export const MechanicalCanvas = forwardRef<
           style={{
             width: "100%",
             height: "100%",
-            backgroundColor: COLORS.BACKGROUND,
             cursor,
             touchAction: "none",
           }}

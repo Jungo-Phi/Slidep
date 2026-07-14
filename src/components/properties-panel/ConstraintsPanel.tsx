@@ -4,7 +4,7 @@
  */
 
 import { Box, IconButton, List, ListItem } from "@mui/material";
-import DeleteIcon from "@mui/icons-material/Delete";
+import { Delete } from "@mui/icons-material";
 import { ConstraintElement, ID } from "../../types/element";
 import {
   CanvasState,
@@ -145,8 +145,9 @@ export const ConstraintsPanel: React.FC<ConstraintsPanelProps> = ({
                           )
                         }
                         title="Supprimer"
+                        sx={{ borderRadius: 3 }}
                       >
-                        <DeleteIcon sx={{ width: 20, height: 20 }} />
+                        <Delete sx={{ width: 20, height: 20 }} />
                       </IconButton>
                     </>
                   }

@@ -13,6 +13,26 @@ interface ConnectionsPropertiesProps {
   mechanism: Mechanism;
 }
 
+/** Two-column grid: each ConnectionsContainer contributes a name cell and a
+ * connections cell, so names and connections line up across containers. */
+const ConnectionsGrid: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => (
+  <Box
+    sx={{
+      display: "grid",
+      gridTemplateColumns: "max-content 1fr",
+      columnGap: 2,
+      rowGap: 1.5,
+      alignItems: "center",
+      justifyItems: "start",
+      pl: 2,
+    }}
+  >
+    {children}
+  </Box>
+);
+
 export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
   element,
   setHoveredPart,
@@ -23,15 +43,7 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
   switch (element.type) {
     case "pivot":
       return (
-        <Box
-          sx={{
-            display: "flex",
-            gap: 1,
-            justifyContent: "space-evenly",
-            alignItems: "center",
-            flexDirection: "column",
-          }}
-        >
+        <ConnectionsGrid>
           <ConnectionsContainer
             element={element}
             containerType="ConnectsRotatingEdges"
@@ -48,19 +60,11 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
             applyActions={applyActions}
             mechanism={mechanism}
           />
-        </Box>
+        </ConnectionsGrid>
       );
     case "slider":
       return (
-        <Box
-          sx={{
-            display: "flex",
-            gap: 1,
-            justifyContent: "space-evenly",
-            alignItems: "center",
-            flexDirection: "column",
-          }}
-        >
+        <ConnectionsGrid>
           <ConnectionsContainer
             element={element}
             containerType="ConnectsParentBeam"
@@ -77,19 +81,11 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
             applyActions={applyActions}
             mechanism={mechanism}
           />
-        </Box>
+        </ConnectionsGrid>
       );
     case "slidep":
       return (
-        <Box
-          sx={{
-            display: "flex",
-            gap: 1,
-            justifyContent: "space-evenly",
-            alignItems: "center",
-            flexDirection: "column",
-          }}
-        >
+        <ConnectionsGrid>
           <ConnectionsContainer
             element={element}
             containerType="ConnectsParentBeam"
@@ -114,20 +110,12 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
             applyActions={applyActions}
             mechanism={mechanism}
           />
-        </Box>
+        </ConnectionsGrid>
       );
     case "join":
     case "mass":
       return (
-        <Box
-          sx={{
-            display: "flex",
-            gap: 1,
-            justifyContent: "space-evenly",
-            alignItems: "center",
-            flexDirection: "column",
-          }}
-        >
+        <ConnectionsGrid>
           <ConnectionsContainer
             element={element}
             containerType="ConnectsFixedEdges"
@@ -136,19 +124,11 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
             applyActions={applyActions}
             mechanism={mechanism}
           />
-        </Box>
+        </ConnectionsGrid>
       );
     case "gear": {
       return (
-        <Box
-          sx={{
-            display: "flex",
-            gap: 1,
-            justifyContent: "space-evenly",
-            alignItems: "center",
-            flexDirection: "column",
-          }}
-        >
+        <ConnectionsGrid>
           <ConnectionsContainer
             element={element}
             containerType="ConnectsParentAxle"
@@ -181,68 +161,12 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
             applyActions={applyActions}
             mechanism={mechanism}
           />
-        </Box>
+        </ConnectionsGrid>
       );
     }
     case "beam":
       return (
-        <Box
-          sx={{
-            display: "flex",
-            gap: 1,
-            justifyContent: "space-evenly",
-            alignItems: "center",
-            flexDirection: "column",
-          }}
-        >
-          <Box
-            sx={{
-              display: "flex",
-              gap: 1,
-              justifyContent: "space-evenly",
-              alignItems: "center",
-              flexDirection: "row",
-            }}
-          >
-            <ConnectionsContainer
-              element={element}
-              containerType="ConnectsFixedNodeStart"
-              setHoveredPart={setHoveredPart}
-              setCanvasState={setCanvasState}
-              applyActions={applyActions}
-              mechanism={mechanism}
-            />
-            <ConnectionsContainer
-              element={element}
-              containerType="ConnectsFixedNodeEnd"
-              setHoveredPart={setHoveredPart}
-              setCanvasState={setCanvasState}
-              applyActions={applyActions}
-              mechanism={mechanism}
-            />
-          </Box>
-          <ConnectionsContainer
-            element={element}
-            containerType="ConnectsFixedNodesBody"
-            setHoveredPart={setHoveredPart}
-            setCanvasState={setCanvasState}
-            applyActions={applyActions}
-            mechanism={mechanism}
-          />
-        </Box>
-      );
-    case "spring":
-    case "damper":
-      return (
-        <Box
-          sx={{
-            display: "flex",
-            gap: 1,
-            justifyContent: "space-evenly",
-            alignItems: "center",
-            flexDirection: "row",
-          }}
-        >
+        <ConnectionsGrid>
           <ConnectionsContainer
             element={element}
             containerType="ConnectsFixedNodeStart"
@@ -259,28 +183,42 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
             applyActions={applyActions}
             mechanism={mechanism}
           />
-        </Box>
+          <ConnectionsContainer
+            element={element}
+            containerType="ConnectsFixedNodesBody"
+            setHoveredPart={setHoveredPart}
+            setCanvasState={setCanvasState}
+            applyActions={applyActions}
+            mechanism={mechanism}
+          />
+        </ConnectionsGrid>
+      );
+    case "spring":
+    case "damper":
+      return (
+        <ConnectionsGrid>
+          <ConnectionsContainer
+            element={element}
+            containerType="ConnectsFixedNodeStart"
+            setHoveredPart={setHoveredPart}
+            setCanvasState={setCanvasState}
+            applyActions={applyActions}
+            mechanism={mechanism}
+          />
+          <ConnectionsContainer
+            element={element}
+            containerType="ConnectsFixedNodeEnd"
+            setHoveredPart={setHoveredPart}
+            setCanvasState={setCanvasState}
+            applyActions={applyActions}
+            mechanism={mechanism}
+          />
+        </ConnectionsGrid>
       );
     case "belt":
       return (
-        <Box
-          sx={{
-            display: "flex",
-            gap: 1,
-            justifyContent: "space-evenly",
-            alignItems: "center",
-            flexDirection: "column",
-          }}
-        >
-          <Box
-            sx={{
-              display: "flex",
-              gap: 1,
-              justifyContent: "space-evenly",
-              alignItems: "center",
-              flexDirection: "row",
-            }}
-          >
+        <ConnectionsGrid>
+          {element.tight ? (
             <ConnectionsContainer
               element={element}
               containerType="ConnectsFixedNodeStart"
@@ -289,15 +227,27 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
               applyActions={applyActions}
               mechanism={mechanism}
             />
-            <ConnectionsContainer
-              element={element}
-              containerType="ConnectsFixedNodeEnd"
-              setHoveredPart={setHoveredPart}
-              setCanvasState={setCanvasState}
-              applyActions={applyActions}
-              mechanism={mechanism}
-            />
-          </Box>
+          ) : (
+            <>
+              <ConnectionsContainer
+                element={element}
+                containerType="ConnectsFixedNodeStart"
+                setHoveredPart={setHoveredPart}
+                setCanvasState={setCanvasState}
+                applyActions={applyActions}
+                mechanism={mechanism}
+              />
+              <ConnectionsContainer
+                element={element}
+                containerType="ConnectsFixedNodeEnd"
+                setHoveredPart={setHoveredPart}
+                setCanvasState={setCanvasState}
+                applyActions={applyActions}
+                mechanism={mechanism}
+              />
+            </>
+          )}
+
           <ConnectionsContainer
             element={element}
             containerType="ConnectsAttachedGears"
@@ -306,7 +256,7 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
             applyActions={applyActions}
             mechanism={mechanism}
           />
-        </Box>
+        </ConnectionsGrid>
       );
   }
 };

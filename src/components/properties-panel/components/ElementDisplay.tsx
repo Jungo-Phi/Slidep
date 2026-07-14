@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   Action,
   ActionBundleType,
@@ -48,22 +48,25 @@ const ElementDisplayComponent: React.FC<ElementDisplayProps> = ({
     size === "small" ? "0.75rem" : size === "medium" ? "0.875rem" : "1rem";
   const fontWeight = 500;
 
-  const measureTextWidth = (text: string) => {
-    const span = document.createElement("span");
-    span.style.visibility = "hidden";
-    span.style.position = "absolute";
-    span.style.whiteSpace = "nowrap";
-    span.style.fontWeight = fontWeight.toString();
-    span.style.fontSize = fontSizeValue;
-    span.style.lineHeight = "1.5";
-    span.textContent = text;
+  const measureTextWidth = useCallback(
+    (text: string) => {
+      const span = document.createElement("span");
+      span.style.visibility = "hidden";
+      span.style.position = "absolute";
+      span.style.whiteSpace = "nowrap";
+      span.style.fontWeight = fontWeight.toString();
+      span.style.fontSize = fontSizeValue;
+      span.style.lineHeight = "1.5";
+      span.textContent = text;
 
-    document.body.appendChild(span);
-    const width = span.offsetWidth;
-    document.body.removeChild(span);
+      document.body.appendChild(span);
+      const width = span.offsetWidth;
+      document.body.removeChild(span);
 
-    return width;
-  };
+      return width;
+    },
+    [fontSizeValue],
+  );
 
   useEffect(() => {
     if (!isEditing) {
@@ -72,10 +75,13 @@ const ElementDisplayComponent: React.FC<ElementDisplayProps> = ({
     }
   }, [initialName, isEditing]);
 
-  const updateWidth = (text: string) => {
-    const width = measureTextWidth(text);
-    setInputWidth(Math.max(8, width + 2));
-  };
+  const updateWidth = useCallback(
+    (text: string) => {
+      const width = measureTextWidth(text);
+      setInputWidth(Math.max(8, width + 2));
+    },
+    [measureTextWidth],
+  );
 
   const handleMouseEnter = () => {
     if (!element || isEditing || !interactive) return;
@@ -144,7 +150,7 @@ const ElementDisplayComponent: React.FC<ElementDisplayProps> = ({
     if (isEditing) {
       updateWidth(inputValue);
     }
-  }, [inputValue, isEditing]);
+  }, [inputValue, isEditing, updateWidth]);
 
   const iconSize = size === "small" ? 24 : size === "medium" ? 28 : 32;
   const gap = size === "small" ? "1px" : "6px";
@@ -158,9 +164,6 @@ const ElementDisplayComponent: React.FC<ElementDisplayProps> = ({
 
   const content = (
     <IconButton
-      // With trailingControls the wrapper below carries the interactions for
-      // the whole row; on its own, the card must carry them itself — otherwise
-      // it shows a pointer cursor and a hover but does nothing on click.
       {...(!trailingControls && {
         onClick: handleSelect,
         onMouseEnter: handleMouseEnter,
@@ -226,8 +229,6 @@ const ElementDisplayComponent: React.FC<ElementDisplayProps> = ({
                 padding: 0,
                 margin: 0,
                 textOverflow: "clip",
-                // Translucent white, so the row's own background still shows
-                // through while the name is being edited.
                 backgroundColor: (t) => alpha(t.palette.common.white, 0.8),
                 borderRadius: "2px",
                 cursor: "text",

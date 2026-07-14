@@ -1,5 +1,5 @@
 import React, { useRef } from "react";
-import { Box, Typography, useTheme, alpha } from "@mui/material";
+import { Box, Typography, useTheme } from "@mui/material";
 import { ProbeCurveKey } from "../../solver/probe-series";
 
 /**
@@ -175,9 +175,9 @@ export const ProbeChart: React.FC<ProbeChartProps> = ({
             x2={VIEW_W - PAD_RIGHT}
             y1={toY(0)}
             y2={toY(0)}
-            // Deliberately stronger than the axis: the zero crossing is the one
-            // gridline that carries meaning.
-            stroke={alpha(palette.common.black, 0.2)}
+            // Same colour as the axis: the dashes already say it is a different
+            // kind of line, so a different weight on top would only add noise.
+            stroke={palette.divider}
             strokeWidth={0.5}
             strokeDasharray="3 3"
           />

@@ -220,7 +220,7 @@ Hot reload, dev server rapide, TypeScript checking, ESLint configuré
 - `src/utils/` : Fonctions utilitaires (calculs physiques, formatage)
 - `src/types/` : Interfaces et types TypeScript
 - `src/hooks/` : Hooks personnalisés React
-- `src/lib/` : Librairies externes configurées (MUI thème)
+- `src/constants/` : Constantes globales (thème MUI, spécifications de rendu)
 
 **File Structure Patterns:**
 
@@ -372,8 +372,9 @@ slidep/
 │ └── storage.ts
 ├── hooks/
 │ └── useLocalStorage.ts
-└── lib/
-└── mui-theme.ts
+└── constants/
+├── mui-theme.ts
+└── rendering-specs.ts
 
 ```
 
@@ -410,7 +411,7 @@ slidep/
 **Interface Utilisateur (FR16-FR20):**
 - Composants : Tous dans `src/components/`
 - Stores : `src/stores/ui.ts`
-- Lib : `src/lib/mui-theme.ts`
+- Constants : `src/constants/mui-theme.ts`
 
 **Gestion des Données (FR21-FR24):**
 - Utils : `src/utils/storage.ts`

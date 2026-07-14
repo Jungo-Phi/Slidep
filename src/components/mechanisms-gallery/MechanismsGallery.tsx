@@ -14,10 +14,10 @@ import {
   Divider,
 } from "@mui/material";
 import {
-  Close,
-  DeleteOutline,
   AccessTime,
   AddCircleOutline,
+  Close,
+  Delete,
   Settings,
 } from "@mui/icons-material";
 import { SerializedMechanism } from "../../types";
@@ -170,7 +170,7 @@ export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
                               onDelete(mechanismRecord.metadata.createdAt);
                             }}
                           >
-                            <DeleteOutline />
+                            <Delete />
                           </IconButton>
                         </Tooltip>
                       </Box>

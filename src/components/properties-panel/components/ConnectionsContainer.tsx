@@ -53,30 +53,17 @@ export const ConnectionsContainer: React.FC<ConnectionsContainerProps> = ({
     containerType === "ConnectsAttachedGears" ||
     containerType === "ConnectsFixedGears";
   const connections = get_connections(element, containerType);
-  /*
-  const containerName = containerType
-    .replace("Connects", "")
-    .split("N")
-    .join(" N")
-    .split("E")
-    .join(" E")
-    .split("B")
-    .join(" B")
-    .split("G")
-    .join(" G")
-    .split("S")
-    .join(" S");
-  */
-  const containerName = CONTAINER_NAMES[containerType];
+  const containerName =
+    containerType === "ConnectsFixedNodeStart" &&
+    element.type === "belt" &&
+    element.tight
+      ? "Jonction"
+      : containerType === "ConnectsFixedNodesBody" && element.type === "gear"
+        ? "Fixed nodes"
+        : CONTAINER_NAMES[containerType];
 
   return (
-    <Box
-      sx={{
-        display: "flex",
-        alignItems: "inherit",
-        flexDirection: "column",
-      }}
-    >
+    <Box sx={{ display: "contents" }}>
       <Typography variant="subtitle2">{containerName}</Typography>
 
       <Box
