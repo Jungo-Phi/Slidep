@@ -85,7 +85,7 @@ export function host_mechanical_element(
   if (mechanicalElement) return mechanicalElement;
   const load = loadElements.find((l) => l.id === elementID);
   if (!load) return undefined;
-  const hostID = load.type === "force" ? load.targetID : load.beamID;
+  const hostID = load.targetID;
   return mechanicalElements.find((e) => e.id === hostID);
 }
 

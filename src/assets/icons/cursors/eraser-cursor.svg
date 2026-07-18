@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+  <!-- Pale body, contrasting outline: the macOS convention. The outline is what
+       carries the shape over a light canvas, the fill what carries it over a
+       dark one — so no separate halo pass is needed.
+
+       Authored in the default deletion hue; `cursors.ts` substitutes the active
+       theme's before building the data URI. -->
+
+  <!-- Arrow: the standard pointer silhouette, hotspot at its tip (2,2). Left
+       neutral on purpose — in the OS arrow-plus-badge idiom the arrow stays the
+       generic pointer and the badge carries the meaning. -->
+  <path d="M2 2 L2 21 L6.8 16.5 L10 23.5 L13 22 L9.9 15.3 L16 15 Z"
+        fill="#ffffff" stroke="#111111" stroke-width="1.6" stroke-linejoin="round"/>
+
+  <!-- Eraser badge, bottom-right. Pale body, rubber tip and border sharing the
+       deletion accent: the two-tone is what reads as an eraser at this size — a
+       detailed icon would mush. -->
+  <g transform="translate(22.5 22.5) rotate(-35)">
+    <rect x="-6" y="-3.75" width="12" height="7.5" rx="1.8"
+          fill="#ffffff" stroke="#ED5E71" stroke-width="1.8"/>
+    <path d="M0.5 -3.75 H4.2 a1.8 1.8 0 0 1 1.8 1.8 V1.95 a1.8 1.8 0 0 1 -1.8 1.8 H0.5 Z"
+          fill="#ED5E71"/>
+  </g>
+</svg>

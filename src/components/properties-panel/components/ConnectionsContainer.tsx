@@ -121,7 +121,7 @@ export const ConnectionsContainer: React.FC<ConnectionsContainerProps> = ({
         )}
         {connections.length === 0 && (
           <Typography variant="caption" color="textDisabled">
-            {`Pas d'élément${isListContainer ? "s" : ""}`}
+            Vide
           </Typography>
         )}
       </Box>

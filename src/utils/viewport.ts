@@ -1,13 +1,13 @@
 import { ScreenPoint, ViewportState, WorldPoint } from "../types";
 
-export function screen_to_world(
+export function screen2world(
   screenPos: ScreenPoint,
   viewport: ViewportState,
 ): WorldPoint {
   return screenPos.sub(viewport.pan).div(viewport.zoom);
 }
 
-export function world_to_screen(
+export function world2screen(
   worldPos: WorldPoint,
   viewport: ViewportState,
 ): ScreenPoint {

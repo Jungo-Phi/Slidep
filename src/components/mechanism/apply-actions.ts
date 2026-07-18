@@ -247,8 +247,9 @@ export function apply_actions(
       break;
     case "MoveLoad":
       if (
-        newAction.type !== "MoveForceVector" &&
-        newAction.type !== "SetDistributedForce"
+        newAction.type !== "ChangeForce" &&
+        newAction.type !== "ChangeDistributedForce" &&
+        newAction.type !== "ChangeMoment"
       )
         break;
       if (mechanism.history.length === 0) break;
@@ -258,15 +259,19 @@ export function apply_actions(
       if (newAction.type !== lastAction.type || newAction.id !== lastAction.id)
         break;
       switch (lastAction.type) {
-        case "MoveForceVector":
-          if (newAction.type !== "MoveForceVector") break;
+        case "ChangeForce":
+          if (newAction.type !== "ChangeForce") break;
           lastAction.newVector = newAction.newVector;
           break;
-        case "SetDistributedForce":
-          if (newAction.type !== "SetDistributedForce") break;
+        case "ChangeDistributedForce":
+          if (newAction.type !== "ChangeDistributedForce") break;
           lastAction.newDirection = newAction.newDirection;
           lastAction.newMagnitudeStart = newAction.newMagnitudeStart;
           lastAction.newMagnitudeEnd = newAction.newMagnitudeEnd;
+          break;
+        case "ChangeMoment":
+          if (newAction.type !== "ChangeMoment") break;
+          lastAction.newValue = newAction.newValue;
           break;
       }
       newHistory = [...mechanism.history];

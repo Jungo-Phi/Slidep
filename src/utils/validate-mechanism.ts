@@ -722,7 +722,7 @@ export function compute_constraint_violations(
         const e = edgePos.get(cel.edgeID);
         const p = nodePos.get(cel.nodeID);
         if (!e || !p) break;
-        const dist = p.distance_to_line(e.start, e.end);
+        const dist = p.distance2line(e.start, e.end);
         const err = Math.abs(dist - cel.value);
         add(
           cel.id,
@@ -906,7 +906,7 @@ export function compute_constraint_violations(
     for (const nodeID of (el as BeamElement).fixedNodesBodyIDs) {
       const p = nodePos.get(nodeID);
       if (!p) continue;
-      const err = p.distance_to_segment(e.start, e.end);
+      const err = p.distance2segment(e.start, e.end);
       const nodeName = shown_element_name(mechByID.get(nodeID));
       add(
         el.id,

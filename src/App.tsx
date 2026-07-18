@@ -24,12 +24,12 @@ import {
   ToggleButton,
   CircularProgress,
   Chip,
-  Button,
   Snackbar,
   Switch,
   FormControlLabel,
   alpha,
   ListItemIcon,
+  useMediaQuery,
 } from "@mui/material";
 import {
   CenterFocusStrong,
@@ -41,13 +41,12 @@ import {
   Language,
   Info,
   Close,
-  Download,
-  FileOpen,
   Apps,
   Undo,
   Redo,
   Gif,
-  KeyboardArrowDown,
+  ChevronLeft,
+  ChevronRight,
   RestartAlt,
   KeyboardDoubleArrowDown,
   JoinInner,
@@ -72,6 +71,7 @@ import {
   Point2,
   PropertiesPanelTab,
   RuntimeState,
+  SimulationSpeed,
   ScreenPoint,
   SerializedMechanism,
   SimulationConfig,
@@ -86,7 +86,7 @@ import {
   save_to_file,
   serialize_mechanism,
   debounce,
-  screen_to_world,
+  screen2world,
   getStorageItem,
   setStorageItem,
 } from "./utils";
@@ -127,7 +127,15 @@ const DB_VERSION = 3;
 const DEBOUNCE_AUTOSAVE_TIME_MILLIS = 1000;
 const VIEWPORT_ZOOM_SENSITIVITY = 250; // Nombre de "crans" de molette nécessaires pour multiplier le zoom par 2
 const LANGUAGES = ["Deutsch", "English", "Español", "Français"];
-let condensed = true;
+
+// Paliers de la top-bar. `condensed` raccourcit les libellés (Édition → Édit,
+// masque les labels des chips) ; `tight` retire en plus les séparateurs et
+// resserre les espacements pour les fenêtres vraiment étroites.
+const CONDENSED_BREAKPOINT = 1400;
+const TIGHT_BREAKPOINT = 1100;
+
+// Crans de vitesse de simulation, du plus lent au plus rapide.
+const SPEEDS: SimulationSpeed[] = [0.1, 0.25, 0.5, 1, 2, 4, 10];
 
 /**
  * The three classes an edit can fall into during a simulation.
@@ -145,9 +153,9 @@ const OBSERVATION_ACTIONS: Action["type"][] = ["SetProbes", "SetShowOverlay"];
 
 const PARAMETER_ACTIONS: Action["type"][] = [
   "SetMotorConfig",
-  "MoveForceVector",
-  "SetDistributedForce",
-  "ChangeMomentValue",
+  "ChangeForce",
+  "ChangeDistributedForce",
+  "ChangeMoment",
   "SetLoadFrame",
 ];
 
@@ -242,6 +250,11 @@ const App: React.FC = () => {
   );
   const [timelineHovered, setTimelineHovered] = useState(false);
   const [timelineDragging, setTimelineDragging] = useState(false);
+
+  // La largeur de la top-bar suit la fenêtre, pas le canvas : ces requêtes
+  // re-rendent le composant à chaque franchissement de palier.
+  const condensed = useMediaQuery(`(max-width:${CONDENSED_BREAKPOINT}px)`);
+  const tight = useMediaQuery(`(max-width:${TIGHT_BREAKPOINT}px)`);
   const [simulationConfig, setSimulationConfig] = useState<SimulationConfig>(
     DEFAULT_SIMULATION_CONFIG,
   );
@@ -630,7 +643,7 @@ const App: React.FC = () => {
       } else {
         const zoomFactor = 2 ** (-change.deltaY / VIEWPORT_ZOOM_SENSITIVITY);
         zoom *= zoomFactor;
-        pan = change.center.sub(screen_to_world(change.center, ov).mul(zoom));
+        pan = change.center.sub(screen2world(change.center, ov).mul(zoom));
       }
       return { ...prevMechanism, viewport: { pan, zoom } };
     });
@@ -847,19 +860,7 @@ const App: React.FC = () => {
     }
   }, []);
 
-  const [menuAnchorEl, setMenuAnchorEl] = React.useState<null | HTMLElement>(
-    null,
-  );
-  const menuOpen = Boolean(menuAnchorEl);
-  const handleMenuClick = (event: React.MouseEvent<HTMLElement>) => {
-    setMenuAnchorEl(event.currentTarget);
-  };
-  const handleMenuClose = () => {
-    setMenuAnchorEl(null);
-  };
-
   const handleOpenGallery = useCallback(async () => {
-    setMenuAnchorEl(null);
     const db = await openDB<SlidepDB>("SlidepDB", DB_VERSION, {
       upgrade(db) {
         if (!db.objectStoreNames.contains("mechanisms")) {
@@ -909,11 +910,8 @@ const App: React.FC = () => {
   }, []);
 
   const handleNewFromGallery = useCallback(() => {
-    setMenuAnchorEl(null);
     const currentCanvas = canvasRef.current;
     if (!currentCanvas) return;
-
-    condensed = currentCanvas.width < 1400; // TODO : faire ça plus propre
 
     setMechanism({
       metadata: {
@@ -937,25 +935,24 @@ const App: React.FC = () => {
     setSaveStatus("idle");
   }, [resetSimulationState]);
 
+  // Appelé depuis la galerie : un import réussi charge le mécanisme et referme
+  // la galerie, comme le fait un chargement depuis une carte.
   const handleMenuButtonUpload = () => {
-    setMenuAnchorEl(null);
     load_from_file()
       .then((data) => {
         setMechanism(deserialize_mechanism(data));
         setCanvasState({ type: "Selecting" });
         resetSimulationState();
+        setGalleryOpen(false);
         setSaveStatus("saving");
         debouncedSave();
       })
       .catch(() => setSaveStatus("error"));
   };
 
-  const handleMenuButtonDownload = () => {
-    setMenuAnchorEl(null);
-    save_to_file(
-      serialize_mechanism(mechanism),
-      `${mechanism.metadata.name}.slidep`,
-    );
+  // Export depuis la galerie : les enregistrements y sont déjà sérialisés.
+  const handleExportRecord = (record: SerializedMechanism) => {
+    save_to_file(record, `${record.metadata.name || "mecanisme"}.slidep`);
   };
 
   const [settingsAnchorEl, setSettingsAnchorEl] = useState<null | HTMLElement>(
@@ -998,6 +995,9 @@ const App: React.FC = () => {
       // of resetting isPlaying to false right after we set it.
       autoPlayOnEnterRef.current = true;
       setAppMode(mechanism.metadata.lastSimulationMode);
+      // Entering simulation restarts from a clean canvas, just like Space does
+      // in the canvas handler.
+      setCanvasState({ type: "Selecting" });
     } else {
       setRuntimeState((prev) => ({ ...prev, isPlaying: !prev.isPlaying }));
     }
@@ -1098,6 +1098,48 @@ const App: React.FC = () => {
     ? apply_snapshot_to_mechanism(mechanism, activeSnapshot)
     : mechanism;
 
+  // ── État de la timeline, partagé par la top-bar et le rail ──
+  //
+  // `frontier` est le temps le plus avancé déjà calculé. Le curseur en deçà =
+  // relecture ; au niveau de la frontière et en lecture = enregistrement.
+  //
+  // Le rail est toujours à l'échelle de la frontière : en enregistrement, on
+  // est par définition au bout du temps connu, donc la tête reste collée à
+  // droite. On la force à 100 % au lieu de calculer `time / frontier` — les
+  // deux avancent ensemble mais pas au même rythme (le temps est continu, les
+  // snapshots arrivent par pas de RECORD_DT), et cet écart d'arrondi est
+  // exactement ce qui faisait vibrer la tête d'une image à l'autre.
+  // `current` est un champ d'état ordinaire, pas une ref : on le destructure
+  // pour que la règle exhaustive-deps ne le prenne pas pour un `ref.current`.
+  const {
+    kinematicSnapshots: timelineSnaps,
+    current: timelineCurrent,
+    time: timelineTime,
+    isPlaying: timelinePlaying,
+  } = runtimeState;
+  const timeline = useMemo(() => {
+    const frontier =
+      appMode === "kinematic" && timelineSnaps.length > 0
+        ? timelineSnaps[timelineSnaps.length - 1].t
+        : timelineCurrent
+          ? timelineCurrent.timestamp
+          : 0;
+    const recording = timelinePlaying && timelineTime >= frontier - RECORD_DT;
+    const pct = recording
+      ? 100
+      : frontier > 0
+        ? Math.min(100, (timelineTime / frontier) * 100)
+        : 0;
+    return {
+      frontier,
+      recording,
+      pct,
+      atStart: timelineTime <= 0,
+      atEnd: frontier > 0 && timelineTime >= frontier - RECORD_DT / 2,
+      hasRecording: frontier > 0 || timelineSnaps.length > 0,
+    };
+  }, [appMode, timelineSnaps, timelineCurrent, timelineTime, timelinePlaying]);
+
   // Trajectoires des éléments dont l'affichage est activé (showTrajectory),
   // tracées sur le canvas pendant la simulation.
   const trajectories = useMemo(() => {
@@ -1175,20 +1217,28 @@ const App: React.FC = () => {
                 alt="Slidep"
                 sx={{ height: 26, display: "block", flexShrink: 0 }}
               />
-              <Typography
-                sx={{
-                  fontSize: "1.5em",
-                  fontWeight: 700,
-                  color: "primary.main",
-                  letterSpacing: "-0.04em",
-                  flexShrink: 0,
-                  lineHeight: 1,
-                }}
-              >
-                Slidep
-              </Typography>
+              {/* Le mot-symbole est le premier sacrifié : le logo suffit à
+                  identifier l'app quand la place manque. */}
+              {!tight && (
+                <Typography
+                  sx={{
+                    fontSize: "1.5em",
+                    fontWeight: 700,
+                    color: "primary.main",
+                    letterSpacing: "-0.04em",
+                    flexShrink: 0,
+                    lineHeight: 1,
+                  }}
+                >
+                  Slidep
+                </Typography>
+              )}
 
-              <Divider orientation="vertical" flexItem sx={{ mx: 1 }} />
+              <Divider
+                orientation="vertical"
+                flexItem
+                sx={{ mx: tight ? 0.5 : 1 }}
+              />
 
               {/* Bouton Bibliothèque — accès direct à la galerie */}
               <Tooltip title="Bibliothèque de mécanismes">
@@ -1218,7 +1268,10 @@ const App: React.FC = () => {
                   variant="body2"
                   fontWeight={400}
                   noWrap
-                  sx={{ maxWidth: 180, opacity: 0.9 }}
+                  sx={{
+                    maxWidth: tight ? 90 : condensed ? 130 : 180,
+                    opacity: 0.9,
+                  }}
                 >
                   {mechanism.metadata.name}
                 </Typography>
@@ -1270,8 +1323,9 @@ const App: React.FC = () => {
               sx={{
                 display: "flex",
                 alignItems: "center",
-                gap: 0.75,
-                flexShrink: 0,
+                gap: tight ? 0.25 : 0.75,
+                flexShrink: 1,
+                minWidth: 0,
               }}
             >
               {/* Sélecteur de mode */}
@@ -1310,41 +1364,37 @@ const App: React.FC = () => {
                     {condensed ? "Édit" : "Édition"}
                   </ToggleButton>
                 </Tooltip>
-                <Tooltip title="Étude de cas immobiles [ ∑F = 0 ]">
-                  <ToggleButton value="static" disabled>
-                    {condensed ? "Stat" : "Statique"}
-                  </ToggleButton>
+                <Tooltip title="Étude de cas immobiles [ ∑F = 0 ] (à venir)">
+                  <span>
+                    <ToggleButton value="static" disabled>
+                      {condensed ? "Stat" : "Statique"}
+                    </ToggleButton>
+                  </span>
                 </Tooltip>
                 <Tooltip title="Analyse du mouvement">
                   <ToggleButton value="kinematic">
                     {condensed ? "Ciné" : "Cinématique"}
                   </ToggleButton>
                 </Tooltip>
-                <Tooltip title="Combine la statique et la cinématique [ ∑F = ma ]">
-                  <ToggleButton value="dynamic" disabled>
-                    {condensed ? "Dyna" : "Dynamique"}
-                  </ToggleButton>
+                <Tooltip title="Combine la statique et la cinématique [ ∑F = ma ] (à venir)">
+                  <span>
+                    <ToggleButton value="dynamic" disabled>
+                      {condensed ? "Dyna" : "Dynamique"}
+                    </ToggleButton>
+                  </span>
                 </Tooltip>
               </ToggleButtonGroup>
 
-              <Divider flexItem sx={{ mx: 0.5 }} />
+              {!tight && <Divider flexItem sx={{ mx: 0.5 }} />}
 
-              {/* Contrôles temporels — Play/Pause toujours actif ; les autres
-                  boutons sont grisés en mode Édition. */}
-              <Box
-                sx={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 0.5,
-                }}
-              >
-                <Tooltip title="Réinitialiser (Esc)">
+              <Tooltip title="Réinitialiser (Esc)">
+                <span>
                   <IconButton
                     size="small"
                     color="inherit"
+                    disabled={appMode === "edition" || !timeline.hasRecording}
                     onClick={() => {
-                      // Recompile from the initial geometry so motor targets and
-                      // gear angles reset cleanly.
+                      // Recompile from the initial geometry
                       if (appMode !== "edition")
                         simulationModelRef.current = compile_simulation_model(
                           mechanismRef.current,
@@ -1360,35 +1410,44 @@ const App: React.FC = () => {
                     }}
                     sx={{
                       p: 0.4,
-                      opacity: appMode === "edition" ? 0.3 : 1,
-                      pointerEvents: appMode === "edition" ? "none" : "auto",
-                      transition: "opacity 0.2s ease",
+                      color: "primary.main",
+                      "&:hover": { backgroundColor: "action.hover" },
                     }}
                   >
                     <RestartAlt sx={{ fontSize: 20 }} />
                   </IconButton>
-                </Tooltip>
+                </span>
+              </Tooltip>
 
+              {!tight && <Divider flexItem sx={{ mx: 0.5 }} />}
+
+              {/* Contrôles temporels — Play/Pause toujours actif ; les autres
+                  boutons sont désactivés en mode Édition ou en bout de course. */}
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 0.5,
+                }}
+              >
                 <Tooltip title="Aller au début">
-                  <IconButton
-                    size="small"
-                    color="inherit"
-                    onClick={() =>
-                      setRuntimeState((prev) => ({
-                        ...prev,
-                        time: 0,
-                        isPlaying: false,
-                      }))
-                    }
-                    sx={{
-                      p: 0.4,
-                      opacity: appMode === "edition" ? 0.3 : 1,
-                      pointerEvents: appMode === "edition" ? "none" : "auto",
-                      transition: "opacity 0.2s ease",
-                    }}
-                  >
-                    <FirstPage sx={{ fontSize: 20 }} />
-                  </IconButton>
+                  <span>
+                    <IconButton
+                      size="small"
+                      color="inherit"
+                      disabled={appMode === "edition" || timeline.atStart}
+                      onClick={() =>
+                        setRuntimeState((prev) => ({
+                          ...prev,
+                          time: 0,
+                          isPlaying: false,
+                        }))
+                      }
+                      sx={{ p: 0.4 }}
+                    >
+                      <FirstPage sx={{ fontSize: 20 }} />
+                    </IconButton>
+                  </span>
                 </Tooltip>
 
                 <Tooltip
@@ -1414,78 +1473,106 @@ const App: React.FC = () => {
                   </IconButton>
                 </Tooltip>
 
-                <Tooltip title="Aller à la fin">
-                  <IconButton
-                    size="small"
-                    color="inherit"
-                    sx={{
-                      p: 0.4,
-                      opacity: appMode === "edition" ? 0.3 : 1,
-                      pointerEvents: appMode === "edition" ? "none" : "auto",
-                      transition: "opacity 0.2s ease",
-                    }}
-                    onClick={() =>
-                      setRuntimeState((prev) => {
-                        const snaps = prev.kinematicSnapshots;
-                        const maxT =
-                          snaps.length > 0 ? snaps[snaps.length - 1].t : 0;
-                        return { ...prev, time: maxT, isPlaying: false };
-                      })
-                    }
-                  >
-                    <LastPage sx={{ fontSize: 20 }} />
-                  </IconButton>
+                <Tooltip title="Aller à la fin de l'enregistrement">
+                  <span>
+                    <IconButton
+                      size="small"
+                      color="inherit"
+                      disabled={appMode === "edition" || timeline.atEnd}
+                      sx={{ p: 0.4 }}
+                      onClick={() =>
+                        setRuntimeState((prev) => {
+                          const snaps = prev.kinematicSnapshots;
+                          const maxT =
+                            snaps.length > 0 ? snaps[snaps.length - 1].t : 0;
+                          return { ...prev, time: maxT, isPlaying: false };
+                        })
+                      }
+                    >
+                      <LastPage sx={{ fontSize: 20 }} />
+                    </IconButton>
+                  </span>
                 </Tooltip>
               </Box>
 
-              <Divider flexItem sx={{ mx: 0.5 }} />
+              {!tight && <Divider flexItem sx={{ mx: 0.5 }} />}
 
-              {/* Vitesse : boutons segmentés */}
-              <Box
-                sx={{
-                  display: "flex",
-                  alignItems: "center",
-                  opacity: appMode === "edition" ? 0.3 : 1,
-                  pointerEvents: appMode === "edition" ? "none" : "auto",
-                  transition: "opacity 0.2s ease",
-                }}
-              >
-                <ToggleButtonGroup
-                  value={runtimeState.speed}
-                  exclusive
-                  size="small"
-                  onChange={(_e, val) => {
-                    if (val === null) return;
-                    setRuntimeState((prev) => ({ ...prev, speed: val }));
-                  }}
-                  sx={{
-                    "& .MuiToggleButton-root": {
-                      px: 0.6,
-                      py: 0.2,
-                      fontSize: "0.65rem",
-                      fontWeight: 600,
-                      textTransform: "none",
-                      color: "text.secondary",
-                      borderColor: "divider",
-                      minWidth: 0,
-                      lineHeight: 1.4,
-                      "&.Mui-selected": {
-                        color: "primary.contrastText",
-                        backgroundColor: "primary.main",
-                        "&:hover": { backgroundColor: "primary.dark" },
-                      },
-                    },
-                  }}
-                >
-                  {[0.25, 0.5, 1, 2, 4].map((s) => (
-                    <ToggleButton key={s} value={s}>
-                      {s < 1 ? `${s}×` : `${s}×`}
-                    </ToggleButton>
-                  ))}
-                </ToggleButtonGroup>
-              </Box>
+              {/* Stepper de vitesse de simulation */}
+              {(() => {
+                const speedIdx = SPEEDS.indexOf(runtimeState.speed);
+                const setSpeed = (s: SimulationSpeed) =>
+                  setRuntimeState((prev) => ({ ...prev, speed: s }));
+                const disabled = appMode === "edition";
+                return (
+                  <Box
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 0.25,
+                      opacity: disabled ? 0.3 : 1,
+                      pointerEvents: disabled ? "none" : "auto",
+                      transition: "opacity 0.2s ease",
+                    }}
+                  >
+                    <Tooltip title="Ralentir la simulation">
+                      <span>
+                        <IconButton
+                          size="small"
+                          color="inherit"
+                          disabled={speedIdx <= 0}
+                          onClick={() => setSpeed(SPEEDS[speedIdx - 1])}
+                          sx={{ p: 0.1 }}
+                        >
+                          <ChevronLeft sx={{ fontSize: 18 }} />
+                        </IconButton>
+                      </span>
+                    </Tooltip>
+                    <Tooltip title="Réinitialiser la vitesse">
+                      <Box
+                        component="button"
+                        onClick={() => setSpeed(1)}
+                        sx={{
+                          all: "unset",
+                          cursor: "pointer",
+                          minWidth: 30,
+                          minHeight: 20,
+                          textAlign: "center",
+                          fontSize: "0.7rem",
+                          fontWeight: 700,
+                          fontVariantNumeric: "tabular-nums",
+                          lineHeight: 1,
+                          py: 0.3,
+                          borderRadius: 1,
+                          // La vitesse nominale est un état neutre : seul un
+                          // réglage non standard mérite d'attirer l'œil.
+                          color:
+                            runtimeState.speed === 1
+                              ? "text.secondary"
+                              : "primary.main",
+                          "&:hover": { backgroundColor: "action.hover" },
+                        }}
+                      >
+                        {runtimeState.speed}×
+                      </Box>
+                    </Tooltip>
+                    <Tooltip title="Accélérer la simulation">
+                      <span>
+                        <IconButton
+                          size="small"
+                          color="inherit"
+                          disabled={speedIdx >= SPEEDS.length - 1}
+                          onClick={() => setSpeed(SPEEDS[speedIdx + 1])}
+                          sx={{ p: 0.1 }}
+                        >
+                          <ChevronRight sx={{ fontSize: 18 }} />
+                        </IconButton>
+                      </span>
+                    </Tooltip>
+                  </Box>
+                );
+              })()}
 
-              <Divider flexItem sx={{ mx: 0.5 }} />
+              {!tight && <Divider flexItem sx={{ mx: 0.5 }} />}
 
               {/* Toggles Gravité / Collisions */}
               <Box
@@ -1610,7 +1697,7 @@ const App: React.FC = () => {
                 </Tooltip>
               </Box>
 
-              <Divider flexItem sx={{ mx: 0.5 }} />
+              {!tight && <Divider flexItem sx={{ mx: 0.5 }} />}
 
               {/* Calques d'affichage — groupe distinct de gravité/collisions :
                   ceux-là changent ce qui est calculé, celui-ci ce qui est montré. */}
@@ -1706,62 +1793,6 @@ const App: React.FC = () => {
                 flexItem
                 sx={{ ml: 0.75, mr: 0.5, my: 0.25 }}
               />
-
-              {/* Menu Fichier — bouton textuel */}
-              <Button
-                color="inherit"
-                size="small"
-                onClick={handleMenuClick}
-                endIcon={
-                  <KeyboardArrowDown
-                    sx={{ ml: -0.5, fontSize: "16px !important", opacity: 0.7 }}
-                  />
-                }
-                sx={{
-                  fontSize: "0.75rem",
-                  fontWeight: 600,
-                  textTransform: "none",
-                  px: 1,
-                  py: 0.5,
-                  minWidth: 0,
-                  letterSpacing: 0,
-                }}
-              >
-                Fichier
-              </Button>
-              <Menu
-                anchorEl={menuAnchorEl}
-                open={menuOpen}
-                onClose={handleMenuClose}
-                anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
-                transformOrigin={{ vertical: "top", horizontal: "right" }}
-              >
-                <MenuItem
-                  onClick={handleMenuButtonUpload}
-                  sx={{ gap: 1, fontSize: "14px" }}
-                  disableRipple
-                >
-                  <FileOpen fontSize="small" />
-                  Importer un mécanisme
-                </MenuItem>
-                <MenuItem
-                  onClick={handleMenuButtonDownload}
-                  sx={{ gap: 1, fontSize: "14px" }}
-                  disableRipple
-                >
-                  <Download fontSize="small" />
-                  Exporter le mécanisme
-                </MenuItem>
-                <Divider />
-                <MenuItem
-                  onClick={handleMenuButtonDownload}
-                  sx={{ gap: 1, fontSize: "14px" }}
-                  disableRipple
-                >
-                  <Gif fontSize="small" />
-                  Exporter une animation
-                </MenuItem>
-              </Menu>
 
               {/* Langue */}
               <Tooltip title="Langue">
@@ -1991,17 +2022,7 @@ const App: React.FC = () => {
           {/* Timeline */}
           {appMode !== "edition" &&
             (() => {
-              const snaps = runtimeState.kinematicSnapshots;
-              const timelineMax =
-                appMode === "kinematic" && snaps.length > 0
-                  ? snaps[snaps.length - 1].t
-                  : runtimeState.current
-                    ? runtimeState.current.timestamp
-                    : 0;
-              const timelinePct = Math.min(
-                100,
-                (runtimeState.time / timelineMax) * 100,
-              ).toFixed(2);
+              const timelinePct = timeline.pct.toFixed(2);
               return (
                 <Box
                   sx={{
@@ -2012,14 +2033,41 @@ const App: React.FC = () => {
                     zIndex: 1000,
                     display: "flex",
                     alignItems: "center",
+                    gap: 1,
                     backgroundColor: "background.toolbar",
                     borderRadius: 999,
                     boxShadow: 3,
                     px: 1.5,
-                    width: "min(480px, 55vw)",
-                    height: 24,
+                    width: "min(560px, 60vw)",
+                    height: 28,
                   }}
                 >
+                  {/* Temps courant / durée enregistrée. Chiffres tabulaires et
+                      largeur réservée : le libellé ne doit pas pousser le rail
+                      à chaque image. Aligné à gauche, pour que la marge de
+                      réserve tombe côté rail plutôt que contre le bord. */}
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      fontVariantNumeric: "tabular-nums",
+                      fontSize: "0.68rem",
+                      color: "text.secondary",
+                      flexShrink: 0,
+                      textAlign: "left",
+                      lineHeight: 1,
+                    }}
+                  >
+                    <Box
+                      component="span"
+                      sx={{ color: "text.primary", fontWeight: 700 }}
+                    >
+                      {runtimeState.time.toFixed(1)}
+                    </Box>
+                    <Box component="span" sx={{ opacity: 0.55 }}>
+                      {` / ${timeline.frontier.toFixed(1)} s`}
+                    </Box>
+                  </Typography>
+
                   <Box
                     ref={timelineTrackRef}
                     sx={{
@@ -2080,7 +2128,7 @@ const App: React.FC = () => {
                         backgroundColor: "action.hover",
                       }}
                     />
-                    {/* Fill */}
+                    {/* Fill jusqu'au curseur */}
                     <Box
                       sx={{
                         position: "absolute",
@@ -2091,9 +2139,8 @@ const App: React.FC = () => {
                         width: `${timelinePct}%`,
                       }}
                     />
-                    {/* Thumb */}
                     <Tooltip
-                      title={`t = ${runtimeState.time.toFixed(1)} s`}
+                      title={`${runtimeState.time.toFixed(1)} s`}
                       placement="bottom"
                       open={timelineHovered || timelineDragging}
                     >
@@ -2102,20 +2149,56 @@ const App: React.FC = () => {
                           position: "absolute",
                           top: "50%",
                           left: `${timelinePct}%`,
-                          transform: `translate(-50%, -50%) scale(${timelineHovered || timelineDragging ? 1.3 : 1})`,
+                          transform: `translate(-50%, -50%) scale(${
+                            !timeline.recording &&
+                            (timelineHovered || timelineDragging)
+                              ? 1.3
+                              : 1
+                          })`,
                           width: 12,
                           height: 12,
                           borderRadius: "50%",
-                          backgroundColor: "common.white",
+                          backgroundColor: timeline.recording
+                            ? "primary.main"
+                            : "primary.contrastText",
                           border: "2px solid",
                           borderColor: "primary.main",
                           boxShadow: (t) =>
                             `0 1px 4px ${alpha(t.palette.common.black, 0.3)}`,
                           pointerEvents: "none",
+                          "&::after": timeline.recording
+                            ? {
+                                content: '""',
+                                position: "absolute",
+                                inset: -2,
+                                borderRadius: "50%",
+                                border: "2px solid",
+                                borderColor: "primary.main",
+                                animation:
+                                  "slidepRecHalo 1.1s ease-out infinite",
+                              }
+                            : undefined,
+                          "@keyframes slidepRecHalo": {
+                            "0%": { transform: "scale(1)", opacity: 0.8 },
+                            "100%": { transform: "scale(2.8)", opacity: 0 },
+                          },
                         }}
                       />
                     </Tooltip>
                   </Box>
+
+                  <Tooltip title="Exporter une animation (à venir)">
+                    <span>
+                      <IconButton
+                        size="small"
+                        color="inherit"
+                        disabled
+                        sx={{ p: 0.25, flexShrink: 0 }}
+                      >
+                        <Gif sx={{ fontSize: 18 }} />
+                      </IconButton>
+                    </span>
+                  </Tooltip>
                 </Box>
               );
             })()}
@@ -2157,6 +2240,8 @@ const App: React.FC = () => {
         onLoad={handleLoadFromGallery}
         onDelete={handleDeleteFromGallery}
         onNew={handleNewFromGallery}
+        onImport={handleMenuButtonUpload}
+        onExport={handleExportRecord}
       />
       <Dialog open={infoOpen} onClose={handleInfoClose}>
         <DialogTitle fontSize={"large"}>Infos</DialogTitle>

@@ -157,6 +157,26 @@ export const INTERACTION_SPECS = {
   BELT_GRAB_RADIUS: 4,
 } as const;
 
+export const LOAD_SCALING = {
+  /** Reference force value (N) for scaling. */
+  REF_VALUE: 100,
+  /** Drawn length (world px) of a reference-magnitude load. */
+  PX_SCALE: 50,
+  /** Log base of force scaling. Extending the drawn length by `PX_SCALE` will multiply the force value by `SCALE_BASE`. */
+  LOG_BASE: 2,
+  /** Minimal force value (N). */
+  MIN_VALUE: 0.1,
+  /** Minimal drawn force length (world px). */
+  MIN_PX: 40,
+  /** A moment's arc is drawn at the radius a force arrow of the same value
+   *  would be long, divided by this: its diameter reads like that arrow. */
+  MOMENT_RADIUS_FACTOR: 2,
+  /** Mantissas of the round values a load drag snaps to, one set per decade
+   *  (…, 1, 2, 5, 10, 20, 50, 100, …). Pure powers of ten would sit ~166 px
+   *  apart at the current scale, leaving most of a drag with no rung nearby. */
+  SNAP_MANTISSAS: [1, 2, 5],
+};
+
 /**
  * Durée (ms) pendant laquelle les badges de contraintes d'un élément restent
  * affichés après avoir cessé de le survoler (hover-reveal en édition).
@@ -179,6 +199,8 @@ export const DIM = {
   // General
   TAC: 20,
   ICON_SIZE: 24,
+  ARROW_HEAD_LENGTH: 18,
+  ARROW_HEAD_WIDTH: 13,
 
   // GRID
   GRID_LARGER: 500,
@@ -240,21 +262,24 @@ export const DIM = {
   GROUND_BAR_HEIGHT: 6,
   GROUND_VERTICAL_OFFSET: 6,
 
+  // Loads
+  VECTOR_VALUE_OFFSET: 16,
+  MOMENT_MIN_RADIUS: 20,
+  MOMENT_MAX_RADIUS: 40,
+  NB_DISTRIBUTED_FORCE_ARROWS: 5,
+
   // Probe
   PROBE_OFFSET: 28,
 } as const;
 
 export const DIMENSION_SPECS = {
-  ARROW_SIZE: 18,
-  ARROW_WING_LENGTH: 7,
-  ARROW_WING_WIDTH: 18,
   TEXT_FONT: "16px Arial",
   TEXT_ALIGN: "center",
   TEXT_BASELINE: "middle",
   TEXT_PADDING: 3,
   TEXT_HEIGHT: 18,
   OFFSET_LINE_WIDTH: 1,
-  DIMENSION_OFFSET: 20, // Distance from beam for offset dimension
+  AUTO_DIMENSION_OFFSET: 50,
 } as const;
 
 /** Ordre de dessin des éléments sur le canvas */

@@ -9,7 +9,7 @@ import { Point2 } from "./point2";
 /**
  * Simulation speed presets
  */
-export type SimulationSpeed = 0.25 | 0.5 | 1 | 2 | 4;
+export type SimulationSpeed = 0.1 | 0.25 | 0.5 | 1 | 2 | 4 | 10;
 
 // ─────────────────────────────────────────────────────────────
 // Physics state per element category

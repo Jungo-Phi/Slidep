@@ -64,7 +64,7 @@ const FORCE: ForceElement = {
 const MOMENT: MomentElement = {
   type: "moment",
   id: id("moment1"),
-  beamID: id("beam1"),
+  targetID: id("beam1"),
   value: 5,
 };
 
@@ -239,16 +239,16 @@ describe("actionReducer — GroundNode", () => {
   });
 });
 
-// ─── MoveForceVector ──────────────────────────────────────────────────────────
+// ─── ChangeForce ──────────────────────────────────────────────────────────
 
-describe("actionReducer — MoveForceVector", () => {
+describe("actionReducer — ChangeForce", () => {
   it("met à jour le vecteur de la force (forward)", () => {
     const mech = { ...emptyMechanism(), loads: [FORCE] };
     const result = actionReducer(
       mech,
       [
         {
-          type: "MoveForceVector",
+          type: "ChangeForce",
           id: id("force1"),
           oldVector: FORCE.vector,
           newVector: P(1, -2),
@@ -268,7 +268,7 @@ describe("actionReducer — MoveForceVector", () => {
       mech,
       [
         {
-          type: "MoveForceVector",
+          type: "ChangeForce",
           id: id("force1"),
           oldVector: P(0, -1),
           newVector: P(1, -2),
@@ -287,21 +287,21 @@ describe("actionReducer — MoveForceVector", () => {
 const DIST_FORCE: DistributedForceElement = {
   type: "distributed-force",
   id: id("df1"),
-  beamID: id("beam1"),
+  targetID: id("beam1"),
   direction: P(0, -1),
   magnitudeStart: 2,
   magnitudeEnd: 4,
   frame: "world",
 };
 
-describe("actionReducer — SetDistributedForce", () => {
+describe("actionReducer — ChangeDistributedForce", () => {
   it("met à jour direction et magnitudes (forward)", () => {
     const mech = { ...emptyMechanism(), loads: [DIST_FORCE] };
     const result = actionReducer(
       mech,
       [
         {
-          type: "SetDistributedForce",
+          type: "ChangeDistributedForce",
           id: id("df1"),
           oldDirection: DIST_FORCE.direction,
           newDirection: P(1, 0),
@@ -331,7 +331,7 @@ describe("actionReducer — SetDistributedForce", () => {
       mech,
       [
         {
-          type: "SetDistributedForce",
+          type: "ChangeDistributedForce",
           id: id("df1"),
           oldDirection: P(0, -1),
           newDirection: P(1, 0),
@@ -353,13 +353,13 @@ describe("actionReducer — SetDistributedForce", () => {
 // ─── ChangeMomentValue ────────────────────────────────────────────────────────
 
 describe("actionReducer — moment", () => {
-  it("ChangeMomentValue met à jour la valeur", () => {
+  it("ChangeMoment met à jour la valeur", () => {
     const mech = { ...emptyMechanism(), loads: [MOMENT] };
     const result = actionReducer(
       mech,
       [
         {
-          type: "ChangeMomentValue",
+          type: "ChangeMoment",
           id: id("moment1"),
           oldValue: 5,
           newValue: 10,
@@ -377,7 +377,7 @@ describe("actionReducer — moment", () => {
       mech,
       [
         {
-          type: "ChangeMomentValue",
+          type: "ChangeMoment",
           id: id("moment1"),
           oldValue: 5,
           newValue: -5,
@@ -395,7 +395,7 @@ describe("actionReducer — moment", () => {
       mech,
       [
         {
-          type: "ChangeMomentValue",
+          type: "ChangeMoment",
           id: id("moment1"),
           oldValue: 5,
           newValue: -5,

@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+  <!-- Eraser alone, no arrow: the tool *is* the pointer, as in Excalidraw or
+       Paint. Tilted so the rubber leads towards the top-left, which is where the
+       eye expects a pointer's business end — the hotspot sits on that edge.
+
+       Authored in the default deletion hue; `cursors.ts` substitutes the active
+       theme's before building the data URI. The body stays pure white in every
+       theme: it is the cursor's paper, and what keeps it legible on a dark
+       canvas — the thick accent border does the rest. -->
+  <g transform="translate(14 15) rotate(35)">
+    <rect x="-11" y="-6" width="22" height="12" rx="2.5"
+          fill="#ffffff" stroke="#ED5E71" stroke-width="2.2"/>
+    <!-- Rubber: the leading third, filled in the same accent as the border so
+         the two merge into one solid block. Its straight edge against the white
+         body is the division — no drawn separator needed. -->
+    <path d="M-3.5 -6 H-8.5 a2.5 2.5 0 0 0 -2.5 2.5 V3.5 a2.5 2.5 0 0 0 2.5 2.5 H-3.5 Z"
+          fill="#ED5E71"/>
+  </g>
+</svg>

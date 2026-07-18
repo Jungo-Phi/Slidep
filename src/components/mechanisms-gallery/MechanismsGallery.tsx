@@ -12,12 +12,15 @@ import {
   IconButton,
   Tooltip,
   Divider,
+  Button,
 } from "@mui/material";
 import {
   AccessTime,
   AddCircleOutline,
   Close,
   Delete,
+  Download,
+  FileOpen,
   Settings,
 } from "@mui/icons-material";
 import { SerializedMechanism } from "../../types";
@@ -31,6 +34,8 @@ interface MechanismsGalleryProps {
   onLoad: (mechanismRecord: SerializedMechanism) => void;
   onDelete: (createdAtId: number) => void;
   onNew: () => void;
+  onImport: () => void;
+  onExport: (mechanismRecord: SerializedMechanism) => void;
 }
 
 export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
@@ -40,6 +45,8 @@ export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
   onLoad,
   onDelete,
   onNew,
+  onImport,
+  onExport,
 }) => {
   // Trier par date de modification décroissante
   const sortedMechanismRecords = [...mechanismRecords].sort(
@@ -70,9 +77,23 @@ export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
         <Typography fontSize={"large"} fontWeight={500}>
           Mes mécanismes
         </Typography>
-        <IconButton onClick={onClose} size="small">
-          <Close />
-        </IconButton>
+        {/* L'import fait entrer un fichier dans la bibliothèque, il est donc
+            global ; l'export porte sur *un* mécanisme et vit sur sa carte. */}
+        <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+          <Button
+            size="small"
+            color="inherit"
+            startIcon={<FileOpen fontSize="small" />}
+            onClick={onImport}
+            sx={{ textTransform: "none", fontSize: "0.8rem" }}
+          >
+            Importer un fichier
+          </Button>
+          <Divider orientation="vertical" flexItem sx={{ mx: 0.5, my: 0.5 }} />
+          <IconButton onClick={onClose} size="small">
+            <Close />
+          </IconButton>
+        </Box>
       </DialogTitle>
 
       <DialogContent dividers sx={{ bgcolor: "background.default", pt: 2 }}>
@@ -160,19 +181,34 @@ export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
                         >
                           {mechanismRecord.metadata.name || "Sans titre"}
                         </Typography>
-                        {/* Actions (Suppression) */}
-                        <Tooltip title="Supprimer">
-                          <IconButton
-                            size="small"
-                            color="error"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onDelete(mechanismRecord.metadata.createdAt);
-                            }}
-                          >
-                            <Delete />
-                          </IconButton>
-                        </Tooltip>
+                        {/* Actions par mécanisme. `stopPropagation` : la carte
+                            entière charge le mécanisme au clic. */}
+                        <Box sx={{ display: "flex", flexShrink: 0, ml: 0.5 }}>
+                          <Tooltip title="Exporter">
+                            <IconButton
+                              size="small"
+                              color="inherit"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onExport(mechanismRecord);
+                              }}
+                            >
+                              <Download fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title="Supprimer">
+                            <IconButton
+                              size="small"
+                              color="error"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onDelete(mechanismRecord.metadata.createdAt);
+                              }}
+                            >
+                              <Delete fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        </Box>
                       </Box>
 
                       {/* Date et Info éléments */}

@@ -329,7 +329,7 @@ export function actionReducer(
           (element as { parentAxleID: string }).parentAxleID = action.connectID;
         }
         break;
-      case "MoveForceVector": {
+      case "ChangeForce": {
         const force = get_load_element_from_id(
           action.id,
           loadElements,
@@ -337,7 +337,7 @@ export function actionReducer(
         force.vector = revert ? action.oldVector : action.newVector;
         break;
       }
-      case "SetDistributedForce": {
+      case "ChangeDistributedForce": {
         const distForce = get_load_element_from_id(
           action.id,
           loadElements,
@@ -353,7 +353,7 @@ export function actionReducer(
           : action.newMagnitudeEnd;
         break;
       }
-      case "ChangeMomentValue": {
+      case "ChangeMoment": {
         const moment = get_load_element_from_id(
           action.id,
           loadElements,

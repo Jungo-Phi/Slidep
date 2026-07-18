@@ -262,9 +262,9 @@ export type Action =
       oldNodes: GeomNodes;
     }
   | { type: "Blank" }
-  | { type: "MoveForceVector"; id: ID; newVector: Point2; oldVector: Point2 }
+  | { type: "ChangeForce"; id: ID; newVector: Point2; oldVector: Point2 }
   | {
-      type: "SetDistributedForce";
+      type: "ChangeDistributedForce";
       id: ID;
       newDirection: Point2;
       oldDirection: Point2;
@@ -273,7 +273,7 @@ export type Action =
       newMagnitudeEnd: number;
       oldMagnitudeEnd: number;
     }
-  | { type: "ChangeMomentValue"; id: ID; newValue: number; oldValue: number }
+  | { type: "ChangeMoment"; id: ID; newValue: number; oldValue: number }
   | { type: "SetLoadFrame"; id: ID; newFrame: LoadFrame; oldFrame: LoadFrame }
   | {
       type: "SetProbes";

@@ -12,7 +12,7 @@ import {
 } from "../types";
 import {
   distributed_display_vectors,
-  force_base,
+  force_base_position,
   force_display_vector,
   force_world_vector,
 } from "./load-geom";
@@ -69,7 +69,10 @@ export function mechanism_bounds(
   for (const load of loads) {
     switch (load.type) {
       case "force": {
-        const base = force_base(load as ForceElement, mechanicalElements);
+        const base = force_base_position(
+          load as ForceElement,
+          mechanicalElements,
+        );
         if (!base) break;
         include(base);
         include(
@@ -84,7 +87,7 @@ export function mechanism_bounds(
       case "distributed-force": {
         const distributed = load as DistributedForceElement;
         const beam = mechanicalElements.find(
-          (e) => e.id === distributed.beamID && e.type === "beam",
+          (e) => e.id === distributed.targetID && e.type === "beam",
         ) as BeamElement | undefined;
         if (!beam) break;
         const { displayStart, displayEnd } = distributed_display_vectors(

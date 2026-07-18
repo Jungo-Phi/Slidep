@@ -4,7 +4,13 @@
 
 ### À faire rapidement
 
-- Afficher les valeurs des forces sur le canvas
+- handleKeyDown traite 0 comme une annulation (OnCanvasValueEditor.tsx:58-61), embètant pour mettre une extrémité de distributed-force à zéro
+
+- (M) : Moment, Mass ou Motor ?
+
+- Empécher les crashs
+
+- Instaurer un système de versioning, avec update des fichiers de la version précédente
 
 - Déconnecter un join de courroie fermée doit l'ouvrir.
 - Créer une validation : une courroie ne peut être tendue que si ses 2 extrémitées sont connectées et qu'il y a au moins 2 gears
@@ -24,27 +30,43 @@
 - ENTER et ESCAPE dans "auteur.ice.x" ou "nom de projet" devrait quitter la textBox
 - Afficher les trajectoires des edges (les 2 extrémités)
 - Changer couleur (icon + texte) de la contrainte sélectionnée au lieu du bord dans panneau contextuel
+- Unifier l'usage des tooltips
 - Ajouter disableInteractive à tous les tooltip
 - default damper length moves on simulation start
+- OnCanvasValueEditor trop large avec des points
+- Theme transition : certaines couleurs changent instantanément (grille + autres éléments spéciaux du canvas)
+- Pour les thèmes sombres, la couleur des selected loads n'est pas assez différenciée
+- Afficher le edge hovered au placement de force sur une référence avec snap
+- snapTo les valeurs rondes des loads
+- snap des edges prennent la priorité sur la grille
 
 - Ajouter boutons pour changer le parentBeam des slider et slideps
 - Le bouton dropDown pour changer le repère d'une force ne click pas sur toute la largeur de ElementDisplay
 - Utiliser le "bouton dropDown pour changer le repère d'une force" pour choisir l'ancrage d'un moteur
 - Afficher vitesse au lieu de ground en haut du moteur
 - Simulation moteur non grounded (parentBeamID)
+- Hover de suppression du pivot devrait le faire pour les gears connectés
+- Cacher dimension-belt en simulation
+- Mettre le cadenas dans le numberInput
+- Pareil pour horaire/anti-horaire
+- Ajuster les hitbox du "Stepper de vitesse de simulation"
+- isPlacing (editingValue) est-il vraiment utile ?
 
 - Analise des degrés de libertés en sous-parties
 
 ### À faire plus tard
 
+- Supprimer des fonctions simples de load-utils
+- Supprimer les duplications de code entre du placement d'éléments le canvas state reducer et draw-canvas
+- Créer un CanvasState "PlacingElement", elementType (fusion de 15 états)
 - unifier la méthode de catégories de canvasState dans get-hover et placing-element-actions
 
+- Choisir quels éléments sont : disabled={simulating}
 - Filtre du numberInput à vérifier + accepter (-) selon le type de valeur
 - Permettre des calculs dans numberInput
 - Penser le panneau de : plusieurs éléments sélectionnés
 - Force ref : ajouter gear et belt en plus des edges
 - Ajouter un title="xxx" à tous les trailing controls
-- Changer les noms "MoveForceVector" et "MoveDistributedForceVector"
 - enlever les undefined de "SelectedElement"
 - Ajouter la probe au hover de l'élément ?
 - Fusionner "force" et "distributed-force" dans le panneau d'éléments
@@ -72,13 +94,13 @@
 - se déplacer dans le temps de la simu avec les flèches
 - le "ghost" de contrainte en rouge pour un ctrl+z devrait être barré
 - hover des inputs dans le property pannel -> hilight canvas
+- Le ctrl+z de la création de dimensions à revoir
 - geometric-solver : Maintenir les longueurs des beams si possible. Maintenir l'orientation ce celui modifié si possible. Ignorer des grounds si nécessaire.
 - En simulation, en attrapant un point sur gearTooth et en le tirant vers l'intérieur, la roue tourne de façon incontrôlable
 - En simulation, attraper un élément alors qu'on moteur tourne fait que la simulation n'avance que si on bouge la souris.
 - Zoom sans scale les éléments eux-même ?
 - Mirror Y le canvas ?
 - N'afficher QUE les éléments connectés dans connectionProperties ?
-- responsive : top bar, element palette
 - Snap force et distributed force aux perpendiculaires lors du placement
 - Revenir au dernier mode de simulation avec SPACE (sauvegarde)
 - Afficher / Cacher les probes
@@ -88,7 +110,6 @@
 - changer le curseur sur les graphiques
 - pin graphique ?
 - zoom graphique (horizontal = dans le temps)
-- Afficher temps total de simu sur la progressbar
 - Faire le panneau de paramètre propre
 - placer un gear sur un slidep reste en slidep
 - Belt hover (gear section) is not reliable
@@ -100,7 +121,7 @@
 - Finir les traits de DimensionAngle
 - Enlever le système de drag and drop, passer à des boutons de transfer aux endroits spécifiques
 - Polish de dimensionAngle: arrondir les angles de 0° / 180°, traits extérieurs pour les petits angles
-- Hover interdire les éléments directement connectés et l'élément lui-meme pour dimentions
+- Hover interdire les éléments directement connectés et l'élément lui-meme pour dimensions
 - Empecher les contraintes sur le même élément (DDL analyser)
 - Pas de moteur + sur-contraint, on affiche quoi ?
 - Panneau d'analyse : Liste textuelle des libertés/blocages avec interaction (survol = surlignage canvas)
@@ -111,7 +132,6 @@
 - Copié collé
 - Rewhole de ElementDisplay pour inclure d'autres éléments, fill, etc.
 - Ajouter "Angle" dans les edges
-- Afficher la dimension dans le panneau de propriétés d'un edge
 - Afficher le ratio avec une autre gear dans les connections de l'élément
 - Afficher les contraintes non respectées avec des messages (Attention / Brisée) au lieu de e=3.72
 - Afficher les contraintes non respectées en couleur sur le canvas
@@ -124,7 +144,7 @@
 - Collisions
 - Afficher les vitesses
 - Afficher les forces
-- Afficher les contraintes
+- Afficher les contraintes (à partir des déformations ?)
 - Frottements dans les pivots et sliders
 - Moteurs de couple
 - Hot-Reload : champ clignote brièvement (bordure verte) pour confirmer la prise en compte par le solver
@@ -143,13 +163,17 @@
 - Ajouter "repelDistance" pour éloigner les contraintes détachées : move apart disconnected elements
 - hilight element on hover "disconnect" on element panel ?
 - afficher ground avec les 4 directions cardinales
-- changer le style du ground sur le moteur
-- Prefered force direction
-- afficher les forces en 2 modes (toe to head / head to toe)
+- Prefered force direction : afficher les forces en 2 modes (toe to head / head to toe)
 - Option de colorer les éléments
 - Comment rendre visible les ctrl+y/z invisibles ? Ou on s'en fout ?
 - Changer la contrainte same length gears -> ratio 1:1 en une vraie contrainte same lengths
 - Contrainte de distance entre edges parallèles (qui fait aussi contrainte de parallélisme ?)
+- Contrainte de symétrie ?
+- Contrainte de milieu/centre ?
+- Dimension verticale/horizontale (choisie au placement) ?
+- Dimension sur edges/gears/loads au placement ?
+- Traits de construction ?
+- Système de variables et/ou de calculs pour les dimensions ?
 - Créer un système d'unités (zoom de base : 1px = 1mm) à mettre dans les paramètres
 - afficher le sens de rotation du moteur sur une des 4 directions cardinales (seulement au hover ?)
 - S'assurer que la police est toujours la même
@@ -157,19 +181,16 @@
 - Ajouter InputBox lors du placement des beams ? (définir sa longueur)
 - Changer les textes avec les langues
 - Style des éléments : fil de fer, plein, couleurs
+- responsive : element palette
 - responsive : mobile mode
-- Tendre la courroie
 - Uniformiser MIN gearRadius/edgeLength, placement, pas déplacement ?
 - Ajouter un tag editor (property pannel + gallerie)
-- Sugesstion de tags "Statique", "Cinématique", "Dynamique"
+- Suggestion de tags "Statique", "Cinématique", "Dynamique"
 - Afficher des méchanismes exemple dans la gallerie
 - Afficher le nombre de pièces comme un tag
 - Logo animé
 - Exporter une animation : générer .gif, .mp4 de la simulation (options durée, FPS, zoom)
 - Ajouter engrenage couronne pour train épicycloïdal
-- Traits de construction ?
-- Contrainte de symétrie ?
-- Est-ce que les forces doivent tourner avec les éléments ?
 
 ### [ Simulation STATIQUE ]
 

@@ -30,9 +30,16 @@ import {
 import { get_gear_angles } from "../../utils";
 import {
   distributed_display_vectors,
-  force_base,
+  distributed_label_vector,
+  force_base_position,
   force_display_vector,
+  force_value_label_position,
   force_world_vector,
+  frame2world,
+  is_zero_load,
+  moment_center_position,
+  moment_display_radius,
+  moment_value_label_position,
 } from "../../utils/load-geom";
 import { is_constraint_type } from "./utils";
 
@@ -41,7 +48,8 @@ const SELECTION_STATES = [
   "SelectedMultiple",
   "SelectedElement",
   "Erasing",
-  "EditingConstraint",
+  "EditingValue",
+  "PlacingValue",
 ] as const satisfies readonly CanvasStateType[];
 
 type SelectionStateType = (typeof SELECTION_STATES)[number];
@@ -50,6 +58,17 @@ function isSelectionState(
   state: CanvasState,
 ): state is Extract<CanvasState, { type: SelectionStateType }> {
   return (SELECTION_STATES as readonly CanvasStateType[]).includes(state.type);
+}
+
+/**
+ * Where along `start`→`end` the cursor grabbed it, clamped to the segment.
+ * Falls back to the middle for a segment with no length, which carries no
+ * parameter at all.
+ */
+function grab_parameter(cursor: Point2, start: Point2, end: Point2): number {
+  const t = cursor.parameter_on_segment(start, end);
+  if (!Number.isFinite(t)) return 0.5;
+  return Math.min(1, Math.max(0, t));
 }
 
 /** Returns the hovered part of the element, or null if no part is hovered. */
@@ -122,11 +141,33 @@ function get_hovered_part_of_element(
       const node = element as NodeElement;
       const distance = mousePos.distance_to(node.position);
       switch (state.type) {
+        case "PlacingMomentStart": {
+          // A moment aimed at an axle lands on the gear it carries: reaching for
+          // the centre of a gear is a natural way to designate that gear, and
+          // the axle itself takes no moment of its own. Without this, only the
+          // gear's rim is a target — its whole middle is a dead zone.
+          if (distance > HIT_TOLERANCE.NODE) break;
+          if (!("fixedGearsIDs" in node) || node.fixedGearsIDs.length === 0)
+            break;
+          // An axle can carry several gears; the first is the one the moment
+          // goes to. Aiming at a specific gear's rim stays the way to pick.
+          const gear = get_mechanical_element_from_id(
+            node.fixedGearsIDs[0],
+            mechanicalElements,
+          ) as GearElement;
+          return {
+            type: "GearTooth",
+            position: gear.position.clone(),
+            id: gear.id,
+            deleting: false,
+          };
+        }
         case "Selecting":
         case "SelectedElement":
         case "SelectedMultiple":
         case "Erasing":
-        case "EditingConstraint":
+        case "EditingValue":
+        case "PlacingValue":
         case "PlacingBeltStart":
         case "PlacingBeltEnd":
         case "MovingNode":
@@ -179,11 +220,11 @@ function get_hovered_part_of_element(
 
           if (state.type === "PlacingBeamEnd") {
             if (
-              node.position.distance_to_segment(
+              node.position.distance2segment(
                 state.startHover.position,
                 mousePos,
               ) <= HIT_TOLERANCE.EDGE &&
-              mousePos.distance_to_line(
+              mousePos.distance2line(
                 state.startHover.position,
                 node.position,
               ) <= HIT_TOLERANCE.EDGE
@@ -209,9 +250,9 @@ function get_hovered_part_of_element(
 
           if (state.type === "MovingEdgeStartPoint") {
             if (
-              node.position.distance_to_segment(edge.positionEnd, mousePos) <=
+              node.position.distance2segment(edge.positionEnd, mousePos) <=
                 HIT_TOLERANCE.EDGE &&
-              mousePos.distance_to_line(edge.positionEnd, node.position) <=
+              mousePos.distance2line(edge.positionEnd, node.position) <=
                 HIT_TOLERANCE.EDGE
             ) {
               return {
@@ -226,9 +267,9 @@ function get_hovered_part_of_element(
               };
             }
           } else if (
-            node.position.distance_to_segment(edge.positionStart, mousePos) <=
+            node.position.distance2segment(edge.positionStart, mousePos) <=
               HIT_TOLERANCE.EDGE &&
-            mousePos.distance_to_line(edge.positionStart, node.position) <=
+            mousePos.distance2line(edge.positionStart, node.position) <=
               HIT_TOLERANCE.EDGE
           ) {
             return {
@@ -259,7 +300,8 @@ function get_hovered_part_of_element(
         case "SelectedElement":
         case "SelectedMultiple":
         case "Erasing":
-        case "EditingConstraint":
+        case "EditingValue":
+        case "PlacingValue":
         case "PlacingBeltStart":
         case "PlacingBeltEnd":
         case "DimensionStart":
@@ -325,7 +367,7 @@ function get_hovered_part_of_element(
             id: gear.id,
             deleting: false,
           };
-        case "PlacingMoment":
+        case "PlacingMomentStart":
           // Moment on gear perimeter
           return {
             type: "GearTooth",
@@ -380,7 +422,7 @@ function get_hovered_part_of_element(
           };
         }
         if (
-          mousePos.distance_to_segment(edge.positionStart, edge.positionEnd) <=
+          mousePos.distance2segment(edge.positionStart, edge.positionEnd) <=
           HIT_TOLERANCE.EDGE
         ) {
           return {
@@ -416,6 +458,7 @@ function get_hovered_part_of_element(
         case "PlacingJoin":
         case "PlacingMass":
         case "PlacingGround":
+        case "PlacingForceStart":
           // body (only if beam) & ends
           if (mousePos.distance_to(edge.positionStart) <= HIT_TOLERANCE.NODE) {
             return {
@@ -438,10 +481,8 @@ function get_hovered_part_of_element(
           if (
             element.type === "beam" &&
             state.type !== "MovingEdgeBody" &&
-            mousePos.distance_to_segment(
-              edge.positionStart,
-              edge.positionEnd,
-            ) <= HIT_TOLERANCE.EDGE
+            mousePos.distance2segment(edge.positionStart, edge.positionEnd) <=
+              HIT_TOLERANCE.EDGE
           ) {
             return {
               type: "Edge",
@@ -467,10 +508,8 @@ function get_hovered_part_of_element(
         case "DimensionEdge":
           // body
           if (
-            mousePos.distance_to_segment(
-              edge.positionStart,
-              edge.positionEnd,
-            ) <= HIT_TOLERANCE.EDGE
+            mousePos.distance2segment(edge.positionStart, edge.positionEnd) <=
+            HIT_TOLERANCE.EDGE
           ) {
             return {
               type: "Edge",
@@ -506,62 +545,15 @@ function get_hovered_part_of_element(
             };
           }
           break;
-        case "PlacingForceStart":
-          // endpoints only (no body) — force anchors at node or edge endpoint
-          if (mousePos.distance_to(edge.positionStart) <= HIT_TOLERANCE.NODE) {
-            return {
-              type: "Edge",
-              position: edge.positionStart.clone(),
-              id: edge.id,
-              deleting: false,
-              part: "start",
-            };
-          }
-          if (mousePos.distance_to(edge.positionEnd) <= HIT_TOLERANCE.NODE) {
-            return {
-              type: "Edge",
-              position: edge.positionEnd.clone(),
-              id: edge.id,
-              deleting: false,
-              part: "end",
-            };
-          }
-          break;
-        case "PlacingMoment":
+        case "PlacingMomentStart":
           // body of any edge (not just beam)
           if (
-            mousePos.distance_to_segment(
-              edge.positionStart,
-              edge.positionEnd,
-            ) <= HIT_TOLERANCE.EDGE
+            mousePos.distance2segment(edge.positionStart, edge.positionEnd) <=
+            HIT_TOLERANCE.EDGE
           ) {
             return {
               type: "Edge",
-              position: mousePos.project_on_line(
-                edge.positionStart,
-                edge.positionEnd,
-              ),
-              id: edge.id,
-              deleting: false,
-              part: "body",
-            };
-          }
-          break;
-        case "PlacingDistributedForceStart":
-          // beam body only
-          if (
-            edge.type === "beam" &&
-            mousePos.distance_to_segment(
-              edge.positionStart,
-              edge.positionEnd,
-            ) <= HIT_TOLERANCE.EDGE
-          ) {
-            return {
-              type: "Edge",
-              position: mousePos.project_on_line(
-                edge.positionStart,
-                edge.positionEnd,
-              ),
+              position: edge.positionStart.lerp(edge.positionEnd, 0.5),
               id: edge.id,
               deleting: false,
               part: "body",
@@ -571,10 +563,8 @@ function get_hovered_part_of_element(
         case "PlacingProbe":
           // body of any edge
           if (
-            mousePos.distance_to_segment(
-              edge.positionStart,
-              edge.positionEnd,
-            ) <= HIT_TOLERANCE.EDGE
+            mousePos.distance2segment(edge.positionStart, edge.positionEnd) <=
+            HIT_TOLERANCE.EDGE
           ) {
             return {
               type: "Edge",
@@ -689,7 +679,7 @@ function get_hovered_part_of_element(
           const { center: c2, radius: r2, startAngle } = gearAngles[i + 1];
           const start = c1.add(Point2.from_polar(r1, endAngle));
           const end = c2.add(Point2.from_polar(r2, startAngle));
-          if (mousePos.distance_to_segment(start, end) <= HIT_TOLERANCE.EDGE) {
+          if (mousePos.distance2segment(start, end) <= HIT_TOLERANCE.EDGE) {
             if (
               state.type === "ChangingGearRadius" ||
               state.type === "PlacingGearRadius"
@@ -705,8 +695,8 @@ function get_hovered_part_of_element(
                 gearPos = state.startHover.position;
               }
               if (
-                gearPos.distance_to_segment(start, end) <=
-                gearPos.distance_to_line(start, end)
+                gearPos.distance2segment(start, end) <=
+                gearPos.distance2line(start, end)
               ) {
                 return {
                   type: "BeltBody",
@@ -804,42 +794,41 @@ function get_hovered_part_of_element(
       };
     case "force": {
       if (!isSelectionState(state)) break;
-      const base = force_base(element, mechanicalElements);
-      if (!base) break;
-      const tip = base.add(
-        force_display_vector(force_world_vector(element, mechanicalElements)),
+      const base = force_base_position(element, mechanicalElements);
+      const displayVector = force_display_vector(
+        force_world_vector(element, mechanicalElements),
       );
-      // Tip handle
-      if (mousePos.distance_to(tip) <= HIT_TOLERANCE.NODE) {
+      const valuePos = force_value_label_position(base, displayVector);
+      // Tip handle + Arrow body
+      const tip = base.add(displayVector);
+      if (
+        mousePos.distance_to(tip) <= HIT_TOLERANCE.NODE ||
+        mousePos.distance2segment(base, tip) <= HIT_TOLERANCE.EDGE
+      )
         return {
           type: "Force",
           position: tip,
           id: element.id,
-          part: "tip",
-          deleting: state.type === "Erasing",
-        };
-      }
-      // Arrow body
-      if (mousePos.distance_to_segment(base, tip) <= HIT_TOLERANCE.EDGE) {
-        return {
-          type: "Force",
-          position: mousePos.project_on_line(base, tip),
-          id: element.id,
           part: "body",
           deleting: state.type === "Erasing",
         };
-      }
+      // Value
+      if (mousePos.distance_to(valuePos) <= HIT_TOLERANCE.CONSTRAINT)
+        return {
+          type: "Force",
+          position: valuePos,
+          id: element.id,
+          part: "value",
+          deleting: state.type === "Erasing",
+        };
       break;
     }
     case "moment": {
       if (!isSelectionState(state)) break;
-      const beam = get_mechanical_element_from_id(
-        element.beamID,
-        mechanicalElements,
-      ) as BeamElement;
-      const center = beam.positionStart.lerp(beam.positionEnd, 0.5);
+      const center = moment_center_position(element, mechanicalElements);
+      const radius = moment_display_radius(element.value);
+      const valuePos = moment_value_label_position(center, radius);
       const dist = mousePos.distance_to(center);
-      const radius = 18 + Math.min(Math.abs(element.value) * 2, 20);
       if (
         dist <= radius + HIT_TOLERANCE.EDGE &&
         dist >= radius - HIT_TOLERANCE.EDGE
@@ -848,75 +837,124 @@ function get_hovered_part_of_element(
           type: "Moment",
           position: center,
           id: element.id,
+          part: "body",
           deleting: state.type === "Erasing",
         };
       }
+      // Value
+      if (mousePos.distance_to(valuePos) <= HIT_TOLERANCE.CONSTRAINT)
+        return {
+          type: "Moment",
+          position: valuePos,
+          id: element.id,
+          part: "value",
+          deleting: state.type === "Erasing",
+        };
       break;
     }
-    case "distributed-force":
-      {
-        if (!isSelectionState(state)) break;
-        const beam = get_mechanical_element_from_id(
-          element.beamID,
-          mechanicalElements,
-        ) as BeamElement;
-        const { displayStart, displayEnd } = distributed_display_vectors(
-          element,
-          mechanicalElements,
-        );
-        const tipStart = beam.positionStart.add(displayStart);
-        const tipEnd = beam.positionEnd.add(displayEnd);
-        // Tip handles
-        if (mousePos.distance_to(tipStart) <= HIT_TOLERANCE.NODE) {
-          return {
-            type: "DistributedForce",
-            position: tipStart,
-            id: element.id,
-            part: "start-tip",
-            deleting: state.type === "Erasing",
-          };
-        }
-        if (mousePos.distance_to(tipEnd) <= HIT_TOLERANCE.NODE) {
-          return {
-            type: "DistributedForce",
-            position: tipEnd,
-            id: element.id,
-            part: "end-tip",
-            deleting: state.type === "Erasing",
-          };
-        }
-        // Both tips: near segment between tips
-        if (
-          mousePos.distance_to_segment(tipStart, tipEnd) <= HIT_TOLERANCE.EDGE
-        ) {
-          return {
-            type: "DistributedForce",
-            position: mousePos.project_on_line(tipStart, tipEnd),
-            id: element.id,
-            part: "line",
-            deleting: state.type === "Erasing",
-          };
-        }
-        // Body: Area between segment and beam
-        if (
-          mousePos.is_in_distributed_force(
-            beam.positionStart,
-            beam.positionEnd,
-            element.direction,
-            element.magnitudeStart,
-            element.magnitudeEnd,
-          )
-        ) {
-          return {
-            type: "DistributedForce",
-            position: mousePos,
-            id: element.id,
-            part: "body",
-            deleting: state.type === "Erasing",
-          };
-        }
+    case "distributed-force": {
+      if (!isSelectionState(state)) break;
+      const beam = get_mechanical_element_from_id(
+        element.targetID,
+        mechanicalElements,
+      ) as BeamElement;
+      const { displayStart, displayEnd } = distributed_display_vectors(
+        element,
+        mechanicalElements,
+      );
+      const tipStart = beam.positionStart.add(displayStart);
+      const tipEnd = beam.positionEnd.add(displayEnd);
+      // Same anchors as the drawing, via the same helper: an end whose arrow
+      // has run out to nothing still hangs its label off the load's direction.
+      const direction = frame2world(
+        element.direction,
+        element.frame,
+        mechanicalElements,
+      );
+      const startValuePos = force_value_label_position(
+        beam.positionStart,
+        distributed_label_vector(displayStart, direction),
+      );
+      // Tip handles + Arrows body
+      if (
+        mousePos.distance_to(tipStart) <= HIT_TOLERANCE.NODE ||
+        mousePos.distance2segment(beam.positionStart, tipStart) <=
+          HIT_TOLERANCE.EDGE
+      ) {
+        return {
+          type: "DistributedForce",
+          position: tipStart,
+          id: element.id,
+          part: "start",
+          deleting: state.type === "Erasing",
+        };
       }
+      if (
+        mousePos.distance_to(tipEnd) <= HIT_TOLERANCE.NODE ||
+        mousePos.distance2segment(beam.positionEnd, tipEnd) <=
+          HIT_TOLERANCE.EDGE
+      ) {
+        return {
+          type: "DistributedForce",
+          position: tipEnd,
+          id: element.id,
+          part: "end",
+          deleting: state.type === "Erasing",
+        };
+      }
+      // Body + segment between tips
+      if (
+        mousePos.is_in_distributed_force(
+          beam.positionStart,
+          beam.positionEnd,
+          displayStart,
+          displayEnd,
+        ) ||
+        mousePos.distance2segment(tipStart, tipEnd) <= HIT_TOLERANCE.EDGE
+      ) {
+        return {
+          type: "DistributedForce",
+          position: mousePos.project_on_line(tipStart, tipEnd),
+          id: element.id,
+          part: "body",
+          deleting: state.type === "Erasing",
+          // The tips are the profile at t = 0 and t = 1, so the parameter along
+          // the crest line is the parameter along the beam. A load with both
+          // ends at zero has no crest line to read it off — grab its middle.
+          t: grab_parameter(mousePos, tipStart, tipEnd),
+        };
+      }
+      // Value. An end carrying nothing writes no label, so it offers no target
+      // either — an invisible one would be a click into thin air. Its value is
+      // reached by dragging its tip back out, or from the panel.
+      if (
+        !is_zero_load(element.magnitudeStart) &&
+        mousePos.distance_to(startValuePos) <= HIT_TOLERANCE.CONSTRAINT
+      )
+        return {
+          type: "DistributedForce",
+          position: startValuePos,
+          id: element.id,
+          part: "start-value",
+          deleting: state.type === "Erasing",
+        };
+      const endValuePos = force_value_label_position(
+        beam.positionEnd,
+        distributed_label_vector(displayEnd, direction),
+      );
+      if (
+        !is_zero_load(element.magnitudeEnd) &&
+        mousePos.distance_to(endValuePos) <= HIT_TOLERANCE.CONSTRAINT
+      )
+        return {
+          type: "DistributedForce",
+          position: endValuePos,
+          id: element.id,
+          part: "end-value",
+          deleting: state.type === "Erasing",
+        };
       break;
+    }
   }
   return null;
 }

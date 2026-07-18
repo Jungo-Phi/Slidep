@@ -83,12 +83,12 @@ export type EdgeElement =
 
 /** Union type for all constraint element types */
 export type ConstraintElement =
-  | DimentionEdgeElement
-  | DimentionNodeToNode
-  | DimentionEdgeToNode
-  | DimentionAngle
-  | DimentionRadius
-  | DimentionBelt
+  | DimensionEdgeElement
+  | DimensionNodeToNode
+  | DimensionEdgeToNode
+  | DimensionAngle
+  | DimensionRadius
+  | DimensionBelt
   | HorizontalAlignEdge
   | HorizontalAlignNodes
   | VerticalAlignEdge
@@ -233,31 +233,31 @@ export interface ConstraintBaseElement extends BaseElement {
   position: Point2;
 }
 
-/** Dimention edge element - dimension of edge length */
-export interface DimentionEdgeElement extends ConstraintBaseElement {
+/** Dimension edge element - dimension of edge length */
+export interface DimensionEdgeElement extends ConstraintBaseElement {
   type: "dimension-edge";
   edgeID: ID;
   value: number;
 }
 
-/** Dimention node to node element - dimension between two nodes */
-export interface DimentionNodeToNode extends ConstraintBaseElement {
+/** Dimension node to node element - dimension between two nodes */
+export interface DimensionNodeToNode extends ConstraintBaseElement {
   type: "dimension-node-to-node";
   startNodeID: ID;
   endNodeID: ID;
   value: number;
 }
 
-/** Dimention edge to node element - dimension between edge and node */
-export interface DimentionEdgeToNode extends ConstraintBaseElement {
+/** Dimension edge to node element - dimension between edge and node */
+export interface DimensionEdgeToNode extends ConstraintBaseElement {
   type: "dimension-edge-to-node";
   edgeID: ID;
   nodeID: ID;
   value: number;
 }
 
-/** Dimention angle element - dimension of angle between two edges */
-export interface DimentionAngle extends ConstraintBaseElement {
+/** Dimension angle element - dimension of angle between two edges */
+export interface DimensionAngle extends ConstraintBaseElement {
   type: "dimension-angle";
   startEdgeID: ID;
   endEdgeID: ID;
@@ -267,15 +267,15 @@ export interface DimentionAngle extends ConstraintBaseElement {
   value: number;
 }
 
-/** Dimention radius element - radius dimension of a gear */
-export interface DimentionRadius extends ConstraintBaseElement {
+/** Dimension radius element - radius dimension of a gear */
+export interface DimensionRadius extends ConstraintBaseElement {
   type: "dimension-radius";
   gearID: ID;
   value: number;
 }
 
 /** Dimension belt length element - total length dimension of a belt */
-export interface DimentionBelt extends ConstraintBaseElement {
+export interface DimensionBelt extends ConstraintBaseElement {
   type: "dimension-belt";
   beltID: ID;
   value: number;
@@ -373,7 +373,8 @@ export interface ForceElement extends BaseElement {
  */
 export interface DistributedForceElement extends BaseElement {
   type: "distributed-force";
-  beamID: ID;
+  /** The beam it is spread along. Every load names its host `targetID`. */
+  targetID: ID;
   direction: Point2;
   magnitudeStart: number;
   magnitudeEnd: number;
@@ -384,7 +385,8 @@ export interface DistributedForceElement extends BaseElement {
  *  `value` is signed: positive is clockwise, negative counter-clockwise. */
 export interface MomentElement extends BaseElement {
   type: "moment";
-  beamID: ID;
+  /** The edge or gear it turns. Every load names its host `targetID`. */
+  targetID: ID;
   value: number;
 }
 

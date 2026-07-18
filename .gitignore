@@ -27,6 +27,7 @@ vite.config.ts.timestamp-*
 # Editor / tools
 .vscode
 .kilocodemodes
+CLAUDE.local.md
 
 # Screenshots générés par les tests
 screenshots

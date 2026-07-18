@@ -66,7 +66,7 @@ const edition_palette = (): { title: string; elements: PaletteElement[] }[] => [
             "MovingConstraint",
             "SimulationDragging",
           ].includes(state.type) ||
-          (state.type === "EditingConstraint" && !state.isPlacing),
+          state.type === "EditingValue",
         hilightColor: COLORS.SELECTION_BOX,
         hilightHoverColor: COLORS.SELECTION_STROKE,
         simHilightColor: COLORS.ACCENT,
@@ -224,7 +224,7 @@ const edition_palette = (): { title: string; elements: PaletteElement[] }[] => [
       {
         label: "Dimension",
         tooltip: "Dimension (D)",
-        iconSrc: icon("dimention"),
+        iconSrc: icon("dimension"),
         goToStateType: "DimensionStart",
         simBehavior: "constraint",
         hilightRule: (state, mechanism) =>
@@ -237,8 +237,7 @@ const edition_palette = (): { title: string; elements: PaletteElement[] }[] => [
             "DimensionAngle",
             "DimensionRadius",
           ].includes(state.type) ||
-          (state.type === "EditingConstraint" &&
-            state.isPlacing &&
+          (state.type === "PlacingValue" &&
             get_constraint_element_from_id(
               state.elementID,
               mechanism.constraintElements,
@@ -255,8 +254,7 @@ const edition_palette = (): { title: string; elements: PaletteElement[] }[] => [
         hilightRule: (state, mechanism) =>
           state.type === "GearRatioConstraintStart" ||
           state.type === "GearRatioConstraintGear" ||
-          (state.type === "EditingConstraint" &&
-            state.isPlacing &&
+          (state.type === "PlacingValue" &&
             get_constraint_element_from_id(
               state.elementID,
               mechanism.constraintElements,
@@ -326,19 +324,8 @@ const edition_palette = (): { title: string; elements: PaletteElement[] }[] => [
         simBehavior: "structural",
         hilightRule: (state) =>
           state.type === "PlacingForceStart" ||
-          state.type === "PlacingForceEnd",
-        hilightColor: COLORS.ACCENT,
-        hilightHoverColor: COLORS.ACCENT_DARK,
-      },
-      {
-        label: "Force répartie",
-        tooltip: "Distributed Force (U)",
-        iconSrc: icon("distributed-force"),
-        goToStateType: "PlacingDistributedForceStart",
-        simBehavior: "structural",
-        hilightRule: (state) =>
-          state.type === "PlacingDistributedForceStart" ||
-          state.type === "PlacingDistributedForceEnd",
+          state.type === "PlacingForceEnd" ||
+          state.type === "PlacingDistributedForce",
         hilightColor: COLORS.ACCENT,
         hilightHoverColor: COLORS.ACCENT_DARK,
       },
@@ -346,9 +333,11 @@ const edition_palette = (): { title: string; elements: PaletteElement[] }[] => [
         label: "Moment",
         tooltip: "Moment (O)",
         iconSrc: icon("moment"),
-        goToStateType: "PlacingMoment",
+        goToStateType: "PlacingMomentStart",
         simBehavior: "structural",
-        hilightRule: (state) => state.type === "PlacingMoment",
+        hilightRule: (state) =>
+          state.type === "PlacingMomentStart" ||
+          state.type === "PlacingMomentEnd",
         hilightColor: COLORS.ACCENT,
         hilightHoverColor: COLORS.ACCENT_DARK,
       },
@@ -359,8 +348,7 @@ const edition_palette = (): { title: string; elements: PaletteElement[] }[] => [
         goToStateType: "PlacingProbe",
         simBehavior: "observational",
         hilightRule: (state) =>
-          state.type === "PlacingProbe" ||
-          state.type === "PlacingProbeMetrics",
+          state.type === "PlacingProbe" || state.type === "PlacingProbeMetrics",
         hilightColor: COLORS.ACCENT,
         hilightHoverColor: COLORS.ACCENT_DARK,
       },
@@ -478,63 +466,66 @@ export const ElementPalette: React.FC<ElementPaletteProps> = ({
             {group.elements.map((element) => {
               const isSimMode = appMode !== "edition";
               const isHighlighted = element.hilightRule(canvasState, mechanism);
-              const hilightColor = isSimMode && element.simHilightColor
-                ? element.simHilightColor
-                : element.hilightColor;
-              const hilightHoverColor = isSimMode && element.simHilightHoverColor
-                ? element.simHilightHoverColor
-                : element.hilightHoverColor;
-              const iconSrc = isSimMode && element.simIconSrc
-                ? element.simIconSrc
-                : element.iconSrc;
+              const hilightColor =
+                isSimMode && element.simHilightColor
+                  ? element.simHilightColor
+                  : element.hilightColor;
+              const hilightHoverColor =
+                isSimMode && element.simHilightHoverColor
+                  ? element.simHilightHoverColor
+                  : element.hilightHoverColor;
+              const iconSrc =
+                isSimMode && element.simIconSrc
+                  ? element.simIconSrc
+                  : element.iconSrc;
               return (
-              <Tooltip
-                key={element.goToStateType}
-                title={element.tooltip}
-                placement="right"
-                arrow
-                disableInteractive
-                onOpen={() => {}}
-              >
-                <IconButton
-                  onClick={() => handleElementClick(element)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      handleElementClick(element);
-                    }
-                  }}
-                  sx={{
-                    width: SIZE + 2 * PADDING,
-                    height: SIZE + 2 * PADDING,
-                    borderRadius: 0.75,
-                    backgroundColor: isHighlighted
-                      ? hilightColor
-                      : "transparent",
-                    "&:hover": {
-                      background: isHighlighted
-                        ? hilightHoverColor
-                        : "action.hover",
-                    },
-                  }}
-                  aria-label={element.label}
+                <Tooltip
+                  key={element.goToStateType}
+                  title={element.tooltip}
+                  placement="right"
+                  arrow
+                  disableInteractive
+                  onOpen={() => {}}
                 >
-                  <Box
-                    component="img"
-                    src={iconSrc}
-                    alt={element.label}
-                    sx={{
-                      width: SIZE,
-                      height: SIZE,
-                      display: "block",
-                      filter:
-                        canvasState.type && isHighlighted
-                          ? "brightness(0) invert(1)"
-                          : "none",
+                  <IconButton
+                    onClick={() => handleElementClick(element)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        handleElementClick(element);
+                      }
                     }}
-                  />
-                </IconButton>
-              </Tooltip>
+                    sx={{
+                      width: SIZE + 2 * PADDING,
+                      height: SIZE + 2 * PADDING,
+                      borderRadius: 0.75,
+                      backgroundColor: isHighlighted
+                        ? hilightColor
+                        : "transparent",
+                      "&:hover": {
+                        background: isHighlighted
+                          ? hilightHoverColor
+                          : "action.hover",
+                      },
+                    }}
+                    aria-label={element.label}
+                  >
+                    <Box
+                      component="img"
+                      src={iconSrc}
+                      alt={element.label}
+                      sx={{
+                        width: SIZE,
+                        height: SIZE,
+                        display: "block",
+                        filter:
+                          canvasState.type && isHighlighted
+                            ? "brightness(0) invert(1)"
+                            : "none",
+                      }}
+                    />
+                  </IconButton>
+                </Tooltip>
               );
             })}
           </div>

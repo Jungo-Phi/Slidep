@@ -1,4 +1,4 @@
-import type { CanvasState } from "../../types/canvas-state";
+﻿import type { CanvasState } from "../../types/canvas-state";
 import type { HoveredPart } from "../../types/hovered-part";
 import {
   BeltElement,
@@ -134,10 +134,9 @@ export function handle_placing_constraint(
           ],
           actionBundleType: "CreateConstraint",
           newCanvasState: {
-            type: "EditingConstraint",
+            type: "PlacingValue",
             elementID,
             value,
-            isPlacing: true,
           },
         };
       }
@@ -171,10 +170,9 @@ export function handle_placing_constraint(
         ],
         actionBundleType: "CreateConstraint",
         newCanvasState: {
-          type: "EditingConstraint",
+          type: "PlacingValue",
           elementID,
           value,
-          isPlacing: true,
         },
       };
     }
@@ -189,7 +187,7 @@ export function handle_placing_constraint(
         state.edgeID,
         mechanicalElements,
       ) as EdgeElement;
-      const value = node.position.distance_to_line(
+      const value = node.position.distance2line(
         edge.positionStart,
         edge.positionEnd,
       );
@@ -209,10 +207,9 @@ export function handle_placing_constraint(
         ],
         actionBundleType: "CreateConstraint",
         newCanvasState: {
-          type: "EditingConstraint",
+          type: "PlacingValue",
           elementID,
           value,
-          isPlacing: true,
         },
       };
     }
@@ -255,10 +252,9 @@ export function handle_placing_constraint(
         ],
         actionBundleType: "CreateConstraint",
         newCanvasState: {
-          type: "EditingConstraint",
+          type: "PlacingValue",
           elementID,
           value: angle,
-          isPlacing: true,
         },
       };
     }
@@ -285,10 +281,9 @@ export function handle_placing_constraint(
         ],
         actionBundleType: "CreateConstraint",
         newCanvasState: {
-          type: "EditingConstraint",
+          type: "PlacingValue",
           elementID,
           value,
-          isPlacing: true,
         },
       };
     }
@@ -315,10 +310,9 @@ export function handle_placing_constraint(
         ],
         actionBundleType: "CreateConstraint",
         newCanvasState: {
-          type: "EditingConstraint",
+          type: "PlacingValue",
           elementID,
           value,
-          isPlacing: true,
         },
       };
     }
@@ -602,10 +596,9 @@ export function handle_placing_constraint(
         ],
         actionBundleType: "CreateConstraint",
         newCanvasState: {
-          type: "EditingConstraint",
+          type: "PlacingValue",
           elementID,
           value,
-          isPlacing: true,
         },
       };
     }

@@ -15,6 +15,7 @@ import {
   Link,
   LoadElement,
   MechanicalElement,
+  MomentElement,
 } from "../../types";
 import {
   connect_elements,
@@ -27,9 +28,13 @@ import {
 } from "../mechanism/connect-actions";
 import { is_on_left_side_of_belt } from "../../utils";
 import {
-  force_display_value,
+  distributed_grab_magnitude,
+  distributed_tip_magnitude,
   force_stored_vector,
-  world_to_frame,
+  frame2world,
+  moment_center_position,
+  radius2moment_value,
+  world2frame,
 } from "../../utils/load-geom";
 import { belt_body_grab_pin, elements_by_id } from "../solver/parsing";
 import { DIM, HIT_TOLERANCE } from "../../constants/rendering-specs";
@@ -94,7 +99,8 @@ export function canvasStateReducer(
       switch (state.type) {
         case "Selecting":
         case "SelectedElement":
-        case "EditingConstraint":
+        case "EditingValue":
+        case "PlacingValue":
           // En simulation : pas de multi-sélection, pas de Moving* sur click
           if (isSimulating) {
             if (hoveredPart.type === "Void") {
@@ -143,59 +149,58 @@ export function canvasStateReducer(
             });
             break;
           }
+          // Étiquette de valeur d'une charge : on ouvre l'éditeur dès le 1ᵉʳ
+          // clic. C'est une cible distincte du corps, donc aucun drag n'est à
+          // armer ici. Le reste de la charge (corps, poignées) tombe dans le cas
+          // générique plus bas : sélection + drag armé via `pendingHit`.
           if (
-            hoveredPart.type === "Moment" ||
-            ((hoveredPart.type === "Force" ||
-              hoveredPart.type === "DistributedForce") &&
-              hoveredPart.part === "body")
+            (hoveredPart.type === "Force" ||
+              hoveredPart.type === "DistributedForce" ||
+              hoveredPart.type === "Moment") &&
+            (hoveredPart.part === "value" ||
+              hoveredPart.part === "start-value" ||
+              hoveredPart.part === "end-value")
           ) {
-            setCanvasState({
-              type: "SelectedElement",
-              elementID: hoveredPart.id,
-            });
-            break;
-          } else if (
-            hoveredPart.type === "Force" &&
-            hoveredPart.part !== "body"
-          ) {
+            // Pendant une saisie, on ne fait rien : le blur de l'input s'en charge.
+            if (state.type === "EditingValue" || state.type === "PlacingValue")
+              break;
             const load = get_load_element_from_id(hoveredPart.id, loadElements);
+            const part =
+              hoveredPart.part === "start-value"
+                ? "start"
+                : hoveredPart.part === "end-value"
+                  ? "end"
+                  : undefined;
             setCanvasState({
-              type: "MovingForce",
+              type: "EditingValue",
               elementID: load.id,
-            });
-            break;
-          } else if (
-            hoveredPart.type === "DistributedForce" &&
-            hoveredPart.part !== "body"
-          ) {
-            const load = get_load_element_from_id(hoveredPart.id, loadElements);
-            setCanvasState({
-              type: "MovingDistributedForce",
-              elementID: load.id,
-              part: hoveredPart.part,
+              value:
+                load.type === "moment"
+                  ? load.value
+                  : load.type === "force"
+                    ? load.vector.length()
+                    : // Unsigned, like the label it is opened from: the side of
+                      // the beam an end pushes on is set by dragging, not typed.
+                      Math.abs(
+                        part === "end"
+                          ? load.magnitudeEnd
+                          : load.magnitudeStart,
+                      ),
+              part,
             });
             break;
           }
           const constraint = constraintElements.find(
             (element) => element.id === hoveredPart.id,
           );
-          if (constraint && "value" in constraint) {
-            // Dimension (contrainte à valeur) : on arme un drag potentiel comme
-            // pour n'importe quel élément, mais on garde le mode "édition au 2ᵉ
-            // clic" — armedForEdit n'est vrai que si elle était déjà sélectionnée.
-            // Pendant l'édition, on ne fait rien : le blur de l'input s'en charge.
-            if (state.type === "EditingConstraint") break;
-            setCanvasState({
-              type: "SelectedElement",
-              elementID: hoveredPart.id,
-              pendingHit: hoveredPart,
-              downPos: worldMousePos,
-              armedForEdit:
-                state.type === "SelectedElement" &&
-                state.elementID === hoveredPart.id,
-            });
+          // Dimension (contrainte à valeur) : pendant une saisie, on ne fait
+          // rien ici — le blur de l'input s'en charge.
+          if (
+            constraint &&
+            "value" in constraint &&
+            (state.type === "EditingValue" || state.type === "PlacingValue")
+          )
             break;
-          }
           setCanvasState({
             type: "SelectedElement",
             elementID: hoveredPart.id,
@@ -308,9 +313,9 @@ export function canvasStateReducer(
         case "PlacingGround":
         case "PlacingForceStart":
         case "PlacingForceEnd":
-        case "PlacingDistributedForceStart":
-        case "PlacingDistributedForceEnd":
-        case "PlacingMoment":
+        case "PlacingDistributedForce":
+        case "PlacingMomentStart":
+        case "PlacingMomentEnd":
         case "PlacingProbe": {
           const r = handle_placing_element(
             state,
@@ -387,8 +392,8 @@ export function canvasStateReducer(
             let simElementID: ID | null = null;
             let bodyRatio: number | undefined = undefined;
             let gearPerimeter:
-              | { gearID: ID; angleOffset: number; radius: number }
-              | undefined = undefined;
+              { gearID: ID; angleOffset: number; radius: number } | undefined =
+              undefined;
             let beltPin: Extract<Link, { type: "BeltPin" }> | undefined =
               undefined;
             if (hit.type === "GearTooth") {
@@ -542,6 +547,31 @@ export function canvasStateReducer(
                 elementID: hit.id,
               });
               break;
+            case "Force":
+              setCanvasState({ type: "MovingForce", elementID: hit.id });
+              break;
+            case "Moment":
+              setCanvasState({ type: "MovingMoment", elementID: hit.id });
+              break;
+            case "DistributedForce":
+              // Les étiquettes de valeur n'arment jamais de drag (elles ouvrent
+              // l'éditeur au mouseDown), mais le type les autorise ici.
+              if (hit.part === "start-value" || hit.part === "end-value") break;
+              setCanvasState(
+                hit.part === "body"
+                  ? {
+                      type: "MovingDistributedForce",
+                      elementID: hit.id,
+                      part: "body",
+                      grabT: hit.t ?? 0.5,
+                    }
+                  : {
+                      type: "MovingDistributedForce",
+                      elementID: hit.id,
+                      part: hit.part,
+                    },
+              );
+              break;
           }
           break;
         }
@@ -636,9 +666,9 @@ export function canvasStateReducer(
                 : targetEle.positionEnd;
           actionBundleType = "MoveLoad";
           actions.push({
-            type: "MoveForceVector",
+            type: "ChangeForce",
             id: state.elementID,
-            newVector: world_to_frame(
+            newVector: world2frame(
               force_stored_vector(hoveredPart.position.sub(targetPos)),
               force.frame,
               mechanicalElements,
@@ -654,54 +684,96 @@ export function canvasStateReducer(
             loadElements,
           ) as DistributedForceElement;
           const beam = get_mechanical_element_from_id(
-            distForce.beamID,
+            distForce.targetID,
             mechanicalElements,
           ) as BeamElement;
           actionBundleType = "MoveLoad";
-          // A distributed force has a single shared direction: tips set their own
-          // magnitude (and re-aim the whole load), the connecting bar re-aims only.
-          let newDirection = distForce.direction;
+          // Every handle does the same thing — slide along the load's direction
+          // — and only differs in what the slid length means. Aiming is not
+          // part of any of them: the direction is chosen when the load is
+          // placed and edited in the panel, so a load dragged across its beam
+          // simply goes negative instead of swinging round, which would make
+          // its two ends look like they had swapped.
           let newMagnitudeStart = distForce.magnitudeStart;
           let newMagnitudeEnd = distForce.magnitudeEnd;
-          const setDirectionFromWorld = (worldVec: Point2) => {
-            if (worldVec.length() > 1e-6)
-              newDirection = world_to_frame(
-                worldVec.normalize(),
-                distForce.frame,
-                mechanicalElements,
-              );
-          };
+          const worldDirection = frame2world(
+            distForce.direction,
+            distForce.frame,
+            mechanicalElements,
+          );
+          const projection_at = (base: Point2) =>
+            // Signed: past the base the projection goes negative and the arrow
+            // flips to the other side of the beam rather than being clamped.
+            hoveredPart.position.sub(base).dot(worldDirection);
           switch (state.part) {
-            case "start-tip": {
-              const worldVec = hoveredPart.position.sub(beam.positionStart);
-              setDirectionFromWorld(worldVec);
-              newMagnitudeStart = force_display_value(worldVec.length());
-              break;
-            }
-            case "end-tip": {
-              const worldVec = hoveredPart.position.sub(beam.positionEnd);
-              setDirectionFromWorld(worldVec);
-              newMagnitudeEnd = force_display_value(worldVec.length());
-              break;
-            }
-            case "line": {
-              const proj = hoveredPart.position.project_on_line(
-                beam.positionStart,
-                beam.positionEnd,
+            case "start":
+              newMagnitudeStart = distributed_tip_magnitude(
+                projection_at(beam.positionStart),
+                distForce.magnitudeEnd,
               );
-              setDirectionFromWorld(hoveredPart.position.sub(proj));
+              break;
+            case "end":
+              newMagnitudeEnd = distributed_tip_magnitude(
+                projection_at(beam.positionEnd),
+                distForce.magnitudeStart,
+              );
+              break;
+            case "body": {
+              // The grabbed point of the crest line follows the cursor and both
+              // magnitudes are translated with it, keeping their difference
+              // fixed: the taper is a property of the load, not something
+              // moving it should rewrite. So pushing the load towards its beam
+              // takes the trailing end through zero into the negatives — it
+              // crosses to the other side — instead of collapsing the trapezoid
+              // into a rectangle.
+              const grabbed =
+                distForce.magnitudeStart +
+                (distForce.magnitudeEnd - distForce.magnitudeStart) *
+                  state.grabT;
+              const offsetStart = distForce.magnitudeStart - grabbed;
+              const offsetEnd = distForce.magnitudeEnd - grabbed;
+              const magnitude = distributed_grab_magnitude(
+                projection_at(
+                  beam.positionStart.lerp(beam.positionEnd, state.grabT),
+                ),
+                offsetStart,
+                offsetEnd,
+              );
+              newMagnitudeStart = magnitude + offsetStart;
+              newMagnitudeEnd = magnitude + offsetEnd;
               break;
             }
           }
           actions.push({
-            type: "SetDistributedForce",
+            type: "ChangeDistributedForce",
             id: state.elementID,
-            newDirection,
+            newDirection: distForce.direction,
             oldDirection: distForce.direction,
             newMagnitudeStart,
             oldMagnitudeStart: distForce.magnitudeStart,
             newMagnitudeEnd,
             oldMagnitudeEnd: distForce.magnitudeEnd,
+          });
+          break;
+        }
+        case "MovingMoment": {
+          if (hoveredPart.position.equals(oldPosition)) break;
+          const moment = get_load_element_from_id(
+            state.elementID,
+            loadElements,
+          ) as MomentElement;
+          const beamCenter = moment_center_position(moment, mechanicalElements);
+          actionBundleType = "MoveLoad";
+          actions.push({
+            type: "ChangeMoment",
+            id: state.elementID,
+            // The drag radius maps back through the arc's own scale; the sign
+            // is a placement choice, so a move only ever resizes the arc.
+            newValue:
+              radius2moment_value(
+                hoveredPart.position.distance_to(beamCenter),
+              ) * (moment.value < 0 ? -1 : 1),
+            oldValue: moment.value,
           });
           break;
         }
@@ -813,17 +885,16 @@ export function canvasStateReducer(
         case "SelectedElement":
           if (hoveredPart.type === "Void") break;
           if (hoveredPart.id === state.elementID) {
-            // On n'édite une dimension seulement au 2ᵉ clic (armedForEdit).
-            if (!state.armedForEdit) break;
+            // Un clic simple (sans drag) sur une dimension ouvre directement
+            // l'édition de sa valeur.
             const constraint = constraintElements.find(
               (element) => element.id === hoveredPart.id,
             );
             if (constraint && "value" in constraint) {
               setCanvasState({
-                type: "EditingConstraint",
+                type: "EditingValue",
                 elementID: state.elementID,
                 value: constraint.value,
-                isPlacing: false,
               });
               break;
             }
@@ -1156,7 +1227,7 @@ export function canvasStateReducer(
           setCanvasState({ type: "NormalConstraintStart" });
           break;
         case "o":
-          setCanvasState({ type: "PlacingMoment" });
+          setCanvasState({ type: "PlacingMomentStart" });
           break;
         case "p":
           setCanvasState({ type: "PlacingPivot" });
@@ -1172,9 +1243,6 @@ export function canvasStateReducer(
           break;
         case "t":
           setCanvasState({ type: "PlacingBeltStart" });
-          break;
-        case "u":
-          setCanvasState({ type: "PlacingDistributedForceStart" });
           break;
         case "v":
           setCanvasState({ type: "HorizontalVerticalConstraintStart" });

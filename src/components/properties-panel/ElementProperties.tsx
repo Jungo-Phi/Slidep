@@ -22,23 +22,28 @@ import {
   KeyboardArrowDown,
   ShowChart,
   Public,
+  Lock,
+  LockOpen,
 } from "@mui/icons-material";
 import {
+  ConstraintElement,
   DistributedForceElement,
   EdgeElement,
   ForceElement,
+  GearElement,
   ID,
   LoadElement,
   LoadFrame,
   MechanicalElement,
   PivotElement,
+  UnionElement,
   available_overlays,
   overlay_shown,
 } from "../../types/element";
 import {
-  frame_to_world,
+  frame2world,
   node_candidate_edges,
-  world_to_frame,
+  world2frame,
 } from "../../utils/load-geom";
 import {
   PROBE_METRIC_LABELS,
@@ -58,6 +63,7 @@ import {
   PropertiesPanelTab,
   RuntimeState,
   ZERO,
+  ONE,
 } from "../../types";
 import ConnectionsProperties from "./ConnectionsProperties";
 import { delete_element } from "../mechanism/connect-actions";
@@ -67,8 +73,9 @@ import SignedNumberInput from "./components/SignedNumberInput";
 import ElementDisplay from "./components/ElementDisplay";
 import ElementMeasures from "./ElementMeasures";
 import { OVERLAY_LABELS, set_overlay } from "./overlay-actions";
-import { element_to_hovered_part } from "../canvas/utils";
+import { element_to_hovered_part, linked_constraint } from "../canvas/utils";
 import { measure_belt_length } from "../../utils/belt-geom";
+import { DIMENSION_SPECS } from "../../constants/rendering-specs";
 import React from "react";
 
 interface MotorSectionProps {
@@ -279,8 +286,54 @@ const StructureOnly: React.FC<{
 const to_deg = (rad: number) => ((rad * 180) / Math.PI + 360) % 360;
 const to_rad = (deg: number) => (deg * Math.PI) / 180;
 
+const create_length_dimension = (
+  element: EdgeElement,
+  mechanicalElements: MechanicalElement[],
+): ConstraintElement => {
+  const { positionStart, positionEnd } = element;
+  const length =
+    element.type === "belt"
+      ? measure_belt_length(element, mechanicalElements)
+      : positionStart.distance_to(positionEnd);
+  const mid = positionStart.lerp(positionEnd, 0.5);
+  const offset = positionEnd
+    .sub(positionStart)
+    .perp()
+    .scale2length(DIMENSION_SPECS.AUTO_DIMENSION_OFFSET);
+  const position = mid.add(offset);
+  if (element.type === "belt") {
+    return {
+      type: "dimension-belt",
+      id: crypto.randomUUID(),
+      position,
+      beltID: element.id,
+      value: length,
+    };
+  }
+  return {
+    type: "dimension-edge",
+    id: crypto.randomUUID(),
+    position,
+    edgeID: element.id,
+    value: length,
+  };
+};
+
+const create_radius_dimension = (gear: GearElement): ConstraintElement => {
+  const position = gear.position.add(
+    ONE.scale2length(gear.radius + DIMENSION_SPECS.AUTO_DIMENSION_OFFSET),
+  );
+  return {
+    type: "dimension-radius",
+    id: crypto.randomUUID(),
+    position,
+    gearID: gear.id,
+    value: gear.radius,
+  };
+};
+
 /** Build a SetDistributedForce action from partial new values (rest kept). */
-const set_distributed_force = (
+const change_distributed_force = (
   load: DistributedForceElement,
   next: Partial<{
     newDirection: Point2;
@@ -288,7 +341,7 @@ const set_distributed_force = (
     newMagnitudeEnd: number;
   }>,
 ): Action => ({
-  type: "SetDistributedForce",
+  type: "ChangeDistributedForce",
   id: load.id,
   newDirection: next.newDirection ?? load.direction,
   oldDirection: load.direction,
@@ -312,22 +365,18 @@ const frame_change_actions = (
     { type: "SetLoadFrame", id: load.id, newFrame, oldFrame: load.frame },
   ];
   if (load.type === "force") {
-    const world = frame_to_world(load.vector, load.frame, mechanicalElements);
+    const world = frame2world(load.vector, load.frame, mechanicalElements);
     actions.push({
-      type: "MoveForceVector",
+      type: "ChangeForce",
       id: load.id,
-      newVector: world_to_frame(world, newFrame, mechanicalElements),
+      newVector: world2frame(world, newFrame, mechanicalElements),
       oldVector: load.vector,
     });
   } else {
-    const world = frame_to_world(
-      load.direction,
-      load.frame,
-      mechanicalElements,
-    );
+    const world = frame2world(load.direction, load.frame, mechanicalElements);
     actions.push(
-      set_distributed_force(load, {
-        newDirection: world_to_frame(world, newFrame, mechanicalElements),
+      change_distributed_force(load, {
+        newDirection: world2frame(world, newFrame, mechanicalElements),
       }),
     );
   }
@@ -502,10 +551,7 @@ const LoadsSection: React.FC<LoadsSectionProps> = ({
   const nodeEdges = hostEdge
     ? []
     : node_candidate_edges(element, mechanicalElements);
-  const elementLoads = loads.filter((l) => {
-    if (l.type === "force") return l.targetID === element.id;
-    return l.beamID === element.id;
-  });
+  const elementLoads = loads.filter((l) => l.targetID === element.id);
   const beamLength =
     "positionStart" in element
       ? element.positionStart.distance_to(element.positionEnd)
@@ -530,6 +576,7 @@ const LoadsSection: React.FC<LoadsSectionProps> = ({
             key={load.id}
             sx={{
               mt: 0.5,
+              pb: 0.5,
               borderRadius: 3,
               border: 1,
               borderColor:
@@ -556,7 +603,7 @@ const LoadsSection: React.FC<LoadsSectionProps> = ({
                   title="Supprimer"
                   sx={{ borderRadius: 3 }}
                 >
-                  <Delete sx={{ width: 16, height: 16 }} />
+                  <Delete sx={{ width: 20, height: 20 }} />
                 </IconButton>
               }
             />
@@ -579,9 +626,9 @@ const LoadsSection: React.FC<LoadsSectionProps> = ({
                       applyActions(
                         [
                           {
-                            type: "MoveForceVector",
+                            type: "ChangeForce",
                             id: load.id,
-                            newVector: load.vector.scale_to_length(mag),
+                            newVector: load.vector.scale2length(mag),
                             oldVector: load.vector,
                           },
                         ],
@@ -597,7 +644,7 @@ const LoadsSection: React.FC<LoadsSectionProps> = ({
                       applyActions(
                         [
                           {
-                            type: "MoveForceVector",
+                            type: "ChangeForce",
                             id: load.id,
                             newVector: Point2.from_polar(
                               load.vector.length(),
@@ -620,7 +667,7 @@ const LoadsSection: React.FC<LoadsSectionProps> = ({
                     onChange={(deg) =>
                       applyActions(
                         [
-                          set_distributed_force(load, {
+                          change_distributed_force(load, {
                             newDirection: Point2.from_polar(1, to_rad(deg)),
                           }),
                         ],
@@ -633,7 +680,11 @@ const LoadsSection: React.FC<LoadsSectionProps> = ({
                     value={load.magnitudeStart}
                     onChange={(v) =>
                       applyActions(
-                        [set_distributed_force(load, { newMagnitudeStart: v })],
+                        [
+                          change_distributed_force(load, {
+                            newMagnitudeStart: v,
+                          }),
+                        ],
                         "MoveLoad",
                       )
                     }
@@ -643,7 +694,11 @@ const LoadsSection: React.FC<LoadsSectionProps> = ({
                     value={load.magnitudeEnd}
                     onChange={(v) =>
                       applyActions(
-                        [set_distributed_force(load, { newMagnitudeEnd: v })],
+                        [
+                          change_distributed_force(load, {
+                            newMagnitudeEnd: v,
+                          }),
+                        ],
                         "MoveLoad",
                       )
                     }
@@ -651,25 +706,28 @@ const LoadsSection: React.FC<LoadsSectionProps> = ({
                   <NumberInput
                     label="R (N)"
                     value={
-                      ((load.magnitudeStart + load.magnitudeEnd) / 2) *
-                      beamLength
+                      (((load.magnitudeStart + load.magnitudeEnd) / 2) *
+                        beamLength) /
+                      1000
                     }
                     onChange={(resultant) => {
                       if (beamLength <= 0) return;
                       const current =
-                        ((load.magnitudeStart + load.magnitudeEnd) / 2) *
-                        beamLength;
+                        (((load.magnitudeStart + load.magnitudeEnd) / 2) *
+                          beamLength) /
+                        1000;
                       const next =
                         current > 1e-9
-                          ? set_distributed_force(load, {
+                          ? change_distributed_force(load, {
                               newMagnitudeStart:
                                 load.magnitudeStart * (resultant / current),
                               newMagnitudeEnd:
                                 load.magnitudeEnd * (resultant / current),
                             })
-                          : set_distributed_force(load, {
-                              newMagnitudeStart: resultant / beamLength,
-                              newMagnitudeEnd: resultant / beamLength,
+                          : change_distributed_force(load, {
+                              newMagnitudeStart:
+                                (resultant / beamLength) * 1000,
+                              newMagnitudeEnd: (resultant / beamLength) * 1000,
                             });
                       applyActions([next], "MoveLoad");
                     }}
@@ -684,7 +742,7 @@ const LoadsSection: React.FC<LoadsSectionProps> = ({
                     applyActions(
                       [
                         {
-                          type: "ChangeMomentValue",
+                          type: "ChangeMoment",
                           id: load.id,
                           newValue: value,
                           oldValue: load.value,
@@ -746,11 +804,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
       selectedElement.type === "moment" ||
       selectedElement.type === "distributed-force")
       ? mechanism.mechanicalElements.find(
-          (e) =>
-            e.id ===
-            (selectedElement.type === "force"
-              ? selectedElement.targetID
-              : selectedElement.beamID),
+          (e) => e.id === selectedElement.targetID,
         )
       : selectedElement;
 
@@ -763,8 +817,8 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
       ? selectedElement.id
       : undefined;
 
-  const handleMouseEnter = (el: MechanicalElement | LoadElement) => {
-    setHoveredPart(element_to_hovered_part(el, true));
+  const handleMouseEnter = (el: UnionElement, deleting: boolean) => {
+    setHoveredPart(element_to_hovered_part(el, deleting));
   };
 
   const handleMouseLeave = () => {
@@ -804,7 +858,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                     <StructureOnly disabled={simulating} row>
                       <IconButton
                         color="error"
-                        onMouseEnter={() => handleMouseEnter(element)}
+                        onMouseEnter={() => handleMouseEnter(element, true)}
                         onMouseLeave={handleMouseLeave}
                         onClick={() =>
                           applyActions(
@@ -839,6 +893,11 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
       </Box>
     );
   }
+
+  const linkedConstraint = linked_constraint(
+    element,
+    mechanism.constraintElements,
+  );
 
   return (
     <Box sx={{ mb: 1 }}>
@@ -968,9 +1027,9 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                     )
                   }
                   title="Supprimer"
-                  onMouseEnter={(_e) => handleMouseEnter(element)}
+                  onMouseEnter={(_e) => handleMouseEnter(element, true)}
                   onMouseLeave={handleMouseLeave}
-                  sx={{ borderRadius: 3 }}
+                  sx={{ borderRadius: 4 }}
                 >
                   <Delete />
                 </IconButton>
@@ -1011,29 +1070,80 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
               }
             />
             {element.type === "gear" && (
-              <NumberInput
-                value={element.radius}
-                onChange={(radius) => {
-                  applyActions(
-                    [
-                      {
-                        type: "ChangeGearRadius",
-                        id: element.id,
-                        newRadius: radius,
-                        oldRadius: element.radius,
-                        target: new Point2(
-                          element.position.x + radius,
-                          element.position.y,
-                        ),
-                      },
-                    ],
-                    "MoveElement",
-                  );
+              <Box
+                sx={{
+                  display: "flex",
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 0.5,
                 }}
-                label="Rayon"
-                large={true}
-                signed={false}
-              />
+              >
+                <NumberInput
+                  value={element.radius}
+                  onChange={(radius) => {
+                    applyActions(
+                      [
+                        {
+                          type: "ChangeGearRadius",
+                          id: element.id,
+                          newRadius: radius,
+                          oldRadius: element.radius,
+                          target: new Point2(
+                            element.position.x + radius,
+                            element.position.y,
+                          ),
+                        },
+                      ],
+                      "MoveElement",
+                    );
+                  }}
+                  label="Rayon"
+                  large={true}
+                  signed={false}
+                />
+                {linkedConstraint ? (
+                  <IconButton
+                    color="secondary"
+                    onMouseEnter={() =>
+                      handleMouseEnter(linkedConstraint, true)
+                    }
+                    onMouseLeave={handleMouseLeave}
+                    onClick={() =>
+                      applyActions(
+                        [
+                          {
+                            type: "DeleteElement",
+                            element: linkedConstraint,
+                          },
+                        ],
+                        "Other",
+                      )
+                    }
+                    title="Débloquer la longueur"
+                    size="small"
+                  >
+                    <Lock sx={{ width: 20, height: 20 }} fontSize="small" />
+                  </IconButton>
+                ) : (
+                  <IconButton
+                    onClick={() =>
+                      applyActions(
+                        [
+                          {
+                            type: "CreateElement",
+                            element: create_radius_dimension(element),
+                          },
+                        ],
+                        "CreateConstraint",
+                      )
+                    }
+                    title="Bloquer la longueur"
+                    size="small"
+                  >
+                    <LockOpen sx={{ width: 20, height: 20 }} fontSize="small" />
+                  </IconButton>
+                )}
+              </Box>
             )}
           </Box>
         </StructureOnly>
@@ -1047,7 +1157,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
               direction: "row",
               alignItems: "center",
               justifyContent: "center",
-              gap: 2,
+              gap: 1,
               m: 1,
             }}
           >
@@ -1067,27 +1177,69 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                 )
               }
             />
-            <NumberInput
-              value={
-                element.type === "belt"
-                  ? measure_belt_length(element, mechanism.mechanicalElements)
-                  : element.positionStart.distance_to(element.positionEnd)
-              }
-              onChange={(length) => {
-                if (element.type === "belt") {
-                  const beltDim = mechanism.constraintElements.find(
+            <Box
+              sx={{
+                display: "flex",
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 0.5,
+              }}
+            >
+              <NumberInput
+                value={
+                  element.type === "belt"
+                    ? measure_belt_length(element, mechanism.mechanicalElements)
+                    : element.positionStart.distance_to(element.positionEnd)
+                }
+                onChange={(length) => {
+                  if (element.type === "belt") {
+                    const beltDim = mechanism.constraintElements.find(
+                      (c) =>
+                        c.type === "dimension-belt" && c.beltID === element.id,
+                    );
+                    if (beltDim && beltDim.type === "dimension-belt") {
+                      // Persistent dimension: update its value.
+                      applyActions(
+                        [
+                          {
+                            type: "ChangeDimensionBeltValue",
+                            id: beltDim.id,
+                            newValue: length,
+                            oldValue: beltDim.value,
+                          },
+                        ],
+                        "ChangeDimension",
+                      );
+                    } else {
+                      applyActions(
+                        [
+                          {
+                            type: "ChangeBeltLength",
+                            id: element.id,
+                            newLength: length,
+                            oldLength: measure_belt_length(
+                              element,
+                              mechanism.mechanicalElements,
+                            ),
+                          },
+                        ],
+                        "MoveElement",
+                      );
+                    }
+                    return;
+                  }
+                  const linkedDim = mechanism.constraintElements.find(
                     (c) =>
-                      c.type === "dimension-belt" && c.beltID === element.id,
+                      c.type === "dimension-edge" && c.edgeID === element.id,
                   );
-                  if (beltDim && beltDim.type === "dimension-belt") {
-                    // Persistent dimension: update its value.
+                  if (linkedDim && linkedDim.type === "dimension-edge") {
                     applyActions(
                       [
                         {
-                          type: "ChangeDimensionBeltValue",
-                          id: beltDim.id,
+                          type: "ChangeDimensionEdgeValue",
+                          id: linkedDim.id,
                           newValue: length,
-                          oldValue: beltDim.value,
+                          oldValue: linkedDim.value,
                         },
                       ],
                       "ChangeDimension",
@@ -1096,55 +1248,66 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                     applyActions(
                       [
                         {
-                          type: "ChangeBeltLength",
+                          type: "ChangeEdgeLength",
                           id: element.id,
                           newLength: length,
-                          oldLength: measure_belt_length(
-                            element,
-                            mechanism.mechanicalElements,
+                          oldLength: element.positionStart.distance_to(
+                            element.positionEnd,
                           ),
                         },
                       ],
                       "MoveElement",
                     );
                   }
-                  return;
-                }
-                const linkedDim = mechanism.constraintElements.find(
-                  (c) => c.type === "dimension-edge" && c.edgeID === element.id,
-                );
-                if (linkedDim && linkedDim.type === "dimension-edge") {
-                  applyActions(
-                    [
-                      {
-                        type: "ChangeDimensionEdgeValue",
-                        id: linkedDim.id,
-                        newValue: length,
-                        oldValue: linkedDim.value,
-                      },
-                    ],
-                    "ChangeDimension",
-                  );
-                } else {
-                  applyActions(
-                    [
-                      {
-                        type: "ChangeEdgeLength",
-                        id: element.id,
-                        newLength: length,
-                        oldLength: element.positionStart.distance_to(
-                          element.positionEnd,
-                        ),
-                      },
-                    ],
-                    "MoveElement",
-                  );
-                }
-              }}
-              large={true}
-              label="Longueur"
-              signed={false}
-            />
+                }}
+                large={true}
+                label="Longueur"
+                signed={false}
+              />
+              {linkedConstraint ? (
+                <IconButton
+                  color="secondary"
+                  onMouseEnter={() => handleMouseEnter(linkedConstraint, true)}
+                  onMouseLeave={handleMouseLeave}
+                  onClick={() =>
+                    applyActions(
+                      [
+                        {
+                          type: "DeleteElement",
+                          element: linkedConstraint,
+                        },
+                      ],
+                      "Other",
+                    )
+                  }
+                  title="Débloquer la longueur"
+                  size="small"
+                >
+                  <Lock sx={{ width: 20, height: 20 }} fontSize="small" />
+                </IconButton>
+              ) : (
+                <IconButton
+                  onClick={() =>
+                    applyActions(
+                      [
+                        {
+                          type: "CreateElement",
+                          element: create_length_dimension(
+                            element,
+                            mechanism.mechanicalElements,
+                          ),
+                        },
+                      ],
+                      "CreateConstraint",
+                    )
+                  }
+                  title="Bloquer la longueur"
+                  size="small"
+                >
+                  <LockOpen sx={{ width: 20, height: 20 }} fontSize="small" />
+                </IconButton>
+              )}
+            </Box>
             <VectorInput
               value={element.positionEnd}
               onChange={(pos) =>

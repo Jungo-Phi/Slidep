@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect, useCallback } from "react";
 import { TextField, Box, Typography } from "@mui/material";
-import { value_to_ratio_parts } from "../../../utils";
+import { value2ratio } from "../../../utils";
 
 interface RatioInputProps {
   value: number;
@@ -8,20 +8,20 @@ interface RatioInputProps {
 }
 
 export const RatioInput: React.FC<RatioInputProps> = ({ value, onChange }) => {
-  const [val1, setVal1] = useState(() => value_to_ratio_parts(value)[0]);
-  const [val2, setVal2] = useState(() => value_to_ratio_parts(value)[1]);
+  const [val1, setVal1] = useState(() => value2ratio(value)[0]);
+  const [val2, setVal2] = useState(() => value2ratio(value)[1]);
 
   const inputRef1 = useRef<HTMLInputElement>(null);
   const inputRef2 = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    const [n, d] = value_to_ratio_parts(value);
+    const [n, d] = value2ratio(value);
     setVal1(n);
     setVal2(d);
   }, [value]);
 
   const resetToValue = useCallback(() => {
-    const [n, d] = value_to_ratio_parts(value);
+    const [n, d] = value2ratio(value);
     setVal1(n);
     setVal2(d);
   }, [value]);

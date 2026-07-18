@@ -15,8 +15,17 @@ import {
 import { Point2 as Point2 } from "../../types/point2";
 import { get_element_icon } from "../element-palette/elementIcon";
 import { UnionElement, ViewportState } from "../../types";
-import { value_to_ratio_parts } from "../../utils";
-import { BeltVia, BeltPiece, belt_pieces } from "../../utils/belt-path";
+import { value2ratio } from "../../utils";
+import {
+  force_value_label_position,
+  moment_value_label_position,
+} from "../../utils/load-geom";
+import {
+  BeltVia,
+  BeltPiece,
+  belt_pieces,
+  belt_project,
+} from "../../utils/belt-path";
 
 const TAU = 2 * Math.PI;
 
@@ -766,7 +775,29 @@ export function draw_belt_loop(
   ctx.stroke();
 }
 
-export function draw_dimention(
+export function draw_arrow_head(
+  ctx: CanvasRenderingContext2D,
+  position: Point2,
+  angle: number,
+  scale: number = 1,
+) {
+  ctx.save();
+  ctx.translate(position.x, position.y);
+  ctx.rotate(angle);
+
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.lineTo(
+    DIM.ARROW_HEAD_LENGTH * scale,
+    (-DIM.ARROW_HEAD_WIDTH / 2) * scale,
+  );
+  ctx.lineTo(DIM.ARROW_HEAD_LENGTH * scale, (DIM.ARROW_HEAD_WIDTH / 2) * scale);
+  ctx.fill();
+
+  ctx.restore();
+}
+
+export function draw_dimension(
   ctx: CanvasRenderingContext2D,
   start: Point2,
   end: Point2,
@@ -804,39 +835,27 @@ export function draw_dimention(
     ctx.lineWidth = widthStart;
   }
 
-  // Draw dimention
-
-  ctx.save();
-  ctx.translate(start.x + np.x * offset, start.y + np.y * offset);
-  ctx.rotate(delta.angle());
-
+  // Draw dimension
+  const d = start.add(np.mul(offset));
+  const s = d.add(
+    delta.scale2length(t < 0 ? length * t + 16 : DIM.ARROW_HEAD_LENGTH),
+  );
+  const e = d.add(
+    delta.scale2length(
+      t > 1 ? length * t - 16 : length - DIM.ARROW_HEAD_LENGTH,
+    ),
+  );
+  draw_arrow_head(ctx, d, delta.angle());
+  draw_arrow_head(ctx, d.add(delta), delta.angle() + TAU / 2);
   ctx.beginPath();
-  ctx.moveTo(0, 0);
-  ctx.lineTo(18, -6);
-  ctx.lineTo(18, 6);
-  ctx.fill();
-
-  ctx.beginPath();
-  ctx.moveTo(length, 0);
-  ctx.lineTo(length - 18, -6);
-  ctx.lineTo(length - 18, 6);
-  ctx.fill();
-
-  ctx.beginPath();
-  ctx.moveTo(t < 0 ? length * t + 16 : 17.5, 0);
-  ctx.lineTo(t > 1 ? length * t - 16 : length - 17.5, 0);
+  ctx.moveTo(s.x, s.y);
+  ctx.lineTo(e.x, e.y);
   ctx.stroke();
 
-  ctx.restore();
-
-  if (hideText) return;
-  ctx.save();
-  ctx.translate(position.x, position.y);
-  draw_dimention_text(ctx, value);
-  ctx.restore();
+  if (!hideText) draw_dimension_text(ctx, position, value);
 }
 
-export function draw_dimention_to_segment(
+export function draw_dimension_to_segment(
   ctx: CanvasRenderingContext2D,
   point: Point2,
   start: Point2,
@@ -880,43 +899,28 @@ export function draw_dimention_to_segment(
 
   ctx.lineWidth = widthStart;
 
-  // Draw dimention
-
-  ctx.save();
-  ctx.translate(
-    oppositePoint.add(np.mul(offset)).x,
-    oppositePoint.add(np.mul(offset)).y,
+  // Draw dimension
+  const d = oppositePoint.add(np.mul(offset));
+  const s = d.add(
+    delta.scale2length(t < 0 ? length * t + 16 : DIM.ARROW_HEAD_LENGTH),
   );
-  ctx.rotate(delta.angle());
-
-  const startOffset = ts > 0 && ts < 1 ? DIM.BEAM_WIDTH / 2 - 1 : 0;
+  const e = d.add(
+    delta.scale2length(
+      t > 1 ? length * t - 16 : length - DIM.ARROW_HEAD_LENGTH,
+    ),
+  );
+  const sOffset = ts > 0 && ts < 1 ? DIM.BEAM_WIDTH / 2 - 1 : 0;
+  draw_arrow_head(ctx, d.add(delta.scale2length(sOffset)), delta.angle());
+  draw_arrow_head(ctx, d.add(delta), delta.angle() + TAU / 2);
   ctx.beginPath();
-  ctx.moveTo(startOffset, 0);
-  ctx.lineTo(startOffset + 18, -6);
-  ctx.lineTo(startOffset + 18, 6);
-  ctx.fill();
-
-  ctx.beginPath();
-  ctx.moveTo(length, 0);
-  ctx.lineTo(length - 18, -6);
-  ctx.lineTo(length - 18, 6);
-  ctx.fill();
-
-  ctx.beginPath();
-  ctx.moveTo(t < 0 ? length * t + 16 : 17.5, 0);
-  ctx.lineTo(t > 1 ? length * t - 16 : length - 17.5, 0);
+  ctx.moveTo(s.x, s.y);
+  ctx.lineTo(e.x, e.y);
   ctx.stroke();
 
-  ctx.restore();
-
-  if (hideText) return;
-  ctx.save();
-  ctx.translate(position.x, position.y);
-  draw_dimention_text(ctx, value);
-  ctx.restore();
+  if (!hideText) draw_dimension_text(ctx, position, value);
 }
 
-export function draw_dimention_angle(
+export function draw_dimension_angle(
   ctx: CanvasRenderingContext2D,
   start1: Point2,
   end1: Point2,
@@ -948,40 +952,23 @@ export function draw_dimention_angle(
   const start = origin.add(Point2.from_polar(radius, alpha + 3 / radius));
   const end = origin.add(Point2.from_polar(radius, beta - 3 / radius));
 
-  let p1 = new Point2(-7, 18).rotate(alpha);
-  let p2 = new Point2(7, 18).rotate(alpha);
-  ctx.beginPath();
-  ctx.moveTo(start.x, start.y);
-  ctx.lineTo(start.x + p1.x, start.y + p1.y);
-  ctx.lineTo(start.x + p2.x, start.y + p2.y);
-  ctx.fill();
-
-  p1 = new Point2(-7, 18).rotate(beta);
-  p2 = new Point2(7, 18).rotate(beta);
-  ctx.beginPath();
-  ctx.moveTo(end.x, end.y);
-  ctx.lineTo(end.x - p1.x, end.y - p1.y);
-  ctx.lineTo(end.x - p2.x, end.y - p2.y);
-  ctx.fill();
+  draw_arrow_head(ctx, start, alpha + TAU / 4);
+  draw_arrow_head(ctx, end, beta - TAU / 4);
 
   ctx.beginPath();
   ctx.arc(
     origin.x,
     origin.y,
     Math.sqrt(radius ** 2 + 20 ** 2),
-    alpha + 18 / radius,
-    beta - 18 / radius,
+    alpha + DIM.ARROW_HEAD_LENGTH / radius,
+    beta - DIM.ARROW_HEAD_LENGTH / radius,
   );
   ctx.stroke();
 
   // TODO : add arc to position
   // TODO : add straight lines
 
-  if (hideText) return;
-  ctx.save();
-  ctx.translate(position.x, position.y);
-  draw_dimention_text(ctx, value, " °");
-  ctx.restore();
+  if (!hideText) draw_dimension_text(ctx, position, value, " °");
 }
 
 export function draw_dimension_radius(
@@ -996,44 +983,45 @@ export function draw_dimension_radius(
 
   const delta = position.sub(center);
   const length = delta.length();
-  ctx.save();
-  ctx.translate(center.x, center.y);
-  ctx.rotate(delta.angle());
 
+  const d = center.add(delta.scale2length(radius));
+  const s = center.add(delta.scale2length(length > radius ? radius : 0 + 5));
+  const e = center.add(delta.scale2length(Math.max(radius - 5, length)));
+  draw_arrow_head(ctx, d, delta.angle() + (length > radius ? 0 : TAU / 2));
   ctx.beginPath();
-  ctx.moveTo(radius, 0);
-  if (length > radius) {
-    ctx.lineTo(radius + 18, 6);
-    ctx.lineTo(radius + 18, -6);
-  } else {
-    ctx.lineTo(radius - 18, -6);
-    ctx.lineTo(radius - 18, 6);
-  }
-  ctx.fill();
-
-  ctx.beginPath();
-  if (length > radius) {
-    ctx.moveTo(radius + 5, 0);
-  } else {
-    ctx.moveTo(5, 0);
-  }
-  ctx.lineTo(Math.max(radius - 5, length), 0);
+  ctx.moveTo(s.x, s.y);
+  ctx.lineTo(e.x, e.y);
   ctx.stroke();
 
-  ctx.restore();
-
-  if (hideText) return;
-  ctx.save();
-  ctx.translate(position.x, position.y);
-  draw_dimention_text(ctx, value);
-  ctx.restore();
+  if (!hideText) draw_dimension_text(ctx, position, value);
 }
 
-export function draw_dimention_text(
+export function draw_dimension_belt(
   ctx: CanvasRenderingContext2D,
+  vias: BeltVia[],
+  tight: boolean,
+  position: Point2,
+  value: number,
+  hideText: boolean = false,
+) {
+  const closest = belt_project(vias, position, tight).point;
+  ctx.beginPath();
+  ctx.moveTo(position.x, position.y);
+  ctx.lineTo(closest.x, closest.y);
+  ctx.stroke();
+
+  if (!hideText) draw_dimension_text(ctx, position, value);
+}
+
+export function draw_dimension_text(
+  ctx: CanvasRenderingContext2D,
+  position: Point2,
   value: number,
   extension: string = "",
 ) {
+  ctx.save();
+  ctx.translate(position.x, position.y);
+
   ctx.font = DIMENSION_SPECS.TEXT_FONT;
   ctx.textAlign = DIMENSION_SPECS.TEXT_ALIGN;
   ctx.textBaseline = DIMENSION_SPECS.TEXT_BASELINE;
@@ -1059,13 +1047,21 @@ export function draw_dimention_text(
   ctx.shadowColor = lastShadowColor;
   ctx.fillStyle = ctx.strokeStyle;
   draw_text(ctx, text);
+
+  ctx.restore();
 }
 
-export function draw_gear_ratio(ctx: CanvasRenderingContext2D, value: number) {
+export function draw_gear_ratio(
+  ctx: CanvasRenderingContext2D,
+  position: Point2,
+  value: number,
+) {
+  ctx.save();
+  ctx.translate(position.x, position.y);
   ctx.font = DIMENSION_SPECS.TEXT_FONT;
   ctx.textAlign = DIMENSION_SPECS.TEXT_ALIGN;
   ctx.textBaseline = DIMENSION_SPECS.TEXT_BASELINE;
-  const text = value_to_ratio_parts(value).join(" : ");
+  const text = value2ratio(value).join(" : ");
   const metrics = ctx.measureText(text);
   const isSelected = ctx.shadowBlur !== 0;
 
@@ -1091,6 +1087,7 @@ export function draw_gear_ratio(ctx: CanvasRenderingContext2D, value: number) {
   ctx.shadowColor = lastShadowColor;
   ctx.strokeStyle = lastStrokeStyle;
   draw_text(ctx, text);
+  ctx.restore();
 }
 
 export function draw_element_icon(
@@ -1128,7 +1125,6 @@ export function draw_element_icon(
 }
 
 export function draw_text(ctx: CanvasRenderingContext2D, text: string) {
-  ctx.fillStyle = COLORS.ELEMENT_STROKE; // ctx.strokeStyle;
   ctx.filter = "none";
   ctx.fillText(text, 0, 0);
 
@@ -1141,48 +1137,41 @@ export function draw_text(ctx: CanvasRenderingContext2D, text: string) {
 
 // ─── Load element drawing ─────────────────────────────────────────────────────
 
-const ARROWHEAD_LENGTH = 12;
-const ARROWHEAD_ANGLE = Math.PI / 7;
-
-/** Draws a single force arrow from `base` in direction+magnitude of `vector` (world units). */
+/** Draws a single force arrow from `base` in direction+magnitude of `vector` (world units).
+ *  `textLineWidth` lets the value label be emphasized (or not) independently of
+ *  the arrow, since hovering one part of a load must not light up the other.
+ *  `labelVector` places the value elsewhere than along the arrow — a tapered
+ *  distributed load has ends with no arrow left to hang their "0" on. */
 export function draw_force(
   ctx: CanvasRenderingContext2D,
   base: Point2,
   vector: Point2,
+  value: number,
+  hideText: boolean = false,
+  textLineWidth?: number,
+  labelVector?: Point2,
 ) {
-  const tip = base.add(vector);
-  const len = vector.length();
-  if (len < 1) return;
-  const dir = vector.mul(1 / len);
+  const length = vector.length();
+  if (length >= 1) {
+    draw_arrow_head(ctx, base.add(vector), vector.angle() + TAU / 2);
+    if (length > DIM.ARROW_HEAD_LENGTH) {
+      const e = base.add(vector.extend_length(-DIM.ARROW_HEAD_LENGTH));
+      ctx.beginPath();
+      ctx.moveTo(base.x, base.y);
+      ctx.lineTo(e.x, e.y);
+      ctx.stroke();
+    }
+  }
 
-  ctx.save();
-
-  ctx.beginPath();
-  ctx.moveTo(base.x, base.y);
-  ctx.lineTo(tip.x, tip.y);
-  ctx.stroke();
-
-  // Arrowhead
-  ctx.beginPath();
-  const left = tip.sub(
-    new Point2(
-      dir.x * Math.cos(ARROWHEAD_ANGLE) - dir.y * Math.sin(ARROWHEAD_ANGLE),
-      dir.x * Math.sin(ARROWHEAD_ANGLE) + dir.y * Math.cos(ARROWHEAD_ANGLE),
-    ).mul(ARROWHEAD_LENGTH),
+  if (hideText) return;
+  const lastLineWidth = ctx.lineWidth;
+  if (textLineWidth !== undefined) ctx.lineWidth = textLineWidth;
+  draw_dimension_text(
+    ctx,
+    force_value_label_position(base, labelVector ?? vector),
+    value,
   );
-  const right = tip.sub(
-    new Point2(
-      dir.x * Math.cos(-ARROWHEAD_ANGLE) - dir.y * Math.sin(-ARROWHEAD_ANGLE),
-      dir.x * Math.sin(-ARROWHEAD_ANGLE) + dir.y * Math.cos(-ARROWHEAD_ANGLE),
-    ).mul(ARROWHEAD_LENGTH),
-  );
-  ctx.moveTo(tip.x, tip.y);
-  ctx.lineTo(left.x, left.y);
-  ctx.moveTo(tip.x, tip.y);
-  ctx.lineTo(right.x, right.y);
-  ctx.stroke();
-
-  ctx.restore();
+  ctx.lineWidth = lastLineWidth;
 }
 
 /** Draws a curved moment arrow (arc with arrowhead) centered at `center`.
@@ -1190,40 +1179,76 @@ export function draw_force(
 export function draw_moment(
   ctx: CanvasRenderingContext2D,
   center: Point2,
+  radius: number,
   value: number,
+  hideText: boolean = false,
+  textLineWidth?: number,
 ) {
   const clockwise = value >= 0;
-  const radius = 18 + Math.min(Math.abs(value) * 2, 20);
-  const sweep = (clockwise ? 1 : -1) * (Math.PI * 1.3);
-  const startAngle = -Math.PI * 0.65;
-  const endAngle = startAngle + sweep;
-
-  ctx.save();
-
+  const startAngle = clockwise ? (5 / 8) * TAU : -TAU / 8;
+  const endAngle = clockwise ? (3 / 8) * TAU : TAU / 8;
   ctx.beginPath();
   ctx.arc(center.x, center.y, radius, startAngle, endAngle, !clockwise);
   ctx.stroke();
 
-  // Arrowhead at end of arc
-  const tipAngle = endAngle;
-  const tangentAngle = tipAngle + (clockwise ? Math.PI / 2 : -Math.PI / 2);
-  const tipX = center.x + radius * Math.cos(tipAngle);
-  const tipY = center.y + radius * Math.sin(tipAngle);
-  const headLen = ARROWHEAD_LENGTH * 0.8;
-  ctx.beginPath();
-  ctx.moveTo(tipX, tipY);
-  ctx.lineTo(
-    tipX - headLen * Math.cos(tangentAngle - ARROWHEAD_ANGLE),
-    tipY - headLen * Math.sin(tangentAngle - ARROWHEAD_ANGLE),
-  );
-  ctx.moveTo(tipX, tipY);
-  ctx.lineTo(
-    tipX - headLen * Math.cos(tangentAngle + ARROWHEAD_ANGLE),
-    tipY - headLen * Math.sin(tangentAngle + ARROWHEAD_ANGLE),
-  );
-  ctx.stroke();
+  const headAngle = clockwise
+    ? endAngle - (7 / 32) * TAU
+    : endAngle + (7 / 32) * TAU;
+  const tip = center
+    .add(Point2.from_polar(radius, endAngle))
+    .sub(Point2.from_polar(DIM.ARROW_HEAD_LENGTH, headAngle));
+  draw_arrow_head(ctx, tip, headAngle);
 
-  ctx.restore();
+  if (hideText) return;
+  const lastLineWidth = ctx.lineWidth;
+  if (textLineWidth !== undefined) ctx.lineWidth = textLineWidth;
+  draw_dimension_text(
+    ctx,
+    moment_value_label_position(center, radius),
+    Math.abs(value),
+  );
+  ctx.lineWidth = lastLineWidth;
+}
+
+/** Draws evenly-spaced force arrows along a beam segment, under the crest line
+ *  joining the two endpoint arrows. The drawing is proportional to the values
+ *  across the whole span (see `distributed_display_gain`), so that crest line
+ *  *is* the intensity profile — it is how the load is read, and it doubles as
+ *  the handle the body drag grabs. `crestLineWidth` emphasizes it on hover
+ *  without lighting up the arrows. */
+export function draw_distributed_force(
+  ctx: CanvasRenderingContext2D,
+  start: Point2,
+  end: Point2,
+  vectorStart: Point2,
+  vectorEnd: Point2,
+  crestLineWidth?: number,
+) {
+  const lastLineWidth = ctx.lineWidth;
+  if (crestLineWidth !== undefined) ctx.lineWidth = crestLineWidth;
+  ctx.beginPath();
+  ctx.moveTo(start.x + vectorStart.x, start.y + vectorStart.y);
+  ctx.lineTo(end.x + vectorEnd.x, end.y + vectorEnd.y);
+  ctx.stroke();
+  ctx.lineWidth = lastLineWidth;
+
+  for (let i = 1; i < DIM.NB_DISTRIBUTED_FORCE_ARROWS; i++) {
+    const t = i / DIM.NB_DISTRIBUTED_FORCE_ARROWS;
+    const base = start.lerp(end, t);
+    const vector = vectorStart.lerp(vectorEnd, t);
+    // A tapered load runs its arrows down to nothing: below a pixel there is
+    // no direction left to draw, and below a head length the shaft would
+    // point backwards out of `extend_length`.
+    const length = vector.length();
+    if (length < 1) continue;
+    draw_arrow_head(ctx, base.add(vector), vector.angle() + TAU / 2);
+    if (length <= DIM.ARROW_HEAD_LENGTH) continue;
+    const e = base.add(vector.extend_length(-DIM.ARROW_HEAD_LENGTH));
+    ctx.beginPath();
+    ctx.moveTo(base.x, base.y);
+    ctx.lineTo(e.x, e.y);
+    ctx.stroke();
+  }
 }
 
 /** Draws a small probe indicator (circle with crosshair). */
@@ -1243,21 +1268,6 @@ export function draw_probe(ctx: CanvasRenderingContext2D) {
   ctx.lineTo(0, r);
   ctx.stroke();
   ctx.restore();
-}
-
-/** Draws evenly-spaced force arrows along a beam segment. */
-export function draw_distributed_force(
-  ctx: CanvasRenderingContext2D,
-  start: Point2,
-  end: Point2,
-  vectorStart: Point2,
-  vectorEnd: Point2,
-  steps: number = 5,
-) {
-  for (let i = 0; i <= steps; i++) {
-    const t = i / steps;
-    draw_force(ctx, start.lerp(end, t), vectorStart.lerp(vectorEnd, t));
-  }
 }
 
 /** A probed element's recorded path, ready to draw on the canvas. */

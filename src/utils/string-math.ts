@@ -127,7 +127,7 @@ export function shown_element_name(element: UnionElement | undefined): string {
 /**
  * Helper to convert a decimal value to a ratio string (e.g., 0.5 -> "1:2")
  */
-export function value_to_ratio_parts(
+export function value2ratio(
   value: number,
   limit: number = 100,
 ): [string, string] {

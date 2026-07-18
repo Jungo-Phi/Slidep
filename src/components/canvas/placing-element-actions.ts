@@ -23,11 +23,13 @@ import {
 } from "../mechanism/connect-actions";
 import { is_on_left_side_of_belt } from "../../utils";
 import {
-  force_display_value,
+  world2stored_load,
   force_snap_edges,
   force_stored_vector,
   frame_from_snapped_direction,
-  world_to_frame,
+  moment_sign_from_cursor,
+  radius2moment_value,
+  world2frame,
 } from "../../utils/load-geom";
 import { PHYSICS } from "../../constants/rendering-specs";
 
@@ -59,9 +61,9 @@ type PlacingCanvasState = Extract<
       | "PlacingGround"
       | "PlacingForceStart"
       | "PlacingForceEnd"
-      | "PlacingDistributedForceStart"
-      | "PlacingDistributedForceEnd"
-      | "PlacingMoment"
+      | "PlacingDistributedForce"
+      | "PlacingMomentStart"
+      | "PlacingMomentEnd"
       | "PlacingProbe";
   }
 >;
@@ -103,16 +105,6 @@ export function handle_placing_element(
         actions: [],
         newCanvasState: { type: "PlacingGearRadius", startHover: hoveredPart },
       };
-    case "PlacingForceStart":
-      if (hoveredPart.type === "Void")
-        return {
-          actions: [],
-          newCanvasState: state,
-        };
-      return {
-        actions: [],
-        newCanvasState: { type: "PlacingForceEnd", startHover: hoveredPart },
-      };
     case "PlacingBeamEnd":
     case "PlacingSpringEnd":
     case "PlacingDamperEnd":
@@ -139,6 +131,24 @@ export function handle_placing_element(
         loads,
       );
 
+    case "PlacingForceStart":
+      if (hoveredPart.type === "Void") return { actions: [] };
+      // The body of a beam takes a distributed force; its endpoints (and any
+      // node) take a point force — same tool, the hovered part decides. Mirrors
+      // the two ghosts drawn for this state in `draw-canvas.ts`.
+      if (hoveredPart.type === "Edge" && hoveredPart.part === "body")
+        return {
+          actions: [],
+          newCanvasState: {
+            type: "PlacingDistributedForce",
+            startHover: hoveredPart,
+          },
+        };
+      return {
+        actions: [],
+        newCanvasState: { type: "PlacingForceEnd", startHover: hoveredPart },
+      };
+
     case "PlacingForceEnd": {
       const anchor =
         state.startHover.type === "Edge" && state.startHover.part !== "body"
@@ -160,7 +170,7 @@ export function handle_placing_element(
         id: crypto.randomUUID() as ID,
         targetID: state.startHover.id,
         anchor,
-        vector: world_to_frame(
+        vector: world2frame(
           force_stored_vector(forceDelta),
           forceFrame,
           mechanicalElements,
@@ -184,36 +194,7 @@ export function handle_placing_element(
       };
     }
 
-    case "PlacingMoment": {
-      if (hoveredPart.type !== "Edge" && hoveredPart.type !== "GearTooth")
-        return { actions: [] };
-      const newMoment: MomentElement = {
-        type: "moment",
-        id: crypto.randomUUID() as ID,
-        beamID: hoveredPart.id,
-        value: 1,
-      };
-      const actions: Action[] = [];
-      const existingMoment = loads.find(
-        (l) => l.type === "moment" && l.beamID === newMoment.beamID,
-      );
-      if (existingMoment)
-        actions.push({ type: "DeleteElement", element: existingMoment });
-      actions.push({ type: "CreateElement", element: newMoment });
-      return { actions, actionBundleType: "Other" };
-    }
-
-    case "PlacingDistributedForceStart":
-      if (hoveredPart.type !== "Edge") return { actions: [] };
-      return {
-        actions: [],
-        newCanvasState: {
-          type: "PlacingDistributedForceEnd",
-          startHover: hoveredPart,
-        },
-      };
-
-    case "PlacingDistributedForceEnd": {
+    case "PlacingDistributedForce": {
       if (state.startHover.type !== "Edge") return { actions: [] };
       const beam = get_mechanical_element_from_id(
         state.startHover.id,
@@ -222,13 +203,13 @@ export function handle_placing_element(
       const delta = hoveredPart.position.sub(
         beam.positionStart.lerp(beam.positionEnd, 0.5),
       );
-      const magnitude = force_display_value(delta.length());
+      const magnitude = world2stored_load(delta.length());
       const direction =
         delta.length() > 1e-6 ? delta.normalize() : new Point2(0, -1);
-      const beamID = state.startHover.id;
+      const targetID = state.startHover.id;
       const actions: Action[] = [];
       const existingDF = loads.find(
-        (l) => l.type === "distributed-force" && l.beamID === beamID,
+        (l) => l.type === "distributed-force" && l.targetID === targetID,
       );
       if (existingDF)
         actions.push({ type: "DeleteElement", element: existingDF });
@@ -237,7 +218,7 @@ export function handle_placing_element(
         element: {
           type: "distributed-force",
           id: crypto.randomUUID() as ID,
-          beamID,
+          targetID,
           direction,
           magnitudeStart: magnitude,
           magnitudeEnd: magnitude,
@@ -247,7 +228,52 @@ export function handle_placing_element(
       return {
         actions,
         actionBundleType: "Other",
-        newCanvasState: { type: "PlacingDistributedForceStart" },
+        newCanvasState: { type: "PlacingForceStart" },
+      };
+    }
+
+    case "PlacingMomentStart":
+      if (hoveredPart.type !== "Edge" && hoveredPart.type !== "GearTooth")
+        return { actions: [] };
+      return {
+        actions: [],
+        newCanvasState: { type: "PlacingMomentEnd", startHover: hoveredPart },
+      };
+
+    case "PlacingMomentEnd": {
+      if (
+        state.startHover.type !== "Edge" &&
+        state.startHover.type !== "GearTooth"
+      )
+        return { actions: [] };
+      // The side of the support the cursor ends on picks the rotation sign;
+      // afterwards only the panel can flip it, a drag just resizes the arc.
+      const newMoment: MomentElement = {
+        type: "moment",
+        id: crypto.randomUUID() as ID,
+        targetID: state.startHover.id,
+        value:
+          radius2moment_value(
+            state.startHover.position.distance_to(hoveredPart.position),
+          ) *
+          moment_sign_from_cursor(
+            state.startHover.id,
+            state.startHover.position,
+            hoveredPart.position,
+            mechanicalElements,
+          ),
+      };
+      const actions: Action[] = [];
+      const existingMoment = loads.find(
+        (l) => l.type === "moment" && l.targetID === newMoment.targetID,
+      );
+      if (existingMoment)
+        actions.push({ type: "DeleteElement", element: existingMoment });
+      actions.push({ type: "CreateElement", element: newMoment });
+      return {
+        actions,
+        actionBundleType: "Other",
+        newCanvasState: { type: "PlacingMomentStart" },
       };
     }
 

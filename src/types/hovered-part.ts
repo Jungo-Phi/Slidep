@@ -36,14 +36,23 @@ export type HoveredPart =
       type: "Force";
       position: Point2;
       id: ID;
-      part: "tip" | "body";
+      part: "body" | "value";
       deleting: boolean;
     }
   | {
       type: "DistributedForce";
       position: Point2;
       id: ID;
-      part: "start-tip" | "end-tip" | "line" | "body";
+      part: "start" | "end" | "body" | "start-value" | "end-value";
       deleting: boolean;
+      /** Only for `part: "body"`: where along the beam the crest line was
+       *  grabbed, so the drag can move that very point under the cursor. */
+      t?: number;
     }
-  | { type: "Moment"; position: Point2; id: ID; deleting: boolean };
+  | {
+      type: "Moment";
+      position: Point2;
+      id: ID;
+      part: "body" | "value";
+      deleting: boolean;
+    };

@@ -2,7 +2,7 @@ import React, { useRef, useEffect, useCallback, forwardRef } from "react";
 import {
   Action,
   ActionBundleType,
-  ActionType,
+  ChangeDimensionActionType,
   AppMode,
   CanvasEvent,
   CanvasState,
@@ -12,10 +12,11 @@ import {
   Mechanism,
   Point2,
   PropertiesPanelTab,
+  UnionElement,
   ViewportChange,
   ZERO,
 } from "../../types";
-import { world_to_screen, screen_to_world } from "../../utils";
+import { world2screen, screen2world } from "../../utils";
 import {
   COLORS,
   CONSTRAINT_REVEAL_COOLDOWN_MS,
@@ -26,11 +27,13 @@ import {
 import { Box } from "@mui/material";
 import { drawMechanicalCanvas as draw_mechanical_canvas } from "./draw-canvas";
 import { canvasStateReducer } from "./canvas-state-reducer";
-import { get_constraint_element_from_id } from "../mechanism/connect-actions";
+import { get_element_from_id } from "../mechanism/connect-actions";
+import { is_zero_load, load_value_anchor } from "../../utils/load-geom";
 import { get_hovered_part } from "./get-hover";
 import { snap_load_hover } from "./load-snap";
 import { compute_visible_constraints, connected_constraints } from "./utils";
-import { ConstraintEditor } from "./ConstraintEditor";
+import { eraser_cursor } from "./cursors";
+import { OnCanvasValueEditor } from "./OnCanvasValueEditor";
 import { ProbeMetricSelector } from "./ProbeMetricSelector";
 import {
   draw_grid,
@@ -476,7 +479,7 @@ export const MechanicalCanvas = forwardRef<
         }
         const currMech = mechanismRef.current;
 
-        const worldMousePos = screen_to_world(
+        const worldMousePos = screen2world(
           mousePositionRef.current,
           currMech.viewport,
         );
@@ -509,7 +512,6 @@ export const MechanicalCanvas = forwardRef<
             canvasStateRef.current.type === "PlacingGround" ||
             canvasStateRef.current.type === "PlacingJoin" ||
             canvasStateRef.current.type === "PlacingMass" ||
-            canvasStateRef.current.type === "PlacingMoment" ||
             canvasStateRef.current.type === "PlacingMotor" ||
             canvasStateRef.current.type === "PlacingPivot" ||
             canvasStateRef.current.type === "PlacingSlider")
@@ -532,16 +534,16 @@ export const MechanicalCanvas = forwardRef<
             newHoveredPart.position.y = rdy;
         }
         if (
-          snapToGrid &&
           newHoveredPart.type === "Void" &&
           appModeRef.current === "edition"
         ) {
-          // Align load direction to world/beam axes (visual, like grid snap).
+          // Align load direction to world/beam axes, and its length to a round value
           newHoveredPart.position = snap_load_hover(
             canvasStateRef.current,
             newHoveredPart.position,
             currMech.mechanicalElements,
             currMech.loads,
+            currMech.viewport.zoom,
           );
         }
         refreshRevealFromHover(newHoveredPart);
@@ -685,37 +687,115 @@ export const MechanicalCanvas = forwardRef<
             ["Selecting", "SelectedElement"].includes(canvasState.type) &&
             hoveredPart.type !== "Void"
           ? "grab"
-          : [
-                "DimensionStart",
-                "DimensionNode",
-                "DimensionEdge",
-                "DimensionNodeToNode",
-                "DimensionEdgeToNode",
-                "DimensionAngle",
-                "DimensionRadius",
-                "DimensionBelt",
-                "HorizontalVerticalConstraintStart",
-                "HorizontalVerticalConstraintNode",
-                "NormalConstraintStart",
-                "NormalConstraintEdge",
-                "ParallelConstraintStart",
-                "ParallelConstraintEdge",
-                "EqualConstraintStart",
-                "EqualConstraintEdge",
-                "EqualConstraintGear",
-                "GearRatioConstraintStart",
-                "GearRatioConstraintGear",
-              ].includes(canvasState.type)
-            ? "crosshair"
-            : "default";
+          : ["Erasing", "ErasingMultiple"].includes(canvasState.type)
+            ? eraser_cursor()
+            : [
+                  "DimensionStart",
+                  "DimensionNode",
+                  "DimensionEdge",
+                  "DimensionNodeToNode",
+                  "DimensionEdgeToNode",
+                  "DimensionAngle",
+                  "DimensionRadius",
+                  "DimensionBelt",
+                  "HorizontalVerticalConstraintStart",
+                  "HorizontalVerticalConstraintNode",
+                  "NormalConstraintStart",
+                  "NormalConstraintEdge",
+                  "ParallelConstraintStart",
+                  "ParallelConstraintEdge",
+                  "EqualConstraintStart",
+                  "EqualConstraintEdge",
+                  "EqualConstraintGear",
+                  "GearRatioConstraintStart",
+                  "GearRatioConstraintGear",
+                ].includes(canvasState.type)
+              ? "crosshair"
+              : "default";
 
-    const editingConstraint =
-      canvasState.type === "EditingConstraint"
-        ? get_constraint_element_from_id(
+    // Les deux états de saisie partagent l'éditeur ; ils ne diffèrent que par
+    // ce qu'ENTER et ESCAPE font en sortie (voir `onCommit` / `onCancel`).
+    const isPlacingValue = canvasState.type === "PlacingValue";
+    const isEditingValue = canvasState.type === "EditingValue";
+    const editingElement =
+      isEditingValue || isPlacingValue
+        ? get_element_from_id(
             canvasState.elementID,
+            mechanism.mechanicalElements,
             mechanism.constraintElements,
+            mechanism.loads,
           )
         : null;
+
+    // Commit an edited value for a load (force magnitude, moment value, or a
+    // distributed force's start/end magnitude). Returns true if it handled the
+    // element, false for non-load elements (dimensions/constraints).
+    const commitLoadValue = (element: UnionElement, newValue: number) => {
+      switch (element.type) {
+        case "force":
+          applyActions(
+            [
+              {
+                type: "ChangeForce",
+                id: element.id,
+                newVector: element.vector.scale2length(newValue),
+                oldVector: element.vector,
+              },
+            ],
+            "MoveLoad",
+          );
+          return true;
+        case "moment":
+          applyActions(
+            [
+              {
+                type: "ChangeMoment",
+                id: element.id,
+                // The editor shows the magnitude unsigned: a moment's sign is
+                // its rotation direction, picked when it is placed, so editing
+                // the value here resizes the arc without turning it around.
+                newValue: newValue * (element.value < 0 ? -1 : 1),
+                oldValue: element.value,
+              },
+            ],
+            "MoveLoad",
+          );
+          return true;
+        case "distributed-force": {
+          const editingEnd =
+            canvasState.type === "EditingValue" && canvasState.part === "end";
+          // The editor opens on the magnitude: the sign of an end is which side
+          // of the beam it pushes on. Committing it unchanged must therefore
+          // never turn the load over, so the typed sign is read as a flip of
+          // wherever that end currently points, not as the new sign itself.
+          const edited =
+            newValue *
+            ((editingEnd ? element.magnitudeEnd : element.magnitudeStart) < 0
+              ? -1
+              : 1);
+          applyActions(
+            [
+              {
+                type: "ChangeDistributedForce",
+                id: element.id,
+                newDirection: element.direction,
+                oldDirection: element.direction,
+                newMagnitudeStart: editingEnd
+                  ? element.magnitudeStart
+                  : edited,
+                oldMagnitudeStart: element.magnitudeStart,
+                newMagnitudeEnd: editingEnd ? edited : element.magnitudeEnd,
+                oldMagnitudeEnd: element.magnitudeEnd,
+              },
+            ],
+            "MoveLoad",
+          );
+          return true;
+        }
+        default:
+          return false;
+      }
+    };
 
     return (
       <Box
@@ -750,58 +830,97 @@ export const MechanicalCanvas = forwardRef<
           aria-label="Canvas de conception mécanique"
           role="img"
         />
-        {editingConstraint && (
-          <ConstraintEditor
-            constraint={editingConstraint}
-            position={world_to_screen(
-              editingConstraint.position,
+        {editingElement && (isEditingValue || isPlacingValue) && (
+          <OnCanvasValueEditor
+            mode={editingElement.type === "gear-ratio" ? "ratio" : "single"}
+            // Loads reuse the value captured at trigger time (force magnitude,
+            // moment value, or the distributed start/end magnitude); dimensions
+            // and constraints carry it on the element.
+            initialValue={
+              editingElement.type === "moment"
+                ? Math.abs(editingElement.value)
+                : "value" in editingElement
+                  ? editingElement.value
+                  : canvasState.value
+            }
+            suffix={editingElement.type === "dimension-angle" ? "°" : undefined}
+            // A distributed load's end is the one value here that can be
+            // turned around (a minus flips it across the beam) and the one that
+            // can legitimately be set to zero — as long as its opposite end is
+            // still carrying something, otherwise the load would vanish.
+            signed={editingElement.type === "distributed-force"}
+            allowZero={
+              editingElement.type === "distributed-force" &&
+              !is_zero_load(
+                isEditingValue && canvasState.part === "end"
+                  ? editingElement.magnitudeStart
+                  : editingElement.magnitudeEnd,
+              )
+            }
+            position={world2screen(
+              // Loads have no `.position`; their editable label sits at a
+              // computed world anchor next to the drawn value.
+              editingElement.type === "force" ||
+                editingElement.type === "moment" ||
+                editingElement.type === "distributed-force"
+                ? load_value_anchor(
+                    editingElement,
+                    mechanism.mechanicalElements,
+                    // Seule une charge existante est ré-éditée : un `PlacingValue`
+                    // ne concerne que les cotes, qui n'ont pas de `part`.
+                    isEditingValue ? canvasState.part : undefined,
+                  )
+                : "position" in editingElement
+                  ? editingElement.position
+                  : ZERO,
               mechanism.viewport,
             )}
             onCommit={(newValue) => {
-              if (!("value" in editingConstraint)) return;
+              const loadCommitted = commitLoadValue(editingElement, newValue);
 
-              let actionType: ActionType;
-              switch (editingConstraint.type) {
-                case "dimension-edge":
-                  actionType = "ChangeDimensionEdgeValue";
-                  break;
-                case "dimension-node-to-node":
-                  actionType = "ChangeDimensionNodeToNodeValue";
-                  break;
-                case "dimension-edge-to-node":
-                  actionType = "ChangeDimensionEdgeToNodeValue";
-                  break;
-                case "dimension-angle":
-                  actionType = "ChangeDimensionAngleValue";
-                  break;
-                case "dimension-radius":
-                  actionType = "ChangeDimensionRadiusValue";
-                  break;
-                case "dimension-belt":
-                  actionType = "ChangeDimensionBeltValue";
-                  break;
-                case "gear-ratio":
-                  actionType = "ChangeGearRatioValue";
-                  break;
+              if (!loadCommitted && "value" in editingElement) {
+                let actionType: ChangeDimensionActionType | undefined;
+                switch (editingElement.type) {
+                  case "dimension-edge":
+                    actionType = "ChangeDimensionEdgeValue";
+                    break;
+                  case "dimension-node-to-node":
+                    actionType = "ChangeDimensionNodeToNodeValue";
+                    break;
+                  case "dimension-edge-to-node":
+                    actionType = "ChangeDimensionEdgeToNodeValue";
+                    break;
+                  case "dimension-angle":
+                    actionType = "ChangeDimensionAngleValue";
+                    break;
+                  case "dimension-radius":
+                    actionType = "ChangeDimensionRadiusValue";
+                    break;
+                  case "dimension-belt":
+                    actionType = "ChangeDimensionBeltValue";
+                    break;
+                  case "gear-ratio":
+                    actionType = "ChangeGearRatioValue";
+                    break;
+                }
+                if (actionType) {
+                  applyActions(
+                    [
+                      {
+                        type: actionType,
+                        id: editingElement.id,
+                        newValue: newValue,
+                        oldValue: editingElement.value,
+                      },
+                    ],
+                    "ChangeDimension",
+                  );
+                }
               }
-              if (actionType) {
-                applyActions(
-                  [
-                    {
-                      type: actionType,
-                      id: editingConstraint.id,
-                      newValue: newValue,
-                      oldValue: editingConstraint.value,
-                    },
-                  ],
-                  "ChangeDimension",
-                );
-              }
-              if (
-                canvasState.type === "EditingConstraint" &&
-                canvasState.isPlacing
-              ) {
-                if (editingConstraint.type === "gear-ratio") {
+              // Valider sur un élément qu'on vient de poser réarme son outil,
+              // pour en enchaîner un autre sans repasser par la palette.
+              if (isPlacingValue) {
+                if (editingElement.type === "gear-ratio") {
                   setCanvasState({ type: "GearRatioConstraintStart" });
                 } else {
                   setCanvasState({ type: "DimensionStart" });
@@ -809,20 +928,19 @@ export const MechanicalCanvas = forwardRef<
               } else {
                 setCanvasState({
                   type: "SelectedElement",
-                  elementID: editingConstraint.id,
+                  elementID: editingElement.id,
                 });
               }
             }}
-            onCancel={(constraint) => {
-              if (
-                canvasState.type === "EditingConstraint" &&
-                canvasState.isPlacing
-              ) {
+            onCancel={() => {
+              // Annuler la saisie d'un élément qu'on vient de poser le retire :
+              // sans valeur, il n'a jamais vraiment existé.
+              if (isPlacingValue) {
                 applyActions(
                   [
                     {
                       type: "DeleteElement",
-                      element: constraint,
+                      element: editingElement,
                     },
                   ],
                   "Other",
@@ -831,7 +949,7 @@ export const MechanicalCanvas = forwardRef<
               } else {
                 setCanvasState({
                   type: "SelectedElement",
-                  elementID: constraint.id,
+                  elementID: editingElement.id,
                 });
               }
             }}
@@ -846,7 +964,7 @@ export const MechanicalCanvas = forwardRef<
             return (
               <ProbeMetricSelector
                 element={probedElement}
-                position={world_to_screen(
+                position={world2screen(
                   canvasState.position,
                   mechanism.viewport,
                 )}

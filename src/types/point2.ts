@@ -54,7 +54,7 @@ export class Point2 {
   }
 
   /** Calculate the angle to another point in degrees */
-  public angle_to_deg(other: Point2): number {
+  public angle2deg(other: Point2): number {
     return (this.angle_to(other) * 180) / Math.PI;
   }
 
@@ -80,7 +80,7 @@ export class Point2 {
   }
 
   /** Sets the length, conserving the direction */
-  public scale_to_length(scalar: number): Point2 {
+  public scale2length(scalar: number): Point2 {
     const lenght = this.length();
     if (lenght === 0) return new Point2(scalar, 0);
     return this.mul(scalar / lenght);
@@ -325,7 +325,7 @@ export class Point2 {
   }
 
   /** Distance to a line defined by two points */
-  public distance_to_line(start: Point2, end: Point2): number {
+  public distance2line(start: Point2, end: Point2): number {
     return Math.abs(this.sub(start).dot(end.sub(start).perp().normalize()));
   }
 
@@ -337,12 +337,12 @@ export class Point2 {
   /**
    * Distance to a segment defined by two points
    */
-  public distance_to_segment(start: Point2, end: Point2): number {
+  public distance2segment(start: Point2, end: Point2): number {
     const scalar_projection = this.scalar_projection_on_line(start, end);
     if (scalar_projection <= 0) return this.distance_to(start);
     if (scalar_projection >= start.distance_to(end))
       return this.distance_to(end);
-    return this.distance_to_line(start, end);
+    return this.distance2line(start, end);
   }
 
   /** Reflect this point across a line defined by two points */
@@ -401,14 +401,13 @@ export class Point2 {
   public is_in_distributed_force(
     startPoint: Point2,
     endPoint: Point2,
-    direction: Point2,
-    magnitudeStart: number,
-    magnitudeEnd: number,
+    startVector: Point2,
+    endVector: Point2,
   ): boolean {
     const vertices = [
       startPoint,
-      startPoint.add(direction.mul(magnitudeStart)),
-      endPoint.add(direction.mul(magnitudeEnd)),
+      startPoint.add(startVector),
+      endPoint.add(endVector),
       endPoint,
     ];
     let inside = false;
@@ -471,7 +470,7 @@ export class Point2 {
 
 export const ZERO: Point2 = new Point2(0, 0);
 export const ONE: Point2 = new Point2(1, 1);
-export const TOP: Point2 = new Point2(0, 1);
-export const BOTTOM: Point2 = new Point2(0, -1);
+export const UP: Point2 = new Point2(0, 1);
+export const DOWN: Point2 = new Point2(0, -1);
 export const RIGHT: Point2 = new Point2(1, 0);
 export const LEFT: Point2 = new Point2(-1, 0);

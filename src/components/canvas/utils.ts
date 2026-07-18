@@ -146,6 +146,7 @@ export function element_to_hovered_part(
         type: "Moment",
         position: ZERO,
         id: element.id,
+        part: "body",
         deleting,
       };
   }
@@ -207,6 +208,29 @@ export function connected_constraints(
   return connectedConstraintsIDs;
 }
 
+export function linked_constraint(
+  element: MechanicalElement,
+  constraints: ConstraintElement[],
+): ConstraintElement | undefined {
+  switch (element.type) {
+    case "beam":
+    case "spring":
+    case "damper":
+      return constraints.find(
+        (c) => c.type === "dimension-edge" && c.edgeID === element.id,
+      );
+    case "gear":
+      return constraints.find(
+        (c) => c.type === "dimension-radius" && c.gearID === element.id,
+      );
+    case "belt":
+      return constraints.find(
+        (c) => c.type === "dimension-belt" && c.beltID === element.id,
+      );
+  }
+  return undefined;
+}
+
 /**
  * Computes which constraints should be visible and at which opacity (0–1) given
  * the current context. A constraint absent from the returned map is hidden
@@ -246,7 +270,8 @@ export function compute_visible_constraints(
   if (
     canvasState.type === "SelectedElement" ||
     canvasState.type === "MovingConstraint" ||
-    canvasState.type === "EditingConstraint"
+    canvasState.type === "EditingValue" ||
+    canvasState.type === "PlacingValue"
   )
     visible.set(canvasState.elementID, 1);
 

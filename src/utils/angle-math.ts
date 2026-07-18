@@ -32,7 +32,7 @@ export function resolve_angle_constraint_quadrant(
   const v1 = flipStart ? delta1.mul(-1) : delta1;
   const v2 = flipEnd ? delta2.mul(-1) : delta2;
 
-  let angle = v1.angle_to_deg(v2);
+  let angle = v1.angle2deg(v2);
   let couterClockwise = false;
   if (angle < 0) {
     angle = Math.abs(angle);

@@ -4,6 +4,7 @@ import {
   DIMENSION_SPECS,
   DRAWING_ORDER,
   INTERACTION_SPECS,
+  LOAD_SCALING,
   STROKE_WIDTHS,
 } from "../../constants/rendering-specs";
 import {
@@ -21,6 +22,7 @@ import {
   NodeElement,
   Point2,
   UnionElement,
+  UP,
   ZERO,
 } from "../../types";
 import { HoveredPart } from "../../types/hovered-part";
@@ -45,10 +47,10 @@ import {
   draw_belt_end,
   draw_element_icon,
   draw_gear_ratio,
-  draw_dimention_angle,
-  draw_dimention_to_segment,
+  draw_dimension_angle,
+  draw_dimension_to_segment,
   draw_dimension_radius,
-  draw_dimention,
+  draw_dimension,
   draw_join_bottom,
   draw_join_top,
   draw_force,
@@ -56,15 +58,26 @@ import {
   draw_distributed_force,
   draw_motor,
   draw_probe,
+  draw_dimension_belt,
 } from "./drawing-functions";
 import { get_mechanical_element_from_id } from "../mechanism/connect-actions";
 import {
   distributed_display_vectors,
-  force_base,
+  distributed_label_vector,
+  frame2world,
+  is_zero_load,
+  force_base_position,
   force_display_vector,
+  world2stored_load,
   force_world_vector,
+  moment_center_position,
+  moment_display_radius,
+  moment_sign_from_cursor,
+  radius2moment_value,
+  stored2world_load,
 } from "../../utils/load-geom";
 import {
+  get_belt_vias,
   get_gear_angles,
   is_on_left_side_of_belt,
   measure_belt_length,
@@ -75,7 +88,6 @@ import {
   is_constraint_type,
   node_on_beam_body,
 } from "./utils";
-import { belt_project, BeltVia } from "../../utils/belt-path";
 
 const TAU = 2 * Math.PI;
 
@@ -183,10 +195,28 @@ function is_edge_end_hovered(
         "PlacingSpringStart",
         "PlacingDamperStart",
         "PlacingBeltStart",
-      ].includes(state.type)) ||
-    (hoveredPart.type === "Force" && hoveredPart.part === "tip") ||
-    (hoveredPart.type === "DistributedForce" && hoveredPart.part !== "body")
+      ].includes(state.type))
   );
+}
+
+/**
+ * Whether a load element is hovered, optionally restricted to one of its parts.
+ * Loads emphasize per part rather than as a whole: hovering a value label must
+ * light up that label and the geometry, but not the element's other label.
+ */
+function is_load_hovered(
+  elementID: ID,
+  hoveredPart: HoveredPart,
+  part?: "body" | "start" | "end" | "value" | "start-value" | "end-value",
+): boolean {
+  if (
+    hoveredPart.type !== "Force" &&
+    hoveredPart.type !== "Moment" &&
+    hoveredPart.type !== "DistributedForce"
+  )
+    return false;
+  if (hoveredPart.id !== elementID || hoveredPart.deleting) return false;
+  return part === undefined || hoveredPart.part === part;
 }
 
 function is_hovered(
@@ -361,13 +391,9 @@ export function drawMechanicalCanvas(
         ctx.lineWidth = STROKE_WIDTHS.STANDARD / 2;
       }
 
-      // Thicken the stroke if element is hovered
-      if (
-        (isHovered && !isEdgeEndHovered) ||
-        ((hoveredPart.type === "Force" ||
-          hoveredPart.type === "DistributedForce") &&
-          hoveredPart.id === element.id)
-      )
+      // Thicken the stroke if element is hovered. Loads are left out: they pick
+      // their width per sub-part below, from loadRestWidth / loadHoverWidth.
+      if (isHovered && !isEdgeEndHovered && !isLoadElement)
         ctx.lineWidth = STROKE_WIDTHS.THICK;
       // Add blue halo and blue stroke if element is selected
       if (isSelected) {
@@ -393,6 +419,13 @@ export function drawMechanicalCanvas(
       // Tombstone of a just-deleted constraint (undo/redo feedback).
       const isGhost = ghostConstraintIDs.has(element.id);
       if (isGhost) ctx.strokeStyle = COLORS.DELETION_STROKE;
+      const hideText =
+        (state.type === "EditingValue" || state.type === "PlacingValue") &&
+        state.elementID === element.id;
+      // Widths a load's sub-parts choose from: the element's own width when at
+      // rest, the hovered width for the part under the cursor.
+      const loadRestWidth = ctx.lineWidth;
+      const loadHoverWidth = STROKE_WIDTHS.THICK + (isSelected ? 1 : 0);
 
       switch (element.type) {
         case "pivot":
@@ -739,14 +772,13 @@ export function drawMechanicalCanvas(
             element.edgeID,
             mechanicalElements,
           ) as EdgeElement;
-          draw_dimention(
+          draw_dimension(
             ctx,
             edgeD.positionStart,
             edgeD.positionEnd,
             element.position,
             element.value,
-            state.type === "EditingConstraint" &&
-              state.elementID === element.id,
+            hideText,
           );
           break;
         case "dimension-node-to-node":
@@ -758,14 +790,13 @@ export function drawMechanicalCanvas(
             element.endNodeID,
             mechanicalElements,
           ) as NodeElement;
-          draw_dimention(
+          draw_dimension(
             ctx,
             startNode.position,
             endNode.position,
             element.position,
             element.value,
-            state.type === "EditingConstraint" &&
-              state.elementID === element.id,
+            hideText,
           );
           break;
         case "dimension-edge-to-node":
@@ -777,15 +808,14 @@ export function drawMechanicalCanvas(
             element.nodeID,
             mechanicalElements,
           ) as NodeElement;
-          draw_dimention_to_segment(
+          draw_dimension_to_segment(
             ctx,
             node.position,
             edge.positionStart,
             edge.positionEnd,
             element.position,
             element.value,
-            state.type === "EditingConstraint" &&
-              state.elementID === element.id,
+            hideText,
           );
           break;
         case "dimension-angle":
@@ -797,7 +827,7 @@ export function drawMechanicalCanvas(
             element.endEdgeID,
             mechanicalElements,
           ) as EdgeElement;
-          draw_dimention_angle(
+          draw_dimension_angle(
             ctx,
             startEdge.positionStart,
             startEdge.positionEnd,
@@ -807,8 +837,7 @@ export function drawMechanicalCanvas(
             element.flipEnd,
             element.position,
             element.value,
-            state.type === "EditingConstraint" &&
-              state.elementID === element.id,
+            hideText,
           );
           break;
         case "dimension-radius":
@@ -822,30 +851,23 @@ export function drawMechanicalCanvas(
             gear.radius,
             element.position,
             element.value,
-            state.type === "EditingConstraint" &&
-              state.elementID === element.id,
+            hideText,
           );
           break;
         case "dimension-belt":
-          // TODO : draw_dimension_belt()
           const belt = get_mechanical_element_from_id(
             element.beltID,
             mechanicalElements,
           ) as BeltElement;
-          const vias: BeltVia[] = [];
-          for (const { id, direction } of belt.attachedGearsIDs) {
-            const gear = get_mechanical_element_from_id(
-              id,
-              mechanicalElements,
-            ) as GearElement;
-            vias.push({ pos: gear.position, radius: gear.radius, direction });
-          }
-          draw_dimension_radius(
+          const allVias = get_belt_vias(belt, mechanicalElements);
+          const vias = belt.tight ? allVias.slice(1, -1) : allVias;
+          draw_dimension_belt(
             ctx,
-            belt_project(vias, element.position, belt.tight).point,
-            1,
+            vias,
+            belt.tight,
             element.position,
             element.value,
+            hideText,
           );
           break;
         case "horizontal-align-edge":
@@ -864,16 +886,29 @@ export function drawMechanicalCanvas(
           ctx.restore();
           break;
         case "force": {
-          const load = element as ForceElement;
-          const base = force_base(load, mechanicalElements);
+          const force = element as ForceElement;
+          const base = force_base_position(force, mechanicalElements);
           if (!base) break;
           const displayVector = force_display_vector(
-            force_world_vector(load, mechanicalElements),
+            force_world_vector(force, mechanicalElements),
           );
           ctx.save();
           ctx.translate(base.x, base.y);
-          draw_force(ctx, ZERO, displayVector);
-          if (isEdgeEndHovered && hoveredPart.type === "Force") {
+          ctx.lineWidth = is_load_hovered(force.id, hoveredPart)
+            ? loadHoverWidth
+            : loadRestWidth;
+          draw_force(
+            ctx,
+            ZERO,
+            displayVector,
+            force.vector.length(),
+            hideText,
+            is_load_hovered(force.id, hoveredPart, "value")
+              ? loadHoverWidth
+              : loadRestWidth,
+          );
+          // Hovering the arrow reveals the tip handle it would drag.
+          if (is_load_hovered(force.id, hoveredPart, "body")) {
             ctx.translate(displayVector.x, displayVector.y);
             draw_hover_edge_end(ctx);
           }
@@ -882,63 +917,97 @@ export function drawMechanicalCanvas(
         }
         case "moment": {
           const load = element as MomentElement;
-          const beam = get_mechanical_element_from_id(
-            load.beamID,
-            mechanicalElements,
-          ) as BeamElement;
-          const center = beam.positionStart.lerp(beam.positionEnd, 0.5);
-          draw_moment(ctx, center, load.value);
+          const center = moment_center_position(load, mechanicalElements);
+          ctx.lineWidth = is_load_hovered(load.id, hoveredPart)
+            ? loadHoverWidth
+            : loadRestWidth;
+          draw_moment(
+            ctx,
+            center,
+            moment_display_radius(load.value),
+            load.value,
+            hideText,
+            is_load_hovered(load.id, hoveredPart, "value")
+              ? loadHoverWidth
+              : loadRestWidth,
+          );
           break;
         }
         case "distributed-force": {
-          const load = element as DistributedForceElement;
+          const distributedForce = element as DistributedForceElement;
           const beam = mechanicalElements.find(
-            (e) => e.id === load.beamID && e.type === "beam",
+            (e) => e.id === distributedForce.targetID && e.type === "beam",
           ) as BeamElement | undefined;
           if (!beam) break;
           const { displayStart, displayEnd } = distributed_display_vectors(
-            load,
+            distributedForce,
             mechanicalElements,
           );
+          const id = distributedForce.id;
+          const direction = frame2world(
+            distributedForce.direction,
+            distributedForce.frame,
+            mechanicalElements,
+          );
+          ctx.lineWidth = is_load_hovered(id, hoveredPart)
+            ? loadHoverWidth
+            : loadRestWidth;
           draw_distributed_force(
             ctx,
             beam.positionStart,
             beam.positionEnd,
             displayStart,
             displayEnd,
+            is_load_hovered(id, hoveredPart, "body")
+              ? loadHoverWidth
+              : loadRestWidth,
           );
+          // The values are written unsigned: the arrows already say which side
+          // of the beam the load pushes on, and a load dragged across its beam
+          // must not start reading as negative. An end carrying nothing writes
+          // nothing — a "0" floating by the beam is noise, and the arrow
+          // running out to a point already says it.
+          draw_force(
+            ctx,
+            beam.positionStart,
+            displayStart,
+            Math.abs(distributedForce.magnitudeStart),
+            hideText || is_zero_load(distributedForce.magnitudeStart),
+            is_load_hovered(id, hoveredPart, "start-value")
+              ? loadHoverWidth
+              : loadRestWidth,
+            distributed_label_vector(displayStart, direction),
+          );
+          draw_force(
+            ctx,
+            beam.positionEnd,
+            displayEnd,
+            Math.abs(distributedForce.magnitudeEnd),
+            hideText || is_zero_load(distributedForce.magnitudeEnd),
+            is_load_hovered(id, hoveredPart, "end-value")
+              ? loadHoverWidth
+              : loadRestWidth,
+            distributed_label_vector(displayEnd, direction),
+          );
+          const startTip = beam.positionStart.add(displayStart);
+          const endTip = beam.positionEnd.add(displayEnd);
           if (
-            hoveredPart.type === "DistributedForce" &&
-            hoveredPart.id === load.id
+            is_load_hovered(id, hoveredPart, "start") ||
+            is_load_hovered(id, hoveredPart, "end")
           ) {
-            const startTip = beam.positionStart.add(displayStart);
-            const endTip = beam.positionEnd.add(displayEnd);
-            if (isEdgeEndHovered && hoveredPart.part === "line") {
-              // draw hover line
-              ctx.beginPath();
-              ctx.moveTo(startTip.x, startTip.y);
-              ctx.lineTo(endTip.x, endTip.y);
-              ctx.stroke();
-            } else if (isEdgeEndHovered && hoveredPart.part !== "body") {
-              const pos = hoveredPart.part === "start-tip" ? startTip : endTip;
-              ctx.save();
-              ctx.translate(pos.x, pos.y);
-              draw_hover_edge_end(ctx);
-              ctx.restore();
-            }
+            const pos = is_load_hovered(id, hoveredPart, "start")
+              ? startTip
+              : endTip;
+            ctx.save();
+            ctx.translate(pos.x, pos.y);
+            draw_hover_edge_end(ctx);
+            ctx.restore();
           }
           break;
         }
         case "gear-ratio":
-          if (
-            state.type === "EditingConstraint" &&
-            state.elementID === element.id
-          )
-            break;
-          ctx.save();
-          ctx.translate(element.position.x, element.position.y);
-          draw_gear_ratio(ctx, element.value);
-          ctx.restore();
+          if (hideText) break;
+          draw_gear_ratio(ctx, element.position, element.value);
           break;
       }
     }
@@ -1056,73 +1125,101 @@ export function drawMechanicalCanvas(
       break;
     case "PlacingForceStart":
     case "PlacingForceEnd":
-    case "PlacingMoment":
-    case "PlacingDistributedForceStart":
-    case "PlacingDistributedForceEnd":
+    case "PlacingDistributedForce":
+    case "PlacingMomentStart":
+    case "PlacingMomentEnd":
       ctx.strokeStyle = COLORS.ACCENT;
       ctx.fillStyle = COLORS.ACCENT;
       switch (state.type) {
         case "PlacingForceStart":
-          draw_force(ctx, hoveredPart.position, new Point2(0, -50));
-          break;
-        case "PlacingForceEnd":
-          draw_force(
-            ctx,
-            state.startHover.position,
-            hoveredPart.position.sub(state.startHover.position),
-          );
-          break;
-        case "PlacingMoment":
-          draw_moment(ctx, hoveredPart.position, 1);
-          break;
-        case "PlacingDistributedForceStart":
-          if (hoveredPart.type === "Edge") {
-            const hBeam = mechanicalElements.find(
-              (e) => e.id === hoveredPart.id && e.type === "beam",
-            ) as BeamElement | undefined;
-            if (hBeam) {
-              const perp = hBeam.positionEnd
-                .sub(hBeam.positionStart)
-                .perp()
-                .normalize()
-                .mul(50);
-              draw_distributed_force(
-                ctx,
-                hBeam.positionStart,
-                hBeam.positionEnd,
-                perp,
-                perp,
-              );
-            }
-          } else {
-            const delta = new Point2(0, 50);
+          const force_length = stored2world_load(LOAD_SCALING.REF_VALUE);
+          if (hoveredPart.type === "Edge" && hoveredPart.part === "body") {
+            const beam = get_mechanical_element_from_id(
+              hoveredPart.id,
+              mechanicalElements,
+            ) as BeamElement;
+            const delta = beam.positionEnd
+              .sub(beam.positionStart)
+              .perp()
+              .scale2length(force_length);
             draw_distributed_force(
               ctx,
-              hoveredPart.position.sub(new Point2(50, 0)),
-              hoveredPart.position.add(new Point2(50, 0)),
+              beam.positionStart,
+              beam.positionEnd,
               delta,
               delta,
-              4,
             );
+            draw_force(ctx, beam.positionStart, delta, LOAD_SCALING.REF_VALUE);
+            draw_force(ctx, beam.positionEnd, delta, LOAD_SCALING.REF_VALUE);
+            break;
           }
+          draw_force(
+            ctx,
+            hoveredPart.position,
+            UP.mul(force_length),
+            LOAD_SCALING.REF_VALUE,
+          );
           break;
-        case "PlacingDistributedForceEnd":
+        case "PlacingForceEnd": {
+          const mouseVector = hoveredPart.position.sub(
+            state.startHover.position,
+          );
+          const value = world2stored_load(mouseVector.length());
+          const vector = mouseVector.scale2length(stored2world_load(value));
+          draw_force(ctx, state.startHover.position, vector, value);
+          break;
+        }
+        case "PlacingDistributedForce": {
           if (state.startHover.type !== "Edge") break;
           const beam = get_mechanical_element_from_id(
             state.startHover.id,
             mechanicalElements,
           ) as BeamElement;
-          const delta = hoveredPart.position.sub(
+          const mouseVector = hoveredPart.position.sub(
             beam.positionStart.lerp(beam.positionEnd, 0.5),
           );
+          const value = world2stored_load(mouseVector.length());
+          const vector = mouseVector.scale2length(stored2world_load(value));
           draw_distributed_force(
             ctx,
             beam.positionStart,
             beam.positionEnd,
-            delta,
-            delta,
+            vector,
+            vector,
+          );
+          draw_force(ctx, beam.positionStart, vector, value);
+          draw_force(ctx, beam.positionEnd, vector, value);
+          break;
+        }
+        case "PlacingMomentStart": {
+          draw_moment(
+            ctx,
+            hoveredPart.position,
+            moment_display_radius(LOAD_SCALING.REF_VALUE),
+            LOAD_SCALING.REF_VALUE,
           );
           break;
+        }
+        case "PlacingMomentEnd": {
+          if (state.startHover.type === "Void") break;
+          const value =
+            radius2moment_value(
+              state.startHover.position.distance_to(hoveredPart.position),
+            ) *
+            moment_sign_from_cursor(
+              state.startHover.id,
+              state.startHover.position,
+              hoveredPart.position,
+              mechanicalElements,
+            );
+          draw_moment(
+            ctx,
+            state.startHover.position,
+            moment_display_radius(value),
+            value,
+          );
+          break;
+        }
       }
       break;
     case "PlacingBeamEnd":
@@ -1215,16 +1312,16 @@ export function drawMechanicalCanvas(
           hoveredPart.id,
           mechanicalElements,
         ) as EdgeElement;
-        draw_dimention_to_segment(
+        draw_dimension_to_segment(
           ctx,
           nodeD.position,
           edge.positionStart,
           edge.positionEnd,
           hoveredPart.position,
-          nodeD.position.distance_to_line(edge.positionStart, edge.positionEnd),
+          nodeD.position.distance2line(edge.positionStart, edge.positionEnd),
         );
       } else {
-        draw_dimention(
+        draw_dimension(
           ctx,
           nodeD.position,
           hoveredPart.position,
@@ -1241,7 +1338,7 @@ export function drawMechanicalCanvas(
       ) as EdgeElement;
       switch (hoveredPart.type) {
         case "Void":
-          draw_dimention(
+          draw_dimension(
             ctx,
             edgeD.positionStart,
             edgeD.positionEnd,
@@ -1250,7 +1347,7 @@ export function drawMechanicalCanvas(
           );
           break;
         case "Node":
-          draw_dimention_to_segment(
+          draw_dimension_to_segment(
             ctx,
             hoveredPart.position,
             edgeD.positionStart,
@@ -1258,7 +1355,7 @@ export function drawMechanicalCanvas(
             hoveredPart.position
               .project_on_line(edgeD.positionStart, edgeD.positionEnd)
               .lerp(hoveredPart.position, 0.5),
-            hoveredPart.position.distance_to_line(
+            hoveredPart.position.distance2line(
               edgeD.positionStart,
               edgeD.positionEnd,
             ),
@@ -1298,7 +1395,7 @@ export function drawMechanicalCanvas(
             ),
           );
 
-          draw_dimention_angle(
+          draw_dimension_angle(
             ctx,
             edgeD.positionStart,
             edgeD.positionEnd,
@@ -1322,7 +1419,7 @@ export function drawMechanicalCanvas(
         state.endNodeID,
         mechanicalElements,
       ) as NodeElement;
-      draw_dimention(
+      draw_dimension(
         ctx,
         startNode.position,
         endNode.position,
@@ -1339,13 +1436,13 @@ export function drawMechanicalCanvas(
         state.nodeID,
         mechanicalElements,
       ) as NodeElement;
-      draw_dimention_to_segment(
+      draw_dimension_to_segment(
         ctx,
         node.position,
         edge.positionStart,
         edge.positionEnd,
         hoveredPart.position,
-        node.position.distance_to_line(edge.positionStart, edge.positionEnd),
+        node.position.distance2line(edge.positionStart, edge.positionEnd),
       );
       ctx.restore();
       break;
@@ -1369,7 +1466,7 @@ export function drawMechanicalCanvas(
       if (!angleConstraintQuadrant) break;
       const { flipStart, flipEnd, angle } = angleConstraintQuadrant;
 
-      draw_dimention_angle(
+      draw_dimension_angle(
         ctx,
         startEdge.positionStart,
         startEdge.positionEnd,
@@ -1395,23 +1492,16 @@ export function drawMechanicalCanvas(
       );
       break;
     case "DimensionBelt":
-      // TODO : draw_dimension_belt()
       const belt = get_mechanical_element_from_id(
         state.beltID,
         mechanicalElements,
       ) as BeltElement;
-      const vias: BeltVia[] = [];
-      for (const { id, direction } of belt.attachedGearsIDs) {
-        const gear = get_mechanical_element_from_id(
-          id,
-          mechanicalElements,
-        ) as GearElement;
-        vias.push({ pos: gear.position, radius: gear.radius, direction });
-      }
-      draw_dimension_radius(
+      const allVias = get_belt_vias(belt, mechanicalElements);
+      const vias = belt.tight ? allVias.slice(1, -1) : allVias;
+      draw_dimension_belt(
         ctx,
-        belt_project(vias, hoveredPart.position, belt.tight).point,
-        1,
+        vias,
+        belt.tight,
         hoveredPart.position,
         measure_belt_length(belt, mechanicalElements),
       );

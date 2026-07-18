@@ -24,7 +24,12 @@ const rawIcons = import.meta.glob("../../assets/icons/palette/*.svg", {
 /** Map from icon basename (without extension) → raw SVG source. */
 const RAW: Record<string, string> = {};
 for (const [path, raw] of Object.entries(rawIcons)) {
-  RAW[path.split("/").pop()!.replace(/\.svg$/, "")] = raw;
+  RAW[
+    path
+      .split("/")
+      .pop()!
+      .replace(/\.svg$/, "")
+  ] = raw;
 }
 
 /**
@@ -67,8 +72,7 @@ const toDataUri = (svg: string): string =>
 const cache = new Map<string, Record<string, string>>();
 
 const icons_for = (palette: CanvasPalette): Record<string, string> => {
-  // The palette's own stroke identifies it well enough to key the cache: no two
-  // themes draw elements in the same color.
+  // The palette's own stroke identifies it well enough to key the cache: themes draw elements in different colors.
   const key = palette.RECOLOR_ICONS ? palette.ELEMENT_STROKE : "source";
   let built = cache.get(key);
   if (!built) {

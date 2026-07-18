@@ -15,6 +15,7 @@ export type CanvasStateType =
   | "ChangingGearRadius"
   | "MovingForce"
   | "MovingDistributedForce"
+  | "MovingMoment"
   | "SelectingMultiple"
   | "SelectedMultiple"
   | "MovingSelectionMultiple"
@@ -38,9 +39,9 @@ export type CanvasStateType =
   | "PlacingGround"
   | "PlacingForceStart"
   | "PlacingForceEnd"
-  | "PlacingDistributedForceStart"
-  | "PlacingDistributedForceEnd"
-  | "PlacingMoment"
+  | "PlacingDistributedForce"
+  | "PlacingMomentStart"
+  | "PlacingMomentEnd"
   | "PlacingProbe"
   | "PlacingProbeMetrics"
   | "DimensionStart"
@@ -63,7 +64,8 @@ export type CanvasStateType =
   | "GearRatioConstraintStart"
   | "GearRatioConstraintGear"
   | "MovingConstraint"
-  | "EditingConstraint"
+  | "PlacingValue"
+  | "EditingValue"
   | "SimulationDragging";
 
 // Define the possible states of the canvas interaction
@@ -81,7 +83,6 @@ export type CanvasState =
       elementID: ID;
       pendingHit?: HoveredPart;
       downPos?: Point2;
-      armedForEdit?: boolean;
     }
   | { type: "MovingNode"; elementID: ID }
   | { type: "MovingEdgeStartPoint"; elementID: ID }
@@ -90,11 +91,16 @@ export type CanvasState =
   | { type: "MovingBeltBody"; elementID: ID; section: number }
   | { type: "ChangingGearRadius"; elementID: ID }
   | { type: "MovingForce"; elementID: ID }
+  | { type: "MovingDistributedForce"; elementID: ID; part: "start" | "end" }
   | {
       type: "MovingDistributedForce";
       elementID: ID;
-      part: "start-tip" | "end-tip" | "line";
+      part: "body";
+      /** Where along the beam the crest line was grabbed: that point is what
+       *  follows the cursor, so an off-centre grab does not swing the load. */
+      grabT: number;
     }
+  | { type: "MovingMoment"; elementID: ID }
   | {
       type: "MovingSelectionMultiple";
       elementIDs: ID[];
@@ -125,9 +131,9 @@ export type CanvasState =
   | { type: "PlacingGround" }
   | { type: "PlacingForceStart" }
   | { type: "PlacingForceEnd"; startHover: HoveredPart }
-  | { type: "PlacingDistributedForceStart" }
-  | { type: "PlacingDistributedForceEnd"; startHover: HoveredPart }
-  | { type: "PlacingMoment" }
+  | { type: "PlacingDistributedForce"; startHover: HoveredPart }
+  | { type: "PlacingMomentStart" }
+  | { type: "PlacingMomentEnd"; startHover: HoveredPart }
   | { type: "PlacingProbe" }
   | { type: "PlacingProbeMetrics"; elementID: ID; position: Point2 } // Metric selector popover open on a clicked element
   | { type: "DimensionStart" } // Dimensioning tool active
@@ -154,11 +160,21 @@ export type CanvasState =
   | { type: "GearRatioConstraintStart" }
   | { type: "GearRatioConstraintGear"; startGearID: ID }
   | { type: "MovingConstraint"; elementID: ID }
+  // Les deux états de saisie d'une valeur au canvas. Ils partagent l'éditeur
+  // mais pas les issues : sur un élément qui vient d'être posé, ESCAPE le
+  // supprime et ENTER réarme l'outil pour en poser un autre ; sur un élément
+  // déjà existant, ESCAPE annule la saisie et ENTER le laisse sélectionné.
   | {
-      type: "EditingConstraint";
+      type: "PlacingValue";
       elementID: ID;
       value: number;
-      isPlacing: boolean;
+    }
+  | {
+      type: "EditingValue";
+      elementID: ID;
+      value: number;
+      /** Quelle magnitude d'une force répartie est éditée. */
+      part?: "start" | "end";
     }
   | {
       type: "SimulationDragging";

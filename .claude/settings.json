@@ -5,7 +5,13 @@
     ],
     "deny": [
       "Read(./TODO.md)",
-      "Edit(./TODO.md)"
+      "Edit(./TODO.md)",
+      "Bash(*TODO.md*)",
+      "PowerShell(*TODO.md*)",
+      "Bash(git diff*TODO.md*)",
+      "PowerShell(git diff*TODO.md*)",
+      "Bash(git show*TODO.md*)",
+      "PowerShell(git show*TODO.md*)"
     ]
   }
 }

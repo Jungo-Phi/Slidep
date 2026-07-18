@@ -126,9 +126,7 @@ export function resolveGeometricConstraints(
             if ("position" in element) {
               nodes.positions.set(
                 `${element.id}`,
-                nodes.positions
-                  .get(`${element.id}`)!
-                  .add(triggerAction.delta),
+                nodes.positions.get(`${element.id}`)!.add(triggerAction.delta),
               );
               nodes.posMasses.set(`${element.id}`, 1);
             } else {
@@ -433,17 +431,13 @@ export function resolveGeometricConstraints(
           constraint.type === "horizontal-align-edge" ||
           constraint.type === "vertical-align-edge";
         const oldStart = nodes.positions.get(
-          isEdge
-            ? `${constraint.edgeID}:start`
-            : `${constraint.startNodeID}`,
+          isEdge ? `${constraint.edgeID}:start` : `${constraint.startNodeID}`,
         );
         const oldEnd = nodes.positions.get(
           isEdge ? `${constraint.edgeID}:end` : `${constraint.endNodeID}`,
         );
         const newStart = solvedNodes.positions.get(
-          isEdge
-            ? `${constraint.edgeID}:start`
-            : `${constraint.startNodeID}`,
+          isEdge ? `${constraint.edgeID}:start` : `${constraint.startNodeID}`,
         );
         const newEnd = solvedNodes.positions.get(
           isEdge ? `${constraint.edgeID}:end` : `${constraint.endNodeID}`,
@@ -481,8 +475,8 @@ export function resolveGeometricConstraints(
           oldEdgeEnd,
         );
         local.y *=
-          newNode.distance_to_line(newEdgeStart, newEdgeEnd) /
-          oldNode.distance_to_line(oldEdgeStart, oldEdgeEnd);
+          newNode.distance2line(newEdgeStart, newEdgeEnd) /
+          oldNode.distance2line(oldEdgeStart, oldEdgeEnd);
         solvedNodes.positions.set(
           `${constraint.id}`,
           local.from_segment_coordinates(newEdgeStart, newEdgeEnd),
@@ -556,9 +550,7 @@ export function resolveGeometricConstraints(
         const oldGearStartPos = nodes.positions.get(
           `${constraint.startGearID}`,
         );
-        const oldGearEndPos = nodes.positions.get(
-          `${constraint.endGearID}`,
-        );
+        const oldGearEndPos = nodes.positions.get(`${constraint.endGearID}`);
         const newGearStartPos = solvedNodes.positions.get(
           `${constraint.startGearID}`,
         );
