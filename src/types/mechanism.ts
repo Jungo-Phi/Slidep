@@ -17,7 +17,6 @@ export interface MechanismMetadata {
   author: string;
   createdAt: number;
   modifiedAt: number;
-  version: string;
   tags: string[];
   lastSimulationMode: SimulationMode;
 }
@@ -28,7 +27,6 @@ export const DEFAULT_METADATA: MechanismMetadata = {
   author: "",
   createdAt: 0,
   modifiedAt: 0,
-  version: "1.0.0",
   tags: [],
   lastSimulationMode: "kinematic", // TODO : passer en "dynamic" quand le mode existe
 };
@@ -56,6 +54,8 @@ export interface Mechanism {
 }
 
 export interface SerializedMechanism {
+  /** File format version, raised by the migration chain on the way in. */
+  formatVersion: number;
   metadata: MechanismMetadata;
   viewport: SerializedViewportState;
   mechanicalElements: SerializedMechanicalElement[];

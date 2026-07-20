@@ -1,0 +1,1120 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`get_hovered_part > pique la même chose qu'avant sur toute la matrice état × cible 1`] = `
+"── Selecting
+   axle centre            → Node axle (0, 0)
+   gear rim               → GearTooth gear (60, 0)
+   gear inside            → Void (30, 0)
+   join centre            → Node join (200, 0)
+   beam body              → Edge beam (300, 0) [body]
+   beam end               → Edge beam (400, 0) [end]
+   beam body past join    → Void (150, 0)
+   spring body            → Edge spring (300, 200) [body]
+   spring start           → Edge spring (200, 200) [start]
+   mass centre            → Node mass (600, 0)
+   belt start             → Edge belt (0, -300) [start]
+   belt arc               → GearTooth belt-gear (300, -320)
+   plain belt run         → BeltBody plain-belt (300, -500) [section 0]
+   plain belt end         → Edge plain-belt (600, -500) [end]
+   dimension              → Constraint dim (300, 80)
+   force arrow            → Force force (600, 64.27)
+   empty space            → Void (900, 900)
+── SelectingMultiple
+   axle centre            → Void (0, 0)
+   gear rim               → Void (60, 0)
+   gear inside            → Void (30, 0)
+   join centre            → Void (200, 0)
+   beam body              → Void (300, 0)
+   beam end               → Void (400, 0)
+   beam body past join    → Void (150, 0)
+   spring body            → Void (300, 200)
+   spring start           → Void (200, 200)
+   mass centre            → Void (600, 0)
+   belt start             → Void (0, -300)
+   belt arc               → Void (300, -320)
+   plain belt run         → Void (300, -500)
+   plain belt end         → Void (600, -500)
+   dimension              → Void (300, 80)
+   force arrow            → Void (600, 20)
+   empty space            → Void (900, 900)
+── SelectedMultiple
+   axle centre            → Node axle (0, 0)
+   gear rim               → GearTooth gear (60, 0)
+   gear inside            → Void (30, 0)
+   join centre            → Node join (200, 0)
+   beam body              → Edge beam (300, 0) [body]
+   beam end               → Edge beam (400, 0) [end]
+   beam body past join    → Void (150, 0)
+   spring body            → Edge spring (300, 200) [body]
+   spring start           → Edge spring (200, 200) [start]
+   mass centre            → Node mass (600, 0)
+   belt start             → Edge belt (0, -300) [start]
+   belt arc               → GearTooth belt-gear (300, -320)
+   plain belt run         → BeltBody plain-belt (300, -500) [section 0]
+   plain belt end         → Edge plain-belt (600, -500) [end]
+   dimension              → Constraint dim (300, 80)
+   force arrow            → Force force (600, 64.27)
+   empty space            → Void (900, 900)
+── SelectedElement
+   axle centre            → Node axle (0, 0)
+   gear rim               → GearTooth gear (60, 0)
+   gear inside            → Void (30, 0)
+   join centre            → Node join (200, 0)
+   beam body              → Edge beam (300, 0) [body]
+   beam end               → Edge beam (400, 0) [end]
+   beam body past join    → Void (150, 0)
+   spring body            → Edge spring (300, 200) [body]
+   spring start           → Edge spring (200, 200) [start]
+   mass centre            → Node mass (600, 0)
+   belt start             → Edge belt (0, -300) [start]
+   belt arc               → GearTooth belt-gear (300, -320)
+   plain belt run         → BeltBody plain-belt (300, -500) [section 0]
+   plain belt end         → Edge plain-belt (600, -500) [end]
+   dimension              → Constraint dim (300, 80)
+   force arrow            → Force force (600, 64.27)
+   empty space            → Void (900, 900)
+── MovingNode
+   axle centre            → Void (14, 0) rejected:Cet axe porte des engrenages qu'un join ne peut pas reprendre
+   gear rim               → GearTooth gear (60, 0)
+   gear inside            → Void (30, 0)
+   join centre            → Void (200, 0)
+   beam body              → Void (300, 0)
+   beam end               → Void (400, 0)
+   beam body past join    → Void (150, 0)
+   spring body            → Void (300, 200)
+   spring start           → Edge spring (200, 200) [start]
+   mass centre            → Node mass (600, 0)
+   belt start             → Edge belt (0, -300) [start]
+   belt arc               → GearTooth belt-gear (300, -320)
+   plain belt run         → Void (300, -500)
+   plain belt end         → Edge plain-belt (600, -500) [end]
+   dimension              → Void (300, 80)
+   force arrow            → Void (600, 20)
+   empty space            → Void (900, 900)
+── MovingEdgeStartPoint
+   axle centre            → Node axle (0, 0)
+   gear rim               → GearTooth gear (60, 0)
+   gear inside            → Void (30, 0)
+   join centre            → Void (200, 0)
+   beam body              → Void (300, 0)
+   beam end               → Void (400, 0)
+   beam body past join    → Void (150, 0)
+   spring body            → Void (300, 200)
+   spring start           → Edge spring (200, 200) [start]
+   mass centre            → Node mass (600, 0)
+   belt start             → Edge belt (0, -300) [start]
+   belt arc               → GearTooth belt-gear (300, -320)
+   plain belt run         → Void (300, -500)
+   plain belt end         → Edge plain-belt (600, -500) [end]
+   dimension              → Void (300, 80)
+   force arrow            → Void (600, 20)
+   empty space            → Void (900, 900)
+── MovingEdgeEndPoint
+   axle centre            → Node axle (0, 0)
+   gear rim               → GearTooth gear (60, 0)
+   gear inside            → Void (30, 0)
+   join centre            → Void (200, 0)
+   beam body              → Void (300, 0)
+   beam end               → Void (400, 0)
+   beam body past join    → Void (150, 0)
+   spring body            → Void (300, 200)
+   spring start           → Edge spring (200, 200) [start]
+   mass centre            → Node mass (600, 0)
+   belt start             → Edge belt (0, -300) [start]
+   belt arc               → GearTooth belt-gear (300, -320)
+   plain belt run         → Void (300, -500)
+   plain belt end         → Edge plain-belt (600, -500) [end]
+   dimension              → Void (300, 80)
+   force arrow            → Void (600, 20)
+   empty space            → Void (900, 900)
+── MovingEdgeBody
+   axle centre            → Node axle (0, 0)
+   gear rim               → GearTooth gear (60, 0)
+   gear inside            → Void (30, 0)
+   join centre            → Void (200, 0)
+   beam body              → Void (300, 0)
+   beam end               → Void (400, 0)
+   beam body past join    → Void (150, 0)
+   spring body            → Void (300, 200)
+   spring start           → Edge spring (200, 200) [start]
+   mass centre            → Node mass (600, 0)
+   belt start             → Edge belt (0, -300) [start]
+   belt arc               → GearTooth belt-gear (300, -320)
+   plain belt run         → Void (300, -500)
+   plain belt end         → Edge plain-belt (600, -500) [end]
+   dimension              → Void (300, 80)
+   force arrow            → Void (600, 20)
+   empty space            → Void (900, 900)
+── MovingBeltBody
+   axle centre            → Void (0, 0)
+   gear rim               → GearTooth gear (60, 0)
+   gear inside            → Void (30, 0)
+   join centre            → Void (200, 0)
+   beam body              → Void (300, 0)
+   beam end               → Void (400, 0)
+   beam body past join    → Void (150, 0)
+   spring body            → Void (300, 200)
+   spring start           → Void (200, 200)
+   mass centre            → Void (600, 0)
+   belt start             → Void (0, -300)
+   belt arc               → Void (300, -320)
+   plain belt run         → Void (300, -500)
+   plain belt end         → Void (600, -500)
+   dimension              → Void (300, 80)
+   force arrow            → Void (600, 20)
+   empty space            → Void (900, 900)
+── ChangingGearRadius
+   axle centre            → Void (0, 0)
+   gear rim               → Void (60, 0)
+   gear inside            → Void (30, 0)
+   join centre            → Node join (200, 0)
+   beam body              → Void (300, 0)
+   beam end               → Edge beam (400, 0) [end]
+   beam body past join    → Void (150, 0)
+   spring body            → Void (300, 200)
+   spring start           → Edge spring (200, 200) [start]
+   mass centre            → Node mass (600, 0)
+   belt start             → Void (0, -300)
+   belt arc               → GearTooth belt-gear (274.39, -329.27)
+   plain belt run         → BeltBody plain-belt (0, -515) [section 0]
+   plain belt end         → BeltBody plain-belt (0, -515) [section 0]
+   dimension              → Void (300, 80)
+   force arrow            → Void (600, 20)
+   empty space            → Void (900, 900)
+── MovingForce
+   axle centre            → Void (0, 0)
+   gear rim               → Void (60, 0)
+   gear inside            → Void (30, 0)
+   join centre            → Void (200, 0)
+   beam body              → Void (300, 0)
+   beam end               → Void (400, 0)
+   beam body past join    → Void (150, 0)
+   spring body            → Void (300, 200)
+   spring start           → Void (200, 200)
+   mass centre            → Void (600, 0)
+   belt start             → Void (0, -300)
+   belt arc               → Void (300, -320)
+   plain belt run         → Void (300, -500)
+   plain belt end         → Void (600, -500)
+   dimension              → Void (300, 80)
+   force arrow            → Void (600, 20)
+   empty space            → Void (900, 900)
+── MovingDistributedForce
+   axle centre            → Void (0, 0)
+   gear rim               → Void (60, 0)
+   gear inside            → Void (30, 0)
+   join centre            → Void (200, 0)
+   beam body              → Void (300, 0)
+   beam end               → Void (400, 0)
+   beam body past join    → Void (150, 0)
+   spring body            → Void (300, 200)
+   spring start           → Void (200, 200)
+   mass centre            → Void (600, 0)
+   belt start             → Void (0, -300)
+   belt arc               → Void (300, -320)
+   plain belt run         → Void (300, -500)
+   plain belt end         → Void (600, -500)
+   dimension              → Void (300, 80)
+   force arrow            → Void (600, 20)
+   empty space            → Void (900, 900)
+── MovingMoment
+   axle centre            → Void (0, 0)
+   gear rim               → Void (60, 0)
+   gear inside            → Void (30, 0)
+   join centre            → Void (200, 0)
+   beam body              → Void (300, 0)
+   beam end               → Void (400, 0)
+   beam body past join    → Void (150, 0)
+   spring body            → Void (300, 200)
+   spring start           → Void (200, 200)
+   mass centre            → Void (600, 0)
+   belt start             → Void (0, -300)
+   belt arc               → Void (300, -320)
+   plain belt run         → Void (300, -500)
+   plain belt end         → Void (600, -500)
+   dimension              → Void (300, 80)
+   force arrow            → Void (600, 20)
+   empty space            → Void (900, 900)
+── MovingSelectionMultiple
+   axle centre            → Void (0, 0)
+   gear rim               → Void (60, 0)
+   gear inside            → Void (30, 0)
+   join centre            → Void (200, 0)
+   beam body              → Void (300, 0)
+   beam end               → Void (400, 0)
+   beam body past join    → Void (150, 0)
+   spring body            → Void (300, 200)
+   spring start           → Void (200, 200)
+   mass centre            → Void (600, 0)
+   belt start             → Void (0, -300)
+   belt arc               → Void (300, -320)
+   plain belt run         → Void (300, -500)
+   plain belt end         → Void (600, -500)
+   dimension              → Void (300, 80)
+   force arrow            → Void (600, 20)
+   empty space            → Void (900, 900)
+── Erasing
+   axle centre            → Node axle (0, 0) [deleting]
+   gear rim               → GearTooth gear (60, 0) [deleting]
+   gear inside            → Void (30, 0)
+   join centre            → Node join (200, 0) [deleting]
+   beam body              → Edge beam (300, 0) [body, deleting]
+   beam end               → Edge beam (400, 0) [end, deleting]
+   beam body past join    → Void (150, 0)
+   spring body            → Edge spring (300, 200) [body, deleting]
+   spring start           → Edge spring (200, 200) [start, deleting]
+   mass centre            → Node mass (600, 0) [deleting]
+   belt start             → Edge belt (0, -300) [start, deleting]
+   belt arc               → GearTooth belt-gear (300, -320) [deleting]
+   plain belt run         → BeltBody plain-belt (300, -500) [section 0]
+   plain belt end         → Edge plain-belt (600, -500) [end, deleting]
+   dimension              → Constraint dim (300, 80) [deleting]
+   force arrow            → Force force (600, 64.27) [deleting]
+   empty space            → Void (900, 900)
+── ErasingMultiple
+   axle centre            → Void (0, 0)
+   gear rim               → Void (60, 0)
+   gear inside            → Void (30, 0)
+   join centre            → Void (200, 0)
+   beam body              → Void (300, 0)
+   beam end               → Void (400, 0)
+   beam body past join    → Void (150, 0)
+   spring body            → Void (300, 200)
+   spring start           → Void (200, 200)
+   mass centre            → Void (600, 0)
+   belt start             → Void (0, -300)
+   belt arc               → Void (300, -320)
+   plain belt run         → Void (300, -500)
+   plain belt end         → Void (600, -500)
+   dimension              → Void (300, 80)
+   force arrow            → Void (600, 20)
+   empty space            → Void (900, 900)
+── PlacingBeamStart
+   axle centre            → Node axle (0, 0)
+   gear rim               → GearTooth gear (60, 0)
+   gear inside            → Void (30, 0)
+   join centre            → Node join (200, 0)
+   beam body              → Edge beam (300, 0) [body]
+   beam end               → Edge beam (400, 0) [end]
+   beam body past join    → Void (150, 0)
+   spring body            → Void (300, 200)
+   spring start           → Edge spring (200, 200) [start]
+   mass centre            → Node mass (600, 0)
+   belt start             → Edge belt (0, -300) [start]
+   belt arc               → GearTooth belt-gear (300, -320)
+   plain belt run         → Void (300, -500)
+   plain belt end         → Edge plain-belt (600, -500) [end]
+   dimension              → Void (300, 80)
+   force arrow            → Void (600, 20)
+   empty space            → Void (900, 900)
+── PlacingBeamEnd
+   axle centre            → Void (0, 0)
+   gear rim               → GearTooth gear (60, 0)
+   gear inside            → Void (30, 0)
+   join centre            → Node join (200, 0)
+   beam body              → Node join (300, 0) [beamBodyHover]
+   beam end               → Node join (400, 0) [beamBodyHover]
+   beam body past join    → Void (150, 0)
+   spring body            → Void (300, 200)
+   spring start           → Edge spring (200, 200) [start]
+   mass centre            → Node mass (600, 0)
+   belt start             → Edge belt (0, -300) [start]
+   belt arc               → GearTooth belt-gear (300, -320)
+   plain belt run         → Void (300, -500)
+   plain belt end         → Edge plain-belt (600, -500) [end]
+   dimension              → Void (300, 80)
+   force arrow            → Void (600, 20)
+   empty space            → Void (900, 900)
+── PlacingSpringStart
+   axle centre            → Node axle (0, 0)
+   gear rim               → GearTooth gear (60, 0)
+   gear inside            → Void (30, 0)
+   join centre            → Node join (200, 0)
+   beam body              → Edge beam (300, 0) [body]
+   beam end               → Edge beam (400, 0) [end]
+   beam body past join    → Void (150, 0)
+   spring body            → Void (300, 200)
+   spring start           → Edge spring (200, 200) [start]
+   mass centre            → Node mass (600, 0)
+   belt start             → Edge belt (0, -300) [start]
+   belt arc               → GearTooth belt-gear (300, -320)
+   plain belt run         → Void (300, -500)
+   plain belt end         → Edge plain-belt (600, -500) [end]
+   dimension              → Void (300, 80)
+   force arrow            → Void (600, 20)
+   empty space            → Void (900, 900)
+── PlacingSpringEnd
+   axle centre            → Void (0, 0)
+   gear rim               → GearTooth gear (60, 0)
+   gear inside            → Void (30, 0)
+   join centre            → Node join (200, 0)
+   beam body              → Edge beam (300, 0) [body]
+   beam end               → Edge beam (400, 0) [end]
+   beam body past join    → Void (150, 0)
+   spring body            → Void (300, 200)
+   spring start           → Edge spring (200, 200) [start]
+   mass centre            → Node mass (600, 0)
+   belt start             → Edge belt (0, -300) [start]
+   belt arc               → GearTooth belt-gear (300, -320)
+   plain belt run         → Void (300, -500)
+   plain belt end         → Edge plain-belt (600, -500) [end]
+   dimension              → Void (300, 80)
+   force arrow            → Void (600, 20)
+   empty space            → Void (900, 900)
+── PlacingDamperStart
+   axle centre            → Node axle (0, 0)
+   gear rim               → GearTooth gear (60, 0)
+   gear inside            → Void (30, 0)
+   join centre            → Node join (200, 0)
+   beam body              → Edge beam (300, 0) [body]
+   beam end               → Edge beam (400, 0) [end]
+   beam body past join    → Void (150, 0)
+   spring body            → Void (300, 200)
+   spring start           → Edge spring (200, 200) [start]
+   mass centre            → Node mass (600, 0)
+   belt start             → Edge belt (0, -300) [start]
+   belt arc               → GearTooth belt-gear (300, -320)
+   plain belt run         → Void (300, -500)
+   plain belt end         → Edge plain-belt (600, -500) [end]
+   dimension              → Void (300, 80)
+   force arrow            → Void (600, 20)
+   empty space            → Void (900, 900)
+── PlacingDamperEnd
+   axle centre            → Void (0, 0)
+   gear rim               → GearTooth gear (60, 0)
+   gear inside            → Void (30, 0)
+   join centre            → Node join (200, 0)
+   beam body              → Edge beam (300, 0) [body]
+   beam end               → Edge beam (400, 0) [end]
+   beam body past join    → Void (150, 0)
+   spring body            → Void (300, 200)
+   spring start           → Edge spring (200, 200) [start]
+   mass centre            → Node mass (600, 0)
+   belt start             → Edge belt (0, -300) [start]
+   belt arc               → GearTooth belt-gear (300, -320)
+   plain belt run         → Void (300, -500)
+   plain belt end         → Edge plain-belt (600, -500) [end]
+   dimension              → Void (300, 80)
+   force arrow            → Void (600, 20)
+   empty space            → Void (900, 900)
+── PlacingBeltStart
+   axle centre            → Node axle (0, 0)
+   gear rim               → GearTooth gear (60, 0)
+   gear inside            → Void (30, 0)
+   join centre            → Node join (200, 0)
+   beam body              → Edge beam (300, 0) [body]
+   beam end               → Edge beam (400, 0) [end]
+   beam body past join    → Void (150, 0)
+   spring body            → Void (300, 200)
+   spring start           → Edge spring (200, 200) [start]
+   mass centre            → Node mass (600, 0)
+   belt start             → Void (0, -300)
+   belt arc               → GearTooth belt-gear (300, -320)
+   plain belt run         → Void (300, -500)
+   plain belt end         → Void (600, -500)
+   dimension              → Void (300, 80)
+   force arrow            → Void (600, 20)
+   empty space            → Void (900, 900)
+── PlacingBeltEnd
+   axle centre            → Node axle (0, 0)
+   gear rim               → GearTooth gear (60, 0)
+   gear inside            → Void (30, 0)
+   join centre            → Node join (200, 0)
+   beam body              → Edge beam (300, 0) [body]
+   beam end               → Edge beam (400, 0) [end]
+   beam body past join    → Void (150, 0)
+   spring body            → Void (300, 200)
+   spring start           → Edge spring (200, 200) [start]
+   mass centre            → Node mass (600, 0)
+   belt start             → Void (0, -300)
+   belt arc               → GearTooth belt-gear (300, -320)
+   plain belt run         → Void (300, -500)
+   plain belt end         → Void (600, -500)
+   dimension              → Void (300, 80)
+   force arrow            → Void (600, 20)
+   empty space            → Void (900, 900)
+── PlacingMotor
+   axle centre            → Node axle (0, 0)
+   gear rim               → GearTooth gear (60, 0)
+   gear inside            → Void (30, 0)
+   join centre            → Node join (200, 0)
+   beam body              → Edge beam (300, 0) [body]
+   beam end               → Edge beam (400, 0) [end]
+   beam body past join    → Void (150, 0)
+   spring body            → Void (300, 200)
+   spring start           → Edge spring (200, 200) [start]
+   mass centre            → Node mass (600, 0)
+   belt start             → Edge belt (0, -300) [start]
+   belt arc               → GearTooth belt-gear (300, -320)
+   plain belt run         → Void (300, -500)
+   plain belt end         → Edge plain-belt (600, -500) [end]
+   dimension              → Void (300, 80)
+   force arrow            → Void (600, 20)
+   empty space            → Void (900, 900)
+── PlacingPivot
+   axle centre            → Node axle (0, 0)
+   gear rim               → GearTooth gear (60, 0)
+   gear inside            → Void (30, 0)
+   join centre            → Node join (200, 0)
+   beam body              → Edge beam (300, 0) [body]
+   beam end               → Edge beam (400, 0) [end]
+   beam body past join    → Void (150, 0)
+   spring body            → Void (300, 200)
+   spring start           → Edge spring (200, 200) [start]
+   mass centre            → Node mass (600, 0)
+   belt start             → Edge belt (0, -300) [start]
+   belt arc               → GearTooth belt-gear (300, -320)
+   plain belt run         → Void (300, -500)
+   plain belt end         → Edge plain-belt (600, -500) [end]
+   dimension              → Void (300, 80)
+   force arrow            → Void (600, 20)
+   empty space            → Void (900, 900)
+── PlacingSlider
+   axle centre            → Node axle (0, 0)
+   gear rim               → GearTooth gear (60, 0)
+   gear inside            → Void (30, 0)
+   join centre            → Node join (200, 0)
+   beam body              → Edge beam (300, 0) [body]
+   beam end               → Edge beam (400, 0) [end]
+   beam body past join    → Void (150, 0)
+   spring body            → Void (300, 200)
+   spring start           → Edge spring (200, 200) [start]
+   mass centre            → Node mass (600, 0)
+   belt start             → Edge belt (0, -300) [start]
+   belt arc               → GearTooth belt-gear (300, -320)
+   plain belt run         → Void (300, -500)
+   plain belt end         → Edge plain-belt (600, -500) [end]
+   dimension              → Void (300, 80)
+   force arrow            → Void (600, 20)
+   empty space            → Void (900, 900)
+── PlacingJoin
+   axle centre            → Void (14, 0) rejected:Cet axe porte des engrenages qu'un join ne peut pas reprendre
+   gear rim               → GearTooth gear (60, 0)
+   gear inside            → Void (30, 0)
+   join centre            → Node join (200, 0)
+   beam body              → Edge beam (300, 0) [body]
+   beam end               → Edge beam (400, 0) [end]
+   beam body past join    → Void (150, 0)
+   spring body            → Void (300, 200)
+   spring start           → Edge spring (200, 200) [start]
+   mass centre            → Node mass (600, 0)
+   belt start             → Edge belt (0, -300) [start]
+   belt arc               → GearTooth belt-gear (300, -320)
+   plain belt run         → Void (300, -500)
+   plain belt end         → Edge plain-belt (600, -500) [end]
+   dimension              → Void (300, 80)
+   force arrow            → Void (600, 20)
+   empty space            → Void (900, 900)
+── PlacingMass
+   axle centre            → Void (14, 0) rejected:Cet axe porte des engrenages qu'un mass ne peut pas reprendre
+   gear rim               → GearTooth gear (60, 0)
+   gear inside            → Void (30, 0)
+   join centre            → Node join (200, 0)
+   beam body              → Edge beam (300, 0) [body]
+   beam end               → Edge beam (400, 0) [end]
+   beam body past join    → Void (150, 0)
+   spring body            → Void (300, 200)
+   spring start           → Edge spring (200, 200) [start]
+   mass centre            → Node mass (600, 0)
+   belt start             → Edge belt (0, -300) [start]
+   belt arc               → GearTooth belt-gear (300, -320)
+   plain belt run         → Void (300, -500)
+   plain belt end         → Edge plain-belt (600, -500) [end]
+   dimension              → Void (300, 80)
+   force arrow            → Void (600, 20)
+   empty space            → Void (900, 900)
+── PlacingGearStart
+   axle centre            → Node axle (0, 0)
+   gear rim               → GearTooth gear (60, 0)
+   gear inside            → Void (30, 0)
+   join centre            → Node join (200, 0)
+   beam body              → Edge beam (300, 0) [body]
+   beam end               → Edge beam (400, 0) [end]
+   beam body past join    → Void (150, 0)
+   spring body            → Void (300, 200)
+   spring start           → Edge spring (200, 200) [start]
+   mass centre            → Node mass (600, 0)
+   belt start             → Edge belt (0, -300) [start]
+   belt arc               → GearTooth belt-gear (300, -320)
+   plain belt run         → Void (300, -500)
+   plain belt end         → Edge plain-belt (600, -500) [end]
+   dimension              → Void (300, 80)
+   force arrow            → Void (600, 20)
+   empty space            → Void (900, 900)
+── PlacingGearRadius
+   axle centre            → Node axle (0, 0)
+   gear rim               → GearTooth gear (60, 0)
+   gear inside            → Void (30, 0)
+   join centre            → Node join (200, 0)
+   beam body              → Void (300, 0)
+   beam end               → Edge beam (400, 0) [end]
+   beam body past join    → Void (150, 0)
+   spring body            → Void (300, 200)
+   spring start           → Edge spring (200, 200) [start]
+   mass centre            → Node mass (600, 0)
+   belt start             → BeltBody belt (82.73, -344.05) [section 0]
+   belt arc               → GearTooth belt-gear (289.29, -321.46)
+   plain belt run         → BeltBody plain-belt (200, -515) [section 0]
+   plain belt end         → BeltBody plain-belt (200, -515) [section 0]
+   dimension              → Void (300, 80)
+   force arrow            → Void (600, 20)
+   empty space            → Void (900, 900)
+── PlacingGround
+   axle centre            → Node axle (0, 0)
+   gear rim               → GearTooth gear (60, 0)
+   gear inside            → Void (30, 0)
+   join centre            → Node join (200, 0)
+   beam body              → Edge beam (300, 0) [body]
+   beam end               → Edge beam (400, 0) [end]
+   beam body past join    → Void (150, 0)
+   spring body            → Void (300, 200)
+   spring start           → Edge spring (200, 200) [start]
+   mass centre            → Void (614, 0) rejected:Une masse ne peut pas être ancrée au sol
+   belt start             → Edge belt (0, -300) [start]
+   belt arc               → GearTooth belt-gear (300, -320)
+   plain belt run         → Void (300, -500)
+   plain belt end         → Edge plain-belt (600, -500) [end]
+   dimension              → Void (300, 80)
+   force arrow            → Void (600, 20)
+   empty space            → Void (900, 900)
+── PlacingForceStart
+   axle centre            → Node axle (0, 0)
+   gear rim               → Void (60, 0)
+   gear inside            → Void (30, 0)
+   join centre            → Node join (200, 0)
+   beam body              → Edge beam (300, 0) [body]
+   beam end               → Edge beam (400, 0) [end]
+   beam body past join    → Void (150, 0)
+   spring body            → Void (300, 200)
+   spring start           → Edge spring (200, 200) [start]
+   mass centre            → Node mass (600, 0)
+   belt start             → Void (0, -300)
+   belt arc               → Void (300, -320)
+   plain belt run         → Void (300, -500)
+   plain belt end         → Void (600, -500)
+   dimension              → Void (300, 80)
+   force arrow            → Void (600, 20)
+   empty space            → Void (900, 900)
+── PlacingForceEnd
+   axle centre            → Void (0, 0)
+   gear rim               → Void (60, 0)
+   gear inside            → Void (30, 0)
+   join centre            → Void (200, 0)
+   beam body              → Void (300, 0)
+   beam end               → Void (400, 0)
+   beam body past join    → Void (150, 0)
+   spring body            → Void (300, 200)
+   spring start           → Void (200, 200)
+   mass centre            → Void (600, 0)
+   belt start             → Void (0, -300)
+   belt arc               → Void (300, -320)
+   plain belt run         → Void (300, -500)
+   plain belt end         → Void (600, -500)
+   dimension              → Void (300, 80)
+   force arrow            → Void (600, 20)
+   empty space            → Void (900, 900)
+── PlacingDistributedForce
+   axle centre            → Void (0, 0)
+   gear rim               → Void (60, 0)
+   gear inside            → Void (30, 0)
+   join centre            → Void (200, 0)
+   beam body              → Void (300, 0)
+   beam end               → Void (400, 0)
+   beam body past join    → Void (150, 0)
+   spring body            → Void (300, 200)
+   spring start           → Void (200, 200)
+   mass centre            → Void (600, 0)
+   belt start             → Void (0, -300)
+   belt arc               → Void (300, -320)
+   plain belt run         → Void (300, -500)
+   plain belt end         → Void (600, -500)
+   dimension              → Void (300, 80)
+   force arrow            → Void (600, 20)
+   empty space            → Void (900, 900)
+── PlacingMomentStart
+   axle centre            → GearTooth gear (0, 0)
+   gear rim               → GearTooth gear (0, 0)
+   gear inside            → Void (30, 0)
+   join centre            → Edge beam (300, 0) [body]
+   beam body              → Edge beam (300, 0) [body]
+   beam end               → Edge beam (300, 0) [body]
+   beam body past join    → Void (150, 0)
+   spring body            → Edge spring (300, 200) [body]
+   spring start           → Edge spring (300, 200) [body]
+   mass centre            → Void (600, 0)
+   belt start             → Void (0, -300)
+   belt arc               → GearTooth belt-gear (300, -360)
+   plain belt run         → Void (300, -500)
+   plain belt end         → Void (600, -500)
+   dimension              → Void (300, 80)
+   force arrow            → Void (600, 20)
+   empty space            → Void (900, 900)
+── PlacingMomentEnd
+   axle centre            → Void (0, 0)
+   gear rim               → Void (60, 0)
+   gear inside            → Void (30, 0)
+   join centre            → Void (200, 0)
+   beam body              → Void (300, 0)
+   beam end               → Void (400, 0)
+   beam body past join    → Void (150, 0)
+   spring body            → Void (300, 200)
+   spring start           → Void (200, 200)
+   mass centre            → Void (600, 0)
+   belt start             → Void (0, -300)
+   belt arc               → Void (300, -320)
+   plain belt run         → Void (300, -500)
+   plain belt end         → Void (600, -500)
+   dimension              → Void (300, 80)
+   force arrow            → Void (600, 20)
+   empty space            → Void (900, 900)
+── PlacingProbe
+   axle centre            → Node axle (0, 0)
+   gear rim               → GearTooth gear (60, 0)
+   gear inside            → Void (30, 0)
+   join centre            → Node join (200, 0)
+   beam body              → Edge beam (300, 0) [body]
+   beam end               → Edge beam (400, 0) [body]
+   beam body past join    → Void (150, 0)
+   spring body            → Edge spring (300, 200) [body]
+   spring start           → Edge spring (200, 200) [body]
+   mass centre            → Node mass (600, 0)
+   belt start             → Void (0, -300)
+   belt arc               → GearTooth belt-gear (300, -320)
+   plain belt run         → Void (300, -500)
+   plain belt end         → Void (600, -500)
+   dimension              → Void (300, 80)
+   force arrow            → Void (600, 20)
+   empty space            → Void (900, 900)
+── PlacingProbeMetrics
+   axle centre            → Void (0, 0)
+   gear rim               → Void (60, 0)
+   gear inside            → Void (30, 0)
+   join centre            → Void (200, 0)
+   beam body              → Void (300, 0)
+   beam end               → Void (400, 0)
+   beam body past join    → Void (150, 0)
+   spring body            → Void (300, 200)
+   spring start           → Void (200, 200)
+   mass centre            → Void (600, 0)
+   belt start             → Void (0, -300)
+   belt arc               → Void (300, -320)
+   plain belt run         → Void (300, -500)
+   plain belt end         → Void (600, -500)
+   dimension              → Void (300, 80)
+   force arrow            → Void (600, 20)
+   empty space            → Void (900, 900)
+── DimensionStart
+   axle centre            → Node axle (0, 0)
+   gear rim               → GearTooth gear (60, 0)
+   gear inside            → Void (30, 0)
+   join centre            → Node join (200, 0)
+   beam body              → Edge beam (300, 0) [body]
+   beam end               → Edge beam (400, 0) [body]
+   beam body past join    → Void (150, 0)
+   spring body            → Edge spring (300, 200) [body]
+   spring start           → Edge spring (200, 200) [body]
+   mass centre            → Node mass (600, 0)
+   belt start             → BeltBody belt (0, -300) [section 0]
+   belt arc               → GearTooth belt-gear (300, -320)
+   plain belt run         → BeltBody plain-belt (300, -500) [section 0]
+   plain belt end         → BeltBody plain-belt (600, -500) [section 0]
+   dimension              → Void (300, 80)
+   force arrow            → Void (600, 20)
+   empty space            → Void (900, 900)
+── DimensionNode
+   axle centre            → Node axle (0, 0)
+   gear rim               → Void (60, 0)
+   gear inside            → Void (30, 0)
+   join centre            → Edge beam (200, 0) [body]
+   beam body              → Edge beam (300, 0) [body]
+   beam end               → Edge beam (400, 0) [body]
+   beam body past join    → Void (150, 0)
+   spring body            → Edge spring (300, 200) [body]
+   spring start           → Edge spring (200, 200) [body]
+   mass centre            → Node mass (600, 0)
+   belt start             → Void (0, -300)
+   belt arc               → Void (300, -320)
+   plain belt run         → Void (300, -500)
+   plain belt end         → Void (600, -500)
+   dimension              → Void (300, 80)
+   force arrow            → Void (600, 20)
+   empty space            → Void (900, 900)
+── DimensionEdge
+   axle centre            → Node axle (0, 0)
+   gear rim               → Void (60, 0)
+   gear inside            → Void (30, 0)
+   join centre            → Node join (200, 0)
+   beam body              → Void (300, 0)
+   beam end               → Void (400, 0)
+   beam body past join    → Void (150, 0)
+   spring body            → Edge spring (300, 200) [body]
+   spring start           → Edge spring (200, 200) [body]
+   mass centre            → Node mass (600, 0)
+   belt start             → Void (0, -300)
+   belt arc               → Void (300, -320)
+   plain belt run         → Void (300, -500)
+   plain belt end         → Void (600, -500)
+   dimension              → Void (300, 80)
+   force arrow            → Void (600, 20)
+   empty space            → Void (900, 900)
+── DimensionNodeToNode
+   axle centre            → Void (0, 0)
+   gear rim               → Void (60, 0)
+   gear inside            → Void (30, 0)
+   join centre            → Void (200, 0)
+   beam body              → Void (300, 0)
+   beam end               → Void (400, 0)
+   beam body past join    → Void (150, 0)
+   spring body            → Void (300, 200)
+   spring start           → Void (200, 200)
+   mass centre            → Void (600, 0)
+   belt start             → Void (0, -300)
+   belt arc               → Void (300, -320)
+   plain belt run         → Void (300, -500)
+   plain belt end         → Void (600, -500)
+   dimension              → Void (300, 80)
+   force arrow            → Void (600, 20)
+   empty space            → Void (900, 900)
+── DimensionEdgeToNode
+   axle centre            → Void (0, 0)
+   gear rim               → Void (60, 0)
+   gear inside            → Void (30, 0)
+   join centre            → Void (200, 0)
+   beam body              → Void (300, 0)
+   beam end               → Void (400, 0)
+   beam body past join    → Void (150, 0)
+   spring body            → Void (300, 200)
+   spring start           → Void (200, 200)
+   mass centre            → Void (600, 0)
+   belt start             → Void (0, -300)
+   belt arc               → Void (300, -320)
+   plain belt run         → Void (300, -500)
+   plain belt end         → Void (600, -500)
+   dimension              → Void (300, 80)
+   force arrow            → Void (600, 20)
+   empty space            → Void (900, 900)
+── DimensionAngle
+   axle centre            → Void (0, 0)
+   gear rim               → Void (60, 0)
+   gear inside            → Void (30, 0)
+   join centre            → Void (200, 0)
+   beam body              → Void (300, 0)
+   beam end               → Void (400, 0)
+   beam body past join    → Void (150, 0)
+   spring body            → Void (300, 200)
+   spring start           → Void (200, 200)
+   mass centre            → Void (600, 0)
+   belt start             → Void (0, -300)
+   belt arc               → Void (300, -320)
+   plain belt run         → Void (300, -500)
+   plain belt end         → Void (600, -500)
+   dimension              → Void (300, 80)
+   force arrow            → Void (600, 20)
+   empty space            → Void (900, 900)
+── DimensionRadius
+   axle centre            → Void (0, 0)
+   gear rim               → Void (60, 0)
+   gear inside            → Void (30, 0)
+   join centre            → Void (200, 0)
+   beam body              → Void (300, 0)
+   beam end               → Void (400, 0)
+   beam body past join    → Void (150, 0)
+   spring body            → Void (300, 200)
+   spring start           → Void (200, 200)
+   mass centre            → Void (600, 0)
+   belt start             → Void (0, -300)
+   belt arc               → Void (300, -320)
+   plain belt run         → Void (300, -500)
+   plain belt end         → Void (600, -500)
+   dimension              → Void (300, 80)
+   force arrow            → Void (600, 20)
+   empty space            → Void (900, 900)
+── DimensionBelt
+   axle centre            → Void (0, 0)
+   gear rim               → Void (60, 0)
+   gear inside            → Void (30, 0)
+   join centre            → Void (200, 0)
+   beam body              → Void (300, 0)
+   beam end               → Void (400, 0)
+   beam body past join    → Void (150, 0)
+   spring body            → Void (300, 200)
+   spring start           → Void (200, 200)
+   mass centre            → Void (600, 0)
+   belt start             → Void (0, -300)
+   belt arc               → Void (300, -320)
+   plain belt run         → Void (300, -500)
+   plain belt end         → Void (600, -500)
+   dimension              → Void (300, 80)
+   force arrow            → Void (600, 20)
+   empty space            → Void (900, 900)
+── HorizontalVerticalConstraintStart
+   axle centre            → Node axle (0, 0)
+   gear rim               → Void (60, 0)
+   gear inside            → Void (30, 0)
+   join centre            → Node join (200, 0)
+   beam body              → Edge beam (300, 0) [body]
+   beam end               → Edge beam (400, 0) [body]
+   beam body past join    → Void (150, 0)
+   spring body            → Edge spring (300, 200) [body]
+   spring start           → Edge spring (200, 200) [body]
+   mass centre            → Node mass (600, 0)
+   belt start             → Void (0, -300)
+   belt arc               → Void (300, -320)
+   plain belt run         → Void (300, -500)
+   plain belt end         → Void (600, -500)
+   dimension              → Void (300, 80)
+   force arrow            → Void (600, 20)
+   empty space            → Void (900, 900)
+── HorizontalVerticalConstraintNode
+   axle centre            → Node axle (0, 0)
+   gear rim               → Void (60, 0)
+   gear inside            → Void (30, 0)
+   join centre            → Void (200, 0)
+   beam body              → Void (300, 0)
+   beam end               → Void (400, 0)
+   beam body past join    → Void (150, 0)
+   spring body            → Void (300, 200)
+   spring start           → Void (200, 200)
+   mass centre            → Node mass (600, 0)
+   belt start             → Void (0, -300)
+   belt arc               → Void (300, -320)
+   plain belt run         → Void (300, -500)
+   plain belt end         → Void (600, -500)
+   dimension              → Void (300, 80)
+   force arrow            → Void (600, 20)
+   empty space            → Void (900, 900)
+── NormalConstraintStart
+   axle centre            → Void (0, 0)
+   gear rim               → Void (60, 0)
+   gear inside            → Void (30, 0)
+   join centre            → Edge beam (200, 0) [body]
+   beam body              → Edge beam (300, 0) [body]
+   beam end               → Edge beam (400, 0) [body]
+   beam body past join    → Void (150, 0)
+   spring body            → Edge spring (300, 200) [body]
+   spring start           → Edge spring (200, 200) [body]
+   mass centre            → Void (600, 0)
+   belt start             → Void (0, -300)
+   belt arc               → Void (300, -320)
+   plain belt run         → Void (300, -500)
+   plain belt end         → Void (600, -500)
+   dimension              → Void (300, 80)
+   force arrow            → Void (600, 20)
+   empty space            → Void (900, 900)
+── NormalConstraintEdge
+   axle centre            → Void (0, 0)
+   gear rim               → Void (60, 0)
+   gear inside            → Void (30, 0)
+   join centre            → Void (200, 0)
+   beam body              → Void (300, 0)
+   beam end               → Void (400, 0)
+   beam body past join    → Void (150, 0)
+   spring body            → Edge spring (300, 200) [body]
+   spring start           → Edge spring (200, 200) [body]
+   mass centre            → Void (600, 0)
+   belt start             → Void (0, -300)
+   belt arc               → Void (300, -320)
+   plain belt run         → Void (300, -500)
+   plain belt end         → Void (600, -500)
+   dimension              → Void (300, 80)
+   force arrow            → Void (600, 20)
+   empty space            → Void (900, 900)
+── ParallelConstraintStart
+   axle centre            → Void (0, 0)
+   gear rim               → Void (60, 0)
+   gear inside            → Void (30, 0)
+   join centre            → Edge beam (200, 0) [body]
+   beam body              → Edge beam (300, 0) [body]
+   beam end               → Edge beam (400, 0) [body]
+   beam body past join    → Void (150, 0)
+   spring body            → Edge spring (300, 200) [body]
+   spring start           → Edge spring (200, 200) [body]
+   mass centre            → Void (600, 0)
+   belt start             → Void (0, -300)
+   belt arc               → Void (300, -320)
+   plain belt run         → Void (300, -500)
+   plain belt end         → Void (600, -500)
+   dimension              → Void (300, 80)
+   force arrow            → Void (600, 20)
+   empty space            → Void (900, 900)
+── ParallelConstraintEdge
+   axle centre            → Void (0, 0)
+   gear rim               → Void (60, 0)
+   gear inside            → Void (30, 0)
+   join centre            → Void (200, 0)
+   beam body              → Void (300, 0)
+   beam end               → Void (400, 0)
+   beam body past join    → Void (150, 0)
+   spring body            → Edge spring (300, 200) [body]
+   spring start           → Edge spring (200, 200) [body]
+   mass centre            → Void (600, 0)
+   belt start             → Void (0, -300)
+   belt arc               → Void (300, -320)
+   plain belt run         → Void (300, -500)
+   plain belt end         → Void (600, -500)
+   dimension              → Void (300, 80)
+   force arrow            → Void (600, 20)
+   empty space            → Void (900, 900)
+── EqualConstraintStart
+   axle centre            → Void (0, 0)
+   gear rim               → GearTooth gear (0, 0)
+   gear inside            → Void (30, 0)
+   join centre            → Edge beam (200, 0) [body]
+   beam body              → Edge beam (300, 0) [body]
+   beam end               → Edge beam (400, 0) [body]
+   beam body past join    → Void (150, 0)
+   spring body            → Edge spring (300, 200) [body]
+   spring start           → Edge spring (200, 200) [body]
+   mass centre            → Void (600, 0)
+   belt start             → Void (0, -300)
+   belt arc               → GearTooth belt-gear (300, -360)
+   plain belt run         → Void (300, -500)
+   plain belt end         → Void (600, -500)
+   dimension              → Void (300, 80)
+   force arrow            → Void (600, 20)
+   empty space            → Void (900, 900)
+── EqualConstraintEdge
+   axle centre            → Void (0, 0)
+   gear rim               → Void (60, 0)
+   gear inside            → Void (30, 0)
+   join centre            → Void (200, 0)
+   beam body              → Void (300, 0)
+   beam end               → Void (400, 0)
+   beam body past join    → Void (150, 0)
+   spring body            → Edge spring (300, 200) [body]
+   spring start           → Edge spring (200, 200) [body]
+   mass centre            → Void (600, 0)
+   belt start             → Void (0, -300)
+   belt arc               → Void (300, -320)
+   plain belt run         → Void (300, -500)
+   plain belt end         → Void (600, -500)
+   dimension              → Void (300, 80)
+   force arrow            → Void (600, 20)
+   empty space            → Void (900, 900)
+── EqualConstraintGear
+   axle centre            → Void (0, 0)
+   gear rim               → Void (60, 0)
+   gear inside            → Void (30, 0)
+   join centre            → Void (200, 0)
+   beam body              → Void (300, 0)
+   beam end               → Void (400, 0)
+   beam body past join    → Void (150, 0)
+   spring body            → Void (300, 200)
+   spring start           → Void (200, 200)
+   mass centre            → Void (600, 0)
+   belt start             → Void (0, -300)
+   belt arc               → GearTooth belt-gear (300, -360)
+   plain belt run         → Void (300, -500)
+   plain belt end         → Void (600, -500)
+   dimension              → Void (300, 80)
+   force arrow            → Void (600, 20)
+   empty space            → Void (900, 900)
+── GearRatioConstraintStart
+   axle centre            → Void (0, 0)
+   gear rim               → GearTooth gear (0, 0)
+   gear inside            → Void (30, 0)
+   join centre            → Void (200, 0)
+   beam body              → Void (300, 0)
+   beam end               → Void (400, 0)
+   beam body past join    → Void (150, 0)
+   spring body            → Void (300, 200)
+   spring start           → Void (200, 200)
+   mass centre            → Void (600, 0)
+   belt start             → Void (0, -300)
+   belt arc               → GearTooth belt-gear (300, -360)
+   plain belt run         → Void (300, -500)
+   plain belt end         → Void (600, -500)
+   dimension              → Void (300, 80)
+   force arrow            → Void (600, 20)
+   empty space            → Void (900, 900)
+── GearRatioConstraintGear
+   axle centre            → Void (0, 0)
+   gear rim               → Void (60, 0)
+   gear inside            → Void (30, 0)
+   join centre            → Void (200, 0)
+   beam body              → Void (300, 0)
+   beam end               → Void (400, 0)
+   beam body past join    → Void (150, 0)
+   spring body            → Void (300, 200)
+   spring start           → Void (200, 200)
+   mass centre            → Void (600, 0)
+   belt start             → Void (0, -300)
+   belt arc               → GearTooth belt-gear (300, -360)
+   plain belt run         → Void (300, -500)
+   plain belt end         → Void (600, -500)
+   dimension              → Void (300, 80)
+   force arrow            → Void (600, 20)
+   empty space            → Void (900, 900)
+── MovingConstraint
+   axle centre            → Void (0, 0)
+   gear rim               → Void (60, 0)
+   gear inside            → Void (30, 0)
+   join centre            → Void (200, 0)
+   beam body              → Void (300, 0)
+   beam end               → Void (400, 0)
+   beam body past join    → Void (150, 0)
+   spring body            → Void (300, 200)
+   spring start           → Void (200, 200)
+   mass centre            → Void (600, 0)
+   belt start             → Void (0, -300)
+   belt arc               → Void (300, -320)
+   plain belt run         → Void (300, -500)
+   plain belt end         → Void (600, -500)
+   dimension              → Void (300, 80)
+   force arrow            → Void (600, 20)
+   empty space            → Void (900, 900)
+── PlacingValue
+   axle centre            → Node axle (0, 0)
+   gear rim               → GearTooth gear (60, 0)
+   gear inside            → Void (30, 0)
+   join centre            → Node join (200, 0)
+   beam body              → Edge beam (300, 0) [body]
+   beam end               → Edge beam (400, 0) [end]
+   beam body past join    → Void (150, 0)
+   spring body            → Edge spring (300, 200) [body]
+   spring start           → Edge spring (200, 200) [start]
+   mass centre            → Node mass (600, 0)
+   belt start             → Edge belt (0, -300) [start]
+   belt arc               → GearTooth belt-gear (300, -320)
+   plain belt run         → BeltBody plain-belt (300, -500) [section 0]
+   plain belt end         → Edge plain-belt (600, -500) [end]
+   dimension              → Constraint dim (300, 80)
+   force arrow            → Force force (600, 64.27)
+   empty space            → Void (900, 900)
+── EditingValue
+   axle centre            → Node axle (0, 0)
+   gear rim               → GearTooth gear (60, 0)
+   gear inside            → Void (30, 0)
+   join centre            → Node join (200, 0)
+   beam body              → Edge beam (300, 0) [body]
+   beam end               → Edge beam (400, 0) [end]
+   beam body past join    → Void (150, 0)
+   spring body            → Edge spring (300, 200) [body]
+   spring start           → Edge spring (200, 200) [start]
+   mass centre            → Node mass (600, 0)
+   belt start             → Edge belt (0, -300) [start]
+   belt arc               → GearTooth belt-gear (300, -320)
+   plain belt run         → BeltBody plain-belt (300, -500) [section 0]
+   plain belt end         → Edge plain-belt (600, -500) [end]
+   dimension              → Constraint dim (300, 80)
+   force arrow            → Force force (600, 64.27)
+   empty space            → Void (900, 900)
+── SimulationDragging
+   axle centre            → Void (0, 0)
+   gear rim               → Void (60, 0)
+   gear inside            → Void (30, 0)
+   join centre            → Void (200, 0)
+   beam body              → Void (300, 0)
+   beam end               → Void (400, 0)
+   beam body past join    → Void (150, 0)
+   spring body            → Void (300, 200)
+   spring start           → Void (200, 200)
+   mass centre            → Void (600, 0)
+   belt start             → Void (0, -300)
+   belt arc               → Void (300, -320)
+   plain belt run         → Void (300, -500)
+   plain belt end         → Void (600, -500)
+   dimension              → Void (300, 80)
+   force arrow            → Void (600, 20)
+   empty space            → Void (900, 900)"
+`;

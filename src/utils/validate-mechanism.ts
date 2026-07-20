@@ -1,13 +1,11 @@
 import {
   BeamElement,
-  BeltElement,
   GearElement,
   ID,
   MechanicalElement,
-  NodeElement,
-  PivotElement,
   UnionElement,
 } from "../types/element";
+import { element_ref_fields } from "../types/element-refs";
 import { Point2 } from "../types/point2";
 import { Mechanism } from "../types/mechanism";
 import { legible_id, shown_element_name } from "./string-math";
@@ -20,7 +18,8 @@ export type ValidationErrorCode =
   | "WRONG_TYPE"
   | "MISSING_BIDIRECTIONAL"
   | "SAME_AXLE_MESH"
-  | "CONTRADICTORY_MOTOR";
+  | "CONTRADICTORY_MOTOR"
+  | "GROUNDED_MASS";
 
 export interface MechanismValidationError {
   code: ValidationErrorCode;
@@ -29,48 +28,96 @@ export interface MechanismValidationError {
   relatedID?: ID;
 }
 
-const NODE_TYPES = new Set([
-  "pivot",
-  "slider",
-  "slidep",
-  "join",
-  "mass",
-  "gear",
-]);
-const EDGE_TYPES = new Set(["beam", "spring", "damper", "belt"]);
-
-function is_node(el: MechanicalElement): el is NodeElement {
-  return NODE_TYPES.has(el.type);
-}
-
 function has_body_ids(el: MechanicalElement): el is BeamElement {
   return "fixedNodesBodyIDs" in el;
 }
+
+// Edge back-references a node if the node appears at start, end, or body.
+function edge_refs_node(edge: MechanicalElement, nodeID: ID): boolean {
+  return (
+    ("fixedNodeStartID" in edge && edge.fixedNodeStartID === nodeID) ||
+    ("fixedNodeEndID" in edge && edge.fixedNodeEndID === nodeID) ||
+    (has_body_ids(edge) && edge.fixedNodesBodyIDs.includes(nodeID))
+  );
+}
+
+// Node back-references an edge if the edge appears in any of its edge lists.
+function node_refs_edge(node: MechanicalElement, edgeID: ID): boolean {
+  return (
+    ("rotatingEdgesIDs" in node && node.rotatingEdgesIDs.includes(edgeID)) ||
+    ("fixedEdgesIDs" in node && node.fixedEdgesIDs.includes(edgeID)) ||
+    ("parentBeamID" in node && node.parentBeamID === edgeID)
+  );
+}
+
+/**
+ * Whether `target` points back at `source`, per reference field.
+ *
+ * A field absent from this map carries no reciprocity requirement — that is the
+ * case for constraint and load references, which are one-way by nature.
+ */
+const BACK_REFERENCE: Record<
+  string,
+  (source: MechanicalElement, target: MechanicalElement) => boolean
+> = {
+  // A node's edge lists also hold gears pinned to its perimeter.
+  fixedEdgesIDs: (node, target) =>
+    target.type === "gear"
+      ? target.fixedNodesBodyIDs.includes(node.id)
+      : edge_refs_node(target, node.id),
+  rotatingEdgesIDs: (node, target) =>
+    target.type === "gear"
+      ? target.fixedNodesBodyIDs.includes(node.id)
+      : edge_refs_node(target, node.id),
+  parentBeamID: (node, beam) =>
+    has_body_ids(beam) && beam.fixedNodesBodyIDs.includes(node.id),
+  parentAxleID: (gear, axle) =>
+    "fixedGearsIDs" in axle && axle.fixedGearsIDs.includes(gear.id),
+  fixedGearsIDs: (axle, gear) =>
+    gear.type === "gear" && gear.parentAxleID === axle.id,
+  meshedGearsIDs: (gear, other) =>
+    other.type === "gear" && other.meshedGearsIDs.includes(gear.id),
+  attachedBeltID: (gear, belt) =>
+    belt.type === "belt" && belt.attachedGearsIDs.some((g) => g.id === gear.id),
+  attachedGearsIDs: (belt, gear) =>
+    gear.type === "gear" && gear.attachedBeltID === belt.id,
+  fixedNodesBodyIDs: (edge, node) => node_refs_edge(node, edge.id),
+  fixedNodeStartID: (edge, node) => node_refs_edge(node, edge.id),
+  fixedNodeEndID: (edge, node) => node_refs_edge(node, edge.id),
+};
+
+/** Constraint fields that must not name the same element twice. */
+const CONSTRAINT_ENDPOINT_PAIRS: [string, string][] = [
+  ["startNodeID", "endNodeID"],
+  ["startEdgeID", "endEdgeID"],
+  ["startGearID", "endGearID"],
+];
 
 /**
  * Validates a mechanism's internal consistency.
  * Returns null if valid, or an array of errors otherwise.
  *
- * Checks:
- * - No duplicate IDs (across all elements)
- * - No duplicates within connection lists
- * - No self-references
- * - All referenced IDs exist and are of the correct element type
- * - All connections are bidirectional
- * - All constraint references point to existing elements of the right type
- * - Motors are grounded OR have a parentAxle
+ * Reference checks — existence, target type, self-reference, duplicates — are
+ * driven by `ELEMENT_REFS`, so they cover every element alike: mechanical,
+ * constraint and load. The passes that follow encode the rules the table cannot
+ * express: reciprocity, duplicate IDs, meshing and motor coherence.
  */
 export function validate_mechanism(
   mechanism: Mechanism,
 ): MechanismValidationError[] | null {
   const errors: MechanismValidationError[] = [];
-  const { mechanicalElements: mels, constraintElements: cels } = mechanism;
+  const {
+    mechanicalElements: mels,
+    constraintElements: cels,
+    loads,
+  } = mechanism;
 
   const mechByID = new Map<ID, MechanicalElement>(mels.map((e) => [e.id, e]));
-  const allByID = new Map<ID, UnionElement>([
-    ...mels.map((e): [ID, UnionElement] => [e.id, e]),
-    ...cels.map((e): [ID, UnionElement] => [e.id, e]),
-  ]);
+  const isMechanical = new Set<UnionElement>(mels);
+  const allElements: UnionElement[] = [...mels, ...cels, ...loads];
+  const allByID = new Map<ID, UnionElement>(
+    allElements.map((e): [ID, UnionElement] => [e.id, e]),
+  );
 
   // Uses shown_element_name when the element exists, legible_id as fallback.
   function name(id: ID): string {
@@ -79,9 +126,9 @@ export function validate_mechanism(
     return el ? shown_element_name(el) : legible_id(id);
   }
 
-  // ── 1. Duplicate IDs ─────────────────────────────────────────────────────────
+  // ── Duplicate IDs ────────────────────────────────────────────────────────────
   const seenIDs = new Set<ID>();
-  for (const el of [...mels, ...cels]) {
+  for (const el of allElements) {
     if (seenIDs.has(el.id)) {
       errors.push({
         code: "DUPLICATE_ID",
@@ -92,528 +139,142 @@ export function validate_mechanism(
     seenIDs.add(el.id);
   }
 
-  // ── Helpers ──────────────────────────────────────────────────────────────────
-  function ref(
-    sourceID: ID,
-    refID: ID,
-    field: string,
-  ): MechanicalElement | undefined {
-    if (!refID) {
-      errors.push({
-        code: "MISSING_REFERENCE",
-        message: `${name(sourceID)} (${field}): ID de référence absent.`,
-        elementID: sourceID,
-      });
-      return undefined;
-    }
-    const el = mechByID.get(refID);
-    if (!el) {
-      errors.push({
-        code: "MISSING_REFERENCE",
-        message: `${name(sourceID)} (${field}): référence "${legible_id(refID)}" qui n'existe pas.`,
-        elementID: sourceID,
-        relatedID: refID,
-      });
-    }
-    return el;
-  }
-
-  function wrong_type(
-    sourceID: ID,
-    refID: ID,
-    field: string,
-    expected: string[],
-    got: string,
-  ) {
-    errors.push({
-      code: "WRONG_TYPE",
-      message: `${name(sourceID)} (${field}): attendait [${expected.join(", ")}], "${name(refID)}" est de type "${got}".`,
-      elementID: sourceID,
-      relatedID: refID,
-    });
-  }
-
-  function no_self(sourceID: ID, refID: ID, field: string) {
-    if (!refID) return;
-    if (refID === sourceID) {
-      errors.push({
-        code: "SELF_REFERENCE",
-        message: `${name(sourceID)} (${field}): auto-référence.`,
-        elementID: sourceID,
-      });
-    }
-  }
-
-  function no_dupes(sourceID: ID, list: ID[], field: string) {
-    const counts = new Map<ID, number>();
-    for (const id of list) counts.set(id, (counts.get(id) ?? 0) + 1);
-    for (const [id, count] of counts) {
-      if (count > 1) {
+  // ── References ───────────────────────────────────────────────────────────────
+  for (const el of allElements) {
+    for (const { field, ids, spec } of element_ref_fields(el)) {
+      if (spec.required && ids.length === 0) {
         errors.push({
-          code: "DUPLICATE_IN_LIST",
-          message: `${name(sourceID)} (${field}): "${name(id)}" apparaît ${count} fois.`,
-          elementID: sourceID,
-          relatedID: id,
+          code: "MISSING_REFERENCE",
+          message: `${name(el.id)} (${field}) : référence absente.`,
+          elementID: el.id,
+        });
+        continue;
+      }
+
+      const counts = new Map<ID, number>();
+      for (const id of ids) counts.set(id, (counts.get(id) ?? 0) + 1);
+      for (const [id, count] of counts) {
+        if (count > 1) {
+          errors.push({
+            code: "DUPLICATE_IN_LIST",
+            message: `${name(el.id)} (${field}) : "${name(id)}" apparaît ${count} fois.`,
+            elementID: el.id,
+            relatedID: id,
+          });
+        }
+      }
+
+      for (const refID of ids) {
+        if (refID === el.id) {
+          errors.push({
+            code: "SELF_REFERENCE",
+            message: `${name(el.id)} (${field}) : auto-référence.`,
+            elementID: el.id,
+          });
+          continue;
+        }
+        const target = mechByID.get(refID);
+        if (!target) {
+          errors.push({
+            code: "MISSING_REFERENCE",
+            message: `${name(el.id)} (${field}) : référence "${legible_id(refID)}" qui n'existe pas.`,
+            elementID: el.id,
+            relatedID: refID,
+          });
+          continue;
+        }
+        if (!spec.target.includes(target.type)) {
+          errors.push({
+            code: "WRONG_TYPE",
+            message: `${name(el.id)} (${field}) : attendait [${spec.target.join(", ")}], "${name(refID)}" est de type "${target.type}".`,
+            elementID: el.id,
+            relatedID: refID,
+          });
+          continue;
+        }
+        const back_reference = BACK_REFERENCE[field];
+        if (
+          back_reference &&
+          isMechanical.has(el) &&
+          !back_reference(el as MechanicalElement, target)
+        ) {
+          errors.push({
+            code: "MISSING_BIDIRECTIONAL",
+            message: `${name(el.id)} (${field} → ${name(refID)}) : connexion non réciproque.`,
+            elementID: el.id,
+            relatedID: refID,
+          });
+        }
+      }
+    }
+  }
+
+  // ── Constraint endpoints must name two different elements ────────────────────
+  for (const cel of cels) {
+    const fields = cel as unknown as Record<string, ID | undefined>;
+    for (const [startField, endField] of CONSTRAINT_ENDPOINT_PAIRS) {
+      const start = fields[startField];
+      const end = fields[endField];
+      if (start && end && start === end) {
+        errors.push({
+          code: "SELF_REFERENCE",
+          message: `${name(cel.id)} (${cel.type}) : ${startField} et ${endField} identiques.`,
+          elementID: cel.id,
         });
       }
     }
   }
 
-  function missing_bidi(sourceID: ID, relatedID: ID, description: string) {
-    errors.push({
-      code: "MISSING_BIDIRECTIONAL",
-      message: description,
-      elementID: sourceID,
-      relatedID: relatedID,
-    });
-  }
-
-  // Edge back-references a node if the node appears at start, end, or body.
-  function edge_refs_node(edge: MechanicalElement, nodeID: ID): boolean {
-    return (
-      ("fixedNodeStartID" in edge && edge.fixedNodeStartID === nodeID) ||
-      ("fixedNodeEndID" in edge && edge.fixedNodeEndID === nodeID) ||
-      (has_body_ids(edge) && edge.fixedNodesBodyIDs.includes(nodeID))
-    );
-  }
-
-  // Node back-references an edge if the edge appears in any of its edge lists.
-  function node_refs_edge(node: MechanicalElement, edgeID: ID): boolean {
-    return (
-      ("rotatingEdgesIDs" in node &&
-        (
-          node as NodeElement & { rotatingEdgesIDs: ID[] }
-        ).rotatingEdgesIDs.includes(edgeID)) ||
-      ("fixedEdgesIDs" in node &&
-        (node as NodeElement & { fixedEdgesIDs: ID[] }).fixedEdgesIDs.includes(
-          edgeID,
-        )) ||
-      ("parentBeamID" in node &&
-        (node as { parentBeamID?: ID }).parentBeamID === edgeID)
-    );
-  }
-
-  // ── 2. Mechanical element connections ────────────────────────────────────────
+  // ── Meshed gears must not share an axle ──────────────────────────────────────
   for (const el of mels) {
-    // fixedEdgesIDs (slider, join, mass, gear)
-    if ("fixedEdgesIDs" in el) {
-      const node = el as NodeElement & { fixedEdgesIDs: ID[] };
-      no_dupes(el.id, node.fixedEdgesIDs, "fixedEdgesIDs");
-      for (const edgeID of node.fixedEdgesIDs) {
-        no_self(el.id, edgeID, "fixedEdgesIDs");
-        const edge = ref(el.id, edgeID, "fixedEdgesIDs");
-        if (!edge) continue;
-        // A gear pinned to this node's perimeter is also stored here.
-        if (edge.type === "gear") {
-          if (!edge.fixedNodesBodyIDs.includes(el.id)) {
-            missing_bidi(
-              el.id,
-              edgeID,
-              `${name(el.id)} (fixedEdgesIDs → ${name(edgeID)}): l'engrenage ne référence pas ce nœud en retour (fixedNodesBodyIDs).`,
-            );
-          }
-          continue;
-        }
-        if (!EDGE_TYPES.has(edge.type)) {
-          wrong_type(
-            el.id,
-            edgeID,
-            "fixedEdgesIDs",
-            [...EDGE_TYPES, "gear"],
-            edge.type,
-          );
-          continue;
-        }
-        if (!edge_refs_node(edge, el.id)) {
-          missing_bidi(
-            el.id,
-            edgeID,
-            `${name(el.id)} (fixedEdgesIDs → ${name(edgeID)}): la liaison ne référence pas ce nœud en retour.`,
-          );
-        }
-      }
-    }
-
-    // rotatingEdgesIDs (pivot, slidep)
-    if ("rotatingEdgesIDs" in el) {
-      const node = el as NodeElement & { rotatingEdgesIDs: ID[] };
-      no_dupes(el.id, node.rotatingEdgesIDs, "rotatingEdgesIDs");
-      for (const edgeID of node.rotatingEdgesIDs) {
-        no_self(el.id, edgeID, "rotatingEdgesIDs");
-        const edge = ref(el.id, edgeID, "rotatingEdgesIDs");
-        if (!edge) continue;
-        // A gear pinned to this node's perimeter is also stored here.
-        if (edge.type === "gear") {
-          if (!edge.fixedNodesBodyIDs.includes(el.id)) {
-            missing_bidi(
-              el.id,
-              edgeID,
-              `${name(el.id)} (rotatingEdgesIDs → ${name(edgeID)}): l'engrenage ne référence pas ce nœud en retour (fixedNodesBodyIDs).`,
-            );
-          }
-          continue;
-        }
-        if (!EDGE_TYPES.has(edge.type)) {
-          wrong_type(
-            el.id,
-            edgeID,
-            "rotatingEdgesIDs",
-            [...EDGE_TYPES, "gear"],
-            edge.type,
-          );
-          continue;
-        }
-        if (!edge_refs_node(edge, el.id)) {
-          missing_bidi(
-            el.id,
-            edgeID,
-            `${name(el.id)} (rotatingEdgesIDs → ${name(edgeID)}): la liaison ne référence pas ce nœud en retour.`,
-          );
-        }
-      }
-    }
-
-    // parentBeamID (slider, slidep)
-    if ("parentBeamID" in el && el.parentBeamID) {
-      const beamID = el.parentBeamID;
-      no_self(el.id, beamID, "parentBeamID");
-      const beam = ref(el.id, beamID, "parentBeamID");
-      if (beam) {
-        if (beam.type !== "beam") {
-          wrong_type(el.id, beamID, "parentBeamID", ["beam"], beam.type);
-        } else if (!(beam as BeamElement).fixedNodesBodyIDs.includes(el.id)) {
-          missing_bidi(
-            el.id,
-            beamID,
-            `${name(el.id)} (parentBeamID → ${name(beamID)}): le beam ne contient pas ce nœud dans fixedNodesBodyIDs.`,
-          );
-        }
-      }
-    }
-
-    // motor (pivot) → XOR : pivot groundé (sans parentBeamID) OU parentBeamID défini (sans isGrounded)
-    if (el.type === "pivot") {
-      const pivot = el as PivotElement;
-      if (pivot.motor !== undefined) {
-        const motor = pivot.motor;
-        if (pivot.isGrounded && motor.parentBeamID !== undefined) {
-          errors.push({
-            code: "CONTRADICTORY_MOTOR",
-            message: `${name(el.id)} (motor): le pivot est ancré au sol et a un parentBeamID — ces deux conditions sont mutuellement exclusives.`,
-            elementID: el.id,
-            relatedID: motor.parentBeamID,
-          });
-        } else if (!pivot.isGrounded && motor.parentBeamID === undefined) {
-          errors.push({
-            code: "MISSING_REFERENCE",
-            message: `${name(el.id)} (motor.parentBeamID): le pivot n'est pas ancré au sol, donc le moteur doit avoir un parentBeamID.`,
-            elementID: el.id,
-          });
-        } else if (motor.parentBeamID !== undefined) {
-          no_self(el.id, motor.parentBeamID, "motor.parentBeamID");
-          const beam = ref(el.id, motor.parentBeamID, "motor.parentBeamID");
-          if (beam && beam.type !== "beam") {
-            wrong_type(
-              el.id,
-              motor.parentBeamID,
-              "motor.parentBeamID",
-              ["beam"],
-              beam.type,
-            );
-          }
-        }
-      }
-    }
-
-    // parentAxleID (gear) → doit pointer sur un pivot/slidep qui a ce gear dans fixedGearsIDs
-    if (el.type === "gear") {
-      const gear = el as GearElement;
-      no_self(el.id, gear.parentAxleID, "parentAxleID");
-      const parent = ref(el.id, gear.parentAxleID, "parentAxleID");
-      if (parent) {
-        if (parent.type !== "pivot" && parent.type !== "slidep") {
-          wrong_type(
-            el.id,
-            gear.parentAxleID,
-            "parentAxleID",
-            ["pivot", "slidep"],
-            parent.type,
-          );
-        } else if (
-          !("fixedGearsIDs" in parent) ||
-          !(parent as { fixedGearsIDs: ID[] }).fixedGearsIDs.includes(el.id)
-        ) {
-          missing_bidi(
-            el.id,
-            gear.parentAxleID,
-            `${name(el.id)} (parentAxleID → ${name(gear.parentAxleID)}): le nœud parent ne contient pas cet engrenage dans fixedGearsIDs.`,
-          );
-        }
-      }
-    }
-
-    // meshedGearsIDs (gear)
-    if ("meshedGearsIDs" in el) {
-      const gear = el as GearElement;
-      no_dupes(el.id, gear.meshedGearsIDs, "meshedGearsIDs");
-      for (const gearID of gear.meshedGearsIDs) {
-        no_self(el.id, gearID, "meshedGearsIDs");
-        const other = ref(el.id, gearID, "meshedGearsIDs");
-        if (!other) continue;
-        if (other.type !== "gear") {
-          wrong_type(el.id, gearID, "meshedGearsIDs", ["gear"], other.type);
-          continue;
-        }
-        const otherGear = other as GearElement;
-        if (
-          gear.parentAxleID &&
-          otherGear.parentAxleID &&
-          gear.parentAxleID === otherGear.parentAxleID &&
-          el.id < gearID
-        ) {
-          errors.push({
-            code: "SAME_AXLE_MESH",
-            message: `${name(el.id)} et ${name(gearID)} partagent le même axle (${name(gear.parentAxleID)}) et ne peuvent pas être engrenés.`,
-            elementID: el.id,
-            relatedID: gearID,
-          });
-        }
-        if (!otherGear.meshedGearsIDs.includes(el.id)) {
-          missing_bidi(
-            el.id,
-            gearID,
-            `${name(el.id)} (meshedGearsIDs → ${name(gearID)}): connexion non réciproque.`,
-          );
-        }
-      }
-    }
-
-    // fixedGearsIDs (pivot, slidep) → chaque entrée doit être un gear dont parentAxleID pointe sur ce nœud
-    if ("fixedGearsIDs" in el) {
-      const node = el as { id: ID; fixedGearsIDs: ID[] };
-      no_dupes(el.id, node.fixedGearsIDs, "fixedGearsIDs");
-      for (const gearID of node.fixedGearsIDs) {
-        no_self(el.id, gearID, "fixedGearsIDs");
-        const gear = ref(el.id, gearID, "fixedGearsIDs");
-        if (!gear) continue;
-        if (gear.type !== "gear") {
-          wrong_type(el.id, gearID, "fixedGearsIDs", ["gear"], gear.type);
-          continue;
-        }
-        if ((gear as GearElement).parentAxleID !== el.id) {
-          missing_bidi(
-            el.id,
-            gearID,
-            `${name(el.id)} (fixedGearsIDs → ${name(gearID)}): l'engrenage ne référence pas ce nœud comme parentAxleID.`,
-          );
-        }
-      }
-    }
-
-    // attachedBeltID (gear)
-    if ("attachedBeltID" in el && el.attachedBeltID) {
-      const beltID = el.attachedBeltID;
-      no_self(el.id, beltID, "attachedBeltID");
-      const belt = ref(el.id, beltID, "attachedBeltID");
-      if (belt) {
-        if (belt.type !== "belt") {
-          wrong_type(el.id, beltID, "attachedBeltID", ["belt"], belt.type);
-        } else if (
-          !(belt as BeltElement).attachedGearsIDs.some((g) => g.id === el.id)
-        ) {
-          missing_bidi(
-            el.id,
-            beltID,
-            `${name(el.id)} (attachedBeltID → ${name(beltID)}): la courroie ne référence pas cet engrenage dans attachedGearsIDs.`,
-          );
-        }
-      }
-    }
-
-    // fixedNodesBodyIDs (beam/gear)
-    if ("fixedNodesBodyIDs" in el) {
-      no_dupes(el.id, el.fixedNodesBodyIDs, "fixedNodesBodyIDs");
-      for (const nodeID of el.fixedNodesBodyIDs) {
-        no_self(el.id, nodeID, "fixedNodesBodyIDs");
-        const node = ref(el.id, nodeID, "fixedNodesBodyIDs");
-        if (!node) continue;
-        if (!is_node(node)) {
-          wrong_type(
-            el.id,
-            nodeID,
-            "fixedNodesBodyIDs",
-            [...NODE_TYPES],
-            node.type,
-          );
-          continue;
-        }
-        if (!node_refs_edge(node, el.id)) {
-          missing_bidi(
-            el.id,
-            nodeID,
-            `${name(el.id)} (fixedNodesBodyIDs → ${name(nodeID)}): le nœud ne référence pas ce beam (parentBeamID, fixedEdgesIDs ou rotatingEdgesIDs).`,
-          );
-        }
-      }
-    }
-
-    // attachedGearsIDs (belt)
-    if ("attachedGearsIDs" in el) {
-      const belt = el as BeltElement;
-      const gearIDs = belt.attachedGearsIDs.map((g) => g.id);
-      no_dupes(el.id, gearIDs, "attachedGearsIDs");
-      for (const { id: gearID } of belt.attachedGearsIDs) {
-        no_self(el.id, gearID, "attachedGearsIDs");
-        const gear = ref(el.id, gearID, "attachedGearsIDs");
-        if (!gear) continue;
-        if (gear.type !== "gear") {
-          wrong_type(el.id, gearID, "attachedGearsIDs", ["gear"], gear.type);
-          continue;
-        }
-        if ((gear as GearElement).attachedBeltID !== el.id) {
-          missing_bidi(
-            el.id,
-            gearID,
-            `${name(el.id)} (attachedGearsIDs → ${name(gearID)}): l'engrenage ne référence pas cette courroie (attachedBeltID).`,
-          );
-        }
-      }
-    }
-
-    // fixedNodeStartID (all edges)
-    if ("fixedNodeStartID" in el && el.fixedNodeStartID) {
-      const nodeID = el.fixedNodeStartID;
-      no_self(el.id, nodeID, "fixedNodeStartID");
-      const node = ref(el.id, nodeID, "fixedNodeStartID");
-      if (node) {
-        if (!is_node(node)) {
-          wrong_type(
-            el.id,
-            nodeID,
-            "fixedNodeStartID",
-            [...NODE_TYPES],
-            node.type,
-          );
-        } else if (!node_refs_edge(node, el.id)) {
-          missing_bidi(
-            el.id,
-            nodeID,
-            `${name(el.id)} (fixedNodeStartID → ${name(nodeID)}): le nœud ne référence pas cette liaison.`,
-          );
-        }
-      }
-    }
-
-    // fixedNodeEndID (all edges)
-    if ("fixedNodeEndID" in el && el.fixedNodeEndID) {
-      const nodeID = el.fixedNodeEndID;
-      no_self(el.id, nodeID, "fixedNodeEndID");
-      const node = ref(el.id, nodeID, "fixedNodeEndID");
-      if (node) {
-        if (!is_node(node)) {
-          wrong_type(
-            el.id,
-            nodeID,
-            "fixedNodeEndID",
-            [...NODE_TYPES],
-            node.type,
-          );
-        } else if (!node_refs_edge(node, el.id)) {
-          missing_bidi(
-            el.id,
-            nodeID,
-            `${name(el.id)} (fixedNodeEndID → ${name(nodeID)}): le nœud ne référence pas cette liaison.`,
-          );
-        }
+    if (el.type !== "gear") continue;
+    for (const otherID of el.meshedGearsIDs) {
+      const other = mechByID.get(otherID);
+      if (!other || other.type !== "gear") continue;
+      // Reported once per pair.
+      if (
+        el.parentAxleID &&
+        el.parentAxleID === other.parentAxleID &&
+        el.id < otherID
+      ) {
+        errors.push({
+          code: "SAME_AXLE_MESH",
+          message: `${name(el.id)} et ${name(otherID)} partagent le même axle (${name(el.parentAxleID)}) et ne peuvent pas être engrenés.`,
+          elementID: el.id,
+          relatedID: otherID,
+        });
       }
     }
   }
 
-  // ── 3. Constraint element references ─────────────────────────────────────────
-  function assert_ref(
-    sourceID: ID,
-    refID: ID,
-    field: string,
-    expectedTypes: string[],
-  ) {
-    const el = ref(sourceID, refID, field);
-    if (el && !expectedTypes.includes(el.type)) {
-      wrong_type(sourceID, refID, field, expectedTypes, el.type);
+  // ── A mass is never anchored ─────────────────────────────────────────────────
+  for (const el of mels) {
+    if (el.type === "mass" && el.isGrounded) {
+      errors.push({
+        code: "GROUNDED_MASS",
+        message: `${name(el.id)} : une masse ne peut pas être ancrée au sol.`,
+        elementID: el.id,
+      });
     }
   }
 
-  const NODE_TYPE_LIST = [...NODE_TYPES];
-  const EDGE_TYPE_LIST = [...EDGE_TYPES];
-
-  for (const cel of cels) {
-    switch (cel.type) {
-      case "dimension-edge":
-        assert_ref(cel.id, cel.edgeID, "edgeID", EDGE_TYPE_LIST);
-        break;
-      case "dimension-node-to-node":
-        assert_ref(cel.id, cel.startNodeID, "startNodeID", NODE_TYPE_LIST);
-        assert_ref(cel.id, cel.endNodeID, "endNodeID", NODE_TYPE_LIST);
-        if (cel.startNodeID === cel.endNodeID)
-          errors.push({
-            code: "SELF_REFERENCE",
-            message: `${name(cel.id)} (dimension-node-to-node): startNodeID et endNodeID identiques.`,
-            elementID: cel.id,
-          });
-        break;
-      case "dimension-edge-to-node":
-        assert_ref(cel.id, cel.edgeID, "edgeID", EDGE_TYPE_LIST);
-        assert_ref(cel.id, cel.nodeID, "nodeID", NODE_TYPE_LIST);
-        break;
-      case "dimension-angle":
-        assert_ref(cel.id, cel.startEdgeID, "startEdgeID", EDGE_TYPE_LIST);
-        assert_ref(cel.id, cel.endEdgeID, "endEdgeID", EDGE_TYPE_LIST);
-        if (cel.startEdgeID === cel.endEdgeID)
-          errors.push({
-            code: "SELF_REFERENCE",
-            message: `${name(cel.id)} (dimension-angle): startEdgeID et endEdgeID identiques.`,
-            elementID: cel.id,
-          });
-        break;
-      case "dimension-radius":
-        assert_ref(cel.id, cel.gearID, "gearID", ["gear"]);
-        break;
-      case "horizontal-align-edge":
-      case "vertical-align-edge":
-        assert_ref(cel.id, cel.edgeID, "edgeID", EDGE_TYPE_LIST);
-        break;
-      case "horizontal-align-nodes":
-      case "vertical-align-nodes":
-        assert_ref(cel.id, cel.startNodeID, "startNodeID", NODE_TYPE_LIST);
-        assert_ref(cel.id, cel.endNodeID, "endNodeID", NODE_TYPE_LIST);
-        if (cel.startNodeID === cel.endNodeID)
-          errors.push({
-            code: "SELF_REFERENCE",
-            message: `${name(cel.id)} (${cel.type}): startNodeID et endNodeID identiques.`,
-            elementID: cel.id,
-          });
-        break;
-      case "normal":
-      case "parallel":
-      case "equal":
-        assert_ref(cel.id, cel.startEdgeID, "startEdgeID", EDGE_TYPE_LIST);
-        assert_ref(cel.id, cel.endEdgeID, "endEdgeID", EDGE_TYPE_LIST);
-        if (cel.startEdgeID === cel.endEdgeID)
-          errors.push({
-            code: "SELF_REFERENCE",
-            message: `${name(cel.id)} (${cel.type}): startEdgeID et endEdgeID identiques.`,
-            elementID: cel.id,
-          });
-        break;
-      case "gear-ratio":
-        assert_ref(cel.id, cel.startGearID, "startGearID", ["gear"]);
-        assert_ref(cel.id, cel.endGearID, "endGearID", ["gear"]);
-        if (cel.startGearID === cel.endGearID)
-          errors.push({
-            code: "SELF_REFERENCE",
-            message: `${name(cel.id)} (gear-ratio): startGearID et endGearID identiques.`,
-            elementID: cel.id,
-          });
-        break;
+  // ── A motor drives from the ground or from a beam, never both ────────────────
+  for (const el of mels) {
+    if (el.type !== "pivot" || !el.motor) continue;
+    const { parentBeamID } = el.motor;
+    if (el.isGrounded && parentBeamID !== undefined) {
+      errors.push({
+        code: "CONTRADICTORY_MOTOR",
+        message: `${name(el.id)} (motor) : le pivot est ancré au sol et a un parentBeamID — ces deux conditions sont mutuellement exclusives.`,
+        elementID: el.id,
+        relatedID: parentBeamID,
+      });
+    } else if (!el.isGrounded && parentBeamID === undefined) {
+      errors.push({
+        code: "MISSING_REFERENCE",
+        message: `${name(el.id)} (motor.parentBeamID) : le pivot n'est pas ancré au sol, donc le moteur doit avoir un parentBeamID.`,
+        elementID: el.id,
+      });
     }
   }
 
@@ -623,10 +284,7 @@ export function validate_mechanism(
 // ─── Geometric constraint violations ─────────────────────────────────────────
 
 export type ConstraintViolationCategory =
-  | "dimension"
-  | "alignment"
-  | "geometric"
-  | "liaison";
+  "dimension" | "alignment" | "geometric" | "liaison";
 
 export interface ConstraintViolation {
   elementID: ID;

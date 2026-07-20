@@ -2,35 +2,28 @@ import type { CanvasState } from "../../types/canvas-state";
 import type { Action, ActionBundleType } from "../../types/actions";
 import type { HoveredPart } from "../../types/hovered-part";
 import {
-  BeamElement,
   BeltElement,
   ConstraintElement,
-  ForceElement,
   GearElement,
   ID,
   JoinElement,
   LoadElement,
   MechanicalElement,
-  MomentElement,
   NodeElement,
   PivotElement,
-  Point2,
 } from "../../types";
 import {
+  attach_gear_to_belt,
   connect_elements,
-  connect_gear_and_belt,
   get_mechanical_element_from_id,
+  own_part,
+  start_simulation,
 } from "../mechanism/connect-actions";
-import { is_on_left_side_of_belt } from "../../utils";
 import {
-  world2stored_load,
-  force_snap_edges,
-  force_stored_vector,
-  frame_from_snapped_direction,
-  moment_sign_from_cursor,
-  radius2moment_value,
-  world2frame,
-} from "../../utils/load-geom";
+  distributed_force_from_drag,
+  force_from_drag,
+  moment_from_drag,
+} from "./placing-loads";
 import { PHYSICS } from "../../constants/rendering-specs";
 
 export type MouseDownResult = {
@@ -150,39 +143,20 @@ export function handle_placing_element(
       };
 
     case "PlacingForceEnd": {
-      const anchor =
-        state.startHover.type === "Edge" && state.startHover.part !== "body"
-          ? state.startHover.part
-          : undefined;
-      if (state.startHover.type === "Void")
-        return { actions: [], newCanvasState: { type: "PlacingForceStart" } };
-      // The hovered position is already direction-snapped (see snap_load_hover):
-      // if it landed on a connected edge's axial/normal, reference that edge.
-      const forceDelta = hoveredPart.position.sub(state.startHover.position);
-      const snapEdges = force_snap_edges(
-        state.startHover.id,
-        anchor,
+      const newForce = force_from_drag(
+        crypto.randomUUID() as ID,
+        state.startHover,
+        hoveredPart.position,
         mechanicalElements,
       );
-      const forceFrame = frame_from_snapped_direction(forceDelta, snapEdges);
-      const newForce: ForceElement = {
-        type: "force",
-        id: crypto.randomUUID() as ID,
-        targetID: state.startHover.id,
-        anchor,
-        vector: world2frame(
-          force_stored_vector(forceDelta),
-          forceFrame,
-          mechanicalElements,
-        ),
-        frame: forceFrame,
-      };
+      if (!newForce)
+        return { actions: [], newCanvasState: { type: "PlacingForceStart" } };
       const actions: Action[] = [];
       const existingForce = loads.find(
         (l) =>
           l.type === "force" &&
           l.targetID === newForce.targetID &&
-          l.anchor === anchor,
+          l.anchor === newForce.anchor,
       );
       if (existingForce)
         actions.push({ type: "DeleteElement", element: existingForce });
@@ -195,36 +169,20 @@ export function handle_placing_element(
     }
 
     case "PlacingDistributedForce": {
-      if (state.startHover.type !== "Edge") return { actions: [] };
-      const beam = get_mechanical_element_from_id(
-        state.startHover.id,
+      const newDF = distributed_force_from_drag(
+        crypto.randomUUID() as ID,
+        state.startHover,
+        hoveredPart.position,
         mechanicalElements,
-      ) as BeamElement;
-      const delta = hoveredPart.position.sub(
-        beam.positionStart.lerp(beam.positionEnd, 0.5),
       );
-      const magnitude = world2stored_load(delta.length());
-      const direction =
-        delta.length() > 1e-6 ? delta.normalize() : new Point2(0, -1);
-      const targetID = state.startHover.id;
+      if (!newDF) return { actions: [] };
       const actions: Action[] = [];
       const existingDF = loads.find(
-        (l) => l.type === "distributed-force" && l.targetID === targetID,
+        (l) => l.type === "distributed-force" && l.targetID === newDF.targetID,
       );
       if (existingDF)
         actions.push({ type: "DeleteElement", element: existingDF });
-      actions.push({
-        type: "CreateElement",
-        element: {
-          type: "distributed-force",
-          id: crypto.randomUUID() as ID,
-          targetID,
-          direction,
-          magnitudeStart: magnitude,
-          magnitudeEnd: magnitude,
-          frame: "world",
-        },
-      });
+      actions.push({ type: "CreateElement", element: newDF });
       return {
         actions,
         actionBundleType: "Other",
@@ -241,28 +199,13 @@ export function handle_placing_element(
       };
 
     case "PlacingMomentEnd": {
-      if (
-        state.startHover.type !== "Edge" &&
-        state.startHover.type !== "GearTooth"
-      )
-        return { actions: [] };
-      // The side of the support the cursor ends on picks the rotation sign;
-      // afterwards only the panel can flip it, a drag just resizes the arc.
-      const newMoment: MomentElement = {
-        type: "moment",
-        id: crypto.randomUUID() as ID,
-        targetID: state.startHover.id,
-        value:
-          radius2moment_value(
-            state.startHover.position.distance_to(hoveredPart.position),
-          ) *
-          moment_sign_from_cursor(
-            state.startHover.id,
-            state.startHover.position,
-            hoveredPart.position,
-            mechanicalElements,
-          ),
-      };
+      const newMoment = moment_from_drag(
+        crypto.randomUUID() as ID,
+        state.startHover,
+        hoveredPart.position,
+        mechanicalElements,
+      );
+      if (!newMoment) return { actions: [] };
       const actions: Action[] = [];
       const existingMoment = loads.find(
         (l) => l.type === "moment" && l.targetID === newMoment.targetID,
@@ -412,56 +355,51 @@ function handle_place_element(
       meshedGearsIDs: [],
       attachedBeltID: undefined,
     };
-    const actions: Action[] = [
+    const sim = start_simulation(mechanicalElements, constraintElements, loads);
+    sim.step([
       { type: "CreateElement", element: newPivot },
       { type: "CreateElement", element: newGear },
-      ...connect_elements(
+    ]);
+    sim.step(
+      connect_elements(
         state.startHover,
         newPivot,
-        {
-          type: "Node",
-          position: newPivot.position,
-          id: pivotId,
-          deleting: false,
-          beamBodyHover: false,
-        },
-        mechanicalElements,
-        constraintElements,
-        loads,
+        own_part(pivotId, "node", state.startHover),
+        sim.mechanicalElements,
+        sim.constraintElements,
+        sim.loads,
       ),
-      ...connect_elements(
-        hoveredPart,
-        newGear,
-        {
-          type: "GearTooth",
-          position: hoveredPart.position,
-          id: gearId,
-          deleting: false,
-        },
-        mechanicalElements,
-        constraintElements,
-        loads,
-      ),
-    ];
-    if (hoveredPart.type === "BeltBody") {
+    );
+    // The axle may have taken over the node it landed on, which is then gone:
+    // the rim can only be pinned to what the first step left standing.
+    if (sim.holds(hoveredPart))
+      sim.step(
+        connect_elements(
+          hoveredPart,
+          newGear,
+          own_part(gearId, "gear", hoveredPart),
+          sim.mechanicalElements,
+          sim.constraintElements,
+          sim.loads,
+        ),
+      );
+    if (hoveredPart.type === "BeltBody" && sim.holds(hoveredPart)) {
       const belt = get_mechanical_element_from_id(
         hoveredPart.id,
-        mechanicalElements,
+        sim.mechanicalElements,
       ) as BeltElement;
-      actions.push(
-        ...connect_gear_and_belt(
+      sim.step(
+        attach_gear_to_belt(
           gearId,
-          hoveredPart.id,
+          state.startHover.position,
+          belt,
           hoveredPart.section,
-          is_on_left_side_of_belt(
-            state.startHover.position,
-            belt,
-            hoveredPart.section,
-            mechanicalElements,
-          ),
+          sim.mechanicalElements,
+          "gear-onto-belt",
         ),
       );
     }
+    const actions = sim.actions;
     return {
       actions,
       actionBundleType: "Other",
@@ -580,7 +518,8 @@ function handle_place_element(
       break;
   }
 
-  const actions: Action[] = [{ type: "CreateElement", element: newElement }];
+  const sim = start_simulation(mechanicalElements, constraintElements, loads);
+  sim.step([{ type: "CreateElement", element: newElement }]);
 
   if (
     "startHover" in state &&
@@ -591,60 +530,39 @@ function handle_place_element(
       hoveredPart.id === "----"
     )
   ) {
-    console.log("connected start hover");
-    actions.push(
-      ...connect_elements(
+    sim.step(
+      connect_elements(
         state.startHover,
         newElement,
-        {
-          type: "Edge",
-          position: newElement.positionStart,
-          id: newElement.id,
-          deleting: false,
-          part: "start",
-        },
-        mechanicalElements,
-        constraintElements,
-        loads,
+        own_part(newElement.id, "start", state.startHover),
+        sim.mechanicalElements,
+        sim.constraintElements,
+        sim.loads,
       ),
     );
   }
 
-  let elementPart: HoveredPart;
-  if ("position" in newElement) {
-    elementPart = {
-      type: "Node",
-      position: hoveredPart.position,
-      id: newElement.id,
-      deleting: false,
-      beamBodyHover: false,
-    };
-  } else {
-    elementPart = {
-      type: "Edge",
-      position: hoveredPart.position,
-      id: newElement.id,
-      deleting: false,
-      part:
-        hoveredPart.type === "Node" && hoveredPart.beamBodyHover
-          ? "body"
-          : "end",
-    };
-  }
-  actions.push(
-    ...connect_elements(
-      hoveredPart,
-      newElement,
-      elementPart,
-      mechanicalElements,
-      constraintElements,
-      loads,
-    ),
-  );
+  // Attaching the start may have taken over the node the end lands on, leaving
+  // nothing here to attach to.
+  if (sim.holds(hoveredPart) || hoveredPart.type === "Void")
+    sim.step(
+      connect_elements(
+        hoveredPart,
+        newElement,
+        own_part(
+          newElement.id,
+          "position" in newElement ? "node" : "end",
+          hoveredPart,
+        ),
+        sim.mechanicalElements,
+        sim.constraintElements,
+        sim.loads,
+      ),
+    );
 
   if (state.type === "PlacingBeltEnd") {
     for (let i = 0; i < state.attachedGearsIDs.length; i++) {
-      actions.push(
+      sim.step([
         {
           type: "ConnectsAttachedGears",
           disconnect: false,
@@ -659,9 +577,11 @@ function handle_place_element(
           elementID: state.attachedGearsIDs[i].id,
           connectID: newElementId,
         },
-      );
+      ]);
     }
   }
+
+  const actions = sim.actions;
 
   let newCanvasState: CanvasState | undefined;
   switch (state.type) {
@@ -726,7 +646,10 @@ function handle_place_ground(
         ],
         actionBundleType: "Other",
       };
-    case "Edge": {
+    // A gear rim anchors the same way an edge does: the ground is a grounded
+    // join pinned to it.
+    case "Edge":
+    case "GearTooth": {
       const newJoin: JoinElement = {
         type: "join",
         id: crypto.randomUUID() as ID,
@@ -742,13 +665,7 @@ function handle_place_ground(
           ...connect_elements(
             hoveredPart,
             newJoin,
-            {
-              type: "Node",
-              position: hoveredPart.position,
-              id: newJoin.id,
-              deleting: false,
-              beamBodyHover: false,
-            },
+            own_part(newJoin.id, "node", hoveredPart),
             mechanicalElements,
             constraintElements,
             loads,

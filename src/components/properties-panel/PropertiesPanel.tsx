@@ -64,7 +64,6 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
       name: info.name,
       description: info.description,
       author: info.author,
-      version: info.version,
       createdAt: info.createdAt,
       modifiedAt: info.modifiedAt,
     });

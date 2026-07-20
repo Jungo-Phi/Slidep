@@ -15,7 +15,7 @@ import {
 } from "@mui/icons-material";
 import {
   disconnect_element,
-  get_connection_pair_type,
+  get_connection_pair_types,
   get_connections,
 } from "../../mechanism/connect-actions";
 import { HoveredPart } from "../../../types/hovered-part";
@@ -80,10 +80,6 @@ const Connection: React.FC<ConnectionProps> = ({
   const handleDisconnect = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!connectedElement) return;
-    const connection_pair_type = get_connection_pair_type(
-      element.id,
-      connectedElement,
-    );
     applyActions(
       [
         disconnect_element(
@@ -92,11 +88,14 @@ const Connection: React.FC<ConnectionProps> = ({
           containerType,
           mechanism.mechanicalElements,
         ),
-        disconnect_element(
-          connectedElement,
-          element,
-          connection_pair_type,
-          mechanism.mechanicalElements,
+        ...get_connection_pair_types(element.id, connectedElement).map(
+          (pairType) =>
+            disconnect_element(
+              connectedElement,
+              element,
+              pairType,
+              mechanism.mechanicalElements,
+            ),
         ),
       ],
       "Connects",

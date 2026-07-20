@@ -17,16 +17,18 @@ import {
   MechanicalElement,
   MomentElement,
 } from "../../types";
+import type { OwnPartKind } from "../mechanism/connect-actions";
 import {
+  attach_gear_to_belt,
   connect_elements,
-  connect_gear_and_belt,
   connect_meshed_gears,
+  own_part,
   delete_element,
   delete_elements,
   get_load_element_from_id,
   get_mechanical_element_from_id,
 } from "../mechanism/connect-actions";
-import { is_on_left_side_of_belt } from "../../utils";
+import { TOOL_STATE_BY_KEY, tool_state } from "../../constants/shortcuts";
 import {
   distributed_grab_magnitude,
   distributed_tip_magnitude,
@@ -37,34 +39,9 @@ import {
   world2frame,
 } from "../../utils/load-geom";
 import { belt_body_grab_pin, elements_by_id } from "../solver/parsing";
-import { DIM, HIT_TOLERANCE } from "../../constants/rendering-specs";
+import { HIT_TOLERANCE } from "../../constants/rendering-specs";
 import { handle_placing_element } from "./placing-element-actions";
 import { handle_placing_constraint } from "./placing-constraint-actions";
-
-/**
- * Keep a belt terminal from being dragged INSIDE its adjacent gear (a belt end can
- * never enter the pulley it wraps): clamp its position to at least the gear radius
- * from that gear's centre. It may sit ON the rim — that is a wound end — but never
- * inside. `which` picks the adjacent gear: the belt's first attached gear for the
- * start terminal, its last for the end.
- */
-function clamp_belt_terminal_outside_gear(
-  pos: Point2,
-  edge: EdgeElement,
-  which: "start" | "end",
-  mechanicalElements: MechanicalElement[],
-): Point2 {
-  if (edge.type !== "belt") return pos;
-  const gears = (edge as BeltElement).attachedGearsIDs;
-  if (gears.length === 0) return pos;
-  const gearId = which === "start" ? gears[0].id : gears[gears.length - 1].id;
-  const gear = get_mechanical_element_from_id(gearId, mechanicalElements);
-  if (!gear || gear.type !== "gear") return pos;
-  const v = pos.sub(gear.position);
-  const d = v.length();
-  if (d >= gear.radius || d < 1e-9) return pos;
-  return gear.position.add(v.mul(gear.radius / d));
-}
 
 export function canvasStateReducer(
   state: CanvasState,
@@ -585,58 +562,26 @@ export function canvasStateReducer(
             oldPosition,
           });
           break;
-        case "MovingEdgeStartPoint": {
+        case "MovingEdgeStartPoint":
           if (hoveredPart.position.equals(oldPosition)) break;
-          const edge = get_mechanical_element_from_id(
-            state.elementID,
-            mechanicalElements,
-          ) as EdgeElement;
           actionBundleType = "MoveElement";
           actions.push({
             type: "MoveEdgeStart",
             id: state.elementID,
-            newPosition: clamp_belt_terminal_outside_gear(
-              edge.positionEnd.add(
-                hoveredPart.position
-                  .sub(edge.positionEnd)
-                  .limit_length_min(
-                    edge.type === "belt" ? 0 : DIM.MIN_EDGE_LENGTH,
-                  ),
-              ),
-              edge,
-              "start",
-              mechanicalElements,
-            ),
+            newPosition: hoveredPart.position,
             oldPosition,
           });
           break;
-        }
-        case "MovingEdgeEndPoint": {
+        case "MovingEdgeEndPoint":
           if (hoveredPart.position.equals(oldPosition)) break;
-          const edge = get_mechanical_element_from_id(
-            state.elementID,
-            mechanicalElements,
-          ) as EdgeElement;
           actionBundleType = "MoveElement";
           actions.push({
             type: "MoveEdgeEnd",
             id: state.elementID,
-            newPosition: clamp_belt_terminal_outside_gear(
-              edge.positionStart.add(
-                hoveredPart.position
-                  .sub(edge.positionStart)
-                  .limit_length_min(
-                    edge.type === "belt" ? 0 : DIM.MIN_EDGE_LENGTH,
-                  ),
-              ),
-              edge,
-              "end",
-              mechanicalElements,
-            ),
+            newPosition: hoveredPart.position,
             oldPosition,
           });
           break;
-        }
         case "MovingEdgeBody":
           if (hoveredPart.position.equals(oldPosition)) break;
           actionBundleType = "MoveElement";
@@ -782,20 +727,24 @@ export function canvasStateReducer(
             state.elementID,
             mechanicalElements,
           ) as GearElement;
-          // Grab a point on the perimeter and pull the gear toward the mouse
-          // (raw mouse, not the hovered part, so pinned nodes don't hijack it).
+          // Grab a point on the perimeter and pull the gear toward the mouse:
+          // the raw mouse rather than the hovered part, because the nodes pinned
+          // to the rim move with it and would lock the radius on its own value.
+          // A belt is the exception — the hover has already placed the tangency
+          // point, so the rim snaps onto it instead of stopping short.
           // The geometric solver decides whether the radius grows or the centre
           // moves (radius-constrained / meshed) — see resolveGeometricConstraints.
+          const gearTarget =
+            hoveredPart.type === "BeltBody"
+              ? hoveredPart.position
+              : worldMousePos;
           actionBundleType = "MoveElement";
           actions.push({
             type: "ChangeGearRadius",
             id: state.elementID,
-            newRadius: Math.max(
-              DIM.MIN_GEAR_RADIUS,
-              gear.position.distance_to(worldMousePos),
-            ),
+            newRadius: gear.position.distance_to(gearTarget),
             oldRadius: gear.radius,
-            target: worldMousePos,
+            target: gearTarget,
           });
           break;
         case "SelectingMultiple":
@@ -909,51 +858,14 @@ export function canvasStateReducer(
         case "MovingEdgeStartPoint":
         case "MovingEdgeEndPoint":
         case "MovingEdgeBody":
-          let elementPart: HoveredPart;
-          switch (state.type) {
-            case "MovingNode":
-              elementPart = {
-                type: "Node",
-                position: hoveredPart.position,
-                id: state.elementID,
-                deleting: false,
-                beamBodyHover: false,
-              };
-              break;
-            case "MovingEdgeStartPoint":
-              elementPart = {
-                type: "Edge",
-                position: hoveredPart.position,
-                id: state.elementID,
-                deleting: false,
-                part:
-                  hoveredPart.type === "Node" && hoveredPart.beamBodyHover
-                    ? "body"
-                    : "start",
-              };
-              break;
-            case "MovingEdgeEndPoint":
-              elementPart = {
-                type: "Edge",
-                position: hoveredPart.position,
-                id: state.elementID,
-                deleting: false,
-                part:
-                  hoveredPart.type === "Node" && hoveredPart.beamBodyHover
-                    ? "body"
-                    : "end",
-              };
-              break;
-            case "MovingEdgeBody":
-              elementPart = {
-                type: "Edge",
-                position: hoveredPart.position,
-                id: state.elementID,
-                deleting: false,
-                part: "body",
-              };
-              break;
-          }
+          const draggedKind: OwnPartKind =
+            state.type === "MovingNode"
+              ? "node"
+              : state.type === "MovingEdgeStartPoint"
+                ? "start"
+                : state.type === "MovingEdgeEndPoint"
+                  ? "end"
+                  : "body";
           actionBundleType = "Connects";
           actions.push(
             ...connect_elements(
@@ -962,7 +874,7 @@ export function canvasStateReducer(
                 state.elementID,
                 mechanicalElements,
               ),
-              elementPart,
+              own_part(state.elementID, draggedKind, hoveredPart),
               mechanicalElements,
               constraintElements,
               loadElements,
@@ -983,18 +895,19 @@ export function canvasStateReducer(
               state.elementID,
               mechanicalElements,
             ) as BeltElement;
+            const gear = get_mechanical_element_from_id(
+              hoveredPart.id,
+              mechanicalElements,
+            ) as GearElement;
             actionBundleType = "Connects";
             actions.push(
-              ...connect_gear_and_belt(
-                hoveredPart.id,
-                state.elementID,
+              ...attach_gear_to_belt(
+                gear.id,
+                gear.position,
+                belt,
                 state.section,
-                !is_on_left_side_of_belt(
-                  hoveredPart.position,
-                  belt,
-                  state.section,
-                  mechanicalElements,
-                ),
+                mechanicalElements,
+                "belt-onto-gear",
               ),
             );
           }
@@ -1009,23 +922,19 @@ export function canvasStateReducer(
               hoveredPart.id,
               mechanicalElements,
             ) as BeltElement;
+            const gear = get_mechanical_element_from_id(
+              state.elementID,
+              mechanicalElements,
+            ) as GearElement;
             actionBundleType = "Connects";
             actions.push(
-              ...connect_gear_and_belt(
-                state.elementID,
-                hoveredPart.id,
+              ...attach_gear_to_belt(
+                gear.id,
+                gear.position,
+                belt,
                 hoveredPart.section,
-                is_on_left_side_of_belt(
-                  (
-                    get_mechanical_element_from_id(
-                      state.elementID,
-                      mechanicalElements,
-                    ) as GearElement
-                  ).position,
-                  belt,
-                  hoveredPart.section,
-                  mechanicalElements,
-                ),
+                mechanicalElements,
+                "gear-onto-belt",
               ),
             );
           } else if (hoveredPart.type === "GearTooth") {
@@ -1054,12 +963,7 @@ export function canvasStateReducer(
                   state.elementID,
                   mechanicalElements,
                 ),
-                {
-                  type: "GearTooth",
-                  position: hoveredPart.position,
-                  id: state.elementID,
-                  deleting: false,
-                },
+                own_part(state.elementID, "gear", hoveredPart),
                 mechanicalElements,
                 constraintElements,
                 loadElements,
@@ -1153,9 +1057,6 @@ export function canvasStateReducer(
 
     case "KeyDown":
       switch (event.key) {
-        case "Escape":
-          setCanvasState({ type: "Selecting" });
-          break;
         case "Delete":
           switch (state.type) {
             case "SelectedElement":
@@ -1184,72 +1085,6 @@ export function canvasStateReducer(
               break;
           }
           break;
-        case "a":
-          setCanvasState({ type: "Erasing" });
-          break;
-        case "b":
-          setCanvasState({ type: "PlacingBeamStart" });
-          break;
-        case "c":
-          setCanvasState({ type: "PlacingDamperStart" });
-          break;
-        case "d":
-          setCanvasState({ type: "DimensionStart" });
-          break;
-        case "e":
-          setCanvasState({ type: "EqualConstraintStart" });
-          break;
-        case "f":
-          setCanvasState({ type: "PlacingForceStart" });
-          break;
-        case "g":
-          setCanvasState({ type: "PlacingGearStart" });
-          break;
-        case "h":
-          setCanvasState({ type: "HorizontalVerticalConstraintStart" });
-          break;
-        case "i":
-          setCanvasState({ type: "PlacingProbe" });
-          break;
-        case "j":
-          setCanvasState({ type: "PlacingJoin" });
-          break;
-        case "k":
-          setCanvasState({ type: "PlacingSpringStart" });
-          break;
-        case "l":
-          setCanvasState({ type: "ParallelConstraintStart" });
-          break;
-        case "m":
-          setCanvasState({ type: "PlacingMotor" });
-          break;
-        case "n":
-          setCanvasState({ type: "NormalConstraintStart" });
-          break;
-        case "o":
-          setCanvasState({ type: "PlacingMomentStart" });
-          break;
-        case "p":
-          setCanvasState({ type: "PlacingPivot" });
-          break;
-        case "q":
-          setCanvasState({ type: "GearRatioConstraintStart" });
-          break;
-        case "r":
-          setCanvasState({ type: "PlacingGround" });
-          break;
-        case "s":
-          setCanvasState({ type: "PlacingSlider" });
-          break;
-        case "t":
-          setCanvasState({ type: "PlacingBeltStart" });
-          break;
-        case "v":
-          setCanvasState({ type: "HorizontalVerticalConstraintStart" });
-          break;
-        case "w":
-          setCanvasState({ type: "PlacingMass" });
-          break;
         case "y":
           if (!event.ctrlKey) break;
           onMouseUpHandler();
@@ -1260,6 +1095,11 @@ export function canvasStateReducer(
           onMouseUpHandler();
           undoMechanism();
           break;
+        default: {
+          const toolState = TOOL_STATE_BY_KEY[event.key];
+          if (toolState) setCanvasState(tool_state(toolState));
+          break;
+        }
       }
       break;
   }

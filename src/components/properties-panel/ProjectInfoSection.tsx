@@ -32,6 +32,7 @@ const ERROR_CODE_COLORS: Record<ValidationErrorCode, string> = {
   MISSING_BIDIRECTIONAL: "#004D40",
   SAME_AXLE_MESH: "#BF360C",
   CONTRADICTORY_MOTOR: "#3162AB",
+  GROUNDED_MASS: "#AD1457",
 };
 
 const ERROR_CODE_LABELS: Record<ValidationErrorCode, string> = {
@@ -43,6 +44,7 @@ const ERROR_CODE_LABELS: Record<ValidationErrorCode, string> = {
   MISSING_BIDIRECTIONAL: "bdi",
   SAME_AXLE_MESH: "axl",
   CONTRADICTORY_MOTOR: "mot",
+  GROUNDED_MASS: "anc",
 };
 
 const CATEGORY_COLORS: Record<ConstraintViolationCategory, string> = {
@@ -84,7 +86,6 @@ export const ProjectInfoSection: React.FC<ProjectInfoSectionProps> = ({
     name: mechanism.metadata.name,
     description: mechanism.metadata.description,
     author: mechanism.metadata.author,
-    version: mechanism.metadata.version,
     createdAt: mechanism.metadata.createdAt,
     modifiedAt: mechanism.metadata.modifiedAt,
     tags: mechanism.metadata.tags,
@@ -96,7 +97,6 @@ export const ProjectInfoSection: React.FC<ProjectInfoSectionProps> = ({
       name: mechanism.metadata.name,
       description: mechanism.metadata.description,
       author: mechanism.metadata.author,
-      version: mechanism.metadata.version,
       createdAt: mechanism.metadata.createdAt,
       modifiedAt: mechanism.metadata.modifiedAt,
       tags: mechanism.metadata.tags,
@@ -143,7 +143,7 @@ export const ProjectInfoSection: React.FC<ProjectInfoSectionProps> = ({
 
         <TextField
           fullWidth
-          label="Auteur·rice·x"
+          label="Auteur·rice"
           value={projectInfo.author}
           onChange={(e) => handleInfoChange("author", e.target.value)}
           size="small"
@@ -154,7 +154,7 @@ export const ProjectInfoSection: React.FC<ProjectInfoSectionProps> = ({
         sx={{
           m: 2,
           display: "flex",
-          justifyContent: "space-between",
+          gap: 4,
         }}
       >
         <Box>
@@ -180,16 +180,6 @@ export const ProjectInfoSection: React.FC<ProjectInfoSectionProps> = ({
           <Typography variant="body2">
             {format_date(projectInfo.modifiedAt)}
           </Typography>
-        </Box>
-        <Box>
-          <Typography
-            variant="caption"
-            color="text.secondary"
-            sx={{ display: "block" }}
-          >
-            Version :
-          </Typography>
-          <Typography variant="body2">{projectInfo.version}</Typography>
         </Box>
       </Box>
 

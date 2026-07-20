@@ -25,6 +25,9 @@ export interface CanvasPalette {
   ACCENT: string;
   ACCENT_DARK: string;
 
+  BADGE_STROKE: string;
+  BADGE_FILL_SELECTED: string;
+
   SELECTION_STROKE: string;
   SELECTION_BOX: string;
   SELECTION_ACCENT: string;
@@ -235,15 +238,15 @@ const SPECS = {
   blueprint: {
     family: "Blueprint",
     mode: "dark",
-    accent: "#d98da4",
-    accentDark: "#b76468",
-    onAccent: "#580f1e",
+    accent: "#e07942",
+    accentDark: "#c5612b",
+    onAccent: "#38110e",
     ink: "#eeeeee",
     appBackground: "#517cb5",
-    paper: "#2467bd",
+    paper: "#215fb1",
     toolbar: "#4a97e5",
-    fillBody: "#398ae5",
-    fillNode: "#b0d4e9",
+    fillBody: "#5d71d7",
+    fillNode: "#6eb2d9",
     selectionStroke: "#62e5ff",
     selectionBox: "#5AA9FF",
     gridContrast: 4,
@@ -363,6 +366,15 @@ export const canvas_palette = (s: ThemeSpec): CanvasPalette => {
     FILL_NODE: s.fillNode,
     ACCENT: s.accent,
     ACCENT_DARK: s.accentDark,
+
+    // A step off the ground, like the grid, but deliberately outside `gridContrast`: a theme that wants a loud grid does not want a loud badge outline.
+    BADGE_STROKE: mix(s.paper, towards, 0.4),
+    // Selection pushes the paper further into its own tone — the opposite of `towards`, which pulls against it. A theme whose paper already sits at the extreme gets no lift and leans on the outline alone.
+    BADGE_FILL_SELECTED: mix(
+      s.paper,
+      s.mode === "dark" ? "#000000" : "#FFFFFF",
+      0.75,
+    ),
 
     SELECTION_STROKE: s.selectionStroke,
     SELECTION_BOX: s.selectionBox,

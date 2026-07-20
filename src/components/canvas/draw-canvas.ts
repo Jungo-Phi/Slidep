@@ -27,6 +27,7 @@ import {
 } from "../../types";
 import { HoveredPart } from "../../types/hovered-part";
 import { CanvasState } from "../../types/canvas-state";
+import { element_refs } from "../../types/element-refs";
 import {
   draw_beam,
   draw_belt,
@@ -68,18 +69,21 @@ import {
   is_zero_load,
   force_base_position,
   force_display_vector,
-  world2stored_load,
   force_world_vector,
   moment_center_position,
   moment_display_radius,
-  moment_sign_from_cursor,
-  radius2moment_value,
   stored2world_load,
 } from "../../utils/load-geom";
 import {
+  GHOST_LOAD_ID,
+  distributed_force_from_drag,
+  force_from_drag,
+  moment_from_drag,
+} from "./placing-loads";
+import {
   get_belt_vias,
   get_gear_angles,
-  is_on_left_side_of_belt,
+  belt_wrap_direction,
   measure_belt_length,
   resolve_angle_constraint_quadrant,
 } from "../../utils";
@@ -179,23 +183,23 @@ function is_edge_end_hovered(
 ): boolean {
   if (hoveredPart.type === "Void" || hoveredPart.id !== elementID) return false;
   return (
-    (hoveredPart.type === "Edge" &&
-      hoveredPart.part !== "body" &&
-      !hoveredPart.deleting &&
-      !(
-        state.type === "ErasingMultiple" &&
-        state.hoveredElementIDs.includes(elementID)
-      ) &&
-      ![
-        "PlacingPivot",
-        "PlacingSlider",
-        "PlacingJoin",
-        "PlacingMass",
-        "PlacingBeamStart",
-        "PlacingSpringStart",
-        "PlacingDamperStart",
-        "PlacingBeltStart",
-      ].includes(state.type))
+    hoveredPart.type === "Edge" &&
+    hoveredPart.part !== "body" &&
+    !hoveredPart.deleting &&
+    !(
+      state.type === "ErasingMultiple" &&
+      state.hoveredElementIDs.includes(elementID)
+    ) &&
+    ![
+      "PlacingPivot",
+      "PlacingSlider",
+      "PlacingJoin",
+      "PlacingMass",
+      "PlacingBeamStart",
+      "PlacingSpringStart",
+      "PlacingDamperStart",
+      "PlacingBeltStart",
+    ].includes(state.type)
   );
 }
 
@@ -314,6 +318,28 @@ export function draw_edge_fake_end(
   ctx.lineWidth = oldLineWidth;
 }
 
+/**
+ * The elements that cannot be drawn, because a reference they hold names an
+ * element that is not there. Drawing resolves those referents through strict
+ * getters, so attempting one throws and takes the whole frame with it.
+ *
+ * Omitting them is a safety net, never a fix: a dangling reference is a defect
+ * the validator reports and `repair_mechanism` clears at load time. What this
+ * buys is that the defect costs one invisible element instead of a blank canvas.
+ */
+function undrawable_elements(
+  allElements: UnionElement[],
+  mechanicalElements: MechanicalElement[],
+): Set<ID> {
+  const present = new Set<ID>(mechanicalElements.map((element) => element.id));
+  const undrawable = new Set<ID>();
+  for (const element of allElements) {
+    const dangling = element_refs(element).some((ref) => !present.has(ref.id));
+    if (dangling) undrawable.add(element.id);
+  }
+  return undrawable;
+}
+
 /*
  * Dessine tous les éléments du canvas.
  */
@@ -330,6 +356,7 @@ export function drawMechanicalCanvas(
   const allElements: UnionElement[] = (mechanicalElements as UnionElement[])
     .concat(constraintElements)
     .concat(loads);
+  const undrawable = undrawable_elements(allElements, mechanicalElements);
 
   ctx.shadowBlur = 0;
   ctx.globalAlpha = 1;
@@ -341,6 +368,7 @@ export function drawMechanicalCanvas(
     (element) => element.type === "join",
   )) {
     if (
+      undrawable.has(element.id) ||
       (hoveredPart.type !== "Void" &&
         hoveredPart.deleting &&
         hoveredPart.id === element.id) ||
@@ -357,6 +385,7 @@ export function drawMechanicalCanvas(
   DRAWING_ORDER.forEach((type) => {
     const elements = allElements.filter((element) => element.type === type);
     for (const element of elements) {
+      if (undrawable.has(element.id)) continue;
       // Skip constraints hidden by the current context (mode / tab / hover).
       const constraintOpacity = is_constraint_type(element.type)
         ? visibleConstraints.get(element.id)
@@ -610,11 +639,12 @@ export function drawMechanicalCanvas(
                 ) as GearElement;
                 attachedGears.splice(state.section / 2, 0, {
                   gear,
-                  direction: !is_on_left_side_of_belt(
-                    hoveredPart.position,
+                  direction: belt_wrap_direction(
+                    gear.position,
                     element,
                     state.section,
                     mechanicalElements,
+                    "belt-onto-gear",
                   ),
                 });
               } else {
@@ -633,11 +663,12 @@ export function drawMechanicalCanvas(
                 };
                 attachedGears.splice(state.section / 2, 0, {
                   gear: newGear,
-                  direction: !is_on_left_side_of_belt(
-                    hoveredPart.position,
+                  direction: belt_wrap_direction(
+                    newGear.position,
                     element,
                     state.section,
                     mechanicalElements,
+                    "belt-onto-gear",
                   ),
                 });
               }
@@ -654,11 +685,12 @@ export function drawMechanicalCanvas(
               ) as GearElement;
               attachedGears.splice(hoveredPart.section / 2, 0, {
                 gear,
-                direction: is_on_left_side_of_belt(
+                direction: belt_wrap_direction(
                   gear.position,
                   element,
                   hoveredPart.section,
                   mechanicalElements,
+                  "gear-onto-belt",
                 ),
               });
               break;
@@ -685,11 +717,12 @@ export function drawMechanicalCanvas(
               };
               attachedGears.splice(hoveredPart.section / 2, 0, {
                 gear: newGear,
-                direction: is_on_left_side_of_belt(
-                  state.startHover.position,
+                direction: belt_wrap_direction(
+                  newGear.position,
                   element,
                   hoveredPart.section,
                   mechanicalElements,
+                  "gear-onto-belt",
                 ),
               });
               break;
@@ -1161,34 +1194,56 @@ export function drawMechanicalCanvas(
           );
           break;
         case "PlacingForceEnd": {
-          const mouseVector = hoveredPart.position.sub(
-            state.startHover.position,
+          const force = force_from_drag(
+            GHOST_LOAD_ID,
+            state.startHover,
+            hoveredPart.position,
+            mechanicalElements,
           );
-          const value = world2stored_load(mouseVector.length());
-          const vector = mouseVector.scale2length(stored2world_load(value));
-          draw_force(ctx, state.startHover.position, vector, value);
+          if (!force) break;
+          draw_force(
+            ctx,
+            force_base_position(force, mechanicalElements),
+            force_display_vector(force_world_vector(force, mechanicalElements)),
+            force.vector.length(),
+          );
           break;
         }
         case "PlacingDistributedForce": {
-          if (state.startHover.type !== "Edge") break;
+          const load = distributed_force_from_drag(
+            GHOST_LOAD_ID,
+            state.startHover,
+            hoveredPart.position,
+            mechanicalElements,
+          );
+          if (!load) break;
           const beam = get_mechanical_element_from_id(
-            state.startHover.id,
+            load.targetID,
             mechanicalElements,
           ) as BeamElement;
-          const mouseVector = hoveredPart.position.sub(
-            beam.positionStart.lerp(beam.positionEnd, 0.5),
+          const { displayStart, displayEnd } = distributed_display_vectors(
+            load,
+            mechanicalElements,
           );
-          const value = world2stored_load(mouseVector.length());
-          const vector = mouseVector.scale2length(stored2world_load(value));
           draw_distributed_force(
             ctx,
             beam.positionStart,
             beam.positionEnd,
-            vector,
-            vector,
+            displayStart,
+            displayEnd,
           );
-          draw_force(ctx, beam.positionStart, vector, value);
-          draw_force(ctx, beam.positionEnd, vector, value);
+          draw_force(
+            ctx,
+            beam.positionStart,
+            displayStart,
+            Math.abs(load.magnitudeStart),
+          );
+          draw_force(
+            ctx,
+            beam.positionEnd,
+            displayEnd,
+            Math.abs(load.magnitudeEnd),
+          );
           break;
         }
         case "PlacingMomentStart": {
@@ -1201,22 +1256,18 @@ export function drawMechanicalCanvas(
           break;
         }
         case "PlacingMomentEnd": {
-          if (state.startHover.type === "Void") break;
-          const value =
-            radius2moment_value(
-              state.startHover.position.distance_to(hoveredPart.position),
-            ) *
-            moment_sign_from_cursor(
-              state.startHover.id,
-              state.startHover.position,
-              hoveredPart.position,
-              mechanicalElements,
-            );
+          const moment = moment_from_drag(
+            GHOST_LOAD_ID,
+            state.startHover,
+            hoveredPart.position,
+            mechanicalElements,
+          );
+          if (!moment) break;
           draw_moment(
             ctx,
-            state.startHover.position,
-            moment_display_radius(value),
-            value,
+            moment_center_position(moment, mechanicalElements),
+            moment_display_radius(moment.value),
+            moment.value,
           );
           break;
         }

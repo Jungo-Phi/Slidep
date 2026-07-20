@@ -6,6 +6,7 @@ import {
   get_geom_nodes,
 } from "../solver/parsing";
 import { clone_mechanism } from "../../utils";
+import { assert_actions_preserve_validity } from "../../utils/assert-mechanism";
 import { actionReducer } from "./action-reducer";
 
 export function apply_actions(
@@ -294,5 +295,12 @@ export function apply_actions(
     viewport: { ...mechanism.viewport },
     metadata: { ...mechanism.metadata },
   };
-  return actionReducer(newMechanism, newActions, false);
+  const result = actionReducer(newMechanism, newActions, false);
+  assert_actions_preserve_validity(
+    mechanism,
+    result,
+    newActions,
+    actionBundleType,
+  );
+  return result;
 }

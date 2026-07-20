@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef } from "react";
 import { Box, useTheme } from "@mui/material";
 import { SerializedMechanism } from "../../types";
-import { deserialize_mechanism } from "../../utils";
+import { load_mechanism } from "../../utils";
 import { draw_thumbnail } from "../canvas/render-thumbnail";
 
 /** Résolution du rendu. Bien au-dessus de la taille d'affichage, pour rester net
@@ -23,7 +23,9 @@ export const MechanismThumbnail: React.FC<MechanismThumbnailProps> = ({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   // Redessiner quand le thème change : les couleurs du dessin en dépendent.
   const theme = useTheme();
-  const mechanism = useMemo(() => deserialize_mechanism(record), [record]);
+  // Repairs silently: a card is no place to report damage, but a broken record
+  // must not take the gallery down with it.
+  const mechanism = useMemo(() => load_mechanism(record).mechanism, [record]);
 
   useEffect(() => {
     const ctx = canvasRef.current?.getContext("2d");

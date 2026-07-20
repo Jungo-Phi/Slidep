@@ -3,7 +3,9 @@ import { Point2 } from "./point2";
 
 /** The element and which part of that element of the mechanism that is currently hovered */
 export type HoveredPart =
-  | { type: "Void"; position: Point2 }
+  /** `rejected` carries why an opaque element refused the gesture, so the canvas
+   *  can say so; absent when the cursor is simply over nothing. */
+  | { type: "Void"; position: Point2; rejected?: string }
   | {
       type: "Node";
       position: Point2;

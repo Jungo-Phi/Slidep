@@ -4,14 +4,8 @@
 
 ### À faire rapidement
 
-- handleKeyDown traite 0 comme une annulation (OnCanvasValueEditor.tsx:58-61), embètant pour mettre une extrémité de distributed-force à zéro
-
-- (M) : Moment, Mass ou Motor ?
-
-- Empécher les crashs
-
-- Instaurer un système de versioning, avec update des fichiers de la version précédente
-
+- Pas de sonde sur les courroies
+- Enlever la sentinelle "----" de fermeture de boucle de courroie
 - Déconnecter un join de courroie fermée doit l'ouvrir.
 - Créer une validation : une courroie ne peut être tendue que si ses 2 extrémitées sont connectées et qu'il y a au moins 2 gears
 - Créer une validation : une extrémité de courroie ne peut pas être à l'intérieur du gear adjascent
@@ -19,7 +13,7 @@
 - Fusionner les connections start/end dans belt quand tendue
 - Preview quand placingBeltEnd ou on joit les 2 bouts
 - Placer une courroie en la fermant devrait bouger le join et pas la courroie (position du nouveau join = nearest_on_belt)
-- Placer moment on gearTooth
+- Placer force on gearTooth
 - Hover on closed belt est inconcistant
 - La dimension belt doit pouvoir changer les rayons en édition
 
@@ -27,7 +21,7 @@
 - Placer beltEnd après beltStart sur gear fait pas le attached
 
 - Escape de placingProbe ne fait pas sortir de l'onglet analyse
-- ENTER et ESCAPE dans "auteur.ice.x" ou "nom de projet" devrait quitter la textBox
+- ENTER et ESCAPE dans "auteur.ice" ou "nom de projet" devrait quitter la textBox
 - Afficher les trajectoires des edges (les 2 extrémités)
 - Changer couleur (icon + texte) de la contrainte sélectionnée au lieu du bord dans panneau contextuel
 - Unifier l'usage des tooltips
@@ -45,12 +39,16 @@
 - Utiliser le "bouton dropDown pour changer le repère d'une force" pour choisir l'ancrage d'un moteur
 - Afficher vitesse au lieu de ground en haut du moteur
 - Simulation moteur non grounded (parentBeamID)
+- Bouton "Play" sur moteur en simu ?
 - Hover de suppression du pivot devrait le faire pour les gears connectés
 - Cacher dimension-belt en simulation
 - Mettre le cadenas dans le numberInput
 - Pareil pour horaire/anti-horaire
 - Ajuster les hitbox du "Stepper de vitesse de simulation"
-- isPlacing (editingValue) est-il vraiment utile ?
+- Changer la vitesse ne doit pas mettre en pause
+- Pourquoi les contraintes réapparaissent au hover ?
+- Parfois, la couleur de fond des mécanismes de gallerie n'est pas la bonne
+- Déplacer la probe de belt sur son milieu (t)
 
 - Analise des degrés de libertés en sous-parties
 
@@ -72,6 +70,7 @@
 - Fusionner "force" et "distributed-force" dans le panneau d'éléments
 - Alt pour désactiver le snapping ?
 - Option d'afficher la trajectoire avec des points
+- Afficher les couches de trajectoires (plus foncé ?)
 - le hover delete de contrainte prend le meme style que le ghost de ctrl+y de supression
 - Clicker sur l'onglet "éléments" quand un élément est sélectionné le désélectionne et passe à l'affichage en liste
 - Unifier les "excluded_elements" et les conditions au début de "get_hover"
@@ -186,6 +185,7 @@
 - Uniformiser MIN gearRadius/edgeLength, placement, pas déplacement ?
 - Ajouter un tag editor (property pannel + gallerie)
 - Suggestion de tags "Statique", "Cinématique", "Dynamique"
+- Rendre les previews de la gallerie interactives
 - Afficher des méchanismes exemple dans la gallerie
 - Afficher le nombre de pièces comme un tag
 - Logo animé

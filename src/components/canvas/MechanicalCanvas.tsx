@@ -30,6 +30,7 @@ import { canvasStateReducer } from "./canvas-state-reducer";
 import { get_element_from_id } from "../mechanism/connect-actions";
 import { is_zero_load, load_value_anchor } from "../../utils/load-geom";
 import { get_hovered_part } from "./get-hover";
+import { clamp_to_bounds } from "./hover-bounds";
 import { snap_load_hover } from "./load-snap";
 import { compute_visible_constraints, connected_constraints } from "./utils";
 import { eraser_cursor } from "./cursors";
@@ -72,6 +73,16 @@ const STRUCTURAL_KEYS = new Set([
 ]);
 // Keys that place constraints/dimensions → pause simulation
 const CONSTRAINT_KEYS = new Set(["d", "e", "h", "l", "n", "q", "v"]);
+
+/** One line per distinct failure: the loop retries every frame, so an unguarded
+ *  log buries the console sixty times a second. */
+const reportedRenderFailures = new Set<string>();
+function report_render_failure(error: unknown): void {
+  const key = error instanceof Error ? error.message : String(error);
+  if (reportedRenderFailures.has(key)) return;
+  reportedRenderFailures.add(key);
+  console.error("Rendu du canvas interrompu :", error);
+}
 
 /**
  * Demande de retour visuel après un undo/redo touchant des contraintes-icônes :
@@ -371,7 +382,14 @@ export const MechanicalCanvas = forwardRef<
           });
           pendingZoomRef.current = null;
         }
-        render();
+        // A frame that throws must not take the loop with it: the canvas is
+        // cleared before drawing, so a dead loop leaves the user staring at the
+        // bare grid with no way back. Losing one frame is recoverable.
+        try {
+          render();
+        } catch (error) {
+          report_render_failure(error);
+        }
         rafId = requestAnimationFrame(loop);
       };
       rafId = requestAnimationFrame(loop);
@@ -479,9 +497,12 @@ export const MechanicalCanvas = forwardRef<
         }
         const currMech = mechanismRef.current;
 
-        const worldMousePos = screen2world(
-          mousePositionRef.current,
-          currMech.viewport,
+        // Bounded here, where the cursor enters the system, so that hit-testing
+        // and the gestures reading the raw mouse share one bounded point.
+        const worldMousePos = clamp_to_bounds(
+          screen2world(mousePositionRef.current, currMech.viewport),
+          canvasStateRef.current,
+          currMech.mechanicalElements,
         );
         const newHoveredPart = get_hovered_part(
           currMech.mechanicalElements,
@@ -546,6 +567,16 @@ export const MechanicalCanvas = forwardRef<
             currMech.viewport.zoom,
           );
         }
+        // Both snaps above rewrite the point after it was bounded, and the grid
+        // one pulls it a long way — onto the very centre of a gear being sized,
+        // when that centre sits on the grid. Only the free point is restored: a
+        // hovered element keeps its own position, which is what makes it a target.
+        if (newHoveredPart.type === "Void")
+          newHoveredPart.position = clamp_to_bounds(
+            newHoveredPart.position,
+            canvasStateRef.current,
+            currMech.mechanicalElements,
+          );
         refreshRevealFromHover(newHoveredPart);
 
         setHoveredPart(newHoveredPart);
@@ -680,38 +711,41 @@ export const MechanicalCanvas = forwardRef<
       event.preventDefault();
     };
 
+    // A refusal outranks every tool: whatever is armed, this spot takes nothing.
     const cursor =
-      canvasState.type === "SimulationDragging"
-        ? "grabbing"
-        : appMode !== "edition" &&
-            ["Selecting", "SelectedElement"].includes(canvasState.type) &&
-            hoveredPart.type !== "Void"
-          ? "grab"
-          : ["Erasing", "ErasingMultiple"].includes(canvasState.type)
-            ? eraser_cursor()
-            : [
-                  "DimensionStart",
-                  "DimensionNode",
-                  "DimensionEdge",
-                  "DimensionNodeToNode",
-                  "DimensionEdgeToNode",
-                  "DimensionAngle",
-                  "DimensionRadius",
-                  "DimensionBelt",
-                  "HorizontalVerticalConstraintStart",
-                  "HorizontalVerticalConstraintNode",
-                  "NormalConstraintStart",
-                  "NormalConstraintEdge",
-                  "ParallelConstraintStart",
-                  "ParallelConstraintEdge",
-                  "EqualConstraintStart",
-                  "EqualConstraintEdge",
-                  "EqualConstraintGear",
-                  "GearRatioConstraintStart",
-                  "GearRatioConstraintGear",
-                ].includes(canvasState.type)
-              ? "crosshair"
-              : "default";
+      hoveredPart.type === "Void" && hoveredPart.rejected
+        ? "not-allowed"
+        : canvasState.type === "SimulationDragging"
+          ? "grabbing"
+          : appMode !== "edition" &&
+              ["Selecting", "SelectedElement"].includes(canvasState.type) &&
+              hoveredPart.type !== "Void"
+            ? "grab"
+            : ["Erasing", "ErasingMultiple"].includes(canvasState.type)
+              ? eraser_cursor()
+              : [
+                    "DimensionStart",
+                    "DimensionNode",
+                    "DimensionEdge",
+                    "DimensionNodeToNode",
+                    "DimensionEdgeToNode",
+                    "DimensionAngle",
+                    "DimensionRadius",
+                    "DimensionBelt",
+                    "HorizontalVerticalConstraintStart",
+                    "HorizontalVerticalConstraintNode",
+                    "NormalConstraintStart",
+                    "NormalConstraintEdge",
+                    "ParallelConstraintStart",
+                    "ParallelConstraintEdge",
+                    "EqualConstraintStart",
+                    "EqualConstraintEdge",
+                    "EqualConstraintGear",
+                    "GearRatioConstraintStart",
+                    "GearRatioConstraintGear",
+                  ].includes(canvasState.type)
+                ? "crosshair"
+                : "default";
 
     // Les deux états de saisie partagent l'éditeur ; ils ne diffèrent que par
     // ce qu'ENTER et ESCAPE font en sortie (voir `onCommit` / `onCancel`).
@@ -780,9 +814,7 @@ export const MechanicalCanvas = forwardRef<
                 id: element.id,
                 newDirection: element.direction,
                 oldDirection: element.direction,
-                newMagnitudeStart: editingEnd
-                  ? element.magnitudeStart
-                  : edited,
+                newMagnitudeStart: editingEnd ? element.magnitudeStart : edited,
                 oldMagnitudeStart: element.magnitudeStart,
                 newMagnitudeEnd: editingEnd ? edited : element.magnitudeEnd,
                 oldMagnitudeEnd: element.magnitudeEnd,

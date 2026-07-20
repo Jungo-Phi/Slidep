@@ -120,9 +120,41 @@ export function measure_belt_length(
 }
 
 /**
- * Is a point is on the left side of a belt section, used to determine the direction of a gear
+ * Which gesture brought the gear and the belt together, which decides where they
+ * touch and so which way the belt winds.
+ *
+ * `gear-onto-belt` — the gear is pressed against the section where it lies, so
+ * the belt bulges towards the gear and wraps its far side.
+ * `belt-onto-gear` — the belt is pulled to the rim point under the cursor, the
+ * near side, and wraps the other way round.
  */
-export function is_on_left_side_of_belt(
+export type BeltGearApproach = "gear-onto-belt" | "belt-onto-gear";
+
+/**
+ * Which way a belt winds around a gear inserted in one of its straight sections.
+ *
+ * Always the gear's *centre* — a point on its rim answers a different question
+ * and lands on either side of the section depending on where the cursor came
+ * from. The gear may not exist yet, hence a position rather than the element.
+ */
+export function belt_wrap_direction(
+  gearCenter: Point2,
+  belt: BeltElement,
+  section: number,
+  mechanicalElements: MechanicalElement[],
+  approach: BeltGearApproach,
+): boolean {
+  const left = is_on_left_side_of_belt(
+    gearCenter,
+    belt,
+    section,
+    mechanicalElements,
+  );
+  return approach === "gear-onto-belt" ? left : !left;
+}
+
+/** Is a point on the left side of a belt section. Reach it through belt_wrap_direction. */
+function is_on_left_side_of_belt(
   position: Point2,
   belt: BeltElement,
   section: number,

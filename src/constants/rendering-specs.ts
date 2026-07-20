@@ -116,7 +116,6 @@ export function set_canvas_theme(
 }
 
 export const ICON_SELECTION_FILTER = "brightness(5)";
-export const FILL_SELECTION_FILTER = "brightness(1.2)";
 export const FILL_DELETION_FILTER =
   "saturate(1) hue-rotate(100deg) brightness(2.1)";
 
@@ -188,6 +187,16 @@ export const CONSTRAINT_REVEAL_COOLDOWN_MS = 700;
  * pleine opacité jusqu'à `COOLDOWN - FADE`, puis s'estompent vers 0.
  */
 export const CONSTRAINT_REVEAL_FADE_MS = 150;
+
+/**
+ * Durées (ms) d'affichage des toasts. `REPORT` est pour les messages qui rendent
+ * compte de quelque chose de perdu ou de modifié à l'insu de l'utilisateur : ils
+ * doivent tenir le temps d'être lus jusqu'au bout.
+ */
+export const SNACKBAR_DURATION = {
+  DEFAULT: 3000,
+  REPORT: 12000,
+};
 
 export const CURSOR_STYLE = {
   HOVER: "grab",

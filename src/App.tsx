@@ -17,6 +17,7 @@ import {
   MenuItem,
   Menu,
   Divider,
+  Link as MuiLink,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -54,6 +55,9 @@ import {
   DarkMode,
   SettingsBrightness,
   Check,
+  Bolt,
+  CloudOff,
+  Lock,
 } from "@mui/icons-material";
 import { icon } from "./components/element-palette/iconDataUris";
 import {
@@ -81,8 +85,12 @@ import {
   ZERO,
 } from "./types";
 import {
-  deserialize_mechanism,
-  load_from_file,
+  load_mechanism,
+  migrate_document,
+  Repair,
+  repair_summary,
+  load_mechanisms_from_file,
+  save_all_to_zip,
   save_to_file,
   serialize_mechanism,
   debounce,
@@ -98,7 +106,10 @@ import {
   ThemeMode,
   ThemeName,
 } from "./constants/mui-theme";
-import { set_canvas_theme } from "./constants/rendering-specs";
+import {
+  set_canvas_theme,
+  SNACKBAR_DURATION,
+} from "./constants/rendering-specs";
 import MechanicalCanvas, {
   ConstraintChangeSignal,
 } from "./components/canvas/MechanicalCanvas";
@@ -119,11 +130,30 @@ import { KinematicSnapshot } from "./types/runtime-state";
 import { CanvasState } from "./types/canvas-state";
 import { HoveredPart } from "./types/hovered-part";
 import { actionReducer } from "./components/mechanism/action-reducer";
+import { assert_actions_preserve_validity } from "./utils/assert-mechanism";
 import { apply_actions } from "./components/mechanism/apply-actions";
 import MechanismsGallery from "./components/mechanisms-gallery/MechanismsGallery";
-import { openDB } from "idb";
+import { IDBPDatabase, openDB } from "idb";
 
 const DB_VERSION = 3;
+
+/** The mechanism library. Keyed by `metadata.createdAt`, so two records sharing one are the same entry. */
+const openMechanismsDB = () =>
+  openDB<SlidepDB>("SlidepDB", DB_VERSION, {
+    upgrade(db) {
+      if (!db.objectStoreNames.contains("mechanisms")) {
+        const store = db.createObjectStore("mechanisms", {
+          keyPath: "metadata.createdAt",
+        });
+        store.createIndex("by-date", "metadata.modifiedAt");
+      }
+    },
+  });
+
+/** Every stored mechanism, raised to the current file format. The only way to read the library. */
+const read_all_records = async (db: IDBPDatabase<SlidepDB>) =>
+  (await db.getAll("mechanisms")).map(migrate_document);
+
 const DEBOUNCE_AUTOSAVE_TIME_MILLIS = 1000;
 const VIEWPORT_ZOOM_SENSITIVITY = 250; // Nombre de "crans" de molette nécessaires pour multiplier le zoom par 2
 const LANGUAGES = ["Deutsch", "English", "Español", "Français"];
@@ -368,9 +398,12 @@ const App: React.FC = () => {
   const simStartHistoryLengthRef = useRef<number>(0);
   const probeOnlyEditRef = useRef<boolean>(false);
 
+  /** `duration` overrides the default for messages that take longer to read, or
+   *  that report something lost. */
   const [snackbar, setSnackbar] = useState<{
     open: boolean;
     message: string;
+    duration?: number;
   }>({ open: false, message: "" });
 
   const [activeTab, setActiveTab] = useState<PropertiesPanelTab>("project");
@@ -748,6 +781,12 @@ const App: React.FC = () => {
         lastActionsForUndo,
         true,
       );
+      assert_actions_preserve_validity(
+        prevMechanism,
+        newMechanism,
+        lastActionsForUndo,
+        "Undo",
+      );
       signalConstraintChange(
         prevMechanism.constraintElements,
         newMechanism.constraintElements,
@@ -800,6 +839,12 @@ const App: React.FC = () => {
         nextActions,
         false,
       );
+      assert_actions_preserve_validity(
+        prevMechanism,
+        newMechanism,
+        nextActions,
+        "Redo",
+      );
       signalConstraintChange(
         prevMechanism.constraintElements,
         newMechanism.constraintElements,
@@ -828,16 +873,7 @@ const App: React.FC = () => {
   const performSaveToDB = useCallback(async () => {
     setSaveStatus("saving");
     try {
-      const db = await openDB<SlidepDB>("SlidepDB", DB_VERSION, {
-        upgrade(db) {
-          if (!db.objectStoreNames.contains("mechanisms")) {
-            const store = db.createObjectStore("mechanisms", {
-              keyPath: "metadata.createdAt",
-            });
-            store.createIndex("by-date", "metadata.modifiedAt");
-          }
-        },
-      });
+      const db = await openMechanismsDB();
       // Pas de miniature encodée ici : la galerie redessine chaque mécanisme à
       // l'ouverture, au thème courant.
       const mechanismToSave = {
@@ -851,8 +887,7 @@ const App: React.FC = () => {
       setSaveStatus("saved");
 
       if (galleryOpenRef.current) {
-        const allRecords = await db.getAll("mechanisms");
-        setSavedMechanisms(allRecords);
+        setSavedMechanisms(await read_all_records(db));
       }
     } catch (error) {
       console.error("Erreur lors de la sauvegarde :", error);
@@ -861,19 +896,8 @@ const App: React.FC = () => {
   }, []);
 
   const handleOpenGallery = useCallback(async () => {
-    const db = await openDB<SlidepDB>("SlidepDB", DB_VERSION, {
-      upgrade(db) {
-        if (!db.objectStoreNames.contains("mechanisms")) {
-          const store = db.createObjectStore("mechanisms", {
-            keyPath: "metadata.createdAt",
-          });
-          store.createIndex("by-date", "metadata.modifiedAt");
-        }
-      },
-    });
-
-    const allRecords = await db.getAll("mechanisms");
-    setSavedMechanisms(allRecords);
+    const db = await openMechanismsDB();
+    setSavedMechanisms(await read_all_records(db));
     setGalleryOpen(true);
   }, []);
 
@@ -888,11 +912,20 @@ const App: React.FC = () => {
 
   const handleLoadFromGallery = useCallback(
     (mechanismRecord: SerializedMechanism) => {
-      setMechanism(deserialize_mechanism(mechanismRecord));
+      const { mechanism: loaded, repairs } = load_mechanism(mechanismRecord);
+      setMechanism(loaded);
       setGalleryOpen(false);
       setCanvasState({ type: "Selecting" });
       resetSimulationState();
-      setSnackbar({ open: true, message: "Mécanisme chargé" });
+      setSnackbar(
+        repairs.length > 0
+          ? {
+              open: true,
+              message: repair_summary(repairs),
+              duration: SNACKBAR_DURATION.REPORT,
+            }
+          : { open: true, message: "Mécanisme chargé" },
+      );
     },
     [resetSimulationState],
   );
@@ -935,24 +968,101 @@ const App: React.FC = () => {
     setSaveStatus("idle");
   }, [resetSimulationState]);
 
-  // Appelé depuis la galerie : un import réussi charge le mécanisme et referme
-  // la galerie, comme le fait un chargement depuis une carte.
+  // Un import n'écrase jamais un mécanisme existant : quand l'identifiant est
+  // déjà pris — typiquement en réimportant un fichier qu'on a exporté — l'entrée
+  // entre dans la bibliothèque comme une copie, à côté de l'originale.
+  const storeImportedRecords = useCallback(
+    async (records: SerializedMechanism[]) => {
+      const db = await openMechanismsDB();
+      const existing = await db.getAll("mechanisms");
+      const takenIds = new Set(existing.map((r) => r.metadata.createdAt));
+      const takenNames = new Set(existing.map((r) => r.metadata.name));
+
+      // Importing is an entry, so records are repaired before anything is
+      // written: a known-broken entry must not land in the library when the
+      // sound version is already in hand. Reading them all up front also keeps
+      // an archive importing fully or not at all.
+      const repairs: Repair[] = [];
+      const sound = records.map((record) => {
+        const loaded = load_mechanism(record);
+        repairs.push(...loaded.repairs);
+        return serialize_mechanism(loaded.mechanism);
+      });
+
+      const stored: SerializedMechanism[] = [];
+      for (const record of sound) {
+        const metadata = { ...record.metadata, modifiedAt: Date.now() };
+
+        if (takenIds.has(metadata.createdAt)) {
+          let id = Date.now();
+          while (takenIds.has(id)) id++;
+          metadata.createdAt = id;
+
+          const base = record.metadata.name || "Mécanisme";
+          let name = `${base} (copie)`;
+          for (let n = 2; takenNames.has(name); n++)
+            name = `${base} (copie ${n})`;
+          metadata.name = name;
+        }
+
+        takenIds.add(metadata.createdAt);
+        takenNames.add(metadata.name);
+
+        const entry = { ...record, metadata };
+        await db.put("mechanisms", entry);
+        stored.push(entry);
+      }
+      return { stored, repairs };
+    },
+    [],
+  );
+
+  // Un `.slidep` s'ouvre dans l'éditeur, comme un clic sur une carte ; une
+  // archive remplit la bibliothèque et laisse la galerie ouverte.
   const handleMenuButtonUpload = () => {
-    load_from_file()
-      .then((data) => {
-        setMechanism(deserialize_mechanism(data));
+    load_mechanisms_from_file()
+      .then(async ({ records, isArchive }) => {
+        const { stored, repairs } = await storeImportedRecords(records);
+
+        if (isArchive) {
+          setSavedMechanisms((prev) => [...prev, ...stored]);
+          const plural = stored.length > 1 ? "s" : "";
+          setSnackbar({
+            open: true,
+            message:
+              `${stored.length} mécanisme${plural} importé${plural}` +
+              (repairs.length > 0 ? ` — ${repair_summary(repairs)}` : ""),
+          });
+          return;
+        }
+
+        // Already repaired on the way into the library.
+        setMechanism(load_mechanism(stored[0]).mechanism);
         setCanvasState({ type: "Selecting" });
         resetSimulationState();
         setGalleryOpen(false);
-        setSaveStatus("saving");
-        debouncedSave();
+        setSaveStatus("saved");
+        setSnackbar({
+          open: true,
+          message:
+            repairs.length > 0 ? repair_summary(repairs) : "Mécanisme importé",
+        });
       })
-      .catch(() => setSaveStatus("error"));
+      .catch(() => setSnackbar({ open: true, message: "Fichier illisible" }));
   };
 
   // Export depuis la galerie : les enregistrements y sont déjà sérialisés.
   const handleExportRecord = (record: SerializedMechanism) => {
     save_to_file(record, `${record.metadata.name || "mecanisme"}.slidep`);
+  };
+
+  const handleExportAllRecords = () => {
+    save_all_to_zip(savedMechanisms);
+    const plural = savedMechanisms.length > 1 ? "s" : "";
+    setSnackbar({
+      open: true,
+      message: `${savedMechanisms.length} mécanisme${plural} exporté${plural}`,
+    });
   };
 
   const [settingsAnchorEl, setSettingsAnchorEl] = useState<null | HTMLElement>(
@@ -2139,6 +2249,7 @@ const App: React.FC = () => {
                         width: `${timelinePct}%`,
                       }}
                     />
+                    {/* Dot */}
                     <Tooltip
                       title={`${runtimeState.time.toFixed(1)} s`}
                       placement="bottom"
@@ -2159,8 +2270,8 @@ const App: React.FC = () => {
                           height: 12,
                           borderRadius: "50%",
                           backgroundColor: timeline.recording
-                            ? "primary.main"
-                            : "primary.contrastText",
+                            ? "primary.contrastText"
+                            : "primary.main",
                           border: "2px solid",
                           borderColor: "primary.main",
                           boxShadow: (t) =>
@@ -2242,9 +2353,10 @@ const App: React.FC = () => {
         onNew={handleNewFromGallery}
         onImport={handleMenuButtonUpload}
         onExport={handleExportRecord}
+        onExportAll={handleExportAllRecords}
       />
-      <Dialog open={infoOpen} onClose={handleInfoClose}>
-        <DialogTitle fontSize={"large"}>Infos</DialogTitle>
+      <Dialog open={infoOpen} onClose={handleInfoClose} maxWidth="sm" fullWidth>
+        <DialogTitle fontSize={"large"}>À propos</DialogTitle>
         <IconButton
           onClick={handleInfoClose}
           sx={() => ({
@@ -2256,52 +2368,130 @@ const App: React.FC = () => {
           <Close />
         </IconButton>
         <DialogContent dividers>
-          <Typography gutterBottom align="justify">
-            Slidep a d'abord été pensé comme l'application que j'aurais aimé
-            avoir en tant qu'étudiant en ingénierie mécanique.
+          <Typography gutterBottom>
+            Slidep simule des mécanismes plans en temps réel. On dessine, on
+            tire sur une pièce, et tout le système réagit.
           </Typography>
 
-          <Typography gutterBottom align="justify">
-            La méthode par éléments finis (FEM) m'a toujours facinée. On arrive
-            avec un modèle mathématique simple à recréer un comportement
-            physique réel. Mais même si les interfaces se sont améliorées, les
-            Ansys et Abaqus restent des outils complexes et souvent très chères.
-            De plus, les pièces un peu complexes demandent vite beaucoup de
-            temps et de ressources. C'est pour ça que j'ai toujours eu une
-            fixette sur les éléments de type poutre. Avec les poutres, on peut
-            faire des éléments finis en temps réel ! J'ai toujours eu envie de
-            créer un outil basé dessus.
+          <Typography gutterBottom>
+            C'est l'application que j'aurais aimé avoir quand j'étais étudiant
+            en génie mécanique. Slidep se place entre le schéma papier-crayon et
+            le solveur par éléments finis. Mais pour vraiment remplacer le
+            papier-crayon, il faudrait pouvoir modéliser n'importe quel
+            mécanisme : j'aimerais un jour gérer les collisions, dessiner en 3D,
+            peut-être faire de la dynamique des fluides.
           </Typography>
 
-          <Typography gutterBottom align="justify">
-            C'est Slidep : De la simulation en temps réel avec des éléments
-            simples, le tout dans une interface facile d'accès. C'est l'étape
-            intermédiaire entre les schémas papier crayon et le solveur par
-            éléments finis. Mais pour prétendre remplacer le papier crayon, il
-            faudrais pouvoir créer tous les mécanismes ! C'est pour cela qu'à
-            l'avenir, j'aimerais faire évoluer Slidep pour gérer les collisions,
-            dessiner en 3D, voire même faire de la dynamique des fluides !
+          <Typography>
+            Slidep donne tout de suite des ordres de grandeur : on voit une
+            flèche, un effort ou un rapport de transmission changer en direct.
+            Ça ne remplace pas un solveur validé quand il faut signer un
+            dimensionnement, mais pour explorer, comparer et comprendre, c'est
+            bien plus rapide.
           </Typography>
 
-          <Typography gutterBottom align="justify">
-            Implémenter ces changement à l'avenir me demandera plus que de la
-            patience, mais des moyens. Alors si vous avez des idées, partagez
-            les ! Si vous savez coder, contribuez ! Et si vous avez de l'argent,
-            financez !
+          <Box
+            sx={{
+              display: "grid",
+              gridTemplateColumns: { xs: "1fr", sm: "repeat(3, 1fr)" },
+              gap: 2,
+              mt: 3,
+            }}
+          >
+            {[
+              {
+                icon: <Bolt sx={{ fontSize: 20 }} />,
+                title: "Temps réel",
+                body: "Le mécanisme se recalcule pendant que vous le manipulez.",
+              },
+              {
+                icon: <CloudOff sx={{ fontSize: 20 }} />,
+                title: "Hors ligne",
+                body: "Installez Slidep depuis votre navigateur, il fonctionne sans connexion.",
+              },
+              {
+                icon: <Lock sx={{ fontSize: 20 }} />,
+                title: "Chez vous",
+                body: "Vos mécanismes restent sur votre machine. Pas de compte, pas de serveur.",
+              },
+            ].map((feature) => (
+              <Box key={feature.title}>
+                <Box
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 0.75,
+                    color: "primary.main",
+                    mb: 0.25,
+                  }}
+                >
+                  {feature.icon}
+                  <Typography variant="subtitle2" color="text.primary">
+                    {feature.title}
+                  </Typography>
+                </Box>
+                <Typography variant="body2" color="text.secondary">
+                  {feature.body}
+                </Typography>
+              </Box>
+            ))}
+          </Box>
+
+          <Typography sx={{ mt: 3 }}>
+            Si vous avez des idées, écrivez-moi. Et si vous savez coder, le
+            dépôt est ouvert.
           </Typography>
         </DialogContent>
         <DialogContent>
-          <Box>Contact :</Box>
-          <a href="mailto:arnaud.jungo@slidep.ch">arnaud.jungo@slidep.ch</a>
-          <Box>Code :</Box>
-          <a href="https://github.com/Jungo-Phi/Slidep">
-            github.com/Jungo-Phi/Slidep
-          </a>
+          <Box
+            sx={{
+              display: "grid",
+              gridTemplateColumns: "auto 1fr",
+              columnGap: 2,
+              rowGap: 0.75,
+              alignItems: "baseline",
+              fontSize: "0.875rem",
+            }}
+          >
+            <Typography variant="body2" color="text.secondary">
+              Version
+            </Typography>
+            <Typography variant="body2">{__APP_VERSION__}</Typography>
+
+            <Typography variant="body2" color="text.secondary">
+              Licence
+            </Typography>
+            <Typography variant="body2">à définir</Typography>
+
+            <Typography variant="body2" color="text.secondary">
+              Contact
+            </Typography>
+            <MuiLink
+              variant="body2"
+              href="mailto:arnaud.jungo@slidep.ch"
+              sx={{ justifySelf: "start" }}
+            >
+              arnaud.jungo@slidep.ch
+            </MuiLink>
+
+            <Typography variant="body2" color="text.secondary">
+              Code
+            </Typography>
+            <MuiLink
+              variant="body2"
+              href="https://github.com/Jungo-Phi/Slidep"
+              target="_blank"
+              rel="noopener noreferrer"
+              sx={{ justifySelf: "start" }}
+            >
+              github.com/Jungo-Phi/Slidep
+            </MuiLink>
+          </Box>
         </DialogContent>
       </Dialog>
       <Snackbar
         open={snackbar.open}
-        autoHideDuration={3000}
+        autoHideDuration={snackbar.duration ?? SNACKBAR_DURATION.DEFAULT}
         onClose={() => setSnackbar((prev) => ({ ...prev, open: false }))}
         anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
       >

@@ -16,7 +16,8 @@ import { Action, ConnectsActionType } from "../../types";
 import { Point2 } from "../../types/point2";
 import { HoveredPart } from "../../types/hovered-part";
 import { connected_constraints, node_on_beam_body } from "../canvas/utils";
-import { legible_id } from "../../utils";
+import { belt_wrap_direction, legible_id } from "../../utils";
+import type { BeltGearApproach } from "../../utils";
 
 /** Returns the mechanical element from the id. */
 export function get_mechanical_element_from_id(
@@ -89,57 +90,67 @@ export function host_mechanical_element(
   return mechanicalElements.find((e) => e.id === hostID);
 }
 
-/** Returns the complementary connection pair type of an element to another. */
-export function get_connection_pair_type(
+/**
+ * Every container of `connectedElement` that holds `elementID`.
+ *
+ * A pair can be linked through more than one container — a gear sitting in both
+ * its axle's `fixedGearsIDs` and its `rotatingEdgesIDs`, say. Disconnecting only
+ * the first one leaves the others pointing at a deleted element, so callers must
+ * handle all of them.
+ */
+export function get_connection_pair_types(
   elementID: ID,
   connectedElement: MechanicalElement,
-): ConnectsActionType {
+): ConnectsActionType[] {
+  const types: ConnectsActionType[] = [];
+
   if (
     "fixedEdgesIDs" in connectedElement &&
     connectedElement.fixedEdgesIDs.includes(elementID)
   )
-    return "ConnectsFixedEdges";
+    types.push("ConnectsFixedEdges");
 
   if (
     "rotatingEdgesIDs" in connectedElement &&
     connectedElement.rotatingEdgesIDs.includes(elementID)
   )
-    return "ConnectsRotatingEdges";
+    types.push("ConnectsRotatingEdges");
 
   if (
     "parentBeamID" in connectedElement &&
     connectedElement.parentBeamID === elementID
   )
-    return "ConnectsParentBeam";
+    types.push("ConnectsParentBeam");
 
   if (
     "fixedNodeStartID" in connectedElement &&
     connectedElement.fixedNodeStartID === elementID
   )
-    return "ConnectsFixedNodeStart";
+    types.push("ConnectsFixedNodeStart");
 
   if (
     "fixedNodeEndID" in connectedElement &&
     connectedElement.fixedNodeEndID === elementID
   )
-    return "ConnectsFixedNodeEnd";
+    types.push("ConnectsFixedNodeEnd");
 
   if (
     "fixedNodesBodyIDs" in connectedElement &&
     connectedElement.fixedNodesBodyIDs.includes(elementID)
   )
-    return "ConnectsFixedNodesBody";
+    types.push("ConnectsFixedNodesBody");
 
   if (
     "parentAxleID" in connectedElement &&
     connectedElement.parentAxleID === elementID
   )
-    return "ConnectsParentAxle";
+    types.push("ConnectsParentAxle");
+
   if (
     "meshedGearsIDs" in connectedElement &&
     connectedElement.meshedGearsIDs.includes(elementID)
   )
-    return "ConnectsMeshedGears";
+    types.push("ConnectsMeshedGears");
 
   if (
     "attachedGearsIDs" in connectedElement &&
@@ -147,21 +158,21 @@ export function get_connection_pair_type(
       (attachedGear) => attachedGear.id === elementID,
     )
   )
-    return "ConnectsAttachedGears";
+    types.push("ConnectsAttachedGears");
 
   if (
     "attachedBeltID" in connectedElement &&
     connectedElement.attachedBeltID === elementID
   )
-    return "ConnectsAttachedBelt";
+    types.push("ConnectsAttachedBelt");
 
   if (
     "fixedGearsIDs" in connectedElement &&
     (connectedElement.fixedGearsIDs as ID[]).includes(elementID)
   )
-    return "ConnectsFixedGears";
+    types.push("ConnectsFixedGears");
 
-  throw new Error("Connection pair type has not been found !");
+  return types;
 }
 
 /** Returns the array of connected elements of a given type. */
@@ -329,17 +340,16 @@ export function delete_element(
             id,
             mechanicalElements,
           );
-          const connection_pair_type = get_connection_pair_type(
-            element.id,
-            connectedElement,
-          );
-          actions.push(
-            disconnect_element(
-              connectedElement,
-              element,
-              connection_pair_type,
-              mechanicalElements,
-            ),
+          get_connection_pair_types(element.id, connectedElement).forEach(
+            (pairType) =>
+              actions.push(
+                disconnect_element(
+                  connectedElement,
+                  element,
+                  pairType,
+                  mechanicalElements,
+                ),
+              ),
           );
         });
       });
@@ -371,20 +381,86 @@ export function delete_element(
       element: get_constraint_element_from_id(id, constraintElements),
     }),
   );
+
+  // A load lives on its host and goes with it. One merely *framed* on the
+  // deleted edge survives, back in world coordinates — the fallback
+  // `repair_mechanism` already applies to that reference at load time.
+  loadElements.forEach((load) => {
+    if (load.targetID === elementID) {
+      actions.push({ type: "DeleteElement", element: load });
+      return;
+    }
+    if (
+      "frame" in load &&
+      load.frame !== "world" &&
+      load.frame.edgeID === elementID
+    )
+      actions.push({
+        type: "SetLoadFrame",
+        id: load.id,
+        newFrame: "world",
+        oldFrame: load.frame,
+      });
+  });
   return actions;
 }
 
 /**
- * Applies a single structural action (Delete or Connect/Disconnect) to mutable
- * simulated-state arrays. Used by delete_elements to maintain correct indices
- * between successive deletions within the same batch.
+ * A copy whose mutable containers are detached, so a simulation can advance over
+ * it without ever reaching the caller's state — nor, for a freshly built
+ * element, the very object its `CreateElement` action carries.
  */
-function apply_to_sim_state(
+function clone_element_for_simulation(
+  el: MechanicalElement,
+): MechanicalElement {
+  return {
+    ...el,
+    ...("fixedEdgesIDs" in el && { fixedEdgesIDs: [...el.fixedEdgesIDs] }),
+    ...("rotatingEdgesIDs" in el && {
+      rotatingEdgesIDs: [...el.rotatingEdgesIDs],
+    }),
+    ...("meshedGearsIDs" in el && { meshedGearsIDs: [...el.meshedGearsIDs] }),
+    ...("fixedGearsIDs" in el && { fixedGearsIDs: [...el.fixedGearsIDs] }),
+    ...("fixedNodesBodyIDs" in el && {
+      fixedNodesBodyIDs: [...el.fixedNodesBodyIDs],
+    }),
+    ...("attachedGearsIDs" in el && {
+      attachedGearsIDs: el.attachedGearsIDs.map((g) => ({ ...g })),
+    }),
+  } as MechanicalElement;
+}
+
+/** The whole state, detached the same way. */
+export function clone_for_simulation(
+  mechanicalElements: MechanicalElement[],
+): MechanicalElement[] {
+  return mechanicalElements.map(clone_element_for_simulation);
+}
+
+/**
+ * Applies a single structural action (Create, Delete or Connect/Disconnect) to
+ * mutable simulated-state arrays.
+ *
+ * Any caller that emits several bundles of actions in one gesture must advance
+ * this state between them: a bundle computed against the state as it was before
+ * a previous one can name an element that is already gone, and the reducer
+ * throws on it. `simMech` must come from `clone_for_simulation`.
+ */
+export function apply_to_sim_state(
   action: Action,
   simMech: MechanicalElement[],
   simConst: ConstraintElement[],
   simLoad: LoadElement[],
 ) {
+  if (action.type === "CreateElement") {
+    const { element } = action;
+    // Mechanical elements carry probes; loads name a host; constraints neither.
+    if ("probes" in element)
+      simMech.push(clone_element_for_simulation(element as MechanicalElement));
+    else if ("targetID" in element) simLoad.push(element);
+    else simConst.push(element);
+    return;
+  }
   if (action.type === "DeleteElement") {
     const mechIndex = simMech.findIndex((e) => e.id === action.element.id);
     if (mechIndex !== -1) {
@@ -397,6 +473,15 @@ function apply_to_sim_state(
     if (constraintIndex !== -1) simConst.splice(constraintIndex, 1);
     const loadIndex = simLoad.findIndex((e) => e.id === action.element.id);
     if (loadIndex !== -1) simLoad.splice(loadIndex, 1);
+    return;
+  }
+  if (action.type === "SetLoadFrame") {
+    // simLoad shares its entries with the caller's state, so this replaces
+    // rather than mutates.
+    const index = simLoad.findIndex((l) => l.id === action.id);
+    const load = index === -1 ? undefined : simLoad[index];
+    if (load && "frame" in load)
+      simLoad[index] = { ...load, frame: action.newFrame };
     return;
   }
   if (!("elementID" in action)) return;
@@ -466,6 +551,58 @@ function apply_to_sim_state(
 }
 
 /**
+ * A gesture that emits several bundles of actions, each computed against the
+ * state the previous ones leave behind.
+ *
+ * Composing two `connect_elements` calls against the same starting state is a
+ * defect, not a shortcut: the first may take a node over and delete it, and the
+ * second then names an element the reducer will not find. Any multi-step gesture
+ * goes through here.
+ */
+export interface Simulation {
+  readonly mechanicalElements: MechanicalElement[];
+  readonly constraintElements: ConstraintElement[];
+  readonly loads: LoadElement[];
+  /** Everything recorded so far, in order, ready for the reducer. */
+  readonly actions: Action[];
+  /** Records `produced` and advances the state over it. */
+  step(produced: Action[]): void;
+  /** Whether that hovered part still designates a live element. */
+  holds(part: HoveredPart): boolean;
+}
+
+export function start_simulation(
+  mechanicalElements: MechanicalElement[],
+  constraintElements: ConstraintElement[],
+  loads: LoadElement[],
+): Simulation {
+  const simMech = clone_for_simulation(mechanicalElements);
+  const simConst = [...constraintElements];
+  const simLoad = [...loads];
+  const actions: Action[] = [];
+  return {
+    mechanicalElements: simMech,
+    constraintElements: simConst,
+    loads: simLoad,
+    actions,
+    step(produced) {
+      for (const action of produced) {
+        actions.push(action);
+        apply_to_sim_state(action, simMech, simConst, simLoad);
+      }
+    },
+    holds(part) {
+      if (part.type === "Void") return false;
+      return (
+        simMech.some((e) => e.id === part.id) ||
+        simConst.some((e) => e.id === part.id) ||
+        simLoad.some((e) => e.id === part.id)
+      );
+    },
+  };
+}
+
+/**
  * Deletes multiple elements as a single consistent action bundle.
  *
  * Each element is deleted against the state as it looks after all prior
@@ -478,52 +615,32 @@ export function delete_elements(
   constraintElements: ConstraintElement[],
   loadElements: LoadElement[],
 ): Action[] {
-  // Shallow-clone with deep-copied mutable arrays so the simulation
-  // never touches the caller's state.
-  const simMech: MechanicalElement[] = mechanicalElements.map(
-    (el) =>
-      ({
-        ...el,
-        ...("fixedEdgesIDs" in el && { fixedEdgesIDs: [...el.fixedEdgesIDs] }),
-        ...("rotatingEdgesIDs" in el && {
-          rotatingEdgesIDs: [...el.rotatingEdgesIDs],
-        }),
-        ...("meshedGearsIDs" in el && {
-          meshedGearsIDs: [...el.meshedGearsIDs],
-        }),
-        ...("fixedGearsIDs" in el && { fixedGearsIDs: [...el.fixedGearsIDs] }),
-        ...("fixedNodesBodyIDs" in el && {
-          fixedNodesBodyIDs: [...el.fixedNodesBodyIDs],
-        }),
-        ...("attachedGearsIDs" in el && {
-          attachedGearsIDs: el.attachedGearsIDs.map((g) => ({ ...g })),
-        }),
-      }) as MechanicalElement,
+  const sim = start_simulation(
+    mechanicalElements,
+    constraintElements,
+    loadElements,
   );
-  const simConst: ConstraintElement[] = [...constraintElements];
-  const simLoad: LoadElement[] = [...loadElements];
-
-  const allActions: Action[] = [];
 
   for (const id of elementIDs) {
     // Skip if a previous deletion in this batch already removed this element
     // (e.g. a constraint shared by two deleted mechanical elements).
     const exists =
-      simMech.find((e) => e.id === id) ??
-      simConst.find((e) => e.id === id) ??
-      simLoad.find((e) => e.id === id);
+      sim.mechanicalElements.some((e) => e.id === id) ||
+      sim.constraintElements.some((e) => e.id === id) ||
+      sim.loads.some((e) => e.id === id);
     if (!exists) continue;
 
-    const stepActions = delete_element(id, simMech, simConst, simLoad);
-    allActions.push(...stepActions);
-
-    // Advance the simulation so the next iteration sees correct state.
-    for (const action of stepActions) {
-      apply_to_sim_state(action, simMech, simConst, simLoad);
-    }
+    sim.step(
+      delete_element(
+        id,
+        sim.mechanicalElements,
+        sim.constraintElements,
+        sim.loads,
+      ),
+    );
   }
 
-  return allActions;
+  return sim.actions;
 }
 
 /**
@@ -625,7 +742,22 @@ function transfer_internal_connections(
 ): Action[] {
   const actions: Action[] = [];
 
-  if ("parentBeamID" in sourceNode && sourceNode.parentBeamID) {
+  // Both nodes may already hold the same edge — the two ends of one beam, say.
+  // Re-adding it would leave the survivor naming it twice.
+  const not_already_on_dest = (edgeID: ID): boolean =>
+    !(
+      ("fixedEdgesIDs" in destNode &&
+        destNode.fixedEdgesIDs.includes(edgeID)) ||
+      ("rotatingEdgesIDs" in destNode &&
+        destNode.rotatingEdgesIDs.includes(edgeID)) ||
+      ("parentBeamID" in destNode && destNode.parentBeamID === edgeID)
+    );
+
+  if (
+    "parentBeamID" in sourceNode &&
+    sourceNode.parentBeamID &&
+    not_already_on_dest(sourceNode.parentBeamID)
+  ) {
     if ("parentBeamID" in destNode && !destNode.parentBeamID) {
       actions.push({
         type: "ConnectsParentBeam",
@@ -647,7 +779,7 @@ function transfer_internal_connections(
     }
   }
   if ("fixedEdgesIDs" in sourceNode) {
-    sourceNode.fixedEdgesIDs.forEach((edgeID) => {
+    sourceNode.fixedEdgesIDs.filter(not_already_on_dest).forEach((edgeID) => {
       actions.push({
         type:
           "fixedEdgesIDs" in destNode
@@ -661,18 +793,20 @@ function transfer_internal_connections(
     });
   }
   if ("rotatingEdgesIDs" in sourceNode) {
-    sourceNode.rotatingEdgesIDs.forEach((edgeID) => {
-      actions.push({
-        type:
-          "rotatingEdgesIDs" in destNode
-            ? "ConnectsRotatingEdges"
-            : "ConnectsFixedEdges",
-        disconnect: false,
-        elementID: destNode.id,
-        connectID: edgeID,
-        index: 0,
+    sourceNode.rotatingEdgesIDs
+      .filter(not_already_on_dest)
+      .forEach((edgeID) => {
+        actions.push({
+          type:
+            "rotatingEdgesIDs" in destNode
+              ? "ConnectsRotatingEdges"
+              : "ConnectsFixedEdges",
+          disconnect: false,
+          elementID: destNode.id,
+          connectID: edgeID,
+          index: 0,
+        });
       });
-    });
   }
   // Transférer les gears du source (pivot/slidep) vers le dest
   if ("fixedGearsIDs" in sourceNode && "fixedGearsIDs" in destNode) {
@@ -809,6 +943,47 @@ function transfer_constraint_connections(
     }
   });
   return actions;
+}
+
+/** Which part of its own element a gesture is bringing to the target. */
+export type OwnPartKind = "node" | "start" | "end" | "body" | "gear";
+
+/**
+ * The `selectedPart` to hand to `connect_elements`: what the element being placed
+ * or dragged offers to the target.
+ *
+ * An endpoint becomes a body connection when the target is a node the edge is
+ * being drawn past — it ends up mid-edge, not at the tip. Placing and dragging
+ * answer to this identically, which is the whole reason this is one function.
+ *
+ * The position is carried only to satisfy `HoveredPart`; `connect_elements`
+ * reads the type, the id and the part, never the position.
+ */
+export function own_part(
+  elementID: ID,
+  kind: OwnPartKind,
+  target: HoveredPart,
+): HoveredPart {
+  const position = target.position;
+  if (kind === "gear")
+    return { type: "GearTooth", position, id: elementID, deleting: false };
+  if (kind === "node")
+    return {
+      type: "Node",
+      position,
+      id: elementID,
+      deleting: false,
+      beamBodyHover: false,
+    };
+  const drawnPast =
+    kind !== "body" && target.type === "Node" && target.beamBodyHover;
+  return {
+    type: "Edge",
+    position,
+    id: elementID,
+    deleting: false,
+    part: drawnPast ? "body" : kind,
+  };
 }
 
 /**
@@ -979,7 +1154,13 @@ export function connect_elements(
           } else {
             // Takeover de selectedNode sur hoveredNode
             actions.push({ type: "DeleteElement", element: hoveredNode });
-            if (hoveredNode.isGrounded && !selectedNode.isGrounded) {
+            // A mass never inherits an anchor: it is the one node that cannot
+            // be grounded.
+            if (
+              hoveredNode.isGrounded &&
+              !selectedNode.isGrounded &&
+              selectedNode.type !== "mass"
+            ) {
               actions.push({
                 type: "GroundNode",
                 id: selectedNode.id,
@@ -1013,6 +1194,7 @@ export function connect_elements(
               selectedNode,
               hoveredEdge,
               hoveredPart.part,
+              mechanicalElements,
               loads,
             ),
           );
@@ -1024,6 +1206,7 @@ export function connect_elements(
               selectedNode,
               hoveredElement as GearElement,
               "body",
+              mechanicalElements,
               loads,
             ),
           );
@@ -1041,6 +1224,7 @@ export function connect_elements(
               hoveredNode,
               selectedEdge,
               selectedPart.part,
+              mechanicalElements,
               loads,
             ),
           );
@@ -1054,6 +1238,7 @@ export function connect_elements(
               selectedEdge,
               selectedPart.part,
               hoveredPart.position,
+              mechanicalElements,
               loads,
             ),
           );
@@ -1067,6 +1252,7 @@ export function connect_elements(
               hoveredElement as GearElement,
               "body",
               hoveredPart.position,
+              mechanicalElements,
               loads,
             ),
           );
@@ -1083,6 +1269,7 @@ export function connect_elements(
               hoveredElement as NodeElement,
               selectedGear,
               "body",
+              mechanicalElements,
               loads,
             ),
           );
@@ -1096,6 +1283,7 @@ export function connect_elements(
               selectedGear,
               "body",
               hoveredPart.position,
+              mechanicalElements,
               loads,
             ),
           );
@@ -1115,11 +1303,44 @@ export function connect_elements(
   return actions;
 }
 
-/** Connects a node and an edge bidirectionally. */
+/**
+ * Connects a node and an edge bidirectionally.
+ *
+ * Idempotent: a link already present on either side is not emitted again, so
+ * re-connecting an existing pair is a no-op rather than a duplicate entry.
+ */
+/**
+ * Releases an edge end from the node currently holding it.
+ *
+ * Only the node's edge lists are cleared: a node may also hold the same edge as
+ * its `parentBeamID` — a slider sliding along it — which the endpoint moving
+ * away does not end.
+ */
+function detach_edge_end(
+  edge: EdgeElement,
+  previousNodeID: ID | undefined,
+  node: NodeElement,
+  mechanicalElements: MechanicalElement[],
+): Action[] {
+  if (!previousNodeID || previousNodeID === node.id) return [];
+  const previous = mechanicalElements.find((e) => e.id === previousNodeID);
+  if (!previous) return [];
+  return get_connection_pair_types(edge.id, previous)
+    .filter(
+      (pairType) =>
+        pairType === "ConnectsRotatingEdges" ||
+        pairType === "ConnectsFixedEdges",
+    )
+    .map((pairType) =>
+      disconnect_element(previous, edge, pairType, mechanicalElements),
+    );
+}
+
 function connect_node_and_edge(
   node: NodeElement,
   edge: EdgeElement | GearElement,
   edgePart: "start" | "end" | "body",
+  mechanicalElements: MechanicalElement[],
   loads: LoadElement[] = [],
 ): Action[] {
   const actions: Action[] = [];
@@ -1136,47 +1357,73 @@ function connect_node_and_edge(
       connectID: edge.id,
     });
   } else if ("rotatingEdgesIDs" in node) {
-    actions.push({
-      type: "ConnectsRotatingEdges",
-      disconnect: false,
-      elementID: node.id,
-      connectID: edge.id,
-      index: 0,
-    });
+    if (!node.rotatingEdgesIDs.includes(edge.id))
+      actions.push({
+        type: "ConnectsRotatingEdges",
+        disconnect: false,
+        elementID: node.id,
+        connectID: edge.id,
+        index: 0,
+      });
   } else if ("fixedEdgesIDs" in node) {
-    actions.push({
-      type: "ConnectsFixedEdges",
-      disconnect: false,
-      elementID: node.id,
-      connectID: edge.id,
-      index: 0,
-    });
+    if (!node.fixedEdgesIDs.includes(edge.id))
+      actions.push({
+        type: "ConnectsFixedEdges",
+        disconnect: false,
+        elementID: node.id,
+        connectID: edge.id,
+        index: 0,
+      });
   }
   switch (edgePart) {
     case "start":
-      actions.push({
-        type: "ConnectsFixedNodeStart",
-        disconnect: false,
-        elementID: edge.id,
-        connectID: node.id,
-      });
+      if (edge.type !== "gear" && edge.fixedNodeStartID !== node.id) {
+        actions.push(
+          ...detach_edge_end(
+            edge,
+            edge.fixedNodeStartID,
+            node,
+            mechanicalElements,
+          ),
+        );
+        actions.push({
+          type: "ConnectsFixedNodeStart",
+          disconnect: false,
+          elementID: edge.id,
+          connectID: node.id,
+        });
+      }
       break;
     case "end":
-      actions.push({
-        type: "ConnectsFixedNodeEnd",
-        disconnect: false,
-        elementID: edge.id,
-        connectID: node.id,
-      });
+      if (edge.type !== "gear" && edge.fixedNodeEndID !== node.id) {
+        actions.push(
+          ...detach_edge_end(
+            edge,
+            edge.fixedNodeEndID,
+            node,
+            mechanicalElements,
+          ),
+        );
+        actions.push({
+          type: "ConnectsFixedNodeEnd",
+          disconnect: false,
+          elementID: edge.id,
+          connectID: node.id,
+        });
+      }
       break;
     case "body":
-      actions.push({
-        type: "ConnectsFixedNodesBody",
-        disconnect: false,
-        elementID: edge.id,
-        connectID: node.id,
-        index: 0,
-      });
+      if (
+        !("fixedNodesBodyIDs" in edge) ||
+        !edge.fixedNodesBodyIDs.includes(node.id)
+      )
+        actions.push({
+          type: "ConnectsFixedNodesBody",
+          disconnect: false,
+          elementID: edge.id,
+          connectID: node.id,
+          index: 0,
+        });
   }
   if (edgePart === "body") return actions;
 
@@ -1205,8 +1452,22 @@ function connect_node_and_edge(
   return actions;
 }
 
+/** The node fixed at that end of an edge, if the part designates a single one. */
+function node_at_edge_part(
+  edge: EdgeElement | GearElement,
+  edgePart: "start" | "end" | "body",
+): ID | undefined {
+  if (edge.type === "gear") return undefined;
+  if (edgePart === "start") return edge.fixedNodeStartID;
+  if (edgePart === "end") return edge.fixedNodeEndID;
+  return undefined;
+}
+
 /**
  * Connects 2 edges together (beam body / gear perimeter) by creating a join at the contact point.
+ *
+ * Idempotent: two ends already held by the same node are left alone, rather than
+ * given a second join that would orphan the first.
  */
 function connect_two_edges(
   edge1: EdgeElement | GearElement,
@@ -1214,8 +1475,12 @@ function connect_two_edges(
   edge2: EdgeElement | GearElement,
   edgePart2: "start" | "end" | "body",
   position: Point2,
+  mechanicalElements: MechanicalElement[],
   loads: LoadElement[] = [],
 ): Action[] {
+  const node1 = node_at_edge_part(edge1, edgePart1);
+  if (node1 && node1 === node_at_edge_part(edge2, edgePart2)) return [];
+
   const join: JoinElement = {
     type: "join",
     id: crypto.randomUUID(),
@@ -1227,8 +1492,8 @@ function connect_two_edges(
   };
   return [
     { type: "CreateElement", element: join },
-    ...connect_node_and_edge(join, edge1, edgePart1, loads),
-    ...connect_node_and_edge(join, edge2, edgePart2, loads),
+    ...connect_node_and_edge(join, edge1, edgePart1, mechanicalElements, loads),
+    ...connect_node_and_edge(join, edge2, edgePart2, mechanicalElements, loads),
   ];
 }
 
@@ -1253,7 +1518,36 @@ export function connect_meshed_gears(gear1ID: ID, gear2ID: ID): Action[] {
 }
 
 /** Connects a gear and a belt bidirectionally. */
-export function connect_gear_and_belt(
+/**
+ * Insert a gear into a belt's straight section, winding the belt on the side its
+ * centre sits on.
+ *
+ * The centre is passed rather than read from the gear: the placement tool creates
+ * the gear in the same batch, so it is not in `mechanicalElements` yet.
+ */
+export function attach_gear_to_belt(
+  gearID: ID,
+  gearCenter: Point2,
+  belt: BeltElement,
+  section: number,
+  mechanicalElements: MechanicalElement[],
+  approach: BeltGearApproach,
+): Action[] {
+  return connect_gear_and_belt(
+    gearID,
+    belt.id,
+    section,
+    belt_wrap_direction(
+      gearCenter,
+      belt,
+      section,
+      mechanicalElements,
+      approach,
+    ),
+  );
+}
+
+function connect_gear_and_belt(
   gearID: ID,
   beltID: ID,
   beltSection: number,

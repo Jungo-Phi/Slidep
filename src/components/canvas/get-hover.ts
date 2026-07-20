@@ -18,15 +18,17 @@ import {
   HIT_TOLERANCE,
   DRAWING_ORDER,
   INTERACTION_SPECS,
-  DIM,
 } from "../../constants/rendering-specs";
 import {
-  get_connection_types,
-  get_connections,
   get_constraint_element_from_id,
   get_load_element_from_id,
   get_mechanical_element_from_id,
 } from "../mechanism/connect-actions";
+import {
+  BELT_CANNOT_CLOSE,
+  belt_can_close,
+  legality_for_state,
+} from "../mechanism/connection-rules";
 import { get_gear_angles } from "../../utils";
 import {
   distributed_display_vectors,
@@ -43,23 +45,6 @@ import {
 } from "../../utils/load-geom";
 import { is_constraint_type } from "./utils";
 
-const SELECTION_STATES = [
-  "Selecting",
-  "SelectedMultiple",
-  "SelectedElement",
-  "Erasing",
-  "EditingValue",
-  "PlacingValue",
-] as const satisfies readonly CanvasStateType[];
-
-type SelectionStateType = (typeof SELECTION_STATES)[number];
-
-function isSelectionState(
-  state: CanvasState,
-): state is Extract<CanvasState, { type: SelectionStateType }> {
-  return (SELECTION_STATES as readonly CanvasStateType[]).includes(state.type);
-}
-
 /**
  * Where along `start`→`end` the cursor grabbed it, clamped to the segment.
  * Falls back to the middle for a segment with no length, which carries no
@@ -71,6 +56,473 @@ function grab_parameter(cursor: Point2, start: Point2, end: Point2): number {
   return Math.min(1, Math.max(0, t));
 }
 
+/**
+ * How a target answers one tool, per family. `doc/hover-matrix.md` is the
+ * readable form of the table below and explains every empty cell.
+ */
+type NodeProbe =
+  /** The node itself. */
+  | "centre"
+  /** …and the node an edge is being drawn *past*, which lands on its body. */
+  | "centre+past"
+  /** Not the node but the gear its axle carries. */
+  | "carried-gear";
+
+type GearProbe =
+  /** Rim point under the cursor. */
+  | "rim"
+  /** Rim point facing the gear being sized — the tangency of the two. */
+  | "rim-toward-ref"
+  /** The gear as a whole, designated by its centre. */
+  | "whole";
+
+export type EdgeProbe =
+  /** Ends, then body — whatever the edge type. */
+  | "ends+body"
+  /** Ends, then body only if it is a beam. */
+  | "ends+beam-body"
+  /** Ends only. */
+  | "ends"
+  /** Body only, at the cursor. */
+  | "body"
+  /** Body only, designated by its middle. */
+  | "body-centre";
+
+export type BeltProbe =
+  /** Ends, arcs and straight runs. */
+  | "full"
+  /** Arcs and straight runs, but not the ends. */
+  | "runs+arcs"
+  /** Straight runs only, at the tangency of the gear being sized. */
+  | "runs-tangent"
+  /** Ends only. */
+  | "ends";
+
+export type HoverTargets = {
+  node?: NodeProbe;
+  gear?: GearProbe;
+  edge?: EdgeProbe;
+  belt?: BeltProbe;
+  /** Constraints and loads, which are only ever picked to be selected. */
+  overlays?: true;
+};
+
+/** What a tool may pick, stated once for all six target families. */
+const SELECT_ALL: HoverTargets = {
+  node: "centre",
+  gear: "rim",
+  edge: "ends+body",
+  belt: "full",
+  overlays: true,
+};
+
+/** Placing or dragging something that attaches to the mechanism. */
+const ATTACHING: HoverTargets = {
+  node: "centre",
+  gear: "rim",
+  edge: "ends+beam-body",
+  belt: "ends",
+};
+
+/** Same, for the two gestures that size a gear against what it meets. */
+const SIZING_GEAR: HoverTargets = {
+  node: "centre",
+  gear: "rim-toward-ref",
+  edge: "ends",
+  belt: "runs-tangent",
+};
+
+/** Nothing is a target: the gesture reads the free cursor. */
+const NOTHING: HoverTargets = {};
+
+/**
+ * The one place a tool declares what it may pick.
+ *
+ * `Record<CanvasStateType, …>` is the point: a new state does not compile until
+ * it has answered for all six families. Before this table the answer was spread
+ * over six parallel `switch`, and forgetting one was silent — the tool simply
+ * stopped seeing a kind of target.
+ */
+export const HOVER_TARGETS: Record<CanvasStateType, HoverTargets> = {
+  Selecting: SELECT_ALL,
+  SelectedElement: SELECT_ALL,
+  SelectedMultiple: SELECT_ALL,
+  Erasing: SELECT_ALL,
+  EditingValue: SELECT_ALL,
+  PlacingValue: SELECT_ALL,
+  // A rectangle drag picks by area, not by hover.
+  SelectingMultiple: NOTHING,
+  ErasingMultiple: NOTHING,
+
+  MovingNode: ATTACHING,
+  MovingEdgeStartPoint: { ...ATTACHING, node: "centre+past" },
+  MovingEdgeEndPoint: { ...ATTACHING, node: "centre+past" },
+  // Dragging a body offers the body itself, so other bodies are not targets.
+  MovingEdgeBody: { ...ATTACHING, edge: "ends" },
+  MovingBeltBody: { gear: "rim" },
+  ChangingGearRadius: SIZING_GEAR,
+  MovingSelectionMultiple: NOTHING,
+  MovingConstraint: NOTHING,
+  // A load being dragged follows its own snapping, on the free cursor.
+  MovingForce: NOTHING,
+  MovingDistributedForce: NOTHING,
+  MovingMoment: NOTHING,
+  SimulationDragging: NOTHING,
+
+  PlacingBeamStart: ATTACHING,
+  PlacingBeamEnd: { ...ATTACHING, node: "centre+past" },
+  PlacingSpringStart: ATTACHING,
+  PlacingSpringEnd: ATTACHING,
+  PlacingDamperStart: ATTACHING,
+  PlacingDamperEnd: ATTACHING,
+  PlacingBeltStart: ATTACHING,
+  PlacingBeltEnd: ATTACHING,
+  PlacingPivot: ATTACHING,
+  PlacingMotor: ATTACHING,
+  PlacingSlider: ATTACHING,
+  PlacingJoin: ATTACHING,
+  PlacingMass: ATTACHING,
+  PlacingGround: ATTACHING,
+  PlacingGearStart: ATTACHING,
+  PlacingGearRadius: SIZING_GEAR,
+
+  PlacingForceStart: { node: "centre", edge: "ends+beam-body" },
+  // The "…End" states define a vector, not a target.
+  PlacingForceEnd: NOTHING,
+  PlacingDistributedForce: NOTHING,
+  PlacingMomentStart: {
+    node: "carried-gear",
+    gear: "whole",
+    edge: "body-centre",
+  },
+  PlacingMomentEnd: NOTHING,
+  PlacingProbe: { node: "centre", gear: "rim", edge: "body" },
+  PlacingProbeMetrics: NOTHING,
+
+  // A belt is measured whole, from its body, so only DimensionStart sees it.
+  DimensionStart: {
+    node: "centre",
+    gear: "rim",
+    edge: "body",
+    belt: "runs+arcs",
+  },
+  DimensionNode: { node: "centre", edge: "body" },
+  DimensionEdge: { node: "centre", edge: "body" },
+  // Both operands are already known; only the label is left to place.
+  DimensionNodeToNode: NOTHING,
+  DimensionEdgeToNode: NOTHING,
+  DimensionAngle: NOTHING,
+  DimensionRadius: NOTHING,
+  DimensionBelt: NOTHING,
+
+  HorizontalVerticalConstraintStart: { node: "centre", edge: "body" },
+  // Once the first node is picked, the constraint joins two nodes.
+  HorizontalVerticalConstraintNode: { node: "centre" },
+  NormalConstraintStart: { edge: "body" },
+  NormalConstraintEdge: { edge: "body" },
+  ParallelConstraintStart: { edge: "body" },
+  ParallelConstraintEdge: { edge: "body" },
+  EqualConstraintStart: { gear: "whole", edge: "body" },
+  EqualConstraintEdge: { edge: "body" },
+  EqualConstraintGear: { gear: "whole" },
+  GearRatioConstraintStart: { gear: "whole" },
+  GearRatioConstraintGear: { gear: "whole" },
+};
+
+/**
+ * Where the edge being drawn or dragged runs from, for the "drawn past a node"
+ * pick. Only a beam takes a node on its body.
+ */
+function drawn_past_base(
+  state: CanvasState,
+  mechanicalElements: MechanicalElement[],
+): Point2 | undefined {
+  if (state.type === "PlacingBeamEnd") return state.startHover.position;
+  if (
+    state.type !== "MovingEdgeStartPoint" &&
+    state.type !== "MovingEdgeEndPoint"
+  )
+    return undefined;
+  const edge = get_mechanical_element_from_id(
+    state.elementID,
+    mechanicalElements,
+  );
+  if (edge.type !== "beam") return undefined;
+  return state.type === "MovingEdgeStartPoint"
+    ? edge.positionEnd
+    : edge.positionStart;
+}
+
+/**
+ * The centre of the gear a sizing gesture is bringing to a target. It is what
+ * both the gear tangency and the belt tangency are measured from — a rim point
+ * would answer a different question.
+ */
+function placed_gear_center(
+  state: CanvasState,
+  mechanicalElements: MechanicalElement[],
+): Point2 | undefined {
+  if (state.type === "PlacingGearRadius") return state.startHover.position;
+  if (state.type !== "ChangingGearRadius") return undefined;
+  return (
+    get_mechanical_element_from_id(
+      state.elementID,
+      mechanicalElements,
+    ) as GearElement
+  ).position;
+}
+
+function probe_node(
+  node: NodeElement,
+  mousePos: Point2,
+  mode: NodeProbe,
+  deleting: boolean,
+  drawnPastBase: Point2 | undefined,
+  mechanicalElements: MechanicalElement[],
+): HoveredPart | null {
+  const distance = mousePos.distance_to(node.position);
+
+  // A moment aimed at an axle lands on the gear it carries: reaching for the
+  // centre of a gear is a natural way to designate that gear, and the axle
+  // itself takes no moment. Without this, only the rim is a target — the whole
+  // middle of the gear is a dead zone.
+  if (mode === "carried-gear") {
+    if (distance > HIT_TOLERANCE.NODE) return null;
+    if (!("fixedGearsIDs" in node) || node.fixedGearsIDs.length === 0)
+      return null;
+    // An axle can carry several gears; the first is the one the moment goes to.
+    // Aiming at a specific gear's rim stays the way to pick.
+    const gear = get_mechanical_element_from_id(
+      node.fixedGearsIDs[0],
+      mechanicalElements,
+    ) as GearElement;
+    return {
+      type: "GearTooth",
+      position: gear.position.clone(),
+      id: gear.id,
+      deleting: false,
+    };
+  }
+
+  const hitRadius =
+    HIT_TOLERANCE.NODE * (node.type === "pivot" && node.motor ? 1.5 : 1);
+  if (distance <= hitRadius)
+    return {
+      type: "Node",
+      position: node.position.clone(),
+      id: node.id,
+      deleting,
+      beamBodyHover: false,
+    };
+
+  if (mode !== "centre+past" || !drawnPastBase) return null;
+  if (
+    node.position.distance2segment(drawnPastBase, mousePos) >
+      HIT_TOLERANCE.EDGE ||
+    mousePos.distance2line(drawnPastBase, node.position) > HIT_TOLERANCE.EDGE
+  )
+    return null;
+  return {
+    type: "Node",
+    position: mousePos.project_on_line(drawnPastBase, node.position),
+    id: node.id,
+    deleting,
+    beamBodyHover: true,
+  };
+}
+
+function probe_gear(
+  gear: GearElement,
+  mousePos: Point2,
+  mode: GearProbe,
+  deleting: boolean,
+  gearRef: Point2 | undefined,
+): HoveredPart | null {
+  // Only the rim answers: the whole inside of a gear is a dead zone.
+  const distance = mousePos.distance_to(gear.position);
+  if (
+    distance > gear.radius + HIT_TOLERANCE.NODE / 2 ||
+    distance < gear.radius - HIT_TOLERANCE.NODE / 2
+  )
+    return null;
+
+  if (mode === "whole")
+    return {
+      type: "GearTooth",
+      position: gear.position.clone(),
+      id: gear.id,
+      deleting: false,
+    };
+
+  const toward = mode === "rim-toward-ref" && gearRef ? gearRef : mousePos;
+  return {
+    type: "GearTooth",
+    position: gear.position.add(
+      toward.sub(gear.position).normalize().mul(gear.radius),
+    ),
+    id: gear.id,
+    deleting,
+  };
+}
+
+function probe_edge(
+  edge: EdgeElement,
+  mousePos: Point2,
+  mode: EdgeProbe,
+  deleting: boolean,
+): HoveredPart | null {
+  if (mode !== "body" && mode !== "body-centre") {
+    if (mousePos.distance_to(edge.positionStart) <= HIT_TOLERANCE.NODE)
+      return {
+        type: "Edge",
+        position: edge.positionStart.clone(),
+        id: edge.id,
+        deleting,
+        part: "start",
+      };
+    if (mousePos.distance_to(edge.positionEnd) <= HIT_TOLERANCE.NODE)
+      return {
+        type: "Edge",
+        position: edge.positionEnd.clone(),
+        id: edge.id,
+        deleting,
+        part: "end",
+      };
+    if (mode === "ends") return null;
+    if (mode === "ends+beam-body" && edge.type !== "beam") return null;
+  }
+
+  if (
+    mousePos.distance2segment(edge.positionStart, edge.positionEnd) >
+    HIT_TOLERANCE.EDGE
+  )
+    return null;
+  return {
+    type: "Edge",
+    position:
+      mode === "body-centre"
+        ? edge.positionStart.lerp(edge.positionEnd, 0.5)
+        : mousePos.project_on_line(edge.positionStart, edge.positionEnd),
+    id: edge.id,
+    deleting,
+    part: "body",
+  };
+}
+
+function probe_belt(
+  belt: BeltElement,
+  mousePos: Point2,
+  mode: BeltProbe,
+  deleting: boolean,
+  gearRef: Point2 | undefined,
+  mechanicalElements: MechanicalElement[],
+): HoveredPart | null {
+  if (mode === "ends" || mode === "full") {
+    if (mousePos.distance_to(belt.positionStart) <= HIT_TOLERANCE.NODE)
+      return {
+        type: "Edge",
+        position: belt.positionStart.clone(),
+        id: belt.id,
+        deleting,
+        part: "start",
+      };
+    if (mousePos.distance_to(belt.positionEnd) <= HIT_TOLERANCE.NODE)
+      return {
+        type: "Edge",
+        position: belt.positionEnd.clone(),
+        id: belt.id,
+        deleting,
+        part: "end",
+      };
+    if (mode === "ends") return null;
+  }
+
+  const attachedGears = belt.attachedGearsIDs.map(({ id, direction }) => ({
+    gear: get_mechanical_element_from_id(id, mechanicalElements) as GearElement,
+    direction,
+  }));
+  const gearAngles = get_gear_angles(
+    belt.positionStart,
+    belt.positionEnd,
+    attachedGears,
+  );
+
+  // Arc sections: the stretch wrapped around each pulley.
+  if (mode === "full" || mode === "runs+arcs") {
+    for (let i = 0; i < gearAngles.length; i++) {
+      const { center, radius, startAngle, endAngle, direction } = gearAngles[i];
+      const distance = mousePos.distance_to(center);
+      const angle = mousePos.sub(center).angle();
+      if (
+        distance <= radius + HIT_TOLERANCE.NODE / 2 &&
+        distance > radius - HIT_TOLERANCE.NODE / 2 &&
+        ((!direction && startAngle <= angle && angle <= endAngle) ||
+          (direction && endAngle <= angle && angle <= startAngle))
+      )
+        return {
+          type: "BeltBody",
+          position: mousePos.sub(center).normalize().mul(radius).add(center),
+          id: belt.id,
+          deleting,
+          section: 2 * i + 1,
+        };
+    }
+  }
+
+  // The two terminals close the chain, as arcs of radius 0.
+  gearAngles.unshift({
+    center: belt.positionStart,
+    radius: 0,
+    startAngle: 0,
+    endAngle: 0,
+    direction: false,
+  });
+  gearAngles.push({
+    center: belt.positionEnd,
+    radius: 0,
+    startAngle: 0,
+    endAngle: 0,
+    direction: false,
+  });
+
+  for (let i = 0; i < gearAngles.length - 1; i++) {
+    const { center: c1, radius: r1, endAngle } = gearAngles[i];
+    const { center: c2, radius: r2, startAngle } = gearAngles[i + 1];
+    const start = c1.add(Point2.from_polar(r1, endAngle));
+    const end = c2.add(Point2.from_polar(r2, startAngle));
+    if (mousePos.distance2segment(start, end) > HIT_TOLERANCE.EDGE) continue;
+
+    if (mode === "runs-tangent") {
+      // The run answers only where the gear can actually meet it: its centre
+      // must project inside the segment, not past one of its ends.
+      if (
+        !gearRef ||
+        gearRef.distance2segment(start, end) > gearRef.distance2line(start, end)
+      )
+        continue;
+      return {
+        type: "BeltBody",
+        position: gearRef
+          .project_on_line(start, end)
+          .sub(gearRef)
+          .extend_length(INTERACTION_SPECS.GEAR_ON_BELT_GROW)
+          .add(gearRef),
+        id: belt.id,
+        deleting: false,
+        section: 2 * i,
+      };
+    }
+    return {
+      type: "BeltBody",
+      position: mousePos.project_on_line(start, end),
+      id: belt.id,
+      deleting,
+      section: 2 * i,
+    };
+  }
+  return null;
+}
+
 /** Returns the hovered part of the element, or null if no part is hovered. */
 function get_hovered_part_of_element(
   element: UnionElement,
@@ -78,697 +530,71 @@ function get_hovered_part_of_element(
   mousePos: Point2,
   state: CanvasState,
 ): HoveredPart | null {
-  if (state.type === "SelectingMultiple" || state.type === "ErasingMultiple")
-    return null;
+  // Grabbing the body of anything but a beam drags it without connecting it.
   if (state.type === "MovingEdgeBody") {
-    const edge = get_mechanical_element_from_id(
+    const dragged = get_mechanical_element_from_id(
       state.elementID,
       mechanicalElements,
     ) as EdgeElement;
-    if (edge.type !== "beam") return null;
+    if (dragged.type !== "beam") return null;
   }
-  if (element.type === "mass" && state.type === "PlacingGround") return null; // cannot place ground on mass
-  if (
-    element.type === "gear" &&
-    state.type === "PlacingGearRadius" &&
-    state.startHover.type === "Node" &&
-    state.startHover.id === element.parentAxleID
-  )
-    return null; // cannot place a gear on another AND mesh them
-  if (state.type === "MovingNode" && "fixedGearsIDs" in element) {
-    const node = get_mechanical_element_from_id(
-      state.elementID,
-      mechanicalElements,
-    ) as NodeElement;
-    if (
-      "fixedGearsIDs" in node &&
-      node.fixedGearsIDs
-        .map((nodeGearID) =>
-          element.fixedGearsIDs
-            .map((elementGearID) =>
-              (
-                get_mechanical_element_from_id(
-                  elementGearID,
-                  mechanicalElements,
-                ) as GearElement
-              ).meshedGearsIDs.includes(nodeGearID),
-            )
-            .some(Boolean),
-        )
-        .some(Boolean)
-    )
-      return null;
-  } // cannot move an axle with fixed gear meshed with another on the other's parent axle
   // TODO : à "PlacingBeltEnd", ignorer les gears avec le même parentAxle
-  if (
-    (state.type === "PlacingBeltStart" ||
-      state.type === "PlacingBeltEnd" ||
-      state.type === "MovingBeltBody" ||
-      ((state.type === "MovingEdgeStartPoint" ||
-        state.type === "MovingEdgeEndPoint") &&
-        get_mechanical_element_from_id(state.elementID, mechanicalElements)
-          .type === "belt")) &&
-    element.type === "belt"
-  )
-    return null; // "PlacingBeltStart/End" Et "MovingBeltStart/End" : ignorer les autres beltEnds
+
+  const targets = HOVER_TARGETS[state.type];
+  const deleting = state.type === "Erasing";
 
   switch (element.type) {
     case "pivot":
     case "slider":
     case "slidep":
     case "join":
-    case "mass": {
-      const node = element as NodeElement;
-      const distance = mousePos.distance_to(node.position);
-      switch (state.type) {
-        case "PlacingMomentStart": {
-          // A moment aimed at an axle lands on the gear it carries: reaching for
-          // the centre of a gear is a natural way to designate that gear, and
-          // the axle itself takes no moment of its own. Without this, only the
-          // gear's rim is a target — its whole middle is a dead zone.
-          if (distance > HIT_TOLERANCE.NODE) break;
-          if (!("fixedGearsIDs" in node) || node.fixedGearsIDs.length === 0)
-            break;
-          // An axle can carry several gears; the first is the one the moment
-          // goes to. Aiming at a specific gear's rim stays the way to pick.
-          const gear = get_mechanical_element_from_id(
-            node.fixedGearsIDs[0],
-            mechanicalElements,
-          ) as GearElement;
-          return {
-            type: "GearTooth",
-            position: gear.position.clone(),
-            id: gear.id,
-            deleting: false,
-          };
-        }
-        case "Selecting":
-        case "SelectedElement":
-        case "SelectedMultiple":
-        case "Erasing":
-        case "EditingValue":
-        case "PlacingValue":
-        case "PlacingBeltStart":
-        case "PlacingBeltEnd":
-        case "MovingNode":
-        case "MovingEdgeBody":
-        case "ChangingGearRadius":
-        case "PlacingBeamStart":
-        case "PlacingBeamEnd":
-        case "PlacingSpringStart":
-        case "PlacingSpringEnd":
-        case "PlacingDamperStart":
-        case "PlacingDamperEnd":
-        case "PlacingGearStart":
-        case "PlacingGearRadius":
-        case "PlacingGround":
-        case "PlacingPivot":
-        case "PlacingMotor":
-        case "PlacingSlider":
-        case "PlacingJoin":
-        case "PlacingMass":
-        case "PlacingForceStart":
-        case "PlacingProbe":
-        case "DimensionStart":
-        case "DimensionNode":
-        case "DimensionEdge":
-        case "HorizontalVerticalConstraintStart":
-        case "HorizontalVerticalConstraintNode":
-        case "MovingEdgeStartPoint":
-        case "MovingEdgeEndPoint":
-          // center
-          const hit_radius =
-            HIT_TOLERANCE.NODE *
-            (node.type === "pivot" && node.motor ? 1.5 : 1);
-          if (distance <= hit_radius) {
-            return {
-              type: "Node",
-              position: node.position.clone(),
-              id: node.id,
-              deleting: state.type === "Erasing",
-              beamBodyHover: false,
-            };
-          }
+    case "mass":
+      if (!targets.node) return null;
+      return probe_node(
+        element as NodeElement,
+        mousePos,
+        targets.node,
+        deleting,
+        drawn_past_base(state, mechanicalElements),
+        mechanicalElements,
+      );
 
-          // beam BodyHover
-          if (
-            state.type !== "MovingEdgeStartPoint" &&
-            state.type !== "MovingEdgeEndPoint" &&
-            state.type !== "PlacingBeamEnd"
-          )
-            break;
+    case "gear":
+      if (!targets.gear) return null;
+      return probe_gear(
+        element as GearElement,
+        mousePos,
+        targets.gear,
+        deleting,
+        placed_gear_center(state, mechanicalElements),
+      );
 
-          if (state.type === "PlacingBeamEnd") {
-            if (
-              node.position.distance2segment(
-                state.startHover.position,
-                mousePos,
-              ) <= HIT_TOLERANCE.EDGE &&
-              mousePos.distance2line(
-                state.startHover.position,
-                node.position,
-              ) <= HIT_TOLERANCE.EDGE
-            ) {
-              return {
-                type: "Node",
-                position: mousePos.project_on_line(
-                  state.startHover.position,
-                  node.position,
-                ),
-                id: node.id,
-                deleting: false,
-                beamBodyHover: true,
-              };
-            }
-            break;
-          }
-          const edge = get_mechanical_element_from_id(
-            state.elementID,
-            mechanicalElements,
-          );
-          if (edge.type !== "beam") break;
-
-          if (state.type === "MovingEdgeStartPoint") {
-            if (
-              node.position.distance2segment(edge.positionEnd, mousePos) <=
-                HIT_TOLERANCE.EDGE &&
-              mousePos.distance2line(edge.positionEnd, node.position) <=
-                HIT_TOLERANCE.EDGE
-            ) {
-              return {
-                type: "Node",
-                position: mousePos.project_on_line(
-                  edge.positionEnd,
-                  node.position,
-                ),
-                id: node.id,
-                deleting: false,
-                beamBodyHover: true,
-              };
-            }
-          } else if (
-            node.position.distance2segment(edge.positionStart, mousePos) <=
-              HIT_TOLERANCE.EDGE &&
-            mousePos.distance2line(edge.positionStart, node.position) <=
-              HIT_TOLERANCE.EDGE
-          ) {
-            return {
-              type: "Node",
-              position: mousePos.project_on_line(
-                edge.positionStart,
-                node.position,
-              ),
-              id: node.id,
-              deleting: false,
-              beamBodyHover: true,
-            };
-          }
-          break;
-      }
-      break;
-    }
-    case "gear": {
-      const gear = element as GearElement;
-      const distance = mousePos.distance_to(gear.position);
-      if (
-        distance > gear.radius + HIT_TOLERANCE.NODE / 2 ||
-        distance < gear.radius - HIT_TOLERANCE.NODE / 2
-      )
-        break;
-      switch (state.type) {
-        case "Selecting":
-        case "SelectedElement":
-        case "SelectedMultiple":
-        case "Erasing":
-        case "EditingValue":
-        case "PlacingValue":
-        case "PlacingBeltStart":
-        case "PlacingBeltEnd":
-        case "DimensionStart":
-        case "MovingNode":
-        case "MovingEdgeBody":
-        case "PlacingBeamStart":
-        case "PlacingBeamEnd":
-        case "PlacingSpringStart":
-        case "PlacingSpringEnd":
-        case "PlacingDamperStart":
-        case "PlacingDamperEnd":
-        case "PlacingGround":
-        case "PlacingPivot":
-        case "PlacingMotor":
-        case "PlacingSlider":
-        case "PlacingJoin":
-        case "PlacingMass":
-        case "PlacingProbe":
-          // gear perimeter
-          return {
-            type: "GearTooth",
-            position: mousePos
-              .sub(gear.position)
-              .normalize()
-              .mul(gear.radius)
-              .add(gear.position),
-            id: gear.id,
-            deleting: state.type === "Erasing",
-          };
-        case "MovingBeltBody":
-          if (gear.attachedBeltID) break;
-          return {
-            type: "GearTooth",
-            position: gear.position.add(
-              mousePos.sub(gear.position).normalize().mul(gear.radius),
-            ),
-            id: gear.id,
-            deleting: false,
-          };
-        case "ChangingGearRadius":
-          const gear2 = get_mechanical_element_from_id(
-            state.elementID,
-            mechanicalElements,
-          ) as GearElement;
-          return {
-            type: "GearTooth",
-            position: gear.position.add(
-              gear2.position.sub(gear.position).normalize().mul(gear.radius),
-            ),
-            id: gear.id,
-            deleting: false,
-          };
-        case "PlacingGearRadius":
-          // Gear on gear teehts -> contact point
-          return {
-            type: "GearTooth",
-            position: gear.position.add(
-              state.startHover.position
-                .sub(gear.position)
-                .normalize()
-                .mul(gear.radius),
-            ),
-            id: gear.id,
-            deleting: false,
-          };
-        case "PlacingMomentStart":
-          // Moment on gear perimeter
-          return {
-            type: "GearTooth",
-            position: gear.position.clone(),
-            id: gear.id,
-            deleting: false,
-          };
-        case "GearRatioConstraintStart":
-        case "GearRatioConstraintGear":
-        case "EqualConstraintStart":
-        case "EqualConstraintGear":
-          // Only gear teehts
-          if (
-            gear.type !== "gear" ||
-            ((state.type === "GearRatioConstraintGear" ||
-              state.type === "EqualConstraintGear") &&
-              state.startGearID === gear.id)
-          )
-            break;
-          return {
-            type: "GearTooth",
-            position: gear.position.clone(),
-            id: gear.id,
-            deleting: false,
-          };
-      }
-      break;
-    }
     case "beam":
     case "spring":
     case "damper":
-      const edge = element as EdgeElement;
+      if (!targets.edge) return null;
+      return probe_edge(
+        element as EdgeElement,
+        mousePos,
+        targets.edge,
+        deleting,
+      );
 
-      if (isSelectionState(state)) {
-        // body & ends
-        if (mousePos.distance_to(edge.positionStart) <= HIT_TOLERANCE.NODE) {
-          return {
-            type: "Edge",
-            position: edge.positionStart.clone(),
-            id: edge.id,
-            deleting: state.type === "Erasing",
-            part: "start",
-          };
-        }
-        if (mousePos.distance_to(edge.positionEnd) <= HIT_TOLERANCE.NODE) {
-          return {
-            type: "Edge",
-            position: edge.positionEnd.clone(),
-            id: edge.id,
-            deleting: state.type === "Erasing",
-            part: "end",
-          };
-        }
-        if (
-          mousePos.distance2segment(edge.positionStart, edge.positionEnd) <=
-          HIT_TOLERANCE.EDGE
-        ) {
-          return {
-            type: "Edge",
-            position: mousePos.project_on_line(
-              edge.positionStart,
-              edge.positionEnd,
-            ),
-            id: edge.id,
-            deleting: state.type === "Erasing",
-            part: "body",
-          };
-        }
-        break;
-      }
-      switch (state.type) {
-        case "MovingNode":
-        case "MovingEdgeStartPoint":
-        case "MovingEdgeEndPoint":
-        case "MovingEdgeBody":
-        case "PlacingBeamStart":
-        case "PlacingBeamEnd":
-        case "PlacingSpringStart":
-        case "PlacingSpringEnd":
-        case "PlacingDamperStart":
-        case "PlacingDamperEnd":
-        case "PlacingBeltStart":
-        case "PlacingBeltEnd":
-        case "PlacingGearStart":
-        case "PlacingPivot":
-        case "PlacingMotor":
-        case "PlacingSlider":
-        case "PlacingJoin":
-        case "PlacingMass":
-        case "PlacingGround":
-        case "PlacingForceStart":
-          // body (only if beam) & ends
-          if (mousePos.distance_to(edge.positionStart) <= HIT_TOLERANCE.NODE) {
-            return {
-              type: "Edge",
-              position: edge.positionStart.clone(),
-              id: edge.id,
-              deleting: false,
-              part: "start",
-            };
-          }
-          if (mousePos.distance_to(edge.positionEnd) <= HIT_TOLERANCE.NODE) {
-            return {
-              type: "Edge",
-              position: edge.positionEnd.clone(),
-              id: edge.id,
-              deleting: false,
-              part: "end",
-            };
-          }
-          if (
-            element.type === "beam" &&
-            state.type !== "MovingEdgeBody" &&
-            mousePos.distance2segment(edge.positionStart, edge.positionEnd) <=
-              HIT_TOLERANCE.EDGE
-          ) {
-            return {
-              type: "Edge",
-              position: mousePos.project_on_line(
-                edge.positionStart,
-                edge.positionEnd,
-              ),
-              id: edge.id,
-              deleting: false,
-              part: "body",
-            };
-          }
-          break;
-        case "HorizontalVerticalConstraintStart":
-        case "NormalConstraintStart":
-        case "NormalConstraintEdge":
-        case "ParallelConstraintStart":
-        case "ParallelConstraintEdge":
-        case "EqualConstraintStart":
-        case "EqualConstraintEdge":
-        case "DimensionStart":
-        case "DimensionNode":
-        case "DimensionEdge":
-          // body
-          if (
-            mousePos.distance2segment(edge.positionStart, edge.positionEnd) <=
-            HIT_TOLERANCE.EDGE
-          ) {
-            return {
-              type: "Edge",
-              position: mousePos.project_on_line(
-                edge.positionStart,
-                edge.positionEnd,
-              ),
-              id: edge.id,
-              deleting: false,
-              part: "body",
-            };
-          }
-          break;
-        case "PlacingGearRadius":
-        case "ChangingGearRadius":
-          // ends
-          if (mousePos.distance_to(edge.positionStart) <= HIT_TOLERANCE.NODE) {
-            return {
-              type: "Edge",
-              position: edge.positionStart.clone(),
-              id: edge.id,
-              deleting: false,
-              part: "start",
-            };
-          }
-          if (mousePos.distance_to(edge.positionEnd) <= HIT_TOLERANCE.NODE) {
-            return {
-              type: "Edge",
-              position: edge.positionEnd.clone(),
-              id: edge.id,
-              deleting: false,
-              part: "end",
-            };
-          }
-          break;
-        case "PlacingMomentStart":
-          // body of any edge (not just beam)
-          if (
-            mousePos.distance2segment(edge.positionStart, edge.positionEnd) <=
-            HIT_TOLERANCE.EDGE
-          ) {
-            return {
-              type: "Edge",
-              position: edge.positionStart.lerp(edge.positionEnd, 0.5),
-              id: edge.id,
-              deleting: false,
-              part: "body",
-            };
-          }
-          break;
-        case "PlacingProbe":
-          // body of any edge
-          if (
-            mousePos.distance2segment(edge.positionStart, edge.positionEnd) <=
-            HIT_TOLERANCE.EDGE
-          ) {
-            return {
-              type: "Edge",
-              position: mousePos.project_on_line(
-                edge.positionStart,
-                edge.positionEnd,
-              ),
-              id: edge.id,
-              deleting: false,
-              part: "body",
-            };
-          }
-          break;
-      }
-      break;
     case "belt":
-      const belt = element as BeltElement;
+      if (!targets.belt) return null;
+      return probe_belt(
+        element as BeltElement,
+        mousePos,
+        targets.belt,
+        deleting,
+        placed_gear_center(state, mechanicalElements),
+        mechanicalElements,
+      );
+  }
 
-      if (
-        isSelectionState(state) ||
-        state.type === "ChangingGearRadius" ||
-        state.type === "PlacingGearRadius" ||
-        state.type === "DimensionStart"
-      ) {
-        // ends
-        if (
-          state.type !== "ChangingGearRadius" &&
-          state.type !== "PlacingGearRadius" &&
-          state.type !== "DimensionStart"
-        ) {
-          if (mousePos.distance_to(belt.positionStart) <= HIT_TOLERANCE.NODE) {
-            return {
-              type: "Edge",
-              position: belt.positionStart.clone(),
-              id: belt.id,
-              deleting: state.type === "Erasing",
-              part: "start",
-            };
-          }
-          if (mousePos.distance_to(belt.positionEnd) <= HIT_TOLERANCE.NODE) {
-            return {
-              type: "Edge",
-              position: belt.positionEnd.clone(),
-              id: belt.id,
-              deleting: state.type === "Erasing",
-              part: "end",
-            };
-          }
-        }
-        // Belt body
-        const attachedGears = belt.attachedGearsIDs.map(({ id, direction }) => {
-          return {
-            gear: get_mechanical_element_from_id(
-              id,
-              mechanicalElements,
-            ) as GearElement,
-            direction,
-          };
-        });
-        const gearAngles = get_gear_angles(
-          belt.positionStart,
-          belt.positionEnd,
-          attachedGears,
-        );
-        // arc sections
-        if (
-          state.type !== "ChangingGearRadius" &&
-          state.type !== "PlacingGearRadius"
-        ) {
-          for (let i = 0; i < gearAngles.length; i++) {
-            const { center, radius, startAngle, endAngle, direction } =
-              gearAngles[i];
-            const distance = mousePos.distance_to(center);
-            const angle = mousePos.sub(center).angle();
-            if (
-              distance <= radius + HIT_TOLERANCE.NODE / 2 &&
-              distance > radius - HIT_TOLERANCE.NODE / 2 &&
-              ((!direction && startAngle <= angle && angle <= endAngle) ||
-                (direction && endAngle <= angle && angle <= startAngle))
-            ) {
-              return {
-                type: "BeltBody",
-                position: mousePos
-                  .sub(center)
-                  .normalize()
-                  .mul(radius)
-                  .add(center),
-                id: belt.id,
-                deleting: state.type === "Erasing",
-                section: 2 * i + 1,
-              };
-            }
-          }
-        }
-        // straight sections
-        gearAngles.unshift({
-          center: belt.positionStart,
-          radius: 0,
-          startAngle: 0,
-          endAngle: 0,
-          direction: false,
-        });
-        gearAngles.push({
-          center: belt.positionEnd,
-          radius: 0,
-          startAngle: 0,
-          endAngle: 0,
-          direction: false,
-        });
-        for (let i = 0; i < gearAngles.length - 1; i++) {
-          const { center: c1, radius: r1, endAngle } = gearAngles[i];
-          const { center: c2, radius: r2, startAngle } = gearAngles[i + 1];
-          const start = c1.add(Point2.from_polar(r1, endAngle));
-          const end = c2.add(Point2.from_polar(r2, startAngle));
-          if (mousePos.distance2segment(start, end) <= HIT_TOLERANCE.EDGE) {
-            if (
-              state.type === "ChangingGearRadius" ||
-              state.type === "PlacingGearRadius"
-            ) {
-              let gearPos: Point2;
-              if (state.type == "ChangingGearRadius") {
-                const gear = get_mechanical_element_from_id(
-                  state.elementID,
-                  mechanicalElements,
-                ) as GearElement;
-                gearPos = gear.position;
-              } else {
-                gearPos = state.startHover.position;
-              }
-              if (
-                gearPos.distance2segment(start, end) <=
-                gearPos.distance2line(start, end)
-              ) {
-                return {
-                  type: "BeltBody",
-                  position: gearPos
-                    .project_on_line(start, end)
-                    .sub(gearPos)
-                    .extend_length(INTERACTION_SPECS.GEAR_ON_BELT_GROW)
-                    .add(gearPos),
-                  id: belt.id,
-                  deleting: false,
-                  section: 2 * i,
-                };
-              }
-            } else {
-              return {
-                type: "BeltBody",
-                position: mousePos.project_on_line(start, end),
-                id: belt.id,
-                deleting: state.type === "Erasing",
-                section: 2 * i,
-              };
-            }
-          }
-        }
-        break;
-      }
-      switch (state.type) {
-        case "MovingNode":
-        case "MovingEdgeStartPoint":
-        case "MovingEdgeEndPoint":
-        case "MovingEdgeBody":
-        case "PlacingBeamStart":
-        case "PlacingBeamEnd":
-        case "PlacingSpringStart":
-        case "PlacingSpringEnd":
-        case "PlacingDamperStart":
-        case "PlacingDamperEnd":
-        case "PlacingBeltStart":
-        case "PlacingBeltEnd":
-        case "PlacingPivot":
-        case "PlacingMotor":
-        case "PlacingSlider":
-        case "PlacingJoin":
-        case "PlacingMass":
-        case "PlacingGearStart":
-        case "PlacingGround":
-        case "DimensionNode":
-        case "DimensionEdge":
-        case "HorizontalVerticalConstraintStart":
-        case "HorizontalVerticalConstraintNode":
-          // ends
-          if (mousePos.distance_to(belt.positionStart) <= HIT_TOLERANCE.NODE) {
-            return {
-              type: "Edge",
-              position: belt.positionStart.clone(),
-              id: belt.id,
-              deleting: false,
-              part: "start",
-            };
-          }
-          if (mousePos.distance_to(belt.positionEnd) <= HIT_TOLERANCE.NODE) {
-            return {
-              type: "Edge",
-              position: belt.positionEnd.clone(),
-              id: belt.id,
-              deleting: false,
-              part: "end",
-            };
-          }
-          break;
-      }
-      break;
+  if (!targets.overlays) return null;
+
+  switch (element.type) {
     case "dimension-edge":
     case "dimension-node-to-node":
     case "dimension-edge-to-node":
@@ -783,7 +609,6 @@ function get_hovered_part_of_element(
     case "parallel":
     case "equal":
     case "gear-ratio":
-      if (!isSelectionState(state)) break;
       if (mousePos.distance_to(element.position) > HIT_TOLERANCE.CONSTRAINT)
         break;
       return {
@@ -793,7 +618,6 @@ function get_hovered_part_of_element(
         deleting: state.type === "Erasing",
       };
     case "force": {
-      if (!isSelectionState(state)) break;
       const base = force_base_position(element, mechanicalElements);
       const displayVector = force_display_vector(
         force_world_vector(element, mechanicalElements),
@@ -824,7 +648,6 @@ function get_hovered_part_of_element(
       break;
     }
     case "moment": {
-      if (!isSelectionState(state)) break;
       const center = moment_center_position(element, mechanicalElements);
       const radius = moment_display_radius(element.value);
       const valuePos = moment_value_label_position(center, radius);
@@ -853,7 +676,6 @@ function get_hovered_part_of_element(
       break;
     }
     case "distributed-force": {
-      if (!isSelectionState(state)) break;
       const beam = get_mechanical_element_from_id(
         element.targetID,
         mechanicalElements,
@@ -960,6 +782,28 @@ function get_hovered_part_of_element(
 }
 
 /**
+ * Where the cursor is held back to when an opaque element refuses it: the edge
+ * of its hit zone. Nothing can then be dropped stacked on top of it — the
+ * refusal is felt as a resistance rather than read as an error.
+ *
+ * Only elements with a single centre push back; a gear is refused at its rim,
+ * which has no inside to be pushed out of.
+ */
+function pushed_out_of(element: UnionElement, position: Point2): Point2 {
+  if (!("position" in element) || element.type === "gear") return position;
+  const radius =
+    HIT_TOLERANCE.NODE * (element.type === "pivot" && element.motor ? 1.5 : 1);
+  const distance = position.distance_to(element.position);
+  if (distance >= radius) return position;
+  // Dead centre carries no direction to push along; any one will do.
+  const direction =
+    distance > 0
+      ? position.sub(element.position).normalize()
+      : new Point2(1, 0);
+  return element.position.add(direction.mul(radius));
+}
+
+/**
  * Detects which part of a mechanism is being hovered at a given point
  * Returns the hovered part and the corresponding point on that part
  */
@@ -971,6 +815,9 @@ export function get_hovered_part(
   mousePos: Point2,
   state: CanvasState,
 ): HoveredPart {
+  // Picking only: an element being dragged is under the cursor by construction
+  // and must never be its own target. What it may legally reach is decided by
+  // legality_for_state.
   const excluded_elements: ID[] = [];
   if (
     state.type === "MovingNode" ||
@@ -979,14 +826,7 @@ export function get_hovered_part(
     state.type === "MovingEdgeBody" ||
     state.type === "ChangingGearRadius"
   ) {
-    const element = get_mechanical_element_from_id(
-      state.elementID,
-      mechanicalElements,
-    );
-    excluded_elements.push(element.id);
-    get_connection_types(element).forEach((connectionType) => {
-      excluded_elements.push(...get_connections(element, connectionType));
-    });
+    excluded_elements.push(state.elementID);
   }
   if (state.type === "MovingConstraint") {
     const constraint = get_constraint_element_from_id(
@@ -999,33 +839,11 @@ export function get_hovered_part(
     const load = get_load_element_from_id(state.elementID, loadElements);
     excluded_elements.push(load.id);
   }
-  if (state.type === "PlacingBeltEnd") {
-    excluded_elements.push(...state.attachedGearsIDs.map(({ id }) => id));
-  } else if (
-    state.type === "PlacingBeamEnd" &&
-    (state.startHover.type === "Node" || state.startHover.type === "Edge")
-  ) {
-    excluded_elements.push(state.startHover.id);
-  }
 
-  let position = mousePos.clone();
-  if (
-    state.type === "PlacingBeamEnd" ||
-    state.type === "PlacingSpringEnd" ||
-    state.type === "PlacingDamperEnd"
-  ) {
-    position = state.startHover.position.add(
-      mousePos
-        .sub(state.startHover.position)
-        .limit_length_min(DIM.MIN_EDGE_LENGTH),
-    );
-  } else if (state.type === "PlacingGearRadius") {
-    position = state.startHover.position.add(
-      mousePos
-        .sub(state.startHover.position)
-        .limit_length_min(DIM.MIN_GEAR_RADIUS),
-    );
-  }
+  const is_legal = legality_for_state(state, mechanicalElements);
+
+  // `mousePos` arrives already bounded — see clamp_to_bounds at its call site.
+  const position = mousePos.clone();
 
   const elements: UnionElement[] = (mechanicalElements as UnionElement[])
     .concat(constraintElements)
@@ -1043,21 +861,34 @@ export function get_hovered_part(
         !visibleConstraints.has(element.id)
       )
         continue;
+      // Geometry first: legality is only consulted for an element the cursor is
+      // actually over, otherwise an opaque refusal would block from anywhere.
       const hoveredPart = get_hovered_part_of_element(
         element,
         mechanicalElements,
         position,
         state,
       );
-      if (hoveredPart) return hoveredPart;
+      if (!hoveredPart) continue;
+      const verdict = is_legal(element);
+      if (verdict.allowed) return hoveredPart;
+      if (verdict.blocks)
+        return {
+          type: "Void",
+          position: pushed_out_of(element, position),
+          rejected: verdict.reason,
+        };
     }
   }
 
-  // Belt end over belt start
+  // Belt end over belt start. The target is the belt's own terminal, so no rule
+  // in `legality_for_state` can be asked about it: the closure is gated here.
   if (
     state.type === "PlacingBeltEnd" &&
     mousePos.distance_to(state.startHover.position) <= HIT_TOLERANCE.NODE
   ) {
+    if (!belt_can_close(state.attachedGearsIDs))
+      return { type: "Void", position, rejected: BELT_CANNOT_CLOSE };
     return {
       type: "Edge",
       position: state.startHover.position,
@@ -1074,6 +905,8 @@ export function get_hovered_part(
       belt.type === "belt" &&
       mousePos.distance_to(belt.positionEnd) <= HIT_TOLERANCE.NODE
     ) {
+      if (!belt_can_close(belt.attachedGearsIDs))
+        return { type: "Void", position, rejected: BELT_CANNOT_CLOSE };
       return {
         type: "Edge",
         position: belt.positionEnd,
@@ -1091,6 +924,8 @@ export function get_hovered_part(
       belt.type === "belt" &&
       mousePos.distance_to(belt.positionStart) <= HIT_TOLERANCE.NODE
     ) {
+      if (!belt_can_close(belt.attachedGearsIDs))
+        return { type: "Void", position, rejected: BELT_CANNOT_CLOSE };
       return {
         type: "Edge",
         position: belt.positionStart,

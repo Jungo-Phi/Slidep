@@ -1,3 +1,4 @@
+import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
 import {
   Action,
   ConstraintElement,
@@ -16,6 +17,48 @@ import {
   SerializedPoint2,
   SerializedViewportState,
 } from "../types/serialized";
+import { CURRENT_FORMAT_VERSION, migrate_document } from "./migrate-mechanism";
+
+// --- Point2 fields carried by actions
+//
+// `JSON.stringify` flattens a Point2 into a plain `{x, y}`, so every Point2
+// field of every action has to be revived by hand on the way back in. The table
+// below is derived from the `Action` union so that `tsc` — not a code review —
+// catches a forgotten field: adding a Point2 to an action makes the entry
+// incomplete, and adding a new action that carries one makes the whole key
+// missing. Both are compile errors.
+//
+// Known limit: only *top-level* Point2 fields are detected. No action nests a
+// Point2 inside an object or an array today; if one ever does, it needs its own
+// handling in `deserialize_action` (see `UpdatePositionsToValidState`).
+
+type ActionOfType<T extends Action["type"]> = Extract<Action, { type: T }>;
+
+/** Keys of `A` whose value is a `Point2` (optionality stripped). */
+type PointKeysOf<A> = {
+  [K in keyof A]-?: NonNullable<A[K]> extends Point2 ? K : never;
+}[keyof A];
+
+/** Action types carrying at least one top-level `Point2`. */
+type ActionTypeWithPoints = {
+  [T in Action["type"]]: [PointKeysOf<ActionOfType<T>>] extends [never]
+    ? never
+    : T;
+}[Action["type"]];
+
+const ACTION_POINT_FIELDS: {
+  [T in ActionTypeWithPoints]: Record<PointKeysOf<ActionOfType<T>>, true>;
+} = {
+  MoveNode: { newPosition: true, oldPosition: true },
+  MoveEdgeStart: { newPosition: true, oldPosition: true },
+  MoveEdgeEnd: { newPosition: true, oldPosition: true },
+  MoveEdgeBody: { newPosition: true, oldPosition: true },
+  MoveConstraint: { newPosition: true, oldPosition: true },
+  MoveElements: { newPos: true, delta: true },
+  ChangeGearRadius: { target: true },
+  ChangeForce: { newVector: true, oldVector: true },
+  ChangeDistributedForce: { newDirection: true, oldDirection: true },
+};
 
 // --- Helper functions
 
@@ -143,23 +186,12 @@ function deserialize_action(s: SerializedAction): Action {
       };
     default: {
       const result = { ...s } as Record<string, unknown>;
-      const pointFields = [
-        "newPosition",
-        "oldPosition",
-        "newPos",
-        "delta",
-      ] as const;
-      for (const key of pointFields) {
-        if (key in result) {
-          const p = result[key] as SerializedPoint2;
-          result[key] = dp(p);
-        }
-      }
-      // Migration: SetShowTrajectory became the "trajectory" kind of the
-      // generic SetShowOverlay. Keep old history entries undoable.
-      if (result.type === "SetShowTrajectory") {
-        result.type = "SetShowOverlay";
-        result.kind = "trajectory";
+      // Only actions carrying a Point2 have an entry, hence the lookup guard.
+      const pointFields: Record<string, true> | undefined =
+        ACTION_POINT_FIELDS[s.type as ActionTypeWithPoints];
+      for (const key in pointFields) {
+        const value = result[key];
+        if (isSerializedPoint(value)) result[key] = dp(value);
       }
       return result as unknown as Action;
     }
@@ -234,27 +266,7 @@ function deserialize_mechanical_element(
     if (!("attachedBeltID" in el)) el.attachedBeltID = undefined;
   }
 
-  // Migration: the per-element `showTrajectory` boolean became one flag among
-  // several in `overlays`. Files saved before the change carry the old field.
-  if ("showTrajectory" in el) {
-    if (el.showTrajectory)
-      el.overlays = { ...(el.overlays as object), trajectory: true };
-    delete el.showTrajectory;
-  }
   if (typeof el.overlays !== "object" || el.overlays === null) el.overlays = {};
-
-  // Drop probes saved in the legacy placeholder format (metric "position-x"…)
-  if (Array.isArray(el.probes)) {
-    const validMetrics = ["position", "velocity", "angle", "force"];
-    const probes = (el.probes as Record<string, unknown>[]).filter(
-      (p) =>
-        p &&
-        validMetrics.includes(p.metric as string) &&
-        typeof p.components === "object",
-    );
-    if (probes.length > 0) el.probes = probes;
-    else delete el.probes;
-  }
 
   return el as unknown as MechanicalElement;
 }
@@ -277,6 +289,7 @@ function deserialize_viewport(
 
 export function serialize_mechanism(mechanism: Mechanism): SerializedMechanism {
   return {
+    formatVersion: CURRENT_FORMAT_VERSION,
     metadata: { ...mechanism.metadata },
     viewport: serialize_viewport(mechanism.viewport),
     mechanicalElements: mechanism.mechanicalElements.map(
@@ -328,6 +341,10 @@ export function clone_mechanism(mechanism: Mechanism): Mechanism {
 export function save_to_file(data: any, filename: string = "data.slidep") {
   const jsonString = JSON.stringify(data, null, 2); // Formaté pour la lisibilité
   const blob = new Blob([jsonString], { type: "application/json" });
+  download_blob(blob, filename);
+}
+
+function download_blob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
 
   const a = document.createElement("a");
@@ -340,27 +357,78 @@ export function save_to_file(data: any, filename: string = "data.slidep") {
   URL.revokeObjectURL(url);
 }
 
-export function load_from_file(): Promise<any> {
+/** Strips the characters Windows and macOS reject in a file name, and trims the dots and spaces Windows silently drops. */
+function sanitize_filename(name: string): string {
+  const cleaned = name
+    .replace(/[/\\:*?"<>|]/g, "-")
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\x00-\x1f]/g, "")
+    .replace(/^[\s.]+|[\s.]+$/g, "");
+  return cleaned || "mecanisme";
+}
+
+/** Downloads every mechanism as one `.slidep` per entry inside a single zip. Names collide freely in the gallery, so duplicates get a ` (2)` suffix. */
+export function save_all_to_zip(
+  records: SerializedMechanism[],
+  filename: string = "Mes mécanismes.zip",
+) {
+  const files: Record<string, Uint8Array> = {};
+
+  for (const record of records) {
+    const base = sanitize_filename(record.metadata.name || "mecanisme");
+    // Probing every candidate rather than counting per base: a mechanism
+    // actually named "Bielle (2)" must not be overwritten by the suffix
+    // generated for a second "Bielle".
+    let entry = `${base}.slidep`;
+    for (let n = 2; entry in files; n++) entry = `${base} (${n}).slidep`;
+    files[entry] = strToU8(JSON.stringify(record, null, 2));
+  }
+
+  const zipped = zipSync(files, { level: 6 });
+  download_blob(
+    new Blob([zipped as BlobPart], { type: "application/zip" }),
+    filename,
+  );
+}
+
+export interface FileImport {
+  records: SerializedMechanism[];
+  /** A zip fills the library; a lone `.slidep` is opened in the editor. */
+  isArchive: boolean;
+}
+
+/** Prompts for a `.slidep` or a `.zip` of them. Never resolves if the user cancels the picker. */
+export function load_mechanisms_from_file(): Promise<FileImport> {
   return new Promise((resolve, reject) => {
     const input = document.createElement("input");
     input.type = "file";
-    input.accept = ".slidep";
+    input.accept = ".slidep,.zip";
 
-    input.onchange = (e: Event) => {
+    input.onchange = async (e: Event) => {
       const file = (e.target as HTMLInputElement).files?.[0];
       if (!file) return;
 
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        try {
-          const content = event.target?.result as string;
-          const data = JSON.parse(content);
-          resolve(data);
-        } catch (err) {
-          reject("Erreur lors de la lecture du JSON");
+      try {
+        if (!file.name.toLowerCase().endsWith(".zip")) {
+          resolve({
+            records: [migrate_document(JSON.parse(await file.text()))],
+            isArchive: false,
+          });
+          return;
         }
-      };
-      reader.readAsText(file);
+
+        const entries = unzipSync(new Uint8Array(await file.arrayBuffer()), {
+          filter: (entry) => entry.name.toLowerCase().endsWith(".slidep"),
+        });
+        const records = Object.values(entries).map((bytes) =>
+          migrate_document(JSON.parse(strFromU8(bytes))),
+        );
+        if (records.length === 0)
+          throw new Error("Archive sans fichier .slidep");
+        resolve({ records, isArchive: true });
+      } catch (err) {
+        reject(err);
+      }
     };
 
     input.click();

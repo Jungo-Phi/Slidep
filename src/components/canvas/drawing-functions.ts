@@ -9,7 +9,6 @@ import {
   INTERACTION_SPECS,
   DIMENSION_SPECS,
   ICON_SELECTION_FILTER,
-  FILL_SELECTION_FILTER,
   FILL_DELETION_FILTER,
 } from "../../constants/rendering-specs";
 import { Point2 as Point2 } from "../../types/point2";
@@ -1013,6 +1012,14 @@ export function draw_dimension_belt(
   if (!hideText) draw_dimension_text(ctx, position, value);
 }
 
+/** The fill of an on-canvas badge — a dimension pill, a ratio pill, an icon box. */
+function badge_fill(isSelected: boolean): string {
+  return (
+    (isSelected ? COLORS.BADGE_FILL_SELECTED : COLORS.BACKGROUND) +
+    COLORS.ICON_TRANSPARENCY
+  );
+}
+
 export function draw_dimension_text(
   ctx: CanvasRenderingContext2D,
   position: Point2,
@@ -1032,7 +1039,8 @@ export function draw_dimension_text(
   const lastShadowColor = ctx.shadowColor;
   ctx.shadowBlur = INTERACTION_SPECS.ICON_HALO_SIZE;
   ctx.shadowColor = COLORS.BACKGROUND;
-  ctx.fillStyle = COLORS.BACKGROUND + COLORS.ICON_TRANSPARENCY;
+  // A dimension pill keeps the plain ground even when selected — its outline and text already carry the selection.
+  ctx.fillStyle = badge_fill(false);
   ctx.beginPath();
   ctx.roundRect(
     -metrics.width / 2 - 8 / 2,
@@ -1066,7 +1074,8 @@ export function draw_gear_ratio(
   const isSelected = ctx.shadowBlur !== 0;
 
   const lastStrokeStyle = ctx.strokeStyle;
-  if (ctx.lineWidth === 2 && ctx.shadowBlur === 0) ctx.strokeStyle = "grey";
+  if (ctx.lineWidth === 2 && ctx.shadowBlur === 0)
+    ctx.strokeStyle = COLORS.BADGE_STROKE;
   ctx.beginPath();
   ctx.roundRect(
     -metrics.width / 2 - 14 / 2,
@@ -1080,12 +1089,12 @@ export function draw_gear_ratio(
   const lastShadowColor = ctx.shadowColor;
   ctx.shadowBlur = INTERACTION_SPECS.ICON_HALO_SIZE;
   ctx.shadowColor = COLORS.BACKGROUND;
-  ctx.fillStyle = COLORS.BACKGROUND + COLORS.ICON_TRANSPARENCY;
-  if (isSelected) ctx.filter = ICON_SELECTION_FILTER;
+  ctx.fillStyle = badge_fill(isSelected);
   ctx.fill();
   ctx.shadowBlur = lastShadowBlur;
   ctx.shadowColor = lastShadowColor;
   ctx.strokeStyle = lastStrokeStyle;
+  ctx.fillStyle = ctx.strokeStyle;
   draw_text(ctx, text);
   ctx.restore();
 }
@@ -1099,15 +1108,14 @@ export function draw_element_icon(
   const isSelected = ctx.shadowBlur !== 0;
   if (deletionTint) ctx.strokeStyle = COLORS.DELETION_BOX;
   else if (ctx.lineWidth === 2 && ctx.shadowBlur === 0)
-    ctx.strokeStyle = "grey";
+    ctx.strokeStyle = COLORS.BADGE_STROKE;
   if (deletionTint) ctx.globalAlpha *= 0.5;
   ctx.beginPath();
   ctx.roundRect(-side / 2 - 1, -side / 2 - 1, side + 2, side + 2, 4);
   ctx.stroke();
   ctx.shadowBlur = INTERACTION_SPECS.ICON_HALO_SIZE;
   ctx.shadowColor = COLORS.BACKGROUND;
-  ctx.fillStyle = COLORS.BACKGROUND + COLORS.ICON_TRANSPARENCY;
-  if (isSelected) ctx.filter = FILL_SELECTION_FILTER;
+  ctx.fillStyle = badge_fill(isSelected);
   if (deletionTint) ctx.filter = FILL_DELETION_FILTER;
 
   ctx.fill();

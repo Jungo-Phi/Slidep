@@ -17,10 +17,12 @@ import {
 import {
   AccessTime,
   AddCircleOutline,
+  Archive,
   Close,
   Delete,
   Download,
   FileOpen,
+  InfoOutlined,
   Settings,
 } from "@mui/icons-material";
 import { SerializedMechanism } from "../../types";
@@ -36,6 +38,7 @@ interface MechanismsGalleryProps {
   onNew: () => void;
   onImport: () => void;
   onExport: (mechanismRecord: SerializedMechanism) => void;
+  onExportAll: () => void;
 }
 
 export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
@@ -47,6 +50,7 @@ export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
   onNew,
   onImport,
   onExport,
+  onExportAll,
 }) => {
   // Trier par date de modification décroissante
   const sortedMechanismRecords = [...mechanismRecords].sort(
@@ -74,21 +78,67 @@ export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
           pb: 1,
         }}
       >
-        <Typography fontSize={"large"} fontWeight={500}>
+        <Typography fontSize={"large"} fontWeight={500} sx={{ flexShrink: 0 }}>
           Mes mécanismes
         </Typography>
-        {/* L'import fait entrer un fichier dans la bibliothèque, il est donc
-            global ; l'export porte sur *un* mécanisme et vit sur sa carte. */}
-        <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-          <Button
-            size="small"
-            color="inherit"
-            startIcon={<FileOpen fontSize="small" />}
-            onClick={onImport}
-            sx={{ textTransform: "none", fontSize: "0.8rem" }}
+
+        <Box
+          sx={{
+            display: { xs: "none", md: "flex" },
+            alignItems: "center",
+            gap: 0.5,
+            minWidth: 0,
+            mx: 2,
+            color: "text.secondary",
+          }}
+        >
+          <InfoOutlined sx={{ fontSize: 15, flexShrink: 0 }} />
+          <Typography variant="caption">
+            Vos mécanismes sont enregistrés dans ce navigateur : vider ses
+            données les efface. Exportez-les pour les conserver.
+          </Typography>
+        </Box>
+        {/* L'import et l'export global portent sur toute la bibliothèque ;
+            l'export d'*un* mécanisme vit sur sa carte. */}
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            gap: 0.5,
+            flexShrink: 0,
+          }}
+        >
+          <Tooltip title="Ouvrir un .slidep ou une archive zip">
+            <Button
+              size="small"
+              color="inherit"
+              startIcon={<FileOpen fontSize="small" />}
+              onClick={onImport}
+              sx={{ textTransform: "none", fontSize: "0.8rem" }}
+            >
+              Importer
+            </Button>
+          </Tooltip>
+          <Tooltip
+            title={
+              mechanismRecords.length === 0
+                ? "Aucun mécanisme à exporter"
+                : "Télécharger tous les mécanismes dans une archive zip"
+            }
           >
-            Importer un fichier
-          </Button>
+            <span>
+              <Button
+                size="small"
+                color="inherit"
+                disabled={mechanismRecords.length === 0}
+                startIcon={<Archive fontSize="small" />}
+                onClick={onExportAll}
+                sx={{ textTransform: "none", fontSize: "0.8rem" }}
+              >
+                Tout exporter
+              </Button>
+            </span>
+          </Tooltip>
           <Divider orientation="vertical" flexItem sx={{ mx: 0.5, my: 0.5 }} />
           <IconButton onClick={onClose} size="small">
             <Close />

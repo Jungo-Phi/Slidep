@@ -10,8 +10,13 @@ import {
 
 import { icon } from "./iconDataUris";
 
-import { AppMode, CanvasState, CanvasStateType } from "../../types";
+import { AppMode, CanvasState } from "../../types";
 import { COLORS } from "../../constants/rendering-specs";
+import {
+  shortcut_label,
+  tool_state,
+  ToolStateType,
+} from "../../constants/shortcuts";
 import { get_constraint_element_from_id } from "../mechanism/connect-actions";
 import { Mechanism } from "../../types";
 
@@ -24,10 +29,11 @@ type SimBehavior = "structural" | "constraint" | "observational";
 
 interface PaletteElement {
   label: string;
+  /** Name only: the shortcut is appended at render time. */
   tooltip: string;
   iconSrc: string;
   simIconSrc?: string;
-  goToStateType: CanvasStateType;
+  goToStateType: ToolStateType;
   hilightRule: (state: CanvasState, mechanism: Mechanism) => boolean;
   hilightColor: string;
   hilightHoverColor: string;
@@ -47,7 +53,7 @@ const edition_palette = (): { title: string; elements: PaletteElement[] }[] => [
     elements: [
       {
         label: "Selection",
-        tooltip: "Select (Esc)",
+        tooltip: "Select",
         iconSrc: icon("select"),
         simIconSrc: icon("select-sim"),
         goToStateType: "Selecting",
@@ -74,7 +80,7 @@ const edition_palette = (): { title: string; elements: PaletteElement[] }[] => [
       },
       {
         label: "Gomme",
-        tooltip: "Eraser (A)",
+        tooltip: "Eraser",
         iconSrc: icon("eraser"),
         goToStateType: "Erasing",
         simBehavior: "structural",
@@ -90,7 +96,7 @@ const edition_palette = (): { title: string; elements: PaletteElement[] }[] => [
     elements: [
       {
         label: "Glissière",
-        tooltip: "Slider (S)",
+        tooltip: "Slider",
         iconSrc: icon("slider"),
         goToStateType: "PlacingSlider",
         simBehavior: "structural",
@@ -100,7 +106,7 @@ const edition_palette = (): { title: string; elements: PaletteElement[] }[] => [
       },
       {
         label: "Pivot",
-        tooltip: "Pivot (P)",
+        tooltip: "Pivot",
         iconSrc: icon("pivot"),
         goToStateType: "PlacingPivot",
         simBehavior: "structural",
@@ -110,7 +116,7 @@ const edition_palette = (): { title: string; elements: PaletteElement[] }[] => [
       },
       {
         label: "Courroie",
-        tooltip: "Belt (T)",
+        tooltip: "Belt",
         iconSrc: icon("belt"),
         goToStateType: "PlacingBeltStart",
         simBehavior: "structural",
@@ -121,7 +127,7 @@ const edition_palette = (): { title: string; elements: PaletteElement[] }[] => [
       },
       {
         label: "Engrenage",
-        tooltip: "Gear (G)",
+        tooltip: "Gear",
         iconSrc: icon("gear"),
         goToStateType: "PlacingGearStart",
         simBehavior: "structural",
@@ -138,7 +144,7 @@ const edition_palette = (): { title: string; elements: PaletteElement[] }[] => [
     elements: [
       {
         label: "Jointure",
-        tooltip: "Join (J)",
+        tooltip: "Join",
         iconSrc: icon("join"),
         goToStateType: "PlacingJoin",
         simBehavior: "structural",
@@ -148,7 +154,7 @@ const edition_palette = (): { title: string; elements: PaletteElement[] }[] => [
       },
       {
         label: "Poutre",
-        tooltip: "Beam (B)",
+        tooltip: "Beam",
         iconSrc: icon("beam"),
         goToStateType: "PlacingBeamStart",
         simBehavior: "structural",
@@ -159,7 +165,7 @@ const edition_palette = (): { title: string; elements: PaletteElement[] }[] => [
       },
       {
         label: "Sol",
-        tooltip: "Ground (R)",
+        tooltip: "Ground",
         iconSrc: icon("ground"),
         goToStateType: "PlacingGround",
         simBehavior: "structural",
@@ -174,7 +180,7 @@ const edition_palette = (): { title: string; elements: PaletteElement[] }[] => [
     elements: [
       {
         label: "Amortisseur",
-        tooltip: "Damper (C)",
+        tooltip: "Damper",
         iconSrc: icon("damper"),
         goToStateType: "PlacingDamperStart",
         simBehavior: "structural",
@@ -186,7 +192,7 @@ const edition_palette = (): { title: string; elements: PaletteElement[] }[] => [
       },
       {
         label: "Ressort",
-        tooltip: "Spring (K)",
+        tooltip: "Spring",
         iconSrc: icon("spring"),
         goToStateType: "PlacingSpringStart",
         simBehavior: "structural",
@@ -198,7 +204,7 @@ const edition_palette = (): { title: string; elements: PaletteElement[] }[] => [
       },
       {
         label: "Masse",
-        tooltip: "Mass (W)",
+        tooltip: "Mass",
         iconSrc: icon("mass"),
         goToStateType: "PlacingMass",
         simBehavior: "structural",
@@ -208,7 +214,7 @@ const edition_palette = (): { title: string; elements: PaletteElement[] }[] => [
       },
       {
         label: "Moteur",
-        tooltip: "Motor (M)",
+        tooltip: "Motor",
         iconSrc: icon("motor"),
         goToStateType: "PlacingMotor",
         simBehavior: "structural",
@@ -223,7 +229,7 @@ const edition_palette = (): { title: string; elements: PaletteElement[] }[] => [
     elements: [
       {
         label: "Dimension",
-        tooltip: "Dimension (D)",
+        tooltip: "Dimension",
         iconSrc: icon("dimension"),
         goToStateType: "DimensionStart",
         simBehavior: "constraint",
@@ -247,7 +253,7 @@ const edition_palette = (): { title: string; elements: PaletteElement[] }[] => [
       },
       {
         label: "Rapport d'engrenages",
-        tooltip: "Gear ratio (Q)",
+        tooltip: "Gear ratio",
         iconSrc: icon("ratio"),
         goToStateType: "GearRatioConstraintStart",
         simBehavior: "constraint",
@@ -264,7 +270,7 @@ const edition_palette = (): { title: string; elements: PaletteElement[] }[] => [
       },
       {
         label: "Longueurs égales",
-        tooltip: "Equal lengths (E)",
+        tooltip: "Equal lengths",
         iconSrc: icon("equal"),
         goToStateType: "EqualConstraintStart",
         simBehavior: "constraint",
@@ -277,7 +283,7 @@ const edition_palette = (): { title: string; elements: PaletteElement[] }[] => [
       },
       {
         label: "Alignement horizontal / vertical",
-        tooltip: "Horizontal/Vertical alignement  (H/V)",
+        tooltip: "Horizontal/Vertical alignement",
         iconSrc: icon("horizontal-vertical"),
         goToStateType: "HorizontalVerticalConstraintStart",
         simBehavior: "constraint",
@@ -289,7 +295,7 @@ const edition_palette = (): { title: string; elements: PaletteElement[] }[] => [
       },
       {
         label: "Perpendiculaire",
-        tooltip: "Normal (N)",
+        tooltip: "Normal",
         iconSrc: icon("normal"),
         goToStateType: "NormalConstraintStart",
         simBehavior: "constraint",
@@ -301,7 +307,7 @@ const edition_palette = (): { title: string; elements: PaletteElement[] }[] => [
       },
       {
         label: "Parallèle",
-        tooltip: "Parallel (L)",
+        tooltip: "Parallel",
         iconSrc: icon("parallel"),
         goToStateType: "ParallelConstraintStart",
         simBehavior: "constraint",
@@ -318,7 +324,7 @@ const edition_palette = (): { title: string; elements: PaletteElement[] }[] => [
     elements: [
       {
         label: "Force",
-        tooltip: "Force (F)",
+        tooltip: "Force",
         iconSrc: icon("force"),
         goToStateType: "PlacingForceStart",
         simBehavior: "structural",
@@ -331,7 +337,7 @@ const edition_palette = (): { title: string; elements: PaletteElement[] }[] => [
       },
       {
         label: "Moment",
-        tooltip: "Moment (O)",
+        tooltip: "Moment",
         iconSrc: icon("moment"),
         goToStateType: "PlacingMomentStart",
         simBehavior: "structural",
@@ -343,7 +349,7 @@ const edition_palette = (): { title: string; elements: PaletteElement[] }[] => [
       },
       {
         label: "Sonde",
-        tooltip: "Probe (I)",
+        tooltip: "Probe",
         iconSrc: icon("probe"),
         goToStateType: "PlacingProbe",
         simBehavior: "observational",
@@ -389,7 +395,7 @@ export const ElementPalette: React.FC<ElementPaletteProps> = ({
       }
       // "observational" → no sim side-effect
     }
-    setCanvasState({ type: element.goToStateType } as CanvasState);
+    setCanvasState(tool_state(element.goToStateType));
   };
 
   // Structural, not visual: the group sizes are the same under every theme.
@@ -478,10 +484,11 @@ export const ElementPalette: React.FC<ElementPaletteProps> = ({
                 isSimMode && element.simIconSrc
                   ? element.simIconSrc
                   : element.iconSrc;
+              const key = shortcut_label(element.goToStateType);
               return (
                 <Tooltip
                   key={element.goToStateType}
-                  title={element.tooltip}
+                  title={key ? `${element.tooltip} (${key})` : element.tooltip}
                   placement="right"
                   arrow
                   disableInteractive
