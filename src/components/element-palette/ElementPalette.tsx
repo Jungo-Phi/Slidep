@@ -71,8 +71,7 @@ const edition_palette = (): { title: string; elements: PaletteElement[] }[] => [
             "MovingEdgeBody",
             "MovingConstraint",
             "SimulationDragging",
-          ].includes(state.type) ||
-          state.type === "EditingValue",
+          ].includes(state.type) || state.type === "EditingValue",
         hilightColor: COLORS.SELECTION_BOX,
         hilightHoverColor: COLORS.SELECTION_STROKE,
         simHilightColor: COLORS.ACCENT,

@@ -16,8 +16,13 @@ import { Action, ConnectsActionType } from "../../types";
 import { Point2 } from "../../types/point2";
 import { HoveredPart } from "../../types/hovered-part";
 import { connected_constraints, node_on_beam_body } from "../canvas/utils";
-import { belt_wrap_direction, legible_id } from "../../utils";
+import { belt_wrap_direction, get_belt_path, legible_id } from "../../utils";
 import type { BeltGearApproach } from "../../utils";
+import {
+  belt_section_insertion_index,
+  belt_project,
+} from "../../utils/belt-path";
+import { belt_junction_id } from "../../utils/belt-rules";
 
 /** Returns the mechanical element from the id. */
 export function get_mechanical_element_from_id(
@@ -274,7 +279,9 @@ export function disconnect_element(
       element.id,
       mechanicalElements,
     ) as BeltElement;
-    console.log("get_connections: ", get_connections(element, containerType));
+    const attached = belt.attachedGearsIDs.find(
+      (gear) => gear.id === connectedElement.id,
+    );
     return {
       type: containerType,
       disconnect: true,
@@ -283,9 +290,7 @@ export function disconnect_element(
       index: get_connections(element, containerType).indexOf(
         connectedElement.id,
       ),
-      direction: belt.attachedGearsIDs.find(
-        (gear) => gear.id === connectedElement.id,
-      )?.direction!,
+      direction: attached?.direction ?? false,
     };
   } else {
     return {
@@ -298,6 +303,151 @@ export function disconnect_element(
       ),
     };
   }
+}
+
+/**
+ * Actions that open a closed belt into a loose one.
+ *
+ * When one junction node still fuses both terminals, the start is freed so the
+ * two ends can part (the disconnection-separation pass slides it along the belt);
+ * the end keeps the junction, so the node survives holding a single terminal.
+ * Then the closed flag is cleared. A belt already free of its junction only needs
+ * the flag. Call it on a belt whose loop no longer holds — see `belt_is_looped`.
+ */
+export function open_belt(belt: BeltElement): Action[] {
+  const actions: Action[] = [];
+  const junction = belt_junction_id(belt);
+  if (junction !== undefined)
+    actions.push({
+      type: "ConnectsFixedNodeStart",
+      disconnect: true,
+      elementID: belt.id,
+      connectID: junction,
+    });
+  actions.push({ type: "CloseBelt", id: belt.id, closed: false });
+  return actions;
+}
+
+/**
+ * The point of the loop nearest to `p`, read from the belt as the loop it is
+ * about to become — the pulley cycle, terminals dropped. Same geometry the
+ * geometric `BeltJunction` projects onto, so a junction seated here starts on
+ * the outline. `p` itself when there is no loop to speak of.
+ */
+function nearest_point_on_belt_loop(
+  belt: BeltElement,
+  p: Point2,
+  mechanicalElements: MechanicalElement[],
+): Point2 {
+  const { vias, closed } = get_belt_path(
+    { ...belt, closed: true },
+    mechanicalElements,
+  );
+  if (vias.length === 0) return p;
+  return belt_project(vias, p, closed).point;
+}
+
+/**
+ * Actions that close a belt into a loop, reusing whatever its terminals already
+ * hold rather than always minting a junction:
+ *
+ *   • both terminals free          → a fresh join holds both;
+ *   • one terminal already on a node → that node is the junction, the free end
+ *                                      joins it (no new join, no duplicate);
+ *   • both on the same node          → it is already the junction;
+ *   • both on different nodes         → the two are fused like a node dropped on
+ *                                      a node, then both terminals share it.
+ *
+ * `position` is only read when a fresh join is minted, and then only to pick the
+ * nearest point of the loop it lands on.
+ */
+export function close_belt_actions(
+  belt: BeltElement,
+  position: Point2,
+  mechanicalElements: MechanicalElement[],
+  constraintElements: ConstraintElement[],
+): Action[] {
+  const close: Action = { type: "CloseBelt", id: belt.id, closed: true };
+  const startNode = belt.fixedNodeStartID;
+  const endNode = belt.fixedNodeEndID;
+
+  if (startNode && startNode === endNode) return [close];
+
+  if (!startNode && !endNode) {
+    const join: JoinElement = {
+      type: "join",
+      id: crypto.randomUUID(),
+      probes: [],
+      overlays: {},
+      fixedEdgesIDs: [],
+      // Seat the junction on the loop it closes, not under the cursor: the
+      // geometric BeltJunction then has ~no error to solve, so the belt itself
+      // does not shift to meet a junction dropped away from its outline.
+      position: nearest_point_on_belt_loop(belt, position, mechanicalElements),
+      isGrounded: false,
+    };
+    return [
+      { type: "CreateElement", element: join },
+      {
+        type: "ConnectsFixedEdges",
+        disconnect: false,
+        elementID: join.id,
+        connectID: belt.id,
+        index: 0,
+      },
+      {
+        type: "ConnectsFixedNodeStart",
+        disconnect: false,
+        elementID: belt.id,
+        connectID: join.id,
+      },
+      {
+        type: "ConnectsFixedNodeEnd",
+        disconnect: false,
+        elementID: belt.id,
+        connectID: join.id,
+      },
+      close,
+    ];
+  }
+
+  // One terminal pinned: reuse its node, attach the free end to it. The node
+  // already lists the belt (reciprocal of the pinned terminal), so nothing is
+  // created and it is never listed twice.
+  if (!startNode || !endNode) {
+    const junction = (startNode ?? endNode)!;
+    return [
+      startNode
+        ? {
+            type: "ConnectsFixedNodeEnd",
+            disconnect: false,
+            elementID: belt.id,
+            connectID: junction,
+          }
+        : {
+            type: "ConnectsFixedNodeStart",
+            disconnect: false,
+            elementID: belt.id,
+            connectID: junction,
+          },
+      close,
+    ];
+  }
+
+  // Both terminals on different nodes: fuse them. The start's node survives and
+  // keeps the start; the end's node is absorbed, its belt end retargeted onto it.
+  const startEl = get_mechanical_element_from_id(
+    startNode,
+    mechanicalElements,
+  ) as NodeElement;
+  const endEl = get_mechanical_element_from_id(
+    endNode,
+    mechanicalElements,
+  ) as NodeElement;
+  return [
+    ...fuse_nodes(startEl, endEl, mechanicalElements, constraintElements),
+    close,
+  ];
 }
 
 /**
@@ -592,7 +742,9 @@ export function start_simulation(
       }
     },
     holds(part) {
-      if (part.type === "Void") return false;
+      // A closure names no element, so there is nothing to vouch for. Callers
+      // that accept one must say so themselves.
+      if (part.type === "Void" || part.type === "BeltClosure") return false;
       return (
         simMech.some((e) => e.id === part.id) ||
         simConst.some((e) => e.id === part.id) ||
@@ -668,13 +820,14 @@ function transfer_edge_connections_to_node(
         connectID: sourceNodeID,
         index,
       });
-      actions.push({
-        type: "ConnectsFixedNodesBody",
-        disconnect: false,
-        elementID: edgeID,
-        connectID: destNodeID,
-        index: 0,
-      });
+      if (!connected.fixedNodesBodyIDs.includes(destNodeID))
+        actions.push({
+          type: "ConnectsFixedNodesBody",
+          disconnect: false,
+          elementID: edgeID,
+          connectID: destNodeID,
+          index: 0,
+        });
     }
     return actions;
   }
@@ -707,6 +860,8 @@ function transfer_edge_connections_to_node(
       connectID: destNodeID,
     });
   }
+  // Both nodes may already sit on this body, in which case the survivor only
+  // takes the place it already holds.
   if (
     "fixedNodesBodyIDs" in connectedEdge &&
     connectedEdge.fixedNodesBodyIDs.includes(sourceNodeID)
@@ -720,13 +875,14 @@ function transfer_edge_connections_to_node(
         sourceNodeID,
       ),
     });
-    actions.push({
-      type: "ConnectsFixedNodesBody",
-      disconnect: false,
-      elementID: edgeID,
-      connectID: destNodeID,
-      index: 0,
-    });
+    if (!connectedEdge.fixedNodesBodyIDs.includes(destNodeID))
+      actions.push({
+        type: "ConnectsFixedNodesBody",
+        disconnect: false,
+        elementID: edgeID,
+        connectID: destNodeID,
+        index: 0,
+      });
   }
   return actions;
 }
@@ -945,6 +1101,132 @@ function transfer_constraint_connections(
   return actions;
 }
 
+/**
+ * Fuses `hoveredNode` into `selectedNode`: the actions that merge two nodes
+ * landing on one another, keeping every connection either carried.
+ *
+ * A pivot meeting a slider (either order) becomes a slidep — the one node that
+ * both turns and slides; the slidep inherits the pivot's id so a gear's
+ * `parentAxleID` stays valid. Otherwise `selectedNode` takes over and
+ * `hoveredNode` is deleted, its links transferred. Shared with the belt closure,
+ * which merges the two junction nodes exactly as a drag would.
+ */
+export function fuse_nodes(
+  selectedNode: NodeElement,
+  hoveredNode: NodeElement,
+  mechanicalElements: MechanicalElement[],
+  constraintElements: ConstraintElement[],
+): Action[] {
+  const actions: Action[] = [];
+  if (
+    selectedNode.type === "pivot" &&
+    !selectedNode.motor &&
+    hoveredNode.type === "slider"
+  ) {
+    const slidep: SlidepElement = {
+      type: "slidep",
+      id: selectedNode.id,
+      probes: [],
+      overlays: {},
+      parentBeamID: hoveredNode.parentBeamID,
+      rotatingEdgesIDs: selectedNode.rotatingEdgesIDs.concat(
+        hoveredNode.fixedEdgesIDs,
+      ),
+      fixedGearsIDs: selectedNode.fixedGearsIDs,
+      position: hoveredNode.position,
+      isGrounded: selectedNode.isGrounded || hoveredNode.isGrounded,
+    };
+    actions.push({ type: "DeleteElement", element: selectedNode });
+    actions.push({ type: "DeleteElement", element: hoveredNode });
+    actions.push({ type: "CreateElement", element: slidep });
+    actions.push(
+      ...transfer_external_connections(
+        hoveredNode,
+        selectedNode,
+        mechanicalElements,
+      ),
+    );
+    actions.push(
+      ...transfer_constraint_connections(
+        hoveredNode.id,
+        selectedNode.id,
+        constraintElements,
+      ),
+    );
+  } else if (selectedNode.type === "slider" && hoveredNode.type === "pivot") {
+    // Fuse them into a Slidep — symétrique au cas pivot+slider :
+    // le slidep hérite de l'ID du pivot pour que gear.parentAxleID reste valide.
+    const parentBeam = node_on_beam_body(hoveredNode, mechanicalElements);
+    const parentBeamID = selectedNode.parentBeamID
+      ? selectedNode.parentBeamID
+      : parentBeam
+        ? parentBeam.id
+        : undefined;
+    const slidep: SlidepElement = {
+      type: "slidep",
+      id: hoveredNode.id,
+      probes: [],
+      overlays: {},
+      parentBeamID,
+      rotatingEdgesIDs: selectedNode.fixedEdgesIDs
+        .concat(hoveredNode.rotatingEdgesIDs)
+        .filter((edgeID) => edgeID !== parentBeamID),
+      fixedGearsIDs: hoveredNode.fixedGearsIDs,
+      position: hoveredNode.position,
+      isGrounded: selectedNode.isGrounded || hoveredNode.isGrounded,
+    };
+    actions.push({ type: "DeleteElement", element: selectedNode });
+    actions.push({ type: "DeleteElement", element: hoveredNode });
+    actions.push({ type: "CreateElement", element: slidep });
+    actions.push(
+      ...transfer_external_connections(
+        selectedNode,
+        hoveredNode,
+        mechanicalElements,
+      ),
+    );
+    actions.push(
+      ...transfer_constraint_connections(
+        selectedNode.id,
+        hoveredNode.id,
+        constraintElements,
+      ),
+    );
+  } else {
+    // Takeover de selectedNode sur hoveredNode
+    actions.push({ type: "DeleteElement", element: hoveredNode });
+    // A mass never inherits an anchor: it is the one node that cannot
+    // be grounded.
+    if (
+      hoveredNode.isGrounded &&
+      !selectedNode.isGrounded &&
+      selectedNode.type !== "mass"
+    ) {
+      actions.push({
+        type: "GroundNode",
+        id: selectedNode.id,
+        grounded: true,
+      });
+    }
+    actions.push(...transfer_internal_connections(hoveredNode, selectedNode));
+    actions.push(
+      ...transfer_external_connections(
+        hoveredNode,
+        selectedNode,
+        mechanicalElements,
+      ),
+    );
+    actions.push(
+      ...transfer_constraint_connections(
+        hoveredNode.id,
+        selectedNode.id,
+        constraintElements,
+      ),
+    );
+  }
+  return actions;
+}
+
 /** Which part of its own element a gesture is bringing to the target. */
 export type OwnPartKind = "node" | "start" | "end" | "body" | "gear";
 
@@ -1005,48 +1287,23 @@ export function connect_elements(
     hoveredPart.type === "Void" ||
     hoveredPart.type === "Constraint" ||
     selectedPart.type === "Void" ||
-    selectedPart.type === "Constraint"
+    selectedPart.type === "Constraint" ||
+    selectedPart.type === "BeltClosure"
   ) {
     return [];
   }
-  // Connect belt ends together
-  if (hoveredPart.id === "----" || hoveredPart.id === selectedPart.id) {
-    const join: JoinElement = {
-      type: "join",
-      id: crypto.randomUUID(),
-      probes: [],
-      overlays: {},
-      fixedEdgesIDs: [],
-      position: hoveredPart.position,
-      isGrounded: false,
-    };
-    return [
-      { type: "CreateElement", element: join },
-      {
-        type: "ConnectsFixedEdges",
-        disconnect: false,
-        elementID: join.id,
-        connectID: selectedPart.id,
-        index: 0,
-      },
-      {
-        type: "ConnectsFixedNodeStart",
-        disconnect: false,
-        elementID: selectedPart.id,
-        connectID: join.id,
-      },
-      {
-        type: "ConnectsFixedNodeEnd",
-        disconnect: false,
-        elementID: selectedPart.id,
-        connectID: join.id,
-      },
-      {
-        type: "TightenBelt",
-        id: selectedPart.id,
-        tightened: true,
-      },
-    ];
+  // Close a belt onto itself: the terminal offered while it is being placed, or
+  // its own opposite end while one is dragged onto the other.
+  if (
+    hoveredPart.type === "BeltClosure" ||
+    hoveredPart.id === selectedPart.id
+  ) {
+    return close_belt_actions(
+      selectedElement as BeltElement,
+      hoveredPart.position,
+      mechanicalElements,
+      constraintElements,
+    );
   }
 
   const hoveredElement = get_mechanical_element_from_id(
@@ -1071,120 +1328,14 @@ export function connect_elements(
         case "Node":
           // NODE on NODE
           const hoveredNode = hoveredElement as NodeElement;
-          if (
-            selectedNode.type === "pivot" &&
-            !selectedNode.motor &&
-            hoveredNode.type === "slider"
-          ) {
-            const slidep: SlidepElement = {
-              type: "slidep",
-              id: selectedNode.id,
-              probes: [],
-              overlays: {},
-              parentBeamID: hoveredNode.parentBeamID,
-              rotatingEdgesIDs: selectedNode.rotatingEdgesIDs.concat(
-                hoveredNode.fixedEdgesIDs,
-              ),
-              fixedGearsIDs: selectedNode.fixedGearsIDs,
-              position: hoveredNode.position,
-              isGrounded: selectedNode.isGrounded || hoveredNode.isGrounded,
-            };
-            actions.push({ type: "DeleteElement", element: selectedNode });
-            actions.push({ type: "DeleteElement", element: hoveredNode });
-            actions.push({ type: "CreateElement", element: slidep });
-            actions.push(
-              ...transfer_external_connections(
-                hoveredNode,
-                selectedNode,
-                mechanicalElements,
-              ),
-            );
-            actions.push(
-              ...transfer_constraint_connections(
-                hoveredNode.id,
-                selectedNode.id,
-                constraintElements,
-              ),
-            );
-          } else if (
-            selectedNode.type === "slider" &&
-            hoveredNode.type === "pivot"
-          ) {
-            // Fuse them into a Slidep — symétrique au cas pivot+slider :
-            // le slidep hérite de l'ID du pivot pour que gear.parentAxleID reste valide.
-            const parentBeam = node_on_beam_body(
+          actions.push(
+            ...fuse_nodes(
+              selectedNode,
               hoveredNode,
               mechanicalElements,
-            );
-            const parentBeamID = selectedNode.parentBeamID
-              ? selectedNode.parentBeamID
-              : parentBeam
-                ? parentBeam.id
-                : undefined;
-            const slidep: SlidepElement = {
-              type: "slidep",
-              id: hoveredNode.id,
-              probes: [],
-              overlays: {},
-              parentBeamID,
-              rotatingEdgesIDs: selectedNode.fixedEdgesIDs
-                .concat(hoveredNode.rotatingEdgesIDs)
-                .filter((edgeID) => edgeID !== parentBeamID),
-              fixedGearsIDs: hoveredNode.fixedGearsIDs,
-              position: hoveredNode.position,
-              isGrounded: selectedNode.isGrounded || hoveredNode.isGrounded,
-            };
-            actions.push({ type: "DeleteElement", element: selectedNode });
-            actions.push({ type: "DeleteElement", element: hoveredNode });
-            actions.push({ type: "CreateElement", element: slidep });
-            actions.push(
-              ...transfer_external_connections(
-                selectedNode,
-                hoveredNode,
-                mechanicalElements,
-              ),
-            );
-            actions.push(
-              ...transfer_constraint_connections(
-                selectedNode.id,
-                hoveredNode.id,
-                constraintElements,
-              ),
-            );
-          } else {
-            // Takeover de selectedNode sur hoveredNode
-            actions.push({ type: "DeleteElement", element: hoveredNode });
-            // A mass never inherits an anchor: it is the one node that cannot
-            // be grounded.
-            if (
-              hoveredNode.isGrounded &&
-              !selectedNode.isGrounded &&
-              selectedNode.type !== "mass"
-            ) {
-              actions.push({
-                type: "GroundNode",
-                id: selectedNode.id,
-                grounded: true,
-              });
-            }
-            actions.push(
-              ...transfer_internal_connections(hoveredNode, selectedNode),
-            );
-            actions.push(
-              ...transfer_external_connections(
-                hoveredNode,
-                selectedNode,
-                mechanicalElements,
-              ),
-            );
-            actions.push(
-              ...transfer_constraint_connections(
-                hoveredNode.id,
-                selectedNode.id,
-                constraintElements,
-              ),
-            );
-          }
+              constraintElements,
+            ),
+          );
           break;
         case "Edge":
           // NODE on EDGE
@@ -1533,24 +1684,61 @@ export function attach_gear_to_belt(
   mechanicalElements: MechanicalElement[],
   approach: BeltGearApproach,
 ): Action[] {
-  return connect_gear_and_belt(
-    gearID,
-    belt.id,
-    section,
-    belt_wrap_direction(
-      gearCenter,
-      belt,
-      section,
-      mechanicalElements,
-      approach,
+  const index = belt_section_insertion_index(section, belt.closed);
+  if (index === undefined) return [];
+  return [
+    ...evict_belt_from_gear(gearID, belt.id, mechanicalElements),
+    ...connect_gear_and_belt(
+      gearID,
+      belt.id,
+      index,
+      belt_wrap_direction(
+        gearCenter,
+        belt,
+        section,
+        mechanicalElements,
+        approach,
+      ),
     ),
-  );
+  ];
+}
+
+/**
+ * A gear carries one belt. When a new belt takes a gear another already holds,
+ * the previous belt lets go of it (the closure-correction pass then opens that
+ * belt if it drops below a loop). A freshly placed gear is not in the mechanism
+ * yet, so it holds nothing and this is a no-op.
+ *
+ * Both directions are cut, not just the belt's list: `attachedBeltID` is written
+ * by the connect that follows, but undoing that write clears it to `undefined`
+ * rather than back to the old belt. Cutting the gear→belt side here makes the
+ * eviction reversible — the undo restores the previous belt on both sides.
+ */
+export function evict_belt_from_gear(
+  gearID: ID,
+  incomingBeltID: ID,
+  mechanicalElements: MechanicalElement[],
+): Action[] {
+  const gear = mechanicalElements.find((el) => el.id === gearID);
+  if (!gear || !("attachedBeltID" in gear)) return [];
+  const previous = gear.attachedBeltID;
+  if (!previous || previous === incomingBeltID) return [];
+  const oldBelt = get_mechanical_element_from_id(previous, mechanicalElements);
+  return [
+    disconnect_element(
+      oldBelt,
+      gear,
+      "ConnectsAttachedGears",
+      mechanicalElements,
+    ),
+    disconnect_element(gear, oldBelt, "ConnectsAttachedBelt", mechanicalElements),
+  ];
 }
 
 function connect_gear_and_belt(
   gearID: ID,
   beltID: ID,
-  beltSection: number,
+  index: number,
   direction: boolean,
 ): Action[] {
   return [
@@ -1565,7 +1753,7 @@ function connect_gear_and_belt(
       disconnect: false,
       elementID: beltID,
       connectID: gearID,
-      index: beltSection / 2,
+      index,
       direction,
     },
   ];

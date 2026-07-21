@@ -26,7 +26,16 @@ export type Link = {
   owner?: ID;
 } & (
   | { type: "Coincidence"; ddl: 2; key1: string; key2: string }
-  | { type: "Distance"; ddl: 1; key1: string; key2: string; distance: number }
+  | {
+      type: "Distance";
+      ddl: 1;
+      key1: string;
+      key2: string;
+      distance: number;
+      // Which way coincident points should part. Ignored as soon as they are
+      // apart, since the axis between them is then the real one.
+      preferredAxis?: Point2;
+    }
   | {
       type: "DistanceToLine";
       ddl: 1;
@@ -113,7 +122,7 @@ export type Link = {
     }
   // Inextensible belt, ONE link per belt, both solvers' simulation path. Holds the
   // total drawn length at `length`; gradient wrt a pulley centre = −(sum of adjacent
-  // tangent units). For a CLOSED (tight) belt that is all it does. For an OPEN
+  // tangent units). For a CLOSED belt that is all it does. For an OPEN
   // (loose) belt it ALSO governs the two terminal endpoints: the length pins the SUM
   // of their free runs while the shared travel φ drives their DIFFERENTIAL (one run
   // winds in as the other feeds out), and an exhausted run winds onto its pulley and
@@ -130,6 +139,11 @@ export type Link = {
       directions: boolean[];
       length: number;
       closed: boolean;
+      // Edition only: the pulleys' RADIUS-map keys (bare gear ids, never fused), same
+      // order as `radii`. When present the length constraint also treats the radii as
+      // DOFs (∂L/∂r = wrap), so a length dimension resizes the pulleys. Absent in the
+      // simulation, where radii are baked.
+      radKeys?: string[];
       // Continuous (unwrapped) wrap per pulley, tracked each frame; whole turns feed
       // the length so winding past 2π stays smooth. disconnected = lost contact.
       wraps?: number[];
@@ -152,13 +166,16 @@ export type Link = {
       startWound?: boolean;
       endWound?: boolean;
     }
-  // Tight-belt junction (geometric-solver)
+  // Closed-belt junction (geometric-solver)
   | {
       type: "BeltJunction";
       ddl: 1;
       nodeKey: string;
       gearPosKeys: string[];
       radii: number[];
+      // Bare (never-fused) gear ids, same order as `radii`, for reading the LIVE radius
+      // from the radii map when a length dimension resizes the pulleys in edition.
+      radKeys: string[];
       directions: boolean[];
     }
   // Belt pin (simulation): the attached node `nodeKey` rides the belt at
@@ -166,7 +183,7 @@ export type Link = {
   // belt rotates (θ_ref = reference pulley angle, ε = dir?1:−1). Bidirectional:
   // dragging the node along the belt advances θ_ref (which turns every pulley via
   // BeltPhaseGear), and pulling it off the belt snaps it back. Radii + refs baked.
-  // A tight belt is a closed pulley loop; a loose belt is the open path
+  // A closed belt is a closed pulley loop; a loose belt is the open path
   // start-terminal → pulleys → end-terminal (`closed:false` + startKey/endKey).
   | {
       type: "BeltPin";
@@ -182,7 +199,7 @@ export type Link = {
       s0: number;
       thetaRef0: number;
       // Open (loose) belt: rides the open path with r=0 terminals. Absent/true =
-      // closed loop (tight junction).
+      // closed loop (its junction).
       closed?: boolean;
       startKey?: string;
       endKey?: string;

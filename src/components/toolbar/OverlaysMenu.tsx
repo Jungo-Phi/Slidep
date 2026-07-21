@@ -29,6 +29,8 @@ import {
 interface OverlaysMenuProps {
   mechanicalElements: MechanicalElement[];
   applyActions: (actions: Action[], actionBundleType: ActionBundleType) => void;
+  /** Drops the "Afficher" label, keeping the eye and the caret. */
+  condensed?: boolean;
 }
 
 interface OverlayMenuRowProps {
@@ -75,7 +77,7 @@ const OverlayMenuRow: React.FC<OverlayMenuRowProps> = ({
     >
       {shown}/{total}
     </Typography>
-    <Tooltip title="Tout afficher">
+    <Tooltip disableInteractive title="Tout afficher">
       <span>
         <IconButton
           size="small"
@@ -88,7 +90,7 @@ const OverlayMenuRow: React.FC<OverlayMenuRowProps> = ({
         </IconButton>
       </span>
     </Tooltip>
-    <Tooltip title="Tout cacher">
+    <Tooltip disableInteractive title="Tout cacher">
       <span>
         <IconButton
           size="small"
@@ -116,6 +118,7 @@ const OverlayMenuRow: React.FC<OverlayMenuRowProps> = ({
 export const OverlaysMenu: React.FC<OverlaysMenuProps> = ({
   mechanicalElements,
   applyActions,
+  condensed = false,
 }) => {
   const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
   const anyShown = any_overlay_shown(mechanicalElements);
@@ -127,34 +130,41 @@ export const OverlaysMenu: React.FC<OverlaysMenuProps> = ({
 
   return (
     <>
-      <Button
-        color="inherit"
-        size="small"
-        onClick={(e) => setAnchorEl(e.currentTarget)}
-        startIcon={
-          anyShown ? (
-            <Visibility sx={{ fontSize: "18px !important" }} />
-          ) : (
-            <VisibilityOff sx={{ fontSize: "18px !important" }} />
-          )
-        }
-        endIcon={
-          <KeyboardArrowDown
-            sx={{ ml: -0.5, fontSize: "16px !important", opacity: 0.7 }}
-          />
-        }
-        sx={{
-          fontSize: "0.72rem",
-          fontWeight: 600,
-          textTransform: "none",
-          px: 0.75,
-          py: 0.25,
-          minWidth: 0,
-          letterSpacing: 0,
-        }}
+      <Tooltip
+        disableInteractive
+        title={condensed ? "Afficher les calques" : ""}
       >
-        Afficher
-      </Button>
+        <Button
+          color="inherit"
+          size="small"
+          onClick={(e) => setAnchorEl(e.currentTarget)}
+          startIcon={
+            anyShown ? (
+              <Visibility sx={{ fontSize: "18px !important" }} />
+            ) : (
+              <VisibilityOff sx={{ fontSize: "18px !important" }} />
+            )
+          }
+          endIcon={
+            <KeyboardArrowDown
+              sx={{ ml: -0.5, fontSize: "16px !important", opacity: 0.7 }}
+            />
+          }
+          sx={{
+            fontSize: "0.72rem",
+            fontWeight: 600,
+            textTransform: "none",
+            px: 0.75,
+            py: 0.25,
+            minWidth: 0,
+            letterSpacing: 0,
+            // Icon-only: the label's slot would otherwise keep its gap.
+            "& .MuiButton-startIcon": { mr: condensed ? 0 : undefined },
+          }}
+        >
+          {condensed ? null : "Afficher"}
+        </Button>
+      </Tooltip>
       <Menu
         anchorEl={anchorEl}
         open={!!anchorEl}

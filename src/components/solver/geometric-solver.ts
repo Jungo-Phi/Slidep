@@ -15,6 +15,7 @@ import {
   get_geom_nodes,
 } from "./parsing";
 import { PBD_kinematic_solver } from "./PBD_kinematic_solver";
+import { belt_terminal_axes, separation_links } from "./disconnect-separation";
 
 /**
  * Resolves geometric constraints for a given mechanism and a triggering action.
@@ -23,6 +24,9 @@ export function resolveGeometricConstraints(
   mechanism: Mechanism,
   actionBundleType: ActionBundleType,
   triggerAction: Action,
+  /** The whole bundle. Only the separation of what it disconnects reads it —
+   *  every other rule answers to `triggerAction` alone. */
+  bundleActions: Action[] = [triggerAction],
 ): GeomNodes {
   // *
   // Phase A : Création du graphe de dépendances
@@ -202,8 +206,17 @@ export function resolveGeometricConstraints(
         }
       }
       break;
-    case "ChangeDimension":
     case "Connects":
+      // Momentary: pushes apart what this bundle detached, then it is gone.
+      links.push(
+        ...separation_links(
+          bundleActions,
+          mechanism,
+          belt_terminal_axes(mechanism),
+        ),
+      );
+      break;
+    case "ChangeDimension":
     case "CreateConstraint":
   }
 

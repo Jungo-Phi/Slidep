@@ -408,15 +408,15 @@ exports[`get_hovered_part > pique la même chose qu'avant sur toute la matrice �
    spring body            → Void (300, 200)
    spring start           → Edge spring (200, 200) [start]
    mass centre            → Node mass (600, 0)
-   belt start             → Void (0, -300)
+   belt start             → Void (14, -300) rejected:Une courroie ne peut pas en rejoindre une autre
    belt arc               → GearTooth belt-gear (300, -320)
    plain belt run         → Void (300, -500)
-   plain belt end         → Void (600, -500)
+   plain belt end         → Void (614, -500) rejected:Une courroie ne peut pas en rejoindre une autre
    dimension              → Void (300, 80)
    force arrow            → Void (600, 20)
    empty space            → Void (900, 900)
 ── PlacingBeltEnd
-   axle centre            → Node axle (0, 0)
+   axle centre            → Void (0, 0) rejected:Une courroie doit passer par 2 poulies pour se refermer
    gear rim               → GearTooth gear (60, 0)
    gear inside            → Void (30, 0)
    join centre            → Node join (200, 0)
@@ -426,10 +426,10 @@ exports[`get_hovered_part > pique la même chose qu'avant sur toute la matrice �
    spring body            → Void (300, 200)
    spring start           → Edge spring (200, 200) [start]
    mass centre            → Node mass (600, 0)
-   belt start             → Void (0, -300)
+   belt start             → Void (14, -300) rejected:Une courroie ne peut pas en rejoindre une autre
    belt arc               → GearTooth belt-gear (300, -320)
    plain belt run         → Void (300, -500)
-   plain belt end         → Void (600, -500)
+   plain belt end         → Void (614, -500) rejected:Une courroie ne peut pas en rejoindre une autre
    dimension              → Void (300, 80)
    force arrow            → Void (600, 20)
    empty space            → Void (900, 900)

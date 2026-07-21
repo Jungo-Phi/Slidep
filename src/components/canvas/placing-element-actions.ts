@@ -11,10 +11,12 @@ import {
   MechanicalElement,
   NodeElement,
   PivotElement,
+  SlidepElement,
 } from "../../types";
 import {
   attach_gear_to_belt,
   connect_elements,
+  evict_belt_from_gear,
   get_mechanical_element_from_id,
   own_part,
   start_simulation,
@@ -25,6 +27,10 @@ import {
   moment_from_drag,
 } from "./placing-loads";
 import { PHYSICS } from "../../constants/rendering-specs";
+import { Point2 } from "../../types/point2";
+import { get_belt_path } from "../../utils";
+import { belt_wrap_arriving, belt_wrap_leaving } from "../../utils/belt-geom";
+import { belt_project } from "../../utils/belt-path";
 
 export type MouseDownResult = {
   actions: Action[];
@@ -221,7 +227,11 @@ export function handle_placing_element(
     }
 
     case "PlacingProbe":
-      if (hoveredPart.type === "Void" || hoveredPart.type === "Constraint")
+      if (
+        hoveredPart.type === "Void" ||
+        hoveredPart.type === "Constraint" ||
+        hoveredPart.type === "BeltClosure"
+      )
         return { actions: [] };
       // Open the metric selector popover anchored on the clicked element.
       return {
@@ -252,6 +262,22 @@ type PlacingElementGroupState = Extract<
   }
 >;
 
+/**
+ * The axle a gear started on this part would join, if that part is a node that
+ * already turns. Reusing it spares the takeover a fresh pivot would perform, in
+ * which the node — and its motor, its anchor, its name — is deleted.
+ */
+export function axle_under(
+  part: HoveredPart,
+  mechanicalElements: MechanicalElement[],
+): PivotElement | SlidepElement | undefined {
+  if (part.type !== "Node") return undefined;
+  const node = mechanicalElements.find((element) => element.id === part.id);
+  return node && (node.type === "pivot" || node.type === "slidep")
+    ? node
+    : undefined;
+}
+
 function handle_place_element(
   state: PlacingElementGroupState,
   hoveredPart: HoveredPart,
@@ -279,43 +305,29 @@ function handle_place_element(
     }
   }
 
-  // Add a gear to the belt route being defined
+  // Add a gear to the belt route being defined. The gear the gesture started on
+  // is folded in only at finalisation (`attached_gears_with_start`), so it never
+  // needs a next-gear click to be caught.
   if (state.type === "PlacingBeltEnd" && hoveredPart.type === "GearTooth") {
     const newAttachedGearsIDs = [...state.attachedGearsIDs];
-    if (
-      state.startHover.type === "GearTooth" &&
-      state.attachedGearsIDs.length === 0 &&
-      hoveredPart.id !== state.startHover.id
-    ) {
-      const hoveredGear = get_mechanical_element_from_id(
-        state.startHover.id,
-        mechanicalElements,
-      ) as GearElement;
-      const direction =
-        hoveredGear.position
-          .sub(state.startHover.position)
-          .perp()
-          .dot(hoveredPart.position.sub(hoveredGear.position)) > 0;
-      newAttachedGearsIDs.push({ id: hoveredGear.id, direction });
-    }
     const hoveredGear = get_mechanical_element_from_id(
       hoveredPart.id,
       mechanicalElements,
     ) as GearElement;
-    const direction =
-      hoveredGear.position
-        .sub(
-          state.attachedGearsIDs.length > 0
-            ? (
-                get_mechanical_element_from_id(
-                  state.attachedGearsIDs.slice(-1)[0].id,
-                  mechanicalElements,
-                ) as GearElement
-              ).position
-            : state.startHover.position,
-        )
-        .perp()
-        .dot(hoveredPart.position.sub(hoveredGear.position)) > 0;
+    const previousVia =
+      state.attachedGearsIDs.length > 0
+        ? (
+            get_mechanical_element_from_id(
+              state.attachedGearsIDs.slice(-1)[0].id,
+              mechanicalElements,
+            ) as GearElement
+          ).position
+        : state.startHover.position;
+    const direction = belt_wrap_arriving(
+      hoveredGear,
+      previousVia,
+      hoveredPart.position,
+    );
 
     newAttachedGearsIDs.push({ id: hoveredGear.id, direction });
     return {
@@ -328,48 +340,66 @@ function handle_place_element(
     };
   }
 
-  // Create a pivot + gear pair atomically
+  // Create a gear on its axle atomically, the axle being a fresh pivot unless the
+  // gesture started on one that can already carry it.
   if (state.type === "PlacingGearRadius") {
-    const pivotId = crypto.randomUUID() as ID;
+    const existingAxle = axle_under(state.startHover, mechanicalElements);
+    const axleId = existingAxle ? existingAxle.id : (crypto.randomUUID() as ID);
     const gearId = crypto.randomUUID() as ID;
-    const newPivot: PivotElement = {
-      type: "pivot",
-      id: pivotId,
-      probes: [],
-      overlays: {},
-      position: state.startHover.position,
-      isGrounded: false,
-      rotatingEdgesIDs: [],
-      fixedGearsIDs: [gearId],
-    };
+    const center = existingAxle
+      ? existingAxle.position
+      : state.startHover.position;
     const newGear: GearElement = {
       type: "gear",
       id: gearId,
       probes: [],
       overlays: {},
-      position: state.startHover.position,
+      position: center,
       angle: 0,
-      radius: state.startHover.position.distance_to(hoveredPart.position),
-      parentAxleID: pivotId,
+      radius: center.distance_to(hoveredPart.position),
+      parentAxleID: axleId,
       fixedNodesBodyIDs: [],
       meshedGearsIDs: [],
       attachedBeltID: undefined,
     };
     const sim = start_simulation(mechanicalElements, constraintElements, loads);
-    sim.step([
-      { type: "CreateElement", element: newPivot },
-      { type: "CreateElement", element: newGear },
-    ]);
-    sim.step(
-      connect_elements(
-        state.startHover,
-        newPivot,
-        own_part(pivotId, "node", state.startHover),
-        sim.mechanicalElements,
-        sim.constraintElements,
-        sim.loads,
-      ),
-    );
+    if (existingAxle) {
+      sim.step([
+        { type: "CreateElement", element: newGear },
+        {
+          type: "ConnectsFixedGears",
+          disconnect: false,
+          elementID: axleId,
+          connectID: gearId,
+          index: existingAxle.fixedGearsIDs.length,
+        },
+      ]);
+    } else {
+      const newPivot: PivotElement = {
+        type: "pivot",
+        id: axleId,
+        probes: [],
+        overlays: {},
+        position: center,
+        isGrounded: false,
+        rotatingEdgesIDs: [],
+        fixedGearsIDs: [gearId],
+      };
+      sim.step([
+        { type: "CreateElement", element: newPivot },
+        { type: "CreateElement", element: newGear },
+      ]);
+      sim.step(
+        connect_elements(
+          state.startHover,
+          newPivot,
+          own_part(axleId, "node", state.startHover),
+          sim.mechanicalElements,
+          sim.constraintElements,
+          sim.loads,
+        ),
+      );
+    }
     // The axle may have taken over the node it landed on, which is then gone:
     // the rim can only be pinned to what the first step left standing.
     if (sim.holds(hoveredPart))
@@ -391,7 +421,7 @@ function handle_place_element(
       sim.step(
         attach_gear_to_belt(
           gearId,
-          state.startHover.position,
+          center,
           belt,
           hoveredPart.section,
           sim.mechanicalElements,
@@ -461,7 +491,7 @@ function handle_place_element(
         fixedNodeStartID: undefined,
         fixedNodeEndID: undefined,
         attachedGearsIDs: [],
-        tight: false,
+        closed: false,
       };
       break;
     case "PlacingPivot":
@@ -518,17 +548,80 @@ function handle_place_element(
       break;
   }
 
+  // A closing gesture puts both terminals on the junction, and the junction
+  // belongs to the loop. Born there, they agree with the join `close_belt_actions`
+  // seats on that same point, so fusing the three of them moves nothing.
+  if (
+    state.type === "PlacingBeltEnd" &&
+    hoveredPart.type === "BeltClosure" &&
+    newElement.type === "belt"
+  ) {
+    const { vias, closed } = get_belt_path(
+      {
+        ...newElement,
+        attachedGearsIDs: attached_gears_with_start(
+          state,
+          hoveredPart.position,
+          mechanicalElements,
+        ),
+        closed: true,
+      },
+      mechanicalElements,
+    );
+    if (vias.length > 0) {
+      const onLoop = belt_project(vias, hoveredPart.position, closed).point;
+      newElement = {
+        ...newElement,
+        positionStart: onLoop,
+        positionEnd: onLoop,
+      };
+    }
+  }
+
   const sim = start_simulation(mechanicalElements, constraintElements, loads);
   sim.step([{ type: "CreateElement", element: newElement }]);
+
+  // The route is part of what the belt IS, so it is laid down before the
+  // terminals are connected: closing the belt seats its junction on the loop,
+  // which only exists once the pulleys are attached.
+  if (state.type === "PlacingBeltEnd") {
+    const attachedGears = attached_gears_with_start(
+      state,
+      hoveredPart.position,
+      mechanicalElements,
+    );
+    for (let i = 0; i < attachedGears.length; i++) {
+      sim.step([
+        ...evict_belt_from_gear(
+          attachedGears[i].id,
+          newElementId,
+          sim.mechanicalElements,
+        ),
+        {
+          type: "ConnectsAttachedGears",
+          disconnect: false,
+          elementID: newElementId,
+          connectID: attachedGears[i].id,
+          index: i,
+          direction: attachedGears[i].direction,
+        },
+        {
+          type: "ConnectsAttachedBelt",
+          disconnect: false,
+          elementID: attachedGears[i].id,
+          connectID: newElementId,
+        },
+      ]);
+    }
+  }
 
   if (
     "startHover" in state &&
     "positionStart" in newElement &&
-    !(
-      state.type === "PlacingBeltEnd" &&
-      hoveredPart.type === "Edge" &&
-      hoveredPart.id === "----"
-    )
+    // A closing belt normally attaches to its own start through the closure
+    // below — except when the gesture began on a node, which then becomes the
+    // junction (the closure reuses it instead of minting a fresh one).
+    (hoveredPart.type !== "BeltClosure" || state.startHover.type === "Node")
   ) {
     sim.step(
       connect_elements(
@@ -542,13 +635,18 @@ function handle_place_element(
     );
   }
 
-  // Attaching the start may have taken over the node the end lands on, leaving
-  // nothing here to attach to.
-  if (sim.holds(hoveredPart) || hoveredPart.type === "Void")
+  // Attaching the start may have taken over the node the end lands on, leaving nothing here to attach to.
+  // A closure names no element for `holds` to vouch for, yet it is the very target that shuts the loop.
+  // Read the belt back from the sim so the closure sees the terminal the start-attach may have pinned.
+  if (
+    hoveredPart.type === "BeltClosure" ||
+    sim.holds(hoveredPart) ||
+    hoveredPart.type === "Void"
+  )
     sim.step(
       connect_elements(
         hoveredPart,
-        newElement,
+        get_mechanical_element_from_id(newElement.id, sim.mechanicalElements),
         own_part(
           newElement.id,
           "position" in newElement ? "node" : "end",
@@ -559,27 +657,6 @@ function handle_place_element(
         sim.loads,
       ),
     );
-
-  if (state.type === "PlacingBeltEnd") {
-    for (let i = 0; i < state.attachedGearsIDs.length; i++) {
-      sim.step([
-        {
-          type: "ConnectsAttachedGears",
-          disconnect: false,
-          elementID: newElementId,
-          connectID: state.attachedGearsIDs[i].id,
-          index: i,
-          direction: state.attachedGearsIDs[i].direction,
-        },
-        {
-          type: "ConnectsAttachedBelt",
-          disconnect: false,
-          elementID: state.attachedGearsIDs[i].id,
-          connectID: newElementId,
-        },
-      ]);
-    }
-  }
 
   const actions = sim.actions;
 
@@ -600,12 +677,46 @@ function handle_place_element(
   }
 
   // If placing the end closed the belt (landed on its start → connect_elements
-  // created a join + TightenBelt), the geometric solver must run so BeltJunction
-  // snaps the join onto the loop — like any TightenBelt path, not "Other".
-  const bundle: ActionBundleType = actions.some((a) => a.type === "TightenBelt")
+  // created a join + CloseBelt), the geometric solver must run so BeltJunction
+  // snaps the join onto the loop — like any CloseBelt path, not "Other".
+  const bundle: ActionBundleType = actions.some((a) => a.type === "CloseBelt")
     ? "Connects"
     : "Other";
   return { actions, actionBundleType: bundle, newCanvasState };
+}
+
+/**
+ * The belt route's pulleys, with the gear the gesture started on prepended when
+ * it isn't already listed. A start on a gear only enters `attachedGearsIDs` once
+ * a next via exists to orient its wrap, so on finalisation we fold it in against
+ * whatever comes next — the first routed pulley, or the end point. Same wrap
+ * formula as the placing preview in `draw-canvas`.
+ */
+export function attached_gears_with_start(
+  state: Extract<CanvasState, { type: "PlacingBeltEnd" }>,
+  endPosition: Point2,
+  mechanicalElements: MechanicalElement[],
+): { id: ID; direction: boolean }[] {
+  const start = state.startHover;
+  const routed = state.attachedGearsIDs;
+  if (start.type !== "GearTooth" || routed.some((g) => g.id === start.id))
+    return routed;
+
+  const startGear = get_mechanical_element_from_id(
+    start.id,
+    mechanicalElements,
+  ) as GearElement;
+  const nextPos =
+    routed.length > 0
+      ? (
+          get_mechanical_element_from_id(
+            routed[0].id,
+            mechanicalElements,
+          ) as GearElement
+        ).position
+      : endPosition;
+  const direction = belt_wrap_leaving(startGear, start.position, nextPos);
+  return [{ id: startGear.id, direction }, ...routed];
 }
 
 function handle_place_ground(

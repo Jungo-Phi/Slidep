@@ -47,7 +47,7 @@ export type BeltPiece =
 
 /**
  * Split a belt into its ordered geometric pieces (tangent segments + gear arcs).
- * `closed` treats the vias as a cycle (tight belt: gears only, wrap gN→g0);
+ * `closed` treats the vias as a cycle (closed belt: gears only, wrap gN→g0);
  * otherwise as an open path (loose belt: terminals at both ends carry no arc).
  * Order for closed: arc(v0), seg(v0→v1), arc(v1), … ; for open: seg, arc, seg, …
  */
@@ -140,6 +140,60 @@ export function belt_pieces(
     }
   }
   return pieces;
+}
+
+/**
+ * A belt `section` is an index into `belt_pieces(vias, closed)`.
+ *
+ * The two traversals do not share a parity: an open path starts on a run
+ * (`seg, arc, seg…`), a closed one on an arc (`arc, seg, arc…`). Read the
+ * helpers below rather than deriving anything from `section` by hand — the
+ * closed case also shifts the indices, since it has no start terminal to offset
+ * the pulleys.
+ */
+export function belt_section_is_run(section: number, closed: boolean): boolean {
+  return closed ? section % 2 === 1 : section % 2 === 0;
+}
+
+/**
+ * Where a pulley dropped on run `section` lands in `attachedGearsIDs`.
+ * Undefined for an arc section, which no pulley can be inserted into.
+ */
+export function belt_section_insertion_index(
+  section: number,
+  closed: boolean,
+): number | undefined {
+  if (!belt_section_is_run(section, closed)) return undefined;
+  return closed ? (section - 1) / 2 + 1 : section / 2;
+}
+
+/**
+ * Which pulley of `attachedGearsIDs` arc `section` wraps.
+ * Undefined for a run section, which wraps none.
+ */
+export function belt_section_gear_index(
+  section: number,
+  closed: boolean,
+): number | undefined {
+  if (belt_section_is_run(section, closed)) return undefined;
+  return closed ? section / 2 : (section - 1) / 2;
+}
+
+/**
+ * Where the two runs adjacent to arc `section` merge once its pulley leaves the
+ * belt, expressed in the numbering of the shortened belt (`gearCount` counts the
+ * pulleys BEFORE the removal). A closed path wraps around, so the first pulley's
+ * arc merges into the last run.
+ */
+export function belt_merged_run_section(
+  section: number,
+  closed: boolean,
+  gearCount: number,
+): number {
+  if (!closed) return section - 1;
+  const sections = 2 * (gearCount - 1);
+  if (sections <= 0) return 0;
+  return ((section - 1) % sections + sections) % sections;
 }
 
 /**

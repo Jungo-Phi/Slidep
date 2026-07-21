@@ -25,6 +25,44 @@ export function get_belt_vias(
   ];
 }
 
+/**
+ * The belt as it will be once pulley `index` is off it. Interpret a section
+ * index against this rather than the stored belt whenever a gesture carries a
+ * pending removal, since dropping a pulley renumbers the sections.
+ *
+ * `closed` is deliberately left untouched: whether the shortened belt still
+ * loops is settled at commit time, and flipping it here would renumber the
+ * sections a second time mid-gesture.
+ */
+export function belt_without_gear(
+  belt: BeltElement,
+  index: number,
+): BeltElement {
+  return {
+    ...belt,
+    attachedGearsIDs: belt.attachedGearsIDs.filter((_, i) => i !== index),
+    disconnectedGearIndices: belt.disconnectedGearIndices?.flatMap((i) =>
+      i === index ? [] : [i > index ? i - 1 : i],
+    ),
+    gearWraps: belt.gearWraps?.filter((_, i) => i !== index),
+  };
+}
+
+/**
+ * The via chain a belt's geometry is actually read from: a closed belt is the
+ * pulley cycle (no terminals — the junction rides on the loop), a loose one the
+ * terminal-to-terminal chain. Feed the pair straight to `belt_pieces`.
+ */
+export function get_belt_path(
+  belt: BeltElement,
+  mechanicalElements: MechanicalElement[],
+): { vias: BeltVia[]; closed: boolean } {
+  const vias = get_belt_vias(belt, mechanicalElements);
+  return belt.closed
+    ? { vias: vias.slice(1, -1), closed: true }
+    : { vias, closed: false };
+}
+
 export function get_gear_angles(
   positionStart: Point2,
   positionEnd: Point2,
@@ -109,14 +147,10 @@ export function measure_belt_length(
   belt: BeltElement,
   mechanicalElements: MechanicalElement[],
 ): number {
-  const vias = get_belt_vias(belt, mechanicalElements);
-  if (belt.tight) {
-    const gears = vias.slice(1, -1); // drop the start/end terminals
-    return belt_pieces(gears, true).reduce((acc, p) => acc + p.length, 0);
-  }
   // Open chain: a terminal resting on its pulley's rim needs no special case — its
   // tangent run is simply of length 0 and the arc already reaches it.
-  return belt_pieces(vias, false).reduce((acc, p) => acc + p.length, 0);
+  const { vias, closed } = get_belt_path(belt, mechanicalElements);
+  return belt_pieces(vias, closed).reduce((acc, p) => acc + p.length, 0);
 }
 
 /**
@@ -153,6 +187,30 @@ export function belt_wrap_direction(
   return approach === "gear-onto-belt" ? left : !left;
 }
 
+/**
+ * Which way a belt winds around `gear` when it ARRIVES at the rim point
+ * `contact`, coming from `from` — the previous via of the route.
+ */
+export function belt_wrap_arriving(
+  gear: GearElement,
+  from: Point2,
+  contact: Point2,
+): boolean {
+  return gear.position.sub(from).perp().dot(contact.sub(gear.position)) > 0;
+}
+
+/**
+ * Which way it winds when it LEAVES the rim point `contact` towards `to` — the
+ * next via of the route. Travelling the other way round winds the other way.
+ */
+export function belt_wrap_leaving(
+  gear: GearElement,
+  contact: Point2,
+  to: Point2,
+): boolean {
+  return gear.position.sub(contact).perp().dot(to.sub(gear.position)) > 0;
+}
+
 /** Is a point on the left side of a belt section. Reach it through belt_wrap_direction. */
 function is_on_left_side_of_belt(
   position: Point2,
@@ -160,39 +218,8 @@ function is_on_left_side_of_belt(
   section: number,
   mechanicalElements: MechanicalElement[],
 ): boolean {
-  const attachedGears: { gear: GearElement; direction: boolean }[] =
-    belt.attachedGearsIDs.map(({ id, direction }) => {
-      return {
-        gear: get_mechanical_element_from_id(
-          id,
-          mechanicalElements,
-        ) as GearElement,
-        direction,
-      };
-    });
-  const gearAngles = get_gear_angles(
-    belt.positionStart,
-    belt.positionEnd,
-    attachedGears,
-  );
-  // arc sections
-  gearAngles.unshift({
-    center: belt.positionStart,
-    radius: 0,
-    startAngle: 0,
-    endAngle: 0,
-    direction: false,
-  });
-  gearAngles.push({
-    center: belt.positionEnd,
-    radius: 0,
-    startAngle: 0,
-    endAngle: 0,
-    direction: false,
-  });
-  const { center: c1, radius: r1, endAngle } = gearAngles[section / 2];
-  const { center: c2, radius: r2, startAngle } = gearAngles[section / 2 + 1];
-  const start = c1.add(Point2.from_polar(r1, endAngle));
-  const end = c2.add(Point2.from_polar(r2, startAngle));
-  return position.is_on_left_side_of_line(start, end);
+  const { vias, closed } = get_belt_path(belt, mechanicalElements);
+  const piece = belt_pieces(vias, closed)[section];
+  if (!piece || piece.kind !== "segment") return false;
+  return position.is_on_left_side_of_line(piece.from, piece.to);
 }

@@ -9,7 +9,15 @@ import {
 } from "@mui/material";
 import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
 import WarningAmberIcon from "@mui/icons-material/WarningAmber";
-import { Mechanism, MechanismMetadata } from "../../types";
+import {
+  Action,
+  ActionBundleType,
+  CanvasState,
+  ID,
+  Mechanism,
+  MechanismMetadata,
+  UnionElement,
+} from "../../types";
 import {
   compute_constraint_violations,
   ConstraintViolationCategory,
@@ -17,6 +25,8 @@ import {
   validate_mechanism,
   ValidationErrorCode,
 } from "../../utils";
+import { HoveredPart } from "../../types/hovered-part";
+import ElementDisplay from "./components/ElementDisplay";
 
 /**
  * Categorical badge colors: they exist to tell the codes apart at a glance, not
@@ -33,6 +43,8 @@ const ERROR_CODE_COLORS: Record<ValidationErrorCode, string> = {
   SAME_AXLE_MESH: "#BF360C",
   CONTRADICTORY_MOTOR: "#3162AB",
   GROUNDED_MASS: "#AD1457",
+  BELT_CLOSURE_MISMATCH: "#00695C",
+  BELTS_JOINED: "#827717",
 };
 
 const ERROR_CODE_LABELS: Record<ValidationErrorCode, string> = {
@@ -45,6 +57,8 @@ const ERROR_CODE_LABELS: Record<ValidationErrorCode, string> = {
   SAME_AXLE_MESH: "axl",
   CONTRADICTORY_MOTOR: "mot",
   GROUNDED_MASS: "anc",
+  BELT_CLOSURE_MISMATCH: "crr",
+  BELTS_JOINED: "cxc",
 };
 
 const CATEGORY_COLORS: Record<ConstraintViolationCategory, string> = {
@@ -64,16 +78,39 @@ const CATEGORY_LABELS: Record<ConstraintViolationCategory, string> = {
 interface ProjectInfoSectionProps {
   mechanism: Mechanism;
   updateMetadata: (metadata: MechanismMetadata) => void;
+  setHoveredPart: (hoveredPart: HoveredPart) => void;
+  setCanvasState: (state: CanvasState) => void;
+  applyActions: (actions: Action[], actionBundleType: ActionBundleType) => void;
 }
 
 export const ProjectInfoSection: React.FC<ProjectInfoSectionProps> = ({
   mechanism,
   updateMetadata,
+  setHoveredPart,
+  setCanvasState,
+  applyActions,
 }) => {
   const validationErrors = useMemo(
     () => validate_mechanism(mechanism),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [mechanism.mechanicalElements, mechanism.constraintElements],
+  );
+
+  // Names the element an error points at. Every list is in it: an error can sit on a mechanical element, a constraint or a load.
+  const elementByID = useMemo(
+    () =>
+      new Map<ID, UnionElement>(
+        [
+          ...mechanism.mechanicalElements,
+          ...mechanism.constraintElements,
+          ...mechanism.loads,
+        ].map((el) => [el.id, el]),
+      ),
+    [
+      mechanism.mechanicalElements,
+      mechanism.constraintElements,
+      mechanism.loads,
+    ],
   );
 
   const constraintViolations = useMemo(
@@ -113,6 +150,15 @@ export const ProjectInfoSection: React.FC<ProjectInfoSectionProps> = ({
     updateMetadata({ ...updatedInfo });
   };
 
+  // Metadata is committed on every keystroke, so leaving the field is all these keys have to do.
+  const leaveOnEnterOrEscape = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" || e.key === "Escape")
+      (e.target as HTMLElement).blur();
+  };
+  const leaveOnEscape = (e: React.KeyboardEvent) => {
+    if (e.key === "Escape") (e.target as HTMLElement).blur();
+  };
+
   return (
     <Box sx={{ my: 2 }}>
       <Box
@@ -128,6 +174,7 @@ export const ProjectInfoSection: React.FC<ProjectInfoSectionProps> = ({
           label="Nom du projet"
           value={projectInfo.name}
           onChange={(e) => handleInfoChange("name", e.target.value)}
+          onKeyDown={leaveOnEnterOrEscape}
           size="small"
         />
 
@@ -138,6 +185,7 @@ export const ProjectInfoSection: React.FC<ProjectInfoSectionProps> = ({
           rows={3}
           value={projectInfo.description}
           onChange={(e) => handleInfoChange("description", e.target.value)}
+          onKeyDown={leaveOnEscape}
           size="small"
         />
 
@@ -146,6 +194,7 @@ export const ProjectInfoSection: React.FC<ProjectInfoSectionProps> = ({
           label="Auteur·rice"
           value={projectInfo.author}
           onChange={(e) => handleInfoChange("author", e.target.value)}
+          onKeyDown={leaveOnEnterOrEscape}
           size="small"
         />
       </Box>
@@ -249,35 +298,52 @@ export const ProjectInfoSection: React.FC<ProjectInfoSectionProps> = ({
               {validationErrors.length > 1 ? "s" : ""}
             </AlertTitle>
             <Box sx={{ display: "flex", flexDirection: "column", gap: 0.25 }}>
-              {validationErrors.map((err, i) => (
-                <Box
-                  key={i}
-                  sx={{
-                    fontSize: "0.72rem",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 0.5,
-                  }}
-                >
+              {validationErrors.map((err, i) => {
+                const faulty = err.elementID
+                  ? elementByID.get(err.elementID)
+                  : undefined;
+                return (
                   <Box
-                    component="span"
+                    key={i}
                     sx={{
-                      fontSize: "0.6rem",
-                      fontWeight: 700,
-                      px: 0.5,
-                      py: "1px",
-                      borderRadius: "3px",
-                      bgcolor: ERROR_CODE_COLORS[err.code],
-                      color: "common.white",
-                      flexShrink: 0,
-                      lineHeight: 1.4,
+                      fontSize: "0.72rem",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 0.5,
                     }}
                   >
-                    {ERROR_CODE_LABELS[err.code]}
+                    <Box
+                      component="span"
+                      sx={{
+                        fontSize: "0.6rem",
+                        fontWeight: 700,
+                        px: 0.5,
+                        py: "1px",
+                        borderRadius: "3px",
+                        bgcolor: ERROR_CODE_COLORS[err.code],
+                        color: "common.white",
+                        flexShrink: 0,
+                        lineHeight: 1.4,
+                      }}
+                    >
+                      {ERROR_CODE_LABELS[err.code]}
+                    </Box>
+                    {faulty && (
+                      <Box sx={{ flexShrink: 0 }}>
+                        <ElementDisplay
+                          element={faulty}
+                          setHoveredPart={setHoveredPart}
+                          setCanvasState={setCanvasState}
+                          applyActions={applyActions}
+                          size="small"
+                          editable={false}
+                        />
+                      </Box>
+                    )}
+                    {err.message}
                   </Box>
-                  {err.message}
-                </Box>
-              ))}
+                );
+              })}
             </Box>
           </Alert>
         </>

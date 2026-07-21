@@ -27,9 +27,11 @@ import {
 import {
   BELT_CANNOT_CLOSE,
   belt_can_close,
+  belt_placing_pulleys,
   legality_for_state,
 } from "../mechanism/connection-rules";
-import { get_gear_angles } from "../../utils";
+import { get_belt_path } from "../../utils";
+import { belt_pieces, nearest_point_on_piece } from "../../utils/belt-path";
 import {
   distributed_display_vectors,
   distributed_label_vector,
@@ -437,87 +439,63 @@ function probe_belt(
     if (mode === "ends") return null;
   }
 
-  const attachedGears = belt.attachedGearsIDs.map(({ id, direction }) => ({
-    gear: get_mechanical_element_from_id(id, mechanicalElements) as GearElement,
-    direction,
-  }));
-  const gearAngles = get_gear_angles(
-    belt.positionStart,
-    belt.positionEnd,
-    attachedGears,
-  );
+  // `section` is the index of the piece in this list, closed loop included, so
+  // hit-testing and drawing name the same stretches of belt.
+  const { vias, closed } = get_belt_path(belt, mechanicalElements);
+  const pieces = belt_pieces(vias, closed);
 
-  // Arc sections: the stretch wrapped around each pulley.
+  // Arcs first: a stretch wrapped on a pulley wins over the runs it joins, whose
+  // ends it touches.
   if (mode === "full" || mode === "runs+arcs") {
-    for (let i = 0; i < gearAngles.length; i++) {
-      const { center, radius, startAngle, endAngle, direction } = gearAngles[i];
-      const distance = mousePos.distance_to(center);
-      const angle = mousePos.sub(center).angle();
-      if (
-        distance <= radius + HIT_TOLERANCE.NODE / 2 &&
-        distance > radius - HIT_TOLERANCE.NODE / 2 &&
-        ((!direction && startAngle <= angle && angle <= endAngle) ||
-          (direction && endAngle <= angle && angle <= startAngle))
-      )
-        return {
-          type: "BeltBody",
-          position: mousePos.sub(center).normalize().mul(radius).add(center),
-          id: belt.id,
-          deleting,
-          section: 2 * i + 1,
-        };
+    for (let section = 0; section < pieces.length; section++) {
+      const piece = pieces[section];
+      if (piece.kind !== "arc") continue;
+      // Clamped to the swept sector, so the arc keeps its extent across the ±π
+      // seam and never answers on the pulley's free side.
+      const onArc = nearest_point_on_piece(mousePos, piece);
+      if (mousePos.distance_to(onArc) > HIT_TOLERANCE.NODE / 2) continue;
+      return {
+        type: "BeltBody",
+        position: onArc,
+        id: belt.id,
+        deleting,
+        section,
+      };
     }
   }
 
-  // The two terminals close the chain, as arcs of radius 0.
-  gearAngles.unshift({
-    center: belt.positionStart,
-    radius: 0,
-    startAngle: 0,
-    endAngle: 0,
-    direction: false,
-  });
-  gearAngles.push({
-    center: belt.positionEnd,
-    radius: 0,
-    startAngle: 0,
-    endAngle: 0,
-    direction: false,
-  });
-
-  for (let i = 0; i < gearAngles.length - 1; i++) {
-    const { center: c1, radius: r1, endAngle } = gearAngles[i];
-    const { center: c2, radius: r2, startAngle } = gearAngles[i + 1];
-    const start = c1.add(Point2.from_polar(r1, endAngle));
-    const end = c2.add(Point2.from_polar(r2, startAngle));
-    if (mousePos.distance2segment(start, end) > HIT_TOLERANCE.EDGE) continue;
+  for (let section = 0; section < pieces.length; section++) {
+    const piece = pieces[section];
+    if (piece.kind !== "segment") continue;
+    const { from, to } = piece;
+    if (mousePos.distance2segment(from, to) > HIT_TOLERANCE.EDGE) continue;
 
     if (mode === "runs-tangent") {
       // The run answers only where the gear can actually meet it: its centre
       // must project inside the segment, not past one of its ends.
       if (
         !gearRef ||
-        gearRef.distance2segment(start, end) > gearRef.distance2line(start, end)
+        gearRef.distance2segment(from, to) > gearRef.distance2line(from, to)
       )
         continue;
       return {
         type: "BeltBody",
         position: gearRef
-          .project_on_line(start, end)
+          .project_on_line(from, to)
           .sub(gearRef)
           .extend_length(INTERACTION_SPECS.GEAR_ON_BELT_GROW)
           .add(gearRef),
         id: belt.id,
         deleting: false,
-        section: 2 * i,
+        section,
       };
     }
     return {
       type: "BeltBody",
-      position: mousePos.project_on_line(start, end),
+      position: mousePos.project_on_line(from, to),
       id: belt.id,
       deleting,
-      section: 2 * i,
+      section,
     };
   }
   return null;
@@ -530,14 +508,6 @@ function get_hovered_part_of_element(
   mousePos: Point2,
   state: CanvasState,
 ): HoveredPart | null {
-  // Grabbing the body of anything but a beam drags it without connecting it.
-  if (state.type === "MovingEdgeBody") {
-    const dragged = get_mechanical_element_from_id(
-      state.elementID,
-      mechanicalElements,
-    ) as EdgeElement;
-    if (dragged.type !== "beam") return null;
-  }
   // TODO : à "PlacingBeltEnd", ignorer les gears avec le même parentAxle
 
   const targets = HOVER_TARGETS[state.type];
@@ -786,21 +756,30 @@ function get_hovered_part_of_element(
  * of its hit zone. Nothing can then be dropped stacked on top of it — the
  * refusal is felt as a resistance rather than read as an error.
  *
- * Only elements with a single centre push back; a gear is refused at its rim,
- * which has no inside to be pushed out of.
+ * Only a refusal with a point to push away from pushes back: a node's centre, or
+ * the terminal of an edge. A gear is refused at its rim and a body along its
+ * length, and neither has an inside to be pushed out of.
  */
-function pushed_out_of(element: UnionElement, position: Point2): Point2 {
-  if (!("position" in element) || element.type === "gear") return position;
+function pushed_out_of(
+  element: UnionElement,
+  hoveredPart: HoveredPart,
+  position: Point2,
+): Point2 {
+  const centre =
+    "position" in element && element.type !== "gear"
+      ? element.position
+      : hoveredPart.type === "Edge" && hoveredPart.part !== "body"
+        ? hoveredPart.position
+        : undefined;
+  if (!centre) return position;
   const radius =
     HIT_TOLERANCE.NODE * (element.type === "pivot" && element.motor ? 1.5 : 1);
-  const distance = position.distance_to(element.position);
+  const distance = position.distance_to(centre);
   if (distance >= radius) return position;
   // Dead centre carries no direction to push along; any one will do.
   const direction =
-    distance > 0
-      ? position.sub(element.position).normalize()
-      : new Point2(1, 0);
-  return element.position.add(direction.mul(radius));
+    distance > 0 ? position.sub(centre).normalize() : new Point2(1, 0);
+  return centre.add(direction.mul(radius));
 }
 
 /**
@@ -828,6 +807,18 @@ export function get_hovered_part(
   ) {
     excluded_elements.push(state.elementID);
   }
+  // A node holding a belt terminal drags that terminal onto the cursor, so the
+  // main loop would keep answering with the held end. Exclude such a belt and
+  // let the closure section below offer its *other* terminal instead.
+  if (state.type === "MovingNode") {
+    for (const element of mechanicalElements)
+      if (
+        element.type === "belt" &&
+        (element.fixedNodeStartID === state.elementID ||
+          element.fixedNodeEndID === state.elementID)
+      )
+        excluded_elements.push(element.id);
+  }
   if (state.type === "MovingConstraint") {
     const constraint = get_constraint_element_from_id(
       state.elementID,
@@ -842,12 +833,31 @@ export function get_hovered_part(
 
   const is_legal = legality_for_state(state, mechanicalElements);
 
-  // `mousePos` arrives already bounded — see clamp_to_bounds at its call site.
   const position = mousePos.clone();
 
   const elements: UnionElement[] = (mechanicalElements as UnionElement[])
     .concat(constraintElements)
     .concat(loadElements);
+
+  // Belt end back on its own start: the target is the belt's own terminal, so no rule in `legality_for_state` can be asked about it and the closure is gated here.
+  // It precedes the element sweep because the start point usually sits on something — the rim of the gear the gesture started on, the node it started from — which would otherwise answer for it.
+  if (
+    state.type === "PlacingBeltEnd" &&
+    mousePos.distance_to(state.startHover.position) <= HIT_TOLERANCE.NODE
+  ) {
+    if (
+      !belt_can_close(
+        belt_placing_pulleys(
+          state.attachedGearsIDs,
+          state.startHover.type === "GearTooth"
+            ? state.startHover.id
+            : undefined,
+        ),
+      )
+    )
+      return { type: "Void", position, rejected: BELT_CANNOT_CLOSE };
+    return { type: "BeltClosure", position: state.startHover.position };
+  }
 
   const hover_order = [...DRAWING_ORDER];
   hover_order.reverse();
@@ -870,33 +880,18 @@ export function get_hovered_part(
         state,
       );
       if (!hoveredPart) continue;
-      const verdict = is_legal(element);
+      const verdict = is_legal(element, hoveredPart);
       if (verdict.allowed) return hoveredPart;
       if (verdict.blocks)
         return {
           type: "Void",
-          position: pushed_out_of(element, position),
+          position: pushed_out_of(element, hoveredPart, position),
           rejected: verdict.reason,
         };
     }
   }
 
-  // Belt end over belt start. The target is the belt's own terminal, so no rule
-  // in `legality_for_state` can be asked about it: the closure is gated here.
-  if (
-    state.type === "PlacingBeltEnd" &&
-    mousePos.distance_to(state.startHover.position) <= HIT_TOLERANCE.NODE
-  ) {
-    if (!belt_can_close(state.attachedGearsIDs))
-      return { type: "Void", position, rejected: BELT_CANNOT_CLOSE };
-    return {
-      type: "Edge",
-      position: state.startHover.position,
-      id: "----",
-      deleting: false,
-      part: "start",
-    };
-  } else if (state.type === "MovingEdgeStartPoint") {
+  if (state.type === "MovingEdgeStartPoint") {
     const belt = get_mechanical_element_from_id(
       state.elementID,
       mechanicalElements,
@@ -905,7 +900,7 @@ export function get_hovered_part(
       belt.type === "belt" &&
       mousePos.distance_to(belt.positionEnd) <= HIT_TOLERANCE.NODE
     ) {
-      if (!belt_can_close(belt.attachedGearsIDs))
+      if (!belt_can_close(belt.attachedGearsIDs.length))
         return { type: "Void", position, rejected: BELT_CANNOT_CLOSE };
       return {
         type: "Edge",
@@ -924,7 +919,7 @@ export function get_hovered_part(
       belt.type === "belt" &&
       mousePos.distance_to(belt.positionStart) <= HIT_TOLERANCE.NODE
     ) {
-      if (!belt_can_close(belt.attachedGearsIDs))
+      if (!belt_can_close(belt.attachedGearsIDs.length))
         return { type: "Void", position, rejected: BELT_CANNOT_CLOSE };
       return {
         type: "Edge",
@@ -932,6 +927,27 @@ export function get_hovered_part(
         id: state.elementID,
         deleting: false,
         part: "start",
+      };
+    }
+  } else if (state.type === "MovingNode") {
+    // A node holding one belt terminal, dragged onto that belt's *other*
+    // terminal, closes the loop by becoming its junction. Offer the end the node
+    // does not hold; the one it holds rides the cursor and is never the target.
+    for (const belt of mechanicalElements) {
+      if (belt.type !== "belt") continue;
+      const holdsStart = belt.fixedNodeStartID === state.elementID;
+      const holdsEnd = belt.fixedNodeEndID === state.elementID;
+      if (holdsStart === holdsEnd) continue;
+      const otherPos = holdsStart ? belt.positionEnd : belt.positionStart;
+      if (mousePos.distance_to(otherPos) > HIT_TOLERANCE.NODE) continue;
+      if (!belt_can_close(belt.attachedGearsIDs.length))
+        return { type: "Void", position, rejected: BELT_CANNOT_CLOSE };
+      return {
+        type: "Edge",
+        position: otherPos,
+        id: belt.id,
+        deleting: false,
+        part: holdsStart ? "end" : "start",
       };
     }
   }

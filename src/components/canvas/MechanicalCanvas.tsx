@@ -16,7 +16,7 @@ import {
   ViewportChange,
   ZERO,
 } from "../../types";
-import { world2screen, screen2world } from "../../utils";
+import { world2screen, screen2world, legible_id } from "../../utils";
 import {
   COLORS,
   CONSTRAINT_REVEAL_COOLDOWN_MS,
@@ -24,7 +24,8 @@ import {
   DIM,
   HIT_TOLERANCE,
 } from "../../constants/rendering-specs";
-import { Box } from "@mui/material";
+import { Box, Tooltip } from "@mui/material";
+import type { Instance as PopperInstance } from "@popperjs/core";
 import { drawMechanicalCanvas as draw_mechanical_canvas } from "./draw-canvas";
 import { canvasStateReducer } from "./canvas-state-reducer";
 import { get_element_from_id } from "../mechanism/connect-actions";
@@ -314,6 +315,12 @@ export const MechanicalCanvas = forwardRef<
       }
       ctx.fillText(text, 125, 40);
 
+      text = `${canvasStateRef.current.type.toString()}`;
+      if ("elementID" in canvasStateRef.current) {
+        text += ` ${legible_id(canvasStateRef.current.elementID)}`;
+      }
+      ctx.fillText(text, 275, 40);
+
       ctx.save();
       ctx.translate(
         mechanismRef.current.viewport.pan.x,
@@ -515,6 +522,9 @@ export const MechanicalCanvas = forwardRef<
         if (
           snapToGrid &&
           newHoveredPart.type === "Void" &&
+          // A point held back by a refusal keeps the distance it was pushed to:
+          // the grid would pull it straight back onto the centre that refused it.
+          !newHoveredPart.rejected &&
           appModeRef.current === "edition" &&
           (canvasStateRef.current.type === "ChangingGearRadius" ||
             canvasStateRef.current.type === "MovingEdgeStartPoint" ||
@@ -711,6 +721,20 @@ export const MechanicalCanvas = forwardRef<
       event.preventDefault();
     };
 
+    // Why the gesture is refused here. Anchored on the raw cursor rather than on
+    // the hovered point: a refusal reports its point pushed out to the edge of
+    // the hit zone, which swings across it for a one-pixel move and would send
+    // the bubble jumping from one side of the cursor to the other.
+    const rejection =
+      hoveredPart.type === "Void" && hoveredPart.rejected
+        ? { reason: hoveredPart.rejected, anchor: mousePositionRef.current }
+        : null;
+    // The anchor is a moving element, which Popper does not watch on its own.
+    const rejectionPopperRef = useRef<PopperInstance>(null);
+    useEffect(() => {
+      rejectionPopperRef.current?.update();
+    }, [rejection?.anchor.x, rejection?.anchor.y]);
+
     // A refusal outranks every tool: whatever is armed, this spot takes nothing.
     const cursor =
       hoveredPart.type === "Void" && hoveredPart.rejected
@@ -862,6 +886,33 @@ export const MechanicalCanvas = forwardRef<
           aria-label="Canvas de conception mécanique"
           role="img"
         />
+        {rejection && (
+          <Tooltip
+            open
+            disableInteractive
+            title={rejection.reason}
+            placement="bottom-start"
+            slotProps={{
+              popper: {
+                popperRef: rejectionPopperRef,
+                // Clears the cursor glyph, which the hotspot sits at the top of.
+                modifiers: [{ name: "offset", options: { offset: [0, 20] } }],
+                sx: { pointerEvents: "none" },
+              },
+            }}
+          >
+            <Box
+              sx={{
+                position: "absolute",
+                left: rejection.anchor.x,
+                top: rejection.anchor.y,
+                width: 0,
+                height: 0,
+                pointerEvents: "none",
+              }}
+            />
+          </Tooltip>
+        )}
         {editingElement && (isEditingValue || isPlacingValue) && (
           <OnCanvasValueEditor
             mode={editingElement.type === "gear-ratio" ? "ratio" : "single"}

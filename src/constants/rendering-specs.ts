@@ -19,6 +19,7 @@ import {
 /** Alpha suffixes, appended to a hex color. Theme-independent. */
 const TRANSPARENCY = {
   ICON_TRANSPARENCY: "C8", // 75% opacity
+  HOVER_TRANSPARENCY: "CC", // 80% opacity
   HALF_TRANSPARENCY: "80", // 50% opacity
 } as const;
 
@@ -124,10 +125,23 @@ export const PHYSICS = {
   GRAVITY: 10, // m/s^2
 } as const;
 
+const STANDARD_STROKE = 2;
+/** Added to an element's own width when it is hovered. A gain rather than a
+ *  fixed width, so that emphasis stays proportionate on a stroke that does not
+ *  rest at `STANDARD` — a gear outline jumping straight to a belt's weight reads
+ *  as a belt, not as a hovered gear. */
+const HOVER_GAIN = 1.5;
+
 export const STROKE_WIDTHS = {
-  STANDARD: 2,
-  THICK: 3.5, // Hovered, Selection, Deletion
+  STANDARD: STANDARD_STROKE,
+  /** Gears rest on a light outline: they are large, and a full-weight circle
+   *  would compete with the belt riding on that same perimeter. */
+  GEAR: (STANDARD_STROKE * 3) / 4,
+  GROUND_BAR: 3.5,
   SPIRE: 4,
+  HOVER_GAIN,
+  /** Hovered width of a stroke resting at `STANDARD`. */
+  HOVERED: STANDARD_STROKE + HOVER_GAIN,
 } as const;
 
 export const LINE_STYLES = {
@@ -220,6 +234,11 @@ export const DIM = {
   EDGE_ENDPOINT_RADIUS: 7,
   MIN_EDGE_LENGTH: 30,
   EDGE_END_MARGIN: 15,
+
+  // How far a disconnection pushes apart the elements it leaves superposed, so
+  // that what is still connected reads at a glance. Purely a legibility gap: it
+  // holds for one solve, not as a standing minimum distance.
+  DISCONNECT_SEPARATION: 20,
 
   // Beam
   BEAM_WIDTH: 8,

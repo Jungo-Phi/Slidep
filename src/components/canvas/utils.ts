@@ -21,6 +21,7 @@ const CONSTRAINT_TYPES = new Set<ConstraintElement["type"]>([
   "dimension-edge-to-node",
   "dimension-angle",
   "dimension-radius",
+  "dimension-belt",
   "horizontal-align-edge",
   "horizontal-align-nodes",
   "vertical-align-edge",

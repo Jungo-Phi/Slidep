@@ -630,7 +630,7 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
                             }}
                           />
                         ))}
-                      <Tooltip title="Supprimer cette mesure">
+                      <Tooltip disableInteractive title="Supprimer cette mesure">
                         <IconButton
                           size="small"
                           color="error"

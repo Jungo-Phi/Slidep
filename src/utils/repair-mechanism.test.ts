@@ -99,7 +99,7 @@ function belt(over: Partial<BeltElement> = {}): BeltElement {
     fixedNodeStartID: undefined,
     fixedNodeEndID: undefined,
     attachedGearsIDs: [],
-    tight: true,
+    closed: true,
     ...over,
   };
 }

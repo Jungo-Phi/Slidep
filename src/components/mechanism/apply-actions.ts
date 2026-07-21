@@ -8,12 +8,46 @@ import {
 import { clone_mechanism } from "../../utils";
 import { assert_actions_preserve_validity } from "../../utils/assert-mechanism";
 import { actionReducer } from "./action-reducer";
+import { open_belt } from "./connect-actions";
+import { belt_is_looped } from "../../utils/belt-rules";
+
+/**
+ * Appends the corrections a bundle owes to the belt-closure invariant, in both
+ * directions: a belt whose loop no longer holds (a pulley lost, a terminal freed
+ * from its junction) must open; a belt that a gesture just made looped (both
+ * terminals brought onto one node, ≥2 pulleys) must close. Stated once here,
+ * against the state the bundle leaves, rather than at every call site.
+ *
+ * The corrections join the bundle, so they solve, record and undo as one with it.
+ */
+function with_belt_closure_corrections(
+  mechanism: Mechanism,
+  actions: Action[],
+): Action[] {
+  const mayChangeLoop = actions.some(
+    (a) =>
+      a.type.startsWith("Connects") ||
+      a.type === "DeleteElement" ||
+      a.type === "CloseBelt",
+  );
+  if (!mayChangeLoop) return actions;
+
+  const after = actionReducer(clone_mechanism(mechanism), actions, false);
+  const corrections = after.mechanicalElements.flatMap((el): Action[] => {
+    if (el.type !== "belt" || el.closed === belt_is_looped(el)) return [];
+    return el.closed
+      ? open_belt(el)
+      : [{ type: "CloseBelt", id: el.id, closed: true }];
+  });
+  return corrections.length ? [...actions, ...corrections] : actions;
+}
 
 export function apply_actions(
   mechanism: Mechanism,
   actions: Action[],
   actionBundleType: ActionBundleType,
 ): Mechanism {
+  actions = with_belt_closure_corrections(mechanism, actions);
   const newAction = actions[0];
   let newActions = actions;
   let lastActions: Action[];
@@ -189,7 +223,7 @@ export function apply_actions(
         newAction.type !== "ConnectsFixedGears" &&
         newAction.type !== "CreateElement" &&
         newAction.type !== "DeleteElement" &&
-        newAction.type !== "TightenBelt"
+        newAction.type !== "CloseBelt"
       )
         break;
 
@@ -201,6 +235,7 @@ export function apply_actions(
         actionReducer(clone_mechanism(mechanism), actions, false),
         actionBundleType,
         newAction,
+        actions,
       );
       newActions = [
         ...actions,

@@ -1,4 +1,5 @@
 import type { HoveredPart } from "../../types/hovered-part";
+import { names_element } from "../../types/hovered-part";
 import {
   BeamElement,
   DistributedForceElement,
@@ -39,7 +40,7 @@ export function force_from_drag(
   cursor: Point2,
   mechanicalElements: MechanicalElement[],
 ): ForceElement | undefined {
-  if (startHover.type === "Void" || startHover.type === "Constraint")
+  if (!names_element(startHover) || startHover.type === "Constraint")
     return undefined;
   const anchor =
     startHover.type === "Edge" && startHover.part !== "body"

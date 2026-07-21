@@ -9,7 +9,7 @@ import { actionReducer } from "../components/mechanism/action-reducer";
 import { validate_mechanism } from "./validate-mechanism";
 import { DEFAULT_METADATA, Mechanism } from "../types/mechanism";
 import { Point2 } from "../types/point2";
-import { HoveredPart } from "../types/hovered-part";
+import { HoveredPart, names_element } from "../types/hovered-part";
 import { CanvasState } from "../types/canvas-state";
 import { legality_for_state } from "../components/mechanism/connection-rules";
 import {
@@ -467,12 +467,13 @@ function is_offered(
   hoveredPart: HoveredPart,
   mechanicalElements: MechanicalElement[],
 ): boolean {
-  if (hoveredPart.type === "Void") return true;
+  if (!names_element(hoveredPart)) return true;
   const candidate: UnionElement | undefined = mechanicalElements.find(
     (element) => element.id === hoveredPart.id,
   );
   if (!candidate) return false;
-  return legality_for_state(state, mechanicalElements)(candidate).allowed;
+  return legality_for_state(state, mechanicalElements)(candidate, hoveredPart)
+    .allowed;
 }
 
 /** Applies one command through the production entry points. Returns the new session. */
@@ -518,7 +519,10 @@ function run_command(session: Session, command: Command): Session {
       const hoveredPart = pick(hoveredParts, command.partB);
       // The gesture is only explored if the interface would offer it — same
       // oracle the hover consults, so the generator cannot drift from the UI.
-      if (!legality_for_state(state, mechanicalElements)(hovered).allowed)
+      if (
+        !legality_for_state(state, mechanicalElements)(hovered, hoveredPart)
+          .allowed
+      )
         return { mechanism, tool: undefined };
       const actions = connect_elements(
         hoveredPart,
@@ -579,6 +583,9 @@ declare const process: { env: Record<string, string | undefined> };
  */
 const NUM_RUNS = Number(process.env.FUZZ_RUNS ?? 300);
 const MAX_COMMANDS = Number(process.env.FUZZ_COMMANDS ?? 6);
+
+/** `FUZZ_SEED=<seed from the failure report>` replays that exact run. */
+const SEED = process.env.FUZZ_SEED ? Number(process.env.FUZZ_SEED) : undefined;
 
 /** Runs a sequence to the end, throwing on the first state the validator rejects. */
 function run_sequence(seed: Gadget[], commands: Command[]): void {
@@ -662,7 +669,7 @@ describe("fuzzing — les gestes de l'UI préservent la validité", () => {
         }),
         run_sequence,
       ),
-      { numRuns: NUM_RUNS },
+      { numRuns: NUM_RUNS, seed: SEED },
     );
   });
 });
@@ -714,25 +721,26 @@ describe("fuzzing — le placement compose ses étapes", () => {
   });
 });
 
-describe("fuzzing — défauts ouverts, reproduits", () => {
-  it.fails(
-    "DUPLICATE_IN_LIST : un nœud deux fois dans fixedNodesBodyIDs",
-    () => {
-      run_sequence(
-        ["pivotOnBeam", "lonePivot", "loneBeam"],
-        [
-          { kind: "connect", a: 5, partA: 0, b: 11, partB: 2 },
-          { kind: "deleteOne", i: 0 },
-          { kind: "connect", a: 0, partA: 0, b: 6, partB: 2 },
-          { kind: "deleteMany", indices: [0] },
-          { kind: "connect", a: 2, partA: 0, b: 15, partB: 0 },
-          { kind: "deleteMany", indices: [0] },
-        ],
-      );
-    },
-  );
+/**
+ * Two nodes carried by the same body, then merged: the survivor must take the
+ * place it already holds rather than be named twice.
+ */
+describe("fuzzing — la fusion ne duplique pas une référence de corps", () => {
+  it("un nœud absorbé par un autre du même corps ne le dédouble pas", () => {
+    run_sequence(
+      ["pivotOnBeam", "lonePivot", "loneBeam"],
+      [
+        { kind: "connect", a: 5, partA: 0, b: 11, partB: 2 },
+        { kind: "deleteOne", i: 0 },
+        { kind: "connect", a: 0, partA: 0, b: 6, partB: 2 },
+        { kind: "deleteMany", indices: [0] },
+        { kind: "connect", a: 2, partA: 0, b: 15, partB: 0 },
+        { kind: "deleteMany", indices: [0] },
+      ],
+    );
+  });
 
-  it.fails("DUPLICATE_IN_LIST : par un autre chemin", () => {
+  it("le même défaut par un autre chemin", () => {
     run_sequence(
       ["loneBeam", "pivotOnBeam", "loneBeam"],
       [
@@ -744,7 +752,9 @@ describe("fuzzing — défauts ouverts, reproduits", () => {
       ],
     );
   });
+});
 
+describe("fuzzing — défauts ouverts, reproduits", () => {
   it.fails("MISSING_BIDIRECTIONAL : extrémité de barre non réciproque", () => {
     run_sequence(
       ["pivotOnBeam", "pivotOnBeam"],
@@ -756,21 +766,27 @@ describe("fuzzing — défauts ouverts, reproduits", () => {
     );
   });
 
-  it.fails(
-    "MISSING_BIDIRECTIONAL : extrémité de ressort tirée sur un nœud",
-    () => {
-      run_sequence(
-        ["lonePivot"],
-        [
-          { kind: "place", tool: 1, target: 0, x: 0, y: 0 },
-          { kind: "place", tool: 0, target: 0, x: 0, y: 0 },
-          { kind: "connect", a: 9, partA: 2, b: 0, partB: 0 },
-        ],
-      );
-    },
-  );
+});
 
-  it.fails("SAME_AXLE_MESH : deux gears du même axe engrenés", () => {
+/**
+ * Two gestures the rules now refuse. The sequences no longer build anything —
+ * the refusal drops the offending command — so they only guard against the rule
+ * being lost; what each rule actually says is asserted in
+ * `connection-rules.test.ts`.
+ */
+describe("fuzzing — gestes désormais refusés", () => {
+  it("le corps d'un ressort ne s'accroche pas à un nœud", () => {
+    run_sequence(
+      ["lonePivot"],
+      [
+        { kind: "place", tool: 1, target: 0, x: 0, y: 0 },
+        { kind: "place", tool: 0, target: 0, x: 0, y: 0 },
+        { kind: "connect", a: 9, partA: 2, b: 0, partB: 0 },
+      ],
+    );
+  });
+
+  it("deux engrenages du même axe ne s'engrènent pas", () => {
     run_sequence(
       ["gearOnAxle", "gearOnAxle"],
       [

@@ -20,6 +20,7 @@ import type {
   MechanicalElement,
   MomentElement,
 } from "../../types";
+import { names_element } from "../../types/hovered-part";
 import { Point2 } from "../../types/point2";
 import { HIT_TOLERANCE } from "../../constants/rendering-specs";
 import {
@@ -141,7 +142,7 @@ export function snap_load_hover(
   switch (state.type) {
     case "PlacingForceEnd": {
       const startHover = state.startHover;
-      if (startHover.type === "Void") return position;
+      if (!names_element(startHover)) return position;
       const anchor =
         startHover.type === "Edge" && startHover.part !== "body"
           ? startHover.part
@@ -153,7 +154,7 @@ export function snap_load_hover(
     }
     case "PlacingDistributedForce": {
       const startHover = state.startHover;
-      if (startHover.type === "Void") return position;
+      if (!names_element(startHover)) return position;
       const beam = as_edge(
         mechanicalElements.find((e) => e.id === startHover.id),
       );

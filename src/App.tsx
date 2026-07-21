@@ -2,6 +2,7 @@ import React, {
   useState,
   useRef,
   useEffect,
+  useLayoutEffect,
   useCallback,
   useMemo,
 } from "react";
@@ -1105,8 +1106,7 @@ const App: React.FC = () => {
       // of resetting isPlaying to false right after we set it.
       autoPlayOnEnterRef.current = true;
       setAppMode(mechanism.metadata.lastSimulationMode);
-      // Entering simulation restarts from a clean canvas, just like Space does
-      // in the canvas handler.
+      // Entering simulation restarts from a clean canvas, just like Space does in the canvas handler.
       setCanvasState({ type: "Selecting" });
     } else {
       setRuntimeState((prev) => ({ ...prev, isPlaying: !prev.isPlaying }));
@@ -1271,10 +1271,45 @@ const App: React.FC = () => {
     runtimeState.time,
   ]);
 
-  /** App starts */
+  /**
+   * App starts: put the world origin at the middle of the canvas, which is only
+   * measurable once it has been laid out.
+   */
+  useLayoutEffect(() => {
+    let frame = 0;
+    const center = () => {
+      const rect = canvasRef.current?.getBoundingClientRect();
+      if (!rect || rect.width === 0) {
+        frame = requestAnimationFrame(center);
+        return;
+      }
+      // The backing store is integral, so the pan the "Recentrer" button aims
+      // for is computed from the truncated size, not from the CSS one.
+      setMechanism((prev) => ({
+        ...prev,
+        viewport: {
+          ...prev.viewport,
+          pan: new Point2(
+            Math.trunc(rect.width) / 2,
+            Math.trunc(rect.height) / 2,
+          ),
+        },
+      }));
+    };
+    center();
+    return () => cancelAnimationFrame(frame);
+  }, []);
+
+  /** App starts: only greet with the gallery when there is something to load. */
   useEffect(() => {
-    handleOpenGallery();
-  }, [handleOpenGallery]);
+    (async () => {
+      const db = await openMechanismsDB();
+      const records = await read_all_records(db);
+      if (records.length === 0) return;
+      setSavedMechanisms(records);
+      setGalleryOpen(true);
+    })();
+  }, []);
 
   return (
     <ThemeProvider theme={currentTheme}>
@@ -1306,138 +1341,142 @@ const App: React.FC = () => {
               alignItems: "center",
               justifyContent: "space-between",
               px: 1,
-              gap: 1,
+              gap: 0.5,
               minHeight: "40px !important",
             }}
           >
-            {/* ── Zone 1 : Logo + Bibliothèque + Nom du projet (Gauche) ── */}
+            {/* Les deux moitiés se partagent à parts égales la place laissée par
+                le bouton play, qui tombe ainsi au centre exact de la fenêtre —
+                donc de la grille, que le canvas occupe en pleine largeur. */}
             <Box
               sx={{
                 display: "flex",
                 alignItems: "center",
-                gap: 0.5,
-                flex: 1,
+                justifyContent: "flex-end",
+                gap: tight ? 0.25 : 0.75,
+                flex: "1 1 0",
                 minWidth: 0,
               }}
             >
-              {/* Logo */}
-              <Box
-                component="img"
-                src={icon("logo")}
-                alt="Slidep"
-                sx={{ height: 26, display: "block", flexShrink: 0 }}
-              />
-              {/* Le mot-symbole est le premier sacrifié : le logo suffit à
-                  identifier l'app quand la place manque. */}
-              {!tight && (
-                <Typography
-                  sx={{
-                    fontSize: "1.5em",
-                    fontWeight: 700,
-                    color: "primary.main",
-                    letterSpacing: "-0.04em",
-                    flexShrink: 0,
-                    lineHeight: 1,
-                  }}
-                >
-                  Slidep
-                </Typography>
-              )}
-
-              <Divider
-                orientation="vertical"
-                flexItem
-                sx={{ mx: tight ? 0.5 : 1 }}
-              />
-
-              {/* Bouton Bibliothèque — accès direct à la galerie */}
-              <Tooltip title="Bibliothèque de mécanismes">
-                <IconButton
-                  color="inherit"
-                  size="small"
-                  onClick={handleOpenGallery}
-                  sx={{ m: -1 }}
-                >
-                  <Apps sx={{ fontSize: 20 }} />
-                </IconButton>
-              </Tooltip>
-
-              <Divider orientation="vertical" flexItem sx={{ mx: 1 }} />
-
-              {/* Nom du projet + pastille */}
+              {/* ── Zone 1 : Logo + Bibliothèque + Nom du projet (Gauche) ── */}
               <Box
                 sx={{
                   display: "flex",
                   alignItems: "center",
-                  gap: 0.75,
+                  gap: 0.5,
+                  flex: 1,
                   minWidth: 0,
-                  overflow: "hidden",
                 }}
               >
-                <Typography
-                  variant="body2"
-                  fontWeight={400}
-                  noWrap
+                {/* Logo */}
+                <Box
+                  component="img"
+                  src={icon("logo")}
+                  alt="Slidep"
+                  sx={{ height: 26, display: "block", flexShrink: 0 }}
+                />
+                {/* Le mot-symbole est le premier sacrifié : le logo suffit à
+                  identifier l'app quand la place manque. */}
+                {!tight && (
+                  <Typography
+                    sx={{
+                      fontSize: "1.5em",
+                      fontWeight: 700,
+                      color: "primary.main",
+                      letterSpacing: "-0.04em",
+                      flexShrink: 0,
+                      lineHeight: 1,
+                    }}
+                  >
+                    Slidep
+                  </Typography>
+                )}
+
+                <Divider
+                  orientation="vertical"
+                  flexItem
+                  sx={{ mx: tight ? 0.5 : 1 }}
+                />
+
+                {/* Bouton Bibliothèque — accès direct à la galerie */}
+                <Tooltip disableInteractive title="Bibliothèque de mécanismes">
+                  <IconButton
+                    color="inherit"
+                    size="small"
+                    onClick={handleOpenGallery}
+                    sx={{ m: -1 }}
+                  >
+                    <Apps sx={{ fontSize: 20 }} />
+                  </IconButton>
+                </Tooltip>
+
+                <Divider orientation="vertical" flexItem sx={{ mx: 1 }} />
+
+                {/* Nom du projet + pastille */}
+                <Box
                   sx={{
-                    maxWidth: tight ? 90 : condensed ? 130 : 180,
-                    opacity: 0.9,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 0.75,
+                    minWidth: 0,
+                    overflow: "hidden",
                   }}
                 >
-                  {mechanism.metadata.name}
-                </Typography>
-
-                {saveStatus === "saving" ? (
-                  <Tooltip title="Sauvegarde en cours...">
-                    <CircularProgress
-                      size={8}
-                      color="inherit"
-                      sx={{ flexShrink: 0, opacity: 0.7 }}
-                    />
-                  </Tooltip>
-                ) : (
-                  <Tooltip
-                    title={
-                      saveStatus === "saved"
-                        ? "Sauvegardé"
-                        : saveStatus === "error"
-                          ? "Erreur de sauvegarde"
-                          : ""
-                    }
+                  <Typography
+                    variant="body2"
+                    fontWeight={400}
+                    noWrap
+                    sx={{
+                      maxWidth: tight ? 90 : condensed ? 130 : 180,
+                      opacity: 0.9,
+                    }}
                   >
-                    <Box
-                      sx={{
-                        width: 7,
-                        height: 7,
-                        borderRadius: "50%",
-                        flexShrink: 0,
-                        backgroundColor:
-                          saveStatus === "saved"
-                            ? "success.main"
-                            : saveStatus === "error"
-                              ? "error.main"
-                              : "transparent",
-                        transition: "background-color 0.3s ease",
-                        boxShadow: (t) =>
-                          saveStatus === "saved"
-                            ? `0 0 4px ${alpha(t.palette.success.light, 0.7)}`
-                            : "none",
-                      }}
-                    />
-                  </Tooltip>
-                )}
-              </Box>
-            </Box>
+                    {mechanism.metadata.name}
+                  </Typography>
 
-            {/* ── Zone 2 : Cockpit de Simulation (Centre) ── */}
-            <Box
-              sx={{
-                display: "flex",
-                alignItems: "center",
-                gap: tight ? 0.25 : 0.75,
-                flexShrink: 1,
-                minWidth: 0,
-              }}
-            >
+                  {saveStatus === "saving" ? (
+                    <Tooltip disableInteractive title="Sauvegarde en cours...">
+                      <CircularProgress
+                        size={8}
+                        color="inherit"
+                        sx={{ flexShrink: 0, opacity: 0.7 }}
+                      />
+                    </Tooltip>
+                  ) : (
+                    <Tooltip
+                      disableInteractive
+                      title={
+                        saveStatus === "saved"
+                          ? "Sauvegardé"
+                          : saveStatus === "error"
+                            ? "Erreur de sauvegarde"
+                            : ""
+                      }
+                    >
+                      <Box
+                        sx={{
+                          width: 7,
+                          height: 7,
+                          borderRadius: "50%",
+                          flexShrink: 0,
+                          backgroundColor:
+                            saveStatus === "saved"
+                              ? "success.main"
+                              : saveStatus === "error"
+                                ? "error.main"
+                                : "transparent",
+                          transition: "background-color 0.3s ease",
+                          boxShadow: (t) =>
+                            saveStatus === "saved"
+                              ? `0 0 4px ${alpha(t.palette.success.light, 0.7)}`
+                              : "none",
+                        }}
+                      />
+                    </Tooltip>
+                  )}
+                </Box>
+              </Box>
+
               {/* Sélecteur de mode */}
               <ToggleButtonGroup
                 value={appMode}
@@ -1469,24 +1508,30 @@ const App: React.FC = () => {
                   },
                 }}
               >
-                <Tooltip title="Éditer le mécanisme">
+                <Tooltip disableInteractive title="Éditer le mécanisme">
                   <ToggleButton value="edition">
                     {condensed ? "Édit" : "Édition"}
                   </ToggleButton>
                 </Tooltip>
-                <Tooltip title="Étude de cas immobiles [ ∑F = 0 ] (à venir)">
+                <Tooltip
+                  disableInteractive
+                  title="Étude de cas immobiles [ ∑F = 0 ] (à venir)"
+                >
                   <span>
                     <ToggleButton value="static" disabled>
                       {condensed ? "Stat" : "Statique"}
                     </ToggleButton>
                   </span>
                 </Tooltip>
-                <Tooltip title="Analyse du mouvement">
+                <Tooltip disableInteractive title="Analyse du mouvement">
                   <ToggleButton value="kinematic">
                     {condensed ? "Ciné" : "Cinématique"}
                   </ToggleButton>
                 </Tooltip>
-                <Tooltip title="Combine la statique et la cinématique [ ∑F = ma ] (à venir)">
+                <Tooltip
+                  disableInteractive
+                  title="Combine la statique et la cinématique [ ∑F = ma ] (à venir)"
+                >
                   <span>
                     <ToggleButton value="dynamic" disabled>
                       {condensed ? "Dyna" : "Dynamique"}
@@ -1497,7 +1542,7 @@ const App: React.FC = () => {
 
               {!tight && <Divider flexItem sx={{ mx: 0.5 }} />}
 
-              <Tooltip title="Réinitialiser (Esc)">
+              <Tooltip disableInteractive title="Réinitialiser (Esc)">
                 <span>
                   <IconButton
                     size="small"
@@ -1529,81 +1574,87 @@ const App: React.FC = () => {
                 </span>
               </Tooltip>
 
-              {!tight && <Divider flexItem sx={{ mx: 0.5 }} />}
+              {!tight && <Divider flexItem sx={{ mx: 0.2 }} />}
 
               {/* Contrôles temporels — Play/Pause toujours actif ; les autres
                   boutons sont désactivés en mode Édition ou en bout de course. */}
-              <Box
-                sx={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 0.5,
-                }}
-              >
-                <Tooltip title="Aller au début">
-                  <span>
-                    <IconButton
-                      size="small"
-                      color="inherit"
-                      disabled={appMode === "edition" || timeline.atStart}
-                      onClick={() =>
-                        setRuntimeState((prev) => ({
-                          ...prev,
-                          time: 0,
-                          isPlaying: false,
-                        }))
-                      }
-                      sx={{ p: 0.4 }}
-                    >
-                      <FirstPage sx={{ fontSize: 20 }} />
-                    </IconButton>
-                  </span>
-                </Tooltip>
-
-                <Tooltip
-                  title={
-                    runtimeState.isPlaying ? "Pause (Space)" : "Play (Space)"
-                  }
-                >
+              <Tooltip disableInteractive title="Aller au début">
+                <span>
                   <IconButton
                     size="small"
-                    onClick={handleSpaceKey}
-                    sx={{
-                      bgcolor: "primary.main",
-                      color: "primary.contrastText",
-                      "&:hover": { bgcolor: "primary.dark" },
-                      p: 0.5,
-                    }}
+                    color="inherit"
+                    disabled={appMode === "edition" || timeline.atStart}
+                    onClick={() =>
+                      setRuntimeState((prev) => ({
+                        ...prev,
+                        time: 0,
+                        isPlaying: false,
+                      }))
+                    }
+                    sx={{ p: 0.4 }}
                   >
-                    {runtimeState.isPlaying ? (
-                      <Pause sx={{ fontSize: 20 }} />
-                    ) : (
-                      <PlayArrow sx={{ fontSize: 20 }} />
-                    )}
+                    <FirstPage sx={{ fontSize: 20 }} />
                   </IconButton>
-                </Tooltip>
+                </span>
+              </Tooltip>
+            </Box>
 
-                <Tooltip title="Aller à la fin de l'enregistrement">
-                  <span>
-                    <IconButton
-                      size="small"
-                      color="inherit"
-                      disabled={appMode === "edition" || timeline.atEnd}
-                      sx={{ p: 0.4 }}
-                      onClick={() =>
-                        setRuntimeState((prev) => {
-                          const snaps = prev.kinematicSnapshots;
-                          const maxT =
-                            snaps.length > 0 ? snaps[snaps.length - 1].t : 0;
-                          return { ...prev, time: maxT, isPlaying: false };
-                        })
-                      }
-                    >
-                      <LastPage sx={{ fontSize: 20 }} />
-                    </IconButton>
-                  </span>
-                </Tooltip>
-              </Box>
+            <Tooltip
+              disableInteractive
+              title={runtimeState.isPlaying ? "Pause (Space)" : "Play (Space)"}
+            >
+              <IconButton
+                size="small"
+                onClick={handleSpaceKey}
+                sx={{
+                  bgcolor: "primary.main",
+                  color: "primary.contrastText",
+                  "&:hover": { bgcolor: "primary.dark" },
+                  p: 0.5,
+                  flexShrink: 0,
+                }}
+              >
+                {runtimeState.isPlaying ? (
+                  <Pause sx={{ fontSize: 20 }} />
+                ) : (
+                  <PlayArrow sx={{ fontSize: 20 }} />
+                )}
+              </IconButton>
+            </Tooltip>
+
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "flex-start",
+                gap: tight ? 0.25 : 0.75,
+                flex: "1 1 0",
+                minWidth: 0,
+              }}
+            >
+              <Tooltip
+                disableInteractive
+                title="Aller à la fin de l'enregistrement"
+              >
+                <span>
+                  <IconButton
+                    size="small"
+                    color="inherit"
+                    disabled={appMode === "edition" || timeline.atEnd}
+                    sx={{ p: 0.4 }}
+                    onClick={() =>
+                      setRuntimeState((prev) => {
+                        const snaps = prev.kinematicSnapshots;
+                        const maxT =
+                          snaps.length > 0 ? snaps[snaps.length - 1].t : 0;
+                        return { ...prev, time: maxT, isPlaying: false };
+                      })
+                    }
+                  >
+                    <LastPage sx={{ fontSize: 20 }} />
+                  </IconButton>
+                </span>
+              </Tooltip>
 
               {!tight && <Divider flexItem sx={{ mx: 0.5 }} />}
 
@@ -1618,40 +1669,44 @@ const App: React.FC = () => {
                     sx={{
                       display: "flex",
                       alignItems: "center",
-                      gap: 0.25,
                       opacity: disabled ? 0.3 : 1,
                       pointerEvents: disabled ? "none" : "auto",
                       transition: "opacity 0.2s ease",
                     }}
                   >
-                    <Tooltip title="Ralentir la simulation">
+                    <Tooltip disableInteractive title="Ralentir la simulation">
                       <span>
                         <IconButton
                           size="small"
                           color="inherit"
                           disabled={speedIdx <= 0}
                           onClick={() => setSpeed(SPEEDS[speedIdx - 1])}
-                          sx={{ p: 0.1 }}
+                          sx={{ px: 0.2, py: 0.5, borderRadius: 1 }}
                         >
                           <ChevronLeft sx={{ fontSize: 18 }} />
                         </IconButton>
                       </span>
                     </Tooltip>
-                    <Tooltip title="Réinitialiser la vitesse">
+                    <Tooltip
+                      disableInteractive
+                      title="Réinitialiser la vitesse"
+                    >
                       <Box
                         component="button"
                         onClick={() => setSpeed(1)}
                         sx={{
                           all: "unset",
                           cursor: "pointer",
-                          minWidth: 30,
-                          minHeight: 20,
-                          textAlign: "center",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          minWidth: 28,
+                          // Matches the height of the top-bar icon buttons (20px icon + p: 0.4).
+                          minHeight: 26.4,
                           fontSize: "0.7rem",
                           fontWeight: 700,
                           fontVariantNumeric: "tabular-nums",
                           lineHeight: 1,
-                          py: 0.3,
                           borderRadius: 1,
                           // La vitesse nominale est un état neutre : seul un
                           // réglage non standard mérite d'attirer l'œil.
@@ -1665,14 +1720,14 @@ const App: React.FC = () => {
                         {runtimeState.speed}×
                       </Box>
                     </Tooltip>
-                    <Tooltip title="Accélérer la simulation">
+                    <Tooltip disableInteractive title="Accélérer la simulation">
                       <span>
                         <IconButton
                           size="small"
                           color="inherit"
                           disabled={speedIdx >= SPEEDS.length - 1}
                           onClick={() => setSpeed(SPEEDS[speedIdx + 1])}
-                          sx={{ p: 0.1 }}
+                          sx={{ px: 0.2, py: 0.5, borderRadius: 1 }}
                         >
                           <ChevronRight sx={{ fontSize: 18 }} />
                         </IconButton>
@@ -1696,6 +1751,7 @@ const App: React.FC = () => {
                 }}
               >
                 <Tooltip
+                  disableInteractive
                   title={
                     simulationConfig.gravity
                       ? "Gravité activée"
@@ -1751,6 +1807,7 @@ const App: React.FC = () => {
                   />
                 </Tooltip>
                 <Tooltip
+                  disableInteractive
                   title={
                     simulationConfig.collisions
                       ? "Collisions activées"
@@ -1823,265 +1880,272 @@ const App: React.FC = () => {
                 <OverlaysMenu
                   mechanicalElements={mechanism.mechanicalElements}
                   applyActions={applyActions}
+                  condensed={condensed}
                 />
               </Box>
-            </Box>
 
-            {/* ── Zone 3 : Outils & Config (Droite) ── */}
-            <Box
-              sx={{
-                display: "flex",
-                alignItems: "center",
-                gap: 0.25,
-                flex: 1,
-                justifyContent: "flex-end",
-              }}
-            >
-              {/* Recentrer */}
-              <Tooltip title="Recentrer la vue">
-                <IconButton
-                  color="inherit"
-                  size="small"
-                  onClick={() => {
-                    const currentCanvas = canvasRef.current;
-                    if (!currentCanvas) return;
-                    setMechanism((prev) => ({
-                      ...prev,
-                      viewport: {
-                        zoom: 1,
-                        pan: new Point2(
-                          currentCanvas.width / 2,
-                          currentCanvas.height / 2,
-                        ),
-                      },
-                    }));
-                  }}
-                  disabled={
-                    canvasRef.current
-                      ? mechanism.viewport.zoom === 1 &&
-                        mechanism.viewport.pan.equals(
-                          new Point2(
-                            canvasRef.current!.width / 2,
-                            canvasRef.current!.height / 2,
-                          ),
-                        )
-                      : true
-                  }
-                >
-                  <CenterFocusStrong sx={{ fontSize: 20 }} />
-                </IconButton>
-              </Tooltip>
-
-              {/* Undo / Redo */}
-              <Tooltip title="Annuler (Ctrl+Z)">
-                <span>
-                  <IconButton
-                    color="inherit"
-                    size="small"
-                    onClick={() => undoMechanism()}
-                    disabled={mechanism.history.length === 0}
-                  >
-                    <Undo sx={{ fontSize: 20 }} />
-                  </IconButton>
-                </span>
-              </Tooltip>
-              <Tooltip title="Rétablir (Ctrl+Y)">
-                <span>
-                  <IconButton
-                    color="inherit"
-                    size="small"
-                    onClick={() => redoMechanism()}
-                    disabled={mechanism.future.length === 0}
-                  >
-                    <Redo sx={{ fontSize: 20 }} />
-                  </IconButton>
-                </span>
-              </Tooltip>
-
-              <Divider
-                orientation="vertical"
-                flexItem
-                sx={{ ml: 0.75, mr: 0.5, my: 0.25 }}
-              />
-
-              {/* Langue */}
-              <Tooltip title="Langue">
-                <IconButton
-                  color="inherit"
-                  size="small"
-                  aria-expanded={langOpen}
-                  onClick={handleLangClick}
-                  sx={{
-                    gap: 0.4,
-                    fontSize: "0.72rem",
-                    fontWeight: 700,
-                    px: 0.75,
-                  }}
-                >
-                  <Language sx={{ fontSize: 20 }} />
-                  {language.slice(0, 2).toUpperCase()}
-                </IconButton>
-              </Tooltip>
-              <Menu
-                anchorEl={langAnchorEl}
-                open={langOpen}
-                onClose={handleLangClose}
-                anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
-                transformOrigin={{ vertical: "top", horizontal: "right" }}
-                slotProps={{ paper: { style: { maxHeight: 175 } } }}
-              >
-                {LANGUAGES.map((lang) => (
-                  <MenuItem
-                    key={lang}
-                    selected={lang === language}
-                    onClick={() => handleSelectLang(lang)}
-                    disableRipple
-                  >
-                    {lang}
-                  </MenuItem>
-                ))}
-              </Menu>
-
-              {/* Paramètres */}
-              <Tooltip title="Paramètres">
-                <IconButton
-                  color="inherit"
-                  size="small"
-                  onClick={handleSettingsOpen}
-                >
-                  <Settings sx={{ fontSize: 20 }} />
-                </IconButton>
-              </Tooltip>
-              <Menu
-                anchorEl={settingsAnchorEl}
-                open={Boolean(settingsAnchorEl)}
-                onClose={() => {
-                  previewLater(null);
-                  handleSettingsClose();
+              {/* ── Zone 3 : Outils & Config (Droite) ── */}
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 0.25,
+                  flex: 1,
+                  justifyContent: "flex-end",
                 }}
-                anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
-                transformOrigin={{ vertical: "top", horizontal: "right" }}
-                // Leaving the list — for another setting or out of the menu
-                // entirely — drops the preview, armed or showing, and restores
-                // the chosen theme.
-                MenuListProps={{ onMouseLeave: () => previewLater(null) }}
               >
-                <MenuItem disableRipple>
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        checked={showGrid}
-                        size="small"
-                        onChange={(e) => setShowGrid(e.target.checked)}
-                      />
-                    }
-                    label="Afficher la grille"
-                  />
-                </MenuItem>
-                <MenuItem disableRipple>
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        checked={snapToGrid}
-                        size="small"
-                        onChange={(e) => setSnapToGrid(e.target.checked)}
-                      />
-                    }
-                    label="Aimanter à la grille"
-                  />
-                </MenuItem>
-                <MenuItem disabled sx={{ fontSize: "0.85rem" }}>
-                  Taille de la grille (100mm)
-                </MenuItem>
-                <Divider />
-                <MenuItem disableRipple disabled>
-                  <FormControlLabel
-                    control={<Switch size="small" disabled />}
-                    label="Afficher les contraintes"
-                  />
-                </MenuItem>
-                <Divider />
-                <Box
-                  sx={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    gap: 3,
-                    pl: 3,
-                    pr: 2,
-                    py: 0.5,
-                  }}
-                >
-                  <Typography variant="body2" color="textDisabled">
-                    Thème
-                  </Typography>
-                  <ToggleButtonGroup
-                    exclusive
-                    size="medium"
-                    value={themeChoice.mode}
-                    onChange={(_, mode: ThemeMode | null) =>
-                      mode && changeTheme(themeChoice.family, mode)
+                {/* Recentrer */}
+                <Tooltip disableInteractive title="Recentrer la vue">
+                  <IconButton
+                    color="inherit"
+                    size="small"
+                    onClick={() => {
+                      const currentCanvas = canvasRef.current;
+                      if (!currentCanvas) return;
+                      setMechanism((prev) => ({
+                        ...prev,
+                        viewport: {
+                          zoom: 1,
+                          pan: new Point2(
+                            currentCanvas.width / 2,
+                            currentCanvas.height / 2,
+                          ),
+                        },
+                      }));
+                    }}
+                    disabled={
+                      canvasRef.current
+                        ? mechanism.viewport.zoom === 1 &&
+                          mechanism.viewport.pan.equals(
+                            new Point2(
+                              canvasRef.current!.width / 2,
+                              canvasRef.current!.height / 2,
+                            ),
+                          )
+                        : true
                     }
                   >
-                    {THEME_MODES.map(({ mode, title, Icon }) => (
-                      <ToggleButton
-                        key={mode}
-                        value={mode}
-                        onMouseEnter={() =>
-                          previewLater(
-                            resolve_theme(themeChoice.family, mode, systemDark),
-                          )
-                        }
-                        sx={{ px: 1, py: 0.25, border: 0 }}
-                      >
-                        <Tooltip title={title}>
-                          <Icon sx={{ fontSize: 18 }} />
-                        </Tooltip>
-                      </ToggleButton>
-                    ))}
-                  </ToggleButtonGroup>
-                </Box>
-                {/* The families, each shown in the ambience currently set. The
+                    <CenterFocusStrong sx={{ fontSize: 20 }} />
+                  </IconButton>
+                </Tooltip>
+
+                {/* Undo / Redo */}
+                <Tooltip disableInteractive title="Annuler (Ctrl+Z)">
+                  <span>
+                    <IconButton
+                      color="inherit"
+                      size="small"
+                      onClick={() => undoMechanism()}
+                      disabled={mechanism.history.length === 0}
+                    >
+                      <Undo sx={{ fontSize: 20 }} />
+                    </IconButton>
+                  </span>
+                </Tooltip>
+                <Tooltip disableInteractive title="Rétablir (Ctrl+Y)">
+                  <span>
+                    <IconButton
+                      color="inherit"
+                      size="small"
+                      onClick={() => redoMechanism()}
+                      disabled={mechanism.future.length === 0}
+                    >
+                      <Redo sx={{ fontSize: 20 }} />
+                    </IconButton>
+                  </span>
+                </Tooltip>
+
+                <Divider
+                  orientation="vertical"
+                  flexItem
+                  sx={{ ml: 0.75, mr: 0.5, my: 0.25 }}
+                />
+
+                {/* Langue */}
+                <Tooltip disableInteractive title="Langue">
+                  <IconButton
+                    color="inherit"
+                    size="small"
+                    aria-expanded={langOpen}
+                    onClick={handleLangClick}
+                    sx={{
+                      gap: 0.4,
+                      fontSize: "0.72rem",
+                      fontWeight: 700,
+                      px: 0.75,
+                    }}
+                  >
+                    <Language sx={{ fontSize: 20 }} />
+                    {language.slice(0, 2).toUpperCase()}
+                  </IconButton>
+                </Tooltip>
+                <Menu
+                  anchorEl={langAnchorEl}
+                  open={langOpen}
+                  onClose={handleLangClose}
+                  anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+                  transformOrigin={{ vertical: "top", horizontal: "right" }}
+                  slotProps={{ paper: { style: { maxHeight: 175 } } }}
+                >
+                  {LANGUAGES.map((lang) => (
+                    <MenuItem
+                      key={lang}
+                      selected={lang === language}
+                      onClick={() => handleSelectLang(lang)}
+                      disableRipple
+                    >
+                      {lang}
+                    </MenuItem>
+                  ))}
+                </Menu>
+
+                {/* Paramètres */}
+                <Tooltip disableInteractive title="Paramètres">
+                  <IconButton
+                    color="inherit"
+                    size="small"
+                    onClick={handleSettingsOpen}
+                  >
+                    <Settings sx={{ fontSize: 20 }} />
+                  </IconButton>
+                </Tooltip>
+                <Menu
+                  anchorEl={settingsAnchorEl}
+                  open={Boolean(settingsAnchorEl)}
+                  onClose={() => {
+                    previewLater(null);
+                    handleSettingsClose();
+                  }}
+                  anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+                  transformOrigin={{ vertical: "top", horizontal: "right" }}
+                  // Leaving the list — for another setting or out of the menu
+                  // entirely — drops the preview, armed or showing, and restores
+                  // the chosen theme.
+                  MenuListProps={{ onMouseLeave: () => previewLater(null) }}
+                >
+                  <MenuItem disableRipple>
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          checked={showGrid}
+                          size="small"
+                          onChange={(e) => setShowGrid(e.target.checked)}
+                        />
+                      }
+                      label="Afficher la grille"
+                    />
+                  </MenuItem>
+                  <MenuItem disableRipple>
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          checked={snapToGrid}
+                          size="small"
+                          onChange={(e) => setSnapToGrid(e.target.checked)}
+                        />
+                      }
+                      label="Aimanter à la grille"
+                    />
+                  </MenuItem>
+                  <MenuItem disabled sx={{ fontSize: "0.85rem" }}>
+                    Taille de la grille (100mm)
+                  </MenuItem>
+                  <Divider />
+                  <MenuItem disableRipple disabled>
+                    <FormControlLabel
+                      control={<Switch size="small" disabled />}
+                      label="Afficher les contraintes"
+                    />
+                  </MenuItem>
+                  <Divider />
+                  <Box
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: 3,
+                      pl: 3,
+                      pr: 2,
+                      py: 0.5,
+                    }}
+                  >
+                    <Typography variant="body2" color="textDisabled">
+                      Thème
+                    </Typography>
+                    <ToggleButtonGroup
+                      exclusive
+                      size="medium"
+                      value={themeChoice.mode}
+                      onChange={(_, mode: ThemeMode | null) =>
+                        mode && changeTheme(themeChoice.family, mode)
+                      }
+                    >
+                      {THEME_MODES.map(({ mode, title, Icon }) => (
+                        <ToggleButton
+                          key={mode}
+                          value={mode}
+                          onMouseEnter={() =>
+                            previewLater(
+                              resolve_theme(
+                                themeChoice.family,
+                                mode,
+                                systemDark,
+                              ),
+                            )
+                          }
+                          sx={{ px: 1, py: 0.25, border: 0 }}
+                        >
+                          <Tooltip disableInteractive title={title}>
+                            <Icon sx={{ fontSize: 18 }} />
+                          </Tooltip>
+                        </ToggleButton>
+                      ))}
+                    </ToggleButtonGroup>
+                  </Box>
+                  {/* The families, each shown in the ambience currently set. The
                     grey name is the theme the pair resolves to, where the family
                     does not already carry it (Fantaisie → Blueprint). */}
-                {THEME_FAMILIES.map((family) => {
-                  const resolved = resolve_theme(
-                    family.name,
-                    themeChoice.mode,
-                    systemDark,
-                  );
-                  return (
-                    <MenuItem
-                      key={family.name}
-                      selected={family.name === themeChoice.family}
-                      onClick={() => changeTheme(family.name, themeChoice.mode)}
-                      onMouseEnter={() => previewLater(resolved)}
-                    >
-                      <ListItemIcon>
-                        {family.name === themeChoice.family && (
-                          <Check sx={{ fontSize: 18 }} />
-                        )}
-                      </ListItemIcon>
-                      {family.name}
-                    </MenuItem>
-                  );
-                })}
-                <Divider />
-                <MenuItem disabled sx={{ fontSize: "0.85rem" }}>
-                  Style des éléments
-                </MenuItem>
-              </Menu>
+                  {THEME_FAMILIES.map((family) => {
+                    const resolved = resolve_theme(
+                      family.name,
+                      themeChoice.mode,
+                      systemDark,
+                    );
+                    return (
+                      <MenuItem
+                        key={family.name}
+                        selected={family.name === themeChoice.family}
+                        onClick={() =>
+                          changeTheme(family.name, themeChoice.mode)
+                        }
+                        onMouseEnter={() => previewLater(resolved)}
+                      >
+                        <ListItemIcon>
+                          {family.name === themeChoice.family && (
+                            <Check sx={{ fontSize: 18 }} />
+                          )}
+                        </ListItemIcon>
+                        {family.name}
+                      </MenuItem>
+                    );
+                  })}
+                  <Divider />
+                  <MenuItem disabled sx={{ fontSize: "0.85rem" }}>
+                    Style des éléments
+                  </MenuItem>
+                </Menu>
 
-              {/* À propos */}
-              <Tooltip title="À propos de Slidep">
-                <IconButton
-                  color="inherit"
-                  size="small"
-                  onClick={handleInfoOpen}
-                >
-                  <Info sx={{ fontSize: 20 }} />
-                </IconButton>
-              </Tooltip>
+                {/* À propos */}
+                <Tooltip disableInteractive title="À propos de Slidep">
+                  <IconButton
+                    color="inherit"
+                    size="small"
+                    onClick={handleInfoOpen}
+                  >
+                    <Info sx={{ fontSize: 20 }} />
+                  </IconButton>
+                </Tooltip>
+              </Box>
             </Box>
           </Toolbar>
         </AppBar>
@@ -2251,6 +2315,7 @@ const App: React.FC = () => {
                     />
                     {/* Dot */}
                     <Tooltip
+                      disableInteractive
                       title={`${runtimeState.time.toFixed(1)} s`}
                       placement="bottom"
                       open={timelineHovered || timelineDragging}
@@ -2298,7 +2363,10 @@ const App: React.FC = () => {
                     </Tooltip>
                   </Box>
 
-                  <Tooltip title="Exporter une animation (à venir)">
+                  <Tooltip
+                    disableInteractive
+                    title="Exporter une animation (à venir)"
+                  >
                     <span>
                       <IconButton
                         size="small"

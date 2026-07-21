@@ -17,7 +17,9 @@ import {
   disconnect_element,
   get_connection_pair_types,
   get_connections,
+  open_belt,
 } from "../../mechanism/connect-actions";
+import { belt_junction_id } from "../../../utils/belt-rules";
 import { HoveredPart } from "../../../types/hovered-part";
 import ElementDisplay from "./ElementDisplay";
 
@@ -77,9 +79,26 @@ const Connection: React.FC<ConnectionProps> = ({
     }
   };
 
+  // The belt–junction link of a closed belt, seen from either side. Its removal
+  // opens the belt rather than detaching it: one terminal is freed and the loop
+  // cleared, but the junction keeps the other terminal.
+  const belt =
+    element.type === "belt"
+      ? element
+      : connectedElement?.type === "belt"
+        ? connectedElement
+        : undefined;
+  const junctionOf = belt === element ? connectedElement : element;
+  const opensBelt =
+    !!belt && belt.closed && belt_junction_id(belt) === junctionOf?.id;
+
   const handleDisconnect = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!connectedElement) return;
+    if (opensBelt && belt) {
+      applyActions(open_belt(belt), "Connects");
+      return;
+    }
     applyActions(
       [
         disconnect_element(
@@ -170,7 +189,7 @@ const Connection: React.FC<ConnectionProps> = ({
               }}
               color="error"
               onClick={handleDisconnect}
-              title="Déconnecter"
+              title={opensBelt ? "Ouvrir la courroie" : "Déconnecter"}
               size="small"
             >
               <LinkOffIcon sx={{ mx: -0.1, my: -0.4 }} fontSize="small" />

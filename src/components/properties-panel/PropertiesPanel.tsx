@@ -195,6 +195,9 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
             <ProjectInfoSection
               mechanism={mechanism}
               updateMetadata={handleProjectInfoChange}
+              setHoveredPart={setHoveredPart}
+              setCanvasState={setCanvasState}
+              applyActions={applyActions}
             />
           )}
           {activeTab === "elements" && (

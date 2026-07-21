@@ -11,6 +11,7 @@ import {
 import Connection from "./ConnectionComponent";
 import { get_connections } from "../../mechanism/connect-actions";
 import { HoveredPart } from "../../../types/hovered-part";
+import { ordered_body_nodes } from "../element-order";
 
 const CONTAINER_NAMES: Record<ConnectsActionType, string> = {
   ConnectsAttachedBelt: "Belt",
@@ -52,11 +53,15 @@ export const ConnectionsContainer: React.FC<ConnectionsContainerProps> = ({
     containerType === "ConnectsMeshedGears" ||
     containerType === "ConnectsAttachedGears" ||
     containerType === "ConnectsFixedGears";
-  const connections = get_connections(element, containerType);
+  const stored = get_connections(element, containerType);
+  const connections =
+    containerType === "ConnectsFixedNodesBody"
+      ? ordered_body_nodes(element, stored, mechanism.mechanicalElements)
+      : stored;
   const containerName =
     containerType === "ConnectsFixedNodeStart" &&
     element.type === "belt" &&
-    element.tight
+    element.closed
       ? "Jonction"
       : containerType === "ConnectsFixedNodesBody" && element.type === "gear"
         ? "Fixed nodes"
@@ -80,8 +85,8 @@ export const ConnectionsContainer: React.FC<ConnectionsContainerProps> = ({
       >
         {isListContainer && (
           <List disablePadding>
-            {connections.map((connectedId, index) => (
-              <React.Fragment key={index}>
+            {connections.map((connectedId) => (
+              <React.Fragment key={connectedId}>
                 <ListItem ref={dragImageRef} disablePadding>
                   <Connection
                     element={element}

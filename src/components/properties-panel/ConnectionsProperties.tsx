@@ -218,7 +218,7 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
     case "belt":
       return (
         <ConnectionsGrid>
-          {element.tight ? (
+          {element.closed ? (
             <ConnectionsContainer
               element={element}
               containerType="ConnectsFixedNodeStart"

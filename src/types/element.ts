@@ -218,7 +218,7 @@ export interface DamperElement extends BaseEdgeElement {
 export interface BeltElement extends BaseEdgeElement {
   type: "belt";
   attachedGearsIDs: { id: ID; direction: boolean }[];
-  tight: boolean;
+  closed: boolean;
   /** Rendering only (simulation): indices into `attachedGearsIDs` of pulleys that
    *  lost belt contact this run, so the belt is drawn straight past them.
    *  Undefined in edition. */

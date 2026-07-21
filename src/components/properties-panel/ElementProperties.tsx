@@ -71,6 +71,7 @@ import { HoveredPart } from "../../types/hovered-part";
 import NumberInput from "./components/NumberInput";
 import SignedNumberInput from "./components/SignedNumberInput";
 import ElementDisplay from "./components/ElementDisplay";
+import { sorted_for_display } from "./element-order";
 import ElementMeasures from "./ElementMeasures";
 import { OVERLAY_LABELS, set_overlay } from "./overlay-actions";
 import { element_to_hovered_part, linked_constraint } from "../canvas/utils";
@@ -844,8 +845,8 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
             width: "100%",
           }}
         >
-          {mechanism.mechanicalElements.map((element, index) => (
-            <React.Fragment key={index}>
+          {sorted_for_display(mechanism.mechanicalElements).map((element) => (
+            <React.Fragment key={element.id}>
               <ListItem disablePadding>
                 <ElementDisplay
                   element={element}
@@ -926,21 +927,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
               </StructureOnly>
               <StructureOnly disabled={simulating} row>
                 {element.type === "belt" && (
-                  <BeltTensionSwitch
-                    tightened={element.tight}
-                    setTight={(tightened) =>
-                      applyActions(
-                        [
-                          {
-                            type: "TightenBelt",
-                            id: element.id,
-                            tightened,
-                          },
-                        ],
-                        "Connects",
-                      )
-                    }
-                  />
+                  <BeltTensionSwitch closed={element.closed} />
                 )}
               </StructureOnly>
               <StructureOnly disabled={simulating} row>
@@ -1023,7 +1010,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                         mechanism.constraintElements,
                         mechanism.loads,
                       ),
-                      "Other",
+                      "Connects",
                     )
                   }
                   title="Supprimer"

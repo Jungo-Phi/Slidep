@@ -2,7 +2,7 @@ import { Point2, ZERO } from "../../types/point2";
 import type { CanvasState } from "../../types/canvas-state";
 import { get_hovered_elements_by_rect } from "./get-hover";
 import { Action, ActionBundleType, CanvasEvent } from "../../types/actions";
-import { HoveredPart } from "../../types/hovered-part";
+import { HoveredPart, names_element } from "../../types/hovered-part";
 import {
   BeamElement,
   BeltElement,
@@ -38,6 +38,11 @@ import {
   radius2moment_value,
   world2frame,
 } from "../../utils/load-geom";
+import {
+  belt_merged_run_section,
+  belt_section_gear_index,
+} from "../../utils/belt-path";
+import { belt_without_gear } from "../../utils/belt-geom";
 import { belt_body_grab_pin, elements_by_id } from "../solver/parsing";
 import { HIT_TOLERANCE } from "../../constants/rendering-specs";
 import { handle_placing_element } from "./placing-element-actions";
@@ -73,6 +78,29 @@ export function canvasStateReducer(
   let actionBundleType: ActionBundleType | undefined = undefined;
   switch (event.type) {
     case "MouseLeftButtonDown":
+      // A closure names no element, so only the belt placement that offered it
+      // can act on one — every other state sees empty space. Handled here so
+      // the states below are typed against a target that has an id.
+      if (hoveredPart.type === "BeltClosure") {
+        if (state.type === "PlacingBeltEnd") {
+          const closing = handle_placing_element(
+            state,
+            hoveredPart,
+            mechanicalElements,
+            constraintElements,
+            loadElements,
+          );
+          if (closing.newCanvasState) setCanvasState(closing.newCanvasState);
+          actions.push(...closing.actions);
+          if (closing.actionBundleType)
+            actionBundleType = closing.actionBundleType;
+        }
+        break;
+      }
+      // An opaque refusal is binding, not advisory: the spot showing the
+      // forbidden cursor takes nothing, whatever tool is armed. The tool stays
+      // armed so the user can aim again.
+      if (hoveredPart.type === "Void" && hoveredPart.rejected) break;
       switch (state.type) {
         case "Selecting":
         case "SelectedElement":
@@ -261,7 +289,9 @@ export function canvasStateReducer(
             });
             break;
           }
-          actionBundleType = "Other";
+          // A deletion changes connections, so it solves like any other
+          // connection change (its separation spreads what it detaches).
+          actionBundleType = "Connects";
           actions.push(
             ...delete_element(
               hoveredPart.id,
@@ -341,7 +371,7 @@ export function canvasStateReducer(
       if (mouseButtonDown !== "left") break;
       switch (state.type) {
         case "Selecting":
-          if (hoveredPart.type === "Void") break;
+          if (!names_element(hoveredPart)) break;
           const constraint = constraintElements.find(
             (element) => element.id === hoveredPart.id,
           );
@@ -393,7 +423,7 @@ export function canvasStateReducer(
               simKey = hit.id;
               simElementID = hit.id;
             } else if (hit.type === "BeltBody") {
-              // Grab any point of a tight belt → rotate the belt with the point
+              // Grab any point of a closed belt → rotate the belt with the point
               // under the cursor: bake a transient BeltPin at the grabbed
               // arc-length (from the live sim geometry).
               const belt = get_mechanical_element_from_id(
@@ -485,36 +515,29 @@ export function canvasStateReducer(
                 hit.id,
                 mechanicalElements,
               ) as BeltElement;
-              if (hit.section % 2 === 0) {
-                // even section : straight part
+              const gearIndex = belt_section_gear_index(
+                hit.section,
+                belt.closed,
+              );
+              if (gearIndex === undefined) {
+                // A run: the drag inserts a new pulley into it.
                 setCanvasState({
                   type: "MovingBeltBody",
                   elementID: hit.id,
                   section: hit.section,
                 });
               } else {
-                // odd section : gear part
-                const gearIndex = (hit.section - 1) / 2;
-                const gearId = belt.attachedGearsIDs[gearIndex].id;
-                actionBundleType = "Connects";
-                actions.push({
-                  type: "ConnectsAttachedBelt",
-                  disconnect: true,
-                  elementID: gearId,
-                  connectID: belt.id,
-                });
-                actions.push({
-                  type: "ConnectsAttachedGears",
-                  disconnect: true,
-                  elementID: belt.id,
-                  connectID: gearId,
-                  index: gearIndex,
-                  direction: belt.attachedGearsIDs[gearIndex].direction,
-                });
+                // An arc: the drag carries the run the two runs it joined merge
+                // into. The pulley itself only comes off at the drop.
                 setCanvasState({
                   type: "MovingBeltBody",
                   elementID: hit.id,
-                  section: hit.section - 1,
+                  section: belt_merged_run_section(
+                    hit.section,
+                    belt.closed,
+                    belt.attachedGearsIDs.length,
+                  ),
+                  removingGearIndex: gearIndex,
                 });
               }
               break;
@@ -825,14 +848,14 @@ export function canvasStateReducer(
       if (mouseButtonDown !== "left") break;
       switch (state.type) {
         case "Selecting":
-          if (hoveredPart.type === "Void") break;
+          if (!names_element(hoveredPart)) break;
           setCanvasState({
             type: "SelectedElement",
             elementID: hoveredPart.id,
           });
           break;
         case "SelectedElement":
-          if (hoveredPart.type === "Void") break;
+          if (!names_element(hoveredPart)) break;
           if (hoveredPart.id === state.elementID) {
             // Un clic simple (sans drag) sur une dimension ouvre directement
             // l'édition de sa valeur.
@@ -889,33 +912,66 @@ export function canvasStateReducer(
             elementID: state.elementID,
           });
           break;
-        case "MovingBeltBody":
+        case "MovingBeltBody": {
+          const belt = get_mechanical_element_from_id(
+            state.elementID,
+            mechanicalElements,
+          ) as BeltElement;
+          // Removal and insertion travel as one bundle: they apply in order, and
+          // the closure pass judges the net result, so swapping a pulley for
+          // another never opens the belt in between.
+          const removing = state.removingGearIndex;
+          const shortened =
+            removing === undefined ? belt : belt_without_gear(belt, removing);
+          const beltActions: Action[] = [];
+          if (removing !== undefined) {
+            const removed = belt.attachedGearsIDs[removing];
+            beltActions.push(
+              {
+                type: "ConnectsAttachedBelt",
+                disconnect: true,
+                elementID: removed.id,
+                connectID: belt.id,
+              },
+              {
+                type: "ConnectsAttachedGears",
+                disconnect: true,
+                elementID: belt.id,
+                connectID: removed.id,
+                index: removing,
+                direction: removed.direction,
+              },
+            );
+          }
           if (hoveredPart.type === "GearTooth") {
-            const belt = get_mechanical_element_from_id(
-              state.elementID,
-              mechanicalElements,
-            ) as BeltElement;
             const gear = get_mechanical_element_from_id(
               hoveredPart.id,
               mechanicalElements,
             ) as GearElement;
-            actionBundleType = "Connects";
-            actions.push(
-              ...attach_gear_to_belt(
-                gear.id,
-                gear.position,
-                belt,
-                state.section,
-                mechanicalElements,
-                "belt-onto-gear",
-              ),
+            const attach = attach_gear_to_belt(
+              gear.id,
+              gear.position,
+              shortened,
+              state.section,
+              mechanicalElements,
+              "belt-onto-gear",
             );
+            // Empty means the carried section is not a run of the shortened belt,
+            // so it was renumbered wrong: committing the removal alone would cost
+            // a pulley for nothing. Drop the whole gesture instead.
+            if (attach.length === 0) beltActions.length = 0;
+            else beltActions.push(...attach);
+          }
+          if (beltActions.length > 0) {
+            actionBundleType = "Connects";
+            actions.push(...beltActions);
           }
           setCanvasState({
             type: "SelectedElement",
             elementID: state.elementID,
           });
           break;
+        }
         case "ChangingGearRadius":
           if (hoveredPart.type === "BeltBody") {
             const belt = get_mechanical_element_from_id(
@@ -1018,7 +1074,7 @@ export function canvasStateReducer(
           });
           break;
         case "ErasingMultiple":
-          actionBundleType = "Other";
+          actionBundleType = "Connects";
           actions.push(
             ...delete_elements(
               state.hoveredElementIDs,
@@ -1060,7 +1116,7 @@ export function canvasStateReducer(
         case "Delete":
           switch (state.type) {
             case "SelectedElement":
-              actionBundleType = "Other";
+              actionBundleType = "Connects";
               actions.push(
                 ...delete_element(
                   state.elementID,
@@ -1072,7 +1128,7 @@ export function canvasStateReducer(
               setCanvasState({ type: "Selecting" });
               break;
             case "SelectedMultiple":
-              actionBundleType = "Other";
+              actionBundleType = "Connects";
               actions.push(
                 ...delete_elements(
                   state.elementIDs,

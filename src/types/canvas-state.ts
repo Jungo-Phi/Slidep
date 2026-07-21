@@ -88,7 +88,16 @@ export type CanvasState =
   | { type: "MovingEdgeStartPoint"; elementID: ID }
   | { type: "MovingEdgeEndPoint"; elementID: ID }
   | { type: "MovingEdgeBody"; elementID: ID; t: number }
-  | { type: "MovingBeltBody"; elementID: ID; section: number }
+  | {
+      type: "MovingBeltBody";
+      elementID: ID;
+      /** The run the drag carries, numbered on the belt MINUS `removingGearIndex`
+       *  — read it through `belt_without_gear`, never against the stored belt. */
+      section: number;
+      /** Set when the grab was on an arc: that pulley only leaves the belt at the
+       *  drop, so an abandoned gesture costs nothing and the path never opens. */
+      removingGearIndex?: number;
+    }
   | { type: "ChangingGearRadius"; elementID: ID }
   | { type: "MovingForce"; elementID: ID }
   | { type: "MovingDistributedForce"; elementID: ID; part: "start" | "end" }

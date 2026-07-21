@@ -156,13 +156,13 @@ export function actionReducer(
         ) as NodeElement;
         node.isGrounded = action.grounded !== revert;
         break;
-      case "TightenBelt":
+      case "CloseBelt":
         (
           get_mechanical_element_from_id(
             action.id,
             mechanicalElements,
           ) as BeltElement
-        ).tight = action.tightened !== revert;
+        ).closed = action.closed !== revert;
         break;
       case "SwitchAttachedGearDirection":
         const belt = get_mechanical_element_from_id(

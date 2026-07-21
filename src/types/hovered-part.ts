@@ -33,6 +33,10 @@ export type HoveredPart =
       deleting: boolean;
       section: number;
     }
+  /** A belt's own terminal, offered as the target that closes it into a loop.
+   *  It names no element: while the belt is being placed it does not exist yet,
+   *  and once placed the target is the belt itself. */
+  | { type: "BeltClosure"; position: Point2 }
   | { type: "Constraint"; position: Point2; id: ID; deleting: boolean }
   | {
       type: "Force";
@@ -58,3 +62,17 @@ export type HoveredPart =
       part: "body" | "value";
       deleting: boolean;
     };
+
+/** A hovered part that designates an element, and so carries an `id`. */
+export type ElementHover = Exclude<
+  HoveredPart,
+  { type: "Void" } | { type: "BeltClosure" }
+>;
+
+/**
+ * Whether the cursor is on an element rather than on empty space or on a belt's
+ * closing terminal, which names none.
+ */
+export function names_element(part: HoveredPart): part is ElementHover {
+  return part.type !== "Void" && part.type !== "BeltClosure";
+}

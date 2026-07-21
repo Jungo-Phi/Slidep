@@ -8,6 +8,9 @@ Aucun de ces défauts ne fait planter l'application. Ils produisent une **physiq
 liaison que le solveur ne voit que d'un côté, un nœud compté deux fois. Ils sont donc hors du
 périmètre de `repair-mechanism`, à raison.
 
+> **Il n'en reste qu'un.** Les défauts 1, 3 et 4 sont corrigés ; le détail est plus bas, sous
+> « Corrigés depuis ».
+
 > **Écart entre la séquence automatique et le geste manuel.** Le fuzzer appelle `connect_elements`
 > et applique les actions de connexion **sans l'action de déplacement** qui les accompagne dans
 > l'interface. Une reproduction à la souris produit donc la même topologie mais pas la même
@@ -20,6 +23,12 @@ périmètre de `repair-mechanism`, à raison.
 > nulle — est donc à regarder de près avant d'être crue : c'est le troisième endroit d'où la dérive
 > peut venir, après `legality_for_state` et `HOVER_TARGETS`.
 
+> **Un `it.fails` n'immunise pas la suite.** Il fige *une* séquence ; la propriété
+> `aucune séquence…` continue de tirer au hasard, sans seed fixe, et retombe de temps en temps sur
+> le défaut ci-dessous par un autre chemin — la suite passe alors au rouge sans qu'il se soit rien
+> passé de nouveau. Avant de suspecter une régression, comparer l'étiquette du contre-exemple à
+> celle du défaut restant : si c'est la même, c'est une redécouverte.
+
 Pour rejouer les séquences automatiques :
 
 ```
@@ -28,31 +37,7 @@ FUZZ_RUNS=8000 FUZZ_COMMANDS=14 npx vitest run src/utils/mechanism-fuzz.test.ts
 
 ---
 
-## 1. `DUPLICATE_IN_LIST` — la fusion de deux nœuds portés par la même barre
-
-**Essence.** Deux nœuds posés sur le **corps de la même barre**, puis fusionnés l'un dans l'autre :
-le survivant se retrouve **deux fois** dans `beam.fixedNodesBodyIDs`.
-
-Les deux contre-exemples enregistrés sont le même défaut par deux chemins — je les avais d'abord
-comptés séparément, la trace montre qu'ils convergent.
-
-**Reproduction.**
-
-1. Dessiner une barre A.
-2. Poser deux nœuds distincts sur le **corps** de A. Peu importe comment : en y amenant deux joins
-   déjà là, ou en y tirant deux fois l'extrémité d'une autre barre, ce qui crée un join à chaque
-   fois.
-3. Faire glisser l'un des deux nœuds **sur l'autre** pour les fusionner.
-4. Le nœud survivant apparaît deux fois dans la liste des nœuds de corps de A.
-
-**Où regarder.** La redirection des références lors d'un takeover : quand le nœud absorbé est
-remplacé par le survivant dans les listes de ceux qui le nommaient, rien ne vérifie que le
-survivant n'y est pas déjà. Le filtre `not_already_on_dest` du défaut 6 couvre les listes du nœud,
-pas la liste de corps de la barre, qui pointe dans l'autre sens.
-
----
-
-## 2. `MISSING_BIDIRECTIONAL` — la barre survivante oubliée par son pivot
+## `MISSING_BIDIRECTIONAL` — la barre survivante oubliée par son pivot
 
 **Essence.** Un pivot qui a absorbé un autre nœud, puis dont **une** des barres est supprimée : la
 barre restante continue de nommer le pivot, mais le pivot ne la nomme plus.
@@ -75,54 +60,24 @@ donc le traitement des deux extrémités n'est pas symétrique quelque part.
 
 ---
 
-## 3. `SAME_AXLE_MESH` — deux engrenages du même axe engrenés
-
-**Essence.** Après fusion de deux axes, les deux engrenages partagent le même axe. Redimensionner
-l'un jusqu'à toucher l'autre les engrène quand même — ce qui est mécaniquement impossible.
-
-**Reproduction.**
-
-1. Deux ensembles « axe + engrenage » : pivot P1 portant l'engrenage G1, pivot P2 portant G2.
-2. Faire glisser P2 **sur P1** : les axes fusionnent, G1 et G2 se retrouvent sur le même axe.
-3. Attraper la denture de G1 et **agrandir son rayon** jusqu'à toucher G2.
-4. Les deux s'engrènent alors qu'ils tournent sur le même axe.
-
-**Où regarder.** C'est le plus net des trois, et le seul qui soit une **règle manquante** plutôt
-qu'une opération fautive : `connection-rules.ts` ne refuse pas une cible partageant l'axe de
-l'engrenage en cours de dimensionnement. `SAME_AXLE_MESH` existe déjà côté valideur ; il n'a pas
-son pendant côté légalité, donc l'interface propose un geste qu'elle devrait bloquer.
-
-> Corriger celui-ci **rétrécit l'espace exploré par le fuzzer**, comme les règles ajoutées
-> précédemment. C'est ce qui avait déjà fait croire que ce défaut avait disparu. Après correction,
-> il faudra vérifier que l'`it.fails` correspondant vire bien au vert pour la bonne raison — parce
-> que le geste est refusé — et pas parce qu'il est devenu inatteignable par hasard.
-
----
-
-## 4. `MISSING_BIDIRECTIONAL` — un nœud sur le corps d'un ressort
-
-**Essence.** Le corps d'un **ressort** (ou d'un amortisseur, ou d'une courroie) traîné sur un nœud :
-le nœud ajoute le ressort à ses `rotatingEdgesIDs`, mais le ressort n'a aucun moyen de nommer le
-nœud en retour.
-
-**Reproduction.**
-
-1. Poser un pivot, puis un ressort à côté.
-2. Attraper le ressort **par son corps** et l'amener sur le pivot.
-3. Le pivot nomme le ressort ; le ressort ne nomme pas le pivot.
-
-**Où regarder.** Seule une **barre** a un `fixedNodesBodyIDs` — voir `BEAM_REFS` contre
-`SPRING_REFS` dans `element-refs.ts`. Un nœud ne peut donc porter que le corps d'une barre, et
-l'interface le sait déjà dans un sens : la sonde `ends+beam-body` n'offre le corps d'une arête que
-si c'est une barre. Le sens inverse — l'arête traînée par son corps **vers** un nœud — n'a pas son
-équivalent. C'est une règle de légalité manquante, exprimable telle quelle : sous `MovingEdgeBody`,
-un nœud n'est pas une cible si l'élément traîné n'est pas une barre.
-
-C'est le seul des quatre à ne pas passer par une fusion de nœuds.
-
----
-
 ## Corrigés depuis
+
+- **La fusion dupliquait une référence de corps** (`DUPLICATE_IN_LIST`). Deux nœuds posés sur le
+  corps de la même barre, fusionnés l'un dans l'autre : `transfer_edge_connections_to_node`
+  redirigeait la référence sans vérifier que le survivant n'était pas déjà dans
+  `fixedNodesBodyIDs`. Le filtre `not_already_on_dest` couvrait les listes du nœud, pas celle de
+  l'arête, qui pointe dans l'autre sens. Les deux contre-exemples enregistrés étaient le même
+  défaut par deux chemins ; ils sont gardés en `it`.
+- **Deux règles de légalité manquantes**, toutes deux dans `connection-rules.ts` :
+  - sous `ChangingGearRadius`, un engrenage partageant l'axe de celui qu'on dimensionne n'est plus
+    une cible (`SAME_AXLE_MESH`). C'est le pendant de la règle que `PlacingGearRadius` avait déjà ;
+  - sous `MovingEdgeBody`, plus aucune cible si l'arête traînée n'est pas une barre — seule une
+    barre a un `fixedNodesBodyIDs`. La règle vivait dans `get-hover`, où le fuzzer ne la voyait
+    pas ; elle est maintenant à côté des autres.
+
+  Ces deux-là **rétrécissent l'espace exploré par le fuzzer** : leurs séquences enregistrées ne
+  construisent plus rien, donc elles ne prouvent plus grand-chose. Ce que chaque règle dit est
+  affirmé directement dans `connection-rules.test.ts`.
 
 - **La composition des étapes de placement.** `handle_place_element` enchaînait deux
   `connect_elements` calculés contre **le même état de départ** : le premier pouvait absorber un
@@ -146,4 +101,11 @@ Défauts connus que le générateur ne peut pas atteindre en l'état.
 
 - **Retirer l'ancrage d'un pivot moteur depuis le panneau latéral** produit un moteur ni ancré ni
   porté par une barre, que le valideur rejette (`CONTRADICTORY_MOTOR` / `MISSING_REFERENCE`). Le
-  fuzzer ne connaît ni le moteur ni le panneau.
+  fuzzer ne connaît pas le panneau.
+
+  > **Le fuzzer atteint pourtant le même état sans le panneau.** Sur une exécution au hasard (~1 sur
+  > 8, pas de seed fixe) il produit `MISSING_REFERENCE: Motor (motor.parentBeamID) : le pivot n'est
+  > pas ancré au sol, donc le moteur doit avoir un parentBeamID`, à partir de `[lonePivot,
+  > lonePivot]` et de trois gestes — un placement de moteur, une connexion, un placement. Le défaut
+  > n'est donc pas propre au panneau latéral : le geste de canvas y mène aussi. Pas encore
+  > d'`it.fails` enregistré.

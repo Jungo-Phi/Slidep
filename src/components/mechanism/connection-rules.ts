@@ -7,6 +7,11 @@ import type {
   UnionElement,
 } from "../../types/element";
 import { get_connection_types, get_connections } from "./connect-actions";
+import {
+  belt_can_close,
+  belt_placing_pulleys,
+  MIN_PULLEYS_TO_CLOSE,
+} from "../../utils/belt-rules";
 
 const NODE_TYPES: readonly string[] = [
   "pivot",
@@ -111,24 +116,85 @@ function incoming_node_type(
 }
 
 const SAME_ENDPOINTS = "Les deux extrémités seraient au même endroit";
+const SAME_AXLE_GEARS = "Deux engrenages du même axe ne peuvent pas s'engrener";
+const BODY_CANNOT_ATTACH = "Seul le corps d'une barre peut porter un élément";
 const TWO_DIFFERENT = "Une contrainte relie deux éléments différents";
 
-export const BELT_CANNOT_CLOSE =
-  "Une courroie sans poulie ne peut pas se refermer";
+export const BELT_CANNOT_CLOSE = `Une courroie doit passer par ${MIN_PULLEYS_TO_CLOSE} poulies pour se refermer`;
+
+export const BELT_GEARS_SAME_AXLE =
+  "Un engrenage de cet axe porte déjà cette courroie";
+
+export const BELTS_CANNOT_JOIN =
+  "Une courroie ne peut pas en rejoindre une autre";
+
+/** The belts holding a terminal on `id`. */
+function belts_pinned_to(
+  id: ID,
+  mechanicalElements: MechanicalElement[],
+): ID[] {
+  return mechanicalElements
+    .filter(
+      (element) =>
+        element.type === "belt" &&
+        (element.fixedNodeStartID === id || element.fixedNodeEndID === id),
+    )
+    .map((element) => element.id);
+}
 
 /**
- * Whether a belt may close into a loop: it must run over at least one pulley,
- * otherwise both ends are simply the same point.
- *
- * Read by `get-hover` rather than by `legality_for_state`, because the target of
- * a closing gesture is the belt's own terminal — a ghost during placement, the
- * opposite end of the belt during a drag — and never an element the rules can be
- * asked about. The cursor bounds keep a pulley-less belt away from its own start
- * (`hover-bounds`), so this is the net rather than the mechanism.
+ * The belt terminal the gesture is carrying: a dragged belt end, the belts a
+ * dragged node holds, or none at all — a belt being routed carries a terminal
+ * that belongs to no belt yet, hence the empty list. `undefined` means the
+ * gesture brings no terminal, and the rule does not concern it.
  */
-export function belt_can_close(attachedGears: readonly unknown[]): boolean {
-  return attachedGears.length > 0;
+function carried_belts(
+  state: CanvasState,
+  draggedElement: MechanicalElement | undefined,
+  mechanicalElements: MechanicalElement[],
+): ID[] | undefined {
+  switch (state.type) {
+    case "PlacingBeltStart":
+    case "PlacingBeltEnd":
+      return [];
+    case "MovingEdgeStartPoint":
+    case "MovingEdgeEndPoint":
+      return draggedElement?.type === "belt" ? [draggedElement.id] : undefined;
+    case "MovingNode": {
+      if (!draggedElement) return undefined;
+      const held = belts_pinned_to(draggedElement.id, mechanicalElements);
+      return held.length > 0 ? held : undefined;
+    }
+    default:
+      return undefined;
+  }
 }
+
+/**
+ * The belts whose terminal sits where the gesture is aiming: a belt aimed at by
+ * one of its own ends, or every belt the targeted node holds. A belt aimed at by
+ * its body carries none — the rule is about ends meeting, and a belt one crosses
+ * on the way must stay crossable.
+ */
+function belts_targeted(
+  candidate: UnionElement,
+  part: HoveredPart | undefined,
+  mechanicalElements: MechanicalElement[],
+): ID[] {
+  if (candidate.type === "belt")
+    return part?.type === "Edge" && part.part !== "body" ? [candidate.id] : [];
+  return belts_pinned_to(candidate.id, mechanicalElements);
+}
+
+/**
+ * The closure threshold is read by `get-hover` rather than by
+ * `legality_for_state`, because the target of a closing gesture is the belt's
+ * own terminal — a ghost during placement, the opposite end of the belt during a
+ * drag — and never an element the rules can be asked about. The cursor bounds
+ * keep a short belt away from its own start (`hover-bounds`), so this is the net
+ * rather than the mechanism.
+ */
+export { belt_can_close, belt_placing_pulleys };
 
 /**
  * Whether the gesture started on `candidate`, so both ends of the edge being
@@ -174,11 +240,15 @@ function connected_ids(element: MechanicalElement): Set<ID> {
  * Returned as a closure because the set of elements already linked to the
  * dragged one is computed once: the check itself runs per candidate on every
  * mouse move, so it must stay a lookup.
+ *
+ * `part` says which part of the candidate is aimed at, for the rules that answer
+ * differently for an end and for a body. Callers checking a pair outside a hover
+ * pass omit it, and get the verdict that holds whatever the part.
  */
 export function legality_for_state(
   state: CanvasState,
   mechanicalElements: MechanicalElement[],
-): (candidate: UnionElement) => Legality {
+): (candidate: UnionElement, part?: HoveredPart) => Legality {
   const byID = new Map<ID, MechanicalElement>(
     mechanicalElements.map((e) => [e.id, e]),
   );
@@ -190,7 +260,27 @@ export function legality_for_state(
 
   const dragging_belt = draggedElement?.type === "belt";
 
-  return (candidate: UnionElement): Legality => {
+  /**
+   * Whether one of `beltGearIDs` already sits on `candidate`'s axle. Two gears of
+   * one axle turn as one, so a belt over both would run twice on the same body —
+   * a self-contradiction whether the belt is open or closed.
+   */
+  const shares_axle_with_belt = (
+    candidate: UnionElement,
+    beltGearIDs: readonly ID[],
+  ): boolean => {
+    if (candidate.type !== "gear") return false;
+    return beltGearIDs.some((id) => {
+      const gear = byID.get(id);
+      return (
+        gear?.type === "gear" && gear.parentAxleID === candidate.parentAxleID
+      );
+    });
+  };
+
+  const carried = carried_belts(state, draggedElement, mechanicalElements);
+
+  return (candidate: UnionElement, part?: HoveredPart): Legality => {
     // Re-linking a pair changes nothing, and offering it would let a useless
     // target sit in front of a useful one.
     if (alreadyLinked.has(candidate.id))
@@ -201,6 +291,17 @@ export function legality_for_state(
       candidate,
     );
     if (takeover) return takeover;
+
+    // Two belts stay strangers, whatever the route: end on end, or both ends on
+    // one node. Opaque, because what lies under the end that refuses is not a
+    // fallback — landing there would build the very junction being refused.
+    if (
+      carried &&
+      belts_targeted(candidate, part, mechanicalElements).some(
+        (id) => !carried.includes(id),
+      )
+    )
+      return block(BELTS_CANNOT_JOIN);
 
     switch (state.type) {
       case "PlacingGround":
@@ -218,6 +319,24 @@ export function legality_for_state(
           return refuse(
             "Un engrenage ne peut pas engrener avec son propre axe",
           );
+        break;
+
+      // The pendant of the `PlacingGearRadius` rule, for a gear already on its
+      // axle: two gears of one axle turn as one and cannot mesh.
+      case "ChangingGearRadius":
+        if (
+          draggedElement?.type === "gear" &&
+          candidate.type === "gear" &&
+          candidate.parentAxleID === draggedElement.parentAxleID
+        )
+          return refuse(SAME_AXLE_GEARS);
+        break;
+
+      // Only a beam has a `fixedNodesBodyIDs`, so only a beam body can land on
+      // something: any other edge dragged by its body just moves.
+      case "MovingEdgeBody":
+        if (draggedElement && draggedElement.type !== "beam")
+          return refuse(BODY_CANNOT_ATTACH);
         break;
 
       case "MovingNode": {
@@ -256,14 +375,42 @@ export function legality_for_state(
         break;
       }
 
-      case "MovingBeltBody":
-        if (candidate.type === "gear" && candidate.attachedBeltID)
-          return refuse("Cet engrenage porte déjà une courroie");
+      // The belt is read from the state rather than through `dragged_element_id`:
+      // this drag reshapes a belt's routing, it does not move an element onto
+      // another, so it owes nothing to the takeover and already-linked rules.
+      case "MovingBeltBody": {
+        const belt = byID.get(state.elementID);
+        // The pulley the drag is pulling off still reads as attached, so it is
+        // excluded from both rules: dropping back onto it undoes the gesture,
+        // and its axle siblings are free the moment it leaves.
+        const staying =
+          belt?.type === "belt"
+            ? belt.attachedGearsIDs.filter(
+                (_, i) => i !== state.removingGearIndex,
+              )
+            : [];
+        if (staying.some(({ id }) => id === candidate.id))
+          return refuse("Cet engrenage est déjà sur cette courroie");
+        if (
+          shares_axle_with_belt(
+            candidate,
+            staying.map(({ id }) => id),
+          )
+        )
+          return refuse(BELT_GEARS_SAME_AXLE);
         break;
+      }
 
       case "PlacingBeltEnd":
         if (state.attachedGearsIDs.some(({ id }) => id === candidate.id))
           return refuse("Cet engrenage est déjà sur cette courroie");
+        if (
+          shares_axle_with_belt(
+            candidate,
+            state.attachedGearsIDs.map(({ id }) => id),
+          )
+        )
+          return refuse(BELT_GEARS_SAME_AXLE);
         break;
 
       case "PlacingBeamEnd":

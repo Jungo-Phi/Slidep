@@ -9,6 +9,12 @@ import { element_ref_fields } from "../types/element-refs";
 import { Point2 } from "../types/point2";
 import { Mechanism } from "../types/mechanism";
 import { legible_id, shown_element_name } from "./string-math";
+import {
+  belt_is_looped,
+  belt_junction_id,
+  belt_terminal_pulley_id,
+  MIN_PULLEYS_TO_CLOSE,
+} from "./belt-rules";
 
 export type ValidationErrorCode =
   | "DUPLICATE_ID"
@@ -19,10 +25,13 @@ export type ValidationErrorCode =
   | "MISSING_BIDIRECTIONAL"
   | "SAME_AXLE_MESH"
   | "CONTRADICTORY_MOTOR"
-  | "GROUNDED_MASS";
+  | "GROUNDED_MASS"
+  | "BELT_CLOSURE_MISMATCH"
+  | "BELTS_JOINED";
 
 export interface MechanismValidationError {
   code: ValidationErrorCode;
+  /** States the defect only: the faulty element is `elementID`, named by the caller. */
   message: string;
   elementID?: ID;
   relatedID?: ID;
@@ -132,7 +141,7 @@ export function validate_mechanism(
     if (seenIDs.has(el.id)) {
       errors.push({
         code: "DUPLICATE_ID",
-        message: `ID dupliqué sur "${shown_element_name(el)}" (type: ${el.type}).`,
+        message: `ID dupliqué (type: ${el.type}).`,
         elementID: el.id,
       });
     }
@@ -145,7 +154,7 @@ export function validate_mechanism(
       if (spec.required && ids.length === 0) {
         errors.push({
           code: "MISSING_REFERENCE",
-          message: `${name(el.id)} (${field}) : référence absente.`,
+          message: `(${field}) : référence absente.`,
           elementID: el.id,
         });
         continue;
@@ -157,7 +166,7 @@ export function validate_mechanism(
         if (count > 1) {
           errors.push({
             code: "DUPLICATE_IN_LIST",
-            message: `${name(el.id)} (${field}) : "${name(id)}" apparaît ${count} fois.`,
+            message: `(${field}) : "${name(id)}" apparaît ${count} fois.`,
             elementID: el.id,
             relatedID: id,
           });
@@ -168,7 +177,7 @@ export function validate_mechanism(
         if (refID === el.id) {
           errors.push({
             code: "SELF_REFERENCE",
-            message: `${name(el.id)} (${field}) : auto-référence.`,
+            message: `(${field}) : auto-référence.`,
             elementID: el.id,
           });
           continue;
@@ -177,7 +186,7 @@ export function validate_mechanism(
         if (!target) {
           errors.push({
             code: "MISSING_REFERENCE",
-            message: `${name(el.id)} (${field}) : référence "${legible_id(refID)}" qui n'existe pas.`,
+            message: `(${field}) : référence "${legible_id(refID)}" qui n'existe pas.`,
             elementID: el.id,
             relatedID: refID,
           });
@@ -186,7 +195,7 @@ export function validate_mechanism(
         if (!spec.target.includes(target.type)) {
           errors.push({
             code: "WRONG_TYPE",
-            message: `${name(el.id)} (${field}) : attendait [${spec.target.join(", ")}], "${name(refID)}" est de type "${target.type}".`,
+            message: `(${field}) : attendait [${spec.target.join(", ")}], "${name(refID)}" est de type "${target.type}".`,
             elementID: el.id,
             relatedID: refID,
           });
@@ -200,7 +209,7 @@ export function validate_mechanism(
         ) {
           errors.push({
             code: "MISSING_BIDIRECTIONAL",
-            message: `${name(el.id)} (${field} → ${name(refID)}) : connexion non réciproque.`,
+            message: `(${field} → ${name(refID)}) : connexion non réciproque.`,
             elementID: el.id,
             relatedID: refID,
           });
@@ -218,7 +227,7 @@ export function validate_mechanism(
       if (start && end && start === end) {
         errors.push({
           code: "SELF_REFERENCE",
-          message: `${name(cel.id)} (${cel.type}) : ${startField} et ${endField} identiques.`,
+          message: `(${cel.type}) : ${startField} et ${endField} identiques.`,
           elementID: cel.id,
         });
       }
@@ -239,7 +248,7 @@ export function validate_mechanism(
       ) {
         errors.push({
           code: "SAME_AXLE_MESH",
-          message: `${name(el.id)} et ${name(otherID)} partagent le même axle (${name(el.parentAxleID)}) et ne peuvent pas être engrenés.`,
+          message: `partage l'axle ${name(el.parentAxleID)} avec ${name(otherID)} : engrènement impossible.`,
           elementID: el.id,
           relatedID: otherID,
         });
@@ -252,10 +261,46 @@ export function validate_mechanism(
     if (el.type === "mass" && el.isGrounded) {
       errors.push({
         code: "GROUNDED_MASS",
-        message: `${name(el.id)} : une masse ne peut pas être ancrée au sol.`,
+        message: `une masse ne peut pas être ancrée au sol.`,
         elementID: el.id,
       });
     }
+  }
+
+  // ── A belt is closed exactly when its loop exists ────────────────────────────
+  for (const el of mels) {
+    if (el.type !== "belt" || el.closed === belt_is_looped(el)) continue;
+    const junctionID = belt_junction_id(el);
+    errors.push({
+      code: "BELT_CLOSURE_MISMATCH",
+      message: el.closed
+        ? `courroie fermée sans boucle — il faut ${MIN_PULLEYS_TO_CLOSE} poulies et les deux extrémités sur une même jonction.`
+        : `courroie ouverte dont les deux extrémités tiennent à ${name(junctionID!)} — elle doit être fermée.`,
+      elementID: el.id,
+      relatedID: junctionID,
+    });
+  }
+
+  // ── Two belts never meet ─────────────────────────────────────────────────────
+  const beltsByNode = new Map<ID, ID[]>();
+  for (const el of mels) {
+    if (el.type !== "belt") continue;
+    for (const nodeID of [el.fixedNodeStartID, el.fixedNodeEndID]) {
+      if (!nodeID) continue;
+      const held = beltsByNode.get(nodeID) ?? [];
+      // A closed belt holds its junction by both ends: one belt, not two.
+      if (!held.includes(el.id)) held.push(el.id);
+      beltsByNode.set(nodeID, held);
+    }
+  }
+  for (const [nodeID, beltIDs] of beltsByNode) {
+    if (beltIDs.length < 2) continue;
+    errors.push({
+      code: "BELTS_JOINED",
+      message: `tient les extrémités de ${beltIDs.length} courroies différentes (${beltIDs.map(name).join(", ")}) — deux courroies ne se rejoignent jamais.`,
+      elementID: nodeID,
+      relatedID: beltIDs[0],
+    });
   }
 
   // ── A motor drives from the ground or from a beam, never both ────────────────
@@ -265,14 +310,14 @@ export function validate_mechanism(
     if (el.isGrounded && parentBeamID !== undefined) {
       errors.push({
         code: "CONTRADICTORY_MOTOR",
-        message: `${name(el.id)} (motor) : le pivot est ancré au sol et a un parentBeamID — ces deux conditions sont mutuellement exclusives.`,
+        message: `(motor) : le pivot est ancré au sol et a un parentBeamID — ces deux conditions sont mutuellement exclusives.`,
         elementID: el.id,
         relatedID: parentBeamID,
       });
     } else if (!el.isGrounded && parentBeamID === undefined) {
       errors.push({
         code: "MISSING_REFERENCE",
-        message: `${name(el.id)} (motor.parentBeamID) : le pivot n'est pas ancré au sol, donc le moteur doit avoir un parentBeamID.`,
+        message: `(motor.parentBeamID) : le pivot n'est pas ancré au sol, donc le moteur doit avoir un parentBeamID.`,
         elementID: el.id,
       });
     }
@@ -656,6 +701,32 @@ export function compute_constraint_violations(
         el.id,
         "liaison",
         `${gearName} désaligné de son axe ${axleName} (Δ ${err.toFixed(2)} px)`,
+        err,
+        "px",
+      );
+    }
+  }
+
+  // ── Liaisons: a belt terminal rests ON its pulley's rim, never inside ────────
+  // A closed belt has no free terminal: its junction rides the loop, which runs
+  // outside every pulley by construction.
+  for (const el of mels) {
+    if (el.type !== "belt" || el.closed) continue;
+    const e = edgePos.get(el.id);
+    if (!e) continue;
+    const beltName = shown_element_name(el);
+    for (const which of ["start", "end"] as const) {
+      const gearID = belt_terminal_pulley_id(el, which);
+      if (!gearID) continue;
+      const center = nodePos.get(gearID);
+      const radius = radii.get(gearID);
+      if (!center || radius === undefined) continue;
+      const err =
+        radius - center.distance_to(which === "start" ? e.start : e.end);
+      add(
+        el.id,
+        "liaison",
+        `${which === "start" ? "Début" : "Fin"} de ${beltName} dans ${shown_element_name(mechByID.get(gearID))} (Δ ${err.toFixed(2)} px)`,
         err,
         "px",
       );

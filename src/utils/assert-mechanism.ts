@@ -4,6 +4,7 @@ import {
   MechanismValidationError,
   validate_mechanism,
 } from "./validate-mechanism";
+import { shown_element_name } from "./string-math";
 
 /**
  * Development guard: reports in the console when an action bundle leaves the
@@ -31,8 +32,18 @@ export function assert_actions_preserve_validity(
     `%c[mechanism] ${label} a cassé ${newIssues.length} invariant(s)`,
     "color:#e5484d;font-weight:bold",
   );
-  for (const issue of newIssues)
-    console.error(`${issue.code}: ${issue.message}`);
+  // The message names the defect, not its element: the console has to re-attach it.
+  const names = new Map(
+    [
+      ...after.mechanicalElements,
+      ...after.constraintElements,
+      ...after.loads,
+    ].map((el) => [el.id, shown_element_name(el)]),
+  );
+  for (const issue of newIssues) {
+    const name = issue.elementID ? (names.get(issue.elementID) ?? "?") : "?";
+    console.error(`${issue.code}: ${name} ${issue.message}`);
+  }
   console.log("Actions:", actions);
   console.groupEnd();
 }

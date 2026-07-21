@@ -6,7 +6,8 @@ import type {
   MechanicalElement,
   Point2,
 } from "../../types";
-import { DIM } from "../../constants/rendering-specs";
+import { DIM, HIT_TOLERANCE } from "../../constants/rendering-specs";
+import { belt_can_close, belt_terminal_pulley_id } from "../../utils/belt-rules";
 
 /**
  * Where the cursor is allowed to be, given what the gesture is about to produce.
@@ -42,19 +43,22 @@ export function clamp_to_bounds(
         : point;
     }
 
-    // The belt being routed has no element yet, so its adjacent gear comes from
-    // the route built so far rather than from `attachedGearsIDs`. Until a first
-    // pulley is picked, the belt is still one straight span from its start and
-    // answers to the same minimum length as any other edge.
+    // The belt being routed has no element yet, so the pulley its end wraps is
+    // read from the gesture: the last one routed, or — before any is — the gear
+    // the gesture started on, which joins `attachedGearsIDs` only at
+    // finalisation. With no pulley at all the belt is one straight span from its
+    // start and answers to the same minimum length as any other edge.
     case "PlacingBeltEnd": {
       const gears = state.attachedGearsIDs;
-      if (gears.length === 0)
-        return from_base(point, state.startHover.position, DIM.MIN_EDGE_LENGTH);
-      return clamp_outside_gear(
-        point,
-        gears[gears.length - 1].id,
-        mechanicalElements,
-      );
+      const gearID =
+        gears.length > 0
+          ? gears[gears.length - 1].id
+          : state.startHover.type === "GearTooth"
+            ? state.startHover.id
+            : undefined;
+      return gearID
+        ? clamp_outside_gear(point, gearID, mechanicalElements)
+        : from_base(point, state.startHover.position, DIM.MIN_EDGE_LENGTH);
     }
 
     // A node pinned to an edge terminal carries that terminal with it, so it
@@ -89,6 +93,14 @@ export function clamp_to_bounds(
   }
 }
 
+/**
+ * How close the two ends of a belt that cannot close may come. Strictly inside
+ * the tolerance that triggers the refusal, never on it: held exactly on the
+ * threshold, the `<=` deciding whether the refusal shows flips with rounding on
+ * every mouse move, and the cursor and its message blink.
+ */
+const UNCLOSABLE_BELT_GAP = HIT_TOLERANCE.NODE - 1;
+
 /** Where one terminal of `edge` may go: clear of the opposite end, and outside the pulley it wraps. */
 function clamp_edge_terminal(
   point: Point2,
@@ -97,17 +109,21 @@ function clamp_edge_terminal(
   mechanicalElements: MechanicalElement[],
 ): Point2 {
   const opposite = which === "start" ? edge.positionEnd : edge.positionStart;
-  // A belt running over at least one pulley may bring its two ends together —
-  // that is the loop closing. One with no pulley is a plain span, and shortening
-  // it onto itself would only make a point.
-  const canClose =
-    edge.type === "belt" && (edge as BeltElement).attachedGearsIDs.length > 0;
-  const bounded = from_base(
-    point,
-    opposite,
-    canClose ? 0 : DIM.MIN_EDGE_LENGTH,
-  );
-  const gearID = adjacent_belt_gear(edge, which);
+  // A belt may bring its two ends together — that is the loop closing. Short of
+  // the pulleys the loop needs, they stop just before touching: near enough for
+  // the refusal to be offered, far enough not to merge. A plain span has no
+  // closure to aim at, and shortening it onto itself would only make a point.
+  const minLength =
+    edge.type !== "belt"
+      ? DIM.MIN_EDGE_LENGTH
+      : belt_can_close((edge as BeltElement).attachedGearsIDs.length)
+        ? 0
+        : UNCLOSABLE_BELT_GAP;
+  const bounded = from_base(point, opposite, minLength);
+  const gearID =
+    edge.type === "belt"
+      ? belt_terminal_pulley_id(edge as BeltElement, which)
+      : undefined;
   return gearID
     ? clamp_outside_gear(bounded, gearID, mechanicalElements)
     : bounded;
@@ -150,20 +166,6 @@ function element_of_type<T extends MechanicalElement["type"]>(
 /** `point` pushed away from `base` until it is at least `minLength` from it. */
 function from_base(point: Point2, base: Point2, minLength: number): Point2 {
   return base.add(point.sub(base).limit_length_min(minLength));
-}
-
-/**
- * The gear a belt terminal wraps: the first attached gear for the start
- * terminal, the last for the end.
- */
-function adjacent_belt_gear(
-  edge: EdgeElement,
-  which: "start" | "end",
-): ID | undefined {
-  if (edge.type !== "belt") return undefined;
-  const gears = (edge as BeltElement).attachedGearsIDs;
-  if (gears.length === 0) return undefined;
-  return which === "start" ? gears[0].id : gears[gears.length - 1].id;
 }
 
 /**

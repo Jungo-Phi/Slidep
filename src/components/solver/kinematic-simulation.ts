@@ -51,7 +51,7 @@ export type SimGrab =
   | { key: string; target: Point2 }
   | { edgeID: string; t: number; target: Point2 }
   | { gearID: string; angleOffset: number; radius: number; target: Point2 }
-  // Grab an arbitrary point of a tight belt: a transient BeltPin (baked at grab
+  // Grab an arbitrary point of a closed belt: a transient BeltPin (baked at grab
   // start) rides the loop at the grabbed arc-length; pulling it rotates the belt.
   | { beltPin: Extract<Link, { type: "BeltPin" }>; target: Point2 };
 
@@ -112,7 +112,7 @@ export function update_belt_disconnects(
     return prev + delta;
   };
   // A pulley whose continuous wrap reaches 0 has lost belt contact (the belt straightens
-  // past it) and detaches. A CLOSED (tight) belt keeps its last pulley (a gearless loop is
+  // past it) and detaches. A CLOSED belt keeps its last pulley (a gearless loop is
   // degenerate); a LOOSE belt may shed even its last pulley → an inert free segment.
   activeIdx.forEach((gi, k) => {
     const rawW = raw[offset + k];
@@ -168,7 +168,7 @@ export function rewire_belt_mesh(
 }
 
 /**
- * Re-bake the tight-belt junction constraints (BeltPin + BeltFollowsTangent) of
+ * Re-bake the closed-belt junction constraints (BeltPin + BeltFollowsTangent) of
  * belts that just lost a pulley. The junction rides the loop at
  * s = s0 + rε·(θ − θ0); s0 is an arc-length on the loop, so when a pulley
  * disconnects the loop shrinks, s0's meaning shifts, and the junction would JUMP.
@@ -392,7 +392,7 @@ export function step_simulation(
 
   // A pulley just lost contact → rebuild the affected belts' transmission chain
   // so it stops being driven while its neighbours stay coupled, and re-bake the
-  // tight-belt junction refs onto the reduced loop so the junction doesn't jump.
+  // closed-belt junction refs onto the reduced loop so the junction doesn't jump.
   // Permanent for the run (model mutated; reset on recompile).
   if (beltsToRewire.length > 0) {
     model.links = rewire_belt_mesh(model.links, beltsToRewire);
@@ -470,7 +470,7 @@ export function step_simulation(
       },
     ];
   } else if (grab && "beltPin" in grab) {
-    // Grab an arbitrary point of a tight belt: place a bridge node at the mouse,
+    // Grab an arbitrary point of a closed belt: place a bridge node at the mouse,
     // pin it to the loop at the grabbed arc-length (BeltPin), and pull it there —
     // the pin advances the belt travel so the loop rotates with the point under
     // the cursor. gearPosKeys were built unfused (grab start) → remap to the fused

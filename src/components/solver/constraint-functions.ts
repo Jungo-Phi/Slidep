@@ -1,5 +1,6 @@
 import { DIM } from "../../constants/rendering-specs";
 import { Link, Point2 } from "../../types";
+import { ONE } from "../../types/point2";
 import {
   BeltPiece,
   BeltVia,
@@ -43,7 +44,12 @@ export function applyHandleGrabConstraint(
 
 /** Contraint la distance entre deux points à valoir targetDist.
  * L'erreur (écart à la distance cible) est corrigée le long de l'axe p1→p2 :
- * chaque point est déplacé proportionnellement à sa masse (w/totalW) et à stiffness. */
+ * chaque point est déplacé proportionnellement à sa masse (w/totalW) et à stiffness.
+ *
+ * Coincident points carry no axis, so the separation borrows `preferredAxis`
+ * when the caller knows which way the points should part (a belt terminal leaves
+ * along the loop tangent); without one it falls back to a fixed diagonal, which
+ * keeps the outcome deterministic instead of frame-dependent. */
 export function applyDistanceConstraint(
   positions: Map<string, Point2>,
   posMasses: Map<string, number>,
@@ -51,6 +57,7 @@ export function applyDistanceConstraint(
   key2: string,
   targetDist: number,
   stiffness: number = 1.0,
+  preferredAxis?: Point2,
 ): number {
   const p1 = positions.get(key1);
   const p2 = positions.get(key2);
@@ -63,6 +70,13 @@ export function applyDistanceConstraint(
 
   const delta = p2.sub(p1);
   if (delta.length_squared() === 0) {
+    // Already satisfied, and the null length would divide into NaN below.
+    if (targetDist === 0) return 0;
+    const axis =
+      preferredAxis && preferredAxis.length_squared() > 0 ? preferredAxis : ONE;
+    const step = axis.normalize().mul(targetDist * stiffness);
+    if (w1 !== 0) positions.set(key1, p1.sub(step.mul(w1 / totalW)));
+    if (w2 !== 0) positions.set(key2, p2.add(step.mul(w2 / totalW)));
     return targetDist;
   }
   const error = delta.length() - targetDist;
@@ -819,6 +833,8 @@ export function applyBeltLengthConstraint(
   angles: Map<string, number>,
   link: Extract<Link, { type: "BeltLength" }>,
   stiffness: number = 1.0,
+  radiiMap?: Map<string, number>,
+  radMassesMap?: Map<string, number>,
 ): number {
   const {
     startKey,
@@ -832,7 +848,7 @@ export function applyBeltLengthConstraint(
     wraps,
   } = link;
 
-  // Vias: closed (tight) belt = the gear cycle
+  // Vias: closed belt = the gear cycle
   // open (loose) belt = start terminal (r=0) → gears → end terminal (r=0)
   // `viaKey[v]` = its position key
   // `viaGear[v]` = the original gear index (−1 for a terminal)
@@ -900,9 +916,15 @@ export function applyBeltLengthConstraint(
   }
 
   // Vias, sampled from the now-valid positions (every terminal is on or outside its rim).
+  // In edition (radKeys present) the radii are live DOFs, so the geometry is measured from
+  // the RADII MAP — not the link's baked array — otherwise the length can't see them change.
+  const gearRadius = (i: number) =>
+    link.radKeys && radiiMap
+      ? (radiiMap.get(link.radKeys[i]) ?? radii[i])
+      : radii[i];
   const vias: BeltVia[] = viaKey.map((key, v) => ({
     pos: positions.get(key)!,
-    radius: viaGear[v] >= 0 ? radii[viaGear[v]] : 0,
+    radius: viaGear[v] >= 0 ? gearRadius(viaGear[v]) : 0,
     direction: viaGear[v] >= 0 ? directions[viaGear[v]] : false,
   }));
 
@@ -937,7 +959,8 @@ export function applyBeltLengthConstraint(
     }
     // A terminal run's tangent is read off the rim below (uS/uE), never off the run
     // vector — which vanishes at contact. Its centre gradient is added there too.
-    if (!closed && (piece.gearIndexA === 0 || piece.gearIndexB === last)) continue;
+    if (!closed && (piece.gearIndexA === 0 || piece.gearIndexB === last))
+      continue;
     const d = piece.to.sub(piece.from);
     if (d.length_squared() < 1e-12) continue; // no direction to read off a null run
     const u = d.normalize();
@@ -1026,17 +1049,56 @@ export function applyBeltLengthConstraint(
     link.phaseKey !== undefined &&
     angles.get(link.phaseKey) !== undefined;
 
-  // ── Tight belt, or edition: pulley-centre projection only ──
+  // ── Closed belt, or edition: pulley-centre projection (+ radii in edition) ──
   if (!simFeed) {
-    let denom = 0;
+    let sPos = 0;
     posGrad.forEach((grad, key) => {
-      denom += (posMasses.get(key) ?? 1) * grad.length_squared();
+      sPos += (posMasses.get(key) ?? 1) * grad.length_squared();
     });
+
+    // Edition-only: the radii are DOFs too. Growing a pulley lengthens the belt by
+    // its wrap angle (∂L/∂r = wrap — the tangent-length and tangent-point terms
+    // cancel by the envelope theorem, leaving just the arc's angular extent). A
+    // dimension-radius freezes its pulley automatically (radMass 0).
+    const radGrad = new Map<string, number>();
+    if (link.radKeys && radiiMap) {
+      for (const piece of pieces) {
+        if (piece.kind !== "arc") continue;
+        const gi = viaGear[piece.gearIndex];
+        if (gi < 0) continue;
+        const rk = link.radKeys[gi];
+        if (rk === undefined) continue;
+        radGrad.set(rk, (radGrad.get(rk) ?? 0) + piece.wrap);
+      }
+    }
+    let sRad = 0;
+    radGrad.forEach((g, key) => {
+      sRad += (radMassesMap?.get(key) ?? 1) * g * g;
+    });
+
+    // Feel: when the centres are free to move, they should absorb the change TWICE
+    // as much as the radii (the principled split is 1:1 — set the factor to 1).
+    // Down-weighting the radii only; if the centres are all anchored (sPos ≈ 0) the
+    // radii keep their full mobility and carry the whole correction.
+    const RADII_ABSORB = 0.5;
+    let radScale = 1;
+    if (sPos > 1e-12 && sRad > 1e-12)
+      radScale = Math.min(1, (sPos * RADII_ABSORB) / sRad);
+
+    const denom = sPos + radScale * sRad;
     if (denom < 1e-12) return Math.abs(C);
     const k = -(C / denom) * stiffness;
     posGrad.forEach((grad, key) => {
       const w = posMasses.get(key) ?? 1;
       if (w !== 0) positions.set(key, positions.get(key)!.add(grad.mul(k * w)));
+    });
+    radGrad.forEach((g, key) => {
+      const w = (radMassesMap?.get(key) ?? 1) * radScale;
+      if (w !== 0)
+        radiiMap!.set(
+          key,
+          Math.max(DIM.MIN_GEAR_RADIUS, radiiMap!.get(key)! + k * w * g),
+        );
     });
     return Math.abs(C);
   }
@@ -1105,8 +1167,7 @@ export function applyBeltLengthConstraint(
   const diffRuns =
     nFree > 0 && (startWound || uS !== null) && (endWound || uE !== null);
   if (diffRuns) {
-    const Cdiff =
-      (startWound ? 0 : hS) - (endWound ? 0 : hE) - diffTarget;
+    const Cdiff = (startWound ? 0 : hS) - (endWound ? 0 : hE) - diffTarget;
     const lambda = Cdiff / (wSf + wEf + nFree * nFree);
     if (uS && wSf > 0) addCorr(startKey, uS.mul(-lambda * wSf));
     if (uE && wEf > 0) addCorr(endKey, uE.mul(lambda * wEf));
@@ -1140,15 +1201,22 @@ export function applyBeltJunctionConstraint(
   radii: number[],
   directions: boolean[],
   stiffness: number = 1.0,
+  radiiMap?: Map<string, number>,
+  radKeys?: string[],
 ): number {
   const J = positions.get(nodeKey);
   if (!J || gearPosKeys.length === 0) return 0;
 
+  // Edition: the pulleys may be resized in the same solve (a length dimension), so read
+  // the LIVE radius from the map (keyed by the bare, never-fused gear id) — the link's
+  // baked `radii` array is a frame behind and would drag the junction off the outline.
+  const gearRadius = (i: number) =>
+    radiiMap && radKeys ? (radiiMap.get(radKeys[i]) ?? radii[i]) : radii[i];
   const vias: BeltVia[] = [];
   for (let i = 0; i < gearPosKeys.length; i++) {
     const pos = positions.get(gearPosKeys[i]);
     if (!pos) return 0;
-    vias.push({ pos, radius: radii[i], direction: directions[i] });
+    vias.push({ pos, radius: gearRadius(i), direction: directions[i] });
   }
 
   // Nearest piece (segment or arc) of the closed gear cycle. Distance is to the
@@ -1207,7 +1275,7 @@ export function applyBeltJunctionConstraint(
  * Bidirectional/symmetric: the TANGENTIAL error advances θ_ref (→ every pulley
  * turns via BeltPhaseGear) or slides the node, split by mass; the NORMAL error
  * pulls the node back onto the belt, shared with the pulley(s) bounding that
- * piece. A tight belt is a closed pulley loop; a loose belt is the open path
+ * piece. A closed belt is a closed pulley loop; a loose belt is the open path
  * start-terminal → pulleys → end-terminal (`closed=false`, terminals from
  * `startKey`/`endKey`). Disconnected pulleys are skipped. Radii + refs baked.
  */

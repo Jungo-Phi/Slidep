@@ -144,7 +144,7 @@ const belt: BeltElement = {
   fixedNodeStartID: undefined,
   fixedNodeEndID: undefined,
   attachedGearsIDs: [{ id: BELT_GEAR, direction: false }],
-  tight: false,
+  closed: false,
 };
 
 // A belt with no pulley, so its single straight run lies on a known line — the
@@ -159,7 +159,7 @@ const plainBelt: BeltElement = {
   fixedNodeStartID: undefined,
   fixedNodeEndID: undefined,
   attachedGearsIDs: [],
-  tight: false,
+  closed: false,
 };
 
 const MECHANICAL: MechanicalElement[] = [
@@ -325,6 +325,7 @@ function describe_hover(part: HoveredPart): string {
   const at = `(${round(part.position.x)}, ${round(part.position.y)})`;
   if (part.type === "Void")
     return part.rejected ? `Void ${at} rejected:${part.rejected}` : `Void ${at}`;
+  if (part.type === "BeltClosure") return `BeltClosure ${at}`;
   const who = NAMES.get(part.id) ?? part.id;
   const flags: string[] = [];
   if (part.type === "Edge") flags.push(part.part);

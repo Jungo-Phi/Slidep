@@ -25,7 +25,7 @@ import {
   UP,
   ZERO,
 } from "../../types";
-import { HoveredPart } from "../../types/hovered-part";
+import { HoveredPart, names_element } from "../../types/hovered-part";
 import { CanvasState } from "../../types/canvas-state";
 import { element_refs } from "../../types/element-refs";
 import {
@@ -83,10 +83,21 @@ import {
 import {
   get_belt_vias,
   get_gear_angles,
+  belt_wrap_arriving,
   belt_wrap_direction,
+  belt_without_gear,
   measure_belt_length,
   resolve_angle_constraint_quadrant,
 } from "../../utils";
+import {
+  BeltVia,
+  belt_project,
+  belt_section_insertion_index,
+} from "../../utils/belt-path";
+import {
+  attached_gears_with_start,
+  axle_under,
+} from "./placing-element-actions";
 import {
   connected_constraints,
   is_constraint_type,
@@ -128,6 +139,7 @@ function is_selected(
     (state.type === "MovingEdgeStartPoint" && state.elementID === elementID) ||
     (state.type === "MovingEdgeEndPoint" && state.elementID === elementID) ||
     (state.type === "MovingEdgeBody" && state.elementID === elementID) ||
+    (state.type === "MovingBeltBody" && state.elementID === elementID) ||
     (state.type === "ChangingGearRadius" && state.elementID === elementID) ||
     (state.type === "MovingForce" && state.elementID === elementID) ||
     (state.type === "MovingDistributedForce" &&
@@ -160,7 +172,7 @@ function is_erase_hovered(
   constraintElements: ConstraintElement[],
 ): boolean {
   return (
-    (hoveredPart.type !== "Void" &&
+    (names_element(hoveredPart) &&
       hoveredPart.deleting &&
       (hoveredPart.id === elementID ||
         connected_constraints(hoveredPart.id, constraintElements).includes(
@@ -181,7 +193,7 @@ function is_edge_end_hovered(
   hoveredPart: HoveredPart,
   state: CanvasState,
 ): boolean {
-  if (hoveredPart.type === "Void" || hoveredPart.id !== elementID) return false;
+  if (!names_element(hoveredPart) || hoveredPart.id !== elementID) return false;
   return (
     hoveredPart.type === "Edge" &&
     hoveredPart.part !== "body" &&
@@ -201,6 +213,88 @@ function is_edge_end_hovered(
       "PlacingBeltStart",
     ].includes(state.type)
   );
+}
+
+/**
+ * The node the cursor is really on when the hover names an edge terminal, or the
+ * start a belt closes onto. A held terminal is grabbed through its node: the node
+ * is what lights up, and no free-end handle is ever drawn over it.
+ */
+function hovered_terminal_node(
+  hoveredPart: HoveredPart,
+  state: CanvasState,
+  mechanicalElements: MechanicalElement[],
+): ID | undefined {
+  if (hoveredPart.type === "BeltClosure")
+    return state.type === "PlacingBeltEnd" && state.startHover.type === "Node"
+      ? state.startHover.id
+      : undefined;
+  if (
+    hoveredPart.type !== "Edge" ||
+    hoveredPart.part === "body" ||
+    hoveredPart.deleting
+  )
+    return undefined;
+  const edge = mechanicalElements.find((el) => el.id === hoveredPart.id);
+  if (!edge || !("fixedNodeStartID" in edge)) return undefined;
+  return hoveredPart.part === "start"
+    ? edge.fixedNodeStartID
+    : edge.fixedNodeEndID;
+}
+
+/**
+ * Whether the gesture is about to close `belt` on itself: one terminal rides the
+ * cursor and the hover offers the opposite one as its target. The preview must
+ * then be the loop, not an open path with both ends on the same point.
+ */
+function is_closing_belt(
+  belt: BeltElement,
+  hoveredPart: HoveredPart,
+  state: CanvasState,
+): boolean {
+  if (belt.closed || hoveredPart.type !== "Edge" || hoveredPart.id !== belt.id)
+    return false;
+  switch (state.type) {
+    case "MovingEdgeStartPoint":
+      return state.elementID === belt.id && hoveredPart.part === "end";
+    case "MovingEdgeEndPoint":
+      return state.elementID === belt.id && hoveredPart.part === "start";
+    // The node carries one terminal, so the closing target is the other one.
+    // Any other node merely dragged over a terminal is not closing anything.
+    case "MovingNode": {
+      const holdsStart = belt.fixedNodeStartID === state.elementID;
+      const holdsEnd = belt.fixedNodeEndID === state.elementID;
+      if (holdsStart === holdsEnd) return false;
+      return hoveredPart.part === (holdsStart ? "end" : "start");
+    }
+    default:
+      return false;
+  }
+}
+
+/**
+ * Marks of a closing gesture: the junction the loop will carry, and the terminal
+ * the cursor aims at. The junction is shown on the loop whatever the click does
+ * with it — mint a join there, or reuse the node a terminal already holds, which
+ * `BeltJunction` then seats on the loop all the same.
+ */
+function draw_belt_closure_marks(
+  ctx: CanvasRenderingContext2D,
+  loopVias: BeltVia[],
+  cursor: Point2,
+  withHandle: boolean,
+) {
+  const junction = belt_project(loopVias, cursor, true).point;
+  ctx.save();
+  ctx.translate(junction.x, junction.y);
+  draw_belt_end(ctx);
+  ctx.restore();
+  if (!withHandle) return;
+  ctx.save();
+  ctx.lineWidth = STROKE_WIDTHS.HOVERED;
+  ctx.translate(cursor.x, cursor.y);
+  draw_hover_edge_end(ctx);
+  ctx.restore();
 }
 
 /**
@@ -228,7 +322,7 @@ function is_hovered(
   hoveredPart: HoveredPart,
   constraintElements: ConstraintElement[],
 ): boolean {
-  if (hoveredPart.type === "Void") return false;
+  if (!names_element(hoveredPart)) return false;
   if (hoveredPart.id === elementID && !hoveredPart.deleting) return true;
 
   const constraint = constraintElements.find((el) => el.id === hoveredPart.id);
@@ -287,7 +381,7 @@ export function draw_edge_fake_end(
   ctx.lineWidth = STROKE_WIDTHS.STANDARD;
 
   if (is_hovered(edge.id, hoveredPart, constraintElements))
-    ctx.lineWidth = STROKE_WIDTHS.THICK;
+    ctx.lineWidth += STROKE_WIDTHS.HOVER_GAIN;
 
   if (is_selected(edge.id, state, constraintElements)) {
     ctx.strokeStyle = COLORS.SELECTION_STROKE;
@@ -357,6 +451,11 @@ export function drawMechanicalCanvas(
     .concat(constraintElements)
     .concat(loads);
   const undrawable = undrawable_elements(allElements, mechanicalElements);
+  const terminalNodeID = hovered_terminal_node(
+    hoveredPart,
+    state,
+    mechanicalElements,
+  );
 
   ctx.shadowBlur = 0;
   ctx.globalAlpha = 1;
@@ -369,7 +468,7 @@ export function drawMechanicalCanvas(
   )) {
     if (
       undrawable.has(element.id) ||
-      (hoveredPart.type !== "Void" &&
+      (names_element(hoveredPart) &&
         hoveredPart.deleting &&
         hoveredPart.id === element.id) ||
       (state.type === "ErasingMultiple" &&
@@ -403,12 +502,14 @@ export function drawMechanicalCanvas(
         state,
         constraintElements,
       );
-      const isEdgeEndHovered = is_edge_end_hovered(
-        element.id,
-        hoveredPart,
-        state,
-      );
-      const isHovered = is_hovered(element.id, hoveredPart, constraintElements);
+      // A terminal held by a node is grabbed through it: the node takes the
+      // hover, and the handle that would sit on top of it is not drawn.
+      const isEdgeEndHovered =
+        is_edge_end_hovered(element.id, hoveredPart, state) &&
+        terminalNodeID === undefined;
+      const isHovered =
+        is_hovered(element.id, hoveredPart, constraintElements) ||
+        element.id === terminalNodeID;
 
       ctx.shadowBlur = 0;
       ctx.globalAlpha = 1;
@@ -417,13 +518,13 @@ export function drawMechanicalCanvas(
       ctx.fillStyle = isLoadElement ? COLORS.ACCENT : COLORS.FILL_BODY;
       ctx.lineWidth = STROKE_WIDTHS.STANDARD;
       if (element.type === "gear") {
-        ctx.lineWidth = STROKE_WIDTHS.STANDARD / 2;
+        ctx.lineWidth = STROKE_WIDTHS.GEAR;
       }
 
       // Thicken the stroke if element is hovered. Loads are left out: they pick
       // their width per sub-part below, from loadRestWidth / loadHoverWidth.
       if (isHovered && !isEdgeEndHovered && !isLoadElement)
-        ctx.lineWidth = STROKE_WIDTHS.THICK;
+        ctx.lineWidth += STROKE_WIDTHS.HOVER_GAIN;
       // Add blue halo and blue stroke if element is selected
       if (isSelected) {
         if (isLoadElement) ctx.lineWidth += 1;
@@ -454,7 +555,7 @@ export function drawMechanicalCanvas(
       // Widths a load's sub-parts choose from: the element's own width when at
       // rest, the hovered width for the part under the cursor.
       const loadRestWidth = ctx.lineWidth;
-      const loadHoverWidth = STROKE_WIDTHS.THICK + (isSelected ? 1 : 0);
+      const loadHoverWidth = loadRestWidth + STROKE_WIDTHS.HOVER_GAIN;
 
       switch (element.type) {
         case "pivot":
@@ -577,7 +678,7 @@ export function drawMechanicalCanvas(
           ctx.save();
           ctx.translate(element.position.x, element.position.y);
           ctx.rotate(element.angle);
-          draw_gear(ctx, element.radius);
+          draw_gear(ctx, element.radius, isHovered);
           ctx.restore();
           break;
         case "beam":
@@ -604,7 +705,7 @@ export function drawMechanicalCanvas(
               break;
           }
           if (isEdgeEndHovered && hoveredPart.type === "Edge") {
-            ctx.lineWidth = STROKE_WIDTHS.THICK;
+            ctx.lineWidth = STROKE_WIDTHS.HOVERED;
             if (hoveredPart.part === "end") {
               ctx.translate(delta.length(), 0);
             }
@@ -613,11 +714,24 @@ export function drawMechanicalCanvas(
           ctx.restore();
           break;
         case "belt":
-          // Pulleys that lost belt contact during simulation are drawn as if the
-          // belt ran straight past them (skipped from the path).
+          // Pulleys the path skips: those that lost belt contact during
+          // simulation, and the one a drag is about to pull off. Both are drawn
+          // as if the belt ran straight past them.
+          const removingGearIndex =
+            state.type === "MovingBeltBody" && state.elementID === element.id
+              ? state.removingGearIndex
+              : undefined;
           const disconnectedGears = new Set(
             element.disconnectedGearIndices ?? [],
           );
+          if (removingGearIndex !== undefined)
+            disconnectedGears.add(removingGearIndex);
+          // The carried section is numbered on the belt without that pulley, so
+          // every section-indexed read below goes through this one.
+          const pathBelt =
+            removingGearIndex === undefined
+              ? element
+              : belt_without_gear(element, removingGearIndex);
           const attachedGears = element.attachedGearsIDs
             .map(({ id, direction }) => {
               return {
@@ -629,6 +743,15 @@ export function drawMechanicalCanvas(
               };
             })
             .filter((_, i) => !disconnectedGears.has(i));
+          // Preview the pulley where the commit will actually put it. An arc
+          // section takes none, and the belt is then previewed unchanged.
+          const preview_pulley = (
+            section: number,
+            entry: { gear: GearElement; direction: boolean },
+          ) => {
+            const index = belt_section_insertion_index(section, pathBelt.closed);
+            if (index !== undefined) attachedGears.splice(index, 0, entry);
+          };
           switch (state.type) {
             case "MovingBeltBody":
               if (state.elementID !== element.id) break;
@@ -637,11 +760,11 @@ export function drawMechanicalCanvas(
                   hoveredPart.id,
                   mechanicalElements,
                 ) as GearElement;
-                attachedGears.splice(state.section / 2, 0, {
+                preview_pulley(state.section, {
                   gear,
                   direction: belt_wrap_direction(
                     gear.position,
-                    element,
+                    pathBelt,
                     state.section,
                     mechanicalElements,
                     "belt-onto-gear",
@@ -661,11 +784,11 @@ export function drawMechanicalCanvas(
                   meshedGearsIDs: [],
                   attachedBeltID: element.id,
                 };
-                attachedGears.splice(state.section / 2, 0, {
+                preview_pulley(state.section, {
                   gear: newGear,
                   direction: belt_wrap_direction(
                     newGear.position,
-                    element,
+                    pathBelt,
                     state.section,
                     mechanicalElements,
                     "belt-onto-gear",
@@ -683,7 +806,7 @@ export function drawMechanicalCanvas(
                 state.elementID,
                 mechanicalElements,
               ) as GearElement;
-              attachedGears.splice(hoveredPart.section / 2, 0, {
+              preview_pulley(hoveredPart.section, {
                 gear,
                 direction: belt_wrap_direction(
                   gear.position,
@@ -715,7 +838,7 @@ export function drawMechanicalCanvas(
                 meshedGearsIDs: [],
                 attachedBeltID: element.id,
               };
-              attachedGears.splice(hoveredPart.section / 2, 0, {
+              preview_pulley(hoveredPart.section, {
                 gear: newGear,
                 direction: belt_wrap_direction(
                   newGear.position,
@@ -727,8 +850,11 @@ export function drawMechanicalCanvas(
               });
               break;
           }
-          if (element.tight && attachedGears.length > 0) {
-            // Tight belt: continuous closed loop around the pulleys, drawn
+          // A terminal dragged onto the other one shows the loop the drop makes,
+          // not an open path whose two ends sit on the same point.
+          const isClosing = is_closing_belt(element, hoveredPart, state);
+          if ((element.closed || isClosing) && attachedGears.length > 0) {
+            // Closed belt: continuous closed loop around the pulleys, drawn
             // independently of the junction position (no free ends). In
             // simulation, pass the tracked continuous wraps (filtered to the
             // still-connected gears, same as attachedGears) so a pulley about to
@@ -736,17 +862,25 @@ export function drawMechanicalCanvas(
             const loopWraps = element.gearWraps
               ? element.gearWraps.filter((_, i) => !disconnectedGears.has(i))
               : undefined;
+            const loopVias = attachedGears.map(({ gear, direction }) => ({
+              pos: gear.position,
+              radius: gear.radius,
+              direction,
+            }));
             draw_belt_loop(
               ctx,
-              attachedGears.map(({ gear, direction }) => ({
-                pos: gear.position,
-                radius: gear.radius,
-                direction,
-              })),
+              loopVias,
               loopWraps,
-              // A tight loop has no terminals, so any wound pulley coils outward.
+              // A closed loop has no terminals, so any wound pulley coils outward.
               loopWraps ? belt_windings(loopWraps, false, false) : undefined,
             );
+            if (isClosing)
+              draw_belt_closure_marks(
+                ctx,
+                loopVias,
+                hoveredPart.position,
+                terminalNodeID === undefined,
+              );
           } else {
             // Loose belt: open path (start terminal → gears → end terminal). In
             // simulation, pass the tracked continuous wraps (filtered to the
@@ -788,7 +922,7 @@ export function drawMechanicalCanvas(
                 : undefined,
             );
             if (isEdgeEndHovered && hoveredPart.type === "Edge") {
-              ctx.lineWidth = STROKE_WIDTHS.THICK;
+              ctx.lineWidth = STROKE_WIDTHS.HOVERED;
               const delta =
                 hoveredPart.part === "end"
                   ? element.positionEnd
@@ -893,11 +1027,11 @@ export function drawMechanicalCanvas(
             mechanicalElements,
           ) as BeltElement;
           const allVias = get_belt_vias(belt, mechanicalElements);
-          const vias = belt.tight ? allVias.slice(1, -1) : allVias;
+          const vias = belt.closed ? allVias.slice(1, -1) : allVias;
           draw_dimension_belt(
             ctx,
             vias,
-            belt.tight,
+            belt.closed,
             element.position,
             element.value,
             hideText,
@@ -1114,7 +1248,10 @@ export function drawMechanicalCanvas(
           break;
         case "PlacingGearStart":
           draw_gear(ctx, DIM.DEFAULT_GEAR_RADIUS);
-          draw_pivot(ctx, false);
+          // No pivot ghost over an axle the gear would simply join: only a new
+          // one is worth previewing.
+          if (!axle_under(hoveredPart, mechanicalElements))
+            draw_pivot(ctx, false);
           break;
         case "PlacingPivot":
           draw_pivot(ctx, false);
@@ -1292,54 +1429,68 @@ export function drawMechanicalCanvas(
           break;
         case "PlacingGearRadius":
           draw_gear(ctx, delta.length());
-          draw_pivot(ctx, false);
+          if (!axle_under(state.startHover, mechanicalElements))
+            draw_pivot(ctx, false);
           break;
       }
       break;
-    case "PlacingBeltEnd":
-      let attachedGears = state.attachedGearsIDs.map(({ id, direction }) => {
-        return {
-          gear: get_mechanical_element_from_id(
-            id,
-            mechanicalElements,
-          ) as GearElement,
-          direction,
-        };
-      });
-      if (
-        state.startHover.type === "GearTooth" &&
-        attachedGears.length === 0 &&
-        !(
-          hoveredPart.type === "GearTooth" &&
-          hoveredPart.id === state.startHover.id
-        )
-      ) {
-        const hoveredGear = get_mechanical_element_from_id(
-          state.startHover.id,
-          mechanicalElements,
-        ) as GearElement;
-        const direction =
-          hoveredGear.position
-            .sub(state.startHover.position)
-            .perp()
-            .dot(hoveredPart.position.sub(hoveredGear.position)) > 0;
-        attachedGears = [{ gear: hoveredGear, direction }];
-      }
+    case "PlacingBeltEnd": {
+      // Cursor back on the start: the click closes the belt, so preview the loop
+      // the commit will build — same route, no free ends.
+      // The route the click commits: the pulleys already routed, the gear under
+      // the cursor appended as clicking it would, and the gear the gesture
+      // started on folded in exactly as finalisation does.
+      const routed = [...state.attachedGearsIDs];
       if (hoveredPart.type === "GearTooth") {
         const hoveredGear = get_mechanical_element_from_id(
           hoveredPart.id,
           mechanicalElements,
         ) as GearElement;
-        const direction =
-          hoveredGear.position
-            .sub(
-              state.attachedGearsIDs.length > 0
-                ? attachedGears.slice(-1)[0].gear.position
-                : state.startHover.position,
-            )
-            .perp()
-            .dot(hoveredPart.position.sub(hoveredGear.position)) > 0;
-        attachedGears.push({ gear: hoveredGear, direction });
+        const previousVia =
+          routed.length > 0
+            ? (
+                get_mechanical_element_from_id(
+                  routed[routed.length - 1].id,
+                  mechanicalElements,
+                ) as GearElement
+              ).position
+            : state.startHover.position;
+        routed.push({
+          id: hoveredGear.id,
+          direction: belt_wrap_arriving(
+            hoveredGear,
+            previousVia,
+            hoveredPart.position,
+          ),
+        });
+      }
+      const attachedGears = attached_gears_with_start(
+        { ...state, attachedGearsIDs: routed },
+        hoveredPart.position,
+        mechanicalElements,
+      ).map(({ id, direction }) => ({
+        gear: get_mechanical_element_from_id(
+          id,
+          mechanicalElements,
+        ) as GearElement,
+        direction,
+      }));
+      // Cursor back on the start: the click closes the belt, so preview the loop
+      // it will build — same route, no free ends.
+      if (hoveredPart.type === "BeltClosure") {
+        const loopVias = attachedGears.map(({ gear, direction }) => ({
+          pos: gear.position,
+          radius: gear.radius,
+          direction,
+        }));
+        draw_belt_loop(ctx, loopVias);
+        draw_belt_closure_marks(
+          ctx,
+          loopVias,
+          hoveredPart.position,
+          state.startHover.type !== "Node",
+        );
+        break;
       }
       const gearAngles = get_gear_angles(
         state.startHover.position,
@@ -1353,6 +1504,7 @@ export function drawMechanicalCanvas(
         gearAngles,
       );
       break;
+    }
     case "DimensionNode":
       const nodeD = get_mechanical_element_from_id(
         state.nodeID,
@@ -1548,11 +1700,11 @@ export function drawMechanicalCanvas(
         mechanicalElements,
       ) as BeltElement;
       const allVias = get_belt_vias(belt, mechanicalElements);
-      const vias = belt.tight ? allVias.slice(1, -1) : allVias;
+      const vias = belt.closed ? allVias.slice(1, -1) : allVias;
       draw_dimension_belt(
         ctx,
         vias,
-        belt.tight,
+        belt.closed,
         hoveredPart.position,
         measure_belt_length(belt, mechanicalElements),
       );

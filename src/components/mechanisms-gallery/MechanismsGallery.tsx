@@ -108,7 +108,10 @@ export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
             flexShrink: 0,
           }}
         >
-          <Tooltip title="Ouvrir un .slidep ou une archive zip">
+          <Tooltip
+            disableInteractive
+            title="Ouvrir un .slidep ou une archive zip"
+          >
             <Button
               size="small"
               color="inherit"
@@ -120,6 +123,7 @@ export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
             </Button>
           </Tooltip>
           <Tooltip
+            disableInteractive
             title={
               mechanismRecords.length === 0
                 ? "Aucun mécanisme à exporter"
@@ -192,7 +196,10 @@ export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
                 size={{ xs: 12, sm: 6, md: 4, lg: 3 }}
                 key={mechanismRecord.metadata.createdAt}
               >
-                <Tooltip title={mechanismRecord.metadata.description}>
+                <Tooltip
+                  disableInteractive
+                  title={mechanismRecord.metadata.description}
+                >
                   <Card
                     onClick={() => onLoad(mechanismRecord)}
                     sx={{
@@ -234,7 +241,7 @@ export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
                         {/* Actions par mécanisme. `stopPropagation` : la carte
                             entière charge le mécanisme au clic. */}
                         <Box sx={{ display: "flex", flexShrink: 0, ml: 0.5 }}>
-                          <Tooltip title="Exporter">
+                          <Tooltip disableInteractive title="Exporter">
                             <IconButton
                               size="small"
                               color="inherit"
@@ -246,7 +253,7 @@ export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
                               <Download fontSize="small" />
                             </IconButton>
                           </Tooltip>
-                          <Tooltip title="Supprimer">
+                          <Tooltip disableInteractive title="Supprimer">
                             <IconButton
                               size="small"
                               color="error"

@@ -1,25 +1,23 @@
 /**
  * BeltTensionSwitch component
- * Toggle switch for tensionning a belt with visual indicator
+ * Read-only indicator of whether a belt is a closed loop.
+ *
+ * Closure is not a property one sets: it follows from the routing (enough
+ * pulleys, both terminals on one junction). Joining the terminals closes the
+ * belt, disconnecting them opens it — so this reports, it does not decide.
  */
 
 import React from "react";
-import { Box, IconButton, Typography } from "@mui/material";
+import { Box, Typography } from "@mui/material";
 import { icon } from "../../element-palette/iconDataUris";
 
 interface BeltTensionSwitchProps {
-  tightened: boolean;
-  setTight: (tight: boolean) => void;
+  closed: boolean;
 }
 
 export const BeltTensionSwitch: React.FC<BeltTensionSwitchProps> = ({
-  tightened,
-  setTight,
+  closed,
 }) => {
-  const toggleTight = () => {
-    setTight(!tightened);
-  };
-
   return (
     <Box
       sx={{
@@ -28,20 +26,29 @@ export const BeltTensionSwitch: React.FC<BeltTensionSwitchProps> = ({
         alignItems: "center",
         gap: 0.5,
       }}
+      title={
+        closed
+          ? "Les deux extrémités tiennent à une même jonction"
+          : "Les extrémités sont libres"
+      }
     >
-      <IconButton
-        onClick={toggleTight}
-        size="small"
-        sx={{ border: 1, borderColor: "divider" }}
-        title={tightened ? "Libérer la courroie" : "Tendre la courroie"}
+      <Box
+        sx={{
+          display: "flex",
+          border: 1,
+          borderColor: "divider",
+          borderRadius: 1,
+          p: 0.5,
+          opacity: 0.7,
+        }}
       >
         <Box
           component="img"
           style={{ width: 28, height: 28 }}
-          src={tightened ? icon("tight-belt") : icon("loose-belt")}
+          src={closed ? icon("tight-belt") : icon("loose-belt")}
         />
-      </IconButton>
-      <Typography variant="body2">{tightened ? "Tendue" : "Libre"}</Typography>
+      </Box>
+      <Typography variant="body2">{closed ? "Fermée" : "Libre"}</Typography>
     </Box>
   );
 };

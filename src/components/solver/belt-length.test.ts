@@ -25,7 +25,7 @@ import {
 const P = (x: number, y: number) => new Point2(x, y);
 
 describe("BeltLength constraint (simulation)", () => {
-  it("conserves a tight belt's closed-loop length (and pulls the far pulley)", () => {
+  it("conserves a closed belt's closed-loop length (and pulls the far pulley)", () => {
     const positions = new Map<string, Point2>([
       ["gA", P(-100, 0)],
       ["gB", P(100, 0)],
@@ -986,5 +986,100 @@ describe("junction travels around a wound pulley (belt_pieces wraps)", () => {
     const s = pieces[0].startS + pieces[0].length / 2;
     const pt = belt_point_tangent(vias, s, true, wraps).point;
     expect(pt.distance_to(P(-100, 0))).toBeCloseTo(40, 3);
+  });
+});
+
+describe("BeltLength resizes pulleys in edition (radii as DOFs)", () => {
+  // Closed 2-gear loop, centres 200 apart, r=40 each: L0 = 2·200 + 2·(40·π).
+  const makeLink = (length: number): Extract<Link, { type: "BeltLength" }> => ({
+    type: "BeltLength",
+    ddl: 1,
+    startKey: "s",
+    endKey: "e",
+    gearPosKeys: ["gA", "gB"],
+    gearAngleKeys: ["gA", "gB"],
+    radii: [40, 40], // unused by the projection (it reads the radii map)
+    directions: [false, false],
+    length,
+    closed: true,
+    radKeys: ["gA", "gB"],
+  });
+  const centres = () =>
+    new Map<string, Point2>([
+      ["gA", P(-100, 0)],
+      ["gB", P(100, 0)],
+    ]);
+  const anchored = new Map<string, number>([
+    ["gA", 0],
+    ["gB", 0],
+  ]);
+  const freeRadii = () =>
+    [
+      new Map<string, number>([
+        ["gA", 40],
+        ["gB", 40],
+      ]),
+      new Map<string, number>([
+        ["gA", 1],
+        ["gB", 1],
+      ]),
+    ] as const;
+
+  it("shrinks the pulleys to meet a shorter dimension (centres anchored)", () => {
+    const positions = centres();
+    const [radii, radMasses] = freeRadii();
+    const target = 620; // < L0 ≈ 651.3 → radii shrink (arc sum 220 → r sum ≈ 70)
+    const link = makeLink(target);
+    let err = Infinity;
+    for (let i = 0; i < 300; i++)
+      err = applyBeltLengthConstraint(
+        positions,
+        anchored,
+        new Map(),
+        link,
+        1,
+        radii,
+        radMasses,
+      );
+    expect(err).toBeLessThan(0.1);
+    expect(radii.get("gA")!).toBeLessThan(40);
+    expect(radii.get("gA")! + radii.get("gB")!).toBeCloseTo(220 / Math.PI, 1);
+  });
+
+  it("never drives a radius below MIN_GEAR_RADIUS", () => {
+    const positions = centres();
+    const [radii, radMasses] = freeRadii();
+    const link = makeLink(400); // impossibly short: would need zero-radius pulleys
+    for (let i = 0; i < 300; i++)
+      applyBeltLengthConstraint(
+        positions,
+        anchored,
+        new Map(),
+        link,
+        1,
+        radii,
+        radMasses,
+      );
+    expect(radii.get("gA")!).toBeGreaterThanOrEqual(30);
+    expect(radii.get("gB")!).toBeGreaterThanOrEqual(30);
+  });
+
+  it("leaves radii untouched without radKeys (simulation)", () => {
+    const positions = centres();
+    const [radii, radMasses] = freeRadii();
+    const link = makeLink(620);
+    delete link.radKeys;
+    for (let i = 0; i < 50; i++)
+      applyBeltLengthConstraint(
+        positions,
+        anchored,
+        new Map(),
+        link,
+        1,
+        radii,
+        radMasses,
+      );
+    expect(radii.get("gA")!).toBe(40);
+    expect(radii.get("gB")!).toBe(40);
   });
 });

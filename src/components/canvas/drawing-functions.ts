@@ -126,7 +126,7 @@ export function draw_ground(ctx: CanvasRenderingContext2D) {
 
   // Vertical line
   ctx.lineCap = "square";
-  ctx.lineWidth = STROKE_WIDTHS.THICK + widthChange;
+  ctx.lineWidth = STROKE_WIDTHS.GROUND_BAR + widthChange;
   ctx.beginPath();
   ctx.moveTo(0, 0);
   ctx.lineTo(0, 0 + DIM.GROUND_BAR_HEIGHT);
@@ -549,7 +549,16 @@ export function draw_motor(ctx: CanvasRenderingContext2D, isGrounded: boolean) {
   ctx.lineWidth -= 0.5;
 }
 
-export function draw_gear(ctx: CanvasRenderingContext2D, radius: number) {
+/**
+ * `hovered` fills the body at 80% opacity instead of the usual half. The belt
+ * arc rides on the very circle the outline draws, so the outline alone cannot
+ * carry the hover: the body does.
+ */
+export function draw_gear(
+  ctx: CanvasRenderingContext2D,
+  radius: number,
+  hovered = false,
+) {
   if (radius < DIM.MIN_GEAR_RADIUS) radius = DIM.MIN_GEAR_RADIUS;
 
   //const teethCount = Math.floor(radius * 0.5);
@@ -566,7 +575,9 @@ export function draw_gear(ctx: CanvasRenderingContext2D, radius: number) {
     ctx.moveTo(Math.cos(angle) * r1, Math.sin(angle) * r1);
     ctx.arc(Math.cos(angle) * r1, Math.sin(angle) * r1, r2, 0, TAU);
   }
-  ctx.fillStyle += COLORS.HALF_TRANSPARENCY;
+  ctx.fillStyle += hovered
+    ? COLORS.HOVER_TRANSPARENCY
+    : COLORS.HALF_TRANSPARENCY;
 
   const oldShadowBlur = ctx.shadowBlur;
   ctx.shadowBlur = 0;
@@ -738,7 +749,7 @@ export function draw_belt_open(
 }
 
 /**
- * Draw a tight belt as a continuous closed loop around its pulleys (the gN→g0
+ * Draw a closed belt as a continuous closed loop around its pulleys (the gN→g0
  * closure included), with no free ends. Unlike `draw_belt`, this is independent
  * of the junction position, so the loop stays continuous wherever the join sits.
  *
@@ -998,12 +1009,12 @@ export function draw_dimension_radius(
 export function draw_dimension_belt(
   ctx: CanvasRenderingContext2D,
   vias: BeltVia[],
-  tight: boolean,
+  closed: boolean,
   position: Point2,
   value: number,
   hideText: boolean = false,
 ) {
-  const closest = belt_project(vias, position, tight).point;
+  const closest = belt_project(vias, position, closed).point;
   ctx.beginPath();
   ctx.moveTo(position.x, position.y);
   ctx.lineTo(closest.x, closest.y);

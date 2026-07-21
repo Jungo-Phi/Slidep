@@ -30,9 +30,21 @@ describe("the migration chain", () => {
 });
 
 describe("migrate_document", () => {
-  it("treats a document with no formatVersion as the current one", () => {
-    const result = migrate_document(doc());
+  // A missing field means the document predates it, so it owes every step. Read
+  // as the current version instead, it would skip them all and keep its old
+  // shape under a new version number.
+  it("treats a document with no formatVersion as version 1", () => {
+    const result = migrate_document(
+      doc({ mechanicalElements: [{ type: "belt", id: "b", tight: true }] }),
+    );
     expect(result.formatVersion).toBe(CURRENT_FORMAT_VERSION);
+    expect(result.mechanicalElements[0]).toMatchObject({ closed: true });
+  });
+
+  it("keeps undo history when no step has to run", () => {
+    const result = migrate_document(
+      doc({ formatVersion: CURRENT_FORMAT_VERSION }),
+    );
     expect(result.history).toEqual([["a"]]);
   });
 
@@ -40,6 +52,67 @@ describe("migrate_document", () => {
     expect(migrate_document(doc({ formatVersion: 1 })).formatVersion).toBe(
       CURRENT_FORMAT_VERSION,
     );
+  });
+
+  it("renames a belt's tension flag", () => {
+    const result = migrate_document(
+      doc({
+        formatVersion: 1,
+        mechanicalElements: [
+          { type: "belt", id: "b1", tight: false },
+          { type: "beam", id: "m1", tight: true },
+        ],
+      }),
+    );
+    const [belt, beam] = result.mechanicalElements as unknown as Record<
+      string,
+      unknown
+    >[];
+    expect(belt).toMatchObject({ closed: false });
+    expect("tight" in belt).toBe(false);
+    // Only belts carry the flag: a like-named field elsewhere is not ours.
+    expect(beam).toMatchObject({ tight: true });
+  });
+
+  it("renames the flag in the undo stack too", () => {
+    const result = migrate_document(
+      doc({
+        formatVersion: 1,
+        history: [
+          [
+            { type: "TightenBelt", id: "b1", tightened: true },
+            { type: "MoveNode", id: "n1" },
+          ],
+        ],
+        future: [
+          [
+            {
+              type: "UpdatePositionsToValidState",
+              masterActionType: "TightenBelt",
+            },
+            {
+              type: "CreateElement",
+              element: { type: "belt", id: "b2", tight: true },
+            },
+          ],
+        ],
+      }),
+    );
+    expect(result.history).toEqual([
+      [
+        { type: "CloseBelt", id: "b1", closed: true },
+        { type: "MoveNode", id: "n1" },
+      ],
+    ]);
+    expect(result.future).toEqual([
+      [
+        { type: "UpdatePositionsToValidState", masterActionType: "CloseBelt" },
+        {
+          type: "CreateElement",
+          element: { type: "belt", id: "b2", closed: true },
+        },
+      ],
+    ]);
   });
 
   it("refuses a document from a newer format", () => {

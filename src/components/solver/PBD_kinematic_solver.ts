@@ -93,6 +93,8 @@ export function PBD_kinematic_solver(
             link.key1,
             link.key2,
             link.distance,
+            1.0,
+            link.preferredAxis,
           );
           break;
         case "DistanceToLine":
@@ -223,7 +225,15 @@ export function PBD_kinematic_solver(
           );
           break;
         case "BeltLength":
-          err = applyBeltLengthConstraint(positions, posMasses, angles, link);
+          err = applyBeltLengthConstraint(
+            positions,
+            posMasses,
+            angles,
+            link,
+            1.0,
+            radii,
+            radMasses,
+          );
           break;
         case "BeltJunction":
           err = applyBeltJunctionConstraint(
@@ -233,6 +243,9 @@ export function PBD_kinematic_solver(
             link.gearPosKeys,
             link.radii,
             link.directions,
+            1.0,
+            radii,
+            link.radKeys,
           );
           break;
         case "BeltPin":

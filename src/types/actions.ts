@@ -38,7 +38,7 @@ export type ActionType =
 export type OtherActionType =
   | "MoveConstraint"
   | "GroundNode"
-  | "TightenBelt"
+  | "CloseBelt"
   | "SwitchAttachedGearDirection"
   | "Blank";
 export type ChangeConstantActionType =
@@ -104,7 +104,7 @@ export type Action =
     }
   | { type: "MoveConstraint"; id: ID; newPosition: Point2; oldPosition: Point2 }
   | { type: "GroundNode"; id: ID; grounded: boolean }
-  | { type: "TightenBelt"; id: ID; tightened: boolean }
+  | { type: "CloseBelt"; id: ID; closed: boolean }
   | {
       type: "SwitchAttachedGearDirection";
       id: ID;
@@ -257,7 +257,7 @@ export type Action =
         | ChangeDimensionActionType
         | ConnectsActionType
         | CreationActionType
-        | "TightenBelt";
+        | "CloseBelt";
       newNodes: GeomNodes;
       oldNodes: GeomNodes;
     }
