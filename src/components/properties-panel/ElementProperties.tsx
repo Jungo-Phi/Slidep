@@ -1057,80 +1057,64 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
               }
             />
             {element.type === "gear" && (
-              <Box
-                sx={{
-                  display: "flex",
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: 0.5,
+              <NumberInput
+                value={element.radius}
+                onChange={(radius) => {
+                  applyActions(
+                    [
+                      {
+                        type: "ChangeGearRadius",
+                        id: element.id,
+                        newRadius: radius,
+                        oldRadius: element.radius,
+                        target: new Point2(
+                          element.position.x + radius,
+                          element.position.y,
+                        ),
+                      },
+                    ],
+                    "MoveElement",
+                  );
                 }}
-              >
-                <NumberInput
-                  value={element.radius}
-                  onChange={(radius) => {
-                    applyActions(
-                      [
-                        {
-                          type: "ChangeGearRadius",
-                          id: element.id,
-                          newRadius: radius,
-                          oldRadius: element.radius,
-                          target: new Point2(
-                            element.position.x + radius,
-                            element.position.y,
+                label="Rayon"
+                large={true}
+                signed={false}
+                adornment={
+                  linkedConstraint
+                    ? {
+                        icon: Lock,
+                        title: "Débloquer la longueur",
+                        color: "secondary",
+                        onMouseEnter: () =>
+                          handleMouseEnter(linkedConstraint, true),
+                        onMouseLeave: handleMouseLeave,
+                        onClick: () =>
+                          applyActions(
+                            [
+                              {
+                                type: "DeleteElement",
+                                element: linkedConstraint,
+                              },
+                            ],
+                            "Other",
                           ),
-                        },
-                      ],
-                      "MoveElement",
-                    );
-                  }}
-                  label="Rayon"
-                  large={true}
-                  signed={false}
-                />
-                {linkedConstraint ? (
-                  <IconButton
-                    color="secondary"
-                    onMouseEnter={() =>
-                      handleMouseEnter(linkedConstraint, true)
-                    }
-                    onMouseLeave={handleMouseLeave}
-                    onClick={() =>
-                      applyActions(
-                        [
-                          {
-                            type: "DeleteElement",
-                            element: linkedConstraint,
-                          },
-                        ],
-                        "Other",
-                      )
-                    }
-                    title="Débloquer la longueur"
-                    size="small"
-                  >
-                    <Lock sx={{ width: 20, height: 20 }} fontSize="small" />
-                  </IconButton>
-                ) : (
-                  <IconButton
-                    onClick={() =>
-                      applyActions(
-                        [
-                          {
-                            type: "CreateElement",
-                            element: create_radius_dimension(element),
-                          },
-                        ],
-                        "CreateConstraint",
-                      )
-                    }
-                    title="Bloquer la longueur"
-                    size="small"
-                  >
-                    <LockOpen sx={{ width: 20, height: 20 }} fontSize="small" />
-                  </IconButton>
-                )}
-              </Box>
+                      }
+                    : {
+                        icon: LockOpen,
+                        title: "Bloquer la longueur",
+                        onClick: () =>
+                          applyActions(
+                            [
+                              {
+                                type: "CreateElement",
+                                element: create_radius_dimension(element),
+                              },
+                            ],
+                            "CreateConstraint",
+                          ),
+                      }
+                }
+              />
             )}
           </Box>
         </StructureOnly>
@@ -1164,69 +1148,27 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                 )
               }
             />
-            <Box
-              sx={{
-                display: "flex",
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 0.5,
-              }}
-            >
-              <NumberInput
-                value={
-                  element.type === "belt"
-                    ? measure_belt_length(element, mechanism.mechanicalElements)
-                    : element.positionStart.distance_to(element.positionEnd)
-                }
-                onChange={(length) => {
-                  if (element.type === "belt") {
-                    const beltDim = mechanism.constraintElements.find(
-                      (c) =>
-                        c.type === "dimension-belt" && c.beltID === element.id,
-                    );
-                    if (beltDim && beltDim.type === "dimension-belt") {
-                      // Persistent dimension: update its value.
-                      applyActions(
-                        [
-                          {
-                            type: "ChangeDimensionBeltValue",
-                            id: beltDim.id,
-                            newValue: length,
-                            oldValue: beltDim.value,
-                          },
-                        ],
-                        "ChangeDimension",
-                      );
-                    } else {
-                      applyActions(
-                        [
-                          {
-                            type: "ChangeBeltLength",
-                            id: element.id,
-                            newLength: length,
-                            oldLength: measure_belt_length(
-                              element,
-                              mechanism.mechanicalElements,
-                            ),
-                          },
-                        ],
-                        "MoveElement",
-                      );
-                    }
-                    return;
-                  }
-                  const linkedDim = mechanism.constraintElements.find(
+            <NumberInput
+              value={
+                element.type === "belt"
+                  ? measure_belt_length(element, mechanism.mechanicalElements)
+                  : element.positionStart.distance_to(element.positionEnd)
+              }
+              onChange={(length) => {
+                if (element.type === "belt") {
+                  const beltDim = mechanism.constraintElements.find(
                     (c) =>
-                      c.type === "dimension-edge" && c.edgeID === element.id,
+                      c.type === "dimension-belt" && c.beltID === element.id,
                   );
-                  if (linkedDim && linkedDim.type === "dimension-edge") {
+                  if (beltDim && beltDim.type === "dimension-belt") {
+                    // Persistent dimension: update its value.
                     applyActions(
                       [
                         {
-                          type: "ChangeDimensionEdgeValue",
-                          id: linkedDim.id,
+                          type: "ChangeDimensionBeltValue",
+                          id: beltDim.id,
                           newValue: length,
-                          oldValue: linkedDim.value,
+                          oldValue: beltDim.value,
                         },
                       ],
                       "ChangeDimension",
@@ -1235,66 +1177,93 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                     applyActions(
                       [
                         {
-                          type: "ChangeEdgeLength",
+                          type: "ChangeBeltLength",
                           id: element.id,
                           newLength: length,
-                          oldLength: element.positionStart.distance_to(
-                            element.positionEnd,
+                          oldLength: measure_belt_length(
+                            element,
+                            mechanism.mechanicalElements,
                           ),
                         },
                       ],
                       "MoveElement",
                     );
                   }
-                }}
-                large={true}
-                label="Longueur"
-                signed={false}
-              />
-              {linkedConstraint ? (
-                <IconButton
-                  color="secondary"
-                  onMouseEnter={() => handleMouseEnter(linkedConstraint, true)}
-                  onMouseLeave={handleMouseLeave}
-                  onClick={() =>
-                    applyActions(
-                      [
-                        {
-                          type: "DeleteElement",
-                          element: linkedConstraint,
-                        },
-                      ],
-                      "Other",
-                    )
-                  }
-                  title="Débloquer la longueur"
-                  size="small"
-                >
-                  <Lock sx={{ width: 20, height: 20 }} fontSize="small" />
-                </IconButton>
-              ) : (
-                <IconButton
-                  onClick={() =>
-                    applyActions(
-                      [
-                        {
-                          type: "CreateElement",
-                          element: create_length_dimension(
-                            element,
-                            mechanism.mechanicalElements,
-                          ),
-                        },
-                      ],
-                      "CreateConstraint",
-                    )
-                  }
-                  title="Bloquer la longueur"
-                  size="small"
-                >
-                  <LockOpen sx={{ width: 20, height: 20 }} fontSize="small" />
-                </IconButton>
-              )}
-            </Box>
+                  return;
+                }
+                const linkedDim = mechanism.constraintElements.find(
+                  (c) => c.type === "dimension-edge" && c.edgeID === element.id,
+                );
+                if (linkedDim && linkedDim.type === "dimension-edge") {
+                  applyActions(
+                    [
+                      {
+                        type: "ChangeDimensionEdgeValue",
+                        id: linkedDim.id,
+                        newValue: length,
+                        oldValue: linkedDim.value,
+                      },
+                    ],
+                    "ChangeDimension",
+                  );
+                } else {
+                  applyActions(
+                    [
+                      {
+                        type: "ChangeEdgeLength",
+                        id: element.id,
+                        newLength: length,
+                        oldLength: element.positionStart.distance_to(
+                          element.positionEnd,
+                        ),
+                      },
+                    ],
+                    "MoveElement",
+                  );
+                }
+              }}
+              large={true}
+              label="Longueur"
+              signed={false}
+              adornment={
+                linkedConstraint
+                  ? {
+                      icon: Lock,
+                      title: "Débloquer la longueur",
+                      color: "secondary",
+                      onMouseEnter: () =>
+                        handleMouseEnter(linkedConstraint, true),
+                      onMouseLeave: handleMouseLeave,
+                      onClick: () =>
+                        applyActions(
+                          [
+                            {
+                              type: "DeleteElement",
+                              element: linkedConstraint,
+                            },
+                          ],
+                          "Other",
+                        ),
+                    }
+                  : {
+                      icon: LockOpen,
+                      title: "Bloquer la longueur",
+                      onClick: () =>
+                        applyActions(
+                          [
+                            {
+                              type: "CreateElement",
+                              element: create_length_dimension(
+                                element,
+                                mechanism.mechanicalElements,
+                              ),
+                            },
+                          ],
+                          "CreateConstraint",
+                        ),
+                    }
+              }
+            />
             <VectorInput
               value={element.positionEnd}
               onChange={(pos) =>

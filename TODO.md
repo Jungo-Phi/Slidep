@@ -4,49 +4,49 @@
 
 ### À faire rapidement
 
-**Engrenages et moteurs**
+- Afficher une snack-bar "Les forces ne sont pas prisent en compte en cinématique" là première fois qu'on ouvre un mécanisme avec un/des loads, par mécanisme.
+- Donner aux ressorts la même "élasticité" en cinématique.
+- On confond toujours les boutons "reset" et "retour au départ", et de changement de vitesse de simulation. En déplacer vers la timeline ?
 
-- Placer force on gearTooth
-- Hover de suppression du pivot devrait le faire pour les gears connectés
-- Afficher vitesse au lieu de ground en haut du moteur
-- Simulation moteur non grounded (parentBeamID)
-- Utiliser le "bouton dropDown pour changer le repère d'une force" pour choisir l'ancrage d'un moteur
+**Hover et connections**
 
-**Charges et snapping**
-
+- Pas de sonde sur les courroies
+- Hover de suppression du pivot devrait le faire pour les gears connectés + suppression en chaine
 - Afficher le edge hovered au placement de force sur une référence avec snap
 - snap des forces : les edges prennent la priorité sur la grille
+- Pourquoi les contraintes réapparaissent au hover ?
+- Faire le tri dans le tableau de hover sur ce qui doit être ignoré ou rejeté
 
 **Canvas**
 
-- Pas de sonde sur les courroies
 - Afficher les trajectoires des edges (les 2 extrémités)
-- Pourquoi les contraintes réapparaissent au hover ?
 - Theme transition : certaines couleurs changent instantanément (grille + autres éléments spéciaux du canvas)
 - Les couleurs des selected loads ne sont pas assez différenciée
-- Changer couleur (icon + texte) de la contrainte sélectionnée au lieu du bord dans panneau contextuel
 - Parfois, la couleur de fond des mécanismes de gallerie n'est pas la bonne
-- Faire le tri dans le tableau de hover sur ce qui doit être ignoré ou rejeté
 
 **Panneaux et UI**
 
+- Changer couleur (icon + texte) de la contrainte sélectionnée au lieu du bord dans panneau contextuel
 - Escape de placingProbe ne fait pas sortir de l'onglet analyse
 - ENTER et ESCAPE dans "auteur.ice" ou "nom de projet" devrait quitter la textBox
 - Unifier l'usage des tooltips
 - Ajouter disableInteractive à tous les tooltip
 - OnCanvasValueEditor trop large avec des points
+- Afficher vitesse au lieu de ground en haut du moteur
+- Utiliser le "bouton dropDown pour changer le repère d'une force" pour choisir l'ancrage d'un moteur
 - Ajouter boutons pour changer le parentBeam des slider et slideps
 - Le bouton dropDown pour changer le repère d'une force ne click pas sur toute la largeur de ElementDisplay
-- Mettre le cadenas dans le numberInput
-- Pareil pour horaire/anti-horaire
 - Courroie fermée : refléter "déconnecter = ouvrir" (icône ou affichage de la Jonction) — le bouton Tendue/Libre du panneau n'a plus de sens
 - Visuel belt hovered sur gearTooth confusant
+- Scroll dans NumberInput
+- Scroll-bar plus discrète
 
 **Simulation**
 
+- Simuler un moteur non grounded (parentBeamID)
 - default damper length moves on simulation start
 - Ajuster les hitbox du "Stepper de vitesse de simulation"
-- Changer la vitesse ne doit pas mettre en pause
+- La simulation se met parfois en pause pour on ne sait quoi
 
 **Analyse**
 
@@ -70,13 +70,13 @@
 
 **Engrenages**
 
-- ground sur gearTooth ?
 - ChangeGearRadius ne met pas sa position sur le hover
 - placer un gear sur un slidep reste en slidep
 - Afficher le ratio avec une autre gear dans les connections de l'élément
 
 **Charges**
 
+- Placer force on gearTooth
 - Force ref : ajouter gear et belt en plus des edges
 - Fusionner "force" et "distributed-force" dans le panneau d'éléments
 - Snap force et distributed force aux perpendiculaires lors du placement
@@ -124,6 +124,7 @@
 - Penser le panneau de : plusieurs éléments sélectionnés
 - Sélection multiple d'éléments du même type -> modifier paramètres simultanément (IU adaptée + actions multiples)
 - Clicker sur l'onglet "éléments" quand un élément est sélectionné le désélectionne et passe à l'affichage en liste
+- Ajouter le copié-collé
 
 **Panneaux et UI**
 
@@ -138,7 +139,7 @@
 - Ajouter "Angle" dans les edges
 - Afficher des "stand in" pendant que les icons chargent
 - Faire le panneau de paramètre propre
-- Copié collé
+- Unifier les tailles des éléments UI
 
 **Historique (ctrl+z / ctrl+y)**
 
@@ -251,6 +252,7 @@
 - Afficher le nombre de pièces comme un tag
 - Rendre les previews de la gallerie interactives
 - Afficher des méchanismes exemple dans la gallerie
+- Dupliquer le mécanisme
 
 **Export et divers**
 

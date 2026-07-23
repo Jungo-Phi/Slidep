@@ -76,6 +76,13 @@ function keys_of(link: Link): string[] {
       return [link.pivotKey, link.drivenKey, ...link.gearPosKeys];
     case "BeltPhaseGear":
       return [link.angleKey, link.phaseKey];
+    case "BeltSegmentNoSlip":
+      return [
+        link.posKeyA,
+        link.posKeyB,
+        ...(link.angleKeyA ? [link.angleKeyA] : []),
+        ...(link.angleKeyB ? [link.angleKeyB] : []),
+      ];
     case "BeamFollowsAngle":
       return [link.pivotKey, link.drivenKey, link.angleKey];
     case "HandleGrab":

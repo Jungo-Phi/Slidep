@@ -125,7 +125,12 @@ import {
   compile_simulation_model,
   step_simulation,
 } from "./components/solver/kinematic-simulation";
-import { get_probe_trajectories } from "./components/solver/probe-series";
+import {
+  EMPTY_TRAJECTORY_CACHE,
+  TrajectoryCache,
+  extend_probe_trajectories,
+  trajectories_at,
+} from "./components/solver/probe-series";
 import { PROBE_ELEMENT_COLORS } from "./components/properties-panel/components/ProbeChart";
 import { KinematicSnapshot } from "./types/runtime-state";
 import { CanvasState } from "./types/canvas-state";
@@ -1252,18 +1257,29 @@ const App: React.FC = () => {
 
   // Trajectoires des éléments dont l'affichage est activé (showTrajectory),
   // tracées sur le canvas pendant la simulation.
+  // Le cache n'est étendu que par les nouveaux snapshots : reconstruire les
+  // trajectoires entières à chaque frame coûte le carré de la durée enregistrée.
+  const trajectoryCacheRef = useRef<TrajectoryCache>(EMPTY_TRAJECTORY_CACHE);
   const trajectories = useMemo(() => {
-    if (appMode !== "kinematic" || runtimeState.kinematicSnapshots.length === 0)
+    if (
+      appMode !== "kinematic" ||
+      runtimeState.kinematicSnapshots.length === 0
+    ) {
+      trajectoryCacheRef.current = EMPTY_TRAJECTORY_CACHE;
       return [];
-    return get_probe_trajectories(
+    }
+    trajectoryCacheRef.current = extend_probe_trajectories(
+      trajectoryCacheRef.current,
       mechanism.mechanicalElements,
       runtimeState.kinematicSnapshots,
-      runtimeState.time,
-    ).map((traj, i) => ({
-      points: traj.points,
-      headCount: traj.headCount,
-      color: PROBE_ELEMENT_COLORS[i % PROBE_ELEMENT_COLORS.length],
-    }));
+    );
+    return trajectories_at(trajectoryCacheRef.current, runtimeState.time).map(
+      (traj, i) => ({
+        points: traj.points,
+        headCount: traj.headCount,
+        color: PROBE_ELEMENT_COLORS[i % PROBE_ELEMENT_COLORS.length],
+      }),
+    );
   }, [
     appMode,
     mechanism.mechanicalElements,
@@ -1513,30 +1529,31 @@ const App: React.FC = () => {
                     {condensed ? "Édit" : "Édition"}
                   </ToggleButton>
                 </Tooltip>
+
                 <Tooltip
                   disableInteractive
                   title="Étude de cas immobiles [ ∑F = 0 ] (à venir)"
                 >
-                  <span>
-                    <ToggleButton value="static" disabled>
-                      {condensed ? "Stat" : "Statique"}
-                    </ToggleButton>
-                  </span>
+                  {/* Span supprimé ici */}
+                  <ToggleButton value="static" disabled>
+                    {condensed ? "Stat" : "Statique"}
+                  </ToggleButton>
                 </Tooltip>
+
                 <Tooltip disableInteractive title="Analyse du mouvement">
                   <ToggleButton value="kinematic">
                     {condensed ? "Ciné" : "Cinématique"}
                   </ToggleButton>
                 </Tooltip>
+
                 <Tooltip
                   disableInteractive
                   title="Combine la statique et la cinématique [ ∑F = ma ] (à venir)"
                 >
-                  <span>
-                    <ToggleButton value="dynamic" disabled>
-                      {condensed ? "Dyna" : "Dynamique"}
-                    </ToggleButton>
-                  </span>
+                  {/* Span supprimé ici */}
+                  <ToggleButton value="dynamic" disabled>
+                    {condensed ? "Dyna" : "Dynamique"}
+                  </ToggleButton>
                 </Tooltip>
               </ToggleButtonGroup>
 

@@ -305,6 +305,39 @@ export type Link = {
       angleKey: string;
       offset: number;
     }
+  // EXPERIMENTAL (belt "q" model, behind USE_Q_MODEL). One instance per tangent
+  // segment a→b of a belt: no-slip q_a − q_b = Δh, q_k = r_k·ε_k·θ_k. Replaces the
+  // single shared φ of BeltPhaseGear by a per-segment chain. Never emitted by the
+  // parser — only the measurement bench builds these. See experimental/belt-noslip-q.ts.
+  | {
+      type: "BeltSegmentNoSlip";
+      ddl: 1;
+      // Pulley a (departure side) and b (arrival side) of the tangent strand.
+      // A terminal end has angleKey undefined (q = 0) and posKey the terminal node.
+      angleKeyA?: string;
+      angleKeyB?: string;
+      posKeyA: string;
+      posKeyB: string;
+      rEpsA: number; // r_a·ε_a  (0 for a terminal)
+      rEpsB: number; // r_b·ε_b  (0 for a terminal)
+      theta0A: number;
+      theta0B: number;
+      h0: number; // baked h at rest
+      // The whole ordered belt geometry, shared by every segment of the belt, so
+      // each instance can recompute h (ℓ + u_a − v_b) from the live positions.
+      gearPosKeys: string[];
+      radii: number[];
+      directions: boolean[];
+      closed: boolean;
+      startKey?: string;
+      endKey?: string;
+      segIndex: number; // which tangent piece of belt_pieces(vias, closed) this is
+      // Continuous arrival-angle unwrapping reference, per via, updated in place.
+      arrivals?: number[];
+      // If true the constraint also writes posKeyA/posKeyB along the strand tangent
+      // (option 2); false = angles only (option 1).
+      writePositions: boolean;
+    }
   | { type: "HandleGrab"; ddl: 1; grabbedKey: string; value: Point2 | number }
   | {
       type: "Spring";

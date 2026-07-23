@@ -153,6 +153,14 @@ export const MechanicalCanvas = forwardRef<
     ref,
   ) => {
     const canvasOffsetRef = useRef(ZERO);
+    // Cached container geometry. Reading it back from the DOM forces a layout,
+    // which neither the render loop nor a pointer move can afford to pay for.
+    const canvasRectRef = useRef<{
+      left: number;
+      top: number;
+      width: number;
+      height: number;
+    } | null>(null);
     const mousePositionRef = useRef(ZERO);
     const oldPositionRef = useRef(ZERO);
     const pendingPanRef = useRef<Point2>(ZERO);
@@ -197,6 +205,34 @@ export const MechanicalCanvas = forwardRef<
     mechanismRef.current = mechanism;
     hoveredPartRef.current = hoveredPart;
     canvasStateRef.current = canvasState;
+
+    /** Re-reads the container geometry. Call it whenever the canvas may have
+     *  moved or been resized — the cache serves every frame in between. */
+    const measureCanvas = useCallback(() => {
+      const container = containerRef.current;
+      if (!container) return null;
+      const rect = container.getBoundingClientRect();
+      // The backing store is integral: keep the cached size in step with it, so
+      // the screen↔world conversions don't drift by a fraction of a pixel.
+      const measured = {
+        left: rect.left,
+        top: rect.top,
+        width: Math.trunc(rect.width),
+        height: Math.trunc(rect.height),
+      };
+      canvasRectRef.current = measured;
+      canvasOffsetRef.current = new Point2(rect.left, rect.top);
+      return measured;
+    }, []);
+
+    useEffect(() => {
+      const container = containerRef.current;
+      if (!container) return;
+      measureCanvas();
+      const observer = new ResizeObserver(() => measureCanvas());
+      observer.observe(container);
+      return () => observer.disconnect();
+    }, [measureCanvas]);
 
     // Rafraîchit les contraintes révélées d'après l'élément (ou le badge) survolé.
     // Appelé à chaque frame → les badges restent affichés tant qu'on survole,
@@ -276,13 +312,12 @@ export const MechanicalCanvas = forwardRef<
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
 
-      // Définit la taille du canvas à la taille du conteneur
-      const rect = container.getBoundingClientRect();
-      canvas.width = rect.width;
-      canvas.height = rect.height;
-
-      // Met à jour l'offset du canvas
-      canvasOffsetRef.current = new Point2(rect.left, rect.top);
+      // Writing width/height reallocates the backing store even when the value
+      // is unchanged, so the canvas only follows the container when it moves.
+      const rect = canvasRectRef.current ?? measureCanvas();
+      if (!rect) return;
+      if (canvas.width !== rect.width) canvas.width = rect.width;
+      if (canvas.height !== rect.height) canvas.height = rect.height;
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       if (showGrid)
@@ -372,7 +407,12 @@ export const MechanicalCanvas = forwardRef<
         ghostIDs,
       );
       ctx.restore();
-    }, [showGrid, computeVisibleConstraints, processConstraintChange]);
+    }, [
+      showGrid,
+      computeVisibleConstraints,
+      processConstraintChange,
+      measureCanvas,
+    ]);
 
     useEffect(() => {
       let rafId: number;
@@ -424,6 +464,9 @@ export const MechanicalCanvas = forwardRef<
       event: React.PointerEvent<HTMLCanvasElement>,
     ) => {
       window.getSelection()?.removeAllRanges();
+      // A gesture is rare enough to pay for one measurement, and it catches the
+      // case the observer cannot see: a canvas moved without being resized.
+      measureCanvas();
       // Capture le pointeur : une fois le bouton enfoncé, les pointermove / pointerup continuent d'arriver sur le canvas même si le curseur sort de ses limites.
       event.currentTarget.setPointerCapture(event.pointerId);
       mousePositionRef.current = new Point2(event.clientX, event.clientY).sub(
@@ -448,7 +491,8 @@ export const MechanicalCanvas = forwardRef<
     ) => {
       const canvas = canvasRef.current;
       if (!canvas) return;
-      const rect = canvas.getBoundingClientRect();
+      const rect = canvasRectRef.current ?? measureCanvas();
+      if (!rect) return;
 
       const x = (event.clientX - rect.left) * (canvas.width / rect.width);
       const y = (event.clientY - rect.top) * (canvas.height / rect.height);
@@ -687,7 +731,8 @@ export const MechanicalCanvas = forwardRef<
       const handleWheel = (event: WheelEvent) => {
         event.preventDefault();
 
-        const rect = canvas.getBoundingClientRect();
+        const rect = canvasRectRef.current;
+        if (!rect) return;
         const center = new Point2(
           (event.clientX - rect.left) * (canvas.width / rect.width),
           (event.clientY - rect.top) * (canvas.height / rect.height),

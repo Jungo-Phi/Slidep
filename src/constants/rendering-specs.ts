@@ -261,7 +261,7 @@ export const DIM = {
   PIVOT_INNER_RADIUS: 4,
   // Motor
   MOTOR_RADIUS: 18,
-  MOTOR_CORNER_RADIUS: 3,
+  MOTOR_CORNER_RADIUS: 2.5,
   // Join
   JOIN_RADIUS: 6,
 

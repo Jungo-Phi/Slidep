@@ -9,6 +9,16 @@ function round_value(value: number, rounding: number): string {
   ).toString();
 }
 
+/** Icon button docked inside the field, right of the stepper arrows. */
+export interface NumberInputAdornment {
+  icon: React.ElementType;
+  title: string;
+  onClick: () => void;
+  onMouseEnter?: () => void;
+  onMouseLeave?: () => void;
+  color?: "primary" | "secondary" | "inherit";
+}
+
 interface NumberInputProps {
   label: string;
   value: number;
@@ -18,6 +28,7 @@ interface NumberInputProps {
   suffix?: string;
   accent?: boolean;
   signed?: boolean;
+  adornment?: NumberInputAdornment;
 }
 
 export const NumberInput: React.FC<NumberInputProps> = ({
@@ -29,6 +40,7 @@ export const NumberInput: React.FC<NumberInputProps> = ({
   suffix,
   accent = false,
   signed = true,
+  adornment,
 }) => {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -44,8 +56,10 @@ export const NumberInput: React.FC<NumberInputProps> = ({
   const holdDelay = 400;
   const longHoldDelay = 2000;
   const holdInterval = 60;
-  const width = large ? 82 : 75;
+  // The adornment eats into the text zone, so the field grows to keep it intact.
   const height = large ? 32 : 24;
+  const adornmentWidth = adornment ? height - 4 : 0;
+  const width = (large ? 82 : 75) + adornmentWidth;
   const rounding = 1;
 
   const [localValue, setLocalValue] = useState<string>(
@@ -156,7 +170,7 @@ export const NumberInput: React.FC<NumberInputProps> = ({
             sx={{
               position: "absolute",
               left: `calc(11px + ${suffixLeft}px)`,
-              right: `24px`,
+              right: `${24 + adornmentWidth}px`,
               top: "50%",
               transform: "translateY(-50%)",
               overflow: "hidden",
@@ -216,37 +230,59 @@ export const NumberInput: React.FC<NumberInputProps> = ({
         }}
         InputProps={{
           endAdornment: (
-            <Box sx={{ display: "flex", flexDirection: "column", mr: -1.6 }}>
-              <IconButton
-                size="small"
-                color="secondary"
-                onMouseDown={() => startRepeating(1)}
-                onMouseUp={stopRepeating}
-                onMouseLeave={stopRepeating}
-                sx={{
-                  p: 0.25,
-                  pb: 0,
-                  fontSize: "18px",
-                  "&:hover": { backgroundColor: "action.hover" },
-                }}
-              >
-                <KeyboardArrowUp fontSize="inherit" sx={{ my: -0.25 }} />
-              </IconButton>
-              <IconButton
-                size="small"
-                color="secondary"
-                onMouseDown={() => startRepeating(-1)}
-                onMouseUp={stopRepeating}
-                onMouseLeave={stopRepeating}
-                sx={{
-                  p: 0.25,
-                  pt: 0,
-                  fontSize: "18px",
-                  "&:hover": { backgroundColor: "action.hover" },
-                }}
-              >
-                <KeyboardArrowDown fontSize="inherit" sx={{ my: -0.25 }} />
-              </IconButton>
+            <Box sx={{ display: "flex", alignItems: "center", mr: -1.6 }}>
+              <Box sx={{ display: "flex", flexDirection: "column" }}>
+                <IconButton
+                  size="small"
+                  color="secondary"
+                  onMouseDown={() => startRepeating(1)}
+                  onMouseUp={stopRepeating}
+                  onMouseLeave={stopRepeating}
+                  sx={{
+                    p: 0.25,
+                    pb: 0,
+                    borderRadius: 1,
+                    fontSize: "18px",
+                    "&:hover": { backgroundColor: "action.hover" },
+                  }}
+                >
+                  <KeyboardArrowUp fontSize="inherit" sx={{ my: -0.25 }} />
+                </IconButton>
+                <IconButton
+                  size="small"
+                  color="secondary"
+                  onMouseDown={() => startRepeating(-1)}
+                  onMouseUp={stopRepeating}
+                  onMouseLeave={stopRepeating}
+                  sx={{
+                    p: 0.25,
+                    pt: 0,
+                    borderRadius: 1,
+                    fontSize: "18px",
+                    "&:hover": { backgroundColor: "action.hover" },
+                  }}
+                >
+                  <KeyboardArrowDown fontSize="inherit" sx={{ my: -0.25 }} />
+                </IconButton>
+              </Box>
+              {adornment && (
+                <IconButton
+                  color={adornment.color}
+                  onClick={adornment.onClick}
+                  onMouseEnter={adornment.onMouseEnter}
+                  onMouseLeave={adornment.onMouseLeave}
+                  title={adornment.title}
+                  sx={{
+                    height: height + 2,
+                    borderRadius: 0.75,
+                    px: 0.5,
+                    ml: -0.25,
+                    fontSize: large ? "20px" : "16px",
+                  }}
+                >
+                  <adornment.icon fontSize="inherit" />
+                </IconButton>
+              )}
             </Box>
           ),
         }}

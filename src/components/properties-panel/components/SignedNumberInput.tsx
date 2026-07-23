@@ -1,11 +1,9 @@
 import React from "react";
-import { Box, IconButton } from "@mui/material";
 import {
   RotateLeft as RotateLeftIcon,
   RotateRight as RotateRightIcon,
 } from "@mui/icons-material";
 import NumberInput from "./NumberInput";
-import { COLORS } from "../../../constants/rendering-specs";
 
 interface SignedNumberInputProps {
   label: string;
@@ -47,43 +45,22 @@ export const SignedNumberInput: React.FC<SignedNumberInputProps> = ({
   };
 
   return (
-    <Box sx={{ display: "inline-flex", alignItems: "center", gap: 0.5 }}>
-      <NumberInput
-        label={label}
-        value={Math.abs(value)}
-        onChange={handleChange}
-        step={step}
-        large={large}
-        suffix={suffix}
-        accent={accent}
-        signed={true}
-      />
-      <IconButton
-        onClick={() => onChange(-value)}
-        title={clockwise ? "Horaire" : "Anti-horaire"}
-        size="small"
-        sx={{
-          borderRadius: 3,
-          border: "1px solid",
-          borderColor: accent ? COLORS.FILL_NODE : "divider",
-          backgroundColor: accent
-            ? COLORS.FILL_NODE + COLORS.HALF_TRANSPARENCY
-            : "transparent",
-          color: accent ? "primary.main" : undefined,
-          "&:hover": {
-            backgroundColor: accent
-              ? COLORS.FILL_NODE + COLORS.HALF_TRANSPARENCY
-              : "transparent",
-            borderColor: accent ? "primary.main" : "text.primary",
-          },
-        }}
-      >
-        <DirectionIcon
-          sx={{ fontSize: large ? "24px" : "16px" }}
-          color={"secondary"}
-        />
-      </IconButton>
-    </Box>
+    <NumberInput
+      label={label}
+      value={Math.abs(value)}
+      onChange={handleChange}
+      step={step}
+      large={large}
+      suffix={suffix}
+      accent={accent}
+      signed={true}
+      adornment={{
+        icon: DirectionIcon,
+        title: clockwise ? "Horaire" : "Anti-horaire",
+        onClick: () => onChange(-value),
+        color: "secondary",
+      }}
+    />
   );
 };
 

@@ -9,6 +9,504 @@ import {
   nearest_point_on_piece,
 } from "../../utils/belt-path";
 
+/* ════════════════════════════════════════════════════════════════════════
+ *  OnSegment : point contraint sur le segment (start, end)
+ * ════════════════════════════════════════════════════════════════════════
+ *
+ * Contrainte vectorielle  C(p) = pNode − lerp(start, end, t) = 0.
+ * Le point cible sur le segment est  L(t) = (1−t)·start + t·end, donc
+ *
+ *     ∂C/∂pNode = +I            ‖∇_node‖² = 1
+ *     ∂C/∂start = −(1−t)·I      ‖∇_start‖² = (1−t)²
+ *     ∂C/∂end   = −t·I          ‖∇_end‖²  = t²
+ *
+ * La projection PBD répartit la correction selon wᵢ‖∇ᵢ‖² :
+ *
+ *     denom = w_node·1 + w_start·(1−t)² + w_end·t²
+ *     λ     = C / denom            (vectoriel : C est un Point2)
+ *     Δp_node  = −λ · w_node·1
+ *     Δp_start = +λ · w_start·(1−t)
+ *     Δp_end   = +λ · w_end·t
+ *
+ * L'ancienne pondération  (2·w_node + w_start + w_end)/2  ignorait `t` : elle
+ * traitait chaque extrémité comme si t = 0.5. Conséquences mesurées :
+ *   • un nœud proche d'une extrémité sur-sollicitait l'AUTRE extrémité (bras de
+ *     levier ignoré), injectant du mouvement parasite dans les liens voisins ;
+ *   • convergence molle : ~6 itérations là où la projection exacte converge en
+ *     une seule (le facteur de sous-relaxation implicite variait avec t).
+ * Le TODO « oscillation avec wEnd bloqué » se lève : pas d'oscillation, mais une
+ * répartition fausse et une convergence lente.
+ * ──────────────────────────────────────────────────────────────────────── */
+
+/** Facteur commun aux deux contraintes OnSegment : projette pNode sur
+ * lerp(start, end, t) avec la pondération PBD correcte (bras de levier `t`).
+ * `t` est fourni par l'appelant (fixe pour Fixed, reprojeté pour Slide). */
+function projectOnSegment(
+  positions: Map<string, Point2>,
+  posMasses: Map<string, number>,
+  keyStart: string,
+  keyEnd: string,
+  keyNode: string,
+  t: number,
+  stiffness: number,
+): number {
+  const pNode = positions.get(keyNode)!;
+  const start = positions.get(keyStart)!;
+  const end = positions.get(keyEnd)!;
+  const wNode = posMasses.get(keyNode) ?? 1;
+  const wStart = posMasses.get(keyStart) ?? 1;
+  const wEnd = posMasses.get(keyEnd) ?? 1;
+
+  const a = 1 - t;
+  const denom = wNode + wStart * a * a + wEnd * t * t;
+  if (denom < 1e-12) return 0; // tout ancré → rien à corriger
+
+  const foot = start.lerp(end, t);
+  const C = pNode.sub(foot); // contrainte vectorielle
+  const error = C.length();
+
+  // λ = C / denom, puis Δpᵢ = ∓ λ wᵢ ‖∂ᵢ‖. Point ancré (wᵢ=0) → Δ nul.
+  const lambda = C.mul(stiffness / denom);
+  positions.set(keyNode, pNode.sub(lambda.mul(wNode)));
+  positions.set(keyStart, start.add(lambda.mul(wStart * a)));
+  positions.set(keyEnd, end.add(lambda.mul(wEnd * t)));
+
+  return error;
+}
+
+/** Contraint un point (keyNode) à rester sur le segment (keyStart, keyEnd).
+ * `t` est reprojeté à chaque itération (glissement libre), borné par une marge
+ * pour éviter les extrémités. La contrainte n'agit donc que perpendiculairement
+ * au segment : le nœud glisse librement dans le sens tangent. */
+export function applySlideOnSegmentConstraint(
+  positions: Map<string, Point2>,
+  posMasses: Map<string, number>,
+  keyStart: string,
+  keyEnd: string,
+  keyNode: string,
+  stiffness: number = 1.0,
+): number {
+  const pNode = positions.get(keyNode);
+  const start = positions.get(keyStart);
+  const end = positions.get(keyEnd);
+  if (!pNode || !start || !end) return 0;
+
+  const edgeLength = start.distance_to(end);
+  if (edgeLength === 0) return 0;
+
+  const t = Math.max(
+    DIM.EDGE_END_MARGIN / edgeLength,
+    Math.min(
+      pNode.parameter_on_segment(start, end),
+      1 - DIM.EDGE_END_MARGIN / edgeLength,
+    ),
+  );
+  return projectOnSegment(
+    positions,
+    posMasses,
+    keyStart,
+    keyEnd,
+    keyNode,
+    t,
+    stiffness,
+  );
+}
+
+/** Contraint un point (keyNode) à se trouver exactement au ratio `t` FIXE sur
+ * le segment (keyStart, keyEnd), i.e. à lerp(start, end, t). Contrairement à
+ * Slide, `t` est constant (mémorisé au grab) : la contrainte agit dans les deux
+ * directions (tangent + normal). */
+export function applyFixedOnSegmentConstraint(
+  positions: Map<string, Point2>,
+  posMasses: Map<string, number>,
+  keyStart: string,
+  keyEnd: string,
+  keyNode: string,
+  t: number,
+  stiffness: number = 1.0,
+): number {
+  const pNode = positions.get(keyNode);
+  const start = positions.get(keyStart);
+  const end = positions.get(keyEnd);
+  if (!pNode || !start || !end) return 0;
+
+  return projectOnSegment(
+    positions,
+    posMasses,
+    keyStart,
+    keyEnd,
+    keyNode,
+    t,
+    stiffness,
+  );
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+ *  EqualLength : deux segments de même longueur
+ * ════════════════════════════════════════════════════════════════════════
+ *
+ * Cible = longueur commune vers laquelle tirer les deux segments. En PBD, le
+ * segment le plus MOBILE doit s'adapter le plus, donc peser le MOINS dans la
+ * cible → pondération par mobilité CROISÉE :
+ *
+ *     targetLen = (l1·w2 + l2·w1) / (w1 + w2)
+ *
+ * L'ancienne version utilisait (l1·w1 + l2·w2)/(w1+w2) : mobilité NON croisée.
+ * Défaut mesuré : segment 1 entièrement ancré (w1 = 0), segment 2 libre. La
+ * seule solution est seg2 → l1. L'ancienne calculait targetLen = l2 (elle
+ * visait la longueur du segment LIBRE, pas de l'ancré), demandait au segment
+ * ancré de s'y conformer — bloqué par sa masse nulle — et ne corrigeait donc
+ * RIEN, tout en déclarant l'erreur en boucle. Même motif que le défaut de
+ * pondération inversée sur applyAngleConstraint.
+ *
+ * Note d'ordre : on délègue deux fois à applyDistanceConstraint dans la même
+ * passe. Ce n'est pas idempotent au sens strict d'un balayage Gauss-Seidel (le
+ * second appel voit déjà l'effet du premier via les positions partagées), mais
+ * la cible est calculée AVANT toute écriture, donc les deux segments visent la
+ * même valeur. Le solveur re-balaie de toute façon : le résidu inter-segment
+ * est absorbé aux passes suivantes.
+ * ──────────────────────────────────────────────────────────────────────── */
+
+/** Contraint deux segments à avoir la même longueur. */
+export function applyEqualLengthConstraint(
+  positions: Map<string, Point2>,
+  posMasses: Map<string, number>,
+  s1: string,
+  e1: string,
+  s2: string,
+  e2: string,
+  stiffness: number = 1.0,
+): number {
+  const ps1 = positions.get(s1);
+  const pe1 = positions.get(e1);
+  const ps2 = positions.get(s2);
+  const pe2 = positions.get(e2);
+  if (!ps1 || !pe1 || !ps2 || !pe2) return 0;
+
+  const len1 = pe1.sub(ps1).length();
+  const len2 = pe2.sub(ps2).length();
+
+  const w1 = (posMasses.get(s1) ?? 1) + (posMasses.get(e1) ?? 1);
+  const w2 = (posMasses.get(s2) ?? 1) + (posMasses.get(e2) ?? 1);
+  const totalW = w1 + w2;
+
+  // Mobilité CROISÉE : le segment le moins mobile tire la cible vers sa longueur.
+  const targetLen =
+    totalW > 0 ? (len1 * w2 + len2 * w1) / totalW : (len1 + len2) / 2;
+
+  const error = Math.abs(len1 - len2);
+
+  applyDistanceConstraint(positions, posMasses, s1, e1, targetLen, stiffness);
+  applyDistanceConstraint(positions, posMasses, s2, e2, targetLen, stiffness);
+  return error;
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+ *  Projection PBD de contraintes angulaire à 4 points
+ * ════════════════════════════════════════════════════════════════════════
+ *
+ * Toutes les contraintes ci-dessous imposent une fonction scalaire de la forme
+ *
+ *     C(p) = θ(v₂) − θ(v₁) − θ_cible          (v₁ = e₁−s₁,  v₂ = e₂−s₂)
+ *
+ * La projection PBD standard pour une contrainte scalaire est
+ *
+ *     λ    = −C / Σᵢ wᵢ ‖∇ᵢC‖²
+ *     Δpᵢ  = λ · wᵢ · ∇ᵢC
+ *
+ * avec, pour l'angle (perp(x,y) = (−y, x)) :
+ *
+ *     ∇_{s₁}C = +perp(v₁)/‖v₁‖²     ∇_{e₁}C = −perp(v₁)/‖v₁‖²
+ *     ∇_{s₂}C = −perp(v₂)/‖v₂‖²     ∇_{e₂}C = +perp(v₂)/‖v₂‖²
+ *
+ * Propriétés obtenues « gratuitement », sans aucun garde-fou :
+ *   • un point ancré (wᵢ = 0) ne bouge pas — Δpᵢ s'annule dans la formule ;
+ *   • le segment pivote alors autour de ce point (seul mouvement laissé au
+ *     point libre par le gradient) ;
+ *   • chaque Δpᵢ est ⟂ au segment → la longueur n'est touchée qu'au 2ᵈ ordre ;
+ *   • la correction demandée est celle obtenue → raideur/convergence prévisibles.
+ *
+ * Comme ‖perp(vᵢ)‖² = ‖vᵢ‖², on a ‖∇ᵢC‖² = 1/‖vᵢ‖² : le dénominateur se
+ * simplifie et n'a jamais besoin de la longueur au carré des gradients écrite
+ * explicitement.
+ * ──────────────────────────────────────────────────────────────────────── */
+
+/**
+ * Cœur partagé : projette la contrainte scalaire `C` (déjà déballée dans
+ * (−π, π]) sur les quatre extrémités des deux segments, en respectant la
+ * mobilité point par point. Utilisé par Angle, Parallel et Normal — seule
+ * change la façon de calculer `C`.
+ *
+ * Ne fait rien et renvoie |C| si aucune correction n'est possible (segment
+ * dégénéré ou tous les points ancrés).
+ */
+function projectAngleC(
+  positions: Map<string, Point2>,
+  posMasses: Map<string, number>,
+  s1: string,
+  e1: string,
+  s2: string,
+  e2: string,
+  v1: Point2,
+  v2: Point2,
+  C: number,
+  stiffness: number,
+): number {
+  const l1sq = v1.length_squared();
+  const l2sq = v2.length_squared();
+  if (l1sq === 0 || l2sq === 0) return Math.abs(C);
+
+  // Gradients par point. Chaque grad a pour norme² 1/lᵢ².
+  const g_s1 = v1.perp().mul(1 / l1sq); //  +perp(v₁)/‖v₁‖²
+  const g_e1 = g_s1.mul(-1); //  −perp(v₁)/‖v₁‖²
+  const g_s2 = v2.perp().mul(-1 / l2sq); //  −perp(v₂)/‖v₂‖²
+  const g_e2 = g_s2.mul(-1); //  +perp(v₂)/‖v₂‖²
+
+  const w_s1 = posMasses.get(s1) ?? 1;
+  const w_e1 = posMasses.get(e1) ?? 1;
+  const w_s2 = posMasses.get(s2) ?? 1;
+  const w_e2 = posMasses.get(e2) ?? 1;
+
+  // Σ wᵢ‖∇ᵢC‖² = (w_s1+w_e1)/l1² + (w_s2+w_e2)/l2²
+  const denom = (w_s1 + w_e1) / l1sq + (w_s2 + w_e2) / l2sq;
+  if (denom < 1e-12) return Math.abs(C); // tout ancré → rien à faire
+
+  const lambda = (-C / denom) * stiffness;
+
+  // Δpᵢ = λ · wᵢ · ∇ᵢC. Un point ancré (wᵢ=0) reçoit un Δ nul : pas de `if`.
+  const ps1 = positions.get(s1)!;
+  const pe1 = positions.get(e1)!;
+  const ps2 = positions.get(s2)!;
+  const pe2 = positions.get(e2)!;
+  positions.set(s1, ps1.add(g_s1.mul(lambda * w_s1)));
+  positions.set(e1, pe1.add(g_e1.mul(lambda * w_e1)));
+  positions.set(s2, ps2.add(g_s2.mul(lambda * w_s2)));
+  positions.set(e2, pe2.add(g_e2.mul(lambda * w_e2)));
+
+  return Math.abs(C);
+}
+
+/** Ramène un écart angulaire dans (−π, π]. */
+function wrapPi(a: number): number {
+  while (a > Math.PI) a -= 2 * Math.PI;
+  while (a <= -Math.PI) a += 2 * Math.PI;
+  return a;
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+ *  applyAngleConstraint (projection PBD)
+ * ════════════════════════════════════════════════════════════════════════ */
+
+/** Contraint l'angle orienté entre deux segments à valoir targetAngle.
+ *
+ * flipStart/flipEnd et couterClockwise ne servent qu'à interpréter la cible
+ * dans le bon quadrant ; ils ne changent pas la géométrie de la correction.
+ *
+ * Projection PBD : voir l'en-tête du fichier. Un point ancré reste fixe et le
+ * segment pivote autour de lui, sans cas particulier ni raccourcissement.
+ */
+export function applyAngleConstraint(
+  positions: Map<string, Point2>,
+  posMasses: Map<string, number>,
+  s1: string,
+  e1: string,
+  s2: string,
+  e2: string,
+  flipStart: boolean,
+  flipEnd: boolean,
+  couterClockwise: boolean,
+  targetAngle: number,
+  stiffness: number = 1.0,
+): number {
+  const ps1 = positions.get(s1);
+  const pe1 = positions.get(e1);
+  const ps2 = positions.get(s2);
+  const pe2 = positions.get(e2);
+  if (!ps1 || !pe1 || !ps2 || !pe2) return 0;
+
+  const delta1 = pe1.sub(ps1);
+  const delta2 = pe2.sub(ps2);
+  if (delta1.length_squared() === 0 || delta2.length_squared() === 0) return 0;
+
+  // flip : on interprète la cible sur les vecteurs « virtuels ». Le gradient,
+  // lui, se calcule sur les vrais vecteurs (le flip est une négation globale
+  // qui laisse perp(v)/‖v‖² inchangé au signe près, absorbé par C).
+  const virtV1 = flipStart ? delta1.mul(-1) : delta1;
+  const virtV2 = flipEnd ? delta2.mul(-1) : delta2;
+  const currentAngle = virtV1.angle_to(virtV2);
+
+  const C = wrapPi(currentAngle - targetAngle * (couterClockwise ? -1 : 1));
+  if (Math.abs(C) < 0.0001) return 0;
+
+  // On projette avec les vrais delta1/delta2 : θ(virtV) et θ(delta) diffèrent
+  // d'une constante (0 ou π) par segment, donc ∂C/∂p est identique.
+  return projectAngleC(
+    positions,
+    posMasses,
+    s1,
+    e1,
+    s2,
+    e2,
+    delta1,
+    delta2,
+    C,
+    stiffness,
+  );
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+ *  applyParallelConstraint (projection PBD)
+ * ════════════════════════════════════════════════════════════════════════ */
+
+/** Contraint deux segments à être parallèles.
+ *
+ * Cible : angle relatif 0, modulo π (les segments ne sont pas orientés). La
+ * correction la plus courte est choisie en ramenant C dans (−π/2, π/2].
+ * Projection PBD identique à Angle.
+ */
+export function applyParallelConstraint(
+  positions: Map<string, Point2>,
+  posMasses: Map<string, number>,
+  s1: string,
+  e1: string,
+  s2: string,
+  e2: string,
+  stiffness: number = 1.0,
+): number {
+  const ps1 = positions.get(s1);
+  const pe1 = positions.get(e1);
+  const ps2 = positions.get(s2);
+  const pe2 = positions.get(e2);
+  if (!ps1 || !pe1 || !ps2 || !pe2) return 0;
+
+  const v1 = pe1.sub(ps1);
+  const v2 = pe2.sub(ps2);
+  if (v1.length_squared() === 0 || v2.length_squared() === 0) return 0;
+
+  // Modulo π : la correction la plus courte vit dans (−π/2, π/2].
+  let C = v1.angle_to(v2);
+  while (C > Math.PI / 2) C -= Math.PI;
+  while (C <= -Math.PI / 2) C += Math.PI;
+
+  return projectAngleC(
+    positions,
+    posMasses,
+    s1,
+    e1,
+    s2,
+    e2,
+    v1,
+    v2,
+    C,
+    stiffness,
+  );
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+ *  applyNormalConstraint (projection PBD)
+ * ════════════════════════════════════════════════════════════════════════ */
+
+/** Contraint deux segments à être perpendiculaires (angle = π/2).
+ *
+ * Identique à Parallel, cible décalée de π/2. Projection PBD identique.
+ */
+export function applyNormalConstraint(
+  positions: Map<string, Point2>,
+  posMasses: Map<string, number>,
+  s1: string,
+  e1: string,
+  s2: string,
+  e2: string,
+  stiffness: number = 1.0,
+): number {
+  const ps1 = positions.get(s1);
+  const pe1 = positions.get(e1);
+  const ps2 = positions.get(s2);
+  const pe2 = positions.get(e2);
+  if (!ps1 || !pe1 || !ps2 || !pe2) return 0;
+
+  const v1 = pe1.sub(ps1);
+  const v2 = pe2.sub(ps2);
+  if (v1.length_squared() === 0 || v2.length_squared() === 0) return 0;
+
+  // Écart à π/2, ramené modulo π dans (−π/2, π/2].
+  let C = v1.angle_to(v2) - Math.PI / 2;
+  while (C > Math.PI / 2) C -= Math.PI;
+  while (C <= -Math.PI / 2) C += Math.PI;
+
+  return projectAngleC(
+    positions,
+    posMasses,
+    s1,
+    e1,
+    s2,
+    e2,
+    v1,
+    v2,
+    C,
+    stiffness,
+  );
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+ *  applyKeepOrientationConstraint (projection PBD)
+ * ════════════════════════════════════════════════════════════════════════
+ *
+ * Un seul segment, aligné sur une direction fixe. On peut le voir comme un cas
+ * particulier de la contrainte d'angle où le « second segment » est la
+ * direction cible, immobile (poids infini → gradient nul côté cible). Il reste
+ * donc une contrainte scalaire sur (s, e) :
+ *
+ *     C(p) = θ(e−s) − θ_dir      (ramené dans (−π, π])
+ *     ∇_e C = +perp(v)/‖v‖²      ∇_s C = −perp(v)/‖v‖²
+ *     λ = −C / [(w_s + w_e)/‖v‖²]
+ *
+ * (v = e−s : bouger `e` de +perp(v) augmente θ(v), d'où le + sur ∇_e.)
+ *
+ * Comme pour l'angle : une extrémité ancrée reste fixe et le segment pivote
+ * autour d'elle, sans passer par le milieu, sans raccourcir.
+ * ──────────────────────────────────────────────────────────────────────── */
+
+/** Contraint le segment (keyStart, keyEnd) à rester parallèle à `direction`. */
+export function applyKeepOrientationConstraint(
+  positions: Map<string, Point2>,
+  posMasses: Map<string, number>,
+  keyStart: string,
+  keyEnd: string,
+  direction: Point2,
+  stiffness: number = 1.0,
+): number {
+  const start = positions.get(keyStart);
+  const end = positions.get(keyEnd);
+  if (!start || !end) return 0;
+  if (direction.length_squared() === 0) return 0;
+
+  const v = end.sub(start);
+  const lsq = v.length_squared();
+  if (lsq === 0) return 0;
+
+  // Écart d'orientation, modulo π (un segment n'est pas orienté).
+  let C = direction.angle_to(v);
+  while (C > Math.PI / 2) C -= Math.PI;
+  while (C <= -Math.PI / 2) C += Math.PI;
+  if (Math.abs(C) < 1e-9) return 0;
+
+  const wS = posMasses.get(keyStart) ?? 1;
+  const wE = posMasses.get(keyEnd) ?? 1;
+
+  const denom = (wS + wE) / lsq;
+  if (denom < 1e-12) return Math.abs(C);
+
+  const lambda = (-C / denom) * stiffness;
+  const g_e = v.perp().mul(1 / lsq); // +perp(v)/‖v‖²
+  const g_s = g_e.mul(-1); // −perp(v)/‖v‖²
+
+  positions.set(keyStart, start.add(g_s.mul(lambda * wS)));
+  positions.set(keyEnd, end.add(g_e.mul(lambda * wE)));
+
+  return Math.abs(C);
+}
+
 /** Approche une position ou un rayon vers targetValue.
  * La valeur de 'stiffness' doit être en dessous de 1 pour une attraction moins forte que les autres contraintes. */
 export function applyHandleGrabConstraint(
@@ -140,113 +638,6 @@ export function applyDistanceToLineConstraint(
   return Math.abs(error);
 }
 
-/** Contraint un point (keyNode) à rester sur le segment (keyStart, keyEnd).
- * Le paramètre t est recalculé à chaque itération (projection libre sur le segment),
- * avec une marge pour éviter les extrémités. Chaque point est déplacé selon sa masse. */
-export function applySlideOnSegmentConstraint(
-  positions: Map<string, Point2>,
-  posMasses: Map<string, number>,
-  keyStart: string,
-  keyEnd: string,
-  keyNode: string,
-  stiffness: number = 1.0,
-): number {
-  const pNode = positions.get(keyNode);
-  const start = positions.get(keyStart);
-  const end = positions.get(keyEnd);
-  const wNode = posMasses.get(keyNode) ?? 1;
-  const wStart = posMasses.get(keyStart) ?? 1;
-  const wEnd = posMasses.get(keyEnd) ?? 1;
-  if (!pNode || !start || !end) return 0;
-
-  const totalW = (2 * wNode + wStart + wEnd) / 2; // TODO : vérifier risque d'oscillation avec "wEnd" bloqué
-  if (totalW === 0) return 0;
-
-  const edgeLength = start.distance_to(end);
-  const t = Math.max(
-    DIM.EDGE_END_MARGIN / edgeLength,
-    Math.min(
-      pNode.parameter_on_segment(start, end),
-      1 - DIM.EDGE_END_MARGIN / edgeLength,
-    ),
-  );
-  const delta = pNode.sub(start.lerp(end, t));
-  const error = delta.length();
-
-  positions.set(keyNode, pNode.sub(delta.mul((wNode / totalW) * stiffness)));
-  positions.set(keyStart, start.add(delta.mul((wStart / totalW) * stiffness)));
-  positions.set(keyEnd, end.add(delta.mul((wEnd / totalW) * stiffness)));
-  return error;
-}
-
-/** Contraint un point (keyNode) à se trouver exactement au ratio t fixe sur le
- * segment (keyStart, keyEnd), i.e. à la position lerp(start, end, t).
- * Contrairement à OnSegment, t est constant (ratio mémorisé au moment du grab).
- * Chaque point est déplacé selon sa masse. */
-export function applyFixedOnSegmentConstraint(
-  positions: Map<string, Point2>,
-  posMasses: Map<string, number>,
-  keyStart: string,
-  keyEnd: string,
-  keyNode: string,
-  t: number,
-  stiffness: number = 1.0,
-): number {
-  const pNode = positions.get(keyNode);
-  const start = positions.get(keyStart);
-  const end = positions.get(keyEnd);
-  const wNode = posMasses.get(keyNode) ?? 1;
-  const wStart = posMasses.get(keyStart) ?? 1;
-  const wEnd = posMasses.get(keyEnd) ?? 1;
-  if (!pNode || !start || !end) return 0;
-
-  const totalW = (2 * wNode + wStart + wEnd) / 2; // TODO : vérifier risque d'oscillation avec "wEnd" bloqué
-  if (totalW === 0) return 0;
-
-  const delta = pNode.sub(start.lerp(end, t));
-  const error = delta.length();
-
-  positions.set(keyNode, pNode.sub(delta.mul((wNode / totalW) * stiffness)));
-  positions.set(keyStart, start.add(delta.mul((wStart / totalW) * stiffness)));
-  positions.set(keyEnd, end.add(delta.mul((wEnd / totalW) * stiffness)));
-  return error;
-}
-
-/** Contraint le segment (keyStart, keyEnd) à rester parallèle à une direction fixe.
- * Chaque extrémité est projetée sur la droite passant par le milieu du segment
- * avec cette direction, en proportion de sa masse. */
-export function applyKeepOrientationConstraint(
-  positions: Map<string, Point2>,
-  posMasses: Map<string, number>,
-  keyStart: string,
-  keyEnd: string,
-  direction: Point2,
-  stiffness: number = 1.0,
-): number {
-  const start = positions.get(keyStart);
-  const end = positions.get(keyEnd);
-  const wStart = posMasses.get(keyStart) ?? 1;
-  const wEnd = posMasses.get(keyEnd) ?? 1;
-  if (!start || !end) return 0;
-
-  const totalW = wStart + wEnd;
-  if (totalW === 0) return 0;
-
-  const midPoint = start.lerp(end, 0.5);
-  const projStart = start.project_on_line(midPoint, midPoint.add(direction));
-  const projEnd = end.project_on_line(midPoint, midPoint.add(direction));
-  const error = start.distance_to(projStart);
-
-  if (wStart !== 0)
-    positions.set(
-      keyStart,
-      start.lerp(projStart, (wStart / totalW) * stiffness),
-    );
-  if (wEnd !== 0)
-    positions.set(keyEnd, end.lerp(projEnd, (wEnd / totalW) * stiffness));
-  return error;
-}
-
 /** Contraint les deux points à avoir la même coordonnée Y (alignement horizontal).
  * Le Y cible est la moyenne pondérée des Y des deux points selon leurs masses. */
 export function applyHorizontalConstraint(
@@ -312,214 +703,6 @@ export function applyVerticalConstraint(
       new Point2(end.x + error * (wEnd / totalW) * stiffness, end.y),
     );
   return Math.abs(error);
-}
-
-/** Contraint deux segments à être parallèles.
- * L'angle résiduel (diff) est distribué entre les deux segments au prorata
- * de leurs masses totales : le segment le plus léger tourne davantage.
- * Chaque segment pivote autour de son propre centre. */
-export function applyParallelConstraint(
-  positions: Map<string, Point2>,
-  posMasses: Map<string, number>,
-  s1: string,
-  e1: string,
-  s2: string,
-  e2: string,
-  stiffness: number = 1.0,
-): number {
-  const ps1 = positions.get(s1);
-  const pe1 = positions.get(e1);
-  const ps2 = positions.get(s2);
-  const pe2 = positions.get(e2);
-  if (!ps1 || !pe1 || !ps2 || !pe2) return 0;
-
-  const v1 = pe1.sub(ps1);
-  const v2 = pe2.sub(ps2);
-
-  // Différence d'angle à corriger (modulo π car les segments ne sont pas orientés)
-  let diff = v2.angle() - v1.angle();
-  // Ramener diff dans [-π/2, π/2] pour choisir la correction la plus courte
-  while (diff > Math.PI / 2) diff -= Math.PI;
-  while (diff < -Math.PI / 2) diff += Math.PI;
-
-  const error = Math.abs(diff);
-
-  // Masses totales de chaque segment
-  const w1 = (posMasses.get(s1) ?? 1) + (posMasses.get(e1) ?? 1);
-  const w2 = (posMasses.get(s2) ?? 1) + (posMasses.get(e2) ?? 1);
-  const totalW = w1 + w2;
-  if (totalW === 0) return 0;
-
-  // Segment 1 : tourne de +diff * (w1/totalW) * stiffness
-  const rot1 = diff * (w1 / totalW) * stiffness;
-  const center1 = ps1.lerp(pe1, 0.5);
-  const half1 = v1.mul(0.5).rotate(rot1);
-  if (posMasses.get(s1) !== 0) positions.set(s1, center1.sub(half1));
-  if (posMasses.get(e1) !== 0) positions.set(e1, center1.add(half1));
-
-  // Segment 2 : tourne de -diff * (w2/totalW) * stiffness
-  const rot2 = -diff * (w2 / totalW) * stiffness;
-  const center2 = ps2.lerp(pe2, 0.5);
-  const half2 = v2.mul(0.5).rotate(rot2);
-  if (posMasses.get(s2) !== 0) positions.set(s2, center2.sub(half2));
-  if (posMasses.get(e2) !== 0) positions.set(e2, center2.add(half2));
-
-  return error;
-}
-
-/** Contraint deux segments à être perpendiculaires (angle = π/2 entre eux).
- * Identique à applyParallelConstraint mais la cible est un angle de 90°.
- * La correction angulaire est distribuée entre les deux segments selon leurs masses. */
-export function applyNormalConstraint(
-  positions: Map<string, Point2>,
-  posMasses: Map<string, number>,
-  s1: string,
-  e1: string,
-  s2: string,
-  e2: string,
-  stiffness: number = 1.0,
-): number {
-  const ps1 = positions.get(s1);
-  const pe1 = positions.get(e1);
-  const ps2 = positions.get(s2);
-  const pe2 = positions.get(e2);
-  if (!ps1 || !pe1 || !ps2 || !pe2) return 0;
-
-  const v1 = pe1.sub(ps1);
-  const v2 = pe2.sub(ps2);
-
-  // Différence par rapport à la cible de 90° (π/2)
-  let diff = v2.angle() - (v1.angle() + Math.PI / 2);
-  // Ramener diff dans [-π/2, π/2]
-  while (diff > Math.PI / 2) diff -= Math.PI;
-  while (diff < -Math.PI / 2) diff += Math.PI;
-
-  const error = Math.abs(diff);
-
-  const w1 = (posMasses.get(s1) ?? 1) + (posMasses.get(e1) ?? 1);
-  const w2 = (posMasses.get(s2) ?? 1) + (posMasses.get(e2) ?? 1);
-  const totalW = w1 + w2;
-  if (totalW === 0) return 0;
-
-  // Segment 1 : tourne dans le sens positif
-  const rot1 = diff * (w1 / totalW) * stiffness;
-  const center1 = ps1.lerp(pe1, 0.5);
-  const half1 = v1.mul(0.5).rotate(rot1);
-  if (posMasses.get(s1) !== 0) positions.set(s1, center1.sub(half1));
-  if (posMasses.get(e1) !== 0) positions.set(e1, center1.add(half1));
-
-  // Segment 2 : tourne dans le sens négatif
-  const rot2 = -diff * (w2 / totalW) * stiffness;
-  const center2 = ps2.lerp(pe2, 0.5);
-  const half2 = v2.mul(0.5).rotate(rot2);
-  if (posMasses.get(s2) !== 0) positions.set(s2, center2.sub(half2));
-  if (posMasses.get(e2) !== 0) positions.set(e2, center2.add(half2));
-
-  return error;
-}
-
-/** Contraint l'angle orienté entre deux segments à valoir targetAngle.
- *
- * Les paramètres flipStart/flipEnd et couterClockwise servent uniquement à interpréter la valeur cible (targetAngle) dans le bon quadrant.
- *
- * Chaque segment pivote autour de son propre centre.
- */
-export function applyAngleConstraint(
-  positions: Map<string, Point2>,
-  posMasses: Map<string, number>,
-  s1: string,
-  e1: string,
-  s2: string,
-  e2: string,
-  flipStart: boolean,
-  flipEnd: boolean,
-  couterClockwise: boolean,
-  targetAngle: number,
-  stiffness: number = 1.0,
-): number {
-  const ps1 = positions.get(s1);
-  const pe1 = positions.get(e1);
-  const ps2 = positions.get(s2);
-  const pe2 = positions.get(e2);
-
-  if (!ps1 || !pe1 || !ps2 || !pe2) return 0;
-
-  const delta1 = pe1.sub(ps1);
-  const delta2 = pe2.sub(ps2);
-
-  if (delta1.length_squared() === 0 || delta2.length_squared() === 0) return 0;
-
-  const virtV1 = flipStart ? delta1.mul(-1) : delta1;
-  const virtV2 = flipEnd ? delta2.mul(-1) : delta2;
-  const currentAngle = virtV1.angle_to(virtV2);
-
-  let diff = currentAngle - targetAngle * (couterClockwise ? -1 : 1);
-
-  if (diff > Math.PI) diff -= 2 * Math.PI;
-  if (diff < -Math.PI) diff += 2 * Math.PI;
-
-  const error = Math.abs(diff);
-  if (error < 0.0001) return 0;
-
-  const w1 = (posMasses.get(s1) ?? 1) + (posMasses.get(e1) ?? 1);
-  const w2 = (posMasses.get(s2) ?? 1) + (posMasses.get(e2) ?? 1);
-  const totalW = w1 + w2;
-
-  if (totalW === 0) return 0;
-
-  const invW1 = 1 / w1;
-  const invW2 = 1 / w2;
-  const totalInvW = invW1 + invW2;
-
-  const finalRot1 = diff * (invW1 / totalInvW) * stiffness;
-  const finalRot2 = -diff * (invW2 / totalInvW) * stiffness; // Signe opposé pour fermer/ouvrir l'angle
-
-  const center1 = ps1.lerp(pe1, 0.5);
-  const half1 = delta1.mul(0.5).rotate(finalRot1);
-  if ((posMasses.get(s1) ?? 1) !== 0) positions.set(s1, center1.sub(half1));
-  if ((posMasses.get(e1) ?? 1) !== 0) positions.set(e1, center1.add(half1));
-
-  const center2 = ps2.lerp(pe2, 0.5);
-  const half2 = delta2.mul(0.5).rotate(finalRot2);
-  if ((posMasses.get(s2) ?? 1) !== 0) positions.set(s2, center2.sub(half2));
-  if ((posMasses.get(e2) ?? 1) !== 0) positions.set(e2, center2.add(half2));
-
-  return error;
-}
-
-/** Contraint deux segments à avoir la même longueur.
- * La longueur cible est la moyenne pondérée des deux longueurs selon les masses
- * totales de chaque segment : le segment le plus léger s'adapte davantage.
- * Délègue ensuite à applyDistanceConstraint pour chaque segment. */
-export function applyEqualLengthConstraint(
-  positions: Map<string, Point2>,
-  posMasses: Map<string, number>,
-  s1: string,
-  e1: string,
-  s2: string,
-  e2: string,
-  stiffness: number = 1.0,
-): number {
-  const ps1 = positions.get(s1);
-  const pe1 = positions.get(e1);
-  const ps2 = positions.get(s2);
-  const pe2 = positions.get(e2);
-  if (!ps1 || !pe1 || !ps2 || !pe2) return 0;
-
-  const len1 = pe1.sub(ps1).length();
-  const len2 = pe2.sub(ps2).length();
-
-  const w1 = (posMasses.get(s1) ?? 1) + (posMasses.get(e1) ?? 1);
-  const w2 = (posMasses.get(s2) ?? 1) + (posMasses.get(e2) ?? 1);
-  const totalW = w1 + w2;
-  const targetLen =
-    totalW > 0 ? (len1 * w1 + len2 * w2) / totalW : (len1 + len2) / 2;
-
-  const error = Math.abs(len1 - len2);
-
-  applyDistanceConstraint(positions, posMasses, s1, e1, targetLen, stiffness);
-  applyDistanceConstraint(positions, posMasses, s2, e2, targetLen, stiffness);
-  return error;
 }
 
 /** Contraint la distance entre deux centres d'engrenages à être exactement r1+r2

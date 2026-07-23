@@ -55,30 +55,107 @@ export interface ProbeTrajectory {
   headCount: number;
 }
 
+/** One trajectory being accumulated: the path, and the time each point was
+ *  recorded at (the sampling can skip a snapshot, so the two arrays are not
+ *  indexed by snapshot). */
+interface TrajectoryBuild {
+  elementID: ID;
+  points: Point2[];
+  times: number[];
+}
+
+/** Trajectories built so far, plus what they were built from. Opaque: pass it
+ *  back to `extend_probe_trajectories`, never read it. */
+export interface TrajectoryCache {
+  elements: MechanicalElement[];
+  /** Number of snapshots consumed, and the last one consumed — its identity is
+   *  what tells an append apart from a rewritten history. */
+  consumed: number;
+  boundary: KinematicSnapshot | null;
+  built: TrajectoryBuild[];
+}
+
+export const EMPTY_TRAJECTORY_CACHE: TrajectoryCache = {
+  elements: [],
+  consumed: 0,
+  boundary: null,
+  built: [],
+};
+
+function sample_into(
+  build: TrajectoryBuild[],
+  snapshots: KinematicSnapshot[],
+  elements: MechanicalElement[],
+  from: number,
+): void {
+  for (let i = from; i < snapshots.length; i++) {
+    const snap = snapshots[i];
+    build.forEach((traj, k) => {
+      const p = sample_position(elements[k], snap);
+      if (!p) return;
+      traj.points.push(p);
+      traj.times.push(snap.t);
+    });
+  }
+}
+
 /**
- * Extract the trajectory of every node whose `trajectory` overlay is on from
- * the recorded kinematic snapshots, in mechanical-element order. Trajectories
- * only apply to node elements (a single moving point).
+ * Trajectories of every node whose `trajectory` overlay is on, in mechanical-
+ * element order. The recording only ever grows, so the cache is extended with
+ * the new snapshots instead of being rebuilt — pass the returned cache back on
+ * the next call. Anything else (elements edited, history truncated or reset)
+ * rebuilds from scratch.
  */
-export function get_probe_trajectories(
+export function extend_probe_trajectories(
+  cache: TrajectoryCache,
   elements: MechanicalElement[],
   snapshots: KinematicSnapshot[],
+): TrajectoryCache {
+  const appendable =
+    cache.elements === elements &&
+    snapshots.length >= cache.consumed &&
+    (cache.consumed === 0 || snapshots[cache.consumed - 1] === cache.boundary);
+
+  const tracked = elements.filter(
+    (el) => is_node_element(el) && overlay_shown(el, "trajectory"),
+  );
+  const built = appendable
+    ? cache.built
+    : tracked.map((el) => ({ elementID: el.id, points: [], times: [] }));
+  sample_into(built, snapshots, tracked, appendable ? cache.consumed : 0);
+
+  return {
+    elements,
+    consumed: snapshots.length,
+    boundary: snapshots.length > 0 ? snapshots[snapshots.length - 1] : null,
+    built,
+  };
+}
+
+/** Index of the first point recorded after `time` — the trajectory's head at
+ *  that playback time. `times` is sorted, so the scan is a binary search. */
+function head_count(times: number[], time: number): number {
+  let lo = 0;
+  let hi = times.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (times[mid] <= time) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo;
+}
+
+/** Reads the accumulated trajectories at a playback time. The point arrays are
+ *  shared with the cache, not copied: treat them as read-only. */
+export function trajectories_at(
+  cache: TrajectoryCache,
   time: number,
 ): ProbeTrajectory[] {
-  const out: ProbeTrajectory[] = [];
-  for (const el of elements) {
-    if (!is_node_element(el) || !overlay_shown(el, "trajectory")) continue;
-    const points: Point2[] = [];
-    let headCount = 0;
-    for (const snap of snapshots) {
-      const p = sample_position(el, snap);
-      if (!p) continue;
-      points.push(p);
-      if (snap.t <= time) headCount = points.length;
-    }
-    out.push({ elementID: el.id, points, headCount });
-  }
-  return out;
+  return cache.built.map((traj) => ({
+    elementID: traj.elementID,
+    points: traj.points,
+    headCount: head_count(traj.times, time),
+  }));
 }
 
 /**

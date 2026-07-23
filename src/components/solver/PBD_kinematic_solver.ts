@@ -27,6 +27,8 @@ import {
   applySlideOnSegmentConstraint,
   applyVerticalConstraint,
 } from "./constraint-functions";
+import { solver_trace } from "./solver-trace";
+import { applyBeltSegmentNoSlip } from "./experimental/belt-noslip-q";
 
 export type SolverMaps = {
   positions: Map<string, Point2>;
@@ -38,10 +40,34 @@ export type SolverMaps = {
   unsatisfied?: ConstraintResidual[];
 };
 
-/** Above this residual (px for distances, rad for angles) a constraint is
- *  reported as unsatisfied. Heuristic: well above the convergence epsilon, but
- *  catches a genuinely violated (e.g. blocked) constraint. */
-const DIAGNOSTIC_TOLERANCE = 1;
+/** Above its residual a constraint is reported as unsatisfied. Heuristic: well
+ *  above the convergence epsilon, but catches a genuinely violated (e.g.
+ *  blocked) constraint. Each family answers in its own unit, so each gets its
+ *  own threshold — a single one would read a broken angle lock as satisfied. */
+const DIAGNOSTIC_TOLERANCE_PX = 1;
+/** ~0.6°: an angle constraint is off well before it reaches a whole radian. */
+const DIAGNOSTIC_TOLERANCE_RAD = 0.01;
+/** `GearRatio` answers a dimensionless ratio error (r1/r2 − target). */
+const DIAGNOSTIC_TOLERANCE_RATIO = 0.01;
+
+/** Constraints whose residual is an angle in radians. Everything else answers
+ *  in pixels — including `GearMeshAngle` and `BeltPhaseGear`, whose residuals
+ *  are arc lengths. */
+const ANGULAR_LINKS: ReadonlySet<Link["type"]> = new Set([
+  "Angle",
+  "Parallel",
+  "Normal",
+  "MotorAngle",
+  "MotorBeam",
+  "CoaxialAngle",
+]);
+
+function diagnostic_tolerance(type: Link["type"]): number {
+  if (type === "GearRatio") return DIAGNOSTIC_TOLERANCE_RATIO;
+  return ANGULAR_LINKS.has(type)
+    ? DIAGNOSTIC_TOLERANCE_RAD
+    : DIAGNOSTIC_TOLERANCE_PX;
+}
 
 /*
  * PBD (Position Based Dynamics) solver shared by the geometric solver (edition)
@@ -78,11 +104,17 @@ export function PBD_kinematic_solver(
     ? new Array<number>(links.length).fill(0)
     : null;
 
+  // Read once: a trace cannot be installed in the middle of a solve, and this
+  // must not cost a lookup per link.
+  const trace = solver_trace();
+
   let maxError: number = 0;
   for (let i = 0; i < nbIterations; i++) {
     maxError = 0;
 
     links.forEach((link, idx) => {
+      const tracedPositions = trace ? new Map(positions) : null;
+      const tracedAngles = trace ? new Map(angles) : null;
       let err = 0;
       let report = true; // surface in diagnostics
       switch (link.type) {
@@ -374,6 +406,11 @@ export function PBD_kinematic_solver(
           );
           report = false;
           break;
+        case "BeltSegmentNoSlip":
+          // EXPERIMENTAL (belt "q" bench, behind USE_Q_MODEL). Dead unless a
+          // measurement builds these links — the parser never emits them.
+          err = applyBeltSegmentNoSlip(positions, posMasses, angles, link, 1.0);
+          break;
         case "HandleGrab":
           // Transient interaction, not a constraint to report.
           report = false;
@@ -390,6 +427,29 @@ export function PBD_kinematic_solver(
           break;
       }
 
+      if (trace && tracedPositions && tracedAngles) {
+        const moves: { key: string; distance: number }[] = [];
+        positions.forEach((p, key) => {
+          const before = tracedPositions.get(key);
+          const distance = before ? p.distance_to(before) : 0;
+          if (distance > 0) moves.push({ key, distance });
+        });
+        const angleMoves: { key: string; delta: number }[] = [];
+        angles.forEach((a, key) => {
+          const before = tracedAngles.get(key);
+          if (before !== undefined && a !== before)
+            angleMoves.push({ key, delta: a - before });
+        });
+        trace({
+          iteration: i,
+          index: idx,
+          link,
+          residual: err,
+          moves,
+          angleMoves,
+        });
+      }
+
       // Spring is soft by design → excluded from convergence; everything else
       // (incl. the grab while active) drives maxError.
       if (link.type !== "Spring") maxError = Math.max(maxError, err);
@@ -400,14 +460,17 @@ export function PBD_kinematic_solver(
   }
 
   // Build the unsatisfied-constraint list from the last iteration's residuals.
-  // Converged links sit below DIAGNOSTIC_TOLERANCE and are dropped; a blocked
-  // mechanism leaves the violated links above it.
+  // Converged links sit below their family's tolerance and are dropped; a
+  // blocked mechanism leaves the violated links above it.
   let unsatisfied: ConstraintResidual[] | undefined;
   if (residuals) {
     unsatisfied = [];
     links.forEach((link, idx) => {
       const residual = residuals[idx];
-      if (residual > DIAGNOSTIC_TOLERANCE && link.owner !== undefined)
+      if (
+        residual > diagnostic_tolerance(link.type) &&
+        link.owner !== undefined
+      )
         unsatisfied!.push({ owner: link.owner, type: link.type, residual });
     });
   }

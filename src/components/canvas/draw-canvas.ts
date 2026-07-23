@@ -380,7 +380,10 @@ export function draw_edge_fake_end(
   ctx.fillStyle = COLORS.FILL_BODY;
   ctx.lineWidth = STROKE_WIDTHS.STANDARD;
 
-  if (is_hovered(edge.id, hoveredPart, constraintElements))
+  if (
+    is_hovered(edge.id, hoveredPart, constraintElements) &&
+    !is_edge_end_hovered(edge.id, hoveredPart, state)
+  )
     ctx.lineWidth += STROKE_WIDTHS.HOVER_GAIN;
 
   if (is_selected(edge.id, state, constraintElements)) {
@@ -749,7 +752,10 @@ export function drawMechanicalCanvas(
             section: number,
             entry: { gear: GearElement; direction: boolean },
           ) => {
-            const index = belt_section_insertion_index(section, pathBelt.closed);
+            const index = belt_section_insertion_index(
+              section,
+              pathBelt.closed,
+            );
             if (index !== undefined) attachedGears.splice(index, 0, entry);
           };
           switch (state.type) {

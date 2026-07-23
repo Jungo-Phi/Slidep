@@ -478,6 +478,7 @@ export function draw_damper(
 
 export function draw_motor(ctx: CanvasRenderingContext2D, isGrounded: boolean) {
   const bottom = DIM.MOTOR_RADIUS - 2;
+  ctx.lineCap = "round";
 
   ctx.beginPath();
   if (isGrounded) {
