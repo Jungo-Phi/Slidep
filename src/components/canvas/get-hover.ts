@@ -13,6 +13,7 @@ import {
   BeamElement,
   Point2,
   CanvasStateType,
+  UP,
 } from "../../types";
 import {
   HIT_TOLERANCE,
@@ -44,6 +45,7 @@ import {
   moment_center_position,
   moment_display_radius,
   moment_value_label_position,
+  probe_badge_position,
 } from "../../utils/load-geom";
 import { is_constraint_type } from "./utils";
 
@@ -76,7 +78,9 @@ type GearProbe =
   /** Rim point facing the gear being sized — the tangency of the two. */
   | "rim-toward-ref"
   /** The gear as a whole, designated by its centre. */
-  | "whole";
+  | "whole"
+  /** Positioned on top of the Rim (probe). */
+  | "rim-top";
 
 export type EdgeProbe =
   /** Ends, then body — whatever the edge type. */
@@ -100,13 +104,25 @@ export type BeltProbe =
   /** Ends only. */
   | "ends";
 
+/** Which of the overlays drawn over the mechanism — constraints and loads —
+ *  a tool may pick. */
+export type OverlayProbe =
+  /** Both, as a selection tool takes anything. */
+  | "all"
+  /** Constraints only: the dimensioning tool reaches its own labels to edit
+   *  them, and a load is none of its business. */
+  | "constraints";
+
 export type HoverTargets = {
   node?: NodeProbe;
   gear?: GearProbe;
   edge?: EdgeProbe;
   belt?: BeltProbe;
-  /** Constraints and loads, which are only ever picked to be selected. */
-  overlays?: true;
+  overlays?: OverlayProbe;
+  /** The probe badge, picked to edit what its host measures. The eraser is
+   *  deliberately not among these: a probe is removed with its host, and a
+   *  badge sitting off to the side must not become a way to delete it. */
+  probeBadge?: true;
 };
 
 /** What a tool may pick, stated once for all six target families. */
@@ -115,7 +131,8 @@ const SELECT_ALL: HoverTargets = {
   gear: "rim",
   edge: "ends+body",
   belt: "full",
-  overlays: true,
+  overlays: "all",
+  probeBadge: true,
 };
 
 /** Placing or dragging something that attaches to the mechanism. */
@@ -149,7 +166,7 @@ export const HOVER_TARGETS: Record<CanvasStateType, HoverTargets> = {
   Selecting: SELECT_ALL,
   SelectedElement: SELECT_ALL,
   SelectedMultiple: SELECT_ALL,
-  Erasing: SELECT_ALL,
+  Erasing: { ...SELECT_ALL, probeBadge: undefined },
   EditingValue: SELECT_ALL,
   PlacingValue: SELECT_ALL,
   // A rectangle drag picks by area, not by hover.
@@ -198,15 +215,18 @@ export const HOVER_TARGETS: Record<CanvasStateType, HoverTargets> = {
     edge: "body-centre",
   },
   PlacingMomentEnd: NOTHING,
-  PlacingProbe: { node: "centre", gear: "rim", edge: "body" },
+  PlacingProbe: { node: "centre", gear: "rim-top", edge: "body-centre" },
   PlacingProbeMetrics: NOTHING,
 
   // A belt is measured whole, from its body, so only DimensionStart sees it.
+  // Dimensions already placed are targets too, so the armed tool can edit one
+  // without being put down first.
   DimensionStart: {
     node: "centre",
     gear: "rim",
     edge: "body",
     belt: "runs+arcs",
+    overlays: "constraints",
   },
   DimensionNode: { node: "centre", edge: "body" },
   DimensionEdge: { node: "centre", edge: "body" },
@@ -352,6 +372,14 @@ function probe_gear(
     return {
       type: "GearTooth",
       position: gear.position.clone(),
+      id: gear.id,
+      deleting: false,
+    };
+
+  if (mode === "rim-top")
+    return {
+      type: "GearTooth",
+      position: gear.position.add(UP.mul(gear.radius)),
       id: gear.id,
       deleting: false,
     };
@@ -588,6 +616,7 @@ function get_hovered_part_of_element(
         deleting: state.type === "Erasing",
       };
     case "force": {
+      if (targets.overlays !== "all") break;
       const base = force_base_position(element, mechanicalElements);
       const displayVector = force_display_vector(
         force_world_vector(element, mechanicalElements),
@@ -618,6 +647,7 @@ function get_hovered_part_of_element(
       break;
     }
     case "moment": {
+      if (targets.overlays !== "all") break;
       const center = moment_center_position(element, mechanicalElements);
       const radius = moment_display_radius(element.value);
       const valuePos = moment_value_label_position(center, radius);
@@ -646,6 +676,7 @@ function get_hovered_part_of_element(
       break;
     }
     case "distributed-force": {
+      if (targets.overlays !== "all") break;
       const beam = get_mechanical_element_from_id(
         element.targetID,
         mechanicalElements,
@@ -783,6 +814,31 @@ function pushed_out_of(
 }
 
 /**
+ * The probe badge under the cursor, if the tool may pick one at all.
+ */
+function hovered_probe_badge(
+  mousePos: Point2,
+  mechanicalElements: MechanicalElement[],
+  excluded_elements: ID[],
+  state: CanvasState,
+): HoveredPart | undefined {
+  if (!HOVER_TARGETS[state.type].probeBadge) return undefined;
+  for (const element of mechanicalElements) {
+    if (excluded_elements.includes(element.id)) continue;
+    if (!element.probes || element.probes.length === 0) continue;
+    const badge = probe_badge_position(element);
+    if (mousePos.distance_to(badge) > HIT_TOLERANCE.PROBE) continue;
+    return {
+      type: "Probe",
+      position: badge,
+      id: element.id,
+      deleting: false,
+    };
+  }
+  return undefined;
+}
+
+/**
  * Detects which part of a mechanism is being hovered at a given point
  * Returns the hovered part and the corresponding point on that part
  */
@@ -806,6 +862,17 @@ export function get_hovered_part(
     state.type === "ChangingGearRadius"
   ) {
     excluded_elements.push(state.elementID);
+  }
+  // The nodes a gear carries ride its rim, so they sit under the cursor for the
+  // whole gesture and would answer with the radius the gear already has —
+  // locking it on its own value. Its axle is excluded on the same grounds: it
+  // is the centre the radius is measured from.
+  if (state.type === "ChangingGearRadius") {
+    const sized = get_mechanical_element_from_id(
+      state.elementID,
+      mechanicalElements,
+    ) as GearElement;
+    excluded_elements.push(...sized.fixedNodesBodyIDs, sized.parentAxleID);
   }
   // A node holding a belt terminal drags that terminal onto the cursor, so the
   // main loop would keep answering with the held end. Exclude such a belt and
@@ -862,6 +929,19 @@ export function get_hovered_part(
   const hover_order = [...DRAWING_ORDER];
   hover_order.reverse();
   for (const type of hover_order) {
+    // Badges are not elements, so the family is swept whole at the rank
+    // `DRAWING_ORDER` gives "probe" — above its host, which the badge overlaps
+    // and which would otherwise answer for it.
+    if (type === "probe") {
+      const badgeHover = hovered_probe_badge(
+        mousePos,
+        mechanicalElements,
+        excluded_elements,
+        state,
+      );
+      if (badgeHover) return badgeHover;
+      continue;
+    }
     const one_type_elements = elements.filter((e) => e.type === type).reverse();
     for (const element of one_type_elements) {
       if (excluded_elements.includes(element.id)) continue;

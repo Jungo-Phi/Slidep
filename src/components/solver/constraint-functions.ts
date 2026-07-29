@@ -2,12 +2,25 @@ import { DIM } from "../../constants/rendering-specs";
 import { Link, Point2 } from "../../types";
 import { ONE } from "../../types/point2";
 import {
-  BeltPiece,
   BeltVia,
+  belt_at,
+  belt_locate,
   belt_pieces,
-  belt_point_tangent,
+  belt_shared_scratch,
+  belt_solve_arc,
+  belt_solve_pairs,
+  belt_total,
   nearest_point_on_piece,
 } from "../../utils/belt-path";
+import {
+  EditNodes,
+  Nodes,
+  SimNodes,
+  SolveNodes,
+  point,
+  setPoint,
+} from "./nodes";
+import { LinkSlots } from "./link-slots";
 
 /* ════════════════════════════════════════════════════════════════════════
  *  OnSegment : point contraint sur le segment (start, end)
@@ -42,34 +55,39 @@ import {
  * lerp(start, end, t) avec la pondération PBD correcte (bras de levier `t`).
  * `t` est fourni par l'appelant (fixe pour Fixed, reprojeté pour Slide). */
 function projectOnSegment(
-  positions: Map<string, Point2>,
-  posMasses: Map<string, number>,
-  keyStart: string,
-  keyEnd: string,
-  keyNode: string,
+  nodes: Nodes,
+  iStart: number,
+  iEnd: number,
+  iNode: number,
   t: number,
   stiffness: number,
 ): number {
-  const pNode = positions.get(keyNode)!;
-  const start = positions.get(keyStart)!;
-  const end = positions.get(keyEnd)!;
-  const wNode = posMasses.get(keyNode) ?? 1;
-  const wStart = posMasses.get(keyStart) ?? 1;
-  const wEnd = posMasses.get(keyEnd) ?? 1;
+  const wNode = nodes.w[iNode];
+  const wStart = nodes.w[iStart];
+  const wEnd = nodes.w[iEnd];
 
   const a = 1 - t;
   const denom = wNode + wStart * a * a + wEnd * t * t;
   if (denom < 1e-12) return 0; // tout ancré → rien à corriger
 
-  const foot = start.lerp(end, t);
-  const C = pNode.sub(foot); // contrainte vectorielle
-  const error = C.length();
+  const sx = nodes.x[iStart];
+  const sy = nodes.y[iStart];
+  const ex = nodes.x[iEnd];
+  const ey = nodes.y[iEnd];
+  // foot = lerp(start, end, t), puis C = pNode − foot (contrainte vectorielle)
+  const Cx = nodes.x[iNode] - (sx + (ex - sx) * t);
+  const Cy = nodes.y[iNode] - (sy + (ey - sy) * t);
+  const error = Math.sqrt(Cx * Cx + Cy * Cy);
 
   // λ = C / denom, puis Δpᵢ = ∓ λ wᵢ ‖∂ᵢ‖. Point ancré (wᵢ=0) → Δ nul.
-  const lambda = C.mul(stiffness / denom);
-  positions.set(keyNode, pNode.sub(lambda.mul(wNode)));
-  positions.set(keyStart, start.add(lambda.mul(wStart * a)));
-  positions.set(keyEnd, end.add(lambda.mul(wEnd * t)));
+  const lx = Cx * (stiffness / denom);
+  const ly = Cy * (stiffness / denom);
+  nodes.x[iNode] -= lx * wNode;
+  nodes.y[iNode] -= ly * wNode;
+  nodes.x[iStart] = sx + lx * (wStart * a);
+  nodes.y[iStart] = sy + ly * (wStart * a);
+  nodes.x[iEnd] = ex + lx * (wEnd * t);
+  nodes.y[iEnd] = ey + ly * (wEnd * t);
 
   return error;
 }
@@ -79,37 +97,30 @@ function projectOnSegment(
  * pour éviter les extrémités. La contrainte n'agit donc que perpendiculairement
  * au segment : le nœud glisse librement dans le sens tangent. */
 export function applySlideOnSegmentConstraint(
-  positions: Map<string, Point2>,
-  posMasses: Map<string, number>,
-  keyStart: string,
-  keyEnd: string,
-  keyNode: string,
+  nodes: Nodes,
+  iStart: number,
+  iEnd: number,
+  iNode: number,
   stiffness: number = 1.0,
 ): number {
-  const pNode = positions.get(keyNode);
-  const start = positions.get(keyStart);
-  const end = positions.get(keyEnd);
-  if (!pNode || !start || !end) return 0;
+  if (iStart < 0 || iEnd < 0 || iNode < 0) return 0;
+  const sx = nodes.x[iStart];
+  const sy = nodes.y[iStart];
+  const dx = nodes.x[iEnd] - sx;
+  const dy = nodes.y[iEnd] - sy;
 
-  const edgeLength = start.distance_to(end);
+  const edgeLength = Math.sqrt(Math.pow(dx, 2) + Math.pow(dy, 2));
   if (edgeLength === 0) return 0;
 
+  // parameter_on_segment: (node − start)·d / ‖d‖²
+  const onSegment =
+    ((nodes.x[iNode] - sx) * dx + (nodes.y[iNode] - sy) * dy) /
+    (dx * dx + dy * dy);
   const t = Math.max(
     DIM.EDGE_END_MARGIN / edgeLength,
-    Math.min(
-      pNode.parameter_on_segment(start, end),
-      1 - DIM.EDGE_END_MARGIN / edgeLength,
-    ),
+    Math.min(onSegment, 1 - DIM.EDGE_END_MARGIN / edgeLength),
   );
-  return projectOnSegment(
-    positions,
-    posMasses,
-    keyStart,
-    keyEnd,
-    keyNode,
-    t,
-    stiffness,
-  );
+  return projectOnSegment(nodes, iStart, iEnd, iNode, t, stiffness);
 }
 
 /** Contraint un point (keyNode) à se trouver exactement au ratio `t` FIXE sur
@@ -117,28 +128,15 @@ export function applySlideOnSegmentConstraint(
  * Slide, `t` est constant (mémorisé au grab) : la contrainte agit dans les deux
  * directions (tangent + normal). */
 export function applyFixedOnSegmentConstraint(
-  positions: Map<string, Point2>,
-  posMasses: Map<string, number>,
-  keyStart: string,
-  keyEnd: string,
-  keyNode: string,
+  nodes: Nodes,
+  iStart: number,
+  iEnd: number,
+  iNode: number,
   t: number,
   stiffness: number = 1.0,
 ): number {
-  const pNode = positions.get(keyNode);
-  const start = positions.get(keyStart);
-  const end = positions.get(keyEnd);
-  if (!pNode || !start || !end) return 0;
-
-  return projectOnSegment(
-    positions,
-    posMasses,
-    keyStart,
-    keyEnd,
-    keyNode,
-    t,
-    stiffness,
-  );
+  if (iStart < 0 || iEnd < 0 || iNode < 0) return 0;
+  return projectOnSegment(nodes, iStart, iEnd, iNode, t, stiffness);
 }
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -169,25 +167,24 @@ export function applyFixedOnSegmentConstraint(
 
 /** Contraint deux segments à avoir la même longueur. */
 export function applyEqualLengthConstraint(
-  positions: Map<string, Point2>,
-  posMasses: Map<string, number>,
-  s1: string,
-  e1: string,
-  s2: string,
-  e2: string,
+  nodes: Nodes,
+  s1: number,
+  e1: number,
+  s2: number,
+  e2: number,
   stiffness: number = 1.0,
 ): number {
-  const ps1 = positions.get(s1);
-  const pe1 = positions.get(e1);
-  const ps2 = positions.get(s2);
-  const pe2 = positions.get(e2);
-  if (!ps1 || !pe1 || !ps2 || !pe2) return 0;
+  if (s1 < 0 || e1 < 0 || s2 < 0 || e2 < 0) return 0;
+  const ps1 = point(nodes, s1);
+  const pe1 = point(nodes, e1);
+  const ps2 = point(nodes, s2);
+  const pe2 = point(nodes, e2);
 
   const len1 = pe1.sub(ps1).length();
   const len2 = pe2.sub(ps2).length();
 
-  const w1 = (posMasses.get(s1) ?? 1) + (posMasses.get(e1) ?? 1);
-  const w2 = (posMasses.get(s2) ?? 1) + (posMasses.get(e2) ?? 1);
+  const w1 = nodes.w[s1] + nodes.w[e1];
+  const w2 = nodes.w[s2] + nodes.w[e2];
   const totalW = w1 + w2;
 
   // Mobilité CROISÉE : le segment le moins mobile tire la cible vers sa longueur.
@@ -196,8 +193,8 @@ export function applyEqualLengthConstraint(
 
   const error = Math.abs(len1 - len2);
 
-  applyDistanceConstraint(positions, posMasses, s1, e1, targetLen, stiffness);
-  applyDistanceConstraint(positions, posMasses, s2, e2, targetLen, stiffness);
+  applyDistanceConstraint(nodes, s1, e1, targetLen, stiffness);
+  applyDistanceConstraint(nodes, s2, e2, targetLen, stiffness);
   return error;
 }
 
@@ -241,12 +238,11 @@ export function applyEqualLengthConstraint(
  * dégénéré ou tous les points ancrés).
  */
 function projectAngleC(
-  positions: Map<string, Point2>,
-  posMasses: Map<string, number>,
-  s1: string,
-  e1: string,
-  s2: string,
-  e2: string,
+  nodes: Nodes,
+  s1: number,
+  e1: number,
+  s2: number,
+  e2: number,
   v1: Point2,
   v2: Point2,
   C: number,
@@ -262,10 +258,10 @@ function projectAngleC(
   const g_s2 = v2.perp().mul(-1 / l2sq); //  −perp(v₂)/‖v₂‖²
   const g_e2 = g_s2.mul(-1); //  +perp(v₂)/‖v₂‖²
 
-  const w_s1 = posMasses.get(s1) ?? 1;
-  const w_e1 = posMasses.get(e1) ?? 1;
-  const w_s2 = posMasses.get(s2) ?? 1;
-  const w_e2 = posMasses.get(e2) ?? 1;
+  const w_s1 = nodes.w[s1];
+  const w_e1 = nodes.w[e1];
+  const w_s2 = nodes.w[s2];
+  const w_e2 = nodes.w[e2];
 
   // Σ wᵢ‖∇ᵢC‖² = (w_s1+w_e1)/l1² + (w_s2+w_e2)/l2²
   const denom = (w_s1 + w_e1) / l1sq + (w_s2 + w_e2) / l2sq;
@@ -274,14 +270,14 @@ function projectAngleC(
   const lambda = (-C / denom) * stiffness;
 
   // Δpᵢ = λ · wᵢ · ∇ᵢC. Un point ancré (wᵢ=0) reçoit un Δ nul : pas de `if`.
-  const ps1 = positions.get(s1)!;
-  const pe1 = positions.get(e1)!;
-  const ps2 = positions.get(s2)!;
-  const pe2 = positions.get(e2)!;
-  positions.set(s1, ps1.add(g_s1.mul(lambda * w_s1)));
-  positions.set(e1, pe1.add(g_e1.mul(lambda * w_e1)));
-  positions.set(s2, ps2.add(g_s2.mul(lambda * w_s2)));
-  positions.set(e2, pe2.add(g_e2.mul(lambda * w_e2)));
+  const ps1 = point(nodes, s1);
+  const pe1 = point(nodes, e1);
+  const ps2 = point(nodes, s2);
+  const pe2 = point(nodes, e2);
+  setPoint(nodes, s1, ps1.add(g_s1.mul(lambda * w_s1)));
+  setPoint(nodes, e1, pe1.add(g_e1.mul(lambda * w_e1)));
+  setPoint(nodes, s2, ps2.add(g_s2.mul(lambda * w_s2)));
+  setPoint(nodes, e2, pe2.add(g_e2.mul(lambda * w_e2)));
 
   return Math.abs(C);
 }
@@ -306,23 +302,22 @@ function wrapPi(a: number): number {
  * segment pivote autour de lui, sans cas particulier ni raccourcissement.
  */
 export function applyAngleConstraint(
-  positions: Map<string, Point2>,
-  posMasses: Map<string, number>,
-  s1: string,
-  e1: string,
-  s2: string,
-  e2: string,
+  nodes: Nodes,
+  s1: number,
+  e1: number,
+  s2: number,
+  e2: number,
   flipStart: boolean,
   flipEnd: boolean,
   couterClockwise: boolean,
   targetAngle: number,
   stiffness: number = 1.0,
 ): number {
-  const ps1 = positions.get(s1);
-  const pe1 = positions.get(e1);
-  const ps2 = positions.get(s2);
-  const pe2 = positions.get(e2);
-  if (!ps1 || !pe1 || !ps2 || !pe2) return 0;
+  if (s1 < 0 || e1 < 0 || s2 < 0 || e2 < 0) return 0;
+  const ps1 = point(nodes, s1);
+  const pe1 = point(nodes, e1);
+  const ps2 = point(nodes, s2);
+  const pe2 = point(nodes, e2);
 
   const delta1 = pe1.sub(ps1);
   const delta2 = pe2.sub(ps2);
@@ -340,18 +335,7 @@ export function applyAngleConstraint(
 
   // On projette avec les vrais delta1/delta2 : θ(virtV) et θ(delta) diffèrent
   // d'une constante (0 ou π) par segment, donc ∂C/∂p est identique.
-  return projectAngleC(
-    positions,
-    posMasses,
-    s1,
-    e1,
-    s2,
-    e2,
-    delta1,
-    delta2,
-    C,
-    stiffness,
-  );
+  return projectAngleC(nodes, s1, e1, s2, e2, delta1, delta2, C, stiffness);
 }
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -365,19 +349,18 @@ export function applyAngleConstraint(
  * Projection PBD identique à Angle.
  */
 export function applyParallelConstraint(
-  positions: Map<string, Point2>,
-  posMasses: Map<string, number>,
-  s1: string,
-  e1: string,
-  s2: string,
-  e2: string,
+  nodes: Nodes,
+  s1: number,
+  e1: number,
+  s2: number,
+  e2: number,
   stiffness: number = 1.0,
 ): number {
-  const ps1 = positions.get(s1);
-  const pe1 = positions.get(e1);
-  const ps2 = positions.get(s2);
-  const pe2 = positions.get(e2);
-  if (!ps1 || !pe1 || !ps2 || !pe2) return 0;
+  if (s1 < 0 || e1 < 0 || s2 < 0 || e2 < 0) return 0;
+  const ps1 = point(nodes, s1);
+  const pe1 = point(nodes, e1);
+  const ps2 = point(nodes, s2);
+  const pe2 = point(nodes, e2);
 
   const v1 = pe1.sub(ps1);
   const v2 = pe2.sub(ps2);
@@ -388,18 +371,7 @@ export function applyParallelConstraint(
   while (C > Math.PI / 2) C -= Math.PI;
   while (C <= -Math.PI / 2) C += Math.PI;
 
-  return projectAngleC(
-    positions,
-    posMasses,
-    s1,
-    e1,
-    s2,
-    e2,
-    v1,
-    v2,
-    C,
-    stiffness,
-  );
+  return projectAngleC(nodes, s1, e1, s2, e2, v1, v2, C, stiffness);
 }
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -411,19 +383,18 @@ export function applyParallelConstraint(
  * Identique à Parallel, cible décalée de π/2. Projection PBD identique.
  */
 export function applyNormalConstraint(
-  positions: Map<string, Point2>,
-  posMasses: Map<string, number>,
-  s1: string,
-  e1: string,
-  s2: string,
-  e2: string,
+  nodes: Nodes,
+  s1: number,
+  e1: number,
+  s2: number,
+  e2: number,
   stiffness: number = 1.0,
 ): number {
-  const ps1 = positions.get(s1);
-  const pe1 = positions.get(e1);
-  const ps2 = positions.get(s2);
-  const pe2 = positions.get(e2);
-  if (!ps1 || !pe1 || !ps2 || !pe2) return 0;
+  if (s1 < 0 || e1 < 0 || s2 < 0 || e2 < 0) return 0;
+  const ps1 = point(nodes, s1);
+  const pe1 = point(nodes, e1);
+  const ps2 = point(nodes, s2);
+  const pe2 = point(nodes, e2);
 
   const v1 = pe1.sub(ps1);
   const v2 = pe2.sub(ps2);
@@ -434,18 +405,7 @@ export function applyNormalConstraint(
   while (C > Math.PI / 2) C -= Math.PI;
   while (C <= -Math.PI / 2) C += Math.PI;
 
-  return projectAngleC(
-    positions,
-    posMasses,
-    s1,
-    e1,
-    s2,
-    e2,
-    v1,
-    v2,
-    C,
-    stiffness,
-  );
+  return projectAngleC(nodes, s1, e1, s2, e2, v1, v2, C, stiffness);
 }
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -469,16 +429,15 @@ export function applyNormalConstraint(
 
 /** Contraint le segment (keyStart, keyEnd) à rester parallèle à `direction`. */
 export function applyKeepOrientationConstraint(
-  positions: Map<string, Point2>,
-  posMasses: Map<string, number>,
-  keyStart: string,
-  keyEnd: string,
+  nodes: Nodes,
+  iStart: number,
+  iEnd: number,
   direction: Point2,
   stiffness: number = 1.0,
 ): number {
-  const start = positions.get(keyStart);
-  const end = positions.get(keyEnd);
-  if (!start || !end) return 0;
+  if (iStart < 0 || iEnd < 0) return 0;
+  const start = point(nodes, iStart);
+  const end = point(nodes, iEnd);
   if (direction.length_squared() === 0) return 0;
 
   const v = end.sub(start);
@@ -491,8 +450,8 @@ export function applyKeepOrientationConstraint(
   while (C <= -Math.PI / 2) C += Math.PI;
   if (Math.abs(C) < 1e-9) return 0;
 
-  const wS = posMasses.get(keyStart) ?? 1;
-  const wE = posMasses.get(keyEnd) ?? 1;
+  const wS = nodes.w[iStart];
+  const wE = nodes.w[iEnd];
 
   const denom = (wS + wE) / lsq;
   if (denom < 1e-12) return Math.abs(C);
@@ -501,8 +460,8 @@ export function applyKeepOrientationConstraint(
   const g_e = v.perp().mul(1 / lsq); // +perp(v)/‖v‖²
   const g_s = g_e.mul(-1); // −perp(v)/‖v‖²
 
-  positions.set(keyStart, start.add(g_s.mul(lambda * wS)));
-  positions.set(keyEnd, end.add(g_e.mul(lambda * wE)));
+  setPoint(nodes, iStart, start.add(g_s.mul(lambda * wS)));
+  setPoint(nodes, iEnd, end.add(g_e.mul(lambda * wE)));
 
   return Math.abs(C);
 }
@@ -510,32 +469,34 @@ export function applyKeepOrientationConstraint(
 /** Approche une position ou un rayon vers targetValue.
  * La valeur de 'stiffness' doit être en dessous de 1 pour une attraction moins forte que les autres contraintes. */
 export function applyHandleGrabConstraint(
-  positions: Map<string, Point2>,
-  radii: Map<string, number>,
-  posMasses: Map<string, number>,
-  key: string,
+  nodes: Nodes,
+  /** The radius DOF array — edition only, where a grab can target a radius. */
+  radii: Float64Array | undefined,
+  iPos: number,
+  iRad: number,
   targetValue: Point2 | number,
   stiffness: number = 0.5,
   maxAmplitude: number = 10,
 ): number {
   if (typeof targetValue === "number") {
     // Radius
-    const r = radii.get(key);
+    if (radii === undefined || iRad < 0) return 0;
+    const r = radii[iRad];
     if (!r) return 0;
     const delta = targetValue - r;
     let target = delta * stiffness;
     if (target > maxAmplitude) target = maxAmplitude;
     if (target < -maxAmplitude) target = -maxAmplitude;
-    radii.set(key, r + target);
+    radii[iRad] = r + target;
     return Math.abs(delta);
   } else {
     // Position — respect mass (grounded elements cannot be moved)
-    if ((posMasses.get(key) ?? 1) === 0) return 0;
-    const p = positions.get(key);
-    if (!p) return 0;
+    if (iPos < 0) return 0;
+    if (nodes.w[iPos] === 0) return 0;
+    const p = point(nodes, iPos);
     const delta = targetValue.sub(p);
     const target = delta.mul(stiffness).limit_length_max(maxAmplitude);
-    positions.set(key, p.add(target));
+    setPoint(nodes, iPos, p.add(target));
     return delta.length();
   }
 }
@@ -549,39 +510,44 @@ export function applyHandleGrabConstraint(
  * along the loop tangent); without one it falls back to a fixed diagonal, which
  * keeps the outcome deterministic instead of frame-dependent. */
 export function applyDistanceConstraint(
-  positions: Map<string, Point2>,
-  posMasses: Map<string, number>,
-  key1: string,
-  key2: string,
+  nodes: Nodes,
+  i1: number,
+  i2: number,
   targetDist: number,
   stiffness: number = 1.0,
   preferredAxis?: Point2,
 ): number {
-  const p1 = positions.get(key1);
-  const p2 = positions.get(key2);
-  const w1 = posMasses.get(key1) ?? 1;
-  const w2 = posMasses.get(key2) ?? 1;
-  if (!p1 || !p2) return 0;
+  if (i1 < 0 || i2 < 0) return 0;
+  const w1 = nodes.w[i1];
+  const w2 = nodes.w[i2];
 
   const totalW = w1 + w2;
   if (totalW === 0) return 0;
 
-  const delta = p2.sub(p1);
-  if (delta.length_squared() === 0) {
+  const x1 = nodes.x[i1];
+  const y1 = nodes.y[i1];
+  const dx = nodes.x[i2] - x1;
+  const dy = nodes.y[i2] - y1;
+  if (dx * dx + dy * dy === 0) {
     // Already satisfied, and the null length would divide into NaN below.
     if (targetDist === 0) return 0;
     const axis =
       preferredAxis && preferredAxis.length_squared() > 0 ? preferredAxis : ONE;
     const step = axis.normalize().mul(targetDist * stiffness);
-    if (w1 !== 0) positions.set(key1, p1.sub(step.mul(w1 / totalW)));
-    if (w2 !== 0) positions.set(key2, p2.add(step.mul(w2 / totalW)));
+    if (w1 !== 0) setPoint(nodes, i1, point(nodes, i1).sub(step.mul(w1 / totalW)));
+    if (w2 !== 0) setPoint(nodes, i2, point(nodes, i2).add(step.mul(w2 / totalW)));
     return targetDist;
   }
-  const error = delta.length() - targetDist;
-  const diff = error / delta.length();
+  const length = Math.sqrt(dx * dx + dy * dy);
+  const error = length - targetDist;
+  const diff = error / length;
 
-  positions.set(key1, p1.add(delta.mul(diff * (w1 / totalW) * stiffness)));
-  positions.set(key2, p2.sub(delta.mul(diff * (w2 / totalW) * stiffness)));
+  const k1 = diff * (w1 / totalW) * stiffness;
+  const k2 = diff * (w2 / totalW) * stiffness;
+  nodes.x[i1] = x1 + dx * k1;
+  nodes.y[i1] = y1 + dy * k1;
+  nodes.x[i2] = nodes.x[i2] - dx * k2;
+  nodes.y[i2] = nodes.y[i2] - dy * k2;
   return Math.abs(error);
 }
 
@@ -589,21 +555,20 @@ export function applyDistanceConstraint(
  * définie par (keyStart, keyEnd). Chaque point est déplacé proportionnellement
  * à sa masse pour réduire l'erreur. */
 export function applyDistanceToLineConstraint(
-  positions: Map<string, Point2>,
-  posMasses: Map<string, number>,
-  keyStart: string,
-  keyEnd: string,
-  keyNode: string,
+  nodes: Nodes,
+  iStart: number,
+  iEnd: number,
+  iNode: number,
   targetDist: number,
   stiffness: number = 1.0,
 ): number {
-  const pNode = positions.get(keyNode);
-  const start = positions.get(keyStart);
-  const end = positions.get(keyEnd);
-  const wNode = posMasses.get(keyNode) ?? 1;
-  const wStart = posMasses.get(keyStart) ?? 1;
-  const wEnd = posMasses.get(keyEnd) ?? 1;
-  if (!pNode || !start || !end) return 0;
+  if (iStart < 0 || iEnd < 0 || iNode < 0) return 0;
+  const pNode = point(nodes, iNode);
+  const start = point(nodes, iStart);
+  const end = point(nodes, iEnd);
+  const wNode = nodes.w[iNode];
+  const wStart = nodes.w[iStart];
+  const wEnd = nodes.w[iEnd];
 
   // Vecteur perpendiculaire normalisé de la droite, pointant vers le nœud
   const proj = pNode.project_on_line(start, end);
@@ -628,12 +593,12 @@ export function applyDistanceToLineConstraint(
 
   // Déplacement du nœud : le ramène vers la ligne de "error * wNode/totalW"
   const nodeCorrection = perpDir.mul(-error * (wNode / totalW) * stiffness);
-  if (wNode !== 0) positions.set(keyNode, pNode.add(nodeCorrection));
+  if (wNode !== 0) setPoint(nodes, iNode, pNode.add(nodeCorrection));
 
   // Déplacement des extrémités : la ligne s'éloigne du nœud de "error * wLine/totalW"
   const lineCorrection = perpDir.mul(error * (wLine / totalW) * stiffness);
-  if (wStart !== 0) positions.set(keyStart, start.add(lineCorrection));
-  if (wEnd !== 0) positions.set(keyEnd, end.add(lineCorrection));
+  if (wStart !== 0) setPoint(nodes, iStart, start.add(lineCorrection));
+  if (wEnd !== 0) setPoint(nodes, iEnd, end.add(lineCorrection));
 
   return Math.abs(error);
 }
@@ -641,17 +606,16 @@ export function applyDistanceToLineConstraint(
 /** Contraint les deux points à avoir la même coordonnée Y (alignement horizontal).
  * Le Y cible est la moyenne pondérée des Y des deux points selon leurs masses. */
 export function applyHorizontalConstraint(
-  positions: Map<string, Point2>,
-  posMasses: Map<string, number>,
-  keyStart: string,
-  keyEnd: string,
+  nodes: Nodes,
+  iStart: number,
+  iEnd: number,
   stiffness: number = 1.0,
 ): number {
-  const start = positions.get(keyStart);
-  const end = positions.get(keyEnd);
-  const wStart = posMasses.get(keyStart) ?? 1;
-  const wEnd = posMasses.get(keyEnd) ?? 1;
-  if (!start || !end) return 0;
+  if (iStart < 0 || iEnd < 0) return 0;
+  const start = point(nodes, iStart);
+  const end = point(nodes, iEnd);
+  const wStart = nodes.w[iStart];
+  const wEnd = nodes.w[iEnd];
 
   const totalW = wStart + wEnd;
   if (totalW === 0) return 0;
@@ -659,13 +623,15 @@ export function applyHorizontalConstraint(
   const error = start.y - end.y;
 
   if (wStart !== 0)
-    positions.set(
-      keyStart,
+    setPoint(
+      nodes,
+      iStart,
       new Point2(start.x, start.y - error * (wStart / totalW) * stiffness),
     );
   if (wEnd !== 0) {
-    positions.set(
-      keyEnd,
+    setPoint(
+      nodes,
+      iEnd,
       new Point2(end.x, end.y + error * (wEnd / totalW) * stiffness),
     );
   }
@@ -675,17 +641,16 @@ export function applyHorizontalConstraint(
 /** Contraint les deux points à avoir la même coordonnée X (alignement vertical).
  * Le X cible est la moyenne pondérée des X des deux points selon leurs masses. */
 export function applyVerticalConstraint(
-  positions: Map<string, Point2>,
-  posMasses: Map<string, number>,
-  keyStart: string,
-  keyEnd: string,
+  nodes: Nodes,
+  iStart: number,
+  iEnd: number,
   stiffness: number = 1.0,
 ): number {
-  const start = positions.get(keyStart);
-  const end = positions.get(keyEnd);
-  const wStart = posMasses.get(keyStart) ?? 1;
-  const wEnd = posMasses.get(keyEnd) ?? 1;
-  if (!start || !end) return 0;
+  if (iStart < 0 || iEnd < 0) return 0;
+  const start = point(nodes, iStart);
+  const end = point(nodes, iEnd);
+  const wStart = nodes.w[iStart];
+  const wEnd = nodes.w[iEnd];
 
   const totalW = wStart + wEnd;
   if (totalW === 0) return 0;
@@ -693,13 +658,15 @@ export function applyVerticalConstraint(
   const error = start.x - end.x;
 
   if (wStart !== 0)
-    positions.set(
-      keyStart,
+    setPoint(
+      nodes,
+      iStart,
       new Point2(start.x - error * (wStart / totalW) * stiffness, start.y),
     );
   if (wEnd !== 0)
-    positions.set(
-      keyEnd,
+    setPoint(
+      nodes,
+      iEnd,
       new Point2(end.x + error * (wEnd / totalW) * stiffness, end.y),
     );
   return Math.abs(error);
@@ -710,27 +677,24 @@ export function applyVerticalConstraint(
  * les rayons selon leurs masses : si les centres sont bloqués, ce sont les rayons
  * qui s'adaptent, et inversement. */
 export function applyGearMeshingConstraint(
-  positions: Map<string, Point2>,
-  posMasses: Map<string, number>,
-  radii: Map<string, number>,
-  radMasses: Map<string, number>,
-  g1: string,
-  g2: string,
-  rg1: string,
-  rg2: string,
+  nodes: EditNodes,
+  g1: number,
+  g2: number,
+  rg1: number,
+  rg2: number,
   stiffness: number = 1.0,
 ): number {
-  const p1 = positions.get(g1);
-  const p2 = positions.get(g2);
-  const r1 = radii.get(rg1);
-  const r2 = radii.get(rg2);
-  const wPos1 = posMasses.get(g1) ?? 1;
-  const wPos2 = posMasses.get(g2) ?? 1;
-  const wRad1 = radMasses.get(rg1) ?? 1;
-  const wRad2 = radMasses.get(rg2) ?? 1;
   // r1/r2 peuvent valoir 0 (pont de rayon nul utilisé par le grab de rayon) :
-  // on teste `undefined`, pas la fausseté, sinon la contrainte s'annule.
-  if (!p1 || !p2 || r1 === undefined || r2 === undefined) return 0;
+  // on teste la présence du nœud, pas la fausseté, sinon la contrainte s'annule.
+  if (g1 < 0 || g2 < 0 || rg1 < 0 || rg2 < 0) return 0;
+  const p1 = point(nodes, g1);
+  const p2 = point(nodes, g2);
+  const r1 = nodes.radius[rg1];
+  const r2 = nodes.radius[rg2];
+  const wPos1 = nodes.w[g1];
+  const wPos2 = nodes.w[g2];
+  const wRad1 = nodes.wRadius[rg1];
+  const wRad2 = nodes.wRadius[rg2];
 
   const dist = p1.distance_to(p2);
   const targetDist = r1 + r2;
@@ -745,8 +709,7 @@ export function applyGearMeshingConstraint(
   if (wPos1 !== 0 || wPos2 !== 0) {
     const posW = wPos1 + wPos2;
     applyDistanceConstraint(
-      positions,
-      posMasses,
+      nodes,
       g1,
       g2,
       targetDist,
@@ -758,14 +721,14 @@ export function applyGearMeshingConstraint(
   // Les deux rayons bougent dans le même sens (tous deux grandissent si dist > r1+r2).
   const radCorrection = error * stiffness;
   if (wRad1 !== 0)
-    radii.set(
-      rg1,
-      Math.max(DIM.MIN_GEAR_RADIUS, r1 + radCorrection * (wRad1 / totalW)),
+    nodes.radius[rg1] = Math.max(
+      DIM.MIN_GEAR_RADIUS,
+      r1 + radCorrection * (wRad1 / totalW),
     );
   if (wRad2 !== 0)
-    radii.set(
-      rg2,
-      Math.max(DIM.MIN_GEAR_RADIUS, r2 + radCorrection * (wRad2 / totalW)),
+    nodes.radius[rg2] = Math.max(
+      DIM.MIN_GEAR_RADIUS,
+      r2 + radCorrection * (wRad2 / totalW),
     );
   return Math.abs(error);
 }
@@ -774,17 +737,17 @@ export function applyGearMeshingConstraint(
  * La correction est distribuée entre les deux rayons selon leurs masses :
  * le rayon libre bougera davantage que le rayon ancré. */
 export function applyGearRatioConstraint(
-  radii: Map<string, number>,
-  radMasses: Map<string, number>,
-  g1: string,
-  g2: string,
+  nodes: EditNodes,
+  g1: number,
+  g2: number,
   ratio: number,
   stiffness: number = 1.0,
 ): number {
-  const r1 = radii.get(g1);
-  const r2 = radii.get(g2);
-  const w1 = radMasses.get(g1) ?? 1;
-  const w2 = radMasses.get(g2) ?? 1;
+  if (g1 < 0 || g2 < 0) return 0;
+  const r1 = nodes.radius[g1];
+  const r2 = nodes.radius[g2];
+  const w1 = nodes.wRadius[g1];
+  const w2 = nodes.wRadius[g2];
   if (!r1 || !r2) return 0;
 
   const totalW = w1 + w2;
@@ -807,20 +770,14 @@ export function applyGearRatioConstraint(
   const targetR1 = ratio * r2; // r1 si r2 est fixe
   const targetR2 = r1 / ratio; // r2 si r1 est fixe
   if (w1 !== 0)
-    radii.set(
-      g1,
-      Math.max(
-        DIM.MIN_GEAR_RADIUS,
-        r1 + (targetR1 - r1) * (w1 / totalW) * stiffness,
-      ),
+    nodes.radius[g1] = Math.max(
+      DIM.MIN_GEAR_RADIUS,
+      r1 + (targetR1 - r1) * (w1 / totalW) * stiffness,
     );
   if (w2 !== 0)
-    radii.set(
-      g2,
-      Math.max(
-        DIM.MIN_GEAR_RADIUS,
-        r2 + (targetR2 - r2) * (w2 / totalW) * stiffness,
-      ),
+    nodes.radius[g2] = Math.max(
+      DIM.MIN_GEAR_RADIUS,
+      r2 + (targetR2 - r2) * (w2 / totalW) * stiffness,
     );
 
   return error;
@@ -837,36 +794,35 @@ function wrap_angle(a: number): number {
  * absolu `targetAngle` (angle monde de pivot→driven). Contrainte à priorité
  * normale : si le mécanisme est bloqué, le résidu subsiste sans état invalide. */
 export function applyMotorBeamConstraint(
-  positions: Map<string, Point2>,
-  posMasses: Map<string, number>,
-  pivotKey: string,
-  drivenKey: string,
+  nodes: Nodes,
+  iPivot: number,
+  iDriven: number,
   targetAngle: number,
   stiffness: number = 1.0,
 ): number {
-  if ((posMasses.get(drivenKey) ?? 1) === 0) return 0;
-  const pivot = positions.get(pivotKey);
-  const driven = positions.get(drivenKey);
-  if (!pivot || !driven) return 0;
+  if (iPivot < 0 || iDriven < 0) return 0;
+  if (nodes.w[iDriven] === 0) return 0;
+  const pivot = point(nodes, iPivot);
+  const driven = point(nodes, iDriven);
 
   const v = driven.sub(pivot);
   if (v.length_squared() < 1e-12) return 0;
   const diff = wrap_angle(targetAngle - v.angle());
-  positions.set(drivenKey, pivot.add(v.rotate(diff * stiffness)));
+  setPoint(nodes, iDriven, pivot.add(v.rotate(diff * stiffness)));
   return Math.abs(diff);
 }
 
-/** Moteur sur engrenage : pousse le nœud d'angle `angleKey` vers `targetAngle`. */
+/** Moteur sur engrenage : pousse le nœud d'angle `iAngle` vers `targetAngle`. */
 export function applyMotorAngleConstraint(
-  angles: Map<string, number>,
-  angleKey: string,
+  nodes: SimNodes,
+  iAngle: number,
   targetAngle: number,
   stiffness: number = 1.0,
 ): number {
-  const a = angles.get(angleKey);
-  if (a === undefined) return 0;
+  if (iAngle < 0) return 0;
+  const a = nodes.angle[iAngle];
   const diff = targetAngle - a; // cumulatif : pas de wrap
-  angles.set(angleKey, a + diff * stiffness);
+  nodes.angle[iAngle] = a + diff * stiffness;
   return Math.abs(diff);
 }
 
@@ -874,9 +830,9 @@ export function applyMotorAngleConstraint(
  * nœuds d'angle). `alpha` est l'angle continu de la ligne des centres.
  * C = r1·((θ1−θ1₀) − Δα) + r2·((θ2−θ2₀) − Δα), Δα = alpha − alpha0. */
 export function applyGearMeshAngleConstraint(
-  angles: Map<string, number>,
-  angleKey1: string,
-  angleKey2: string,
+  nodes: SimNodes,
+  iAngle1: number,
+  iAngle2: number,
   r1: number,
   r2: number,
   theta1_0: number,
@@ -885,17 +841,17 @@ export function applyGearMeshAngleConstraint(
   alpha: number,
   stiffness: number = 1.0,
 ): number {
-  const a1 = angles.get(angleKey1);
-  const a2 = angles.get(angleKey2);
-  if (a1 === undefined || a2 === undefined) return 0;
+  if (iAngle1 < 0 || iAngle2 < 0) return 0;
+  const a1 = nodes.angle[iAngle1];
+  const a2 = nodes.angle[iAngle2];
 
   const dAlpha = alpha - alpha0;
   const C = r1 * (a1 - theta1_0 - dAlpha) + r2 * (a2 - theta2_0 - dAlpha);
   const denom = r1 * r1 + r2 * r2;
   if (denom === 0) return 0;
 
-  angles.set(angleKey1, a1 - (r1 * C * stiffness) / denom);
-  angles.set(angleKey2, a2 - (r2 * C * stiffness) / denom);
+  nodes.angle[iAngle1] = a1 - (r1 * C * stiffness) / denom;
+  nodes.angle[iAngle2] = a2 - (r2 * C * stiffness) / denom;
   return Math.abs(C);
 }
 
@@ -905,26 +861,25 @@ export function applyGearMeshAngleConstraint(
  * l'angle θ, puis contraint le rayon en déplaçant N ET le centre selon leurs
  * masses (si N est ancré, c'est le centre de l'engrenage qui bouge). */
 export function applyGearPerimeterPinConstraint(
-  positions: Map<string, Point2>,
-  posMasses: Map<string, number>,
-  angles: Map<string, number>,
-  nodeKey: string,
-  centerKey: string,
-  angleKey: string,
+  nodes: SimNodes,
+  iNode: number,
+  iCenter: number,
+  iAngle: number,
   radius: number,
   offset: number,
   stiffness: number = 1.0,
 ): number {
-  const center = positions.get(centerKey);
-  const node = positions.get(nodeKey);
-  const theta = angles.get(angleKey);
-  if (!center || !node || theta === undefined) return 0;
+  if (iNode < 0 || iCenter < 0 || iAngle < 0) return 0;
+  const cx = nodes.x[iCenter];
+  const cy = nodes.y[iCenter];
+  const theta = nodes.angle[iAngle];
 
-  const v = node.sub(center);
-  if (v.length_squared() < 1e-12) return 0;
-  const ang = v.angle();
+  const vx = nodes.x[iNode] - cx;
+  const vy = nodes.y[iNode] - cy;
+  if (vx * vx + vy * vy < 1e-12) return 0;
+  const ang = Math.atan2(vy, vx);
 
-  const wN = posMasses.get(nodeKey) ?? 1;
+  const wN = nodes.w[iNode];
   // L'angle n'est jamais ancré (poids 1).
   const denom = wN + 1;
 
@@ -937,17 +892,21 @@ export function applyGearPerimeterPinConstraint(
   const dTheta = (C / denom) * stiffness;
   // Correction angulaire : on tourne N autour du centre (le centre reste fixe
   // pour cette partie) et on ajuste θ.
-  if (wN !== 0) positions.set(nodeKey, center.add(v.rotate(dAng)));
-  angles.set(angleKey, theta + dTheta);
+  if (wN !== 0) {
+    const cos = Math.cos(dAng);
+    const sin = Math.sin(dAng);
+    nodes.x[iNode] = cx + (vx * cos - vy * sin);
+    nodes.y[iNode] = cy + (vx * sin + vy * cos);
+  }
+  nodes.angle[iAngle] = theta + dTheta;
 
   // Correction du rayon : contraint |N − centre| = radius en déplaçant les deux
   // points selon leurs masses. Le centre de l'engrenage bouge donc aussi pour
   // résoudre la contrainte (indispensable quand N est ancré ailleurs).
   const radiusError = applyDistanceConstraint(
-    positions,
-    posMasses,
-    nodeKey,
-    centerKey,
+    nodes,
+    iNode,
+    iCenter,
     radius,
     stiffness,
   );
@@ -959,19 +918,17 @@ export function applyGearPerimeterPinConstraint(
  * Fait tourner `drivenKey` autour de `pivotKey` pour que
  * angle(driven − pivot) = θ + offset (bidirectionnel avec θ). */
 export function applyBeamFollowsAngleConstraint(
-  positions: Map<string, Point2>,
-  posMasses: Map<string, number>,
-  angles: Map<string, number>,
-  pivotKey: string,
-  drivenKey: string,
-  angleKey: string,
+  nodes: SimNodes,
+  iPivot: number,
+  iDriven: number,
+  iAngle: number,
   offset: number,
   stiffness: number = 1.0,
 ): number {
-  const pivot = positions.get(pivotKey);
-  const driven = positions.get(drivenKey);
-  const theta = angles.get(angleKey);
-  if (!pivot || !driven || theta === undefined) return 0;
+  if (iPivot < 0 || iDriven < 0 || iAngle < 0) return 0;
+  const pivot = point(nodes, iPivot);
+  const driven = point(nodes, iDriven);
+  const theta = nodes.angle[iAngle];
 
   const v = driven.sub(pivot);
   if (v.length_squared() < 1e-12) return 0;
@@ -986,8 +943,8 @@ export function applyBeamFollowsAngleConstraint(
   // driven)/(w_pivot+w_driven): an anchored pivot (w_pivot = 0) gives c = pivot
   // (driven swings about it), a free pivot (a grabbed far end) moves too and
   // GearPerimeterPin turns the gear.
-  const wP = posMasses.get(pivotKey) ?? 1;
-  const wD = posMasses.get(drivenKey) ?? 1;
+  const wP = nodes.w[iPivot];
+  const wD = nodes.w[iDriven];
   const wBeam = wP + wD; // beam-rotation mobility (0 = both ends anchored)
   const denom = wBeam + 1; // angle node weight = 1, gradient 1
   if (denom < 1e-12) return Math.abs(C);
@@ -996,12 +953,22 @@ export function applyBeamFollowsAngleConstraint(
   const dTheta = (C / denom) * stiffness; // gear angle
   if (wBeam > 0 && dPhi !== 0) {
     const c = pivot.mul(wD / wBeam).add(driven.mul(wP / wBeam));
-    if (wP !== 0) positions.set(pivotKey, c.add(pivot.sub(c).rotate(dPhi)));
-    if (wD !== 0) positions.set(drivenKey, c.add(driven.sub(c).rotate(dPhi)));
+    if (wP !== 0) setPoint(nodes, iPivot, c.add(pivot.sub(c).rotate(dPhi)));
+    if (wD !== 0) setPoint(nodes, iDriven, c.add(driven.sub(c).rotate(dPhi)));
   }
-  angles.set(angleKey, theta + dTheta);
+  nodes.angle[iAngle] = theta + dTheta;
   return Math.abs(C);
 }
+
+// Scratch for the belt length, grown once: the active vias (node slot + original gear
+// index, disconnected pulleys skipped) and the slot-keyed gradient accumulation. Keyed by
+// SLOT, not by via, because coincidence fusion can put two vias on one node.
+let lenSlot = new Int32Array(16);
+let lenGear = new Int32Array(16);
+let lenArc = new Uint8Array(16);
+let gradSlot = new Int32Array(16);
+let gradX = new Float64Array(16);
+let gradY = new Float64Array(16);
 
 /**
  * Courroie inextensible (simulation) : maintient la longueur géométrique totale à `targetLength`.
@@ -1011,17 +978,15 @@ export function applyBeamFollowsAngleConstraint(
  * ∂L/∂centre = −(somme des tangentes unitaires adjacentes).
  */
 export function applyBeltLengthConstraint(
-  positions: Map<string, Point2>,
-  posMasses: Map<string, number>,
-  angles: Map<string, number>,
+  /** The one constraint emitted in BOTH modes: the belt geometry is positional in
+   *  simulation, and in edition the pulley radii become DOFs too. Which of the two it
+   *  uses is decided by the link own fields (radKeys), never by the node set. */
+  nodes: SolveNodes,
+  s: LinkSlots,
   link: Extract<Link, { type: "BeltLength" }>,
   stiffness: number = 1.0,
-  radiiMap?: Map<string, number>,
-  radMassesMap?: Map<string, number>,
 ): number {
   const {
-    startKey,
-    endKey,
     gearPosKeys,
     radii,
     directions,
@@ -1031,340 +996,289 @@ export function applyBeltLengthConstraint(
     wraps,
   } = link;
 
-  // Vias: closed belt = the gear cycle
-  // open (loose) belt = start terminal (r=0) → gears → end terminal (r=0)
-  // `viaKey[v]` = its position key
-  // `viaGear[v]` = the original gear index (−1 for a terminal)
-  // Pulleys that lost contact mid-simulation are skipped (belt runs straight past them)
-  const viaKey: string[] = [];
-  const viaGear: number[] = [];
+  // pos slots: [start, end, ...one per pulley] (see link-slots.ts)
+  const iStart = s.pos[0];
+  const iEnd = s.pos[1];
+
+  const capacity = gearPosKeys.length + 2;
+  if (lenSlot.length < capacity) {
+    lenSlot = new Int32Array(capacity);
+    lenGear = new Int32Array(capacity);
+    lenArc = new Uint8Array(capacity);
+    gradSlot = new Int32Array(capacity);
+    gradX = new Float64Array(capacity);
+    gradY = new Float64Array(capacity);
+  }
+
+  let n = 0;
   if (!closed) {
-    if (!positions.has(startKey)) return 0;
-    viaKey.push(startKey);
-    viaGear.push(-1);
+    if (iStart < 0) return 0;
+    lenSlot[n] = iStart;
+    lenGear[n] = -1;
+    n++;
   }
   for (let i = 0; i < gearPosKeys.length; i++) {
     if (disconnected?.[i]) continue;
-    if (!positions.has(gearPosKeys[i])) return 0;
-    viaKey.push(gearPosKeys[i]);
-    viaGear.push(i);
+    if (s.pos[2 + i] < 0) return 0;
+    lenSlot[n] = s.pos[2 + i];
+    lenGear[n] = i;
+    n++;
   }
   if (!closed) {
-    if (!positions.has(endKey)) return 0;
-    viaKey.push(endKey);
-    viaGear.push(-1);
+    if (iEnd < 0) return 0;
+    lenSlot[n] = iEnd;
+    lenGear[n] = -1;
+    n++;
   }
   // A loose belt with NO active gears is an inert straight segment
-  if (!closed && viaKey.length === 2)
+  if (!closed && n === 2)
     return applyDistanceConstraint(
-      positions,
-      posMasses,
-      startKey,
-      endKey,
+      nodes,
+      iStart,
+      iEnd,
       targetLength,
       stiffness,
     );
-  if (viaKey.length < (closed ? 2 : 3)) return 0;
-  const last = viaKey.length - 1;
+  if (n < (closed ? 2 : 3)) return 0;
+  const last = n - 1;
 
   // ── Non-penetration FIRST, before any geometry is read ────────────────────
-  // A terminal can never sit inside its adjacent pulley. This has to run BEFORE the
-  // vias are sampled, because `circles_link` switches formula at d = r: outside, the
-  // run is a TANGENT (its gradient w.r.t. the gear centre is the tangent unit);
-  // inside, it degenerates to a RADIAL spoke (gradient = the radial unit). Sampling a
-  // terminal that has drifted inside — a grab, gravity, the previous iteration — hands
-  // the projection a gradient rotated by 90°, so the gear gets shoved sideways and the
-  // solver never settles. Symmetric: the pulley is pushed away too, by mobility.
-  const radialContact = (termKey: string, centerKey: string, rad: number) => {
-    const t = positions.get(termKey);
-    const cc = positions.get(centerKey);
-    if (!t || !cc) return;
-    const vv = t.sub(cc);
-    const dd = vv.length();
+  // A terminal can never sit inside its adjacent pulley: `circles_link` switches from a
+  // TANGENT to a RADIAL spoke at d = r, so sampling a terminal that has drifted inside
+  // hands the projection a gradient rotated by 90° and the solver never settles.
+  const radialContact = (iTerm: number, iCenter: number, rad: number) => {
+    if (iTerm < 0 || iCenter < 0) return;
+    const tx = nodes.x[iTerm];
+    const ty = nodes.y[iTerm];
+    const ccx = nodes.x[iCenter];
+    const ccy = nodes.y[iCenter];
+    const vx = tx - ccx;
+    const vy = ty - ccy;
+    const dd = Math.sqrt(vx * vx + vy * vy);
     if (dd >= rad || dd < 1e-9) return;
     const Cc = rad - dd;
-    const u = vv.mul(1 / dd);
-    const wT = posMasses.get(termKey) ?? 1;
-    const wC = posMasses.get(centerKey) ?? 1;
+    const ux = vx * (1 / dd);
+    const uy = vy * (1 / dd);
+    const wT = nodes.w[iTerm];
+    const wC = nodes.w[iCenter];
     const tot = wT + wC;
     if (tot === 0) return;
-    if (wT !== 0)
-      positions.set(termKey, t.add(u.mul(Cc * (wT / tot) * stiffness)));
-    if (wC !== 0)
-      positions.set(centerKey, cc.sub(u.mul(Cc * (wC / tot) * stiffness)));
+    if (wT !== 0) {
+      const f = Cc * (wT / tot) * stiffness;
+      nodes.x[iTerm] = tx + ux * f;
+      nodes.y[iTerm] = ty + uy * f;
+    }
+    if (wC !== 0) {
+      const f = Cc * (wC / tot) * stiffness;
+      nodes.x[iCenter] = ccx - ux * f;
+      nodes.y[iCenter] = ccy - uy * f;
+    }
   };
   if (!closed) {
-    radialContact(startKey, viaKey[1], radii[viaGear[1]]);
-    radialContact(endKey, viaKey[last - 1], radii[viaGear[last - 1]]);
+    radialContact(iStart, lenSlot[1], radii[lenGear[1]]);
+    radialContact(iEnd, lenSlot[last - 1], radii[lenGear[last - 1]]);
   }
 
-  // Vias, sampled from the now-valid positions (every terminal is on or outside its rim).
-  // In edition (radKeys present) the radii are live DOFs, so the geometry is measured from
-  // the RADII MAP — not the link's baked array — otherwise the length can't see them change.
-  const gearRadius = (i: number) =>
-    link.radKeys && radiiMap
-      ? (radiiMap.get(link.radKeys[i]) ?? radii[i])
-      : radii[i];
-  const vias: BeltVia[] = viaKey.map((key, v) => ({
-    pos: positions.get(key)!,
-    radius: viaGear[v] >= 0 ? gearRadius(viaGear[v]) : 0,
-    direction: viaGear[v] >= 0 ? directions[viaGear[v]] : false,
-  }));
+  // Vias, from the now-valid positions. In edition (radKeys present) the radii are live
+  // DOFs, so the geometry is measured from the RADII MAP — not the link's baked array —
+  // otherwise the length cannot see them change.
+  const sc = belt_shared_scratch(n);
+  for (let v = 0; v < n; v++) {
+    const g = lenGear[v];
+    sc.cx[v] = nodes.x[lenSlot[v]];
+    sc.cy[v] = nodes.y[lenSlot[v]];
+    sc.r[v] = g >= 0 ? (s.rad[g] >= 0 ? nodes.radius[s.rad[g]] : radii[g]) : 0;
+    sc.ccw[v] = g >= 0 && directions[g] ? 1 : 0;
+  }
+  const pairs = belt_solve_pairs(sc, n, closed);
 
-  // Continuous per-via wrap (whole turns included) → a wound arc grows past 2π smoothly (no 0/2π seam jump). Terminal slots carry 0 (never read as arcs).
-  const viaWraps = wraps
-    ? viaGear.map((g) => (g >= 0 ? (wraps[g] ?? 0) : 0))
-    : undefined;
-
-  // ∂L/∂centre = −(sum of adjacent tangent units): each straight span A→B adds −û to A and +û to B (envelope theorem: arcs add nothing to first-order translation). Accumulate per unique DOF (positions may be fused). For an open belt, also grab the two terminal runs (length + tangent point).
-  const pieces = belt_pieces(vias, closed, viaWraps);
+  // ∂L/∂centre = −(sum of adjacent tangent units): each straight span A→B adds −û to A
+  // and +û to B (envelope theorem: arcs add nothing to first-order translation). For an
+  // open belt, also grab the two terminal runs (length + tangent point).
   let length = 0;
-  let fsStart = 0;
-  let fsEnd = 0;
-  let PtanS: Point2 | null = null; // start run's gear tangent point
-  let PtanE: Point2 | null = null; // end run's gear tangent point
-  const posGrad = new Map<string, Point2>();
-  const add = (key: string, g: Point2) =>
-    posGrad.set(key, (posGrad.get(key) ?? new Point2(0, 0)).add(g));
-  for (const piece of pieces) {
-    length += piece.length;
-    if (piece.kind !== "segment") continue;
+  let gradCount = 0;
+  const add = (slot: number, gx: number, gy: number) => {
+    for (let i = 0; i < gradCount; i++)
+      if (gradSlot[i] === slot) {
+        gradX[i] += gx;
+        gradY[i] += gy;
+        return;
+      }
+    gradSlot[gradCount] = slot;
+    gradX[gradCount] = gx;
+    gradY[gradCount] = gy;
+    gradCount++;
+  };
+
+  let ptSX = 0;
+  let ptSY = 0;
+  let hasPtS = false;
+  let ptEX = 0;
+  let ptEY = 0;
+  let hasPtE = false;
+
+  /** Contact arc of via `v`: its length, or −1 when it has none. */
+  const arcOfVia = (v: number): number => {
+    const wrap =
+      wraps !== undefined ? (lenGear[v] >= 0 ? (wraps[lenGear[v]] ?? 0) : 0) : undefined;
+    if (!belt_solve_arc(sc, v, n, closed, wrap)) {
+      lenArc[v] = 0;
+      return -1;
+    }
+    lenArc[v] = 1;
+    return sc.r[v] * sc.arcWrap[v];
+  };
+
+  const strand = (p: number) => {
+    length += sc.ell[p];
+    const a = p;
+    const b = (p + 1) % n;
     // Terminal runs are captured FIRST: they must survive a ZERO-LENGTH run (an end
-    // resting on its pulley's rim). Dropping them there would null PtanS/PtanE, hence
-    // uS/uE, hence C_diff below — the belt would silently stop being no-slip.
-    if (!closed && piece.gearIndexA === 0) {
-      fsStart = piece.length;
-      PtanS = piece.to;
+    // resting on its pulley's rim). Dropping them there would null the tangent points,
+    // and the terminals would stop being moved by the length at all.
+    if (!closed && a === 0) {
+      ptSX = sc.arrX[p];
+      ptSY = sc.arrY[p];
+      hasPtS = true;
     }
-    if (!closed && piece.gearIndexB === last) {
-      fsEnd = piece.length;
-      PtanE = piece.from;
+    if (!closed && b === last) {
+      ptEX = sc.depX[p];
+      ptEY = sc.depY[p];
+      hasPtE = true;
     }
-    // A terminal run's tangent is read off the rim below (uS/uE), never off the run
-    // vector — which vanishes at contact. Its centre gradient is added there too.
-    if (!closed && (piece.gearIndexA === 0 || piece.gearIndexB === last))
-      continue;
-    const d = piece.to.sub(piece.from);
-    if (d.length_squared() < 1e-12) continue; // no direction to read off a null run
-    const u = d.normalize();
-    // Terminals (viaGear −1) are excluded from the centre gradient — an open belt's ends ride their own tangent (projected below).
-    if (viaGear[piece.gearIndexA] >= 0)
-      add(viaKey[piece.gearIndexA], u.mul(-1));
-    if (viaGear[piece.gearIndexB] >= 0) add(viaKey[piece.gearIndexB], u);
+    // A terminal run's tangent is read off the rim below, never off the run vector —
+    // which vanishes at contact. Its centre gradient is added there too.
+    if (!closed && (a === 0 || b === last)) return;
+    const dx = sc.arrX[p] - sc.depX[p];
+    const dy = sc.arrY[p] - sc.depY[p];
+    if (dx * dx + dy * dy < 1e-12) return; // no direction to read off a null run
+    const len = Math.sqrt(dx * dx + dy * dy);
+    const ux = dx / len;
+    const uy = dy / len;
+    // Terminals are excluded from the centre gradient — an open belt's ends ride their
+    // own tangent (projected below).
+    if (lenGear[a] >= 0) add(lenSlot[a], -ux, -uy);
+    if (lenGear[b] >= 0) add(lenSlot[b], ux, uy);
+  };
+
+  // Same traversal as `belt_pieces`: a closed belt starts on an arc, an open one on a run.
+  if (closed) {
+    for (let v = 0; v < n; v++) {
+      const arc = arcOfVia(v);
+      if (arc >= 0) length += arc;
+      strand(v);
+    }
+  } else {
+    for (let p = 0; p < pairs; p++) {
+      strand(p);
+      const arc = arcOfVia(p + 1);
+      if (arc >= 0) length += arc;
+    }
   }
 
-  // Outward unit tangent at each free terminal, taken from the pulley's RIM rather
-  // than from the run vector `terminal − Ptan`: that vector vanishes as the end
-  // reaches the rim, so neither its direction nor — above all — its SIGN can be read
-  // off it there. Belt travel at a rim point is perp(radial)·sign, sign = direction
-  // ? −1 : 1 (same convention as belt_point_tangent); the start run travels INTO its
-  // gear and the end run OUT of it, hence the flip on uS. Never degenerates.
-  const rimTravel = (Ptan: Point2, c: Point2, direction: boolean): Point2 =>
-    Ptan.sub(c)
-      .normalize()
-      .perp()
-      .mul(direction ? -1 : 1);
-  const uS =
-    !closed && PtanS
-      ? rimTravel(PtanS, vias[1].pos, vias[1].direction).mul(-1)
-      : null;
-  const uE =
-    !closed && PtanE
-      ? rimTravel(PtanE, vias[last - 1].pos, vias[last - 1].direction)
-      : null;
+  // Outward unit tangent at each free terminal, taken from the pulley's RIM rather than
+  // from the run vector `terminal − Ptan`: that vector vanishes as the end reaches the
+  // rim, so neither its direction nor — above all — its SIGN can be read off it there.
+  // Belt travel at a rim point is perp(radial)·sign; the start run travels INTO its gear
+  // and the end run OUT of it, hence the flip on the start.
+  let uSX = 0;
+  let uSY = 0;
+  let uEX = 0;
+  let uEY = 0;
+  const hasUS = !closed && hasPtS;
+  const hasUE = !closed && hasPtE;
+  if (hasUS) {
+    const vx = ptSX - sc.cx[1];
+    const vy = ptSY - sc.cy[1];
+    const l = Math.sqrt(vx * vx + vy * vy);
+    const sign = sc.ccw[1] === 1 ? -1 : 1;
+    uSX = -(vy / l) * sign * -1;
+    uSY = (vx / l) * sign * -1;
+  }
+  if (hasUE) {
+    const vx = ptEX - sc.cx[last - 1];
+    const vy = ptEY - sc.cy[last - 1];
+    const l = Math.sqrt(vx * vx + vy * vy);
+    const sign = sc.ccw[last - 1] === 1 ? -1 : 1;
+    uEX = -(vy / l) * sign;
+    uEY = (vx / l) * sign;
+  }
 
-  // ── The terminals' belt coordinate, IN THEIR PULLEY'S FRAME ────────────────
-  // The free-strand length fs is NOT a usable coordinate for a terminal: it is a **V**
-  // in the terminal's own tangential motion (fs = |t|, vertex at the tangency point), and
-  // its radial derivative is d/fs → ∞. Push a terminal through the vertex and fs grows
-  // back, so the differential's feedback sign flips and the end whips around the pulley.
-  //
-  //     h_S = fsStart − r₁·sign₁·ψ_arr      (ψ_arr = arrival rim angle on the first pulley)
-  //     h_E = fsEnd   + r_N·sign_N·ψ_dep    (ψ_dep = departure rim angle on the last)
-  //
-  // h is the terminal's belt ARC-LENGTH position measured in the pulley's frame. The two
-  // singular pieces (the √ in fs, the −√ in the rim angle) cancel exactly — the envelope
-  // theorem — leaving a gradient that is exactly the unit tangent uS/uE, everywhere,
-  // contact included. Monotone, so no V and no cap: reeling a free end past the tangency
-  // point simply UNWRAPS the pulley, which is the physics. Each end reads only its OWN
-  // rim angle, so ∂h_S/∂(end) = ∂h_E/∂(start) = 0 and the gradients stay uncoupled.
-  // No-slip then reads d(h_S) = −dφ and d(h_E) = +dφ.
-  const arcAt = (v: number) => {
-    const a = pieces.find((p) => p.kind === "arc" && p.gearIndex === v);
-    return a && a.kind === "arc" ? a : null;
-  };
-  // Continuous (unwrapped) arrival angle, tracked per frame; the raw atan2 would jump 2π
-  // at the ±π seam and inject 2πr of phantom belt into the residual.
-  const psiArr = (v: number, raw: number) => {
-    const cont = link.arrivals?.[viaGear[v]];
-    if (cont === undefined) return raw;
-    const TAU = 2 * Math.PI;
-    let d = raw - (((cont % TAU) + TAU) % TAU);
-    while (d > Math.PI) d -= TAU;
-    while (d <= -Math.PI) d += TAU;
-    return cont + d;
-  };
-  const arcS = closed ? null : arcAt(1);
-  const arcE = closed ? null : arcAt(last - 1);
-  const signOf = (v: number) => (vias[v].direction ? -1 : 1);
-  const hS = arcS
-    ? fsStart - vias[1].radius * signOf(1) * psiArr(1, arcS.startAngle)
-    : fsStart;
-  const hE = arcE
-    ? fsEnd +
-      vias[last - 1].radius *
-        signOf(last - 1) *
-        (psiArr(last - 1, arcE.startAngle) + signOf(last - 1) * arcE.wrap)
-    : fsEnd;
-  // Both terminal runs push their neighbouring gear centre along −(their own travel
-  // unit): −(−uS) for the start run's gear, −(uE) for the end run's.
-  if (uS) add(viaKey[1], uS.mul(-1));
-  if (uE) add(viaKey[last - 1], uE.mul(-1));
+  // Both terminal runs push their neighbouring gear centre along −(their own travel unit).
+  if (hasUS) add(lenSlot[1], -uSX, -uSY);
+  if (hasUE) add(lenSlot[last - 1], -uEX, -uEY);
 
   const C = length - targetLength;
 
-  // The open-belt terminal + φ + winding machinery is SIMULATION-only: it needs the
-  // shared travel φ, seeded in the angles map by belt_phase_gear_links. In edition
-  // (a length dimension) φ is absent → fall back to the pulley-centre projection,
-  // exactly as when closed (terminals stay free, unmoved by the length).
-  const simFeed =
-    !closed &&
-    link.phaseKey !== undefined &&
-    angles.get(link.phaseKey) !== undefined;
+  // ── One projection of C = L − L₀, the same in every branch ─────────────────
+  // The DOFs are the pulley centres, the two free terminals (each along its own belt
+  // tangent), and in edition the radii. A terminal JOINED to its adjacent pulley (a
+  // winch) is not free: its `GearPerimeterPin` carries it, and the belt it pays out is
+  // already counted in that pulley's growing arc.
+  const startWound = !!link.startWound && lenGear[1] === 0;
+  const endWound = !!link.endWound && lenGear[last - 1] === radii.length - 1;
+  const wSf = hasUS && !startWound ? nodes.w[iStart] : 0;
+  const wEf = hasUE && !endWound ? nodes.w[iEnd] : 0;
 
-  // ── Closed belt, or edition: pulley-centre projection (+ radii in edition) ──
-  if (!simFeed) {
-    let sPos = 0;
-    posGrad.forEach((grad, key) => {
-      sPos += (posMasses.get(key) ?? 1) * grad.length_squared();
-    });
+  let sPos = wSf + wEf;
+  for (let i = 0; i < gradCount; i++)
+    sPos += nodes.w[gradSlot[i]] * (gradX[i] * gradX[i] + gradY[i] * gradY[i]);
 
-    // Edition-only: the radii are DOFs too. Growing a pulley lengthens the belt by
-    // its wrap angle (∂L/∂r = wrap — the tangent-length and tangent-point terms
-    // cancel by the envelope theorem, leaving just the arc's angular extent). A
-    // dimension-radius freezes its pulley automatically (radMass 0).
-    const radGrad = new Map<string, number>();
-    if (link.radKeys && radiiMap) {
-      for (const piece of pieces) {
-        if (piece.kind !== "arc") continue;
-        const gi = viaGear[piece.gearIndex];
-        if (gi < 0) continue;
-        const rk = link.radKeys[gi];
-        if (rk === undefined) continue;
-        radGrad.set(rk, (radGrad.get(rk) ?? 0) + piece.wrap);
-      }
+  // Edition-only: the radii are DOFs too. Growing a pulley lengthens the belt by its
+  // wrap angle (∂L/∂r = wrap — the tangent-length and tangent-point terms cancel by the
+  // envelope theorem). A dimension-radius freezes its pulley automatically (radMass 0).
+  const radGrad = new Map<number, number>();
+  if (s.rad.length > 0) {
+    for (let v = 0; v < n; v++) {
+      if (!lenArc[v]) continue;
+      const gi = lenGear[v];
+      if (gi < 0) continue;
+      const rk = s.rad[gi];
+      if (rk === undefined || rk < 0) continue;
+      radGrad.set(rk, (radGrad.get(rk) ?? 0) + sc.arcWrap[v]);
     }
-    let sRad = 0;
-    radGrad.forEach((g, key) => {
-      sRad += (radMassesMap?.get(key) ?? 1) * g * g;
-    });
-
-    // Feel: when the centres are free to move, they should absorb the change TWICE
-    // as much as the radii (the principled split is 1:1 — set the factor to 1).
-    // Down-weighting the radii only; if the centres are all anchored (sPos ≈ 0) the
-    // radii keep their full mobility and carry the whole correction.
-    const RADII_ABSORB = 0.5;
-    let radScale = 1;
-    if (sPos > 1e-12 && sRad > 1e-12)
-      radScale = Math.min(1, (sPos * RADII_ABSORB) / sRad);
-
-    const denom = sPos + radScale * sRad;
-    if (denom < 1e-12) return Math.abs(C);
-    const k = -(C / denom) * stiffness;
-    posGrad.forEach((grad, key) => {
-      const w = posMasses.get(key) ?? 1;
-      if (w !== 0) positions.set(key, positions.get(key)!.add(grad.mul(k * w)));
-    });
-    radGrad.forEach((g, key) => {
-      const w = (radMassesMap?.get(key) ?? 1) * radScale;
-      if (w !== 0)
-        radiiMap!.set(
-          key,
-          Math.max(DIM.MIN_GEAR_RADIUS, radiiMap!.get(key)! + k * w * g),
-        );
-    });
-    return Math.abs(C);
   }
-
-  // ── Loose belt (simulation): free centres + terminals + φ + winding, one proj ──
-  const phi =
-    link.phaseKey !== undefined ? (angles.get(link.phaseKey) ?? 0) : 0;
-  const startGear = viaGear[1]; // first ACTIVE gear (terminal's neighbour)
-  const endGear = viaGear[last - 1];
-
-  // A terminal JOINED to its adjacent pulley (winch) is NOT a free end. Its join's
-  // GearPerimeterPin carries it, and it feeds the belt through that pulley's growing
-  // ARC — which `length` already counts, via the continuous wrap. Treating it as a free
-  // strand did two harmful things: the differential dragged the pinned terminal along
-  // its tangent (fighting the pin, which fed the tug back as torque on θ), and φ was
-  // charged twice when only ONE end can actually pay out belt. Guard on the joined
-  // pulley still being the terminal's neighbour (it may have disconnected mid-run).
-  const startWound = !!link.startWound && startGear === 0;
-  const endWound = !!link.endWound && endGear === radii.length - 1;
-  if (startWound) fsStart = 0;
-  if (endWound) fsEnd = 0;
-  const nFree = (startWound ? 0 : 1) + (endWound ? 0 : 1);
-
-  // Travelling the belt by φ pays out φ of strand at each FREE end (with opposite
-  // signs), so the differential's reference drifts by nFree·φ — not always 2φ.
-  const diffTarget = (link.diff0 ?? 0) - nFree * phi;
-
-  // A wound terminal gets weight 0 here: the belt never moves it, its join does.
-  const wS = startWound ? 0 : (posMasses.get(startKey) ?? 1);
-  const wE = endWound ? 0 : (posMasses.get(endKey) ?? 1);
-
-  const wSf = uS ? wS : 0;
-  const wEf = uE ? wE : 0;
-
-  // C_sum = total drawn length − L0, over free centres AND free terminals (each moves
-  // along its belt tangent; moving a terminal δ along its tangent changes total by δ, the
-  // gear tangent point stays put). One mass-weighted projection.
-  const corr = new Map<string, Point2>();
-  const addCorr = (key: string, v: Point2) =>
-    corr.set(key, (corr.get(key) ?? new Point2(0, 0)).add(v));
-  let denom = wSf + wEf;
-  posGrad.forEach((grad, key) => {
-    denom += (posMasses.get(key) ?? 1) * grad.length_squared();
+  let sRad = 0;
+  radGrad.forEach((g, slot) => {
+    sRad += nodes.wRadius[slot] * g * g;
   });
-  if (denom > 1e-12) {
-    const k = -C / denom;
-    posGrad.forEach((grad, key) => {
-      const w = posMasses.get(key) ?? 1;
-      if (w !== 0) addCorr(key, grad.mul(k * w));
-    });
-    if (uS && wSf > 0) addCorr(startKey, uS.mul(k * wSf));
-    if (uE && wEf > 0) addCorr(endKey, uE.mul(k * wEf));
-  }
 
-  // C_diff = (h_S − h_E) − (diff0 − nFree·φ): the no-slip differential coupling the FREE
-  // ends to the belt travel φ (feeding one end reels the other in). Bidirectional:
-  // dragging a free end advances φ, which turns every pulley via BeltPhaseGear. A wound
-  // end contributes nothing (weight 0) but the constraint still runs on the other one —
-  // that IS the winch: one end paying out, one end coiling.
-  //
-  // h, NOT the free-strand length: see the derivation above. d(h_S) = −dφ, d(h_E) = +dφ,
-  // so the residual is exactly (h_S − h_E) + nFree·φ − const, and ∇ = (+uS at start,
-  // −uE at end, +nFree on φ) — hence Σw|∇|² = wSf + wEf + nFree². Same gradients the
-  // projection already used; only the RESIDUAL changes, and that is what kills the V.
-  let dPhi = 0;
-  const diffRuns =
-    nFree > 0 && (startWound || uS !== null) && (endWound || uE !== null);
-  if (diffRuns) {
-    const Cdiff = (startWound ? 0 : hS) - (endWound ? 0 : hE) - diffTarget;
-    const lambda = Cdiff / (wSf + wEf + nFree * nFree);
-    if (uS && wSf > 0) addCorr(startKey, uS.mul(-lambda * wSf));
-    if (uE && wEf > 0) addCorr(endKey, uE.mul(lambda * wEf));
-    dPhi = -lambda * nFree;
-  }
+  // Feel: when the centres are free to move, they should absorb the change TWICE as much
+  // as the radii (the principled split is 1:1 — set the factor to 1).
+  const RADII_ABSORB = 0.5;
+  let radScale = 1;
+  if (sPos > 1e-12 && sRad > 1e-12)
+    radScale = Math.min(1, (sPos * RADII_ABSORB) / sRad);
 
-  // (No unilateral stop at the rim: h is monotone through the tangency point, so a free
-  // end reeled inward simply UNWRAPS its pulley instead of butting against it. The clamp
-  // that used to live here only existed to contain fs's V, and fs is gone.)
-  corr.forEach((v, key) =>
-    positions.set(key, positions.get(key)!.add(v.mul(stiffness))),
-  );
-  if (link.phaseKey !== undefined)
-    angles.set(link.phaseKey, phi + dPhi * stiffness);
+  const denom = sPos + radScale * sRad;
+  if (denom < 1e-12) return Math.abs(C);
+  const k = -(C / denom) * stiffness;
+  for (let i = 0; i < gradCount; i++) {
+    const slot = gradSlot[i];
+    const w = nodes.w[slot];
+    if (w === 0) continue;
+    const kw = k * w;
+    nodes.x[slot] += gradX[i] * kw;
+    nodes.y[slot] += gradY[i] * kw;
+  }
+  if (hasUS && wSf > 0) {
+    const kw = k * wSf;
+    nodes.x[iStart] += uSX * kw;
+    nodes.y[iStart] += uSY * kw;
+  }
+  if (hasUE && wEf > 0) {
+    const kw = k * wEf;
+    nodes.x[iEnd] += uEX * kw;
+    nodes.y[iEnd] += uEY * kw;
+  }
+  radGrad.forEach((g, slot) => {
+    const w = nodes.wRadius[slot] * radScale;
+    if (w !== 0)
+      nodes.radius[slot] = Math.max(
+        DIM.MIN_GEAR_RADIUS,
+        nodes.radius[slot] + k * w * g,
+      );
+  });
   return Math.abs(C);
 }
 
@@ -1377,29 +1291,31 @@ export function applyBeltLengthConstraint(
  * tangence sur un arc est structurelle (pas de poulie « dupliquée »). Retire 1 DDL.
  */
 export function applyBeltJunctionConstraint(
-  positions: Map<string, Point2>,
-  posMasses: Map<string, number>,
-  nodeKey: string,
-  gearPosKeys: string[],
+  nodes: EditNodes,
+  s: LinkSlots,
   radii: number[],
   directions: boolean[],
   stiffness: number = 1.0,
-  radiiMap?: Map<string, number>,
-  radKeys?: string[],
 ): number {
-  const J = positions.get(nodeKey);
-  if (!J || gearPosKeys.length === 0) return 0;
+  // pos slots: [junction node, ...one per pulley] (see link-slots.ts)
+  const iNode = s.pos[0];
+  const gearCount = s.pos.length - 1;
+  if (iNode < 0 || gearCount === 0) return 0;
+  const J = point(nodes, iNode);
 
   // Edition: the pulleys may be resized in the same solve (a length dimension), so read
-  // the LIVE radius from the map (keyed by the bare, never-fused gear id) — the link's
-  // baked `radii` array is a frame behind and would drag the junction off the outline.
+  // the LIVE radius from the radius DOF — the link's baked `radii` array is a frame
+  // behind and would drag the junction off the outline.
   const gearRadius = (i: number) =>
-    radiiMap && radKeys ? (radiiMap.get(radKeys[i]) ?? radii[i]) : radii[i];
+    s.rad[i] >= 0 ? nodes.radius[s.rad[i]] : radii[i];
   const vias: BeltVia[] = [];
-  for (let i = 0; i < gearPosKeys.length; i++) {
-    const pos = positions.get(gearPosKeys[i]);
-    if (!pos) return 0;
-    vias.push({ pos, radius: gearRadius(i), direction: directions[i] });
+  for (let i = 0; i < gearCount; i++) {
+    if (s.pos[1 + i] < 0) return 0;
+    vias.push({
+      pos: point(nodes, s.pos[1 + i]),
+      radius: gearRadius(i),
+      direction: directions[i],
+    });
   }
 
   // Nearest piece (segment or arc) of the closed gear cycle. Distance is to the
@@ -1417,36 +1333,35 @@ export function applyBeltJunctionConstraint(
     }
   }
 
-  const wJ = posMasses.get(nodeKey) ?? 1;
+  const wJ = nodes.w[iNode];
 
   if (best.kind === "segment") {
     // Move J and the segment's two bounding gears along the tangent normal
     // (translating both centres translates the tangent line exactly).
-    const keyA = gearPosKeys[best.gearIndexA];
-    const keyB = gearPosKeys[best.gearIndexB];
-    const cA = positions.get(keyA)!;
-    const cB = positions.get(keyB)!;
-    const wA = posMasses.get(keyA) ?? 1;
-    const wB = posMasses.get(keyB) ?? 1;
+    const iA = s.pos[1 + best.gearIndexA];
+    const iB = s.pos[1 + best.gearIndexB];
+    const cA = point(nodes, iA);
+    const cB = point(nodes, iB);
+    const wA = nodes.w[iA];
+    const wB = nodes.w[iB];
     const n = best.to.sub(best.from).perp().normalize();
     const e = J.sub(best.from).dot(n); // signed perpendicular offset
     const wLine = (wA + wB) / 2;
     const totalW = wJ + wLine;
     if (totalW === 0) return Math.abs(e);
     if (wJ !== 0)
-      positions.set(nodeKey, J.add(n.mul(-e * (wJ / totalW) * stiffness)));
+      setPoint(nodes, iNode, J.add(n.mul(-e * (wJ / totalW) * stiffness)));
     const lineShift = n.mul(e * (wLine / totalW) * stiffness);
-    if (wA !== 0) positions.set(keyA, cA.add(lineShift));
-    if (keyB !== keyA && wB !== 0) positions.set(keyB, cB.add(lineShift));
+    if (wA !== 0) setPoint(nodes, iA, cA.add(lineShift));
+    if (iB !== iA && wB !== 0) setPoint(nodes, iB, cB.add(lineShift));
     return Math.abs(e);
   }
 
   // On an arc: |J − centre| = radius, shared between J and that centre.
   return applyDistanceConstraint(
-    positions,
-    posMasses,
-    nodeKey,
-    gearPosKeys[best.gearIndex],
+    nodes,
+    iNode,
+    s.pos[1 + best.gearIndex],
     best.radius,
     stiffness,
   );
@@ -1456,146 +1371,167 @@ export function applyBeltJunctionConstraint(
  * Belt pin (simulation): the attached node `nodeKey` rides the belt at arc-length
  * s = s0 + r_ref·ε_ref·(θ_ref − θ_ref0), so it travels as the belt turns.
  * Bidirectional/symmetric: the TANGENTIAL error advances θ_ref (→ every pulley
- * turns via BeltPhaseGear) or slides the node, split by mass; the NORMAL error
+ * turns via the strand no-slips) or slides the node, split by mass; the NORMAL error
  * pulls the node back onto the belt, shared with the pulley(s) bounding that
  * piece. A closed belt is a closed pulley loop; a loose belt is the open path
  * start-terminal → pulleys → end-terminal (`closed=false`, terminals from
  * `startKey`/`endKey`). Disconnected pulleys are skipped. Radii + refs baked.
+ *
+ * `passive` makes it one-way — the node is moved onto its belt target and nothing
+ * else: a node nobody but the belt has a say in reads the belt travel, it does not
+ * hold it, and driving θ_ref from it would excite the free travel mode of a closed
+ * belt at the mercy of the sweep order.
  */
+
+/** Scratch for the pin: the gear slot behind each via (−1 for a terminal), the wrap it
+ *  rides, and where the arc-length lands. Grown once, reused every application. */
+let pinSlot = new Int32Array(16);
+let pinWrap = new Float64Array(16);
+const pinAt = belt_at();
+
 export function applyBeltPinConstraint(
-  positions: Map<string, Point2>,
-  posMasses: Map<string, number>,
-  angles: Map<string, number>,
-  nodeKey: string,
-  gearPosKeys: string[],
+  nodes: SimNodes,
+  s_: LinkSlots,
   radii: number[],
   directions: boolean[],
   refIndex: number,
-  refAngleKey: string,
   s0: number,
   thetaRef0: number,
   wraps?: number[],
   disconnected?: boolean[],
   closed: boolean = true,
-  startKey?: string,
-  endKey?: string,
   stiffness: number = 1.0,
+  passive: boolean = false,
 ): number {
-  const J = positions.get(nodeKey);
-  if (!J || gearPosKeys.length === 0) return 0;
-  // Ordered vias with, for an open belt, the two r=0 terminals bracketing the
-  // still-connected pulleys. `viaGearKey[v]` is the via's gear key, or null for a
-  // terminal (which owns no pulley to share the normal correction with).
-  const vias: BeltVia[] = [];
-  const viaGearKey: (string | null)[] = [];
-  const viaWraps: number[] | undefined = wraps ? [] : undefined;
-  if (!closed) {
-    const start = startKey ? positions.get(startKey) : undefined;
-    if (!start) return 0;
-    vias.push({ pos: start, radius: 0, direction: false });
-    viaGearKey.push(null);
-    viaWraps?.push(0);
+  // pos slots: [node, start, end, ...one per pulley] (see link-slots.ts)
+  const iNode = s_.pos[0];
+  const iStart = s_.pos[1];
+  const iEnd = s_.pos[2];
+  const gearCount = s_.pos.length - 3;
+  if (iNode < 0 || gearCount === 0) return 0;
+  const jx = nodes.x[iNode];
+  const jy = nodes.y[iNode];
+
+  // Ordered vias, straight into the scalar scratch: for an open belt the two r = 0
+  // terminals bracket the still-connected pulleys. `pinSlot[v]` is the via's gear slot,
+  // or −1 for a terminal, which owns no pulley to share the normal correction with.
+  const capacity = gearCount + 2;
+  if (pinSlot.length < capacity) {
+    pinSlot = new Int32Array(capacity);
+    pinWrap = new Float64Array(capacity);
   }
-  for (let i = 0; i < gearPosKeys.length; i++) {
+  const sc = belt_shared_scratch(capacity);
+  let n = 0;
+  const pushVia = (slot: number, radius: number, ccw: boolean, wrap: number) => {
+    sc.cx[n] = nodes.x[slot];
+    sc.cy[n] = nodes.y[slot];
+    sc.r[n] = radius;
+    sc.ccw[n] = ccw ? 1 : 0;
+    pinSlot[n] = radius > 0 ? slot : -1;
+    pinWrap[n] = wrap;
+    n++;
+  };
+  if (!closed) {
+    if (iStart < 0) return 0;
+    pushVia(iStart, 0, false, 0);
+  }
+  for (let i = 0; i < gearCount; i++) {
     if (disconnected?.[i]) continue;
-    const pos = positions.get(gearPosKeys[i]);
-    if (!pos) return 0;
-    vias.push({ pos, radius: radii[i], direction: directions[i] });
-    viaGearKey.push(gearPosKeys[i]);
-    viaWraps?.push(wraps![i] ?? 0);
+    const slot = s_.pos[3 + i];
+    if (slot < 0) return 0;
+    pushVia(slot, radii[i], directions[i], wraps?.[i] ?? 0);
   }
   if (!closed) {
-    const end = endKey ? positions.get(endKey) : undefined;
-    if (!end) return 0;
-    vias.push({ pos: end, radius: 0, direction: false });
-    viaGearKey.push(null);
-    viaWraps?.push(0);
+    if (iEnd < 0) return 0;
+    pushVia(iEnd, 0, false, 0);
   }
   // A closed loop needs ≥2 pulleys; an open path needs ≥1 pulley between its
   // terminals (start + pulley + end). Otherwise there is nothing to ride.
-  if (vias.length < (closed ? 2 : 3)) return 0;
+  if (n < (closed ? 2 : 3)) return 0;
 
-  const thetaRef = angles.get(refAngleKey);
-  if (thetaRef === undefined) return 0;
+  const iRefAngle = s_.ang[0];
+  if (iRefAngle < 0) return 0;
+  const thetaRef = nodes.angle[iRefAngle];
 
   const rEps = radii[refIndex] * (directions[refIndex] ? -1 : 1);
   if (Math.abs(rEps) < 1e-9) return 0;
-  const pieces = belt_pieces(vias, closed, viaWraps);
+
+  belt_solve_pairs(sc, n, closed);
+  const viaWraps = wraps ? pinWrap : undefined;
   let s = s0 + rEps * (thetaRef - thetaRef0);
   // On an open belt the arc-length is bounded by the belt itself (no wrap-around).
-  if (!closed) {
-    const total = pieces.reduce((a, p) => a + p.length, 0);
-    s = Math.max(0, Math.min(total, s));
+  if (!closed)
+    s = Math.max(0, Math.min(belt_total(sc, n, closed, viaWraps).total, s));
+  belt_locate(sc, n, closed, s, viaWraps, pinAt);
+
+  // Node relative to its belt target.
+  const ex = jx - pinAt.px;
+  const ey = jy - pinAt.py;
+  const errLen = Math.sqrt(ex * ex + ey * ey);
+  const wJ = nodes.w[iNode];
+
+  if (passive) {
+    if (wJ !== 0) {
+      nodes.x[iNode] = jx - ex * stiffness;
+      nodes.y[iNode] = jy - ey * stiffness;
+    }
+    return errLen;
   }
-  const { point: target, tangent: T } = belt_point_tangent(
-    vias,
-    s,
-    closed,
-    viaWraps,
-  );
 
-  const err = J.sub(target); // node relative to its belt target
-  const errT = err.dot(T); // tangential (belt-travel) mismatch
-  const errN = err.sub(T.mul(errT)); // normal (off-belt) offset
+  const errT = ex * pinAt.tx + ey * pinAt.ty; // tangential (belt-travel) mismatch
+  const nx = ex - pinAt.tx * errT; // normal (off-belt) offset
+  const ny = ey - pinAt.ty * errT;
 
-  const wJ = posMasses.get(nodeKey) ?? 1;
   const wTheta = 1; // angle node never anchored
   const totalT = wJ + wTheta;
 
   // Tangential: share between sliding the node back and advancing the belt.
-  let node = J;
-  if (wJ !== 0) node = node.sub(T.mul(errT * (wJ / totalT) * stiffness));
-  angles.set(
-    refAngleKey,
-    thetaRef + (errT * (wTheta / totalT) * stiffness) / rEps,
-  );
+  let px = jx;
+  let py = jy;
+  if (wJ !== 0) {
+    const shift = errT * (wJ / totalT) * stiffness;
+    px -= pinAt.tx * shift;
+    py -= pinAt.ty * shift;
+  }
+  nodes.angle[iRefAngle] =
+    thetaRef + (errT * (wTheta / totalT) * stiffness) / rEps;
 
-  // Normal: pull the node back onto the belt, sharing with the pulley(s) bounding
-  // the piece at s (terminals own no pulley), so dragging the node off the belt
-  // drags those pulleys with it.
-  const piece = piece_at_arclength(pieces, s, closed);
-  const gearKeys = piece
-    ? [
-        ...new Set(
-          (piece.kind === "segment"
-            ? [viaGearKey[piece.gearIndexA], viaGearKey[piece.gearIndexB]]
-            : [viaGearKey[piece.gearIndex]]
-          ).filter((k): k is string => k !== null),
-        ),
-      ]
-    : [];
+  // Normal: pull the node back onto the belt, sharing with the pulley(s) bounding the
+  // piece at s (terminals own no pulley), so dragging the node off the belt drags those
+  // pulleys with it. `viaA === viaB` on an arc, and coincidence fusion can put both on one
+  // slot — either way the pulley is counted once.
+  const slotA = pinAt.viaA >= 0 ? pinSlot[pinAt.viaA] : -1;
+  const slotBraw = pinAt.viaB >= 0 ? pinSlot[pinAt.viaB] : -1;
+  const slotB = slotBraw === slotA ? -1 : slotBraw;
+  const gearCountN = (slotA >= 0 ? 1 : 0) + (slotB >= 0 ? 1 : 0);
   const wGear =
-    gearKeys.length > 0
-      ? gearKeys.reduce((a, k) => a + (posMasses.get(k) ?? 1), 0) /
-        gearKeys.length
+    gearCountN > 0
+      ? ((slotA >= 0 ? nodes.w[slotA] : 0) + (slotB >= 0 ? nodes.w[slotB] : 0)) /
+        gearCountN
       : 0;
   const totalN = wJ + wGear;
   if (totalN > 0) {
-    if (wJ !== 0) node = node.sub(errN.mul((wJ / totalN) * stiffness));
-    const gearShift = errN.mul((wGear / totalN) * stiffness);
-    gearKeys.forEach((k) => {
-      if ((posMasses.get(k) ?? 1) !== 0)
-        positions.set(k, positions.get(k)!.add(gearShift));
-    });
+    if (wJ !== 0) {
+      const share = (wJ / totalN) * stiffness;
+      px -= nx * share;
+      py -= ny * share;
+    }
+    const gearShare = (wGear / totalN) * stiffness;
+    if (slotA >= 0 && nodes.w[slotA] !== 0) {
+      nodes.x[slotA] += nx * gearShare;
+      nodes.y[slotA] += ny * gearShare;
+    }
+    if (slotB >= 0 && nodes.w[slotB] !== 0) {
+      nodes.x[slotB] += nx * gearShare;
+      nodes.y[slotB] += ny * gearShare;
+    }
   }
-  if (wJ !== 0) positions.set(nodeKey, node);
-
-  return err.length();
-}
-
-/** The belt piece containing arc-length `s`: a closed loop wraps `s` modulo its
- *  length; an open belt clamps to its two ends. */
-function piece_at_arclength(pieces: BeltPiece[], s: number, closed = true) {
-  const total = pieces.reduce((a, p) => a + p.length, 0);
-  if (pieces.length === 0 || total <= 0) return undefined;
-  let local = closed
-    ? ((s % total) + total) % total
-    : Math.max(0, Math.min(total, s));
-  for (const p of pieces) {
-    if (local <= p.length) return p;
-    local -= p.length;
+  if (wJ !== 0) {
+    nodes.x[iNode] = px;
+    nodes.y[iNode] = py;
   }
-  return pieces[pieces.length - 1];
+
+  return errLen;
 }
 
 /**
@@ -1605,47 +1541,57 @@ function piece_at_arclength(pieces: BeltPiece[], s: number, closed = true) {
  * le beam avance la courroie (dTangentAngle/dθ_ref = courbure·r_ref·ε_ref) ; sur
  * un segment la tangente est fixe → le beam s'y aligne sans faire voyager.
  */
+
+/** Where the welded beam reads its tangent. Grown once, reused every application. */
+const tangentAt = belt_at();
+
 export function applyBeltFollowsTangentConstraint(
-  positions: Map<string, Point2>,
-  posMasses: Map<string, number>,
-  angles: Map<string, number>,
-  pivotKey: string,
-  drivenKey: string,
-  gearPosKeys: string[],
+  nodes: SimNodes,
+  s_: LinkSlots,
   radii: number[],
   directions: boolean[],
   refIndex: number,
-  refAngleKey: string,
   s0: number,
   thetaRef0: number,
   offset: number,
   disconnected?: boolean[],
   stiffness: number = 1.0,
 ): number {
-  const pivot = positions.get(pivotKey);
-  const driven = positions.get(drivenKey);
-  if (!pivot || !driven || gearPosKeys.length === 0) return 0;
+  // pos slots: [pivot, driven, ...one per pulley] (see link-slots.ts)
+  const iPivot = s_.pos[0];
+  const iDriven = s_.pos[1];
+  const gearCount = s_.pos.length - 2;
+  if (iPivot < 0 || iDriven < 0 || gearCount === 0) return 0;
+  const pivot = point(nodes, iPivot);
+  const driven = point(nodes, iDriven);
   // Reduced loop: skip disconnected pulleys (the tangent is read from the same
   // loop the belt is drawn on). s0/thetaRef0/refIndex are re-baked at disconnect.
-  const vias: BeltVia[] = [];
-  for (let i = 0; i < gearPosKeys.length; i++) {
+  const sc = belt_shared_scratch(gearCount);
+  let n = 0;
+  for (let i = 0; i < gearCount; i++) {
     if (disconnected?.[i]) continue;
-    const pos = positions.get(gearPosKeys[i]);
-    if (!pos) return 0;
-    vias.push({ pos, radius: radii[i], direction: directions[i] });
+    const slot = s_.pos[2 + i];
+    if (slot < 0) return 0;
+    sc.cx[n] = nodes.x[slot];
+    sc.cy[n] = nodes.y[slot];
+    sc.r[n] = radii[i];
+    sc.ccw[n] = directions[i] ? 1 : 0;
+    n++;
   }
-  if (vias.length < 2) return 0; // a 0/1-gear loop is degenerate
-  const angleKey = refAngleKey;
-  const thetaRef = angles.get(angleKey);
-  if (thetaRef === undefined) return 0;
+  if (n < 2) return 0; // a 0/1-gear loop is degenerate
+  const iAngle = s_.ang[0];
+  if (iAngle < 0) return 0;
+  const thetaRef = nodes.angle[iAngle];
 
   const rEps = radii[refIndex] * (directions[refIndex] ? -1 : 1);
   const s = s0 + rEps * (thetaRef - thetaRef0);
-  const { tangent, curvature } = belt_point_tangent(vias, s, true);
+  belt_solve_pairs(sc, n, true);
+  belt_locate(sc, n, true, s, undefined, tangentAt);
+  const curvature = tangentAt.curvature;
 
   const v = driven.sub(pivot);
   if (v.length_squared() < 1e-12) return 0;
-  let C = v.angle() - tangent.angle() - offset;
+  let C = v.angle() - Math.atan2(tangentAt.ty, tangentAt.tx) - offset;
   while (C > Math.PI) C -= 2 * Math.PI;
   while (C <= -Math.PI) C += 2 * Math.PI;
 
@@ -1656,8 +1602,8 @@ export function applyBeltFollowsTangentConstraint(
   // stays put: an anchored pivot (w_pivot = 0) gives c = pivot (driven swings about
   // it), while a free pivot (a grabbed far end) moves too and BeltPin turns that
   // motion into belt travel.
-  const wP = posMasses.get(pivotKey) ?? 1;
-  const wD = posMasses.get(drivenKey) ?? 1;
+  const wP = nodes.w[iPivot];
+  const wD = nodes.w[iDriven];
   const wBeam = wP + wD; // beam-rotation mobility (0 = both ends anchored)
   const denom = wBeam + dTdTheta * dTdTheta; // θ_ref node weight = 1
   if (denom < 1e-12) return Math.abs(C);
@@ -1666,56 +1612,29 @@ export function applyBeltFollowsTangentConstraint(
   const dTheta = C * (dTdTheta / denom) * stiffness; // belt travel
   if (wBeam > 0 && dPhi !== 0) {
     const c = pivot.mul(wD / wBeam).add(driven.mul(wP / wBeam));
-    if (wP !== 0) positions.set(pivotKey, c.add(pivot.sub(c).rotate(dPhi)));
-    if (wD !== 0) positions.set(drivenKey, c.add(driven.sub(c).rotate(dPhi)));
+    if (wP !== 0) setPoint(nodes, iPivot, c.add(pivot.sub(c).rotate(dPhi)));
+    if (wD !== 0) setPoint(nodes, iDriven, c.add(driven.sub(c).rotate(dPhi)));
   }
-  angles.set(angleKey, thetaRef + dTheta);
+  nodes.angle[iAngle] = thetaRef + dTheta;
   return Math.abs(C);
 }
 
-/**
- * Belt no-slip (simulation) : la rotation d'une poulie est liée au voyage partagé
- * `φ` de la courroie — r·ε·(θ − θ0) = φ, ε = dir?−1:1. Toutes les poulies (et les
- * extrémités / la jonction) se couplent au MÊME `φ`, donc la transmission passe
- * par lui. N'écrit que des scalaires d'angle (θ et φ, jamais ancrés).
- */
-export function applyBeltPhaseGearConstraint(
-  angles: Map<string, number>,
-  angleKey: string,
-  phaseKey: string,
-  r: number,
-  eps: number,
-  theta0: number,
-  stiffness: number = 1.0,
-): number {
-  const theta = angles.get(angleKey);
-  const phi = angles.get(phaseKey);
-  if (theta === undefined || phi === undefined) return 0;
-
-  if (r < 1e-9) return 0;
-  const C = r * eps * (theta - theta0) - phi; // = 0 at no-slip (px units)
-  // Project in belt-px space: θ contributes r·ε·θ px and φ contributes φ px, both
-  // magnitude 1 → denom = 2. Convert the θ correction back to radians by /(r·ε).
-  angles.set(angleKey, theta - (C / (2 * r * eps)) * stiffness);
-  angles.set(phaseKey, phi + (C / 2) * stiffness);
-  return Math.abs(C);
-}
 
 /** Engrenages coaxiaux : θ1 − θ2 = offset (même rotation, offset constant). */
 export function applyCoaxialAngleConstraint(
-  angles: Map<string, number>,
-  angleKey1: string,
-  angleKey2: string,
+  nodes: SimNodes,
+  iAngle1: number,
+  iAngle2: number,
   offset: number,
   stiffness: number = 1.0,
 ): number {
-  const a1 = angles.get(angleKey1);
-  const a2 = angles.get(angleKey2);
-  if (a1 === undefined || a2 === undefined) return 0;
+  if (iAngle1 < 0 || iAngle2 < 0) return 0;
+  const a1 = nodes.angle[iAngle1];
+  const a2 = nodes.angle[iAngle2];
 
   // Les angles ne sont jamais ancrés : correction répartie à parts égales.
   const C = a1 - a2 - offset; // cumulatif : pas de wrap
-  angles.set(angleKey1, a1 - 0.5 * C * stiffness);
-  angles.set(angleKey2, a2 + 0.5 * C * stiffness);
+  nodes.angle[iAngle1] = a1 - 0.5 * C * stiffness;
+  nodes.angle[iAngle2] = a2 + 0.5 * C * stiffness;
   return Math.abs(C);
 }

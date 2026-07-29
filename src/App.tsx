@@ -120,11 +120,12 @@ import { OverlaysMenu } from "./components/toolbar/OverlaysMenu";
 import {
   RECORD_DT,
   SimGrab,
-  SimulationModel,
   apply_snapshot_to_mechanism,
-  compile_simulation_model,
-  step_simulation,
+  at_recording_end,
+  snapshot_at,
+  snapshot_index_at,
 } from "./components/solver/kinematic-simulation";
+import { RecorderClient } from "./components/solver/recorder-client";
 import {
   EMPTY_TRAJECTORY_CACHE,
   TrajectoryCache,
@@ -132,7 +133,6 @@ import {
   trajectories_at,
 } from "./components/solver/probe-series";
 import { PROBE_ELEMENT_COLORS } from "./components/properties-panel/components/ProbeChart";
-import { KinematicSnapshot } from "./types/runtime-state";
 import { CanvasState } from "./types/canvas-state";
 import { HoveredPart } from "./types/hovered-part";
 import { actionReducer } from "./components/mechanism/action-reducer";
@@ -161,7 +161,7 @@ const read_all_records = async (db: IDBPDatabase<SlidepDB>) =>
   (await db.getAll("mechanisms")).map(migrate_document);
 
 const DEBOUNCE_AUTOSAVE_TIME_MILLIS = 1000;
-const VIEWPORT_ZOOM_SENSITIVITY = 250; // Nombre de "crans" de molette nécessaires pour multiplier le zoom par 2
+const VIEWPORT_ZOOM_SENSITIVITY = 400; // Nombre de "crans" de molette nécessaires pour multiplier le zoom par 2
 const LANGUAGES = ["Deutsch", "English", "Español", "Français"];
 
 // Paliers de la top-bar. `condensed` raccourcit les libellés (Édition → Édit,
@@ -281,9 +281,6 @@ const App: React.FC = () => {
   const [runtimeState, setRuntimeState] = useState<RuntimeState>(
     DEFAULT_RUNTIME_STATE,
   );
-  const [grabSnapshot, setGrabSnapshot] = useState<KinematicSnapshot | null>(
-    null,
-  );
   const [timelineHovered, setTimelineHovered] = useState(false);
   const [timelineDragging, setTimelineDragging] = useState(false);
 
@@ -398,11 +395,32 @@ const App: React.FC = () => {
   const kinematicRef = useRef({ mechanism, runtimeState, appMode });
   kinematicRef.current = { mechanism, runtimeState, appMode };
   const kinematicLastWallTime = useRef<number | null>(null);
-  const kinematicGrabRef = useRef<SimGrab | null>(null);
   const autoPlayOnEnterRef = useRef<boolean>(false);
-  const simulationModelRef = useRef<SimulationModel | null>(null);
   const simStartHistoryLengthRef = useRef<number>(0);
   const probeOnlyEditRef = useRef<boolean>(false);
+  /**
+   * The recording worker: it owns the compiled model and everything measured about it, and
+   * produces snapshots on its own thread.
+   *
+   * Built on first use and rebuilt after a dispose, never in a `useRef` initialiser: that
+   * argument is evaluated on EVERY render, so it would spawn a worker per render — and
+   * StrictMode's mount/unmount/mount would leave the ref pointing at a terminated one.
+   */
+  const recorderRef = useRef<RecorderClient | null>(null);
+  const recorder = () => (recorderRef.current ??= new RecorderClient());
+  /** Whether the worker was last told to record, so pausing is signalled once. */
+  const recordingRef = useRef<boolean>(false);
+  /**
+   * Whether playback is re-reading a recording that already extends past the cursor,
+   * rather than extending it.
+   *
+   * Decided ONCE when playback starts, never re-inferred per frame: the frontier
+   * legitimately runs ahead of the cursor while recording — by a step, by the worker's
+   * lead, by a message's latency — so any per-frame comparison eventually reads a live
+   * recording as a replay, and the replay path pauses itself on reaching an end that
+   * recording does not have.
+   */
+  const replayingRef = useRef<boolean>(false);
 
   /** `duration` overrides the default for messages that take longer to read, or
    *  that report something lost. */
@@ -428,7 +446,10 @@ const App: React.FC = () => {
     setPrevCanvasState(canvasState);
     if (
       canvasState.type === "PlacingProbe" ||
-      canvasState.type === "PlacingProbeMetrics"
+      canvasState.type === "PlacingProbeMetrics" ||
+      // Leaving that popover too: the user came in through a probe, so closing
+      // it must not send them back to the element or project tab.
+      prevCanvasState.type === "PlacingProbeMetrics"
     ) {
       // Probe workflow: the probes and their graphs live in the analysis tab
       setActiveTab("analysis");
@@ -500,14 +521,10 @@ const App: React.FC = () => {
     if (appMode !== "edition") {
       simStartHistoryLengthRef.current = mechanismRef.current.history.length;
       // Compile the frozen simulation model from the current mechanism.
-      simulationModelRef.current = compile_simulation_model(
-        mechanismRef.current,
-      );
+      recorder().load(mechanismRef.current, null);
       // Entering simulation is the one automatic switch to the analysis tab;
       // from there, selecting elements no longer moves it.
       setActiveTab("analysis");
-    } else {
-      simulationModelRef.current = null;
     }
     // Capture the flag synchronously: the setRuntimeState updater below runs
     // later, after this line has already reset the ref to false.
@@ -518,6 +535,9 @@ const App: React.FC = () => {
       isPlaying: shouldAutoPlay,
       time: 0,
       kinematicSnapshots: [],
+      lag: 0,
+      recordStep: RECORD_DT,
+      scrubbed: false,
     }));
   }, [appMode]);
 
@@ -534,18 +554,12 @@ const App: React.FC = () => {
     if (probeOnly) return;
     const rs = runtimeStateRef.current;
     const snaps = rs.kinematicSnapshots;
-    const idx =
-      snaps.length > 0
-        ? Math.min(
-            Math.max(0, Math.floor(rs.time / RECORD_DT)),
-            snaps.length - 1,
-          )
-        : -1;
-    const baseSnap = idx >= 0 ? snaps[idx] : null;
+    const baseSnap =
+      snaps.length > 0 ? snaps[snapshot_index_at(snaps, rs.time)] : null;
     const baseMech = baseSnap
       ? apply_snapshot_to_mechanism(mechanism, baseSnap)
       : mechanism;
-    simulationModelRef.current = compile_simulation_model(baseMech);
+    recorder().load(baseMech, baseSnap);
     setRuntimeState((prev) => ({
       ...prev,
       kinematicSnapshots: prev.kinematicSnapshots.filter((s) => s.t <= rs.time),
@@ -569,8 +583,20 @@ const App: React.FC = () => {
 
       if (mode !== "kinematic" || !rs.isPlaying) {
         kinematicLastWallTime.current = null;
+        // Tell the worker once, not every frame: left running it would keep recording
+        // towards the last target it was given, well past the pause.
+        if (recordingRef.current) {
+          recordingRef.current = false;
+          recorder().stop();
+        }
         rafId = requestAnimationFrame(step);
         return;
+      }
+      if (!recordingRef.current) {
+        recordingRef.current = true;
+        // Decided from the intent that put the cursor there, not from where the cursor
+        // sits: the frontier moves while recording, the flag does not.
+        replayingRef.current = rs.scrubbed;
       }
 
       const lastWallTime = kinematicLastWallTime.current;
@@ -584,64 +610,65 @@ const App: React.FC = () => {
       const realDt = Math.min((wallTime - lastWallTime) / 1000, 0.1);
       const simDt = realDt * rs.speed;
 
-      const existingSnaps = rs.kinematicSnapshots;
-      const frontier =
-        existingSnaps.length > 0
-          ? existingSnaps[existingSnaps.length - 1].t
-          : -RECORD_DT;
-
-      // Replay mode: history exists ahead of current time → just advance the cursor
-      if (frontier > rs.time + RECORD_DT / 2) {
+      // Replay: history exists ahead of the cursor → just walk it, solving nothing.
+      if (replayingRef.current) {
         setRuntimeState((prev) => {
           const prevFrontier =
             prev.kinematicSnapshots.length > 0
               ? prev.kinematicSnapshots[prev.kinematicSnapshots.length - 1].t
               : 0;
           const nextTime = prev.time + simDt;
-          // Stop as soon as the next step would leave the replay zone
-          // (mirrors the `frontier > time + RECORD_DT / 2` mode test above),
-          // otherwise the cursor can land just under the frontier and the
-          // next frame falls through to create mode while still playing.
-          if (nextTime >= prevFrontier - RECORD_DT / 2) {
-            return { ...prev, time: prevFrontier, isPlaying: false };
+          // Reaching the end of what was recorded stops playback — the recording is not
+          // resumed from here, since the frontier is where the mechanism was left.
+          if (nextTime >= prevFrontier) {
+            replayingRef.current = false;
+            // Caught up with the recording: no longer somewhere the user put us, so
+            // playing again extends instead of replaying.
+            return {
+              ...prev,
+              time: prevFrontier,
+              isPlaying: false,
+              scrubbed: false,
+            };
           }
           return { ...prev, time: nextTime };
         });
       } else {
-        // Create mode: compute new snapshots
-        const model = simulationModelRef.current;
-        const newTime = rs.time + simDt;
-        const newSnaps: KinematicSnapshot[] = [];
-        let t = frontier + RECORD_DT;
-        while (model && t <= newTime + RECORD_DT / 2) {
-          const prevSnap =
-            newSnaps.length > 0
-              ? newSnaps[newSnaps.length - 1]
-              : existingSnaps.length > 0
-                ? existingSnaps[existingSnaps.length - 1]
-                : null;
-          newSnaps.push(
-            step_simulation(
-              model,
-              t,
-              prevSnap?.positions ?? null,
-              prevSnap?.angles ?? null,
-              RECORD_DT,
-              kinematicGrabRef.current ?? undefined,
-            ),
-          );
-          t += RECORD_DT;
-        }
+        // Create mode. The solving happens in the worker; this frame only says where
+        // the clock is headed and collects whatever came back. Nothing is awaited, so
+        // the display never blocks on the solver however heavy the mechanism.
+        const requestedTime = rs.time + simDt;
+        // Two frames of lead, deliberately. `reached` always describes the target of the
+        // PREVIOUS frame — a worker answers between frames, not inside one — so aiming at
+        // where the cursor is going leaves the cap sitting exactly on it: it binds on some
+        // frames and not others, and the cursor advances in fits, which is visible as the
+        // mechanism speeding up and slowing down. One frame of lead cancels the staleness,
+        // the second puts the cap comfortably out of the way. It costs nothing — the
+        // worker stops at its target — beyond recording slightly past what is displayed.
+        recorder().target(requestedTime + 2 * simDt, rs.speed);
+        const { snapshots: newSnaps, stepDt, reached } = recorder().drain();
+
+        // The cursor may lead the frontier by a step and no further: past that it would
+        // read a time no snapshot covers, and the timeline would claim progress that was
+        // never computed. What it gives up is the lag. Before the first snapshot comes
+        // back there is no frontier to lead, so the clock waits.
+        const newTime =
+          reached === null
+            ? rs.time
+            : Math.min(requestedTime, reached + stepDt);
+        const lagAdded = requestedTime - newTime;
 
         setRuntimeState((prev) => {
           const prevFrontier =
             prev.kinematicSnapshots.length > 0
               ? prev.kinematicSnapshots[prev.kinematicSnapshots.length - 1].t
-              : -RECORD_DT;
+              : -stepDt;
           const uniqueSnaps = newSnaps.filter((s) => s.t > prevFrontier);
           return {
             ...prev,
             time: newTime,
+            lag: prev.lag + lagAdded,
+            recordStep: newSnaps.length > 0 ? stepDt : prev.recordStep,
             kinematicSnapshots:
               uniqueSnaps.length > 0
                 ? [...prev.kinematicSnapshots, ...uniqueSnaps]
@@ -654,7 +681,14 @@ const App: React.FC = () => {
     };
 
     rafId = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(rafId);
+    return () => {
+      cancelAnimationFrame(rafId);
+      // Cleared, not just terminated: the next mount must build a live one. React runs
+      // every cleanup before every effect, so the `load` that follows recreates it.
+      recorderRef.current?.dispose();
+      recorderRef.current = null;
+      recordingRef.current = false;
+    };
   }, []); // intentionally runs once; all state accessed via kinematicRef
 
   const debouncedSave = useRef(
@@ -730,9 +764,18 @@ const App: React.FC = () => {
 
   // Repère les contraintes-icônes recréées/supprimées par un undo/redo pour que
   // le canvas les fasse réapparaître (reveal) ou s'estomper (fantôme rouge). Les
-  // dimensions sont ignorées car toujours visibles.
+  // dimensions sont ignorées car toujours visibles. `actions` sont celles que
+  // l'undo/redo vient de rejouer : un déplacement d'icône n'est révélé que s'il
+  // provient d'un MoveConstraint explicite, pas d'un re-solve géométrique global.
   const signalConstraintChange = useCallback(
-    (before: ConstraintElement[], after: ConstraintElement[]) => {
+    (
+      before: ConstraintElement[],
+      after: ConstraintElement[],
+      actions: Action[],
+    ) => {
+      const movedByAction = new Set<ID>();
+      for (const a of actions)
+        if (a.type === "MoveConstraint") movedByAction.add(a.id);
       const beforeById = new Map(before.map((c) => [c.id, c]));
       const afterById = new Map(after.map((c) => [c.id, c]));
       const revealIDs: ID[] = [];
@@ -741,11 +784,12 @@ const App: React.FC = () => {
         if (c.type.startsWith("dimension-") || c.type === "gear-ratio")
           continue;
         const prev = beforeById.get(c.id);
-        // Recréée, déplacée ou éditée → la révéler.
+        // Recréée, ou déplacée/éditée par une action explicite → la révéler.
         if (
           !prev ||
-          prev.position.x !== c.position.x ||
-          prev.position.y !== c.position.y ||
+          (movedByAction.has(c.id) &&
+            (prev.position.x !== c.position.x ||
+              prev.position.y !== c.position.y)) ||
           ("value" in prev && "value" in c && prev.value !== c.value)
         )
           revealIDs.push(c.id);
@@ -796,6 +840,7 @@ const App: React.FC = () => {
       signalConstraintChange(
         prevMechanism.constraintElements,
         newMechanism.constraintElements,
+        lastActionsForUndo,
       );
       const currentState = canvasStateRef.current;
       if (
@@ -854,6 +899,7 @@ const App: React.FC = () => {
       signalConstraintChange(
         prevMechanism.constraintElements,
         newMechanism.constraintElements,
+        nextActions,
       );
       const currentState = canvasStateRef.current;
       if (
@@ -1122,9 +1168,7 @@ const App: React.FC = () => {
   // button (reset to t=0 and stop); otherwise it exits to edition mode.
   const handleEscapeKey = useCallback(() => {
     if (appMode !== "edition" && runtimeStateRef.current.isPlaying) {
-      simulationModelRef.current = compile_simulation_model(
-        mechanismRef.current,
-      );
+      recorder().load(mechanismRef.current, null);
       setRuntimeState((prev) => ({
         ...prev,
         time: 0,
@@ -1132,6 +1176,9 @@ const App: React.FC = () => {
         current: null,
         history: [],
         kinematicSnapshots: [],
+        lag: 0,
+        recordStep: RECORD_DT,
+        scrubbed: false,
       }));
     } else {
       setAppMode("edition");
@@ -1147,7 +1194,7 @@ const App: React.FC = () => {
       gearPerimeter?: { gearID: string; angleOffset: number; radius: number },
       beltPin?: Extract<Link, { type: "BeltPin" }>,
     ) => {
-      // Feed the grab into the RAF loop for snapshot recording
+      // Feed the grab into the recorder, which is what pulls on it while stepping
       const grab: SimGrab = beltPin
         ? { beltPin, target }
         : gearPerimeter
@@ -1160,58 +1207,35 @@ const App: React.FC = () => {
           : bodyRatio !== undefined
             ? { edgeID: key, t: bodyRatio, target }
             : { key, target };
-      kinematicGrabRef.current = grab;
-      const { runtimeState: rs } = kinematicRef.current;
-      const model = simulationModelRef.current;
-      if (!model) return;
-      // Start playback if paused
-      if (!rs.isPlaying) {
+      if (kinematicRef.current.appMode === "edition") return;
+      recorder().setGrab(grab);
+      // Start playback if paused: the grab only reaches the solver through the
+      // recording loop, which needs to be running.
+      if (!kinematicRef.current.runtimeState.isPlaying) {
         setRuntimeState((prev) => ({ ...prev, isPlaying: true }));
       }
-      // Also compute an immediate display snapshot for sub-frame responsiveness
-      const snaps = rs.kinematicSnapshots;
-      const idx =
-        snaps.length > 0
-          ? Math.min(
-              Math.max(0, Math.floor(rs.time / RECORD_DT)),
-              snaps.length - 1,
-            )
-          : -1;
-      const prevSnap = idx >= 0 ? snaps[idx] : null;
-      setGrabSnapshot(
-        step_simulation(
-          model,
-          rs.time,
-          prevSnap?.positions ?? null,
-          prevSnap?.angles ?? null,
-          RECORD_DT,
-          grab,
-        ),
-      );
     },
     [],
   );
 
   const handleSimulationGrabEnd = useCallback(() => {
-    kinematicGrabRef.current = null;
-    setGrabSnapshot(null);
+    recorder().setGrab(null);
   }, []);
 
   // Derive the display mechanism: use simulated positions when in kinematic mode
-  const currentKinematicSnapshot = (() => {
-    if (appMode !== "kinematic" || runtimeState.kinematicSnapshots.length === 0)
-      return null;
-    const idx = Math.min(
-      Math.max(0, Math.floor(runtimeState.time / RECORD_DT)),
-      runtimeState.kinematicSnapshots.length - 1,
-    );
-    return runtimeState.kinematicSnapshots[idx];
-  })();
+  const currentKinematicSnapshot =
+    appMode === "kinematic"
+      ? snapshot_at(runtimeState.kinematicSnapshots, runtimeState.time)
+      : null;
 
-  const activeSnapshot = grabSnapshot ?? currentKinematicSnapshot;
-  const displayMechanism = activeSnapshot
-    ? apply_snapshot_to_mechanism(mechanism, activeSnapshot)
+  const displayMechanism = currentKinematicSnapshot
+    ? apply_snapshot_to_mechanism(mechanism, currentKinematicSnapshot)
     : mechanism;
+
+  // A grab is a live intervention on the mechanism, so it only has a meaning where the
+  // recording is being extended. Somewhere the user scrubbed to, playback re-reads what
+  // exists and never consults the grab, so the canvas must not offer one.
+  const canSimulationGrab = appMode === "kinematic" && !runtimeState.scrubbed;
 
   // ── État de la timeline, partagé par la top-bar et le rail ──
   //
@@ -1231,6 +1255,7 @@ const App: React.FC = () => {
     current: timelineCurrent,
     time: timelineTime,
     isPlaying: timelinePlaying,
+    scrubbed: timelineScrubbed,
   } = runtimeState;
   const timeline = useMemo(() => {
     const frontier =
@@ -1239,7 +1264,11 @@ const App: React.FC = () => {
         : timelineCurrent
           ? timelineCurrent.timestamp
           : 0;
-    const recording = timelinePlaying && timelineTime >= frontier - RECORD_DT;
+    // Read from the intent, not from a comparison of times: the frontier deliberately
+    // runs ahead of the cursor while recording, by an amount that varies from frame to
+    // frame (the worker produces in bursts). Comparing them makes the head flicker
+    // between its two appearances at the rhythm of that burstiness.
+    const recording = timelinePlaying && !timelineScrubbed;
     const pct = recording
       ? 100
       : frontier > 0
@@ -1250,10 +1279,17 @@ const App: React.FC = () => {
       recording,
       pct,
       atStart: timelineTime <= 0,
-      atEnd: frontier > 0 && timelineTime >= frontier - RECORD_DT / 2,
+      atEnd: recording || (frontier > 0 && timelineTime >= frontier - RECORD_DT / 2),
       hasRecording: frontier > 0 || timelineSnaps.length > 0,
     };
-  }, [appMode, timelineSnaps, timelineCurrent, timelineTime, timelinePlaying]);
+  }, [
+    appMode,
+    timelineSnaps,
+    timelineCurrent,
+    timelineTime,
+    timelinePlaying,
+    timelineScrubbed,
+  ]);
 
   // Trajectoires des éléments dont l'affichage est activé (showTrajectory),
   // tracées sur le canvas pendant la simulation.
@@ -1568,9 +1604,7 @@ const App: React.FC = () => {
                     onClick={() => {
                       // Recompile from the initial geometry
                       if (appMode !== "edition")
-                        simulationModelRef.current = compile_simulation_model(
-                          mechanismRef.current,
-                        );
+                        recorder().load(mechanismRef.current, null);
                       setRuntimeState((prev) => ({
                         ...prev,
                         time: 0,
@@ -1578,6 +1612,7 @@ const App: React.FC = () => {
                         current: null,
                         history: [],
                         kinematicSnapshots: [],
+                        lag: 0,
                       }));
                     }}
                     sx={{
@@ -1606,6 +1641,12 @@ const App: React.FC = () => {
                         ...prev,
                         time: 0,
                         isPlaying: false,
+                        // Nothing recorded yet ⇒ the start IS the end.
+                        scrubbed: !at_recording_end(
+                          prev.kinematicSnapshots,
+                          0,
+                          prev.recordStep,
+                        ),
                       }))
                     }
                     sx={{ p: 0.4 }}
@@ -1664,7 +1705,13 @@ const App: React.FC = () => {
                         const snaps = prev.kinematicSnapshots;
                         const maxT =
                           snaps.length > 0 ? snaps[snaps.length - 1].t : 0;
-                        return { ...prev, time: maxT, isPlaying: false };
+                        // The end by construction: playing from here records on.
+                        return {
+                          ...prev,
+                          time: maxT,
+                          isPlaying: false,
+                          scrubbed: false,
+                        };
                       })
                     }
                   >
@@ -1832,6 +1879,7 @@ const App: React.FC = () => {
                   }
                 >
                   <Chip
+                    disabled
                     icon={
                       <JoinInner
                         sx={{
@@ -1883,8 +1931,7 @@ const App: React.FC = () => {
 
               {!tight && <Divider flexItem sx={{ mx: 0.5 }} />}
 
-              {/* Calques d'affichage — groupe distinct de gravité/collisions :
-                  ceux-là changent ce qui est calculé, celui-ci ce qui est montré. */}
+              {/* Calques d'affichage : ce qui est montré. */}
               <Box
                 sx={{
                   display: "flex",
@@ -2203,6 +2250,7 @@ const App: React.FC = () => {
             }
             onSimulationGrab={handleSimulationGrab}
             onSimulationGrabEnd={handleSimulationGrabEnd}
+            canSimulationGrab={canSimulationGrab}
             snapToGrid={snapToGrid}
             showGrid={showGrid}
             trajectories={trajectories}
@@ -2291,11 +2339,21 @@ const App: React.FC = () => {
                             : rs.current
                               ? rs.current.timestamp
                               : 0;
-                        setRuntimeState((prev) => ({
-                          ...prev,
-                          time: ratio * maxTime,
-                          isPlaying: false,
-                        }));
+                        setRuntimeState((prev) => {
+                          const t = ratio * maxTime;
+                          return {
+                            ...prev,
+                            time: t,
+                            isPlaying: false,
+                            // Dropped ON the end is not scrubbing: playing from there
+                            // extends the recording instead of replaying nothing.
+                            scrubbed: !at_recording_end(
+                              prev.kinematicSnapshots,
+                              t,
+                              prev.recordStep,
+                            ),
+                          };
+                        });
                       };
                       seek(e.clientX);
                       const onMove = (ev: MouseEvent) => seek(ev.clientX);
@@ -2425,7 +2483,7 @@ const App: React.FC = () => {
             appMode={appMode}
             activeTab={activeTab}
             setActiveTab={setActiveTab}
-            unsatisfied={activeSnapshot?.unsatisfied ?? []}
+            unsatisfied={currentKinematicSnapshot?.unsatisfied ?? []}
           />
         </Box>
       </Box>
@@ -2454,25 +2512,24 @@ const App: React.FC = () => {
         </IconButton>
         <DialogContent dividers>
           <Typography gutterBottom>
-            Slidep simule des mécanismes plans en temps réel. On dessine, on
-            tire sur une pièce, et tout le système réagit.
+            Slidep est un laboratoire de mécanique virtuel. Conçu pour une prise
+            en main immédiate, il permet de construire et voir s'animer
+            instantanément ses propres mécanismes.
           </Typography>
 
           <Typography gutterBottom>
             C'est l'application que j'aurais aimé avoir quand j'étais étudiant
             en génie mécanique. Slidep se place entre le schéma papier-crayon et
-            le solveur par éléments finis. Mais pour vraiment remplacer le
-            papier-crayon, il faudrait pouvoir modéliser n'importe quel
-            mécanisme : j'aimerais un jour gérer les collisions, dessiner en 3D,
-            peut-être faire de la dynamique des fluides.
+            le solveur par éléments finis. Mais sa force réside plutôt dans les
+            itérations rapides. Slidep donne tout de suite des ordres de
+            grandeur, et permet surtout de voir l'impact de changements sur un
+            design en temps réel.
           </Typography>
 
           <Typography>
-            Slidep donne tout de suite des ordres de grandeur : on voit une
-            flèche, un effort ou un rapport de transmission changer en direct.
-            Ça ne remplace pas un solveur validé quand il faut signer un
-            dimensionnement, mais pour explorer, comparer et comprendre, c'est
-            bien plus rapide.
+            Slidep devrait bientôt permettre de gérer les collisions et de
+            partager ses mécanismes. À terme, l'objectif est d'ajouter le dessin
+            en 3D, et peut-être même y faire de la dynamique des fluides.
           </Typography>
 
           <Box
@@ -2487,12 +2544,12 @@ const App: React.FC = () => {
               {
                 icon: <Bolt sx={{ fontSize: 20 }} />,
                 title: "Temps réel",
-                body: "Le mécanisme se recalcule pendant que vous le manipulez.",
+                body: "La simulation se recalcule pendant que vous manipulez le mécanisme.",
               },
               {
                 icon: <CloudOff sx={{ fontSize: 20 }} />,
                 title: "Hors ligne",
-                body: "Installez Slidep depuis votre navigateur, il fonctionne sans connexion.",
+                body: "Installez Slidep depuis votre navigateur pour l'utiliser sans connexion.",
               },
               {
                 icon: <Lock sx={{ fontSize: 20 }} />,
@@ -2523,8 +2580,8 @@ const App: React.FC = () => {
           </Box>
 
           <Typography sx={{ mt: 3 }}>
-            Si vous avez des idées, écrivez-moi. Et si vous savez coder, le
-            dépôt est ouvert.
+            Si vous êtes intéressé par le projet ou souhaitez contribuer,
+            écrivez-moi.
           </Typography>
         </DialogContent>
         <DialogContent>

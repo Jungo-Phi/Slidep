@@ -157,12 +157,10 @@ export type Link = {
       // tangent) and the no-slip differential couples them to the belt travel φ. They do
       // NOT grip/wind — winding is done by attaching a terminal to a gear with a JOIN
       // (its GearPerimeterPin carries it around).
-      phaseKey?: string; // belt travel φ `${beltId}:phi`
-      diff0?: number; // initial (fsStart − fsEnd), the differential reference, over the FREE ends only
       // A terminal JOINED to its adjacent pulley (winch). Static: the join exists in the
       // mechanism or it does not — never a runtime state. Such an end has no tangent
-      // strand: it pays the belt out through that pulley's ARC, and the length constraint
-      // must neither move it (its GearPerimeterPin owns it) nor charge φ for it.
+      // strand: it pays the belt out through that pulley's ARC, so the length constraint
+      // must not move it — its GearPerimeterPin owns it.
       startWound?: boolean;
       endWound?: boolean;
     }
@@ -182,7 +180,8 @@ export type Link = {
   // arc-length s = s0 + r_ref·ε_ref·(θ_ref − θ_ref0) — i.e. it travels as the
   // belt rotates (θ_ref = reference pulley angle, ε = dir?1:−1). Bidirectional:
   // dragging the node along the belt advances θ_ref (which turns every pulley via
-  // BeltPhaseGear), and pulling it off the belt snaps it back. Radii + refs baked.
+  // the strand no-slips), and pulling it off the belt snaps it back. Radii + refs
+  // baked.
   // A closed belt is a closed pulley loop; a loose belt is the open path
   // start-terminal → pulleys → end-terminal (`closed:false` + startKey/endKey).
   | {
@@ -211,6 +210,10 @@ export type Link = {
       // rides the REDUCED loop (disconnected gears skipped); s0/thetaRef0/refIndex
       // are re-baked at the disconnect event so it doesn't jump.
       disconnected?: boolean[];
+      // One-way: the node rides the belt without driving it — no θ_ref, no pulley.
+      // Set on a closure node nobody but the belt has a say in, whose position is
+      // then a readout of the belt travel rather than a hold on it.
+      passive?: boolean;
     }
   // Belt follows tangent (simulation): a beam welded to the belt junction keeps
   // its orientation aligned with the belt tangent at the junction — angle(driven
@@ -236,19 +239,6 @@ export type Link = {
       // Pulleys that lost contact mid-sim (copied from BeltLength). The tangent is
       // read from the REDUCED loop; s0/thetaRef0/refIndex re-baked at disconnect.
       disconnected?: boolean[];
-    }
-  // Belt no-slip (simulation): a wrapped pulley's rotation is tied to the belt's
-  // shared travel φ (a per-belt scalar in the angles map): r·ε·(θ − θ0) = φ,
-  // ε = dir?−1:1. Every pulley on the belt couples to the SAME φ, so they all
-  // transmit through it AND the belt ends / junction couple to the same φ. Corrects the angle node and φ.
-  | {
-      type: "BeltPhaseGear";
-      ddl: 1;
-      angleKey: string; // gear id (bare)
-      phaseKey: string; // belt travel scalar `${beltId}:phi` (bare)
-      r: number;
-      eps: number; // dir ? −1 : 1
-      theta0: number;
     }
   | {
       type: "MotorBeam";
@@ -332,11 +322,58 @@ export type Link = {
       startKey?: string;
       endKey?: string;
       segIndex: number; // which tangent piece of belt_pieces(vias, closed) this is
+      // The via the strand departs from, i.e. its TANGENT PAIR index — which the piece
+      // index above is not: skipped arcs shift the piece list.
+      viaA: number;
       // Continuous arrival-angle unwrapping reference, per via, updated in place.
       arrivals?: number[];
       // If true the constraint also writes posKeyA/posKeyB along the strand tangent
       // (option 2); false = angles only (option 1).
       writePositions: boolean;
+      // Angular mobility of θ_a / θ_b, the analogue of posMasses for angles: 1 =
+      // free, 0 = pinned (another constraint assigns this angle outright, so the
+      // projection must not send it any correction). Absent = 1.
+      angleMobA?: number;
+      angleMobB?: number;
+      // "full" = write the two centres with the FULL positional gradient of C
+      // (tangent + arc, ∂C/∂c = (d + (s_a−s_b)·n̂)/ℓ), giving the no-slip
+      // positional authority. Overrides writePositions' tangent-only path.
+      authority?: "full";
+      // Metric of the angle DOFs in the projection. Absent = "unit" (w_θ = 1),
+      // where an angle of radius r is r² times more mobile than a centre. "rim"
+      // (w_θ = 1/r²) makes an angle exactly as mobile as a point of its own rim —
+      // the metric GearPerimeterPin, BeltPin and BeltPhaseGear already use.
+      angleMetric?: "rim";
+    }
+  // EXPERIMENTAL (belt sub-chain aggregate). The telescoped sum of a run of
+  // consecutive no-slip laws: C = q_début − q_fin − Σ Δh. Its interior q's have
+  // cancelled, so it has no internal degree of freedom to relax into — that is the
+  // whole point. Never emitted by the parser. See experimental/belt-aggregate.ts.
+  | {
+      type: "BeltSubChainAggregate";
+      ddl: 1;
+      // The two bounds. A dead terminal has no angle key and rEps 0 (q ≡ 0).
+      angleKeyStart?: string;
+      angleKeyEnd?: string;
+      rEpsStart: number;
+      rEpsEnd: number;
+      theta0Start: number;
+      theta0End: number;
+      h0Sum: number; // baked Σ h over the sub-chain's strands
+      // The whole ordered belt geometry, shared with the belt's other aggregates.
+      gearPosKeys: string[];
+      radii: number[];
+      directions: boolean[];
+      closed: boolean;
+      startKey?: string;
+      endKey?: string;
+      segIndices: number[]; // the belt_pieces indices of this sub-chain's strands
+      // The same strands as TANGENT PAIR indices (the via each departs from), which the
+      // piece indices above are not: skipped arcs shift the piece list. Cyclically
+      // contiguous, so the vias the run touches run from `viaIndices[0]` onwards.
+      viaIndices: number[];
+      arrivals?: number[];
+      angleMetric?: "rim";
     }
   | { type: "HandleGrab"; ddl: 1; grabbedKey: string; value: Point2 | number }
   | {

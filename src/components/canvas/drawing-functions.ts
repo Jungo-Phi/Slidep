@@ -1173,9 +1173,15 @@ export function draw_force(
 ) {
   const length = vector.length();
   if (length >= 1) {
-    draw_arrow_head(ctx, base.add(vector), vector.angle() + TAU / 2);
+    draw_arrow_head(
+      ctx,
+      base.add(vector.extend_length(DIM.ARROW_HEAD_OFFSET)),
+      vector.angle() + TAU / 2,
+    );
     if (length > DIM.ARROW_HEAD_LENGTH) {
-      const e = base.add(vector.extend_length(-DIM.ARROW_HEAD_LENGTH));
+      const e = base.add(
+        vector.extend_length(DIM.ARROW_HEAD_OFFSET - DIM.ARROW_HEAD_LENGTH),
+      );
       ctx.beginPath();
       ctx.moveTo(base.x, base.y);
       ctx.lineTo(e.x, e.y);
@@ -1247,8 +1253,10 @@ export function draw_distributed_force(
   const lastLineWidth = ctx.lineWidth;
   if (crestLineWidth !== undefined) ctx.lineWidth = crestLineWidth;
   ctx.beginPath();
-  ctx.moveTo(start.x + vectorStart.x, start.y + vectorStart.y);
-  ctx.lineTo(end.x + vectorEnd.x, end.y + vectorEnd.y);
+  const vs = vectorStart.extend_length((2 / 3) * DIM.ARROW_HEAD_OFFSET);
+  const ve = vectorEnd.extend_length((2 / 3) * DIM.ARROW_HEAD_OFFSET);
+  ctx.moveTo(start.x + vs.x, start.y + vs.y);
+  ctx.lineTo(end.x + ve.x, end.y + ve.y);
   ctx.stroke();
   ctx.lineWidth = lastLineWidth;
 
@@ -1261,9 +1269,15 @@ export function draw_distributed_force(
     // point backwards out of `extend_length`.
     const length = vector.length();
     if (length < 1) continue;
-    draw_arrow_head(ctx, base.add(vector), vector.angle() + TAU / 2);
+    draw_arrow_head(
+      ctx,
+      base.add(vector.extend_length(DIM.ARROW_HEAD_OFFSET)),
+      vector.angle() + TAU / 2,
+    );
     if (length <= DIM.ARROW_HEAD_LENGTH) continue;
-    const e = base.add(vector.extend_length(-DIM.ARROW_HEAD_LENGTH));
+    const e = base.add(
+      vector.extend_length(DIM.ARROW_HEAD_OFFSET - DIM.ARROW_HEAD_LENGTH),
+    );
     ctx.beginPath();
     ctx.moveTo(base.x, base.y);
     ctx.lineTo(e.x, e.y);
@@ -1271,21 +1285,18 @@ export function draw_distributed_force(
   }
 }
 
-/** Draws a small probe indicator (circle with crosshair). */
+/** Draws a small probe indicator (circle with crosshair). `hovered` thickens it,
+ *  `deleting` marks it as going with the element that carries it. */
 export function draw_probe(ctx: CanvasRenderingContext2D) {
-  const r = 6;
   ctx.save();
-  ctx.strokeStyle = COLORS.ACCENT;
-  ctx.fillStyle = COLORS.ACCENT;
-  ctx.lineWidth = 1.5;
   ctx.beginPath();
-  ctx.arc(0, 0, r, 0, Math.PI * 2);
+  ctx.arc(0, 0, DIM.PROBE_RADIUS, 0, Math.PI * 2);
   ctx.stroke();
   ctx.beginPath();
-  ctx.moveTo(-r, 0);
-  ctx.lineTo(r, 0);
-  ctx.moveTo(0, -r);
-  ctx.lineTo(0, r);
+  ctx.moveTo(-DIM.PROBE_RADIUS, 0);
+  ctx.lineTo(DIM.PROBE_RADIUS, 0);
+  ctx.moveTo(0, -DIM.PROBE_RADIUS);
+  ctx.lineTo(0, DIM.PROBE_RADIUS);
   ctx.stroke();
   ctx.restore();
 }

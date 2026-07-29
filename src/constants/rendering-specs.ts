@@ -154,6 +154,8 @@ export const HIT_TOLERANCE = {
   NODE: 14,
   CONSTRAINT: 20,
   SNAP_TO_GRID: 8,
+  /** Probe badge, drawn at radius 6 and offset well clear of its host. */
+  PROBE: 10,
   // Distance (px écran) que la souris doit parcourir depuis le mouseDown avant
   // qu'un clic ne bascule en déplacement. En dessous, c'est un clic ; au-dessus,
   // un drag. Rend la distinction clic/déplacement indépendante du framerate et
@@ -291,13 +293,15 @@ export const DIM = {
   GROUND_VERTICAL_OFFSET: 6,
 
   // Loads
-  VECTOR_VALUE_OFFSET: 16,
+  ARROW_HEAD_OFFSET: 3,
+  VECTOR_VALUE_OFFSET: 20,
   MOMENT_MIN_RADIUS: 20,
   MOMENT_MAX_RADIUS: 40,
   NB_DISTRIBUTED_FORCE_ARROWS: 5,
 
   // Probe
-  PROBE_OFFSET: 28,
+  PROBE_OFFSET: 20,
+  PROBE_RADIUS: 6,
 } as const;
 
 export const DIMENSION_SPECS = {
@@ -311,7 +315,7 @@ export const DIMENSION_SPECS = {
 } as const;
 
 /** Ordre de dessin des éléments sur le canvas */
-export const DRAWING_ORDER: UnionElement["type"][] = [
+export const DRAWING_ORDER: (UnionElement["type"] | "probe")[] = [
   "distributed-force",
   "force",
   "moment",
@@ -339,4 +343,5 @@ export const DRAWING_ORDER: UnionElement["type"][] = [
   "parallel",
   "equal",
   "gear-ratio",
+  "probe",
 ];

@@ -1,11 +1,5 @@
-import React, { useEffect, useRef, useState } from "react";
-import {
-  Box,
-  Button,
-  Checkbox,
-  FormControlLabel,
-  Paper,
-} from "@mui/material";
+import React, { useEffect, useRef } from "react";
+import { Box, Checkbox, MenuItem, Paper } from "@mui/material";
 import {
   DEFAULT_PROBE_COMPONENTS,
   MechanicalElement,
@@ -71,115 +65,102 @@ export function toggled_probes(
   );
 }
 
+/** The surface the metric list sits on, shared by both places that show it. */
+export const PROBE_METRIC_PAPER_SX = {
+  boxShadow: 4,
+  borderRadius: 1.5,
+  py: 1,
+  display: "flex",
+  flexDirection: "column",
+  outline: "none",
+} as const;
+
 interface ProbeMetricSelectorProps {
   element: MechanicalElement;
-  /** Anchor, in screen coordinates. */
-  position: Point2;
-  onCommit: (newProbes: ProbeConfig[]) => void;
-  onCancel: () => void;
+  /** Called with the element's new probes each time a metric is toggled. */
+  onToggle: (newProbes: ProbeConfig[]) => void;
 }
 
 /**
- * Popover opened when placing a probe on an element: pick the metric families
- * to measure. Pre-filled (and editable) when the element already has a probe.
+ * The metrics an element can measure, ticked on and off. Mounted both in the
+ * canvas popover and in the properties panel, so the same choice is made from
+ * the same list wherever it is reached.
  */
 export const ProbeMetricSelector: React.FC<ProbeMetricSelectorProps> = ({
   element,
-  position,
-  onCommit,
-  onCancel,
+  onToggle,
 }) => {
-  const [selected, setSelected] = useState<Set<ProbeMetric>>(
-    () => new Set((element.probes ?? []).map((p) => p.metric)),
+  return (
+    <>
+      {available_probe_metrics(element).map((metric) => (
+        <MenuItem
+          key={metric}
+          dense
+          onClick={() => onToggle(toggled_probes(element, metric))}
+        >
+          <Checkbox
+            size="small"
+            checked={element.probes.some((p) => p.metric === metric)}
+            sx={{ p: 0, ml: -0.5, mr: 1 }}
+          />
+          {PROBE_METRIC_LABELS[metric]}
+        </MenuItem>
+      ))}
+    </>
   );
+};
+
+interface OnCanvasProbeMetricSelectorProps {
+  element: MechanicalElement;
+  /** Anchor, in screen coordinates. */
+  position: Point2;
+  /** Called with the element's new probes each time a metric is toggled. */
+  onToggle: (newProbes: ProbeConfig[]) => void;
+  onClose: () => void;
+}
+
+/**
+ * Popover for picking what an element measures, opened by placing a probe on it
+ * or by clicking the badge of one it already carries.
+ *
+ * Each metric applies as it is ticked, like the same list in the properties
+ * panel: there is nothing to confirm, so closing it never means losing a choice.
+ */
+export const OnCanvasProbeMetricSelector: React.FC<
+  OnCanvasProbeMetricSelectorProps
+> = ({ element, position, onToggle, onClose }) => {
   const paperRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     paperRef.current?.focus();
   }, []);
 
-  const toggle = (metric: ProbeMetric) => {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(metric)) next.delete(metric);
-      else next.add(metric);
-      return next;
-    });
-  };
-
-  const commit = () => {
-    // Keep existing configs (display components) for metrics still selected.
-    const oldByMetric = new Map(
-      (element.probes ?? []).map((p) => [p.metric, p]),
-    );
-    const newProbes: ProbeConfig[] = PROBE_METRIC_ORDER.filter((m) =>
-      selected.has(m),
-    ).map(
-      (m) =>
-        oldByMetric.get(m) ?? {
-          metric: m,
-          components: { ...DEFAULT_PROBE_COMPONENTS },
-        },
-    );
-    onCommit(newProbes);
-  };
-
   return (
     <>
-      {/* Backdrop: click outside cancels */}
+      {/* Backdrop: clicking outside closes it */}
       <Box
         sx={{ position: "absolute", inset: 0, zIndex: 999 }}
-        onMouseDown={onCancel}
+        onMouseDown={onClose}
       />
       <Paper
         ref={paperRef}
         tabIndex={-1}
         onKeyDown={(e) => {
-          if (e.key === "Escape") onCancel();
-          else if (e.key === "Enter") commit();
+          if (e.key === "Escape" || e.key === "Enter") onClose();
         }}
         sx={{
+          ...PROBE_METRIC_PAPER_SX,
           position: "absolute",
           left: position.x,
           top: position.y,
           transform: "translate(-50%, 14px)",
           zIndex: 1000,
-          boxShadow: 4,
-          borderRadius: 1.5,
-          px: 1.5,
-          py: 1,
-          display: "flex",
-          flexDirection: "column",
-          outline: "none",
         }}
       >
-        {available_probe_metrics(element).map((metric) => (
-          <FormControlLabel
-            key={metric}
-            control={
-              <Checkbox
-                size="small"
-                checked={selected.has(metric)}
-                onChange={() => toggle(metric)}
-                sx={{ py: 0.25 }}
-              />
-            }
-            label={PROBE_METRIC_LABELS[metric]}
-            slotProps={{ typography: { variant: "body2" } }}
-            sx={{ mr: 0.5 }}
-          />
-        ))}
-        <Button
-          size="small"
-          variant="contained"
-          onClick={commit}
-          sx={{ mt: 0.75, textTransform: "none" }}
-        >
-          Valider
-        </Button>
+        <ProbeMetricSelector element={element} onToggle={onToggle} />
       </Paper>
     </>
   );
 };
 
-export default ProbeMetricSelector;
+export default OnCanvasProbeMetricSelector;

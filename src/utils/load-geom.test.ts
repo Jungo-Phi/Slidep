@@ -5,8 +5,12 @@ import {
   distributed_grab_magnitude,
   distributed_tip_length,
   distributed_tip_magnitude,
+  frame_from_snapped_direction,
+  snap_direction,
   stored2world_load,
 } from "./load-geom";
+import { Point2 } from "../types/point2";
+import type { BeamElement, EdgeElement, ID } from "../types";
 
 /**
  * The display scale of a distributed load: compressed once as a whole on the
@@ -133,5 +137,112 @@ describe("distributed body drag", () => {
   it("keeps the taper while the load is translated", () => {
     const magnitude = distributed_grab_magnitude(80, -50, 50);
     expect(magnitude + 50 - (magnitude - 50)).toBe(100);
+  });
+});
+
+describe("frame implied by a snapped direction", () => {
+  const beam = (id: string, end: Point2): BeamElement => ({
+    type: "beam",
+    id: id as ID,
+    positionStart: new Point2(0, 0),
+    positionEnd: end,
+    fixedNodesBodyIDs: [],
+    probes: [],
+    overlays: {},
+  });
+
+  const frame_of = (direction: Point2, edges: EdgeElement[]) =>
+    frame_from_snapped_direction(direction, edges);
+
+  const oblique = beam("oblique", new Point2(100, 100));
+  const vertical = beam("vertical", new Point2(0, 100));
+
+  it("references the edge a direction is aligned with", () => {
+    expect(frame_of(new Point2(50, 50), [oblique])).toEqual({
+      mode: "edge",
+      edgeID: "oblique",
+    });
+  });
+
+  it("references the edge along its normal too", () => {
+    expect(frame_of(new Point2(-50, 50), [oblique])).toEqual({
+      mode: "edge",
+      edgeID: "oblique",
+    });
+  });
+
+  it("falls back to world when no edge matches", () => {
+    expect(frame_of(new Point2(0, 100), [oblique])).toBe("world");
+  });
+
+  // The priority that decides whether a load follows its beam: an edge wins
+  // even when the direction is world-aligned as well, so a force pulled down a
+  // vertical beam is captured as a follower load rather than staying vertical.
+  it("gives the edge priority over the world axes", () => {
+    expect(frame_of(new Point2(0, 100), [vertical])).toEqual({
+      mode: "edge",
+      edgeID: "vertical",
+    });
+  });
+
+  it("stays world-framed when there is no edge at all", () => {
+    expect(frame_of(new Point2(0, 100), [])).toBe("world");
+  });
+
+  // A beam a fraction of a degree off vertical collapses onto the world axis as
+  // a snap target, and the edge still claims the direction — priority applies
+  // there as everywhere, so a near-aligned beam behaves like an aligned one.
+  it("references a near-aligned edge just like an aligned one", () => {
+    const nearVertical = beam("near-vertical", new Point2(0.5, 100));
+    expect(frame_of(new Point2(0, 100), [nearVertical])).toEqual({
+      mode: "edge",
+      edgeID: "near-vertical",
+    });
+  });
+
+  it("leaves the world frame reachable once the edge is a target of its own", () => {
+    // 5° off vertical: far enough to keep its own candidate, so aiming at the
+    // world axis is a distinct gesture and stays world-framed.
+    const tilted = beam("tilted", Point2.from_polar(100, (95 * Math.PI) / 180));
+    expect(frame_of(new Point2(0, 100), [tilted])).toBe("world");
+  });
+});
+
+describe("snap candidates", () => {
+  const beam = (id: string, end: Point2): BeamElement => ({
+    type: "beam",
+    id: id as ID,
+    positionStart: new Point2(0, 0),
+    positionEnd: end,
+    fixedNodesBodyIDs: [],
+    probes: [],
+    overlays: {},
+  });
+
+  // The direction must not flicker between two targets a fraction of a degree
+  // apart as the cursor moves by one pixel.
+  it("snaps a near-vertical beam's neighbourhood to a single direction", () => {
+    const nearVertical = beam("near-vertical", new Point2(0.5, 100));
+    const angles = new Set<number>();
+    for (let deg = -3; deg <= 3; deg += 0.25) {
+      const rad = (90 + deg) * (Math.PI / 180);
+      angles.add(
+        Number(
+          snap_direction(Point2.from_polar(100, rad), [nearVertical])
+            .angle()
+            .toFixed(6),
+        ),
+      );
+    }
+    expect(angles.size).toBe(1);
+  });
+
+  it("keeps an oblique beam as a target of its own", () => {
+    const oblique = beam("oblique", new Point2(100, 100));
+    const snapped = snap_direction(
+      Point2.from_polar(100, (46 * Math.PI) / 180),
+      [oblique],
+    );
+    expect(snapped.angle()).toBeCloseTo(Math.PI / 4, 6);
   });
 });

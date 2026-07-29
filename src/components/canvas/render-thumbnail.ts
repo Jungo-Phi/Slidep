@@ -1,7 +1,7 @@
 import { COLORS } from "../../constants/rendering-specs";
 import { Mechanism, Point2, ZERO } from "../../types";
 import { mechanism_bounds } from "../../utils";
-import { drawMechanicalCanvas as draw_mechanical_canvas } from "./draw-canvas";
+import { draw_mechanical_canvas as draw_mechanical_canvas } from "./draw-canvas";
 import { compute_visible_constraints } from "./utils";
 
 /** Côté (px) par défaut de la miniature carrée. */

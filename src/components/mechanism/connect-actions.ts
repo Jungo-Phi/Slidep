@@ -556,6 +556,35 @@ export function delete_element(
 }
 
 /**
+ * Every element deleting `elementID` would take with it, itself included.
+ *
+ * Read off the very actions the deletion emits, so what the eraser highlights
+ * and what it removes cannot drift apart. Falls back to the element alone if
+ * they cannot be computed: this runs every frame under the cursor, where a
+ * dangling reference must not take the canvas down before the click does.
+ */
+export function deletion_closure(
+  elementID: ID,
+  mechanicalElements: MechanicalElement[],
+  constraintElements: ConstraintElement[],
+  loadElements: LoadElement[],
+): Set<ID> {
+  const deleted = new Set<ID>([elementID]);
+  try {
+    for (const action of delete_element(
+      elementID,
+      mechanicalElements,
+      constraintElements,
+      loadElements,
+    ))
+      if (action.type === "DeleteElement") deleted.add(action.element.id);
+  } catch {
+    // Left as the element alone; the click will report the failure for real.
+  }
+  return deleted;
+}
+
+/**
  * A copy whose mutable containers are detached, so a simulation can advance over
  * it without ever reaching the caller's state — nor, for a freshly built
  * element, the very object its `CreateElement` action carries.

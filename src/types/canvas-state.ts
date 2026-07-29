@@ -144,7 +144,15 @@ export type CanvasState =
   | { type: "PlacingMomentStart" }
   | { type: "PlacingMomentEnd"; startHover: HoveredPart }
   | { type: "PlacingProbe" }
-  | { type: "PlacingProbeMetrics"; elementID: ID; position: Point2 } // Metric selector popover open on a clicked element
+  // Metric selector popover open on an element, reached either by placing a
+  // probe (`armed`, so closing it re-arms the tool) or by clicking the badge of
+  // one already there (closing leaves that element selected).
+  | {
+      type: "PlacingProbeMetrics";
+      elementID: ID;
+      position: Point2;
+      armed?: boolean;
+    }
   | { type: "DimensionStart" } // Dimensioning tool active
   | { type: "DimensionNode"; nodeID: ID } // Dimension from a node to ?
   | { type: "DimensionEdge"; edgeID: ID } // Dimension of an edge / from an edge to ?
@@ -184,6 +192,9 @@ export type CanvasState =
       value: number;
       /** Quelle magnitude d'une force répartie est éditée. */
       part?: "start" | "end";
+      /** L'outil à réarmer en sortie, quand la saisie a été ouverte depuis un
+       *  outil encore armé. Absent : la saisie laisse l'élément sélectionné. */
+      rearm?: "DimensionStart";
     }
   | {
       type: "SimulationDragging";

@@ -21,6 +21,11 @@ import {
   belt_point_tangent,
   belt_project,
 } from "../../utils/belt-path";
+import { buildBeltSegmentNoSlipLinks } from "./experimental/belt-noslip-q";
+import {
+  buildBeltAggregateLinks,
+  hasStakeholderBeyond,
+} from "./experimental/belt-aggregate";
 
 const COLLINEAR_AREA_EPS = 1; // px² — below this a triangulation chord is degenerate
 
@@ -579,8 +584,8 @@ export function belt_length_link(
   const startWound = woundOn(belt.fixedNodeStartID, gears[0]?.id);
   const endWound = woundOn(belt.fixedNodeEndID, gears[gears.length - 1]?.id);
 
-  // Length + differential from the drawn geometry; belt_pieces matches how the constraint
-  // measures length, so it starts in equilibrium.
+  // Length from the drawn geometry; belt_pieces matches how the constraint measures it,
+  // so the belt starts in equilibrium.
   const svias: BeltVia[] = [
     { pos: belt.positionStart, radius: 0, direction: false },
     ...gears.map(({ id, direction }) => {
@@ -589,42 +594,10 @@ export function belt_length_link(
     }),
     { pos: belt.positionEnd, radius: 0, direction: false },
   ];
-  const pieces = belt_pieces(svias, false);
-  const last = svias.length - 1;
-  let fsStart0 = 0;
-  let fsEnd0 = 0;
-  for (const pc of pieces) {
-    if (pc.kind !== "segment") continue;
-    if (pc.gearIndexA === 0) fsStart0 = pc.length;
-    if (pc.gearIndexB === last) fsEnd0 = pc.length;
-  }
-  // Reference for the no-slip differential, in the SAME coordinate the constraint uses:
-  // h = fs ∓ r·sign·ψ, the terminal's belt arc-length in its pulley's frame. (The raw
-  // strand length is a V at the tangency point and cannot serve — see the constraint.)
-  const arcAt = (v: number) => {
-    const a = pieces.find((p) => p.kind === "arc" && p.gearIndex === v);
-    return a && a.kind === "arc" ? a : null;
-  };
-  const signOf = (v: number) => (svias[v].direction ? -1 : 1);
-  const arcS = arcAt(1);
-  const arcE = arcAt(last - 1);
-  const hStart0 = arcS
-    ? fsStart0 - svias[1].radius * signOf(1) * arcS.startAngle
-    : fsStart0;
-  const hEnd0 = arcE
-    ? fsEnd0 +
-      svias[last - 1].radius *
-        signOf(last - 1) *
-        (arcE.startAngle + signOf(last - 1) * arcE.wrap)
-    : fsEnd0;
-
-  const loopLength = pieces.reduce((a, p) => a + p.length, 0);
+  const loopLength = belt_pieces(svias, false).reduce((a, p) => a + p.length, 0);
   return {
     ...base,
     length: length ?? loopLength,
-    phaseKey: belt_phase_key(belt.id),
-    // Only the FREE ends enter the differential's reference.
-    diff0: (startWound ? 0 : hStart0) - (endWound ? 0 : hEnd0),
     startWound,
     endWound,
   };
@@ -639,38 +612,109 @@ export function elements_by_id(
   return byId;
 }
 
-/** Belt phase key (its shared travel scalar) in the angles map. */
-const belt_phase_key = (beltId: ID): string => `${beltId}:phi`;
+/**
+ * Belt no-slip links (simulation): one `BeltSegmentNoSlip` per tangent strand, plus one
+ * `BeltSubChainAggregate` per sub-chain between two angles somebody else has a say in.
+ *
+ * Emitted here rather than in `get_links_simulation` because both bake their rest state
+ * `h⁰` from the positions, and coincidence fusion moves a fused node to the midpoint of
+ * its parts — baking before it would bake a geometry that no longer exists. The cut
+ * criterion needs the complete link list for the same reason it runs last: it asks
+ * whether anything OTHER than this belt has a say in each pulley's angle.
+ */
+export function belt_q_links(nodes: KinNodes, links: Link[]): Link[] {
+  const out: Link[] = [];
+  for (const belt of links)
+    if (belt.type === "BeltLength") {
+      const spec = {
+        gearPosKeys: belt.gearPosKeys,
+        gearAngleKeys: belt.gearAngleKeys,
+        radii: belt.radii,
+        directions: belt.directions,
+        closed: belt.closed,
+        startKey: belt.startKey,
+        endKey: belt.endKey,
+        owner: belt.owner,
+        angleMetric: "rim" as const,
+      };
+      out.push(
+        ...buildBeltSegmentNoSlipLinks(nodes.positions, nodes.angles, {
+          ...spec,
+          writePositions: false,
+        }),
+        ...buildBeltAggregateLinks(nodes.positions, nodes.angles, links, spec),
+      );
+    }
+  return out;
+}
 
 /**
- * Belt no-slip links (simulation): one BeltPhaseGear per wrapped pulley, all
- * tying θ to the belt's SHARED travel φ. That transmits between every pulley
- * and lets the ends/junction couple to the same φ. Seeds φ=0 in the angles map.
+ * Rebuild one belt's no-slip links against the CURRENT topology and state, dropping the
+ * old ones. Called when a pulley leaves the belt or comes back: the strands and their
+ * baked `h⁰` name the pulleys of the belt as it was, and there is nothing to patch —
+ * `h⁰` of the merged strand is not derived from the two it replaces, it is measured.
+ *
+ * No jump by construction: baking against the current state puts `C = 0` at this frame.
+ * What it does cost is memory — the rebuild resets the `q` origin of the WHOLE belt, so
+ * whatever travel had accumulated is forgotten. That, not the geometry, is why a belt
+ * must not be allowed to flip back and forth (see the reattachment hysteresis).
  */
-function belt_phase_gear_links(
-  belt: BeltElement,
-  byId: Map<ID, MechanicalElement>,
-  nodes: KinNodes,
+export function rebuild_belt_q_links(
+  links: Link[],
+  belt: Extract<Link, { type: "BeltLength" }>,
+  positions: Map<string, Point2>,
+  angles: Map<string, number>,
 ): Link[] {
-  if (belt.attachedGearsIDs.length === 0) return [];
-  const phaseKey = belt_phase_key(belt.id);
-  if (!nodes.angles.has(phaseKey)) nodes.angles.set(phaseKey, 0);
-  const links: Link[] = [];
-  for (const { id, direction } of belt.attachedGearsIDs) {
-    const g = gearById(id, byId);
-    if (!g) continue;
-    links.push({
-      type: "BeltPhaseGear",
-      ddl: 1,
-      angleKey: id,
-      phaseKey,
-      r: g.radius,
-      eps: direction ? -1 : 1,
-      theta0: g.angle,
-      owner: belt.id,
-    });
+  const active = belt.gearPosKeys
+    .map((_, i) => i)
+    .filter((i) => !belt.disconnected?.[i]);
+  const kept = links.filter(
+    (l) =>
+      !(
+        (l.type === "BeltSegmentNoSlip" || l.type === "BeltSubChainAggregate") &&
+        l.owner === belt.owner
+      ),
+  );
+  if (active.length < 2) return kept;
+
+  const spec = {
+    gearPosKeys: active.map((i) => belt.gearPosKeys[i]),
+    gearAngleKeys: active.map((i) => belt.gearAngleKeys[i]),
+    radii: active.map((i) => belt.radii[i]),
+    directions: active.map((i) => belt.directions[i]),
+    closed: belt.closed,
+    startKey: belt.startKey,
+    endKey: belt.endKey,
+    owner: belt.owner,
+    angleMetric: "rim" as const,
+  };
+  kept.push(
+    ...buildBeltSegmentNoSlipLinks(positions, angles, {
+      ...spec,
+      writePositions: false,
+    }),
+    ...buildBeltAggregateLinks(positions, angles, kept, spec),
+  );
+  return kept;
+}
+
+/**
+ * Turn the closure pin of every closed belt nobody else has a say in into a passive
+ * follower (see `applyBeltPinConstraint`). The question is the one the cut criterion
+ * asks of an angle, asked here of the junction node: a link naming it is a stakeholder,
+ * and so is the ground — an anchored junction speaks by holding the node still, without
+ * naming it anywhere.
+ *
+ * Runs where `belt_q_links` does, and for the same reason: the node key is only final
+ * once coincidence fusion has merged the junction with whatever sits on it.
+ */
+export function mark_passive_belt_pins(nodes: KinNodes, links: Link[]): void {
+  for (const link of links) {
+    if (link.type !== "BeltPin" || link.closed === false) continue;
+    const anchored = (nodes.posMasses.get(link.nodeKey) ?? 1) === 0;
+    if (!anchored && !hasStakeholderBeyond(links, link.nodeKey, link.owner))
+      link.passive = true;
   }
-  return links;
 }
 
 /*
@@ -1053,7 +1097,6 @@ export function get_links_simulation(
         ...belt_follows_tangent_links(element, byId, mechanicalElements),
       );
     }
-    links.push(...belt_phase_gear_links(element, byId, nodes));
   });
 
   // ── Rigidity (joins / masses / sliders) ──────────────────────────────────

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { get_hovered_part } from "./get-hover";
 import { Point2 } from "../../types/point2";
 import type { CanvasState } from "../../types/canvas-state";
-import type { HoveredPart } from "../../types/hovered-part";
+import { names_element, type HoveredPart } from "../../types/hovered-part";
 import {
   BeamElement,
   BeltElement,
@@ -101,10 +101,11 @@ const spring: SpringElement = {
   fixedNodeEndID: undefined,
   stiffness: 1,
 };
+// Probed, so the badge above it is a target of its own — the only one here.
 const mass: MassElement = {
   type: "mass",
   id: MASS,
-  probes: [],
+  probes: [{ metric: "position", components: { x: true, y: true, norm: false } }],
   overlays: {},
   position: P(600, 0),
   isGrounded: false,
@@ -218,7 +219,8 @@ const PROBES: [string, Point2][] = [
   ["plain belt run", P(300, -500)],
   ["plain belt end", P(600, -500)],
   ["dimension", P(300, 80)],
-  ["force arrow", P(600, 20)],
+  ["force arrow", P(600, 40)],
+  ["probe badge", P(600, 20)],
   ["empty space", P(900, 900)],
 ];
 
@@ -354,5 +356,50 @@ describe("get_hovered_part", () => {
       }
     }
     expect(lines.join("\n")).toMatchSnapshot();
+  });
+});
+
+describe("probe badge", () => {
+  const at = (cursor: Point2, state: CanvasState) =>
+    get_hovered_part(
+      MECHANICAL,
+      CONSTRAINTS,
+      LOADS,
+      VISIBLE_CONSTRAINTS,
+      cursor,
+      state,
+    );
+  const BADGE = P(600, 20);
+
+  it("names its host, so selecting it selects the element", () => {
+    const hovered = at(BADGE, { type: "Selecting" });
+    expect(hovered.type).toBe("Probe");
+    expect(names_element(hovered) && hovered.id).toBe(MASS);
+  });
+
+  it("is picked ahead of whatever lies under it", () => {
+    // It is drawn on top of everything, so it must answer first.
+    expect(at(BADGE, { type: "Selecting" }).type).toBe("Probe");
+  });
+
+  // The decision behind all of this: a probe goes with its host, and a badge off
+  // to the side must never become a way to delete that host by mistake.
+  it("is not a target for the eraser", () => {
+    expect(at(BADGE, { type: "Erasing" }).type).not.toBe("Probe");
+  });
+
+  it("is not a target while placing anything", () => {
+    for (const state of [
+      { type: "PlacingPivot" },
+      { type: "PlacingBeamStart" },
+      { type: "PlacingProbe" },
+      { type: "DimensionStart" },
+    ] satisfies CanvasState[])
+      expect(at(BADGE, state).type).not.toBe("Probe");
+  });
+
+  it("is only offered on an element that carries one", () => {
+    // The join at (200, 0) has no probe: nothing sits above it.
+    expect(at(P(200, -28), { type: "Selecting" }).type).not.toBe("Probe");
   });
 });

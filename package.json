@@ -10,7 +10,9 @@
     "preview": "vite preview",
     "test": "vitest",
     "test:run": "vitest run",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "test:fuzz": "vitest run fuzz.test",
+    "test:bench": "vitest run --maxWorkers=1 bench.test"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",

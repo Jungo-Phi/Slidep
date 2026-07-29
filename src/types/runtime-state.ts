@@ -164,6 +164,33 @@ export interface RuntimeState {
 
   /** Recorded kinematic snapshots (incremental, sampled at 30 fps of sim-time) */
   kinematicSnapshots: KinematicSnapshot[];
+
+  /**
+   * Simulated seconds asked for but never produced, accumulated over the current
+   * recording: what the frame budget had to give up on. Normally zero — the step
+   * coarsens to hold the requested speed instead — so this only fills up when even
+   * one step per frame cannot keep up.
+   */
+  lag: number;
+
+  /**
+   * The simulated step the last recorded frame used (s). `RECORD_DT` while the
+   * solver keeps up; coarser when the requested speed forced it to. This is what
+   * degrades in place of real time, so it is the fidelity readout.
+   */
+  recordStep: number;
+
+  /**
+   * The cursor was placed by hand — a timeline drag, a click on a chart — and has not
+   * caught up with the recording since.
+   *
+   * Held as intent rather than derived from `time` against the frontier: while recording,
+   * the frontier legitimately runs ahead of the cursor, by a step and by the worker's own
+   * lead, so any comparison of the two eventually reads a live recording as a replay.
+   * Playing from here re-reads what exists instead of extending it, and a grab is refused
+   * because it would pull on frames the solver is not computing.
+   */
+  scrubbed: boolean;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -195,4 +222,7 @@ export const DEFAULT_RUNTIME_STATE: RuntimeState = {
   current: null,
   history: [],
   kinematicSnapshots: [],
+  lag: 0,
+  recordStep: 1 / 120,
+  scrubbed: false,
 };

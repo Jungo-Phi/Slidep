@@ -110,7 +110,7 @@ export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
         >
           <Tooltip
             disableInteractive
-            title="Ouvrir un .slidep ou une archive zip"
+            title="Ouvrir un .slidep ou une archive .zip"
           >
             <Button
               size="small"
@@ -127,7 +127,7 @@ export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
             title={
               mechanismRecords.length === 0
                 ? "Aucun mécanisme à exporter"
-                : "Télécharger tous les mécanismes dans une archive zip"
+                : "Tout exporter dans une archive .zip"
             }
           >
             <span>

@@ -3,16 +3,14 @@ import { Point2 } from "../../types/point2";
 import { Link } from "../../types";
 import { PBD_kinematic_solver } from "./PBD_kinematic_solver";
 import {
-  rewire_belt_mesh,
   update_belt_disconnects,
 } from "./kinematic-simulation";
 import {
   applyBeltLengthConstraint,
   applyBeltFollowsTangentConstraint,
   applyBeltJunctionConstraint,
-  applyBeltPhaseGearConstraint,
   applyBeltPinConstraint,
-} from "./constraint-functions";
+} from "../../test/constraint-map-api";
 import {
   advance_continuous_wraps,
   belt_pieces,
@@ -181,43 +179,6 @@ describe("BeltJunction constraint (closed cycle)", () => {
       );
     expect(positions.get("gA")!.distance_to(P(-100, 0))).toBeGreaterThan(1e-3);
     expect(positions.get("gB")!.distance_to(P(100, 0))).toBeGreaterThan(1e-3);
-  });
-});
-
-describe("BeltPhaseGear constraint (no-slip transmission via shared φ)", () => {
-  // Two pulleys coupled to the same belt travel φ. Drive g1 (held each iter, like
-  // a motor); read how g2 follows through φ.
-  const drive = (
-    r1: number,
-    r2: number,
-    eps1: number,
-    eps2: number,
-    driven: number,
-  ): number => {
-    const angles = new Map<string, number>([
-      ["g1", driven],
-      ["g2", 0],
-      ["phi", 0],
-    ]);
-    for (let i = 0; i < 200; i++) {
-      angles.set("g1", driven);
-      applyBeltPhaseGearConstraint(angles, "g1", "phi", r1, eps1, 0);
-      applyBeltPhaseGearConstraint(angles, "g2", "phi", r2, eps2, 0);
-    }
-    return angles.get("g2")!;
-  };
-
-  it("spins both pulleys the same way (same sense, equal radii)", () => {
-    expect(drive(40, 40, 1, 1, 0.5)).toBeCloseTo(0.5, 4);
-  });
-
-  it("scales rotation by the radius ratio", () => {
-    // r1·ε1·θ1 = r2·ε2·θ2 → θ2 = θ1·r1/r2 = 1.0·20/40 = 0.5
-    expect(drive(20, 40, 1, 1, 1.0)).toBeCloseTo(0.5, 4);
-  });
-
-  it("reverses the far pulley for a crossed belt (opposite sense)", () => {
-    expect(drive(40, 40, 1, -1, 0.5)).toBeCloseTo(-0.5, 4);
   });
 });
 
@@ -657,46 +618,6 @@ describe("BeltLength — gearless belt holds its length (point 1)", () => {
   });
 });
 
-describe("belt phase rewire on disconnect (3e)", () => {
-  it("drops the disconnected pulley's coupling; the rest stay on shared φ", () => {
-    const belt: Extract<Link, { type: "BeltLength" }> = {
-      type: "BeltLength",
-      ddl: 1,
-      startKey: "s",
-      endKey: "e",
-      gearPosKeys: ["g0", "g1", "g2"],
-      gearAngleKeys: ["g0", "g1", "g2"],
-      radii: [30, 30, 30],
-      directions: [false, false, false],
-      length: 100,
-      closed: false,
-      disconnected: [false, true, false], // middle pulley lost contact
-      owner: "belt-1-1-1-1" as any,
-    };
-    const phase = (g: string): Link => ({
-      type: "BeltPhaseGear",
-      ddl: 1,
-      angleKey: g,
-      phaseKey: "belt-1-1-1-1:phi",
-      r: 30,
-      eps: 1,
-      theta0: 0,
-      owner: "belt-1-1-1-1" as any,
-    });
-    const unrelated: Link = { type: "Radius", ddl: 1, key1: "x", radius: 5 };
-    const links = [phase("g0"), phase("g1"), phase("g2"), unrelated];
-
-    const out = rewire_belt_mesh(links, [belt]);
-    const kept = out.filter((l) => l.type === "BeltPhaseGear") as Extract<
-      Link,
-      { type: "BeltPhaseGear" }
-    >[];
-    // g0 and g2 keep their coupling to φ (transmission continues); g1 dropped.
-    expect(kept.map((l) => l.angleKey).sort()).toEqual(["g0", "g2"]);
-    expect(out.includes(unrelated)).toBe(true);
-  });
-});
-
 describe("loose belt sheds its last pulley → inert (user-decided)", () => {
   // s and e sit close together above g1, which now wraps the long way (raw wrap
   // ≈ 4.67 rad > π): from the seeded 0.05 the continuous wrap has crossed the 0/2π
@@ -784,47 +705,6 @@ describe("a terminal touching its pulley keeps its tangent run", () => {
   });
 });
 
-describe("no-slip survives an end resting on its pulley", () => {
-  it("still drives the belt travel φ (C_diff), instead of going slack", () => {
-    const positions = new Map<string, Point2>([
-      ["s", P(-300, 0)],
-      ["g", P(0, 0)],
-      ["e", P(0, 40)], // end terminal exactly on the rim
-    ]);
-    const masses = new Map<string, number>([
-      ["s", 1],
-      ["g", 0], // grounded pulley: only the free end and φ can move
-      ["e", 1],
-    ]);
-    const angles = new Map<string, number>([["b:phi", 0]]);
-    const drawn = belt_pieces(
-      [
-        { pos: P(-300, 0), radius: 0, direction: false },
-        { pos: P(0, 0), radius: 40, direction: false },
-        { pos: P(0, 40), radius: 0, direction: false },
-      ],
-      false,
-    ).reduce((a, p) => a + p.length, 0);
-
-    applyBeltLengthConstraint(positions, masses, angles, {
-      type: "BeltLength",
-      ddl: 1,
-      startKey: "s",
-      endKey: "e",
-      gearPosKeys: ["g"],
-      gearAngleKeys: ["g"],
-      radii: [40],
-      directions: [false],
-      length: drawn, // C_sum ≈ 0 → isolates the differential
-      closed: false,
-      phaseKey: "b:phi",
-      diff0: 0, // ⇒ C_diff = fsStart − fsEnd ≠ 0, so φ MUST move
-    });
-
-    expect(angles.get("b:phi")).not.toBeCloseTo(0, 6);
-  });
-});
-
 describe("winch: a JOINed end is not a free strand", () => {
   // Loose belt: free start terminal → gear → end terminal JOINed onto the rim.
   const run = (endWound: boolean) => {
@@ -851,8 +731,6 @@ describe("winch: a JOINed end is not a free strand", () => {
         directions: [false],
         length: 1000, // belt longer than drawn → the constraint pays strand out
         closed: false,
-        phaseKey: "b:phi",
-        diff0: 0,
         endWound,
       });
     return positions.get("e")!.distance_to(P(0, 0)) - 40;
@@ -868,70 +746,6 @@ describe("winch: a JOINed end is not a free strand", () => {
 
   it("(and would, if it were mistaken for a free end)", () => {
     expect(Math.abs(run(false))).toBeGreaterThan(1); // the drift, reproduced
-  });
-});
-
-describe("a free end reeled through its pulley's tangency point", () => {
-  // The differential must be written in h = fs ∓ r·sign·ψ (the end's belt arc-length in
-  // the pulley's frame), NOT in the free-strand length fs. fs is a V about the tangency
-  // point (fs = |t|, and its radial derivative is d/fs → ∞), so a correction that
-  // overshoots the vertex makes fs GROW: the feedback sign flips and the end whips around
-  // the rim, spinning up the wrap and inventing r·2π of belt. h is monotone, unit-gradient
-  // and uncapped, so the same reeling just unwraps the pulley — the physics.
-  const reel = (diff0: number) => {
-    const positions = new Map<string, Point2>([
-      ["s", P(-300, 0)],
-      ["g", P(0, 0)],
-      ["e", P(-6, Math.sqrt(40 * 40 + 6 * 6))], // 6px of strand left
-    ]);
-    const masses = new Map<string, number>([
-      ["s", 1],
-      ["g", 0], // anchored drum
-      ["e", 1],
-    ]);
-    const vias = (): BeltVia[] => [
-      { pos: positions.get("s")!, radius: 0, direction: false },
-      { pos: positions.get("g")!, radius: 40, direction: false },
-      { pos: positions.get("e")!, radius: 0, direction: false },
-    ];
-    const L0 = belt_pieces(vias(), false).reduce((a, p) => a + p.length, 0);
-    const angles = new Map<string, number>([["b:phi", 0]]);
-    for (let i = 0; i < 30; i++)
-      applyBeltLengthConstraint(positions, masses, angles, {
-        type: "BeltLength",
-        ddl: 1,
-        startKey: "s",
-        endKey: "e",
-        gearPosKeys: ["g"],
-        gearAngleKeys: ["g"],
-        radii: [40],
-        directions: [false],
-        length: L0,
-        closed: false,
-        phaseKey: "b:phi",
-        diff0, // drives the end hard, straight through the tangency point
-      });
-    const e = positions.get("e")!;
-    return {
-      d: e.distance_to(positions.get("g")!),
-      L: belt_pieces(vias(), false).reduce((a, p) => a + p.length, 0),
-      L0,
-    };
-  };
-
-  it("never runs away around the rim, and conserves the belt's length", () => {
-    for (const diff0 of [-500, 500]) {
-      const r = reel(diff0);
-      expect(r.d).toBeGreaterThanOrEqual(40 - 1e-9); // never inside the rim
-      expect(r.d).toBeLessThan(1000); // never ejected: the old bug flew off in ONE step
-      expect(r.L).toBeCloseTo(r.L0, 1); // no phantom belt invented
-    }
-  });
-
-  it("settles instead of oscillating", () => {
-    const a = reel(-500);
-    const b = reel(-500);
-    expect(a.d).toBeCloseTo(b.d, 6); // deterministic fixed point, not a limit cycle
   });
 });
 

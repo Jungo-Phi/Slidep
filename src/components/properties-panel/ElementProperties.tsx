@@ -14,8 +14,8 @@ import {
   FormControlLabel,
   Menu,
   MenuItem,
-  Checkbox,
   Button,
+  Paper,
 } from "@mui/material";
 import {
   Delete,
@@ -45,11 +45,7 @@ import {
   node_candidate_edges,
   world2frame,
 } from "../../utils/load-geom";
-import {
-  PROBE_METRIC_LABELS,
-  available_probe_metrics,
-  toggled_probes,
-} from "../canvas/ProbeMetricSelector";
+import { ProbeMetricSelector } from "../canvas/ProbeMetricSelector";
 import VectorInput from "./components/VectorInput";
 import GroundSwitch from "./components/GroundSwitch";
 import BeltTensionSwitch from "./components/BeltTensionSwitch";
@@ -152,8 +148,6 @@ const ProbesSection: React.FC<ProbesSectionProps> = ({
   setActiveTab,
 }) => {
   const probes = element.probes ?? [];
-  const [metricsAnchorEl, setMetricsAnchorEl] =
-    React.useState<null | HTMLElement>(null);
   return (
     <Box
       sx={{
@@ -167,26 +161,6 @@ const ProbesSection: React.FC<ProbesSectionProps> = ({
       <Typography variant="caption" color="text.secondary">
         Mesures
       </Typography>
-      <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-        <Typography
-          variant="caption"
-          color={probes.length > 0 ? "text.primary" : "text.disabled"}
-          noWrap
-          sx={{ flex: 1, minWidth: 0 }}
-        >
-          {probes.length > 0
-            ? probes.map((p) => PROBE_METRIC_LABELS[p.metric]).join(" · ")
-            : "Aucune mesure"}
-        </Typography>
-        <Button
-          size="small"
-          endIcon={<KeyboardArrowDown sx={{ ml: -0.5 }} />}
-          onClick={(e) => setMetricsAnchorEl(e.currentTarget)}
-          sx={{ textTransform: "none", flexShrink: 0, py: 0, minWidth: 0 }}
-        >
-          Mesures
-        </Button>
-      </Box>
       {/* Les calques applicables à cet élément (le contrôle par élément ; la
           commande en masse vit dans le menu « Afficher » de la top-bar). */}
       {available_overlays(element).map((kind) => (
@@ -222,38 +196,27 @@ const ProbesSection: React.FC<ProbesSectionProps> = ({
       >
         Voir les graphiques
       </Button>
-      <Menu
-        anchorEl={metricsAnchorEl}
-        open={!!metricsAnchorEl}
-        onClose={() => setMetricsAnchorEl(null)}
-      >
-        {available_probe_metrics(element).map((metric) => (
-          <MenuItem
-            key={metric}
-            dense
-            onClick={() =>
+
+      <Box sx={{ display: "flex", alignItems: "left" }}>
+        <Paper sx={{ py: 1 }}>
+          <ProbeMetricSelector
+            element={element}
+            onToggle={(newProbes) =>
               applyActions(
                 [
                   {
                     type: "SetProbes",
                     elementID: element.id,
-                    newProbes: toggled_probes(element, metric),
+                    newProbes,
                     oldProbes: probes,
                   },
                 ],
                 "Other",
               )
             }
-          >
-            <Checkbox
-              size="small"
-              checked={probes.some((p) => p.metric === metric)}
-              sx={{ p: 0.5, mr: 0.5 }}
-            />
-            {PROBE_METRIC_LABELS[metric]}
-          </MenuItem>
-        ))}
-      </Menu>
+          />
+        </Paper>
+      </Box>
     </Box>
   );
 };

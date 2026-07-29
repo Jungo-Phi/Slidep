@@ -240,6 +240,7 @@ export function handle_placing_element(
           type: "PlacingProbeMetrics",
           elementID: hoveredPart.id,
           position: hoveredPart.position,
+          armed: true,
         },
       };
   }

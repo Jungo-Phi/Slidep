@@ -71,7 +71,10 @@ const edition_palette = (): { title: string; elements: PaletteElement[] }[] => [
             "MovingEdgeBody",
             "MovingConstraint",
             "SimulationDragging",
-          ].includes(state.type) || state.type === "EditingValue",
+          ].includes(state.type) ||
+          // Une saisie ouverte depuis un outil resté armé laisse cet outil
+          // allumé : c'est lui qu'on retrouve en sortie, pas la sélection.
+          (state.type === "EditingValue" && !state.rearm),
         hilightColor: COLORS.SELECTION_BOX,
         hilightHoverColor: COLORS.SELECTION_STROKE,
         simHilightColor: COLORS.ACCENT,
@@ -241,12 +244,14 @@ const edition_palette = (): { title: string; elements: PaletteElement[] }[] => [
             "DimensionNodeToNode",
             "DimensionAngle",
             "DimensionRadius",
+            "DimensionBelt",
           ].includes(state.type) ||
           (state.type === "PlacingValue" &&
             get_constraint_element_from_id(
               state.elementID,
               mechanism.constraintElements,
-            )!.type !== "gear-ratio"),
+            )!.type !== "gear-ratio") ||
+          (state.type === "EditingValue" && state.rearm === "DimensionStart"),
         hilightColor: COLORS.ACCENT,
         hilightHoverColor: COLORS.ACCENT_DARK,
       },

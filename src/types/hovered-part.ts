@@ -37,6 +37,9 @@ export type HoveredPart =
    *  It names no element: while the belt is being placed it does not exist yet,
    *  and once placed the target is the belt itself. */
   | { type: "BeltClosure"; position: Point2 }
+  /** The probe badge of an element. `id` is that element: a probe is a setting
+   *  its host carries, not an element of its own, so it is named through it. */
+  | { type: "Probe"; position: Point2; id: ID; deleting: boolean }
   | { type: "Constraint"; position: Point2; id: ID; deleting: boolean }
   | {
       type: "Force";

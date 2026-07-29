@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { separation_links } from "./disconnect-separation";
-import { applyDistanceConstraint } from "./constraint-functions";
+import { applyDistanceConstraint } from "../../test/constraint-map-api";
 import { DIM } from "../../constants/rendering-specs";
 import { Point2 } from "../../types/point2";
 import { DEFAULT_METADATA, Mechanism } from "../../types/mechanism";

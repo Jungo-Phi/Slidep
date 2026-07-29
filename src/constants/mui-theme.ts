@@ -504,13 +504,17 @@ const components: ThemeOptions["components"] = {
         outline: `2px solid ${palette.primary.main}`,
         outlineOffset: 2,
       },
-      "::-webkit-scrollbar": { width: 8, height: 8 },
-      "::-webkit-scrollbar-track": { background: palette.background.sunken },
-      "::-webkit-scrollbar-thumb": {
+      "*": {
+        scrollbarWidth: "thin",
+        scrollbarColor: `${alpha(palette.text.primary, 0.25)} ${palette.background.sunken}`,
+      },
+      "*::-webkit-scrollbar": { width: 8, height: 8 },
+      "*::-webkit-scrollbar-track": { background: palette.background.sunken },
+      "*::-webkit-scrollbar-thumb": {
         background: alpha(palette.text.primary, 0.25),
         borderRadius: 4,
       },
-      "::-webkit-scrollbar-thumb:hover": {
+      "*::-webkit-scrollbar-thumb:hover": {
         background: alpha(palette.text.primary, 0.45),
       },
     }),

@@ -63,6 +63,7 @@ export function canvasStateReducer(
   onMouseUpHandler: () => void,
   loadElements: LoadElement[] = [],
   isSimulating: boolean = false,
+  canSimulationGrab: boolean = false,
   onSimulationGrab: (
     key: string,
     target: Point2,
@@ -106,6 +107,17 @@ export function canvasStateReducer(
         case "SelectedElement":
         case "EditingValue":
         case "PlacingValue":
+          // Le badge d'une sonde ouvre le choix des grandeurs mesurées, la même
+          // boîte qu'à la pose. Avant tout le reste, y compris la simulation :
+          // c'est là qu'on veut le plus souvent y toucher.
+          if (hoveredPart.type === "Probe") {
+            setCanvasState({
+              type: "PlacingProbeMetrics",
+              elementID: hoveredPart.id,
+              position: hoveredPart.position,
+            });
+            break;
+          }
           // En simulation : pas de multi-sélection, pas de Moving* sur click
           if (isSimulating) {
             if (hoveredPart.type === "Void") {
@@ -355,6 +367,22 @@ export function canvasStateReducer(
         case "EqualConstraintGear":
         case "GearRatioConstraintStart":
         case "GearRatioConstraintGear": {
+          // Clicking a dimension already placed edits its value instead of
+          // starting a new one. The tool stays armed behind the editor.
+          if (state.type === "DimensionStart" && names_element(hoveredPart)) {
+            const dimension = constraintElements.find(
+              (element) => element.id === hoveredPart.id,
+            );
+            if (dimension && "value" in dimension) {
+              setCanvasState({
+                type: "EditingValue",
+                elementID: dimension.id,
+                value: dimension.value,
+                rearm: "DimensionStart",
+              });
+              break;
+            }
+          }
           const r = handle_placing_constraint(
             state,
             hoveredPart,
@@ -395,6 +423,9 @@ export function canvasStateReducer(
           )
             break;
           if (isSimulating) {
+            // Behind the recording frontier the loop replays snapshots and never
+            // consults the grab, so a drag there would pull on nothing.
+            if (!canSimulationGrab) break;
             let simKey: string | null = null;
             let simElementID: ID | null = null;
             let bodyRatio: number | undefined = undefined;
@@ -403,7 +434,33 @@ export function canvasStateReducer(
               undefined;
             let beltPin: Extract<Link, { type: "BeltPin" }> | undefined =
               undefined;
-            if (hit.type === "GearTooth") {
+            // A closed belt's junction is a point of the belt like any other, so a
+            // grab there is a belt-body grab at that arc-length — whether the cursor
+            // caught the node holding the junction (the usual case: a join is drawn
+            // over the belt) or the belt's own terminal.
+            const junctionBelt = mechanicalElements.find(
+              (e): e is BeltElement =>
+                e.type === "belt" &&
+                e.closed &&
+                (hit.type === "Node"
+                  ? e.fixedNodeStartID === hit.id || e.fixedNodeEndID === hit.id
+                  : hit.type === "Edge" &&
+                    hit.part !== "body" &&
+                    e.id === hit.id),
+            );
+            const junctionPin = junctionBelt
+              ? belt_body_grab_pin(
+                  junctionBelt,
+                  elements_by_id(mechanicalElements),
+                  hit.position,
+                  "grab_belt",
+                )
+              : null;
+            if (junctionPin && junctionBelt) {
+              simKey = junctionBelt.id;
+              simElementID = junctionBelt.id;
+              beltPin = junctionPin;
+            } else if (hit.type === "GearTooth") {
               // Grab a gear tooth → rotate the gear: capture the angle offset of
               // the grabbed point relative to the gear angle (held constant).
               const grabbedGear = get_mechanical_element_from_id(
@@ -750,17 +807,14 @@ export function canvasStateReducer(
             state.elementID,
             mechanicalElements,
           ) as GearElement;
-          // Grab a point on the perimeter and pull the gear toward the mouse:
-          // the raw mouse rather than the hovered part, because the nodes pinned
-          // to the rim move with it and would lock the radius on its own value.
-          // A belt is the exception — the hover has already placed the tangency
-          // point, so the rim snaps onto it instead of stopping short.
+          // Grab a point on the perimeter and pull the rim onto what is hovered:
+          // a meshing gear, a belt run, a node to size against. The hover has
+          // already placed the tangency point, so the rim lands on it instead of
+          // stopping short; on empty space it follows the free cursor.
           // The geometric solver decides whether the radius grows or the centre
           // moves (radius-constrained / meshed) — see resolveGeometricConstraints.
           const gearTarget =
-            hoveredPart.type === "BeltBody"
-              ? hoveredPart.position
-              : worldMousePos;
+            hoveredPart.type === "Void" ? worldMousePos : hoveredPart.position;
           actionBundleType = "MoveElement";
           actions.push({
             type: "ChangeGearRadius",

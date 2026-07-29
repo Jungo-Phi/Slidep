@@ -108,6 +108,24 @@ export function moment_center_position(
   return edge.positionStart.lerp(edge.positionEnd, 0.5);
 }
 
+/**
+ * World position of an element's probe badge: above its centre, or above the
+ * middle of an edge. Drawing and hit-testing both read it here, so the badge is
+ * picked exactly where it is drawn.
+ */
+export function probe_badge_position(element: MechanicalElement): Point2 {
+  const anchor =
+    "position" in element
+      ? element.type === "gear"
+        ? element.position.add(UP.mul(element.radius))
+        : (element as NodeElement).position
+      : (element as EdgeElement).positionStart.lerp(
+          (element as EdgeElement).positionEnd,
+          0.5,
+        );
+  return anchor.add(UP.mul(DIM.PROBE_OFFSET));
+}
+
 /** Drawn radius of a moment's arc for a given (signed) value. */
 export function moment_display_radius(value: number): number {
   return stored2world_load(Math.abs(value)) / LOAD_SCALING.MOMENT_RADIUS_FACTOR;
@@ -282,10 +300,7 @@ export function distributed_display_vectors(
     load,
     mechanicalElements,
   );
-  const gain = distributed_display_gain(
-    load.magnitudeStart,
-    load.magnitudeEnd,
-  );
+  const gain = distributed_display_gain(load.magnitudeStart, load.magnitudeEnd);
   return {
     displayStart: worldStart.mul(gain),
     displayEnd: worldEnd.mul(gain),
@@ -525,12 +540,28 @@ const SNAP_TOLERANCE_RAD = (8 * Math.PI) / 180;
 /** Tolerance to recognise an already-snapped direction as an edge/world axis. */
 const SNAP_MATCH_RAD = (1 * Math.PI) / 180;
 
-/** World axes (H/V) plus each edge's axial and normal directions, as angles. */
+/**
+ * World axes (H/V) plus each edge's axial and normal directions, as angles.
+ *
+ * A candidate landing within `SNAP_MATCH_RAD` of one already kept is dropped:
+ * an edge lying all but along a world axis would otherwise offer two targets a
+ * fraction of a degree apart, which the direction flips between from one pixel
+ * to the next. World axes come first, so they are the ones that survive.
+ */
 function snap_candidate_angles(edges: EdgeElement[]): number[] {
   const candidates = [0, Math.PI / 2, Math.PI, -Math.PI / 2];
   for (const edge of edges) {
     const beamAngle = edge.positionEnd.sub(edge.positionStart).angle();
-    for (let k = 0; k < 4; k++) candidates.push(beamAngle + (k * Math.PI) / 2);
+    for (let k = 0; k < 4; k++) {
+      const candidate = beamAngle + (k * Math.PI) / 2;
+      if (
+        candidates.some(
+          (kept) => Math.abs(angle_diff(candidate, kept)) < SNAP_MATCH_RAD,
+        )
+      )
+        continue;
+      candidates.push(candidate);
+    }
   }
   return candidates;
 }
@@ -559,9 +590,9 @@ export function snap_direction(worldVec: Point2, edges: EdgeElement[]): Point2 {
 
 /**
  * Reference frame implied by an (already snapped) direction: the edge whose
- * axial/normal it lies on, or "world" — world axes take priority, so a direction
- * that is both world-aligned and edge-aligned stays "world" (e.g. gravity down a
- * vertical beam is not captured as a follower load).
+ * axial/normal it lies on, or "world". An edge takes priority, so a direction
+ * that is both world-aligned and edge-aligned references the edge — a load
+ * aimed along a beam follows it, whichever way that beam happens to lie.
  */
 export function frame_from_snapped_direction(
   worldVec: Point2,
@@ -569,9 +600,6 @@ export function frame_from_snapped_direction(
 ): LoadFrame {
   if (worldVec.length() < 1e-6) return "world";
   const angle = worldVec.angle();
-  for (let k = 0; k < 4; k++)
-    if (Math.abs(angle_diff(angle, (k * Math.PI) / 2)) < SNAP_MATCH_RAD)
-      return "world";
   for (const edge of edges) {
     const beamAngle = edge.positionEnd.sub(edge.positionStart).angle();
     for (let k = 0; k < 4; k++)

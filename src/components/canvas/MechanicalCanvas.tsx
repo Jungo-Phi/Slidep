@@ -6,6 +6,7 @@ import {
   AppMode,
   CanvasEvent,
   CanvasState,
+  CanvasStateType,
   ConstraintElement,
   HoveredPart,
   ID,
@@ -26,7 +27,7 @@ import {
 } from "../../constants/rendering-specs";
 import { Box, Tooltip } from "@mui/material";
 import type { Instance as PopperInstance } from "@popperjs/core";
-import { drawMechanicalCanvas as draw_mechanical_canvas } from "./draw-canvas";
+import { draw_mechanical_canvas } from "./draw-canvas";
 import { canvasStateReducer } from "./canvas-state-reducer";
 import { get_element_from_id } from "../mechanism/connect-actions";
 import { is_zero_load, load_value_anchor } from "../../utils/load-geom";
@@ -36,7 +37,7 @@ import { snap_load_hover } from "./load-snap";
 import { compute_visible_constraints, connected_constraints } from "./utils";
 import { eraser_cursor } from "./cursors";
 import { OnCanvasValueEditor } from "./OnCanvasValueEditor";
-import { ProbeMetricSelector } from "./ProbeMetricSelector";
+import { OnCanvasProbeMetricSelector } from "./ProbeMetricSelector";
 import {
   draw_grid,
   draw_trajectory,
@@ -74,6 +75,31 @@ const STRUCTURAL_KEYS = new Set([
 ]);
 // Keys that place constraints/dimensions → pause simulation
 const CONSTRAINT_KEYS = new Set(["d", "e", "h", "l", "n", "q", "v"]);
+
+/** States whose free point snaps to the grid: those that put a point down, and
+ *  those that drag one. A tool aiming at an element is not among them. */
+const GRID_SNAPPED_STATES = new Set<CanvasStateType>([
+  "ChangingGearRadius",
+  "MovingEdgeStartPoint",
+  "MovingEdgeEndPoint",
+  "MovingNode",
+  "PlacingBeamStart",
+  "PlacingBeamEnd",
+  "PlacingBeltStart",
+  "PlacingBeltEnd",
+  "PlacingSpringStart",
+  "PlacingSpringEnd",
+  "PlacingDamperStart",
+  "PlacingDamperEnd",
+  "PlacingGearStart",
+  "PlacingGearRadius",
+  "PlacingGround",
+  "PlacingJoin",
+  "PlacingMass",
+  "PlacingMotor",
+  "PlacingPivot",
+  "PlacingSlider",
+]);
 
 /** One line per distinct failure: the loop retries every frame, so an unguarded
  *  log buries the console sixty times a second. */
@@ -116,6 +142,8 @@ interface MechanicalCanvasProps {
   onPauseSim: () => void;
   onSimulationGrab: (key: string, target: Point2, bodyRatio?: number) => void;
   onSimulationGrabEnd: () => void;
+  /** May a grab be started at all? False while replaying behind the frontier. */
+  canSimulationGrab: boolean;
   snapToGrid: boolean;
   showGrid: boolean;
   /** Recorded trajectories of the probed elements (empty outside simulation). */
@@ -146,6 +174,7 @@ export const MechanicalCanvas = forwardRef<
       onPauseSim,
       onSimulationGrab,
       onSimulationGrabEnd,
+      canSimulationGrab,
       snapToGrid,
       showGrid,
       trajectories,
@@ -185,6 +214,8 @@ export const MechanicalCanvas = forwardRef<
     onSimulationGrabRef.current = onSimulationGrab;
     const onSimulationGrabEndRef = useRef(onSimulationGrabEnd);
     onSimulationGrabEndRef.current = onSimulationGrabEnd;
+    const canSimulationGrabRef = useRef(canSimulationGrab);
+    canSimulationGrabRef.current = canSimulationGrab;
     const appModeRef = useRef(appMode);
     appModeRef.current = appMode;
     const trajectoriesRef = useRef(trajectories);
@@ -514,6 +545,82 @@ export const MechanicalCanvas = forwardRef<
       onMouseUpHandler();
     };
 
+    /**
+     * The hovered part under the last known cursor position, bounded and
+     * snapped. Reads the current state, so it answers for whatever tool is
+     * armed right now; free of side effects, so it can be called outside a
+     * gesture. Returns the bounded cursor too, which gestures read raw.
+     */
+    const computeHover = useCallback((): {
+      hoveredPart: HoveredPart;
+      worldMousePos: Point2;
+    } => {
+      const currMech = mechanismRef.current;
+
+      // Bounded here, where the cursor enters the system, so that hit-testing
+      // and the gestures reading the raw mouse share one bounded point.
+      const worldMousePos = clamp_to_bounds(
+        screen2world(mousePositionRef.current, currMech.viewport),
+        canvasStateRef.current,
+        currMech.mechanicalElements,
+      );
+      const newHoveredPart = get_hovered_part(
+        currMech.mechanicalElements,
+        currMech.constraintElements,
+        currMech.loads,
+        computeVisibleConstraints(),
+        worldMousePos,
+        canvasStateRef.current,
+      );
+      if (
+        snapToGrid &&
+        newHoveredPart.type === "Void" &&
+        // A point held back by a refusal keeps the distance it was pushed to:
+        // the grid would pull it straight back onto the centre that refused it.
+        !newHoveredPart.rejected &&
+        appModeRef.current === "edition" &&
+        GRID_SNAPPED_STATES.has(canvasStateRef.current.type)
+      ) {
+        const rdx =
+          Math.round(newHoveredPart.position.x / DIM.GRID_MAJOR) *
+          DIM.GRID_MAJOR;
+        if (
+          Math.abs(rdx - newHoveredPart.position.x) <
+          HIT_TOLERANCE.SNAP_TO_GRID / currMech.viewport.zoom
+        )
+          newHoveredPart.position.x = rdx;
+        const rdy =
+          Math.round(newHoveredPart.position.y / DIM.GRID_MAJOR) *
+          DIM.GRID_MAJOR;
+        if (
+          Math.abs(rdy - newHoveredPart.position.y) <
+          HIT_TOLERANCE.SNAP_TO_GRID / currMech.viewport.zoom
+        )
+          newHoveredPart.position.y = rdy;
+      }
+      if (newHoveredPart.type === "Void" && appModeRef.current === "edition") {
+        // Align load direction to world/beam axes, and its length to a round value
+        newHoveredPart.position = snap_load_hover(
+          canvasStateRef.current,
+          newHoveredPart.position,
+          currMech.mechanicalElements,
+          currMech.loads,
+          currMech.viewport.zoom,
+        );
+      }
+      // Both snaps above rewrite the point after it was bounded, and the grid
+      // one pulls it a long way — onto the very centre of a gear being sized,
+      // when that centre sits on the grid. Only the free point is restored: a
+      // hovered element keeps its own position, which is what makes it a target.
+      if (newHoveredPart.type === "Void")
+        newHoveredPart.position = clamp_to_bounds(
+          newHoveredPart.position,
+          canvasStateRef.current,
+          currMech.mechanicalElements,
+        );
+      return { hoveredPart: newHoveredPart, worldMousePos };
+    }, [snapToGrid, computeVisibleConstraints]);
+
     const handleEvent = useCallback(
       (event: CanvasEvent) => {
         if (
@@ -548,89 +655,7 @@ export const MechanicalCanvas = forwardRef<
         }
         const currMech = mechanismRef.current;
 
-        // Bounded here, where the cursor enters the system, so that hit-testing
-        // and the gestures reading the raw mouse share one bounded point.
-        const worldMousePos = clamp_to_bounds(
-          screen2world(mousePositionRef.current, currMech.viewport),
-          canvasStateRef.current,
-          currMech.mechanicalElements,
-        );
-        const newHoveredPart = get_hovered_part(
-          currMech.mechanicalElements,
-          currMech.constraintElements,
-          currMech.loads,
-          computeVisibleConstraints(),
-          worldMousePos,
-          canvasStateRef.current,
-        );
-        if (
-          snapToGrid &&
-          newHoveredPart.type === "Void" &&
-          // A point held back by a refusal keeps the distance it was pushed to:
-          // the grid would pull it straight back onto the centre that refused it.
-          !newHoveredPart.rejected &&
-          appModeRef.current === "edition" &&
-          (canvasStateRef.current.type === "ChangingGearRadius" ||
-            canvasStateRef.current.type === "MovingEdgeStartPoint" ||
-            canvasStateRef.current.type === "MovingEdgeEndPoint" ||
-            canvasStateRef.current.type === "MovingNode" ||
-            canvasStateRef.current.type === "PlacingBeamStart" ||
-            canvasStateRef.current.type === "PlacingBeamEnd" ||
-            canvasStateRef.current.type === "PlacingBeltStart" ||
-            canvasStateRef.current.type === "PlacingBeltEnd" ||
-            canvasStateRef.current.type === "PlacingSpringStart" ||
-            canvasStateRef.current.type === "PlacingSpringEnd" ||
-            canvasStateRef.current.type === "PlacingDamperStart" ||
-            canvasStateRef.current.type === "PlacingDamperEnd" ||
-            canvasStateRef.current.type === "PlacingGearStart" ||
-            canvasStateRef.current.type === "PlacingGearRadius" ||
-            canvasStateRef.current.type === "PlacingGround" ||
-            canvasStateRef.current.type === "PlacingJoin" ||
-            canvasStateRef.current.type === "PlacingMass" ||
-            canvasStateRef.current.type === "PlacingMotor" ||
-            canvasStateRef.current.type === "PlacingPivot" ||
-            canvasStateRef.current.type === "PlacingSlider")
-        ) {
-          const rdx =
-            Math.round(newHoveredPart.position.x / DIM.GRID_MAJOR) *
-            DIM.GRID_MAJOR;
-          if (
-            Math.abs(rdx - newHoveredPart.position.x) <
-            HIT_TOLERANCE.SNAP_TO_GRID / currMech.viewport.zoom
-          )
-            newHoveredPart.position.x = rdx;
-          const rdy =
-            Math.round(newHoveredPart.position.y / DIM.GRID_MAJOR) *
-            DIM.GRID_MAJOR;
-          if (
-            Math.abs(rdy - newHoveredPart.position.y) <
-            HIT_TOLERANCE.SNAP_TO_GRID / currMech.viewport.zoom
-          )
-            newHoveredPart.position.y = rdy;
-        }
-        if (
-          newHoveredPart.type === "Void" &&
-          appModeRef.current === "edition"
-        ) {
-          // Align load direction to world/beam axes, and its length to a round value
-          newHoveredPart.position = snap_load_hover(
-            canvasStateRef.current,
-            newHoveredPart.position,
-            currMech.mechanicalElements,
-            currMech.loads,
-            currMech.viewport.zoom,
-          );
-        }
-        // Both snaps above rewrite the point after it was bounded, and the grid
-        // one pulls it a long way — onto the very centre of a gear being sized,
-        // when that centre sits on the grid. Only the free point is restored: a
-        // hovered element keeps its own position, which is what makes it a target.
-        if (newHoveredPart.type === "Void")
-          newHoveredPart.position = clamp_to_bounds(
-            newHoveredPart.position,
-            canvasStateRef.current,
-            currMech.mechanicalElements,
-          );
+        const { hoveredPart: newHoveredPart, worldMousePos } = computeHover();
         refreshRevealFromHover(newHoveredPart);
 
         setHoveredPart(newHoveredPart);
@@ -650,6 +675,7 @@ export const MechanicalCanvas = forwardRef<
           onMouseUpHandler,
           currMech.loads,
           appModeRef.current !== "edition",
+          canSimulationGrabRef.current,
           onSimulationGrabRef.current,
           onSimulationGrabEndRef.current,
           worldMousePos,
@@ -663,13 +689,27 @@ export const MechanicalCanvas = forwardRef<
         redoMechanism,
         setCanvasState,
         setHoveredPart,
-        snapToGrid,
-        computeVisibleConstraints,
+        computeHover,
         refreshRevealFromHover,
         onMouseUpHandler,
       ],
     );
     handleEventRef.current = handleEvent;
+
+    // The hover answers the armed tool, so it goes stale when the tool changes
+    // under a still cursor — a click that ends a placement, a shortcut, Escape.
+    // Recomputed without the reducer: this is a refresh, not a gesture.
+    useEffect(() => {
+      const { hoveredPart: refreshed } = computeHover();
+      refreshRevealFromHover(refreshed);
+      setHoveredPart(refreshed);
+      oldPositionRef.current = refreshed.position.clone();
+    }, [
+      canvasState.type,
+      computeHover,
+      refreshRevealFromHover,
+      setHoveredPart,
+    ]);
 
     const isTypingInInput = (): boolean => {
       const active = document.activeElement;
@@ -786,7 +826,7 @@ export const MechanicalCanvas = forwardRef<
         ? "not-allowed"
         : canvasState.type === "SimulationDragging"
           ? "grabbing"
-          : appMode !== "edition" &&
+          : canSimulationGrab &&
               ["Selecting", "SelectedElement"].includes(canvasState.type) &&
               hoveredPart.type !== "Void"
             ? "grab"
@@ -1046,13 +1086,16 @@ export const MechanicalCanvas = forwardRef<
                 }
               }
               // Valider sur un élément qu'on vient de poser réarme son outil,
-              // pour en enchaîner un autre sans repasser par la palette.
+              // pour en enchaîner un autre sans repasser par la palette. Une
+              // cote éditée depuis un outil resté armé y revient de même.
               if (isPlacingValue) {
                 if (editingElement.type === "gear-ratio") {
                   setCanvasState({ type: "GearRatioConstraintStart" });
                 } else {
                   setCanvasState({ type: "DimensionStart" });
                 }
+              } else if (isEditingValue && canvasState.rearm) {
+                setCanvasState({ type: canvasState.rearm });
               } else {
                 setCanvasState({
                   type: "SelectedElement",
@@ -1074,6 +1117,8 @@ export const MechanicalCanvas = forwardRef<
                   "Other",
                 );
                 setCanvasState({ type: "Selecting" });
+              } else if (isEditingValue && canvasState.rearm) {
+                setCanvasState({ type: canvasState.rearm });
               } else {
                 setCanvasState({
                   type: "SelectedElement",
@@ -1090,32 +1135,37 @@ export const MechanicalCanvas = forwardRef<
             );
             if (!probedElement) return null;
             return (
-              <ProbeMetricSelector
+              <OnCanvasProbeMetricSelector
                 element={probedElement}
                 position={world2screen(
                   canvasState.position,
                   mechanism.viewport,
                 )}
-                onCommit={(newProbes) => {
-                  const oldProbes = probedElement.probes ?? [];
-                  const changed =
-                    newProbes.length !== oldProbes.length ||
-                    newProbes.some((p, i) => p.metric !== oldProbes[i].metric);
-                  if (changed)
-                    applyActions(
-                      [
-                        {
-                          type: "SetProbes",
+                onToggle={(newProbes) =>
+                  applyActions(
+                    [
+                      {
+                        type: "SetProbes",
+                        elementID: probedElement.id,
+                        newProbes,
+                        oldProbes: probedElement.probes ?? [],
+                      },
+                    ],
+                    "Other",
+                  )
+                }
+                // The measured element stays selected either way; only the tool
+                // differs, the probe tool going on to place another.
+                onClose={() =>
+                  setCanvasState(
+                    canvasState.armed
+                      ? { type: "PlacingProbe" }
+                      : {
+                          type: "SelectedElement",
                           elementID: probedElement.id,
-                          newProbes,
-                          oldProbes,
                         },
-                      ],
-                      "Other",
-                    );
-                  setCanvasState({ type: "PlacingProbe" });
-                }}
-                onCancel={() => setCanvasState({ type: "PlacingProbe" })}
+                  )
+                }
               />
             );
           })()}

@@ -21,7 +21,7 @@ import {
   applyParallelConstraint,
   applySlideOnSegmentConstraint,
   applyVerticalConstraint,
-} from "./constraint-functions";
+} from "../../test/constraint-map-api";
 import { PBD_kinematic_solver } from "./PBD_kinematic_solver";
 import { collect_solver_trace } from "./solver-trace";
 

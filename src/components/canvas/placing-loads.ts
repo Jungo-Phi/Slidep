@@ -80,14 +80,18 @@ export function distributed_force_from_drag(
   ) as BeamElement;
   const drag = cursor.sub(beam.positionStart.lerp(beam.positionEnd, 0.5));
   const magnitude = world2stored_load(drag.length());
+  // The cursor is already direction-snapped (see snap_load_hover): a load that
+  // landed on its beam's axial/normal references that beam and follows it.
+  const frame = frame_from_snapped_direction(drag, [beam]);
+  const direction = drag.length() > 1e-6 ? drag.normalize() : new Point2(0, -1);
   return {
     type: "distributed-force",
     id,
     targetID: startHover.id,
-    direction: drag.length() > 1e-6 ? drag.normalize() : new Point2(0, -1),
+    direction: world2frame(direction, frame, mechanicalElements),
     magnitudeStart: magnitude,
     magnitudeEnd: magnitude,
-    frame: "world",
+    frame,
   };
 }
 

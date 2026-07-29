@@ -2,6 +2,7 @@ import { ID, Link, Mechanism, Point2, KinNodes } from "../../types";
 import {
   BeltVia,
   belt_arrivals,
+  belt_pieces,
   belt_project,
   belt_wraps,
 } from "../../utils/belt-path";
@@ -9,11 +10,106 @@ import {
   ConstraintResidual,
   KinematicSnapshot,
 } from "../../types/runtime-state";
-import { get_links_simulation, get_sim_nodes } from "./parsing";
+import {
+  belt_q_links,
+  get_links_simulation,
+  get_sim_nodes,
+  mark_passive_belt_pins,
+  rebuild_belt_q_links,
+} from "./parsing";
 import { PBD_kinematic_solver } from "./PBD_kinematic_solver";
 import { sort_links } from "./utils";
 
 const RECORD_DT = 1 / 120; // 120 fps of simulated time
+
+/**
+ * Wall-clock milliseconds the recording loop may spend inside one displayed frame.
+ * Under a 16.7 ms frame, so the display keeps its own time; a step that outlasts
+ * it on its own still runs to completion, since a partial step is not a state.
+ */
+export const FRAME_BUDGET_MS = 8;
+
+/**
+ * The simulated step to record, to advance `requestedDt` of simulated time within
+ * one frame budget, given what a step currently costs.
+ *
+ * Real time is what the playback speed promises, so it is the step that gives way,
+ * not the clock: the solver being incremental (`ω·dt`), the only way to advance
+ * faster than it can afford is to solve fewer, coarser instants. Never finer than
+ * `RECORD_DT` — past that the fidelity is free but the memory is not.
+ *
+ * **This makes the recording machine-dependent**: the same run records coarser
+ * snapshots on a slower machine, or under load. That is the accepted price of
+ * honouring the requested speed — the trajectory error grows linearly with the
+ * step, so a recording produced under load is proportionally less faithful.
+ *
+ * Saturates on its own: once one step outlasts the budget, `affordable` sticks at
+ * 1 and the step stops growing beyond the frame's own request.
+ */
+export function recording_step(
+  requestedDt: number,
+  stepCostMs: number,
+  budgetMs: number = FRAME_BUDGET_MS,
+): number {
+  const affordable = Math.max(
+    1,
+    Math.floor(budgetMs / Math.max(stepCostMs, 1e-3)),
+  );
+  return Math.max(RECORD_DT, requestedDt / affordable);
+}
+
+/**
+ * How much of the ceiling a clean step gives back. A quarter per step: a mechanism that
+ * stops resisting recovers its fast-forward in a handful of frames instead of staying
+ * pinned by one bad moment.
+ */
+const CEILING_RELAX = 0.8;
+
+/**
+ * The coarsest step the recording may take next, from what the last one left violated.
+ *
+ * A coarse step tears the constraints of a mechanism that **resists** — one at a dead point,
+ * or losing a pulley. Measured (`plan-fluidite.md`, chantier 2): the violation is exactly
+ * proportional to the step, and it appears between 1/120 and 1/60, which is where the belt
+ * links stop holding. So the step that would put the worst constraint back at its reporting
+ * threshold is the current one divided by how far past it we are — one division, no search,
+ * and it converges in a single frame because the relation is linear.
+ *
+ * Mechanisms that violate nothing (they follow their motor rather than resisting it) are
+ * never capped: they keep the full playback speed however coarse the step gets.
+ *
+ * Never finer than `RECORD_DT`: past it the step costs more without buying anything, and a
+ * mechanism blocked for real must keep reporting the blockage, which is its own signal.
+ */
+export function step_ceiling(stepDt: number, severity: number): number {
+  return Math.max(RECORD_DT, stepDt / Math.max(severity, CEILING_RELAX));
+}
+
+/** Gauss-Seidel sweeps per frame. Raise it only from a measurement bench. */
+const DEFAULT_SWEEPS = 200;
+
+/**
+ * The belt's contact band, in belt-px of wrapped arc: a pulley is let go below
+ * `detachArc` and taken back above `reattachArc`.
+ *
+ * `detachArc` is NOT zero, and that is the whole point. The last sliver of wrap before
+ * zero is a degenerate band — the no-slip on a pulley the belt barely grazes goes
+ * erratic — so waiting for exactly zero means letting the mechanism strain against a
+ * pulley that no longer holds anything, then releasing it all at once. Measured on
+ * `Déconnexion courroie`: the transition frame lurches **26.1 px** at zero and **1.2 px**
+ * at 0.5, and grows again beyond (3.7 px at 2, 18.4 px at 10 — there the pulley still
+ * carried belt and dropping it is a real geometric change).
+ *
+ * The gap between the two is the hysteresis, and it exists for one reason: every flip
+ * rebuilds the belt's no-slip links, which resets the `q` origin of the WHOLE belt.
+ *
+ * Mutable so a bench can sweep it in one process — production never writes it.
+ */
+export const beltContact = {
+  detachArc: 0.5,
+  reattachArc: 1.0,
+  rebuildQLinks: true,
+};
 
 /** A motor is reported blocked when, over the frame, the driven element advanced
  *  by less than this fraction of its commanded increment ω·dt. */
@@ -130,7 +226,7 @@ export function update_belt_disconnects(
     // a raw atan2 would jump 2π at the ±π seam and inject 2πr of phantom belt.
     link.arrivals![gi] = unwrap(rawArr[offset + k], link.arrivals![gi]);
     if (
-      cont <= 0 &&
+      cont * link.radii[gi] <= beltContact.detachArc &&
       !link.disconnected![gi] &&
       (!link.closed || activeIdx.length > 1)
     ) {
@@ -138,33 +234,80 @@ export function update_belt_disconnects(
       newlyDisconnected = true;
     }
   });
-  return newlyDisconnected;
+  return newlyDisconnected || reattach_belt_pulleys(link, positions);
 }
 
 /**
- * Drop the belt links of pulleys that have just disconnected. With the shared
- * travel φ this is trivial: remove the disconnected pulley's BeltPhaseGear (it
- * stops being driven) — every other pulley (and the belt's free ends) stays
- * coupled to the SAME φ, so transmission continues past it with no rebuild.
- * Reset on recompile.
+ * Belt contact REGAINED: a detached pulley the belt has come back onto. Tested by
+ * putting the pulley back into the via list and reading the arc it would then wrap —
+ * the exact mirror of the detachment test, which is why the two agree at the tangency.
+ *
+ * Two guards, and neither is optional:
+ *  - the pulley's centre must project INSIDE the strand it would join, not past one of
+ *    its ends (same condition the canvas uses to decide a pulley can be dropped on a
+ *    run) — otherwise a pulley that has drifted off sideways reads as touching;
+ *  - the arc must exceed `BELT_REATTACH_ARC`, in belt-px. Detachment stays at exactly
+ *    zero, which is the geometric truth; only the way back waits. Measured on
+ *    `Déconnexion courroie`, the belt straightens ACROSS the pulley it just dropped and
+ *    would re-take it on the very next frame, forever — and every flip resets the whole
+ *    belt's `q` origin, which is what would make the no-slip blind.
  */
-export function rewire_belt_mesh(
-  links: Link[],
-  belts: Extract<Link, { type: "BeltLength" }>[],
-): Link[] {
-  const disconnectedAngleKeys = new Set<string>();
-  for (const b of belts)
-    b.disconnected?.forEach((d, i) => {
-      if (!d) return;
-      disconnectedAngleKeys.add(b.gearAngleKeys[i]);
-    });
-  return links.filter((l) => {
-    // A disconnected pulley just loses its no-slip coupling; every other pulley
-    // (and the belt's free ends) stays on the same φ, so transmission continues.
-    if (l.type === "BeltPhaseGear" && disconnectedAngleKeys.has(l.angleKey))
-      return false;
-    return true;
-  });
+function reattach_belt_pulleys(
+  link: Extract<Link, { type: "BeltLength" }>,
+  positions: Map<string, Point2>,
+): boolean {
+  if (!link.disconnected?.some(Boolean)) return false;
+  let reattached = false;
+  for (let gi = 0; gi < link.gearPosKeys.length; gi++) {
+    if (!link.disconnected[gi]) continue;
+    const vias: BeltVia[] = [];
+    let index = -1;
+    let ok = true;
+    for (let i = 0; i < link.gearPosKeys.length; i++) {
+      if (link.disconnected[i] && i !== gi) continue;
+      const pos = positions.get(link.gearPosKeys[i]);
+      if (!pos) {
+        ok = false;
+        break;
+      }
+      if (i === gi) index = vias.length;
+      vias.push({ pos, radius: link.radii[i], direction: link.directions[i] });
+    }
+    if (!ok || index < 0 || vias.length < 2) continue;
+
+    const centre = vias[index].pos;
+    const onRun = belt_pieces(
+      vias.filter((_, v) => v !== index),
+      link.closed,
+    ).some(
+      (p) =>
+        p.kind === "segment" &&
+        centre.distance2segment(p.from, p.to) <=
+          centre.distance2line(p.from, p.to),
+    );
+    if (!onRun) continue;
+
+    const piece = belt_pieces(vias, link.closed).find(
+      (p) => p.kind === "arc" && p.gearIndex === index,
+    );
+    if (!piece || piece.kind !== "arc") continue;
+    // The raw sweep lives in [0, 2π) and cannot say which side of zero it is on: a pulley
+    // the belt misses by 0.027 rad reads 6.2558, i.e. 2π − 0.027, and would be taken back
+    // wrapped the LONG way round — measured, +409 px of belt out of nowhere. A pulley
+    // coming back into contact always starts from a hair of wrap, so the short side is
+    // the only readable one.
+    if (piece.wrap >= Math.PI) continue;
+    if (piece.length < beltContact.reattachArc) continue;
+
+    // Back on the belt: its continuous state is stale by the whole detachment, so
+    // re-seed it from the raw geometry exactly as the first frame does.
+    link.disconnected[gi] = false;
+    if (link.wraps) link.wraps[gi] = belt_wraps(vias, link.closed)[index];
+    if (link.arrivals)
+      link.arrivals[gi] = belt_arrivals(vias, link.closed)[index];
+    reattached = true;
+  }
+  return reattached;
 }
 
 /**
@@ -304,6 +447,10 @@ export function compile_simulation_model(
   });
   links = links.filter((link) => link.type !== "Coincidence");
 
+  // ── Belt no-slip, on the fused geometry and the complete link list ──
+  mark_passive_belt_pins(nodes, links);
+  links.push(...belt_q_links(nodes, links));
+
   // ── Sort links (anchored nodes first for better convergence) ──
   links = sort_links(links, nodes.posMasses);
 
@@ -326,6 +473,9 @@ export function step_simulation(
   prevAngles: Map<string, number> | null,
   dt: number = RECORD_DT,
   grab?: SimGrab,
+  sweeps: number = DEFAULT_SWEEPS,
+  /** Off only to measure what the collection itself costs; production reads it. */
+  collectDiagnostics: boolean = true,
 ): KinematicSnapshot {
   const positions = new Map(model.nodes.positions);
   const angles = new Map(model.nodes.angles);
@@ -390,13 +540,28 @@ export function step_simulation(
     }
   });
 
-  // A pulley just lost contact → rebuild the affected belts' transmission chain
-  // so it stops being driven while its neighbours stay coupled, and re-bake the
-  // closed-belt junction refs onto the reduced loop so the junction doesn't jump.
-  // Permanent for the run (model mutated; reset on recompile).
+  // A pulley just left the belt, or came back onto it → re-bake the closed-belt junction
+  // refs onto the new loop (its arc-length origin has shifted, and it would otherwise
+  // JUMP), then rebuild the belt's no-slip links against the new topology. Both mutate
+  // the model, and both are reset on recompile.
   if (beltsToRewire.length > 0) {
-    model.links = rewire_belt_mesh(model.links, beltsToRewire);
     rebake_belt_pin_refs(model.links, beltsToRewire, positions, angles);
+    // Drop the belt's no-slip links for THIS frame: they describe the belt as it was, so
+    // letting them pull against the new topology spoils the very state the rebuild is
+    // about to bake against. The frame runs on `BeltLength` alone and the links come back
+    // at the end of it — measured, that is what makes the transition frame come out with
+    // no violated constraint at all instead of three stuck at 1.3 px forever.
+    if (beltContact.rebuildQLinks) {
+      const owners = new Set(beltsToRewire.map((b) => b.owner));
+      model.links = model.links.filter(
+        (l) =>
+          !(
+            (l.type === "BeltSegmentNoSlip" ||
+              l.type === "BeltSubChainAggregate") &&
+            owners.has(l.owner)
+          ),
+      );
+    }
   }
 
   // Share each belt's sim state — continuous wraps (so a wound pulley >2π is
@@ -514,11 +679,29 @@ export function step_simulation(
     model.nodes.posMasses,
     new Map<string, number>(),
     links,
-    300,
+    sweeps,
     undefined,
     angles,
-    true, // collect unsatisfied-constraint diagnostics
+    collectDiagnostics,
   );
+
+  // ── Belt topology changed this frame → rebuild its no-slip links, AFTER the solve ──
+  // The bake has to happen on a state the other constraints agree with. Baking on the
+  // warm start, before the solve, freezes into `h⁰` whatever the frame was about to
+  // correct: measured on `Déconnexion courroie`, a 26 px lurch on the transition frame
+  // and 1.3 px of residual that never went away afterwards.
+  if (beltsToRewire.length > 0 && beltContact.rebuildQLinks) {
+    for (const belt of beltsToRewire)
+      model.links = sort_links(
+        rebuild_belt_q_links(
+          model.links,
+          belt,
+          result.positions,
+          result.angles,
+        ),
+        model.nodes.posMasses,
+      );
+  }
 
   // ── Decouple fused keys back to individual keys ──
   const outPositions = new Map<string, Point2>();
@@ -574,6 +757,130 @@ export function step_simulation(
     disconnectedBeltGears,
     beltWraps,
   };
+}
+
+/**
+ * The snapshot to draw at time `t`, interpolated between the two it falls between.
+ *
+ * Recording runs at a fixed `RECORD_DT` whatever the playback speed, so below ×1 the same
+ * snapshot would otherwise be drawn several times in a row and the motion reads as
+ * stepping. Interpolating decouples smoothness from the recording rate, at no solver cost.
+ *
+ * Two states that each satisfy the constraints do not average into one that does — a beam
+ * gets marginally shorter across the interpolation. The error is second-order in the step
+ * and measured in `snapshot-interpolation.test.ts`; it is not a solve, only a drawing.
+ *
+ * Topology is never interpolated: across a frame where a pulley leaves or rejoins a belt,
+ * the earlier snapshot is held rather than drawing a half-detached belt.
+ */
+export function snapshot_at(
+  snapshots: KinematicSnapshot[],
+  t: number,
+): KinematicSnapshot | null {
+  if (snapshots.length === 0) return null;
+  const i = snapshot_index_at(snapshots, t);
+  if (i >= snapshots.length - 1) return snapshots[snapshots.length - 1];
+  const a = snapshots[i];
+  const b = snapshots[i + 1];
+  const span = b.t - a.t;
+  const u = span > 0 ? (t - a.t) / span : 0;
+  if (u <= 0) return a;
+  if (!same_belt_topology(a, b)) return a;
+
+  const positions = new Map<string, Point2>();
+  a.positions.forEach((pa, key) => {
+    const pb = b.positions.get(key);
+    positions.set(
+      key,
+      pb
+        ? new Point2(pa.x + (pb.x - pa.x) * u, pa.y + (pb.y - pa.y) * u)
+        : pa.clone(),
+    );
+  });
+  const angles = new Map<string, number>();
+  a.angles.forEach((va, key) => {
+    const vb = b.angles.get(key);
+    angles.set(key, vb === undefined ? va : va + (vb - va) * u);
+  });
+  // Wraps are continuous (unwrapped) like the angles, so they interpolate the same way.
+  let beltWraps: Map<ID, number[]> | undefined;
+  if (a.beltWraps) {
+    beltWraps = new Map<ID, number[]>();
+    a.beltWraps.forEach((wa, id) => {
+      const wb = b.beltWraps?.get(id);
+      beltWraps!.set(
+        id,
+        wb && wb.length === wa.length
+          ? wa.map((v, k) => v + (wb[k] - v) * u)
+          : wa.slice(),
+      );
+    });
+  }
+  return {
+    t,
+    positions,
+    angles,
+    // Diagnostics and topology belong to a state the solver actually produced.
+    unsatisfied: a.unsatisfied,
+    disconnectedBeltGears: a.disconnectedBeltGears,
+    beltWraps,
+  };
+}
+
+/**
+ * Does a cursor placed at `t` sit at the live end of the recording, rather than behind it?
+ *
+ * This compares times, which the recording loop must never do: while recording, the
+ * frontier runs ahead of the cursor by an amount that varies frame to frame. It is sound
+ * **here and only here** — it answers at the instant the user drops the cursor, playback
+ * stopped and the frontier still.
+ */
+export function at_recording_end(
+  snapshots: KinematicSnapshot[],
+  t: number,
+  step: number,
+): boolean {
+  if (snapshots.length === 0) return true;
+  return t >= snapshots[snapshots.length - 1].t - step / 2;
+}
+
+/**
+ * Index of the last snapshot recorded at or before `t`, by binary search — the
+ * recording is not uniformly spaced (see `recording_step`), so the time axis has
+ * to be searched rather than divided. Clamped to the array.
+ */
+export function snapshot_index_at(
+  snapshots: KinematicSnapshot[],
+  t: number,
+): number {
+  let lo = 0;
+  let hi = snapshots.length - 1;
+  if (hi < 0 || t <= snapshots[0].t) return 0;
+  if (t >= snapshots[hi].t) return hi;
+  while (hi - lo > 1) {
+    const mid = (lo + hi) >> 1;
+    if (snapshots[mid].t <= t) lo = mid;
+    else hi = mid;
+  }
+  return lo;
+}
+
+/** Same pulleys detached on both sides, belt by belt. */
+function same_belt_topology(
+  a: KinematicSnapshot,
+  b: KinematicSnapshot,
+): boolean {
+  const da = a.disconnectedBeltGears;
+  const db = b.disconnectedBeltGears;
+  if (!da && !db) return true;
+  if (!da || !db || da.size !== db.size) return false;
+  for (const [id, indices] of da) {
+    const other = db.get(id);
+    if (!other || other.length !== indices.length) return false;
+    for (let k = 0; k < indices.length; k++)
+      if (other[k] !== indices[k]) return false;
+  }
+  return true;
 }
 
 /**

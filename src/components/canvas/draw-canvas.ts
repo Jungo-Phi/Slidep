@@ -61,7 +61,10 @@ import {
   draw_probe,
   draw_dimension_belt,
 } from "./drawing-functions";
-import { get_mechanical_element_from_id } from "../mechanism/connect-actions";
+import {
+  deletion_closure,
+  get_mechanical_element_from_id,
+} from "../mechanism/connect-actions";
 import {
   distributed_display_vectors,
   distributed_label_vector,
@@ -72,6 +75,7 @@ import {
   force_world_vector,
   moment_center_position,
   moment_display_radius,
+  probe_badge_position,
   stored2world_load,
 } from "../../utils/load-geom";
 import {
@@ -106,6 +110,9 @@ import {
 
 const TAU = 2 * Math.PI;
 
+/** Shared empty set, so a frame with nothing doomed allocates none. */
+const EMPTY_IDS: ReadonlySet<ID> = new Set<ID>();
+
 /**
  * Per-via winding spec for a belt: a pulley wound past a full turn (|wrap| ≥ 2π)
  * gets a coil growing one BELT_WIDTH per turn. It grows OUTWARD on the departure
@@ -135,6 +142,9 @@ function is_selected(
 ): boolean {
   return (
     (state.type === "SelectedElement" && state.elementID === elementID) ||
+    // Its metric popover is open: the element being measured reads as selected,
+    // the cursor having left the canvas for the popover.
+    (state.type === "PlacingProbeMetrics" && state.elementID === elementID) ||
     (state.type === "MovingNode" && state.elementID === elementID) ||
     (state.type === "MovingEdgeStartPoint" && state.elementID === elementID) ||
     (state.type === "MovingEdgeEndPoint" && state.elementID === elementID) ||
@@ -165,19 +175,22 @@ function is_selected(
   );
 }
 
+/**
+ * Whether `elementID` is about to be erased — itself, or as part of the cascade
+ * the hovered element drags along. `doomed` holds that cascade, computed once
+ * per frame from the deletion itself (see `deletion_closure`).
+ */
 function is_erase_hovered(
   elementID: ID,
   hoveredPart: HoveredPart,
   state: CanvasState,
   constraintElements: ConstraintElement[],
+  doomed: ReadonlySet<ID>,
 ): boolean {
   return (
     (names_element(hoveredPart) &&
       hoveredPart.deleting &&
-      (hoveredPart.id === elementID ||
-        connected_constraints(hoveredPart.id, constraintElements).includes(
-          elementID,
-        ))) ||
+      doomed.has(elementID)) ||
     (state.type === "ErasingMultiple" &&
       [
         ...state.hoveredElementIDs,
@@ -317,12 +330,45 @@ function is_load_hovered(
   return part === undefined || hoveredPart.part === part;
 }
 
+/**
+ * The edge a load being placed takes its frame from, if any. The load is aimed
+ * by dragging, so nothing else says which edge captured the direction — and that
+ * edge decides whether the load follows it or stays put.
+ */
+function load_frame_edge_id(
+  hoveredPart: HoveredPart,
+  state: CanvasState,
+  mechanicalElements: MechanicalElement[],
+): ID | undefined {
+  const load =
+    state.type === "PlacingForceEnd"
+      ? force_from_drag(
+          GHOST_LOAD_ID,
+          state.startHover,
+          hoveredPart.position,
+          mechanicalElements,
+        )
+      : state.type === "PlacingDistributedForce"
+        ? distributed_force_from_drag(
+            GHOST_LOAD_ID,
+            state.startHover,
+            hoveredPart.position,
+            mechanicalElements,
+          )
+        : undefined;
+  if (!load || load.frame === "world") return undefined;
+  return load.frame.edgeID;
+}
+
 function is_hovered(
   elementID: ID,
   hoveredPart: HoveredPart,
   constraintElements: ConstraintElement[],
 ): boolean {
   if (!names_element(hoveredPart)) return false;
+  // A badge names its host, but hovering it highlights the badge alone —
+  // lighting up the element too would read as two targets for one gesture.
+  if (hoveredPart.type === "Probe") return false;
   if (hoveredPart.id === elementID && !hoveredPart.deleting) return true;
 
   const constraint = constraintElements.find((el) => el.id === hoveredPart.id);
@@ -365,9 +411,11 @@ export function draw_edge_fake_end(
   hoveredPart: HoveredPart,
   state: CanvasState,
   constraintElements: ConstraintElement[],
+  doomed: ReadonlySet<ID>,
   length: number,
 ) {
-  if (is_erase_hovered(edge.id, hoveredPart, state, constraintElements)) return;
+  if (is_erase_hovered(edge.id, hoveredPart, state, constraintElements, doomed))
+    return;
 
   const oldShadowBlur = ctx.shadowBlur;
   const oldGlobalAlpha = ctx.globalAlpha;
@@ -440,7 +488,7 @@ function undrawable_elements(
 /*
  * Dessine tous les éléments du canvas.
  */
-export function drawMechanicalCanvas(
+export function draw_mechanical_canvas(
   ctx: CanvasRenderingContext2D,
   hoveredPart: HoveredPart,
   state: CanvasState,
@@ -466,14 +514,37 @@ export function drawMechanicalCanvas(
   ctx.fillStyle = COLORS.FILL_BODY;
   ctx.textAlign = DIMENSION_SPECS.TEXT_ALIGN;
   ctx.textBaseline = DIMENSION_SPECS.TEXT_BASELINE;
+  // Once for the whole pass: they depend on the gesture, not on the element.
+  const frameEdgeID = load_frame_edge_id(
+    hoveredPart,
+    state,
+    mechanicalElements,
+  );
+
+  // The element whose metric popover is open, so its badge stays lit up while
+  // the cursor is away in the popover. The element itself reads as selected —
+  // see `is_selected`.
+  const metricsElementID =
+    state.type === "PlacingProbeMetrics" ? state.elementID : undefined;
+
+  // What the eraser would take, so the whole cascade turns red before the click
+  // rather than the aimed element alone.
+  const doomed =
+    names_element(hoveredPart) && hoveredPart.deleting
+      ? deletion_closure(
+          hoveredPart.id,
+          mechanicalElements,
+          constraintElements,
+          loads,
+        )
+      : EMPTY_IDS;
+
   for (const element of allElements.filter(
     (element) => element.type === "join",
   )) {
     if (
       undrawable.has(element.id) ||
-      (names_element(hoveredPart) &&
-        hoveredPart.deleting &&
-        hoveredPart.id === element.id) ||
+      doomed.has(element.id) ||
       (state.type === "ErasingMultiple" &&
         state.hoveredElementIDs.includes(element.id))
     )
@@ -485,6 +556,29 @@ export function drawMechanicalCanvas(
   }
 
   DRAWING_ORDER.forEach((type) => {
+    if (type === "probe") {
+      // globalAlpha may still hold the last constraint's fade-out opacity here.
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = COLORS.ACCENT;
+      for (const element of mechanicalElements) {
+        if (!element.probes || element.probes.length === 0) continue;
+        if (undrawable.has(element.id)) continue;
+        const pos = probe_badge_position(element);
+        ctx.save();
+        ctx.translate(pos.x, pos.y);
+        ctx.lineWidth = STROKE_WIDTHS.STANDARD;
+        if (
+          (hoveredPart.type === "Probe" && hoveredPart.id === element.id) ||
+          element.id === metricsElementID
+        )
+          ctx.lineWidth += STROKE_WIDTHS.HOVER_GAIN;
+        if (doomed.has(element.id))
+          ctx.globalAlpha = INTERACTION_SPECS.DELETION_OPACITY;
+        draw_probe(ctx);
+        ctx.restore();
+      }
+      return;
+    }
     const elements = allElements.filter((element) => element.type === type);
     for (const element of elements) {
       if (undrawable.has(element.id)) continue;
@@ -504,6 +598,7 @@ export function drawMechanicalCanvas(
         hoveredPart,
         state,
         constraintElements,
+        doomed,
       );
       // A terminal held by a node is grabbed through it: the node takes the
       // hover, and the handle that would sit on top of it is not drawn.
@@ -512,7 +607,8 @@ export function drawMechanicalCanvas(
         terminalNodeID === undefined;
       const isHovered =
         is_hovered(element.id, hoveredPart, constraintElements) ||
-        element.id === terminalNodeID;
+        element.id === terminalNodeID ||
+        element.id === frameEdgeID;
 
       ctx.shadowBlur = 0;
       ctx.globalAlpha = 1;
@@ -544,7 +640,7 @@ export function drawMechanicalCanvas(
       }
       // Add red stroke and make semi-transparent if element is to be deleted
       if (isEraseHovered) {
-        ctx.strokeStyle = COLORS.DELETION_STROKE;
+        if (!isLoadElement) ctx.strokeStyle = COLORS.DELETION_STROKE;
         ctx.globalAlpha = INTERACTION_SPECS.DELETION_OPACITY;
       }
       // Fade out revealed constraints at the end of their hover cooldown.
@@ -623,6 +719,7 @@ export function drawMechanicalCanvas(
                     hoveredPart,
                     state,
                     constraintElements,
+                    doomed,
                     DIM.MOTOR_RADIUS + DIM.MOTOR_CORNER_RADIUS + 1,
                   );
                 });
@@ -655,6 +752,7 @@ export function drawMechanicalCanvas(
                   hoveredPart,
                   state,
                   constraintElements,
+                  doomed,
                   DIM.SLIDEP_OUTER_WIDTH / 2,
                 );
               });
@@ -1186,24 +1284,6 @@ export function drawMechanicalCanvas(
     }
   });
 
-  // Draw probes on top of all elements (one indicator per probed element)
-  // globalAlpha may still hold the last constraint's fade-out opacity here.
-  ctx.globalAlpha = 1;
-  for (const el of mechanicalElements) {
-    if (!el.probes || el.probes.length === 0) continue;
-    const pos =
-      "position" in el
-        ? (el as NodeElement).position
-        : (el as EdgeElement).positionStart.lerp(
-            (el as EdgeElement).positionEnd,
-            0.5,
-          );
-    ctx.save();
-    ctx.translate(pos.x, pos.y - DIM.PROBE_OFFSET);
-    draw_probe(ctx);
-    ctx.restore();
-  }
-
   // Draw  state specific elements
   ctx.save();
   ctx.shadowBlur = 0;
@@ -1717,15 +1797,20 @@ export function drawMechanicalCanvas(
       break;
     case "PlacingProbe":
       const pos = hoveredPart.position.clone();
-      if (hoveredPart.type !== "Void") pos.y -= DIM.PROBE_OFFSET;
+      if (hoveredPart.type !== "Void") pos.y += DIM.PROBE_OFFSET;
       ctx.translate(pos.x, pos.y);
+      ctx.strokeStyle = COLORS.ACCENT;
+      ctx.lineWidth = STROKE_WIDTHS.STANDARD;
       draw_probe(ctx);
       break;
-    case "PlacingProbeMetrics":
-      // Metric popover open: keep showing the probe on the clicked element
-      ctx.translate(state.position.x, state.position.y - DIM.PROBE_OFFSET);
+    case "PlacingProbeMetrics": {
+      const probed = mechanicalElements.find((el) => el.id === state.elementID);
+      if (!probed || (probed.probes?.length ?? 0) > 0) break;
+      const badge = probe_badge_position(probed);
+      ctx.translate(badge.x, badge.y);
       draw_probe(ctx);
       break;
+    }
   }
   ctx.restore();
 }
