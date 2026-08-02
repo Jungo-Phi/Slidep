@@ -124,7 +124,8 @@ export interface SliderElement extends BaseNodeElement {
 
 export interface MotorConfig {
   parentBeamID?: ID; // undefined = sol (seulement si le pivot est groundé)
-  speed: number; // tr/min
+  /** tr/min, signed: positive turns clockwise on screen. */
+  speed: number;
 }
 
 /** Pivot element - allows rotational motion */

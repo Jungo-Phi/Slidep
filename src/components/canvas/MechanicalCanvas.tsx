@@ -16,8 +16,10 @@ import {
   UnionElement,
   ViewportChange,
   ZERO,
+  ScreenPoint,
+  WorldPoint,
 } from "../../types";
-import { world2screen, screen2world, legible_id } from "../../utils";
+import { world2screen, screen2world } from "../../utils";
 import {
   COLORS,
   CONSTRAINT_REVEAL_COOLDOWN_MS,
@@ -26,11 +28,12 @@ import {
   HIT_TOLERANCE,
 } from "../../constants/rendering-specs";
 import { Box, Tooltip } from "@mui/material";
-import type { Instance as PopperInstance } from "@popperjs/core";
+import { type Instance as PopperInstance } from "@popperjs/core";
 import { draw_mechanical_canvas } from "./draw-canvas";
 import { canvasStateReducer } from "./canvas-state-reducer";
 import { get_element_from_id } from "../mechanism/connect-actions";
-import { is_zero_load, load_value_anchor } from "../../utils/load-geom";
+import { load_value_anchor } from "../../utils/load-geom";
+import { is_zero_load } from "../../utils/load-scale";
 import { get_hovered_part } from "./get-hover";
 import { clamp_to_bounds } from "./hover-bounds";
 import { snap_load_hover } from "./load-snap";
@@ -181,7 +184,6 @@ export const MechanicalCanvas = forwardRef<
     },
     ref,
   ) => {
-    const canvasOffsetRef = useRef(ZERO);
     // Cached container geometry. Reading it back from the DOM forces a layout,
     // which neither the render loop nor a pointer move can afford to pay for.
     const canvasRectRef = useRef<{
@@ -190,12 +192,14 @@ export const MechanicalCanvas = forwardRef<
       width: number;
       height: number;
     } | null>(null);
-    const mousePositionRef = useRef(ZERO);
-    const oldPositionRef = useRef(ZERO);
-    const pendingPanRef = useRef<Point2>(ZERO);
-    const pendingZoomRef = useRef<{ deltaY: number; center: Point2 } | null>(
-      null,
-    );
+    const canvasOffsetRef = useRef<ScreenPoint>(ZERO);
+    const mousePositionRef = useRef<ScreenPoint>(ZERO);
+    const oldPositionRef = useRef<WorldPoint>(ZERO);
+    const pendingPanRef = useRef<ScreenPoint>(ZERO);
+    const pendingZoomRef = useRef<{
+      deltaY: number;
+      center: ScreenPoint;
+    } | null>(null);
     const mouseButtonDownRef = useRef<"none" | "left" | "right">("none");
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
@@ -350,13 +354,14 @@ export const MechanicalCanvas = forwardRef<
       if (canvas.width !== rect.width) canvas.width = rect.width;
       if (canvas.height !== rect.height) canvas.height = rect.height;
 
+      ctx.shadowBlur = 0;
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       if (showGrid)
         draw_grid(
           ctx,
+          mechanismRef.current.viewport,
           canvas.width,
           canvas.height,
-          mechanismRef.current.viewport,
         );
 
       // Draw axes
@@ -374,32 +379,14 @@ export const MechanicalCanvas = forwardRef<
       ctx.lineTo(canvas.width, panY);
       ctx.stroke();
 
-      // DEBUG
-      let text = `${hoveredPartRef.current.position.toString()} ${hoveredPartRef.current.type}`;
-      if ("part" in hoveredPartRef.current) {
-        text += ` ${hoveredPartRef.current.part}`;
-      }
-      ctx.fillText(text, 125, 40);
-
-      text = `${canvasStateRef.current.type.toString()}`;
-      if ("elementID" in canvasStateRef.current) {
-        text += ` ${legible_id(canvasStateRef.current.elementID)}`;
-      }
-      ctx.fillText(text, 275, 40);
-
-      ctx.save();
-      ctx.translate(
-        mechanismRef.current.viewport.pan.x,
-        mechanismRef.current.viewport.pan.y,
-      );
-      ctx.scale(
-        mechanismRef.current.viewport.zoom,
-        mechanismRef.current.viewport.zoom,
-      );
-
       // Trajectoires des points sondés, sous les éléments du mécanisme.
-      for (const traj of trajectoriesRef.current)
-        draw_trajectory(ctx, traj.points, traj.headCount, traj.color);
+      for (const trajectory of trajectoriesRef.current)
+        draw_trajectory(
+          ctx,
+          mechanismRef.current.viewport,
+          trajectory,
+          false, // TODO : add variable
+        );
 
       // Retour visuel undo/redo : révèle les recréations, prépare les fantômes.
       processConstraintChange();
@@ -427,6 +414,7 @@ export const MechanicalCanvas = forwardRef<
 
       draw_mechanical_canvas(
         ctx,
+        mechanismRef.current.viewport,
         hoveredPartRef.current,
         canvasStateRef.current,
         mechanismRef.current.mechanicalElements,
@@ -436,8 +424,8 @@ export const MechanicalCanvas = forwardRef<
         mechanismRef.current.loads,
         visibleConstraints,
         ghostIDs,
+        false,
       );
-      ctx.restore();
     }, [
       showGrid,
       computeVisibleConstraints,
@@ -500,9 +488,10 @@ export const MechanicalCanvas = forwardRef<
       measureCanvas();
       // Capture le pointeur : une fois le bouton enfoncé, les pointermove / pointerup continuent d'arriver sur le canvas même si le curseur sort de ses limites.
       event.currentTarget.setPointerCapture(event.pointerId);
-      mousePositionRef.current = new Point2(event.clientX, event.clientY).sub(
-        canvasOffsetRef.current,
-      );
+      mousePositionRef.current = new Point2<"screen">(
+        event.clientX,
+        event.clientY,
+      ).sub(canvasOffsetRef.current);
       if (event.button === 0) {
         mouseButtonDownRef.current = "left";
         handleEvent({
@@ -527,9 +516,7 @@ export const MechanicalCanvas = forwardRef<
 
       const x = (event.clientX - rect.left) * (canvas.width / rect.width);
       const y = (event.clientY - rect.top) * (canvas.height / rect.height);
-      const newPos = new Point2(x, y);
-
-      mousePositionRef.current = newPos;
+      mousePositionRef.current = new Point2(x, y);
 
       handleEvent({
         type: "MouseMove",
@@ -559,6 +546,7 @@ export const MechanicalCanvas = forwardRef<
 
       // Bounded here, where the cursor enters the system, so that hit-testing
       // and the gestures reading the raw mouse share one bounded point.
+      // TODO : pourquoi bound ?
       const worldMousePos = clamp_to_bounds(
         screen2world(mousePositionRef.current, currMech.viewport),
         canvasStateRef.current,
@@ -571,6 +559,7 @@ export const MechanicalCanvas = forwardRef<
         computeVisibleConstraints(),
         worldMousePos,
         canvasStateRef.current,
+        currMech.viewport,
       );
       if (
         snapToGrid &&
@@ -586,7 +575,7 @@ export const MechanicalCanvas = forwardRef<
           DIM.GRID_MAJOR;
         if (
           Math.abs(rdx - newHoveredPart.position.x) <
-          HIT_TOLERANCE.SNAP_TO_GRID / currMech.viewport.zoom
+          HIT_TOLERANCE.SNAP / currMech.viewport.scale
         )
           newHoveredPart.position.x = rdx;
         const rdy =
@@ -594,18 +583,26 @@ export const MechanicalCanvas = forwardRef<
           DIM.GRID_MAJOR;
         if (
           Math.abs(rdy - newHoveredPart.position.y) <
-          HIT_TOLERANCE.SNAP_TO_GRID / currMech.viewport.zoom
+          HIT_TOLERANCE.SNAP / currMech.viewport.scale
         )
           newHoveredPart.position.y = rdy;
       }
       if (newHoveredPart.type === "Void" && appModeRef.current === "edition") {
         // Align load direction to world/beam axes, and its length to a round value
-        newHoveredPart.position = snap_load_hover(
-          canvasStateRef.current,
+        const screenHoverPos = world2screen(
           newHoveredPart.position,
+          currMech.viewport,
+        );
+        const newScreenHoverPos = snap_load_hover(
+          screenHoverPos,
+          canvasStateRef.current,
           currMech.mechanicalElements,
           currMech.loads,
-          currMech.viewport.zoom,
+          currMech.viewport,
+        );
+        newHoveredPart.position = screen2world(
+          newScreenHoverPos,
+          currMech.viewport,
         );
       }
       // Both snaps above rewrite the point after it was bounded, and the grid
@@ -668,18 +665,18 @@ export const MechanicalCanvas = forwardRef<
           event,
           currMech.mechanicalElements,
           currMech.constraintElements,
+          currMech.loads,
+          currMech.viewport,
           setCanvasState,
           applyActions,
           undoMechanism,
           redoMechanism,
           onMouseUpHandler,
-          currMech.loads,
           appModeRef.current !== "edition",
           canSimulationGrabRef.current,
           onSimulationGrabRef.current,
           onSimulationGrabEndRef.current,
           worldMousePos,
-          currMech.viewport.zoom,
         );
         oldPositionRef.current = newHoveredPart.position.clone();
       },
@@ -773,7 +770,7 @@ export const MechanicalCanvas = forwardRef<
 
         const rect = canvasRectRef.current;
         if (!rect) return;
-        const center = new Point2(
+        const center: ScreenPoint = new Point2(
           (event.clientX - rect.left) * (canvas.width / rect.width),
           (event.clientY - rect.top) * (canvas.height / rect.height),
         );
@@ -791,8 +788,9 @@ export const MechanicalCanvas = forwardRef<
             };
           }
         } else {
-          const delta = new Point2(-deltaX, -deltaY);
-          pendingPanRef.current = pendingPanRef.current.add(delta);
+          pendingPanRef.current = pendingPanRef.current.add(
+            new Point2(-deltaX, -deltaY),
+          );
         }
       };
 
@@ -881,7 +879,7 @@ export const MechanicalCanvas = forwardRef<
               {
                 type: "ChangeForce",
                 id: element.id,
-                newVector: element.vector.scale2length(newValue),
+                newVector: element.vector.with_length(newValue),
                 oldVector: element.vector,
               },
             ],
@@ -1025,24 +1023,27 @@ export const MechanicalCanvas = forwardRef<
                   : editingElement.magnitudeEnd,
               )
             }
-            position={world2screen(
+            position={
               // Loads have no `.position`; their editable label sits at a
-              // computed world anchor next to the drawn value.
+              // computed screen anchor next to the drawn value.
               editingElement.type === "force" ||
-                editingElement.type === "moment" ||
-                editingElement.type === "distributed-force"
+              editingElement.type === "moment" ||
+              editingElement.type === "distributed-force"
                 ? load_value_anchor(
                     editingElement,
                     mechanism.mechanicalElements,
+                    mechanism.viewport,
                     // Seule une charge existante est ré-éditée : un `PlacingValue`
                     // ne concerne que les cotes, qui n'ont pas de `part`.
                     isEditingValue ? canvasState.part : undefined,
                   )
-                : "position" in editingElement
-                  ? editingElement.position
-                  : ZERO,
-              mechanism.viewport,
-            )}
+                : world2screen(
+                    "position" in editingElement
+                      ? editingElement.position
+                      : ZERO,
+                    mechanism.viewport,
+                  )
+            }
             onCommit={(newValue) => {
               const loadCommitted = commitLoadValue(editingElement, newValue);
 

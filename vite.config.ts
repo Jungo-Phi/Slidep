@@ -35,6 +35,19 @@ export default defineConfig({
         orientation: "any",
         start_url: "/",
         scope: "/",
+        // Bump `?v=` whenever the source logo changes: installed desktop PWAs only
+        // refresh their launcher icon when the manifest URLs differ, not the bytes.
+        icons: [
+          { src: "pwa-64x64.png?v=2", sizes: "64x64", type: "image/png" },
+          { src: "pwa-192x192.png?v=2", sizes: "192x192", type: "image/png" },
+          { src: "pwa-512x512.png?v=2", sizes: "512x512", type: "image/png" },
+          {
+            src: "maskable-icon-512x512.png?v=2",
+            sizes: "512x512",
+            type: "image/png",
+            purpose: "maskable",
+          },
+        ],
       },
     }),
   ],

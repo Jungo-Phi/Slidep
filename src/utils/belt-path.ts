@@ -1,9 +1,17 @@
-import { Point2 } from "../types/point2";
+import { Point2, Space } from "../types/point2";
 
 /**
  * A via-point of a belt path: a pulley the belt wraps (radius > 0, `direction` = wrap sense, false: clockwise / true: counter-clockwise) or a terminal endpoint (radius 0).
+ *
+ * Tagged with its space like `Point2`, and defaulting to `"world"` the same way: a
+ * screen path is not just mirrored coordinates, it also flips every `direction`, so
+ * feeding one where the other is expected is a mistake worth catching.
  */
-export type BeltVia = { pos: Point2; radius: number; direction: boolean };
+export type BeltVia<S extends Space = "world"> = {
+  pos: Point2<S>;
+  radius: number;
+  direction: boolean;
+};
 
 /**
  * Positive angle swept by a belt arc, same convention as the `counterClockwise`
@@ -23,22 +31,22 @@ export function belt_arc_sweep(
 }
 
 /** One ordered piece of a belt path: a straight tangent run between two vias, or an arc wrapping one via. */
-export type BeltPiece =
+export type BeltPiece<S extends Space = "world"> =
   | {
       kind: "segment";
       length: number;
       startS: number;
       gearIndexA: number;
       gearIndexB: number;
-      from: Point2;
-      to: Point2;
+      from: Point2<S>;
+      to: Point2<S>;
     }
   | {
       kind: "arc";
       length: number;
       startS: number;
       gearIndex: number;
-      center: Point2;
+      center: Point2<S>;
       radius: number;
       startAngle: number;
       wrap: number;
@@ -370,7 +378,7 @@ export function belt_locate(
 }
 
 /** Load via centres/radii/senses from `BeltVia` objects (the boxed, cold path). */
-export function belt_load_vias(sc: BeltScratch, vias: BeltVia[]): void {
+export function belt_load_vias(sc: BeltScratch, vias: BeltVia<Space>[]): void {
   for (let i = 0; i < vias.length; i++) {
     sc.cx[i] = vias[i].pos.x;
     sc.cy[i] = vias[i].pos.y;
@@ -388,17 +396,17 @@ export function belt_load_vias(sc: BeltScratch, vias: BeltVia[]): void {
  * Boxes the scalar core above into objects, for drawing, hit-testing and edition.
  * The solver's hot constraints read the core directly.
  */
-export function belt_pieces(
-  vias: BeltVia[],
+export function belt_pieces<S extends Space = "world">(
+  vias: BeltVia<S>[],
   closed = false,
   wraps?: number[],
-): BeltPiece[] {
+): BeltPiece<S>[] {
   const n = vias.length;
   const sc = belt_shared_scratch(Math.max(n, 1));
   belt_load_vias(sc, vias);
   const pairCount = belt_solve_pairs(sc, n, closed);
 
-  const pieces: BeltPiece[] = [];
+  const pieces: BeltPiece<S>[] = [];
   let s = 0;
   const pushArc = (v: number) => {
     if (!belt_solve_arc(sc, v, n, closed, wraps?.[v])) return;
@@ -425,8 +433,8 @@ export function belt_pieces(
       startS: s,
       gearIndexA: p,
       gearIndexB: (p + 1) % n,
-      from: new Point2(sc.depX[p], sc.depY[p]),
-      to: new Point2(sc.arrX[p], sc.arrY[p]),
+      from: new Point2<S>(sc.depX[p], sc.depY[p]),
+      to: new Point2<S>(sc.arrX[p], sc.arrY[p]),
     });
     s += length;
   };
@@ -508,7 +516,7 @@ export function belt_merged_run_section(
  * Raw wrap angle (∈ [0, 2π)) of each via on the path, 0 for terminals / vias
  * with no arc. Index-aligned to `vias`.
  */
-export function belt_wraps(vias: BeltVia[], closed = false): number[] {
+export function belt_wraps(vias: BeltVia<Space>[], closed = false): number[] {
   const wraps = new Array(vias.length).fill(0);
   for (const piece of belt_pieces(vias, closed))
     if (piece.kind === "arc") wraps[piece.gearIndex] = piece.wrap;
@@ -524,7 +532,10 @@ export function belt_wraps(vias: BeltVia[], closed = false): number[] {
  * no-slip differential must be written in (see `applyBeltLengthConstraint`), because
  * the free-strand length alone is a V at the tangency point and cannot be used.
  */
-export function belt_arrivals(vias: BeltVia[], closed = false): number[] {
+export function belt_arrivals(
+  vias: BeltVia<Space>[],
+  closed = false,
+): number[] {
   const arrivals = new Array(vias.length).fill(0);
   for (const piece of belt_pieces(vias, closed))
     if (piece.kind === "arc") arrivals[piece.gearIndex] = piece.startAngle;
@@ -538,7 +549,7 @@ export function belt_arrivals(vias: BeltVia[], closed = false): number[] {
  * jumping across the 0/2π seam. `prev` undefined → seed with the raw wrap.
  */
 export function advance_continuous_wraps(
-  vias: BeltVia[],
+  vias: BeltVia<Space>[],
   prev: number[] | undefined,
   closed = false,
 ): number[] {
@@ -560,7 +571,10 @@ export function advance_continuous_wraps(
  * (from belt arrival to departure) — so a point never snaps onto the free,
  * non-contact side of a pulley.
  */
-export function nearest_point_on_piece(p: Point2, piece: BeltPiece): Point2 {
+export function nearest_point_on_piece<S extends Space = "world">(
+  p: Point2<S>,
+  piece: NoInfer<BeltPiece<S>>,
+): Point2<S> {
   if (piece.kind === "segment") {
     const d = piece.to.sub(piece.from);
     const len2 = d.length_squared();
@@ -581,7 +595,7 @@ export function nearest_point_on_piece(p: Point2, piece: BeltPiece): Point2 {
         ? piece.wrap
         : 0;
   const angle = piece.startAngle + (piece.direction ? -param : param);
-  return piece.center.add(Point2.from_polar(piece.radius, angle));
+  return piece.center.add(Point2.from_polar<S>(piece.radius, angle));
 }
 
 /**
@@ -589,20 +603,21 @@ export function nearest_point_on_piece(p: Point2, piece: BeltPiece): Point2 {
  * `point`, and the unit `tangent` there. Uses the clamped nearest point of each
  * piece (so it never lands on a pulley's free side).
  */
-export function belt_project(
-  vias: BeltVia[],
-  p: Point2,
+export function belt_project<S extends Space = "world">(
+  vias: BeltVia<S>[],
+  p: NoInfer<Point2<S>>,
   closed = false,
   wraps?: number[],
-): { s: number; point: Point2; tangent: Point2 } {
+): { s: number; point: Point2<S>; tangent: Point2<S> } {
   const pieces = belt_pieces(vias, closed, wraps);
-  if (pieces.length === 0) return { s: 0, point: p, tangent: new Point2(1, 0) };
+  if (pieces.length === 0)
+    return { s: 0, point: p, tangent: new Point2<S>(1, 0) };
   let bestDist = Infinity;
   let bestS = 0;
   let bestPoint =
     pieces[0].kind === "arc"
       ? pieces[0].center.add(
-          Point2.from_polar(pieces[0].radius, pieces[0].startAngle),
+          Point2.from_polar<S>(pieces[0].radius, pieces[0].startAngle),
         )
       : pieces[0].from;
   for (const piece of pieces) {
@@ -632,18 +647,18 @@ export function belt_project(
  * Point and unit tangent at arc-length `s` along a belt path (wrapping for a
  * closed path). Tangent points in the direction of increasing `s` (belt travel).
  */
-export function belt_point_tangent(
-  vias: BeltVia[],
+export function belt_point_tangent<S extends Space = "world">(
+  vias: BeltVia<S>[],
   s: number,
   closed = false,
   wraps?: number[],
-): { point: Point2; tangent: Point2; curvature: number } {
+): { point: Point2<S>; tangent: Point2<S>; curvature: number } {
   const pieces = belt_pieces(vias, closed, wraps);
   const total = pieces.reduce((a, p) => a + p.length, 0);
   if (pieces.length === 0)
     return {
-      point: vias[0]?.pos ?? new Point2(0, 0),
-      tangent: new Point2(1, 0),
+      point: vias[0]?.pos ?? new Point2<S>(0, 0),
+      tangent: new Point2<S>(1, 0),
       curvature: 0,
     };
   let local = closed && total > 0 ? ((s % total) + total) % total : s;
@@ -657,15 +672,17 @@ export function belt_point_tangent(
         return {
           point: piece.from.lerp(piece.to, t),
           tangent:
-            dir.length_squared() > 1e-12 ? dir.normalize() : new Point2(1, 0),
+            dir.length_squared() > 1e-12
+              ? dir.normalize()
+              : new Point2<S>(1, 0),
           curvature: 0,
         };
       }
       const sign = piece.direction ? -1 : 1;
       const angle = piece.startAngle + (sign * local) / piece.radius;
       return {
-        point: piece.center.add(Point2.from_polar(piece.radius, angle)),
-        tangent: Point2.from_polar(sign, angle).perp(),
+        point: piece.center.add(Point2.from_polar<S>(piece.radius, angle)),
+        tangent: Point2.from_polar<S>(sign, angle).perp(),
         curvature: sign / piece.radius,
       };
     }
@@ -680,8 +697,11 @@ export function belt_point_tangent(
     };
   }
   return {
-    point: last.center.add(Point2.from_polar(last.radius, last.startS)),
-    tangent: Point2.from_polar(last.direction ? -1 : 1, last.startAngle).perp(),
+    point: last.center.add(Point2.from_polar<S>(last.radius, last.startS)),
+    tangent: Point2.from_polar<S>(
+      last.direction ? -1 : 1,
+      last.startAngle,
+    ).perp(),
     curvature: 0,
   };
 }

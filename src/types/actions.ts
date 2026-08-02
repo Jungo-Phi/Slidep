@@ -7,13 +7,13 @@ import {
   UnionElement,
 } from "./element";
 import { GeomNodes } from "./kinematic-solver-links";
-import { Point2 } from "./point2";
+import { ScreenPoint, WorldPoint } from "./mechanism";
 
 /** Events captured on the canvas */
 export type CanvasEvent =
   | { type: "MouseLeftButtonDown"; shiftKey: boolean }
   | { type: "MouseButtonUp" }
-  | { type: "MouseMove"; mouseDelta: Point2 }
+  | { type: "MouseMove"; mouseDelta: ScreenPoint }
   | { type: "MouseRightButtonDown" }
   | { type: "KeyDown"; key: string; ctrlKey: boolean };
 
@@ -86,23 +86,43 @@ export type Action =
   | { type: "CreateElement"; element: UnionElement }
   | { type: "DeleteElement"; element: UnionElement }
   | { type: "UpdateElementName"; id: ID; newName?: string; oldName?: string }
-  | { type: "MoveNode"; id: ID; newPosition: Point2; oldPosition: Point2 }
-  | { type: "MoveEdgeStart"; id: ID; newPosition: Point2; oldPosition: Point2 }
-  | { type: "MoveEdgeEnd"; id: ID; newPosition: Point2; oldPosition: Point2 }
+  | {
+      type: "MoveNode";
+      id: ID;
+      newPosition: WorldPoint;
+      oldPosition: WorldPoint;
+    }
+  | {
+      type: "MoveEdgeStart";
+      id: ID;
+      newPosition: WorldPoint;
+      oldPosition: WorldPoint;
+    }
+  | {
+      type: "MoveEdgeEnd";
+      id: ID;
+      newPosition: WorldPoint;
+      oldPosition: WorldPoint;
+    }
   | {
       type: "MoveEdgeBody";
       id: ID;
       t: number;
-      newPosition: Point2;
-      oldPosition: Point2;
+      newPosition: WorldPoint;
+      oldPosition: WorldPoint;
     }
   | {
       type: "MoveElements";
       elementIDs: ID[];
-      newPos: Point2;
-      delta: Point2;
+      newPos: WorldPoint;
+      delta: WorldPoint;
     }
-  | { type: "MoveConstraint"; id: ID; newPosition: Point2; oldPosition: Point2 }
+  | {
+      type: "MoveConstraint";
+      id: ID;
+      newPosition: WorldPoint;
+      oldPosition: WorldPoint;
+    }
   | { type: "GroundNode"; id: ID; grounded: boolean }
   | { type: "CloseBelt"; id: ID; closed: boolean }
   | {
@@ -116,7 +136,7 @@ export type Action =
       id: ID;
       newRadius: number;
       oldRadius: number;
-      target: Point2;
+      target: WorldPoint;
     }
   | { type: "ChangeEdgeLength"; id: ID; newLength: number; oldLength: number }
   | { type: "ChangeBeltLength"; id: ID; newLength: number; oldLength: number }
@@ -262,12 +282,17 @@ export type Action =
       oldNodes: GeomNodes;
     }
   | { type: "Blank" }
-  | { type: "ChangeForce"; id: ID; newVector: Point2; oldVector: Point2 }
+  | {
+      type: "ChangeForce";
+      id: ID;
+      newVector: WorldPoint;
+      oldVector: WorldPoint;
+    }
   | {
       type: "ChangeDistributedForce";
       id: ID;
-      newDirection: Point2;
-      oldDirection: Point2;
+      newDirection: WorldPoint;
+      oldDirection: WorldPoint;
       newMagnitudeStart: number;
       oldMagnitudeStart: number;
       newMagnitudeEnd: number;

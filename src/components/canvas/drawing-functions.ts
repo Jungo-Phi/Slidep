@@ -7,16 +7,21 @@ import {
   STROKE_WIDTHS,
   DIM,
   INTERACTION_SPECS,
-  DIMENSION_SPECS,
+  TEXT_SPECS,
   ICON_SELECTION_FILTER,
   FILL_DELETION_FILTER,
 } from "../../constants/rendering-specs";
-import { Point2 as Point2 } from "../../types/point2";
+import { Point2 } from "../../types/point2";
 import { get_element_icon } from "../element-palette/elementIcon";
-import { UnionElement, ViewportState } from "../../types";
-import { value2ratio } from "../../utils";
 import {
-  force_value_label_position,
+  ScreenPoint,
+  UnionElement,
+  ViewportState,
+  WorldPoint,
+} from "../../types";
+import { value2ratio, world2screen } from "../../utils";
+import {
+  force_label_position_screen,
   moment_value_label_position,
 } from "../../utils/load-geom";
 import {
@@ -33,11 +38,11 @@ const iconImageCache = new Map<string, HTMLImageElement>();
 
 export function draw_grid(
   ctx: CanvasRenderingContext2D,
+  viewport: ViewportState,
   width: number,
   height: number,
-  viewport: ViewportState,
 ) {
-  const zoom = viewport.zoom;
+  const zoom = viewport.scale;
   const panX = viewport.pan.x;
   const panY = viewport.pan.y;
 
@@ -119,9 +124,15 @@ export function draw_grid(
   }
 }
 
-export function draw_ground(ctx: CanvasRenderingContext2D) {
+export function draw_ground(
+  ctx: CanvasRenderingContext2D,
+  position: ScreenPoint,
+  angle: number,
+) {
   const widthChange = ctx.lineWidth - STROKE_WIDTHS.STANDARD;
   ctx.save();
+  ctx.translate(position.x, position.y);
+  ctx.rotate(angle);
   ctx.translate(0, DIM.GROUND_VERTICAL_OFFSET);
 
   // Vertical line
@@ -152,52 +163,75 @@ export function draw_ground(ctx: CanvasRenderingContext2D) {
 }
 
 /** Dessine un carré pour les Edges à l'état "PlacingStartX" */
-export function draw_start_edge_end(ctx: CanvasRenderingContext2D) {
+export function draw_start_edge_end(
+  ctx: CanvasRenderingContext2D,
+  position: ScreenPoint,
+) {
   const sideL = DIM.BEAM_WIDTH + STROKE_WIDTHS.STANDARD;
   const sideS = DIM.BEAM_WIDTH - STROKE_WIDTHS.STANDARD;
   const oldFillStyle = ctx.fillStyle;
   ctx.fillStyle = ctx.strokeStyle;
-  ctx.fillRect(-sideL / 2, -sideL / 2, sideL, sideL);
+  ctx.fillRect(position.x - sideL / 2, position.y - sideL / 2, sideL, sideL);
   ctx.fillStyle = oldFillStyle;
-  ctx.fillRect(-sideS / 2, -sideS / 2, sideS, sideS);
+  ctx.fillRect(position.x - sideS / 2, position.y - sideS / 2, sideS, sideS);
 }
 
-export function draw_belt_end(ctx: CanvasRenderingContext2D) {
+export function draw_belt_end(
+  ctx: CanvasRenderingContext2D,
+  position: ScreenPoint,
+) {
   ctx.fillStyle = ctx.strokeStyle;
   ctx.beginPath();
-  ctx.arc(0, 0, DIM.END_RADIUS, 0, TAU);
+  ctx.arc(position.x, position.y, DIM.END_RADIUS, 0, TAU);
   ctx.fill();
 }
 
-export function draw_hover_edge_end(ctx: CanvasRenderingContext2D) {
+export function draw_hover_circle(
+  ctx: CanvasRenderingContext2D,
+  position: ScreenPoint,
+) {
+  ctx.lineWidth = STROKE_WIDTHS.HOVERED;
   ctx.beginPath();
-  ctx.arc(0, 0, DIM.EDGE_ENDPOINT_RADIUS, 0, TAU);
+  ctx.arc(position.x, position.y, DIM.EDGE_ENDPOINT_RADIUS, 0, TAU);
   ctx.stroke();
 }
 
-export function draw_pivot(ctx: CanvasRenderingContext2D, filled: boolean) {
+export function draw_pivot(
+  ctx: CanvasRenderingContext2D,
+  position: ScreenPoint,
+  filled: boolean,
+) {
   ctx.beginPath();
-  ctx.arc(0, 0, DIM.PIVOT_OUTER_RADIUS, 0, TAU);
-  ctx.arc(0, 0, DIM.PIVOT_INNER_RADIUS, 0, TAU);
+  ctx.arc(position.x, position.y, DIM.PIVOT_OUTER_RADIUS, 0, TAU);
+  ctx.arc(position.x, position.y, DIM.PIVOT_INNER_RADIUS, 0, TAU);
   ctx.fillStyle = COLORS.FILL_NODE;
   ctx.fill("evenodd");
 
   if (filled) {
     ctx.beginPath();
-    ctx.arc(0, 0, DIM.PIVOT_INNER_RADIUS, 0, TAU);
+    ctx.arc(position.x, position.y, DIM.PIVOT_INNER_RADIUS, 0, TAU);
     ctx.fillStyle = COLORS.FILL_BODY;
     ctx.fill();
   }
 
   ctx.beginPath();
-  ctx.arc(0, 0, DIM.PIVOT_OUTER_RADIUS, 0, TAU);
+  ctx.arc(position.x, position.y, DIM.PIVOT_OUTER_RADIUS, 0, TAU);
   ctx.stroke();
   ctx.beginPath();
-  ctx.arc(0, 0, DIM.PIVOT_INNER_RADIUS, 0, TAU);
+  ctx.arc(position.x, position.y, DIM.PIVOT_INNER_RADIUS, 0, TAU);
   ctx.stroke();
 }
 
-export function draw_slider(ctx: CanvasRenderingContext2D, filled: boolean) {
+export function draw_slider(
+  ctx: CanvasRenderingContext2D,
+  position: ScreenPoint,
+  angle: number,
+  filled: boolean,
+) {
+  ctx.save();
+  ctx.translate(position.x, position.y);
+  ctx.rotate(angle);
+
   ctx.beginPath();
   ctx.roundRect(
     -DIM.SLIDER_OUTER_WIDTH / 2,
@@ -225,9 +259,19 @@ export function draw_slider(ctx: CanvasRenderingContext2D, filled: boolean) {
     );
   }
   ctx.stroke();
+
+  ctx.restore();
 }
 
-export function draw_slidep_bottom(ctx: CanvasRenderingContext2D) {
+export function draw_slidep_bottom(
+  ctx: CanvasRenderingContext2D,
+  position: ScreenPoint,
+  angle: number,
+) {
+  ctx.save();
+  ctx.translate(position.x, position.y);
+  ctx.rotate(angle);
+
   ctx.beginPath();
   ctx.roundRect(
     -DIM.SLIDEP_OUTER_WIDTH / 2,
@@ -253,36 +297,58 @@ export function draw_slidep_bottom(ctx: CanvasRenderingContext2D) {
     DIM.SLIDER_RADIUS,
   );
   ctx.stroke();
+
+  ctx.restore();
 }
 
-export function draw_join_bottom(ctx: CanvasRenderingContext2D) {
+export function draw_join_bottom(
+  ctx: CanvasRenderingContext2D,
+  position: ScreenPoint,
+) {
   ctx.beginPath();
-  ctx.arc(0, 0, DIM.JOIN_RADIUS + ctx.lineWidth / 2, 0, TAU);
+  ctx.arc(position.x, position.y, DIM.JOIN_RADIUS + ctx.lineWidth / 2, 0, TAU);
   ctx.fillStyle = ctx.strokeStyle;
   ctx.fill();
 }
 
-export function draw_join_top(ctx: CanvasRenderingContext2D) {
+export function draw_join_top(
+  ctx: CanvasRenderingContext2D,
+  position: ScreenPoint,
+) {
   ctx.beginPath();
-  ctx.arc(0, 0, DIM.JOIN_RADIUS - ctx.lineWidth / 2 - 0.5, 0, TAU);
+  ctx.arc(
+    position.x,
+    position.y,
+    DIM.JOIN_RADIUS - ctx.lineWidth / 2 - 0.5,
+    0,
+    TAU,
+  );
 
   ctx.fill();
 }
 
-export function draw_join(ctx: CanvasRenderingContext2D) {
+export function draw_join(
+  ctx: CanvasRenderingContext2D,
+  position: ScreenPoint,
+) {
   ctx.beginPath();
-  ctx.arc(0, 0, DIM.JOIN_RADIUS, 0, TAU);
+  ctx.arc(position.x, position.y, DIM.JOIN_RADIUS, 0, TAU);
 
   ctx.fill();
   ctx.stroke();
 }
 
-export function draw_mass(ctx: CanvasRenderingContext2D) {
+export function draw_mass(
+  ctx: CanvasRenderingContext2D,
+  position: ScreenPoint,
+  value: number,
+) {
+  // TODO : draw avec la forme de trapèze
   ctx.beginPath();
   ctx.roundRect(
-    -DIM.MASS_SIZE / 2,
-    -DIM.MASS_SIZE / 2,
-    DIM.MASS_SIZE,
+    position.x - (1.5 * DIM.MASS_SIZE) / 2,
+    position.y - DIM.MASS_SIZE / 2,
+    1.5 * DIM.MASS_SIZE,
     DIM.MASS_SIZE,
     DIM.SLIDER_RADIUS,
   );
@@ -290,13 +356,13 @@ export function draw_mass(ctx: CanvasRenderingContext2D) {
   ctx.stroke();
 
   ctx.fillStyle = ctx.strokeStyle;
-  ctx.font = "14px Verdana";
-  draw_text(ctx, "M");
+  draw_text(ctx, position, value + "kg");
 }
 
 export function draw_beam(
   ctx: CanvasRenderingContext2D,
-  length: number,
+  start: ScreenPoint,
+  end: ScreenPoint,
   isStartJoin: boolean = false,
   isEndJoin: boolean = false,
 ) {
@@ -305,17 +371,31 @@ export function draw_beam(
   const startJ = isStartJoin ? DIM.JOIN_RADIUS + STROKE_WIDTHS.STANDARD + 1 : 0;
   const endJ = isEndJoin ? DIM.JOIN_RADIUS + STROKE_WIDTHS.STANDARD + 1 : 0;
   const oldFillStyle = ctx.fillStyle;
+
+  ctx.save();
+  ctx.translate(start.x, start.y);
+  ctx.rotate(end.sub(start).angle());
+  const length = start.distance_to(end);
+
   ctx.fillStyle = ctx.strokeStyle;
   ctx.fillRect(-sL / 2 + startJ, -sL / 2, length + sL - endJ - startJ, sL);
   ctx.fillStyle = oldFillStyle;
   ctx.fillRect(-sideS / 2, -sideS / 2, length + sideS, sideS);
+
+  ctx.restore();
 }
 
 export function draw_spring(
   ctx: CanvasRenderingContext2D,
-  length: number,
+  start: ScreenPoint,
+  end: ScreenPoint,
   restLength: number | undefined = undefined,
 ) {
+  ctx.save();
+  ctx.translate(start.x, start.y);
+  ctx.rotate(end.sub(start).angle());
+  const length = start.distance_to(end);
+
   let coilNb;
   if (!restLength) {
     coilNb = Math.max(Math.floor(length / 16), DIM.SPRING_MIN_COILS);
@@ -394,13 +474,20 @@ export function draw_spring(
     ctx.lineTo(deca(i, 0.25), DIM.SPRING_COIL_RADIUS);
     ctx.stroke();
   }
+  ctx.restore();
 }
 
 export function draw_damper(
   ctx: CanvasRenderingContext2D,
-  length: number,
+  start: ScreenPoint,
+  end: ScreenPoint,
   restLength: number | undefined = undefined,
 ) {
+  ctx.save();
+  ctx.translate(start.x, start.y);
+  ctx.rotate(end.sub(start).angle());
+  const length = start.distance_to(end);
+
   let start_x;
   let piston_x;
   if (!restLength) {
@@ -474,59 +561,90 @@ export function draw_damper(
   ctx.lineWidth = STROKE_WIDTHS.STANDARD + widthChange;
   ctx.fill();
   ctx.stroke();
+
+  ctx.restore();
 }
 
-export function draw_motor(ctx: CanvasRenderingContext2D, isGrounded: boolean) {
+export function draw_motor(
+  ctx: CanvasRenderingContext2D,
+  position: ScreenPoint,
+  isGrounded: boolean,
+  clockwise: boolean,
+) {
   const bottom = DIM.MOTOR_RADIUS - 2;
   ctx.lineCap = "round";
 
   ctx.beginPath();
   if (isGrounded) {
-    ctx.moveTo(-DIM.MOTOR_RADIUS, bottom);
-    ctx.arc(0, 0, DIM.MOTOR_RADIUS, TAU / 2, 0);
-    ctx.lineTo(DIM.MOTOR_RADIUS, bottom);
+    ctx.moveTo(position.x - DIM.MOTOR_RADIUS, position.y + bottom);
+    ctx.arc(position.x, position.y, DIM.MOTOR_RADIUS, TAU / 2, 0);
+    ctx.lineTo(position.x + DIM.MOTOR_RADIUS, position.y + bottom);
   } else {
-    ctx.arc(0, 0, DIM.MOTOR_RADIUS, 0, TAU);
+    ctx.arc(position.x, position.y, DIM.MOTOR_RADIUS, 0, TAU);
   }
   ctx.closePath();
   if (isGrounded) {
-    ctx.moveTo(-DIM.MOTOR_RADIUS + 7, bottom);
-    ctx.arc(-DIM.MOTOR_RADIUS + 5, bottom - 5, 2, 0, TAU);
-    ctx.moveTo(DIM.MOTOR_RADIUS - 3, bottom - 5);
-    ctx.arc(DIM.MOTOR_RADIUS - 5, bottom - 5, 2, 0, TAU);
+    ctx.moveTo(position.x - DIM.MOTOR_RADIUS + 7, position.y + bottom);
+    ctx.arc(
+      position.x - DIM.MOTOR_RADIUS + 5,
+      position.y + bottom - 5,
+      2,
+      0,
+      TAU,
+    );
+    ctx.moveTo(position.x + DIM.MOTOR_RADIUS - 3, position.y + bottom - 5);
+    ctx.arc(
+      position.x + DIM.MOTOR_RADIUS - 5,
+      position.y + bottom - 5,
+      2,
+      0,
+      TAU,
+    );
   }
-  ctx.arc(0, 0, DIM.PIVOT_INNER_RADIUS, 0, TAU);
+  ctx.arc(position.x, position.y, DIM.PIVOT_INNER_RADIUS, 0, TAU);
   ctx.fill("evenodd");
 
   ctx.beginPath();
   if (isGrounded) {
     ctx.arc(
-      -DIM.MOTOR_RADIUS + DIM.MOTOR_CORNER_RADIUS,
-      bottom - DIM.MOTOR_CORNER_RADIUS,
+      position.x - DIM.MOTOR_RADIUS + DIM.MOTOR_CORNER_RADIUS,
+      position.y + bottom - DIM.MOTOR_CORNER_RADIUS,
       DIM.MOTOR_CORNER_RADIUS,
       TAU / 4,
       TAU / 2,
     );
-    ctx.arc(0, 0, DIM.MOTOR_RADIUS, TAU / 2, 0);
+    ctx.arc(position.x, position.y, DIM.MOTOR_RADIUS, TAU / 2, 0);
     ctx.arc(
-      DIM.MOTOR_RADIUS - DIM.MOTOR_CORNER_RADIUS,
-      bottom - DIM.MOTOR_CORNER_RADIUS,
+      position.x + DIM.MOTOR_RADIUS - DIM.MOTOR_CORNER_RADIUS,
+      position.y + bottom - DIM.MOTOR_CORNER_RADIUS,
       DIM.MOTOR_CORNER_RADIUS,
       0,
       TAU / 4,
     );
   } else {
-    ctx.arc(0, 0, DIM.MOTOR_RADIUS, 0, TAU);
+    ctx.arc(position.x, position.y, DIM.MOTOR_RADIUS, 0, TAU);
   }
   ctx.closePath();
   ctx.stroke();
   if (isGrounded) {
     ctx.lineWidth -= 0.5;
     ctx.beginPath();
-    ctx.arc(-DIM.MOTOR_RADIUS + 5, bottom - 5, 2, 0, TAU);
+    ctx.arc(
+      position.x - DIM.MOTOR_RADIUS + 5,
+      position.y + bottom - 5,
+      2,
+      0,
+      TAU,
+    );
     ctx.stroke();
     ctx.beginPath();
-    ctx.arc(DIM.MOTOR_RADIUS - 5, bottom - 5, 2, 0, TAU);
+    ctx.arc(
+      position.x + DIM.MOTOR_RADIUS - 5,
+      position.y + bottom - 5,
+      2,
+      0,
+      TAU,
+    );
     ctx.stroke();
     ctx.lineWidth += 0.5;
   }
@@ -535,19 +653,40 @@ export function draw_motor(ctx: CanvasRenderingContext2D, isGrounded: boolean) {
   const outer = DIM.MOTOR_RADIUS - 1;
 
   ctx.beginPath();
-  ctx.moveTo(inner, 0);
-  ctx.lineTo(outer, 0);
+  ctx.moveTo(position.x + inner, position.y);
+  ctx.lineTo(position.x + outer, position.y);
   if (!isGrounded) {
-    ctx.moveTo(0, inner);
-    ctx.lineTo(0, outer);
+    ctx.moveTo(position.x, position.y + inner);
+    ctx.lineTo(position.x, position.y + outer);
   }
-  ctx.moveTo(-inner, 0);
-  ctx.lineTo(-outer, 0);
-  ctx.moveTo(0, -inner);
-  ctx.lineTo(0, -outer);
+  ctx.moveTo(position.x - inner, position.y);
+  ctx.lineTo(position.x - outer, position.y);
+  ctx.moveTo(position.x, position.y - inner);
+  ctx.lineTo(position.x, position.y - outer);
   ctx.lineWidth += 0.5;
   ctx.stroke();
   ctx.lineWidth -= 0.5;
+
+  const C = 1 / 6;
+  const D = 1 / 32;
+  const radius = 30;
+  const scale = 0.8;
+
+  let startAngle = TAU * (clockwise ? C - 0.5 : -C);
+  let endAngle = TAU * (clockwise ? -C - D : C - 0.5 + D);
+  ctx.beginPath();
+  ctx.arc(position.x, position.y, radius, startAngle, endAngle, !clockwise);
+  ctx.stroke();
+  const headAngle = clockwise
+    ? endAngle - (1 / 4 - D) * TAU
+    : endAngle + (1 / 4 - D) * TAU;
+  const tip = position
+    .add(Point2.from_polar(radius, endAngle))
+    .sub(Point2.from_polar(DIM.ARROW_HEAD_LENGTH * scale, headAngle));
+  const oldFillStyle = ctx.fillStyle;
+  ctx.fillStyle = ctx.strokeStyle;
+  draw_arrow_head(ctx, tip, headAngle, scale);
+  ctx.fillStyle = oldFillStyle;
 }
 
 /**
@@ -557,24 +696,35 @@ export function draw_motor(ctx: CanvasRenderingContext2D, isGrounded: boolean) {
  */
 export function draw_gear(
   ctx: CanvasRenderingContext2D,
+  position: ScreenPoint,
   radius: number,
+  angle: number,
   hovered = false,
 ) {
-  if (radius < DIM.MIN_GEAR_RADIUS) radius = DIM.MIN_GEAR_RADIUS;
+  // if (radius < DIM.MIN_GEAR_RADIUS) radius = DIM.MIN_GEAR_RADIUS; // TODO : afficher en grisé ?
 
   //const teethCount = Math.floor(radius * 0.5);
   const r1 = (radius + DIM.PIVOT_OUTER_RADIUS) / 2;
-  const r2 = (radius - DIM.PIVOT_OUTER_RADIUS) / 3;
+  const r2 = Math.max(1, (radius - DIM.PIVOT_OUTER_RADIUS) / 3);
   const holesNb = 3;
 
   // Corps principal de l'engrenage
   ctx.beginPath();
-  ctx.arc(0, 0, radius, 0, TAU);
-  ctx.arc(0, 0, DIM.PIVOT_OUTER_RADIUS, 0, TAU);
+  ctx.arc(position.x, position.y, radius, 0, TAU);
+  ctx.arc(position.x, position.y, DIM.PIVOT_OUTER_RADIUS, 0, TAU);
   for (let i = 0; i < holesNb; i++) {
-    const angle = (i / holesNb) * TAU;
-    ctx.moveTo(Math.cos(angle) * r1, Math.sin(angle) * r1);
-    ctx.arc(Math.cos(angle) * r1, Math.sin(angle) * r1, r2, 0, TAU);
+    const angleA = (i / holesNb) * TAU + angle;
+    ctx.moveTo(
+      position.x + Math.cos(angleA) * r1,
+      position.y + Math.sin(angleA) * r1,
+    );
+    ctx.arc(
+      position.x + Math.cos(angleA) * r1,
+      position.y + Math.sin(angleA) * r1,
+      r2,
+      0,
+      TAU,
+    );
   }
   ctx.fillStyle += hovered
     ? COLORS.HOVER_TRANSPARENCY
@@ -586,13 +736,19 @@ export function draw_gear(
   ctx.shadowBlur = oldShadowBlur;
 
   ctx.beginPath();
-  ctx.arc(0, 0, radius, 0, TAU);
+  ctx.arc(position.x, position.y, radius, 0, TAU);
   ctx.stroke();
 
   for (let i = 0; i < holesNb; i++) {
     ctx.beginPath();
-    const angle = (i / holesNb) * TAU;
-    ctx.arc(Math.cos(angle) * r1, Math.sin(angle) * r1, r2, 0, TAU);
+    const angleA = (i / holesNb) * TAU + angle;
+    ctx.arc(
+      position.x + Math.cos(angleA) * r1,
+      position.y + Math.sin(angleA) * r1,
+      r2,
+      0,
+      TAU,
+    );
     ctx.stroke();
   }
 
@@ -613,48 +769,6 @@ export function draw_gear(
   */
 }
 
-export function draw_belt(
-  ctx: CanvasRenderingContext2D,
-  positionStart: Point2,
-  positionEnd: Point2,
-  gearAngles: {
-    center: Point2;
-    radius: number;
-    startAngle: number;
-    endAngle: number;
-    direction: boolean;
-  }[],
-) {
-  const widthChange = ctx.lineWidth - STROKE_WIDTHS.STANDARD;
-  ctx.lineCap = "square";
-
-  ctx.beginPath();
-  ctx.moveTo(positionStart.x, positionStart.y);
-  gearAngles.forEach((gearAngle) => {
-    ctx.arc(
-      gearAngle.center.x,
-      gearAngle.center.y,
-      gearAngle.radius,
-      gearAngle.startAngle,
-      gearAngle.endAngle,
-      gearAngle.direction,
-    );
-  });
-  ctx.lineTo(positionEnd.x, positionEnd.y);
-  ctx.lineWidth = DIM.BELT_WIDTH + widthChange;
-  ctx.stroke();
-
-  ctx.save();
-  ctx.translate(positionStart.x, positionStart.y);
-  draw_belt_end(ctx);
-  ctx.restore();
-
-  ctx.save();
-  ctx.translate(positionEnd.x, positionEnd.y);
-  draw_belt_end(ctx);
-  ctx.restore();
-}
-
 /**
  * Winding of one belt arc: the belt climbs `growth` px total across the wrap
  * (one BELT_WIDTH per turn) so surplus turns read as a coil, not a retraced
@@ -669,7 +783,10 @@ export type BeltWinding = { growth: number; atStart: boolean };
  * The grown end is kept ≥ 1px so an inward (winch) coil deep enough to reach the
  * centre never flips across it.
  */
-function belt_arc_radii(arc: BeltPiece, w?: BeltWinding): [number, number] {
+function belt_arc_radii(
+  arc: BeltPiece<"screen">,
+  w?: BeltWinding,
+): [number, number] {
   if (arc.kind !== "arc") return [0, 0];
   const r = arc.radius;
   if (!w) return [r, r];
@@ -687,7 +804,7 @@ function belt_arc_radii(arc: BeltPiece, w?: BeltWinding): [number, number] {
  */
 function append_belt_arc(
   ctx: CanvasRenderingContext2D,
-  arc: BeltPiece,
+  arc: BeltPiece<"screen">,
   rStart: number,
   rEnd: number,
 ) {
@@ -713,9 +830,9 @@ function append_belt_arc(
  */
 export function draw_belt_open(
   ctx: CanvasRenderingContext2D,
-  vias: BeltVia[],
-  wraps?: number[],
-  windings?: (BeltWinding | undefined)[],
+  vias: BeltVia<"screen">[],
+  wraps: number[],
+  windings: (BeltWinding | undefined)[],
 ) {
   if (vias.length < 2) return;
   const pieces = belt_pieces(vias, false, wraps);
@@ -738,21 +855,13 @@ export function draw_belt_open(
   ctx.lineWidth = DIM.BELT_WIDTH + widthChange;
   ctx.stroke();
 
-  ctx.save();
-  ctx.translate(start.x, start.y);
-  draw_belt_end(ctx);
-  ctx.restore();
-
-  ctx.save();
-  ctx.translate(end.x, end.y);
-  draw_belt_end(ctx);
-  ctx.restore();
+  draw_belt_end(ctx, start);
+  draw_belt_end(ctx, end);
 }
 
 /**
  * Draw a closed belt as a continuous closed loop around its pulleys (the gN→g0
- * closure included), with no free ends. Unlike `draw_belt`, this is independent
- * of the junction position, so the loop stays continuous wherever the join sits.
+ * closure included), with no free ends.
  *
  * `wraps` (continuous per-via wrap, simulation) sizes each arc so a pulley
  * losing contact (wrap → 0) is drawn straight-past. `windings` (per via) draws a
@@ -761,9 +870,9 @@ export function draw_belt_open(
  */
 export function draw_belt_loop(
   ctx: CanvasRenderingContext2D,
-  vias: BeltVia[],
-  wraps?: number[],
-  windings?: (BeltWinding | undefined)[],
+  vias: BeltVia<"screen">[],
+  wraps: number[],
+  windings: (BeltWinding | undefined)[],
 ) {
   const arcs = belt_pieces(vias, true, wraps).filter((p) => p.kind === "arc");
   if (arcs.length === 0) return;
@@ -788,7 +897,7 @@ export function draw_belt_loop(
 
 export function draw_arrow_head(
   ctx: CanvasRenderingContext2D,
-  position: Point2,
+  position: ScreenPoint,
   angle: number,
   scale: number = 1,
 ) {
@@ -810,9 +919,9 @@ export function draw_arrow_head(
 
 export function draw_dimension(
   ctx: CanvasRenderingContext2D,
-  start: Point2,
-  end: Point2,
-  position: Point2,
+  start: ScreenPoint,
+  end: ScreenPoint,
+  position: ScreenPoint,
   value: number,
   hideText: boolean = false,
 ) {
@@ -830,14 +939,14 @@ export function draw_dimension(
     const widthStart = ctx.lineWidth;
     ctx.lineWidth = 1;
     const side = position.is_on_left_side_of_line(start, end) ? -1 : 1;
-    const startPos = start.add(np.mul(7 * side));
+    const startPos = start.add(np.mul(DIM.HELPER_LINE_BASE_OFFSET * side));
     const offsetStart = start.add(np.mul(offset).extend_length(5));
     ctx.beginPath();
     ctx.moveTo(startPos.x, startPos.y);
     ctx.lineTo(offsetStart.x, offsetStart.y);
     ctx.stroke();
 
-    const endPos = end.add(np.mul(7 * side));
+    const endPos = end.add(np.mul(DIM.HELPER_LINE_BASE_OFFSET * side));
     const offsetEnd = end.add(np.mul(offset).extend_length(5));
     ctx.beginPath();
     ctx.moveTo(endPos.x, endPos.y);
@@ -849,12 +958,10 @@ export function draw_dimension(
   // Draw dimension
   const d = start.add(np.mul(offset));
   const s = d.add(
-    delta.scale2length(t < 0 ? length * t + 16 : DIM.ARROW_HEAD_LENGTH),
+    delta.with_length(t < 0 ? length * t + 16 : DIM.ARROW_HEAD_LENGTH),
   );
   const e = d.add(
-    delta.scale2length(
-      t > 1 ? length * t - 16 : length - DIM.ARROW_HEAD_LENGTH,
-    ),
+    delta.with_length(t > 1 ? length * t - 16 : length - DIM.ARROW_HEAD_LENGTH),
   );
   draw_arrow_head(ctx, d, delta.angle());
   draw_arrow_head(ctx, d.add(delta), delta.angle() + TAU / 2);
@@ -868,10 +975,10 @@ export function draw_dimension(
 
 export function draw_dimension_to_segment(
   ctx: CanvasRenderingContext2D,
-  point: Point2,
-  start: Point2,
-  end: Point2,
-  position: Point2,
+  point: ScreenPoint,
+  start: ScreenPoint,
+  end: ScreenPoint,
+  position: ScreenPoint,
   value: number,
   hideText: boolean = false,
 ) {
@@ -891,7 +998,10 @@ export function draw_dimension_to_segment(
     (position.is_on_left_side_of_line(start, end) ? -1 : 1);
 
   if (ts < 0 || ts > 1) {
-    const startPos = ts < 0.5 ? start.sub(np.mul(7)) : end.add(np.mul(7));
+    const startPos =
+      ts < 0.5
+        ? start.sub(np.mul(DIM.HELPER_LINE_BASE_OFFSET))
+        : end.add(np.mul(DIM.HELPER_LINE_BASE_OFFSET));
     const offsetStart = oppositePoint.add(
       np.mul(offset).extend_length((ts < 0.5 ? 5 : -5) * side),
     );
@@ -901,7 +1011,7 @@ export function draw_dimension_to_segment(
     ctx.stroke();
   }
 
-  const endPos = point.sub(np.mul(7 * side));
+  const endPos = point.sub(np.mul(DIM.HELPER_LINE_BASE_OFFSET * side));
   const offsetEnd = point.add(np.mul(offset).extend_length(5));
   ctx.beginPath();
   ctx.moveTo(endPos.x, endPos.y);
@@ -913,15 +1023,13 @@ export function draw_dimension_to_segment(
   // Draw dimension
   const d = oppositePoint.add(np.mul(offset));
   const s = d.add(
-    delta.scale2length(t < 0 ? length * t + 16 : DIM.ARROW_HEAD_LENGTH),
+    delta.with_length(t < 0 ? length * t + 16 : DIM.ARROW_HEAD_LENGTH),
   );
   const e = d.add(
-    delta.scale2length(
-      t > 1 ? length * t - 16 : length - DIM.ARROW_HEAD_LENGTH,
-    ),
+    delta.with_length(t > 1 ? length * t - 16 : length - DIM.ARROW_HEAD_LENGTH),
   );
   const sOffset = ts > 0 && ts < 1 ? DIM.BEAM_WIDTH / 2 - 1 : 0;
-  draw_arrow_head(ctx, d.add(delta.scale2length(sOffset)), delta.angle());
+  draw_arrow_head(ctx, d.add(delta.with_length(sOffset)), delta.angle());
   draw_arrow_head(ctx, d.add(delta), delta.angle() + TAU / 2);
   ctx.beginPath();
   ctx.moveTo(s.x, s.y);
@@ -933,13 +1041,13 @@ export function draw_dimension_to_segment(
 
 export function draw_dimension_angle(
   ctx: CanvasRenderingContext2D,
-  start1: Point2,
-  end1: Point2,
-  start2: Point2,
-  end2: Point2,
+  start1: ScreenPoint,
+  end1: ScreenPoint,
+  start2: ScreenPoint,
+  end2: ScreenPoint,
   flipStart: boolean,
   flipEnd: boolean,
-  position: Point2,
+  position: ScreenPoint,
   value: number,
   hideText: boolean = false,
 ) {
@@ -984,9 +1092,9 @@ export function draw_dimension_angle(
 
 export function draw_dimension_radius(
   ctx: CanvasRenderingContext2D,
-  center: Point2,
+  center: ScreenPoint,
   radius: number,
-  position: Point2,
+  position: ScreenPoint,
   value: number,
   hideText: boolean = false,
 ) {
@@ -995,9 +1103,17 @@ export function draw_dimension_radius(
   const delta = position.sub(center);
   const length = delta.length();
 
-  const d = center.add(delta.scale2length(radius));
-  const s = center.add(delta.scale2length(length > radius ? radius : 0 + 5));
-  const e = center.add(delta.scale2length(Math.max(radius - 5, length)));
+  const d = center.add(delta.with_length(radius));
+  const s = center.add(
+    delta.with_length(
+      length > radius
+        ? radius + DIM.ARROW_HEAD_LENGTH
+        : DIM.HELPER_LINE_BASE_OFFSET,
+    ),
+  );
+  const e = center.add(
+    delta.with_length(Math.max(radius - DIM.ARROW_HEAD_LENGTH, length)),
+  );
   draw_arrow_head(ctx, d, delta.angle() + (length > radius ? 0 : TAU / 2));
   ctx.beginPath();
   ctx.moveTo(s.x, s.y);
@@ -1009,9 +1125,9 @@ export function draw_dimension_radius(
 
 export function draw_dimension_belt(
   ctx: CanvasRenderingContext2D,
-  vias: BeltVia[],
+  vias: BeltVia<"screen">[],
   closed: boolean,
-  position: Point2,
+  position: ScreenPoint,
   value: number,
   hideText: boolean = false,
 ) {
@@ -1034,16 +1150,13 @@ function badge_fill(isSelected: boolean): string {
 
 export function draw_dimension_text(
   ctx: CanvasRenderingContext2D,
-  position: Point2,
+  position: ScreenPoint,
   value: number,
   extension: string = "",
 ) {
-  ctx.save();
-  ctx.translate(position.x, position.y);
-
-  ctx.font = DIMENSION_SPECS.TEXT_FONT;
-  ctx.textAlign = DIMENSION_SPECS.TEXT_ALIGN;
-  ctx.textBaseline = DIMENSION_SPECS.TEXT_BASELINE;
+  ctx.font = TEXT_SPECS.TEXT_FONT;
+  ctx.textAlign = TEXT_SPECS.TEXT_ALIGN;
+  ctx.textBaseline = TEXT_SPECS.TEXT_BASELINE;
   const text = (Math.round(value * 10) / 10).toString() + extension;
   const metrics = ctx.measureText(text);
 
@@ -1055,8 +1168,8 @@ export function draw_dimension_text(
   ctx.fillStyle = badge_fill(false);
   ctx.beginPath();
   ctx.roundRect(
-    -metrics.width / 2 - 8 / 2,
-    -22 / 2 - 1,
+    position.x - metrics.width / 2 - 8 / 2,
+    position.y - 22 / 2 - 1,
     metrics.width + 8,
     22,
     5,
@@ -1066,21 +1179,15 @@ export function draw_dimension_text(
   ctx.shadowBlur = lastShadowBlur;
   ctx.shadowColor = lastShadowColor;
   ctx.fillStyle = ctx.strokeStyle;
-  draw_text(ctx, text);
-
-  ctx.restore();
+  draw_text(ctx, position, text);
 }
 
 export function draw_gear_ratio(
   ctx: CanvasRenderingContext2D,
-  position: Point2,
+  position: ScreenPoint,
   value: number,
 ) {
-  ctx.save();
-  ctx.translate(position.x, position.y);
-  ctx.font = DIMENSION_SPECS.TEXT_FONT;
-  ctx.textAlign = DIMENSION_SPECS.TEXT_ALIGN;
-  ctx.textBaseline = DIMENSION_SPECS.TEXT_BASELINE;
+  ctx.font = TEXT_SPECS.TEXT_FONT;
   const text = value2ratio(value).join(" : ");
   const metrics = ctx.measureText(text);
   const isSelected = ctx.shadowBlur !== 0;
@@ -1090,8 +1197,8 @@ export function draw_gear_ratio(
     ctx.strokeStyle = COLORS.BADGE_STROKE;
   ctx.beginPath();
   ctx.roundRect(
-    -metrics.width / 2 - 14 / 2,
-    -28 / 2,
+    position.x - metrics.width / 2 - 14 / 2,
+    position.y - 28 / 2,
     metrics.width + 14,
     28,
     28 / 2,
@@ -1107,12 +1214,12 @@ export function draw_gear_ratio(
   ctx.shadowColor = lastShadowColor;
   ctx.strokeStyle = lastStrokeStyle;
   ctx.fillStyle = ctx.strokeStyle;
-  draw_text(ctx, text);
-  ctx.restore();
+  draw_text(ctx, position, text);
 }
 
 export function draw_element_icon(
   ctx: CanvasRenderingContext2D,
+  position: ScreenPoint,
   element: UnionElement,
   deletionTint = false,
 ) {
@@ -1123,7 +1230,13 @@ export function draw_element_icon(
     ctx.strokeStyle = COLORS.BADGE_STROKE;
   if (deletionTint) ctx.globalAlpha *= 0.5;
   ctx.beginPath();
-  ctx.roundRect(-side / 2 - 1, -side / 2 - 1, side + 2, side + 2, 4);
+  ctx.roundRect(
+    position.x - side / 2 - 1,
+    position.y - side / 2 - 1,
+    side + 2,
+    side + 2,
+    4,
+  );
   ctx.stroke();
   ctx.shadowBlur = INTERACTION_SPECS.ICON_HALO_SIZE;
   ctx.shadowColor = COLORS.BACKGROUND;
@@ -1140,18 +1253,22 @@ export function draw_element_icon(
   }
   if (!img.complete) return;
   if (isSelected) ctx.filter = ICON_SELECTION_FILTER;
-  ctx.drawImage(img, -side / 2, -side / 2, side, side);
+  ctx.drawImage(img, position.x - side / 2, position.y - side / 2, side, side);
   if (deletionTint) ctx.globalAlpha *= 2;
 }
 
-export function draw_text(ctx: CanvasRenderingContext2D, text: string) {
+export function draw_text(
+  ctx: CanvasRenderingContext2D,
+  position: ScreenPoint,
+  text: string,
+) {
   ctx.filter = "none";
-  ctx.fillText(text, 0, 0);
+  ctx.fillText(text, position.x, position.y);
 
-  if (ctx.lineWidth > 2) {
-    ctx.shadowBlur = 2;
-    ctx.shadowColor = ctx.strokeStyle as string;
-    ctx.fillText(text, 0, 0);
+  if (ctx.lineWidth > 3) {
+    ctx.font = "bold " + TEXT_SPECS.TEXT_FONT;
+    ctx.fillText(text, position.x, position.y);
+    ctx.font = TEXT_SPECS.TEXT_FONT;
   }
 }
 
@@ -1164,12 +1281,12 @@ export function draw_text(ctx: CanvasRenderingContext2D, text: string) {
  *  distributed load has ends with no arrow left to hang their "0" on. */
 export function draw_force(
   ctx: CanvasRenderingContext2D,
-  base: Point2,
-  vector: Point2,
+  base: ScreenPoint,
+  vector: ScreenPoint,
   value: number,
   hideText: boolean = false,
+  extension: string,
   textLineWidth?: number,
-  labelVector?: Point2,
 ) {
   const length = vector.length();
   if (length >= 1) {
@@ -1179,11 +1296,12 @@ export function draw_force(
       vector.angle() + TAU / 2,
     );
     if (length > DIM.ARROW_HEAD_LENGTH) {
+      const s = base.add(vector.with_length(DIM.ARROW_BASE_OFFSET));
       const e = base.add(
         vector.extend_length(DIM.ARROW_HEAD_OFFSET - DIM.ARROW_HEAD_LENGTH),
       );
       ctx.beginPath();
-      ctx.moveTo(base.x, base.y);
+      ctx.moveTo(s.x, s.y);
       ctx.lineTo(e.x, e.y);
       ctx.stroke();
     }
@@ -1194,8 +1312,9 @@ export function draw_force(
   if (textLineWidth !== undefined) ctx.lineWidth = textLineWidth;
   draw_dimension_text(
     ctx,
-    force_value_label_position(base, labelVector ?? vector),
+    force_label_position_screen(base, vector),
     value,
+    extension,
   );
   ctx.lineWidth = lastLineWidth;
 }
@@ -1204,26 +1323,41 @@ export function draw_force(
  *  `value` is signed: positive is clockwise, negative counter-clockwise. */
 export function draw_moment(
   ctx: CanvasRenderingContext2D,
-  center: Point2,
+  center: ScreenPoint,
   radius: number,
   value: number,
   hideText: boolean = false,
   textLineWidth?: number,
 ) {
   const clockwise = value >= 0;
-  const startAngle = clockwise ? (5 / 8) * TAU : -TAU / 8;
-  const endAngle = clockwise ? (3 / 8) * TAU : TAU / 8;
+  const C = 1 / 16;
+  const D = 1 / 32;
+
+  let startAngle = TAU * (clockwise ? C - 0.5 : -C);
+  let endAngle = TAU * (clockwise ? -C - D : C - 0.5 + D);
   ctx.beginPath();
   ctx.arc(center.x, center.y, radius, startAngle, endAngle, !clockwise);
   ctx.stroke();
-
   const headAngle = clockwise
-    ? endAngle - (7 / 32) * TAU
-    : endAngle + (7 / 32) * TAU;
+    ? endAngle - (1 / 4 - D) * TAU
+    : endAngle + (1 / 4 - D) * TAU;
   const tip = center
     .add(Point2.from_polar(radius, endAngle))
     .sub(Point2.from_polar(DIM.ARROW_HEAD_LENGTH, headAngle));
   draw_arrow_head(ctx, tip, headAngle);
+
+  startAngle += TAU / 2;
+  endAngle += TAU / 2;
+  ctx.beginPath();
+  ctx.arc(center.x, center.y, radius, startAngle, endAngle, !clockwise);
+  ctx.stroke();
+  const headAngle2 = clockwise
+    ? endAngle - (7 / 32) * TAU
+    : endAngle + (7 / 32) * TAU;
+  const tip2 = center
+    .add(Point2.from_polar(radius, endAngle))
+    .add(Point2.from_polar(DIM.ARROW_HEAD_LENGTH, headAngle));
+  draw_arrow_head(ctx, tip2, headAngle2);
 
   if (hideText) return;
   const lastLineWidth = ctx.lineWidth;
@@ -1232,6 +1366,7 @@ export function draw_moment(
     ctx,
     moment_value_label_position(center, radius),
     Math.abs(value),
+    " Nm",
   );
   ctx.lineWidth = lastLineWidth;
 }
@@ -1244,10 +1379,10 @@ export function draw_moment(
  *  without lighting up the arrows. */
 export function draw_distributed_force(
   ctx: CanvasRenderingContext2D,
-  start: Point2,
-  end: Point2,
-  vectorStart: Point2,
-  vectorEnd: Point2,
+  start: ScreenPoint,
+  end: ScreenPoint,
+  vectorStart: ScreenPoint,
+  vectorEnd: ScreenPoint,
   crestLineWidth?: number,
 ) {
   const lastLineWidth = ctx.lineWidth;
@@ -1275,11 +1410,12 @@ export function draw_distributed_force(
       vector.angle() + TAU / 2,
     );
     if (length <= DIM.ARROW_HEAD_LENGTH) continue;
+    const s = base.add(vector.with_length(DIM.ARROW_BASE_OFFSET));
     const e = base.add(
       vector.extend_length(DIM.ARROW_HEAD_OFFSET - DIM.ARROW_HEAD_LENGTH),
     );
     ctx.beginPath();
-    ctx.moveTo(base.x, base.y);
+    ctx.moveTo(s.x, s.y);
     ctx.lineTo(e.x, e.y);
     ctx.stroke();
   }
@@ -1287,23 +1423,25 @@ export function draw_distributed_force(
 
 /** Draws a small probe indicator (circle with crosshair). `hovered` thickens it,
  *  `deleting` marks it as going with the element that carries it. */
-export function draw_probe(ctx: CanvasRenderingContext2D) {
-  ctx.save();
+export function draw_probe(
+  ctx: CanvasRenderingContext2D,
+  position: ScreenPoint,
+) {
   ctx.beginPath();
-  ctx.arc(0, 0, DIM.PROBE_RADIUS, 0, Math.PI * 2);
+  ctx.arc(position.x, position.y, DIM.PROBE_RADIUS, 0, Math.PI * 2);
   ctx.stroke();
   ctx.beginPath();
-  ctx.moveTo(-DIM.PROBE_RADIUS, 0);
-  ctx.lineTo(DIM.PROBE_RADIUS, 0);
-  ctx.moveTo(0, -DIM.PROBE_RADIUS);
-  ctx.lineTo(0, DIM.PROBE_RADIUS);
+  ctx.moveTo(position.x - DIM.PROBE_RADIUS + 1, position.y);
+  ctx.lineTo(position.x + DIM.PROBE_RADIUS - 1, position.y);
+  ctx.moveTo(position.x, position.y - DIM.PROBE_RADIUS + 1);
+  ctx.lineTo(position.x, position.y + DIM.PROBE_RADIUS - 1);
   ctx.stroke();
-  ctx.restore();
 }
 
+// TODO : move in "types/..."
 /** A probed element's recorded path, ready to draw on the canvas. */
 export interface TrajectoryDisplay {
-  points: Point2[];
+  points: WorldPoint[];
   /** Number of points at or before the current playback time. */
   headCount: number;
   color: string;
@@ -1313,31 +1451,53 @@ export interface TrajectoryDisplay {
  *  solid line, the rest of the recording (ahead of the cursor) faded. */
 export function draw_trajectory(
   ctx: CanvasRenderingContext2D,
-  points: Point2[],
-  headCount: number,
-  color: string,
+  viewport: ViewportState,
+  trajectory: TrajectoryDisplay,
+  dotted: boolean,
 ) {
-  if (points.length < 2) return;
-  ctx.save();
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 1.5;
+  if (trajectory.points.length < 2) return;
+  ctx.strokeStyle = trajectory.color;
+  ctx.fillStyle = trajectory.color;
+  ctx.lineWidth = DIM.TRAJECTORY_LINE_WIDTH;
   ctx.lineJoin = "round";
   ctx.lineCap = "round";
+  const step = dotted ? DIM.TRAJECTORY_DOT_STEP : 1;
 
   const polyline = (from: number, to: number) => {
+    if (from > to) return;
+
     ctx.beginPath();
-    ctx.moveTo(points[from].x, points[from].y);
-    for (let i = from + 1; i <= to; i++) ctx.lineTo(points[i].x, points[i].y);
-    ctx.stroke();
+    if (dotted) {
+      // POINTILLÉ
+      for (let i = from; i <= to; i += step) {
+        const p = world2screen(trajectory.points[i], viewport);
+        ctx.moveTo(p.x + DIM.TRAJECTORY_DOT_RADIUS, p.y);
+        ctx.arc(p.x, p.y, DIM.TRAJECTORY_DOT_RADIUS, 0, TAU);
+      }
+      ctx.fill();
+    } else {
+      // COURBE
+      const p0 = world2screen(trajectory.points[from], viewport);
+      ctx.moveTo(p0.x, p0.y);
+      for (let i = from + 1; i <= to; i++) {
+        const pn = world2screen(trajectory.points[i], viewport);
+        ctx.lineTo(pn.x, pn.y);
+      }
+      ctx.stroke();
+    }
   };
 
-  if (headCount >= 2) {
+  if (trajectory.headCount >= 2) {
     ctx.globalAlpha = 0.8;
-    polyline(0, headCount - 1);
+    polyline(0, trajectory.headCount - 1);
   }
-  if (headCount < points.length) {
+  if (trajectory.headCount < trajectory.points.length) {
     ctx.globalAlpha = 0.25;
-    polyline(Math.max(0, headCount - 1), points.length - 1);
+    let startFuture = Math.max(0, trajectory.headCount - 1);
+    if (dotted) {
+      const remainder = startFuture % step;
+      if (remainder !== 0) startFuture += step - remainder;
+    }
+    polyline(startFuture, trajectory.points.length - 1);
   }
-  ctx.restore();
 }

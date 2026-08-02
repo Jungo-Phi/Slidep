@@ -10,14 +10,16 @@ import {
   CanvasState,
   HoveredPart,
   LoadElement,
-  BeamElement,
   Point2,
   CanvasStateType,
+  ScreenPoint,
   UP,
+  ViewportState,
+  WorldPoint,
 } from "../../types";
 import {
   HIT_TOLERANCE,
-  DRAWING_ORDER,
+  HOVER_ORDER,
   INTERACTION_SPECS,
 } from "../../constants/rendering-specs";
 import {
@@ -31,34 +33,20 @@ import {
   belt_placing_pulleys,
   legality_for_state,
 } from "../mechanism/connection-rules";
-import { get_belt_path } from "../../utils";
+import {
+  get_belt_path,
+  screen2world,
+  world2screen,
+  world2screen_length,
+} from "../../utils";
 import { belt_pieces, nearest_point_on_piece } from "../../utils/belt-path";
 import {
-  distributed_display_vectors,
-  distributed_label_vector,
-  force_base_position,
-  force_display_vector,
-  force_value_label_position,
-  force_world_vector,
-  frame2world,
-  is_zero_load,
-  moment_center_position,
-  moment_display_radius,
-  moment_value_label_position,
-  probe_badge_position,
+  distributed_screen_geometry,
+  force_screen_geometry,
+  moment_screen_geometry,
 } from "../../utils/load-geom";
-import { is_constraint_type } from "./utils";
-
-/**
- * Where along `start`→`end` the cursor grabbed it, clamped to the segment.
- * Falls back to the middle for a segment with no length, which carries no
- * parameter at all.
- */
-function grab_parameter(cursor: Point2, start: Point2, end: Point2): number {
-  const t = cursor.parameter_on_segment(start, end);
-  if (!Number.isFinite(t)) return 0.5;
-  return Math.min(1, Math.max(0, t));
-}
+import { is_zero_load } from "../../utils/load-scale";
+import { is_constraint_type, probe_badge_position } from "./utils";
 
 /**
  * How a target answers one tool, per family. `doc/hover-matrix.md` is the
@@ -296,13 +284,15 @@ function placed_gear_center(
 
 function probe_node(
   node: NodeElement,
-  mousePos: Point2,
+  mouseScreen: ScreenPoint,
   mode: NodeProbe,
   deleting: boolean,
-  drawnPastBase: Point2 | undefined,
+  drawnPastBase: WorldPoint | undefined,
   mechanicalElements: MechanicalElement[],
+  viewport: ViewportState,
 ): HoveredPart | null {
-  const distance = mousePos.distance_to(node.position);
+  const center = world2screen(node.position, viewport);
+  const distance = mouseScreen.distance_to(center);
 
   // A moment aimed at an axle lands on the gear it carries: reaching for the
   // centre of a gear is a natural way to designate that gear, and the axle
@@ -338,15 +328,15 @@ function probe_node(
     };
 
   if (mode !== "centre+past" || !drawnPastBase) return null;
+  const base = world2screen(drawnPastBase, viewport);
   if (
-    node.position.distance2segment(drawnPastBase, mousePos) >
-      HIT_TOLERANCE.EDGE ||
-    mousePos.distance2line(drawnPastBase, node.position) > HIT_TOLERANCE.EDGE
+    center.distance2segment(base, mouseScreen) > HIT_TOLERANCE.EDGE ||
+    mouseScreen.distance2line(base, center) > HIT_TOLERANCE.EDGE
   )
     return null;
   return {
     type: "Node",
-    position: mousePos.project_on_line(drawnPastBase, node.position),
+    position: screen2world(mouseScreen.project_on_line(base, center), viewport),
     id: node.id,
     deleting,
     beamBodyHover: true,
@@ -355,16 +345,19 @@ function probe_node(
 
 function probe_gear(
   gear: GearElement,
-  mousePos: Point2,
+  mouseScreen: ScreenPoint,
   mode: GearProbe,
   deleting: boolean,
-  gearRef: Point2 | undefined,
+  gearRef: WorldPoint | undefined,
+  viewport: ViewportState,
 ): HoveredPart | null {
   // Only the rim answers: the whole inside of a gear is a dead zone.
-  const distance = mousePos.distance_to(gear.position);
+  const center = world2screen(gear.position, viewport);
+  const radius = world2screen_length(gear.radius, viewport);
+  const distance = mouseScreen.distance_to(center);
   if (
-    distance > gear.radius + HIT_TOLERANCE.NODE / 2 ||
-    distance < gear.radius - HIT_TOLERANCE.NODE / 2
+    distance > radius + HIT_TOLERANCE.NODE / 2 ||
+    distance < radius - HIT_TOLERANCE.NODE / 2
   )
     return null;
 
@@ -384,11 +377,15 @@ function probe_gear(
       deleting: false,
     };
 
-  const toward = mode === "rim-toward-ref" && gearRef ? gearRef : mousePos;
+  const toward =
+    mode === "rim-toward-ref" && gearRef
+      ? world2screen(gearRef, viewport)
+      : mouseScreen;
   return {
     type: "GearTooth",
-    position: gear.position.add(
-      toward.sub(gear.position).normalize().mul(gear.radius),
+    position: screen2world(
+      center.add(toward.sub(center).normalize().mul(radius)),
+      viewport,
     ),
     id: gear.id,
     deleting,
@@ -397,12 +394,15 @@ function probe_gear(
 
 function probe_edge(
   edge: EdgeElement,
-  mousePos: Point2,
+  mouseScreen: ScreenPoint,
   mode: EdgeProbe,
   deleting: boolean,
+  viewport: ViewportState,
 ): HoveredPart | null {
+  const start = world2screen(edge.positionStart, viewport);
+  const end = world2screen(edge.positionEnd, viewport);
   if (mode !== "body" && mode !== "body-centre") {
-    if (mousePos.distance_to(edge.positionStart) <= HIT_TOLERANCE.NODE)
+    if (mouseScreen.distance_to(start) <= HIT_TOLERANCE.NODE)
       return {
         type: "Edge",
         position: edge.positionStart.clone(),
@@ -410,7 +410,7 @@ function probe_edge(
         deleting,
         part: "start",
       };
-    if (mousePos.distance_to(edge.positionEnd) <= HIT_TOLERANCE.NODE)
+    if (mouseScreen.distance_to(end) <= HIT_TOLERANCE.NODE)
       return {
         type: "Edge",
         position: edge.positionEnd.clone(),
@@ -422,17 +422,14 @@ function probe_edge(
     if (mode === "ends+beam-body" && edge.type !== "beam") return null;
   }
 
-  if (
-    mousePos.distance2segment(edge.positionStart, edge.positionEnd) >
-    HIT_TOLERANCE.EDGE
-  )
+  if (mouseScreen.distance2segment(start, end) > HIT_TOLERANCE.EDGE)
     return null;
   return {
     type: "Edge",
     position:
       mode === "body-centre"
         ? edge.positionStart.lerp(edge.positionEnd, 0.5)
-        : mousePos.project_on_line(edge.positionStart, edge.positionEnd),
+        : screen2world(mouseScreen.project_on_line(start, end), viewport),
     id: edge.id,
     deleting,
     part: "body",
@@ -446,9 +443,13 @@ function probe_belt(
   deleting: boolean,
   gearRef: Point2 | undefined,
   mechanicalElements: MechanicalElement[],
+  viewport: ViewportState,
 ): HoveredPart | null {
   if (mode === "ends" || mode === "full") {
-    if (mousePos.distance_to(belt.positionStart) <= HIT_TOLERANCE.NODE)
+    if (
+      mousePos.distance_to(belt.positionStart) <=
+      HIT_TOLERANCE.NODE / viewport.scale
+    )
       return {
         type: "Edge",
         position: belt.positionStart.clone(),
@@ -456,7 +457,10 @@ function probe_belt(
         deleting,
         part: "start",
       };
-    if (mousePos.distance_to(belt.positionEnd) <= HIT_TOLERANCE.NODE)
+    if (
+      mousePos.distance_to(belt.positionEnd) <=
+      HIT_TOLERANCE.NODE / viewport.scale
+    )
       return {
         type: "Edge",
         position: belt.positionEnd.clone(),
@@ -481,7 +485,8 @@ function probe_belt(
       // Clamped to the swept sector, so the arc keeps its extent across the ±π
       // seam and never answers on the pulley's free side.
       const onArc = nearest_point_on_piece(mousePos, piece);
-      if (mousePos.distance_to(onArc) > HIT_TOLERANCE.NODE / 2) continue;
+      if (mousePos.distance_to(onArc) > HIT_TOLERANCE.NODE / viewport.scale / 2)
+        continue;
       return {
         type: "BeltBody",
         position: onArc,
@@ -496,7 +501,11 @@ function probe_belt(
     const piece = pieces[section];
     if (piece.kind !== "segment") continue;
     const { from, to } = piece;
-    if (mousePos.distance2segment(from, to) > HIT_TOLERANCE.EDGE) continue;
+    if (
+      mousePos.distance2segment(from, to) >
+      HIT_TOLERANCE.EDGE / viewport.scale
+    )
+      continue;
 
     if (mode === "runs-tangent") {
       // The run answers only where the gear can actually meet it: its centre
@@ -529,12 +538,25 @@ function probe_belt(
   return null;
 }
 
-/** Returns the hovered part of the element, or null if no part is hovered. */
+/**
+ * Returns the hovered part of the element, or null if no part is hovered.
+ *
+ * Hit-testing is done in screen px, the unit every `HIT_TOLERANCE` is written
+ * in. The answer goes back to world, as `HoveredPart` demands: an element's own
+ * anchor is handed over untouched — never round-tripped through the screen,
+ * whose float noise would break the `.equals` the reducer compares moves with —
+ * and only a point derived from the cursor is converted back.
+ *
+ * The belt is the exception, still probed in world: its path carries per-via
+ * winding directions that the y flip reverses (see `probe_belt`).
+ */
 function get_hovered_part_of_element(
   element: UnionElement,
   mechanicalElements: MechanicalElement[],
-  mousePos: Point2,
+  mouseWorld: WorldPoint,
+  mouseScreen: ScreenPoint,
   state: CanvasState,
+  viewport: ViewportState,
 ): HoveredPart | null {
   // TODO : à "PlacingBeltEnd", ignorer les gears avec le même parentAxle
 
@@ -550,21 +572,23 @@ function get_hovered_part_of_element(
       if (!targets.node) return null;
       return probe_node(
         element as NodeElement,
-        mousePos,
+        mouseScreen,
         targets.node,
         deleting,
         drawn_past_base(state, mechanicalElements),
         mechanicalElements,
+        viewport,
       );
 
     case "gear":
       if (!targets.gear) return null;
       return probe_gear(
         element as GearElement,
-        mousePos,
+        mouseScreen,
         targets.gear,
         deleting,
         placed_gear_center(state, mechanicalElements),
+        viewport,
       );
 
     case "beam":
@@ -573,20 +597,22 @@ function get_hovered_part_of_element(
       if (!targets.edge) return null;
       return probe_edge(
         element as EdgeElement,
-        mousePos,
+        mouseScreen,
         targets.edge,
         deleting,
+        viewport,
       );
 
     case "belt":
       if (!targets.belt) return null;
       return probe_belt(
         element as BeltElement,
-        mousePos,
+        mouseWorld,
         targets.belt,
         deleting,
         placed_gear_center(state, mechanicalElements),
         mechanicalElements,
+        viewport,
       );
   }
 
@@ -607,7 +633,10 @@ function get_hovered_part_of_element(
     case "parallel":
     case "equal":
     case "gear-ratio":
-      if (mousePos.distance_to(element.position) > HIT_TOLERANCE.CONSTRAINT)
+      if (
+        mouseScreen.distance_to(world2screen(element.position, viewport)) >
+        HIT_TOLERANCE.CONSTRAINT
+      )
         break;
       return {
         type: "Constraint",
@@ -617,29 +646,27 @@ function get_hovered_part_of_element(
       };
     case "force": {
       if (targets.overlays !== "all") break;
-      const base = force_base_position(element, mechanicalElements);
-      const displayVector = force_display_vector(
-        force_world_vector(element, mechanicalElements),
+      const { base, tip, label } = force_screen_geometry(
+        element,
+        mechanicalElements,
+        viewport,
       );
-      const valuePos = force_value_label_position(base, displayVector);
-      // Tip handle + Arrow body
-      const tip = base.add(displayVector);
       if (
-        mousePos.distance_to(tip) <= HIT_TOLERANCE.NODE ||
-        mousePos.distance2segment(base, tip) <= HIT_TOLERANCE.EDGE
+        mouseScreen.distance_to(tip) <= HIT_TOLERANCE.NODE ||
+        mouseScreen.distance2segment(base, tip) <= HIT_TOLERANCE.EDGE
       )
         return {
           type: "Force",
-          position: tip,
+          position: screen2world(tip, viewport),
           id: element.id,
           part: "body",
           deleting: state.type === "Erasing",
         };
       // Value
-      if (mousePos.distance_to(valuePos) <= HIT_TOLERANCE.CONSTRAINT)
+      if (mouseScreen.distance_to(label) <= HIT_TOLERANCE.CONSTRAINT)
         return {
           type: "Force",
-          position: valuePos,
+          position: screen2world(label, viewport),
           id: element.id,
           part: "value",
           deleting: state.type === "Erasing",
@@ -648,27 +675,29 @@ function get_hovered_part_of_element(
     }
     case "moment": {
       if (targets.overlays !== "all") break;
-      const center = moment_center_position(element, mechanicalElements);
-      const radius = moment_display_radius(element.value);
-      const valuePos = moment_value_label_position(center, radius);
-      const dist = mousePos.distance_to(center);
+      const { center, worldCenter, radius, label } = moment_screen_geometry(
+        element,
+        mechanicalElements,
+        viewport,
+      );
+      const dist = mouseScreen.distance_to(center);
       if (
         dist <= radius + HIT_TOLERANCE.EDGE &&
         dist >= radius - HIT_TOLERANCE.EDGE
       ) {
         return {
           type: "Moment",
-          position: center,
+          position: worldCenter,
           id: element.id,
           part: "body",
           deleting: state.type === "Erasing",
         };
       }
       // Value
-      if (mousePos.distance_to(valuePos) <= HIT_TOLERANCE.CONSTRAINT)
+      if (mouseScreen.distance_to(label) <= HIT_TOLERANCE.CONSTRAINT)
         return {
           type: "Moment",
-          position: valuePos,
+          position: screen2world(label, viewport),
           id: element.id,
           part: "value",
           deleting: state.type === "Erasing",
@@ -677,49 +706,36 @@ function get_hovered_part_of_element(
     }
     case "distributed-force": {
       if (targets.overlays !== "all") break;
-      const beam = get_mechanical_element_from_id(
-        element.targetID,
-        mechanicalElements,
-      ) as BeamElement;
-      const { displayStart, displayEnd } = distributed_display_vectors(
-        element,
-        mechanicalElements,
-      );
-      const tipStart = beam.positionStart.add(displayStart);
-      const tipEnd = beam.positionEnd.add(displayEnd);
-      // Same anchors as the drawing, via the same helper: an end whose arrow
-      // has run out to nothing still hangs its label off the load's direction.
-      const direction = frame2world(
-        element.direction,
-        element.frame,
-        mechanicalElements,
-      );
-      const startValuePos = force_value_label_position(
-        beam.positionStart,
-        distributed_label_vector(displayStart, direction),
-      );
+      const {
+        start,
+        end,
+        vectorStart,
+        vectorEnd,
+        tipStart,
+        tipEnd,
+        labelStart,
+        labelEnd,
+      } = distributed_screen_geometry(element, mechanicalElements, viewport);
       // Tip handles + Arrows body
       if (
-        mousePos.distance_to(tipStart) <= HIT_TOLERANCE.NODE ||
-        mousePos.distance2segment(beam.positionStart, tipStart) <=
-          HIT_TOLERANCE.EDGE
+        mouseScreen.distance_to(tipStart) <= HIT_TOLERANCE.NODE ||
+        mouseScreen.distance2segment(start, tipStart) <= HIT_TOLERANCE.EDGE
       ) {
         return {
           type: "DistributedForce",
-          position: tipStart,
+          position: screen2world(tipStart, viewport),
           id: element.id,
           part: "start",
           deleting: state.type === "Erasing",
         };
       }
       if (
-        mousePos.distance_to(tipEnd) <= HIT_TOLERANCE.NODE ||
-        mousePos.distance2segment(beam.positionEnd, tipEnd) <=
-          HIT_TOLERANCE.EDGE
+        mouseScreen.distance_to(tipEnd) <= HIT_TOLERANCE.NODE ||
+        mouseScreen.distance2segment(end, tipEnd) <= HIT_TOLERANCE.EDGE
       ) {
         return {
           type: "DistributedForce",
-          position: tipEnd,
+          position: screen2world(tipEnd, viewport),
           id: element.id,
           part: "end",
           deleting: state.type === "Erasing",
@@ -727,51 +743,47 @@ function get_hovered_part_of_element(
       }
       // Body + segment between tips
       if (
-        mousePos.is_in_distributed_force(
-          beam.positionStart,
-          beam.positionEnd,
-          displayStart,
-          displayEnd,
+        mouseScreen.is_in_distributed_force(
+          start,
+          end,
+          vectorStart,
+          vectorEnd,
         ) ||
-        mousePos.distance2segment(tipStart, tipEnd) <= HIT_TOLERANCE.EDGE
+        mouseScreen.distance2segment(tipStart, tipEnd) <= HIT_TOLERANCE.EDGE
       ) {
         return {
           type: "DistributedForce",
-          position: mousePos.project_on_line(tipStart, tipEnd),
+          position: screen2world(
+            mouseScreen.project_on_line(tipStart, tipEnd),
+            viewport,
+          ),
           id: element.id,
           part: "body",
           deleting: state.type === "Erasing",
           // The tips are the profile at t = 0 and t = 1, so the parameter along
           // the crest line is the parameter along the beam. A load with both
           // ends at zero has no crest line to read it off — grab its middle.
-          t: grab_parameter(mousePos, tipStart, tipEnd),
+          t: mouseScreen.parameter_on_segment(tipStart, tipEnd),
         };
       }
-      // Value. An end carrying nothing writes no label, so it offers no target
-      // either — an invisible one would be a click into thin air. Its value is
-      // reached by dragging its tip back out, or from the panel.
       if (
         !is_zero_load(element.magnitudeStart) &&
-        mousePos.distance_to(startValuePos) <= HIT_TOLERANCE.CONSTRAINT
+        mouseScreen.distance_to(labelStart) <= HIT_TOLERANCE.CONSTRAINT
       )
         return {
           type: "DistributedForce",
-          position: startValuePos,
+          position: screen2world(labelStart, viewport),
           id: element.id,
           part: "start-value",
           deleting: state.type === "Erasing",
         };
-      const endValuePos = force_value_label_position(
-        beam.positionEnd,
-        distributed_label_vector(displayEnd, direction),
-      );
       if (
         !is_zero_load(element.magnitudeEnd) &&
-        mousePos.distance_to(endValuePos) <= HIT_TOLERANCE.CONSTRAINT
+        mouseScreen.distance_to(labelEnd) <= HIT_TOLERANCE.CONSTRAINT
       )
         return {
           type: "DistributedForce",
-          position: endValuePos,
+          position: screen2world(labelEnd, viewport),
           id: element.id,
           part: "end-value",
           deleting: state.type === "Erasing",
@@ -794,43 +806,46 @@ function get_hovered_part_of_element(
 function pushed_out_of(
   element: UnionElement,
   hoveredPart: HoveredPart,
-  position: Point2,
-): Point2 {
-  const centre =
+  mouseScreen: ScreenPoint,
+  viewport: ViewportState,
+): WorldPoint {
+  const worldCentre =
     "position" in element && element.type !== "gear"
       ? element.position
       : hoveredPart.type === "Edge" && hoveredPart.part !== "body"
         ? hoveredPart.position
         : undefined;
-  if (!centre) return position;
+  if (!worldCentre) return screen2world(mouseScreen, viewport);
+  const centre = world2screen(worldCentre, viewport);
   const radius =
     HIT_TOLERANCE.NODE * (element.type === "pivot" && element.motor ? 1.5 : 1);
-  const distance = position.distance_to(centre);
-  if (distance >= radius) return position;
+  const distance = mouseScreen.distance_to(centre);
+  if (distance >= radius) return screen2world(mouseScreen, viewport);
   // Dead centre carries no direction to push along; any one will do.
-  const direction =
-    distance > 0 ? position.sub(centre).normalize() : new Point2(1, 0);
-  return centre.add(direction.mul(radius));
+  const direction: ScreenPoint =
+    distance > 0 ? mouseScreen.sub(centre).normalize() : new Point2(1, 0);
+  return screen2world(centre.add(direction.mul(radius)), viewport);
 }
 
 /**
  * The probe badge under the cursor, if the tool may pick one at all.
  */
 function hovered_probe_badge(
-  mousePos: Point2,
+  mouseScreen: ScreenPoint,
   mechanicalElements: MechanicalElement[],
   excluded_elements: ID[],
   state: CanvasState,
+  viewport: ViewportState,
 ): HoveredPart | undefined {
   if (!HOVER_TARGETS[state.type].probeBadge) return undefined;
   for (const element of mechanicalElements) {
     if (excluded_elements.includes(element.id)) continue;
     if (!element.probes || element.probes.length === 0) continue;
-    const badge = probe_badge_position(element);
-    if (mousePos.distance_to(badge) > HIT_TOLERANCE.PROBE) continue;
+    const badge = probe_badge_position(element, viewport);
+    if (mouseScreen.distance_to(badge) > HIT_TOLERANCE.PROBE) continue;
     return {
       type: "Probe",
-      position: badge,
+      position: screen2world(badge, viewport),
       id: element.id,
       deleting: false,
     };
@@ -849,6 +864,7 @@ export function get_hovered_part(
   visibleConstraints: Map<ID, number>,
   mousePos: Point2,
   state: CanvasState,
+  viewport: ViewportState,
 ): HoveredPart {
   // Picking only: an element being dragged is under the cursor by construction
   // and must never be its own target. What it may legally reach is decided by
@@ -901,6 +917,9 @@ export function get_hovered_part(
   const is_legal = legality_for_state(state, mechanicalElements);
 
   const position = mousePos.clone();
+  // Picking is a screen question — every `HIT_TOLERANCE` is a number of pixels —
+  // so the cursor is converted once here and compared in that space throughout.
+  const mouseScreen = world2screen(mousePos, viewport);
 
   const elements: UnionElement[] = (mechanicalElements as UnionElement[])
     .concat(constraintElements)
@@ -910,7 +929,9 @@ export function get_hovered_part(
   // It precedes the element sweep because the start point usually sits on something — the rim of the gear the gesture started on, the node it started from — which would otherwise answer for it.
   if (
     state.type === "PlacingBeltEnd" &&
-    mousePos.distance_to(state.startHover.position) <= HIT_TOLERANCE.NODE
+    mouseScreen.distance_to(
+      world2screen(state.startHover.position, viewport),
+    ) <= HIT_TOLERANCE.NODE
   ) {
     if (
       !belt_can_close(
@@ -926,18 +947,17 @@ export function get_hovered_part(
     return { type: "BeltClosure", position: state.startHover.position };
   }
 
-  const hover_order = [...DRAWING_ORDER];
-  hover_order.reverse();
-  for (const type of hover_order) {
+  for (const type of HOVER_ORDER) {
     // Badges are not elements, so the family is swept whole at the rank
     // `DRAWING_ORDER` gives "probe" — above its host, which the badge overlaps
     // and which would otherwise answer for it.
     if (type === "probe") {
       const badgeHover = hovered_probe_badge(
-        mousePos,
+        mouseScreen,
         mechanicalElements,
         excluded_elements,
         state,
+        viewport,
       );
       if (badgeHover) return badgeHover;
       continue;
@@ -957,7 +977,9 @@ export function get_hovered_part(
         element,
         mechanicalElements,
         position,
+        mouseScreen,
         state,
+        viewport,
       );
       if (!hoveredPart) continue;
       const verdict = is_legal(element, hoveredPart);
@@ -965,7 +987,7 @@ export function get_hovered_part(
       if (verdict.blocks)
         return {
           type: "Void",
-          position: pushed_out_of(element, hoveredPart, position),
+          position: pushed_out_of(element, hoveredPart, mouseScreen, viewport),
           rejected: verdict.reason,
         };
     }
@@ -978,7 +1000,8 @@ export function get_hovered_part(
     ) as EdgeElement;
     if (
       belt.type === "belt" &&
-      mousePos.distance_to(belt.positionEnd) <= HIT_TOLERANCE.NODE
+      mouseScreen.distance_to(world2screen(belt.positionEnd, viewport)) <=
+        HIT_TOLERANCE.NODE
     ) {
       if (!belt_can_close(belt.attachedGearsIDs.length))
         return { type: "Void", position, rejected: BELT_CANNOT_CLOSE };
@@ -997,7 +1020,8 @@ export function get_hovered_part(
     ) as EdgeElement;
     if (
       belt.type === "belt" &&
-      mousePos.distance_to(belt.positionStart) <= HIT_TOLERANCE.NODE
+      mouseScreen.distance_to(world2screen(belt.positionStart, viewport)) <=
+        HIT_TOLERANCE.NODE
     ) {
       if (!belt_can_close(belt.attachedGearsIDs.length))
         return { type: "Void", position, rejected: BELT_CANNOT_CLOSE };
@@ -1019,7 +1043,11 @@ export function get_hovered_part(
       const holdsEnd = belt.fixedNodeEndID === state.elementID;
       if (holdsStart === holdsEnd) continue;
       const otherPos = holdsStart ? belt.positionEnd : belt.positionStart;
-      if (mousePos.distance_to(otherPos) > HIT_TOLERANCE.NODE) continue;
+      if (
+        mouseScreen.distance_to(world2screen(otherPos, viewport)) >
+        HIT_TOLERANCE.NODE
+      )
+        continue;
       if (!belt_can_close(belt.attachedGearsIDs.length))
         return { type: "Void", position, rejected: BELT_CANNOT_CLOSE };
       return {

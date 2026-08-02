@@ -16,6 +16,7 @@ import {
   LoadElement,
   MechanicalElement,
   MomentElement,
+  ViewportState,
 } from "../../types";
 import type { OwnPartKind } from "../mechanism/connect-actions";
 import {
@@ -32,17 +33,22 @@ import { TOOL_STATE_BY_KEY, tool_state } from "../../constants/shortcuts";
 import {
   distributed_grab_magnitude,
   distributed_tip_magnitude,
-  force_stored_vector,
-  frame2world,
+  screen2stored_moment,
+} from "../../utils/load-scale";
+import {
+  frame2world_transform,
+  world2frame_transform,
+} from "../../utils/load-frame";
+import {
+  drag2stored_force_vector,
   moment_center_position,
-  radius2moment_value,
-  world2frame,
 } from "../../utils/load-geom";
 import {
   belt_merged_run_section,
   belt_section_gear_index,
 } from "../../utils/belt-path";
 import { belt_without_gear } from "../../utils/belt-geom";
+import { screen2world_vec, world2screen_length } from "../../utils/viewport";
 import { belt_body_grab_pin, elements_by_id } from "../solver/parsing";
 import { HIT_TOLERANCE } from "../../constants/rendering-specs";
 import { handle_placing_element } from "./placing-element-actions";
@@ -56,12 +62,13 @@ export function canvasStateReducer(
   event: CanvasEvent,
   mechanicalElements: MechanicalElement[],
   constraintElements: ConstraintElement[],
+  loadElements: LoadElement[] = [],
+  viewport: ViewportState,
   setCanvasState: (state: CanvasState) => void,
   applyActions: (actions: Action[], actionBundleType: ActionBundleType) => void,
   undoMechanism: () => void,
   redoMechanism: () => void,
   onMouseUpHandler: () => void,
-  loadElements: LoadElement[] = [],
   isSimulating: boolean = false,
   canSimulationGrab: boolean = false,
   onSimulationGrab: (
@@ -73,7 +80,6 @@ export function canvasStateReducer(
   ) => void = () => {},
   onSimulationGrabEnd: () => void = () => {},
   worldMousePos: Point2 = ZERO,
-  viewportZoom: number = 1,
 ) {
   const actions: Action[] = [];
   let actionBundleType: ActionBundleType | undefined = undefined;
@@ -90,6 +96,7 @@ export function canvasStateReducer(
             mechanicalElements,
             constraintElements,
             loadElements,
+            viewport,
           );
           if (closing.newCanvasState) setCanvasState(closing.newCanvasState);
           actions.push(...closing.actions);
@@ -342,6 +349,7 @@ export function canvasStateReducer(
             mechanicalElements,
             constraintElements,
             loadElements,
+            viewport,
           );
           if (r.newCanvasState) setCanvasState(r.newCanvasState);
           actions.push(...r.actions);
@@ -418,8 +426,8 @@ export function canvasStateReducer(
           if (
             !hit ||
             !state.downPos ||
-            worldMousePos.distance_to(state.downPos) <
-              HIT_TOLERANCE.DRAG_START / viewportZoom
+            worldMousePos.distance_to(state.downPos) * viewport.scale <
+              HIT_TOLERANCE.DRAG_START
           )
             break;
           if (isSimulating) {
@@ -430,8 +438,8 @@ export function canvasStateReducer(
             let simElementID: ID | null = null;
             let bodyRatio: number | undefined = undefined;
             let gearPerimeter:
-              { gearID: ID; angleOffset: number; radius: number } | undefined =
-              undefined;
+              | { gearID: ID; angleOffset: number; radius: number }
+              | undefined = undefined;
             let beltPin: Extract<Link, { type: "BeltPin" }> | undefined =
               undefined;
             // A closed belt's junction is a point of the belt like any other, so a
@@ -693,8 +701,11 @@ export function canvasStateReducer(
           actions.push({
             type: "ChangeForce",
             id: state.elementID,
-            newVector: world2frame(
-              force_stored_vector(hoveredPart.position.sub(targetPos)),
+            newVector: world2frame_transform(
+              drag2stored_force_vector(
+                hoveredPart.position.sub(targetPos),
+                viewport,
+              ),
               force.frame,
               mechanicalElements,
             ),
@@ -721,7 +732,7 @@ export function canvasStateReducer(
           // its two ends look like they had swapped.
           let newMagnitudeStart = distForce.magnitudeStart;
           let newMagnitudeEnd = distForce.magnitudeEnd;
-          const worldDirection = frame2world(
+          const worldDirection = frame2world_transform(
             distForce.direction,
             distForce.frame,
             mechanicalElements,
@@ -729,7 +740,11 @@ export function canvasStateReducer(
           const projection_at = (base: Point2) =>
             // Signed: past the base the projection goes negative and the arrow
             // flips to the other side of the beam rather than being clamped.
-            hoveredPart.position.sub(base).dot(worldDirection);
+            // In screen px, the unit the display ruler is graduated in.
+            world2screen_length(
+              hoveredPart.position.sub(base).dot(worldDirection),
+              viewport,
+            );
           switch (state.part) {
             case "start":
               newMagnitudeStart = distributed_tip_magnitude(
@@ -795,8 +810,11 @@ export function canvasStateReducer(
             // The drag radius maps back through the arc's own scale; the sign
             // is a placement choice, so a move only ever resizes the arc.
             newValue:
-              radius2moment_value(
-                hoveredPart.position.distance_to(beamCenter),
+              screen2stored_moment(
+                world2screen_length(
+                  hoveredPart.position.distance_to(beamCenter),
+                  viewport,
+                ),
               ) * (moment.value < 0 ? -1 : 1),
             oldValue: moment.value,
           });
@@ -858,7 +876,7 @@ export function canvasStateReducer(
             type: "MoveElements",
             elementIDs: state.elementIDs,
             newPos: hoveredPart.position,
-            delta: event.mouseDelta,
+            delta: screen2world_vec(event.mouseDelta, viewport),
           });
           break;
         case "ErasingMultiple":
@@ -1142,6 +1160,7 @@ export function canvasStateReducer(
         case "MovingConstraint":
         case "MovingForce":
         case "MovingDistributedForce":
+        case "MovingMoment":
           if (actions.length === 0) {
             actionBundleType = "Other";
             actions.push({ type: "Blank" });

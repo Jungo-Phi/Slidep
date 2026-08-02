@@ -54,10 +54,11 @@ describe("garde-fous des mécanismes à courroie", () => {
       if (frame === 100) blocked = deg(angles.get(motor.angleKey) ?? 0);
     });
 
-    // The motor commands 1 rad/s: it would be at 100° by frame 100 if nothing stopped it.
+    // The motor commands 1 rad/s clockwise, i.e. −100° by frame 100 in the model's
+    // frame, if nothing stopped it.
     console.log(`  blocage à ${blocked.toFixed(4)}°`);
-    expect(blocked).toBeGreaterThan(45);
-    expect(blocked).toBeLessThan(55);
+    expect(blocked).toBeLessThan(-45);
+    expect(blocked).toBeGreaterThan(-55);
     // A true dead point, not slow creep: nothing moves over the next 100 frames.
     expect(Math.abs(deg(end.angles.get(motor.angleKey) ?? 0) - blocked)).toBeLessThan(0.05);
   }, 60_000);

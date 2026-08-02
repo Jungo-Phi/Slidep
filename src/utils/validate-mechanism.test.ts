@@ -19,7 +19,6 @@ import {
 
 const id = (s: string) =>
   `00000000-0000-0000-0000-${s.padStart(12, "0")}` as ID;
-const P = (x: number, y: number) => new Point2(x, y);
 
 const PIVOT_ID = id("p1");
 const BEAM_ID = id("b1");
@@ -34,7 +33,7 @@ function mechanism(
 ): Mechanism {
   return {
     metadata: DEFAULT_METADATA,
-    viewport: { zoom: 1, pan: P(0, 0) },
+    viewport: { scale: 1, pan: new Point2(0, 0) },
     mechanicalElements,
     constraintElements,
     loads,
@@ -49,7 +48,7 @@ function pivot(over: Partial<PivotElement> = {}): PivotElement {
     id: PIVOT_ID,
     probes: [],
     overlays: {},
-    position: P(0, 0),
+    position: new Point2(0, 0),
     isGrounded: false,
     rotatingEdgesIDs: [BEAM_ID],
     fixedGearsIDs: [],
@@ -63,8 +62,8 @@ function beam(over: Partial<BeamElement> = {}): BeamElement {
     id: BEAM_ID,
     probes: [],
     overlays: {},
-    positionStart: P(0, 0),
-    positionEnd: P(10, 0),
+    positionStart: new Point2(0, 0),
+    positionEnd: new Point2(10, 0),
     fixedNodeStartID: PIVOT_ID,
     fixedNodeEndID: undefined,
     fixedNodesBodyIDs: [],
@@ -78,7 +77,7 @@ function gear(over: Partial<GearElement> = {}): GearElement {
     id: GEAR_ID,
     probes: [],
     overlays: {},
-    position: P(0, 0),
+    position: new Point2(0, 0),
     angle: 0,
     radius: 10,
     parentAxleID: AXLE_ID,
@@ -111,7 +110,7 @@ function closed_belt_mechanism(over: Partial<BeltElement> = {}): Mechanism {
       id: joinID,
       probes: [],
       overlays: {},
-      position: P(0, 0),
+      position: new Point2(0, 0),
       isGrounded: false,
       fixedEdgesIDs: [beltID],
     },
@@ -120,8 +119,8 @@ function closed_belt_mechanism(over: Partial<BeltElement> = {}): Mechanism {
       id: beltID,
       probes: [],
       overlays: {},
-      positionStart: P(0, 0),
-      positionEnd: P(0, 0),
+      positionStart: new Point2(0, 0),
+      positionEnd: new Point2(0, 0),
       fixedNodeStartID: joinID,
       fixedNodeEndID: joinID,
       attachedGearsIDs: [
@@ -142,13 +141,13 @@ function open_belt_mechanism(start: Point2, end: Point2): Mechanism {
     gear({ attachedBeltID: beltID }),
     pivot({
       id: ax2,
-      position: P(100, 0),
+      position: new Point2(100, 0),
       rotatingEdgesIDs: [],
       fixedGearsIDs: [gear2],
     }),
     gear({
       id: gear2,
-      position: P(100, 0),
+      position: new Point2(100, 0),
       parentAxleID: ax2,
       attachedBeltID: beltID,
     }),
@@ -223,8 +222,8 @@ describe("validate_mechanism — fermeture des courroies", () => {
       id: otherID,
       probes: [],
       overlays: {},
-      positionStart: P(0, 0),
-      positionEnd: P(50, 0),
+      positionStart: new Point2(0, 0),
+      positionEnd: new Point2(50, 0),
       fixedNodeStartID: joinID,
       fixedNodeEndID: undefined,
       attachedGearsIDs: [],
@@ -293,7 +292,7 @@ describe("validate_mechanism — chaque code d'erreur", () => {
       id: id("m1"),
       probes: [],
       overlays: {},
-      position: P(0, 0),
+      position: new Point2(0, 0),
       isGrounded: true,
       fixedEdgesIDs: [],
       mass: 1,
@@ -315,7 +314,7 @@ describe("validate_mechanism — contraintes", () => {
     const constraint: ConstraintElement = {
       type: "dimension-radius",
       id: id("c1"),
-      position: P(0, 0),
+      position: new Point2(0, 0),
       gearID: id("absent"),
       value: 5,
     };
@@ -328,7 +327,7 @@ describe("validate_mechanism — contraintes", () => {
     const constraint: ConstraintElement = {
       type: "dimension-radius",
       id: id("c1"),
-      position: P(0, 0),
+      position: new Point2(0, 0),
       gearID: BEAM_ID,
       value: 5,
     };
@@ -341,7 +340,7 @@ describe("validate_mechanism — contraintes", () => {
     const constraint: ConstraintElement = {
       type: "horizontal-align-nodes",
       id: id("c1"),
-      position: P(0, 0),
+      position: new Point2(0, 0),
       startNodeID: PIVOT_ID,
       endNodeID: PIVOT_ID,
     };
@@ -354,7 +353,7 @@ describe("validate_mechanism — contraintes", () => {
     const constraint: ConstraintElement = {
       type: "dimension-belt",
       id: id("c1"),
-      position: P(0, 0),
+      position: new Point2(0, 0),
       beltID: id("absent"),
       value: 100,
     };
@@ -371,7 +370,7 @@ describe("validate_mechanism — charges", () => {
       id: id("f1"),
       targetID: PIVOT_ID,
       anchor: undefined,
-      vector: P(0, -1),
+      vector: new Point2(0, -1),
       frame: "world",
       ...over,
     }) as LoadElement;
@@ -417,7 +416,7 @@ describe("validate_mechanism — charges", () => {
       type: "distributed-force",
       id: id("d1"),
       targetID: PIVOT_ID,
-      direction: P(0, -1),
+      direction: new Point2(0, -1),
       magnitudeStart: 1,
       magnitudeEnd: 1,
       frame: "world",
@@ -438,7 +437,7 @@ describe("compute_constraint_violations — extrémité de courroie dans sa poul
     (compute_constraint_violations(mech) ?? []).map((v) => v.message);
 
   it("signale un bout enfoncé dans la poulie qu'il enroule", () => {
-    const mech = open_belt_mechanism(P(3, 0), P(100, 10));
+    const mech = open_belt_mechanism(new Point2(3, 0), new Point2(100, 10));
     const violation = (compute_constraint_violations(mech) ?? []).find((v) =>
       v.message.startsWith("Début"),
     );
@@ -450,13 +449,13 @@ describe("compute_constraint_violations — extrémité de courroie dans sa poul
   // A wound end rests exactly on the rim: the tangent run is of length 0, which
   // is legitimate and must not be reported.
   it("accepte un bout posé sur la jante", () => {
-    const mech = open_belt_mechanism(P(0, -10), P(100, 10));
+    const mech = open_belt_mechanism(new Point2(0, -10), new Point2(100, 10));
     expect(messages(mech)).toEqual([]);
   });
 
   it("ne regarde que la poulie adjacente au bout", () => {
     // Inside the FAR pulley, which the start terminal does not wrap.
-    const mech = open_belt_mechanism(P(97, 0), P(100, 10));
+    const mech = open_belt_mechanism(new Point2(97, 0), new Point2(100, 10));
     expect(messages(mech)).toEqual([]);
   });
 });

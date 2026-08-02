@@ -171,7 +171,6 @@ export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
                 "&:hover": {
                   borderColor: "primary.main",
                   bgcolor: "action.hover",
-                  transform: "translateY(-2px)",
                 },
               }}
             >
@@ -210,7 +209,7 @@ export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
                       transition: "transform 0.2s, box-shadow 0.2s",
                       "&:hover": {
                         transform: "translateY(-4px)",
-                        boxShadow: 6,
+                        boxShadow: "6px 6px 8px rgba(0, 0, 0, 0.3)",
                         borderColor: "primary.main",
                       },
                       border: "2px solid",

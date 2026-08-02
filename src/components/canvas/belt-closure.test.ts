@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { Point2 } from "../../types/point2";
+import { Point2, ZERO } from "../../types/point2";
 import type {
   BeltElement,
   GearElement,
@@ -14,12 +14,15 @@ import type { HoveredPart } from "../../types/hovered-part";
 import { get_hovered_part } from "./get-hover";
 import { handle_placing_element } from "./placing-element-actions";
 import { legality_for_state } from "../mechanism/connection-rules";
+import { ViewportState } from "../../types";
 
 const P = (x: number, y: number) => new Point2(x, y);
 const AX_A = "ax-a" as ID;
 const AX_B = "ax-b" as ID;
 const G_A = "g-a" as ID;
 const G_B = "g-b" as ID;
+
+const VIEWPORT: ViewportState = { scale: 1, pan: ZERO };
 
 const axle = (id: ID, x: number, gearID: ID): PivotElement => ({
   type: "pivot",
@@ -66,7 +69,15 @@ const routing: Extract<CanvasState, { type: "PlacingBeltEnd" }> = {
 
 describe("closing a belt while placing it", () => {
   it("offers the closure when the cursor returns to the start", () => {
-    const hovered = get_hovered_part(MECH, [], [], new Map(), START, routing);
+    const hovered = get_hovered_part(
+      MECH,
+      [],
+      [],
+      new Map(),
+      START,
+      routing,
+      VIEWPORT,
+    );
     expect(hovered.type).toBe("BeltClosure");
   });
 
@@ -78,7 +89,15 @@ describe("closing a belt while placing it", () => {
       ...routing,
       attachedGearsIDs: [{ id: G_B, direction: false }],
     };
-    const hovered = get_hovered_part(MECH, [], [], new Map(), START, gesture);
+    const hovered = get_hovered_part(
+      MECH,
+      [],
+      [],
+      new Map(),
+      START,
+      gesture,
+      VIEWPORT,
+    );
     expect(hovered.type).toBe("BeltClosure");
   });
 
@@ -92,6 +111,7 @@ describe("closing a belt while placing it", () => {
       MECH,
       [],
       [],
+      VIEWPORT,
     );
 
     const created = actions.filter((a) => a.type === "CreateElement");
@@ -131,6 +151,7 @@ describe("closing a belt while placing it", () => {
       MECH,
       [],
       [],
+      VIEWPORT,
     );
     const created = actions.filter((a) => a.type === "CreateElement");
     const join = created.find((a) => a.element.type === "join")!
@@ -162,6 +183,7 @@ describe("closing a belt while placing it", () => {
       new Map(),
       loose,
       pulleyless,
+      VIEWPORT,
     );
     expect(hovered.type).toBe("Void");
     expect(hovered).toHaveProperty("rejected");
@@ -174,7 +196,15 @@ describe("closing a belt while placing it", () => {
       ...routing,
       attachedGearsIDs: [{ id: G_A, direction: false }],
     };
-    const hovered = get_hovered_part(MECH, [], [], new Map(), START, oneGear);
+    const hovered = get_hovered_part(
+      MECH,
+      [],
+      [],
+      new Map(),
+      START,
+      oneGear,
+      VIEWPORT,
+    );
     expect(hovered.type).toBe("Void");
     expect(hovered).toHaveProperty("rejected");
   });
@@ -206,6 +236,7 @@ describe("the gear a belt is started on", () => {
       MECH,
       [],
       [],
+      VIEWPORT,
     );
     expect(attached(actions)).toEqual([G_A]);
   });
@@ -217,6 +248,7 @@ describe("the gear a belt is started on", () => {
       MECH,
       [],
       [],
+      VIEWPORT,
     );
     expect(attached(actions)).toEqual([G_A, G_B]);
   });
@@ -228,6 +260,7 @@ describe("the gear a belt is started on", () => {
       MECH,
       [],
       [],
+      VIEWPORT,
     );
     expect(attached(actions)).toEqual([G_A, G_B]);
   });
@@ -296,7 +329,15 @@ describe("closing a belt by dragging its terminal node onto the other end", () =
 
   it("offers the free end when the node holds the start", () => {
     const mech = [...MECH, node, belt()];
-    const hovered = get_hovered_part(mech, [], [], new Map(), END, moving);
+    const hovered = get_hovered_part(
+      mech,
+      [],
+      [],
+      new Map(),
+      END,
+      moving,
+      VIEWPORT,
+    );
     expect(hovered).toMatchObject({ type: "Edge", id: BELT, part: "end" });
   });
 
@@ -308,13 +349,29 @@ describe("closing a belt by dragging its terminal node onto the other end", () =
       { ...node, position: END },
       belt({ fixedNodeStartID: undefined, fixedNodeEndID: NODE }),
     ];
-    const hovered = get_hovered_part(mech, [], [], new Map(), START, moving);
+    const hovered = get_hovered_part(
+      mech,
+      [],
+      [],
+      new Map(),
+      START,
+      moving,
+      VIEWPORT,
+    );
     expect(hovered).toMatchObject({ type: "Edge", id: BELT, part: "start" });
   });
 
   it("refuses to close a pulley-less belt this way", () => {
     const mech = [...MECH, node, belt({ attachedGearsIDs: [] })];
-    const hovered = get_hovered_part(mech, [], [], new Map(), END, moving);
+    const hovered = get_hovered_part(
+      mech,
+      [],
+      [],
+      new Map(),
+      END,
+      moving,
+      VIEWPORT,
+    );
     expect(hovered.type).toBe("Void");
     expect(hovered).toHaveProperty("rejected");
   });

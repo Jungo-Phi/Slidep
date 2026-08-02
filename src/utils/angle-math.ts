@@ -26,8 +26,8 @@ export function resolve_angle_constraint_quadrant(
   if (!intersection) return null;
   const posDir = position.sub(intersection);
 
-  const flipStart = delta2.cross(posDir) * delta2.cross(delta1) < -10e-10;
-  const flipEnd = delta1.cross(posDir) * delta1.cross(delta2) < -10e-10;
+  const flipStart = delta2.cross(posDir) * delta2.cross(delta1) < -10e-4;
+  const flipEnd = delta1.cross(posDir) * delta1.cross(delta2) < -10e-4;
 
   const v1 = flipStart ? delta1.mul(-1) : delta1;
   const v2 = flipEnd ? delta2.mul(-1) : delta2;

@@ -8,7 +8,7 @@ import {
 import { actionReducer } from "../components/mechanism/action-reducer";
 import { validate_mechanism } from "./validate-mechanism";
 import { DEFAULT_METADATA, Mechanism } from "../types/mechanism";
-import { Point2 } from "../types/point2";
+import { Point2, ZERO } from "../types/point2";
 import { HoveredPart, names_element } from "../types/hovered-part";
 import { CanvasState } from "../types/canvas-state";
 import { legality_for_state } from "../components/mechanism/connection-rules";
@@ -40,12 +40,14 @@ const fresh = (): ID => {
   return `00000000-0000-0000-0000-${String(counter).padStart(12, "0")}` as ID;
 };
 
-const P = (x: number, y: number) => new Point2(x, y);
-
 // ─── Gadgets: small, individually valid fragments ─────────────────────────────
 
 type Gadget =
-  "lonePivot" | "loneJoin" | "loneBeam" | "pivotOnBeam" | "gearOnAxle";
+  | "lonePivot"
+  | "loneJoin"
+  | "loneBeam"
+  | "pivotOnBeam"
+  | "gearOnAxle";
 
 const GADGETS: Gadget[] = [
   "lonePivot",
@@ -64,7 +66,7 @@ function build_gadget(gadget: Gadget, x: number): MechanicalElement[] {
           id: fresh(),
           probes: [],
           overlays: {},
-          position: P(x, 0),
+          position: new Point2(x, 0),
           isGrounded: false,
           rotatingEdgesIDs: [],
           fixedGearsIDs: [],
@@ -77,7 +79,7 @@ function build_gadget(gadget: Gadget, x: number): MechanicalElement[] {
           id: fresh(),
           probes: [],
           overlays: {},
-          position: P(x, 0),
+          position: new Point2(x, 0),
           isGrounded: false,
           fixedEdgesIDs: [],
         },
@@ -89,8 +91,8 @@ function build_gadget(gadget: Gadget, x: number): MechanicalElement[] {
           id: fresh(),
           probes: [],
           overlays: {},
-          positionStart: P(x, 0),
-          positionEnd: P(x + 40, 0),
+          positionStart: new Point2(x, 0),
+          positionEnd: new Point2(x + 40, 0),
           fixedNodeStartID: undefined,
           fixedNodeEndID: undefined,
           fixedNodesBodyIDs: [],
@@ -105,7 +107,7 @@ function build_gadget(gadget: Gadget, x: number): MechanicalElement[] {
           id: pivotID,
           probes: [],
           overlays: {},
-          position: P(x, 0),
+          position: new Point2(x, 0),
           isGrounded: false,
           rotatingEdgesIDs: [beamID],
           fixedGearsIDs: [],
@@ -115,8 +117,8 @@ function build_gadget(gadget: Gadget, x: number): MechanicalElement[] {
           id: beamID,
           probes: [],
           overlays: {},
-          positionStart: P(x, 0),
-          positionEnd: P(x + 40, 0),
+          positionStart: new Point2(x, 0),
+          positionEnd: new Point2(x + 40, 0),
           fixedNodeStartID: pivotID,
           fixedNodeEndID: undefined,
           fixedNodesBodyIDs: [],
@@ -132,7 +134,7 @@ function build_gadget(gadget: Gadget, x: number): MechanicalElement[] {
           id: axleID,
           probes: [],
           overlays: {},
-          position: P(x, 0),
+          position: new Point2(x, 0),
           isGrounded: false,
           rotatingEdgesIDs: [],
           fixedGearsIDs: [gearID],
@@ -142,7 +144,7 @@ function build_gadget(gadget: Gadget, x: number): MechanicalElement[] {
           id: gearID,
           probes: [],
           overlays: {},
-          position: P(x, 0),
+          position: new Point2(x, 0),
           angle: 0,
           radius: 20,
           parentAxleID: axleID,
@@ -161,7 +163,7 @@ function build_mechanism(gadgets: Gadget[]): Mechanism {
   );
   return {
     metadata: DEFAULT_METADATA,
-    viewport: { zoom: 1, pan: P(0, 0) },
+    viewport: { scale: 1, pan: new Point2(0, 0) },
     mechanicalElements,
     constraintElements: [],
     loads: [],
@@ -397,6 +399,7 @@ function run_tool(
         mechanicalElements,
         constraintElements,
         loads,
+        { scale: 1, pan: ZERO },
       )
     : handle_placing_constraint(state, hoveredPart, mechanicalElements);
 }
@@ -488,7 +491,10 @@ function run_command(session: Session, command: Command): Session {
       const state = session.tool ?? pick(ROOT_TOOLS, command.tool);
       const probed = HOVER_TARGETS[state.type];
       const targets: HoveredPart[] = [
-        { type: "Void", position: P(command.x * 40, command.y * 40 - 100) },
+        {
+          type: "Void",
+          position: new Point2(command.x * 40, command.y * 40 - 100),
+        },
         ...mechanicalElements.flatMap((element) => parts_of(element, probed)),
       ];
       const hoveredPart = pick(targets, command.target);
@@ -765,7 +771,6 @@ describe("fuzzing — défauts ouverts, reproduits", () => {
       ],
     );
   });
-
 });
 
 /**

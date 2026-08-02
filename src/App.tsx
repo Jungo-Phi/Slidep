@@ -1,4 +1,4 @@
-import React, {
+﻿import React, {
   useState,
   useRef,
   useEffect,
@@ -77,7 +77,6 @@ import {
   PropertiesPanelTab,
   RuntimeState,
   SimulationSpeed,
-  ScreenPoint,
   SerializedMechanism,
   SimulationConfig,
   SlidepDB,
@@ -95,9 +94,9 @@ import {
   save_to_file,
   serialize_mechanism,
   debounce,
-  screen2world,
   getStorageItem,
   setStorageItem,
+  zoom_on_point,
 } from "./utils";
 import {
   THEMES,
@@ -161,7 +160,6 @@ const read_all_records = async (db: IDBPDatabase<SlidepDB>) =>
   (await db.getAll("mechanisms")).map(migrate_document);
 
 const DEBOUNCE_AUTOSAVE_TIME_MILLIS = 1000;
-const VIEWPORT_ZOOM_SENSITIVITY = 400; // Nombre de "crans" de molette nécessaires pour multiplier le zoom par 2
 const LANGUAGES = ["Deutsch", "English", "Español", "Français"];
 
 // Paliers de la top-bar. `condensed` raccourcit les libellés (Édition → Édit,
@@ -250,7 +248,7 @@ const App: React.FC = () => {
       createdAt: Date.now(),
       modifiedAt: Date.now(),
     },
-    viewport: { zoom: 1, pan: ZERO },
+    viewport: { scale: 1, pan: ZERO },
     mechanicalElements: [],
     constraintElements: [],
     loads: [],
@@ -709,16 +707,13 @@ const App: React.FC = () => {
   const changeViewport = useCallback((change: ViewportChange) => {
     setMechanism((prevMechanism) => {
       const ov = prevMechanism.viewport;
-      let pan: ScreenPoint;
-      let zoom = ov.zoom;
-      if (change.type === "Pan") {
-        pan = ov.pan.add(change.delta);
-      } else {
-        const zoomFactor = 2 ** (-change.deltaY / VIEWPORT_ZOOM_SENSITIVITY);
-        zoom *= zoomFactor;
-        pan = change.center.sub(screen2world(change.center, ov).mul(zoom));
-      }
-      return { ...prevMechanism, viewport: { pan, zoom } };
+      return {
+        ...prevMechanism,
+        viewport:
+          change.type === "Pan"
+            ? { pan: ov.pan.add(change.delta), scale: ov.scale }
+            : zoom_on_point(change.deltaY, change.center, ov),
+      };
     });
   }, []);
 
@@ -1005,7 +1000,7 @@ const App: React.FC = () => {
         modifiedAt: Date.now(),
       },
       viewport: {
-        zoom: 1,
+        scale: 1,
         pan: new Point2(currentCanvas.width / 2, currentCanvas.height / 2),
       },
       mechanicalElements: [],
@@ -1279,7 +1274,8 @@ const App: React.FC = () => {
       recording,
       pct,
       atStart: timelineTime <= 0,
-      atEnd: recording || (frontier > 0 && timelineTime >= frontier - RECORD_DT / 2),
+      atEnd:
+        recording || (frontier > 0 && timelineTime >= frontier - RECORD_DT / 2),
       hasRecording: frontier > 0 || timelineSnaps.length > 0,
     };
   }, [
@@ -1479,7 +1475,6 @@ const App: React.FC = () => {
                     fontWeight={400}
                     noWrap
                     sx={{
-                      maxWidth: tight ? 90 : condensed ? 130 : 180,
                       opacity: 0.9,
                     }}
                   >
@@ -1811,7 +1806,7 @@ const App: React.FC = () => {
                   opacity: appMode === "edition" ? 0.3 : 1,
                   pointerEvents: appMode === "edition" ? "none" : "auto",
                   transition: "opacity 0.2s ease",
-                  gap: 1.5,
+                  gap: tight ? 0.5 : 1.5,
                 }}
               >
                 <Tooltip
@@ -1823,6 +1818,7 @@ const App: React.FC = () => {
                   }
                 >
                   <Chip
+                    disabled
                     icon={
                       <KeyboardDoubleArrowDown
                         sx={{
@@ -1929,7 +1925,7 @@ const App: React.FC = () => {
                 </Tooltip>
               </Box>
 
-              {!tight && <Divider flexItem sx={{ mx: 0.5 }} />}
+              <Divider flexItem sx={{ mx: tight ? 0.25 : 0.5 }} />
 
               {/* Calques d'affichage : ce qui est montré. */}
               <Box
@@ -1969,7 +1965,7 @@ const App: React.FC = () => {
                       setMechanism((prev) => ({
                         ...prev,
                         viewport: {
-                          zoom: 1,
+                          scale: 1,
                           pan: new Point2(
                             currentCanvas.width / 2,
                             currentCanvas.height / 2,
@@ -1979,7 +1975,7 @@ const App: React.FC = () => {
                     }}
                     disabled={
                       canvasRef.current
-                        ? mechanism.viewport.zoom === 1 &&
+                        ? mechanism.viewport.scale === 1 &&
                           mechanism.viewport.pan.equals(
                             new Point2(
                               canvasRef.current!.width / 2,

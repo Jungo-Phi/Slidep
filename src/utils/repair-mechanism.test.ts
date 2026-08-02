@@ -17,7 +17,6 @@ import {
 
 const id = (s: string) =>
   `00000000-0000-0000-0000-${s.padStart(12, "0")}` as ID;
-const P = (x: number, y: number) => new Point2(x, y);
 
 const PIVOT_ID = id("p1");
 const BEAM_ID = id("b1");
@@ -33,7 +32,7 @@ function mechanism(
 ): Mechanism {
   return {
     metadata: DEFAULT_METADATA,
-    viewport: { zoom: 1, pan: P(0, 0) },
+    viewport: { scale: 1, pan: new Point2(0, 0) },
     mechanicalElements,
     constraintElements,
     loads,
@@ -48,7 +47,7 @@ function pivot(over: Partial<PivotElement> = {}): PivotElement {
     id: PIVOT_ID,
     probes: [],
     overlays: {},
-    position: P(0, 0),
+    position: new Point2(0, 0),
     isGrounded: false,
     rotatingEdgesIDs: [BEAM_ID],
     fixedGearsIDs: [],
@@ -62,8 +61,8 @@ function beam(over: Partial<BeamElement> = {}): BeamElement {
     id: BEAM_ID,
     probes: [],
     overlays: {},
-    positionStart: P(0, 0),
-    positionEnd: P(10, 0),
+    positionStart: new Point2(0, 0),
+    positionEnd: new Point2(10, 0),
     fixedNodeStartID: PIVOT_ID,
     fixedNodeEndID: undefined,
     fixedNodesBodyIDs: [],
@@ -77,7 +76,7 @@ function gear(over: Partial<GearElement> = {}): GearElement {
     id: GEAR_ID,
     probes: [],
     overlays: {},
-    position: P(0, 0),
+    position: new Point2(0, 0),
     angle: 0,
     radius: 10,
     parentAxleID: AXLE_ID,
@@ -94,8 +93,8 @@ function belt(over: Partial<BeltElement> = {}): BeltElement {
     id: BELT_ID,
     probes: [],
     overlays: {},
-    positionStart: P(0, 0),
-    positionEnd: P(10, 0),
+    positionStart: new Point2(0, 0),
+    positionEnd: new Point2(10, 0),
     fixedNodeStartID: undefined,
     fixedNodeEndID: undefined,
     attachedGearsIDs: [],
@@ -109,7 +108,7 @@ function force(over: Partial<ForceElement> = {}): ForceElement {
     type: "force",
     id: id("f1"),
     targetID: PIVOT_ID,
-    vector: P(0, 1),
+    vector: new Point2(0, 1),
     frame: "world",
     ...over,
   };
@@ -227,7 +226,7 @@ describe("repair_mechanism", () => {
     const dimension = {
       type: "dimension-edge",
       id: id("d1"),
-      position: P(0, 0),
+      position: new Point2(0, 0),
       edgeID: GHOST_ID,
       value: 10,
     } as ConstraintElement;

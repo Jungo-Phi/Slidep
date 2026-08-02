@@ -12,6 +12,7 @@ import {
   NodeElement,
   PivotElement,
   SlidepElement,
+  ViewportState,
 } from "../../types";
 import {
   attach_gear_to_belt,
@@ -73,6 +74,7 @@ export function handle_placing_element(
   mechanicalElements: MechanicalElement[],
   constraintElements: ConstraintElement[],
   loads: LoadElement[],
+  viewport: ViewportState,
 ): MouseDownResult {
   switch (state.type) {
     case "PlacingBeamStart":
@@ -132,9 +134,9 @@ export function handle_placing_element(
 
     case "PlacingForceStart":
       if (hoveredPart.type === "Void") return { actions: [] };
-      // The body of a beam takes a distributed force; its endpoints (and any
-      // node) take a point force — same tool, the hovered part decides. Mirrors
-      // the two ghosts drawn for this state in `draw-canvas.ts`.
+      // The body of a beam takes a distributed force;
+      // its endpoints (and any node) take a point force — same tool, the hovered part decides.
+      // Mirrors the two ghosts drawn for this state in `draw-canvas.ts`.
       if (hoveredPart.type === "Edge" && hoveredPart.part === "body")
         return {
           actions: [],
@@ -154,6 +156,7 @@ export function handle_placing_element(
         state.startHover,
         hoveredPart.position,
         mechanicalElements,
+        viewport,
       );
       if (!newForce)
         return { actions: [], newCanvasState: { type: "PlacingForceStart" } };
@@ -180,6 +183,7 @@ export function handle_placing_element(
         state.startHover,
         hoveredPart.position,
         mechanicalElements,
+        viewport,
       );
       if (!newDF) return { actions: [] };
       const actions: Action[] = [];
@@ -209,7 +213,7 @@ export function handle_placing_element(
         crypto.randomUUID() as ID,
         state.startHover,
         hoveredPart.position,
-        mechanicalElements,
+        viewport,
       );
       if (!newMoment) return { actions: [] };
       const actions: Action[] = [];
@@ -264,9 +268,8 @@ type PlacingElementGroupState = Extract<
 >;
 
 /**
- * The axle a gear started on this part would join, if that part is a node that
- * already turns. Reusing it spares the takeover a fresh pivot would perform, in
- * which the node — and its motor, its anchor, its name — is deleted.
+ * The axle a gear started on this part would join, if that part is a node that already turns.
+ * Reusing it spares the takeover (motor, anchor, name) a fresh pivot would perform.
  */
 export function axle_under(
   part: HoveredPart,
@@ -306,9 +309,9 @@ function handle_place_element(
     }
   }
 
-  // Add a gear to the belt route being defined. The gear the gesture started on
-  // is folded in only at finalisation (`attached_gears_with_start`), so it never
-  // needs a next-gear click to be caught.
+  // Add a gear to the belt route being defined.
+  // The gear the gesture started on is folded in only at finalisation (`attached_gears_with_start`),
+  // so it never needs a next-gear click to be caught.
   if (state.type === "PlacingBeltEnd" && hoveredPart.type === "GearTooth") {
     const newAttachedGearsIDs = [...state.attachedGearsIDs];
     const hoveredGear = get_mechanical_element_from_id(

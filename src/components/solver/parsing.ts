@@ -1114,7 +1114,9 @@ export function get_links_simulation(
     if (element.type !== "pivot" || !element.motor) return;
     // Only grounded motors (parentBeamID === undefined) for now.
     if (element.motor.parentBeamID !== undefined) return;
-    const omega = element.motor.speed * ((2 * Math.PI) / 60); // rad/s
+    // Negated: a positive speed reads clockwise on screen (the sense `draw_motor`
+    // shows), which is a *decreasing* angle in the model's counter-clockwise frame.
+    const omega = -element.motor.speed * ((2 * Math.PI) / 60); // rad/s
 
     // Drive each rotating beam's orientation about the pivot.
     element.rotatingEdgesIDs.forEach((beamId) => {

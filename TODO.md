@@ -4,41 +4,53 @@
 
 ### À faire rapidement
 
-- DimensionBelt ne met pas à jour la dimension de belt _open_
-- MovingBeltBody sur un gear ne se fait pas avec le bon sens de rotation **quand les 2 sens sont possibles**
+- Trajectoires sur les edges
+- Bouton "Recentrer" calcul à partir des positions des éléments
+- Ajouter un délais (2s) avant d'afficher "mécanisme(s) exporté(s)"
+- Ne pas afficher les LOADS en cinématique
 
-- Boucler le replay (et choisir le temps de rebouclage)
+- Changer une dimension fait apparaitre les autres contraintes, c'est bizzare
+- Changer de frame en déplaçant un load ?
+- grille "adaptative"
 
-- Zoom sans scale les éléments eux-même
-- Mirror Y le canvas
-- Taille minimale au placement à adapter à l'échelle, mais pour geometric-solver : La règle de taille minimale doit être traitée comme une contrainte interne au composant, qui ne s'active que lorsque le solveur tente d'écrire une nouvelle valeur pour ce composant.
-
-- Repenser les "Contraintes non respectées" :
-  - Afficher uniquement les moteurs ? (OU sur la liste des moteurs déjà affichés ?)
-  - Afficher les contraintes non respectées en colorant les éléments (rouge ?)
-  - Distance d'attachement/détachement poulie/courroie doit dépendre de la vitesse relative
-  - Les changements de vitesse de moteurs en simulation doivent-il être enregistrés ?
-  - Passer la simulation en Rust pour accélérer ?
+**Snapping**
 
 - Snap _snap relatif et angulaire.md_:
   - Supprimer SNAP_MATCH_RAD pour ne garder que SNAP_TOLERANCE_RAD (et le mettre avec les autres constantes et en deg) OU utiliser "distance à droite" plutot qu'un angle ?
   - SnapToGrid adapté aux radius
   - Hover loads : angle de snap sur edge pas tout à fait aligné
 
+- Taille minimale au placement à adapter à l'échelle, mais pour geometric-solver : La règle de taille minimale doit être traitée comme une contrainte interne au composant, qui ne s'active que lorsque le solveur tente d'écrire une nouvelle valeur pour ce composant.
+
+- Snapping sur les dimensions (au milieu)
+
 - Améliorer l'alignement d'éléments :
-  - En cinématique, quand l'alignement n'est juste pas parfait, le défaut ne s'affiche pas, mais le mécanisme "bouge tout seul".
-  - Snap to grid (modifié) aussi quand on hover quelque chose
+  - PROBLÉMATIQUE : En cinématique, quand l'alignement n'est juste pas parfait, le défaut ne s'affiche pas, mais le mécanisme "bouge tout seul".
+  - Snap to grid devrait aussi se faire quand on hover déjà quelque chose
   - Connecter plusieurs éléments en même temps s'ils sont alignés ? (beamBodyHover)
 
-- Panneau mesures:
-  - Remplacer les switchs d'ovelays par des icons "oeuil"/"oeuil barré"
-  - "Esc", "CTRL+Y/Z" et hover sur le canvas doit marcher avec le OnCanvasProbeMetricSelector
-  - À la fermeture du menu ProbeMetricSelector, on voit un petit rectangle sur 1 frame
-  - Ajouter l'icon "Probe" au dessus des check-box de mesure (et reprendre le même style que celui du canvas)
-  - Pas de sonde sur les courroies
-  - Mettre l'icon Probe dans la section Mesures
-  - Choisir x/y/norme pour les mesures superposées
-  - Possible de hover sur probe quand placingProbe (pareil pour gearRatio et Dimension)
+---
+
+- geometric-solver, critère d'arrêt différent : convergence de position, ralentissement ok /!\
+
+**Repenser les "Contraintes non respectées"**
+
+- Afficher uniquement les moteurs ? (OU sur la liste des moteurs déjà affichés ?)
+- Afficher les contraintes non respectées en colorant les éléments (rouge ?)
+- Distance d'attachement/détachement poulie/courroie doit dépendre de la vitesse relative
+- Les changements de vitesse de moteurs en simulation doivent-il être enregistrés ?
+- Passer la simulation en Rust pour accélérer ?
+
+**Panneau mesures**
+
+- Remplacer les switchs d'ovelays par des icons "oeuil"/"oeuil barré"
+- "Esc", "CTRL+Y/Z" et hover sur le canvas doit marcher avec le OnCanvasProbeMetricSelector
+- À la fermeture du menu ProbeMetricSelector, on voit un petit rectangle sur 1 frame
+- Ajouter l'icon "Probe" au dessus des check-box de mesure (et reprendre le même style que celui du canvas)
+- Pas de sonde sur les courroies
+- Mettre l'icon Probe dans la section Mesures
+- Choisir x/y/norme pour les mesures superposées
+- Possible de hover sur probe quand placingProbe (pareil pour gearRatio et Dimension)
 
 **Canvas**
 
@@ -47,17 +59,24 @@
   - Afficher les trajectoires des gears (bords tangeants au mouvement) ?
   - Ne PAS afficher les trajectoires des éléments ancrés.
   - Option d'afficher la trajectoire avec des points
-  - Afficher les couches de trajectoires (plus foncé ?)
-- Flèche sur moteur
+  - Afficher les trajectoires anciennes de plus en plus transparentes
+- Accepter les valeurs négatives pour les loads sur le OnCanvasValueEditor
+- Parsing loads : "150000 N" => "150 kN"
 - Afficher valeur de masses sur le canvas
 - Afficher le point grabbé en simulation
-- Afficher le point de contact pour placingGearRadius sur belt
 - Theme transition : certaines couleurs changent instantanément (grille + autres éléments spéciaux du canvas)
 - Les couleurs des selected loads ne sont pas assez différenciée
 - Parfois, la couleur de fond des mécanismes de gallerie n'est pas la bonne
 - Afficher une snack-bar "Les forces ne sont pas prisent en compte en cinématique" là première fois qu'on ouvre un mécanisme avec un/des loads, par mécanisme. Ou pour les mesures de forces.
+- MovingBeltBody sur un gear ne se fait pas avec le bon sens de rotation **quand les 2 sens sont possibles**
 - Sélectionner une contrainte fait un shadow sur les probes
 - Hover une probe devrait hover l'élément aussi
+- Changer le sens des moteurs en cliquant sur la flèche
+- Sélectionner les dimensions (sur la flèche) ?
+- Régler les TODOs de draw
+
+- Afficher le point de contact pour placingGearRadius sur belt
+- Wrap VS windings ?
 
 **Panneaux et UI**
 
@@ -79,6 +98,7 @@
 
 **Simulation**
 
+- DimensionBelt ne met pas à jour la dimension de belt _open_
 - Simuler un moteur non grounded (parentBeamID)
 - default damper length moves on simulation start
 - La simulation se met parfois en pause pour on ne sait quoi
@@ -92,7 +112,9 @@
 
 **Architecture et refactor**
 
+- Ne pas ajouter une action à l'historique si elle ne change rien (ex: newValue = oldValue)
 - Supprimer des fonctions simples de load-utils
+- Expliciter _ScreenPoint_ et _WorldPoint_ partout
 - Supprimer les duplications de code entre du placement d'éléments le canvas state reducer et draw-canvas
 - Créer un CanvasState "PlacingElement", elementType (fusion de 15 états)
 - unifier la méthode de catégories de canvasState dans get-hover et placing-element-actions
@@ -134,7 +156,6 @@
 
 **Canvas, hover et snap**
 
-- Bouton "Recentrer" calcul à partir des positions des éléments
 - Preview des éléments déconnectés au hover de déconnexion (après le chantier courroie : réutiliser le mécanisme d'état visé porté par le canvasState et retiré du tracé de preview)
 - Preview de la courroie explusée d'un gear ?
 
@@ -144,7 +165,7 @@
 - Sélection multiple d'éléments du même type -> modifier paramètres simultanément (IU adaptée + actions multiples)
 - Clicker sur l'onglet "éléments" quand un élément est sélectionné le désélectionne et passe à l'affichage en liste
 - Ajouter le copié-collé
-- Symétrie / Scale d'éléments multiples.
+- Symétrie / Rotation / Scale d'éléments multiples.
 
 **Panneaux et UI**
 
@@ -160,6 +181,7 @@
 - Afficher des "stand in" pendant que les icons chargent
 - Faire le panneau de paramètre propre
 - Unifier les tailles des éléments UI
+- Ajouter bouton(s) loupe pour zoomer
 - Import de mécanismes en drag & drop depuis l'explorateur de fichiers
 - Propriétés du mécanisme:
   - Édition du nom du mécanisme dans la gallerie
@@ -284,6 +306,7 @@
 
 **Export et divers**
 
+- Boucler le replay (et choisir le temps de rebouclage)
 - Exporter une animation : générer .gif, .mp4 de la simulation (options durée, FPS, zoom)
 - Logo animé
 - Animer un mécanisme qui arrive sur l'écran après 10 min d'inactivité

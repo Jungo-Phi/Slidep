@@ -41,10 +41,9 @@ import {
   overlay_shown,
 } from "../../types/element";
 import {
-  frame2world,
-  node_candidate_edges,
-  world2frame,
-} from "../../utils/load-geom";
+  frame2world_transform,
+  world2frame_transform,
+} from "../../utils/load-frame";
 import { ProbeMetricSelector } from "../canvas/ProbeMetricSelector";
 import VectorInput from "./components/VectorInput";
 import GroundSwitch from "./components/GroundSwitch";
@@ -72,8 +71,9 @@ import ElementMeasures from "./ElementMeasures";
 import { OVERLAY_LABELS, set_overlay } from "./overlay-actions";
 import { element_to_hovered_part, linked_constraint } from "../canvas/utils";
 import { measure_belt_length } from "../../utils/belt-geom";
-import { DIMENSION_SPECS } from "../../constants/rendering-specs";
+import { DIM } from "../../constants/rendering-specs";
 import React from "react";
+import { node_candidate_edges } from "../../utils/load-frame";
 
 interface MotorSectionProps {
   pivot: PivotElement;
@@ -263,7 +263,7 @@ const create_length_dimension = (
   const offset = positionEnd
     .sub(positionStart)
     .perp()
-    .scale2length(DIMENSION_SPECS.AUTO_DIMENSION_OFFSET);
+    .with_length(DIM.AUTO_DIMENSION_OFFSET);
   const position = mid.add(offset);
   if (element.type === "belt") {
     return {
@@ -285,7 +285,7 @@ const create_length_dimension = (
 
 const create_radius_dimension = (gear: GearElement): ConstraintElement => {
   const position = gear.position.add(
-    ONE.scale2length(gear.radius + DIMENSION_SPECS.AUTO_DIMENSION_OFFSET),
+    ONE.with_length(gear.radius + DIM.AUTO_DIMENSION_OFFSET),
   );
   return {
     type: "dimension-radius",
@@ -329,18 +329,30 @@ const frame_change_actions = (
     { type: "SetLoadFrame", id: load.id, newFrame, oldFrame: load.frame },
   ];
   if (load.type === "force") {
-    const world = frame2world(load.vector, load.frame, mechanicalElements);
+    const world = frame2world_transform(
+      load.vector,
+      load.frame,
+      mechanicalElements,
+    );
     actions.push({
       type: "ChangeForce",
       id: load.id,
-      newVector: world2frame(world, newFrame, mechanicalElements),
+      newVector: world2frame_transform(world, newFrame, mechanicalElements),
       oldVector: load.vector,
     });
   } else {
-    const world = frame2world(load.direction, load.frame, mechanicalElements);
+    const world = frame2world_transform(
+      load.direction,
+      load.frame,
+      mechanicalElements,
+    );
     actions.push(
       change_distributed_force(load, {
-        newDirection: world2frame(world, newFrame, mechanicalElements),
+        newDirection: world2frame_transform(
+          world,
+          newFrame,
+          mechanicalElements,
+        ),
       }),
     );
   }
@@ -592,7 +604,7 @@ const LoadsSection: React.FC<LoadsSectionProps> = ({
                           {
                             type: "ChangeForce",
                             id: load.id,
-                            newVector: load.vector.scale2length(mag),
+                            newVector: load.vector.with_length(mag),
                             oldVector: load.vector,
                           },
                         ],

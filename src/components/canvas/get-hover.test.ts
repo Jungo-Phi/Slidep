@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { get_hovered_part } from "./get-hover";
-import { Point2 } from "../../types/point2";
+import { Point2, ZERO } from "../../types/point2";
 import type { CanvasState } from "../../types/canvas-state";
 import { names_element, type HoveredPart } from "../../types/hovered-part";
 import {
@@ -18,6 +18,7 @@ import {
   MomentElement,
   PivotElement,
   SpringElement,
+  ViewportState,
 } from "../../types";
 
 /**
@@ -29,7 +30,8 @@ import {
  * in that document is a regression.
  */
 
-const id = (s: string) => `00000000-0000-0000-0000-${s.padStart(12, "0")}` as ID;
+const id = (s: string) =>
+  `00000000-0000-0000-0000-${s.padStart(12, "0")}` as ID;
 const P = (x: number, y: number) => new Point2(x, y);
 
 const AXLE = id("a1");
@@ -105,7 +107,9 @@ const spring: SpringElement = {
 const mass: MassElement = {
   type: "mass",
   id: MASS,
-  probes: [{ metric: "position", components: { x: true, y: true, norm: false } }],
+  probes: [
+    { metric: "position", components: { x: true, y: true, norm: false } },
+  ],
   overlays: {},
   position: P(600, 0),
   isGrounded: false,
@@ -202,6 +206,8 @@ const LOADS: LoadElement[] = [force, moment];
 
 const VISIBLE_CONSTRAINTS = new Map<ID, number>([[DIM, 1]]);
 
+const VIEWPORT: ViewportState = { scale: 1, pan: ZERO };
+
 /** Where the cursor is put, one per part the hover can resolve. */
 const PROBES: [string, Point2][] = [
   ["axle centre", P(0, 0)],
@@ -241,7 +247,12 @@ const edgeHover = (id: ID, at: Point2): HoveredPart => ({
 /** One representative payload per canvas state. */
 const STATES: CanvasState[] = [
   { type: "Selecting" },
-  { type: "SelectingMultiple", startPos: P(0, 0), elementIDs: [], hoveredElementIDs: [] },
+  {
+    type: "SelectingMultiple",
+    startPos: P(0, 0),
+    elementIDs: [],
+    hoveredElementIDs: [],
+  },
   { type: "SelectedMultiple", elementIDs: [BEAM] },
   { type: "SelectedElement", elementID: BEAM },
   { type: "MovingNode", elementID: JOIN },
@@ -253,7 +264,12 @@ const STATES: CanvasState[] = [
   { type: "MovingForce", elementID: FORCE },
   { type: "MovingDistributedForce", elementID: FORCE, part: "start" },
   { type: "MovingMoment", elementID: MOMENT },
-  { type: "MovingSelectionMultiple", elementIDs: [BEAM], grabbedID: BEAM, hasMoved: false },
+  {
+    type: "MovingSelectionMultiple",
+    elementIDs: [BEAM],
+    grabbedID: BEAM,
+    hasMoved: false,
+  },
   { type: "Erasing" },
   { type: "ErasingMultiple", startPos: P(0, 0), hoveredElementIDs: [] },
   { type: "PlacingBeamStart" },
@@ -263,7 +279,11 @@ const STATES: CanvasState[] = [
   { type: "PlacingDamperStart" },
   { type: "PlacingDamperEnd", startHover: nodeHover(AXLE, P(0, 0)) },
   { type: "PlacingBeltStart" },
-  { type: "PlacingBeltEnd", startHover: nodeHover(AXLE, P(0, 0)), attachedGearsIDs: [] },
+  {
+    type: "PlacingBeltEnd",
+    startHover: nodeHover(AXLE, P(0, 0)),
+    attachedGearsIDs: [],
+  },
   { type: "PlacingMotor" },
   { type: "PlacingPivot" },
   { type: "PlacingSlider" },
@@ -326,7 +346,9 @@ const round = (n: number) => Math.round(n * 100) / 100;
 function describe_hover(part: HoveredPart): string {
   const at = `(${round(part.position.x)}, ${round(part.position.y)})`;
   if (part.type === "Void")
-    return part.rejected ? `Void ${at} rejected:${part.rejected}` : `Void ${at}`;
+    return part.rejected
+      ? `Void ${at} rejected:${part.rejected}`
+      : `Void ${at}`;
   if (part.type === "BeltClosure") return `BeltClosure ${at}`;
   const who = NAMES.get(part.id) ?? part.id;
   const flags: string[] = [];
@@ -351,6 +373,7 @@ describe("get_hovered_part", () => {
           VISIBLE_CONSTRAINTS,
           cursor,
           state,
+          VIEWPORT,
         );
         lines.push(`   ${label.padEnd(22)} → ${describe_hover(hovered)}`);
       }
@@ -368,6 +391,7 @@ describe("probe badge", () => {
       VISIBLE_CONSTRAINTS,
       cursor,
       state,
+      VIEWPORT,
     );
   const BADGE = P(600, 20);
 

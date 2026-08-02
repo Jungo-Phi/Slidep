@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from "react";
 import { TextField, Typography, Box } from "@mui/material";
-import { Point2 } from "../../types/point2";
 import { COLORS } from "../../constants/rendering-specs";
 import { value2ratio } from "../../utils";
+import { ScreenPoint } from "../../types";
 
 /**
  * How the editor lays out its inputs.
@@ -17,7 +17,7 @@ interface OnCanvasValueEditorProps {
   /** Value shown when the editor opens. In "ratio" mode it is split into parts. */
   initialValue: number;
   /** Screen-space anchor (the editor centers itself on this point). */
-  position: Point2;
+  position: ScreenPoint;
   /** Text drawn after the input (e.g. "°", "N"). "single" mode only. */
   suffix?: string;
   /**

@@ -3,16 +3,48 @@ import {
   BeamElement,
   CanvasState,
   ConstraintElement,
+  EdgeElement,
   HoveredPart,
   ID,
   LoadElement,
   MechanicalElement,
   NodeElement,
+  Point2,
   PropertiesPanelTab,
+  ScreenPoint,
   UnionElement,
+  UP,
+  ViewportState,
   ZERO,
 } from "../../types";
 import { get_mechanical_element_from_id } from "../mechanism/connect-actions";
+import { DIM } from "../../constants/rendering-specs";
+import { world2screen } from "../../utils/viewport";
+
+/**
+ * Screen position of an element's probe badge: above its centre, or above the
+ * middle of an edge. Drawing and hit-testing both read it here, so the badge is
+ * picked exactly where it is drawn.
+ *
+ * The offset is a screen distance, so the badge keeps its gap to the element at
+ * any zoom.
+ */
+export function probe_badge_position(
+  element: MechanicalElement,
+  viewport: ViewportState,
+): ScreenPoint {
+  const anchor =
+    "position" in element
+      ? element.type === "gear"
+        ? element.position.add(UP.mul(element.radius))
+        : (element as NodeElement).position
+      : (element as EdgeElement).positionStart.lerp(
+          (element as EdgeElement).positionEnd,
+          0.5,
+        );
+  const screen = world2screen(anchor, viewport);
+  return new Point2(screen.x, screen.y - DIM.PROBE_OFFSET);
+}
 
 /** All constraint element types (dimensions + geometric badges). */
 const CONSTRAINT_TYPES = new Set<ConstraintElement["type"]>([

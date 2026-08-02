@@ -1,7 +1,7 @@
 import { HoveredPart } from "../types/hovered-part";
 import { ID } from "./element";
 import type { Link } from "./kinematic-solver-links";
-import type { Point2 } from "./point2";
+import { WorldPoint } from "./mechanism";
 
 // Define the possible types of canvas states
 export type CanvasStateType =
@@ -73,7 +73,7 @@ export type CanvasState =
   | { type: "Selecting" } // Selection tool active
   | {
       type: "SelectingMultiple";
-      startPos: Point2;
+      startPos: WorldPoint;
       elementIDs: ID[];
       hoveredElementIDs: ID[];
     } // User has started a drag to select multiple elements
@@ -82,7 +82,7 @@ export type CanvasState =
       type: "SelectedElement";
       elementID: ID;
       pendingHit?: HoveredPart;
-      downPos?: Point2;
+      downPos?: WorldPoint;
     }
   | { type: "MovingNode"; elementID: ID }
   | { type: "MovingEdgeStartPoint"; elementID: ID }
@@ -117,7 +117,7 @@ export type CanvasState =
       hasMoved: boolean;
     }
   | { type: "Erasing" }
-  | { type: "ErasingMultiple"; startPos: Point2; hoveredElementIDs: ID[] }
+  | { type: "ErasingMultiple"; startPos: WorldPoint; hoveredElementIDs: ID[] }
   | { type: "PlacingBeamStart" }
   | { type: "PlacingBeamEnd"; startHover: HoveredPart }
   | { type: "PlacingSpringStart" }
@@ -150,7 +150,7 @@ export type CanvasState =
   | {
       type: "PlacingProbeMetrics";
       elementID: ID;
-      position: Point2;
+      position: WorldPoint;
       armed?: boolean;
     }
   | { type: "DimensionStart" } // Dimensioning tool active

@@ -6,7 +6,6 @@ import { Point2 } from "../../types/point2";
 import { DEFAULT_METADATA, Mechanism } from "../../types/mechanism";
 import type { BeltElement, ID, MechanicalElement } from "../../types";
 
-const P = (x: number, y: number) => new Point2(x, y);
 const id = (s: string) => s as ID;
 
 const BELT = id("blt");
@@ -21,8 +20,8 @@ const belt = (over: Partial<BeltElement> = {}): BeltElement => ({
   id: BELT,
   probes: [],
   overlays: {},
-  positionStart: P(0, 0),
-  positionEnd: P(0, 0),
+  positionStart: new Point2(0, 0),
+  positionEnd: new Point2(0, 0),
   fixedNodeStartID: JOIN,
   fixedNodeEndID: JOIN,
   attachedGearsIDs: [
@@ -71,7 +70,7 @@ function closed_belt(): MechanicalElement[] {
     id: gid,
     probes: [],
     overlays: {},
-    position: P(x, 0),
+    position: new Point2(x, 0),
     angle: 0,
     radius: 30,
     parentAxleID: axle,
@@ -84,7 +83,7 @@ function closed_belt(): MechanicalElement[] {
     id: aid,
     probes: [],
     overlays: {},
-    position: P(x, 0),
+    position: new Point2(x, 0),
     isGrounded: false,
     rotatingEdgesIDs: [],
     fixedGearsIDs: [gid],
@@ -100,7 +99,7 @@ function closed_belt(): MechanicalElement[] {
       id: JOIN,
       probes: [],
       overlays: {},
-      position: P(0, 0),
+      position: new Point2(0, 0),
       isGrounded: false,
       fixedEdgesIDs: [BELT],
     },
@@ -111,7 +110,7 @@ function closed_belt(): MechanicalElement[] {
 function mechanism(mechanicalElements: MechanicalElement[]): Mechanism {
   return {
     metadata: DEFAULT_METADATA,
-    viewport: { zoom: 1, pan: P(0, 0) },
+    viewport: { scale: 1, pan: new Point2(0, 0) },
     mechanicalElements,
     constraintElements: [],
     loads: [],

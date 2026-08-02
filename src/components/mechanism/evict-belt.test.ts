@@ -5,9 +5,13 @@ import { actionReducer } from "./action-reducer";
 import { validate_mechanism } from "../../utils/validate-mechanism";
 import { Point2 } from "../../types/point2";
 import { DEFAULT_METADATA, Mechanism } from "../../types/mechanism";
-import type { BeltElement, GearElement, ID, MechanicalElement } from "../../types";
+import type {
+  BeltElement,
+  GearElement,
+  ID,
+  MechanicalElement,
+} from "../../types";
 
-const P = (x: number, y: number) => new Point2(x, y);
 const id = (s: string) => s as ID;
 
 const gear = (
@@ -20,7 +24,7 @@ const gear = (
   id: id(gid),
   probes: [],
   overlays: {},
-  position: P(x, 0),
+  position: new Point2(x, 0),
   angle: 0,
   radius: 30,
   parentAxleID: id(axle),
@@ -34,7 +38,7 @@ const axle = (aid: string, gid: string, x: number): MechanicalElement => ({
   id: id(aid),
   probes: [],
   overlays: {},
-  position: P(x, 0),
+  position: new Point2(x, 0),
   isGrounded: false,
   rotatingEdgesIDs: [],
   fixedGearsIDs: [id(gid)],
@@ -46,8 +50,8 @@ const belt = (bid: string, gears: string[], y: number): BeltElement => ({
   id: id(bid),
   probes: [],
   overlays: {},
-  positionStart: P(-300, y),
-  positionEnd: P(300, y),
+  positionStart: new Point2(-300, y),
+  positionEnd: new Point2(300, y),
   fixedNodeStartID: undefined,
   fixedNodeEndID: undefined,
   attachedGearsIDs: gears.map((g) => ({ id: id(g), direction: false })),
@@ -63,7 +67,7 @@ function two_belts(): MechanicalElement[] {
     gear("g2", "ax2", 100, "b1"),
     belt("b1", ["g1", "g2"], 0),
     axle("ax3", "g3", 0),
-    { ...gear("g3", "ax3", 0, "b2"), position: P(0, 400) },
+    { ...gear("g3", "ax3", 0, "b2"), position: new Point2(0, 400) },
     belt("b2", ["g3"], 400),
   ];
 }
@@ -71,7 +75,7 @@ function two_belts(): MechanicalElement[] {
 function mechanism(mels: MechanicalElement[]): Mechanism {
   return {
     metadata: DEFAULT_METADATA,
-    viewport: { zoom: 1, pan: P(0, 0) },
+    viewport: { scale: 1, pan: new Point2(0, 0) },
     mechanicalElements: mels,
     constraintElements: [],
     loads: [],

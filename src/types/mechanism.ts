@@ -28,18 +28,20 @@ export const DEFAULT_METADATA: MechanismMetadata = {
   createdAt: 0,
   modifiedAt: 0,
   tags: [],
-  lastSimulationMode: "kinematic", // TODO : passer en "dynamic" quand le mode existe
+  lastSimulationMode: "kinematic", // TODO : passer en "dynamic" quand le mode sera implémenté
 };
 
-export type ScreenPoint = Point2;
-export type WorldPoint = Point2;
+/** Screen space : Distances are expressed in pixels (px), y points down. */
+export type ScreenPoint = Point2<"screen">;
+/** World space : Distances are expressed in millimeters (mm), y points up. */
+export type WorldPoint = Point2<"world">;
 
 export type ViewportChange =
   | { type: "Pan"; delta: ScreenPoint }
   | { type: "Zoom"; deltaY: number; center: ScreenPoint };
 
 export interface ViewportState {
-  zoom: number;
+  scale: number;
   pan: ScreenPoint;
 }
 

@@ -153,8 +153,7 @@ export const HIT_TOLERANCE = {
   EDGE: 10,
   NODE: 14,
   CONSTRAINT: 20,
-  SNAP_TO_GRID: 8,
-  /** Probe badge, drawn at radius 6 and offset well clear of its host. */
+  SNAP: 8,
   PROBE: 10,
   // Distance (px écran) que la souris doit parcourir depuis le mouseDown avant
   // qu'un clic ne bascule en déplacement. En dessous, c'est un clic ; au-dessus,
@@ -179,7 +178,7 @@ export const LOAD_SCALING = {
   PX_SCALE: 50,
   /** Log base of force scaling. Extending the drawn length by `PX_SCALE` will multiply the force value by `SCALE_BASE`. */
   LOG_BASE: 2,
-  /** Minimal force value (N). */
+  /** Minimal force value : 0.1 (N). */
   MIN_VALUE: 0.1,
   /** Minimal drawn force length (world px). */
   MIN_PX: 40,
@@ -292,33 +291,34 @@ export const DIM = {
   GROUND_BAR_HEIGHT: 6,
   GROUND_VERTICAL_OFFSET: 6,
 
+  // Dimensions
+  HELPER_LINE_BASE_OFFSET: 7,
+  AUTO_DIMENSION_OFFSET: 50,
+
   // Loads
+  ARROW_BASE_OFFSET: 5,
   ARROW_HEAD_OFFSET: 3,
-  VECTOR_VALUE_OFFSET: 20,
-  MOMENT_MIN_RADIUS: 20,
-  MOMENT_MAX_RADIUS: 40,
+  LOAD_VALUE_OFFSET: 20,
   NB_DISTRIBUTED_FORCE_ARROWS: 5,
 
   // Probe
   PROBE_OFFSET: 20,
   PROBE_RADIUS: 6,
+
+  // Trajectory
+  TRAJECTORY_LINE_WIDTH: 1.5,
+  TRAJECTORY_DOT_RADIUS: 2.5,
+  TRAJECTORY_DOT_STEP: 8,
 } as const;
 
-export const DIMENSION_SPECS = {
+export const TEXT_SPECS = {
   TEXT_FONT: "16px Arial",
   TEXT_ALIGN: "center",
   TEXT_BASELINE: "middle",
-  TEXT_PADDING: 3,
-  TEXT_HEIGHT: 18,
-  OFFSET_LINE_WIDTH: 1,
-  AUTO_DIMENSION_OFFSET: 50,
 } as const;
 
 /** Ordre de dessin des éléments sur le canvas */
 export const DRAWING_ORDER: (UnionElement["type"] | "probe")[] = [
-  "distributed-force",
-  "force",
-  "moment",
   "gear",
   "beam",
   "damper",
@@ -329,6 +329,10 @@ export const DRAWING_ORDER: (UnionElement["type"] | "probe")[] = [
   "slider",
   "pivot",
   "mass",
+  "probe",
+  "distributed-force",
+  "force",
+  "moment",
   "dimension-edge-to-node",
   "dimension-node-to-node",
   "dimension-edge",
@@ -343,5 +347,36 @@ export const DRAWING_ORDER: (UnionElement["type"] | "probe")[] = [
   "parallel",
   "equal",
   "gear-ratio",
+];
+
+/** Ordre de hover des éléments sur le canvas */
+export const HOVER_ORDER: (UnionElement["type"] | "probe")[] = [
+  "gear-ratio",
+  "equal",
+  "parallel",
+  "normal",
+  "vertical-align-nodes",
+  "vertical-align-edge",
+  "horizontal-align-nodes",
+  "horizontal-align-edge",
+  "dimension-belt",
+  "dimension-radius",
+  "dimension-angle",
+  "dimension-edge",
+  "dimension-node-to-node",
+  "dimension-edge-to-node",
   "probe",
+  "mass",
+  "pivot",
+  "slider",
+  "slidep",
+  "join",
+  "belt",
+  "spring",
+  "damper",
+  "beam",
+  "moment",
+  "force",
+  "distributed-force",
+  "gear",
 ];

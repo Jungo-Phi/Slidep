@@ -6,7 +6,6 @@ import { Point2 } from "../../types/point2";
 import { DEFAULT_METADATA, Mechanism } from "../../types/mechanism";
 import type { Action, ID, MechanicalElement } from "../../types";
 
-const P = (x: number, y: number) => new Point2(x, y);
 const id = (s: string) => s as ID;
 
 const JOIN = id("j1");
@@ -17,7 +16,7 @@ const BEAM = id("bm1");
 function mechanism(mechanicalElements: MechanicalElement[]): Mechanism {
   return {
     metadata: DEFAULT_METADATA,
-    viewport: { zoom: 1, pan: P(0, 0) },
+    viewport: { scale: 1, pan: new Point2(0, 0) },
     mechanicalElements,
     constraintElements: [],
     loads: [],
@@ -26,7 +25,7 @@ function mechanism(mechanicalElements: MechanicalElement[]): Mechanism {
   };
 }
 
-const pivot = (elementID: ID, at = P(0, 0)): MechanicalElement => ({
+const pivot = (elementID: ID, at = new Point2(0, 0)): MechanicalElement => ({
   type: "pivot",
   id: elementID,
   probes: [],
@@ -133,7 +132,10 @@ describe("separation_links", () => {
           index: 0,
         },
       ],
-      mechanism([gear(g1, P(0, 0), 30), gear(g2, P(50, 0), 20)]),
+      mechanism([
+        gear(g1, new Point2(0, 0), 30),
+        gear(g2, new Point2(50, 0), 20),
+      ]),
     );
     expect(links).toHaveLength(1);
     const link = links[0];
@@ -155,9 +157,9 @@ describe("separation_links", () => {
           connectID: g2,
           index: 0,
         },
-        { type: "DeleteElement", element: gear(g2, P(50, 0), 20) },
+        { type: "DeleteElement", element: gear(g2, new Point2(50, 0), 20) },
       ],
-      mechanism([gear(g1, P(0, 0), 30)]),
+      mechanism([gear(g1, new Point2(0, 0), 30)]),
     );
     expect(links).toHaveLength(0);
   });
@@ -210,8 +212,8 @@ describe("separation_links", () => {
 describe("applyDistanceConstraint on coincident points", () => {
   const run = (preferredAxis?: Point2) => {
     const positions = new Map([
-      ["a", P(100, 100)],
-      ["b", P(100, 100)],
+      ["a", new Point2(100, 100)],
+      ["b", new Point2(100, 100)],
     ]);
     const masses = new Map([
       ["a", 1],
@@ -230,7 +232,7 @@ describe("applyDistanceConstraint on coincident points", () => {
   };
 
   it("parts them along the preferred axis, symmetrically", () => {
-    const positions = run(P(1, 0));
+    const positions = run(new Point2(1, 0));
     expect(positions.get("a")!.x).toBeCloseTo(90);
     expect(positions.get("b")!.x).toBeCloseTo(110);
     expect(positions.get("a")!.distance_to(positions.get("b")!)).toBeCloseTo(
@@ -249,15 +251,15 @@ describe("applyDistanceConstraint on coincident points", () => {
   // covered the division by zero that would otherwise poison both positions.
   it("leaves a satisfied zero-distance pair alone", () => {
     const positions = new Map([
-      ["a", P(5, 5)],
-      ["b", P(5, 5)],
+      ["a", new Point2(5, 5)],
+      ["b", new Point2(5, 5)],
     ]);
     const masses = new Map([
       ["a", 1],
       ["b", 1],
     ]);
     applyDistanceConstraint(positions, masses, "a", "b", 0);
-    expect(positions.get("a")).toEqual(P(5, 5));
-    expect(positions.get("b")).toEqual(P(5, 5));
+    expect(positions.get("a")).toEqual(new Point2(5, 5));
+    expect(positions.get("b")).toEqual(new Point2(5, 5));
   });
 });

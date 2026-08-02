@@ -6,7 +6,7 @@ import {
   ProbeConfig,
   ProbeMetric,
 } from "../../types/element";
-import { Point2 } from "../../types/point2";
+import { ScreenPoint } from "../../types";
 
 export const PROBE_METRIC_LABELS: Record<ProbeMetric, string> = {
   position: "Position",
@@ -113,7 +113,7 @@ export const ProbeMetricSelector: React.FC<ProbeMetricSelectorProps> = ({
 interface OnCanvasProbeMetricSelectorProps {
   element: MechanicalElement;
   /** Anchor, in screen coordinates. */
-  position: Point2;
+  position: ScreenPoint;
   /** Called with the element's new probes each time a metric is toggled. */
   onToggle: (newProbes: ProbeConfig[]) => void;
   onClose: () => void;

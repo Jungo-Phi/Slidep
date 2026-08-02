@@ -11,7 +11,6 @@ import type {
   MechanicalElement,
 } from "../../types";
 
-const P = (x: number, y: number) => new Point2(x, y);
 const id = (s: string) => s as ID;
 
 const BELT = id("blt");
@@ -23,7 +22,7 @@ const join = (jid: ID, over: Partial<JoinElement> = {}): JoinElement => ({
   id: jid,
   probes: [],
   overlays: {},
-  position: P(0, 0),
+  position: new Point2(0, 0),
   isGrounded: false,
   fixedEdgesIDs: [BELT],
   ...over,
@@ -34,8 +33,8 @@ const belt = (over: Partial<BeltElement> = {}): BeltElement => ({
   id: BELT,
   probes: [],
   overlays: {},
-  positionStart: P(0, 0),
-  positionEnd: P(0, 0),
+  positionStart: new Point2(0, 0),
+  positionEnd: new Point2(0, 0),
   fixedNodeStartID: undefined,
   fixedNodeEndID: undefined,
   attachedGearsIDs: [
@@ -55,7 +54,7 @@ describe("close_belt_actions", () => {
   it("mints a fresh junction holding both ends when both are free", () => {
     const actions = close_belt_actions(
       belt(),
-      P(5, 5),
+      new Point2(5, 5),
       [...PULLEYS, belt()],
       [],
     );
@@ -73,7 +72,12 @@ describe("close_belt_actions", () => {
   it("seats a fresh junction on the loop, not under the cursor", () => {
     const b = belt();
     // Well above the loop, so the nearest belt point is the top run at y = -30.
-    const actions = close_belt_actions(b, P(100, -400), [...PULLEYS, b], []);
+    const actions = close_belt_actions(
+      b,
+      new Point2(100, -400),
+      [...PULLEYS, b],
+      [],
+    );
     const join = actions.find((a) => a.type === "CreateElement")!
       .element as JoinElement;
     expect(join.position.x).toBeCloseTo(100);
@@ -84,7 +88,12 @@ describe("close_belt_actions", () => {
   // nearest run rather than left floating between the pulleys.
   it("seats it on the loop from inside too", () => {
     const b = belt();
-    const actions = close_belt_actions(b, P(100, -5), [...PULLEYS, b], []);
+    const actions = close_belt_actions(
+      b,
+      new Point2(100, -5),
+      [...PULLEYS, b],
+      [],
+    );
     const join = actions.find((a) => a.type === "CreateElement")!
       .element as JoinElement;
     expect(join.position.y).toBeCloseTo(-30);
@@ -92,13 +101,13 @@ describe("close_belt_actions", () => {
 
   it("only sets the flag when both ends already share one node", () => {
     const b = belt({ fixedNodeStartID: J1, fixedNodeEndID: J1 });
-    const actions = close_belt_actions(b, P(0, 0), [b, join(J1)], []);
+    const actions = close_belt_actions(b, new Point2(0, 0), [b, join(J1)], []);
     expect(actions).toEqual([{ type: "CloseBelt", id: BELT, closed: true }]);
   });
 
   it("reuses the pinned node and joins the free end to it, no new join", () => {
     const b = belt({ fixedNodeStartID: J1 });
-    const actions = close_belt_actions(b, P(0, 0), [b, join(J1)], []);
+    const actions = close_belt_actions(b, new Point2(0, 0), [b, join(J1)], []);
     expect(actions).toEqual([
       {
         type: "ConnectsFixedNodeEnd",
@@ -117,7 +126,7 @@ describe("close_belt_actions", () => {
       join(J1, { fixedEdgesIDs: [BELT] }),
       join(J2, { fixedEdgesIDs: [BELT] }),
     ];
-    const actions = close_belt_actions(b, P(0, 0), mels, []);
+    const actions = close_belt_actions(b, new Point2(0, 0), mels, []);
     expect(types(actions)).not.toContain("CreateElement");
     // The end's node is absorbed; the belt end is retargeted onto the start's.
     expect(actions).toContainEqual({ type: "DeleteElement", element: mels[2] });
@@ -136,7 +145,7 @@ function loose_belt_on_join(): MechanicalElement[] {
     id: gid,
     probes: [],
     overlays: {},
-    position: P(x, 0),
+    position: new Point2(x, 0),
     angle: 0,
     radius: 30,
     parentAxleID: axle,
@@ -149,7 +158,7 @@ function loose_belt_on_join(): MechanicalElement[] {
     id: aid,
     probes: [],
     overlays: {},
-    position: P(x, 0),
+    position: new Point2(x, 0),
     isGrounded: false,
     rotatingEdgesIDs: [],
     fixedGearsIDs: [gid],
@@ -168,7 +177,7 @@ function loose_belt_on_join(): MechanicalElement[] {
 function mechanism(mechanicalElements: MechanicalElement[]): Mechanism {
   return {
     metadata: DEFAULT_METADATA,
-    viewport: { zoom: 1, pan: P(0, 0) },
+    viewport: { scale: 1, pan: new Point2(0, 0) },
     mechanicalElements,
     constraintElements: [],
     loads: [],

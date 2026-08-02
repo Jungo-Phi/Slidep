@@ -12,7 +12,6 @@ import {
 
 const id = (s: string) =>
   `00000000-0000-0000-0000-${s.padStart(12, "0")}` as ID;
-const P = (x: number, y: number) => new Point2(x, y);
 
 const PIVOT_ID = id("p1");
 const BEAM_ID = id("b1");
@@ -22,7 +21,7 @@ const PIVOT: PivotElement = {
   id: PIVOT_ID,
   probes: [],
   overlays: {},
-  position: P(0, 0),
+  position: new Point2(0, 0),
   isGrounded: false,
   rotatingEdgesIDs: [BEAM_ID],
   fixedGearsIDs: [],
@@ -33,8 +32,8 @@ const BEAM: BeamElement = {
   id: BEAM_ID,
   probes: [],
   overlays: {},
-  positionStart: P(0, 0),
-  positionEnd: P(10, 0),
+  positionStart: new Point2(0, 0),
+  positionEnd: new Point2(10, 0),
   fixedNodeStartID: PIVOT_ID,
   fixedNodeEndID: undefined,
   fixedNodesBodyIDs: [],
@@ -43,7 +42,7 @@ const BEAM: BeamElement = {
 function mechanism(mechanicalElements: MechanicalElement[]): Mechanism {
   return {
     metadata: DEFAULT_METADATA,
-    viewport: { zoom: 1, pan: P(0, 0) },
+    viewport: { scale: 1, pan: new Point2(0, 0) },
     mechanicalElements,
     constraintElements: [],
     loads: [],
@@ -58,7 +57,7 @@ const ORPHAN_GEAR: MechanicalElement = {
   id: id("g1"),
   probes: [],
   overlays: {},
-  position: P(0, 0),
+  position: new Point2(0, 0),
   angle: 0,
   radius: 10,
   parentAxleID: id("absent"),

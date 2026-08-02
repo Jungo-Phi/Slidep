@@ -15,12 +15,11 @@ import {
 
 const id = (s: string) =>
   `00000000-0000-0000-0000-${s.padStart(12, "0")}` as ID;
-const P = (x: number, y: number) => new Point2(x, y);
 
 function emptyMechanism(): Mechanism {
   return {
     metadata: DEFAULT_METADATA,
-    viewport: { zoom: 1, pan: P(0, 0) },
+    viewport: { scale: 1, pan: new Point2(0, 0) },
     mechanicalElements: [],
     constraintElements: [],
     loads: [],
@@ -34,8 +33,8 @@ const BEAM: BeamElement = {
   id: id("beam1"),
   probes: [],
   overlays: {},
-  positionStart: P(0, 0),
-  positionEnd: P(1, 0),
+  positionStart: new Point2(0, 0),
+  positionEnd: new Point2(1, 0),
   fixedNodeStartID: undefined,
   fixedNodeEndID: undefined,
   fixedNodesBodyIDs: [],
@@ -46,7 +45,7 @@ const PIVOT: PivotElement = {
   id: id("pivot1"),
   probes: [],
   overlays: {},
-  position: P(0, 0),
+  position: new Point2(0, 0),
   isGrounded: false,
   rotatingEdgesIDs: [],
   fixedGearsIDs: [],
@@ -57,7 +56,7 @@ const FORCE: ForceElement = {
   id: id("force1"),
   targetID: id("pivot1"),
   anchor: undefined,
-  vector: P(0, -1),
+  vector: new Point2(0, -1),
   frame: "world",
 };
 
@@ -251,7 +250,7 @@ describe("actionReducer — ChangeForce", () => {
           type: "ChangeForce",
           id: id("force1"),
           oldVector: FORCE.vector,
-          newVector: P(1, -2),
+          newVector: new Point2(1, -2),
         },
       ],
       false,
@@ -262,7 +261,7 @@ describe("actionReducer — ChangeForce", () => {
   });
 
   it("restaure l'ancien vecteur (revert=true)", () => {
-    const force = { ...FORCE, vector: P(1, -2) };
+    const force = { ...FORCE, vector: new Point2(1, -2) };
     const mech = { ...emptyMechanism(), loads: [force] };
     const result = actionReducer(
       mech,
@@ -270,8 +269,8 @@ describe("actionReducer — ChangeForce", () => {
         {
           type: "ChangeForce",
           id: id("force1"),
-          oldVector: P(0, -1),
-          newVector: P(1, -2),
+          oldVector: new Point2(0, -1),
+          newVector: new Point2(1, -2),
         },
       ],
       true,
@@ -288,7 +287,7 @@ const DIST_FORCE: DistributedForceElement = {
   type: "distributed-force",
   id: id("df1"),
   targetID: id("beam1"),
-  direction: P(0, -1),
+  direction: new Point2(0, -1),
   magnitudeStart: 2,
   magnitudeEnd: 4,
   frame: "world",
@@ -304,7 +303,7 @@ describe("actionReducer — ChangeDistributedForce", () => {
           type: "ChangeDistributedForce",
           id: id("df1"),
           oldDirection: DIST_FORCE.direction,
-          newDirection: P(1, 0),
+          newDirection: new Point2(1, 0),
           oldMagnitudeStart: 2,
           newMagnitudeStart: 5,
           oldMagnitudeEnd: 4,
@@ -322,7 +321,7 @@ describe("actionReducer — ChangeDistributedForce", () => {
   it("restaure les anciennes valeurs (revert=true)", () => {
     const df0 = {
       ...DIST_FORCE,
-      direction: P(1, 0),
+      direction: new Point2(1, 0),
       magnitudeStart: 5,
       magnitudeEnd: 6,
     };
@@ -333,8 +332,8 @@ describe("actionReducer — ChangeDistributedForce", () => {
         {
           type: "ChangeDistributedForce",
           id: id("df1"),
-          oldDirection: P(0, -1),
-          newDirection: P(1, 0),
+          oldDirection: new Point2(0, -1),
+          newDirection: new Point2(1, 0),
           oldMagnitudeStart: 2,
           newMagnitudeStart: 5,
           oldMagnitudeEnd: 4,
