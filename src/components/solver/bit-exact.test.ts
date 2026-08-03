@@ -57,6 +57,25 @@ const positionRows = (m: Map<string, Point2>): Rows =>
 const scalarRows = (m: Map<string, number>): Rows =>
   [...m.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1)).map(([k, v]) => [k, v]);
 
+/** The same rows, read out of a snapshot's slots. Slots with no value (the reserved grab
+ *  bridges, on a frame that has no grab) are keys the snapshot does not carry. */
+const snapshotRows = (s): { positions: Rows; angles: Rows } => ({
+  positions: positionRows(
+    new Map(
+      s.layout.keys
+        .map((k, i) => [k, new Point2(s.positions[2 * i], s.positions[2 * i + 1])])
+        .filter(([, p]) => !Number.isNaN(p.x)),
+    ),
+  ),
+  angles: scalarRows(
+    new Map(
+      s.layout.angleKeys
+        .map((k, i) => [k, s.angles[i]])
+        .filter(([, a]) => !Number.isNaN(a)),
+    ),
+  ),
+});
+
 /** First free node, in map order: a deterministic grab victim without naming ids. */
 function firstFreeKey(
   positions: Map<string, Point2>,
@@ -72,23 +91,19 @@ function runSimulation(json: string, frames: number, withGrab: boolean) {
     ? firstFreeKey(model.nodes.positions, model.nodes.posMasses)
     : undefined;
   const from = grabKey ? model.nodes.positions.get(grabKey)!.clone() : undefined;
-  let positions: Map<string, Point2> | null = null;
-  let angles: Map<string, number> | null = null;
+  let prev = null;
   for (let i = 0; i < frames; i++) {
     const target =
       from && new Point2(from.x + (37 * (i + 1)) / frames, from.y - (23 * (i + 1)) / frames);
-    const s = step_simulation(
+    prev = step_simulation(
       model,
       i / 60,
-      positions,
-      angles,
+      prev,
       1 / 60,
       target && grabKey ? { key: grabKey, target } : undefined,
     );
-    positions = s.positions;
-    angles = s.angles;
   }
-  return { positions: positionRows(positions!), angles: scalarRows(angles!) };
+  return snapshotRows(prev);
 }
 
 /**
@@ -152,6 +167,10 @@ describe("écart à la référence", () => {
     // Matched by KEY, not by index, so that a change in how nodes are ordered or named is
     // not read as a change in what the solver computes.
     const perScenario: [string, number][] = [];
+    // A key the reference has and the run does not is silently skipped below, so an empty
+    // comparison would read as a perfect one: count what was actually looked at.
+    let expectedKeys = 0;
+    let comparedKeys = 0;
     for (const scenario of Object.keys(expected)) {
       const a = actual[scenario] as Record<string, [string, ...number[]][]>;
       const b = expected[scenario] as Record<string, [string, ...number[]][]>;
@@ -160,7 +179,9 @@ describe("écart à la référence", () => {
         const mine = new Map(a[family].map(([k, ...v]) => [k, v]));
         for (const [key, ...values] of b[family]) {
           const actualValues = mine.get(key);
+          expectedKeys++;
           if (actualValues === undefined) continue;
+          comparedKeys++;
           values.forEach((v, j) => {
             const drift = Math.abs(actualValues[j] - v);
             if (drift > scenarioWorst) scenarioWorst = drift;
@@ -174,7 +195,10 @@ describe("écart à la référence", () => {
     console.log("  |---|---|");
     for (const [scenario, d] of perScenario.sort((x, y) => y[1] - x[1]))
       console.log(`  | ${scenario} | ${d.toExponential(2)} |`);
-    console.log(`\n  pire écart : ${worst.toExponential(3)}`);
+    console.log(
+      `\n  pire écart : ${worst.toExponential(3)} sur ${comparedKeys}/${expectedKeys} clés`,
+    );
+    expect(comparedKeys).toBe(expectedKeys);
 
     // Bit-identical, not "close": the point is to catch a rewrite that computes the same
     // geometry a different way and drifts by a last-place digit.

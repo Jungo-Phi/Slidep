@@ -1,8 +1,9 @@
 import { Mechanism } from "../../types";
-import { KinematicSnapshot } from "../../types/runtime-state";
+import { KinematicSnapshot, SnapshotLayout } from "../../types/runtime-state";
 import { serialize_mechanism } from "../../utils/serialization";
-import { RECORD_DT, SimGrab } from "./kinematic-simulation";
-import { FromRecorder, ToRecorder, revive_snapshot } from "./recorder-protocol";
+import { SimGrab } from "./kinematic-simulation";
+import { FromRecorder, ToRecorder } from "./recorder-protocol";
+import { snapshot_layout } from "./snapshot";
 
 /**
  * The main thread's handle on the recording worker.
@@ -16,9 +17,14 @@ export class RecorderClient {
   private worker: Worker;
   private epoch = 0;
   private queued: KinematicSnapshot[] = [];
-  private stepDt = RECORD_DT;
   /** Where the recording ends, or `null` while nothing has come back yet. */
   private reached: number | null = null;
+  /**
+   * The slots the epoch's snapshots are written in, from the `layout` message the worker
+   * posts on every load. Put back on each arriving snapshot, which is what gives all the
+   * snapshots of one recording the single shared layout `snapshot_at` compares by identity.
+   */
+  private layout: SnapshotLayout | null = null;
 
   constructor() {
     this.worker = new Worker(
@@ -29,9 +35,19 @@ export class RecorderClient {
       const message = event.data;
       // Anything from before the last `load` describes a mechanism that no longer exists.
       if (message.epoch !== this.epoch) return;
-      for (const snapshot of message.snapshots)
-        this.queued.push(revive_snapshot(snapshot));
-      this.stepDt = message.stepDt;
+      if (message.type === "layout") {
+        this.layout = snapshot_layout(message.keys, message.angleKeys);
+        return;
+      }
+      // Messages are delivered in order and the layout is posted on load, so it is here
+      // before any snapshot of its epoch. Reading them without it would silently place
+      // every key at the wrong slot, so they are dropped rather than guessed at.
+      if (!this.layout) {
+        console.error("[recorder worker] snapshots avant leur disposition");
+        return;
+      }
+      for (const wire of message.snapshots)
+        this.queued.push({ ...wire, layout: this.layout });
       this.reached = message.reached;
     };
     // Without these a worker that throws — or a message that fails to clone — simply goes
@@ -53,8 +69,8 @@ export class RecorderClient {
   load(mechanism: Mechanism, resumeFrom: KinematicSnapshot | null): void {
     this.epoch++;
     this.queued = [];
+    this.layout = null;
     this.reached = resumeFrom?.t ?? null;
-    this.stepDt = RECORD_DT;
     // Without its undo history: the worker only ever simulates, and that array is the
     // bulk of a long editing session — re-serialised on every edit made while running.
     this.post({
@@ -69,9 +85,9 @@ export class RecorderClient {
     this.post({ type: "grab", grab });
   }
 
-  /** Where the simulated clock is being asked to get to, and how fast. */
-  target(targetTime: number, speed: number): void {
-    this.post({ type: "target", targetTime, speed });
+  /** Where the simulated clock is being asked to get to. */
+  target(targetTime: number): void {
+    this.post({ type: "target", targetTime });
   }
 
   stop(): void {
@@ -79,14 +95,10 @@ export class RecorderClient {
   }
 
   /** Snapshots recorded since the last call, and where the recording now ends. */
-  drain(): {
-    snapshots: KinematicSnapshot[];
-    stepDt: number;
-    reached: number | null;
-  } {
+  drain(): { snapshots: KinematicSnapshot[]; reached: number | null } {
     const snapshots = this.queued;
     this.queued = [];
-    return { snapshots, stepDt: this.stepDt, reached: this.reached };
+    return { snapshots, reached: this.reached };
   }
 
   dispose(): void {

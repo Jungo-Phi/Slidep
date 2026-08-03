@@ -50,6 +50,7 @@ import {
 import { belt_without_gear } from "../../utils/belt-geom";
 import { screen2world_vec, world2screen_length } from "../../utils/viewport";
 import { belt_body_grab_pin, elements_by_id } from "../solver/parsing";
+import { GRAB_BELT_KEY } from "../solver/snapshot";
 import { HIT_TOLERANCE } from "../../constants/rendering-specs";
 import { handle_placing_element } from "./placing-element-actions";
 import { handle_placing_constraint } from "./placing-constraint-actions";
@@ -461,7 +462,7 @@ export function canvasStateReducer(
                   junctionBelt,
                   elements_by_id(mechanicalElements),
                   hit.position,
-                  "grab_belt",
+                  GRAB_BELT_KEY,
                 )
               : null;
             if (junctionPin && junctionBelt) {
@@ -499,7 +500,7 @@ export function canvasStateReducer(
                 belt,
                 elements_by_id(mechanicalElements),
                 hit.position,
-                "grab_belt",
+                GRAB_BELT_KEY,
               );
               if (pin) {
                 simKey = hit.id;

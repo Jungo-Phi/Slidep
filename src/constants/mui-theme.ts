@@ -26,6 +26,7 @@ export interface CanvasPalette {
   ACCENT_DARK: string;
 
   BADGE_STROKE: string;
+  BADGE_FILL: string;
   BADGE_FILL_SELECTED: string;
 
   SELECTION_STROKE: string;
@@ -48,8 +49,8 @@ export interface ThemeSpec {
 
   ink: string;
 
-  appBackground: string;
   paper: string;
+  appBackground: string;
   toolbar: string;
 
   fillBody: string;
@@ -150,6 +151,28 @@ const GRID_RAMP = {
   dark: { GRID: 0.06, GRID_MAJOR: 0.13, GRID_LARGER: 0.21, GRID_AXIS: 0.28 },
 };
 
+/**
+ * The four steps of the grid, each a notch further off the canvas ground.
+ *
+ * Also what the interface's dividers are drawn in: a rule between two panels and
+ * a line of the grid play the same part, and a theme that raises `gridContrast`
+ * wants both to follow.
+ */
+const grid_colors = (s: ThemeSpec) => {
+  const ramp = GRID_RAMP[s.mode];
+  const contrast = s.gridContrast ?? 1;
+  // Darken a light ground, lighten a dark one — either way the ground keeps its
+  // own hue, which is what a mix towards the ink would have destroyed.
+  const towards = s.mode === "dark" ? "#FFFFFF" : "#000000";
+  const step = (v: number) => mix(s.appBackground, towards, v * contrast);
+  return {
+    GRID: step(ramp.GRID),
+    GRID_MAJOR: step(ramp.GRID_MAJOR),
+    GRID_LARGER: step(ramp.GRID_LARGER),
+    GRID_AXIS: step(ramp.GRID_AXIS),
+  };
+};
+
 /** Deletion reads as a warning in every theme, so it never varies. */
 const DELETION_STROKE = "#A4315D";
 const DELETION_BOX = "#ED5E71";
@@ -162,8 +185,8 @@ const SPECS = {
     accentDark: "#9C4211",
     onAccent: "#FFFFFF",
     ink: "#001D59",
-    appBackground: "#FFF9EB",
-    paper: "#FDECC9",
+    paper: "#fff5de",
+    appBackground: "#FDECC9",
     toolbar: "#FFBE80",
     fillBody: "#B7E2FF",
     fillNode: "#FFBE80",
@@ -179,8 +202,8 @@ const SPECS = {
     accentDark: "#C9541C",
     onAccent: "#1E1712",
     ink: "#F2E6D4",
-    appBackground: "#1E1712",
-    paper: "#261D16",
+    paper: "#2d201a",
+    appBackground: "#3e2d26",
     toolbar: "#33261C",
     fillBody: "#2474ad",
     fillNode: "#E09A3C",
@@ -195,8 +218,8 @@ const SPECS = {
     accentDark: "#A83D08",
     onAccent: "#FFFFFF",
     ink: "#000000",
-    appBackground: "#FFFFFF",
     paper: "#FFFFFF",
+    appBackground: "#FFFFFF",
     toolbar: "#e2e9f2",
     fillBody: "#c5e2ff",
     fillNode: "#f5b567",
@@ -212,40 +235,40 @@ const SPECS = {
     accentDark: "#E2600C",
     onAccent: "#10171C",
     ink: "#DDE8EE",
-    appBackground: "#10171C",
-    paper: "#162027",
+    paper: "#0b0b0b",
+    appBackground: "#151515",
     toolbar: "#1F2E38",
     fillBody: "#2E4E63",
     fillNode: "#6292c5",
     selectionStroke: "#6FC3F5",
     selectionBox: "#487bbe",
   },
-  sorbet: {
+  "blueprint-light": {
     family: "Blueprint",
     mode: "light",
     accent: "#E2530B",
     accentDark: "#A83D08",
     onAccent: "#FFFFFF",
     ink: "#404040",
-    appBackground: "#a1d3fc",
-    paper: "#7ab6eb",
+    paper: "#dde4eb",
+    appBackground: "#aec9ec",
     toolbar: "#e2e9f2",
-    fillBody: "#5191f2",
-    fillNode: "#5fb9ed",
-    selectionStroke: "#207fb7",
-    selectionBox: "#529ad9",
+    fillBody: "#c3ddff",
+    fillNode: "#7cb9ff",
+    selectionStroke: "#3086dd",
+    selectionBox: "#4385cf",
     gridContrast: 2,
   },
-  blueprint: {
+  "blueprint-dark": {
     family: "Blueprint",
     mode: "dark",
     accent: "#e07942",
     accentDark: "#c5612b",
     onAccent: "#38110e",
     ink: "#eeeeee",
-    appBackground: "#517cb5",
-    paper: "#215fb1",
-    toolbar: "#4a97e5",
+    paper: "#16529f",
+    appBackground: "#215fb1",
+    toolbar: "#387fc6",
     fillBody: "#5d71d7",
     fillNode: "#6eb2d9",
     selectionStroke: "#62e5ff",
@@ -337,7 +360,7 @@ const mui_palette = (s: ThemeSpec) => {
       secondary: alpha(s.ink, 0.7),
       disabled: alpha(s.ink, 0.38),
     },
-    divider: `rgba(${veil}, ${dark ? 0.14 : 0.12})`,
+    divider: grid_colors(s).GRID_LARGER,
     action: {
       hover: `rgba(${veil}, 0.1)`,
       hoverOpacity: 0.1,
@@ -348,19 +371,14 @@ const mui_palette = (s: ThemeSpec) => {
 };
 
 export const canvas_palette = (s: ThemeSpec): CanvasPalette => {
-  const ramp = GRID_RAMP[s.mode];
-  const contrast = s.gridContrast ?? 1;
-  // Darken a light ground, lighten a dark one — either way the ground keeps its
-  // own hue, which is what a mix towards the ink would have destroyed.
   const towards = s.mode === "dark" ? "#FFFFFF" : "#000000";
-  const grid = (step: number) => mix(s.paper, towards, step * contrast);
+  // The drawing sits on the app's own ground; `paper` belongs to what floats
+  // above it — badges included, small labels laid over the drawing.
+  const ground = s.appBackground;
 
   return {
-    BACKGROUND: s.paper,
-    GRID: grid(ramp.GRID),
-    GRID_MAJOR: grid(ramp.GRID_MAJOR),
-    GRID_LARGER: grid(ramp.GRID_LARGER),
-    GRID_AXIS: grid(ramp.GRID_AXIS),
+    BACKGROUND: ground,
+    ...grid_colors(s),
 
     ELEMENT_STROKE: s.ink,
     FILL_BODY: s.fillBody,
@@ -369,7 +387,8 @@ export const canvas_palette = (s: ThemeSpec): CanvasPalette => {
     ACCENT_DARK: s.accentDark,
 
     // A step off the ground, like the grid, but deliberately outside `gridContrast`: a theme that wants a loud grid does not want a loud badge outline.
-    BADGE_STROKE: mix(s.paper, towards, 0.4),
+    BADGE_STROKE: mix(ground, towards, 0.4),
+    BADGE_FILL: s.paper,
     // Selection pushes the paper further into its own tone — the opposite of `towards`, which pulls against it. A theme whose paper already sits at the extreme gets no lift and leans on the outline alone.
     BADGE_FILL_SELECTED: mix(
       s.paper,

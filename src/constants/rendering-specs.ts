@@ -116,10 +116,6 @@ export function set_canvas_theme(
   fade = requestAnimationFrame(step);
 }
 
-export const ICON_SELECTION_FILTER = "brightness(5)";
-export const FILL_DELETION_FILTER =
-  "saturate(1) hue-rotate(100deg) brightness(2.1)";
-
 export const PHYSICS = {
   DEFAULT_MOTOR_SPEED: 10, // tr/min
   GRAVITY: 10, // m/s^2
@@ -248,6 +244,10 @@ export const DIM = {
   SPRING_INNER_WIDTH: 6,
   SPRING_COIL_RADIUS: 7,
   SPRING_MIN_COILS: 3,
+  /** World length one coil stands for, which fixes how many a spring shows. */
+  SPRING_COIL_PITCH: 16,
+  /** How far the coils passing behind the spring recede into the ground. */
+  SPRING_BACK_COIL_OPACITY: 0.45,
 
   // Damper
   DAMPER_INNER_WIDTH: 6,
@@ -255,7 +255,11 @@ export const DIM = {
   DAMPER_PISTON_WIDTH: 6,
 
   // Mass
-  MASS_SIZE: 24,
+  MASS_HEIGHT: 24,
+  /** Tilt of the trapezoid sides, away from vertical. */
+  MASS_SIDE_ANGLE: 20 * (Math.PI / 180),
+  /** Free space kept on each side of the label before the shape widens. */
+  MASS_TEXT_PADDING: 9,
 
   // Pivot
   PIVOT_OUTER_RADIUS: 9,

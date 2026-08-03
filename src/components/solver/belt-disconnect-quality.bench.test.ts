@@ -1,6 +1,7 @@
 import { describe, it } from "vitest";
 import disconnectJson from "../../../test-mechanisms/Déconnexion courroie.slidep?raw";
-import { Link, Point2 } from "../../types";
+import { Link } from "../../types";
+import { KinematicSnapshot } from "../../types/runtime-state";
 import { load_mechanism } from "../../utils/load-mechanism";
 import {
   beltContact,
@@ -21,18 +22,20 @@ const loadFixture = () => load_mechanism(JSON.parse(disconnectJson)).mechanism;
 
 /** Largest single-node move between two frames, in px: the jump one actually sees. */
 function biggestMove(
-  a: Map<string, Point2>,
-  b: Map<string, Point2>,
+  a: KinematicSnapshot,
+  b: KinematicSnapshot,
 ): { key: string; d: number } {
   let key = "";
   let d = 0;
-  for (const [k, p] of b) {
-    const q = a.get(k);
-    if (!q) continue;
-    const move = p.distance_to(q);
+  for (let i = 0; i < b.layout.keys.length; i++) {
+    // A slot with no value gives NaN, which never wins the comparison.
+    const move = Math.hypot(
+      b.positions[2 * i] - a.positions[2 * i],
+      b.positions[2 * i + 1] - a.positions[2 * i + 1],
+    );
     if (move > d) {
       d = move;
-      key = k;
+      key = b.layout.keys[i];
     }
   }
   return { key, d };
@@ -45,18 +48,14 @@ function run(rebuild: boolean, frames: number, dt = 1 / 60) {
     (l): l is Extract<Link, { type: "BeltLength" }> => l.type === "BeltLength",
   )!;
 
-  let positions: Map<string, Point2> | null = null;
-  let angles: Map<string, number> | null = null;
+  let prev: KinematicSnapshot | null = null;
   const lines: string[] = [];
   let detachFrame = -1;
 
   for (let frame = 0; frame < frames; frame++) {
-    const snap = step_simulation(model, frame * dt, positions, angles, dt);
-    const move = positions
-      ? biggestMove(positions, snap.positions)
-      : { key: "", d: 0 };
-    positions = snap.positions;
-    angles = snap.angles;
+    const snap = step_simulation(model, frame * dt, prev, dt);
+    const move = prev ? biggestMove(prev, snap) : { key: "", d: 0 };
+    prev = snap;
 
     const detached = (belt.disconnected ?? []).some(Boolean);
     if (detached && detachFrame < 0) detachFrame = frame;
@@ -76,9 +75,8 @@ function run(rebuild: boolean, frames: number, dt = 1 / 60) {
   // Where it settles, well after the event.
   const tail = (frames: number) => {
     for (let i = 0; i < frames; i++) {
-      const snap = step_simulation(model, i * dt, positions, angles, dt);
-      positions = snap.positions;
-      angles = snap.angles;
+      const snap = step_simulation(model, i * dt, prev, dt);
+      prev = snap;
       if (i === frames - 1) return snap.unsatisfied ?? [];
     }
     return [];
@@ -132,13 +130,11 @@ describe("qualité de la déconnexion", () => {
     const motor = model.links.find(
       (l): l is Extract<Link, { type: "MotorAngle" }> => l.type === "MotorAngle",
     )!;
-    let positions: Map<string, Point2> | null = null;
-    let angles: Map<string, number> | null = null;
+    let prev: KinematicSnapshot | null = null;
     for (let frame = 0; frame < 900; frame++) {
       if (frame === 200) motor.omega = -motor.omega;
-      const snap = step_simulation(model, frame * dt, positions, angles, dt);
-      positions = snap.positions;
-      angles = snap.angles;
+      const snap = step_simulation(model, frame * dt, prev, dt);
+      prev = snap;
       if (frame === 899)
         console.log(
           `    témoin, fin : ${(snap.unsatisfied ?? []).length} violées | ` +
@@ -171,8 +167,7 @@ describe("qualité de la déconnexion", () => {
         (l): l is Extract<Link, { type: "MotorAngle" }> =>
           l.type === "MotorAngle",
       )!;
-      let positions: Map<string, Point2> | null = null;
-      let angles: Map<string, number> | null = null;
+      let prev: KinematicSnapshot | null = null;
       let attached = true;
       let flips = 0;
       let worstJump = 0;
@@ -180,12 +175,9 @@ describe("qualité de la déconnexion", () => {
 
       for (let frame = 0; frame < 900; frame++) {
         if (frame === 460) motor.omega = -motor.omega;
-        const snap = step_simulation(model, frame * dt, positions, angles, dt);
-        const move = positions
-          ? biggestMove(positions, snap.positions)
-          : { key: "", d: 0 };
-        positions = snap.positions;
-        angles = snap.angles;
+        const snap = step_simulation(model, frame * dt, prev, dt);
+        const move = prev ? biggestMove(prev, snap) : { key: "", d: 0 };
+        prev = snap;
         const now = !belt.disconnected?.some(Boolean);
         if (now !== attached) {
           attached = now;
@@ -213,19 +205,15 @@ describe("qualité de la déconnexion", () => {
       (l): l is Extract<Link, { type: "MotorAngle" }> => l.type === "MotorAngle",
     )!;
 
-    let positions: Map<string, Point2> | null = null;
-    let angles: Map<string, number> | null = null;
+    let prev: KinematicSnapshot | null = null;
     let attached = true;
     let reattachFrame = -1;
 
     for (let frame = 0; frame < 900; frame++) {
       if (frame === 460) motor.omega = -motor.omega;
-      const snap = step_simulation(model, frame * dt, positions, angles, dt);
-      const move = positions
-        ? biggestMove(positions, snap.positions)
-        : { key: "", d: 0 };
-      positions = snap.positions;
-      angles = snap.angles;
+      const snap = step_simulation(model, frame * dt, prev, dt);
+      const move = prev ? biggestMove(prev, snap) : { key: "", d: 0 };
+      prev = snap;
 
       const now = !belt.disconnected?.some(Boolean);
       if (now !== attached) {

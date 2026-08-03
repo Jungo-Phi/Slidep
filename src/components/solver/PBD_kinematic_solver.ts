@@ -27,7 +27,6 @@ import {
   applyVerticalConstraint,
 } from "./constraint-functions";
 import { solver_trace } from "./solver-trace";
-import { sweep_probe } from "./sweep-probe";
 import { applyBeltSegmentNoSlip } from "./experimental/belt-noslip-q";
 import { applyBeltSubChainAggregate } from "./experimental/belt-aggregate";
 import {
@@ -36,7 +35,7 @@ import {
   writePositionsBack,
   writeScalarsBack,
 } from "./nodes";
-import { resolve_slots } from "./link-slots";
+import { LinkSlots, resolve_slots } from "./link-slots";
 
 export type SolverMaps = {
   positions: Map<string, Point2>;
@@ -48,26 +47,72 @@ export type SolverMaps = {
   unsatisfied?: ConstraintResidual[];
 };
 
-/** Above its residual a constraint is reported as unsatisfied. Heuristic: well
- *  above the convergence epsilon, but catches a genuinely violated (e.g.
- *  blocked) constraint. Each family answers in its own unit, so each gets its
- *  own threshold — a single one would read a broken angle lock as satisfied. */
-const DIAGNOSTIC_TOLERANCE_PX = 1;
-/** ~0.6°: an angle constraint is off well before it reaches a whole radian. */
-const DIAGNOSTIC_TOLERANCE_RAD = 0.01;
-/** `GearRatio` answers a dimensionless ratio error (r1/r2 − target). */
-const DIAGNOSTIC_TOLERANCE_RATIO = 0.01;
+/**
+ * Above this residual a constraint is reported as unsatisfied, and severity is expressed
+ * against it. One millimetre, and **one** threshold for every family: residuals reach it
+ * already converted to the length they are worth (see `residual_scale`), so an angle and a
+ * distance are finally the same kind of number.
+ *
+ * This is the threshold the USER is warned at. Moving it changes what the diagnostics panel
+ * reports, not how hard a solver works — a solver target is a multiple of it, never it.
+ */
+const DIAGNOSTIC_TOLERANCE_MM = 1;
 
-/** Constraints whose residual is an angle in radians. Everything else answers
- *  in pixels — including `GearMeshAngle`, whose residual is an arc length. */
-const ANGULAR_LINKS: ReadonlySet<Link["type"]> = new Set([
-  "Angle",
-  "Parallel",
-  "Normal",
-  "MotorAngle",
-  "MotorBeam",
-  "CoaxialAngle",
-]);
+/**
+ * What one unit of a link's residual is worth in millimetres.
+ *
+ * An angle is not a length, and a fixed angular threshold is not comparable to a fixed
+ * distance one: 0.01 rad is 4 mm at the end of a 400 mm arm and 0.1 mm on a 10 mm pinion.
+ * So an angular residual is converted to **the arc it sweeps**, through the link's own
+ * geometry — the longer of the two edges an angle holds apart, a motor's crank, the radius
+ * of a gear that carries nothing but an angle. `GearRatio` answers a dimensionless ratio,
+ * which times the second radius is the millimetres the first one is off by.
+ *
+ * Everything else already answers in millimetres — including `GearMeshAngle`, whose
+ * residual is an arc length, which is the precedent this generalises.
+ *
+ * **Incomplete in simulation**: there the radii live in the links, not in the nodes, so a
+ * link carrying nothing but an angle finds no lever and falls back to 1 — its residual stays
+ * an angle. Closing that needs an angle → radius map built where the model is compiled.
+ */
+function residual_scale(
+  link: Link,
+  slot: LinkSlots,
+  nodes: SolveNodes,
+  angleLever: Float64Array,
+): number {
+  const span = (a: number, b: number) =>
+    Math.hypot(nodes.x[a] - nodes.x[b], nodes.y[a] - nodes.y[b]);
+  let lever: number;
+  switch (link.type) {
+    case "Angle":
+    case "Parallel":
+    case "Normal":
+      // The worst displacement the angular error causes, so the longer edge.
+      lever = Math.max(
+        span(slot.pos[0], slot.pos[1]),
+        span(slot.pos[2], slot.pos[3]),
+      );
+      break;
+    case "MotorBeam":
+      lever = span(slot.pos[0], slot.pos[1]);
+      break;
+    case "MotorAngle":
+      lever = angleLever[slot.ang[0]];
+      break;
+    case "CoaxialAngle":
+      lever = Math.max(angleLever[slot.ang[0]], angleLever[slot.ang[1]]);
+      break;
+    case "GearRatio":
+      lever = nodes.radius[slot.rad[1]];
+      break;
+    default:
+      return 1;
+  }
+  // A missing slot leaves the lever undefined, and a degenerate one leaves it at zero.
+  // Either would silently erase the residual, so the raw one is the safer answer.
+  return Number.isFinite(lever) && lever > 0 ? lever : 1;
+}
 
 /* ── Early exit on the motion still to come ──────────────────────────────────
  *
@@ -95,25 +140,61 @@ const GRAB_RELEASE_SWEEPS = 4;
 /**
  * Below this much motion left to come, finishing the sweeps buys nothing visible.
  *
- * A thousandth of a pixel, not a hundredth: the per-frame bound is respected either way,
- * but each frame warm-starts from the previous one, so what it gives up ACCUMULATES. At
- * 1e-2 the drift grows without settling (1.48 px over 200 frames on `Core XY modifié`);
- * at 1e-3 it plateaus (5e-2 px, the same at 60 and at 200 frames) while keeping the whole
+ * A thousandth of a millimetre, not a hundredth: the per-frame bound is respected either
+ * way, but each frame warm-starts from the previous one, so what it gives up ACCUMULATES.
+ * At 1e-2 the drift grows without settling (1.48 mm over 200 frames on `Core XY modifié`);
+ * at 1e-3 it plateaus (5e-2 mm, the same at 60 and at 200 frames) while keeping the whole
  * of the gain that is actually free — `Poulie bloqueuse`, blocked, goes from 300 sweeps to
  * 109 with a drift of exactly zero.
  */
-let REMAINING_PX = 1e-3;
-/** Same bound in angle: 1e-6 rad moves a point on a 400 px rim by 4e-4 px. */
-let REMAINING_RAD = 1e-6;
+const REMAINING_MM = 1e-3;
+/** Same bound in angle: 1e-6 rad moves a point on a 400 mm rim by 4e-4 mm. */
+const REMAINING_RAD = 1e-6;
 
 /**
- * Moves the early-exit bounds. `0` disables the exit outright (nothing can be below it),
- * which is how a measurement gets the every-sweep reference to compare against.
+ * How the solver decides it has done enough.
+ *
+ * `motion` — stop when nothing will move enough to matter. Right in simulation: the frame
+ * hands back to a display that is waiting, and the next one resumes from here, so what is
+ * given up is caught up. A mechanism that is blocked stops and reports its blockage, which
+ * is the honest answer.
+ *
+ * `constraints` — stop when nothing is violated. Right in edition, where there is no next
+ * frame: the solve IS the drawing, and it stays on screen until the next gesture. A
+ * mechanism can stop moving while still being wrong, and that would freeze a false figure.
+ * Slower is acceptable here; approximate is not.
  */
-export function set_early_exit_bounds(px: number, rad: number): void {
-  REMAINING_PX = px;
-  REMAINING_RAD = rad;
-}
+export type ExitCriterion = "motion" | "constraints";
+
+/**
+ * How far past its reporting threshold the worst constraint may sit for a `constraints`
+ * solve to call itself done. A hundredth of the threshold, so 0.01 mm and 1e-4 rad — an
+ * order of magnitude finer than the 0.1 the editors round their values to, which is what
+ * makes that rounding trustworthy.
+ */
+const CONSTRAINT_EXIT_SEVERITY = 0.01;
+
+/**
+ * How hard, how far and for how long a grab pulls.
+ *
+ * The pull is a RAMP, not a schedule of the whole solve: it runs for `nbGrabIterations`
+ * sweeps and then lets go, leaving the rest of the budget to relax whatever it stretched.
+ * Pulling all the way through would settle the sketch at a compromise where the grab is
+ * still pulling, i.e. leave it permanently stretched.
+ *
+ * There is no absolute cap on one sweep's correction, and that is the point: `grabStiffness`
+ * already bounds it to half the remaining gap, which is soft in the way that matters — the
+ * grab yields to the constraints — without being slow. An absolute cap made the pull slow
+ * instead: at 10 mm a sweep the grabbed point could not travel more than ~60 mm per solve,
+ * so a cursor moving faster simply outran it and stayed behind (chantier 4 ter measured a
+ * 2798 mm lag at 150 mm/frame, against 2.4 mm without the cap, for the same deformation of
+ * zero and the same sweep count).
+ */
+const GRAB = {
+  nbGrabIterations: 5,
+  grabStiffness: 0.5,
+  maxGrabAmplitude: Infinity,
+};
 
 /**
  * Total motion still to come if the current per-sweep decay holds, in the unit of `now`.
@@ -131,26 +212,20 @@ function remaining_motion(now: number, windowAgo: number): number {
   return (now * rate) / (1 - rate);
 }
 
-function diagnostic_tolerance(type: Link["type"]): number {
-  if (type === "GearRatio") return DIAGNOSTIC_TOLERANCE_RATIO;
-  return ANGULAR_LINKS.has(type)
-    ? DIAGNOSTIC_TOLERANCE_RAD
-    : DIAGNOSTIC_TOLERANCE_PX;
-}
 
 /**
- * How far past its reporting threshold the worst-off constraint sits, families put on one
- * scale by dividing each residual by its own tolerance. `0` when nothing is reported, `2`
- * when something is twice as violated as it takes to be listed.
+ * How far past the reporting threshold the worst-off constraint sits. `0` when nothing is
+ * reported, `2` when something is twice as violated as it takes to be listed.
  *
- * Dimensionless on purpose: px and rad cannot be compared, but "twice the threshold" can.
+ * Dimensionless, and now honestly so: every residual reaches this list already expressed as
+ * a length, so there is one threshold to divide by rather than one per family.
  */
 export function constraint_severity(
   unsatisfied: ConstraintResidual[] | undefined,
 ): number {
   let worst = 0;
   for (const u of unsatisfied ?? []) {
-    const s = u.residual / diagnostic_tolerance(u.type as Link["type"]);
+    const s = u.residual / DIAGNOSTIC_TOLERANCE_MM;
     if (s > worst) worst = s;
   }
   return worst;
@@ -174,6 +249,7 @@ export function PBD_kinematic_solver(
   epsilon: number = 0.000_001,
   angles: Map<string, number> = new Map(),
   collectDiagnostics: boolean = false,
+  exitOn: ExitCriterion = "motion",
 ): SolverMaps {
   const nodes = solveNodesFromMaps(
     positions,
@@ -188,6 +264,7 @@ export function PBD_kinematic_solver(
     nbIterations,
     epsilon,
     collectDiagnostics,
+    exitOn,
   );
   writePositionsBack(nodes, positions);
   writeScalarsBack(nodes.angleIndex, nodes.angle, angles);
@@ -205,13 +282,12 @@ export function PBD_solve(
   nbIterations: number,
   epsilon: number = 0.000_001,
   collectDiagnostics: boolean = false,
+  exitOn: ExitCriterion = "motion",
 ): ConstraintResidual[] | undefined {
   const slots = resolve_slots(links, nodes);
 
   // stop grab after `nbGrabIterations` to not stretch the mechanism
-  const nbGrabIterations = 5;
-  const grabStiffness = 0.5;
-  const maxGrabAmplitude = 10;
+  const { nbGrabIterations, grabStiffness, maxGrabAmplitude } = GRAB;
 
   // The grab is the only reason the early exit has a floor at all: a frame must not
   // exit while it is still pulling, nor before what it stretched has relaxed. A frame
@@ -243,7 +319,6 @@ export function PBD_solve(
   const traceY = trace ? new Float64Array(nodes.y.length) : null;
   const traceA = trace ? new Float64Array(nodes.angle.length) : null;
 
-  const probe = sweep_probe();
   // Previous sweep's state, for the motion measured below. A `Float64Array` copy of a few
   // hundred doubles costs ~0.5 % of a frame, which is why this is a snapshot and not an
   // accumulation threaded through every constraint.
@@ -254,9 +329,25 @@ export function PBD_solve(
   const movedRing = new Float64Array(RATE_WINDOW);
   const turnedRing = new Float64Array(RATE_WINDOW);
 
+  // Radius of the gear each angle belongs to, so a link that carries nothing but an angle
+  // still knows what its error is worth in millimetres. Angles and radii are keyed alike
+  // (both by element id), which is what makes the lookup possible. Read once: the radius is
+  // a degree of freedom, but as a scale for reporting its initial value is enough.
+  const angleLever = new Float64Array(nodes.angle.length);
+  for (let a = 0; a < nodes.angle.length; a++) {
+    const r = nodes.radIndex.get(nodes.angleKeys[a]);
+    angleLever[a] = r !== undefined ? nodes.radius[r] : 1;
+  }
+
+  // Worst residual of the sweep against the reporting threshold. Only tracked when
+  // something reads it.
+  const trackSeverity = exitOn === "constraints";
+  let maxSeverity = 0;
+
   let maxError: number = 0;
   for (let i = 0; i < nbIterations; i++) {
     maxError = 0;
+    maxSeverity = 0;
     prevX.set(nodes.x);
     prevY.set(nodes.y);
     prevA.set(nodes.angle);
@@ -545,9 +636,20 @@ export function PBD_solve(
       }
 
       // Spring is soft by design → excluded from convergence; everything else
-      // (incl. the grab while active) drives maxError.
+      // (incl. the grab while active) drives maxError. Deliberately the RAW residual: this
+      // exit fires below any physical scale in either unit, so it means "nothing moved at
+      // all" and has nothing to do with what is worth reporting.
       if (link.type !== "Spring") maxError = Math.max(maxError, err);
-      if (residuals && report) residuals[idx] = err;
+      if (report) {
+        // `report` and not `owner`: a link with no owner is invisible to the diagnostics
+        // panel, but it still has to hold for the figure to be right.
+        const residual = err * residual_scale(link, s, nodes, angleLever);
+        if (trackSeverity) {
+          const severity = residual / DIAGNOSTIC_TOLERANCE_MM;
+          if (severity > maxSeverity) maxSeverity = severity;
+        }
+        if (residuals) residuals[idx] = residual;
+      }
     });
 
     // ── What this sweep actually moved ────────────────────────────────────────
@@ -568,24 +670,6 @@ export function PBD_solve(
       const d = Math.abs(nodes.angle[n] - prevA[n]);
       if (d > turned) turned = d;
     }
-    if (probe)
-      probe({
-        sweep: i,
-        moved,
-        turned,
-        maxError,
-        shape: {
-          x: nodes.x,
-          y: nodes.y,
-          angle: nodes.angle,
-          prevX,
-          prevY,
-          prevA,
-          count: nodes.count,
-          keys: nodes.keys,
-        },
-      });
-
     const slot = i % RATE_WINDOW;
     const movedBefore = movedRing[slot];
     const turnedBefore = turnedRing[slot];
@@ -594,9 +678,12 @@ export function PBD_solve(
 
     if (maxError < epsilon) break;
 
-    if (
-      i >= minSweepsBeforeExit &&
-      remaining_motion(moved, movedBefore) < REMAINING_PX &&
+    if (i < minSweepsBeforeExit) continue;
+
+    if (exitOn === "constraints") {
+      if (maxSeverity < CONSTRAINT_EXIT_SEVERITY) break;
+    } else if (
+      remaining_motion(moved, movedBefore) < REMAINING_MM &&
       remaining_motion(turned, turnedBefore) < REMAINING_RAD
     )
       break;
@@ -609,7 +696,7 @@ export function PBD_solve(
   const unsatisfied: ConstraintResidual[] = [];
   links.forEach((link, idx) => {
     const residual = residuals[idx];
-    if (residual > diagnostic_tolerance(link.type) && link.owner !== undefined)
+    if (residual > DIAGNOSTIC_TOLERANCE_MM && link.owner !== undefined)
       unsatisfied.push({ owner: link.owner, type: link.type, residual });
   });
   return unsatisfied;

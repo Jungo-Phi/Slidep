@@ -5,7 +5,7 @@ import huygens from "../../../test-mechanisms/Huygen's chain drive.slidep?raw";
 import jansen from "../../../test-mechanisms/Jansen's linkage.slidep?raw";
 import poulie from "../../../test-mechanisms/Poulie bloqueuse.slidep?raw";
 import vilbrequin from "../../../test-mechanisms/Vilbrequin.slidep?raw";
-import { Point2 } from "../../types/point2";
+import { KinematicSnapshot } from "../../types/runtime-state";
 import { load_mechanism } from "../../utils/load-mechanism";
 import {
   RECORD_DT,
@@ -47,23 +47,19 @@ const PASSES = 5;
 /** One simulation advancing on its own model, so two can run in lockstep. */
 function runner(json: string, collectDiagnostics: boolean) {
   const model = compile_simulation_model(loadFixture(json));
-  let positions: Map<string, Point2> | null = null;
-  let angles: Map<string, number> | null = null;
+  let prev: KinematicSnapshot | null = null;
   let t = 0;
   return () => {
     t += RECORD_DT;
-    const s = step_simulation(
+    prev = step_simulation(
       model,
       t,
-      positions,
-      angles,
+      prev,
       RECORD_DT,
       undefined,
       undefined,
       collectDiagnostics,
     );
-    positions = s.positions;
-    angles = s.angles;
   };
 }
 

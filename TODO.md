@@ -4,14 +4,30 @@
 
 ### À faire rapidement
 
-- Trajectoires sur les edges
-- Bouton "Recentrer" calcul à partir des positions des éléments
-- Ajouter un délais (2s) avant d'afficher "mécanisme(s) exporté(s)"
-- Ne pas afficher les LOADS en cinématique
+**User Test**
 
-- Changer une dimension fait apparaitre les autres contraintes, c'est bizzare
+- Drag & Drop de ElementPalette sur le canvas
+- Hover en PlacingXXX ne doit pas afficher l'élément
+- BUG SIMU avec le mécanisme "Poutre sur joint de courroie"
+- BUG SIMU avec le mécanisme "Ressorts sur moteur"
+- changer le label "Simulation" dans ElementPalette
+- Clicker sur l'icon de ElementPalette sélectionné devrait le désélectionner
+- Fermer la courroie en clickant sur le gearTooth de départ
+- Ce n'est pas toujours clair quand un élément est placé ou en train d'être placé (transparence ?)
+- Ce n'est pas toujours clair quand on est en simulation : curseur main
+- Le nom par défaut "Nouveau mécanisme" est confusant (dans la top-bar comme dans la gallerie)
+- Perdre le focus d'un NumberInput (ou autre input) devrait valider la valeur
+- Ajouter un effet ressort sur l'amortisseur en simulation
+- Click droit sur le canvas devrait proposer des choses (undo/redo, copy/paste, recentrer, etc.) (et sur un élément ?)
+- Remplacer Edge par Edge devient une priorité
+- Les mécanismes exemple sont à mettre en priorité
+- Trajectoires sur les edges aussi à mettre en priorité
+- La sélection multiple ne devrait pas afficher les contraintes
+
 - Changer de frame en déplaçant un load ?
 - grille "adaptative"
+
+- BeambodyHover peut se faire à moveEdge sur un noeud inateignable et créer une connexion illégale, pareil pour déplacer un noeud sur un autre hors d'atteinte. Vérifier s'il n'y a pas d'autres cas du genre.
 
 **Snapping**
 
@@ -29,16 +45,14 @@
   - Snap to grid devrait aussi se faire quand on hover déjà quelque chose
   - Connecter plusieurs éléments en même temps s'ils sont alignés ? (beamBodyHover)
 
----
-
-- geometric-solver, critère d'arrêt différent : convergence de position, ralentissement ok /!\
-
 **Repenser les "Contraintes non respectées"**
 
 - Afficher uniquement les moteurs ? (OU sur la liste des moteurs déjà affichés ?)
 - Afficher les contraintes non respectées en colorant les éléments (rouge ?)
 - Distance d'attachement/détachement poulie/courroie doit dépendre de la vitesse relative
 - Les changements de vitesse de moteurs en simulation doivent-il être enregistrés ?
+- Afficher les changements de directions de moteurs (et autres) dans le panneau latéral en relecture ?
+- La flèche du moteur doit changer de sens en simulation relecture
 - Passer la simulation en Rust pour accélérer ?
 
 **Panneau mesures**
@@ -52,14 +66,16 @@
 - Choisir x/y/norme pour les mesures superposées
 - Possible de hover sur probe quand placingProbe (pareil pour gearRatio et Dimension)
 
+**Trajectoires**
+
+- Afficher les trajectoires des edges (les 2 extrémités)
+- Afficher les trajectoires des gears (bords tangeants au mouvement) ?
+- Ne PAS afficher les trajectoires des éléments ancrés.
+- Option d'afficher la trajectoire avec des points
+- Afficher les trajectoires anciennes de plus en plus transparentes
+
 **Canvas**
 
-- Trajectoires :
-  - Afficher les trajectoires des edges (les 2 extrémités)
-  - Afficher les trajectoires des gears (bords tangeants au mouvement) ?
-  - Ne PAS afficher les trajectoires des éléments ancrés.
-  - Option d'afficher la trajectoire avec des points
-  - Afficher les trajectoires anciennes de plus en plus transparentes
 - Accepter les valeurs négatives pour les loads sur le OnCanvasValueEditor
 - Parsing loads : "150000 N" => "150 kN"
 - Afficher valeur de masses sur le canvas
@@ -67,11 +83,16 @@
 - Theme transition : certaines couleurs changent instantanément (grille + autres éléments spéciaux du canvas)
 - Les couleurs des selected loads ne sont pas assez différenciée
 - Parfois, la couleur de fond des mécanismes de gallerie n'est pas la bonne
+- Changer une dimension fait apparaitre les autres contraintes, c'est bizzare
+- Ajouter un délais (2s) avant d'afficher "mécanisme(s) exporté(s)"
 - Afficher une snack-bar "Les forces ne sont pas prisent en compte en cinématique" là première fois qu'on ouvre un mécanisme avec un/des loads, par mécanisme. Ou pour les mesures de forces.
 - MovingBeltBody sur un gear ne se fait pas avec le bon sens de rotation **quand les 2 sens sont possibles**
 - Sélectionner une contrainte fait un shadow sur les probes
+- Afficher hover-circle au hover du numberInput ?
 - Hover une probe devrait hover l'élément aussi
+- Mettre à jour le hover selon la vraie taille des éléments
 - Changer le sens des moteurs en cliquant sur la flèche
+- Ne pas afficher les LOADS en cinématique
 - Sélectionner les dimensions (sur la flèche) ?
 - Régler les TODOs de draw
 
@@ -87,6 +108,7 @@
 - Unifier l'usage des tooltips
 - OnCanvasValueEditor trop large avec des points
 - Afficher vitesse au lieu de ground en haut du moteur
+- Le sens de rotation gear/belt indiqué dans le panneau latéral est inversé
 - Utiliser le "bouton dropDown pour changer le repère d'une force" pour choisir l'ancrage d'un moteur
 - Ajouter boutons pour changer le parentBeam des slider et slideps
 - Le bouton dropDown pour changer le repère d'une force ne click pas sur toute la largeur de ElementDisplay
@@ -123,6 +145,8 @@
 - Fusionner les actions : placement/mouvement + connexions
 - enlever les undefined de "SelectedElement"
 - Refactor en enlevant le actionBundleType ?
+- Système d'undo/redo pas toujours fiable
+- Ajouter des "Blank" quand on change une valeur depuis les propriétés
 - Reste 2 usages de la sentinelle "----" : gears fantômes du preview (draw-canvas) et `parentAxleID` détaché (action-reducer, connect-actions). Même piège que la fermeture : invisible au typage
 - Fuzzer : pas de seed fixe, donc un échec ne se rejoue pas. Ajouter un FUZZ_SEED (fast-check l'affiche déjà dans le rapport)
 
@@ -156,6 +180,7 @@
 
 **Canvas, hover et snap**
 
+- Bouton "Recentrer" calcul à partir des positions des éléments
 - Preview des éléments déconnectés au hover de déconnexion (après le chantier courroie : réutiliser le mécanisme d'état visé porté par le canvasState et retiré du tracé de preview)
 - Preview de la courroie explusée d'un gear ?
 
@@ -169,12 +194,12 @@
 
 **Panneaux et UI**
 
+- Changer le nom de l'onglet en "Mon mécanisme - Slidep"
 - Choisir quels éléments sont : disabled={simulating}
 - Filtre du numberInput à vérifier + accepter (-) selon le type de valeur
 - Permettre des calculs dans numberInput
 - Ajouter un title="xxx" à tous les trailing controls
 - S'assurer qu'aucun élément du panneau de propriétés n'aie le focus (pas de "space = switch")
-- Ajouter des "Blank" quand on change une valeur depuis les propriétés
 - Bouton "Play" sur moteur en simu ?
 - Ajouter les éléments interactifs (vitesse moteur, etc.) dans la liste d'éléments mécaniques
 - Ajouter "Angle" dans les edges
@@ -182,8 +207,10 @@
 - Faire le panneau de paramètre propre
 - Unifier les tailles des éléments UI
 - Ajouter bouton(s) loupe pour zoomer
+
+**Propriétés du mécanisme, tags et imports**
+
 - Import de mécanismes en drag & drop depuis l'explorateur de fichiers
-- Propriétés du mécanisme:
   - Édition du nom du mécanisme dans la gallerie
   - Afficher la description du mécanisme dans la gallerie en lecture seule sur 2 ou 3 lignes (... si trop long)
   - Créer l'éditeur de tags, le même dans la gallerie que dans le panneau de propriétés

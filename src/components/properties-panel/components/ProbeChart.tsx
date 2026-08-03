@@ -105,6 +105,10 @@ export const ProbeChart: React.FC<ProbeChartProps> = ({
         if (v > yMax) yMax = v;
       }
     }
+    // What the curve actually reaches, kept apart from what the axis spans: the gutter
+    // labels are read as measurements, so they must be the data and not the padded bound.
+    const dataMin = yMin;
+    const dataMax = yMax;
     // Pad the range; keep a visible band for flat curves.
     const spanRaw = yMax - yMin;
     const pad = spanRaw > 1e-9 ? spanRaw * 0.08 : Math.max(Math.abs(yMax), 1);
@@ -223,7 +227,7 @@ export const ProbeChart: React.FC<ProbeChartProps> = ({
           fill={palette.text.secondary}
           textAnchor="end"
         >
-          {fmt(yMax)}
+          {fmt(dataMax)}
         </text>
         <text
           x={GUTTER - 5}
@@ -232,7 +236,7 @@ export const ProbeChart: React.FC<ProbeChartProps> = ({
           fill={palette.text.secondary}
           textAnchor="end"
         >
-          {fmt(yMin)}
+          {fmt(dataMin)}
         </text>
       </svg>
     );

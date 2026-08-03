@@ -149,9 +149,23 @@ interface MechanicalCanvasProps {
   canSimulationGrab: boolean;
   snapToGrid: boolean;
   showGrid: boolean;
-  /** Recorded trajectories of the probed elements (empty outside simulation). */
+  /**
+   * What the recording loop publishes each frame, or `null` outside simulation.
+   *
+   * A ref rather than a prop because the canvas must not wait for a render to show a
+   * mechanism that moved: it draws from its own RAF loop, and the clock deliberately
+   * reaches React at a fraction of the frame rate.
+   */
+  liveFrameRef: React.RefObject<LiveFrame | null>;
+}
+
+/** The simulated mechanism and probe trajectories at the cursor, for one frame. */
+export interface LiveFrame {
+  mechanism: Mechanism;
   trajectories: TrajectoryDisplay[];
 }
+
+const EMPTY_TRAJECTORIES: TrajectoryDisplay[] = [];
 
 export const MechanicalCanvas = forwardRef<
   HTMLCanvasElement,
@@ -180,7 +194,7 @@ export const MechanicalCanvas = forwardRef<
       canSimulationGrab,
       snapToGrid,
       showGrid,
-      trajectories,
+      liveFrameRef,
     },
     ref,
   ) => {
@@ -222,8 +236,6 @@ export const MechanicalCanvas = forwardRef<
     canSimulationGrabRef.current = canSimulationGrab;
     const appModeRef = useRef(appMode);
     appModeRef.current = appMode;
-    const trajectoriesRef = useRef(trajectories);
-    trajectoriesRef.current = trajectories;
     const activeTabRef = useRef(activeTab);
     activeTabRef.current = activeTab;
     // Contrainte révélée au survol → timestamp du dernier survol (hover-reveal).
@@ -237,7 +249,9 @@ export const MechanicalCanvas = forwardRef<
     // handleEvent mémoïsé, il doit rester stable sans figer la closure.
     const handleEventRef = useRef<(event: CanvasEvent) => void>(() => {});
 
-    mechanismRef.current = mechanism;
+    // The live frame wins: a render must not put the edit-time positions back under the
+    // pointer for the frame it takes the draw loop to overwrite them again.
+    mechanismRef.current = liveFrameRef.current?.mechanism ?? mechanism;
     hoveredPartRef.current = hoveredPart;
     canvasStateRef.current = canvasState;
 
@@ -347,6 +361,11 @@ export const MechanicalCanvas = forwardRef<
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
 
+      // The simulated positions land here, not through a prop: hit-testing and hover read
+      // the same ref, so they stay on the mechanism that is actually drawn.
+      const live = liveFrameRef.current;
+      if (live) mechanismRef.current = live.mechanism;
+
       // Writing width/height reallocates the backing store even when the value
       // is unchanged, so the canvas only follows the container when it moves.
       const rect = canvasRectRef.current ?? measureCanvas();
@@ -354,7 +373,11 @@ export const MechanicalCanvas = forwardRef<
       if (canvas.width !== rect.width) canvas.width = rect.width;
       if (canvas.height !== rect.height) canvas.height = rect.height;
 
+      // Canvas state survives across frames: an opacity or a halo left on by the
+      // previous frame would fade the grid and everything drawn before the first
+      // reset.
       ctx.shadowBlur = 0;
+      ctx.globalAlpha = 1;
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       if (showGrid)
         draw_grid(
@@ -380,7 +403,7 @@ export const MechanicalCanvas = forwardRef<
       ctx.stroke();
 
       // Trajectoires des points sondés, sous les éléments du mécanisme.
-      for (const trajectory of trajectoriesRef.current)
+      for (const trajectory of live?.trajectories ?? EMPTY_TRAJECTORIES)
         draw_trajectory(
           ctx,
           mechanismRef.current.viewport,
@@ -431,6 +454,7 @@ export const MechanicalCanvas = forwardRef<
       computeVisibleConstraints,
       processConstraintChange,
       measureCanvas,
+      liveFrameRef,
     ]);
 
     useEffect(() => {
@@ -949,7 +973,7 @@ export const MechanicalCanvas = forwardRef<
           // cross-fades with the rest of the interface on a theme change, where
           // a `COLORS` read baked into an inline style would freeze on whichever
           // palette was current when React last rendered.
-          backgroundColor: "background.paper",
+          backgroundColor: "background.default",
         }}
       >
         <canvas

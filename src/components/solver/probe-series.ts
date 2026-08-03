@@ -6,7 +6,7 @@ import {
   overlay_shown,
 } from "../../types/element";
 import { Point2 } from "../../types/point2";
-import { KinematicSnapshot } from "../../types/runtime-state";
+import { KinematicSnapshot, SnapshotLayout } from "../../types/runtime-state";
 
 export type ProbeCurveKey = "x" | "y" | "norm" | "value";
 
@@ -24,27 +24,73 @@ export interface ProbeSeries {
   unit: string;
 }
 
-/** Where a probe samples an element: its position for nodes/bodies, the
- *  midpoint for edges. */
-function sample_position(
+/**
+ * Where a probe samples an element, as slots into one layout: `a` alone for a node or a
+ * body's position, `a` and `b` for an edge — sampled at its midpoint, oriented start → end —
+ * and `angle` for a gear's own rotation. −1 where the layout has no such key.
+ *
+ * Resolved once per layout, not once per snapshot: a series walks the whole recording, and
+ * all its snapshots share one layout until an edit.
+ */
+interface ProbeSlots {
+  a: number;
+  b: number;
+  angle: number;
+}
+
+const NO_SLOTS: ProbeSlots = { a: -1, b: -1, angle: -1 };
+
+function probe_slots(
   element: MechanicalElement,
-  snapshot: KinematicSnapshot,
-): Point2 | undefined {
-  if ("position" in element) return snapshot.positions.get(element.id);
-  const start = snapshot.positions.get(`${element.id}:start`);
-  const end = snapshot.positions.get(`${element.id}:end`);
-  return start && end ? start.lerp(end, 0.5) : undefined;
+  layout: SnapshotLayout,
+): ProbeSlots {
+  const slot = (key: string) => layout.index.get(key) ?? -1;
+  if ("position" in element)
+    return {
+      a: slot(element.id),
+      b: -1,
+      angle:
+        element.type === "gear" ? (layout.angleIndex.get(element.id) ?? -1) : -1,
+    };
+  return { a: slot(`${element.id}:start`), b: slot(`${element.id}:end`), angle: -1 };
+}
+
+/** Scratch pair the readers write into, so sampling a whole recording allocates nothing. */
+const sampled = new Float64Array(2);
+
+/** The probed point, into `sampled`. False when the snapshot carries no value for it. */
+function read_position(snapshot: KinematicSnapshot, slots: ProbeSlots): boolean {
+  if (slots.a < 0) return false;
+  const p = snapshot.positions;
+  const ax = p[2 * slots.a];
+  const ay = p[2 * slots.a + 1];
+  if (Number.isNaN(ax)) return false;
+  if (slots.b < 0) {
+    sampled[0] = ax;
+    sampled[1] = ay;
+    return true;
+  }
+  const bx = p[2 * slots.b];
+  if (Number.isNaN(bx)) return false;
+  sampled[0] = ax + (bx - ax) * 0.5;
+  sampled[1] = ay + (p[2 * slots.b + 1] - ay) * 0.5;
+  return true;
 }
 
 /** Oriented angle of the element (rad): gear own angle, or edge direction. */
-function sample_angle(
-  element: MechanicalElement,
+function read_angle(
   snapshot: KinematicSnapshot,
+  slots: ProbeSlots,
 ): number | undefined {
-  if (element.type === "gear") return snapshot.angles.get(element.id);
-  const start = snapshot.positions.get(`${element.id}:start`);
-  const end = snapshot.positions.get(`${element.id}:end`);
-  return start && end ? end.sub(start).angle() : undefined;
+  if (slots.angle >= 0) {
+    const a = snapshot.angles[slots.angle];
+    return Number.isNaN(a) ? undefined : a;
+  }
+  if (slots.a < 0 || slots.b < 0) return undefined;
+  const p = snapshot.positions;
+  const dx = p[2 * slots.b] - p[2 * slots.a];
+  if (Number.isNaN(dx)) return undefined;
+  return Math.atan2(p[2 * slots.b + 1] - p[2 * slots.a + 1], dx);
 }
 
 /** The recorded path of one element (canvas trajectory overlay). */
@@ -88,12 +134,17 @@ function sample_into(
   elements: MechanicalElement[],
   from: number,
 ): void {
+  let layout: SnapshotLayout | null = null;
+  let slots: ProbeSlots[] = [];
   for (let i = from; i < snapshots.length; i++) {
     const snap = snapshots[i];
+    if (snap.layout !== layout) {
+      layout = snap.layout;
+      slots = elements.map((el) => probe_slots(el, layout!));
+    }
     build.forEach((traj, k) => {
-      const p = sample_position(elements[k], snap);
-      if (!p) return;
-      traj.points.push(p);
+      if (!read_position(snap, slots[k])) return;
+      traj.points.push(new Point2(sampled[0], sampled[1]));
       traj.times.push(snap.t);
     });
   }
@@ -173,40 +224,54 @@ export function get_probe_series(
     case "position":
     case "velocity": {
       const t: number[] = [];
-      const points: Point2[] = [];
+      const xs: number[] = [];
+      const ys: number[] = [];
+      let layout: SnapshotLayout | null = null;
+      let slots = NO_SLOTS;
       for (const snap of snapshots) {
-        const p = sample_position(element, snap);
-        if (!p) continue;
+        if (snap.layout !== layout) {
+          layout = snap.layout;
+          slots = probe_slots(element, layout);
+        }
+        if (!read_position(snap, slots)) continue;
         t.push(snap.t);
-        points.push(p);
+        xs.push(sampled[0]);
+        ys.push(sampled[1]);
       }
 
-      let vectors = points;
+      let vx = xs;
+      let vy = ys;
       if (metric === "velocity") {
-        if (points.length < 2) return { t: [], curves: [], unit: "mm/s" };
-        vectors = points.map((_, i) => {
+        if (xs.length < 2) return { t: [], curves: [], unit: "mm/s" };
+        vx = new Array<number>(xs.length);
+        vy = new Array<number>(ys.length);
+        for (let i = 0; i < xs.length; i++) {
           const i0 = Math.max(0, i - 1);
-          const i1 = Math.min(points.length - 1, i + 1);
+          const i1 = Math.min(xs.length - 1, i + 1);
           const dt = t[i1] - t[i0];
-          return dt > 0
-            ? points[i1].sub(points[i0]).mul(1 / dt)
-            : new Point2(0, 0);
-        });
+          const inv = dt > 0 ? 1 / dt : 0;
+          vx[i] = (xs[i1] - xs[i0]) * inv;
+          vy[i] = (ys[i1] - ys[i0]) * inv;
+        }
       }
 
       // Position "norm" is the displacement from the start of the recording
       // (‖p‖ would be the distance to the arbitrary canvas origin); velocity
       // norm is the plain magnitude ‖v‖.
-      const origin = metric === "position" ? points[0] : undefined;
+      const position = metric === "position" && xs.length > 0;
+      const ox = position ? xs[0] : 0;
+      const oy = position ? ys[0] : 0;
       return {
         t,
         curves: [
-          { key: "x", values: vectors.map((v) => v.x) },
-          { key: "y", values: vectors.map((v) => v.y) },
+          { key: "x", values: vx },
+          { key: "y", values: vy },
           {
             key: "norm",
-            values: vectors.map((v) =>
-              origin ? v.sub(origin).length() : Math.hypot(v.x, v.y),
+            values: vx.map((x, i) =>
+              position
+                ? Math.sqrt((x - ox) * (x - ox) + (vy[i] - oy) * (vy[i] - oy))
+                : Math.hypot(x, vy[i]),
             ),
           },
         ],
@@ -219,8 +284,14 @@ export function get_probe_series(
       const t: number[] = [];
       const angles: number[] = []; // unwrapped, rad
       let prev: number | undefined;
+      let layout: SnapshotLayout | null = null;
+      let slots = NO_SLOTS;
       for (const snap of snapshots) {
-        let a = sample_angle(element, snap);
+        if (snap.layout !== layout) {
+          layout = snap.layout;
+          slots = probe_slots(element, layout);
+        }
+        let a = read_angle(snap, slots);
         if (a === undefined) continue;
         // Unwrap: keep the curve continuous across the ±π seam.
         if (prev !== undefined) {

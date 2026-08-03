@@ -76,6 +76,7 @@ export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
           justifyContent: "space-between",
           alignItems: "center",
           pb: 1,
+          bgcolor: "background.default",
         }}
       >
         <Typography fontSize={"large"} fontWeight={500} sx={{ flexShrink: 0 }}>
@@ -150,7 +151,7 @@ export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
         </Box>
       </DialogTitle>
 
-      <DialogContent dividers sx={{ bgcolor: "background.default", pt: 2 }}>
+      <DialogContent dividers sx={{ pt: 2 }}>
         <Grid container spacing={2}>
           {/* 1. Carte "Nouveau Mécanisme" (En première position) */}
           <Grid size={{ xs: 12, sm: 6, md: 4, lg: 3 }}>
@@ -221,7 +222,9 @@ export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
 
                     <Divider />
 
-                    <CardContent sx={{ flexGrow: 1, p: 2 }}>
+                    <CardContent
+                      sx={{ flexGrow: 1, p: 2, bgcolor: "background.default" }}
+                    >
                       {/* Nom */}
                       <Box
                         display="flex"

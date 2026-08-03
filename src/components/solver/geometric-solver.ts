@@ -18,6 +18,13 @@ import { PBD_kinematic_solver } from "./PBD_kinematic_solver";
 import { belt_terminal_axes, separation_links } from "./disconnect-separation";
 
 /**
+ * Hard cap on the sweeps one edition solve may run. Not a convergence target — the solve
+ * exits on constraint satisfaction — but the guard that keeps an unsatisfiable sketch,
+ * which is a legitimate thing to be drawing, from running forever.
+ */
+const EDITION_SWEEPS = 300;
+
+/**
  * Resolves geometric constraints for a given mechanism and a triggering action.
  */
 export function resolveGeometricConstraints(
@@ -53,6 +60,8 @@ export function resolveGeometricConstraints(
 
   let grabPoint: Point2 | number | undefined = undefined;
   let grabConnectionID: string | undefined = undefined;
+  /** Key of a node whose value was typed: pinned rather than pulled, once fusion is done. */
+  let pin: string | undefined = undefined;
   // MoveElements mute nodes.positions avant le solve : on garde les positions
   // d'origine pour que la mise à jour des contraintes voie un vrai "avant".
   let preMovePositions: Map<string, Point2> | undefined = undefined;
@@ -72,16 +81,19 @@ export function resolveGeometricConstraints(
 
       switch (triggerAction.type) {
         case "MoveNode":
+          if (triggerAction.committed) pin = `${triggerAction.id}`;
+          else grabConnectionID = `${triggerAction.id}`;
           grabPoint = triggerAction.newPosition;
-          grabConnectionID = `${triggerAction.id}`;
           break;
         case "MoveEdgeStart":
+          if (triggerAction.committed) pin = `${triggerAction.id}:start`;
+          else grabConnectionID = `${triggerAction.id}:start`;
           grabPoint = triggerAction.newPosition;
-          grabConnectionID = `${triggerAction.id}:start`;
           break;
         case "MoveEdgeEnd":
+          if (triggerAction.committed) pin = `${triggerAction.id}:end`;
+          else grabConnectionID = `${triggerAction.id}:end`;
           grabPoint = triggerAction.newPosition;
-          grabConnectionID = `${triggerAction.id}:end`;
           break;
         case "MoveEdgeBody":
           links.push({
@@ -150,6 +162,13 @@ export function resolveGeometricConstraints(
           });
           break;
         case "ChangeGearRadius": {
+          if (triggerAction.committed) {
+            // Same as a dimensioned radius: anchored at its value, so meshing and pins
+            // move the gear rather than the number the user just typed.
+            nodes.radii.set(`${triggerAction.id}`, triggerAction.newRadius);
+            nodes.radMasses.set(`${triggerAction.id}`, 0);
+            break;
+          }
           // Grab a point that slides on the gear perimeter and pull it toward
           // the mouse. A `GearMeshing` link against a zero-radius bridge keeps
           // |centre − bridge| = radius (radius stays a DOF), so the solver
@@ -328,6 +347,20 @@ export function resolveGeometricConstraints(
   });
   links = links.filter((link) => link.type !== "Coincidence");
 
+  // A typed value is imposed, not pulled: the node is anchored ON it and the rest of the
+  // sketch is what yields — or what reports itself violated, which is the honest answer
+  // when the value cannot be held. This has to come AFTER the fusion above, which deletes
+  // the key it was asked about and replaces the pair by its midpoint.
+  if (pin !== undefined && grabPoint instanceof Point2) {
+    const key = nodes.positions.has(pin)
+      ? pin
+      : ([...nodes.positions.keys()].find((k) =>
+          k.split(",").includes(pin),
+        ) ?? pin);
+    nodes.positions.set(key, grabPoint);
+    nodes.posMasses.set(key, 0);
+  }
+
   // Maintien de la position (ratio) sur un beam, à moins de grab le node lui-meme OU que le node soit ancré
   links.forEach((link, index) => {
     if (
@@ -402,7 +435,11 @@ export function resolveGeometricConstraints(
     nodes.posMasses,
     nodes.radMasses,
     links,
-    300,
+    EDITION_SWEEPS,
+    undefined,
+    undefined,
+    false,
+    "constraints",
   );
 
   // Decouple fused elements

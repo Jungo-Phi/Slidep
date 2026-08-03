@@ -9,6 +9,7 @@ import {
 import {
   ConstraintResidual,
   KinematicSnapshot,
+  SnapshotLayout,
 } from "../../types/runtime-state";
 import {
   belt_q_links,
@@ -18,9 +19,66 @@ import {
   rebuild_belt_q_links,
 } from "./parsing";
 import { PBD_kinematic_solver } from "./PBD_kinematic_solver";
+import {
+  BeltShape,
+  GRAB_BRIDGE_KEY,
+  GRAB_KEYS,
+  GRAB_PERIMETER_KEY,
+  angles_length,
+  make_snapshot_layout,
+  snapshot_angle,
+  snapshot_belt_detached,
+  snapshot_belt_wraps,
+  snapshot_point,
+} from "./snapshot";
 import { sort_links } from "./utils";
 
+/**
+ * The step every recorded instant is spaced by, whatever the playback speed and whatever
+ * the machine. Speed is a target while recording and a promise on replay; it never buys
+ * itself a coarser step, so the same mechanism records the same trajectory everywhere.
+ */
 const RECORD_DT = 1 / 120; // 120 fps of simulated time
+
+/**
+ * Solved instants per instant kept. The solver's step is a fidelity requirement — the
+ * disconnection defect of chantier 5 does not even exist at 1/60 — but the display
+ * interpolates and draws at 60 Hz, so keeping every step doubles what a session retains for
+ * a resolution nothing reads back.
+ */
+const RETAIN_EVERY = 2;
+
+/** Spacing of the RECORDED instants: what everything downstream of the recorder sees. */
+export const RETAIN_DT = RECORD_DT * RETAIN_EVERY;
+
+/** Whether the instant `t` is one of those kept. */
+export function is_retained(t: number): boolean {
+  return Math.round(t / RECORD_DT) % RETAIN_EVERY === 0;
+}
+
+/**
+ * How long a recording may run, in simulated seconds.
+ *
+ * Sized on memory, and on the worst mechanism rather than the usual one: five minutes at
+ * `RETAIN_DT` is 18 000 instants, which cost 30 Mo on `Core XY - 2 moteurs` (55 nodes,
+ * 1.67 ko an instant) but ~160 Mo on a mechanism ten times its size — and a tab stays
+ * comfortable there, with the canvas and the undo history alongside.
+ *
+ * It is the same five minutes whatever is being simulated, which is what makes it
+ * explainable; the memory it costs is not, which is why the worst case sets it.
+ */
+export const MAX_RECORDING_TIME = 300;
+
+/**
+ * Whether a recording that has got to `t` has run its full length.
+ *
+ * Half a step of tolerance, and it is not decorative: a recorded instant is a running sum of
+ * `RECORD_DT`, so the thirty-six-thousandth lands 1e-10 SHORT of the round number it stands
+ * for. Compared with a bare `>=`, the end of the recording is never reached.
+ */
+export function recording_full(t: number): boolean {
+  return t >= MAX_RECORDING_TIME - RECORD_DT / 2;
+}
 
 /**
  * Wall-clock milliseconds the recording loop may spend inside one displayed frame.
@@ -30,63 +88,12 @@ const RECORD_DT = 1 / 120; // 120 fps of simulated time
 export const FRAME_BUDGET_MS = 8;
 
 /**
- * The simulated step to record, to advance `requestedDt` of simulated time within
- * one frame budget, given what a step currently costs.
- *
- * Real time is what the playback speed promises, so it is the step that gives way,
- * not the clock: the solver being incremental (`ω·dt`), the only way to advance
- * faster than it can afford is to solve fewer, coarser instants. Never finer than
- * `RECORD_DT` — past that the fidelity is free but the memory is not.
- *
- * **This makes the recording machine-dependent**: the same run records coarser
- * snapshots on a slower machine, or under load. That is the accepted price of
- * honouring the requested speed — the trajectory error grows linearly with the
- * step, so a recording produced under load is proportionally less faithful.
- *
- * Saturates on its own: once one step outlasts the budget, `affordable` sticks at
- * 1 and the step stops growing beyond the frame's own request.
+ * Gauss-Seidel sweeps per simulated frame. Measured (chantier 3 of `plan-ralentissement`):
+ * raising it buys a smaller drift slope and nothing the user can see — no constraint is
+ * left violated at 200 — while costing real time in proportion. Edition has its own cap
+ * and its own exit; the two are not the same number and must not be made one.
  */
-export function recording_step(
-  requestedDt: number,
-  stepCostMs: number,
-  budgetMs: number = FRAME_BUDGET_MS,
-): number {
-  const affordable = Math.max(
-    1,
-    Math.floor(budgetMs / Math.max(stepCostMs, 1e-3)),
-  );
-  return Math.max(RECORD_DT, requestedDt / affordable);
-}
-
-/**
- * How much of the ceiling a clean step gives back. A quarter per step: a mechanism that
- * stops resisting recovers its fast-forward in a handful of frames instead of staying
- * pinned by one bad moment.
- */
-const CEILING_RELAX = 0.8;
-
-/**
- * The coarsest step the recording may take next, from what the last one left violated.
- *
- * A coarse step tears the constraints of a mechanism that **resists** — one at a dead point,
- * or losing a pulley. Measured (`plan-fluidite.md`, chantier 2): the violation is exactly
- * proportional to the step, and it appears between 1/120 and 1/60, which is where the belt
- * links stop holding. So the step that would put the worst constraint back at its reporting
- * threshold is the current one divided by how far past it we are — one division, no search,
- * and it converges in a single frame because the relation is linear.
- *
- * Mechanisms that violate nothing (they follow their motor rather than resisting it) are
- * never capped: they keep the full playback speed however coarse the step gets.
- *
- * Never finer than `RECORD_DT`: past it the step costs more without buying anything, and a
- * mechanism blocked for real must keep reporting the blockage, which is its own signal.
- */
-export function step_ceiling(stepDt: number, severity: number): number {
-  return Math.max(RECORD_DT, stepDt / Math.max(severity, CEILING_RELAX));
-}
-
-/** Gauss-Seidel sweeps per frame. Raise it only from a measurement bench. */
-const DEFAULT_SWEEPS = 200;
+const SIMULATION_SWEEPS = 200;
 
 /**
  * The belt's contact band, in belt-px of wrapped arc: a pulley is let go below
@@ -139,6 +146,26 @@ export type SimulationModel = {
   links: Link[];
   /** Maps an original solver key to its fused key (for grab translation). */
   keyMap: Map<string, string>;
+  /** Slot layout every snapshot of this model shares. */
+  layout: SnapshotLayout;
+  /** How a solved state is written into those slots. */
+  fill: SnapshotFill;
+  /**
+   * Radius of each gear, by id. Not a solver input — simulation solves no radius — but the
+   * lever arm that turns an angular shortfall into the arc it failed to sweep, so a
+   * diagnostic can be stated in millimetres like every other one.
+   */
+  gearRadii: Map<ID, number>;
+};
+
+/** Which snapshot slots each solver node writes to: a fused key feeds one slot per key it
+ *  fuses, and `firstParts` is the key a warm start reads its previous position from. */
+type SnapshotFill = {
+  keys: string[];
+  firstParts: string[];
+  /** `slots[start[i] … start[i + 1]]` are the slots of `keys[i]`. */
+  start: Int32Array;
+  slots: Int32Array;
 };
 
 /** A grab during simulation: a node/endpoint key, an edge body at ratio t, or a
@@ -454,7 +481,51 @@ export function compile_simulation_model(
   // ── Sort links (anchored nodes first for better convergence) ──
   links = sort_links(links, nodes.posMasses);
 
-  return { nodes, links, keyMap };
+  const gearRadii = new Map<ID, number>();
+  for (const element of mechanism.mechanicalElements)
+    if (element.type === "gear") gearRadii.set(element.id, element.radius);
+
+  // ── Snapshot slots: one per ORIGINAL key, so a fused node writes to each of its parts ──
+  const fusedKeys = [...nodes.positions.keys()];
+  const snapshotKeys: string[] = [];
+  const firstParts: string[] = [];
+  const start = new Int32Array(fusedKeys.length + 1);
+  const slotList: number[] = [];
+  fusedKeys.forEach((fused, i) => {
+    start[i] = slotList.length;
+    const parts = fused.split(",");
+    firstParts.push(parts[0]);
+    for (const part of parts) {
+      slotList.push(snapshotKeys.length);
+      snapshotKeys.push(part);
+    }
+  });
+  start[fusedKeys.length] = slotList.length;
+
+  // Each belt's pulley count, fixed for the recording: a detachment raises a flag, it never
+  // shortens `gearPosKeys`.
+  const belts: BeltShape[] = [];
+  for (const link of links)
+    if (link.type === "BeltLength" && link.owner !== undefined)
+      belts.push({ id: link.owner, pulleys: link.gearPosKeys.length });
+
+  return {
+    nodes,
+    links,
+    keyMap,
+    gearRadii,
+    layout: make_snapshot_layout(
+      snapshotKeys,
+      [...nodes.angles.keys()],
+      belts,
+    ),
+    fill: {
+      keys: fusedKeys,
+      firstParts,
+      start,
+      slots: Int32Array.from(slotList),
+    },
+  };
 }
 
 /**
@@ -469,11 +540,12 @@ export function compile_simulation_model(
 export function step_simulation(
   model: SimulationModel,
   t: number,
-  prevPositions: Map<string, Point2> | null,
-  prevAngles: Map<string, number> | null,
+  /** The frame to warm-start from. Read by key, so it may come from another model —
+   *  which is what it is after an edit, the snapshot the recording resumes on. */
+  prev: KinematicSnapshot | null,
   dt: number = RECORD_DT,
   grab?: SimGrab,
-  sweeps: number = DEFAULT_SWEEPS,
+  sweeps: number = SIMULATION_SWEEPS,
   /** Off only to measure what the collection itself costs; production reads it. */
   collectDiagnostics: boolean = true,
 ): KinematicSnapshot {
@@ -481,17 +553,22 @@ export function step_simulation(
   const angles = new Map(model.nodes.angles);
 
   // ── Warm start (fused keys take the previous position of any of their parts) ──
-  if (prevPositions) {
-    positions.forEach((_, fusedKey) => {
-      const part = fusedKey.split(",")[0];
-      const p = prevPositions.get(part) ?? prevPositions.get(fusedKey);
-      if (p) positions.set(fusedKey, new Point2(p.x, p.y));
-    });
-  }
-  if (prevAngles) {
+  if (prev) {
+    const { keys: fusedKeys, firstParts } = model.fill;
+    const index = prev.layout.index;
+    for (let i = 0; i < fusedKeys.length; i++) {
+      const slot = index.get(firstParts[i]) ?? index.get(fusedKeys[i]);
+      if (slot === undefined) continue;
+      const x = prev.positions[2 * slot];
+      if (Number.isNaN(x)) continue;
+      positions.set(fusedKeys[i], new Point2(x, prev.positions[2 * slot + 1]));
+    }
+    const angleIndex = prev.layout.angleIndex;
     angles.forEach((_, key) => {
-      const a = prevAngles.get(key);
-      if (a !== undefined) angles.set(key, a);
+      const slot = angleIndex.get(key);
+      if (slot === undefined) return;
+      const a = prev.angles[slot];
+      if (!Number.isNaN(a)) angles.set(key, a);
     });
   }
 
@@ -594,7 +671,7 @@ export function step_simulation(
       model.keyMap.get(`${grab.edgeID}:start`) ?? `${grab.edgeID}:start`;
     const endKey =
       model.keyMap.get(`${grab.edgeID}:end`) ?? `${grab.edgeID}:end`;
-    positions.set("grab_bridge", new Point2(grab.target.x, grab.target.y));
+    positions.set(GRAB_BRIDGE_KEY, new Point2(grab.target.x, grab.target.y));
     links = [
       ...model.links,
       {
@@ -602,26 +679,26 @@ export function step_simulation(
         ddl: 2,
         key1: startKey,
         key2: endKey,
-        key3: "grab_bridge",
+        key3: GRAB_BRIDGE_KEY,
         t: grab.t,
       },
       {
         type: "HandleGrab",
         ddl: 1,
-        grabbedKey: "grab_bridge",
+        grabbedKey: GRAB_BRIDGE_KEY,
         value: grab.target,
       },
     ];
   } else if (grab && "gearID" in grab) {
     // Gear-tooth grab: pin a bridge node on the perimeter (fixed angle offset)
     // and pull it to the mouse — the GearPerimeterPin rotates the gear angle.
-    positions.set("grab_perimeter", new Point2(grab.target.x, grab.target.y));
+    positions.set(GRAB_PERIMETER_KEY, new Point2(grab.target.x, grab.target.y));
     links = [
       ...model.links,
       {
         type: "GearPerimeterPin",
         ddl: 2,
-        nodeKey: "grab_perimeter",
+        nodeKey: GRAB_PERIMETER_KEY,
         centerKey: model.keyMap.get(grab.gearID) ?? grab.gearID,
         angleKey: grab.gearID,
         radius: grab.radius,
@@ -703,10 +780,41 @@ export function step_simulation(
       );
   }
 
-  // ── Decouple fused keys back to individual keys ──
-  const outPositions = new Map<string, Point2>();
-  result.positions.forEach((p, fusedKey) => {
-    fusedKey.split(",").forEach((k) => outPositions.set(k, p));
+  // ── Into the snapshot's slots, fused keys decoupled back to one slot per original key ──
+  const layout = model.layout;
+  const { keys: fusedKeys, start, slots } = model.fill;
+  const outPositions = new Float64Array(layout.keys.length * 2);
+  for (let i = 0; i < fusedKeys.length; i++) {
+    const p = result.positions.get(fusedKeys[i]);
+    const x = p ? p.x : NaN;
+    const y = p ? p.y : NaN;
+    for (let s = start[i]; s < start[i + 1]; s++) {
+      outPositions[2 * slots[s]] = x;
+      outPositions[2 * slots[s] + 1] = y;
+    }
+  }
+  // The reserved grab slots: only the bridge node this frame's own grab added, if any.
+  for (const key of GRAB_KEYS) {
+    const slot = layout.index.get(key)!;
+    const p = result.positions.get(key);
+    outPositions[2 * slot] = p ? p.x : NaN;
+    outPositions[2 * slot + 1] = p ? p.y : NaN;
+  }
+
+  const outAngles = new Float64Array(angles_length(layout));
+  for (let i = 0; i < layout.angleKeys.length; i++) {
+    const a = result.angles.get(layout.angleKeys[i]);
+    outAngles[i] = a === undefined ? NaN : a;
+  }
+  // Then each belt's per-pulley wrap angles, and the pulleys it has lost contact with.
+  layout.belts.forEach((id, r) => {
+    const wraps = wrapsByBelt.get(id);
+    const disconnected = disconnectedByBelt.get(id);
+    for (let p = layout.beltStart[r]; p < layout.beltStart[r + 1]; p++) {
+      const k = p - layout.beltStart[r];
+      outAngles[layout.wrapBase + p] = wraps ? wraps[k] : NaN;
+      outAngles[layout.detachBase + p] = disconnected?.[k] ? 1 : 0;
+    }
   });
 
   // ── Motor-block detection ──
@@ -717,45 +825,40 @@ export function step_simulation(
   const motorBlocks: ConstraintResidual[] = [];
   for (const m of motorChecks) {
     let achieved: number | undefined;
+    // How far the driver reaches, so its shortfall can be reported as the arc it failed to
+    // sweep rather than as a bare angle — the same scale every other residual is on.
+    let lever = 1;
     if (m.type === "MotorBeam") {
       const p = result.positions.get(m.pivotKey!);
       const d = result.positions.get(m.drivenKey!);
-      if (p && d) achieved = wrap_angle(d.sub(p).angle() - m.cur);
+      if (p && d) {
+        achieved = wrap_angle(d.sub(p).angle() - m.cur);
+        lever = d.distance_to(p);
+      }
     } else {
       const a = result.angles.get(m.angleKey!);
-      if (a !== undefined) achieved = wrap_angle(a - m.cur);
+      if (a !== undefined) {
+        achieved = wrap_angle(a - m.cur);
+        lever = model.gearRadii.get(m.angleKey as ID) ?? 1;
+      }
     }
     if (achieved === undefined) continue;
     if (Math.abs(achieved) < Math.abs(m.expected) * MOTOR_BLOCK_FRACTION)
       motorBlocks.push({
         owner: m.owner,
         type: m.type,
-        residual: Math.abs(m.expected - achieved),
+        residual: Math.abs(m.expected - achieved) * lever,
       });
   }
 
   const unsatisfied = [...motorBlocks, ...(result.unsatisfied ?? [])];
 
-  // Collect per-belt disconnected pulleys and continuous wrap angles (for drawing).
-  let disconnectedBeltGears: Map<ID, number[]> | undefined;
-  let beltWraps: Map<ID, number[]> | undefined;
-  for (const link of model.links) {
-    if (link.type !== "BeltLength" || link.owner === undefined) continue;
-    const idx = (link.disconnected ?? [])
-      .map((d, i) => (d ? i : -1))
-      .filter((i) => i >= 0);
-    if (idx.length > 0)
-      (disconnectedBeltGears ??= new Map()).set(link.owner, idx);
-    if (link.wraps) (beltWraps ??= new Map()).set(link.owner, [...link.wraps]);
-  }
-
   return {
     t,
+    layout,
     positions: outPositions,
-    angles: new Map(result.angles),
+    angles: outAngles,
     unsatisfied: unsatisfied.length > 0 ? unsatisfied : undefined,
-    disconnectedBeltGears,
-    beltWraps,
   };
 }
 
@@ -785,45 +888,26 @@ export function snapshot_at(
   const span = b.t - a.t;
   const u = span > 0 ? (t - a.t) / span : 0;
   if (u <= 0) return a;
+  // Slot i means one thing on each side of an edit, so two layouts never average.
+  if (a.layout !== b.layout) return a;
   if (!same_belt_topology(a, b)) return a;
 
-  const positions = new Map<string, Point2>();
-  a.positions.forEach((pa, key) => {
-    const pb = b.positions.get(key);
-    positions.set(
-      key,
-      pb
-        ? new Point2(pa.x + (pb.x - pa.x) * u, pa.y + (pb.y - pa.y) * u)
-        : pa.clone(),
-    );
-  });
-  const angles = new Map<string, number>();
-  a.angles.forEach((va, key) => {
-    const vb = b.angles.get(key);
-    angles.set(key, vb === undefined ? va : va + (vb - va) * u);
-  });
-  // Wraps are continuous (unwrapped) like the angles, so they interpolate the same way.
-  let beltWraps: Map<ID, number[]> | undefined;
-  if (a.beltWraps) {
-    beltWraps = new Map<ID, number[]>();
-    a.beltWraps.forEach((wa, id) => {
-      const wb = b.beltWraps?.get(id);
-      beltWraps!.set(
-        id,
-        wb && wb.length === wa.length
-          ? wa.map((v, k) => v + (wb[k] - v) * u)
-          : wa.slice(),
-      );
-    });
-  }
+  const positions = new Float64Array(a.positions.length);
+  for (let i = 0; i < positions.length; i++)
+    positions[i] = a.positions[i] + (b.positions[i] - a.positions[i]) * u;
+  // Belt wraps are continuous like the angles and share their array, so they interpolate in
+  // the same pass. The contact flags do too, harmlessly: the topology check above is what
+  // guarantees they are equal on both sides, so they come out unchanged.
+  const angles = new Float64Array(a.angles.length);
+  for (let i = 0; i < angles.length; i++)
+    angles[i] = a.angles[i] + (b.angles[i] - a.angles[i]) * u;
   return {
     t,
+    layout: a.layout,
     positions,
     angles,
-    // Diagnostics and topology belong to a state the solver actually produced.
+    // Diagnostics belong to a state the solver actually produced.
     unsatisfied: a.unsatisfied,
-    disconnectedBeltGears: a.disconnectedBeltGears,
-    beltWraps,
   };
 }
 
@@ -838,16 +922,16 @@ export function snapshot_at(
 export function at_recording_end(
   snapshots: KinematicSnapshot[],
   t: number,
-  step: number,
 ): boolean {
   if (snapshots.length === 0) return true;
-  return t >= snapshots[snapshots.length - 1].t - step / 2;
+  return t >= snapshots[snapshots.length - 1].t - RETAIN_DT / 2;
 }
 
 /**
- * Index of the last snapshot recorded at or before `t`, by binary search — the
- * recording is not uniformly spaced (see `recording_step`), so the time axis has
- * to be searched rather than divided. Clamped to the array.
+ * Index of the last snapshot recorded at or before `t`, by binary search rather than by
+ * dividing the time axis — the search is correct whether or not the spacing is uniform,
+ * and nothing downstream then has to be revisited if it ever stops being. Clamped to the
+ * array.
  */
 export function snapshot_index_at(
   snapshots: KinematicSnapshot[],
@@ -865,21 +949,14 @@ export function snapshot_index_at(
   return lo;
 }
 
-/** Same pulleys detached on both sides, belt by belt. */
+/** Same pulleys detached on both sides. Only sound on one layout, where the flags of a
+ *  given pulley are the same slot on both sides. */
 function same_belt_topology(
   a: KinematicSnapshot,
   b: KinematicSnapshot,
 ): boolean {
-  const da = a.disconnectedBeltGears;
-  const db = b.disconnectedBeltGears;
-  if (!da && !db) return true;
-  if (!da || !db || da.size !== db.size) return false;
-  for (const [id, indices] of da) {
-    const other = db.get(id);
-    if (!other || other.length !== indices.length) return false;
-    for (let k = 0; k < indices.length; k++)
-      if (other[k] !== indices[k]) return false;
-  }
+  for (let i = a.layout.detachBase; i < a.angles.length; i++)
+    if (a.angles[i] !== b.angles[i]) return false;
   return true;
 }
 
@@ -894,10 +971,10 @@ export function apply_snapshot_to_mechanism(
 ): Mechanism {
   const newElements = mechanism.mechanicalElements.map((el) => {
     if ("position" in el) {
-      const pos = snapshot.positions.get(el.id);
+      const pos = snapshot_point(snapshot, el.id);
       if (!pos) return el;
       if (el.type === "gear") {
-        const ang = snapshot.angles.get(el.id);
+        const ang = snapshot_angle(snapshot, el.id);
         return {
           ...el,
           position: pos,
@@ -906,8 +983,8 @@ export function apply_snapshot_to_mechanism(
       }
       return { ...el, position: pos };
     } else {
-      const start = snapshot.positions.get(`${el.id}:start`);
-      const end = snapshot.positions.get(`${el.id}:end`);
+      const start = snapshot_point(snapshot, `${el.id}:start`);
+      const end = snapshot_point(snapshot, `${el.id}:end`);
       // Springs/dampers: freeze the natural (rest) length from the edit-time
       // positions so the drawing keeps a fixed coil/piston count while the
       // simulated length stretches or compresses.
@@ -916,11 +993,9 @@ export function apply_snapshot_to_mechanism(
           ? el.positionStart.distance_to(el.positionEnd)
           : undefined;
       const disconnectedGearIndices =
-        el.type === "belt"
-          ? snapshot.disconnectedBeltGears?.get(el.id)
-          : undefined;
+        el.type === "belt" ? snapshot_belt_detached(snapshot, el.id) : undefined;
       const gearWraps =
-        el.type === "belt" ? snapshot.beltWraps?.get(el.id) : undefined;
+        el.type === "belt" ? snapshot_belt_wraps(snapshot, el.id) : undefined;
       return {
         ...el,
         ...(start ? { positionStart: start } : {}),

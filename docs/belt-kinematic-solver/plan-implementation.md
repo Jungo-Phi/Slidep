@@ -603,6 +603,14 @@ toute sortie anticipée doit tenir compte.
   6.2558 pour une poulie manquée de 0.027 rad : indiscernable d'un enroulement réel de 6.2558. Tout
   test de contact écrit sur une mesure brute est faux à la frontière — c'est là qu'il sert
   (chantier 5).
+- **`heapUsed` ne compte pas le contenu des tableaux typés**, qui vit hors du tas JS. Mesurer la
+  mémoire d'une structure en `Float64Array` avec lui, c'est compter ses en-têtes et pas ses
+  nombres — lire `heapUsed + external`. Le symptôme est reconnaissable : une taille **sous son
+  propre plancher structurel**, ce qui n'est jamais du bruit (`plan-snapshots`, chantier 4).
+- **Une mesure devenue peu coûteuse finit par chronométrer le ramasse-miettes.** `get_probe_series`
+  sortait non monotone de deux façons différentes en deux exécutions — 30 s cinq fois plus rapide
+  que 15 s — parce que la collecte de l'itération précédente tombait dans la fenêtre. Forcer le GC
+  avant de chronométrer, pas seulement avant de lire un tas (`plan-snapshots`, chantier 4).
 - **Vérifier ce que l'instrument couvre avant de s'y fier.** `bit-exact` a passé tout un chantier
   pointé sur une référence φ, n'assertant plus que les mécanismes *sans* courroie ; et ses scénarios
   s'arrêtent à 60 frames, donc il ne voit aucun événement tardif (chantiers 4 et 5).

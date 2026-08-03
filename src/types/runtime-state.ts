@@ -130,20 +130,48 @@ export interface ConstraintResidual {
   residual: number;
 }
 
+/**
+ * Which key sits at which slot of a snapshot's arrays. Held once per recording and shared
+ * by all its snapshots, so two snapshots may only be read against one another — or
+ * interpolated — when they carry the very same layout object.
+ *
+ * Keys are solver keys: bare "${id}" for nodes/bodies, "${id}:start"/"${id}:end" for edges,
+ * plus the reserved grab-bridge slots (`GRAB_KEYS`), which hold NaN on frames without a grab.
+ */
+export interface SnapshotLayout {
+  keys: string[];
+  index: Map<string, number>;
+  /** Gear rotation keys — the first section of `angles`. */
+  angleKeys: string[];
+  angleIndex: Map<string, number>;
+  /**
+   * Belts, in the order their pulley slots follow the angles. Belt `r` owns the pulleys
+   * `beltStart[r] … beltStart[r + 1]`, and each pulley has two slots: its wrap angle, at
+   * `wrapBase + p`, and its contact flag, at `detachBase + p`.
+   *
+   * A belt's pulley count is fixed for the whole recording: detaching one raises its flag,
+   * it never shortens the list.
+   */
+  belts: ID[];
+  beltIndex: Map<ID, number>;
+  beltStart: Int32Array;
+  wrapBase: number;
+  detachBase: number;
+}
+
 export interface KinematicSnapshot {
   t: number;
-  /** Solver-keyed positions: bare "${id}" for nodes/bodies, "${id}:start"/"${id}:end" for edges */
-  positions: Map<string, Point2>;
-  /** Solver-keyed gear rotation angles (rad), bare "${id}" */
-  angles: Map<string, number>;
+  layout: SnapshotLayout;
+  /** x and y interleaved, 2 per `layout.keys` entry. NaN = no value at this instant. */
+  positions: Float64Array;
+  /**
+   * Gear rotation angles (rad), then each belt's per-pulley continuous wrap angle — a
+   * magnitude above 2π means the belt has wound onto that pulley — then a 1 per pulley that
+   * lost belt contact, so the belt is drawn running straight past it. See `SnapshotLayout`.
+   */
+  angles: Float64Array;
   /** Constraints left unsatisfied at this frame (empty/undefined when all met). */
   unsatisfied?: ConstraintResidual[];
-  /** Belt id → indices (into attachedGearsIDs) of pulleys that lost belt contact
-   *  during simulation, so the belt is drawn running straight past them. */
-  disconnectedBeltGears?: Map<ID, number[]>;
-  /** Belt id → continuous (unwrapped) wrap angle per attached pulley; magnitudes
-   *  above 2π mean the belt has wound onto that pulley (drawn as extra turns). */
-  beltWraps?: Map<ID, number[]>;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -164,21 +192,6 @@ export interface RuntimeState {
 
   /** Recorded kinematic snapshots (incremental, sampled at 30 fps of sim-time) */
   kinematicSnapshots: KinematicSnapshot[];
-
-  /**
-   * Simulated seconds asked for but never produced, accumulated over the current
-   * recording: what the frame budget had to give up on. Normally zero — the step
-   * coarsens to hold the requested speed instead — so this only fills up when even
-   * one step per frame cannot keep up.
-   */
-  lag: number;
-
-  /**
-   * The simulated step the last recorded frame used (s). `RECORD_DT` while the
-   * solver keeps up; coarser when the requested speed forced it to. This is what
-   * degrades in place of real time, so it is the fidelity readout.
-   */
-  recordStep: number;
 
   /**
    * The cursor was placed by hand — a timeline drag, a click on a chart — and has not
@@ -222,7 +235,5 @@ export const DEFAULT_RUNTIME_STATE: RuntimeState = {
   current: null,
   history: [],
   kinematicSnapshots: [],
-  lag: 0,
-  recordStep: 1 / 120,
   scrubbed: false,
 };

@@ -35,7 +35,15 @@ export const MechanismThumbnail: React.FC<MechanismThumbnailProps> = ({
   }, [mechanism, theme]);
 
   return (
-    <Box sx={{ position: "relative", paddingTop: "100%" }}>
+    // The ground the drawing sits on, as on the canvas itself: a preview is a
+    // small view of the app's own surface, not of the card carrying it.
+    <Box
+      sx={{
+        position: "relative",
+        paddingTop: "100%",
+        backgroundColor: "background.default",
+      }}
+    >
       {/* A plain <canvas>, not a Box: MUI would swallow `width`/`height` as
           style props, leaving the bitmap at its default 300×150 while the
           drawing code frames for RENDER_SIZE — the drawing would be cropped. */}

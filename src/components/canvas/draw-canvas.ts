@@ -711,7 +711,8 @@ export function draw_mechanical_canvas(
 
       ctx.shadowBlur = 0;
       ctx.globalAlpha = 1;
-      ctx.filter = "none";
+      ctx.lineCap = "butt";
+      ctx.lineJoin = "miter";
       ctx.strokeStyle = isLoadElement ? COLORS.ACCENT : COLORS.ELEMENT_STROKE;
       ctx.fillStyle = isLoadElement ? COLORS.ACCENT : COLORS.FILL_BODY;
       ctx.lineWidth = STROKE_WIDTHS.STANDARD;
@@ -905,10 +906,10 @@ export function draw_mechanical_canvas(
               );
               break;
             case "spring":
-              draw_spring(ctx, start, end, element.restLength);
+              draw_spring(ctx, start, end, element.restLength, viewport.scale);
               break;
             case "damper":
-              draw_damper(ctx, start, end, element.restLength);
+              draw_damper(ctx, start, end, element.restLength, viewport.scale);
               break;
           }
           if (handleTerminal) {
@@ -1293,6 +1294,9 @@ export function draw_mechanical_canvas(
             ctx,
             world2screen(element.position, viewport),
             element.value,
+            isSelected,
+            isHovered,
+            isGhost ? "ghost" : isEraseHovered ? "erasing" : "none",
           );
           break;
         case "horizontal-align-edge":
@@ -1306,7 +1310,9 @@ export function draw_mechanical_canvas(
             ctx,
             world2screen(element.position, viewport),
             element,
-            isGhost,
+            isSelected,
+            isHovered,
+            isGhost ? "ghost" : isEraseHovered ? "erasing" : "none",
           );
           break;
         case "force": {
@@ -1443,10 +1449,11 @@ export function draw_mechanical_canvas(
     state.type === "PlacingDistributedForce" ||
     state.type === "PlacingMomentStart" ||
     state.type === "PlacingMomentEnd";
-  ctx.save();
+  // Cleared before `save` so the matching `restore` leaves the context neutral:
+  // the element pass ends on whatever tint its last element carried.
   ctx.shadowBlur = 0;
   ctx.globalAlpha = 1;
-  ctx.filter = "none";
+  ctx.save();
   ctx.strokeStyle = isPlacingLoadElement
     ? COLORS.ACCENT
     : COLORS.ELEMENT_STROKE;
@@ -1552,6 +1559,8 @@ export function draw_mechanical_canvas(
         ctx,
         world2screen(state.startHover.position, viewport),
         world2screen(hoveredPart.position, viewport),
+        undefined,
+        viewport.scale,
       );
       break;
     case "PlacingDamperEnd":
@@ -1559,6 +1568,8 @@ export function draw_mechanical_canvas(
         ctx,
         world2screen(state.startHover.position, viewport),
         world2screen(hoveredPart.position, viewport),
+        undefined,
+        viewport.scale,
       );
       break;
     case "PlacingBeltEnd": {

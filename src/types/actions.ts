@@ -91,18 +91,28 @@ export type Action =
       id: ID;
       newPosition: WorldPoint;
       oldPosition: WorldPoint;
+      /**
+       * The value was typed and validated rather than dragged. A drag is a continuous
+       * gesture that must follow the cursor without tearing the sketch, so it pulls softly;
+       * a typed value is a decision, and it is the rest of the sketch that has to give way.
+       */
+      committed?: boolean;
     }
   | {
       type: "MoveEdgeStart";
       id: ID;
       newPosition: WorldPoint;
       oldPosition: WorldPoint;
+      /** Typed and validated rather than dragged — see `MoveNode`. */
+      committed?: boolean;
     }
   | {
       type: "MoveEdgeEnd";
       id: ID;
       newPosition: WorldPoint;
       oldPosition: WorldPoint;
+      /** Typed and validated rather than dragged — see `MoveNode`. */
+      committed?: boolean;
     }
   | {
       type: "MoveEdgeBody";
@@ -137,6 +147,8 @@ export type Action =
       newRadius: number;
       oldRadius: number;
       target: WorldPoint;
+      /** Typed and validated rather than dragged — see `MoveNode`. */
+      committed?: boolean;
     }
   | { type: "ChangeEdgeLength"; id: ID; newLength: number; oldLength: number }
   | { type: "ChangeBeltLength"; id: ID; newLength: number; oldLength: number }

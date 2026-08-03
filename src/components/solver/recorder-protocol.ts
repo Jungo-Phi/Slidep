@@ -6,22 +6,18 @@ import { SimGrab } from "./kinematic-simulation";
 /**
  * What crosses the worker boundary, and how it survives the crossing.
  *
- * `structuredClone` keeps `Map`s and plain objects but strips prototypes, so a `Point2`
- * arrives as a bare `{x, y}`. Rather than change the snapshot format — measured at 480
- * bytes at worst, 57 kB/s at 120 Hz, nowhere near a bottleneck — the few class instances
- * are rebuilt on arrival, in this one place.
+ * `structuredClone` keeps `Map`s, typed arrays and plain objects but strips prototypes, so
+ * a `Point2` arrives as a bare `{x, y}`. Snapshots hold none — only numbers — so they cross
+ * as they are; the few class instances left are rebuilt on arrival, in this one place.
+ *
+ * The slot layout crosses once per `load`, in its own message, and the client puts it back
+ * on the snapshots that follow. Sending it with each of them would clone it once per batch —
+ * identity is preserved WITHIN a message, not between two — for keys that cannot change
+ * until the next `load`.
  */
 
-/** A snapshot as it arrives: same shape, `Point2` reduced to its fields. */
-type WireSnapshot = Omit<KinematicSnapshot, "positions"> & {
-  positions: Map<string, { x: number; y: number }>;
-};
-
-export function revive_snapshot(wire: WireSnapshot): KinematicSnapshot {
-  const positions = new Map<string, Point2>();
-  wire.positions.forEach((p, key) => positions.set(key, new Point2(p.x, p.y)));
-  return { ...wire, positions };
-}
+/** A snapshot as it crosses: the layout it belongs to is named by the epoch, not carried. */
+export type WireSnapshot = Omit<KinematicSnapshot, "layout">;
 
 /** The grab target is the only `Point2` going the other way. */
 type WireGrab = Omit<SimGrab, "target"> & { target: { x: number; y: number } };
@@ -45,20 +41,24 @@ export type ToRecorder =
     }
   | { type: "grab"; grab: SimGrab | null }
   /**
-   * Where the simulated clock should get to, and how fast it is being asked to move.
-   * Sent every displayed frame and never awaited: the worker runs towards the target on
-   * its own, so it is never idle waiting to be asked.
+   * Where the simulated clock should get to. Sent every displayed frame and never awaited:
+   * the worker runs towards the target on its own, so it is never idle waiting to be asked.
    */
-  | { type: "target"; targetTime: number; speed: number }
+  | { type: "target"; targetTime: number }
   | { type: "stop" };
 
-export type FromRecorder = {
-  type: "snapshots";
-  snapshots: KinematicSnapshot[];
-  /** The step these were recorded at, for the fidelity readout. */
-  stepDt: number;
-  /** Where the recording now ends. */
-  reached: number;
-  /** The `load` these belong to; anything older is stale and dropped. */
-  epoch: number;
-};
+export type FromRecorder =
+  /**
+   * The slots the epoch's snapshots are written in, posted as soon as the model is
+   * compiled — so before any of them. It follows the same epoch rule as the snapshots
+   * themselves: read with the layout of another model, a snapshot is a different mechanism.
+   */
+  | { type: "layout"; keys: string[]; angleKeys: string[]; epoch: number }
+  | {
+      type: "snapshots";
+      snapshots: WireSnapshot[];
+      /** Where the recording now ends. */
+      reached: number;
+      /** The `load` these belong to; anything older is stale and dropped. */
+      epoch: number;
+    };

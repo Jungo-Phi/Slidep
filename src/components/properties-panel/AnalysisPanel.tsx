@@ -39,10 +39,7 @@ import { ConstraintResidual, RuntimeState } from "../../types/runtime-state";
 import { get_sim_degrees_of_freedom } from "../solver/utils";
 import { get_links_simulation, get_sim_nodes } from "../solver/parsing";
 import { get_probe_series } from "../solver/probe-series";
-import {
-  RECORD_DT,
-  at_recording_end,
-} from "../solver/kinematic-simulation";
+import { at_recording_end } from "../solver/kinematic-simulation";
 import {
   PROBE_METRIC_LABELS,
   PROBE_METRIC_ORDER,
@@ -95,9 +92,6 @@ const CONSTRAINT_NOUN: Record<string, string> = {
   Horizontal: "Horizontalité",
   Vertical: "Verticalité",
 };
-
-/** The recording rate when nothing forces the simulation to coarsen. */
-const NOMINAL_RECORD_HZ = Math.round(1 / RECORD_DT);
 
 type DdlStatus = { label: string; color: string };
 
@@ -213,7 +207,7 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
       time: t,
       isPlaying: false,
       // Landing on the end is not scrubbing: playing from there records on.
-      scrubbed: !at_recording_end(prev.kinematicSnapshots, t, prev.recordStep),
+      scrubbed: !at_recording_end(prev.kinematicSnapshots, t),
     }));
 
   const chart_empty_message = (metric: ProbeMetric): string =>
@@ -250,21 +244,6 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
   ).length;
   const mobility = get_sim_degrees_of_freedom(nodes, links) + drivingMotors;
   const status = ddl_status(mobility, drivingMotors, appMode);
-
-  // What the simulation gave up to hold the requested speed. The step is what
-  // yields first — real time is honoured, fidelity is not — so the recording rate
-  // is the headline; the lag only shows up when even coarsening was not enough.
-  // A tenth off nominal is not worth a line: the step is capped to whatever keeps the
-  // constraints intact, and that cap lands a few percent under 120 Hz without meaning
-  // anything is degraded.
-  const recordHz = Math.round(1 / runtimeState.recordStep);
-  const simulationFidelity =
-    appMode === "kinematic" && recordHz <= NOMINAL_RECORD_HZ * 0.9
-      ? {
-          hz: recordHz,
-          lagSeconds: runtimeState.lag >= 0.1 ? runtimeState.lag.toFixed(1) : null,
-        }
-      : null;
 
   const motorPivots = mechanism.mechanicalElements.filter(
     (el): el is PivotElement => el.type === "pivot" && !!el.motor,
@@ -466,7 +445,7 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
                             >
                               {CONSTRAINT_NOUN[constraint.type] ??
                                 constraint.type}{" "}
-                              {`e = ${constraint.residual.toFixed(2)}`}
+                              {`e = ${constraint.residual.toFixed(2)} mm`}
                             </Typography>
                           </>
                         }
@@ -500,21 +479,6 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
               </Box>
             )}
           </Box>
-
-          {/* La vitesse demandée est tenue en enregistrant plus grossièrement.
-              Muet quand le pas nominal suffit. */}
-          {simulationFidelity && (
-            <Typography
-              variant="caption"
-              sx={{ mx: 2, color: "text.secondary" }}
-            >
-              Enregistrement à {simulationFidelity.hz} Hz au lieu de{" "}
-              {NOMINAL_RECORD_HZ} : la vitesse demandée est tenue au prix de la
-              précision
-              {simulationFidelity.lagSeconds &&
-                ` — et ${simulationFidelity.lagSeconds} s de retard accumulé`}
-            </Typography>
-          )}
 
           <Divider />
         </>

@@ -1,6 +1,7 @@
 import { describe, it } from "vitest";
 import disconnectJson from "../../../test-mechanisms/Déconnexion courroie.slidep?raw";
-import { Link, Point2 } from "../../types";
+import { Link } from "../../types";
+import { KinematicSnapshot } from "../../types/runtime-state";
 import { load_mechanism } from "../../utils/load-mechanism";
 import { belt_pieces, BeltVia } from "../../utils/belt-path";
 import {
@@ -8,6 +9,7 @@ import {
   compile_simulation_model,
   step_simulation,
 } from "./kinematic-simulation";
+import { snapshot_point } from "./snapshot";
 
 /**
  * Chantier 5, sur `Déconnexion courroie.slidep`. Ce mécanisme ne TRAVERSE pas la limite
@@ -23,16 +25,16 @@ const loadFixture = () => load_mechanism(JSON.parse(disconnectJson)).mechanism;
 type Belt = Extract<Link, { type: "BeltLength" }>;
 
 /** A snapshot may key a fused node by either of its parts. */
-const at = (positions: Map<string, Point2>, key: string) =>
-  positions.get(key) ?? positions.get(key.split(",")[0]);
+const at = (snapshot: KinematicSnapshot, key: string) =>
+  snapshot_point(snapshot, key) ?? snapshot_point(snapshot, key.split(",")[0]);
 
 /** Geometric length of the belt on its REDUCED loop, the only honest measurement. */
-function beltLength(belt: Belt, positions: Map<string, Point2>): number {
+function beltLength(belt: Belt, snapshot: KinematicSnapshot): number {
   const vias: BeltVia[] = [];
   const wraps: number[] = [];
   for (let i = 0; i < belt.gearPosKeys.length; i++) {
     if (belt.disconnected?.[i]) continue;
-    const pos = at(positions, belt.gearPosKeys[i]);
+    const pos = at(snapshot, belt.gearPosKeys[i]);
     if (!pos) return NaN;
     vias.push({ pos, radius: belt.radii[i], direction: belt.directions[i] });
     wraps.push(belt.wraps?.[i] ?? 0);
@@ -56,8 +58,7 @@ function run(reattachArc: number, frames: number) {
   const model = compile_simulation_model(loadFixture());
   const belt = model.links.find((l): l is Belt => l.type === "BeltLength")!;
 
-  let positions: Map<string, Point2> | null = null;
-  let angles: Map<string, number> | null = null;
+  let prev: KinematicSnapshot | null = null;
   let attached = belt.gearPosKeys.map(() => true);
   let flips = 0;
   let firstDetach = -1;
@@ -68,9 +69,8 @@ function run(reattachArc: number, frames: number) {
 
   const trace: string[] = [];
   for (let frame = 0; frame < frames; frame++) {
-    const snap = step_simulation(model, frame / 60, positions, angles, 1 / 60);
-    positions = snap.positions;
-    angles = snap.angles;
+    const snap = step_simulation(model, frame / 60, prev, 1 / 60);
+    prev = snap;
 
     const now = belt.gearPosKeys.map((_, i) => !belt.disconnected?.[i]);
     now.forEach((a, i) => {
@@ -80,7 +80,7 @@ function run(reattachArc: number, frames: number) {
     });
     attached = now;
 
-    const len = beltLength(belt, positions);
+    const len = beltLength(belt, snap);
     if (frame > 5) {
       lengthMin = Math.min(lengthMin, len);
       lengthMax = Math.max(lengthMax, len);
@@ -154,8 +154,7 @@ describe("chantier 5 — hystérésis de rattachement", () => {
           l.type === "MotorAngle",
       )!;
 
-      let positions: Map<string, Point2> | null = null;
-      let angles: Map<string, number> | null = null;
+      let prev: KinematicSnapshot | null = null;
       let attached = true;
       let flips = 0;
       let detachFrame = -1;
@@ -165,9 +164,8 @@ describe("chantier 5 — hystérésis de rattachement", () => {
 
       for (let frame = 0; frame < 480; frame++) {
         if (frame === reverseAt) motor.omega = -motor.omega;
-        const snap = step_simulation(model, frame / 60, positions, angles, 1 / 60);
-        positions = snap.positions;
-        angles = snap.angles;
+        const snap = step_simulation(model, frame / 60, prev, 1 / 60);
+        prev = snap;
 
         const now = !belt.disconnected?.some(Boolean);
         if (now !== attached) {
@@ -177,7 +175,7 @@ describe("chantier 5 — hystérésis de rattachement", () => {
           attached = now;
         }
         if (frame > 5) {
-          const len = beltLength(belt, positions);
+          const len = beltLength(belt, snap);
           lengthMin = Math.min(lengthMin, len);
           lengthMax = Math.max(lengthMax, len);
         }

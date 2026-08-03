@@ -4,12 +4,11 @@
 
 import {
   COLORS,
+  ICON_COLORS,
   STROKE_WIDTHS,
   DIM,
   INTERACTION_SPECS,
   TEXT_SPECS,
-  ICON_SELECTION_FILTER,
-  FILL_DELETION_FILTER,
 } from "../../constants/rendering-specs";
 import { Point2 } from "../../types/point2";
 import { get_element_icon } from "../element-palette/elementIcon";
@@ -35,6 +34,44 @@ const TAU = 2 * Math.PI;
 
 // Cache pour les images d'icônes préchargées
 const iconImageCache = new Map<string, HTMLImageElement>();
+
+/** Flat silhouettes of the icons, one per (source, colour). */
+const tintedIconCache = new Map<string, HTMLCanvasElement>();
+
+/** Rendered above the drawn size so the silhouette stays crisp when scaled down. */
+const TINT_SUPERSAMPLE = 4;
+
+/**
+ * The icon painted over in a single colour, for the states an icon has to read
+ * in — selected, about to be deleted.
+ *
+ * A silhouette rather than a filter over the original: an icon's own hues come
+ * from the theme, and any relative operation (brightness, hue-rotate) lands
+ * somewhere different in each one — on a pure black or pure grey ink, nowhere at
+ * all. Cached, since it costs a rasterization.
+ */
+function tinted_icon(
+  img: HTMLImageElement,
+  url: string,
+  color: string,
+  side: number,
+): HTMLCanvasElement {
+  const key = `${url}|${color}|${side}`;
+  const cached = tintedIconCache.get(key);
+  if (cached) return cached;
+
+  const tinted = document.createElement("canvas");
+  tinted.width = side * TINT_SUPERSAMPLE;
+  tinted.height = side * TINT_SUPERSAMPLE;
+  const tintedCtx = tinted.getContext("2d")!;
+  tintedCtx.drawImage(img, 0, 0, tinted.width, tinted.height);
+  // Keeps the glyph's shape and drops all of its colours.
+  tintedCtx.globalCompositeOperation = "source-in";
+  tintedCtx.fillStyle = color;
+  tintedCtx.fillRect(0, 0, tinted.width, tinted.height);
+  tintedIconCache.set(key, tinted);
+  return tinted;
+}
 
 export function draw_grid(
   ctx: CanvasRenderingContext2D,
@@ -343,20 +380,37 @@ export function draw_mass(
   position: ScreenPoint,
   value: number,
 ) {
-  // TODO : draw avec la forme de trapèze
+  ctx.font = TEXT_SPECS.TEXT_FONT;
+  const text = value + " kg";
+  const width = ctx.measureText(text).width + 2 * DIM.MASS_TEXT_PADDING;
+  const overhang = (DIM.MASS_HEIGHT / 2) * Math.tan(DIM.MASS_SIDE_ANGLE);
+  const top = position.y - DIM.MASS_HEIGHT / 2;
+  const bottom = position.y + DIM.MASS_HEIGHT / 2;
+  const corners = [
+    { x: position.x - width / 2 + overhang * 2, y: top },
+    { x: position.x + width / 2 - overhang * 2, y: top },
+    { x: position.x + width / 2, y: bottom },
+    { x: position.x - width / 2, y: bottom },
+  ];
+  const edge_middle = (i: number) => ({
+    x: (corners[i % 4].x + corners[(i + 1) % 4].x) / 2,
+    y: (corners[i % 4].y + corners[(i + 1) % 4].y) / 2,
+  });
+
   ctx.beginPath();
-  ctx.roundRect(
-    position.x - (1.5 * DIM.MASS_SIZE) / 2,
-    position.y - DIM.MASS_SIZE / 2,
-    1.5 * DIM.MASS_SIZE,
-    DIM.MASS_SIZE,
-    DIM.SLIDER_RADIUS,
-  );
+  const start = edge_middle(0);
+  ctx.moveTo(start.x, start.y);
+  for (let i = 1; i <= 4; i++) {
+    const corner = corners[i % 4];
+    const next = edge_middle(i);
+    ctx.arcTo(corner.x, corner.y, next.x, next.y, DIM.SLIDER_RADIUS);
+  }
+  ctx.closePath();
   ctx.fill();
   ctx.stroke();
 
   ctx.fillStyle = ctx.strokeStyle;
-  draw_text(ctx, position, value + "kg");
+  draw_text(ctx, position, text);
 }
 
 export function draw_beam(
@@ -390,18 +444,16 @@ export function draw_spring(
   start: ScreenPoint,
   end: ScreenPoint,
   restLength: number | undefined = undefined,
+  scale: number = 1,
 ) {
   ctx.save();
   ctx.translate(start.x, start.y);
   ctx.rotate(end.sub(start).angle());
   const length = start.distance_to(end);
-
-  let coilNb;
-  if (!restLength) {
-    coilNb = Math.max(Math.floor(length / 16), DIM.SPRING_MIN_COILS);
-  } else {
-    coilNb = Math.max(Math.floor(restLength / 16), DIM.SPRING_MIN_COILS);
-  }
+  const coilNb = Math.max(
+    Math.floor((restLength ?? length / scale) / DIM.SPRING_COIL_PITCH),
+    DIM.SPRING_MIN_COILS,
+  );
   const fc = (t: number) => {
     return (Math.sin((t - 0.5) * Math.PI) + 1) / 2;
   };
@@ -415,19 +467,19 @@ export function draw_spring(
 
   const oldStrokeStyle = ctx.strokeStyle;
   const oldFillStyle = ctx.fillStyle;
+  const oldGlobalAlpha = ctx.globalAlpha;
   const widthChange = ctx.lineWidth - STROKE_WIDTHS.STANDARD;
 
-  // Spires en arrière-plan
   ctx.lineCap = "round";
   ctx.lineWidth = STROKE_WIDTHS.SPIRE + widthChange;
-  ctx.filter = `saturate(0.5) brightness(3)`;
+  ctx.globalAlpha *= DIM.SPRING_BACK_COIL_OPACITY;
   for (let i = 1; i <= coilNb - 1; i++) {
     ctx.beginPath();
     ctx.moveTo(deca(i, 0.25), DIM.SPRING_COIL_RADIUS);
     ctx.lineTo(deca(i, 0.75), -DIM.SPRING_COIL_RADIUS);
     ctx.stroke();
   }
-  ctx.filter = "none";
+  ctx.globalAlpha = oldGlobalAlpha;
 
   // Barre de fond
   ctx.lineCap = "square";
@@ -482,23 +534,19 @@ export function draw_damper(
   start: ScreenPoint,
   end: ScreenPoint,
   restLength: number | undefined = undefined,
+  scale: number = 1,
 ) {
   ctx.save();
   ctx.translate(start.x, start.y);
   ctx.rotate(end.sub(start).angle());
   const length = start.distance_to(end);
-
-  let start_x;
-  let piston_x;
-  if (!restLength) {
-    start_x = length / 4;
-    piston_x = (length - 2 * DIM.TAC) / 2;
-  } else {
-    start_x = length / 4;
-    piston_x =
-      ((length - 2 * DIM.TAC) / 4) *
-      (1 + 3 * Math.exp(-Math.pow(length / restLength / 2, 2)));
-  }
+  const start_x = length / 4;
+  const stretch = restLength ? length / scale / restLength : undefined;
+  const piston_x =
+    stretch === undefined
+      ? (length - 2 * DIM.TAC) / 2
+      : ((length - 2 * DIM.TAC) / 4) *
+        (1 + 3 * Math.exp(-Math.pow(stretch / 2, 2)));
   const oldStrokeStyle = ctx.strokeStyle;
   const widthChange = ctx.lineWidth - STROKE_WIDTHS.STANDARD;
 
@@ -672,8 +720,8 @@ export function draw_motor(
   const radius = 30;
   const scale = 0.8;
 
-  let startAngle = TAU * (clockwise ? C - 0.5 : -C);
-  let endAngle = TAU * (clockwise ? -C - D : C - 0.5 + D);
+  const startAngle = TAU * (clockwise ? C - 0.5 : -C);
+  const endAngle = TAU * (clockwise ? -C - D : C - 0.5 + D);
   ctx.beginPath();
   ctx.arc(position.x, position.y, radius, startAngle, endAngle, !clockwise);
   ctx.stroke();
@@ -1140,10 +1188,16 @@ export function draw_dimension_belt(
   if (!hideText) draw_dimension_text(ctx, position, value);
 }
 
-/** The fill of an on-canvas badge — a dimension pill, a ratio pill, an icon box. */
+/**
+ * How a badge shows that it is on its way out: under the eraser, or as the
+ * tombstone of a constraint an undo/redo has just removed.
+ */
+export type BadgeDeletion = "none" | "erasing" | "ghost";
+
+/** The fill of a badge laid over the drawing — a ratio pill, a constraint icon box. */
 function badge_fill(isSelected: boolean): string {
   return (
-    (isSelected ? COLORS.BADGE_FILL_SELECTED : COLORS.BACKGROUND) +
+    (isSelected ? COLORS.BADGE_FILL_SELECTED : COLORS.BADGE_FILL) +
     COLORS.ICON_TRANSPARENCY
   );
 }
@@ -1164,8 +1218,8 @@ export function draw_dimension_text(
   const lastShadowColor = ctx.shadowColor;
   ctx.shadowBlur = INTERACTION_SPECS.ICON_HALO_SIZE;
   ctx.shadowColor = COLORS.BACKGROUND;
-  // A dimension pill keeps the plain ground even when selected — its outline and text already carry the selection.
-  ctx.fillStyle = badge_fill(false);
+  // A value pill sits on the ground and keeps it even when selected: it labels the drawing rather than floating above it, and its outline and text already carry the selection.
+  ctx.fillStyle = COLORS.BACKGROUND + COLORS.ICON_TRANSPARENCY;
   ctx.beginPath();
   ctx.roundRect(
     position.x - metrics.width / 2 - 8 / 2,
@@ -1186,14 +1240,17 @@ export function draw_gear_ratio(
   ctx: CanvasRenderingContext2D,
   position: ScreenPoint,
   value: number,
+  selected = false,
+  hovered = false,
+  deletion: BadgeDeletion = "none",
 ) {
   ctx.font = TEXT_SPECS.TEXT_FONT;
   const text = value2ratio(value).join(" : ");
   const metrics = ctx.measureText(text);
-  const isSelected = ctx.shadowBlur !== 0;
-
   const lastStrokeStyle = ctx.strokeStyle;
-  if (ctx.lineWidth === 2 && ctx.shadowBlur === 0)
+  // At rest the pill carries an outline of its own. Any other state has
+  // something to say, and says it in the stroke the caller chose.
+  if (!selected && !hovered && deletion === "none")
     ctx.strokeStyle = COLORS.BADGE_STROKE;
   ctx.beginPath();
   ctx.roundRect(
@@ -1208,7 +1265,7 @@ export function draw_gear_ratio(
   const lastShadowColor = ctx.shadowColor;
   ctx.shadowBlur = INTERACTION_SPECS.ICON_HALO_SIZE;
   ctx.shadowColor = COLORS.BACKGROUND;
-  ctx.fillStyle = badge_fill(isSelected);
+  ctx.fillStyle = badge_fill(selected);
   ctx.fill();
   ctx.shadowBlur = lastShadowBlur;
   ctx.shadowColor = lastShadowColor;
@@ -1221,14 +1278,15 @@ export function draw_element_icon(
   ctx: CanvasRenderingContext2D,
   position: ScreenPoint,
   element: UnionElement,
-  deletionTint = false,
+  selected = false,
+  hovered = false,
+  deletion: BadgeDeletion = "none",
 ) {
   const side = DIM.ICON_SIZE;
-  const isSelected = ctx.shadowBlur !== 0;
-  if (deletionTint) ctx.strokeStyle = COLORS.DELETION_BOX;
-  else if (ctx.lineWidth === 2 && ctx.shadowBlur === 0)
-    ctx.strokeStyle = COLORS.BADGE_STROKE;
-  if (deletionTint) ctx.globalAlpha *= 0.5;
+  // At rest the box carries an outline of its own. Any other state has something
+  // to say, and says it in the stroke the caller chose.
+  if (deletion !== "none") ctx.strokeStyle = COLORS.DELETION_BOX;
+  else if (!selected && !hovered) ctx.strokeStyle = COLORS.BADGE_STROKE;
   ctx.beginPath();
   ctx.roundRect(
     position.x - side / 2 - 1,
@@ -1238,12 +1296,13 @@ export function draw_element_icon(
     4,
   );
   ctx.stroke();
+  const lastShadowBlur = ctx.shadowBlur;
+  const lastShadowColor = ctx.shadowColor;
   ctx.shadowBlur = INTERACTION_SPECS.ICON_HALO_SIZE;
   ctx.shadowColor = COLORS.BACKGROUND;
-  ctx.fillStyle = badge_fill(isSelected);
-  if (deletionTint) ctx.filter = FILL_DELETION_FILTER;
-
+  ctx.fillStyle = badge_fill(selected);
   ctx.fill();
+
   const iconUrl = get_element_icon(element);
   let img = iconImageCache.get(iconUrl);
   if (!img) {
@@ -1251,10 +1310,32 @@ export function draw_element_icon(
     img.src = iconUrl;
     iconImageCache.set(iconUrl, img);
   }
-  if (!img.complete) return;
-  if (isSelected) ctx.filter = ICON_SELECTION_FILTER;
-  ctx.drawImage(img, position.x - side / 2, position.y - side / 2, side, side);
-  if (deletionTint) ctx.globalAlpha *= 2;
+  if (img.complete) {
+    // The tint follows the theme's own palette, not the blend a theme fade
+    // passes through, so a fade does not rasterize a silhouette per frame.
+    const tint =
+      deletion !== "none"
+        ? ICON_COLORS.DELETION_STROKE
+        : selected
+          ? ICON_COLORS.SELECTION_STROKE
+          : undefined;
+    ctx.drawImage(
+      tint ? tinted_icon(img, iconUrl, tint, side) : img,
+      position.x - side / 2,
+      position.y - side / 2,
+      side,
+      side,
+    );
+  }
+  ctx.shadowBlur = lastShadowBlur;
+  ctx.shadowColor = lastShadowColor;
+  if (deletion === "ghost") {
+    // Strikes a badge through, corner to corner, in the stroke it is outlined with.
+    ctx.beginPath();
+    ctx.moveTo(position.x - side / 2, position.y + side / 2);
+    ctx.lineTo(position.x + side / 2, position.y - side / 2);
+    ctx.stroke();
+  }
 }
 
 export function draw_text(
@@ -1262,7 +1343,6 @@ export function draw_text(
   position: ScreenPoint,
   text: string,
 ) {
-  ctx.filter = "none";
   ctx.fillText(text, position.x, position.y);
 
   if (ctx.lineWidth > 3) {
@@ -1444,6 +1524,13 @@ export interface TrajectoryDisplay {
   points: WorldPoint[];
   /** Number of points at or before the current playback time. */
   headCount: number;
+  /**
+   * How much of the path is drawn at all. Equal to `headCount` while the recording is being
+   * extended: what lies past the cursor is not a preview of where the motion goes, it is
+   * wherever the worker happens to have got to — an amount that changes every frame, and
+   * that reads as a flicker running ahead of the point.
+   */
+  visibleCount: number;
   color: string;
 }
 
@@ -1491,13 +1578,13 @@ export function draw_trajectory(
     ctx.globalAlpha = 0.8;
     polyline(0, trajectory.headCount - 1);
   }
-  if (trajectory.headCount < trajectory.points.length) {
+  if (trajectory.headCount < trajectory.visibleCount) {
     ctx.globalAlpha = 0.25;
     let startFuture = Math.max(0, trajectory.headCount - 1);
     if (dotted) {
       const remainder = startFuture % step;
       if (remainder !== 0) startFuture += step - remainder;
     }
-    polyline(startFuture, trajectory.points.length - 1);
+    polyline(startFuture, trajectory.visibleCount - 1);
   }
 }

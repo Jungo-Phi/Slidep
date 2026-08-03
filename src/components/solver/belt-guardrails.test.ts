@@ -2,14 +2,15 @@ import { describe, it, expect } from "vitest";
 import poulieJson from "../../../test-mechanisms/Poulie bloqueuse.slidep?raw";
 import coreXYJson from "../../../test-mechanisms/Core XY - 2 moteurs.slidep?raw";
 import huygensJson from "../../../test-mechanisms/Huygen's chain drive.slidep?raw";
-import { Point2 } from "../../types/point2";
 import { Link } from "../../types";
+import { KinematicSnapshot } from "../../types/runtime-state";
 import { load_mechanism } from "../../utils/load-mechanism";
 import {
   compile_simulation_model,
   step_simulation,
   SimulationModel,
 } from "./kinematic-simulation";
+import { snapshot_angle, snapshot_point } from "./snapshot";
 
 /**
  * Guardrails for the three belt reference mechanisms, on a short horizon: they catch a
@@ -32,17 +33,14 @@ const motorsOf = (m: SimulationModel) =>
 function run(
   model: SimulationModel,
   frames: number,
-  probe?: (frame: number, angles: Map<string, number>) => void,
+  probe?: (frame: number, snapshot: KinematicSnapshot) => void,
 ) {
-  let positions: Map<string, Point2> | null = null;
-  let angles: Map<string, number> | null = null;
+  let last: KinematicSnapshot | null = null;
   for (let i = 0; i < frames; i++) {
-    const s = step_simulation(model, i / 60, positions, angles, 1 / 60);
-    positions = s.positions;
-    angles = s.angles;
-    probe?.(i + 1, angles);
+    last = step_simulation(model, i / 60, last, 1 / 60);
+    probe?.(i + 1, last);
   }
-  return { positions: positions!, angles: angles! };
+  return last!;
 }
 
 describe("garde-fous des mécanismes à courroie", () => {
@@ -50,8 +48,8 @@ describe("garde-fous des mécanismes à courroie", () => {
     const model = compile_simulation_model(loadFixture(poulieJson));
     const motor = motorsOf(model)[0];
     let blocked = NaN;
-    const end = run(model, 200, (frame, angles) => {
-      if (frame === 100) blocked = deg(angles.get(motor.angleKey) ?? 0);
+    const end = run(model, 200, (frame, snapshot) => {
+      if (frame === 100) blocked = deg(snapshot_angle(snapshot, motor.angleKey) ?? 0);
     });
 
     // The motor commands 1 rad/s clockwise, i.e. −100° by frame 100 in the model's
@@ -60,7 +58,9 @@ describe("garde-fous des mécanismes à courroie", () => {
     expect(blocked).toBeLessThan(-45);
     expect(blocked).toBeGreaterThan(-55);
     // A true dead point, not slow creep: nothing moves over the next 100 frames.
-    expect(Math.abs(deg(end.angles.get(motor.angleKey) ?? 0) - blocked)).toBeLessThan(0.05);
+    expect(
+      Math.abs(deg(snapshot_angle(end, motor.angleKey) ?? 0) - blocked),
+    ).toBeLessThan(0.05);
   }, 60_000);
 
   it("Core XY - 2 moteurs — un moteur seul, l'autre à ω = 0", () => {
@@ -75,18 +75,18 @@ describe("garde-fous des mécanismes à courroie", () => {
     const key = model.keyMap.get(carriage) ?? carriage;
     const start = model.nodes.positions.get(key)!.clone();
     const r = run(model, 60);
-    const end = r.positions.get(carriage) ?? r.positions.get(key)!;
+    const end = snapshot_point(r, carriage) ?? snapshot_point(r, key)!;
     const ratio = (end.y - start.y) / (end.x - start.x);
 
     // Freezing one motor leaves a single degree of freedom — the diagonal, Δy/Δx ≈ 1 —
     // and the frozen motor must stay put. Both follow from the belt no longer slipping.
     console.log(
-      `  Δ = (${(end.x - start.x).toFixed(2)}, ${(end.y - start.y).toFixed(2)})  Δy/Δx = ${ratio.toFixed(4)}  figé = ${deg(r.angles.get(frozen.angleKey) ?? 0).toFixed(4)}°`,
+      `  Δ = (${(end.x - start.x).toFixed(2)}, ${(end.y - start.y).toFixed(2)})  Δy/Δx = ${ratio.toFixed(4)}  figé = ${deg(snapshot_angle(r, frozen.angleKey) ?? 0).toFixed(4)}°`,
     );
     expect(Math.abs(end.x - start.x)).toBeGreaterThan(10);
     expect(ratio).toBeGreaterThan(0.9);
     expect(ratio).toBeLessThan(1.1);
-    expect(Math.abs(deg(r.angles.get(frozen.angleKey) ?? 0))).toBeLessThan(1);
+    expect(Math.abs(deg(snapshot_angle(r, frozen.angleKey) ?? 0))).toBeLessThan(1);
   }, 60_000);
 
   it("Huygen's chain drive — le moteur suit sa consigne", () => {
@@ -95,7 +95,7 @@ describe("garde-fous des mécanismes à courroie", () => {
     const frames = 60;
     const r = run(model, frames);
     const tracking =
-      (r.angles.get(motor.angleKey) ?? 0) / ((motor.omega * frames) / 60);
+      (snapshot_angle(r, motor.angleKey) ?? 0) / ((motor.omega * frames) / 60);
 
     // Nothing on this mechanism should hold the motor back: it must do what it is told.
     console.log(`  suivi = ${(100 * tracking).toFixed(2)} %`);

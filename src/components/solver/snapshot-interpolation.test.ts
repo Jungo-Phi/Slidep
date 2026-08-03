@@ -5,20 +5,23 @@ import huygens from "../../../test-mechanisms/Huygen's chain drive.slidep?raw";
 import jansen from "../../../test-mechanisms/Jansen's linkage.slidep?raw";
 import poulie from "../../../test-mechanisms/Poulie bloqueuse.slidep?raw";
 import vilbrequin from "../../../test-mechanisms/Vilbrequin.slidep?raw";
-import { Point2 } from "../../types/point2";
 import { Mechanism } from "../../types";
 import { load_mechanism } from "../../utils/load-mechanism";
 import {
   RECORD_DT,
   apply_snapshot_to_mechanism,
   compile_simulation_model,
-  recording_step,
   snapshot_at,
   snapshot_index_at,
-  step_ceiling,
   step_simulation,
 } from "./kinematic-simulation";
 import { KinematicSnapshot } from "../../types/runtime-state";
+import {
+  make_snapshot_layout,
+  snapshot_angle,
+  snapshot_belt_detached,
+  snapshot_point,
+} from "./snapshot";
 
 /**
  * Interpolating between two snapshots is a drawing, not a solve: the average of two states
@@ -64,13 +67,10 @@ function record(json: string, frames: number) {
   const mechanism = loadFixture(json);
   const model = compile_simulation_model(mechanism);
   const snaps: KinematicSnapshot[] = [];
-  let positions: Map<string, Point2> | null = null;
-  let angles: Map<string, number> | null = null;
+  let prev: KinematicSnapshot | null = null;
   for (let i = 0; i < frames; i++) {
-    const s = step_simulation(model, i * RECORD_DT, positions, angles, RECORD_DT);
-    positions = s.positions;
-    angles = s.angles;
-    snaps.push(s);
+    prev = step_simulation(model, i * RECORD_DT, prev, RECORD_DT);
+    snaps.push(prev);
   }
   return { mechanism, snaps };
 }
@@ -119,6 +119,51 @@ describe("interpolation des snapshots", () => {
     expect(worstAdded).toBeLessThan(0.1);
   }, 300_000);
 
+  it("au pas RÉELLEMENT enregistré, l'erreur reste sous le même seuil", () => {
+    // The recorder solves at RECORD_DT and keeps one instant in two, so what the app
+    // interpolates across is twice the step measured above — and the error of a linear
+    // interpolation is second order in it, so this is where it is expected to quadruple.
+    const FRAMES = 120;
+    console.log("\n  | mécanisme | pas 1/120 | pas retenu 1/60 | rapport |");
+    console.log("  |---|---|---|---|");
+
+    let worstAdded = 0;
+    for (const [name, json] of MECHANISMS) {
+      const { mechanism, snaps } = record(json, FRAMES);
+      const rest = beamLengths(mechanism);
+      if (rest.size === 0) continue;
+      const kept = snaps.filter((_, i) => i % 2 === 0);
+
+      const added = (series: KinematicSnapshot[], step: number) => {
+        let atNodes = 0;
+        let interpolated = 0;
+        for (let i = 0; i < series.length - 1; i++) {
+          atNodes = Math.max(
+            atNodes,
+            worstBeamError(apply_snapshot_to_mechanism(mechanism, series[i]), rest),
+          );
+          const mid = snapshot_at(series, (i + 0.5) * step);
+          if (!mid) continue;
+          interpolated = Math.max(
+            interpolated,
+            worstBeamError(apply_snapshot_to_mechanism(mechanism, mid), rest),
+          );
+        }
+        return Math.max(0, interpolated - atNodes);
+      };
+
+      const fine = added(snaps, RECORD_DT);
+      const coarse = added(kept, 2 * RECORD_DT);
+      worstAdded = Math.max(worstAdded, coarse);
+      console.log(
+        `  | ${name} | ${fine.toExponential(2)} px | ${coarse.toExponential(2)} px | ` +
+          `${fine > 0 ? (coarse / fine).toFixed(1) : "—"}× |`,
+      );
+    }
+    console.log(`\n  pire ajout au pas retenu : ${worstAdded.toExponential(3)} px`);
+    expect(worstAdded).toBeLessThan(0.1);
+  }, 300_000);
+
   it("aux instants enregistrés, elle rend le snapshot lui-même", () => {
     const { snaps } = record(jansen, 20);
     for (let i = 0; i < snaps.length; i++) {
@@ -132,7 +177,9 @@ describe("interpolation des snapshots", () => {
     // must be held, never a half-detached belt.
     const { snaps } = record(disconnect, 400);
     const detached = (s: KinematicSnapshot) =>
-      JSON.stringify([...(s.disconnectedBeltGears ?? new Map())]);
+      s.layout.belts
+        .map((id) => `${id}:${snapshot_belt_detached(s, id) ?? ""}`)
+        .join("|");
     let transitions = 0;
     for (let i = 0; i < snaps.length - 1; i++) {
       if (detached(snaps[i]) === detached(snaps[i + 1])) continue;
@@ -145,47 +192,22 @@ describe("interpolation des snapshots", () => {
 });
 
 /**
- * Above ×1 the recording steps in coarser jumps, so its time axis is no longer a
- * multiple of `RECORD_DT`. Everything that reads a snapshot by time has to search
- * that axis instead of dividing by the step.
+ * Everything that reads a snapshot by time searches the axis rather than dividing by the
+ * step. Recording is uniform today, so these hold nothing up on their own — they are what
+ * keeps the readers correct if a variable step ever comes back.
  */
 describe("axe de temps non uniforme", () => {
-  /** Snapshots at the given times, carrying one node that moves with time. */
-  const at = (times: number[]): KinematicSnapshot[] =>
-    times.map((t) => ({
-      t,
-      positions: new Map([["n", new Point2(t, 0)]]),
-      angles: new Map([["g", t]]),
-    }));
-
-  it("le pas d'enregistrement grossit juste assez pour tenir la vitesse", () => {
-    const BUDGET = 8;
-    // A cheap step: the whole frame's request fits, so the step stays nominal.
-    expect(recording_step(1 / 60, 0.5, BUDGET)).toBe(RECORD_DT);
-    // 4 ms a step → 2 affordable → half the request each, coarser than nominal.
-    expect(recording_step(1 / 6, 4, BUDGET)).toBeCloseTo(1 / 12, 12);
-    // A step that outlasts the budget on its own: one per frame, so it has to
-    // carry the entire request. This is the saturated regime.
-    expect(recording_step(1 / 6, 40, BUDGET)).toBeCloseTo(1 / 6, 12);
-    // Never finer than nominal, however cheap the mechanism or slow the playback.
-    expect(recording_step(1 / 600, 0.01, BUDGET)).toBe(RECORD_DT);
-    // A cost of zero (not yet measured) must not divide by zero.
-    expect(recording_step(1 / 60, 0, BUDGET)).toBe(RECORD_DT);
-  });
-
-  it("le plafond ramène le pas au seuil où la contrainte tient", () => {
-    // Nothing violated: no cap, and the ceiling opens by a quarter each clean step.
-    expect(step_ceiling(1 / 6, 0)).toBeCloseTo(1 / 6 / 0.8, 12);
-    // Twice past the threshold ⇒ halve the step. Measured on `Poulie bloqueuse`: 1.94 at
-    // a 1/60 step, which this maps back to ~1/116 — the far side of the cliff.
-    expect(step_ceiling(1 / 60, 1.94)).toBeCloseTo(1 / 60 / 1.94, 12);
-    // From very coarse, one division is enough to land back near nominal.
-    expect(step_ceiling(1 / 6, 15.9)).toBeCloseTo(1 / 6 / 15.9, 12);
-    // Never finer than nominal, whatever the violation: a real blockage must keep
-    // reporting itself instead of being chased below RECORD_DT.
-    expect(step_ceiling(1 / 120, 1.8)).toBe(RECORD_DT);
-    expect(step_ceiling(1 / 480, 50)).toBe(RECORD_DT);
-  });
+  /** Snapshots at the given times, carrying one node that moves with time. They share one
+   *  layout, as the snapshots of a single recording do. */
+  const at = (times: number[]): KinematicSnapshot[] => {
+    const layout = make_snapshot_layout(["n"], ["g"]);
+    return times.map((t) => {
+      const positions = new Float64Array(layout.keys.length * 2).fill(NaN);
+      positions[0] = t;
+      positions[1] = 0;
+      return { t, layout, positions, angles: Float64Array.of(t) };
+    });
+  };
 
   it("encadre l'instant demandé quel que soit l'espacement", () => {
     const snaps = at([0, 1, 1.25, 5, 5.5]);
@@ -202,9 +224,10 @@ describe("axe de temps non uniforme", () => {
     // A gap of 4 s followed by one of 0.5 s: half-way across each is the midpoint
     // of that gap, which fixed-step arithmetic would place elsewhere entirely.
     const snaps = at([0, 4, 4.5]);
-    expect(snapshot_at(snaps, 2)?.positions.get("n")?.x).toBeCloseTo(2, 12);
-    expect(snapshot_at(snaps, 4.25)?.positions.get("n")?.x).toBeCloseTo(4.25, 12);
-    expect(snapshot_at(snaps, 4.25)?.angles.get("g")).toBeCloseTo(4.25, 12);
+    const x = (t: number) => snapshot_point(snapshot_at(snaps, t)!, "n")?.x;
+    expect(x(2)).toBeCloseTo(2, 12);
+    expect(x(4.25)).toBeCloseTo(4.25, 12);
+    expect(snapshot_angle(snapshot_at(snaps, 4.25)!, "g")).toBeCloseTo(4.25, 12);
     // Recorded instants still hand back the snapshot itself, untouched.
     expect(snapshot_at(snaps, 4)).toBe(snaps[1]);
   });

@@ -2,11 +2,13 @@ import { describe, it, expect } from "vitest";
 import poulieJson from "../../../test-mechanisms/Poulie bloqueuse.slidep?raw";
 import huygensJson from "../../../test-mechanisms/Huygen's chain drive.slidep?raw";
 import { Mechanism, Point2 } from "../../types";
+import { KinematicSnapshot } from "../../types/runtime-state";
 import { load_mechanism } from "../../utils/load-mechanism";
 import {
   compile_simulation_model,
   step_simulation,
 } from "./kinematic-simulation";
+import { snapshot_angle } from "./snapshot";
 
 /**
  * A closed belt's travel is a free mode — every pulley turning by as much leaves the
@@ -73,8 +75,7 @@ function spun(
 ): { angles: Map<string, number>; travel: Map<string, number> } {
   const model = compile_simulation_model(mechanism);
   const gear = mechanism.mechanicalElements.find((e) => e.id === spin);
-  let positions: Map<string, Point2> | null = null;
-  let angles: Map<string, number> | null = null;
+  let prev: KinematicSnapshot | null = null;
   const travel = new Map<string, number>();
   for (let i = 0; i < frames; i++) {
     const grab =
@@ -91,20 +92,18 @@ function spun(
             ),
           }
         : undefined;
-    const s = step_simulation(model, i / 60, positions, angles, 1 / 60, grab);
-    s.angles.forEach((a, key) => {
-      const before = angles?.get(key);
-      if (before !== undefined)
-        travel.set(key, (travel.get(key) ?? 0) + Math.abs(a - before));
-    });
-    positions = s.positions;
-    angles = s.angles;
+    const s = step_simulation(model, i / 60, prev, 1 / 60, grab);
+    if (prev)
+      s.layout.angleKeys.forEach((key, k) => {
+        travel.set(key, (travel.get(key) ?? 0) + Math.abs(s.angles[k] - prev!.angles[k]));
+      });
+    prev = s;
   }
   const out = new Map<string, number>();
   const travelled = new Map<string, number>();
   for (const el of mechanism.mechanicalElements)
     if (el.type === "gear") {
-      out.set(el.id, angles!.get(el.id) ?? NaN);
+      out.set(el.id, snapshot_angle(prev!, el.id) ?? NaN);
       travelled.set(el.id, travel.get(el.id) ?? 0);
     }
   return { angles: out, travel: travelled };
