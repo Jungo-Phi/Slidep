@@ -7,13 +7,14 @@ import {
   ProbeMetric,
 } from "../../types/element";
 import { ScreenPoint } from "../../types";
+import { StringKey, t } from "../../i18n";
 
-export const PROBE_METRIC_LABELS: Record<ProbeMetric, string> = {
-  position: "Position",
-  velocity: "Vitesse",
-  angle: "Angle",
-  "angular-velocity": "Vitesse angulaire",
-  force: "Force",
+export const PROBE_METRIC_LABEL_KEYS: Record<ProbeMetric, StringKey> = {
+  position: "metric_position",
+  velocity: "metric_velocity",
+  angle: "metric_angle",
+  "angular-velocity": "metric_angular_velocity",
+  force: "metric_force",
 };
 
 export const PROBE_METRIC_ORDER: ProbeMetric[] = [
@@ -103,7 +104,7 @@ export const ProbeMetricSelector: React.FC<ProbeMetricSelectorProps> = ({
             checked={element.probes.some((p) => p.metric === metric)}
             sx={{ p: 0, ml: -0.5, mr: 1 }}
           />
-          {PROBE_METRIC_LABELS[metric]}
+          {t(PROBE_METRIC_LABEL_KEYS[metric])}
         </MenuItem>
       ))}
     </>

@@ -33,7 +33,9 @@ export function get_sim_degrees_of_freedom(
   );
 }
 
-function keys_of(link: Link): string[] {
+/** Position keys a link touches, for ordering the sweep. Angle keys are absent on purpose:
+ *  the sort only cares about distance to an anchor. `variable_keys_of` is the complete one. */
+export function keys_of(link: Link): string[] {
   switch (link.type) {
     case "Radius":
       return [link.key1];

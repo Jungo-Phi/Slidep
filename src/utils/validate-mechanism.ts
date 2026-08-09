@@ -5,6 +5,7 @@ import {
   MechanicalElement,
   UnionElement,
 } from "../types/element";
+import type { ConstraintElement } from "../types/element";
 import { element_ref_fields } from "../types/element-refs";
 import { Point2 } from "../types/point2";
 import { Mechanism } from "../types/mechanism";
@@ -15,6 +16,8 @@ import {
   belt_terminal_pulley_id,
   MIN_PULLEYS_TO_CLOSE,
 } from "./belt-rules";
+import { edges_by_terminal_pair, edges_may_coexist } from "./edge-rules";
+import { t } from "../i18n";
 
 export type ValidationErrorCode =
   | "DUPLICATE_ID"
@@ -27,7 +30,19 @@ export type ValidationErrorCode =
   | "CONTRADICTORY_MOTOR"
   | "GROUNDED_MASS"
   | "BELT_CLOSURE_MISMATCH"
-  | "BELTS_JOINED";
+  | "BELTS_JOINED"
+  | "SUPERPOSED_EDGES"
+  | "DUPLICATE_CONSTRAINT";
+
+/**
+ * What a constraint says, independently of how it was written: its type and its
+ * operands, order-independent. Two constraints sharing a key say the same thing
+ * twice.
+ */
+export function constraint_key(constraint: ConstraintElement): string {
+  const ids = element_ref_fields(constraint).flatMap(({ ids }) => ids);
+  return [constraint.type, ...ids.sort()].join("|");
+}
 
 export interface MechanismValidationError {
   code: ValidationErrorCode;
@@ -130,7 +145,7 @@ export function validate_mechanism(
 
   // Uses shown_element_name when the element exists, legible_id as fallback.
   function name(id: ID): string {
-    if (!id) return "<ID manquant>";
+    if (!id) return t("validation_missing_id");
     const el = allByID.get(id);
     return el ? shown_element_name(el) : legible_id(id);
   }
@@ -141,7 +156,7 @@ export function validate_mechanism(
     if (seenIDs.has(el.id)) {
       errors.push({
         code: "DUPLICATE_ID",
-        message: `ID dupliqué (type: ${el.type}).`,
+        message: t("validation_duplicate_id", { type: el.type }),
         elementID: el.id,
       });
     }
@@ -154,7 +169,7 @@ export function validate_mechanism(
       if (spec.required && ids.length === 0) {
         errors.push({
           code: "MISSING_REFERENCE",
-          message: `(${field}) : référence absente.`,
+          message: t("validation_missing_reference", { field }),
           elementID: el.id,
         });
         continue;
@@ -166,7 +181,11 @@ export function validate_mechanism(
         if (count > 1) {
           errors.push({
             code: "DUPLICATE_IN_LIST",
-            message: `(${field}) : "${name(id)}" apparaît ${count} fois.`,
+            message: t("validation_duplicate_in_list", {
+              field,
+              name: name(id),
+              count,
+            }),
             elementID: el.id,
             relatedID: id,
           });
@@ -177,7 +196,7 @@ export function validate_mechanism(
         if (refID === el.id) {
           errors.push({
             code: "SELF_REFERENCE",
-            message: `(${field}) : auto-référence.`,
+            message: t("validation_self_reference", { field }),
             elementID: el.id,
           });
           continue;
@@ -186,7 +205,10 @@ export function validate_mechanism(
         if (!target) {
           errors.push({
             code: "MISSING_REFERENCE",
-            message: `(${field}) : référence "${legible_id(refID)}" qui n'existe pas.`,
+            message: t("validation_unknown_reference", {
+              field,
+              name: legible_id(refID),
+            }),
             elementID: el.id,
             relatedID: refID,
           });
@@ -195,7 +217,12 @@ export function validate_mechanism(
         if (!spec.target.includes(target.type)) {
           errors.push({
             code: "WRONG_TYPE",
-            message: `(${field}) : attendait [${spec.target.join(", ")}], "${name(refID)}" est de type "${target.type}".`,
+            message: t("validation_wrong_type", {
+              field,
+              expected: spec.target.join(", "),
+              name: name(refID),
+              type: target.type,
+            }),
             elementID: el.id,
             relatedID: refID,
           });
@@ -209,7 +236,10 @@ export function validate_mechanism(
         ) {
           errors.push({
             code: "MISSING_BIDIRECTIONAL",
-            message: `(${field} → ${name(refID)}) : connexion non réciproque.`,
+            message: t("validation_not_reciprocal", {
+              field,
+              name: name(refID),
+            }),
             elementID: el.id,
             relatedID: refID,
           });
@@ -227,10 +257,47 @@ export function validate_mechanism(
       if (start && end && start === end) {
         errors.push({
           code: "SELF_REFERENCE",
-          message: `(${cel.type}) : ${startField} et ${endField} identiques.`,
+          message: t("validation_same_endpoints", {
+            type: cel.type,
+            startField,
+            endField,
+          }),
           elementID: cel.id,
         });
       }
+    }
+  }
+
+  // ── One constraint per relation ──────────────────────────────────────────────
+  const constraintByKey = new Map<string, ID>();
+  for (const cel of cels) {
+    const key = constraint_key(cel);
+    const first = constraintByKey.get(key);
+    if (first === undefined) {
+      constraintByKey.set(key, cel.id);
+      continue;
+    }
+    errors.push({
+      code: "DUPLICATE_CONSTRAINT",
+      message: t("validation_duplicate_constraint", { name: name(first) }),
+      elementID: cel.id,
+      relatedID: first,
+    });
+  }
+
+  // ── Two edges never hold the same pair of nodes ──────────────────────────────
+  for (const group of edges_by_terminal_pair(mels).values()) {
+    if (group.length < 2 || edges_may_coexist(group)) continue;
+    // The eldest is the reference the others are superposed on.
+    for (const el of group.slice(1)) {
+      errors.push({
+        code: "SUPERPOSED_EDGES",
+        message: t("validation_superposed_edges", {
+          name: name(group[0].id),
+        }),
+        elementID: el.id,
+        relatedID: group[0].id,
+      });
     }
   }
 
@@ -248,7 +315,10 @@ export function validate_mechanism(
       ) {
         errors.push({
           code: "SAME_AXLE_MESH",
-          message: `partage l'axle ${name(el.parentAxleID)} avec ${name(otherID)} : engrènement impossible.`,
+          message: t("validation_same_axle_mesh", {
+            axle: name(el.parentAxleID),
+            other: name(otherID),
+          }),
           elementID: el.id,
           relatedID: otherID,
         });
@@ -261,7 +331,7 @@ export function validate_mechanism(
     if (el.type === "mass" && el.isGrounded) {
       errors.push({
         code: "GROUNDED_MASS",
-        message: `une masse ne peut pas être ancrée au sol.`,
+        message: t("validation_grounded_mass"),
         elementID: el.id,
       });
     }
@@ -274,8 +344,8 @@ export function validate_mechanism(
     errors.push({
       code: "BELT_CLOSURE_MISMATCH",
       message: el.closed
-        ? `courroie fermée sans boucle — il faut ${MIN_PULLEYS_TO_CLOSE} poulies et les deux extrémités sur une même jonction.`
-        : `courroie ouverte dont les deux extrémités tiennent à ${name(junctionID!)} — elle doit être fermée.`,
+        ? t("validation_belt_closed_no_loop", { count: MIN_PULLEYS_TO_CLOSE })
+        : t("validation_belt_open_with_loop", { name: name(junctionID!) }),
       elementID: el.id,
       relatedID: junctionID,
     });
@@ -297,7 +367,10 @@ export function validate_mechanism(
     if (beltIDs.length < 2) continue;
     errors.push({
       code: "BELTS_JOINED",
-      message: `tient les extrémités de ${beltIDs.length} courroies différentes (${beltIDs.map(name).join(", ")}) — deux courroies ne se rejoignent jamais.`,
+      message: t("validation_belts_joined", {
+        count: beltIDs.length,
+        names: beltIDs.map(name).join(", "),
+      }),
       elementID: nodeID,
       relatedID: beltIDs[0],
     });
@@ -310,14 +383,14 @@ export function validate_mechanism(
     if (el.isGrounded && parentBeamID !== undefined) {
       errors.push({
         code: "CONTRADICTORY_MOTOR",
-        message: `(motor) : le pivot est ancré au sol et a un parentBeamID — ces deux conditions sont mutuellement exclusives.`,
+        message: t("validation_contradictory_motor"),
         elementID: el.id,
         relatedID: parentBeamID,
       });
     } else if (!el.isGrounded && parentBeamID === undefined) {
       errors.push({
         code: "MISSING_REFERENCE",
-        message: `(motor.parentBeamID) : le pivot n'est pas ancré au sol, donc le moteur doit avoir un parentBeamID.`,
+        message: t("validation_motor_needs_beam"),
         elementID: el.id,
       });
     }
@@ -400,7 +473,12 @@ export function compute_constraint_violations(
         add(
           cel.id,
           "dimension",
-          `${n}: ${len.toFixed(1)} ≠ ${cel.value} px (Δ ${err.toFixed(2)} px)`,
+          t("violation_distance", {
+            name: n,
+            current: len.toFixed(1),
+            target: cel.value,
+            delta: err.toFixed(2),
+          }),
           err,
           "px",
         );
@@ -415,7 +493,12 @@ export function compute_constraint_violations(
         add(
           cel.id,
           "dimension",
-          `${n}: ${dist.toFixed(1)} ≠ ${cel.value} px (Δ ${err.toFixed(2)} px)`,
+          t("violation_distance", {
+            name: n,
+            current: dist.toFixed(1),
+            target: cel.value,
+            delta: err.toFixed(2),
+          }),
           err,
           "px",
         );
@@ -430,7 +513,12 @@ export function compute_constraint_violations(
         add(
           cel.id,
           "dimension",
-          `${n}: ${dist.toFixed(1)} ≠ ${cel.value} px (Δ ${err.toFixed(2)} px)`,
+          t("violation_distance", {
+            name: n,
+            current: dist.toFixed(1),
+            target: cel.value,
+            delta: err.toFixed(2),
+          }),
           err,
           "px",
         );
@@ -455,7 +543,12 @@ export function compute_constraint_violations(
         add(
           cel.id,
           "dimension",
-          `${n}: ${currentDeg.toFixed(1)}° ≠ ${cel.value}° (Δ ${errDeg.toFixed(2)}°)`,
+          t("violation_angle", {
+            name: n,
+            current: currentDeg.toFixed(1),
+            target: cel.value,
+            delta: errDeg.toFixed(2),
+          }),
           errDeg,
           "°",
         );
@@ -468,7 +561,12 @@ export function compute_constraint_violations(
         add(
           cel.id,
           "dimension",
-          `${n}: ${r.toFixed(1)} ≠ ${cel.value} px (Δ ${err.toFixed(2)} px)`,
+          t("violation_distance", {
+            name: n,
+            current: r.toFixed(1),
+            target: cel.value,
+            delta: err.toFixed(2),
+          }),
           err,
           "px",
         );
@@ -481,7 +579,7 @@ export function compute_constraint_violations(
         add(
           cel.id,
           "alignment",
-          `${n}: non horizontal (Δy ${err.toFixed(2)} px)`,
+          t("violation_not_horizontal", { name: n, delta: err.toFixed(2) }),
           err,
           "px",
         );
@@ -495,7 +593,7 @@ export function compute_constraint_violations(
         add(
           cel.id,
           "alignment",
-          `${n}: non horizontal (Δy ${err.toFixed(2)} px)`,
+          t("violation_not_horizontal", { name: n, delta: err.toFixed(2) }),
           err,
           "px",
         );
@@ -508,7 +606,7 @@ export function compute_constraint_violations(
         add(
           cel.id,
           "alignment",
-          `${n}: non vertical (Δx ${err.toFixed(2)} px)`,
+          t("violation_not_vertical", { name: n, delta: err.toFixed(2) }),
           err,
           "px",
         );
@@ -522,7 +620,7 @@ export function compute_constraint_violations(
         add(
           cel.id,
           "alignment",
-          `${n}: non vertical (Δx ${err.toFixed(2)} px)`,
+          t("violation_not_vertical", { name: n, delta: err.toFixed(2) }),
           err,
           "px",
         );
@@ -541,7 +639,10 @@ export function compute_constraint_violations(
         add(
           cel.id,
           "geometric",
-          `${n}: non perpendiculaire (Δ ${errDeg.toFixed(2)}°)`,
+          t("violation_not_perpendicular", {
+            name: n,
+            delta: errDeg.toFixed(2),
+          }),
           errDeg,
           "°",
         );
@@ -560,7 +661,7 @@ export function compute_constraint_violations(
         add(
           cel.id,
           "geometric",
-          `${n}: non parallèle (Δ ${errDeg.toFixed(2)}°)`,
+          t("violation_not_parallel", { name: n, delta: errDeg.toFixed(2) }),
           errDeg,
           "°",
         );
@@ -576,7 +677,12 @@ export function compute_constraint_violations(
         add(
           cel.id,
           "geometric",
-          `${n}: longueurs inégales ${len1.toFixed(1)} vs ${len2.toFixed(1)} px (Δ ${err.toFixed(2)} px)`,
+          t("violation_unequal_lengths", {
+            name: n,
+            first: len1.toFixed(1),
+            second: len2.toFixed(1),
+            delta: err.toFixed(2),
+          }),
           err,
           "px",
         );
@@ -591,7 +697,12 @@ export function compute_constraint_violations(
         add(
           cel.id,
           "geometric",
-          `${n}: rapport ${current.toFixed(3)} ≠ ${cel.value} (Δ ${err.toFixed(4)})`,
+          t("violation_ratio", {
+            name: n,
+            current: current.toFixed(3),
+            target: cel.value,
+            delta: err.toFixed(4),
+          }),
           err,
           "ratio",
         );
@@ -614,7 +725,11 @@ export function compute_constraint_violations(
       add(
         el.id,
         "liaison",
-        `${nodeName} hors de ${beamName} (Δ ${err.toFixed(2)} px)`,
+        t("violation_node_off_beam", {
+          node: nodeName,
+          beam: beamName,
+          delta: err.toFixed(2),
+        }),
         err,
         "px",
       );
@@ -635,7 +750,11 @@ export function compute_constraint_violations(
         add(
           el.id,
           "liaison",
-          `${nodeName} ↔ début de ${edgeName} (Δ ${err.toFixed(2)} px)`,
+          t("violation_node_off_edge_start", {
+            node: nodeName,
+            edge: edgeName,
+            delta: err.toFixed(2),
+          }),
           err,
           "px",
         );
@@ -649,7 +768,11 @@ export function compute_constraint_violations(
         add(
           el.id,
           "liaison",
-          `${nodeName} ↔ fin de ${edgeName} (Δ ${err.toFixed(2)} px)`,
+          t("violation_node_off_edge_end", {
+            node: nodeName,
+            edge: edgeName,
+            delta: err.toFixed(2),
+          }),
           err,
           "px",
         );
@@ -679,7 +802,13 @@ export function compute_constraint_violations(
       add(
         el.id,
         "liaison",
-        `Tangence ${gear1Name}↔${gear2Name}: ${dist.toFixed(1)} ≠ ${target.toFixed(1)} px (Δ ${err.toFixed(2)} px)`,
+        t("violation_tangency", {
+          first: gear1Name,
+          second: gear2Name,
+          current: dist.toFixed(1),
+          target: target.toFixed(1),
+          delta: err.toFixed(2),
+        }),
         err,
         "px",
       );
@@ -700,7 +829,11 @@ export function compute_constraint_violations(
       add(
         el.id,
         "liaison",
-        `${gearName} désaligné de son axe ${axleName} (Δ ${err.toFixed(2)} px)`,
+        t("violation_gear_off_axle", {
+          gear: gearName,
+          axle: axleName,
+          delta: err.toFixed(2),
+        }),
         err,
         "px",
       );
@@ -726,7 +859,16 @@ export function compute_constraint_violations(
       add(
         el.id,
         "liaison",
-        `${which === "start" ? "Début" : "Fin"} de ${beltName} dans ${shown_element_name(mechByID.get(gearID))} (Δ ${err.toFixed(2)} px)`,
+        t(
+          which === "start"
+            ? "violation_belt_start_off_gear"
+            : "violation_belt_end_off_gear",
+          {
+            belt: beltName,
+            gear: shown_element_name(mechByID.get(gearID)),
+            delta: err.toFixed(2),
+          },
+        ),
         err,
         "px",
       );

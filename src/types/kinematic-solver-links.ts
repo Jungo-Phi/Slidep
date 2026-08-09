@@ -44,7 +44,18 @@ export type Link = {
       key3: string;
       distance: number;
     }
-  | { type: "SlideOnSegment"; ddl: 1; key1: string; key2: string; key3: string }
+  // `normalOffset` (both OnSegment links) holds the point that many millimetres OFF the
+  // segment, on the side it already lies. Absent = on it. It is the target the redundancy
+  // analysis shifts to ask a slider whether it can be moved at all — a slider having no
+  // value of its own, there is nothing else to lie to it about.
+  | {
+      type: "SlideOnSegment";
+      ddl: 1;
+      key1: string;
+      key2: string;
+      key3: string;
+      normalOffset?: number;
+    }
   | {
       type: "FixedOnSegment";
       ddl: 2;
@@ -52,6 +63,7 @@ export type Link = {
       key2: string;
       key3: string;
       t: number;
+      normalOffset?: number;
     }
   | {
       type: "KeepOrientation";

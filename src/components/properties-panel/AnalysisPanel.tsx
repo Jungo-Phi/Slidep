@@ -7,6 +7,7 @@ import {
   FormControlLabel,
   Chip,
   Button,
+  CircularProgress,
   IconButton,
   Menu,
   Tooltip,
@@ -18,6 +19,8 @@ import {
   Add,
   WarningAmber,
   CheckCircleOutline,
+  InfoOutlined,
+  Troubleshoot,
   Tune,
   Close,
 } from "@mui/icons-material";
@@ -29,19 +32,16 @@ import {
   ID,
   MechanicalElement,
   Mechanism,
-  PivotElement,
   ProbeConfig,
   ProbeMetric,
   ZERO,
 } from "../../types";
 import { CanvasState } from "../../types/canvas-state";
 import { ConstraintResidual, RuntimeState } from "../../types/runtime-state";
-import { get_sim_degrees_of_freedom } from "../solver/utils";
-import { get_links_simulation, get_sim_nodes } from "../solver/parsing";
 import { get_probe_series } from "../solver/probe-series";
 import { at_recording_end } from "../solver/kinematic-simulation";
 import {
-  PROBE_METRIC_LABELS,
+  PROBE_METRIC_LABEL_KEYS,
   PROBE_METRIC_ORDER,
   ProbeMetricSelector,
 } from "../canvas/ProbeMetricSelector";
@@ -56,6 +56,18 @@ import { get_element_from_id } from "../mechanism/connect-actions";
 import { element_to_hovered_part } from "../canvas/utils";
 import { shown_element_name } from "../../utils";
 import ElementMeasures from "./ElementMeasures";
+import { MODE_ANIMATION } from "../../constants/rendering-specs";
+import { StringKey, t, tn } from "../../i18n";
+import { CanvasHighlight, NO_HIGHLIGHT } from "../canvas/draw-canvas";
+import {
+  find_redundant_links,
+  Redundancy,
+  RedundancyGroup,
+} from "../solver/redundant-links";
+import { ChainAnalysis, useDofAnalysis } from "./useDofAnalysis";
+import { ddl_status } from "./ddl-status";
+import { PosePreview, usePosePreview } from "./usePosePreview";
+import { strained_link } from "../solver/strain-animation";
 
 interface AnalysisPanelProps {
   mechanism: Mechanism;
@@ -69,95 +81,442 @@ interface AnalysisPanelProps {
   /** The mechanical element the canvas selection points at (a selected load
    *  resolves to its host), or undefined when nothing is selected. */
   selectedElement: MechanicalElement | undefined;
+  /** Names the elements the canvas should pick out; empty clears the highlight. */
+  setHighlight: (highlight: CanvasHighlight) => void;
+  /** Where the pose the panel is animating is published, for the canvas to draw. */
+  modePreviewRef: React.MutableRefObject<Mechanism | null>;
 }
 
 /** Short human label for a solver link type, shown as the violation kind. */
-const CONSTRAINT_NOUN: Record<string, string> = {
-  MotorBeam: "Moteur bloqué",
-  MotorAngle: "Moteur bloqué",
-  Distance: "Longueur",
-  FixedOnSegment: "Position sur poutre",
-  SlideOnSegment: "Glissement",
-  Angle: "Angle",
-  KeepOrientation: "Orientation",
-  GearMeshing: "Engrènement",
-  GearMeshAngle: "Engrènement",
-  GearRatio: "Rapport d'engrenage",
-  CoaxialAngle: "Coaxialité",
-  GearPerimeterPin: "Liaison engrenage",
-  BeamFollowsAngle: "Solidarité engrenage",
-  Normal: "Perpendicularité",
-  Parallel: "Parallélisme",
-  EqualLength: "Égalité de longueur",
-  Horizontal: "Horizontalité",
-  Vertical: "Verticalité",
+const CONSTRAINT_NOUN: Record<string, StringKey> = {
+  MotorBeam: "link_motor",
+  MotorAngle: "link_motor",
+  Distance: "link_distance",
+  FixedOnSegment: "link_fixed_on_segment",
+  SlideOnSegment: "link_slide_on_segment",
+  Angle: "link_angle",
+  KeepOrientation: "link_keep_orientation",
+  GearMeshing: "link_gear_meshing",
+  GearMeshAngle: "link_gear_meshing",
+  GearRatio: "link_gear_ratio",
+  CoaxialAngle: "link_coaxial",
+  GearPerimeterPin: "link_gear_perimeter_pin",
+  BeamFollowsAngle: "link_beam_follows_angle",
+  Normal: "link_normal",
+  Parallel: "link_parallel",
+  EqualLength: "link_equal_length",
+  Horizontal: "link_horizontal",
+  Vertical: "link_vertical",
+  BeltSegmentNoSlip: "link_belt_no_slip",
+  BeltLength: "link_belt_length",
 };
 
-type DdlStatus = { label: string; color: string };
-
-const plural = (n: number) => (n > 1 ? "s" : "");
-
-/**
- * One DOF number (the mechanism's mobility), read through the lens of the
- * active mode. `residual = mobility − drivers`:
- *  - static: motors act as restraints → classic iso/hyper/mécanisme trichotomy;
- *  - kinematic: the residual measures unpiloted motion;
- *  - dynamic: free DOF are normal (motion comes from forces), not a defect;
- *  - edition: neutral, design-time description (no pilotage judgement).
- */
-function ddl_status(
-  mobility: number,
-  drivers: number,
-  appMode: AppMode,
-): DdlStatus {
-  const residual = mobility - drivers;
-  const GREEN = "success.main";
-  const ORANGE = "warning.main";
-  const RED = "error.main";
-  const BLUE = "info.main";
-  const GREY = "text.secondary";
-
-  switch (appMode) {
-    case "edition":
-      if (mobility < 0) return { label: "Sur-contraint", color: RED };
-      if (mobility === 0)
-        return { label: "Structure rigide — 0 ddl", color: GREY };
-      return {
-        label: `Mécanisme — ${mobility} ddl mobile${plural(mobility)}`,
-        color: BLUE,
-      };
-
-    case "static":
-      if (residual > 0) return { label: "Instable (mécanisme)", color: ORANGE };
-      if (residual === 0) return { label: "Isostatique", color: GREEN };
-      return { label: `Hyperstatique (degré ${-residual})`, color: BLUE };
-
-    case "kinematic":
-      if (mobility === 0)
-        return { label: "Structure rigide — aucun mouvement", color: GREY };
-      if (drivers === 0)
-        return {
-          label: "Aucun moteur — déplacez le mécanisme à la main",
-          color: BLUE,
-        };
-      if (residual === 0) return { label: "Mouvement déterminé", color: GREEN };
-      if (residual > 0)
-        return {
-          label: `Sous-motorisé — ${residual} ddl non piloté${plural(residual)}`,
-          color: ORANGE,
-        };
-      return { label: "Sur-contraint", color: RED };
-
-    case "dynamic":
-      if (mobility === 0) return { label: "Structure rigide", color: GREY };
-      if (residual < 0) return { label: "Sur-contraint", color: RED };
-      if (residual === 0) return { label: "Mouvement déterminé", color: GREEN };
-      return {
-        label: `Mouvement libre — ${residual} ddl`,
-        color: BLUE,
-      };
+/** What one element's dispensable constraints are, in words: "2 × Distance". */
+const redundancy_kinds = (group: RedundancyGroup): string => {
+  const counts = new Map<string, number>();
+  for (const link of group.links) {
+    const noun = CONSTRAINT_NOUN[link.type]
+      ? t(CONSTRAINT_NOUN[link.type])
+      : link.type;
+    counts.set(noun, (counts.get(noun) ?? 0) + 1);
   }
-}
+  return [...counts]
+    .map(([noun, count]) => (count > 1 ? `${count} × ${noun}` : noun))
+    .join(", ");
+};
+
+/** A row whose animation is playing beats in time with it, so panel and canvas agree. */
+const BEATING = {
+  animation: `mode-beat ${MODE_ANIMATION.PERIOD_S / 2}s ease-in-out infinite`,
+  "@keyframes mode-beat": {
+    "0%, 100%": { backgroundColor: "action.selected" },
+    "50%": { backgroundColor: "action.hover" },
+  },
+} as const;
+
+/** Point the canvas at these elements: something to look at, not something wrong with them. */
+const focus = (elements: Iterable<ID>): CanvasHighlight => ({
+  elements: new Set(elements),
+  kind: "focus",
+});
+
+/** The same, for constraints an audit found dispensable. Drawn red. */
+const fault = (elements: Iterable<ID>): CanvasHighlight => ({
+  elements: new Set(elements),
+  kind: "fault",
+});
+
+/** One chain's block: its mobility headline, its motors, and its redundancies. */
+const ChainCard: React.FC<{
+  analysis: ChainAnalysis;
+  index: number;
+  appMode: AppMode;
+  setHighlight: (highlight: CanvasHighlight) => void;
+  /**
+   * The element a mode is named after — absent only in the moment after a deletion.
+   *
+   * The analysis is debounced, so for up to its delay the modes still name a part the
+   * mechanism no longer holds. Rare, brief, and not worth blanking the panel over.
+   */
+  elementOf: (id: ID) => MechanicalElement | undefined;
+  preview: PosePreview;
+  setPreview: (preview: PosePreview) => void;
+  setHoveredPart: (hoveredPart: HoveredPart) => void;
+  setCanvasState: (state: CanvasState) => void;
+  applyActions: (actions: Action[], actionBundleType: ActionBundleType) => void;
+  /** A running simulation already shows motion; a mode swung over it would only muddle it. */
+  modesPlayable: boolean;
+  /** Whether the pointed-at row is really animating — a strain sometimes has nothing to show. */
+  playing: boolean;
+  /** The redundancy audit's answer for this chain, or undefined until it is asked for. */
+  audit: Redundancy | undefined;
+  auditing: boolean;
+  onAudit: () => void;
+}> = ({
+  analysis,
+  index,
+  appMode,
+  setHighlight,
+  elementOf,
+  preview,
+  setPreview,
+  setHoveredPart,
+  setCanvasState,
+  applyActions,
+  modesPlayable,
+  playing,
+  audit,
+  auditing,
+  onAudit,
+}) => {
+  const { chain, mobility, modes, highlight } = analysis;
+  const status = ddl_status(mobility.mobility, chain.motors.length, appMode);
+  // The card's own hover, not its animation: entering a mode row keeps it true, since
+  // `onMouseEnter` does not fire again for children and `onMouseLeave` waits for the card.
+  const [hovered, setHovered] = React.useState(false);
+
+  return (
+    <Box
+      // Pointing at a chain lights it on the canvas; leaving lets the whole
+      // mechanism come back.
+      onMouseEnter={() => {
+        setHovered(true);
+        setHighlight(focus(highlight));
+      }}
+      onMouseLeave={() => {
+        setHovered(false);
+        setHighlight(NO_HIGHLIGHT);
+      }}
+      sx={{
+        display: "flex",
+        flexDirection: "column",
+        py: 1,
+        gap: 0.5,
+        borderRadius: 1,
+        backgroundColor: hovered ? "background.hover" : "background.sunken",
+      }}
+    >
+      <Box sx={{ display: "flex", alignItems: "center", gap: 1, px: 1 }}>
+        <Typography
+          variant="body1"
+          fontWeight={700}
+          color="primary"
+          sx={{ flex: 1 }}
+        >
+          {t("ddl_abbrev")} = {mobility.mobility}
+        </Typography>
+
+        {/* The verdict is a couple of words; the sentence behind it waits behind the
+            mark rather than crowding a row meant to be read at a glance. */}
+        <Typography
+          variant="body2"
+          fontWeight={600}
+          color={status.color}
+          noWrap
+          sx={{ maxWidth: "75%" }}
+        >
+          {status.label}
+        </Typography>
+        {status.hint && (
+          <Tooltip disableInteractive title={status.hint}>
+            <InfoOutlined
+              sx={{
+                fontSize: 16,
+                color: "text.disabled",
+                "&:hover": { color: "text.secondary" },
+              }}
+            />
+          </Tooltip>
+        )}
+      </Box>
+
+      {/* One row per mode: pointing at it swings the mechanism along that freedom. */}
+      {modes.length > 0 && (
+        <Box sx={{ display: "flex", flexDirection: "column", mx: 1 }}>
+          {modes.map((mode, modeIndex) => {
+            const shown =
+              preview?.kind === "mode" &&
+              preview.chainIndex === index &&
+              preview.modeIndex === modeIndex;
+            const named = elementOf(mode.dominant);
+            // A driven mode carries its motor's speed: now that modes name their
+            // motors, a separate motors list would say the same thing twice.
+            const motor =
+              mode.drivenByMotor && named?.type === "pivot" && named.motor
+                ? named
+                : undefined;
+            return (
+              <Box
+                key={modeIndex}
+                onMouseEnter={() => {
+                  if (!modesPlayable) return;
+                  setPreview({ kind: "mode", chainIndex: index, modeIndex });
+                  // Everything the mode moves, not just what it is named after:
+                  // `contributors` is a ranking, trimmed of its small shares.
+                  setHighlight(focus(mode.moves));
+                }}
+                onMouseLeave={() => {
+                  if (!modesPlayable) return;
+                  setPreview(null);
+                  // The row sits inside the chain's card, which gets no enter
+                  // event of its own on the way out — hand the chain back its
+                  // own highlight rather than clearing the canvas.
+                  setHighlight(focus(highlight));
+                }}
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 1,
+                  py: 0.2,
+                  borderRadius: 3,
+                  cursor: "default",
+                  backgroundColor: shown ? "action.selected" : "transparent",
+                  ...(shown && BEATING),
+                }}
+              >
+                {/* The mode's identity, and the only inert part of the row while a
+                    simulation plays. Opacity multiplies down the tree, so the speed
+                    input has to sit outside it to keep its own. */}
+                <Box
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 1,
+                    flex: 1,
+                    minWidth: 0,
+                    opacity: modesPlayable ? 1 : 0.5,
+                  }}
+                >
+                  <Chip
+                    size="small"
+                    color={shown ? "primary" : "default"}
+                    label={modeIndex + 1}
+                    sx={{
+                      width: 18,
+                      height: 18,
+                      ml: 0.5,
+                      pr: 0.75,
+                      fontWeight: 600,
+                    }}
+                  />
+
+                  {named ? (
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                      <ElementDisplay
+                        element={named}
+                        setHoveredPart={setHoveredPart}
+                        setCanvasState={setCanvasState}
+                        applyActions={applyActions}
+                        size="small"
+                        editable={false}
+                        interactive={false}
+                      />
+                    </Box>
+                  ) : (
+                    <Typography variant="caption" sx={{ flex: 1, minWidth: 0 }}>
+                      {t("ddl_mode", { index: modeIndex + 1 })}
+                    </Typography>
+                  )}
+                </Box>
+                {motor && (
+                  <Box
+                    // Reaching for the speed is not pointing at the mode: the swing
+                    // stops so the value can be read while it is being changed.
+                    onMouseEnter={() => {
+                      setPreview(null);
+                      setHighlight(focus(highlight));
+                    }}
+                    onMouseLeave={() => {
+                      if (!modesPlayable) return;
+                      setPreview({ kind: "mode", chainIndex: index, modeIndex });
+                      setHighlight(focus(mode.moves));
+                    }}
+                  >
+                    <SignedNumberInput
+                      label=""
+                      value={motor.motor!.speed}
+                      onChange={(speed) =>
+                        applyActions(
+                          [
+                            {
+                              type: "SetMotorConfig",
+                              id: motor.id,
+                              newConfig: { ...motor.motor!, speed },
+                              oldConfig: motor.motor,
+                            },
+                          ],
+                          "ChangeConstant",
+                        )
+                      }
+                      accent
+                    />
+                  </Box>
+                )}
+              </Box>
+            );
+          })}
+        </Box>
+      )}
+
+      {/* Hyperstaticity: a separate fact, never a negative DOF. */}
+      {mobility.hyperstaticity > 0 && (
+        <Box>
+          <Divider sx={{ my: 0.5 }} />
+          <Box sx={{ mx: 1 }}>
+            <Typography
+              variant="caption"
+              fontWeight={700}
+              sx={{ display: "block" }}
+              color="info.main"
+            >
+              {t("ddl_hyperstatic_heading")} ·{" "}
+              {tn("ddl_hyperstatic_degree", mobility.hyperstaticity)}
+            </Typography>
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ display: "block" }}
+            >
+              {t("ddl_hyperstatic_hint")}
+            </Typography>
+
+            {/* Naming the joints costs one mobility measurement per link — seconds on a
+                big chain — so it waits to be asked for. */}
+            {audit === undefined ? (
+              <Button
+                size="small"
+                variant="text"
+                disabled={auditing}
+                onClick={onAudit}
+                startIcon={
+                  auditing ? (
+                    <CircularProgress size={14} color="inherit" />
+                  ) : (
+                    <Troubleshoot fontSize="small" />
+                  )
+                }
+                sx={{ mt: 0.5 }}
+              >
+                {t("ddl_locate")}
+              </Button>
+            ) : audit.groups.length === 0 ? (
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ display: "block", mt: 0.5, fontStyle: "italic" }}
+              >
+                {t("ddl_redundant_none")}
+              </Typography>
+            ) : (
+              <Box
+                // The whole set at once, then one at a time on each row: the reader sees
+                // where the redundancy lives before picking through it.
+                onMouseEnter={() =>
+                  setHighlight(fault(audit.groups.flatMap((g) => g.elements)))
+                }
+                onMouseLeave={() => setHighlight(focus(highlight))}
+                sx={{ mt: 0.5 }}
+              >
+                {audit.groups.map((group) => {
+                  const element = elementOf(group.owner);
+                  if (!element) return null;
+                  // The one constraint of the group a lie is told to. Absent when none of
+                  // them holds a value to be wrong about — a slider's rail, say — and the
+                  // row then only lights its parts.
+                  const lied = strained_link(group.links);
+                  // Marked only while something is really moving: a constraint the
+                  // mechanism has no way of answering shows nothing, and a row that lit
+                  // up anyway would promise a motion nobody is going to see.
+                  const straining =
+                    playing &&
+                    preview?.kind === "strain" &&
+                    preview.owner === group.owner;
+                  return (
+                    <Box
+                      key={group.owner}
+                      onMouseEnter={() => {
+                        setHighlight(fault(group.elements));
+                        if (lied && modesPlayable)
+                          setPreview({
+                            kind: "strain",
+                            chainIndex: index,
+                            owner: group.owner,
+                            link: lied,
+                          });
+                      }}
+                      onMouseLeave={() => {
+                        setPreview(null);
+                        setHighlight(
+                          fault(audit.groups.flatMap((g) => g.elements)),
+                        );
+                      }}
+                      sx={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 0.75,
+                        px: 0.5,
+                        borderRadius: 3,
+                        backgroundColor: straining
+                          ? "action.selected"
+                          : "transparent",
+                        ...(straining && BEATING),
+                      }}
+                    >
+                      {/* The constraint is what is one too many; the element only says
+                          where it sits. Naming the element first read as an invitation to
+                          delete the part, which removes far more than the constraint. */}
+                      <Typography variant="caption" fontWeight={600} noWrap>
+                        {redundancy_kinds(group)}
+                      </Typography>
+                      <Box sx={{ minWidth: 0, opacity: 0.75 }}>
+                        <ElementDisplay
+                          element={element}
+                          setHoveredPart={setHoveredPart}
+                          setCanvasState={setCanvasState}
+                          applyActions={applyActions}
+                          size="small"
+                          editable={false}
+                          interactive={false}
+                        />
+                      </Box>
+                    </Box>
+                  );
+                })}
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ display: "block", mt: 0.5 }}
+                >
+                  {t("ddl_redundant_candidates")}
+                </Typography>
+              </Box>
+            )}
+          </Box>
+        </Box>
+      )}
+    </Box>
+  );
+};
 
 export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
   mechanism,
@@ -168,6 +527,8 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
   unsatisfied,
   runtimeState,
   setRuntimeState,
+  setHighlight,
+  modePreviewRef,
   selectedElement,
 }) => {
   const { palette } = useTheme();
@@ -211,11 +572,13 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
     }));
 
   const chart_empty_message = (metric: ProbeMetric): string =>
-    metric === "force"
-      ? "Forces non calculées en mode cinématique"
-      : appMode === "edition"
-        ? "Lancez une simulation pour mesurer"
-        : "En attente de données…";
+    t(
+      metric === "force"
+        ? "chart_force_kinematic"
+        : appMode === "edition"
+          ? "chart_run_simulation"
+          : "chart_waiting",
+    );
 
   const element_color = (el: MechanicalElement): string =>
     PROBE_ELEMENT_COLORS[
@@ -231,22 +594,63 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
   // back to the per-element view (and its hidden switch) below that.
   const superposed = superpose && probedElements.length >= 2;
 
-  const nodes = get_sim_nodes(mechanism.mechanicalElements);
-  const links = get_links_simulation(mechanism.mechanicalElements, nodes);
+  const analysis = useDofAnalysis(mechanism);
 
-  // Headline value = the mechanism's mobility (DOF), motors NOT subtracted —
-  // that is what "degrés de liberté" means to a mechanic (a driven 4-bar reads
-  // DDL = 1, not 0). A motor is a driving constraint (its link carries ddl 1),
-  // so get_sim_degrees_of_freedom already nets it out; we add it back to recover
-  // the bare mobility, and let the mode-specific subtitle read the relation.
-  const drivingMotors = links.filter(
-    (l) => l.type === "MotorBeam" || l.type === "MotorAngle",
-  ).length;
-  const mobility = get_sim_degrees_of_freedom(nodes, links) + drivingMotors;
-  const status = ddl_status(mobility, drivingMotors, appMode);
+  /** The mode or the strained constraint being pointed at, if any. */
+  const [preview, setPreview] = React.useState<PosePreview>(null);
 
-  const motorPivots = mechanism.mechanicalElements.filter(
-    (el): el is PivotElement => el.type === "pivot" && !!el.motor,
+  /** Redundancy audits already asked for, by chain, and the one currently running. */
+  const [audits, setAudits] = React.useState(
+    () => new Map<string, Redundancy>(),
+  );
+  const [auditing, setAuditing] = React.useState<string | null>(null);
+
+  // An audit describes one measurement of one mechanism. A new measurement makes every
+  // answer stale at once, however little the edit changed.
+  const measuredModel = analysis.model;
+  React.useEffect(() => {
+    setAudits(new Map());
+    setAuditing(null);
+  }, [measuredModel]);
+
+  const runAudit = React.useCallback(
+    (chainAnalysis: ChainAnalysis) => {
+      if (!measuredModel) return;
+      const { chain, mobility } = chainAnalysis;
+      setAuditing(chain.id);
+      // Seconds of solving on a big chain, and it blocks the thread. Handing the browser
+      // one frame first is what lets the button show it was pressed.
+      setTimeout(() => {
+        const found = find_redundant_links(measuredModel, chain, mobility);
+        setAudits((prev) => new Map(prev).set(chain.id, found));
+        setAuditing(null);
+      }, 0);
+    },
+    [measuredModel],
+  );
+
+  // Still means analysable and showable: edition, or a simulation on pause. While it plays
+  // the mechanism already moves, and anything swung on top of it would only muddle that.
+  const playing = usePosePreview(
+    modePreviewRef,
+    mechanism,
+    analysis.model,
+    analysis.chains,
+    preview,
+    !runtimeState.isPlaying,
+  );
+
+  // Leaving the tab unmounts the panel without a mouse-leave, which would strand the
+  // highlight on a canvas nothing is pointing at any more.
+  React.useEffect(
+    () => () => setHighlight(NO_HIGHLIGHT),
+    [setHighlight],
+  );
+
+  /** The element a mode is named after, for its row's `ElementDisplay`. */
+  const elementOf = React.useCallback(
+    (id: ID) => mechanism.mechanicalElements.find((el) => el.id === id),
+    [mechanism.mechanicalElements],
   );
 
   return (
@@ -277,7 +681,7 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
                 sx={{ mx: 2 }}
                 gutterBottom
               >
-                Élément sélectionné
+                {t("analysis_selected_element")}
               </Typography>
             )}
 
@@ -292,82 +696,41 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
         </>
       )}
 
-      {/* DDL Indicator */}
+      {/* DDL Indicator — one block per kinematic chain */}
       <Box sx={{ mx: 2 }}>
         <Typography variant="subtitle2" fontWeight={600} gutterBottom>
-          Degrés de liberté
+          {t("ddl_heading")}
         </Typography>
-        <Box
-          sx={{
-            display: "flex",
-            flexDirection: "column",
-            gap: 0.5,
-            p: 1,
-            borderRadius: 1,
-            backgroundColor: "background.sunken",
-          }}
-        >
-          <Typography variant="h6" fontWeight={700} color="primary">
-            DDL = {mobility}
-          </Typography>
-          <Typography variant="body2" fontWeight={600} color={status.color}>
-            {status.label}
-          </Typography>
+        <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+          {analysis.chains.map((chainAnalysis, index) => (
+            <ChainCard
+              key={chainAnalysis.chain.id}
+              analysis={chainAnalysis}
+              index={index}
+              appMode={appMode}
+              setHighlight={setHighlight}
+              elementOf={elementOf}
+              preview={preview}
+              setPreview={setPreview}
+              setHoveredPart={setHoveredPart}
+              setCanvasState={setCanvasState}
+              applyActions={applyActions}
+              modesPlayable={!runtimeState.isPlaying}
+              playing={playing}
+              audit={audits.get(chainAnalysis.chain.id)}
+              auditing={auditing === chainAnalysis.chain.id}
+              onAudit={() => runAudit(chainAnalysis)}
+            />
+          ))}
+          {/* Only once measured: an empty list before the first pass means "not
+              yet", which is not the same statement as "nothing moves". */}
+          {analysis.ready && analysis.chains.length === 0 && (
+            <Typography variant="body2" color="text.disabled" sx={{ p: 1 }}>
+              {t("ddl_rigid_zero")}
+            </Typography>
+          )}
         </Box>
       </Box>
-
-      {/* Motors */}
-      {motorPivots.length > 0 && (
-        <>
-          <Box sx={{ mx: 2 }}>
-            <Typography variant="subtitle2" fontWeight={600} gutterBottom>
-              Moteurs ({motorPivots.length})
-            </Typography>
-            <Box
-              sx={{
-                borderRadius: 3,
-                backgroundColor: "background.sunken",
-                display: "flex",
-                flexDirection: "column",
-                gap: 0.5,
-              }}
-            >
-              {motorPivots.map((pivot) => (
-                <Box key={pivot.id}>
-                  <ElementDisplay
-                    element={pivot}
-                    setHoveredPart={setHoveredPart}
-                    setCanvasState={setCanvasState}
-                    applyActions={applyActions}
-                    size={"small"}
-                    editable={false}
-                    trailingControls={
-                      <SignedNumberInput
-                        label=""
-                        value={pivot.motor!.speed}
-                        onChange={(speed) =>
-                          applyActions(
-                            [
-                              {
-                                type: "SetMotorConfig",
-                                id: pivot.id,
-                                newConfig: { ...pivot.motor!, speed },
-                                oldConfig: pivot.motor,
-                              },
-                            ],
-                            "ChangeConstant",
-                          )
-                        }
-                        accent
-                      />
-                    }
-                  />
-                </Box>
-              ))}
-            </Box>
-          </Box>
-        </>
-      )}
 
       <Divider />
 
@@ -384,7 +747,7 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
             }}
           >
             <Typography variant="subtitle2" fontWeight={600}>
-              Contraintes non respectées
+              {t("analysis_unsatisfied")}
             </Typography>
             {unsatisfied.length > 0 && (
               <Chip
@@ -443,8 +806,9 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
                               variant="caption"
                               color="text.secondary"
                             >
-                              {CONSTRAINT_NOUN[constraint.type] ??
-                                constraint.type}{" "}
+                              {CONSTRAINT_NOUN[constraint.type]
+                                ? t(CONSTRAINT_NOUN[constraint.type])
+                                : constraint.type}{" "}
                               {`e = ${constraint.residual.toFixed(2)} mm`}
                             </Typography>
                           </>
@@ -474,7 +838,7 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
                     color: "text.disabled",
                   }}
                 >
-                  Toutes les contraintes sont respectées
+                  {t("analysis_all_satisfied")}
                 </Typography>
               </Box>
             )}
@@ -488,7 +852,7 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
       <Box sx={{ mx: 2, display: "flex", flexDirection: "column", gap: 1 }}>
         <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
           <Typography variant="subtitle2" fontWeight={600} sx={{ flex: 1 }}>
-            Mesures
+            {t("palette_measurements")}
           </Typography>
           {probedElements.length >= 2 && (
             <FormControlLabel
@@ -528,7 +892,7 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
                         anchorEl: e.currentTarget,
                       })
                     }
-                    title="Choisir les mesures"
+                    title={t("analysis_choose_metrics")}
                     sx={{ borderRadius: 3 }}
                   >
                     <Tune fontSize="small" />
@@ -584,7 +948,7 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
                         noWrap
                         sx={{ flex: 1, minWidth: 0 }}
                       >
-                        {PROBE_METRIC_LABELS[probe.metric]}
+                        {t(PROBE_METRIC_LABEL_KEYS[probe.metric])}
                         <Typography
                           component="span"
                           variant="caption"
@@ -637,7 +1001,7 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
                         ))}
                       <Tooltip
                         disableInteractive
-                        title="Supprimer cette mesure"
+                        title={t("analysis_remove_metric")}
                       >
                         <IconButton
                           size="small"
@@ -661,7 +1025,7 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
                       currentTime={runtimeState.time}
                       emptyMessage={
                         noComponentSelected
-                          ? "Aucune composante sélectionnée (x, y, norme)"
+                          ? t("chart_no_component")
                           : chart_empty_message(probe.metric)
                       }
                       onSeek={appMode !== "edition" ? seekTime : undefined}
@@ -713,14 +1077,14 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
                   fontWeight={600}
                   sx={{ display: "block", mb: 0.25 }}
                 >
-                  {PROBE_METRIC_LABELS[metric]}
+                  {t(PROBE_METRIC_LABEL_KEYS[metric])}
                   <Typography
                     component="span"
                     variant="caption"
                     color="text.secondary"
                   >
                     {` (${unit})`}
-                    {isVector && " — norme"}
+                    {isVector && t("chart_norm_suffix")}
                   </Typography>
                 </Typography>
                 <ProbeChart

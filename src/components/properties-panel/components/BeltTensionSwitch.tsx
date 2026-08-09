@@ -10,6 +10,7 @@
 import React from "react";
 import { Box, Typography } from "@mui/material";
 import { icon } from "../../element-palette/iconDataUris";
+import { t } from "../../../i18n";
 
 interface BeltTensionSwitchProps {
   closed: boolean;
@@ -26,11 +27,7 @@ export const BeltTensionSwitch: React.FC<BeltTensionSwitchProps> = ({
         alignItems: "center",
         gap: 0.5,
       }}
-      title={
-        closed
-          ? "Les deux extrémités tiennent à une même jonction"
-          : "Les extrémités sont libres"
-      }
+      title={t(closed ? "belt_closed_tooltip" : "belt_open_tooltip")}
     >
       <Box
         sx={{
@@ -48,7 +45,9 @@ export const BeltTensionSwitch: React.FC<BeltTensionSwitchProps> = ({
           src={closed ? icon("tight-belt") : icon("loose-belt")}
         />
       </Box>
-      <Typography variant="body2">{closed ? "Fermée" : "Libre"}</Typography>
+      <Typography variant="body2">
+        {t(closed ? "belt_closed" : "belt_open")}
+      </Typography>
     </Box>
   );
 };

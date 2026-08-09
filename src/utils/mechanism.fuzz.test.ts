@@ -6,6 +6,7 @@ import {
   delete_elements,
 } from "../components/mechanism/connect-actions";
 import { actionReducer } from "../components/mechanism/action-reducer";
+import { with_corrections } from "../components/mechanism/apply-actions";
 import { validate_mechanism } from "./validate-mechanism";
 import { DEFAULT_METADATA, Mechanism } from "../types/mechanism";
 import { Point2, ZERO } from "../types/point2";
@@ -23,7 +24,7 @@ import {
   type EdgeProbe,
   type HoverTargets,
 } from "../components/canvas/get-hover";
-import { ID, MechanicalElement, UnionElement } from "../types";
+import { Action, ID, MechanicalElement, UnionElement } from "../types";
 
 /**
  * Property: any state reachable through gestures the UI offers is a valid
@@ -401,7 +402,12 @@ function run_tool(
         loads,
         { scale: 1, pan: ZERO },
       )
-    : handle_placing_constraint(state, hoveredPart, mechanicalElements);
+    : handle_placing_constraint(
+        state,
+        hoveredPart,
+        mechanicalElements,
+        constraintElements,
+      );
 }
 
 // ─── Commands ─────────────────────────────────────────────────────────────────
@@ -479,6 +485,16 @@ function is_offered(
     .allowed;
 }
 
+/**
+ * Applies a bundle the way the application does, minus the geometric solver: the
+ * invariant corrections `apply_actions` appends are part of the gesture, so a
+ * harness that skipped them would judge a state the user is never shown.
+ */
+function apply(mechanism: Mechanism, actions: Action[]): Mechanism {
+  if (actions.length === 0) return mechanism;
+  return actionReducer(mechanism, with_corrections(mechanism, actions), false);
+}
+
 /** Applies one command through the production entry points. Returns the new session. */
 function run_command(session: Session, command: Command): Session {
   const { mechanism } = session;
@@ -501,10 +517,7 @@ function run_command(session: Session, command: Command): Session {
       if (!is_offered(state, hoveredPart, mechanicalElements)) return session;
       const result = run_tool(state, hoveredPart, mechanism);
       return {
-        mechanism:
-          result.actions.length === 0
-            ? mechanism
-            : actionReducer(mechanism, result.actions, false),
+        mechanism: apply(mechanism, result.actions),
         tool: as_tool(result.newCanvasState ?? state),
       };
     }
@@ -538,13 +551,7 @@ function run_command(session: Session, command: Command): Session {
         constraintElements,
         loads,
       );
-      return {
-        mechanism:
-          actions.length === 0
-            ? mechanism
-            : actionReducer(mechanism, actions, false),
-        tool: undefined,
-      };
+      return { mechanism: apply(mechanism, actions), tool: undefined };
     }
     case "deleteOne": {
       const target = pick(mechanicalElements, command.i);
@@ -554,10 +561,7 @@ function run_command(session: Session, command: Command): Session {
         constraintElements,
         loads,
       );
-      return {
-        mechanism: actionReducer(mechanism, actions, false),
-        tool: undefined,
-      };
+      return { mechanism: apply(mechanism, actions), tool: undefined };
     }
     case "deleteMany": {
       const ids = [
@@ -571,10 +575,7 @@ function run_command(session: Session, command: Command): Session {
         constraintElements,
         loads,
       );
-      return {
-        mechanism: actionReducer(mechanism, actions, false),
-        tool: undefined,
-      };
+      return { mechanism: apply(mechanism, actions), tool: undefined };
     }
   }
 }
@@ -682,11 +683,8 @@ describe("fuzzing — les gestes de l'UI préservent la validité", () => {
 
 /**
  * Counter-examples the deep probe found, kept as executable records rather than
- * prose: each one still reproduces its defect, and `it.fails` turns red the day
- * it stops — which is the day to fix the operation and flip it back to `it`.
- *
- * The default budget reaches none of these, so without this block the suite is
- * green while the defects are alive.
+ * prose: the default budget reaches none of them, so without these the suite is
+ * green while nothing guards the fixes.
  */
 /**
  * Defects the deep probe found in the placement tools, all three killed by
@@ -760,8 +758,14 @@ describe("fuzzing — la fusion ne duplique pas une référence de corps", () =>
   });
 });
 
-describe("fuzzing — défauts ouverts, reproduits", () => {
-  it.fails("MISSING_BIDIRECTIONAL : extrémité de barre non réciproque", () => {
+/**
+ * A fusion can bring both ends of one beam onto a single node. That beam then
+ * names the node twice, so deleting it reached the node twice and emitted the
+ * same cut twice — the second carrying an index the first splice had already
+ * invalidated, which took a neighbouring edge out of the node's list.
+ */
+describe("fuzzing — la suppression ne coupe chaque lien qu'une fois", () => {
+  it("une barre repliée sur un nœud n'emporte pas la voisine", () => {
     run_sequence(
       ["pivotOnBeam", "pivotOnBeam"],
       [

@@ -22,7 +22,7 @@ export interface MechanismMetadata {
 }
 
 export const DEFAULT_METADATA: MechanismMetadata = {
-  name: "Nouveau mécanisme",
+  name: "",
   description: "",
   author: "",
   createdAt: 0,

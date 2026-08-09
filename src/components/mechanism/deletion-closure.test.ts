@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { delete_element, deletion_closure } from "./connect-actions";
+import {
+  connect_elements,
+  delete_element,
+  deletion_closure,
+  fuse_nodes,
+} from "./connect-actions";
+import { apply_actions } from "./apply-actions";
+import { validate_mechanism } from "../../utils/validate-mechanism";
 import { Point2 } from "../../types/point2";
+import { DEFAULT_METADATA, Mechanism } from "../../types/mechanism";
 import type {
   ConstraintElement,
   ID,
@@ -154,6 +162,175 @@ describe("deletion_closure", () => {
     const doomed = closure_of(AXLE);
     expect(doomed.has(BEAM)).toBe(false);
     expect(doomed.has(LONE)).toBe(false);
+  });
+
+  // A node fusion can bring both ends of a beam onto one node. That beam then
+  // names the node twice, so the deletion reaches it twice — and two cuts
+  // carrying the same index would splice the neighbour out on the second pass.
+  it("cuts a node once when the deleted edge holds it by both ends", () => {
+    const LOOPED = id(20);
+    const NEIGHBOUR = id(21);
+    const JOIN = id(22);
+    const mechanical: MechanicalElement[] = [
+      {
+        type: "join",
+        id: JOIN,
+        probes: [],
+        overlays: {},
+        position: new Point2(0, 0),
+        isGrounded: false,
+        fixedEdgesIDs: [LOOPED, NEIGHBOUR],
+      },
+      {
+        type: "beam",
+        id: LOOPED,
+        probes: [],
+        overlays: {},
+        positionStart: new Point2(0, 0),
+        positionEnd: new Point2(0, 0),
+        fixedNodeStartID: JOIN,
+        fixedNodeEndID: JOIN,
+        fixedNodesBodyIDs: [],
+      },
+      {
+        type: "beam",
+        id: NEIGHBOUR,
+        probes: [],
+        overlays: {},
+        positionStart: new Point2(0, 0),
+        positionEnd: new Point2(80, 0),
+        fixedNodeStartID: JOIN,
+        fixedNodeEndID: undefined,
+        fixedNodesBodyIDs: [],
+      },
+    ];
+
+    const cuts = delete_element(LOOPED, mechanical, [], []).filter(
+      (action) =>
+        action.type === "ConnectsFixedEdges" &&
+        action.disconnect &&
+        action.elementID === JOIN,
+    );
+    expect(cuts).toHaveLength(1);
+  });
+
+  // A fusion deletes the absorbed node outright rather than through
+  // `delete_element`, so a force resting on it has to be carried over by hand or
+  // it is left naming an element that no longer exists.
+  it("carries a force off the node a fusion absorbs", () => {
+    const KEPT = id(40);
+    const ABSORBED = id(41);
+    const FORCE = id(42);
+    const node = (nid: ID, x: number): MechanicalElement => ({
+      type: "pivot",
+      id: nid,
+      probes: [],
+      overlays: {},
+      position: new Point2(x, 0),
+      isGrounded: false,
+      rotatingEdgesIDs: [],
+      fixedGearsIDs: [],
+    });
+    const mechanical = [node(KEPT, 0), node(ABSORBED, 40)];
+    const loads: LoadElement[] = [
+      {
+        type: "force",
+        id: FORCE,
+        targetID: ABSORBED,
+        vector: new Point2(0, 30),
+        frame: "world",
+      },
+    ];
+    const mechanism: Mechanism = {
+      metadata: DEFAULT_METADATA,
+      viewport: { scale: 1, pan: new Point2(0, 0) },
+      mechanicalElements: mechanical,
+      constraintElements: [],
+      loads,
+      history: [],
+      future: [],
+    };
+
+    const after = apply_actions(
+      mechanism,
+      fuse_nodes(
+        mechanical[0] as never,
+        mechanical[1] as never,
+        mechanical,
+        [],
+        loads,
+      ),
+      "Connects",
+    );
+
+    expect(after.loads).toHaveLength(1);
+    expect(after.loads[0].targetID).toBe(KEPT);
+    expect(validate_mechanism(after)).toBeNull();
+  });
+
+  // The node lists that beam once for its two ends. Moving one end away must
+  // leave the entry, or the end that stays is stranded.
+  it("keeps the node's entry when only one of the two ends leaves", () => {
+    const LOOPED = id(30);
+    const OLD = id(31);
+    const FRESH = id(32);
+    const mechanical: MechanicalElement[] = [
+      {
+        type: "pivot",
+        id: OLD,
+        probes: [],
+        overlays: {},
+        position: new Point2(0, 0),
+        isGrounded: false,
+        rotatingEdgesIDs: [LOOPED],
+        fixedGearsIDs: [],
+      },
+      {
+        type: "pivot",
+        id: FRESH,
+        probes: [],
+        overlays: {},
+        position: new Point2(40, 0),
+        isGrounded: false,
+        rotatingEdgesIDs: [],
+        fixedGearsIDs: [],
+      },
+      {
+        type: "beam",
+        id: LOOPED,
+        probes: [],
+        overlays: {},
+        positionStart: new Point2(0, 0),
+        positionEnd: new Point2(0, 0),
+        fixedNodeStartID: OLD,
+        fixedNodeEndID: OLD,
+        fixedNodesBodyIDs: [],
+      },
+    ];
+
+    const mechanism: Mechanism = {
+      metadata: DEFAULT_METADATA,
+      viewport: { scale: 1, pan: new Point2(0, 0) },
+      mechanicalElements: mechanical,
+      constraintElements: [],
+      loads: [],
+      history: [],
+      future: [],
+    };
+    const after = apply_actions(
+      mechanism,
+      connect_elements(
+        { type: "Edge", position: new Point2(0, 0), id: LOOPED, deleting: false, part: "start" },
+        mechanical[1],
+        { type: "Node", position: new Point2(40, 0), id: FRESH, deleting: false, beamBodyHover: false },
+        mechanical,
+        [],
+        [],
+      ),
+      "Connects",
+    );
+
+    expect(validate_mechanism(after)).toBeNull();
   });
 
   it("agrees with what the deletion actually removes", () => {

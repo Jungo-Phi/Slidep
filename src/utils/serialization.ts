@@ -66,8 +66,9 @@ function sp(p: Point2): SerializedPoint2 {
   return { x: p.x, y: p.y };
 }
 
+/** A `null` coordinate is a `NaN` that went through JSON; it stays out of range so `repair_mechanism` can spot it. */
 function dp(s: SerializedPoint2): Point2 {
-  return new Point2(s.x, s.y);
+  return new Point2(s.x ?? NaN, s.y ?? NaN);
 }
 
 function serialize_points_map(
@@ -224,14 +225,16 @@ function serialize_viewport(e: ViewportState): SerializedViewportState {
   return JSON.parse(JSON.stringify(e));
 }
 
+/** `null` counts: refusing it would leave a plain `{x, y}` where the rest of the app expects a `Point2`, which throws on the first method call. */
 function isSerializedPoint(p: unknown): p is SerializedPoint2 {
+  const is_coordinate = (v: unknown) => typeof v === "number" || v === null;
   return (
     typeof p === "object" &&
     p !== null &&
     "x" in p &&
     "y" in p &&
-    typeof (p as any).x === "number" &&
-    typeof (p as any).y === "number"
+    is_coordinate((p as SerializedPoint2).x) &&
+    is_coordinate((p as SerializedPoint2).y)
   );
 }
 
@@ -240,7 +243,7 @@ function revive_points(s: Record<string, unknown>): Record<string, unknown> {
   for (const key in result) {
     const value = result[key];
     if (isSerializedPoint(value)) {
-      result[key] = new Point2(value.x, value.y);
+      result[key] = dp(value);
     }
   }
   return result;
@@ -370,12 +373,14 @@ function sanitize_filename(name: string): string {
 /** Downloads every mechanism as one `.slidep` per entry inside a single zip. Names collide freely in the gallery, so duplicates get a ` (2)` suffix. */
 export function save_all_to_zip(
   records: SerializedMechanism[],
-  filename: string = "Mes mécanismes.zip",
+  filename: string,
+  /** What an unnamed mechanism is filed under. */
+  unnamed: string,
 ) {
   const files: Record<string, Uint8Array> = {};
 
   for (const record of records) {
-    const base = sanitize_filename(record.metadata.name || "mecanisme");
+    const base = sanitize_filename(record.metadata.name || unnamed);
     // Probing every candidate rather than counting per base: a mechanism
     // actually named "Bielle (2)" must not be overwritten by the suffix
     // generated for a second "Bielle".

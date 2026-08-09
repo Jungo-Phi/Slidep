@@ -24,11 +24,14 @@ interface NumberInputProps {
   value: number;
   onChange: (value: number) => void;
   step?: number;
-  large?: boolean;
   suffix?: string;
+  large?: boolean;
   accent?: boolean;
-  signed?: boolean;
+  /** Unsigned, which means always positive */
+  unsigned?: boolean;
   adornment?: NumberInputAdornment;
+  /** Rounds the field's right edge into a pill matching the adornment (SignedNumberInput's direction icon). */
+  pillAdornment?: boolean;
 }
 
 export const NumberInput: React.FC<NumberInputProps> = ({
@@ -36,11 +39,12 @@ export const NumberInput: React.FC<NumberInputProps> = ({
   value,
   onChange,
   step = 1,
-  large = false,
   suffix,
+  large = false,
   accent = false,
-  signed = true,
+  unsigned = false,
   adornment,
+  pillAdornment = false,
 }) => {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -48,6 +52,9 @@ export const NumberInput: React.FC<NumberInputProps> = ({
   const valueRef = useRef(value);
   const rulerRef = useRef<HTMLSpanElement>(null);
   const [suffixLeft, setSuffixLeft] = useState<number>(0);
+  const [focused, setFocused] = useState(false);
+  // Set by Escape so the blur it triggers discards instead of committing.
+  const discardRef = useRef(false);
 
   useEffect(() => {
     valueRef.current = value;
@@ -61,6 +68,8 @@ export const NumberInput: React.FC<NumberInputProps> = ({
   const adornmentWidth = adornment ? height - 4 : 0;
   const width = (large ? 82 : 75) + adornmentWidth;
   const rounding = 1;
+  // Pill-shaped right edge for the direction adornment (SignedNumberInput only).
+  const adornmentRadius = (height + 4) / 2;
 
   const [localValue, setLocalValue] = useState<string>(
     round_value(value, rounding),
@@ -72,6 +81,9 @@ export const NumberInput: React.FC<NumberInputProps> = ({
 
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // Out of focus the field is a view of the value, never of a leftover edit.
+  const displayed = focused ? localValue : round_value(value, rounding);
+
   useEffect(() => {
     if (rulerRef.current && inputRef.current) {
       // Copy the exact computed font from the real input so the ruler matches perfectly
@@ -80,7 +92,7 @@ export const NumberInput: React.FC<NumberInputProps> = ({
       rulerRef.current.style.letterSpacing = style.letterSpacing;
       setSuffixLeft(rulerRef.current.offsetWidth);
     }
-  }, [localValue]);
+  }, [displayed]);
 
   const stopRepeating = useCallback(() => {
     if (intervalRef.current !== null) {
@@ -94,6 +106,13 @@ export const NumberInput: React.FC<NumberInputProps> = ({
     holdStartRef.current = null;
   }, []);
 
+  // The arrows keep the focus in the field, so an edit in progress is what they step from.
+  const baseValue = useCallback(() => {
+    if (document.activeElement !== inputRef.current) return valueRef.current;
+    const pending = parseFloat(inputRef.current?.value ?? "");
+    return isNaN(pending) ? valueRef.current : pending;
+  }, []);
+
   const startRepeating = useCallback(
     (direction: 1 | -1) => {
       holdStartRef.current = Date.now();
@@ -103,16 +122,17 @@ export const NumberInput: React.FC<NumberInputProps> = ({
           Date.now() - (holdStartRef.current ?? 0) > longHoldDelay
             ? step * 5
             : step;
-        const snapped = Math.round(valueRef.current * 10) / 10;
+        const current = baseValue();
+        const snapped = Math.round(current * 10) / 10;
         return direction === 1
-          ? snapped > valueRef.current
+          ? snapped > current
             ? snapped
-            : snapped === Math.round(valueRef.current)
+            : snapped === Math.round(current)
               ? snapped + actualStep
               : snapped + 0.1
-          : snapped < valueRef.current
+          : snapped < current
             ? snapped
-            : snapped === Math.round(valueRef.current)
+            : snapped === Math.round(current)
               ? snapped - actualStep
               : snapped - 0.1;
       };
@@ -123,13 +143,21 @@ export const NumberInput: React.FC<NumberInputProps> = ({
         }, holdInterval);
       }, holdDelay);
     },
-    [holdDelay, holdInterval, onChange, step],
+    [baseValue, holdDelay, holdInterval, onChange, step],
   );
 
   const filterInput = (val: string) => {
-    const negative = signed && val.startsWith("-");
+    const negative = !unsigned && val.startsWith("-");
     const digits = val.replace(/[^0-9.]/g, "").replace(/(\.[^.]*)\./g, "$1");
     return (negative ? "-" : "") + digits;
+  };
+
+  // Leaving the field validates the entry; an unreadable one is dropped and the field
+  // goes back to showing the value.
+  const commitLocalValue = () => {
+    if (localValue === round_value(value, rounding)) return;
+    const parsed = parseFloat(localValue);
+    if (!isNaN(parsed)) onChange(parsed);
   };
 
   return (
@@ -160,7 +188,7 @@ export const NumberInput: React.FC<NumberInputProps> = ({
               left: "8px",
             }}
           >
-            {localValue}
+            {displayed}
           </Box>
 
           {/* Suffix overlay, follows the text, clips before the arrows */}
@@ -185,20 +213,26 @@ export const NumberInput: React.FC<NumberInputProps> = ({
         label={label}
         type="text"
         inputProps={{ inputMode: "decimal" }}
-        value={localValue}
+        value={displayed}
         onChange={(e) => setLocalValue(filterInput(e.target.value))}
         inputRef={inputRef}
+        onFocus={() => {
+          setLocalValue(round_value(value, rounding));
+          setFocused(true);
+        }}
         onKeyDown={(e) => {
           if (e.key === "Enter") {
-            const parsed = parseFloat(localValue);
-            if (!isNaN(parsed)) onChange(parsed);
             (e.target as HTMLInputElement).blur();
           } else if (e.key === "Escape") {
-            setLocalValue(round_value(value, rounding));
+            discardRef.current = true;
             (e.target as HTMLInputElement).blur();
           }
         }}
-        onBlur={() => setLocalValue(round_value(value, rounding))}
+        onBlur={() => {
+          setFocused(false);
+          if (discardRef.current) discardRef.current = false;
+          else commitLocalValue();
+        }}
         size="small"
         sx={{
           width: "100%",
@@ -210,6 +244,10 @@ export const NumberInput: React.FC<NumberInputProps> = ({
           "& .MuiInputBase-root": {
             marginY: "-2px",
             overflow: "hidden",
+            ...(pillAdornment && {
+              borderTopRightRadius: adornmentRadius,
+              borderBottomRightRadius: adornmentRadius,
+            }),
             ...(accent && {
               backgroundColor: COLORS.FILL_NODE + COLORS.HALF_TRANSPARENCY,
               "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
@@ -223,6 +261,12 @@ export const NumberInput: React.FC<NumberInputProps> = ({
               },
             }),
           },
+          ...(pillAdornment && {
+            "& .MuiOutlinedInput-notchedOutline": {
+              borderTopRightRadius: adornmentRadius,
+              borderBottomRightRadius: adornmentRadius,
+            },
+          }),
           "& .MuiInputLabel-root": accent
             ? { color: "primary.main", fontWeight: 500 }
             : {},
@@ -235,7 +279,10 @@ export const NumberInput: React.FC<NumberInputProps> = ({
                 <IconButton
                   size="small"
                   color="secondary"
-                  onMouseDown={() => startRepeating(1)}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    startRepeating(1);
+                  }}
                   onMouseUp={stopRepeating}
                   onMouseLeave={stopRepeating}
                   sx={{
@@ -251,7 +298,10 @@ export const NumberInput: React.FC<NumberInputProps> = ({
                 <IconButton
                   size="small"
                   color="secondary"
-                  onMouseDown={() => startRepeating(-1)}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    startRepeating(-1);
+                  }}
                   onMouseUp={stopRepeating}
                   onMouseLeave={stopRepeating}
                   sx={{
@@ -274,7 +324,14 @@ export const NumberInput: React.FC<NumberInputProps> = ({
                   title={adornment.title}
                   sx={{
                     height: height + 2,
-                    borderRadius: 0.75,
+                    ...(pillAdornment
+                      ? {
+                          borderTopLeftRadius: 0,
+                          borderBottomLeftRadius: 0,
+                          borderTopRightRadius: adornmentRadius,
+                          borderBottomRightRadius: adornmentRadius,
+                        }
+                      : { borderRadius: 0.75 }),
                     px: 0.5,
                     ml: -0.25,
                     fontSize: large ? "20px" : "16px",

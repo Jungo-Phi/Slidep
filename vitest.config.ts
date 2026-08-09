@@ -17,7 +17,8 @@ const optional = [
 export default defineConfig({
   plugins: [react()],
   test: {
-    environment: "jsdom",
+    // Building a jsdom costs seconds per file and almost nothing here needs one. Tests that touch the DOM opt in with a `// @vitest-environment jsdom` docblock.
+    environment: "node",
     include: ["src/**/*.test.ts", "src/**/*.spec.ts"],
     // Fuzzing is slow and non-deterministic, so it stays out of the default run. Opt in with `npm run test:fuzz`, or set FUZZ=1 when calling vitest directly.
     exclude: ["**/node_modules/**", ...optional],

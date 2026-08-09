@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+  <!-- The hand of the palette's simulation icon, redrawn for a cursor: pale body,
+       contrasting outline, hotspot on the tallest fingertip as a pointing hand.
+
+       The fingers share their edges, and a drawn line separates them rather than
+       a notch: one stroke of accent between two whites, with no canvas showing
+       through. Above the knuckles that line is the silhouette itself, since the
+       fingers are of unequal heights; below, it is drawn on its own. -->
+  <g fill="none" stroke="#d7530b" stroke-width="2" stroke-linejoin="round" stroke-linecap="round">
+    <path d="M24.5 10.5
+             C24.5 13 24.5 21 24.5 24
+             C24 29 14 29 9 26.5
+             C8.5 26 6 24 5 20
+             C4 16 5.5 14.8 7 15
+             C9 15 10.5 20.5 10.5 19
+             L10.5 9.5
+             C10.5 9.5 11 7.5 12.8 7.5
+             C14.7 7.5 15.3 9.5 15.3 9.5
+             L15.3 6
+             C15.3 5.5 15.9 4 17.6 4
+             C19.2 4 20 5.5 20 6
+             L20 10.5
+             C20 10 20.8 8.5 22.2 8.5
+             C24 8.5 24.5 10 24.5 10.5
+             Z"
+          fill="#ffffff"/>
+    <path d="M15.3 9 L15.3 16"/>
+    <path d="M20 10 L20 16"/>
+  </g>
+</svg>

@@ -236,6 +236,60 @@ describe("repair_mechanism", () => {
     expect(result.constraintElements).toEqual([]);
   });
 
+  it("sends a non-finite point back to the origin", () => {
+    // What a NaN coordinate becomes once it has been through a `.slidep` file.
+    const dimension = {
+      type: "dimension-angle",
+      id: id("d2"),
+      position: new Point2(NaN, NaN),
+      startEdgeID: BEAM_ID,
+      endEdgeID: BEAM_ID,
+      flipStart: false,
+      flipEnd: false,
+      couterClockwise: true,
+      value: 135,
+    } as ConstraintElement;
+    const { mechanism: result, repairs } = repair_mechanism(
+      mechanism([pivot(), beam()], [dimension]),
+    );
+    expect(result.constraintElements[0].position).toEqual(new Point2(0, 0));
+    expect(repairs.map((r) => r.code)).toEqual(["POINT_RESET"]);
+  });
+
+  it("repairs a point on any field, and leaves the sound ones alone", () => {
+    const { mechanism: result, repairs } = repair_mechanism(
+      mechanism([
+        pivot(),
+        beam({
+          positionStart: new Point2(5, 5),
+          positionEnd: new Point2(0, Infinity),
+        }),
+      ]),
+    );
+    const repaired = result.mechanicalElements[1] as BeamElement;
+    expect(repaired.positionStart).toEqual(new Point2(5, 5));
+    expect(repaired.positionEnd).toEqual(new Point2(0, 0));
+    expect(repairs).toHaveLength(1);
+    expect(repairs[0].elementID).toBe(BEAM_ID);
+  });
+
+  it("brings an unusable viewport back to the default framing", () => {
+    for (const broken of [
+      { scale: 1, pan: new Point2(NaN, 0).as_space<"screen">() },
+      { scale: NaN, pan: new Point2(0, 0).as_space<"screen">() },
+      { scale: 0, pan: new Point2(0, 0).as_space<"screen">() },
+    ]) {
+      const { mechanism: result, repairs } = repair_mechanism({
+        ...mechanism([pivot(), beam()]),
+        viewport: broken,
+      });
+      expect(result.viewport).toEqual({ scale: 1, pan: new Point2(0, 0) });
+      expect(repairs.map((r) => r.code)).toEqual(["VIEWPORT_RESET"]);
+      // Nothing an undo entry carries can put a broken viewport back.
+      expect(result.history).not.toEqual([]);
+    }
+  });
+
   it("empties the history as soon as it repairs anything", () => {
     const { mechanism: result } = repair_mechanism(
       mechanism([pivot(), beam({ fixedNodeEndID: GHOST_ID })]),

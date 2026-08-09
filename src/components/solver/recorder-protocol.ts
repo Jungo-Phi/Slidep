@@ -53,7 +53,18 @@ export type FromRecorder =
    * compiled — so before any of them. It follows the same epoch rule as the snapshots
    * themselves: read with the layout of another model, a snapshot is a different mechanism.
    */
-  | { type: "layout"; keys: string[]; angleKeys: string[]; epoch: number }
+  | {
+      type: "layout";
+      keys: string[];
+      angleKeys: string[];
+      /**
+       * The longest this load records. Derived from the layout, which the wire carries
+       * WITHOUT its belts — recomputing it on the other side would read a cheaper
+       * mechanism than the one being simulated, so it crosses as a number.
+       */
+      maxTime: number;
+      epoch: number;
+    }
   | {
       type: "snapshots";
       snapshots: WireSnapshot[];

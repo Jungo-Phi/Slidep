@@ -1,17 +1,22 @@
-﻿import type { CanvasState } from "../../types/canvas-state";
+﻿import type { Action } from "../../types/actions";
+import type { CanvasState } from "../../types/canvas-state";
 import type { HoveredPart } from "../../types/hovered-part";
 import {
   BeltElement,
+  ConstraintElement,
   EdgeElement,
   GearElement,
+  ID,
   MechanicalElement,
   NodeElement,
+  UnionElement,
 } from "../../types";
 import { get_mechanical_element_from_id } from "../mechanism/connect-actions";
 import {
   measure_belt_length,
   resolve_angle_constraint_quadrant,
 } from "../../utils";
+import { constraint_key } from "../../utils/validate-mechanism";
 import type { MouseDownResult } from "./placing-element-actions";
 
 type ConstraintCanvasState = Extract<
@@ -40,7 +45,115 @@ type ConstraintCanvasState = Extract<
   }
 >;
 
+/** Mechanical elements carry probes; loads name a host; constraints neither. */
+function is_constraint(element: UnionElement): element is ConstraintElement {
+  return !("probes" in element) && !("targetID" in element);
+}
+
+/**
+ * The constraints `result` would repeat, and so takes the place of.
+ *
+ * The verdict is read off the built constraint rather than the gesture, because
+ * the type only settles at construction: an alignment turns horizontal or
+ * vertical on the edge's own slope, and two gears made equal become a ratio.
+ */
+function repeated_constraints(
+  result: MouseDownResult,
+  constraintElements: ConstraintElement[],
+): ConstraintElement[] {
+  const created = result.actions.find(
+    (action) => action.type === "CreateElement",
+  );
+  if (created?.type !== "CreateElement" || !is_constraint(created.element))
+    return [];
+  const key = constraint_key(created.element);
+  return constraintElements.filter(
+    (constraint) => constraint_key(constraint) === key,
+  );
+}
+
+/**
+ * A relation is imposed once: a constraint repeating one the mechanism already
+ * carries takes its place instead of stacking on it — re-dimensioning an edge
+ * moves its dimension and re-measures it.
+ *
+ * The eviction goes last so the bundle still opens on the creation, which is
+ * what `apply_actions` reads to route it.
+ */
+function evict_repeated_constraint(
+  result: MouseDownResult,
+  constraintElements: ConstraintElement[],
+): MouseDownResult {
+  const repeated = repeated_constraints(result, constraintElements);
+  if (repeated.length === 0) return result;
+  return {
+    ...result,
+    actions: [
+      ...result.actions,
+      ...repeated.map(
+        (element): Action => ({ type: "DeleteElement", element }),
+      ),
+    ],
+  };
+}
+
+/** The dimensioning steps whose next click builds the dimension and opens its value editor. */
+const DIMENSION_PLACEMENTS = [
+  "DimensionEdge",
+  "DimensionNodeToNode",
+  "DimensionEdgeToNode",
+  "DimensionAngle",
+  "DimensionRadius",
+  "DimensionBelt",
+] as const;
+
+type DimensionPlacementState = Extract<
+  ConstraintCanvasState,
+  { type: (typeof DIMENSION_PLACEMENTS)[number] }
+>;
+
+function is_dimension_placement(
+  state: CanvasState,
+): state is DimensionPlacementState {
+  return (DIMENSION_PLACEMENTS as readonly string[]).includes(state.type);
+}
+
+const NOTHING_REPLACED: ReadonlySet<ID> = new Set();
+
+/**
+ * The dimensions the aimed placement would take the place of, to hide them while
+ * it is aimed — the preview already draws their replacement under the cursor.
+ * Only the dimensioning steps answer: the other constraints have no preview, so
+ * hiding what they replace would make a badge vanish with nothing to show for it.
+ */
+export function replaced_constraint_ids(
+  state: CanvasState,
+  hoveredPart: HoveredPart,
+  mechanicalElements: MechanicalElement[],
+  constraintElements: ConstraintElement[],
+): ReadonlySet<ID> {
+  if (!is_dimension_placement(state)) return NOTHING_REPLACED;
+  const repeated = repeated_constraints(
+    build_constraint(state, hoveredPart, mechanicalElements),
+    constraintElements,
+  );
+  if (repeated.length === 0) return NOTHING_REPLACED;
+  return new Set(repeated.map((constraint) => constraint.id));
+}
+
 export function handle_placing_constraint(
+  state: ConstraintCanvasState,
+  hoveredPart: HoveredPart,
+  mechanicalElements: MechanicalElement[],
+  constraintElements: ConstraintElement[],
+): MouseDownResult {
+  return evict_repeated_constraint(
+    build_constraint(state, hoveredPart, mechanicalElements),
+    constraintElements,
+  );
+}
+
+function build_constraint(
   state: ConstraintCanvasState,
   hoveredPart: HoveredPart,
   mechanicalElements: MechanicalElement[],
@@ -342,7 +455,7 @@ export function handle_placing_constraint(
                 type: isHorizontal
                   ? "horizontal-align-edge"
                   : "vertical-align-edge",
-                position: edge.positionStart.lerp(edge.positionEnd, 0.5),
+                position: edge.positionStart.lerp(edge.positionEnd, 0.25),
                 id: crypto.randomUUID(),
                 edgeID: edge.id,
               },
@@ -374,7 +487,7 @@ export function handle_placing_constraint(
               type: isHorizontal
                 ? "horizontal-align-nodes"
                 : "vertical-align-nodes",
-              position: startNode.position.lerp(hoveredPart.position, 0.5),
+              position: startNode.position.lerp(hoveredPart.position, 0.25),
               id: crypto.randomUUID(),
               startNodeID: state.startNodeID,
               endNodeID: hoveredPart.id,
@@ -450,8 +563,8 @@ export function handle_placing_constraint(
         mechanicalElements,
       ) as EdgeElement;
       const position = startEdge.positionStart
-        .lerp(startEdge.positionEnd, 0.5)
-        .lerp(endEdge.positionStart.lerp(endEdge.positionEnd, 0.5), 0.5);
+        .lerp(startEdge.positionEnd, 0.25)
+        .lerp(endEdge.positionStart.lerp(endEdge.positionEnd, 0.25), 0.5);
       return {
         actions: [
           {
@@ -501,8 +614,8 @@ export function handle_placing_constraint(
         mechanicalElements,
       ) as EdgeElement;
       const position = startEdge.positionStart
-        .lerp(startEdge.positionEnd, 0.5)
-        .lerp(endEdge.positionStart.lerp(endEdge.positionEnd, 0.5), 0.5);
+        .lerp(startEdge.positionEnd, 0.25)
+        .lerp(endEdge.positionStart.lerp(endEdge.positionEnd, 0.25), 0.5);
       return {
         actions: [
           {
@@ -533,7 +646,7 @@ export function handle_placing_constraint(
         hoveredPart.id,
         mechanicalElements,
       ) as GearElement;
-      const position = startGear.position.lerp(endGear.position, 0.5);
+      const position = startGear.position.lerp(endGear.position, 0.25);
       return {
         actions: [
           {
@@ -578,7 +691,7 @@ export function handle_placing_constraint(
         hoveredPart.id,
         mechanicalElements,
       ) as GearElement;
-      const position = startGear.position.lerp(endGear.position, 0.5);
+      const position = startGear.position.lerp(endGear.position, 0.25);
       const value = startGear.radius / endGear.radius;
       return {
         actions: [

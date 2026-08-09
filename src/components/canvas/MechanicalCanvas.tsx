@@ -6,7 +6,6 @@ import {
   AppMode,
   CanvasEvent,
   CanvasState,
-  CanvasStateType,
   ConstraintElement,
   HoveredPart,
   ID,
@@ -21,28 +20,36 @@ import {
 } from "../../types";
 import { world2screen, screen2world } from "../../utils";
 import {
-  COLORS,
   CONSTRAINT_REVEAL_COOLDOWN_MS,
   CONSTRAINT_REVEAL_FADE_MS,
-  DIM,
-  HIT_TOLERANCE,
+  MODE_ANIMATION,
 } from "../../constants/rendering-specs";
 import { Box, Tooltip } from "@mui/material";
 import { type Instance as PopperInstance } from "@popperjs/core";
-import { draw_mechanical_canvas } from "./draw-canvas";
+import { CanvasHighlight, draw_mechanical_canvas } from "./draw-canvas";
 import { canvasStateReducer } from "./canvas-state-reducer";
 import { get_element_from_id } from "../mechanism/connect-actions";
 import { load_value_anchor } from "../../utils/load-geom";
 import { is_zero_load } from "../../utils/load-scale";
+import { t } from "../../i18n";
 import { get_hovered_part } from "./get-hover";
 import { clamp_to_bounds } from "./hover-bounds";
+import { snap_hover } from "./point-snap";
+import {
+  NO_FEEDBACK,
+  type SnapFeedback,
+  type SnapSettings,
+} from "./snap-corridor";
+import { snap_dimension_position } from "./dimension-snap";
 import { snap_load_hover } from "./load-snap";
 import { compute_visible_constraints, connected_constraints } from "./utils";
 import { eraser_cursor } from "./cursors";
 import { OnCanvasValueEditor } from "./OnCanvasValueEditor";
 import { OnCanvasProbeMetricSelector } from "./ProbeMetricSelector";
 import {
+  draw_axes,
   draw_grid,
+  draw_snap_feedback,
   draw_trajectory,
   TrajectoryDisplay,
 } from "./drawing-functions";
@@ -78,31 +85,6 @@ const STRUCTURAL_KEYS = new Set([
 ]);
 // Keys that place constraints/dimensions → pause simulation
 const CONSTRAINT_KEYS = new Set(["d", "e", "h", "l", "n", "q", "v"]);
-
-/** States whose free point snaps to the grid: those that put a point down, and
- *  those that drag one. A tool aiming at an element is not among them. */
-const GRID_SNAPPED_STATES = new Set<CanvasStateType>([
-  "ChangingGearRadius",
-  "MovingEdgeStartPoint",
-  "MovingEdgeEndPoint",
-  "MovingNode",
-  "PlacingBeamStart",
-  "PlacingBeamEnd",
-  "PlacingBeltStart",
-  "PlacingBeltEnd",
-  "PlacingSpringStart",
-  "PlacingSpringEnd",
-  "PlacingDamperStart",
-  "PlacingDamperEnd",
-  "PlacingGearStart",
-  "PlacingGearRadius",
-  "PlacingGround",
-  "PlacingJoin",
-  "PlacingMass",
-  "PlacingMotor",
-  "PlacingPivot",
-  "PlacingSlider",
-]);
 
 /** One line per distinct failure: the loop retries every frame, so an unguarded
  *  log buries the console sixty times a second. */
@@ -148,6 +130,7 @@ interface MechanicalCanvasProps {
   /** May a grab be started at all? False while replaying behind the frontier. */
   canSimulationGrab: boolean;
   snapToGrid: boolean;
+  snapSettings: SnapSettings;
   showGrid: boolean;
   /**
    * What the recording loop publishes each frame, or `null` outside simulation.
@@ -157,6 +140,16 @@ interface MechanicalCanvasProps {
    * reaches React at a fraction of the frame rate.
    */
   liveFrameRef: React.RefObject<LiveFrame | null>;
+  /** Elements the analysis panel is pointing at, and why (see `CanvasHighlight`). */
+  highlight: CanvasHighlight;
+  /**
+   * A pose the analysis panel is swinging along one motion mode, or `null`.
+   *
+   * A ref for the same reason as `liveFrameRef`: it changes every frame, and the draw loop
+   * must not wait for a render. The live frame wins — while the simulation drives the canvas
+   * there is nothing for a mode preview to add.
+   */
+  modePreviewRef: React.RefObject<Mechanism | null>;
 }
 
 /** The simulated mechanism and probe trajectories at the cursor, for one frame. */
@@ -193,8 +186,11 @@ export const MechanicalCanvas = forwardRef<
       onSimulationGrabEnd,
       canSimulationGrab,
       snapToGrid,
+      snapSettings,
       showGrid,
       liveFrameRef,
+      highlight,
+      modePreviewRef,
     },
     ref,
   ) => {
@@ -215,11 +211,26 @@ export const MechanicalCanvas = forwardRef<
       center: ScreenPoint;
     } | null>(null);
     const mouseButtonDownRef = useRef<"none" | "left" | "right">("none");
+    // The hovered part is shared with the panels, which designate an element by
+    // hovering its card. Only a hover pointed at on the canvas carries a cursor
+    // for a tool to preview under.
+    const cursorOnCanvasRef = useRef(false);
+    // Set beside every `setHoveredPart`: the guide belongs to the snap that
+    // produced the hovered point, and would be a lie recomputed from it.
+    const snapFeedbackRef = useRef<SnapFeedback>(NO_FEEDBACK);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const mechanismRef = useRef(mechanism);
+    const restingRef = useRef(mechanism);
+    /** How much of their opacity the dimensions currently keep, 0…1 (see the fade below). */
+    const dimensionFadeRef = useRef(1);
+    const lastFadeAtRef = useRef(0);
+    /** When a mode was last being swung, for the delay before dimensions come back. */
+    const lastSwingAtRef = useRef(0);
     const hoveredPartRef = useRef(hoveredPart);
     const canvasStateRef = useRef(canvasState);
+    const highlightRef = useRef(highlight);
+    highlightRef.current = highlight;
     const onSpaceKeyRef = useRef(onSpaceKey);
     onSpaceKeyRef.current = onSpaceKey;
     const onEscapeKeyRef = useRef(onEscapeKey);
@@ -251,7 +262,12 @@ export const MechanicalCanvas = forwardRef<
 
     // The live frame wins: a render must not put the edit-time positions back under the
     // pointer for the frame it takes the draw loop to overwrite them again.
-    mechanismRef.current = liveFrameRef.current?.mechanism ?? mechanism;
+    // What is drawn when nothing overrides it. `render` runs from the draw loop and does
+    // not list the prop among its dependencies, so it reads the resting pose from here
+    // rather than from a closure that would freeze on the first frame.
+    restingRef.current = mechanism;
+    mechanismRef.current =
+      liveFrameRef.current?.mechanism ?? modePreviewRef.current ?? mechanism;
     hoveredPartRef.current = hoveredPart;
     canvasStateRef.current = canvasState;
 
@@ -361,10 +377,12 @@ export const MechanicalCanvas = forwardRef<
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
 
-      // The simulated positions land here, not through a prop: hit-testing and hover read
-      // the same ref, so they stay on the mechanism that is actually drawn.
+      // The simulated positions — and the pose a mode is being swung through — land here,
+      // not through a prop: hit-testing and hover read the same ref, so they stay on the
+      // mechanism that is actually drawn. Both change every frame, which no render follows.
       const live = liveFrameRef.current;
-      if (live) mechanismRef.current = live.mechanism;
+      mechanismRef.current =
+        live?.mechanism ?? modePreviewRef.current ?? restingRef.current;
 
       // Writing width/height reallocates the backing store even when the value
       // is unchanged, so the canvas only follows the container when it moves.
@@ -387,20 +405,30 @@ export const MechanicalCanvas = forwardRef<
           canvas.height,
         );
 
-      // Draw axes
-      ctx.strokeStyle = COLORS.GRID_AXIS;
-      // Vertical axis
-      const panX = mechanismRef.current.viewport.pan.x;
-      ctx.beginPath();
-      ctx.moveTo(panX, 0);
-      ctx.lineTo(panX, canvas.height);
-      ctx.stroke();
-      // Horizontal axis
-      const panY = mechanismRef.current.viewport.pan.y;
-      ctx.beginPath();
-      ctx.moveTo(0, panY);
-      ctx.lineTo(canvas.width, panY);
-      ctx.stroke();
+      draw_axes(
+        ctx,
+        mechanismRef.current.viewport,
+        canvas.width,
+        canvas.height,
+      );
+
+      // Under the mechanism, like the grid: it is scaffolding for the gesture in
+      // progress, not something being drawn.
+      if (cursorOnCanvasRef.current) {
+        const held = snapFeedbackRef.current;
+        draw_snap_feedback(
+          ctx,
+          {
+            guides: snapSettings.showAngleGuides ? held.guides : [],
+            ...(snapSettings.highlightSnap
+              ? { gridX: held.gridX, gridY: held.gridY }
+              : {}),
+          },
+          mechanismRef.current.viewport,
+          canvas.width,
+          canvas.height,
+        );
+      }
 
       // Trajectoires des points sondés, sous les éléments du mécanisme.
       for (const trajectory of live?.trajectories ?? EMPTY_TRAJECTORIES)
@@ -416,6 +444,34 @@ export const MechanicalCanvas = forwardRef<
       const visibleConstraints = computeVisibleConstraints();
 
       const now = performance.now();
+
+      // A dimension states a design value, and the analysis is not about design values: a
+      // mode swings the mechanism away from the pose it was dimensioned at, and a chain
+      // picks out parts a cluttered drawing hides. So the dimensions step aside as soon as
+      // the panel points at anything, as they already do in simulation. Faded rather than
+      // cut, so travelling down a card's rows does not make them blink.
+      const analysing =
+        modePreviewRef.current !== null ||
+        highlightRef.current.elements.size > 0;
+      if (analysing) lastSwingAtRef.current = now;
+      // They leave at once but come back late: crossing from one row to the next passes
+      // through a frame or two pointing at nothing, and dimensions flashing in between
+      // would be worse than their absence.
+      const returning =
+        !analysing &&
+        now - lastSwingAtRef.current > MODE_ANIMATION.DIMENSION_RETURN_DELAY_MS;
+      const fadeStep =
+        ((returning ? 1 : analysing ? -1 : 0) *
+          (now - (lastFadeAtRef.current || now))) /
+        CONSTRAINT_REVEAL_FADE_MS;
+      dimensionFadeRef.current = Math.min(
+        1,
+        Math.max(0, dimensionFadeRef.current + fadeStep),
+      );
+      lastFadeAtRef.current = now;
+      if (dimensionFadeRef.current < 1)
+        for (const [id, opacity] of visibleConstraints)
+          visibleConstraints.set(id, opacity * dimensionFadeRef.current);
       const modelConstraints = mechanismRef.current.constraintElements;
       const modelIDs = new Set(modelConstraints.map((c) => c.id));
       const ghostIDs = new Set<ID>();
@@ -435,26 +491,33 @@ export const MechanicalCanvas = forwardRef<
         return true;
       });
 
-      draw_mechanical_canvas(
-        ctx,
-        mechanismRef.current.viewport,
-        hoveredPartRef.current,
-        canvasStateRef.current,
-        mechanismRef.current.mechanicalElements,
-        ghostConstraints.length
+      draw_mechanical_canvas(ctx, {
+        viewport: mechanismRef.current.viewport,
+        hoveredPart: hoveredPartRef.current,
+        state: canvasStateRef.current,
+        mechanicalElements: mechanismRef.current.mechanicalElements,
+        constraintElements: ghostConstraints.length
           ? [...modelConstraints, ...ghostConstraints]
           : modelConstraints,
-        mechanismRef.current.loads,
+        loads: mechanismRef.current.loads,
         visibleConstraints,
-        ghostIDs,
-        false,
-      );
+        ghostConstraintIDs: ghostIDs,
+        cursorOnCanvas: cursorOnCanvasRef.current,
+        // A running kinematic simulation moves the mechanism away from the poses the loads
+        // were placed at, so they step aside rather than point at nothing.
+        hideLoads: appModeRef.current === "kinematic",
+        dimensionSnapped: snapFeedbackRef.current.distanceSnapped ?? false,
+        highlight: highlightRef.current,
+      });
     }, [
       showGrid,
+      snapSettings.highlightSnap,
+      snapSettings.showAngleGuides,
       computeVisibleConstraints,
       processConstraintChange,
       measureCanvas,
       liveFrameRef,
+      modePreviewRef,
     ]);
 
     useEffect(() => {
@@ -507,6 +570,7 @@ export const MechanicalCanvas = forwardRef<
       event: React.PointerEvent<HTMLCanvasElement>,
     ) => {
       window.getSelection()?.removeAllRanges();
+      cursorOnCanvasRef.current = true;
       // A gesture is rare enough to pay for one measurement, and it catches the
       // case the observer cannot see: a canvas moved without being resized.
       measureCanvas();
@@ -533,6 +597,7 @@ export const MechanicalCanvas = forwardRef<
     const onPointerMoveHandler = (
       event: React.PointerEvent<HTMLCanvasElement>,
     ) => {
+      cursorOnCanvasRef.current = true;
       const canvas = canvasRef.current;
       if (!canvas) return;
       const rect = canvasRectRef.current ?? measureCanvas();
@@ -556,6 +621,14 @@ export const MechanicalCanvas = forwardRef<
       onMouseUpHandler();
     };
 
+    // A gesture in progress keeps the canvas: the pointer is captured, and what
+    // it draws — a selection rectangle, an element being placed — must survive
+    // the cursor straying outside.
+    const onPointerLeaveHandler = () => {
+      if (mouseButtonDownRef.current === "none")
+        cursorOnCanvasRef.current = false;
+    };
+
     /**
      * The hovered part under the last known cursor position, bounded and
      * snapped. Reads the current state, so it answers for whatever tool is
@@ -565,6 +638,8 @@ export const MechanicalCanvas = forwardRef<
     const computeHover = useCallback((): {
       hoveredPart: HoveredPart;
       worldMousePos: Point2;
+      /** What the snap took hold of, to be shown. Carried out of the snap rather than read back from the position: a point pulled onto the grid alone lands on a round direction often enough by chance. */
+      snapFeedback: SnapFeedback;
     } => {
       const currMech = mechanismRef.current;
 
@@ -575,6 +650,7 @@ export const MechanicalCanvas = forwardRef<
         screen2world(mousePositionRef.current, currMech.viewport),
         canvasStateRef.current,
         currMech.mechanicalElements,
+        currMech.viewport,
       );
       const newHoveredPart = get_hovered_part(
         currMech.mechanicalElements,
@@ -584,32 +660,39 @@ export const MechanicalCanvas = forwardRef<
         worldMousePos,
         canvasStateRef.current,
         currMech.viewport,
+        // What the previous frame asked of the drag: the mechanism read here has
+        // answered that, not the cursor, which has since moved on.
+        oldPositionRef.current,
       );
+      let snapFeedback: SnapFeedback = NO_FEEDBACK;
+      if (snapToGrid && appModeRef.current === "edition") {
+        const { position, ...feedback } = snap_hover(
+          newHoveredPart,
+          canvasStateRef.current,
+          currMech.mechanicalElements,
+          currMech.viewport,
+          snapSettings,
+        );
+        newHoveredPart.position = position;
+        snapFeedback = feedback;
+      }
       if (
         snapToGrid &&
         newHoveredPart.type === "Void" &&
-        // A point held back by a refusal keeps the distance it was pushed to:
-        // the grid would pull it straight back onto the centre that refused it.
-        !newHoveredPart.rejected &&
-        appModeRef.current === "edition" &&
-        GRID_SNAPPED_STATES.has(canvasStateRef.current.type)
+        appModeRef.current === "edition"
       ) {
-        const rdx =
-          Math.round(newHoveredPart.position.x / DIM.GRID_MAJOR) *
-          DIM.GRID_MAJOR;
-        if (
-          Math.abs(rdx - newHoveredPart.position.x) <
-          HIT_TOLERANCE.SNAP / currMech.viewport.scale
-        )
-          newHoveredPart.position.x = rdx;
-        const rdy =
-          Math.round(newHoveredPart.position.y / DIM.GRID_MAJOR) *
-          DIM.GRID_MAJOR;
-        if (
-          Math.abs(rdy - newHoveredPart.position.y) <
-          HIT_TOLERANCE.SNAP / currMech.viewport.scale
-        )
-          newHoveredPart.position.y = rdy;
+        const { position, ...feedback } = snap_dimension_position(
+          newHoveredPart.position,
+          canvasStateRef.current,
+          currMech.mechanicalElements,
+          currMech.constraintElements,
+          currMech.viewport,
+          snapSettings,
+        );
+        newHoveredPart.position = position;
+        // A dimension gesture is never one the point snap answers to, so there is nothing to reconcile: whichever spoke, spoke alone.
+        if (feedback.guides.length > 0 || feedback.distanceSnapped)
+          snapFeedback = feedback;
       }
       if (newHoveredPart.type === "Void" && appModeRef.current === "edition") {
         // Align load direction to world/beam axes, and its length to a round value
@@ -638,9 +721,10 @@ export const MechanicalCanvas = forwardRef<
           newHoveredPart.position,
           canvasStateRef.current,
           currMech.mechanicalElements,
+          currMech.viewport,
         );
-      return { hoveredPart: newHoveredPart, worldMousePos };
-    }, [snapToGrid, computeVisibleConstraints]);
+      return { hoveredPart: newHoveredPart, worldMousePos, snapFeedback };
+    }, [snapToGrid, snapSettings, computeVisibleConstraints]);
 
     const handleEvent = useCallback(
       (event: CanvasEvent) => {
@@ -676,9 +760,14 @@ export const MechanicalCanvas = forwardRef<
         }
         const currMech = mechanismRef.current;
 
-        const { hoveredPart: newHoveredPart, worldMousePos } = computeHover();
+        const {
+          hoveredPart: newHoveredPart,
+          worldMousePos,
+          snapFeedback,
+        } = computeHover();
         refreshRevealFromHover(newHoveredPart);
 
+        snapFeedbackRef.current = snapFeedback;
         setHoveredPart(newHoveredPart);
 
         canvasStateReducer(
@@ -721,8 +810,9 @@ export const MechanicalCanvas = forwardRef<
     // under a still cursor — a click that ends a placement, a shortcut, Escape.
     // Recomputed without the reducer: this is a refresh, not a gesture.
     useEffect(() => {
-      const { hoveredPart: refreshed } = computeHover();
+      const { hoveredPart: refreshed, snapFeedback } = computeHover();
       refreshRevealFromHover(refreshed);
+      snapFeedbackRef.current = snapFeedback;
       setHoveredPart(refreshed);
       oldPositionRef.current = refreshed.position.clone();
     }, [
@@ -834,7 +924,10 @@ export const MechanicalCanvas = forwardRef<
     // the bubble jumping from one side of the cursor to the other.
     const rejection =
       hoveredPart.type === "Void" && hoveredPart.rejected
-        ? { reason: hoveredPart.rejected, anchor: mousePositionRef.current }
+        ? {
+            reason: t(hoveredPart.rejected, hoveredPart.rejectedVars),
+            anchor: mousePositionRef.current,
+          }
         : null;
     // The anchor is a moving element, which Popper does not watch on its own.
     const rejectionPopperRef = useRef<PopperInstance>(null);
@@ -850,7 +943,9 @@ export const MechanicalCanvas = forwardRef<
           ? "grabbing"
           : canSimulationGrab &&
               ["Selecting", "SelectedElement"].includes(canvasState.type) &&
-              hoveredPart.type !== "Void"
+              hoveredPart.type !== "Void" &&
+              hoveredPart.type !== "Probe" &&
+              hoveredPart.type !== "MotorArrow"
             ? "grab"
             : ["Erasing", "ErasingMultiple"].includes(canvasState.type)
               ? eraser_cursor()
@@ -988,9 +1083,10 @@ export const MechanicalCanvas = forwardRef<
           onPointerMove={onPointerMoveHandler}
           onPointerUp={onPointerUpHandler}
           onPointerCancel={onPointerUpHandler}
+          onPointerLeave={onPointerLeaveHandler}
           onContextMenu={onContextMenuHandler}
           tabIndex={0}
-          aria-label="Canvas de conception mécanique"
+          aria-label={t("canvas_label")}
           role="img"
         />
         {rejection && (
@@ -1038,7 +1134,7 @@ export const MechanicalCanvas = forwardRef<
             // turned around (a minus flips it across the beam) and the one that
             // can legitimately be set to zero — as long as its opposite end is
             // still carrying something, otherwise the load would vanish.
-            signed={editingElement.type === "distributed-force"}
+            signed={"targetID" in editingElement}
             allowZero={
               editingElement.type === "distributed-force" &&
               !is_zero_load(

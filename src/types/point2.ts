@@ -6,6 +6,17 @@
 export type Space = "world" | "screen";
 
 /**
+ * Under this length a segment counts as a single point. Every local frame built
+ * on a segment divides by its length, so a shorter one yields `NaN` rather than
+ * a large number, and the `NaN` then spreads to whatever the frame produced.
+ */
+export const DEGENERATE_LENGTH = 1e-9;
+
+function is_degenerate<S extends Space>(delta: Point2<S>): boolean {
+  return delta.length_squared() < DEGENERATE_LENGTH * DEGENERATE_LENGTH;
+}
+
+/**
  * 2D Point representation with utility methods, tagged with the space it lives
  * in. Mixing the two — subtracting a screen point from a world one, feeding a
  * world angle to a screen glyph — is a mistake the compiler can catch, and one
@@ -113,7 +124,7 @@ export class Point2<S extends Space = "world"> {
 
   /** Divide by a scalar */
   public div(scalar: number): Point2<S> {
-    if (scalar === 0) return ZERO;
+    if (scalar === 0) return new Point2<S>(0, 0);
     return new Point2<S>(this.x / scalar, this.y / scalar);
   }
 
@@ -216,7 +227,7 @@ export class Point2<S extends Space = "world"> {
    */
   public parameter_on_segment(start: Point2<S>, end: Point2<S>): number {
     const delta = end.sub(start);
-    if (delta === ZERO) return 0;
+    if (is_degenerate(delta)) return 0;
     return this.sub(start).dot(delta) / delta.length_squared();
   }
 
@@ -229,7 +240,7 @@ export class Point2<S extends Space = "world"> {
    */
   public to_segment_coordinates(start: Point2<S>, end: Point2<S>): Point2<S> {
     const delta = end.sub(start);
-    if (delta === ZERO) return ZERO;
+    if (is_degenerate(delta)) return new Point2<S>(0, 0);
     return new Point2<S>(
       this.sub(start).dot(delta) / delta.length_squared(),
       this.sub(start).dot(delta.perp().normalize()),
@@ -245,7 +256,7 @@ export class Point2<S extends Space = "world"> {
    */
   public from_segment_coordinates(start: Point2<S>, end: Point2<S>): Point2<S> {
     const delta = end.sub(start);
-    if (delta === ZERO) return start;
+    if (is_degenerate(delta)) return start.clone();
     return start.lerp(end, this.x).add(delta.perp().normalize().mul(this.y));
   }
 
@@ -262,7 +273,8 @@ export class Point2<S extends Space = "world"> {
   ): Point2<S> {
     const delta1 = end1.sub(start1);
     const delta2 = end2.sub(start2);
-    if (delta1 === ZERO || delta2 === ZERO) return ZERO;
+    if (is_degenerate(delta1) || is_degenerate(delta2))
+      return new Point2<S>(0, 0);
     return new Point2<S>(
       this.sub(start1).dot(delta1) / delta1.length_squared(),
       this.sub(start2).dot(delta2) / delta2.length_squared(),
@@ -281,9 +293,9 @@ export class Point2<S extends Space = "world"> {
     end2: Point2<S>,
   ): Point2<S> | null {
     const delta1 = end1.sub(start1);
-    if (delta1 === ZERO) return start1;
+    if (is_degenerate(delta1)) return start1.clone();
     const delta2 = end2.sub(start2);
-    if (delta2 === ZERO) return start2;
+    if (is_degenerate(delta2)) return start2.clone();
 
     const pos1 = start1.lerp(end1, this.x);
     const pos2 = start2.lerp(end2, this.y);

@@ -2,6 +2,7 @@ import {
   Action,
   EdgeElement,
   ActionBundleType,
+  DEGENERATE_LENGTH,
   Point2,
   GeomNodes,
   Mechanism,
@@ -524,9 +525,11 @@ export function resolveGeometricConstraints(
           oldEdgeStart,
           oldEdgeEnd,
         );
-        local.y *=
-          newNode.distance2line(newEdgeStart, newEdgeEnd) /
-          oldNode.distance2line(oldEdgeStart, oldEdgeEnd);
+        // The label rides the gap between edge and node. A node that sat on the
+        // edge offers no gap to scale from, so the offset stays as the user left it.
+        const oldGap = oldNode.distance2line(oldEdgeStart, oldEdgeEnd);
+        if (oldGap > DEGENERATE_LENGTH)
+          local.y *= newNode.distance2line(newEdgeStart, newEdgeEnd) / oldGap;
         solvedNodes.positions.set(
           `${constraint.id}`,
           local.from_segment_coordinates(newEdgeStart, newEdgeEnd),

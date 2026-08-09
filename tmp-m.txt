@@ -1,0 +1,29 @@
+
+── Vilbrequin   (9 ms, 4 solves, 1 chaîne(s))
+   [ancrée]   libres=7 G=1  →  m=1  h=0  moteurs=1
+
+── Test slider   (3 ms, 4 solves, 1 chaîne(s))
+   [ancrée]   libres=6 G=1  →  m=1  h=0  moteurs=0
+
+── Jansen's linkage   (12 ms, 4 solves, 1 chaîne(s))
+   [ancrée]   libres=14 G=0  →  m=1  h=1  moteurs=1
+
+── Vilbrequin double slider   (3 ms, 9 solves, 3 chaîne(s))
+   [ancrée]   libres=10 G=-1  →  m=1  h=2  moteurs=1
+   [ancrée]   libres=5 G=2  →  m=2  h=0  moteurs=1
+   [FLOTTANTE] libres=2 G=2  →  m=2  h=0  moteurs=0
+
+── Déconnexion courroie   (66 ms, 4 solves, 1 chaîne(s))
+   [ancrée]   libres=17 G=0  →  m=1  h=1  moteurs=1
+
+── Poulie bloqueuse   (3 ms, 4 solves, 1 chaîne(s))
+   [ancrée]   libres=12 G=-1  →  m=1  h=2  moteurs=1
+
+── Huygen's chain drive   (9 ms, 10 solves, 1 chaîne(s))
+   [ancrée]   libres=23 G=5  →  m=7  h=2  moteurs=1
+
+── Core XY   (53 ms, 5 solves, 1 chaîne(s))
+   [ancrée]   libres=40 G=-4  →  m=2  h=6  moteurs=1
+
+── Core XY - 2 moteurs   (35 ms, 5 solves, 1 chaîne(s))
+   [ancrée]   libres=40 G=-4  →  m=2  h=6  moteurs=2

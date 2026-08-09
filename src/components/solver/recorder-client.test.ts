@@ -3,6 +3,7 @@ import vilbrequin from "../../../test-mechanisms/Vilbrequin.slidep?raw";
 import { load_mechanism } from "../../utils/load-mechanism";
 import { FromRecorder, ToRecorder, WireSnapshot } from "./recorder-protocol";
 import { RecorderClient } from "./recorder-client";
+import { MAX_RECORDING_TIME } from "./kinematic-simulation";
 
 /**
  * The client's half of the worker protocol: the layout crosses once per load and is put
@@ -36,10 +37,11 @@ const wire = (t: number): WireSnapshot => ({
   angles: Float64Array.of(t),
 });
 
-const layoutMessage = (epoch: number): FromRecorder => ({
+const layoutMessage = (epoch: number, maxTime = 300): FromRecorder => ({
   type: "layout",
   keys: ["n"],
   angleKeys: ["g"],
+  maxTime,
   epoch,
 });
 
@@ -69,6 +71,13 @@ describe("protocole du client d'enregistrement", () => {
     for (const s of snapshots) expect(s.layout).toBe(snapshots[0].layout);
     expect(snapshots[0].layout.index.get("n")).toBe(0);
     expect(snapshots[0].layout.angleIndex.get("g")).toBe(0);
+  });
+
+  it("retient la durée que le worker a mesurée sur le mécanisme", () => {
+    // Before a load, the ceiling: nothing is recorded yet, so nothing can be cut short.
+    expect(client.maxTime()).toBe(MAX_RECORDING_TIME);
+    worker.deliver(layoutMessage(0, 120));
+    expect(client.maxTime()).toBe(120);
   });
 
   it("écarte ce qui vient d'une époque révolue", () => {

@@ -5,6 +5,7 @@
 export * from "./angle-math";
 export * from "./belt-geom";
 export * from "./debounce";
+export * from "./grid";
 export * from "./load-mechanism";
 export * from "./mechanism-bounds";
 export * from "./migrate-mechanism";

@@ -18,6 +18,7 @@ import {
   WorldPoint,
 } from "../../types";
 import {
+  DIM,
   HIT_TOLERANCE,
   HOVER_ORDER,
   INTERACTION_SPECS,
@@ -29,6 +30,7 @@ import {
 } from "../mechanism/connect-actions";
 import {
   BELT_CANNOT_CLOSE,
+  BELT_CANNOT_CLOSE_VARS,
   belt_can_close,
   belt_placing_pulleys,
   legality_for_state,
@@ -47,6 +49,8 @@ import {
 } from "../../utils/load-geom";
 import { is_zero_load } from "../../utils/load-scale";
 import { is_constraint_type, probe_badge_position } from "./utils";
+import { offset_ends, parallel_edge_offsets } from "./parallel-edges";
+import { motor_arrow_geometry } from "./drawing-functions";
 
 /**
  * How a target answers one tool, per family. `doc/hover-matrix.md` is the
@@ -111,6 +115,10 @@ export type HoverTargets = {
    *  deliberately not among these: a probe is removed with its host, and a
    *  badge sitting off to the side must not become a way to delete it. */
   probeBadge?: true;
+  /** The rotation-direction arrow drawn on a motorized pivot. Excluded from
+   *  the eraser for the same reason as `probeBadge`: it flips the motor, it
+   *  does not remove anything. */
+  motorArrow?: true;
 };
 
 /** What a tool may pick, stated once for all six target families. */
@@ -121,6 +129,7 @@ const SELECT_ALL: HoverTargets = {
   belt: "full",
   overlays: "all",
   probeBadge: true,
+  motorArrow: true,
 };
 
 /** Placing or dragging something that attaches to the mechanism. */
@@ -154,7 +163,7 @@ export const HOVER_TARGETS: Record<CanvasStateType, HoverTargets> = {
   Selecting: SELECT_ALL,
   SelectedElement: SELECT_ALL,
   SelectedMultiple: SELECT_ALL,
-  Erasing: { ...SELECT_ALL, probeBadge: undefined },
+  Erasing: { ...SELECT_ALL, probeBadge: undefined, motorArrow: undefined },
   EditingValue: SELECT_ALL,
   PlacingValue: SELECT_ALL,
   // A rectangle drag picks by area, not by hover.
@@ -261,6 +270,55 @@ function drawn_past_base(
   return state.type === "MovingEdgeStartPoint"
     ? edge.positionEnd
     : edge.positionStart;
+}
+
+/**
+ * Where the part being dragged actually sits, once the solver has had its say.
+ *
+ * A drag does not pin anything to the cursor: `resolveGeometricConstraints`
+ * frees the grabbed part and pulls it with a `HandleGrab` that competes with
+ * every other constraint. What comes back is what the mechanism granted, and it
+ * falls short whenever an anchor, a dimension or a slide holds the part back.
+ *
+ * Belts are left out on purpose: a terminal rides its pulley's rim by
+ * construction, so it stands off the cursor even when nothing is holding it.
+ */
+function granted_grab_point(
+  state: CanvasState,
+  mechanicalElements: MechanicalElement[],
+  mousePos: Point2,
+): Point2 | undefined {
+  const dragged =
+    "elementID" in state
+      ? mechanicalElements.find((element) => element.id === state.elementID)
+      : undefined;
+  if (!dragged || dragged.type === "belt") return undefined;
+
+  switch (state.type) {
+    case "MovingNode":
+      return "position" in dragged ? dragged.position : undefined;
+    case "MovingEdgeStartPoint":
+      return "positionStart" in dragged ? dragged.positionStart : undefined;
+    case "MovingEdgeEndPoint":
+      return "positionEnd" in dragged ? dragged.positionEnd : undefined;
+    case "MovingEdgeBody":
+      return "positionStart" in dragged
+        ? dragged.positionStart.lerp(dragged.positionEnd, state.t)
+        : undefined;
+    case "ChangingGearRadius": {
+      // The grab rides the rim on the cursor's bearing, so what was granted is
+      // the rim point on that same bearing.
+      if (dragged.type !== "gear") return undefined;
+      const bearing = mousePos.sub(dragged.position);
+      const unit =
+        bearing.length_squared() > 1e-9
+          ? bearing.normalize()
+          : new Point2(1, 0);
+      return dragged.position.add(unit.mul(dragged.radius));
+    }
+    default:
+      return undefined;
+  }
 }
 
 /**
@@ -398,11 +456,16 @@ function probe_edge(
   mode: EdgeProbe,
   deleting: boolean,
   viewport: ViewportState,
+  /** Where the body is drawn, when it stands beside the axis (see `parallel-edges`). */
+  lateralOffset: number = 0,
 ): HoveredPart | null {
-  const start = world2screen(edge.positionStart, viewport);
-  const end = world2screen(edge.positionEnd, viewport);
+  const nodeStart = world2screen(edge.positionStart, viewport);
+  const nodeEnd = world2screen(edge.positionEnd, viewport);
+  // The terminals answer on their nodes, where they are drawn and where the
+  // gesture grabs them; only the body follows the offset.
+  const { start, end } = offset_ends(nodeStart, nodeEnd, lateralOffset);
   if (mode !== "body" && mode !== "body-centre") {
-    if (mouseScreen.distance_to(start) <= HIT_TOLERANCE.NODE)
+    if (mouseScreen.distance_to(nodeStart) <= HIT_TOLERANCE.NODE)
       return {
         type: "Edge",
         position: edge.positionStart.clone(),
@@ -410,7 +473,7 @@ function probe_edge(
         deleting,
         part: "start",
       };
-    if (mouseScreen.distance_to(end) <= HIT_TOLERANCE.NODE)
+    if (mouseScreen.distance_to(nodeEnd) <= HIT_TOLERANCE.NODE)
       return {
         type: "Edge",
         position: edge.positionEnd.clone(),
@@ -422,6 +485,8 @@ function probe_edge(
     if (mode === "ends+beam-body" && edge.type !== "beam") return null;
   }
 
+  // Aimed at where the body is drawn, but answering on the axis: the offset is
+  // a way of showing two elements at once, not a second place for one to be.
   if (mouseScreen.distance2segment(start, end) > HIT_TOLERANCE.EDGE)
     return null;
   return {
@@ -429,7 +494,10 @@ function probe_edge(
     position:
       mode === "body-centre"
         ? edge.positionStart.lerp(edge.positionEnd, 0.5)
-        : screen2world(mouseScreen.project_on_line(start, end), viewport),
+        : screen2world(
+            mouseScreen.project_on_line(nodeStart, nodeEnd),
+            viewport,
+          ),
     id: edge.id,
     deleting,
     part: "body",
@@ -557,6 +625,7 @@ function get_hovered_part_of_element(
   mouseScreen: ScreenPoint,
   state: CanvasState,
   viewport: ViewportState,
+  parallelOffsets: Map<ID, number>,
 ): HoveredPart | null {
   // TODO : à "PlacingBeltEnd", ignorer les gears avec le même parentAxle
 
@@ -601,6 +670,7 @@ function get_hovered_part_of_element(
         targets.edge,
         deleting,
         viewport,
+        parallelOffsets.get(element.id) ?? 0,
       );
 
     case "belt":
@@ -853,6 +923,70 @@ function hovered_probe_badge(
   return undefined;
 }
 
+/** 2π, matching the sweep `ctx.arc` and `motor_arrow_geometry` reason in. */
+const ARROW_TAU = 2 * Math.PI;
+
+/**
+ * Whether `angle` falls on the arc from `start` to `end`, swept the way
+ * `ctx.arc`'s own `anticlockwise` flag would draw it, with `margin` radians
+ * of slack on each end — the arrow head is wider than the stroke it caps.
+ */
+function angle_on_arc(
+  angle: number,
+  start: number,
+  end: number,
+  anticlockwise: boolean,
+  margin: number,
+): boolean {
+  const wrap = (a: number) => ((a % ARROW_TAU) + ARROW_TAU) % ARROW_TAU;
+  const from = wrap(anticlockwise ? end : start) - margin;
+  const span = wrap(anticlockwise ? start - end : end - start) + 2 * margin;
+  const offset = wrap(angle - from);
+  return offset <= span;
+}
+
+/**
+ * The motor's rotation-direction arrow under the cursor, if the tool may pick
+ * one at all. Hit-tested on the arc the arrow is actually drawn on — its
+ * radius (`MOTOR_ARROW_RADIUS`) and its angular span, not the full ring
+ * around the motor's disc, so the disc stays a normal node target and the
+ * dead half of the circle does not answer for the arrow.
+ */
+function hovered_motor_arrow(
+  mouseScreen: ScreenPoint,
+  mechanicalElements: MechanicalElement[],
+  excluded_elements: ID[],
+  state: CanvasState,
+  viewport: ViewportState,
+): HoveredPart | undefined {
+  if (!HOVER_TARGETS[state.type].motorArrow) return undefined;
+  for (const element of mechanicalElements) {
+    if (element.type !== "pivot" || !element.motor) continue;
+    if (excluded_elements.includes(element.id)) continue;
+    const centre = world2screen(element.position, viewport);
+    const radialDistance = Math.abs(
+      mouseScreen.distance_to(centre) - DIM.MOTOR_ARROW_RADIUS,
+    );
+    if (radialDistance > HIT_TOLERANCE.PROBE) continue;
+    const { startAngle, endAngle, anticlockwise } = motor_arrow_geometry(
+      element.motor.speed >= 0,
+    );
+    const angularMargin = HIT_TOLERANCE.PROBE / DIM.MOTOR_ARROW_RADIUS;
+    const angle = mouseScreen.sub(centre).angle();
+    if (
+      !angle_on_arc(angle, startAngle, endAngle, anticlockwise, angularMargin)
+    )
+      continue;
+    return {
+      type: "MotorArrow",
+      position: element.position.clone(),
+      id: element.id,
+      deleting: false,
+    };
+  }
+  return undefined;
+}
+
 /**
  * Detects which part of a mechanism is being hovered at a given point
  * Returns the hovered part and the corresponding point on that part
@@ -865,6 +999,8 @@ export function get_hovered_part(
   mousePos: Point2,
   state: CanvasState,
   viewport: ViewportState,
+  /** What the previous frame of this drag asked for, when there is one. */
+  askedPosition?: Point2,
 ): HoveredPart {
   // Picking only: an element being dragged is under the cursor by construction
   // and must never be its own target. What it may legally reach is decided by
@@ -915,6 +1051,8 @@ export function get_hovered_part(
   }
 
   const is_legal = legality_for_state(state, mechanicalElements);
+  // The same map the drawing reads, so the cursor answers where the stroke is.
+  const parallelOffsets = parallel_edge_offsets(mechanicalElements);
 
   const position = mousePos.clone();
   // Picking is a screen question — every `HIT_TOLERANCE` is a number of pixels —
@@ -943,9 +1081,45 @@ export function get_hovered_part(
         ),
       )
     )
-      return { type: "Void", position, rejected: BELT_CANNOT_CLOSE };
+      return {
+        type: "Void",
+        position,
+        rejected: BELT_CANNOT_CLOSE,
+        rejectedVars: BELT_CANNOT_CLOSE_VARS,
+      };
     return { type: "BeltClosure", position: state.startHover.position };
   }
+
+  // A drag can only meet what it reaches. When the solver has granted the
+  // grabbed part a place short of what the gesture asked for — an anchor holding
+  // it, a dimensioned length, a slide it cannot leave — whatever lies under the
+  // cursor is not under the element, and aiming at it targets nothing. Ignored
+  // rather than refused: there is no gesture to explain, the cursor is simply
+  // over empty space as far as this element is concerned.
+  //
+  // Measured against what was asked rather than against the cursor, because the
+  // hover runs before the move of its own frame is applied: the cursor has
+  // already advanced past the position this state answers to, and that head
+  // start is not a constraint holding anything back.
+  if (askedPosition) {
+    const granted = granted_grab_point(state, mechanicalElements, position);
+    if (
+      granted &&
+      world2screen(granted, viewport).distance_to(
+        world2screen(askedPosition, viewport),
+      ) > HIT_TOLERANCE.NODE
+    )
+      return { type: "Void", position };
+  }
+
+  // A node the bar is merely drawn PAST, held back until the sweep is over.
+  //
+  // That hit only asks the node to lie somewhere along the line, so a whole row
+  // of aligned nodes answers to it at once — and the first one swept would win
+  // over the node the cursor is actually sitting on, which is never what was
+  // aimed at. A centre under the cursor outranks them all; among themselves, the
+  // nearest one does.
+  let past: { part: HoveredPart; distance: number } | undefined;
 
   for (const type of HOVER_ORDER) {
     // Badges are not elements, so the family is swept whole at the rank
@@ -960,6 +1134,19 @@ export function get_hovered_part(
         viewport,
       );
       if (badgeHover) return badgeHover;
+      continue;
+    }
+    // Same reasoning as "probe": the arrow rides on the pivot it belongs to,
+    // above it, so it must be swept before that pivot answers instead.
+    if (type === "motorArrow") {
+      const arrowHover = hovered_motor_arrow(
+        mouseScreen,
+        mechanicalElements,
+        excluded_elements,
+        state,
+        viewport,
+      );
+      if (arrowHover) return arrowHover;
       continue;
     }
     const one_type_elements = elements.filter((e) => e.type === type).reverse();
@@ -980,18 +1167,30 @@ export function get_hovered_part(
         mouseScreen,
         state,
         viewport,
+        parallelOffsets,
       );
       if (!hoveredPart) continue;
       const verdict = is_legal(element, hoveredPart);
-      if (verdict.allowed) return hoveredPart;
+      if (verdict.allowed) {
+        if (hoveredPart.type !== "Node" || !hoveredPart.beamBodyHover)
+          return hoveredPart;
+        const distance = mouseScreen.distance_to(
+          world2screen((element as NodeElement).position, viewport),
+        );
+        if (!past || distance < past.distance)
+          past = { part: hoveredPart, distance };
+        continue;
+      }
       if (verdict.blocks)
         return {
           type: "Void",
           position: pushed_out_of(element, hoveredPart, mouseScreen, viewport),
           rejected: verdict.reason,
+          rejectedVars: verdict.vars,
         };
     }
   }
+  if (past) return past.part;
 
   if (state.type === "MovingEdgeStartPoint") {
     const belt = get_mechanical_element_from_id(
@@ -1004,7 +1203,12 @@ export function get_hovered_part(
         HIT_TOLERANCE.NODE
     ) {
       if (!belt_can_close(belt.attachedGearsIDs.length))
-        return { type: "Void", position, rejected: BELT_CANNOT_CLOSE };
+        return {
+          type: "Void",
+          position,
+          rejected: BELT_CANNOT_CLOSE,
+          rejectedVars: BELT_CANNOT_CLOSE_VARS,
+        };
       return {
         type: "Edge",
         position: belt.positionEnd,
@@ -1024,7 +1228,12 @@ export function get_hovered_part(
         HIT_TOLERANCE.NODE
     ) {
       if (!belt_can_close(belt.attachedGearsIDs.length))
-        return { type: "Void", position, rejected: BELT_CANNOT_CLOSE };
+        return {
+          type: "Void",
+          position,
+          rejected: BELT_CANNOT_CLOSE,
+          rejectedVars: BELT_CANNOT_CLOSE_VARS,
+        };
       return {
         type: "Edge",
         position: belt.positionStart,
@@ -1049,7 +1258,12 @@ export function get_hovered_part(
       )
         continue;
       if (!belt_can_close(belt.attachedGearsIDs.length))
-        return { type: "Void", position, rejected: BELT_CANNOT_CLOSE };
+        return {
+          type: "Void",
+          position,
+          rejected: BELT_CANNOT_CLOSE,
+          rejectedVars: BELT_CANNOT_CLOSE_VARS,
+        };
       return {
         type: "Edge",
         position: otherPos,

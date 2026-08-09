@@ -23,6 +23,7 @@ import {
   belt_project,
 } from "../../utils/belt-path";
 import { belt_junction_id } from "../../utils/belt-rules";
+import { constraint_key } from "../../utils/validate-mechanism";
 
 /** Returns the mechanical element from the id. */
 export function get_mechanical_element_from_id(
@@ -366,6 +367,7 @@ export function close_belt_actions(
   position: Point2,
   mechanicalElements: MechanicalElement[],
   constraintElements: ConstraintElement[],
+  loads: LoadElement[] = [],
 ): Action[] {
   const close: Action = { type: "CloseBelt", id: belt.id, closed: true };
   const startNode = belt.fixedNodeStartID;
@@ -445,7 +447,13 @@ export function close_belt_actions(
     mechanicalElements,
   ) as NodeElement;
   return [
-    ...fuse_nodes(startEl, endEl, mechanicalElements, constraintElements),
+    ...fuse_nodes(
+      startEl,
+      endEl,
+      mechanicalElements,
+      constraintElements,
+      loads,
+    ),
     close,
   ];
 }
@@ -482,6 +490,11 @@ export function delete_element(
     element.type === "slider" ||
     element.type === "spring"
   ) {
+    // Each cut is emitted once. An edge holding both its ends on one node names
+    // it twice, so the node is reached twice — and the second disconnect would
+    // carry the same index as the first, whose splice has already shifted the
+    // list: it would take out a neighbour instead.
+    const cut = new Set<string>();
     get_connection_types(element)
       .filter((ct) => !(isCascade && ct === "ConnectsParentAxle"))
       .forEach((connectionType) => {
@@ -491,7 +504,10 @@ export function delete_element(
             mechanicalElements,
           );
           get_connection_pair_types(element.id, connectedElement).forEach(
-            (pairType) =>
+            (pairType) => {
+              const key = `${id}|${pairType}`;
+              if (cut.has(key)) return;
+              cut.add(key);
               actions.push(
                 disconnect_element(
                   connectedElement,
@@ -499,7 +515,8 @@ export function delete_element(
                   pairType,
                   mechanicalElements,
                 ),
-              ),
+              );
+            },
           );
         });
       });
@@ -1073,12 +1090,62 @@ function transfer_external_connections(
   return actions;
 }
 
+/** A constraint the fusion leaves meaningless, to be removed rather than moved. */
+const DROP = "drop" as const;
+
 /**
- * Transfer les connections des contraintes à `sourceNode` vers `destNode`.
+ * The same constraint said of `destNodeID` instead of `sourceNodeID`, `DROP`
+ * when the move robs it of meaning, or `undefined` when it says nothing about
+ * the absorbed node.
  *
- * Si le transfer n'est pas possible, les supprimer.
+ * A relation between the two nodes being fused becomes a relation of one node to
+ * itself, which constrains nothing.
+ */
+function retargeted_constraint(
+  constraint: ConstraintElement,
+  sourceNodeID: ID,
+  destNodeID: ID,
+): ConstraintElement | typeof DROP | undefined {
+  switch (constraint.type) {
+    case "dimension-node-to-node":
+    case "horizontal-align-nodes":
+    case "vertical-align-nodes": {
+      const startNodeID =
+        constraint.startNodeID === sourceNodeID
+          ? destNodeID
+          : constraint.startNodeID;
+      const endNodeID =
+        constraint.endNodeID === sourceNodeID ? destNodeID : constraint.endNodeID;
+      if (
+        startNodeID === constraint.startNodeID &&
+        endNodeID === constraint.endNodeID
+      )
+        return undefined;
+      if (startNodeID === endNodeID) return DROP;
+      return { ...constraint, startNodeID, endNodeID };
+    }
+    case "dimension-edge-to-node":
+      return constraint.nodeID === sourceNodeID
+        ? { ...constraint, nodeID: destNodeID }
+        : undefined;
+    case "dimension-radius":
+      return constraint.gearID === sourceNodeID ? DROP : undefined;
+    case "gear-ratio":
+      return constraint.startGearID === sourceNodeID ||
+        constraint.endGearID === sourceNodeID
+        ? DROP
+        : undefined;
+    default:
+      return undefined;
+  }
+}
+
+/**
+ * Moves onto `destNodeID` every constraint held on the node being absorbed.
  *
- * Returns the actions to perform disconnections and connections.
+ * One left relating an element to itself goes, and so does one that would end up
+ * repeating a relation the mechanism already states — fusing two nodes can bring
+ * two dimensions onto the very same pair.
  */
 function transfer_constraint_connections(
   sourceNodeID: ID,
@@ -1086,47 +1153,74 @@ function transfer_constraint_connections(
   constraintElements: ConstraintElement[],
 ): Action[] {
   const actions: Action[] = [];
+  const rewritten = constraintElements.map((constraint) => ({
+    constraint,
+    next: retargeted_constraint(constraint, sourceNodeID, destNodeID),
+  }));
+  const stated = new Set(
+    rewritten
+      .filter(({ next }) => next === undefined)
+      .map(({ constraint }) => constraint_key(constraint)),
+  );
 
-  constraintElements.forEach((constraint) => {
-    switch (constraint.type) {
-      case "dimension-node-to-node":
-      case "horizontal-align-nodes":
-      case "vertical-align-nodes":
-        if (constraint.startNodeID === sourceNodeID) {
-          const newConstraint = { ...constraint };
-          newConstraint.startNodeID = destNodeID;
-          actions.push({ type: "DeleteElement", element: constraint });
-          actions.push({ type: "CreateElement", element: newConstraint });
-        } else if (constraint.endNodeID === sourceNodeID) {
-          const newConstraint = { ...constraint };
-          newConstraint.endNodeID = destNodeID;
-          actions.push({ type: "DeleteElement", element: constraint });
-          actions.push({ type: "CreateElement", element: newConstraint });
-        }
-        break;
-      case "dimension-edge-to-node":
-        if (constraint.nodeID === sourceNodeID) {
-          const newConstraint = { ...constraint };
-          newConstraint.nodeID = destNodeID;
-          actions.push({ type: "DeleteElement", element: constraint });
-          actions.push({ type: "CreateElement", element: newConstraint });
-        }
-        break;
-      case "dimension-radius":
-        if (constraint.gearID === sourceNodeID) {
-          actions.push({ type: "DeleteElement", element: constraint });
-        }
-        break;
-      case "gear-ratio":
-        if (
-          constraint.startGearID === sourceNodeID ||
-          constraint.endGearID === sourceNodeID
-        ) {
-          actions.push({ type: "DeleteElement", element: constraint });
-        }
-        break;
-    }
-  });
+  for (const { constraint, next } of rewritten) {
+    if (next === undefined) continue;
+    actions.push({ type: "DeleteElement", element: constraint });
+    if (next === DROP) continue;
+    const key = constraint_key(next);
+    if (stated.has(key)) continue;
+    stated.add(key);
+    actions.push({ type: "CreateElement", element: next });
+  }
+  return actions;
+}
+
+/**
+ * The edges a fused node ends up turning about: those both nodes held, each
+ * named once, minus the beam it now slides along.
+ *
+ * A bar running from one of the two to the other is held by each of them, so a
+ * plain concatenation lists it twice — and that is the ordinary case, not a
+ * corner one: fusing the ends of a bar is how a linkage gets folded up.
+ */
+function fused_edges(
+  first: readonly ID[],
+  second: readonly ID[],
+  parentBeamID: ID | undefined,
+): ID[] {
+  return [...new Set([...first, ...second])].filter(
+    (edgeID) => edgeID !== parentBeamID,
+  );
+}
+
+/**
+ * Moves onto `destNodeID` the loads applied to the node being absorbed.
+ *
+ * A node carries at most one force — the same rule `connect_node_and_edge`
+ * applies when an edge end lands on one — so a force meeting one already there
+ * is dropped rather than stacked. Nothing else ever rests on a node: a moment
+ * turns an edge or a gear, a distributed force runs along a beam, and either
+ * would have nowhere to go.
+ */
+function transfer_load_connections(
+  sourceNodeID: ID,
+  destNodeID: ID,
+  loads: LoadElement[],
+): Action[] {
+  const actions: Action[] = [];
+  let destHasForce = loads.some(
+    (load) => load.type === "force" && load.targetID === destNodeID,
+  );
+  for (const load of loads) {
+    if (load.targetID !== sourceNodeID) continue;
+    actions.push({ type: "DeleteElement", element: load });
+    if (load.type !== "force" || destHasForce) continue;
+    actions.push({
+      type: "CreateElement",
+      element: { ...load, targetID: destNodeID },
+    });
+    destHasForce = true;
+  }
   return actions;
 }
 
@@ -1145,6 +1239,7 @@ export function fuse_nodes(
   hoveredNode: NodeElement,
   mechanicalElements: MechanicalElement[],
   constraintElements: ConstraintElement[],
+  loads: LoadElement[] = [],
 ): Action[] {
   const actions: Action[] = [];
   if (
@@ -1158,8 +1253,10 @@ export function fuse_nodes(
       probes: [],
       overlays: {},
       parentBeamID: hoveredNode.parentBeamID,
-      rotatingEdgesIDs: selectedNode.rotatingEdgesIDs.concat(
+      rotatingEdgesIDs: fused_edges(
+        selectedNode.rotatingEdgesIDs,
         hoveredNode.fixedEdgesIDs,
+        hoveredNode.parentBeamID,
       ),
       fixedGearsIDs: selectedNode.fixedGearsIDs,
       position: hoveredNode.position,
@@ -1182,6 +1279,9 @@ export function fuse_nodes(
         constraintElements,
       ),
     );
+    actions.push(
+      ...transfer_load_connections(hoveredNode.id, selectedNode.id, loads),
+    );
   } else if (selectedNode.type === "slider" && hoveredNode.type === "pivot") {
     // Fuse them into a Slidep — symétrique au cas pivot+slider :
     // le slidep hérite de l'ID du pivot pour que gear.parentAxleID reste valide.
@@ -1197,9 +1297,11 @@ export function fuse_nodes(
       probes: [],
       overlays: {},
       parentBeamID,
-      rotatingEdgesIDs: selectedNode.fixedEdgesIDs
-        .concat(hoveredNode.rotatingEdgesIDs)
-        .filter((edgeID) => edgeID !== parentBeamID),
+      rotatingEdgesIDs: fused_edges(
+        selectedNode.fixedEdgesIDs,
+        hoveredNode.rotatingEdgesIDs,
+        parentBeamID,
+      ),
       fixedGearsIDs: hoveredNode.fixedGearsIDs,
       position: hoveredNode.position,
       isGrounded: selectedNode.isGrounded || hoveredNode.isGrounded,
@@ -1220,6 +1322,9 @@ export function fuse_nodes(
         hoveredNode.id,
         constraintElements,
       ),
+    );
+    actions.push(
+      ...transfer_load_connections(selectedNode.id, hoveredNode.id, loads),
     );
   } else {
     // Takeover de selectedNode sur hoveredNode
@@ -1251,6 +1356,9 @@ export function fuse_nodes(
         selectedNode.id,
         constraintElements,
       ),
+    );
+    actions.push(
+      ...transfer_load_connections(hoveredNode.id, selectedNode.id, loads),
     );
   }
   return actions;
@@ -1332,6 +1440,7 @@ export function connect_elements(
       hoveredPart.position,
       mechanicalElements,
       constraintElements,
+      loads,
     );
   }
 
@@ -1363,6 +1472,7 @@ export function connect_elements(
               hoveredNode,
               mechanicalElements,
               constraintElements,
+              loads,
             ),
           );
           break;
@@ -1490,19 +1600,30 @@ export function connect_elements(
  * re-connecting an existing pair is a no-op rather than a duplicate entry.
  */
 /**
- * Releases an edge end from the node currently holding it.
+ * Releases one end of an edge from the node currently holding it.
  *
- * Only the node's edge lists are cleared: a node may also hold the same edge as
- * its `parentBeamID` — a slider sliding along it — which the endpoint moving
- * away does not end.
+ * A node names an edge once, whatever number of ways that edge rests on it — an
+ * end, the other end, a point of its body. So the entry goes only when this
+ * endpoint was the last of them; cutting it while another still holds would
+ * strand that one. The `parentBeamID` a slider slides along is left alone in
+ * every case: an endpoint moving away does not end a slide.
  */
 function detach_edge_end(
   edge: EdgeElement,
-  previousNodeID: ID | undefined,
+  leaving: "start" | "end",
   node: NodeElement,
   mechanicalElements: MechanicalElement[],
 ): Action[] {
+  const previousNodeID =
+    leaving === "start" ? edge.fixedNodeStartID : edge.fixedNodeEndID;
   if (!previousNodeID || previousNodeID === node.id) return [];
+  const otherEnd =
+    leaving === "start" ? edge.fixedNodeEndID : edge.fixedNodeStartID;
+  const stillHeldOtherwise =
+    otherEnd === previousNodeID ||
+    ("fixedNodesBodyIDs" in edge &&
+      edge.fixedNodesBodyIDs.includes(previousNodeID));
+  if (stillHeldOtherwise) return [];
   const previous = mechanicalElements.find((e) => e.id === previousNodeID);
   if (!previous) return [];
   return get_connection_pair_types(edge.id, previous)
@@ -1516,7 +1637,7 @@ function detach_edge_end(
     );
 }
 
-function connect_node_and_edge(
+export function connect_node_and_edge(
   node: NodeElement,
   edge: EdgeElement | GearElement,
   edgePart: "start" | "end" | "body",
@@ -1558,14 +1679,7 @@ function connect_node_and_edge(
   switch (edgePart) {
     case "start":
       if (edge.type !== "gear" && edge.fixedNodeStartID !== node.id) {
-        actions.push(
-          ...detach_edge_end(
-            edge,
-            edge.fixedNodeStartID,
-            node,
-            mechanicalElements,
-          ),
-        );
+        actions.push(...detach_edge_end(edge, "start", node, mechanicalElements));
         actions.push({
           type: "ConnectsFixedNodeStart",
           disconnect: false,
@@ -1576,14 +1690,7 @@ function connect_node_and_edge(
       break;
     case "end":
       if (edge.type !== "gear" && edge.fixedNodeEndID !== node.id) {
-        actions.push(
-          ...detach_edge_end(
-            edge,
-            edge.fixedNodeEndID,
-            node,
-            mechanicalElements,
-          ),
-        );
+        actions.push(...detach_edge_end(edge, "end", node, mechanicalElements));
         actions.push({
           type: "ConnectsFixedNodeEnd",
           disconnect: false,

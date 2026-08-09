@@ -28,6 +28,7 @@ import {
   Chip,
   Snackbar,
   Switch,
+  Select,
   FormControlLabel,
   alpha,
   ListItemIcon,
@@ -59,6 +60,10 @@ import {
   Bolt,
   CloudOff,
   Lock,
+  Visibility,
+  VisibilityOff,
+  GridOn,
+  GridOff,
 } from "@mui/icons-material";
 import { icon } from "./components/element-palette/iconDataUris";
 import {
@@ -94,6 +99,7 @@ import {
   save_to_file,
   serialize_mechanism,
   debounce,
+  format_sim_time,
   getStorageItem,
   setStorageItem,
   zoom_on_point,
@@ -107,6 +113,17 @@ import {
   ThemeName,
 } from "./constants/mui-theme";
 import {
+  get_language,
+  is_string_key,
+  Lang,
+  LANGUAGE_LABELS,
+  LANGUAGES,
+  set_language,
+  StringKey,
+  t,
+  tn,
+} from "./i18n";
+import {
   set_canvas_theme,
   SNACKBAR_DURATION,
 } from "./constants/rendering-specs";
@@ -114,6 +131,7 @@ import MechanicalCanvas, {
   ConstraintChangeSignal,
   LiveFrame,
 } from "./components/canvas/MechanicalCanvas";
+import { CanvasHighlight, NO_HIGHLIGHT } from "./components/canvas/draw-canvas";
 import { ElementPalette } from "./components/element-palette";
 import { PropertiesPanel } from "./components/properties-panel/PropertiesPanel";
 import { OverlaysMenu } from "./components/toolbar/OverlaysMenu";
@@ -144,6 +162,13 @@ import {
 } from "./components/solver/probe-series";
 import { PROBE_ELEMENT_COLORS } from "./components/properties-panel/components/ProbeChart";
 import { CanvasState } from "./types/canvas-state";
+import {
+  ANGLE_STEPS,
+  CUSTOM_ANGLE_STEP,
+  DEFAULT_SNAP_SETTINGS,
+  type SnapSettings,
+} from "./components/canvas/snap-corridor";
+import NumberInput from "./components/properties-panel/components/NumberInput";
 import { HoveredPart } from "./types/hovered-part";
 import { actionReducer } from "./components/mechanism/action-reducer";
 import { assert_actions_preserve_validity } from "./utils/assert-mechanism";
@@ -170,7 +195,7 @@ const openMechanismsDB = () =>
 const read_all_records = async (db: IDBPDatabase<SlidepDB>) =>
   (await db.getAll("mechanisms")).map(migrate_document);
 
-const DEBOUNCE_AUTOSAVE_TIME_MILLIS = 1000;
+const DEBOUNCE_AUTOSAVE_TIME_MILLIS = 1500;
 /** How often the simulation clock reaches React. Text and controls, not motion. */
 const CLOCK_MIRROR_MS = 100;
 /**
@@ -180,7 +205,35 @@ const CLOCK_MIRROR_MS = 100;
  * absorbed over about ten frames.
  */
 const CURSOR_RATE_ALPHA = 0.1;
-const LANGUAGES = ["Deutsch", "English", "Español", "Français"];
+
+/**
+ * How far ahead of the cursor the worker is aimed, in simulated seconds.
+ *
+ * Two frames of it, deliberately. `reached` always describes the target of the PREVIOUS
+ * frame — a worker answers between frames, not inside one — so aiming at where the cursor is
+ * going leaves the cap sitting exactly on it: it binds on some frames and not others, and
+ * the cursor advances in fits, which is visible as the mechanism speeding up and slowing
+ * down. One frame of lead cancels the staleness, the second puts the cap comfortably out of
+ * the way.
+ *
+ * Never less than two recorded steps, though, and that floor is what makes low speeds
+ * watchable: a lead counted in frames shrinks with the playback speed while the recording
+ * grid does not. Once it falls under a step — below ×1/3 on a 60 Hz screen — the cursor
+ * spends part of its time past the newest snapshot, where `snapshot_at` holds the last one
+ * rather than interpolating, and the motion steps at the recording rate instead of the
+ * display's.
+ *
+ * It costs nothing — the worker stops at its target — beyond recording slightly past what
+ * is displayed, which pausing truncates.
+ */
+const worker_lead = (simDt: number): number =>
+  Math.max(2 * simDt, 2 * RETAIN_DT);
+
+/** A theme family is named by its id; only the ones with a translation read differently. */
+const theme_family_label = (name: string): string => {
+  const key = `theme_family_${name.toLowerCase()}`;
+  return is_string_key(key) ? t(key) : name;
+};
 
 // Paliers de la top-bar. `condensed` raccourcit les libellés (Édition → Édit,
 // masque les labels des chips) ; `tight` retire en plus les séparateurs et
@@ -243,12 +296,12 @@ const is_structure_bundle = (actions: Action[]) =>
  */
 const THEME_MODES: {
   mode: ThemeMode;
-  title: string;
+  titleKey: StringKey;
   Icon: typeof LightMode;
 }[] = [
-  { mode: "light", title: "Clair", Icon: LightMode },
-  { mode: "dark", title: "Sombre", Icon: DarkMode },
-  { mode: "system", title: "Système", Icon: SettingsBrightness },
+  { mode: "light", titleKey: "theme_light", Icon: LightMode },
+  { mode: "dark", titleKey: "theme_dark", Icon: DarkMode },
+  { mode: "system", titleKey: "theme_system", Icon: SettingsBrightness },
 ];
 
 /**
@@ -280,6 +333,22 @@ const App: React.FC = () => {
     type: "Void",
     position: ZERO,
   });
+
+  /**
+   * Elements the analysis panel is pointing at, and why (see `CanvasHighlight`).
+   *
+   * Held here rather than in the panel because the two are siblings: the panel names what to
+   * pick out, the canvas draws it.
+   */
+  const [highlight, setHighlight] = useState<CanvasHighlight>(NO_HIGHLIGHT);
+
+  /**
+   * The pose the analysis panel is swinging along a motion mode, or `null` when it is not.
+   *
+   * A ref, like `liveFrameRef`: it changes every frame and the canvas draws from its own
+   * loop. Written by the panel, read by the canvas — App only holds the wire.
+   */
+  const modePreviewRef = useRef<Mechanism | null>(null);
   const [appMode, setAppMode] = useState<AppMode>("edition");
   const [snapToGrid, setSnapToGrid] = useState<boolean>(
     getStorageItem<boolean>("snapToGrid", true),
@@ -287,6 +356,16 @@ const App: React.FC = () => {
   const [showGrid, setShowGrid] = useState<boolean>(
     getStorageItem<boolean>("showGrid", true),
   );
+  const [snapSettings, setSnapSettings] = useState<SnapSettings>(
+    getStorageItem<SnapSettings>("snapSettings", DEFAULT_SNAP_SETTINGS),
+  );
+  const setSnapSetting = <K extends keyof SnapSettings>(
+    key: K,
+    value: SnapSettings[K],
+  ) => setSnapSettings((prev) => ({ ...prev, [key]: value }));
+  const isCustomAngleStep =
+    snapSettings.angleStepIsCustom ??
+    !ANGLE_STEPS.includes(snapSettings.angleStep);
 
   useEffect(() => {
     setStorageItem("snapToGrid", snapToGrid);
@@ -295,6 +374,10 @@ const App: React.FC = () => {
   useEffect(() => {
     setStorageItem("showGrid", showGrid);
   }, [showGrid]);
+
+  useEffect(() => {
+    setStorageItem("snapSettings", snapSettings);
+  }, [snapSettings]);
 
   /**
    * The clock is held outside React (`sim-clock.ts`) and this is only a mirror, refreshed
@@ -482,6 +565,13 @@ const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<PropertiesPanelTab>("project");
   const [prevCanvasState, setPrevCanvasState] =
     useState<CanvasState>(canvasState);
+  // The exact CanvasState object a setCanvasState call passed when its resulting
+  // deselection must not move the active tab (e.g. re-clicking the already-active
+  // tab to show its list). Identity, not a boolean: the sync block below runs
+  // during render, and StrictMode double-invokes render, so a flag flipped back to
+  // false there would already be consumed by the throwaway first pass. Comparing
+  // by reference keeps that block a pure read.
+  const skipTabSyncStateRef = useRef<CanvasState | null>(null);
 
   // Derived state pattern: sync tab with canvas state during render, not in useEffect.
   // This prevents a one-frame flash where old tab content renders with new canvas state
@@ -493,7 +583,9 @@ const App: React.FC = () => {
   if (prevCanvasState !== canvasState) {
     // TODO : mettre aussi à jour quand on change activeTab
     setPrevCanvasState(canvasState);
-    if (
+    if (canvasState === skipTabSyncStateRef.current) {
+      // no-op: this exact transition asked to keep the current tab.
+    } else if (
       canvasState.type === "PlacingProbe" ||
       canvasState.type === "PlacingProbeMetrics" ||
       // Leaving that popover too: the user came in through a probe, so closing
@@ -547,6 +639,14 @@ const App: React.FC = () => {
       }
     }
   }
+
+  // Deselect without letting the tab-sync logic above move off the active tab —
+  // for re-clicking the already-active tab to collapse its selection to a list.
+  const clearSelectionKeepTab = useCallback(() => {
+    const next: CanvasState = { type: "Selecting" };
+    skipTabSyncStateRef.current = next;
+    setCanvasState(next);
+  }, []);
 
   useEffect(() => {
     mechanismRef.current = mechanism;
@@ -666,8 +766,8 @@ const App: React.FC = () => {
 
       // Held: the newest computed instant, not the one under the cursor.
       //
-      // The cursor deliberately trails the frontier — the worker is aimed two frames of
-      // simulated time ahead of it — while the solver applies the grab AT the frontier. So
+      // The cursor deliberately trails the frontier — the worker is aimed a `worker_lead`
+      // ahead of it — while the solver applies the grab AT the frontier. So
       // the grabbed part gets drawn where it was rather than where the mouse just pulled it,
       // and the drag reads as offset by exactly that trail.
       //
@@ -695,18 +795,19 @@ const App: React.FC = () => {
         mechanism: apply_snapshot_to_mechanism(mech, snapshot),
         // Headed at the instant actually DRAWN, which a held grab moves off the cursor:
         // a trail stopping short of the mechanism it belongs to is the same offset again.
-        trajectories: trajectories_at(trajectoryCacheRef.current, snapshot.t).map(
-          (traj, i) => ({
-            points: traj.points,
-            headCount: traj.headCount,
-            // Read from the intent, not from a comparison of times — the same rule the
-            // timeline head follows. While recording, the frontier runs ahead of the cursor
-            // by the worker's lead and by whatever it is behind, so the faded segment would
-            // show the producer's progress rather than the motion to come.
-            visibleCount: extending ? traj.headCount : traj.points.length,
-            color: PROBE_ELEMENT_COLORS[i % PROBE_ELEMENT_COLORS.length],
-          }),
-        ),
+        trajectories: trajectories_at(
+          trajectoryCacheRef.current,
+          snapshot.t,
+        ).map((traj, i) => ({
+          points: traj.points,
+          headCount: traj.headCount,
+          // Read from the intent, not from a comparison of times — the same rule the
+          // timeline head follows. While recording, the frontier runs ahead of the cursor
+          // by the worker's lead and by whatever it is behind, so the faded segment would
+          // show the producer's progress rather than the motion to come.
+          visibleCount: extending ? traj.headCount : traj.points.length,
+          color: PROBE_ELEMENT_COLORS[i % PROBE_ELEMENT_COLORS.length],
+        })),
       };
     };
 
@@ -856,14 +957,7 @@ const App: React.FC = () => {
         // the clock is headed and collects whatever came back. Nothing is awaited, so
         // the display never blocks on the solver however heavy the mechanism.
         const requestedTime = rs.time + simDt;
-        // Two frames of lead, deliberately. `reached` always describes the target of the
-        // PREVIOUS frame — a worker answers between frames, not inside one — so aiming at
-        // where the cursor is going leaves the cap sitting exactly on it: it binds on some
-        // frames and not others, and the cursor advances in fits, which is visible as the
-        // mechanism speeding up and slowing down. One frame of lead cancels the staleness,
-        // the second puts the cap comfortably out of the way. It costs nothing — the
-        // worker stops at its target — beyond recording slightly past what is displayed.
-        recorder().target(requestedTime + 2 * simDt);
+        recorder().target(requestedTime + worker_lead(simDt));
         const { snapshots: newSnaps, reached } = recorder().drain();
 
         // The cursor runs at the rate the producer SUSTAINS, not at the one that happened
@@ -881,7 +975,10 @@ const App: React.FC = () => {
           if (previousReached === null) {
             prevReachedRef.current = reached;
             waitedForReachedRef.current = 0;
-          } else if (reached > previousReached && waitedForReachedRef.current > 0) {
+          } else if (
+            reached > previousReached &&
+            waitedForReachedRef.current > 0
+          ) {
             // Measured over however long the news took to come, not over this frame.
             cursorRateRef.current =
               (1 - CURSOR_RATE_ALPHA) * cursorRateRef.current +
@@ -908,11 +1005,17 @@ const App: React.FC = () => {
         // Checking it would in fact never fire: the cursor advances at the rate the producer
         // sustains, which decays to zero as soon as the recording stops growing, so it comes
         // to rest short of the end rather than on it.
-        const exhausted = reached !== null && recording_full(reached);
+        const maxTime = recorder().maxTime();
+        const exhausted = reached !== null && recording_full(reached, maxTime);
         if (exhausted)
           setSnackbar({
             open: true,
-            message: `Une simulation ne peut pas dépasser ${MAX_RECORDING_TIME / 60} minutes`,
+            message: t(
+              maxTime >= MAX_RECORDING_TIME
+                ? "recording_limit_time"
+                : "recording_limit_memory",
+              { minutes: maxTime / 60 },
+            ),
             duration: SNACKBAR_DURATION.REPORT,
           });
 
@@ -1230,14 +1333,14 @@ const App: React.FC = () => {
               message: repair_summary(repairs),
               duration: SNACKBAR_DURATION.REPORT,
             }
-          : { open: true, message: "Mécanisme chargé" },
+          : { open: true, message: t("mechanism_loaded") },
       );
     },
     [resetSimulationState],
   );
 
   const handleDeleteFromGallery = useCallback(async (createdAtId: number) => {
-    if (!window.confirm("Supprimer ce mécanisme définitivement ?")) return;
+    if (!window.confirm(t("mechanism_delete_confirm"))) return;
 
     const db = await openDB<SlidepDB>("SlidepDB", DB_VERSION);
     await db.delete("mechanisms", createdAtId);
@@ -1245,7 +1348,7 @@ const App: React.FC = () => {
     setSavedMechanisms((prev) =>
       prev.filter((r) => r.metadata.createdAt !== createdAtId),
     );
-    setSnackbar({ open: true, message: "Mécanisme supprimé" });
+    setSnackbar({ open: true, message: t("mechanism_deleted") });
   }, []);
 
   const handleNewFromGallery = useCallback(() => {
@@ -1304,10 +1407,10 @@ const App: React.FC = () => {
           while (takenIds.has(id)) id++;
           metadata.createdAt = id;
 
-          const base = record.metadata.name || "Mécanisme";
-          let name = `${base} (copie)`;
+          const base = record.metadata.name || t("untitled");
+          let name = t("copy_of", { name: base });
           for (let n = 2; takenNames.has(name); n++)
-            name = `${base} (copie ${n})`;
+            name = t("copy_of_n", { name: base, n });
           metadata.name = name;
         }
 
@@ -1332,11 +1435,10 @@ const App: React.FC = () => {
 
         if (isArchive) {
           setSavedMechanisms((prev) => [...prev, ...stored]);
-          const plural = stored.length > 1 ? "s" : "";
           setSnackbar({
             open: true,
             message:
-              `${stored.length} mécanisme${plural} importé${plural}` +
+              tn("mechanisms_imported", stored.length) +
               (repairs.length > 0 ? ` — ${repair_summary(repairs)}` : ""),
           });
           return;
@@ -1351,23 +1453,28 @@ const App: React.FC = () => {
         setSnackbar({
           open: true,
           message:
-            repairs.length > 0 ? repair_summary(repairs) : "Mécanisme importé",
+            repairs.length > 0
+              ? repair_summary(repairs)
+              : t("mechanism_imported"),
         });
       })
-      .catch(() => setSnackbar({ open: true, message: "Fichier illisible" }));
+      .catch(() => setSnackbar({ open: true, message: t("file_unreadable") }));
   };
 
   // Export depuis la galerie : les enregistrements y sont déjà sérialisés.
   const handleExportRecord = (record: SerializedMechanism) => {
-    save_to_file(record, `${record.metadata.name || "mecanisme"}.slidep`);
+    save_to_file(record, `${record.metadata.name || t("untitled")}.slidep`);
   };
 
   const handleExportAllRecords = () => {
-    save_all_to_zip(savedMechanisms);
-    const plural = savedMechanisms.length > 1 ? "s" : "";
+    save_all_to_zip(
+      savedMechanisms,
+      t("archive_filename"),
+      t("default_filename"),
+    );
     setSnackbar({
       open: true,
-      message: `${savedMechanisms.length} mécanisme${plural} exporté${plural}`,
+      message: tn("mechanisms_exported", savedMechanisms.length),
     });
   };
 
@@ -1389,7 +1496,9 @@ const App: React.FC = () => {
     setInfoOpen(false);
   };
 
-  const [language, setlanguage] = useState<string>("Français");
+  // The chosen language lives in `i18n`, which every module reads through `t`; this state is
+  // only what makes React repaint the app around it.
+  const [language, setLanguageState] = useState<Lang>(get_language);
   const [langAnchorEl, setLangAnchorEl] = React.useState<null | HTMLElement>(
     null,
   );
@@ -1400,8 +1509,9 @@ const App: React.FC = () => {
   const handleLangClose = () => {
     setLangAnchorEl(null);
   };
-  const handleSelectLang = (newLanguage: string) => {
-    setlanguage(newLanguage);
+  const handleSelectLang = (newLanguage: Lang) => {
+    set_language(newLanguage);
+    setLanguageState(newLanguage);
     setLangAnchorEl(null);
   };
 
@@ -1526,7 +1636,12 @@ const App: React.FC = () => {
     // between its two appearances at the rhythm of that burstiness.
     const recording = timelinePlaying && !timelineScrubbed;
     return {
-      frontier,
+      // The total the label announces — the cursor's own time while recording, not the
+      // frontier. The frontier deliberately runs ahead of the cursor by the worker's lead,
+      // and pausing deletes exactly that overshoot, so counting it announces a duration the
+      // user is about to see disappear. It also contradicts the head, which is pinned to the
+      // end of the rail by construction while recording.
+      duration: recording ? timelineTime : frontier,
       recording,
       atStart: timelineTime <= 0,
       atEnd:
@@ -1601,6 +1716,9 @@ const App: React.FC = () => {
             backgroundColor: "background.toolbar",
             border: "none",
             borderRadius: 0,
+            // A rule in the top bar is read against the toolbar, never against
+            // the `paper` the default divider is cut for.
+            "& .MuiDivider-root": { borderColor: "dividers.toolbar" },
           }}
         >
           {/* ── Toolbar principale ── */}
@@ -1670,7 +1788,7 @@ const App: React.FC = () => {
                 />
 
                 {/* Bouton Bibliothèque — accès direct à la galerie */}
-                <Tooltip disableInteractive title="Bibliothèque de mécanismes">
+                <Tooltip disableInteractive title={t("toolbar_library")}>
                   <IconButton
                     color="inherit"
                     size="small"
@@ -1700,12 +1818,15 @@ const App: React.FC = () => {
                     sx={{
                       opacity: 0.9,
                     }}
+                    color={
+                      mechanism.metadata.name ? "text.primary" : "text.disabled"
+                    }
                   >
-                    {mechanism.metadata.name}
+                    {mechanism.metadata.name || t("untitled")}
                   </Typography>
 
                   {saveStatus === "saving" ? (
-                    <Tooltip disableInteractive title="Sauvegarde en cours...">
+                    <Tooltip disableInteractive title={t("save_saving")}>
                       <CircularProgress
                         size={8}
                         color="inherit"
@@ -1717,9 +1838,9 @@ const App: React.FC = () => {
                       disableInteractive
                       title={
                         saveStatus === "saved"
-                          ? "Sauvegardé"
+                          ? t("save_saved")
                           : saveStatus === "error"
-                            ? "Erreur de sauvegarde"
+                            ? t("save_error")
                             : ""
                       }
                     >
@@ -1769,7 +1890,7 @@ const App: React.FC = () => {
                     fontWeight: 600,
                     textTransform: "none",
                     color: "text.secondary",
-                    borderColor: "divider",
+                    borderColor: "dividers.toolbar",
                     "&.Mui-selected": {
                       color: "primary.contrastText",
                       backgroundColor: "primary.main",
@@ -1778,42 +1899,36 @@ const App: React.FC = () => {
                   },
                 }}
               >
-                <Tooltip disableInteractive title="Éditer le mécanisme">
+                <Tooltip disableInteractive title={t("mode_edition_tooltip")}>
                   <ToggleButton value="edition">
-                    {condensed ? "Édit" : "Édition"}
+                    {t(condensed ? "mode_edition_short" : "mode_edition")}
                   </ToggleButton>
                 </Tooltip>
 
-                <Tooltip
-                  disableInteractive
-                  title="Étude de cas immobiles [ ∑F = 0 ] (à venir)"
-                >
+                <Tooltip disableInteractive title={t("mode_static_tooltip")}>
                   {/* Span supprimé ici */}
                   <ToggleButton value="static" disabled>
-                    {condensed ? "Stat" : "Statique"}
+                    {t(condensed ? "mode_static_short" : "mode_static")}
                   </ToggleButton>
                 </Tooltip>
 
-                <Tooltip disableInteractive title="Analyse du mouvement">
+                <Tooltip disableInteractive title={t("mode_kinematic_tooltip")}>
                   <ToggleButton value="kinematic">
-                    {condensed ? "Ciné" : "Cinématique"}
+                    {t(condensed ? "mode_kinematic_short" : "mode_kinematic")}
                   </ToggleButton>
                 </Tooltip>
 
-                <Tooltip
-                  disableInteractive
-                  title="Combine la statique et la cinématique [ ∑F = ma ] (à venir)"
-                >
+                <Tooltip disableInteractive title={t("mode_dynamic_tooltip")}>
                   {/* Span supprimé ici */}
                   <ToggleButton value="dynamic" disabled>
-                    {condensed ? "Dyna" : "Dynamique"}
+                    {t(condensed ? "mode_dynamic_short" : "mode_dynamic")}
                   </ToggleButton>
                 </Tooltip>
               </ToggleButtonGroup>
 
               {!tight && <Divider flexItem sx={{ mx: 0.5 }} />}
 
-              <Tooltip disableInteractive title="Réinitialiser (Esc)">
+              <Tooltip disableInteractive title={t("toolbar_reset")}>
                 <span>
                   <IconButton
                     size="small"
@@ -1847,7 +1962,7 @@ const App: React.FC = () => {
 
               {/* Contrôles temporels — Play/Pause toujours actif ; les autres
                   boutons sont désactivés en mode Édition ou en bout de course. */}
-              <Tooltip disableInteractive title="Aller au début">
+              <Tooltip disableInteractive title={t("toolbar_go_to_start")}>
                 <span>
                   <IconButton
                     size="small"
@@ -1872,7 +1987,9 @@ const App: React.FC = () => {
 
             <Tooltip
               disableInteractive
-              title={runtimeState.isPlaying ? "Pause (Space)" : "Play (Space)"}
+              title={t(
+                runtimeState.isPlaying ? "toolbar_pause" : "toolbar_play",
+              )}
             >
               <IconButton
                 size="small"
@@ -1903,10 +2020,7 @@ const App: React.FC = () => {
                 minWidth: 0,
               }}
             >
-              <Tooltip
-                disableInteractive
-                title="Aller à la fin de l'enregistrement"
-              >
+              <Tooltip disableInteractive title={t("toolbar_go_to_end")}>
                 <span>
                   <IconButton
                     size="small"
@@ -1951,7 +2065,7 @@ const App: React.FC = () => {
                       transition: "opacity 0.2s ease",
                     }}
                   >
-                    <Tooltip disableInteractive title="Ralentir la simulation">
+                    <Tooltip disableInteractive title={t("toolbar_slow_down")}>
                       <span>
                         <IconButton
                           size="small"
@@ -1966,7 +2080,7 @@ const App: React.FC = () => {
                     </Tooltip>
                     <Tooltip
                       disableInteractive
-                      title="Réinitialiser la vitesse"
+                      title={t("toolbar_reset_speed")}
                     >
                       <Box
                         component="button"
@@ -1997,7 +2111,7 @@ const App: React.FC = () => {
                         {runtimeState.speed}×
                       </Box>
                     </Tooltip>
-                    <Tooltip disableInteractive title="Accélérer la simulation">
+                    <Tooltip disableInteractive title={t("toolbar_speed_up")}>
                       <span>
                         <IconButton
                           size="small"
@@ -2029,11 +2143,9 @@ const App: React.FC = () => {
               >
                 <Tooltip
                   disableInteractive
-                  title={
-                    simulationConfig.gravity
-                      ? "Gravité activée"
-                      : "Gravité désactivée"
-                  }
+                  title={t(
+                    simulationConfig.gravity ? "gravity_on" : "gravity_off",
+                  )}
                 >
                   <Chip
                     disabled
@@ -2047,7 +2159,7 @@ const App: React.FC = () => {
                         }}
                       />
                     }
-                    label={condensed ? null : "Gravité"}
+                    label={condensed ? null : t("gravity")}
                     size="small"
                     clickable
                     onClick={() =>
@@ -2086,11 +2198,11 @@ const App: React.FC = () => {
                 </Tooltip>
                 <Tooltip
                   disableInteractive
-                  title={
+                  title={t(
                     simulationConfig.collisions
-                      ? "Collisions activées"
-                      : "Collisions désactivées"
-                  }
+                      ? "collisions_on"
+                      : "collisions_off",
+                  )}
                 >
                   <Chip
                     disabled
@@ -2104,7 +2216,7 @@ const App: React.FC = () => {
                         }}
                       />
                     }
-                    label={condensed ? null : "Collisions"}
+                    label={condensed ? null : t("collisions")}
                     size="small"
                     clickable
                     onClick={() =>
@@ -2173,7 +2285,7 @@ const App: React.FC = () => {
                 }}
               >
                 {/* Recentrer */}
-                <Tooltip disableInteractive title="Recentrer la vue">
+                <Tooltip disableInteractive title={t("toolbar_recenter")}>
                   <IconButton
                     color="inherit"
                     size="small"
@@ -2208,7 +2320,7 @@ const App: React.FC = () => {
                 </Tooltip>
 
                 {/* Undo / Redo */}
-                <Tooltip disableInteractive title="Annuler (Ctrl+Z)">
+                <Tooltip disableInteractive title={t("toolbar_undo")}>
                   <span>
                     <IconButton
                       color="inherit"
@@ -2220,7 +2332,7 @@ const App: React.FC = () => {
                     </IconButton>
                   </span>
                 </Tooltip>
-                <Tooltip disableInteractive title="Rétablir (Ctrl+Y)">
+                <Tooltip disableInteractive title={t("toolbar_redo")}>
                   <span>
                     <IconButton
                       color="inherit"
@@ -2240,7 +2352,7 @@ const App: React.FC = () => {
                 />
 
                 {/* Langue */}
-                <Tooltip disableInteractive title="Langue">
+                <Tooltip disableInteractive title={t("toolbar_language")}>
                   <IconButton
                     color="inherit"
                     size="small"
@@ -2254,7 +2366,7 @@ const App: React.FC = () => {
                     }}
                   >
                     <Language sx={{ fontSize: 20 }} />
-                    {language.slice(0, 2).toUpperCase()}
+                    {language.toUpperCase()}
                   </IconButton>
                 </Tooltip>
                 <Menu
@@ -2272,13 +2384,13 @@ const App: React.FC = () => {
                       onClick={() => handleSelectLang(lang)}
                       disableRipple
                     >
-                      {lang}
+                      {LANGUAGE_LABELS[lang]}
                     </MenuItem>
                   ))}
                 </Menu>
 
                 {/* Paramètres */}
-                <Tooltip disableInteractive title="Paramètres">
+                <Tooltip disableInteractive title={t("toolbar_settings")}>
                   <IconButton
                     color="inherit"
                     size="small"
@@ -2301,38 +2413,188 @@ const App: React.FC = () => {
                   // the chosen theme.
                   MenuListProps={{ onMouseLeave: () => previewLater(null) }}
                 >
-                  <MenuItem disableRipple>
+                  <MenuItem
+                    disableRipple
+                    onClick={() => setShowGrid(!showGrid)}
+                  >
                     <FormControlLabel
                       control={
-                        <Switch
-                          checked={showGrid}
-                          size="small"
-                          onChange={(e) => setShowGrid(e.target.checked)}
-                        />
+                        <Box sx={{ display: "flex", mr: 1 }}>
+                          {showGrid ? (
+                            <Visibility fontSize="small" />
+                          ) : (
+                            <VisibilityOff fontSize="small" />
+                          )}
+                        </Box>
                       }
-                      label="Afficher la grille"
+                      label={t("settings_show_grid")}
+                      sx={{ margin: 0 }}
                     />
                   </MenuItem>
-                  <MenuItem disableRipple>
+                  <MenuItem
+                    disableRipple
+                    onClick={() => setSnapToGrid(!snapToGrid)}
+                  >
                     <FormControlLabel
                       control={
-                        <Switch
-                          checked={snapToGrid}
-                          size="small"
-                          onChange={(e) => setSnapToGrid(e.target.checked)}
-                        />
+                        <Box sx={{ display: "flex", mr: 1 }}>
+                          {snapToGrid ? (
+                            <GridOn fontSize="small" />
+                          ) : (
+                            <GridOff fontSize="small" />
+                          )}
+                        </Box>
                       }
-                      label="Aimanter à la grille"
+                      label={t("settings_snap_to_grid")}
+                      sx={{ margin: 0 }}
                     />
                   </MenuItem>
-                  <MenuItem disabled sx={{ fontSize: "0.85rem" }}>
-                    Taille de la grille (100mm)
+                  <MenuItem
+                    disableRipple
+                    onClick={() =>
+                      setSnapSetting(
+                        "highlightSnap",
+                        !snapSettings.highlightSnap,
+                      )
+                    }
+                    disabled={!snapToGrid}
+                  >
+                    <FormControlLabel
+                      control={
+                        <Box sx={{ display: "flex", mr: 1 }}>
+                          {snapSettings.highlightSnap ? (
+                            <Visibility fontSize="small" />
+                          ) : (
+                            <VisibilityOff fontSize="small" />
+                          )}
+                        </Box>
+                      }
+                      label={t("settings_highlight_snap")}
+                      sx={{ margin: 0 }}
+                    />
                   </MenuItem>
+                  <MenuItem
+                    disableRipple
+                    onClick={() =>
+                      setSnapSetting(
+                        "showAngleGuides",
+                        !snapSettings.showAngleGuides,
+                      )
+                    }
+                    disabled={!snapToGrid}
+                  >
+                    <FormControlLabel
+                      control={
+                        <Box sx={{ display: "flex", mr: 1 }}>
+                          {snapSettings.showAngleGuides ? (
+                            <Visibility fontSize="small" />
+                          ) : (
+                            <VisibilityOff fontSize="small" />
+                          )}
+                        </Box>
+                      }
+                      label={t("settings_show_angle_guides")}
+                      sx={{ margin: 0 }}
+                    />
+                  </MenuItem>
+
+                  <MenuItem
+                    disableRipple
+                    disabled={!snapSettings.showAngleGuides}
+                    sx={{
+                      py: 0.5,
+                      gap: 1,
+                      "&:hover": { backgroundColor: "transparent" },
+                      "&.Mui-focusVisible": { backgroundColor: "transparent" },
+                      cursor: "default",
+                    }}
+                  >
+                    <Typography
+                      variant="body2"
+                      color="textDisabled"
+                      sx={{ flexGrow: 1 }}
+                    >
+                      {t("settings_angle_step")}
+                    </Typography>
+                    <Box sx={{ display: "flex", alignItems: "center" }}>
+                      {isCustomAngleStep && (
+                        <Box sx={{ display: "flex", mr: "-1px" }}>
+                          <NumberInput
+                            label={""}
+                            value={snapSettings.angleStep}
+                            suffix="°"
+                            onChange={(value) =>
+                              setSnapSettings((prev) => ({
+                                ...prev,
+                                angleStep: Math.min(90, Math.max(1, value)),
+                                angleStepIsCustom: true,
+                              }))
+                            }
+                            unsigned
+                          />
+                        </Box>
+                      )}
+                      <Select
+                        disabled={!snapToGrid}
+                        value={
+                          isCustomAngleStep ? "custom" : snapSettings.angleStep
+                        }
+                        onChange={(e) =>
+                          setSnapSettings((prev) => ({
+                            ...prev,
+                            angleStep:
+                              e.target.value === "custom"
+                                ? CUSTOM_ANGLE_STEP
+                                : Number(e.target.value),
+                            angleStepIsCustom: e.target.value === "custom",
+                          }))
+                        }
+                        sx={{
+                          maxWidth: isCustomAngleStep ? 36 : "none",
+                          height: 28,
+                          fontSize: "body2.fontSize",
+                          border: "none",
+                          "& .MuiSelect-select": {
+                            ...(isCustomAngleStep && {
+                              color: "transparent",
+                              textShadow: "0 0 0 transparent",
+                            }),
+                          },
+                          "& .MuiOutlinedInput-notchedOutline": {
+                            ...(isCustomAngleStep && {
+                              borderLeft: "none",
+                            }),
+                          },
+                          ...(isCustomAngleStep && {
+                            borderTopLeftRadius: 0,
+                            borderBottomLeftRadius: 0,
+                          }),
+                        }}
+                      >
+                        {ANGLE_STEPS.map((step) => (
+                          <MenuItem
+                            key={step}
+                            value={step}
+                            sx={{ fontSize: "body2.fontSize" }}
+                          >
+                            {step}°
+                          </MenuItem>
+                        ))}
+                        <MenuItem
+                          value="custom"
+                          sx={{ fontSize: "body2.fontSize" }}
+                        >
+                          {t("settings_angle_step_custom")}
+                        </MenuItem>
+                      </Select>
+                    </Box>
+                  </MenuItem>
+
                   <Divider />
                   <MenuItem disableRipple disabled>
                     <FormControlLabel
                       control={<Switch size="small" disabled />}
-                      label="Afficher les contraintes"
+                      label={t("settings_show_constraints")}
                     />
                   </MenuItem>
                   <Divider />
@@ -2348,7 +2610,7 @@ const App: React.FC = () => {
                     }}
                   >
                     <Typography variant="body2" color="textDisabled">
-                      Thème
+                      {t("settings_theme")}
                     </Typography>
                     <ToggleButtonGroup
                       exclusive
@@ -2358,7 +2620,7 @@ const App: React.FC = () => {
                         mode && changeTheme(themeChoice.family, mode)
                       }
                     >
-                      {THEME_MODES.map(({ mode, title, Icon }) => (
+                      {THEME_MODES.map(({ mode, titleKey, Icon }) => (
                         <ToggleButton
                           key={mode}
                           value={mode}
@@ -2373,7 +2635,7 @@ const App: React.FC = () => {
                           }
                           sx={{ px: 1, py: 0.25, border: 0 }}
                         >
-                          <Tooltip disableInteractive title={title}>
+                          <Tooltip disableInteractive title={t(titleKey)}>
                             <Icon sx={{ fontSize: 18 }} />
                           </Tooltip>
                         </ToggleButton>
@@ -2403,18 +2665,18 @@ const App: React.FC = () => {
                             <Check sx={{ fontSize: 18 }} />
                           )}
                         </ListItemIcon>
-                        {family.name}
+                        {theme_family_label(family.name)}
                       </MenuItem>
                     );
                   })}
                   <Divider />
                   <MenuItem disabled sx={{ fontSize: "0.85rem" }}>
-                    Style des éléments
+                    {t("settings_element_style")}
                   </MenuItem>
                 </Menu>
 
                 {/* À propos */}
-                <Tooltip disableInteractive title="À propos de Slidep">
+                <Tooltip disableInteractive title={t("toolbar_about")}>
                   <IconButton
                     color="inherit"
                     size="small"
@@ -2466,8 +2728,11 @@ const App: React.FC = () => {
             onSimulationGrabEnd={handleSimulationGrabEnd}
             canSimulationGrab={canSimulationGrab}
             snapToGrid={snapToGrid}
+            snapSettings={snapSettings}
             showGrid={showGrid}
             liveFrameRef={liveFrameRef}
+            highlight={highlight}
+            modePreviewRef={modePreviewRef}
           />
 
           {/* Floating panels */}
@@ -2505,6 +2770,7 @@ const App: React.FC = () => {
                       fontSize: "0.68rem",
                       color: "text.secondary",
                       flexShrink: 0,
+                      minWidth: timeline.duration < 60 ? "11ch" : "13.5ch",
                       textAlign: "left",
                       lineHeight: 1,
                     }}
@@ -2513,10 +2779,10 @@ const App: React.FC = () => {
                       component="span"
                       sx={{ color: "text.primary", fontWeight: 700 }}
                     >
-                      {runtimeState.time.toFixed(1)}
+                      {format_sim_time(runtimeState.time)}
                     </Box>
                     <Box component="span" sx={{ opacity: 0.55 }}>
-                      {` / ${timeline.frontier.toFixed(1)} s`}
+                      {` / ${format_sim_time(timeline.duration)}`}
                     </Box>
                   </Typography>
 
@@ -2603,7 +2869,7 @@ const App: React.FC = () => {
                     {/* Dot */}
                     <Tooltip
                       disableInteractive
-                      title={`${runtimeState.time.toFixed(1)} s`}
+                      title={format_sim_time(runtimeState.time)}
                       placement="bottom"
                       open={timelineHovered || timelineDragging}
                     >
@@ -2652,7 +2918,7 @@ const App: React.FC = () => {
 
                   <Tooltip
                     disableInteractive
-                    title="Exporter une animation (à venir)"
+                    title={t("toolbar_export_animation")}
                   >
                     <span>
                       <IconButton
@@ -2682,7 +2948,10 @@ const App: React.FC = () => {
             }
           />
           <PropertiesPanel
+            setHighlight={setHighlight}
+            modePreviewRef={modePreviewRef}
             setCanvasState={setCanvasState}
+            clearSelectionKeepTab={clearSelectionKeepTab}
             canvasState={canvasState}
             applyActions={applyActions}
             mechanism={mechanism}
@@ -2711,7 +2980,7 @@ const App: React.FC = () => {
         onExportAll={handleExportAllRecords}
       />
       <Dialog open={infoOpen} onClose={handleInfoClose} maxWidth="sm" fullWidth>
-        <DialogTitle fontSize={"large"}>À propos</DialogTitle>
+        <DialogTitle fontSize={"large"}>{t("about_title")}</DialogTitle>
         <IconButton
           onClick={handleInfoClose}
           sx={() => ({
@@ -2723,26 +2992,11 @@ const App: React.FC = () => {
           <Close />
         </IconButton>
         <DialogContent dividers>
-          <Typography gutterBottom>
-            Slidep est un laboratoire de mécanique virtuel. Conçu pour une prise
-            en main immédiate, il permet de construire et voir s'animer
-            instantanément ses propres mécanismes.
-          </Typography>
+          <Typography gutterBottom>{t("about_intro")}</Typography>
 
-          <Typography gutterBottom>
-            C'est l'application que j'aurais aimé avoir quand j'étais étudiant
-            en génie mécanique. Slidep se place entre le schéma papier-crayon et
-            le solveur par éléments finis. Mais sa force réside plutôt dans les
-            itérations rapides. Slidep donne tout de suite des ordres de
-            grandeur, et permet surtout de voir l'impact de changements sur un
-            design en temps réel.
-          </Typography>
+          <Typography gutterBottom>{t("about_story")}</Typography>
 
-          <Typography>
-            Slidep devrait bientôt permettre de gérer les collisions et de
-            partager ses mécanismes. À terme, l'objectif est d'ajouter le dessin
-            en 3D, et peut-être même y faire de la dynamique des fluides.
-          </Typography>
+          <Typography>{t("about_roadmap")}</Typography>
 
           <Box
             sx={{
@@ -2755,18 +3009,18 @@ const App: React.FC = () => {
             {[
               {
                 icon: <Bolt sx={{ fontSize: 20 }} />,
-                title: "Temps réel",
-                body: "La simulation se recalcule pendant que vous manipulez le mécanisme.",
+                title: t("about_realtime_title"),
+                body: t("about_realtime_body"),
               },
               {
                 icon: <CloudOff sx={{ fontSize: 20 }} />,
-                title: "Hors ligne",
-                body: "Installez Slidep depuis votre navigateur pour l'utiliser sans connexion.",
+                title: t("about_offline_title"),
+                body: t("about_offline_body"),
               },
               {
                 icon: <Lock sx={{ fontSize: 20 }} />,
-                title: "Chez vous",
-                body: "Vos mécanismes restent sur votre machine. Pas de compte, pas de serveur.",
+                title: t("about_local_title"),
+                body: t("about_local_body"),
               },
             ].map((feature) => (
               <Box key={feature.title}>
@@ -2791,10 +3045,7 @@ const App: React.FC = () => {
             ))}
           </Box>
 
-          <Typography sx={{ mt: 3 }}>
-            Si vous êtes intéressé par le projet ou souhaitez contribuer,
-            écrivez-moi.
-          </Typography>
+          <Typography sx={{ mt: 3 }}>{t("about_contribute")}</Typography>
         </DialogContent>
         <DialogContent>
           <Box
@@ -2808,17 +3059,17 @@ const App: React.FC = () => {
             }}
           >
             <Typography variant="body2" color="text.secondary">
-              Version
+              {t("about_version")}
             </Typography>
             <Typography variant="body2">{__APP_VERSION__}</Typography>
 
             <Typography variant="body2" color="text.secondary">
-              Licence
+              {t("about_license")}
             </Typography>
-            <Typography variant="body2">à définir</Typography>
+            <Typography variant="body2">{t("about_license_tbd")}</Typography>
 
             <Typography variant="body2" color="text.secondary">
-              Contact
+              {t("about_contact")}
             </Typography>
             <MuiLink
               variant="body2"
@@ -2829,7 +3080,7 @@ const App: React.FC = () => {
             </MuiLink>
 
             <Typography variant="body2" color="text.secondary">
-              Code
+              {t("about_code")}
             </Typography>
             <MuiLink
               variant="body2"

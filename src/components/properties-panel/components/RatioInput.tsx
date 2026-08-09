@@ -26,17 +26,30 @@ export const RatioInput: React.FC<RatioInputProps> = ({ value, onChange }) => {
     setVal2(d);
   }, [value]);
 
+  // Set by Escape so the blur it triggers discards instead of committing.
+  const discardRef = useRef(false);
+
+  // Leaving the pair validates the entry; an unusable ratio is dropped, and one that
+  // says nothing new is only put back in normal form.
+  const handleLeave = () => {
+    if (discardRef.current) {
+      discardRef.current = false;
+      resetToValue();
+      return;
+    }
+    const v1 = parseFloat(val1);
+    const v2 = parseFloat(val2);
+    if (!isNaN(v1) && !isNaN(v2) && v1 !== 0 && v2 !== 0 && v1 / v2 !== value)
+      onChange(v1 / v2);
+    else resetToValue();
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
-      const v1 = parseFloat(val1);
-      const v2 = parseFloat(val2);
-      if (!isNaN(v1) && !isNaN(v2) && v1 !== 0 && v2 !== 0) {
-        onChange(v1 / v2);
-      }
       inputRef1.current?.blur();
       inputRef2.current?.blur();
     } else if (e.key === "Escape") {
-      resetToValue();
+      discardRef.current = true;
       inputRef1.current?.blur();
       inputRef2.current?.blur();
     } else {
@@ -111,7 +124,7 @@ export const RatioInput: React.FC<RatioInputProps> = ({ value, onChange }) => {
             (e.relatedTarget !== inputRef2.current &&
               !inputRef2.current?.contains(e.relatedTarget as Node))
           )
-            resetToValue();
+            handleLeave();
         }}
         inputRef={inputRef1}
         autoComplete="off"
@@ -139,7 +152,7 @@ export const RatioInput: React.FC<RatioInputProps> = ({ value, onChange }) => {
             (e.relatedTarget !== inputRef1.current &&
               !inputRef1.current?.contains(e.relatedTarget as Node))
           )
-            resetToValue();
+            handleLeave();
         }}
         inputRef={inputRef2}
         autoComplete="off"

@@ -387,6 +387,8 @@ export function PBD_solve(
             s.pos[0],
             s.pos[1],
             s.pos[2],
+            1.0,
+            link.normalOffset,
           );
           break;
         case "FixedOnSegment":
@@ -396,6 +398,8 @@ export function PBD_solve(
             s.pos[1],
             s.pos[2],
             link.t,
+            1.0,
+            link.normalOffset,
           );
           break;
         case "KeepOrientation":

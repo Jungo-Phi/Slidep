@@ -1,0 +1,583 @@
+{
+  "formatVersion": 2,
+  "metadata": {
+    "name": "Poutre sur joint de courroie",
+    "description": "",
+    "author": "",
+    "createdAt": 1785069016644,
+    "modifiedAt": 1785785347715,
+    "tags": [],
+    "lastSimulationMode": "kinematic"
+  },
+  "viewport": {
+    "scale": 1,
+    "pan": {
+      "x": 768,
+      "y": 425.5
+    }
+  },
+  "mechanicalElements": [
+    {
+      "type": "pivot",
+      "id": "099860a7-2c23-44e8-b3bc-91b685c407ff",
+      "probes": [],
+      "overlays": {},
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "isGrounded": false,
+      "rotatingEdgesIDs": [],
+      "fixedGearsIDs": [
+        "4b3227e1-4b6a-410d-850f-0a330ce100cf"
+      ]
+    },
+    {
+      "type": "gear",
+      "id": "4b3227e1-4b6a-410d-850f-0a330ce100cf",
+      "probes": [],
+      "overlays": {},
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "angle": 0,
+      "radius": 100,
+      "parentAxleID": "099860a7-2c23-44e8-b3bc-91b685c407ff",
+      "fixedNodesBodyIDs": [],
+      "meshedGearsIDs": [],
+      "attachedBeltID": "f6049376-af42-4a8d-8d29-9f822334d322"
+    },
+    {
+      "type": "pivot",
+      "id": "8008579d-72b3-4e26-92a2-343088bb3511",
+      "probes": [],
+      "overlays": {},
+      "position": {
+        "x": -300,
+        "y": 7.0400626396837194e-15
+      },
+      "isGrounded": true,
+      "rotatingEdgesIDs": [],
+      "fixedGearsIDs": [
+        "9b85bea0-37d4-43bb-8e55-d4d392ac5143"
+      ],
+      "motor": {
+        "speed": 10
+      }
+    },
+    {
+      "type": "gear",
+      "id": "9b85bea0-37d4-43bb-8e55-d4d392ac5143",
+      "probes": [],
+      "overlays": {},
+      "position": {
+        "x": -300,
+        "y": 7.0400626396837194e-15
+      },
+      "angle": 0,
+      "radius": 100,
+      "parentAxleID": "8008579d-72b3-4e26-92a2-343088bb3511",
+      "fixedNodesBodyIDs": [],
+      "meshedGearsIDs": [],
+      "attachedBeltID": "f6049376-af42-4a8d-8d29-9f822334d322"
+    },
+    {
+      "type": "belt",
+      "id": "f6049376-af42-4a8d-8d29-9f822334d322",
+      "probes": [],
+      "overlays": {},
+      "positionStart": {
+        "x": -313.53288807104957,
+        "y": -99.0800733773267
+      },
+      "positionEnd": {
+        "x": -313.53288807104957,
+        "y": -99.0800733773267
+      },
+      "fixedNodeStartID": "35a449c9-8e74-4640-b5f4-be255cdd5460",
+      "fixedNodeEndID": "35a449c9-8e74-4640-b5f4-be255cdd5460",
+      "attachedGearsIDs": [
+        {
+          "id": "9b85bea0-37d4-43bb-8e55-d4d392ac5143",
+          "direction": false
+        },
+        {
+          "id": "4b3227e1-4b6a-410d-850f-0a330ce100cf",
+          "direction": false
+        }
+      ],
+      "closed": true
+    },
+    {
+      "type": "join",
+      "id": "35a449c9-8e74-4640-b5f4-be255cdd5460",
+      "probes": [],
+      "overlays": {},
+      "fixedEdgesIDs": [
+        "dda67982-9ce3-4ba1-834a-1194cd34855d",
+        "f6049376-af42-4a8d-8d29-9f822334d322"
+      ],
+      "position": {
+        "x": -313.53288807104957,
+        "y": -99.0800733773267
+      },
+      "isGrounded": false
+    },
+    {
+      "type": "beam",
+      "id": "dda67982-9ce3-4ba1-834a-1194cd34855d",
+      "probes": [],
+      "overlays": {},
+      "positionStart": {
+        "x": -313.53288807104957,
+        "y": -99.0800733773267
+      },
+      "positionEnd": {
+        "x": -247,
+        "y": -200
+      },
+      "fixedNodeStartID": "35a449c9-8e74-4640-b5f4-be255cdd5460",
+      "fixedNodesBodyIDs": []
+    }
+  ],
+  "constraintElements": [],
+  "loads": [],
+  "history": [
+    [
+      {
+        "type": "CreateElement",
+        "element": {
+          "type": "pivot",
+          "id": "099860a7-2c23-44e8-b3bc-91b685c407ff",
+          "probes": [],
+          "overlays": {},
+          "position": {
+            "x": 0,
+            "y": 0
+          },
+          "isGrounded": true,
+          "rotatingEdgesIDs": [],
+          "fixedGearsIDs": [],
+          "motor": {
+            "speed": 10
+          }
+        }
+      }
+    ],
+    [
+      {
+        "type": "CreateElement",
+        "element": {
+          "type": "gear",
+          "id": "4b3227e1-4b6a-410d-850f-0a330ce100cf",
+          "probes": [],
+          "overlays": {},
+          "position": {
+            "x": 0,
+            "y": 0
+          },
+          "angle": 0,
+          "radius": 100,
+          "parentAxleID": "099860a7-2c23-44e8-b3bc-91b685c407ff",
+          "fixedNodesBodyIDs": [],
+          "meshedGearsIDs": []
+        }
+      },
+      {
+        "type": "ConnectsFixedGears",
+        "disconnect": false,
+        "elementID": "099860a7-2c23-44e8-b3bc-91b685c407ff",
+        "connectID": "4b3227e1-4b6a-410d-850f-0a330ce100cf",
+        "index": 0
+      }
+    ],
+    [
+      {
+        "type": "CreateElement",
+        "element": {
+          "type": "pivot",
+          "id": "8008579d-72b3-4e26-92a2-343088bb3511",
+          "probes": [],
+          "overlays": {},
+          "position": {
+            "x": -300,
+            "y": 0
+          },
+          "isGrounded": false,
+          "rotatingEdgesIDs": [],
+          "fixedGearsIDs": [
+            "9b85bea0-37d4-43bb-8e55-d4d392ac5143"
+          ]
+        }
+      },
+      {
+        "type": "CreateElement",
+        "element": {
+          "type": "gear",
+          "id": "9b85bea0-37d4-43bb-8e55-d4d392ac5143",
+          "probes": [],
+          "overlays": {},
+          "position": {
+            "x": -300,
+            "y": 0
+          },
+          "angle": 0,
+          "radius": 100,
+          "parentAxleID": "8008579d-72b3-4e26-92a2-343088bb3511",
+          "fixedNodesBodyIDs": [],
+          "meshedGearsIDs": []
+        }
+      }
+    ],
+    [
+      {
+        "type": "CreateElement",
+        "element": {
+          "type": "belt",
+          "id": "f6049376-af42-4a8d-8d29-9f822334d322",
+          "probes": [],
+          "overlays": {},
+          "positionStart": {
+            "x": -313.53288807104957,
+            "y": -99.0800733773267
+          },
+          "positionEnd": {
+            "x": -313.53288807104957,
+            "y": -99.0800733773267
+          },
+          "attachedGearsIDs": [],
+          "closed": false
+        }
+      },
+      {
+        "type": "ConnectsAttachedGears",
+        "disconnect": false,
+        "elementID": "f6049376-af42-4a8d-8d29-9f822334d322",
+        "connectID": "9b85bea0-37d4-43bb-8e55-d4d392ac5143",
+        "index": 0,
+        "direction": false
+      },
+      {
+        "type": "ConnectsAttachedBelt",
+        "disconnect": false,
+        "elementID": "9b85bea0-37d4-43bb-8e55-d4d392ac5143",
+        "connectID": "f6049376-af42-4a8d-8d29-9f822334d322"
+      },
+      {
+        "type": "ConnectsAttachedGears",
+        "disconnect": false,
+        "elementID": "f6049376-af42-4a8d-8d29-9f822334d322",
+        "connectID": "4b3227e1-4b6a-410d-850f-0a330ce100cf",
+        "index": 1,
+        "direction": false
+      },
+      {
+        "type": "ConnectsAttachedBelt",
+        "disconnect": false,
+        "elementID": "4b3227e1-4b6a-410d-850f-0a330ce100cf",
+        "connectID": "f6049376-af42-4a8d-8d29-9f822334d322"
+      },
+      {
+        "type": "CreateElement",
+        "element": {
+          "type": "join",
+          "id": "35a449c9-8e74-4640-b5f4-be255cdd5460",
+          "probes": [],
+          "overlays": {},
+          "fixedEdgesIDs": [],
+          "position": {
+            "x": -313.53288807104957,
+            "y": -99.0800733773267
+          },
+          "isGrounded": false
+        }
+      },
+      {
+        "type": "ConnectsFixedEdges",
+        "disconnect": false,
+        "elementID": "35a449c9-8e74-4640-b5f4-be255cdd5460",
+        "connectID": "f6049376-af42-4a8d-8d29-9f822334d322",
+        "index": 0
+      },
+      {
+        "type": "ConnectsFixedNodeStart",
+        "disconnect": false,
+        "elementID": "f6049376-af42-4a8d-8d29-9f822334d322",
+        "connectID": "35a449c9-8e74-4640-b5f4-be255cdd5460"
+      },
+      {
+        "type": "ConnectsFixedNodeEnd",
+        "disconnect": false,
+        "elementID": "f6049376-af42-4a8d-8d29-9f822334d322",
+        "connectID": "35a449c9-8e74-4640-b5f4-be255cdd5460"
+      },
+      {
+        "type": "CloseBelt",
+        "id": "f6049376-af42-4a8d-8d29-9f822334d322",
+        "closed": true
+      },
+      {
+        "type": "UpdatePositionsToValidState",
+        "masterActionType": "CreateElement",
+        "newNodes": {
+          "positions": [
+            [
+              "099860a7-2c23-44e8-b3bc-91b685c407ff",
+              {
+                "x": 0,
+                "y": 0
+              }
+            ],
+            [
+              "4b3227e1-4b6a-410d-850f-0a330ce100cf",
+              {
+                "x": 0,
+                "y": 0
+              }
+            ],
+            [
+              "8008579d-72b3-4e26-92a2-343088bb3511",
+              {
+                "x": -300,
+                "y": 7.0400626396837194e-15
+              }
+            ],
+            [
+              "9b85bea0-37d4-43bb-8e55-d4d392ac5143",
+              {
+                "x": -300,
+                "y": 7.0400626396837194e-15
+              }
+            ],
+            [
+              "35a449c9-8e74-4640-b5f4-be255cdd5460",
+              {
+                "x": -313.53288807104957,
+                "y": -99.0800733773267
+              }
+            ],
+            [
+              "f6049376-af42-4a8d-8d29-9f822334d322:start",
+              {
+                "x": -313.53288807104957,
+                "y": -99.0800733773267
+              }
+            ],
+            [
+              "f6049376-af42-4a8d-8d29-9f822334d322:end",
+              {
+                "x": -313.53288807104957,
+                "y": -99.0800733773267
+              }
+            ]
+          ],
+          "radii": [
+            [
+              "4b3227e1-4b6a-410d-850f-0a330ce100cf",
+              100
+            ],
+            [
+              "9b85bea0-37d4-43bb-8e55-d4d392ac5143",
+              100
+            ]
+          ],
+          "posMasses": [
+            [
+              "099860a7-2c23-44e8-b3bc-91b685c407ff,4b3227e1-4b6a-410d-850f-0a330ce100cf",
+              0
+            ],
+            [
+              "8008579d-72b3-4e26-92a2-343088bb3511,9b85bea0-37d4-43bb-8e55-d4d392ac5143",
+              1
+            ],
+            [
+              "35a449c9-8e74-4640-b5f4-be255cdd5460,f6049376-af42-4a8d-8d29-9f822334d322:start,f6049376-af42-4a8d-8d29-9f822334d322:end",
+              1
+            ]
+          ],
+          "radMasses": [
+            [
+              "4b3227e1-4b6a-410d-850f-0a330ce100cf",
+              1
+            ],
+            [
+              "9b85bea0-37d4-43bb-8e55-d4d392ac5143",
+              1
+            ]
+          ]
+        },
+        "oldNodes": {
+          "positions": [
+            [
+              "099860a7-2c23-44e8-b3bc-91b685c407ff",
+              {
+                "x": 0,
+                "y": 0
+              }
+            ],
+            [
+              "4b3227e1-4b6a-410d-850f-0a330ce100cf",
+              {
+                "x": 0,
+                "y": 0
+              }
+            ],
+            [
+              "8008579d-72b3-4e26-92a2-343088bb3511",
+              {
+                "x": -300,
+                "y": 0
+              }
+            ],
+            [
+              "9b85bea0-37d4-43bb-8e55-d4d392ac5143",
+              {
+                "x": -300,
+                "y": 0
+              }
+            ]
+          ],
+          "radii": [
+            [
+              "4b3227e1-4b6a-410d-850f-0a330ce100cf",
+              100
+            ],
+            [
+              "9b85bea0-37d4-43bb-8e55-d4d392ac5143",
+              100
+            ]
+          ],
+          "posMasses": [
+            [
+              "099860a7-2c23-44e8-b3bc-91b685c407ff",
+              0
+            ],
+            [
+              "4b3227e1-4b6a-410d-850f-0a330ce100cf",
+              1
+            ],
+            [
+              "8008579d-72b3-4e26-92a2-343088bb3511",
+              1
+            ],
+            [
+              "9b85bea0-37d4-43bb-8e55-d4d392ac5143",
+              1
+            ]
+          ],
+          "radMasses": [
+            [
+              "4b3227e1-4b6a-410d-850f-0a330ce100cf",
+              1
+            ],
+            [
+              "9b85bea0-37d4-43bb-8e55-d4d392ac5143",
+              1
+            ]
+          ]
+        }
+      }
+    ],
+    [
+      {
+        "type": "SetMotorConfig",
+        "id": "8008579d-72b3-4e26-92a2-343088bb3511",
+        "newConfig": {
+          "speed": 10
+        }
+      },
+      {
+        "type": "GroundNode",
+        "id": "8008579d-72b3-4e26-92a2-343088bb3511",
+        "grounded": true
+      }
+    ],
+    [
+      {
+        "type": "SetMotorConfig",
+        "id": "8008579d-72b3-4e26-92a2-343088bb3511",
+        "newConfig": {
+          "speed": -10
+        },
+        "oldConfig": {
+          "speed": 10
+        }
+      }
+    ],
+    [
+      {
+        "type": "SetMotorConfig",
+        "id": "8008579d-72b3-4e26-92a2-343088bb3511",
+        "newConfig": {
+          "speed": 0
+        },
+        "oldConfig": {
+          "speed": -10
+        }
+      }
+    ],
+    [
+      {
+        "type": "SetMotorConfig",
+        "id": "099860a7-2c23-44e8-b3bc-91b685c407ff",
+        "oldConfig": {
+          "speed": 10
+        }
+      }
+    ],
+    [
+      {
+        "type": "SetMotorConfig",
+        "id": "8008579d-72b3-4e26-92a2-343088bb3511",
+        "newConfig": {
+          "speed": 10
+        },
+        "oldConfig": {
+          "speed": 0
+        }
+      }
+    ],
+    [
+      {
+        "type": "CreateElement",
+        "element": {
+          "type": "beam",
+          "id": "dda67982-9ce3-4ba1-834a-1194cd34855d",
+          "probes": [],
+          "overlays": {},
+          "positionStart": {
+            "x": -313.53288807104957,
+            "y": -99.0800733773267
+          },
+          "positionEnd": {
+            "x": -247,
+            "y": -200
+          },
+          "fixedNodesBodyIDs": []
+        }
+      },
+      {
+        "type": "ConnectsFixedEdges",
+        "disconnect": false,
+        "elementID": "35a449c9-8e74-4640-b5f4-be255cdd5460",
+        "connectID": "dda67982-9ce3-4ba1-834a-1194cd34855d",
+        "index": 0
+      },
+      {
+        "type": "ConnectsFixedNodeStart",
+        "disconnect": false,
+        "elementID": "dda67982-9ce3-4ba1-834a-1194cd34855d",
+        "connectID": "35a449c9-8e74-4640-b5f4-be255cdd5460"
+      }
+    ],
+    [
+      {
+        "type": "GroundNode",
+        "id": "099860a7-2c23-44e8-b3bc-91b685c407ff",
+        "grounded": false
+      }
+    ]
+  ],
+  "future": []
+}

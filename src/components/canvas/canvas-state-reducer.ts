@@ -29,7 +29,8 @@ import {
   get_load_element_from_id,
   get_mechanical_element_from_id,
 } from "../mechanism/connect-actions";
-import { TOOL_STATE_BY_KEY, tool_state } from "../../constants/shortcuts";
+import { TOOL_STATE_BY_KEY } from "../../constants/shortcuts";
+import { armed_tool_state } from "./arm-tool";
 import {
   distributed_grab_magnitude,
   distributed_tip_magnitude,
@@ -54,6 +55,32 @@ import { GRAB_BELT_KEY } from "../solver/snapshot";
 import { HIT_TOLERANCE } from "../../constants/rendering-specs";
 import { handle_placing_element } from "./placing-element-actions";
 import { handle_placing_constraint } from "./placing-constraint-actions";
+
+/**
+ * A multiple selection holds mechanical elements only. Constraints and loads are
+ * overlays on those elements: they follow them when the selection moves, so
+ * taking one into the selection would only ask the move to carry an element the
+ * mechanism does not have.
+ */
+function mechanical_only(
+  elementIDs: ID[],
+  mechanicalElements: MechanicalElement[],
+): ID[] {
+  return elementIDs.filter((id) =>
+    mechanicalElements.some((element) => element.id === id),
+  );
+}
+
+/** The state a selection of `elementIDs` calls for, once the overlays are out. */
+function multiple_selection_state(
+  elementIDs: ID[],
+  mechanicalElements: MechanicalElement[],
+): CanvasState {
+  const kept = mechanical_only(elementIDs, mechanicalElements);
+  if (kept.length === 0) return { type: "Selecting" };
+  if (kept.length === 1) return { type: "SelectedElement", elementID: kept[0] };
+  return { type: "SelectedMultiple", elementIDs: kept };
+}
 
 export function canvasStateReducer(
   state: CanvasState,
@@ -126,6 +153,26 @@ export function canvasStateReducer(
             });
             break;
           }
+          // La flèche de sens inverse le moteur d'un clic, sans passer par un
+          // état de placement : un bascule immédiat, comme le switch
+          // marche/arrêt du panneau de propriétés. Avant tout le reste, y
+          // compris la simulation, pour la même raison que la sonde ci-dessus.
+          if (hoveredPart.type === "MotorArrow") {
+            const pivot = get_mechanical_element_from_id(
+              hoveredPart.id,
+              mechanicalElements,
+            );
+            if (pivot.type === "pivot" && pivot.motor) {
+              actions.push({
+                type: "SetMotorConfig",
+                id: pivot.id,
+                newConfig: { ...pivot.motor, speed: -pivot.motor.speed },
+                oldConfig: pivot.motor,
+              });
+              actionBundleType = "Other";
+            }
+            break;
+          }
           // En simulation : pas de multi-sélection, pas de Moving* sur click
           if (isSimulating) {
             if (hoveredPart.type === "Void") {
@@ -150,7 +197,10 @@ export function canvasStateReducer(
               setCanvasState({
                 type: "SelectingMultiple",
                 startPos: hoveredPart.position,
-                elementIDs: [state.elementID],
+                elementIDs: mechanical_only(
+                  [state.elementID],
+                  mechanicalElements,
+                ),
                 hoveredElementIDs: [],
               });
             } else if (hoveredPart.id === state.elementID) {
@@ -158,10 +208,12 @@ export function canvasStateReducer(
               setCanvasState({ type: "Selecting" });
             } else {
               // Clic sur un nouvel élément
-              setCanvasState({
-                type: "SelectedMultiple",
-                elementIDs: [state.elementID, hoveredPart.id],
-              });
+              setCanvasState(
+                multiple_selection_state(
+                  [state.elementID, hoveredPart.id],
+                  mechanicalElements,
+                ),
+              );
             }
             break;
           }
@@ -254,35 +306,15 @@ export function canvasStateReducer(
             }
           } else if (event.shiftKey) {
             // Logique pour la sélection multiple avec Shift
-            if (state.elementIDs.includes(hoveredPart.id)) {
-              const newElementsIds = state.elementIDs.filter(
-                (elementId: ID) => elementId !== hoveredPart.id,
-              );
-              if (newElementsIds.length === 1) {
-                const element = mechanicalElements.find(
-                  (e) => e.id === newElementsIds[0],
-                );
-                if (element) {
-                  setCanvasState({
-                    type: "SelectedElement",
-                    elementID: element.id,
-                  });
-                  break;
-                }
-              } else {
-                setCanvasState({
-                  type: "SelectedMultiple",
-                  elementIDs: newElementsIds,
-                });
-                break;
-              }
-            } else {
-              setCanvasState({
-                type: "SelectedMultiple",
-                elementIDs: [...state.elementIDs, hoveredPart.id],
-              });
-              break;
-            }
+            setCanvasState(
+              multiple_selection_state(
+                state.elementIDs.includes(hoveredPart.id)
+                  ? state.elementIDs.filter((id: ID) => id !== hoveredPart.id)
+                  : [...state.elementIDs, hoveredPart.id],
+                mechanicalElements,
+              ),
+            );
+            break;
           } else if (state.elementIDs.includes(hoveredPart.id)) {
             setCanvasState({
               type: "MovingSelectionMultiple",
@@ -396,6 +428,7 @@ export function canvasStateReducer(
             state,
             hoveredPart,
             mechanicalElements,
+            constraintElements,
           );
           if (r.newCanvasState) setCanvasState(r.newCanvasState);
           actions.push(...r.actions);
@@ -921,6 +954,9 @@ export function canvasStateReducer(
       if (mouseButtonDown !== "left") break;
       switch (state.type) {
         case "Selecting":
+          // Déjà traitée au bouton enfoncé (bascule immédiate) : le clic ne
+          // doit pas en plus sélectionner le pivot porteur au relâchement.
+          if (hoveredPart.type === "MotorArrow") break;
           if (!names_element(hoveredPart)) break;
           setCanvasState({
             type: "SelectedElement",
@@ -928,6 +964,7 @@ export function canvasStateReducer(
           });
           break;
         case "SelectedElement":
+          if (hoveredPart.type === "MotorArrow") break;
           if (!names_element(hoveredPart)) break;
           if (hoveredPart.id === state.elementID) {
             // Un clic simple (sans drag) sur une dimension ouvre directement
@@ -1227,7 +1264,17 @@ export function canvasStateReducer(
           break;
         default: {
           const toolState = TOOL_STATE_BY_KEY[event.key];
-          if (toolState) setCanvasState(tool_state(toolState));
+          if (toolState)
+            setCanvasState(
+              armed_tool_state(
+                toolState,
+                state,
+                mechanicalElements,
+                constraintElements,
+                loadElements,
+                viewport,
+              ),
+            );
           break;
         }
       }

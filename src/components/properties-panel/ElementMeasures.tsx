@@ -8,9 +8,10 @@ import {
   get_metric_at,
 } from "../solver/probe-series";
 import {
-  PROBE_METRIC_LABELS,
+  PROBE_METRIC_LABEL_KEYS,
   available_probe_metrics,
 } from "../canvas/ProbeMetricSelector";
+import { t } from "../../i18n";
 
 /** Reserved height of the section in the analysis tab: the panel must not change
  *  shape when the user drags elements around, which is the most frequent gesture
@@ -38,7 +39,7 @@ const MeasureRow: React.FC<{ sample: MetricSample }> = ({ sample }) => (
       noWrap
       sx={{ minWidth: 0, flexShrink: 1 }}
     >
-      {PROBE_METRIC_LABELS[sample.metric]}
+      {t(PROBE_METRIC_LABEL_KEYS[sample.metric])}
     </Typography>
     <Box
       sx={{
@@ -133,7 +134,7 @@ export const ElementMeasures: React.FC<ElementMeasuresProps> = ({
             p: 2,
           }}
         >
-          Sélectionnez un élément pour voir ses grandeurs
+          {t("measures_select_element")}
         </Typography>
       ) : (
         <Box

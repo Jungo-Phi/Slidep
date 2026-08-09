@@ -26,14 +26,14 @@ interface OnCanvasValueEditorProps {
    * typing one is how the user turns that direction around from here. What the
    * sign then means is the caller's business. "single" mode only.
    */
-  signed?: boolean;
+  signed: boolean;
   /**
    * Commit a zero instead of reading it as "cancel". Zero is nonsense for most
    * quantities an editor opens on (a dimension, a force, a ratio), but it is a
    * real value for one end of a distributed load: it is what makes it
    * triangular. Callers pass it only when zero leaves something behind.
    */
-  allowZero?: boolean;
+  allowZero: boolean;
   onCommit: (newValue: number) => void;
   onCancel: () => void;
 }
@@ -43,8 +43,8 @@ export const OnCanvasValueEditor: React.FC<OnCanvasValueEditorProps> = ({
   initialValue,
   position,
   suffix,
-  signed = false,
-  allowZero = false,
+  signed,
+  allowZero,
   onCommit,
   onCancel,
 }) => {
@@ -68,19 +68,31 @@ export const OnCanvasValueEditor: React.FC<OnCanvasValueEditorProps> = ({
     }, 10);
   }, [mode, initialValue]);
 
+  /** What the fields hold, or null when they make no value the editor can take. */
+  const entered = ((): number | null => {
+    const v1 = parseFloat(val1);
+    const v2 = mode === "ratio" ? parseFloat(val2) : 1;
+    if (isNaN(v1) || isNaN(v2) || v2 === 0) return null;
+    if (v1 === 0 && !allowZero) return null;
+    return v1 / v2;
+  })();
+
+  // A refusal shows up while typing rather than at Enter, so pressing it on a value the
+  // editor will not take is not a silent no-op. A field still being filled stays neutral.
+  const refused =
+    entered === null &&
+    val1.trim() !== "" &&
+    (mode === "single" || val2.trim() !== "");
+
+  const handleLeave = () => {
+    if (entered === null) onCancel();
+    else onCommit(entered);
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
-      const v1 = parseFloat(val1);
-      if (v1 === 0 && !allowZero) {
-        onCancel();
-        return;
-      }
-      const v2 = mode === "ratio" ? parseFloat(val2) : 1;
-      if (!isNaN(v1) && !isNaN(v2) && v2 !== 0) {
-        onCommit(v1 / v2);
-      } else {
-        onCancel();
-      }
+      // An unusable entry keeps the editor open, on the red field that says why.
+      if (entered !== null) onCommit(entered);
     } else if (e.key === "Escape") {
       onCancel();
     } else if (mode === "ratio") {
@@ -140,7 +152,7 @@ export const OnCanvasValueEditor: React.FC<OnCanvasValueEditorProps> = ({
             alignItems: "center",
             height: "36px",
             border: "2px solid",
-            borderColor: "text.primary",
+            borderColor: refused ? "error.main" : "text.primary",
             borderRadius: "18px",
             backgroundColor: "primary.contrastText",
             padding: "0 6px",
@@ -157,7 +169,7 @@ export const OnCanvasValueEditor: React.FC<OnCanvasValueEditorProps> = ({
                 (e.relatedTarget !== inputRef2.current &&
                   !inputRef2.current?.contains(e.relatedTarget as Node))
               )
-                onCancel();
+                handleLeave();
             }}
             inputRef={inputRef1}
             autoComplete="off"
@@ -188,7 +200,7 @@ export const OnCanvasValueEditor: React.FC<OnCanvasValueEditorProps> = ({
                 (e.relatedTarget !== inputRef1.current &&
                   !inputRef1.current?.contains(e.relatedTarget as Node))
               )
-                onCancel();
+                handleLeave();
             }}
             inputRef={inputRef2}
             autoComplete="off"
@@ -207,7 +219,7 @@ export const OnCanvasValueEditor: React.FC<OnCanvasValueEditorProps> = ({
           display: "flex",
           alignItems: "center",
           border: "2px solid",
-          borderColor: "text.primary",
+          borderColor: refused ? "error.main" : "text.primary",
           borderRadius: "6px",
           backgroundColor: "primary.contrastText",
           padding: "0 4px",
@@ -218,7 +230,7 @@ export const OnCanvasValueEditor: React.FC<OnCanvasValueEditorProps> = ({
           value={val1}
           onChange={(e) => setVal1(filterInput(e.target.value))}
           onKeyDown={handleKeyDown}
-          onBlur={() => onCancel()}
+          onBlur={handleLeave}
           inputRef={inputRef1}
           autoComplete="off"
           sx={{

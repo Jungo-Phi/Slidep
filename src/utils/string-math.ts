@@ -1,3 +1,4 @@
+import { get_language } from "../i18n";
 import { ID, UnionElement } from "../types";
 
 /**
@@ -153,8 +154,22 @@ export function value2ratio(
   return ["1", "1"];
 }
 
+/**
+ * A simulated time, for display: `45.3s` under the minute, `2m53s` past it.
+ *
+ * Truncated rather than rounded, so the label never shows an instant the recording has not
+ * got to — and never reads `60.0s` for something the next tenth calls `1m00s`.
+ */
+export function format_sim_time(seconds: number): string {
+  const tenths = Math.max(0, Math.floor(seconds * 10));
+  if (tenths < 600) return `${(tenths / 10).toFixed(1)}s`;
+  const whole = Math.floor(tenths / 10);
+  const s = whole % 60;
+  return `${Math.floor(whole / 60)}m${s.toString().padStart(2, "0")}s`;
+}
+
 export function format_date(timestamp: number): string {
-  return new Intl.DateTimeFormat("fr-FR", {
+  return new Intl.DateTimeFormat(get_language(), {
     day: "numeric",
     month: "short",
     hour: "2-digit",

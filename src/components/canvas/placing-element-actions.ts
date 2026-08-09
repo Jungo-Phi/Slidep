@@ -32,6 +32,16 @@ import { Point2 } from "../../types/point2";
 import { get_belt_path } from "../../utils";
 import { belt_wrap_arriving, belt_wrap_leaving } from "../../utils/belt-geom";
 import { belt_project } from "../../utils/belt-path";
+import { nodes_under_segment } from "./body-crossings";
+
+/** A node named as a hover, for the connection helpers that speak in hovers. */
+const node_hover = (node: MechanicalElement & { position: Point2 }): HoveredPart => ({
+  type: "Node",
+  position: node.position,
+  id: node.id,
+  deleting: false,
+  beamBodyHover: false,
+});
 
 export type MouseDownResult = {
   actions: Action[];
@@ -122,6 +132,7 @@ export function handle_placing_element(
         mechanicalElements,
         constraintElements,
         loads,
+        viewport,
       );
 
     case "PlacingGround":
@@ -288,6 +299,7 @@ function handle_place_element(
   mechanicalElements: MechanicalElement[],
   constraintElements: ConstraintElement[],
   loads: LoadElement[],
+  viewport: ViewportState,
 ): MouseDownResult {
   // Toggle motor on an existing pivot node
   if (state.type === "PlacingMotor" && hoveredPart.type === "Node") {
@@ -661,6 +673,31 @@ function handle_place_element(
         sim.loads,
       ),
     );
+
+  // The bar runs over these on its way, having aimed at neither: they connect to
+  // its body. Only a beam has one to hold them — a spring or a damper carries
+  // nothing mid-span. Each is re-checked against the running mechanism, an
+  // earlier attach being free to have absorbed it.
+  if (state.type === "PlacingBeamEnd" && "positionStart" in newElement)
+    for (const node of nodes_under_segment(
+      newElement.positionStart,
+      newElement.positionEnd,
+      sim.mechanicalElements,
+      viewport,
+    )) {
+      const target = node_hover(node);
+      if (!sim.holds(target)) continue;
+      sim.step(
+        connect_elements(
+          target,
+          get_mechanical_element_from_id(newElement.id, sim.mechanicalElements),
+          own_part(newElement.id, "body", target),
+          sim.mechanicalElements,
+          sim.constraintElements,
+          sim.loads,
+        ),
+      );
+    }
 
   const actions = sim.actions;
 

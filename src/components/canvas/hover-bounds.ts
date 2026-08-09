@@ -5,9 +5,11 @@ import type {
   ID,
   MechanicalElement,
   Point2,
+  ViewportState,
 } from "../../types";
 import { DIM, HIT_TOLERANCE } from "../../constants/rendering-specs";
 import { belt_can_close, belt_terminal_pulley_id } from "../../utils/belt-rules";
+import { screen2world_length } from "../../utils";
 
 /**
  * Where the cursor is allowed to be, given what the gesture is about to produce.
@@ -19,6 +21,12 @@ import { belt_can_close, belt_terminal_pulley_id } from "../../utils/belt-rules"
  * Placing an element and dragging one answer to the same bounds — a beam is no
  * shorter for having just been drawn.
  *
+ * Every minimum here is a **screen** distance, converted through the viewport:
+ * what these bounds protect is the ability to see and grab what one is drawing,
+ * which is a matter of pixels. Zoomed in, a beam of ten world units becomes a
+ * legitimate thing to draw; zoomed out, one of a thousand is the shortest that
+ * can still be aimed at.
+ *
  * These are aids to hovering, not invariants: hit tolerance and grid snapping
  * both run downstream and may pull the point back inside by a few pixels.
  */
@@ -26,21 +34,23 @@ export function clamp_to_bounds(
   point: Point2,
   state: CanvasState,
   mechanicalElements: MechanicalElement[],
+  viewport: ViewportState,
 ): Point2 {
+  const minEdgeLength = screen2world_length(DIM.MIN_EDGE_LENGTH, viewport);
+  const minGearRadius = screen2world_length(DIM.MIN_GEAR_RADIUS, viewport);
+
   switch (state.type) {
     case "PlacingBeamEnd":
     case "PlacingSpringEnd":
     case "PlacingDamperEnd":
-      return from_base(point, state.startHover.position, DIM.MIN_EDGE_LENGTH);
+      return from_base(point, state.startHover.position, minEdgeLength);
 
     case "PlacingGearRadius":
-      return from_base(point, state.startHover.position, DIM.MIN_GEAR_RADIUS);
+      return from_base(point, state.startHover.position, minGearRadius);
 
     case "ChangingGearRadius": {
       const gear = element_of_type(state.elementID, "gear", mechanicalElements);
-      return gear
-        ? from_base(point, gear.position, DIM.MIN_GEAR_RADIUS)
-        : point;
+      return gear ? from_base(point, gear.position, minGearRadius) : point;
     }
 
     // The belt being routed has no element yet, so the pulley its end wraps is
@@ -58,7 +68,7 @@ export function clamp_to_bounds(
             : undefined;
       return gearID
         ? clamp_outside_gear(point, gearID, mechanicalElements)
-        : from_base(point, state.startHover.position, DIM.MIN_EDGE_LENGTH);
+        : from_base(point, state.startHover.position, minEdgeLength);
     }
 
     // A node pinned to an edge terminal carries that terminal with it, so it
@@ -69,7 +79,13 @@ export function clamp_to_bounds(
     case "MovingNode":
       return pinned_edge_terminals(state.elementID, mechanicalElements).reduce(
         (bounded, { edge, which }) =>
-          clamp_edge_terminal(bounded, edge, which, mechanicalElements),
+          clamp_edge_terminal(
+            bounded,
+            edge,
+            which,
+            mechanicalElements,
+            viewport,
+          ),
         point,
       );
 
@@ -84,6 +100,7 @@ export function clamp_to_bounds(
             edge,
             state.type === "MovingEdgeStartPoint" ? "start" : "end",
             mechanicalElements,
+            viewport,
           )
         : point;
     }
@@ -94,10 +111,10 @@ export function clamp_to_bounds(
 }
 
 /**
- * How close the two ends of a belt that cannot close may come. Strictly inside
- * the tolerance that triggers the refusal, never on it: held exactly on the
- * threshold, the `<=` deciding whether the refusal shows flips with rounding on
- * every mouse move, and the cursor and its message blink.
+ * How close the two ends of a belt that cannot close may come, in screen px.
+ * Strictly inside the tolerance that triggers the refusal, never on it: held
+ * exactly on the threshold, the `<=` deciding whether the refusal shows flips
+ * with rounding on every mouse move, and the cursor and its message blink.
  */
 const UNCLOSABLE_BELT_GAP = HIT_TOLERANCE.NODE - 1;
 
@@ -107,18 +124,21 @@ function clamp_edge_terminal(
   edge: EdgeElement,
   which: "start" | "end",
   mechanicalElements: MechanicalElement[],
+  viewport: ViewportState,
 ): Point2 {
   const opposite = which === "start" ? edge.positionEnd : edge.positionStart;
   // A belt may bring its two ends together — that is the loop closing. Short of
   // the pulleys the loop needs, they stop just before touching: near enough for
   // the refusal to be offered, far enough not to merge. A plain span has no
   // closure to aim at, and shortening it onto itself would only make a point.
-  const minLength =
+  const minLength = screen2world_length(
     edge.type !== "belt"
       ? DIM.MIN_EDGE_LENGTH
       : belt_can_close((edge as BeltElement).attachedGearsIDs.length)
         ? 0
-        : UNCLOSABLE_BELT_GAP;
+        : UNCLOSABLE_BELT_GAP,
+    viewport,
+  );
   const bounded = from_base(point, opposite, minLength);
   const gearID =
     edge.type === "belt"
@@ -130,7 +150,7 @@ function clamp_edge_terminal(
 }
 
 /** Every edge terminal `nodeID` is pinned to. A node on an edge *body* is not one. */
-function pinned_edge_terminals(
+export function pinned_edge_terminals(
   nodeID: ID,
   mechanicalElements: MechanicalElement[],
 ): { edge: EdgeElement; which: "start" | "end" }[] {

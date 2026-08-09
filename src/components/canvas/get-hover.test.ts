@@ -382,6 +382,40 @@ describe("get_hovered_part", () => {
   });
 });
 
+/**
+ * A drag reaches only what the solver granted it. The mass sits at (600,0) and
+ * the join at (200,0): asking to bring the mass onto the join and being left
+ * where it started is what an anchor holding it looks like from here.
+ */
+describe("une cible que le glissement n'atteint pas", () => {
+  const dragging: CanvasState = { type: "MovingNode", elementID: MASS };
+  const at = (asked: Point2 | undefined) =>
+    get_hovered_part(
+      MECHANICAL,
+      CONSTRAINTS,
+      LOADS,
+      VISIBLE_CONSTRAINTS,
+      P(200, 0),
+      dragging,
+      VIEWPORT,
+      asked,
+    );
+
+  it("n'est pas survolée quand l'élément est resté en arrière", () => {
+    expect(at(P(200, 0)).type).toBe("Void");
+  });
+
+  it("l'est quand ce qui a été demandé a été accordé", () => {
+    // Asked for the mass's own place, and that is where it is: nothing held it
+    // back, so the join under the cursor is a target like any other.
+    expect(names_element(at(P(600, 0)))).toBe(true);
+  });
+
+  it("est laissée au survol ordinaire hors de tout glissement", () => {
+    expect(names_element(at(undefined))).toBe(true);
+  });
+});
+
 describe("probe badge", () => {
   const at = (cursor: Point2, state: CanvasState) =>
     get_hovered_part(

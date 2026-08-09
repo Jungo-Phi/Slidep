@@ -47,108 +47,99 @@ import {
 } from "../../utils/load-scale";
 import { moment_center_position } from "../../utils/load-geom";
 import { world2screen, world2screen_vec } from "../../utils";
+import {
+  corridor_distance,
+  SNAP_CORRIDOR,
+  SNAP_DEAD_RADIUS,
+  SNAP_SEPARATION,
+} from "./snap-corridor";
 
 // ─── Direction ──────────────────────────────────────────────────────────────
 
-/** Smallest signed difference between two angles, wrapped to (-π, π]. */
-function angle_diff(a: number, b: number): number {
-  let d = a - b;
-  while (d > Math.PI) d -= 2 * Math.PI;
-  while (d <= -Math.PI) d += 2 * Math.PI;
-  return d;
+/**
+ * A direction snap, and what it landed on.
+ *
+ * The frame comes out of the snap rather than being read back from the angle it produced. Recognising an axis after the fact takes a tolerance, and a tolerance turns a beam half a degree off vertical into a beam whose load is stored at 89.5° from it — aimed at its normal, following it for ever a touch askew, and nothing on screen to say so.
+ */
+export interface DirectionSnap {
+  vector: ScreenPoint;
+  frame: LoadFrame;
 }
 
-const SNAP_TOLERANCE_RAD = (8 * Math.PI) / 180;
-/** Tolerance to recognise an already-snapped direction as an edge/world axis. */
-const SNAP_MATCH_RAD = (1 * Math.PI) / 180;
-
 /**
- * The four screen angles an edge offers: its axial direction and its normal,
- * both ways. Measured on screen and not in world, because the y flip of
- * `world2screen` turns a beam at θ into one drawn at −θ — comparing a drawn
- * direction to a world angle silently aims every oblique beam the wrong way.
+ * The four rays an edge offers: its axial direction and its normal, both ways.
+ *
+ * Measured on screen and not in world, because the y flip of `world2screen` turns a beam at θ into one drawn at −θ — comparing a drawn direction to a world angle silently aims every oblique beam the wrong way.
  */
-function edge_axis_angles(
+function edge_axis_rays(
   edge: EdgeElement,
   viewport: ViewportState,
-): number[] {
+): ScreenPoint[] {
   const beamAngle = world2screen(edge.positionEnd, viewport)
     .sub(world2screen(edge.positionStart, viewport))
     .angle();
-  return [0, 1, 2, 3].map((k) => beamAngle + (k * Math.PI) / 2);
+  return [0, 1, 2, 3].map((k) =>
+    Point2.from_polar(1, beamAngle + (k * Math.PI) / 2).as_space<"screen">(),
+  );
 }
 
 /**
- * Reference frame implied by an (already snapped) screen direction: the edge
- * whose axial/normal it lies on, or "world". An edge takes priority, so a
- * direction that is both world-aligned and edge-aligned references the edge — a
- * load aimed along a beam follows it, whichever way that beam happens to lie.
- */
-export function frame_from_snapped_direction(
-  screenVec: ScreenPoint,
-  edges: EdgeElement[],
-  viewport: ViewportState,
-): LoadFrame {
-  if (screenVec.length() < 1e-6) return "world";
-  const angle = screenVec.angle();
-  for (const edge of edges)
-    for (const candidate of edge_axis_angles(edge, viewport))
-      if (Math.abs(angle_diff(angle, candidate)) < SNAP_MATCH_RAD)
-        return { mode: "edge", edgeID: edge.id };
-  return "world";
-}
-
-/**
- * World axes (H/V) plus each edge's axial and normal directions, as angles.
+ * Every direction a load is worth aiming at, **edges first**.
  *
- * A candidate landing within `SNAP_MATCH_RAD` of one already kept is dropped:
- * an edge lying all but along a world axis would otherwise offer two targets a
- * fraction of a degree apart, which the direction flips between from one pixel
- * to the next. World axes come first, so they are the ones that survive.
+ * An edge outranks the world: a load pulled along a beam follows that beam, whichever way it happens to lie. Order is what carries that rule — where two rays are within `SNAP_SEPARATION` of each other the first wins, so a beam all but vertical keeps its own ray, and the load lands on exactly a quarter turn from it rather than on the world's vertical a hair away.
  */
-function snap_candidate_angles(
+function snap_candidates(
   edges: EdgeElement[],
   viewport: ViewportState,
-): number[] {
-  const candidates = [0, Math.PI / 2, Math.PI, -Math.PI / 2];
-  for (const edge of edges) {
-    for (const candidate of edge_axis_angles(edge, viewport)) {
-      if (
-        candidates.some(
-          (kept) => Math.abs(angle_diff(candidate, kept)) < SNAP_MATCH_RAD,
-        )
-      )
-        continue;
-      candidates.push(candidate);
-    }
-  }
+): { ray: ScreenPoint; frame: LoadFrame }[] {
+  const candidates: { ray: ScreenPoint; frame: LoadFrame }[] = [];
+  for (const edge of edges)
+    for (const ray of edge_axis_rays(edge, viewport))
+      candidates.push({ ray, frame: { mode: "edge", edgeID: edge.id } });
+  for (const k of [0, 1, 2, 3])
+    candidates.push({
+      ray: Point2.from_polar(1, (k * Math.PI) / 2).as_space<"screen">(),
+      frame: "world",
+    });
   return candidates;
 }
 
 /**
- * Snap a screen-space load direction to the nearest meaningful axis (magnitude preserved)
- * The world horizontal/vertical axes, plus each given edge's axial and normal directions.
- * Returns the vector unchanged when no candidate is within tolerance.
+ * Aim a screen-space load direction at the nearest ray worth landing on, magnitude preserved: the world axes, plus each given edge's axial and normal directions.
+ *
+ * Answers `"world"` and the untouched vector when nothing is near enough — an unaimed load belongs to no beam.
  */
 export function snap_direction(
   vector: ScreenPoint,
   edges: EdgeElement[],
   viewport: ViewportState,
-): ScreenPoint {
+): DirectionSnap {
   const len = vector.length();
-  if (len < 1e-6) return vector;
+  if (len < SNAP_DEAD_RADIUS) return { vector, frame: "world" };
 
-  const angle = vector.angle();
-  let best = angle;
-  let bestDiff = SNAP_TOLERANCE_RAD;
-  for (const c of snap_candidate_angles(edges, viewport)) {
-    const diff = Math.abs(angle_diff(angle, c));
-    if (diff < bestDiff) {
-      bestDiff = diff;
-      best = c;
-    }
+  let best: { ray: ScreenPoint; frame: LoadFrame } | undefined;
+  let bestDistance = Infinity;
+  for (const candidate of snap_candidates(edges, viewport)) {
+    const distance = corridor_distance(vector, candidate.ray);
+    if (distance >= bestDistance - SNAP_SEPARATION) continue;
+    bestDistance = distance;
+    best = candidate;
   }
-  return best === angle ? vector : Point2.from_polar(len, best);
+  if (!best || bestDistance > SNAP_CORRIDOR) return { vector, frame: "world" };
+  return { vector: best.ray.mul(len), frame: best.frame };
+}
+
+/**
+ * The frame a drag lands in, for the commit that has to store it.
+ *
+ * The same snap the preview ran, on the vector that snap produced: the drag already lies on the retained ray, so it wins its own lane again and the frame comes back exactly.
+ */
+export function frame_from_drag(
+  screenVec: ScreenPoint,
+  edges: EdgeElement[],
+  viewport: ViewportState,
+): LoadFrame {
+  return snap_direction(screenVec, edges, viewport).frame;
 }
 
 // ─── Gestures ───────────────────────────────────────────────────────────────
@@ -160,10 +151,10 @@ function snap_arrow(
   edges: EdgeElement[],
   viewport: ViewportState,
 ): ScreenPoint {
-  const aimed = snap_direction(position.sub(base), edges, viewport);
-  const value = screen2stored_load(aimed.length());
+  const { vector } = snap_direction(position.sub(base), edges, viewport);
+  const value = screen2stored_load(vector.length());
   return base.add(
-    aimed.with_length(stored2screen_load(nearest_round_load_value(value))),
+    vector.with_length(stored2screen_load(nearest_round_load_value(value))),
   );
 }
 

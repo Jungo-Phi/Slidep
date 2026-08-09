@@ -9,6 +9,7 @@ import {
   SimulationModel,
   compile_simulation_model,
   is_retained,
+  max_recording_time,
   step_simulation,
 } from "./kinematic-simulation";
 
@@ -25,6 +26,8 @@ export class Recorder {
   private grab: SimGrab | null = null;
   /** Last snapshot handed out, to warm-start the next step from. */
   private last: KinematicSnapshot | null = null;
+  /** How long this load may record: what its instants cost sets it. */
+  private limit = MAX_RECORDING_TIME;
 
   /**
    * Adopt a mechanism, discarding whatever the previous one left. `resumeFrom` is the
@@ -33,7 +36,13 @@ export class Recorder {
    */
   load(mechanism: Mechanism, resumeFrom: KinematicSnapshot | null): void {
     this.model = compile_simulation_model(mechanism);
+    this.limit = max_recording_time(this.model.layout);
     this.last = resumeFrom;
+  }
+
+  /** The longest this load records, in simulated seconds. */
+  maxTime(): number {
+    return this.limit;
   }
 
   /** The grab the next steps pull on, or `null` to let go. */
@@ -48,7 +57,7 @@ export class Recorder {
 
   /** Whether the recording has run its full length and will produce nothing more. */
   full(): boolean {
-    return recording_full(this.last?.t ?? -RECORD_DT);
+    return recording_full(this.last?.t ?? -RECORD_DT, this.limit);
   }
 
   /** Whether a mechanism has been loaded — nothing can be recorded before that. */
@@ -91,7 +100,7 @@ export class Recorder {
     // due: a mechanism whose single step outlasts the whole budget must still advance.
     // Never past the recording's full length: what bounds a session's memory is that no
     // instant beyond it is ever solved, not that the display stops asking for one.
-    const dueUntil = Math.min(targetTime, MAX_RECORDING_TIME) + RECORD_DT / 2;
+    const dueUntil = Math.min(targetTime, this.limit) + RECORD_DT / 2;
     while (frontier + produced + RECORD_DT <= dueUntil) {
       produced += RECORD_DT;
       const t = frontier + produced;

@@ -6,10 +6,13 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "lint": "eslint . --ext ts,tsx --report-unused-disable-directives",
+    "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --cache --cache-location node_modules/.cache/eslintcache",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
     "preview": "vite preview",
     "test": "vitest",
     "test:run": "vitest run",
+    "test:changed": "vitest run --changed",
+    "test:related": "vitest related --run",
     "test:coverage": "vitest run --coverage",
     "test:fuzz": "vitest run fuzz.test",
     "test:bench": "vitest run --maxWorkers=1 bench.test"

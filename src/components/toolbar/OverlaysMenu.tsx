@@ -20,16 +20,17 @@ import {
   OverlayKind,
 } from "../../types";
 import {
-  OVERLAY_LABELS,
+  OVERLAY_LABEL_KEYS,
   any_overlay_shown,
   overlay_count,
   set_all_overlays,
 } from "../properties-panel/overlay-actions";
+import { t } from "../../i18n";
 
 interface OverlaysMenuProps {
   mechanicalElements: MechanicalElement[];
   applyActions: (actions: Action[], actionBundleType: ActionBundleType) => void;
-  /** Drops the "Afficher" label, keeping the eye and the caret. */
+  /** Drops the button's label, keeping the eye and the caret. */
   condensed?: boolean;
 }
 
@@ -63,7 +64,7 @@ const OverlayMenuRow: React.FC<OverlayMenuRowProps> = ({
     }}
   >
     <Typography variant="body2" sx={{ flex: 1, whiteSpace: "nowrap" }}>
-      {OVERLAY_LABELS[kind]}
+      {t(OVERLAY_LABEL_KEYS[kind])}
     </Typography>
     <Typography
       variant="caption"
@@ -77,7 +78,7 @@ const OverlayMenuRow: React.FC<OverlayMenuRowProps> = ({
     >
       {shown}/{total}
     </Typography>
-    <Tooltip disableInteractive title="Tout afficher">
+    <Tooltip disableInteractive title={t("overlays_show_all")}>
       <span>
         <IconButton
           size="small"
@@ -90,7 +91,7 @@ const OverlayMenuRow: React.FC<OverlayMenuRowProps> = ({
         </IconButton>
       </span>
     </Tooltip>
-    <Tooltip disableInteractive title="Tout cacher">
+    <Tooltip disableInteractive title={t("overlays_hide_all")}>
       <span>
         <IconButton
           size="small"
@@ -132,7 +133,7 @@ export const OverlaysMenu: React.FC<OverlaysMenuProps> = ({
     <>
       <Tooltip
         disableInteractive
-        title={condensed ? "Afficher les calques" : ""}
+        title={condensed ? t("overlays_button_tooltip") : ""}
       >
         <Button
           color="inherit"
@@ -162,7 +163,7 @@ export const OverlaysMenu: React.FC<OverlaysMenuProps> = ({
             "& .MuiButton-startIcon": { mr: condensed ? 0 : undefined },
           }}
         >
-          {condensed ? null : "Afficher"}
+          {condensed ? null : t("overlays_button")}
         </Button>
       </Tooltip>
       <Menu

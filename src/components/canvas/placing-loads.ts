@@ -22,7 +22,7 @@ import {
   world2frame_transform,
 } from "../../utils/load-frame";
 import { world2screen_length, world2screen_vec } from "../../utils";
-import { frame_from_snapped_direction } from "./load-snap";
+import { frame_from_drag } from "./load-snap";
 
 /**
  * The load a drag would create, from where it started to where the cursor is.
@@ -53,7 +53,7 @@ export function force_from_drag(
       : undefined;
   // The cursor is already direction-snapped (see snap_load_hover)
   const drag = cursor.sub(startHover.position);
-  const frame = frame_from_snapped_direction(
+  const frame = frame_from_drag(
     world2screen_vec(drag, viewport),
     force_snap_edges(startHover.id, anchor, mechanicalElements),
     viewport,
@@ -90,7 +90,7 @@ export function distributed_force_from_drag(
   );
   // The cursor is already direction-snapped (see snap_load_hover): a load that
   // landed on its beam's axial/normal references that beam and follows it.
-  const frame = frame_from_snapped_direction(
+  const frame = frame_from_drag(
     world2screen_vec(drag, viewport),
     [beam],
     viewport,

@@ -7,9 +7,11 @@ import { load_mechanism } from "../../utils/load-mechanism";
 import {
   MAX_RECORDING_TIME,
   RECORD_DT,
+  max_recording_time,
   recording_full,
 } from "./kinematic-simulation";
 import { Recorder } from "./recorder";
+import { snapshot_layout } from "./snapshot";
 
 /**
  * The recording is the same at every playback speed — the promise the fixed `RECORD_DT`
@@ -71,11 +73,59 @@ describe("la fin d'un enregistrement se reconnaît", () => {
     while (t + RECORD_DT <= MAX_RECORDING_TIME) t += RECORD_DT;
     expect(t).not.toBe(MAX_RECORDING_TIME);
     expect(t).toBeCloseTo(MAX_RECORDING_TIME, 9);
-    expect(recording_full(t)).toBe(true);
+    expect(recording_full(t, MAX_RECORDING_TIME)).toBe(true);
 
     // And it is not so tolerant that it fires a step early.
-    expect(recording_full(t - RECORD_DT)).toBe(false);
-    expect(recording_full(0)).toBe(false);
+    expect(recording_full(t - RECORD_DT, MAX_RECORDING_TIME)).toBe(false);
+    expect(recording_full(0, MAX_RECORDING_TIME)).toBe(false);
+  });
+});
+
+describe("la durée enregistrable se règle sur la mémoire", () => {
+  const layout_of = (nodes: number) =>
+    snapshot_layout(
+      Array.from({ length: nodes }, (_, i) => `n${i}`),
+      [],
+    );
+
+  const time_of = (nodes: number) => max_recording_time(layout_of(nodes));
+
+  /** The smallest mechanism the budget binds on before the ceiling does. Searched rather
+   *  than written down, so the test says nothing about what the budget happens to be. */
+  const bound_by_memory = () => {
+    let nodes = 64;
+    while (time_of(nodes) === MAX_RECORDING_TIME) nodes *= 2;
+    return nodes;
+  };
+
+  it("laisse le plafond à un mécanisme que la mémoire porte", () => {
+    expect(time_of(1)).toBe(MAX_RECORDING_TIME);
+  });
+
+  it("raccourcit un mécanisme lourd, par minutes entières", () => {
+    const nodes = bound_by_memory();
+    expect(time_of(nodes)).toBeLessThan(MAX_RECORDING_TIME);
+    expect(time_of(nodes) % 60).toBe(0);
+  });
+
+  // A million keys is what the floor has to be shown on, and laying them out
+  // costs real time: the default budget is not meant for it, and this asserts a
+  // returned duration, never how fast it was reached.
+  it(
+    "ne descend jamais sous la minute, quitte à dépasser le budget",
+    () => {
+      expect(time_of(1_000_000)).toBe(60);
+    },
+    30_000,
+  );
+
+  it("ne récompense jamais un mécanisme plus lourd", () => {
+    let previous = Infinity;
+    for (let nodes = 1; nodes <= 1_000_000; nodes *= 4) {
+      const time = time_of(nodes);
+      expect(time).toBeLessThanOrEqual(previous);
+      previous = time;
+    }
   });
 });
 

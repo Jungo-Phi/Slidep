@@ -28,6 +28,7 @@ import {
   WorldPoint,
 } from "../../types";
 import { HoveredPart, names_element } from "../../types/hovered-part";
+import { nodes_under_segment } from "./body-crossings";
 import { CanvasState } from "../../types/canvas-state";
 import { element_refs } from "../../types/element-refs";
 import {
@@ -61,7 +62,10 @@ import {
   draw_motor,
   draw_probe,
   draw_dimension_belt,
+  draw_parallel_leg_bottom,
+  draw_parallel_leg_top,
 } from "./drawing-functions";
+import { offset_ends, parallel_edge_offsets } from "./parallel-edges";
 import {
   deletion_closure,
   get_mechanical_element_from_id,
@@ -104,6 +108,7 @@ import {
   attached_gears_with_start,
   axle_under,
 } from "./placing-element-actions";
+import { replaced_constraint_ids } from "./placing-constraint-actions";
 import {
   connected_constraints,
   is_constraint_type,
@@ -191,11 +196,7 @@ function belt_windings(
   });
 }
 
-function is_selected(
-  elementID: ID,
-  state: CanvasState,
-  constraintElements: ConstraintElement[],
-): boolean {
+function is_selected(elementID: ID, state: CanvasState): boolean {
   return (
     (state.type === "SelectedElement" && state.elementID === elementID) ||
     // Its metric popover is open: the element being measured reads as selected,
@@ -213,10 +214,7 @@ function is_selected(
     ((state.type === "SelectingMultiple" ||
       state.type === "SelectedMultiple" ||
       state.type === "MovingSelectionMultiple") &&
-      (state.elementIDs.includes(elementID) ||
-        state.elementIDs.some((id) =>
-          connected_constraints(id, constraintElements).includes(elementID),
-        ))) ||
+      state.elementIDs.includes(elementID)) ||
     (state.type === "MovingConstraint" && state.elementID === elementID) ||
     (state.type === "EqualConstraintGear" && state.startGearID === elementID) ||
     (state.type === "EqualConstraintEdge" && state.startEdgeID === elementID) ||
@@ -399,17 +397,20 @@ function is_load_hovered(
 }
 
 /**
- * The edge a load being placed takes its frame from, if any. The load is aimed
- * by dragging, so nothing else says which edge captured the direction — and that
- * edge decides whether the load follows it or stays put.
+ * The edge a load takes its frame from, if any.
+ *
+ * A load bound to a beam turns with it, and nothing in its own drawing says so — it is aimed by dragging, and an arrow along a beam looks the same whether it follows that beam or stays put. So the edge that captured the direction is thickened like an ordinary hover, and that is the only place the binding is visible.
+ *
+ * Shown while the load is being placed, and afterwards whenever it is hovered or selected: the drag infers the frame once, at creation, and the side panel is where it changes — the answer to "which is it?" has to be readable somewhere else than in the gesture that is over.
  */
 function load_frame_edge_id(
   hoveredPart: HoveredPart,
   state: CanvasState,
   mechanicalElements: MechanicalElement[],
+  loads: LoadElement[],
   viewport: ViewportState,
 ): ID | undefined {
-  const load =
+  const placing =
     state.type === "PlacingForceEnd"
       ? force_from_drag(
           GHOST_LOAD_ID,
@@ -427,8 +428,41 @@ function load_frame_edge_id(
             viewport,
           )
         : undefined;
-  if (!load || load.frame === "world") return undefined;
-  return load.frame.edgeID;
+  // A moment carries no frame: its arc has no direction to bind.
+  const shown =
+    placing ??
+    loads.find(
+      (load): load is ForceElement | DistributedForceElement =>
+        load.type !== "moment" &&
+        (is_selected(load.id, state) ||
+          (names_element(hoveredPart) &&
+            !hoveredPart.deleting &&
+            hoveredPart.id === load.id)),
+    );
+  if (!shown || shown.frame === "world") return undefined;
+  return shown.frame.edgeID;
+}
+
+/**
+ * The nodes the beam being drawn would pick up along its body, thickened like an ordinary hover.
+ *
+ * They are connected without ever having been aimed at, so without this the bar would silently take hold of whatever it happened to cross. Empty for every other tool: only a beam has a body to hold a node.
+ */
+function crossed_node_ids(
+  hoveredPart: HoveredPart,
+  state: CanvasState,
+  mechanicalElements: MechanicalElement[],
+  viewport: ViewportState,
+): ReadonlySet<ID> {
+  if (state.type !== "PlacingBeamEnd") return EMPTY_IDS;
+  return new Set(
+    nodes_under_segment(
+      state.startHover.position,
+      hoveredPart.position,
+      mechanicalElements,
+      viewport,
+    ).map((node) => node.id),
+  );
 }
 
 function is_hovered(
@@ -439,7 +473,8 @@ function is_hovered(
   if (!names_element(hoveredPart)) return false;
   // A badge names its host, but hovering it highlights the badge alone —
   // lighting up the element too would read as two targets for one gesture.
-  if (hoveredPart.type === "Probe") return false;
+  if (hoveredPart.type === "Probe" || hoveredPart.type === "MotorArrow")
+    return false;
   if (hoveredPart.id === elementID && !hoveredPart.deleting) return true;
 
   const constraint = constraintElements.find((el) => el.id === hoveredPart.id);
@@ -507,7 +542,7 @@ export function draw_edge_fake_end(
   )
     ctx.lineWidth += STROKE_WIDTHS.HOVER_GAIN;
 
-  if (is_selected(edge.id, state, constraintElements)) {
+  if (is_selected(edge.id, state)) {
     ctx.strokeStyle = COLORS.SELECTION_STROKE;
     ctx.fillStyle = COLORS.FILL_BODY;
   }
@@ -561,26 +596,81 @@ function undrawable_elements(
   return undrawable;
 }
 
+/**
+ * Elements the analysis panel is pointing at, and why.
+ *
+ * The reason travels with the set because the drawing differs: `focus` picks parts out —
+ * a kinematic chain, or what one motion mode moves — and draws them hovered, while `fault`
+ * marks the constraints an audit found dispensable and draws them red. Two parallel sets
+ * would have let a caller light the same element both ways at once, which means nothing.
+ *
+ * Fading everything else was the first idea for `focus` and it reads backwards: the eye
+ * follows the change, and the change would be on the parts one is NOT pointing at.
+ */
+export type CanvasHighlight = {
+  elements: ReadonlySet<ID>;
+  kind: "focus" | "fault";
+};
+
+/** Nothing pointed at. Shared, so a quiet frame keeps a stable identity. */
+export const NO_HIGHLIGHT: CanvasHighlight = {
+  elements: new Set<ID>(),
+  kind: "focus",
+};
+
+/** What one frame of the mechanical canvas shows. Everything past the mechanism is optional. */
+export type CanvasDrawing = {
+  viewport: ViewportState;
+  hoveredPart: HoveredPart;
+  state: CanvasState;
+  mechanicalElements: MechanicalElement[];
+  constraintElements: ConstraintElement[];
+  loads?: LoadElement[];
+  /** Dimensions to draw, by id, each with the opacity its reveal has reached. */
+  visibleConstraints?: Map<ID, number>;
+  /** Among those, the ones an undo is about to bring back. */
+  ghostConstraintIDs?: Set<ID>;
+  /** Whether the cursor is over the canvas: what a tool previews follows it, so
+   *  it is not drawn for a hover designated from a panel. */
+  cursorOnCanvas?: boolean;
+  hideConstraints?: boolean;
+  hideLoads?: boolean;
+  hideProbes?: boolean;
+  /** The dimension the gesture is placing or dragging has its stand-off on a rung. Its own
+   *  ladder is invisible, so the dimension goes into relief to say so. */
+  dimensionSnapped?: boolean;
+  highlight?: CanvasHighlight;
+};
+
 /*
  * Dessine tous les éléments du canvas.
  */
 export function draw_mechanical_canvas(
   ctx: CanvasRenderingContext2D,
-  viewport: ViewportState,
-  hoveredPart: HoveredPart,
-  state: CanvasState,
-  mechanicalElements: MechanicalElement[],
-  constraintElements: ConstraintElement[],
-  loads: LoadElement[] = [],
-  visibleConstraints: Map<ID, number> = new Map(),
-  ghostConstraintIDs: Set<ID> = new Set(),
-  isPreview: boolean,
+  drawing: CanvasDrawing,
 ) {
-  const allElements: UnionElement[] = isPreview
-    ? (mechanicalElements as UnionElement[]).concat(loads)
-    : (mechanicalElements as UnionElement[])
-        .concat(constraintElements)
-        .concat(loads);
+  const {
+    viewport,
+    hoveredPart,
+    state,
+    mechanicalElements,
+    constraintElements,
+    loads = [],
+    visibleConstraints = new Map(),
+    ghostConstraintIDs = new Set(),
+    cursorOnCanvas = false,
+    hideConstraints = false,
+    hideLoads = false,
+    hideProbes = false,
+    dimensionSnapped = false,
+    highlight = NO_HIGHLIGHT,
+  } = drawing;
+  const focused = highlight.kind === "focus" ? highlight.elements : EMPTY_IDS;
+  const faulty = highlight.kind === "fault" ? highlight.elements : EMPTY_IDS;
+
+  let allElements: UnionElement[] = mechanicalElements as UnionElement[];
+  if (!hideConstraints) allElements = allElements.concat(constraintElements);
+  if (!hideLoads) allElements = allElements.concat(loads);
   const undrawable = undrawable_elements(allElements, mechanicalElements);
   const terminalNodeID = hovered_terminal_node(
     hoveredPart,
@@ -601,8 +691,12 @@ export function draw_mechanical_canvas(
     hoveredPart,
     state,
     mechanicalElements,
+    loads,
     viewport,
   );
+  const crossedNodeIDs = cursorOnCanvas
+    ? crossed_node_ids(hoveredPart, state, mechanicalElements, viewport)
+    : EMPTY_IDS;
 
   // The element whose metric popover is open, so its badge stays lit up while
   // the cursor is away in the popover. The element itself reads as selected —
@@ -621,6 +715,17 @@ export function draw_mechanical_canvas(
           loads,
         )
       : EMPTY_IDS;
+
+  // The dimensions the aimed placement would replace: the preview draws their
+  // replacement, so they step aside instead of doubling it.
+  const replaced = hideConstraints
+    ? EMPTY_IDS
+    : replaced_constraint_ids(
+        state,
+        hoveredPart,
+        mechanicalElements,
+        constraintElements,
+      );
 
   for (const element of allElements.filter(
     (element) => element.type === "join",
@@ -650,13 +755,17 @@ export function draw_mechanical_canvas(
     draw_motor(
       ctx,
       world2screen(element.position, viewport),
-      element.motor.parentBeamID === undefined,
+      element.isGrounded,
       element.motor.speed >= 0,
     );
   }
 
+  // Read once for the whole frame: the drawing and the hover share this map, so
+  // the stroke and the cursor cannot disagree on where an edge is.
+  const parallelOffsets = parallel_edge_offsets(mechanicalElements);
+
   DRAWING_ORDER.forEach((type) => {
-    if (type === "probe" && !isPreview) {
+    if (type === "probe" && !hideProbes) {
       // globalAlpha may still hold the last constraint's fade-out opacity here.
       ctx.globalAlpha = 1;
       ctx.shadowBlur = 0;
@@ -678,7 +787,7 @@ export function draw_mechanical_canvas(
     }
     const elements = allElements.filter((element) => element.type === type);
     for (const element of elements) {
-      if (undrawable.has(element.id)) continue;
+      if (undrawable.has(element.id) || replaced.has(element.id)) continue;
       // Skip constraints hidden by the current context (mode / tab / hover).
       const constraintOpacity = is_constraint_type(element.type)
         ? visibleConstraints.get(element.id)
@@ -689,7 +798,7 @@ export function draw_mechanical_canvas(
         element.type === "force" ||
         element.type === "moment" ||
         element.type === "distributed-force";
-      const isSelected = is_selected(element.id, state, constraintElements);
+      const isSelected = is_selected(element.id, state);
       const isEraseHovered = is_erase_hovered(
         element.id,
         hoveredPart,
@@ -705,9 +814,15 @@ export function draw_mechanical_canvas(
           : undefined;
       const isEdgeEndHovered = handleTerminal !== undefined;
       const isHovered =
+        focused.has(element.id) ||
+        faulty.has(element.id) ||
         is_hovered(element.id, hoveredPart, constraintElements) ||
         element.id === terminalNodeID ||
-        element.id === frameEdgeID;
+        element.id === frameEdgeID ||
+        crossedNodeIDs.has(element.id) ||
+        (dimensionSnapped &&
+          state.type === "MovingConstraint" &&
+          state.elementID === element.id);
 
       ctx.shadowBlur = 0;
       ctx.globalAlpha = 1;
@@ -743,6 +858,11 @@ export function draw_mechanical_canvas(
         if (!isLoadElement) ctx.strokeStyle = COLORS.DELETION_STROKE;
         ctx.globalAlpha = INTERACTION_SPECS.DELETION_OPACITY;
       }
+      // A joint the redundancy audit found dispensable. The eraser's red, because it reads
+      // as a warning in every theme — but at full opacity, since this is something to look
+      // at, not something on its way out.
+      if (faulty.has(element.id) && !isLoadElement)
+        ctx.strokeStyle = COLORS.DELETION_STROKE;
       // Fade out revealed constraints at the end of their hover cooldown.
       if (constraintOpacity !== undefined) ctx.globalAlpha *= constraintOpacity;
       // Tombstone of a just-deleted constraint (undo/redo feedback).
@@ -789,19 +909,26 @@ export function draw_mechanical_canvas(
               break;
             }
             case "pivot": {
+              const arrowHovered =
+                hoveredPart.type === "MotorArrow" &&
+                hoveredPart.id === element.id;
+              // A motor rides under the bars, drawn before them. Standing out means
+              // coming up over them, and only then are the bars faked back on top.
               if (
                 element.motor &&
-                (isHovered || isSelected || isEraseHovered)
+                (isHovered || isSelected || isEraseHovered || arrowHovered)
               ) {
                 draw_motor(
                   ctx,
                   world2screen(element.position, viewport),
                   element.isGrounded,
                   element.motor.speed >= 0,
+                  arrowHovered,
                 );
 
-                const rotatingEdges = [...element.rotatingEdgesIDs];
-                rotatingEdges.filter(
+                // The bar the stator pushes against passes under the body: that is
+                // what tells it apart from the ones the motor turns.
+                const rotatingEdges = element.rotatingEdgesIDs.filter(
                   (el) => el !== element.motor!.parentBeamID,
                 );
                 rotatingEdges.reverse().forEach((edgeID) => {
@@ -893,8 +1020,14 @@ export function draw_mechanical_canvas(
         case "beam":
         case "spring":
         case "damper": {
-          const start = world2screen(element.positionStart, viewport);
-          const end = world2screen(element.positionEnd, viewport);
+          const nodeStart = world2screen(element.positionStart, viewport);
+          const nodeEnd = world2screen(element.positionEnd, viewport);
+          const offset = parallelOffsets.get(element.id) ?? 0;
+          const { start, end } = offset_ends(nodeStart, nodeEnd, offset);
+          if (offset) {
+            draw_parallel_leg_bottom(ctx, nodeStart, start);
+            draw_parallel_leg_bottom(ctx, nodeEnd, end);
+          }
           switch (element.type) {
             case "beam":
               draw_beam(
@@ -912,8 +1045,16 @@ export function draw_mechanical_canvas(
               draw_damper(ctx, start, end, element.restLength, viewport.scale);
               break;
           }
+          if (offset) {
+            draw_parallel_leg_top(ctx, nodeStart, start);
+            draw_parallel_leg_top(ctx, nodeEnd, end);
+          }
           if (handleTerminal) {
-            draw_hover_circle(ctx, handleTerminal === "end" ? end : start);
+            // The handle belongs to the terminal, which stays on its node.
+            draw_hover_circle(
+              ctx,
+              handleTerminal === "end" ? nodeEnd : nodeStart,
+            );
           }
           break;
         }
@@ -1442,6 +1583,11 @@ export function draw_mechanical_canvas(
     }
   });
 
+  // What a tool draws for itself is aimed with the cursor, so none of it is
+  // drawn while the cursor is away from the canvas: the hover then comes from a
+  // panel card, which designates an element without pointing anywhere.
+  if (!cursorOnCanvas) return;
+
   // Draw  state specific elements
   const isPlacingLoadElement =
     state.type === "PlacingForceStart" ||
@@ -1458,7 +1604,10 @@ export function draw_mechanical_canvas(
     ? COLORS.ACCENT
     : COLORS.ELEMENT_STROKE;
   ctx.fillStyle = isPlacingLoadElement ? COLORS.ACCENT : COLORS.FILL_BODY;
-  ctx.lineWidth = STROKE_WIDTHS.STANDARD;
+  // A dimension being placed says its stand-off has landed the only way it can:
+  // by thickening, exactly as a placed one does when the drag holds it.
+  ctx.lineWidth =
+    STROKE_WIDTHS.STANDARD + (dimensionSnapped ? STROKE_WIDTHS.HOVER_GAIN : 0);
   let delta: ScreenPoint;
   switch (state.type) {
     case "SelectingMultiple":

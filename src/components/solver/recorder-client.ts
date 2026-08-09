@@ -1,7 +1,7 @@
 import { Mechanism } from "../../types";
 import { KinematicSnapshot, SnapshotLayout } from "../../types/runtime-state";
 import { serialize_mechanism } from "../../utils/serialization";
-import { SimGrab } from "./kinematic-simulation";
+import { MAX_RECORDING_TIME, SimGrab } from "./kinematic-simulation";
 import { FromRecorder, ToRecorder } from "./recorder-protocol";
 import { snapshot_layout } from "./snapshot";
 
@@ -25,6 +25,8 @@ export class RecorderClient {
    * snapshots of one recording the single shared layout `snapshot_at` compares by identity.
    */
   private layout: SnapshotLayout | null = null;
+  /** How long the loaded mechanism records, from the worker that sized it. */
+  private limit = MAX_RECORDING_TIME;
 
   constructor() {
     this.worker = new Worker(
@@ -37,6 +39,7 @@ export class RecorderClient {
       if (message.epoch !== this.epoch) return;
       if (message.type === "layout") {
         this.layout = snapshot_layout(message.keys, message.angleKeys);
+        this.limit = message.maxTime;
         return;
       }
       // Messages are delivered in order and the layout is posted on load, so it is here
@@ -79,6 +82,11 @@ export class RecorderClient {
       resumeFrom,
       epoch: this.epoch,
     });
+  }
+
+  /** The longest the loaded mechanism records, in simulated seconds. */
+  maxTime(): number {
+    return this.limit;
   }
 
   setGrab(grab: SimGrab | null): void {

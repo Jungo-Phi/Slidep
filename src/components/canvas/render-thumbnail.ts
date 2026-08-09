@@ -56,18 +56,17 @@ export const draw_thumbnail = (
   ctx.lineTo(size, viewport.pan.y);
   ctx.stroke();
 
-  draw_mechanical_canvas(
-    ctx,
+  draw_mechanical_canvas(ctx, {
     viewport,
-    HOVERED_PART,
-    CANVAS_STATE,
-    mechanism.mechanicalElements,
-    mechanism.constraintElements,
-    mechanism.loads,
+    hoveredPart: HOVERED_PART,
+    state: CANVAS_STATE,
+    mechanicalElements: mechanism.mechanicalElements,
+    constraintElements: mechanism.constraintElements,
+    loads: mechanism.loads,
     visibleConstraints,
-    new Set(),
-    true,
-  );
+    hideConstraints: true,
+    hideProbes: true,
+  });
 };
 
 /** Zoom et pan cadrant le contenu dessiné dans un carré de `size` px. */

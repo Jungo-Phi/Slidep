@@ -73,23 +73,24 @@ Les états « …End » et `PlacingDistributedForce` ne visent **rien** volontai
 un vecteur, pas une cible, et c'est `snap_load_hover` qui aimante la direction et la longueur sur le
 survol `Void`. Même raison pour `MovingForce` / `MovingDistributedForce` / `MovingMoment` plus bas.
 
-**L'edge de référence est mis en évidence à `PlacingForceEnd` et `PlacingDistributedForce`.** Une
-charge aimantée sur l'axe (ou la normale) d'un edge devient solidaire de lui — elle tournera avec.
-Rien dans le geste ne le dirait : c'est une direction, pas une cible. L'edge que
-`frame_from_snapped_direction` a retenu est donc épaissi comme un survol ordinaire, le temps du
-placement. Une force ponctuelle peut viser n'importe quel edge connecté ; une répartie n'a que sa
-propre barre comme référence possible.
+**L'edge de référence est mis en évidence.** Une charge aimantée sur l'axe (ou la normale) d'un edge
+devient solidaire de lui — elle tournera avec. Rien dans le geste ne le dirait : c'est une direction,
+pas une cible. L'edge que `snap_direction` a retenu est donc épaissi comme un survol ordinaire —
+pendant le placement, et ensuite dès que la charge est survolée ou sélectionnée, le repère se posant
+à la création et ne changeant plus qu'au panneau latéral. Une force ponctuelle peut viser n'importe
+quel edge connecté ; une répartie n'a que sa propre barre comme référence possible.
 
 Un edge l'emporte sur les axes du monde quand les deux conviennent : une force tirée le long d'une
 barre verticale suit cette barre, elle ne reste pas verticale. C'est ce que le surlignage rend
 lisible — sans lui, deux gestes identiques au pixel près donneraient deux charges différentes.
 
-**Un edge quasi aligné sur un axe du monde ne propose pas de cible propre.** `snap_candidate_angles`
-écarte tout candidat à moins de `SNAP_MATCH_RAD` d'un candidat déjà retenu, et les axes du monde
-sont listés en premier. Sans cette déduplication, une barre à un demi-degré de la verticale offrait
-deux cibles séparées d'autant, entre lesquelles la direction basculait d'un pixel à l'autre. La
-priorité à l'edge continue de s'appliquer : la barre reste le frame retenu, elle n'a simplement plus
-d'angle à elle.
+**Une barre quasi alignée sur un axe du monde garde sa propre cible, et c'est elle qui gagne.**
+`snap_candidates` liste les edges avant les axes du monde, et la sélection ne déloge un candidat
+retenu que si le suivant fait mieux de plus de `SNAP_SEPARATION` px. Deux rayons à un demi-degré l'un
+de l'autre sont donc le même but, que l'ordre départage — sans quoi la direction basculerait de l'un
+à l'autre d'un pixel au suivant. Conséquence recherchée : sur une barre à 89,5°, une charge visée sur
+sa normale est stockée à exactement un quart de tour d'elle, et non aimantée sur la verticale du
+monde puis reconnue « presque » perpendiculaire.
 
 ## Déplacement
 
@@ -151,6 +152,12 @@ charges — une force n'est pas une chose que l'outil de cotation manipule.
 - **a — `beamBodyHover`.** En plus du centre du nœud, la barre tirée _au-delà_ de lui l'attrape :
   le nœud finit sur son corps et non à sa pointe. Position renvoyée = la projection du curseur sur
   l'axe. Trois états seulement : `PlacingBeamEnd`, `MovingEdgeStartPoint`, `MovingEdgeEndPoint`.
+
+  **C'est le survol de dernier recours.** Il ne demande au nœud que d'être quelque part le long de la
+  ligne, donc toute une rangée de nœuds alignés y répond d'un coup — et sans précaution, le premier
+  balayé l'emporterait sur celui que le curseur touche vraiment. Il est donc mis de côté jusqu'à la
+  fin du balayage : n'importe quelle cible **sous le curseur** passe devant, et entre plusieurs
+  « au-delà », c'est le nœud le plus proche du curseur qui gagne.
 - **b — `PlacingGearRadius` sur engrenage.** Point de contact sur la jante, dans la direction du
   centre en cours de pose (`startHover`), pas du curseur : c'est le point de tangence des deux
   dentures.
@@ -196,6 +203,12 @@ ci-dessus peuvent réellement produire.
 
 Une courroie fait exception au minimum de longueur **dès qu'elle porte une poulie** : ses deux bouts
 doivent pouvoir se rejoindre, c'est la fermeture de la boucle.
+
+Tous ces minima sont des distances **écran**, converties par le viewport : ce qu'ils protègent est la
+capacité à voir et à attraper ce qu'on dessine, qui se compte en pixels. Zoomé, une barre de dix
+unités monde devient une chose qu'on a le droit de tracer ; dézoomé, une de mille est la plus courte
+qu'on puisse encore viser. Le solveur, lui, n'a **aucune** taille minimale — seulement une garde
+numérique contre le rayon nul.
 
 Ces bornes sont une aide au survol, pas un invariant : la tolérance de clic et l'aimantation à la
 grille passent après et peuvent ramener le point de quelques pixels vers l'intérieur.

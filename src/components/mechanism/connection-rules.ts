@@ -12,6 +12,7 @@ import {
   belt_placing_pulleys,
   MIN_PULLEYS_TO_CLOSE,
 } from "../../utils/belt-rules";
+import type { StringKey } from "../../i18n";
 
 const NODE_TYPES: readonly string[] = [
   "pivot",
@@ -51,17 +52,32 @@ function is_node_type(type: string): type is NodeType {
  * mass ends up landing on the edge under it.
  */
 export type Legality =
-  { allowed: true } | { allowed: false; reason: string; blocks: boolean };
+  | { allowed: true }
+  | {
+      allowed: false;
+      /** Named, not written out: the rules stay free of the language they are read in. */
+      reason: StringKey;
+      vars?: Record<string, string | number>;
+      blocks: boolean;
+    };
 
 const ALLOWED: Legality = { allowed: true };
-const refuse = (reason: string): Legality => ({
+const refuse = (
+  reason: StringKey,
+  vars?: Record<string, string | number>,
+): Legality => ({
   allowed: false,
   reason,
+  vars,
   blocks: false,
 });
-const block = (reason: string): Legality => ({
+const block = (
+  reason: StringKey,
+  vars?: Record<string, string | number>,
+): Legality => ({
   allowed: false,
   reason,
+  vars,
   blocks: true,
 });
 
@@ -95,9 +111,7 @@ function takeover_refusal(
     incomingType === "slidep" ||
     (incomingType === "slider" && candidate.type === "pivot");
   if (canCarry) return undefined;
-  return block(
-    `Cet axe porte des engrenages qu'un ${incomingType} ne peut pas reprendre`,
-  );
+  return block("rule_takeover_gears", { type: incomingType });
 }
 
 /**
@@ -115,18 +129,20 @@ function incoming_node_type(
   return is_node_type(draggedElement.type) ? draggedElement.type : undefined;
 }
 
-const SAME_ENDPOINTS = "Les deux extrémités seraient au même endroit";
-const SAME_AXLE_GEARS = "Deux engrenages du même axe ne peuvent pas s'engrener";
-const BODY_CANNOT_ATTACH = "Seul le corps d'une barre peut porter un élément";
-const TWO_DIFFERENT = "Une contrainte relie deux éléments différents";
+export const SAME_ENDPOINTS: StringKey = "rule_same_endpoints";
+const SAME_AXLE_GEARS: StringKey = "rule_same_axle_gears";
+const BODY_CANNOT_ATTACH: StringKey = "rule_body_cannot_attach";
+const TWO_DIFFERENT: StringKey = "rule_two_different";
 
-export const BELT_CANNOT_CLOSE = `Une courroie doit passer par ${MIN_PULLEYS_TO_CLOSE} poulies pour se refermer`;
+export const MOTOR_NEEDS_SUPPORT: StringKey = "rule_motor_needs_support";
 
-export const BELT_GEARS_SAME_AXLE =
-  "Un engrenage de cet axe porte déjà cette courroie";
+export const BELT_CANNOT_CLOSE: StringKey = "rule_belt_cannot_close";
+/** `rule_belt_cannot_close` names a count the rule itself fixes. */
+export const BELT_CANNOT_CLOSE_VARS = { count: MIN_PULLEYS_TO_CLOSE };
 
-export const BELTS_CANNOT_JOIN =
-  "Une courroie ne peut pas en rejoindre une autre";
+export const BELT_GEARS_SAME_AXLE: StringKey = "rule_belt_gears_same_axle";
+
+export const BELTS_CANNOT_JOIN: StringKey = "rule_belts_cannot_join";
 
 /** The belts holding a terminal on `id`. */
 function belts_pinned_to(
@@ -197,17 +213,29 @@ function belts_targeted(
 export { belt_can_close, belt_placing_pulleys };
 
 /**
- * Whether the gesture started on `candidate`, so both ends of the edge being
- * placed would land on it. A gear rim is not concerned: two ends pinned to the
- * same wheel sit at two different points of it.
+ * Whether the end being placed would land on the very point the gesture started
+ * from, making an edge of no length.
+ *
+ * Landing on the same element is not enough. A node is one point, so meeting it
+ * twice is conclusive; an edge offers two ends and a whole body, and a gear a
+ * whole rim, where a second landing is a legitimate edge. Only the same terminal
+ * aimed at twice is the same point.
+ *
+ * Callers outside a hover pass name no part, and get the verdict that holds
+ * whatever it is.
  */
-function gesture_started_on(
+function lands_on_start(
   startHover: HoveredPart,
   candidate: UnionElement,
+  part: HoveredPart | undefined,
 ): boolean {
+  if (startHover.type !== "Node" && startHover.type !== "Edge") return false;
+  if (startHover.id !== candidate.id) return false;
+  if (startHover.type === "Node") return true;
   return (
-    (startHover.type === "Node" || startHover.type === "Edge") &&
-    startHover.id === candidate.id
+    startHover.part !== "body" &&
+    part?.type === "Edge" &&
+    part.part === startHover.part
   );
 }
 
@@ -284,7 +312,7 @@ export function legality_for_state(
     // Re-linking a pair changes nothing, and offering it would let a useless
     // target sit in front of a useful one.
     if (alreadyLinked.has(candidate.id))
-      return refuse("Ces éléments sont déjà connectés");
+      return refuse("rule_already_connected");
 
     const takeover = takeover_refusal(
       incoming_node_type(state, draggedElement),
@@ -306,7 +334,18 @@ export function legality_for_state(
     switch (state.type) {
       case "PlacingGround":
         if (candidate.type === "mass")
-          return block("Une masse ne peut pas être ancrée au sol");
+          return block("rule_mass_cannot_ground");
+        // The tool toggles, so on an anchored motor it means *un*-anchoring —
+        // and a motor pushes against the ground or against a beam, never
+        // against nothing. Opaque: what lies under it is not a fallback, it
+        // would simply be anchored in its place.
+        if (
+          candidate.type === "pivot" &&
+          candidate.motor &&
+          candidate.isGrounded &&
+          candidate.motor.parentBeamID === undefined
+        )
+          return block(MOTOR_NEEDS_SUPPORT);
         break;
 
       case "PlacingGearRadius":
@@ -316,9 +355,7 @@ export function legality_for_state(
           state.startHover.type === "Node" &&
           state.startHover.id === candidate.parentAxleID
         )
-          return refuse(
-            "Un engrenage ne peut pas engrener avec son propre axe",
-          );
+          return refuse("rule_gear_own_axle");
         break;
 
       // The pendant of the `PlacingGearRadius` rule, for a gear already on its
@@ -353,9 +390,7 @@ export function legality_for_state(
             );
           });
           if (pinned)
-            return block(
-              "Ce nœud est fixé au périmètre d'un engrenage de cet axe",
-            );
+            return block("rule_node_pinned_to_gear");
         }
 
         // Moving an axle onto another would mesh two gears sharing an axle.
@@ -369,9 +404,7 @@ export function legality_for_state(
           );
         });
         if (meshes)
-          return refuse(
-            "Ces axes portent des engrenages déjà engrenés entre eux",
-          );
+          return refuse("rule_axles_already_meshed");
         break;
       }
 
@@ -390,7 +423,7 @@ export function legality_for_state(
               )
             : [];
         if (staying.some(({ id }) => id === candidate.id))
-          return refuse("Cet engrenage est déjà sur cette courroie");
+          return refuse("rule_gear_already_on_belt");
         if (
           shares_axle_with_belt(
             candidate,
@@ -403,7 +436,7 @@ export function legality_for_state(
 
       case "PlacingBeltEnd":
         if (state.attachedGearsIDs.some(({ id }) => id === candidate.id))
-          return refuse("Cet engrenage est déjà sur cette courroie");
+          return refuse("rule_gear_already_on_belt");
         if (
           shares_axle_with_belt(
             candidate,
@@ -416,7 +449,7 @@ export function legality_for_state(
       case "PlacingBeamEnd":
       case "PlacingSpringEnd":
       case "PlacingDamperEnd":
-        if (gesture_started_on(state.startHover, candidate))
+        if (lands_on_start(state.startHover, candidate, part))
           return refuse(SAME_ENDPOINTS);
         break;
 
@@ -457,7 +490,7 @@ export function legality_for_state(
           state.type === "MovingEdgeEndPoint") &&
           dragging_belt))
     )
-      return refuse("Une courroie ne se connecte pas à une autre courroie");
+      return refuse("rule_belt_to_belt");
 
     return ALLOWED;
   };

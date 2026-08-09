@@ -56,28 +56,58 @@ export function is_retained(t: number): boolean {
   return Math.round(t / RECORD_DT) % RETAIN_EVERY === 0;
 }
 
-/**
- * How long a recording may run, in simulated seconds.
- *
- * Sized on memory, and on the worst mechanism rather than the usual one: five minutes at
- * `RETAIN_DT` is 18 000 instants, which cost 30 Mo on `Core XY - 2 moteurs` (55 nodes,
- * 1.67 ko an instant) but ~160 Mo on a mechanism ten times its size — and a tab stays
- * comfortable there, with the canvas and the undo history alongside.
- *
- * It is the same five minutes whatever is being simulated, which is what makes it
- * explainable; the memory it costs is not, which is why the worst case sets it.
- */
-export const MAX_RECORDING_TIME = 300;
+/** Longest a recording may run, in simulated seconds — no mechanism goes past it, however
+ *  cheap its instants are. */
+export const MAX_RECORDING_TIME = 600;
 
 /**
- * Whether a recording that has got to `t` has run its full length.
+ * Memory one recording may hold, in bytes.
+ *
+ * What actually bounds a session: an instant costs 1.67 ko on `Core XY - 2 moteurs`
+ * (55 nodes) and ten times that on a mechanism ten times its size, so a duration fixed for
+ * everyone is either short for the small ones or fatal for the big ones. The budget is what
+ * a tab keeps comfortably alongside the canvas and the undo history.
+ */
+const RECORDING_MEMORY_BUDGET = 200 * 1024 * 1024;
+
+/** What an instant costs beyond its numbers: two typed arrays with their buffers, the
+ *  snapshot object, and its slot in the recording. Around 15 % on a small mechanism. */
+const SNAPSHOT_OVERHEAD_BYTES = 256;
+
+/** Bytes one retained instant of this layout costs. */
+function snapshot_bytes(layout: SnapshotLayout): number {
+  return (
+    8 * (2 * layout.keys.length + angles_length(layout)) +
+    SNAPSHOT_OVERHEAD_BYTES
+  );
+}
+
+/**
+ * How long a recording of this layout may run, in simulated seconds: whatever the memory
+ * budget buys, capped at `MAX_RECORDING_TIME`.
+ *
+ * Whole minutes, because it is a number the user is told; and never under one, because a
+ * mechanism heavy enough to exhaust the budget in seconds is still worth simulating — that
+ * floor is the one case where the budget is knowingly overrun.
+ */
+export function max_recording_time(layout: SnapshotLayout): number {
+  const affordable =
+    (RECORDING_MEMORY_BUDGET / snapshot_bytes(layout)) * RETAIN_DT;
+  return Math.max(
+    60,
+    Math.min(MAX_RECORDING_TIME, Math.floor(affordable / 60) * 60),
+  );
+}
+
+/**
+ * Whether a recording that has got to `t` has run its full length, `maxTime`.
  *
  * Half a step of tolerance, and it is not decorative: a recorded instant is a running sum of
- * `RECORD_DT`, so the thirty-six-thousandth lands 1e-10 SHORT of the round number it stands
- * for. Compared with a bare `>=`, the end of the recording is never reached.
+ * `RECORD_DT`, so the last one lands short of the round number it stands for. Compared with
+ * a bare `>=`, the end of the recording is never reached.
  */
-export function recording_full(t: number): boolean {
-  return t >= MAX_RECORDING_TIME - RECORD_DT / 2;
+export function recording_full(t: number, maxTime: number): boolean {
+  return t >= maxTime - RECORD_DT / 2;
 }
 
 /**

@@ -22,6 +22,7 @@ import {
 import { belt_junction_id } from "../../../utils/belt-rules";
 import { HoveredPart } from "../../../types/hovered-part";
 import ElementDisplay from "./ElementDisplay";
+import { t } from "../../../i18n";
 
 interface ConnectionProps {
   element: MechanicalElement;
@@ -170,7 +171,7 @@ const Connection: React.FC<ConnectionProps> = ({
                 ml: -0.5,
               }}
               onClick={handleSwitchMeshedGearDirection}
-              title="Inverser la direction"
+              title={t("connection_flip")}
               size="small"
             >
               <DirectionIcon
@@ -189,7 +190,9 @@ const Connection: React.FC<ConnectionProps> = ({
               }}
               color="error"
               onClick={handleDisconnect}
-              title={opensBelt ? "Ouvrir la courroie" : "Déconnecter"}
+              title={t(
+                opensBelt ? "connection_open_belt" : "connection_disconnect",
+              )}
               size="small"
             >
               <LinkOffIcon sx={{ mx: -0.1, my: -0.4 }} fontSize="small" />

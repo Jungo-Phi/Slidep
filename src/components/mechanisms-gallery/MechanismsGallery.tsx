@@ -26,6 +26,7 @@ import {
   Settings,
 } from "@mui/icons-material";
 import { SerializedMechanism } from "../../types";
+import { t, tn } from "../../i18n";
 import { format_date } from "../../utils";
 import MechanismThumbnail from "./MechanismThumbnail";
 
@@ -80,7 +81,7 @@ export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
         }}
       >
         <Typography fontSize={"large"} fontWeight={500} sx={{ flexShrink: 0 }}>
-          Mes mécanismes
+          {t("gallery_title")}
         </Typography>
 
         <Box
@@ -95,8 +96,7 @@ export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
         >
           <InfoOutlined sx={{ fontSize: 15, flexShrink: 0 }} />
           <Typography variant="caption">
-            Vos mécanismes sont enregistrés dans ce navigateur : vider ses
-            données les efface. Exportez-les pour les conserver.
+            {t("gallery_storage_notice")}
           </Typography>
         </Box>
         {/* L'import et l'export global portent sur toute la bibliothèque ;
@@ -109,10 +109,7 @@ export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
             flexShrink: 0,
           }}
         >
-          <Tooltip
-            disableInteractive
-            title="Ouvrir un .slidep ou une archive .zip"
-          >
+          <Tooltip disableInteractive title={t("gallery_import_tooltip")}>
             <Button
               size="small"
               color="inherit"
@@ -120,16 +117,16 @@ export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
               onClick={onImport}
               sx={{ textTransform: "none", fontSize: "0.8rem" }}
             >
-              Importer
+              {t("gallery_import")}
             </Button>
           </Tooltip>
           <Tooltip
             disableInteractive
-            title={
+            title={t(
               mechanismRecords.length === 0
-                ? "Aucun mécanisme à exporter"
-                : "Tout exporter dans une archive .zip"
-            }
+                ? "gallery_export_all_empty"
+                : "gallery_export_all_tooltip",
+            )}
           >
             <span>
               <Button
@@ -140,7 +137,7 @@ export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
                 onClick={onExportAll}
                 sx={{ textTransform: "none", fontSize: "0.8rem" }}
               >
-                Tout exporter
+                {t("gallery_export_all")}
               </Button>
             </span>
           </Tooltip>
@@ -179,7 +176,7 @@ export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
                 sx={{ fontSize: 48, color: "text.secondary", mb: 1 }}
               />
               <Typography variant="h6" color="text.secondary">
-                Nouveau mécanisme
+                {t("gallery_new")}
               </Typography>
             </Card>
           </Grid>
@@ -215,6 +212,9 @@ export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
                       },
                       border: "2px solid",
                       borderColor: "divider",
+                      // Inside, the card is the app's own ground: preview and
+                      // content both sit on it, and so do the rules between them.
+                      "& .MuiDivider-root": { borderColor: "dividers.ground" },
                     }}
                   >
                     {/* Miniature, redessinée au thème courant */}
@@ -237,13 +237,18 @@ export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
                           noWrap
                           gutterBottom
                           fontWeight="600"
+                          color={
+                            mechanismRecord.metadata.name
+                              ? "text.primary"
+                              : "text.disabled"
+                          }
                         >
-                          {mechanismRecord.metadata.name || "Sans titre"}
+                          {mechanismRecord.metadata.name || t("untitled")}
                         </Typography>
                         {/* Actions par mécanisme. `stopPropagation` : la carte
                             entière charge le mécanisme au clic. */}
                         <Box sx={{ display: "flex", flexShrink: 0, ml: 0.5 }}>
-                          <Tooltip disableInteractive title="Exporter">
+                          <Tooltip disableInteractive title={t("gallery_export")}>
                             <IconButton
                               size="small"
                               color="inherit"
@@ -255,7 +260,7 @@ export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
                               <Download fontSize="small" />
                             </IconButton>
                           </Tooltip>
-                          <Tooltip disableInteractive title="Supprimer">
+                          <Tooltip disableInteractive title={t("action_delete")}>
                             <IconButton
                               size="small"
                               color="error"
@@ -308,7 +313,7 @@ export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
                         >
                           <Settings fontSize="small" sx={{ fontSize: 14 }} />
                           <Typography variant="caption" fontWeight="600">
-                            {elementCount} {"pièces"}
+                            {tn("gallery_parts", elementCount)}
                           </Typography>
                         </Box>
                       </Box>

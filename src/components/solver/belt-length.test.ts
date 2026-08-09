@@ -860,7 +860,10 @@ describe("BeltLength resizes pulleys in edition (radii as DOFs)", () => {
     expect(radii.get("gA")! + radii.get("gB")!).toBeCloseTo(220 / Math.PI, 1);
   });
 
-  it("never drives a radius below MIN_GEAR_RADIUS", () => {
+  // A belt too short for its pulleys shrinks them as far as it can. There is no
+  // minimum size to stop at — that is a matter of pixels, not of model — but a
+  // radius must stay strictly positive: the arc lengths divide by it.
+  it("garde un rayon strictement positif sur une courroie impossible", () => {
     const positions = centres();
     const [radii, radMasses] = freeRadii();
     const link = makeLink(400); // impossibly short: would need zero-radius pulleys
@@ -874,8 +877,10 @@ describe("BeltLength resizes pulleys in edition (radii as DOFs)", () => {
         radii,
         radMasses,
       );
-    expect(radii.get("gA")!).toBeGreaterThanOrEqual(30);
-    expect(radii.get("gB")!).toBeGreaterThanOrEqual(30);
+    expect(radii.get("gA")!).toBeGreaterThan(0);
+    expect(radii.get("gB")!).toBeGreaterThan(0);
+    expect(Number.isFinite(radii.get("gA")!)).toBe(true);
+    expect(Number.isFinite(radii.get("gB")!)).toBe(true);
   });
 
   it("leaves radii untouched without radKeys (simulation)", () => {

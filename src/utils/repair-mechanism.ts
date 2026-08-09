@@ -5,15 +5,17 @@
  * while the app holds it is a bug the guards must surface, not something to
  * launder on save.
  *
- * Scope is deliberately narrow: references that point at nothing, or at the
- * wrong kind of element. Those are what make a getter throw. Non-reciprocal
- * connections, duplicate IDs and domain contradictions are left to the
- * validator, because repairing them means guessing which side told the truth.
+ * Scope is deliberately narrow: references that point at nothing or at the
+ * wrong kind of element, and coordinates that are not finite numbers. Those are
+ * what make a getter throw or a drawing call crash. Non-reciprocal connections,
+ * duplicate IDs and domain contradictions are left to the validator, because
+ * repairing them means guessing which side told the truth.
  */
 
 import { ID, MechanicalElement, UnionElement } from "../types/element";
 import { AnyRefSpec, element_ref_fields } from "../types/element-refs";
-import { Mechanism } from "../types/mechanism";
+import { Mechanism, ViewportState } from "../types/mechanism";
+import { Point2 } from "../types/point2";
 import { legible_id, shown_element_name } from "./string-math";
 
 export type RepairCode =
@@ -22,12 +24,17 @@ export type RepairCode =
   /** A reference field was cleared, or fell back to its neutral value. */
   | "REFERENCE_CLEARED"
   /** An element was removed: a reference it cannot do without was dead. */
-  | "ELEMENT_REMOVED";
+  | "ELEMENT_REMOVED"
+  /** A point whose coordinates were not finite went back to the origin. */
+  | "POINT_RESET"
+  /** The pan or the scale was unusable, so the framing went back to default. */
+  | "VIEWPORT_RESET";
 
 export interface Repair {
   code: RepairCode;
   message: string;
-  elementID: ID;
+  /** Absent when the repair is about the document rather than one of its elements. */
+  elementID?: ID;
   relatedID?: ID;
 }
 
@@ -70,9 +77,33 @@ export function repair_mechanism(mechanism: Mechanism): {
       return el ? shown_element_name(el) : legible_id(id);
     };
 
+    /**
+     * The element with every non-finite point sent back to the origin.
+     *
+     * Only the element's own top-level fields are looked at, which is the same
+     * reach `revive_points` has when it rebuilds them on load.
+     */
+    const repair_points = <T extends UnionElement>(element: T): T => {
+      let repaired = element;
+
+      for (const [field, value] of Object.entries(element)) {
+        if (!(value instanceof Point2)) continue;
+        if (Number.isFinite(value.x) && Number.isFinite(value.y)) continue;
+
+        repairs.push({
+          code: "POINT_RESET",
+          message: `${shown_element_name(element)} (${field}) : coordonnées invalides, ramenées à l'origine.`,
+          elementID: element.id,
+        });
+        repaired = { ...repaired, [field]: new Point2(0, 0) };
+      }
+
+      return repaired;
+    };
+
     /** The repaired element, or null when it cannot survive its dead reference. */
     const repair_element = <T extends UnionElement>(element: T): T | null => {
-      let repaired = element;
+      let repaired = repair_points(element);
 
       for (const { field, ids, spec } of element_ref_fields(element)) {
         // An absent mandatory reference is as fatal to a getter as a dead one.
@@ -156,8 +187,37 @@ export function repair_mechanism(mechanism: Mechanism): {
       console.error("repair_mechanism : nettoyage non convergent.", repairs);
   }
 
+  const viewport = repair_viewport(current.viewport, repairs);
   if (repairs.length === 0) return { mechanism, repairs };
-  return { mechanism: { ...current, history: [], future: [] }, repairs };
+
+  // The history is worth keeping when only the framing was wrong: undo entries
+  // carry elements, and none of them can put back a broken viewport.
+  const framingOnly = repairs.every((r) => r.code === "VIEWPORT_RESET");
+  return {
+    mechanism: framingOnly
+      ? { ...current, viewport }
+      : { ...current, viewport, history: [], future: [] },
+    repairs,
+  };
+}
+
+/** The viewport, back to its default framing when either half of it is unusable. */
+function repair_viewport(
+  viewport: ViewportState,
+  repairs: Repair[],
+): ViewportState {
+  const usable =
+    Number.isFinite(viewport.pan.x) &&
+    Number.isFinite(viewport.pan.y) &&
+    Number.isFinite(viewport.scale) &&
+    viewport.scale > 0;
+  if (usable) return viewport;
+
+  repairs.push({
+    code: "VIEWPORT_RESET",
+    message: "Cadrage invalide, revenu à la vue par défaut.",
+  });
+  return { scale: 1, pan: new Point2<"screen">(0, 0) };
 }
 
 /** Applies the field's own repair when it declares one, else drops the dead IDs generically. */

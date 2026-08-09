@@ -18,7 +18,12 @@ import {
   ViewportState,
   WorldPoint,
 } from "../../types";
-import { value2ratio, world2screen } from "../../utils";
+import {
+  grid_metrics,
+  value2ratio,
+  world2screen,
+  world2screen_vec,
+} from "../../utils";
 import {
   force_label_position_screen,
   moment_value_label_position,
@@ -29,6 +34,7 @@ import {
   belt_pieces,
   belt_project,
 } from "../../utils/belt-path";
+import type { SnapFeedback } from "./snap-corridor";
 
 const TAU = 2 * Math.PI;
 
@@ -73,92 +79,150 @@ function tinted_icon(
   return tinted;
 }
 
+/**
+ * Opacity of a grid line as the zoom crosses a decade, from its start to its end.
+ *
+ * Two interlocking ladders — powers of ten, and multiples of five — whose steps are chosen so that a line moving up one level at a decade boundary keeps the opacity it had just before.
+ * That is what makes the change of level invisible.
+ */
+const POWER_ALPHAS = [0, 0.1, 0.3, 0.6];
+const FIVE_ALPHAS = [0, 0.25, 0.45];
+
+/** The alpha `COLORS.GRID` stands for: the weight the strongest line reaches. Turn this to make the whole grid heavier or lighter. */
+const ALPHA_FULL = 0.4;
+
+/** Below this a line is not worth a path — it lands on the ground's own pixel value. */
+const ALPHA_INVISIBLE = 1 / 100;
+
 export function draw_grid(
   ctx: CanvasRenderingContext2D,
   viewport: ViewportState,
   width: number,
   height: number,
 ) {
-  const zoom = viewport.scale;
+  const { pitch, local } = grid_metrics(viewport.scale);
   const panX = viewport.pan.x;
   const panY = viewport.pan.y;
+
+  // Line n runs down the screen at x = n·pitch + panX, and across it at y = panY − n·pitch, the world y axis pointing the other way.
+  const xFrom = Math.ceil(-panX / pitch);
+  const xTo = (width - panX) / pitch;
+  const yFrom = Math.ceil((panY - height) / pitch);
+  const yTo = panY / pitch;
 
   ctx.strokeStyle = COLORS.GRID;
   ctx.lineWidth = 1;
 
-  const worldLeft = -panX / zoom;
-  const worldTop = -panY / zoom;
-  const worldRight = (width - panX) / zoom;
-  const worldBottom = (height - panY) / zoom;
+  const between = (from: number, to: number) => from + (to - from) * local;
 
-  const startX = Math.ceil(worldLeft / DIM.GRID_SIZE) * DIM.GRID_SIZE;
-  const startY = Math.ceil(worldTop / DIM.GRID_SIZE) * DIM.GRID_SIZE;
-
-  // Dessin vertical
-  for (let x = startX; x <= worldRight; x += DIM.GRID_SIZE) {
-    const screenX = x * zoom + panX;
+  /**
+   * All the lines of one level, in a single path: the indices multiple of `multiple` but not of `next`, which owns those.
+   *
+   * One path rather than one per line: at the dense end of a decade a level runs to a few hundred lines, and a stroke each would show.
+   */
+  const stroke_level = (multiple: number, next: number, alpha: number) => {
+    if (alpha < ALPHA_INVISIBLE) return;
+    ctx.globalAlpha = alpha / ALPHA_FULL;
     ctx.beginPath();
-    ctx.moveTo(screenX, 0);
-    ctx.lineTo(screenX, height);
+    const xStart = Math.ceil(xFrom / multiple) * multiple;
+    const yStart = Math.ceil(yFrom / multiple) * multiple;
+    for (let n = xStart; n <= xTo; n += multiple) {
+      if (next > 0 && n % next === 0) continue;
+      const x = n * pitch + panX;
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, height);
+    }
+    for (let n = yStart; n <= yTo; n += multiple) {
+      if (next > 0 && n % next === 0) continue;
+      const y = panY - n * pitch;
+      ctx.moveTo(0, y);
+      ctx.lineTo(width, y);
+    }
     ctx.stroke();
+  };
+
+  stroke_level(1, 5, between(POWER_ALPHAS[0], POWER_ALPHAS[1]));
+  stroke_level(5, 10, between(FIVE_ALPHAS[0], FIVE_ALPHAS[1]));
+  stroke_level(10, 50, between(POWER_ALPHAS[1], POWER_ALPHAS[2]));
+  stroke_level(50, 100, between(FIVE_ALPHAS[1], FIVE_ALPHAS[2]));
+  stroke_level(100, 0, between(POWER_ALPHAS[2], POWER_ALPHAS[3]));
+
+  ctx.globalAlpha = 1;
+}
+
+/** How close to the edge an axis that has left the view is held. */
+const AXIS_EDGE_MARGIN = 1;
+
+/**
+ * The world axes, always on screen.
+ *
+ * An axis whose origin has scrolled out of the view is pinned to the edge it left by rather than disappearing: it keeps saying which side the origin lies on, which is what makes it a landmark at any pan.
+ */
+export function draw_axes(
+  ctx: CanvasRenderingContext2D,
+  viewport: ViewportState,
+  width: number,
+  height: number,
+) {
+  // The origin's own screen position: `world2screen` of (0, 0) is the pan.
+  const pin = (origin: number, extent: number) =>
+    Math.min(Math.max(origin, AXIS_EDGE_MARGIN), extent - AXIS_EDGE_MARGIN);
+  const x = pin(viewport.pan.x, width);
+  const y = pin(viewport.pan.y, height);
+
+  ctx.strokeStyle = COLORS.GRID_AXIS;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(x, 0);
+  ctx.lineTo(x, height);
+  ctx.moveTo(0, y);
+  ctx.lineTo(width, y);
+  ctx.stroke();
+}
+
+/** Dash pattern of a construction line: fine enough to read as an aid rather than as something drawn. */
+const GUIDE_DASH = [12, 8];
+
+/**
+ * What a snap took hold of, drawn under the mechanism.
+ *
+ * One colour and one dash throughout, and neither belongs to the grid: a hold is a different statement from « here is the paper », and drawn in a step of the grid ramp it read as one more grid line — vanishing outright where it fell on an axis. The grid line a point landed on is therefore not darkened in place but overdrawn, in the same dashes as the direction holding it, so every indicator reads as one family.
+ *
+ * Lines run the full width rather than stopping at the cursor: what they say is « this line », not « this length », and a segment ending under the point would read as the edge being placed.
+ */
+export function draw_snap_feedback(
+  ctx: CanvasRenderingContext2D,
+  feedback: SnapFeedback,
+  viewport: ViewportState,
+  width: number,
+  height: number,
+) {
+  const reach = width + height;
+  ctx.save();
+  ctx.strokeStyle = COLORS.SNAP;
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash(GUIDE_DASH);
+  ctx.beginPath();
+
+  if (feedback.gridX !== undefined) {
+    const x = world2screen(new Point2(feedback.gridX, 0), viewport).x;
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, height);
+  }
+  if (feedback.gridY !== undefined) {
+    const y = world2screen(new Point2(0, feedback.gridY), viewport).y;
+    ctx.moveTo(0, y);
+    ctx.lineTo(width, y);
+  }
+  for (const { anchor, direction } of feedback.guides) {
+    const origin = world2screen(anchor, viewport);
+    const along = world2screen_vec(direction, viewport).normalize();
+    ctx.moveTo(origin.x - along.x * reach, origin.y - along.y * reach);
+    ctx.lineTo(origin.x + along.x * reach, origin.y + along.y * reach);
   }
 
-  // Dessin horizontal
-  for (let y = startY; y <= worldBottom; y += DIM.GRID_SIZE) {
-    const screenY = y * zoom + panY;
-    ctx.beginPath();
-    ctx.moveTo(0, screenY);
-    ctx.lineTo(width, screenY);
-    ctx.stroke();
-  }
-
-  // --- Lignes majeures ---
-  ctx.strokeStyle = COLORS.GRID_MAJOR;
-
-  const startMajorX = Math.ceil(worldLeft / DIM.GRID_MAJOR) * DIM.GRID_MAJOR;
-  const startMajorY = Math.ceil(worldTop / DIM.GRID_MAJOR) * DIM.GRID_MAJOR;
-
-  // Dessin vertical majeur
-  for (let x = startMajorX; x <= worldRight; x += DIM.GRID_MAJOR) {
-    const screenX = x * zoom + panX;
-    ctx.beginPath();
-    ctx.moveTo(screenX, 0);
-    ctx.lineTo(screenX, height);
-    ctx.stroke();
-  }
-
-  // Dessin horizontal majeur
-  for (let y = startMajorY; y <= worldBottom; y += DIM.GRID_MAJOR) {
-    const screenY = y * zoom + panY;
-    ctx.beginPath();
-    ctx.moveTo(0, screenY);
-    ctx.lineTo(width, screenY);
-    ctx.stroke();
-  }
-
-  // --- Lignes plus larges ---
-  ctx.strokeStyle = COLORS.GRID_LARGER;
-
-  const startLargerX = Math.ceil(worldLeft / DIM.GRID_LARGER) * DIM.GRID_LARGER;
-  const startLargerY = Math.ceil(worldTop / DIM.GRID_LARGER) * DIM.GRID_LARGER;
-
-  // Dessin vertical majeur
-  for (let x = startLargerX; x <= worldRight; x += DIM.GRID_LARGER) {
-    const screenX = x * zoom + panX;
-    ctx.beginPath();
-    ctx.moveTo(screenX, 0);
-    ctx.lineTo(screenX, height);
-    ctx.stroke();
-  }
-
-  // Dessin horizontal majeur
-  for (let y = startLargerY; y <= worldBottom; y += DIM.GRID_LARGER) {
-    const screenY = y * zoom + panY;
-    ctx.beginPath();
-    ctx.moveTo(0, screenY);
-    ctx.lineTo(width, screenY);
-    ctx.stroke();
-  }
+  ctx.stroke();
+  ctx.restore();
 }
 
 export function draw_ground(
@@ -335,6 +399,37 @@ export function draw_slidep_bottom(
   );
   ctx.stroke();
 
+  ctx.restore();
+}
+
+export function draw_parallel_leg_bottom(
+  ctx: CanvasRenderingContext2D,
+  from: ScreenPoint,
+  to: ScreenPoint,
+) {
+  const widthChange = ctx.lineWidth - STROKE_WIDTHS.STANDARD;
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(from.x, from.y);
+  ctx.lineTo(to.x, to.y);
+  ctx.lineWidth = DIM.BEAM_WIDTH + widthChange;
+  ctx.stroke();
+  ctx.restore();
+}
+
+export function draw_parallel_leg_top(
+  ctx: CanvasRenderingContext2D,
+  from: ScreenPoint,
+  to: ScreenPoint,
+) {
+  const widthChange = ctx.lineWidth - STROKE_WIDTHS.STANDARD;
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(from.x, from.y);
+  ctx.lineTo(to.x, to.y);
+  ctx.strokeStyle = ctx.fillStyle;
+  ctx.lineWidth = DIM.BEAM_WIDTH - 2 * STROKE_WIDTHS.STANDARD - widthChange;
+  ctx.stroke();
   ctx.restore();
 }
 
@@ -529,6 +624,21 @@ export function draw_spring(
   ctx.restore();
 }
 
+/**
+ * How far down its travel the piston sits, as a fraction, for a damper stretched
+ * to `stretch` times its rest length: half way at rest, sliding back toward the
+ * cylinder's mouth as the damper extends.
+ *
+ * One function of the stretch, normalised on its own value at rest, so edition —
+ * which *is* rest — and simulation cannot disagree. Two separate expressions
+ * would have to be kept equal at `stretch === 1` by hand, and a mismatch there
+ * jumps the piston the instant the simulation starts, with nothing having moved.
+ */
+function damper_piston_fraction(stretch: number): number {
+  const reach = (s: number) => 1 + 3 * Math.exp(-Math.pow(s / 2, 2));
+  return reach(stretch) / (2 * reach(1));
+}
+
 export function draw_damper(
   ctx: CanvasRenderingContext2D,
   start: ScreenPoint,
@@ -541,12 +651,10 @@ export function draw_damper(
   ctx.rotate(end.sub(start).angle());
   const length = start.distance_to(end);
   const start_x = length / 4;
-  const stretch = restLength ? length / scale / restLength : undefined;
-  const piston_x =
-    stretch === undefined
-      ? (length - 2 * DIM.TAC) / 2
-      : ((length - 2 * DIM.TAC) / 4) *
-        (1 + 3 * Math.exp(-Math.pow(stretch / 2, 2)));
+  // No rest length to compare against means edition, where the damper is drawn
+  // at its natural length by definition.
+  const stretch = restLength ? length / scale / restLength : 1;
+  const piston_x = (length - 2 * DIM.TAC) * damper_piston_fraction(stretch);
   const oldStrokeStyle = ctx.strokeStyle;
   const widthChange = ctx.lineWidth - STROKE_WIDTHS.STANDARD;
 
@@ -613,11 +721,30 @@ export function draw_damper(
   ctx.restore();
 }
 
+/**
+ * The arc the rotation-direction arrow rides on, shared with the hit-test so
+ * a click only lands where the arrow is actually drawn.
+ */
+export function motor_arrow_geometry(clockwise: boolean): {
+  startAngle: number;
+  endAngle: number;
+  anticlockwise: boolean;
+} {
+  return {
+    startAngle:
+      TAU * (clockwise ? DIM.MOTOR_ARROW_ANGLE - 0.5 : -DIM.MOTOR_ARROW_ANGLE),
+    endAngle:
+      TAU * (clockwise ? -DIM.MOTOR_ARROW_ANGLE : DIM.MOTOR_ARROW_ANGLE - 0.5),
+    anticlockwise: !clockwise,
+  };
+}
+
 export function draw_motor(
   ctx: CanvasRenderingContext2D,
   position: ScreenPoint,
   isGrounded: boolean,
   clockwise: boolean,
+  arrowHovered = false,
 ) {
   const bottom = DIM.MOTOR_RADIUS - 2;
   ctx.lineCap = "round";
@@ -715,26 +842,39 @@ export function draw_motor(
   ctx.stroke();
   ctx.lineWidth -= 0.5;
 
-  const C = 1 / 6;
+  // Direction arrow
+
   const D = 1 / 32;
-  const radius = 30;
   const scale = 0.8;
 
-  const startAngle = TAU * (clockwise ? C - 0.5 : -C);
-  const endAngle = TAU * (clockwise ? -C - D : C - 0.5 + D);
+  const { startAngle, endAngle, anticlockwise } =
+    motor_arrow_geometry(clockwise);
+  const endAngleA = endAngle + TAU * (clockwise ? -D : D);
+
+  const oldArrowLineWidth = ctx.lineWidth;
+  ctx.lineWidth =
+    STROKE_WIDTHS.STANDARD + (arrowHovered ? STROKE_WIDTHS.HOVER_GAIN : 0);
   ctx.beginPath();
-  ctx.arc(position.x, position.y, radius, startAngle, endAngle, !clockwise);
+  ctx.arc(
+    position.x,
+    position.y,
+    DIM.MOTOR_ARROW_RADIUS,
+    startAngle,
+    endAngleA,
+    anticlockwise,
+  );
   ctx.stroke();
   const headAngle = clockwise
-    ? endAngle - (1 / 4 - D) * TAU
-    : endAngle + (1 / 4 - D) * TAU;
+    ? endAngleA - (1 / 4 - D) * TAU
+    : endAngleA + (1 / 4 - D) * TAU;
   const tip = position
-    .add(Point2.from_polar(radius, endAngle))
+    .add(Point2.from_polar(DIM.MOTOR_ARROW_RADIUS, endAngleA))
     .sub(Point2.from_polar(DIM.ARROW_HEAD_LENGTH * scale, headAngle));
   const oldFillStyle = ctx.fillStyle;
   ctx.fillStyle = ctx.strokeStyle;
   draw_arrow_head(ctx, tip, headAngle, scale);
   ctx.fillStyle = oldFillStyle;
+  ctx.lineWidth = oldArrowLineWidth;
 }
 
 /**

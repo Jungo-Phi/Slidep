@@ -26,9 +26,17 @@ import ConstraintsPanel from "./ConstraintsPanel";
 import AnalysisPanel from "./AnalysisPanel";
 import { host_mechanical_element } from "../mechanism/connect-actions";
 import { ElementNavigationContext } from "./element-navigation";
+import { CanvasHighlight } from "../canvas/draw-canvas";
+import { t } from "../../i18n";
 
 export interface PropertiesPanelProps {
+  /** Names what the canvas should pick out, and why; empty clears the highlight. */
+  setHighlight: (highlight: CanvasHighlight) => void;
+  /** Where the analysis panel publishes the pose it is animating, for the canvas to draw. */
+  modePreviewRef: React.MutableRefObject<Mechanism | null>;
   setCanvasState: (state: CanvasState) => void;
+  /** Deselects without moving the active tab off "elements" — see handleTabClick. */
+  clearSelectionKeepTab: () => void;
   canvasState: CanvasState;
   applyActions: (actions: Action[], actionBundleType: ActionBundleType) => void;
   mechanism: Mechanism;
@@ -45,7 +53,10 @@ export interface PropertiesPanelProps {
 }
 
 export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
+  modePreviewRef,
+  setHighlight,
   setCanvasState,
+  clearSelectionKeepTab,
   canvasState,
   applyActions,
   mechanism,
@@ -76,6 +87,17 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
     setActiveTab(newValue);
   };
 
+  const handleTabClick = (
+    _event: React.MouseEvent,
+    tabLabel: PropertiesPanelTab,
+  ) => {
+    if (
+      tabLabel === activeTab &&
+      (activeTab === "elements" || activeTab === "constraints")
+    )
+      clearSelectionKeepTab();
+  };
+
   const selectedID: ID | undefined = (canvasState as { elementID?: ID })
     .elementID;
   // The mechanical element the selection points at (a selected load resolves to
@@ -86,9 +108,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
     mechanism.loads,
   );
 
-  // Any ElementDisplay clicked anywhere in the panel drills down to the element
-  // it names. Declared once here rather than wired card by card, so no panel can
-  // forget it and none has to special-case which of its cards navigate.
+  // Any ElementDisplay clicked anywhere in the panel drills down to the element it names.
   const drillDownToElement = React.useCallback(
     () => setActiveTab("elements"),
     [setActiveTab],
@@ -144,19 +164,32 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
             }}
           >
             {[
-              { id: "project", icon: ProjectIcon, label: "Projet" },
-              { id: "elements", icon: ElementIcon, label: "Éléments" },
               {
-                id: "constraints",
-                icon: ConstraintsIcon,
-                label: "Contraintes",
+                id: "project" as PropertiesPanelTab,
+                icon: ProjectIcon,
+                label: t("tab_project"),
               },
-              { id: "analysis", icon: AnalysisIcon, label: "Analyse" },
+              {
+                id: "elements" as PropertiesPanelTab,
+                icon: ElementIcon,
+                label: t("tab_elements"),
+              },
+              {
+                id: "constraints" as PropertiesPanelTab,
+                icon: ConstraintsIcon,
+                label: t("tab_constraints"),
+              },
+              {
+                id: "analysis" as PropertiesPanelTab,
+                icon: AnalysisIcon,
+                label: t("tab_analysis"),
+              },
             ].map((tab) => {
               return (
                 <Tab
                   key={tab.id}
                   value={tab.id}
+                  onClick={(e) => handleTabClick(e, tab.id)}
                   icon={
                     <Box
                       sx={{
@@ -227,6 +260,8 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
           )}
           {activeTab === "analysis" && (
             <AnalysisPanel
+              setHighlight={setHighlight}
+              modePreviewRef={modePreviewRef}
               mechanism={mechanism}
               appMode={appMode}
               applyActions={applyActions}

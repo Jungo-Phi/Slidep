@@ -188,16 +188,95 @@ export const LOAD_SCALING = {
 };
 
 /**
+ * Showing one degree of freedom by swinging the mechanism along it (analysis panel).
+ */
+export const MODE_ANIMATION = {
+  /**
+   * How far the widest-moving node travels, as a fraction of the WHOLE mechanism's extent.
+   *
+   * The mechanism's, not the chain's: an animation illustrates a property of the mechanism,
+   * so every chain of it swings by the same amount, and an isolated node — which has no
+   * extent of its own — still moves visibly.
+   */
+  AMPLITUDE_RATIO: 0.06,
+  /** Seconds for a full there-and-back swing. The panel row beats in time with it. */
+  PERIOD_S: 1.6,
+  /**
+   * How long the dimensions stay away after a swing ends.
+   *
+   * Long enough to cross from one mode's row to the next without them flashing back in
+   * between, short enough that leaving the list brings them straight back.
+   */
+  DIMENSION_RETURN_DELAY_MS: 200,
+} as const;
+
+/** Showing an over-constraint by asking one of its joints to hold a value it cannot. */
+export const STRAIN_ANIMATION = {
+  /**
+   * How wrong the joint is asked to be, as a fraction of the WHOLE mechanism's extent.
+   *
+   * Small, and it has to be. Measured on the gallery: a lie of a few per cent leaves every
+   * mechanism in pieces — bars three times their length — because the parts can no longer
+   * reach the pose being asked of them at all. That is a jammed drawing, not a strain. Kept
+   * where the response is still proportional to the lie, the picture stays the mechanism's
+   * own; what it costs in legibility, `SHOWN_RATIO` buys back.
+   */
+  LIE_RATIO: 0.005,
+  /**
+   * How far a bar should APPEAR to stretch, as a fraction of its own length.
+   *
+   * The response is drawn magnified, the way a stress plot exaggerates a deflection: the
+   * displacement field is scaled whole, so shape and proportion stay the mechanism's and
+   * only the size is not. It is the stretching the magnification is aimed at, because that
+   * is the statement — a mechanism that cannot take the lie up. On a heavily over-constrained
+   * one the parts barely move at all and a single short bar takes the whole error; aiming at
+   * the travel instead would blow that bar up to three times its length.
+   */
+  SHOWN_STRAIN_RATIO: 0.12,
+  /**
+   * Ceiling on the travel, as a fraction of the extent.
+   *
+   * Only binds when the mechanism answers the lie by moving rather than by straining, where
+   * aiming at the stretching alone would ask for a magnification nothing justifies.
+   */
+  SHOWN_RATIO: 0.05,
+  /**
+   * Ceiling on that magnification.
+   *
+   * A joint whose lie the mechanism barely answers at all would otherwise have the solver's
+   * own rounding blown up into a shape, which is a picture of nothing.
+   */
+  MAX_GAIN: 60,
+  /**
+   * Below this share of the extent, the mechanism did not answer the lie at all.
+   *
+   * A real case: a belt whose pulleys are every one of them anchored. Its length cannot be
+   * wrong in any direction anything can move, so there is nothing to show and the panel says
+   * so by not animating.
+   */
+  DEAD_RESPONSE_RATIO: 0.0005,
+  /** Seconds for a full there-and-back strain. Shares the modes' beat, and their panel row. */
+  PERIOD_S: MODE_ANIMATION.PERIOD_S,
+  /**
+   * Sweeps each strained pose gets.
+   *
+   * A falsified system is inconsistent, so the solve never satisfies its constraints and
+   * never exits early: this budget is spent in full, every frame.
+   */
+  SWEEPS: 200,
+} as const;
+
+/**
  * Durée (ms) pendant laquelle les badges de contraintes d'un élément restent
  * affichés après avoir cessé de le survoler (hover-reveal en édition).
  */
-export const CONSTRAINT_REVEAL_COOLDOWN_MS = 700;
+export const CONSTRAINT_REVEAL_COOLDOWN_MS = 900;
 
 /**
  * Durée (ms) du fondu de sortie, à la toute fin du cooldown : les badges sont à
  * pleine opacité jusqu'à `COOLDOWN - FADE`, puis s'estompent vers 0.
  */
-export const CONSTRAINT_REVEAL_FADE_MS = 150;
+export const CONSTRAINT_REVEAL_FADE_MS = 200;
 
 /**
  * Durées (ms) d'affichage des toasts. `REPORT` est pour les messages qui rendent
@@ -222,15 +301,10 @@ export const DIM = {
   ARROW_HEAD_LENGTH: 18,
   ARROW_HEAD_WIDTH: 13,
 
-  // GRID
-  GRID_LARGER: 500,
-  GRID_MAJOR: 100,
-  GRID_SIZE: 25,
-
   // Edges
   EDGE_ENDPOINT_RADIUS: 7,
+  /** Shortest edge a gesture may draw, and smallest gear it may size — in **screen** px, so that what one can see and grab does not depend on the zoom. Neither is a world minimum: the solver has none. */
   MIN_EDGE_LENGTH: 30,
-  EDGE_END_MARGIN: 15,
 
   // How far a disconnection pushes apart the elements it leaves superposed, so
   // that what is still connected reads at a glance. Purely a legibility gap: it
@@ -254,6 +328,9 @@ export const DIM = {
   DAMPER_CYLINDER_DIAMETER: 20,
   DAMPER_PISTON_WIDTH: 6,
 
+  /** Half the gap between a spring and a damper drawn in parallel. */
+  PARALLEL_EDGE_OFFSET: 12,
+
   // Mass
   MASS_HEIGHT: 24,
   /** Tilt of the trapezoid sides, away from vertical. */
@@ -267,6 +344,8 @@ export const DIM = {
   // Motor
   MOTOR_RADIUS: 18,
   MOTOR_CORNER_RADIUS: 2.5,
+  MOTOR_ARROW_RADIUS: 30,
+  MOTOR_ARROW_ANGLE: 1 / 6,
   // Join
   JOIN_RADIUS: 6,
 
@@ -354,7 +433,7 @@ export const DRAWING_ORDER: (UnionElement["type"] | "probe")[] = [
 ];
 
 /** Ordre de hover des éléments sur le canvas */
-export const HOVER_ORDER: (UnionElement["type"] | "probe")[] = [
+export const HOVER_ORDER: (UnionElement["type"] | "probe" | "motorArrow")[] = [
   "gear-ratio",
   "equal",
   "parallel",
@@ -370,6 +449,7 @@ export const HOVER_ORDER: (UnionElement["type"] | "probe")[] = [
   "dimension-node-to-node",
   "dimension-edge-to-node",
   "probe",
+  "motorArrow",
   "mass",
   "pivot",
   "slider",

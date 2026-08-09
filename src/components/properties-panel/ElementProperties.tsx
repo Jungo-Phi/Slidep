@@ -24,6 +24,8 @@ import {
   Public,
   Lock,
   LockOpen,
+  VisibilityOff,
+  Visibility,
 } from "@mui/icons-material";
 import {
   ConstraintElement,
@@ -57,9 +59,11 @@ import {
   Point2,
   PropertiesPanelTab,
   RuntimeState,
+  ViewportState,
   ZERO,
   ONE,
 } from "../../types";
+import { screen2world_length } from "../../utils";
 import ConnectionsProperties from "./ConnectionsProperties";
 import { delete_element } from "../mechanism/connect-actions";
 import { HoveredPart } from "../../types/hovered-part";
@@ -68,7 +72,8 @@ import SignedNumberInput from "./components/SignedNumberInput";
 import ElementDisplay from "./components/ElementDisplay";
 import { sorted_for_display } from "./element-order";
 import ElementMeasures from "./ElementMeasures";
-import { OVERLAY_LABELS, set_overlay } from "./overlay-actions";
+import { OVERLAY_LABEL_KEYS, set_overlay } from "./overlay-actions";
+import { t } from "../../i18n";
 import { element_to_hovered_part, linked_constraint } from "../canvas/utils";
 import { measure_belt_length } from "../../utils/belt-geom";
 import { DIM } from "../../constants/rendering-specs";
@@ -107,12 +112,12 @@ const MotorSection: React.FC<MotorSectionProps> = ({ pivot, applyActions }) => {
             }
           />
         }
-        label={<Typography variant="caption">Moteur</Typography>}
+        label={<Typography variant="caption">{t("element_motor")}</Typography>}
       />
       {motor && (
         <Box sx={{ mt: 0.5, display: "flex", alignItems: "center" }}>
           <SignedNumberInput
-            label="tr/min"
+            label={t("unit_rpm")}
             value={motor.speed}
             onChange={(speed) =>
               applyActions(
@@ -127,8 +132,8 @@ const MotorSection: React.FC<MotorSectionProps> = ({ pivot, applyActions }) => {
                 "ChangeConstant",
               )
             }
-            large={true}
-            accent={true}
+            large
+            accent
           />
         </Box>
       )}
@@ -159,7 +164,7 @@ const ProbesSection: React.FC<ProbesSectionProps> = ({
       }}
     >
       <Typography variant="caption" color="text.secondary">
-        Mesures
+        {t("palette_measurements")}
       </Typography>
       {/* Les calques applicables à cet élément (le contrôle par élément ; la
           commande en masse vit dans le menu « Afficher » de la top-bar). */}
@@ -167,20 +172,29 @@ const ProbesSection: React.FC<ProbesSectionProps> = ({
         <FormControlLabel
           key={kind}
           control={
-            <Switch
+            <IconButton
               size="small"
-              checked={overlay_shown(element, kind)}
-              onChange={() =>
+              color="inherit"
+              onClick={() =>
                 applyActions(
                   set_overlay(element, kind, !overlay_shown(element, kind)),
                   "Other",
                 )
               }
-            />
+            >
+              {overlay_shown(element, kind) ? (
+                <Visibility fontSize="small" />
+              ) : (
+                <VisibilityOff fontSize="small" />
+              )}
+            </IconButton>
           }
           label={
-            <Typography variant="caption">{OVERLAY_LABELS[kind]}</Typography>
+            <Typography variant="caption">
+              {t(OVERLAY_LABEL_KEYS[kind])}
+            </Typography>
           }
+          sx={{ m: 0, gap: 0.5 }}
         />
       ))}
       <Button
@@ -194,7 +208,7 @@ const ProbesSection: React.FC<ProbesSectionProps> = ({
           minWidth: 0,
         }}
       >
-        Voir les graphiques
+        {t("element_view_charts")}
       </Button>
 
       <Box sx={{ display: "flex", alignItems: "left" }}>
@@ -250,9 +264,18 @@ const StructureOnly: React.FC<{
 const to_deg = (rad: number) => ((rad * 180) / Math.PI + 360) % 360;
 const to_rad = (deg: number) => (deg * Math.PI) / 180;
 
+/**
+ * How far a dimension created from the panel stands off what it measures — a
+ * screen distance, so it lands where it can be read whatever the zoom, and never
+ * a hundred times the mechanism away.
+ */
+const auto_offset = (viewport: ViewportState) =>
+  screen2world_length(DIM.AUTO_DIMENSION_OFFSET, viewport);
+
 const create_length_dimension = (
   element: EdgeElement,
   mechanicalElements: MechanicalElement[],
+  viewport: ViewportState,
 ): ConstraintElement => {
   const { positionStart, positionEnd } = element;
   const length =
@@ -263,7 +286,7 @@ const create_length_dimension = (
   const offset = positionEnd
     .sub(positionStart)
     .perp()
-    .with_length(DIM.AUTO_DIMENSION_OFFSET);
+    .with_length(auto_offset(viewport));
   const position = mid.add(offset);
   if (element.type === "belt") {
     return {
@@ -283,9 +306,12 @@ const create_length_dimension = (
   };
 };
 
-const create_radius_dimension = (gear: GearElement): ConstraintElement => {
+const create_radius_dimension = (
+  gear: GearElement,
+  viewport: ViewportState,
+): ConstraintElement => {
   const position = gear.position.add(
-    ONE.with_length(gear.radius + DIM.AUTO_DIMENSION_OFFSET),
+    ONE.with_length(gear.radius + auto_offset(viewport)),
   );
   return {
     type: "dimension-radius",
@@ -391,7 +417,7 @@ const MondeLabel: React.FC = () => (
           lineHeight: 1.5,
         }}
       >
-        Monde
+        {t("frame_world")}
       </Typography>
     </Box>
   </Box>
@@ -536,7 +562,7 @@ const LoadsSection: React.FC<LoadsSectionProps> = ({
   return (
     <Box sx={{ px: 1, pb: 1 }}>
       <Typography variant="caption" color="text.secondary" sx={{ px: 1 }}>
-        Charges appliquées
+        {t("element_applied_loads")}
       </Typography>
       {elementLoads.length === 0 ? (
         <Typography
@@ -544,7 +570,7 @@ const LoadsSection: React.FC<LoadsSectionProps> = ({
           color="text.disabled"
           sx={{ px: 1, display: "block" }}
         >
-          Aucune charge
+          {t("element_no_load")}
         </Typography>
       ) : (
         elementLoads.map((load) => (
@@ -576,7 +602,7 @@ const LoadsSection: React.FC<LoadsSectionProps> = ({
                       "Other",
                     )
                   }
-                  title="Supprimer"
+                  title={t("action_delete")}
                   sx={{ borderRadius: 3 }}
                 >
                   <Delete sx={{ width: 20, height: 20 }} />
@@ -611,7 +637,6 @@ const LoadsSection: React.FC<LoadsSectionProps> = ({
                         "MoveLoad",
                       )
                     }
-                    signed={false}
                   />
                   <NumberInput
                     label="°"
@@ -842,7 +867,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                             "Other",
                           )
                         }
-                        title="Supprimer"
+                        title={t("action_delete")}
                         sx={{ borderRadius: 3 }}
                       >
                         <Delete sx={{ width: 20, height: 20 }} />
@@ -922,9 +947,9 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                         "ChangeConstant",
                       )
                     }
-                    large={true}
-                    accent={true}
-                    signed={false}
+                    large
+                    accent
+                    unsigned
                   />
                 )}
               </StructureOnly>
@@ -945,9 +970,9 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                         "ChangeConstant",
                       )
                     }
-                    large={true}
-                    accent={true}
-                    signed={false}
+                    large
+                    accent
+                    unsigned
                   />
                 )}
               </StructureOnly>
@@ -968,9 +993,9 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                         "ChangeConstant",
                       )
                     }
-                    large={true}
-                    accent={true}
-                    signed={false}
+                    large
+                    accent
+                    unsigned
                   />
                 )}
               </StructureOnly>
@@ -988,7 +1013,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                       "Connects",
                     )
                   }
-                  title="Supprimer"
+                  title={t("action_delete")}
                   onMouseEnter={(_e) => handleMouseEnter(element, true)}
                   onMouseLeave={handleMouseLeave}
                   sx={{ borderRadius: 4 }}
@@ -1053,14 +1078,14 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                     "MoveElement",
                   );
                 }}
-                label="Rayon"
-                large={true}
-                signed={false}
+                label={t("element_radius")}
+                large
+                unsigned
                 adornment={
                   linkedConstraint
                     ? {
                         icon: Lock,
-                        title: "Débloquer la longueur",
+                        title: t("length_unlock"),
                         color: "secondary",
                         onMouseEnter: () =>
                           handleMouseEnter(linkedConstraint, true),
@@ -1078,13 +1103,16 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                       }
                     : {
                         icon: LockOpen,
-                        title: "Bloquer la longueur",
+                        title: t("length_lock"),
                         onClick: () =>
                           applyActions(
                             [
                               {
                                 type: "CreateElement",
-                                element: create_radius_dimension(element),
+                                element: create_radius_dimension(
+                                  element,
+                                  mechanism.viewport,
+                                ),
                               },
                             ],
                             "CreateConstraint",
@@ -1200,14 +1228,14 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                   );
                 }
               }}
-              large={true}
-              label="Longueur"
-              signed={false}
+              label={t("element_length")}
+              large
+              unsigned
               adornment={
                 linkedConstraint
                   ? {
                       icon: Lock,
-                      title: "Débloquer la longueur",
+                      title: t("length_unlock"),
                       color: "secondary",
                       onMouseEnter: () =>
                         handleMouseEnter(linkedConstraint, true),
@@ -1234,6 +1262,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                               element: create_length_dimension(
                                 element,
                                 mechanism.mechanicalElements,
+                                mechanism.viewport,
                               ),
                             },
                           ],

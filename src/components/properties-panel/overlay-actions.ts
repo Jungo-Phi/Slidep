@@ -5,14 +5,15 @@ import {
   available_overlays,
   overlay_shown,
 } from "../../types";
+import { StringKey } from "../../i18n";
 
 /** Human label of each overlay layer (full wording — the "Afficher" menu has
  *  the room an icon doesn't). */
-export const OVERLAY_LABELS: Record<OverlayKind, string> = {
-  trajectory: "Trajectoires",
-  force: "Forces de réaction",
-  velocity: "Vitesses",
-  stress: "Contraintes (MPa)",
+export const OVERLAY_LABEL_KEYS: Record<OverlayKind, StringKey> = {
+  trajectory: "overlay_trajectory",
+  force: "overlay_force",
+  velocity: "overlay_velocity",
+  stress: "overlay_stress",
 };
 
 /** The elements `kind` can be drawn on — the denominator of the n/total counter. */

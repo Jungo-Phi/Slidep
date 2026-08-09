@@ -8,6 +8,7 @@
  */
 
 import { Mechanism } from "../types";
+import { t, tn } from "../i18n";
 import { migrate_document } from "./migrate-mechanism";
 import { deserialize_mechanism } from "./serialization";
 import { Repair, repair_mechanism } from "./repair-mechanism";
@@ -24,18 +25,21 @@ export function load_mechanism(raw: unknown): LoadedMechanism {
 
 /** One line for the user: what was lost, without the field-level detail. */
 export function repair_summary(repairs: Repair[]): string {
-  const removed = repairs.filter((r) => r.code === "ELEMENT_REMOVED").length;
-  const links = repairs.length - removed;
+  const count = (code: Repair["code"]) =>
+    repairs.filter((r) => r.code === code).length;
+  const removed = count("ELEMENT_REMOVED");
+  const points = count("POINT_RESET");
+  const framing = count("VIEWPORT_RESET");
+  const links = repairs.length - removed - points - framing;
 
   const parts: string[] = [];
-  if (removed > 0)
-    parts.push(
-      `${removed} élément${removed > 1 ? "s" : ""} supprimé${removed > 1 ? "s" : ""}`,
-    );
-  if (links > 0)
-    parts.push(
-      `${links} liaison${links > 1 ? "s" : ""} cassée${links > 1 ? "s" : ""} retirée${links > 1 ? "s" : ""}`,
-    );
+  if (removed > 0) parts.push(tn("repair_elements_removed", removed));
+  if (links > 0) parts.push(tn("repair_links_removed", links));
+  if (points > 0) parts.push(tn("repair_points_reset", points));
+  if (framing > 0) parts.push(t("repair_viewport_reset"));
 
-  return `Mécanisme réparé : ${parts.join(", ")}. L'historique a été effacé.`;
+  const summary = t("repair_summary", { parts: parts.join(", ") });
+  // `repair_mechanism` keeps the undo stack when the framing was the only fault.
+  if (framing === repairs.length) return summary;
+  return `${summary} ${t("repair_history_cleared")}`;
 }

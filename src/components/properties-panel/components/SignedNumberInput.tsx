@@ -11,8 +11,8 @@ interface SignedNumberInputProps {
   value: number;
   onChange: (value: number) => void;
   step?: number;
-  large?: boolean;
   suffix?: string;
+  large?: boolean;
   accent?: boolean;
 }
 
@@ -27,9 +27,9 @@ export const SignedNumberInput: React.FC<SignedNumberInputProps> = ({
   value,
   onChange,
   step,
-  large,
   suffix,
-  accent,
+  large = false,
+  accent = false,
 }) => {
   const clockwise = value >= 0;
   const DirectionIcon = clockwise ? RotateRightIcon : RotateLeftIcon;
@@ -50,10 +50,10 @@ export const SignedNumberInput: React.FC<SignedNumberInputProps> = ({
       value={Math.abs(value)}
       onChange={handleChange}
       step={step}
-      large={large}
       suffix={suffix}
+      large={large}
       accent={accent}
-      signed={true}
+      pillAdornment
       adornment={{
         icon: DirectionIcon,
         title: clockwise ? "Horaire" : "Anti-horaire",

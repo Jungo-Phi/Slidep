@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useLayoutEffect, useRef, useState } from "react";
 import {
   Box,
   Paper,
@@ -7,6 +7,7 @@ import {
   Tooltip,
   Divider,
 } from "@mui/material";
+import { darken } from "@mui/material/styles";
 
 import { icon } from "./iconDataUris";
 
@@ -18,7 +19,9 @@ import {
   ToolStateType,
 } from "../../constants/shortcuts";
 import { get_constraint_element_from_id } from "../mechanism/connect-actions";
+import { armed_tool_state } from "../canvas/arm-tool";
 import { Mechanism } from "../../types";
+import { StringKey, t } from "../../i18n";
 
 /** How clicking this palette button behaves when simulation is active.
  *  - "structural"   : exits to edition first (elements, forces)
@@ -28,9 +31,8 @@ import { Mechanism } from "../../types";
 type SimBehavior = "structural" | "constraint" | "observational";
 
 interface PaletteElement {
-  label: string;
   /** Name only: the shortcut is appended at render time. */
-  tooltip: string;
+  nameKey: StringKey;
   iconSrc: string;
   simIconSrc?: string;
   goToStateType: ToolStateType;
@@ -47,13 +49,15 @@ interface PaletteElement {
  * colors it holds come from the active theme, and a constant would freeze them
  * on whichever theme was loaded first.
  */
-const edition_palette = (): { title: string; elements: PaletteElement[] }[] => [
+const edition_palette = (): {
+  titleKey: StringKey;
+  elements: PaletteElement[];
+}[] => [
   {
-    title: "Interface",
+    titleKey: "palette_interface",
     elements: [
       {
-        label: "Selection",
-        tooltip: "Select",
+        nameKey: "tool_select",
         iconSrc: icon("select"),
         simIconSrc: icon("select-sim"),
         goToStateType: "Selecting",
@@ -76,13 +80,12 @@ const edition_palette = (): { title: string; elements: PaletteElement[] }[] => [
           // allumé : c'est lui qu'on retrouve en sortie, pas la sélection.
           (state.type === "EditingValue" && !state.rearm),
         hilightColor: COLORS.SELECTION_BOX,
-        hilightHoverColor: COLORS.SELECTION_STROKE,
+        hilightHoverColor: darken(COLORS.SELECTION_BOX, 0.2),
         simHilightColor: COLORS.ACCENT,
         simHilightHoverColor: COLORS.ACCENT_DARK,
       },
       {
-        label: "Gomme",
-        tooltip: "Eraser",
+        nameKey: "tool_eraser",
         iconSrc: icon("eraser"),
         goToStateType: "Erasing",
         simBehavior: "structural",
@@ -94,11 +97,10 @@ const edition_palette = (): { title: string; elements: PaletteElement[] }[] => [
     ],
   },
   {
-    title: "Liaisons",
+    titleKey: "palette_connections",
     elements: [
       {
-        label: "Glissière",
-        tooltip: "Slider",
+        nameKey: "tool_slider",
         iconSrc: icon("slider"),
         goToStateType: "PlacingSlider",
         simBehavior: "structural",
@@ -107,8 +109,7 @@ const edition_palette = (): { title: string; elements: PaletteElement[] }[] => [
         hilightHoverColor: COLORS.ACCENT_DARK,
       },
       {
-        label: "Pivot",
-        tooltip: "Pivot",
+        nameKey: "tool_pivot",
         iconSrc: icon("pivot"),
         goToStateType: "PlacingPivot",
         simBehavior: "structural",
@@ -117,8 +118,7 @@ const edition_palette = (): { title: string; elements: PaletteElement[] }[] => [
         hilightHoverColor: COLORS.ACCENT_DARK,
       },
       {
-        label: "Courroie",
-        tooltip: "Belt",
+        nameKey: "tool_belt",
         iconSrc: icon("belt"),
         goToStateType: "PlacingBeltStart",
         simBehavior: "structural",
@@ -128,8 +128,7 @@ const edition_palette = (): { title: string; elements: PaletteElement[] }[] => [
         hilightHoverColor: COLORS.ACCENT_DARK,
       },
       {
-        label: "Engrenage",
-        tooltip: "Gear",
+        nameKey: "tool_gear",
         iconSrc: icon("gear"),
         goToStateType: "PlacingGearStart",
         simBehavior: "structural",
@@ -142,11 +141,10 @@ const edition_palette = (): { title: string; elements: PaletteElement[] }[] => [
     ],
   },
   {
-    title: "Structure",
+    titleKey: "palette_structure",
     elements: [
       {
-        label: "Jointure",
-        tooltip: "Join",
+        nameKey: "tool_join",
         iconSrc: icon("join"),
         goToStateType: "PlacingJoin",
         simBehavior: "structural",
@@ -155,8 +153,7 @@ const edition_palette = (): { title: string; elements: PaletteElement[] }[] => [
         hilightHoverColor: COLORS.ACCENT_DARK,
       },
       {
-        label: "Poutre",
-        tooltip: "Beam",
+        nameKey: "tool_beam",
         iconSrc: icon("beam"),
         goToStateType: "PlacingBeamStart",
         simBehavior: "structural",
@@ -166,8 +163,7 @@ const edition_palette = (): { title: string; elements: PaletteElement[] }[] => [
         hilightHoverColor: COLORS.ACCENT_DARK,
       },
       {
-        label: "Sol",
-        tooltip: "Ground",
+        nameKey: "tool_ground",
         iconSrc: icon("ground"),
         goToStateType: "PlacingGround",
         simBehavior: "structural",
@@ -178,11 +174,10 @@ const edition_palette = (): { title: string; elements: PaletteElement[] }[] => [
     ],
   },
   {
-    title: "Dynamique",
+    titleKey: "palette_dynamics",
     elements: [
       {
-        label: "Amortisseur",
-        tooltip: "Damper",
+        nameKey: "tool_damper",
         iconSrc: icon("damper"),
         goToStateType: "PlacingDamperStart",
         simBehavior: "structural",
@@ -193,8 +188,7 @@ const edition_palette = (): { title: string; elements: PaletteElement[] }[] => [
         hilightHoverColor: COLORS.ACCENT_DARK,
       },
       {
-        label: "Ressort",
-        tooltip: "Spring",
+        nameKey: "tool_spring",
         iconSrc: icon("spring"),
         goToStateType: "PlacingSpringStart",
         simBehavior: "structural",
@@ -205,8 +199,7 @@ const edition_palette = (): { title: string; elements: PaletteElement[] }[] => [
         hilightHoverColor: COLORS.ACCENT_DARK,
       },
       {
-        label: "Masse",
-        tooltip: "Mass",
+        nameKey: "tool_mass",
         iconSrc: icon("mass"),
         goToStateType: "PlacingMass",
         simBehavior: "structural",
@@ -215,8 +208,7 @@ const edition_palette = (): { title: string; elements: PaletteElement[] }[] => [
         hilightHoverColor: COLORS.ACCENT_DARK,
       },
       {
-        label: "Moteur",
-        tooltip: "Motor",
+        nameKey: "tool_motor",
         iconSrc: icon("motor"),
         goToStateType: "PlacingMotor",
         simBehavior: "structural",
@@ -227,11 +219,10 @@ const edition_palette = (): { title: string; elements: PaletteElement[] }[] => [
     ],
   },
   {
-    title: "Contraintes",
+    titleKey: "palette_constraints",
     elements: [
       {
-        label: "Dimension",
-        tooltip: "Dimension",
+        nameKey: "tool_dimension",
         iconSrc: icon("dimension"),
         goToStateType: "DimensionStart",
         simBehavior: "constraint",
@@ -256,8 +247,7 @@ const edition_palette = (): { title: string; elements: PaletteElement[] }[] => [
         hilightHoverColor: COLORS.ACCENT_DARK,
       },
       {
-        label: "Rapport d'engrenages",
-        tooltip: "Gear ratio",
+        nameKey: "tool_gear_ratio",
         iconSrc: icon("ratio"),
         goToStateType: "GearRatioConstraintStart",
         simBehavior: "constraint",
@@ -273,8 +263,7 @@ const edition_palette = (): { title: string; elements: PaletteElement[] }[] => [
         hilightHoverColor: COLORS.ACCENT_DARK,
       },
       {
-        label: "Longueurs égales",
-        tooltip: "Equal lengths",
+        nameKey: "tool_equal_lengths",
         iconSrc: icon("equal"),
         goToStateType: "EqualConstraintStart",
         simBehavior: "constraint",
@@ -286,8 +275,7 @@ const edition_palette = (): { title: string; elements: PaletteElement[] }[] => [
         hilightHoverColor: COLORS.ACCENT_DARK,
       },
       {
-        label: "Alignement horizontal / vertical",
-        tooltip: "Horizontal/Vertical alignement",
+        nameKey: "tool_horizontal_vertical",
         iconSrc: icon("horizontal-vertical"),
         goToStateType: "HorizontalVerticalConstraintStart",
         simBehavior: "constraint",
@@ -298,8 +286,7 @@ const edition_palette = (): { title: string; elements: PaletteElement[] }[] => [
         hilightHoverColor: COLORS.ACCENT_DARK,
       },
       {
-        label: "Perpendiculaire",
-        tooltip: "Normal",
+        nameKey: "tool_normal",
         iconSrc: icon("normal"),
         goToStateType: "NormalConstraintStart",
         simBehavior: "constraint",
@@ -310,8 +297,7 @@ const edition_palette = (): { title: string; elements: PaletteElement[] }[] => [
         hilightHoverColor: COLORS.ACCENT_DARK,
       },
       {
-        label: "Parallèle",
-        tooltip: "Parallel",
+        nameKey: "tool_parallel",
         iconSrc: icon("parallel"),
         goToStateType: "ParallelConstraintStart",
         simBehavior: "constraint",
@@ -324,11 +310,10 @@ const edition_palette = (): { title: string; elements: PaletteElement[] }[] => [
     ],
   },
   {
-    title: "Simulation",
+    titleKey: "palette_loads",
     elements: [
       {
-        label: "Force",
-        tooltip: "Force",
+        nameKey: "tool_force",
         iconSrc: icon("force"),
         goToStateType: "PlacingForceStart",
         simBehavior: "structural",
@@ -340,8 +325,7 @@ const edition_palette = (): { title: string; elements: PaletteElement[] }[] => [
         hilightHoverColor: COLORS.ACCENT_DARK,
       },
       {
-        label: "Moment",
-        tooltip: "Moment",
+        nameKey: "tool_moment",
         iconSrc: icon("moment"),
         goToStateType: "PlacingMomentStart",
         simBehavior: "structural",
@@ -351,9 +335,13 @@ const edition_palette = (): { title: string; elements: PaletteElement[] }[] => [
         hilightColor: COLORS.ACCENT,
         hilightHoverColor: COLORS.ACCENT_DARK,
       },
+    ],
+  },
+  {
+    titleKey: "palette_measurements",
+    elements: [
       {
-        label: "Sonde",
-        tooltip: "Probe",
+        nameKey: "tool_probe",
         iconSrc: icon("probe"),
         goToStateType: "PlacingProbe",
         simBehavior: "observational",
@@ -365,6 +353,19 @@ const edition_palette = (): { title: string; elements: PaletteElement[] }[] => [
     ],
   },
 ];
+
+const SIZE = 28;
+const PADDING = 2;
+const ROW_HEIGHT = SIZE + 2 * PADDING;
+const GRID_GAP = 2;
+/** Space kept between the palette and the edges of the canvas area. */
+const MARGIN = 16;
+
+/** Height of a group's icon grid, laid out over `columns` columns. */
+const grid_height = (icons: number, columns: number): number => {
+  const rows = Math.ceil(icons / columns);
+  return rows * ROW_HEIGHT + (rows - 1) * GRID_GAP;
+};
 
 interface ElementPaletteProps {
   setCanvasState: (state: CanvasState) => void;
@@ -383,14 +384,20 @@ export const ElementPalette: React.FC<ElementPaletteProps> = ({
   onExitToEdition,
   onPauseSim,
 }) => {
-  const SIZE = 28;
-  const PADDING = 2;
-
   // Rebuilt on every render, which is how the icons and highlight colors follow
   // a theme change: both are read from the active canvas palette at call time.
   const palette = edition_palette();
 
-  const handleElementClick = (element: PaletteElement) => {
+  const handleElementClick = (
+    element: PaletteElement,
+    isHighlighted: boolean,
+  ) => {
+    // Clicking the armed tool disarms it, like Escape — minus Escape's effect on
+    // a running simulation, which a palette click has no business triggering.
+    if (isHighlighted && element.goToStateType !== "Selecting") {
+      setCanvasState(tool_state("Selecting"));
+      return;
+    }
     if (appMode !== "edition") {
       if (element.simBehavior === "structural") {
         onExitToEdition();
@@ -399,40 +406,81 @@ export const ElementPalette: React.FC<ElementPaletteProps> = ({
       }
       // "observational" → no sim side-effect
     }
-    setCanvasState(tool_state(element.goToStateType));
+    setCanvasState(
+      armed_tool_state(
+        element.goToStateType,
+        canvasState,
+        mechanism.mechanicalElements,
+        mechanism.constraintElements,
+        mechanism.loads,
+        mechanism.viewport,
+      ),
+    );
   };
 
   // Structural, not visual: the group sizes are the same under every theme.
   const maxIconsInGroup = Math.max(...palette.map((g) => g.elements.length), 1);
+  const groupSizesRef = useRef<number[]>([]);
+  groupSizesRef.current = palette.map((g) => g.elements.length);
 
+  const paperRef = useRef<HTMLDivElement>(null);
   const [columns, setColumns] = useState(2);
-  useEffect(() => {
-    const computeColumns = () => {
-      const availableHeight = window.innerHeight - 200;
-      const rowHeight = (SIZE + 2 * PADDING) * 3;
-      const rowsThatFit = Math.max(1, Math.floor(availableHeight / rowHeight));
-      setColumns(Math.max(2, Math.ceil(maxIconsInGroup / rowsThatFit)));
+  const columnsRef = useRef(columns);
+  columnsRef.current = columns;
+
+  // The narrowest layout that still fits the canvas area, measured rather than
+  // estimated: the section titles and dividers vary with the theme's metrics, so
+  // the current height is the only reliable starting point. Everything but the
+  // icon grids keeps the same height when the column count changes, hence the
+  // reasoning on deltas.
+  useLayoutEffect(() => {
+    const paper = paperRef.current;
+    const area = paper?.parentElement;
+    if (!paper || !area) return;
+
+    const fit = () => {
+      if (area.clientHeight === 0) return;
+      const available = area.clientHeight - 2 * MARGIN;
+      // `scrollHeight` leaves the borders out, and they still take room on screen.
+      const borders = paper.offsetHeight - paper.clientHeight;
+      const current = paper.scrollHeight + borders;
+      const sizes = groupSizesRef.current;
+      const from = columnsRef.current;
+      for (let candidate = 2; candidate <= maxIconsInGroup; candidate++) {
+        const delta = sizes.reduce(
+          (sum, icons) =>
+            sum + grid_height(icons, candidate) - grid_height(icons, from),
+          0,
+        );
+        if (current + delta <= available || candidate === maxIconsInGroup) {
+          setColumns(candidate);
+          return;
+        }
+      }
     };
 
-    computeColumns();
-    window.addEventListener("resize", computeColumns);
-    return () => window.removeEventListener("resize", computeColumns);
+    fit();
+    const observer = new ResizeObserver(fit);
+    observer.observe(area);
+    return () => observer.disconnect();
   }, [maxIconsInGroup]);
 
   return (
     <Paper
       elevation={0}
+      ref={paperRef}
       sx={{
         position: "absolute",
-        left: 16,
-        top: 16,
+        left: MARGIN,
+        top: MARGIN,
         boxSizing: "border-box",
         display: "flex",
         alignItems: "center",
         flexDirection: "column",
         p: 0.5,
         zIndex: 1000,
-        maxHeight: "calc(100vh - 32px)",
+        userSelect: "none",
+        maxHeight: `calc(100% - ${2 * MARGIN}px)`,
         overflowY: "auto",
         // Hide scrollbar for Chrome, Safari and Opera
         "&::-webkit-scrollbar": {
@@ -444,8 +492,8 @@ export const ElementPalette: React.FC<ElementPaletteProps> = ({
       }}
     >
       {palette.map((group) => (
-        <section key={group.title}>
-          {group.title !== "Interface" && (
+        <section key={group.titleKey}>
+          {group.titleKey !== "palette_interface" && (
             <>
               <Divider
                 variant="fullWidth"
@@ -460,7 +508,7 @@ export const ElementPalette: React.FC<ElementPaletteProps> = ({
                   color: "text.disabled",
                 }}
               >
-                {group.title}
+                {t(group.titleKey)}
               </Typography>
             </>
           )}
@@ -489,21 +537,22 @@ export const ElementPalette: React.FC<ElementPaletteProps> = ({
                   ? element.simIconSrc
                   : element.iconSrc;
               const key = shortcut_label(element.goToStateType);
+              const name = t(element.nameKey);
               return (
                 <Tooltip
                   key={element.goToStateType}
-                  title={key ? `${element.tooltip} (${key})` : element.tooltip}
+                  title={key ? `${name} (${key})` : name}
                   placement="right"
                   arrow
                   disableInteractive
                   onOpen={() => {}}
                 >
                   <IconButton
-                    onClick={() => handleElementClick(element)}
+                    onClick={() => handleElementClick(element, isHighlighted)}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" || e.key === " ") {
                         e.preventDefault();
-                        handleElementClick(element);
+                        handleElementClick(element, isHighlighted);
                       }
                     }}
                     sx={{
@@ -519,12 +568,13 @@ export const ElementPalette: React.FC<ElementPaletteProps> = ({
                           : "action.hover",
                       },
                     }}
-                    aria-label={element.label}
+                    aria-label={name}
                   >
                     <Box
                       component="img"
                       src={iconSrc}
-                      alt={element.label}
+                      alt={name}
+                      draggable={false}
                       sx={{
                         width: SIZE,
                         height: SIZE,

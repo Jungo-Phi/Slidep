@@ -1,3 +1,4 @@
+import type { StringKey } from "../i18n";
 import { ID } from "./element";
 import { WorldPoint } from "./mechanism";
 
@@ -9,13 +10,20 @@ type HoveredElement = {
 
 /** The element and which part of that element of the mechanism that is currently hovered */
 export type HoveredPart =
-  | { type: "Void"; position: WorldPoint; rejected?: string }
+  | {
+      type: "Void";
+      position: WorldPoint;
+      /** Named rather than written out, so hovering says nothing about the language it is read in. */
+      rejected?: StringKey;
+      rejectedVars?: Record<string, string | number>;
+    }
   | (HoveredElement & { type: "Node"; beamBodyHover: boolean })
   | (HoveredElement & { type: "Edge"; part: "start" | "end" | "body" })
   | (HoveredElement & { type: "GearTooth" })
   | (HoveredElement & { type: "BeltBody"; section: number })
   | { type: "BeltClosure"; position: WorldPoint }
   | (HoveredElement & { type: "Probe" })
+  | (HoveredElement & { type: "MotorArrow" })
   | (HoveredElement & { type: "Constraint" })
   | (HoveredElement & { type: "Force"; part: "body" | "value" })
   | (HoveredElement & {

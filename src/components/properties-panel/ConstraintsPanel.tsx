@@ -20,6 +20,7 @@ import React from "react";
 import RatioInput from "./components/RatioInput";
 import { element_to_hovered_part } from "../canvas/utils";
 import { sorted_constraints_for_display } from "./element-order";
+import { t } from "../../i18n";
 
 interface ConstraintsPanelProps {
   constraintID: ID;
@@ -112,7 +113,7 @@ export const ConstraintsPanel: React.FC<ConstraintsPanelProps> = ({
                                       ? "°"
                                       : undefined
                                   }
-                                  signed={false}
+                                  unsigned
                                 />
                               );
                             case "gear-ratio":
@@ -146,7 +147,7 @@ export const ConstraintsPanel: React.FC<ConstraintsPanelProps> = ({
                               "Other",
                             )
                           }
-                          title="Supprimer"
+                          title={t("action_delete")}
                           sx={{ borderRadius: 3 }}
                         >
                           <Delete sx={{ width: 20, height: 20 }} />
@@ -169,7 +170,7 @@ export const ConstraintsPanel: React.FC<ConstraintsPanelProps> = ({
             color: "text.disabled",
           }}
         >
-          Pas encore de contraintes
+          {t("constraints_empty")}
         </Box>
       )}
     </Box>

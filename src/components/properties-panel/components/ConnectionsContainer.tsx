@@ -12,19 +12,20 @@ import Connection from "./ConnectionComponent";
 import { get_connections } from "../../mechanism/connect-actions";
 import { HoveredPart } from "../../../types/hovered-part";
 import { ordered_body_nodes } from "../element-order";
+import { StringKey, t } from "../../../i18n";
 
-const CONTAINER_NAMES: Record<ConnectsActionType, string> = {
-  ConnectsAttachedBelt: "Belt",
-  ConnectsAttachedGears: "Gears",
-  ConnectsFixedEdges: "Fixed edges",
-  ConnectsParentBeam: "Parent",
-  ConnectsFixedNodeStart: "Start node",
-  ConnectsFixedNodeEnd: "End node",
-  ConnectsParentAxle: "Axle",
-  ConnectsRotatingEdges: "Rotating edges",
-  ConnectsFixedNodesBody: "Body nodes",
-  ConnectsMeshedGears: "Meshed gears",
-  ConnectsFixedGears: "Fixed gears",
+const CONTAINER_NAME_KEYS: Record<ConnectsActionType, StringKey> = {
+  ConnectsAttachedBelt: "slot_belt",
+  ConnectsAttachedGears: "slot_gears",
+  ConnectsFixedEdges: "slot_fixed_edges",
+  ConnectsParentBeam: "slot_parent",
+  ConnectsFixedNodeStart: "slot_start_node",
+  ConnectsFixedNodeEnd: "slot_end_node",
+  ConnectsParentAxle: "slot_axle",
+  ConnectsRotatingEdges: "slot_rotating_edges",
+  ConnectsFixedNodesBody: "slot_body_nodes",
+  ConnectsMeshedGears: "slot_meshed_gears",
+  ConnectsFixedGears: "slot_fixed_gears",
 };
 
 interface ConnectionsContainerProps {
@@ -58,14 +59,15 @@ export const ConnectionsContainer: React.FC<ConnectionsContainerProps> = ({
     containerType === "ConnectsFixedNodesBody"
       ? ordered_body_nodes(element, stored, mechanism.mechanicalElements)
       : stored;
-  const containerName =
+  const containerName = t(
     containerType === "ConnectsFixedNodeStart" &&
-    element.type === "belt" &&
-    element.closed
-      ? "Jonction"
+      element.type === "belt" &&
+      element.closed
+      ? "slot_junction"
       : containerType === "ConnectsFixedNodesBody" && element.type === "gear"
-        ? "Fixed nodes"
-        : CONTAINER_NAMES[containerType];
+        ? "slot_fixed_nodes"
+        : CONTAINER_NAME_KEYS[containerType],
+  );
 
   return (
     <Box sx={{ display: "contents" }}>
@@ -126,7 +128,7 @@ export const ConnectionsContainer: React.FC<ConnectionsContainerProps> = ({
         )}
         {connections.length === 0 && (
           <Typography variant="caption" color="textDisabled">
-            Vide
+            {t("slot_empty")}
           </Typography>
         )}
       </Box>

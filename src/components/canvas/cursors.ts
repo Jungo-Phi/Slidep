@@ -6,23 +6,26 @@
  * dragged", "you are dragging", "you are about to point" — and native cursors
  * scale with the user's OS cursor-size setting, which a custom one cannot.
  *
- * A custom cursor is reserved for the other register: the identity of a tool the
- * user armed from the palette. CSS has no eraser cursor, so it has to be drawn.
+ * A custom cursor is reserved for the other register: identity — which tool is
+ * armed, which mode the app is in. CSS has neither an eraser nor a simulation
+ * cursor, so both have to be drawn.
  *
  * The bodies stay pale with a contrasting outline, like a real system cursor:
  * the outline holds the shape on a light canvas, the fill holds it on a dark
- * one. Only the deletion accent follows the theme — the same one the palette
- * button and the canvas deletion feedback already use, so an armed eraser, its
- * button and the elements it is about to remove all read in one colour.
+ * one. Only the accent follows the theme — the same one the palette button uses,
+ * so an armed eraser and the elements it is about to remove, or a simulation and
+ * its lit palette button, each read in one colour.
  */
 import { ICON_COLORS } from "../../constants/rendering-specs";
 import { CanvasPalette } from "../../constants/mui-theme";
 import eraserArrowSvg from "../../assets/icons/cursors/eraser-cursor.svg?raw";
 import eraserSoloSvg from "../../assets/icons/cursors/eraser-cursor-solo.svg?raw";
+import simSvg from "../../assets/icons/cursors/sim-cursor.svg?raw";
 
-/** The deletion literal baked into the source SVGs, and the role it plays. */
+/** The accent literals baked into the source SVGs, and the role each plays. */
 const SOURCE_HUES: Record<string, keyof CanvasPalette> = {
   "#ed5e71": "DELETION_BOX",
+  "#d7530b": "ACCENT",
 };
 
 const recolor = (svg: string, palette: CanvasPalette): string =>
@@ -44,23 +47,26 @@ const build = (
     recolor(svg, palette),
   )}") ${hotspotX} ${hotspotY}, default`;
 
-const cache = new Map<string, { arrow: string; solo: string }>();
+type Variants = { arrow: string; solo: string; sim: string };
+
+const cache = new Map<string, Variants>();
 
 /**
- * Two variants, cached per deletion palette. The cache matters: this is read on
+ * Every variant, cached per accent pair. The cache matters: this is read on
  * every render, and re-encoding a whole SVG each time would be wasteful.
  *
  * Reads `ICON_COLORS`, not `COLORS`: during a theme fade the latter holds an
  * intermediate palette, which would key a fresh URI on every frame.
  */
-const variants = (): { arrow: string; solo: string } => {
+const variants = (): Variants => {
   const palette = ICON_COLORS;
-  const key = palette.DELETION_BOX;
+  const key = `${palette.DELETION_BOX}|${palette.ACCENT}`;
   let built = cache.get(key);
   if (!built) {
     built = {
       arrow: build(eraserArrowSvg, 2, 2, palette),
       solo: build(eraserSoloSvg, 5, 9, palette),
+      sim: build(simSvg, 18, 15, palette),
     };
     cache.set(key, built);
   }
@@ -79,3 +85,12 @@ const variants = (): { arrow: string; solo: string } => {
  * compare the two.
  */
 export const eraser_cursor = (): string => variants().solo;
+
+/**
+ * `cursor` value for a canvas in simulation, in the active theme's accent.
+ *
+ * It says which mode the app is in, nothing more: the native `grab` still marks
+ * what can be dragged, and outranks this one wherever it applies. Hotspot on the
+ * tallest fingertip, the pointing-hand convention.
+ */
+export const simulation_cursor = (): string => variants().sim;

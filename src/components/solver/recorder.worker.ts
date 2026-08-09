@@ -75,6 +75,7 @@ self.onmessage = (event: MessageEvent<ToRecorder>) => {
             type: "layout",
             keys: layout.keys,
             angleKeys: layout.angleKeys,
+            maxTime: recorder.maxTime(),
             epoch,
           });
       }

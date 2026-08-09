@@ -7,7 +7,8 @@ import {
   ViewportState,
 } from "../types";
 
-export type SerializedPoint2 = { x: number; y: number };
+/** `JSON.stringify` has no spelling for `NaN` or `Infinity` and writes `null`, so a stored coordinate is not always a number. */
+export type SerializedPoint2 = { x: number | null; y: number | null };
 
 export type Serialized<T> = T extends Point2
   ? SerializedPoint2

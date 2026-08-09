@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   AlertTitle,
@@ -27,6 +27,7 @@ import {
 } from "../../utils";
 import { HoveredPart } from "../../types/hovered-part";
 import ElementDisplay from "./components/ElementDisplay";
+import { t, tn } from "../../i18n";
 
 /**
  * Categorical badge colors: they exist to tell the codes apart at a glance, not
@@ -45,6 +46,8 @@ const ERROR_CODE_COLORS: Record<ValidationErrorCode, string> = {
   GROUNDED_MASS: "#AD1457",
   BELT_CLOSURE_MISMATCH: "#00695C",
   BELTS_JOINED: "#827717",
+  SUPERPOSED_EDGES: "#37474F",
+  DUPLICATE_CONSTRAINT: "#5D4037",
 };
 
 const ERROR_CODE_LABELS: Record<ValidationErrorCode, string> = {
@@ -59,6 +62,8 @@ const ERROR_CODE_LABELS: Record<ValidationErrorCode, string> = {
   GROUNDED_MASS: "anc",
   BELT_CLOSURE_MISMATCH: "crr",
   BELTS_JOINED: "cxc",
+  SUPERPOSED_EDGES: "sup",
+  DUPLICATE_CONSTRAINT: "cnt",
 };
 
 const CATEGORY_COLORS: Record<ConstraintViolationCategory, string> = {
@@ -68,10 +73,11 @@ const CATEGORY_COLORS: Record<ConstraintViolationCategory, string> = {
   liaison: "#E65100",
 };
 
+// Badges, not words: they stay the same in every language, the message beside them carries the meaning.
 const CATEGORY_LABELS: Record<ConstraintViolationCategory, string> = {
   dimension: "dim",
   alignment: "ali",
-  geometric: "géo",
+  geometric: "geo",
   liaison: "lia",
 };
 
@@ -142,21 +148,41 @@ export const ProjectInfoSection: React.FC<ProjectInfoSectionProps> = ({
   }, [mechanism.metadata]);
 
   const handleInfoChange = (field: keyof MechanismMetadata, value: string) => {
-    const updatedInfo = {
-      ...projectInfo,
-      [field]: value,
-    };
-    setProjectInfo(updatedInfo);
-    updateMetadata({ ...updatedInfo });
+    setProjectInfo((previous) => ({ ...previous, [field]: value }));
   };
 
-  // Metadata is committed on every keystroke, so leaving the field is all these keys have to do.
-  const leaveOnEnterOrEscape = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" || e.key === "Escape")
-      (e.target as HTMLElement).blur();
+  // Set by Escape so the blur it triggers discards instead of committing.
+  const discardRef = useRef(false);
+
+  // Leaving a field validates it. Metadata does not go through the history, so Escape is
+  // the only way back from an edit and has to restore rather than merely leave.
+  const commitInfo = () => {
+    if (discardRef.current) {
+      discardRef.current = false;
+      setProjectInfo({ ...mechanism.metadata });
+      return;
+    }
+    const { name, description, author } = mechanism.metadata;
+    if (
+      projectInfo.name === name &&
+      projectInfo.description === description &&
+      projectInfo.author === author
+    )
+      return;
+    updateMetadata({ ...projectInfo });
   };
-  const leaveOnEscape = (e: React.KeyboardEvent) => {
-    if (e.key === "Escape") (e.target as HTMLElement).blur();
+
+  /** `enterCommits` is off for the description, where Enter is a line break. */
+  const handleFieldKeyDown = (
+    e: React.KeyboardEvent,
+    enterCommits: boolean,
+  ) => {
+    if (e.key === "Escape") {
+      discardRef.current = true;
+      (e.target as HTMLElement).blur();
+    } else if (e.key === "Enter" && enterCommits) {
+      (e.target as HTMLElement).blur();
+    }
   };
 
   return (
@@ -171,30 +197,42 @@ export const ProjectInfoSection: React.FC<ProjectInfoSectionProps> = ({
       >
         <TextField
           fullWidth
-          label="Nom du projet"
+          label={t("project_title")}
           value={projectInfo.name}
           onChange={(e) => handleInfoChange("name", e.target.value)}
-          onKeyDown={leaveOnEnterOrEscape}
+          onKeyDown={(e) => handleFieldKeyDown(e, true)}
+          onBlur={commitInfo}
           size="small"
         />
 
         <TextField
           fullWidth
-          label="Description"
+          label={t("project_description")}
           multiline
-          rows={3}
+          rows={4.6}
           value={projectInfo.description}
           onChange={(e) => handleInfoChange("description", e.target.value)}
-          onKeyDown={leaveOnEscape}
+          onKeyDown={(e) => handleFieldKeyDown(e, false)}
+          onBlur={commitInfo}
           size="small"
+          sx={{
+            "& .MuiOutlinedInput-root": {
+              paddingRight: 0,
+            },
+            "& .MuiInputBase-input": {
+              fontSize: "0.86rem",
+              paddingRight: "10px",
+            },
+          }}
         />
 
         <TextField
           fullWidth
-          label="Auteur·rice"
+          label={t("project_author")}
           value={projectInfo.author}
           onChange={(e) => handleInfoChange("author", e.target.value)}
-          onKeyDown={leaveOnEnterOrEscape}
+          onKeyDown={(e) => handleFieldKeyDown(e, true)}
+          onBlur={commitInfo}
           size="small"
         />
       </Box>
@@ -212,7 +250,7 @@ export const ProjectInfoSection: React.FC<ProjectInfoSectionProps> = ({
             color="text.secondary"
             sx={{ display: "block" }}
           >
-            Créé le :
+            {t("project_created")}
           </Typography>
           <Typography variant="body2">
             {format_date(projectInfo.createdAt)}
@@ -224,7 +262,7 @@ export const ProjectInfoSection: React.FC<ProjectInfoSectionProps> = ({
             color="text.secondary"
             sx={{ display: "block" }}
           >
-            Modifié le :
+            {t("project_modified")}
           </Typography>
           <Typography variant="body2">
             {format_date(projectInfo.modifiedAt)}
@@ -249,7 +287,7 @@ export const ProjectInfoSection: React.FC<ProjectInfoSectionProps> = ({
             gap: 1,
           }}
         >
-          <Typography variant="body2">Éléments :</Typography>
+          <Typography variant="body2">{t("project_element_count")}</Typography>
           <Typography variant="body1" fontWeight={500}>
             {mechanism.mechanicalElements.length}
           </Typography>
@@ -262,7 +300,9 @@ export const ProjectInfoSection: React.FC<ProjectInfoSectionProps> = ({
             gap: 1,
           }}
         >
-          <Typography variant="body2">Contraintes :</Typography>
+          <Typography variant="body2">
+            {t("project_constraint_count")}
+          </Typography>
           <Typography variant="body1" fontWeight={500}>
             {mechanism.constraintElements.length}
           </Typography>
@@ -293,9 +333,7 @@ export const ProjectInfoSection: React.FC<ProjectInfoSectionProps> = ({
               }}
             >
               <ErrorOutlineIcon fontSize="small" />
-              {validationErrors.length} erreur
-              {validationErrors.length > 1 ? "s" : ""} détectée
-              {validationErrors.length > 1 ? "s" : ""}
+              {tn("project_errors", validationErrors.length)}
             </AlertTitle>
             <Box sx={{ display: "flex", flexDirection: "column", gap: 0.25 }}>
               {validationErrors.map((err, i) => {
@@ -373,9 +411,7 @@ export const ProjectInfoSection: React.FC<ProjectInfoSectionProps> = ({
               }}
             >
               <WarningAmberIcon fontSize="small" />
-              {constraintViolations.length} contrainte
-              {constraintViolations.length > 1 ? "s" : ""} non respectée
-              {constraintViolations.length > 1 ? "s" : ""}
+              {tn("project_violations", constraintViolations.length)}
             </AlertTitle>
             <Box sx={{ display: "flex", flexDirection: "column", gap: 0.25 }}>
               {constraintViolations.map((v, i) => (

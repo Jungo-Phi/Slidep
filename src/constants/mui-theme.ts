@@ -9,15 +9,22 @@ declare module "@mui/material/styles" {
     toolbar: string;
     sunken: string;
   }
+  /** `palette.divider` is the one for `paper`; these name the other surfaces. */
+  interface Palette {
+    dividers: { ground: string; paper: string; toolbar: string };
+  }
+  interface PaletteOptions {
+    dividers?: { ground: string; paper: string; toolbar: string };
+  }
 }
 
 /** Colors that name the parts of a mechanical drawing, not UI roles. */
 export interface CanvasPalette {
   BACKGROUND: string;
   GRID: string;
-  GRID_MAJOR: string;
-  GRID_LARGER: string;
   GRID_AXIS: string;
+  /** Every snap indicator: the grid line a point landed on, the guides holding it. */
+  SNAP: string;
 
   ELEMENT_STROKE: string;
   FILL_BODY: string;
@@ -63,6 +70,8 @@ export interface ThemeSpec {
   deletionBox?: string;
 
   gridContrast?: number;
+  /** Mixes grid steps toward this colour instead of pure black/white — for a theme whose grid is meant to read as the same ink as everything else drawn on it. */
+  gridTint?: string;
   recolorIcons?: boolean;
 }
 
@@ -147,29 +156,85 @@ const selection_accent = (accent: string): string => {
 };
 
 const GRID_RAMP = {
-  light: { GRID: 0.03, GRID_MAJOR: 0.08, GRID_LARGER: 0.13, GRID_AXIS: 0.17 },
-  dark: { GRID: 0.06, GRID_MAJOR: 0.13, GRID_LARGER: 0.21, GRID_AXIS: 0.28 },
+  light: { GRID: 0.15, GRID_AXIS: 0.2 },
+  dark: { GRID: 0.22, GRID_AXIS: 0.3 },
 };
 
-/**
- * The four steps of the grid, each a notch further off the canvas ground.
- *
- * Also what the interface's dividers are drawn in: a rule between two panels and
- * a line of the grid play the same part, and a theme that raises `gridContrast`
- * wants both to follow.
- */
+/** The four steps of the grid, each a notch further off the canvas ground. */
 const grid_colors = (s: ThemeSpec) => {
   const ramp = GRID_RAMP[s.mode];
   const contrast = s.gridContrast ?? 1;
   // Darken a light ground, lighten a dark one — either way the ground keeps its
-  // own hue, which is what a mix towards the ink would have destroyed.
-  const towards = s.mode === "dark" ? "#FFFFFF" : "#000000";
+  // own hue, unless a theme opts into a tinted grid via `gridTint`.
+  const towards = s.gridTint ?? (s.mode === "dark" ? "#FFFFFF" : "#000000");
   const step = (v: number) => mix(s.appBackground, towards, v * contrast);
+  const axis = step(ramp.GRID_AXIS);
   return {
     GRID: step(ramp.GRID),
-    GRID_MAJOR: step(ramp.GRID_MAJOR),
-    GRID_LARGER: step(ramp.GRID_LARGER),
-    GRID_AXIS: step(ramp.GRID_AXIS),
+    GRID_AXIS: axis,
+    SNAP: snap_color(s, axis),
+  };
+};
+
+/** How much of the body hue a snap indicator carries: enough to be another statement than the grid, not enough to shout over the drawing. */
+const SNAP_SATURATION = 0.33;
+
+/**
+ * How far off the paper a snap indicator stands, as a WCAG contrast ratio.
+ *
+ * One figure for every theme, and deliberately **not** the grid's own: the grid ramp is far heavier on a dark ground than on a light one, and heavier again on the blueprints, so an indicator pegged to it inherited a weight that swung by three to one across the set. What it has to be is the same discreet mark everywhere.
+ */
+const SNAP_CONTRAST = 1.5;
+
+/**
+ * Where a theme drives its grid harder than the rest, the share of that excess the indicator keeps.
+ *
+ * A blueprint draws its grid near-white on blue, five times off the paper where the other themes sit under three: held to the common figure there, the indicator was fainter than the lines it has to stand out from. This is a floor, never a ceiling — every theme whose grid is ordinary stays on `SNAP_CONTRAST` exactly.
+ */
+const SNAP_GRID_SHARE = 0.25;
+
+/**
+ * The colour every snap indicator is drawn in: the body's hue, at a weight fixed once for all themes.
+ *
+ * The grid's family says « here is the paper », and a hold on it has to be a different statement — drawn in a step of the grid ramp it read as one more grid line, and vanished where it fell on an axis. Hence the hue.
+ *
+ * The weight is set by **contrast**, not by lightness: a tinted colour reads stronger than a grey of the same lightness, and by a different amount on a dark ground than on a light one. So the lightness is solved for, on the side the theme's own grid steps towards.
+ */
+const snap_color = (s: ThemeSpec, axis: string): string => {
+  const { h } = to_hsl(s.fillBody);
+  const ground = s.appBackground;
+  const target = Math.max(
+    SNAP_CONTRAST,
+    1 + SNAP_GRID_SHARE * (contrast_ratio(axis, ground) - 1),
+  );
+  const shade = (l: number) => to_hex({ h, s: SNAP_SATURATION, l });
+  // Contrast is monotone in lightness on either side of the ground, so a bisection on one side finds it. Twenty halvings take the interval well under one 8-bit level.
+  const lighter = s.mode === "dark";
+  let lo = lighter ? to_hsl(ground).l : 0;
+  let hi = lighter ? 1 : to_hsl(ground).l;
+  for (let i = 0; i < 20; i++) {
+    const mid = (lo + hi) / 2;
+    if (contrast_ratio(shade(mid), ground) < target === lighter) lo = mid;
+    else hi = mid;
+  }
+  return shade((lo + hi) / 2);
+};
+
+/**
+ * How far a rule steps off the surface it is drawn on. One step, applied to each
+ * surface in turn: a divider is only ever read against what it lies on, so a
+ * single colour for all of them is right on one surface and wrong on the others.
+ */
+const DIVIDER_STEP = { light: 0.2, dark: 0.26 };
+
+/** The rules of the interface, one per surface they can be drawn on. */
+const divider_colors = (s: ThemeSpec) => {
+  const towards = s.mode === "dark" ? "#FFFFFF" : "#000000";
+  const step = (surface: string) => mix(surface, towards, DIVIDER_STEP[s.mode]);
+  return {
+    ground: step(s.appBackground),
+    paper: step(s.paper),
+    toolbar: step(s.toolbar),
   };
 };
 
@@ -185,7 +250,7 @@ const SPECS = {
     accentDark: "#9C4211",
     onAccent: "#FFFFFF",
     ink: "#001D59",
-    paper: "#fff5de",
+    paper: "#fff3d6",
     appBackground: "#FDECC9",
     toolbar: "#FFBE80",
     fillBody: "#B7E2FF",
@@ -218,7 +283,7 @@ const SPECS = {
     accentDark: "#A83D08",
     onAccent: "#FFFFFF",
     ink: "#000000",
-    paper: "#FFFFFF",
+    paper: "#fffbf7",
     appBackground: "#FFFFFF",
     toolbar: "#e2e9f2",
     fillBody: "#c5e2ff",
@@ -249,15 +314,16 @@ const SPECS = {
     accent: "#E2530B",
     accentDark: "#A83D08",
     onAccent: "#FFFFFF",
-    ink: "#404040",
-    paper: "#dde4eb",
-    appBackground: "#aec9ec",
-    toolbar: "#e2e9f2",
-    fillBody: "#c3ddff",
-    fillNode: "#7cb9ff",
-    selectionStroke: "#3086dd",
-    selectionBox: "#4385cf",
-    gridContrast: 2,
+    ink: "#1D3F73",
+    paper: "#f5f0e5",
+    appBackground: "#EFE8D4",
+    toolbar: "#e4d9c2",
+    fillBody: "#c5dfff",
+    fillNode: "#e8a774",
+    selectionStroke: "#2F7DDA",
+    selectionBox: "#4C8FE0",
+    gridContrast: 4,
+    gridTint: "#1D3F73",
   },
   "blueprint-dark": {
     family: "Blueprint",
@@ -266,11 +332,11 @@ const SPECS = {
     accentDark: "#c5612b",
     onAccent: "#38110e",
     ink: "#eeeeee",
-    paper: "#16529f",
-    appBackground: "#215fb1",
-    toolbar: "#387fc6",
-    fillBody: "#5d71d7",
-    fillNode: "#6eb2d9",
+    paper: "#1464b5",
+    appBackground: "#216eb1",
+    toolbar: "#2b5db4",
+    fillBody: "#4b76cb",
+    fillNode: "#ce9681",
     selectionStroke: "#62e5ff",
     selectionBox: "#5AA9FF",
     gridContrast: 3,
@@ -354,13 +420,16 @@ const mui_palette = (s: ThemeSpec) => {
       paper: s.paper,
       toolbar: s.toolbar,
       sunken: `rgba(${veil}, 0.04)`,
+      hover: `rgba(${veil}, 0.08)`,
     },
     text: {
       primary: s.ink,
       secondary: alpha(s.ink, 0.7),
       disabled: alpha(s.ink, 0.38),
     },
-    divider: grid_colors(s).GRID_LARGER,
+    // The default lands on `paper`, which is what most of the interface is made of.
+    divider: divider_colors(s).paper,
+    dividers: divider_colors(s),
     action: {
       hover: `rgba(${veil}, 0.1)`,
       hoverOpacity: 0.1,
@@ -442,6 +511,11 @@ export const mix_theme_specs = (
   ),
 
   gridContrast: (from.gridContrast ?? 1) * (1 - t) + (to.gridContrast ?? 1) * t,
+  gridTint: mix(
+    from.gridTint ?? (from.mode === "dark" ? "#FFFFFF" : "#000000"),
+    to.gridTint ?? (to.mode === "dark" ? "#FFFFFF" : "#000000"),
+    t,
+  ),
 });
 
 /**

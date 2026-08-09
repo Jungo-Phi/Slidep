@@ -1,4 +1,3 @@
-import { DIM } from "../../constants/rendering-specs";
 import { Link, Point2 } from "../../types";
 import { ONE } from "../../types/point2";
 import {
@@ -21,6 +20,18 @@ import {
   setPoint,
 } from "./nodes";
 import { LinkSlots } from "./link-slots";
+
+/**
+ * How small a gear radius the solver may write.
+ *
+ * A numerical guard, not a size: the belt geometry, the meshing and the ratio all divide by a radius, and none of them survives a zero. How small a gear one may *draw* is a matter of pixels and belongs to the cursor bounds — a minimum in world units would make the same mechanism behave differently drawn at ten times the size.
+ */
+const MIN_SOLVED_RADIUS = 1e-3;
+
+/** The single writer of a gear radius, so the guard above cannot be forgotten at one of the sites that move one. */
+function write_radius(nodes: EditNodes, slot: number, value: number): void {
+  nodes.radius[slot] = Math.max(MIN_SOLVED_RADIUS, value);
+}
 
 /* ════════════════════════════════════════════════════════════════════════
  *  OnSegment : point contraint sur le segment (start, end)
@@ -53,7 +64,11 @@ import { LinkSlots } from "./link-slots";
 
 /** Facteur commun aux deux contraintes OnSegment : projette pNode sur
  * lerp(start, end, t) avec la pondération PBD correcte (bras de levier `t`).
- * `t` est fourni par l'appelant (fixe pour Fixed, reprojeté pour Slide). */
+ * `t` est fourni par l'appelant (fixe pour Fixed, reprojeté pour Slide).
+ * `normalOffset` décale la cible perpendiculairement au segment, du côté où le
+ * nœud se trouve déjà. Comme `DistanceToLine`, la direction perpendiculaire est
+ * lue sur la géométrie courante et sa rotation n'entre pas dans le gradient : la
+ * variété visée est exacte, seule la répartition de la correction est approchée. */
 function projectOnSegment(
   nodes: Nodes,
   iStart: number,
@@ -61,6 +76,7 @@ function projectOnSegment(
   iNode: number,
   t: number,
   stiffness: number,
+  normalOffset: number = 0,
 ): number {
   const wNode = nodes.w[iNode];
   const wStart = nodes.w[iStart];
@@ -75,8 +91,22 @@ function projectOnSegment(
   const ex = nodes.x[iEnd];
   const ey = nodes.y[iEnd];
   // foot = lerp(start, end, t), puis C = pNode − foot (contrainte vectorielle)
-  const Cx = nodes.x[iNode] - (sx + (ex - sx) * t);
-  const Cy = nodes.y[iNode] - (sy + (ey - sy) * t);
+  let Cx = nodes.x[iNode] - (sx + (ex - sx) * t);
+  let Cy = nodes.y[iNode] - (sy + (ey - sy) * t);
+  if (normalOffset !== 0) {
+    const dx = ex - sx;
+    const dy = ey - sy;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    if (len > 0) {
+      const nx = -dy / len;
+      const ny = dx / len;
+      // Un nœud pile sur le segment n'a pas de côté : la perpendiculaire gauche
+      // tranche, ce qui rend le décalage reproductible plutôt qu'arbitraire.
+      const side = Cx * nx + Cy * ny < 0 ? -1 : 1;
+      Cx -= normalOffset * side * nx;
+      Cy -= normalOffset * side * ny;
+    }
+  }
   const error = Math.sqrt(Cx * Cx + Cy * Cy);
 
   // λ = C / denom, puis Δpᵢ = ∓ λ wᵢ ‖∂ᵢ‖. Point ancré (wᵢ=0) → Δ nul.
@@ -102,6 +132,7 @@ export function applySlideOnSegmentConstraint(
   iEnd: number,
   iNode: number,
   stiffness: number = 1.0,
+  normalOffset: number = 0,
 ): number {
   if (iStart < 0 || iEnd < 0 || iNode < 0) return 0;
   const sx = nodes.x[iStart];
@@ -116,11 +147,17 @@ export function applySlideOnSegmentConstraint(
   const onSegment =
     ((nodes.x[iNode] - sx) * dx + (nodes.y[iNode] - sy) * dy) /
     (dx * dx + dy * dy);
-  const t = Math.max(
-    DIM.EDGE_END_MARGIN / edgeLength,
-    Math.min(onSegment, 1 - DIM.EDGE_END_MARGIN / edgeLength),
+  // The whole segment, ends included: keeping the slider clear of them would be a rule of the drawing — the block is a fixed number of pixels wide — written into the model, where it would not survive a change of the mechanism's size.
+  const t = Math.max(0, Math.min(onSegment, 1));
+  return projectOnSegment(
+    nodes,
+    iStart,
+    iEnd,
+    iNode,
+    t,
+    stiffness,
+    normalOffset,
   );
-  return projectOnSegment(nodes, iStart, iEnd, iNode, t, stiffness);
 }
 
 /** Contraint un point (keyNode) à se trouver exactement au ratio `t` FIXE sur
@@ -134,9 +171,18 @@ export function applyFixedOnSegmentConstraint(
   iNode: number,
   t: number,
   stiffness: number = 1.0,
+  normalOffset: number = 0,
 ): number {
   if (iStart < 0 || iEnd < 0 || iNode < 0) return 0;
-  return projectOnSegment(nodes, iStart, iEnd, iNode, t, stiffness);
+  return projectOnSegment(
+    nodes,
+    iStart,
+    iEnd,
+    iNode,
+    t,
+    stiffness,
+    normalOffset,
+  );
 }
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -721,15 +767,9 @@ export function applyGearMeshingConstraint(
   // Les deux rayons bougent dans le même sens (tous deux grandissent si dist > r1+r2).
   const radCorrection = error * stiffness;
   if (wRad1 !== 0)
-    nodes.radius[rg1] = Math.max(
-      DIM.MIN_GEAR_RADIUS,
-      r1 + radCorrection * (wRad1 / totalW),
-    );
+    write_radius(nodes, rg1, r1 + radCorrection * (wRad1 / totalW));
   if (wRad2 !== 0)
-    nodes.radius[rg2] = Math.max(
-      DIM.MIN_GEAR_RADIUS,
-      r2 + radCorrection * (wRad2 / totalW),
-    );
+    write_radius(nodes, rg2, r2 + radCorrection * (wRad2 / totalW));
   return Math.abs(error);
 }
 
@@ -770,15 +810,9 @@ export function applyGearRatioConstraint(
   const targetR1 = ratio * r2; // r1 si r2 est fixe
   const targetR2 = r1 / ratio; // r2 si r1 est fixe
   if (w1 !== 0)
-    nodes.radius[g1] = Math.max(
-      DIM.MIN_GEAR_RADIUS,
-      r1 + (targetR1 - r1) * (w1 / totalW) * stiffness,
-    );
+    write_radius(nodes, g1, r1 + (targetR1 - r1) * (w1 / totalW) * stiffness);
   if (w2 !== 0)
-    nodes.radius[g2] = Math.max(
-      DIM.MIN_GEAR_RADIUS,
-      r2 + (targetR2 - r2) * (w2 / totalW) * stiffness,
-    );
+    write_radius(nodes, g2, r2 + (targetR2 - r2) * (w2 / totalW) * stiffness);
 
   return error;
 }
@@ -1273,11 +1307,7 @@ export function applyBeltLengthConstraint(
   }
   radGrad.forEach((g, slot) => {
     const w = nodes.wRadius[slot] * radScale;
-    if (w !== 0)
-      nodes.radius[slot] = Math.max(
-        DIM.MIN_GEAR_RADIUS,
-        nodes.radius[slot] + k * w * g,
-      );
+    if (w !== 0) write_radius(nodes, slot, nodes.radius[slot] + k * w * g);
   });
   return Math.abs(C);
 }

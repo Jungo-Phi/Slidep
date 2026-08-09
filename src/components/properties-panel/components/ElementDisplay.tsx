@@ -12,6 +12,7 @@ import { HoveredPart } from "../../../types/hovered-part";
 import { element_to_hovered_part } from "../../canvas/utils";
 import { shown_element_name } from "../../../utils";
 import { useElementNavigation } from "../element-navigation";
+import { t } from "../../../i18n";
 
 interface ElementDisplayProps {
   element: UnionElement;
@@ -181,6 +182,9 @@ const ElementDisplayComponent: React.FC<ElementDisplayProps> = ({
           justifyContent: "flex-start",
           minWidth: 0,
         }),
+        "&:focus-visible": {
+          backgroundColor: "action.selected",
+        },
       }}
       disableRipple
     >
@@ -256,7 +260,7 @@ const ElementDisplayComponent: React.FC<ElementDisplayProps> = ({
                   : "body1"
             }
             onClick={handleTextClick}
-            title={"Cliquer pour modifier le nom"}
+            title={t("element_rename_hint")}
             sx={{
               ...textStyleCommon,
               fontSize: fontSizeValue,
