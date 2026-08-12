@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useLayoutEffect, useRef, useState } from "react";
 import { Box, Checkbox, MenuItem, Paper } from "@mui/material";
 import {
   DEFAULT_PROBE_COMPONENTS,
@@ -12,7 +12,7 @@ import { StringKey, t } from "../../i18n";
 export const PROBE_METRIC_LABEL_KEYS: Record<ProbeMetric, StringKey> = {
   position: "metric_position",
   velocity: "metric_velocity",
-  angle: "metric_angle",
+  angle: "angle",
   "angular-velocity": "metric_angular_velocity",
   force: "metric_force",
 };
@@ -131,9 +131,22 @@ export const OnCanvasProbeMetricSelector: React.FC<
   OnCanvasProbeMetricSelectorProps
 > = ({ element, position, onToggle, onClose }) => {
   const paperRef = useRef<HTMLDivElement>(null);
+  const [clampOffset, setClampOffset] = useState({ x: 0, y: 0 });
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     paperRef.current?.focus();
+    const rect = paperRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const margin = 8;
+    let dx = 0;
+    let dy = 0;
+    if (rect.left < margin) dx = margin - rect.left;
+    else if (rect.right > window.innerWidth - margin)
+      dx = window.innerWidth - margin - rect.right;
+    if (rect.top < margin) dy = margin - rect.top;
+    else if (rect.bottom > window.innerHeight - margin)
+      dy = window.innerHeight - margin - rect.bottom;
+    if (dx !== 0 || dy !== 0) setClampOffset({ x: dx, y: dy });
   }, []);
 
   return (
@@ -147,14 +160,21 @@ export const OnCanvasProbeMetricSelector: React.FC<
         ref={paperRef}
         tabIndex={-1}
         onKeyDown={(e) => {
-          if (e.key === "Escape" || e.key === "Enter") onClose();
+          if (e.key === "Escape") onClose();
+        }}
+        onKeyDownCapture={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            e.stopPropagation();
+            onClose();
+          }
         }}
         sx={{
           ...PROBE_METRIC_PAPER_SX,
           position: "absolute",
           left: position.x,
           top: position.y,
-          transform: "translate(-50%, 14px)",
+          transform: `translate(calc(-50% + ${clampOffset.x}px), calc(14px + ${clampOffset.y}px))`,
           zIndex: 1000,
         }}
       >

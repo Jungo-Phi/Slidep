@@ -128,7 +128,7 @@ export type CanvasState =
   | {
       type: "PlacingBeltEnd";
       startHover: HoveredPart;
-      attachedGearsIDs: { id: ID; direction: boolean }[];
+      attachedGearsIDs: { id: ID; clockwise: boolean }[];
     }
   | { type: "PlacingMotor" }
   | { type: "PlacingPivot" }
@@ -204,3 +204,11 @@ export type CanvasState =
       gearPerimeter?: { gearID: ID; angleOffset: number; radius: number };
       beltPin?: Extract<Link, { type: "BeltPin" }>;
     };
+
+/** Every element id the canvas state currently treats as selected/focused: one id for
+ *  most states (drag, edit, single selection), several under a multiple selection. */
+export function selected_ids(state: CanvasState): ID[] {
+  if ("elementIDs" in state) return state.elementIDs;
+  if ("elementID" in state) return [state.elementID];
+  return [];
+}

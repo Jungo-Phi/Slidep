@@ -485,19 +485,19 @@ export class Point2<S extends Space = "world"> {
     return inside;
   }
 
-  /** Renvoie un segment (`start` to `end`) tangeant aux 2 cercles. direction {false: clockwise, true: counterClockwise}*/
+  /** Renvoie un segment (`start` to `end`) tangeant aux 2 cercles.*/
   public static circles_link<S extends Space = "world">(
     center1: Point2<S>,
     radius1: number,
-    direction1: boolean,
+    clockwise1: boolean,
     center2: NoInfer<Point2<S>>,
     radius2: number,
-    direction2: boolean,
+    clockwise2: boolean,
   ): { start: Point2<S>; end: Point2<S> } {
     const delta = center2.sub(center1);
     const d = delta.length();
     let alpha: number;
-    if (direction1 === direction2) {
+    if (clockwise1 === clockwise2) {
       const r_diff = radius1 - radius2;
       if (d < Math.abs(r_diff)) {
         return {
@@ -517,11 +517,11 @@ export class Point2<S extends Space = "world"> {
       alpha = Math.asin(r_sum / d);
     }
     const n = Point2.from_angle<S>(
-      delta.angle() + alpha * (direction1 ? -1 : 1) + Math.PI / 2,
+      delta.angle() + alpha * (clockwise1 ? -1 : 1) + Math.PI / 2,
     );
     return {
-      start: n.mul(radius1 * (direction1 ? 1 : -1)),
-      end: n.mul(radius2 * (direction2 ? 1 : -1)),
+      start: n.mul(radius1 * (clockwise1 ? 1 : -1)),
+      end: n.mul(radius2 * (clockwise2 ? 1 : -1)),
     };
   }
 }

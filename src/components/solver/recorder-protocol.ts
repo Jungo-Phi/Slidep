@@ -2,6 +2,7 @@ import { Point2 } from "../../types/point2";
 import { KinematicSnapshot } from "../../types/runtime-state";
 import { SerializedMechanism } from "../../types";
 import { SimGrab } from "./kinematic-simulation";
+import { BeltShape } from "./snapshot";
 
 /**
  * What crosses the worker boundary, and how it survives the crossing.
@@ -39,6 +40,14 @@ export type ToRecorder =
        */
       epoch: number;
     }
+  /**
+   * Put the recording back on an instant it already produced, keeping the compiled model.
+   *
+   * What a pause needs: the worker deliberately records past the cursor, and those instants
+   * are dropped rather than shown. Reloading to rewind would recompile a mechanism that has
+   * not changed, and lose everything the run had accumulated on it.
+   */
+  | { type: "rewind"; resumeFrom: KinematicSnapshot; epoch: number }
   | { type: "grab"; grab: SimGrab | null }
   /**
    * Where the simulated clock should get to. Sent every displayed frame and never awaited:
@@ -57,12 +66,9 @@ export type FromRecorder =
       type: "layout";
       keys: string[];
       angleKeys: string[];
-      /**
-       * The longest this load records. Derived from the layout, which the wire carries
-       * WITHOUT its belts — recomputing it on the other side would read a cheaper
-       * mechanism than the one being simulated, so it crosses as a number.
-       */
-      maxTime: number;
+      /** Belts and their pulley counts: without them the belt slots have no owner on the
+       *  other side, and the contact flags cannot be read back at all. */
+      belts: BeltShape[];
       epoch: number;
     }
   | {

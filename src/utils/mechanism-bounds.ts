@@ -1,3 +1,4 @@
+import { DIM } from "../constants/rendering-specs";
 import {
   ConstraintElement,
   EdgeElement,
@@ -14,13 +15,12 @@ export interface Bounds {
 
 /**
  * Boîte englobante, en coordonnées monde, des ancres du modèle : positions des
- * nœuds, extrémités des arêtes, disque des engrenages, étiquettes des
- * contraintes.
+ * nœuds, extrémités des arêtes, disque des engrenages (dents comprises),
+ * étiquettes des contraintes.
  *
  * Approximative par nature : l'encombrement *dessiné* des glyphes (bâti,
- * moteur, texte d'une cote) ne vit que dans les fonctions de dessin. Les
- * appelants compensent par une marge en unités monde — constante quel que soit
- * le zoom, puisque le contexte entier est mis à l'échelle.
+ * moteur, texte d'une cote) ne vit que dans les fonctions de dessin et n'est
+ * pas repris ici.
  *
  * Les charges en sont exclues : elles sont dessinées à taille écran fixe, donc
  * leur encombrement en unités monde dépend du zoom qu'on cherche justement à
@@ -47,7 +47,7 @@ export function mechanism_bounds(
   for (const element of mechanicalElements) {
     if (element.type === "gear") {
       const gear = element as GearElement;
-      include(gear.position, gear.radius);
+      include(gear.position, gear.radius + DIM.GEAR_TEETH_SIZE);
     } else if ("position" in element) {
       include((element as NodeElement).position);
     } else if ("positionStart" in element) {

@@ -151,7 +151,7 @@ const find = (m: Mechanism, elementID: ID) =>
  */
 function apply(before: Mechanism, actions: Action[]): Mechanism {
   expect(validate_mechanism(before)).toBeNull();
-  return apply_actions(before, actions, "Connects");
+  return apply_actions(before, actions);
 }
 
 describe("superposition — deux edges sur les mêmes nœuds", () => {

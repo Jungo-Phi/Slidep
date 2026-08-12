@@ -148,7 +148,7 @@ const belt: BeltElement = {
   positionEnd: P(600, -300),
   fixedNodeStartID: undefined,
   fixedNodeEndID: undefined,
-  attachedGearsIDs: [{ id: BELT_GEAR, direction: false }],
+  attachedGearsIDs: [{ id: BELT_GEAR, clockwise: false }],
   closed: false,
 };
 
@@ -413,6 +413,81 @@ describe("une cible que le glissement n'atteint pas", () => {
 
   it("est laissée au survol ordinaire hors de tout glissement", () => {
     expect(names_element(at(undefined))).toBe(true);
+  });
+});
+
+/**
+ * Le même contrôle, pour le geste qui ne produit pas un point mais un rayon.
+ *
+ * L'engrenage dimensionné est au centre, la cible à 300 avec un rayon de 100 :
+ * la tangence est donc en (200,0) et le rayon accordé vaut 200. Le curseur, lui,
+ * est ailleurs sur la jante de la cible — mesurer la poignée sur son relèvement
+ * plutôt que sur celui de la tangence faisait osciller le survol d'une frame à
+ * l'autre.
+ */
+describe("un rayon que le glissement n'atteint pas", () => {
+  const SIZED_AXLE = id("a3");
+  const SIZED = id("g3");
+  const TARGET_AXLE = id("a4");
+  const TARGET = id("g4");
+  const ASKED = P(200, 0);
+  /** Sur la jante de la cible, à 90° du point de tangence. */
+  const CURSOR = P(300, 100);
+
+  const pivot = (pivotID: ID, at: Point2, gearID: ID): PivotElement => ({
+    type: "pivot",
+    id: pivotID,
+    probes: [],
+    overlays: {},
+    position: at,
+    isGrounded: false,
+    rotatingEdgesIDs: [],
+    fixedGearsIDs: [gearID],
+  });
+  const wheel = (
+    gearID: ID,
+    axleID: ID,
+    at: Point2,
+    radius: number,
+  ): GearElement => ({
+    type: "gear",
+    id: gearID,
+    probes: [],
+    overlays: {},
+    position: at,
+    angle: 0,
+    radius,
+    parentAxleID: axleID,
+    fixedNodesBodyIDs: [],
+    meshedGearsIDs: [],
+    attachedBeltID: undefined,
+  });
+
+  const at = (grantedRadius: number) =>
+    get_hovered_part(
+      [
+        pivot(SIZED_AXLE, ZERO, SIZED),
+        wheel(SIZED, SIZED_AXLE, ZERO, grantedRadius),
+        pivot(TARGET_AXLE, P(300, 0), TARGET),
+        wheel(TARGET, TARGET_AXLE, P(300, 0), 100),
+      ],
+      [],
+      [],
+      new Map(),
+      CURSOR,
+      { type: "ChangingGearRadius", elementID: SIZED },
+      VIEWPORT,
+      ASKED,
+    );
+
+  it("survole la cible quand le rayon demandé a été accordé", () => {
+    const hovered = at(200);
+    expect(names_element(hovered) && hovered.id).toBe(TARGET);
+    expect(hovered.position.distance_to(ASKED)).toBeCloseTo(0);
+  });
+
+  it("ne la survole pas quand le rayon est resté en arrière", () => {
+    expect(at(100).type).toBe("Void");
   });
 });
 

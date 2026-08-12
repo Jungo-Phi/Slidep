@@ -144,22 +144,27 @@ describe("find_redundant_links", () => {
     );
   });
 
-  it("un groupe montre les deux côtés de sa contrainte", () => {
+  it("un groupe montre les deux côtés de sa contrainte, et rien au-delà", () => {
     // Une contrainte est entre des pièces. L'`owner` n'est que celle sous laquelle le
     // parser l'a rangée : pointer elle seule laissait chercher contre quoi elle lutte.
+    // Mais la lire nœud par nœud débordait à l'inverse — les nœuds du rail portent aussi
+    // l'autre slider, qui n'a rien à voir avec ce verrou-ci.
     const [{ redundancy }] = audited([
-      pivot("p1", P(0, 0), true, [id("b1"), id("b2")]),
-      pivot("p2", P(100, 0), false, [id("b1"), id("b2")]),
-      beam("b1", P(0, 0), P(100, 0), "p1", "p2"),
-      beam("b2", P(0, 0), P(100, 0), "p1", "p2"),
+      join("g1", P(0, 0), true, [id("rail")]),
+      join("g2", P(400, 0), true, [id("rail")]),
+      beam("rail", P(0, 0), P(400, 0), "g1", "g2", [id("s1"), id("s2")]),
+      sliderNode("s1", P(100, 0), "rail", [id("carried")]),
+      sliderNode("s2", P(300, 0), "rail", [id("carried")]),
+      beam("carried", P(100, 0), P(300, 0), "s1", "s2"),
     ]);
-    for (const group of redundancy.groups) {
-      expect(group.elements).toContain(group.owner);
-      // La longueur d'une barre tient ses deux pivots, dont l'un est ancré et n'a donc
-      // aucune variable libre : c'est bien la contrainte qu'on lit, pas la chaîne.
-      expect(group.elements).toContain(id("p2"));
-      expect(group.elements.length).toBeGreaterThan(1);
-    }
+    const lock = redundancy.groups.find((g) =>
+      g.links.some((l) => l.type === "Angle"),
+    );
+    expect(lock).toBeDefined();
+    expect(lock!.elements).toContain(lock!.owner);
+    expect(lock!.elements).toEqual(
+      [lock!.owner, id("rail"), id("carried")].sort(),
+    );
   });
 
   it("une courroie parle d'une seule voix", () => {

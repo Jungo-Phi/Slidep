@@ -11,7 +11,6 @@ import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
 import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import {
   Action,
-  ActionBundleType,
   CanvasState,
   ID,
   Mechanism,
@@ -48,6 +47,8 @@ const ERROR_CODE_COLORS: Record<ValidationErrorCode, string> = {
   BELTS_JOINED: "#827717",
   SUPERPOSED_EDGES: "#37474F",
   DUPLICATE_CONSTRAINT: "#5D4037",
+  PARENT_BEAM_CONFLICT: "#2E7D32",
+  GEAR_ROLE_CONFLICT: "#809d28",
 };
 
 const ERROR_CODE_LABELS: Record<ValidationErrorCode, string> = {
@@ -64,6 +65,8 @@ const ERROR_CODE_LABELS: Record<ValidationErrorCode, string> = {
   BELTS_JOINED: "cxc",
   SUPERPOSED_EDGES: "sup",
   DUPLICATE_CONSTRAINT: "cnt",
+  PARENT_BEAM_CONFLICT: "rai",
+  GEAR_ROLE_CONFLICT: "grc",
 };
 
 const CATEGORY_COLORS: Record<ConstraintViolationCategory, string> = {
@@ -84,15 +87,19 @@ const CATEGORY_LABELS: Record<ConstraintViolationCategory, string> = {
 interface ProjectInfoSectionProps {
   mechanism: Mechanism;
   updateMetadata: (metadata: MechanismMetadata) => void;
+  hoveredPart: HoveredPart;
   setHoveredPart: (hoveredPart: HoveredPart) => void;
+  selectedIds: ID[];
   setCanvasState: (state: CanvasState) => void;
-  applyActions: (actions: Action[], actionBundleType: ActionBundleType) => void;
+  applyActions: (actions: Action[]) => void;
 }
 
 export const ProjectInfoSection: React.FC<ProjectInfoSectionProps> = ({
   mechanism,
   updateMetadata,
+  hoveredPart,
   setHoveredPart,
+  selectedIds,
   setCanvasState,
   applyActions,
 }) => {
@@ -370,7 +377,9 @@ export const ProjectInfoSection: React.FC<ProjectInfoSectionProps> = ({
                       <Box sx={{ flexShrink: 0 }}>
                         <ElementDisplay
                           element={faulty}
+                          hoveredPart={hoveredPart}
                           setHoveredPart={setHoveredPart}
+                          selectedIds={selectedIds}
                           setCanvasState={setCanvasState}
                           applyActions={applyActions}
                           size="small"

@@ -124,8 +124,8 @@ function closed_belt_mechanism(over: Partial<BeltElement> = {}): Mechanism {
       fixedNodeStartID: joinID,
       fixedNodeEndID: joinID,
       attachedGearsIDs: [
-        { id: GEAR_ID, direction: false },
-        { id: gear2, direction: false },
+        { id: GEAR_ID, clockwise: false },
+        { id: gear2, clockwise: false },
       ],
       closed: true,
       ...over,
@@ -161,8 +161,8 @@ function open_belt_mechanism(start: Point2, end: Point2): Mechanism {
       fixedNodeStartID: undefined,
       fixedNodeEndID: undefined,
       attachedGearsIDs: [
-        { id: GEAR_ID, direction: false },
-        { id: gear2, direction: false },
+        { id: GEAR_ID, clockwise: false },
+        { id: gear2, clockwise: false },
       ],
       closed: false,
     },
@@ -195,7 +195,7 @@ describe("validate_mechanism — fermeture des courroies", () => {
 
   it("BELT_CLOSURE_MISMATCH : fermée mais une seule poulie", () => {
     const mech = closed_belt_mechanism({
-      attachedGearsIDs: [{ id: GEAR_ID, direction: false }],
+      attachedGearsIDs: [{ id: GEAR_ID, clockwise: false }],
     });
     expect(codes(mech)).toContain("BELT_CLOSURE_MISMATCH");
   });
@@ -286,6 +286,16 @@ describe("validate_mechanism — chaque code d'erreur", () => {
     expect(codes(mechanism([axle, g1, g2]))).toContain("SAME_AXLE_MESH");
   });
 
+  it("GEAR_ROLE_CONFLICT : un engrenage est à la fois fixé et libre sur son axe", () => {
+    const axle = pivot({
+      id: AXLE_ID,
+      rotatingEdgesIDs: [GEAR_ID],
+      fixedGearsIDs: [GEAR_ID],
+    });
+    const g1 = gear();
+    expect(codes(mechanism([axle, g1]))).toContain("GEAR_ROLE_CONFLICT");
+  });
+
   it("GROUNDED_MASS : une masse est ancrée au sol", () => {
     const mass: MechanicalElement = {
       type: "mass",
@@ -306,6 +316,25 @@ describe("validate_mechanism — chaque code d'erreur", () => {
       beam(),
     ]);
     expect(codes(mech)).toContain("CONTRADICTORY_MOTOR");
+  });
+
+  it("PARENT_BEAM_CONFLICT : un slider a le même beam en parentBeamID et fixedEdgesIDs", () => {
+    const SLIDER_ID = id("s1");
+    const slider: MechanicalElement = {
+      type: "slider",
+      id: SLIDER_ID,
+      probes: [],
+      overlays: {},
+      position: new Point2(5, 0),
+      isGrounded: false,
+      parentBeamID: BEAM_ID,
+      fixedEdgesIDs: [BEAM_ID],
+    };
+    const mech = mechanism([
+      slider,
+      beam({ fixedNodeStartID: undefined, fixedNodesBodyIDs: [SLIDER_ID] }),
+    ]);
+    expect(codes(mech)).toContain("PARENT_BEAM_CONFLICT");
   });
 });
 

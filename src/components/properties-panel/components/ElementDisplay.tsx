@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   Action,
-  ActionBundleType,
   CanvasState,
+  ID,
   UnionElement,
   ZERO,
 } from "../../../types";
 import { Box, IconButton, Typography, TextField, alpha } from "@mui/material";
 import { get_element_icon } from "../../element-palette/elementIcon";
-import { HoveredPart } from "../../../types/hovered-part";
+import { HoveredPart, is_hovered } from "../../../types/hovered-part";
 import { element_to_hovered_part } from "../../canvas/utils";
 import { shown_element_name } from "../../../utils";
 import { useElementNavigation } from "../element-navigation";
@@ -16,25 +16,41 @@ import { t } from "../../../i18n";
 
 interface ElementDisplayProps {
   element: UnionElement;
+  hoveredPart: HoveredPart;
   setHoveredPart: (hoveredPart: HoveredPart) => void;
+  /** Every element id the canvas currently holds selected — single or multiple. */
+  selectedIds: ID[];
   setCanvasState: (state: CanvasState) => void;
-  applyActions: (actions: Action[], actionBundleType: ActionBundleType) => void;
+  applyActions: (actions: Action[]) => void;
   size: "small" | "medium" | "large";
   editable: boolean;
   trailingControls?: React.ReactNode;
   interactive?: boolean;
+  /** Overrides the hover cursor when it diverges from `interactive` — e.g. a
+   *  non-interactive preview (no click, no highlight of its own) that still sits
+   *  inside a parent which opens something on click, like FrameControl's edge
+   *  display. Defaults to mirroring `interactive`. */
+  cursor?: "pointer" | "default";
 }
 
 const ElementDisplayComponent: React.FC<ElementDisplayProps> = ({
   element,
+  hoveredPart,
   setHoveredPart,
+  selectedIds,
   setCanvasState,
   applyActions,
   size,
   editable,
   trailingControls,
   interactive = true,
+  cursor = interactive ? "pointer" : "default",
 }) => {
+  // A non-interactive display (a label inside a menu item, a frame preview) is
+  // never a target of its own, so it shouldn't reflect hover or selection state
+  // that belongs to the real, clickable row elsewhere.
+  const hovered = interactive && is_hovered(hoveredPart, element.id);
+  const selected = interactive && selectedIds.includes(element.id);
   const icon = get_element_icon(element);
   const initialName = shown_element_name(element);
   const drillDown = useElementNavigation();
@@ -119,7 +135,6 @@ const ElementDisplayComponent: React.FC<ElementDisplayProps> = ({
             oldName: element.name,
           },
         ],
-        "Other",
       );
     }
     setIsEditing(false);
@@ -157,7 +172,7 @@ const ElementDisplayComponent: React.FC<ElementDisplayProps> = ({
   const gap = size === "small" ? "1px" : "6px";
 
   const textStyleCommon = {
-    fontWeight: fontWeight,
+    fontWeight: selected ? fontWeight + 300 : fontWeight,
     color: "text.primary",
     lineHeight: 1.5,
     whiteSpace: "nowrap" as const,
@@ -165,19 +180,22 @@ const ElementDisplayComponent: React.FC<ElementDisplayProps> = ({
 
   const content = (
     <IconButton
-      {...(!trailingControls && {
-        onClick: handleSelect,
-        onMouseEnter: handleMouseEnter,
-        onMouseLeave: handleMouseLeave,
-      })}
+      {...(!trailingControls &&
+        interactive && {
+          onClick: handleSelect,
+          onMouseEnter: handleMouseEnter,
+          onMouseLeave: handleMouseLeave,
+        })}
       sx={{
         borderRadius: 5,
         padding: size === "small" ? "4px" : size === "medium" ? "6px" : "8px",
+        backgroundColor:
+          !trailingControls && hovered ? "action.hover" : "transparent",
         "&:hover": {
           backgroundColor:
             trailingControls || !interactive ? "transparent" : "action.hover",
         },
-        cursor: interactive ? "pointer" : "default",
+        cursor,
         ...(trailingControls && {
           justifyContent: "flex-start",
           minWidth: 0,
@@ -310,6 +328,7 @@ const ElementDisplayComponent: React.FC<ElementDisplayProps> = ({
         borderRadius: 5,
         cursor: "pointer",
         justifyContent: "space-between",
+        backgroundColor: hovered ? "action.hover" : "transparent",
         "&:hover": {
           backgroundColor: "action.hover",
         },

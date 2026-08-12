@@ -260,7 +260,6 @@ describe("deletion_closure", () => {
         [],
         loads,
       ),
-      "Connects",
     );
 
     expect(after.loads).toHaveLength(1);
@@ -327,7 +326,6 @@ describe("deletion_closure", () => {
         [],
         [],
       ),
-      "Connects",
     );
 
     expect(validate_mechanism(after)).toBeNull();

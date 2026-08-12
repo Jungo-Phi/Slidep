@@ -42,3 +42,8 @@ export function names_element(
 ): part is Exclude<HoveredPart, { type: "Void" } | { type: "BeltClosure" }> {
   return part.type !== "Void" && part.type !== "BeltClosure";
 }
+
+/** Whether the given hover names this element, e.g. to highlight its ElementDisplay(s). */
+export function is_hovered(part: HoveredPart, id: ID): boolean {
+  return names_element(part) && part.id === id;
+}

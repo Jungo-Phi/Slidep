@@ -19,7 +19,6 @@ import {
   AnalysisModel,
   Variable,
   elements_of_key,
-  variable_keys_of,
 } from "./analysis-model";
 import { ChainMobility, angle_levers, chain_extent } from "./mobility-probe";
 
@@ -75,12 +74,16 @@ export type MotionMode = {
 };
 
 /**
- * Elements to light when the chain itself is pointed at: everything any of its modes moves.
+ * Elements to light when the chain itself is pointed at: everything any of its modes moves,
+ * and every motor acting on it.
  *
  * Pointing at a chain and then at one of its modes must narrow the highlight, never move it
  * elsewhere. Taking the union is what makes that true in both directions at once — and it
  * drops the free variables no mode moves, which the constraints have pinned: the chain owns
  * them on paper, but nothing about them is a freedom.
+ *
+ * The motors are added whole rather than gathered from the modes, so an over-motorised
+ * chain still shows the motor that drives nothing. That is precisely what its card says.
  *
  * A chain with no mobility has no union to take. Its own parts are the honest answer there:
  * "this group is the rigid one" is exactly what the card says.
@@ -92,7 +95,31 @@ export function chain_highlight(
   if (modes.length === 0) return chain.elements;
   const union = new Set<ID>();
   for (const mode of modes) for (const id of mode.moves) union.add(id);
+  for (const motor of chain.motors)
+    if (motor.owner !== undefined) union.add(motor.owner);
   return [...union].sort();
+}
+
+/**
+ * Motors of the chain that drive no mode of it.
+ *
+ * Empty on any sound design — `name_after_motors` gives each motor a freedom of its own,
+ * and one is left over only when there are more motors than mobilities. That motor has no
+ * row to be named on, so without this it appears nowhere at all: neither its presence nor
+ * its speed would be reachable from the panel that just called the chain over-driven.
+ */
+export function undriven_motors(
+  chain: AnalysisChain,
+  modes: MotionMode[],
+): ID[] {
+  const driving = new Set(
+    modes.filter((mode) => mode.drivenByMotor).map((mode) => mode.dominant),
+  );
+  const idle = new Set<ID>();
+  for (const motor of chain.motors)
+    if (motor.owner !== undefined && !driving.has(motor.owner))
+      idle.add(motor.owner);
+  return [...idle].sort();
 }
 
 /** A named direction the chain might move in, before it is confronted with the constraints. */
@@ -241,40 +268,30 @@ function contributors_of(
 }
 
 /**
- * Elements the mode actually moves, plus the motors that turn them.
+ * Elements the mode actually moves.
  *
  * Counted as a set rather than weighed: "this freedom touches one part and nothing else" is
  * a statement about which parts move, not about how the motion is shared out. Weighing it
  * would call a linkage's coupler a lone mover, since it belongs to every fused node.
  *
- * Motors are the one still thing kept: the row is named after its motor, and a highlight
- * that omitted it would contradict the name the reader just clicked. Anything else that
- * stays put is left out — a rule reaching for "the frame the motion happens against" spread
- * through the rigidity links and lit up the whole rig, rails and their far joints included.
+ * What stays put is left out, motors included — a motor's own unknown turns in most of its
+ * chain's modes, so lighting it wherever it is touched put it on every neighbouring row.
+ * The one it drives gets it back in `canonical_modes`, by name.
  *
  * Monotone in the moving set, which is what keeps a mode's highlight inside its chain's.
  */
 function moved_elements(
   vector: Float64Array,
   variables: Variable[],
-  chain: AnalysisChain,
 ): Set<ID> {
   let widest = 0;
   for (const value of vector) widest = Math.max(widest, Math.abs(value));
   const floor = widest * MOVING_SHARE;
 
-  const movingKeys = new Set<string>();
   const moved = new Set<ID>();
   for (let i = 0; i < variables.length; i++) {
     if (Math.abs(vector[i]) < floor) continue;
-    movingKeys.add(variables[i].key);
     for (const id of elements_of_key(variables[i].key)) moved.add(id);
-  }
-
-  for (const motor of chain.motors) {
-    if (motor.owner === undefined) continue;
-    if (variable_keys_of(motor).some((key) => movingKeys.has(key)))
-      moved.add(motor.owner);
   }
   return moved;
 }
@@ -321,7 +338,7 @@ export function canonical_modes(
 
   const modes: MotionMode[] = basis.map((vector) => {
     const contributors = contributors_of(vector, variables);
-    const moves = moved_elements(vector, variables, chain);
+    const moves = moved_elements(vector, variables);
     const named = [...moves].sort();
     return {
       vector,
@@ -335,6 +352,12 @@ export function canonical_modes(
     };
   });
   name_modes(chain, variables, modes);
+  // A driven row is named after its motor, so a highlight without it would contradict the
+  // name the reader is pointing at. Only that row gets it: the motor drives this freedom
+  // and no other.
+  for (const mode of modes)
+    if (mode.drivenByMotor && !mode.moves.includes(mode.dominant))
+      mode.moves = [...mode.moves, mode.dominant].sort();
   // Driven freedoms first: they are what the mechanism was built to have, and a reader looks
   // for them before the play left over around them.
   return modes

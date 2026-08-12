@@ -5,8 +5,6 @@ import { describe, it, expect } from "vitest";
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import coreXY2 from "../../../test-mechanisms/Core XY - 2 moteurs.slidep?raw";
-import coreXYMod from "../../../test-mechanisms/Core XY modifié.slidep?raw";
-import coreXY from "../../../test-mechanisms/Core XY.slidep?raw";
 import disconnect from "../../../test-mechanisms/Déconnexion courroie.slidep?raw";
 import huygens from "../../../test-mechanisms/Huygen's chain drive.slidep?raw";
 import jansen from "../../../test-mechanisms/Jansen's linkage.slidep?raw";
@@ -34,10 +32,12 @@ import { sort_links } from "./utils";
 
 const FIXTURE = resolve(__dirname, "__fixtures__/bit-exact-reference.json");
 
+/**
+ * Les trois derniers n'ont aucune courroie : ils sont le témoin qui dit qu'un changement
+ * de géométrie de courroie n'a touché que les courroies.
+ */
 const MECHANISMS: [string, string][] = [
   ["Core XY - 2 moteurs", coreXY2],
-  ["Core XY modifié", coreXYMod],
-  ["Core XY", coreXY],
   ["Déconnexion courroie", disconnect],
   ["Huygen's chain drive", huygens],
   ["Jansen's linkage", jansen],
@@ -155,7 +155,7 @@ function capture() {
 }
 
 describe("écart à la référence", () => {
-  it("les 9 mécanismes rendent les mêmes nombres, au bit près", () => {
+  it(`les ${MECHANISMS.length} mécanismes rendent les mêmes nombres, au bit près`, () => {
     const actual = capture();
     if (process.env.CAPTURE || !existsSync(FIXTURE)) {
       mkdirSync(dirname(FIXTURE), { recursive: true });
@@ -166,7 +166,7 @@ describe("écart à la référence", () => {
     const expected = JSON.parse(readFileSync(FIXTURE, "utf8"));
     // Matched by KEY, not by index, so that a change in how nodes are ordered or named is
     // not read as a change in what the solver computes.
-    const perScenario: [string, number][] = [];
+    const perScenario: [string, number, number][] = [];
     // A key the reference has and the run does not is silently skipped below, so an empty
     // comparison would read as a perfect one: count what was actually looked at.
     let expectedKeys = 0;
@@ -175,26 +175,34 @@ describe("écart à la référence", () => {
       const a = actual[scenario] as Record<string, [string, ...number[]][]>;
       const b = expected[scenario] as Record<string, [string, ...number[]][]>;
       let scenarioWorst = 0;
+      let scenarioCompared = 0;
       for (const family of Object.keys(b)) {
-        const mine = new Map(a[family].map(([k, ...v]) => [k, v]));
+        // A whole scenario or family the reference has and the run no longer
+        // produces — a mechanism dropped from the list — leaves its keys
+        // uncompared rather than throwing: the count below is what says so.
+        const mine = new Map((a?.[family] ?? []).map(([k, ...v]) => [k, v]));
         for (const [key, ...values] of b[family]) {
           const actualValues = mine.get(key);
           expectedKeys++;
           if (actualValues === undefined) continue;
           comparedKeys++;
+          scenarioCompared++;
           values.forEach((v, j) => {
             const drift = Math.abs(actualValues[j] - v);
             if (drift > scenarioWorst) scenarioWorst = drift;
           });
         }
       }
-      perScenario.push([scenario, scenarioWorst]);
+      perScenario.push([scenario, scenarioWorst, scenarioCompared]);
     }
     const worst = Math.max(...perScenario.map(([, d]) => d));
     console.log("\n  | scénario | pire écart à la référence |");
     console.log("  |---|---|");
-    for (const [scenario, d] of perScenario.sort((x, y) => y[1] - x[1]))
-      console.log(`  | ${scenario} | ${d.toExponential(2)} |`);
+    // A scenario nothing was compared on reads « jamais joué », never « aucun écart ».
+    for (const [scenario, d, compared] of perScenario.sort((x, y) => y[1] - x[1]))
+      console.log(
+        `  | ${scenario} | ${compared === 0 ? "jamais joué" : d.toExponential(2)} |`,
+      );
     console.log(
       `\n  pire écart : ${worst.toExponential(3)} sur ${comparedKeys}/${expectedKeys} clés`,
     );

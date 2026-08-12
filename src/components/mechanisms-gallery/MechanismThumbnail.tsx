@@ -3,13 +3,20 @@ import { Box, useTheme } from "@mui/material";
 import { SerializedMechanism } from "../../types";
 import { load_mechanism } from "../../utils";
 import { draw_thumbnail } from "../canvas/render-thumbnail";
+import { animate_mode } from "../solver/mode-animation";
+import { THUMBNAIL_MODE_ANIMATION } from "../../constants/rendering-specs";
+import { thumbnail_mode } from "./thumbnail-mode";
 
-/** Résolution du rendu. Bien au-dessus de la taille d'affichage, pour rester net
- *  sur un écran à forte densité. */
-const RENDER_SIZE = 512;
+/** Résolution du rendu, en 4:3. Bien au-dessus de la taille d'affichage, pour
+ *  rester net sur un écran à forte densité. */
+const RENDER_WIDTH = 512;
+const RENDER_HEIGHT = 512;
 
 interface MechanismThumbnailProps {
   record: SerializedMechanism;
+  /** Swings the mechanism along its first mode while true; a mechanism with no
+   *  freedom simply stays put. */
+  hovered: boolean;
 }
 
 /**
@@ -19,6 +26,7 @@ interface MechanismThumbnailProps {
  */
 export const MechanismThumbnail: React.FC<MechanismThumbnailProps> = ({
   record,
+  hovered,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   // Redessiner quand le thème change : les couleurs du dessin en dépendent.
@@ -30,9 +38,44 @@ export const MechanismThumbnail: React.FC<MechanismThumbnailProps> = ({
   useEffect(() => {
     const ctx = canvasRef.current?.getContext("2d");
     if (!ctx) return;
-    ctx.clearRect(0, 0, RENDER_SIZE, RENDER_SIZE);
-    draw_thumbnail(ctx, mechanism, RENDER_SIZE);
-  }, [mechanism, theme]);
+
+    const rest = () => {
+      ctx.clearRect(0, 0, RENDER_WIDTH, RENDER_HEIGHT);
+      draw_thumbnail(ctx, mechanism, RENDER_WIDTH, RENDER_HEIGHT);
+    };
+
+    const found = hovered ? thumbnail_mode(mechanism) : null;
+    if (!found) {
+      rest();
+      return;
+    }
+
+    const animation = animate_mode(
+      mechanism,
+      found.model,
+      found.chain,
+      found.mode,
+      {
+        amplitudeRatio: THUMBNAIL_MODE_ANIMATION.AMPLITUDE_RATIO,
+        periodS: THUMBNAIL_MODE_ANIMATION.PERIOD_S,
+      },
+    );
+    let frame = 0;
+    let last = performance.now();
+    const step = () => {
+      const now = performance.now();
+      // A tab left in the background hands back a huge delta; clamping keeps the
+      // swing from jumping half a period on the frame the window comes back.
+      const dt = Math.min((now - last) / 1000, 1 / 20);
+      last = now;
+      ctx.clearRect(0, 0, RENDER_WIDTH, RENDER_HEIGHT);
+      draw_thumbnail(ctx, animation.advance(dt), RENDER_WIDTH, RENDER_HEIGHT);
+      frame = requestAnimationFrame(step);
+    };
+    frame = requestAnimationFrame(step);
+
+    return () => cancelAnimationFrame(frame);
+  }, [mechanism, theme, hovered]);
 
   return (
     // The ground the drawing sits on, as on the canvas itself: a preview is a
@@ -46,11 +89,12 @@ export const MechanismThumbnail: React.FC<MechanismThumbnailProps> = ({
     >
       {/* A plain <canvas>, not a Box: MUI would swallow `width`/`height` as
           style props, leaving the bitmap at its default 300×150 while the
-          drawing code frames for RENDER_SIZE — the drawing would be cropped. */}
+          drawing code frames for RENDER_WIDTH/RENDER_HEIGHT — the drawing
+          would be cropped. */}
       <canvas
         ref={canvasRef}
-        width={RENDER_SIZE}
-        height={RENDER_SIZE}
+        width={RENDER_WIDTH}
+        height={RENDER_HEIGHT}
         style={{
           position: "absolute",
           top: 0,

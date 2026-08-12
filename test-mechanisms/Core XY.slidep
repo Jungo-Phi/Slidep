@@ -5,16 +5,16 @@
     "description": "",
     "author": "",
     "createdAt": 1784708051630,
-    "modifiedAt": 1784709319184,
+    "modifiedAt": 1786528243915,
     "tags": [],
     "lastSimulationMode": "kinematic"
   },
   "viewport": {
+    "scale": 0.5084591187344271,
     "pan": {
-      "x": 705.5483072218133,
-      "y": 426.3760662081511
-    },
-    "zoom": 0.512717971886776
+      "x": 692.9999998787739,
+      "y": 425.4999995150956
+    }
   },
   "mechanicalElements": [
     {
@@ -717,19 +717,23 @@
       "attachedGearsIDs": [
         {
           "id": "9a644d7a-c70f-4f39-ae30-a0d9e4a64e66",
-          "direction": true
+          "direction": true,
+          "clockwise": true
         },
         {
           "id": "88133c80-4629-47d7-bd48-7d6b2322ec29",
-          "direction": true
+          "direction": true,
+          "clockwise": true
         },
         {
           "id": "f58d42d7-a897-4833-bf32-d57ef830217f",
-          "direction": true
+          "direction": true,
+          "clockwise": true
         },
         {
           "id": "2aca3c1f-cdcb-4175-8e62-17a934b357af",
-          "direction": true
+          "direction": true,
+          "clockwise": true
         },
         {
           "id": "a8696686-1eb9-469a-b3d9-435291c0a802",
@@ -760,19 +764,23 @@
         },
         {
           "id": "695de818-2b3c-4dc7-8188-9db57e4fdd16",
-          "direction": true
+          "direction": true,
+          "clockwise": true
         },
         {
           "id": "22c07ff9-2380-4d57-a65e-5baa8f70991d",
-          "direction": true
+          "direction": true,
+          "clockwise": true
         },
         {
           "id": "15e8d6f3-48e3-4c10-8999-e189e66fbb17",
-          "direction": true
+          "direction": true,
+          "clockwise": true
         },
         {
           "id": "6dcbd1ca-06fd-457c-988e-3616b7540adc",
-          "direction": true
+          "direction": true,
+          "clockwise": true
         }
       ],
       "closed": false
@@ -40792,6 +40800,70 @@
         "newConfig": {
           "speed": 10
         }
+      }
+    ],
+    [
+      {
+        "type": "SwitchAttachedGearDirection",
+        "id": "ba6255f4-4540-43f8-af9d-e54c3c0d0c18",
+        "index": 0,
+        "clockwise": true
+      }
+    ],
+    [
+      {
+        "type": "SwitchAttachedGearDirection",
+        "id": "ba6255f4-4540-43f8-af9d-e54c3c0d0c18",
+        "index": 1,
+        "clockwise": true
+      }
+    ],
+    [
+      {
+        "type": "SwitchAttachedGearDirection",
+        "id": "ba6255f4-4540-43f8-af9d-e54c3c0d0c18",
+        "index": 2,
+        "clockwise": true
+      }
+    ],
+    [
+      {
+        "type": "SwitchAttachedGearDirection",
+        "id": "ba6255f4-4540-43f8-af9d-e54c3c0d0c18",
+        "index": 3,
+        "clockwise": true
+      }
+    ],
+    [
+      {
+        "type": "SwitchAttachedGearDirection",
+        "id": "05cd7081-11b2-4636-866f-06bfa298c120",
+        "index": 1,
+        "clockwise": true
+      }
+    ],
+    [
+      {
+        "type": "SwitchAttachedGearDirection",
+        "id": "05cd7081-11b2-4636-866f-06bfa298c120",
+        "index": 2,
+        "clockwise": true
+      }
+    ],
+    [
+      {
+        "type": "SwitchAttachedGearDirection",
+        "id": "05cd7081-11b2-4636-866f-06bfa298c120",
+        "index": 3,
+        "clockwise": true
+      }
+    ],
+    [
+      {
+        "type": "SwitchAttachedGearDirection",
+        "id": "05cd7081-11b2-4636-866f-06bfa298c120",
+        "index": 4,
+        "clockwise": true
       }
     ]
   ],

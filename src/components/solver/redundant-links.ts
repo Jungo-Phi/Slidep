@@ -15,22 +15,15 @@
  */
 
 import { ID, Link } from "../../types";
-import {
-  AnalysisChain,
-  AnalysisModel,
-  elements_of_key,
-  variable_keys_of,
-} from "./analysis-model";
+import { AnalysisChain, AnalysisModel } from "./analysis-model";
+import { constraint_elements } from "./constraint-parts";
 import { ChainMobility, probe_chain_mobility } from "./mobility-probe";
 
 /** Every element the given constraints hold, canonical order. */
 function held_elements(links: Link[]): ID[] {
   const held = new Set<ID>();
-  for (const link of links) {
-    if (link.owner !== undefined) held.add(link.owner);
-    for (const key of variable_keys_of(link))
-      for (const id of elements_of_key(key)) held.add(id);
-  }
+  for (const link of links)
+    for (const id of constraint_elements(link)) held.add(id);
   return [...held].sort();
 }
 

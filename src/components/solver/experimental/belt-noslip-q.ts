@@ -54,29 +54,24 @@ export function viasFrom(
   positions: Map<string, Point2>,
   link: Pick<
     Seg,
-    | "gearPosKeys"
-    | "radii"
-    | "directions"
-    | "closed"
-    | "startKey"
-    | "endKey"
+    "gearPosKeys" | "radii" | "directions" | "closed" | "startKey" | "endKey"
   >,
 ): BeltVia[] | null {
   const vias: BeltVia[] = [];
   if (!link.closed && link.startKey) {
     const s = at(positions, link.startKey);
     if (!s) return null;
-    vias.push({ pos: s, radius: 0, direction: false });
+    vias.push({ pos: s, radius: 0, clockwise: false });
   }
   for (let i = 0; i < link.gearPosKeys.length; i++) {
     const p = at(positions, link.gearPosKeys[i]);
     if (!p) return null;
-    vias.push({ pos: p, radius: link.radii[i], direction: link.directions[i] });
+    vias.push({ pos: p, radius: link.radii[i], clockwise: link.directions[i] });
   }
   if (!link.closed && link.endKey) {
     const e = at(positions, link.endKey);
     if (!e) return null;
-    vias.push({ pos: e, radius: 0, direction: false });
+    vias.push({ pos: e, radius: 0, clockwise: false });
   }
   return vias;
 }
@@ -104,8 +99,7 @@ export function segmentH(
   const b = seg.gearIndexB;
   const ell = seg.length;
 
-  const rEps = (v: number) =>
-    vias[v].radius * (vias[v].direction ? -1 : 1);
+  const rEps = (v: number) => vias[v].radius * (vias[v].clockwise ? -1 : 1);
 
   // u_a = departure half-arc on a = r_a·ε_a·ψ_arr(a) + r_a·wrap_a  (0 for a terminal)
   let u = 0;
@@ -130,7 +124,6 @@ export function segmentH(
   return { h: ell + u - v, ell, uMinusV: u - v, tangent };
 }
 
-
 /**
  * Weight of an angle DOF in the projection metric. "rim" (w_θ = 1/r²) makes the
  * angle exactly as mobile as a point of its own rim, so a strand shares its
@@ -140,10 +133,10 @@ export function segmentH(
 export const rimWeight = (rEps: number): number =>
   Math.abs(rEps) < 1e-9 ? 1 : 1 / (rEps * rEps);
 
-
-
 /** How many vias the belt has: its pulleys, plus the terminals when it is open. */
-export function beltViaCount(link: Pick<Seg, "radii" | "closed" | "startKey" | "endKey">): number {
+export function beltViaCount(
+  link: Pick<Seg, "radii" | "closed" | "startKey" | "endKey">,
+): number {
   const head = !link.closed && link.startKey !== undefined ? 1 : 0;
   const tail = !link.closed && link.endKey !== undefined ? 1 : 0;
   return link.radii.length + head + tail;
@@ -208,7 +201,8 @@ function strandH(
   const iEnd = s.pos[3];
   const a = link.viaA;
   const b = (a + 1) % n;
-  const load = (v: number) => loadBeltVia(sc, nodes, s, link, 4, iStart, iEnd, v);
+  const load = (v: number) =>
+    loadBeltVia(sc, nodes, s, link, 4, iStart, iEnd, v);
   if (!load(a) || !load(b)) return null;
   belt_solve_pair(sc, a, n);
 
@@ -226,7 +220,10 @@ function strandH(
   // v_b = arrival half-arc on b = r_b·ε_b·ψ_arr(b)  (0 for a terminal)
   let v = 0;
   if (belt_has_arc(sc, b, n, closed)) {
-    const psiB = unwrapArrival(belt_arrival_angle(sc, b, n, closed), link.arrivals?.[b]);
+    const psiB = unwrapArrival(
+      belt_arrival_angle(sc, b, n, closed),
+      link.arrivals?.[b],
+    );
     if (link.arrivals && track) link.arrivals[b] = psiB;
     v = sc.r[b] * (sc.ccw[b] === 1 ? -1 : 1) * psiB;
   }
@@ -385,7 +382,7 @@ export function buildBeltSegmentNoSlipLinks(
     const geom = segmentH(vias, pieces, segIndex, arrivals.slice(), false);
     if (!geom) return;
 
-    const rEps = (v: number) => vias[v].radius * (vias[v].direction ? -1 : 1);
+    const rEps = (v: number) => vias[v].radius * (vias[v].clockwise ? -1 : 1);
     const angleKeyA = isTerminal(a) ? undefined : spec.gearAngleKeys[gearOf(a)];
     const angleKeyB = isTerminal(b) ? undefined : spec.gearAngleKeys[gearOf(b)];
     const posKeyA = isTerminal(a)

@@ -142,6 +142,42 @@ export const STRINGS = {
     de: "Simulation beschleunigen",
     es: "Acelerar la simulación",
   },
+  timeline_dead_point: {
+    fr: "Mécanisme bloqué",
+    en: "Mechanism blocked",
+    de: "Mechanismus blockiert",
+    es: "Mecanismo bloqueado",
+  },
+  timeline_dead_point_recurring: {
+    fr: "Mécanisme bloqué, toutes les {period} s",
+    en: "Mechanism blocked, every {period} s",
+    de: "Mechanismus blockiert, alle {period} s",
+    es: "Mecanismo bloqueado, cada {period} s",
+  },
+  timeline_dead_point_released: {
+    fr: "Mécanisme débloqué",
+    en: "Mechanism released",
+    de: "Mechanismus wieder frei",
+    es: "Mecanismo desbloqueado",
+  },
+  timeline_dead_point_released_recurring: {
+    fr: "Mécanisme débloqué, toutes les {period} s",
+    en: "Mechanism released, every {period} s",
+    de: "Mechanismus wieder frei, alle {period} s",
+    es: "Mecanismo desbloqueado, cada {period} s",
+  },
+  timeline_belt_detach: {
+    fr: "Courroie déconnectée",
+    en: "Belt disconnected",
+    de: "Riemen gelöst",
+    es: "Correa desconectada",
+  },
+  timeline_belt_reattach: {
+    fr: "Courroie reconnectée",
+    en: "Belt reconnected",
+    de: "Riemen wieder aufgelegt",
+    es: "Correa reconectada",
+  },
   toolbar_export_animation: {
     fr: "Exporter une animation (à venir)",
     en: "Export an animation (coming soon)",
@@ -505,12 +541,6 @@ export const STRINGS = {
     de: "{count} ungültige Positionen auf den Ursprung zurückgesetzt",
     es: "{count} posiciones no válidas devueltas al origen",
   },
-  repair_viewport_reset: {
-    fr: "cadrage revenu à la vue par défaut",
-    en: "framing reset to the default view",
-    de: "Ansicht auf die Standardansicht zurückgesetzt",
-    es: "encuadre devuelto a la vista predeterminada",
-  },
 
   // ── Element palette ───────────────────────────────────────────────────────
   // Group titles sit in a column barely wider than one icon: keep them short.
@@ -740,6 +770,12 @@ export const STRINGS = {
     de: "Exportieren",
     es: "Exportar",
   },
+  gallery_rename: {
+    fr: "Renommer",
+    en: "Rename",
+    de: "Umbenennen",
+    es: "Renombrar",
+  },
   action_delete: {
     fr: "Supprimer",
     en: "Delete",
@@ -834,6 +870,12 @@ export const STRINGS = {
     de: "teilt die Achse {axle} mit {other}: Eingriff unmöglich.",
     es: "comparte el eje {axle} con {other}: engrane imposible.",
   },
+  validation_gear_role_conflict: {
+    fr: "porte {name} à la fois comme engrenage fixé et comme engrenage libre de tourner.",
+    en: "carries {name} both as a fixed gear and as one free to rotate.",
+    de: "trägt {name} sowohl als fixiertes als auch als frei drehbares Zahnrad.",
+    es: "lleva {name} tanto como engranaje fijo como libre de girar.",
+  },
   validation_grounded_mass: {
     fr: "une masse ne peut pas être ancrée au sol.",
     en: "a mass cannot be anchored to the ground.",
@@ -869,6 +911,12 @@ export const STRINGS = {
     en: "(motor.parentBeamID): the pivot is not anchored to the ground, so the motor must have a parentBeamID.",
     de: "(motor.parentBeamID): Das Drehgelenk ist nicht am Boden verankert, also braucht der Motor eine parentBeamID.",
     es: "(motor.parentBeamID): el pivote no está anclado al suelo, así que el motor debe tener un parentBeamID.",
+  },
+  validation_parent_beam_conflict: {
+    fr: "(parentBeamID) : {name} apparaît aussi dans fixedEdgesIDs — un rail et une arête fixée sont mutuellement exclusifs.",
+    en: "(parentBeamID): {name} also appears in fixedEdgesIDs — a rail and a fixed edge are mutually exclusive.",
+    de: "(parentBeamID): {name} erscheint auch in fixedEdgesIDs — eine Schiene und eine fixierte Kante schließen sich gegenseitig aus.",
+    es: "(parentBeamID): {name} también aparece en fixedEdgesIDs: un raíl y una arista fija se excluyen mutuamente.",
   },
 
   // ── Unsatisfied constraints, as reported in the project panel ─────────────
@@ -1067,25 +1115,14 @@ export const STRINGS = {
     de: "Diagramme ansehen",
     es: "Ver los gráficos",
   },
-  element_applied_loads: {
-    fr: "Charges appliquées",
-    en: "Applied loads",
-    de: "Aufgebrachte Lasten",
-    es: "Cargas aplicadas",
-  },
-  element_no_load: {
-    fr: "Aucune charge",
-    en: "No load",
-    de: "Keine Last",
-    es: "Sin cargas",
-  },
   element_radius: { fr: "Rayon", en: "Radius", de: "Radius", es: "Radio" },
-  element_length: {
+  length: {
     fr: "Longueur",
     en: "Length",
     de: "Länge",
     es: "Longitud",
   },
+  angle: { fr: "Angle", en: "Angle", de: "Winkel", es: "Ángulo" },
   length_unlock: {
     fr: "Débloquer la longueur",
     en: "Unlock the length",
@@ -1171,7 +1208,7 @@ export const STRINGS = {
     de: "Drehende Stäbe",
     es: "Barras giratorias",
   },
-  slot_parent: { fr: "Parent", en: "Parent", de: "Parent", es: "Parent" },
+  slot_parent: { fr: "Rail", en: "Track", de: "Schiene", es: "Carril" },
   slot_start_node: {
     fr: "Nœud de début",
     en: "Start node",
@@ -1192,10 +1229,10 @@ export const STRINGS = {
     es: "Nodos del cuerpo",
   },
   slot_meshed_gears: {
-    fr: "Engrenages engrenés",
+    fr: "Engrenages",
     en: "Meshed gears",
-    de: "Kämmende Zahnräder",
-    es: "Engranajes engranados",
+    de: "Verzahnung ",
+    es: "Engranajes",
   },
   slot_fixed_gears: {
     fr: "Engrenages fixés",
@@ -1224,12 +1261,6 @@ export const STRINGS = {
     de: "Blockierter Motor",
     es: "Motor bloqueado",
   },
-  link_distance: {
-    fr: "Longueur",
-    en: "Length",
-    de: "Länge",
-    es: "Longitud",
-  },
   link_fixed_on_segment: {
     fr: "Position sur poutre",
     en: "Position on beam",
@@ -1242,7 +1273,6 @@ export const STRINGS = {
     de: "Gleiten",
     es: "Deslizamiento",
   },
-  link_angle: { fr: "Angle", en: "Angle", de: "Winkel", es: "Ángulo" },
   link_keep_orientation: {
     fr: "Orientation",
     en: "Orientation",
@@ -1336,10 +1366,10 @@ export const STRINGS = {
     es: "Inestable",
   },
   ddl_unstable_hint: {
-    fr: "Une mobilité que rien ne pilote : sous charge, l'ensemble bouge au lieu de porter.",
-    en: "A mobility nothing drives: under load it moves instead of carrying.",
-    de: "Eine Beweglichkeit ohne Antrieb: unter Last bewegt sich das Ganze, statt zu tragen.",
-    es: "Una movilidad que nada acciona: bajo carga se mueve en lugar de sostener.",
+    fr: "Un degré de liberté que rien ne pilote : sous charge, l'ensemble bouge au lieu de porter.",
+    en: "A degree of freedom nothing drives: under load it moves instead of carrying.",
+    de: "Ein Freiheitsgrad ohne Antrieb: unter Last bewegt sich das Ganze, statt zu tragen.",
+    es: "Un grado de libertad que nada acciona: bajo carga se mueve en lugar de sostener.",
   },
   ddl_isostatic: {
     fr: "Isostatique",
@@ -1354,10 +1384,10 @@ export const STRINGS = {
     es: "Justo las uniones necesarias para sostenerse, sin redundancia.",
   },
   ddl_no_motor: {
-    fr: "Aucun moteur",
-    en: "No motor",
-    de: "Kein Motor",
-    es: "Sin motor",
+    fr: "Mouvement libre",
+    en: "Free motion",
+    de: "Freie Bewegung",
+    es: "Movimiento libre",
   },
   ddl_no_motor_hint: {
     fr: "Rien ne pilote ce mouvement : déplacez le mécanisme à la main.",
@@ -1378,16 +1408,16 @@ export const STRINGS = {
     es: "Submotorizado",
   },
   ddl_underdriven_hint_one: {
-    fr: "{count} mobilité n'est pilotée par aucun moteur : le mouvement reste indéterminé.",
-    en: "{count} mobility is driven by no motor: the motion stays undetermined.",
-    de: "{count} Beweglichkeit wird von keinem Motor angetrieben: die Bewegung bleibt unbestimmt.",
-    es: "{count} movilidad no está accionada: el movimiento queda indeterminado.",
+    fr: "{count} degré de liberté n'est piloté par aucun moteur : le mouvement reste indéterminé.",
+    en: "{count} degree of freedom is driven by no motor: the motion stays undetermined.",
+    de: "{count} Freiheitsgrad wird von keinem Motor angetrieben: die Bewegung bleibt unbestimmt.",
+    es: "{count} grado de libertad no está accionado: el movimiento queda indeterminado.",
   },
   ddl_underdriven_hint_other: {
-    fr: "{count} mobilités ne sont pilotées par aucun moteur : le mouvement reste indéterminé.",
-    en: "{count} mobilities are driven by no motor: the motion stays undetermined.",
-    de: "{count} Beweglichkeiten werden von keinem Motor angetrieben: die Bewegung bleibt unbestimmt.",
-    es: "{count} movilidades no están accionadas: el movimiento queda indeterminado.",
+    fr: "{count} degrés de liberté ne sont pilotés par aucun moteur : le mouvement reste indéterminé.",
+    en: "{count} degrees of freedom are driven by no motor: the motion stays undetermined.",
+    de: "{count} Freiheitsgrade werden von keinem Motor angetrieben: die Bewegung bleibt unbestimmt.",
+    es: "{count} grados de libertad no están accionados: el movimiento queda indeterminado.",
   },
   ddl_hyperstatic_heading: {
     fr: "Hyperstatisme",
@@ -1414,10 +1444,10 @@ export const STRINGS = {
     es: "Localizar",
   },
   ddl_redundant_candidates: {
-    fr: "Chacune de ces contraintes redit ce qu'une autre impose déjà, et rien ne dit laquelle est celle de trop. Survolez-en une : on lui demande une valeur légèrement fausse, et le mécanisme s'arc-boute au lieu de suivre.",
-    en: "Each of these constraints repeats what another already imposes, and nothing says which one is the spare. Point at one: it is asked for a slightly wrong value, and the mechanism strains instead of following.",
-    de: "Jede dieser Zwangsbedingungen wiederholt, was eine andere bereits vorgibt, und welche die überzählige ist, sagt nichts. Zeigen Sie auf eine: sie wird um einen kleinen Betrag falsch gefordert, und der Mechanismus verspannt sich, statt zu folgen.",
-    es: "Cada una de estas restricciones repite lo que otra ya impone, y nada dice cuál sobra. Pase el cursor por una: se le pide un valor ligeramente falso, y el mecanismo se tensa en lugar de seguirlo.",
+    fr: "Chacune de ces contraintes redit ce qu'une autre impose déjà, et rien ne dit laquelle est celle de trop.",
+    en: "Each of these constraints repeats what another already imposes, and nothing says which one is the spare.",
+    de: "Jede dieser Zwangsbedingungen wiederholt, was eine andere bereits vorgibt, und welche die überzählige ist, sagt nichts.",
+    es: "Cada una de estas restricciones repite lo que otra ya impone, y nada dice cuál sobra.",
   },
   ddl_redundant_none: {
     fr: "Aucune liaison n'est retirable à elle seule : la redondance ne porte que sur une partie de l'une d'elles.",
@@ -1450,16 +1480,34 @@ export const STRINGS = {
     es: "Sobremotorizado",
   },
   ddl_overdriven_hint: {
-    fr: "Plus de moteurs que de mobilités : leurs commandes vont se contrarier.",
-    en: "More motors than mobilities: their commands will fight each other.",
-    de: "Mehr Motoren als Beweglichkeiten: ihre Vorgaben arbeiten gegeneinander.",
-    es: "Más motores que movilidades: sus mandos se contradirán.",
+    fr: "Plus de moteurs que de degrés de liberté : leurs commandes vont se contrarier.",
+    en: "More motors than degrees of freedom: their commands will fight each other.",
+    de: "Mehr Motoren als Freiheitsgrade: ihre Vorgaben arbeiten gegeneinander.",
+    es: "Más motores que grados de libertad: sus mandos se contradirán.",
   },
-  ddl_mode: {
-    fr: "Mode {index}",
-    en: "Mode {index}",
-    de: "Modus {index}",
-    es: "Modo {index}",
+  ddl_motor_undriven_hint: {
+    fr: "Ce moteur ne pilote aucun degré de liberté : sa commande sera reprise par les autres.",
+    en: "This motor drives no degree of freedom: the others will override its command.",
+    de: "Dieser Motor treibt keinen Freiheitsgrad an: die anderen setzen sich über seine Vorgabe hinweg.",
+    es: "Este motor no acciona ningún grado de libertad: los demás anularán su mando.",
+  },
+  ddl_measure_incomplete: {
+    fr: "Mesure incomplète",
+    en: "Incomplete measurement",
+    de: "Unvollständige Messung",
+    es: "Medición incompleta",
+  },
+  ddl_measure_incomplete_hint_one: {
+    fr: "La sonde a manqué {count} mouvement que le décompte garantit : les chiffres de cette chaîne sont sous-estimés.",
+    en: "The probe missed {count} motion the count guarantees: this chain's figures are understated.",
+    de: "Die Sonde hat {count} Bewegung übersehen, die die Zählung garantiert: die Werte dieser Kette sind zu niedrig.",
+    es: "La sonda ha pasado por alto {count} movimiento que el recuento garantiza: las cifras de esta cadena se quedan cortas.",
+  },
+  ddl_measure_incomplete_hint_other: {
+    fr: "La sonde a manqué {count} mouvements que le décompte garantit : les chiffres de cette chaîne sont sous-estimés.",
+    en: "The probe missed {count} motions the count guarantees: this chain's figures are understated.",
+    de: "Die Sonde hat {count} Bewegungen übersehen, die die Zählung garantiert: die Werte dieser Kette sind zu niedrig.",
+    es: "La sonda ha pasado por alto {count} movimientos que el recuento garantiza: las cifras de esta cadena se quedan cortas.",
   },
   ddl_free_motion: {
     fr: "Mouvement libre",
@@ -1468,16 +1516,16 @@ export const STRINGS = {
     es: "Movimiento libre",
   },
   ddl_free_motion_hint_one: {
-    fr: "{count} mobilité laissée aux efforts : c'est eux qui décideront du mouvement.",
-    en: "{count} mobility left to the loads: they are what will decide the motion.",
-    de: "{count} Beweglichkeit den Kräften überlassen: sie bestimmen die Bewegung.",
-    es: "{count} movilidad a merced de las cargas: ellas decidirán el movimiento.",
+    fr: "{count} degré de liberté laissé aux efforts : ce sont eux qui décideront du mouvement.",
+    en: "{count} degree of freedom left to the loads: they are what will decide the motion.",
+    de: "{count} Freiheitsgrad den Kräften überlassen: sie bestimmen die Bewegung.",
+    es: "{count} grado de libertad a merced de las cargas: ellas decidirán el movimiento.",
   },
   ddl_free_motion_hint_other: {
-    fr: "{count} mobilités laissées aux efforts : ce sont eux qui décideront du mouvement.",
-    en: "{count} mobilities left to the loads: they are what will decide the motion.",
-    de: "{count} Beweglichkeiten den Kräften überlassen: sie bestimmen die Bewegung.",
-    es: "{count} movilidades a merced de las cargas: ellas decidirán el movimiento.",
+    fr: "{count} degrés de liberté laissés aux efforts : ce sont eux qui décideront du mouvement.",
+    en: "{count} degrees of freedom left to the loads: they are what will decide the motion.",
+    de: "{count} Freiheitsgrade den Kräften überlassen: sie bestimmen die Bewegung.",
+    es: "{count} grados de libertad a merced de las cargas: ellas decidirán el movimiento.",
   },
 
   analysis_selected_element: {
@@ -1553,7 +1601,6 @@ export const STRINGS = {
     de: "Geschwindigkeit",
     es: "Velocidad",
   },
-  metric_angle: { fr: "Angle", en: "Angle", de: "Winkel", es: "Ángulo" },
   metric_angular_velocity: {
     fr: "Vitesse angulaire",
     en: "Angular velocity",
@@ -1616,6 +1663,12 @@ export const STRINGS = {
     en: "These axles carry gears already meshed together",
     de: "Diese Achsen tragen Zahnräder, die bereits miteinander kämmen",
     es: "Estos ejes llevan engranajes que ya engranan entre sí",
+  },
+  rule_gear_fixed_and_rotating: {
+    fr: "Un engrenage serait à la fois fixé et libre de tourner sur cet axe",
+    en: "A gear would be both fixed to and free to rotate on this axle",
+    de: "Ein Zahnrad wäre auf dieser Achse zugleich fixiert und frei drehbar",
+    es: "Un engranaje quedaría a la vez fijo y libre de girar en este eje",
   },
   rule_gear_already_on_belt: {
     fr: "Cet engrenage est déjà sur cette courroie",

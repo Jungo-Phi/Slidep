@@ -4,10 +4,7 @@ import {
   DialogTitle,
   DialogContent,
   Grid,
-  Card,
-  CardContent,
   Typography,
-  Chip,
   Box,
   IconButton,
   Tooltip,
@@ -15,26 +12,22 @@ import {
   Button,
 } from "@mui/material";
 import {
-  AccessTime,
   AddCircleOutline,
   Archive,
   Close,
-  Delete,
-  Download,
   FileOpen,
   InfoOutlined,
-  Settings,
 } from "@mui/icons-material";
 import { SerializedMechanism } from "../../types";
-import { t, tn } from "../../i18n";
-import { format_date } from "../../utils";
-import MechanismThumbnail from "./MechanismThumbnail";
+import { t } from "../../i18n";
+import MechanismCard from "./MechanismCard";
 
 interface MechanismsGalleryProps {
   open: boolean;
   onClose: () => void;
   mechanismRecords: SerializedMechanism[];
   onLoad: (mechanismRecord: SerializedMechanism) => void;
+  onRename: (createdAtId: number, name: string) => void;
   onDelete: (createdAtId: number) => void;
   onNew: () => void;
   onImport: () => void;
@@ -47,6 +40,7 @@ export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
   onClose,
   mechanismRecords,
   onLoad,
+  onRename,
   onDelete,
   onNew,
   onImport,
@@ -58,15 +52,24 @@ export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
     (a, b) => b.metadata.modifiedAt - a.metadata.modifiedAt,
   );
 
+  // Au-delà de 12 mécanismes, un écran large peut afficher plus de 4 colonnes.
+  const gridSize =
+    mechanismRecords.length >= 12
+      ? { xs: 12, sm: 6, md: 4, lg: 3, xl: 2 }
+      : { xs: 12, sm: 6, md: 4, lg: 3 };
+
   return (
     <Dialog
       open={open}
       onClose={onClose}
       fullWidth
-      maxWidth="lg"
+      // Ni "lg" (1200px) ni "xl" (1536px) : une valeur propre entre les deux,
+      // MUI n'a pas de palier pour ça.
+      maxWidth={false}
       PaperProps={{
         sx: {
           height: "85vh",
+          maxWidth: 1320,
           borderRadius: 2,
         },
       }}
@@ -77,6 +80,7 @@ export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
           justifyContent: "space-between",
           alignItems: "center",
           pb: 1,
+          pr: 2,
           bgcolor: "background.default",
         }}
       >
@@ -141,31 +145,32 @@ export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
               </Button>
             </span>
           </Tooltip>
-          <Divider orientation="vertical" flexItem sx={{ mx: 0.5, my: 0.5 }} />
+          <Divider orientation="vertical" flexItem sx={{ m: 0.5 }} />
           <IconButton onClick={onClose} size="small">
             <Close />
           </IconButton>
         </Box>
       </DialogTitle>
 
-      <DialogContent dividers sx={{ pt: 2 }}>
-        <Grid container spacing={2}>
+      <DialogContent dividers sx={{ p: 2 }}>
+        <Grid container spacing={1.5}>
           {/* 1. Carte "Nouveau Mécanisme" (En première position) */}
-          <Grid size={{ xs: 12, sm: 6, md: 4, lg: 3 }}>
-            <Card
+          <Grid size={gridSize}>
+            <Box
               onClick={onNew}
               sx={{
                 height: "100%",
-                minHeight: "375px",
+                minHeight: 180,
                 display: "flex",
                 flexDirection: "column",
                 alignItems: "center",
                 justifyContent: "center",
                 cursor: "pointer",
                 border: "2px dashed",
-                borderColor: "divider",
+                borderColor: "dividers.ground",
+                borderRadius: 2,
                 bgcolor: "background.sunken",
-                transition: "all 0.2s",
+                transition: "border-color 0.15s, background-color 0.15s",
                 "&:hover": {
                   borderColor: "primary.main",
                   bgcolor: "action.hover",
@@ -178,188 +183,21 @@ export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
               <Typography variant="h6" color="text.secondary">
                 {t("gallery_new")}
               </Typography>
-            </Card>
+            </Box>
           </Grid>
 
           {/* 2. Liste des mécanismes existants */}
-          {sortedMechanismRecords.map((mechanismRecord) => {
-            const elementCount = mechanismRecord.mechanicalElements.length;
-            const hasTags =
-              mechanismRecord.metadata.tags &&
-              mechanismRecord.metadata.tags.length > 0;
-
-            return (
-              <Grid
-                size={{ xs: 12, sm: 6, md: 4, lg: 3 }}
-                key={mechanismRecord.metadata.createdAt}
-              >
-                <Tooltip
-                  disableInteractive
-                  title={mechanismRecord.metadata.description}
-                >
-                  <Card
-                    onClick={() => onLoad(mechanismRecord)}
-                    sx={{
-                      height: "100%",
-                      display: "flex",
-                      flexDirection: "column",
-                      cursor: "pointer",
-                      transition: "transform 0.2s, box-shadow 0.2s",
-                      "&:hover": {
-                        transform: "translateY(-4px)",
-                        boxShadow: "6px 6px 8px rgba(0, 0, 0, 0.3)",
-                        borderColor: "primary.main",
-                      },
-                      border: "2px solid",
-                      borderColor: "divider",
-                      // Inside, the card is the app's own ground: preview and
-                      // content both sit on it, and so do the rules between them.
-                      "& .MuiDivider-root": { borderColor: "dividers.ground" },
-                    }}
-                  >
-                    {/* Miniature, redessinée au thème courant */}
-                    <MechanismThumbnail record={mechanismRecord} />
-
-                    <Divider />
-
-                    <CardContent
-                      sx={{ flexGrow: 1, p: 2, bgcolor: "background.default" }}
-                    >
-                      {/* Nom */}
-                      <Box
-                        display="flex"
-                        flexDirection="row"
-                        alignItems="center"
-                        justifyContent="space-between"
-                      >
-                        <Typography
-                          variant="h6"
-                          noWrap
-                          gutterBottom
-                          fontWeight="600"
-                          color={
-                            mechanismRecord.metadata.name
-                              ? "text.primary"
-                              : "text.disabled"
-                          }
-                        >
-                          {mechanismRecord.metadata.name || t("untitled")}
-                        </Typography>
-                        {/* Actions par mécanisme. `stopPropagation` : la carte
-                            entière charge le mécanisme au clic. */}
-                        <Box sx={{ display: "flex", flexShrink: 0, ml: 0.5 }}>
-                          <Tooltip disableInteractive title={t("gallery_export")}>
-                            <IconButton
-                              size="small"
-                              color="inherit"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onExport(mechanismRecord);
-                              }}
-                            >
-                              <Download fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                          <Tooltip disableInteractive title={t("action_delete")}>
-                            <IconButton
-                              size="small"
-                              color="error"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onDelete(mechanismRecord.metadata.createdAt);
-                              }}
-                            >
-                              <Delete fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                        </Box>
-                      </Box>
-
-                      {/* Date et Info éléments */}
-                      <Box
-                        sx={{
-                          display: "flex",
-                          flexDirection: "row",
-                          alignItems: "center",
-                          justifyContent: "flex-start",
-                          gap: 2,
-                          color: "text.secondary",
-                        }}
-                      >
-                        <Box
-                          sx={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 0.5,
-                          }}
-                        >
-                          <AccessTime fontSize="small" />
-                          <Typography variant="caption">
-                            {format_date(mechanismRecord.metadata.modifiedAt)}
-                          </Typography>
-                        </Box>
-
-                        {/* Compteur d'éléments */}
-                        <Box
-                          sx={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 0.5,
-                            bgcolor: "background.sunken",
-                            px: 1,
-                            py: 0.2,
-                            borderRadius: 1,
-                          }}
-                        >
-                          <Settings fontSize="small" sx={{ fontSize: 14 }} />
-                          <Typography variant="caption" fontWeight="600">
-                            {tn("gallery_parts", elementCount)}
-                          </Typography>
-                        </Box>
-                      </Box>
-
-                      {/* Tags (Affiché uniquement s'il y a des tags) */}
-                      {hasTags && (
-                        <>
-                          <Divider sx={{ my: 1 }} />
-                          <Box
-                            sx={{
-                              display: "flex",
-                              gap: 0.5,
-                              flexWrap: "wrap",
-                            }}
-                          >
-                            {mechanismRecord.metadata.tags
-                              .slice(0, 3)
-                              .map((tag, idx) => (
-                                <Chip
-                                  key={idx}
-                                  label={tag}
-                                  size="small"
-                                  variant="outlined"
-                                  sx={{ height: 20, fontSize: "0.7rem" }}
-                                />
-                              ))}
-                            {mechanismRecord.metadata.tags.length > 3 && (
-                              <Typography
-                                variant="caption"
-                                sx={{
-                                  alignSelf: "center",
-                                  color: "text.secondary",
-                                }}
-                              >
-                                +{mechanismRecord.metadata.tags.length - 3}
-                              </Typography>
-                            )}
-                          </Box>
-                        </>
-                      )}
-                    </CardContent>
-                  </Card>
-                </Tooltip>
-              </Grid>
-            );
-          })}
+          {sortedMechanismRecords.map((mechanismRecord) => (
+            <MechanismCard
+              key={mechanismRecord.metadata.createdAt}
+              mechanismRecord={mechanismRecord}
+              gridSize={gridSize}
+              onLoad={onLoad}
+              onRename={onRename}
+              onDelete={onDelete}
+              onExport={onExport}
+            />
+          ))}
         </Grid>
       </DialogContent>
     </Dialog>

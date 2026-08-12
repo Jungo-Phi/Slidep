@@ -10,44 +10,25 @@
 
 ### À faire rapidement
 
-**Analyse**
+**Propriétés du mécanisme, gallerie, tags et imports**
 
-- 🔨 Changer le terme "mobilité" par "degré de liberté".
-- 🚨 Unifier l'usage des : ctx.globalAlpha, etc. Pour une règle unique de ctx.save/restore à chaque modification du contexte (plus un reset global au début du dessin).
-- 🚨 Fixes visuels du hover-multiple, notament pour les "edge-end"
-- 🤔 Changer d'onglet devrait changer le canvasState (ex: placingX -> analyse -> selecting)
-- 🤔 Hover un élément sur le canvas devrait hover son/ses ElementDisplay correspondants
-- A partir de 12 mécanismes, afficher les previews en plus petit.
-
-- 🔨 Faire le tri dans le tableau de hover sur ce qui doit être ignoré ou rejeté
-- 🆕 Sélectionner un élément (depuis le panneau latéral) recadre le canvas pour le rendre visible à l'écran
-- 🚨 Supprimer le parentBeam du slider "Uvom" de "Vilbrequin double slider.slidep" génère une connexion non réciproque
-- 🚨 Les dimensions sont prisent en compte pour le cadrage de la gallerie
-- 🚨 Supprimer la contrainte sélectionnée dans le panneau latéral fait quitter l'onglet de contraintes
-- 🔨 Bouton "Recentrer" calcul à partir des positions des éléments
-- 🚨 SnapToGrid pas 100% fiable (nottament snapX + snapY)
-- 🚨 Système d'undo/redo des déplacements n'est pas toujours fiable
-- 🚨 Le ctrl+z de la création de dimension a 2 étapes lieu d'une
-- 🚨 Ne pas ajouter une action à l'historique si elle ne change rien (ex: newValue = oldValue)
-- 🚨 Ajouter une règle qui empèche un pivot d'avoir un gear comme RotatingEdges ET FixesGears + adapter le hover pour ne pas l'atteindre
-- 🚨 Sélectionner une contrainte fait un shadow sur les probes
-- 🚨 MovingBeltBody sur un gear ne se fait pas avec le bon sens de rotation **quand les 2 sens sont possibles**
-- 🚨 Le sens de rotation gear/belt indiqué dans le panneau latéral est inversé
-- 🚨 Le bouton dropDown pour changer le repère d'une force ne click pas sur toute la largeur de ElementDisplay
-- 🚨 Click droit sur le canvas / esc en simulation devrait faire retourner au panneau d'analyse (comme en édition dans le panneau de propriétés)
-- 🚨 Hover interdire les éléments directement connectés et l'élément lui-meme pour dimensions
-- 🆕 Ajouter des méchanismes exemple dans la gallerie ("Jansen's linkage", "Slidep", "IK", "Horloge", "Dynamique (Huygens?)")
+- 🔨 Importer plusieurs fichiers d'un coup
+- 🆕 Import de mécanismes en drag & drop depuis l'explorateur de fichiers
+- 🤔 Changer le style de grille : panneaux -> Grille "serrée" (pour gagner des pixels)
+- 🔨 Édition du nom du mécanisme dans la gallerie (ne doit pas être caché)
+- 🔨 Afficher la description du mécanisme dans la gallerie en lecture seule sur 2 ou 3 lignes (... si trop long)
+- 🆕 Suggestion de tags "Statique", "Cinématique", "Dynamique"
+- 🔨 Afficher le nombre de pièces comme un tag
+- 🆕 Créer l'éditeur de tags, le même dans la gallerie que dans le panneau de propriétés
+- 🔨 Exporter le mécanisme depuis le panneau de propriétés ?
 
 **Refactor des dossiers**
 
-- ❇️ Refactor App.tsx (< 600 lignes)
-- ❇️ Refactor draw-canvas.ts (< 600 lignes)
 - ❇️ Refactor connect-actions.ts (< 600 lignes)
 - 🤔 Refactor drawing-functions.ts ?
 - 🤔 Refactor constraint-functions.ts ?
 - ❇️ Refactor parsing.ts
 - ❇️ Refactor kinematic-simulation.ts
-- ❇️ Refactor ElementProperties.tsx
 - ❇️ Refactor MechanicalCanvas.tsx
 - ❇️ Refactor AnalysisPanel.tsx
 - ❇️ Refactor canvas-state-reducer.ts
@@ -58,7 +39,8 @@
 - 🤔 Refactor placing-constraint-actions.ts ?
 - ❇️ Réorganisation des fichiers en sous-dossiers
 
-**Clarifier l'édition en simulation (Hot-Reload), ce n'est pas clair si elle est sauvegardée ou temporaire**
+**Clarifier l'édition en simulation (Hot-Reload), ce n'est pas clair si elle est sauvegardée ou temporaire.**
+**Ce qui comte pour la clareté, c'est qu'après le premier click, l'utilisateur aie compris si son changement est temporaire où non.**
 
 - 🤔 Les changements de vitesse de moteurs en simulation doivent-il être enregistrés ?
 - 🤔 Afficher les changements de directions de moteurs (et autres) dans le panneau latéral en relecture ?
@@ -110,6 +92,8 @@
 
 ### À faire plus tard
 
+- 🆕 Ajouter des méchanismes exemple dans la gallerie ("Jansen's linkage", "Slidep", "IK", "Horloge", "Dynamique (Huygens?)")
+
 **Mobile mode**
 
 - 🆕 Suivre le plan _plan-mobile.md_ pour téléphone
@@ -121,14 +105,18 @@
 - 🤔 Afficher uniquement les moteurs ? (OU sur la liste des moteurs déjà affichés ?)
 - 🤔 Afficher les contraintes non respectées en colorant les éléments (rouge) ?
 
+**Analyse hyperstatique**
+
+- 🚨 Sur le mécanisme "Poulie.slidep", je ne comprend pas les hyperstatismes "Non-glissement de courroie"
+- 🔨 Re-router les contraintes de distances qui viennent de contraintes d'angles
+- 🤔 Animer les éléments (en plus?) des symboles ?
+
 **Panneau mesures**
 
 - 🔨 "Esc", "CTRL+Y/Z" et hover sur le canvas doit marcher avec le OnCanvasProbeMetricSelector
 - 🔨 À la fermeture du menu ProbeMetricSelector, on voit un petit rectangle sur 1 frame
 - 🤔 Ajouter l'icon "Probe" au dessus des check-box de mesure ?
 - 🔨 Pas de sonde sur les courroies
-- 🔨 Le ProbeMetricSelector devrait apparaitre au dessus de la sonde si elle est en bas de l'écran
-- 🔨 La couleur de la sonde n'est pas la bonne au placement
 - 🔨 La transparence de deletion des probes est inconsistante
 - 🔨 Choisir x/y/norme pour les mesures superposées
 - 🔨 Possible de hover sur probe quand placingProbe (pareil pour gearRatio et Dimension)
@@ -144,16 +132,17 @@
 **Canvas**
 
 - 🆕 Ajouter les graduations à la grille (_grille adaptative.md_)
+- 🔨 Ajouter zoom min et max au viewport
+- 🚨 SnapToGrid pas 100% fiable (nottament snapX + snapY) ?
 - 🔨 PlacingBeltEnd : clicker sur le gearTooth de départ devrait fermer la courroie
 - 🆕 Parsing loads : "150000 N" => "150 kN"
 - 🔨 Afficher le point grabbé en simulation
 - 🔨 Theme transition : certaines couleurs changent instantanément (grille + autres éléments spéciaux du canvas)
 - 🔨 Les couleurs des selected loads ne sont pas assez différenciée
-- 🤔 Changer une dimension fait apparaitre les autres contraintes, c'est bizzare
 - 🔨 Les contraintes ne devrait pas apparaitre au hover quand on est en train de placer un élément. En fait, elle ne devrait apparaitre que dans les états "Idle"
 - 🔨 Ajouter un délais (2s) avant d'afficher "mécanisme(s) exporté(s)"
 - 🔨 Dessiner un join avec le ground à PlacingGround (quand c'est approprié)
-- 🤔 Afficher hover-circle au hover du numberInput ?
+- 🆕 Afficher des syboles au hover des numberInput start, end, longueur et angle
 - 🔨 Hover une probe devrait hover l'élément aussi
 - 🆕 Sélectionner les dimensions (sur la flèche)
 
@@ -164,15 +153,12 @@
 
 - 🤔 On confond toujours les boutons "reset" et "retour au départ" (et un peu de changement de vitesse de simulation). En déplacer vers la timeline ?
 - 🤔 Est-ce que le contrôle de vitesse de simulation ne devrait-il pas être éditable en édition ?
-- 🔨 Changer couleur (icon + texte) de la contrainte sélectionnée au lieu du bord dans panneau contextuel
-- 🔨 Unifier l'usage des tooltips
+- 🔨 Unifier l'usage des tooltips : style, alignement, et textes : "Dans quel état est-on ?" / "Qu'est-ce que clicker va faire ?"
 - 🔨 Séparer snap "grille" et "angles"
 - 🆕 Ajouter des tooltips sur les onglets
 - 🔨 OnCanvasValueEditor trop large avec des points "."
-- 🔨 Afficher vitesse au lieu de ground en haut du moteur
 - 🆕 Utiliser le "bouton dropDown pour changer le repère d'une force" pour choisir l'ancrage d'un moteur
 - 🆕 Ajouter boutons pour changer le parentBeam des slider et slideps
-- 🤔 Courroie fermée : refléter "déconnecter = ouvrir" (icône ou affichage de la Jonction) — le bouton Tendue/Libre du panneau n'a plus de sens
 - 🆕 Afficher le ratio avec une autre gear dans les connections de l'élément
 - 🆕 Éditer la longueur de repos d'un ressort (pas forcément égale à celle affichée en édition)
 - 🆕 Scroll dans NumberInput
@@ -184,7 +170,7 @@
 - ❇️ Créer un CanvasState "PlacingElement", elementType (fusion de 15 états)
 - ❇️ unifier la méthode de catégories de canvasState dans get-hover, placing-element-actions et autres / Créer uns catégories de CanvasState pour rendre le code plus lisible et maintenable
 - ❇️ enlever les undefined de "SelectedElement"
-- ❇️ Refactor en enlevant le actionBundleType ?
+- ❇️ Enlever tous les commentaires redondants
 - 🔨 Ajouter des "Blank" quand on change une valeur depuis les propriétés
 - 🆕 Ajouter un nouvel élément "Commentaire" sur le canvas
 
@@ -197,6 +183,7 @@
 
 - 🔨 Finir les traits de DimensionAngle
 - 🔨 Polish de dimensionAngle: arrondir les angles de 0° / 180°, traits extérieurs pour les petits angles
+- 🔨 Le dessin preview de DimensionAngle devrait tendre vers l'angle le plus petit
 - 🔨 Afficher les contraintes non respectées avec des messages (Attention / Brisée) au lieu de e=3.72
 - 🆕 Afficher les contraintes non respectées en couleur sur le canvas
 
@@ -218,6 +205,8 @@
 
 - 🤔 Penser le panneau : plusieurs éléments sélectionnés (même/différent type)
 - 🆕 Sélection multiple d'éléments du même type -> modifier paramètres simultanément (IU adaptée + actions multiples)
+- 🚨 Shift + Click sur l'unique élément sélectionné ne le désélectionne pas
+- 🤔 Shift + Click de sélection multiple sur les ElementDisplay de l'onglet éléments aussi
 - 🆕 Ajouter le copié-collé
 - 🤔 Symétrie / Rotation / Scale d'éléments multiples.
 - 🤔 Click droit sur le canvas devrait proposer des choses (undo/redo, copy/paste, recentrer, etc.) (et sur un élément ?)
@@ -237,19 +226,11 @@
 - 🆕 Se déplacer dans le temps de la simu avec les flèches du clavier
 - 🆕 Afficher les couleurs des thèmes dans le menu paramètres
 
-**Propriétés du mécanisme, tags et imports**
-
-- 🆕 Import de mécanismes en drag & drop depuis l'explorateur de fichiers
-- 🔨 Édition du nom du mécanisme dans la gallerie
-- 🔨 Afficher la description du mécanisme dans la gallerie en lecture seule sur 2 ou 3 lignes (... si trop long)
-- 🆕 Créer l'éditeur de tags, le même dans la gallerie que dans le panneau de propriétés
-- 🆕 Suggestion de tags "Statique", "Cinématique", "Dynamique"
-- 🔨 Afficher le nombre de pièces comme un tag
-- 🔨 Exporter le mécanisme depuis le panneau de propriétés ?
-
 **Probes et graphiques**
 
 - 🆕 Ajouter paramètre : Afficher / Cacher les probes
+- 🔨 Le nom des graphiques est affiché au dessus, mais en dessous quand fusionné
+- 🔨 Les couleurs des graphiques ne changent pas en thème sombre et ne sont pas les mêmes que les trajectoires dessinées
 - 🆕 export CSV / image des graphiques
 - 🆕 pin graphique en grand ?
 - 🆕 Mesures d'accélération, jerk ?
@@ -293,7 +274,8 @@
 
 **Interactions et UI**
 
-- 🤔 Comment rendre visible les ctrl+y/z invisibles ? Ou on s'en fout ?
+- 🆕 Rendre visible les ctrl+y/z invisibles : clicgnottement dans l'onglet
+- 🤔 Bundler les actions avec un debounce ?
 - 🤔 Afficher "shown_name d'un élément au hover de celui-ci ?
 - 🤔 Test utilisateur : "ESCAPE" doit-il faire revenir en édition en 1/2 clicks ?
 

@@ -6,6 +6,7 @@ import doubleSlider from "../../../test-mechanisms/Vilbrequin double slider.slid
 import huygens from "../../../test-mechanisms/Huygen's chain drive.slidep?raw";
 import jansen from "../../../test-mechanisms/Jansen's linkage.slidep?raw";
 import poulie from "../../../test-mechanisms/Poulie bloqueuse.slidep?raw";
+import roues from "../../../test-mechanisms/Roues isolées.slidep?raw";
 import slider from "../../../test-mechanisms/Test slider.slidep?raw";
 import vilbrequin from "../../../test-mechanisms/Vilbrequin.slidep?raw";
 import {
@@ -112,20 +113,37 @@ describe("build_analysis_model — cas synthétiques", () => {
   it("un bâti soudé au sol ne compte ni mobilité ni redondance", () => {
     // Un join groundé ancre l'extrémité opposée de sa poutre, et la fusion des
     // Coincidence rend le Distance restant purement inerte. Sans élagage, le
-    // décompte brut donnait −5.
+    // décompte brut donnait −5. Il reste une chaîne triviale : le bâti existe.
     const model = build_analysis_model(mechanism(GROUNDED_FRAME("b1", 0)));
     expect(model.links).toHaveLength(0);
     expect(model.pruned.filter((p) => p.reason === "inert")).toHaveLength(1);
-    expect(model.chains).toHaveLength(0); // aucune variable libre
+    expect(model.chains).toHaveLength(1);
+    expect(model.chains[0].freeVariables).toBe(0);
+    expect(model.chains[0].grounded).toBe(true);
+    expect(model.chains[0].grublerCount).toBe(0);
+    expect(new Set(model.chains[0].elements)).toEqual(
+      new Set([id("b1"), id("b11"), id("b12")]),
+    );
   });
 
-  it("deux bâtis séparés ne rapportent rien non plus", () => {
+  it("deux bâtis séparés forment deux chaînes triviales, jamais une seule", () => {
     const model = build_analysis_model(
       mechanism([...GROUNDED_FRAME("b1", 0), ...GROUNDED_FRAME("b2", 500)]),
     );
     expect(model.links).toHaveLength(0);
     expect(model.pruned.filter((p) => p.reason === "inert")).toHaveLength(2);
-    expect(model.chains).toHaveLength(0);
+    expect(model.chains).toHaveLength(2);
+    expect(model.chains.every((c) => c.freeVariables === 0)).toBe(true);
+    expect(model.chains.every((c) => c.grounded)).toBe(true);
+    expect(model.chains.every((c) => c.grublerCount === 0)).toBe(true);
+    // Rien ne se partage entre les deux : ils ne sont pas soudés l'un à l'autre.
+    const seen = new Set<ID>();
+    for (const chain of model.chains)
+      for (const el of chain.elements) {
+        expect(seen.has(el)).toBe(false);
+        seen.add(el);
+      }
+    expect(seen.size).toBe(6);
   });
 
   it("deux poutres redondantes entre les mêmes pivots : l'élagage ne peut pas le voir", () => {
@@ -168,11 +186,15 @@ describe("build_analysis_model — cas synthétiques", () => {
     expect(model.chains[0].grublerCount).toBe(3);
   });
 
-  it("un nœud groundé sans rien autour ne produit aucune chaîne", () => {
+  it("un nœud groundé sans rien autour produit une chaîne triviale", () => {
     const model = build_analysis_model(
       mechanism([join("j1", P(0, 0), true, [])]),
     );
-    expect(model.chains).toHaveLength(0);
+    expect(model.chains).toHaveLength(1);
+    expect(model.chains[0].freeVariables).toBe(0);
+    expect(model.chains[0].grounded).toBe(true);
+    expect(model.chains[0].grublerCount).toBe(0);
+    expect(model.chains[0].elements).toEqual([id("j1")]);
   });
 
   it("un quatre-barres est une chaîne ancrée à 1", () => {
@@ -251,6 +273,20 @@ describe("build_analysis_model — mécanismes de référence", () => {
       }
   });
 
+  it("un join groundé soudé au milieu d'une barre reste dans la chaîne de cette barre", () => {
+    // b93f0555 est fixé par FixedOnSegment au milieu de la barre 096ac8ba, dont les
+    // deux bouts sont eux-mêmes ancrés (pris dans le décompte ci-dessus). Son seul
+    // lien est donc inerte — mais il reste soudé, via ce lien, au même bloc ancré
+    // que la barre, laquelle est réclamée par la chaîne 1 ailleurs. Il ne doit pas
+    // se détacher en chaîne triviale à part.
+    const model = fixture(doubleSlider);
+    const midJoin = "b93f0555-aabd-4c47-ac33-a363a80425fe" as ID;
+    expect(model.chains).toHaveLength(3);
+    expect(model.chains.some((c) => c.elements.includes(midJoin))).toBe(
+      false,
+    );
+  });
+
   it("les agrégats de courroie sont élagués comme conditionnement", () => {
     // Un BeltSubChainAggregate est la somme télescopée des BeltSegmentNoSlip qu'il
     // couvre : le compter fabriquerait de l'hyperstatisme inexistant.
@@ -271,6 +307,29 @@ describe("build_analysis_model — mécanismes de référence", () => {
     const model = fixture(jansen);
     expect(model.links.some((l) => l.type === "GearMeshAngle")).toBe(true);
     expect(model.chains).toHaveLength(1);
+  });
+
+  it("Roues isolées : une roue portée reste avec ce qui la porte", () => {
+    // Trois roues, dont deux montées l'une sur l'autre. Rien ne relie l'angle d'une
+    // roue à son centre, donc le seul graphe des liens éparpillait ce mécanisme en
+    // quatre chaînes : le spin de chaque roue partait seul, et le pivot moteur ancré
+    // formait en plus un doublon trivial de celui de sa roue.
+    const model = fixture(roues);
+    expect(model.chains).toHaveLength(2);
+    // Aucune n'est flottante : les deux roues portantes sont sur des pivots groundés.
+    expect(model.chains.map((c) => c.grounded)).toEqual([true, true]);
+    expect(model.chains.map((c) => c.grublerCount)).toEqual([2, 1]);
+    expect(model.chains.map((c) => c.motors.length)).toEqual([0, 1]);
+  });
+
+  it("deux chaînes ne portent jamais le même identifiant", () => {
+    // L'identifiant sert de clé React à la liste du panneau et de clé de cache aux
+    // audits de redondance. Une chaîne triviale se nomme d'après son premier élément,
+    // lequel peut très bien porter une variable libre ailleurs — d'où le préfixe.
+    for (const json of [vilbrequin, jansen, coreXY, doubleSlider, roues]) {
+      const ids = fixture(json).chains.map((c) => c.id);
+      expect(new Set(ids).size).toBe(ids.length);
+    }
   });
 
   it("décomptes de référence (m − h, borne inférieure de la mobilité)", () => {

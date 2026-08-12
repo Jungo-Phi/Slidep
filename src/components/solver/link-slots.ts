@@ -35,6 +35,7 @@ export function resolve_slots(links: Link[], nodes: Nodes): LinkSlots[] {
     switch (link.type) {
       case "Coincidence":
       case "Distance":
+      case "MinDistance":
       case "Spring":
       case "Horizontal":
       case "Vertical":

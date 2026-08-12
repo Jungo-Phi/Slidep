@@ -146,8 +146,9 @@ export interface SnapshotLayout {
   angleIndex: Map<string, number>;
   /**
    * Belts, in the order their pulley slots follow the angles. Belt `r` owns the pulleys
-   * `beltStart[r] … beltStart[r + 1]`, and each pulley has two slots: its wrap angle, at
-   * `wrapBase + p`, and its contact flag, at `detachBase + p`.
+   * `beltStart[r] … beltStart[r + 1]`, and each pulley has three slots: its wrap angle, at
+   * `wrapBase + p`, its contact flag, at `detachBase + p`, and its arrival rim angle, at
+   * `arrivalBase + p`.
    *
    * A belt's pulley count is fixed for the whole recording: detaching one raises its flag,
    * it never shortens the list.
@@ -157,6 +158,7 @@ export interface SnapshotLayout {
   beltStart: Int32Array;
   wrapBase: number;
   detachBase: number;
+  arrivalBase: number;
 }
 
 export interface KinematicSnapshot {
@@ -167,7 +169,9 @@ export interface KinematicSnapshot {
   /**
    * Gear rotation angles (rad), then each belt's per-pulley continuous wrap angle — a
    * magnitude above 2π means the belt has wound onto that pulley — then a 1 per pulley that
-   * lost belt contact, so the belt is drawn running straight past it. See `SnapshotLayout`.
+   * lost belt contact, so the belt is drawn running straight past it, then each pulley's
+   * continuous arrival rim angle, which the no-slip differential is written against. See
+   * `SnapshotLayout`.
    */
   angles: Float64Array;
   /** Constraints left unsatisfied at this frame (empty/undefined when all met). */

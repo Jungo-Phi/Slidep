@@ -59,6 +59,7 @@ export function snapshot_layout(
     beltStart[r + 1] = beltStart[r] + belt.pulleys;
   });
   const wrapBase = angleKeys.length;
+  const pulleys = beltStart[belts.length];
   return {
     keys,
     index,
@@ -68,39 +69,55 @@ export function snapshot_layout(
     beltIndex,
     beltStart,
     wrapBase,
-    detachBase: wrapBase + beltStart[belts.length],
+    detachBase: wrapBase + pulleys,
+    arrivalBase: wrapBase + 2 * pulleys,
   };
 }
 
 /** How long a snapshot's `angles` array is under this layout. */
 export function angles_length(layout: SnapshotLayout): number {
-  return layout.detachBase + (layout.detachBase - layout.wrapBase);
+  return layout.arrivalBase + (layout.detachBase - layout.wrapBase);
 }
 
-/**
- * Continuous wrap angle per attached pulley of `belt`, in `attachedGearsIDs` order, or
- * `undefined` when this snapshot carries none — the belt is unknown, or its state had not
- * been seeded yet.
- */
-export function snapshot_belt_wraps(
+/** One per-pulley block of a belt, or `undefined` when this snapshot carries none — the
+ *  belt is unknown, or its state had not been seeded yet. */
+function belt_block(
   snapshot: KinematicSnapshot,
   belt: ID,
+  base: number,
 ): number[] | undefined {
-  const { beltIndex, beltStart, wrapBase } = snapshot.layout;
+  const { beltIndex, beltStart } = snapshot.layout;
   const r = beltIndex.get(belt);
   if (r === undefined) return undefined;
   const out: number[] = [];
   for (let p = beltStart[r]; p < beltStart[r + 1]; p++) {
-    const w = snapshot.angles[wrapBase + p];
-    if (Number.isNaN(w)) return undefined;
-    out.push(w);
+    const v = snapshot.angles[base + p];
+    if (Number.isNaN(v)) return undefined;
+    out.push(v);
   }
   return out;
 }
 
+/** Continuous wrap angle per attached pulley of `belt`, in `attachedGearsIDs` order. */
+export function snapshot_belt_wraps(
+  snapshot: KinematicSnapshot,
+  belt: ID,
+): number[] | undefined {
+  return belt_block(snapshot, belt, snapshot.layout.wrapBase);
+}
+
+/** Continuous arrival rim angle per attached pulley of `belt`, same order. */
+export function snapshot_belt_arrivals(
+  snapshot: KinematicSnapshot,
+  belt: ID,
+): number[] | undefined {
+  return belt_block(snapshot, belt, snapshot.layout.arrivalBase);
+}
+
 /**
- * Indices, into `attachedGearsIDs`, of the pulleys `belt` has lost contact with, or
- * `undefined` when it has lost none — which is what leaves the drawn belt as it was.
+ * Indices, into `attachedGearsIDs`, of the pulleys `belt` has lost contact with. Empty when
+ * it has lost none, `undefined` only when the snapshot does not know this belt: the two say
+ * different things, and a caller putting the state back needs to tell them apart.
  */
 export function snapshot_belt_detached(
   snapshot: KinematicSnapshot,
@@ -112,7 +129,7 @@ export function snapshot_belt_detached(
   const out: number[] = [];
   for (let p = beltStart[r]; p < beltStart[r + 1]; p++)
     if (snapshot.angles[detachBase + p] === 1) out.push(p - beltStart[r]);
-  return out.length > 0 ? out : undefined;
+  return out;
 }
 
 /** The position recorded for `key`, or `undefined` when this snapshot has none. */

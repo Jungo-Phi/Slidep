@@ -25,8 +25,8 @@ const belt = (over: Partial<BeltElement> = {}): BeltElement => ({
   fixedNodeStartID: JOIN,
   fixedNodeEndID: JOIN,
   attachedGearsIDs: [
-    { id: G1, direction: false },
-    { id: G2, direction: false },
+    { id: G1, clockwise: false },
+    { id: G2, clockwise: false },
   ],
   closed: true,
   ...over,
@@ -125,7 +125,7 @@ describe("apply_actions opens a belt whose loop the bundle breaks", () => {
   it("opens the belt when its junction node is deleted", () => {
     const mech = mechanism(closed_belt());
     const actions = delete_element(JOIN, mech.mechanicalElements, [], []);
-    const result = apply_actions(mech, actions, "Connects");
+    const result = apply_actions(mech, actions);
 
     const openedBelt = result.mechanicalElements.find(
       (el): el is BeltElement => el.type === "belt",
@@ -141,7 +141,7 @@ describe("apply_actions opens a belt whose loop the bundle breaks", () => {
     const beltEl = mech.mechanicalElements.find(
       (el): el is BeltElement => el.type === "belt",
     )!;
-    const result = apply_actions(mech, open_belt(beltEl), "Connects");
+    const result = apply_actions(mech, open_belt(beltEl));
 
     const opened = result.mechanicalElements.find(
       (el): el is BeltElement => el.type === "belt",
@@ -162,7 +162,7 @@ describe("apply_actions opens a belt whose loop the bundle breaks", () => {
   it("leaves a still-looped belt untouched", () => {
     const mech = mechanism(closed_belt());
     // A no-op disconnect that breaks no loop: nothing to correct.
-    const result = apply_actions(mech, [{ type: "Blank" }], "Other");
+    const result = apply_actions(mech, [{ type: "Blank" }]);
     const stillClosed = result.mechanicalElements.find(
       (el): el is BeltElement => el.type === "belt",
     );

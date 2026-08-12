@@ -10,7 +10,6 @@ import {
   CanvasState,
   Action,
   Mechanism,
-  ActionBundleType,
   ZERO,
 } from "../../types";
 import { HoveredPart } from "../../types/hovered-part";
@@ -23,16 +22,18 @@ import { sorted_constraints_for_display } from "./element-order";
 import { t } from "../../i18n";
 
 interface ConstraintsPanelProps {
-  constraintID: ID;
+  hoveredPart: HoveredPart;
   setHoveredPart: (hoveredPart: HoveredPart) => void;
+  selectedIds: ID[];
   setCanvasState: (state: CanvasState) => void;
-  applyActions: (actions: Action[], actionBundleType: ActionBundleType) => void;
+  applyActions: (actions: Action[]) => void;
   mechanism: Mechanism;
 }
 
 export const ConstraintsPanel: React.FC<ConstraintsPanelProps> = ({
-  constraintID,
+  hoveredPart,
   setHoveredPart,
+  selectedIds,
   setCanvasState,
   applyActions: applyActions,
   mechanism,
@@ -66,96 +67,86 @@ export const ConstraintsPanel: React.FC<ConstraintsPanelProps> = ({
           (constraint) => (
             <React.Fragment key={constraint.id}>
               <ListItem disablePadding>
-                <Box
-                  sx={{
-                    border: constraint.id === constraintID ? 1 : 0,
-                    borderColor: "divider",
-                    borderRadius: 5,
-                    width: "100%",
-                  }}
-                >
-                  <ElementDisplay
-                    element={constraint}
-                    setHoveredPart={setHoveredPart}
-                    setCanvasState={setCanvasState}
-                    applyActions={applyActions}
-                    size="medium"
-                    editable={true}
-                    trailingControls={
-                      <>
-                        {(() => {
-                          switch (constraint.type) {
-                            case "dimension-edge":
-                            case "dimension-node-to-node":
-                            case "dimension-edge-to-node":
-                            case "dimension-angle":
-                            case "dimension-radius":
-                            case "dimension-belt":
-                              return (
-                                <NumberInput
-                                  value={constraint.value}
-                                  onChange={(value: number) =>
-                                    applyActions(
-                                      [
-                                        {
-                                          type: "ChangeDimensionEdgeValue",
-                                          id: constraint.id,
-                                          newValue: value,
-                                          oldValue: constraint.value,
-                                        },
-                                      ],
-                                      "ChangeDimension",
-                                    )
-                                  }
-                                  label=""
-                                  suffix={
-                                    constraint.type === "dimension-angle"
-                                      ? "°"
-                                      : undefined
-                                  }
-                                  unsigned
-                                />
-                              );
-                            case "gear-ratio":
-                              return (
-                                <RatioInput
-                                  value={constraint.value}
-                                  onChange={(value: number) =>
-                                    applyActions(
-                                      [
-                                        {
-                                          type: "ChangeGearRatioValue",
-                                          id: constraint.id,
-                                          newValue: value,
-                                          oldValue: constraint.value,
-                                        },
-                                      ],
-                                      "ChangeDimension",
-                                    )
-                                  }
-                                />
-                              );
-                          }
-                        })()}
-                        <IconButton
-                          color="error"
-                          onMouseEnter={() => handleMouseEnter(constraint)}
-                          onMouseLeave={handleMouseLeave}
-                          onClick={() =>
-                            applyActions(
-                              [{ type: "DeleteElement", element: constraint }],
-                              "Other",
-                            )
-                          }
-                          title={t("action_delete")}
-                          sx={{ borderRadius: 3 }}
-                        >
-                          <Delete sx={{ width: 20, height: 20 }} />
-                        </IconButton>
-                      </>
-                    }
-                  />
-                </Box>
+                <ElementDisplay
+                  element={constraint}
+                  hoveredPart={hoveredPart}
+                  setHoveredPart={setHoveredPart}
+                  selectedIds={selectedIds}
+                  setCanvasState={setCanvasState}
+                  applyActions={applyActions}
+                  size="medium"
+                  editable={true}
+                  trailingControls={
+                    <>
+                      {(() => {
+                        switch (constraint.type) {
+                          case "dimension-edge":
+                          case "dimension-node-to-node":
+                          case "dimension-edge-to-node":
+                          case "dimension-angle":
+                          case "dimension-radius":
+                          case "dimension-belt":
+                            return (
+                              <NumberInput
+                                value={constraint.value}
+                                onChange={(value: number) =>
+                                  applyActions(
+                                    [
+                                      {
+                                        type: "ChangeDimensionEdgeValue",
+                                        id: constraint.id,
+                                        newValue: value,
+                                        oldValue: constraint.value,
+                                      },
+                                    ],
+                                  )
+                                }
+                                label=""
+                                suffix={
+                                  constraint.type === "dimension-angle"
+                                    ? "°"
+                                    : undefined
+                                }
+                                unsigned
+                              />
+                            );
+                          case "gear-ratio":
+                            return (
+                              <RatioInput
+                                value={constraint.value}
+                                onChange={(value: number) =>
+                                  applyActions(
+                                    [
+                                      {
+                                        type: "ChangeGearRatioValue",
+                                        id: constraint.id,
+                                        newValue: value,
+                                        oldValue: constraint.value,
+                                      },
+                                    ],
+                                  )
+                                }
+                              />
+                            );
+                        }
+                      })()}
+                      <IconButton
+                        color="error"
+                        onMouseEnter={() => handleMouseEnter(constraint)}
+                        onMouseLeave={handleMouseLeave}
+                        onClick={() =>
+                          applyActions(
+                            [{ type: "DeleteElement", element: constraint }],
+                          )
+                        }
+                        title={t("action_delete")}
+                        sx={{ borderRadius: 3 }}
+                      >
+                        <Delete sx={{ width: 20, height: 20 }} />
+                      </IconButton>
+                    </>
+                  }
+                />
               </ListItem>
             </React.Fragment>
           ),

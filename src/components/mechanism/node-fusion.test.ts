@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { connect_elements, fuse_nodes } from "./connect-actions";
+import { connect_elements, connect_node_and_edge, fuse_nodes } from "./connect-actions";
 import { apply_actions } from "./apply-actions";
 import { validate_mechanism } from "../../utils/validate-mechanism";
 import { Point2, ZERO } from "../../types/point2";
@@ -98,7 +98,6 @@ describe("fusion d'un pivot et d'un slider que la même barre relie", () => {
         elements,
         [],
       ),
-      "Connects",
     );
 
     const slidep = after.mechanicalElements.find(
@@ -118,7 +117,6 @@ describe("fusion d'un pivot et d'un slider que la même barre relie", () => {
         elements,
         [],
       ),
-      "Connects",
     );
 
     const slidep = after.mechanicalElements.find(
@@ -126,6 +124,30 @@ describe("fusion d'un pivot et d'un slider que la même barre relie", () => {
     ) as SlidepElement;
     expect(slidep.rotatingEdgesIDs).toEqual([BAR]);
     expect(validate_mechanism(after)).toBeNull();
+  });
+});
+
+describe("un slider dont la barre est déjà le parentBeamID", () => {
+  // A beamBodyHover catch during placement, and the body-crossing sweep that
+  // follows it in the same gesture, can both name the same node for the same
+  // edge. The second call must be a true no-op — not a fixedEdgesIDs entry
+  // alongside the parentBeamID that already says the same thing.
+  it("un second appel en body ne duplique pas la barre dans fixedEdgesIDs", () => {
+    const slider: SliderElement = {
+      type: "slider",
+      id: SLIDER,
+      probes: [],
+      overlays: {},
+      position: P(100, 0),
+      isGrounded: false,
+      parentBeamID: BAR,
+      fixedEdgesIDs: [],
+    };
+    const bar = beam(BAR, undefined, undefined, [SLIDER]);
+
+    const actions = connect_node_and_edge(slider, bar, "body", [slider, bar], []);
+
+    expect(actions).toEqual([]);
   });
 });
 
@@ -162,7 +184,6 @@ describe("une extrémité quittant un nœud qui tient la barre autrement", () =>
         [],
         [],
       ),
-      "Connects",
     );
 
     const held = after.mechanicalElements.find(

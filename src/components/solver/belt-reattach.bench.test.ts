@@ -36,10 +36,13 @@ function beltLength(belt: Belt, snapshot: KinematicSnapshot): number {
     if (belt.disconnected?.[i]) continue;
     const pos = at(snapshot, belt.gearPosKeys[i]);
     if (!pos) return NaN;
-    vias.push({ pos, radius: belt.radii[i], direction: belt.directions[i] });
+    vias.push({ pos, radius: belt.radii[i], clockwise: belt.directions[i] });
     wraps.push(belt.wraps?.[i] ?? 0);
   }
-  return belt_pieces(vias, belt.closed, wraps).reduce((a, p) => a + p.length, 0);
+  return belt_pieces(vias, belt.closed, wraps).reduce(
+    (a, p) => a + p.length,
+    0,
+  );
 }
 
 /** Worst residual of the belt's no-slip family, in belt-px. */
@@ -87,7 +90,9 @@ function run(reattachArc: number, frames: number) {
     }
     const res = beltResidual(snap.unsatisfied ?? []);
     if (frame >= 190 && frame <= 240)
-      trace.push(`    f${frame} len ${len.toFixed(2)} res ${res.toExponential(1)} det [${(belt.disconnected ?? []).map((d) => (d ? 1 : 0)).join("")}]`);
+      trace.push(
+        `    f${frame} len ${len.toFixed(2)} res ${res.toExponential(1)} det [${(belt.disconnected ?? []).map((d) => (d ? 1 : 0)).join("")}]`,
+      );
     worstResidual = Math.max(worstResidual, res);
     if (frame === frames - 1) residualAfter = res;
   }

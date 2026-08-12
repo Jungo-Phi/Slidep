@@ -9,7 +9,9 @@ import {
   DIM,
   INTERACTION_SPECS,
   TEXT_SPECS,
+  REDUNDANCY_SYMBOL,
 } from "../../constants/rendering-specs";
+import { RedundancySymbol } from "../solver/redundancy-symbols";
 import { Point2 } from "../../types/point2";
 import { get_element_icon } from "../element-palette/elementIcon";
 import {
@@ -448,13 +450,7 @@ export function draw_join_top(
   position: ScreenPoint,
 ) {
   ctx.beginPath();
-  ctx.arc(
-    position.x,
-    position.y,
-    DIM.JOIN_RADIUS - ctx.lineWidth / 2 - 0.5,
-    0,
-    TAU,
-  );
+  ctx.arc(position.x, position.y, DIM.JOIN_RADIUS - ctx.lineWidth / 2, 0, TAU);
 
   ctx.fill();
 }
@@ -562,11 +558,11 @@ export function draw_spring(
 
   const oldStrokeStyle = ctx.strokeStyle;
   const oldFillStyle = ctx.fillStyle;
-  const oldGlobalAlpha = ctx.globalAlpha;
   const widthChange = ctx.lineWidth - STROKE_WIDTHS.STANDARD;
 
   ctx.lineCap = "round";
   ctx.lineWidth = STROKE_WIDTHS.SPIRE + widthChange;
+  ctx.save();
   ctx.globalAlpha *= DIM.SPRING_BACK_COIL_OPACITY;
   for (let i = 1; i <= coilNb - 1; i++) {
     ctx.beginPath();
@@ -574,7 +570,7 @@ export function draw_spring(
     ctx.lineTo(deca(i, 0.75), -DIM.SPRING_COIL_RADIUS);
     ctx.stroke();
   }
-  ctx.globalAlpha = oldGlobalAlpha;
+  ctx.restore();
 
   // Barre de fond
   ctx.lineCap = "square";
@@ -997,7 +993,7 @@ function append_belt_arc(
   rEnd: number,
 ) {
   if (arc.kind !== "arc") return [0, 0];
-  const sign = arc.direction ? -1 : 1;
+  const sign = arc.clockwise ? -1 : 1;
   const steps = Math.max(8, Math.ceil((arc.wrap / TAU) * 48));
   for (let i = 0; i <= steps; i++) {
     const t = i / steps;
@@ -1683,6 +1679,7 @@ export function draw_trajectory(
   dotted: boolean,
 ) {
   if (trajectory.points.length < 2) return;
+  ctx.save();
   ctx.strokeStyle = trajectory.color;
   ctx.fillStyle = trajectory.color;
   ctx.lineWidth = DIM.TRAJECTORY_LINE_WIDTH;
@@ -1727,4 +1724,114 @@ export function draw_trajectory(
     }
     polyline(startFuture, trajectory.visibleCount - 1);
   }
+  ctx.restore();
+}
+
+/**
+ * Draws how a redundant constraint yields: a glyph, not a measurement — see
+ * `REDUNDANCY_SYMBOL`. `phase` is `performance.now()` in ms; the pulse it drives is a plain
+ * sine, so every symbol on screen breathes together whatever mechanism they belong to.
+ */
+export function draw_redundancy_symbol(
+  ctx: CanvasRenderingContext2D,
+  viewport: ViewportState,
+  symbol: RedundancySymbol,
+  phase: number,
+) {
+  const S = REDUNDANCY_SYMBOL;
+  const pulse = Math.sin((phase / 1000) * (TAU / S.PERIOD_S));
+
+  ctx.save();
+  ctx.strokeStyle = COLORS.DELETION_STROKE;
+  ctx.fillStyle = COLORS.DELETION_STROKE;
+  ctx.lineWidth = STROKE_WIDTHS.STANDARD;
+  ctx.lineCap = "round";
+
+  if (symbol.kind === "gap") {
+    const a = world2screen(symbol.a, viewport);
+    const b = world2screen(symbol.b, viewport);
+    const axis = b.sub(a);
+    if (axis.length_squared() < 1e-6) {
+      ctx.restore();
+      return;
+    }
+    const dir = axis.normalize();
+    const perp = dir.perp();
+    const mid = a.lerp(b, 0.5);
+    // Base offset keeps the two ticks apart even at the pulse's low point, so the gap
+    // never fully closes back into a single mark.
+    const offset = S.GAP_AMPLITUDE_PX * (0.6 + 0.4 * pulse);
+    const p1 = mid.sub(dir.mul(offset));
+    const p2 = mid.add(dir.mul(offset));
+
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath();
+    ctx.moveTo(p1.x, p1.y);
+    ctx.lineTo(p2.x, p2.y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    for (const p of [p1, p2]) {
+      ctx.beginPath();
+      ctx.moveTo(p.x - perp.x * S.GAP_TICK_PX, p.y - perp.y * S.GAP_TICK_PX);
+      ctx.lineTo(p.x + perp.x * S.GAP_TICK_PX, p.y + perp.y * S.GAP_TICK_PX);
+      ctx.stroke();
+    }
+  } else if (symbol.kind === "diverge") {
+    const vertex = world2screen(symbol.vertex, viewport);
+    const dir1 = world2screen_vec(symbol.arm1, viewport).normalize();
+    const dir2 = world2screen_vec(symbol.arm2, viewport).normalize();
+    const swing = (S.ARM_SWING_DEG * Math.PI) / 180;
+    const angle1 = dir1.angle() + swing * pulse;
+    const angle2 = dir2.angle() - swing * pulse;
+
+    for (const angle of [angle1, angle2]) {
+      const tip = vertex.add(
+        Point2.from_angle<"screen">(angle).mul(S.ARM_LENGTH_PX),
+      );
+      ctx.beginPath();
+      ctx.moveTo(vertex.x, vertex.y);
+      ctx.lineTo(tip.x, tip.y);
+      ctx.stroke();
+    }
+
+    // A short arc between the two live directions, so the spread reads as an angle
+    // opening rather than as two unrelated ticks.
+    ctx.beginPath();
+    ctx.arc(vertex.x, vertex.y, S.ARM_ARC_PX, angle1, angle2, angle1 > angle2);
+    ctx.stroke();
+  } else {
+    const at = world2screen(symbol.at, viewport);
+    const normal = world2screen_vec(symbol.normal, viewport).normalize();
+    const tangent = normal.perp();
+
+    ctx.beginPath();
+    ctx.moveTo(
+      at.x - tangent.x * S.RAIL_TICK_PX,
+      at.y - tangent.y * S.RAIL_TICK_PX,
+    );
+    ctx.lineTo(
+      at.x + tangent.x * S.RAIL_TICK_PX,
+      at.y + tangent.y * S.RAIL_TICK_PX,
+    );
+    ctx.stroke();
+
+    // Rises from the rail to the peak and settles back, never dipping below it: the
+    // node is shown coming loose, not oscillating through the rail it is pinned to.
+    const lift = S.LIFT_PX * (0.5 + 0.5 * pulse);
+    const lifted = at.add(normal.mul(lift));
+
+    ctx.setLineDash([2, 3]);
+    ctx.beginPath();
+    ctx.moveTo(at.x, at.y);
+    ctx.lineTo(lifted.x, lifted.y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.beginPath();
+    ctx.arc(lifted.x, lifted.y, S.GAP_TICK_PX * 0.6, 0, TAU);
+    ctx.fill();
+  }
+
+  ctx.restore();
 }

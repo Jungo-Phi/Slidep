@@ -37,6 +37,21 @@ export type Link = {
       preferredAxis?: Point2;
     }
   | {
+      /**
+       * Holds two points at least `distance` apart, and says nothing once they are.
+       *
+       * `ddl: 0` because an inequality is not a lost degree of freedom: inactive it
+       * constrains nothing, and active it is a boundary the sketch rests against, not a
+       * relation it must satisfy. Counting it would make every bar look one degree
+       * stiffer than it is.
+       */
+      type: "MinDistance";
+      ddl: 0;
+      key1: string;
+      key2: string;
+      distance: number;
+    }
+  | {
       type: "DistanceToLine";
       ddl: 1;
       key1: string;

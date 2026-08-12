@@ -28,40 +28,29 @@ function is_node_type(type: string): type is NodeType {
 }
 
 /**
- * Which gestures the interface may offer, stated once.
+ * A connection can be **Legal**, or if not, lead to a **transparent refusal** or an **explicit blockage**.
  *
- * A verdict depends only on the interaction and the mechanism — never on the
- * cursor, the zoom or the drawing order. That is what separates it from picking,
- * which decides *who the user meant* among the things under the cursor and stays
- * in `get-hover`.
+ * **A transparent refusal** : the candidate is not a target, so look behind it.
  *
- * Three consumers read these rules: hit-testing (to drop illegal targets), the
- * connect operations (to refuse whatever reaches them by another path), and the
- * fuzzer (as its precondition, so it only explores gestures the UI would allow).
- */
-
-/**
- * A refusal is transparent or opaque.
- *
- * Transparent (`blocks: false`): the candidate is not a target, look behind it.
- * That is what keeps a useless target from masking a useful one.
- *
- * Opaque (`blocks: true`): something is here and it cannot be attached to, and
- * what lies under it is not a fallback. Without this, refusing a target silently
- * hands the gesture to whatever is beneath — which is how a ground refused on a
- * mass ends up landing on the edge under it.
+ * **An explicit blockage** : the connection is forbidden with a message explaining why.
+ * When blockage occurs, what lies beneath is not a fallback.
+ * Without this distinction, refusing a target silently passes the gesture to what's beneath—
+ * which is how a grounded connection on a mass ends up landing on the edge below it.
  */
 export type Legality =
   | { allowed: true }
   | {
       allowed: false;
-      /** Named, not written out: the rules stay free of the language they are read in. */
       reason: StringKey;
       vars?: Record<string, string | number>;
       blocks: boolean;
     };
 
 const ALLOWED: Legality = { allowed: true };
+
+/**
+ * **A transparent refusal** : the candidate is not a target, so look behind it.
+ */
 const refuse = (
   reason: StringKey,
   vars?: Record<string, string | number>,
@@ -71,6 +60,10 @@ const refuse = (
   vars,
   blocks: false,
 });
+
+/**
+ * **An explicit blockage** : the connection is forbidden with a message explaining why.
+ */
 const block = (
   reason: StringKey,
   vars?: Record<string, string | number>,
@@ -135,13 +128,9 @@ const BODY_CANNOT_ATTACH: StringKey = "rule_body_cannot_attach";
 const TWO_DIFFERENT: StringKey = "rule_two_different";
 
 export const MOTOR_NEEDS_SUPPORT: StringKey = "rule_motor_needs_support";
-
 export const BELT_CANNOT_CLOSE: StringKey = "rule_belt_cannot_close";
-/** `rule_belt_cannot_close` names a count the rule itself fixes. */
 export const BELT_CANNOT_CLOSE_VARS = { count: MIN_PULLEYS_TO_CLOSE };
-
 export const BELT_GEARS_SAME_AXLE: StringKey = "rule_belt_gears_same_axle";
-
 export const BELTS_CANNOT_JOIN: StringKey = "rule_belts_cannot_join";
 
 /** The belts holding a terminal on `id`. */
@@ -320,9 +309,6 @@ export function legality_for_state(
     );
     if (takeover) return takeover;
 
-    // Two belts stay strangers, whatever the route: end on end, or both ends on
-    // one node. Opaque, because what lies under the end that refuses is not a
-    // fallback — landing there would build the very junction being refused.
     if (
       carried &&
       belts_targeted(candidate, part, mechanicalElements).some(
@@ -333,12 +319,7 @@ export function legality_for_state(
 
     switch (state.type) {
       case "PlacingGround":
-        if (candidate.type === "mass")
-          return block("rule_mass_cannot_ground");
-        // The tool toggles, so on an anchored motor it means *un*-anchoring —
-        // and a motor pushes against the ground or against a beam, never
-        // against nothing. Opaque: what lies under it is not a fallback, it
-        // would simply be anchored in its place.
+        if (candidate.type === "mass") return block("rule_mass_cannot_ground");
         if (
           candidate.type === "pivot" &&
           candidate.motor &&
@@ -389,8 +370,7 @@ export function legality_for_state(
               gear.fixedNodesBodyIDs.includes(candidate.id)
             );
           });
-          if (pinned)
-            return block("rule_node_pinned_to_gear");
+          if (pinned) return block("rule_node_pinned_to_gear");
         }
 
         // Moving an axle onto another would mesh two gears sharing an axle.
@@ -403,8 +383,18 @@ export function legality_for_state(
             gear.meshedGearsIDs.includes(draggedGearID),
           );
         });
-        if (meshes)
-          return refuse("rule_axles_already_meshed");
+        if (meshes) return refuse("rule_axles_already_meshed");
+
+        // A gear fixed to one node and freely resting on the other would end
+        // up both fixed and rotating on the survivor.
+        const rolesConflict =
+          draggedElement.fixedGearsIDs.some((id) =>
+            candidate.rotatingEdgesIDs.includes(id),
+          ) ||
+          draggedElement.rotatingEdgesIDs.some((id) =>
+            candidate.fixedGearsIDs.includes(id),
+          );
+        if (rolesConflict) return block("rule_gear_fixed_and_rotating");
         break;
       }
 
@@ -456,13 +446,30 @@ export function legality_for_state(
       // A constraint relates two *different* elements. `DimensionRadius` and
       // `DimensionBelt` are absent on purpose: they hold a single operand, and
       // their second click only drops the label.
+      // A node dimensioned against an edge it terminates would measure its
+      // distance to a line it already sits on: always zero.
       case "DimensionNode":
         if (candidate.id === state.nodeID) return refuse(TWO_DIFFERENT);
+        if (
+          "fixedNodeStartID" in candidate &&
+          (candidate.fixedNodeStartID === state.nodeID ||
+            candidate.fixedNodeEndID === state.nodeID)
+        )
+          return refuse("rule_already_connected");
         break;
 
-      case "DimensionEdge":
+      case "DimensionEdge": {
         if (candidate.id === state.edgeID) return refuse(TWO_DIFFERENT);
+        const edge = byID.get(state.edgeID);
+        if (
+          edge &&
+          "fixedNodeStartID" in edge &&
+          (edge.fixedNodeStartID === candidate.id ||
+            edge.fixedNodeEndID === candidate.id)
+        )
+          return refuse("rule_already_connected");
         break;
+      }
 
       case "HorizontalVerticalConstraintNode":
         if (candidate.id === state.startNodeID) return refuse(TWO_DIFFERENT);

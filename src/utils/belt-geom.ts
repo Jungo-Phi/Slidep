@@ -6,22 +6,30 @@ import { BeltVia, belt_pieces } from "./belt-path";
  * Build the ordered via-points of a belt (start terminal → gears → end
  * terminal) from the mechanism, resolving each attached gear. Shared by the
  * length measurement and the geometric solver's belt-length constraint.
+ *
+ * Pulleys the belt has lost contact with in simulation are left out: the belt
+ * runs straight past them, and its route is what everything downstream — the
+ * length, the hover, a dimension's leader — has to be read against.
  */
 export function get_belt_vias(
   belt: BeltElement,
   mechanicalElements: MechanicalElement[],
 ): BeltVia[] {
-  const gears: BeltVia[] = belt.attachedGearsIDs.map(({ id, direction }) => {
-    const gear = get_mechanical_element_from_id(
-      id,
-      mechanicalElements,
-    ) as GearElement;
-    return { pos: gear.position, radius: gear.radius, direction };
-  });
+  const dropped = new Set(belt.disconnectedGearIndices ?? []);
+  const gears: BeltVia[] = belt.attachedGearsIDs.flatMap(
+    ({ id, clockwise }, i) => {
+      if (dropped.has(i)) return [];
+      const gear = get_mechanical_element_from_id(
+        id,
+        mechanicalElements,
+      ) as GearElement;
+      return [{ pos: gear.position, radius: gear.radius, clockwise }];
+    },
+  );
   return [
-    { pos: belt.positionStart, radius: 0, direction: false },
+    { pos: belt.positionStart, radius: 0, clockwise: false },
     ...gears,
-    { pos: belt.positionEnd, radius: 0, direction: false },
+    { pos: belt.positionEnd, radius: 0, clockwise: false },
   ];
 }
 
@@ -68,21 +76,21 @@ export function get_gear_angles(
   positionEnd: Point2,
   attachedGears: {
     gear: GearElement;
-    direction: boolean;
+    clockwise: boolean;
   }[],
 ): {
   center: Point2;
   radius: number;
   startAngle: number;
   endAngle: number;
-  direction: boolean;
+  clockwise: boolean;
 }[] {
   const gearAngles: {
     center: Point2;
     radius: number;
     startAngle: number;
     endAngle: number;
-    direction: boolean;
+    clockwise: boolean;
   }[] = [];
 
   let lastPos = positionStart;
@@ -94,7 +102,7 @@ export function get_gear_angles(
       false,
       attachedGears[0].gear.position,
       attachedGears[0].gear.radius,
-      attachedGears[0].direction,
+      attachedGears[0].clockwise,
     ).end;
   }
 
@@ -102,17 +110,17 @@ export function get_gear_angles(
     const { start, end } = Point2.circles_link(
       attachedGears[i].gear.position,
       attachedGears[i].gear.radius,
-      attachedGears[i].direction,
+      attachedGears[i].clockwise,
       attachedGears[i + 1].gear.position,
       attachedGears[i + 1].gear.radius,
-      attachedGears[i + 1].direction,
+      attachedGears[i + 1].clockwise,
     );
     gearAngles.push({
       center: attachedGears[i].gear.position,
       radius: attachedGears[i].gear.radius,
       startAngle: lastPos.angle(),
       endAngle: start.angle(),
-      direction: attachedGears[i].direction,
+      clockwise: attachedGears[i].clockwise,
     });
     lastPos = end;
   }
@@ -121,7 +129,7 @@ export function get_gear_angles(
     const { start } = Point2.circles_link(
       attachedGears[attachedGears.length - 1].gear.position,
       attachedGears[attachedGears.length - 1].gear.radius,
-      attachedGears[attachedGears.length - 1].direction,
+      attachedGears[attachedGears.length - 1].clockwise,
       positionEnd,
       0,
       false,
@@ -131,7 +139,7 @@ export function get_gear_angles(
       radius: attachedGears[attachedGears.length - 1].gear.radius,
       startAngle: lastPos.angle(),
       endAngle: start.angle(),
-      direction: attachedGears[attachedGears.length - 1].direction,
+      clockwise: attachedGears[attachedGears.length - 1].clockwise,
     });
   }
   return gearAngles;
@@ -167,19 +175,23 @@ export type BeltGearApproach = "gear-onto-belt" | "belt-onto-gear";
 /**
  * Which way a belt winds around a gear inserted in one of its straight sections.
  *
- * Always the gear's *centre* — a point on its rim answers a different question
- * and lands on either side of the section depending on where the cursor came
- * from. The gear may not exist yet, hence a position rather than the element.
+ * `referencePoint` is the gear's *centre* for `gear-onto-belt` — the gear's own
+ * position is what is growing or landing there, the cursor is incidental. For
+ * `belt-onto-gear` it is the rim point under the cursor: the belt is being
+ * dragged onto a gear that already sits still, so the cursor is what picks
+ * which side it wraps. The two only disagree when the gear's rim crosses the
+ * belt's line (its centre is closer to the line than its radius) — otherwise
+ * every rim point sits on the same side as the centre anyway.
  */
 export function belt_wrap_direction(
-  gearCenter: Point2,
+  referencePoint: Point2,
   belt: BeltElement,
   section: number,
   mechanicalElements: MechanicalElement[],
   approach: BeltGearApproach,
 ): boolean {
   const left = is_on_left_side_of_belt(
-    gearCenter,
+    referencePoint,
     belt,
     section,
     mechanicalElements,

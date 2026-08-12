@@ -46,11 +46,26 @@ export function linkKeys(link: Link): string[] {
   const r = link as unknown as Record<string, unknown>;
   const out: string[] = [];
   for (const field of [
-    "key1", "key2", "key3", "key4",
-    "nodeKey", "centerKey", "pivotKey", "drivenKey",
-    "angleKey", "angleKey1", "angleKey2", "refAngleKey",
-    "posKey1", "posKey2", "posKeyA", "posKeyB",
-    "phaseKey", "startKey", "endKey", "grabbedKey",
+    "key1",
+    "key2",
+    "key3",
+    "key4",
+    "nodeKey",
+    "centerKey",
+    "pivotKey",
+    "drivenKey",
+    "angleKey",
+    "angleKey1",
+    "angleKey2",
+    "refAngleKey",
+    "posKey1",
+    "posKey2",
+    "posKeyA",
+    "posKeyB",
+    "phaseKey",
+    "startKey",
+    "endKey",
+    "grabbedKey",
   ]) {
     const v = r[field];
     if (typeof v === "string") out.push(v);
@@ -159,7 +174,7 @@ export function buildBeltAggregateLinks(
   const angleOfVia = (via: number) =>
     isTerminal(via) ? undefined : spec.gearAngleKeys[via - shift];
   const rEpsOfVia = (via: number) =>
-    isTerminal(via) ? 0 : vias[via].radius * (vias[via].direction ? -1 : 1);
+    isTerminal(via) ? 0 : vias[via].radius * (vias[via].clockwise ? -1 : 1);
 
   // Ordered strands, and where each one ends.
   const strands = pieces
@@ -202,7 +217,8 @@ export function buildBeltAggregateLinks(
 
   return runs.map((run) => {
     const h0Sum = run.idx.reduce(
-      (a, i) => a + (segmentH(vias, pieces, i, arrivals.slice(), false)?.h ?? 0),
+      (a, i) =>
+        a + (segmentH(vias, pieces, i, arrivals.slice(), false)?.h ?? 0),
       0,
     );
     const viaIndices = run.idx.map((i) => {
@@ -240,7 +256,6 @@ export function buildBeltAggregateLinks(
 // The aggregate constraint
 // ───────────────────────────────────────────────────────────────────────────
 
-
 /** Per-via gradient accumulators, grown once and reused (see `BeltScratch`). */
 let gradX = new Float64Array(16);
 let gradY = new Float64Array(16);
@@ -267,7 +282,8 @@ function evaluateScalar(
   }
   const iStart = s.pos[0];
   const iEnd = s.pos[1];
-  const load = (v: number) => loadBeltVia(sc, nodes, s, link, 2, iStart, iEnd, v);
+  const load = (v: number) =>
+    loadBeltVia(sc, nodes, s, link, 2, iStart, iEnd, v);
 
   // The run is cyclically contiguous, so its vias run from the first strand's departure
   // via to the last one's arrival — and the pair BEFORE the first carries that first

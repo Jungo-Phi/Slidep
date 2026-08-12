@@ -5,16 +5,16 @@
     "description": "",
     "author": "",
     "createdAt": 1785092034913,
-    "modifiedAt": 1785098006999,
+    "modifiedAt": 1786525349788,
     "tags": [],
     "lastSimulationMode": "kinematic"
   },
   "viewport": {
+    "scale": 0.9844125607574827,
     "pan": {
-      "x": 535.3351440429688,
-      "y": 600.000244140625
-    },
-    "zoom": 1
+      "x": 424.4176241723855,
+      "y": 206.46773144029316
+    }
   },
   "mechanicalElements": [
     {
@@ -91,7 +91,8 @@
         },
         {
           "id": "6a9bcce7-925d-457b-8eec-80db792f372c",
-          "direction": true
+          "direction": true,
+          "clockwise": true
         },
         {
           "id": "7df6585d-41bd-4aa4-9d86-100afb15fca9",
@@ -6563,6 +6564,14 @@
             ]
           ]
         }
+      }
+    ],
+    [
+      {
+        "type": "SwitchAttachedGearDirection",
+        "id": "f8929179-c47a-479c-a379-eb70ea5be957",
+        "index": 1,
+        "clockwise": true
       }
     ]
   ],

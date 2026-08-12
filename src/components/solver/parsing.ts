@@ -17,7 +17,6 @@ import { DIM } from "../../constants/rendering-specs";
 import { measure_belt_length } from "../../utils/belt-geom";
 import {
   BeltVia,
-  belt_pieces,
   belt_point_tangent,
   belt_project,
 } from "../../utils/belt-path";
@@ -323,7 +322,7 @@ function belt_junction_link(
     gearPosKeys: belt.attachedGearsIDs.map(({ id }) => id),
     radii,
     radKeys: belt.attachedGearsIDs.map(({ id }) => id),
-    directions: belt.attachedGearsIDs.map(({ direction }) => direction),
+    directions: belt.attachedGearsIDs.map(({ clockwise }) => clockwise),
     owner: belt.id,
   };
 }
@@ -342,13 +341,13 @@ function belt_pin_link(
   const gearPosKeys: string[] = [];
   const radii: number[] = [];
   const directions: boolean[] = [];
-  for (const { id, direction } of belt.attachedGearsIDs) {
+  for (const { id, clockwise } of belt.attachedGearsIDs) {
     const g = gearById(id, byId);
     if (!g) return null;
-    vias.push({ pos: g.position, radius: g.radius, direction });
+    vias.push({ pos: g.position, radius: g.radius, clockwise });
     gearPosKeys.push(id);
     radii.push(g.radius);
-    directions.push(direction);
+    directions.push(clockwise);
   }
   const refGear = gearById(belt.attachedGearsIDs[0].id, byId)!;
   return {
@@ -390,22 +389,22 @@ export function belt_body_grab_pin(
   const gearPosKeys: string[] = [];
   const radii: number[] = [];
   const directions: boolean[] = [];
-  for (const { id, direction } of belt.attachedGearsIDs) {
+  for (const { id, clockwise } of belt.attachedGearsIDs) {
     const g = gearById(id, byId);
     if (!g) return null;
-    gearVias.push({ pos: g.position, radius: g.radius, direction });
+    gearVias.push({ pos: g.position, radius: g.radius, clockwise });
     gearPosKeys.push(id);
     radii.push(g.radius);
-    directions.push(direction);
+    directions.push(clockwise);
   }
   const refGear = gearById(belt.attachedGearsIDs[0].id, byId)!;
   const closed = belt.closed;
   const vias = closed
     ? gearVias
     : [
-        { pos: belt.positionStart, radius: 0, direction: false },
+        { pos: belt.positionStart, radius: 0, clockwise: false },
         ...gearVias,
-        { pos: belt.positionEnd, radius: 0, direction: false },
+        { pos: belt.positionEnd, radius: 0, clockwise: false },
       ];
   return {
     type: "BeltPin",
@@ -488,13 +487,13 @@ function belt_follows_tangent_links(
   const gearPosKeys: string[] = [];
   const radii: number[] = [];
   const directions: boolean[] = [];
-  for (const { id, direction } of belt.attachedGearsIDs) {
+  for (const { id, clockwise } of belt.attachedGearsIDs) {
     const g = gearById(id, byId);
     if (!g) return [];
-    vias.push({ pos: g.position, radius: g.radius, direction });
+    vias.push({ pos: g.position, radius: g.radius, clockwise });
     gearPosKeys.push(id);
     radii.push(g.radius);
-    directions.push(direction);
+    directions.push(clockwise);
   }
   const s0 = belt_project(vias, belt.positionStart, true).s;
   const tangentAngle = belt_point_tangent(vias, s0, true).tangent.angle();
@@ -539,17 +538,12 @@ export function belt_length_link(
   const gears = belt.attachedGearsIDs;
   const radii: number[] = [];
   const directions: boolean[] = [];
-  const vias: BeltVia[] = [
-    { pos: belt.positionStart, radius: 0, direction: false },
-  ];
-  for (const { id, direction } of gears) {
+  for (const { id, clockwise } of gears) {
     const g = gearById(id, byId);
     if (!g) return null;
     radii.push(g.radius);
-    directions.push(direction);
-    vias.push({ pos: g.position, radius: g.radius, direction });
+    directions.push(clockwise);
   }
-  vias.push({ pos: belt.positionEnd, radius: 0, direction: false });
 
   const base = {
     type: "BeltLength" as const,
@@ -584,23 +578,7 @@ export function belt_length_link(
   const startWound = woundOn(belt.fixedNodeStartID, gears[0]?.id);
   const endWound = woundOn(belt.fixedNodeEndID, gears[gears.length - 1]?.id);
 
-  // Length from the drawn geometry; belt_pieces matches how the constraint measures it,
-  // so the belt starts in equilibrium.
-  const svias: BeltVia[] = [
-    { pos: belt.positionStart, radius: 0, direction: false },
-    ...gears.map(({ id, direction }) => {
-      const g = gearById(id, byId)!;
-      return { pos: g.position, radius: g.radius, direction };
-    }),
-    { pos: belt.positionEnd, radius: 0, direction: false },
-  ];
-  const loopLength = belt_pieces(svias, false).reduce((a, p) => a + p.length, 0);
-  return {
-    ...base,
-    length: length ?? loopLength,
-    startWound,
-    endWound,
-  };
+  return { ...base, startWound, endWound };
 }
 
 /** Build a byId lookup for a mechanism's elements. */
@@ -671,7 +649,8 @@ export function rebuild_belt_q_links(
   const kept = links.filter(
     (l) =>
       !(
-        (l.type === "BeltSegmentNoSlip" || l.type === "BeltSubChainAggregate") &&
+        (l.type === "BeltSegmentNoSlip" ||
+          l.type === "BeltSubChainAggregate") &&
         l.owner === belt.owner
       ),
   );

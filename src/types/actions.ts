@@ -17,16 +17,6 @@ export type CanvasEvent =
   | { type: "MouseRightButtonDown" }
   | { type: "KeyDown"; key: string; ctrlKey: boolean };
 
-export type ActionBundleType =
-  | "MoveElement"
-  | "MoveConstraint"
-  | "ChangeConstant"
-  | "ChangeDimension"
-  | "Connects"
-  | "CreateConstraint"
-  | "MoveLoad"
-  | "Other";
-
 /** Supported action types */
 export type ActionType =
   | OtherActionType
@@ -53,6 +43,7 @@ export type MoveElementActionType =
   | "MoveElements"
   | "ChangeGearRadius"
   | "ChangeEdgeLength"
+  | "ChangeEdgeAngle"
   | "ChangeBeltLength";
 export type ChangeDimensionActionType =
   | "ChangeDimensionEdgeValue"
@@ -139,7 +130,7 @@ export type Action =
       type: "SwitchAttachedGearDirection";
       id: ID;
       index: number;
-      direction: boolean;
+      clockwise: boolean;
     }
   | {
       type: "ChangeGearRadius";
@@ -151,6 +142,7 @@ export type Action =
       committed?: boolean;
     }
   | { type: "ChangeEdgeLength"; id: ID; newLength: number; oldLength: number }
+  | { type: "ChangeEdgeAngle"; id: ID; newAngle: number; oldAngle: number }
   | { type: "ChangeBeltLength"; id: ID; newLength: number; oldLength: number }
   | {
       type: "ChangeMass";
@@ -267,7 +259,7 @@ export type Action =
       elementID: ID;
       connectID: ID;
       index: number;
-      direction: boolean;
+      clockwise: boolean;
     }
   | {
       type: "ConnectsFixedGears";

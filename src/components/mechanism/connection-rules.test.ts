@@ -213,4 +213,17 @@ describe("legality_for_state", () => {
     )(element_of(elements, PIVOT));
     expect(verdict.allowed).toBe(true);
   });
+
+  it("refuse de fusionner un axe sur un nœud qui tient déjà un de ses engrenages", () => {
+    const elements = build().map((element) =>
+      element.id === PIVOT
+        ? { ...element, rotatingEdgesIDs: [GEAR_A] }
+        : element,
+    ) as MechanicalElement[];
+    const verdict = legality_for_state(
+      { type: "MovingNode", elementID: AXLE },
+      elements,
+    )(element_of(elements, PIVOT));
+    expect(verdict.allowed).toBe(false);
+  });
 });

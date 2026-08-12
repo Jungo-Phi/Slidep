@@ -170,7 +170,7 @@ describe("repair_mechanism", () => {
     const { mechanism: result } = repair_mechanism(
       mechanism([
         orphan,
-        belt({ attachedGearsIDs: [{ id: GEAR_ID, direction: true }] }),
+        belt({ attachedGearsIDs: [{ id: GEAR_ID, clockwise: true }] }),
       ]),
     );
     const survivor = result.mechanicalElements[0] as BeltElement;
@@ -182,7 +182,7 @@ describe("repair_mechanism", () => {
     const { mechanism: result } = repair_mechanism(
       mechanism([
         belt({
-          attachedGearsIDs: [{ id: GHOST_ID, direction: true }],
+          attachedGearsIDs: [{ id: GHOST_ID, clockwise: true }],
           disconnectedGearIndices: [0],
           gearWraps: [1.5],
         }),
@@ -290,6 +290,44 @@ describe("repair_mechanism", () => {
     }
   });
 
+  it("drops a beam from fixedEdgesIDs when it's already the slider's parentBeamID", () => {
+    const SLIDER_ID = id("s1");
+    const slider: MechanicalElement = {
+      type: "slider",
+      id: SLIDER_ID,
+      probes: [],
+      overlays: {},
+      position: new Point2(5, 0),
+      isGrounded: false,
+      parentBeamID: BEAM_ID,
+      fixedEdgesIDs: [BEAM_ID],
+    };
+    const { mechanism: result, repairs } = repair_mechanism(
+      mechanism([
+        slider,
+        beam({ fixedNodeStartID: undefined, fixedNodesBodyIDs: [SLIDER_ID] }),
+      ]),
+    );
+    const repaired = result.mechanicalElements[0] as MechanicalElement & {
+      fixedEdgesIDs: ID[];
+    };
+    expect(repaired.fixedEdgesIDs).toEqual([]);
+    expect(repairs.map((r) => r.code)).toEqual(["PARENT_BEAM_DUPLICATE"]);
+  });
+
+  it("drops a gear from rotatingEdgesIDs when it's already the axle's fixedGearsIDs", () => {
+    const { mechanism: result, repairs } = repair_mechanism(
+      mechanism([
+        pivot({ rotatingEdgesIDs: [GEAR_ID], fixedGearsIDs: [GEAR_ID] }),
+        gear({ parentAxleID: PIVOT_ID }),
+      ]),
+    );
+    const repaired = result.mechanicalElements[0] as PivotElement;
+    expect(repaired.rotatingEdgesIDs).toEqual([]);
+    expect(repaired.fixedGearsIDs).toEqual([GEAR_ID]);
+    expect(repairs.map((r) => r.code)).toEqual(["GEAR_ROLE_DUPLICATE"]);
+  });
+
   it("empties the history as soon as it repairs anything", () => {
     const { mechanism: result } = repair_mechanism(
       mechanism([pivot(), beam({ fixedNodeEndID: GHOST_ID })]),
@@ -304,7 +342,7 @@ describe("repair_mechanism", () => {
         pivot({ rotatingEdgesIDs: [BEAM_ID, GHOST_ID] }),
         beam({ fixedNodeEndID: GHOST_ID }),
         gear({ parentAxleID: GHOST_ID }),
-        belt({ attachedGearsIDs: [{ id: GHOST_ID, direction: false }] }),
+        belt({ attachedGearsIDs: [{ id: GHOST_ID, clockwise: false }] }),
       ],
       [],
       [force({ frame: { mode: "edge", edgeID: GHOST_ID } })],

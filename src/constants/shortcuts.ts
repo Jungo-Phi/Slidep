@@ -60,17 +60,21 @@ export function shortcut_label(stateType: ToolStateType): string {
   return keys.map((key) => KEY_LABELS[key] ?? key.toUpperCase()).join("/");
 }
 
-/** Which tool a pressed key arms. Throws if two tools claim the same key. */
+/**
+ * Which tool a pressed key arms, keyed by `key.toLowerCase()` so shortcuts work regardless
+ * of Shift/Caps Lock. Throws if two tools claim the same key.
+ */
 export const TOOL_STATE_BY_KEY: Readonly<Record<string, ToolStateType>> =
   (() => {
     const byKey: Record<string, ToolStateType> = {};
     for (const [stateType, keys] of Object.entries(TOOL_SHORTCUTS)) {
       for (const key of keys) {
-        if (byKey[key])
+        const lowerKey = key.toLowerCase();
+        if (byKey[lowerKey])
           throw new Error(
-            `Shortcut "${key}" claimed by both ${byKey[key]} and ${stateType}`,
+            `Shortcut "${key}" claimed by both ${byKey[lowerKey]} and ${stateType}`,
           );
-        byKey[key] = stateType as ToolStateType;
+        byKey[lowerKey] = stateType as ToolStateType;
       }
     }
     return byKey;

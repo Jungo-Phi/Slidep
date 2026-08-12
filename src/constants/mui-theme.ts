@@ -8,6 +8,7 @@ declare module "@mui/material/styles" {
   interface TypeBackground {
     toolbar: string;
     sunken: string;
+    hoverOpaque: string;
   }
   /** `palette.divider` is the one for `paper`; these name the other surfaces. */
   interface Palette {
@@ -411,6 +412,7 @@ const mui_palette = (s: ThemeSpec) => {
   // The veil darkens a light ground and lightens a dark one: a black veil on a
   // dark background is invisible.
   const veil = dark ? "255, 255, 255" : "0, 0, 0";
+  const towards = dark ? "#FFFFFF" : "#000000";
   return {
     primary: { main: s.accent, dark: s.accentDark, contrastText: s.onAccent },
     secondary: { main: s.ink, contrastText: s.onAccent },
@@ -421,6 +423,9 @@ const mui_palette = (s: ThemeSpec) => {
       toolbar: s.toolbar,
       sunken: `rgba(${veil}, 0.04)`,
       hover: `rgba(${veil}, 0.08)`,
+      // Opaque equivalent of `background.default` under `action.hover`'s veil,
+      // for surfaces that must hide what's beneath rather than tint it.
+      hoverOpaque: mix(s.appBackground, towards, 0.1),
     },
     text: {
       primary: s.ink,

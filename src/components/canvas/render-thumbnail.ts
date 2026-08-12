@@ -1,24 +1,16 @@
 import { COLORS } from "../../constants/rendering-specs";
-import {
-  Mechanism,
-  Point2,
-  ScreenPoint,
-  ViewportState,
-  ZERO,
-} from "../../types";
-import { mechanism_bounds, world2screen_vec } from "../../utils";
-import { draw_mechanical_canvas } from "./draw-canvas";
-import { compute_visible_constraints } from "./utils";
+import { Mechanism, ZERO } from "../../types";
+import { fit_viewport_to_bounds, mechanism_bounds } from "../../utils";
+import { draw_mechanism } from "./draw-mechanism";
 
-const RATIO_MARGIN = 0.05;
-const FIXED_MARGIN = 20;
-const MAX_ZOOM = 2;
+/** Framing for an empty mechanism, or one whose anchors all sit at the same point. */
+const DEFAULT_ZOOM = 1;
 
 const CANVAS_STATE = { type: "Selecting" } as const;
 const HOVERED_PART = { type: "Void", position: ZERO } as const;
 
 /**
- * Dessine la miniature carrée du mécanisme dans un contexte déjà dimensionné.
+ * Dessine la miniature du mécanisme dans un contexte déjà dimensionné.
  *
  * Ce n'est pas une photo du canvas visible : on redessine le mécanisme seul,
  * dans un état d'interaction neutre (rien de sélectionné, survolé, ni en cours
@@ -31,10 +23,12 @@ const HOVERED_PART = { type: "Void", position: ZERO } as const;
 export const draw_thumbnail = (
   ctx: CanvasRenderingContext2D,
   mechanism: Mechanism,
-  size: number,
+  width: number,
+  height: number,
 ): void => {
   // Contraintes telles qu'on les voit en édition hors survol : cotations et
   // rapports d'engrenage, sans les badges géométriques.
+  /*
   const visibleConstraints = compute_visible_constraints(
     mechanism.constraintElements,
     "edition",
@@ -42,8 +36,16 @@ export const draw_thumbnail = (
     new Map(),
     CANVAS_STATE,
   );
+  */
+  const visibleConstraints = new Map();
 
-  const viewport = fit_viewport(mechanism, visibleConstraints, size);
+  const bounds = mechanism_bounds(
+    mechanism.mechanicalElements,
+    mechanism.constraintElements.filter((c) => visibleConstraints.has(c.id)),
+  );
+  const viewport = fit_viewport_to_bounds(bounds, width, height, {
+    defaultZoom: DEFAULT_ZOOM,
+  });
 
   // Axes du monde, en coordonnées écran comme dans le rendu principal. Ils
   // sortent du cadre si le mécanisme est loin de l'origine : c'est voulu.
@@ -51,12 +53,12 @@ export const draw_thumbnail = (
   ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(viewport.pan.x, 0);
-  ctx.lineTo(viewport.pan.x, size);
+  ctx.lineTo(viewport.pan.x, height);
   ctx.moveTo(0, viewport.pan.y);
-  ctx.lineTo(size, viewport.pan.y);
+  ctx.lineTo(width, viewport.pan.y);
   ctx.stroke();
 
-  draw_mechanical_canvas(ctx, {
+  draw_mechanism(ctx, {
     viewport,
     hoveredPart: HOVERED_PART,
     state: CANVAS_STATE,
@@ -68,30 +70,3 @@ export const draw_thumbnail = (
     hideProbes: true,
   });
 };
-
-/** Zoom et pan cadrant le contenu dessiné dans un carré de `size` px. */
-function fit_viewport(
-  mechanism: Mechanism,
-  visibleConstraints: Map<string, number>,
-  size: number,
-): ViewportState {
-  const bounds = mechanism_bounds(
-    mechanism.mechanicalElements,
-    mechanism.constraintElements.filter((c) => visibleConstraints.has(c.id)),
-  );
-  const center: ScreenPoint = new Point2(size / 2, size / 2);
-  if (!bounds) return { scale: 1, pan: center };
-
-  const width = bounds.max.x - bounds.min.x + 2 * FIXED_MARGIN;
-  const height = bounds.max.y - bounds.min.y + 2 * FIXED_MARGIN;
-  const inner = size * (1 - 2 * RATIO_MARGIN);
-  const scale = Math.min(MAX_ZOOM, inner / width, inner / height);
-
-  // The pan that lands the content's centre on the canvas centre. `world2screen`
-  // flips y on the way, so what has to be cancelled is the flipped offset.
-  const contentCenter = bounds.min.lerp(bounds.max, 0.5);
-  return {
-    scale,
-    pan: center.sub(world2screen_vec(contentCenter, { scale, pan: ZERO })),
-  };
-}

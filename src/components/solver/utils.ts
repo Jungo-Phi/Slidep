@@ -41,6 +41,7 @@ export function keys_of(link: Link): string[] {
       return [link.key1];
     case "Coincidence":
     case "Distance":
+    case "MinDistance":
     case "Spring":
     case "Horizontal":
     case "Vertical":

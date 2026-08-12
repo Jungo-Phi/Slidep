@@ -27,12 +27,14 @@ export type ValidationErrorCode =
   | "WRONG_TYPE"
   | "MISSING_BIDIRECTIONAL"
   | "SAME_AXLE_MESH"
+  | "GEAR_ROLE_CONFLICT"
   | "CONTRADICTORY_MOTOR"
   | "GROUNDED_MASS"
   | "BELT_CLOSURE_MISMATCH"
   | "BELTS_JOINED"
   | "SUPERPOSED_EDGES"
-  | "DUPLICATE_CONSTRAINT";
+  | "DUPLICATE_CONSTRAINT"
+  | "PARENT_BEAM_CONFLICT";
 
 /**
  * What a constraint says, independently of how it was written: its type and its
@@ -326,6 +328,20 @@ export function validate_mechanism(
     }
   }
 
+  // ── A gear is never both fixed to and rotating on the same axle ─────────────
+  for (const el of mels) {
+    if (!("fixedGearsIDs" in el) || !("rotatingEdgesIDs" in el)) continue;
+    for (const gearID of el.fixedGearsIDs) {
+      if (!el.rotatingEdgesIDs.includes(gearID)) continue;
+      errors.push({
+        code: "GEAR_ROLE_CONFLICT",
+        message: t("validation_gear_role_conflict", { name: name(gearID) }),
+        elementID: el.id,
+        relatedID: gearID,
+      });
+    }
+  }
+
   // ── A mass is never anchored ─────────────────────────────────────────────────
   for (const el of mels) {
     if (el.type === "mass" && el.isGrounded) {
@@ -374,6 +390,21 @@ export function validate_mechanism(
       elementID: nodeID,
       relatedID: beltIDs[0],
     });
+  }
+
+  // ── A rail is never also a fixed edge ────────────────────────────────────────
+  for (const el of mels) {
+    if (!("parentBeamID" in el) || !("fixedEdgesIDs" in el)) continue;
+    if (el.parentBeamID && el.fixedEdgesIDs.includes(el.parentBeamID)) {
+      errors.push({
+        code: "PARENT_BEAM_CONFLICT",
+        message: t("validation_parent_beam_conflict", {
+          name: name(el.parentBeamID),
+        }),
+        elementID: el.id,
+        relatedID: el.parentBeamID,
+      });
+    }
   }
 
   // ── A motor drives from the ground or from a beam, never both ────────────────

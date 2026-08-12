@@ -9,6 +9,7 @@ import slider from "../../../test-mechanisms/Test slider.slidep?raw";
 import vilbrequin from "../../../test-mechanisms/Vilbrequin.slidep?raw";
 import {
   BeamElement,
+  BeltElement,
   ID,
   JoinElement,
   MechanicalElement,
@@ -19,6 +20,7 @@ import {
 } from "../../types";
 import { DEFAULT_METADATA } from "../../types/mechanism";
 import { load_mechanism } from "../../utils/load-mechanism";
+import { belt_without_gear } from "../../utils/belt-geom";
 import { build_analysis_model, variable_keys_of } from "./analysis-model";
 import { probe_chain_mobility, probe_mobility } from "./mobility-probe";
 
@@ -167,6 +169,54 @@ describe("probe_chain_mobility — valeurs connues d'avance", () => {
     ).toEqual([[1, 2]]);
   });
 
+  it("le même mécanisme dessiné plus petit répond la même chose", () => {
+    // La sonde n'a pas d'amplitude plancher, et c'est ce test qui l'interdit : toute
+    // valeur absolue finit par dépasser le mécanisme qu'elle sonde, ce qui sort du
+    // régime linéaire sur lequel repose toute la projection. Un plancher d'un
+    // millimètre faisait répondre 3 à ce double pendule dessiné sur 2 mm — donc un
+    // mode et une redondance qui n'existent pas.
+    const pendulum = (k: number) => [
+      pivot("p1", P(0, 0), true, [id("b1")]),
+      pivot("p2", P(k, 0), false, [id("b1"), id("b2")]),
+      beam("b1", P(0, 0), P(k, 0), "p1", "p2"),
+      beam("b2", P(k, 0), P(k, 2 * k), "p2"),
+    ];
+    const twins = (k: number) => [
+      pivot("t1", P(0, 0), true, [id("d1"), id("d2")]),
+      pivot("t2", P(k, 0), false, [id("d1"), id("d2")]),
+      beam("d1", P(0, 0), P(k, 0), "t1", "t2"),
+      beam("d2", P(0, 0), P(k, 0), "t1", "t2"),
+    ];
+    for (const k of [1000, 10, 1, 0.01, 0.001]) {
+      expect(mobility(pendulum(k))).toEqual([[2, 0]]);
+      expect(mobility(twins(k))).toEqual([[1, 1]]);
+    }
+  });
+
+  it("une pose que le modèle ne satisfait pas n'invente pas de mode", () => {
+    // Le quatre-barres, mais la manivelle et la bielle ne se rejoignent pas : la fusion
+    // pose le nœud partagé entre les deux, et aucune des deux longueurs cuites n'y tient.
+    // Le solveur referme donc la boucle avant même qu'on ait poussé, et ce déplacement-là
+    // est le même quelle que soit la direction sondée — une constante, que la sonde compte
+    // comme une direction de plus si on ne la lui retire pas.
+    const [result] = probe_mobility(
+      build_analysis_model(
+        mechanism([
+          pivot("p1", P(0, 0), true, [id("b1")]),
+          pivot("p2", P(0, 100), false, [id("b1"), id("b2")]),
+          pivot("p3", P(200, 120), false, [id("b2"), id("b3")]),
+          pivot("p4", P(200, 0), true, [id("b3")]),
+          beam("b1", P(0, 0), P(0, 100), "p1", "p2"),
+          beam("b2", P(0, 100), P(200, 120), "p2", "p3"),
+          beam("b3", P(260, 150), P(200, 0), "p3", "p4"),
+        ]),
+      ),
+    );
+    // Le garde-fou a bien eu de quoi mordre : la pose est loin de ses contraintes.
+    expect(result.restDrift).toBeGreaterThan(1);
+    expect([result.mobility, result.hyperstaticity]).toEqual([1, 0]);
+  });
+
   it("chaque chaîne est mesurée pour elle-même", () => {
     const results = mobility([
       pivot("p1", P(0, 0), true, [id("b1")]),
@@ -202,6 +252,70 @@ describe("probe_chain_mobility — mécanismes de référence", () => {
     // La masse flottante n'est tenue par rien : ses deux DDL sont entiers.
     expect(results[2].mobility).toBe(2);
     expect(results[2].hyperstaticity).toBe(0);
+  });
+
+  it("une poulie que la courroie a lâchée rend son degré de liberté", () => {
+    // La déconnexion est un état de simulation : elle vit sur le lien, semée depuis un
+    // snapshot, et `compile_simulation_model` reconstruit toujours la courroie entière.
+    // L'analyse lit pourtant la pose affichée, où la courroie passe droit devant la poulie.
+    // Sans en tenir compte, la loi de brin de cette poulie masque la liberté que la courroie
+    // vient de rendre — mesuré 1 au lieu de 2 sur ce mécanisme.
+    const { mechanism: mech } = load_mechanism(JSON.parse(decon));
+    const belt = mech.mechanicalElements.find((el) => el.type === "belt")!;
+    const attached = (belt as { attachedGearsIDs: unknown[] }).attachedGearsIDs;
+    expect(attached.length).toBeGreaterThan(2);
+
+    const withDrop = {
+      ...mech,
+      mechanicalElements: mech.mechanicalElements.map((el) =>
+        el.id === belt.id ? { ...el, disconnectedGearIndices: [1] } : el,
+      ),
+    };
+    // Vérité indépendante : la même pose, la poulie retirée de la courroie pour de bon.
+    const removed = {
+      ...mech,
+      mechanicalElements: mech.mechanicalElements.map((el) =>
+        el.id === belt.id ? belt_without_gear(belt as BeltElement, 1) : el,
+      ),
+    };
+
+    const strands = (m: Mechanism) =>
+      build_analysis_model(m).links.filter(
+        (l) => l.type === "BeltSegmentNoSlip",
+      ).length;
+    expect(probe_mobility(build_analysis_model(withDrop))).toEqual(
+      probe_mobility(build_analysis_model(removed)).map((r) =>
+        expect.objectContaining({
+          mobility: r.mobility,
+          hyperstaticity: r.hyperstaticity,
+        }),
+      ),
+    );
+    expect(strands(withDrop)).toBe(strands(removed));
+    // Et c'est bien un brin de moins qu'avec la courroie entière.
+    expect(strands(withDrop)).toBe(strands(mech) - 1);
+  });
+
+  it("le joint relit son s0 sur la boucle amputée, pas sur l'entière", () => {
+    // `rewire_belts` mesure le `s0` du joint sur la boucle privée de la poulie lâchée ; le
+    // lien qui relit ce `s0` doit parcourir la même. Sinon il pose le joint ailleurs — 316 mm
+    // ailleurs, mesuré sur `Déconnexion courroie` à 2,5 s —, la pose de repos du modèle viole
+    // sa propre contrainte, et la sonde comptait cet écart comme un troisième mode.
+    const { mechanism: mech } = load_mechanism(JSON.parse(decon));
+    const belt = mech.mechanicalElements.find((el) => el.type === "belt")!;
+    const model = build_analysis_model({
+      ...mech,
+      mechanicalElements: mech.mechanicalElements.map((el) =>
+        el.id === belt.id ? { ...el, disconnectedGearIndices: [1] } : el,
+      ),
+    });
+    const off = model.links.find((l) => l.type === "BeltLength")?.disconnected;
+    expect(off).toEqual([false, true, false]);
+    const junctions = [...model.links, ...model.pruned.map((p) => p.link)].filter(
+      (l) => l.type === "BeltPin" || l.type === "BeltFollowsTangent",
+    );
+    expect(junctions.length).toBeGreaterThan(0);
+    for (const junction of junctions) expect(junction.disconnected).toEqual(off);
   });
 
   it("m et h de référence", () => {

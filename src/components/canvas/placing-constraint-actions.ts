@@ -125,6 +125,11 @@ const NOTHING_REPLACED: ReadonlySet<ID> = new Set();
  * it is aimed — the preview already draws their replacement under the cursor.
  * Only the dimensioning steps answer: the other constraints have no preview, so
  * hiding what they replace would make a badge vanish with nothing to show for it.
+ *
+ * A step like `DimensionEdge` hovering an `Edge` does not build yet: it only
+ * advances to `DimensionAngle`, still aimed at the same hover. The preview drawn
+ * for that frame is the angle's, so the search follows the same chain of
+ * no-op transitions — same hover each time, since the click hasn't moved.
  */
 export function replaced_constraint_ids(
   state: CanvasState,
@@ -132,13 +137,23 @@ export function replaced_constraint_ids(
   mechanicalElements: MechanicalElement[],
   constraintElements: ConstraintElement[],
 ): ReadonlySet<ID> {
-  if (!is_dimension_placement(state)) return NOTHING_REPLACED;
-  const repeated = repeated_constraints(
-    build_constraint(state, hoveredPart, mechanicalElements),
-    constraintElements,
-  );
-  if (repeated.length === 0) return NOTHING_REPLACED;
-  return new Set(repeated.map((constraint) => constraint.id));
+  let current = state;
+  while (is_dimension_placement(current)) {
+    const result = build_constraint(current, hoveredPart, mechanicalElements);
+    const repeated = repeated_constraints(result, constraintElements);
+    if (repeated.length > 0)
+      return new Set(repeated.map((constraint) => constraint.id));
+    if (
+      result.actions.length === 0 &&
+      result.newCanvasState &&
+      result.newCanvasState.type !== current.type
+    ) {
+      current = result.newCanvasState;
+      continue;
+    }
+    break;
+  }
+  return NOTHING_REPLACED;
 }
 
 export function handle_placing_constraint(
@@ -245,7 +260,6 @@ function build_constraint(
               },
             },
           ],
-          actionBundleType: "CreateConstraint",
           newCanvasState: {
             type: "PlacingValue",
             elementID,
@@ -281,7 +295,6 @@ function build_constraint(
             },
           },
         ],
-        actionBundleType: "CreateConstraint",
         newCanvasState: {
           type: "PlacingValue",
           elementID,
@@ -318,7 +331,6 @@ function build_constraint(
             },
           },
         ],
-        actionBundleType: "CreateConstraint",
         newCanvasState: {
           type: "PlacingValue",
           elementID,
@@ -363,7 +375,6 @@ function build_constraint(
             },
           },
         ],
-        actionBundleType: "CreateConstraint",
         newCanvasState: {
           type: "PlacingValue",
           elementID,
@@ -392,7 +403,6 @@ function build_constraint(
             },
           },
         ],
-        actionBundleType: "CreateConstraint",
         newCanvasState: {
           type: "PlacingValue",
           elementID,
@@ -421,7 +431,6 @@ function build_constraint(
             },
           },
         ],
-        actionBundleType: "CreateConstraint",
         newCanvasState: {
           type: "PlacingValue",
           elementID,
@@ -461,7 +470,6 @@ function build_constraint(
               },
             },
           ],
-          actionBundleType: "CreateConstraint",
         };
       }
       return { actions: [] };
@@ -494,7 +502,6 @@ function build_constraint(
             },
           },
         ],
-        actionBundleType: "CreateConstraint",
         newCanvasState,
       };
     }
@@ -536,7 +543,6 @@ function build_constraint(
             },
           },
         ],
-        actionBundleType: "CreateConstraint",
         newCanvasState,
       };
     }
@@ -578,7 +584,6 @@ function build_constraint(
             },
           },
         ],
-        actionBundleType: "CreateConstraint",
         newCanvasState,
       };
     }
@@ -629,7 +634,6 @@ function build_constraint(
             },
           },
         ],
-        actionBundleType: "CreateConstraint",
         newCanvasState,
       };
     }
@@ -661,7 +665,6 @@ function build_constraint(
             },
           },
         ],
-        actionBundleType: "CreateConstraint",
         newCanvasState,
       };
     }
@@ -707,7 +710,6 @@ function build_constraint(
             },
           },
         ],
-        actionBundleType: "CreateConstraint",
         newCanvasState: {
           type: "PlacingValue",
           elementID,

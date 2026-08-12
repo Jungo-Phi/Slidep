@@ -63,7 +63,7 @@ function loadVias(w: Workspace, vias: BeltVia[]): void {
     w.cx[i] = vias[i].pos.x;
     w.cy[i] = vias[i].pos.y;
     w.r[i] = vias[i].radius;
-    w.dir[i] = vias[i].direction ? 1 : 0;
+    w.dir[i] = vias[i].clockwise ? 1 : 0;
   }
 }
 
@@ -131,7 +131,12 @@ function scalarAll(w: Workspace, n: number, closed: boolean): number {
 }
 
 /** Only what one strand needs: its own pair and the one before it. */
-function scalarStrand(w: Workspace, n: number, closed: boolean, seg: number): number {
+function scalarStrand(
+  w: Workspace,
+  n: number,
+  closed: boolean,
+  seg: number,
+): number {
   const pairs = closed ? n : n - 1;
   const prev = (seg - 1 + pairs) % pairs;
   tangentPair(w, prev, (prev + 1) % n, prev);
@@ -148,7 +153,7 @@ function reboxVias(w: Workspace, n: number): BeltVia[] {
     vias.push({
       pos: new Point2(w.cx[i], w.cy[i]),
       radius: w.r[i],
-      direction: w.dir[i] === 1,
+      clockwise: w.dir[i] === 1,
     });
   return vias;
 }
@@ -198,10 +203,10 @@ describe("géométrie de courroie — où passe le temps", () => {
               const { start, end } = Point2.circles_link(
                 a.pos,
                 a.radius,
-                a.direction,
+                a.clockwise,
                 b.pos,
                 b.radius,
-                b.direction,
+                b.clockwise,
               );
               acc += a.pos.add(start).distance_to(b.pos.add(end));
             }
@@ -209,7 +214,10 @@ describe("géométrie de courroie — où passe le temps", () => {
           },
         ],
         ["scalar", () => scalarAll(w, n, g.closed)],
-        ["scalar×2", (i) => scalarStrand(w, n, g.closed, i % (g.closed ? n : n - 1))],
+        [
+          "scalar×2",
+          (i) => scalarStrand(w, n, g.closed, i % (g.closed ? n : n - 1)),
+        ],
       ];
 
       const best = new Map<string, number>();
@@ -235,7 +243,8 @@ describe("géométrie de courroie — où passe le temps", () => {
     }
 
     console.log(
-      "\n  | géométrie | " + "pieces | vias+pieces | tangents | scalar | scalar×2 |",
+      "\n  | géométrie | " +
+        "pieces | vias+pieces | tangents | scalar | scalar×2 |",
     );
     console.log("  |---|---|---|---|---|---|");
     for (const row of rows) console.log(row);

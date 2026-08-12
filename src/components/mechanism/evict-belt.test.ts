@@ -54,7 +54,7 @@ const belt = (bid: string, gears: string[], y: number): BeltElement => ({
   positionEnd: new Point2(300, y),
   fixedNodeStartID: undefined,
   fixedNodeEndID: undefined,
-  attachedGearsIDs: gears.map((g) => ({ id: id(g), direction: false })),
+  attachedGearsIDs: gears.map((g) => ({ id: id(g), clockwise: false })),
   closed: false,
 });
 
@@ -101,7 +101,7 @@ describe("attach_gear_to_belt evicts a prior belt", () => {
     mels,
     "belt-onto-gear",
   );
-  const forward = apply_actions(mechanism(two_belts()), actions, "Connects");
+  const forward = apply_actions(mechanism(two_belts()), actions);
 
   it("the previous belt lets go of the gear, on both sides", () => {
     expect(beltOf(forward, "b1").attachedGearsIDs.map((g) => g.id)).toEqual([

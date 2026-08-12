@@ -291,7 +291,7 @@ export function disconnect_element(
       index: get_connections(element, containerType).indexOf(
         connectedElement.id,
       ),
-      direction: attached?.direction ?? false,
+      clockwise: attached?.clockwise ?? false,
     };
   } else {
     return {
@@ -720,7 +720,7 @@ export function apply_to_sim_state(
           ? el.attachedGearsIDs.splice(action.index, 1)
           : el.attachedGearsIDs.splice(action.index, 0, {
               id: action.connectID,
-              direction: action.direction,
+              clockwise: action.clockwise,
             });
       break;
     case "ConnectsFixedNodeStart":
@@ -1115,7 +1115,9 @@ function retargeted_constraint(
           ? destNodeID
           : constraint.startNodeID;
       const endNodeID =
-        constraint.endNodeID === sourceNodeID ? destNodeID : constraint.endNodeID;
+        constraint.endNodeID === sourceNodeID
+          ? destNodeID
+          : constraint.endNodeID;
       if (
         startNodeID === constraint.startNodeID &&
         endNodeID === constraint.endNodeID
@@ -1645,6 +1647,11 @@ export function connect_node_and_edge(
   loads: LoadElement[] = [],
 ): Action[] {
   const actions: Action[] = [];
+  // A slider names its rail through parentBeamID alone — once this edge holds
+  // that role, re-offering it (e.g. a second body crossing in the same
+  // gesture) is already satisfied, not a fixed edge to add on top of it.
+  const alreadyParentBeam =
+    "parentBeamID" in node && node.parentBeamID === edge.id;
   if (
     "parentBeamID" in node &&
     !node.parentBeamID &&
@@ -1657,7 +1664,7 @@ export function connect_node_and_edge(
       elementID: node.id,
       connectID: edge.id,
     });
-  } else if ("rotatingEdgesIDs" in node) {
+  } else if (!alreadyParentBeam && "rotatingEdgesIDs" in node) {
     if (!node.rotatingEdgesIDs.includes(edge.id))
       actions.push({
         type: "ConnectsRotatingEdges",
@@ -1666,7 +1673,7 @@ export function connect_node_and_edge(
         connectID: edge.id,
         index: 0,
       });
-  } else if ("fixedEdgesIDs" in node) {
+  } else if (!alreadyParentBeam && "fixedEdgesIDs" in node) {
     if (!node.fixedEdgesIDs.includes(edge.id))
       actions.push({
         type: "ConnectsFixedEdges",
@@ -1679,7 +1686,9 @@ export function connect_node_and_edge(
   switch (edgePart) {
     case "start":
       if (edge.type !== "gear" && edge.fixedNodeStartID !== node.id) {
-        actions.push(...detach_edge_end(edge, "start", node, mechanicalElements));
+        actions.push(
+          ...detach_edge_end(edge, "start", node, mechanicalElements),
+        );
         actions.push({
           type: "ConnectsFixedNodeStart",
           disconnect: false,
@@ -1804,17 +1813,14 @@ export function connect_meshed_gears(gear1ID: ID, gear2ID: ID): Action[] {
   ];
 }
 
-/** Connects a gear and a belt bidirectionally. */
 /**
- * Insert a gear into a belt's straight section, winding the belt on the side its
- * centre sits on.
+ * Insert a gear into a belt's straight section, winding the belt per `belt_wrap_direction` — see there for what `referencePoint` should be.
  *
- * The centre is passed rather than read from the gear: the placement tool creates
- * the gear in the same batch, so it is not in `mechanicalElements` yet.
+ * It is passed rather than read from the gear: the placement tool creates the gear in the same batch, so it is not in `mechanicalElements` yet.
  */
 export function attach_gear_to_belt(
   gearID: ID,
-  gearCenter: Point2,
+  referencePoint: Point2,
   belt: BeltElement,
   section: number,
   mechanicalElements: MechanicalElement[],
@@ -1829,7 +1835,7 @@ export function attach_gear_to_belt(
       belt.id,
       index,
       belt_wrap_direction(
-        gearCenter,
+        referencePoint,
         belt,
         section,
         mechanicalElements,
@@ -1867,7 +1873,12 @@ export function evict_belt_from_gear(
       "ConnectsAttachedGears",
       mechanicalElements,
     ),
-    disconnect_element(gear, oldBelt, "ConnectsAttachedBelt", mechanicalElements),
+    disconnect_element(
+      gear,
+      oldBelt,
+      "ConnectsAttachedBelt",
+      mechanicalElements,
+    ),
   ];
 }
 
@@ -1875,7 +1886,7 @@ function connect_gear_and_belt(
   gearID: ID,
   beltID: ID,
   index: number,
-  direction: boolean,
+  clockwise: boolean,
 ): Action[] {
   return [
     {
@@ -1890,7 +1901,7 @@ function connect_gear_and_belt(
       elementID: beltID,
       connectID: gearID,
       index,
-      direction,
+      clockwise,
     },
   ];
 }

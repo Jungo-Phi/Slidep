@@ -36,7 +36,6 @@ export function repair_summary(repairs: Repair[]): string {
   if (removed > 0) parts.push(tn("repair_elements_removed", removed));
   if (links > 0) parts.push(tn("repair_links_removed", links));
   if (points > 0) parts.push(tn("repair_points_reset", points));
-  if (framing > 0) parts.push(t("repair_viewport_reset"));
 
   const summary = t("repair_summary", { parts: parts.join(", ") });
   // `repair_mechanism` keeps the undo stack when the framing was the only fault.

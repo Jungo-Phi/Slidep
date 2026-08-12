@@ -1,7 +1,11 @@
 import { Mechanism } from "../../types";
 import { KinematicSnapshot, SnapshotLayout } from "../../types/runtime-state";
 import { serialize_mechanism } from "../../utils/serialization";
-import { MAX_RECORDING_TIME, SimGrab } from "./kinematic-simulation";
+import {
+  MAX_RECORDING_TIME,
+  SimGrab,
+  max_recording_time,
+} from "./kinematic-simulation";
 import { FromRecorder, ToRecorder } from "./recorder-protocol";
 import { snapshot_layout } from "./snapshot";
 
@@ -38,8 +42,12 @@ export class RecorderClient {
       // Anything from before the last `load` describes a mechanism that no longer exists.
       if (message.epoch !== this.epoch) return;
       if (message.type === "layout") {
-        this.layout = snapshot_layout(message.keys, message.angleKeys);
-        this.limit = message.maxTime;
+        this.layout = snapshot_layout(
+          message.keys,
+          message.angleKeys,
+          message.belts,
+        );
+        this.limit = max_recording_time(this.layout);
         return;
       }
       // Messages are delivered in order and the layout is posted on load, so it is here
@@ -82,6 +90,20 @@ export class RecorderClient {
       resumeFrom,
       epoch: this.epoch,
     });
+  }
+
+  /**
+   * Go back to an instant already recorded, keeping the loaded mechanism.
+   *
+   * Same epoch bump as a `load` — the instants past the target are still in flight and must
+   * not be appended after it — but the layout is kept: the model has not changed, so the
+   * snapshots that follow are written in the same slots.
+   */
+  rewind(resumeFrom: KinematicSnapshot): void {
+    this.epoch++;
+    this.queued = [];
+    this.reached = resumeFrom.t;
+    this.post({ type: "rewind", resumeFrom, epoch: this.epoch });
   }
 
   /** The longest the loaded mechanism records, in simulated seconds. */

@@ -1,15 +1,17 @@
 import React from "react";
 import { Box } from "@mui/material";
-import { MechanicalElement } from "../../types/element";
-import { CanvasState, Action, Mechanism, ActionBundleType } from "../../types";
+import { MechanicalElement, ID } from "../../types/element";
+import { CanvasState, Action, Mechanism } from "../../types";
 import { ConnectionsContainer } from "./components/ConnectionsContainer";
 import { HoveredPart } from "../../types/hovered-part";
 
 interface ConnectionsPropertiesProps {
   element: MechanicalElement;
+  hoveredPart: HoveredPart;
   setHoveredPart: (hoveredPart: HoveredPart) => void;
+  selectedIds: ID[];
   setCanvasState: (state: CanvasState) => void;
-  applyActions: (actions: Action[], actionBundleType: ActionBundleType) => void;
+  applyActions: (actions: Action[]) => void;
   mechanism: Mechanism;
 }
 
@@ -35,7 +37,9 @@ const ConnectionsGrid: React.FC<{ children: React.ReactNode }> = ({
 
 export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
   element,
+  hoveredPart,
   setHoveredPart,
+  selectedIds,
   setCanvasState,
   applyActions,
   mechanism,
@@ -47,7 +51,9 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
           <ConnectionsContainer
             element={element}
             containerType="ConnectsRotatingEdges"
+            hoveredPart={hoveredPart}
             setHoveredPart={setHoveredPart}
+            selectedIds={selectedIds}
             setCanvasState={setCanvasState}
             applyActions={applyActions}
             mechanism={mechanism}
@@ -55,7 +61,9 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
           <ConnectionsContainer
             element={element}
             containerType="ConnectsFixedGears"
+            hoveredPart={hoveredPart}
             setHoveredPart={setHoveredPart}
+            selectedIds={selectedIds}
             setCanvasState={setCanvasState}
             applyActions={applyActions}
             mechanism={mechanism}
@@ -68,7 +76,9 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
           <ConnectionsContainer
             element={element}
             containerType="ConnectsParentBeam"
+            hoveredPart={hoveredPart}
             setHoveredPart={setHoveredPart}
+            selectedIds={selectedIds}
             setCanvasState={setCanvasState}
             applyActions={applyActions}
             mechanism={mechanism}
@@ -76,7 +86,9 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
           <ConnectionsContainer
             element={element}
             containerType="ConnectsFixedEdges"
+            hoveredPart={hoveredPart}
             setHoveredPart={setHoveredPart}
+            selectedIds={selectedIds}
             setCanvasState={setCanvasState}
             applyActions={applyActions}
             mechanism={mechanism}
@@ -89,7 +101,9 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
           <ConnectionsContainer
             element={element}
             containerType="ConnectsParentBeam"
+            hoveredPart={hoveredPart}
             setHoveredPart={setHoveredPart}
+            selectedIds={selectedIds}
             setCanvasState={setCanvasState}
             applyActions={applyActions}
             mechanism={mechanism}
@@ -97,7 +111,9 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
           <ConnectionsContainer
             element={element}
             containerType="ConnectsRotatingEdges"
+            hoveredPart={hoveredPart}
             setHoveredPart={setHoveredPart}
+            selectedIds={selectedIds}
             setCanvasState={setCanvasState}
             applyActions={applyActions}
             mechanism={mechanism}
@@ -105,7 +121,9 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
           <ConnectionsContainer
             element={element}
             containerType="ConnectsFixedGears"
+            hoveredPart={hoveredPart}
             setHoveredPart={setHoveredPart}
+            selectedIds={selectedIds}
             setCanvasState={setCanvasState}
             applyActions={applyActions}
             mechanism={mechanism}
@@ -119,7 +137,9 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
           <ConnectionsContainer
             element={element}
             containerType="ConnectsFixedEdges"
+            hoveredPart={hoveredPart}
             setHoveredPart={setHoveredPart}
+            selectedIds={selectedIds}
             setCanvasState={setCanvasState}
             applyActions={applyActions}
             mechanism={mechanism}
@@ -132,7 +152,9 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
           <ConnectionsContainer
             element={element}
             containerType="ConnectsParentAxle"
+            hoveredPart={hoveredPart}
             setHoveredPart={setHoveredPart}
+            selectedIds={selectedIds}
             setCanvasState={setCanvasState}
             applyActions={applyActions}
             mechanism={mechanism}
@@ -140,7 +162,9 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
           <ConnectionsContainer
             element={element}
             containerType="ConnectsAttachedBelt"
+            hoveredPart={hoveredPart}
             setHoveredPart={setHoveredPart}
+            selectedIds={selectedIds}
             setCanvasState={setCanvasState}
             applyActions={applyActions}
             mechanism={mechanism}
@@ -148,7 +172,9 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
           <ConnectionsContainer
             element={element}
             containerType="ConnectsMeshedGears"
+            hoveredPart={hoveredPart}
             setHoveredPart={setHoveredPart}
+            selectedIds={selectedIds}
             setCanvasState={setCanvasState}
             applyActions={applyActions}
             mechanism={mechanism}
@@ -156,7 +182,9 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
           <ConnectionsContainer
             element={element}
             containerType="ConnectsFixedNodesBody"
+            hoveredPart={hoveredPart}
             setHoveredPart={setHoveredPart}
+            selectedIds={selectedIds}
             setCanvasState={setCanvasState}
             applyActions={applyActions}
             mechanism={mechanism}
@@ -170,7 +198,9 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
           <ConnectionsContainer
             element={element}
             containerType="ConnectsFixedNodeStart"
+            hoveredPart={hoveredPart}
             setHoveredPart={setHoveredPart}
+            selectedIds={selectedIds}
             setCanvasState={setCanvasState}
             applyActions={applyActions}
             mechanism={mechanism}
@@ -178,7 +208,9 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
           <ConnectionsContainer
             element={element}
             containerType="ConnectsFixedNodesBody"
+            hoveredPart={hoveredPart}
             setHoveredPart={setHoveredPart}
+            selectedIds={selectedIds}
             setCanvasState={setCanvasState}
             applyActions={applyActions}
             mechanism={mechanism}
@@ -186,7 +218,9 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
           <ConnectionsContainer
             element={element}
             containerType="ConnectsFixedNodeEnd"
+            hoveredPart={hoveredPart}
             setHoveredPart={setHoveredPart}
+            selectedIds={selectedIds}
             setCanvasState={setCanvasState}
             applyActions={applyActions}
             mechanism={mechanism}
@@ -200,7 +234,9 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
           <ConnectionsContainer
             element={element}
             containerType="ConnectsFixedNodeStart"
+            hoveredPart={hoveredPart}
             setHoveredPart={setHoveredPart}
+            selectedIds={selectedIds}
             setCanvasState={setCanvasState}
             applyActions={applyActions}
             mechanism={mechanism}
@@ -208,7 +244,9 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
           <ConnectionsContainer
             element={element}
             containerType="ConnectsFixedNodeEnd"
+            hoveredPart={hoveredPart}
             setHoveredPart={setHoveredPart}
+            selectedIds={selectedIds}
             setCanvasState={setCanvasState}
             applyActions={applyActions}
             mechanism={mechanism}
@@ -222,7 +260,9 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
             <ConnectionsContainer
               element={element}
               containerType="ConnectsFixedNodeStart"
+              hoveredPart={hoveredPart}
               setHoveredPart={setHoveredPart}
+              selectedIds={selectedIds}
               setCanvasState={setCanvasState}
               applyActions={applyActions}
               mechanism={mechanism}
@@ -232,7 +272,9 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
               <ConnectionsContainer
                 element={element}
                 containerType="ConnectsFixedNodeStart"
+                hoveredPart={hoveredPart}
                 setHoveredPart={setHoveredPart}
+                selectedIds={selectedIds}
                 setCanvasState={setCanvasState}
                 applyActions={applyActions}
                 mechanism={mechanism}
@@ -240,7 +282,9 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
               <ConnectionsContainer
                 element={element}
                 containerType="ConnectsFixedNodeEnd"
+                hoveredPart={hoveredPart}
                 setHoveredPart={setHoveredPart}
+                selectedIds={selectedIds}
                 setCanvasState={setCanvasState}
                 applyActions={applyActions}
                 mechanism={mechanism}
@@ -251,7 +295,9 @@ export const ConnectionsProperties: React.FC<ConnectionsPropertiesProps> = ({
           <ConnectionsContainer
             element={element}
             containerType="ConnectsAttachedGears"
+            hoveredPart={hoveredPart}
             setHoveredPart={setHoveredPart}
+            selectedIds={selectedIds}
             setCanvasState={setCanvasState}
             applyActions={applyActions}
             mechanism={mechanism}

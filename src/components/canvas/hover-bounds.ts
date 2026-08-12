@@ -27,6 +27,14 @@ import { screen2world_length } from "../../utils";
  * legitimate thing to draw; zoomed out, one of a thousand is the shortest that
  * can still be aimed at.
  *
+ * A minimum never grows what is already under it. Resizing something is not the
+ * occasion to edit a size nobody aimed at: a gear of four units drawn at zoom 8
+ * is a deliberate gear, and dezooming until it measures ten pixels must not blow
+ * it out to thirty on the first grab of its rim. So what a resize answers to is
+ * the screen minimum *or* the size in hand, whichever is smaller — a floor that
+ * forbids shrinking further without ever pushing outwards. Zooming in lowers it
+ * and gives the small sizes back.
+ *
  * These are aids to hovering, not invariants: hit tolerance and grid snapping
  * both run downstream and may pull the point back inside by a few pixels.
  */
@@ -37,7 +45,6 @@ export function clamp_to_bounds(
   viewport: ViewportState,
 ): Point2 {
   const minEdgeLength = screen2world_length(DIM.MIN_EDGE_LENGTH, viewport);
-  const minGearRadius = screen2world_length(DIM.MIN_GEAR_RADIUS, viewport);
 
   switch (state.type) {
     case "PlacingBeamEnd":
@@ -46,11 +53,9 @@ export function clamp_to_bounds(
       return from_base(point, state.startHover.position, minEdgeLength);
 
     case "PlacingGearRadius":
-      return from_base(point, state.startHover.position, minGearRadius);
-
     case "ChangingGearRadius": {
-      const gear = element_of_type(state.elementID, "gear", mechanicalElements);
-      return gear ? from_base(point, gear.position, minGearRadius) : point;
+      const bound = sizing_bound(state, mechanicalElements, viewport);
+      return bound ? from_base(point, bound.centre, bound.minRadius) : point;
     }
 
     // The belt being routed has no element yet, so the pulley its end wraps is
@@ -111,6 +116,50 @@ export function clamp_to_bounds(
 }
 
 /**
+ * Where a gear-sizing gesture measures its radius from, and the smallest it may
+ * leave it — `undefined` for any other gesture.
+ *
+ * Placing has no gear yet, so nothing to ratchet against: a gear one is drawing
+ * answers to the screen minimum alone.
+ */
+function sizing_bound(
+  state: CanvasState,
+  mechanicalElements: MechanicalElement[],
+  viewport: ViewportState,
+): { centre: Point2; minRadius: number } | undefined {
+  const minRadius = screen2world_length(DIM.MIN_GEAR_RADIUS, viewport);
+  if (state.type === "PlacingGearRadius")
+    return { centre: state.startHover.position, minRadius };
+  if (state.type !== "ChangingGearRadius") return undefined;
+  const gear = element_of_type(state.elementID, "gear", mechanicalElements);
+  return gear
+    ? { centre: gear.position, minRadius: Math.min(minRadius, gear.radius) }
+    : undefined;
+}
+
+/**
+ * Whether `target` sits closer to the centre than the radius a sizing gesture
+ * may leave the gear at.
+ *
+ * The bound the free cursor answers to, asked of an aimed target instead. A
+ * target keeps its own position — that is what makes it a target — so the only
+ * way to hold the bound against one is to stop offering it: the rim cannot be
+ * brought there, so there is nothing to aim at. Silently, like every other place
+ * a gesture simply cannot reach; and without it a target sitting on the axle
+ * would size the gear down to nothing, which is where meshing, belt geometry and
+ * ratios all divide by zero.
+ */
+export function out_of_sizing_reach(
+  target: Point2,
+  state: CanvasState,
+  mechanicalElements: MechanicalElement[],
+  viewport: ViewportState,
+): boolean {
+  const bound = sizing_bound(state, mechanicalElements, viewport);
+  return !!bound && target.distance_to(bound.centre) < bound.minRadius;
+}
+
+/**
  * How close the two ends of a belt that cannot close may come, in screen px.
  * Strictly inside the tolerance that triggers the refusal, never on it: held
  * exactly on the threshold, the `<=` deciding whether the refusal shows flips
@@ -131,13 +180,18 @@ function clamp_edge_terminal(
   // the pulleys the loop needs, they stop just before touching: near enough for
   // the refusal to be offered, far enough not to merge. A plain span has no
   // closure to aim at, and shortening it onto itself would only make a point.
-  const minLength = screen2world_length(
-    edge.type !== "belt"
-      ? DIM.MIN_EDGE_LENGTH
-      : belt_can_close((edge as BeltElement).attachedGearsIDs.length)
-        ? 0
-        : UNCLOSABLE_BELT_GAP,
-    viewport,
+  const minLength = Math.min(
+    screen2world_length(
+      edge.type !== "belt"
+        ? DIM.MIN_EDGE_LENGTH
+        : belt_can_close((edge as BeltElement).attachedGearsIDs.length)
+          ? 0
+          : UNCLOSABLE_BELT_GAP,
+      viewport,
+    ),
+    // Never longer than the edge already is: dragging one end of a bar that
+    // measures ten pixels must not stretch it to thirty.
+    edge.positionStart.distance_to(edge.positionEnd),
   );
   const bounded = from_base(point, opposite, minLength);
   const gearID =

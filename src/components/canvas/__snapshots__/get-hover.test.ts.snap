@@ -575,7 +575,7 @@ exports[`get_hovered_part > pique la même chose qu'avant sur toute la matrice �
    axle centre            → Node axle (0, 0)
    gear rim               → GearTooth gear (60, 0)
    gear inside            → Void (30, 0)
-   join centre            → Node join (200, 0)
+   join centre            → Void (200, 0)
    beam body              → Void (300, 0)
    beam end               → Edge beam (400, 0) [end]
    beam body past join    → Void (150, 0)
@@ -765,9 +765,9 @@ exports[`get_hovered_part > pique la même chose qu'avant sur toute la matrice �
    axle centre            → Node axle (0, 0)
    gear rim               → Void (60, 0)
    gear inside            → Void (30, 0)
-   join centre            → Edge beam (200, 0) [body]
-   beam body              → Edge beam (300, 0) [body]
-   beam end               → Edge beam (400, 0) [body]
+   join centre            → Void (200, 0)
+   beam body              → Void (300, 0)
+   beam end               → Void (400, 0)
    beam body past join    → Void (150, 0)
    spring body            → Edge spring (300, 200) [body]
    spring start           → Edge spring (200, 200) [body]
@@ -784,7 +784,7 @@ exports[`get_hovered_part > pique la même chose qu'avant sur toute la matrice �
    axle centre            → Node axle (0, 0)
    gear rim               → Void (60, 0)
    gear inside            → Void (30, 0)
-   join centre            → Node join (200, 0)
+   join centre            → Void (200, 0)
    beam body              → Void (300, 0)
    beam end               → Void (400, 0)
    beam body past join    → Void (150, 0)

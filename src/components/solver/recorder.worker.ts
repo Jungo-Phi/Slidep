@@ -75,7 +75,10 @@ self.onmessage = (event: MessageEvent<ToRecorder>) => {
             type: "layout",
             keys: layout.keys,
             angleKeys: layout.angleKeys,
-            maxTime: recorder.maxTime(),
+            belts: layout.belts.map((id, r) => ({
+              id,
+              pulleys: layout.beltStart[r + 1] - layout.beltStart[r],
+            })),
             epoch,
           });
       }
@@ -85,6 +88,13 @@ self.onmessage = (event: MessageEvent<ToRecorder>) => {
       targetTime = message.resumeFrom?.t ?? 0;
       running = true;
       schedule();
+      break;
+    case "rewind":
+      // The model is untouched, so the layout the client holds still describes it and is
+      // not posted again. Only the epoch moves, to drop the instants still in flight.
+      epoch = message.epoch;
+      recorder.rewind(message.resumeFrom);
+      targetTime = message.resumeFrom.t;
       break;
     case "grab":
       recorder.setGrab(message.grab ? revive_grab(message.grab) : null);

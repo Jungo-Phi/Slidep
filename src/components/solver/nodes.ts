@@ -30,9 +30,23 @@ export interface EditNodes extends Nodes {
   radius: Float64Array;
   /** Inverse mass of the radius DOF: 0 = dimensioned, hence fixed. */
   wRadius: Float64Array;
+  /**
+   * Smallest value each radius may be written to, one per slot — see `radiusFloor`.
+   * Never zero: below `MIN_SOLVED_RADIUS`, meshing, belt geometry and ratios all divide
+   * into infinity.
+   */
+  minRadius: Float64Array;
   radIndex: Map<string, number>;
   radKeys: string[];
 }
+
+/**
+ * How small a radius the solver may write, whatever the caller asks for.
+ *
+ * A numerical guard, not a size: nothing here says how small a gear may be, only that a
+ * zero one breaks the arithmetic downstream.
+ */
+export const MIN_SOLVED_RADIUS = 1e-3;
 
 /** Slot of a key the node set does not know. */
 export const ABSENT = -1;
@@ -150,6 +164,13 @@ export function solveNodesFromMaps(
   angles: Map<string, number>,
   radii: Map<string, number>,
   radMasses: Map<string, number>,
+  /**
+   * Smallest radius this solve may shrink a gear to, in world units — the caller's, since
+   * only it knows the zoom the bound answers to. A gear already under it keeps its own
+   * radius as its floor: a solve may hold a small gear where it is, never blow it out to a
+   * size nobody asked for. Omitted, only `MIN_SOLVED_RADIUS` applies.
+   */
+  radiusFloor: number = 0,
 ): SolveNodes {
   const nodes = makeNodes(positions.size || 16) as SolveNodes;
   fillPositions(nodes, positions, posMasses);
@@ -159,6 +180,7 @@ export function solveNodesFromMaps(
   fillScalars(nodes.angleIndex, nodes.angleKeys, nodes.angle, undefined, angles, undefined);
   nodes.radius = new Float64Array(radii.size);
   nodes.wRadius = new Float64Array(radii.size);
+  nodes.minRadius = new Float64Array(radii.size);
   nodes.radIndex = new Map();
   nodes.radKeys = [];
   fillScalars(
@@ -169,6 +191,11 @@ export function solveNodesFromMaps(
     radii,
     radMasses,
   );
+  for (let i = 0; i < nodes.radius.length; i++)
+    nodes.minRadius[i] = Math.max(
+      MIN_SOLVED_RADIUS,
+      Math.min(radiusFloor, nodes.radius[i]),
+    );
   return nodes;
 }
 

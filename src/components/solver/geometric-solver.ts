@@ -1,8 +1,8 @@
 import {
   Action,
   EdgeElement,
-  ActionBundleType,
   DEGENERATE_LENGTH,
+  Link,
   Point2,
   GeomNodes,
   Mechanism,
@@ -17,6 +17,8 @@ import {
 } from "./parsing";
 import { PBD_kinematic_solver } from "./PBD_kinematic_solver";
 import { belt_terminal_axes, separation_links } from "./disconnect-separation";
+import { DIM } from "../../constants/rendering-specs";
+import { screen2world_length } from "../../utils";
 
 /**
  * Hard cap on the sweeps one edition solve may run. Not a convergence target — the solve
@@ -26,15 +28,63 @@ import { belt_terminal_axes, separation_links } from "./disconnect-separation";
 const EDITION_SWEEPS = 300;
 
 /**
+ * Where a radius grab takes hold of the rim: on the bearing of the target it is pulled to, never on the cursor's.
+ *
+ * Exported so that asking what the grab was granted reads the very handle the solve moved. Rebuilt elsewhere, the two drift, and a hover then measures a bearing where the gesture only ever produced a radius.
+ */
+export function gear_grab_handle(
+  center: Point2,
+  radius: number,
+  target: Point2,
+): Point2 {
+  const dir = target.sub(center);
+  const unit = dir.length_squared() > 1e-9 ? dir.normalize() : new Point2(1, 0);
+  return center.add(unit.mul(radius));
+}
+
+/** The two keys of a link, in an order that does not depend on which way it was written. */
+const key_pair = (a: string, b: string) => (a < b ? `${a}|${b}` : `${b}|${a}`);
+
+/**
+ * The floor each straight edge answers to, one link per edge.
+ *
+ * Unlike a gear radius, a length is not a quantity the solver stores — it is the distance between two nodes, and there is no writer to clamp. The floor has to be a constraint like any other, and a one-sided one: a bar may be as long as it likes.
+ *
+ * Never longer than the edge already measures, for the reason the cursor bounds give: a resize answers to what one can see *or* to the size in hand, whichever is smaller, and never blows out a bar drawn short at high zoom.
+ *
+ * Belts are left out. Their two ends are meant to meet — that is the loop closing — and their length is the run around the pulleys, not the span between the terminals.
+ */
+function min_length_links(
+  mechanicalElements: Mechanism["mechanicalElements"],
+  floor: number,
+): Link[] {
+  const links: Link[] = [];
+  for (const element of mechanicalElements) {
+    if (!("positionStart" in element) || element.type === "belt") continue;
+    const edge = element as EdgeElement;
+    links.push({
+      type: "MinDistance",
+      ddl: 0,
+      key1: `${edge.id}:start`,
+      key2: `${edge.id}:end`,
+      distance: Math.min(
+        floor,
+        edge.positionStart.distance_to(edge.positionEnd),
+      ),
+    });
+  }
+  return links;
+}
+
+/**
  * Resolves geometric constraints for a given mechanism and a triggering action.
  */
 export function resolveGeometricConstraints(
   mechanism: Mechanism,
-  actionBundleType: ActionBundleType,
-  triggerAction: Action,
-  /** The whole bundle. Only the separation of what it disconnects reads it —
-   *  every other rule answers to `triggerAction` alone. */
-  bundleActions: Action[] = [triggerAction],
+  /** The action the solve pulls against, absent when the bundle only reshapes the graph (connections, deletions). */
+  trigger: Action | undefined,
+  /** The whole bundle. Only the separation of what it disconnects reads it — every other rule answers to `trigger` alone. */
+  bundleActions: Action[],
 ): GeomNodes {
   // *
   // Phase A : Création du graphe de dépendances
@@ -46,6 +96,15 @@ export function resolveGeometricConstraints(
   let links = get_links_geometric(
     mechanism.mechanicalElements,
     mechanism.constraintElements,
+  );
+  // Pushed before the fusion below, so their keys are rewritten with everyone
+  // else's; the ones a dimension already answers for are dropped after it, when
+  // both are stated in the same keys.
+  links.push(
+    ...min_length_links(
+      mechanism.mechanicalElements,
+      screen2world_length(DIM.MIN_EDGE_LENGTH, mechanism.viewport),
+    ),
   );
 
   // Un rayon dimensionné est fixe : on l'ancre (radMass 0) à sa valeur cible.
@@ -66,179 +125,168 @@ export function resolveGeometricConstraints(
   // MoveElements mute nodes.positions avant le solve : on garde les positions
   // d'origine pour que la mise à jour des contraintes voie un vrai "avant".
   let preMovePositions: Map<string, Point2> | undefined = undefined;
-  switch (actionBundleType) {
-    case "MoveElement":
-      if (
-        triggerAction.type !== "MoveNode" &&
-        triggerAction.type !== "MoveEdgeStart" &&
-        triggerAction.type !== "MoveEdgeEnd" &&
-        triggerAction.type !== "MoveEdgeBody" &&
-        triggerAction.type !== "MoveElements" &&
-        triggerAction.type !== "ChangeGearRadius" &&
-        triggerAction.type !== "ChangeEdgeLength" &&
-        triggerAction.type !== "ChangeBeltLength"
-      )
-        throw console.error("impossible");
-
-      switch (triggerAction.type) {
-        case "MoveNode":
-          if (triggerAction.committed) pin = `${triggerAction.id}`;
-          else grabConnectionID = `${triggerAction.id}`;
-          grabPoint = triggerAction.newPosition;
-          break;
-        case "MoveEdgeStart":
-          if (triggerAction.committed) pin = `${triggerAction.id}:start`;
-          else grabConnectionID = `${triggerAction.id}:start`;
-          grabPoint = triggerAction.newPosition;
-          break;
-        case "MoveEdgeEnd":
-          if (triggerAction.committed) pin = `${triggerAction.id}:end`;
-          else grabConnectionID = `${triggerAction.id}:end`;
-          grabPoint = triggerAction.newPosition;
-          break;
-        case "MoveEdgeBody":
-          links.push({
-            type: "FixedOnSegment",
-            ddl: 2,
-            key1: `${triggerAction.id}:start`,
-            key2: `${triggerAction.id}:end`,
-            key3: `grab_bridge`,
-            t: triggerAction.t,
-          });
-          nodes.positions.set(`grab_bridge`, triggerAction.newPosition);
-          nodes.posMasses.set(`grab_bridge`, 1);
-          grabPoint = triggerAction.newPosition;
-          grabConnectionID = `grab_bridge`;
-          // Beam sélectionné : si joint ancré connecté ALORS enlever l'ancrage.
-          links.forEach((link) => {
-            if (link.type === "Coincidence") {
-              if (
-                link.key1 === `${triggerAction.id}:start` ||
-                link.key1 === `${triggerAction.id}:end`
-              )
-                nodes.posMasses.set(link.key2, 1); // TODO : AND "link.key2" should be a join
-              if (
-                link.key2 === `${triggerAction.id}:start` ||
-                link.key2 === `${triggerAction.id}:end`
-              )
-                nodes.posMasses.set(link.key1, 1); // TODO : AND "link.key2" should be a join
-            } else if (link.type === "FixedOnSegment") {
-              if (
-                link.key1 === `${triggerAction.id}:start` &&
-                link.key2 === `${triggerAction.id}:end`
-              ) {
-                nodes.posMasses.set(link.key3, 1); // TODO : AND "link.key2" should be a join
-              }
+  if (trigger) {
+    switch (trigger.type) {
+      case "MoveNode":
+        if (trigger.committed) pin = `${trigger.id}`;
+        else grabConnectionID = `${trigger.id}`;
+        grabPoint = trigger.newPosition;
+        break;
+      case "MoveEdgeStart":
+        if (trigger.committed) pin = `${trigger.id}:start`;
+        else grabConnectionID = `${trigger.id}:start`;
+        grabPoint = trigger.newPosition;
+        break;
+      case "MoveEdgeEnd":
+        if (trigger.committed) pin = `${trigger.id}:end`;
+        else grabConnectionID = `${trigger.id}:end`;
+        grabPoint = trigger.newPosition;
+        break;
+      case "MoveEdgeBody":
+        links.push({
+          type: "FixedOnSegment",
+          ddl: 2,
+          key1: `${trigger.id}:start`,
+          key2: `${trigger.id}:end`,
+          key3: `grab_bridge`,
+          t: trigger.t,
+        });
+        nodes.positions.set(`grab_bridge`, trigger.newPosition);
+        nodes.posMasses.set(`grab_bridge`, 1);
+        grabPoint = trigger.newPosition;
+        grabConnectionID = `grab_bridge`;
+        // Beam sélectionné : si joint ancré connecté ALORS enlever l'ancrage.
+        links.forEach((link) => {
+          if (link.type === "Coincidence") {
+            if (
+              link.key1 === `${trigger.id}:start` ||
+              link.key1 === `${trigger.id}:end`
+            )
+              nodes.posMasses.set(link.key2, 1); // TODO : AND "link.key2" should be a join
+            if (
+              link.key2 === `${trigger.id}:start` ||
+              link.key2 === `${trigger.id}:end`
+            )
+              nodes.posMasses.set(link.key1, 1); // TODO : AND "link.key2" should be a join
+          } else if (link.type === "FixedOnSegment") {
+            if (
+              link.key1 === `${trigger.id}:start` &&
+              link.key2 === `${trigger.id}:end`
+            ) {
+              nodes.posMasses.set(link.key3, 1); // TODO : AND "link.key2" should be a join
             }
-          });
-          break;
-        case "MoveElements":
-          preMovePositions = new Map(nodes.positions);
-          // move and remove anchor from dragged elements
-          triggerAction.elementIDs.forEach((elementID) => {
-            const element = get_mechanical_element_from_id(
-              elementID,
-              mechanism.mechanicalElements,
-            );
-            if ("position" in element) {
-              nodes.positions.set(
-                `${element.id}`,
-                nodes.positions.get(`${element.id}`)!.add(triggerAction.delta),
-              );
-              nodes.posMasses.set(`${element.id}`, 1);
-            } else {
-              nodes.positions.set(
-                `${element.id}:start`,
-                nodes.positions
-                  .get(`${element.id}:start`)!
-                  .add(triggerAction.delta),
-              );
-              nodes.positions.set(
-                `${element.id}:end`,
-                nodes.positions
-                  .get(`${element.id}:end`)!
-                  .add(triggerAction.delta),
-              );
-            }
-          });
-          break;
-        case "ChangeGearRadius": {
-          if (triggerAction.committed) {
-            // Same as a dimensioned radius: anchored at its value, so meshing and pins
-            // move the gear rather than the number the user just typed.
-            nodes.radii.set(`${triggerAction.id}`, triggerAction.newRadius);
-            nodes.radMasses.set(`${triggerAction.id}`, 0);
-            break;
           }
-          // Grab a point that slides on the gear perimeter and pull it toward
-          // the mouse. A `GearMeshing` link against a zero-radius bridge keeps
-          // |centre − bridge| = radius (radius stays a DOF), so the solver
-          // shares the correction between the radius and the centre position.
-          const center = nodes.positions.get(`${triggerAction.id}`);
-          const radius = nodes.radii.get(`${triggerAction.id}`);
-          if (center && radius !== undefined) {
-            const dir = triggerAction.target.sub(center);
-            const u =
-              dir.length_squared() > 1e-9 ? dir.normalize() : new Point2(1, 0);
-            nodes.positions.set("grab_perimeter", center.add(u.mul(radius)));
-            nodes.posMasses.set("grab_perimeter", 1);
-            nodes.radii.set("grab_perimeter", 0);
-            nodes.radMasses.set("grab_perimeter", 0);
-            links.push({
-              type: "GearMeshing",
-              ddl: 1,
-              key1: `${triggerAction.id}`,
-              key2: "grab_perimeter",
-              radKey1: `${triggerAction.id}`,
-              radKey2: "grab_perimeter",
-            });
-            grabPoint = triggerAction.target;
-            grabConnectionID = "grab_perimeter";
-          }
-          break;
-        }
-        case "ChangeEdgeLength":
-          links.push({
-            type: "Distance",
-            ddl: 1,
-            key1: `${triggerAction.id}:start`,
-            key2: `${triggerAction.id}:end`,
-            distance: triggerAction.newLength,
-          });
-          break;
-        case "ChangeBeltLength": {
-          // Momentary inextensible-belt constraint: hold the whole loop at the
-          // requested length while the gears relax to satisfy it.
-          const belt = get_mechanical_element_from_id(
-            triggerAction.id,
+        });
+        break;
+      case "MoveElements":
+        preMovePositions = new Map(nodes.positions);
+        // move and remove anchor from dragged elements
+        trigger.elementIDs.forEach((elementID) => {
+          const element = get_mechanical_element_from_id(
+            elementID,
             mechanism.mechanicalElements,
           );
-          if (belt && belt.type === "belt") {
-            const link = belt_length_link(
-              belt,
-              elements_by_id(mechanism.mechanicalElements),
-              mechanism.mechanicalElements,
-              triggerAction.newLength,
+          if ("position" in element) {
+            nodes.positions.set(
+              `${element.id}`,
+              nodes.positions.get(`${element.id}`)!.add(trigger.delta),
             );
-            if (link) links.push(link);
+            nodes.posMasses.set(`${element.id}`, 1);
+          } else {
+            nodes.positions.set(
+              `${element.id}:start`,
+              nodes.positions.get(`${element.id}:start`)!.add(trigger.delta),
+            );
+            nodes.positions.set(
+              `${element.id}:end`,
+              nodes.positions.get(`${element.id}:end`)!.add(trigger.delta),
+            );
           }
+        });
+        break;
+      case "ChangeGearRadius": {
+        if (trigger.committed) {
+          // Same as a dimensioned radius: anchored at its value, so meshing and pins
+          // move the gear rather than the number the user just typed.
+          nodes.radii.set(`${trigger.id}`, trigger.newRadius);
+          nodes.radMasses.set(`${trigger.id}`, 0);
           break;
         }
+        // Grab a point that slides on the gear perimeter and pull it toward
+        // the mouse. A `GearMeshing` link against a zero-radius bridge keeps
+        // |centre − bridge| = radius (radius stays a DOF), so the solver
+        // shares the correction between the radius and the centre position.
+        const center = nodes.positions.get(`${trigger.id}`);
+        const radius = nodes.radii.get(`${trigger.id}`);
+        if (center && radius !== undefined) {
+          nodes.positions.set(
+            "grab_perimeter",
+            gear_grab_handle(center, radius, trigger.target),
+          );
+          nodes.posMasses.set("grab_perimeter", 1);
+          nodes.radii.set("grab_perimeter", 0);
+          nodes.radMasses.set("grab_perimeter", 0);
+          links.push({
+            type: "GearMeshing",
+            ddl: 1,
+            key1: `${trigger.id}`,
+            key2: "grab_perimeter",
+            radKey1: `${trigger.id}`,
+            radKey2: "grab_perimeter",
+          });
+          grabPoint = trigger.target;
+          grabConnectionID = "grab_perimeter";
+        }
+        break;
       }
-      break;
-    case "Connects":
-      // Momentary: pushes apart what this bundle detached, then it is gone.
-      links.push(
-        ...separation_links(
-          bundleActions,
-          mechanism,
-          belt_terminal_axes(mechanism),
-        ),
-      );
-      break;
-    case "ChangeDimension":
-    case "CreateConstraint":
+      case "ChangeEdgeLength":
+        links.push({
+          type: "Distance",
+          ddl: 1,
+          key1: `${trigger.id}:start`,
+          key2: `${trigger.id}:end`,
+          distance: trigger.newLength,
+        });
+        break;
+      case "ChangeEdgeAngle":
+        links.push({
+          type: "KeepOrientation",
+          ddl: 1,
+          key1: `${trigger.id}:start`,
+          key2: `${trigger.id}:end`,
+          direction: Point2.from_polar(1, trigger.newAngle),
+        });
+        break;
+      case "ChangeBeltLength": {
+        // Momentary inextensible-belt constraint: hold the whole loop at the
+        // requested length while the gears relax to satisfy it.
+        const belt = get_mechanical_element_from_id(
+          trigger.id,
+          mechanism.mechanicalElements,
+        );
+        if (belt && belt.type === "belt") {
+          const link = belt_length_link(
+            belt,
+            elements_by_id(mechanism.mechanicalElements),
+            mechanism.mechanicalElements,
+            trigger.newLength,
+          );
+          if (link) links.push(link);
+        }
+        break;
+      }
+      // Every other trigger type solves against the mechanism the bundle has
+      // already applied, so the value or connection it stated is already part
+      // of the graph `get_links_geometric` read above — nothing more to add here.
+    }
   }
+
+  // Momentary: pushes apart what this bundle detached, then it is gone.
+  // `separation_links` filters on each action's own `disconnect` flag, so
+  // calling it unconditionally is safe even when the bundle detaches nothing.
+  links.push(
+    ...separation_links(bundleActions, mechanism, belt_terminal_axes(mechanism)),
+  );
 
   if (grabPoint && grabConnectionID) {
     // Enlever l'ancrage du node sélectionné
@@ -257,30 +305,30 @@ export function resolveGeometricConstraints(
 
   // Ancrages pré-fusion : les clés individuelles disparaissent après la fusion Coincidence ;
   // Math.min() propagera ensuite ces valeurs à la clé fusionnée.
-  if (triggerAction.type === "ChangeGearRadius") {
+  if (trigger && trigger.type === "ChangeGearRadius") {
     // Keep the centre stable only when the radius is free to grow (no mesh and
     // no radius dimension). When meshed or radius-constrained, the centre must
     // stay free so the gear can move to keep tangency / honour the held radius.
     const gearEl = get_mechanical_element_from_id(
-      triggerAction.id,
+      trigger.id,
       mechanism.mechanicalElements,
     );
     const hasMesh =
       "meshedGearsIDs" in gearEl && gearEl.meshedGearsIDs.length > 0;
     const hasRadiusDim = mechanism.constraintElements.some(
-      (c) => c.type === "dimension-radius" && c.gearID === triggerAction.id,
+      (c) => c.type === "dimension-radius" && c.gearID === trigger.id,
     );
     if (!hasMesh && !hasRadiusDim) {
-      nodes.posMasses.set(`${triggerAction.id}`, 0);
+      nodes.posMasses.set(`${trigger.id}`, 0);
     }
   }
-  if (triggerAction.type === "MoveNode") {
+  if (trigger && trigger.type === "MoveNode") {
     const movedEl = mechanism.mechanicalElements.find(
-      (e) => e.id === triggerAction.id,
+      (e) => e.id === trigger.id,
     );
     if (movedEl) {
       if ("radius" in movedEl) {
-        nodes.radMasses.set(`${triggerAction.id}`, 0);
+        nodes.radMasses.set(`${trigger.id}`, 0);
       }
       if ("fixedGearsIDs" in movedEl) {
         (movedEl as { fixedGearsIDs: string[] }).fixedGearsIDs.forEach(
@@ -348,6 +396,23 @@ export function resolveGeometricConstraints(
   });
   links = links.filter((link) => link.type !== "Coincidence");
 
+  // A length the user has stated wins over the floor, however short: the two would
+  // otherwise pull the same pair of points opposite ways and settle in between,
+  // leaving the dimension silently wrong. Matched on the fused keys, so a length
+  // dimensioned edge-wise and one dimensioned between its two terminal nodes are
+  // recognised as the same statement.
+  const dimensioned = new Set(
+    links
+      .filter((link) => link.type === "Distance")
+      .map((link) => key_pair(link.key1, link.key2)),
+  );
+  if (dimensioned.size > 0)
+    links = links.filter(
+      (link) =>
+        link.type !== "MinDistance" ||
+        !dimensioned.has(key_pair(link.key1, link.key2)),
+    );
+
   // A typed value is imposed, not pulled: the node is anchored ON it and the rest of the
   // sketch is what yields — or what reports itself violated, which is the honest answer
   // when the value cannot be held. This has to come AFTER the fusion above, which deletes
@@ -386,9 +451,9 @@ export function resolveGeometricConstraints(
   let ddl: number;
 
   // Beam sélectionné
-  if (triggerAction.type === "MoveEdgeBody") {
+  if (trigger && trigger.type === "MoveEdgeBody") {
     const movedEdge = mechanism.mechanicalElements.find(
-      (e) => e.id === triggerAction.id,
+      (e) => e.id === trigger.id,
     )! as EdgeElement;
     // Si il y a 3 ou plus degré de liberté ALORS contrainte de parallélisme.
     ddl = get_geom_degrees_of_freedom(nodes, links);
@@ -396,8 +461,8 @@ export function resolveGeometricConstraints(
       links.push({
         type: "KeepOrientation",
         ddl: 1,
-        key1: `${triggerAction.id}:start`,
-        key2: `${triggerAction.id}:end`,
+        key1: `${trigger.id}:start`,
+        key2: `${trigger.id}:end`,
         direction: movedEdge.positionEnd.sub(movedEdge.positionStart),
       });
     }
@@ -407,8 +472,8 @@ export function resolveGeometricConstraints(
       links.push({
         type: "Distance",
         ddl: 1,
-        key1: `${triggerAction.id}:start`,
-        key2: `${triggerAction.id}:end`,
+        key1: `${trigger.id}:start`,
+        key2: `${trigger.id}:end`,
         distance: movedEdge.positionEnd.distance_to(movedEdge.positionStart),
       });
     }
@@ -441,6 +506,11 @@ export function resolveGeometricConstraints(
     undefined,
     false,
     "constraints",
+    // The same bound the cursor answers to, handed to the constraints: a radius is
+    // written by meshing, by a ratio and by a belt's length as much as by the grab, and
+    // those know nothing of what one can see. In screen px through the viewport, so a
+    // gear drawn small at high zoom stays a gear one may keep.
+    screen2world_length(DIM.MIN_GEAR_RADIUS, mechanism.viewport),
   );
 
   // Decouple fused elements

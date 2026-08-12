@@ -1,7 +1,7 @@
 import { Point2, ZERO } from "../../types/point2";
 import type { CanvasState } from "../../types/canvas-state";
 import { get_hovered_elements_by_rect } from "./get-hover";
-import { Action, ActionBundleType, CanvasEvent } from "../../types/actions";
+import { Action, CanvasEvent } from "../../types/actions";
 import { HoveredPart, names_element } from "../../types/hovered-part";
 import {
   BeamElement,
@@ -26,6 +26,7 @@ import {
   own_part,
   delete_element,
   delete_elements,
+  get_constraint_element_from_id,
   get_load_element_from_id,
   get_mechanical_element_from_id,
 } from "../mechanism/connect-actions";
@@ -93,7 +94,7 @@ export function canvasStateReducer(
   loadElements: LoadElement[] = [],
   viewport: ViewportState,
   setCanvasState: (state: CanvasState) => void,
-  applyActions: (actions: Action[], actionBundleType: ActionBundleType) => void,
+  applyActions: (actions: Action[]) => void,
   undoMechanism: () => void,
   redoMechanism: () => void,
   onMouseUpHandler: () => void,
@@ -110,7 +111,6 @@ export function canvasStateReducer(
   worldMousePos: Point2 = ZERO,
 ) {
   const actions: Action[] = [];
-  let actionBundleType: ActionBundleType | undefined = undefined;
   switch (event.type) {
     case "MouseLeftButtonDown":
       // A closure names no element, so only the belt placement that offered it
@@ -128,8 +128,6 @@ export function canvasStateReducer(
           );
           if (closing.newCanvasState) setCanvasState(closing.newCanvasState);
           actions.push(...closing.actions);
-          if (closing.actionBundleType)
-            actionBundleType = closing.actionBundleType;
         }
         break;
       }
@@ -169,7 +167,6 @@ export function canvasStateReducer(
                 newConfig: { ...pivot.motor, speed: -pivot.motor.speed },
                 oldConfig: pivot.motor,
               });
-              actionBundleType = "Other";
             }
             break;
           }
@@ -343,7 +340,6 @@ export function canvasStateReducer(
           }
           // A deletion changes connections, so it solves like any other
           // connection change (its separation spreads what it detaches).
-          actionBundleType = "Connects";
           actions.push(
             ...delete_element(
               hoveredPart.id,
@@ -386,7 +382,6 @@ export function canvasStateReducer(
           );
           if (r.newCanvasState) setCanvasState(r.newCanvasState);
           actions.push(...r.actions);
-          if (r.actionBundleType) actionBundleType = r.actionBundleType;
           break;
         }
         case "DimensionStart":
@@ -432,7 +427,6 @@ export function canvasStateReducer(
           );
           if (r.newCanvasState) setCanvasState(r.newCanvasState);
           actions.push(...r.actions);
-          if (r.actionBundleType) actionBundleType = r.actionBundleType;
           break;
         }
       }
@@ -676,7 +670,6 @@ export function canvasStateReducer(
         }
         case "MovingNode":
           if (hoveredPart.position.equals(oldPosition)) break;
-          actionBundleType = "MoveElement";
           actions.push({
             type: "MoveNode",
             id: state.elementID,
@@ -686,7 +679,6 @@ export function canvasStateReducer(
           break;
         case "MovingEdgeStartPoint":
           if (hoveredPart.position.equals(oldPosition)) break;
-          actionBundleType = "MoveElement";
           actions.push({
             type: "MoveEdgeStart",
             id: state.elementID,
@@ -696,7 +688,6 @@ export function canvasStateReducer(
           break;
         case "MovingEdgeEndPoint":
           if (hoveredPart.position.equals(oldPosition)) break;
-          actionBundleType = "MoveElement";
           actions.push({
             type: "MoveEdgeEnd",
             id: state.elementID,
@@ -706,7 +697,6 @@ export function canvasStateReducer(
           break;
         case "MovingEdgeBody":
           if (hoveredPart.position.equals(oldPosition)) break;
-          actionBundleType = "MoveElement";
           actions.push({
             type: "MoveEdgeBody",
             id: state.elementID,
@@ -731,7 +721,6 @@ export function canvasStateReducer(
               : force.anchor === "start"
                 ? targetEle.positionStart
                 : targetEle.positionEnd;
-          actionBundleType = "MoveLoad";
           actions.push({
             type: "ChangeForce",
             id: state.elementID,
@@ -757,7 +746,6 @@ export function canvasStateReducer(
             distForce.targetID,
             mechanicalElements,
           ) as BeamElement;
-          actionBundleType = "MoveLoad";
           // Every handle does the same thing — slide along the load's direction
           // — and only differs in what the slid length means. Aiming is not
           // part of any of them: the direction is chosen when the load is
@@ -837,7 +825,6 @@ export function canvasStateReducer(
             loadElements,
           ) as MomentElement;
           const beamCenter = moment_center_position(moment, mechanicalElements);
-          actionBundleType = "MoveLoad";
           actions.push({
             type: "ChangeMoment",
             id: state.elementID,
@@ -867,7 +854,6 @@ export function canvasStateReducer(
           // moves (radius-constrained / meshed) — see resolveGeometricConstraints.
           const gearTarget =
             hoveredPart.type === "Void" ? worldMousePos : hoveredPart.position;
-          actionBundleType = "MoveElement";
           actions.push({
             type: "ChangeGearRadius",
             id: state.elementID,
@@ -905,7 +891,6 @@ export function canvasStateReducer(
           if (!state.hasMoved) {
             setCanvasState({ ...state, hasMoved: true });
           }
-          actionBundleType = "MoveElement";
           actions.push({
             type: "MoveElements",
             elementIDs: state.elementIDs,
@@ -925,16 +910,28 @@ export function canvasStateReducer(
             ),
           });
           break;
-        case "MovingConstraint":
+        case "MovingConstraint": {
           if (hoveredPart.position.equals(oldPosition)) break;
-          actionBundleType = "MoveConstraint";
+          // The constraint's own position, not `oldPosition`: that one tracks
+          // the last hover, which only snaps to the anchor within
+          // `HIT_TOLERANCE.CONSTRAINT` — a drag started fast enough leaves it
+          // reporting raw cursor positions instead, and since `MoveConstraint`
+          // never solves, nothing downstream corrects a wrong value baked in
+          // here. `ChangeForce`/`ChangeDistributedForce`/`ChangeMoment` below
+          // already read their `old*` from the live element for the same
+          // reason.
+          const constraint = get_constraint_element_from_id(
+            state.elementID,
+            constraintElements,
+          );
           actions.push({
             type: "MoveConstraint",
             id: state.elementID,
             newPosition: hoveredPart.position,
-            oldPosition,
+            oldPosition: constraint.position,
           });
           break;
+        }
         case "SimulationDragging":
           onSimulationGrab(
             state.grabbedKey,
@@ -999,7 +996,6 @@ export function canvasStateReducer(
                 : state.type === "MovingEdgeEndPoint"
                   ? "end"
                   : "body";
-          actionBundleType = "Connects";
           actions.push(
             ...connect_elements(
               hoveredPart,
@@ -1014,7 +1010,6 @@ export function canvasStateReducer(
             ),
           );
           if (actions.length === 0) {
-            actionBundleType = "Other";
             actions.push({ type: "Blank" });
           }
           setCanvasState({
@@ -1049,7 +1044,7 @@ export function canvasStateReducer(
                 elementID: belt.id,
                 connectID: removed.id,
                 index: removing,
-                direction: removed.direction,
+                clockwise: removed.clockwise,
               },
             );
           }
@@ -1060,7 +1055,7 @@ export function canvasStateReducer(
             ) as GearElement;
             const attach = attach_gear_to_belt(
               gear.id,
-              gear.position,
+              hoveredPart.position,
               shortened,
               state.section,
               mechanicalElements,
@@ -1073,7 +1068,6 @@ export function canvasStateReducer(
             else beltActions.push(...attach);
           }
           if (beltActions.length > 0) {
-            actionBundleType = "Connects";
             actions.push(...beltActions);
           }
           setCanvasState({
@@ -1092,7 +1086,6 @@ export function canvasStateReducer(
               state.elementID,
               mechanicalElements,
             ) as GearElement;
-            actionBundleType = "Connects";
             actions.push(
               ...attach_gear_to_belt(
                 gear.id,
@@ -1104,7 +1097,6 @@ export function canvasStateReducer(
               ),
             );
           } else if (hoveredPart.type === "GearTooth") {
-            actionBundleType = "Connects";
             actions.push(
               ...connect_meshed_gears(state.elementID, hoveredPart.id),
             );
@@ -1121,7 +1113,6 @@ export function canvasStateReducer(
             // Pin the dragged gear to the hovered node/edge (GEAR on NODE/EDGE).
             // The gear's own axle is excluded so dragging the tooth toward the
             // centre keeps resizing instead of self-pinning.
-            actionBundleType = "Connects";
             actions.push(
               ...connect_elements(
                 hoveredPart,
@@ -1136,7 +1127,6 @@ export function canvasStateReducer(
               ),
             );
           } else {
-            actionBundleType = "Other";
             actions.push({ type: "Blank" });
           }
           setCanvasState({
@@ -1176,7 +1166,6 @@ export function canvasStateReducer(
             });
             break;
           }
-          actionBundleType = "Other";
           actions.push({ type: "Blank" });
           setCanvasState({
             type: "SelectedMultiple",
@@ -1184,7 +1173,6 @@ export function canvasStateReducer(
           });
           break;
         case "ErasingMultiple":
-          actionBundleType = "Connects";
           actions.push(
             ...delete_elements(
               state.hoveredElementIDs,
@@ -1200,7 +1188,6 @@ export function canvasStateReducer(
         case "MovingDistributedForce":
         case "MovingMoment":
           if (actions.length === 0) {
-            actionBundleType = "Other";
             actions.push({ type: "Blank" });
           }
           setCanvasState({
@@ -1227,7 +1214,6 @@ export function canvasStateReducer(
         case "Delete":
           switch (state.type) {
             case "SelectedElement":
-              actionBundleType = "Connects";
               actions.push(
                 ...delete_element(
                   state.elementID,
@@ -1239,7 +1225,6 @@ export function canvasStateReducer(
               setCanvasState({ type: "Selecting" });
               break;
             case "SelectedMultiple":
-              actionBundleType = "Connects";
               actions.push(
                 ...delete_elements(
                   state.elementIDs,
@@ -1253,17 +1238,19 @@ export function canvasStateReducer(
           }
           break;
         case "y":
+        case "Y":
           if (!event.ctrlKey) break;
           onMouseUpHandler();
           redoMechanism();
           break;
         case "z":
+        case "Z":
           if (!event.ctrlKey) break;
           onMouseUpHandler();
           undoMechanism();
           break;
         default: {
-          const toolState = TOOL_STATE_BY_KEY[event.key];
+          const toolState = TOOL_STATE_BY_KEY[event.key.toLowerCase()];
           if (toolState)
             setCanvasState(
               armed_tool_state(
@@ -1281,7 +1268,7 @@ export function canvasStateReducer(
       break;
   }
 
-  if (actions.length > 0 && actionBundleType) {
-    applyActions(actions, actionBundleType);
+  if (actions.length > 0) {
+    applyActions(actions);
   }
 }

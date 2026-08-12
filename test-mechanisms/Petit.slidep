@@ -1,0 +1,309 @@
+{
+  "formatVersion": 2,
+  "metadata": {
+    "name": "Petit",
+    "description": "",
+    "author": "",
+    "createdAt": 1786348205122,
+    "modifiedAt": 1786348515255,
+    "tags": [],
+    "lastSimulationMode": "kinematic"
+  },
+  "viewport": {
+    "pan": {
+      "x": 718.2733916036191,
+      "y": 493.14893676126496
+    },
+    "scale": 124.26557105373446
+  },
+  "mechanicalElements": [
+    {
+      "type": "pivot",
+      "id": "f3fb3d1e-500d-4a66-b585-a8ae45cc6197",
+      "probes": [],
+      "overlays": {},
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "isGrounded": true,
+      "rotatingEdgesIDs": [
+        "e3bebfe7-b6f6-4b80-a68b-02c8060c5449"
+      ],
+      "fixedGearsIDs": [],
+      "motor": {
+        "speed": 10
+      }
+    },
+    {
+      "type": "beam",
+      "id": "e3bebfe7-b6f6-4b80-a68b-02c8060c5449",
+      "probes": [],
+      "overlays": {},
+      "positionStart": {
+        "x": 0,
+        "y": 0
+      },
+      "positionEnd": {
+        "x": 1,
+        "y": 0
+      },
+      "fixedNodeStartID": "f3fb3d1e-500d-4a66-b585-a8ae45cc6197",
+      "fixedNodeEndID": "33e5ac3c-d401-4151-a1e6-204ba660ab37",
+      "fixedNodesBodyIDs": []
+    },
+    {
+      "type": "pivot",
+      "id": "33e5ac3c-d401-4151-a1e6-204ba660ab37",
+      "probes": [],
+      "overlays": {},
+      "position": {
+        "x": 1,
+        "y": 0
+      },
+      "isGrounded": false,
+      "rotatingEdgesIDs": [
+        "14fe52e2-c65b-46d9-8211-eaa1eb299637",
+        "e3bebfe7-b6f6-4b80-a68b-02c8060c5449"
+      ],
+      "fixedGearsIDs": []
+    },
+    {
+      "type": "beam",
+      "id": "14fe52e2-c65b-46d9-8211-eaa1eb299637",
+      "probes": [],
+      "overlays": {},
+      "positionStart": {
+        "x": 1,
+        "y": 0
+      },
+      "positionEnd": {
+        "x": 1,
+        "y": 2
+      },
+      "fixedNodeStartID": "33e5ac3c-d401-4151-a1e6-204ba660ab37",
+      "fixedNodesBodyIDs": []
+    }
+  ],
+  "constraintElements": [],
+  "loads": [],
+  "history": [
+    [
+      {
+        "type": "CreateElement",
+        "element": {
+          "type": "pivot",
+          "id": "f3fb3d1e-500d-4a66-b585-a8ae45cc6197",
+          "probes": [],
+          "overlays": {},
+          "position": {
+            "x": 0,
+            "y": 0
+          },
+          "isGrounded": true,
+          "rotatingEdgesIDs": [],
+          "fixedGearsIDs": [],
+          "motor": {
+            "speed": 10
+          }
+        }
+      }
+    ],
+    [
+      {
+        "type": "CreateElement",
+        "element": {
+          "type": "beam",
+          "id": "e3bebfe7-b6f6-4b80-a68b-02c8060c5449",
+          "probes": [],
+          "overlays": {},
+          "positionStart": {
+            "x": 0,
+            "y": 0
+          },
+          "positionEnd": {
+            "x": 10.546464158209279,
+            "y": 0
+          },
+          "fixedNodesBodyIDs": []
+        }
+      },
+      {
+        "type": "ConnectsRotatingEdges",
+        "disconnect": false,
+        "elementID": "f3fb3d1e-500d-4a66-b585-a8ae45cc6197",
+        "connectID": "e3bebfe7-b6f6-4b80-a68b-02c8060c5449",
+        "index": 0
+      },
+      {
+        "type": "ConnectsFixedNodeStart",
+        "disconnect": false,
+        "elementID": "e3bebfe7-b6f6-4b80-a68b-02c8060c5449",
+        "connectID": "f3fb3d1e-500d-4a66-b585-a8ae45cc6197"
+      }
+    ],
+    [
+      {
+        "type": "ChangeEdgeLength",
+        "id": "e3bebfe7-b6f6-4b80-a68b-02c8060c5449",
+        "newLength": 1,
+        "oldLength": 10.546464158209279
+      },
+      {
+        "type": "UpdatePositionsToValidState",
+        "masterActionType": "ChangeEdgeLength",
+        "newNodes": {
+          "positions": [
+            [
+              "e3bebfe7-b6f6-4b80-a68b-02c8060c5449:end",
+              {
+                "x": 1,
+                "y": 0
+              }
+            ],
+            [
+              "f3fb3d1e-500d-4a66-b585-a8ae45cc6197",
+              {
+                "x": 0,
+                "y": 0
+              }
+            ],
+            [
+              "e3bebfe7-b6f6-4b80-a68b-02c8060c5449:start",
+              {
+                "x": 0,
+                "y": 0
+              }
+            ]
+          ],
+          "radii": [],
+          "posMasses": [
+            [
+              "e3bebfe7-b6f6-4b80-a68b-02c8060c5449:end",
+              1
+            ],
+            [
+              "f3fb3d1e-500d-4a66-b585-a8ae45cc6197,e3bebfe7-b6f6-4b80-a68b-02c8060c5449:start",
+              0
+            ]
+          ],
+          "radMasses": []
+        },
+        "oldNodes": {
+          "positions": [
+            [
+              "f3fb3d1e-500d-4a66-b585-a8ae45cc6197",
+              {
+                "x": 0,
+                "y": 0
+              }
+            ],
+            [
+              "e3bebfe7-b6f6-4b80-a68b-02c8060c5449:start",
+              {
+                "x": 0,
+                "y": 0
+              }
+            ],
+            [
+              "e3bebfe7-b6f6-4b80-a68b-02c8060c5449:end",
+              {
+                "x": 10.546464158209279,
+                "y": 0
+              }
+            ]
+          ],
+          "radii": [],
+          "posMasses": [
+            [
+              "f3fb3d1e-500d-4a66-b585-a8ae45cc6197",
+              0
+            ],
+            [
+              "e3bebfe7-b6f6-4b80-a68b-02c8060c5449:start",
+              1
+            ],
+            [
+              "e3bebfe7-b6f6-4b80-a68b-02c8060c5449:end",
+              1
+            ]
+          ],
+          "radMasses": []
+        }
+      }
+    ],
+    [
+      {
+        "type": "CreateElement",
+        "element": {
+          "type": "pivot",
+          "id": "33e5ac3c-d401-4151-a1e6-204ba660ab37",
+          "probes": [],
+          "overlays": {},
+          "position": {
+            "x": 1,
+            "y": 0
+          },
+          "isGrounded": false,
+          "rotatingEdgesIDs": [],
+          "fixedGearsIDs": []
+        }
+      },
+      {
+        "type": "ConnectsRotatingEdges",
+        "disconnect": false,
+        "elementID": "33e5ac3c-d401-4151-a1e6-204ba660ab37",
+        "connectID": "e3bebfe7-b6f6-4b80-a68b-02c8060c5449",
+        "index": 0
+      },
+      {
+        "type": "ConnectsFixedNodeEnd",
+        "disconnect": false,
+        "elementID": "e3bebfe7-b6f6-4b80-a68b-02c8060c5449",
+        "connectID": "33e5ac3c-d401-4151-a1e6-204ba660ab37"
+      }
+    ],
+    [
+      {
+        "type": "CreateElement",
+        "element": {
+          "type": "beam",
+          "id": "14fe52e2-c65b-46d9-8211-eaa1eb299637",
+          "probes": [],
+          "overlays": {},
+          "positionStart": {
+            "x": 1,
+            "y": 0
+          },
+          "positionEnd": {
+            "x": 1,
+            "y": 2
+          },
+          "fixedNodesBodyIDs": []
+        }
+      },
+      {
+        "type": "ConnectsRotatingEdges",
+        "disconnect": false,
+        "elementID": "33e5ac3c-d401-4151-a1e6-204ba660ab37",
+        "connectID": "14fe52e2-c65b-46d9-8211-eaa1eb299637",
+        "index": 0
+      },
+      {
+        "type": "ConnectsFixedNodeStart",
+        "disconnect": false,
+        "elementID": "14fe52e2-c65b-46d9-8211-eaa1eb299637",
+        "connectID": "33e5ac3c-d401-4151-a1e6-204ba660ab37"
+      }
+    ]
+  ],
+  "future": [
+    [
+      {
+        "type": "GroundNode",
+        "id": "33e5ac3c-d401-4151-a1e6-204ba660ab37",
+        "grounded": true
+      }
+    ]
+  ]
+}

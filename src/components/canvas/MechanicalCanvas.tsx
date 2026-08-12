@@ -1,7 +1,6 @@
 import React, { useRef, useEffect, useCallback, forwardRef } from "react";
 import {
   Action,
-  ActionBundleType,
   ChangeDimensionActionType,
   AppMode,
   CanvasEvent,
@@ -27,6 +26,7 @@ import {
 import { Box, Tooltip } from "@mui/material";
 import { type Instance as PopperInstance } from "@popperjs/core";
 import { CanvasHighlight, draw_mechanical_canvas } from "./draw-canvas";
+import { RedundancySymbol } from "../solver/redundancy-symbols";
 import { canvasStateReducer } from "./canvas-state-reducer";
 import { get_element_from_id } from "../mechanism/connect-actions";
 import { load_value_anchor } from "../../utils/load-geom";
@@ -111,7 +111,7 @@ export interface ConstraintChangeSignal {
 interface MechanicalCanvasProps {
   setCanvasState: (state: CanvasState) => void;
   canvasState: CanvasState;
-  applyActions: (actions: Action[], actionBundleType: ActionBundleType) => void;
+  applyActions: (actions: Action[]) => void;
   changeViewport: (viewportChange: ViewportChange) => void;
   mechanism: Mechanism;
   setHoveredPart: (hoveredPart: HoveredPart) => void;
@@ -146,10 +146,17 @@ interface MechanicalCanvasProps {
    * A pose the analysis panel is swinging along one motion mode, or `null`.
    *
    * A ref for the same reason as `liveFrameRef`: it changes every frame, and the draw loop
-   * must not wait for a render. The live frame wins — while the simulation drives the canvas
-   * there is nothing for a mode preview to add.
+   * must not wait for a render.
+   *
+   * It wins over the live frame, which is only ever set in simulation and would otherwise
+   * hide the swing on a PAUSED recording — the one place the feature has most to say, since
+   * the analysis then describes the pose the recording is stopped on. Nothing is lost the
+   * other way round: the panel only animates while the mechanism is still, so this is null
+   * for the whole of a playing simulation.
    */
   modePreviewRef: React.RefObject<Mechanism | null>;
+  /** How a redundant constraint the analysis panel is pointing at would yield. */
+  redundancySymbols: RedundancySymbol[];
 }
 
 /** The simulated mechanism and probe trajectories at the cursor, for one frame. */
@@ -191,6 +198,7 @@ export const MechanicalCanvas = forwardRef<
       liveFrameRef,
       highlight,
       modePreviewRef,
+      redundancySymbols,
     },
     ref,
   ) => {
@@ -231,6 +239,8 @@ export const MechanicalCanvas = forwardRef<
     const canvasStateRef = useRef(canvasState);
     const highlightRef = useRef(highlight);
     highlightRef.current = highlight;
+    const redundancySymbolsRef = useRef(redundancySymbols);
+    redundancySymbolsRef.current = redundancySymbols;
     const onSpaceKeyRef = useRef(onSpaceKey);
     onSpaceKeyRef.current = onSpaceKey;
     const onEscapeKeyRef = useRef(onEscapeKey);
@@ -267,7 +277,7 @@ export const MechanicalCanvas = forwardRef<
     // rather than from a closure that would freeze on the first frame.
     restingRef.current = mechanism;
     mechanismRef.current =
-      liveFrameRef.current?.mechanism ?? modePreviewRef.current ?? mechanism;
+      modePreviewRef.current ?? liveFrameRef.current?.mechanism ?? mechanism;
     hoveredPartRef.current = hoveredPart;
     canvasStateRef.current = canvasState;
 
@@ -382,7 +392,7 @@ export const MechanicalCanvas = forwardRef<
       // mechanism that is actually drawn. Both change every frame, which no render follows.
       const live = liveFrameRef.current;
       mechanismRef.current =
-        live?.mechanism ?? modePreviewRef.current ?? restingRef.current;
+        modePreviewRef.current ?? live?.mechanism ?? restingRef.current;
 
       // Writing width/height reallocates the backing store even when the value
       // is unchanged, so the canvas only follows the container when it moves.
@@ -508,6 +518,8 @@ export const MechanicalCanvas = forwardRef<
         hideLoads: appModeRef.current === "kinematic",
         dimensionSnapped: snapFeedbackRef.current.distanceSnapped ?? false,
         highlight: highlightRef.current,
+        redundancySymbols: redundancySymbolsRef.current,
+        now,
       });
     }, [
       showGrid,
@@ -559,7 +571,15 @@ export const MechanicalCanvas = forwardRef<
     // Logique "bouton relâché" partagée : appelée par pointerup/pointercancel
     // et par le reducer (undo/redo forcent un relâchement). Ne touche pas à la
     // capture du pointeur (gérée dans les handlers pointer qui ont l'événement).
+    //
+    // Idempotent par nécessité : certains navigateurs déclenchent pointercancel
+    // juste après un pointerup déjà traité pour le même relâchement (autour de
+    // releasePointerCapture notamment), les deux dans le même tick — avant que
+    // canvasStateRef n'ait pu se rafraîchir au rendu suivant. Sans cette garde,
+    // le deuxième appel rejoue le scellement du geste sur un état encore
+    // "MovingXXX" et double une action de l'historique.
     const onMouseUpHandler = useCallback(() => {
+      if (mouseButtonDownRef.current === "none") return;
       handleEventRef.current({
         type: "MouseButtonUp",
       });
@@ -623,9 +643,13 @@ export const MechanicalCanvas = forwardRef<
 
     // A gesture in progress keeps the canvas: the pointer is captured, and what
     // it draws — a selection rectangle, an element being placed — must survive
-    // the cursor straying outside.
+    // the cursor straying outside. Same for the probe metric popover: it sits
+    // outside the canvas element, so reaching it would otherwise trigger this.
     const onPointerLeaveHandler = () => {
-      if (mouseButtonDownRef.current === "none")
+      if (
+        mouseButtonDownRef.current === "none" &&
+        canvasStateRef.current.type !== "PlacingProbeMetrics"
+      )
         cursorOnCanvasRef.current = false;
     };
 
@@ -1002,7 +1026,6 @@ export const MechanicalCanvas = forwardRef<
                 oldVector: element.vector,
               },
             ],
-            "MoveLoad",
           );
           return true;
         case "moment":
@@ -1018,7 +1041,6 @@ export const MechanicalCanvas = forwardRef<
                 oldValue: element.value,
               },
             ],
-            "MoveLoad",
           );
           return true;
         case "distributed-force": {
@@ -1046,7 +1068,6 @@ export const MechanicalCanvas = forwardRef<
                 oldMagnitudeEnd: element.magnitudeEnd,
               },
             ],
-            "MoveLoad",
           );
           return true;
         }
@@ -1202,7 +1223,6 @@ export const MechanicalCanvas = forwardRef<
                         oldValue: editingElement.value,
                       },
                     ],
-                    "ChangeDimension",
                   );
                 }
               }
@@ -1235,7 +1255,6 @@ export const MechanicalCanvas = forwardRef<
                       element: editingElement,
                     },
                   ],
-                  "Other",
                 );
                 setCanvasState({ type: "Selecting" });
               } else if (isEditingValue && canvasState.rearm) {
@@ -1272,7 +1291,6 @@ export const MechanicalCanvas = forwardRef<
                         oldProbes: probedElement.probes ?? [],
                       },
                     ],
-                    "Other",
                   )
                 }
                 // The measured element stays selected either way; only the tool

@@ -4,6 +4,11 @@ import { load_mechanism } from "../../utils/load-mechanism";
 import { FromRecorder, ToRecorder, WireSnapshot } from "./recorder-protocol";
 import { RecorderClient } from "./recorder-client";
 import { MAX_RECORDING_TIME } from "./kinematic-simulation";
+import {
+  snapshot_belt_arrivals,
+  snapshot_belt_detached,
+  snapshot_belt_wraps,
+} from "./snapshot";
 
 /**
  * The client's half of the worker protocol: the layout crosses once per load and is put
@@ -31,17 +36,22 @@ class FakeWorker {
   }
 }
 
+const BELT = "00000000-0000-0000-0000-00000000beef" as const;
+
 const wire = (t: number): WireSnapshot => ({
   t,
   positions: Float64Array.of(t, 0),
   angles: Float64Array.of(t),
 });
 
-const layoutMessage = (epoch: number, maxTime = 300): FromRecorder => ({
+const layoutMessage = (
+  epoch: number,
+  keys: string[] = ["n"],
+): FromRecorder => ({
   type: "layout",
-  keys: ["n"],
+  keys,
   angleKeys: ["g"],
-  maxTime,
+  belts: [],
   epoch,
 });
 
@@ -73,11 +83,50 @@ describe("protocole du client d'enregistrement", () => {
     expect(snapshots[0].layout.angleIndex.get("g")).toBe(0);
   });
 
-  it("retient la durée que le worker a mesurée sur le mécanisme", () => {
+  it("mesure la durée d'enregistrement sur la disposition reçue", () => {
     // Before a load, the ceiling: nothing is recorded yet, so nothing can be cut short.
     expect(client.maxTime()).toBe(MAX_RECORDING_TIME);
-    worker.deliver(layoutMessage(0, 120));
-    expect(client.maxTime()).toBe(120);
+    worker.deliver(layoutMessage(0));
+    const light = client.maxTime();
+    expect(light).toBeLessThanOrEqual(MAX_RECORDING_TIME);
+    // A mechanism whose instants cost more records for less long.
+    worker.deliver(
+      layoutMessage(
+        0,
+        Array.from({ length: 20000 }, (_, i) => `n${i}`),
+      ),
+    );
+    expect(client.maxTime()).toBeLessThan(light);
+  });
+
+  it("replace les poulies d'une courroie dans la disposition", () => {
+    // Without the belt section, every belt slot loses its owner on this side: the contact
+    // flags read back as "nothing detached" and the belt is drawn wrapped around a pulley
+    // it left. One gear angle, then three wraps, three flags, three arrival angles.
+    worker.deliver({
+      type: "layout",
+      keys: ["n"],
+      angleKeys: ["g"],
+      belts: [{ id: BELT, pulleys: 3 }],
+      epoch: 0,
+    });
+    worker.deliver({
+      type: "snapshots",
+      snapshots: [
+        {
+          t: 0,
+          positions: Float64Array.of(0, 0),
+          angles: Float64Array.of(0.5, 1, 2, 3, 0, 1, 0, 4, 5, 6),
+        },
+      ],
+      reached: 0,
+      epoch: 0,
+    });
+
+    const snapshot = client.drain().snapshots[0];
+    expect(snapshot_belt_detached(snapshot, BELT)).toEqual([1]);
+    expect(snapshot_belt_wraps(snapshot, BELT)).toEqual([1, 2, 3]);
+    expect(snapshot_belt_arrivals(snapshot, BELT)).toEqual([4, 5, 6]);
   });
 
   it("écarte ce qui vient d'une époque révolue", () => {

@@ -210,60 +210,40 @@ export const MODE_ANIMATION = {
   DIMENSION_RETURN_DELAY_MS: 200,
 } as const;
 
-/** Showing an over-constraint by asking one of its joints to hold a value it cannot. */
-export const STRAIN_ANIMATION = {
-  /**
-   * How wrong the joint is asked to be, as a fraction of the WHOLE mechanism's extent.
-   *
-   * Small, and it has to be. Measured on the gallery: a lie of a few per cent leaves every
-   * mechanism in pieces — bars three times their length — because the parts can no longer
-   * reach the pose being asked of them at all. That is a jammed drawing, not a strain. Kept
-   * where the response is still proportional to the lie, the picture stays the mechanism's
-   * own; what it costs in legibility, `SHOWN_RATIO` buys back.
-   */
-  LIE_RATIO: 0.005,
-  /**
-   * How far a bar should APPEAR to stretch, as a fraction of its own length.
-   *
-   * The response is drawn magnified, the way a stress plot exaggerates a deflection: the
-   * displacement field is scaled whole, so shape and proportion stay the mechanism's and
-   * only the size is not. It is the stretching the magnification is aimed at, because that
-   * is the statement — a mechanism that cannot take the lie up. On a heavily over-constrained
-   * one the parts barely move at all and a single short bar takes the whole error; aiming at
-   * the travel instead would blow that bar up to three times its length.
-   */
-  SHOWN_STRAIN_RATIO: 0.12,
-  /**
-   * Ceiling on the travel, as a fraction of the extent.
-   *
-   * Only binds when the mechanism answers the lie by moving rather than by straining, where
-   * aiming at the stretching alone would ask for a magnification nothing justifies.
-   */
-  SHOWN_RATIO: 0.05,
-  /**
-   * Ceiling on that magnification.
-   *
-   * A joint whose lie the mechanism barely answers at all would otherwise have the solver's
-   * own rounding blown up into a shape, which is a picture of nothing.
-   */
-  MAX_GAIN: 60,
-  /**
-   * Below this share of the extent, the mechanism did not answer the lie at all.
-   *
-   * A real case: a belt whose pulleys are every one of them anchored. Its length cannot be
-   * wrong in any direction anything can move, so there is nothing to show and the panel says
-   * so by not animating.
-   */
-  DEAD_RESPONSE_RATIO: 0.0005,
-  /** Seconds for a full there-and-back strain. Shares the modes' beat, and their panel row. */
+/**
+ * Same swing, for a gallery card on hover: evocative rather than a precise DDL reading, so it
+ * runs wider and quicker than MODE_ANIMATION's.
+ */
+export const THUMBNAIL_MODE_ANIMATION = {
+  AMPLITUDE_RATIO: 0.15,
+  PERIOD_S: 1.2,
+} as const;
+
+/**
+ * Showing how a redundant constraint yields, drawn rather than measured (analysis panel).
+ *
+ * Every size here is a drawing decision in screen pixels, constant across zoom: the point this
+ * replaces the strain animation for is that a symbol has no measured response to calibrate,
+ * only a glyph to place and swing gently — its geometry (position, direction) still comes from
+ * the mechanism, but its size never does.
+ */
+export const REDUNDANCY_SYMBOL = {
+  /** Seconds for a full there-and-back pulse. Shares `MODE_ANIMATION`'s beat, and its panel row. */
   PERIOD_S: MODE_ANIMATION.PERIOD_S,
-  /**
-   * Sweeps each strained pose gets.
-   *
-   * A falsified system is inconsistent, so the solve never satisfies its constraints and
-   * never exits early: this budget is spent in full, every frame.
-   */
-  SWEEPS: 200,
+  /** How far a "gap" symbol's two ticks pull apart from their rest position, in px. */
+  GAP_AMPLITUDE_PX: 50,
+  /** Half-length of a gap tick, perpendicular to the axis, in px. */
+  GAP_TICK_PX: 15,
+  /** Length of a "diverge" symbol's two arms, in px. */
+  ARM_LENGTH_PX: 100,
+  /** How far the arms swing away from their rest direction, in degrees. */
+  ARM_SWING_DEG: 20,
+  /** Radius of the small arc drawn between the two arms, in px. */
+  ARM_ARC_PX: 30,
+  /** How far an "off-rail" symbol's node lifts off its rail at the pulse's peak, in px. */
+  LIFT_PX: 40,
+  /** Half-length of the rail tick drawn at the node's rest position, in px. */
+  RAIL_TICK_PX: 20,
 } as const;
 
 /**

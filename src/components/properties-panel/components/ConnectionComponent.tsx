@@ -1,18 +1,13 @@
 import React from "react";
 import {
   Action,
-  ActionBundleType,
   CanvasState,
   ConnectsActionType,
   MechanicalElement,
   Mechanism,
 } from "../../../types";
 import { IconButton } from "@mui/material";
-import {
-  LinkOff as LinkOffIcon,
-  RotateLeft as RotateLeftIcon,
-  RotateRight as RotateRightIcon,
-} from "@mui/icons-material";
+import { LinkOff, RotateLeft, RotateRight } from "@mui/icons-material";
 import {
   disconnect_element,
   get_connection_pair_types,
@@ -21,6 +16,7 @@ import {
 } from "../../mechanism/connect-actions";
 import { belt_junction_id } from "../../../utils/belt-rules";
 import { HoveredPart } from "../../../types/hovered-part";
+import { ID } from "../../../types/element";
 import ElementDisplay from "./ElementDisplay";
 import { t } from "../../../i18n";
 
@@ -28,9 +24,11 @@ interface ConnectionProps {
   element: MechanicalElement;
   connectedElement: MechanicalElement;
   containerType: ConnectsActionType;
+  hoveredPart: HoveredPart;
   setHoveredPart: (hoveredPart: HoveredPart) => void;
+  selectedIds: ID[];
   setCanvasState: (state: CanvasState) => void;
-  applyActions: (actions: Action[], actionBundleType: ActionBundleType) => void;
+  applyActions: (actions: Action[]) => void;
   mechanism: Mechanism;
 }
 
@@ -38,7 +36,9 @@ const Connection: React.FC<ConnectionProps> = ({
   element,
   connectedElement,
   containerType,
+  hoveredPart,
   setHoveredPart,
+  selectedIds,
   setCanvasState,
   applyActions,
   mechanism,
@@ -56,10 +56,9 @@ const Connection: React.FC<ConnectionProps> = ({
             type: "SwitchAttachedGearDirection",
             id: element.id,
             index,
-            direction: !element.attachedGearsIDs[index].direction,
+            clockwise: !element.attachedGearsIDs[index].clockwise,
           },
         ],
-        "Other",
       );
     } else if (connectedElement.type === "belt") {
       index = get_connections(
@@ -72,10 +71,9 @@ const Connection: React.FC<ConnectionProps> = ({
             type: "SwitchAttachedGearDirection",
             id: connectedElement.id,
             index,
-            direction: !connectedElement.attachedGearsIDs[index].direction,
+            clockwise: !connectedElement.attachedGearsIDs[index].clockwise,
           },
         ],
-        "Other",
       );
     }
   };
@@ -97,7 +95,7 @@ const Connection: React.FC<ConnectionProps> = ({
     e.stopPropagation();
     if (!connectedElement) return;
     if (opensBelt && belt) {
-      applyActions(open_belt(belt), "Connects");
+      applyActions(open_belt(belt));
       return;
     }
     applyActions(
@@ -118,7 +116,6 @@ const Connection: React.FC<ConnectionProps> = ({
             ),
         ),
       ],
-      "Connects",
     );
   };
 
@@ -127,25 +124,25 @@ const Connection: React.FC<ConnectionProps> = ({
       element.type === "belt" &&
       containerType === "ConnectsAttachedGears") ||
     containerType === "ConnectsAttachedBelt";
-  let direction = false;
+  let clockwise = false;
   if (showDirectionButton) {
     if (element.type === "belt") {
-      direction =
+      clockwise =
         element.attachedGearsIDs[
           get_connections(element, "ConnectsAttachedGears").indexOf(
             connectedElement.id,
           )
-        ].direction;
+        ].clockwise;
     } else if (connectedElement.type === "belt") {
-      direction =
+      clockwise =
         connectedElement.attachedGearsIDs[
           get_connections(connectedElement, "ConnectsAttachedGears").indexOf(
             element.id,
           )
-        ].direction;
+        ].clockwise;
     }
   }
-  const DirectionIcon = direction ? RotateLeftIcon : RotateRightIcon;
+  const DirectionIcon = clockwise ? RotateRight : RotateLeft;
   const showDisconnectButton =
     containerType !== "ConnectsParentAxle" &&
     containerType !== "ConnectsFixedGears";
@@ -153,7 +150,9 @@ const Connection: React.FC<ConnectionProps> = ({
   return (
     <ElementDisplay
       element={connectedElement}
+      hoveredPart={hoveredPart}
       setHoveredPart={setHoveredPart}
+      selectedIds={selectedIds}
       setCanvasState={setCanvasState}
       applyActions={applyActions}
       size="small"
@@ -195,7 +194,7 @@ const Connection: React.FC<ConnectionProps> = ({
               )}
               size="small"
             >
-              <LinkOffIcon sx={{ mx: -0.1, my: -0.4 }} fontSize="small" />
+              <LinkOff sx={{ mx: -0.1, my: -0.4 }} fontSize="small" />
             </IconButton>
           )}
         </>

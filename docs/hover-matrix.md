@@ -129,6 +129,12 @@ monde puis reconnue « presque » perpendiculaire.
 Les cinq états `Dimension…` qui ne visent rien ont déjà leurs deux opérandes : il ne reste qu'à
 poser l'étiquette, il n'y a plus de cible à désigner.
 
+`DimensionNode` et `DimensionEdge` refusent en plus, de façon transparente, l'élément que leur
+premier opérande **termine** : un nœud coté contre une arête dont il est une extrémité mesurerait sa
+distance à une droite sur laquelle il se trouve déjà, et la réponse serait zéro quoi qu'il arrive.
+La règle vaut pour l'arête entière, corps compris — ce n'est pas une extrémité qu'on refuse, c'est
+la paire.
+
 ## Les overlays
 
 Contraintes et charges se déclarent à part, par `overlays`, parce qu'ils ne sont pas des cibles
@@ -197,8 +203,9 @@ ci-dessus peuvent réellement produire.
 | `PlacingBeamEnd` / `SpringEnd` / `DamperEnd` | à `MIN_EDGE_LENGTH` du départ                                     |
 | `PlacingBeltEnd`, aucune poulie posée        | à `MIN_EDGE_LENGTH` du départ                                     |
 | `PlacingBeltEnd`, au moins une poulie        | hors du disque de la dernière poulie                              |
-| `PlacingGearRadius` / `ChangingGearRadius`   | à `MIN_GEAR_RADIUS` du centre                                     |
-| `MovingEdgeStartPoint` / `EndPoint`          | à `MIN_EDGE_LENGTH` du bout opposé, et hors de la poulie enroulée |
+| `PlacingGearRadius`                          | à `MIN_GEAR_RADIUS` du centre                                     |
+| `ChangingGearRadius`                         | à `min(MIN_GEAR_RADIUS, rayon courant)` du centre                 |
+| `MovingEdgeStartPoint` / `EndPoint`          | à `min(MIN_EDGE_LENGTH, longueur courante)` du bout opposé, et hors de la poulie enroulée |
 | `MovingNode`                                 | la même, une fois par bout d'edge que le nœud porte               |
 
 Une courroie fait exception au minimum de longueur **dès qu'elle porte une poulie** : ses deux bouts
@@ -207,8 +214,41 @@ doivent pouvoir se rejoindre, c'est la fermeture de la boucle.
 Tous ces minima sont des distances **écran**, converties par le viewport : ce qu'ils protègent est la
 capacité à voir et à attraper ce qu'on dessine, qui se compte en pixels. Zoomé, une barre de dix
 unités monde devient une chose qu'on a le droit de tracer ; dézoomé, une de mille est la plus courte
-qu'on puisse encore viser. Le solveur, lui, n'a **aucune** taille minimale — seulement une garde
-numérique contre le rayon nul.
+qu'on puisse encore viser.
+
+Le solveur répond aux **mêmes** bornes, parce qu'un rayon et une longueur ne sont pas écrits que par
+le geste : l'engrènement, un rapport et la longueur d'une courroie écrivent des rayons, et n'importe
+quelle contrainte peut rapprocher deux extrémités. `resolveGeometricConstraints` lit donc le viewport
+que porte le mécanisme et transmet les deux planchers, avec le même cliquet qu'ici. La forme diffère
+selon la grandeur : un rayon est une valeur que le solveur **stocke**, donc son plancher est un
+`Math.max` dans son écrivain unique ; une longueur n'est stockée nulle part — c'est une distance
+entre deux nœuds — donc son plancher est un lien `MinDistance`, une inégalité qui ne dit rien tant
+que la barre est plus longue. Dans les deux cas la correction refusée revient au balayage suivant et
+part aux degrés de liberté restants : c'est ce qui fait que deux engrenages qu'on pousse l'un dans
+l'autre arrêtent leurs centres au lieu de s'effondrer.
+
+Une barre dont la longueur est **cotée** n'a pas de plancher : la cote gagne, si courte soit-elle,
+sinon les deux tireraient le même couple de points en sens inverse et la cote serait silencieusement
+fausse.
+
+### Un minimum ne fait jamais grandir
+
+D'où le `min(…)` sur les états qui redimensionnent : un geste qui reprend un élément existant répond
+à la borne écran **ou** à la taille qu'il a déjà, la plus petite des deux. Un engrenage de rayon 4
+dessiné à zoom 8 est un engrenage voulu ; dézoomer jusqu'à ce qu'il fasse dix pixels ne doit pas le
+faire bondir à trente au premier contact avec sa jante. Le plancher interdit de rétrécir davantage,
+il ne pousse jamais vers l'extérieur, et zoomer le rabaisse — c'est ainsi qu'on récupère les petites
+tailles. Les états de **pose** n'ont rien à cliqueter : il n'y a pas encore d'élément.
+
+### Une cible trop proche n'est pas une cible
+
+Une cible garde sa propre position — c'est ce qui en fait une cible — donc la borne ne peut pas lui
+être appliquée sans mentir sur le point de contact affiché. Sous `PlacingGearRadius` et
+`ChangingGearRadius`, une cible plus proche du centre que le rayon minimal ci-dessus cesse donc
+simplement d'être offerte (`out_of_sizing_reach`), en silence, comme tout ce qu'un geste ne peut pas
+atteindre. Sans quoi une cible posée sur l'axe — la jante d'un grand engrenage qui passe par ce
+centre, un nœud, un brin de courroie — dimensionnerait l'engrenage à zéro, là où l'engrènement, la
+géométrie de courroie et les rapports divisent tous par le rayon.
 
 Ces bornes sont une aide au survol, pas un invariant : la tolérance de clic et l'aimantation à la
 grille passent après et peuvent ramener le point de quelques pixels vers l'intérieur.

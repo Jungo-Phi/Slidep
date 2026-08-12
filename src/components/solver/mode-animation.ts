@@ -38,12 +38,25 @@ export type ModeAnimation = {
  * The swing starts and ends at the rest pose, so letting go of it never leaves the drawing
  * somewhere unexpected — `sin` is zero at zero.
  */
+/** Overrides for callers with a different purpose than the analysis panel's precise
+ *  reading — a gallery thumbnail, say — that may want a wider, quicker swing. */
+export type ModeAnimationTuning = {
+  amplitudeRatio?: number;
+  periodS?: number;
+};
+
 export function animate_mode(
   mechanism: Mechanism,
   model: AnalysisModel,
   chain: AnalysisChain,
   mode: MotionMode,
+  tuning: ModeAnimationTuning = {},
 ): ModeAnimation {
+  const {
+    amplitudeRatio = MODE_ANIMATION.AMPLITUDE_RATIO,
+    periodS = MODE_ANIMATION.PERIOD_S,
+  } = tuning;
+
   const variables = chain.variables;
   const nodes = rest_nodes(model);
   // The lever keeps the chain's own scale: it converts this chain's angles to millimetres,
@@ -60,14 +73,14 @@ export function animate_mode(
   let widest = 0;
   for (const value of mode.vector) widest = Math.max(widest, Math.abs(value));
   const swing =
-    (Math.max(MODE_ANIMATION.AMPLITUDE_RATIO * extent, 1) / (widest || 1)) as number;
+    (Math.max(amplitudeRatio * extent, 1) / (widest || 1)) as number;
 
   let phase = 0;
   let offset = 0;
 
   return {
     advance(dt: number): Mechanism {
-      phase += (dt * 2 * Math.PI) / MODE_ANIMATION.PERIOD_S;
+      phase += (dt * 2 * Math.PI) / periodS;
       const target = swing * Math.sin(phase);
       const step = target - offset;
       offset = target;

@@ -8,7 +8,6 @@ import {
 } from "@mui/icons-material";
 import {
   Action,
-  ActionBundleType,
   AppMode,
   ID,
   Mechanism,
@@ -19,7 +18,7 @@ import {
 } from "../../types";
 import { ConstraintResidual } from "../../types/runtime-state";
 import { HoveredPart } from "../../types/hovered-part";
-import { CanvasState } from "../../types/canvas-state";
+import { CanvasState, selected_ids } from "../../types/canvas-state";
 import { ProjectInfoSection } from "./ProjectInfoSection";
 import ElementProperties from "./ElementProperties";
 import ConstraintsPanel from "./ConstraintsPanel";
@@ -27,19 +26,25 @@ import AnalysisPanel from "./AnalysisPanel";
 import { host_mechanical_element } from "../mechanism/connect-actions";
 import { ElementNavigationContext } from "./element-navigation";
 import { CanvasHighlight } from "../canvas/draw-canvas";
+import { RedundancySymbol } from "../solver/redundancy-symbols";
 import { t } from "../../i18n";
 
 export interface PropertiesPanelProps {
   /** Names what the canvas should pick out, and why; empty clears the highlight. */
   setHighlight: (highlight: CanvasHighlight) => void;
+  /** How a redundant constraint the analysis panel is naming right now would yield. */
+  setRedundancySymbols: (symbols: RedundancySymbol[]) => void;
   /** Where the analysis panel publishes the pose it is animating, for the canvas to draw. */
   modePreviewRef: React.MutableRefObject<Mechanism | null>;
   setCanvasState: (state: CanvasState) => void;
   /** Deselects without moving the active tab off "elements" — see handleTabClick. */
   clearSelectionKeepTab: () => void;
   canvasState: CanvasState;
-  applyActions: (actions: Action[], actionBundleType: ActionBundleType) => void;
+  applyActions: (actions: Action[]) => void;
   mechanism: Mechanism;
+  /** The same mechanism in the pose on screen, which in simulation is not the edited one. */
+  analysedMechanism: Mechanism;
+  hoveredPart: HoveredPart;
   setHoveredPart: (hoveredPart: HoveredPart) => void;
   updateMetadata: (metadata: MechanismMetadata) => void;
   setRuntimeState: React.Dispatch<React.SetStateAction<RuntimeState>>;
@@ -55,11 +60,14 @@ export interface PropertiesPanelProps {
 export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
   modePreviewRef,
   setHighlight,
+  setRedundancySymbols,
   setCanvasState,
   clearSelectionKeepTab,
   canvasState,
   applyActions,
   mechanism,
+  analysedMechanism,
+  hoveredPart,
   setHoveredPart,
   updateMetadata,
   appMode,
@@ -100,6 +108,10 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
 
   const selectedID: ID | undefined = (canvasState as { elementID?: ID })
     .elementID;
+  // Every id currently selected — for a plain click, the same singleton as
+  // selectedID; for a box selection, the whole group. Threaded down so any
+  // ElementDisplay can tell whether it names one of them.
+  const selectedIds = selected_ids(canvasState);
   // The mechanical element the selection points at (a selected load resolves to
   // its host). Shared by the elements tab and the analysis tab's measures section.
   const selectedElement = host_mechanical_element(
@@ -228,7 +240,9 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
             <ProjectInfoSection
               mechanism={mechanism}
               updateMetadata={handleProjectInfoChange}
+              hoveredPart={hoveredPart}
               setHoveredPart={setHoveredPart}
+              selectedIds={selectedIds}
               setCanvasState={setCanvasState}
               applyActions={applyActions}
             />
@@ -240,7 +254,9 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                   (el) => el.id === selectedID,
                 ) || mechanism.loads.find((l) => l.id === selectedID)
               }
+              hoveredPart={hoveredPart}
               setHoveredPart={setHoveredPart}
+              selectedIds={selectedIds}
               setCanvasState={setCanvasState}
               applyActions={applyActions}
               mechanism={mechanism}
@@ -251,8 +267,9 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
           )}
           {activeTab === "constraints" && (
             <ConstraintsPanel
-              constraintID={(canvasState as any).elementID}
+              hoveredPart={hoveredPart}
               setHoveredPart={setHoveredPart}
+              selectedIds={selectedIds}
               setCanvasState={setCanvasState}
               applyActions={applyActions}
               mechanism={mechanism}
@@ -261,11 +278,15 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
           {activeTab === "analysis" && (
             <AnalysisPanel
               setHighlight={setHighlight}
+              setRedundancySymbols={setRedundancySymbols}
               modePreviewRef={modePreviewRef}
               mechanism={mechanism}
+              analysedMechanism={analysedMechanism}
               appMode={appMode}
               applyActions={applyActions}
+              hoveredPart={hoveredPart}
               setHoveredPart={setHoveredPart}
+              selectedIds={selectedIds}
               setCanvasState={setCanvasState}
               unsatisfied={unsatisfied}
               runtimeState={runtimeState}

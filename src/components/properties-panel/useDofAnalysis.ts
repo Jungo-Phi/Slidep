@@ -23,11 +23,23 @@ export type ChainAnalysis = {
 };
 
 /** Everything one measurement produced, kept together: animating a mode needs the model too. */
-type Measurement = { model: AnalysisModel; chains: ChainAnalysis[] };
+type Measurement = {
+  mechanism: Mechanism;
+  model: AnalysisModel;
+  chains: ChainAnalysis[];
+};
 
 export type DofAnalysis = {
   /** The model the figures were measured on, or undefined before the first pass. */
   model: AnalysisModel | undefined;
+  /**
+   * The pose the model describes — which the debounce lets fall behind the one on screen.
+   *
+   * Handed out so an animation swings the mechanism the model actually knows: swinging the
+   * newer pose along an older model moves the chain from where it used to be and leaves
+   * everything else where it is, a hybrid pose belonging to no instant.
+   */
+  mechanism: Mechanism | undefined;
   chains: ChainAnalysis[];
   /** False until the first measurement lands — distinct from "measured, and empty". */
   ready: boolean;
@@ -81,9 +93,11 @@ export function useDofAnalysis(mechanism: Mechanism): DofAnalysis {
       return;
     }
     const measure = () => {
-      const model = build_analysis_model(latest.current);
+      const measured = latest.current;
+      const model = build_analysis_model(measured);
       const mobilities = probe_mobility(model);
       const result: Measurement = {
+        mechanism: measured,
         model,
         chains: model.chains.map((chain, i) => {
           const modes = canonical_modes(model, chain, mobilities[i]);
@@ -111,6 +125,7 @@ export function useDofAnalysis(mechanism: Mechanism): DofAnalysis {
   const measurement = cached ?? shown.current;
   return {
     model: measurement?.model,
+    mechanism: measurement?.mechanism,
     chains: measurement?.chains ?? [],
     ready: measurement !== undefined,
   };

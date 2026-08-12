@@ -69,8 +69,8 @@ describe("constraint labels after a solve", () => {
 
     const solved = resolveGeometricConstraints(
       mechanism,
-      "MoveElement",
       move,
+      [move],
     ).positions.get(DIM);
 
     expect(solved).toBeDefined();

@@ -4,11 +4,14 @@
  * A PBD sweep is an alternating projection onto the constraint manifolds, so for a small
  * perturbation `δ` around a satisfied configuration
  *
- *     P(δ) = ( solve(x + ε·δ) − x ) / ε
+ *     P(δ) = ( solve(x + ε·δ) − solve(x) ) / ε
  *
  * lands back on the manifold: it is the projection of `δ` onto the motions the constraints
  * allow. Probing with enough directions and orthogonalising what comes back spans that
  * space, and its dimension **is** the mobility `m`.
+ *
+ * Measured against `solve(x)` rather than `x`, so that a configuration the model does not
+ * quite hold satisfied costs accuracy and never a phantom mode (see `rest`).
  *
  * Nothing here re-implements a constraint. The analysis therefore cannot disagree with the
  * simulation about what moves — which is the whole reason for measuring rather than
@@ -35,15 +38,13 @@ import { angleSlotOf, slotOf, solveNodesFromMaps } from "./nodes";
 /**
  * Perturbation size, as a fraction of the chain's own extent.
  *
- * Bounded from both sides: the solver leaves a residual violation of a hundredth of a
- * millimetre, so too small a probe drowns the response in it, and too large a one leaves
- * the linear regime the projection argument rests on. One percent of the chain keeps the
- * relative error near a thousandth on a mechanism of any drawn size.
+ * A fraction and nothing else — no floor in millimetres. Any absolute floor eventually
+ * exceeds the chain it probes, and a probe worth half the mechanism leaves the linear
+ * regime the whole projection argument rests on: measured, a floor of 1 mm makes a chain
+ * 2 mm across report a mode that does not exist, and a floor of 0.01 mm does the same at
+ * 0.02 mm. Purely relative, the answer holds from a couple of microns to a couple of metres.
  */
 const PROBE_AMPLITUDE_RATIO = 0.01;
-
-/** Floor for the above, so a chain drawn a few millimetres wide still out-runs the solver's residual. */
-const MIN_PROBE_AMPLITUDE_MM = 1;
 
 /**
  * How much of a candidate direction must survive being projected a second time.
@@ -87,6 +88,14 @@ export type ChainMobility = {
   solves: number;
   /** The `m ≥ G` guard fired and every canonical direction was swept. */
   exhaustive: boolean;
+  /**
+   * How far the configuration handed in sits off the constraints, in probe steps.
+   *
+   * `0` on a chain the model holds satisfied. Anything of order 1 or more means the modes
+   * describe the nearby pose the solver settled on rather than the one on screen — the
+   * measurement is still sound, the pose it answers for is not the one asked about.
+   */
+  restDrift: number;
 };
 
 /**
@@ -204,6 +213,7 @@ export function probe_chain_mobility(
   } = tuning;
   const variables = chain.variables;
   const n = variables.length;
+  let restDrift = 0;
   const result = (
     modes: Float64Array[],
     solves: number,
@@ -216,6 +226,7 @@ export function probe_chain_mobility(
     modes,
     solves,
     exhaustive,
+    restDrift,
   });
 
   // Nothing constrains the chain: every unknown is free, and no solve can say otherwise.
@@ -233,12 +244,10 @@ export function probe_chain_mobility(
   const baseY = Float64Array.from(nodes.y);
   const baseAngle = Float64Array.from(nodes.angle);
 
-  const extent = chain_extent(model, chain);
-  const amplitude = Math.max(
-    amplitudeRatio * extent,
-    MIN_PROBE_AMPLITUDE_MM,
-  );
-  const levers = angle_levers(model, variables, extent || 1);
+  // A chain whose nodes all sit on one point has no scale of its own; a millimetre stands in.
+  const extent = chain_extent(model, chain) || 1;
+  const amplitude = amplitudeRatio * extent;
+  const levers = angle_levers(model, variables, extent);
 
   // Slot of each unknown, resolved once.
   const slots = variables.map((v) =>
@@ -249,8 +258,8 @@ export function probe_chain_mobility(
 
   let solves = 0;
 
-  /** Project one direction onto the chain's motion space, in scaled units. */
-  const project = (direction: Float64Array): Float64Array => {
+  /** Where the solve takes a direction from the base configuration, in scaled units. */
+  const settle = (direction: Float64Array): Float64Array => {
     nodes.x.set(baseX);
     nodes.y.set(baseY);
     nodes.angle.set(baseAngle);
@@ -279,6 +288,28 @@ export function probe_chain_mobility(
             : ((nodes.angle[slot] - baseAngle[slot]) * levers.get(key)!) /
               amplitude;
     }
+    return moved;
+  };
+
+  /**
+   * What the solve does to the base configuration on its own, subtracted from every probe.
+   *
+   * A configuration the constraints already satisfy gives zero and nothing changes. One they
+   * do not turns `settle` affine — `settle(δ) = Aδ + c`, with the same `c` whichever way the
+   * chain is pushed — and that constant is a direction like any other to a routine looking
+   * for a span: it survives re-projection, is admitted, and inflates `m` by one. Removing it
+   * leaves `Aδ`, the honest projection about the pose the solver settles on.
+   *
+   * Measured on `Déconnexion courroie` while the belt has a pulley off: a junction 316 mm
+   * from where its constraint wants it, and a chain of 2 DDL reported with 3 and one degree
+   * of hyperstaticity.
+   */
+  const rest = settle(new Float64Array(n));
+  for (const value of rest) restDrift += value * value;
+  restDrift = Math.sqrt(restDrift);
+  const project = (direction: Float64Array): Float64Array => {
+    const moved = settle(direction);
+    for (let i = 0; i < n; i++) moved[i] -= rest[i];
     return moved;
   };
 

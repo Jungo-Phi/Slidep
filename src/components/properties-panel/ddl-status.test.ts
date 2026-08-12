@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { set_language } from "../../i18n";
+import { set_language, t, tn } from "../../i18n";
 import { AppMode } from "../../types";
 import { ddl_status } from "./ddl-status";
 
@@ -16,7 +16,9 @@ describe("ddl_status", () => {
     // se lisait comme une panne.
     for (let m = 0; m <= 3; m++)
       for (let drivers = 0; drivers <= 2; drivers++)
-        expect(label(m, drivers, "edition")).toBe(label(m, drivers, "kinematic"));
+        expect(label(m, drivers, "edition")).toBe(
+          label(m, drivers, "kinematic"),
+        );
     // Ce qu'elle ne fait plus : répéter le chiffre affiché juste au-dessus.
     expect(label(1, 0, "edition")).not.toMatch(/1 ddl/);
   });
@@ -29,17 +31,17 @@ describe("ddl_status", () => {
   });
 
   it("cinématique : compare mobilités et moteurs", () => {
-    expect(label(0, 0, "kinematic")).toBe("Structure rigide");
-    expect(label(1, 0, "kinematic")).toBe("Aucun moteur");
-    expect(label(1, 1, "kinematic")).toBe("Mouvement déterminé");
-    expect(label(2, 1, "kinematic")).toBe("Sous-motorisé");
-    expect(label(1, 2, "kinematic")).toBe("Sur-motorisé");
+    expect(label(0, 0, "kinematic")).toBe(t("ddl_rigid"));
+    expect(label(1, 0, "kinematic")).toBe(t("ddl_no_motor"));
+    expect(label(1, 1, "kinematic")).toBe(t("ddl_determined"));
+    expect(label(2, 1, "kinematic")).toBe(t("ddl_underdriven"));
+    expect(label(1, 2, "kinematic")).toBe(t("ddl_overdriven"));
   });
 
   it("dynamique : un degré libre est normal, le mouvement vient des efforts", () => {
-    expect(label(0, 0, "dynamic")).toBe("Structure rigide");
-    expect(label(2, 0, "dynamic")).toBe("Mouvement libre");
-    expect(label(1, 1, "dynamic")).toBe("Mouvement déterminé");
+    expect(label(0, 0, "dynamic")).toBe(t("ddl_rigid"));
+    expect(label(2, 0, "dynamic")).toBe(t("ddl_no_motor"));
+    expect(label(1, 1, "dynamic")).toBe(t("ddl_determined"));
   });
 
   it("le décompte vit dans l'explication, pas dans le verdict", () => {
@@ -48,8 +50,8 @@ describe("ddl_status", () => {
     // pas se perdre en route — et il s'accorde.
     const underdriven = (n: number) => ddl_status(n + 1, 1, "kinematic");
     expect(underdriven(1).label).not.toMatch(/\d/);
-    expect(underdriven(1).hint).toMatch(/^1 mobilité n'est/);
-    expect(underdriven(2).hint).toMatch(/^2 mobilités ne sont/);
+    expect(underdriven(1).hint).toMatch(tn("ddl_underdriven_hint", 1));
+    expect(underdriven(2).hint).toMatch(tn("ddl_underdriven_hint", 2));
   });
 
   it("aucun mode n'annonce jamais un DDL négatif", () => {

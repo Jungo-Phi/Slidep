@@ -169,8 +169,8 @@ export function actionReducer(
           action.id,
           mechanicalElements,
         ) as BeltElement;
-        belt.attachedGearsIDs[action.index].direction =
-          action.direction !== revert;
+        belt.attachedGearsIDs[action.index].clockwise =
+          action.clockwise !== revert;
         break;
       case "ConnectsFixedEdges":
         element = get_mechanical_element_from_id(
@@ -283,7 +283,7 @@ export function actionReducer(
         } else {
           element.attachedGearsIDs.splice(action.index, 0, {
             id: action.connectID,
-            direction: action.direction,
+            clockwise: action.clockwise,
           });
         }
         break;

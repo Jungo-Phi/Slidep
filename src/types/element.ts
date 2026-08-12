@@ -213,12 +213,10 @@ export interface DamperElement extends BaseEdgeElement {
  * Belt element - flexible transmission
  *
  * The order of connected Gears (with directions) is the path of the belt from start to end
- *
- * Direction {true: counterClockwise, false: clockwise}
  */
 export interface BeltElement extends BaseEdgeElement {
   type: "belt";
-  attachedGearsIDs: { id: ID; direction: boolean }[];
+  attachedGearsIDs: { id: ID; clockwise: boolean }[];
   closed: boolean;
   /** Rendering only (simulation): indices into `attachedGearsIDs` of pulleys that
    *  lost belt contact this run, so the belt is drawn straight past them.

@@ -61,6 +61,13 @@ export function mechanism_at(mechanism: Mechanism, pose: Pose): Mechanism {
       const positionStart = pose.positions.get(`${el.id}:start`);
       const positionEnd = pose.positions.get(`${el.id}:end`);
       if (!positionStart && !positionEnd) return el;
+      // A belt's wraps are a RECORDED quantity — how far it had turned onto each pulley at
+      // the instant the snapshot was taken. This pose is one we made up, so they no longer
+      // describe it: carried through, they hold every arc at the angle it had while the
+      // pulleys move and turn underneath. Dropped, the drawing solves the belt against the
+      // geometry it is given, which is what edition does. Which pulleys the belt has come
+      // off is a topology and stays: the swing does not put a belt back on.
+      const unwrapped = el.type === "belt" ? { gearWraps: undefined } : {};
       // A spring or damper draws a fixed number of coils at its natural length and stretches
       // between them. Freezing that length on the animated copy keeps the coils from being
       // recounted every frame, exactly as the simulation does.
@@ -73,6 +80,7 @@ export function mechanism_at(mechanism: Mechanism, pose: Pose): Mechanism {
         ...(positionStart ? { positionStart } : {}),
         ...(positionEnd ? { positionEnd } : {}),
         ...(restLength !== undefined ? { restLength } : {}),
+        ...unwrapped,
       };
     }),
   };

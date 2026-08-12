@@ -1,5 +1,5 @@
 import type { CanvasState } from "../../types/canvas-state";
-import type { Action, ActionBundleType } from "../../types/actions";
+import type { Action } from "../../types/actions";
 import type { HoveredPart } from "../../types/hovered-part";
 import {
   BeltElement,
@@ -35,7 +35,9 @@ import { belt_project } from "../../utils/belt-path";
 import { nodes_under_segment } from "./body-crossings";
 
 /** A node named as a hover, for the connection helpers that speak in hovers. */
-const node_hover = (node: MechanicalElement & { position: Point2 }): HoveredPart => ({
+const node_hover = (
+  node: MechanicalElement & { position: Point2 },
+): HoveredPart => ({
   type: "Node",
   position: node.position,
   id: node.id,
@@ -45,7 +47,6 @@ const node_hover = (node: MechanicalElement & { position: Point2 }): HoveredPart
 
 export type MouseDownResult = {
   actions: Action[];
-  actionBundleType?: ActionBundleType;
   newCanvasState?: CanvasState;
 };
 
@@ -183,7 +184,6 @@ export function handle_placing_element(
       actions.push({ type: "CreateElement", element: newForce });
       return {
         actions,
-        actionBundleType: "Other",
         newCanvasState: { type: "PlacingForceStart" },
       };
     }
@@ -206,7 +206,6 @@ export function handle_placing_element(
       actions.push({ type: "CreateElement", element: newDF });
       return {
         actions,
-        actionBundleType: "Other",
         newCanvasState: { type: "PlacingForceStart" },
       };
     }
@@ -236,7 +235,6 @@ export function handle_placing_element(
       actions.push({ type: "CreateElement", element: newMoment });
       return {
         actions,
-        actionBundleType: "Other",
         newCanvasState: { type: "PlacingMomentStart" },
       };
     }
@@ -317,7 +315,7 @@ function handle_place_element(
       ];
       if (!node.isGrounded)
         actions.push({ type: "GroundNode", id: node.id, grounded: true });
-      return { actions, actionBundleType: "Other" };
+      return { actions };
     }
   }
 
@@ -339,13 +337,13 @@ function handle_place_element(
             ) as GearElement
           ).position
         : state.startHover.position;
-    const direction = belt_wrap_arriving(
+    const clockwise = belt_wrap_arriving(
       hoveredGear,
       previousVia,
       hoveredPart.position,
     );
 
-    newAttachedGearsIDs.push({ id: hoveredGear.id, direction });
+    newAttachedGearsIDs.push({ id: hoveredGear.id, clockwise });
     return {
       actions: [],
       newCanvasState: {
@@ -448,7 +446,6 @@ function handle_place_element(
     const actions = sim.actions;
     return {
       actions,
-      actionBundleType: "Other",
       newCanvasState: { type: "PlacingGearStart" },
     };
   }
@@ -619,7 +616,7 @@ function handle_place_element(
           elementID: newElementId,
           connectID: attachedGears[i].id,
           index: i,
-          direction: attachedGears[i].direction,
+          clockwise: attachedGears[i].clockwise,
         },
         {
           type: "ConnectsAttachedBelt",
@@ -678,13 +675,23 @@ function handle_place_element(
   // its body. Only a beam has one to hold them — a spring or a damper carries
   // nothing mid-span. Each is re-checked against the running mechanism, an
   // earlier attach being free to have absorbed it.
-  if (state.type === "PlacingBeamEnd" && "positionStart" in newElement)
+  //
+  // A node the gesture's own hovers already named (typically a beamBodyHover
+  // catch, drawn past rather than landed on) sits geometrically under the body
+  // too — excluded here so it isn't connected a second time.
+  if (state.type === "PlacingBeamEnd" && "positionStart" in newElement) {
+    const alreadyConnected = new Set<ID>(
+      [state.startHover, hoveredPart]
+        .filter((hover) => hover.type === "Node")
+        .map((hover) => hover.id),
+    );
     for (const node of nodes_under_segment(
       newElement.positionStart,
       newElement.positionEnd,
       sim.mechanicalElements,
       viewport,
     )) {
+      if (alreadyConnected.has(node.id)) continue;
       const target = node_hover(node);
       if (!sim.holds(target)) continue;
       sim.step(
@@ -698,6 +705,7 @@ function handle_place_element(
         ),
       );
     }
+  }
 
   const actions = sim.actions;
 
@@ -717,13 +725,7 @@ function handle_place_element(
       break;
   }
 
-  // If placing the end closed the belt (landed on its start → connect_elements
-  // created a join + CloseBelt), the geometric solver must run so BeltJunction
-  // snaps the join onto the loop — like any CloseBelt path, not "Other".
-  const bundle: ActionBundleType = actions.some((a) => a.type === "CloseBelt")
-    ? "Connects"
-    : "Other";
-  return { actions, actionBundleType: bundle, newCanvasState };
+  return { actions, newCanvasState };
 }
 
 /**
@@ -737,7 +739,7 @@ export function attached_gears_with_start(
   state: Extract<CanvasState, { type: "PlacingBeltEnd" }>,
   endPosition: Point2,
   mechanicalElements: MechanicalElement[],
-): { id: ID; direction: boolean }[] {
+): { id: ID; clockwise: boolean }[] {
   const start = state.startHover;
   const routed = state.attachedGearsIDs;
   if (start.type !== "GearTooth" || routed.some((g) => g.id === start.id))
@@ -756,8 +758,8 @@ export function attached_gears_with_start(
           ) as GearElement
         ).position
       : endPosition;
-  const direction = belt_wrap_leaving(startGear, start.position, nextPos);
-  return [{ id: startGear.id, direction }, ...routed];
+  const clockwise = belt_wrap_leaving(startGear, start.position, nextPos);
+  return [{ id: startGear.id, clockwise }, ...routed];
 }
 
 function handle_place_ground(
@@ -779,7 +781,6 @@ function handle_place_ground(
       };
       return {
         actions: [{ type: "CreateElement", element: newJoin }],
-        actionBundleType: "Other",
       };
     }
     case "Node":
@@ -796,7 +797,6 @@ function handle_place_ground(
             ).isGrounded,
           },
         ],
-        actionBundleType: "Other",
       };
     // A gear rim anchors the same way an edge does: the ground is a grounded
     // join pinned to it.
@@ -823,7 +823,6 @@ function handle_place_ground(
             loads,
           ),
         ],
-        actionBundleType: "Other",
       };
     }
     default:

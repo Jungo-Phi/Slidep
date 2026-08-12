@@ -65,8 +65,8 @@ export const NumberInput: React.FC<NumberInputProps> = ({
   const holdInterval = 60;
   // The adornment eats into the text zone, so the field grows to keep it intact.
   const height = large ? 32 : 24;
-  const adornmentWidth = adornment ? height - 4 : 0;
-  const width = (large ? 82 : 75) + adornmentWidth;
+  const adornmentWidth = adornment ? height - 8 : 0;
+  const width = (large ? 75 : 71) + adornmentWidth;
   const rounding = 1;
   // Pill-shaped right edge for the direction adornment (SignedNumberInput only).
   const adornmentRadius = (height + 4) / 2;
@@ -268,7 +268,12 @@ export const NumberInput: React.FC<NumberInputProps> = ({
             },
           }),
           "& .MuiInputLabel-root": accent
-            ? { color: "primary.main", fontWeight: 500 }
+            ? {
+                color: "primary.main",
+                fontWeight: 500,
+                fontSize: large ? "1em" : "0.92em",
+                pl: large ? 0 : 0.4,
+              }
             : {},
           height,
         }}

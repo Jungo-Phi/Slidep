@@ -1,4 +1,5 @@
-import { ScreenPoint, ViewportState, WorldPoint } from "../types";
+import { Point2, ScreenPoint, ViewportState, WorldPoint, ZERO } from "../types";
+import { Bounds } from "./mechanism-bounds";
 
 const VIEWPORT_ZOOM_SENSITIVITY = 400; // Nombre de "crans" de molette nécessaires pour multiplier le zoom par 2
 
@@ -69,4 +70,45 @@ export function zoom_on_point(
   const scale = viewport.scale * 2 ** (-deltaY / VIEWPORT_ZOOM_SENSITIVITY);
   const pan = point.sub(point.sub(viewport.pan).mul(scale / viewport.scale));
   return { pan, scale };
+}
+
+export interface FitViewportOptions {
+  ratioMarginX?: number;
+  ratioMarginY?: number;
+  defaultZoom: number;
+}
+
+/**
+ * Zoom and pan framing `bounds` inside a `width` × `height` viewport.
+ *
+ * No margin beyond `ratioMargin` is added around the content: a fixed
+ * world-unit margin would swamp a small mechanism, shrinking it toward the
+ * middle of the frame instead of filling it.
+ */
+export function fit_viewport_to_bounds(
+  bounds: Bounds | undefined,
+  width: number,
+  height: number,
+  { ratioMarginX = 0.08, ratioMarginY = 0.12, defaultZoom }: FitViewportOptions,
+): ViewportState {
+  const center: ScreenPoint = new Point2(width / 2, height / 2);
+  if (!bounds) return { scale: defaultZoom, pan: center };
+
+  const contentWidth = bounds.max.x - bounds.min.x;
+  const contentHeight = bounds.max.y - bounds.min.y;
+  const innerWidth = width * (1 - 2 * ratioMarginX);
+  const innerHeight = height * (1 - 2 * ratioMarginY);
+  const fitScale = Math.min(
+    innerWidth / contentWidth,
+    innerHeight / contentHeight,
+  );
+  const scale = Number.isFinite(fitScale) ? fitScale : defaultZoom;
+
+  // The pan that lands the content's centre on the viewport's centre. `world2screen`
+  // flips y on the way, so what has to be cancelled is the flipped offset.
+  const contentCenter = bounds.min.lerp(bounds.max, 0.5);
+  return {
+    scale,
+    pan: center.sub(world2screen_vec(contentCenter, { scale, pan: ZERO })),
+  };
 }

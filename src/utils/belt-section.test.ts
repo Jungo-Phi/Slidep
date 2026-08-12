@@ -13,12 +13,12 @@ const P = (x: number, y: number) => new Point2(x, y);
 const pulley = (x: number, y: number, radius = 40): BeltVia => ({
   pos: P(x, y),
   radius,
-  direction: false,
+  clockwise: false,
 });
 const terminal = (x: number, y: number): BeltVia => ({
   pos: P(x, y),
   radius: 0,
-  direction: false,
+  clockwise: false,
 });
 
 /** Three pulleys in a triangle, as a closed loop or between two terminals. */

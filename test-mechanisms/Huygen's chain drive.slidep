@@ -4,17 +4,17 @@
     "name": "Huygen's chain drive",
     "description": "",
     "author": "",
-    "createdAt": 1784709618114,
-    "modifiedAt": 1784709886348,
+    "createdAt": 1786525159708,
+    "modifiedAt": 1786525183585,
     "tags": [],
     "lastSimulationMode": "kinematic"
   },
   "viewport": {
+    "scale": 0.24875384615384616,
     "pan": {
-      "x": 793.4869394582929,
-      "y": 452.5320108075973
-    },
-    "zoom": 0.2861658534905161
+      "x": 668.1171318621416,
+      "y": 375.7492307692308
+    }
   },
   "mechanicalElements": [
     {
@@ -172,7 +172,8 @@
         },
         {
           "id": "61d94350-fa16-4bf1-b910-009a8b06402b",
-          "direction": true
+          "direction": true,
+          "clockwise": true
         },
         {
           "id": "6be72df6-e052-48fb-9f48-0450fbcde577",
@@ -2944,6 +2945,14 @@
         "type": "ChangeMass",
         "id": "774e357f-c7b0-4a9b-b096-43d71e9b62bc",
         "delta": 9
+      }
+    ],
+    [
+      {
+        "type": "SwitchAttachedGearDirection",
+        "id": "bbf3aca8-22d6-4238-8c27-8b8fdb8af145",
+        "index": 1,
+        "clockwise": true
       }
     ]
   ],

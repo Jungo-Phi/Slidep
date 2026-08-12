@@ -26,7 +26,6 @@ import {
 } from "@mui/icons-material";
 import {
   Action,
-  ActionBundleType,
   AppMode,
   HoveredPart,
   ID,
@@ -64,16 +63,31 @@ import {
   Redundancy,
   RedundancyGroup,
 } from "../solver/redundant-links";
+import {
+  redundancy_symbol,
+  RedundancySymbol,
+} from "../solver/redundancy-symbols";
+import { Link } from "../../types";
+import { undriven_motors } from "../solver/motion-modes";
 import { ChainAnalysis, useDofAnalysis } from "./useDofAnalysis";
 import { ddl_status } from "./ddl-status";
-import { PosePreview, usePosePreview } from "./usePosePreview";
-import { strained_link } from "../solver/strain-animation";
+import { AnimatedMode, useModeAnimation } from "./useModeAnimation";
 
 interface AnalysisPanelProps {
   mechanism: Mechanism;
+  /**
+   * The mechanism in the pose on screen: what the figures describe.
+   *
+   * Distinct from `mechanism`, which stays the edited one. In simulation the two differ,
+   * and everything the panel can act on — a motor's speed, an element's probes — must go
+   * to the edited mechanism, never to the pose a recording happens to be showing.
+   */
+  analysedMechanism: Mechanism;
   appMode: AppMode;
-  applyActions: (actions: Action[], actionBundleType: ActionBundleType) => void;
+  applyActions: (actions: Action[]) => void;
+  hoveredPart: HoveredPart;
   setHoveredPart: (hoveredPart: HoveredPart) => void;
+  selectedIds: ID[];
   setCanvasState: (state: CanvasState) => void;
   unsatisfied: ConstraintResidual[];
   runtimeState: RuntimeState;
@@ -83,6 +97,8 @@ interface AnalysisPanelProps {
   selectedElement: MechanicalElement | undefined;
   /** Names the elements the canvas should pick out; empty clears the highlight. */
   setHighlight: (highlight: CanvasHighlight) => void;
+  /** How a redundant constraint the panel is naming right now would yield; empty clears it. */
+  setRedundancySymbols: (symbols: RedundancySymbol[]) => void;
   /** Where the pose the panel is animating is published, for the canvas to draw. */
   modePreviewRef: React.MutableRefObject<Mechanism | null>;
 }
@@ -91,10 +107,10 @@ interface AnalysisPanelProps {
 const CONSTRAINT_NOUN: Record<string, StringKey> = {
   MotorBeam: "link_motor",
   MotorAngle: "link_motor",
-  Distance: "link_distance",
+  Distance: "length",
   FixedOnSegment: "link_fixed_on_segment",
   SlideOnSegment: "link_slide_on_segment",
-  Angle: "link_angle",
+  Angle: "angle",
   KeepOrientation: "link_keep_orientation",
   GearMeshing: "link_gear_meshing",
   GearMeshAngle: "link_gear_meshing",
@@ -125,15 +141,6 @@ const redundancy_kinds = (group: RedundancyGroup): string => {
     .join(", ");
 };
 
-/** A row whose animation is playing beats in time with it, so panel and canvas agree. */
-const BEATING = {
-  animation: `mode-beat ${MODE_ANIMATION.PERIOD_S / 2}s ease-in-out infinite`,
-  "@keyframes mode-beat": {
-    "0%, 100%": { backgroundColor: "action.selected" },
-    "50%": { backgroundColor: "action.hover" },
-  },
-} as const;
-
 /** Point the canvas at these elements: something to look at, not something wrong with them. */
 const focus = (elements: Iterable<ID>): CanvasHighlight => ({
   elements: new Set(elements),
@@ -146,12 +153,46 @@ const fault = (elements: Iterable<ID>): CanvasHighlight => ({
   kind: "fault",
 });
 
+/** Stable identity for the resting state, like `NO_HIGHLIGHT`. */
+const EMPTY_SYMBOLS: RedundancySymbol[] = [];
+
+/** A motor's speed, wherever its row sits — a mode it drives, or none at all. */
+const MotorSpeed: React.FC<{
+  element: MechanicalElement | undefined;
+  applyActions: (actions: Action[]) => void;
+}> = ({ element, applyActions }) => {
+  if (element?.type !== "pivot" || !element.motor) return null;
+  const config = element.motor;
+  return (
+    <SignedNumberInput
+      label={t("unit_rpm")}
+      value={config.speed}
+      onChange={(speed) =>
+        applyActions(
+          [
+            {
+              type: "SetMotorConfig",
+              id: element.id,
+              newConfig: { ...config, speed },
+              oldConfig: config,
+            },
+          ],
+        )
+      }
+      accent
+    />
+  );
+};
+
 /** One chain's block: its mobility headline, its motors, and its redundancies. */
 const ChainCard: React.FC<{
   analysis: ChainAnalysis;
   index: number;
   appMode: AppMode;
   setHighlight: (highlight: CanvasHighlight) => void;
+  setRedundancySymbols: (symbols: RedundancySymbol[]) => void;
+  /** Turns a set of links into the symbols showing how each of them yields. */
+  symbolsFor: (links: Link[]) => RedundancySymbol[];
   /**
    * The element a mode is named after — absent only in the moment after a deletion.
    *
@@ -159,15 +200,15 @@ const ChainCard: React.FC<{
    * mechanism no longer holds. Rare, brief, and not worth blanking the panel over.
    */
   elementOf: (id: ID) => MechanicalElement | undefined;
-  preview: PosePreview;
-  setPreview: (preview: PosePreview) => void;
+  animated: AnimatedMode;
+  setAnimated: (animated: AnimatedMode) => void;
+  hoveredPart: HoveredPart;
   setHoveredPart: (hoveredPart: HoveredPart) => void;
+  selectedIds: ID[];
   setCanvasState: (state: CanvasState) => void;
-  applyActions: (actions: Action[], actionBundleType: ActionBundleType) => void;
+  applyActions: (actions: Action[]) => void;
   /** A running simulation already shows motion; a mode swung over it would only muddle it. */
   modesPlayable: boolean;
-  /** Whether the pointed-at row is really animating — a strain sometimes has nothing to show. */
-  playing: boolean;
   /** The redundancy audit's answer for this chain, or undefined until it is asked for. */
   audit: Redundancy | undefined;
   auditing: boolean;
@@ -177,20 +218,24 @@ const ChainCard: React.FC<{
   index,
   appMode,
   setHighlight,
+  setRedundancySymbols,
+  symbolsFor,
   elementOf,
-  preview,
-  setPreview,
+  animated,
+  setAnimated,
+  hoveredPart,
   setHoveredPart,
+  selectedIds,
   setCanvasState,
   applyActions,
   modesPlayable,
-  playing,
   audit,
   auditing,
   onAudit,
 }) => {
   const { chain, mobility, modes, highlight } = analysis;
   const status = ddl_status(mobility.mobility, chain.motors.length, appMode);
+  const idleMotors = undriven_motors(chain, modes);
   // The card's own hover, not its animation: entering a mode row keeps it true, since
   // `onMouseEnter` does not fire again for children and `onMouseLeave` waits for the card.
   const [hovered, setHovered] = React.useState(false);
@@ -206,6 +251,7 @@ const ChainCard: React.FC<{
       onMouseLeave={() => {
         setHovered(false);
         setHighlight(NO_HIGHLIGHT);
+        setRedundancySymbols(EMPTY_SYMBOLS);
       }}
       sx={{
         display: "flex",
@@ -251,13 +297,12 @@ const ChainCard: React.FC<{
       </Box>
 
       {/* One row per mode: pointing at it swings the mechanism along that freedom. */}
-      {modes.length > 0 && (
+      {(modes.length > 0 || idleMotors.length > 0) && (
         <Box sx={{ display: "flex", flexDirection: "column", mx: 1 }}>
           {modes.map((mode, modeIndex) => {
             const shown =
-              preview?.kind === "mode" &&
-              preview.chainIndex === index &&
-              preview.modeIndex === modeIndex;
+              animated?.chainIndex === index &&
+              animated?.modeIndex === modeIndex;
             const named = elementOf(mode.dominant);
             // A driven mode carries its motor's speed: now that modes name their
             // motors, a separate motors list would say the same thing twice.
@@ -270,14 +315,14 @@ const ChainCard: React.FC<{
                 key={modeIndex}
                 onMouseEnter={() => {
                   if (!modesPlayable) return;
-                  setPreview({ kind: "mode", chainIndex: index, modeIndex });
+                  setAnimated({ chainIndex: index, modeIndex });
                   // Everything the mode moves, not just what it is named after:
                   // `contributors` is a ranking, trimmed of its small shares.
                   setHighlight(focus(mode.moves));
                 }}
                 onMouseLeave={() => {
                   if (!modesPlayable) return;
-                  setPreview(null);
+                  setAnimated(null);
                   // The row sits inside the chain's card, which gets no enter
                   // event of its own on the way out — hand the chain back its
                   // own highlight rather than clearing the canvas.
@@ -291,7 +336,13 @@ const ChainCard: React.FC<{
                   borderRadius: 3,
                   cursor: "default",
                   backgroundColor: shown ? "action.selected" : "transparent",
-                  ...(shown && BEATING),
+                  ...(shown && {
+                    animation: `mode-beat ${MODE_ANIMATION.PERIOD_S / 2}s ease-in-out infinite`,
+                    "@keyframes mode-beat": {
+                      "0%, 100%": { backgroundColor: "action.selected" },
+                      "50%": { backgroundColor: "action.hover" },
+                    },
+                  }),
                 }}
               >
                 {/* The mode's identity, and the only inert part of the row while a
@@ -320,11 +371,13 @@ const ChainCard: React.FC<{
                     }}
                   />
 
-                  {named ? (
+                  {named && (
                     <Box sx={{ flex: 1, minWidth: 0 }}>
                       <ElementDisplay
                         element={named}
+                        hoveredPart={hoveredPart}
                         setHoveredPart={setHoveredPart}
+                        selectedIds={selectedIds}
                         setCanvasState={setCanvasState}
                         applyActions={applyActions}
                         size="small"
@@ -332,10 +385,6 @@ const ChainCard: React.FC<{
                         interactive={false}
                       />
                     </Box>
-                  ) : (
-                    <Typography variant="caption" sx={{ flex: 1, minWidth: 0 }}>
-                      {t("ddl_mode", { index: modeIndex + 1 })}
-                    </Typography>
                   )}
                 </Box>
                 {motor && (
@@ -343,38 +392,95 @@ const ChainCard: React.FC<{
                     // Reaching for the speed is not pointing at the mode: the swing
                     // stops so the value can be read while it is being changed.
                     onMouseEnter={() => {
-                      setPreview(null);
+                      setAnimated(null);
                       setHighlight(focus(highlight));
                     }}
                     onMouseLeave={() => {
                       if (!modesPlayable) return;
-                      setPreview({ kind: "mode", chainIndex: index, modeIndex });
+                      setAnimated({ chainIndex: index, modeIndex });
                       setHighlight(focus(mode.moves));
                     }}
                   >
-                    <SignedNumberInput
-                      label=""
-                      value={motor.motor!.speed}
-                      onChange={(speed) =>
-                        applyActions(
-                          [
-                            {
-                              type: "SetMotorConfig",
-                              id: motor.id,
-                              newConfig: { ...motor.motor!, speed },
-                              oldConfig: motor.motor,
-                            },
-                          ],
-                          "ChangeConstant",
-                        )
-                      }
-                      accent
-                    />
+                    <MotorSpeed element={motor} applyActions={applyActions} />
                   </Box>
                 )}
               </Box>
             );
           })}
+
+          {/* A motor with no freedom of its own to name it after. It has no mode row,
+              so this is the only place it exists in the panel — and the verdict above
+              has just called the chain over-driven without saying which one is spare. */}
+          {idleMotors.map((id) => {
+            const element = elementOf(id);
+            if (!element) return null;
+            return (
+              <Box
+                key={id}
+                onMouseEnter={() => setHighlight(focus([id]))}
+                onMouseLeave={() => setHighlight(focus(highlight))}
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 1,
+                  py: 0.2,
+                  borderRadius: 3,
+                  cursor: "default",
+                }}
+              >
+                <Tooltip
+                  disableInteractive
+                  title={t("ddl_motor_undriven_hint")}
+                >
+                  <WarningAmber
+                    sx={{ fontSize: 16, ml: 0.5, color: "warning.main" }}
+                  />
+                </Tooltip>
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                  <ElementDisplay
+                    element={element}
+                    hoveredPart={hoveredPart}
+                    setHoveredPart={setHoveredPart}
+                    selectedIds={selectedIds}
+                    setCanvasState={setCanvasState}
+                    applyActions={applyActions}
+                    size="small"
+                    editable={false}
+                    interactive={false}
+                  />
+                </Box>
+                <MotorSpeed element={element} applyActions={applyActions} />
+              </Box>
+            );
+          })}
+        </Box>
+      )}
+
+      {/* `h = m − G` cannot be negative: the rank of a constraint set never exceeds the
+          number of rows, so a shortfall means the probe missed a motion and the exhaustive
+          sweep missed it too. That is a broken measurement, not a mechanical property —
+          it is said as such rather than shown as a count of −2 redundant constraints, and
+          it is never left silent, since every figure on the card is then understated. */}
+      {mobility.hyperstaticity < 0 && (
+        <Box>
+          <Divider sx={{ my: 0.5 }} />
+          <Box sx={{ mx: 1 }}>
+            <Typography
+              variant="caption"
+              fontWeight={700}
+              sx={{ display: "block" }}
+              color="warning.main"
+            >
+              {t("ddl_measure_incomplete")}
+            </Typography>
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ display: "block" }}
+            >
+              {tn("ddl_measure_incomplete_hint", -mobility.hyperstaticity)}
+            </Typography>
+          </Box>
         </Box>
       )}
 
@@ -431,44 +537,31 @@ const ChainCard: React.FC<{
               <Box
                 // The whole set at once, then one at a time on each row: the reader sees
                 // where the redundancy lives before picking through it.
-                onMouseEnter={() =>
-                  setHighlight(fault(audit.groups.flatMap((g) => g.elements)))
-                }
-                onMouseLeave={() => setHighlight(focus(highlight))}
+                onMouseEnter={() => {
+                  setHighlight(fault(audit.groups.flatMap((g) => g.elements)));
+                  setRedundancySymbols(symbolsFor(audit.links));
+                }}
+                onMouseLeave={() => {
+                  setHighlight(focus(highlight));
+                  setRedundancySymbols(EMPTY_SYMBOLS);
+                }}
                 sx={{ mt: 0.5 }}
               >
                 {audit.groups.map((group) => {
                   const element = elementOf(group.owner);
                   if (!element) return null;
-                  // The one constraint of the group a lie is told to. Absent when none of
-                  // them holds a value to be wrong about — a slider's rail, say — and the
-                  // row then only lights its parts.
-                  const lied = strained_link(group.links);
-                  // Marked only while something is really moving: a constraint the
-                  // mechanism has no way of answering shows nothing, and a row that lit
-                  // up anyway would promise a motion nobody is going to see.
-                  const straining =
-                    playing &&
-                    preview?.kind === "strain" &&
-                    preview.owner === group.owner;
                   return (
                     <Box
                       key={group.owner}
                       onMouseEnter={() => {
                         setHighlight(fault(group.elements));
-                        if (lied && modesPlayable)
-                          setPreview({
-                            kind: "strain",
-                            chainIndex: index,
-                            owner: group.owner,
-                            link: lied,
-                          });
+                        setRedundancySymbols(symbolsFor(group.links));
                       }}
                       onMouseLeave={() => {
-                        setPreview(null);
                         setHighlight(
                           fault(audit.groups.flatMap((g) => g.elements)),
                         );
+                        setRedundancySymbols(symbolsFor(audit.links));
                       }}
                       sx={{
                         display: "flex",
@@ -476,10 +569,6 @@ const ChainCard: React.FC<{
                         gap: 0.75,
                         px: 0.5,
                         borderRadius: 3,
-                        backgroundColor: straining
-                          ? "action.selected"
-                          : "transparent",
-                        ...(straining && BEATING),
                       }}
                     >
                       {/* The constraint is what is one too many; the element only says
@@ -491,7 +580,9 @@ const ChainCard: React.FC<{
                       <Box sx={{ minWidth: 0, opacity: 0.75 }}>
                         <ElementDisplay
                           element={element}
+                          hoveredPart={hoveredPart}
                           setHoveredPart={setHoveredPart}
+                          selectedIds={selectedIds}
                           setCanvasState={setCanvasState}
                           applyActions={applyActions}
                           size="small"
@@ -520,14 +611,18 @@ const ChainCard: React.FC<{
 
 export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
   mechanism,
+  analysedMechanism,
   appMode,
   applyActions,
+  hoveredPart,
   setHoveredPart,
+  selectedIds,
   setCanvasState,
   unsatisfied,
   runtimeState,
   setRuntimeState,
   setHighlight,
+  setRedundancySymbols,
   modePreviewRef,
   selectedElement,
 }) => {
@@ -557,7 +652,6 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
           oldProbes: element.probes ?? [],
         },
       ],
-      "Other",
     );
   };
 
@@ -594,10 +688,18 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
   // back to the per-element view (and its hidden switch) below that.
   const superposed = superpose && probedElements.length >= 2;
 
-  const analysis = useDofAnalysis(mechanism);
+  const analysis = useDofAnalysis(analysedMechanism);
 
-  /** The mode or the strained constraint being pointed at, if any. */
-  const [preview, setPreview] = React.useState<PosePreview>(null);
+  /** The mode being pointed at, if any. */
+  const [animated, setAnimated] = React.useState<AnimatedMode>(null);
+
+  // Starting the simulation leaves the pointer where it was, so no row is ever told it has
+  // been left: without this the row it sits on goes on beating for a swing that has stopped
+  // and a mechanism that is now moving of its own accord.
+  const modesPlayable = !runtimeState.isPlaying;
+  React.useEffect(() => {
+    if (!modesPlayable) setAnimated(null);
+  }, [modesPlayable]);
 
   /** Redundancy audits already asked for, by chain, and the one currently running. */
   const [audits, setAudits] = React.useState(
@@ -629,22 +731,39 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
     [measuredModel],
   );
 
+  /** Turns a set of links into the symbols showing how each yields — only some types have one. */
+  const symbolsFor = React.useCallback(
+    (links: Link[]): RedundancySymbol[] => {
+      if (!measuredModel) return EMPTY_SYMBOLS;
+      const symbols: RedundancySymbol[] = [];
+      for (const link of links) {
+        const symbol = redundancy_symbol(measuredModel, link);
+        if (symbol) symbols.push(symbol);
+      }
+      return symbols;
+    },
+    [measuredModel],
+  );
+
   // Still means analysable and showable: edition, or a simulation on pause. While it plays
-  // the mechanism already moves, and anything swung on top of it would only muddle that.
-  const playing = usePosePreview(
+  // the mechanism already moves, and a mode swinging on top of it would only muddle that.
+  useModeAnimation(
     modePreviewRef,
-    mechanism,
+    analysis.mechanism,
     analysis.model,
     analysis.chains,
-    preview,
-    !runtimeState.isPlaying,
+    animated,
+    modesPlayable,
   );
 
   // Leaving the tab unmounts the panel without a mouse-leave, which would strand the
-  // highlight on a canvas nothing is pointing at any more.
+  // highlight — and a redundancy symbol — on a canvas nothing is pointing at any more.
   React.useEffect(
-    () => () => setHighlight(NO_HIGHLIGHT),
-    [setHighlight],
+    () => () => {
+      setHighlight(NO_HIGHLIGHT);
+      setRedundancySymbols(EMPTY_SYMBOLS);
+    },
+    [setHighlight, setRedundancySymbols],
   );
 
   /** The element a mode is named after, for its row's `ElementDisplay`. */
@@ -668,7 +787,9 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
             {selectedElement ? (
               <ElementDisplay
                 element={selectedElement}
+                hoveredPart={hoveredPart}
                 setHoveredPart={setHoveredPart}
+                selectedIds={selectedIds}
                 setCanvasState={setCanvasState}
                 applyActions={applyActions}
                 size={"small"}
@@ -709,14 +830,17 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
               index={index}
               appMode={appMode}
               setHighlight={setHighlight}
+              setRedundancySymbols={setRedundancySymbols}
+              symbolsFor={symbolsFor}
               elementOf={elementOf}
-              preview={preview}
-              setPreview={setPreview}
+              animated={animated}
+              setAnimated={setAnimated}
+              hoveredPart={hoveredPart}
               setHoveredPart={setHoveredPart}
+              selectedIds={selectedIds}
               setCanvasState={setCanvasState}
               applyActions={applyActions}
-              modesPlayable={!runtimeState.isPlaying}
-              playing={playing}
+              modesPlayable={modesPlayable}
               audit={audits.get(chainAnalysis.chain.id)}
               auditing={auditing === chainAnalysis.chain.id}
               onAudit={() => runAudit(chainAnalysis)}
@@ -794,7 +918,9 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
                           mechanism.constraintElements,
                           mechanism.loads,
                         )}
+                        hoveredPart={hoveredPart}
                         setHoveredPart={setHoveredPart}
+                        selectedIds={selectedIds}
                         setCanvasState={setCanvasState}
                         applyActions={applyActions}
                         size="small"
@@ -878,7 +1004,9 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
               {/* Element header + metric edit menu */}
               <ElementDisplay
                 element={element}
+                hoveredPart={hoveredPart}
                 setHoveredPart={setHoveredPart}
+                selectedIds={selectedIds}
                 setCanvasState={setCanvasState}
                 applyActions={applyActions}
                 size={"small"}
@@ -1168,7 +1296,6 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
                     oldProbes: menuElement.probes ?? [],
                   },
                 ],
-                "Other",
               )
             }
           />

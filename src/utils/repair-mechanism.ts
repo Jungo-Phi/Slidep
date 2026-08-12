@@ -9,7 +9,8 @@
  * wrong kind of element, and coordinates that are not finite numbers. Those are
  * what make a getter throw or a drawing call crash. Non-reciprocal connections,
  * duplicate IDs and domain contradictions are left to the validator, because
- * repairing them means guessing which side told the truth.
+ * repairing them means guessing which side told the truth — with one named
+ * exception below (parentBeamID vs fixedEdgesIDs), where the guess isn't one.
  */
 
 import { ID, MechanicalElement, UnionElement } from "../types/element";
@@ -28,7 +29,11 @@ export type RepairCode =
   /** A point whose coordinates were not finite went back to the origin. */
   | "POINT_RESET"
   /** The pan or the scale was unusable, so the framing went back to default. */
-  | "VIEWPORT_RESET";
+  | "VIEWPORT_RESET"
+  /** A beam held as parentBeamID also sat in fixedEdgesIDs; the duplicate was dropped. */
+  | "PARENT_BEAM_DUPLICATE"
+  /** A gear held as fixedGearsIDs also sat in rotatingEdgesIDs; the duplicate was dropped. */
+  | "GEAR_ROLE_DUPLICATE";
 
 export interface Repair {
   code: RepairCode;
@@ -101,9 +106,86 @@ export function repair_mechanism(mechanism: Mechanism): {
       return repaired;
     };
 
+    /**
+     * The element with its parentBeamID removed from fixedEdgesIDs, when both
+     * name the same beam.
+     *
+     * A slider either rides a beam's body or holds one fixed at a point — never
+     * both at once. Unlike the dead-reference repairs above, there is nothing to
+     * guess here: parentBeamID is the one connection tool ever sets deliberately
+     * for this pair, so it wins and the fixedEdgesIDs entry, always a leftover
+     * of a stale double-connect, is dropped.
+     */
+    const repair_parent_beam_conflict = <T extends UnionElement>(
+      element: T,
+    ): T => {
+      const fields = element as unknown as {
+        parentBeamID?: ID;
+        fixedEdgesIDs?: ID[];
+      };
+      const { parentBeamID, fixedEdgesIDs } = fields;
+      if (!parentBeamID || !fixedEdgesIDs?.includes(parentBeamID))
+        return element;
+
+      repairs.push({
+        code: "PARENT_BEAM_DUPLICATE",
+        message: `${shown_element_name(element)} (fixedEdgesIDs) : référence "${name(parentBeamID)}" retirée, déjà tenue par parentBeamID.`,
+        elementID: element.id,
+        relatedID: parentBeamID,
+      });
+
+      return {
+        ...element,
+        fixedEdgesIDs: fixedEdgesIDs.filter((id) => id !== parentBeamID),
+      };
+    };
+
+    /**
+     * The element with any gear removed from rotatingEdgesIDs that also sits in
+     * fixedGearsIDs.
+     *
+     * A gear is either keyed to its axle or free to rotate against it — never
+     * both. fixedGearsIDs wins: it mirrors parentAxleID, the gear's own
+     * deliberate choice of axle, while a matching rotatingEdgesIDs entry only
+     * means the node once separately took the gear's rim, before a fusion
+     * carried the axle relation onto it too.
+     */
+    const repair_gear_role_conflict = <T extends UnionElement>(
+      element: T,
+    ): T => {
+      const fields = element as unknown as {
+        fixedGearsIDs?: ID[];
+        rotatingEdgesIDs?: ID[];
+      };
+      const { fixedGearsIDs, rotatingEdgesIDs } = fields;
+      if (!fixedGearsIDs || !rotatingEdgesIDs) return element;
+      const conflicting = rotatingEdgesIDs.filter((id) =>
+        fixedGearsIDs.includes(id),
+      );
+      if (conflicting.length === 0) return element;
+
+      for (const gearID of conflicting) {
+        repairs.push({
+          code: "GEAR_ROLE_DUPLICATE",
+          message: `${shown_element_name(element)} (rotatingEdgesIDs) : référence "${name(gearID)}" retirée, déjà tenue par fixedGearsIDs.`,
+          elementID: element.id,
+          relatedID: gearID,
+        });
+      }
+
+      return {
+        ...element,
+        rotatingEdgesIDs: rotatingEdgesIDs.filter(
+          (id) => !conflicting.includes(id),
+        ),
+      };
+    };
+
     /** The repaired element, or null when it cannot survive its dead reference. */
     const repair_element = <T extends UnionElement>(element: T): T | null => {
       let repaired = repair_points(element);
+      repaired = repair_parent_beam_conflict(repaired);
+      repaired = repair_gear_role_conflict(repaired);
 
       for (const { field, ids, spec } of element_ref_fields(element)) {
         // An absent mandatory reference is as fatal to a getter as a dead one.

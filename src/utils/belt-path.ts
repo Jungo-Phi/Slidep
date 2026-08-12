@@ -1,30 +1,28 @@
 import { Point2, Space } from "../types/point2";
 
 /**
- * A via-point of a belt path: a pulley the belt wraps (radius > 0, `direction` = wrap sense, false: clockwise / true: counter-clockwise) or a terminal endpoint (radius 0).
+ * A via-point of a belt path: a pulley the belt wraps or a terminal endpoint (radius 0).
  *
  * Tagged with its space like `Point2`, and defaulting to `"world"` the same way: a
- * screen path is not just mirrored coordinates, it also flips every `direction`, so
+ * screen path is not just mirrored coordinates, it also flips every `clockwise`, so
  * feeding one where the other is expected is a mistake worth catching.
  */
 export type BeltVia<S extends Space = "world"> = {
   pos: Point2<S>;
   radius: number;
-  direction: boolean;
+  clockwise: boolean;
 };
 
 /**
- * Positive angle swept by a belt arc, same convention as the `counterClockwise`
- * flag of `ctx.arc` used when drawing: `direction` {false: clockwise, true:
- * counter-clockwise}.
+ * Positive angle swept by a belt arc, same convention as the `counterClockwise` flag of `ctx.arc` used when drawing.
  */
 export function belt_arc_sweep(
   startAngle: number,
   endAngle: number,
-  direction: boolean,
+  clockwise: boolean,
 ): number {
   const TWO_PI = 2 * Math.PI;
-  let span = direction ? startAngle - endAngle : endAngle - startAngle;
+  let span = clockwise ? startAngle - endAngle : endAngle - startAngle;
   span = span % TWO_PI;
   if (span < 0) span += TWO_PI;
   return span;
@@ -50,7 +48,7 @@ export type BeltPiece<S extends Space = "world"> =
       radius: number;
       startAngle: number;
       wrap: number;
-      direction: boolean;
+      clockwise: boolean;
     };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -71,7 +69,6 @@ export interface BeltScratch {
   cx: Float64Array;
   cy: Float64Array;
   r: Float64Array;
-  /** Wrap sense per via, 1 = counter-clockwise (`BeltVia.direction`). */
   ccw: Uint8Array;
   depX: Float64Array;
   depY: Float64Array;
@@ -105,7 +102,8 @@ let shared: BeltScratch = belt_scratch(16);
 
 /** The module's scratch, grown to hold `n` vias. Single-threaded, never nested. */
 export function belt_shared_scratch(n: number): BeltScratch {
-  if (shared.cx.length < n) shared = belt_scratch(Math.max(n, 2 * shared.cx.length));
+  if (shared.cx.length < n)
+    shared = belt_scratch(Math.max(n, 2 * shared.cx.length));
   return shared;
 }
 
@@ -135,7 +133,8 @@ export function belt_solve_pair(sc: BeltScratch, p: number, n: number): void {
     ex = ux * -sc.r[b];
     ey = uy * -sc.r[b];
   } else {
-    const angle = Math.atan2(dy, dx) + Math.asin(gap / d) * (ccwA ? -1 : 1) + Math.PI / 2;
+    const angle =
+      Math.atan2(dy, dx) + Math.asin(gap / d) * (ccwA ? -1 : 1) + Math.PI / 2;
     const nx = Math.cos(angle);
     const ny = Math.sin(angle);
     const ka = sc.r[a] * (ccwA ? 1 : -1);
@@ -236,7 +235,16 @@ export interface BeltAt {
 }
 
 export function belt_at(): BeltAt {
-  return { total: 0, px: 0, py: 0, tx: 1, ty: 0, curvature: 0, viaA: -1, viaB: -1 };
+  return {
+    total: 0,
+    px: 0,
+    py: 0,
+    tx: 1,
+    ty: 0,
+    curvature: 0,
+    viaA: -1,
+    viaB: -1,
+  };
 }
 
 /**
@@ -370,7 +378,10 @@ export function belt_locate(
     for (let p = 0; p < pairs; p++) {
       if (visit(false, p, sc.ell[p])) return;
       const v = p + 1;
-      if (belt_has_arc(sc, v, n, closed) && visit(true, v, sc.r[v] * sc.arcWrap[v]))
+      if (
+        belt_has_arc(sc, v, n, closed) &&
+        visit(true, v, sc.r[v] * sc.arcWrap[v])
+      )
         return;
     }
   }
@@ -383,7 +394,7 @@ export function belt_load_vias(sc: BeltScratch, vias: BeltVia<Space>[]): void {
     sc.cx[i] = vias[i].pos.x;
     sc.cy[i] = vias[i].pos.y;
     sc.r[i] = vias[i].radius;
-    sc.ccw[i] = vias[i].direction ? 1 : 0;
+    sc.ccw[i] = vias[i].clockwise ? 1 : 0;
   }
 }
 
@@ -421,7 +432,7 @@ export function belt_pieces<S extends Space = "world">(
       radius: vias[v].radius,
       startAngle: sc.arcAngle[v],
       wrap,
-      direction: vias[v].direction,
+      clockwise: vias[v].clockwise,
     });
     s += length;
   };
@@ -509,7 +520,7 @@ export function belt_merged_run_section(
   if (!closed) return section - 1;
   const sections = 2 * (gearCount - 1);
   if (sections <= 0) return 0;
-  return ((section - 1) % sections + sections) % sections;
+  return (((section - 1) % sections) + sections) % sections;
 }
 
 /**
@@ -582,11 +593,11 @@ export function nearest_point_on_piece<S extends Space = "world">(
     const t = Math.max(0, Math.min(1, p.sub(piece.from).dot(d) / len2));
     return piece.from.lerp(piece.to, t);
   }
-  // Arc: clamp the swept angle to [0, wrap] along the traversal direction.
+  // Arc: clamp the swept angle to [0, wrap] along the traversal clockwise.
   const swept = belt_arc_sweep(
     piece.startAngle,
     p.sub(piece.center).angle(),
-    piece.direction,
+    piece.clockwise,
   );
   const param =
     swept <= piece.wrap
@@ -594,7 +605,7 @@ export function nearest_point_on_piece<S extends Space = "world">(
       : swept < (piece.wrap + 2 * Math.PI) / 2 // past the end → nearer endpoint
         ? piece.wrap
         : 0;
-  const angle = piece.startAngle + (piece.direction ? -param : param);
+  const angle = piece.startAngle + (piece.clockwise ? -param : param);
   return piece.center.add(Point2.from_polar<S>(piece.radius, angle));
 }
 
@@ -632,7 +643,7 @@ export function belt_project<S extends Space = "world">(
         : belt_arc_sweep(
             piece.startAngle,
             np.sub(piece.center).angle(),
-            piece.direction,
+            piece.clockwise,
           ) * piece.radius;
     bestS = piece.startS + local;
   }
@@ -645,7 +656,7 @@ export function belt_project<S extends Space = "world">(
 
 /**
  * Point and unit tangent at arc-length `s` along a belt path (wrapping for a
- * closed path). Tangent points in the direction of increasing `s` (belt travel).
+ * closed path). Tangent points in the clockwise of increasing `s` (belt travel).
  */
 export function belt_point_tangent<S extends Space = "world">(
   vias: BeltVia<S>[],
@@ -678,7 +689,7 @@ export function belt_point_tangent<S extends Space = "world">(
           curvature: 0,
         };
       }
-      const sign = piece.direction ? -1 : 1;
+      const sign = piece.clockwise ? -1 : 1;
       const angle = piece.startAngle + (sign * local) / piece.radius;
       return {
         point: piece.center.add(Point2.from_polar<S>(piece.radius, angle)),
@@ -699,7 +710,7 @@ export function belt_point_tangent<S extends Space = "world">(
   return {
     point: last.center.add(Point2.from_polar<S>(last.radius, last.startS)),
     tangent: Point2.from_polar<S>(
-      last.direction ? -1 : 1,
+      last.clockwise ? -1 : 1,
       last.startAngle,
     ).perp(),
     curvature: 0,

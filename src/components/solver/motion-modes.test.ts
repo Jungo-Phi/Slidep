@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import coreXY from "../../../test-mechanisms/Core XY.slidep?raw";
+import coreXY2 from "../../../test-mechanisms/Core XY - 2 moteurs.slidep?raw";
 import doubleSlider from "../../../test-mechanisms/Vilbrequin double slider.slidep?raw";
 import huygens from "../../../test-mechanisms/Huygen's chain drive.slidep?raw";
 import jansen from "../../../test-mechanisms/Jansen's linkage.slidep?raw";
@@ -17,7 +18,12 @@ import { DEFAULT_METADATA } from "../../types/mechanism";
 import { load_mechanism } from "../../utils/load-mechanism";
 import { build_analysis_model } from "./analysis-model";
 import { probe_chain_mobility } from "./mobility-probe";
-import { canonical_modes, chain_highlight, MotionMode } from "./motion-modes";
+import {
+  canonical_modes,
+  chain_highlight,
+  MotionMode,
+  undriven_motors,
+} from "./motion-modes";
 
 const id = (s: string) =>
   `00000000-0000-0000-0000-${s.padStart(12, "0")}` as ID;
@@ -226,6 +232,84 @@ describe("canonical_modes", () => {
     const driven = modes.find((m) => m.drivenByMotor)!;
     expect(driven.dominant).toBeDefined();
     expect(driven.moves).toContain(driven.dominant);
+  });
+
+  it("un moteur n'est mis en évidence que dans le mode qu'il pilote", () => {
+    // La clé qu'un moteur pilote bouge dans presque tous les modes de sa chaîne :
+    // l'allumer partout où elle bouge le posait sur les rangées voisines, alors qu'il
+    // n'y pilote rien. Ce double pendule motorisé a deux modes, le moteur n'en tient
+    // qu'un.
+    const [modes] = modes_of([
+      { ...pivot("p1", P(0, 0), true, [id("b1")]), motor: { speed: 10 } },
+      pivot("p2", P(100, 0), false, [id("b1"), id("b2")]),
+      beam("b1", P(0, 0), P(100, 0), "p1", "p2"),
+      beam("b2", P(100, 0), P(100, 200), "p2"),
+    ]);
+    expect(modes).toHaveLength(2);
+    const lit = modes.filter((m) => m.moves.includes(id("p1")));
+    expect(lit).toHaveLength(1);
+    expect(lit[0].drivenByMotor).toBe(true);
+  });
+
+  it("chaque moteur d'une chaîne à deux moteurs tient sa propre rangée", () => {
+    const [modes] = fixture(coreXY2);
+    for (const mode of modes.filter((m) => m.drivenByMotor))
+      for (const other of modes)
+        if (other !== mode) expect(other.moves).not.toContain(mode.dominant);
+  });
+
+  it("un moteur sans mobilité à piloter est nommé pour lui-même", () => {
+    // Il n'a aucune rangée de mode où figurer : sans cette liste il n'existerait nulle
+    // part dans le panneau, qui vient pourtant d'annoncer la chaîne sur-motorisée.
+    const [{ chain, modes }] = analyse(
+      mechanism([
+        { ...pivot("p1", P(0, 0), true, [id("b1")]), motor: { speed: 10 } },
+        pivot("p2", P(0, 100), false, [id("b1"), id("b2")]),
+        pivot("p3", P(200, 120), false, [id("b2"), id("b3")]),
+        { ...pivot("p4", P(200, 0), true, [id("b3")]), motor: { speed: 4 } },
+        beam("b1", P(0, 0), P(0, 100), "p1", "p2"),
+        beam("b2", P(0, 100), P(200, 120), "p2", "p3"),
+        beam("b3", P(200, 120), P(200, 0), "p3", "p4"),
+      ]),
+    );
+    const idle = undriven_motors(chain, modes);
+    expect(idle).toHaveLength(1);
+    // Celui qui reste est bien l'autre : le mode piloté garde le sien.
+    expect(idle[0]).not.toBe(modes[0].dominant);
+  });
+
+  it("une chaîne exactement pilotée ne laisse aucun moteur de côté", () => {
+    for (const json of [vilbrequin, jansen, coreXY2, doubleSlider])
+      for (const { chain, modes } of analysed(json))
+        if (chain.motors.length <= modes.filter((m) => m.drivenByMotor).length)
+          expect(undriven_motors(chain, modes)).toEqual([]);
+  });
+
+  it("le survol d'une chaîne montre aussi ses moteurs sans mode", () => {
+    // Une chaîne sur-motorisée a plus de moteurs que de mobilités : celui qui ne
+    // revendique aucune rangée sortirait de l'union des modes, alors que la carte de
+    // la chaîne parle bien de lui.
+    // Un quatre-barres motorisé aux deux bâtis : une seule mobilité pour deux moteurs.
+    const [{ chain, modes }] = analyse(
+      mechanism([
+        { ...pivot("p1", P(0, 0), true, [id("b1")]), motor: { speed: 10 } },
+        pivot("p2", P(0, 100), false, [id("b1"), id("b2")]),
+        pivot("p3", P(200, 120), false, [id("b2"), id("b3")]),
+        { ...pivot("p4", P(200, 0), true, [id("b3")]), motor: { speed: 4 } },
+        beam("b1", P(0, 0), P(0, 100), "p1", "p2"),
+        beam("b2", P(0, 100), P(200, 120), "p2", "p3"),
+        beam("b3", P(200, 120), P(200, 0), "p3", "p4"),
+      ]),
+    );
+    expect(modes).toHaveLength(1);
+    expect(chain.motors).toHaveLength(2);
+    const highlight = chain_highlight(chain, modes);
+    for (const motor of chain.motors)
+      expect(highlight).toContain(motor.owner);
+    // …et le moteur qui ne pilote rien n'est pas pour autant posé sur la rangée.
+    expect(modes[0].moves).not.toContain(
+      chain.motors.find((m) => m.owner !== modes[0].dominant)!.owner,
+    );
   });
 
   it("un mode ne met en évidence que des pièces de sa chaîne", () => {

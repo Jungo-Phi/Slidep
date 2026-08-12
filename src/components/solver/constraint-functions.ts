@@ -22,15 +22,12 @@ import {
 import { LinkSlots } from "./link-slots";
 
 /**
- * How small a gear radius the solver may write.
+ * The single writer of a gear radius, so its floor cannot be forgotten at one of the sites that move one.
  *
- * A numerical guard, not a size: the belt geometry, the meshing and the ratio all divide by a radius, and none of them survives a zero. How small a gear one may *draw* is a matter of pixels and belongs to the cursor bounds — a minimum in world units would make the same mechanism behave differently drawn at ten times the size.
+ * That floor is per slot and settled when the solve starts (`solveNodesFromMaps`): a numerical guard against the zero that meshing, belt geometry and ratios all divide into, raised to the smallest gear one can still see and grab at the current zoom. It is one-sided — a gear held at its floor grows back as soon as there is room — and what it refuses to absorb comes back as an error the next sweep, which the free positions then take instead. That is how two meshed gears pushed together stop moving their centres rather than shrinking to nothing.
  */
-const MIN_SOLVED_RADIUS = 1e-3;
-
-/** The single writer of a gear radius, so the guard above cannot be forgotten at one of the sites that move one. */
 function write_radius(nodes: EditNodes, slot: number, value: number): void {
-  nodes.radius[slot] = Math.max(MIN_SOLVED_RADIUS, value);
+  nodes.radius[slot] = Math.max(nodes.minRadius[slot], value);
 }
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -580,8 +577,10 @@ export function applyDistanceConstraint(
     const axis =
       preferredAxis && preferredAxis.length_squared() > 0 ? preferredAxis : ONE;
     const step = axis.normalize().mul(targetDist * stiffness);
-    if (w1 !== 0) setPoint(nodes, i1, point(nodes, i1).sub(step.mul(w1 / totalW)));
-    if (w2 !== 0) setPoint(nodes, i2, point(nodes, i2).add(step.mul(w2 / totalW)));
+    if (w1 !== 0)
+      setPoint(nodes, i1, point(nodes, i1).sub(step.mul(w1 / totalW)));
+    if (w2 !== 0)
+      setPoint(nodes, i2, point(nodes, i2).add(step.mul(w2 / totalW)));
     return targetDist;
   }
   const length = Math.sqrt(dx * dx + dy * dy);
@@ -595,6 +594,27 @@ export function applyDistanceConstraint(
   nodes.x[i2] = nodes.x[i2] - dx * k2;
   nodes.y[i2] = nodes.y[i2] - dy * k2;
   return Math.abs(error);
+}
+
+/**
+ * Empêche deux points de se rapprocher à moins de `minDistance`, et ne dit rien tant qu'ils sont plus loin.
+ *
+ * L'inégalité est la seule forme correcte pour un plancher : une `Distance` tirerait aussi les points l'un vers l'autre quand ils sont trop loin, et une barre ne serait plus qu'une barre de longueur fixe. Ce qu'elle refuse d'absorber revient au balayage suivant et part aux autres degrés de liberté — c'est ainsi qu'un mécanisme poussé au-delà de sa course s'arrête au lieu de s'effondrer.
+ *
+ * Deux points confondus n'ont pas d'axe : la séparation reste au bon soin de `applyDistanceConstraint`, qui en choisit un.
+ */
+export function applyMinDistanceConstraint(
+  nodes: Nodes,
+  i1: number,
+  i2: number,
+  minDistance: number,
+  stiffness: number = 1.0,
+): number {
+  if (i1 < 0 || i2 < 0 || i1 === i2) return 0;
+  const dx = nodes.x[i2] - nodes.x[i1];
+  const dy = nodes.y[i2] - nodes.y[i1];
+  if (dx * dx + dy * dy >= minDistance * minDistance) return 0;
+  return applyDistanceConstraint(nodes, i1, i2, minDistance, stiffness);
 }
 
 /** Contraint la distance perpendiculaire entre un point (keyNode) et une droite
@@ -1154,7 +1174,11 @@ export function applyBeltLengthConstraint(
   /** Contact arc of via `v`: its length, or −1 when it has none. */
   const arcOfVia = (v: number): number => {
     const wrap =
-      wraps !== undefined ? (lenGear[v] >= 0 ? (wraps[lenGear[v]] ?? 0) : 0) : undefined;
+      wraps !== undefined
+        ? lenGear[v] >= 0
+          ? (wraps[lenGear[v]] ?? 0)
+          : 0
+        : undefined;
     if (!belt_solve_arc(sc, v, n, closed, wrap)) {
       lenArc[v] = 0;
       return -1;
@@ -1344,7 +1368,7 @@ export function applyBeltJunctionConstraint(
     vias.push({
       pos: point(nodes, s.pos[1 + i]),
       radius: gearRadius(i),
-      direction: directions[i],
+      clockwise: directions[i],
     });
   }
 
@@ -1452,7 +1476,12 @@ export function applyBeltPinConstraint(
   }
   const sc = belt_shared_scratch(capacity);
   let n = 0;
-  const pushVia = (slot: number, radius: number, ccw: boolean, wrap: number) => {
+  const pushVia = (
+    slot: number,
+    radius: number,
+    ccw: boolean,
+    wrap: number,
+  ) => {
     sc.cx[n] = nodes.x[slot];
     sc.cy[n] = nodes.y[slot];
     sc.r[n] = radius;
@@ -1536,7 +1565,8 @@ export function applyBeltPinConstraint(
   const gearCountN = (slotA >= 0 ? 1 : 0) + (slotB >= 0 ? 1 : 0);
   const wGear =
     gearCountN > 0
-      ? ((slotA >= 0 ? nodes.w[slotA] : 0) + (slotB >= 0 ? nodes.w[slotB] : 0)) /
+      ? ((slotA >= 0 ? nodes.w[slotA] : 0) +
+          (slotB >= 0 ? nodes.w[slotB] : 0)) /
         gearCountN
       : 0;
   const totalN = wJ + wGear;
@@ -1648,7 +1678,6 @@ export function applyBeltFollowsTangentConstraint(
   nodes.angle[iAngle] = thetaRef + dTheta;
   return Math.abs(C);
 }
-
 
 /** Engrenages coaxiaux : θ1 − θ2 = offset (même rotation, offset constant). */
 export function applyCoaxialAngleConstraint(

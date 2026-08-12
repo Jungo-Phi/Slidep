@@ -51,6 +51,8 @@ import { is_zero_load } from "../../utils/load-scale";
 import { is_constraint_type, probe_badge_position } from "./utils";
 import { offset_ends, parallel_edge_offsets } from "./parallel-edges";
 import { motor_arrow_geometry } from "./drawing-functions";
+import { gear_grab_handle } from "../solver/geometric-solver";
+import { out_of_sizing_reach } from "./hover-bounds";
 
 /**
  * How a target answers one tool, per family. `doc/hover-matrix.md` is the
@@ -280,13 +282,19 @@ function drawn_past_base(
  * every other constraint. What comes back is what the mechanism granted, and it
  * falls short whenever an anchor, a dimension or a slide holds the part back.
  *
+ * Every case here must answer with the handle that solve took hold of, built
+ * from the same target it was handed. Most grab a part the mechanism carries,
+ * so reading it back is an identity; the one that does not borrows the
+ * solver's own constructor rather than repeating it.
+ *
  * Belts are left out on purpose: a terminal rides its pulley's rim by
  * construction, so it stands off the cursor even when nothing is holding it.
  */
 function granted_grab_point(
   state: CanvasState,
   mechanicalElements: MechanicalElement[],
-  mousePos: Point2,
+  /** The target the solve was handed, which is what its grab took hold of. */
+  askedPosition: Point2,
 ): Point2 | undefined {
   const dragged =
     "elementID" in state
@@ -305,17 +313,14 @@ function granted_grab_point(
       return "positionStart" in dragged
         ? dragged.positionStart.lerp(dragged.positionEnd, state.t)
         : undefined;
-    case "ChangingGearRadius": {
-      // The grab rides the rim on the cursor's bearing, so what was granted is
-      // the rim point on that same bearing.
-      if (dragged.type !== "gear") return undefined;
-      const bearing = mousePos.sub(dragged.position);
-      const unit =
-        bearing.length_squared() > 1e-9
-          ? bearing.normalize()
-          : new Point2(1, 0);
-      return dragged.position.add(unit.mul(dragged.radius));
-    }
+    // This one grabs no part of the gear but a handle the solver makes: the
+    // rim point facing what was asked. Read back that way, the caller's
+    // comparison reduces to the only thing this gesture ever produces — a
+    // radius.
+    case "ChangingGearRadius":
+      return dragged.type === "gear"
+        ? gear_grab_handle(dragged.position, dragged.radius, askedPosition)
+        : undefined;
     default:
       return undefined;
   }
@@ -1090,19 +1095,21 @@ export function get_hovered_part(
     return { type: "BeltClosure", position: state.startHover.position };
   }
 
-  // A drag can only meet what it reaches. When the solver has granted the
-  // grabbed part a place short of what the gesture asked for — an anchor holding
-  // it, a dimensioned length, a slide it cannot leave — whatever lies under the
-  // cursor is not under the element, and aiming at it targets nothing. Ignored
-  // rather than refused: there is no gesture to explain, the cursor is simply
-  // over empty space as far as this element is concerned.
+  // A drag can only meet what it reaches.
+  // When the solver has granted the grabbed part a place short of what the gesture asked for
+  // (an anchor holding it, a dimensioned length, a slide it cannot leave)
+  // whatever lies under the cursor is not under the element, and aiming at it targets nothing.
+  // Ignored rather than refused: there is no gesture to explain, the cursor is simply over empty space as far as this element is concerned.
   //
-  // Measured against what was asked rather than against the cursor, because the
-  // hover runs before the move of its own frame is applied: the cursor has
-  // already advanced past the position this state answers to, and that head
-  // start is not a constraint holding anything back.
+  // Measured against what was asked rather than against the cursor,
+  // because the hover runs before the move of its own frame is applied: the cursor has already advanced past the position this state answers to,
+  // and that head start is not a constraint holding anything back.
   if (askedPosition) {
-    const granted = granted_grab_point(state, mechanicalElements, position);
+    const granted = granted_grab_point(
+      state,
+      mechanicalElements,
+      askedPosition,
+    );
     if (
       granted &&
       world2screen(granted, viewport).distance_to(
@@ -1170,6 +1177,15 @@ export function get_hovered_part(
         parallelOffsets,
       );
       if (!hoveredPart) continue;
+      if (
+        out_of_sizing_reach(
+          hoveredPart.position,
+          state,
+          mechanicalElements,
+          viewport,
+        )
+      )
+        continue;
       const verdict = is_legal(element, hoveredPart);
       if (verdict.allowed) {
         if (hoveredPart.type !== "Node" || !hoveredPart.beamBodyHover)

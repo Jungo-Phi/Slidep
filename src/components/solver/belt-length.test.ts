@@ -2,9 +2,7 @@ import { describe, it, expect } from "vitest";
 import { Point2 } from "../../types/point2";
 import { Link } from "../../types";
 import { PBD_kinematic_solver } from "./PBD_kinematic_solver";
-import {
-  update_belt_disconnects,
-} from "./kinematic-simulation";
+import { update_belt_disconnects } from "./kinematic-simulation";
 import {
   applyBeltLengthConstraint,
   applyBeltFollowsTangentConstraint,
@@ -35,8 +33,8 @@ describe("BeltLength constraint (simulation)", () => {
     const loopLen = (pos: Map<string, Point2>) =>
       belt_pieces(
         [
-          { pos: pos.get("gA")!, radius: 40, direction: false },
-          { pos: pos.get("gB")!, radius: 40, direction: false },
+          { pos: pos.get("gA")!, radius: 40, clockwise: false },
+          { pos: pos.get("gB")!, radius: 40, clockwise: false },
         ],
         true,
       ).reduce((a, p) => a + p.length, 0);
@@ -185,8 +183,8 @@ describe("BeltJunction constraint (closed cycle)", () => {
 describe("belt_point_tangent (parametrization)", () => {
   // Closed belt around two equal pulleys: arcs (π·40) + two tangents (200).
   const vias: BeltVia[] = [
-    { pos: P(-100, 0), radius: 40, direction: false },
-    { pos: P(100, 0), radius: 40, direction: false },
+    { pos: P(-100, 0), radius: 40, clockwise: false },
+    { pos: P(100, 0), radius: 40, clockwise: false },
   ];
   const L = belt_pieces(vias, true).reduce((a, p) => a + p.length, 0);
 
@@ -212,8 +210,8 @@ describe("belt_point_tangent (parametrization)", () => {
 
 describe("BeltPin constraint (junction travels with the belt)", () => {
   const vias: BeltVia[] = [
-    { pos: P(-100, 0), radius: 40, direction: false },
-    { pos: P(100, 0), radius: 40, direction: false },
+    { pos: P(-100, 0), radius: 40, clockwise: false },
+    { pos: P(100, 0), radius: 40, clockwise: false },
   ];
   const rEps = 40 * 1; // radius · (dir false → +1) for the reference gear
   const s0 = belt_project(vias, P(0, 40), true).s; // junction starts on top run
@@ -336,8 +334,8 @@ describe("BeltPin constraint (junction travels with the belt)", () => {
 
 describe("belt_project", () => {
   const vias: BeltVia[] = [
-    { pos: P(-100, 0), radius: 40, direction: false },
-    { pos: P(100, 0), radius: 40, direction: false },
+    { pos: P(-100, 0), radius: 40, clockwise: false },
+    { pos: P(100, 0), radius: 40, clockwise: false },
   ];
   it("returns an on-belt point matching belt_point_tangent at s", () => {
     for (const q of [P(0, 60), P(-130, 30), P(0, -50)]) {
@@ -350,8 +348,8 @@ describe("belt_project", () => {
 
 describe("BeltFollowsTangent constraint (welded beam orientation)", () => {
   const vias: BeltVia[] = [
-    { pos: P(-100, 0), radius: 40, direction: false },
-    { pos: P(100, 0), radius: 40, direction: false },
+    { pos: P(-100, 0), radius: 40, clockwise: false },
+    { pos: P(100, 0), radius: 40, clockwise: false },
   ];
   const s0 = 62.8; // mid gA arc (curvature ≠ 0)
   const tangentAngle = (s: number) =>
@@ -498,9 +496,9 @@ describe("continuous wrap tracking (mid-sim disconnect signal)", () => {
   // Open belt, middle pulley wrapped; slide it down through the g0–g2 line so
   // its wrap shrinks to 0 and past. Terminals (ends) carry no arc.
   const mk = (y: number): BeltVia[] => [
-    { pos: P(-100, 0), radius: 30, direction: false },
-    { pos: P(0, y), radius: 30, direction: false },
-    { pos: P(100, 0), radius: 30, direction: false },
+    { pos: P(-100, 0), radius: 30, clockwise: false },
+    { pos: P(0, y), radius: 30, clockwise: false },
+    { pos: P(100, 0), radius: 30, clockwise: false },
   ];
 
   it("goes negative when a pulley loses contact (no 2π jump)", () => {
@@ -537,10 +535,10 @@ describe("continuous wrap tracking (mid-sim disconnect signal)", () => {
       ["end", 0],
     ]);
     const reduced: BeltVia[] = [
-      { pos: P(-250, 0), radius: 0, direction: false },
-      { pos: P(-120, 0), radius: 30, direction: false },
-      { pos: P(120, 0), radius: 30, direction: false },
-      { pos: P(250, 0), radius: 0, direction: false },
+      { pos: P(-250, 0), radius: 0, clockwise: false },
+      { pos: P(-120, 0), radius: 30, clockwise: false },
+      { pos: P(120, 0), radius: 30, clockwise: false },
+      { pos: P(250, 0), radius: 0, clockwise: false },
     ];
     const L0 = belt_pieces(reduced, false).reduce((a, p) => a + p.length, 0);
     const gBStart = positions.get("gB")!.clone();
@@ -655,12 +653,12 @@ describe("loose belt sheds its last pulley → inert (user-decided)", () => {
 describe("winch geometry (Option A: end on a gear)", () => {
   // Belt: far start terminal → gear at origin → end pinned ON the gear rim.
   const mk = (endAngle: number): BeltVia[] => [
-    { pos: P(-300, 0), radius: 0, direction: false },
-    { pos: P(0, 0), radius: 40, direction: false },
+    { pos: P(-300, 0), radius: 0, clockwise: false },
+    { pos: P(0, 0), radius: 40, clockwise: false },
     {
       pos: P(40 * Math.cos(endAngle), 40 * Math.sin(endAngle)),
       radius: 0,
-      direction: false,
+      clockwise: false,
     },
   ];
 
@@ -680,9 +678,9 @@ describe("winch geometry (Option A: end on a gear)", () => {
 describe("a terminal touching its pulley keeps its tangent run", () => {
   // Loose belt: far start terminal → gear (r=40) → end terminal ON the rim.
   const vias: BeltVia[] = [
-    { pos: P(-300, 0), radius: 0, direction: false },
-    { pos: P(0, 0), radius: 40, direction: false },
-    { pos: P(0, 40), radius: 0, direction: false },
+    { pos: P(-300, 0), radius: 0, clockwise: false },
+    { pos: P(0, 0), radius: 40, clockwise: false },
+    { pos: P(0, 40), radius: 0, clockwise: false },
   ];
 
   it("still emits the end run, degenerate (length 0), instead of dropping it", () => {
@@ -782,8 +780,8 @@ describe("BeltLength counts wound turns (continuous wrap)", () => {
 
 describe("junction travels around a wound pulley (belt_pieces wraps)", () => {
   const vias: BeltVia[] = [
-    { pos: P(-100, 0), radius: 40, direction: false },
-    { pos: P(100, 0), radius: 40, direction: false },
+    { pos: P(-100, 0), radius: 40, clockwise: false },
+    { pos: P(100, 0), radius: 40, clockwise: false },
   ];
 
   it("sizes the wound gear's arc from the continuous wrap (r·|wrap|)", () => {

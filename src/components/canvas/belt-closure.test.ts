@@ -15,6 +15,7 @@ import { get_hovered_part } from "./get-hover";
 import { handle_placing_element } from "./placing-element-actions";
 import { legality_for_state } from "../mechanism/connection-rules";
 import { ViewportState } from "../../types";
+import { bundle_geometry } from "../mechanism/action-geometry";
 
 const P = (x: number, y: number) => new Point2(x, y);
 const AX_A = "ax-a" as ID;
@@ -62,8 +63,8 @@ const routing: Extract<CanvasState, { type: "PlacingBeltEnd" }> = {
   type: "PlacingBeltEnd",
   startHover: { type: "GearTooth", id: G_A, position: START, deleting: false },
   attachedGearsIDs: [
-    { id: G_A, direction: false },
-    { id: G_B, direction: false },
+    { id: G_A, clockwise: false },
+    { id: G_B, clockwise: false },
   ],
 };
 
@@ -87,7 +88,7 @@ describe("closing a belt while placing it", () => {
   it("offers the closure over the start gear, which the route lists last", () => {
     const gesture: CanvasState = {
       ...routing,
-      attachedGearsIDs: [{ id: G_B, direction: false }],
+      attachedGearsIDs: [{ id: G_B, clockwise: false }],
     };
     const hovered = get_hovered_part(
       MECH,
@@ -105,7 +106,7 @@ describe("closing a belt while placing it", () => {
   // be dropped on that ground, and the belt was created open.
   it("creates the junction and closes the loop", () => {
     const closure: HoveredPart = { type: "BeltClosure", position: START };
-    const { actions, actionBundleType } = handle_placing_element(
+    const { actions } = handle_placing_element(
       routing,
       closure,
       MECH,
@@ -128,8 +129,9 @@ describe("closing a belt while placing it", () => {
         expect.objectContaining({ type, connectID: join.id }),
       );
 
-    // The junction has to be solved onto the loop, which "Other" would skip.
-    expect(actionBundleType).toBe("Connects");
+    // The junction has to be solved onto the loop — a bundle read as having
+    // no geometric meaning (the old "Other" mislabel) would skip that solve.
+    expect(bundle_geometry(actions).solve).toBe("after");
   });
 
   // The route is attached after the belt is created, so the closure used to run
@@ -141,8 +143,8 @@ describe("closing a belt while placing it", () => {
       type: "PlacingBeltEnd",
       startHover: { type: "Void", position: far },
       attachedGearsIDs: [
-        { id: G_A, direction: false },
-        { id: G_B, direction: false },
+        { id: G_A, clockwise: false },
+        { id: G_B, clockwise: false },
       ],
     };
     const { actions } = handle_placing_element(
@@ -194,7 +196,7 @@ describe("closing a belt while placing it", () => {
   it("refuses to close a belt that runs over a single pulley", () => {
     const oneGear: CanvasState = {
       ...routing,
-      attachedGearsIDs: [{ id: G_A, direction: false }],
+      attachedGearsIDs: [{ id: G_A, clockwise: false }],
     };
     const hovered = get_hovered_part(
       MECH,
@@ -243,7 +245,7 @@ describe("the gear a belt is started on", () => {
 
   it("stays first in the route, ahead of the gears clicked after it", () => {
     const { actions } = handle_placing_element(
-      { ...routing, attachedGearsIDs: [{ id: G_B, direction: false }] },
+      { ...routing, attachedGearsIDs: [{ id: G_B, clockwise: false }] },
       { type: "Void", position: P(500, -200) },
       MECH,
       [],
@@ -283,7 +285,7 @@ describe("routing a belt over two gears of one axle", () => {
 
   it("still allows a gear on another axle", () => {
     const legal = legality_for_state(
-      { ...routing, attachedGearsIDs: [{ id: G_A, direction: false }] },
+      { ...routing, attachedGearsIDs: [{ id: G_A, clockwise: false }] },
       mech,
     );
     expect(legal(mech[4])).toMatchObject({ allowed: true });
@@ -318,8 +320,8 @@ describe("closing a belt by dragging its terminal node onto the other end", () =
     fixedNodeStartID: NODE,
     fixedNodeEndID: undefined,
     attachedGearsIDs: [
-      { id: G_A, direction: false },
-      { id: G_B, direction: false },
+      { id: G_A, clockwise: false },
+      { id: G_B, clockwise: false },
     ],
     closed: false,
     ...over,

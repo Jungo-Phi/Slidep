@@ -6,11 +6,11 @@ import {
   Action,
   Mechanism,
   ConnectsActionType,
-  ActionBundleType,
 } from "../../../types";
 import Connection from "./ConnectionComponent";
 import { get_connections } from "../../mechanism/connect-actions";
 import { HoveredPart } from "../../../types/hovered-part";
+import { ID } from "../../../types/element";
 import { ordered_body_nodes } from "../element-order";
 import { StringKey, t } from "../../../i18n";
 
@@ -31,16 +31,20 @@ const CONTAINER_NAME_KEYS: Record<ConnectsActionType, StringKey> = {
 interface ConnectionsContainerProps {
   element: MechanicalElement;
   containerType: ConnectsActionType;
+  hoveredPart: HoveredPart;
   setHoveredPart: (hoveredPart: HoveredPart) => void;
+  selectedIds: ID[];
   setCanvasState: (state: CanvasState) => void;
-  applyActions: (actions: Action[], actionBundleType: ActionBundleType) => void;
+  applyActions: (actions: Action[]) => void;
   mechanism: Mechanism;
 }
 
 export const ConnectionsContainer: React.FC<ConnectionsContainerProps> = ({
   element,
   containerType,
+  hoveredPart,
   setHoveredPart,
+  selectedIds,
   setCanvasState,
   applyActions,
   mechanism,
@@ -99,7 +103,9 @@ export const ConnectionsContainer: React.FC<ConnectionsContainerProps> = ({
                       ) as MechanicalElement
                     }
                     containerType={containerType}
+                    hoveredPart={hoveredPart}
                     setHoveredPart={setHoveredPart}
+                    selectedIds={selectedIds}
                     setCanvasState={setCanvasState}
                     applyActions={applyActions}
                     mechanism={mechanism}
@@ -119,7 +125,9 @@ export const ConnectionsContainer: React.FC<ConnectionsContainerProps> = ({
                 ) as MechanicalElement
               }
               containerType={containerType}
+              hoveredPart={hoveredPart}
               setHoveredPart={setHoveredPart}
+              selectedIds={selectedIds}
               setCanvasState={setCanvasState}
               applyActions={applyActions}
               mechanism={mechanism}

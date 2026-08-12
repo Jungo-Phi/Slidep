@@ -27,6 +27,7 @@ import {
   angles_length,
   make_snapshot_layout,
   snapshot_angle,
+  snapshot_belt_arrivals,
   snapshot_belt_detached,
   snapshot_belt_wraps,
   snapshot_point,
@@ -198,6 +199,57 @@ type SnapshotFill = {
   slots: Int32Array;
 };
 
+/** The junction links a belt topology change rewrites in place. */
+type JunctionLink = Extract<Link, { type: "BeltPin" | "BeltFollowsTangent" }>;
+
+/**
+ * What a belt topology change rewrites in a compiled model: the link list, whose no-slip
+ * links are rebuilt against the new loop, and the junction references baked into it.
+ *
+ * Handed to `step_simulation`'s `onRewire` BEFORE the change, since the junction links are
+ * rewritten in place and there is no reading them back afterwards. Restoring it is what
+ * makes a rewind land on the state the recording actually had, rather than on one re-baked
+ * from the geometry — `h⁰` is measured, not derived, so the two are not the same.
+ */
+export type RewireState = {
+  links: Link[];
+  pins: {
+    link: JunctionLink;
+    refIndex: number;
+    refAngleKey: string;
+    s0: number;
+    thetaRef0: number;
+  }[];
+};
+
+function capture_rewire_state(model: SimulationModel): RewireState {
+  const pins: RewireState["pins"] = [];
+  for (const link of model.links)
+    if (link.type === "BeltPin" || link.type === "BeltFollowsTangent")
+      pins.push({
+        link,
+        refIndex: link.refIndex,
+        refAngleKey: link.refAngleKey,
+        s0: link.s0,
+        thetaRef0: link.thetaRef0,
+      });
+  return { links: model.links, pins };
+}
+
+/** Put a captured `RewireState` back on the model it came from. */
+export function restore_rewire_state(
+  model: SimulationModel,
+  state: RewireState,
+): void {
+  model.links = state.links;
+  for (const pin of state.pins) {
+    pin.link.refIndex = pin.refIndex;
+    pin.link.refAngleKey = pin.refAngleKey;
+    pin.link.s0 = pin.s0;
+    pin.link.thetaRef0 = pin.thetaRef0;
+  }
+}
+
 /** A grab during simulation: a node/endpoint key, an edge body at ratio t, or a
  *  gear tooth (rotate the gear so the perimeter point at `angleOffset` follows). */
 export type SimGrab =
@@ -215,12 +267,14 @@ function wrap_angle(a: number): number {
 }
 
 /**
- * Per-frame belt-contact update (mutates the BeltLength link's sim state):
- * tracks each still-connected pulley's continuous (unwrapped) wrap angle and, as
- * soon as it crosses to ≤ 0 (contact lost), marks the pulley disconnected —
- * irreversibly for the run (reset on recompile). The belt then runs straight
- * past it (BeltLength skips it; the geometry of the remaining pulleys uses the
- * reduced loop/chain).
+ * Per-frame belt-contact update (mutates the BeltLength link's sim state): tracks each
+ * still-connected pulley's continuous (unwrapped) wrap angle and, once the arc it wraps
+ * falls under `beltContact.detachArc`, marks the pulley disconnected. The belt then runs
+ * straight past it (BeltLength skips it; the geometry of the remaining pulleys uses the
+ * reduced loop/chain), until `reattach_belt_pulleys` finds it back on the belt.
+ *
+ * Returns whether the belt's topology changed this frame, which is what the caller re-bakes
+ * the junction references and the no-slip links on.
  */
 export function update_belt_disconnects(
   link: Extract<Link, { type: "BeltLength" }>,
@@ -235,19 +289,19 @@ export function update_belt_disconnects(
   if (!link.closed) {
     const s = positions.get(link.startKey);
     if (!s) return false;
-    vias.push({ pos: s, radius: 0, direction: false });
+    vias.push({ pos: s, radius: 0, clockwise: false });
   }
   for (let i = 0; i < n; i++) {
     if (link.disconnected[i]) continue;
     const pos = positions.get(link.gearPosKeys[i]);
     if (!pos) return false;
     activeIdx.push(i);
-    vias.push({ pos, radius: link.radii[i], direction: link.directions[i] });
+    vias.push({ pos, radius: link.radii[i], clockwise: link.directions[i] });
   }
   if (!link.closed) {
     const e = positions.get(link.endKey);
     if (!e) return false;
-    vias.push({ pos: e, radius: 0, direction: false });
+    vias.push({ pos: e, radius: 0, clockwise: false });
   }
 
   const raw = belt_wraps(vias, link.closed);
@@ -328,7 +382,7 @@ function reattach_belt_pulleys(
         break;
       }
       if (i === gi) index = vias.length;
-      vias.push({ pos, radius: link.radii[i], direction: link.directions[i] });
+      vias.push({ pos, radius: link.radii[i], clockwise: link.directions[i] });
     }
     if (!ok || index < 0 || vias.length < 2) continue;
 
@@ -394,7 +448,7 @@ export function rebake_belt_pin_refs(
       if (disconnected?.[i]) continue;
       const pos = positions.get(belt.gearPosKeys[i]);
       if (!pos) continue;
-      vias.push({ pos, radius: belt.radii[i], direction: belt.directions[i] });
+      vias.push({ pos, radius: belt.radii[i], clockwise: belt.directions[i] });
       viaToGear.push(i);
     }
     if (vias.length < 2) continue;
@@ -427,6 +481,82 @@ export function rebake_belt_pin_refs(
       link.s0 = belt_project(vias, J, true, projWraps).s;
     }
   }
+}
+
+/**
+ * Put every belt's per-frame state — which pulleys it is on, and the continuous wrap and
+ * arrival angles it tracks them by — back from `snapshot`.
+ *
+ * Returns the belts that come back with a pulley off, whose baked topology therefore has to
+ * be looked at: `rewire_belts` for a model just compiled, the recorder's own journal for a
+ * rewind, which can put back the exact state instead of measuring a new one.
+ */
+export function restore_belt_state(
+  model: SimulationModel,
+  snapshot: KinematicSnapshot,
+): Extract<Link, { type: "BeltLength" }>[] {
+  const detachedBelts: Extract<Link, { type: "BeltLength" }>[] = [];
+  for (const link of model.links) {
+    if (link.type !== "BeltLength" || link.owner === undefined) continue;
+    const detached = snapshot_belt_detached(snapshot, link.owner);
+    // Unknown to this snapshot: a belt the edit has just added, which starts fresh.
+    if (detached === undefined) continue;
+    const dropped = new Set(detached);
+    link.disconnected = link.gearPosKeys.map((_, i) => dropped.has(i));
+    link.wraps = snapshot_belt_wraps(snapshot, link.owner) ?? link.wraps;
+    link.arrivals =
+      snapshot_belt_arrivals(snapshot, link.owner) ?? link.arrivals;
+    if (dropped.size > 0) detachedBelts.push(link);
+  }
+  return detachedBelts;
+}
+
+/**
+ * Hand each belt's disconnected mask to the junction links that ride its loop.
+ *
+ * `rebake_belt_pin_refs` measures `s0` as an arc-length on the REDUCED loop, so whatever
+ * reads that `s0` back has to walk the same loop. Left without the mask, `BeltPin` walks the
+ * whole one and lands the junction wherever the two disagree — a violated constraint at the
+ * model's own rest state, which the mobility probe then reports as a mode.
+ */
+function share_belt_disconnections(
+  links: Link[],
+  belts: Extract<Link, { type: "BeltLength" }>[],
+): void {
+  const byBelt = new Map<ID, boolean[]>();
+  for (const belt of belts)
+    if (belt.owner !== undefined && belt.disconnected)
+      byBelt.set(belt.owner, belt.disconnected);
+  for (const link of links)
+    if (link.type === "BeltPin" || link.type === "BeltFollowsTangent") {
+      const mask = byBelt.get(link.beltID);
+      if (mask) link.disconnected = mask;
+    }
+}
+
+/**
+ * Re-bake what a belt's topology decides — junction references and no-slip links — against
+ * the state the model currently holds.
+ *
+ * For a model compiled from a mechanism: the compile reads the belt's whole pulley list, so
+ * everything baked on it describes a loop the belt may have left long ago. `h⁰` is measured
+ * rather than derived, so this lands on the geometry it is given and not on whatever the
+ * recording had accumulated — close, but not the same state.
+ */
+export function rewire_belts(
+  model: SimulationModel,
+  belts: Extract<Link, { type: "BeltLength" }>[],
+): void {
+  if (belts.length === 0) return;
+  const positions = new Map(model.nodes.positions);
+  const angles = new Map(model.nodes.angles);
+  share_belt_disconnections(model.links, belts);
+  rebake_belt_pin_refs(model.links, belts, positions, angles);
+  for (const belt of belts)
+    model.links = sort_links(
+      rebuild_belt_q_links(model.links, belt, positions, angles),
+      model.nodes.posMasses,
+    );
 }
 
 /** Position-bearing key fields are rewritten on coincidence fusion; angle key
@@ -544,11 +674,7 @@ export function compile_simulation_model(
     links,
     keyMap,
     gearRadii,
-    layout: make_snapshot_layout(
-      snapshotKeys,
-      [...nodes.angles.keys()],
-      belts,
-    ),
+    layout: make_snapshot_layout(snapshotKeys, [...nodes.angles.keys()], belts),
     fill: {
       keys: fusedKeys,
       firstParts,
@@ -578,6 +704,9 @@ export function step_simulation(
   sweeps: number = SIMULATION_SWEEPS,
   /** Off only to measure what the collection itself costs; production reads it. */
   collectDiagnostics: boolean = true,
+  /** Called with the model state a belt topology change is about to overwrite, so a caller
+   *  that may rewind can keep it. Only ever called on the frames that change it. */
+  onRewire?: (state: RewireState) => void,
 ): KinematicSnapshot {
   const positions = new Map(model.nodes.positions);
   const angles = new Map(model.nodes.angles);
@@ -652,6 +781,7 @@ export function step_simulation(
   // JUMP), then rebuild the belt's no-slip links against the new topology. Both mutate
   // the model, and both are reset on recompile.
   if (beltsToRewire.length > 0) {
+    onRewire?.(capture_rewire_state(model));
     rebake_belt_pin_refs(model.links, beltsToRewire, positions, angles);
     // Drop the belt's no-slip links for THIS frame: they describe the belt as it was, so
     // letting them pull against the new topology spoils the very state the rebuild is
@@ -677,10 +807,12 @@ export function step_simulation(
   // BeltLength link with its BeltPin + BeltFollowsTangent links. gearPosKeys order
   // matches (all built from the belt).
   const wrapsByBelt = new Map<ID, number[]>();
+  const arrivalsByBelt = new Map<ID, number[]>();
   const disconnectedByBelt = new Map<ID, boolean[]>();
   for (const link of model.links)
     if (link.type === "BeltLength" && link.owner !== undefined) {
       if (link.wraps) wrapsByBelt.set(link.owner, link.wraps);
+      if (link.arrivals) arrivalsByBelt.set(link.owner, link.arrivals);
       if (link.disconnected)
         disconnectedByBelt.set(link.owner, link.disconnected);
     }
@@ -836,14 +968,18 @@ export function step_simulation(
     const a = result.angles.get(layout.angleKeys[i]);
     outAngles[i] = a === undefined ? NaN : a;
   }
-  // Then each belt's per-pulley wrap angles, and the pulleys it has lost contact with.
+  // Then each belt's per-pulley wrap angles, the pulleys it has lost contact with, and the
+  // arrival rim angles. Together they are the belt's whole per-frame state, which is what
+  // lets a recording be resumed on any recorded instant.
   layout.belts.forEach((id, r) => {
     const wraps = wrapsByBelt.get(id);
+    const arrivals = arrivalsByBelt.get(id);
     const disconnected = disconnectedByBelt.get(id);
     for (let p = layout.beltStart[r]; p < layout.beltStart[r + 1]; p++) {
       const k = p - layout.beltStart[r];
       outAngles[layout.wrapBase + p] = wraps ? wraps[k] : NaN;
       outAngles[layout.detachBase + p] = disconnected?.[k] ? 1 : 0;
+      outAngles[layout.arrivalBase + p] = arrivals ? arrivals[k] : NaN;
     }
   });
 
@@ -985,7 +1121,9 @@ function same_belt_topology(
   a: KinematicSnapshot,
   b: KinematicSnapshot,
 ): boolean {
-  for (let i = a.layout.detachBase; i < a.angles.length; i++)
+  // The flag block alone. The arrival angles that follow it are continuous like the wraps,
+  // so comparing them would find every pair of instants different and never interpolate.
+  for (let i = a.layout.detachBase; i < a.layout.arrivalBase; i++)
     if (a.angles[i] !== b.angles[i]) return false;
   return true;
 }
@@ -1023,7 +1161,9 @@ export function apply_snapshot_to_mechanism(
           ? el.positionStart.distance_to(el.positionEnd)
           : undefined;
       const disconnectedGearIndices =
-        el.type === "belt" ? snapshot_belt_detached(snapshot, el.id) : undefined;
+        el.type === "belt"
+          ? snapshot_belt_detached(snapshot, el.id)
+          : undefined;
       const gearWraps =
         el.type === "belt" ? snapshot_belt_wraps(snapshot, el.id) : undefined;
       return {

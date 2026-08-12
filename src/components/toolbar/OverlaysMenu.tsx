@@ -14,7 +14,6 @@ import {
 } from "@mui/icons-material";
 import {
   Action,
-  ActionBundleType,
   MechanicalElement,
   OVERLAY_KIND_ORDER,
   OverlayKind,
@@ -29,7 +28,7 @@ import { t } from "../../i18n";
 
 interface OverlaysMenuProps {
   mechanicalElements: MechanicalElement[];
-  applyActions: (actions: Action[], actionBundleType: ActionBundleType) => void;
+  applyActions: (actions: Action[]) => void;
   /** Drops the button's label, keeping the eye and the caret. */
   condensed?: boolean;
 }
@@ -126,7 +125,7 @@ export const OverlaysMenu: React.FC<OverlaysMenuProps> = ({
 
   const setAll = (kind: OverlayKind, show: boolean) => {
     const actions = set_all_overlays(mechanicalElements, kind, show);
-    if (actions.length > 0) applyActions(actions, "Other");
+    if (actions.length > 0) applyActions(actions);
   };
 
   return (

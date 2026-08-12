@@ -1,4 +1,4 @@
-import { Action, ActionBundleType, GeomNodes, Mechanism } from "../../types";
+import { Action, GeomNodes, Mechanism } from "../../types";
 
 import { resolveGeometricConstraints } from "../solver/geometric-solver";
 import {
@@ -15,6 +15,8 @@ import {
   superposition_fusions,
 } from "./superposition";
 import { belt_is_looped } from "../../utils/belt-rules";
+import { bundle_geometry, continues_previous_gesture } from "./action-geometry";
+import { is_noop_entry } from "./no-op-action";
 
 /** Whether a bundle can have changed which nodes an edge holds. */
 function may_change_terminals(actions: Action[]): boolean {
@@ -158,284 +160,220 @@ export function with_corrections(
   );
 }
 
-export function apply_actions(
-  mechanism: Mechanism,
-  actions: Action[],
-  actionBundleType: ActionBundleType,
-): Mechanism {
-  actions = with_corrections(mechanism, actions);
-  const newAction = actions[0];
-  let newActions = actions;
-  let lastActions: Action[];
-  let lastAction: Action;
-  let secondToLastAction: Action;
-  let oldNodes: GeomNodes;
-  let newNodes: GeomNodes;
+/** The `masterActionType` an `UpdatePositionsToValidState` records. */
+type MasterActionType = Extract<
+  Action,
+  { type: "UpdatePositionsToValidState" }
+>["masterActionType"];
 
-  let newHistory: Action[][] | undefined = undefined;
-
-  switch (actionBundleType) {
-    case "MoveConstraint":
-    case "ChangeConstant":
-      if (
-        newAction.type !== "MoveConstraint" &&
-        newAction.type !== "ChangeMass" &&
-        newAction.type !== "ChangeStiffness" &&
-        newAction.type !== "ChangeDamping"
-      )
-        break;
-      if (mechanism.history.length === 0) break;
-      lastActions = mechanism.history[mechanism.history.length - 1];
-      if (lastActions.length < 1) break;
-      lastAction = lastActions[lastActions.length - 1];
+/**
+ * Folds a value-only edit (mechanism 1: `MoveConstraint`, `ChangeMass` /
+ * `ChangeStiffness` / `ChangeDamping`, the load edits) into the single action
+ * of the history entry it continues. Stiffness-like deltas accumulate; the
+ * rest overwrite with the latest value, since they carry an absolute position
+ * or vector rather than a step.
+ */
+function merge_value_edit(lastAction: Action, newAction: Action): void {
+  switch (lastAction.type) {
+    case "ChangeStiffness":
+    case "ChangeDamping":
+    case "ChangeMass":
       if (newAction.type !== lastAction.type) break;
-      if (newAction.id !== lastAction.id) break;
-      switch (lastAction.type) {
-        case "ChangeStiffness":
-        case "ChangeDamping":
-        case "ChangeMass":
-          if (newAction.type !== lastAction.type) break;
-          lastAction.delta += newAction.delta;
-          break;
-        case "MoveConstraint":
-          if (newAction.type !== lastAction.type) break;
-          lastAction.newPosition = newAction.newPosition;
-          break;
-      }
-      newHistory = [...mechanism.history];
+      lastAction.delta += newAction.delta;
       break;
-    case "MoveElement":
-      if (
-        newAction.type !== "MoveNode" &&
-        newAction.type !== "MoveEdgeStart" &&
-        newAction.type !== "MoveEdgeEnd" &&
-        newAction.type !== "MoveEdgeBody" &&
-        newAction.type !== "MoveElements" &&
-        newAction.type !== "ChangeGearRadius" &&
-        newAction.type !== "ChangeEdgeLength" &&
-        newAction.type !== "ChangeBeltLength"
-      )
-        break;
+    case "MoveConstraint":
+      if (newAction.type !== lastAction.type) break;
+      lastAction.newPosition = newAction.newPosition;
+      break;
+    case "ChangeForce":
+      if (newAction.type !== lastAction.type) break;
+      lastAction.newVector = newAction.newVector;
+      break;
+    case "ChangeDistributedForce":
+      if (newAction.type !== lastAction.type) break;
+      lastAction.newDirection = newAction.newDirection;
+      lastAction.newMagnitudeStart = newAction.newMagnitudeStart;
+      lastAction.newMagnitudeEnd = newAction.newMagnitudeEnd;
+      break;
+    case "ChangeMoment":
+      if (newAction.type !== lastAction.type) break;
+      lastAction.newValue = newAction.newValue;
+      break;
+  }
+}
 
-      oldNodes = get_geom_nodes(mechanism.mechanicalElements);
-      get_constraint_positions(mechanism.constraintElements).forEach(
-        (pos, key) => oldNodes.positions.set(key, pos),
-      );
-      newNodes = resolveGeometricConstraints(
-        mechanism,
-        actionBundleType,
-        newAction,
-      );
-      newActions = [
-        ...actions,
-        {
-          type: "UpdatePositionsToValidState",
-          masterActionType: newAction.type,
-          newNodes,
-          oldNodes,
-        },
-      ];
-      if (mechanism.history.length === 0) break;
-      lastActions = mechanism.history[mechanism.history.length - 1];
-      if (lastActions.length < 2) break;
-      lastAction = lastActions[lastActions.length - 1];
-      secondToLastAction = lastActions[lastActions.length - 2];
-      if (
-        lastAction.type !== "UpdatePositionsToValidState" ||
-        newAction.type !== lastAction.masterActionType
-      )
-        break;
-      newHistory = [...mechanism.history];
-      lastAction.newNodes = newNodes;
+/**
+ * Folds a geometry-solving edit (mechanism 2: the `MoveElement` family, the
+ * `ChangeDimension` family minus the gear ratio) into the gesture's history
+ * entry: the entry's `UpdatePositionsToValidState` takes the freshly solved
+ * nodes, and the master edit it recorded takes the latest value — so a single
+ * undo reverts the whole gesture to before it started, not to its first frame.
+ */
+function merge_solved_edit(
+  secondToLastAction: Action,
+  newAction: Action,
+): void {
+  switch (secondToLastAction.type) {
+    case "MoveNode":
+    case "MoveEdgeStart":
+    case "MoveEdgeEnd":
+    case "MoveEdgeBody":
       if (secondToLastAction.type !== newAction.type) break;
-      switch (secondToLastAction.type) {
-        case "MoveNode":
-        case "MoveEdgeStart":
-        case "MoveEdgeEnd":
-        case "MoveEdgeBody":
-          if (secondToLastAction.type !== newAction.type) break;
-          secondToLastAction.newPosition = newAction.newPosition;
-          break;
-        case "MoveElements":
-          if (secondToLastAction.type !== newAction.type) break;
-          secondToLastAction.delta = secondToLastAction.delta.add(
-            newAction.delta,
-          );
-          break;
-        case "ChangeGearRadius":
-          if (secondToLastAction.type !== newAction.type) break;
-          secondToLastAction.newRadius = newAction.newRadius;
-          break;
-        case "ChangeEdgeLength":
-          if (secondToLastAction.type !== newAction.type) break;
-          secondToLastAction.newLength = newAction.newLength;
-          break;
-        case "ChangeBeltLength":
-          if (secondToLastAction.type !== newAction.type) break;
-          secondToLastAction.newLength = newAction.newLength;
-          break;
-      }
+      secondToLastAction.newPosition = newAction.newPosition;
       break;
-    case "ChangeDimension":
-      if (
-        newAction.type !== "ChangeDimensionEdgeValue" &&
-        newAction.type !== "ChangeDimensionNodeToNodeValue" &&
-        newAction.type !== "ChangeDimensionEdgeToNodeValue" &&
-        newAction.type !== "ChangeDimensionAngleValue" &&
-        newAction.type !== "ChangeDimensionRadiusValue" &&
-        newAction.type !== "ChangeDimensionBeltValue" &&
-        newAction.type !== "ChangeGearRatioValue"
-      )
-        break;
-
-      oldNodes = get_geom_nodes(mechanism.mechanicalElements);
-      get_constraint_positions(mechanism.constraintElements).forEach(
-        (pos, key) => oldNodes.positions.set(key, pos),
+    case "MoveElements":
+      if (secondToLastAction.type !== newAction.type) break;
+      secondToLastAction.delta = secondToLastAction.delta.add(
+        newAction.delta,
       );
-      newNodes = resolveGeometricConstraints(
-        actionReducer(clone_mechanism(mechanism), actions, false),
-        actionBundleType,
-        newAction,
-      );
-      newActions = [
-        ...actions,
-        {
-          type: "UpdatePositionsToValidState",
-          masterActionType: newAction.type,
-          newNodes,
-          oldNodes,
-        },
-      ];
-      if (
-        mechanism.history.length === 0 ||
-        newAction.type === "ChangeGearRatioValue"
-      )
-        break;
-      lastActions = mechanism.history[mechanism.history.length - 1];
-      if (lastActions.length < 2) break;
-      lastAction = lastActions[lastActions.length - 1];
-      secondToLastAction = lastActions[lastActions.length - 2];
-      if (
-        lastAction.type !== "UpdatePositionsToValidState" ||
-        newAction.type !== lastAction.masterActionType
-      )
-        break;
-      newHistory = [...mechanism.history];
-      lastAction.newNodes = newNodes;
+      break;
+    case "ChangeGearRadius":
+      if (secondToLastAction.type !== newAction.type) break;
+      secondToLastAction.newRadius = newAction.newRadius;
+      break;
+    case "ChangeEdgeLength":
+      if (secondToLastAction.type !== newAction.type) break;
+      secondToLastAction.newLength = newAction.newLength;
+      break;
+    case "ChangeEdgeAngle":
+      if (secondToLastAction.type !== newAction.type) break;
+      secondToLastAction.newAngle = newAction.newAngle;
+      break;
+    case "ChangeBeltLength":
+      if (secondToLastAction.type !== newAction.type) break;
+      secondToLastAction.newLength = newAction.newLength;
+      break;
+    case "ChangeDimensionEdgeValue":
+    case "ChangeDimensionNodeToNodeValue":
+    case "ChangeDimensionEdgeToNodeValue":
+    case "ChangeDimensionAngleValue":
+    case "ChangeDimensionRadiusValue":
+    case "ChangeDimensionBeltValue":
       if (secondToLastAction.type !== newAction.type) break;
       secondToLastAction.newValue = newAction.newValue;
       break;
-    case "Connects":
-      if (
-        newAction.type !== "ConnectsParentBeam" &&
-        newAction.type !== "ConnectsFixedNodeStart" &&
-        newAction.type !== "ConnectsFixedNodeEnd" &&
-        newAction.type !== "ConnectsAttachedBelt" &&
-        newAction.type !== "ConnectsFixedEdges" &&
-        newAction.type !== "ConnectsRotatingEdges" &&
-        newAction.type !== "ConnectsFixedNodesBody" &&
-        newAction.type !== "ConnectsMeshedGears" &&
-        newAction.type !== "ConnectsAttachedGears" &&
-        newAction.type !== "ConnectsFixedGears" &&
-        newAction.type !== "CreateElement" &&
-        newAction.type !== "DeleteElement" &&
-        newAction.type !== "CloseBelt"
-      )
-        break;
-
-      oldNodes = get_geom_nodes(mechanism.mechanicalElements);
-      get_constraint_positions(mechanism.constraintElements).forEach(
-        (pos, key) => oldNodes.positions.set(key, pos),
-      );
-      newNodes = resolveGeometricConstraints(
-        actionReducer(clone_mechanism(mechanism), actions, false),
-        actionBundleType,
-        newAction,
-        actions,
-      );
-      newActions = [
-        ...actions,
-        {
-          type: "UpdatePositionsToValidState",
-          masterActionType: newAction.type,
-          newNodes,
-          oldNodes,
-        },
-      ];
-      break;
-    case "CreateConstraint":
-      if (
-        newAction.type !== "CreateElement" ||
-        (newAction.element.type !== "horizontal-align-edge" &&
-          newAction.element.type !== "horizontal-align-nodes" &&
-          newAction.element.type !== "vertical-align-edge" &&
-          newAction.element.type !== "vertical-align-nodes" &&
-          newAction.element.type !== "normal" &&
-          newAction.element.type !== "parallel" &&
-          newAction.element.type !== "equal" &&
-          newAction.element.type !== "gear-ratio" &&
-          newAction.element.type !== "dimension-belt")
-      )
-        break;
-      oldNodes = get_geom_nodes(mechanism.mechanicalElements);
-      get_constraint_positions(mechanism.constraintElements).forEach(
-        (pos, key) => oldNodes.positions.set(key, pos),
-      );
-
-      newNodes = resolveGeometricConstraints(
-        actionReducer(clone_mechanism(mechanism), actions, false),
-        actionBundleType,
-        newAction,
-      );
-      newActions = [
-        ...actions,
-        {
-          type: "UpdatePositionsToValidState",
-          masterActionType: newAction.type,
-          newNodes,
-          oldNodes,
-        },
-      ];
-      break;
-    case "MoveLoad":
-      if (
-        newAction.type !== "ChangeForce" &&
-        newAction.type !== "ChangeDistributedForce" &&
-        newAction.type !== "ChangeMoment"
-      )
-        break;
-      if (mechanism.history.length === 0) break;
-      lastActions = mechanism.history[mechanism.history.length - 1];
-      if (lastActions.length < 1) break;
-      lastAction = lastActions[lastActions.length - 1];
-      if (newAction.type !== lastAction.type || newAction.id !== lastAction.id)
-        break;
-      switch (lastAction.type) {
-        case "ChangeForce":
-          if (newAction.type !== "ChangeForce") break;
-          lastAction.newVector = newAction.newVector;
-          break;
-        case "ChangeDistributedForce":
-          if (newAction.type !== "ChangeDistributedForce") break;
-          lastAction.newDirection = newAction.newDirection;
-          lastAction.newMagnitudeStart = newAction.newMagnitudeStart;
-          lastAction.newMagnitudeEnd = newAction.newMagnitudeEnd;
-          break;
-        case "ChangeMoment":
-          if (newAction.type !== "ChangeMoment") break;
-          lastAction.newValue = newAction.newValue;
-          break;
-      }
-      newHistory = [...mechanism.history];
-      break;
-    case "Other":
-      if (newAction.type == "Blank") {
-        if (mechanism.history.length === 0) break;
-        mechanism.history[mechanism.history.length - 1].push(newAction);
-        newHistory = [...mechanism.history];
-      }
   }
-  if (!newHistory) newHistory = [...mechanism.history, newActions];
+}
+
+/** Whether two actions share an `id` — the mechanism-1 types all carry one. */
+function same_id(a: Action, b: Action): boolean {
+  return "id" in a && "id" in b && a.id === b.id;
+}
+
+export function apply_actions(mechanism: Mechanism, actions: Action[]): Mechanism {
+  actions = with_corrections(mechanism, actions);
+  const newAction = actions[0];
+  const { solve, trigger } = bundle_geometry(actions);
+  let newActions = actions;
+  let newNodes: GeomNodes | undefined;
+  let newHistory: Action[][] | undefined = undefined;
+
+  if (solve !== "none") {
+    const oldNodes = get_geom_nodes(mechanism.mechanicalElements);
+    get_constraint_positions(mechanism.constraintElements).forEach(
+      (pos, key) => oldNodes.positions.set(key, pos),
+    );
+    const solvedOn =
+      solve === "before"
+        ? mechanism
+        : actionReducer(clone_mechanism(mechanism), actions, false);
+    newNodes = resolveGeometricConstraints(solvedOn, trigger, actions);
+    newActions = [
+      ...actions,
+      {
+        type: "UpdatePositionsToValidState",
+        // `solve !== "none"` only for the categories action-geometry maps to
+        // the MoveElement / ChangeDimension / Connects / CloseBelt / creation
+        // triggers this field's type expects.
+        masterActionType: newAction.type as MasterActionType,
+        newNodes,
+        oldNodes,
+      },
+    ];
+  }
+
+  const lastActions =
+    mechanism.history.length > 0
+      ? mechanism.history[mechanism.history.length - 1]
+      : undefined;
+  const lastAction = lastActions?.[lastActions.length - 1];
+  // Whether the entry this call is NOT going to merge into (different type,
+  // different id, or nothing to merge with) turned out, now that nothing else
+  // will ever touch it, to have netted to no change — a drag or value edit
+  // that ended up back where it started.
+  const staleNoop = is_noop_entry(lastActions);
+
+  // The value editor's first commit right after placing the element is part
+  // of the creation gesture, not a follow-up edit: it folds into the same
+  // history entry so a single undo removes the whole dimension. The creation
+  // bundle ends either on the `CreateElement` itself (a plain dimension,
+  // whose auto-measured value needs no geometry solve) or on the
+  // `UpdatePositionsToValidState` a constraining type like a gear ratio
+  // appends after it.
+  if (
+    lastActions &&
+    lastAction &&
+    (newAction.type === "ChangeDimensionEdgeValue" ||
+      newAction.type === "ChangeDimensionNodeToNodeValue" ||
+      newAction.type === "ChangeDimensionEdgeToNodeValue" ||
+      newAction.type === "ChangeDimensionAngleValue" ||
+      newAction.type === "ChangeDimensionRadiusValue" ||
+      newAction.type === "ChangeDimensionBeltValue" ||
+      newAction.type === "ChangeGearRatioValue") &&
+    (lastAction.type === "CreateElement" ||
+      (lastAction.type === "UpdatePositionsToValidState" &&
+        lastAction.masterActionType === "CreateElement")) &&
+    lastActions.some(
+      (a) => a.type === "CreateElement" && a.element.id === newAction.id,
+    )
+  ) {
+    newHistory = [
+      ...mechanism.history.slice(0, -1),
+      [...lastActions, ...newActions],
+    ];
+  } else if (
+    lastActions &&
+    lastAction &&
+    continues_previous_gesture(actions) &&
+    newAction.type === lastAction.type &&
+    same_id(newAction, lastAction)
+  ) {
+    // Mechanism 1: the previous entry is the single value-only action itself.
+    // Cloned rather than mutated in place — `lastAction` is reachable from the
+    // mechanism React just handed us, and mutating it would corrupt whatever
+    // else still holds that reference (StrictMode replays this same updater a
+    // second time against the identical, unmutated `mechanism`).
+    const mergedAction = { ...lastAction };
+    merge_value_edit(mergedAction, newAction);
+    newHistory = [...mechanism.history.slice(0, -1), [mergedAction]];
+  } else if (
+    lastActions &&
+    lastActions.length >= 2 &&
+    lastAction &&
+    continues_previous_gesture(actions) &&
+    lastAction.type === "UpdatePositionsToValidState" &&
+    newAction.type === lastAction.masterActionType &&
+    newNodes
+  ) {
+    // Mechanism 2: the previous entry ends on the solve this gesture repeats.
+    // Same cloning concern as mechanism 1, for both halves of the pair.
+    const mergedUpdate = { ...lastAction, newNodes };
+    const mergedMaster = { ...lastActions[lastActions.length - 2] };
+    merge_solved_edit(mergedMaster, newAction);
+    newHistory = [
+      ...mechanism.history.slice(0, -1),
+      [...lastActions.slice(0, -2), mergedMaster, mergedUpdate],
+    ];
+  } else if (newAction.type === "Blank" && lastActions) {
+    newHistory = staleNoop
+      ? mechanism.history.slice(0, -1)
+      : [...mechanism.history.slice(0, -1), [...lastActions, newAction]];
+  }
+
+  if (!newHistory) {
+    const base = staleNoop ? mechanism.history.slice(0, -1) : mechanism.history;
+    newHistory = is_noop_entry(newActions) ? base : [...base, newActions];
+  }
 
   const newMechanism = {
     history: newHistory,
@@ -447,11 +385,6 @@ export function apply_actions(
     metadata: { ...mechanism.metadata },
   };
   const result = actionReducer(newMechanism, newActions, false);
-  assert_actions_preserve_validity(
-    mechanism,
-    result,
-    newActions,
-    actionBundleType,
-  );
+  assert_actions_preserve_validity(mechanism, result, newActions, newAction.type);
   return result;
 }

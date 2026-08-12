@@ -28,7 +28,6 @@ export const VectorInput: React.FC<VectorInputProps> = ({
         flexDirection: "column",
         alignItems: "center",
         gap: 1,
-        py: 1,
       }}
     >
       {label && (

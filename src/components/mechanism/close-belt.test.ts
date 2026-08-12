@@ -38,8 +38,8 @@ const belt = (over: Partial<BeltElement> = {}): BeltElement => ({
   fixedNodeStartID: undefined,
   fixedNodeEndID: undefined,
   attachedGearsIDs: [
-    { id: id("g1"), direction: false },
-    { id: id("g2"), direction: false },
+    { id: id("g1"), clockwise: false },
+    { id: id("g2"), clockwise: false },
   ],
   closed: false,
   ...over,
@@ -201,7 +201,6 @@ describe("apply_actions auto-closes a belt a gesture makes looped", () => {
           connectID: J1,
         },
       ],
-      "Connects",
     );
     const b = result.mechanicalElements.find(
       (el): el is BeltElement => el.type === "belt",

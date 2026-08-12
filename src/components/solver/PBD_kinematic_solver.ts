@@ -9,6 +9,7 @@ import {
   applyBeltPinConstraint,
   applyCoaxialAngleConstraint,
   applyDistanceConstraint,
+  applyMinDistanceConstraint,
   applyDistanceToLineConstraint,
   applyEqualLengthConstraint,
   applyFixedOnSegmentConstraint,
@@ -250,6 +251,8 @@ export function PBD_kinematic_solver(
   angles: Map<string, number> = new Map(),
   collectDiagnostics: boolean = false,
   exitOn: ExitCriterion = "motion",
+  /** Smallest radius this solve may shrink a gear to, in world units — see `solveNodesFromMaps`. */
+  radiusFloor: number = 0,
 ): SolverMaps {
   const nodes = solveNodesFromMaps(
     positions,
@@ -257,6 +260,7 @@ export function PBD_kinematic_solver(
     angles,
     radii,
     radMasses,
+    radiusFloor,
   );
   const unsatisfied = PBD_solve(
     nodes,
@@ -370,6 +374,14 @@ export function PBD_solve(
             link.distance,
             1.0,
             link.preferredAxis,
+          );
+          break;
+        case "MinDistance":
+          err = applyMinDistanceConstraint(
+            nodes,
+            s.pos[0],
+            s.pos[1],
+            link.distance,
           );
           break;
         case "DistanceToLine":
@@ -696,7 +708,7 @@ export function PBD_solve(
   // Build the unsatisfied-constraint list from the last iteration's residuals.
   // Converged links sit below their family's tolerance and are dropped; a
   // blocked mechanism leaves the violated links above it.
-  if (!residuals) return undefined;
+  if (!residuals || !collectDiagnostics) return undefined;
   const unsatisfied: ConstraintResidual[] = [];
   links.forEach((link, idx) => {
     const residual = residuals[idx];
