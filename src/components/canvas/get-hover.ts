@@ -48,7 +48,11 @@ import {
   moment_screen_geometry,
 } from "../../utils/load-geom";
 import { is_zero_load } from "../../utils/load-scale";
-import { is_constraint_type, probe_badge_position } from "./utils";
+import {
+  is_constraint_type,
+  probe_badge_position,
+  relation_badge_positions,
+} from "./utils";
 import { offset_ends, parallel_edge_offsets } from "./parallel-edges";
 import { motor_arrow_geometry } from "./drawing-functions";
 import { gear_grab_handle } from "../solver/geometric-solver";
@@ -700,13 +704,6 @@ function get_hovered_part_of_element(
     case "dimension-angle":
     case "dimension-radius":
     case "dimension-belt":
-    case "horizontal-align-edge":
-    case "horizontal-align-nodes":
-    case "vertical-align-edge":
-    case "vertical-align-nodes":
-    case "normal":
-    case "parallel":
-    case "equal":
     case "gear-ratio":
       if (
         mouseScreen.distance_to(world2screen(element.position, viewport)) >
@@ -928,6 +925,39 @@ function hovered_probe_badge(
   return undefined;
 }
 
+/**
+ * The relation-constraint badge (align/normal/parallel/equal) under the
+ * cursor, if the tool may pick a constraint at all — same gate the old
+ * position-based constraint badges used.
+ */
+function hovered_relation_badge(
+  mouseScreen: ScreenPoint,
+  mechanicalElements: MechanicalElement[],
+  constraintElements: ConstraintElement[],
+  state: CanvasState,
+  viewport: ViewportState,
+): HoveredPart | undefined {
+  if (!HOVER_TARGETS[state.type].overlays) return undefined;
+  for (const host of mechanicalElements) {
+    for (const { constraintId, position } of relation_badge_positions(
+      host.id,
+      mechanicalElements,
+      constraintElements,
+      viewport,
+    )) {
+      if (mouseScreen.distance_to(position) > HIT_TOLERANCE.CONSTRAINT)
+        continue;
+      return {
+        type: "Constraint",
+        position: screen2world(position, viewport),
+        id: constraintId,
+        deleting: state.type === "Erasing",
+      };
+    }
+  }
+  return undefined;
+}
+
 /** 2π, matching the sweep `ctx.arc` and `motor_arrow_geometry` reason in. */
 const ARROW_TAU = 2 * Math.PI;
 
@@ -1143,6 +1173,20 @@ export function get_hovered_part(
       if (badgeHover) return badgeHover;
       continue;
     }
+    // Same reasoning as "probe": a relation badge (align/normal/parallel/equal)
+    // is anchored to its host(s), not an element of its own, so it is swept as
+    // a family rather than through the per-element switch below.
+    if (type === "relationBadge") {
+      const badgeHover = hovered_relation_badge(
+        mouseScreen,
+        mechanicalElements,
+        constraintElements,
+        state,
+        viewport,
+      );
+      if (badgeHover) return badgeHover;
+      continue;
+    }
     // Same reasoning as "probe": the arrow rides on the pivot it belongs to,
     // above it, so it must be swept before that pivot answers instead.
     if (type === "motorArrow") {
@@ -1188,6 +1232,29 @@ export function get_hovered_part(
         continue;
       const verdict = is_legal(element, hoveredPart);
       if (verdict.allowed) {
+        // Landing back on the gear the belt started on, anywhere on its rim
+        // (not just the exact starting pixel, already caught above): the same
+        // closing gesture as returning to the start, since a bare via there
+        // would just duplicate the gear in the route instead of shutting the loop.
+        if (
+          state.type === "PlacingBeltEnd" &&
+          hoveredPart.type === "GearTooth" &&
+          state.startHover.type === "GearTooth" &&
+          hoveredPart.id === state.startHover.id
+        ) {
+          if (
+            !belt_can_close(
+              belt_placing_pulleys(state.attachedGearsIDs, state.startHover.id),
+            )
+          )
+            return {
+              type: "Void",
+              position: hoveredPart.position,
+              rejected: BELT_CANNOT_CLOSE,
+              rejectedVars: BELT_CANNOT_CLOSE_VARS,
+            };
+          return { type: "BeltClosure", position: hoveredPart.position };
+        }
         if (hoveredPart.type !== "Node" || !hoveredPart.beamBodyHover)
           return hoveredPart;
         const distance = mouseScreen.distance_to(

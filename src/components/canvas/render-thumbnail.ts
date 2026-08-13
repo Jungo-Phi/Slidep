@@ -1,4 +1,4 @@
-import { COLORS } from "../../constants/rendering-specs";
+import { COLORS, THUMBNAIL_MARGIN } from "../../constants/rendering-specs";
 import { Mechanism, ZERO } from "../../types";
 import { fit_viewport_to_bounds, mechanism_bounds } from "../../utils";
 import { draw_mechanism } from "./draw-mechanism";
@@ -25,6 +25,8 @@ export const draw_thumbnail = (
   mechanism: Mechanism,
   width: number,
   height: number,
+  /** Eases the framing from `REST` (0) to `HOVER`'s tighter margins (1) as a card is hovered. */
+  zoomProgress = 0,
 ): void => {
   // Contraintes telles qu'on les voit en édition hors survol : cotations et
   // rapports d'engrenage, sans les badges géométriques.
@@ -43,8 +45,15 @@ export const draw_thumbnail = (
     mechanism.mechanicalElements,
     mechanism.constraintElements.filter((c) => visibleConstraints.has(c.id)),
   );
+  const { REST, HOVER } = THUMBNAIL_MARGIN;
   const viewport = fit_viewport_to_bounds(bounds, width, height, {
     defaultZoom: DEFAULT_ZOOM,
+    ratioMarginX:
+      REST.ratioMarginX +
+      (HOVER.ratioMarginX - REST.ratioMarginX) * zoomProgress,
+    ratioMarginY:
+      REST.ratioMarginY +
+      (HOVER.ratioMarginY - REST.ratioMarginY) * zoomProgress,
   });
 
   // Axes du monde, en coordonnées écran comme dans le rendu principal. Ils

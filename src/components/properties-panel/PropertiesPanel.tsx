@@ -47,6 +47,8 @@ export interface PropertiesPanelProps {
   hoveredPart: HoveredPart;
   setHoveredPart: (hoveredPart: HoveredPart) => void;
   updateMetadata: (metadata: MechanismMetadata) => void;
+  /** Every tag already used in the mechanism library, suggested by the tag autocomplete. */
+  allTags: string[];
   setRuntimeState: React.Dispatch<React.SetStateAction<RuntimeState>>;
   runtimeState: RuntimeState;
   setSimulationConfig: (config: SimulationConfig) => void;
@@ -70,6 +72,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
   hoveredPart,
   setHoveredPart,
   updateMetadata,
+  allTags,
   appMode,
   activeTab,
   setActiveTab,
@@ -77,7 +80,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
   runtimeState,
   setRuntimeState,
 }) => {
-  const handleProjectInfoChange = (info: any) => {
+  const handleProjectInfoChange = (info: MechanismMetadata) => {
     updateMetadata({
       ...mechanism.metadata,
       name: info.name,
@@ -85,6 +88,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
       author: info.author,
       createdAt: info.createdAt,
       modifiedAt: info.modifiedAt,
+      tags: info.tags,
     });
   };
 
@@ -240,6 +244,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
             <ProjectInfoSection
               mechanism={mechanism}
               updateMetadata={handleProjectInfoChange}
+              allTags={allTags}
               hoveredPart={hoveredPart}
               setHoveredPart={setHoveredPart}
               selectedIds={selectedIds}
@@ -260,6 +265,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
               setCanvasState={setCanvasState}
               applyActions={applyActions}
               mechanism={mechanism}
+              analysedMechanism={analysedMechanism}
               setActiveTab={setActiveTab}
               appMode={appMode}
               runtimeState={runtimeState}

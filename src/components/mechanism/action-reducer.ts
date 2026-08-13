@@ -11,6 +11,7 @@ import {
   ForceElement,
   DistributedForceElement,
   MomentElement,
+  is_nameable,
 } from "../../types";
 import {
   get_constraint_element_from_id,
@@ -110,11 +111,13 @@ export function actionReducer(
           constraintElements,
           loadElements,
         );
-        element.name = revert ? action.oldName : action.newName;
+        if (is_nameable(element))
+          element.name = revert ? action.oldName : action.newName;
         break;
       case "MoveConstraint":
         element = get_constraint_element_from_id(action.id, constraintElements);
-        element.position = revert ? action.oldPosition : action.newPosition;
+        if ("position" in element)
+          element.position = revert ? action.oldPosition : action.newPosition;
         break;
       case "ChangeDimensionEdgeValue":
       case "ChangeDimensionNodeToNodeValue":
@@ -426,6 +429,7 @@ export function actionReducer(
           }
         });
         constraintElements.forEach((element) => {
+          if (!("position" in element)) return;
           position = positions.get(element.id);
           if (position) element.position = position;
         });

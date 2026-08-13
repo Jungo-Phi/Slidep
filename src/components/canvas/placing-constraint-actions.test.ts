@@ -43,7 +43,6 @@ const hovered: HoveredPart = {
 const align = (): ConstraintElement => ({
   type: "horizontal-align-edge",
   id: EXISTING,
-  position: new Point2(50, 1),
   edgeID: EDGE,
 });
 

@@ -15,10 +15,11 @@ import {
   IconButton,
   Typography,
   Snackbar,
+  Fade,
   alpha,
   useMediaQuery,
 } from "@mui/material";
-import { Close, WarningAmber } from "@mui/icons-material";
+import { Close, UploadFile, WarningAmber } from "@mui/icons-material";
 import {
   Action,
   AppMode,
@@ -55,7 +56,9 @@ import { ToolsMenu } from "./components/toolbar/ToolsMenu";
 import { PlaybackControls } from "./components/toolbar/PlaybackControls";
 import { set_sim_clock as setRuntimeState } from "./components/solver/sim-clock";
 import {
+  apply_parameter_snapshot_to_mechanism,
   apply_snapshot_to_mechanism,
+  parameter_snapshot_at,
   snapshot_at,
 } from "./components/solver/kinematic-simulation";
 import {
@@ -216,10 +219,9 @@ const App: React.FC = () => {
   const constraintChangeRef = useRef<ConstraintChangeSignal | null>(null);
   const constraintChangeSeqRef = useRef(0);
 
-  /** `duration` overrides the default for messages that take longer to read, or
-   *  that report something lost. `severity: "warning"` marks those same messages
-   *  visually — the two aren't always paired (e.g. `file_unreadable` stays short
-   *  but still warrants the warning look). */
+  /** `duration` overrides the default for messages that take longer to read, or that report something lost.
+   * `severity: "warning"` marks those same messages visually.
+   * The two aren't always paired (e.g. `file_unreadable` stays short but still warrants the warning look). */
   const [snackbar, setSnackbar] = useState<{
     open: boolean;
     message: string;
@@ -254,9 +256,6 @@ const App: React.FC = () => {
           canvasState.elementIDs.length > 0 ? "elements" : "project",
         );
       } else if ("elementID" in canvasState) {
-        const constraint = mechanism.constraintElements.find(
-          (el) => el.id === canvasState.elementID,
-        );
         if (
           mechanism.mechanicalElements.find(
             (el) => el.id === canvasState.elementID,
@@ -264,7 +263,11 @@ const App: React.FC = () => {
           mechanism.loads.find((el) => el.id === canvasState.elementID)
         ) {
           setActiveTab("elements");
-        } else if (constraint && !("value" in constraint)) {
+        } else if (
+          mechanism.constraintElements.find(
+            (el) => el.id === canvasState.elementID,
+          )
+        ) {
           setActiveTab("constraints");
         }
       } else if (
@@ -273,9 +276,6 @@ const App: React.FC = () => {
       ) {
         setActiveTab("elements");
       } else if (!is_armed_tool_waiting(prevCanvasState, mechanism)) {
-        // "Selecting", or any armed tool carrying no selection at all
-        // (PlacingBeamStart, DimensionStart, ...): only a genuine
-        // deselection deserves the fallback.
         setActiveTab("project");
       }
     } else if (canvasState.type === "Selecting") {
@@ -297,8 +297,6 @@ const App: React.FC = () => {
     canvasStateRef.current = canvasState;
   }, [canvasState]);
 
-  // Entering simulation is the one automatic switch to the analysis tab;
-  // from there, selecting elements no longer moves it.
   useEffect(() => {
     if (appMode !== "edition") setActiveTab("analysis");
   }, [appMode]);
@@ -352,32 +350,30 @@ const App: React.FC = () => {
     [resetSimulationStateFor],
   );
 
-  /**
-   * The pose the analysis describes: the one on screen, not the one being edited.
-   *
-   * Memoised on the clock's INPUTS rather than on `currentKinematicSnapshot`, which
-   * `snapshot_at` rebuilds by interpolation whenever the cursor sits between two samples —
-   * a fresh object every render, and with it a fresh element list. The analysis caches its
-   * measurements by that list, so deriving from the snapshot would re-measure on every
-   * render of the application. Held still, this yields one measurement; scrubbing is what
-   * the panel's debounce is there for.
-   *
-   * The panel keeps the edition mechanism for everything else: it is a place one edits
-   * from, and a simulated pose must never become the thing an action is applied to.
-   */
   const analysedMechanism = useMemo(() => {
     if (appMode !== "kinematic") return mechanism;
     const snapshot = snapshot_at(
       runtimeState.kinematicSnapshots,
       runtimeState.time,
     );
-    return snapshot
-      ? apply_snapshot_to_mechanism(mechanism, snapshot)
-      : mechanism;
+    if (!snapshot) return mechanism;
+    const geometryMechanism = apply_snapshot_to_mechanism(mechanism, snapshot);
+    const paramSnapshot = parameter_snapshot_at(
+      runtimeState.parameterSnapshots,
+      runtimeState.time,
+    );
+    return paramSnapshot
+      ? apply_parameter_snapshot_to_mechanism(geometryMechanism, paramSnapshot)
+      : geometryMechanism;
+    // Depend on geometry/parameters only, not the whole mechanism: a viewport (pan/zoom)
+    // change keeps these array refs identical, so it must not re-derive the pose on screen.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     appMode,
-    mechanism,
+    mechanism.mechanicalElements,
+    mechanism.loads,
     runtimeState.kinematicSnapshots,
+    runtimeState.parameterSnapshots,
     runtimeState.time,
   ]);
 
@@ -390,9 +386,11 @@ const App: React.FC = () => {
     closeGallery,
     handleLoadFromGallery,
     handleRenameFromGallery,
+    handleUpdateTagsFromGallery,
     handleDeleteFromGallery,
     handleNewFromGallery,
     handleMenuButtonUpload,
+    handleFilesDropped,
     handleExportRecord,
     handleExportAllRecords,
   } = useMechanismLibrary({
@@ -411,6 +409,23 @@ const App: React.FC = () => {
     },
     [markDirty],
   );
+
+  // Valeurs déjà utilisées quelque part dans la bibliothèque. Les trois modes de simulation
+  // sont toujours suggérés en plus, comme point de départ le plus courant pour trier.
+  const usedTags = useMemo(() => {
+    const set = new Set<string>();
+    for (const record of savedMechanisms)
+      for (const tag of record.metadata.tags) set.add(tag);
+    return set;
+  }, [savedMechanisms]);
+  const allTags = [
+    ...new Set([
+      t("mode_static"),
+      t("mode_kinematic"),
+      t("mode_dynamic"),
+      ...usedTags,
+    ]),
+  ].sort();
 
   const changeViewport = useCallback((change: ViewportChange) => {
     setMechanism((prevMechanism) => {
@@ -449,25 +464,12 @@ const App: React.FC = () => {
       });
       markDirty();
     },
-    [
-      markDirty,
-      setCanvasState,
-      exitToEdition,
-      kinematicRef,
-      probeOnlyEditRef,
-    ],
+    [markDirty, setCanvasState, exitToEdition, kinematicRef, probeOnlyEditRef],
   );
 
   /** Repère les contraintes-icônes recréées/supprimées par un undo/redo pour que le canvas les fasse réapparaître (reveal) ou s'estomper (fantôme rouge). */
   const signalConstraintChange = useCallback(
-    (
-      before: ConstraintElement[],
-      after: ConstraintElement[],
-      actions: Action[],
-    ) => {
-      const movedByAction = new Set<ID>();
-      for (const a of actions)
-        if (a.type === "MoveConstraint") movedByAction.add(a.id);
+    (before: ConstraintElement[], after: ConstraintElement[]) => {
       const beforeById = new Map(before.map((c) => [c.id, c]));
       const afterById = new Map(after.map((c) => [c.id, c]));
       const revealIDs: ID[] = [];
@@ -475,16 +477,10 @@ const App: React.FC = () => {
       for (const c of after) {
         if (c.type.startsWith("dimension-") || c.type === "gear-ratio")
           continue;
-        const prev = beforeById.get(c.id);
-        // Recréée, ou déplacée/éditée par une action explicite → la révéler.
-        if (
-          !prev ||
-          (movedByAction.has(c.id) &&
-            (prev.position.x !== c.position.x ||
-              prev.position.y !== c.position.y)) ||
-          ("value" in prev && "value" in c && prev.value !== c.value)
-        )
-          revealIDs.push(c.id);
+        // Attached badges have no position/value of their own to have changed —
+        // recreation (including by undo/redo) is the only way one of these gets
+        // revealed here.
+        if (!beforeById.has(c.id)) revealIDs.push(c.id);
       }
       for (const c of before) {
         if (c.type.startsWith("dimension-") || c.type === "gear-ratio")
@@ -532,7 +528,6 @@ const App: React.FC = () => {
       signalConstraintChange(
         prevMechanism.constraintElements,
         newMechanism.constraintElements,
-        lastActionsForUndo,
       );
       const currentState = canvasStateRef.current;
       if (
@@ -597,7 +592,6 @@ const App: React.FC = () => {
       signalConstraintChange(
         prevMechanism.constraintElements,
         newMechanism.constraintElements,
-        nextActions,
       );
       const currentState = canvasStateRef.current;
       if (
@@ -617,12 +611,53 @@ const App: React.FC = () => {
 
     // In simulation, the [mechanism] effect recompiles + truncates snapshots.
     markDirty();
-  }, [
-    markDirty,
-    signalConstraintChange,
-    setCanvasState,
-    probeOnlyEditRef,
-  ]);
+  }, [markDirty, signalConstraintChange, setCanvasState, probeOnlyEditRef]);
+
+  // Window-wide drop target for importing .slidep/.zip files, independent of
+  // whatever React element the pointer happens to be over (incl. portaled
+  // dialogs like the gallery). The enter/leave counter is the standard trick
+  // to keep the overlay visible while the pointer crosses child elements.
+  const [isDraggingFile, setIsDraggingFile] = useState(false);
+  useEffect(() => {
+    let dragCounter = 0;
+    const isFileDrag = (e: DragEvent) =>
+      !!e.dataTransfer && Array.from(e.dataTransfer.types).includes("Files");
+
+    const onDragEnter = (e: DragEvent) => {
+      if (!isFileDrag(e)) return;
+      e.preventDefault();
+      dragCounter++;
+      setIsDraggingFile(true);
+    };
+    const onDragOver = (e: DragEvent) => {
+      if (!isFileDrag(e)) return;
+      e.preventDefault();
+    };
+    const onDragLeave = (e: DragEvent) => {
+      if (!isFileDrag(e)) return;
+      dragCounter = Math.max(0, dragCounter - 1);
+      if (dragCounter === 0) setIsDraggingFile(false);
+    };
+    const onDrop = (e: DragEvent) => {
+      if (!isFileDrag(e)) return;
+      e.preventDefault();
+      dragCounter = 0;
+      setIsDraggingFile(false);
+      if (e.dataTransfer && e.dataTransfer.files.length > 0)
+        handleFilesDropped(e.dataTransfer.files);
+    };
+
+    window.addEventListener("dragenter", onDragEnter);
+    window.addEventListener("dragover", onDragOver);
+    window.addEventListener("dragleave", onDragLeave);
+    window.addEventListener("drop", onDrop);
+    return () => {
+      window.removeEventListener("dragenter", onDragEnter);
+      window.removeEventListener("dragover", onDragOver);
+      window.removeEventListener("dragleave", onDragLeave);
+      window.removeEventListener("drop", onDrop);
+    };
+  }, [handleFilesDropped]);
 
   const [infoOpen, setInfoOpen] = useState<boolean>(false);
   const handleInfoOpen = () => {
@@ -661,8 +696,8 @@ const App: React.FC = () => {
     return () => cancelAnimationFrame(frame);
   }, []);
 
-  // What "Recentrer" aims for, and what its disabled state compares against —
-  // computed once here rather than twice inside the button's JSX.
+  // What "Recentrer" aims for, and what its disabled state compares against.
+  // Computed once here rather than twice inside the button's JSX.
   const recenterTarget = canvasRef.current
     ? fit_to_content(mechanism, canvasRef.current)
     : null;
@@ -821,6 +856,7 @@ const App: React.FC = () => {
             hoveredPart={hoveredPart}
             setHoveredPart={setHoveredPart}
             updateMetadata={updateMetadata}
+            allTags={allTags}
             setRuntimeState={setRuntimeState}
             runtimeState={runtimeState}
             setSimulationConfig={setSimulationConfig}
@@ -839,6 +875,7 @@ const App: React.FC = () => {
         onLoad={handleLoadFromGallery}
         onRename={handleRenameFromGallery}
         onDelete={handleDeleteFromGallery}
+        onUpdateTags={handleUpdateTagsFromGallery}
         onNew={handleNewFromGallery}
         onImport={handleMenuButtonUpload}
         onExport={handleExportRecord}
@@ -874,7 +911,9 @@ const App: React.FC = () => {
           }}
         >
           {snackbar.severity === "warning" && (
-            <WarningAmber sx={{ fontSize: 17, color: "warning.main", flexShrink: 0 }} />
+            <WarningAmber
+              sx={{ fontSize: 17, color: "warning.main", flexShrink: 0 }}
+            />
           )}
           <Typography
             sx={{
@@ -898,6 +937,48 @@ const App: React.FC = () => {
           </IconButton>
         </Box>
       </Snackbar>
+      <Fade in={isDraggingFile}>
+        <Box
+          sx={{
+            position: "fixed",
+            inset: 0,
+            // Above dialogs (the gallery included) and the snackbar: the drop target is the whole window, whatever is open on top of it.
+            zIndex: (t) => t.zIndex.tooltip + 100,
+            pointerEvents: "none",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            // A constant dark veil rather than a themed surface, so the drop
+            // zone reads the same over any drawing/theme underneath — same
+            // choice as the snackbar's scrim below.
+            backgroundColor: (t) => alpha(t.palette.common.black, 0.55),
+            backdropFilter: "blur(2px)",
+          }}
+        >
+          <Box
+            sx={{
+              m: 3,
+              px: 5,
+              py: 4,
+              borderRadius: 3,
+              border: "2px dashed",
+              borderColor: "primary.main",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: 1.5,
+              color: "primary.main",
+            }}
+          >
+            <UploadFile sx={{ fontSize: 40, color: "inherit" }} />
+            <Typography
+              sx={{ fontSize: "1.1rem", fontWeight: 600, color: "inherit" }}
+            >
+              {t("drop_to_import")}
+            </Typography>
+          </Box>
+        </Box>
+      </Fade>
     </ThemeProvider>
   );
 };

@@ -252,7 +252,9 @@ describe("repair_mechanism", () => {
     const { mechanism: result, repairs } = repair_mechanism(
       mechanism([pivot(), beam()], [dimension]),
     );
-    expect(result.constraintElements[0].position).toEqual(new Point2(0, 0));
+    expect(
+      (result.constraintElements[0] as { position: Point2 }).position,
+    ).toEqual(new Point2(0, 0));
     expect(repairs.map((r) => r.code)).toEqual(["POINT_RESET"]);
   });
 

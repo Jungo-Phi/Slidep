@@ -95,12 +95,12 @@ const frame_change_actions = (
 /** Finds the edge a load's frame currently refers to, among the candidates
  *  offered by the ElementPicker or (if it fell out of them) all elements. */
 const frame_current_edge = (
-  load: ForceElement | DistributedForceElement,
+  frame: LoadFrame,
   candidateEdges: EdgeElement[],
   mechanicalElements: MechanicalElement[],
 ): EdgeElement | undefined => {
-  if (load.frame === "world") return undefined;
-  const edgeID = load.frame.edgeID;
+  if (frame === "world") return undefined;
+  const edgeID = frame.edgeID;
   return (
     candidateEdges.find((e) => e.id === edgeID) ??
     (mechanicalElements.find((e) => e.id === edgeID && "positionStart" in e) as
@@ -113,6 +113,9 @@ interface LoadsSectionProps {
   element: MechanicalElement;
   mechanicalElements: MechanicalElement[];
   loads: LoadElement[];
+  /** Same loads, in the pose on screen — only for the values shown while scrubbed; every
+   *  write below still goes through `loads`, matched by id (see `ElementProperties`). */
+  displayLoads: LoadElement[];
   selectedLoadID: ID | undefined;
   hoveredPart: HoveredPart;
   setHoveredPart: (hoveredPart: HoveredPart) => void;
@@ -125,6 +128,7 @@ export const LoadsSection: React.FC<LoadsSectionProps> = ({
   element,
   mechanicalElements,
   loads,
+  displayLoads,
   selectedLoadID,
   hoveredPart,
   setHoveredPart,
@@ -148,7 +152,34 @@ export const LoadsSection: React.FC<LoadsSectionProps> = ({
 
   return (
     <Box sx={{ px: 1 }}>
-      {loads.map((load) => (
+      {loads.map((load) => {
+        const shownLoad = displayLoads.find((l) => l.id === load.id) ?? load;
+        const shownForce =
+          load.type === "force" && shownLoad.type === "force"
+            ? shownLoad
+            : load.type === "force"
+              ? load
+              : undefined;
+        const shownDistributed =
+          load.type === "distributed-force" &&
+          shownLoad.type === "distributed-force"
+            ? shownLoad
+            : load.type === "distributed-force"
+              ? load
+              : undefined;
+        const shownMoment =
+          load.type === "moment" && shownLoad.type === "moment"
+            ? shownLoad
+            : load.type === "moment"
+              ? load
+              : undefined;
+        const shownFrame =
+          shownLoad.type === "force" || shownLoad.type === "distributed-force"
+            ? shownLoad.frame
+            : load.type === "force" || load.type === "distributed-force"
+              ? load.frame
+              : undefined;
+        return (
         <Box
           key={load.id}
           sx={{
@@ -205,7 +236,7 @@ export const LoadsSection: React.FC<LoadsSectionProps> = ({
               <>
                 <NumberInput
                   label="N"
-                  value={load.vector.length()}
+                  value={(shownForce ?? load).vector.length()}
                   onChange={(mag) =>
                     applyActions(
                       [
@@ -221,7 +252,7 @@ export const LoadsSection: React.FC<LoadsSectionProps> = ({
                 />
                 <NumberInput
                   label="°"
-                  value={to_deg(load.vector.angle())}
+                  value={to_deg((shownForce ?? load).vector.angle())}
                   onChange={(deg) =>
                     applyActions(
                       [
@@ -244,7 +275,7 @@ export const LoadsSection: React.FC<LoadsSectionProps> = ({
               <>
                 <NumberInput
                   label="°"
-                  value={to_deg(load.direction.angle())}
+                  value={to_deg((shownDistributed ?? load).direction.angle())}
                   onChange={(deg) =>
                     applyActions(
                       [
@@ -257,7 +288,7 @@ export const LoadsSection: React.FC<LoadsSectionProps> = ({
                 />
                 <NumberInput
                   label="q₀"
-                  value={load.magnitudeStart}
+                  value={(shownDistributed ?? load).magnitudeStart}
                   onChange={(v) =>
                     applyActions(
                       [
@@ -270,7 +301,7 @@ export const LoadsSection: React.FC<LoadsSectionProps> = ({
                 />
                 <NumberInput
                   label="q₁"
-                  value={load.magnitudeEnd}
+                  value={(shownDistributed ?? load).magnitudeEnd}
                   onChange={(v) =>
                     applyActions(
                       [
@@ -284,7 +315,9 @@ export const LoadsSection: React.FC<LoadsSectionProps> = ({
                 <NumberInput
                   label="R (N)"
                   value={
-                    (((load.magnitudeStart + load.magnitudeEnd) / 2) *
+                    ((((shownDistributed ?? load).magnitudeStart +
+                      (shownDistributed ?? load).magnitudeEnd) /
+                      2) *
                       beamLength) /
                     1000
                   }
@@ -314,7 +347,7 @@ export const LoadsSection: React.FC<LoadsSectionProps> = ({
             {load.type === "moment" && (
               <SignedNumberInput
                 label="N·m"
-                value={load.value}
+                value={(shownMoment ?? load).value}
                 onChange={(value) =>
                   applyActions(
                     [
@@ -336,13 +369,16 @@ export const LoadsSection: React.FC<LoadsSectionProps> = ({
                 extraOption={{
                   label: t("frame_world"),
                   icon: Public,
-                  selected: load.frame === "world",
+                  selected: shownFrame === "world",
                 }}
-                selected={frame_current_edge(
-                  load,
-                  hostEdge ? [hostEdge] : nodeEdges,
-                  mechanicalElements,
-                )}
+                selected={
+                  shownFrame &&
+                  frame_current_edge(
+                    shownFrame,
+                    hostEdge ? [hostEdge] : nodeEdges,
+                    mechanicalElements,
+                  )
+                }
                 onSelectExtra={() =>
                   applyActions(
                     frame_change_actions(load, "world", mechanicalElements),
@@ -372,7 +408,8 @@ export const LoadsSection: React.FC<LoadsSectionProps> = ({
             )}
           </Box>
         </Box>
-      ))}
+        );
+      })}
     </Box>
   );
 };

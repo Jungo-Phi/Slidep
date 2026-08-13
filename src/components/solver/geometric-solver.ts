@@ -542,15 +542,8 @@ export function resolveGeometricConstraints(
   mechanism.constraintElements.forEach((constraint) => {
     switch (constraint.type) {
       case "dimension-edge":
-      case "horizontal-align-edge":
-      case "vertical-align-edge":
       case "dimension-node-to-node":
-      case "horizontal-align-nodes":
-      case "vertical-align-nodes":
-        const isEdge =
-          constraint.type === "dimension-edge" ||
-          constraint.type === "horizontal-align-edge" ||
-          constraint.type === "vertical-align-edge";
+        const isEdge = constraint.type === "dimension-edge";
         const oldStart = nodes.positions.get(
           isEdge ? `${constraint.edgeID}:start` : `${constraint.startNodeID}`,
         );
@@ -606,9 +599,6 @@ export function resolveGeometricConstraints(
         );
         break;
       case "dimension-angle":
-      case "normal":
-      case "parallel":
-      case "equal":
         const oldStartEdgeStart = nodes.positions.get(
           `${constraint.startEdgeID}:start`,
         );

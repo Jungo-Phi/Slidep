@@ -402,38 +402,50 @@ export interface FileImport {
   isArchive: boolean;
 }
 
-/** Prompts for a `.slidep` or a `.zip` of them. Never resolves if the user cancels the picker. */
+/**
+ * Parses one or more `.slidep` files and/or `.zip` archives of them, picked
+ * from a file input or dropped onto the window.
+ *
+ * A single `.slidep` file opens straight in the editor (`isArchive: false`);
+ * anything else — several files, a zip, a mix — fills the library instead,
+ * since there's no single obvious mechanism to open.
+ */
+export async function load_mechanisms_from_filelist(
+  files: FileList | File[],
+): Promise<FileImport> {
+  const records: SerializedMechanism[] = [];
+  let hasArchive = false;
+
+  for (const file of Array.from(files)) {
+    if (!file.name.toLowerCase().endsWith(".zip")) {
+      records.push(migrate_document(JSON.parse(await file.text())));
+      continue;
+    }
+
+    hasArchive = true;
+    const entries = unzipSync(new Uint8Array(await file.arrayBuffer()), {
+      filter: (entry) => entry.name.toLowerCase().endsWith(".slidep"),
+    });
+    for (const bytes of Object.values(entries))
+      records.push(migrate_document(JSON.parse(strFromU8(bytes))));
+  }
+
+  if (records.length === 0) throw new Error("Archive sans fichier .slidep");
+  return { records, isArchive: hasArchive || files.length > 1 };
+}
+
+/** Prompts for `.slidep`/`.zip` files via the OS picker. Never resolves if the user cancels. */
 export function load_mechanisms_from_file(): Promise<FileImport> {
   return new Promise((resolve, reject) => {
     const input = document.createElement("input");
     input.type = "file";
     input.accept = ".slidep,.zip";
+    input.multiple = true;
 
-    input.onchange = async (e: Event) => {
-      const file = (e.target as HTMLInputElement).files?.[0];
-      if (!file) return;
-
-      try {
-        if (!file.name.toLowerCase().endsWith(".zip")) {
-          resolve({
-            records: [migrate_document(JSON.parse(await file.text()))],
-            isArchive: false,
-          });
-          return;
-        }
-
-        const entries = unzipSync(new Uint8Array(await file.arrayBuffer()), {
-          filter: (entry) => entry.name.toLowerCase().endsWith(".slidep"),
-        });
-        const records = Object.values(entries).map((bytes) =>
-          migrate_document(JSON.parse(strFromU8(bytes))),
-        );
-        if (records.length === 0)
-          throw new Error("Archive sans fichier .slidep");
-        resolve({ records, isArchive: true });
-      } catch (err) {
-        reject(err);
-      }
+    input.onchange = (e: Event) => {
+      const files = (e.target as HTMLInputElement).files;
+      if (!files || files.length === 0) return;
+      load_mechanisms_from_filelist(files).then(resolve, reject);
     };
 
     input.click();

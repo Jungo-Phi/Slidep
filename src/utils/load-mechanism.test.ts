@@ -54,7 +54,8 @@ describe("load_mechanism", () => {
     });
 
     const { mechanism: loaded, repairs } = load_mechanism(stored);
-    const position = loaded.constraintElements[0].position;
+    const position = (loaded.constraintElements[0] as { position: Point2 })
+      .position;
     expect(position).toBeInstanceOf(Point2);
     expect(position).toEqual(new Point2(0, 0));
     expect(repairs.map((r) => r.code)).toEqual(["POINT_RESET"]);

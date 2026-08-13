@@ -407,20 +407,15 @@ export const MechanicalCanvas = forwardRef<
       ctx.shadowBlur = 0;
       ctx.globalAlpha = 1;
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      if (showGrid)
-        draw_grid(
-          ctx,
-          mechanismRef.current.viewport,
-          canvas.width,
-          canvas.height,
-        );
+      // The viewport is camera state, not part of the pose: it must track the mechanism
+      // being edited even while `mechanismRef` points at a stale analysed/preview copy
+      // (a mode swing, say), or panning while one is shown would snap the drawing back
+      // to whatever viewport was current when that copy was made.
+      const viewport = restingRef.current.viewport;
 
-      draw_axes(
-        ctx,
-        mechanismRef.current.viewport,
-        canvas.width,
-        canvas.height,
-      );
+      if (showGrid) draw_grid(ctx, viewport, canvas.width, canvas.height);
+
+      draw_axes(ctx, viewport, canvas.width, canvas.height);
 
       // Under the mechanism, like the grid: it is scaffolding for the gesture in
       // progress, not something being drawn.
@@ -434,7 +429,7 @@ export const MechanicalCanvas = forwardRef<
               ? { gridX: held.gridX, gridY: held.gridY }
               : {}),
           },
-          mechanismRef.current.viewport,
+          viewport,
           canvas.width,
           canvas.height,
         );
@@ -442,12 +437,7 @@ export const MechanicalCanvas = forwardRef<
 
       // Trajectoires des points sondés, sous les éléments du mécanisme.
       for (const trajectory of live?.trajectories ?? EMPTY_TRAJECTORIES)
-        draw_trajectory(
-          ctx,
-          mechanismRef.current.viewport,
-          trajectory,
-          false, // TODO : add variable
-        );
+        draw_trajectory(ctx, viewport, trajectory, false /* TODO : add variable */);
 
       // Retour visuel undo/redo : révèle les recréations, prépare les fantômes.
       processConstraintChange();
@@ -502,7 +492,7 @@ export const MechanicalCanvas = forwardRef<
       });
 
       draw_mechanical_canvas(ctx, {
-        viewport: mechanismRef.current.viewport,
+        viewport,
         hoveredPart: hoveredPartRef.current,
         state: canvasStateRef.current,
         mechanicalElements: mechanismRef.current.mechanicalElements,

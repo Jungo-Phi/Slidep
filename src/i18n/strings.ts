@@ -143,40 +143,28 @@ export const STRINGS = {
     es: "Acelerar la simulación",
   },
   timeline_dead_point: {
-    fr: "Mécanisme bloqué",
-    en: "Mechanism blocked",
-    de: "Mechanismus blockiert",
-    es: "Mecanismo bloqueado",
-  },
-  timeline_dead_point_recurring: {
-    fr: "Mécanisme bloqué, toutes les {period} s",
-    en: "Mechanism blocked, every {period} s",
-    de: "Mechanismus blockiert, alle {period} s",
-    es: "Mecanismo bloqueado, cada {period} s",
+    fr: "Blocage",
+    en: "Stall",
+    de: "Blockade",
+    es: "Bloqueo",
   },
   timeline_dead_point_released: {
-    fr: "Mécanisme débloqué",
-    en: "Mechanism released",
-    de: "Mechanismus wieder frei",
-    es: "Mecanismo desbloqueado",
-  },
-  timeline_dead_point_released_recurring: {
-    fr: "Mécanisme débloqué, toutes les {period} s",
-    en: "Mechanism released, every {period} s",
-    de: "Mechanismus wieder frei, alle {period} s",
-    es: "Mecanismo desbloqueado, cada {period} s",
+    fr: "Déblocage",
+    en: "Release",
+    de: "Freigabe",
+    es: "Desbloqueo",
   },
   timeline_belt_detach: {
-    fr: "Courroie déconnectée",
-    en: "Belt disconnected",
-    de: "Riemen gelöst",
-    es: "Correa desconectada",
+    fr: "Déconnexion courroie",
+    en: "Belt disconnection",
+    de: "Riementrennung",
+    es: "Desconexión correa",
   },
   timeline_belt_reattach: {
-    fr: "Courroie reconnectée",
-    en: "Belt reconnected",
-    de: "Riemen wieder aufgelegt",
-    es: "Correa reconectada",
+    fr: "Reconnexion courroie",
+    en: "Belt reconnection",
+    de: "Riemenverbindung",
+    es: "Reconexión correa",
   },
   toolbar_export_animation: {
     fr: "Exporter une animation (à venir)",
@@ -442,6 +430,12 @@ export const STRINGS = {
     en: "Unreadable file",
     de: "Datei nicht lesbar",
     es: "Archivo ilegible",
+  },
+  drop_to_import: {
+    fr: "Déposez pour importer",
+    en: "Drop to import",
+    de: "Zum Importieren ablegen",
+    es: "Suelta para importar",
   },
   mechanisms_imported_one: {
     fr: "{count} mécanisme importé",
@@ -770,12 +764,6 @@ export const STRINGS = {
     de: "Exportieren",
     es: "Exportar",
   },
-  gallery_rename: {
-    fr: "Renommer",
-    en: "Rename",
-    de: "Umbenennen",
-    es: "Renombrar",
-  },
   action_delete: {
     fr: "Supprimer",
     en: "Delete",
@@ -793,6 +781,30 @@ export const STRINGS = {
     en: "{count} parts",
     de: "{count} Teile",
     es: "{count} piezas",
+  },
+  gallery_add_tag: {
+    fr: "Ajouter un tag",
+    en: "Add a tag",
+    de: "Tag hinzufügen",
+    es: "Añadir una etiqueta",
+  },
+  gallery_search_placeholder: {
+    fr: "Rechercher…",
+    en: "Search…",
+    de: "Suchen…",
+    es: "Buscar…",
+  },
+  gallery_no_results: {
+    fr: "Rien trouvé",
+    en: "Nothing found",
+    de: "Nichts gefunden",
+    es: "No se encontró nada",
+  },
+  gallery_no_tag_suggestions: {
+    fr: "Aucune suggestion",
+    en: "No suggestions",
+    de: "Keine Vorschläge",
+    es: "Sin sugerencias",
   },
 
   // ── Mechanism validation ──────────────────────────────────────────────────
@@ -1050,6 +1062,12 @@ export const STRINGS = {
     de: "Autor·in",
     es: "Autor·a",
   },
+  project_tags: {
+    fr: "Tags",
+    en: "Tags",
+    de: "Tags",
+    es: "Etiquetas",
+  },
   project_created: {
     fr: "Créé le :",
     en: "Created:",
@@ -1061,18 +1079,6 @@ export const STRINGS = {
     en: "Modified:",
     de: "Geändert:",
     es: "Modificado:",
-  },
-  project_element_count: {
-    fr: "Éléments :",
-    en: "Elements:",
-    de: "Elemente:",
-    es: "Elementos:",
-  },
-  project_constraint_count: {
-    fr: "Contraintes :",
-    en: "Constraints:",
-    de: "Bedingungen:",
-    es: "Restricciones:",
   },
   project_errors_one: {
     fr: "{count} erreur détectée",
@@ -1103,6 +1109,12 @@ export const STRINGS = {
     en: "No constraints yet",
     de: "Noch keine Bedingungen",
     es: "Aún no hay restricciones",
+  },
+  dimensions_empty: {
+    fr: "Pas encore de dimensions",
+    en: "No dimensions yet",
+    de: "Noch keine Maße",
+    es: "Aún no hay dimensiones",
   },
 
   // ── Element properties ────────────────────────────────────────────────────

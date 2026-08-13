@@ -220,6 +220,18 @@ export const THUMBNAIL_MODE_ANIMATION = {
 } as const;
 
 /**
+ * Framing margins for a gallery thumbnail, at rest and while a card is hovered.
+ *
+ * Tighter margins on hover draw the eye in, including for a mechanism with no freedom to swing, which would otherwise show no reaction to the hover at all.
+ * `TRANSITION_S` eases between the two so the zoom doesn't cut in and out.
+ */
+export const THUMBNAIL_MARGIN = {
+  REST: { ratioMarginX: 0.08, ratioMarginY: 0.12 },
+  HOVER: { ratioMarginX: 0.06, ratioMarginY: 0.09 },
+  TRANSITION_S: 0.15,
+} as const;
+
+/**
  * Showing how a redundant constraint yields, drawn rather than measured (analysis panel).
  *
  * Every size here is a drawing decision in screen pixels, constant across zoom: the point this
@@ -366,6 +378,11 @@ export const DIM = {
 
   // Probe
   PROBE_OFFSET: 20,
+
+  // Relation constraint badges (align/normal/parallel/equal), anchored to
+  // their host(s) — below it, so they stay clear of the probe badge above.
+  RELATION_BADGE_OFFSET: 20,
+  RELATION_BADGE_GAP: 4,
   PROBE_RADIUS: 6,
 
   // Trajectory
@@ -381,7 +398,11 @@ export const TEXT_SPECS = {
 } as const;
 
 /** Ordre de dessin des éléments sur le canvas */
-export const DRAWING_ORDER: (UnionElement["type"] | "probe")[] = [
+export const DRAWING_ORDER: (
+  | UnionElement["type"]
+  | "probe"
+  | "relationBadge"
+)[] = [
   "gear",
   "beam",
   "damper",
@@ -393,6 +414,7 @@ export const DRAWING_ORDER: (UnionElement["type"] | "probe")[] = [
   "pivot",
   "mass",
   "probe",
+  "relationBadge",
   "distributed-force",
   "force",
   "moment",
@@ -402,26 +424,18 @@ export const DRAWING_ORDER: (UnionElement["type"] | "probe")[] = [
   "dimension-angle",
   "dimension-radius",
   "dimension-belt",
-  "horizontal-align-edge",
-  "horizontal-align-nodes",
-  "vertical-align-edge",
-  "vertical-align-nodes",
-  "normal",
-  "parallel",
-  "equal",
   "gear-ratio",
 ];
 
 /** Ordre de hover des éléments sur le canvas */
-export const HOVER_ORDER: (UnionElement["type"] | "probe" | "motorArrow")[] = [
+export const HOVER_ORDER: (
+  | UnionElement["type"]
+  | "probe"
+  | "motorArrow"
+  | "relationBadge"
+)[] = [
+  "relationBadge",
   "gear-ratio",
-  "equal",
-  "parallel",
-  "normal",
-  "vertical-align-nodes",
-  "vertical-align-edge",
-  "horizontal-align-nodes",
-  "horizontal-align-edge",
   "dimension-belt",
   "dimension-radius",
   "dimension-angle",

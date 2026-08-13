@@ -31,6 +31,7 @@ import {
   ID,
   MechanicalElement,
   Mechanism,
+  MotorConfig,
   ProbeConfig,
   ProbeMetric,
   ZERO,
@@ -156,17 +157,35 @@ const fault = (elements: Iterable<ID>): CanvasHighlight => ({
 /** Stable identity for the resting state, like `NO_HIGHLIGHT`. */
 const EMPTY_SYMBOLS: RedundancySymbol[] = [];
 
-/** A motor's speed, wherever its row sits — a mode it drives, or none at all. */
+/** The motor config to *show*, resolved through `analysedElementOf` — the pose on screen,
+ *  which while scrubbed can hold a different value than the live mechanism. */
+const motor_config_at = (
+  analysedElementOf: (id: ID) => MechanicalElement | undefined,
+  id: ID,
+): MotorConfig | undefined => {
+  const shown = analysedElementOf(id);
+  return shown?.type === "pivot" ? shown.motor : undefined;
+};
+
+/**
+ * A motor's speed, wherever its row sits — a mode it drives, or none at all.
+ *
+ * `element` (live) is what the edit is built against — id and `oldConfig` must always name
+ * the mechanism's actual current config, whatever value happens to be on screen. `displayConfig`
+ * is only what's shown before the user touches it: while scrubbed to a past instant, it is the
+ * config that was in effect there, which can differ from the live one.
+ */
 const MotorSpeed: React.FC<{
   element: MechanicalElement | undefined;
+  displayConfig: MotorConfig | undefined;
   applyActions: (actions: Action[]) => void;
-}> = ({ element, applyActions }) => {
+}> = ({ element, displayConfig, applyActions }) => {
   if (element?.type !== "pivot" || !element.motor) return null;
   const config = element.motor;
   return (
     <SignedNumberInput
       label={t("unit_rpm")}
-      value={config.speed}
+      value={(displayConfig ?? config).speed}
       onChange={(speed) =>
         applyActions(
           [
@@ -200,6 +219,9 @@ const ChainCard: React.FC<{
    * mechanism no longer holds. Rare, brief, and not worth blanking the panel over.
    */
   elementOf: (id: ID) => MechanicalElement | undefined;
+  /** Same lookup, in the pose on screen — only for the motor speed shown, never for the
+   *  action `elementOf`'s result feeds; see `MotorSpeed`. */
+  analysedElementOf: (id: ID) => MechanicalElement | undefined;
   animated: AnimatedMode;
   setAnimated: (animated: AnimatedMode) => void;
   hoveredPart: HoveredPart;
@@ -221,6 +243,7 @@ const ChainCard: React.FC<{
   setRedundancySymbols,
   symbolsFor,
   elementOf,
+  analysedElementOf,
   animated,
   setAnimated,
   hoveredPart,
@@ -310,6 +333,9 @@ const ChainCard: React.FC<{
               mode.drivenByMotor && named?.type === "pivot" && named.motor
                 ? named
                 : undefined;
+            const motorDisplayConfig = motor
+              ? motor_config_at(analysedElementOf, motor.id)
+              : undefined;
             return (
               <Box
                 key={modeIndex}
@@ -401,7 +427,11 @@ const ChainCard: React.FC<{
                       setHighlight(focus(mode.moves));
                     }}
                   >
-                    <MotorSpeed element={motor} applyActions={applyActions} />
+                    <MotorSpeed
+                      element={motor}
+                      displayConfig={motorDisplayConfig}
+                      applyActions={applyActions}
+                    />
                   </Box>
                 )}
               </Box>
@@ -449,7 +479,11 @@ const ChainCard: React.FC<{
                     interactive={false}
                   />
                 </Box>
-                <MotorSpeed element={element} applyActions={applyActions} />
+                <MotorSpeed
+                  element={element}
+                  displayConfig={motor_config_at(analysedElementOf, id)}
+                  applyActions={applyActions}
+                />
               </Box>
             );
           })}
@@ -772,6 +806,12 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
     [mechanism.mechanicalElements],
   );
 
+  /** Same lookup, in the pose on screen — for `MotorSpeed`'s displayed value only. */
+  const analysedElementOf = React.useCallback(
+    (id: ID) => analysedMechanism.mechanicalElements.find((el) => el.id === id),
+    [analysedMechanism.mechanicalElements],
+  );
+
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 2, my: 2 }}>
       {appMode !== "edition" && (
@@ -833,6 +873,7 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
               setRedundancySymbols={setRedundancySymbols}
               symbolsFor={symbolsFor}
               elementOf={elementOf}
+              analysedElementOf={analysedElementOf}
               animated={animated}
               setAnimated={setAnimated}
               hoveredPart={hoveredPart}

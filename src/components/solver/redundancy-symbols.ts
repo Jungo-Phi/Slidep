@@ -12,10 +12,12 @@
  * Three shapes, chosen from what the gallery's redundant links are, not from the full type
  * union: `Distance` / `BeltLength` / `BeltSegmentNoSlip` hold a length, so they show as two
  * points pulled apart. `Angle` holds two arms at a fixed spread, so it shows as arcs coming
- * loose from their shared vertex. `SlideOnSegment` / `FixedOnSegment` / `GearPerimeterPin` pin
- * a point to a rail — straight or, for the perimeter pin, the rim of a gear — so they show as
- * the point lifting off it. A link outside that set gets no symbol; the red highlight it
- * already carries is not lost, only left undecorated.
+ * loose from their shared vertex — as does a `Distance` with `angleLock` set, a triangulation
+ * chord standing in for a hub's angle lock rather than a real dimension.
+ * `SlideOnSegment` / `FixedOnSegment` / `GearPerimeterPin` pin a point to a rail — straight
+ * or, for the perimeter pin, the rim of a gear — so they show as the point lifting off it. A
+ * link outside that set gets no symbol; the red highlight it already carries is not lost,
+ * only left undecorated.
  */
 
 import { ID, Link, Point2 } from "../../types";
@@ -43,7 +45,9 @@ export function redundancy_symbol(
 
   switch (link.type) {
     case "Distance":
-      return gap(at(link.key1), at(link.key2));
+      return link.angleLock
+        ? diverge_at_hub(model, link.owner, at(link.key1), at(link.key2))
+        : gap(at(link.key1), at(link.key2));
     case "BeltSegmentNoSlip":
       return gap(at(link.posKeyA), at(link.posKeyB));
     case "BeltLength": {
@@ -133,6 +137,34 @@ function arm_from(
   if (dir.length_squared() < 1e-18) return undefined;
   const towardEnd = vertex.distance_to(start) <= vertex.distance_to(end);
   return (towardEnd ? dir : dir.mul(-1)).normalize();
+}
+
+/**
+ * Diverge symbol for a triangulation chord standing in for a hub's angle lock (see
+ * `angleLock` on `Distance` links). `p1`/`p2` are the chord's own endpoints, each already the
+ * far end of one welded beam, so the arms need no direction lookup — just the unit vector
+ * from the hub to each.
+ */
+function diverge_at_hub(
+  model: AnalysisModel,
+  owner: ID | undefined,
+  p1: Point2 | undefined,
+  p2: Point2 | undefined,
+): RedundancySymbol | undefined {
+  if (!p1 || !p2) return undefined;
+  const vertex =
+    (owner !== undefined ? element_position(model, owner) : undefined) ??
+    p1.lerp(p2, 0.5);
+  const arm1 = p1.sub(vertex);
+  const arm2 = p2.sub(vertex);
+  if (arm1.length_squared() < 1e-18 || arm2.length_squared() < 1e-18)
+    return undefined;
+  return {
+    kind: "diverge",
+    vertex,
+    arm1: arm1.normalize(),
+    arm2: arm2.normalize(),
+  };
 }
 
 /** The position of `element`, found by scanning for whichever variable key names it. */

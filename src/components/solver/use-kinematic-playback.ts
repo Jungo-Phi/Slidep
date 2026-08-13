@@ -16,7 +16,9 @@ import {
   RETAIN_DT,
   recording_full,
   SimGrab,
+  apply_parameter_snapshot_to_mechanism,
   apply_snapshot_to_mechanism,
+  parameter_snapshot_at,
   snapshot_at,
   snapshot_index_at,
 } from "./kinematic-simulation";
@@ -199,6 +201,16 @@ export function useKinematicPlayback({
       isPlaying: shouldAutoPlay,
       time: 0,
       kinematicSnapshots: [],
+      parameterSnapshots:
+        appMode !== "edition"
+          ? [
+              {
+                t: 0,
+                mechanicalElements: mechanismRef.current.mechanicalElements,
+                loads: mechanismRef.current.loads,
+              },
+            ]
+          : [],
       scrubbed: false,
     }));
   }, [appMode]);
@@ -225,6 +237,17 @@ export function useKinematicPlayback({
     setRuntimeState((prev) => ({
       ...prev,
       kinematicSnapshots: prev.kinematicSnapshots.filter((s) => s.t <= rs.time),
+      // Strict `<`, not `<=`: an edit made without the clock having moved since the last one
+      // (two edits at the same instant, including the very first at t=0) replaces that
+      // entry instead of leaving a duplicate a lookup could resolve to either side of.
+      parameterSnapshots: [
+        ...prev.parameterSnapshots.filter((s) => s.t < rs.time),
+        {
+          t: rs.time,
+          mechanicalElements: mechanism.mechanicalElements,
+          loads: mechanism.loads,
+        },
+      ],
     }));
     // Depend on geometry/topology only, not the whole mechanism: a viewport
     // (pan/zoom) change keeps these array refs identical, so it no longer
@@ -306,8 +329,15 @@ export function useKinematicPlayback({
         mech.mechanicalElements,
         rs.kinematicSnapshots,
       );
+      // Same instant as `snapshot`, not `rs.time`: a held grab draws the newest computed
+      // frame rather than the one under the cursor, and the motor/load values shown must
+      // match whichever instant that is.
+      const paramSnapshot = parameter_snapshot_at(rs.parameterSnapshots, snapshot.t);
+      const geometryMechanism = apply_snapshot_to_mechanism(mech, snapshot);
       liveFrameRef.current = {
-        mechanism: apply_snapshot_to_mechanism(mech, snapshot),
+        mechanism: paramSnapshot
+          ? apply_parameter_snapshot_to_mechanism(geometryMechanism, paramSnapshot)
+          : geometryMechanism,
         // Headed at the instant actually DRAWN, which a held grab moves off the cursor:
         // a trail stopping short of the mechanism it belongs to is the same offset again.
         trajectories: trajectories_at(trajectoryCacheRef.current, snapshot.t).map(
@@ -579,6 +609,13 @@ export function useKinematicPlayback({
         current: null,
         history: [],
         kinematicSnapshots: [],
+        parameterSnapshots: [
+          {
+            t: 0,
+            mechanicalElements: mechanismRef.current.mechanicalElements,
+            loads: mechanismRef.current.loads,
+          },
+        ],
         scrubbed: false,
       }));
     } else {
@@ -635,6 +672,13 @@ export function useKinematicPlayback({
       current: null,
       history: [],
       kinematicSnapshots: [],
+      parameterSnapshots: [
+        {
+          t: 0,
+          mechanicalElements: mechanismRef.current.mechanicalElements,
+          loads: mechanismRef.current.loads,
+        },
+      ],
     }));
   }, []);
 

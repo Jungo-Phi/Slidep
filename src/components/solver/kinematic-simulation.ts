@@ -1,4 +1,4 @@
-import { ID, Link, Mechanism, Point2, KinNodes } from "../../types";
+import { ID, Link, Mechanism, PivotElement, Point2, KinNodes } from "../../types";
 import {
   BeltVia,
   belt_arrivals,
@@ -9,6 +9,7 @@ import {
 import {
   ConstraintResidual,
   KinematicSnapshot,
+  ParameterSnapshot,
   SnapshotLayout,
 } from "../../types/runtime-state";
 import {
@@ -1115,6 +1116,28 @@ export function snapshot_index_at(
   return lo;
 }
 
+/**
+ * The parameter snapshot in effect at `t`: the last edit made at or before it. A recording
+ * always carries at least the `t: 0` entry seeded when it started, so this only returns
+ * `null` outside a simulation (an empty log).
+ */
+export function parameter_snapshot_at(
+  snapshots: ParameterSnapshot[],
+  t: number,
+): ParameterSnapshot | null {
+  if (snapshots.length === 0) return null;
+  let lo = 0;
+  let hi = snapshots.length - 1;
+  if (t <= snapshots[0].t) return snapshots[0];
+  if (t >= snapshots[hi].t) return snapshots[hi];
+  while (hi - lo > 1) {
+    const mid = (lo + hi) >> 1;
+    if (snapshots[mid].t <= t) lo = mid;
+    else hi = mid;
+  }
+  return snapshots[lo];
+}
+
 /** Same pulleys detached on both sides. Only sound on one layout, where the flags of a
  *  given pulley are the same slot on both sides. */
 function same_belt_topology(
@@ -1180,6 +1203,50 @@ export function apply_snapshot_to_mechanism(
   });
 
   return { ...mechanism, mechanicalElements: newElements };
+}
+
+/**
+ * Apply a parameter snapshot's motor/load values to a mechanism copy for rendering — the
+ * configuration in effect at that instant, distinct from whatever was last edited. Touches
+ * only the fields a parameter edit can change (`SetMotorConfig`, `ChangeForce`,
+ * `ChangeDistributedForce`, `ChangeMoment`, `SetLoadFrame`); geometry is untouched, so this
+ * composes after `apply_snapshot_to_mechanism` without undoing it.
+ */
+export function apply_parameter_snapshot_to_mechanism(
+  mechanism: Mechanism,
+  snapshot: ParameterSnapshot,
+): Mechanism {
+  const motorByID = new Map(
+    snapshot.mechanicalElements
+      .filter((el): el is PivotElement => el.type === "pivot")
+      .map((el) => [el.id, el.motor]),
+  );
+  const loadByID = new Map(snapshot.loads.map((load) => [load.id, load]));
+
+  const newElements = mechanism.mechanicalElements.map((el) => {
+    if (el.type !== "pivot" || !motorByID.has(el.id)) return el;
+    return { ...el, motor: motorByID.get(el.id) };
+  });
+
+  const newLoads = mechanism.loads.map((load) => {
+    const shown = loadByID.get(load.id);
+    if (!shown) return load;
+    if (load.type === "force" && shown.type === "force")
+      return { ...load, vector: shown.vector, frame: shown.frame };
+    if (load.type === "distributed-force" && shown.type === "distributed-force")
+      return {
+        ...load,
+        direction: shown.direction,
+        magnitudeStart: shown.magnitudeStart,
+        magnitudeEnd: shown.magnitudeEnd,
+        frame: shown.frame,
+      };
+    if (load.type === "moment" && shown.type === "moment")
+      return { ...load, value: shown.value };
+    return load;
+  });
+
+  return { ...mechanism, mechanicalElements: newElements, loads: newLoads };
 }
 
 export { RECORD_DT };

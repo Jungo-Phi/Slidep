@@ -369,7 +369,6 @@ describe("validate_mechanism — contraintes", () => {
     const constraint: ConstraintElement = {
       type: "horizontal-align-nodes",
       id: id("c1"),
-      position: new Point2(0, 0),
       startNodeID: PIVOT_ID,
       endNodeID: PIVOT_ID,
     };

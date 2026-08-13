@@ -57,7 +57,8 @@ export function mechanism_bounds(
     }
   }
 
-  for (const constraint of constraintElements) include(constraint.position);
+  for (const constraint of constraintElements)
+    if ("position" in constraint) include(constraint.position);
 
   if (!Number.isFinite(minX)) return undefined;
   return { min: new Point2(minX, minY), max: new Point2(maxX, maxY) };

@@ -93,19 +93,11 @@ export const SimulationTimeline: React.FC<SimulationTimelineProps> = ({
       ...dead_points(snapshots).map((point) => ({
         t: point.t,
         kind: "dead-point" as const,
-        label:
-          point.period === undefined
-            ? t(
-                point.kind === "blocked"
-                  ? "timeline_dead_point"
-                  : "timeline_dead_point_released",
-              )
-            : t(
-                point.kind === "blocked"
-                  ? "timeline_dead_point_recurring"
-                  : "timeline_dead_point_released_recurring",
-                { period: format_sim_time(point.period) },
-              ),
+        label: t(
+          point.kind === "blocked"
+            ? "timeline_dead_point"
+            : "timeline_dead_point_released",
+        ),
       })),
     ];
   }, [appMode, runtimeState.kinematicSnapshots]);

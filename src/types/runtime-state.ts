@@ -3,7 +3,7 @@
  * Replaces the previous simulation.ts with a more comprehensive structure
  */
 
-import { ID } from "./element";
+import { ID, LoadElement, MechanicalElement } from "./element";
 import { Point2 } from "./point2";
 
 /**
@@ -178,6 +178,22 @@ export interface KinematicSnapshot {
   unsatisfied?: ConstraintResidual[];
 }
 
+/**
+ * The motor/load configuration in effect from `t` onward, until the next entry (or the end
+ * of the recording). One entry per parameter edit made during a simulation — sparse, unlike
+ * `KinematicSnapshot`'s per-frame sampling — plus one seeded at `t: 0` when the recording
+ * starts, so a lookup always has something at or before any `t` it is asked about.
+ *
+ * Carries the full arrays (as they stood at `t`) rather than a diff: cheap here since entries
+ * are rare, and it reuses the same "whole state, keyed by id" shape `KinematicSnapshot`'s
+ * consumers already know how to read.
+ */
+export interface ParameterSnapshot {
+  t: number;
+  mechanicalElements: MechanicalElement[];
+  loads: LoadElement[];
+}
+
 // ─────────────────────────────────────────────────────────────
 // Main runtime state
 // ─────────────────────────────────────────────────────────────
@@ -196,6 +212,10 @@ export interface RuntimeState {
 
   /** Recorded kinematic snapshots (incremental, sampled at 30 fps of sim-time) */
   kinematicSnapshots: KinematicSnapshot[];
+
+  /** The motor/load configuration history, truncated and appended to in lockstep with
+   *  `kinematicSnapshots` — see `ParameterSnapshot`. */
+  parameterSnapshots: ParameterSnapshot[];
 
   /**
    * The cursor was placed by hand — a timeline drag, a click on a chart — and has not
@@ -239,5 +259,6 @@ export const DEFAULT_RUNTIME_STATE: RuntimeState = {
   current: null,
   history: [],
   kinematicSnapshots: [],
+  parameterSnapshots: [],
   scrubbed: false,
 };

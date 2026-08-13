@@ -20,8 +20,10 @@ import { CanvasState } from "../../types/canvas-state";
 import {
   debounce,
   fit_viewport_to_bounds,
+  FileImport,
   load_mechanism,
   load_mechanisms_from_file,
+  load_mechanisms_from_filelist,
   mechanism_bounds,
   migrate_document,
   Repair,
@@ -211,8 +213,7 @@ export function useMechanismLibrary({
       const record = await db.get("mechanisms", createdAtId);
       if (!record) return;
 
-      const modifiedAt = Date.now();
-      const updated = { ...record, metadata: { ...record.metadata, name, modifiedAt } };
+      const updated = { ...record, metadata: { ...record.metadata, name } };
       await db.put("mechanisms", updated);
 
       setSavedMechanisms((prev) =>
@@ -222,7 +223,35 @@ export function useMechanismLibrary({
       if (mechanismRef.current.metadata.createdAt === createdAtId) {
         setMechanism({
           ...mechanismRef.current,
-          metadata: { ...mechanismRef.current.metadata, name, modifiedAt },
+          metadata: { ...mechanismRef.current.metadata, name },
+        });
+      }
+    },
+    [mechanismRef, setMechanism],
+  );
+
+  // Same rationale as handleRenameFromGallery: the currently open mechanism must
+  // stay in sync so the next autosave doesn't overwrite the tag change.
+  const handleUpdateTagsFromGallery = useCallback(
+    async (createdAtId: number, tags: string[]) => {
+      const db = await openMechanismsDB();
+      const record = await db.get("mechanisms", createdAtId);
+      if (!record) return;
+
+      const updated = {
+        ...record,
+        metadata: { ...record.metadata, tags },
+      };
+      await db.put("mechanisms", updated);
+
+      setSavedMechanisms((prev) =>
+        prev.map((r) => (r.metadata.createdAt === createdAtId ? updated : r)),
+      );
+
+      if (mechanismRef.current.metadata.createdAt === createdAtId) {
+        setMechanism({
+          ...mechanismRef.current,
+          metadata: { ...mechanismRef.current.metadata, tags },
         });
       }
     },
@@ -315,50 +344,62 @@ export function useMechanismLibrary({
     [],
   );
 
-  const handleMenuButtonUpload = useCallback(() => {
-    load_mechanisms_from_file()
-      .then(async ({ records, isArchive }) => {
-        const { stored, repairs } = await storeImportedRecords(records);
+  const importFiles = useCallback(
+    async ({ records, isArchive }: FileImport) => {
+      const { stored, repairs } = await storeImportedRecords(records);
 
-        if (isArchive) {
-          setSavedMechanisms((prev) => [...prev, ...stored]);
-          setSnackbar({
-            open: true,
-            message:
-              tn("mechanisms_imported", stored.length) +
-              (repairs.length > 0 ? ` — ${repair_summary(repairs)}` : ""),
-            ...(repairs.length > 0 && {
-              duration: SNACKBAR_DURATION.REPORT,
-              severity: "warning",
-            }),
-          });
-          return;
-        }
-
-        // A repaired viewport needs to be fitted it to the mechanism.
-        const loaded = load_mechanism(stored[0]).mechanism;
-        const currentCanvas = canvasRef.current;
-        setMechanism(
-          currentCanvas && repairs.some((r) => r.code === "VIEWPORT_RESET")
-            ? { ...loaded, viewport: fit_to_content(loaded, currentCanvas) }
-            : loaded,
-        );
-        setCanvasState({ type: "Selecting" });
-        resetSimulationState();
-        setGalleryOpen(false);
-        setSaveStatus("saved");
+      if (isArchive) {
+        setSavedMechanisms((prev) => [...prev, ...stored]);
         setSnackbar({
           open: true,
           message:
-            repairs.length > 0
-              ? repair_summary(repairs)
-              : t("mechanism_imported"),
+            tn("mechanisms_imported", stored.length) +
+            (repairs.length > 0 ? ` — ${repair_summary(repairs)}` : ""),
           ...(repairs.length > 0 && {
             duration: SNACKBAR_DURATION.REPORT,
             severity: "warning",
           }),
         });
-      })
+        return;
+      }
+
+      // A repaired viewport needs to be fitted it to the mechanism.
+      const loaded = load_mechanism(stored[0]).mechanism;
+      const currentCanvas = canvasRef.current;
+      setMechanism(
+        currentCanvas && repairs.some((r) => r.code === "VIEWPORT_RESET")
+          ? { ...loaded, viewport: fit_to_content(loaded, currentCanvas) }
+          : loaded,
+      );
+      setCanvasState({ type: "Selecting" });
+      resetSimulationState();
+      setGalleryOpen(false);
+      setSaveStatus("saved");
+      setSnackbar({
+        open: true,
+        message:
+          repairs.length > 0
+            ? repair_summary(repairs)
+            : t("mechanism_imported"),
+        ...(repairs.length > 0 && {
+          duration: SNACKBAR_DURATION.REPORT,
+          severity: "warning",
+        }),
+      });
+    },
+    [
+      storeImportedRecords,
+      canvasRef,
+      setMechanism,
+      setCanvasState,
+      resetSimulationState,
+      setSnackbar,
+    ],
+  );
+
+  const handleMenuButtonUpload = useCallback(() => {
+    load_mechanisms_from_file()
+      .then(importFiles)
       .catch(() =>
         setSnackbar({
           open: true,
@@ -366,14 +407,22 @@ export function useMechanismLibrary({
           severity: "warning",
         }),
       );
-  }, [
-    storeImportedRecords,
-    canvasRef,
-    setMechanism,
-    setCanvasState,
-    resetSimulationState,
-    setSnackbar,
-  ]);
+  }, [importFiles, setSnackbar]);
+
+  const handleFilesDropped = useCallback(
+    (files: FileList | File[]) => {
+      load_mechanisms_from_filelist(files)
+        .then(importFiles)
+        .catch(() =>
+          setSnackbar({
+            open: true,
+            message: t("file_unreadable"),
+            severity: "warning",
+          }),
+        );
+    },
+    [importFiles, setSnackbar],
+  );
 
   // Export depuis la galerie : les enregistrements y sont déjà sérialisés.
   const handleExportRecord = useCallback((record: SerializedMechanism) => {
@@ -402,9 +451,11 @@ export function useMechanismLibrary({
     closeGallery,
     handleLoadFromGallery,
     handleRenameFromGallery,
+    handleUpdateTagsFromGallery,
     handleDeleteFromGallery,
     handleNewFromGallery,
     handleMenuButtonUpload,
+    handleFilesDropped,
     handleExportRecord,
     handleExportAllRecords,
   };

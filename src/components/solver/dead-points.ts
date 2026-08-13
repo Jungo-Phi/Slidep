@@ -22,16 +22,8 @@ import { KinematicSnapshot } from "../../types/runtime-state";
 /** Frames a block must last to be reported, so one uneven frame is not an event. */
 const MIN_BLOCKED_FRAMES = 2;
 
-/** How much the gaps between blocks may vary and still read as a rhythm rather than a list. */
-const PERIOD_TOLERANCE = 0.25;
-
-/** Blocks needed before a rhythm can be claimed at all. */
-const MIN_RECURRENCES = 3;
-
 export type DeadPointTuning = {
   minBlockedFrames?: number;
-  periodTolerance?: number;
-  minRecurrences?: number;
 };
 
 export type DeadPoint = {
@@ -47,15 +39,6 @@ export type DeadPoint = {
    * would leave the reader unsure whether the escape worked.
    */
   kind: "blocked" | "released";
-  /**
-   * Seconds between recurrences, when the block comes back on a rhythm.
-   *
-   * A crank driven from its slider meets its dead points twice a turn: at three turns a
-   * second over twenty seconds that is a hundred and twenty of them, and marking each one
-   * buries the very fact it is trying to state. A recurrence is a property of the
-   * mechanism, not of an instant, so only the first is reported and it carries the rhythm.
-   */
-  period?: number;
 };
 
 const MOTOR_TYPES = new Set(["MotorBeam", "MotorAngle"]);
@@ -69,26 +52,6 @@ const blocked_motors = (snapshot: KinematicSnapshot): Set<ID> => {
 };
 
 /**
- * Collapse a rhythm into its first occurrence.
- *
- * The gaps are compared to their own mean, so a mechanism turning slowly and one turning
- * fast are judged the same way. Anything irregular is left as a list: an event that happens
- * once is exactly what a mark is for.
- */
-function fold_recurrences(
-  times: number[],
-  tolerance: number,
-  minRecurrences: number,
-): { t: number; period?: number }[] {
-  if (times.length < minRecurrences) return times.map((t) => ({ t }));
-  const gaps = times.slice(1).map((t, i) => t - times[i]);
-  const mean = gaps.reduce((sum, gap) => sum + gap, 0) / gaps.length;
-  if (mean <= 0) return times.map((t) => ({ t }));
-  const regular = gaps.every((gap) => Math.abs(gap - mean) / mean <= tolerance);
-  return regular ? [{ t: times[0], period: mean }] : times.map((t) => ({ t }));
-}
-
-/**
  * Every instant a motor stalls along `snapshots`, in time order.
  *
  * Pure, and cheap enough to redo whenever the recording grows: the per-frame work is
@@ -98,11 +61,7 @@ export function dead_points(
   snapshots: KinematicSnapshot[],
   tuning: DeadPointTuning = {},
 ): DeadPoint[] {
-  const {
-    minBlockedFrames = MIN_BLOCKED_FRAMES,
-    periodTolerance = PERIOD_TOLERANCE,
-    minRecurrences = MIN_RECURRENCES,
-  } = tuning;
+  const { minBlockedFrames = MIN_BLOCKED_FRAMES } = tuning;
 
   /** Per motor: when the run in progress began, and how long it has lasted. */
   const running = new Map<ID, { since: number; frames: number }>();
@@ -138,12 +97,7 @@ export function dead_points(
   const found: DeadPoint[] = [];
   for (const [motor, kinds] of times)
     for (const kind of ["blocked", "released"] as const)
-      for (const { t, period } of fold_recurrences(
-        kinds[kind],
-        periodTolerance,
-        minRecurrences,
-      ))
-        found.push({ t, motor, kind, ...(period ? { period } : {}) });
+      for (const t of kinds[kind]) found.push({ t, motor, kind });
 
   return found.sort(
     (a, b) => a.t - b.t || a.motor.localeCompare(b.motor) || a.kind.localeCompare(b.kind),

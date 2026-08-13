@@ -71,7 +71,6 @@ describe("dead_points", () => {
     // frame où il devient certain ; la première frame libre, pas la dernière bloquée.
     expect(found[0].t).toBeCloseTo(snapshots[50].t, 9);
     expect(found[1].t).toBeCloseTo(snapshots[80].t, 9);
-    expect(found.every((p) => p.period === undefined)).toBe(true);
   });
 
   it("un blocage qui dure jusqu'au bout n'a pas de sortie", () => {
@@ -92,17 +91,13 @@ describe("dead_points", () => {
     ).toEqual(["blocked", "released"]);
   });
 
-  it("un blocage régulier se replie sur sa première occurrence", () => {
-    // Cent vingt marques pour dire « deux points morts par tour » enterrent
-    // l'information sous le bruit qu'elles produisent.
+  it("un blocage qui revient sur un rythme est rapporté à chaque occurrence", () => {
     const cycle = [...free(40), ...stuck(10)];
     const found = dead_points(
-      recording([...cycle, ...cycle, ...cycle, ...cycle]),
+      recording([...cycle, ...cycle, ...cycle, ...cycle, ...free(1)]),
     );
-    // Une entrée et une sortie, chacune repliée sur sa propre cadence.
-    expect(found.map((p) => p.kind)).toEqual(["blocked", "released"]);
-    expect(found.every((p) => p.period !== undefined)).toBe(true);
-    expect(found[0].period).toBeCloseTo(50 * RECORD_DT, 6);
+    expect(found.filter((p) => p.kind === "blocked")).toHaveLength(4);
+    expect(found.filter((p) => p.kind === "released")).toHaveLength(4);
   });
 
   it("des blocages irréguliers restent une liste", () => {
@@ -119,7 +114,6 @@ describe("dead_points", () => {
     );
     expect(found.filter((p) => p.kind === "blocked")).toHaveLength(3);
     expect(found.filter((p) => p.kind === "released")).toHaveLength(3);
-    expect(found.every((point) => point.period === undefined)).toBe(true);
   });
 
   it("allonger l'enregistrement ne déplace pas ce qui précède", () => {

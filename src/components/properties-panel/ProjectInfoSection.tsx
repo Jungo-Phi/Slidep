@@ -26,6 +26,7 @@ import {
 } from "../../utils";
 import { HoveredPart } from "../../types/hovered-part";
 import ElementDisplay from "./components/ElementDisplay";
+import TagChipsEditor from "../mechanisms-gallery/TagChipsEditor";
 import { t, tn } from "../../i18n";
 
 /**
@@ -87,6 +88,8 @@ const CATEGORY_LABELS: Record<ConstraintViolationCategory, string> = {
 interface ProjectInfoSectionProps {
   mechanism: Mechanism;
   updateMetadata: (metadata: MechanismMetadata) => void;
+  /** Every tag already used in the mechanism library, suggested by the tag autocomplete. */
+  allTags: string[];
   hoveredPart: HoveredPart;
   setHoveredPart: (hoveredPart: HoveredPart) => void;
   selectedIds: ID[];
@@ -97,6 +100,7 @@ interface ProjectInfoSectionProps {
 export const ProjectInfoSection: React.FC<ProjectInfoSectionProps> = ({
   mechanism,
   updateMetadata,
+  allTags,
   hoveredPart,
   setHoveredPart,
   selectedIds,
@@ -179,6 +183,10 @@ export const ProjectInfoSection: React.FC<ProjectInfoSectionProps> = ({
     updateMetadata({ ...projectInfo });
   };
 
+  const handleTagsChange = (tags: string[]) => {
+    updateMetadata({ ...projectInfo, tags });
+  };
+
   /** `enterCommits` is off for the description, where Enter is a line break. */
   const handleFieldKeyDown = (
     e: React.KeyboardEvent,
@@ -242,77 +250,53 @@ export const ProjectInfoSection: React.FC<ProjectInfoSectionProps> = ({
           onBlur={commitInfo}
           size="small"
         />
-      </Box>
-
-      <Box
-        sx={{
-          m: 2,
-          display: "flex",
-          gap: 4,
-        }}
-      >
-        <Box>
-          <Typography
-            variant="caption"
-            color="text.secondary"
-            sx={{ display: "block" }}
-          >
-            {t("project_created")}
-          </Typography>
-          <Typography variant="body2">
-            {format_date(projectInfo.createdAt)}
-          </Typography>
-        </Box>
-        <Box>
-          <Typography
-            variant="caption"
-            color="text.secondary"
-            sx={{ display: "block" }}
-          >
-            {t("project_modified")}
-          </Typography>
-          <Typography variant="body2">
-            {format_date(projectInfo.modifiedAt)}
-          </Typography>
-        </Box>
-      </Box>
-
-      <Divider />
-
-      <Box
-        sx={{
-          display: "flex",
-          flexDirection: "column",
-          gap: 0.5,
-          m: 2,
-        }}
-      >
-        <Box
-          sx={{
-            display: "flex",
-            alignItems: "center",
-            gap: 1,
-          }}
-        >
-          <Typography variant="body2">{t("project_element_count")}</Typography>
-          <Typography variant="body1" fontWeight={500}>
-            {mechanism.mechanicalElements.length}
-          </Typography>
-        </Box>
 
         <Box
           sx={{
             display: "flex",
-            alignItems: "center",
-            gap: 1,
+            gap: 5,
           }}
         >
-          <Typography variant="body2">
-            {t("project_constraint_count")}
+          <Box>
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ display: "block" }}
+            >
+              {t("project_created")}
+            </Typography>
+            <Typography variant="body2">
+              {format_date(projectInfo.createdAt)}
+            </Typography>
+          </Box>
+          <Box>
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ display: "block" }}
+            >
+              {t("project_modified")}
+            </Typography>
+            <Typography variant="body2">
+              {format_date(projectInfo.modifiedAt)}
+            </Typography>
+          </Box>
+        </Box>
+
+        <Box>
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            sx={{ display: "block", mb: 0.5 }}
+          >
+            {t("project_tags")}
           </Typography>
-          <Typography variant="body1" fontWeight={500}>
-            {mechanism.constraintElements.length}
-          </Typography>
+          <TagChipsEditor
+            tags={projectInfo.tags}
+            allTags={allTags}
+            onChange={handleTagsChange}
+            mechanismLength={mechanism.mechanicalElements.length}
+          />
         </Box>
       </Box>
 

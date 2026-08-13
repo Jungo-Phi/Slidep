@@ -1,5 +1,5 @@
 import { get_language } from "../i18n";
-import { ID, UnionElement } from "../types";
+import { ID, UnionElement, is_nameable } from "../types";
 
 /**
  * Formate un UUID pour le rendre lisible.
@@ -95,7 +95,7 @@ export function legible_id(id: ID): string {
  */
 export function shown_element_name(element: UnionElement | undefined): string {
   if (!element) return "Not found";
-  if (element.name) return element.name;
+  if (is_nameable(element) && element.name) return element.name;
 
   let name: string = element.type;
   if (element.type === "pivot" && element.motor) name = "motor";

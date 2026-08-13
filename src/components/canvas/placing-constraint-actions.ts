@@ -464,7 +464,6 @@ function build_constraint(
                 type: isHorizontal
                   ? "horizontal-align-edge"
                   : "vertical-align-edge",
-                position: edge.positionStart.lerp(edge.positionEnd, 0.25),
                 id: crypto.randomUUID(),
                 edgeID: edge.id,
               },
@@ -495,7 +494,6 @@ function build_constraint(
               type: isHorizontal
                 ? "horizontal-align-nodes"
                 : "vertical-align-nodes",
-              position: startNode.position.lerp(hoveredPart.position, 0.25),
               id: crypto.randomUUID(),
               startNodeID: state.startNodeID,
               endNodeID: hoveredPart.id,
@@ -527,16 +525,12 @@ function build_constraint(
         hoveredPart.id,
         mechanicalElements,
       ) as EdgeElement;
-      const position = startEdge.positionStart
-        .lerp(startEdge.positionEnd, 0.5)
-        .lerp(endEdge.positionStart.lerp(endEdge.positionEnd, 0.5), 0.5);
       return {
         actions: [
           {
             type: "CreateElement",
             element: {
               type: "normal",
-              position,
               id: crypto.randomUUID(),
               startEdgeID: startEdge.id,
               endEdgeID: endEdge.id,
@@ -568,16 +562,12 @@ function build_constraint(
         hoveredPart.id,
         mechanicalElements,
       ) as EdgeElement;
-      const position = startEdge.positionStart
-        .lerp(startEdge.positionEnd, 0.25)
-        .lerp(endEdge.positionStart.lerp(endEdge.positionEnd, 0.25), 0.5);
       return {
         actions: [
           {
             type: "CreateElement",
             element: {
               type: "parallel",
-              position,
               id: crypto.randomUUID(),
               startEdgeID: startEdge.id,
               endEdgeID: endEdge.id,
@@ -618,16 +608,12 @@ function build_constraint(
         hoveredPart.id,
         mechanicalElements,
       ) as EdgeElement;
-      const position = startEdge.positionStart
-        .lerp(startEdge.positionEnd, 0.25)
-        .lerp(endEdge.positionStart.lerp(endEdge.positionEnd, 0.25), 0.5);
       return {
         actions: [
           {
             type: "CreateElement",
             element: {
               type: "equal",
-              position,
               id: crypto.randomUUID(),
               startEdgeID: startEdge.id,
               endEdgeID: endEdge.id,

@@ -89,6 +89,7 @@ import {
   connected_constraints,
   is_constraint_type,
   probe_badge_position,
+  relation_badge_positions,
 } from "./utils";
 import {
   screen_vias,
@@ -665,6 +666,73 @@ export function draw_mechanism(
         if (doomed.has(element.id))
           ctx.globalAlpha = INTERACTION_SPECS.DELETION_OPACITY;
         draw_probe(ctx, probe_badge_position(element, viewport));
+      }
+      return;
+    }
+    if (type === "relationBadge") {
+      if (hideConstraints) return;
+      for (const host of mechanicalElements) {
+        if (undrawable.has(host.id)) continue;
+        for (const { constraintId, position } of relation_badge_positions(
+          host.id,
+          mechanicalElements,
+          constraintElements,
+          viewport,
+        )) {
+          if (undrawable.has(constraintId)) continue;
+          const opacity = visibleConstraints.get(constraintId);
+          if (opacity === undefined) continue;
+          const constraint = constraintElements.find(
+            (c) => c.id === constraintId,
+          );
+          if (!constraint) continue;
+          const isSelected = is_selected(constraintId, state);
+          const isEraseHovered = is_erase_hovered(
+            constraintId,
+            hoveredPart,
+            state,
+            constraintElements,
+            doomed,
+          );
+          const isCursorHovered = is_hovered(
+            constraintId,
+            hoveredPart,
+            constraintElements,
+          );
+          const isHovered =
+            focused.has(constraintId) || faulty.has(constraintId) || isCursorHovered;
+
+          ctx.shadowBlur = 0;
+          ctx.globalAlpha = 1;
+          ctx.lineCap = "butt";
+          ctx.lineJoin = "miter";
+          ctx.strokeStyle = COLORS.ELEMENT_STROKE;
+          ctx.fillStyle = COLORS.FILL_BODY;
+          ctx.lineWidth = STROKE_WIDTHS.STANDARD;
+          if (isHovered) ctx.lineWidth += STROKE_WIDTHS.HOVER_GAIN;
+          if (isSelected) {
+            ctx.shadowColor = COLORS.SELECTION_STROKE;
+            ctx.strokeStyle = COLORS.SELECTION_STROKE;
+            ctx.fillStyle = COLORS.FILL_BODY;
+            ctx.shadowBlur = INTERACTION_SPECS.SELECTION_HALO_SIZE;
+          }
+          if (isEraseHovered) {
+            ctx.strokeStyle = COLORS.DELETION_STROKE;
+            ctx.globalAlpha = INTERACTION_SPECS.DELETION_OPACITY;
+          }
+          if (faulty.has(constraintId)) ctx.strokeStyle = COLORS.DELETION_STROKE;
+          ctx.globalAlpha *= opacity;
+          const isGhost = ghostConstraintIDs.has(constraintId);
+          if (isGhost) ctx.strokeStyle = COLORS.DELETION_STROKE;
+          draw_element_icon(
+            ctx,
+            position,
+            constraint,
+            isSelected,
+            isHovered,
+            isGhost ? "ghost" : isEraseHovered ? "erasing" : "none",
+          );
+        }
       }
       return;
     }
@@ -1339,22 +1407,6 @@ export function draw_mechanism(
             ctx,
             world2screen(element.position, viewport),
             element.value,
-            isSelected,
-            isHovered,
-            isGhost ? "ghost" : isEraseHovered ? "erasing" : "none",
-          );
-          break;
-        case "horizontal-align-edge":
-        case "horizontal-align-nodes":
-        case "vertical-align-edge":
-        case "vertical-align-nodes":
-        case "normal":
-        case "parallel":
-        case "equal":
-          draw_element_icon(
-            ctx,
-            world2screen(element.position, viewport),
-            element,
             isSelected,
             isHovered,
             isGhost ? "ghost" : isEraseHovered ? "erasing" : "none",

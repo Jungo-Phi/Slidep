@@ -10,52 +10,15 @@
 
 ### À faire rapidement
 
-**Propriétés du mécanisme, gallerie, tags et imports**
-
-- 🔨 Importer plusieurs fichiers d'un coup
-- 🆕 Import de mécanismes en drag & drop depuis l'explorateur de fichiers
-- 🤔 Changer le style de grille : panneaux -> Grille "serrée" (pour gagner des pixels)
-- 🔨 Édition du nom du mécanisme dans la gallerie (ne doit pas être caché)
-- 🔨 Afficher la description du mécanisme dans la gallerie en lecture seule sur 2 ou 3 lignes (... si trop long)
-- 🆕 Suggestion de tags "Statique", "Cinématique", "Dynamique"
-- 🔨 Afficher le nombre de pièces comme un tag
-- 🆕 Créer l'éditeur de tags, le même dans la gallerie que dans le panneau de propriétés
-- 🔨 Exporter le mécanisme depuis le panneau de propriétés ?
-
-**Refactor des dossiers**
-
-- ❇️ Refactor connect-actions.ts (< 600 lignes)
-- 🤔 Refactor drawing-functions.ts ?
-- 🤔 Refactor constraint-functions.ts ?
-- ❇️ Refactor parsing.ts
-- ❇️ Refactor kinematic-simulation.ts
-- ❇️ Refactor MechanicalCanvas.tsx
-- ❇️ Refactor AnalysisPanel.tsx
-- ❇️ Refactor canvas-state-reducer.ts
-- ❇️ Refactor get-hover.ts
-- ❇️ Refactor AnalysisPanel.tsx
-- ❇️ Refactor belt-path.ts
-- 🤔 Refactor placing-element-actions.ts ?
-- 🤔 Refactor placing-constraint-actions.ts ?
-- ❇️ Réorganisation des fichiers en sous-dossiers
-
-**Clarifier l'édition en simulation (Hot-Reload), ce n'est pas clair si elle est sauvegardée ou temporaire.**
-**Ce qui comte pour la clareté, c'est qu'après le premier click, l'utilisateur aie compris si son changement est temporaire où non.**
-
-- 🤔 Les changements de vitesse de moteurs en simulation doivent-il être enregistrés ?
-- 🤔 Afficher les changements de directions de moteurs (et autres) dans le panneau latéral en relecture ?
-- 🔨 La flèche du moteur doit changer de sens en simulation relecture
-- 🆕 Champ clignote brièvement (bordure verte ?) pour confirmer la prise en compte par le solver
+- 🔨 Simuler un moteur non grounded (parentBeamID)
 
 **Simulation**
 
 - 🔨 Mettre à jour le hover en simulation quand le mécanisme bouge sans grab
 - 🚨 En cinématique, quand l'alignement n'est juste pas parfait (alors que le défaut peut ne même pas s'afficher), le mécanisme bouge tout seul (voir "Le mécanisme qui bouge tout seul.slidep").
-- 🔨 DimensionBelt ne met pas à jour la dimension de belt _open_
-- 🔨 Simuler un moteur non grounded (parentBeamID)
 - 🔨 Donner a tous les ressorts en cinématique la même "élasticité".
-- 🚨 avec le mécanisme "Poutre sur joint de courroie"
-- 🚨 avec le mécanisme "Ressorts sur moteur"
+- 🚨 Bug avec le mécanisme "Poutre sur joint de courroie"
+- 🚨 Bug avec le mécanisme "Ressorts sur moteur"
 - Passer la simulation en Rust WASM pour accélérer ?
 
 **Solveur géométrique**
@@ -64,10 +27,6 @@
 - 🔨 Ignorer des grounds si nécessaire.
 - 🚨 Généralement laisser les nodes sur les edges en "SlideOn"
 - 🤔 Que faire quand on entre une valeur dans le panneau latéral que les contraintes existantes ne permettent pas ?
-
----
-
-### [ Simulation dynamique ]
 
 **Physique**
 
@@ -108,7 +67,6 @@
 **Analyse hyperstatique**
 
 - 🚨 Sur le mécanisme "Poulie.slidep", je ne comprend pas les hyperstatismes "Non-glissement de courroie"
-- 🔨 Re-router les contraintes de distances qui viennent de contraintes d'angles
 - 🤔 Animer les éléments (en plus?) des symboles ?
 
 **Panneau mesures**
@@ -134,7 +92,8 @@
 - 🆕 Ajouter les graduations à la grille (_grille adaptative.md_)
 - 🔨 Ajouter zoom min et max au viewport
 - 🚨 SnapToGrid pas 100% fiable (nottament snapX + snapY) ?
-- 🔨 PlacingBeltEnd : clicker sur le gearTooth de départ devrait fermer la courroie
+- 🚨 Ne pas ajouter un remplacement d'élément identique à l'historique
+- 🆕 Ajouter un nouvel élément "Commentaire" sur le canvas
 - 🆕 Parsing loads : "150000 N" => "150 kN"
 - 🔨 Afficher le point grabbé en simulation
 - 🔨 Theme transition : certaines couleurs changent instantanément (grille + autres éléments spéciaux du canvas)
@@ -145,6 +104,7 @@
 - 🆕 Afficher des syboles au hover des numberInput start, end, longueur et angle
 - 🔨 Hover une probe devrait hover l'élément aussi
 - 🆕 Sélectionner les dimensions (sur la flèche)
+- 🔨 Rendre les hitbox exactes (contraintes, noeuds)
 
 - 🔨 Afficher le point de contact pour placingGearRadius sur belt
 - ❇️ Wrap VS windings ?
@@ -163,6 +123,23 @@
 - 🆕 Éditer la longueur de repos d'un ressort (pas forcément égale à celle affichée en édition)
 - 🆕 Scroll dans NumberInput
 
+**Refactor des dossiers**
+
+- ❇️ Refactor connect-actions.ts (< 600 lignes)
+- 🤔 Refactor drawing-functions.ts ?
+- 🤔 Refactor constraint-functions.ts ?
+- ❇️ Refactor parsing.ts
+- ❇️ Refactor kinematic-simulation.ts
+- ❇️ Refactor MechanicalCanvas.tsx
+- ❇️ Refactor AnalysisPanel.tsx
+- ❇️ Refactor canvas-state-reducer.ts
+- ❇️ Refactor get-hover.ts
+- ❇️ Refactor AnalysisPanel.tsx
+- ❇️ Refactor belt-path.ts
+- 🤔 Refactor placing-element-actions.ts ?
+- 🤔 Refactor placing-constraint-actions.ts ?
+- ❇️ Réorganisation des fichiers en sous-dossiers
+
 **Architecture et refactor**
 
 - ❇️ Supprimer des fonctions simples de load-utils
@@ -171,8 +148,7 @@
 - ❇️ unifier la méthode de catégories de canvasState dans get-hover, placing-element-actions et autres / Créer uns catégories de CanvasState pour rendre le code plus lisible et maintenable
 - ❇️ enlever les undefined de "SelectedElement"
 - ❇️ Enlever tous les commentaires redondants
-- 🔨 Ajouter des "Blank" quand on change une valeur depuis les propriétés
-- 🆕 Ajouter un nouvel élément "Commentaire" sur le canvas
+- ❇️ Fusionner les termes qui se répètent dans les traductions
 
 **Charges**
 
@@ -276,6 +252,7 @@
 
 - 🆕 Rendre visible les ctrl+y/z invisibles : clicgnottement dans l'onglet
 - 🤔 Bundler les actions avec un debounce ?
+- 🔨 Ajouter des "Blank" quand on change une valeur depuis les propriétés ?
 - 🤔 Afficher "shown_name d'un élément au hover de celui-ci ?
 - 🤔 Test utilisateur : "ESCAPE" doit-il faire revenir en édition en 1/2 clicks ?
 

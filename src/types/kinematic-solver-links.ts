@@ -35,6 +35,11 @@ export type Link = {
       // Which way coincident points should part. Ignored as soon as they are
       // apart, since the axis between them is then the real one.
       preferredAxis?: Point2;
+      // True when this length is standing in for a hub's angle lock (SSS
+      // triangulation of two welded beams) rather than a real dimension. Read
+      // by the redundancy symbol, which then draws it as a diverging angle
+      // instead of a parting gap.
+      angleLock?: true;
     }
   | {
       /**

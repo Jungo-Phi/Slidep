@@ -65,6 +65,9 @@ interface ElementPropertiesProps {
   setCanvasState: (state: CanvasState) => void;
   applyActions: (actions: Action[]) => void;
   mechanism: Mechanism;
+  /** The mechanism in the pose on screen — see the same field on `AnalysisPanel`. Only feeds
+   *  the values shown for a motor/load while scrubbed; every write still goes to `mechanism`. */
+  analysedMechanism: Mechanism;
   setActiveTab: (tab: PropertiesPanelTab) => void;
   appMode: AppMode;
   runtimeState: RuntimeState;
@@ -78,6 +81,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
   setCanvasState,
   applyActions,
   mechanism,
+  analysedMechanism,
   setActiveTab,
   appMode,
   runtimeState,
@@ -147,9 +151,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                         onMouseEnter={() => handleMouseEnter(element, true)}
                         onMouseLeave={handleMouseLeave}
                         onClick={() =>
-                          applyActions(
-                            [{ type: "DeleteElement", element }],
-                          )
+                          applyActions([{ type: "DeleteElement", element }])
                         }
                         title={t("action_delete")}
                         sx={{ borderRadius: 3 }}
@@ -185,6 +187,15 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
   );
 
   const elementLoads = mechanism.loads.filter((l) => l.targetID === element.id);
+  const displayLoads = analysedMechanism.loads.filter(
+    (l) => l.targetID === element.id,
+  );
+  const analysedElement =
+    element.type === "pivot"
+      ? analysedMechanism.mechanicalElements.find((e) => e.id === element.id)
+      : undefined;
+  const displayMotorConfig =
+    analysedElement?.type === "pivot" ? analysedElement.motor : undefined;
 
   return (
     <Box sx={{ mb: 1 }}>
@@ -214,15 +225,13 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                         color="inherit"
                         size="small"
                         onClick={() =>
-                          applyActions(
-                            [
-                              {
-                                type: "GroundNode",
-                                id: element.id,
-                                grounded: !element.isGrounded,
-                              },
-                            ],
-                          )
+                          applyActions([
+                            {
+                              type: "GroundNode",
+                              id: element.id,
+                              grounded: !element.isGrounded,
+                            },
+                          ])
                         }
                         sx={{ padding: 0.5, border: 1, borderColor: "divider" }}
                       >
@@ -239,18 +248,16 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
               {element.type === "pivot" && element.motor && (
                 <SignedNumberInput
                   label={t("unit_rpm")}
-                  value={element.motor.speed}
+                  value={(displayMotorConfig ?? element.motor).speed}
                   onChange={(speed) =>
-                    applyActions(
-                      [
-                        {
-                          type: "SetMotorConfig",
-                          id: element.id,
-                          newConfig: { ...element.motor, speed },
-                          oldConfig: element.motor,
-                        },
-                      ],
-                    )
+                    applyActions([
+                      {
+                        type: "SetMotorConfig",
+                        id: element.id,
+                        newConfig: { ...element.motor, speed },
+                        oldConfig: element.motor,
+                      },
+                    ])
                   }
                   large
                   accent
@@ -261,15 +268,13 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                   label="kg"
                   value={element.mass}
                   onChange={(mass) =>
-                    applyActions(
-                      [
-                        {
-                          type: "ChangeMass",
-                          id: element.id,
-                          delta: mass - element.mass,
-                        },
-                      ],
-                    )
+                    applyActions([
+                      {
+                        type: "ChangeMass",
+                        id: element.id,
+                        delta: mass - element.mass,
+                      },
+                    ])
                   }
                   large
                   accent
@@ -281,15 +286,13 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                   label="N/m"
                   value={element.stiffness}
                   onChange={(stiffness) =>
-                    applyActions(
-                      [
-                        {
-                          type: "ChangeStiffness",
-                          id: element.id,
-                          delta: stiffness - element.stiffness,
-                        },
-                      ],
-                    )
+                    applyActions([
+                      {
+                        type: "ChangeStiffness",
+                        id: element.id,
+                        delta: stiffness - element.stiffness,
+                      },
+                    ])
                   }
                   large
                   accent
@@ -301,15 +304,13 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                   label="N·s/m"
                   value={element.damping}
                   onChange={(damping) =>
-                    applyActions(
-                      [
-                        {
-                          type: "ChangeDamping",
-                          id: element.id,
-                          delta: damping - element.damping,
-                        },
-                      ],
-                    )
+                    applyActions([
+                      {
+                        type: "ChangeDamping",
+                        id: element.id,
+                        delta: damping - element.damping,
+                      },
+                    ])
                   }
                   large
                   accent
@@ -359,17 +360,15 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
             <VectorInput
               value={element.position}
               onChange={(pos) =>
-                applyActions(
-                  [
-                    {
-                      type: "MoveNode",
-                      id: element.id,
-                      newPosition: pos,
-                      oldPosition: element.position,
-                      committed: true,
-                    },
-                  ],
-                )
+                applyActions([
+                  {
+                    type: "MoveNode",
+                    id: element.id,
+                    newPosition: pos,
+                    oldPosition: element.position,
+                    committed: true,
+                  },
+                ])
               }
             />
             {element.type === "pivot" && (
@@ -411,21 +410,19 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
               <NumberInput
                 value={element.radius}
                 onChange={(radius) => {
-                  applyActions(
-                    [
-                      {
-                        type: "ChangeGearRadius",
-                        id: element.id,
-                        newRadius: radius,
-                        oldRadius: element.radius,
-                        target: new Point2(
-                          element.position.x + radius,
-                          element.position.y,
-                        ),
-                        committed: true,
-                      },
-                    ],
-                  );
+                  applyActions([
+                    {
+                      type: "ChangeGearRadius",
+                      id: element.id,
+                      newRadius: radius,
+                      oldRadius: element.radius,
+                      target: new Point2(
+                        element.position.x + radius,
+                        element.position.y,
+                      ),
+                      committed: true,
+                    },
+                  ]);
                 }}
                 label={t("element_radius")}
                 large
@@ -440,30 +437,26 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                           handleMouseEnter(linkedConstraint, true),
                         onMouseLeave: handleMouseLeave,
                         onClick: () =>
-                          applyActions(
-                            [
-                              {
-                                type: "DeleteElement",
-                                element: linkedConstraint,
-                              },
-                            ],
-                          ),
+                          applyActions([
+                            {
+                              type: "DeleteElement",
+                              element: linkedConstraint,
+                            },
+                          ]),
                       }
                     : {
                         icon: LockOpen,
                         title: t("length_lock"),
                         onClick: () =>
-                          applyActions(
-                            [
-                              {
-                                type: "CreateElement",
-                                element: create_radius_dimension(
-                                  element,
-                                  mechanism.viewport,
-                                ),
-                              },
-                            ],
-                          ),
+                          applyActions([
+                            {
+                              type: "CreateElement",
+                              element: create_radius_dimension(
+                                element,
+                                mechanism.viewport,
+                              ),
+                            },
+                          ]),
                       }
                 }
               />
@@ -487,17 +480,15 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
             <VectorInput
               value={element.positionStart}
               onChange={(pos) =>
-                applyActions(
-                  [
-                    {
-                      type: "MoveEdgeStart",
-                      id: element.id,
-                      newPosition: pos,
-                      oldPosition: element.positionStart,
-                      committed: true,
-                    },
-                  ],
-                )
+                applyActions([
+                  {
+                    type: "MoveEdgeStart",
+                    id: element.id,
+                    newPosition: pos,
+                    oldPosition: element.positionStart,
+                    committed: true,
+                  },
+                ])
               }
             />
 
@@ -523,30 +514,26 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                     );
                     if (beltDim && beltDim.type === "dimension-belt") {
                       // Persistent dimension: update its value.
-                      applyActions(
-                        [
-                          {
-                            type: "ChangeDimensionBeltValue",
-                            id: beltDim.id,
-                            newValue: length,
-                            oldValue: beltDim.value,
-                          },
-                        ],
-                      );
+                      applyActions([
+                        {
+                          type: "ChangeDimensionBeltValue",
+                          id: beltDim.id,
+                          newValue: length,
+                          oldValue: beltDim.value,
+                        },
+                      ]);
                     } else {
-                      applyActions(
-                        [
-                          {
-                            type: "ChangeBeltLength",
-                            id: element.id,
-                            newLength: length,
-                            oldLength: measure_belt_length(
-                              element,
-                              mechanism.mechanicalElements,
-                            ),
-                          },
-                        ],
-                      );
+                      applyActions([
+                        {
+                          type: "ChangeBeltLength",
+                          id: element.id,
+                          newLength: length,
+                          oldLength: measure_belt_length(
+                            element,
+                            mechanism.mechanicalElements,
+                          ),
+                        },
+                      ]);
                     }
                     return;
                   }
@@ -555,29 +542,25 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                       c.type === "dimension-edge" && c.edgeID === element.id,
                   );
                   if (linkedDim && linkedDim.type === "dimension-edge") {
-                    applyActions(
-                      [
-                        {
-                          type: "ChangeDimensionEdgeValue",
-                          id: linkedDim.id,
-                          newValue: length,
-                          oldValue: linkedDim.value,
-                        },
-                      ],
-                    );
+                    applyActions([
+                      {
+                        type: "ChangeDimensionEdgeValue",
+                        id: linkedDim.id,
+                        newValue: length,
+                        oldValue: linkedDim.value,
+                      },
+                    ]);
                   } else {
-                    applyActions(
-                      [
-                        {
-                          type: "ChangeEdgeLength",
-                          id: element.id,
-                          newLength: length,
-                          oldLength: element.positionStart.distance_to(
-                            element.positionEnd,
-                          ),
-                        },
-                      ],
-                    );
+                    applyActions([
+                      {
+                        type: "ChangeEdgeLength",
+                        id: element.id,
+                        newLength: length,
+                        oldLength: element.positionStart.distance_to(
+                          element.positionEnd,
+                        ),
+                      },
+                    ]);
                   }
                 }}
                 label={t("length")}
@@ -593,31 +576,27 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                           handleMouseEnter(linkedConstraint, true),
                         onMouseLeave: handleMouseLeave,
                         onClick: () =>
-                          applyActions(
-                            [
-                              {
-                                type: "DeleteElement",
-                                element: linkedConstraint,
-                              },
-                            ],
-                          ),
+                          applyActions([
+                            {
+                              type: "DeleteElement",
+                              element: linkedConstraint,
+                            },
+                          ]),
                       }
                     : {
                         icon: LockOpen,
                         title: "Bloquer la longueur",
                         onClick: () =>
-                          applyActions(
-                            [
-                              {
-                                type: "CreateElement",
-                                element: create_length_dimension(
-                                  element,
-                                  mechanism.mechanicalElements,
-                                  mechanism.viewport,
-                                ),
-                              },
-                            ],
-                          ),
+                          applyActions([
+                            {
+                              type: "CreateElement",
+                              element: create_length_dimension(
+                                element,
+                                mechanism.mechanicalElements,
+                                mechanism.viewport,
+                              ),
+                            },
+                          ]),
                       }
                 }
               />
@@ -627,18 +606,16 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                     element.positionEnd.sub(element.positionStart).angle(),
                   )}
                   onChange={(deg) =>
-                    applyActions(
-                      [
-                        {
-                          type: "ChangeEdgeAngle",
-                          id: element.id,
-                          newAngle: to_rad(deg),
-                          oldAngle: element.positionEnd
-                            .sub(element.positionStart)
-                            .angle(),
-                        },
-                      ],
-                    )
+                    applyActions([
+                      {
+                        type: "ChangeEdgeAngle",
+                        id: element.id,
+                        newAngle: to_rad(deg),
+                        oldAngle: element.positionEnd
+                          .sub(element.positionStart)
+                          .angle(),
+                      },
+                    ])
                   }
                   suffix={"°"}
                   label={t("angle")}
@@ -649,17 +626,15 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
             <VectorInput
               value={element.positionEnd}
               onChange={(pos) =>
-                applyActions(
-                  [
-                    {
-                      type: "MoveEdgeEnd",
-                      id: element.id,
-                      newPosition: pos,
-                      oldPosition: element.positionEnd,
-                      committed: true,
-                    },
-                  ],
-                )
+                applyActions([
+                  {
+                    type: "MoveEdgeEnd",
+                    id: element.id,
+                    newPosition: pos,
+                    oldPosition: element.positionEnd,
+                    committed: true,
+                  },
+                ])
               }
             />
           </Box>
@@ -685,6 +660,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
             element={element}
             mechanicalElements={mechanism.mechanicalElements}
             loads={elementLoads}
+            displayLoads={displayLoads}
             selectedLoadID={selectedLoadID}
             hoveredPart={hoveredPart}
             setHoveredPart={setHoveredPart}

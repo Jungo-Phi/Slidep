@@ -227,9 +227,56 @@ export interface BeltElement extends BaseEdgeElement {
   gearWraps?: number[];
 }
 
-/** Constraint element */
+/** Constraint element carrying its own on-canvas position (dimensions, gear ratio). */
 export interface ConstraintBaseElement extends BaseElement {
   position: Point2;
+}
+
+/**
+ * Constraint element with no position of its own: drawn as a badge anchored to
+ * its host element(s) instead (see `relation_badge_positions`), so it never
+ * has anything to collide with — the bug positioned badges used to hit when
+ * two of them landed on the same point.
+ *
+ * No `name` either, unlike `BaseElement`: nothing displays it, so renaming one
+ * would be a control with no visible effect.
+ */
+export interface AttachedConstraintBaseElement {
+  type: ElementType;
+  id: ID;
+}
+
+/** The 7 constraint types with no `name` — kept in sync with `AttachedConstraintBaseElement`. */
+const UNNAMEABLE_TYPES = new Set<ElementType>([
+  "horizontal-align-edge",
+  "horizontal-align-nodes",
+  "vertical-align-edge",
+  "vertical-align-nodes",
+  "normal",
+  "parallel",
+  "equal",
+]);
+
+/**
+ * Type guard: elements that carry a `name` — everything except the geometric
+ * relation constraints. Checked on `element.type`, not on whether the property
+ * happens to be set: a freshly created, never-renamed element has no `name`
+ * key at runtime either, `name` being optional, so `"name" in element` cannot
+ * tell the two apart.
+ */
+export function is_nameable(
+  element: UnionElement,
+): element is Exclude<
+  UnionElement,
+  | HorizontalAlignEdge
+  | HorizontalAlignNodes
+  | VerticalAlignEdge
+  | VerticalAlignNodes
+  | NormalEdges
+  | ParallelEdges
+  | EqualEdges
+> {
+  return !UNNAMEABLE_TYPES.has(element.type);
 }
 
 /** Dimension edge element - dimension of edge length */
@@ -281,26 +328,26 @@ export interface DimensionBelt extends ConstraintBaseElement {
 }
 
 /** Horizontal align edge element - horizontal constraint */
-export interface HorizontalAlignEdge extends ConstraintBaseElement {
+export interface HorizontalAlignEdge extends AttachedConstraintBaseElement {
   type: "horizontal-align-edge";
   edgeID: ID;
 }
 
 /** Horizontal align nodes element - horizontal constraint between two nodes */
-export interface HorizontalAlignNodes extends ConstraintBaseElement {
+export interface HorizontalAlignNodes extends AttachedConstraintBaseElement {
   type: "horizontal-align-nodes";
   startNodeID: ID;
   endNodeID: ID;
 }
 
 /** Vertical align edge element - vertical constraint */
-export interface VerticalAlignEdge extends ConstraintBaseElement {
+export interface VerticalAlignEdge extends AttachedConstraintBaseElement {
   type: "vertical-align-edge";
   edgeID: ID;
 }
 
 /** Vertical align nodes element - vertical constraint between two nodes */
-export interface VerticalAlignNodes extends ConstraintBaseElement {
+export interface VerticalAlignNodes extends AttachedConstraintBaseElement {
   type: "vertical-align-nodes";
   startNodeID: ID;
   endNodeID: ID;
@@ -309,7 +356,7 @@ export interface VerticalAlignNodes extends ConstraintBaseElement {
 /**
  * Normal element - perpendicular constraint between two edges
  */
-export interface NormalEdges extends ConstraintBaseElement {
+export interface NormalEdges extends AttachedConstraintBaseElement {
   type: "normal";
   startEdgeID: ID;
   endEdgeID: ID;
@@ -318,7 +365,7 @@ export interface NormalEdges extends ConstraintBaseElement {
 /**
  * Parallel element - parallel constraint between two edges
  */
-export interface ParallelEdges extends ConstraintBaseElement {
+export interface ParallelEdges extends AttachedConstraintBaseElement {
   type: "parallel";
   startEdgeID: ID;
   endEdgeID: ID;
@@ -327,7 +374,7 @@ export interface ParallelEdges extends ConstraintBaseElement {
 /**
  * Equal element - equal length constraint between two edges
  */
-export interface EqualEdges extends ConstraintBaseElement {
+export interface EqualEdges extends AttachedConstraintBaseElement {
   type: "equal";
   startEdgeID: ID;
   endEdgeID: ID;

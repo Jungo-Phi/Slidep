@@ -634,12 +634,17 @@ export function canvasStateReducer(
                 });
               }
               break;
-            case "Constraint":
-              setCanvasState({
-                type: "MovingConstraint",
-                elementID: hit.id,
-              });
+            case "Constraint": {
+              // Attached badges (align/normal/parallel/equal) have no position
+              // of their own to drag — anchored to their host(s) instead.
+              const dragged = constraintElements.find((c) => c.id === hit.id);
+              if (dragged && "position" in dragged)
+                setCanvasState({
+                  type: "MovingConstraint",
+                  elementID: hit.id,
+                });
               break;
+            }
             case "Force":
               setCanvasState({ type: "MovingForce", elementID: hit.id });
               break;
@@ -924,6 +929,7 @@ export function canvasStateReducer(
             state.elementID,
             constraintElements,
           );
+          if (!("position" in constraint)) break;
           actions.push({
             type: "MoveConstraint",
             id: state.elementID,

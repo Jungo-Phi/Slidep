@@ -156,7 +156,7 @@ export function get_constraint_nodes(
 ): Map<string, Point2> {
   const positions = new Map<string, Point2>();
   constraintElements.forEach((constraint) => {
-    positions.set(constraint.id, constraint.position);
+    if ("position" in constraint) positions.set(constraint.id, constraint.position);
   });
   return positions;
 }
@@ -1392,6 +1392,7 @@ function add_rigidity_links(
           key2: s.key,
           distance: ref.pos.distance_to(s.pos),
           owner: node.id,
+          angleLock: true,
         });
       }
     }

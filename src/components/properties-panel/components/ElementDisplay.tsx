@@ -5,8 +5,9 @@ import {
   ID,
   UnionElement,
   ZERO,
+  is_nameable,
 } from "../../../types";
-import { Box, IconButton, Typography, TextField, alpha } from "@mui/material";
+import { Box, IconButton, Typography, TextField } from "@mui/material";
 import { get_element_icon } from "../../element-palette/elementIcon";
 import { HoveredPart, is_hovered } from "../../../types/hovered-part";
 import { element_to_hovered_part } from "../../canvas/utils";
@@ -51,6 +52,10 @@ const ElementDisplayComponent: React.FC<ElementDisplayProps> = ({
   // that belongs to the real, clickable row elsewhere.
   const hovered = interactive && is_hovered(hoveredPart, element.id);
   const selected = interactive && selectedIds.includes(element.id);
+  // A relation-constraint badge (align/normal/parallel/equal) carries no name
+  // to begin with — nothing displays it, so offering to edit it would be a
+  // control with no visible effect.
+  const canRename = editable && is_nameable(element);
   const icon = get_element_icon(element);
   const initialName = shown_element_name(element);
   const drillDown = useElementNavigation();
@@ -126,16 +131,14 @@ const ElementDisplayComponent: React.FC<ElementDisplayProps> = ({
   const handleNameChange = (newName: string) => {
     setInputValue(newName);
     if (element && newName !== initialName) {
-      applyActions(
-        [
-          {
-            type: "UpdateElementName",
-            id: element.id,
-            newName,
-            oldName: element.name,
-          },
-        ],
-      );
+      applyActions([
+        {
+          type: "UpdateElementName",
+          id: element.id,
+          newName,
+          oldName: is_nameable(element) ? element.name : undefined,
+        },
+      ]);
     }
     setIsEditing(false);
   };
@@ -156,7 +159,7 @@ const ElementDisplayComponent: React.FC<ElementDisplayProps> = ({
 
   const handleTextClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (editable && !isEditing && interactive) {
+    if (canRename && !isEditing && interactive) {
       updateWidth(initialName);
       setIsEditing(true);
     }
@@ -251,7 +254,7 @@ const ElementDisplayComponent: React.FC<ElementDisplayProps> = ({
                 padding: 0,
                 margin: 0,
                 textOverflow: "clip",
-                backgroundColor: (t) => alpha(t.palette.common.white, 0.8),
+                backgroundColor: "primary.contrastText",
                 borderRadius: "2px",
                 cursor: "text",
                 overflow: "hidden",
@@ -268,7 +271,7 @@ const ElementDisplayComponent: React.FC<ElementDisplayProps> = ({
               },
             }}
           />
-        ) : editable ? (
+        ) : canRename ? (
           <Typography
             variant={
               size === "small"

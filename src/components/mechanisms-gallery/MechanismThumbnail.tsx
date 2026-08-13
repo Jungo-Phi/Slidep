@@ -4,7 +4,10 @@ import { SerializedMechanism } from "../../types";
 import { load_mechanism } from "../../utils";
 import { draw_thumbnail } from "../canvas/render-thumbnail";
 import { animate_mode } from "../solver/mode-animation";
-import { THUMBNAIL_MODE_ANIMATION } from "../../constants/rendering-specs";
+import {
+  THUMBNAIL_MARGIN,
+  THUMBNAIL_MODE_ANIMATION,
+} from "../../constants/rendering-specs";
 import { thumbnail_mode } from "./thumbnail-mode";
 
 /** Résolution du rendu, en 4:3. Bien au-dessus de la taille d'affichage, pour
@@ -14,8 +17,8 @@ const RENDER_HEIGHT = 512;
 
 interface MechanismThumbnailProps {
   record: SerializedMechanism;
-  /** Swings the mechanism along its first mode while true; a mechanism with no
-   *  freedom simply stays put. */
+  /** Zooms the framing in while true, and swings the mechanism along its first mode
+   *  — a mechanism with no freedom just gets the zoom. */
   hovered: boolean;
 }
 
@@ -34,43 +37,49 @@ export const MechanismThumbnail: React.FC<MechanismThumbnailProps> = ({
   // Repairs silently: a card is no place to report damage, but a broken record
   // must not take the gallery down with it.
   const mechanism = useMemo(() => load_mechanism(record).mechanism, [record]);
+  // Survives across hover toggles (each one restarts the effect below) so the zoom eases
+  // onward from wherever it is instead of snapping back to `REST` between two hovers.
+  const zoomRef = useRef(0);
 
   useEffect(() => {
     const ctx = canvasRef.current?.getContext("2d");
     if (!ctx) return;
 
-    const rest = () => {
-      ctx.clearRect(0, 0, RENDER_WIDTH, RENDER_HEIGHT);
-      draw_thumbnail(ctx, mechanism, RENDER_WIDTH, RENDER_HEIGHT);
-    };
-
+    // Only a mechanism with a freedom to show gets a swing; one with none still gets the
+    // zoom below, which is its only reaction to the hover.
     const found = hovered ? thumbnail_mode(mechanism) : null;
-    if (!found) {
-      rest();
-      return;
-    }
+    const animation = found
+      ? animate_mode(mechanism, found.model, found.chain, found.mode, {
+          amplitudeRatio: THUMBNAIL_MODE_ANIMATION.AMPLITUDE_RATIO,
+          periodS: THUMBNAIL_MODE_ANIMATION.PERIOD_S,
+        })
+      : null;
 
-    const animation = animate_mode(
-      mechanism,
-      found.model,
-      found.chain,
-      found.mode,
-      {
-        amplitudeRatio: THUMBNAIL_MODE_ANIMATION.AMPLITUDE_RATIO,
-        periodS: THUMBNAIL_MODE_ANIMATION.PERIOD_S,
-      },
-    );
+    const target = hovered ? 1 : 0;
     let frame = 0;
     let last = performance.now();
     const step = () => {
       const now = performance.now();
       // A tab left in the background hands back a huge delta; clamping keeps the
-      // swing from jumping half a period on the frame the window comes back.
+      // swing (and the zoom ramp below) from jumping on the frame the window comes back.
       const dt = Math.min((now - last) / 1000, 1 / 20);
       last = now;
+
+      const zoomStep = dt / THUMBNAIL_MARGIN.TRANSITION_S;
+      zoomRef.current =
+        target > zoomRef.current
+          ? Math.min(zoomRef.current + zoomStep, target)
+          : Math.max(zoomRef.current - zoomStep, target);
+
+      const pose = animation ? animation.advance(dt) : mechanism;
       ctx.clearRect(0, 0, RENDER_WIDTH, RENDER_HEIGHT);
-      draw_thumbnail(ctx, animation.advance(dt), RENDER_WIDTH, RENDER_HEIGHT);
-      frame = requestAnimationFrame(step);
+      draw_thumbnail(ctx, pose, RENDER_WIDTH, RENDER_HEIGHT, zoomRef.current);
+
+      // Stops once the zoom has settled and there's no swing to keep drawing —
+      // a resting thumbnail costs nothing between hovers.
+      if (animation || zoomRef.current !== target) {
+        frame = requestAnimationFrame(step);
+      }
     };
     frame = requestAnimationFrame(step);
 
