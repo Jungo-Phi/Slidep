@@ -125,9 +125,13 @@ export function variable_keys_of(link: Link): string[] {
     case "EqualLength":
       return [link.key1, link.key2, link.key3, link.key4];
     case "MotorBeam":
-      return [link.pivotKey, link.drivenKey];
+      return link.anchorKey === undefined
+        ? [link.pivotKey, link.drivenKey]
+        : [link.pivotKey, link.drivenKey, link.anchorKey];
     case "MotorAngle":
-      return [link.angleKey];
+      return link.anchorPivotKey === undefined || link.anchorKey === undefined
+        ? [link.angleKey]
+        : [link.angleKey, link.anchorPivotKey, link.anchorKey];
     case "GearMeshAngle":
       return [link.angleKey1, link.angleKey2, link.posKey1, link.posKey2];
     case "CoaxialAngle":

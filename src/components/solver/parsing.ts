@@ -10,6 +10,7 @@ import {
   Link,
   MechanicalElement,
   Point2,
+  PivotElement,
   KinNodes,
   SpringElement,
 } from "../../types";
@@ -465,6 +466,46 @@ function welded_edge_spokes(
     spokes.push({ edgeId: el.id, drivenKey, dir });
   });
   return spokes;
+}
+
+export type MotorArm = { pivotKey: string; drivenKey: string; dir: Point2 };
+
+/**
+ * The arm a motor pivot drives (or is anchored to): the edge's free end, and the
+ * hub→end direction. Covers an edge welded at either endpoint (drive the OTHER end)
+ * and one welded through its body (drive the farther end, for the lever arm) —
+ * same shape as `welded_edge_spokes`, but for a free hinge rather than a rigid hub.
+ */
+function motor_arm(pivot: PivotElement, edge: EdgeElement): MotorArm | undefined {
+  let pivotKey: string;
+  let drivenKey: string;
+  let dir: Point2;
+  if (edge.fixedNodeStartID === pivot.id) {
+    pivotKey = `${edge.id}:start`;
+    drivenKey = `${edge.id}:end`;
+    dir = edge.positionEnd.sub(edge.positionStart);
+  } else if (edge.fixedNodeEndID === pivot.id) {
+    pivotKey = `${edge.id}:end`;
+    drivenKey = `${edge.id}:start`;
+    dir = edge.positionStart.sub(edge.positionEnd);
+  } else {
+    // The motor pivot sits on the edge between its endpoints (a body node).
+    // Drive the farthest endpoint about the pivot — the longer arm gives
+    // better angular conditioning.
+    const pivotPos = pivot.position;
+    pivotKey = pivot.id;
+    const toStart = edge.positionStart.sub(pivotPos);
+    const toEnd = edge.positionEnd.sub(pivotPos);
+    if (toEnd.length_squared() >= toStart.length_squared()) {
+      drivenKey = `${edge.id}:end`;
+      dir = toEnd;
+    } else {
+      drivenKey = `${edge.id}:start`;
+      dir = toStart;
+    }
+  }
+  if (dir.length_squared() < 1e-12) return undefined;
+  return { pivotKey, drivenKey, dir };
 }
 
 /**
@@ -1091,56 +1132,44 @@ export function get_links_simulation(
   // ── Motors ───────────────────────────────────────────────────────────────
   mechanicalElements.forEach((element) => {
     if (element.type !== "pivot" || !element.motor) return;
-    // Only grounded motors (parentBeamID === undefined) for now.
-    if (element.motor.parentBeamID !== undefined) return;
     // Negated: a positive speed reads clockwise on screen (the sense `draw_motor`
     // shows), which is a *decreasing* angle in the model's counter-clockwise frame.
     const omega = -element.motor.speed * ((2 * Math.PI) / 60); // rad/s
 
-    // Drive each rotating beam's orientation about the pivot.
+    // The reference the motor pushes against: the world when grounded, or the arm of
+    // the anchor beam — itself resolved the same way as any driven arm below, since it
+    // turns about the very same pivot. A dangling or degenerate anchor drives nothing.
+    const anchorBeamID = element.motor.parentBeamID;
+    let anchorArm: MotorArm | undefined;
+    if (anchorBeamID !== undefined) {
+      const anchorBeam = byId.get(anchorBeamID);
+      anchorArm =
+        anchorBeam?.type === "beam" ? motor_arm(element, anchorBeam) : undefined;
+      if (!anchorArm) return;
+    }
+
+    // Drive each other rotating beam's orientation about the pivot — relative to the
+    // anchor arm when there is one (the reference, never itself driven), the world otherwise.
     element.rotatingEdgesIDs.forEach((beamId) => {
+      if (beamId === anchorBeamID) return;
       const beam = byId.get(beamId);
       if (!beam || !("positionStart" in beam)) return;
-      let pivotKey: string;
-      let drivenKey: string;
-      let dir: Point2;
-      if (beam.fixedNodeStartID === element.id) {
-        pivotKey = `${beamId}:start`;
-        drivenKey = `${beamId}:end`;
-        dir = beam.positionEnd.sub(beam.positionStart);
-      } else if (beam.fixedNodeEndID === element.id) {
-        pivotKey = `${beamId}:end`;
-        drivenKey = `${beamId}:start`;
-        dir = beam.positionStart.sub(beam.positionEnd);
-      } else {
-        // The motor pivot sits on the beam between its endpoints (a body node).
-        // Drive the farthest endpoint about the pivot — the longer arm gives
-        // better angular conditioning.
-        const pivotPos = element.position;
-        pivotKey = element.id;
-        const toStart = beam.positionStart.sub(pivotPos);
-        const toEnd = beam.positionEnd.sub(pivotPos);
-        if (toEnd.length_squared() >= toStart.length_squared()) {
-          drivenKey = `${beamId}:end`;
-          dir = toEnd;
-        } else {
-          drivenKey = `${beamId}:start`;
-          dir = toStart;
-        }
-      }
-      if (dir.length_squared() < 1e-12) return;
+      const arm = motor_arm(element, beam);
+      if (!arm) return;
       links.push({
         type: "MotorBeam",
         ddl: 1,
-        pivotKey,
-        drivenKey,
+        pivotKey: arm.pivotKey,
+        drivenKey: arm.drivenKey,
+        anchorKey: anchorArm?.drivenKey,
+        anchorAngle: anchorArm?.dir.angle(),
         omega,
-        targetAngle: dir.angle(),
+        targetAngle: arm.dir.angle(),
         owner: element.id,
       });
     });
 
-    // Drive fixed gears' angle nodes.
+    // Drive fixed gears' angle nodes the same way.
     element.fixedGearsIDs.forEach((gearId) => {
       const gear = byId.get(gearId);
       if (!gear || gear.type !== "gear") return;
@@ -1148,6 +1177,9 @@ export function get_links_simulation(
         type: "MotorAngle",
         ddl: 1,
         angleKey: gearId,
+        anchorPivotKey: anchorArm ? element.id : undefined,
+        anchorKey: anchorArm?.drivenKey,
+        anchorAngle: anchorArm?.dir.angle(),
         omega,
         targetAngle: gear.angle,
         owner: element.id,

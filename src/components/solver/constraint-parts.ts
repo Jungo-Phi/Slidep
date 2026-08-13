@@ -96,10 +96,25 @@ function held_shapes(link: Link): Held {
     case "Radius":
       return points(link.key1);
 
+    // Anchored to a beam rather than the ground, a motor holds that beam's arm too —
+    // same shape as "Angle", the closest kin: an angle held between two arms of a hub.
     case "MotorBeam":
-      return segment(link.pivotKey, link.drivenKey);
+      return link.anchorKey === undefined
+        ? segment(link.pivotKey, link.drivenKey)
+        : {
+            segments: [
+              [link.pivotKey, link.drivenKey],
+              [link.pivotKey, link.anchorKey],
+            ],
+            points: [],
+          };
     case "MotorAngle":
-      return points(link.angleKey);
+      return link.anchorPivotKey === undefined || link.anchorKey === undefined
+        ? points(link.angleKey)
+        : {
+            segments: [[link.anchorPivotKey, link.anchorKey]],
+            points: [link.angleKey],
+          };
 
     // Angle keys are bare element ids, so they name the same gears their centres do.
     case "GearMeshAngle":

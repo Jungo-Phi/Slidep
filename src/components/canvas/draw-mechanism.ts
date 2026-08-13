@@ -865,9 +865,13 @@ export function draw_mechanism(
                 hoveredPart.id === element.id;
               // A motor rides under the bars, drawn before them. Standing out means
               // coming up over them, and only then are the bars faked back on top.
+              // A non-grounded motor is mounted on its parent beam, so it must
+              // always ride above it — not just while hovered/selected.
+              const ridesOnBeam = element.motor && !element.isGrounded;
               if (
                 element.motor &&
-                (isCursorHovered ||
+                (ridesOnBeam ||
+                  isCursorHovered ||
                   isSelected ||
                   isEraseHovered ||
                   arrowHovered)

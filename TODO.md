@@ -150,9 +150,10 @@
 - ❇️ Enlever tous les commentaires redondants
 - ❇️ Fusionner les termes qui se répètent dans les traductions
 
-**Charges**
+**Refs ou frames sur gears**
 
 - 🔨 Placer force on gearTooth
+- 🔨 Moteurs ancrés sur gears
 - 🔨 Force ref : ajouter gear et belt (join de courroie) en plus des edges
 
 **Contraintes et dimensions**

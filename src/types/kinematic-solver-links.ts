@@ -278,6 +278,13 @@ export type Link = {
       pivotKey: string;
       drivenKey: string;
       omega: number;
+      // The anchor beam's free end (undefined = grounded, the world is the reference).
+      // `pivotKey` doubles as the anchor's own pivot: both beams turn about the same hinge.
+      anchorKey?: string;
+      // Last frame's raw pivot→anchor angle, so the per-frame refresh can fold the anchor's
+      // OWN motion into `targetAngle` as a one-frame delta (see kinematic-simulation.ts).
+      // Unused when `anchorKey` is undefined.
+      anchorAngle?: number;
       targetAngle: number;
     }
   | {
@@ -285,6 +292,13 @@ export type Link = {
       ddl: 1;
       angleKey: string;
       omega: number;
+      // Same idea as `MotorBeam`'s anchor, for a gear driven relative to a beam instead of
+      // the ground: the beam has no angle node, so its orientation is read from these two
+      // position keys (the shared pivot, and the beam's free end) rather than one angle key.
+      anchorPivotKey?: string;
+      anchorKey?: string;
+      /** Last frame's raw anchorPivotKey→anchorKey angle — see `MotorBeam.anchorAngle`. */
+      anchorAngle?: number;
       targetAngle: number;
     }
   | {

@@ -9,9 +9,6 @@ import {
   Divider,
   List,
   ListItem,
-  Typography,
-  Switch,
-  FormControlLabel,
   Tooltip,
 } from "@mui/material";
 import { Delete, Lock, LockOpen } from "@mui/icons-material";
@@ -23,6 +20,7 @@ import {
 } from "../../types/element";
 import VectorInput from "./components/VectorInput";
 import {
+  BeamElement,
   CanvasState,
   Action,
   AppMode,
@@ -53,9 +51,16 @@ import {
   create_length_dimension,
   create_radius_dimension,
 } from "./element-dimensions";
+import ElementPicker from "./components/ElementPicker";
 
 const to_deg = (rad: number) => ((rad * 180) / Math.PI + 360) % 360;
 const to_rad = (deg: number) => (deg * Math.PI) / 180;
+
+/** The ground/unground button's icon, reused as the ElementPicker "world" option
+ *  so a motor's anchor reads with the same visual language as the ground toggle. */
+const GroundIcon: React.FC<{ sx?: object }> = ({ sx }) => (
+  <Box component="img" src={icon("ground")} sx={sx} />
+);
 
 interface ElementPropertiesProps {
   element: MechanicalElement | LoadElement | undefined;
@@ -196,6 +201,15 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
       : undefined;
   const displayMotorConfig =
     analysedElement?.type === "pivot" ? analysedElement.motor : undefined;
+  const motorConfig = element.type === "pivot" ? element.motor : undefined;
+
+  // Beams the pivot's motor can push against: the beams rotating about it.
+  const motorBeams: BeamElement[] =
+    element.type === "pivot"
+      ? element.rotatingEdgesIDs
+          .map((id) => mechanism.mechanicalElements.find((e) => e.id === id))
+          .filter((e): e is BeamElement => e?.type === "beam")
+      : [];
 
   return (
     <Box sx={{ mb: 1 }}>
@@ -218,7 +232,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                     <Tooltip
                       disableInteractive
                       title={t(
-                        element.isGrounded ? "ground_anchored" : "ground_free",
+                        element.isGrounded ? "ground_release" : "ground_anchor",
                       )}
                     >
                       <IconButton
@@ -372,12 +386,15 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
               }
             />
             {element.type === "pivot" && (
-              <FormControlLabel
-                control={
-                  <Switch
+              <>
+                <Tooltip
+                  disableInteractive
+                  title={t(element.motor ? "motor_revert" : "motor_convert")}
+                >
+                  <IconButton
+                    color="inherit"
                     size="small"
-                    checked={!!element.motor}
-                    onChange={() => {
+                    onClick={() => {
                       const actions: Action[] = [
                         {
                           type: "SetMotorConfig",
@@ -397,14 +414,82 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                       }
                       applyActions(actions);
                     }}
+                    sx={{ padding: 0.5, border: 1, borderColor: "divider" }}
+                  >
+                    <Box
+                      component="img"
+                      style={{ width: 28, height: 28 }}
+                      src={icon(element.motor ? "motor" : "pivot")}
+                    />
+                  </IconButton>
+                </Tooltip>
+                {motorConfig && (
+                  <ElementPicker
+                    label="Ancrage moteur"
+                    options={motorBeams}
+                    extraOption={{
+                      label: t("tool_ground"),
+                      icon: GroundIcon,
+                      selected: motorConfig.parentBeamID === undefined,
+                    }}
+                    selected={motorBeams.find(
+                      (beam) => beam.id === motorConfig.parentBeamID,
+                    )}
+                    onSelectExtra={() =>
+                      applyActions([
+                        {
+                          type: "SetMotorConfig",
+                          id: element.id,
+                          newConfig: {
+                            ...motorConfig,
+                            parentBeamID: undefined,
+                          },
+                          oldConfig: motorConfig,
+                        },
+                        ...(element.isGrounded
+                          ? []
+                          : ([
+                              {
+                                type: "GroundNode",
+                                id: element.id,
+                                grounded: true,
+                              },
+                            ] satisfies Action[])),
+                      ])
+                    }
+                    onSelectElement={(beam) =>
+                      applyActions([
+                        {
+                          type: "SetMotorConfig",
+                          id: element.id,
+                          newConfig: { ...motorConfig, parentBeamID: beam.id },
+                          oldConfig: motorConfig,
+                        },
+                        ...(element.isGrounded
+                          ? ([
+                              {
+                                type: "GroundNode",
+                                id: element.id,
+                                grounded: false,
+                              },
+                            ] satisfies Action[])
+                          : []),
+                      ])
+                    }
+                    onHoverElement={(beam) =>
+                      setHoveredPart(element_to_hovered_part(beam, false))
+                    }
+                    onHoverEnd={() =>
+                      setHoveredPart({ type: "Void", position: ZERO })
+                    }
+                    hoveredPart={hoveredPart}
+                    setHoveredPart={setHoveredPart}
+                    selectedIds={selectedIds}
+                    setCanvasState={setCanvasState}
+                    applyActions={applyActions}
                   />
-                }
-                label={
-                  <Typography variant="caption">
-                    {t("element_motor")}
-                  </Typography>
-                }
-              />
+                )}
+              </>
             )}
             {element.type === "gear" && (
               <NumberInput

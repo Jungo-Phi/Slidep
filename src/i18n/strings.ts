@@ -1120,7 +1120,18 @@ export const STRINGS = {
   // ── Element properties ────────────────────────────────────────────────────
   // Only rpm appears here: the other units are SI symbols and read the same everywhere.
   unit_rpm: { fr: "tr/min", en: "rpm", de: "U/min", es: "rpm" },
-  element_motor: { fr: "Moteur", en: "Motor", de: "Motor", es: "Motor" },
+  motor_convert: {
+    fr: "Motoriser",
+    en: "Motorize",
+    de: "Motorisieren",
+    es: "Motorizar",
+  },
+  motor_revert: {
+    fr: "Dé-motoriser",
+    en: "Un-motorize",
+    de: "Motorisierung aufheben",
+    es: "Desmotorizar",
+  },
   element_view_charts: {
     fr: "Voir les graphiques",
     en: "View the charts",
@@ -1147,6 +1158,7 @@ export const STRINGS = {
     de: "Länge sperren",
     es: "Bloquear la longitud",
   },
+  frame: { fr: "Repère", en: "Frame", de: "Bezugspunkt", es: "Referencia" },
   frame_world: { fr: "Monde", en: "World", de: "Welt", es: "Mundo" },
   belt_closed: {
     fr: "Fermée",

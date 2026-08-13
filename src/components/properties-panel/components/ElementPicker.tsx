@@ -1,12 +1,7 @@
 import React from "react";
 import { Box, Typography, Menu, MenuItem, Tooltip } from "@mui/material";
 import { KeyboardArrowDown } from "@mui/icons-material";
-import {
-  Action,
-  CanvasState,
-  ID,
-  UnionElement,
-} from "../../../types";
+import { Action, CanvasState, ID, UnionElement } from "../../../types";
 import { HoveredPart } from "../../../types/hovered-part";
 import ElementDisplay from "./ElementDisplay";
 
@@ -86,7 +81,6 @@ export function ElementPicker<T extends UnionElement>({
   applyActions,
 }: ElementPickerProps<T>) {
   const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
-  if (options.length === 0) return null;
 
   const choose = (fn: () => void) => {
     fn();
@@ -96,7 +90,7 @@ export function ElementPicker<T extends UnionElement>({
 
   return (
     <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-      <Tooltip title={label}>
+      <Tooltip title={label} disableInteractive>
         <Box
           onClick={(e) => setAnchorEl(e.currentTarget)}
           onMouseEnter={() => selected && onHoverElement(selected)}

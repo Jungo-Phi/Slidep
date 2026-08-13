@@ -741,13 +741,28 @@ export function step_simulation(
       const driven = positions.get(link.drivenKey);
       if (pivot && driven) {
         const cur = driven.sub(pivot).angle();
-        link.targetAngle = cur + link.omega * dt;
-        if (link.owner !== undefined && link.omega * dt !== 0)
+        // A beam-anchored motor also owes the anchor's own motion this frame, folded in
+        // as a one-frame delta rather than read live every sweep (see the `anchorKey`
+        // comment on the Link type): the error that leaves is second-order (the anchor's
+        // angular ACCELERATION × dt², not its velocity), so a one-frame-stale anchor
+        // never drifts.
+        let anchorDelta = 0;
+        if (link.anchorKey !== undefined && link.anchorAngle !== undefined) {
+          const anchor = positions.get(link.anchorKey);
+          if (anchor) {
+            const anchorNow = anchor.sub(pivot).angle();
+            anchorDelta = wrap_angle(anchorNow - link.anchorAngle);
+            link.anchorAngle = anchorNow;
+          }
+        }
+        const expected = anchorDelta + link.omega * dt;
+        link.targetAngle = cur + expected;
+        if (link.owner !== undefined && expected !== 0)
           motorChecks.push({
             owner: link.owner,
             type: "MotorBeam",
             cur,
-            expected: link.omega * dt,
+            expected,
             pivotKey: link.pivotKey,
             drivenKey: link.drivenKey,
           });
@@ -755,13 +770,30 @@ export function step_simulation(
     } else if (link.type === "MotorAngle") {
       const cur = angles.get(link.angleKey);
       if (cur !== undefined) {
-        link.targetAngle = cur + link.omega * dt;
-        if (link.owner !== undefined && link.omega * dt !== 0)
+        // Same anchor-delta idea as `MotorBeam` above, but the reference beam has no
+        // angle node: its orientation comes from its two position keys instead.
+        let anchorDelta = 0;
+        if (
+          link.anchorPivotKey !== undefined &&
+          link.anchorKey !== undefined &&
+          link.anchorAngle !== undefined
+        ) {
+          const anchorPivot = positions.get(link.anchorPivotKey);
+          const anchor = positions.get(link.anchorKey);
+          if (anchorPivot && anchor) {
+            const anchorNow = anchor.sub(anchorPivot).angle();
+            anchorDelta = wrap_angle(anchorNow - link.anchorAngle);
+            link.anchorAngle = anchorNow;
+          }
+        }
+        const expected = anchorDelta + link.omega * dt;
+        link.targetAngle = cur + expected;
+        if (link.owner !== undefined && expected !== 0)
           motorChecks.push({
             owner: link.owner,
             type: "MotorAngle",
             cur,
-            expected: link.omega * dt,
+            expected,
             angleKey: link.angleKey,
           });
       }

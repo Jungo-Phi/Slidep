@@ -180,234 +180,253 @@ export const LoadsSection: React.FC<LoadsSectionProps> = ({
               ? load.frame
               : undefined;
         return (
-        <Box
-          key={load.id}
-          sx={{
-            mt: 0.5,
-            pb: 0.5,
-            borderRadius: 3,
-            border: 1,
-            borderColor:
-              load.id === selectedLoadID ? "primary.main" : "transparent",
-          }}
-        >
-          <ElementDisplay
-            element={load}
-            hoveredPart={hoveredPart}
-            setHoveredPart={setHoveredPart}
-            selectedIds={selectedIds}
-            setCanvasState={setCanvasState}
-            applyActions={applyActions}
-            size="medium"
-            editable={true}
-            trailingControls={
-              <IconButton
-                size="small"
-                color="error"
-                onMouseEnter={() =>
-                  setHoveredPart(element_to_hovered_part(load, true))
-                }
-                onMouseLeave={() =>
-                  setHoveredPart({ type: "Void", position: ZERO })
-                }
-                onClick={() =>
-                  applyActions(
-                    [{ type: "DeleteElement", element: load }],
-                  )
-                }
-                title={t("action_delete")}
-                sx={{ borderRadius: 3 }}
-              >
-                <Delete sx={{ width: 20, height: 20 }} />
-              </IconButton>
-            }
-          />
           <Box
+            key={load.id}
             sx={{
               display: "flex",
-              flexWrap: "wrap",
-              alignItems: "center",
-              gap: 1,
-              px: 1,
-              py: 0.5,
+              flexDirection: "column",
+              mt: 0.5,
+              borderRadius: 3,
+              border: 1,
+              borderColor:
+                load.id === selectedLoadID ? "primary.main" : "transparent",
+              gap: 0.5,
+              padding: 0.4,
             }}
           >
-            {load.type === "force" && (
-              <>
-                <NumberInput
-                  label="N"
-                  value={(shownForce ?? load).vector.length()}
-                  onChange={(mag) =>
-                    applyActions(
-                      [
-                        {
-                          type: "ChangeForce",
-                          id: load.id,
-                          newVector: load.vector.with_length(mag),
-                          oldVector: load.vector,
-                        },
-                      ],
-                    )
-                  }
-                />
-                <NumberInput
-                  label="°"
-                  value={to_deg((shownForce ?? load).vector.angle())}
-                  onChange={(deg) =>
-                    applyActions(
-                      [
-                        {
-                          type: "ChangeForce",
-                          id: load.id,
-                          newVector: Point2.from_polar(
-                            load.vector.length(),
-                            to_rad(deg),
-                          ),
-                          oldVector: load.vector,
-                        },
-                      ],
-                    )
-                  }
-                />
-              </>
-            )}
-            {load.type === "distributed-force" && (
-              <>
-                <NumberInput
-                  label="°"
-                  value={to_deg((shownDistributed ?? load).direction.angle())}
-                  onChange={(deg) =>
-                    applyActions(
-                      [
-                        change_distributed_force(load, {
-                          newDirection: Point2.from_polar(1, to_rad(deg)),
-                        }),
-                      ],
-                    )
-                  }
-                />
-                <NumberInput
-                  label="q₀"
-                  value={(shownDistributed ?? load).magnitudeStart}
-                  onChange={(v) =>
-                    applyActions(
-                      [
-                        change_distributed_force(load, {
-                          newMagnitudeStart: v,
-                        }),
-                      ],
-                    )
-                  }
-                />
-                <NumberInput
-                  label="q₁"
-                  value={(shownDistributed ?? load).magnitudeEnd}
-                  onChange={(v) =>
-                    applyActions(
-                      [
-                        change_distributed_force(load, {
-                          newMagnitudeEnd: v,
-                        }),
-                      ],
-                    )
-                  }
-                />
-                <NumberInput
-                  label="R (N)"
-                  value={
-                    ((((shownDistributed ?? load).magnitudeStart +
-                      (shownDistributed ?? load).magnitudeEnd) /
-                      2) *
-                      beamLength) /
-                    1000
-                  }
-                  onChange={(resultant) => {
-                    if (beamLength <= 0) return;
-                    const current =
-                      (((load.magnitudeStart + load.magnitudeEnd) / 2) *
-                        beamLength) /
-                      1000;
-                    const next =
-                      current > 1e-9
-                        ? change_distributed_force(load, {
-                            newMagnitudeStart:
-                              load.magnitudeStart * (resultant / current),
-                            newMagnitudeEnd:
-                              load.magnitudeEnd * (resultant / current),
-                          })
-                        : change_distributed_force(load, {
-                            newMagnitudeStart: (resultant / beamLength) * 1000,
-                            newMagnitudeEnd: (resultant / beamLength) * 1000,
-                          });
-                    applyActions([next]);
-                  }}
-                />
-              </>
-            )}
-            {load.type === "moment" && (
-              <SignedNumberInput
-                label="N·m"
-                value={(shownMoment ?? load).value}
-                onChange={(value) =>
-                  applyActions(
-                    [
-                      {
-                        type: "ChangeMoment",
-                        id: load.id,
-                        newValue: value,
-                        oldValue: load.value,
-                      },
-                    ],
-                  )
-                }
-              />
-            )}
+            <ElementDisplay
+              element={load}
+              hoveredPart={hoveredPart}
+              setHoveredPart={setHoveredPart}
+              selectedIds={selectedIds}
+              setCanvasState={setCanvasState}
+              applyActions={applyActions}
+              size="medium"
+              editable={true}
+              trailingControls={
+                <>
+                  {load.type === "force" && (
+                    <NumberInput
+                      label="F (N)"
+                      value={(shownForce ?? load).vector.length()}
+                      onChange={(mag) =>
+                        applyActions([
+                          {
+                            type: "ChangeForce",
+                            id: load.id,
+                            newVector: load.vector.with_length(mag),
+                            oldVector: load.vector,
+                          },
+                        ])
+                      }
+                    />
+                  )}
+                  {load.type === "distributed-force" && (
+                    <NumberInput
+                      label="F (N)"
+                      value={
+                        ((((shownDistributed ?? load).magnitudeStart +
+                          (shownDistributed ?? load).magnitudeEnd) /
+                          2) *
+                          beamLength) /
+                        1000
+                      }
+                      onChange={(resultant) => {
+                        if (beamLength <= 0) return;
+                        const current =
+                          (((load.magnitudeStart + load.magnitudeEnd) / 2) *
+                            beamLength) /
+                          1000;
+                        const next =
+                          current > 1e-9
+                            ? change_distributed_force(load, {
+                                newMagnitudeStart:
+                                  load.magnitudeStart * (resultant / current),
+                                newMagnitudeEnd:
+                                  load.magnitudeEnd * (resultant / current),
+                              })
+                            : change_distributed_force(load, {
+                                newMagnitudeStart:
+                                  (resultant / beamLength) * 1000,
+                                newMagnitudeEnd:
+                                  (resultant / beamLength) * 1000,
+                              });
+                        applyActions([next]);
+                      }}
+                    />
+                  )}
+                  {load.type === "moment" && (
+                    <SignedNumberInput
+                      label="M (N·m)"
+                      value={(shownMoment ?? load).value}
+                      onChange={(value) =>
+                        applyActions([
+                          {
+                            type: "ChangeMoment",
+                            id: load.id,
+                            newValue: value,
+                            oldValue: load.value,
+                          },
+                        ])
+                      }
+                    />
+                  )}
+                  <IconButton
+                    size="small"
+                    color="error"
+                    onMouseEnter={() =>
+                      setHoveredPart(element_to_hovered_part(load, true))
+                    }
+                    onMouseLeave={() =>
+                      setHoveredPart({ type: "Void", position: ZERO })
+                    }
+                    onClick={() =>
+                      applyActions([{ type: "DeleteElement", element: load }])
+                    }
+                    title={t("action_delete")}
+                    sx={{ borderRadius: 3 }}
+                  >
+                    <Delete sx={{ width: 20, height: 20 }} />
+                  </IconButton>
+                </>
+              }
+            />
             {(load.type === "force" || load.type === "distributed-force") && (
-              <ElementPicker
-                label="Repère"
-                options={hostEdge ? [hostEdge] : nodeEdges}
-                extraOption={{
-                  label: t("frame_world"),
-                  icon: Public,
-                  selected: shownFrame === "world",
+              <Box
+                sx={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 0.5,
                 }}
-                selected={
-                  shownFrame &&
-                  frame_current_edge(
-                    shownFrame,
-                    hostEdge ? [hostEdge] : nodeEdges,
-                    mechanicalElements,
-                  )
-                }
-                onSelectExtra={() =>
-                  applyActions(
-                    frame_change_actions(load, "world", mechanicalElements),
-                  )
-                }
-                onSelectElement={(edge) =>
-                  applyActions(
-                    frame_change_actions(
-                      load,
-                      { mode: "edge", edgeID: edge.id },
-                      mechanicalElements,
-                    ),
-                  )
-                }
-                onHoverElement={(edge) =>
-                  setHoveredPart(element_to_hovered_part(edge, false))
-                }
-                onHoverEnd={() =>
-                  setHoveredPart({ type: "Void", position: ZERO })
-                }
-                hoveredPart={hoveredPart}
-                setHoveredPart={setHoveredPart}
-                selectedIds={selectedIds}
-                setCanvasState={setCanvasState}
-                applyActions={applyActions}
-              />
+              >
+                <Box
+                  sx={{
+                    display: "flex",
+                    flexDirection: "row",
+                    flexWrap: "wrap",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 1,
+                    pb: 0.5,
+                  }}
+                >
+                  <ElementPicker
+                    label={t("frame")}
+                    options={hostEdge ? [hostEdge] : nodeEdges}
+                    extraOption={{
+                      label: t("frame_world"),
+                      icon: Public,
+                      selected: shownFrame === "world",
+                    }}
+                    selected={
+                      shownFrame &&
+                      frame_current_edge(
+                        shownFrame,
+                        hostEdge ? [hostEdge] : nodeEdges,
+                        mechanicalElements,
+                      )
+                    }
+                    onSelectExtra={() =>
+                      applyActions(
+                        frame_change_actions(load, "world", mechanicalElements),
+                      )
+                    }
+                    onSelectElement={(edge) =>
+                      applyActions(
+                        frame_change_actions(
+                          load,
+                          { mode: "edge", edgeID: edge.id },
+                          mechanicalElements,
+                        ),
+                      )
+                    }
+                    onHoverElement={(edge) =>
+                      setHoveredPart(element_to_hovered_part(edge, false))
+                    }
+                    onHoverEnd={() =>
+                      setHoveredPart({ type: "Void", position: ZERO })
+                    }
+                    hoveredPart={hoveredPart}
+                    setHoveredPart={setHoveredPart}
+                    selectedIds={selectedIds}
+                    setCanvasState={setCanvasState}
+                    applyActions={applyActions}
+                  />
+                  {load.type === "force" ? (
+                    <NumberInput
+                      label="Angle"
+                      value={to_deg((shownForce ?? load).vector.angle())}
+                      onChange={(deg) =>
+                        applyActions([
+                          {
+                            type: "ChangeForce",
+                            id: load.id,
+                            newVector: Point2.from_polar(
+                              load.vector.length(),
+                              to_rad(deg),
+                            ),
+                            oldVector: load.vector,
+                          },
+                        ])
+                      }
+                      suffix="°"
+                    />
+                  ) : (
+                    <NumberInput
+                      label="Angle"
+                      value={to_deg(
+                        (shownDistributed ?? load).direction.angle(),
+                      )}
+                      onChange={(deg) =>
+                        applyActions([
+                          change_distributed_force(load, {
+                            newDirection: Point2.from_polar(1, to_rad(deg)),
+                          }),
+                        ])
+                      }
+                      suffix="°"
+                    />
+                  )}
+                </Box>
+
+                {load.type === "distributed-force" && (
+                  <Box
+                    sx={{
+                      display: "flex",
+                      flexDirection: "row",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: 1,
+                      pb: 0.5,
+                    }}
+                  >
+                    <NumberInput
+                      label="q₀ (N/m)"
+                      value={(shownDistributed ?? load).magnitudeStart}
+                      onChange={(v) =>
+                        applyActions([
+                          change_distributed_force(load, {
+                            newMagnitudeStart: v,
+                          }),
+                        ])
+                      }
+                    />
+                    <NumberInput
+                      label="q₁ (N/m)"
+                      value={(shownDistributed ?? load).magnitudeEnd}
+                      onChange={(v) =>
+                        applyActions([
+                          change_distributed_force(load, {
+                            newMagnitudeEnd: v,
+                          }),
+                        ])
+                      }
+                    />
+                  </Box>
+                )}
+              </Box>
             )}
           </Box>
-        </Box>
         );
       })}
     </Box>

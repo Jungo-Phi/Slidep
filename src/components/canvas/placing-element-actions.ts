@@ -783,21 +783,32 @@ function handle_place_ground(
         actions: [{ type: "CreateElement", element: newJoin }],
       };
     }
-    case "Node":
-      return {
-        actions: [
-          {
-            type: "GroundNode",
-            id: hoveredPart.id,
-            grounded: !(
-              get_mechanical_element_from_id(
-                hoveredPart.id,
-                mechanicalElements,
-              ) as NodeElement
-            ).isGrounded,
-          },
-        ],
-      };
+    case "Node": {
+      const node = get_mechanical_element_from_id(
+        hoveredPart.id,
+        mechanicalElements,
+      ) as NodeElement;
+      const grounded = !node.isGrounded;
+      const actions: Action[] = [
+        { type: "GroundNode", id: node.id, grounded },
+      ];
+      // Grounding a pivot whose motor drives against a beam would leave it
+      // anchored to both at once — clear the beam frame so it drives from the
+      // ground instead, same as picking "ground" in the properties panel.
+      if (
+        grounded &&
+        node.type === "pivot" &&
+        node.motor?.parentBeamID !== undefined
+      ) {
+        actions.push({
+          type: "SetMotorConfig",
+          id: node.id,
+          newConfig: { ...node.motor, parentBeamID: undefined },
+          oldConfig: node.motor,
+        });
+      }
+      return { actions };
+    }
     // A gear rim anchors the same way an edge does: the ground is a grounded
     // join pinned to it.
     case "Edge":
