@@ -282,8 +282,12 @@ export type Link = {
       // `pivotKey` doubles as the anchor's own pivot: both beams turn about the same hinge.
       anchorKey?: string;
       // Last frame's raw pivot→anchor angle, so the per-frame refresh can fold the anchor's
-      // OWN motion into `targetAngle` as a one-frame delta (see kinematic-simulation.ts).
-      // Unused when `anchorKey` is undefined.
+      // OWN motion into `targetAngle` as a one-frame delta on top of `driven`'s ACTUAL current
+      // angle — never an independent target. That is what keeps a beam-anchored motor exactly
+      // as soft as a grounded one (never more than one frame's commanded motion ahead of
+      // reality, so an over-constrained mechanism blocks the motor first, not the other way
+      // round) while still following the anchor's own rotation. Unused when `anchorKey` is
+      // undefined.
       anchorAngle?: number;
       targetAngle: number;
     }

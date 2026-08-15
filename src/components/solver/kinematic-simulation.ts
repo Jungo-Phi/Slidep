@@ -572,6 +572,8 @@ function rewrite_position_keys(link: Link, from: (k: string) => string): void {
     "grabbedKey",
     "pivotKey",
     "drivenKey",
+    "anchorKey",
+    "anchorPivotKey",
     "posKey1",
     "posKey2",
     "nodeKey",
@@ -741,11 +743,11 @@ export function step_simulation(
       const driven = positions.get(link.drivenKey);
       if (pivot && driven) {
         const cur = driven.sub(pivot).angle();
-        // A beam-anchored motor also owes the anchor's own motion this frame, folded in
-        // as a one-frame delta rather than read live every sweep (see the `anchorKey`
-        // comment on the Link type): the error that leaves is second-order (the anchor's
-        // angular ACCELERATION × dt², not its velocity), so a one-frame-stale anchor
-        // never drifts.
+        // A beam-anchored motor also owes the anchor's own motion this frame, folded in as a
+        // one-frame delta on top of `driven`'s ACTUAL current angle — never an independent,
+        // ever-advancing target. That keeps it exactly as soft as a grounded motor: it never
+        // commands more than one frame's worth of motion ahead of reality, so a blocked/
+        // over-constrained mechanism stalls the motor first rather than forcing through it.
         let anchorDelta = 0;
         if (link.anchorKey !== undefined && link.anchorAngle !== undefined) {
           const anchor = positions.get(link.anchorKey);

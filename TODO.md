@@ -32,6 +32,7 @@
 
 - 🆕 Créer les fonctions de containte PBD dynamiques
 - 🆕 Collisions
+- 🆕 Ajouter le sol (en option ?)
 - 🆕 Frottements dans les pivots et sliders
 - 🆕 Propriétés de poutre (hauteur, largeur, matériau)
 - 🆕 Moteurs de couple
@@ -66,6 +67,8 @@
 
 **Analyse hyperstatique**
 
+- 🔨 Le ra-mappage des contraintes "angle -> longueur -> angle" ne met pas en évidence les bons éléments
+- 🔨 Symbole longueur de courroie
 - 🚨 Sur le mécanisme "Poulie.slidep", je ne comprend pas les hyperstatismes "Non-glissement de courroie"
 - 🤔 Animer les éléments (en plus?) des symboles ?
 
@@ -238,17 +241,6 @@
 - 🆕 Motorisation de sliders (verins)
 - 🆕 Limites d'angle des pivots
 
-**Visuel des éléments**
-
-- 🔨 Changer l'apparence des extrémités de spring et damper comme pour beam
-- 🆕 Afficher ground avec les 4 directions cardinales
-- 🆕 Afficher le sens de rotation du moteur sur une des 4 directions cardinales
-- 🆕 Prefered force direction : afficher les forces en 2 modes (toe to head / head to toe)
-- 🆕 Option de colorer les éléments
-- 🆕 Style des éléments : fil de fer, plein, couleurs
-- 🆕 Ajouter engrenage couronne (extérieur) pour train épicycloïdal
-- 🆕 Dessin gear stylisé
-
 **Interactions et UI**
 
 - 🆕 Rendre visible les ctrl+y/z invisibles : clicgnottement dans l'onglet
@@ -261,11 +253,6 @@
 
 - 🆕 Créer un système d'unités (zoom de base : 1px = 1mm) à mettre dans les paramètres
 
-**Gallerie et projet**
-
-- 🆕 Ajouter bouton "Dupliquer le mécanisme"
-- 🆕 Rendre les previews de la gallerie interactives
-
 **Export et divers**
 
 - 🆕 Boucler le replay (et choisir le temps de rebouclage)
@@ -274,8 +261,26 @@
 - 🆕 Animer un mécanisme qui arrive sur l'écran après 10 min d'inactivité
 - 🔨 Relire les traductions
 
+**Visuel des éléments**
+
+- 🔨 Changer l'apparence des extrémités de spring et damper comme pour beam
+- 🆕 Afficher ground avec les 4 directions cardinales
+- 🆕 Afficher le sens de rotation du moteur sur une des 4 directions cardinales
+- 🆕 Prefered force direction : afficher les forces en 2 modes (toe to head / head to toe)
+- 🆕 Option de colorer les éléments
+- 🆕 Style des éléments : fil de fer, plein, couleurs
+- 🆕 Ajouter engrenage couronne (extérieur) pour train épicycloïdal
+- 🆕 Dessin gear stylisé
+
 ### [ Simulation STATIQUE ]
 
 - 🆕 Implémenter algorithme de statique (matrices, ΣF=0)
 - 🆕 Solver Statique algébrique (résolution d'inconnues)
 - 🆕 Modification topologie en simulation : pause auto + bascule temporaire Édition
+
+### [ Slidep 3D ]
+
+- 🆕 Changer la boucle de rendu
+- 🆕 Ajouter un cube d'orientation
+- 🆕 Créer l'objet "plan"
+- 🆕 Ajouter les noeuds "pivot glissant", "rotule", "rotule à doigt", "cardan", "linéaire annulaire", "hélicoïdale"

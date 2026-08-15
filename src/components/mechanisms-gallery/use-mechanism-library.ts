@@ -273,6 +273,42 @@ export function useMechanismLibrary({
     [setSnackbar],
   );
 
+  const handleDuplicateFromGallery = useCallback(
+    async (createdAtId: number) => {
+      const db = await openMechanismsDB();
+      const record = await db.get("mechanisms", createdAtId);
+      if (!record) return undefined;
+
+      const existing = await db.getAll("mechanisms");
+      const takenIds = new Set(existing.map((r) => r.metadata.createdAt));
+      const takenNames = new Set(existing.map((r) => r.metadata.name));
+
+      let id = Date.now();
+      while (takenIds.has(id)) id++;
+
+      const base = record.metadata.name || t("untitled");
+      let name = t("copy_of", { name: base });
+      for (let n = 2; takenNames.has(name); n++)
+        name = t("copy_of_n", { name: base, n });
+
+      const now = Date.now();
+      const duplicated: SerializedMechanism = {
+        ...record,
+        metadata: {
+          ...record.metadata,
+          createdAt: id,
+          name,
+          modifiedAt: now,
+        },
+      };
+      await db.put("mechanisms", duplicated);
+
+      setSavedMechanisms((prev) => [...prev, duplicated]);
+      return duplicated;
+    },
+    [],
+  );
+
   const handleNewFromGallery = useCallback(() => {
     const currentCanvas = canvasRef.current;
     if (!currentCanvas) return;
@@ -453,6 +489,7 @@ export function useMechanismLibrary({
     handleRenameFromGallery,
     handleUpdateTagsFromGallery,
     handleDeleteFromGallery,
+    handleDuplicateFromGallery,
     handleNewFromGallery,
     handleMenuButtonUpload,
     handleFilesDropped,

@@ -54,6 +54,8 @@ export function linkKeys(link: Link): string[] {
     "centerKey",
     "pivotKey",
     "drivenKey",
+    "anchorKey",
+    "anchorPivotKey",
     "angleKey",
     "angleKey1",
     "angleKey2",

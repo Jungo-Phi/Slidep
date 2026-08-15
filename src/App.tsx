@@ -388,6 +388,7 @@ const App: React.FC = () => {
     handleRenameFromGallery,
     handleUpdateTagsFromGallery,
     handleDeleteFromGallery,
+    handleDuplicateFromGallery,
     handleNewFromGallery,
     handleMenuButtonUpload,
     handleFilesDropped,
@@ -875,6 +876,7 @@ const App: React.FC = () => {
         onLoad={handleLoadFromGallery}
         onRename={handleRenameFromGallery}
         onDelete={handleDeleteFromGallery}
+        onDuplicate={handleDuplicateFromGallery}
         onUpdateTags={handleUpdateTagsFromGallery}
         onNew={handleNewFromGallery}
         onImport={handleMenuButtonUpload}

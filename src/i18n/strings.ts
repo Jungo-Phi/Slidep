@@ -764,6 +764,12 @@ export const STRINGS = {
     de: "Exportieren",
     es: "Exportar",
   },
+  gallery_duplicate: {
+    fr: "Dupliquer",
+    en: "Duplicate",
+    de: "Duplizieren",
+    es: "Duplicar",
+  },
   action_delete: {
     fr: "Supprimer",
     en: "Delete",

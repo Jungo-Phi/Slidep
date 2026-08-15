@@ -33,6 +33,9 @@ interface MechanismsGalleryProps {
   onLoad: (mechanismRecord: SerializedMechanism) => void;
   onRename: (createdAtId: number, name: string) => void;
   onDelete: (createdAtId: number) => void;
+  onDuplicate: (
+    createdAtId: number,
+  ) => Promise<SerializedMechanism | undefined>;
   onUpdateTags: (createdAtId: number, tags: string[]) => void;
   onNew: () => void;
   onImport: () => void;
@@ -47,6 +50,7 @@ export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
   onLoad,
   onRename,
   onDelete,
+  onDuplicate,
   onUpdateTags,
   onNew,
   onImport,
@@ -55,6 +59,17 @@ export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
 }) => {
   const [search, setSearch] = useState("");
   const searching = search.trim().length > 0;
+
+  // Set right after a duplication so the new card opens straight into name editing;
+  // cleared as soon as that card consumes it, so it never re-triggers on a later render.
+  const [justDuplicatedId, setJustDuplicatedId] = useState<number | null>(
+    null,
+  );
+  const handleDuplicate = async (createdAtId: number) => {
+    const duplicated = await onDuplicate(createdAtId);
+    if (duplicated) setJustDuplicatedId(duplicated.metadata.createdAt);
+    return duplicated;
+  };
 
   // Valeurs déjà utilisées quelque part dans la bibliothèque. Les trois modes de simulation
   // sont toujours suggérés en plus, comme point de départ le plus courant pour trier.
@@ -285,8 +300,13 @@ export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
                     onRename={onRename}
                     onDelete={onDelete}
                     onExport={onExport}
+                    onDuplicate={handleDuplicate}
                     onUpdateTags={onUpdateTags}
                     allTags={allTags}
+                    startInNameEdit={
+                      mechanismRecord.metadata.createdAt === justDuplicatedId
+                    }
+                    onNameEditStarted={() => setJustDuplicatedId(null)}
                   />
                 ))}
               </Box>

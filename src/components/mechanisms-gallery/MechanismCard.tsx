@@ -7,7 +7,7 @@ import {
   TextField,
   Divider,
 } from "@mui/material";
-import { Delete, Download } from "@mui/icons-material";
+import { ContentCopy, Delete, Download } from "@mui/icons-material";
 import { SerializedMechanism } from "../../types";
 import { t } from "../../i18n";
 import MechanismThumbnail from "./MechanismThumbnail";
@@ -20,35 +20,42 @@ interface MechanismCardProps {
   onRename: (createdAtId: number, name: string) => void;
   onDelete: (createdAtId: number) => void;
   onExport: (mechanismRecord: SerializedMechanism) => void;
+  onDuplicate: (
+    createdAtId: number,
+  ) => Promise<SerializedMechanism | undefined>;
   onUpdateTags: (createdAtId: number, tags: string[]) => void;
-  /** Every tag already used in the library, suggested by the tag autocomplete. */
   allTags: string[];
+  startInNameEdit?: boolean;
+  onNameEditStarted?: () => void;
 }
 
-/**
- * Une carte de la galerie : un panneau à plat (pas de `Card`/`Paper`, pas de
- * levée au survol) pour rester léger une fois qu'on en affiche des dizaines.
- * Le survol est porté sur le panneau entier — pas seulement la miniature —
- * pour rester cohérent avec la teinte de survol déjà déclenchée dessus.
- */
 export const MechanismCard: React.FC<MechanismCardProps> = ({
   mechanismRecord,
   onLoad,
   onRename,
   onDelete,
   onExport,
+  onDuplicate,
   onUpdateTags,
   allTags,
+  startInNameEdit,
+  onNameEditStarted,
 }) => {
   const [hovered, setHovered] = useState(false);
   const description = mechanismRecord.metadata.description;
 
-  const [editingName, setEditingName] = useState(false);
+  const [editingName, setEditingName] = useState(!!startInNameEdit);
   const [nameDraft, setNameDraft] = useState(mechanismRecord.metadata.name);
   useEffect(() => {
     setNameDraft(mechanismRecord.metadata.name);
   }, [mechanismRecord.metadata.name]);
-  // Set by Escape so the blur it triggers discards instead of committing.
+  useEffect(() => {
+    if (startInNameEdit) {
+      setEditingName(true);
+      onNameEditStarted?.();
+    }
+  }, [startInNameEdit]);
+
   const discardNameRef = useRef(false);
 
   const commitName = () => {
@@ -125,7 +132,6 @@ export const MechanismCard: React.FC<MechanismCardProps> = ({
           gap: 1,
         }}
       >
-        {/* Nom, éditable via le crayon révélé au survol */}
         <Box
           display="flex"
           flexDirection="row"
@@ -194,12 +200,24 @@ export const MechanismCard: React.FC<MechanismCardProps> = ({
                   flexShrink: 0,
                   ml: 0.5,
                   mr: -0.5,
-                  width: hovered ? 64 : 0,
+                  width: hovered ? 96 : 0,
                   opacity: hovered ? 1 : 0,
                   overflow: "hidden",
                   transition: "width 0.15s, opacity 0.15s, margin-left 0.15s",
                 }}
               >
+                <Tooltip disableInteractive title={t("gallery_duplicate")}>
+                  <IconButton
+                    size="small"
+                    color="inherit"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDuplicate(mechanismRecord.metadata.createdAt);
+                    }}
+                  >
+                    <ContentCopy fontSize="small" />
+                  </IconButton>
+                </Tooltip>
                 <Tooltip disableInteractive title={t("gallery_export")}>
                   <IconButton
                     size="small"
