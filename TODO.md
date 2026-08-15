@@ -10,7 +10,15 @@
 
 ### À faire rapidement
 
-- 🔨 Simuler un moteur non grounded (parentBeamID)
+**Physique**
+
+- 🆕 Créer les fonctions de containte PBD dynamiques
+- 🆕 Collisions
+- 🆕 Ajouter le sol (en option ?)
+- 🆕 Frottements dans les pivots et sliders
+- 🆕 Propriétés de poutre (hauteur, largeur, matériau)
+- 🆕 Moteurs de couple
+- 🆕 Ajouter ressort de couple
 
 **Simulation**
 
@@ -27,16 +35,6 @@
 - 🔨 Ignorer des grounds si nécessaire.
 - 🚨 Généralement laisser les nodes sur les edges en "SlideOn"
 - 🤔 Que faire quand on entre une valeur dans le panneau latéral que les contraintes existantes ne permettent pas ?
-
-**Physique**
-
-- 🆕 Créer les fonctions de containte PBD dynamiques
-- 🆕 Collisions
-- 🆕 Ajouter le sol (en option ?)
-- 🆕 Frottements dans les pivots et sliders
-- 🆕 Propriétés de poutre (hauteur, largeur, matériau)
-- 🆕 Moteurs de couple
-- 🆕 Ajouter ressort de couple.
 
 **Visualisation**
 
@@ -68,19 +66,21 @@
 **Analyse hyperstatique**
 
 - 🔨 Le ra-mappage des contraintes "angle -> longueur -> angle" ne met pas en évidence les bons éléments
+- 🔨 Symboles angles vers l'intérieur
 - 🔨 Symbole longueur de courroie
 - 🚨 Sur le mécanisme "Poulie.slidep", je ne comprend pas les hyperstatismes "Non-glissement de courroie"
+- 🚨 Quid des doubles contraintes (ex: "2 x Longueur") ?
 - 🤔 Animer les éléments (en plus?) des symboles ?
 
 **Panneau mesures**
 
-- 🔨 "Esc", "CTRL+Y/Z" et hover sur le canvas doit marcher avec le OnCanvasProbeMetricSelector
 - 🔨 À la fermeture du menu ProbeMetricSelector, on voit un petit rectangle sur 1 frame
 - 🤔 Ajouter l'icon "Probe" au dessus des check-box de mesure ?
 - 🔨 Pas de sonde sur les courroies
 - 🔨 La transparence de deletion des probes est inconsistante
 - 🔨 Choisir x/y/norme pour les mesures superposées
 - 🔨 Possible de hover sur probe quand placingProbe (pareil pour gearRatio et Dimension)
+- 🆕 Mesurer la masse totale d'un mécanisme
 
 **🔨 Trajectoires**
 
@@ -123,7 +123,6 @@
 - 🆕 Utiliser le "bouton dropDown pour changer le repère d'une force" pour choisir l'ancrage d'un moteur
 - 🆕 Ajouter boutons pour changer le parentBeam des slider et slideps
 - 🆕 Afficher le ratio avec une autre gear dans les connections de l'élément
-- 🆕 Éditer la longueur de repos d'un ressort (pas forcément égale à celle affichée en édition)
 - 🆕 Scroll dans NumberInput
 
 **Refactor des dossiers**

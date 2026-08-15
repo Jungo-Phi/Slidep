@@ -50,6 +50,7 @@ function pivot(n: string, pos: Point2, g: boolean, edges: ID[]): PivotElement {
     isGrounded: g,
     rotatingEdgesIDs: edges,
     fixedGearsIDs: [],
+    rotationalFriction: 0,
   };
 }
 
@@ -80,6 +81,7 @@ function sliderNode(
     isGrounded: false,
     parentBeamID: id(rail),
     fixedEdgesIDs: edges,
+    slidingFriction: 0,
   };
 }
 
@@ -101,6 +103,7 @@ function beam(
     fixedNodeStartID: s ? id(s) : undefined,
     fixedNodeEndID: e ? id(e) : undefined,
     fixedNodesBodyIDs: body,
+    linearMass: 1,
   };
 }
 
@@ -311,11 +314,13 @@ describe("probe_chain_mobility — mécanismes de référence", () => {
     });
     const off = model.links.find((l) => l.type === "BeltLength")?.disconnected;
     expect(off).toEqual([false, true, false]);
-    const junctions = [...model.links, ...model.pruned.map((p) => p.link)].filter(
-      (l) => l.type === "BeltPin" || l.type === "BeltFollowsTangent",
-    );
+    const junctions = [
+      ...model.links,
+      ...model.pruned.map((p) => p.link),
+    ].filter((l) => l.type === "BeltPin" || l.type === "BeltFollowsTangent");
     expect(junctions.length).toBeGreaterThan(0);
-    for (const junction of junctions) expect(junction.disconnected).toEqual(off);
+    for (const junction of junctions)
+      expect(junction.disconnected).toEqual(off);
   });
 
   it("m et h de référence", () => {
@@ -323,10 +328,7 @@ describe("probe_chain_mobility — mécanismes de référence", () => {
     // dix, à 200 balayages et en sortie sur le mouvement. Core XY vaut bien ses
     // deux axes, Jansen son unique DDL — le panneau affichait 6 et −1.
     const mh = (json: string) =>
-      probe_mobility(fixture(json)).map((r) => [
-        r.mobility,
-        r.hyperstaticity,
-      ]);
+      probe_mobility(fixture(json)).map((r) => [r.mobility, r.hyperstaticity]);
     expect(mh(vilbrequin)).toEqual([[1, 0]]);
     expect(mh(slider)).toEqual([[1, 0]]);
     expect(mh(jansen)).toEqual([[1, 1]]);

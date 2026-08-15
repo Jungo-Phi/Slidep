@@ -437,7 +437,12 @@ export const MechanicalCanvas = forwardRef<
 
       // Trajectoires des points sondés, sous les éléments du mécanisme.
       for (const trajectory of live?.trajectories ?? EMPTY_TRAJECTORIES)
-        draw_trajectory(ctx, viewport, trajectory, false /* TODO : add variable */);
+        draw_trajectory(
+          ctx,
+          viewport,
+          trajectory,
+          false /* TODO : add variable */,
+        );
 
       // Retour visuel undo/redo : révèle les recréations, prépare les fantômes.
       processConstraintChange();
@@ -631,10 +636,8 @@ export const MechanicalCanvas = forwardRef<
       onMouseUpHandler();
     };
 
-    // A gesture in progress keeps the canvas: the pointer is captured, and what
-    // it draws — a selection rectangle, an element being placed — must survive
-    // the cursor straying outside. Same for the probe metric popover: it sits
-    // outside the canvas element, so reaching it would otherwise trigger this.
+    // A gesture in progress keeps the canvas: the pointer is captured, and what it draws (a selection rectangle, an element being placed) must survive the cursor straying outside.
+    // Same for the probe metric popover: it sits outside the canvas element, so reaching it would otherwise trigger this.
     const onPointerLeaveHandler = () => {
       if (
         mouseButtonDownRef.current === "none" &&
@@ -644,10 +647,9 @@ export const MechanicalCanvas = forwardRef<
     };
 
     /**
-     * The hovered part under the last known cursor position, bounded and
-     * snapped. Reads the current state, so it answers for whatever tool is
-     * armed right now; free of side effects, so it can be called outside a
-     * gesture. Returns the bounded cursor too, which gestures read raw.
+     * The hovered part under the last known cursor position, bounded and snapped.
+     * Reads the current state, so it answers for whatever tool is armed right now, free of side effects, so it can be called outside a gesture.
+     * Returns the bounded cursor too, which gestures read raw.
      */
     const computeHover = useCallback((): {
       hoveredPart: HoveredPart;
@@ -868,15 +870,30 @@ export const MechanicalCanvas = forwardRef<
       return false;
     };
 
+    // The measured element stays selected either way; only the tool differs,
+    // the probe tool going on to place another.
+    const closeProbeMetricsPopover = useCallback(() => {
+      const state = canvasStateRef.current;
+      if (state.type !== "PlacingProbeMetrics") return;
+      setCanvasState(
+        state.armed
+          ? { type: "PlacingProbe" }
+          : { type: "SelectedElement", elementID: state.elementID },
+      );
+    }, [setCanvasState]);
+
     useEffect(() => {
       const handleGlobalKeyDown = (event: KeyboardEvent) => {
         if (isTypingInInput()) return;
-        // The probe metric popover handles its own keys (Enter/Escape)
-        if (canvasStateRef.current.type === "PlacingProbeMetrics") return;
+        if (canvasStateRef.current.type === "PlacingProbeMetrics") {
+          // Escape must close the popover even when focus has drifted off it
+          // (e.g. after Tab) — the local handler on the Paper only catches it
+          // while focus is still inside.
+          if (event.key === "Escape") closeProbeMetricsPopover();
+          return;
+        }
         if (event.key === " ") {
           event.preventDefault();
-          // Space must only play/pause: drop the focus a UI control kept after
-          // being clicked, so Space doesn't re-activate it (button, switch…).
           (document.activeElement as HTMLElement | null)?.blur?.();
         }
         handleEvent({
@@ -887,7 +904,7 @@ export const MechanicalCanvas = forwardRef<
       };
       document.addEventListener("keydown", handleGlobalKeyDown);
       return () => document.removeEventListener("keydown", handleGlobalKeyDown);
-    }, [handleEvent]);
+    }, [handleEvent, closeProbeMetricsPopover]);
 
     useEffect(() => {
       const canvas = canvasRef.current;
@@ -1007,31 +1024,27 @@ export const MechanicalCanvas = forwardRef<
     const commitLoadValue = (element: UnionElement, newValue: number) => {
       switch (element.type) {
         case "force":
-          applyActions(
-            [
-              {
-                type: "ChangeForce",
-                id: element.id,
-                newVector: element.vector.with_length(newValue),
-                oldVector: element.vector,
-              },
-            ],
-          );
+          applyActions([
+            {
+              type: "ChangeForce",
+              id: element.id,
+              newVector: element.vector.with_length(newValue),
+              oldVector: element.vector,
+            },
+          ]);
           return true;
         case "moment":
-          applyActions(
-            [
-              {
-                type: "ChangeMoment",
-                id: element.id,
-                // The editor shows the magnitude unsigned: a moment's sign is
-                // its rotation direction, picked when it is placed, so editing
-                // the value here resizes the arc without turning it around.
-                newValue: newValue * (element.value < 0 ? -1 : 1),
-                oldValue: element.value,
-              },
-            ],
-          );
+          applyActions([
+            {
+              type: "ChangeMoment",
+              id: element.id,
+              // The editor shows the magnitude unsigned: a moment's sign is
+              // its rotation direction, picked when it is placed, so editing
+              // the value here resizes the arc without turning it around.
+              newValue: newValue * (element.value < 0 ? -1 : 1),
+              oldValue: element.value,
+            },
+          ]);
           return true;
         case "distributed-force": {
           const editingEnd =
@@ -1045,20 +1058,18 @@ export const MechanicalCanvas = forwardRef<
             ((editingEnd ? element.magnitudeEnd : element.magnitudeStart) < 0
               ? -1
               : 1);
-          applyActions(
-            [
-              {
-                type: "ChangeDistributedForce",
-                id: element.id,
-                newDirection: element.direction,
-                oldDirection: element.direction,
-                newMagnitudeStart: editingEnd ? element.magnitudeStart : edited,
-                oldMagnitudeStart: element.magnitudeStart,
-                newMagnitudeEnd: editingEnd ? edited : element.magnitudeEnd,
-                oldMagnitudeEnd: element.magnitudeEnd,
-              },
-            ],
-          );
+          applyActions([
+            {
+              type: "ChangeDistributedForce",
+              id: element.id,
+              newDirection: element.direction,
+              oldDirection: element.direction,
+              newMagnitudeStart: editingEnd ? element.magnitudeStart : edited,
+              oldMagnitudeStart: element.magnitudeStart,
+              newMagnitudeEnd: editingEnd ? edited : element.magnitudeEnd,
+              oldMagnitudeEnd: element.magnitudeEnd,
+            },
+          ]);
           return true;
         }
         default:
@@ -1204,16 +1215,14 @@ export const MechanicalCanvas = forwardRef<
                     break;
                 }
                 if (actionType) {
-                  applyActions(
-                    [
-                      {
-                        type: actionType,
-                        id: editingElement.id,
-                        newValue: newValue,
-                        oldValue: editingElement.value,
-                      },
-                    ],
-                  );
+                  applyActions([
+                    {
+                      type: actionType,
+                      id: editingElement.id,
+                      newValue: newValue,
+                      oldValue: editingElement.value,
+                    },
+                  ]);
                 }
               }
               // Valider sur un élément qu'on vient de poser réarme son outil,
@@ -1238,14 +1247,12 @@ export const MechanicalCanvas = forwardRef<
               // Annuler la saisie d'un élément qu'on vient de poser le retire :
               // sans valeur, il n'a jamais vraiment existé.
               if (isPlacingValue) {
-                applyActions(
-                  [
-                    {
-                      type: "DeleteElement",
-                      element: editingElement,
-                    },
-                  ],
-                );
+                applyActions([
+                  {
+                    type: "DeleteElement",
+                    element: editingElement,
+                  },
+                ]);
                 setCanvasState({ type: "Selecting" });
               } else if (isEditingValue && canvasState.rearm) {
                 setCanvasState({ type: canvasState.rearm });
@@ -1272,29 +1279,16 @@ export const MechanicalCanvas = forwardRef<
                   mechanism.viewport,
                 )}
                 onToggle={(newProbes) =>
-                  applyActions(
-                    [
-                      {
-                        type: "SetProbes",
-                        elementID: probedElement.id,
-                        newProbes,
-                        oldProbes: probedElement.probes ?? [],
-                      },
-                    ],
-                  )
+                  applyActions([
+                    {
+                      type: "SetProbes",
+                      elementID: probedElement.id,
+                      newProbes,
+                      oldProbes: probedElement.probes ?? [],
+                    },
+                  ])
                 }
-                // The measured element stays selected either way; only the tool
-                // differs, the probe tool going on to place another.
-                onClose={() =>
-                  setCanvasState(
-                    canvasState.armed
-                      ? { type: "PlacingProbe" }
-                      : {
-                          type: "SelectedElement",
-                          elementID: probedElement.id,
-                        },
-                  )
-                }
+                onClose={closeProbeMetricsPopover}
               />
             );
           })()}

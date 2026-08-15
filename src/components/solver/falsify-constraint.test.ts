@@ -72,6 +72,7 @@ function pivot(n: string, pos: Point2, g: boolean, edges: ID[]): PivotElement {
     isGrounded: g,
     rotatingEdgesIDs: edges,
     fixedGearsIDs: [],
+    rotationalFriction: 0,
   };
 }
 
@@ -92,6 +93,7 @@ function beam(
     fixedNodeStartID: s ? id(s) : undefined,
     fixedNodeEndID: e ? id(e) : undefined,
     fixedNodesBodyIDs: [],
+    linearMass: 1,
   };
 }
 
@@ -199,39 +201,47 @@ describe("falsify", () => {
     );
     const healthyChain = healthy.chains[0];
     for (const link of healthyChain.links.filter((l) => l.type === "Distance"))
-      expect(
-        resistance(healthy, healthyChain, link, BIG_LIE),
-      ).toBeLessThan(RESISTED);
+      expect(resistance(healthy, healthyChain, link, BIG_LIE)).toBeLessThan(
+        RESISTED,
+      );
   });
 
-  it("s'accorde avec le leave-one-out, constrainte par contrainte", () => {
-    // Deux chemins vers la même question — le rang d'un côté, la conséquence de
-    // l'autre. Un désaccord voudrait dire que l'une des deux se trompe, et rien ne
-    // dirait laquelle sans ce banc.
-    for (const json of [vilbrequin, jansen, poulie, huygens, doubleSlider]) {
-      const { missed, invented } = disagreements(analysed(json), BIG_LIE);
-      expect(missed.map((l) => l.type)).toEqual([]);
-      expect(invented.map((l) => l.type)).toEqual([]);
-    }
-  }, SLOW);
+  it(
+    "s'accorde avec le leave-one-out, constrainte par contrainte",
+    () => {
+      // Deux chemins vers la même question — le rang d'un côté, la conséquence de
+      // l'autre. Un désaccord voudrait dire que l'une des deux se trompe, et rien ne
+      // dirait laquelle sans ce banc.
+      for (const json of [vilbrequin, jansen, poulie, huygens, doubleSlider]) {
+        const { missed, invented } = disagreements(analysed(json), BIG_LIE);
+        expect(missed.map((l) => l.type)).toEqual([]);
+        expect(invented.map((l) => l.type)).toEqual([]);
+      }
+    },
+    SLOW,
+  );
 
-  it("aucune taille de mensonge ne sépare partout", () => {
-    // Le point qui bloque, mesuré sur Core XY et figé ici pour qu'il ne se perde pas.
-    const model = analysed(coreXY);
+  it(
+    "aucune taille de mensonge ne sépare partout",
+    () => {
+      // Le point qui bloque, mesuré sur Core XY et figé ici pour qu'il ne se perde pas.
+      const model = analysed(coreXY);
 
-    // Gros mensonge : une `Distance` pourtant indépendante résiste. Elle ne peut pas
-    // atteindre sa nouvelle pose — une butée de glissière, pas un rang.
-    const big = disagreements(model, BIG_LIE);
-    expect(big.missed).toEqual([]);
-    expect(big.invented.length).toBeGreaterThan(0);
+      // Gros mensonge : une `Distance` pourtant indépendante résiste. Elle ne peut pas
+      // atteindre sa nouvelle pose — une butée de glissière, pas un rang.
+      const big = disagreements(model, BIG_LIE);
+      expect(big.missed).toEqual([]);
+      expect(big.invented.length).toBeGreaterThan(0);
 
-    // Petit mensonge : l'accusation à tort disparaît, mais de vraies redondances
-    // passent sous le seuil. Le verrou d'angle en est l'exemple — son bras de levier
-    // est celui de la chaîne entière, donc le mensonge qu'il reçoit est minuscule.
-    const small = disagreements(model, SMALL_LIE);
-    expect(small.invented).toEqual([]);
-    expect(small.missed.length).toBeGreaterThan(0);
-  }, SLOW);
+      // Petit mensonge : l'accusation à tort disparaît, mais de vraies redondances
+      // passent sous le seuil. Le verrou d'angle en est l'exemple — son bras de levier
+      // est celui de la chaîne entière, donc le mensonge qu'il reçoit est minuscule.
+      const small = disagreements(model, SMALL_LIE);
+      expect(small.invented).toEqual([]);
+      expect(small.missed.length).toBeGreaterThan(0);
+    },
+    SLOW,
+  );
 
   it("couvre tout Core XY, glissières comprises", () => {
     // La couverture est une donnée du chantier, pas une note de bas de page. Une
@@ -243,7 +253,13 @@ describe("falsify", () => {
   it("ce qui tient une quantité à zéro n'a rien à décaler", () => {
     // La part qui reste découverte, et pourquoi : falsifier un parallélisme demanderait
     // au solveur un terme qu'il n'a pas.
-    const keys = { ddl: 1 as const, key1: "a", key2: "b", key3: "c", key4: "d" };
+    const keys = {
+      ddl: 1 as const,
+      key1: "a",
+      key2: "b",
+      key3: "c",
+      key4: "d",
+    };
     expect(is_falsifiable({ type: "Parallel", ...keys })).toBe(false);
     expect(
       is_falsifiable({ type: "Horizontal", ddl: 1, key1: "a", key2: "b" }),

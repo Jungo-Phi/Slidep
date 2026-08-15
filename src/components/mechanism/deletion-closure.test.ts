@@ -51,6 +51,7 @@ function build(): {
         isGrounded: false,
         rotatingEdgesIDs: [],
         fixedGearsIDs: [GEAR_A, GEAR_B],
+        rotationalFriction: 0,
       },
       {
         type: "gear",
@@ -64,6 +65,7 @@ function build(): {
         fixedNodesBodyIDs: [],
         meshedGearsIDs: [],
         attachedBeltID: undefined,
+        surfaceMass: 1,
       },
       {
         type: "gear",
@@ -77,6 +79,7 @@ function build(): {
         fixedNodesBodyIDs: [],
         meshedGearsIDs: [],
         attachedBeltID: undefined,
+        surfaceMass: 1,
       },
       {
         type: "beam",
@@ -88,6 +91,7 @@ function build(): {
         fixedNodeStartID: undefined,
         fixedNodeEndID: undefined,
         fixedNodesBodyIDs: [],
+        linearMass: 1,
       },
       {
         type: "pivot",
@@ -98,6 +102,7 @@ function build(): {
         isGrounded: false,
         rotatingEdgesIDs: [],
         fixedGearsIDs: [],
+        rotationalFriction: 0,
       },
     ],
     constraints: [
@@ -191,6 +196,7 @@ describe("deletion_closure", () => {
         fixedNodeStartID: JOIN,
         fixedNodeEndID: JOIN,
         fixedNodesBodyIDs: [],
+        linearMass: 1,
       },
       {
         type: "beam",
@@ -202,6 +208,7 @@ describe("deletion_closure", () => {
         fixedNodeStartID: JOIN,
         fixedNodeEndID: undefined,
         fixedNodesBodyIDs: [],
+        linearMass: 1,
       },
     ];
 
@@ -230,6 +237,7 @@ describe("deletion_closure", () => {
       isGrounded: false,
       rotatingEdgesIDs: [],
       fixedGearsIDs: [],
+      rotationalFriction: 0,
     });
     const mechanical = [node(KEPT, 0), node(ABSORBED, 40)];
     const loads: LoadElement[] = [
@@ -283,6 +291,7 @@ describe("deletion_closure", () => {
         isGrounded: false,
         rotatingEdgesIDs: [LOOPED],
         fixedGearsIDs: [],
+        rotationalFriction: 0,
       },
       {
         type: "pivot",
@@ -293,6 +302,7 @@ describe("deletion_closure", () => {
         isGrounded: false,
         rotatingEdgesIDs: [],
         fixedGearsIDs: [],
+        rotationalFriction: 0,
       },
       {
         type: "beam",
@@ -304,6 +314,7 @@ describe("deletion_closure", () => {
         fixedNodeStartID: OLD,
         fixedNodeEndID: OLD,
         fixedNodesBodyIDs: [],
+        linearMass: 1,
       },
     ];
 
@@ -319,9 +330,21 @@ describe("deletion_closure", () => {
     const after = apply_actions(
       mechanism,
       connect_elements(
-        { type: "Edge", position: new Point2(0, 0), id: LOOPED, deleting: false, part: "start" },
+        {
+          type: "Edge",
+          position: new Point2(0, 0),
+          id: LOOPED,
+          deleting: false,
+          part: "start",
+        },
         mechanical[1],
-        { type: "Node", position: new Point2(40, 0), id: FRESH, deleting: false, beamBodyHover: false },
+        {
+          type: "Node",
+          position: new Point2(40, 0),
+          id: FRESH,
+          deleting: false,
+          beamBodyHover: false,
+        },
         mechanical,
         [],
         [],

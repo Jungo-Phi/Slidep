@@ -1,7 +1,8 @@
 import { Box, IconButton, Typography, FormControlLabel, Button, Paper } from "@mui/material";
 import { ShowChart, VisibilityOff, Visibility } from "@mui/icons-material";
-import { MechanicalElement, available_overlays, overlay_shown } from "../../../types/element";
+import { MechanicalElement } from "../../../types/element";
 import { Action, PropertiesPanelTab } from "../../../types";
+import { available_overlays, overlay_shown } from "../../../utils/element-queries";
 import { ProbeMetricSelector } from "../../canvas/ProbeMetricSelector";
 import { OVERLAY_LABEL_KEYS, set_overlay } from "../overlay-actions";
 import { t } from "../../../i18n";

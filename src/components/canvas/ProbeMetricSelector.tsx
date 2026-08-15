@@ -159,9 +159,6 @@ export const OnCanvasProbeMetricSelector: React.FC<
       <Paper
         ref={paperRef}
         tabIndex={-1}
-        onKeyDown={(e) => {
-          if (e.key === "Escape") onClose();
-        }}
         onKeyDownCapture={(e) => {
           if (e.key === "Enter") {
             e.preventDefault();

@@ -48,6 +48,7 @@ function pivot(n: string, pos: Point2, g: boolean, edges: ID[]): PivotElement {
     isGrounded: g,
     rotatingEdgesIDs: edges,
     fixedGearsIDs: [],
+    rotationalFriction: 0,
   };
 }
 
@@ -78,6 +79,7 @@ function sliderNode(
     isGrounded: false,
     parentBeamID: id(rail),
     fixedEdgesIDs: edges,
+    slidingFriction: 0,
   };
 }
 
@@ -99,6 +101,7 @@ function beam(
     fixedNodeStartID: s ? id(s) : undefined,
     fixedNodeEndID: e ? id(e) : undefined,
     fixedNodesBodyIDs: body,
+    linearMass: 1,
   };
 }
 

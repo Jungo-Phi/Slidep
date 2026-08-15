@@ -58,6 +58,7 @@ const axle: PivotElement = {
   isGrounded: false,
   rotatingEdgesIDs: [],
   fixedGearsIDs: [GEAR],
+  rotationalFriction: 0,
 };
 const gear: GearElement = {
   type: "gear",
@@ -71,6 +72,7 @@ const gear: GearElement = {
   fixedNodesBodyIDs: [],
   meshedGearsIDs: [],
   attachedBeltID: undefined,
+  surfaceMass: 1,
 };
 const join: JoinElement = {
   type: "join",
@@ -91,6 +93,7 @@ const beam: BeamElement = {
   fixedNodeStartID: JOIN,
   fixedNodeEndID: undefined,
   fixedNodesBodyIDs: [],
+  linearMass: 1,
 };
 const spring: SpringElement = {
   type: "spring",
@@ -125,6 +128,7 @@ const beltAxle: PivotElement = {
   isGrounded: false,
   rotatingEdgesIDs: [],
   fixedGearsIDs: [BELT_GEAR],
+  rotationalFriction: 0,
 };
 const beltGear: GearElement = {
   type: "gear",
@@ -138,6 +142,7 @@ const beltGear: GearElement = {
   fixedNodesBodyIDs: [],
   meshedGearsIDs: [],
   attachedBeltID: BELT,
+  surfaceMass: 1,
 };
 const belt: BeltElement = {
   type: "belt",
@@ -443,6 +448,7 @@ describe("un rayon que le glissement n'atteint pas", () => {
     isGrounded: false,
     rotatingEdgesIDs: [],
     fixedGearsIDs: [gearID],
+    rotationalFriction: 0,
   });
   const wheel = (
     gearID: ID,
@@ -461,6 +467,7 @@ describe("un rayon que le glissement n'atteint pas", () => {
     fixedNodesBodyIDs: [],
     meshedGearsIDs: [],
     attachedBeltID: undefined,
+    surfaceMass: 1,
   });
 
   const at = (grantedRadius: number) =>

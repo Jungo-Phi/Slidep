@@ -3,6 +3,7 @@
  * Following architecture patterns: PascalCase for types, camelCase for properties
  */
 
+import { WorldPoint } from "./mechanism";
 import { Point2 } from "./point2";
 
 /** Union type for all element types */
@@ -20,25 +21,31 @@ export type NodeType = "pivot" | "slider" | "slidep" | "join" | "mass" | "gear";
 /** Supported edge element types */
 export type EdgeType = "beam" | "spring" | "damper" | "belt";
 
-/** Supported load element types */
-export type LoadElementType = "force" | "moment" | "distributed-force";
-
 /** Supported constraint element types */
-export type ConstraintElementType =
+export type ConstraintElementType = DimensionElementType | GeometricElementType;
+
+/** Supported dimension constraint element types */
+export type DimensionElementType =
   | "dimension-edge"
   | "dimension-node-to-node"
   | "dimension-edge-to-node"
   | "dimension-angle"
   | "dimension-radius"
   | "dimension-belt"
+  | "gear-ratio";
+
+/** Supported geometric constraint element types */
+export type GeometricElementType =
   | "horizontal-align-edge"
   | "horizontal-align-nodes"
   | "vertical-align-edge"
   | "vertical-align-nodes"
   | "normal"
   | "parallel"
-  | "equal"
-  | "gear-ratio";
+  | "equal";
+
+/** Supported load element types */
+export type LoadElementType = "force" | "moment" | "distributed-force";
 
 /** Union type for all element types */
 export type UnionElement = MechanicalElement | ConstraintElement | LoadElement;
@@ -60,17 +67,6 @@ export type NodeElement =
   | JoinElement
   | MassElement;
 
-/** Type guard: node elements — the only ones whose trajectory can be shown. */
-export function is_node_element(el: MechanicalElement): el is NodeElement {
-  return (
-    el.type === "pivot" ||
-    el.type === "slider" ||
-    el.type === "slidep" ||
-    el.type === "join" ||
-    el.type === "mass"
-  );
-}
-
 /** Supported body elements */
 export type BodyElement = GearElement;
 
@@ -81,50 +77,108 @@ export type EdgeElement =
   | DamperElement
   | BeltElement;
 
-/** Union type for all constraint element types */
-export type ConstraintElement =
+/** Union type for all dimension and constraint element types */
+export type ConstraintElement = DimensionElement | GeometricElement;
+
+/** Union type for all dimension constraint element types */
+export type DimensionElement =
   | DimensionEdgeElement
   | DimensionNodeToNode
   | DimensionEdgeToNode
   | DimensionAngle
   | DimensionRadius
   | DimensionBelt
+  | GearRatio;
+
+/** Union type for all geometric constraint element types */
+export type GeometricElement =
   | HorizontalAlignEdge
   | HorizontalAlignNodes
   | VerticalAlignEdge
   | VerticalAlignNodes
   | NormalEdges
   | ParallelEdges
-  | EqualEdges
-  | GearRatio;
+  | EqualEdges;
+
+/** Per-element overlay visibility */
+export type OverlayFlags = Partial<Record<OverlayKind, boolean>>;
+
+export type OverlayKind = "trajectory" | "force" | "velocity" | "stress";
+
+export const OVERLAY_KIND_ORDER: OverlayKind[] = [
+  "trajectory",
+  "force",
+  "velocity",
+  "stress",
+];
+
+// ─── ID ───────────────────────────────────────────────────────────────────────
 
 export type ID = `${string}-${string}-${string}-${string}-${string}`; // UUID
+
+// ─── Base elements ────────────────────────────────────────────────────────────
 
 /** Base interface for all elements */
 export interface BaseElement {
   type: ElementType;
   id: ID;
-  name?: string;
 }
 
-/** Base interface for Node elements (defined by a position) */
-export interface BaseNodeElement extends BaseElement {
-  position: Point2;
-  isGrounded: boolean;
+/** Base interface for Mechanical elements */
+export interface BaseMechanicalElement extends BaseElement {
+  name?: string;
   probes: ProbeConfig[];
   overlays: OverlayFlags;
 }
+
+/** Base interface for Node elements (defined by a position) */
+export interface BaseNodeElement extends BaseMechanicalElement {
+  position: WorldPoint;
+  isGrounded: boolean;
+}
+
+/** Base interface for Body elements (defined by a position and angle) */
+export interface BaseBodyElement extends BaseMechanicalElement {
+  position: WorldPoint;
+  angle: number;
+}
+
+/** Base interface for Edge elements (defined by two points) */
+export interface BaseEdgeElement extends BaseMechanicalElement {
+  positionStart: WorldPoint;
+  positionEnd: WorldPoint;
+  fixedNodeStartID?: ID;
+  fixedNodeEndID?: ID;
+}
+
+/** Base interface for Dimension elements (relative to machanical elements) */
+export interface DimensionBaseElement extends BaseElement {
+  name?: string;
+  position: WorldPoint;
+}
+
+/** Base interface for Constraint elements (no positions, relative to machanical elements) */
+export interface GeometricBaseElement extends BaseElement {}
+
+/** Base interface for Load elements (relative to machanical elements) */
+export interface LoadBaseElement extends BaseElement {
+  name?: string;
+  targetID: ID;
+}
+
+// ─── Mechanical elements ──────────────────────────────────────────────────────
 
 /** Slider element - allows linear motion along a beam */
 export interface SliderElement extends BaseNodeElement {
   type: "slider";
   parentBeamID?: ID;
   fixedEdgesIDs: ID[];
+  slidingFriction: number;
 }
 
 export interface MotorConfig {
-  parentBeamID?: ID; // undefined = sol (seulement si le pivot est groundé)
-  /** tr/min, signed: positive turns clockwise on screen. */
+  parentBeamID?: ID; // undefined means anchored to ground
+  /** tr/min, signed: (positive = clockwise, negative = counter-clockwise) */
   speed: number;
 }
 
@@ -134,6 +188,7 @@ export interface PivotElement extends BaseNodeElement {
   rotatingEdgesIDs: ID[];
   fixedGearsIDs: ID[];
   motor?: MotorConfig;
+  rotationalFriction: number;
 }
 
 /** Slidep element (Pivot on a Slider) - allows linear motion along a beam and rotational motion */
@@ -142,6 +197,8 @@ export interface SlidepElement extends BaseNodeElement {
   parentBeamID?: ID;
   rotatingEdgesIDs: ID[];
   fixedGearsIDs: ID[];
+  slidingFriction: number;
+  rotationalFriction: number;
 }
 
 /** Join element - rigid connection between edges */
@@ -157,47 +214,32 @@ export interface MassElement extends BaseNodeElement {
   mass: number;
 }
 
-/** Base interface for Body elements (defined by a position and angle) */
-export interface BaseBodyElement extends BaseElement {
-  position: Point2;
-  angle: number;
-  probes: ProbeConfig[];
-  overlays: OverlayFlags;
-}
-
 /** Gear element - rotational transmission with teeth */
 export interface GearElement extends BaseBodyElement {
   type: "gear";
   radius: number;
-  parentAxleID: ID; // PivotElement ou SlidepElement (jamais null)
+  parentAxleID: ID; // pivot ou slidep (jamais null)
   fixedNodesBodyIDs: ID[];
   meshedGearsIDs: ID[];
   attachedBeltID?: ID;
-}
-
-/** Base interface for Edge elements (defined by two points) */
-export interface BaseEdgeElement extends BaseElement {
-  positionStart: Point2;
-  positionEnd: Point2;
-  fixedNodeStartID?: ID;
-  fixedNodeEndID?: ID;
-  probes: ProbeConfig[];
-  overlays: OverlayFlags;
+  surfaceMass: number;
 }
 
 /** Beam element - rigid connection between two points */
 export interface BeamElement extends BaseEdgeElement {
   type: "beam";
   fixedNodesBodyIDs: ID[];
+  linearMass: number;
 }
 
 /** Spring element - elastic connection */
 export interface SpringElement extends BaseEdgeElement {
   type: "spring";
   stiffness: number;
-  /** Rendering only: natural length at simulation start, set on the displayed
-   *  copy by apply_snapshot_to_mechanism so the coil count stays fixed while the
-   *  drawn length varies (accordion). Undefined in edition. */
+  /** The spring's natural length: the user's explicit value, or the drawn distance between its
+   *  endpoints when unset. Feeds the kinematic solver's soft pull (see parsing.ts) and the drawn
+   *  coil count; frozen on the simulated copy by apply_snapshot_to_mechanism so the coil count
+   *  stays fixed while the drawn length varies (accordion). */
   restLength?: number;
 }
 
@@ -205,7 +247,8 @@ export interface SpringElement extends BaseEdgeElement {
 export interface DamperElement extends BaseEdgeElement {
   type: "damper";
   damping: number;
-  /** Rendering only: natural length at simulation start (see SpringElement). */
+  /** Rendering only: natural length at simulation start, frozen on the displayed copy so the
+   *  piston reach stays fixed while the drawn length varies. Undefined in edition. */
   restLength?: number;
 }
 
@@ -227,67 +270,17 @@ export interface BeltElement extends BaseEdgeElement {
   gearWraps?: number[];
 }
 
-/** Constraint element carrying its own on-canvas position (dimensions, gear ratio). */
-export interface ConstraintBaseElement extends BaseElement {
-  position: Point2;
-}
-
-/**
- * Constraint element with no position of its own: drawn as a badge anchored to
- * its host element(s) instead (see `relation_badge_positions`), so it never
- * has anything to collide with — the bug positioned badges used to hit when
- * two of them landed on the same point.
- *
- * No `name` either, unlike `BaseElement`: nothing displays it, so renaming one
- * would be a control with no visible effect.
- */
-export interface AttachedConstraintBaseElement {
-  type: ElementType;
-  id: ID;
-}
-
-/** The 7 constraint types with no `name` — kept in sync with `AttachedConstraintBaseElement`. */
-const UNNAMEABLE_TYPES = new Set<ElementType>([
-  "horizontal-align-edge",
-  "horizontal-align-nodes",
-  "vertical-align-edge",
-  "vertical-align-nodes",
-  "normal",
-  "parallel",
-  "equal",
-]);
-
-/**
- * Type guard: elements that carry a `name` — everything except the geometric
- * relation constraints. Checked on `element.type`, not on whether the property
- * happens to be set: a freshly created, never-renamed element has no `name`
- * key at runtime either, `name` being optional, so `"name" in element` cannot
- * tell the two apart.
- */
-export function is_nameable(
-  element: UnionElement,
-): element is Exclude<
-  UnionElement,
-  | HorizontalAlignEdge
-  | HorizontalAlignNodes
-  | VerticalAlignEdge
-  | VerticalAlignNodes
-  | NormalEdges
-  | ParallelEdges
-  | EqualEdges
-> {
-  return !UNNAMEABLE_TYPES.has(element.type);
-}
+// ─── Dimension constraints ────────────────────────────────────────────────────
 
 /** Dimension edge element - dimension of edge length */
-export interface DimensionEdgeElement extends ConstraintBaseElement {
+export interface DimensionEdgeElement extends DimensionBaseElement {
   type: "dimension-edge";
   edgeID: ID;
   value: number;
 }
 
 /** Dimension node to node element - dimension between two nodes */
-export interface DimensionNodeToNode extends ConstraintBaseElement {
+export interface DimensionNodeToNode extends DimensionBaseElement {
   type: "dimension-node-to-node";
   startNodeID: ID;
   endNodeID: ID;
@@ -295,7 +288,7 @@ export interface DimensionNodeToNode extends ConstraintBaseElement {
 }
 
 /** Dimension edge to node element - dimension between edge and node */
-export interface DimensionEdgeToNode extends ConstraintBaseElement {
+export interface DimensionEdgeToNode extends DimensionBaseElement {
   type: "dimension-edge-to-node";
   edgeID: ID;
   nodeID: ID;
@@ -303,7 +296,7 @@ export interface DimensionEdgeToNode extends ConstraintBaseElement {
 }
 
 /** Dimension angle element - dimension of angle between two edges */
-export interface DimensionAngle extends ConstraintBaseElement {
+export interface DimensionAngle extends DimensionBaseElement {
   type: "dimension-angle";
   startEdgeID: ID;
   endEdgeID: ID;
@@ -314,40 +307,42 @@ export interface DimensionAngle extends ConstraintBaseElement {
 }
 
 /** Dimension radius element - radius dimension of a gear */
-export interface DimensionRadius extends ConstraintBaseElement {
+export interface DimensionRadius extends DimensionBaseElement {
   type: "dimension-radius";
   gearID: ID;
   value: number;
 }
 
 /** Dimension belt length element - total length dimension of a belt */
-export interface DimensionBelt extends ConstraintBaseElement {
+export interface DimensionBelt extends DimensionBaseElement {
   type: "dimension-belt";
   beltID: ID;
   value: number;
 }
 
+// ─── Geometric constraints ────────────────────────────────────────────────────
+
 /** Horizontal align edge element - horizontal constraint */
-export interface HorizontalAlignEdge extends AttachedConstraintBaseElement {
+export interface HorizontalAlignEdge extends GeometricBaseElement {
   type: "horizontal-align-edge";
   edgeID: ID;
 }
 
 /** Horizontal align nodes element - horizontal constraint between two nodes */
-export interface HorizontalAlignNodes extends AttachedConstraintBaseElement {
+export interface HorizontalAlignNodes extends GeometricBaseElement {
   type: "horizontal-align-nodes";
   startNodeID: ID;
   endNodeID: ID;
 }
 
 /** Vertical align edge element - vertical constraint */
-export interface VerticalAlignEdge extends AttachedConstraintBaseElement {
+export interface VerticalAlignEdge extends GeometricBaseElement {
   type: "vertical-align-edge";
   edgeID: ID;
 }
 
 /** Vertical align nodes element - vertical constraint between two nodes */
-export interface VerticalAlignNodes extends AttachedConstraintBaseElement {
+export interface VerticalAlignNodes extends GeometricBaseElement {
   type: "vertical-align-nodes";
   startNodeID: ID;
   endNodeID: ID;
@@ -356,7 +351,7 @@ export interface VerticalAlignNodes extends AttachedConstraintBaseElement {
 /**
  * Normal element - perpendicular constraint between two edges
  */
-export interface NormalEdges extends AttachedConstraintBaseElement {
+export interface NormalEdges extends GeometricBaseElement {
   type: "normal";
   startEdgeID: ID;
   endEdgeID: ID;
@@ -365,7 +360,7 @@ export interface NormalEdges extends AttachedConstraintBaseElement {
 /**
  * Parallel element - parallel constraint between two edges
  */
-export interface ParallelEdges extends AttachedConstraintBaseElement {
+export interface ParallelEdges extends GeometricBaseElement {
   type: "parallel";
   startEdgeID: ID;
   endEdgeID: ID;
@@ -374,7 +369,7 @@ export interface ParallelEdges extends AttachedConstraintBaseElement {
 /**
  * Equal element - equal length constraint between two edges
  */
-export interface EqualEdges extends AttachedConstraintBaseElement {
+export interface EqualEdges extends GeometricBaseElement {
   type: "equal";
   startEdgeID: ID;
   endEdgeID: ID;
@@ -383,7 +378,7 @@ export interface EqualEdges extends AttachedConstraintBaseElement {
 /**
  * Gear ration element - gear ratio constraint between two gears (start gear radius / end gear radius)
  */
-export interface GearRatio extends ConstraintBaseElement {
+export interface GearRatio extends DimensionBaseElement {
   type: "gear-ratio";
   startGearID: ID;
   endGearID: ID;
@@ -393,53 +388,44 @@ export interface GearRatio extends ConstraintBaseElement {
 // ─── Load elements ────────────────────────────────────────────────────────────
 
 /**
- * The reference frame a load's direction is expressed (and frozen) in.
- *  - "world": the direction is absolute; the host may rotate under it.
- *  - { mode: "edge", edgeID }: the direction is stored in the edge's local
- *    frame (x = start→end axis, y = normal) and rotates with it — a follower
- *    load. 0° = axial, 90° = normal.
- * Loads default to "world".
+ * The reference frame a load's direction is expressed in.
+ *  - "world": the direction is absolute
+ *  - { mode: "edge", edgeID }: the direction is stored in the edge's local frame
+ * (x = start→end axis, y = normal)
+ *
+ * 0° = axial, 90° = normal
  */
 export type LoadFrame = "world" | { mode: "edge"; edgeID: ID };
 
 /** Force applied to a node or an edge endpoint */
-export interface ForceElement extends BaseElement {
+export interface ForceElement extends LoadBaseElement {
   type: "force";
-  targetID: ID;
-  anchor?: "start" | "end"; // only for edge targets
+  anchor?: "start" | "end";
   /** Force vector, expressed in the active `frame`'s coordinates. */
   vector: Point2;
   frame: LoadFrame;
 }
 
-/**
- * Distributed force along a beam. A single `direction` (unit vector, expressed
- * in the active `frame`) with a magnitude at each endpoint — a rectangular load
- * when the two are equal, trapezoidal otherwise.
- */
-export interface DistributedForceElement extends BaseElement {
+/** Distributed force along a beam */
+export interface DistributedForceElement extends LoadBaseElement {
   type: "distributed-force";
-  /** The beam it is spread along. Every load names its host `targetID`. */
-  targetID: ID;
   direction: Point2;
   magnitudeStart: number;
   magnitudeEnd: number;
   frame: LoadFrame;
 }
 
-/** Moment applied to an edge or a gear (never a node).
- *  `value` is signed: positive is clockwise, negative counter-clockwise. */
-export interface MomentElement extends BaseElement {
+/** Moment applied to an edge or a gear */
+export interface MomentElement extends LoadBaseElement {
   type: "moment";
-  /** The edge or gear it turns. Every load names its host `targetID`. */
-  targetID: ID;
+  /** N·m, signed: (positive = clockwise, negative = counter-clockwise) */
   value: number;
 }
 
 // ─── Probes ───────────────────────────────────────────────────────────────────
 
-/** A metric family measured by a probe. One probe per element; the probe
- *  carries one ProbeConfig per selected metric. */
+/** A metric family measured by a probe.
+ * The probe carries one ProbeConfig per selected metric. */
 export type ProbeMetric =
   | "position"
   | "velocity"
@@ -447,8 +433,8 @@ export type ProbeMetric =
   | "angular-velocity"
   | "force";
 
-/** Which curves of a vector metric are plotted (display setting). Ignored for
- *  scalar metrics (angle, angular velocity). */
+/** Which curves of a vector metric are plotted.
+ * Ignored for scalar metrics (angle, angular velocity). */
 export interface ProbeComponents {
   x: boolean;
   y: boolean;
@@ -465,53 +451,3 @@ export const DEFAULT_PROBE_COMPONENTS: ProbeComponents = {
   y: false,
   norm: true,
 };
-
-// ─── Overlays ─────────────────────────────────────────────────────────────────
-
-/** A layer drawn over an element during simulation. Only `trajectory` is
- *  rendered today; the other three carry state and controls, and light up on
- *  the canvas once the solver/rendering side exists. */
-export type OverlayKind = "trajectory" | "force" | "velocity" | "stress";
-
-export const OVERLAY_KIND_ORDER: OverlayKind[] = [
-  "trajectory",
-  "force",
-  "velocity",
-  "stress",
-];
-
-/** Per-element overlay visibility. Absent key = hidden. */
-export type OverlayFlags = Partial<Record<OverlayKind, boolean>>;
-
-/**
- * Which overlays make sense on this element — the honest denominator of the
- * `n/total` counters in the "Afficher" menu.
- *  - trajectory: a single moving point → nodes only;
- *  - velocity: anything whose position is sampled (nodes, gears, edge midpoint);
- *  - force: reaction forces live at the joints (nodes) and in the members (edges);
- *  - stress (MPa): an internal effort in a member → edges only.
- */
-export function available_overlays(element: MechanicalElement): OverlayKind[] {
-  const isNode = is_node_element(element);
-  const isEdge = "positionStart" in element;
-  return OVERLAY_KIND_ORDER.filter((kind) => {
-    switch (kind) {
-      case "trajectory":
-        return isNode;
-      case "velocity":
-        return true;
-      case "force":
-        return isNode || isEdge;
-      case "stress":
-        return isEdge;
-    }
-  });
-}
-
-/** Is `kind` currently shown on `element`? */
-export function overlay_shown(
-  element: MechanicalElement,
-  kind: OverlayKind,
-): boolean {
-  return !!element.overlays?.[kind];
-}

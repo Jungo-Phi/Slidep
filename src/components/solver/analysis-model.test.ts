@@ -66,6 +66,7 @@ function pivot(n: string, pos: Point2, g: boolean, edges: ID[]): PivotElement {
     isGrounded: g,
     rotatingEdgesIDs: edges,
     fixedGearsIDs: [],
+    rotationalFriction: 0,
   };
 }
 
@@ -86,6 +87,7 @@ function beam(
     fixedNodeStartID: s ? id(s) : undefined,
     fixedNodeEndID: e ? id(e) : undefined,
     fixedNodesBodyIDs: [],
+    linearMass: 1,
   };
 }
 
@@ -206,9 +208,9 @@ describe("build_analysis_model — cas synthétiques", () => {
 
   it("un quatre-barres et une poutre libre sont deux chaînes, jamais une somme", () => {
     // Le panneau affichait 4 pour cet ensemble : 1 + 3, qui ne décrit rien.
-    expect(counts([...FOUR_BAR, beam("z9", P(500, 500), P(600, 500))])).toEqual([
-      1, 3,
-    ]);
+    expect(counts([...FOUR_BAR, beam("z9", P(500, 500), P(600, 500))])).toEqual(
+      [1, 3],
+    );
   });
 
   it("la chaîne ancrée passe en premier, les flottantes ensuite", () => {
@@ -282,9 +284,7 @@ describe("build_analysis_model — mécanismes de référence", () => {
     const model = fixture(doubleSlider);
     const midJoin = "b93f0555-aabd-4c47-ac33-a363a80425fe" as ID;
     expect(model.chains).toHaveLength(3);
-    expect(model.chains.some((c) => c.elements.includes(midJoin))).toBe(
-      false,
-    );
+    expect(model.chains.some((c) => c.elements.includes(midJoin))).toBe(false);
   });
 
   it("les agrégats de courroie sont élagués comme conditionnement", () => {
@@ -295,9 +295,9 @@ describe("build_analysis_model — mécanismes de référence", () => {
       expect(
         model.pruned.filter((p) => p.reason === "conditioning").length,
       ).toBeGreaterThan(0);
-      expect(
-        model.links.some((l) => l.type === "BeltSubChainAggregate"),
-      ).toBe(false);
+      expect(model.links.some((l) => l.type === "BeltSubChainAggregate")).toBe(
+        false,
+      );
     }
   });
 
@@ -333,8 +333,7 @@ describe("build_analysis_model — mécanismes de référence", () => {
   });
 
   it("décomptes de référence (m − h, borne inférieure de la mobilité)", () => {
-    const G = (json: string) =>
-      fixture(json).chains.map((c) => c.grublerCount);
+    const G = (json: string) => fixture(json).chains.map((c) => c.grublerCount);
     expect(G(vilbrequin)).toEqual([1]);
     expect(G(slider)).toEqual([1]);
     expect(G(jansen)).toEqual([0]);
@@ -358,9 +357,7 @@ describe("build_analysis_model — mécanismes de référence", () => {
     }
     // Les courroies de Core XY sont ouvertes : aucune boucle à refermer, rien à retirer.
     expect(
-      fixture(coreXY).pruned.filter(
-        (p) => p.link.type === "BeltSegmentNoSlip",
-      ),
+      fixture(coreXY).pruned.filter((p) => p.link.type === "BeltSegmentNoSlip"),
     ).toHaveLength(0);
   });
 });
@@ -383,10 +380,7 @@ describe("variable_keys_of", () => {
     ]) {
       const { mechanism: mech } = load_mechanism(JSON.parse(json));
       const model = build_analysis_model(mech);
-      for (const link of [
-        ...model.links,
-        ...model.pruned.map((p) => p.link),
-      ]) {
+      for (const link of [...model.links, ...model.pruned.map((p) => p.link)]) {
         seen.add(link.type);
         const complete = new Set(variable_keys_of(link));
         for (const key of keys_of(link)) expect(complete.has(key)).toBe(true);

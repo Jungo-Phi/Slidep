@@ -35,6 +35,7 @@ const MECH: MechanicalElement[] = [
     rotatingEdgesIDs: [],
     fixedGearsIDs: [GEAR],
     motor: undefined,
+    rotationalFriction: 0,
   } as PivotElement,
   {
     type: "gear",
@@ -48,6 +49,7 @@ const MECH: MechanicalElement[] = [
     fixedNodesBodyIDs: [],
     meshedGearsIDs: [],
     attachedBeltID: undefined,
+    surfaceMass: 1,
   } as GearElement,
   {
     type: "beam",
@@ -59,6 +61,7 @@ const MECH: MechanicalElement[] = [
     fixedNodeStartID: undefined,
     fixedNodeEndID: undefined,
     fixedNodesBodyIDs: [],
+    linearMass: 1,
   } as BeamElement,
 ];
 

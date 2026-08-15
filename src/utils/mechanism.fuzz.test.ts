@@ -71,6 +71,7 @@ function build_gadget(gadget: Gadget, x: number): MechanicalElement[] {
           isGrounded: false,
           rotatingEdgesIDs: [],
           fixedGearsIDs: [],
+          rotationalFriction: 0,
         },
       ];
     case "loneJoin":
@@ -97,6 +98,7 @@ function build_gadget(gadget: Gadget, x: number): MechanicalElement[] {
           fixedNodeStartID: undefined,
           fixedNodeEndID: undefined,
           fixedNodesBodyIDs: [],
+          linearMass: 1,
         },
       ];
     case "pivotOnBeam": {
@@ -112,6 +114,7 @@ function build_gadget(gadget: Gadget, x: number): MechanicalElement[] {
           isGrounded: false,
           rotatingEdgesIDs: [beamID],
           fixedGearsIDs: [],
+          rotationalFriction: 0,
         },
         {
           type: "beam",
@@ -123,6 +126,7 @@ function build_gadget(gadget: Gadget, x: number): MechanicalElement[] {
           fixedNodeStartID: pivotID,
           fixedNodeEndID: undefined,
           fixedNodesBodyIDs: [],
+          linearMass: 1,
         },
       ];
     }
@@ -139,6 +143,7 @@ function build_gadget(gadget: Gadget, x: number): MechanicalElement[] {
           isGrounded: false,
           rotatingEdgesIDs: [],
           fixedGearsIDs: [gearID],
+          rotationalFriction: 0,
         },
         {
           type: "gear",
@@ -152,6 +157,7 @@ function build_gadget(gadget: Gadget, x: number): MechanicalElement[] {
           fixedNodesBodyIDs: [],
           meshedGearsIDs: [],
           attachedBeltID: undefined,
+          surfaceMass: 1,
         },
       ];
     }

@@ -1,5 +1,6 @@
 import { get_language } from "../i18n";
-import { ID, UnionElement, is_nameable } from "../types";
+import { ID, UnionElement } from "../types";
+import { is_nameable } from "./element-queries";
 
 /**
  * Formate un UUID pour le rendre lisible.

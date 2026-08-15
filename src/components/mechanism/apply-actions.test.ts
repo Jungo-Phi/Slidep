@@ -32,6 +32,7 @@ const node: PivotElement = {
   isGrounded: true,
   rotatingEdgesIDs: [],
   fixedGearsIDs: [],
+  rotationalFriction: 0,
 };
 
 const mechanism = (): Mechanism => ({

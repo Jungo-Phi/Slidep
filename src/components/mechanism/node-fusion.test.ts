@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { connect_elements, connect_node_and_edge, fuse_nodes } from "./connect-actions";
+import {
+  connect_elements,
+  connect_node_and_edge,
+  fuse_nodes,
+} from "./connect-actions";
 import { apply_actions } from "./apply-actions";
 import { validate_mechanism } from "../../utils/validate-mechanism";
 import { Point2, ZERO } from "../../types/point2";
@@ -36,6 +40,7 @@ const pivot = (nid: ID, x: number, rotating: ID[] = []): PivotElement => ({
   isGrounded: false,
   rotatingEdgesIDs: rotating,
   fixedGearsIDs: [],
+  rotationalFriction: 0,
 });
 
 const beam = (
@@ -53,6 +58,7 @@ const beam = (
   fixedNodeStartID: start,
   fixedNodeEndID: end,
   fixedNodesBodyIDs: body,
+  linearMass: 1,
 });
 
 const mechanism = (mechanicalElements: MechanicalElement[]): Mechanism => ({
@@ -84,6 +90,7 @@ describe("fusion d'un pivot et d'un slider que la même barre relie", () => {
       isGrounded: false,
       parentBeamID: undefined,
       fixedEdgesIDs: [BAR],
+      slidingFriction: 0,
     } as SliderElement,
     beam(BAR, PIVOT, SLIDER),
   ];
@@ -142,10 +149,17 @@ describe("un slider dont la barre est déjà le parentBeamID", () => {
       isGrounded: false,
       parentBeamID: BAR,
       fixedEdgesIDs: [],
+      slidingFriction: 0,
     };
     const bar = beam(BAR, undefined, undefined, [SLIDER]);
 
-    const actions = connect_node_and_edge(slider, bar, "body", [slider, bar], []);
+    const actions = connect_node_and_edge(
+      slider,
+      bar,
+      "body",
+      [slider, bar],
+      [],
+    );
 
     expect(actions).toEqual([]);
   });

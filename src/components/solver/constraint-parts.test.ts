@@ -59,6 +59,7 @@ function pivot(n: string, pos: Point2, g: boolean, edges: ID[]): PivotElement {
     isGrounded: g,
     rotatingEdgesIDs: edges,
     fixedGearsIDs: [],
+    rotationalFriction: 0,
   };
 }
 
@@ -89,6 +90,7 @@ function sliderNode(
     isGrounded: false,
     parentBeamID: id(rail),
     fixedEdgesIDs: edges,
+    slidingFriction: 0,
   };
 }
 
@@ -110,6 +112,7 @@ function beam(
     fixedNodeStartID: s ? id(s) : undefined,
     fixedNodeEndID: e ? id(e) : undefined,
     fixedNodesBodyIDs: body,
+    linearMass: 1,
   };
 }
 
@@ -180,9 +183,7 @@ describe("constraint_elements", () => {
 
     const slide = links.find((l) => l.type === "SlideOnSegment");
     expect(slide).toBeDefined();
-    expect(constraint_elements(slide!)).toEqual(
-      [id("s1"), id("rail")].sort(),
-    );
+    expect(constraint_elements(slide!)).toEqual([id("s1"), id("rail")].sort());
   });
 
   it("deux points sans pièce commune se nomment tous les deux", () => {

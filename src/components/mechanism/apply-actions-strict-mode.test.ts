@@ -33,6 +33,7 @@ const mechanism = (): Mechanism => ({
       isGrounded: true,
       rotatingEdgesIDs: [],
       fixedGearsIDs: [],
+      rotationalFriction: 0,
     } as PivotElement,
   ],
   constraintElements: [],
@@ -76,16 +77,29 @@ describe("apply_actions under StrictMode-style double invocation", () => {
   it("does not corrupt a merged MoveNode drag either", () => {
     let mech = mechanism();
     mech = strictModeApply(mech, [
-      { type: "MoveNode", id: NODE, newPosition: P(50, 0), oldPosition: P(0, 0) },
+      {
+        type: "MoveNode",
+        id: NODE,
+        newPosition: P(50, 0),
+        oldPosition: P(0, 0),
+      },
     ]);
     mech = strictModeApply(mech, [
-      { type: "MoveNode", id: NODE, newPosition: P(80, 20), oldPosition: P(50, 0) },
+      {
+        type: "MoveNode",
+        id: NODE,
+        newPosition: P(80, 20),
+        oldPosition: P(50, 0),
+      },
     ]);
     mech = strictModeApply(mech, [{ type: "Blank" }]);
 
     expect(mech.history).toHaveLength(1);
     expect(mech.history[0]).toHaveLength(3);
-    const master = mech.history[0][0] as { newPosition: Point2; oldPosition: Point2 };
+    const master = mech.history[0][0] as {
+      newPosition: Point2;
+      oldPosition: Point2;
+    };
     expect(master.newPosition.equals(P(80, 20))).toBe(true);
     expect(master.oldPosition.equals(P(0, 0))).toBe(true);
   });

@@ -1263,6 +1263,8 @@ export function fuse_nodes(
       fixedGearsIDs: selectedNode.fixedGearsIDs,
       position: hoveredNode.position,
       isGrounded: selectedNode.isGrounded || hoveredNode.isGrounded,
+      rotationalFriction: selectedNode.rotationalFriction,
+      slidingFriction: hoveredNode.slidingFriction,
     };
     actions.push({ type: "DeleteElement", element: selectedNode });
     actions.push({ type: "DeleteElement", element: hoveredNode });
@@ -1307,6 +1309,8 @@ export function fuse_nodes(
       fixedGearsIDs: hoveredNode.fixedGearsIDs,
       position: hoveredNode.position,
       isGrounded: selectedNode.isGrounded || hoveredNode.isGrounded,
+      rotationalFriction: hoveredNode.rotationalFriction,
+      slidingFriction: selectedNode.slidingFriction,
     };
     actions.push({ type: "DeleteElement", element: selectedNode });
     actions.push({ type: "DeleteElement", element: hoveredNode });

@@ -26,6 +26,10 @@ export function is_noop_action(action: Action): boolean {
     case "ChangeMass":
     case "ChangeStiffness":
     case "ChangeDamping":
+    case "ChangeSlidingFriction":
+    case "ChangeRotationalFriction":
+    case "ChangeSurfaceMass":
+    case "ChangeLinearMass":
       return action.delta === 0;
     case "ChangeDimensionEdgeValue":
     case "ChangeDimensionNodeToNodeValue":
@@ -46,6 +50,8 @@ export function is_noop_action(action: Action): boolean {
       );
     case "UpdateElementName":
       return action.newName === action.oldName;
+    case "UpdateElementRestLength":
+      return action.newValue === action.oldValue;
     case "SetShowOverlay":
       return action.newValue === action.oldValue;
     default:

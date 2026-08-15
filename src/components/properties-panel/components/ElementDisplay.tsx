@@ -1,17 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import {
-  Action,
-  CanvasState,
-  ID,
-  UnionElement,
-  ZERO,
-  is_nameable,
-} from "../../../types";
+import { Action, CanvasState, ID, UnionElement, ZERO } from "../../../types";
 import { Box, IconButton, Typography, TextField } from "@mui/material";
 import { get_element_icon } from "../../element-palette/elementIcon";
 import { HoveredPart, is_hovered } from "../../../types/hovered-part";
 import { element_to_hovered_part } from "../../canvas/utils";
-import { shown_element_name } from "../../../utils";
+import { is_nameable, shown_element_name } from "../../../utils";
 import { useElementNavigation } from "../element-navigation";
 import { t } from "../../../i18n";
 
@@ -52,7 +45,7 @@ const ElementDisplayComponent: React.FC<ElementDisplayProps> = ({
   // that belongs to the real, clickable row elsewhere.
   const hovered = interactive && is_hovered(hoveredPart, element.id);
   const selected = interactive && selectedIds.includes(element.id);
-  // A relation-constraint badge (align/normal/parallel/equal) carries no name
+  // A geometric-constraint badge (align/normal/parallel/equal) carries no name
   // to begin with — nothing displays it, so offering to edit it would be a
   // control with no visible effect.
   const canRename = editable && is_nameable(element);

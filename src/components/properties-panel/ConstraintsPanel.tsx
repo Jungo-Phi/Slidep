@@ -14,7 +14,7 @@ import React from "react";
 import RatioInput from "./components/RatioInput";
 import {
   element_to_hovered_part,
-  is_relation_constraint_type,
+  is_geometric_constraint_type,
 } from "../canvas/utils";
 import { sorted_constraints_for_display } from "./element-order";
 import { t } from "../../i18n";
@@ -49,12 +49,12 @@ export const ConstraintsPanel: React.FC<ConstraintsPanelProps> = ({
   // groups rather than one list mixing an editable number with a bare delete.
   const dimensions = sorted_constraints_for_display(
     mechanism.constraintElements.filter(
-      (c) => !is_relation_constraint_type(c.type),
+      (c) => !is_geometric_constraint_type(c.type),
     ),
   );
-  const relations = sorted_constraints_for_display(
+  const geometrics = sorted_constraints_for_display(
     mechanism.constraintElements.filter((c) =>
-      is_relation_constraint_type(c.type),
+      is_geometric_constraint_type(c.type),
     ),
   );
 
@@ -180,7 +180,7 @@ export const ConstraintsPanel: React.FC<ConstraintsPanelProps> = ({
   return (
     <>
       {renderBlock(dimensions, t("dimensions_empty"))}
-      {renderBlock(relations, t("constraints_empty"))}
+      {renderBlock(geometrics, t("constraints_empty"))}
     </>
   );
 };

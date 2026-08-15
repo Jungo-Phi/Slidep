@@ -23,6 +23,7 @@ const beam: BeamElement = {
   fixedNodeStartID: undefined,
   fixedNodeEndID: undefined,
   fixedNodesBodyIDs: [],
+  linearMass: 1,
 };
 
 /** On the beam's own line, so the gap the label rides is zero. */
@@ -35,6 +36,7 @@ const node: PivotElement = {
   isGrounded: false,
   rotatingEdgesIDs: [],
   fixedGearsIDs: [],
+  rotationalFriction: 0,
 };
 
 const dimension = {
@@ -67,11 +69,9 @@ describe("constraint labels after a solve", () => {
       oldPosition: new Point2(50, 0),
     } as never;
 
-    const solved = resolveGeometricConstraints(
-      mechanism,
+    const solved = resolveGeometricConstraints(mechanism, move, [
       move,
-      [move],
-    ).positions.get(DIM);
+    ]).positions.get(DIM);
 
     expect(solved).toBeDefined();
     expect(Number.isFinite(solved!.x)).toBe(true);

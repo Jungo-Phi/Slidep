@@ -70,10 +70,11 @@ export function mechanism_at(mechanism: Mechanism, pose: Pose): Mechanism {
       const unwrapped = el.type === "belt" ? { gearWraps: undefined } : {};
       // A spring or damper draws a fixed number of coils at its natural length and stretches
       // between them. Freezing that length on the animated copy keeps the coils from being
-      // recounted every frame, exactly as the simulation does.
+      // recounted every frame, exactly as the simulation does — the user's typed value for a
+      // spring, else the edit-time positions.
       const restLength =
         el.type === "spring" || el.type === "damper"
-          ? el.positionStart.distance_to(el.positionEnd)
+          ? (el.restLength ?? el.positionStart.distance_to(el.positionEnd))
           : undefined;
       return {
         ...el,

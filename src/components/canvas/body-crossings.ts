@@ -12,9 +12,8 @@ import type {
   ViewportState,
   WorldPoint,
 } from "../../types";
-import { is_node_element } from "../../types/element";
 import { HIT_TOLERANCE } from "../../constants/rendering-specs";
-import { world2screen } from "../../utils";
+import { is_node_element, world2screen } from "../../utils";
 
 /**
  * The nodes lying under the segment from `start` to `end`, its two ends excepted.

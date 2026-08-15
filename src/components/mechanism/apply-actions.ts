@@ -167,23 +167,30 @@ type MasterActionType = Extract<
 >["masterActionType"];
 
 /**
- * Folds a value-only edit (mechanism 1: `MoveConstraint`, `ChangeMass` /
- * `ChangeStiffness` / `ChangeDamping`, the load edits) into the single action
- * of the history entry it continues. Stiffness-like deltas accumulate; the
- * rest overwrite with the latest value, since they carry an absolute position
- * or vector rather than a step.
+ * Folds a value-only edit (mechanism 1: `MoveConstraint`, the `Change*` constant
+ * edits, the load edits) into the single action of the history entry it
+ * continues. Stiffness-like deltas accumulate; the rest overwrite with the
+ * latest value, since they carry an absolute position or vector rather than a step.
  */
 function merge_value_edit(lastAction: Action, newAction: Action): void {
   switch (lastAction.type) {
     case "ChangeStiffness":
     case "ChangeDamping":
     case "ChangeMass":
+    case "ChangeSlidingFriction":
+    case "ChangeRotationalFriction":
+    case "ChangeSurfaceMass":
+    case "ChangeLinearMass":
       if (newAction.type !== lastAction.type) break;
       lastAction.delta += newAction.delta;
       break;
     case "MoveConstraint":
       if (newAction.type !== lastAction.type) break;
       lastAction.newPosition = newAction.newPosition;
+      break;
+    case "UpdateElementRestLength":
+      if (newAction.type !== lastAction.type) break;
+      lastAction.newValue = newAction.newValue;
       break;
     case "ChangeForce":
       if (newAction.type !== lastAction.type) break;

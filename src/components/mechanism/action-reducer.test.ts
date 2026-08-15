@@ -9,6 +9,7 @@ import {
   ID,
   MomentElement,
   PivotElement,
+  SpringElement,
 } from "../../types";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -38,6 +39,7 @@ const BEAM: BeamElement = {
   fixedNodeStartID: undefined,
   fixedNodeEndID: undefined,
   fixedNodesBodyIDs: [],
+  linearMass: 1,
 };
 
 const PIVOT: PivotElement = {
@@ -49,6 +51,19 @@ const PIVOT: PivotElement = {
   isGrounded: false,
   rotatingEdgesIDs: [],
   fixedGearsIDs: [],
+  rotationalFriction: 0,
+};
+
+const SPRING: SpringElement = {
+  type: "spring",
+  id: id("spring1"),
+  probes: [],
+  overlays: {},
+  positionStart: new Point2(0, 0),
+  positionEnd: new Point2(1, 0),
+  fixedNodeStartID: undefined,
+  fixedNodeEndID: undefined,
+  stiffness: 1,
 };
 
 const FORCE: ForceElement = {
@@ -208,6 +223,66 @@ describe("actionReducer — UpdateElementName", () => {
       true,
     );
     expect(result.mechanicalElements[0].name).toBeUndefined();
+  });
+});
+
+// ─── UpdateElementRestLength ────────────────────────────────────────────────────
+
+describe("actionReducer — UpdateElementRestLength", () => {
+  it("fixe la longueur à vide (forward)", () => {
+    const mech = { ...emptyMechanism(), mechanicalElements: [SPRING] };
+    const result = actionReducer(
+      mech,
+      [
+        {
+          type: "UpdateElementRestLength",
+          id: id("spring1"),
+          oldValue: undefined,
+          newValue: 2,
+        },
+      ],
+      false,
+    );
+    expect(
+      (result.mechanicalElements[0] as SpringElement).restLength,
+    ).toBe(2);
+  });
+
+  it("restaure l'absence de valeur, i.e. le suivi automatique (revert=true)", () => {
+    const spring = { ...SPRING, restLength: 2 };
+    const mech = { ...emptyMechanism(), mechanicalElements: [spring] };
+    const result = actionReducer(
+      mech,
+      [
+        {
+          type: "UpdateElementRestLength",
+          id: id("spring1"),
+          oldValue: undefined,
+          newValue: 2,
+        },
+      ],
+      true,
+    );
+    expect(
+      (result.mechanicalElements[0] as SpringElement).restLength,
+    ).toBeUndefined();
+  });
+
+  it("n'affecte pas un élément qui n'est pas un ressort", () => {
+    const mech = { ...emptyMechanism(), mechanicalElements: [BEAM] };
+    const result = actionReducer(
+      mech,
+      [
+        {
+          type: "UpdateElementRestLength",
+          id: id("beam1"),
+          oldValue: undefined,
+          newValue: 2,
+        },
+      ],
+      false,
+    );
+    expect(result.mechanicalElements[0]).toEqual(BEAM);
   });
 });
 

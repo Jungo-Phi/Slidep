@@ -89,7 +89,7 @@ import {
   connected_constraints,
   is_constraint_type,
   probe_badge_position,
-  relation_badge_positions,
+  geometric_badge_positions,
 } from "./utils";
 import {
   screen_vias,
@@ -669,11 +669,11 @@ export function draw_mechanism(
       }
       return;
     }
-    if (type === "relationBadge") {
+    if (type === "geometricBadge") {
       if (hideConstraints) return;
       for (const host of mechanicalElements) {
         if (undrawable.has(host.id)) continue;
-        for (const { constraintId, position } of relation_badge_positions(
+        for (const { constraintId, position } of geometric_badge_positions(
           host.id,
           mechanicalElements,
           constraintElements,
@@ -700,7 +700,9 @@ export function draw_mechanism(
             constraintElements,
           );
           const isHovered =
-            focused.has(constraintId) || faulty.has(constraintId) || isCursorHovered;
+            focused.has(constraintId) ||
+            faulty.has(constraintId) ||
+            isCursorHovered;
 
           ctx.shadowBlur = 0;
           ctx.globalAlpha = 1;
@@ -720,7 +722,8 @@ export function draw_mechanism(
             ctx.strokeStyle = COLORS.DELETION_STROKE;
             ctx.globalAlpha = INTERACTION_SPECS.DELETION_OPACITY;
           }
-          if (faulty.has(constraintId)) ctx.strokeStyle = COLORS.DELETION_STROKE;
+          if (faulty.has(constraintId))
+            ctx.strokeStyle = COLORS.DELETION_STROKE;
           ctx.globalAlpha *= opacity;
           const isGhost = ghostConstraintIDs.has(constraintId);
           if (isGhost) ctx.strokeStyle = COLORS.DELETION_STROKE;
@@ -1107,6 +1110,7 @@ export function draw_mechanism(
                   fixedNodesBodyIDs: [],
                   meshedGearsIDs: [],
                   attachedBeltID: element.id,
+                  surfaceMass: 0,
                 };
                 preview_pulley(state.section, {
                   gear: newGear,
@@ -1184,6 +1188,7 @@ export function draw_mechanism(
                 fixedNodesBodyIDs: [],
                 meshedGearsIDs: [],
                 attachedBeltID: element.id,
+                surfaceMass: 0,
               };
               preview_pulley(hoveredPart.section, {
                 gear: newGear,

@@ -636,7 +636,7 @@ function build_constraint(
         hoveredPart.id,
         mechanicalElements,
       ) as GearElement;
-      const position = startGear.position.lerp(endGear.position, 0.25);
+      const position = startGear.position.lerp(endGear.position, 0.5);
       return {
         actions: [
           {
@@ -680,7 +680,7 @@ function build_constraint(
         hoveredPart.id,
         mechanicalElements,
       ) as GearElement;
-      const position = startGear.position.lerp(endGear.position, 0.25);
+      const position = startGear.position.lerp(endGear.position, 0.5);
       const value = startGear.radius / endGear.radius;
       return {
         actions: [

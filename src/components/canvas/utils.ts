@@ -152,7 +152,7 @@ export function element_to_hovered_part(
         deleting,
       };
     // Attached badges have no position of their own — anchored to their host(s)
-    // instead (see relation_badge_positions). Nothing here reads it back.
+    // instead (see geometric_badge_positions). Nothing here reads it back.
     case "horizontal-align-edge":
     case "horizontal-align-nodes":
     case "vertical-align-edge":
@@ -250,7 +250,7 @@ export function connected_constraints(
 }
 
 /** The 7 constraint types with no position of their own — anchored to their host(s). */
-const RELATION_CONSTRAINT_TYPES = new Set<ConstraintElement["type"]>([
+const GEOMETRIC_CONSTRAINT_TYPES = new Set<ConstraintElement["type"]>([
   "horizontal-align-edge",
   "horizontal-align-nodes",
   "vertical-align-edge",
@@ -260,14 +260,14 @@ const RELATION_CONSTRAINT_TYPES = new Set<ConstraintElement["type"]>([
   "equal",
 ]);
 
-export function is_relation_constraint_type(
+export function is_geometric_constraint_type(
   type: ConstraintElement["type"],
 ): boolean {
-  return RELATION_CONSTRAINT_TYPES.has(type);
+  return GEOMETRIC_CONSTRAINT_TYPES.has(type);
 }
 
 /**
- * Screen positions of the relation-constraint badges (align/normal/parallel/
+ * Screen positions of the geometric-constraint badges (align/normal/parallel/
  * equal) attached to one host element, one entry per constraint, stacked in a
  * row below it. Drawing and hit-testing both read it here, so a badge is
  * picked exactly where it is drawn.
@@ -277,19 +277,19 @@ export function is_relation_constraint_type(
  * either edge reveals it, and there is nothing to place that could collide
  * with an unrelated badge the way a single free-floating position could.
  */
-export function relation_badge_positions(
+export function geometric_badge_positions(
   hostID: ID,
   mechanicalElements: MechanicalElement[],
   constraintElements: ConstraintElement[],
   viewport: ViewportState,
 ): { constraintId: ID; position: ScreenPoint }[] {
-  const relationIDs = connected_constraints(hostID, constraintElements).filter(
+  const geometricIDs = connected_constraints(hostID, constraintElements).filter(
     (constraintId) => {
       const constraint = constraintElements.find((c) => c.id === constraintId);
-      return !!constraint && RELATION_CONSTRAINT_TYPES.has(constraint.type);
+      return !!constraint && GEOMETRIC_CONSTRAINT_TYPES.has(constraint.type);
     },
   );
-  if (relationIDs.length === 0) return [];
+  if (geometricIDs.length === 0) return [];
 
   const host = get_mechanical_element_from_id(hostID, mechanicalElements);
   const anchor =
@@ -300,12 +300,12 @@ export function relation_badge_positions(
           0.5,
         );
   const screen = world2screen(anchor, viewport);
-  const step = DIM.ICON_SIZE + DIM.RELATION_BADGE_GAP;
-  const rowWidth = (relationIDs.length - 1) * step;
+  const step = DIM.ICON_SIZE + DIM.GEOMETRIC_BADGE_GAP;
+  const rowWidth = (geometricIDs.length - 1) * step;
   const rowStart = screen.x - rowWidth / 2;
-  const y = screen.y + DIM.RELATION_BADGE_OFFSET;
+  const y = screen.y + DIM.GEOMETRIC_BADGE_OFFSET;
 
-  return relationIDs.map((constraintId, i) => ({
+  return geometricIDs.map((constraintId, i) => ({
     constraintId,
     position: new Point2(rowStart + i * step, y),
   }));

@@ -46,6 +46,7 @@ const pivot = (pid: ID, x: number, edges: ID[] = []): PivotElement => ({
   isGrounded: false,
   rotatingEdgesIDs: edges,
   fixedGearsIDs: [],
+  rotationalFriction: 0,
 });
 
 const slider = (sid: ID, beamID: ID): SliderElement => ({
@@ -57,6 +58,7 @@ const slider = (sid: ID, beamID: ID): SliderElement => ({
   isGrounded: false,
   parentBeamID: beamID,
   fixedEdgesIDs: [],
+  slidingFriction: 0,
 });
 
 const beam = (
@@ -74,6 +76,7 @@ const beam = (
   fixedNodeStartID: start,
   fixedNodeEndID: end,
   fixedNodesBodyIDs: body,
+  linearMass: 1,
 });
 
 const spring = (
@@ -281,8 +284,7 @@ describe("superposition — le ressort posé sur une barre à bout libre", () =>
 
   /** Beam A—(free end). The spring is drawn from A to that free end, which mints
    *  a join to marry the two — and superposes them. */
-  const before = () =>
-    mechanism([pivot(A, 0, [BAR]), beam(BAR, A, undefined)]);
+  const before = () => mechanism([pivot(A, 0, [BAR]), beam(BAR, A, undefined)]);
 
   const gesture: Action[] = [
     { type: "CreateElement", element: spring(SPRING, A, undefined) },

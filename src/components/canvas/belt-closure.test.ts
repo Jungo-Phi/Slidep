@@ -35,6 +35,7 @@ const axle = (id: ID, x: number, gearID: ID): PivotElement => ({
   rotatingEdgesIDs: [],
   fixedGearsIDs: [gearID],
   motor: undefined,
+  rotationalFriction: 0,
 });
 const gear = (id: ID, x: number, axleID: ID): GearElement => ({
   type: "gear",
@@ -48,6 +49,7 @@ const gear = (id: ID, x: number, axleID: ID): GearElement => ({
   fixedNodesBodyIDs: [],
   meshedGearsIDs: [],
   attachedBeltID: undefined,
+  surfaceMass: 1,
 });
 
 const MECH: MechanicalElement[] = [

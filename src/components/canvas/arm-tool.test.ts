@@ -8,8 +8,7 @@ import type { CanvasState, ID, MechanicalElement } from "../../types";
  * first click, when the tool can take it whole and takes it without building.
  */
 
-const id = (n: number) =>
-  `00000000-0000-0000-0000-00000000000${n}` as ID;
+const id = (n: number) => `00000000-0000-0000-0000-00000000000${n}` as ID;
 
 const PIVOT = id(1);
 const BEAM = id(2);
@@ -31,6 +30,7 @@ const mechanical: MechanicalElement[] = [
     overlays: {},
     rotatingEdgesIDs: [],
     fixedGearsIDs: [],
+    rotationalFriction: 0,
   },
   {
     type: "beam",
@@ -40,6 +40,7 @@ const mechanical: MechanicalElement[] = [
     probes: [],
     overlays: {},
     fixedNodesBodyIDs: [],
+    linearMass: 1,
   },
   {
     type: "spring",
@@ -61,6 +62,7 @@ const mechanical: MechanicalElement[] = [
     meshedGearsIDs: [],
     probes: [],
     overlays: {},
+    surfaceMass: 1,
   },
   {
     type: "pivot",
@@ -71,6 +73,7 @@ const mechanical: MechanicalElement[] = [
     overlays: {},
     rotatingEdgesIDs: [],
     fixedGearsIDs: [],
+    rotationalFriction: 0,
   },
   {
     type: "beam",
@@ -80,6 +83,7 @@ const mechanical: MechanicalElement[] = [
     probes: [],
     overlays: {},
     fixedNodesBodyIDs: [],
+    linearMass: 1,
   },
   {
     type: "gear",
@@ -92,6 +96,7 @@ const mechanical: MechanicalElement[] = [
     meshedGearsIDs: [],
     probes: [],
     overlays: {},
+    surfaceMass: 1,
   },
   {
     type: "belt",
@@ -265,7 +270,9 @@ describe("armed_tool_state", () => {
       type: "DimensionStart",
     });
     // Une charge et une sonde ne prennent qu'un élément.
-    expect(armed("PlacingProbe", BEAM, BEAM2)).toEqual({ type: "PlacingProbe" });
+    expect(armed("PlacingProbe", BEAM, BEAM2)).toEqual({
+      type: "PlacingProbe",
+    });
     expect(armed("PlacingForceStart", PIVOT, PIVOT2)).toEqual({
       type: "PlacingForceStart",
     });

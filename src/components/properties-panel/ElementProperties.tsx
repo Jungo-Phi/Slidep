@@ -10,6 +10,7 @@ import {
   List,
   ListItem,
   Tooltip,
+  Typography,
 } from "@mui/material";
 import { Delete, Lock, LockOpen } from "@mui/icons-material";
 import {
@@ -41,7 +42,6 @@ import ElementMeasures from "./ElementMeasures";
 import { t } from "../../i18n";
 import { element_to_hovered_part, linked_constraint } from "../canvas/utils";
 import { measure_belt_length } from "../../utils/belt-geom";
-import { PHYSICS } from "../../constants/rendering-specs";
 import React from "react";
 import { icon } from "../element-palette/iconDataUris";
 import StructureOnly from "./components/StructureOnly";
@@ -52,6 +52,7 @@ import {
   create_radius_dimension,
 } from "./element-dimensions";
 import ElementPicker from "./components/ElementPicker";
+import { DEFAULT } from "../../constants/physics-specs";
 
 const to_deg = (rad: number) => ((rad * 180) / Math.PI + 360) % 360;
 const to_rad = (deg: number) => (deg * Math.PI) / 180;
@@ -364,7 +365,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
           <Box
             sx={{
               display: "flex",
-              direction: "row",
+              flexDirection: "row",
               alignItems: "center",
               justifyContent: "center",
               gap: 2,
@@ -386,7 +387,15 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
               }
             />
             {element.type === "pivot" && (
-              <>
+              <Box
+                sx={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 0.25,
+                }}
+              >
                 <Tooltip
                   disableInteractive
                   title={t(element.motor ? "motor_revert" : "motor_convert")}
@@ -401,7 +410,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                           id: element.id,
                           newConfig: element.motor
                             ? undefined
-                            : { speed: PHYSICS.DEFAULT_MOTOR_SPEED },
+                            : { speed: DEFAULT.MOTOR_SPEED },
                           oldConfig: element.motor,
                         },
                       ];
@@ -414,11 +423,11 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                       }
                       applyActions(actions);
                     }}
-                    sx={{ padding: 0.5, border: 1, borderColor: "divider" }}
+                    sx={{ padding: 0.25, border: 1, borderColor: "divider" }}
                   >
                     <Box
                       component="img"
-                      style={{ width: 28, height: 28 }}
+                      style={{ width: 24, height: 24 }}
                       src={icon(element.motor ? "motor" : "pivot")}
                     />
                   </IconButton>
@@ -489,7 +498,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                     applyActions={applyActions}
                   />
                 )}
-              </>
+              </Box>
             )}
             {element.type === "gear" && (
               <NumberInput
@@ -555,7 +564,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
           <Box
             sx={{
               display: "flex",
-              direction: "row",
+              flexDirection: "row",
               alignItems: "center",
               justifyContent: "center",
               gap: 1,
@@ -724,6 +733,174 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
             />
           </Box>
         </StructureOnly>
+      )}
+
+      {("rotatingEdgesIDs" in element ||
+        "parentBeamID" in element ||
+        element.type === "gear" ||
+        element.type === "beam" ||
+        element.type === "spring") && (
+        <>
+          <Divider sx={{ mt: 1, mb: 1.5 }} />
+          <Box
+            sx={{
+              display: "flex",
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 2,
+              mt: -1,
+            }}
+          >
+            {"rotatingEdgesIDs" in element && (
+              <Box
+                sx={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: 0.5,
+                }}
+              >
+                <Typography variant="caption">
+                  {t("rotational_friction")}
+                </Typography>
+                <NumberInput
+                  label=""
+                  value={element.rotationalFriction}
+                  onChange={(rotationalFriction) =>
+                    applyActions([
+                      {
+                        type: "ChangeRotationalFriction",
+                        id: element.id,
+                        delta: rotationalFriction - element.rotationalFriction,
+                      },
+                    ])
+                  }
+                  unsigned
+                  large
+                  precision={3}
+                  step={0.001}
+                />
+              </Box>
+            )}
+            {"parentBeamID" in element && (
+              <Box
+                sx={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: 0.5,
+                }}
+              >
+                <Typography variant="caption">
+                  {t("sliding_friction")}
+                </Typography>
+                <NumberInput
+                  label=""
+                  value={element.slidingFriction}
+                  onChange={(slidingFriction) =>
+                    applyActions([
+                      {
+                        type: "ChangeSlidingFriction",
+                        id: element.id,
+                        delta: slidingFriction - element.slidingFriction,
+                      },
+                    ])
+                  }
+                  unsigned
+                  large
+                  precision={2}
+                  step={0.01}
+                />
+              </Box>
+            )}
+            {element.type === "gear" && (
+              <Box
+                sx={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: 0.5,
+                }}
+              >
+                <Typography variant="caption">{t("surface_mass")}</Typography>
+                <NumberInput
+                  label="kg/m²"
+                  value={element.surfaceMass}
+                  onChange={(surfaceMass) =>
+                    applyActions([
+                      {
+                        type: "ChangeSurfaceMass",
+                        id: element.id,
+                        delta: surfaceMass - element.surfaceMass,
+                      },
+                    ])
+                  }
+                  unsigned
+                  large
+                />
+              </Box>
+            )}
+            {element.type === "beam" && (
+              <Box
+                sx={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: 0.5,
+                }}
+              >
+                <Typography variant="caption">{t("linear_mass")}</Typography>
+                <NumberInput
+                  label="kg/m"
+                  value={element.linearMass}
+                  onChange={(linearMass) =>
+                    applyActions([
+                      {
+                        type: "ChangeLinearMass",
+                        id: element.id,
+                        delta: linearMass - element.linearMass,
+                      },
+                    ])
+                  }
+                  unsigned
+                  large
+                />
+              </Box>
+            )}
+            {element.type === "spring" && (
+              <Box
+                sx={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: 0.5,
+                }}
+              >
+                <Typography variant="caption">{t("rest_length")}</Typography>
+                <NumberInput
+                  label=""
+                  value={
+                    element.restLength ??
+                    element.positionStart.distance_to(element.positionEnd)
+                  }
+                  onChange={(restLength) =>
+                    applyActions([
+                      {
+                        type: "UpdateElementRestLength",
+                        id: element.id,
+                        newValue: restLength,
+                        oldValue: element.restLength,
+                      },
+                    ])
+                  }
+                  unsigned
+                  large
+                />
+              </Box>
+            )}
+          </Box>
+        </>
       )}
 
       <Divider sx={{ mt: 1.5, mb: 1 }} />

@@ -21,6 +21,7 @@ const pivot = (id: string, position: Point2): PivotElement =>
     rotatingEdgesIDs: [],
     fixedGearsIDs: [],
     motor: undefined,
+    rotationalFriction: 0,
   }) as PivotElement;
 
 const ids = (elements: { id: ID }[]) => elements.map((e) => e.id).sort();
@@ -60,9 +61,9 @@ describe("nodes_under_segment", () => {
   it("mesure l'écart à l'écran, pas dans le monde", () => {
     const mech: MechanicalElement[] = [pivot("off", P(450, 40))];
     const zoomedOut: ViewportState = { ...VIEW, scale: 0.2 };
-    expect(ids(nodes_under_segment(P(0, 0), P(900, 0), mech, zoomedOut))).toEqual(
-      ["off"],
-    );
+    expect(
+      ids(nodes_under_segment(P(0, 0), P(900, 0), mech, zoomedOut)),
+    ).toEqual(["off"]);
   });
 
   it("ne rend rien sur une barre trop courte pour avoir un corps", () => {

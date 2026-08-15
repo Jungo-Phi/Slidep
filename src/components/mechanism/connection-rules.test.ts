@@ -27,6 +27,7 @@ function build(): MechanicalElement[] {
       isGrounded: false,
       rotatingEdgesIDs: [],
       fixedGearsIDs: [GEAR_A, GEAR_B],
+      rotationalFriction: 0,
     },
     {
       type: "gear",
@@ -40,6 +41,7 @@ function build(): MechanicalElement[] {
       fixedNodesBodyIDs: [],
       meshedGearsIDs: [],
       attachedBeltID: undefined,
+      surfaceMass: 1,
     },
     {
       type: "gear",
@@ -53,6 +55,7 @@ function build(): MechanicalElement[] {
       fixedNodesBodyIDs: [],
       meshedGearsIDs: [],
       attachedBeltID: undefined,
+      surfaceMass: 1,
     },
     {
       type: "pivot",
@@ -63,6 +66,7 @@ function build(): MechanicalElement[] {
       isGrounded: false,
       rotatingEdgesIDs: [],
       fixedGearsIDs: [],
+      rotationalFriction: 0,
     },
     {
       type: "spring",
@@ -85,6 +89,7 @@ function build(): MechanicalElement[] {
       fixedNodeStartID: undefined,
       fixedNodeEndID: undefined,
       fixedNodesBodyIDs: [],
+      linearMass: 1,
     },
   ];
 }
@@ -102,7 +107,10 @@ const beam_end = (part: "start" | "end"): HoveredPart => ({
 });
 
 describe("l'outil sol sur un moteur", () => {
-  const motor = (isGrounded: boolean, parentBeamID?: ID): MechanicalElement => ({
+  const motor = (
+    isGrounded: boolean,
+    parentBeamID?: ID,
+  ): MechanicalElement => ({
     type: "pivot",
     id: PIVOT,
     probes: [],
@@ -112,6 +120,7 @@ describe("l'outil sol sur un moteur", () => {
     rotatingEdgesIDs: [],
     fixedGearsIDs: [],
     motor: { speed: 10, parentBeamID },
+    rotationalFriction: 0,
   });
   const verdict = (driven: MechanicalElement) => {
     const elements = build().map((e) => (e.id === PIVOT ? driven : e));

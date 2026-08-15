@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { DEFAULT } from "../constants/physics-specs";
 import {
   CURRENT_FORMAT_VERSION,
   MIGRATION_STEPS,
@@ -110,6 +111,73 @@ describe("migrate_document", () => {
         {
           type: "CreateElement",
           element: { type: "belt", id: "b2", closed: true },
+        },
+      ],
+    ]);
+  });
+
+  it("fills in mass and friction absent from elements saved before they existed", () => {
+    const result = migrate_document(
+      doc({
+        formatVersion: 2,
+        mechanicalElements: [
+          { type: "pivot", id: "p1" },
+          { type: "slider", id: "s1" },
+          { type: "slidep", id: "sp1" },
+          { type: "gear", id: "g1" },
+          { type: "beam", id: "b1" },
+        ],
+      }),
+    );
+    expect(result.mechanicalElements).toMatchObject([
+      { rotationalFriction: DEFAULT.ROTATIONAL_FRICTION },
+      { slidingFriction: DEFAULT.SLIDING_FRICTION },
+      {
+        slidingFriction: DEFAULT.SLIDING_FRICTION,
+        rotationalFriction: DEFAULT.ROTATIONAL_FRICTION,
+      },
+      { surfaceMass: DEFAULT.SURFACE_MASS },
+      { linearMass: DEFAULT.LINEAR_MASS },
+    ]);
+  });
+
+  it("does not override a value already present", () => {
+    const result = migrate_document(
+      doc({
+        formatVersion: 2,
+        mechanicalElements: [
+          { type: "beam", id: "b1", linearMass: 42 },
+        ],
+      }),
+    );
+    expect(result.mechanicalElements[0]).toMatchObject({ linearMass: 42 });
+  });
+
+  it("fills in the same defaults for an element carried by the undo stack", () => {
+    const result = migrate_document(
+      doc({
+        formatVersion: 2,
+        history: [
+          [{ type: "CreateElement", element: { type: "gear", id: "g1" } }],
+        ],
+        future: [
+          [{ type: "DeleteElement", element: { type: "beam", id: "b1" } }],
+        ],
+      }),
+    );
+    expect(result.history).toEqual([
+      [
+        {
+          type: "CreateElement",
+          element: { type: "gear", id: "g1", surfaceMass: DEFAULT.SURFACE_MASS },
+        },
+      ],
+    ]);
+    expect(result.future).toEqual([
+      [
+        {
+          type: "DeleteElement",
+          element: { type: "beam", id: "b1", linearMass: DEFAULT.LINEAR_MASS },
         },
       ],
     ]);

@@ -11,8 +11,8 @@ import {
   ForceElement,
   DistributedForceElement,
   MomentElement,
-  is_nameable,
 } from "../../types";
+import { is_nameable } from "../../utils/element-queries";
 import {
   get_constraint_element_from_id,
   get_element_from_id,
@@ -114,6 +114,13 @@ export function actionReducer(
         if (is_nameable(element))
           element.name = revert ? action.oldName : action.newName;
         break;
+      case "UpdateElementRestLength":
+        element = get_mechanical_element_from_id(action.id, mechanicalElements);
+        if (element.type !== "spring") {
+          break;
+        }
+        element.restLength = revert ? action.oldValue : action.newValue;
+        break;
       case "MoveConstraint":
         element = get_constraint_element_from_id(action.id, constraintElements);
         if ("position" in element)
@@ -151,6 +158,34 @@ export function actionReducer(
           break;
         }
         element.damping += action.delta * (revert ? -1 : 1);
+        break;
+      case "ChangeSlidingFriction":
+        element = get_mechanical_element_from_id(action.id, mechanicalElements);
+        if (!("slidingFriction" in element)) {
+          break;
+        }
+        element.slidingFriction += action.delta * (revert ? -1 : 1);
+        break;
+      case "ChangeRotationalFriction":
+        element = get_mechanical_element_from_id(action.id, mechanicalElements);
+        if (!("rotationalFriction" in element)) {
+          break;
+        }
+        element.rotationalFriction += action.delta * (revert ? -1 : 1);
+        break;
+      case "ChangeSurfaceMass":
+        element = get_mechanical_element_from_id(action.id, mechanicalElements);
+        if (element.type !== "gear") {
+          break;
+        }
+        element.surfaceMass += action.delta * (revert ? -1 : 1);
+        break;
+      case "ChangeLinearMass":
+        element = get_mechanical_element_from_id(action.id, mechanicalElements);
+        if (element.type !== "beam") {
+          break;
+        }
+        element.linearMass += action.delta * (revert ? -1 : 1);
         break;
       case "GroundNode":
         const node = get_mechanical_element_from_id(

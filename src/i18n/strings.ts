@@ -1152,6 +1152,36 @@ export const STRINGS = {
     es: "Longitud",
   },
   angle: { fr: "Angle", en: "Angle", de: "Winkel", es: "Ángulo" },
+  sliding_friction: {
+    fr: "Frottement linéaire",
+    en: "Sliding friction",
+    de: "Gleitreibung",
+    es: "Fricción lineal",
+  },
+  rotational_friction: {
+    fr: "Frottement angulaire",
+    en: "Rotational friction",
+    de: "Drehreibung",
+    es: "Fricción angular",
+  },
+  linear_mass: {
+    fr: "Masse linéique",
+    en: "Linear mass",
+    de: "Längenmasse",
+    es: "Masa lineal",
+  },
+  rest_length: {
+    fr: "Longueur au repos",
+    en: "Rest length",
+    de: "Ruhelänge",
+    es: "Longitud en reposo",
+  },
+  surface_mass: {
+    fr: "Masse surfacique",
+    en: "Surface mass",
+    de: "Flächenmasse",
+    es: "Masa superficial",
+  },
   length_unlock: {
     fr: "Débloquer la longueur",
     en: "Unlock the length",

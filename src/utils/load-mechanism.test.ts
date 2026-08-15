@@ -18,6 +18,7 @@ const beam: BeamElement = {
   fixedNodeStartID: undefined,
   fixedNodeEndID: undefined,
   fixedNodesBodyIDs: [],
+  linearMass: 1,
 };
 
 /** A cote whose label the solver has driven to `NaN`, as a degenerate frame does. */

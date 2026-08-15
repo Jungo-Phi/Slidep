@@ -1210,12 +1210,13 @@ export function apply_snapshot_to_mechanism(
     } else {
       const start = snapshot_point(snapshot, `${el.id}:start`);
       const end = snapshot_point(snapshot, `${el.id}:end`);
-      // Springs/dampers: freeze the natural (rest) length from the edit-time
-      // positions so the drawing keeps a fixed coil/piston count while the
-      // simulated length stretches or compresses.
+      // Springs/dampers: freeze the natural (rest) length — the user's typed
+      // value for a spring, else the edit-time positions — so the drawing
+      // keeps a fixed coil/piston count while the simulated length stretches
+      // or compresses.
       const restLength =
         el.type === "spring" || el.type === "damper"
-          ? el.positionStart.distance_to(el.positionEnd)
+          ? (el.restLength ?? el.positionStart.distance_to(el.positionEnd))
           : undefined;
       const disconnectedGearIndices =
         el.type === "belt"

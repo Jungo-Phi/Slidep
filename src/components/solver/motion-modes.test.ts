@@ -57,6 +57,7 @@ function pivot(
     isGrounded: g,
     rotatingEdgesIDs: edges,
     fixedGearsIDs: gears,
+    rotationalFriction: 0,
   };
 }
 
@@ -77,6 +78,7 @@ function beam(
     fixedNodeStartID: s ? id(s) : undefined,
     fixedNodeEndID: e ? id(e) : undefined,
     fixedNodesBodyIDs: [],
+    linearMass: 1,
   };
 }
 
@@ -92,6 +94,7 @@ function gear(n: string, pos: Point2, axle: string, r: number): GearElement {
     parentAxleID: id(axle),
     fixedNodesBodyIDs: [],
     meshedGearsIDs: [],
+    surfaceMass: 1,
   };
 }
 
@@ -199,24 +202,33 @@ describe("canonical_modes", () => {
       for (const modes of chains)
         for (const mode of modes) {
           expect(mode.moves.length).toBeGreaterThan(0);
-          for (const c of mode.contributors)
-            expect(mode.moves).toContain(c.id);
+          for (const c of mode.contributors) expect(mode.moves).toContain(c.id);
         }
   });
 
   it("les modes pilotés passent devant, et portent leur moteur", () => {
-    for (const chains of [fixture(vilbrequin), fixture(coreXY), fixture(huygens)])
+    for (const chains of [
+      fixture(vilbrequin),
+      fixture(coreXY),
+      fixture(huygens),
+    ])
       for (const modes of chains) {
         const driven = modes.map((m) => m.drivenByMotor);
         // Une fois passé le premier non-piloté, plus aucun piloté ne suit.
-        expect(driven).toEqual([...driven].sort((a, b) => Number(b) - Number(a)));
+        expect(driven).toEqual(
+          [...driven].sort((a, b) => Number(b) - Number(a)),
+        );
       }
   });
 
   it("deux modes d'une chaîne ne portent pas le même nom", () => {
     // Sauf s'il n'y a qu'un élément à nommer : la masse libre a deux modes de
     // translation et une seule pièce. L'indice de rangée les distingue alors.
-    for (const chains of [fixture(coreXY), fixture(huygens), fixture(doubleSlider)])
+    for (const chains of [
+      fixture(coreXY),
+      fixture(huygens),
+      fixture(doubleSlider),
+    ])
       for (const modes of chains) {
         const named = modes.map((m) => m.dominant).filter(Boolean);
         const distinctElements = new Set(modes.flatMap((m) => m.moves)).size;
@@ -304,8 +316,7 @@ describe("canonical_modes", () => {
     expect(modes).toHaveLength(1);
     expect(chain.motors).toHaveLength(2);
     const highlight = chain_highlight(chain, modes);
-    for (const motor of chain.motors)
-      expect(highlight).toContain(motor.owner);
+    for (const motor of chain.motors) expect(highlight).toContain(motor.owner);
     // …et le moteur qui ne pilote rien n'est pas pour autant posé sur la rangée.
     expect(modes[0].moves).not.toContain(
       chain.motors.find((m) => m.owner !== modes[0].dominant)!.owner,

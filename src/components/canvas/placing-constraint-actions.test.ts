@@ -28,6 +28,7 @@ const beam: BeamElement = {
   fixedNodeStartID: undefined,
   fixedNodeEndID: undefined,
   fixedNodesBodyIDs: [],
+  linearMass: 1,
 };
 
 const mechanical: MechanicalElement[] = [beam];
@@ -64,7 +65,10 @@ describe("handle_placing_constraint", () => {
   });
 
   it("n'évince rien quand la contrainte porte sur autre chose", () => {
-    const other = { ...align(), edgeID: "00000000-0000-0000-0000-000000000003" as ID };
+    const other = {
+      ...align(),
+      edgeID: "00000000-0000-0000-0000-000000000003" as ID,
+    };
     const result = handle_placing_constraint(
       { type: "HorizontalVerticalConstraintStart" },
       hovered,

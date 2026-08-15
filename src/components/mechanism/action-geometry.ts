@@ -54,6 +54,7 @@ const ACTION_GEOMETRY: Record<
   ActionGeometry
 > = {
   UpdateElementName: NONE,
+  UpdateElementRestLength: NONE_COALESCING,
   MoveNode: BEFORE_PULL,
   MoveEdgeStart: BEFORE_PULL,
   MoveEdgeEnd: BEFORE_PULL,
@@ -70,6 +71,10 @@ const ACTION_GEOMETRY: Record<
   ChangeMass: NONE_COALESCING,
   ChangeStiffness: NONE_COALESCING,
   ChangeDamping: NONE_COALESCING,
+  ChangeSlidingFriction: NONE_COALESCING,
+  ChangeRotationalFriction: NONE_COALESCING,
+  ChangeSurfaceMass: NONE_COALESCING,
+  ChangeLinearMass: NONE_COALESCING,
   ChangeDimensionEdgeValue: AFTER_PULL_COALESCING,
   ChangeDimensionNodeToNodeValue: AFTER_PULL_COALESCING,
   ChangeDimensionEdgeToNodeValue: AFTER_PULL_COALESCING,

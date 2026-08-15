@@ -1,10 +1,5 @@
-import {
-  ID,
-  MechanicalElement,
-  ProbeMetric,
-  is_node_element,
-  overlay_shown,
-} from "../../types/element";
+import { ID, MechanicalElement, ProbeMetric } from "../../types/element";
+import { is_node_element, overlay_shown } from "../../utils/element-queries";
 import { Point2 } from "../../types/point2";
 import { KinematicSnapshot, SnapshotLayout } from "../../types/runtime-state";
 

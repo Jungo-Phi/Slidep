@@ -27,12 +27,12 @@ import {
   force_from_drag,
   moment_from_drag,
 } from "./placing-loads";
-import { PHYSICS } from "../../constants/rendering-specs";
 import { Point2 } from "../../types/point2";
 import { get_belt_path } from "../../utils";
 import { belt_wrap_arriving, belt_wrap_leaving } from "../../utils/belt-geom";
 import { belt_project } from "../../utils/belt-path";
 import { nodes_under_segment } from "./body-crossings";
+import { DEFAULT } from "../../constants/physics-specs";
 
 /** A node named as a hover, for the connection helpers that speak in hovers. */
 const node_hover = (
@@ -307,9 +307,7 @@ function handle_place_element(
     );
     if (node.type === "pivot") {
       const oldConfig = node.motor;
-      const newConfig = oldConfig
-        ? undefined
-        : { speed: PHYSICS.DEFAULT_MOTOR_SPEED };
+      const newConfig = oldConfig ? undefined : { speed: DEFAULT.MOTOR_SPEED };
       const actions: Action[] = [
         { type: "SetMotorConfig", id: node.id, newConfig, oldConfig },
       ];
@@ -375,6 +373,7 @@ function handle_place_element(
       fixedNodesBodyIDs: [],
       meshedGearsIDs: [],
       attachedBeltID: undefined,
+      surfaceMass: DEFAULT.SURFACE_MASS,
     };
     const sim = start_simulation(mechanicalElements, constraintElements, loads);
     if (existingAxle) {
@@ -398,6 +397,7 @@ function handle_place_element(
         isGrounded: false,
         rotatingEdgesIDs: [],
         fixedGearsIDs: [gearId],
+        rotationalFriction: DEFAULT.ROTATIONAL_FRICTION,
       };
       sim.step([
         { type: "CreateElement", element: newPivot },
@@ -465,6 +465,7 @@ function handle_place_element(
         fixedNodeStartID: undefined,
         fixedNodeEndID: undefined,
         fixedNodesBodyIDs: [],
+        linearMass: DEFAULT.LINEAR_MASS,
       };
       break;
     case "PlacingSpringEnd":
@@ -477,7 +478,7 @@ function handle_place_element(
         positionEnd: hoveredPart.position,
         fixedNodeStartID: undefined,
         fixedNodeEndID: undefined,
-        stiffness: 1,
+        stiffness: DEFAULT.STIFFNESS,
       };
       break;
     case "PlacingDamperEnd":
@@ -490,7 +491,7 @@ function handle_place_element(
         positionEnd: hoveredPart.position,
         fixedNodeStartID: undefined,
         fixedNodeEndID: undefined,
-        damping: 1,
+        damping: DEFAULT.DAMPING,
       };
       break;
     case "PlacingBeltEnd":
@@ -520,8 +521,9 @@ function handle_place_element(
         fixedGearsIDs: [],
         motor:
           state.type === "PlacingMotor"
-            ? { speed: PHYSICS.DEFAULT_MOTOR_SPEED }
+            ? { speed: DEFAULT.MOTOR_SPEED }
             : undefined,
+        rotationalFriction: DEFAULT.ROTATIONAL_FRICTION,
       };
       break;
     case "PlacingSlider":
@@ -534,6 +536,7 @@ function handle_place_element(
         isGrounded: false,
         parentBeamID: undefined,
         fixedEdgesIDs: [],
+        slidingFriction: DEFAULT.SLIDING_FRICTION,
       };
       break;
     case "PlacingJoin":
@@ -789,9 +792,7 @@ function handle_place_ground(
         mechanicalElements,
       ) as NodeElement;
       const grounded = !node.isGrounded;
-      const actions: Action[] = [
-        { type: "GroundNode", id: node.id, grounded },
-      ];
+      const actions: Action[] = [{ type: "GroundNode", id: node.id, grounded }];
       // Grounding a pivot whose motor drives against a beam would leave it
       // anchored to both at once — clear the beam frame so it drives from the
       // ground instead, same as picking "ground" in the properties panel.

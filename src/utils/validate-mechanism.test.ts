@@ -52,6 +52,7 @@ function pivot(over: Partial<PivotElement> = {}): PivotElement {
     isGrounded: false,
     rotatingEdgesIDs: [BEAM_ID],
     fixedGearsIDs: [],
+    rotationalFriction: 0,
     ...over,
   };
 }
@@ -67,6 +68,7 @@ function beam(over: Partial<BeamElement> = {}): BeamElement {
     fixedNodeStartID: PIVOT_ID,
     fixedNodeEndID: undefined,
     fixedNodesBodyIDs: [],
+    linearMass: 1,
     ...over,
   };
 }
@@ -84,6 +86,7 @@ function gear(over: Partial<GearElement> = {}): GearElement {
     fixedNodesBodyIDs: [],
     meshedGearsIDs: [],
     attachedBeltID: undefined,
+    surfaceMass: 1,
     ...over,
   };
 }
@@ -329,6 +332,7 @@ describe("validate_mechanism — chaque code d'erreur", () => {
       isGrounded: false,
       parentBeamID: BEAM_ID,
       fixedEdgesIDs: [BEAM_ID],
+      slidingFriction: 0,
     };
     const mech = mechanism([
       slider,

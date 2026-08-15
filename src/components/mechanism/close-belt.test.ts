@@ -152,6 +152,7 @@ function loose_belt_on_join(): MechanicalElement[] {
     fixedNodesBodyIDs: [],
     meshedGearsIDs: [],
     attachedBeltID: BELT,
+    surfaceMass: 1,
   });
   const axle = (aid: ID, gid: ID, x: number): MechanicalElement => ({
     type: "pivot",
@@ -163,6 +164,7 @@ function loose_belt_on_join(): MechanicalElement[] {
     rotatingEdgesIDs: [],
     fixedGearsIDs: [gid],
     motor: undefined,
+    rotationalFriction: 0,
   });
   return [
     axle(id("ax1"), id("g1"), 0),
@@ -191,17 +193,14 @@ describe("apply_actions auto-closes a belt a gesture makes looped", () => {
   // belt looped; the correction must close it without an explicit CloseBelt.
   it("closes when both terminals end up on one node", () => {
     const mech = mechanism(loose_belt_on_join());
-    const result = apply_actions(
-      mech,
-      [
-        {
-          type: "ConnectsFixedNodeEnd",
-          disconnect: false,
-          elementID: BELT,
-          connectID: J1,
-        },
-      ],
-    );
+    const result = apply_actions(mech, [
+      {
+        type: "ConnectsFixedNodeEnd",
+        disconnect: false,
+        elementID: BELT,
+        connectID: J1,
+      },
+    ]);
     const b = result.mechanicalElements.find(
       (el): el is BeltElement => el.type === "belt",
     );

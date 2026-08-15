@@ -1,8 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_METADATA, Mechanism } from "../../types/mechanism";
 import { Point2 } from "../../types/point2";
-import type { BeamElement, ID, MechanicalElement, PivotElement } from "../../types/element";
-import { RECORD_DT, compile_simulation_model, step_simulation } from "./kinematic-simulation";
+import type {
+  BeamElement,
+  ID,
+  MechanicalElement,
+  PivotElement,
+} from "../../types/element";
+import {
+  RECORD_DT,
+  compile_simulation_model,
+  step_simulation,
+} from "./kinematic-simulation";
 import { snapshot_point } from "./snapshot";
 
 /**
@@ -32,6 +41,7 @@ const pivot = (
   isGrounded: true,
   rotatingEdgesIDs,
   fixedGearsIDs: [],
+  rotationalFriction: 0,
   ...extra,
 });
 
@@ -51,6 +61,7 @@ const beam = (
   fixedNodeStartID: startID,
   fixedNodeEndID: endID,
   fixedNodesBodyIDs: [],
+  linearMass: 1,
 });
 
 function mechanism(mechanicalElements: MechanicalElement[]): Mechanism {

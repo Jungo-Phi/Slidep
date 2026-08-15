@@ -32,6 +32,8 @@ interface NumberInputProps {
   adornment?: NumberInputAdornment;
   /** Rounds the field's right edge into a pill matching the adornment (SignedNumberInput's direction icon). */
   pillAdornment?: boolean;
+  /** Decimal places shown and stepped to. Defaults to 1, fine for every value at unit scale (kg, N/m…); friction-like coefficients need more. */
+  precision?: number;
 }
 
 export const NumberInput: React.FC<NumberInputProps> = ({
@@ -45,6 +47,7 @@ export const NumberInput: React.FC<NumberInputProps> = ({
   unsigned = false,
   adornment,
   pillAdornment = false,
+  precision = 1,
 }) => {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -67,7 +70,9 @@ export const NumberInput: React.FC<NumberInputProps> = ({
   const height = large ? 32 : 24;
   const adornmentWidth = adornment ? height - 8 : 0;
   const width = (large ? 75 : 71) + adornmentWidth;
-  const rounding = 1;
+  const rounding = precision;
+  // The finest step the up/down arrows snap to before falling back to `step`.
+  const grain = Math.pow(10, -rounding);
   // Pill-shaped right edge for the direction adornment (SignedNumberInput only).
   const adornmentRadius = (height + 4) / 2;
 
@@ -77,7 +82,7 @@ export const NumberInput: React.FC<NumberInputProps> = ({
 
   useEffect(() => {
     setLocalValue(round_value(value, rounding));
-  }, [value]);
+  }, [value, rounding]);
 
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -123,18 +128,18 @@ export const NumberInput: React.FC<NumberInputProps> = ({
             ? step * 5
             : step;
         const current = baseValue();
-        const snapped = Math.round(current * 10) / 10;
+        const snapped = Math.round(current / grain) * grain;
         return direction === 1
           ? snapped > current
             ? snapped
             : snapped === Math.round(current)
               ? snapped + actualStep
-              : snapped + 0.1
+              : snapped + grain
           : snapped < current
             ? snapped
             : snapped === Math.round(current)
               ? snapped - actualStep
-              : snapped - 0.1;
+              : snapped - grain;
       };
       onChange(getSteppedValue());
       timeoutRef.current = setTimeout(() => {
@@ -143,7 +148,7 @@ export const NumberInput: React.FC<NumberInputProps> = ({
         }, holdInterval);
       }, holdDelay);
     },
-    [baseValue, holdDelay, holdInterval, onChange, step],
+    [baseValue, grain, holdDelay, holdInterval, onChange, step],
   );
 
   const filterInput = (val: string) => {

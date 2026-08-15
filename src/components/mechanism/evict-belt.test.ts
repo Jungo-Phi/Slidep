@@ -31,6 +31,7 @@ const gear = (
   fixedNodesBodyIDs: [],
   meshedGearsIDs: [],
   attachedBeltID: id(belt),
+  surfaceMass: 1,
 });
 
 const axle = (aid: string, gid: string, x: number): MechanicalElement => ({
@@ -43,6 +44,7 @@ const axle = (aid: string, gid: string, x: number): MechanicalElement => ({
   rotatingEdgesIDs: [],
   fixedGearsIDs: [id(gid)],
   motor: undefined,
+  rotationalFriction: 0,
 });
 
 const belt = (bid: string, gears: string[], y: number): BeltElement => ({

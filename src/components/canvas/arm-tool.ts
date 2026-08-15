@@ -2,11 +2,11 @@ import type { CanvasState, CanvasStateType } from "../../types/canvas-state";
 import type { HoveredPart } from "../../types/hovered-part";
 import {
   ConstraintElement,
-  is_node_element,
   LoadElement,
   MechanicalElement,
   ViewportState,
 } from "../../types";
+import { is_node_element } from "../../utils/element-queries";
 import { tool_state, ToolStateType } from "../../constants/shortcuts";
 import { HOVER_TARGETS } from "./get-hover";
 import { element_to_hovered_part } from "./utils";

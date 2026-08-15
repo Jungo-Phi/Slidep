@@ -51,7 +51,7 @@ import { is_zero_load } from "../../utils/load-scale";
 import {
   is_constraint_type,
   probe_badge_position,
-  relation_badge_positions,
+  geometric_badge_positions,
 } from "./utils";
 import { offset_ends, parallel_edge_offsets } from "./parallel-edges";
 import { motor_arrow_geometry } from "./drawing-functions";
@@ -926,11 +926,11 @@ function hovered_probe_badge(
 }
 
 /**
- * The relation-constraint badge (align/normal/parallel/equal) under the
+ * The geometric-constraint badge (align/normal/parallel/equal) under the
  * cursor, if the tool may pick a constraint at all — same gate the old
  * position-based constraint badges used.
  */
-function hovered_relation_badge(
+function hovered_geometric_badge(
   mouseScreen: ScreenPoint,
   mechanicalElements: MechanicalElement[],
   constraintElements: ConstraintElement[],
@@ -939,7 +939,7 @@ function hovered_relation_badge(
 ): HoveredPart | undefined {
   if (!HOVER_TARGETS[state.type].overlays) return undefined;
   for (const host of mechanicalElements) {
-    for (const { constraintId, position } of relation_badge_positions(
+    for (const { constraintId, position } of geometric_badge_positions(
       host.id,
       mechanicalElements,
       constraintElements,
@@ -1173,11 +1173,11 @@ export function get_hovered_part(
       if (badgeHover) return badgeHover;
       continue;
     }
-    // Same reasoning as "probe": a relation badge (align/normal/parallel/equal)
+    // Same reasoning as "probe": a geometric badge (align/normal/parallel/equal)
     // is anchored to its host(s), not an element of its own, so it is swept as
     // a family rather than through the per-element switch below.
-    if (type === "relationBadge") {
-      const badgeHover = hovered_relation_badge(
+    if (type === "geometricBadge") {
+      const badgeHover = hovered_geometric_badge(
         mouseScreen,
         mechanicalElements,
         constraintElements,

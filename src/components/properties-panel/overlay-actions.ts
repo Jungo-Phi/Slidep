@@ -1,10 +1,5 @@
-import {
-  Action,
-  MechanicalElement,
-  OverlayKind,
-  available_overlays,
-  overlay_shown,
-} from "../../types";
+import { Action, MechanicalElement, OverlayKind } from "../../types";
+import { available_overlays, overlay_shown } from "../../utils/element-queries";
 import { StringKey } from "../../i18n";
 
 /** Human label of each overlay layer (full wording — the "Afficher" menu has

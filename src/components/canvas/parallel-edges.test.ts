@@ -33,6 +33,7 @@ const anchor = (nid: ID, x: number, edges: ID[]): PivotElement => ({
   isGrounded: false,
   rotatingEdgesIDs: edges,
   fixedGearsIDs: [],
+  rotationalFriction: 0,
 });
 
 const spring: SpringElement = {
@@ -102,6 +103,7 @@ describe("parallel_edge_offsets", () => {
         fixedNodeStartID: LEFT,
         fixedNodeEndID: RIGHT,
         fixedNodesBodyIDs: [],
+        linearMass: 1,
       },
     ];
     expect(parallel_edge_offsets(twoBeams).size).toBe(0);

@@ -963,16 +963,18 @@ export function get_links_simulation(
         });
       } else if (element.type === "spring") {
         // Springs take NO rigid length constraint: a compliant Spring softly
-        // pulls the two endpoints toward their rest length (the current drawn
-        // length at sim start). Only meaningful where the mechanism leaves a
-        // free DOF for it to resolve. NOT added to distancePairs — it does not
-        // triangulate.
+        // pulls the two endpoints toward their rest length — the user's typed
+        // value, or the current drawn length at sim start when none was set.
+        // Only meaningful where the mechanism leaves a free DOF for it to
+        // resolve. NOT added to distancePairs — it does not triangulate.
         links.push({
           type: "Spring",
           ddl: 0,
           key1: `${element.id}:start`,
           key2: `${element.id}:end`,
-          restLength: element.positionEnd.distance_to(element.positionStart),
+          restLength:
+            element.restLength ??
+            element.positionEnd.distance_to(element.positionStart),
           stiffness: spring_relaxation_factor(element.stiffness),
           owner: element.id,
         });

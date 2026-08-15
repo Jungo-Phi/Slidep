@@ -77,6 +77,7 @@ function closed_belt(): MechanicalElement[] {
     fixedNodesBodyIDs: [],
     meshedGearsIDs: [],
     attachedBeltID: BELT,
+    surfaceMass: 1,
   });
   const axle = (aid: ID, gid: ID, x: number): MechanicalElement => ({
     type: "pivot",
@@ -88,6 +89,7 @@ function closed_belt(): MechanicalElement[] {
     rotatingEdgesIDs: [],
     fixedGearsIDs: [gid],
     motor: undefined,
+    rotationalFriction: 0,
   });
   return [
     axle(AX1, G1, 0),

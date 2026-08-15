@@ -48,6 +48,7 @@ function pivot(n: string, pos: Point2, g: boolean, edges: ID[]): PivotElement {
     isGrounded: g,
     rotatingEdgesIDs: edges,
     fixedGearsIDs: [],
+    rotationalFriction: 0,
   };
 }
 
@@ -78,6 +79,7 @@ function sliderNode(
     isGrounded: false,
     parentBeamID: id(rail),
     fixedEdgesIDs: edges,
+    slidingFriction: 0,
   };
 }
 
@@ -99,6 +101,7 @@ function beam(
     fixedNodeStartID: s ? id(s) : undefined,
     fixedNodeEndID: e ? id(e) : undefined,
     fixedNodesBodyIDs: body,
+    linearMass: 1,
   };
 }
 
@@ -167,23 +170,27 @@ describe("find_redundant_links", () => {
     );
   });
 
-  it("une courroie parle d'une seule voix", () => {
-    // Sa loi de non-glissement est un lien par brin : signalés un par un, ils
-    // noieraient un lecteur qui n'a dessiné qu'une courroie.
-    for (const { redundancy } of fixture(huygens)) {
-      const belts = redundancy.links.filter(
-        (l) => l.type === "BeltSegmentNoSlip",
-      );
-      if (belts.length === 0) continue;
-      expect(belts.length).toBeGreaterThan(1);
-      expect(new Set(belts.map((l) => l.owner)).size).toBe(1);
-      expect(
-        redundancy.groups.filter((g) =>
-          g.links.some((l) => l.type === "BeltSegmentNoSlip"),
-        ),
-      ).toHaveLength(1);
-    }
-  }, SLOW);
+  it(
+    "une courroie parle d'une seule voix",
+    () => {
+      // Sa loi de non-glissement est un lien par brin : signalés un par un, ils
+      // noieraient un lecteur qui n'a dessiné qu'une courroie.
+      for (const { redundancy } of fixture(huygens)) {
+        const belts = redundancy.links.filter(
+          (l) => l.type === "BeltSegmentNoSlip",
+        );
+        if (belts.length === 0) continue;
+        expect(belts.length).toBeGreaterThan(1);
+        expect(new Set(belts.map((l) => l.owner)).size).toBe(1);
+        expect(
+          redundancy.groups.filter((g) =>
+            g.links.some((l) => l.type === "BeltSegmentNoSlip"),
+          ),
+        ).toHaveLength(1);
+      }
+    },
+    SLOW,
+  );
 
   it("un mécanisme sain ne signale rien", () => {
     const [{ mobility, redundancy }] = audited([
@@ -216,56 +223,62 @@ describe("find_redundant_links", () => {
     // Et la mesure de ce qu'un test par lien ne sait pas faire : les deux
     // `SlideOnSegment` sortent aussi, car retirer l'un laisse l'autre plus la
     // distance et les verrous tenir la poutre. Quatre candidats pour h = 2.
-    expect(redundancy.links.length).toBeGreaterThan(
-      mobility.hyperstaticity,
-    );
+    expect(redundancy.links.length).toBeGreaterThan(mobility.hyperstaticity);
   });
 
-  it("ne signale jamais rien sur une chaîne isostatique", () => {
-    // Les chaînes hyperstatiques sont sautées plutôt que mesurées : l'audit de Core XY
-    // coûte 2,6 s à lui seul, et ce n'est pas ce que ce test regarde.
-    for (const json of [
-      vilbrequin,
-      jansen,
-      decon,
-      poulie,
-      huygens,
-      coreXY,
-      doubleSlider,
-    ]) {
+  it(
+    "ne signale jamais rien sur une chaîne isostatique",
+    () => {
+      // Les chaînes hyperstatiques sont sautées plutôt que mesurées : l'audit de Core XY
+      // coûte 2,6 s à lui seul, et ce n'est pas ce que ce test regarde.
+      for (const json of [
+        vilbrequin,
+        jansen,
+        decon,
+        poulie,
+        huygens,
+        coreXY,
+        doubleSlider,
+      ]) {
+        const model = build_analysis_model(
+          load_mechanism(JSON.parse(json)).mechanism,
+        );
+        for (const chain of model.chains) {
+          const mobility = probe_chain_mobility(model, chain);
+          if (mobility.hyperstaticity !== 0) continue;
+          expect(
+            find_redundant_links(model, chain, mobility).links,
+          ).toHaveLength(0);
+        }
+      }
+    },
+    SLOW,
+  );
+
+  it(
+    "retirer un lien signalé ne libère effectivement aucun mouvement",
+    () => {
+      // La propriété qui définit la sortie, vérifiée sur un mécanisme réel plutôt que
+      // sur la seule construction synthétique.
       const model = build_analysis_model(
-        load_mechanism(JSON.parse(json)).mechanism,
+        load_mechanism(JSON.parse(jansen)).mechanism,
       );
       for (const chain of model.chains) {
         const mobility = probe_chain_mobility(model, chain);
-        if (mobility.hyperstaticity !== 0) continue;
-        expect(find_redundant_links(model, chain, mobility).links).toHaveLength(
-          0,
-        );
+        const { links } = find_redundant_links(model, chain, mobility);
+        for (const link of links) {
+          const without = {
+            ...chain,
+            links: chain.links.filter((other) => other !== link),
+            constraintRows: chain.constraintRows - link.ddl,
+            grublerCount: chain.grublerCount + link.ddl,
+          };
+          expect(probe_chain_mobility(model, without).mobility).toBe(
+            mobility.mobility,
+          );
+        }
       }
-    }
-  }, SLOW);
-
-  it("retirer un lien signalé ne libère effectivement aucun mouvement", () => {
-    // La propriété qui définit la sortie, vérifiée sur un mécanisme réel plutôt que
-    // sur la seule construction synthétique.
-    const model = build_analysis_model(
-      load_mechanism(JSON.parse(jansen)).mechanism,
-    );
-    for (const chain of model.chains) {
-      const mobility = probe_chain_mobility(model, chain);
-      const { links } = find_redundant_links(model, chain, mobility);
-      for (const link of links) {
-        const without = {
-          ...chain,
-          links: chain.links.filter((other) => other !== link),
-          constraintRows: chain.constraintRows - link.ddl,
-          grublerCount: chain.grublerCount + link.ddl,
-        };
-        expect(probe_chain_mobility(model, without).mobility).toBe(
-          mobility.mobility,
-        );
-      }
-    }
-  }, SLOW);
+    },
+    SLOW,
+  );
 });

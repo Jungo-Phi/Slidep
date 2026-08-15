@@ -25,6 +25,7 @@ const PIVOT: PivotElement = {
   isGrounded: false,
   rotatingEdgesIDs: [BEAM_ID],
   fixedGearsIDs: [],
+  rotationalFriction: 0,
 };
 
 const BEAM: BeamElement = {
@@ -37,6 +38,7 @@ const BEAM: BeamElement = {
   fixedNodeStartID: PIVOT_ID,
   fixedNodeEndID: undefined,
   fixedNodesBodyIDs: [],
+  linearMass: 1,
 };
 
 function mechanism(mechanicalElements: MechanicalElement[]): Mechanism {
@@ -64,6 +66,7 @@ const ORPHAN_GEAR: MechanicalElement = {
   fixedNodesBodyIDs: [],
   meshedGearsIDs: [],
   attachedBeltID: undefined,
+  surfaceMass: 1,
 };
 
 const DELETE_PIVOT: Action[] = [{ type: "DeleteElement", element: PIVOT }];

@@ -7,10 +7,11 @@
  * can then assume the shape it knows.
  */
 
+import { DEFAULT } from "../constants/physics-specs";
 import { SerializedMechanism } from "../types";
 
 /** The format `serialize_mechanism` writes today. */
-export const CURRENT_FORMAT_VERSION = 2;
+export const CURRENT_FORMAT_VERSION = 3;
 
 /** A document mid-migration: its shape belongs to no version in particular. */
 type RawDocument = Record<string, unknown>;
@@ -48,6 +49,18 @@ const MIGRATIONS: MigrationStep[] = [
       future: close_belt_in_stack(doc.future),
     }),
   },
+  {
+    to: 3,
+    preservesHistory: true,
+    apply: (doc) => ({
+      ...doc,
+      mechanicalElements: as_array(doc.mechanicalElements).map(
+        add_physical_defaults,
+      ),
+      history: add_physical_defaults_in_stack(doc.history),
+      future: add_physical_defaults_in_stack(doc.future),
+    }),
+  },
 ];
 
 /** v1 → v2: a belt's `tight` flag becomes `closed`, on the element itself. */
@@ -81,6 +94,47 @@ const close_belt_in_action = (action: unknown): unknown => {
 
 const close_belt_in_stack = (stack: unknown): unknown[][] =>
   as_array(stack).map((bundle) => as_array(bundle).map(close_belt_in_action));
+
+/** v2 → v3: mass and friction, absent from every element saved before they existed,
+ *  fall back to the same defaults a freshly placed element gets. */
+const add_physical_defaults = (element: unknown): unknown => {
+  if (!is_record(element)) return element;
+  switch (element.type) {
+    case "pivot":
+      return { rotationalFriction: DEFAULT.ROTATIONAL_FRICTION, ...element };
+    case "slider":
+      return { slidingFriction: DEFAULT.SLIDING_FRICTION, ...element };
+    case "slidep":
+      return {
+        slidingFriction: DEFAULT.SLIDING_FRICTION,
+        rotationalFriction: DEFAULT.ROTATIONAL_FRICTION,
+        ...element,
+      };
+    case "gear":
+      return { surfaceMass: DEFAULT.SURFACE_MASS, ...element };
+    case "beam":
+      return { linearMass: DEFAULT.LINEAR_MASS, ...element };
+    default:
+      return element;
+  }
+};
+
+/** The same defaulting where an action carries a whole element: `CreateElement` and `DeleteElement`. */
+const add_physical_defaults_in_action = (action: unknown): unknown => {
+  if (!is_record(action)) return action;
+  switch (action.type) {
+    case "CreateElement":
+    case "DeleteElement":
+      return { ...action, element: add_physical_defaults(action.element) };
+    default:
+      return action;
+  }
+};
+
+const add_physical_defaults_in_stack = (stack: unknown): unknown[][] =>
+  as_array(stack).map((bundle) =>
+    as_array(bundle).map(add_physical_defaults_in_action),
+  );
 
 const is_record = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);

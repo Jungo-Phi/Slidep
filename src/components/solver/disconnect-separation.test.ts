@@ -35,6 +35,7 @@ const pivot = (elementID: ID, at = new Point2(0, 0)): MechanicalElement => ({
   rotatingEdgesIDs: [],
   fixedGearsIDs: [],
   motor: undefined,
+  rotationalFriction: 0,
 });
 
 const gear = (
@@ -53,6 +54,7 @@ const gear = (
   fixedNodesBodyIDs: [],
   meshedGearsIDs: [],
   attachedBeltID: undefined,
+  surfaceMass: 1,
 });
 
 const detach = (

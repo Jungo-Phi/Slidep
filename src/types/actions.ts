@@ -34,7 +34,11 @@ export type OtherActionType =
 export type ChangeConstantActionType =
   | "ChangeMass"
   | "ChangeStiffness"
-  | "ChangeDamping";
+  | "ChangeDamping"
+  | "ChangeSlidingFriction"
+  | "ChangeRotationalFriction"
+  | "ChangeSurfaceMass"
+  | "ChangeLinearMass";
 export type MoveElementActionType =
   | "MoveNode"
   | "MoveEdgeStart"
@@ -77,6 +81,12 @@ export type Action =
   | { type: "CreateElement"; element: UnionElement }
   | { type: "DeleteElement"; element: UnionElement }
   | { type: "UpdateElementName"; id: ID; newName?: string; oldName?: string }
+  | {
+      type: "UpdateElementRestLength";
+      id: ID;
+      newValue?: number;
+      oldValue?: number;
+    }
   | {
       type: "MoveNode";
       id: ID;
@@ -156,6 +166,26 @@ export type Action =
     }
   | {
       type: "ChangeDamping";
+      id: ID;
+      delta: number;
+    }
+  | {
+      type: "ChangeSlidingFriction";
+      id: ID;
+      delta: number;
+    }
+  | {
+      type: "ChangeRotationalFriction";
+      id: ID;
+      delta: number;
+    }
+  | {
+      type: "ChangeSurfaceMass";
+      id: ID;
+      delta: number;
+    }
+  | {
+      type: "ChangeLinearMass";
       id: ID;
       delta: number;
     }

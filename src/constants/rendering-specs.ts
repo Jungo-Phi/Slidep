@@ -1,7 +1,3 @@
-/**
- * Rendering specifications for mechanical elements
- */
-
 import { UnionElement } from "../types";
 import {
   canvas_palette,
@@ -115,11 +111,6 @@ export function set_canvas_theme(
   };
   fade = requestAnimationFrame(step);
 }
-
-export const PHYSICS = {
-  DEFAULT_MOTOR_SPEED: 10, // tr/min
-  GRAVITY: 10, // m/s^2
-} as const;
 
 const STANDARD_STROKE = 2;
 /** Added to an element's own width when it is hovered. A gain rather than a
@@ -379,10 +370,10 @@ export const DIM = {
   // Probe
   PROBE_OFFSET: 20,
 
-  // Relation constraint badges (align/normal/parallel/equal), anchored to
+  // Geometric constraint badges (align/normal/parallel/equal), anchored to
   // their host(s) — below it, so they stay clear of the probe badge above.
-  RELATION_BADGE_OFFSET: 20,
-  RELATION_BADGE_GAP: 4,
+  GEOMETRIC_BADGE_OFFSET: 20,
+  GEOMETRIC_BADGE_GAP: 4,
   PROBE_RADIUS: 6,
 
   // Trajectory
@@ -401,7 +392,7 @@ export const TEXT_SPECS = {
 export const DRAWING_ORDER: (
   | UnionElement["type"]
   | "probe"
-  | "relationBadge"
+  | "geometricBadge"
 )[] = [
   "gear",
   "beam",
@@ -414,7 +405,7 @@ export const DRAWING_ORDER: (
   "pivot",
   "mass",
   "probe",
-  "relationBadge",
+  "geometricBadge",
   "distributed-force",
   "force",
   "moment",
@@ -432,9 +423,9 @@ export const HOVER_ORDER: (
   | UnionElement["type"]
   | "probe"
   | "motorArrow"
-  | "relationBadge"
+  | "geometricBadge"
 )[] = [
-  "relationBadge",
+  "geometricBadge",
   "gear-ratio",
   "dimension-belt",
   "dimension-radius",
