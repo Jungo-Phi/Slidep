@@ -4,7 +4,7 @@ import poulieJson from "../../../test-mechanisms/Poulie bloqueuse.slidep?raw";
 import { Link, Point2 } from "../../types";
 import { load_mechanism } from "../../utils/load-mechanism";
 import { belt_arc_sweep, belt_pieces, BeltVia } from "../../utils/belt-path";
-import { compile_simulation_model } from "./kinematic-simulation";
+import { compile_simulation_model } from "./simulation-engine";
 import { viasFrom } from "./experimental/belt-noslip-q";
 
 /**

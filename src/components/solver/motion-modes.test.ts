@@ -14,7 +14,7 @@ import {
   PivotElement,
   Point2,
 } from "../../types";
-import { DEFAULT_METADATA } from "../../types/mechanism";
+import { DEFAULT_METADATA, DEFAULT_SIMULATION } from "../../types/mechanism";
 import { load_mechanism } from "../../utils/load-mechanism";
 import { build_analysis_model } from "./analysis-model";
 import { probe_chain_mobility } from "./mobility-probe";
@@ -33,6 +33,8 @@ function mechanism(mechanicalElements: MechanicalElement[]): Mechanism {
   return {
     metadata: DEFAULT_METADATA,
     viewport: { scale: 1, pan: new Point2<"screen">(0, 0) },
+
+    simulation: DEFAULT_SIMULATION,
     mechanicalElements,
     constraintElements: [],
     loads: [],
@@ -252,7 +254,7 @@ describe("canonical_modes", () => {
     // n'y pilote rien. Ce double pendule motorisé a deux modes, le moteur n'en tient
     // qu'un.
     const [modes] = modes_of([
-      { ...pivot("p1", P(0, 0), true, [id("b1")]), motor: { speed: 10 } },
+      { ...pivot("p1", P(0, 0), true, [id("b1")]), motor: { speed: 10, torque: 1 } },
       pivot("p2", P(100, 0), false, [id("b1"), id("b2")]),
       beam("b1", P(0, 0), P(100, 0), "p1", "p2"),
       beam("b2", P(100, 0), P(100, 200), "p2"),
@@ -275,10 +277,10 @@ describe("canonical_modes", () => {
     // part dans le panneau, qui vient pourtant d'annoncer la chaîne sur-motorisée.
     const [{ chain, modes }] = analyse(
       mechanism([
-        { ...pivot("p1", P(0, 0), true, [id("b1")]), motor: { speed: 10 } },
+        { ...pivot("p1", P(0, 0), true, [id("b1")]), motor: { speed: 10, torque: 1 } },
         pivot("p2", P(0, 100), false, [id("b1"), id("b2")]),
         pivot("p3", P(200, 120), false, [id("b2"), id("b3")]),
-        { ...pivot("p4", P(200, 0), true, [id("b3")]), motor: { speed: 4 } },
+        { ...pivot("p4", P(200, 0), true, [id("b3")]), motor: { speed: 4, torque: 1 } },
         beam("b1", P(0, 0), P(0, 100), "p1", "p2"),
         beam("b2", P(0, 100), P(200, 120), "p2", "p3"),
         beam("b3", P(200, 120), P(200, 0), "p3", "p4"),
@@ -304,10 +306,10 @@ describe("canonical_modes", () => {
     // Un quatre-barres motorisé aux deux bâtis : une seule mobilité pour deux moteurs.
     const [{ chain, modes }] = analyse(
       mechanism([
-        { ...pivot("p1", P(0, 0), true, [id("b1")]), motor: { speed: 10 } },
+        { ...pivot("p1", P(0, 0), true, [id("b1")]), motor: { speed: 10, torque: 1 } },
         pivot("p2", P(0, 100), false, [id("b1"), id("b2")]),
         pivot("p3", P(200, 120), false, [id("b2"), id("b3")]),
-        { ...pivot("p4", P(200, 0), true, [id("b3")]), motor: { speed: 4 } },
+        { ...pivot("p4", P(200, 0), true, [id("b3")]), motor: { speed: 4, torque: 1 } },
         beam("b1", P(0, 0), P(0, 100), "p1", "p2"),
         beam("b2", P(0, 100), P(200, 120), "p2", "p3"),
         beam("b3", P(200, 120), P(200, 0), "p3", "p4"),

@@ -56,7 +56,7 @@ describe("animate_mode", () => {
     const animation = animate_mode(mechanism, model, chain, mode);
     let pose = mechanism;
     for (let i = 0; i < 12; i++) pose = animation.advance(DT);
-    expect(max_shift(mechanism, pose)).toBeGreaterThan(1);
+    expect(max_shift(mechanism, pose)).toBeGreaterThan(0.001);
   });
 
   it("ne touche jamais le mécanisme qu'on lui confie", () => {

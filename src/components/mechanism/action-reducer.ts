@@ -56,6 +56,9 @@ export function actionReducer(
   }));
   let loadElements = mechanism.loads.map((l) => ({ ...l })); // TODO : clone_load ?
   const viewport = { ...mechanism.viewport };
+  let floor = { ...mechanism.simulation.floor };
+  let gravity = mechanism.simulation.gravity;
+  let collisions = mechanism.simulation.collisions;
   let element: UnionElement;
   actions.forEach((action) => {
     switch (action.type) {
@@ -435,6 +438,24 @@ export function actionReducer(
         }
         break;
       }
+      case "SetFloorEnabled":
+        floor = { ...floor, enabled: action.enabled !== revert };
+        break;
+      case "ChangeFloorHeight":
+        floor = {
+          ...floor,
+          height: revert ? action.oldValue : action.newValue,
+        };
+        break;
+      case "ChangeFloorAngle":
+        floor = { ...floor, angle: revert ? action.oldValue : action.newValue };
+        break;
+      case "SetGravity":
+        gravity = action.enabled !== revert;
+        break;
+      case "SetCollisions":
+        collisions = action.enabled !== revert;
+        break;
       case "UpdatePositionsToValidState":
         let positions: Map<string, Point2>;
         let radii: Map<string, number>;
@@ -474,6 +495,7 @@ export function actionReducer(
   return {
     metadata: mechanism.metadata,
     viewport: viewport,
+    simulation: { ...mechanism.simulation, floor, gravity, collisions },
     mechanicalElements: mechanicalElements,
     constraintElements: constraintElements,
     loads: loadElements,

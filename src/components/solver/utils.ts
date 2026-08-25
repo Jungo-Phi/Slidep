@@ -51,7 +51,10 @@ export function keys_of(link: Link): string[] {
     case "DistanceToLine":
     case "SlideOnSegment":
     case "FixedOnSegment":
+    case "MinDistanceToSegment":
       return [link.key1, link.key2, link.key3];
+    case "MinDistanceToLine":
+      return [link.key1, link.key3];
     case "Angle":
     case "Normal":
     case "Parallel":

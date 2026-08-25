@@ -1,123 +1,13 @@
 /**
  * Runtime state types for slidep simulation
- * Replaces the previous simulation.ts with a more comprehensive structure
  */
 
 import { ID, LoadElement, MechanicalElement } from "./element";
-import { Point2 } from "./point2";
 
 /**
  * Simulation speed presets
  */
 export type SimulationSpeed = 0.1 | 0.25 | 0.5 | 1 | 2 | 4 | 10;
-
-// ─────────────────────────────────────────────────────────────
-// Physics state per element category
-// ─────────────────────────────────────────────────────────────
-
-export interface NodePhysics {
-  position: Point2;
-  velocity: Point2;
-  acceleration: Point2;
-  force: Point2; // resultant force applied
-  reactionForce: Point2; // reaction force (supports, joints)
-}
-
-export interface EdgePhysics {
-  axialForce: number; // normal effort
-  shearForce: number; // shear effort
-  bendingMoment: number; // bending moment
-  tension: number; // for springs/dampers
-}
-
-export interface GearPhysics {
-  angle: number;
-  angularVelocity: number;
-  angularAcceleration: number;
-  torque: number;
-}
-
-// ─────────────────────────────────────────────────────────────
-// Snapshot of the world at a given time
-// ─────────────────────────────────────────────────────────────
-
-export interface PhysicsSnapshot {
-  timestamp: number;
-  nodes: Map<ID, NodePhysics>;
-  edges: Map<ID, EdgePhysics>;
-  gears: Map<ID, GearPhysics>;
-}
-
-// ─────────────────────────────────────────────────────────────
-// Legacy types kept for compatibility (will be migrated)
-// ─────────────────────────────────────────────────────────────
-
-export type SimulationStatus = "stopped" | "running" | "paused";
-
-export interface ElementPhysicsState {
-  elementId: ID;
-  position: Point2;
-  velocity: Point2;
-  acceleration: Point2;
-  rotation: number;
-  angularVelocity: number;
-  angularAcceleration: number;
-}
-
-export interface ForceVector {
-  elementId: ID;
-  point: Point2;
-  magnitude: number;
-  direction: number;
-  type: "applied" | "reaction" | "internal";
-}
-
-export interface Moment {
-  elementId: ID;
-  point: Point2;
-  magnitude: number;
-  direction: "clockwise" | "counterClockwise";
-}
-
-export interface TrajectoryPoint {
-  elementId: ID;
-  position: Point2;
-  timestamp: number;
-}
-
-export interface BlockageInfo {
-  elementId: ID;
-  position: Point2;
-  reason: string;
-  severity: "warning" | "error";
-}
-
-export interface ConstraintDetail {
-  elementId: ID;
-  constraintType: string;
-  degreesRemoved: number;
-}
-
-export interface DegreesOfFreedom {
-  total: number;
-  translational: number;
-  rotational: number;
-  isOverConstrained: boolean;
-  isUnderConstrained: boolean;
-  constraintDetails: ConstraintDetail[];
-}
-
-export interface StaticAnalysisResult {
-  isStable: boolean;
-  forces: ForceVector[];
-  moments: Moment[];
-  reactions: ForceVector[];
-  degreesOfFreedom: DegreesOfFreedom;
-}
-
-// ─────────────────────────────────────────────────────────────
-// Kinematic snapshot: raw solver positions at a given pseudo-time
-// ─────────────────────────────────────────────────────────────
 
 /** A constraint the solver could not satisfy at this frame (e.g. a blocked
  *  mechanism). `residual` mixes px (distance) and rad (angle) — a rough
@@ -129,6 +19,41 @@ export interface ConstraintResidual {
   type: string;
   residual: number;
 }
+
+/**
+ * The force (or torque) a single constraint contributed at one of the solver keys it
+ * touches, accumulated over a dynamic frame's whole sweep — see `PBD_solve`'s
+ * `dynamics.reactions`.
+ *
+ * Two entries can share a `key` — the pivot a beam is grounded to and its gear mesh both
+ * report AT the same node — and are never summed automatically: a consumer after "the total
+ * reaction at this node" adds them itself, one after "just what the gear mesh contributes
+ * here" (a gear's mesh contact) tells them apart by `type`/`owner`.
+ *
+ * `key` may be a fused key (comma-joined, see `compile_simulation_model`'s coincidence
+ * fusion) when the dof it reports at is shared with another element — a consumer matching
+ * against one element's own key must check membership in `key.split(",")`, not equality.
+ */
+export type LinkReaction =
+  | {
+      type: string;
+      owner?: ID;
+      key: string;
+      /** Whether this dof was immovable in the solve (`w = 0`) — a support reaction
+       *  (against the ground) rather than an internal one (between two mobile parts). */
+      atAnchor: boolean;
+      kind: "force";
+      fx: number;
+      fy: number;
+    }
+  | {
+      type: string;
+      owner?: ID;
+      key: string;
+      atAnchor: boolean;
+      kind: "torque";
+      torque: number;
+    };
 
 /**
  * Which key sits at which slot of a snapshot's arrays. Held once per recording and shared
@@ -161,11 +86,24 @@ export interface SnapshotLayout {
   arrivalBase: number;
 }
 
-export interface KinematicSnapshot {
+/**
+ * A recorded instant, whatever solver produced it — kinematic or dynamic. Everything the
+ * timeline, the trajectories and the drawing need to read is here; only a caller that warm-
+ * starts the NEXT frame of a specific mode needs to know which concrete subtype it has.
+ */
+export interface SimulationSnapshot {
   t: number;
   layout: SnapshotLayout;
   /** x and y interleaved, 2 per `layout.keys` entry. NaN = no value at this instant. */
   positions: Float64Array;
+  /** Gear rotation angles (rad), one per `layout.angleKeys` entry. See the concrete
+   *  subtype for what (if anything) follows past that. */
+  angles: Float64Array;
+  /** Constraints left unsatisfied at this frame (empty/undefined when all met). */
+  unsatisfied?: ConstraintResidual[];
+}
+
+export interface KinematicSnapshot extends SimulationSnapshot {
   /**
    * Gear rotation angles (rad), then each belt's per-pulley continuous wrap angle — a
    * magnitude above 2π means the belt has wound onto that pulley — then a 1 per pulley that
@@ -174,8 +112,36 @@ export interface KinematicSnapshot {
    * `SnapshotLayout`.
    */
   angles: Float64Array;
-  /** Constraints left unsatisfied at this frame (empty/undefined when all met). */
+}
+
+/**
+ * A dynamic-mode instant: everything `SimulationSnapshot` carries, plus the velocity XPBD
+ * derives from the frame's whole displacement (see `PBD_solve`'s `dynamics` param) — a
+ * kinematic instant has no such thing, since motors drive position directly and nothing
+ * ever integrates a force. Kept as its own type rather than an optional field on
+ * `KinematicSnapshot`: a mode that never populates it would otherwise carry a dead
+ * zero-filled array across the worker boundary on every frame for nothing. The two are
+ * siblings under `SimulationSnapshot`, neither extending the other.
+ *
+ * Shares `layout` with `KinematicSnapshot` — same keys, same slots — so the two only differ
+ * in which extra arrays they carry.
+ */
+export interface DynamicSnapshot extends SimulationSnapshot {
+  /**
+   * Gear rotation angles (rad), one per `layout.angleKeys` entry — and nothing past it.
+   * Unlike `KinematicSnapshot.angles`, there is no belt-wrap/detach/arrival block: dynamic
+   * mode does not track belt contact (yet), so `layout.wrapBase` and beyond do not apply
+   * here.
+   */
+  angles: Float64Array;
+  /** vx and vy interleaved, 2 per `layout.keys` entry — same slotting as `positions`. */
+  velocities: Float64Array;
+  /** One per `layout.angleKeys` entry — same slotting as `angles`. */
+  angleVelocities: Float64Array;
   unsatisfied?: ConstraintResidual[];
+  /** Per-constraint reaction forces/torques this frame — see `LinkReaction`. Undefined when
+   *  not collected (the same optionality as `unsatisfied`). */
+  reactions?: LinkReaction[];
 }
 
 /**
@@ -204,17 +170,17 @@ export interface RuntimeState {
   time: number;
   speed: SimulationSpeed;
 
-  // Physics state at current time (null when not simulating)
-  current: PhysicsSnapshot | null;
-
-  // History for timeline (sampled, e.g. every 10ms)
-  history: PhysicsSnapshot[];
-
-  /** Recorded kinematic snapshots (incremental, sampled at 30 fps of sim-time) */
-  kinematicSnapshots: KinematicSnapshot[];
+  /**
+   * Recorded simulation snapshots (incremental, sampled at 30 fps of sim-time) — kinematic
+   * or dynamic depending on `appMode`, never a mix within one recording. Typed to the base
+   * so the timeline/drawing code that only reads `t`/`positions`/`angles` does not have to
+   * care which; a consumer that needs the concrete subtype (e.g. `apply_snapshot_to_mechanism`
+   * for a warm start) narrows it itself from `appMode`.
+   */
+  simulationSnapshots: SimulationSnapshot[];
 
   /** The motor/load configuration history, truncated and appended to in lockstep with
-   *  `kinematicSnapshots` — see `ParameterSnapshot`. */
+   *  `simulationSnapshots` — see `ParameterSnapshot`. */
   parameterSnapshots: ParameterSnapshot[];
 
   /**
@@ -237,8 +203,6 @@ export interface RuntimeState {
 export interface SimulationConfig {
   maxIterations: number;
   convergenceTolerance: number;
-  gravity: boolean;
-  collisions: boolean;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -248,17 +212,13 @@ export interface SimulationConfig {
 export const DEFAULT_SIMULATION_CONFIG: SimulationConfig = {
   maxIterations: 100,
   convergenceTolerance: 0.001,
-  gravity: true,
-  collisions: false,
 };
 
 export const DEFAULT_RUNTIME_STATE: RuntimeState = {
   isPlaying: false,
   time: 0,
   speed: 1,
-  current: null,
-  history: [],
-  kinematicSnapshots: [],
+  simulationSnapshots: [],
   parameterSnapshots: [],
   scrubbed: false,
 };

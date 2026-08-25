@@ -1,7 +1,45 @@
 import { Point2, ScreenPoint, ViewportState, WorldPoint, ZERO } from "../types";
 import { Bounds } from "./mechanism-bounds";
+import { MAX_GRID_SCALE, MIN_GRID_SCALE } from "./grid";
 
 const VIEWPORT_ZOOM_SENSITIVITY = 400; // Nombre de "crans" de molette nécessaires pour multiplier le zoom par 2
+
+/** Half-side of the square the viewport may pan within: a 1000 km world. */
+export const WORLD_FRAME_HALF_EXTENT = 500_000;
+
+export function clamp_scale(scale: number): number {
+  return Math.min(MAX_GRID_SCALE, Math.max(MIN_GRID_SCALE, scale));
+}
+
+/**
+ * Keeps one screen axis from panning the world frame's edge past the canvas's own — the
+ * mechanism stays reachable, never scrolled off into empty space it cannot be brought back
+ * from. Symmetric in `pan` because the frame is centred on the world origin: `x` and `y`
+ * (mirrored or not) clamp the same way.
+ *
+ * Once the frame is narrower than the canvas — zoomed out enough that the whole 1000 km
+ * square fits with room to spare — there is no useful position to pan to inside that slack,
+ * so it is centred instead of left wherever the last unclamped pan happened to leave it.
+ */
+function clamp_axis(pan: number, scale: number, viewportSize: number): number {
+  const frameSize = 2 * WORLD_FRAME_HALF_EXTENT * scale;
+  if (frameSize <= viewportSize) return viewportSize / 2;
+  const half = WORLD_FRAME_HALF_EXTENT * scale;
+  return Math.min(half, Math.max(viewportSize - half, pan));
+}
+
+/** `pan`, kept inside the world frame at `scale` for a `width` × `height` canvas. */
+export function clamp_pan(
+  pan: ScreenPoint,
+  scale: number,
+  width: number,
+  height: number,
+): ScreenPoint {
+  return new Point2(
+    clamp_axis(pan.x, scale, width),
+    clamp_axis(pan.y, scale, height),
+  ).as_space<"screen">();
+}
 
 export function screen2world(
   screenPos: ScreenPoint,
@@ -62,14 +100,33 @@ export function world2screen_angle(angle: number): number {
   return -angle;
 }
 
+/** The wheel delta that takes a viewport from `fromScale` to `toScale`, so a control aiming
+ *  at an exact scale goes through the same path as a gesture. */
+export function zoom_delta_to(fromScale: number, toScale: number): number {
+  return -VIEWPORT_ZOOM_SENSITIVITY * Math.log2(toScale / fromScale);
+}
+
+/**
+ * Zooms on `point`, clamped to the grid's own zoom range and the world frame.
+ *
+ * The scale is clamped first, and the pan that keeps `point` fixed is computed from that
+ * clamped scale rather than the raw one — so a scroll that would overshoot a bound instead
+ * eases to a stop at it: the ratio `clampedScale / oldScale` is 1 right at the bound, which
+ * leaves `pan` exactly where it was, rather than snapping to a value consistent with a scale
+ * the viewport never actually reached.
+ */
 export function zoom_on_point(
   deltaY: number,
   point: ScreenPoint,
   viewport: ViewportState,
+  width: number,
+  height: number,
 ): ViewportState {
-  const scale = viewport.scale * 2 ** (-deltaY / VIEWPORT_ZOOM_SENSITIVITY);
+  const scale = clamp_scale(
+    viewport.scale * 2 ** (-deltaY / VIEWPORT_ZOOM_SENSITIVITY),
+  );
   const pan = point.sub(point.sub(viewport.pan).mul(scale / viewport.scale));
-  return { pan, scale };
+  return { pan: clamp_pan(pan, scale, width, height), scale };
 }
 
 export interface FitViewportOptions {

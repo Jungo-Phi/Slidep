@@ -37,9 +37,18 @@ import {
   ZERO,
 } from "../../types";
 import { CanvasState } from "../../types/canvas-state";
-import { ConstraintResidual, RuntimeState } from "../../types/runtime-state";
-import { get_probe_series } from "../solver/probe-series";
-import { at_recording_end } from "../solver/kinematic-simulation";
+import {
+  ConstraintResidual,
+  DynamicSnapshot,
+  KinematicSnapshot,
+  RuntimeState,
+} from "../../types/runtime-state";
+import {
+  get_dynamic_probe_series,
+  get_probe_series,
+  is_vector_metric,
+} from "../solver/probe-series";
+import { at_recording_end } from "../solver/simulation-engine";
 import {
   PROBE_METRIC_LABEL_KEYS,
   PROBE_METRIC_ORDER,
@@ -73,6 +82,7 @@ import { undriven_motors } from "../solver/motion-modes";
 import { ChainAnalysis, useDofAnalysis } from "./useDofAnalysis";
 import { ddl_status } from "./ddl-status";
 import { AnimatedMode, useModeAnimation } from "./useModeAnimation";
+import { ANGULAR_VELOCITY, LENGTH, format_quantity } from "../../utils/quantity-format";
 
 interface AnalysisPanelProps {
   mechanism: Mechanism;
@@ -184,7 +194,8 @@ const MotorSpeed: React.FC<{
   const config = element.motor;
   return (
     <SignedNumberInput
-      label={t("unit_rpm")}
+      label={t("motor_speed_label")}
+      kind={ANGULAR_VELOCITY()}
       value={(displayConfig ?? config).speed}
       onChange={(speed) =>
         applyActions(
@@ -696,12 +707,20 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
       time: t,
       isPlaying: false,
       // Landing on the end is not scrubbing: playing from there records on.
-      scrubbed: !at_recording_end(prev.kinematicSnapshots, t),
+      scrubbed: !at_recording_end(prev.simulationSnapshots, t),
     }));
+
+  const isReactionMetric = (metric: ProbeMetric): boolean =>
+    metric === "force" ||
+    metric === "force-start" ||
+    metric === "force-end" ||
+    metric === "moment" ||
+    metric === "moment-start" ||
+    metric === "moment-end";
 
   const chart_empty_message = (metric: ProbeMetric): string =>
     t(
-      metric === "force"
+      appMode === "kinematic" && isReactionMetric(metric)
         ? "chart_force_kinematic"
         : appMode === "edition"
           ? "chart_run_simulation"
@@ -849,6 +868,7 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
             <ElementMeasures
               element={selectedElement}
               runtimeState={runtimeState}
+              appMode={appMode}
               reserveHeight
             />
           </Box>
@@ -976,7 +996,7 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
                               {CONSTRAINT_NOUN[constraint.type]
                                 ? t(CONSTRAINT_NOUN[constraint.type])
                                 : constraint.type}{" "}
-                              {`e = ${constraint.residual.toFixed(2)} mm`}
+                              {`e = ${format_quantity(constraint.residual, LENGTH)}`}
                             </Typography>
                           </>
                         }
@@ -1070,14 +1090,19 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
               />
 
               {element.probes.map((probe) => {
-                const series = get_probe_series(
-                  element,
-                  probe.metric,
-                  runtimeState.kinematicSnapshots,
-                );
-                const isVector =
-                  probe.metric !== "angle" &&
-                  probe.metric !== "angular-velocity";
+                const series =
+                  appMode === "kinematic"
+                    ? get_probe_series(
+                        element,
+                        probe.metric,
+                        runtimeState.simulationSnapshots as KinematicSnapshot[],
+                      )
+                    : get_dynamic_probe_series(
+                        element,
+                        probe.metric,
+                        runtimeState.simulationSnapshots as DynamicSnapshot[],
+                      );
+                const isVector = is_vector_metric(probe.metric);
                 const curves: ChartCurve[] = series.curves
                   .filter((c) =>
                     isVector
@@ -1215,15 +1240,21 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
             const contributors = probedElements.filter((el) =>
               el.probes.some((p) => p.metric === metric),
             );
-            const isVector =
-              metric !== "angle" && metric !== "angular-velocity";
+            const isVector = is_vector_metric(metric);
             let unit = "";
             const curves: ChartCurve[] = contributors.flatMap((el) => {
-              const series = get_probe_series(
-                el,
-                metric,
-                runtimeState.kinematicSnapshots,
-              );
+              const series =
+                appMode === "kinematic"
+                  ? get_probe_series(
+                      el,
+                      metric,
+                      runtimeState.simulationSnapshots as KinematicSnapshot[],
+                    )
+                  : get_dynamic_probe_series(
+                      el,
+                      metric,
+                      runtimeState.simulationSnapshots as DynamicSnapshot[],
+                    );
               unit = series.unit;
               const curve = series.curves.find(
                 (c) => c.key === (isVector ? "norm" : "value"),

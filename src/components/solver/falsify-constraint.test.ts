@@ -29,7 +29,7 @@ import {
   PivotElement,
   Point2,
 } from "../../types";
-import { DEFAULT_METADATA } from "../../types/mechanism";
+import { DEFAULT_METADATA, DEFAULT_SIMULATION } from "../../types/mechanism";
 import { load_mechanism } from "../../utils/load-mechanism";
 import {
   AnalysisChain,
@@ -54,6 +54,8 @@ function mechanism(mechanicalElements: MechanicalElement[]): Mechanism {
   return {
     metadata: DEFAULT_METADATA,
     viewport: { scale: 1, pan: new Point2<"screen">(0, 0) },
+
+    simulation: DEFAULT_SIMULATION,
     mechanicalElements,
     constraintElements: [],
     loads: [],
@@ -100,7 +102,7 @@ function beam(
 /** Sizes of lie tried, as a share of the chain's extent. Floored past the 1 mm reporting mark. */
 const BIG_LIE = 0.05;
 const SMALL_LIE = 0.002;
-const MIN_LIE_MM = 3;
+const MIN_LIE_M = 0.003; // 3 mm, in metres
 const SWEEPS = 3000;
 
 /** Above this share of the lie, the mechanism is judged to have refused it. */
@@ -120,8 +122,8 @@ function resistance(
   link: Link,
   ratio: number,
 ): number {
-  const extent = chain_extent(model, chain) || 1;
-  const lie = Math.max(ratio * extent, MIN_LIE_MM);
+  const extent = chain_extent(model, chain) || 0.001;
+  const lie = Math.max(ratio * extent, MIN_LIE_M);
   const lied = falsify(link, lie, constraint_lever(model, link, extent));
   if (!lied) return NaN;
 

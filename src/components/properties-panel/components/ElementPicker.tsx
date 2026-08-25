@@ -14,24 +14,30 @@ interface ExtraOption {
 const ExtraOptionLabel: React.FC<{
   icon: React.ElementType;
   label: string;
-}> = ({ icon: Icon, label }) => (
-  <Box sx={{ display: "flex", alignItems: "center", p: "4px" }}>
+  large?: boolean;
+}> = ({ icon: Icon, label, large }) => (
+  <Box sx={{ display: "flex", alignItems: "center", p: large ? "5px" : "4px" }}>
     <Box
       sx={{
         display: "flex",
         alignItems: "center",
-        gap: 0,
-        m: "-4px",
+        gap: large ? "2px" : "1px",
+        m: "-5px",
         pl: 0.25,
         pr: 0.75,
       }}
     >
       <Icon
-        sx={{ margin: "2px", width: 20, height: 20, color: "text.primary" }}
+        sx={{
+          margin: "1px",
+          width: large ? 28 : 24,
+          height: large ? 28 : 24,
+          color: "text.primary",
+        }}
       />
       <Typography
         sx={{
-          fontSize: "0.75rem",
+          fontSize: large ? "0.85rem" : "0.75rem",
           fontWeight: 500,
           color: "text.primary",
           lineHeight: 1.5,
@@ -58,6 +64,7 @@ interface ElementPickerProps<T extends UnionElement> {
   selectedIds: ID[];
   setCanvasState: (state: CanvasState) => void;
   applyActions: (actions: Action[]) => void;
+  large?: boolean;
 }
 
 /**
@@ -79,6 +86,7 @@ export function ElementPicker<T extends UnionElement>({
   selectedIds,
   setCanvasState,
   applyActions,
+  large = undefined,
 }: ElementPickerProps<T>) {
   const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
 
@@ -89,7 +97,13 @@ export function ElementPicker<T extends UnionElement>({
   };
 
   return (
-    <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+    <Box
+      sx={{
+        display: "flex",
+        alignItems: "center",
+        gap: 0.5,
+      }}
+    >
       <Tooltip title={label} disableInteractive>
         <Box
           onClick={(e) => setAnchorEl(e.currentTarget)}
@@ -100,6 +114,8 @@ export function ElementPicker<T extends UnionElement>({
             alignItems: "center",
             cursor: "pointer",
             borderRadius: 3,
+            border: 1,
+            borderColor: "divider",
             "&:hover": { backgroundColor: "action.hover" },
           }}
         >
@@ -111,7 +127,7 @@ export function ElementPicker<T extends UnionElement>({
               selectedIds={selectedIds}
               setCanvasState={setCanvasState}
               applyActions={applyActions}
-              size="small"
+              size={large ? "medium" : "small"}
               editable={false}
               interactive={false}
               cursor="pointer"
@@ -121,6 +137,7 @@ export function ElementPicker<T extends UnionElement>({
               <ExtraOptionLabel
                 icon={extraOption.icon}
                 label={extraOption.label}
+                large={large}
               />
             )
           )}
@@ -141,6 +158,7 @@ export function ElementPicker<T extends UnionElement>({
             <ExtraOptionLabel
               icon={extraOption.icon}
               label={extraOption.label}
+              large={large}
             />
           </MenuItem>
         )}
@@ -160,7 +178,7 @@ export function ElementPicker<T extends UnionElement>({
               selectedIds={selectedIds}
               setCanvasState={setCanvasState}
               applyActions={applyActions}
-              size="small"
+              size={large ? "medium" : "small"}
               editable={false}
               interactive={false}
               cursor="pointer"

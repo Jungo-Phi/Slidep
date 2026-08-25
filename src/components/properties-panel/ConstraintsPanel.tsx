@@ -18,6 +18,7 @@ import {
 } from "../canvas/utils";
 import { sorted_constraints_for_display } from "./element-order";
 import { t } from "../../i18n";
+import { ANGLE, LENGTH } from "../../utils/quantity-format";
 
 interface ConstraintsPanelProps {
   hoveredPart: HoveredPart;
@@ -79,9 +80,22 @@ export const ConstraintsPanel: React.FC<ConstraintsPanelProps> = ({
                   case "dimension-edge-to-node":
                   case "dimension-angle":
                   case "dimension-radius":
-                  case "dimension-belt":
+                  case "dimension-belt": {
+                    const isAngle = constraint.type === "dimension-angle";
+
+                    let label = t("distance");
+                    if (constraint.type === "dimension-angle")
+                      label = t("angle");
+                    if (constraint.type === "dimension-radius")
+                      label = t("radius");
+                    if (
+                      constraint.type === "dimension-edge" ||
+                      constraint.type === "dimension-belt"
+                    )
+                      label = t("length");
                     return (
                       <NumberInput
+                        label={label}
                         value={constraint.value}
                         onChange={(value: number) =>
                           applyActions([
@@ -93,15 +107,11 @@ export const ConstraintsPanel: React.FC<ConstraintsPanelProps> = ({
                             },
                           ])
                         }
-                        label=""
-                        suffix={
-                          constraint.type === "dimension-angle"
-                            ? "°"
-                            : undefined
-                        }
+                        kind={isAngle ? ANGLE : LENGTH}
                         unsigned
                       />
                     );
+                  }
                   case "gear-ratio":
                     return (
                       <RatioInput

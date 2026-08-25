@@ -7,7 +7,7 @@ import { load_mechanism } from "../../utils/load-mechanism";
 import {
   compile_simulation_model,
   step_simulation,
-} from "./kinematic-simulation";
+} from "./simulation-engine";
 import { snapshot_angle } from "./snapshot";
 
 /**

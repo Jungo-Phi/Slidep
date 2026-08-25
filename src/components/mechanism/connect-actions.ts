@@ -14,7 +14,7 @@ import type {
 } from "../../types/element";
 import { Action, ConnectsActionType } from "../../types";
 import { Point2 } from "../../types/point2";
-import { HoveredPart } from "../../types/hovered-part";
+import { HoveredPart, names_element } from "../../types/hovered-part";
 import { connected_constraints, node_on_beam_body } from "../canvas/utils";
 import { belt_wrap_direction, get_belt_path, legible_id } from "../../utils";
 import type { BeltGearApproach } from "../../utils";
@@ -788,9 +788,9 @@ export function start_simulation(
       }
     },
     holds(part) {
-      // A closure names no element, so there is nothing to vouch for. Callers
-      // that accept one must say so themselves.
-      if (part.type === "Void" || part.type === "BeltClosure") return false;
+      // A closure or a floor handle names no element, so there is nothing to vouch for.
+      // Callers that accept one must say so themselves.
+      if (!names_element(part)) return false;
       return (
         simMech.some((e) => e.id === part.id) ||
         simConst.some((e) => e.id === part.id) ||
@@ -1429,9 +1429,15 @@ export function connect_elements(
   if (
     hoveredPart.type === "Void" ||
     hoveredPart.type === "Constraint" ||
+    hoveredPart.type === "FloorHeight" ||
+    hoveredPart.type === "FloorAngle" ||
+    hoveredPart.type === "FloorAngleValue" ||
     selectedPart.type === "Void" ||
     selectedPart.type === "Constraint" ||
-    selectedPart.type === "BeltClosure"
+    selectedPart.type === "BeltClosure" ||
+    selectedPart.type === "FloorHeight" ||
+    selectedPart.type === "FloorAngle" ||
+    selectedPart.type === "FloorAngleValue"
   ) {
     return [];
   }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { apply_actions } from "./apply-actions";
 import { Point2, ZERO } from "../../types/point2";
-import { DEFAULT_METADATA, Mechanism } from "../../types/mechanism";
+import { DEFAULT_METADATA, DEFAULT_SIMULATION, Mechanism } from "../../types/mechanism";
 import type { ID, MassElement, PivotElement } from "../../types";
 
 const id = (n: number): ID =>
@@ -13,6 +13,7 @@ const NODE = id(2);
 const mechanism = (): Mechanism => ({
   metadata: DEFAULT_METADATA,
   viewport: { scale: 1, pan: ZERO },
+  simulation: DEFAULT_SIMULATION,
   mechanicalElements: [
     {
       type: "mass",

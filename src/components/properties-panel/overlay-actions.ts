@@ -1,10 +1,15 @@
 import { Action, MechanicalElement, OverlayKind } from "../../types";
-import { available_overlays, overlay_shown } from "../../utils/element-queries";
-import { StringKey } from "../../i18n";
+import {
+  available_overlays,
+  is_node_element,
+  overlay_shown,
+} from "../../utils/element-queries";
+import { PluralKey } from "../../i18n";
 
-/** Human label of each overlay layer (full wording — the "Afficher" menu has
- *  the room an icon doesn't). */
-export const OVERLAY_LABEL_KEYS: Record<OverlayKind, StringKey> = {
+/** Human label of each overlay layer, singular or plural depending on how many
+ *  elements it's said of — see `tn` (the "Afficher" menu says it of several
+ *  elements at once, a single element's own panel switch says it of just itself). */
+export const OVERLAY_LABEL_KEYS: Record<OverlayKind, PluralKey> = {
   trajectory: "overlay_trajectory",
   force: "overlay_force",
   velocity: "overlay_velocity",
@@ -17,6 +22,34 @@ export function overlay_targets(
   kind: OverlayKind,
 ): MechanicalElement[] {
   return elements.filter((el) => available_overlays(el).includes(kind));
+}
+
+/**
+ * How many distinct `kind` quantities `el` actually carries — the number `tn`
+ * needs to pick singular or plural for `OVERLAY_LABEL_KEYS[kind]`, which is not
+ * always one-per-element: a member's "force" is a reaction at each of its two
+ * ends (a node's is the single reaction at its one point), and a member's
+ * "stress" is never just one figure (axial, shear, bending), so it stays
+ * plural regardless of how many members are in play.
+ */
+function overlay_label_weight(el: MechanicalElement, kind: OverlayKind): number {
+  switch (kind) {
+    case "trajectory":
+    case "velocity":
+      return 1;
+    case "force":
+      return is_node_element(el) ? 1 : 2;
+    case "stress":
+      return 2;
+  }
+}
+
+/** Summed `overlay_label_weight` across `elements` — pass straight to `tn`. */
+export function overlay_label_count(
+  elements: MechanicalElement[],
+  kind: OverlayKind,
+): number {
+  return elements.reduce((sum, el) => sum + overlay_label_weight(el, kind), 0);
 }
 
 /** How many of the applicable elements currently show `kind`, out of how many. */

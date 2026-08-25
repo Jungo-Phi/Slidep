@@ -1,4 +1,3 @@
-import { DIM } from "../constants/rendering-specs";
 import {
   ConstraintElement,
   EdgeElement,
@@ -47,7 +46,7 @@ export function mechanism_bounds(
   for (const element of mechanicalElements) {
     if (element.type === "gear") {
       const gear = element as GearElement;
-      include(gear.position, gear.radius + DIM.GEAR_TEETH_SIZE);
+      include(gear.position, gear.radius);
     } else if ("position" in element) {
       include((element as NodeElement).position);
     } else if ("positionStart" in element) {

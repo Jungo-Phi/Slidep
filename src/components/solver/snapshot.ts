@@ -1,6 +1,11 @@
 import { ID } from "../../types/element";
 import { Point2 } from "../../types/point2";
-import { KinematicSnapshot, SnapshotLayout } from "../../types/runtime-state";
+import {
+  DynamicSnapshot,
+  KinematicSnapshot,
+  SimulationSnapshot,
+  SnapshotLayout,
+} from "../../types/runtime-state";
 
 /**
  * Reading a snapshot: it holds raw numbers, and the layout says which key sits where.
@@ -133,8 +138,15 @@ export function snapshot_belt_detached(
 }
 
 /** The position recorded for `key`, or `undefined` when this snapshot has none. */
-export function snapshot_point(
-  snapshot: KinematicSnapshot,
+/**
+ * Generic over `SimulationSnapshot`: `positions` is always exactly `2 * layout.keys.length`
+ * long on either concrete subtype, so a position slot is never out of bounds whichever kind
+ * this is called with. Kinematic-only accessors (the belt ones below) do NOT get the same
+ * treatment — they index past that bound on purpose, which only a `KinematicSnapshot`'s
+ * longer `angles` array has room for.
+ */
+export function snapshot_point<S extends SimulationSnapshot>(
+  snapshot: S,
   key: string,
 ): Point2 | undefined {
   const i = snapshot.layout.index.get(key);
@@ -143,13 +155,39 @@ export function snapshot_point(
   return Number.isNaN(x) ? undefined : new Point2(x, snapshot.positions[2 * i + 1]);
 }
 
-/** The angle (rad) recorded for `key`, or `undefined` when this snapshot has none. */
-export function snapshot_angle(
-  snapshot: KinematicSnapshot,
+/** The angle (rad) recorded for `key`, or `undefined` when this snapshot has none. Generic
+ *  like `snapshot_point`, for the same reason — an angle slot never exceeds
+ *  `layout.angleKeys.length`, which both concrete subtypes size their `angles` array to (or
+ *  beyond, for `KinematicSnapshot`'s belt blocks — never under). */
+export function snapshot_angle<S extends SimulationSnapshot>(
+  snapshot: S,
   key: string,
 ): number | undefined {
   const i = snapshot.layout.angleIndex.get(key);
   if (i === undefined) return undefined;
   const a = snapshot.angles[i];
   return Number.isNaN(a) ? undefined : a;
+}
+
+/** The velocity recorded for `key` in a dynamic-mode snapshot — see `snapshot_point`. */
+export function snapshot_velocity(
+  snapshot: DynamicSnapshot,
+  key: string,
+): Point2 | undefined {
+  const i = snapshot.layout.index.get(key);
+  if (i === undefined) return undefined;
+  const x = snapshot.velocities[2 * i];
+  return Number.isNaN(x) ? undefined : new Point2(x, snapshot.velocities[2 * i + 1]);
+}
+
+/** The angular velocity (rad/s) recorded for `key` in a dynamic-mode snapshot — see
+ *  `snapshot_angle`. */
+export function snapshot_angle_velocity(
+  snapshot: DynamicSnapshot,
+  key: string,
+): number | undefined {
+  const i = snapshot.layout.angleIndex.get(key);
+  if (i === undefined) return undefined;
+  const v = snapshot.angleVelocities[i];
+  return Number.isNaN(v) ? undefined : v;
 }

@@ -4,6 +4,7 @@ import {
   RotateRight as RotateRightIcon,
 } from "@mui/icons-material";
 import NumberInput from "./NumberInput";
+import { QuantityKind } from "../../../utils/quantity-format";
 
 interface SignedNumberInputProps {
   label: string;
@@ -11,9 +12,9 @@ interface SignedNumberInputProps {
   value: number;
   onChange: (value: number) => void;
   step?: number;
-  suffix?: string;
   large?: boolean;
   accent?: boolean;
+  kind?: QuantityKind;
 }
 
 /**
@@ -27,9 +28,9 @@ export const SignedNumberInput: React.FC<SignedNumberInputProps> = ({
   value,
   onChange,
   step,
-  suffix,
   large = false,
   accent = false,
+  kind,
 }) => {
   const clockwise = value >= 0;
   const DirectionIcon = clockwise ? RotateRightIcon : RotateLeftIcon;
@@ -50,9 +51,9 @@ export const SignedNumberInput: React.FC<SignedNumberInputProps> = ({
       value={Math.abs(value)}
       onChange={handleChange}
       step={step}
-      suffix={suffix}
       large={large}
       accent={accent}
+      kind={kind}
       pillAdornment
       adornment={{
         icon: DirectionIcon,

@@ -206,6 +206,11 @@ function merge_value_edit(lastAction: Action, newAction: Action): void {
       if (newAction.type !== lastAction.type) break;
       lastAction.newValue = newAction.newValue;
       break;
+    case "ChangeFloorHeight":
+    case "ChangeFloorAngle":
+      if (newAction.type !== lastAction.type) break;
+      lastAction.newValue = newAction.newValue;
+      break;
   }
 }
 
@@ -262,9 +267,14 @@ function merge_solved_edit(
   }
 }
 
-/** Whether two actions share an `id` — the mechanism-1 types all carry one. */
+/**
+ * Whether two actions share an `id` — every mechanism-1 type carries one except the
+ * floor's, which needs none: there is only ever one floor, so two id-less actions of
+ * the same type (already checked by the caller) are always about it.
+ */
 function same_id(a: Action, b: Action): boolean {
-  return "id" in a && "id" in b && a.id === b.id;
+  if ("id" in a && "id" in b) return a.id === b.id;
+  return !("id" in a) && !("id" in b);
 }
 
 export function apply_actions(mechanism: Mechanism, actions: Action[]): Mechanism {
@@ -389,6 +399,7 @@ export function apply_actions(mechanism: Mechanism, actions: Action[]): Mechanis
     constraintElements: [...mechanism.constraintElements],
     loads: [...mechanism.loads],
     viewport: { ...mechanism.viewport },
+    simulation: mechanism.simulation,
     metadata: { ...mechanism.metadata },
   };
   const result = actionReducer(newMechanism, newActions, false);

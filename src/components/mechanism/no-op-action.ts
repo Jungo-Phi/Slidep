@@ -54,6 +54,9 @@ export function is_noop_action(action: Action): boolean {
       return action.newValue === action.oldValue;
     case "SetShowOverlay":
       return action.newValue === action.oldValue;
+    case "ChangeFloorHeight":
+    case "ChangeFloorAngle":
+      return action.newValue === action.oldValue;
     default:
       return false;
   }

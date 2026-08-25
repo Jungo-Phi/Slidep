@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT } from "../constants/physics-specs";
+import { DEFAULT_SIMULATION } from "../types";
 import {
   CURRENT_FORMAT_VERSION,
   MIGRATION_STEPS,
@@ -75,8 +76,12 @@ describe("migrate_document", () => {
     expect(beam).toMatchObject({ tight: true });
   });
 
+  // Called directly rather than through `migrate_document`, for the same reason as the
+  // undo-stack tests further down: a document this old also crosses the v5 step, which
+  // drops the stack for an unrelated reason and would leave nothing here to assert on.
   it("renames the flag in the undo stack too", () => {
-    const result = migrate_document(
+    const step = MIGRATION_STEPS.find((s) => s.to === 2)!;
+    const result = step.apply(
       doc({
         formatVersion: 1,
         history: [
@@ -153,8 +158,12 @@ describe("migrate_document", () => {
     expect(result.mechanicalElements[0]).toMatchObject({ linearMass: 42 });
   });
 
+  // Called directly rather than through `migrate_document`: a document this old also
+  // crosses the v5 step, which drops the stack for an unrelated reason (see below) and
+  // would leave nothing here to assert on.
   it("fills in the same defaults for an element carried by the undo stack", () => {
-    const result = migrate_document(
+    const step = MIGRATION_STEPS.find((s) => s.to === 3)!;
+    const result = step.apply(
       doc({
         formatVersion: 2,
         history: [
@@ -181,6 +190,249 @@ describe("migrate_document", () => {
         },
       ],
     ]);
+  });
+
+  it("fills in a motor's torque limit, absent from motors saved before it existed", () => {
+    const result = migrate_document(
+      doc({
+        formatVersion: 3,
+        mechanicalElements: [
+          { type: "pivot", id: "p1", motor: { speed: 10 } },
+          { type: "pivot", id: "p2" },
+        ],
+      }),
+    );
+    expect(result.mechanicalElements).toMatchObject([
+      // Also rescaled tr/min → rad/s on the way to the current version — not what this
+      // test is about, but unavoidable since it migrates from v3 all the way up.
+      { motor: { speed: (10 * 2 * Math.PI) / 60, torque: DEFAULT.MOTOR_TORQUE } },
+      {},
+    ]);
+    // A motorless pivot gets no `motor` field conjured up.
+    expect("motor" in (result.mechanicalElements[1] as object)).toBe(false);
+  });
+
+  it("does not override a motor torque already present", () => {
+    const result = migrate_document(
+      doc({
+        formatVersion: 3,
+        mechanicalElements: [
+          { type: "pivot", id: "p1", motor: { speed: 10, torque: 42 } },
+        ],
+      }),
+    );
+    expect(result.mechanicalElements[0]).toMatchObject({
+      motor: { torque: 42 },
+    });
+  });
+
+  // Called directly rather than through `migrate_document`, for the same reason as above.
+  it("fills in the motor default for a pivot carried by the undo stack", () => {
+    const step = MIGRATION_STEPS.find((s) => s.to === 4)!;
+    const result = step.apply(
+      doc({
+        formatVersion: 3,
+        history: [
+          [
+            {
+              type: "CreateElement",
+              element: { type: "pivot", id: "p1", motor: { speed: 10 } },
+            },
+          ],
+        ],
+      }),
+    );
+    expect(result.history).toEqual([
+      [
+        {
+          type: "CreateElement",
+          element: {
+            type: "pivot",
+            id: "p1",
+            motor: { speed: 10, torque: DEFAULT.MOTOR_TORQUE },
+          },
+        },
+      ],
+    ]);
+  });
+
+  // Called directly rather than through `migrate_document`, for the same reason as above.
+  it("fills in the motor default for a bare MotorConfig carried by SetMotorConfig", () => {
+    const step = MIGRATION_STEPS.find((s) => s.to === 4)!;
+    const result = step.apply(
+      doc({
+        formatVersion: 3,
+        history: [
+          [
+            {
+              type: "SetMotorConfig",
+              id: "p1",
+              newConfig: { speed: 10 },
+              oldConfig: undefined,
+            },
+          ],
+        ],
+      }),
+    );
+    expect(result.history).toEqual([
+      [
+        {
+          type: "SetMotorConfig",
+          id: "p1",
+          newConfig: { speed: 10, torque: DEFAULT.MOTOR_TORQUE },
+          oldConfig: undefined,
+        },
+      ],
+    ]);
+  });
+
+  it("rescales stored distances from the old millimetre-flavoured convention to metres", () => {
+    const result = migrate_document(
+      doc({
+        formatVersion: 4,
+        mechanicalElements: [
+          { type: "pivot", id: "p1", position: { x: 1000, y: -2000 } },
+          {
+            type: "beam",
+            id: "b1",
+            positionStart: { x: 0, y: 0 },
+            positionEnd: { x: 400, y: 0 },
+          },
+          { type: "gear", id: "g1", radius: 40 },
+          { type: "spring", id: "s1", restLength: 100 },
+        ],
+        constraintElements: [
+          {
+            type: "dimension-edge",
+            id: "d1",
+            position: { x: 10, y: 10 },
+            value: 400,
+          },
+          { type: "dimension-angle", id: "d2", position: { x: 0, y: 0 }, value: 1.2 },
+          { type: "gear-ratio", id: "d3", position: { x: 0, y: 0 }, value: 2.5 },
+        ],
+        viewport: { scale: 2, pan: { x: 100, y: 50 } },
+      }),
+    );
+    expect(result.mechanicalElements).toMatchObject([
+      { position: { x: 1, y: -2 } },
+      { positionStart: { x: 0, y: 0 }, positionEnd: { x: 0.4, y: 0 } },
+      { radius: 0.04 },
+      { restLength: 0.1 },
+    ]);
+    expect(result.constraintElements).toMatchObject([
+      { position: { x: 0.01, y: 0.01 }, value: 0.4 },
+      // Not a length, so untouched by this step — but also rescaled degrees → radians on
+      // the way to the current version by the v7 step below.
+      { value: 1.2 * (Math.PI / 180) },
+      // A gear ratio is dimensionless: untouched by either step.
+      { value: 2.5 },
+    ]);
+    // The viewport's scale grows by the same factor a distance shrinks by, so
+    // the same screen position still shows the same view.
+    expect(result.viewport).toMatchObject({ scale: 2000, pan: { x: 100, y: 50 } });
+  });
+
+  it("drops the undo stack when rescaling, rather than guess at every action's shape", () => {
+    const result = migrate_document(
+      doc({
+        formatVersion: 4,
+        history: [[{ type: "MoveNode", id: "n1" }]],
+        future: [[{ type: "MoveNode", id: "n1" }]],
+      }),
+    );
+    expect(result.history).toEqual([]);
+    expect(result.future).toEqual([]);
+  });
+
+  it("rescales a motor's speed from tr/min to rad/s", () => {
+    const result = migrate_document(
+      doc({
+        formatVersion: 5,
+        mechanicalElements: [
+          { type: "pivot", id: "p1", motor: { speed: 60, torque: 1 } },
+        ],
+      }),
+    );
+    expect(result.mechanicalElements).toMatchObject([
+      { motor: { speed: 2 * Math.PI, torque: 1 } },
+    ]);
+  });
+
+  // Called directly rather than through `migrate_document`, for the same reason as the
+  // torque-default step above: `SetMotorConfig` carries a `MotorConfig` outside any element.
+  it("rescales a motor's speed carried by SetMotorConfig", () => {
+    const step = MIGRATION_STEPS.find((s) => s.to === 6)!;
+    const result = step.apply(
+      doc({
+        formatVersion: 5,
+        history: [
+          [
+            {
+              type: "SetMotorConfig",
+              id: "p1",
+              newConfig: { speed: 60, torque: 1 },
+              oldConfig: undefined,
+            },
+          ],
+        ],
+      }),
+    );
+    expect(result.history).toEqual([
+      [
+        {
+          type: "SetMotorConfig",
+          id: "p1",
+          newConfig: { speed: 2 * Math.PI, torque: 1 },
+          oldConfig: undefined,
+        },
+      ],
+    ]);
+  });
+
+  it("rescales a dimension-angle's value from degrees to radians", () => {
+    const result = migrate_document(
+      doc({
+        formatVersion: 6,
+        constraintElements: [
+          { type: "dimension-angle", id: "d1", value: 90 },
+          { type: "dimension-radius", id: "d2", value: 40 },
+        ],
+      }),
+    );
+    expect(result.constraintElements).toMatchObject([
+      { value: Math.PI / 2 },
+      { value: 40 },
+    ]);
+  });
+
+  it("drops the undo stack when rescaling a dimension-angle, rather than guess which action carried one", () => {
+    const result = migrate_document(
+      doc({
+        formatVersion: 6,
+        history: [
+          [{ type: "ChangeDimensionEdgeValue", id: "d1", newValue: 90, oldValue: 0 }],
+        ],
+        future: [[{ type: "ChangeDimensionEdgeValue", id: "d1", newValue: 90, oldValue: 0 }]],
+      }),
+    );
+    expect(result.history).toEqual([]);
+    expect(result.future).toEqual([]);
+  });
+
+  it("defaults gravity/collisions/floor for a document saved before they existed", () => {
+    const result = migrate_document(doc({ formatVersion: 7 }));
+    expect(result.simulation).toEqual(DEFAULT_SIMULATION);
+  });
+
+  it("leaves an existing simulation setting untouched", () => {
+    const simulation = {
+      gravity: false,
+      collisions: true,
+      floor: { enabled: true, height: 3, angle: 0.5 },
+    };
+    const result = migrate_document(doc({ formatVersion: 7, simulation }));
+    expect(result.simulation).toEqual(simulation);
   });
 
   it("refuses a document from a newer format", () => {

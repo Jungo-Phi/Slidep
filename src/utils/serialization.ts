@@ -2,6 +2,7 @@ import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
 import {
   Action,
   ConstraintElement,
+  DEFAULT_SIMULATION,
   LoadElement,
   MechanicalElement,
   Mechanism,
@@ -295,6 +296,7 @@ export function serialize_mechanism(mechanism: Mechanism): SerializedMechanism {
     formatVersion: CURRENT_FORMAT_VERSION,
     metadata: { ...mechanism.metadata },
     viewport: serialize_viewport(mechanism.viewport),
+    simulation: { ...mechanism.simulation, floor: { ...mechanism.simulation.floor } },
     mechanicalElements: mechanism.mechanicalElements.map(
       serialize_mechanical_element,
     ),
@@ -317,6 +319,7 @@ export function deserialize_mechanism(
   return {
     metadata: { ...serializedMechanism.metadata },
     viewport: deserialize_viewport(serializedMechanism.viewport),
+    simulation: serializedMechanism.simulation ?? DEFAULT_SIMULATION,
     mechanicalElements: serializedMechanism.mechanicalElements.map(
       deserialize_mechanical_element,
     ),

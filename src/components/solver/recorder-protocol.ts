@@ -1,7 +1,11 @@
 import { Point2 } from "../../types/point2";
-import { KinematicSnapshot } from "../../types/runtime-state";
+import {
+  DynamicSnapshot,
+  KinematicSnapshot,
+  SimulationSnapshot,
+} from "../../types/runtime-state";
 import { SerializedMechanism } from "../../types";
-import { SimGrab } from "./kinematic-simulation";
+import { SimGrab } from "./simulation-engine";
 import { BeltShape } from "./snapshot";
 
 /**
@@ -17,8 +21,21 @@ import { BeltShape } from "./snapshot";
  * until the next `load`.
  */
 
-/** A snapshot as it crosses: the layout it belongs to is named by the epoch, not carried. */
-export type WireSnapshot = Omit<KinematicSnapshot, "layout">;
+/**
+ * Which pipeline a `load` runs: rigid-motion PBD, or XPBD with mass and gravity. Fixed for
+ * the whole load — a recording is never a mix of the two.
+ *
+ * Deliberately its own type rather than `types/app-mode.ts`'s `SimulationMode` — that one
+ * also carries `"static"`, which has no recorder pipeline at all (its `ToggleButton` stays
+ * `disabled`), so a `RecorderMode` is never asked to mean something it cannot run.
+ */
+export type RecorderMode = "kinematic" | "dynamic";
+
+/** A snapshot as it crosses: the layout it belongs to is named by the epoch, not carried.
+ *  Which of the two shapes it is follows from the load's `mode`. */
+export type WireSnapshot =
+  | Omit<KinematicSnapshot, "layout">
+  | Omit<DynamicSnapshot, "layout">;
 
 /** The grab target is the only `Point2` going the other way. */
 type WireGrab = Omit<SimGrab, "target"> & { target: { x: number; y: number } };
@@ -30,9 +47,10 @@ export function revive_grab(wire: WireGrab): SimGrab {
 export type ToRecorder =
   | {
       type: "load";
+      mode: RecorderMode;
       /** Serialised so the worker rebuilds real `Point2`s, via the save format. */
       mechanism: SerializedMechanism;
-      resumeFrom: KinematicSnapshot | null;
+      resumeFrom: SimulationSnapshot | null;
       /**
        * Bumped on every load. Snapshots still in flight from the previous mechanism are
        * dropped on arrival — without it, an edit would append frames of the old model
@@ -47,13 +65,22 @@ export type ToRecorder =
    * are dropped rather than shown. Reloading to rewind would recompile a mechanism that has
    * not changed, and lose everything the run had accumulated on it.
    */
-  | { type: "rewind"; resumeFrom: KinematicSnapshot; epoch: number }
+  | { type: "rewind"; resumeFrom: SimulationSnapshot; epoch: number }
   | { type: "grab"; grab: SimGrab | null }
   /**
    * Where the simulated clock should get to. Sent every displayed frame and never awaited:
    * the worker runs towards the target on its own, so it is never idle waiting to be asked.
    */
   | { type: "target"; targetTime: number }
+  /** Dynamic mode only: whether the predict step integrates gravity. Rare — a Chip click,
+   *  not a per-frame value — so it is its own message rather than riding along `target`. */
+  | { type: "gravity"; on: boolean }
+  /** Both modes: whether the next steps detect and resist collisions. Same reasoning as
+   *  `gravity` — a toggle click, not a per-frame value, and no recompile needed either. */
+  | { type: "collisions"; on: boolean }
+  /** Both modes: whether the next steps detect and resist the floor. Gated independently
+   *  from `collisions` — same reasoning otherwise, no recompile needed either. */
+  | { type: "floor"; on: boolean }
   | { type: "stop" };
 
 export type FromRecorder =

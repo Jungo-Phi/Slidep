@@ -57,6 +57,28 @@ export type Link = {
       distance: number;
     }
   | {
+      /**
+       * `MinDistance`'s counterpart for a point against a segment (key1, key2) rather than
+       * another point: holds key3 at least `offset` from its nearest point on the segment —
+       * extremities included — and says nothing once it is. `ddl: 0` for the same reason as
+       * `MinDistance`. Used for collisions: a plain node contact uses a small numerical
+       * `offset`; a gear-vs-beam contact uses the gear's radius.
+       *
+       * `side` (+1/-1, of `key2 − key1`'s left normal) fixes which side key3 is kept clear
+       * of — set once when the link is built (see `collision_links`), not re-read from
+       * key3's current position every sweep, so a single oversized correction cannot read as
+       * "arrived on its other, now-current side" and stop being pushed back. See
+       * `applyPointSegmentContactConstraint`.
+       */
+      type: "MinDistanceToSegment";
+      ddl: 0;
+      key1: string;
+      key2: string;
+      key3: string;
+      offset: number;
+      side: number;
+    }
+  | {
       type: "DistanceToLine";
       ddl: 1;
       key1: string;
@@ -64,7 +86,26 @@ export type Link = {
       key3: string;
       distance: number;
     }
-  // `normalOffset` (both OnSegment links) holds the point that many millimetres OFF the
+  | {
+      /**
+       * `MinDistanceToSegment`'s counterpart for an infinite line — the floor — instead of a
+       * bounded segment: holds `key3` at least `offset` from the line through `key1` (a fixed
+       * anchor, `invMass = 0`), in the direction `normal` already points, and says nothing
+       * once it is. `ddl: 0` for the same reason as `MinDistance`.
+       *
+       * No `side`, unlike `MinDistanceToSegment`: `normal` is baked in once from the floor's
+       * angle when the model compiles and the anchor never moves, so there is no live
+       * geometry a fixed side would otherwise need protecting against — see
+       * `applyPointLineContactConstraint`.
+       */
+      type: "MinDistanceToLine";
+      ddl: 0;
+      key1: string;
+      key3: string;
+      normal: Point2;
+      offset: number;
+    }
+  // `normalOffset` (both OnSegment links) holds the point that many metres OFF the
   // segment, on the side it already lies. Absent = on it. It is the target the redundancy
   // analysis shifts to ask a slider whether it can be moved at all — a slider having no
   // value of its own, there is nothing else to lie to it about.
@@ -278,6 +319,17 @@ export type Link = {
       pivotKey: string;
       drivenKey: string;
       omega: number;
+      /** The driven beam's own moment of inertia about `pivotKey` (parallel-axis theorem:
+       *  `mL²/12 + m·a²`, `a` the pivot's distance from the beam's centre) — the analytic
+       *  value a point mass at `drivenKey` alone cannot give. See `mass-model.ts`'s
+       *  `BEAM_END_MASS_FRACTION` for why. */
+      armInertia: number;
+      /** How much of `drivenKey`'s fused mass is this beam's own share (`mass ×
+       *  BEAM_END_MASS_FRACTION`) — subtracted back out before the dynamics step's torque
+       *  control law treats the REST of that fused mass (another beam, a gear, a mass
+       *  element) as a point at the arm's radius, so the beam's own contribution is never
+       *  counted twice. */
+      armEndMass: number;
       // The anchor beam's free end (undefined = grounded, the world is the reference).
       // `pivotKey` doubles as the anchor's own pivot: both beams turn about the same hinge.
       anchorKey?: string;

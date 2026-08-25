@@ -15,6 +15,11 @@ export const PROBE_METRIC_LABEL_KEYS: Record<ProbeMetric, StringKey> = {
   angle: "angle",
   "angular-velocity": "metric_angular_velocity",
   force: "metric_force",
+  "force-start": "metric_force_start",
+  "force-end": "metric_force_end",
+  moment: "metric_moment",
+  "moment-start": "metric_moment_start",
+  "moment-end": "metric_moment_end",
 };
 
 export const PROBE_METRIC_ORDER: ProbeMetric[] = [
@@ -23,22 +28,54 @@ export const PROBE_METRIC_ORDER: ProbeMetric[] = [
   "angle",
   "angular-velocity",
   "force",
+  "force-start",
+  "force-end",
+  "moment",
+  "moment-start",
+  "moment-end",
 ];
 
 /** Angular metrics are only meaningful for oriented elements: gears (own
  *  angle) and two-point edges (segment orientation). Belts follow a path,
  *  nodes are points. */
-export function probe_metric_available(
-  metric: ProbeMetric,
-  element: MechanicalElement,
-): boolean {
-  if (metric !== "angle" && metric !== "angular-velocity") return true;
+function angular_metric_available(element: MechanicalElement): boolean {
   return (
     element.type === "gear" ||
     element.type === "beam" ||
     element.type === "spring" ||
     element.type === "damper"
   );
+}
+
+/** Reaction metrics come in two shapes: a single point for a node/body
+ *  element (its own position), or an independent start/end pair for an edge
+ *  — a beam's root and tip carry unrelated loads, so they are never merged
+ *  into one reading (see `ElementReaction` in `probe-series.ts`). Each
+ *  element offers only the shape that matches it. */
+function reaction_metric_available(
+  metric: "force" | "force-start" | "force-end" | "moment" | "moment-start" | "moment-end",
+  element: MechanicalElement,
+): boolean {
+  const isEdge = "positionStart" in element;
+  return metric === "force" || metric === "moment" ? !isEdge : isEdge;
+}
+
+export function probe_metric_available(
+  metric: ProbeMetric,
+  element: MechanicalElement,
+): boolean {
+  if (metric === "angle" || metric === "angular-velocity")
+    return angular_metric_available(element);
+  if (
+    metric === "force" ||
+    metric === "force-start" ||
+    metric === "force-end" ||
+    metric === "moment" ||
+    metric === "moment-start" ||
+    metric === "moment-end"
+  )
+    return reaction_metric_available(metric, element);
+  return true;
 }
 
 /** Metrics offered in a selector for this element (impossible ones hidden). */

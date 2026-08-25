@@ -88,10 +88,10 @@ export const STRINGS = {
   },
   mode_dynamic_short: { fr: "Dyna", en: "Dyn", de: "Dyn", es: "Din" },
   mode_dynamic_tooltip: {
-    fr: "Combine la statique et la cinématique [ ∑F = ma ] (à venir)",
-    en: "Statics and kinematics combined [ ∑F = ma ] (coming soon)",
-    de: "Statik und Kinematik vereint [ ∑F = ma ] (in Vorbereitung)",
-    es: "Combina la estática y la cinemática [ ∑F = ma ] (próximamente)",
+    fr: "Combine la statique et la cinématique [ ∑F = ma ]",
+    en: "Statics and kinematics combined [ ∑F = ma ]",
+    de: "Statik und Kinematik vereint [ ∑F = ma ]",
+    es: "Combina la estática y la cinemática [ ∑F = ma ]",
   },
 
   toolbar_reset: {
@@ -209,12 +209,51 @@ export const STRINGS = {
     de: "Kollisionen aus",
     es: "Colisiones desactivadas",
   },
+  // "Boden"/"Suelo" already name the palette's fixed-anchor tool (`tool_ground`) — this is
+  // a different, distinct concept (a physical floor mechanisms fall/roll onto), so it needs
+  // its own words in every language, not just fr/en.
+  floor: {
+    fr: "Plancher",
+    en: "Floor",
+    de: "Fußboden",
+    es: "Piso",
+  },
+  floor_on: {
+    fr: "Plancher activé",
+    en: "Floor on",
+    de: "Fußboden an",
+    es: "Piso activado",
+  },
+  floor_off: {
+    fr: "Plancher désactivé",
+    en: "Floor off",
+    de: "Fußboden aus",
+    es: "Piso desactivado",
+  },
 
   toolbar_recenter: {
     fr: "Recentrer la vue",
     en: "Recenter the view",
     de: "Ansicht zentrieren",
     es: "Recentrar la vista",
+  },
+  toolbar_zoom: {
+    fr: "Zoom",
+    en: "Zoom",
+    de: "Zoom",
+    es: "Zoom",
+  },
+  toolbar_zoom_in: {
+    fr: "Zoomer",
+    en: "Zoom in",
+    de: "Vergrößern",
+    es: "Acercar",
+  },
+  toolbar_zoom_out: {
+    fr: "Dézoomer",
+    en: "Zoom out",
+    de: "Verkleinern",
+    es: "Alejar",
   },
   toolbar_undo: {
     fr: "Annuler (Ctrl+Z)",
@@ -593,38 +632,28 @@ export const STRINGS = {
     de: "Radierer",
     es: "Goma",
   },
-  tool_slider: {
+  slider: {
     fr: "Glissière",
     en: "Slider",
     de: "Schiebeführung",
     es: "Corredera",
   },
-  tool_pivot: {
-    fr: "Pivot",
-    en: "Pivot",
-    de: "Drehgelenk",
-    es: "Pivote",
-  },
-  tool_belt: { fr: "Courroie", en: "Belt", de: "Riemen", es: "Correa" },
-  tool_gear: { fr: "Engrenage", en: "Gear", de: "Zahnrad", es: "Engranaje" },
-  tool_join: { fr: "Jointure", en: "Join", de: "Verbindung", es: "Unión" },
-  tool_beam: { fr: "Poutre", en: "Beam", de: "Balken", es: "Viga" },
-  tool_ground: { fr: "Sol", en: "Ground", de: "Boden", es: "Suelo" },
-  tool_damper: {
+  pivot: { fr: "Pivot", en: "Pivot", de: "Drehgelenk", es: "Pivote" },
+  belt: { fr: "Courroie", en: "Belt", de: "Riemen", es: "Correa" },
+  gear: { fr: "Engrenage", en: "Gear", de: "Zahnrad", es: "Engranaje" },
+  join: { fr: "Jointure", en: "Join", de: "Verbindung", es: "Unión" },
+  beam: { fr: "Poutre", en: "Beam", de: "Balken", es: "Viga" },
+  ground: { fr: "Sol", en: "Ground", de: "Boden", es: "Suelo" },
+  damper: {
     fr: "Amortisseur",
     en: "Damper",
     de: "Dämpfer",
     es: "Amortiguador",
   },
-  tool_spring: { fr: "Ressort", en: "Spring", de: "Feder", es: "Resorte" },
-  tool_mass: { fr: "Masse", en: "Mass", de: "Masse", es: "Masa" },
-  tool_motor: { fr: "Moteur", en: "Motor", de: "Motor", es: "Motor" },
-  tool_dimension: {
-    fr: "Dimension",
-    en: "Dimension",
-    de: "Bemaßung",
-    es: "Cota",
-  },
+  spring: { fr: "Ressort", en: "Spring", de: "Feder", es: "Resorte" },
+  mass: { fr: "Masse", en: "Mass", de: "Masse", es: "Masa" },
+  motor: { fr: "Moteur", en: "Motor", de: "Motor", es: "Motor" },
+  dimension: { fr: "Dimension", en: "Dimension", de: "Bemaßung", es: "Cota" },
   tool_gear_ratio: {
     fr: "Rapport d'engrenages",
     en: "Gear ratio",
@@ -660,25 +689,49 @@ export const STRINGS = {
   tool_probe: { fr: "Sonde", en: "Probe", de: "Sonde", es: "Sonda" },
 
   // ── Display layers ────────────────────────────────────────────────────────
-  overlay_trajectory: {
+  overlay_trajectory_one: {
+    fr: "Trajectoire",
+    en: "Trajectory",
+    de: "Bahnkurve",
+    es: "Trayectoria",
+  },
+  overlay_trajectory_other: {
     fr: "Trajectoires",
     en: "Trajectories",
     de: "Bahnkurven",
     es: "Trayectorias",
   },
-  overlay_force: {
+  overlay_force_one: {
+    fr: "Force de réaction",
+    en: "Reaction force",
+    de: "Reaktionskraft",
+    es: "Fuerza de reacción",
+  },
+  overlay_force_other: {
     fr: "Forces de réaction",
     en: "Reaction forces",
     de: "Reaktionskräfte",
     es: "Fuerzas de reacción",
   },
-  overlay_velocity: {
+  overlay_velocity_one: {
+    fr: "Vitesse",
+    en: "Velocity",
+    de: "Geschwindigkeit",
+    es: "Velocidad",
+  },
+  overlay_velocity_other: {
     fr: "Vitesses",
     en: "Velocities",
     de: "Geschwindigkeiten",
     es: "Velocidades",
   },
-  overlay_stress: {
+  overlay_stress_one: {
+    fr: "Contrainte (MPa)",
+    en: "Stress (MPa)",
+    de: "Spannung (MPa)",
+    es: "Tensión (MPa)",
+  },
+  overlay_stress_other: {
     fr: "Contraintes (MPa)",
     en: "Stress (MPa)",
     de: "Spannungen (MPa)",
@@ -945,10 +998,10 @@ export const STRINGS = {
     es: "{name}: {current} ≠ {target} px (Δ {delta} px)",
   },
   violation_angle: {
-    fr: "{name} : {current}° ≠ {target}° (Δ {delta}°)",
-    en: "{name}: {current}° ≠ {target}° (Δ {delta}°)",
-    de: "{name}: {current}° ≠ {target}° (Δ {delta}°)",
-    es: "{name}: {current}° ≠ {target}° (Δ {delta}°)",
+    fr: "{name} : {current} deg ≠ {target} deg (Δ {delta} deg)",
+    en: "{name}: {current} deg ≠ {target} deg (Δ {delta} deg)",
+    de: "{name}: {current} deg ≠ {target} deg (Δ {delta} deg)",
+    es: "{name}: {current} deg ≠ {target} deg (Δ {delta} deg)",
   },
   violation_ratio: {
     fr: "{name} : rapport {current} ≠ {target} (Δ {delta})",
@@ -969,16 +1022,16 @@ export const STRINGS = {
     es: "{name}: no vertical (Δx {delta} px)",
   },
   violation_not_perpendicular: {
-    fr: "{name} : non perpendiculaire (Δ {delta}°)",
-    en: "{name}: not perpendicular (Δ {delta}°)",
-    de: "{name}: nicht rechtwinklig (Δ {delta}°)",
-    es: "{name}: no perpendicular (Δ {delta}°)",
+    fr: "{name} : non perpendiculaire (Δ {delta} deg)",
+    en: "{name}: not perpendicular (Δ {delta} deg)",
+    de: "{name}: nicht rechtwinklig (Δ {delta} deg)",
+    es: "{name}: no perpendicular (Δ {delta} deg)",
   },
   violation_not_parallel: {
-    fr: "{name} : non parallèle (Δ {delta}°)",
-    en: "{name}: not parallel (Δ {delta}°)",
-    de: "{name}: nicht parallel (Δ {delta}°)",
-    es: "{name}: no paralelo (Δ {delta}°)",
+    fr: "{name} : non parallèle (Δ {delta} deg)",
+    en: "{name}: not parallel (Δ {delta} deg)",
+    de: "{name}: nicht parallel (Δ {delta} deg)",
+    es: "{name}: no paralelo (Δ {delta} deg)",
   },
   violation_unequal_lengths: {
     fr: "{name} : longueurs inégales {first} vs {second} px (Δ {delta} px)",
@@ -1126,6 +1179,18 @@ export const STRINGS = {
   // ── Element properties ────────────────────────────────────────────────────
   // Only rpm appears here: the other units are SI symbols and read the same everywhere.
   unit_rpm: { fr: "tr/min", en: "rpm", de: "U/min", es: "rpm" },
+  motor_torque_label: {
+    fr: "Couple",
+    en: "Torque",
+    de: "Drehmoment",
+    es: "Par",
+  },
+  motor_speed_label: {
+    fr: "Vitesse",
+    en: "Speed",
+    de: "Drehzahl",
+    es: "Velocidad",
+  },
   motor_convert: {
     fr: "Motoriser",
     en: "Motorize",
@@ -1138,18 +1203,18 @@ export const STRINGS = {
     de: "Motorisierung aufheben",
     es: "Desmotorizar",
   },
-  element_view_charts: {
-    fr: "Voir les graphiques",
-    en: "View the charts",
-    de: "Diagramme ansehen",
-    es: "Ver los gráficos",
-  },
-  element_radius: { fr: "Rayon", en: "Radius", de: "Radius", es: "Radio" },
+  radius: { fr: "Rayon", en: "Radius", de: "Radius", es: "Radio" },
   length: {
     fr: "Longueur",
     en: "Length",
     de: "Länge",
     es: "Longitud",
+  },
+  distance: {
+    fr: "Distance",
+    en: "Distance",
+    de: "Entfernung",
+    es: "Distancia",
   },
   angle: { fr: "Angle", en: "Angle", de: "Winkel", es: "Ángulo" },
   sliding_friction: {
@@ -1175,6 +1240,18 @@ export const STRINGS = {
     en: "Rest length",
     de: "Ruhelänge",
     es: "Longitud en reposo",
+  },
+  stiffness: {
+    fr: "Raideur",
+    en: "Stiffness",
+    de: "Steifigkeit",
+    es: "Rigidez",
+  },
+  damping: {
+    fr: "Amortissement",
+    en: "Damping",
+    de: "Dämpfung",
+    es: "Amortiguación",
   },
   surface_mass: {
     fr: "Masse surfacique",
@@ -1668,6 +1745,31 @@ export const STRINGS = {
     es: "Velocidad angular",
   },
   metric_force: { fr: "Force", en: "Force", de: "Kraft", es: "Fuerza" },
+  metric_force_start: {
+    fr: "Force (début)",
+    en: "Force (start)",
+    de: "Kraft (Anfang)",
+    es: "Fuerza (inicio)",
+  },
+  metric_force_end: {
+    fr: "Force (fin)",
+    en: "Force (end)",
+    de: "Kraft (Ende)",
+    es: "Fuerza (fin)",
+  },
+  metric_moment: { fr: "Moment", en: "Moment", de: "Moment", es: "Momento" },
+  metric_moment_start: {
+    fr: "Moment (début)",
+    en: "Moment (start)",
+    de: "Moment (Anfang)",
+    es: "Momento (inicio)",
+  },
+  metric_moment_end: {
+    fr: "Moment (fin)",
+    en: "Moment (end)",
+    de: "Moment (Ende)",
+    es: "Momento (fin)",
+  },
 
   // ── Why a connection is refused, shown under the cursor ───────────────────
   rule_already_connected: {

@@ -16,7 +16,7 @@ import {
   Point2,
   SliderElement,
 } from "../../types";
-import { DEFAULT_METADATA } from "../../types/mechanism";
+import { DEFAULT_METADATA, DEFAULT_SIMULATION } from "../../types/mechanism";
 import { load_mechanism } from "../../utils/load-mechanism";
 import { build_analysis_model } from "./analysis-model";
 import { probe_chain_mobility } from "./mobility-probe";
@@ -30,6 +30,8 @@ function mechanism(mechanicalElements: MechanicalElement[]): Mechanism {
   return {
     metadata: DEFAULT_METADATA,
     viewport: { scale: 1, pan: new Point2<"screen">(0, 0) },
+
+    simulation: DEFAULT_SIMULATION,
     mechanicalElements,
     constraintElements: [],
     loads: [],

@@ -1,5 +1,12 @@
 import { Mechanism } from "../../types";
-import { KinematicSnapshot, SnapshotLayout } from "../../types/runtime-state";
+import { ZERO } from "../../types/point2";
+import {
+  DynamicSnapshot,
+  KinematicSnapshot,
+  SimulationSnapshot,
+  SnapshotLayout,
+} from "../../types/runtime-state";
+import { GRAVITY } from "../../constants/physics-specs";
 import {
   FRAME_BUDGET_MS,
   MAX_RECORDING_TIME,
@@ -14,8 +21,10 @@ import {
   compile_simulation_model,
   is_retained,
   max_recording_time,
+  step_dynamic_simulation,
   step_simulation,
-} from "./kinematic-simulation";
+} from "./simulation-engine";
+import { RecorderMode } from "./recorder-protocol";
 
 /**
  * How far back a rewind may reach, in simulated seconds. Well past the worker's lead, which
@@ -31,16 +40,31 @@ const REWIND_WINDOW = 5;
  * Deliberately free of React, of the DOM and of any notion of frames — it is the piece that
  * moves into a Web Worker, so it may only depend on the solver. What it keeps between calls
  * is the model, whose links carry per-frame belt state, and the last snapshot handed out.
+ *
+ * Serves both `RecorderMode`s on the same scheduling shell: `mode` picks which of
+ * `step_simulation`/`step_dynamic_simulation` `advance` calls, and everything else here —
+ * the budget, the retained-instant thinning, the rewind journal's bookkeeping — knows
+ * nothing about which one it is. The belt-topology journal and `restore_belt_state` ARE
+ * kinematic-only (dynamic mode tracks no belt contact yet), and stay guarded by `mode`.
  */
 export class Recorder {
   private model: SimulationModel | null = null;
+  private mode: RecorderMode = "kinematic";
+  /** Dynamic mode only: whether the predict step integrates `GRAVITY`. */
+  private gravityOn = true;
+  /** Both modes: whether the next steps detect and resist collisions. */
+  private collisionsOn = false;
+  /** Both modes: whether the next steps detect and resist the floor. Gated independently
+   *  from `collisionsOn` — see `collision_links`. */
+  private floorOn = false;
   private grab: SimGrab | null = null;
   /** Last snapshot handed out, to warm-start the next step from. */
-  private last: KinematicSnapshot | null = null;
+  private last: SimulationSnapshot | null = null;
   /** How long this load may record: what its instants cost sets it. */
   private limit = MAX_RECORDING_TIME;
   /**
-   * The model state each belt topology change overwrote, and when.
+   * The model state each belt topology change overwrote, and when. Kinematic-only: dynamic
+   * mode never pushes onto this, since `step_dynamic_simulation` tracks no belt topology.
    *
    * Everything else a frame touches is either recomputed from the state it starts on
    * (motor targets, mesh angles) or carried by the snapshot (positions, angles, belt
@@ -54,15 +78,39 @@ export class Recorder {
    * snapshot the recording continues from — it carries the simulated state, so motor
    * angles and belt travel stay continuous across an edit.
    */
-  load(mechanism: Mechanism, resumeFrom: KinematicSnapshot | null): void {
-    this.model = compile_simulation_model(mechanism);
+  load(
+    mode: RecorderMode,
+    mechanism: Mechanism,
+    resumeFrom: SimulationSnapshot | null,
+  ): void {
+    this.mode = mode;
+    this.model = compile_simulation_model(mechanism, mode === "dynamic", true);
     this.limit = max_recording_time(this.model.layout);
     this.last = resumeFrom;
     this.journal = [];
     // The compile reads the belt's whole pulley list from the mechanism; the run may have
-    // taken it off some of them.
-    if (resumeFrom)
-      rewire_belts(this.model, restore_belt_state(this.model, resumeFrom));
+    // taken it off some of them. Dynamic mode never disconnects a belt, so there is nothing
+    // to re-bake against.
+    if (mode === "kinematic" && resumeFrom)
+      rewire_belts(
+        this.model,
+        restore_belt_state(this.model, resumeFrom as KinematicSnapshot),
+      );
+  }
+
+  /** Dynamic mode only: whether the next steps integrate gravity. */
+  setGravity(on: boolean): void {
+    this.gravityOn = on;
+  }
+
+  /** Both modes: whether the next steps detect and resist collisions. */
+  setCollisions(on: boolean): void {
+    this.collisionsOn = on;
+  }
+
+  /** Both modes: whether the next steps detect and resist the floor. */
+  setFloor(on: boolean): void {
+    this.floorOn = on;
   }
 
   /**
@@ -74,7 +122,7 @@ export class Recorder {
    * changed — and reset the belt contact state, which is what made a paused simulation
    * diverge from an uninterrupted one.
    */
-  rewind(resumeFrom: KinematicSnapshot): void {
+  rewind(resumeFrom: SimulationSnapshot): void {
     if (!this.model) return;
     // The OLDEST flip still ahead of the target: its captured state is the one that was in
     // force from the previous flip up to it, so it is the one covering the target. Anything
@@ -84,7 +132,8 @@ export class Recorder {
     this.journal = this.journal.filter((entry) => entry.t <= resumeFrom.t);
     // The rest comes back from the snapshot. No re-bake: the journal has just put the
     // recorded state back, and measuring a new one would replace it with a near miss.
-    restore_belt_state(this.model, resumeFrom);
+    if (this.mode === "kinematic")
+      restore_belt_state(this.model, resumeFrom as KinematicSnapshot);
     this.last = resumeFrom;
   }
 
@@ -131,10 +180,10 @@ export class Recorder {
   advance(
     targetTime: number,
     budgetMs: number = FRAME_BUDGET_MS,
-  ): { snapshots: KinematicSnapshot[]; reached: number; solved: number } {
+  ): { snapshots: SimulationSnapshot[]; reached: number; solved: number } {
     // One step back from the first instant to record, so a fresh recording starts at t = 0.
     const frontier = this.last?.t ?? -RECORD_DT;
-    const snapshots: KinematicSnapshot[] = [];
+    const snapshots: SimulationSnapshot[] = [];
     if (!this.model) return { snapshots, reached: frontier, solved: 0 };
 
     const startedAt = performance.now();
@@ -152,16 +201,32 @@ export class Recorder {
     while (frontier + produced + RECORD_DT <= dueUntil) {
       produced += RECORD_DT;
       const t = frontier + produced;
-      latest = step_simulation(
-        this.model,
-        t,
-        latest,
-        RECORD_DT,
-        this.grab ?? undefined,
-        undefined,
-        undefined,
-        (state) => this.journal.push({ t, state }),
-      );
+      latest =
+        this.mode === "kinematic"
+          ? step_simulation(
+              this.model,
+              t,
+              latest as KinematicSnapshot | null,
+              RECORD_DT,
+              this.grab ?? undefined,
+              undefined,
+              undefined,
+              (state) => this.journal.push({ t, state }),
+              this.collisionsOn,
+              this.floorOn,
+            )
+          : step_dynamic_simulation(
+              this.model,
+              t,
+              latest as DynamicSnapshot | null,
+              RECORD_DT,
+              this.gravityOn ? GRAVITY : ZERO,
+              this.grab ?? undefined,
+              undefined,
+              undefined,
+              this.collisionsOn,
+              this.floorOn,
+            );
       solved++;
       // Every instant is kept while the user is holding the mechanism: the display sits on
       // the frontier then, so an instant dropped there is one the grabbed part is drawn a

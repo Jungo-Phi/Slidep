@@ -30,7 +30,7 @@ import { StringKey, t } from "../../i18n";
  */
 type SimBehavior = "structural" | "constraint" | "observational";
 
-interface PaletteElement {
+export interface PaletteElement {
   /** Name only: the shortcut is appended at render time. */
   nameKey: StringKey;
   iconSrc: string;
@@ -47,9 +47,11 @@ interface PaletteElement {
 /**
  * Built on demand rather than as a module constant: the icons and highlight
  * colors it holds come from the active theme, and a constant would freeze them
- * on whichever theme was loaded first.
+ * on whichever theme was loaded first. Exported for `ElementPalette.test.ts`'s
+ * coverage check — see the note there on why a `CanvasStateType` can't silently
+ * highlight nothing.
  */
-const edition_palette = (): {
+export const edition_palette = (): {
   titleKey: StringKey;
   elements: PaletteElement[];
 }[] => [
@@ -73,8 +75,16 @@ const edition_palette = (): {
             "MovingEdgeStartPoint",
             "MovingEdgeEndPoint",
             "MovingEdgeBody",
+            "MovingBeltBody",
+            "ChangingGearRadius",
+            "MovingForce",
+            "MovingDistributedForce",
+            "MovingMoment",
             "MovingConstraint",
             "SimulationDragging",
+            "DraggingFloorHeight",
+            "DraggingFloorAngle",
+            "EditingFloorValue",
           ].includes(state.type) ||
           // Une saisie ouverte depuis un outil resté armé laisse cet outil
           // allumé : c'est lui qu'on retrouve en sortie, pas la sélection.
@@ -100,7 +110,7 @@ const edition_palette = (): {
     titleKey: "palette_connections",
     elements: [
       {
-        nameKey: "tool_slider",
+        nameKey: "slider",
         iconSrc: icon("slider"),
         goToStateType: "PlacingSlider",
         simBehavior: "structural",
@@ -109,7 +119,7 @@ const edition_palette = (): {
         hilightHoverColor: COLORS.ACCENT_DARK,
       },
       {
-        nameKey: "tool_pivot",
+        nameKey: "pivot",
         iconSrc: icon("pivot"),
         goToStateType: "PlacingPivot",
         simBehavior: "structural",
@@ -118,7 +128,7 @@ const edition_palette = (): {
         hilightHoverColor: COLORS.ACCENT_DARK,
       },
       {
-        nameKey: "tool_belt",
+        nameKey: "belt",
         iconSrc: icon("belt"),
         goToStateType: "PlacingBeltStart",
         simBehavior: "structural",
@@ -128,7 +138,7 @@ const edition_palette = (): {
         hilightHoverColor: COLORS.ACCENT_DARK,
       },
       {
-        nameKey: "tool_gear",
+        nameKey: "gear",
         iconSrc: icon("gear"),
         goToStateType: "PlacingGearStart",
         simBehavior: "structural",
@@ -144,7 +154,7 @@ const edition_palette = (): {
     titleKey: "palette_structure",
     elements: [
       {
-        nameKey: "tool_join",
+        nameKey: "join",
         iconSrc: icon("join"),
         goToStateType: "PlacingJoin",
         simBehavior: "structural",
@@ -153,7 +163,7 @@ const edition_palette = (): {
         hilightHoverColor: COLORS.ACCENT_DARK,
       },
       {
-        nameKey: "tool_beam",
+        nameKey: "beam",
         iconSrc: icon("beam"),
         goToStateType: "PlacingBeamStart",
         simBehavior: "structural",
@@ -163,7 +173,7 @@ const edition_palette = (): {
         hilightHoverColor: COLORS.ACCENT_DARK,
       },
       {
-        nameKey: "tool_ground",
+        nameKey: "ground",
         iconSrc: icon("ground"),
         goToStateType: "PlacingGround",
         simBehavior: "structural",
@@ -177,7 +187,7 @@ const edition_palette = (): {
     titleKey: "palette_dynamics",
     elements: [
       {
-        nameKey: "tool_damper",
+        nameKey: "damper",
         iconSrc: icon("damper"),
         goToStateType: "PlacingDamperStart",
         simBehavior: "structural",
@@ -188,7 +198,7 @@ const edition_palette = (): {
         hilightHoverColor: COLORS.ACCENT_DARK,
       },
       {
-        nameKey: "tool_spring",
+        nameKey: "spring",
         iconSrc: icon("spring"),
         goToStateType: "PlacingSpringStart",
         simBehavior: "structural",
@@ -199,7 +209,7 @@ const edition_palette = (): {
         hilightHoverColor: COLORS.ACCENT_DARK,
       },
       {
-        nameKey: "tool_mass",
+        nameKey: "mass",
         iconSrc: icon("mass"),
         goToStateType: "PlacingMass",
         simBehavior: "structural",
@@ -208,7 +218,7 @@ const edition_palette = (): {
         hilightHoverColor: COLORS.ACCENT_DARK,
       },
       {
-        nameKey: "tool_motor",
+        nameKey: "motor",
         iconSrc: icon("motor"),
         goToStateType: "PlacingMotor",
         simBehavior: "structural",
@@ -222,7 +232,7 @@ const edition_palette = (): {
     titleKey: "palette_constraints",
     elements: [
       {
-        nameKey: "tool_dimension",
+        nameKey: "dimension",
         iconSrc: icon("dimension"),
         goToStateType: "DimensionStart",
         simBehavior: "constraint",
@@ -358,8 +368,6 @@ const SIZE = 28;
 const PADDING = 2;
 const ROW_HEIGHT = SIZE + 2 * PADDING;
 const GRID_GAP = 2;
-/** Space kept between the palette and the edges of the canvas area. */
-const MARGIN = 16;
 
 /** Height of a group's icon grid, laid out over `columns` columns. */
 const grid_height = (icons: number, columns: number): number => {
@@ -440,7 +448,7 @@ export const ElementPalette: React.FC<ElementPaletteProps> = ({
 
     const fit = () => {
       if (area.clientHeight === 0) return;
-      const available = area.clientHeight - 2 * MARGIN;
+      const available = area.clientHeight;
       // `scrollHeight` leaves the borders out, and they still take room on screen.
       const borders = paper.offsetHeight - paper.clientHeight;
       const current = paper.scrollHeight + borders;
@@ -470,17 +478,18 @@ export const ElementPalette: React.FC<ElementPaletteProps> = ({
       elevation={0}
       ref={paperRef}
       sx={{
-        position: "absolute",
-        left: MARGIN,
-        top: MARGIN,
         boxSizing: "border-box",
         display: "flex",
         alignItems: "center",
         flexDirection: "column",
+        flexShrink: 0,
         p: 0.5,
-        zIndex: 1000,
+        border: "none",
+        borderRadius: 0,
+        borderRight: `2px solid ${COLORS.ACCENT}`,
+        boxShadow: "none",
         userSelect: "none",
-        maxHeight: `calc(100% - ${2 * MARGIN}px)`,
+        height: "100%",
         overflowY: "auto",
         // Hide scrollbar for Chrome, Safari and Opera
         "&::-webkit-scrollbar": {

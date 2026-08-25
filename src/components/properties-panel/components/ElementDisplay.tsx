@@ -60,7 +60,7 @@ const ElementDisplayComponent: React.FC<ElementDisplayProps> = ({
   const inputRef = useRef<HTMLInputElement>(null);
 
   const fontSizeValue =
-    size === "small" ? "0.75rem" : size === "medium" ? "0.875rem" : "1rem";
+    size === "small" ? "0.75rem" : size === "medium" ? "0.85rem" : "1rem";
   const fontWeight = 500;
 
   const measureTextWidth = useCallback(
@@ -165,7 +165,7 @@ const ElementDisplayComponent: React.FC<ElementDisplayProps> = ({
   }, [inputValue, isEditing, updateWidth]);
 
   const iconSize = size === "small" ? 24 : size === "medium" ? 28 : 32;
-  const gap = size === "small" ? "1px" : "6px";
+  const gap = size === "small" ? "1px" : size === "medium" ? "2px" : "6px";
 
   const textStyleCommon = {
     fontWeight: selected ? fontWeight + 300 : fontWeight,
@@ -184,7 +184,7 @@ const ElementDisplayComponent: React.FC<ElementDisplayProps> = ({
         })}
       sx={{
         borderRadius: 5,
-        padding: size === "small" ? "4px" : size === "medium" ? "6px" : "8px",
+        padding: size === "small" ? "4px" : size === "medium" ? "5px" : "8px",
         backgroundColor:
           !trailingControls && hovered ? "action.hover" : "transparent",
         "&:hover": {
@@ -266,13 +266,6 @@ const ElementDisplayComponent: React.FC<ElementDisplayProps> = ({
           />
         ) : canRename ? (
           <Typography
-            variant={
-              size === "small"
-                ? "caption"
-                : size === "medium"
-                  ? "body2"
-                  : "body1"
-            }
             onClick={handleTextClick}
             title={t("element_rename_hint")}
             sx={{
@@ -289,13 +282,6 @@ const ElementDisplayComponent: React.FC<ElementDisplayProps> = ({
           </Typography>
         ) : (
           <Typography
-            variant={
-              size === "small"
-                ? "caption"
-                : size === "medium"
-                  ? "body2"
-                  : "body1"
-            }
             sx={{
               ...textStyleCommon,
               fontSize: fontSizeValue,

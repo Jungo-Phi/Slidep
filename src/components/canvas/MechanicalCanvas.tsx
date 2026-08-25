@@ -45,14 +45,52 @@ import { snap_load_hover } from "./load-snap";
 import { compute_visible_constraints, connected_constraints } from "./utils";
 import { eraser_cursor } from "./cursors";
 import { OnCanvasValueEditor } from "./OnCanvasValueEditor";
+import {
+  ANGLE,
+  FORCE,
+  LENGTH,
+  LOAD_INTENSITY,
+  MOMENT,
+  QuantityKind,
+} from "../../utils/quantity-format";
+
+/** What `OnCanvasValueEditor` formats and parses the element's value as — `undefined` for
+ *  `gear-ratio` (dimensionless, "ratio" mode reads it directly). */
+const VALUE_EDITOR_KIND: Partial<Record<UnionElement["type"], QuantityKind>> =
+  {
+    "dimension-edge": LENGTH,
+    "dimension-node-to-node": LENGTH,
+    "dimension-edge-to-node": LENGTH,
+    "dimension-radius": LENGTH,
+    "dimension-belt": LENGTH,
+    "dimension-angle": ANGLE,
+    force: FORCE,
+    moment: MOMENT,
+    "distributed-force": LOAD_INTENSITY,
+  };
 import { OnCanvasProbeMetricSelector } from "./ProbeMetricSelector";
 import {
   draw_axes,
+  draw_floor,
+  draw_graduations,
   draw_grid,
+  draw_overlay_arrow,
+  draw_overlay_arrow_label,
+  draw_overlay_moment,
+  draw_overlay_moment_label,
   draw_snap_feedback,
   draw_trajectory,
+  floor_screen_geometry,
+  overlay_arrow_hit,
+  overlay_moment_hit,
+  OverlayArrow,
+  OverlayMoment,
   TrajectoryDisplay,
 } from "./drawing-functions";
+import {
+  floor_acute_angle,
+  floor_raw_angle_from_acute,
+} from "../../utils/floor-geometry";
 
 function mergeRefs<T>(...refs: React.Ref<T>[]) {
   return (node: T | null) => {
@@ -163,9 +201,17 @@ interface MechanicalCanvasProps {
 export interface LiveFrame {
   mechanism: Mechanism;
   trajectories: TrajectoryDisplay[];
+  /** Velocity/reaction arrows for elements with the matching overlay on — dynamic mode
+   *  only, empty everywhere else. */
+  overlayArrows: OverlayArrow[];
+  /** The moment half of a reaction, wherever a rigid weld's force-couple carries one —
+   *  same gating as `overlayArrows`. */
+  overlayMoments: OverlayMoment[];
 }
 
 const EMPTY_TRAJECTORIES: TrajectoryDisplay[] = [];
+const EMPTY_OVERLAY_ARROWS: OverlayArrow[] = [];
+const EMPTY_OVERLAY_MOMENTS: OverlayMoment[] = [];
 
 export const MechanicalCanvas = forwardRef<
   HTMLCanvasElement,
@@ -416,6 +462,7 @@ export const MechanicalCanvas = forwardRef<
       if (showGrid) draw_grid(ctx, viewport, canvas.width, canvas.height);
 
       draw_axes(ctx, viewport, canvas.width, canvas.height);
+      if (showGrid) draw_graduations(ctx, viewport, canvas.width, canvas.height);
 
       // Under the mechanism, like the grid: it is scaffolding for the gesture in
       // progress, not something being drawn.
@@ -496,6 +543,24 @@ export const MechanicalCanvas = forwardRef<
         return true;
       });
 
+      // The floor: under every mechanism element (it's a surface they rest on, not
+      // one of them), but over the grid/axes/graduations, unlike the grid itself.
+      draw_floor(
+        ctx,
+        viewport,
+        canvas.width,
+        canvas.height,
+        restingRef.current.simulation.floor,
+        hoveredPartRef.current.type === "FloorHeight" ||
+          hoveredPartRef.current.type === "FloorAngle" ||
+          hoveredPartRef.current.type === "FloorAngleValue" ||
+          canvasStateRef.current.type === "DraggingFloorHeight" ||
+          canvasStateRef.current.type === "DraggingFloorAngle",
+        hoveredPartRef.current.type === "FloorAngle" ||
+          canvasStateRef.current.type === "DraggingFloorAngle",
+        hoveredPartRef.current.type === "FloorAngleValue",
+      );
+
       draw_mechanical_canvas(ctx, {
         viewport,
         hoveredPart: hoveredPartRef.current,
@@ -516,6 +581,37 @@ export const MechanicalCanvas = forwardRef<
         redundancySymbols: redundancySymbolsRef.current,
         now,
       });
+
+      // Vitesses / réactions mesurées, par-dessus les éléments qu'elles habillent. Seule une
+      // réaction (jamais une vitesse — son unité affichée n'est pas encore la bonne, voir
+      // `OverlayArrow.vector`) révèle sa valeur au survol, comme un load placé.
+      const overlayArrows = live?.overlayArrows ?? EMPTY_OVERLAY_ARROWS;
+      const overlayMoments = live?.overlayMoments ?? EMPTY_OVERLAY_MOMENTS;
+      const mouseScreen = cursorOnCanvasRef.current
+        ? mousePositionRef.current
+        : null;
+      // A moment wins the tie over its own force, same priority `HOVER_ORDER` gives a
+      // placed moment over a placed force.
+      const hoveredMoment = mouseScreen
+        ? overlayMoments.find((moment) =>
+            overlay_moment_hit(mouseScreen, viewport, moment),
+          )
+        : undefined;
+      const hoveredArrow =
+        mouseScreen && !hoveredMoment
+          ? overlayArrows.find(
+              (arrow) =>
+                arrow.kind !== "velocity" &&
+                overlay_arrow_hit(mouseScreen, viewport, arrow),
+            )
+          : undefined;
+      for (const arrow of overlayArrows) draw_overlay_arrow(ctx, viewport, arrow);
+      for (const moment of overlayMoments)
+        draw_overlay_moment(ctx, viewport, moment);
+      // The hovered label last, on top of every arrow/moment just drawn: an arrow drawn
+      // later in the loops above must not obstruct another one's label.
+      if (hoveredArrow) draw_overlay_arrow_label(ctx, viewport, hoveredArrow);
+      if (hoveredMoment) draw_overlay_moment_label(ctx, viewport, hoveredMoment);
     }, [
       showGrid,
       snapSettings.highlightSnap,
@@ -676,6 +772,7 @@ export const MechanicalCanvas = forwardRef<
         worldMousePos,
         canvasStateRef.current,
         currMech.viewport,
+        currMech.simulation.floor,
         // What the previous frame asked of the drag: the mechanism read here has
         // answered that, not the cursor, which has since moved on.
         oldPositionRef.current,
@@ -806,6 +903,9 @@ export const MechanicalCanvas = forwardRef<
           onSimulationGrabRef.current,
           onSimulationGrabEndRef.current,
           worldMousePos,
+          currMech.simulation.floor,
+          snapToGrid,
+          snapSettings,
         );
         oldPositionRef.current = newHoveredPart.position.clone();
       },
@@ -818,6 +918,8 @@ export const MechanicalCanvas = forwardRef<
         computeHover,
         refreshRevealFromHover,
         onMouseUpHandler,
+        snapToGrid,
+        snapSettings,
       ],
     );
     handleEventRef.current = handleEvent;
@@ -1151,7 +1253,7 @@ export const MechanicalCanvas = forwardRef<
                   ? editingElement.value
                   : canvasState.value
             }
-            suffix={editingElement.type === "dimension-angle" ? "°" : undefined}
+            kind={VALUE_EDITOR_KIND[editingElement.type]}
             // A distributed load's end is the one value here that can be
             // turned around (a minus flips it across the beam) and the one that
             // can legitimately be set to zero — as long as its opposite end is
@@ -1219,7 +1321,7 @@ export const MechanicalCanvas = forwardRef<
                     {
                       type: actionType,
                       id: editingElement.id,
-                      newValue: newValue,
+                      newValue,
                       oldValue: editingElement.value,
                     },
                   ]);
@@ -1265,6 +1367,54 @@ export const MechanicalCanvas = forwardRef<
             }}
           />
         )}
+        {canvasState.type === "EditingFloorValue" &&
+          (() => {
+            const { field, value } = canvasState;
+            const { anchor, angleLabel } = floor_screen_geometry(
+              mechanism.viewport,
+              mechanism.simulation.floor,
+            );
+            return (
+              <OnCanvasValueEditor
+                mode="single"
+                initialValue={value}
+                kind={field === "height" ? LENGTH : ANGLE}
+                signed
+                allowZero
+                position={field === "height" ? anchor : angleLabel}
+                onCommit={(newValue) => {
+                  const oldAngle = mechanism.simulation.floor.angle;
+                  applyActions([
+                    field === "height"
+                      ? {
+                          type: "ChangeFloorHeight",
+                          newValue,
+                          oldValue: mechanism.simulation.floor.height,
+                          committed: true,
+                        }
+                      : {
+                          type: "ChangeFloorAngle",
+                          // `newValue` is the unsigned magnitude the editor opened on (see
+                          // its `initialValue` in `canvas-state-reducer.ts`) — no sign typed
+                          // keeps the floor leaning the way it already was, same idiom as a
+                          // distributed load's end (`commitLoadValue`); a typed "-" flips it.
+                          // The stored angle also carries whether the floor is flipped
+                          // upside down, which the magnitude alone can't express, so that
+                          // part of `oldAngle` is carried over unchanged.
+                          newValue: floor_raw_angle_from_acute(
+                            newValue * (floor_acute_angle(oldAngle) < 0 ? -1 : 1),
+                            oldAngle,
+                          ),
+                          oldValue: oldAngle,
+                          committed: true,
+                        },
+                  ]);
+                  setCanvasState({ type: "Selecting" });
+                }}
+                onCancel={() => setCanvasState({ type: "Selecting" })}
+              />
+            );
+          })()}
         {canvasState.type === "PlacingProbeMetrics" &&
           (() => {
             const probedElement = mechanism.mechanicalElements.find(

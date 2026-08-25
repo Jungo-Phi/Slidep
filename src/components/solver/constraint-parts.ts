@@ -79,7 +79,12 @@ function held_shapes(link: Link): Held {
     case "DistanceToLine":
     case "SlideOnSegment":
     case "FixedOnSegment":
+    case "MinDistanceToSegment":
       return { segments: [[link.key1, link.key2]], points: [link.key3] };
+
+    // The floor's anchor (`key1`) names no real element — only the contacting point does.
+    case "MinDistanceToLine":
+      return points(link.key3);
 
     case "Angle":
     case "Normal":

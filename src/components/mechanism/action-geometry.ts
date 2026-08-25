@@ -105,6 +105,11 @@ const ACTION_GEOMETRY: Record<
   SetProbes: NONE,
   SetShowOverlay: NONE,
   SetMotorConfig: NONE,
+  SetFloorEnabled: NONE,
+  ChangeFloorHeight: NONE_COALESCING,
+  ChangeFloorAngle: NONE_COALESCING,
+  SetGravity: NONE,
+  SetCollisions: NONE,
 };
 
 const LOAD_TYPES: ReadonlySet<LoadElementType> = new Set([

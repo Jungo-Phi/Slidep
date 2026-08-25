@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { load_mechanism } from "./load-mechanism";
 import { serialize_mechanism } from "./serialization";
-import { DEFAULT_METADATA, Mechanism } from "../types/mechanism";
+import { DEFAULT_METADATA, DEFAULT_SIMULATION, Mechanism } from "../types/mechanism";
 import { Point2 } from "../types/point2";
 import { BeamElement, ConstraintElement, ID } from "../types";
 
@@ -37,6 +37,8 @@ const brokenDimension = {
 const mechanism: Mechanism = {
   metadata: DEFAULT_METADATA,
   viewport: { scale: 1, pan: new Point2(0, 0) },
+
+  simulation: DEFAULT_SIMULATION,
   mechanicalElements: [beam],
   constraintElements: [brokenDimension],
   loads: [],
@@ -60,5 +62,19 @@ describe("load_mechanism", () => {
     expect(position).toBeInstanceOf(Point2);
     expect(position).toEqual(new Point2(0, 0));
     expect(repairs.map((r) => r.code)).toEqual(["POINT_RESET"]);
+  });
+
+  it("carries gravity/collisions/floor through a save and reload", () => {
+    const withFloor: Mechanism = {
+      ...mechanism,
+      simulation: {
+        gravity: false,
+        collisions: true,
+        floor: { enabled: true, height: 2.5, angle: 0.3 },
+      },
+    };
+    const stored = JSON.parse(JSON.stringify(serialize_mechanism(withFloor)));
+    const { mechanism: loaded } = load_mechanism(stored);
+    expect(loaded.simulation).toEqual(withFloor.simulation);
   });
 });

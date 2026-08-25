@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { Point2 } from "../../types/point2";
 import { Link } from "../../types";
 import { PBD_kinematic_solver } from "./PBD_kinematic_solver";
-import { update_belt_disconnects } from "./kinematic-simulation";
+import { update_belt_disconnects } from "./simulation-engine";
 import {
   applyBeltLengthConstraint,
   applyBeltFollowsTangentConstraint,
@@ -644,7 +644,9 @@ describe("loose belt sheds its last pulley → inert (user-decided)", () => {
 
   it("disconnects even the LAST active pulley (loose → inert segment)", () => {
     const belt = mkBelt(false);
-    const newly = update_belt_disconnects(belt, positions);
+    // A full wrap-sign flip, not a threshold-boundary case, so any extent comfortably above
+    // this fixture's own ~600-unit span works — the detach ratio it scales barely matters here.
+    const newly = update_belt_disconnects(belt, positions, 1000);
     expect(belt.disconnected).toEqual([true, true]); // last pulley shed
     expect(newly).toBe(true);
   });

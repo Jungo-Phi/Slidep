@@ -14,7 +14,7 @@ import type { HoveredPart } from "../../types/hovered-part";
 import { get_hovered_part } from "./get-hover";
 import { handle_placing_element } from "./placing-element-actions";
 import { legality_for_state } from "../mechanism/connection-rules";
-import { ViewportState } from "../../types";
+import { DEFAULT_FLOOR, ViewportState } from "../../types";
 import { bundle_geometry } from "../mechanism/action-geometry";
 
 const P = (x: number, y: number) => new Point2(x, y);
@@ -80,6 +80,7 @@ describe("closing a belt while placing it", () => {
       START,
       routing,
       VIEWPORT,
+      DEFAULT_FLOOR,
     );
     expect(hovered.type).toBe("BeltClosure");
   });
@@ -100,6 +101,7 @@ describe("closing a belt while placing it", () => {
       START,
       gesture,
       VIEWPORT,
+      DEFAULT_FLOOR,
     );
     expect(hovered.type).toBe("BeltClosure");
   });
@@ -188,6 +190,7 @@ describe("closing a belt while placing it", () => {
       loose,
       pulleyless,
       VIEWPORT,
+      DEFAULT_FLOOR,
     );
     expect(hovered.type).toBe("Void");
     expect(hovered).toHaveProperty("rejected");
@@ -208,6 +211,7 @@ describe("closing a belt while placing it", () => {
       START,
       oneGear,
       VIEWPORT,
+      DEFAULT_FLOOR,
     );
     expect(hovered.type).toBe("Void");
     expect(hovered).toHaveProperty("rejected");
@@ -341,6 +345,7 @@ describe("closing a belt by dragging its terminal node onto the other end", () =
       END,
       moving,
       VIEWPORT,
+      DEFAULT_FLOOR,
     );
     expect(hovered).toMatchObject({ type: "Edge", id: BELT, part: "end" });
   });
@@ -361,6 +366,7 @@ describe("closing a belt by dragging its terminal node onto the other end", () =
       START,
       moving,
       VIEWPORT,
+      DEFAULT_FLOOR,
     );
     expect(hovered).toMatchObject({ type: "Edge", id: BELT, part: "start" });
   });
@@ -375,6 +381,7 @@ describe("closing a belt by dragging its terminal node onto the other end", () =
       END,
       moving,
       VIEWPORT,
+      DEFAULT_FLOOR,
     );
     expect(hovered.type).toBe("Void");
     expect(hovered).toHaveProperty("rejected");

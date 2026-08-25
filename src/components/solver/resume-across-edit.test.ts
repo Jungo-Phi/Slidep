@@ -6,7 +6,7 @@ import {
   RECORD_DT,
   compile_simulation_model,
   step_simulation,
-} from "./kinematic-simulation";
+} from "./simulation-engine";
 import { snapshot_point } from "./snapshot";
 
 /**
@@ -45,7 +45,7 @@ describe("reprise après recompilation", () => {
       `  reprise à ${carried.toFixed(3)} px de l'enregistrement, dont le repos est à ${fromRest.toFixed(1)} px`,
     );
     // Half a second of a turning crank separates the two, so the check is not a close call.
-    expect(fromRest).toBeGreaterThan(10);
-    expect(carried).toBeLessThan(1);
+    expect(fromRest).toBeGreaterThan(0.01);
+    expect(carried).toBeLessThan(0.001);
   }, 60_000);
 });

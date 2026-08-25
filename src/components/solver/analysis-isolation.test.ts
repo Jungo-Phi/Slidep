@@ -23,7 +23,7 @@ import {
   apply_snapshot_to_mechanism,
   compile_simulation_model,
   step_simulation,
-} from "./kinematic-simulation";
+} from "./simulation-engine";
 import { build_analysis_model } from "./analysis-model";
 import { probe_chain_mobility } from "./mobility-probe";
 import { canonical_modes } from "./motion-modes";

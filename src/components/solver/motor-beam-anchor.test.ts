@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_METADATA, Mechanism } from "../../types/mechanism";
+import { DEFAULT_METADATA, DEFAULT_SIMULATION, Mechanism } from "../../types/mechanism";
 import { Point2 } from "../../types/point2";
 import type {
   BeamElement,
@@ -11,7 +11,7 @@ import {
   RECORD_DT,
   compile_simulation_model,
   step_simulation,
-} from "./kinematic-simulation";
+} from "./simulation-engine";
 import { snapshot_point } from "./snapshot";
 
 /**
@@ -68,6 +68,8 @@ function mechanism(mechanicalElements: MechanicalElement[]): Mechanism {
   return {
     metadata: DEFAULT_METADATA,
     viewport: { scale: 1, pan: new Point2(0, 0) },
+
+    simulation: DEFAULT_SIMULATION,
     mechanicalElements,
     constraintElements: [],
     loads: [],
@@ -87,7 +89,7 @@ describe("moteur ancré sur une poutre", () => {
     // arm (DRIVEN) with nothing else constraining its angle around HUB.
     const before = mechanism([
       pivot(HUB, new Point2(0, 0), [ANCHOR, DRIVEN], {
-        motor: { parentBeamID: ANCHOR, speed: 60 }, // 1 rev/s
+        motor: { parentBeamID: ANCHOR, speed: 2 * Math.PI, torque: 1 }, // 1 rev/s
       }),
       pivot(ANCHOR_END, new Point2(100, 0), [ANCHOR]),
       beam(ANCHOR, new Point2(0, 0), new Point2(100, 0), HUB, ANCHOR_END),
@@ -98,13 +100,15 @@ describe("moteur ancré sur une poutre", () => {
     let snapshot = step_simulation(model, 0, null);
     const start = snapshot_point(snapshot, `${DRIVEN}:end`)!;
 
-    // A quarter turn at 1 rev/s: 120 fps × 0.25 s.
-    for (let i = 1; i <= 30; i++)
+    // Well past a quarter turn at 1 rev/s, and past the motor's own startup ramp (see
+    // `MOTOR_STARTUP_RAMP_S`) — 90 frames at 120 fps is 0.75 s, half of it spent ramping up
+    // to speed, still leaving a half turn done at full speed once it has.
+    for (let i = 1; i <= 90; i++)
       snapshot = step_simulation(model, i * RECORD_DT, snapshot);
     const quarterTurn = snapshot_point(snapshot, `${DRIVEN}:end`)!;
 
     // Frozen (the bug): stays within solver noise of where it started. Rotating (fixed):
-    // a 100 px arm swung a quarter turn moves its tip by ~140 px.
+    // a 100 px arm swung well past a quarter turn moves its tip by well over 100 px.
     expect(quarterTurn.distance_to(start)).toBeGreaterThan(100);
   });
 });

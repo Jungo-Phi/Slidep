@@ -22,9 +22,11 @@ import {
   OVERLAY_LABEL_KEYS,
   any_overlay_shown,
   overlay_count,
+  overlay_label_count,
+  overlay_targets,
   set_all_overlays,
 } from "../properties-panel/overlay-actions";
-import { t } from "../../i18n";
+import { t, tn } from "../../i18n";
 
 interface OverlaysMenuProps {
   mechanicalElements: MechanicalElement[];
@@ -37,6 +39,8 @@ interface OverlayMenuRowProps {
   kind: OverlayKind;
   shown: number;
   total: number;
+  /** Passed to `tn` for the row's label — not `total`, see `overlay_label_count`. */
+  labelCount: number;
   onSetAll: (show: boolean) => void;
 }
 
@@ -50,6 +54,7 @@ const OverlayMenuRow: React.FC<OverlayMenuRowProps> = ({
   kind,
   shown,
   total,
+  labelCount,
   onSetAll,
 }) => (
   <Box
@@ -63,7 +68,7 @@ const OverlayMenuRow: React.FC<OverlayMenuRowProps> = ({
     }}
   >
     <Typography variant="body2" sx={{ flex: 1, whiteSpace: "nowrap" }}>
-      {t(OVERLAY_LABEL_KEYS[kind])}
+      {tn(OVERLAY_LABEL_KEYS[kind], labelCount)}
     </Typography>
     <Typography
       variant="caption"
@@ -175,12 +180,17 @@ export const OverlaysMenu: React.FC<OverlaysMenuProps> = ({
         <Box sx={{ py: 0.5 }}>
           {OVERLAY_KIND_ORDER.map((kind) => {
             const { shown, total } = overlay_count(mechanicalElements, kind);
+            const labelCount = overlay_label_count(
+              overlay_targets(mechanicalElements, kind),
+              kind,
+            );
             return (
               <OverlayMenuRow
                 key={kind}
                 kind={kind}
                 shown={shown}
                 total={total}
+                labelCount={labelCount}
                 onSetAll={(show) => setAll(kind, show)}
               />
             );

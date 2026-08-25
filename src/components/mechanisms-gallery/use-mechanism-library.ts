@@ -9,8 +9,8 @@ import {
 import { IDBPDatabase, openDB } from "idb";
 import {
   DEFAULT_METADATA,
+  DEFAULT_SIMULATION,
   Mechanism,
-  Point2,
   SerializedMechanism,
   SlidepDB,
   ViewportState,
@@ -32,14 +32,14 @@ import {
   save_to_file,
   serialize_mechanism,
 } from "../../utils";
-import { SNACKBAR_DURATION } from "../../constants/rendering-specs";
+import {
+  PREVIEW_MIN_ZOOM,
+  SNACKBAR_DURATION,
+} from "../../constants/rendering-specs";
 import { t, tn } from "../../i18n";
 
 const DB_VERSION = 3;
 const DEBOUNCE_AUTOSAVE_TIME_MILLIS = 1500;
-const RECENTER_DEFAULT_ZOOM = 1;
-const PALETTE_LEFT_MARGIN = 100;
-const PALETTE_RIGHT_MARGIN = 250;
 
 /** The mechanism library. Keyed by `metadata.createdAt`, so two records sharing one are the same entry. */
 const openMechanismsDB = () =>
@@ -69,14 +69,11 @@ export const fit_to_content = (
       mechanism.mechanicalElements,
       mechanism.constraintElements,
     ),
-    canvas.width - PALETTE_LEFT_MARGIN - PALETTE_RIGHT_MARGIN,
+    canvas.width,
     canvas.height,
-    { defaultZoom: RECENTER_DEFAULT_ZOOM },
+    { defaultZoom: PREVIEW_MIN_ZOOM },
   );
-  return {
-    ...fitted,
-    pan: fitted.pan.add(new Point2(PALETTE_LEFT_MARGIN, 0)),
-  };
+  return { ...fitted, pan: fitted.pan };
 };
 
 export type SaveStatus = "idle" | "saved" | "saving" | "error";
@@ -320,6 +317,7 @@ export function useMechanismLibrary({
         modifiedAt: Date.now(),
       },
       viewport: { scale: 1, pan: ZERO },
+      simulation: DEFAULT_SIMULATION,
       mechanicalElements: [],
       constraintElements: [],
       loads: [],

@@ -5,6 +5,7 @@ import { DIM } from "../../constants/rendering-specs";
 import { screen2world, world2screen } from "../../utils";
 import { Point2, ZERO } from "../../types/point2";
 import type { CanvasState } from "../../types/canvas-state";
+import { DEFAULT_FLOOR } from "../../types";
 import type {
   DamperElement,
   ID,
@@ -133,6 +134,7 @@ describe("le curseur répond là où le trait est dessiné", () => {
       cursor,
       { type: "Selecting" } as CanvasState,
       VIEWPORT,
+      DEFAULT_FLOOR,
     );
 
   /** The middle of where an edge carrying `offset` is drawn, back in world. */

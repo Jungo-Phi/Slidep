@@ -1,6 +1,6 @@
 /**
  * The coordinate space a point lives in. World is the model's own frame
- * (millimetres, y up); screen is what the canvas draws in (pixels, y down).
+ * (metres, y up); screen is what the canvas draws in (pixels, y down).
  * `utils/viewport.ts` holds the only sanctioned crossings between the two.
  */
 export type Space = "world" | "screen";

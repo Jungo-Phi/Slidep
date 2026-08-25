@@ -1,9 +1,18 @@
 import React from "react";
-import { Box, Chip, Divider, IconButton, ToggleButton, ToggleButtonGroup, Tooltip } from "@mui/material";
+import {
+  Box,
+  Chip,
+  Divider,
+  IconButton,
+  ToggleButton,
+  ToggleButtonGroup,
+  Tooltip,
+} from "@mui/material";
 import {
   ChevronLeft,
   ChevronRight,
   FirstPage,
+  HorizontalRule,
   JoinInner,
   KeyboardDoubleArrowDown,
   LastPage,
@@ -12,16 +21,65 @@ import {
   RestartAlt,
 } from "@mui/icons-material";
 import { t } from "../../i18n";
-import { Action, AppMode, Mechanism, MechanismMetadata, SimulationConfig, SimulationSpeed } from "../../types";
+import {
+  Action,
+  AppMode,
+  Mechanism,
+  MechanismMetadata,
+  SimulationSpeed,
+} from "../../types";
 import { RuntimeState } from "../../types/runtime-state";
-import { at_recording_end } from "../solver/kinematic-simulation";
+import { at_recording_end } from "../solver/simulation-engine";
 import { set_sim_clock as setRuntimeState } from "../solver/sim-clock";
+import { simulationResetPatch } from "../solver/use-simulation-playback";
 import { OverlaysMenu } from "./OverlaysMenu";
 import { ProjectHeader } from "./ProjectHeader";
 import { SaveStatus } from "../mechanisms-gallery/use-mechanism-library";
 
 // Crans de vitesse de simulation, du plus lent au plus rapide.
 const SPEEDS: SimulationSpeed[] = [0.1, 0.25, 0.5, 1, 2, 4, 10];
+
+interface PhysicsToggleProps {
+  on: boolean;
+  Icon: typeof KeyboardDoubleArrowDown;
+  tooltip: string;
+  onToggle: () => void;
+}
+
+/** One simulation switch (gravity, collisions, floor): icon only, filled when on. */
+const PhysicsToggle: React.FC<PhysicsToggleProps> = ({
+  on,
+  Icon,
+  tooltip,
+  onToggle,
+}) => (
+  <Tooltip disableInteractive title={tooltip}>
+    <Chip
+      icon={<Icon sx={{ fontSize: "14px !important" }} />}
+      size="small"
+      clickable
+      onClick={onToggle}
+      variant="outlined"
+      sx={{
+        width: 22,
+        height: 22,
+        borderRadius: "50%",
+        borderColor: on ? "primary.main" : "text.primary",
+        backgroundColor: on ? "primary.main" : "transparent",
+        color: on ? "primary.contrastText" : "inherit",
+        // The label's slot is what makes a chip a pill: dropped, the icon centres on its own.
+        "& .MuiChip-label": { display: "none" },
+        "& .MuiChip-icon": {
+          margin: 0,
+          color: on ? "primary.contrastText" : "inherit",
+        },
+        "&.MuiChip-clickable:hover": {
+          backgroundColor: on ? "primary.dark" : "action.hover",
+        },
+      }}
+    />
+  </Tooltip>
+);
 
 interface PlaybackControlsProps {
   appMode: AppMode;
@@ -35,12 +93,9 @@ interface PlaybackControlsProps {
   runtimeState: RuntimeState;
   resetToStart: () => void;
   handleSpaceKey: () => void;
-  simulationConfig: SimulationConfig;
-  setSimulationConfig: React.Dispatch<React.SetStateAction<SimulationConfig>>;
   onOpenGallery: () => void;
   saveStatus: SaveStatus;
-  /** Rendered at the end of the right-hand half, sharing its `flex: 1` — the
-   *  play button must stay centered on the two halves together. */
+  /** Rendered at the end of the right-hand section. */
   rightSlot?: React.ReactNode;
 }
 
@@ -57,24 +112,16 @@ export const PlaybackControls: React.FC<PlaybackControlsProps> = ({
   runtimeState,
   resetToStart,
   handleSpaceKey,
-  simulationConfig,
-  setSimulationConfig,
   onOpenGallery,
   saveStatus,
   rightSlot,
 }) => (
   <>
-    {/* Les deux moitiés se partagent à parts égales la place laissée par
-        le bouton play, qui tombe ainsi au centre exact de la fenêtre —
-        donc de la grille, que le canvas occupe en pleine largeur. */}
     <Box
       sx={{
         display: "flex",
         alignItems: "center",
-        justifyContent: "flex-end",
         gap: tight ? 0.25 : 0.75,
-        flex: "1 1 0",
-        minWidth: 0,
       }}
     >
       <ProjectHeader
@@ -83,7 +130,19 @@ export const PlaybackControls: React.FC<PlaybackControlsProps> = ({
         projectName={mechanism.metadata.name}
         saveStatus={saveStatus}
       />
+    </Box>
 
+    <Box sx={{ flex: 1 }} />
+
+    {/* Section centrale — tout ce qui pilote ou reflète l'exécution : mode,
+        lecture, vitesse, réglages physiques et calques. */}
+    <Box
+      sx={{
+        display: "flex",
+        alignItems: "center",
+        gap: tight ? 0.25 : 0.75,
+      }}
+    >
       {/* Sélecteur de mode */}
       <ToggleButtonGroup
         value={appMode}
@@ -92,8 +151,20 @@ export const PlaybackControls: React.FC<PlaybackControlsProps> = ({
         onChange={(_e, newMode: AppMode) => {
           if (!newMode) return;
           setAppMode(newMode);
+          // Same tick as `setAppMode`, not left to the hook's own effect: switching directly
+          // between kinematic and dynamic (no edition in between) otherwise leaves a render
+          // where `appMode` already reads the new mode but `runtimeState.simulationSnapshots`
+          // still holds the other mode's snapshot shape — see `simulationResetPatch`.
+          setRuntimeState((prev) => ({
+            ...prev,
+            ...simulationResetPatch(newMode, mechanism),
+            isPlaying: false,
+          }));
           if (newMode !== "edition")
-            updateMetadata({ ...mechanism.metadata, lastSimulationMode: newMode });
+            updateMetadata({
+              ...mechanism.metadata,
+              lastSimulationMode: newMode,
+            });
         }}
         sx={{
           "& .MuiToggleButton-root": {
@@ -131,13 +202,13 @@ export const PlaybackControls: React.FC<PlaybackControlsProps> = ({
         </Tooltip>
 
         <Tooltip disableInteractive title={t("mode_dynamic_tooltip")}>
-          <ToggleButton value="dynamic" disabled>
+          <ToggleButton value="dynamic">
             {t(condensed ? "mode_dynamic_short" : "mode_dynamic")}
           </ToggleButton>
         </Tooltip>
       </ToggleButtonGroup>
 
-      {!tight && <Divider flexItem sx={{ mx: 0.5 }} />}
+      {!condensed && <Divider flexItem sx={{ mx: 0.5 }} />}
 
       <Tooltip disableInteractive title={t("toolbar_reset")}>
         <span>
@@ -146,17 +217,22 @@ export const PlaybackControls: React.FC<PlaybackControlsProps> = ({
             color="inherit"
             disabled={appMode === "edition" || !timeline.hasRecording}
             onClick={resetToStart}
-            sx={{ p: 0.4, color: "primary.main", "&:hover": { backgroundColor: "action.hover" } }}
+            sx={{
+              px: tight ? 0.2 : 0.4,
+              py: 0.4,
+              color: "primary.main",
+              "&:hover": { backgroundColor: "action.hover" },
+            }}
           >
             <RestartAlt sx={{ fontSize: 20 }} />
           </IconButton>
         </span>
       </Tooltip>
 
-      {!tight && <Divider flexItem sx={{ mx: 0.2 }} />}
+      {!condensed && <Divider flexItem sx={{ mx: 0.2 }} />}
 
-      {/* Contrôles temporels — Play/Pause toujours actif ; les autres
-          boutons sont désactivés en mode Édition ou en bout de course. */}
+      {/* Play/Pause toujours actif ; les autres boutons sont désactivés en
+          mode Édition ou en bout de course. */}
       <Tooltip disableInteractive title={t("toolbar_go_to_start")}>
         <span>
           <IconButton
@@ -169,43 +245,39 @@ export const PlaybackControls: React.FC<PlaybackControlsProps> = ({
                 time: 0,
                 isPlaying: false,
                 // Nothing recorded yet ⇒ the start IS the end.
-                scrubbed: !at_recording_end(prev.kinematicSnapshots, 0),
+                scrubbed: !at_recording_end(prev.simulationSnapshots, 0),
               }))
             }
-            sx={{ p: 0.4 }}
+            sx={{ p: 0.4, ml: condensed ? -0.5 : 0 }}
           >
             <FirstPage sx={{ fontSize: 20 }} />
           </IconButton>
         </span>
       </Tooltip>
-    </Box>
 
-    <Tooltip disableInteractive title={t(runtimeState.isPlaying ? "toolbar_pause" : "toolbar_play")}>
-      <IconButton
-        size="small"
-        onClick={handleSpaceKey}
-        sx={{
-          bgcolor: "primary.main",
-          color: "primary.contrastText",
-          "&:hover": { bgcolor: "primary.dark" },
-          p: 0.5,
-          flexShrink: 0,
-        }}
+      <Tooltip
+        disableInteractive
+        title={t(runtimeState.isPlaying ? "toolbar_pause" : "toolbar_play")}
       >
-        {runtimeState.isPlaying ? <Pause sx={{ fontSize: 20 }} /> : <PlayArrow sx={{ fontSize: 20 }} />}
-      </IconButton>
-    </Tooltip>
+        <IconButton
+          size="small"
+          onClick={handleSpaceKey}
+          sx={{
+            bgcolor: "primary.main",
+            color: "primary.contrastText",
+            "&:hover": { bgcolor: "primary.dark" },
+            p: 0.5,
+            flexShrink: 0,
+          }}
+        >
+          {runtimeState.isPlaying ? (
+            <Pause sx={{ fontSize: 20 }} />
+          ) : (
+            <PlayArrow sx={{ fontSize: 20 }} />
+          )}
+        </IconButton>
+      </Tooltip>
 
-    <Box
-      sx={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "flex-start",
-        gap: tight ? 0.25 : 0.75,
-        flex: "1 1 0",
-        minWidth: 0,
-      }}
-    >
       <Tooltip disableInteractive title={t("toolbar_go_to_end")}>
         <span>
           <IconButton
@@ -215,10 +287,15 @@ export const PlaybackControls: React.FC<PlaybackControlsProps> = ({
             sx={{ p: 0.4 }}
             onClick={() =>
               setRuntimeState((prev) => {
-                const snaps = prev.kinematicSnapshots;
+                const snaps = prev.simulationSnapshots;
                 const maxT = snaps.length > 0 ? snaps[snaps.length - 1].t : 0;
                 // The end by construction: playing from here records on.
-                return { ...prev, time: maxT, isPlaying: false, scrubbed: false };
+                return {
+                  ...prev,
+                  time: maxT,
+                  isPlaying: false,
+                  scrubbed: false,
+                };
               })
             }
           >
@@ -227,23 +304,15 @@ export const PlaybackControls: React.FC<PlaybackControlsProps> = ({
         </span>
       </Tooltip>
 
-      {!tight && <Divider flexItem sx={{ mx: 0.5 }} />}
+      {!condensed && <Divider flexItem sx={{ mx: 0.5 }} />}
 
       {/* Stepper de vitesse de simulation */}
       {(() => {
         const speedIdx = SPEEDS.indexOf(runtimeState.speed);
-        const setSpeed = (s: SimulationSpeed) => setRuntimeState((prev) => ({ ...prev, speed: s }));
-        const disabled = appMode === "edition";
+        const setSpeed = (s: SimulationSpeed) =>
+          setRuntimeState((prev) => ({ ...prev, speed: s }));
         return (
-          <Box
-            sx={{
-              display: "flex",
-              alignItems: "center",
-              opacity: disabled ? 0.3 : 1,
-              pointerEvents: disabled ? "none" : "auto",
-              transition: "opacity 0.2s ease",
-            }}
-          >
+          <Box sx={{ display: "flex", alignItems: "center" }}>
             <Tooltip disableInteractive title={t("toolbar_slow_down")}>
               <span>
                 <IconButton
@@ -277,7 +346,10 @@ export const PlaybackControls: React.FC<PlaybackControlsProps> = ({
                   borderRadius: 1,
                   // La vitesse nominale est un état neutre : seul un
                   // réglage non standard mérite d'attirer l'œil.
-                  color: runtimeState.speed === 1 ? "text.secondary" : "primary.main",
+                  color:
+                    runtimeState.speed === 1
+                      ? "text.secondary"
+                      : "primary.main",
                   "&:hover": { backgroundColor: "action.hover" },
                 }}
               >
@@ -301,106 +373,82 @@ export const PlaybackControls: React.FC<PlaybackControlsProps> = ({
         );
       })()}
 
-      {!tight && <Divider flexItem sx={{ mx: 0.5 }} />}
+      {!condensed && <Divider flexItem sx={{ mx: 0.5 }} />}
 
-      {/* Toggles Gravité / Collisions */}
+      {/* Gravity / collisions / floor — reachable in edition too: these are settings of
+          the mechanism, not of the run. */}
       <Box
         sx={{
           display: "flex",
           alignItems: "center",
-          opacity: appMode === "edition" ? 0.3 : 1,
-          pointerEvents: appMode === "edition" ? "none" : "auto",
-          transition: "opacity 0.2s ease",
-          gap: tight ? 0.5 : 1.5,
+          gap: condensed ? 0.5 : 0.75,
         }}
       >
-        <Tooltip disableInteractive title={t(simulationConfig.gravity ? "gravity_on" : "gravity_off")}>
-          <Chip
-            disabled
-            icon={
-              <KeyboardDoubleArrowDown
-                sx={{
-                  fontSize: "14px !important",
-                  color: simulationConfig.gravity ? "primary.contrastText" : "inherit",
-                }}
-              />
-            }
-            label={condensed ? null : t("gravity")}
-            size="small"
-            clickable
-            onClick={() => setSimulationConfig((prev) => ({ ...prev, gravity: !prev.gravity }))}
-            variant="outlined"
-            sx={{
-              fontSize: "0.68rem",
-              height: 22,
-              borderColor: simulationConfig.gravity ? "primary.main" : "text.primary",
-              backgroundColor: simulationConfig.gravity ? "primary.main" : "transparent",
-              color: simulationConfig.gravity ? "primary.contrastText" : "inherit",
-              "& .MuiChip-icon": {
-                color: simulationConfig.gravity ? "primary.contrastText" : "inherit",
+        <PhysicsToggle
+          on={mechanism.simulation.gravity}
+          Icon={KeyboardDoubleArrowDown}
+          tooltip={t(
+            mechanism.simulation.gravity ? "gravity_on" : "gravity_off",
+          )}
+          onToggle={() =>
+            applyActions([
+              { type: "SetGravity", enabled: !mechanism.simulation.gravity },
+            ])
+          }
+        />
+        <PhysicsToggle
+          on={mechanism.simulation.collisions}
+          Icon={JoinInner}
+          tooltip={t(
+            mechanism.simulation.collisions
+              ? "collisions_on"
+              : "collisions_off",
+          )}
+          onToggle={() =>
+            applyActions([
+              {
+                type: "SetCollisions",
+                enabled: !mechanism.simulation.collisions,
               },
-              "& .MuiChip-label": { pr: condensed ? 0.1 : 1 },
-              "&.MuiChip-clickable:hover": {
-                backgroundColor: simulationConfig.gravity ? "primary.dark" : "action.hover",
+            ])
+          }
+        />
+        <PhysicsToggle
+          on={mechanism.simulation.floor.enabled}
+          Icon={HorizontalRule}
+          tooltip={t(
+            mechanism.simulation.floor.enabled ? "floor_on" : "floor_off",
+          )}
+          onToggle={() =>
+            applyActions([
+              {
+                type: "SetFloorEnabled",
+                enabled: !mechanism.simulation.floor.enabled,
               },
-              pl: 0.2,
-            }}
-          />
-        </Tooltip>
-        <Tooltip disableInteractive title={t(simulationConfig.collisions ? "collisions_on" : "collisions_off")}>
-          <Chip
-            disabled
-            icon={
-              <JoinInner
-                sx={{
-                  fontSize: "14px !important",
-                  color: simulationConfig.collisions ? "primary.contrastText" : "inherit",
-                }}
-              />
-            }
-            label={condensed ? null : t("collisions")}
-            size="small"
-            clickable
-            onClick={() => setSimulationConfig((prev) => ({ ...prev, collisions: !prev.collisions }))}
-            variant="outlined"
-            sx={{
-              fontSize: "0.68rem",
-              height: 22,
-              borderColor: simulationConfig.collisions ? "primary.main" : "text.primary",
-              backgroundColor: simulationConfig.collisions ? "primary.main" : "transparent",
-              color: simulationConfig.collisions ? "primary.contrastText" : "inherit",
-              "& .MuiChip-icon": {
-                color: simulationConfig.collisions ? "primary.contrastText" : "inherit",
-              },
-              "& .MuiChip-label": { pr: condensed ? 0.1 : 1 },
-              "&.MuiChip-clickable:hover": {
-                backgroundColor: simulationConfig.collisions ? "primary.dark" : "action.hover",
-              },
-              pl: 0.2,
-            }}
-          />
-        </Tooltip>
-      </Box>
-
-      <Divider flexItem sx={{ mx: tight ? 0.25 : 0.5 }} />
-
-      {/* Calques d'affichage : ce qui est montré. */}
-      <Box
-        sx={{
-          display: "flex",
-          alignItems: "center",
-          opacity: appMode === "edition" ? 0.3 : 1,
-          pointerEvents: appMode === "edition" ? "none" : "auto",
-          transition: "opacity 0.2s ease",
-        }}
-      >
-        <OverlaysMenu
-          mechanicalElements={mechanism.mechanicalElements}
-          applyActions={applyActions}
-          condensed={condensed}
+            ])
+          }
         />
       </Box>
 
+      <Divider flexItem sx={{ mx: condensed ? 0.25 : 0.5 }} />
+
+      {/* Display layers: what gets drawn. Reachable in edition too — picking a layer arms
+          what the run will show, it does not draw anything by itself. */}
+      <OverlaysMenu
+        mechanicalElements={mechanism.mechanicalElements}
+        applyActions={applyActions}
+        condensed={condensed}
+      />
+    </Box>
+
+    <Box sx={{ flex: 1 }} />
+
+    <Box
+      sx={{
+        display: "flex",
+        alignItems: "center",
+      }}
+    >
       {rightSlot}
     </Box>
   </>

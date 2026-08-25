@@ -25,9 +25,13 @@ import NumberInput from "./NumberInput";
 import SignedNumberInput from "./SignedNumberInput";
 import { t } from "../../../i18n";
 import { element_to_hovered_part } from "../../canvas/utils";
-
-const to_deg = (rad: number) => ((rad * 180) / Math.PI + 360) % 360;
-const to_rad = (deg: number) => (deg * Math.PI) / 180;
+import {
+  ANGLE,
+  FORCE,
+  LOAD_INTENSITY,
+  MOMENT,
+  wrap_angle_rad,
+} from "../../../utils/quantity-format";
 
 /** Build a SetDistributedForce action from partial new values (rest kept). */
 const change_distributed_force = (
@@ -207,7 +211,8 @@ export const LoadsSection: React.FC<LoadsSectionProps> = ({
                 <>
                   {load.type === "force" && (
                     <NumberInput
-                      label="F (N)"
+                      label="F"
+                      kind={FORCE}
                       value={(shownForce ?? load).vector.length()}
                       onChange={(mag) =>
                         applyActions([
@@ -223,20 +228,19 @@ export const LoadsSection: React.FC<LoadsSectionProps> = ({
                   )}
                   {load.type === "distributed-force" && (
                     <NumberInput
-                      label="F (N)"
+                      label="F"
+                      kind={FORCE}
                       value={
-                        ((((shownDistributed ?? load).magnitudeStart +
+                        (((shownDistributed ?? load).magnitudeStart +
                           (shownDistributed ?? load).magnitudeEnd) /
                           2) *
-                          beamLength) /
-                        1000
+                        beamLength
                       }
                       onChange={(resultant) => {
                         if (beamLength <= 0) return;
                         const current =
-                          (((load.magnitudeStart + load.magnitudeEnd) / 2) *
-                            beamLength) /
-                          1000;
+                          ((load.magnitudeStart + load.magnitudeEnd) / 2) *
+                          beamLength;
                         const next =
                           current > 1e-9
                             ? change_distributed_force(load, {
@@ -246,10 +250,8 @@ export const LoadsSection: React.FC<LoadsSectionProps> = ({
                                   load.magnitudeEnd * (resultant / current),
                               })
                             : change_distributed_force(load, {
-                                newMagnitudeStart:
-                                  (resultant / beamLength) * 1000,
-                                newMagnitudeEnd:
-                                  (resultant / beamLength) * 1000,
+                                newMagnitudeStart: resultant / beamLength,
+                                newMagnitudeEnd: resultant / beamLength,
                               });
                         applyActions([next]);
                       }}
@@ -257,7 +259,8 @@ export const LoadsSection: React.FC<LoadsSectionProps> = ({
                   )}
                   {load.type === "moment" && (
                     <SignedNumberInput
-                      label="M (N·m)"
+                      label="M"
+                      kind={MOMENT}
                       value={(shownMoment ?? load).value}
                       onChange={(value) =>
                         applyActions([
@@ -355,36 +358,36 @@ export const LoadsSection: React.FC<LoadsSectionProps> = ({
                   {load.type === "force" ? (
                     <NumberInput
                       label="Angle"
-                      value={to_deg((shownForce ?? load).vector.angle())}
-                      onChange={(deg) =>
+                      kind={ANGLE}
+                      value={wrap_angle_rad((shownForce ?? load).vector.angle())}
+                      onChange={(newAngle) =>
                         applyActions([
                           {
                             type: "ChangeForce",
                             id: load.id,
                             newVector: Point2.from_polar(
                               load.vector.length(),
-                              to_rad(deg),
+                              newAngle,
                             ),
                             oldVector: load.vector,
                           },
                         ])
                       }
-                      suffix="°"
                     />
                   ) : (
                     <NumberInput
                       label="Angle"
-                      value={to_deg(
+                      kind={ANGLE}
+                      value={wrap_angle_rad(
                         (shownDistributed ?? load).direction.angle(),
                       )}
-                      onChange={(deg) =>
+                      onChange={(newAngle) =>
                         applyActions([
                           change_distributed_force(load, {
-                            newDirection: Point2.from_polar(1, to_rad(deg)),
+                            newDirection: Point2.from_polar(1, newAngle),
                           }),
                         ])
                       }
-                      suffix="°"
                     />
                   )}
                 </Box>
@@ -401,7 +404,8 @@ export const LoadsSection: React.FC<LoadsSectionProps> = ({
                     }}
                   >
                     <NumberInput
-                      label="q₀ (N/m)"
+                      label="q₀"
+                      kind={LOAD_INTENSITY}
                       value={(shownDistributed ?? load).magnitudeStart}
                       onChange={(v) =>
                         applyActions([
@@ -412,7 +416,8 @@ export const LoadsSection: React.FC<LoadsSectionProps> = ({
                       }
                     />
                     <NumberInput
-                      label="q₁ (N/m)"
+                      label="q₁"
+                      kind={LOAD_INTENSITY}
                       value={(shownDistributed ?? load).magnitudeEnd}
                       onChange={(v) =>
                         applyActions([

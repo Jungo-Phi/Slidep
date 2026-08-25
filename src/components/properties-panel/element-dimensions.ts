@@ -9,9 +9,6 @@ import { screen2world_length } from "../../utils";
 import { measure_belt_length } from "../../utils/belt-geom";
 import { DIM } from "../../constants/rendering-specs";
 
-export const to_deg = (rad: number) => ((rad * 180) / Math.PI + 360) % 360;
-export const to_rad = (deg: number) => (deg * Math.PI) / 180;
-
 /**
  * How far a dimension created from the panel stands off what it measures — a
  * screen distance, so it lands where it can be read whatever the zoom, and never

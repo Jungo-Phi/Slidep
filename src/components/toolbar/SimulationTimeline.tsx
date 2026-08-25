@@ -1,11 +1,11 @@
 import React, { useState } from "react";
 import { Box, IconButton, Tooltip, Typography, alpha } from "@mui/material";
 import { Gif } from "@mui/icons-material";
-import { AppMode } from "../../types";
-import { RuntimeState } from "../../types/runtime-state";
+import { AppMode, is_simulating } from "../../types";
+import { KinematicSnapshot, RuntimeState } from "../../types/runtime-state";
 import { format_sim_time } from "../../utils";
 import { t } from "../../i18n";
-import { at_recording_end } from "../solver/kinematic-simulation";
+import { at_recording_end } from "../solver/simulation-engine";
 import {
   set_sim_clock as setRuntimeState,
   sim_clock,
@@ -79,7 +79,9 @@ export const SimulationTimeline: React.FC<SimulationTimelineProps> = ({
    */
   const events = React.useMemo((): TimelineEvent[] => {
     if (appMode !== "kinematic") return [];
-    const snapshots = runtimeState.kinematicSnapshots;
+    // Narrowed by the check above: only a kinematic run fills `simulationSnapshots`
+    // while that mode is active. Belt/dead-point events have no dynamic-mode meaning yet.
+    const snapshots = runtimeState.simulationSnapshots as KinematicSnapshot[];
     return [
       ...belt_events(snapshots).map((event) => ({
         t: event.t,
@@ -100,7 +102,7 @@ export const SimulationTimeline: React.FC<SimulationTimelineProps> = ({
         ),
       })),
     ];
-  }, [appMode, runtimeState.kinematicSnapshots]);
+  }, [appMode, runtimeState.simulationSnapshots]);
 
   /**
    * Those marks the rail can actually place, merged when they would overlap.
@@ -205,11 +207,9 @@ export const SimulationTimeline: React.FC<SimulationTimelineProps> = ({
             );
             const rs = sim_clock();
             const maxTime =
-              appMode === "kinematic" && rs.kinematicSnapshots.length > 0
-                ? rs.kinematicSnapshots[rs.kinematicSnapshots.length - 1].t
-                : rs.current
-                  ? rs.current.timestamp
-                  : 0;
+              is_simulating(appMode) && rs.simulationSnapshots.length > 0
+                ? rs.simulationSnapshots[rs.simulationSnapshots.length - 1].t
+                : 0;
             setRuntimeState((prev) => {
               const t = ratio * maxTime;
               return {
@@ -218,7 +218,7 @@ export const SimulationTimeline: React.FC<SimulationTimelineProps> = ({
                 isPlaying: false,
                 // Dropped ON the end is not scrubbing: playing from there
                 // extends the recording instead of replaying nothing.
-                scrubbed: !at_recording_end(prev.kinematicSnapshots, t),
+                scrubbed: !at_recording_end(prev.simulationSnapshots,t),
               };
             });
           };
@@ -280,7 +280,7 @@ export const SimulationTimeline: React.FC<SimulationTimelineProps> = ({
                   ...prev,
                   time: mark.t,
                   isPlaying: false,
-                  scrubbed: !at_recording_end(prev.kinematicSnapshots, mark.t),
+                  scrubbed: !at_recording_end(prev.simulationSnapshots,mark.t),
                 }));
               }}
               sx={{

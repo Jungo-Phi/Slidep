@@ -45,8 +45,16 @@ export function resolve_slots(links: Link[], nodes: Nodes): LinkSlots[] {
       case "DistanceToLine":
       case "SlideOnSegment":
       case "FixedOnSegment":
+      case "MinDistanceToSegment":
         return {
           pos: Int32Array.of(P(link.key1), P(link.key2), P(link.key3)),
+          ang: EMPTY,
+          rad: EMPTY,
+        };
+
+      case "MinDistanceToLine":
+        return {
+          pos: Int32Array.of(P(link.key1), P(link.key3)),
           ang: EMPTY,
           rad: EMPTY,
         };

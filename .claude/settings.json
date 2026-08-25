@@ -1,7 +1,10 @@
 {
   "permissions": {
     "allow": [
-      "PowerShell(npx tsc --noEmit -p tsconfig.json; \"exit=$LASTEXITCODE\")"
+      "PowerShell(npx tsc --noEmit -p tsconfig.json; \"exit=$LASTEXITCODE\")",
+      "Bash(npm run *)",
+      "Bash(node \"C:\\\\Users\\\\arnol\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-arnol-Documents-slidep\\\\469628f4-c190-473f-a088-1ecec4ad47c8\\\\scratchpad\\\\fix-simulation-field.js\" --dry)",
+      "Bash(node \"C:\\\\Users\\\\arnol\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-arnol-Documents-slidep\\\\469628f4-c190-473f-a088-1ecec4ad47c8\\\\scratchpad\\\\fix-simulation-field.js\")"
     ],
     "deny": [
       "Read(./TODO.md)",

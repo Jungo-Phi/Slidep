@@ -4,7 +4,7 @@ import { DEFAULT_RUNTIME_STATE, RuntimeState } from "../../types/runtime-state";
 /**
  * The simulation clock, held outside React.
  *
- * `time` and `kinematicSnapshots` change on every recorded frame, and nobody *decides* them. Carrying them in a state the whole tree depends on asked React to
+ * `time` and `simulationSnapshots` change on every recorded frame, and nobody *decides* them. Carrying them in a state the whole tree depends on asked React to
  * reconcile the application sixty times a second — measured at 42 ms per render in a
  * production build, for a canvas that draws in 2 ms. They live here instead; React only
  * mirrors them, at a rate that suits reading numbers rather than moving a mechanism.
@@ -22,8 +22,6 @@ const INTENT = [
   "isPlaying",
   "speed",
   "scrubbed",
-  "current",
-  "history",
 ] as const satisfies readonly (keyof RuntimeState)[];
 
 type Listener = (urgent: boolean) => void;

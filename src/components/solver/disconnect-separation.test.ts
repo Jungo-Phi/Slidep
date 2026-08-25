@@ -3,7 +3,7 @@ import { separation_links } from "./disconnect-separation";
 import { applyDistanceConstraint } from "../../test/constraint-map-api";
 import { DIM } from "../../constants/rendering-specs";
 import { Point2 } from "../../types/point2";
-import { DEFAULT_METADATA, Mechanism } from "../../types/mechanism";
+import { DEFAULT_METADATA, DEFAULT_SIMULATION, Mechanism } from "../../types/mechanism";
 import type { Action, ID, MechanicalElement } from "../../types";
 
 const id = (s: string) => s as ID;
@@ -17,6 +17,8 @@ function mechanism(mechanicalElements: MechanicalElement[]): Mechanism {
   return {
     metadata: DEFAULT_METADATA,
     viewport: { scale: 1, pan: new Point2(0, 0) },
+
+    simulation: DEFAULT_SIMULATION,
     mechanicalElements,
     constraintElements: [],
     loads: [],

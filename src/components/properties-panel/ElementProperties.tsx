@@ -27,7 +27,6 @@ import {
   AppMode,
   Mechanism,
   Point2,
-  PropertiesPanelTab,
   RuntimeState,
   ZERO,
 } from "../../types";
@@ -53,9 +52,18 @@ import {
 } from "./element-dimensions";
 import ElementPicker from "./components/ElementPicker";
 import { DEFAULT } from "../../constants/physics-specs";
-
-const to_deg = (rad: number) => ((rad * 180) / Math.PI + 360) % 360;
-const to_rad = (deg: number) => (deg * Math.PI) / 180;
+import {
+  ANGLE,
+  ANGULAR_VELOCITY,
+  LENGTH,
+  LINEAR_MASS,
+  MASS,
+  MOMENT,
+  STIFFNESS,
+  SURFACE_MASS,
+  DAMPING,
+  wrap_angle_rad,
+} from "../../utils/quantity-format";
 
 /** The ground/unground button's icon, reused as the ElementPicker "world" option
  *  so a motor's anchor reads with the same visual language as the ground toggle. */
@@ -74,7 +82,6 @@ interface ElementPropertiesProps {
   /** The mechanism in the pose on screen — see the same field on `AnalysisPanel`. Only feeds
    *  the values shown for a motor/load while scrubbed; every write still goes to `mechanism`. */
   analysedMechanism: Mechanism;
-  setActiveTab: (tab: PropertiesPanelTab) => void;
   appMode: AppMode;
   runtimeState: RuntimeState;
 }
@@ -88,7 +95,6 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
   applyActions,
   mechanism,
   analysedMechanism,
-  setActiveTab,
   appMode,
   runtimeState,
 }) => {
@@ -151,20 +157,97 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                   size="medium"
                   editable={true}
                   trailingControls={
-                    <StructureOnly disabled={simulating} row>
-                      <IconButton
-                        color="error"
-                        onMouseEnter={() => handleMouseEnter(element, true)}
-                        onMouseLeave={handleMouseLeave}
-                        onClick={() =>
-                          applyActions([{ type: "DeleteElement", element }])
-                        }
-                        title={t("action_delete")}
-                        sx={{ borderRadius: 3 }}
-                      >
-                        <Delete sx={{ width: 20, height: 20 }} />
-                      </IconButton>
-                    </StructureOnly>
+                    <>
+                      {element.type === "mass" && (
+                        <NumberInput
+                          label={t("mass")}
+                          kind={MASS}
+                          value={element.mass}
+                          onChange={(mass) =>
+                            applyActions([
+                              {
+                                type: "ChangeMass",
+                                id: element.id,
+                                delta: mass - element.mass,
+                              },
+                            ])
+                          }
+                          accent
+                          unsigned
+                        />
+                      )}
+                      {element.type === "spring" && (
+                        <NumberInput
+                          label={t("stiffness")}
+                          kind={STIFFNESS}
+                          value={element.stiffness}
+                          onChange={(stiffness) =>
+                            applyActions([
+                              {
+                                type: "ChangeStiffness",
+                                id: element.id,
+                                delta: stiffness - element.stiffness,
+                              },
+                            ])
+                          }
+                          accent
+                          unsigned
+                        />
+                      )}
+                      {element.type === "damper" && (
+                        <NumberInput
+                          label={t("damping")}
+                          kind={DAMPING}
+                          value={element.damping}
+                          onChange={(damping) =>
+                            applyActions([
+                              {
+                                type: "ChangeDamping",
+                                id: element.id,
+                                delta: damping - element.damping,
+                              },
+                            ])
+                          }
+                          accent
+                          unsigned
+                        />
+                      )}
+                      {element.type === "pivot" && element.motor && (
+                        <StructureOnly disabled={simulating}>
+                          <SignedNumberInput
+                            label={t("motor_speed_label")}
+                            kind={ANGULAR_VELOCITY()}
+                            value={element.motor.speed}
+                            onChange={(speed) => {
+                              const motor = element.motor!;
+                              applyActions([
+                                {
+                                  type: "SetMotorConfig",
+                                  id: element.id,
+                                  newConfig: { ...motor, speed },
+                                  oldConfig: motor,
+                                },
+                              ]);
+                            }}
+                            accent
+                          />
+                        </StructureOnly>
+                      )}
+                      <StructureOnly disabled={simulating} row>
+                        <IconButton
+                          color="error"
+                          onMouseEnter={() => handleMouseEnter(element, true)}
+                          onMouseLeave={handleMouseLeave}
+                          onClick={() =>
+                            applyActions([{ type: "DeleteElement", element }])
+                          }
+                          title={t("action_delete")}
+                          sx={{ borderRadius: 3 }}
+                        >
+                          <Delete sx={{ width: 20, height: 20 }} />
+                        </IconButton>
+                      </StructureOnly>
+                    </>
                   }
                 />
               </ListItem>
@@ -248,39 +331,95 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                             },
                           ])
                         }
-                        sx={{ padding: 0.5, border: 1, borderColor: "divider" }}
+                        sx={{
+                          padding: 0.2,
+                          border: 1,
+                          borderColor: "divider",
+                        }}
                       >
                         <Box
                           component="img"
                           style={{ width: 28, height: 28 }}
-                          src={icon(element.isGrounded ? "ground" : "unground")}
+                          src={icon(
+                            element.isGrounded ? "ground" : "ground-off",
+                          )}
                         />
                       </IconButton>
                     </Tooltip>
                   )}
               </StructureOnly>
 
-              {element.type === "pivot" && element.motor && (
-                <SignedNumberInput
-                  label={t("unit_rpm")}
-                  value={(displayMotorConfig ?? element.motor).speed}
-                  onChange={(speed) =>
+              {element.type === "pivot" && element.motor && motorConfig && (
+                <ElementPicker
+                  label="Ancrage moteur"
+                  options={motorBeams}
+                  extraOption={{
+                    label: t("ground"),
+                    icon: GroundIcon,
+                    selected: motorConfig.parentBeamID === undefined,
+                  }}
+                  selected={motorBeams.find(
+                    (beam) => beam.id === motorConfig.parentBeamID,
+                  )}
+                  onSelectExtra={() =>
                     applyActions([
                       {
                         type: "SetMotorConfig",
                         id: element.id,
-                        newConfig: { ...element.motor, speed },
-                        oldConfig: element.motor,
+                        newConfig: {
+                          ...motorConfig,
+                          parentBeamID: undefined,
+                        },
+                        oldConfig: motorConfig,
                       },
+                      ...(element.isGrounded
+                        ? []
+                        : ([
+                            {
+                              type: "GroundNode",
+                              id: element.id,
+                              grounded: true,
+                            },
+                          ] satisfies Action[])),
                     ])
                   }
+                  onSelectElement={(beam) =>
+                    applyActions([
+                      {
+                        type: "SetMotorConfig",
+                        id: element.id,
+                        newConfig: { ...motorConfig, parentBeamID: beam.id },
+                        oldConfig: motorConfig,
+                      },
+                      ...(element.isGrounded
+                        ? ([
+                            {
+                              type: "GroundNode",
+                              id: element.id,
+                              grounded: false,
+                            },
+                          ] satisfies Action[])
+                        : []),
+                    ])
+                  }
+                  onHoverElement={(beam) =>
+                    setHoveredPart(element_to_hovered_part(beam, false))
+                  }
+                  onHoverEnd={() =>
+                    setHoveredPart({ type: "Void", position: ZERO })
+                  }
+                  hoveredPart={hoveredPart}
+                  setHoveredPart={setHoveredPart}
+                  selectedIds={selectedIds}
+                  setCanvasState={setCanvasState}
+                  applyActions={applyActions}
                   large
-                  accent
                 />
               )}
               {element.type === "mass" && (
                 <NumberInput
-                  label="kg"
+                  label={t("mass")}
+                  kind={MASS}
                   value={element.mass}
                   onChange={(mass) =>
                     applyActions([
@@ -298,7 +437,8 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
               )}
               {element.type === "spring" && (
                 <NumberInput
-                  label="N/m"
+                  label={t("stiffness")}
+                  kind={STIFFNESS}
                   value={element.stiffness}
                   onChange={(stiffness) =>
                     applyActions([
@@ -316,7 +456,8 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
               )}
               {element.type === "damper" && (
                 <NumberInput
-                  label="N·s/m"
+                  label={t("damping")}
+                  kind={DAMPING}
                   value={element.damping}
                   onChange={(damping) =>
                     applyActions([
@@ -365,37 +506,37 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
           <Box
             sx={{
               display: "flex",
-              flexDirection: "row",
+              flexDirection: "column",
               alignItems: "center",
               justifyContent: "center",
               gap: 2,
               m: 1,
             }}
           >
-            <VectorInput
-              value={element.position}
-              onChange={(pos) =>
-                applyActions([
-                  {
-                    type: "MoveNode",
-                    id: element.id,
-                    newPosition: pos,
-                    oldPosition: element.position,
-                    committed: true,
-                  },
-                ])
-              }
-            />
-            {element.type === "pivot" && (
-              <Box
-                sx={{
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: 0.25,
-                }}
-              >
+            <Box
+              sx={{
+                display: "flex",
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 2,
+              }}
+            >
+              <VectorInput
+                value={element.position}
+                onChange={(pos) =>
+                  applyActions([
+                    {
+                      type: "MoveNode",
+                      id: element.id,
+                      newPosition: pos,
+                      oldPosition: element.position,
+                      committed: true,
+                    },
+                  ])
+                }
+              />
+              {element.type === "pivot" && (
                 <Tooltip
                   disableInteractive
                   title={t(element.motor ? "motor_revert" : "motor_convert")}
@@ -410,7 +551,10 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                           id: element.id,
                           newConfig: element.motor
                             ? undefined
-                            : { speed: DEFAULT.MOTOR_SPEED },
+                            : {
+                                speed: DEFAULT.MOTOR_SPEED,
+                                torque: DEFAULT.MOTOR_TORQUE,
+                              },
                           oldConfig: element.motor,
                         },
                       ];
@@ -428,132 +572,114 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                     <Box
                       component="img"
                       style={{ width: 24, height: 24 }}
-                      src={icon(element.motor ? "motor" : "pivot")}
+                      src={icon(element.motor ? "motor" : "motor-off")}
                     />
                   </IconButton>
                 </Tooltip>
-                {motorConfig && (
-                  <ElementPicker
-                    label="Ancrage moteur"
-                    options={motorBeams}
-                    extraOption={{
-                      label: t("tool_ground"),
-                      icon: GroundIcon,
-                      selected: motorConfig.parentBeamID === undefined,
-                    }}
-                    selected={motorBeams.find(
-                      (beam) => beam.id === motorConfig.parentBeamID,
-                    )}
-                    onSelectExtra={() =>
-                      applyActions([
-                        {
-                          type: "SetMotorConfig",
-                          id: element.id,
-                          newConfig: {
-                            ...motorConfig,
-                            parentBeamID: undefined,
-                          },
-                          oldConfig: motorConfig,
-                        },
-                        ...(element.isGrounded
-                          ? []
-                          : ([
+              )}
+              {element.type === "gear" && (
+                <NumberInput
+                  label={t("radius")}
+                  kind={LENGTH}
+                  value={element.radius}
+                  onChange={(radius) => {
+                    applyActions([
+                      {
+                        type: "ChangeGearRadius",
+                        id: element.id,
+                        newRadius: radius,
+                        oldRadius: element.radius,
+                        target: new Point2(
+                          element.position.x + radius,
+                          element.position.y,
+                        ),
+                        committed: true,
+                      },
+                    ]);
+                  }}
+                  large
+                  unsigned
+                  adornment={
+                    linkedConstraint
+                      ? {
+                          icon: Lock,
+                          title: t("length_unlock"),
+                          color: "secondary",
+                          onMouseEnter: () =>
+                            handleMouseEnter(linkedConstraint, true),
+                          onMouseLeave: handleMouseLeave,
+                          onClick: () =>
+                            applyActions([
                               {
-                                type: "GroundNode",
-                                id: element.id,
-                                grounded: true,
+                                type: "DeleteElement",
+                                element: linkedConstraint,
                               },
-                            ] satisfies Action[])),
-                      ])
-                    }
-                    onSelectElement={(beam) =>
-                      applyActions([
-                        {
-                          type: "SetMotorConfig",
-                          id: element.id,
-                          newConfig: { ...motorConfig, parentBeamID: beam.id },
-                          oldConfig: motorConfig,
-                        },
-                        ...(element.isGrounded
-                          ? ([
+                            ]),
+                        }
+                      : {
+                          icon: LockOpen,
+                          title: t("length_lock"),
+                          onClick: () =>
+                            applyActions([
                               {
-                                type: "GroundNode",
-                                id: element.id,
-                                grounded: false,
+                                type: "CreateElement",
+                                element: create_radius_dimension(
+                                  element,
+                                  mechanism.viewport,
+                                ),
                               },
-                            ] satisfies Action[])
-                          : []),
-                      ])
-                    }
-                    onHoverElement={(beam) =>
-                      setHoveredPart(element_to_hovered_part(beam, false))
-                    }
-                    onHoverEnd={() =>
-                      setHoveredPart({ type: "Void", position: ZERO })
-                    }
-                    hoveredPart={hoveredPart}
-                    setHoveredPart={setHoveredPart}
-                    selectedIds={selectedIds}
-                    setCanvasState={setCanvasState}
-                    applyActions={applyActions}
-                  />
-                )}
-              </Box>
-            )}
-            {element.type === "gear" && (
-              <NumberInput
-                value={element.radius}
-                onChange={(radius) => {
-                  applyActions([
-                    {
-                      type: "ChangeGearRadius",
-                      id: element.id,
-                      newRadius: radius,
-                      oldRadius: element.radius,
-                      target: new Point2(
-                        element.position.x + radius,
-                        element.position.y,
-                      ),
-                      committed: true,
-                    },
-                  ]);
+                            ]),
+                        }
+                  }
+                />
+              )}
+            </Box>
+            {element.type === "pivot" && element.motor && (
+              <Box
+                sx={{
+                  display: "flex",
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 1,
                 }}
-                label={t("element_radius")}
-                large
-                unsigned
-                adornment={
-                  linkedConstraint
-                    ? {
-                        icon: Lock,
-                        title: t("length_unlock"),
-                        color: "secondary",
-                        onMouseEnter: () =>
-                          handleMouseEnter(linkedConstraint, true),
-                        onMouseLeave: handleMouseLeave,
-                        onClick: () =>
-                          applyActions([
-                            {
-                              type: "DeleteElement",
-                              element: linkedConstraint,
-                            },
-                          ]),
-                      }
-                    : {
-                        icon: LockOpen,
-                        title: t("length_lock"),
-                        onClick: () =>
-                          applyActions([
-                            {
-                              type: "CreateElement",
-                              element: create_radius_dimension(
-                                element,
-                                mechanism.viewport,
-                              ),
-                            },
-                          ]),
-                      }
-                }
-              />
+              >
+                <NumberInput
+                  label={t("motor_torque_label")}
+                  kind={MOMENT}
+                  value={(displayMotorConfig ?? element.motor).torque}
+                  onChange={(torque) => {
+                    const motor = element.motor!;
+                    applyActions([
+                      {
+                        type: "SetMotorConfig",
+                        id: element.id,
+                        newConfig: { ...motor, torque },
+                        oldConfig: motor,
+                      },
+                    ]);
+                  }}
+                  unsigned
+                  large
+                />
+                <SignedNumberInput
+                  label={t("motor_speed_label")}
+                  kind={ANGULAR_VELOCITY()}
+                  value={(displayMotorConfig ?? element.motor).speed}
+                  onChange={(speed) => {
+                    const motor = element.motor!;
+                    applyActions([
+                      {
+                        type: "SetMotorConfig",
+                        id: element.id,
+                        newConfig: { ...motor, speed },
+                        oldConfig: motor,
+                      },
+                    ]);
+                  }}
+                  large
+                />
+              </Box>
             )}
           </Box>
         </StructureOnly>
@@ -564,37 +690,62 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
           <Box
             sx={{
               display: "flex",
-              flexDirection: "row",
+              flexDirection: "column",
               alignItems: "center",
               justifyContent: "center",
-              gap: 1,
+              gap: 2,
               m: 1,
             }}
           >
-            <VectorInput
-              value={element.positionStart}
-              onChange={(pos) =>
-                applyActions([
-                  {
-                    type: "MoveEdgeStart",
-                    id: element.id,
-                    newPosition: pos,
-                    oldPosition: element.positionStart,
-                    committed: true,
-                  },
-                ])
-              }
-            />
-
             <Box
               sx={{
                 display: "flex",
-                flexDirection: "column",
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 2,
+              }}
+            >
+              <VectorInput
+                value={element.positionStart}
+                onChange={(pos) =>
+                  applyActions([
+                    {
+                      type: "MoveEdgeStart",
+                      id: element.id,
+                      newPosition: pos,
+                      oldPosition: element.positionStart,
+                      committed: true,
+                    },
+                  ])
+                }
+              />
+              <VectorInput
+                value={element.positionEnd}
+                onChange={(pos) =>
+                  applyActions([
+                    {
+                      type: "MoveEdgeEnd",
+                      id: element.id,
+                      newPosition: pos,
+                      oldPosition: element.positionEnd,
+                      committed: true,
+                    },
+                  ])
+                }
+              />
+            </Box>
+            <Box
+              sx={{
+                display: "flex",
+                flexDirection: "row",
                 alignItems: "center",
                 gap: 1,
               }}
             >
               <NumberInput
+                label={t("length")}
+                kind={LENGTH}
                 value={
                   element.type === "belt"
                     ? measure_belt_length(element, mechanism.mechanicalElements)
@@ -657,7 +808,6 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                     ]);
                   }
                 }}
-                label={t("length")}
                 large
                 unsigned
                 adornment={
@@ -696,211 +846,29 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
               />
               {element.type !== "belt" && (
                 <NumberInput
-                  value={to_deg(
+                  label={t("angle")}
+                  kind={ANGLE}
+                  value={wrap_angle_rad(
                     element.positionEnd.sub(element.positionStart).angle(),
                   )}
-                  onChange={(deg) =>
+                  onChange={(newAngle) =>
                     applyActions([
                       {
                         type: "ChangeEdgeAngle",
                         id: element.id,
-                        newAngle: to_rad(deg),
+                        newAngle,
                         oldAngle: element.positionEnd
                           .sub(element.positionStart)
                           .angle(),
                       },
                     ])
                   }
-                  suffix={"°"}
-                  label={t("angle")}
                   large
                 />
               )}
             </Box>
-            <VectorInput
-              value={element.positionEnd}
-              onChange={(pos) =>
-                applyActions([
-                  {
-                    type: "MoveEdgeEnd",
-                    id: element.id,
-                    newPosition: pos,
-                    oldPosition: element.positionEnd,
-                    committed: true,
-                  },
-                ])
-              }
-            />
           </Box>
         </StructureOnly>
-      )}
-
-      {("rotatingEdgesIDs" in element ||
-        "parentBeamID" in element ||
-        element.type === "gear" ||
-        element.type === "beam" ||
-        element.type === "spring") && (
-        <>
-          <Divider sx={{ mt: 1, mb: 1.5 }} />
-          <Box
-            sx={{
-              display: "flex",
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 2,
-              mt: -1,
-            }}
-          >
-            {"rotatingEdgesIDs" in element && (
-              <Box
-                sx={{
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  gap: 0.5,
-                }}
-              >
-                <Typography variant="caption">
-                  {t("rotational_friction")}
-                </Typography>
-                <NumberInput
-                  label=""
-                  value={element.rotationalFriction}
-                  onChange={(rotationalFriction) =>
-                    applyActions([
-                      {
-                        type: "ChangeRotationalFriction",
-                        id: element.id,
-                        delta: rotationalFriction - element.rotationalFriction,
-                      },
-                    ])
-                  }
-                  unsigned
-                  large
-                  precision={3}
-                  step={0.001}
-                />
-              </Box>
-            )}
-            {"parentBeamID" in element && (
-              <Box
-                sx={{
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  gap: 0.5,
-                }}
-              >
-                <Typography variant="caption">
-                  {t("sliding_friction")}
-                </Typography>
-                <NumberInput
-                  label=""
-                  value={element.slidingFriction}
-                  onChange={(slidingFriction) =>
-                    applyActions([
-                      {
-                        type: "ChangeSlidingFriction",
-                        id: element.id,
-                        delta: slidingFriction - element.slidingFriction,
-                      },
-                    ])
-                  }
-                  unsigned
-                  large
-                  precision={2}
-                  step={0.01}
-                />
-              </Box>
-            )}
-            {element.type === "gear" && (
-              <Box
-                sx={{
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  gap: 0.5,
-                }}
-              >
-                <Typography variant="caption">{t("surface_mass")}</Typography>
-                <NumberInput
-                  label="kg/m²"
-                  value={element.surfaceMass}
-                  onChange={(surfaceMass) =>
-                    applyActions([
-                      {
-                        type: "ChangeSurfaceMass",
-                        id: element.id,
-                        delta: surfaceMass - element.surfaceMass,
-                      },
-                    ])
-                  }
-                  unsigned
-                  large
-                />
-              </Box>
-            )}
-            {element.type === "beam" && (
-              <Box
-                sx={{
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  gap: 0.5,
-                }}
-              >
-                <Typography variant="caption">{t("linear_mass")}</Typography>
-                <NumberInput
-                  label="kg/m"
-                  value={element.linearMass}
-                  onChange={(linearMass) =>
-                    applyActions([
-                      {
-                        type: "ChangeLinearMass",
-                        id: element.id,
-                        delta: linearMass - element.linearMass,
-                      },
-                    ])
-                  }
-                  unsigned
-                  large
-                />
-              </Box>
-            )}
-            {element.type === "spring" && (
-              <Box
-                sx={{
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  gap: 0.5,
-                }}
-              >
-                <Typography variant="caption">{t("rest_length")}</Typography>
-                <NumberInput
-                  label=""
-                  value={
-                    element.restLength ??
-                    element.positionStart.distance_to(element.positionEnd)
-                  }
-                  onChange={(restLength) =>
-                    applyActions([
-                      {
-                        type: "UpdateElementRestLength",
-                        id: element.id,
-                        newValue: restLength,
-                        oldValue: element.restLength,
-                      },
-                    ])
-                  }
-                  unsigned
-                  large
-                />
-              </Box>
-            )}
-          </Box>
-        </>
       )}
 
       <Divider sx={{ mt: 1.5, mb: 1 }} />
@@ -933,17 +901,200 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
         </Box>
       )}
       <Divider sx={{ my: 1 }} />
-      <ProbesSection
-        element={element}
-        applyActions={applyActions}
-        setActiveTab={setActiveTab}
-      />
+      <ProbesSection element={element} applyActions={applyActions} />
+
+      {("rotatingEdgesIDs" in element ||
+        "parentBeamID" in element ||
+        element.type === "gear" ||
+        element.type === "beam" ||
+        element.type === "spring") && (
+        <>
+          <Divider sx={{ mt: 1, mb: 1.5 }} />
+          <Box
+            sx={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 2,
+            }}
+          >
+            <Box
+              sx={{
+                display: "flex",
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 2,
+                mt: -1,
+              }}
+            >
+              {"rotatingEdgesIDs" in element && (
+                <Box
+                  sx={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    gap: 0.5,
+                  }}
+                >
+                  <Typography variant="caption">
+                    {t("rotational_friction")}
+                  </Typography>
+                  <NumberInput
+                    label=""
+                    value={element.rotationalFriction}
+                    onChange={(rotationalFriction) =>
+                      applyActions([
+                        {
+                          type: "ChangeRotationalFriction",
+                          id: element.id,
+                          delta:
+                            rotationalFriction - element.rotationalFriction,
+                        },
+                      ])
+                    }
+                    unsigned
+                    large
+                    precision={3}
+                    step={0.001}
+                  />
+                </Box>
+              )}
+              {"parentBeamID" in element && (
+                <Box
+                  sx={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    gap: 0.5,
+                  }}
+                >
+                  <Typography variant="caption">
+                    {t("sliding_friction")}
+                  </Typography>
+                  <NumberInput
+                    label=""
+                    value={element.slidingFriction}
+                    onChange={(slidingFriction) =>
+                      applyActions([
+                        {
+                          type: "ChangeSlidingFriction",
+                          id: element.id,
+                          delta: slidingFriction - element.slidingFriction,
+                        },
+                      ])
+                    }
+                    unsigned
+                    large
+                    precision={2}
+                    step={0.01}
+                  />
+                </Box>
+              )}
+              {element.type === "gear" && (
+                <Box
+                  sx={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    gap: 0.5,
+                  }}
+                >
+                  <Typography variant="caption">{t("surface_mass")}</Typography>
+                  <NumberInput
+                    label=""
+                    kind={SURFACE_MASS}
+                    value={element.surfaceMass}
+                    onChange={(surfaceMass) =>
+                      applyActions([
+                        {
+                          type: "ChangeSurfaceMass",
+                          id: element.id,
+                          delta: surfaceMass - element.surfaceMass,
+                        },
+                      ])
+                    }
+                    unsigned
+                    large
+                  />
+                </Box>
+              )}
+              {element.type === "beam" && (
+                <Box
+                  sx={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    gap: 0.5,
+                  }}
+                >
+                  <Typography variant="caption">{t("linear_mass")}</Typography>
+                  <NumberInput
+                    label=""
+                    kind={LINEAR_MASS}
+                    value={element.linearMass}
+                    onChange={(linearMass) =>
+                      applyActions([
+                        {
+                          type: "ChangeLinearMass",
+                          id: element.id,
+                          delta: linearMass - element.linearMass,
+                        },
+                      ])
+                    }
+                    unsigned
+                    large
+                  />
+                </Box>
+              )}
+              {element.type === "spring" && (
+                <Box
+                  sx={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    gap: 0.5,
+                  }}
+                >
+                  <Typography variant="caption">{t("rest_length")}</Typography>
+                  <NumberInput
+                    label=""
+                    kind={LENGTH}
+                    value={
+                      element.restLength ??
+                      element.positionStart.distance_to(element.positionEnd)
+                    }
+                    onChange={(restLength) =>
+                      applyActions([
+                        {
+                          type: "UpdateElementRestLength",
+                          id: element.id,
+                          newValue: restLength,
+                          oldValue: element.restLength,
+                        },
+                      ])
+                    }
+                    unsigned
+                    large
+                  />
+                </Box>
+              )}
+            </Box>
+          </Box>
+        </>
+      )}
+
       {/* Les grandeurs mesurées, sous les propriétés : approfondir depuis
               l'onglet Analyse ne doit jamais faire perdre ce qu'on y voyait. */}
       {simulating && (
         <>
           <Divider sx={{ my: 1 }} />
-          <ElementMeasures element={element} runtimeState={runtimeState} />
+          <ElementMeasures
+            element={element}
+            runtimeState={runtimeState}
+            appMode={appMode}
+          />
         </>
       )}
     </Box>

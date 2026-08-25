@@ -8,6 +8,7 @@
 import type { ScreenPoint, WorldPoint } from "../../types";
 import { Point2 } from "../../types/point2";
 import { HIT_TOLERANCE } from "../../constants/rendering-specs";
+import { deg_to_rad } from "../../utils/quantity-format";
 
 /** A construction line a snap is holding a point on: the anchor it is measured from, and the way it runs. */
 export interface SnapGuide {
@@ -35,7 +36,7 @@ export const NO_FEEDBACK: SnapFeedback = { guides: [] };
 
 /** What the user has asked of the snapping, from the settings menu. */
 export interface SnapSettings {
-  /** Degrees between the round directions a gesture may aim at. */
+  /** Radians between the round directions a gesture may aim at. */
   angleStep: number;
   /** Whether the menu shows `angleStep` via the preset dropdown or the free-form field — kept apart from the value itself so typing a custom angle that happens to match a preset doesn't flip the menu back. Absent on settings saved before this field existed; treat as `"preset"` then. */
   angleStepIsCustom?: boolean;
@@ -45,11 +46,12 @@ export interface SnapSettings {
   showAngleGuides: boolean;
 }
 
-/** The angle steps the menu offers, the first being the one a drawing starts on. */
-export const ANGLE_STEPS = [15, 22.5, 30, 45, 90];
+/** The angle steps the menu offers, the first being the one a drawing starts on. Degrees at
+ *  the design level (15°, 22.5°...) converted once to the radians `angleStep` is stored in. */
+export const ANGLE_STEPS = [15, 22.5, 30, 45, 90].map(deg_to_rad);
 
 /** Where "custom" starts. Deliberately outside `ANGLE_STEPS`, so choosing it reveals the field meant to change it. */
-export const CUSTOM_ANGLE_STEP = 36;
+export const CUSTOM_ANGLE_STEP = deg_to_rad(36);
 
 export const DEFAULT_SNAP_SETTINGS: SnapSettings = {
   angleStep: ANGLE_STEPS[3],
@@ -58,12 +60,31 @@ export const DEFAULT_SNAP_SETTINGS: SnapSettings = {
 };
 
 /**
+ * A `SnapSettings` blob a browser still has saved from before `angleStep` moved from degrees
+ * to radians reads back with a value no genuine radian step reaches — the largest is `Math.PI`
+ * (a straight angle, already an absurdly coarse snap), while the smallest surviving degree
+ * value (15, the finest preset) is nearly five times past it. `localStorage` carries no
+ * version tag to migrate against for a setting this size, so this one-time bounds check
+ * stands in for one.
+ */
+export function migrate_snap_settings(settings: SnapSettings): SnapSettings {
+  return settings.angleStep > Math.PI
+    ? { ...settings, angleStep: deg_to_rad(settings.angleStep) }
+    : settings;
+}
+
+/**
  * The round directions a step offers, as a count of evenly spaced rays.
  *
  * Kept even so no two rays end up closer together than the rest: a step that does not divide a turn — 7°, say — is honoured as the nearest count that does rather than left with a short gap where it wraps.
  */
 export function angle_ray_count(step: number): number {
-  return Math.max(2, Math.round(360 / Math.min(180, Math.max(1, step))));
+  return Math.max(
+    2,
+    Math.round(
+      (2 * Math.PI) / Math.min(Math.PI, Math.max(Math.PI / 180, step)),
+    ),
+  );
 }
 
 /** Half-width of the lane, in screen px. The tolerance the grid snap answers to, so that one hand feels one thing. */

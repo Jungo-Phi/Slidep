@@ -11,11 +11,12 @@ import {
   RECORD_DT,
   apply_snapshot_to_mechanism,
   compile_simulation_model,
+  dynamic_snapshot_at,
   snapshot_at,
   snapshot_index_at,
   step_simulation,
-} from "./kinematic-simulation";
-import { KinematicSnapshot } from "../../types/runtime-state";
+} from "./simulation-engine";
+import { DynamicSnapshot, KinematicSnapshot, LinkReaction } from "../../types/runtime-state";
 import {
   make_snapshot_layout,
   snapshot_angle,
@@ -232,4 +233,30 @@ describe("axe de temps non uniforme", () => {
     expect(snapshot_at(snaps, 4)).toBe(snaps[1]);
   });
 
+});
+
+describe("réactions à travers l'interpolation dynamique", () => {
+  const layout = make_snapshot_layout(["n"], []);
+  const dynSnap = (t: number, reactions: LinkReaction[]): DynamicSnapshot => ({
+    t,
+    layout,
+    positions: Float64Array.of(t, 0),
+    angles: new Float64Array(0),
+    velocities: Float64Array.of(0, 0),
+    angleVelocities: new Float64Array(0),
+    reactions,
+  });
+
+  it("un instant interpolé garde les réactions du côté gauche, comme les contraintes insatisfaites", () => {
+    // A frame drawn between two recorded ticks is most of what playback shows — if it drops
+    // `reactions` (unlike `unsatisfied`, which it already carries over), every overlay arrow
+    // reads empty except at an exact tick or the very last frame (what a grab draws).
+    const reactions: LinkReaction[] = [
+      { type: "Distance", key: "n", atAnchor: true, kind: "force", fx: 1, fy: 2 },
+    ];
+    const a = dynSnap(0, reactions);
+    const b = dynSnap(1, []);
+    const mid = dynamic_snapshot_at([a, b], 0.5);
+    expect(mid?.reactions).toBe(reactions);
+  });
 });

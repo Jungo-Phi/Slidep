@@ -25,17 +25,28 @@ import {
   AppMode,
   ConstraintElement,
   DEFAULT_METADATA,
+  DEFAULT_SIMULATION,
   DEFAULT_SIMULATION_CONFIG,
   ID,
+  KinematicSnapshot,
   Mechanism,
   MechanismMetadata,
+  Point2,
   PropertiesPanelTab,
   SimulationConfig,
   UnionElement,
   ViewportChange,
   ZERO,
+  is_simulating,
 } from "./types";
-import { getStorageItem, setStorageItem, zoom_on_point } from "./utils";
+import { DynamicSnapshot } from "./types/runtime-state";
+import {
+  clamp_pan,
+  getStorageItem,
+  setStorageItem,
+  zoom_delta_to,
+  zoom_on_point,
+} from "./utils";
 import { useThemeChoice } from "./constants/use-theme-choice";
 import { get_language, Lang, set_language, t } from "./i18n";
 import { SNACKBAR_DURATION } from "./constants/rendering-specs";
@@ -56,19 +67,22 @@ import { ToolsMenu } from "./components/toolbar/ToolsMenu";
 import { PlaybackControls } from "./components/toolbar/PlaybackControls";
 import { set_sim_clock as setRuntimeState } from "./components/solver/sim-clock";
 import {
+  apply_dynamic_snapshot_to_mechanism,
   apply_parameter_snapshot_to_mechanism,
   apply_snapshot_to_mechanism,
+  dynamic_snapshot_at,
   parameter_snapshot_at,
   snapshot_at,
-} from "./components/solver/kinematic-simulation";
+} from "./components/solver/simulation-engine";
 import {
-  useKinematicPlayback,
+  useSimulationPlayback,
   SimulationLimitReason,
-} from "./components/solver/use-kinematic-playback";
+} from "./components/solver/use-simulation-playback";
 import { CanvasState } from "./types/canvas-state";
 import {
   ANGLE_STEPS,
   DEFAULT_SNAP_SETTINGS,
+  migrate_snap_settings,
   type SnapSettings,
 } from "./components/canvas/snap-corridor";
 import { HoveredPart } from "./types/hovered-part";
@@ -91,11 +105,11 @@ const TIGHT_BREAKPOINT = 1100;
  *
  *  - **observation** (probe configs, overlay visibility): affects neither the
  *    model nor the snapshots — no recompile, no truncation.
- *  - **parameter** (loads, motor speed): takes effect at the current time. The
- *    past snapshots stay valid, the future ones are truncated and the motion is
- *    recomputed from there. Does NOT leave simulation mode.
- *  - **structure** (geometry, dimensions, ground, connections): forbidden at the
- *    source by greying out the controls (ElementProperties); the exit to edition
+ *  - **parameter** (loads, motor speed, gravity/collisions/the floor): takes effect at
+ *    the current time. The past snapshots stay valid, the future ones are truncated and
+ *    the motion is recomputed from there. Does NOT leave simulation mode.
+ *  - **structure** (geometry, dimensions, node grounding, connections): forbidden at
+ *    the source by greying out the controls (ElementProperties); the exit to edition
  *    remains only as a safety net.
  */
 const OBSERVATION_ACTIONS: Action["type"][] = ["SetProbes", "SetShowOverlay"];
@@ -106,6 +120,11 @@ const PARAMETER_ACTIONS: Action["type"][] = [
   "ChangeDistributedForce",
   "ChangeMoment",
   "SetLoadFrame",
+  "SetFloorEnabled",
+  "ChangeFloorHeight",
+  "ChangeFloorAngle",
+  "SetGravity",
+  "SetCollisions",
 ];
 
 const is_observation_only_bundle = (actions: Action[]) =>
@@ -155,6 +174,7 @@ const App: React.FC = () => {
       modifiedAt: Date.now(),
     },
     viewport: { scale: 1, pan: ZERO },
+    simulation: DEFAULT_SIMULATION,
     mechanicalElements: [],
     constraintElements: [],
     loads: [],
@@ -184,7 +204,9 @@ const App: React.FC = () => {
     getStorageItem<boolean>("showGrid", true),
   );
   const [snapSettings, setSnapSettings] = useState<SnapSettings>(
-    getStorageItem<SnapSettings>("snapSettings", DEFAULT_SNAP_SETTINGS),
+    migrate_snap_settings(
+      getStorageItem<SnapSettings>("snapSettings", DEFAULT_SNAP_SETTINGS),
+    ),
   );
   const isCustomAngleStep =
     snapSettings.angleStepIsCustom ??
@@ -306,7 +328,7 @@ const App: React.FC = () => {
     liveFrameRef,
     timelineTrackRef,
     timeline,
-    currentKinematicSnapshot,
+    currentUnsatisfied,
     canSimulationGrab,
     handleSpaceKey: handleSpaceKeyForMode,
     handleEscapeKey,
@@ -316,14 +338,17 @@ const App: React.FC = () => {
     exitToEdition,
     pauseSimulation,
     resetSimulationState: resetSimulationStateFor,
-    kinematicRef,
+    simulationRef,
     simStartHistoryLengthRef,
     probeOnlyEditRef,
-  } = useKinematicPlayback({
+  } = useSimulationPlayback({
     mechanism,
     appMode,
     setAppMode,
     setCanvasState,
+    gravity: mechanism.simulation.gravity,
+    collisions: mechanism.simulation.collisions,
+    floor: mechanism.simulation.floor.enabled,
     onRecordingLimitReached: (
       reason: SimulationLimitReason,
       maxTime: number,
@@ -351,13 +376,22 @@ const App: React.FC = () => {
   );
 
   const analysedMechanism = useMemo(() => {
-    if (appMode !== "kinematic") return mechanism;
-    const snapshot = snapshot_at(
-      runtimeState.kinematicSnapshots,
-      runtimeState.time,
-    );
+    if (!is_simulating(appMode)) return mechanism;
+    // Narrowed by the `is_simulating` check above: only a kinematic or dynamic run ever
+    // fills `simulationSnapshots` while its own mode is active, and the concrete shape
+    // follows which — the same invariant `Recorder` itself relies on.
+    const snapshot =
+      appMode === "kinematic"
+        ? snapshot_at(runtimeState.simulationSnapshots as KinematicSnapshot[], runtimeState.time)
+        : dynamic_snapshot_at(
+            runtimeState.simulationSnapshots as DynamicSnapshot[],
+            runtimeState.time,
+          );
     if (!snapshot) return mechanism;
-    const geometryMechanism = apply_snapshot_to_mechanism(mechanism, snapshot);
+    const geometryMechanism =
+      appMode === "kinematic"
+        ? apply_snapshot_to_mechanism(mechanism, snapshot as KinematicSnapshot)
+        : apply_dynamic_snapshot_to_mechanism(mechanism, snapshot as DynamicSnapshot);
     const paramSnapshot = parameter_snapshot_at(
       runtimeState.parameterSnapshots,
       runtimeState.time,
@@ -372,7 +406,7 @@ const App: React.FC = () => {
     appMode,
     mechanism.mechanicalElements,
     mechanism.loads,
-    runtimeState.kinematicSnapshots,
+    runtimeState.simulationSnapshots,
     runtimeState.parameterSnapshots,
     runtimeState.time,
   ]);
@@ -403,6 +437,10 @@ const App: React.FC = () => {
     resetSimulationState,
   });
 
+  useEffect(() => {
+    if (galleryOpen) pauseSimulation();
+  }, [galleryOpen, pauseSimulation]);
+
   const updateMetadata = useCallback(
     (metadata: MechanismMetadata) => {
       setMechanism((prevMechanism) => ({ ...prevMechanism, metadata }));
@@ -429,23 +467,57 @@ const App: React.FC = () => {
   ].sort();
 
   const changeViewport = useCallback((change: ViewportChange) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
     setMechanism((prevMechanism) => {
       const ov = prevMechanism.viewport;
       return {
         ...prevMechanism,
         viewport:
           change.type === "Pan"
-            ? { pan: ov.pan.add(change.delta), scale: ov.scale }
-            : zoom_on_point(change.deltaY, change.center, ov),
+            ? {
+                pan: clamp_pan(
+                  ov.pan.add(change.delta),
+                  ov.scale,
+                  canvas.width,
+                  canvas.height,
+                ),
+                scale: ov.scale,
+              }
+            : zoom_on_point(
+                change.deltaY,
+                change.center,
+                ov,
+                canvas.width,
+                canvas.height,
+              ),
       };
     });
   }, []);
+
+  /** Zooms the canvas's middle to an exact scale — what the toolbar's zoom steps aim at,
+   *  routed through the same gesture path as the wheel. */
+  const zoomTo = useCallback(
+    (scale: number) => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      changeViewport({
+        type: "Zoom",
+        deltaY: zoom_delta_to(mechanismRef.current.viewport.scale, scale),
+        center: new Point2(
+          canvas.width / 2,
+          canvas.height / 2,
+        ).as_space<"screen">(),
+      });
+    },
+    [changeViewport],
+  );
 
   const applyActions = useCallback(
     (actions: Action[]) => {
       if (is_observation_only_bundle(actions)) probeOnlyEditRef.current = true;
       if (
-        kinematicRef.current.appMode !== "edition" &&
+        simulationRef.current.appMode !== "edition" &&
         is_structure_bundle(actions)
       ) {
         exitToEdition();
@@ -465,7 +537,7 @@ const App: React.FC = () => {
       });
       markDirty();
     },
-    [markDirty, setCanvasState, exitToEdition, kinematicRef, probeOnlyEditRef],
+    [markDirty, setCanvasState, exitToEdition, simulationRef, probeOnlyEditRef],
   );
 
   /** Repère les contraintes-icônes recréées/supprimées par un undo/redo pour que le canvas les fasse réapparaître (reveal) ou s'estomper (fantôme rouge). */
@@ -501,7 +573,7 @@ const App: React.FC = () => {
   const undoMechanism = useCallback(() => {
     if (mechanismRef.current.history.length === 0) return;
 
-    const isInSim = kinematicRef.current.appMode !== "edition";
+    const isInSim = simulationRef.current.appMode !== "edition";
     const probeOnly = is_observation_only_bundle(
       mechanismRef.current.history.slice(-1)[0],
     );
@@ -562,7 +634,7 @@ const App: React.FC = () => {
     markDirty,
     signalConstraintChange,
     setCanvasState,
-    kinematicRef,
+    simulationRef,
     probeOnlyEditRef,
     simStartHistoryLengthRef,
   ]);
@@ -752,8 +824,6 @@ const App: React.FC = () => {
               runtimeState={runtimeState}
               resetToStart={resetToStart}
               handleSpaceKey={handleSpaceKey}
-              simulationConfig={simulationConfig}
-              setSimulationConfig={setSimulationConfig}
               onOpenGallery={handleOpenGallery}
               saveStatus={saveStatus}
               rightSlot={
@@ -765,6 +835,8 @@ const App: React.FC = () => {
                   }
                   undoMechanism={undoMechanism}
                   redoMechanism={redoMechanism}
+                  onZoomTo={zoomTo}
+                  tight={tight}
                   language={language}
                   onSelectLang={handleSelectLang}
                   showGrid={showGrid}
@@ -790,52 +862,12 @@ const App: React.FC = () => {
           component="main"
           sx={{
             flexGrow: 1,
-            position: "relative",
+            display: "flex",
+            flexDirection: "row",
             overflow: "hidden",
             backgroundColor: "background.default",
           }}
         >
-          {/* Canvas */}
-          <MechanicalCanvas
-            ref={canvasRef}
-            setCanvasState={setCanvasState}
-            canvasState={canvasState}
-            applyActions={applyActions}
-            changeViewport={changeViewport}
-            mechanism={mechanism}
-            setHoveredPart={setHoveredPart}
-            hoveredPart={hoveredPart}
-            undoMechanism={undoMechanism}
-            redoMechanism={redoMechanism}
-            appMode={appMode}
-            activeTab={activeTab}
-            constraintChangeRef={constraintChangeRef}
-            onSpaceKey={handleSpaceKey}
-            onEscapeKey={handleEscapeKey}
-            onExitToEdition={exitToEdition}
-            onPauseSim={pauseSimulation}
-            onSimulationGrab={handleSimulationGrab}
-            onSimulationGrabEnd={handleSimulationGrabEnd}
-            canSimulationGrab={canSimulationGrab}
-            snapToGrid={snapToGrid}
-            snapSettings={snapSettings}
-            showGrid={showGrid}
-            liveFrameRef={liveFrameRef}
-            highlight={highlight}
-            modePreviewRef={modePreviewRef}
-            redundancySymbols={redundancySymbols}
-          />
-
-          {/* Floating panels */}
-
-          {appMode !== "edition" && (
-            <SimulationTimeline
-              appMode={appMode}
-              runtimeState={runtimeState}
-              timeline={timeline}
-              timelineTrackRef={timelineTrackRef}
-            />
-          )}
           <ElementPalette
             setCanvasState={setCanvasState}
             canvasState={canvasState}
@@ -844,6 +876,48 @@ const App: React.FC = () => {
             onExitToEdition={exitToEdition}
             onPauseSim={pauseSimulation}
           />
+
+          <Box sx={{ flexGrow: 1, minWidth: 0, position: "relative" }}>
+            <MechanicalCanvas
+              ref={canvasRef}
+              setCanvasState={setCanvasState}
+              canvasState={canvasState}
+              applyActions={applyActions}
+              changeViewport={changeViewport}
+              mechanism={mechanism}
+              setHoveredPart={setHoveredPart}
+              hoveredPart={hoveredPart}
+              undoMechanism={undoMechanism}
+              redoMechanism={redoMechanism}
+              appMode={appMode}
+              activeTab={activeTab}
+              constraintChangeRef={constraintChangeRef}
+              onSpaceKey={handleSpaceKey}
+              onEscapeKey={handleEscapeKey}
+              onExitToEdition={exitToEdition}
+              onPauseSim={pauseSimulation}
+              onSimulationGrab={handleSimulationGrab}
+              onSimulationGrabEnd={handleSimulationGrabEnd}
+              canSimulationGrab={canSimulationGrab}
+              snapToGrid={snapToGrid}
+              snapSettings={snapSettings}
+              showGrid={showGrid}
+              liveFrameRef={liveFrameRef}
+              highlight={highlight}
+              modePreviewRef={modePreviewRef}
+              redundancySymbols={redundancySymbols}
+            />
+
+            {appMode !== "edition" && (
+              <SimulationTimeline
+                appMode={appMode}
+                runtimeState={runtimeState}
+                timeline={timeline}
+                timelineTrackRef={timelineTrackRef}
+              />
+            )}
+          </Box>
+
           <PropertiesPanel
             setHighlight={setHighlight}
             setRedundancySymbols={setRedundancySymbols}
@@ -865,7 +939,7 @@ const App: React.FC = () => {
             appMode={appMode}
             activeTab={activeTab}
             setActiveTab={setActiveTab}
-            unsatisfied={currentKinematicSnapshot?.unsatisfied ?? []}
+            unsatisfied={currentUnsatisfied}
           />
         </Box>
       </Box>

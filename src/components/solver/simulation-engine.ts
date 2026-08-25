@@ -1,4 +1,6 @@
 import { ID, Link, Mechanism, PivotElement, Point2, KinNodes } from "../../types";
+import { ZERO } from "../../types/point2";
+import { DEFAULT } from "../../constants/physics-specs";
 import {
   BeltVia,
   belt_arrivals,
@@ -8,8 +10,11 @@ import {
 } from "../../utils/belt-path";
 import {
   ConstraintResidual,
+  DynamicSnapshot,
   KinematicSnapshot,
+  LinkReaction,
   ParameterSnapshot,
+  SimulationSnapshot,
   SnapshotLayout,
 } from "../../types/runtime-state";
 import {
@@ -19,7 +24,24 @@ import {
   mark_passive_belt_pins,
   rebuild_belt_q_links,
 } from "./parsing";
-import { PBD_kinematic_solver } from "./PBD_kinematic_solver";
+import { DynamicsInput, PBD_kinematic_solver } from "./PBD_kinematic_solver";
+import { DynamicMassModel, compute_dynamic_mass_model } from "./mass-model";
+import { CompiledLoad, compile_loads, resolve_load_forces } from "./load-model";
+import {
+  CompiledSpringDamper,
+  compile_springs_dampers,
+  resolve_spring_damper_forces,
+} from "./spring-damper-model";
+import { CompiledMotor, compile_motors, resolve_motor_torques } from "./motor-model";
+import {
+  CollisionCandidates,
+  FLOOR_ANCHOR_KEY,
+  build_collision_candidates,
+} from "./collision-candidates";
+import { floor_anchor_and_normal } from "../../utils/floor-geometry";
+import { collision_links, prune_initial_penetrations } from "./collision-detection";
+import { apply_collision_restitution } from "./collision-restitution";
+import { MIN_EXTENT_M, positions_extent } from "./nodes";
 import {
   BeltShape,
   GRAB_BRIDGE_KEY,
@@ -128,16 +150,47 @@ export const FRAME_BUDGET_MS = 8;
 const SIMULATION_SWEEPS = 200;
 
 /**
- * The belt's contact band, in belt-px of wrapped arc: a pulley is let go below
- * `detachArc` and taken back above `reattachArc`.
+ * How long a motor takes to reach its commanded speed from a standing start, instead of
+ * snapping to it on the first frame.
  *
- * `detachArc` is NOT zero, and that is the whole point. The last sliver of wrap before
- * zero is a degenerate band — the no-slip on a pulley the belt barely grazes goes
- * erratic — so waiting for exactly zero means letting the mechanism strain against a
- * pulley that no longer holds anything, then releasing it all at once. Measured on
- * `Déconnexion courroie`: the transition frame lurches **26.1 px** at zero and **1.2 px**
- * at 0.5, and grows again beyond (3.7 px at 2, 18.4 px at 10 — there the pulley still
- * carried belt and dropping it is a real geometric change).
+ * A motor's per-frame target is always exactly one frame's worth of commanded rotation ahead
+ * (see `expected` below) — never a backlog — so this is not about the motor asking for too
+ * much. It is the kinematic sweep itself: with no velocity carried between frames (unlike
+ * dynamics), each frame's 200 Gauss-Seidel sweeps have to close that frame's whole gap on
+ * their own, and a slow-converging chain (a long belt, say) cannot always do it in one frame.
+ * The shortfall then carries into the next, and drains only gradually — a transient that used
+ * to sit under the flat 1 mm diagnostic tolerance by coincidence and now, relative to a
+ * mechanism's own (possibly sub-metre) extent, does not always.
+ *
+ * A linear ramp does not shrink this transient so much as postpone it: the lag it leaves
+ * behind tracks the commanded speed at the time, wherever the ramp is, so a short ramp mostly
+ * moves the peak later rather than lowering it (measured on `Poulie bloqueuse`, the slowest-
+ * converging reference mechanism: 0.68 mm at 0.3 s, 0.56 mm at 0.45 s, 0 at 0.5 s — the last
+ * frames of the ramp give the chain just enough consecutive time at near-full speed to fully
+ * drain what built up). 0.5 s is that measured floor, not a round number picked for looks.
+ */
+const MOTOR_STARTUP_RAMP_S = 0.5;
+
+/** `0` at a standing start, `1` from `MOTOR_STARTUP_RAMP_S` on — see its own doc. */
+function motor_ramp(t: number): number {
+  return t >= MOTOR_STARTUP_RAMP_S ? 1 : t / MOTOR_STARTUP_RAMP_S;
+}
+
+/**
+ * The belt's contact band, as a ratio of the mechanism's own extent (see
+ * `nodes_extent`/`positions_extent`) of wrapped arc: a pulley is let go below
+ * `detachRatio · extent` and taken back above `reattachRatio · extent`. Ratios rather than
+ * flat lengths for the same reason `collision-detection.ts`'s `CONTACT_EPS_RATIO` is — a flat
+ * millimetre would drown a µm-scale mechanism and do nothing on a km-scale one.
+ *
+ * `detachArc` (`detachRatio · extent`) is NOT zero, and that is the whole point. The last
+ * sliver of wrap before zero is a degenerate band — the no-slip on a pulley the belt barely
+ * grazes goes erratic — so waiting for exactly zero means letting the mechanism strain
+ * against a pulley that no longer holds anything, then releasing it all at once. Measured on
+ * `Déconnexion courroie` (extent ≈ 902, so `detachRatio` swept at 0/5.5e-4/1.1e-3/2.2e-3/
+ * 5.5e-3/1.1e-2 mirrors the historical 0/0.5/1/2/5/10 px sweep): the transition frame lurches
+ * **26.1 px** at zero and **1.2 px** at 0.5, and grows again beyond (3.7 px at 2, 18.4 px at
+ * 10 — there the pulley still carried belt and dropping it is a real geometric change).
  *
  * The gap between the two is the hysteresis, and it exists for one reason: every flip
  * rebuilds the belt's no-slip links, which resets the `q` origin of the WHOLE belt.
@@ -145,8 +198,8 @@ const SIMULATION_SWEEPS = 200;
  * Mutable so a bench can sweep it in one process — production never writes it.
  */
 export const beltContact = {
-  detachArc: 0.5,
-  reattachArc: 1.0,
+  detachRatio: 5e-4, // 0.5 mm at the ~1 m extent this was tuned at
+  reattachRatio: 1e-3, // 1 mm at the ~1 m extent this was tuned at
   rebuildQLinks: true,
 };
 
@@ -185,9 +238,36 @@ export type SimulationModel = {
   /**
    * Radius of each gear, by id. Not a solver input — simulation solves no radius — but the
    * lever arm that turns an angular shortfall into the arc it failed to sweep, so a
-   * diagnostic can be stated in millimetres like every other one.
+   * diagnostic can be stated in metres like every other one.
    */
   gearRadii: Map<ID, number>;
+  /** Real masses, read only by `step_dynamic_simulation` — see `DynamicMassModel`. */
+  dynamicMasses: DynamicMassModel;
+  /** User loads resolved to solver keys, read only by `step_dynamic_simulation` — see
+   *  `CompiledLoad`. */
+  compiledLoads: CompiledLoad[];
+  /** Springs and dampers, real-force form — read only by `step_dynamic_simulation`, which
+   *  also drops their kinematic `Spring` LINK from the sweep (see `CompiledSpringDamper`). */
+  compiledSpringDampers: CompiledSpringDamper[];
+  /** Motors, torque-limited form — read only by `step_dynamic_simulation`, which also drops
+   *  their kinematic `MotorBeam`/`MotorAngle` LINKs from the sweep (see `CompiledMotor`). */
+  compiledMotors: CompiledMotor[];
+  /** Pairs collision detection may test each frame — see `build_collision_candidates`. */
+  collisionCandidates: CollisionCandidates;
+  /** The floor's unit normal, baked in from `mechanism.simulation.floor.angle` at compile
+   *  time — fixed for the run, like the anchor node itself (see `FLOOR_ANCHOR_KEY`). Read by
+   *  `collision_links` regardless of whether the floor is currently enabled, the same way
+   *  `collisionCandidates.pointFloor`/`circleFloor` are always built. */
+  floorNormal: Point2;
+  /**
+   * The mechanism's own scale (see `positions_extent`/`nodes_extent`), as of the last solved
+   * frame — the rest pose before the first. Mutated after every `step_simulation`/
+   * `step_dynamic_simulation` call from that frame's `PBD_kinematic_solver` result, and read
+   * before the NEXT frame's solve by whatever needs an extent-relative tolerance ahead of it
+   * (`collision_links`, `update_belt_disconnects`) — a frame's lag on a quantity that never
+   * moves fast is cheaper than a second bbox pass over `positions`.
+   */
+  extent: number;
 };
 
 /** Which snapshot slots each solver node writes to: a fused key feeds one slot per key it
@@ -270,7 +350,7 @@ function wrap_angle(a: number): number {
 /**
  * Per-frame belt-contact update (mutates the BeltLength link's sim state): tracks each
  * still-connected pulley's continuous (unwrapped) wrap angle and, once the arc it wraps
- * falls under `beltContact.detachArc`, marks the pulley disconnected. The belt then runs
+ * falls under `beltContact.detachRatio · extent`, marks the pulley disconnected. The belt then runs
  * straight past it (BeltLength skips it; the geometry of the remaining pulleys uses the
  * reduced loop/chain), until `reattach_belt_pulleys` finds it back on the belt.
  *
@@ -280,6 +360,7 @@ function wrap_angle(a: number): number {
 export function update_belt_disconnects(
   link: Extract<Link, { type: "BeltLength" }>,
   positions: Map<string, Point2>,
+  extent: number,
 ): boolean {
   const n = link.gearPosKeys.length;
   if (!link.disconnected) link.disconnected = new Array(n).fill(false);
@@ -338,7 +419,7 @@ export function update_belt_disconnects(
     // a raw atan2 would jump 2π at the ±π seam and inject 2πr of phantom belt.
     link.arrivals![gi] = unwrap(rawArr[offset + k], link.arrivals![gi]);
     if (
-      cont * link.radii[gi] <= beltContact.detachArc &&
+      cont * link.radii[gi] <= beltContact.detachRatio * (extent || MIN_EXTENT_M) &&
       !link.disconnected![gi] &&
       (!link.closed || activeIdx.length > 1)
     ) {
@@ -346,7 +427,7 @@ export function update_belt_disconnects(
       newlyDisconnected = true;
     }
   });
-  return newlyDisconnected || reattach_belt_pulleys(link, positions);
+  return newlyDisconnected || reattach_belt_pulleys(link, positions, extent);
 }
 
 /**
@@ -358,7 +439,7 @@ export function update_belt_disconnects(
  *  - the pulley's centre must project INSIDE the strand it would join, not past one of
  *    its ends (same condition the canvas uses to decide a pulley can be dropped on a
  *    run) — otherwise a pulley that has drifted off sideways reads as touching;
- *  - the arc must exceed `BELT_REATTACH_ARC`, in belt-px. Detachment stays at exactly
+ *  - the arc must exceed `beltContact.reattachRatio · extent`. Detachment stays at exactly
  *    zero, which is the geometric truth; only the way back waits. Measured on
  *    `Déconnexion courroie`, the belt straightens ACROSS the pulley it just dropped and
  *    would re-take it on the very next frame, forever — and every flip resets the whole
@@ -367,6 +448,7 @@ export function update_belt_disconnects(
 function reattach_belt_pulleys(
   link: Extract<Link, { type: "BeltLength" }>,
   positions: Map<string, Point2>,
+  extent: number,
 ): boolean {
   if (!link.disconnected?.some(Boolean)) return false;
   let reattached = false;
@@ -409,7 +491,7 @@ function reattach_belt_pulleys(
     // coming back into contact always starts from a hair of wrap, so the short side is
     // the only readable one.
     if (piece.wrap >= Math.PI) continue;
-    if (piece.length < beltContact.reattachArc) continue;
+    if (piece.length < beltContact.reattachRatio * (extent || MIN_EXTENT_M)) continue;
 
     // Back on the belt: its continuous state is stale by the whole detachment, so
     // re-seed it from the raw geometry exactly as the first frame does.
@@ -595,13 +677,39 @@ function rewrite_position_keys(link: Link, from: (k: string) => string): void {
 /**
  * Compile the frozen simulation model from a mechanism (called on entering
  * simulation). Parses sim nodes + links, fuses coincidence links, sorts.
+ *
+ * `dynamicRigidity` (default off, see `get_links_simulation`): pass true only for a
+ * model that will actually run `step_dynamic_simulation` — kinematic mode and the
+ * mobility/redundancy analysis model want the plain anchor instead.
  */
 export function compile_simulation_model(
   mechanism: Mechanism,
+  dynamicRigidity: boolean = false,
+  /**
+   * Inject the floor's fixed anchor node, so `MinDistanceToLine` links have something to
+   * hold against. Off by default: the DOF/mobility/redundancy analysis (`build_analysis_model`
+   * and everything built on it) shares this same compile, and an extra always-anchored node
+   * with no `MechanicalElement` behind it would read as a phantom zero-mobility chain —
+   * `Recorder.load()`, the only caller that actually steps a simulation, is the one that
+   * turns it on.
+   */
+  includeFloor: boolean = false,
 ): SimulationModel {
   const nodes = get_sim_nodes(mechanism.mechanicalElements);
-  let links = get_links_simulation(mechanism.mechanicalElements, nodes);
+  let links = get_links_simulation(mechanism.mechanicalElements, nodes, dynamicRigidity);
   const keyMap = new Map<string, string>();
+
+  // The floor's anchor: a fixed node with no backing `MechanicalElement`, injected once
+  // (unlike the transient `GRAB_BRIDGE_KEY`) — `positions`/`posMasses` are copied forward
+  // every frame, so this persists automatically. `invMass = 0` regardless of `.enabled`:
+  // the live flag gates its USE (see `collision_links`), never its presence.
+  const { anchor: floorAnchor, normal: floorNormal } = floor_anchor_and_normal(
+    mechanism.simulation.floor,
+  );
+  if (includeFloor) {
+    nodes.positions.set(FLOOR_ANCHOR_KEY, floorAnchor);
+    nodes.posMasses.set(FLOOR_ANCHOR_KEY, 0);
+  }
 
   // ── Fuse coincidence links (guarantees coincident points stay together) ──
   links.forEach((lc) => {
@@ -648,6 +756,26 @@ export function compile_simulation_model(
   for (const element of mechanism.mechanicalElements)
     if (element.type === "gear") gearRadii.set(element.id, element.radius);
 
+  const dynamicMasses = compute_dynamic_mass_model(
+    mechanism,
+    keyMap,
+    nodes.posMasses,
+  );
+  const compiledLoads = compile_loads(mechanism, keyMap);
+  const compiledSpringDampers = compile_springs_dampers(mechanism, keyMap);
+  const compiledMotors = compile_motors(links, mechanism.mechanicalElements);
+  // The rest pose's own scale, seeded once here and kept current frame to frame after — see
+  // `SimulationModel.extent`.
+  const extent = positions_extent(nodes.positions) || MIN_EXTENT_M;
+  // Pairs already touching in the drawn (rest) configuration — a direct junction structural
+  // exclusion missed — are dropped for the whole run rather than fought from frame one.
+  const collisionCandidates = prune_initial_penetrations(
+    build_collision_candidates(mechanism, keyMap),
+    nodes.positions,
+    extent,
+    floorNormal,
+  );
+
   // ── Snapshot slots: one per ORIGINAL key, so a fused node writes to each of its parts ──
   const fusedKeys = [...nodes.positions.keys()];
   const snapshotKeys: string[] = [];
@@ -677,6 +805,13 @@ export function compile_simulation_model(
     links,
     keyMap,
     gearRadii,
+    dynamicMasses,
+    compiledLoads,
+    compiledSpringDampers,
+    compiledMotors,
+    collisionCandidates,
+    floorNormal,
+    extent,
     layout: make_snapshot_layout(snapshotKeys, [...nodes.angles.keys()], belts),
     fill: {
       keys: fusedKeys,
@@ -685,6 +820,110 @@ export function compile_simulation_model(
       slots: Int32Array.from(slotList),
     },
   };
+}
+
+/**
+ * Injects a grab as extra, transient links for this frame only — a bridge node pulled
+ * toward the mouse and pinned to whatever it grabbed. Mutates `positions` (the bridge node's
+ * own position has nowhere else to live) and returns `model.links` augmented with the pin,
+ * or `model.links` itself when there is no grab.
+ *
+ * Shared by every step function: the interaction is the same whatever produces the rest of
+ * the frame. `wrapsByBelt`/`disconnectedByBelt` only matter for the belt-pin case — a caller
+ * that never tracks belt state (there is no belt to grab in the first place) passes empty
+ * maps.
+ */
+function grab_links(
+  model: SimulationModel,
+  grab: SimGrab | undefined,
+  positions: Map<string, Point2>,
+  wrapsByBelt: Map<ID, number[]>,
+  disconnectedByBelt: Map<ID, boolean[]>,
+): Link[] {
+  if (grab && "edgeID" in grab) {
+    // Body grab: pull a bridge node sitting at ratio t along the beam.
+    const startKey =
+      model.keyMap.get(`${grab.edgeID}:start`) ?? `${grab.edgeID}:start`;
+    const endKey =
+      model.keyMap.get(`${grab.edgeID}:end`) ?? `${grab.edgeID}:end`;
+    positions.set(GRAB_BRIDGE_KEY, new Point2(grab.target.x, grab.target.y));
+    return [
+      ...model.links,
+      {
+        type: "FixedOnSegment",
+        ddl: 2,
+        key1: startKey,
+        key2: endKey,
+        key3: GRAB_BRIDGE_KEY,
+        t: grab.t,
+      },
+      {
+        type: "HandleGrab",
+        ddl: 1,
+        grabbedKey: GRAB_BRIDGE_KEY,
+        value: grab.target,
+      },
+    ];
+  } else if (grab && "gearID" in grab) {
+    // Gear-tooth grab: pin a bridge node on the perimeter (fixed angle offset)
+    // and pull it to the mouse — the GearPerimeterPin rotates the gear angle.
+    positions.set(GRAB_PERIMETER_KEY, new Point2(grab.target.x, grab.target.y));
+    return [
+      ...model.links,
+      {
+        type: "GearPerimeterPin",
+        ddl: 2,
+        nodeKey: GRAB_PERIMETER_KEY,
+        centerKey: model.keyMap.get(grab.gearID) ?? grab.gearID,
+        angleKey: grab.gearID,
+        radius: grab.radius,
+        offset: grab.angleOffset,
+      },
+      {
+        type: "HandleGrab",
+        ddl: 1,
+        grabbedKey: "grab_perimeter",
+        value: grab.target,
+      },
+    ];
+  } else if (grab && "beltPin" in grab) {
+    // Grab an arbitrary point of a closed belt: place a bridge node at the mouse,
+    // pin it to the loop at the grabbed arc-length (BeltPin), and pull it there —
+    // the pin advances the belt travel so the loop rotates with the point under
+    // the cursor. gearPosKeys were built unfused (grab start) → remap to the fused
+    // sim keys; refresh the per-frame wraps/disconnected from the belt.
+    const src = grab.beltPin;
+    const remap = (k: string) => model.keyMap.get(k) ?? k;
+    const pin: Extract<Link, { type: "BeltPin" }> = {
+      ...src,
+      gearPosKeys: src.gearPosKeys.map(remap),
+      startKey: src.startKey ? remap(src.startKey) : undefined,
+      endKey: src.endKey ? remap(src.endKey) : undefined,
+      wraps: wrapsByBelt.get(src.beltID),
+      disconnected: disconnectedByBelt.get(src.beltID),
+    };
+    positions.set(pin.nodeKey, new Point2(grab.target.x, grab.target.y));
+    return [
+      ...model.links,
+      pin,
+      {
+        type: "HandleGrab",
+        ddl: 1,
+        grabbedKey: pin.nodeKey,
+        value: grab.target,
+      },
+    ];
+  } else if (grab) {
+    // A belt terminal that is dragged into its adjacent gear is pushed back out by the
+    // BeltLength constraint's radial non-penetration term (symmetric: it moves the gear
+    // too) — no pre-clamp of the grab target needed.
+    const grabKey = model.keyMap.get(grab.key) ?? grab.key;
+    return [
+      ...model.links,
+      { type: "HandleGrab", ddl: 1, grabbedKey: grabKey, value: grab.target },
+    ];
+  }
+  return model.links;
 }
 
 /**
@@ -710,6 +949,10 @@ export function step_simulation(
   /** Called with the model state a belt topology change is about to overwrite, so a caller
    *  that may rewind can keep it. Only ever called on the frames that change it. */
   onRewire?: (state: RewireState) => void,
+  /** Re-read every frame, like gravity in dynamic mode — no recompile needed to toggle it. */
+  collisionsOn: boolean = false,
+  /** Same reasoning as `collisionsOn`, gated independently — see `collision_links`. */
+  floorOn: boolean = false,
 ): KinematicSnapshot {
   const positions = new Map(model.nodes.positions);
   const angles = new Map(model.nodes.angles);
@@ -737,6 +980,7 @@ export function step_simulation(
   // ── Refresh per-frame motor targets and gear-mesh line-of-centres angle ──
   const motorChecks: MotorCheck[] = [];
   const beltsToRewire: Extract<Link, { type: "BeltLength" }>[] = [];
+  const ramp = motor_ramp(t);
   model.links.forEach((link) => {
     if (link.type === "MotorBeam") {
       const pivot = positions.get(link.pivotKey);
@@ -757,7 +1001,7 @@ export function step_simulation(
             link.anchorAngle = anchorNow;
           }
         }
-        const expected = anchorDelta + link.omega * dt;
+        const expected = anchorDelta + link.omega * ramp * dt;
         link.targetAngle = cur + expected;
         if (link.owner !== undefined && expected !== 0)
           motorChecks.push({
@@ -788,7 +1032,7 @@ export function step_simulation(
             link.anchorAngle = anchorNow;
           }
         }
-        const expected = anchorDelta + link.omega * dt;
+        const expected = anchorDelta + link.omega * ramp * dt;
         link.targetAngle = cur + expected;
         if (link.owner !== undefined && expected !== 0)
           motorChecks.push({
@@ -807,7 +1051,8 @@ export function step_simulation(
         link.alpha = link.alpha + wrap_angle(raw - link.alpha);
       }
     } else if (link.type === "BeltLength") {
-      if (update_belt_disconnects(link, positions)) beltsToRewire.push(link);
+      if (update_belt_disconnects(link, positions, model.extent))
+        beltsToRewire.push(link);
     }
   });
 
@@ -861,90 +1106,23 @@ export function step_simulation(
   }
 
   // ── Grab (transient, this frame only) ──
-  let links = model.links;
-  if (grab && "edgeID" in grab) {
-    // Body grab: pull a bridge node sitting at ratio t along the beam.
-    const startKey =
-      model.keyMap.get(`${grab.edgeID}:start`) ?? `${grab.edgeID}:start`;
-    const endKey =
-      model.keyMap.get(`${grab.edgeID}:end`) ?? `${grab.edgeID}:end`;
-    positions.set(GRAB_BRIDGE_KEY, new Point2(grab.target.x, grab.target.y));
-    links = [
-      ...model.links,
-      {
-        type: "FixedOnSegment",
-        ddl: 2,
-        key1: startKey,
-        key2: endKey,
-        key3: GRAB_BRIDGE_KEY,
-        t: grab.t,
-      },
-      {
-        type: "HandleGrab",
-        ddl: 1,
-        grabbedKey: GRAB_BRIDGE_KEY,
-        value: grab.target,
-      },
-    ];
-  } else if (grab && "gearID" in grab) {
-    // Gear-tooth grab: pin a bridge node on the perimeter (fixed angle offset)
-    // and pull it to the mouse — the GearPerimeterPin rotates the gear angle.
-    positions.set(GRAB_PERIMETER_KEY, new Point2(grab.target.x, grab.target.y));
-    links = [
-      ...model.links,
-      {
-        type: "GearPerimeterPin",
-        ddl: 2,
-        nodeKey: GRAB_PERIMETER_KEY,
-        centerKey: model.keyMap.get(grab.gearID) ?? grab.gearID,
-        angleKey: grab.gearID,
-        radius: grab.radius,
-        offset: grab.angleOffset,
-      },
-      {
-        type: "HandleGrab",
-        ddl: 1,
-        grabbedKey: "grab_perimeter",
-        value: grab.target,
-      },
-    ];
-  } else if (grab && "beltPin" in grab) {
-    // Grab an arbitrary point of a closed belt: place a bridge node at the mouse,
-    // pin it to the loop at the grabbed arc-length (BeltPin), and pull it there —
-    // the pin advances the belt travel so the loop rotates with the point under
-    // the cursor. gearPosKeys were built unfused (grab start) → remap to the fused
-    // sim keys; refresh the per-frame wraps/disconnected from the belt.
-    const src = grab.beltPin;
-    const remap = (k: string) => model.keyMap.get(k) ?? k;
-    const pin: Extract<Link, { type: "BeltPin" }> = {
-      ...src,
-      gearPosKeys: src.gearPosKeys.map(remap),
-      startKey: src.startKey ? remap(src.startKey) : undefined,
-      endKey: src.endKey ? remap(src.endKey) : undefined,
-      wraps: wrapsByBelt.get(src.beltID),
-      disconnected: disconnectedByBelt.get(src.beltID),
-    };
-    positions.set(pin.nodeKey, new Point2(grab.target.x, grab.target.y));
-    links = [
-      ...model.links,
-      pin,
-      {
-        type: "HandleGrab",
-        ddl: 1,
-        grabbedKey: pin.nodeKey,
-        value: grab.target,
-      },
-    ];
-  } else if (grab) {
-    // A belt terminal that is dragged into its adjacent gear is pushed back out by the
-    // BeltLength constraint's radial non-penetration term (symmetric: it moves the gear
-    // too) — no pre-clamp of the grab target needed.
-    const grabKey = model.keyMap.get(grab.key) ?? grab.key;
-    links = [
-      ...model.links,
-      { type: "HandleGrab", ddl: 1, grabbedKey: grabKey, value: grab.target },
-    ];
-  }
+  const grabbed = grab_links(model, grab, positions, wrapsByBelt, disconnectedByBelt);
+  // `grabbed` may alias `model.links` itself (no grab this frame) — spread rather than
+  // push, so a collision link never leaks into the frozen model's own list.
+  const links =
+    collisionsOn || floorOn
+      ? [
+          ...grabbed,
+          ...collision_links(
+            model.collisionCandidates,
+            positions,
+            model.extent,
+            collisionsOn,
+            floorOn,
+            model.floorNormal,
+          ),
+        ]
+      : grabbed;
 
   // ── PBD solve ──
   const result = PBD_kinematic_solver(
@@ -958,6 +1136,7 @@ export function step_simulation(
     angles,
     collectDiagnostics,
   );
+  model.extent = result.extent;
 
   // ── Belt topology changed this frame → rebuild its no-slip links, AFTER the solve ──
   // The bake has to happen on a state the other constraints agree with. Baking on the
@@ -1064,6 +1243,261 @@ export function step_simulation(
 }
 
 /**
+ * Sweeps a dynamic frame runs, fixed (see `PBD_solve`'s `dynamics` bypass of the early
+ * exit — a falling mechanism has no fixed point to converge to). Same order of magnitude as
+ * `SIMULATION_SWEEPS`; unmeasured, a starting point to retune once gravity is on screen.
+ */
+const DYNAMIC_SWEEPS = 200;
+
+/**
+ * Advance a DYNAMIC-mode frame: gravity (today; any other force joins later) integrated in
+ * the predict step, XPBD velocity read back from the whole displacement, everything else
+ * the same rigid-constraint sweep `step_simulation` runs.
+ *
+ * Deliberately narrower than `step_simulation` for now:
+ *  - no motor-target refresh — a motor's `targetAngle` stays wherever the model was
+ *    compiled with, since plan étape 5 ("couple imposé vs position imposée") is what
+ *    decides how a motor belongs in a force-driven step in the first place;
+ *  - no belt-disconnect tracking — a belt stays geometrically constrained but never drops a
+ *    pulley.
+ * Grab is kept: it is core interaction, not a load, and costs nothing extra to support
+ * (`grab_links` is shared with `step_simulation`).
+ */
+export function step_dynamic_simulation(
+  model: SimulationModel,
+  t: number,
+  /** The frame to warm-start from — position, angle AND velocity. */
+  prev: DynamicSnapshot | null,
+  dt: number = RECORD_DT,
+  /** World-space acceleration applied every frame — `Point2(0, 0)` for gravity off. */
+  gravity: Point2,
+  grab?: SimGrab,
+  sweeps: number = DYNAMIC_SWEEPS,
+  collectDiagnostics: boolean = true,
+  /** Re-read every frame, like `gravity` above — no recompile needed to toggle it. */
+  collisionsOn: boolean = false,
+  /** Same reasoning as `collisionsOn`, gated independently — see `collision_links`. */
+  floorOn: boolean = false,
+): DynamicSnapshot {
+  const positions = new Map(model.nodes.positions);
+  const angles = new Map(model.nodes.angles);
+  const velocities = new Map<string, Point2>();
+  const angleVelocities = new Map<string, number>();
+
+  // ── Warm start (position/angle as `step_simulation`; velocity the same way) ──
+  if (prev) {
+    const { keys: fusedKeys, firstParts } = model.fill;
+    const index = prev.layout.index;
+    for (let i = 0; i < fusedKeys.length; i++) {
+      const slot = index.get(firstParts[i]) ?? index.get(fusedKeys[i]);
+      if (slot === undefined) continue;
+      const x = prev.positions[2 * slot];
+      if (!Number.isNaN(x))
+        positions.set(fusedKeys[i], new Point2(x, prev.positions[2 * slot + 1]));
+      const vx = prev.velocities[2 * slot];
+      if (!Number.isNaN(vx))
+        velocities.set(fusedKeys[i], new Point2(vx, prev.velocities[2 * slot + 1]));
+    }
+    const angleIndex = prev.layout.angleIndex;
+    angles.forEach((_, key) => {
+      const slot = angleIndex.get(key);
+      if (slot === undefined) return;
+      const a = prev.angles[slot];
+      if (!Number.isNaN(a)) angles.set(key, a);
+      const va = prev.angleVelocities[slot];
+      if (!Number.isNaN(va)) angleVelocities.set(key, va);
+    });
+  }
+
+  // ── Beam midpoints (dynamics-only, every frame) ── a virtual mass, not a real element:
+  // pinned onto the live segment so the beam's own rotational inertia comes out right — see
+  // `DynamicMassModel.beamMidpoints`. Position is recomputed from THIS frame's start/end
+  // regardless of any warm start, since it is fully determined by them (`t = 0.5`, never a
+  // free DOF) — but velocity DOES need seeding: left at 0, the predict step leaves the
+  // midpoint sitting at last frame's spot while `start`/`end` predict onward under their own
+  // warm-started velocity, so `FixedOnSegment` spends the whole sweep dragging it back into
+  // place — pulling `end` backwards right along with it, since the projection corrects both
+  // ends of a violated constraint. Seeding it at the segment's own linear interpolation of
+  // `start`/`end`'s velocity — exactly what a rigid rod's midpoint velocity actually is —
+  // starts the constraint already near-satisfied, so nothing gets eaten.
+  const midLinks: Link[] = [];
+  for (const { midKey, startKey, endKey } of model.dynamicMasses.beamMidpoints) {
+    const s = positions.get(startKey);
+    const e = positions.get(endKey);
+    if (!s || !e) continue;
+    positions.set(midKey, s.lerp(e, 0.5));
+    const vs = velocities.get(startKey) ?? ZERO;
+    const ve = velocities.get(endKey) ?? ZERO;
+    velocities.set(midKey, vs.lerp(ve, 0.5));
+    midLinks.push({
+      type: "FixedOnSegment",
+      ddl: 2,
+      key1: startKey,
+      key2: endKey,
+      key3: midKey,
+      t: 0.5,
+    });
+  }
+
+  // ── Grab (transient, this frame only) ── no belt state to share: dynamic mode tracks none.
+  // The kinematic `Spring`/`MotorBeam`/`MotorAngle` links are dropped here: dynamic mode
+  // pulls them out of the sweep and applies real forces/torques below instead (see
+  // `spring-damper-model.ts`, `motor-model.ts`) — left in, they would double up, once as a
+  // soft position constraint and once as an actual force.
+  const links: Link[] = grab_links(model, grab, positions, new Map(), new Map()).filter(
+    (link) =>
+      link.type !== "Spring" &&
+      link.type !== "MotorBeam" &&
+      link.type !== "MotorAngle",
+  );
+  links.push(...midLinks);
+  if (collisionsOn || floorOn)
+    links.push(
+      ...collision_links(
+        model.collisionCandidates,
+        positions,
+        model.extent,
+        collisionsOn,
+        floorOn,
+        model.floorNormal,
+      ),
+    );
+
+  // ── User loads, spring/damper and motor forces, resolved against THIS frame's live
+  // positions and pre-predict velocities — all three follow the mechanism as it moves. ──
+  const { forces, torques } = resolve_load_forces(model.compiledLoads, positions);
+  const merge_forces = (extra: Map<string, Point2>) => {
+    for (const [key, f] of extra) forces.set(key, (forces.get(key) ?? ZERO).add(f));
+  };
+  merge_forces(resolve_spring_damper_forces(model.compiledSpringDampers, positions, velocities));
+  const motorContribution = resolve_motor_torques(
+    model.compiledMotors,
+    dt,
+    positions,
+    velocities,
+    angleVelocities,
+    model.dynamicMasses.posMasses,
+    model.dynamicMasses.angleMasses,
+  );
+  merge_forces(motorContribution.forces);
+  for (const [key, t] of motorContribution.torques)
+    torques.set(key, (torques.get(key) ?? 0) + t);
+
+  // An anchored node never feels the predict step's acceleration (it cannot move regardless
+  // of `gx/gy` — see `PBD_kinematic_solver`), so its own weight has to be restated here as an
+  // ordinary force to reach the anchored-dof reaction fallback. A free node needs none of
+  // this: its weight already comes out mass-independent, exactly like real gravity.
+  const groundedWeights = new Map<string, Point2>();
+  for (const [key, mass] of model.dynamicMasses.groundedMasses)
+    if (mass > 0) groundedWeights.set(key, gravity.mul(mass));
+  merge_forces(groundedWeights);
+
+  // ── XPBD solve ── `velocities`/`angleVelocities` are mutated in place with the result.
+  // Snapshot the incoming velocity first: restitution below needs both what the frame
+  // started with and what the plain (inelastic) solve produced, to know how much bounce to
+  // add back.
+  const velocitiesBeforeSolve = new Map(velocities);
+  // Same flag as `unsatisfied`: both are for display, and both cost a per-link bookkeeping
+  // step across the whole sweep that a caller measuring pure solver performance skips.
+  const reactions: LinkReaction[] | undefined = collectDiagnostics ? [] : undefined;
+  const dynamics: DynamicsInput = {
+    dt,
+    gx: gravity.x,
+    gy: gravity.y,
+    velocities,
+    angleVelocities,
+    forces,
+    torques,
+    angleMasses: model.dynamicMasses.angleMasses,
+    reactions,
+  };
+  const result = PBD_kinematic_solver(
+    positions,
+    new Map<string, number>(),
+    model.dynamicMasses.posMasses,
+    new Map<string, number>(),
+    links,
+    sweeps,
+    undefined,
+    angles,
+    collectDiagnostics,
+    // Ignored: `dynamics` overrides the exit criterion with a fixed sweep count.
+    "motion",
+    0,
+    dynamics,
+  );
+  model.extent = result.extent;
+
+  // ── Restitution: bounce whatever collision constraints actually resolved this frame,
+  // instead of leaving them at the plain solve's inelastic (velocity ≈ 0) response. Reads
+  // THIS frame's freshly solved extent, unlike `collision_links` above (which needed an
+  // estimate before the solve had run) — already the accurate answer, so no lag to spend. ──
+  if (collisionsOn || floorOn)
+    apply_collision_restitution(
+      model.collisionCandidates,
+      result.positions,
+      model.dynamicMasses.posMasses,
+      velocitiesBeforeSolve,
+      velocities,
+      DEFAULT.RESTITUTION,
+      result.extent,
+      collisionsOn,
+      floorOn,
+      model.floorNormal,
+    );
+
+  // ── Into the snapshot's slots, fused keys decoupled back to one slot per original key ──
+  const layout = model.layout;
+  const { keys: fusedKeys, start, slots } = model.fill;
+  const outPositions = new Float64Array(layout.keys.length * 2);
+  const outVelocities = new Float64Array(layout.keys.length * 2);
+  for (let i = 0; i < fusedKeys.length; i++) {
+    const p = result.positions.get(fusedKeys[i]);
+    const v = velocities.get(fusedKeys[i]);
+    const x = p ? p.x : NaN;
+    const y = p ? p.y : NaN;
+    const vx = v ? v.x : NaN;
+    const vy = v ? v.y : NaN;
+    for (let s = start[i]; s < start[i + 1]; s++) {
+      outPositions[2 * slots[s]] = x;
+      outPositions[2 * slots[s] + 1] = y;
+      outVelocities[2 * slots[s]] = vx;
+      outVelocities[2 * slots[s] + 1] = vy;
+    }
+  }
+  // The reserved grab slots: only the bridge node this frame's own grab added, if any — and
+  // never a velocity, since a grab bridge does not exist across frames to warm-start one.
+  for (const key of GRAB_KEYS) {
+    const slot = layout.index.get(key)!;
+    const p = result.positions.get(key);
+    outPositions[2 * slot] = p ? p.x : NaN;
+    outPositions[2 * slot + 1] = p ? p.y : NaN;
+    outVelocities[2 * slot] = NaN;
+    outVelocities[2 * slot + 1] = NaN;
+  }
+
+  const outAngles = new Float64Array(layout.angleKeys.length);
+  const outAngleVelocities = new Float64Array(layout.angleKeys.length);
+  for (let i = 0; i < layout.angleKeys.length; i++) {
+    const a = result.angles.get(layout.angleKeys[i]);
+    outAngles[i] = a === undefined ? NaN : a;
+    const v = angleVelocities.get(layout.angleKeys[i]);
+    outAngleVelocities[i] = v === undefined ? NaN : v;
+  }
+
+  return {
+    t,
+    layout,
+    positions: outPositions,
+    angles: outAngles,
+    velocities: outVelocities,
+    angleVelocities: outAngleVelocities,
+    unsatisfied: result.unsatisfied,
+    reactions,
+  };
+}
+
+/**
  * The snapshot to draw at time `t`, interpolated between the two it falls between.
  *
  * Recording runs at a fixed `RECORD_DT` whatever the playback speed, so below ×1 the same
@@ -1113,15 +1547,59 @@ export function snapshot_at(
 }
 
 /**
+ * `snapshot_at`'s dynamic-mode counterpart: same interpolation of position/angle, plus
+ * velocity — and no belt-topology guard, since dynamic mode tracks no belt contact to guard.
+ * Kept separate rather than folded into one generic function: the two snapshot kinds differ
+ * in exactly the fields this interpolates, and forcing them through a shared body would cost
+ * more in indirection than the ~20 duplicated lines below are worth. `snapshot_index_at` is
+ * the part that IS shared, being purely a search over `.t`.
+ */
+export function dynamic_snapshot_at(
+  snapshots: DynamicSnapshot[],
+  t: number,
+): DynamicSnapshot | null {
+  if (snapshots.length === 0) return null;
+  const i = snapshot_index_at(snapshots, t);
+  if (i >= snapshots.length - 1) return snapshots[snapshots.length - 1];
+  const a = snapshots[i];
+  const b = snapshots[i + 1];
+  const span = b.t - a.t;
+  const u = span > 0 ? (t - a.t) / span : 0;
+  if (u <= 0) return a;
+  // Slot i means one thing on each side of an edit, so two layouts never average.
+  if (a.layout !== b.layout) return a;
+
+  const lerp = (from: Float64Array, to: Float64Array) => {
+    const out = new Float64Array(from.length);
+    for (let i = 0; i < out.length; i++) out[i] = from[i] + (to[i] - from[i]) * u;
+    return out;
+  };
+  return {
+    t,
+    layout: a.layout,
+    positions: lerp(a.positions, b.positions),
+    angles: lerp(a.angles, b.angles),
+    velocities: lerp(a.velocities, b.velocities),
+    angleVelocities: lerp(a.angleVelocities, b.angleVelocities),
+    // Diagnostics belong to a state the solver actually produced.
+    unsatisfied: a.unsatisfied,
+    reactions: a.reactions,
+  };
+}
+
+/**
  * Does a cursor placed at `t` sit at the live end of the recording, rather than behind it?
  *
  * This compares times, which the recording loop must never do: while recording, the
  * frontier runs ahead of the cursor by an amount that varies frame to frame. It is sound
  * **here and only here** — it answers at the instant the user drops the cursor, playback
  * stopped and the frontier still.
+ *
+ * Generic over `SimulationSnapshot`: it only ever reads `.t`, so it serves a kinematic or a
+ * dynamic recording alike.
  */
-export function at_recording_end(
-  snapshots: KinematicSnapshot[],
+export function at_recording_end<S extends SimulationSnapshot>(
+  snapshots: S[],
   t: number,
 ): boolean {
   if (snapshots.length === 0) return true;
@@ -1133,9 +1611,11 @@ export function at_recording_end(
  * dividing the time axis — the search is correct whether or not the spacing is uniform,
  * and nothing downstream then has to be revisited if it ever stops being. Clamped to the
  * array.
+ *
+ * Generic like `at_recording_end`, for the same reason.
  */
-export function snapshot_index_at(
-  snapshots: KinematicSnapshot[],
+export function snapshot_index_at<S extends SimulationSnapshot>(
+  snapshots: S[],
   t: number,
 ): number {
   let lo = 0;
@@ -1233,6 +1713,51 @@ export function apply_snapshot_to_mechanism(
           ? { disconnectedGearIndices }
           : {}),
         ...(gearWraps !== undefined ? { gearWraps } : {}),
+      };
+    }
+  });
+
+  return { ...mechanism, mechanicalElements: newElements };
+}
+
+/**
+ * `apply_snapshot_to_mechanism`'s dynamic-mode counterpart: same position/angle/spring-
+ * rest-length mapping, minus the belt fields — dynamic mode tracks no belt contact, so
+ * `disconnectedGearIndices`/`gearWraps` are left untouched (a belt draws as fully engaged,
+ * which is the correct look until dynamic mode tracks disconnection at all). Kept separate
+ * rather than folded into one function for the same reason as `dynamic_snapshot_at`: the two
+ * only diverge on belts, and threading a "does this snapshot have belt data" flag through
+ * one body would cost more than the ~15 duplicated lines below.
+ */
+export function apply_dynamic_snapshot_to_mechanism(
+  mechanism: Mechanism,
+  snapshot: DynamicSnapshot,
+): Mechanism {
+  const newElements = mechanism.mechanicalElements.map((el) => {
+    if ("position" in el) {
+      const pos = snapshot_point(snapshot, el.id);
+      if (!pos) return el;
+      if (el.type === "gear") {
+        const ang = snapshot_angle(snapshot, el.id);
+        return {
+          ...el,
+          position: pos,
+          ...(ang !== undefined ? { angle: ang } : {}),
+        };
+      }
+      return { ...el, position: pos };
+    } else {
+      const start = snapshot_point(snapshot, `${el.id}:start`);
+      const end = snapshot_point(snapshot, `${el.id}:end`);
+      const restLength =
+        el.type === "spring" || el.type === "damper"
+          ? (el.restLength ?? el.positionStart.distance_to(el.positionEnd))
+          : undefined;
+      return {
+        ...el,
+        ...(start ? { positionStart: start } : {}),
+        ...(end ? { positionEnd: end } : {}),
+        ...(restLength !== undefined ? { restLength } : {}),
       };
     }
   });

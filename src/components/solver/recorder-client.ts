@@ -1,12 +1,12 @@
 import { Mechanism } from "../../types";
-import { KinematicSnapshot, SnapshotLayout } from "../../types/runtime-state";
+import { SimulationSnapshot, SnapshotLayout } from "../../types/runtime-state";
 import { serialize_mechanism } from "../../utils/serialization";
 import {
   MAX_RECORDING_TIME,
   SimGrab,
   max_recording_time,
-} from "./kinematic-simulation";
-import { FromRecorder, ToRecorder } from "./recorder-protocol";
+} from "./simulation-engine";
+import { FromRecorder, RecorderMode, ToRecorder } from "./recorder-protocol";
 import { snapshot_layout } from "./snapshot";
 
 /**
@@ -20,7 +20,7 @@ import { snapshot_layout } from "./snapshot";
 export class RecorderClient {
   private worker: Worker;
   private epoch = 0;
-  private queued: KinematicSnapshot[] = [];
+  private queued: SimulationSnapshot[] = [];
   /** Where the recording ends, or `null` while nothing has come back yet. */
   private reached: number | null = null;
   /**
@@ -77,7 +77,11 @@ export class RecorderClient {
    * Adopt a mechanism, dropping everything the previous one still had in flight.
    * `resumeFrom` carries the simulated state, so an edit does not reset motor angles.
    */
-  load(mechanism: Mechanism, resumeFrom: KinematicSnapshot | null): void {
+  load(
+    mode: RecorderMode,
+    mechanism: Mechanism,
+    resumeFrom: SimulationSnapshot | null,
+  ): void {
     this.epoch++;
     this.queued = [];
     this.layout = null;
@@ -86,6 +90,7 @@ export class RecorderClient {
     // bulk of a long editing session — re-serialised on every edit made while running.
     this.post({
       type: "load",
+      mode,
       mechanism: { ...serialize_mechanism(mechanism), history: [] },
       resumeFrom,
       epoch: this.epoch,
@@ -99,7 +104,7 @@ export class RecorderClient {
    * not be appended after it — but the layout is kept: the model has not changed, so the
    * snapshots that follow are written in the same slots.
    */
-  rewind(resumeFrom: KinematicSnapshot): void {
+  rewind(resumeFrom: SimulationSnapshot): void {
     this.epoch++;
     this.queued = [];
     this.reached = resumeFrom.t;
@@ -115,6 +120,21 @@ export class RecorderClient {
     this.post({ type: "grab", grab });
   }
 
+  /** Dynamic mode only: whether the next steps integrate gravity. */
+  setGravity(on: boolean): void {
+    this.post({ type: "gravity", on });
+  }
+
+  /** Both modes: whether the next steps detect and resist collisions. */
+  setCollisions(on: boolean): void {
+    this.post({ type: "collisions", on });
+  }
+
+  /** Both modes: whether the next steps detect and resist the floor. */
+  setFloor(on: boolean): void {
+    this.post({ type: "floor", on });
+  }
+
   /** Where the simulated clock is being asked to get to. */
   target(targetTime: number): void {
     this.post({ type: "target", targetTime });
@@ -125,7 +145,7 @@ export class RecorderClient {
   }
 
   /** Snapshots recorded since the last call, and where the recording now ends. */
-  drain(): { snapshots: KinematicSnapshot[]; reached: number | null } {
+  drain(): { snapshots: SimulationSnapshot[]; reached: number | null } {
     const snapshots = this.queued;
     this.queued = [];
     return { snapshots, reached: this.reached };

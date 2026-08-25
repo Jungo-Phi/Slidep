@@ -1,95 +1,135 @@
-import { Box, IconButton, Typography, FormControlLabel, Button, Paper } from "@mui/material";
-import { ShowChart, VisibilityOff, Visibility } from "@mui/icons-material";
+import { Box, IconButton, Typography, Menu } from "@mui/material";
+import { VisibilityOff, Visibility } from "@mui/icons-material";
 import { MechanicalElement } from "../../../types/element";
-import { Action, PropertiesPanelTab } from "../../../types";
-import { available_overlays, overlay_shown } from "../../../utils/element-queries";
+import { Action } from "../../../types";
+import {
+  available_overlays,
+  overlay_shown,
+} from "../../../utils/element-queries";
 import { ProbeMetricSelector } from "../../canvas/ProbeMetricSelector";
-import { OVERLAY_LABEL_KEYS, set_overlay } from "../overlay-actions";
-import { t } from "../../../i18n";
+import {
+  OVERLAY_LABEL_KEYS,
+  overlay_label_count,
+  set_overlay,
+} from "../overlay-actions";
+import { t, tn } from "../../../i18n";
+import { icon } from "../../element-palette/iconDataUris";
+import React from "react";
 
 interface ProbesSectionProps {
   element: MechanicalElement;
   applyActions: (actions: Action[]) => void;
-  setActiveTab: (tab: PropertiesPanelTab) => void;
 }
 
 export const ProbesSection: React.FC<ProbesSectionProps> = ({
   element,
   applyActions,
-  setActiveTab,
 }) => {
-  const probes = element.probes ?? [];
+  const [metricMenu, setMetricMenu] = React.useState<{
+    anchorEl: HTMLElement;
+  } | null>(null);
+
   return (
     <Box
       sx={{
         px: 2,
-        pb: 1,
         display: "flex",
-        flexDirection: "column",
-        gap: 0.25,
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 1,
       }}
     >
-      {available_overlays(element).map((kind) => (
-        <FormControlLabel
-          key={kind}
-          control={
-            <IconButton
-              size="small"
-              color="inherit"
-              onClick={() =>
-                applyActions(
-                  set_overlay(element, kind, !overlay_shown(element, kind)),
-                )
-              }
-            >
-              {overlay_shown(element, kind) ? (
-                <Visibility fontSize="small" />
-              ) : (
-                <VisibilityOff fontSize="small" />
-              )}
-            </IconButton>
-          }
-          label={
-            <Typography variant="caption">
-              {t(OVERLAY_LABEL_KEYS[kind])}
-            </Typography>
-          }
-          sx={{ m: 0, gap: 0.5 }}
-        />
-      ))}
-      <Button
-        size="small"
-        startIcon={<ShowChart />}
-        onClick={() => setActiveTab("analysis")}
+      <Box
         sx={{
-          textTransform: "none",
-          alignSelf: "flex-start",
-          py: 0,
-          minWidth: 0,
+          display: "flex",
+          flexDirection: "column",
+          gap: 0.25,
         }}
       >
-        {t("element_view_charts")}
-      </Button>
-
-      <Box sx={{ display: "flex", alignItems: "left" }}>
-        <Paper sx={{ py: 1 }}>
-          <ProbeMetricSelector
-            element={element}
-            onToggle={(newProbes) =>
+        {available_overlays(element).map((kind) => (
+          <Box
+            key={kind}
+            onClick={() =>
               applyActions(
-                [
-                  {
-                    type: "SetProbes",
-                    elementID: element.id,
-                    newProbes,
-                    oldProbes: probes,
-                  },
-                ],
+                set_overlay(element, kind, !overlay_shown(element, kind)),
               )
             }
-          />
-        </Paper>
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              gap: 0.5,
+              p: 0.5,
+              cursor: "pointer",
+              borderRadius: 1,
+              "&:hover": { backgroundColor: "action.hover" },
+            }}
+          >
+            {overlay_shown(element, kind) ? (
+              <Visibility fontSize="small" />
+            ) : (
+              <VisibilityOff fontSize="small" />
+            )}
+            <Typography variant="caption">
+              {tn(
+                OVERLAY_LABEL_KEYS[kind],
+                overlay_label_count([element], kind),
+              )}
+            </Typography>
+          </Box>
+        ))}
       </Box>
+      <Box
+        sx={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          flex: 1,
+        }}
+      >
+        <Typography variant="subtitle2" color="textDisabled">
+          {t("palette_measurements")}
+        </Typography>
+        <IconButton
+          color="inherit"
+          size="small"
+          onClick={(e) =>
+            setMetricMenu({
+              anchorEl: e.currentTarget,
+            })
+          }
+        >
+          <Box
+            component="img"
+            style={{ width: 28, height: 28 }}
+            src={icon("probe")}
+          />
+        </IconButton>
+      </Box>
+
+      <Menu
+        anchorEl={metricMenu?.anchorEl ?? null}
+        anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+        transformOrigin={{
+          vertical: "top",
+          horizontal: "right",
+        }}
+        open={!!metricMenu}
+        onClose={() => setMetricMenu(null)}
+      >
+        <ProbeMetricSelector
+          element={element}
+          onToggle={(newProbes) =>
+            applyActions([
+              {
+                type: "SetProbes",
+                elementID: element.id,
+                newProbes,
+                oldProbes: element.probes ?? [],
+              },
+            ])
+          }
+        />
+      </Menu>
     </Box>
   );
 };

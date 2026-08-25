@@ -178,8 +178,10 @@ export interface SliderElement extends BaseNodeElement {
 
 export interface MotorConfig {
   parentBeamID?: ID; // undefined means anchored to ground
-  /** tr/min, signed: (positive = clockwise, negative = counter-clockwise) */
+  /** rad/s, signed: (positive = clockwise, negative = counter-clockwise) */
   speed: number;
+  /** N·m, torque limit at which the motor seizes up */
+  torque: number;
 }
 
 /** Pivot element - allows rotational motion */
@@ -431,7 +433,12 @@ export type ProbeMetric =
   | "velocity"
   | "angle"
   | "angular-velocity"
-  | "force";
+  | "force"
+  | "force-start"
+  | "force-end"
+  | "moment"
+  | "moment-start"
+  | "moment-end";
 
 /** Which curves of a vector metric are plotted.
  * Ignored for scalar metrics (angle, angular velocity). */

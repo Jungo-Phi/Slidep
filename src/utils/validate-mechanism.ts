@@ -17,6 +17,7 @@ import {
   MIN_PULLEYS_TO_CLOSE,
 } from "./belt-rules";
 import { edges_by_terminal_pair, edges_may_coexist } from "./edge-rules";
+import { rad_to_deg } from "./quantity-format";
 import { t } from "../i18n";
 
 export type ValidationErrorCode =
@@ -564,8 +565,7 @@ export function compute_constraint_violations(
         if (cel.flipStart) v1 = v1.mul(-1);
         if (cel.flipEnd) v2 = v2.mul(-1);
         const currentRad = v1.angle_to(v2);
-        const targetRad =
-          ((cel.value * Math.PI) / 180) * (cel.couterClockwise ? -1 : 1);
+        const targetRad = cel.value * (cel.couterClockwise ? -1 : 1);
         let diff = currentRad - targetRad;
         if (diff > Math.PI) diff -= 2 * Math.PI;
         if (diff < -Math.PI) diff += 2 * Math.PI;
@@ -577,7 +577,7 @@ export function compute_constraint_violations(
           t("violation_angle", {
             name: n,
             current: currentDeg.toFixed(1),
-            target: cel.value,
+            target: rad_to_deg(cel.value).toFixed(1),
             delta: errDeg.toFixed(2),
           }),
           errDeg,

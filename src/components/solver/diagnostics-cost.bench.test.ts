@@ -11,7 +11,7 @@ import {
   RECORD_DT,
   compile_simulation_model,
   step_simulation,
-} from "./kinematic-simulation";
+} from "./simulation-engine";
 
 /**
  * What the permanent residual collection costs — the `collectDiagnostics` item of

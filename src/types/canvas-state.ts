@@ -66,6 +66,9 @@ export type CanvasStateType =
   | "MovingConstraint"
   | "PlacingValue"
   | "EditingValue"
+  | "DraggingFloorHeight"
+  | "DraggingFloorAngle"
+  | "EditingFloorValue"
   | "SimulationDragging";
 
 // Define the possible states of the canvas interaction
@@ -177,6 +180,12 @@ export type CanvasState =
   | { type: "GearRatioConstraintStart" }
   | { type: "GearRatioConstraintGear"; startGearID: ID }
   | { type: "MovingConstraint"; elementID: ID }
+  // Both drag the floor directly, continuously once past the same drag-start threshold
+  // `SelectedElement` gates its own drag on. `downPos` is what that threshold measures
+  // against, and — unmoved by mouse-up — what turns the gesture into a click that opens
+  // `EditingFloorValue` instead.
+  | { type: "DraggingFloorHeight"; downPos: WorldPoint }
+  | { type: "DraggingFloorAngle"; downPos: WorldPoint }
   // Les deux états de saisie d'une valeur au canvas. Ils partagent l'éditeur
   // mais pas les issues : sur un élément qui vient d'être posé, ESCAPE le
   // supprime et ENTER réarme l'outil pour en poser un autre ; sur un élément
@@ -203,7 +212,11 @@ export type CanvasState =
       bodyRatio?: number;
       gearPerimeter?: { gearID: ID; angleOffset: number; radius: number };
       beltPin?: Extract<Link, { type: "BeltPin" }>;
-    };
+    }
+  /** Opened on a click (no drag) on a floor handle — see `DraggingFloorHeight`/
+   *  `DraggingFloorAngle`. Always leaves the floor selected on exit: there is no
+   *  `PlacingValue`-style "delete on Escape" counterpart, since the floor already existed. */
+  | { type: "EditingFloorValue"; field: "height" | "angle"; value: number };
 
 /** Every element id the canvas state currently treats as selected/focused: one id for
  *  most states (drag, edit, single selection), several under a multiple selection. */

@@ -7,7 +7,7 @@ import {
   beltContact,
   compile_simulation_model,
   step_simulation,
-} from "./kinematic-simulation";
+} from "./simulation-engine";
 
 /**
  * What the DISCONNECTION looks like from the outside, which is how the defect was seen:
@@ -19,6 +19,10 @@ import {
  */
 
 const loadFixture = () => load_mechanism(JSON.parse(disconnectJson)).mechanism;
+
+/** This fixture's own extent, so a threshold swept below in px of arc can be turned into the
+ *  ratio `beltContact.detachRatio`/`reattachRatio` now expect — see `nodes_extent`. */
+const FIXTURE_EXTENT = compile_simulation_model(loadFixture()).extent;
 
 /** Largest single-node move between two frames, in px: the jump one actually sees. */
 function biggestMove(
@@ -111,12 +115,12 @@ describe("qualité de la déconnexion", () => {
    */
   it("seuil de détachement contre saut de transition", () => {
     for (const detach of [0, 0.5, 1, 2, 5, 10]) {
-      beltContact.detachArc = detach;
+      beltContact.detachRatio = detach / FIXTURE_EXTENT;
       const r = run(true, 460, 1 / 120);
       console.log(
         `  détachement à ${detach} px d'arc — f${r.detachFrame} : ${r.lines[0] ?? "—"}`,
       );
-      beltContact.detachArc = 0.5;
+      beltContact.detachRatio = 0.5 / FIXTURE_EXTENT;
     }
   }, 600_000);
 
@@ -156,8 +160,8 @@ describe("qualité de la déconnexion", () => {
       [0.5, 2],
       [0.5, 3],
     ] as const) {
-      beltContact.detachArc = detach;
-      beltContact.reattachArc = reattach;
+      beltContact.detachRatio = detach / FIXTURE_EXTENT;
+      beltContact.reattachRatio = reattach / FIXTURE_EXTENT;
       const model = compile_simulation_model(loadFixture());
       const belt = model.links.find(
         (l): l is Extract<Link, { type: "BeltLength" }> =>
@@ -189,8 +193,8 @@ describe("qualité de la déconnexion", () => {
       console.log(
         `  lâcher ${detach} / reprendre ${reattach} px — ${flips} bascules : ${events.join(", ")}`,
       );
-      beltContact.detachArc = 0.5;
-      beltContact.reattachArc = 1.0;
+      beltContact.detachRatio = 0.5 / FIXTURE_EXTENT;
+      beltContact.reattachRatio = 1.0 / FIXTURE_EXTENT;
     }
   }, 600_000);
 

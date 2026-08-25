@@ -13,7 +13,9 @@
  * enough to name, to hover and to animate.
  */
 
+import { PREVIEW_MIN_ZOOM } from "../../constants/rendering-specs";
 import { ID } from "../../types";
+import { grid_metrics } from "../../utils/grid";
 import {
   AnalysisChain,
   AnalysisModel,
@@ -21,6 +23,13 @@ import {
   elements_of_key,
 } from "./analysis-model";
 import { ChainMobility, angle_levers, chain_extent } from "./mobility-probe";
+
+/**
+ * Smallest world length worth treating as non-zero — a chain flattened below this is no more
+ * resolved than a preview at its own zoom floor already renders it, so extent guards and swing
+ * amplitudes alike bottom out here rather than at an independently chosen value.
+ */
+export const MIN_VISIBLE_LENGTH = grid_metrics(PREVIEW_MIN_ZOOM).step;
 
 /** Share of a mode's motion below which an element is not worth naming as taking part. */
 const CONTRIBUTOR_SHARE = 0.02;
@@ -45,7 +54,7 @@ export type ModeContributor = {
 };
 
 export type MotionMode = {
-  /** Unit vector over `variables`, scaled units (millimetres, angles through their lever). */
+  /** Unit vector over `variables`, scaled units (metres, angles through their lever). */
   vector: Float64Array;
   /**
    * Elements that move, most first — a ranking, for naming and reading.
@@ -163,7 +172,7 @@ function element_candidates(
       }
 
       // Rotation about the element's own centre: a point turns about it, and an angle the
-      // element carries turns with it — one radian, worth `lever` millimetres at the rim.
+      // element carries turns with it — one radian, worth `lever` metres at the rim.
       let cx = 0;
       let cy = 0;
       let count = 0;
@@ -311,7 +320,11 @@ export function canonical_modes(
   const { variables, modes: space } = mobility;
   if (space.length === 0) return [];
 
-  const levers = angle_levers(model, variables, chain_extent(model, chain) || 1);
+  const levers = angle_levers(
+    model,
+    variables,
+    chain_extent(model, chain) || MIN_VISIBLE_LENGTH,
+  );
   const candidates = element_candidates(model, variables, levers);
 
   const basis: Float64Array[] = [];

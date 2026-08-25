@@ -11,7 +11,7 @@ import {
   apply_snapshot_to_mechanism,
   compile_simulation_model,
   step_simulation,
-} from "./kinematic-simulation";
+} from "./simulation-engine";
 import { get_links_simulation, get_sim_nodes } from "./parsing";
 import { get_probe_series } from "./probe-series";
 import { GRAB_KEYS } from "./snapshot";

@@ -12,12 +12,13 @@ import type { ViewportState } from "../../types";
 import { grid_snap_step } from "../../utils";
 import { DEFAULT_SNAP_SETTINGS } from "./snap-corridor";
 import { snap_dimension_position as snap_dim } from "./dimension-snap";
+import { deg_to_rad } from "../../utils/quantity-format";
 
 /**
  * The angle step the cases below are written against. Pinned rather than read
  * from the defaults: what they check is the snapping, not which step ships.
  */
-const SETTINGS = { ...DEFAULT_SNAP_SETTINGS, angleStep: 15 };
+const SETTINGS = { ...DEFAULT_SNAP_SETTINGS, angleStep: deg_to_rad(15) };
 
 /** The snapped position; no case below reads the feedback. */
 const snap_dimension_position = (
@@ -86,20 +87,22 @@ describe("snap_dimension_position — cote linéaire", () => {
   // sit closer than a whole square while still lining up with its neighbours.
   it("aimante le déport sur des demi-pas de grille", () => {
     const snapped = snap_dimension_position(
-      P(300, 146),
+      P(300, 3.5 * STEP + 3),
       state,
       MECH,
       NONE,
       VIEW,
     );
-    expect(snapped.y).toBeCloseTo(1.5 * STEP);
+    // A half-integer multiple: landing here (rather than on 3 or 4 * STEP)
+    // is what shows the rung is the half-step, not the whole one.
+    expect(snapped.y).toBeCloseTo(3.5 * STEP);
     // Nothing near the middle, so the label keeps where it was along the bar.
     expect(snapped.x).toBeCloseTo(300);
   });
 
   it("laisse tout en place quand rien n'est à portée", () => {
-    // A quarter of a step from either rung, and nowhere near mid-span.
-    const raw = P(300, 175);
+    // Halfway between two rungs, and nowhere near mid-span.
+    const raw = P(300, 2 * STEP + STEP / 4);
     expect(snap_dimension_position(raw, state, MECH, NONE, VIEW)).toEqual(raw);
   });
 });
@@ -130,9 +133,9 @@ describe("snap_dimension_position — cote de rayon", () => {
   });
 
   it("aimante la distance au centre sur la grille", () => {
-    const raw = Point2.from_polar(297, 0);
+    const raw = Point2.from_polar(6 * STEP - 3, 0);
     const snapped = snap_dimension_position(raw, state, MECH, NONE, VIEW);
-    expect(snapped.length()).toBeCloseTo(3 * STEP);
+    expect(snapped.length()).toBeCloseTo(6 * STEP);
   });
 });
 

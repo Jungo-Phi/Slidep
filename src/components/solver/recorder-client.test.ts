@@ -3,7 +3,7 @@ import vilbrequin from "../../../test-mechanisms/Vilbrequin.slidep?raw";
 import { load_mechanism } from "../../utils/load-mechanism";
 import { FromRecorder, ToRecorder, WireSnapshot } from "./recorder-protocol";
 import { RecorderClient } from "./recorder-client";
-import { MAX_RECORDING_TIME } from "./kinematic-simulation";
+import { MAX_RECORDING_TIME } from "./simulation-engine";
 import {
   snapshot_belt_arrivals,
   snapshot_belt_detached,
@@ -148,7 +148,7 @@ describe("protocole du client d'enregistrement", () => {
     const before = client.drain().snapshots[0].layout;
 
     const logged = vi.spyOn(console, "error").mockImplementation(() => {});
-    client.load(load_mechanism(JSON.parse(vilbrequin)).mechanism, null);
+    client.load("kinematic", load_mechanism(JSON.parse(vilbrequin)).mechanism, null);
     const loaded = worker.posted[worker.posted.length - 1] as Extract<
       ToRecorder,
       { type: "load" }

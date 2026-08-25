@@ -8,7 +8,7 @@ import {
 import { actionReducer } from "../components/mechanism/action-reducer";
 import { with_corrections } from "../components/mechanism/apply-actions";
 import { validate_mechanism } from "./validate-mechanism";
-import { DEFAULT_METADATA, Mechanism } from "../types/mechanism";
+import { DEFAULT_METADATA, DEFAULT_SIMULATION, Mechanism } from "../types/mechanism";
 import { Point2, ZERO } from "../types/point2";
 import { HoveredPart, names_element } from "../types/hovered-part";
 import { CanvasState } from "../types/canvas-state";
@@ -171,6 +171,8 @@ function build_mechanism(gadgets: Gadget[]): Mechanism {
   return {
     metadata: DEFAULT_METADATA,
     viewport: { scale: 1, pan: new Point2(0, 0) },
+
+    simulation: DEFAULT_SIMULATION,
     mechanicalElements,
     constraintElements: [],
     loads: [],

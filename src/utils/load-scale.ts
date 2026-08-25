@@ -8,68 +8,84 @@
  * (see `world2screen_length`).
  */
 
-import { LOAD_SCALING } from "../constants/rendering-specs";
+import { LOAD_SCALING, MOMENT_SCALING } from "../constants/rendering-specs";
+
+interface LoadRuler {
+  REF_VALUE: number;
+  PX_SCALE: number;
+  LOG_BASE: number;
+  MIN_VALUE: number;
+  MIN_PX: number;
+}
 
 // ─── Display scale ──────────────────────────────────────────────────────────
 
-/** Compress a load magnitude (N, Nm or N/m) to a drawn length (screen px) with LOG scaling. */
-export function stored2screen_load(value: number): number {
+function stored2screen(value: number, ruler: LoadRuler): number {
   const unsigned = Math.max(
-    LOAD_SCALING.MIN_PX,
-    LOAD_SCALING.MIN_PX +
-      (LOAD_SCALING.PX_SCALE *
-        Math.log(Math.abs(value) / LOAD_SCALING.REF_VALUE + 1)) /
-        Math.log(LOAD_SCALING.LOG_BASE),
+    ruler.MIN_PX,
+    ruler.MIN_PX +
+      (ruler.PX_SCALE * Math.log(Math.abs(value) / ruler.REF_VALUE + 1)) /
+        Math.log(ruler.LOG_BASE),
   );
   return value < 0 ? -unsigned : unsigned;
 }
 
-/** Expand a drawn load length (screen px) to its real magnitude (N, Nm or N/m) with an INVERSE LOG scaling. */
-export function screen2stored_load(value: number): number {
+function screen2stored(value: number, ruler: LoadRuler): number {
   const unsigned = Math.max(
-    LOAD_SCALING.MIN_VALUE,
-    LOAD_SCALING.REF_VALUE *
+    ruler.MIN_VALUE,
+    ruler.REF_VALUE *
       (Math.pow(
-        LOAD_SCALING.LOG_BASE,
-        (Math.abs(value) - LOAD_SCALING.MIN_PX) / LOAD_SCALING.PX_SCALE,
+        ruler.LOG_BASE,
+        (Math.abs(value) - ruler.MIN_PX) / ruler.PX_SCALE,
       ) -
         1),
   );
   return value < 0 ? -unsigned : unsigned;
 }
 
+/** Compress a load magnitude (N or N/m) to a drawn length (screen px) with LOG scaling. */
+export function stored2screen_load(value: number): number {
+  return stored2screen(value, LOAD_SCALING);
+}
+
+/** Expand a drawn load length (screen px) to its real magnitude (N or N/m) with an INVERSE LOG scaling. */
+export function screen2stored_load(value: number): number {
+  return screen2stored(value, LOAD_SCALING);
+}
+
 /**
- * Drawn radius (screen px) of a moment's arc. Unsigned: the sign of a moment is
- * its rotation direction, which `draw_moment` reads separately — a negative
- * radius would just throw out of `ctx.arc`.
+ * Drawn radius (screen px) of a moment's arc, on its own ruler (`MOMENT_SCALING`) rather
+ * than `stored2screen_load`'s — moments live in a different typical range than forces.
+ * Unsigned: the sign of a moment is its rotation direction, which `draw_moment` reads
+ * separately — a negative radius would just throw out of `ctx.arc`.
  */
 export function stored2screen_moment(value: number): number {
-  return (
-    stored2screen_load(Math.abs(value)) / LOAD_SCALING.MOMENT_RADIUS_FACTOR
-  );
+  return stored2screen(Math.abs(value), MOMENT_SCALING);
 }
 
 /** Inverse of `stored2screen_moment`: the unsigned value an arc radius maps to. */
 export function screen2stored_moment(radius: number): number {
-  return screen2stored_load(
-    Math.abs(radius) * LOAD_SCALING.MOMENT_RADIUS_FACTOR,
-  );
+  return screen2stored(Math.abs(radius), MOMENT_SCALING);
 }
 
 /**
  * The round value nearest to `value`, on the ladder a drag snaps to: the
- * mantissas of `LOAD_SCALING.SNAP_MANTISSAS` in every decade. Nearest is
- * measured in log space, the space the display scale itself works in.
+ * mantissas of `ruler.SNAP_MANTISSAS` in every decade, floored at `ruler.MIN_VALUE`.
+ * Nearest is measured in log space, the space the display scale itself works in.
+ * `ruler` defaults to `LOAD_SCALING`; pass `MOMENT_SCALING` for a moment's own floor.
  */
-export function nearest_round_load_value(value: number): number {
-  const magnitude = Math.max(LOAD_SCALING.MIN_VALUE, Math.abs(value));
+export function nearest_round_load_value(
+  value: number,
+  ruler: Pick<LoadRuler, "MIN_VALUE"> & { SNAP_MANTISSAS: readonly number[] } = LOAD_SCALING,
+): number {
+  const magnitude = Math.max(ruler.MIN_VALUE, Math.abs(value));
   const decade = Math.floor(Math.log10(magnitude));
   let best = magnitude;
   let bestDistance = Infinity;
   // The neighbouring decades matter: just under 1000, the nearest rung up is
   // the next decade's 1, not this one's 5.
   for (const exponent of [decade - 1, decade, decade + 1]) {
-    for (const mantissa of LOAD_SCALING.SNAP_MANTISSAS) {
+    for (const mantissa of ruler.SNAP_MANTISSAS) {
       const candidate = mantissa * Math.pow(10, exponent);
       const distance = Math.abs(Math.log(candidate / magnitude));
       if (distance < bestDistance) {

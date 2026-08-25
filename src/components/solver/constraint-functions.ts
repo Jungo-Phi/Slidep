@@ -74,6 +74,13 @@ function projectOnSegment(
   t: number,
   stiffness: number,
   normalOffset: number = 0,
+  /** Which side (of `end − start`'s left normal) the offset is applied on. Omitted, the side
+   *  is read off the node's own current position — reproducible but not remembered between
+   *  calls, which is what `FixedOnSegment`/`SlideOnSegment` want. A contact (see
+   *  `applyPointSegmentContactConstraint`) instead fixes it once, so a single oversized
+   *  correction (a grab, in particular) landing the node past the segment does not read as
+   *  "already on its other, now-current side" and stop pushing back. */
+  forcedSide?: number,
 ): number {
   const wNode = nodes.w[iNode];
   const wStart = nodes.w[iStart];
@@ -99,7 +106,7 @@ function projectOnSegment(
       const ny = dx / len;
       // Un nœud pile sur le segment n'a pas de côté : la perpendiculaire gauche
       // tranche, ce qui rend le décalage reproductible plutôt qu'arbitraire.
-      const side = Cx * nx + Cy * ny < 0 ? -1 : 1;
+      const side = forcedSide ?? (Cx * nx + Cy * ny < 0 ? -1 : 1);
       Cx -= normalOffset * side * nx;
       Cy -= normalOffset * side * ny;
     }
@@ -180,6 +187,112 @@ export function applyFixedOnSegmentConstraint(
     stiffness,
     normalOffset,
   );
+}
+
+/**
+ * Non-penetration between a point (keyNode) and a segment (keyStart, keyEnd): keeps the
+ * node at least `offset` from its nearest point on the segment — extremities included, never
+ * projected past them — on the fixed `side` (of `end − start`'s left normal; `+1` or `-1`)
+ * it is presumed to be approaching from. `offset` is a contact margin, not a physical size: a
+ * plain point-vs-beam contact and a gear-vs-beam contact (`offset` = the gear's radius) share
+ * this one function.
+ *
+ * `side` is deliberately an input, not read off the node's own current position the way
+ * `SlideOnSegment`/`FixedOnSegment` read theirs: an UNSIGNED gate (violated only when closer
+ * than `offset`, whichever side that is) reads a node a single oversized correction has
+ * thrown clean across the segment — a grab in particular, whose per-iteration step can
+ * exceed the whole contact band — as newly arrived on its far side, and lets it go. Fixing
+ * the allowed side once (see `collision_links`, which reads it off the previous frame, before
+ * anything this frame could have moved it) makes the gate SIGNED instead: negative once
+ * truly past the segment, however far, so it stays violated and gets pulled back rather than
+ * being waved through.
+ *
+ * That signed gate only applies where the node projects INSIDE the segment's span (`t`
+ * strictly between the ends): there, `point − foot` is purely along the normal, so "which
+ * side" is exactly what a crossing means. At a clamped end, `point − foot` also carries a
+ * TANGENTIAL component (how far past the corner it is), which the segment's side does not
+ * describe — a point that flew off the end AND past the line should not be dragged back
+ * from arbitrarily far away just because of which side it lands on. There, this falls back
+ * to the plain (unsigned) Euclidean distance from the corner, same as `MinDistance`.
+ */
+export function applyPointSegmentContactConstraint(
+  nodes: Nodes,
+  iStart: number,
+  iEnd: number,
+  iNode: number,
+  offset: number,
+  side: number,
+  stiffness: number = 1.0,
+): number {
+  if (iStart < 0 || iEnd < 0 || iNode < 0) return 0;
+  const sx = nodes.x[iStart];
+  const sy = nodes.y[iStart];
+  const dx = nodes.x[iEnd] - sx;
+  const dy = nodes.y[iEnd] - sy;
+  const lenSq = dx * dx + dy * dy;
+  if (lenSq === 0) return 0;
+
+  const raw = ((nodes.x[iNode] - sx) * dx + (nodes.y[iNode] - sy) * dy) / lenSq;
+  const t = Math.max(0, Math.min(raw, 1));
+  const footX = sx + dx * t;
+  const footY = sy + dy * t;
+  const ndx = nodes.x[iNode] - footX;
+  const ndy = nodes.y[iNode] - footY;
+
+  if (raw > 0 && raw < 1) {
+    const len = Math.sqrt(lenSq);
+    const signedDist = (ndx * -dy + ndy * dx) * (side / len);
+    if (signedDist >= offset) return 0; // clear, on the allowed side
+  } else if (ndx * ndx + ndy * ndy >= offset * offset) {
+    return 0; // clamped to a corner and clear of it, whichever side
+  }
+
+  return projectOnSegment(nodes, iStart, iEnd, iNode, t, stiffness, offset, side);
+}
+
+/**
+ * `MinDistanceToSegment`'s counterpart for an infinite line instead of a bounded segment:
+ * keeps a point (`iNode`) at least `offset` from the line through `iAnchor`, in the
+ * direction `normal` already points, and says nothing once it is.
+ *
+ * No `side`, no projection, no corner case. `MinDistanceToSegment` needs `side` fixed once
+ * per frame because a real segment's own endpoints can move — its "which side" would
+ * otherwise be re-derived from live geometry an oversized correction could have already
+ * crossed. A floor's anchor is pinned (`invMass = 0`) and `normal` is baked in from its
+ * angle at compile time: neither ever moves during a run, so the direction never goes
+ * stale and there is nothing to fix ahead of time. Nor is there a corner to fall off of.
+ */
+export function applyPointLineContactConstraint(
+  nodes: Nodes,
+  iAnchor: number,
+  iNode: number,
+  normal: Point2,
+  offset: number,
+  stiffness: number = 1.0,
+): number {
+  if (iAnchor < 0 || iNode < 0) return 0;
+  const dx = nodes.x[iNode] - nodes.x[iAnchor];
+  const dy = nodes.y[iNode] - nodes.y[iAnchor];
+  const signedDist = dx * normal.x + dy * normal.y;
+  if (signedDist >= offset) return 0;
+
+  const wAnchor = nodes.w[iAnchor];
+  const wNode = nodes.w[iNode];
+  const totalW = wAnchor + wNode;
+  if (totalW === 0) return 0;
+
+  const error = (offset - signedDist) * stiffness;
+  if (wNode !== 0) {
+    const k = (wNode / totalW) * error;
+    nodes.x[iNode] += normal.x * k;
+    nodes.y[iNode] += normal.y * k;
+  }
+  if (wAnchor !== 0) {
+    const k = (wAnchor / totalW) * error;
+    nodes.x[iAnchor] -= normal.x * k;
+    nodes.y[iAnchor] -= normal.y * k;
+  }
+  return offset - signedDist;
 }
 
 /* ════════════════════════════════════════════════════════════════════════

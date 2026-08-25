@@ -2,14 +2,14 @@ import { describe, it, expect } from "vitest";
 import coreXY2 from "../../../test-mechanisms/Core XY - 2 moteurs.slidep?raw";
 import poulie from "../../../test-mechanisms/Poulie bloqueuse.slidep?raw";
 import vilbrequin from "../../../test-mechanisms/Vilbrequin.slidep?raw";
-import { KinematicSnapshot } from "../../types/runtime-state";
+import { SimulationSnapshot } from "../../types/runtime-state";
 import { load_mechanism } from "../../utils/load-mechanism";
 import {
   MAX_RECORDING_TIME,
   RECORD_DT,
   max_recording_time,
   recording_full,
-} from "./kinematic-simulation";
+} from "./simulation-engine";
 import { Recorder } from "./recorder";
 import { snapshot_layout } from "./snapshot";
 
@@ -23,10 +23,10 @@ import { snapshot_layout } from "./snapshot";
 const loadFixture = (json: string) => load_mechanism(JSON.parse(json)).mechanism;
 
 /** Records `wanted` snapshots, driven like the worker: one moving target per frame. */
-function record(json: string, speed: number, wanted: number): KinematicSnapshot[] {
+function record(json: string, speed: number, wanted: number): SimulationSnapshot[] {
   const recorder = new Recorder();
-  recorder.load(loadFixture(json), null);
-  const all: KinematicSnapshot[] = [];
+  recorder.load("kinematic", loadFixture(json), null);
+  const all: SimulationSnapshot[] = [];
   let target = 0;
   // Bounded so a recorder that stops producing fails on the length assertion rather than
   // spinning here.
@@ -47,7 +47,7 @@ const FRAMES = 600;
 describe("une tranche rend compte de sa progression", () => {
   it("même quand elle ne retient aucun instant", () => {
     const recorder = new Recorder();
-    recorder.load(loadFixture(vilbrequin), null);
+    recorder.load("kinematic", loadFixture(vilbrequin), null);
     // A zero budget stops after one step — the check follows it, so exactly one is solved.
     const first = recorder.advance(10, 0);
     expect(first.solved).toBe(1);
@@ -164,12 +164,13 @@ describe("l'enregistrement ne dépend pas de la vitesse de lecture", () => {
         `  ${name} : Δt ${worstT.toExponential(2)} s, ` +
           `Δposition ${worstPosition.toExponential(2)} px, Δangle ${worstAngle.toExponential(2)} rad`,
       );
-      // The states must match to the bit. The instants only match to rounding: the two
-      // speeds batch the steps differently, so the running sum of `RECORD_DT` restarts
-      // from a snapshot at different points.
+      // The states match to the bit, MODULO that same rounding: the motor startup ramp
+      // (see `MOTOR_STARTUP_RAMP_S`) reads `t` directly, so the two speeds' own last-bit
+      // disagreement on `t` now has one path into position/angle, where before `t` only
+      // ever bookkept elapsed time and never fed the physics itself.
       expect(worstT).toBeLessThan(1e-9);
-      expect(worstPosition).toBe(0);
-      expect(worstAngle).toBe(0);
+      expect(worstPosition).toBeLessThan(1e-9);
+      expect(worstAngle).toBeLessThan(1e-9);
     }, 300_000);
   }
 });

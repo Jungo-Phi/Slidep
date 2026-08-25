@@ -62,7 +62,7 @@ const GRID_SNAPPED_STATES = new Set<CanvasStateType>([
 ]);
 
 /** `value` pulled onto the nearest grid line, or left alone when none is near enough. */
-function snapped(value: number, step: number, tolerance: number): number {
+export function snapped(value: number, step: number, tolerance: number): number {
   const target = Math.round(value / step) * step;
   return Math.abs(target - value) < tolerance ? target : value;
 }
@@ -120,7 +120,7 @@ function snap_on_line(
   };
   // Where the line meets each family of grid lines. One it runs parallel to it meets at infinity, which the tolerance turns away on its own.
   const crossing = (coordinate: number, rate: number) => {
-    if (rate === 0) return;
+    if (Math.abs(rate) < 1e-9) return;
     consider((Math.round(coordinate / step) * step - coordinate) / rate);
   };
   crossing(position.x, direction.x);

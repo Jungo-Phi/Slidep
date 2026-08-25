@@ -14,7 +14,7 @@ import vilbrequin from "../../../test-mechanisms/Vilbrequin.slidep?raw";
 import { Point2 } from "../../types/point2";
 import { Link } from "../../types";
 import { load_mechanism } from "../../utils/load-mechanism";
-import { compile_simulation_model, step_simulation } from "./kinematic-simulation";
+import { compile_simulation_model, step_simulation } from "./simulation-engine";
 import { get_geom_nodes, get_links_geometric } from "./parsing";
 import { PBD_kinematic_solver } from "./PBD_kinematic_solver";
 import { sort_links } from "./utils";

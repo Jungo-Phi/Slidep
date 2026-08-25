@@ -7,8 +7,10 @@ import {
   BeamElement,
   BeltElement,
   ConstraintElement,
+  DEFAULT_FLOOR,
   DistributedForceElement,
   EdgeElement,
+  FloorConfig,
   ForceElement,
   GearElement,
   ID,
@@ -18,6 +20,10 @@ import {
   MomentElement,
   ViewportState,
 } from "../../types";
+import {
+  floor_acute_angle,
+  floor_anchor_and_normal,
+} from "../../utils/floor-geometry";
 import type { OwnPartKind } from "../mechanism/connect-actions";
 import {
   attach_gear_to_belt,
@@ -50,12 +56,25 @@ import {
   belt_section_gear_index,
 } from "../../utils/belt-path";
 import { belt_without_gear } from "../../utils/belt-geom";
-import { screen2world_vec, world2screen_length } from "../../utils/viewport";
+import {
+  screen2world_length,
+  screen2world_vec,
+  world2screen_length,
+  world2screen_vec,
+} from "../../utils/viewport";
+import { grid_snap_step } from "../../utils/grid";
 import { belt_body_grab_pin, elements_by_id } from "../solver/parsing";
 import { GRAB_BELT_KEY } from "../solver/snapshot";
 import { HIT_TOLERANCE } from "../../constants/rendering-specs";
 import { handle_placing_element } from "./placing-element-actions";
 import { handle_placing_constraint } from "./placing-constraint-actions";
+import { snapped } from "./point-snap";
+import {
+  DEFAULT_SNAP_SETTINGS,
+  angle_ray_count,
+  best_ladder_ray,
+  type SnapSettings,
+} from "./snap-corridor";
 
 /**
  * A multiple selection holds mechanical elements only. Constraints and loads are
@@ -109,6 +128,9 @@ export function canvasStateReducer(
   ) => void = () => {},
   onSimulationGrabEnd: () => void = () => {},
   worldMousePos: Point2 = ZERO,
+  floor: FloorConfig = DEFAULT_FLOOR,
+  snapToGrid: boolean = true,
+  snapSettings: SnapSettings = DEFAULT_SNAP_SETTINGS,
 ) {
   const actions: Action[] = [];
   switch (event.type) {
@@ -129,6 +151,33 @@ export function canvasStateReducer(
           if (closing.newCanvasState) setCanvasState(closing.newCanvasState);
           actions.push(...closing.actions);
         }
+        break;
+      }
+      // Same reasoning as `BeltClosure` just above: handled here so the states below are
+      // typed against a target that has an id. Height/angle only change while editing —
+      // a recompile is what makes them take effect, so there is nothing useful to drag
+      // mid-simulation.
+      if (hoveredPart.type === "FloorHeight" || hoveredPart.type === "FloorAngle") {
+        if (!isSimulating)
+          setCanvasState({
+            type:
+              hoveredPart.type === "FloorHeight"
+                ? "DraggingFloorHeight"
+                : "DraggingFloorAngle",
+            downPos: worldMousePos,
+          });
+        break;
+      }
+      // The angle's displayed value: a click-to-edit target of its own, separate from the
+      // drag handle above — same split as a load's body vs. its value label. Opens directly,
+      // no drag phase, since the text itself is never dragged.
+      if (hoveredPart.type === "FloorAngleValue") {
+        if (!isSimulating)
+          setCanvasState({
+            type: "EditingFloorValue",
+            field: "angle",
+            value: Math.abs(floor_acute_angle(floor.angle)),
+          });
         break;
       }
       // An opaque refusal is binding, not advisory: the spot showing the
@@ -867,6 +916,68 @@ export function canvasStateReducer(
             target: gearTarget,
           });
           break;
+        case "DraggingFloorHeight": {
+          // Below the threshold: still a candidate click (see `MouseButtonUp`), so the
+          // floor must not have moved yet when it turns out to be one.
+          if (
+            worldMousePos.distance_to(state.downPos) * viewport.scale <
+            HIT_TOLERANCE.DRAG_START
+          )
+            break;
+          // The line keeps its angle: only its offset along its own normal changes, so
+          // dragging reads as sliding the floor perpendicular to itself. `normal.y` is
+          // `cos(angle)`, zero only for a vertical floor (a wall) — a line through (0, h)
+          // is then x = 0 for every h, so there is nothing a height drag could mean.
+          const { normal } = floor_anchor_and_normal(floor);
+          if (Math.abs(normal.y) > 1e-6) {
+            let newHeight = worldMousePos.dot(normal) / normal.y;
+            // The anchor sits on the y-axis (x = 0), so this is the same grid the free
+            // point snap answers to — including landing exactly on 0.
+            if (snapToGrid)
+              newHeight = snapped(
+                newHeight,
+                grid_snap_step(viewport.scale),
+                screen2world_length(HIT_TOLERANCE.SNAP, viewport),
+              );
+            actions.push({
+              type: "ChangeFloorHeight",
+              newValue: newHeight,
+              oldValue: floor.height,
+            });
+          }
+          break;
+        }
+        case "DraggingFloorAngle": {
+          if (
+            worldMousePos.distance_to(state.downPos) * viewport.scale <
+            HIT_TOLERANCE.DRAG_START
+          )
+            break;
+          // Rotates the line to keep pointing at the cursor from its own anchor —
+          // the angle handle drawn `FLOOR.ANGLE_HANDLE_PX` along it is what is grabbed.
+          const anchor = new Point2(0, floor.height);
+          const toCursor = worldMousePos.sub(anchor);
+          if (toCursor.length_squared() > 1e-9) {
+            // Same ladder of round directions a drawn bar answers to (see `angle_hits`),
+            // read in screen space so the corridor is a screen distance like every other
+            // snap tolerance.
+            const found = snapToGrid
+              ? best_ladder_ray(
+                  world2screen_vec(toCursor, viewport),
+                  angle_ray_count(snapSettings.angleStep),
+                )
+              : undefined;
+            const direction = found
+              ? screen2world_vec(found.ray, viewport)
+              : toCursor;
+            actions.push({
+              type: "ChangeFloorAngle",
+              newValue: Math.atan2(direction.y, direction.x),
+              oldValue: floor.angle,
+            });
+          }
+          break;
+        }
         case "SelectingMultiple":
           if (hoveredPart.position.equals(oldPosition)) break;
           const newHoveredElementsIds = get_hovered_elements_by_rect(
@@ -1139,6 +1250,27 @@ export function canvasStateReducer(
             type: "SelectedElement",
             elementID: state.elementID,
           });
+          break;
+        case "DraggingFloorHeight":
+          // Never moved past the drag-start threshold: a click, not a drag — opens the
+          // editor on the height this handle carries, the same "click to type precisely,
+          // drag to eyeball it" split `ChangingGearRadius` has no counterpart for (a
+          // radius has no typed-entry path of its own). The angle handle has no such
+          // fallback: its value has its own click-to-edit target, the displayed text
+          // (`FloorAngleValue`, handled at `MouseLeftButtonDown` above).
+          if (
+            worldMousePos.distance_to(state.downPos) * viewport.scale <
+            HIT_TOLERANCE.DRAG_START
+          )
+            setCanvasState({
+              type: "EditingFloorValue",
+              field: "height",
+              value: floor.height,
+            });
+          else setCanvasState({ type: "Selecting" });
+          break;
+        case "DraggingFloorAngle":
+          setCanvasState({ type: "Selecting" });
           break;
         case "SelectingMultiple":
           if (state.elementIDs.length === 0) {

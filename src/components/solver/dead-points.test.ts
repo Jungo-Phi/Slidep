@@ -13,7 +13,7 @@ import {
   RECORD_DT,
   compile_simulation_model,
   step_simulation,
-} from "./kinematic-simulation";
+} from "./simulation-engine";
 
 const MOTOR = "00000000-0000-0000-0000-00000000000p" as ID;
 

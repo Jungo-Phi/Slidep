@@ -14,7 +14,6 @@ import {
   KinNodes,
   SpringElement,
 } from "../../types";
-import { DIM } from "../../constants/rendering-specs";
 import { measure_belt_length } from "../../utils/belt-geom";
 import {
   BeltVia,
@@ -26,8 +25,30 @@ import {
   buildBeltAggregateLinks,
   hasStakeholderBeyond,
 } from "./experimental/belt-aggregate";
+import { BEAM_END_MASS_FRACTION } from "./mass-model";
 
-const COLLINEAR_AREA_EPS = 1; // px² — below this a triangulation chord is degenerate
+/**
+ * A driven beam's own moment of inertia about its pivot, parallel-axis theorem:
+ * `J = mL²/12 + m·a²`, `a` the (rigid, so rest-pose-only) distance from the beam's centre to
+ * the pivot's world position. Covers both an end-pivoted arm (`a = L/2`, giving the familiar
+ * `mL²/3`) and one welded through its body (`fixedNodesBodyIDs`, arbitrary `a`) with the same
+ * formula — `motor_arm` already resolves which case applies; this only needs where the pivot
+ * actually sits.
+ */
+function beam_pivot_inertia(beam: BeamElement, pivotPos: Point2): number {
+  const length = beam.positionStart.distance_to(beam.positionEnd);
+  const mass = beam.linearMass * length;
+  const center = beam.positionStart.lerp(beam.positionEnd, 0.5);
+  const a = pivotPos.distance_to(center);
+  return (mass * length * length) / 12 + mass * a * a;
+}
+
+// sin of the angle between the two spokes, not an absolute area: an absolute threshold
+// stops catching the degenerate case as the spokes get longer (area scales with length²),
+// and fails on beams of ~1m already bent by a fraction of a degree — e.g. residual float
+// drift from a prior simulation — where the Distance fallback is nearly unconstrained in
+// rotation (its derivative w.r.t. angle vanishes at collinear).
+const COLLINEAR_SIN_EPS = Math.sin((15 * Math.PI) / 180);
 
 /**
  * Map a spring element's physical stiffness (>0, default 1) to a per-iteration
@@ -133,7 +154,7 @@ export function get_sim_nodes(
           const gc = (g as GearElement).position;
           const rad = (g as GearElement).radius;
           const d = pos.distance_to(gc);
-          return d > 1e-9 && d <= rad + DIM.GEAR_TEETH_SIZE + 1
+          return d > 1e-9 && d <= rad + 0.001
             ? gc.add(pos.sub(gc).mul(rad / d))
             : pos;
         };
@@ -157,7 +178,8 @@ export function get_constraint_nodes(
 ): Map<string, Point2> {
   const positions = new Map<string, Point2>();
   constraintElements.forEach((constraint) => {
-    if ("position" in constraint) positions.set(constraint.id, constraint.position);
+    if ("position" in constraint)
+      positions.set(constraint.id, constraint.position);
   });
   return positions;
 }
@@ -207,7 +229,7 @@ export function constraint_to_link(element: ConstraintElement): Link {
         flipStart: element.flipStart,
         flipEnd: element.flipEnd,
         couterClockwise: element.couterClockwise,
-        angle_rad: (element.value * Math.PI) / 180,
+        angle_rad: element.value,
       };
     case "dimension-radius":
       return {
@@ -476,7 +498,10 @@ export type MotorArm = { pivotKey: string; drivenKey: string; dir: Point2 };
  * and one welded through its body (drive the farther end, for the lever arm) —
  * same shape as `welded_edge_spokes`, but for a free hinge rather than a rigid hub.
  */
-function motor_arm(pivot: PivotElement, edge: EdgeElement): MotorArm | undefined {
+function motor_arm(
+  pivot: PivotElement,
+  edge: EdgeElement,
+): MotorArm | undefined {
   let pivotKey: string;
   let drivenKey: string;
   let dir: Point2;
@@ -867,16 +892,26 @@ export function get_links_geometric(
  *  - body nodes are FixedOnSegment (joins/masses) — frozen ratio — while
  *    sliders/slideps stay SlideOnSegment;
  *  - rigidity: non-grounded hubs use triangulation; grounded hubs anchor the
- *    connected beams' endpoints (welded to ground) — see add_rigidity_links;
+ *    connected beams' endpoints (welded to ground), or — under `dynamicRigidity`
+ *    — keep their orientation instead, real mass and all — see add_rigidity_links;
  *  - gear angle constraints (coaxial + epicyclic meshing) are added;
  *  - motors add a constraint (they do not pin a position).
  *
- * `nodes` is mutated to anchor grounded hubs (posMasses set to 0). Keys are
+ * `nodes` is mutated to anchor grounded hubs (posMasses set to 0) UNLESS
+ * `dynamicRigidity` routes that hub to `KeepOrientation` instead. Keys are
  * pre-fusion; compile_simulation_model rewrites them when fusing Coincidence links.
+ *
+ * `dynamicRigidity` (default off): a grounded join/mass/slider's rigid beams keep
+ * real mass/inertia instead of being pinned outright — see add_rigidity_links for
+ * why. Off for kinematic mode and the mobility/redundancy analysis model, which
+ * only care about the resulting geometry and would otherwise see two constraints
+ * where a plain anchor prunes to nothing; on for dynamic-mode simulation, where a
+ * pinned free end would make an applied load invisible to the solver.
  */
 export function get_links_simulation(
   mechanicalElements: MechanicalElement[],
   nodes: KinNodes,
+  dynamicRigidity: boolean = false,
 ): Link[] {
   const links: Link[] = [];
   const byId = new Map<ID, MechanicalElement>();
@@ -1125,10 +1160,14 @@ export function get_links_simulation(
   mechanicalElements.forEach((node) => {
     if (node.type !== "join" && node.type !== "slider" && node.type !== "mass")
       return;
-    add_rigidity_links(node, mechanicalElements, links, nodes, {
-      addDistancePair,
-      hasDistancePair,
-    });
+    add_rigidity_links(
+      node,
+      mechanicalElements,
+      links,
+      nodes,
+      { addDistancePair, hasDistancePair },
+      dynamicRigidity,
+    );
   });
 
   // ── Motors ───────────────────────────────────────────────────────────────
@@ -1136,7 +1175,7 @@ export function get_links_simulation(
     if (element.type !== "pivot" || !element.motor) return;
     // Negated: a positive speed reads clockwise on screen (the sense `draw_motor`
     // shows), which is a *decreasing* angle in the model's counter-clockwise frame.
-    const omega = -element.motor.speed * ((2 * Math.PI) / 60); // rad/s
+    const omega = -element.motor.speed; // rad/s
 
     // The reference the motor pushes against: the world when grounded, or the arm of
     // the anchor beam — itself resolved the same way as any driven arm below, since it
@@ -1146,7 +1185,9 @@ export function get_links_simulation(
     if (anchorBeamID !== undefined) {
       const anchorBeam = byId.get(anchorBeamID);
       anchorArm =
-        anchorBeam?.type === "beam" ? motor_arm(element, anchorBeam) : undefined;
+        anchorBeam?.type === "beam"
+          ? motor_arm(element, anchorBeam)
+          : undefined;
       if (!anchorArm) return;
     }
 
@@ -1155,9 +1196,11 @@ export function get_links_simulation(
     element.rotatingEdgesIDs.forEach((beamId) => {
       if (beamId === anchorBeamID) return;
       const beam = byId.get(beamId);
-      if (!beam || !("positionStart" in beam)) return;
+      if (!beam || beam.type !== "beam") return;
       const arm = motor_arm(element, beam);
       if (!arm) return;
+      const beamMass =
+        beam.linearMass * beam.positionStart.distance_to(beam.positionEnd);
       links.push({
         type: "MotorBeam",
         ddl: 1,
@@ -1168,6 +1211,8 @@ export function get_links_simulation(
         omega,
         targetAngle: arm.dir.angle(),
         owner: element.id,
+        armInertia: beam_pivot_inertia(beam, element.position),
+        armEndMass: beamMass * BEAM_END_MASS_FRACTION,
       });
     });
 
@@ -1208,19 +1253,30 @@ type VarSpoke = {
 };
 
 /**
- * Add rigidity links / anchors for a join / mass / slider hub.
+ * Add rigidity links for a join / mass / slider hub.
  *
  * Strategy (validated with the user):
  *  - **Non-grounded** join/mass: Distance triangulation between welded beam
  *    endpoints (reusing already-constrained pairs; degenerate chords fall back
  *    to an Angle constraint) → relative angles are preserved.
- *  - **Grounded** join/mass (welded to ground): anchor (mass 0) the free
+ *  - **Grounded** join/mass (welded to ground): anchors (mass 0) the free
  *    endpoints of connected beams — endpoint beams' free end, body beams' both
- *    ends. Fully fixes them; no triangulation/orientation lock needed.
+ *    ends. Fully fixes them, no rotational dof to lock separately (an edge
+ *    has none of its own). `dynamicRigidity` swaps this for a `KeepOrientation`
+ *    on the same beams instead: same resulting geometry (the beam's own length
+ *    plus one fixed point plus a fixed direction pins it exactly as hard as two
+ *    anchors would), but as a real, force-responsive constraint rather than an
+ *    infinite-mass pin — a load on the free end can still move it (resisted by
+ *    `KeepOrientation`'s own impulse) instead of vanishing into a zero-mass dof.
+ *    Kept OUT of kinematic mode and the mobility/redundancy analysis model:
+ *    both only ever care about the resulting geometry, and the plain anchor
+ *    prunes to nothing there where two real constraints would not.
  *  - **Slider**: translates but does not rotate. Non-grounded → Angle between
  *    the rail (body beam) and each attached beam. Grounded → the rail slides
- *    through the fixed point (SlideOnSegment + KeepOrientation) and the attached
- *    beams are anchored.
+ *    through the fixed point (SlideOnSegment + KeepOrientation, unconditionally
+ *    — a rail's own length is never fixed, so it was never anchor-able in the
+ *    first place); other attached beams follow the same `dynamicRigidity` split
+ *    as a join/mass above.
  */
 function add_rigidity_links(
   node: MechanicalElement,
@@ -1231,6 +1287,7 @@ function add_rigidity_links(
     addDistancePair: (a: string, b: string) => void;
     hasDistancePair: (a: string, b: string) => boolean;
   },
+  dynamicRigidity: boolean,
 ): void {
   const grounded = "isGrounded" in node && node.isGrounded;
   // When the hub is pinned to a gear perimeter, its welded beams' orientation is
@@ -1296,6 +1353,23 @@ function add_rigidity_links(
     });
   };
 
+  /** Keep a rigid beam's world orientation fixed (one of its points already
+   *  pinned to the hub, by Coincidence fusion or FixedOnSegment): the rest of
+   *  its geometry follows from that pin, its own fixed length, and this — with
+   *  no dof set to infinite mass, unlike a straight position anchor would. */
+  const keepBeamOrientation = (beam: BeamElement) => {
+    const d = beam.positionEnd.sub(beam.positionStart);
+    if (d.length_squared() < 1e-12) return;
+    links.push({
+      type: "KeepOrientation",
+      ddl: 1,
+      key1: `${beam.id}:start`,
+      key2: `${beam.id}:end`,
+      direction: d.normalize(),
+      owner: node.id,
+    });
+  };
+
   // Classify connected edges. Beams are rigid (triangulated / anchored); springs
   // and dampers vary in length, so only their orientation is locked.
   const endpointBeams: Spoke[] = [];
@@ -1330,21 +1404,13 @@ function add_rigidity_links(
   // ── Slider ───────────────────────────────────────────────────────────────
   if (node.type === "slider") {
     if (grounded) {
-      // Rail slides through the fixed point but keeps its orientation; attached
-      // beams move with the (fixed) slider body → anchor their free ends.
-      bodyBeams.forEach((rail) => {
-        const dRail = rail.positionEnd.sub(rail.positionStart);
-        if (dRail.length_squared() > 1e-12)
-          links.push({
-            type: "KeepOrientation",
-            ddl: 1,
-            key1: `${rail.id}:start`,
-            key2: `${rail.id}:end`,
-            direction: dRail.normalize(),
-            owner: node.id,
-          });
-      });
-      endpointBeams.forEach((s) => anchor(s.key));
+      // Rail slides through the fixed point but keeps its orientation — its own
+      // length is never fixed, so a plain anchor was never an option for it even
+      // in kinematic mode.
+      bodyBeams.forEach(keepBeamOrientation);
+      if (dynamicRigidity)
+        endpointBeams.forEach((s) => keepBeamOrientation(s.beam));
+      else endpointBeams.forEach((s) => anchor(s.key));
       // Springs/dampers welded to the (fixed) slider keep their orientation.
       varSpokes.forEach(keepVarOrientation);
       return;
@@ -1369,13 +1435,18 @@ function add_rigidity_links(
     return;
   }
 
-  // ── Join / mass, grounded: anchor everything (welded to ground) ──────────
+  // ── Join / mass, grounded: anchor everything, or keep orientation only ───
   if (grounded) {
-    endpointBeams.forEach((s) => anchor(s.key));
-    bodyBeams.forEach((b) => {
-      anchor(`${b.id}:start`);
-      anchor(`${b.id}:end`);
-    });
+    if (dynamicRigidity) {
+      endpointBeams.forEach((s) => keepBeamOrientation(s.beam));
+      bodyBeams.forEach(keepBeamOrientation);
+    } else {
+      endpointBeams.forEach((s) => anchor(s.key));
+      bodyBeams.forEach((b) => {
+        anchor(`${b.id}:start`);
+        anchor(`${b.id}:end`);
+      });
+    }
     // Springs/dampers: welded end is grounded (via Coincidence fusion); keep the
     // orientation so only the length is free.
     varSpokes.forEach(keepVarOrientation);
@@ -1413,8 +1484,11 @@ function add_rigidity_links(
       if (s.beam.id === ref.beam.id) continue; // same beam: length already constrains it
       if (pairs.hasDistancePair(ref.key, s.key)) continue; // truss member already there
 
-      const area = Math.abs(ref.pos.sub(nodePos).cross(s.pos.sub(nodePos)));
-      if (area < COLLINEAR_AREA_EPS) {
+      const refVec = ref.pos.sub(nodePos);
+      const sVec = s.pos.sub(nodePos);
+      const scale = refVec.length() * sVec.length();
+      const area = Math.abs(refVec.cross(sVec));
+      if (scale < 1e-12 || area < COLLINEAR_SIN_EPS * scale) {
         // Degenerate triangle → lock the relative angle of the two beams.
         lockAngle(ref.beam, ref.flip, s.beam, s.flip);
       } else {

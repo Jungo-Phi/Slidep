@@ -4,7 +4,7 @@ import {
   validate_mechanism,
   ValidationErrorCode,
 } from "./validate-mechanism";
-import { DEFAULT_METADATA, Mechanism } from "../types/mechanism";
+import { DEFAULT_METADATA, DEFAULT_SIMULATION, Mechanism } from "../types/mechanism";
 import { Point2 } from "../types/point2";
 import {
   BeamElement,
@@ -34,6 +34,8 @@ function mechanism(
   return {
     metadata: DEFAULT_METADATA,
     viewport: { scale: 1, pan: new Point2(0, 0) },
+
+    simulation: DEFAULT_SIMULATION,
     mechanicalElements,
     constraintElements,
     loads,
@@ -315,7 +317,7 @@ describe("validate_mechanism — chaque code d'erreur", () => {
 
   it("CONTRADICTORY_MOTOR : moteur au sol avec un parentBeamID", () => {
     const mech = mechanism([
-      pivot({ isGrounded: true, motor: { parentBeamID: BEAM_ID, speed: 10 } }),
+      pivot({ isGrounded: true, motor: { parentBeamID: BEAM_ID, speed: 10, torque: 1 } }),
       beam(),
     ]);
     expect(codes(mech)).toContain("CONTRADICTORY_MOTOR");

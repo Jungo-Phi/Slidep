@@ -243,7 +243,10 @@ export function handle_placing_element(
       if (
         hoveredPart.type === "Void" ||
         hoveredPart.type === "Constraint" ||
-        hoveredPart.type === "BeltClosure"
+        hoveredPart.type === "BeltClosure" ||
+        hoveredPart.type === "FloorHeight" ||
+        hoveredPart.type === "FloorAngle" ||
+        hoveredPart.type === "FloorAngleValue"
       )
         return { actions: [] };
       // Open the metric selector popover anchored on the clicked element.
@@ -307,7 +310,9 @@ function handle_place_element(
     );
     if (node.type === "pivot") {
       const oldConfig = node.motor;
-      const newConfig = oldConfig ? undefined : { speed: DEFAULT.MOTOR_SPEED };
+      const newConfig = oldConfig
+        ? undefined
+        : { speed: DEFAULT.MOTOR_SPEED, torque: DEFAULT.MOTOR_TORQUE };
       const actions: Action[] = [
         { type: "SetMotorConfig", id: node.id, newConfig, oldConfig },
       ];
@@ -521,7 +526,7 @@ function handle_place_element(
         fixedGearsIDs: [],
         motor:
           state.type === "PlacingMotor"
-            ? { speed: DEFAULT.MOTOR_SPEED }
+            ? { speed: DEFAULT.MOTOR_SPEED, torque: DEFAULT.MOTOR_TORQUE }
             : undefined,
         rotationalFriction: DEFAULT.ROTATIONAL_FRICTION,
       };

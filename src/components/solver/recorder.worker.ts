@@ -1,6 +1,11 @@
 import { deserialize_mechanism } from "../../utils/serialization";
 import { Recorder } from "./recorder";
-import { FromRecorder, ToRecorder, revive_grab } from "./recorder-protocol";
+import {
+  FromRecorder,
+  ToRecorder,
+  WireSnapshot,
+  revive_grab,
+} from "./recorder-protocol";
 
 /**
  * The recording loop, off the UI thread.
@@ -40,8 +45,12 @@ function slice(): void {
   if (snapshots.length > 0)
     post({
       type: "snapshots",
-      // Stripped of the layout the client already holds for this epoch.
-      snapshots: snapshots.map(({ layout: _layout, ...wire }) => wire),
+      // Stripped of the layout the client already holds for this epoch. Cast: `snapshots`
+      // is typed to the mode-agnostic base, but its actual shape (Kinematic vs Dynamic)
+      // follows the `mode` this recorder was `load`ed with — always one of `WireSnapshot`.
+      snapshots: snapshots.map(
+        ({ layout: _layout, ...wire }) => wire,
+      ) as WireSnapshot[],
       reached,
       epoch,
     });
@@ -64,6 +73,7 @@ self.onmessage = (event: MessageEvent<ToRecorder>) => {
     case "load":
       epoch = message.epoch;
       recorder.load(
+        message.mode,
         deserialize_mechanism(message.mechanism),
         message.resumeFrom,
       );
@@ -98,6 +108,15 @@ self.onmessage = (event: MessageEvent<ToRecorder>) => {
       break;
     case "grab":
       recorder.setGrab(message.grab ? revive_grab(message.grab) : null);
+      break;
+    case "gravity":
+      recorder.setGravity(message.on);
+      break;
+    case "collisions":
+      recorder.setCollisions(message.on);
+      break;
+    case "floor":
+      recorder.setFloor(message.on);
       break;
     case "target":
       targetTime = message.targetTime;

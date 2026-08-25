@@ -1,5 +1,5 @@
 /**
- * Fonctions de dessin pour les éléments mécaniques
+ * Canvas drawing primitives: one function per mechanical element, badge, or overlay drawn on the canvas.
  */
 
 import {
@@ -7,10 +7,23 @@ import {
   ICON_COLORS,
   STROKE_WIDTHS,
   DIM,
+  FLOOR,
+  GRADUATION,
+  GRID_ALPHA,
+  GUIDE_DASH,
+  HIT_TOLERANCE,
+  ICON_TINT,
   INTERACTION_SPECS,
+  PhysicsOverlayKind,
+  PHYSICS_OVERLAY_COLOR,
   TEXT_SPECS,
   REDUNDANCY_SYMBOL,
 } from "../../constants/rendering-specs";
+import { FloorConfig } from "../../types/mechanism";
+import {
+  floor_acute_angle,
+  floor_anchor_and_normal,
+} from "../../utils/floor-geometry";
 import { RedundancySymbol } from "../solver/redundancy-symbols";
 import { Point2 } from "../../types/point2";
 import { get_element_icon } from "../element-palette/elementIcon";
@@ -22,8 +35,11 @@ import {
 } from "../../types";
 import {
   grid_metrics,
+  graduation_step,
+  graduation_multiple,
   value2ratio,
   world2screen,
+  world2screen_angle,
   world2screen_vec,
 } from "../../utils";
 import {
@@ -31,32 +47,40 @@ import {
   moment_value_label_position,
 } from "../../utils/load-geom";
 import {
+  stored2screen_load,
+  stored2screen_moment,
+} from "../../utils/load-scale";
+import {
   BeltVia,
   BeltPiece,
   belt_pieces,
   belt_project,
 } from "../../utils/belt-path";
 import type { SnapFeedback } from "./snap-corridor";
+import {
+  FORCE,
+  LENGTH,
+  MASS,
+  MOMENT,
+  QuantityKind,
+  format_mantissa,
+  format_quantity,
+  rad_to_deg,
+} from "../../utils/quantity-format";
 
 const TAU = 2 * Math.PI;
 
-// Cache pour les images d'icônes préchargées
+/** Preloaded icon images, keyed by URL. */
 const iconImageCache = new Map<string, HTMLImageElement>();
 
 /** Flat silhouettes of the icons, one per (source, colour). */
 const tintedIconCache = new Map<string, HTMLCanvasElement>();
 
-/** Rendered above the drawn size so the silhouette stays crisp when scaled down. */
-const TINT_SUPERSAMPLE = 4;
-
 /**
- * The icon painted over in a single colour, for the states an icon has to read
- * in — selected, about to be deleted.
+ * The icon painted over in a single colour, for the states an icon has to read in — selected, about to be deleted.
  *
- * A silhouette rather than a filter over the original: an icon's own hues come
- * from the theme, and any relative operation (brightness, hue-rotate) lands
- * somewhere different in each one — on a pure black or pure grey ink, nowhere at
- * all. Cached, since it costs a rasterization.
+ * A silhouette rather than a filter over the original: an icon's own hues come from the theme, and any relative operation (brightness, hue-rotate) lands somewhere different in each one — on a pure black or pure grey ink, nowhere at all.
+ * Cached, since it costs a rasterization.
  */
 function tinted_icon(
   img: HTMLImageElement,
@@ -69,8 +93,8 @@ function tinted_icon(
   if (cached) return cached;
 
   const tinted = document.createElement("canvas");
-  tinted.width = side * TINT_SUPERSAMPLE;
-  tinted.height = side * TINT_SUPERSAMPLE;
+  tinted.width = side * ICON_TINT.SUPERSAMPLE;
+  tinted.height = side * ICON_TINT.SUPERSAMPLE;
   const tintedCtx = tinted.getContext("2d")!;
   tintedCtx.drawImage(img, 0, 0, tinted.width, tinted.height);
   // Keeps the glyph's shape and drops all of its colours.
@@ -80,21 +104,6 @@ function tinted_icon(
   tintedIconCache.set(key, tinted);
   return tinted;
 }
-
-/**
- * Opacity of a grid line as the zoom crosses a decade, from its start to its end.
- *
- * Two interlocking ladders — powers of ten, and multiples of five — whose steps are chosen so that a line moving up one level at a decade boundary keeps the opacity it had just before.
- * That is what makes the change of level invisible.
- */
-const POWER_ALPHAS = [0, 0.1, 0.3, 0.6];
-const FIVE_ALPHAS = [0, 0.25, 0.45];
-
-/** The alpha `COLORS.GRID` stands for: the weight the strongest line reaches. Turn this to make the whole grid heavier or lighter. */
-const ALPHA_FULL = 0.4;
-
-/** Below this a line is not worth a path — it lands on the ground's own pixel value. */
-const ALPHA_INVISIBLE = 1 / 100;
 
 export function draw_grid(
   ctx: CanvasRenderingContext2D,
@@ -123,8 +132,8 @@ export function draw_grid(
    * One path rather than one per line: at the dense end of a decade a level runs to a few hundred lines, and a stroke each would show.
    */
   const stroke_level = (multiple: number, next: number, alpha: number) => {
-    if (alpha < ALPHA_INVISIBLE) return;
-    ctx.globalAlpha = alpha / ALPHA_FULL;
+    if (alpha < GRID_ALPHA.INVISIBLE) return;
+    ctx.globalAlpha = alpha / GRID_ALPHA.FULL;
     ctx.beginPath();
     const xStart = Math.ceil(xFrom / multiple) * multiple;
     const yStart = Math.ceil(yFrom / multiple) * multiple;
@@ -143,17 +152,15 @@ export function draw_grid(
     ctx.stroke();
   };
 
-  stroke_level(1, 5, between(POWER_ALPHAS[0], POWER_ALPHAS[1]));
-  stroke_level(5, 10, between(FIVE_ALPHAS[0], FIVE_ALPHAS[1]));
-  stroke_level(10, 50, between(POWER_ALPHAS[1], POWER_ALPHAS[2]));
-  stroke_level(50, 100, between(FIVE_ALPHAS[1], FIVE_ALPHAS[2]));
-  stroke_level(100, 0, between(POWER_ALPHAS[2], POWER_ALPHAS[3]));
+  const { POWERS, FIVES } = GRID_ALPHA;
+  stroke_level(1, 5, between(POWERS[0], POWERS[1]));
+  stroke_level(5, 10, between(FIVES[0], FIVES[1]));
+  stroke_level(10, 50, between(POWERS[1], POWERS[2]));
+  stroke_level(50, 100, between(FIVES[1], FIVES[2]));
+  stroke_level(100, 0, between(POWERS[2], POWERS[3]));
 
   ctx.globalAlpha = 1;
 }
-
-/** How close to the edge an axis that has left the view is held. */
-const AXIS_EDGE_MARGIN = 1;
 
 /**
  * The world axes, always on screen.
@@ -168,7 +175,7 @@ export function draw_axes(
 ) {
   // The origin's own screen position: `world2screen` of (0, 0) is the pan.
   const pin = (origin: number, extent: number) =>
-    Math.min(Math.max(origin, AXIS_EDGE_MARGIN), extent - AXIS_EDGE_MARGIN);
+    Math.min(Math.max(origin, 1), extent - 1);
   const x = pin(viewport.pan.x, width);
   const y = pin(viewport.pan.y, height);
 
@@ -182,13 +189,351 @@ export function draw_axes(
   ctx.stroke();
 }
 
-/** Dash pattern of a construction line: fine enough to read as an aid rather than as something drawn. */
-const GUIDE_DASH = [12, 8];
+/**
+ * The floor's screen-space geometry, shared by `draw_floor` and hit-testing (`get-hover.ts`) so both agree on exactly where the line and its handles are.
+ * `anchor`/`normal` mirror `floor_anchor_and_normal`'s world-space ones; `direction` is along the line (screen space), for walking along it — the angle handle at `FLOOR.ANGLE_HANDLE_PX` in particular.
+ * `angleLabel` is where the angle's value is drawn (meaningless at exactly flat, where neither `draw_floor` nor hit-testing use it).
+ */
+export function floor_screen_geometry(
+  viewport: ViewportState,
+  floor: FloorConfig,
+): {
+  anchor: ScreenPoint;
+  normal: ScreenPoint;
+  direction: ScreenPoint;
+  angleHandle: ScreenPoint;
+  angleLabel: ScreenPoint;
+} {
+  const { anchor: worldAnchor, normal: worldNormal } =
+    floor_anchor_and_normal(floor);
+  const anchor = world2screen(worldAnchor, viewport);
+  const normal = world2screen_vec(worldNormal, viewport).normalize();
+  // The line's own direction is the normal's perpendicular — screen space, where the world's CCW rotation reads CW (see `world2screen_angle`), so this is `normal` turned -90° on screen rather than +90°.
+  const direction = new Point2(normal.y, -normal.x).as_space<"screen">();
+  // `direction` points at `floor.angle + π`, not `floor.angle`: a world vector at `floor.angle` mirrors and rotates into `(-cos, -sin)` of it, and `atan2` of that is the angle plus a half turn.
+  // The handle must read back as `floor.angle` itself when grabbed (else the first drag frame flips the floor to its mirror image), so it sits against `direction` rather than along it.
+  // Halfway between horizontal and the line, screen angles — where `draw_dimension_angle` draws its label, so it has to sit on the arc rather than floating off it.
+  const screenAngle = world2screen_angle(floor_acute_angle(floor.angle));
+  const angleLabel = anchor.add(
+    new Point2(FLOOR.ANGLE_ARC_PX, 0)
+      .as_space<"screen">()
+      .rotate(screenAngle / 2),
+  );
+  return {
+    anchor,
+    normal,
+    direction,
+    angleHandle: anchor.sub(direction.mul(FLOOR.ANGLE_HANDLE_PX)),
+    angleLabel,
+  };
+}
+
+/**
+ * Clips the infinite line through `anchor` (screen space) along `direction` to the canvas rectangle — the same "extend to the edges" idea as `draw_axes`, generalized to a line that need not be horizontal or vertical.
+ * `null` when the line misses the canvas entirely (never for an unrotated view, but a very steep angle at a corner can).
+ */
+function clip_line_to_rect(
+  anchor: ScreenPoint,
+  direction: ScreenPoint,
+  width: number,
+  height: number,
+): [ScreenPoint, ScreenPoint] | null {
+  let tMin = -Infinity;
+  let tMax = Infinity;
+  const clip = (p0: number, d: number, hi: number) => {
+    if (Math.abs(d) < 1e-9) {
+      if (p0 < 0 || p0 > hi) tMin = Infinity; // parallel to this axis, outside its band
+      return;
+    }
+    const t1 = -p0 / d;
+    const t2 = (hi - p0) / d;
+    tMin = Math.max(tMin, Math.min(t1, t2));
+    tMax = Math.min(tMax, Math.max(t1, t2));
+  };
+  clip(anchor.x, direction.x, width);
+  clip(anchor.y, direction.y, height);
+  if (tMin > tMax) return null;
+  return [anchor.add(direction.mul(tMin)), anchor.add(direction.mul(tMax))];
+}
+
+/** Regular 45° ticks below the line (the `direction`/`normal` side away from free space), the same "ground" language `draw_ground`'s hatching uses for the palette's fixed anchor — walked from `from` to `to` (assumed `to = from + direction * length`, as `clip_line_to_rect` returns them), phase-locked to `anchor` (screen position of the floor's world x=0) so the pattern stays put under pan instead of resetting at the canvas edge. */
+function draw_floor_hatching(
+  ctx: CanvasRenderingContext2D,
+  from: ScreenPoint,
+  to: ScreenPoint,
+  anchor: ScreenPoint,
+  direction: ScreenPoint,
+  normal: ScreenPoint,
+) {
+  const length = from.distance_to(to);
+  // Trailing along the line AND into the ground, in equal parts: 45° down-and-back.
+  const tickDir = direction.add(normal).mul(-Math.SQRT1_2);
+  const offset = from.sub(anchor).dot(direction);
+  const start =
+    offset -
+    Math.floor(offset / FLOOR.HATCH_SPACING_PX) * FLOOR.HATCH_SPACING_PX;
+  ctx.beginPath();
+  for (let t = -start; t <= length; t += FLOOR.HATCH_SPACING_PX) {
+    const base = from.add(direction.mul(t));
+    const tip = base.add(tickDir.mul(FLOOR.HATCH_LENGTH_PX));
+    ctx.moveTo(base.x, base.y);
+    ctx.lineTo(tip.x, tip.y);
+  }
+  ctx.stroke();
+}
+
+/**
+ * The floor: a solid infinite line hatched like the palette's fixed-anchor symbol (see `draw_ground`), with a tick at its height anchor and — only away from flat, so a level floor stays uncluttered — its angle drawn the same way a `dimension-angle` constraint reads an angle: an arc against the horizontal, with its value.
+ * Drawn clipped to the canvas; nothing when disabled.
+ */
+export function draw_floor(
+  ctx: CanvasRenderingContext2D,
+  viewport: ViewportState,
+  width: number,
+  height: number,
+  floor: FloorConfig,
+  isHovered: boolean = false,
+  /** The drag handle specifically — the small ring drawn at `angleHandle`. Separate from `isValueHovered`: dragging the handle and clicking the value are two different gestures on two different targets, so only the one actually under the cursor lights up. */
+  isAngleHovered: boolean = false,
+  /** The angle's displayed value (`FloorAngleValue`) — thickens the arc/text itself, never the handle ring. */
+  isValueHovered: boolean = false,
+) {
+  if (!floor.enabled) return;
+  const { anchor, normal, direction, angleHandle, angleLabel } =
+    floor_screen_geometry(viewport, floor);
+  const clipped = clip_line_to_rect(anchor, direction, width, height);
+  if (!clipped) return;
+
+  ctx.strokeStyle = COLORS.ELEMENT_STROKE;
+  ctx.fillStyle = COLORS.ELEMENT_STROKE;
+  ctx.lineWidth =
+    STROKE_WIDTHS.STANDARD + (isHovered ? STROKE_WIDTHS.HOVER_GAIN : 0);
+
+  ctx.beginPath();
+  ctx.moveTo(clipped[0].x, clipped[0].y);
+  ctx.lineTo(clipped[1].x, clipped[1].y);
+  ctx.stroke();
+
+  draw_floor_hatching(ctx, clipped[0], clipped[1], anchor, direction, normal);
+
+  if (isHovered && !isAngleHovered) {
+    ctx.beginPath();
+    ctx.moveTo(anchor.x, anchor.y - FLOOR.ANCHOR_TICK_PX);
+    ctx.lineTo(anchor.x, anchor.y + FLOOR.ANCHOR_TICK_PX);
+    ctx.stroke();
+  }
+
+  if (isAngleHovered) {
+    ctx.lineWidth = STROKE_WIDTHS.HOVERED;
+    ctx.beginPath();
+    ctx.arc(angleHandle.x, angleHandle.y, DIM.EDGE_ENDPOINT_RADIUS, 0, TAU);
+    ctx.stroke();
+  }
+
+  // The angle itself, read against the horizontal as the line's acute angle — a floor is a line, not a ray, so leaning it past 90° reads as the same line leaning the *other* way, never as an ever-growing angle.
+  // Hidden at exactly flat, where there is nothing to measure.
+  const acuteAngle = floor_acute_angle(floor.angle);
+  const horizontalEnd = anchor.add(new Point2(FLOOR.ANGLE_ARC_PX, 0));
+  const screenAngle = world2screen_angle(acuteAngle);
+  const floorEnd = anchor.add(
+    new Point2(FLOOR.ANGLE_ARC_PX, 0).as_space<"screen">().rotate(screenAngle),
+  );
+  if (Math.abs(acuteAngle) > 1e-6) {
+    ctx.lineWidth = isValueHovered
+      ? STROKE_WIDTHS.HOVERED
+      : STROKE_WIDTHS.STANDARD;
+    draw_dimension_angle(
+      ctx,
+      anchor,
+      horizontalEnd,
+      anchor,
+      floorEnd,
+      false,
+      false,
+      angleLabel,
+      rad_to_deg(Math.abs(acuteAngle)),
+    );
+  } else if (isHovered) {
+    ctx.lineWidth = isAngleHovered
+      ? STROKE_WIDTHS.HOVERED
+      : STROKE_WIDTHS.STANDARD;
+    ctx.fillStyle = ctx.strokeStyle;
+    const anglo = TAU / 20;
+    const radius = FLOOR.ANGLE_ARC_PX;
+    const start = anchor.add(Point2.from_polar(radius, -anglo + 3 / radius));
+    const end = anchor.add(Point2.from_polar(radius, anglo - 3 / radius));
+    draw_arrow_head(ctx, start, TAU / 4 - anglo);
+    draw_arrow_head(ctx, end, anglo - TAU / 4);
+    ctx.beginPath();
+    ctx.arc(
+      anchor.x,
+      anchor.y,
+      Math.sqrt(radius ** 2 + 20 ** 2),
+      -anglo + DIM.ARROW_HEAD_LENGTH / radius,
+      anglo - DIM.ARROW_HEAD_LENGTH / radius,
+    );
+    ctx.stroke();
+  }
+}
+
+/**
+ * The coarsest unit whose numbers, at this decade, still need at most one decimal — see `docs/grille-adaptative.md` §5 for the precision formula this pairs with.
+ *
+ * Picked once per frame from `decade` alone, the same value for every labelled line: were it picked per label instead, a step straddling a unit's threshold would print some ticks in mm and others in m, and a run of "0.8 m, 1.0 m, 1.2 m" would read as unrelated numbers rather than one ruler.
+ */
+function graduation_unit(decade: number): (typeof GRADUATION.UNITS)[number] {
+  for (const unit of GRADUATION.UNITS) {
+    if (unit.scale >= decade - 1) return unit;
+  }
+  return GRADUATION.UNITS[GRADUATION.UNITS.length - 1];
+}
+
+/**
+ * How many decimal digits of headroom a rung's own value is worth, signed: positive for a value with trailing zeros (`10` → 1, it can absorb one decade before needing a decimal), negative for one that already carries decimals of its own (`2.5` → -1, it needs one before `precision` even starts counting decades).
+ * Read from `multiple`'s canonical string form rather than hand-listed per rung, so a ladder entry stays the only thing anyone tunes.
+ */
+function decimal_shift(multiple: number): number {
+  const [intPart, fracPart = ""] = Math.abs(multiple).toString().split(".");
+  const trailingZeros = intPart === "0" ? 0 : intPart.match(/0*$/)![0].length;
+  return trailingZeros - fracPart.length;
+}
+
+function format_graduation(
+  worldValue: number,
+  unit: { scale: number; suffix: string },
+  precision: number,
+): string {
+  const displayed = worldValue * 10 ** unit.scale;
+  // toFixed on a value that rounds to zero can still print "-0.0": the sign survives rounding even though the magnitude doesn't.
+  const text = displayed.toFixed(precision).replace(/^-(0(\.0+)?)$/, "$1");
+  return `${text} ${unit.suffix}`;
+}
+
+/** A label stroked in the background colour before it is filled, so it stays readable over a grid line crossing behind it rather than just over open ground. */
+function draw_graduation_label(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  x: number,
+  y: number,
+) {
+  ctx.lineWidth = GRADUATION.HALO_WIDTH;
+  ctx.strokeStyle = COLORS.BACKGROUND;
+  ctx.lineJoin = "round";
+  ctx.strokeText(text, x, y);
+  ctx.fillStyle = COLORS.BADGE_STROKE;
+  ctx.fillText(text, x, y);
+}
+
+/**
+ * Numbers along the world axes, on the grid's roundest ladder (`graduation_step` — see `grid.ts`'s module doc for why it can differ from where a point actually snaps).
+ *
+ * Ridden on `draw_axes`'s own lines: pinned to whichever edge the axis left by, exactly like the line itself.
+ * Each label sits on the line's interior side, flipped to the other side before the axis's own 1px pin would carry it off-screen — room is reserved for a tick, a gap, and (on the vertical axis, where digit count varies with the unit) the widest label this frame has to show.
+ */
+export function draw_graduations(
+  ctx: CanvasRenderingContext2D,
+  viewport: ViewportState,
+  width: number,
+  height: number,
+) {
+  const pin = (origin: number, extent: number) =>
+    Math.min(Math.max(origin, 1), extent - 1);
+  const axisX = pin(viewport.pan.x, width);
+  const axisY = pin(viewport.pan.y, height);
+
+  const { decade, local } = grid_metrics(viewport.scale);
+  const worldStep = graduation_step(viewport.scale);
+  const multiple = graduation_multiple(local);
+  // A decade's very first labelled line always repeats the previous decade's last one (see grid.ts's own `GRADUATION_LADDER` doc) — reading the unit from the previous decade through that repeat keeps the flip on the next line that's actually new, rather than relabelling one that hasn't moved.
+  const unit = graduation_unit(
+    multiple === graduation_multiple(0) ? decade - 1 : decade,
+  );
+  const precision = Math.max(0, decade - unit.scale - decimal_shift(multiple));
+
+  const xWorldFrom = -viewport.pan.x / viewport.scale;
+  const xWorldTo = (width - viewport.pan.x) / viewport.scale;
+  const yWorldFrom = (viewport.pan.y - height) / viewport.scale;
+  const yWorldTo = viewport.pan.y / viewport.scale;
+
+  ctx.save();
+  ctx.font = GRADUATION.FONT;
+
+  // The vertical axis's labels, computed up front: each one's own width decides whether it has room on the line's right, since they aren't all the same length.
+  const yTicks: { y: number; text: string; textWidth: number }[] = [];
+  const yFrom = Math.ceil(yWorldFrom / worldStep);
+  const yTo = Math.floor(yWorldTo / worldStep);
+  for (let n = yFrom; n <= yTo; n++) {
+    if (n === 0) continue;
+    const worldValue = n * worldStep;
+    const text = format_graduation(worldValue, unit, precision);
+    yTicks.push({
+      y: world2screen(new Point2(0, worldValue), viewport).y,
+      text,
+      textWidth: ctx.measureText(text).width,
+    });
+  }
+
+  // Labels default to below/right, the natural reading side — flipped to the line's other side once that side would run out of room for a tick, a gap, and the label itself.
+  const xLabelBelow =
+    viewport.pan.y <=
+    height -
+      (2 * GRADUATION.TICK_LENGTH +
+        GRADUATION.LABEL_GAP +
+        GRADUATION.LABEL_HEIGHT);
+
+  ctx.textAlign = "center";
+  ctx.textBaseline = xLabelBelow ? "top" : "bottom";
+  const xFrom = Math.ceil(xWorldFrom / worldStep);
+  const xTo = Math.floor(xWorldTo / worldStep);
+  for (let n = xFrom; n <= xTo; n++) {
+    if (n === 0) continue;
+    const worldValue = n * worldStep;
+    const x = world2screen(new Point2(worldValue, 0), viewport).x;
+    ctx.strokeStyle = COLORS.BADGE_STROKE;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x, axisY - GRADUATION.TICK_LENGTH);
+    ctx.lineTo(x, axisY + GRADUATION.TICK_LENGTH);
+    ctx.stroke();
+    const labelY = xLabelBelow
+      ? axisY + GRADUATION.TICK_LENGTH + GRADUATION.LABEL_GAP
+      : height - 1 - GRADUATION.TICK_LENGTH - GRADUATION.LABEL_GAP;
+    draw_graduation_label(
+      ctx,
+      format_graduation(worldValue, unit, precision),
+      x,
+      labelY,
+    );
+  }
+
+  ctx.textBaseline = "middle";
+  for (const { y, text, textWidth } of yTicks) {
+    // Room on the right is the same for every tick — only shared axis, common to the line — but whether a given label fits it depends on that label's own width.
+    const labelRight =
+      viewport.pan.x <=
+      width -
+        (2 * GRADUATION.TICK_LENGTH + GRADUATION.LABEL_GAP + textWidth + 4);
+    ctx.strokeStyle = COLORS.BADGE_STROKE;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(axisX - GRADUATION.TICK_LENGTH, y);
+    ctx.lineTo(axisX + GRADUATION.TICK_LENGTH, y);
+    ctx.stroke();
+    ctx.textAlign = labelRight ? "left" : "right";
+    const labelX = labelRight
+      ? axisX + GRADUATION.TICK_LENGTH + GRADUATION.LABEL_GAP
+      : width - 1 - GRADUATION.TICK_LENGTH - GRADUATION.LABEL_GAP;
+    draw_graduation_label(ctx, text, labelX, y);
+  }
+
+  ctx.restore();
+}
 
 /**
  * What a snap took hold of, drawn under the mechanism.
  *
- * One colour and one dash throughout, and neither belongs to the grid: a hold is a different statement from « here is the paper », and drawn in a step of the grid ramp it read as one more grid line — vanishing outright where it fell on an axis. The grid line a point landed on is therefore not darkened in place but overdrawn, in the same dashes as the direction holding it, so every indicator reads as one family.
+ * One colour and one dash throughout, and neither belongs to the grid: a hold is a different statement from « here is the paper », and drawn in a step of the grid ramp it would read as one more grid line — vanishing outright where it fell on an axis.
+ * The grid line a point landed on is therefore not darkened in place but overdrawn, in the same dashes as the direction holding it, so every indicator reads as one family.
  *
  * Lines run the full width rather than stopping at the cursor: what they say is « this line », not « this length », and a segment ending under the point would read as the edge being placed.
  */
@@ -265,7 +610,7 @@ export function draw_ground(
   ctx.restore();
 }
 
-/** Dessine un carré pour les Edges à l'état "PlacingStartX" */
+/** The gesture-preview marker for an edge's start point, while its end is still being placed. */
 export function draw_start_edge_end(
   ctx: CanvasRenderingContext2D,
   position: ScreenPoint,
@@ -472,7 +817,7 @@ export function draw_mass(
   value: number,
 ) {
   ctx.font = TEXT_SPECS.TEXT_FONT;
-  const text = value + " kg";
+  const text = format_quantity(value, MASS);
   const width = ctx.measureText(text).width + 2 * DIM.MASS_TEXT_PADDING;
   const overhang = (DIM.MASS_HEIGHT / 2) * Math.tan(DIM.MASS_SIDE_ANGLE);
   const top = position.y - DIM.MASS_HEIGHT / 2;
@@ -572,7 +917,7 @@ export function draw_spring(
   }
   ctx.restore();
 
-  // Barre de fond
+  // Backing bar
   ctx.lineCap = "square";
   ctx.beginPath();
   ctx.moveTo(DIM.TAC, 0);
@@ -608,7 +953,7 @@ export function draw_spring(
   ctx.stroke();
   ctx.strokeStyle = oldStrokeStyle;
 
-  // Spires en premier-plan
+  // Front coils
   ctx.lineCap = "round";
   ctx.lineWidth = STROKE_WIDTHS.SPIRE + widthChange;
   for (let i = 1; i <= coilNb; i++) {
@@ -621,14 +966,10 @@ export function draw_spring(
 }
 
 /**
- * How far down its travel the piston sits, as a fraction, for a damper stretched
- * to `stretch` times its rest length: half way at rest, sliding back toward the
- * cylinder's mouth as the damper extends.
+ * How far down its travel the piston sits, as a fraction, for a damper stretched to `stretch` times its rest length: half way at rest, sliding back toward the cylinder's mouth as the damper extends.
  *
- * One function of the stretch, normalised on its own value at rest, so edition —
- * which *is* rest — and simulation cannot disagree. Two separate expressions
- * would have to be kept equal at `stretch === 1` by hand, and a mismatch there
- * jumps the piston the instant the simulation starts, with nothing having moved.
+ * One function of the stretch, normalised on its own value at rest, so edition — which *is* rest — and simulation cannot disagree.
+ * Two separate expressions would have to be kept equal at `stretch === 1` by hand, and a mismatch there jumps the piston the instant the simulation starts, with nothing having moved.
  */
 function damper_piston_fraction(stretch: number): number {
   const reach = (s: number) => 1 + 3 * Math.exp(-Math.pow(s / 2, 2));
@@ -647,8 +988,7 @@ export function draw_damper(
   ctx.rotate(end.sub(start).angle());
   const length = start.distance_to(end);
   const start_x = length / 4;
-  // No rest length to compare against means edition, where the damper is drawn
-  // at its natural length by definition.
+  // No rest length to compare against means edition, where the damper is drawn at its natural length by definition.
   const stretch = restLength ? length / scale / restLength : 1;
   const piston_x = (length - 2 * DIM.TAC) * damper_piston_fraction(stretch);
   const oldStrokeStyle = ctx.strokeStyle;
@@ -678,7 +1018,7 @@ export function draw_damper(
   ctx.lineWidth = STROKE_WIDTHS.STANDARD + widthChange;
   ctx.stroke();
 
-  // Barre centrale
+  // Center bar
   ctx.beginPath();
   ctx.moveTo(DIM.TAC, 0);
   ctx.lineTo(piston_x + DIM.TAC / 2, 0);
@@ -717,10 +1057,7 @@ export function draw_damper(
   ctx.restore();
 }
 
-/**
- * The arc the rotation-direction arrow rides on, shared with the hit-test so
- * a click only lands where the arrow is actually drawn.
- */
+/** The arc the rotation-direction arrow rides on, shared with the hit-test so a click only lands where the arrow is actually drawn. */
 export function motor_arrow_geometry(clockwise: boolean): {
   startAngle: number;
   endAngle: number;
@@ -873,11 +1210,7 @@ export function draw_motor(
   ctx.lineWidth = oldArrowLineWidth;
 }
 
-/**
- * `hovered` fills the body at 80% opacity instead of the usual half. The belt
- * arc rides on the very circle the outline draws, so the outline alone cannot
- * carry the hover: the body does.
- */
+/** `hovered` fills the body at 80% opacity instead of the usual half. The belt arc rides on the very circle the outline draws, so the outline alone cannot carry the hover: the body does. */
 export function draw_gear(
   ctx: CanvasRenderingContext2D,
   position: ScreenPoint,
@@ -885,14 +1218,11 @@ export function draw_gear(
   angle: number,
   hovered = false,
 ) {
-  // if (radius < DIM.MIN_GEAR_RADIUS) radius = DIM.MIN_GEAR_RADIUS; // TODO : afficher en grisé ?
-
-  //const teethCount = Math.floor(radius * 0.5);
   const r1 = (radius + DIM.PIVOT_OUTER_RADIUS) / 2;
   const r2 = Math.max(1, (radius - DIM.PIVOT_OUTER_RADIUS) / 3);
-  const holesNb = 3;
+  const holesNb = DIM.GEAR_HOLES_COUNT;
 
-  // Corps principal de l'engrenage
+  // Main gear body
   ctx.beginPath();
   ctx.arc(position.x, position.y, radius, 0, TAU);
   ctx.arc(position.x, position.y, DIM.PIVOT_OUTER_RADIUS, 0, TAU);
@@ -935,37 +1265,18 @@ export function draw_gear(
     );
     ctx.stroke();
   }
-
-  // Dessine les dents
-  /*
-  for (let i = 0; i < teethCount; i++) {
-    const angle = (i / teethCount) * TAU;
-    const x1 = Math.cos(angle) * radius;
-    const y1 = Math.sin(angle) * radius;
-    const x2 = Math.cos(angle) * (radius + DIM.GEAR_TEETH_SIZE);
-    const y2 = Math.sin(angle) * (radius + DIM.GEAR_TEETH_SIZE);
-
-    ctx.beginPath();
-    ctx.moveTo(x1, y1);
-    ctx.lineTo(x2, y2);
-    ctx.stroke();
-  }
-  */
 }
 
 /**
- * Winding of one belt arc: the belt climbs `growth` px total across the wrap
- * (one BELT_WIDTH per turn) so surplus turns read as a coil, not a retraced
- * circle. Applied at the arrival end (`atStart`) or the departure end; the other
- * end stays on the rim. `growth` > 0 grows outward (the free run leaves from the
- * top layer), < 0 inward (winch: keep the free run on the rim so it doesn't lean).
+ * Winding of one belt arc: the belt climbs `growth` px total across the wrap (one BELT_WIDTH per turn) so surplus turns read as a coil, not a retraced circle.
+ * Applied at the arrival end (`atStart`) or the departure end; the other end stays on the rim.
+ * `growth` > 0 grows outward (the free run leaves from the top layer), < 0 inward (winch: keep the free run on the rim so it doesn't lean).
  */
 export type BeltWinding = { growth: number; atStart: boolean };
 
 /**
  * Radii at the arrival / departure ends of an arc given its optional winding.
- * The grown end is kept ≥ 1px so an inward (winch) coil deep enough to reach the
- * centre never flips across it.
+ * The grown end is kept ≥ 1px so an inward (winch) coil deep enough to reach the centre never flips across it.
  */
 function belt_arc_radii(
   arc: BeltPiece<"screen">,
@@ -979,12 +1290,9 @@ function belt_arc_radii(
 }
 
 /**
- * Append a belt arc to the current path as a polyline from `rStart` (at its
- * arrival angle) to `rEnd` (at its departure angle), the radius interpolated
- * across the swept wrap. rStart === rEnd → a plain circular arc; differing radii
- * → a coil (spiral) that reaches both tangent runs — a belt wound past a full
- * turn. The straight run into the arc is the implicit line from the current
- * point to the first sampled point.
+ * Append a belt arc to the current path as a polyline from `rStart` (at its arrival angle) to `rEnd` (at its departure angle), the radius interpolated across the swept wrap.
+ * rStart === rEnd → a plain circular arc; differing radii → a coil (spiral) that reaches both tangent runs — a belt wound past a full turn.
+ * The straight run into the arc is the implicit line from the current point to the first sampled point.
  */
 function append_belt_arc(
   ctx: CanvasRenderingContext2D,
@@ -1006,11 +1314,8 @@ function append_belt_arc(
 }
 
 /**
- * Draw a loose (open) belt from its ordered geometric pieces: the tangent runs
- * from the start terminal, the gear arcs, and the run to the end terminal, plus
- * the two end dots. `wraps` (continuous per-via wrap, simulation) sizes each arc
- * so a pulley losing contact (wrap → 0) is drawn straight-past; `windings`
- * (per via) turns a wound pulley's arc into a coil (see `draw_belt_loop`).
+ * Draw a loose (open) belt from its ordered geometric pieces: the tangent runs from the start terminal, the gear arcs, and the run to the end terminal, plus the two end dots.
+ * `wraps` (continuous per-via wrap, simulation) sizes each arc so a pulley losing contact (wrap → 0) is drawn straight-past; `windings` (per via) turns a wound pulley's arc into a coil (see `draw_belt_loop`).
  */
 export function draw_belt_open(
   ctx: CanvasRenderingContext2D,
@@ -1044,13 +1349,10 @@ export function draw_belt_open(
 }
 
 /**
- * Draw a closed belt as a continuous closed loop around its pulleys (the gN→g0
- * closure included), with no free ends.
+ * Draw a closed belt as a continuous closed loop around its pulleys (the gN→g0 closure included), with no free ends.
  *
- * `wraps` (continuous per-via wrap, simulation) sizes each arc so a pulley
- * losing contact (wrap → 0) is drawn straight-past. `windings` (per via) draws a
- * pulley wound past a full turn as a coil whose ends reach both tangent runs,
- * instead of the surplus retracing the same circle.
+ * `wraps` (continuous per-via wrap, simulation) sizes each arc so a pulley losing contact (wrap → 0) is drawn straight-past.
+ * `windings` (per via) draws a pulley wound past a full turn as a coil whose ends reach both tangent runs, instead of the surplus retracing the same circle.
  */
 export function draw_belt_loop(
   ctx: CanvasRenderingContext2D,
@@ -1063,8 +1365,7 @@ export function draw_belt_loop(
   const widthChange = ctx.lineWidth - STROKE_WIDTHS.STANDARD;
   ctx.lineCap = "square";
 
-  // Straight tangent runs are the implicit lines between consecutive arcs (each
-  // arc's first sampled point); closePath() adds the final closure run.
+  // Straight tangent runs are the implicit lines between consecutive arcs (each arc's first sampled point); closePath() adds the final closure run.
   ctx.beginPath();
   arcs.forEach((arc, i) => {
     const [rStart, rEnd] = belt_arc_radii(arc, windings?.[arc.gearIndex]);
@@ -1154,7 +1455,7 @@ export function draw_dimension(
   ctx.lineTo(e.x, e.y);
   ctx.stroke();
 
-  if (!hideText) draw_dimension_text(ctx, position, value);
+  if (!hideText) draw_dimension_text(ctx, position, value, "", LENGTH, true);
 }
 
 export function draw_dimension_to_segment(
@@ -1220,7 +1521,7 @@ export function draw_dimension_to_segment(
   ctx.lineTo(e.x, e.y);
   ctx.stroke();
 
-  if (!hideText) draw_dimension_text(ctx, position, value);
+  if (!hideText) draw_dimension_text(ctx, position, value, "", LENGTH, true);
 }
 
 export function draw_dimension_angle(
@@ -1268,10 +1569,10 @@ export function draw_dimension_angle(
   );
   ctx.stroke();
 
-  // TODO : add arc to position
-  // TODO : add straight lines
+  // TODO: add arc to position
+  // TODO: add straight lines
 
-  if (!hideText) draw_dimension_text(ctx, position, value, " °");
+  if (!hideText) draw_dimension_text(ctx, position, value, " deg");
 }
 
 export function draw_dimension_radius(
@@ -1304,7 +1605,7 @@ export function draw_dimension_radius(
   ctx.lineTo(e.x, e.y);
   ctx.stroke();
 
-  if (!hideText) draw_dimension_text(ctx, position, value);
+  if (!hideText) draw_dimension_text(ctx, position, value, "", LENGTH, true);
 }
 
 export function draw_dimension_belt(
@@ -1321,13 +1622,10 @@ export function draw_dimension_belt(
   ctx.lineTo(closest.x, closest.y);
   ctx.stroke();
 
-  if (!hideText) draw_dimension_text(ctx, position, value);
+  if (!hideText) draw_dimension_text(ctx, position, value, "", LENGTH, true);
 }
 
-/**
- * How a badge shows that it is on its way out: under the eraser, or as the
- * tombstone of a constraint an undo/redo has just removed.
- */
+/** How a badge shows that it is on its way out: under the eraser, or as the tombstone of a constraint an undo/redo has just removed. */
 export type BadgeDeletion = "none" | "erasing" | "ghost";
 
 /** The fill of a badge laid over the drawing — a ratio pill, a constraint icon box. */
@@ -1338,16 +1636,27 @@ function badge_fill(isSelected: boolean): string {
   );
 }
 
+/**
+ * `kind` formats `value` as a physical quantity (its own unit replaces `extension`) — every caller but the angle dimension, whose degrees are already the number `element.value` itself stores, with no SI scaling to apply.
+ *
+ * `hideUnit` drops the unit symbol a `kind` would otherwise append: for a length dimension, always mm, so printing it on every single badge is noise once the reader has seen it once — unlike a load's, which is worth repeating because it moves (N, kN, MN…) with the value.
+ */
 export function draw_dimension_text(
   ctx: CanvasRenderingContext2D,
   position: ScreenPoint,
   value: number,
   extension: string = "",
+  kind?: QuantityKind,
+  hideUnit: boolean = false,
 ) {
   ctx.font = TEXT_SPECS.TEXT_FONT;
   ctx.textAlign = TEXT_SPECS.TEXT_ALIGN;
   ctx.textBaseline = TEXT_SPECS.TEXT_BASELINE;
-  const text = (Math.round(value * 10) / 10).toString() + extension;
+  const text = kind
+    ? hideUnit
+      ? format_mantissa(value, kind)
+      : format_quantity(value, kind)
+    : (Math.round(value * 10) / 10).toString() + extension;
   const metrics = ctx.measureText(text);
 
   const lastShadowBlur = ctx.shadowBlur;
@@ -1384,8 +1693,8 @@ export function draw_gear_ratio(
   const text = value2ratio(value).join(" : ");
   const metrics = ctx.measureText(text);
   const lastStrokeStyle = ctx.strokeStyle;
-  // At rest the pill carries an outline of its own. Any other state has
-  // something to say, and says it in the stroke the caller chose.
+  // At rest the pill carries an outline of its own.
+  // Any other state has something to say, and says it in the stroke the caller chose.
   if (!selected && !hovered && deletion === "none")
     ctx.strokeStyle = COLORS.BADGE_STROKE;
   ctx.beginPath();
@@ -1419,8 +1728,8 @@ export function draw_element_icon(
   deletion: BadgeDeletion = "none",
 ) {
   const side = DIM.ICON_SIZE;
-  // At rest the box carries an outline of its own. Any other state has something
-  // to say, and says it in the stroke the caller chose.
+  // At rest the box carries an outline of its own.
+  // Any other state has something to say, and says it in the stroke the caller chose.
   if (deletion !== "none") ctx.strokeStyle = COLORS.DELETION_BOX;
   else if (!selected && !hovered) ctx.strokeStyle = COLORS.BADGE_STROKE;
   ctx.beginPath();
@@ -1447,8 +1756,7 @@ export function draw_element_icon(
     iconImageCache.set(iconUrl, img);
   }
   if (img.complete) {
-    // The tint follows the theme's own palette, not the blend a theme fade
-    // passes through, so a fade does not rasterize a silhouette per frame.
+    // The tint follows the theme's own palette, not the blend a theme fade passes through, so a fade does not rasterize a silhouette per frame.
     const tint =
       deletion !== "none"
         ? ICON_COLORS.DELETION_STROKE
@@ -1490,18 +1798,14 @@ export function draw_text(
 
 // ─── Load element drawing ─────────────────────────────────────────────────────
 
-/** Draws a single force arrow from `base` in direction+magnitude of `vector` (world units).
- *  `textLineWidth` lets the value label be emphasized (or not) independently of
- *  the arrow, since hovering one part of a load must not light up the other.
- *  `labelVector` places the value elsewhere than along the arrow — a tapered
- *  distributed load has ends with no arrow left to hang their "0" on. */
+/** Draws a single force arrow from `base` in direction+magnitude of `vector` (world units). `textLineWidth` lets the value label be emphasized (or not) independently of the arrow, since hovering one part of a load must not light up the other. */
 export function draw_force(
   ctx: CanvasRenderingContext2D,
   base: ScreenPoint,
   vector: ScreenPoint,
   value: number,
   hideText: boolean = false,
-  extension: string,
+  kind: QuantityKind,
   textLineWidth?: number,
 ) {
   const length = vector.length();
@@ -1530,7 +1834,8 @@ export function draw_force(
     ctx,
     force_label_position_screen(base, vector),
     value,
-    extension,
+    "",
+    kind,
   );
   ctx.lineWidth = lastLineWidth;
 }
@@ -1582,17 +1887,17 @@ export function draw_moment(
     ctx,
     moment_value_label_position(center, radius),
     Math.abs(value),
-    " Nm",
+    "",
+    MOMENT,
   );
   ctx.lineWidth = lastLineWidth;
 }
 
-/** Draws evenly-spaced force arrows along a beam segment, under the crest line
- *  joining the two endpoint arrows. The drawing is proportional to the values
- *  across the whole span (see `distributed_display_gain`), so that crest line
- *  *is* the intensity profile — it is how the load is read, and it doubles as
- *  the handle the body drag grabs. `crestLineWidth` emphasizes it on hover
- *  without lighting up the arrows. */
+/**
+ * Draws evenly-spaced force arrows along a beam segment, under the crest line joining the two endpoint arrows.
+ * The drawing is proportional to the values across the whole span (see `distributed_display_gain`), so that crest line *is* the intensity profile — it is how the load is read, and it doubles as the handle the body drag grabs.
+ * `crestLineWidth` emphasizes it on hover without lighting up the arrows.
+ */
 export function draw_distributed_force(
   ctx: CanvasRenderingContext2D,
   start: ScreenPoint,
@@ -1615,9 +1920,7 @@ export function draw_distributed_force(
     const t = i / DIM.NB_DISTRIBUTED_FORCE_ARROWS;
     const base = start.lerp(end, t);
     const vector = vectorStart.lerp(vectorEnd, t);
-    // A tapered load runs its arrows down to nothing: below a pixel there is
-    // no direction left to draw, and below a head length the shaft would
-    // point backwards out of `extend_length`.
+    // A tapered load runs its arrows down to nothing: below a pixel there is no direction left to draw, and below a head length the shaft would point backwards out of `extend_length`.
     const length = vector.length();
     if (length < 1) continue;
     draw_arrow_head(
@@ -1637,8 +1940,7 @@ export function draw_distributed_force(
   }
 }
 
-/** Draws a small probe indicator (circle with crosshair). `hovered` thickens it,
- *  `deleting` marks it as going with the element that carries it. */
+/** Draws a small probe indicator (circle with crosshair). */
 export function draw_probe(
   ctx: CanvasRenderingContext2D,
   position: ScreenPoint,
@@ -1654,24 +1956,20 @@ export function draw_probe(
   ctx.stroke();
 }
 
-// TODO : move in "types/..."
+// TODO: move to types/
 /** A probed element's recorded path, ready to draw on the canvas. */
 export interface TrajectoryDisplay {
   points: WorldPoint[];
   /** Number of points at or before the current playback time. */
   headCount: number;
   /**
-   * How much of the path is drawn at all. Equal to `headCount` while the recording is being
-   * extended: what lies past the cursor is not a preview of where the motion goes, it is
-   * wherever the worker happens to have got to — an amount that changes every frame, and
-   * that reads as a flicker running ahead of the point.
+   * How much of the path is drawn at all. Equal to `headCount` while the recording is being extended: what lies past the cursor is not a preview of where the motion goes, it is wherever the worker happens to have got to — an amount that changes every frame, and that reads as a flicker running ahead of the point.
    */
   visibleCount: number;
   color: string;
 }
 
-/** Draws the trajectory of a probed point: the portion already travelled as a
- *  solid line, the rest of the recording (ahead of the cursor) faded. */
+/** Draws the trajectory of a probed point: the portion already travelled as a solid line, the rest of the recording (ahead of the cursor) faded. */
 export function draw_trajectory(
   ctx: CanvasRenderingContext2D,
   viewport: ViewportState,
@@ -1692,7 +1990,6 @@ export function draw_trajectory(
 
     ctx.beginPath();
     if (dotted) {
-      // POINTILLÉ
       for (let i = from; i <= to; i += step) {
         const p = world2screen(trajectory.points[i], viewport);
         ctx.moveTo(p.x + DIM.TRAJECTORY_DOT_RADIUS, p.y);
@@ -1700,7 +1997,6 @@ export function draw_trajectory(
       }
       ctx.fill();
     } else {
-      // COURBE
       const p0 = world2screen(trajectory.points[from], viewport);
       ctx.moveTo(p0.x, p0.y);
       for (let i = from + 1; i <= to; i++) {
@@ -1727,11 +2023,174 @@ export function draw_trajectory(
   ctx.restore();
 }
 
+// ─── Physics overlay (velocity / reaction force) ───────────────────────────────
+
 /**
- * Draws how a redundant constraint yields: a glyph, not a measurement — see
- * `REDUNDANCY_SYMBOL`. `phase` is `performance.now()` in ms; the pulse it drives is a plain
- * sine, so every symbol on screen breathes together whatever mechanism they belong to.
+ * One physics-overlay arrow (velocity or reaction force), ready to draw — see `element_velocity`/`element_reactions` in `probe-series.ts` for where the vector comes from.
+ * Dynamic mode only: neither quantity exists in kinematic mode.
+ * A reaction is further split by `ElementReaction.atAnchor`: a support reaction (against the ground) reads differently from an internal one (between two mobile parts), so they get distinct colours rather than folding into one generic "reaction" arrow.
  */
+export interface OverlayArrow {
+  /** World-space point the arrow is drawn from — the element's own probed point. */
+  at: WorldPoint;
+  /** World-space vector. Its direction is drawn as-is; its magnitude is remapped through the same log ruler a user-placed load uses (`stored2screen_load`), so an arrow stays legible whatever the underlying unit's typical scale — not calibrated for velocity (mm/s) specifically, a starting point to retune once both are on screen together. */
+  vector: WorldPoint;
+  kind: PhysicsOverlayKind;
+}
+
+/**
+ * Screen-space base/tip of an overlay arrow — shared by the draw call and the hit test below, so hovering and drawing always agree on where the arrow actually sits.
+ * `undefined` for a magnitude too small to draw at all, same guard `draw_overlay_arrow` applies before it.
+ */
+function overlay_arrow_screen_geometry(
+  viewport: ViewportState,
+  arrow: OverlayArrow,
+): { base: ScreenPoint; vector: ScreenPoint; tip: ScreenPoint } | undefined {
+  const magnitude = arrow.vector.length();
+  if (magnitude < 1e-9) return undefined;
+  const base = world2screen(arrow.at, viewport);
+  const vector = world2screen_vec(arrow.vector, viewport).with_length(
+    stored2screen_load(magnitude),
+  );
+  return { base, vector, tip: base.add(vector) };
+}
+
+/** Whether `mouseScreen` sits over `arrow`'s shaft or tip — same tolerance a user-placed force uses in `get-hover.ts`. */
+export function overlay_arrow_hit(
+  mouseScreen: ScreenPoint,
+  viewport: ViewportState,
+  arrow: OverlayArrow,
+): boolean {
+  const geom = overlay_arrow_screen_geometry(viewport, arrow);
+  if (!geom) return false;
+  return (
+    mouseScreen.distance_to(geom.tip) <= HIT_TOLERANCE.NODE ||
+    mouseScreen.distance2segment(geom.base, geom.tip) <= HIT_TOLERANCE.EDGE
+  );
+}
+
+/**
+ * Draws one physics-overlay arrow with `draw_force`'s own geometry (arrowhead, shaft), in a colour that marks it as measured rather than authored.
+ * Never labelled itself — one recording can show one arrow per element with the overlay on, and a value on each would clutter faster than it would inform, so a value only ever appears for the one under the cursor, via `draw_overlay_arrow_label` below.
+ */
+export function draw_overlay_arrow(
+  ctx: CanvasRenderingContext2D,
+  viewport: ViewportState,
+  arrow: OverlayArrow,
+) {
+  const magnitude = arrow.vector.length();
+  if (magnitude < 1e-9) return;
+  const base = world2screen(arrow.at, viewport);
+  const screenVec = world2screen_vec(arrow.vector, viewport).with_length(
+    stored2screen_load(magnitude),
+  );
+  ctx.save();
+  ctx.strokeStyle = PHYSICS_OVERLAY_COLOR[arrow.kind];
+  ctx.fillStyle = ctx.strokeStyle;
+  ctx.lineWidth = STROKE_WIDTHS.STANDARD;
+  draw_force(ctx, base, screenVec, magnitude, true, FORCE);
+  ctx.restore();
+}
+
+/**
+ * Draws only the value label of a hovered overlay arrow, at its own `force_label_position_screen`.
+ * Meant to be called once, after every arrow and moment on screen, so the label sits on top and no other arrow can be drawn over it.
+ */
+export function draw_overlay_arrow_label(
+  ctx: CanvasRenderingContext2D,
+  viewport: ViewportState,
+  arrow: OverlayArrow,
+) {
+  const geom = overlay_arrow_screen_geometry(viewport, arrow);
+  if (!geom) return;
+  ctx.save();
+  ctx.strokeStyle = PHYSICS_OVERLAY_COLOR[arrow.kind];
+  ctx.fillStyle = ctx.strokeStyle;
+  ctx.lineWidth = STROKE_WIDTHS.STANDARD;
+  draw_dimension_text(
+    ctx,
+    force_label_position_screen(geom.base, geom.vector),
+    arrow.vector.length(),
+    "",
+    FORCE,
+  );
+  ctx.restore();
+}
+
+/**
+ * A reaction moment, ready to draw — the couple a rigid (non-rotating) weld's two-point force pair reduces to (see `ElementReaction.moment` in `probe-series.ts`).
+ * Only ever a support or internal reaction, like `OverlayArrow` minus its "velocity" case: nothing measures an angular velocity today.
+ */
+export interface OverlayMoment {
+  /** World-space point the arc is centred on — the same point its paired force (if any) is drawn from. */
+  at: WorldPoint;
+  /** N·m, in the DATA MODEL's sign convention (positive = clockwise) — `draw_moment`'s own, the opposite of the solver's raw CCW-positive `ElementReaction.moment`, so this is negated once on the way in, at the one place that reads it (`use-simulation-playback.ts`) — the same flip `load-model.ts` already applies for a user-authored `MomentElement`. */
+  torque: number;
+  kind: Extract<PhysicsOverlayKind, "reaction-support" | "reaction-internal">;
+}
+
+/** Whether `mouseScreen` sits over `moment`'s arc — same tolerance `moment_screen_geometry`'s hit test uses in `get-hover.ts` for a user-placed moment. */
+export function overlay_moment_hit(
+  mouseScreen: ScreenPoint,
+  viewport: ViewportState,
+  moment: OverlayMoment,
+): boolean {
+  if (Math.abs(moment.torque) < 1e-9) return false;
+  const center = world2screen(moment.at, viewport);
+  const radius = stored2screen_moment(moment.torque);
+  const dist = mouseScreen.distance_to(center);
+  return (
+    dist <= radius + HIT_TOLERANCE.EDGE && dist >= radius - HIT_TOLERANCE.EDGE
+  );
+}
+
+/**
+ * Draws one reaction moment with `draw_moment`'s own geometry (double arc, arrowheads), scaled on its own ruler (`stored2screen_moment`) and coloured like `draw_overlay_arrow`'s matching force so the two read as one reading split across a translation and a rotation.
+ * Never labelled itself, same reasoning as `draw_overlay_arrow` — see `draw_overlay_moment_label`.
+ */
+export function draw_overlay_moment(
+  ctx: CanvasRenderingContext2D,
+  viewport: ViewportState,
+  moment: OverlayMoment,
+) {
+  if (Math.abs(moment.torque) < 1e-9) return;
+  const center = world2screen(moment.at, viewport);
+  const radius = stored2screen_moment(moment.torque);
+  ctx.save();
+  ctx.strokeStyle = PHYSICS_OVERLAY_COLOR[moment.kind];
+  ctx.fillStyle = ctx.strokeStyle;
+  ctx.lineWidth = STROKE_WIDTHS.STANDARD;
+  draw_moment(ctx, center, radius, moment.torque, true);
+  ctx.restore();
+}
+
+/**
+ * Draws only the value label of a hovered reaction moment, at its own `moment_value_label_position`.
+ * Meant to be called once, after every arrow and moment on screen, same reasoning as `draw_overlay_arrow_label`.
+ */
+export function draw_overlay_moment_label(
+  ctx: CanvasRenderingContext2D,
+  viewport: ViewportState,
+  moment: OverlayMoment,
+) {
+  if (Math.abs(moment.torque) < 1e-9) return;
+  const center = world2screen(moment.at, viewport);
+  const radius = stored2screen_moment(moment.torque);
+  ctx.save();
+  ctx.strokeStyle = PHYSICS_OVERLAY_COLOR[moment.kind];
+  ctx.fillStyle = ctx.strokeStyle;
+  ctx.lineWidth = STROKE_WIDTHS.STANDARD;
+  draw_dimension_text(
+    ctx,
+    moment_value_label_position(center, radius),
+    Math.abs(moment.torque),
+    "",
+    MOMENT,
+  );
+  ctx.restore();
+}
+
+/** Draws how a redundant constraint yields: a glyph, not a measurement — see `REDUNDANCY_SYMBOL`. `phase` is `performance.now()` in ms; the pulse it drives is a plain sine, so every symbol on screen breathes together whatever mechanism they belong to. */
 export function draw_redundancy_symbol(
   ctx: CanvasRenderingContext2D,
   viewport: ViewportState,
@@ -1758,8 +2217,7 @@ export function draw_redundancy_symbol(
     const dir = axis.normalize();
     const perp = dir.perp();
     const mid = a.lerp(b, 0.5);
-    // Base offset keeps the two ticks apart even at the pulse's low point, so the gap
-    // never fully closes back into a single mark.
+    // Base offset keeps the two ticks apart even at the pulse's low point, so the gap never fully closes back into a single mark.
     const offset = S.GAP_AMPLITUDE_PX * (0.6 + 0.4 * pulse);
     const p1 = mid.sub(dir.mul(offset));
     const p2 = mid.add(dir.mul(offset));
@@ -1795,8 +2253,7 @@ export function draw_redundancy_symbol(
       ctx.stroke();
     }
 
-    // A short arc between the two live directions, so the spread reads as an angle
-    // opening rather than as two unrelated ticks.
+    // A short arc between the two live directions, so the spread reads as an angle opening rather than as two unrelated ticks.
     ctx.beginPath();
     ctx.arc(vertex.x, vertex.y, S.ARM_ARC_PX, angle1, angle2, angle1 > angle2);
     ctx.stroke();
@@ -1816,8 +2273,7 @@ export function draw_redundancy_symbol(
     );
     ctx.stroke();
 
-    // Rises from the rail to the peak and settles back, never dipping below it: the
-    // node is shown coming loose, not oscillating through the rail it is pinned to.
+    // Rises from the rail to the peak and settles back, never dipping below it: the node is shown coming loose, not oscillating through the rail it is pinned to.
     const lift = S.LIFT_PX * (0.5 + 0.5 * pulse);
     const lifted = at.add(normal.mul(lift));
 

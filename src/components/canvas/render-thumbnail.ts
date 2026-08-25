@@ -1,10 +1,12 @@
-import { COLORS, THUMBNAIL_MARGIN } from "../../constants/rendering-specs";
+import {
+  COLORS,
+  PREVIEW_MIN_ZOOM,
+  THUMBNAIL_MARGIN,
+} from "../../constants/rendering-specs";
 import { Mechanism, ZERO } from "../../types";
 import { fit_viewport_to_bounds, mechanism_bounds } from "../../utils";
+import { draw_floor } from "./drawing-functions";
 import { draw_mechanism } from "./draw-mechanism";
-
-/** Framing for an empty mechanism, or one whose anchors all sit at the same point. */
-const DEFAULT_ZOOM = 1;
 
 const CANVAS_STATE = { type: "Selecting" } as const;
 const HOVERED_PART = { type: "Void", position: ZERO } as const;
@@ -47,7 +49,7 @@ export const draw_thumbnail = (
   );
   const { REST, HOVER } = THUMBNAIL_MARGIN;
   const viewport = fit_viewport_to_bounds(bounds, width, height, {
-    defaultZoom: DEFAULT_ZOOM,
+    defaultZoom: PREVIEW_MIN_ZOOM,
     ratioMarginX:
       REST.ratioMarginX +
       (HOVER.ratioMarginX - REST.ratioMarginX) * zoomProgress,
@@ -66,6 +68,9 @@ export const draw_thumbnail = (
   ctx.moveTo(0, viewport.pan.y);
   ctx.lineTo(width, viewport.pan.y);
   ctx.stroke();
+
+  // Under every mechanism element, over the grid/axes — same z-order as the live canvas.
+  draw_floor(ctx, viewport, width, height, mechanism.simulation.floor);
 
   draw_mechanism(ctx, {
     viewport,

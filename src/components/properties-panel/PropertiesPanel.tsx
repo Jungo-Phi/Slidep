@@ -17,6 +17,7 @@ import {
   SimulationConfig,
 } from "../../types";
 import { ConstraintResidual } from "../../types/runtime-state";
+import { COLORS } from "../../constants/rendering-specs";
 import { HoveredPart } from "../../types/hovered-part";
 import { CanvasState, selected_ids } from "../../types/canvas-state";
 import { ProjectInfoSection } from "./ProjectInfoSection";
@@ -134,17 +135,16 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
     <ElementNavigationContext.Provider value={drillDownToElement}>
       <Paper
         sx={{
-          position: "absolute",
-          right: 16,
-          top: 16,
           width: 300,
-          maxHeight: "calc(100% - 32px)",
+          flexShrink: 0,
+          height: "100%",
           display: "flex",
           flexDirection: "column",
-          zIndex: 1000,
           overflow: "hidden",
-          borderRadius: 1,
-          boxShadow: 3,
+          border: "none",
+          borderRadius: 0,
+          borderLeft: `2px solid ${COLORS.ACCENT}`,
+          boxShadow: "none",
         }}
       >
         <Box
@@ -266,7 +266,6 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
               applyActions={applyActions}
               mechanism={mechanism}
               analysedMechanism={analysedMechanism}
-              setActiveTab={setActiveTab}
               appMode={appMode}
               runtimeState={runtimeState}
             />

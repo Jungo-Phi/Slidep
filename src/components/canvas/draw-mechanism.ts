@@ -76,6 +76,7 @@ import {
   get_belt_vias,
   belt_wrap_direction,
   belt_without_gear,
+  screen2world_length,
   world2screen,
   world2screen_angle,
   world2screen_length,
@@ -96,6 +97,7 @@ import {
   open_belt_vias,
   draw_belt_closure_marks,
 } from "./belt-vias";
+import { FORCE, LOAD_INTENSITY, rad_to_deg } from "../../utils/quantity-format";
 
 const TAU = 2 * Math.PI;
 
@@ -1105,7 +1107,10 @@ export function draw_mechanism(
                   overlays: {},
                   position: hoveredPart.position,
                   angle: 0,
-                  radius: INTERACTION_SPECS.BELT_GRAB_RADIUS,
+                  radius: screen2world_length(
+                    INTERACTION_SPECS.BELT_GRAB_RADIUS,
+                    viewport,
+                  ),
                   parentAxleID: "----",
                   fixedNodesBodyIDs: [],
                   meshedGearsIDs: [],
@@ -1370,7 +1375,9 @@ export function draw_mechanism(
             element.flipStart,
             element.flipEnd,
             world2screen(element.position, viewport),
-            element.value,
+            // `draw_dimension_angle` draws in degrees (like the live placement preview,
+            // which computes its angle that way); `element.value` is stored in SI radians.
+            rad_to_deg(element.value),
             hideText,
           );
           break;
@@ -1437,7 +1444,7 @@ export function draw_mechanism(
             vector,
             force.vector.length(),
             hideText,
-            " N",
+            FORCE,
             is_load_hovered(force.id, hoveredPart, "value")
               ? loadHoverWidth
               : loadRestWidth,
@@ -1498,7 +1505,7 @@ export function draw_mechanism(
               state.type === "EditingValue" &&
               state.part === "start") ||
               is_zero_load(distributedForce.magnitudeStart),
-            " N/m",
+            LOAD_INTENSITY,
             is_load_hovered(id, hoveredPart, "start-value")
               ? loadHoverWidth
               : loadRestWidth,
@@ -1512,7 +1519,7 @@ export function draw_mechanism(
               state.type === "EditingValue" &&
               state.part === "end") ||
               is_zero_load(distributedForce.magnitudeEnd),
-            " N/m",
+            LOAD_INTENSITY,
             is_load_hovered(id, hoveredPart, "end-value")
               ? loadHoverWidth
               : loadRestWidth,

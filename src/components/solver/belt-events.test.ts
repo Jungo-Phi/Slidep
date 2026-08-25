@@ -6,7 +6,7 @@ import {
   RECORD_DT,
   compile_simulation_model,
   step_simulation,
-} from "./kinematic-simulation";
+} from "./simulation-engine";
 import { belt_events } from "./belt-events";
 import { snapshot_belt_detached } from "./snapshot";
 

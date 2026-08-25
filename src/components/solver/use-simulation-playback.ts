@@ -7,22 +7,33 @@ import {
   DEFAULT_RUNTIME_STATE,
   SimulationConfig,
   Point2,
+  is_simulating,
 } from "../../types";
-import { RuntimeState } from "../../types/runtime-state";
+import {
+  ConstraintResidual,
+  DynamicSnapshot,
+  KinematicSnapshot,
+  RuntimeState,
+} from "../../types/runtime-state";
 import { LiveFrame } from "../canvas/MechanicalCanvas";
+import { OverlayArrow, OverlayMoment } from "../canvas/drawing-functions";
+import { overlay_shown } from "../../utils/element-queries";
 import {
   MAX_RECORDING_TIME,
   RECORD_DT,
   RETAIN_DT,
   recording_full,
   SimGrab,
+  apply_dynamic_snapshot_to_mechanism,
   apply_parameter_snapshot_to_mechanism,
   apply_snapshot_to_mechanism,
+  dynamic_snapshot_at,
   parameter_snapshot_at,
   snapshot_at,
   snapshot_index_at,
-} from "./kinematic-simulation";
+} from "./simulation-engine";
 import { RecorderClient } from "./recorder-client";
+import { RecorderMode } from "./recorder-protocol";
 import {
   set_sim_clock as setRuntimeState,
   sim_clock,
@@ -31,6 +42,8 @@ import {
 import {
   EMPTY_TRAJECTORY_CACHE,
   TrajectoryCache,
+  element_reactions,
+  element_velocity,
   extend_probe_trajectories,
   trajectories_at,
 } from "./probe-series";
@@ -71,30 +84,83 @@ const worker_lead = (simDt: number): number =>
 
 export type SimulationLimitReason = "time" | "memory";
 
-export type UseKinematicPlaybackArgs = {
+/**
+ * The `RuntimeState` fields whose shape follows `appMode` — `simulationSnapshots` is a
+ * `KinematicSnapshot[]` or a `DynamicSnapshot[]` depending on which, and code that reads both
+ * together (`analysedMechanism`) trusts `appMode` to say which shape is in there.
+ *
+ * `appMode` is plain React state and updates on its own render; `runtimeState` is a throttled
+ * mirror of the sim clock (see `sim-clock.ts`) and can still hold the PREVIOUS mode's
+ * snapshots for a render or more after `appMode` has already flipped. Anywhere `appMode` is
+ * set outside this hook's own effect below, this patch must be applied in the same
+ * synchronous update — not left for the effect to catch up on its own render — or that gap is
+ * exactly the window where a stale snapshot array gets decoded with the new mode's shape.
+ */
+export function simulationResetPatch(
+  mode: AppMode,
+  mechanism: Mechanism,
+): Pick<RuntimeState, "time" | "simulationSnapshots" | "parameterSnapshots" | "scrubbed"> {
+  return {
+    time: 0,
+    simulationSnapshots: [],
+    parameterSnapshots:
+      mode !== "edition"
+        ? [
+            {
+              t: 0,
+              mechanicalElements: mechanism.mechanicalElements,
+              loads: mechanism.loads,
+            },
+          ]
+        : [],
+    scrubbed: false,
+  };
+}
+
+/**
+ * `Recorder`/the worker only know two `RecorderMode`s. `"static"` is still `disabled` in
+ * `PlaybackControls` — it has no recording loop of its own yet — so it is not distinguished
+ * here; falling back to `"kinematic"` is a harmless default for a mode nobody can reach.
+ */
+const recorder_mode = (mode: AppMode): RecorderMode =>
+  mode === "dynamic" ? "dynamic" : "kinematic";
+
+export type UseSimulationPlaybackArgs = {
   mechanism: Mechanism;
   appMode: AppMode;
   setAppMode: (mode: AppMode) => void;
   setCanvasState: (state: { type: "Selecting" }) => void;
+  /** Dynamic mode only: whether the predict step integrates gravity. Read every render
+   *  through a ref, like `mechanism`/`appMode` — see the class doc below. */
+  gravity: boolean;
+  /** Both modes: whether the next steps detect and resist collisions. Same reasoning as
+   *  `gravity` — read every render through a ref. */
+  collisions: boolean;
+  /** Both modes: whether the next steps detect and resist the floor. Gated independently
+   *  from `collisions` — same reasoning otherwise. */
+  floor: boolean;
   /** Called when the recording hits `MAX_RECORDING_TIME` or the snapshot memory cap. */
   onRecordingLimitReached: (reason: SimulationLimitReason, maxTime: number) => void;
 };
 
 /**
- * Everything needed to drive and observe the kinematic simulation: the recording worker, the
- * RAF loop that steps it, and the handlers Space/Escape/grab feed into it.
+ * Everything needed to drive and observe a simulation — kinematic or dynamic — the recording
+ * worker, the RAF loop that steps it, and the handlers Space/Escape/grab feed into it.
  *
- * `mechanism`/`appMode` are read through a ref (`kinematicRef`) rather than closed over, so
+ * `mechanism`/`appMode` are read through a ref (`simulationRef`) rather than closed over, so
  * the RAF effect can stay mounted once for the app's lifetime instead of re-subscribing on
  * every render.
  */
-export function useKinematicPlayback({
+export function useSimulationPlayback({
   mechanism,
   appMode,
   setAppMode,
   setCanvasState,
+  gravity,
+  collisions,
+  floor,
   onRecordingLimitReached,
-}: UseKinematicPlaybackArgs) {
+}: UseSimulationPlaybackArgs) {
   const runtimeState = useSimClock(CLOCK_MIRROR_MS);
 
   const mechanismRef = useRef(mechanism);
@@ -102,12 +168,18 @@ export function useKinematicPlayback({
 
   // The runtime state is NOT mirrored here: `sim_clock()` is authoritative and always
   // current, whereas this ref would only ever hold what the last render happened to see.
-  const kinematicRef = useRef({ mechanism, appMode });
-  kinematicRef.current = { mechanism, appMode };
+  const simulationRef = useRef({ mechanism, appMode });
+  simulationRef.current = { mechanism, appMode };
+  const gravityRef = useRef(gravity);
+  gravityRef.current = gravity;
+  const collisionsRef = useRef(collisions);
+  collisionsRef.current = collisions;
+  const floorRef = useRef(floor);
+  floorRef.current = floor;
   /** What the canvas draws, republished every frame. */
   const liveFrameRef = useRef<LiveFrame | null>(null);
   const trajectoryCacheRef = useRef<TrajectoryCache>(EMPTY_TRAJECTORY_CACHE);
-  const kinematicLastWallTime = useRef<number | null>(null);
+  const lastWallTimeRef = useRef<number | null>(null);
   /** Simulated seconds per real second the producer sustains, low-passed. */
   const cursorRateRef = useRef<number>(1);
   /** Where the recording ended when it last MOVED, to read that rate from. */
@@ -184,13 +256,16 @@ export function useKinematicPlayback({
     [setAppMode],
   );
 
-  // Reset kinematic state on every mode change (fresh start each time)
+  // Reset simulation state on every mode change (fresh start each time)
   useEffect(() => {
-    kinematicLastWallTime.current = null;
+    lastWallTimeRef.current = null;
     if (appMode !== "edition") {
       simStartHistoryLengthRef.current = mechanismRef.current.history.length;
       // Compile the frozen simulation model from the current mechanism.
-      recorder().load(mechanismRef.current, null);
+      recorder().load(recorder_mode(appMode), mechanismRef.current, null);
+      recorder().setGravity(gravityRef.current);
+      recorder().setCollisions(collisionsRef.current);
+      recorder().setFloor(floorRef.current);
     }
     // Capture the flag synchronously: the setRuntimeState updater below runs
     // later, after this line has already reset the ref to false.
@@ -198,22 +273,29 @@ export function useKinematicPlayback({
     autoPlayOnEnterRef.current = false;
     setRuntimeState((prev) => ({
       ...prev,
+      ...simulationResetPatch(appMode, mechanismRef.current),
       isPlaying: shouldAutoPlay,
-      time: 0,
-      kinematicSnapshots: [],
-      parameterSnapshots:
-        appMode !== "edition"
-          ? [
-              {
-                t: 0,
-                mechanicalElements: mechanismRef.current.mechanicalElements,
-                loads: mechanismRef.current.loads,
-              },
-            ]
-          : [],
-      scrubbed: false,
     }));
   }, [appMode]);
+
+  // Dynamic mode only: toggling the gravity Chip mid-run changes what the NEXT steps
+  // integrate, without recompiling — a reload would lose belt/motor state for nothing, and
+  // gravity is not part of what makes a frame's positions valid or not the way geometry is.
+  useEffect(() => {
+    if (is_simulating(appMode)) recorder().setGravity(gravity);
+  }, [appMode, gravity]);
+
+  // Same reasoning, both modes: toggling collisions mid-run changes what the NEXT steps
+  // detect, without recompiling or losing belt/motor state.
+  useEffect(() => {
+    if (is_simulating(appMode)) recorder().setCollisions(collisions);
+  }, [appMode, collisions]);
+
+  // Same reasoning, gated independently from collisions: a mechanism may want the floor
+  // without general element collisions, or vice versa.
+  useEffect(() => {
+    if (is_simulating(appMode)) recorder().setFloor(floor);
+  }, [appMode, floor]);
 
   // Recompile the simulation model + truncate future snapshots whenever the
   // mechanism is edited during simulation. Re-bake references from the current
@@ -222,21 +304,26 @@ export function useKinematicPlayback({
   useEffect(() => {
     const probeOnly = probeOnlyEditRef.current;
     probeOnlyEditRef.current = false;
-    if (kinematicRef.current.appMode === "edition") return;
+    const mode = simulationRef.current.appMode;
+    if (mode === "edition") return;
     // Probe-config edits don't affect the simulated motion: keep the model
     // and the already-recorded snapshots.
     if (probeOnly) return;
     const rs = sim_clock();
-    const snaps = rs.kinematicSnapshots;
+    const snaps = rs.simulationSnapshots;
     const baseSnap =
       snaps.length > 0 ? snaps[snapshot_index_at(snaps, rs.time)] : null;
-    const baseMech = baseSnap
-      ? apply_snapshot_to_mechanism(mechanism, baseSnap)
-      : mechanism;
-    recorder().load(baseMech, baseSnap);
+    // Cast: `baseSnap`'s concrete shape follows `mode`, same invariant `Recorder` relies on.
+    const baseMech =
+      baseSnap == null
+        ? mechanism
+        : mode === "kinematic"
+          ? apply_snapshot_to_mechanism(mechanism, baseSnap as KinematicSnapshot)
+          : apply_dynamic_snapshot_to_mechanism(mechanism, baseSnap as DynamicSnapshot);
+    recorder().load(recorder_mode(mode), baseMech, baseSnap);
     setRuntimeState((prev) => ({
       ...prev,
-      kinematicSnapshots: prev.kinematicSnapshots.filter((s) => s.t <= rs.time),
+      simulationSnapshots: prev.simulationSnapshots.filter((s) => s.t <= rs.time),
       // Strict `<`, not `<=`: an edit made without the clock having moved since the last one
       // (two edits at the same instant, including the very first at t=0) replaces that
       // entry instead of leaving a duplicate a lookup could resolve to either side of.
@@ -255,7 +342,7 @@ export function useKinematicPlayback({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mechanism.mechanicalElements, mechanism.constraintElements, mechanism.loads]);
 
-  // RAF loop: records kinematic snapshots while playing in kinematic mode
+  // RAF loop: records simulation snapshots while playing in kinematic or dynamic mode
   useEffect(() => {
     let rafId: number;
     // Spawned here rather than on first use: fetching and parsing the worker chunk is
@@ -270,18 +357,18 @@ export function useKinematicPlayback({
      * paused simulation costs a few comparisons.
      */
     let shownTime = NaN;
-    let shownSnaps: RuntimeState["kinematicSnapshots"] | null = null;
+    let shownSnaps: RuntimeState["simulationSnapshots"] | null = null;
     let shownMechanism: Mechanism | null = null;
     let shownHeld = false;
     let shownExtending = false;
     const publish = (mode: AppMode) => {
-      if (mode !== "kinematic") {
+      if (!is_simulating(mode)) {
         liveFrameRef.current = null;
         trajectoryCacheRef.current = EMPTY_TRAJECTORY_CACHE;
         shownSnaps = null;
         return;
       }
-      const { mechanism: mech } = kinematicRef.current;
+      const { mechanism: mech } = simulationRef.current;
       const rs = sim_clock();
       const held = grabbingRef.current;
       // Pausing changes what the trajectories show without moving the clock, so it has to be
@@ -290,14 +377,14 @@ export function useKinematicPlayback({
       const extending = rs.isPlaying && !rs.scrubbed;
       if (
         rs.time === shownTime &&
-        rs.kinematicSnapshots === shownSnaps &&
+        rs.simulationSnapshots === shownSnaps &&
         mech === shownMechanism &&
         held === shownHeld &&
         extending === shownExtending
       )
         return;
       shownTime = rs.time;
-      shownSnaps = rs.kinematicSnapshots;
+      shownSnaps = rs.simulationSnapshots;
       shownMechanism = mech;
       shownHeld = held;
       shownExtending = extending;
@@ -313,11 +400,13 @@ export function useKinematicPlayback({
       // makes the playback speed depend on how many frames a message takes to come back
       // (`t_{n+1} = reached` reads a frontier one frame stale, so the clock advances the
       // worker's lead every OTHER frame) — measured as a mechanism running visibly fast.
-      const snaps = rs.kinematicSnapshots;
+      const snaps = rs.simulationSnapshots;
       const snapshot =
         held && snaps.length > 0
           ? snaps[snaps.length - 1]
-          : snapshot_at(snaps, rs.time);
+          : mode === "kinematic"
+            ? snapshot_at(snaps as KinematicSnapshot[], rs.time)
+            : dynamic_snapshot_at(snaps as DynamicSnapshot[], rs.time);
       if (!snapshot) {
         liveFrameRef.current = null;
         return;
@@ -327,17 +416,50 @@ export function useKinematicPlayback({
       trajectoryCacheRef.current = extend_probe_trajectories(
         trajectoryCacheRef.current,
         mech.mechanicalElements,
-        rs.kinematicSnapshots,
+        rs.simulationSnapshots,
       );
       // Same instant as `snapshot`, not `rs.time`: a held grab draws the newest computed
       // frame rather than the one under the cursor, and the motor/load values shown must
       // match whichever instant that is.
       const paramSnapshot = parameter_snapshot_at(rs.parameterSnapshots, snapshot.t);
-      const geometryMechanism = apply_snapshot_to_mechanism(mech, snapshot);
+      const geometryMechanism =
+        mode === "kinematic"
+          ? apply_snapshot_to_mechanism(mech, snapshot as KinematicSnapshot)
+          : apply_dynamic_snapshot_to_mechanism(mech, snapshot as DynamicSnapshot);
+      // Velocity/reaction arrows: dynamic mode only, one per element with the matching
+      // overlay on, read at the same instant everything else here draws. Velocity only
+      // means something at a sampled point (node/gear); reactions resolve for those AND
+      // edges, one per endpoint — `element_reactions` returns however many apply, each
+      // optionally carrying a moment too (a rigid weld's force-couple, reduced).
+      const overlayArrows: OverlayArrow[] = [];
+      const overlayMoments: OverlayMoment[] = [];
+      if (mode === "dynamic") {
+        const dynSnap = snapshot as DynamicSnapshot;
+        for (const el of geometryMechanism.mechanicalElements) {
+          if ("position" in el && overlay_shown(el, "velocity")) {
+            const v = element_velocity(el, dynSnap);
+            if (v) overlayArrows.push({ at: el.position, vector: v, kind: "velocity" });
+          }
+          if (overlay_shown(el, "force")) {
+            for (const r of element_reactions(el, dynSnap)) {
+              const kind = r.atAnchor ? "reaction-support" : "reaction-internal";
+              overlayArrows.push({ at: r.at, vector: r.vector, kind });
+              // `r.moment` is the solver's raw CCW-positive convention; `draw_moment`
+              // (and every other moment on screen) reads the data model's clockwise-
+              // positive one instead — negate once, here, same flip `load-model.ts`
+              // applies for a user-authored `MomentElement`.
+              if (r.moment !== undefined)
+                overlayMoments.push({ at: r.at, torque: -r.moment, kind });
+            }
+          }
+        }
+      }
       liveFrameRef.current = {
         mechanism: paramSnapshot
           ? apply_parameter_snapshot_to_mechanism(geometryMechanism, paramSnapshot)
           : geometryMechanism,
+        overlayArrows,
+        overlayMoments,
         // Headed at the instant actually DRAWN, which a held grab moves off the cursor:
         // a trail stopping short of the mechanism it belongs to is the same offset again.
         trajectories: trajectories_at(trajectoryCacheRef.current, snapshot.t).map(
@@ -357,7 +479,7 @@ export function useKinematicPlayback({
 
     const step = (wallTime: number) => {
       advance(wallTime);
-      publish(kinematicRef.current.appMode);
+      publish(simulationRef.current.appMode);
       paintPlayhead();
       rafId = requestAnimationFrame(step);
     };
@@ -381,7 +503,7 @@ export function useKinematicPlayback({
      */
     const discardUnshown = () => {
       const rs = sim_clock();
-      const snapshots = rs.kinematicSnapshots;
+      const snapshots = rs.simulationSnapshots;
       if (snapshots.length === 0) return;
       const keep = snapshot_index_at(snapshots, rs.time);
       if (keep >= snapshots.length - 1) return;
@@ -392,7 +514,7 @@ export function useKinematicPlayback({
         // Onto the instant that is kept, not between two: the head has to land exactly on
         // the end of the recording rather than a fraction of a step short of it.
         time: base.t,
-        kinematicSnapshots: kept,
+        simulationSnapshots: kept,
       }));
       recorder().rewind(base);
     };
@@ -418,7 +540,7 @@ export function useKinematicPlayback({
         return;
       }
       const rs = sim_clock();
-      const snapshots = rs.kinematicSnapshots;
+      const snapshots = rs.simulationSnapshots;
       const frontier = snapshots.length > 0 ? snapshots[snapshots.length - 1].t : 0;
       const pct =
         rs.isPlaying && !rs.scrubbed
@@ -433,11 +555,11 @@ export function useKinematicPlayback({
     };
 
     const advance = (wallTime: number) => {
-      const { appMode: mode } = kinematicRef.current;
+      const { appMode: mode } = simulationRef.current;
       const rs = sim_clock();
 
-      if (mode !== "kinematic" || !rs.isPlaying) {
-        kinematicLastWallTime.current = null;
+      if (!is_simulating(mode) || !rs.isPlaying) {
+        lastWallTimeRef.current = null;
         // Tell the worker once, not every frame: left running it would keep recording
         // towards the last target it was given, well past the pause.
         if (recordingRef.current) {
@@ -448,7 +570,7 @@ export function useKinematicPlayback({
           // clears `isPlaying`, and truncating there would delete everything past the point
           // just jumped to; and LEAVING simulation is about to reset the recording anyway,
           // so reloading the worker first is pure waste.
-          if (!replayingRef.current && !rs.scrubbed && mode === "kinematic")
+          if (!replayingRef.current && !rs.scrubbed && is_simulating(mode))
             discardUnshown();
         }
         return;
@@ -465,8 +587,8 @@ export function useKinematicPlayback({
         waitedForReachedRef.current = 0;
       }
 
-      const lastWallTime = kinematicLastWallTime.current;
-      kinematicLastWallTime.current = wallTime;
+      const lastWallTime = lastWallTimeRef.current;
+      lastWallTimeRef.current = wallTime;
 
       if (lastWallTime === null) return;
 
@@ -477,8 +599,8 @@ export function useKinematicPlayback({
       if (replayingRef.current) {
         setRuntimeState((prev) => {
           const prevFrontier =
-            prev.kinematicSnapshots.length > 0
-              ? prev.kinematicSnapshots[prev.kinematicSnapshots.length - 1].t
+            prev.simulationSnapshots.length > 0
+              ? prev.simulationSnapshots[prev.simulationSnapshots.length - 1].t
               : 0;
           const nextTime = prev.time + simDt;
           // Reaching the end of what was recorded stops playback — the recording is not
@@ -551,8 +673,8 @@ export function useKinematicPlayback({
 
         setRuntimeState((prev) => {
           const prevFrontier =
-            prev.kinematicSnapshots.length > 0
-              ? prev.kinematicSnapshots[prev.kinematicSnapshots.length - 1].t
+            prev.simulationSnapshots.length > 0
+              ? prev.simulationSnapshots[prev.simulationSnapshots.length - 1].t
               : -RECORD_DT;
           const uniqueSnaps = newSnaps.filter((s) => s.t > prevFrontier);
           return {
@@ -561,10 +683,10 @@ export function useKinematicPlayback({
             // happened to be would leave the last recorded instants unseen.
             time: exhausted && reached !== null ? reached : newTime,
             ...(exhausted ? { isPlaying: false } : {}),
-            kinematicSnapshots:
+            simulationSnapshots:
               uniqueSnaps.length > 0
-                ? [...prev.kinematicSnapshots, ...uniqueSnaps]
-                : prev.kinematicSnapshots,
+                ? [...prev.simulationSnapshots, ...uniqueSnaps]
+                : prev.simulationSnapshots,
           };
         });
       }
@@ -579,7 +701,7 @@ export function useKinematicPlayback({
       recorderRef.current = null;
       recordingRef.current = false;
     };
-  }, []); // intentionally runs once; all state accessed via kinematicRef
+  }, []); // intentionally runs once; all state accessed via simulationRef
 
   const handleSpaceKey = useCallback(
     (lastSimulationMode: AppMode) => {
@@ -601,14 +723,17 @@ export function useKinematicPlayback({
   // button (reset to t=0 and stop); otherwise it exits to edition mode.
   const handleEscapeKey = useCallback(() => {
     if (appMode !== "edition" && sim_clock().isPlaying) {
-      recorder().load(mechanismRef.current, null);
+      recorder().load(recorder_mode(appMode), mechanismRef.current, null);
+      recorder().setGravity(gravityRef.current);
+      recorder().setCollisions(collisionsRef.current);
+      recorder().setFloor(floorRef.current);
       setRuntimeState((prev) => ({
         ...prev,
         time: 0,
         isPlaying: false,
         current: null,
         history: [],
-        kinematicSnapshots: [],
+        simulationSnapshots: [],
         parameterSnapshots: [
           {
             t: 0,
@@ -644,7 +769,7 @@ export function useKinematicPlayback({
           : bodyRatio !== undefined
             ? { edgeID: key, t: bodyRatio, target }
             : { key, target };
-      if (kinematicRef.current.appMode === "edition") return;
+      if (simulationRef.current.appMode === "edition") return;
       grabbingRef.current = true;
       recorder().setGrab(grab);
       // Start playback if paused: the grab only reaches the solver through the
@@ -663,15 +788,23 @@ export function useKinematicPlayback({
 
   const resetToStart = useCallback(() => {
     // Recompile from the initial geometry
-    if (kinematicRef.current.appMode !== "edition")
-      recorder().load(mechanismRef.current, null);
+    if (simulationRef.current.appMode !== "edition") {
+      recorder().load(
+        recorder_mode(simulationRef.current.appMode),
+        mechanismRef.current,
+        null,
+      );
+      recorder().setGravity(gravityRef.current);
+      recorder().setCollisions(collisionsRef.current);
+      recorder().setFloor(floorRef.current);
+    }
     setRuntimeState((prev) => ({
       ...prev,
       time: 0,
       isPlaying: false,
       current: null,
       history: [],
-      kinematicSnapshots: [],
+      simulationSnapshots: [],
       parameterSnapshots: [
         {
           t: 0,
@@ -682,18 +815,21 @@ export function useKinematicPlayback({
     }));
   }, []);
 
-  /** The snapshot under the cursor, for what React displays — the violated constraints. What
-   *  the canvas draws does NOT come from here: it is published to `liveFrameRef` every frame,
-   *  whereas this follows the mirror. */
-  const currentKinematicSnapshot =
-    appMode === "kinematic"
-      ? snapshot_at(runtimeState.kinematicSnapshots, runtimeState.time)
-      : null;
+  /** The violated constraints of the snapshot under the cursor, for what React displays.
+   *  What the canvas draws does NOT come from here: it is published to `liveFrameRef` every
+   *  frame, whereas this follows the mirror. Generic over the mode: `unsatisfied` is a base
+   *  `SimulationSnapshot` field, so this needs no concrete subtype. */
+  const currentUnsatisfied: ConstraintResidual[] =
+    is_simulating(appMode) && runtimeState.simulationSnapshots.length > 0
+      ? (runtimeState.simulationSnapshots[
+          snapshot_index_at(runtimeState.simulationSnapshots, runtimeState.time)
+        ]?.unsatisfied ?? [])
+      : [];
 
   // A grab is a live intervention on the mechanism, so it only has a meaning where the
   // recording is being extended. Somewhere the user scrubbed to, playback re-reads what
   // exists and never consults the grab, so the canvas must not offer one.
-  const canSimulationGrab = appMode === "kinematic" && !runtimeState.scrubbed;
+  const canSimulationGrab = is_simulating(appMode) && !runtimeState.scrubbed;
 
   // ── État de la timeline, partagé par la top-bar et le rail ──
   //
@@ -711,19 +847,16 @@ export function useKinematicPlayback({
   // sortirait au rythme du miroir, soit dix fois par seconde pour un canvas qui
   // en fait soixante. Elle est écrite par la boucle RAF dans `--playhead`.
   const {
-    kinematicSnapshots: timelineSnaps,
-    current: timelineCurrent,
+    simulationSnapshots: timelineSnaps,
     time: timelineTime,
     isPlaying: timelinePlaying,
     scrubbed: timelineScrubbed,
   } = runtimeState;
   const timeline = useMemo(() => {
     const frontier =
-      appMode === "kinematic" && timelineSnaps.length > 0
+      is_simulating(appMode) && timelineSnaps.length > 0
         ? timelineSnaps[timelineSnaps.length - 1].t
-        : timelineCurrent
-          ? timelineCurrent.timestamp
-          : 0;
+        : 0;
     // Read from the intent, not from a comparison of times: the frontier deliberately
     // runs ahead of the cursor while recording, by an amount that varies from frame to
     // frame (the worker produces in bursts). Comparing them makes the head flicker
@@ -741,14 +874,14 @@ export function useKinematicPlayback({
       atEnd: recording || (frontier > 0 && timelineTime >= frontier - RETAIN_DT / 2),
       hasRecording: frontier > 0 || timelineSnaps.length > 0,
     };
-  }, [appMode, timelineSnaps, timelineCurrent, timelineTime, timelinePlaying, timelineScrubbed]);
+  }, [appMode, timelineSnaps, timelineTime, timelinePlaying, timelineScrubbed]);
 
   return {
     runtimeState,
     liveFrameRef,
     timelineTrackRef,
     timeline,
-    currentKinematicSnapshot,
+    currentUnsatisfied,
     canSimulationGrab,
     handleSpaceKey,
     handleEscapeKey,
@@ -760,7 +893,7 @@ export function useKinematicPlayback({
     resetSimulationState,
     /** For callers (undo/redo, applyActions) that need to reason about whether an edit
      *  reaches back before the simulation started, or should be treated as observation-only. */
-    kinematicRef,
+    simulationRef,
     autoPlayOnEnterRef,
     simStartHistoryLengthRef,
     probeOnlyEditRef,

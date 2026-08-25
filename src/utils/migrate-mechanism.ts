@@ -8,10 +8,10 @@
  */
 
 import { DEFAULT } from "../constants/physics-specs";
-import { SerializedMechanism } from "../types";
+import { DEFAULT_SIMULATION, SerializedMechanism } from "../types";
 
 /** The format `serialize_mechanism` writes today. */
-export const CURRENT_FORMAT_VERSION = 3;
+export const CURRENT_FORMAT_VERSION = 8;
 
 /** A document mid-migration: its shape belongs to no version in particular. */
 type RawDocument = Record<string, unknown>;
@@ -59,6 +59,71 @@ const MIGRATIONS: MigrationStep[] = [
       ),
       history: add_physical_defaults_in_stack(doc.history),
       future: add_physical_defaults_in_stack(doc.future),
+    }),
+  },
+  {
+    to: 4,
+    preservesHistory: true,
+    apply: (doc) => ({
+      ...doc,
+      mechanicalElements: as_array(doc.mechanicalElements).map(
+        add_motor_torque_default,
+      ),
+      history: add_motor_torque_default_in_stack(doc.history),
+      future: add_motor_torque_default_in_stack(doc.future),
+    }),
+  },
+  {
+    to: 5,
+    // The undo stack mixes distances into fields with no distance-specific shape
+    // (a `ChangeForce`'s vector, a `MoveElements`' delta) that only the action's
+    // own `type` disambiguates. Converting the document's present state is exact;
+    // guessing that for every action variant is not worth the risk to a reopened
+    // file, so the stack is dropped instead.
+    preservesHistory: false,
+    apply: (doc) => ({
+      ...doc,
+      mechanicalElements: as_array(doc.mechanicalElements).map(rescale_element),
+      constraintElements: as_array(doc.constraintElements).map(rescale_element),
+      viewport: rescale_viewport(doc.viewport),
+    }),
+  },
+  {
+    to: 6,
+    preservesHistory: true,
+    apply: (doc) => ({
+      ...doc,
+      mechanicalElements: as_array(doc.mechanicalElements).map(
+        rescale_motor_speed,
+      ),
+      history: rescale_motor_speed_in_stack(doc.history),
+      future: rescale_motor_speed_in_stack(doc.future),
+    }),
+  },
+  {
+    to: 7,
+    // The properties panel edits a dimension-angle's value through the same generic
+    // `ChangeDimensionEdgeValue` action every other dimension kind uses (the reducer
+    // dispatches on `id`, not on which of these six action types is named), so a stored
+    // action carrying that type cannot be told apart from one that truly holds a length —
+    // guessing would risk rescaling the wrong quantity, or missing degrees that need it.
+    preservesHistory: false,
+    apply: (doc) => ({
+      ...doc,
+      constraintElements: as_array(doc.constraintElements).map(
+        rescale_dimension_angle,
+      ),
+    }),
+  },
+  {
+    to: 8,
+    // Gravity/collisions/floor move from disjoint, session-only React state onto the
+    // mechanism itself, so a document from before they existed here gets today's defaults
+    // rather than nothing — nothing in `history`/`future` carries them, so no stack reshape.
+    preservesHistory: true,
+    apply: (doc) => ({
+      ...doc,
+      simulation: is_record(doc.simulation) ? doc.simulation : DEFAULT_SIMULATION,
     }),
   },
 ];
@@ -134,6 +199,150 @@ const add_physical_defaults_in_action = (action: unknown): unknown => {
 const add_physical_defaults_in_stack = (stack: unknown): unknown[][] =>
   as_array(stack).map((bundle) =>
     as_array(bundle).map(add_physical_defaults_in_action),
+  );
+
+/** v3 → v4: a motor's torque limit, absent from every one saved before it existed, falls
+ *  back to the same default a freshly placed motor gets. */
+const add_motor_torque_default = (element: unknown): unknown => {
+  if (!is_record(element) || element.type !== "pivot") return element;
+  const motor = add_motor_config_torque_default(element.motor);
+  return motor === element.motor ? element : { ...element, motor };
+};
+
+/** The `MotorConfig` itself, wherever one is carried directly rather than nested in a
+ *  pivot — `SetMotorConfig`'s `newConfig`/`oldConfig` — `undefined` (no motor) passes
+ *  through unchanged. */
+const add_motor_config_torque_default = (config: unknown): unknown => {
+  if (!is_record(config) || typeof config.torque === "number") return config;
+  return { torque: DEFAULT.MOTOR_TORQUE, ...config };
+};
+
+/** The same defaulting where an action carries a pivot, or a `MotorConfig` on its own. */
+const add_motor_torque_default_in_action = (action: unknown): unknown => {
+  if (!is_record(action)) return action;
+  switch (action.type) {
+    case "CreateElement":
+    case "DeleteElement":
+      return { ...action, element: add_motor_torque_default(action.element) };
+    case "SetMotorConfig":
+      return {
+        ...action,
+        newConfig: add_motor_config_torque_default(action.newConfig),
+        oldConfig: add_motor_config_torque_default(action.oldConfig),
+      };
+    default:
+      return action;
+  }
+};
+
+const add_motor_torque_default_in_stack = (stack: unknown): unknown[][] =>
+  as_array(stack).map((bundle) =>
+    as_array(bundle).map(add_motor_torque_default_in_action),
+  );
+
+/** v4 → v5: world units become metres. Every stored distance shrinks by it, and a saved
+ *  viewport's scale grows by the same factor, so a reopened file frames the same view. */
+const WORLD_UNIT_RESCALE = 1 / 1000;
+
+const rescale_point = (point: unknown): unknown => {
+  if (!is_record(point)) return point;
+  const { x, y } = point;
+  return {
+    ...point,
+    x: typeof x === "number" ? x * WORLD_UNIT_RESCALE : x,
+    y: typeof y === "number" ? y * WORLD_UNIT_RESCALE : y,
+  };
+};
+
+/** Every mechanical or constraint element's own distances: a position, the two ends of an
+ *  edge, a gear's radius, a spring or damper's rest length, a dimension's value — except an
+ *  angle (degrees at this version, not yet a length's kind of number regardless) and a gear
+ *  ratio (dimensionless), the two dimension families that aren't lengths. */
+const rescale_element = (element: unknown): unknown => {
+  if (!is_record(element)) return element;
+  const scaled = { ...element };
+  if ("position" in scaled) scaled.position = rescale_point(scaled.position);
+  if ("positionStart" in scaled)
+    scaled.positionStart = rescale_point(scaled.positionStart);
+  if ("positionEnd" in scaled)
+    scaled.positionEnd = rescale_point(scaled.positionEnd);
+  if (element.type === "gear" && typeof scaled.radius === "number")
+    scaled.radius = scaled.radius * WORLD_UNIT_RESCALE;
+  if (
+    (element.type === "spring" || element.type === "damper") &&
+    typeof scaled.restLength === "number"
+  )
+    scaled.restLength = scaled.restLength * WORLD_UNIT_RESCALE;
+  if (
+    typeof scaled.value === "number" &&
+    element.type !== "dimension-angle" &&
+    element.type !== "gear-ratio"
+  )
+    scaled.value = scaled.value * WORLD_UNIT_RESCALE;
+  return scaled;
+};
+
+/** v6 → v7: a dimension-angle's value becomes radians, like `ANGLE` everywhere else, instead
+ *  of the one dimension kind that held degrees directly. */
+const DIMENSION_ANGLE_RESCALE = Math.PI / 180;
+
+const rescale_dimension_angle = (element: unknown): unknown => {
+  if (
+    !is_record(element) ||
+    element.type !== "dimension-angle" ||
+    typeof element.value !== "number"
+  )
+    return element;
+  return { ...element, value: element.value * DIMENSION_ANGLE_RESCALE };
+};
+
+const rescale_viewport = (viewport: unknown): unknown => {
+  if (!is_record(viewport)) return viewport;
+  return {
+    ...viewport,
+    scale:
+      typeof viewport.scale === "number"
+        ? viewport.scale / WORLD_UNIT_RESCALE
+        : viewport.scale,
+  };
+};
+
+/** v5 → v6: a motor's speed becomes rad/s, like every other stored quantity, instead of the
+ *  one field that held tr/min directly. */
+const MOTOR_SPEED_RESCALE = (2 * Math.PI) / 60;
+
+const rescale_motor_config = (config: unknown): unknown => {
+  if (!is_record(config) || typeof config.speed !== "number") return config;
+  return { ...config, speed: config.speed * MOTOR_SPEED_RESCALE };
+};
+
+const rescale_motor_speed = (element: unknown): unknown => {
+  if (!is_record(element) || element.type !== "pivot") return element;
+  const motor = rescale_motor_config(element.motor);
+  return motor === element.motor ? element : { ...element, motor };
+};
+
+/** The same rescaling where an action carries a pivot, or a `MotorConfig` on its own. */
+const rescale_motor_speed_in_action = (action: unknown): unknown => {
+  if (!is_record(action)) return action;
+  switch (action.type) {
+    case "CreateElement":
+    case "DeleteElement":
+      return { ...action, element: rescale_motor_speed(action.element) };
+    case "SetMotorConfig":
+      return {
+        ...action,
+        newConfig: rescale_motor_config(action.newConfig),
+        oldConfig: rescale_motor_config(action.oldConfig),
+      };
+    default:
+      return action;
+  }
+};
+
+const rescale_motor_speed_in_stack = (stack: unknown): unknown[][] =>
+  as_array(stack).map((bundle) =>
+    as_array(bundle).map(rescale_motor_speed_in_action),
   );
 
 const is_record = (value: unknown): value is Record<string, unknown> =>

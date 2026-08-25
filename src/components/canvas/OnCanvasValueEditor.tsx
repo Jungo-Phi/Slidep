@@ -3,6 +3,17 @@ import { TextField, Typography, Box } from "@mui/material";
 import { COLORS } from "../../constants/rendering-specs";
 import { value2ratio } from "../../utils";
 import { ScreenPoint } from "../../types";
+import {
+  QuantityKind,
+  QuantityUnit,
+  display_unit,
+  parse_quantity,
+  to_mantissa,
+} from "../../utils/quantity-format";
+
+const RAW_UNIT: QuantityUnit = { symbol: "", factor: 1 };
+/** Decimal places a canvas edit rounds to — the same as `NumberInput`'s own default. */
+const PRECISION = 1;
 
 /**
  * How the editor lays out its inputs.
@@ -18,8 +29,11 @@ interface OnCanvasValueEditorProps {
   initialValue: number;
   /** Screen-space anchor (the editor centers itself on this point). */
   position: ScreenPoint;
-  /** Text drawn after the input (e.g. "°", "N"). "single" mode only. */
-  suffix?: string;
+  /** Formats and parses the field as a physical quantity instead of a bare number — the same
+   *  unit `NumberInput`'s `kind` would pick for `initialValue`, fixed for the life of this
+   *  editor rather than re-picked as the user types, and part of the editable text itself
+   *  rather than a decoration next to it. "single" mode only. */
+  kind?: QuantityKind;
   /**
    * Accept a leading minus. The field always opens on a magnitude — a load's
    * sign is a direction, and reading a "-" off a label helps nobody — but
@@ -42,7 +56,7 @@ export const OnCanvasValueEditor: React.FC<OnCanvasValueEditorProps> = ({
   mode,
   initialValue,
   position,
-  suffix,
+  kind,
   signed,
   allowZero,
   onCommit,
@@ -50,31 +64,50 @@ export const OnCanvasValueEditor: React.FC<OnCanvasValueEditorProps> = ({
 }) => {
   const [val1, setVal1] = useState("");
   const [val2, setVal2] = useState("");
+  // The unit `initialValue` opened in, fixed for the editor's lifetime rather than re-picked
+  // on every keystroke — an adaptive kind mid-edit would otherwise change what a typed number
+  // means as its magnitude crossed a prefix boundary.
+  const [unit, setUnit] = useState<QuantityUnit>(RAW_UNIT);
 
   const inputRef1 = useRef<HTMLInputElement>(null);
   const inputRef2 = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    // The unit suffix opens as part of the editable text but should never be swept up by
+    // the initial select-all — only the digits the user is actually here to overwrite.
+    // Ratio mode selects each field's full text instead: neither part carries a unit.
+    let mantissaLength: number | null = null;
     if (mode === "ratio") {
       const [n, d] = value2ratio(initialValue);
       setVal1(n);
       setVal2(d);
     } else {
-      setVal1((Math.round(initialValue * 10) / 10).toString());
+      const openedUnit = kind ? display_unit(initialValue, kind) : RAW_UNIT;
+      setUnit(openedUnit);
+      const mantissa = to_mantissa(initialValue, openedUnit, PRECISION).toString();
+      mantissaLength = mantissa.length;
+      setVal1(openedUnit.symbol ? `${mantissa} ${openedUnit.symbol}` : mantissa);
     }
     setTimeout(() => {
       inputRef1.current?.focus();
-      inputRef1.current?.select();
+      if (mantissaLength === null) inputRef1.current?.select();
+      else inputRef1.current?.setSelectionRange(0, mantissaLength);
     }, 10);
-  }, [mode, initialValue]);
+  }, [mode, initialValue, kind]);
 
   /** What the fields hold, or null when they make no value the editor can take. */
   const entered = ((): number | null => {
-    const v1 = parseFloat(val1);
-    const v2 = mode === "ratio" ? parseFloat(val2) : 1;
-    if (isNaN(v1) || isNaN(v2) || v2 === 0) return null;
+    if (mode === "ratio") {
+      const v1 = parseFloat(val1);
+      const v2 = parseFloat(val2);
+      if (isNaN(v1) || isNaN(v2) || v2 === 0) return null;
+      if (v1 === 0 && !allowZero) return null;
+      return v1 / v2;
+    }
+    const v1 = kind ? parse_quantity(val1, kind, unit) : parseFloat(val1);
+    if (v1 === null || isNaN(v1)) return null;
     if (v1 === 0 && !allowZero) return null;
-    return v1 / v2;
+    return v1;
   })();
 
   // A refusal shows up while typing rather than at Enter, so pressing it on a value the
@@ -120,7 +153,12 @@ export const OnCanvasValueEditor: React.FC<OnCanvasValueEditorProps> = ({
   };
 
   const filterInput = (val: string) => {
-    const digits = val.replace(/[^0-9.]/g, "").replace(/(\..*)\./g, "$1");
+    // A `kind` field accepts unit letters typed inline ("12mm", "150kN") and stand-ins
+    // `loose` folds back to the real symbol ("N*m", "Nm" for "N·m"); a plain one, and ratio
+    // mode's two fields, stay digits-only.
+    const pattern =
+      mode === "single" && kind ? /[^0-9.a-zA-Zµμ°·²*^/ ]/g : /[^0-9.]/g;
+    const digits = val.replace(pattern, "").replace(/(\..*)\./g, "$1");
     // The minus is read from the head of the raw input rather than kept in the
     // filtered string, so it can only ever sit in front of the number — and
     // typing it alone leaves "-" on screen while the user finishes the value.
@@ -154,7 +192,12 @@ export const OnCanvasValueEditor: React.FC<OnCanvasValueEditorProps> = ({
             border: "2px solid",
             borderColor: refused ? "error.main" : "text.primary",
             borderRadius: "18px",
-            backgroundColor: "primary.contrastText",
+            // Opaque, not `alpha`'d: a translucent tint would let whatever the canvas
+            // happens to be drawing underneath show through and shift the colour.
+            backgroundColor: (theme) =>
+              refused
+                ? `color-mix(in srgb, ${theme.palette.error.main} 20%, ${theme.palette.primary.contrastText})`
+                : theme.palette.primary.contrastText,
             padding: "0 6px",
           }}
         >
@@ -221,7 +264,12 @@ export const OnCanvasValueEditor: React.FC<OnCanvasValueEditorProps> = ({
           border: "2px solid",
           borderColor: refused ? "error.main" : "text.primary",
           borderRadius: "6px",
-          backgroundColor: "primary.contrastText",
+          // Opaque, not `alpha`'d: a translucent tint would let whatever the canvas
+          // happens to be drawing underneath show through and shift the colour.
+          backgroundColor: (theme) =>
+            refused
+              ? `color-mix(in srgb, ${theme.palette.error.main} 20%, ${theme.palette.primary.contrastText})`
+              : theme.palette.primary.contrastText,
           padding: "0 4px",
         }}
       >
@@ -238,20 +286,6 @@ export const OnCanvasValueEditor: React.FC<OnCanvasValueEditorProps> = ({
             width: `${Math.max(30, val1.length * 9 + 10)}px`,
           }}
         />
-        {suffix && (
-          <Typography
-            sx={{
-              color: "text.primary",
-              ml: -0.5,
-              mr: 0.5,
-              userSelect: "none",
-              fontSize: "16px",
-              fontFamily: "Arial",
-            }}
-          >
-            {suffix}
-          </Typography>
-        )}
       </Box>
     );
   };

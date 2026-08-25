@@ -1,5 +1,5 @@
 import { Link, Point2 } from "../../types";
-import { ConstraintResidual } from "../../types/runtime-state";
+import { ConstraintResidual, LinkReaction } from "../../types/runtime-state";
 import {
   applyAngleConstraint,
   applyBeamFollowsAngleConstraint,
@@ -10,6 +10,8 @@ import {
   applyCoaxialAngleConstraint,
   applyDistanceConstraint,
   applyMinDistanceConstraint,
+  applyPointLineContactConstraint,
+  applyPointSegmentContactConstraint,
   applyDistanceToLineConstraint,
   applyEqualLengthConstraint,
   applyFixedOnSegmentConstraint,
@@ -31,10 +33,13 @@ import { solver_trace } from "./solver-trace";
 import { applyBeltSegmentNoSlip } from "./experimental/belt-noslip-q";
 import { applyBeltSubChainAggregate } from "./experimental/belt-aggregate";
 import {
+  MIN_EXTENT_M,
   SolveNodes,
+  nodes_extent,
   solveNodesFromMaps,
   writePositionsBack,
   writeScalarsBack,
+  writeVelocitiesBack,
 } from "./nodes";
 import { LinkSlots, resolve_slots } from "./link-slots";
 
@@ -46,30 +51,79 @@ export type SolverMaps = {
   angles: Map<string, number>;
   /** Constraints left unsatisfied (only filled when collectDiagnostics is set). */
   unsatisfied?: ConstraintResidual[];
+  /**
+   * The mechanism's own scale this solve measured (see `nodes_extent`), floored at
+   * `MIN_EXTENT_M`. A caller stepping frame after frame can hand this back in as next
+   * frame's estimate wherever an extent-relative tolerance is needed before the solve has
+   * run — `collision-detection.ts`'s `CONTACT_EPS_RATIO`, `simulation-engine.ts`'s
+   * `beltContact.detachRatio`/`reattachRatio` — rather than paying for a second bbox pass.
+   */
+  extent: number;
 };
 
 /**
- * Above this residual a constraint is reported as unsatisfied, and severity is expressed
- * against it. One millimetre, and **one** threshold for every family: residuals reach it
- * already converted to the length they are worth (see `residual_scale`), so an angle and a
- * distance are finally the same kind of number.
+ * What turns a solve into a dynamics step: predict a position under an external
+ * acceleration before the constraint sweep, then read the frame's velocity back from how
+ * far the sweep ended up moving that prediction — the XPBD trick that makes a constraint
+ * correction show up as a velocity change (a contact/constraint force) rather than
+ * vanishing between frames.
+ *
+ * A separate object rather than three more positional params on an already ten-parameter
+ * function, and because `velocities`/`angleVelocities` are in/out: warm-started from here,
+ * overwritten with the frame's result.
+ */
+export type DynamicsInput = {
+  dt: number;
+  /** World-space acceleration applied to every free (w > 0) node this frame, before the
+   *  constraint sweep — gravity today; more forces (loads, springs) join later. */
+  gx: number;
+  gy: number;
+  velocities: Map<string, Point2>;
+  angleVelocities: Map<string, number>;
+  /** Populates `nodes.wAngle` — see its doc on `SimNodes`. Omitted, every angle gets 1, same
+   *  as every other caller of `solveNodesFromMaps`. */
+  angleMasses?: Map<string, number>;
+  /** World-space force (N), per position key, folded into the predict step's acceleration on
+   *  top of `gx`/`gy` — see `Nodes.fx`/`fy`. Omitted, no node carries one. */
+  forces?: Map<string, Point2>;
+  /** Torque (N·m), per angle key — see `SimNodes.torque`. Omitted, no angle carries one. */
+  torques?: Map<string, number>;
+  /**
+   * Output: an array to fill with each constraint's own reaction, one entry per solver key
+   * it touches with a non-zero contribution — see `LinkReaction`. Its presence is the whole
+   * opt-in: omitted, `PBD_solve` skips the bookkeeping entirely (an extra before/after read
+   * per link per sweep), the same optionality `collectDiagnostics` already has for
+   * `unsatisfied`. Provide an empty array to collect.
+   */
+  reactions?: LinkReaction[];
+};
+
+/**
+ * Above this fraction of the mechanism's own extent (see `nodes_extent`) a constraint is
+ * reported as unsatisfied, and severity is expressed against it. **One** threshold for every
+ * family: residuals reach it already converted to the length they are worth (see
+ * `residual_scale`), so an angle and a distance are finally the same kind of number.
+ *
+ * Relative rather than a flat millimetre so a µm-scale mechanism and a km-scale one are each
+ * judged against their own size, not one fixed abroad. 1e-3 is a millimetre reinterpreted as
+ * a ratio at the roughly metre-scale mechanisms it was originally tuned on.
  *
  * This is the threshold the USER is warned at. Moving it changes what the diagnostics panel
  * reports, not how hard a solver works — a solver target is a multiple of it, never it.
  */
-const DIAGNOSTIC_TOLERANCE_MM = 1;
+const DIAGNOSTIC_TOLERANCE_RATIO = 0.001;
 
 /**
- * What one unit of a link's residual is worth in millimetres.
+ * What one unit of a link's residual is worth in metres.
  *
  * An angle is not a length, and a fixed angular threshold is not comparable to a fixed
- * distance one: 0.01 rad is 4 mm at the end of a 400 mm arm and 0.1 mm on a 10 mm pinion.
+ * distance one: 0.01 rad is 4 mm at the end of a 0.4 m arm and 0.1 mm on a 10 mm pinion.
  * So an angular residual is converted to **the arc it sweeps**, through the link's own
  * geometry — the longer of the two edges an angle holds apart, a motor's crank, the radius
  * of a gear that carries nothing but an angle. `GearRatio` answers a dimensionless ratio,
- * which times the second radius is the millimetres the first one is off by.
+ * which times the second radius is the metres the first one is off by.
  *
- * Everything else already answers in millimetres — including `GearMeshAngle`, whose
+ * Everything else already answers in metres — including `GearMeshAngle`, whose
  * residual is an arc length, which is the precedent this generalises.
  *
  * **Incomplete in simulation**: there the radii live in the links, not in the nodes, so a
@@ -139,17 +193,28 @@ const RATE_WINDOW = 8;
 const GRAB_RELEASE_SWEEPS = 4;
 
 /**
- * Below this much motion left to come, finishing the sweeps buys nothing visible.
+ * Below this fraction of the mechanism's own extent (see `nodes_extent`) still left to move,
+ * finishing the sweeps buys nothing visible.
  *
- * A thousandth of a millimetre, not a hundredth: the per-frame bound is respected either
- * way, but each frame warm-starts from the previous one, so what it gives up ACCUMULATES.
- * At 1e-2 the drift grows without settling (1.48 mm over 200 frames on `Core XY modifié`);
- * at 1e-3 it plateaus (5e-2 mm, the same at 60 and at 200 frames) while keeping the whole
- * of the gain that is actually free — `Poulie bloqueuse`, blocked, goes from 300 sweeps to
- * 109 with a drift of exactly zero.
+ * Relative for the same reason as `DIAGNOSTIC_TOLERANCE_RATIO`: a flat metric bound meant a
+ * µm-scale mechanism could never accumulate enough drift to matter (this exit would never
+ * sharpen anything) while a km-scale one would drift for real before crossing it. 1e-6 is a
+ * thousandth of a millimetre reinterpreted as a ratio, at the roughly metre-scale mechanisms
+ * it was tuned on: not a hundredth, since the per-frame bound is respected either way but
+ * each frame warm-starts from the previous one, so what it gives up ACCUMULATES. At 1e-2 the
+ * drift grows without settling (1.48 mm over 200 frames on `Core XY modifié`); at 1e-3 (of a
+ * ~1 m extent, i.e. what is now 1e-6 relative) it plateaus (5e-2 mm, the same at 60 and at
+ * 200 frames) while keeping the whole of the gain that is actually free — `Poulie bloqueuse`,
+ * blocked, goes from 300 sweeps to 109 with a drift of exactly zero.
  */
-const REMAINING_MM = 1e-3;
-/** Same bound in angle: 1e-6 rad moves a point on a 400 mm rim by 4e-4 mm. */
+const REMAINING_RATIO = 1e-6;
+/**
+ * Same bound in angle, but left absolute rather than following `REMAINING_RATIO`: the
+ * length an angular error is worth is itself `angle × lever`, and at the whole-mechanism
+ * scale the lever is approximately the extent — so a relative bound derived the same way
+ * would be `(REMAINING_RATIO × extent) / extent`, which is `REMAINING_RATIO` again. The
+ * extent cancels out, so there is nothing to multiply here.
+ */
 const REMAINING_RAD = 1e-6;
 
 /**
@@ -169,9 +234,9 @@ export type ExitCriterion = "motion" | "constraints";
 
 /**
  * How far past its reporting threshold the worst constraint may sit for a `constraints`
- * solve to call itself done. A hundredth of the threshold, so 0.01 mm and 1e-4 rad — an
- * order of magnitude finer than the 0.1 the editors round their values to, which is what
- * makes that rounding trustworthy.
+ * solve to call itself done. A hundredth of `DIAGNOSTIC_TOLERANCE_RATIO` — at the roughly
+ * metre-scale mechanisms it was tuned on, 0.01 mm — an order of magnitude finer than the 0.1
+ * the editors round their values to, which is what makes that rounding trustworthy.
  */
 const CONSTRAINT_EXIT_SEVERITY = 0.01;
 
@@ -219,14 +284,18 @@ function remaining_motion(now: number, windowAgo: number): number {
  * reported, `2` when something is twice as violated as it takes to be listed.
  *
  * Dimensionless, and now honestly so: every residual reaches this list already expressed as
- * a length, so there is one threshold to divide by rather than one per family.
+ * a length, so there is one threshold to divide by rather than one per family. `extent` is
+ * the mechanism's own scale (see `nodes_extent`), the same one the residuals were reported
+ * against.
  */
 export function constraint_severity(
   unsatisfied: ConstraintResidual[] | undefined,
+  extent: number,
 ): number {
+  const tolerance = DIAGNOSTIC_TOLERANCE_RATIO * (extent || MIN_EXTENT_M);
   let worst = 0;
   for (const u of unsatisfied ?? []) {
-    const s = u.residual / DIAGNOSTIC_TOLERANCE_MM;
+    const s = u.residual / tolerance;
     if (s > worst) worst = s;
   }
   return worst;
@@ -253,6 +322,7 @@ export function PBD_kinematic_solver(
   exitOn: ExitCriterion = "motion",
   /** Smallest radius this solve may shrink a gear to, in world units — see `solveNodesFromMaps`. */
   radiusFloor: number = 0,
+  dynamics?: DynamicsInput,
 ): SolverMaps {
   const nodes = solveNodesFromMaps(
     positions,
@@ -261,6 +331,11 @@ export function PBD_kinematic_solver(
     radii,
     radMasses,
     radiusFloor,
+    dynamics?.velocities,
+    dynamics?.angleVelocities,
+    dynamics?.angleMasses,
+    dynamics?.forces,
+    dynamics?.torques,
   );
   const unsatisfied = PBD_solve(
     nodes,
@@ -269,11 +344,22 @@ export function PBD_kinematic_solver(
     epsilon,
     collectDiagnostics,
     exitOn,
+    dynamics && {
+      dt: dynamics.dt,
+      gx: dynamics.gx,
+      gy: dynamics.gy,
+      reactions: dynamics.reactions,
+    },
   );
   writePositionsBack(nodes, positions);
   writeScalarsBack(nodes.angleIndex, nodes.angle, angles);
   writeScalarsBack(nodes.radIndex, nodes.radius, radii);
-  return { positions, radii, posMasses, radMasses, angles, unsatisfied };
+  if (dynamics) {
+    writeVelocitiesBack(nodes, dynamics.velocities);
+    writeScalarsBack(nodes.angleIndex, nodes.vAngle, dynamics.angleVelocities);
+  }
+  const extent = nodes_extent(nodes) || MIN_EXTENT_M;
+  return { positions, radii, posMasses, radMasses, angles, unsatisfied, extent };
 }
 
 /**
@@ -287,8 +373,41 @@ export function PBD_solve(
   epsilon: number = 0.000_001,
   collectDiagnostics: boolean = false,
   exitOn: ExitCriterion = "motion",
+  /** Present only for a dynamics step — see `DynamicsInput`. Everything else (edition,
+   *  kinematic simulation) leaves this out and gets the plain PBD sweep unchanged. */
+  dynamics?: Pick<DynamicsInput, "dt" | "gx" | "gy" | "reactions">,
 ): ConstraintResidual[] | undefined {
   const slots = resolve_slots(links, nodes);
+
+  // ── Reaction bookkeeping: how much each link moved each of its own dofs, summed over the
+  // whole sweep — see the conversion to force/torque after the loop, and `LinkReaction`'s own
+  // doc for why. One accumulator array per link (sized to what that link touches, from 2 for
+  // a `Distance` to as many as a belt's pulley count) allocated once here, never per sweep —
+  // the per-iteration cost is then just a before/after read, not an allocation.
+  const collectReactions = dynamics?.reactions !== undefined;
+  const reactionAccum = collectReactions
+    ? slots.map((s) => ({
+        dx: new Float64Array(s.pos.length),
+        dy: new Float64Array(s.pos.length),
+        dAngle: new Float64Array(s.ang.length),
+      }))
+    : null;
+  // Reused across every link's before-capture, sized to the largest one — not per-link,
+  // per-iteration, to keep this at the same allocation cost as the trace mechanism below.
+  let reactionScratchX: Float64Array | null = null;
+  let reactionScratchY: Float64Array | null = null;
+  let reactionScratchA: Float64Array | null = null;
+  if (collectReactions) {
+    let maxPos = 0;
+    let maxAng = 0;
+    for (const s of slots) {
+      if (s.pos.length > maxPos) maxPos = s.pos.length;
+      if (s.ang.length > maxAng) maxAng = s.ang.length;
+    }
+    reactionScratchX = new Float64Array(maxPos);
+    reactionScratchY = new Float64Array(maxPos);
+    reactionScratchA = new Float64Array(maxAng);
+  }
 
   // stop grab after `nbGrabIterations` to not stretch the mechanism
   const { nbGrabIterations, grabStiffness, maxGrabAmplitude } = GRAB;
@@ -334,7 +453,7 @@ export function PBD_solve(
   const turnedRing = new Float64Array(RATE_WINDOW);
 
   // Radius of the gear each angle belongs to, so a link that carries nothing but an angle
-  // still knows what its error is worth in millimetres. Angles and radii are keyed alike
+  // still knows what its error is worth in metres. Angles and radii are keyed alike
   // (both by element id), which is what makes the lookup possible. Read once: the radius is
   // a degree of freedom, but as a scale for reporting its initial value is enough.
   const angleLever = new Float64Array(nodes.angle.length);
@@ -343,10 +462,51 @@ export function PBD_solve(
     angleLever[a] = r !== undefined ? nodes.radius[r] : 1;
   }
 
+  // The mechanism's own scale, read once before the sweeps move anything — everything below
+  // that used to be an absolute length is judged against it instead, so a µm-scale mechanism
+  // and a km-scale one are each held to their own precision. One bbox pass, negligible next
+  // to the sweeps themselves.
+  const extent = nodes_extent(nodes) || MIN_EXTENT_M;
+  const diagnosticTolerance = DIAGNOSTIC_TOLERANCE_RATIO * extent;
+  const remainingThreshold = REMAINING_RATIO * extent;
+
   // Worst residual of the sweep against the reporting threshold. Only tracked when
   // something reads it.
   const trackSeverity = exitOn === "constraints";
   let maxSeverity = 0;
+
+  // ── Dynamics: predict, then read the frame's velocity back from the whole sweep ──
+  //
+  // The predicted position is where the node would land under `vx`/`vy` and the external
+  // acceleration alone, with no constraint applied yet — the sweep below then projects it
+  // onto the constraints exactly as it always has. What is new is `frameStart`: the
+  // position BEFORE prediction, kept so the velocity written back after the sweep is
+  // `(solved − frameStart) / dt` rather than `(solved − predicted) / dt`. That difference is
+  // the whole of XPBD's trick — a constraint correction shows up as a velocity change (the
+  // constraint force) instead of being silently absorbed and forgotten by next frame.
+  //
+  // Acceleration is `gx/gy` (uniform, mass-independent — gravity) plus `fx/fy · w` (a load,
+  // which only accelerates a node in proportion to how light it is). Angles have no
+  // gravity-equivalent term, only `torque · wAngle`.
+  let frameStartX: Float64Array | null = null;
+  let frameStartY: Float64Array | null = null;
+  let frameStartA: Float64Array | null = null;
+  if (dynamics) {
+    frameStartX = nodes.x.slice();
+    frameStartY = nodes.y.slice();
+    frameStartA = nodes.angle.slice();
+    for (let n = 0; n < nodes.count; n++) {
+      if (nodes.w[n] === 0) continue; // anchored: gravity does not move it
+      const ax = dynamics.gx + nodes.fx[n] * nodes.w[n];
+      const ay = dynamics.gy + nodes.fy[n] * nodes.w[n];
+      nodes.x[n] += nodes.vx[n] * dynamics.dt + ax * dynamics.dt * dynamics.dt;
+      nodes.y[n] += nodes.vy[n] * dynamics.dt + ay * dynamics.dt * dynamics.dt;
+    }
+    for (let a = 0; a < nodes.angle.length; a++) {
+      const aAngle = nodes.torque[a] * nodes.wAngle[a];
+      nodes.angle[a] += nodes.vAngle[a] * dynamics.dt + aAngle * dynamics.dt * dynamics.dt;
+    }
+  }
 
   let maxError: number = 0;
   for (let i = 0; i < nbIterations; i++) {
@@ -362,6 +522,17 @@ export function PBD_solve(
         traceX.set(nodes.x);
         traceY.set(nodes.y);
         traceA.set(nodes.angle);
+      }
+      if (reactionScratchX && reactionScratchY && reactionScratchA) {
+        for (let k = 0; k < s.pos.length; k++) {
+          const slot = s.pos[k];
+          reactionScratchX[k] = slot >= 0 ? nodes.x[slot] : 0;
+          reactionScratchY[k] = slot >= 0 ? nodes.y[slot] : 0;
+        }
+        for (let k = 0; k < s.ang.length; k++) {
+          const slot = s.ang[k];
+          reactionScratchA[k] = slot >= 0 ? nodes.angle[slot] : 0;
+        }
       }
       let err = 0;
       let report = true; // surface in diagnostics
@@ -382,6 +553,25 @@ export function PBD_solve(
             s.pos[0],
             s.pos[1],
             link.distance,
+          );
+          break;
+        case "MinDistanceToSegment":
+          err = applyPointSegmentContactConstraint(
+            nodes,
+            s.pos[0],
+            s.pos[1],
+            s.pos[2],
+            link.offset,
+            link.side,
+          );
+          break;
+        case "MinDistanceToLine":
+          err = applyPointLineContactConstraint(
+            nodes,
+            s.pos[0],
+            s.pos[1],
+            link.normal,
+            link.offset,
           );
           break;
         case "DistanceToLine":
@@ -625,6 +815,21 @@ export function PBD_solve(
           break;
       }
 
+      if (reactionAccum && reactionScratchX && reactionScratchY && reactionScratchA) {
+        const acc = reactionAccum[idx];
+        for (let k = 0; k < s.pos.length; k++) {
+          const slot = s.pos[k];
+          if (slot < 0) continue;
+          acc.dx[k] += nodes.x[slot] - reactionScratchX[k];
+          acc.dy[k] += nodes.y[slot] - reactionScratchY[k];
+        }
+        for (let k = 0; k < s.ang.length; k++) {
+          const slot = s.ang[k];
+          if (slot < 0) continue;
+          acc.dAngle[k] += nodes.angle[slot] - reactionScratchA[k];
+        }
+      }
+
       if (trace && traceX && traceY && traceA) {
         const moves: { key: string; distance: number }[] = [];
         for (let n = 0; n < nodes.count; n++) {
@@ -661,7 +866,7 @@ export function PBD_solve(
         // panel, but it still has to hold for the figure to be right.
         const residual = err * residual_scale(link, s, nodes, angleLever);
         if (trackSeverity) {
-          const severity = residual / DIAGNOSTIC_TOLERANCE_MM;
+          const severity = residual / diagnosticTolerance;
           if (severity > maxSeverity) maxSeverity = severity;
         }
         if (residuals) residuals[idx] = residual;
@@ -692,17 +897,211 @@ export function PBD_solve(
     movedRing[slot] = moved;
     turnedRing[slot] = turned;
 
-    if (maxError < epsilon) break;
+    // A dynamics step always runs its full `nbIterations`: the early exits above assume the
+    // sweep is creeping toward a fixed point it may never reach exactly (edition) or that a
+    // motionless mechanism is worth cutting short (kinematic); neither notion applies once
+    // gravity keeps every frame moving regardless of how settled the constraints are.
+    if (!dynamics) {
+      if (maxError < epsilon) break;
 
-    if (i < minSweepsBeforeExit) continue;
+      if (i < minSweepsBeforeExit) continue;
 
-    if (exitOn === "constraints") {
-      if (maxSeverity < CONSTRAINT_EXIT_SEVERITY) break;
-    } else if (
-      remaining_motion(moved, movedBefore) < REMAINING_MM &&
-      remaining_motion(turned, turnedBefore) < REMAINING_RAD
-    )
-      break;
+      if (exitOn === "constraints") {
+        if (maxSeverity < CONSTRAINT_EXIT_SEVERITY) break;
+      } else if (
+        remaining_motion(moved, movedBefore) < remainingThreshold &&
+        remaining_motion(turned, turnedBefore) < REMAINING_RAD
+      )
+        break;
+    }
+  }
+
+  // ── Dynamics: the frame's velocity, from the whole displacement since `frameStart` ──
+  if (dynamics && frameStartX && frameStartY && frameStartA) {
+    const invDt = 1 / dynamics.dt;
+    for (let n = 0; n < nodes.count; n++) {
+      if (nodes.w[n] === 0) continue; // anchored: no velocity to speak of
+      nodes.vx[n] = (nodes.x[n] - frameStartX[n]) * invDt;
+      nodes.vy[n] = (nodes.y[n] - frameStartY[n]) * invDt;
+    }
+    for (let a = 0; a < nodes.angle.length; a++)
+      nodes.vAngle[a] = (nodes.angle[a] - frameStartA[a]) * invDt;
+  }
+
+  // ── Dynamics: each link's own reaction, from the displacement it accumulated ──
+  //
+  // `Δx` summed over the whole sweep is a position-level impulse still divided among
+  // whichever dofs it moved; dividing each by that dof's own inverse mass recovers the
+  // impulse ITSELF (an inverse-mass-weighted split is exactly how PBD divides one impulse
+  // between two bodies), and impulse/dt² is force — the same `α=0` XPBD result the velocity
+  // update above already relies on, just not yet summed away into a single number.
+  //
+  // An ANCHORED dof (w = 0) never moves, so its own impulse cannot be read off its `Δx` — it
+  // has to come from Newton's third law instead: a constraint's impulses sum to zero across
+  // whatever it touches (it only ever redistributes momentum among its own dofs, never
+  // invents any), so the anchor's share is minus the sum of every other dof's. That only
+  // resolves cleanly with exactly one anchored dof on the link; with more, the split between
+  // them is genuinely indeterminate from this alone, and is left unreported.
+  if (dynamics?.reactions && reactionAccum && reactionScratchX && reactionScratchA) {
+    const reactions = dynamics.reactions;
+    const invDt2 = 1 / (dynamics.dt * dynamics.dt);
+    const impulseX = new Float64Array(reactionScratchX.length);
+    const impulseY = new Float64Array(reactionScratchX.length);
+    const impulseA = new Float64Array(reactionScratchA.length);
+    links.forEach((link, idx) => {
+      const s = slots[idx];
+      const acc = reactionAccum[idx];
+
+      let sumX = 0;
+      let sumY = 0;
+      let anchoredPos = -1;
+      let anchoredPosCount = 0;
+      for (let k = 0; k < s.pos.length; k++) {
+        const slot = s.pos[k];
+        const w = slot >= 0 ? nodes.w[slot] : 0;
+        if (slot >= 0 && w > 0) {
+          impulseX[k] = acc.dx[k] / w;
+          impulseY[k] = acc.dy[k] / w;
+          sumX += impulseX[k];
+          sumY += impulseY[k];
+        } else {
+          impulseX[k] = 0;
+          impulseY[k] = 0;
+          if (slot >= 0) {
+            anchoredPos = k;
+            anchoredPosCount++;
+          }
+        }
+      }
+      if (anchoredPosCount === 1) {
+        impulseX[anchoredPos] = -sumX;
+        impulseY[anchoredPos] = -sumY;
+      }
+
+      let sumA = 0;
+      let anchoredAng = -1;
+      let anchoredAngCount = 0;
+      for (let k = 0; k < s.ang.length; k++) {
+        const slot = s.ang[k];
+        const w = slot >= 0 ? nodes.wAngle[slot] : 0;
+        if (slot >= 0 && w > 0) {
+          impulseA[k] = acc.dAngle[k] / w;
+          sumA += impulseA[k];
+        } else {
+          impulseA[k] = 0;
+          if (slot >= 0) {
+            anchoredAng = k;
+            anchoredAngCount++;
+          }
+        }
+      }
+      if (anchoredAngCount === 1) impulseA[anchoredAng] = -sumA;
+
+      for (let k = 0; k < s.pos.length; k++) {
+        const slot = s.pos[k];
+        if (slot < 0) continue;
+        const w = nodes.w[slot];
+        if (w === 0 && anchoredPosCount !== 1) continue; // indeterminate, see above
+        const fx = impulseX[k] * invDt2;
+        const fy = impulseY[k] * invDt2;
+        if (fx === 0 && fy === 0) continue;
+        reactions.push({
+          type: link.type,
+          owner: link.owner,
+          key: nodes.keys[slot],
+          atAnchor: w === 0,
+          kind: "force",
+          fx,
+          fy,
+        });
+      }
+
+      // A 2-point link's own reaction always sums to zero across its two ends (Newton's
+      // third law, the same property the anchored-dof derivation above relies on) — which
+      // makes its moment about ANY point the same regardless of where that point is chosen:
+      // a pure couple, exactly the "moment reaction" a rigid, non-rotating weld
+      // (`KeepOrientation`) represents, and mechanics-of-materials expects reported at a
+      // fixed support alongside the translational reaction. A pure axial link (`Distance`)
+      // has its force parallel to the lever arm between its own two points, so this comes
+      // out at ~0 there — reported only where it is actually non-zero. Reported at BOTH
+      // ends (same value): reference-independence means either is equally "the" moment.
+      if (s.pos.length === 2 && s.pos[0] >= 0 && s.pos[1] >= 0) {
+        const slotA = s.pos[0];
+        const slotB = s.pos[1];
+        const dx = nodes.x[slotB] - nodes.x[slotA];
+        const dy = nodes.y[slotB] - nodes.y[slotA];
+        const fxB = impulseX[1] * invDt2;
+        const fyB = impulseY[1] * invDt2;
+        const moment = dx * fyB - dy * fxB;
+        if (moment !== 0) {
+          reactions.push({
+            type: link.type,
+            owner: link.owner,
+            key: nodes.keys[slotA],
+            atAnchor: nodes.w[slotA] === 0,
+            kind: "torque",
+            torque: moment,
+          });
+          reactions.push({
+            type: link.type,
+            owner: link.owner,
+            key: nodes.keys[slotB],
+            atAnchor: nodes.w[slotB] === 0,
+            kind: "torque",
+            torque: moment,
+          });
+        }
+      }
+
+      for (let k = 0; k < s.ang.length; k++) {
+        const slot = s.ang[k];
+        if (slot < 0) continue;
+        const w = nodes.wAngle[slot];
+        if (w === 0 && anchoredAngCount !== 1) continue;
+        const torque = impulseA[k] * invDt2;
+        if (torque === 0) continue;
+        reactions.push({
+          type: link.type,
+          owner: link.owner,
+          key: nodes.angleKeys[slot],
+          atAnchor: w === 0,
+          kind: "torque",
+          torque,
+        });
+      }
+    });
+
+    // ── A directly-applied external force/torque at an anchored dof ── invisible to the
+    // link-based bookkeeping above: an anchored dof never moves (predict skips it, w = 0),
+    // so there is no displacement to read a force off. But the ground still has to supply
+    // exactly it — a lone grounded node carrying a `Force` load and nothing else attached
+    // would otherwise report no reaction at all, when the whole load lands there.
+    for (let slot = 0; slot < nodes.count; slot++) {
+      if (nodes.w[slot] !== 0) continue;
+      const fx = nodes.fx[slot];
+      const fy = nodes.fy[slot];
+      if (fx === 0 && fy === 0) continue;
+      reactions.push({
+        type: "External",
+        key: nodes.keys[slot],
+        atAnchor: true,
+        kind: "force",
+        fx,
+        fy,
+      });
+    }
+    for (let slot = 0; slot < nodes.angleKeys.length; slot++) {
+      if (nodes.wAngle[slot] !== 0) continue;
+      const torque = nodes.torque[slot];
+      if (torque === 0) continue;
+      reactions.push({
+        type: "External",
+        key: nodes.angleKeys[slot],
+        atAnchor: true,
+        kind: "torque",
+        torque,
+      });
+    }
   }
 
   // Build the unsatisfied-constraint list from the last iteration's residuals.
@@ -712,7 +1111,7 @@ export function PBD_solve(
   const unsatisfied: ConstraintResidual[] = [];
   links.forEach((link, idx) => {
     const residual = residuals[idx];
-    if (residual > DIAGNOSTIC_TOLERANCE_MM && link.owner !== undefined)
+    if (residual > diagnosticTolerance && link.owner !== undefined)
       unsatisfied.push({ owner: link.owner, type: link.type, residual });
   });
   return unsatisfied;

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import {
   Dialog,
   DialogTitle,
@@ -43,6 +43,10 @@ interface MechanismsGalleryProps {
   onExportAll: () => void;
 }
 
+// Hauteur de la carte "Nouveau mécanisme" quand la bibliothèque est vide,
+// faute de carte existante dont copier la hauteur.
+const NEW_CARD_FALLBACK_HEIGHT = 300;
+
 export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
   open,
   onClose,
@@ -62,9 +66,7 @@ export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
 
   // Set right after a duplication so the new card opens straight into name editing;
   // cleared as soon as that card consumes it, so it never re-triggers on a later render.
-  const [justDuplicatedId, setJustDuplicatedId] = useState<number | null>(
-    null,
-  );
+  const [justDuplicatedId, setJustDuplicatedId] = useState<number | null>(null);
   const handleDuplicate = async (createdAtId: number) => {
     const duplicated = await onDuplicate(createdAtId);
     if (duplicated) setJustDuplicatedId(duplicated.metadata.createdAt);
@@ -135,6 +137,52 @@ export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
     });
     return columns;
   }, [sortedMechanismRecords, columnCount, searching]);
+
+  // Hauteur de la carte "Nouveau mécanisme" : celle de la plus petite carte de la
+  // première ligne (le premier élément de chaque colonne, mesuré en vrai puisque la
+  // hauteur d'une carte dépend de son contenu — description, nombre de tags).
+  const [firstRowHeights, setFirstRowHeights] = useState<
+    Record<number, number>
+  >({});
+  const firstRowObservers = useRef<Map<number, ResizeObserver>>(new Map());
+  const firstRowRefCallbacks = useRef<
+    Map<number, (el: HTMLDivElement | null) => void>
+  >(new Map());
+  const getFirstRowRef = (columnIndex: number) => {
+    let callback = firstRowRefCallbacks.current.get(columnIndex);
+    if (!callback) {
+      callback = (el) => {
+        firstRowObservers.current.get(columnIndex)?.disconnect();
+        firstRowObservers.current.delete(columnIndex);
+        if (!el) {
+          setFirstRowHeights((prev) => {
+            if (!(columnIndex in prev)) return prev;
+            const next = { ...prev };
+            delete next[columnIndex];
+            return next;
+          });
+          return;
+        }
+        const observer = new ResizeObserver(([entry]) => {
+          const height = entry.contentRect.height;
+          setFirstRowHeights((prev) =>
+            prev[columnIndex] === height
+              ? prev
+              : { ...prev, [columnIndex]: height },
+          );
+        });
+        observer.observe(el);
+        firstRowObservers.current.set(columnIndex, observer);
+      };
+      firstRowRefCallbacks.current.set(columnIndex, callback);
+    }
+    return callback;
+  };
+  const measuredFirstRowHeights = Object.values(firstRowHeights);
+  const newCardHeight =
+    measuredFirstRowHeights.length > 0
+      ? Math.min(...measuredFirstRowHeights)
+      : NEW_CARD_FALLBACK_HEIGHT;
 
   return (
     <Dialog
@@ -266,7 +314,7 @@ export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
                   <Box
                     onClick={onNew}
                     sx={{
-                      minHeight: 335,
+                      height: newCardHeight,
                       display: "flex",
                       flexDirection: "column",
                       alignItems: "center",
@@ -292,23 +340,36 @@ export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
                   </Box>
                 )}
 
-                {column.map((mechanismRecord) => (
-                  <MechanismCard
-                    key={mechanismRecord.metadata.createdAt}
-                    mechanismRecord={mechanismRecord}
-                    onLoad={onLoad}
-                    onRename={onRename}
-                    onDelete={onDelete}
-                    onExport={onExport}
-                    onDuplicate={handleDuplicate}
-                    onUpdateTags={onUpdateTags}
-                    allTags={allTags}
-                    startInNameEdit={
-                      mechanismRecord.metadata.createdAt === justDuplicatedId
-                    }
-                    onNameEditStarted={() => setJustDuplicatedId(null)}
-                  />
-                ))}
+                {column.map((mechanismRecord, rowIndex) => {
+                  const card = (
+                    <MechanismCard
+                      key={mechanismRecord.metadata.createdAt}
+                      mechanismRecord={mechanismRecord}
+                      onLoad={onLoad}
+                      onRename={onRename}
+                      onDelete={onDelete}
+                      onExport={onExport}
+                      onDuplicate={handleDuplicate}
+                      onUpdateTags={onUpdateTags}
+                      allTags={allTags}
+                      startInNameEdit={
+                        mechanismRecord.metadata.createdAt === justDuplicatedId
+                      }
+                      onNameEditStarted={() => setJustDuplicatedId(null)}
+                    />
+                  );
+                  // Le premier élément de chaque colonne (première ligne) est mesuré
+                  // pour dimensionner la carte "Nouveau mécanisme" sur le plus petit.
+                  if (rowIndex !== 0) return card;
+                  return (
+                    <Box
+                      key={mechanismRecord.metadata.createdAt}
+                      ref={getFirstRowRef(columnIndex)}
+                    >
+                      {card}
+                    </Box>
+                  );
+                })}
               </Box>
             ))}
           </Box>

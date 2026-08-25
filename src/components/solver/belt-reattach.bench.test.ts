@@ -8,7 +8,7 @@ import {
   beltContact,
   compile_simulation_model,
   step_simulation,
-} from "./kinematic-simulation";
+} from "./simulation-engine";
 import { snapshot_point } from "./snapshot";
 
 /**
@@ -21,6 +21,10 @@ import { snapshot_point } from "./snapshot";
  */
 
 const loadFixture = () => load_mechanism(JSON.parse(disconnectJson)).mechanism;
+
+/** This fixture's own extent, so a threshold swept below in px of arc can be turned into the
+ *  ratio `beltContact.reattachRatio` now expects — see `nodes_extent`. */
+const FIXTURE_EXTENT = compile_simulation_model(loadFixture()).extent;
 
 type Belt = Extract<Link, { type: "BeltLength" }>;
 
@@ -57,7 +61,7 @@ function beltResidual(residuals: { type: string; residual: number }[]): number {
 
 /** One run at a given hysteresis, reporting what the contact state did. */
 function run(reattachArc: number, frames: number) {
-  beltContact.reattachArc = reattachArc;
+  beltContact.reattachRatio = reattachArc / FIXTURE_EXTENT;
   const model = compile_simulation_model(loadFixture());
   const belt = model.links.find((l): l is Belt => l.type === "BeltLength")!;
 
@@ -96,7 +100,7 @@ function run(reattachArc: number, frames: number) {
     worstResidual = Math.max(worstResidual, res);
     if (frame === frames - 1) residualAfter = res;
   }
-  beltContact.reattachArc = 1.0;
+  beltContact.reattachRatio = 1.0 / FIXTURE_EXTENT;
   return {
     trace,
     flips,
@@ -151,7 +155,7 @@ describe("chantier 5 — hystérésis de rattachement", () => {
       [0, 202],
       [1, 202],
     ] as const) {
-      beltContact.reattachArc = arc;
+      beltContact.reattachRatio = arc / FIXTURE_EXTENT;
       const model = compile_simulation_model(loadFixture());
       const belt = model.links.find((l): l is Belt => l.type === "BeltLength")!;
       const motor = model.links.find(
@@ -190,7 +194,7 @@ describe("chantier 5 — hystérésis de rattachement", () => {
           `${flips} bascules, longueur ${lengthMin.toFixed(2)}…${lengthMax.toFixed(2)} ` +
           `(amplitude ${(lengthMax - lengthMin).toFixed(3)})`,
       );
-      beltContact.reattachArc = 1.0;
+      beltContact.reattachRatio = 1.0 / FIXTURE_EXTENT;
     }
   }, 600_000);
 });

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { resolveGeometricConstraints } from "./geometric-solver";
-import { DEFAULT_METADATA, Mechanism } from "../../types/mechanism";
+import { DEFAULT_METADATA, DEFAULT_SIMULATION, Mechanism } from "../../types/mechanism";
 import { Point2 } from "../../types/point2";
 import {
   BeamElement,
@@ -51,6 +51,7 @@ const dimension = {
 const mechanism: Mechanism = {
   metadata: DEFAULT_METADATA,
   viewport: { scale: 1, pan: new Point2(0, 0) },
+  simulation: DEFAULT_SIMULATION,
   mechanicalElements: [beam, node],
   constraintElements: [dimension],
   loads: [],

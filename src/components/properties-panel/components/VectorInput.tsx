@@ -7,6 +7,7 @@ import React from "react";
 import { Box, Typography } from "@mui/material";
 import NumberInput from "./NumberInput";
 import { Point2 } from "../../../types";
+import { LENGTH } from "../../../utils/quantity-format";
 
 interface VectorInputProps {
   value: Point2;
@@ -37,12 +38,14 @@ export const VectorInput: React.FC<VectorInputProps> = ({
       )}
       <NumberInput
         label="X"
+        kind={LENGTH}
         value={value.x}
         onChange={(newX) => onChange(new Point2(newX, value.y))}
         accent={accent}
       />
       <NumberInput
         label="Y"
+        kind={LENGTH}
         value={value.y}
         onChange={(newY) => onChange(new Point2(value.x, newY))}
         accent={accent}

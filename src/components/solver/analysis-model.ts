@@ -15,7 +15,7 @@ import {
   compile_simulation_model,
   rewire_belts,
   SimulationModel,
-} from "./kinematic-simulation";
+} from "./simulation-engine";
 
 /** Why a link was dropped from the analysis. */
 export type PruneReason =
@@ -90,7 +90,7 @@ export type AnalysisModel = {
   /** Every free variable, canonical order: positions (x then y) then angles. */
   variableOrder: Variable[];
   chains: AnalysisChain[];
-  /** Lever arm of each angle DOF: what one radian of it is worth in millimetres. */
+  /** Lever arm of each angle DOF: what one radian of it is worth in metres. */
   gearRadii: Map<ID, number>;
 };
 
@@ -118,7 +118,10 @@ export function variable_keys_of(link: Link): string[] {
     case "DistanceToLine":
     case "SlideOnSegment":
     case "FixedOnSegment":
+    case "MinDistanceToSegment":
       return [link.key1, link.key2, link.key3];
+    case "MinDistanceToLine":
+      return [link.key1, link.key3];
     case "Angle":
     case "Normal":
     case "Parallel":

@@ -26,8 +26,10 @@ export function resolve_angle_constraint_quadrant(
   if (!intersection) return null;
   const posDir = position.sub(intersection);
 
-  const flipStart = delta2.cross(posDir) * delta2.cross(delta1) < -10e-4;
-  const flipEnd = delta1.cross(posDir) * delta1.cross(delta2) < -10e-4;
+  // The product of two cross products: a quartic (m⁴) quantity, so the margin below
+  // scales by the fourth power of the old millimetre-flavoured threshold (-10e-4).
+  const flipStart = delta2.cross(posDir) * delta2.cross(delta1) < -1e-15;
+  const flipEnd = delta1.cross(posDir) * delta1.cross(delta2) < -1e-15;
 
   const v1 = flipStart ? delta1.mul(-1) : delta1;
   const v2 = flipEnd ? delta2.mul(-1) : delta2;

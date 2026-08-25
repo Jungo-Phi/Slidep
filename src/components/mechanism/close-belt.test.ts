@@ -3,7 +3,7 @@ import { close_belt_actions } from "./connect-actions";
 import { apply_actions } from "./apply-actions";
 import { validate_mechanism } from "../../utils/validate-mechanism";
 import { Point2 } from "../../types/point2";
-import { DEFAULT_METADATA, Mechanism } from "../../types/mechanism";
+import { DEFAULT_METADATA, DEFAULT_SIMULATION, Mechanism } from "../../types/mechanism";
 import type {
   BeltElement,
   ID,
@@ -180,6 +180,7 @@ function mechanism(mechanicalElements: MechanicalElement[]): Mechanism {
   return {
     metadata: DEFAULT_METADATA,
     viewport: { scale: 1, pan: new Point2(0, 0) },
+    simulation: DEFAULT_SIMULATION,
     mechanicalElements,
     constraintElements: [],
     loads: [],

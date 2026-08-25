@@ -2,6 +2,7 @@ import {
   COLORS,
   DIM,
   LOAD_SCALING,
+  MOMENT_SCALING,
   STROKE_WIDTHS,
 } from "../../constants/rendering-specs";
 import {
@@ -75,6 +76,7 @@ import {
 } from "./placing-element-actions";
 import { node_on_beam_body, probe_badge_position } from "./utils";
 import { screen_vias, open_belt_vias, draw_belt_closure_marks } from "./belt-vias";
+import { FORCE, LOAD_INTENSITY } from "../../utils/quantity-format";
 
 /**
  * What `draw_gesture_preview` needs of a frame: the camera and the current tool
@@ -312,8 +314,8 @@ export function draw_gesture_preview(
           viewport,
         ).with_length(force_length);
         draw_distributed_force(ctx, start, end, delta, delta);
-        draw_force(ctx, start, delta, LOAD_SCALING.REF_VALUE, false, " N/m");
-        draw_force(ctx, end, delta, LOAD_SCALING.REF_VALUE, false, " N/m");
+        draw_force(ctx, start, delta, LOAD_SCALING.REF_VALUE, false, LOAD_INTENSITY);
+        draw_force(ctx, end, delta, LOAD_SCALING.REF_VALUE, false, LOAD_INTENSITY);
         break;
       }
       draw_force(
@@ -322,7 +324,7 @@ export function draw_gesture_preview(
         world2screen_vec(UP, viewport).with_length(force_length),
         LOAD_SCALING.REF_VALUE,
         false,
-        " N",
+        FORCE,
       );
       break;
     }
@@ -342,7 +344,7 @@ export function draw_gesture_preview(
         ghost.vector,
         force.vector.length(),
         false,
-        " N",
+        FORCE,
       );
       break;
     }
@@ -364,7 +366,7 @@ export function draw_gesture_preview(
         vectorStart,
         Math.abs(load.magnitudeStart),
         false,
-        " N/m",
+        LOAD_INTENSITY,
       );
       draw_force(
         ctx,
@@ -372,7 +374,7 @@ export function draw_gesture_preview(
         vectorEnd,
         Math.abs(load.magnitudeEnd),
         false,
-        " N/m",
+        LOAD_INTENSITY,
       );
       break;
     }
@@ -380,8 +382,8 @@ export function draw_gesture_preview(
       draw_moment(
         ctx,
         world2screen(hoveredPart.position, viewport),
-        stored2screen_moment(LOAD_SCALING.REF_VALUE),
-        LOAD_SCALING.REF_VALUE,
+        stored2screen_moment(MOMENT_SCALING.REF_VALUE),
+        MOMENT_SCALING.REF_VALUE,
       );
       break;
     }

@@ -3,7 +3,7 @@ import disconnectJson from "../../../test-mechanisms/Déconnexion courroie.slide
 import { KinematicSnapshot } from "../../types/runtime-state";
 import { load_mechanism } from "../../utils/load-mechanism";
 import { Recorder } from "./recorder";
-import { apply_snapshot_to_mechanism, RECORD_DT } from "./kinematic-simulation";
+import { apply_snapshot_to_mechanism, RECORD_DT } from "./simulation-engine";
 import { snapshot_belt_detached } from "./snapshot";
 
 /**
@@ -19,8 +19,9 @@ const fixture = () => load_mechanism(JSON.parse(disconnectJson)).mechanism;
 
 /** Everything recorded up to `to`, and the recorder left sitting there. */
 function record(recorder: Recorder, to: number): KinematicSnapshot[] {
-  // No budget: a test measures a trajectory, not how much of it fits in a frame.
-  return recorder.advance(to, Infinity).snapshots;
+  // No budget: a test measures a trajectory, not how much of it fits in a frame. Cast: this
+  // whole file is belt topology, which only a kinematic recorder ever produces.
+  return recorder.advance(to, Infinity).snapshots as KinematicSnapshot[];
 }
 
 /** Largest distance between two instants, over every slot both carry. */
@@ -50,7 +51,7 @@ describe("reprise après une pause", () => {
   const uninterrupted = () => {
     if (reference) return reference;
     const recorder = new Recorder();
-    recorder.load(fixture(), null);
+    recorder.load("kinematic", fixture(), null);
     return (reference = record(recorder, END));
   };
 
@@ -69,7 +70,7 @@ describe("reprise après une pause", () => {
   /** Pause on the recorded instant nearest `at`, having recorded a lead past it. */
   const pauseAt = (at: number): KinematicSnapshot => {
     const recorder = new Recorder();
-    recorder.load(fixture(), null);
+    recorder.load("kinematic", fixture(), null);
     const shown = record(recorder, at + 4 * RECORD_DT);
     const base = shown.find((s) => Math.abs(s.t - at) < RECORD_DT)!;
     expect(base).toBeDefined();
@@ -105,7 +106,7 @@ describe("reprise après une pause", () => {
   it("garde la courroie sur les poulies qu'elle a quittées", () => {
     // The same rewind, read through what the drawing consumes.
     const recorder = new Recorder();
-    recorder.load(fixture(), null);
+    recorder.load("kinematic", fixture(), null);
     const shown = record(recorder, PAUSE + 4 * RECORD_DT);
     const base = shown.find((s) => Math.abs(s.t - PAUSE) < RECORD_DT / 2)!;
     const belt = base.layout.belts[0];
@@ -122,7 +123,7 @@ describe("reprise après une pause", () => {
     // An edit during simulation has no journal to fall back on: the model is new, and the
     // belt's state has to be read back off the snapshot it resumes on.
     const recorder = new Recorder();
-    recorder.load(fixture(), null);
+    recorder.load("kinematic", fixture(), null);
     const shown = record(recorder, PAUSE);
     const base = last(shown);
     const belt = base.layout.belts[0];
@@ -130,7 +131,7 @@ describe("reprise après une pause", () => {
     expect(dropped).not.toEqual([]);
 
     const edited = new Recorder();
-    edited.load(apply_snapshot_to_mechanism(fixture(), base), base);
+    edited.load("kinematic", apply_snapshot_to_mechanism(fixture(), base), base);
     const next = record(edited, PAUSE + 4 * RECORD_DT)[0];
     expect(snapshot_belt_detached(next, belt)).toEqual(dropped);
   }, 30000);

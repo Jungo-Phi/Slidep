@@ -4,7 +4,7 @@ import { delete_element } from "./connect-actions";
 import { validate_mechanism } from "../../utils/validate-mechanism";
 import { edge_terminal_pair } from "../../utils/edge-rules";
 import { Point2 } from "../../types/point2";
-import { DEFAULT_METADATA, Mechanism } from "../../types/mechanism";
+import { DEFAULT_METADATA, DEFAULT_SIMULATION, Mechanism } from "../../types/mechanism";
 import type { Action } from "../../types";
 import type {
   BeamElement,
@@ -115,6 +115,8 @@ function mechanism(
   return {
     metadata: DEFAULT_METADATA,
     viewport: { scale: 1, pan: new Point2(0, 0) },
+
+    simulation: DEFAULT_SIMULATION,
     mechanicalElements,
     constraintElements,
     loads,
@@ -358,7 +360,7 @@ describe("suppression d'une poutre portant un moteur", () => {
     const before = mechanism([
       {
         ...pivot(MOTOR, 0),
-        motor: { parentBeamID: BAR, speed: 60 },
+        motor: { parentBeamID: BAR, speed: 60, torque: 1 },
       },
       beam(BAR, undefined, undefined),
     ]);

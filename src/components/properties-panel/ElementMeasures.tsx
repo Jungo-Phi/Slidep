@@ -1,10 +1,15 @@
 import React from "react";
 import { Box, Typography } from "@mui/material";
-import { MechanicalElement, ProbeMetric } from "../../types";
-import { RuntimeState } from "../../types/runtime-state";
+import { AppMode, MechanicalElement, ProbeMetric } from "../../types";
+import {
+  DynamicSnapshot,
+  KinematicSnapshot,
+  RuntimeState,
+} from "../../types/runtime-state";
 import {
   MetricSample,
   ProbeCurveKey,
+  get_dynamic_metric_at,
   get_metric_at,
 } from "../solver/probe-series";
 import {
@@ -84,6 +89,7 @@ interface ElementMeasuresProps {
   /** The selected element, or undefined → the empty prompt. */
   element: MechanicalElement | undefined;
   runtimeState: RuntimeState;
+  appMode: AppMode;
   /** Reserve the height even when empty (analysis tab). */
   reserveHeight?: boolean;
 }
@@ -97,16 +103,24 @@ interface ElementMeasuresProps {
 export const ElementMeasures: React.FC<ElementMeasuresProps> = ({
   element,
   runtimeState,
+  appMode,
   reserveHeight = false,
 }) => {
   const samples: MetricSample[] = element
     ? available_probe_metrics(element).map((metric: ProbeMetric) =>
-        get_metric_at(
-          element,
-          metric,
-          runtimeState.kinematicSnapshots,
-          runtimeState.time,
-        ),
+        appMode === "kinematic"
+          ? get_metric_at(
+              element,
+              metric,
+              runtimeState.simulationSnapshots as KinematicSnapshot[],
+              runtimeState.time,
+            )
+          : get_dynamic_metric_at(
+              element,
+              metric,
+              runtimeState.simulationSnapshots as DynamicSnapshot[],
+              runtimeState.time,
+            ),
       )
     : [];
 

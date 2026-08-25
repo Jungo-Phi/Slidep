@@ -54,7 +54,7 @@ export const MechanismCard: React.FC<MechanismCardProps> = ({
       setEditingName(true);
       onNameEditStarted?.();
     }
-  }, [startInNameEdit]);
+  }, [startInNameEdit, onNameEditStarted]);
 
   const discardNameRef = useRef(false);
 

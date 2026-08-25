@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { repair_mechanism } from "./repair-mechanism";
 import { validate_mechanism } from "./validate-mechanism";
-import { DEFAULT_METADATA, Mechanism } from "../types/mechanism";
+import { DEFAULT_METADATA, DEFAULT_SIMULATION, Mechanism } from "../types/mechanism";
 import { Point2 } from "../types/point2";
 import {
   BeamElement,
@@ -33,6 +33,8 @@ function mechanism(
   return {
     metadata: DEFAULT_METADATA,
     viewport: { scale: 1, pan: new Point2(0, 0) },
+
+    simulation: DEFAULT_SIMULATION,
     mechanicalElements,
     constraintElements,
     loads,
@@ -200,7 +202,7 @@ describe("repair_mechanism", () => {
   it("removes the whole motor rather than leaving it without a beam", () => {
     // A motor with neither ground nor beam is invalid in itself.
     const { mechanism: result } = repair_mechanism(
-      mechanism([pivot({ motor: { parentBeamID: GHOST_ID, speed: 60 } })]),
+      mechanism([pivot({ motor: { parentBeamID: GHOST_ID, speed: 60, torque: 1 } })]),
     );
     expect((result.mechanicalElements[0] as PivotElement).motor).toBe(
       undefined,

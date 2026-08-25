@@ -27,7 +27,7 @@ import type {
 } from "../../types";
 import { names_element } from "../../types/hovered-part";
 import { Point2 } from "../../types/point2";
-import { HIT_TOLERANCE } from "../../constants/rendering-specs";
+import { HIT_TOLERANCE, MOMENT_SCALING } from "../../constants/rendering-specs";
 import {
   as_edge,
   force_snap_edges,
@@ -163,7 +163,7 @@ function snap_arc(position: ScreenPoint, center: ScreenPoint): ScreenPoint {
   const radius = position.sub(center);
   const length = radius.length();
   const snapped = stored2screen_moment(
-    nearest_round_load_value(screen2stored_moment(length)),
+    nearest_round_load_value(screen2stored_moment(length), MOMENT_SCALING),
   );
   return center.add(radius.mul(snapped / length));
 }

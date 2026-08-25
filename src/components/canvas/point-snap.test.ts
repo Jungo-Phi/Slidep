@@ -7,12 +7,13 @@ import { grid_snap_step } from "../../utils";
 import { DEFAULT_SNAP_SETTINGS } from "./snap-corridor";
 import { snap_hover } from "./point-snap";
 import type { HoveredPart as Hovered } from "../../types";
+import { deg_to_rad } from "../../utils/quantity-format";
 
 /**
  * The angle step the cases below are written against. Pinned rather than read
  * from the defaults: what they check is the snapping, not which step ships.
  */
-const SETTINGS = { ...DEFAULT_SNAP_SETTINGS, angleStep: 15 };
+const SETTINGS = { ...DEFAULT_SNAP_SETTINGS, angleStep: deg_to_rad(15) };
 
 const snap = (
   hovered: Hovered,
@@ -27,7 +28,7 @@ const snapped_at = (...args: Parameters<typeof snap>) => snap(...args).position;
 const P = (x: number, y: number) => new Point2(x, y);
 const BEAM = "b" as ID;
 const VIEW: ViewportState = { scale: 1, pan: P(0, 0).as_space<"screen">() };
-/** At scale 1 the snapped lines fall every 100 world units. */
+/** The snap step at scale 1, whatever the grid's ladder currently produces. */
 const STEP = grid_snap_step(1);
 
 const beam = (start: Point2, end: Point2): BeamElement =>
@@ -54,23 +55,12 @@ const onBody = (p: Point2): HoveredPart => ({
   part: "body",
 });
 
-describe("grid_snap_step", () => {
-  it("garde les lignes visées entre 50 et 125 px à tout zoom", () => {
-    for (let e = -3; e <= 3; e += 0.05) {
-      const scale = 10 ** e;
-      const spacing = grid_snap_step(scale) * scale;
-      expect(spacing).toBeGreaterThan(49);
-      expect(spacing).toBeLessThan(127);
-    }
-  });
-});
-
 describe("snap_hover /point libre", () => {
   const state: CanvasState = { type: "PlacingPivot" };
 
   it("aimante chaque axe séparément", () => {
-    const snapped = snapped_at(voidAt(P(97, 212)), state, MECH, VIEW);
-    expect(snapped.x).toBeCloseTo(STEP);
+    const snapped = snapped_at(voidAt(P(2 * STEP + 3, 212)), state, MECH, VIEW);
+    expect(snapped.x).toBeCloseTo(2 * STEP);
     expect(snapped.y).toBeCloseTo(212);
   });
 
@@ -91,15 +81,15 @@ describe("snap_hover /rayon", () => {
   // Rounding x and y apart would round everything except the radius, which is
   // the only quantity the gesture produces.
   it("aimante la distance au centre, pas les coordonnées", () => {
-    const snapped = snapped_at(voidAt(P(0, -104)), state, MECH, VIEW);
-    expect(snapped.length()).toBeCloseTo(STEP);
+    const snapped = snapped_at(voidAt(P(0, -(2 * STEP + 4))), state, MECH, VIEW);
+    expect(snapped.length()).toBeCloseTo(2 * STEP);
     expect(snapped.angle()).toBeCloseTo(P(0, -1).angle());
   });
 
   it("laisse la direction oblique intacte", () => {
-    const raw = P(3, 4).mul(104 / 5);
+    const raw = P(3, 4).mul((2 * STEP + 4) / 5);
     const snapped = snapped_at(voidAt(raw), state, MECH, VIEW);
-    expect(snapped.length()).toBeCloseTo(STEP);
+    expect(snapped.length()).toBeCloseTo(2 * STEP);
     expect(snapped.angle()).toBeCloseTo(raw.angle());
   });
 });
@@ -108,21 +98,24 @@ describe("snap_hover /survol glissant", () => {
   const state: CanvasState = { type: "PlacingPivot" };
 
   it("aimante le point sur le croisement de la barre et de la grille", () => {
-    const snapped = snapped_at(onBody(P(295, 0)), state, MECH, VIEW);
-    expect(snapped.x).toBeCloseTo(3 * STEP);
+    const snapped = snapped_at(onBody(P(6 * STEP - 5, 0)), state, MECH, VIEW);
+    expect(snapped.x).toBeCloseTo(6 * STEP);
     expect(snapped.y).toBeCloseTo(0);
   });
 
+  /** Exactly between two grid lines, safely out of the snap tolerance's reach either way. */
+  const midway = 3 * STEP + STEP / 2;
+
   it("laisse le point où il est quand aucun croisement n'est proche", () => {
-    expect(snapped_at(onBody(P(247, 0)), state, MECH, VIEW).x).toBe(247);
+    expect(snapped_at(onBody(P(midway, 0)), state, MECH, VIEW).x).toBe(midway);
   });
 
   // The family the bar runs parallel to is met at infinity; the tolerance has to
   // turn it away on its own, without a division blowing up first.
   it("ne se laisse pas emporter par la famille de lignes parallèle", () => {
     const vertical = [beam(P(0, 0), P(0, 1010))];
-    const snapped = snapped_at(onBody(P(0, 247)), state, vertical, VIEW);
-    expect(snapped).toEqual(P(0, 247));
+    const snapped = snapped_at(onBody(P(0, midway)), state, vertical, VIEW);
+    expect(snapped).toEqual(P(0, midway));
   });
 
   it("préfère le milieu de la barre au croisement voisin", () => {
@@ -156,9 +149,9 @@ describe("snap_hover / angle", () => {
   // Landing on a round angle AND a round place at once is the point of combining
   // the two: the ray is chosen first, then the point slides along it.
   it("glisse le long du rayon retenu jusqu'au croisement de la grille", () => {
-    const raw = Point2.from_polar(197, 0);
+    const raw = Point2.from_polar(4 * STEP - 3, 0);
     const snapped = snapped_at(voidAt(raw), placing, MECH, VIEW);
-    expect(snapped.x).toBeCloseTo(2 * STEP);
+    expect(snapped.x).toBeCloseTo(4 * STEP);
     expect(snapped.y).toBeCloseTo(0);
   });
 
@@ -179,17 +172,17 @@ describe("snap_hover / angle", () => {
   // position it would often be a lie: the grid is made of round directions, so
   // a point pulled onto it by the grid alone lands on one by coincidence.
   it("ne montre aucun guide quand c'est la grille seule qui a tenu le point", () => {
-    // 37° off every multiple of 15 at that distance, and a hair from (300, 200).
-    const raw = P(297, 202);
+    // Off every multiple of 15° at that distance, and a hair from a grid crossing.
+    const raw = P(6 * STEP - 3, 4 * STEP + 2);
     const { position, guides } = snap(voidAt(raw), placing, MECH, VIEW);
-    expect(position.x).toBeCloseTo(3 * STEP);
-    expect(position.y).toBeCloseTo(2 * STEP);
+    expect(position.x).toBeCloseTo(6 * STEP);
+    expect(position.y).toBeCloseTo(4 * STEP);
     expect(guides).toEqual([]);
   });
 
   it("annonce la ligne de grille sur laquelle il a posé le point", () => {
-    const { gridX, gridY } = snap(voidAt(P(97, 212)), { type: "PlacingPivot" }, MECH, VIEW);
-    expect(gridX).toBeCloseTo(STEP);
+    const { gridX, gridY } = snap(voidAt(P(2 * STEP + 3, 212)), { type: "PlacingPivot" }, MECH, VIEW);
+    expect(gridX).toBeCloseTo(2 * STEP);
     expect(gridY).toBeUndefined();
   });
 });

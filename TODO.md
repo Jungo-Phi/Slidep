@@ -10,19 +10,42 @@
 
 ### À faire rapidement
 
+- Différencier "Forces de réaction" et "Efforts internes"
+
+- Cacher les charges minuscules (réaction)
+- Hover sur les graphs met en évidence les éléments concernés
+
 **Physique**
 
-- 🆕 Créer les fonctions de containte PBD dynamiques
-- 🆕 Collisions
-- 🆕 Ajouter le sol (en option ?)
+- ❇️ Voir ce que fait "LinkReaction" exactement, et dessiner les forces de réaction de gears au point de contact.
+- 🔨 Rendre la physique plus exacte avec du substepping
+- 🤔 Afficher les loads (charges) en dynamique ?
+- Interpoler sub snapshot les overlays à l'affichage en x0.1 (notamment les forces de réaction)
+
 - 🆕 Frottements dans les pivots et sliders
 - 🆕 Propriétés de poutre (hauteur, largeur, matériau)
-- 🆕 Moteurs de couple
 - 🆕 Ajouter ressort de couple
+- 🆕 Ajouter les constantes de frottement / rebond des collisions (CONTACT_EPS ?)
+
+**Cas test à régler**
+
+- Jansen a le moteur qui bloque mais rien n'est indiqué et le couple d'y change rien
+- Qu'est-ce qui change entre "Double Cantilever.slidep" et "Double Cantilever bis.slidep" pour que "Double Cantilever.slidep" perde sa rigidité ?
+
+**Collisions**
+
+- 🔨 Vérifier que les contacts "émettent" des force dans les 2 sens
+- 🚨 Vérifier ce que fait la bande de contact (0.5 unité) des collisions (et l'enlever ?)
+- 🔨 Ajouter un filtre géométrique grossier (bounding box, grille spatiale) pour les collisions (recalculé peu souvent)
+- 🔨 Vérifier les éléments exclus des collisions
+- 🆕 Indiquer les collisions sur le canvas (point de contact)
 
 **Simulation**
 
+- 🔨 Ajouter la masse (kg) à coté de linear/surface mass
 - 🔨 Mettre à jour le hover en simulation quand le mécanisme bouge sans grab
+- 🔨 Sélectionner et éditer les loads en simulation
+
 - 🚨 En cinématique, quand l'alignement n'est juste pas parfait (alors que le défaut peut ne même pas s'afficher), le mécanisme bouge tout seul (voir "Le mécanisme qui bouge tout seul.slidep").
 - 🔨 Donner a tous les ressorts en cinématique la même "élasticité".
 - 🚨 Bug avec le mécanisme "Poutre sur joint de courroie"
@@ -51,6 +74,7 @@
 ### À faire plus tard
 
 - 🆕 Ajouter des méchanismes exemple dans la gallerie ("Jansen's linkage", "Slidep", "IK", "Horloge", "Dynamique (Huygens?)")
+- 🔨 A un certain niveau, l'espacement de grille est chiant (snap)
 
 **Mobile mode**
 
@@ -68,6 +92,7 @@
 - 🔨 Le ra-mappage des contraintes "angle -> longueur -> angle" ne met pas en évidence les bons éléments
 - 🔨 Symboles angles vers l'intérieur
 - 🔨 Symbole longueur de courroie
+- 🚨 Mauvaise mesure des hyperstatismes dans le cas d'une simple barre ancrée aux 2 bouts
 - 🚨 Sur le mécanisme "Poulie.slidep", je ne comprend pas les hyperstatismes "Non-glissement de courroie"
 - 🚨 Quid des doubles contraintes (ex: "2 x Longueur") ?
 - 🤔 Animer les éléments (en plus?) des symboles ?
@@ -75,8 +100,8 @@
 **Panneau mesures**
 
 - 🔨 À la fermeture du menu ProbeMetricSelector, on voit un petit rectangle sur 1 frame
-- 🤔 Ajouter l'icon "Probe" au dessus des check-box de mesure ?
 - 🔨 Pas de sonde sur les courroies
+- 🔨 Ajuster la position des sondes sur ressort+amortisseur
 - 🔨 La transparence de deletion des probes est inconsistante
 - 🔨 Choisir x/y/norme pour les mesures superposées
 - 🔨 Possible de hover sur probe quand placingProbe (pareil pour gearRatio et Dimension)
@@ -92,12 +117,9 @@
 
 **Canvas**
 
-- 🆕 Ajouter les graduations à la grille (_grille adaptative.md_)
-- 🔨 Ajouter zoom min et max au viewport
 - 🚨 SnapToGrid pas 100% fiable (nottament snapX + snapY) ?
 - 🚨 Ne pas ajouter un remplacement d'élément identique à l'historique
 - 🆕 Ajouter un nouvel élément "Commentaire" sur le canvas
-- 🆕 Parsing loads : "150000 N" => "150 kN"
 - 🔨 Afficher le point grabbé en simulation
 - 🔨 Theme transition : certaines couleurs changent instantanément (grille + autres éléments spéciaux du canvas)
 - 🔨 Les couleurs des selected loads ne sont pas assez différenciée
@@ -120,13 +142,15 @@
 - 🔨 Séparer snap "grille" et "angles"
 - 🆕 Ajouter des tooltips sur les onglets
 - 🔨 OnCanvasValueEditor trop large avec des points "."
-- 🆕 Utiliser le "bouton dropDown pour changer le repère d'une force" pour choisir l'ancrage d'un moteur
 - 🆕 Ajouter boutons pour changer le parentBeam des slider et slideps
 - 🆕 Afficher le ratio avec une autre gear dans les connections de l'élément
+- 🔨 Donner des couleurs aux tags
 - 🆕 Scroll dans NumberInput
 
 **Refactor des dossiers**
 
+- ❇️ Trier le fichier de constante (et le séparer en plusieurs si nécessaire)
+- ❇️ Réorganisation des fichiers en sous-dossiers
 - ❇️ Refactor connect-actions.ts (< 600 lignes)
 - 🤔 Refactor drawing-functions.ts ?
 - 🤔 Refactor constraint-functions.ts ?
@@ -140,7 +164,6 @@
 - ❇️ Refactor belt-path.ts
 - 🤔 Refactor placing-element-actions.ts ?
 - 🤔 Refactor placing-constraint-actions.ts ?
-- ❇️ Réorganisation des fichiers en sous-dossiers
 
 **Architecture et refactor**
 
@@ -201,7 +224,6 @@
 - 🔨 Ajouter "Angle" dans les edges
 - ❇️ Unifier les tailles des éléments UI
 - ❇️ S'assurer que la police est toujours la même
-- 🆕 Ajouter bouton(s) loupe pour zoomer
 - 🆕 Se déplacer dans le temps de la simu avec les flèches du clavier
 - 🆕 Afficher les couleurs des thèmes dans le menu paramètres
 
@@ -247,10 +269,6 @@
 - 🔨 Ajouter des "Blank" quand on change une valeur depuis les propriétés ?
 - 🤔 Afficher "shown_name d'un élément au hover de celui-ci ?
 - 🤔 Test utilisateur : "ESCAPE" doit-il faire revenir en édition en 1/2 clicks ?
-
-**Paramètres et unités**
-
-- 🆕 Créer un système d'unités (zoom de base : 1px = 1mm) à mettre dans les paramètres
 
 **Export et divers**
 

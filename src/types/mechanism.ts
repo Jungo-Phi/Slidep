@@ -28,12 +28,12 @@ export const DEFAULT_METADATA: MechanismMetadata = {
   createdAt: 0,
   modifiedAt: 0,
   tags: [],
-  lastSimulationMode: "kinematic", // TODO : passer en "dynamic" quand le mode sera implémenté
+  lastSimulationMode: "dynamic",
 };
 
 /** Screen space : Distances are expressed in pixels (px), y points down. */
 export type ScreenPoint = Point2<"screen">;
-/** World space : Distances are expressed in millimeters (mm), y points up. */
+/** World space : Distances are expressed in metres (SI), y points up. */
 export type WorldPoint = Point2<"world">;
 
 export type ViewportChange =
@@ -45,9 +45,34 @@ export interface ViewportState {
   pan: ScreenPoint;
 }
 
+/** An infinite line mechanisms can fall/roll onto — not the palette's fixed anchor
+ *  ("Sol"/`tool_ground`), a distinct, optional, draggable simulation surface. */
+export interface FloorConfig {
+  enabled: boolean;
+  /** World-space height (metres) of a point on the line, along its own normal. */
+  height: number;
+  /** Radians. */
+  angle: number;
+}
+
+export interface SimulationSettings {
+  gravity: boolean;
+  collisions: boolean;
+  floor: FloorConfig;
+}
+
+export const DEFAULT_FLOOR: FloorConfig = { enabled: false, height: 0, angle: 0 };
+
+export const DEFAULT_SIMULATION: SimulationSettings = {
+  gravity: true,
+  collisions: false,
+  floor: DEFAULT_FLOOR,
+};
+
 export interface Mechanism {
   metadata: MechanismMetadata;
   viewport: ViewportState;
+  simulation: SimulationSettings;
   mechanicalElements: MechanicalElement[];
   constraintElements: ConstraintElement[];
   loads: LoadElement[];
@@ -60,6 +85,7 @@ export interface SerializedMechanism {
   formatVersion: number;
   metadata: MechanismMetadata;
   viewport: SerializedViewportState;
+  simulation: SimulationSettings;
   mechanicalElements: SerializedMechanicalElement[];
   constraintElements: SerializedConstraintElement[];
   loads: SerializedLoadElement[];

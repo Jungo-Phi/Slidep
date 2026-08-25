@@ -119,7 +119,7 @@ describe("l'outil sol sur un moteur", () => {
     isGrounded,
     rotatingEdgesIDs: [],
     fixedGearsIDs: [],
-    motor: { speed: 10, parentBeamID },
+    motor: { speed: 10, torque: 1, parentBeamID },
     rotationalFriction: 0,
   });
   const verdict = (driven: MechanicalElement) => {

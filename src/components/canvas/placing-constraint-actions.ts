@@ -17,6 +17,7 @@ import {
   resolve_angle_constraint_quadrant,
 } from "../../utils";
 import { constraint_key } from "../../utils/validate-mechanism";
+import { deg_to_rad } from "../../utils/quantity-format";
 import type { MouseDownResult } from "./placing-element-actions";
 
 type ConstraintCanvasState = Extract<
@@ -371,14 +372,14 @@ function build_constraint(
               flipStart,
               flipEnd,
               couterClockwise,
-              value: angle,
+              value: deg_to_rad(angle),
             },
           },
         ],
         newCanvasState: {
           type: "PlacingValue",
           elementID,
-          value: angle,
+          value: deg_to_rad(angle),
         },
       };
     }

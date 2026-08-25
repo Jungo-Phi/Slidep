@@ -38,6 +38,7 @@ import {
   type SnapSettings,
 } from "../canvas/snap-corridor";
 import NumberInput from "../properties-panel/components/NumberInput";
+import { ANGLE, rad_to_deg } from "../../utils/quantity-format";
 
 /** A theme family is named by its id; only the ones with a translation read differently. */
 const theme_family_label = (name: string): string => {
@@ -214,11 +215,14 @@ export const SettingsMenu: React.FC<SettingsMenuProps> = ({
                 <NumberInput
                   label={""}
                   value={snapSettings.angleStep}
-                  suffix="°"
-                  onChange={(value) =>
+                  kind={ANGLE}
+                  onChange={(valueRad) =>
                     setSnapSettings((prev) => ({
                       ...prev,
-                      angleStep: Math.min(90, Math.max(1, value)),
+                      angleStep: Math.min(
+                        Math.PI / 2,
+                        Math.max(Math.PI / 180, valueRad),
+                      ),
                       angleStepIsCustom: true,
                     }))
                   }
@@ -267,7 +271,7 @@ export const SettingsMenu: React.FC<SettingsMenuProps> = ({
                   value={step}
                   sx={{ fontSize: "body2.fontSize" }}
                 >
-                  {step}°
+                  {Math.round(rad_to_deg(step) * 10) / 10} deg
                 </MenuItem>
               ))}
               <MenuItem value="custom" sx={{ fontSize: "body2.fontSize" }}>

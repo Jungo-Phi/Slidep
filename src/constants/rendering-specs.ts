@@ -136,6 +136,19 @@ export const LINE_STYLES = {
   LINE_JOIN: "round" as const,
 } as const;
 
+/**
+ * Opacity ramp for grid lines as the zoom crosses a decade — two interlocking ladders, powers of ten and multiples of five, whose steps line up so a line moving up one level at a decade boundary keeps the opacity it had just before.
+ * That is what makes the change of level invisible.
+ */
+export const GRID_ALPHA = {
+  POWERS: [0, 0.1, 0.3, 0.6],
+  FIVES: [0, 0.25, 0.45],
+  /** The alpha `COLORS.GRID` stands for: the weight the strongest line reaches. Turn this to make the whole grid heavier or lighter. */
+  FULL: 0.4,
+  /** Below this a line is not worth a path — it lands on the ground's own pixel value. */
+  INVISIBLE: 1 / 100,
+} as const;
+
 export const HIT_TOLERANCE = {
   EDGE: 10,
   NODE: 14,
@@ -158,6 +171,25 @@ export const INTERACTION_SPECS = {
   BELT_GRAB_RADIUS: 4,
 } as const;
 
+/** Dash pattern of a construction line (snap feedback): fine enough to read as an aid rather than as something drawn. */
+export const GUIDE_DASH = [12, 8] as const;
+
+/** The floor: an infinite line, drawn clipped to the canvas — every size here is a screen-px
+ *  drawing decision, constant across zoom, like `REDUNDANCY_SYMBOL`'s. */
+export const FLOOR = {
+  /** How far along the line the angle-rotation handle sits from the height anchor. */
+  ANGLE_HANDLE_PX: 150,
+  /** Radius of the angle-constraint arc drawn when the floor isn't flat — inside the
+   *  handle, so the two never overlap. */
+  ANGLE_ARC_PX: 150,
+  /** Half-length of the tick mark drawn across the line at the height anchor. */
+  ANCHOR_TICK_PX: 12,
+  /** Spacing between hatching ticks, same "ground" language as `draw_ground`'s. */
+  HATCH_SPACING_PX: 14,
+  /** Length of one hatching tick — `DIM.GROUND_HEIGHT`'s, for the same reason. */
+  HATCH_LENGTH_PX: 15,
+} as const;
+
 export const LOAD_SCALING = {
   /** Reference force value (N) for scaling. */
   REF_VALUE: 100,
@@ -169,13 +201,43 @@ export const LOAD_SCALING = {
   MIN_VALUE: 0.1,
   /** Minimal drawn force length (world px). */
   MIN_PX: 40,
-  /** A moment's arc is drawn at the radius a force arrow of the same value
-   *  would be long, divided by this: its diameter reads like that arrow. */
-  MOMENT_RADIUS_FACTOR: 2,
   /** Mantissas of the round values a load drag snaps to, one set per decade
    *  (…, 1, 2, 5, 10, 20, 50, 100, …). Pure powers of ten would sit ~166 px
    *  apart at the current scale, leaving most of a drag with no rung nearby. */
   SNAP_MANTISSAS: [1, 2, 5],
+};
+
+/** Same ruler as `LOAD_SCALING` (same `PX_SCALE`/`LOG_BASE`/`SNAP_MANTISSAS`), but centred on
+ *  moments' own typical range: torques are commonly tenths of N·m, not hundreds of N, so
+ *  sharing `LOAD_SCALING`'s `REF_VALUE`/`MIN_VALUE` flattened every moment near `MIN_PX`,
+ *  indistinguishable from one another. */
+export const MOMENT_SCALING = {
+  ...LOAD_SCALING,
+  /** Reference moment value (N·m) for scaling. */
+  REF_VALUE: 1,
+  /** Minimal moment value (N·m). */
+  MIN_VALUE: 0.01,
+  /** Minimal drawn arc radius (world px) — a moment's arc used to be drawn at a force
+   *  arrow's length divided by two (so its diameter, not its radius, read like the arrow);
+   *  half of `LOAD_SCALING.MIN_PX` keeps that same floor now that the radius is computed
+   *  directly on its own ruler instead of through that division. */
+  MIN_PX: LOAD_SCALING.MIN_PX / 2,
+};
+
+/** The physics-overlay quantities drawn on the canvas: a probed velocity, and the two flavours of reaction force/moment a constraint can carry. */
+export type PhysicsOverlayKind =
+  | "velocity"
+  | "reaction-support"
+  | "reaction-internal";
+
+/**
+ * Distinguishable from a user-placed load's `COLORS.ACCENT` on purpose — an arrow here is measured, not authored.
+ * Reuses entries of `PROBE_ELEMENT_COLORS` rather than inventing new ones, so a physics overlay reads as the same family as a probe chart; the two reaction kinds share the warm half of the palette (support/internal), apart from velocity's cool blue.
+ */
+export const PHYSICS_OVERLAY_COLOR: Record<PhysicsOverlayKind, string> = {
+  velocity: "#2F81F7",
+  "reaction-support": "#B8410D",
+  "reaction-internal": "#60A45F",
 };
 
 /**
@@ -209,6 +271,13 @@ export const THUMBNAIL_MODE_ANIMATION = {
   AMPLITUDE_RATIO: 0.15,
   PERIOD_S: 1.2,
 } as const;
+
+/**
+ * Zoom a preview falls back to when it has nothing finite to fit — an empty mechanism, or one
+ * whose anchors all sit at the same point. World units are metres: this lands the grid in its
+ * millimetre decade (see `grid.ts`), the finest scale a preview ever bothers to resolve.
+ */
+export const PREVIEW_MIN_ZOOM = 1000;
 
 /**
  * Framing margins for a gallery thumbnail, at rest and while a card is hovered.
@@ -291,8 +360,9 @@ export const DIM = {
 
   // How far a disconnection pushes apart the elements it leaves superposed, so
   // that what is still connected reads at a glance. Purely a legibility gap: it
-  // holds for one solve, not as a standing minimum distance.
-  DISCONNECT_SEPARATION: 20,
+  // holds for one solve, not as a standing minimum distance. A world distance
+  // (20 mm), not a screen one, despite living among this object's px constants.
+  DISCONNECT_SEPARATION: 0.02,
 
   // Beam
   BEAM_WIDTH: 8,
@@ -301,8 +371,8 @@ export const DIM = {
   SPRING_INNER_WIDTH: 6,
   SPRING_COIL_RADIUS: 7,
   SPRING_MIN_COILS: 3,
-  /** World length one coil stands for, which fixes how many a spring shows. */
-  SPRING_COIL_PITCH: 16,
+  /** World length one coil stands for, which fixes how many a spring shows. A world distance (16 mm), not a screen one, despite living among this object's px constants. */
+  SPRING_COIL_PITCH: 0.016,
   /** How far the coils passing behind the spring recede into the ground. */
   SPRING_BACK_COIL_OPACITY: 0.45,
 
@@ -345,7 +415,7 @@ export const DIM = {
   // Gear
   DEFAULT_GEAR_RADIUS: 40,
   MIN_GEAR_RADIUS: 30,
-  GEAR_TEETH_SIZE: 6,
+  GEAR_HOLES_COUNT: 3,
 
   // Belt
   BELT_WIDTH: 3,
@@ -386,6 +456,39 @@ export const TEXT_SPECS = {
   TEXT_FONT: "16px Arial",
   TEXT_ALIGN: "center",
   TEXT_BASELINE: "middle",
+} as const;
+
+/** Icon silhouette tinting (selected / about-to-delete states), rasterized once per (source, colour) and cached. */
+export const ICON_TINT = {
+  /** Supersample factor: rendered above the drawn size so the silhouette stays crisp when scaled down. */
+  SUPERSAMPLE: 4,
+} as const;
+
+/**
+ * The world axes' graduations: small ticks and numbers riding `draw_axes`'s
+ * lines, at the same spacing a point snaps to.
+ */
+export const GRADUATION = {
+  /** How far a tick's stroke extends either side of the axis line, in px. */
+  TICK_LENGTH: 4,
+  /** Gap between a tick's end and the label it carries, in px. */
+  LABEL_GAP: 3,
+  FONT: "10px Arial",
+  /** Vertical room one line of graduation text needs. Only sets when the horizontal axis's labels flip above the line, so a generous constant is fine — no need to measure it. */
+  LABEL_HEIGHT: 14,
+  /** Width of the background-coloured halo stroked under each label, so the digits stay legible over a grid line crossing behind them. */
+  HALO_WIDTH: 3,
+  /**
+   * The units a graduation can be shown in, coarsest first: km, m, mm, µm —
+   * every third power of ten, so switching units is switching by exactly the
+   * digits a thousand adds.
+   */
+  UNITS: [
+    { scale: -3, suffix: "km" },
+    { scale: 0, suffix: "m" },
+    { scale: 3, suffix: "mm" },
+    { scale: 6, suffix: "µm" },
+  ],
 } as const;
 
 /** Ordre de dessin des éléments sur le canvas */

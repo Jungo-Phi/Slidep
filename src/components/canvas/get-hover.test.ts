@@ -7,6 +7,7 @@ import {
   BeamElement,
   BeltElement,
   ConstraintElement,
+  DEFAULT_FLOOR,
   DimensionEdgeElement,
   ForceElement,
   GearElement,
@@ -355,6 +356,7 @@ function describe_hover(part: HoveredPart): string {
       ? `Void ${at} rejected:${part.rejected}`
       : `Void ${at}`;
   if (part.type === "BeltClosure") return `BeltClosure ${at}`;
+  if (!names_element(part)) return `${part.type} ${at}`;
   const who = NAMES.get(part.id) ?? part.id;
   const flags: string[] = [];
   if (part.type === "Edge") flags.push(part.part);
@@ -379,6 +381,7 @@ describe("get_hovered_part", () => {
           cursor,
           state,
           VIEWPORT,
+          DEFAULT_FLOOR,
         );
         lines.push(`   ${label.padEnd(22)} → ${describe_hover(hovered)}`);
       }
@@ -403,6 +406,7 @@ describe("une cible que le glissement n'atteint pas", () => {
       P(200, 0),
       dragging,
       VIEWPORT,
+      DEFAULT_FLOOR,
       asked,
     );
 
@@ -484,6 +488,7 @@ describe("un rayon que le glissement n'atteint pas", () => {
       CURSOR,
       { type: "ChangingGearRadius", elementID: SIZED },
       VIEWPORT,
+      DEFAULT_FLOOR,
       ASKED,
     );
 
@@ -508,6 +513,7 @@ describe("probe badge", () => {
       cursor,
       state,
       VIEWPORT,
+      DEFAULT_FLOOR,
     );
   const BADGE = P(600, 20);
 

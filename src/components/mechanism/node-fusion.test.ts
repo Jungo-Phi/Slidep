@@ -7,7 +7,7 @@ import {
 import { apply_actions } from "./apply-actions";
 import { validate_mechanism } from "../../utils/validate-mechanism";
 import { Point2, ZERO } from "../../types/point2";
-import { DEFAULT_METADATA, Mechanism } from "../../types/mechanism";
+import { DEFAULT_METADATA, DEFAULT_SIMULATION, Mechanism } from "../../types/mechanism";
 import type { HoveredPart } from "../../types/hovered-part";
 import type {
   BeamElement,
@@ -64,6 +64,7 @@ const beam = (
 const mechanism = (mechanicalElements: MechanicalElement[]): Mechanism => ({
   metadata: DEFAULT_METADATA,
   viewport: { scale: 1, pan: ZERO },
+  simulation: DEFAULT_SIMULATION,
   mechanicalElements,
   constraintElements: [],
   loads: [],

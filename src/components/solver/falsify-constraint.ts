@@ -67,7 +67,7 @@ export const is_falsifiable = (link: Link): boolean =>
   falsify(link, 1, 1) !== undefined;
 
 /**
- * The arm a lie travels through on `link`, in millimetres, or `fallback` when it holds no
+ * The arm a lie travels through on `link`, in metres, or `fallback` when it holds no
  * geometry to read one from.
  *
  * Only angle-valued targets need it, and they need it to be the constraint's OWN: handed the

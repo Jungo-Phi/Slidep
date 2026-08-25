@@ -21,7 +21,7 @@ import { AnalysisChain, AnalysisModel } from "./analysis-model";
 import { PBD_solve } from "./PBD_kinematic_solver";
 import { angleSlotOf, slotOf } from "./nodes";
 import { angle_levers, chain_extent, model_extent } from "./mobility-probe";
-import { MotionMode } from "./motion-modes";
+import { MIN_VISIBLE_LENGTH, MotionMode } from "./motion-modes";
 import { mechanism_at, pose_of, rest_nodes } from "./animation-pose";
 
 /** Sweeps one animated pose may take. Warm-started, it exits on the constraints well before. */
@@ -61,7 +61,11 @@ export function animate_mode(
   const nodes = rest_nodes(model);
   // The lever keeps the chain's own scale: it converts this chain's angles to millimetres,
   // which has nothing to do with how far the drawing should swing.
-  const levers = angle_levers(model, variables, chain_extent(model, chain) || 1);
+  const levers = angle_levers(
+    model,
+    variables,
+    chain_extent(model, chain) || MIN_VISIBLE_LENGTH,
+  );
   const extent = model_extent(model);
   const slots = variables.map((v) =>
     v.component === "angle" ? angleSlotOf(nodes, v.key) : slotOf(nodes, v.key),
@@ -69,11 +73,12 @@ export function animate_mode(
 
   // Scaled so the widest-moving unknown covers `AMPLITUDE_RATIO` of the chain, whatever the
   // mode's shape. A mode with no motion at all would divide by zero; it cannot occur (modes
-  // are unit vectors) but the guard costs nothing.
+  // are unit vectors) but the guard costs nothing. Floored at `MIN_VISIBLE_LENGTH` so a
+  // degenerate (near-zero-extent) chain still swings visibly, rather than not at all.
   let widest = 0;
   for (const value of mode.vector) widest = Math.max(widest, Math.abs(value));
-  const swing =
-    (Math.max(amplitudeRatio * extent, 1) / (widest || 1)) as number;
+  const swing = (Math.max(amplitudeRatio * extent, MIN_VISIBLE_LENGTH) /
+    (widest || 1)) as number;
 
   let phase = 0;
   let offset = 0;

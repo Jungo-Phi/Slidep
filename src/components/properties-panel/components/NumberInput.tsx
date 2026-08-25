@@ -1,13 +1,17 @@
 import React, { useRef, useCallback, useState, useEffect } from "react";
 import { TextField, IconButton, Box } from "@mui/material";
+import { alpha } from "@mui/material/styles";
 import { KeyboardArrowUp, KeyboardArrowDown } from "@mui/icons-material";
 import { COLORS } from "../../../constants/rendering-specs";
+import {
+  QuantityKind,
+  QuantityUnit,
+  display_unit,
+  parse_quantity,
+  to_mantissa,
+} from "../../../utils/quantity-format";
 
-function round_value(value: number, rounding: number): string {
-  return (
-    Math.round(value * Math.pow(10, rounding)) / Math.pow(10, rounding)
-  ).toString();
-}
+const RAW_UNIT: QuantityUnit = { symbol: "", factor: 1 };
 
 /** Icon button docked inside the field, right of the stepper arrows. */
 export interface NumberInputAdornment {
@@ -24,7 +28,6 @@ interface NumberInputProps {
   value: number;
   onChange: (value: number) => void;
   step?: number;
-  suffix?: string;
   large?: boolean;
   accent?: boolean;
   /** Unsigned, which means always positive */
@@ -34,6 +37,11 @@ interface NumberInputProps {
   pillAdornment?: boolean;
   /** Decimal places shown and stepped to. Defaults to 1, fine for every value at unit scale (kg, N/m…); friction-like coefficients need more. */
   precision?: number;
+  /** Formats and parses `value` (always SI) as a physical quantity instead of a bare number.
+   *  The unit is plain text alongside the digits — part of what is shown and edited, not a
+   *  decoration next to it — so typing over it ("12mm", "3cm", "150kN") is how a unit is
+   *  overridden for that one entry. */
+  kind?: QuantityKind;
 }
 
 export const NumberInput: React.FC<NumberInputProps> = ({
@@ -41,20 +49,24 @@ export const NumberInput: React.FC<NumberInputProps> = ({
   value,
   onChange,
   step = 1,
-  suffix,
   large = false,
   accent = false,
   unsigned = false,
   adornment,
   pillAdornment = false,
   precision = 1,
+  kind,
 }) => {
+  const unit = kind ? display_unit(value, kind) : RAW_UNIT;
+  const format = (v: number) => {
+    const mantissa = to_mantissa(v, unit, precision).toString();
+    return unit.symbol ? `${mantissa} ${unit.symbol}` : mantissa;
+  };
+
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const holdStartRef = useRef<number | null>(null);
   const valueRef = useRef(value);
-  const rulerRef = useRef<HTMLSpanElement>(null);
-  const [suffixLeft, setSuffixLeft] = useState<number>(0);
   const [focused, setFocused] = useState(false);
   // Set by Escape so the blur it triggers discards instead of committing.
   const discardRef = useRef(false);
@@ -69,35 +81,24 @@ export const NumberInput: React.FC<NumberInputProps> = ({
   // The adornment eats into the text zone, so the field grows to keep it intact.
   const height = large ? 32 : 24;
   const adornmentWidth = adornment ? height - 8 : 0;
-  const width = (large ? 75 : 71) + adornmentWidth;
+  const width = (large ? 100 : 96) + adornmentWidth;
   const rounding = precision;
   // The finest step the up/down arrows snap to before falling back to `step`.
   const grain = Math.pow(10, -rounding);
   // Pill-shaped right edge for the direction adornment (SignedNumberInput only).
   const adornmentRadius = (height + 4) / 2;
 
-  const [localValue, setLocalValue] = useState<string>(
-    round_value(value, rounding),
-  );
+  const [localValue, setLocalValue] = useState<string>(format(value));
 
   useEffect(() => {
-    setLocalValue(round_value(value, rounding));
-  }, [value, rounding]);
+    setLocalValue(format(value));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value, rounding, unit.factor]);
 
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Out of focus the field is a view of the value, never of a leftover edit.
-  const displayed = focused ? localValue : round_value(value, rounding);
-
-  useEffect(() => {
-    if (rulerRef.current && inputRef.current) {
-      // Copy the exact computed font from the real input so the ruler matches perfectly
-      const style = window.getComputedStyle(inputRef.current);
-      rulerRef.current.style.font = style.font;
-      rulerRef.current.style.letterSpacing = style.letterSpacing;
-      setSuffixLeft(rulerRef.current.offsetWidth);
-    }
-  }, [displayed]);
+  const displayed = focused ? localValue : format(value);
 
   const stopRepeating = useCallback(() => {
     if (intervalRef.current !== null) {
@@ -112,11 +113,13 @@ export const NumberInput: React.FC<NumberInputProps> = ({
   }, []);
 
   // The arrows keep the focus in the field, so an edit in progress is what they step from.
+  // In the unit `format` currently displays, matching what `step`/`grain` are stepping in.
   const baseValue = useCallback(() => {
-    if (document.activeElement !== inputRef.current) return valueRef.current;
+    if (document.activeElement !== inputRef.current)
+      return valueRef.current / unit.factor;
     const pending = parseFloat(inputRef.current?.value ?? "");
-    return isNaN(pending) ? valueRef.current : pending;
-  }, []);
+    return isNaN(pending) ? valueRef.current / unit.factor : pending;
+  }, [unit.factor]);
 
   const startRepeating = useCallback(
     (direction: 1 | -1) => {
@@ -141,28 +144,44 @@ export const NumberInput: React.FC<NumberInputProps> = ({
               ? snapped - actualStep
               : snapped - grain;
       };
-      onChange(getSteppedValue());
+      onChange(getSteppedValue() * unit.factor);
       timeoutRef.current = setTimeout(() => {
         intervalRef.current = setInterval(() => {
-          onChange(getSteppedValue());
+          onChange(getSteppedValue() * unit.factor);
         }, holdInterval);
       }, holdDelay);
     },
-    [baseValue, grain, holdDelay, holdInterval, onChange, step],
+    [baseValue, grain, holdDelay, holdInterval, onChange, step, unit.factor],
   );
 
   const filterInput = (val: string) => {
     const negative = !unsigned && val.startsWith("-");
-    const digits = val.replace(/[^0-9.]/g, "").replace(/(\.[^.]*)\./g, "$1");
-    return (negative ? "-" : "") + digits;
+    // Stripped off before filtering, and alone allowed to survive it: a leading sign is the
+    // field's own, but a `-` past it belongs to a unit's exponent ("s-1", "min-1") and must
+    // stay legible through the same pass that strips everything else unrecognised.
+    const rest = negative ? val.slice(1) : val;
+    // A `kind` field accepts unit letters typed inline ("12mm", "150kN"), stand-ins `loose`
+    // folds back to the real symbol ("N*m", "Nm" for "N·m"; "m2" for "m²"), and the
+    // physicist's superscript exponent ("s⁻¹"); a plain one stays digits-only.
+    const pattern = kind ? /[^0-9.a-zA-Zµμ°·²⁻¹*^/ -]/g : /[^0-9.]/g;
+    const body = rest.replace(pattern, "").replace(/(\.[^.]*)\./g, "$1");
+    return (negative ? "-" : "") + body;
   };
+
+  const parseLocal = (text: string): number | null => {
+    const parsed = kind ? parse_quantity(text, kind, unit) : parseFloat(text);
+    return parsed === null || isNaN(parsed) ? null : parsed;
+  };
+  const entered = parseLocal(localValue);
+  // A refusal shows up while typing rather than only at blur, so leaving the field on an
+  // unusable entry isn't a silent discard. A field still being filled stays neutral.
+  const refused = focused && localValue.trim() !== "" && entered === null;
 
   // Leaving the field validates the entry; an unreadable one is dropped and the field
   // goes back to showing the value.
   const commitLocalValue = () => {
-    if (localValue === round_value(value, rounding)) return;
-    const parsed = parseFloat(localValue);
-    if (!isNaN(parsed)) onChange(parsed);
+    if (localValue === format(value)) return;
+    if (entered !== null) onChange(entered);
   };
 
   return (
@@ -174,46 +193,6 @@ export const NumberInput: React.FC<NumberInputProps> = ({
         width,
       }}
     >
-      {suffix && (
-        <>
-          {/* Hidden ruler: measures rendered text width */}
-          <Box
-            component="span"
-            ref={rulerRef}
-            aria-hidden
-            sx={{
-              position: "absolute",
-              visibility: "hidden",
-              whiteSpace: "pre",
-              fontSize: "0.875rem",
-              fontFamily: "inherit",
-              letterSpacing: "inherit",
-              pointerEvents: "none",
-              top: "50%",
-              left: "8px",
-            }}
-          >
-            {displayed}
-          </Box>
-
-          {/* Suffix overlay, follows the text, clips before the arrows */}
-          <Box
-            component="span"
-            aria-hidden
-            sx={{
-              position: "absolute",
-              left: `calc(11px + ${suffixLeft}px)`,
-              right: `${24 + adornmentWidth}px`,
-              top: "50%",
-              transform: "translateY(-50%)",
-              overflow: "hidden",
-            }}
-          >
-            {suffix}
-          </Box>
-        </>
-      )}
-
       <TextField
         label={label}
         type="text"
@@ -222,8 +201,14 @@ export const NumberInput: React.FC<NumberInputProps> = ({
         onChange={(e) => setLocalValue(filterInput(e.target.value))}
         inputRef={inputRef}
         onFocus={() => {
-          setLocalValue(round_value(value, rounding));
+          setLocalValue(format(value));
           setFocused(true);
+          // The unit suffix is part of the displayed text but not something a user
+          // overwriting the number wants swept up with it — select just the digits.
+          // Deferred: a focus from a click still has its mouseup to come, which would
+          // otherwise collapse the selection to the click point right after this.
+          const mantissaLength = to_mantissa(value, unit, precision).toString().length;
+          setTimeout(() => inputRef.current?.setSelectionRange(0, mantissaLength), 10);
         }}
         onKeyDown={(e) => {
           if (e.key === "Enter") {
@@ -263,6 +248,20 @@ export const NumberInput: React.FC<NumberInputProps> = ({
               },
               "& .MuiOutlinedInput-notchedOutline": {
                 borderColor: COLORS.FILL_NODE,
+              },
+            }),
+            // Wins over `accent`'s tint below it: a refusal is worth surfacing even on an
+            // already-coloured field like the motor's torque or speed.
+            ...(refused && {
+              backgroundColor: (theme) => alpha(theme.palette.error.main, 0.15),
+              "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
+                borderColor: "error.main",
+              },
+              "&:hover .MuiOutlinedInput-notchedOutline": {
+                borderColor: "error.main",
+              },
+              "& .MuiOutlinedInput-notchedOutline": {
+                borderColor: "error.main",
               },
             }),
           },

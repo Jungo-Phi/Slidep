@@ -38,6 +38,7 @@ import {
 import {
   get_belt_path,
   screen2world,
+  screen2world_length,
   world2screen,
   world2screen_length,
 } from "../../utils";
@@ -54,7 +55,9 @@ import {
   geometric_badge_positions,
 } from "./utils";
 import { offset_ends, parallel_edge_offsets } from "./parallel-edges";
-import { motor_arrow_geometry } from "./drawing-functions";
+import { floor_screen_geometry, motor_arrow_geometry } from "./drawing-functions";
+import { FloorConfig } from "../../types/mechanism";
+import { floor_acute_angle } from "../../utils/floor-geometry";
 import { gear_grab_handle } from "../solver/geometric-solver";
 import { out_of_sizing_reach } from "./hover-bounds";
 
@@ -158,6 +161,21 @@ const SIZING_GEAR: HoverTargets = {
 const NOTHING: HoverTargets = {};
 
 /**
+ * States where grabbing the floor is a meaningful gesture: idle browsing, and the
+ * floor's own handles. Everywhere else — placing or dragging a mechanical element,
+ * say — the cursor is choosing a point for that gesture, not reaching for the floor,
+ * even when it happens to pass near the line.
+ */
+const FLOOR_HOVER_STATES = new Set<CanvasStateType>([
+  "Selecting",
+  "SelectedElement",
+  "SelectedMultiple",
+  "DraggingFloorHeight",
+  "DraggingFloorAngle",
+  "EditingFloorValue",
+]);
+
+/**
  * The one place a tool declares what it may pick.
  *
  * `Record<CanvasStateType, …>` is the point: a new state does not compile until
@@ -190,6 +208,10 @@ export const HOVER_TARGETS: Record<CanvasStateType, HoverTargets> = {
   MovingDistributedForce: NOTHING,
   MovingMoment: NOTHING,
   SimulationDragging: NOTHING,
+  // The floor's own drag/edit reads the free cursor, not the mechanism.
+  DraggingFloorHeight: NOTHING,
+  DraggingFloorAngle: NOTHING,
+  EditingFloorValue: NOTHING,
 
   PlacingBeamStart: ATTACHING,
   PlacingBeamEnd: { ...ATTACHING, node: "centre+past" },
@@ -597,7 +619,9 @@ function probe_belt(
         position: gearRef
           .project_on_line(from, to)
           .sub(gearRef)
-          .extend_length(INTERACTION_SPECS.GEAR_ON_BELT_GROW)
+          .extend_length(
+            screen2world_length(INTERACTION_SPECS.GEAR_ON_BELT_GROW, viewport),
+          )
           .add(gearRef),
         id: belt.id,
         deleting: false,
@@ -1034,6 +1058,7 @@ export function get_hovered_part(
   mousePos: Point2,
   state: CanvasState,
   viewport: ViewportState,
+  floor: FloorConfig,
   /** What the previous frame of this drag asked for, when there is one. */
   askedPosition?: Point2,
 ): HoveredPart {
@@ -1355,6 +1380,34 @@ export function get_hovered_part(
         part: holdsStart ? "end" : "start",
       };
     }
+  }
+
+  // The floor's handles: checked last, so an overlapping mechanism element always wins.
+  // Only where grabbing the floor makes sense — a placement/drag gesture passing near
+  // the line is choosing a point for that gesture, not reaching for the floor.
+  if (floor.enabled && FLOOR_HOVER_STATES.has(state.type)) {
+    const { anchor, direction, angleHandle, angleLabel } = floor_screen_geometry(
+      viewport,
+      floor,
+    );
+    if (mouseScreen.distance_to(angleHandle) <= HIT_TOLERANCE.NODE)
+      return { type: "FloorAngle", position: screen2world(angleHandle, viewport) };
+    // The label reads as a click target only where it's actually drawn — see the same
+    // threshold `draw_floor` hides it behind at exactly flat. A separate hover from the
+    // handle above: one drags the angle, the other opens its value to type, the same
+    // split a load's body and its value label have.
+    const angleLabelShown = Math.abs(floor_acute_angle(floor.angle)) > 1e-6;
+    if (
+      angleLabelShown &&
+      mouseScreen.distance_to(angleLabel) <= HIT_TOLERANCE.CONSTRAINT
+    )
+      return {
+        type: "FloorAngleValue",
+        position: screen2world(angleLabel, viewport),
+      };
+    const foot = mouseScreen.project_on_line(anchor, anchor.add(direction));
+    if (mouseScreen.distance_to(foot) <= HIT_TOLERANCE.EDGE)
+      return { type: "FloorHeight", position: screen2world(foot, viewport) };
   }
 
   return { type: "Void", position };

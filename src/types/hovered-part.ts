@@ -22,6 +22,12 @@ export type HoveredPart =
   | (HoveredElement & { type: "GearTooth" })
   | (HoveredElement & { type: "BeltBody"; section: number })
   | { type: "BeltClosure"; position: WorldPoint }
+  /** The floor's handles — no `id`, like `BeltClosure`: it names no `MechanicalElement`.
+   *  `FloorAngle` is the drag handle; `FloorAngleValue` is its displayed value, a separate
+   *  click-to-edit target the same way a load's `"value"` part is separate from its body. */
+  | { type: "FloorHeight"; position: WorldPoint }
+  | { type: "FloorAngle"; position: WorldPoint }
+  | { type: "FloorAngleValue"; position: WorldPoint }
   | (HoveredElement & { type: "Probe" })
   | (HoveredElement & { type: "MotorArrow" })
   | (HoveredElement & { type: "Constraint" })
@@ -39,8 +45,21 @@ export type HoveredPart =
  */
 export function names_element(
   part: HoveredPart,
-): part is Exclude<HoveredPart, { type: "Void" } | { type: "BeltClosure" }> {
-  return part.type !== "Void" && part.type !== "BeltClosure";
+): part is Exclude<
+  HoveredPart,
+  | { type: "Void" }
+  | { type: "BeltClosure" }
+  | { type: "FloorHeight" }
+  | { type: "FloorAngle" }
+  | { type: "FloorAngleValue" }
+> {
+  return (
+    part.type !== "Void" &&
+    part.type !== "BeltClosure" &&
+    part.type !== "FloorHeight" &&
+    part.type !== "FloorAngle" &&
+    part.type !== "FloorAngleValue"
+  );
 }
 
 /** Whether the given hover names this element, e.g. to highlight its ElementDisplay(s). */

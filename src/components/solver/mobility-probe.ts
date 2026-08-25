@@ -58,7 +58,7 @@ const PROBE_AMPLITUDE_RATIO = 0.01;
 const REPROJECTION_TOLERANCE = 0.5;
 
 /** Below this a candidate is numerical dust, not worth a confirming solve. */
-const DUST = 1e-6;
+const DUST = 1e-9;
 
 /** Consecutive probes that add nothing before the space is called complete. */
 const STALL_PROBES = 3;
@@ -119,9 +119,9 @@ function make_rng(seed = 0x9e3779b9): () => number {
 }
 
 /**
- * What one radian of an angle unknown is worth in millimetres.
+ * What one radian of an angle unknown is worth in metres.
  *
- * Positions are millimetres and angles radians; without a lever the two cannot share a
+ * Positions are metres and angles radians; without a lever the two cannot share a
  * norm, a tolerance, or a notion of orthogonality, and the same mechanism drawn ten times
  * larger would answer differently. A gear's own radius is that lever — the rim is where its
  * rotation is felt.
@@ -245,7 +245,7 @@ export function probe_chain_mobility(
   const baseAngle = Float64Array.from(nodes.angle);
 
   // A chain whose nodes all sit on one point has no scale of its own; a millimetre stands in.
-  const extent = chain_extent(model, chain) || 1;
+  const extent = chain_extent(model, chain) || 0.001;
   const amplitude = amplitudeRatio * extent;
   const levers = angle_levers(model, variables, extent);
 

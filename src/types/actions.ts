@@ -352,4 +352,21 @@ export type Action =
       id: ID;
       newConfig: MotorConfig | undefined;
       oldConfig: MotorConfig | undefined;
+    }
+  | { type: "SetFloorEnabled"; enabled: boolean }
+  | { type: "SetGravity"; enabled: boolean }
+  | { type: "SetCollisions"; enabled: boolean }
+  | {
+      type: "ChangeFloorHeight";
+      newValue: number;
+      oldValue: number;
+      /** Typed and validated rather than dragged — see `MoveNode`. */
+      committed?: boolean;
+    }
+  | {
+      type: "ChangeFloorAngle";
+      newValue: number;
+      oldValue: number;
+      /** Typed and validated rather than dragged — see `MoveNode`. */
+      committed?: boolean;
     };
