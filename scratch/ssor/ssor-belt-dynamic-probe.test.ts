@@ -66,7 +66,7 @@ function max_gap(a: Map<string, number>, b: Map<string, number>): number {
 describe("closed belt, dynamic mode", () => {
   it("Huygens", () => {
     const lines = ["### Huygens en DYNAMIQUE — écart entre deux listages, par horizon"];
-    for (const frames of [30, 60, 120, 240]) {
+    for (const frames of [30, 60, 120]) {
       const reference = angles_at(rotated(0), frames);
       const gap = Math.max(
         max_gap(reference, angles_at(rotated(1), frames)),

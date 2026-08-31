@@ -929,19 +929,23 @@ Ordre que je propose (état au terme de la cinquième passe, décision réaction
    un comptage de redondance : une chaîne alterne si les lignes de contrainte qu'elle porte
    (`Σ ddl`) ne dépassent pas ses inconnues libres.
 
-   *Seconde, et c'est la leçon* : **le comptage ne voit pas une dépendance linéaire.** Une
-   courroie porte un brin de trop sur une boucle fermée, et un agrégat qui est la somme
-   télescopée des lois qu'il couvre — chacun ajoute une ligne ET une inconnue, donc aucun
-   comptage ne les distingue d'une contrainte utile. `Huygens` passait ainsi 18 liens sur 19
-   en alternance, et la suite ne l'attrapait pas : `belt-closed-determinism` est cinématique,
-   et la cinématique n'alterne plus. Mesuré en écrivant la sonde qui manquait
-   (`scratch/ssor/ssor-belt-dynamic-probe.test.ts`, deux listages du même mécanisme en
-   dynamique) : **écart de 30.8° à 30 frames, 3.2e7° à 120, 1.8e8° à 240.** Pas une dérive,
-   une explosion — et un bug qui partait en production. Le critère final nomme donc ces deux
-   types de liens en plus du comptage, en reprenant la connaissance que `analysis-model.ts`
-   porte déjà (`closed_loop_surplus`). Le comptage reste nécessaire de son côté : c'est lui
-   qui épingle les treillis hyperstatiques et `Core XY`.
+   *Seconde* : **le comptage ne voit pas une dépendance linéaire.** Une courroie porte un brin
+   de trop sur une boucle fermée, et un agrégat qui est la somme télescopée des lois qu'il
+   couvre — chacun ajoute une ligne ET une inconnue, donc aucun comptage ne les distingue d'une
+   contrainte utile. `Huygens` passait ainsi 18 liens sur 19 en alternance. Le critère final
+   nomme donc ces deux types de liens en plus du comptage, en reprenant la connaissance que
+   `analysis-model.ts` porte déjà (`closed_loop_surplus`). Le comptage reste nécessaire de son
+   côté : c'est lui qui épingle les treillis hyperstatiques et `Core XY`.
 
+   **Vérifié, et pas comme prévu.** La sonde écrite pour l'occasion
+   (`scratch/ssor/ssor-belt-dynamic-probe.test.ts`, deux listages du même mécanisme en
+   dynamique) donne, après correctif, **exactement les mêmes chiffres que l'alternance
+   entièrement neutralisée**, au bit près (35.09410° / 68.21821° / 108374221.38355° à 30, 60 et
+   120 frames). C'est la preuve que le correctif fait ce qu'on attend de lui — rendre le
+   comportement des courroies identique à celui d'avant ce chantier — et RIEN de plus. Ce n'est
+   pas, contrairement à ce qu'une lecture trop rapide du « avant » (1.8e8° à 240 frames) laissait
+   croire, un bug d'alternance rattrapé de justesse : ces chiffres-là étaient déjà ceux de la
+   production. Voir le défaut séparé ci-dessous, qui est la vraie trouvaille.
    Ce que ça laisse alterner, sur la galerie : `CP.slidep`, les cantilevers, `Vilbrequin`
    (avec ou sans masse), `Puente`, `Treillis` (6/7), `Line from rotation`, `Balance`,
    `Test slider`, `Petit`, `Roues isolées`, `trac-comp`. Ce que ça épingle : tout ce qui porte
@@ -972,6 +976,46 @@ taxe est rédhibitoire tant que les efforts affichés ne sont pas eux-mêmes fia
 que l'ordre de parcours du solveur détermine. Refuser de l'afficher est presque gratuit ; le
 rendre juste demande une raideur. Cette question-là ne dépend d'aucune des six options, et c'est
 probablement celle qui compte le plus pour un utilisateur.
+
+## DÉFAUT TROUVÉ, SANS RAPPORT AVEC CE CHANTIER — le mode dynamique explose sur une courroie fermée
+
+Trouvé en écrivant la sonde qui manquait pour valider le critère d'alternance, et c'est
+probablement plus important que tout le reste de ce document.
+
+`Huygen's chain drive`, en mode DYNAMIQUE, sous gravité, sans moteur. On liste la même courroie
+fermée à partir d'une autre poulie — ce qui ne change rien au mécanisme dessiné — et on compare
+les angles des engrenages :
+
+| frames | écart entre deux listages |
+| --- | --- |
+| 30 | 35.1° |
+| 60 | 68.2° |
+| 120 | **1.08e8 °** |
+
+Un écart de 1e8 degrés, c'est 300 000 tours en une seconde de temps simulé : au moins un des
+deux listages ne dérive pas, il **explose**. Ce n'est donc pas de la sensibilité aux conditions
+initiales, c'est une divergence numérique.
+
+**Rien de tout ça ne vient de l'alternance** : les chiffres sont identiques au bit près avec
+l'alternance en production, avec l'alternance neutralisée, et avec le critère avant correctif.
+C'est le comportement de la production d'aujourd'hui.
+
+**Pourquoi personne ne l'a vu** : `belt-closed-determinism.test.ts` pose exactement la bonne
+question — « lister une courroie fermée autrement ne doit rien changer » — mais uniquement à
+`step_simulation`. Aucun test ne la pose à `step_dynamic_simulation`. Le mode dynamique est
+récent ; les courroies ne l'ont jamais été.
+
+**Pistes, non vérifiées.** `step_dynamic_simulation` est documenté comme délibérément plus
+étroit que son homologue cinématique : *pas de suivi de déconnexion de courroie*, et les
+`Spring`/`MotorBeam`/`MotorAngle` retirés du balayage. Une courroie qui devrait lâcher une
+poulie mais reste contrainte géométriquement est un candidat naturel à l'emballement. L'autre
+suspect est la boucle de `rebake_belt_pin_refs` : elle rebake `s0`/`thetaRef0` une fois par
+frame en cinématique, et il faudrait vérifier ce qu'elle fait à travers 16 substeps.
+
+**Ce que ça vaut** : la question « peut-on simuler une courroie en dynamique » n'a aujourd'hui
+pas de réponse fiable, et le premier pas est le test qui manque — `belt-closed-determinism`
+transposé à `step_dynamic_simulation`. La sonde jetable existe déjà
+(`scratch/ssor/ssor-belt-dynamic-probe.test.ts`), il s'agit d'en faire un vrai test.
 
 ## Défauts constatés en marge de la manip
 
