@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Action, CanvasState, ID, UnionElement, ZERO } from "../../../types";
-import { Box, IconButton, Typography, TextField } from "@mui/material";
+import { Box, IconButton, Typography, TextField, Tooltip } from "@mui/material";
 import { get_element_icon } from "../../element-palette/elementIcon";
 import { HoveredPart, is_hovered } from "../../../types/hovered-part";
 import { element_to_hovered_part } from "../../canvas/utils";
@@ -40,14 +40,11 @@ const ElementDisplayComponent: React.FC<ElementDisplayProps> = ({
   interactive = true,
   cursor = interactive ? "pointer" : "default",
 }) => {
-  // A non-interactive display (a label inside a menu item, a frame preview) is
-  // never a target of its own, so it shouldn't reflect hover or selection state
-  // that belongs to the real, clickable row elsewhere.
+  // A non-interactive display (a label inside a menu item, a frame preview) is never a target of its own, so it shouldn't reflect hover or selection state that belongs to the real, clickable row elsewhere.
   const hovered = interactive && is_hovered(hoveredPart, element.id);
   const selected = interactive && selectedIds.includes(element.id);
-  // A geometric-constraint badge (align/normal/parallel/equal) carries no name
-  // to begin with — nothing displays it, so offering to edit it would be a
-  // control with no visible effect.
+  // A geometric-constraint badge (align/normal/parallel/equal) carries no name to begin with.
+  // Nothing displays it, so offering to edit it would be a control with no visible effect.
   const canRename = editable && is_nameable(element);
   const icon = get_element_icon(element);
   const initialName = shown_element_name(element);
@@ -56,6 +53,10 @@ const ElementDisplayComponent: React.FC<ElementDisplayProps> = ({
   const [inputValue, setInputValue] = useState(initialName);
   const [isEditing, setIsEditing] = useState(false);
   const [inputWidth, setInputWidth] = useState<number>(0);
+  // Suppress the select tooltip while a more specific one is showing over the same
+  // row: the rename text, or (when present) one of the trailing controls.
+  const [renameHovered, setRenameHovered] = useState(false);
+  const [trailingHovered, setTrailingHovered] = useState(false);
 
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -217,16 +218,27 @@ const ElementDisplayComponent: React.FC<ElementDisplayProps> = ({
         border={1}
         borderColor={"transparent"}
       >
-        <Box
-          component="img"
-          src={icon}
-          draggable={false}
-          sx={{
-            width: iconSize,
-            height: iconSize,
-            flexShrink: 0,
-          }}
-        />
+        <Tooltip
+          title={t("element_select_hint")}
+          open={
+            interactive &&
+            !isEditing &&
+            hovered &&
+            !renameHovered &&
+            !trailingHovered
+          }
+        >
+          <Box
+            component="img"
+            src={icon}
+            draggable={false}
+            sx={{
+              width: iconSize,
+              height: iconSize,
+              flexShrink: 0,
+            }}
+          />
+        </Tooltip>
 
         {isEditing ? (
           <TextField
@@ -265,21 +277,24 @@ const ElementDisplayComponent: React.FC<ElementDisplayProps> = ({
             }}
           />
         ) : canRename ? (
-          <Typography
-            onClick={handleTextClick}
-            title={t("element_rename_hint")}
-            sx={{
-              ...textStyleCommon,
-              fontSize: fontSizeValue,
-              cursor: "text",
-              userSelect: "none",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              display: "inline-block",
-            }}
-          >
-            {initialName}
-          </Typography>
+          <Tooltip title={t("element_rename_hint")}>
+            <Typography
+              onClick={handleTextClick}
+              onMouseEnter={() => setRenameHovered(true)}
+              onMouseLeave={() => setRenameHovered(false)}
+              sx={{
+                ...textStyleCommon,
+                fontSize: fontSizeValue,
+                cursor: "text",
+                userSelect: "none",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                display: "inline-block",
+              }}
+            >
+              {initialName}
+            </Typography>
+          </Tooltip>
         ) : (
           <Typography
             sx={{
@@ -327,6 +342,8 @@ const ElementDisplayComponent: React.FC<ElementDisplayProps> = ({
         className="element-display-actions"
         sx={{ display: "contents" }}
         onClick={(e) => e.stopPropagation()}
+        onMouseEnter={() => setTrailingHovered(true)}
+        onMouseLeave={() => setTrailingHovered(false)}
       >
         {trailingControls}
       </Box>

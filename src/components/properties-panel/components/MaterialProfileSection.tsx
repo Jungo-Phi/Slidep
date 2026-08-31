@@ -79,7 +79,7 @@ const LibraryPicker = React.forwardRef<HTMLDivElement, LibraryPickerProps>(
           </Typography>
           <KeyboardArrowDown fontSize="small" />
         </Box>
-        <Tooltip title={t("open_in_library")} disableInteractive>
+        <Tooltip title={t("open_in_library")}>
           <IconButton size="small" onClick={onOpenInLibrary}>
             <OpenInNew fontSize="inherit" />
           </IconButton>
@@ -218,9 +218,11 @@ export const MaterialProfileSection: React.FC<MaterialProfileSectionProps> = ({
                   ])
                 }
               />
-              <IconButton size="small" onClick={() => setOpenPanel(null)}>
-                <Close fontSize="inherit" />
-              </IconButton>
+              <Tooltip title={t("close")}>
+                <IconButton size="small" onClick={() => setOpenPanel(null)}>
+                  <Close fontSize="inherit" />
+                </IconButton>
+              </Tooltip>
             </Box>
             <MaterialDetail
               E={material.E}
@@ -287,9 +289,11 @@ export const MaterialProfileSection: React.FC<MaterialProfileSectionProps> = ({
                   ])
                 }
               />
-              <IconButton size="small" onClick={() => setOpenPanel(null)}>
-                <Close fontSize="inherit" />
-              </IconButton>
+              <Tooltip title={t("close")}>
+                <IconButton size="small" onClick={() => setOpenPanel(null)}>
+                  <Close fontSize="inherit" />
+                </IconButton>
+              </Tooltip>
             </Box>
             <ProfileDetail
               shape={profile.shape}

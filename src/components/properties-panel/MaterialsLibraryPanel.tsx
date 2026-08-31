@@ -2,7 +2,6 @@ import React from "react";
 import {
   Box,
   Button,
-  Divider,
   IconButton,
   MenuItem,
   Select,
@@ -199,7 +198,7 @@ const ListRow: React.FC<ListRowProps> = ({
         {usageCount > 0 ? usageCount : t("unused_entry")}
       </Typography>
     )}
-    <Tooltip title={t("duplicate")} disableInteractive>
+    <Tooltip title={t("duplicate")}>
       <IconButton
         size="small"
         color="primary"
@@ -212,15 +211,16 @@ const ListRow: React.FC<ListRowProps> = ({
       </IconButton>
     </Tooltip>
     {readOnly ? (
-      <span>
-        <IconButton size="small" disabled>
-          <Lock fontSize="inherit" />
-        </IconButton>
-      </span>
+      <Tooltip title={t("delete_disabled_readonly")}>
+        <span>
+          <IconButton size="small" disabled>
+            <Lock fontSize="inherit" />
+          </IconButton>
+        </span>
+      </Tooltip>
     ) : (
       <Tooltip
         title={canDelete ? t("delete") : t("delete_disabled_last_entry")}
-        disableInteractive
       >
         <span>
           <IconButton
@@ -264,42 +264,33 @@ export const MaterialDetail: React.FC<MaterialDetailProps> = ({
   <Box
     sx={{ display: "flex", flexDirection: "column", gap: 1, px: 1.5, py: 1.5 }}
   >
-    <Tooltip title={t("material_field_E")} disableInteractive>
-      <Box>
-        <NumberInput
-          label="E"
-          kind={STRESS}
-          value={E}
-          onChange={onChangeE ?? (() => {})}
-          unsigned
-          disabled={readOnly}
-        />
-      </Box>
-    </Tooltip>
-    <Tooltip title={t("material_field_Re")} disableInteractive>
-      <Box>
-        <NumberInput
-          label="Re"
-          kind={STRESS}
-          value={Re}
-          onChange={onChangeRe ?? (() => {})}
-          unsigned
-          disabled={readOnly}
-        />
-      </Box>
-    </Tooltip>
-    <Tooltip title={t("material_field_rho")} disableInteractive>
-      <Box>
-        <NumberInput
-          label="ρ"
-          kind={DENSITY}
-          value={rho}
-          onChange={onChangeRho ?? (() => {})}
-          unsigned
-          disabled={readOnly}
-        />
-      </Box>
-    </Tooltip>
+    <NumberInput
+      label="E"
+      title={t("material_field_E")}
+      kind={STRESS}
+      value={E}
+      onChange={onChangeE ?? (() => {})}
+      unsigned
+      disabled={readOnly}
+    />
+    <NumberInput
+      label="Re"
+      title={t("material_field_Re")}
+      kind={STRESS}
+      value={Re}
+      onChange={onChangeRe ?? (() => {})}
+      unsigned
+      disabled={readOnly}
+    />
+    <NumberInput
+      label="ρ"
+      title={t("material_field_rho")}
+      kind={DENSITY}
+      value={rho}
+      onChange={onChangeRho ?? (() => {})}
+      unsigned
+      disabled={readOnly}
+    />
   </Box>
 );
 
@@ -330,6 +321,7 @@ const shape_kind_label = (kind: ProfileShape["kind"]): string => {
 
 interface CoteFieldProps {
   label: string;
+  title: string;
   value: number;
   onChange: (value: number) => void;
   disabled?: boolean;
@@ -337,12 +329,14 @@ interface CoteFieldProps {
 
 const CoteField: React.FC<CoteFieldProps> = ({
   label,
+  title,
   value,
   onChange,
   disabled,
 }) => (
   <NumberInput
     label={label}
+    title={title}
     kind={LENGTH}
     value={value}
     onChange={onChange}
@@ -376,12 +370,14 @@ const ShapeCotes: React.FC<ShapeCotesProps> = ({
         <>
           <CoteField
             label="b"
+            title={t("profile_field_width")}
             value={shape.b}
             onChange={(b) => commit({ ...shape, b })}
             disabled={disabled}
           />
           <CoteField
             label="h"
+            title={t("profile_field_height")}
             value={shape.h}
             onChange={(h) => commit({ ...shape, h })}
             disabled={disabled}
@@ -392,6 +388,7 @@ const ShapeCotes: React.FC<ShapeCotesProps> = ({
       return (
         <CoteField
           label="d"
+          title={t("profile_field_diameter")}
           value={shape.d}
           onChange={(d) => commit({ ...shape, d })}
           disabled={disabled}
@@ -402,18 +399,21 @@ const ShapeCotes: React.FC<ShapeCotesProps> = ({
         <>
           <CoteField
             label="b"
+            title={t("profile_field_width")}
             value={shape.b}
             onChange={(b) => commit({ ...shape, b })}
             disabled={disabled}
           />
           <CoteField
             label="h"
+            title={t("profile_field_height")}
             value={shape.h}
             onChange={(h) => commit({ ...shape, h })}
             disabled={disabled}
           />
           <CoteField
             label="e"
+            title={t("profile_field_thickness")}
             value={shape.e}
             onChange={(e) => commit({ ...shape, e })}
             disabled={disabled}
@@ -425,12 +425,14 @@ const ShapeCotes: React.FC<ShapeCotesProps> = ({
         <>
           <CoteField
             label="d"
+            title={t("profile_field_diameter")}
             value={shape.d}
             onChange={(d) => commit({ ...shape, d })}
             disabled={disabled}
           />
           <CoteField
             label="e"
+            title={t("profile_field_thickness")}
             value={shape.e}
             onChange={(e) => commit({ ...shape, e })}
             disabled={disabled}
@@ -442,24 +444,28 @@ const ShapeCotes: React.FC<ShapeCotesProps> = ({
         <>
           <CoteField
             label="b"
+            title={t("profile_field_width")}
             value={shape.b}
             onChange={(b) => commit({ ...shape, b })}
             disabled={disabled}
           />
           <CoteField
             label="h"
+            title={t("profile_field_height")}
             value={shape.h}
             onChange={(h) => commit({ ...shape, h })}
             disabled={disabled}
           />
           <CoteField
             label="tw"
+            title={t("profile_field_web_thickness")}
             value={shape.tw}
             onChange={(tw) => commit({ ...shape, tw })}
             disabled={disabled}
           />
           <CoteField
             label="tf"
+            title={t("profile_field_flange_thickness")}
             value={shape.tf}
             onChange={(tf) => commit({ ...shape, tf })}
             disabled={disabled}
@@ -640,6 +646,11 @@ export const MaterialsLibraryPanel: React.FC<MaterialsLibraryPanelProps> = ({
           setHoveredSection(null);
           setHoveredEntryID(null);
         }}
+        sx={{
+          borderRadius: 3,
+          margin: 2,
+          backgroundColor: "background.sunken",
+        }}
       >
         <Typography
           variant="subtitle2"
@@ -739,14 +750,17 @@ export const MaterialsLibraryPanel: React.FC<MaterialsLibraryPanelProps> = ({
         )}
       </Box>
 
-      <Divider sx={{ mt: 1 }} />
-
       {/* ── Profilés ── */}
       <Box
         onMouseEnter={() => setHoveredSection("profiles")}
         onMouseLeave={() => {
           setHoveredSection(null);
           setHoveredEntryID(null);
+        }}
+        sx={{
+          borderRadius: 3,
+          margin: 2,
+          backgroundColor: "background.sunken",
         }}
       >
         <Typography

@@ -1,8 +1,7 @@
 import React, { useRef, useCallback, useState, useEffect } from "react";
-import { TextField, IconButton, Box } from "@mui/material";
+import { TextField, IconButton, Box, Tooltip } from "@mui/material";
 import { alpha } from "@mui/material/styles";
 import { KeyboardArrowUp, KeyboardArrowDown } from "@mui/icons-material";
-import { COLORS } from "../../../constants/rendering-specs";
 import {
   QuantityKind,
   QuantityUnit,
@@ -25,6 +24,8 @@ export interface NumberInputAdornment {
 
 interface NumberInputProps {
   label: string;
+  /** Tooltip shown on hover, explaining the field to someone who doesn't know it yet. */
+  title: string;
   value: number;
   onChange: (value: number) => void;
   step?: number;
@@ -49,6 +50,7 @@ interface NumberInputProps {
 
 export const NumberInput: React.FC<NumberInputProps> = ({
   label,
+  title,
   value,
   onChange,
   step = 1,
@@ -74,6 +76,10 @@ export const NumberInput: React.FC<NumberInputProps> = ({
   const [focused, setFocused] = useState(false);
   // Set by Escape so the blur it triggers discards instead of committing.
   const discardRef = useRef(false);
+  // Hovering the adornment bubbles up into the field's own Tooltip (mouseover
+  // bubbles), which would otherwise stack the field's title on top of the
+  // adornment's own — blank the field's out for as long as the adornment's shows.
+  const [adornmentHovered, setAdornmentHovered] = useState(false);
 
   useEffect(() => {
     valueRef.current = value;
@@ -189,176 +195,185 @@ export const NumberInput: React.FC<NumberInputProps> = ({
   };
 
   return (
-    <Box
-      sx={{
-        position: "relative",
-        display: "inline-block",
-        minWidth: width,
-        width,
-      }}
-    >
-      <TextField
-        label={label}
-        type="text"
-        disabled={disabled}
-        inputProps={{ inputMode: "decimal" }}
-        value={displayed}
-        onChange={(e) => setLocalValue(filterInput(e.target.value))}
-        inputRef={inputRef}
-        onFocus={() => {
-          setLocalValue(format(value));
-          setFocused(true);
-          // The unit suffix is part of the displayed text but not something a user
-          // overwriting the number wants swept up with it — select just the digits.
-          // Deferred: a focus from a click still has its mouseup to come, which would
-          // otherwise collapse the selection to the click point right after this.
-          const mantissaLength = to_mantissa(value, unit, precision).toString().length;
-          setTimeout(() => inputRef.current?.setSelectionRange(0, mantissaLength), 10);
-        }}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") {
-            (e.target as HTMLInputElement).blur();
-          } else if (e.key === "Escape") {
-            discardRef.current = true;
-            (e.target as HTMLInputElement).blur();
-          }
-        }}
-        onBlur={() => {
-          setFocused(false);
-          if (discardRef.current) discardRef.current = false;
-          else commitLocalValue();
-        }}
-        size="small"
+    <Tooltip title={adornmentHovered ? "" : title}>
+      <Box
         sx={{
-          width: "100%",
-          "& input": {
-            paddingY: "7px",
-            paddingLeft: "8px",
-            paddingRight: "-6px",
-          },
-          "& .MuiInputBase-root": {
-            marginY: "-2px",
-            overflow: "hidden",
-            ...(pillAdornment && {
-              borderTopRightRadius: adornmentRadius,
-              borderBottomRightRadius: adornmentRadius,
-            }),
-            ...(accent && {
-              backgroundColor: COLORS.FILL_NODE + COLORS.HALF_TRANSPARENCY,
-              "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
-                borderColor: "primary.main",
-              },
-              "&:hover .MuiOutlinedInput-notchedOutline": {
-                borderColor: "primary.main",
-              },
-              "& .MuiOutlinedInput-notchedOutline": {
-                borderColor: COLORS.FILL_NODE,
-              },
-            }),
-            // Wins over `accent`'s tint below it: a refusal is worth surfacing even on an
-            // already-coloured field like the motor's torque or speed.
-            ...(refused && {
-              backgroundColor: (theme) => alpha(theme.palette.error.main, 0.15),
-              "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
-                borderColor: "error.main",
-              },
-              "&:hover .MuiOutlinedInput-notchedOutline": {
-                borderColor: "error.main",
-              },
-              "& .MuiOutlinedInput-notchedOutline": {
-                borderColor: "error.main",
-              },
-            }),
-          },
-          ...(pillAdornment && {
-            "& .MuiOutlinedInput-notchedOutline": {
-              borderTopRightRadius: adornmentRadius,
-              borderBottomRightRadius: adornmentRadius,
+          position: "relative",
+          display: "inline-block",
+          minWidth: width,
+          width,
+        }}
+      >
+        <TextField
+          label={label}
+          type="text"
+          disabled={disabled}
+          inputProps={{ inputMode: "decimal" }}
+          value={displayed}
+          onChange={(e) => setLocalValue(filterInput(e.target.value))}
+          inputRef={inputRef}
+          onFocus={() => {
+            setLocalValue(format(value));
+            setFocused(true);
+            // The unit suffix is part of the displayed text but not something a user
+            // overwriting the number wants swept up with it — select just the digits.
+            // Deferred: a focus from a click still has its mouseup to come, which would
+            // otherwise collapse the selection to the click point right after this.
+            const mantissaLength = to_mantissa(value, unit, precision).toString().length;
+            setTimeout(() => inputRef.current?.setSelectionRange(0, mantissaLength), 10);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              (e.target as HTMLInputElement).blur();
+            } else if (e.key === "Escape") {
+              discardRef.current = true;
+              (e.target as HTMLInputElement).blur();
+            }
+          }}
+          onBlur={() => {
+            setFocused(false);
+            if (discardRef.current) discardRef.current = false;
+            else commitLocalValue();
+          }}
+          size="small"
+          sx={{
+            width: "100%",
+            "& input": {
+              paddingY: "7px",
+              paddingLeft: "8px",
+              paddingRight: "-6px",
             },
-          }),
-          "& .MuiInputLabel-root": accent
-            ? {
-                color: "primary.main",
-                fontWeight: 500,
-                fontSize: large ? "1em" : "0.92em",
-                pl: large ? 0 : 0.4,
-              }
-            : {},
-          height,
-        }}
-        InputProps={{
-          endAdornment: disabled ? undefined : (
-            <Box sx={{ display: "flex", alignItems: "center", mr: -1.6 }}>
-              <Box sx={{ display: "flex", flexDirection: "column" }}>
-                <IconButton
-                  size="small"
-                  color="secondary"
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    startRepeating(1);
-                  }}
-                  onMouseUp={stopRepeating}
-                  onMouseLeave={stopRepeating}
-                  sx={{
-                    p: 0.25,
-                    pb: 0,
-                    borderRadius: 1,
-                    fontSize: "18px",
-                    "&:hover": { backgroundColor: "action.hover" },
-                  }}
-                >
-                  <KeyboardArrowUp fontSize="inherit" sx={{ my: -0.25 }} />
-                </IconButton>
-                <IconButton
-                  size="small"
-                  color="secondary"
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    startRepeating(-1);
-                  }}
-                  onMouseUp={stopRepeating}
-                  onMouseLeave={stopRepeating}
-                  sx={{
-                    p: 0.25,
-                    pt: 0,
-                    borderRadius: 1,
-                    fontSize: "18px",
-                    "&:hover": { backgroundColor: "action.hover" },
-                  }}
-                >
-                  <KeyboardArrowDown fontSize="inherit" sx={{ my: -0.25 }} />
-                </IconButton>
+            "& .MuiInputBase-root": {
+              marginY: "-2px",
+              overflow: "hidden",
+              ...(pillAdornment && {
+                borderTopRightRadius: adornmentRadius,
+                borderBottomRightRadius: adornmentRadius,
+              }),
+              ...(accent && {
+                backgroundColor: (theme) => alpha(theme.palette.primary.main, 0.15),
+                "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
+                  borderColor: "primary.main",
+                },
+                "&:hover .MuiOutlinedInput-notchedOutline": {
+                  borderColor: "primary.main",
+                },
+                "& .MuiOutlinedInput-notchedOutline": {
+                  borderColor: (theme) => alpha(theme.palette.primary.main, 0.5),
+                },
+              }),
+              // Wins over `accent`'s tint below it: a refusal is worth surfacing even on an
+              // already-coloured field like the motor's torque or speed.
+              ...(refused && {
+                backgroundColor: (theme) => alpha(theme.palette.error.main, 0.15),
+                "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
+                  borderColor: "error.main",
+                },
+                "&:hover .MuiOutlinedInput-notchedOutline": {
+                  borderColor: "error.main",
+                },
+                "& .MuiOutlinedInput-notchedOutline": {
+                  borderColor: "error.main",
+                },
+              }),
+            },
+            ...(pillAdornment && {
+              "& .MuiOutlinedInput-notchedOutline": {
+                borderTopRightRadius: adornmentRadius,
+                borderBottomRightRadius: adornmentRadius,
+              },
+            }),
+            "& .MuiInputLabel-root": accent
+              ? {
+                  color: "primary.main",
+                  fontWeight: 500,
+                  fontSize: large ? "1em" : "0.92em",
+                  pl: large ? 0 : 0.4,
+                }
+              : {},
+            height,
+          }}
+          InputProps={{
+            endAdornment: disabled ? undefined : (
+              <Box sx={{ display: "flex", alignItems: "center", mr: -1.6 }}>
+                <Box sx={{ display: "flex", flexDirection: "column" }}>
+                  <IconButton
+                    size="small"
+                    color="secondary"
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      startRepeating(1);
+                    }}
+                    onMouseUp={stopRepeating}
+                    onMouseLeave={stopRepeating}
+                    sx={{
+                      p: 0.25,
+                      pb: 0,
+                      borderRadius: 1,
+                      fontSize: "18px",
+                      "&:hover": { backgroundColor: "action.hover" },
+                    }}
+                  >
+                    <KeyboardArrowUp fontSize="inherit" sx={{ my: -0.25 }} />
+                  </IconButton>
+                  <IconButton
+                    size="small"
+                    color="secondary"
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      startRepeating(-1);
+                    }}
+                    onMouseUp={stopRepeating}
+                    onMouseLeave={stopRepeating}
+                    sx={{
+                      p: 0.25,
+                      pt: 0,
+                      borderRadius: 1,
+                      fontSize: "18px",
+                      "&:hover": { backgroundColor: "action.hover" },
+                    }}
+                  >
+                    <KeyboardArrowDown fontSize="inherit" sx={{ my: -0.25 }} />
+                  </IconButton>
+                </Box>
+                {adornment && (
+                  <Tooltip title={adornment.title}>
+                    <IconButton
+                      color={adornment.color}
+                      onClick={adornment.onClick}
+                      onMouseEnter={() => {
+                        setAdornmentHovered(true);
+                        adornment.onMouseEnter?.();
+                      }}
+                      onMouseLeave={() => {
+                        setAdornmentHovered(false);
+                        adornment.onMouseLeave?.();
+                      }}
+                      sx={{
+                        height: height + 2,
+                        ...(pillAdornment
+                          ? {
+                              borderTopLeftRadius: 0,
+                              borderBottomLeftRadius: 0,
+                              borderTopRightRadius: adornmentRadius,
+                              borderBottomRightRadius: adornmentRadius,
+                            }
+                          : { borderRadius: 0.75 }),
+                        px: 0.5,
+                        ml: -0.25,
+                        fontSize: large ? "20px" : "16px",
+                      }}
+                    >
+                      <adornment.icon fontSize="inherit" />
+                    </IconButton>
+                  </Tooltip>
+                )}
               </Box>
-              {adornment && (
-                <IconButton
-                  color={adornment.color}
-                  onClick={adornment.onClick}
-                  onMouseEnter={adornment.onMouseEnter}
-                  onMouseLeave={adornment.onMouseLeave}
-                  title={adornment.title}
-                  sx={{
-                    height: height + 2,
-                    ...(pillAdornment
-                      ? {
-                          borderTopLeftRadius: 0,
-                          borderBottomLeftRadius: 0,
-                          borderTopRightRadius: adornmentRadius,
-                          borderBottomRightRadius: adornmentRadius,
-                        }
-                      : { borderRadius: 0.75 }),
-                    px: 0.5,
-                    ml: -0.25,
-                    fontSize: large ? "20px" : "16px",
-                  }}
-                >
-                  <adornment.icon fontSize="inherit" />
-                </IconButton>
-              )}
-            </Box>
-          ),
-        }}
-      />
-    </Box>
+            ),
+          }}
+        />
+      </Box>
+    </Tooltip>
   );
 };
 

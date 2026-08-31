@@ -169,7 +169,6 @@ export const MechanismCard: React.FC<MechanismCardProps> = ({
           ) : (
             <>
               <Tooltip
-                disableInteractive
                 title={mechanismRecord.metadata.name}
                 disableHoverListener={!nameTruncated}
               >
@@ -206,7 +205,7 @@ export const MechanismCard: React.FC<MechanismCardProps> = ({
                   transition: "width 0.15s, opacity 0.15s, margin-left 0.15s",
                 }}
               >
-                <Tooltip disableInteractive title={t("duplicate")}>
+                <Tooltip title={t("duplicate")}>
                   <IconButton
                     size="small"
                     color="inherit"
@@ -218,7 +217,7 @@ export const MechanismCard: React.FC<MechanismCardProps> = ({
                     <AddToPhotos fontSize="small" />
                   </IconButton>
                 </Tooltip>
-                <Tooltip disableInteractive title={t("export")}>
+                <Tooltip title={t("export")}>
                   <IconButton
                     size="small"
                     color="inherit"
@@ -230,7 +229,7 @@ export const MechanismCard: React.FC<MechanismCardProps> = ({
                     <Download fontSize="small" />
                   </IconButton>
                 </Tooltip>
-                <Tooltip disableInteractive title={t("delete")}>
+                <Tooltip title={t("delete")}>
                   <IconButton
                     size="small"
                     color="error"

@@ -48,7 +48,7 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
     <Divider orientation="vertical" flexItem sx={{ mx: tight ? 0.5 : 1 }} />
 
     {/* Bouton Bibliothèque — accès direct à la galerie */}
-    <Tooltip disableInteractive title={t("mechanism_library")}>
+    <Tooltip title={t("mechanism_library")}>
       <IconButton color="inherit" size="small" onClick={onOpenGallery} sx={{ m: -1 }}>
         <Apps sx={{ fontSize: 20 }} />
       </IconButton>
@@ -69,12 +69,11 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
       </Typography>
 
       {saveStatus === "saving" ? (
-        <Tooltip disableInteractive title={t("save_saving")}>
+        <Tooltip title={t("save_saving")}>
           <CircularProgress size={8} color="inherit" sx={{ flexShrink: 0, opacity: 0.7 }} />
         </Tooltip>
       ) : (
         <Tooltip
-          disableInteractive
           title={
             saveStatus === "saved"
               ? t("save_saved")

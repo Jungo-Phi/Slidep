@@ -99,7 +99,7 @@ export const SettingsMenu: React.FC<SettingsMenuProps> = ({
 
   return (
     <>
-      <Tooltip disableInteractive title={t("settings")}>
+      <Tooltip title={t("settings")}>
         <IconButton
           color="inherit"
           size="small"
@@ -213,7 +213,8 @@ export const SettingsMenu: React.FC<SettingsMenuProps> = ({
             {isCustomAngleStep && (
               <Box sx={{ display: "flex", mr: "-1px" }}>
                 <NumberInput
-                  label={""}
+                  label=""
+                  title=""
                   value={snapSettings.angleStep}
                   kind={ANGLE}
                   onChange={(valueRad) =>
@@ -322,7 +323,7 @@ export const SettingsMenu: React.FC<SettingsMenuProps> = ({
                 }
                 sx={{ px: 1, py: 0.25, border: 0 }}
               >
-                <Tooltip disableInteractive title={t(titleKey)}>
+                <Tooltip title={t(titleKey)}>
                   <Icon sx={{ fontSize: 18 }} />
                 </Tooltip>
               </ToggleButton>

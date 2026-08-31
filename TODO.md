@@ -12,10 +12,7 @@
 
 **UI**
 
-- Pour les NumberInputs, mettre une lettre ou un diminutif en label, et la description complète en tooltip
-- Mettre disableInteractive aux tooltip dans les règles générales au lieu de le re-écrire à chaque fois
 - Afficher la masse au lieu de la masse linéique (en lecture seule)
-
 - Donner un matériau et une épaisseur aux gears ?
 
 - Le point zéro devrait être collé à l'axe (à gauche) dans les diagrames d'efforts internes
@@ -174,10 +171,6 @@
 **Panneaux et UI**
 
 - 🤔 On confond toujours les boutons "reset" et "retour au départ" (et un peu de changement de vitesse de simulation). En déplacer vers la timeline ?
-- 🤔 Est-ce que le contrôle de vitesse de simulation ne devrait-il pas être éditable en édition ?
-- 🔨 Unifier l'usage des tooltips : style, alignement, et textes : "Dans quel état est-on ?" / "Qu'est-ce que clicker va faire ?"
-- 🔨 Séparer snap "grille" et "angles"
-- 🆕 Ajouter des tooltips sur les onglets
 - 🔨 OnCanvasValueEditor trop large avec des points "."
 - 🆕 Ajouter boutons pour changer le parentBeam des slider et slideps
 - 🆕 Afficher le ratio avec une autre gear dans les connections de l'élément

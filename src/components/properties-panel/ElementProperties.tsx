@@ -10,7 +10,6 @@ import {
   List,
   ListItem,
   Tooltip,
-  Typography,
 } from "@mui/material";
 import { Delete, Lock, LockOpen } from "@mui/icons-material";
 import {
@@ -160,7 +159,8 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                     <>
                       {element.type === "mass" && (
                         <NumberInput
-                          label={t("mass")}
+                          label="m"
+                          title={t("mass")}
                           kind={MASS}
                           value={element.mass}
                           onChange={(mass) =>
@@ -178,7 +178,8 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                       )}
                       {element.type === "spring" && (
                         <NumberInput
-                          label={t("stiffness")}
+                          label="k"
+                          title={t("stiffness")}
                           kind={STIFFNESS}
                           value={element.stiffness}
                           onChange={(stiffness) =>
@@ -196,7 +197,8 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                       )}
                       {element.type === "damper" && (
                         <NumberInput
-                          label={t("damping")}
+                          label="b"
+                          title={t("damping")}
                           kind={DAMPING}
                           value={element.damping}
                           onChange={(damping) =>
@@ -215,7 +217,8 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                       {element.type === "pivot" && element.motor && (
                         <StructureOnly disabled={simulating}>
                           <SignedNumberInput
-                            label={t("motor_speed_label")}
+                            label="ω"
+                            title={t("motor_speed_label")}
                             kind={ANGULAR_VELOCITY()}
                             value={element.motor.speed}
                             onChange={(speed) => {
@@ -234,18 +237,21 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                         </StructureOnly>
                       )}
                       <StructureOnly disabled={simulating} row>
-                        <IconButton
-                          color="error"
-                          onMouseEnter={() => handleMouseEnter(element, true)}
-                          onMouseLeave={handleMouseLeave}
-                          onClick={() =>
-                            applyActions([{ type: "DeleteElement", element }])
-                          }
-                          title={t("delete")}
-                          sx={{ borderRadius: 3 }}
-                        >
-                          <Delete sx={{ width: 20, height: 20 }} />
-                        </IconButton>
+                        <Tooltip title={t("delete")}>
+                          <IconButton
+                            color="error"
+                            onMouseEnter={() => handleMouseEnter(element, true)}
+                            onMouseLeave={handleMouseLeave}
+                            onClick={() =>
+                              applyActions([
+                                { type: "DeleteElement", element },
+                              ])
+                            }
+                            sx={{ borderRadius: 3 }}
+                          >
+                            <Delete sx={{ width: 20, height: 20 }} />
+                          </IconButton>
+                        </Tooltip>
                       </StructureOnly>
                     </>
                   }
@@ -314,10 +320,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                   element.type !== "mass" &&
                   !(element.type === "pivot" && element.motor) && (
                     <Tooltip
-                      disableInteractive
-                      title={t(
-                        element.isGrounded ? "release" : "anchor",
-                      )}
+                      title={t(element.isGrounded ? "release" : "anchor")}
                     >
                       <IconButton
                         color="inherit"
@@ -418,7 +421,8 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
               )}
               {element.type === "mass" && (
                 <NumberInput
-                  label={t("mass")}
+                  label="m"
+                  title={t("mass")}
                   kind={MASS}
                   value={element.mass}
                   onChange={(mass) =>
@@ -437,7 +441,8 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
               )}
               {element.type === "spring" && (
                 <NumberInput
-                  label={t("stiffness")}
+                  label="k"
+                  title={t("stiffness")}
                   kind={STIFFNESS}
                   value={element.stiffness}
                   onChange={(stiffness) =>
@@ -456,7 +461,8 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
               )}
               {element.type === "damper" && (
                 <NumberInput
-                  label={t("damping")}
+                  label="b"
+                  title={t("damping")}
                   kind={DAMPING}
                   value={element.damping}
                   onChange={(damping) =>
@@ -474,25 +480,26 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                 />
               )}
               <StructureOnly disabled={simulating} row>
-                <IconButton
-                  color="error"
-                  onClick={() =>
-                    applyActions(
-                      delete_element(
-                        element.id,
-                        mechanism.mechanicalElements,
-                        mechanism.constraintElements,
-                        mechanism.loads,
-                      ),
-                    )
-                  }
-                  title={t("delete")}
-                  onMouseEnter={(_e) => handleMouseEnter(element, true)}
-                  onMouseLeave={handleMouseLeave}
-                  sx={{ borderRadius: 4 }}
-                >
-                  <Delete />
-                </IconButton>
+                <Tooltip title={t("delete")}>
+                  <IconButton
+                    color="error"
+                    onClick={() =>
+                      applyActions(
+                        delete_element(
+                          element.id,
+                          mechanism.mechanicalElements,
+                          mechanism.constraintElements,
+                          mechanism.loads,
+                        ),
+                      )
+                    }
+                    onMouseEnter={(_e) => handleMouseEnter(element, true)}
+                    onMouseLeave={handleMouseLeave}
+                    sx={{ borderRadius: 4 }}
+                  >
+                    <Delete />
+                  </IconButton>
+                </Tooltip>
               </StructureOnly>
             </>
           }
@@ -538,7 +545,6 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
               />
               {element.type === "pivot" && (
                 <Tooltip
-                  disableInteractive
                   title={t(element.motor ? "motor_revert" : "motor_convert")}
                 >
                   <IconButton
@@ -579,7 +585,8 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
               )}
               {element.type === "gear" && (
                 <NumberInput
-                  label={t("radius")}
+                  label="R"
+                  title={t("radius")}
                   kind={LENGTH}
                   value={element.radius}
                   onChange={(radius) => {
@@ -645,7 +652,8 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                 }}
               >
                 <NumberInput
-                  label={t("motor_torque_label")}
+                  label="C"
+                  title={t("motor_torque_label")}
                   kind={MOMENT}
                   value={(displayMotorConfig ?? element.motor).torque}
                   onChange={(torque) => {
@@ -663,7 +671,8 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                   large
                 />
                 <SignedNumberInput
-                  label={t("motor_speed_label")}
+                  label="ω"
+                  title={t("motor_speed_label")}
                   kind={ANGULAR_VELOCITY()}
                   value={(displayMotorConfig ?? element.motor).speed}
                   onChange={(speed) => {
@@ -744,7 +753,8 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
               }}
             >
               <NumberInput
-                label={t("length")}
+                label="L"
+                title={t("length")}
                 kind={LENGTH}
                 value={
                   element.type === "belt"
@@ -846,7 +856,8 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
               />
               {element.type !== "belt" && (
                 <NumberInput
-                  label={t("angle")}
+                  label="α"
+                  title={t("angle")}
                   kind={ANGLE}
                   value={wrap_angle_rad(
                     element.positionEnd.sub(element.positionStart).angle(),
@@ -930,95 +941,63 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
               }}
             >
               {"rotatingEdgesIDs" in element && (
-                <Box
-                  sx={{
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    gap: 0.5,
-                  }}
-                >
-                  <Typography variant="caption">
-                    {t("rotational_friction")}
-                  </Typography>
-                  <NumberInput
-                    label=""
-                    value={element.rotationalFriction}
-                    onChange={(rotationalFriction) =>
-                      applyActions([
-                        {
-                          type: "ChangeRotationalFriction",
-                          id: element.id,
-                          delta:
-                            rotationalFriction - element.rotationalFriction,
-                        },
-                      ])
-                    }
-                    unsigned
-                    large
-                    precision={3}
-                    step={0.001}
-                  />
-                </Box>
+                <NumberInput
+                  label="μᵣ"
+                  title={t("rotational_friction")}
+                  value={element.rotationalFriction}
+                  onChange={(rotationalFriction) =>
+                    applyActions([
+                      {
+                        type: "ChangeRotationalFriction",
+                        id: element.id,
+                        delta: rotationalFriction - element.rotationalFriction,
+                      },
+                    ])
+                  }
+                  unsigned
+                  large
+                  precision={3}
+                  step={0.001}
+                />
               )}
               {"parentBeamID" in element && (
-                <Box
-                  sx={{
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    gap: 0.5,
-                  }}
-                >
-                  <Typography variant="caption">
-                    {t("sliding_friction")}
-                  </Typography>
-                  <NumberInput
-                    label=""
-                    value={element.slidingFriction}
-                    onChange={(slidingFriction) =>
-                      applyActions([
-                        {
-                          type: "ChangeSlidingFriction",
-                          id: element.id,
-                          delta: slidingFriction - element.slidingFriction,
-                        },
-                      ])
-                    }
-                    unsigned
-                    large
-                    precision={2}
-                    step={0.01}
-                  />
-                </Box>
+                <NumberInput
+                  label="μₛ"
+                  title={t("sliding_friction")}
+                  value={element.slidingFriction}
+                  onChange={(slidingFriction) =>
+                    applyActions([
+                      {
+                        type: "ChangeSlidingFriction",
+                        id: element.id,
+                        delta: slidingFriction - element.slidingFriction,
+                      },
+                    ])
+                  }
+                  unsigned
+                  large
+                  precision={2}
+                  step={0.01}
+                />
               )}
               {element.type === "gear" && (
-                <Box
-                  sx={{
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    gap: 0.5,
-                  }}
-                >
-                  <Typography variant="caption">{t("surface_mass")}</Typography>
-                  <NumberInput
-                    label=""
-                    kind={SURFACE_MASS}
-                    value={element.surfaceMass}
-                    onChange={(surfaceMass) =>
-                      applyActions([
-                        {
-                          type: "ChangeSurfaceMass",
-                          id: element.id,
-                          delta: surfaceMass - element.surfaceMass,
-                        },
-                      ])
-                    }
-                    unsigned
-                    large
-                  />
-                </Box>
+                <NumberInput
+                  label="mₛ"
+                  title={t("surface_mass")}
+                  kind={SURFACE_MASS}
+                  value={element.surfaceMass}
+                  onChange={(surfaceMass) =>
+                    applyActions([
+                      {
+                        type: "ChangeSurfaceMass",
+                        id: element.id,
+                        delta: surfaceMass - element.surfaceMass,
+                      },
+                    ])
+                  }
+                  unsigned
+                  large
+                />
               )}
               {element.type === "beam" && (
                 <MaterialProfileSection
@@ -1029,36 +1008,27 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                 />
               )}
               {element.type === "spring" && (
-                <Box
-                  sx={{
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    gap: 0.5,
-                  }}
-                >
-                  <Typography variant="caption">{t("rest_length")}</Typography>
-                  <NumberInput
-                    label=""
-                    kind={LENGTH}
-                    value={
-                      element.restLength ??
-                      element.positionStart.distance_to(element.positionEnd)
-                    }
-                    onChange={(restLength) =>
-                      applyActions([
-                        {
-                          type: "UpdateElementRestLength",
-                          id: element.id,
-                          newValue: restLength,
-                          oldValue: element.restLength,
-                        },
-                      ])
-                    }
-                    unsigned
-                    large
-                  />
-                </Box>
+                <NumberInput
+                  label="L₀"
+                  title={t("rest_length")}
+                  kind={LENGTH}
+                  value={
+                    element.restLength ??
+                    element.positionStart.distance_to(element.positionEnd)
+                  }
+                  onChange={(restLength) =>
+                    applyActions([
+                      {
+                        type: "UpdateElementRestLength",
+                        id: element.id,
+                        newValue: restLength,
+                        oldValue: element.restLength,
+                      },
+                    ])
+                  }
+                  unsigned
+                  large
+                />
               )}
             </Box>
           </Box>

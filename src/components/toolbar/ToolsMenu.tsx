@@ -87,7 +87,7 @@ const ZoomControls: React.FC<ZoomControlsProps> = ({
 
   return (
     <Box sx={{ display: "flex", alignItems: "center" }}>
-      <Tooltip disableInteractive title={t("zoom_out")}>
+      <Tooltip title={t("zoom_out")}>
         <span>
           <IconButton
             color="inherit"
@@ -100,7 +100,7 @@ const ZoomControls: React.FC<ZoomControlsProps> = ({
           </IconButton>
         </span>
       </Tooltip>
-      <Tooltip disableInteractive title={t("recenter")}>
+      <Tooltip title={t("recenter")}>
         <Box
           component="button"
           onClick={() =>
@@ -133,7 +133,7 @@ const ZoomControls: React.FC<ZoomControlsProps> = ({
             : "—"}
         </Box>
       </Tooltip>
-      <Tooltip disableInteractive title={t("zoom_in")}>
+      <Tooltip title={t("zoom_in")}>
         <span>
           <IconButton
             color="inherit"
@@ -155,7 +155,7 @@ const ZoomMenu: React.FC<ZoomControlsProps> = (props) => {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   return (
     <>
-      <Tooltip disableInteractive title={t("zoom")}>
+      <Tooltip title={t("zoom")}>
         <IconButton
           color="inherit"
           size="small"
@@ -261,7 +261,7 @@ export const ToolsMenu: React.FC<ToolsMenuProps> = ({
     />
 
     {/* Undo / Redo */}
-    <Tooltip disableInteractive title={t("undo")}>
+    <Tooltip title={t("undo")}>
       <span>
         <IconButton
           color="inherit"
@@ -273,7 +273,7 @@ export const ToolsMenu: React.FC<ToolsMenuProps> = ({
         </IconButton>
       </span>
     </Tooltip>
-    <Tooltip disableInteractive title={t("redo")}>
+    <Tooltip title={t("redo")}>
       <span>
         <IconButton
           color="inherit"
@@ -309,7 +309,7 @@ export const ToolsMenu: React.FC<ToolsMenuProps> = ({
     />
 
     {/* À propos */}
-    <Tooltip disableInteractive title={t("about")}>
+    <Tooltip title={t("about")}>
       <IconButton color="inherit" size="small" onClick={onOpenAbout}>
         <Info sx={{ fontSize: 20 }} />
       </IconButton>

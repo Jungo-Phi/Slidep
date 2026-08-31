@@ -190,7 +190,7 @@ export const TagChipsEditor: React.FC<TagChipsEditorProps> = ({
           )}
         />
       ) : (
-        <Tooltip disableInteractive title={t("add_tag")}>
+        <Tooltip title={t("add_tag")}>
           <Chip
             label={<Add sx={{ fontSize: 14, display: "block" }} />}
             size="small"

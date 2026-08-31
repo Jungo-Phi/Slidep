@@ -6,7 +6,7 @@ import {
   MechanicalElement,
   Mechanism,
 } from "../../../types";
-import { IconButton } from "@mui/material";
+import { IconButton, Tooltip } from "@mui/material";
 import { LinkOff, RotateLeft, RotateRight } from "@mui/icons-material";
 import {
   disconnect_element,
@@ -160,42 +160,44 @@ const Connection: React.FC<ConnectionProps> = ({
       trailingControls={
         <>
           {showDirectionButton && (
-            <IconButton
-              sx={{
-                borderRadius: 5,
-                "&:hover": {
-                  backgroundColor: "action.hover",
-                },
-                my: -0.5,
-                ml: -0.5,
-              }}
-              onClick={handleSwitchMeshedGearDirection}
-              title={t("flip")}
-              size="small"
-            >
-              <DirectionIcon
-                fontSize="small"
-                color="secondary"
-                sx={{ mx: -0.1, my: -0.4 }}
-              />
-            </IconButton>
+            <Tooltip title={t("flip")}>
+              <IconButton
+                sx={{
+                  borderRadius: 5,
+                  "&:hover": {
+                    backgroundColor: "action.hover",
+                  },
+                  my: -0.5,
+                  ml: -0.5,
+                }}
+                onClick={handleSwitchMeshedGearDirection}
+                size="small"
+              >
+                <DirectionIcon
+                  fontSize="small"
+                  color="secondary"
+                  sx={{ mx: -0.1, my: -0.4 }}
+                />
+              </IconButton>
+            </Tooltip>
           )}
           {showDisconnectButton && (
-            <IconButton
-              sx={{
-                borderRadius: 5,
-                my: -0.5,
-                ml: -0.5,
-              }}
-              color="error"
-              onClick={handleDisconnect}
-              title={t(
-                opensBelt ? "open_belt" : "disconnect",
-              )}
-              size="small"
+            <Tooltip
+              title={t(opensBelt ? "open_belt" : "disconnect")}
             >
-              <LinkOff sx={{ mx: -0.1, my: -0.4 }} fontSize="small" />
-            </IconButton>
+              <IconButton
+                sx={{
+                  borderRadius: 5,
+                  my: -0.5,
+                  ml: -0.5,
+                }}
+                color="error"
+                onClick={handleDisconnect}
+                size="small"
+              >
+                <LinkOff sx={{ mx: -0.1, my: -0.4 }} fontSize="small" />
+              </IconButton>
+            </Tooltip>
           )}
         </>
       }

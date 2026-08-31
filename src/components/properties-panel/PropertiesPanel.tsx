@@ -1,5 +1,5 @@
 import React from "react";
-import { Box, Paper, Tabs, Tab } from "@mui/material";
+import { Box, Paper, Tabs, Tab, Tooltip } from "@mui/material";
 import {
   Folder as ProjectIcon,
   Build as ElementIcon,
@@ -243,27 +243,29 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                   value={tab.id}
                   onClick={(e) => handleTabClick(e, tab.id)}
                   icon={
-                    <Box
-                      sx={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 0.5,
-                        margin: -1,
-                      }}
-                    >
-                      <tab.icon fontSize="small" />
-                      {activeTab === tab.id && (
-                        <span
-                          style={{
-                            fontSize: "0.75rem",
-                            whiteSpace: "nowrap",
-                            lineHeight: 1.2,
-                          }}
-                        >
-                          {tab.label}
-                        </span>
-                      )}
-                    </Box>
+                    <Tooltip title={tab.label}>
+                      <Box
+                        sx={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 0.5,
+                          margin: -1,
+                        }}
+                      >
+                        <tab.icon fontSize="small" />
+                        {activeTab === tab.id && (
+                          <span
+                            style={{
+                              fontSize: "0.75rem",
+                              whiteSpace: "nowrap",
+                              lineHeight: 1.2,
+                            }}
+                          >
+                            {tab.label}
+                          </span>
+                        )}
+                      </Box>
+                    </Tooltip>
                   }
                   label=""
                   sx={{

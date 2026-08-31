@@ -603,7 +603,12 @@ const components: ThemeOptions["components"] = {
           transitionDelay: "0s",
         },
       body: { backgroundColor: palette.background.default },
-      "::selection": { backgroundColor: alpha(palette.primary.main, 0.2) },
+      "::selection": {
+        backgroundColor: alpha(
+          palette.primary.main,
+          palette.mode === "dark" ? 0.3 : 0.2,
+        ),
+      },
       ":focus-visible": {
         outline: `2px solid ${palette.primary.main}`,
         outlineOffset: 2,
@@ -654,6 +659,7 @@ const components: ThemeOptions["components"] = {
   MuiTooltip: {
     defaultProps: {
       arrow: true,
+      disableInteractive: true,
     },
   },
   MuiIconButton: {

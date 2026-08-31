@@ -1362,7 +1362,6 @@ export const MechanicalCanvas = forwardRef<
         {rejection && (
           <Tooltip
             open
-            disableInteractive
             title={rejection.reason}
             placement="bottom-start"
             slotProps={{

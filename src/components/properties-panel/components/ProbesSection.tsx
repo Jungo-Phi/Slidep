@@ -1,4 +1,4 @@
-import { Box, IconButton, Typography, Menu } from "@mui/material";
+import { Box, IconButton, Typography, Menu, Tooltip } from "@mui/material";
 import { VisibilityOff, Visibility } from "@mui/icons-material";
 import { MechanicalElement } from "../../../types/element";
 import { Action } from "../../../types";
@@ -89,21 +89,23 @@ export const ProbesSection: React.FC<ProbesSectionProps> = ({
         <Typography variant="subtitle2" color="textDisabled">
           {t("measurements")}
         </Typography>
-        <IconButton
-          color="inherit"
-          size="small"
-          onClick={(e) =>
-            setMetricMenu({
-              anchorEl: e.currentTarget,
-            })
-          }
-        >
-          <Box
-            component="img"
-            style={{ width: 28, height: 28 }}
-            src={icon("probe")}
-          />
-        </IconButton>
+        <Tooltip title={t("analysis_choose_metrics")}>
+          <IconButton
+            color="inherit"
+            size="small"
+            onClick={(e) =>
+              setMetricMenu({
+                anchorEl: e.currentTarget,
+              })
+            }
+          >
+            <Box
+              component="img"
+              style={{ width: 28, height: 28 }}
+              src={icon("probe")}
+            />
+          </IconButton>
+        </Tooltip>
       </Box>
 
       <Menu

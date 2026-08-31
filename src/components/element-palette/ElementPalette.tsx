@@ -553,7 +553,6 @@ export const ElementPalette: React.FC<ElementPaletteProps> = ({
                   title={key ? `${name} (${key})` : name}
                   placement="right"
                   arrow
-                  disableInteractive
                   onOpen={() => {}}
                 >
                   <IconButton

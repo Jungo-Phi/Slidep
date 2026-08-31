@@ -49,7 +49,10 @@ import {
   get_probe_series,
   is_vector_metric,
 } from "../solver/probe-series";
-import { at_recording_end, dynamic_snapshot_at } from "../solver/simulation-engine";
+import {
+  at_recording_end,
+  dynamic_snapshot_at,
+} from "../solver/simulation-engine";
 import { compute_cohesion_field } from "../solver/cohesion-field";
 import {
   metric_shows_zero,
@@ -211,20 +214,19 @@ const MotorSpeed: React.FC<{
   const config = element.motor;
   return (
     <SignedNumberInput
-      label={t("motor_speed_label")}
+      label="ω"
+      title={t("motor_speed_label")}
       kind={ANGULAR_VELOCITY()}
       value={(displayConfig ?? config).speed}
       onChange={(speed) =>
-        applyActions(
-          [
-            {
-              type: "SetMotorConfig",
-              id: element.id,
-              newConfig: { ...config, speed },
-              oldConfig: config,
-            },
-          ],
-        )
+        applyActions([
+          {
+            type: "SetMotorConfig",
+            id: element.id,
+            newConfig: { ...config, speed },
+            oldConfig: config,
+          },
+        ])
       }
       accent
     />
@@ -335,7 +337,7 @@ const ChainCard: React.FC<{
           {status.label}
         </Typography>
         {status.hint && (
-          <Tooltip disableInteractive title={status.hint}>
+          <Tooltip title={status.hint}>
             <InfoOutlined
               sx={{
                 fontSize: 16,
@@ -487,7 +489,6 @@ const ChainCard: React.FC<{
                 }}
               >
                 <Tooltip
-                  disableInteractive
                   title={t("ddl_motor_undriven_hint")}
                 >
                   <WarningAmber
@@ -706,16 +707,14 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
     element: MechanicalElement,
     newProbes: ProbeConfig[],
   ) => {
-    applyActions(
-      [
-        {
-          type: "SetProbes",
-          elementID: element.id,
-          newProbes,
-          oldProbes: element.probes ?? [],
-        },
-      ],
-    );
+    applyActions([
+      {
+        type: "SetProbes",
+        elementID: element.id,
+        newProbes,
+        oldProbes: element.probes ?? [],
+      },
+    ]);
   };
 
   /** Click/drag on a chart: scrub the simulation time (and pause), like the timeline. */
@@ -862,7 +861,9 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
       runtimeState.simulationSnapshots as DynamicSnapshot[],
       runtimeState.time,
     );
-    const cohesion = dynSnap?.beamCohesion?.find((c) => c.beamID === selectedBeam.id);
+    const cohesion = dynSnap?.beamCohesion?.find(
+      (c) => c.beamID === selectedBeam.id,
+    );
     if (!dynSnap || !cohesion) return undefined;
     const gravity = mechanism.simulation.gravity ? GRAVITY : ZERO;
     return compute_cohesion_field(
@@ -942,10 +943,14 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
                 forcePoolMax={runtimeState.negligibilityPool.force}
                 momentPoolMax={runtimeState.negligibilityPool.moment}
                 emptyMessage={t(
-                  appMode === "kinematic" ? "cohesion_kinematic" : "chart_waiting",
+                  appMode === "kinematic"
+                    ? "cohesion_kinematic"
+                    : "chart_waiting",
                 )}
                 onHoverS={(s) =>
-                  setHoveredAbscissa(s === null ? null : { beamID: selectedBeam.id, s })
+                  setHoveredAbscissa(
+                    s === null ? null : { beamID: selectedBeam.id, s },
+                  )
                 }
               />
             )}
@@ -1151,19 +1156,20 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
                 size={"small"}
                 editable={false}
                 trailingControls={
-                  <IconButton
-                    size="small"
-                    onClick={(e) =>
-                      setMetricMenu({
-                        elementID: element.id,
-                        anchorEl: e.currentTarget,
-                      })
-                    }
-                    title={t("analysis_choose_metrics")}
-                    sx={{ borderRadius: 3 }}
-                  >
-                    <Tune fontSize="small" />
-                  </IconButton>
+                  <Tooltip title={t("analysis_choose_metrics")}>
+                    <IconButton
+                      size="small"
+                      onClick={(e) =>
+                        setMetricMenu({
+                          elementID: element.id,
+                          anchorEl: e.currentTarget,
+                        })
+                      }
+                      sx={{ borderRadius: 3 }}
+                    >
+                      <Tune fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
                 }
               />
 
@@ -1201,10 +1207,14 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
                 // header, so every label inside the chart can stay a bare mantissa in the
                 // same unit instead of repeating it.
                 const peak = curves.reduce(
-                  (m, c) => c.values.reduce((mm, v) => Math.max(mm, Math.abs(v)), m),
+                  (m, c) =>
+                    c.values.reduce((mm, v) => Math.max(mm, Math.abs(v)), m),
                   0,
                 );
-                const unit = display_unit(peak, quantity_kind_for_metric(probe.metric));
+                const unit = display_unit(
+                  peak,
+                  quantity_kind_for_metric(probe.metric),
+                );
                 return (
                   <Box
                     key={probe.metric}
@@ -1281,7 +1291,6 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
                           />
                         ))}
                       <Tooltip
-                        disableInteractive
                         title={t("analysis_remove_metric")}
                       >
                         <IconButton
@@ -1370,7 +1379,8 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
             // The chart's own SI prefix, picked from what it actually shows — see the
             // per-element mode above for the same reasoning.
             const peak = curves.reduce(
-              (m, c) => c.values.reduce((mm, v) => Math.max(mm, Math.abs(v)), m),
+              (m, c) =>
+                c.values.reduce((mm, v) => Math.max(mm, Math.abs(v)), m),
               0,
             );
             const unit = display_unit(peak, quantity_kind_for_metric(metric));
@@ -1394,9 +1404,13 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
                 <ProbeChart
                   curves={curves}
                   currentTime={runtimeState.time}
-                  poolMax={runtimeState.negligibilityPool[pool_key_for_metric(metric)]}
+                  poolMax={
+                    runtimeState.negligibilityPool[pool_key_for_metric(metric)]
+                  }
                   ownFloor={
-                    runtimeState.negligibilityPool.floors[pool_key_for_metric(metric)]
+                    runtimeState.negligibilityPool.floors[
+                      pool_key_for_metric(metric)
+                    ]
                   }
                   unitFactor={unit.factor}
                   showZero={metric_shows_zero(metric)}
@@ -1469,16 +1483,14 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
           <ProbeMetricSelector
             element={menuElement}
             onToggle={(newProbes) =>
-              applyActions(
-                [
-                  {
-                    type: "SetProbes",
-                    elementID: menuElement.id,
-                    newProbes,
-                    oldProbes: menuElement.probes ?? [],
-                  },
-                ],
-              )
+              applyActions([
+                {
+                  type: "SetProbes",
+                  elementID: menuElement.id,
+                  newProbes,
+                  oldProbes: menuElement.probes ?? [],
+                },
+              ])
             }
           />
         )}

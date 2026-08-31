@@ -3,7 +3,7 @@
  * Displays properties for element elements
  */
 
-import { Box, IconButton, List, ListItem } from "@mui/material";
+import { Box, IconButton, List, ListItem, Tooltip } from "@mui/material";
 import { Delete } from "@mui/icons-material";
 import { ConstraintElement, ID } from "../../types/element";
 import { CanvasState, Action, Mechanism, ZERO } from "../../types";
@@ -83,19 +83,25 @@ export const ConstraintsPanel: React.FC<ConstraintsPanelProps> = ({
                   case "dimension-belt": {
                     const isAngle = constraint.type === "dimension-angle";
 
-                    let label = t("distance");
-                    if (constraint.type === "dimension-angle")
-                      label = t("angle");
-                    if (constraint.type === "dimension-radius")
-                      label = t("radius");
+                    let title = t("distance");
+                    let label = "L";
+                    if (constraint.type === "dimension-angle") {
+                      title = t("angle");
+                      label = "α";
+                    }
+                    if (constraint.type === "dimension-radius") {
+                      title = t("radius");
+                      label = "R";
+                    }
                     if (
                       constraint.type === "dimension-edge" ||
                       constraint.type === "dimension-belt"
                     )
-                      label = t("length");
+                      title = t("length");
                     return (
                       <NumberInput
                         label={label}
+                        title={title}
                         value={constraint.value}
                         onChange={(value: number) =>
                           applyActions([
@@ -130,18 +136,21 @@ export const ConstraintsPanel: React.FC<ConstraintsPanelProps> = ({
                     );
                 }
               })()}
-              <IconButton
-                color="error"
-                onMouseEnter={() => handleMouseEnter(constraint)}
-                onMouseLeave={handleMouseLeave}
-                onClick={() =>
-                  applyActions([{ type: "DeleteElement", element: constraint }])
-                }
-                title={t("delete")}
-                sx={{ borderRadius: 3 }}
-              >
-                <Delete sx={{ width: 20, height: 20 }} />
-              </IconButton>
+              <Tooltip title={t("delete")}>
+                <IconButton
+                  color="error"
+                  onMouseEnter={() => handleMouseEnter(constraint)}
+                  onMouseLeave={handleMouseLeave}
+                  onClick={() =>
+                    applyActions([
+                      { type: "DeleteElement", element: constraint },
+                    ])
+                  }
+                  sx={{ borderRadius: 3 }}
+                >
+                  <Delete sx={{ width: 20, height: 20 }} />
+                </IconButton>
+              </Tooltip>
             </>
           }
         />

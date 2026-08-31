@@ -113,7 +113,7 @@ const OverlayMenuRow: React.FC<OverlayMenuRowProps> = ({
     >
       {shown}/{total}
     </Typography>
-    <Tooltip disableInteractive title={t("show_all")}>
+    <Tooltip title={t("show_all")}>
       <span>
         <IconButton
           size="small"
@@ -126,7 +126,7 @@ const OverlayMenuRow: React.FC<OverlayMenuRowProps> = ({
         </IconButton>
       </span>
     </Tooltip>
-    <Tooltip disableInteractive title={t("hide_all")}>
+    <Tooltip title={t("hide_all")}>
       <span>
         <IconButton
           size="small"
@@ -171,7 +171,7 @@ export const OverlaysMenu: React.FC<OverlaysMenuProps> = ({
 
   return (
     <>
-      <Tooltip disableInteractive title={condensed ? t("show_tooltip") : ""}>
+      <Tooltip title={condensed ? t("show_tooltip") : ""}>
         <Button
           color="inherit"
           size="small"
@@ -237,7 +237,6 @@ export const OverlaysMenu: React.FC<OverlaysMenuProps> = ({
                     sx={{ ml: 0.5, "& .MuiToggleButton-root": { p: 0.5 } }}
                   >
                     <Tooltip
-                      disableInteractive
                       title={t("trajectory_style_continuous")}
                     >
                       <ToggleButton value="continuous">
@@ -245,7 +244,6 @@ export const OverlaysMenu: React.FC<OverlaysMenuProps> = ({
                       </ToggleButton>
                     </Tooltip>
                     <Tooltip
-                      disableInteractive
                       title={t("trajectory_style_dotted")}
                     >
                       <ToggleButton value="dotted">

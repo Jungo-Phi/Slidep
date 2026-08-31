@@ -262,7 +262,6 @@ export const SimulationTimeline: React.FC<SimulationTimelineProps> = ({
         {marks.map((mark) => (
           <Tooltip
             key={mark.t}
-            disableInteractive
             placement="bottom"
             // Held back while scrubbing: the pointer is then following the head, not
             // pointing at what it happens to pass over.
@@ -308,7 +307,6 @@ export const SimulationTimeline: React.FC<SimulationTimelineProps> = ({
 
         {/* Dot */}
         <Tooltip
-          disableInteractive
           title={format_sim_time(runtimeState.time)}
           placement="bottom"
           open={(timelineHovered && !markHovered) || timelineDragging}
@@ -354,7 +352,7 @@ export const SimulationTimeline: React.FC<SimulationTimelineProps> = ({
         </Tooltip>
       </Box>
 
-      <Tooltip disableInteractive title={t("export_animation")}>
+      <Tooltip title={t("export_animation")}>
         <span>
           <IconButton
             size="small"

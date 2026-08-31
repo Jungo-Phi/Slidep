@@ -5,9 +5,11 @@ import {
 } from "@mui/icons-material";
 import NumberInput from "./NumberInput";
 import { QuantityKind } from "../../../utils/quantity-format";
+import { t } from "../../../i18n";
 
 interface SignedNumberInputProps {
   label: string;
+  title: string;
   /** Signed value: the magnitude is shown in the field, the sign drives the switch. */
   value: number;
   onChange: (value: number) => void;
@@ -25,6 +27,7 @@ interface SignedNumberInputProps {
  */
 export const SignedNumberInput: React.FC<SignedNumberInputProps> = ({
   label,
+  title,
   value,
   onChange,
   step,
@@ -48,6 +51,7 @@ export const SignedNumberInput: React.FC<SignedNumberInputProps> = ({
   return (
     <NumberInput
       label={label}
+      title={title}
       value={Math.abs(value)}
       onChange={handleChange}
       step={step}
@@ -57,7 +61,7 @@ export const SignedNumberInput: React.FC<SignedNumberInputProps> = ({
       pillAdornment
       adornment={{
         icon: DirectionIcon,
-        title: clockwise ? "Horaire" : "Anti-horaire",
+        title: t("flip"),
         onClick: () => onChange(-value),
         color: "secondary",
       }}

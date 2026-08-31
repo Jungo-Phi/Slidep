@@ -1,4 +1,4 @@
-import { Box, IconButton } from "@mui/material";
+import { Box, IconButton, Tooltip } from "@mui/material";
 import { Delete, Public } from "@mui/icons-material";
 import {
   Action,
@@ -211,7 +211,8 @@ export const LoadsSection: React.FC<LoadsSectionProps> = ({
                 <>
                   {load.type === "force" && (
                     <NumberInput
-                      label={t("force")}
+                      label="F"
+                      title={t("force")}
                       kind={FORCE}
                       value={(shownForce ?? load).vector.length()}
                       onChange={(mag) =>
@@ -228,7 +229,8 @@ export const LoadsSection: React.FC<LoadsSectionProps> = ({
                   )}
                   {load.type === "distributed-force" && (
                     <NumberInput
-                      label={t("force")}
+                      label="F"
+                      title={t("force")}
                       kind={FORCE}
                       value={
                         (((shownDistributed ?? load).magnitudeStart +
@@ -259,7 +261,8 @@ export const LoadsSection: React.FC<LoadsSectionProps> = ({
                   )}
                   {load.type === "moment" && (
                     <SignedNumberInput
-                      label={t("moment")}
+                      label="M"
+                      title={t("moment")}
                       kind={MOMENT}
                       value={(shownMoment ?? load).value}
                       onChange={(value) =>
@@ -274,23 +277,26 @@ export const LoadsSection: React.FC<LoadsSectionProps> = ({
                       }
                     />
                   )}
-                  <IconButton
-                    size="small"
-                    color="error"
-                    onMouseEnter={() =>
-                      setHoveredPart(element_to_hovered_part(load, true))
-                    }
-                    onMouseLeave={() =>
-                      setHoveredPart({ type: "Void", position: ZERO })
-                    }
-                    onClick={() =>
-                      applyActions([{ type: "DeleteElement", element: load }])
-                    }
-                    title={t("delete")}
-                    sx={{ borderRadius: 3 }}
-                  >
-                    <Delete sx={{ width: 20, height: 20 }} />
-                  </IconButton>
+                  <Tooltip title={t("delete")}>
+                    <IconButton
+                      size="small"
+                      color="error"
+                      onMouseEnter={() =>
+                        setHoveredPart(element_to_hovered_part(load, true))
+                      }
+                      onMouseLeave={() =>
+                        setHoveredPart({ type: "Void", position: ZERO })
+                      }
+                      onClick={() =>
+                        applyActions([
+                          { type: "DeleteElement", element: load },
+                        ])
+                      }
+                      sx={{ borderRadius: 3 }}
+                    >
+                      <Delete sx={{ width: 20, height: 20 }} />
+                    </IconButton>
+                  </Tooltip>
                 </>
               }
             />
@@ -357,7 +363,8 @@ export const LoadsSection: React.FC<LoadsSectionProps> = ({
                   />
                   {load.type === "force" ? (
                     <NumberInput
-                      label={t("angle")}
+                      label="α"
+                      title={t("angle")}
                       kind={ANGLE}
                       value={wrap_angle_rad(
                         (shownForce ?? load).vector.angle(),
@@ -378,7 +385,8 @@ export const LoadsSection: React.FC<LoadsSectionProps> = ({
                     />
                   ) : (
                     <NumberInput
-                      label={t("angle")}
+                      label="α"
+                      title={t("angle")}
                       kind={ANGLE}
                       value={wrap_angle_rad(
                         (shownDistributed ?? load).direction.angle(),
@@ -407,6 +415,7 @@ export const LoadsSection: React.FC<LoadsSectionProps> = ({
                   >
                     <NumberInput
                       label="q₀"
+                      title={t("linear_force_start")}
                       kind={LOAD_INTENSITY}
                       value={(shownDistributed ?? load).magnitudeStart}
                       onChange={(v) =>
@@ -419,6 +428,7 @@ export const LoadsSection: React.FC<LoadsSectionProps> = ({
                     />
                     <NumberInput
                       label="q₁"
+                      title={t("linear_force_end")}
                       kind={LOAD_INTENSITY}
                       value={(shownDistributed ?? load).magnitudeEnd}
                       onChange={(v) =>

@@ -104,7 +104,7 @@ export function ElementPicker<T extends UnionElement>({
         gap: 0.5,
       }}
     >
-      <Tooltip title={label} disableInteractive>
+      <Tooltip title={label}>
         <Box
           onClick={(e) => setAnchorEl(e.currentTarget)}
           onMouseEnter={() => selected && onHoverElement(selected)}

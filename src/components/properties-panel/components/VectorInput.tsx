@@ -38,6 +38,7 @@ export const VectorInput: React.FC<VectorInputProps> = ({
       )}
       <NumberInput
         label="X"
+        title=""
         kind={LENGTH}
         value={value.x}
         onChange={(newX) => onChange(new Point2(newX, value.y))}
@@ -45,6 +46,7 @@ export const VectorInput: React.FC<VectorInputProps> = ({
       />
       <NumberInput
         label="Y"
+        title=""
         kind={LENGTH}
         value={value.y}
         onChange={(newY) => onChange(new Point2(value.x, newY))}

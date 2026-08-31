@@ -242,12 +242,12 @@ export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
             flexShrink: 0,
           }}
         >
-          <Tooltip disableInteractive title={t("storage_notice")}>
+          <Tooltip title={t("storage_notice")}>
             <InfoOutlined
               sx={{ fontSize: 20, color: "text.secondary", ml: -1, mr: 4 }}
             />
           </Tooltip>
-          <Tooltip disableInteractive title={t("import_tooltip")}>
+          <Tooltip title={t("import_tooltip")}>
             <Button
               size="small"
               color="inherit"
@@ -259,7 +259,6 @@ export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
             </Button>
           </Tooltip>
           <Tooltip
-            disableInteractive
             title={t(
               mechanismRecords.length === 0
                 ? "export_all_empty"
@@ -280,9 +279,11 @@ export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
             </span>
           </Tooltip>
           <Divider orientation="vertical" flexItem sx={{ m: 0.5 }} />
-          <IconButton onClick={onClose} size="small">
-            <Close />
-          </IconButton>
+          <Tooltip title={t("close")}>
+            <IconButton onClick={onClose} size="small">
+              <Close />
+            </IconButton>
+          </Tooltip>
         </Box>
       </DialogTitle>
 

@@ -54,7 +54,7 @@ const PhysicsToggle: React.FC<PhysicsToggleProps> = ({
   tooltip,
   onToggle,
 }) => (
-  <Tooltip disableInteractive title={tooltip}>
+  <Tooltip title={tooltip}>
     <Chip
       icon={<Icon sx={{ fontSize: "14px !important" }} />}
       size="small"
@@ -191,25 +191,25 @@ export const PlaybackControls: React.FC<PlaybackControlsProps> = ({
           },
         }}
       >
-        <Tooltip disableInteractive title={t("mode_edition_tooltip")}>
+        <Tooltip title={t("mode_edition_tooltip")}>
           <ToggleButton value="edition">
             {t(condensed ? "mode_edition_short" : "mode_edition")}
           </ToggleButton>
         </Tooltip>
 
-        <Tooltip disableInteractive title={t("mode_static_tooltip")}>
+        <Tooltip title={t("mode_static_tooltip")}>
           <ToggleButton value="static" disabled>
             {t(condensed ? "mode_static_short" : "mode_static")}
           </ToggleButton>
         </Tooltip>
 
-        <Tooltip disableInteractive title={t("mode_kinematic_tooltip")}>
+        <Tooltip title={t("mode_kinematic_tooltip")}>
           <ToggleButton value="kinematic">
             {t(condensed ? "mode_kinematic_short" : "mode_kinematic")}
           </ToggleButton>
         </Tooltip>
 
-        <Tooltip disableInteractive title={t("mode_dynamic_tooltip")}>
+        <Tooltip title={t("mode_dynamic_tooltip")}>
           <ToggleButton value="dynamic">
             {t(condensed ? "mode_dynamic_short" : "mode_dynamic")}
           </ToggleButton>
@@ -218,7 +218,7 @@ export const PlaybackControls: React.FC<PlaybackControlsProps> = ({
 
       {!condensed && <Divider flexItem sx={{ mx: 0.5 }} />}
 
-      <Tooltip disableInteractive title={t("reset")}>
+      <Tooltip title={t("reset")}>
         <span>
           <IconButton
             size="small"
@@ -241,7 +241,7 @@ export const PlaybackControls: React.FC<PlaybackControlsProps> = ({
 
       {/* Play/Pause toujours actif ; les autres boutons sont désactivés en
           mode Édition ou en bout de course. */}
-      <Tooltip disableInteractive title={t("go_to_start")}>
+      <Tooltip title={t("go_to_start")}>
         <span>
           <IconButton
             size="small"
@@ -264,7 +264,6 @@ export const PlaybackControls: React.FC<PlaybackControlsProps> = ({
       </Tooltip>
 
       <Tooltip
-        disableInteractive
         title={t(runtimeState.isPlaying ? "pause" : "play")}
       >
         <IconButton
@@ -286,7 +285,7 @@ export const PlaybackControls: React.FC<PlaybackControlsProps> = ({
         </IconButton>
       </Tooltip>
 
-      <Tooltip disableInteractive title={t("go_to_end")}>
+      <Tooltip title={t("go_to_end")}>
         <span>
           <IconButton
             size="small"
@@ -321,7 +320,7 @@ export const PlaybackControls: React.FC<PlaybackControlsProps> = ({
           setRuntimeState((prev) => ({ ...prev, speed: s }));
         return (
           <Box sx={{ display: "flex", alignItems: "center" }}>
-            <Tooltip disableInteractive title={t("slow_down")}>
+            <Tooltip title={t("slow_down")}>
               <span>
                 <IconButton
                   size="small"
@@ -334,7 +333,7 @@ export const PlaybackControls: React.FC<PlaybackControlsProps> = ({
                 </IconButton>
               </span>
             </Tooltip>
-            <Tooltip disableInteractive title={t("reset_speed")}>
+            <Tooltip title={t("reset_speed")}>
               <Box
                 component="button"
                 onClick={() => setSpeed(1)}
@@ -364,7 +363,7 @@ export const PlaybackControls: React.FC<PlaybackControlsProps> = ({
                 {runtimeState.speed}×
               </Box>
             </Tooltip>
-            <Tooltip disableInteractive title={t("speed_up")}>
+            <Tooltip title={t("speed_up")}>
               <span>
                 <IconButton
                   size="small"
