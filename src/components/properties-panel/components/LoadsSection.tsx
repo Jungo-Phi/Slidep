@@ -211,7 +211,7 @@ export const LoadsSection: React.FC<LoadsSectionProps> = ({
                 <>
                   {load.type === "force" && (
                     <NumberInput
-                      label="F"
+                      label={t("force")}
                       kind={FORCE}
                       value={(shownForce ?? load).vector.length()}
                       onChange={(mag) =>
@@ -228,7 +228,7 @@ export const LoadsSection: React.FC<LoadsSectionProps> = ({
                   )}
                   {load.type === "distributed-force" && (
                     <NumberInput
-                      label="F"
+                      label={t("force")}
                       kind={FORCE}
                       value={
                         (((shownDistributed ?? load).magnitudeStart +
@@ -259,7 +259,7 @@ export const LoadsSection: React.FC<LoadsSectionProps> = ({
                   )}
                   {load.type === "moment" && (
                     <SignedNumberInput
-                      label="M"
+                      label={t("moment")}
                       kind={MOMENT}
                       value={(shownMoment ?? load).value}
                       onChange={(value) =>
@@ -286,7 +286,7 @@ export const LoadsSection: React.FC<LoadsSectionProps> = ({
                     onClick={() =>
                       applyActions([{ type: "DeleteElement", element: load }])
                     }
-                    title={t("action_delete")}
+                    title={t("delete")}
                     sx={{ borderRadius: 3 }}
                   >
                     <Delete sx={{ width: 20, height: 20 }} />
@@ -357,9 +357,11 @@ export const LoadsSection: React.FC<LoadsSectionProps> = ({
                   />
                   {load.type === "force" ? (
                     <NumberInput
-                      label="Angle"
+                      label={t("angle")}
                       kind={ANGLE}
-                      value={wrap_angle_rad((shownForce ?? load).vector.angle())}
+                      value={wrap_angle_rad(
+                        (shownForce ?? load).vector.angle(),
+                      )}
                       onChange={(newAngle) =>
                         applyActions([
                           {
@@ -376,7 +378,7 @@ export const LoadsSection: React.FC<LoadsSectionProps> = ({
                     />
                   ) : (
                     <NumberInput
-                      label="Angle"
+                      label={t("angle")}
                       kind={ANGLE}
                       value={wrap_angle_rad(
                         (shownDistributed ?? load).direction.angle(),

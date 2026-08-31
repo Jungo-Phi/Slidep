@@ -19,6 +19,8 @@ const FORCE = id(6);
 const PIVOT2 = id(7);
 const BEAM2 = id(8);
 const GEAR2 = id(9);
+const MATERIAL = id(10);
+const PROFILE = id(11);
 
 const mechanical: MechanicalElement[] = [
   {
@@ -40,7 +42,8 @@ const mechanical: MechanicalElement[] = [
     probes: [],
     overlays: {},
     fixedNodesBodyIDs: [],
-    linearMass: 1,
+    materialID: MATERIAL,
+    profileID: PROFILE,
   },
   {
     type: "spring",
@@ -83,7 +86,8 @@ const mechanical: MechanicalElement[] = [
     probes: [],
     overlays: {},
     fixedNodesBodyIDs: [],
-    linearMass: 1,
+    materialID: MATERIAL,
+    profileID: PROFILE,
   },
   {
     type: "gear",

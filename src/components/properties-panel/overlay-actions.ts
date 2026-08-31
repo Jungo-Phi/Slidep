@@ -1,9 +1,5 @@
 import { Action, MechanicalElement, OverlayKind } from "../../types";
-import {
-  available_overlays,
-  is_node_element,
-  overlay_shown,
-} from "../../utils/element-queries";
+import { available_overlays, overlay_shown } from "../../utils/element-queries";
 import { PluralKey } from "../../i18n";
 
 /** Human label of each overlay layer, singular or plural depending on how many
@@ -12,8 +8,7 @@ import { PluralKey } from "../../i18n";
 export const OVERLAY_LABEL_KEYS: Record<OverlayKind, PluralKey> = {
   trajectory: "overlay_trajectory",
   force: "overlay_force",
-  velocity: "overlay_velocity",
-  stress: "overlay_stress",
+  velocity: "velocity",
 };
 
 /** The elements `kind` can be drawn on — the denominator of the n/total counter. */
@@ -25,22 +20,17 @@ export function overlay_targets(
 }
 
 /**
- * How many distinct `kind` quantities `el` actually carries — the number `tn`
- * needs to pick singular or plural for `OVERLAY_LABEL_KEYS[kind]`, which is not
- * always one-per-element: a member's "force" is a reaction at each of its two
- * ends (a node's is the single reaction at its one point), and a member's
- * "stress" is never just one figure (axial, shear, bending), so it stays
- * plural regardless of how many members are in play.
+ * How many distinct `kind` quantities ONE element of that kind carries — the number `tn`
+ * needs to pick singular or plural for `OVERLAY_LABEL_KEYS[kind]`. One for every kind: each is
+ * a single field read off one beam (or node), even "stress", which folds N and Mf into one
+ * utilization ratio rather than showing them separately.
  */
-function overlay_label_weight(el: MechanicalElement, kind: OverlayKind): number {
+function overlay_label_weight(kind: OverlayKind): number {
   switch (kind) {
     case "trajectory":
     case "velocity":
-      return 1;
     case "force":
-      return is_node_element(el) ? 1 : 2;
-    case "stress":
-      return 2;
+      return 1;
   }
 }
 
@@ -49,7 +39,7 @@ export function overlay_label_count(
   elements: MechanicalElement[],
   kind: OverlayKind,
 ): number {
-  return elements.reduce((sum, el) => sum + overlay_label_weight(el, kind), 0);
+  return elements.length * overlay_label_weight(kind);
 }
 
 /** How many of the applicable elements currently show `kind`, out of how many. */

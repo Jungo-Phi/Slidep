@@ -48,7 +48,7 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
     <Divider orientation="vertical" flexItem sx={{ mx: tight ? 0.5 : 1 }} />
 
     {/* Bouton Bibliothèque — accès direct à la galerie */}
-    <Tooltip disableInteractive title={t("toolbar_library")}>
+    <Tooltip disableInteractive title={t("mechanism_library")}>
       <IconButton color="inherit" size="small" onClick={onOpenGallery} sx={{ m: -1 }}>
         <Apps sx={{ fontSize: 20 }} />
       </IconButton>

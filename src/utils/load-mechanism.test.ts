@@ -3,10 +3,19 @@ import { load_mechanism } from "./load-mechanism";
 import { serialize_mechanism } from "./serialization";
 import { DEFAULT_METADATA, DEFAULT_SIMULATION, Mechanism } from "../types/mechanism";
 import { Point2 } from "../types/point2";
-import { BeamElement, ConstraintElement, ID } from "../types";
+import { BeamElement, ConstraintElement, ID, MaterialDef, ProfileDef } from "../types";
 
 const BEAM_ID = "00000000-0000-0000-0000-00000000b001" as ID;
 const DIM_ID = "00000000-0000-0000-0000-00000000d001" as ID;
+const MATERIAL_ID = "00000000-0000-0000-0000-00000000m001" as ID;
+const PROFILE_ID = "00000000-0000-0000-0000-00000000p001" as ID;
+
+const materials: MaterialDef[] = [
+  { id: MATERIAL_ID, name: "test", E: 1, Re: 1, rho: 1, readOnly: false },
+];
+const profiles: ProfileDef[] = [
+  { id: PROFILE_ID, name: "test", shape: { kind: "rect", b: 1, h: 1 } },
+];
 
 const beam: BeamElement = {
   type: "beam",
@@ -18,7 +27,8 @@ const beam: BeamElement = {
   fixedNodeStartID: undefined,
   fixedNodeEndID: undefined,
   fixedNodesBodyIDs: [],
-  linearMass: 1,
+  materialID: MATERIAL_ID,
+  profileID: PROFILE_ID,
 };
 
 /** A cote whose label the solver has driven to `NaN`, as a degenerate frame does. */
@@ -42,6 +52,8 @@ const mechanism: Mechanism = {
   mechanicalElements: [beam],
   constraintElements: [brokenDimension],
   loads: [],
+  materials,
+  profiles,
   history: [],
   future: [],
 };

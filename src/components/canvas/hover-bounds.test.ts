@@ -16,6 +16,8 @@ const P = (x: number, y: number) => new Point2(x, y);
 const AXLE = "ax" as ID;
 const GEAR = "g" as ID;
 const BEAM = "bm" as ID;
+const MATERIAL = "mt" as ID;
+const PROFILE = "pf" as ID;
 const VIEW: ViewportState = { scale: 1, pan: new Point2(0, 0) };
 
 /** Zoomed out until any screen minimum is worth far more world than the fixtures measure. */
@@ -61,7 +63,8 @@ const MECH: MechanicalElement[] = [
     fixedNodeStartID: undefined,
     fixedNodeEndID: undefined,
     fixedNodesBodyIDs: [],
-    linearMass: 1,
+    materialID: MATERIAL,
+    profileID: PROFILE,
   } as BeamElement,
 ];
 

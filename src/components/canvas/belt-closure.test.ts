@@ -116,6 +116,8 @@ describe("closing a belt while placing it", () => {
       MECH,
       [],
       [],
+      [],
+      [],
       VIEWPORT,
     );
 
@@ -155,6 +157,8 @@ describe("closing a belt while placing it", () => {
       fromVoid,
       { type: "BeltClosure", position: far },
       MECH,
+      [],
+      [],
       [],
       [],
       VIEWPORT,
@@ -244,6 +248,8 @@ describe("the gear a belt is started on", () => {
       MECH,
       [],
       [],
+      [],
+      [],
       VIEWPORT,
     );
     expect(attached(actions)).toEqual([G_A]);
@@ -256,6 +262,8 @@ describe("the gear a belt is started on", () => {
       MECH,
       [],
       [],
+      [],
+      [],
       VIEWPORT,
     );
     expect(attached(actions)).toEqual([G_A, G_B]);
@@ -266,6 +274,8 @@ describe("the gear a belt is started on", () => {
       routing,
       { type: "Void", position: P(500, -200) },
       MECH,
+      [],
+      [],
       [],
       [],
       VIEWPORT,

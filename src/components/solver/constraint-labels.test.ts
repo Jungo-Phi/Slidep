@@ -8,10 +8,13 @@ import {
   ID,
   PivotElement,
 } from "../../types/element";
+import { MaterialDef, ProfileDef } from "../../types/material";
 
 const BEAM = "00000000-0000-0000-0000-0000000000b1" as ID;
 const NODE = "00000000-0000-0000-0000-0000000000p1" as ID;
 const DIM = "00000000-0000-0000-0000-0000000000d1" as ID;
+const MATERIAL_ID = "00000000-0000-0000-0000-0000000000m1" as ID;
+const PROFILE_ID = "00000000-0000-0000-0000-0000000000pr" as ID;
 
 const beam: BeamElement = {
   type: "beam",
@@ -23,7 +26,8 @@ const beam: BeamElement = {
   fixedNodeStartID: undefined,
   fixedNodeEndID: undefined,
   fixedNodesBodyIDs: [],
-  linearMass: 1,
+  materialID: MATERIAL_ID,
+  profileID: PROFILE_ID,
 };
 
 /** On the beam's own line, so the gap the label rides is zero. */
@@ -48,6 +52,13 @@ const dimension = {
   value: 0,
 } as ConstraintElement;
 
+const materials: MaterialDef[] = [
+  { id: MATERIAL_ID, name: "test", E: 1, Re: 1, rho: 1, readOnly: false },
+];
+const profiles: ProfileDef[] = [
+  { id: PROFILE_ID, name: "test", shape: { kind: "rect", b: 1, h: 1 } },
+];
+
 const mechanism: Mechanism = {
   metadata: DEFAULT_METADATA,
   viewport: { scale: 1, pan: new Point2(0, 0) },
@@ -55,6 +66,8 @@ const mechanism: Mechanism = {
   mechanicalElements: [beam, node],
   constraintElements: [dimension],
   loads: [],
+  materials,
+  profiles,
   history: [],
   future: [],
 };

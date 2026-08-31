@@ -103,13 +103,25 @@ export type GeometricElement =
 /** Per-element overlay visibility */
 export type OverlayFlags = Partial<Record<OverlayKind, boolean>>;
 
-export type OverlayKind = "trajectory" | "force" | "velocity" | "stress";
+export type OverlayKind = "trajectory" | "force" | "velocity";
 
-export const OVERLAY_KIND_ORDER: OverlayKind[] = [
-  "trajectory",
-  "force",
-  "velocity",
-  "stress",
+export const OVERLAY_KIND_ORDER: OverlayKind[] = ["trajectory", "force", "velocity"];
+
+/**
+ * A beam's fill colour, mechanism-wide — docs/plan-efforts-interieurs.md phase 9. Unlike
+ * `OverlayKind`, this is not a per-element flag: `draw_beam` has only one fill slot, so at
+ * most one of these reads can be drawn on a beam at a time, and all five are meant for a
+ * comparison across the whole mechanism rather than an isolated beam. One global setting, not
+ * an `OverlayFlags` entry.
+ */
+export type BeamStressLens = "none" | "normal" | "bending" | "utilization" | "shear";
+
+export const BEAM_STRESS_LENS_ORDER: BeamStressLens[] = [
+  "none",
+  "normal",
+  "bending",
+  "utilization",
+  "shear",
 ];
 
 // ─── ID ───────────────────────────────────────────────────────────────────────
@@ -231,7 +243,10 @@ export interface GearElement extends BaseBodyElement {
 export interface BeamElement extends BaseEdgeElement {
   type: "beam";
   fixedNodesBodyIDs: ID[];
-  linearMass: number;
+  /** The mechanism's own library — `A`, `I_Gz` and `v` are derived from these, never
+   *  stored. */
+  materialID: ID;
+  profileID: ID;
 }
 
 /** Spring element - elastic connection */

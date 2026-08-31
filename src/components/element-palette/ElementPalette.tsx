@@ -56,7 +56,7 @@ export const edition_palette = (): {
   elements: PaletteElement[];
 }[] => [
   {
-    titleKey: "palette_interface",
+    titleKey: "interface",
     elements: [
       {
         nameKey: "tool_select",
@@ -107,7 +107,7 @@ export const edition_palette = (): {
     ],
   },
   {
-    titleKey: "palette_connections",
+    titleKey: "connections",
     elements: [
       {
         nameKey: "slider",
@@ -151,7 +151,7 @@ export const edition_palette = (): {
     ],
   },
   {
-    titleKey: "palette_structure",
+    titleKey: "structure",
     elements: [
       {
         nameKey: "join",
@@ -184,7 +184,7 @@ export const edition_palette = (): {
     ],
   },
   {
-    titleKey: "palette_dynamics",
+    titleKey: "mode_dynamic",
     elements: [
       {
         nameKey: "damper",
@@ -229,7 +229,7 @@ export const edition_palette = (): {
     ],
   },
   {
-    titleKey: "palette_constraints",
+    titleKey: "constraints",
     elements: [
       {
         nameKey: "dimension",
@@ -320,10 +320,10 @@ export const edition_palette = (): {
     ],
   },
   {
-    titleKey: "palette_loads",
+    titleKey: "loads",
     elements: [
       {
-        nameKey: "tool_force",
+        nameKey: "force",
         iconSrc: icon("force"),
         goToStateType: "PlacingForceStart",
         simBehavior: "structural",
@@ -335,7 +335,7 @@ export const edition_palette = (): {
         hilightHoverColor: COLORS.ACCENT_DARK,
       },
       {
-        nameKey: "tool_moment",
+        nameKey: "moment",
         iconSrc: icon("moment"),
         goToStateType: "PlacingMomentStart",
         simBehavior: "structural",
@@ -348,7 +348,7 @@ export const edition_palette = (): {
     ],
   },
   {
-    titleKey: "palette_measurements",
+    titleKey: "measurements",
     elements: [
       {
         nameKey: "tool_probe",
@@ -502,7 +502,7 @@ export const ElementPalette: React.FC<ElementPaletteProps> = ({
     >
       {palette.map((group) => (
         <section key={group.titleKey}>
-          {group.titleKey !== "palette_interface" && (
+          {group.titleKey !== "interface" && (
             <>
               <Divider
                 variant="fullWidth"

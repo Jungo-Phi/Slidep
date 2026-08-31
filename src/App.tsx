@@ -21,8 +21,13 @@ import {
 } from "@mui/material";
 import { Close, UploadFile, WarningAmber } from "@mui/icons-material";
 import {
+  default_profile,
+  seed_material_catalog,
+} from "./constants/material-profile-catalog";
+import {
   Action,
   AppMode,
+  BeamStressLens,
   ConstraintElement,
   DEFAULT_METADATA,
   DEFAULT_SIMULATION,
@@ -85,7 +90,7 @@ import {
   migrate_snap_settings,
   type SnapSettings,
 } from "./components/canvas/snap-corridor";
-import { HoveredPart } from "./types/hovered-part";
+import { HoveredAbscissa, HoveredPart } from "./types/hovered-part";
 import { actionReducer } from "./components/mechanism/action-reducer";
 import { assert_actions_preserve_validity } from "./utils/assert-mechanism";
 import { apply_actions } from "./components/mechanism/apply-actions";
@@ -131,6 +136,19 @@ const is_observation_only_bundle = (actions: Action[]) =>
   actions.length > 0 &&
   actions.every((a) => OBSERVATION_ACTIONS.includes(a.type));
 
+/** A load's value changing (magnitude, direction…) — never its target or count — is the one
+ *  parameter edit cheap enough to swap into the running model without a full recompile (see
+ *  `Recorder.setLoads`). A drag can fire this many times a second, unlike every other edit. */
+const LOAD_VALUE_ACTIONS: Action["type"][] = [
+  "ChangeForce",
+  "ChangeDistributedForce",
+  "ChangeMoment",
+];
+
+const is_load_value_only_bundle = (actions: Action[]) =>
+  actions.length > 0 &&
+  actions.every((a) => LOAD_VALUE_ACTIONS.includes(a.type));
+
 /** A load creation/deletion is a parameter edit too (a load is an input, not
  *  structure); any other Create/Delete is structural. */
 const is_load_element = (el: UnionElement) =>
@@ -144,10 +162,14 @@ const is_parameter_action = (a: Action) =>
     is_load_element(a.element));
 
 /** Structure edits are the ones the simulation cannot absorb: they still exit
- *  to edition (the safety net behind the greyed-out controls). */
+ *  to edition (the safety net behind the greyed-out controls). `Blank` is an
+ *  undo-boundary marker, not an edit — it never forces that exit on its own. */
 const is_structure_bundle = (actions: Action[]) =>
   actions.some(
-    (a) => !OBSERVATION_ACTIONS.includes(a.type) && !is_parameter_action(a),
+    (a) =>
+      a.type !== "Blank" &&
+      !OBSERVATION_ACTIONS.includes(a.type) &&
+      !is_parameter_action(a),
   );
 
 /** Whether a canvas state is an armed placement tool waiting for its first click — no element selected, no gesture started. */
@@ -178,6 +200,8 @@ const App: React.FC = () => {
     mechanicalElements: [],
     constraintElements: [],
     loads: [],
+    materials: seed_material_catalog(),
+    profiles: [default_profile()],
     history: [],
     future: [],
   });
@@ -186,6 +210,10 @@ const App: React.FC = () => {
     type: "Void",
     position: ZERO,
   });
+
+  /** An abscissa hovered on the analysis panel's N/T/Mf diagrams, for the canvas to mark on
+   *  the beam — see docs/plan-efforts-interieurs.md phase 5bis. */
+  const [hoveredAbscissa, setHoveredAbscissa] = useState<HoveredAbscissa | null>(null);
 
   /** Elements the analysis panel is pointing at, and why (see `CanvasHighlight`). */
   const [highlight, setHighlight] = useState<CanvasHighlight>(NO_HIGHLIGHT);
@@ -203,6 +231,12 @@ const App: React.FC = () => {
   const [showGrid, setShowGrid] = useState<boolean>(
     getStorageItem<boolean>("showGrid", true),
   );
+  const [beamStressLens, setBeamStressLens] = useState<BeamStressLens>(
+    getStorageItem<BeamStressLens>("beamStressLens", "none"),
+  );
+  const [trajectoryDotted, setTrajectoryDotted] = useState<boolean>(
+    getStorageItem<boolean>("trajectoryDotted", false),
+  );
   const [snapSettings, setSnapSettings] = useState<SnapSettings>(
     migrate_snap_settings(
       getStorageItem<SnapSettings>("snapSettings", DEFAULT_SNAP_SETTINGS),
@@ -219,6 +253,14 @@ const App: React.FC = () => {
   useEffect(() => {
     setStorageItem("showGrid", showGrid);
   }, [showGrid]);
+
+  useEffect(() => {
+    setStorageItem("beamStressLens", beamStressLens);
+  }, [beamStressLens]);
+
+  useEffect(() => {
+    setStorageItem("trajectoryDotted", trajectoryDotted);
+  }, [trajectoryDotted]);
 
   useEffect(() => {
     setStorageItem("snapSettings", snapSettings);
@@ -341,6 +383,7 @@ const App: React.FC = () => {
     simulationRef,
     simStartHistoryLengthRef,
     probeOnlyEditRef,
+    loadValueOnlyEditRef,
   } = useSimulationPlayback({
     mechanism,
     appMode,
@@ -516,6 +559,8 @@ const App: React.FC = () => {
   const applyActions = useCallback(
     (actions: Action[]) => {
       if (is_observation_only_bundle(actions)) probeOnlyEditRef.current = true;
+      else if (is_load_value_only_bundle(actions))
+        loadValueOnlyEditRef.current = true;
       if (
         simulationRef.current.appMode !== "edition" &&
         is_structure_bundle(actions)
@@ -537,7 +582,14 @@ const App: React.FC = () => {
       });
       markDirty();
     },
-    [markDirty, setCanvasState, exitToEdition, simulationRef, probeOnlyEditRef],
+    [
+      markDirty,
+      setCanvasState,
+      exitToEdition,
+      simulationRef,
+      probeOnlyEditRef,
+      loadValueOnlyEditRef,
+    ],
   );
 
   /** Repère les contraintes-icônes recréées/supprimées par un undo/redo pour que le canvas les fasse réapparaître (reveal) ou s'estomper (fantôme rouge). */
@@ -740,6 +792,21 @@ const App: React.FC = () => {
     setInfoOpen(false);
   };
 
+  /** Which section is hovered in the library tab — also what tints the canvas for as long as
+   *  that hover lasts, the same "hover a group to color it" gesture the DDL redundancy audit
+   *  already uses. `null` the rest of the time. */
+  const [librarySection, setLibrarySection] = useState<"materials" | "profiles" | null>(
+    null,
+  );
+  /** A row hovered there, for the canvas to accentuate its beams and fade the rest. */
+  const [hoveredLibraryEntryID, setHoveredLibraryEntryID] = useState<ID | null>(null);
+  useEffect(() => {
+    if (activeTab !== "library") {
+      setLibrarySection(null);
+      setHoveredLibraryEntryID(null);
+    }
+  }, [activeTab]);
+
   // The chosen language lives in `i18n`, which every module reads through `t`; this state is
   // only what makes React repaint the app around it.
   const [language, setLanguageState] = useState<Lang>(get_language);
@@ -804,9 +871,11 @@ const App: React.FC = () => {
             variant="dense"
             disableGutters
             sx={{
-              display: "flex",
+              display: "grid",
+              // Equal side columns keep the center column geometrically centered
+              // regardless of how wide the title or the right-hand controls are.
+              gridTemplateColumns: "1fr auto 1fr",
               alignItems: "center",
-              justifyContent: "space-between",
               px: 1,
               gap: 0.5,
               minHeight: "40px !important",
@@ -826,6 +895,10 @@ const App: React.FC = () => {
               handleSpaceKey={handleSpaceKey}
               onOpenGallery={handleOpenGallery}
               saveStatus={saveStatus}
+              beamStressLens={beamStressLens}
+              setBeamStressLens={setBeamStressLens}
+              trajectoryDotted={trajectoryDotted}
+              setTrajectoryDotted={setTrajectoryDotted}
               rightSlot={
                 <ToolsMenu
                   mechanism={mechanism}
@@ -902,10 +975,17 @@ const App: React.FC = () => {
               snapToGrid={snapToGrid}
               snapSettings={snapSettings}
               showGrid={showGrid}
+              beamStressLens={beamStressLens}
+              trajectoryDotted={trajectoryDotted}
               liveFrameRef={liveFrameRef}
               highlight={highlight}
               modePreviewRef={modePreviewRef}
               redundancySymbols={redundancySymbols}
+              hoveredAbscissa={hoveredAbscissa}
+              librarySection={
+                activeTab === "library" ? (librarySection ?? undefined) : undefined
+              }
+              hoveredLibraryEntryID={hoveredLibraryEntryID}
             />
 
             {appMode !== "edition" && (
@@ -940,6 +1020,10 @@ const App: React.FC = () => {
             activeTab={activeTab}
             setActiveTab={setActiveTab}
             unsatisfied={currentUnsatisfied}
+            setHoveredAbscissa={setHoveredAbscissa}
+            setLibrarySection={setLibrarySection}
+            hoveredLibraryEntryID={hoveredLibraryEntryID}
+            setHoveredLibraryEntryID={setHoveredLibraryEntryID}
           />
         </Box>
       </Box>

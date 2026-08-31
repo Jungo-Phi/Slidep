@@ -15,6 +15,7 @@ import type {
   LoadElement,
   MechanicalElement,
 } from "../../types/element";
+import type { MaterialDef, ProfileDef } from "../../types/material";
 
 /**
  * What the eraser highlights must be what it removes. These pin the closure to
@@ -33,6 +34,14 @@ const LONE = id(5);
 const DIM_RADIUS = id(6);
 const FORCE = id(7);
 const FRAMED_FORCE = id(8);
+const MATERIAL = id(9);
+const PROFILE = id(10);
+const MATERIALS: MaterialDef[] = [
+  { id: MATERIAL, name: "test", E: 1, Re: 1, rho: 1, readOnly: false },
+];
+const PROFILES: ProfileDef[] = [
+  { id: PROFILE, name: "test", shape: { kind: "rect", b: 1, h: 1 } },
+];
 
 /** An axle carrying two gears, a beam hosting a force, and a lone pivot. */
 function build(): {
@@ -91,7 +100,8 @@ function build(): {
         fixedNodeStartID: undefined,
         fixedNodeEndID: undefined,
         fixedNodesBodyIDs: [],
-        linearMass: 1,
+        materialID: MATERIAL,
+        profileID: PROFILE,
       },
       {
         type: "pivot",
@@ -196,7 +206,8 @@ describe("deletion_closure", () => {
         fixedNodeStartID: JOIN,
         fixedNodeEndID: JOIN,
         fixedNodesBodyIDs: [],
-        linearMass: 1,
+        materialID: MATERIAL,
+        profileID: PROFILE,
       },
       {
         type: "beam",
@@ -208,7 +219,8 @@ describe("deletion_closure", () => {
         fixedNodeStartID: JOIN,
         fixedNodeEndID: undefined,
         fixedNodesBodyIDs: [],
-        linearMass: 1,
+        materialID: MATERIAL,
+        profileID: PROFILE,
       },
     ];
 
@@ -256,6 +268,8 @@ describe("deletion_closure", () => {
       mechanicalElements: mechanical,
       constraintElements: [],
       loads,
+      materials: MATERIALS,
+      profiles: PROFILES,
       history: [],
       future: [],
     };
@@ -315,7 +329,8 @@ describe("deletion_closure", () => {
         fixedNodeStartID: OLD,
         fixedNodeEndID: OLD,
         fixedNodesBodyIDs: [],
-        linearMass: 1,
+        materialID: MATERIAL,
+        profileID: PROFILE,
       },
     ];
 
@@ -326,6 +341,8 @@ describe("deletion_closure", () => {
       mechanicalElements: mechanical,
       constraintElements: [],
       loads: [],
+      materials: MATERIALS,
+      profiles: PROFILES,
       history: [],
       future: [],
     };

@@ -42,6 +42,8 @@ const mechanism = (): Mechanism => ({
   mechanicalElements: [mass, node],
   constraintElements: [],
   loads: [],
+  materials: [],
+  profiles: [],
   history: [],
   future: [],
 });

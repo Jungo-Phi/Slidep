@@ -39,6 +39,8 @@ const mechanism = (): Mechanism => ({
   ],
   constraintElements: [],
   loads: [],
+  materials: [],
+  profiles: [],
   history: [],
   future: [],
 });

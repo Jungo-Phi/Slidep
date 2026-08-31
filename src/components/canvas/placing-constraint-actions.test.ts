@@ -16,6 +16,8 @@ import type { HoveredPart } from "../../types/hovered-part";
 
 const EDGE = "00000000-0000-0000-0000-000000000001" as ID;
 const EXISTING = "00000000-0000-0000-0000-000000000002" as ID;
+const MATERIAL = "00000000-0000-0000-0000-000000000003" as ID;
+const PROFILE = "00000000-0000-0000-0000-000000000004" as ID;
 
 const beam: BeamElement = {
   type: "beam",
@@ -28,7 +30,8 @@ const beam: BeamElement = {
   fixedNodeStartID: undefined,
   fixedNodeEndID: undefined,
   fixedNodesBodyIDs: [],
-  linearMass: 1,
+  materialID: MATERIAL,
+  profileID: PROFILE,
 };
 
 const mechanical: MechanicalElement[] = [beam];

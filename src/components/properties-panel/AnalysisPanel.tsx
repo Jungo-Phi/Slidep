@@ -27,6 +27,7 @@ import {
 import {
   Action,
   AppMode,
+  HoveredAbscissa,
   HoveredPart,
   ID,
   MechanicalElement,
@@ -48,7 +49,15 @@ import {
   get_probe_series,
   is_vector_metric,
 } from "../solver/probe-series";
-import { at_recording_end } from "../solver/simulation-engine";
+import { at_recording_end, dynamic_snapshot_at } from "../solver/simulation-engine";
+import { compute_cohesion_field } from "../solver/cohesion-field";
+import {
+  metric_shows_zero,
+  pool_key_for_metric,
+  quantity_kind_for_metric,
+} from "../solver/negligibility-pool";
+import { GRAVITY } from "../../constants/physics-specs";
+import type { BeamElement } from "../../types/element";
 import {
   PROBE_METRIC_LABEL_KEYS,
   PROBE_METRIC_ORDER,
@@ -61,6 +70,7 @@ import ProbeChart, {
   probe_curve_colors,
   PROBE_ELEMENT_COLORS,
 } from "./components/ProbeChart";
+import CohesionDiagrams from "./components/CohesionDiagrams";
 import { get_element_from_id } from "../mechanism/connect-actions";
 import { element_to_hovered_part } from "../canvas/utils";
 import { shown_element_name } from "../../utils";
@@ -82,7 +92,12 @@ import { undriven_motors } from "../solver/motion-modes";
 import { ChainAnalysis, useDofAnalysis } from "./useDofAnalysis";
 import { ddl_status } from "./ddl-status";
 import { AnimatedMode, useModeAnimation } from "./useModeAnimation";
-import { ANGULAR_VELOCITY, LENGTH, format_quantity } from "../../utils/quantity-format";
+import {
+  ANGULAR_VELOCITY,
+  LENGTH,
+  display_unit,
+  format_quantity,
+} from "../../utils/quantity-format";
 
 interface AnalysisPanelProps {
   mechanism: Mechanism;
@@ -112,30 +127,32 @@ interface AnalysisPanelProps {
   setRedundancySymbols: (symbols: RedundancySymbol[]) => void;
   /** Where the pose the panel is animating is published, for the canvas to draw. */
   modePreviewRef: React.MutableRefObject<Mechanism | null>;
+  /** Publishes the abscissa hovered on the selected beam's N/T/Mf diagrams. */
+  setHoveredAbscissa: (hovered: HoveredAbscissa | null) => void;
 }
 
 /** Short human label for a solver link type, shown as the violation kind. */
 const CONSTRAINT_NOUN: Record<string, StringKey> = {
-  MotorBeam: "link_motor",
-  MotorAngle: "link_motor",
+  MotorBeam: "locked_motor",
+  MotorAngle: "locked_motor",
   Distance: "length",
-  FixedOnSegment: "link_fixed_on_segment",
-  SlideOnSegment: "link_slide_on_segment",
+  FixedOnSegment: "fixed_on_segment",
+  SlideOnSegment: "slide_on_segment",
   Angle: "angle",
-  KeepOrientation: "link_keep_orientation",
-  GearMeshing: "link_gear_meshing",
-  GearMeshAngle: "link_gear_meshing",
-  GearRatio: "link_gear_ratio",
-  CoaxialAngle: "link_coaxial",
-  GearPerimeterPin: "link_gear_perimeter_pin",
-  BeamFollowsAngle: "link_beam_follows_angle",
-  Normal: "link_normal",
-  Parallel: "link_parallel",
-  EqualLength: "link_equal_length",
-  Horizontal: "link_horizontal",
-  Vertical: "link_vertical",
-  BeltSegmentNoSlip: "link_belt_no_slip",
-  BeltLength: "link_belt_length",
+  KeepOrientation: "keep_orientation",
+  GearMeshing: "gear_meshing",
+  GearMeshAngle: "gear_meshing",
+  GearRatio: "gear_ratio",
+  CoaxialAngle: "coaxial",
+  GearPerimeterPin: "gear_perimeter_pin",
+  BeamFollowsAngle: "beam_follows_angle",
+  Normal: "normal",
+  Parallel: "parallel",
+  EqualLength: "equal_length",
+  Horizontal: "horizontal",
+  Vertical: "vertical",
+  BeltSegmentNoSlip: "belt_no_slip",
+  BeltLength: "belt_length",
 };
 
 /** What one element's dispensable constraints are, in words: "2 × Distance". */
@@ -670,6 +687,7 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
   setRedundancySymbols,
   modePreviewRef,
   selectedElement,
+  setHoveredAbscissa,
 }) => {
   const { palette } = useTheme();
   const curveColors = probe_curve_colors(palette.primary.main);
@@ -831,6 +849,52 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
     [analysedMechanism.mechanicalElements],
   );
 
+  // N/T/Mf diagrams (docs/plan-efforts-interieurs.md phase 5bis) — a beam selected, dynamic
+  // mode, read off the recorded snapshot nearest the cursor the same way every other measure
+  // in this panel does (`ElementMeasures`'s own `get_dynamic_metric_at`), rather than the
+  // live per-frame ref the canvas itself draws from: this panel re-renders declaratively off
+  // `runtimeState`, not off a `requestAnimationFrame` loop.
+  const selectedBeam: BeamElement | undefined =
+    selectedElement?.type === "beam" ? selectedElement : undefined;
+  const cohesionField = React.useMemo(() => {
+    if (!selectedBeam || appMode !== "dynamic") return undefined;
+    const dynSnap = dynamic_snapshot_at(
+      runtimeState.simulationSnapshots as DynamicSnapshot[],
+      runtimeState.time,
+    );
+    const cohesion = dynSnap?.beamCohesion?.find((c) => c.beamID === selectedBeam.id);
+    if (!dynSnap || !cohesion) return undefined;
+    const gravity = mechanism.simulation.gravity ? GRAVITY : ZERO;
+    return compute_cohesion_field(
+      selectedBeam,
+      mechanism.materials,
+      mechanism.profiles,
+      cohesion,
+      mechanism.loads,
+      dynSnap,
+      gravity,
+    );
+  }, [
+    selectedBeam,
+    appMode,
+    runtimeState.simulationSnapshots,
+    runtimeState.time,
+    mechanism.simulation.gravity,
+    mechanism.loads,
+    mechanism.materials,
+    mechanism.profiles,
+  ]);
+
+  // Clears the canvas's hover marker on deselection and when this panel goes away — nothing
+  // else ever un-sets it once a diagram stops being hovered without the mouse ever leaving.
+  React.useEffect(() => {
+    if (!selectedBeam) {
+      setHoveredAbscissa(null);
+      return;
+    }
+    return () => setHoveredAbscissa(null);
+  }, [selectedBeam, setHoveredAbscissa]);
+
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 2, my: 2 }}>
       {appMode !== "edition" && (
@@ -871,6 +935,20 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
               appMode={appMode}
               reserveHeight
             />
+
+            {selectedBeam && (
+              <CohesionDiagrams
+                field={cohesionField}
+                forcePoolMax={runtimeState.negligibilityPool.force}
+                momentPoolMax={runtimeState.negligibilityPool.moment}
+                emptyMessage={t(
+                  appMode === "kinematic" ? "cohesion_kinematic" : "chart_waiting",
+                )}
+                onHoverS={(s) =>
+                  setHoveredAbscissa(s === null ? null : { beamID: selectedBeam.id, s })
+                }
+              />
+            )}
           </Box>
 
           <Divider />
@@ -1039,7 +1117,7 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
       <Box sx={{ mx: 2, display: "flex", flexDirection: "column", gap: 1 }}>
         <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
           <Typography variant="subtitle2" fontWeight={600} sx={{ flex: 1 }}>
-            {t("palette_measurements")}
+            {t("measurements")}
           </Typography>
           {probedElements.length >= 2 && (
             <FormControlLabel
@@ -1118,6 +1196,15 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
                 // Data exists but every component toggle is off
                 const noComponentSelected =
                   series.t.length >= 2 && curves.length === 0;
+                // The chart's own SI prefix (mN, µN, kN…), picked from what it actually
+                // shows rather than the metric's bare base unit — named once here, in the
+                // header, so every label inside the chart can stay a bare mantissa in the
+                // same unit instead of repeating it.
+                const peak = curves.reduce(
+                  (m, c) => c.values.reduce((mm, v) => Math.max(mm, Math.abs(v)), m),
+                  0,
+                );
+                const unit = display_unit(peak, quantity_kind_for_metric(probe.metric));
                 return (
                   <Box
                     key={probe.metric}
@@ -1148,7 +1235,7 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
                           variant="caption"
                           color="text.secondary"
                         >
-                          {` (${series.unit})`}
+                          {` (${unit.symbol})`}
                         </Typography>
                       </Typography>
                       {isVector &&
@@ -1217,6 +1304,18 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
                     <ProbeChart
                       curves={curves}
                       currentTime={runtimeState.time}
+                      poolMax={
+                        runtimeState.negligibilityPool[
+                          pool_key_for_metric(probe.metric)
+                        ]
+                      }
+                      ownFloor={
+                        runtimeState.negligibilityPool.floors[
+                          pool_key_for_metric(probe.metric)
+                        ]
+                      }
+                      unitFactor={unit.factor}
+                      showZero={metric_shows_zero(probe.metric)}
                       emptyMessage={
                         noComponentSelected
                           ? t("chart_no_component")
@@ -1241,7 +1340,6 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
               el.probes.some((p) => p.metric === metric),
             );
             const isVector = is_vector_metric(metric);
-            let unit = "";
             const curves: ChartCurve[] = contributors.flatMap((el) => {
               const series =
                 appMode === "kinematic"
@@ -1255,7 +1353,6 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
                       metric,
                       runtimeState.simulationSnapshots as DynamicSnapshot[],
                     );
-              unit = series.unit;
               const curve = series.curves.find(
                 (c) => c.key === (isVector ? "norm" : "value"),
               );
@@ -1270,6 +1367,13 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
                   ]
                 : [];
             });
+            // The chart's own SI prefix, picked from what it actually shows — see the
+            // per-element mode above for the same reasoning.
+            const peak = curves.reduce(
+              (m, c) => c.values.reduce((mm, v) => Math.max(mm, Math.abs(v)), m),
+              0,
+            );
+            const unit = display_unit(peak, quantity_kind_for_metric(metric));
             return (
               <Box key={metric}>
                 <Typography
@@ -1283,13 +1387,19 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
                     variant="caption"
                     color="text.secondary"
                   >
-                    {` (${unit})`}
+                    {` (${unit.symbol})`}
                     {isVector && t("chart_norm_suffix")}
                   </Typography>
                 </Typography>
                 <ProbeChart
                   curves={curves}
                   currentTime={runtimeState.time}
+                  poolMax={runtimeState.negligibilityPool[pool_key_for_metric(metric)]}
+                  ownFloor={
+                    runtimeState.negligibilityPool.floors[pool_key_for_metric(metric)]
+                  }
+                  unitFactor={unit.factor}
+                  showZero={metric_shows_zero(metric)}
                   emptyMessage={chart_empty_message(metric)}
                   onSeek={appMode !== "edition" ? seekTime : undefined}
                 />

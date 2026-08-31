@@ -10,6 +10,7 @@ import type {
   MechanicalElement,
   PivotElement,
 } from "../../types/element";
+import type { MaterialDef, ProfileDef } from "../../types/material";
 import { build_collision_candidates } from "./collision-candidates";
 
 /**
@@ -62,6 +63,15 @@ const mass = (mid: ID, position: Point2): MassElement => ({
   mass: 1,
 });
 
+const MATERIAL_ID = id();
+const PROFILE_ID = id();
+const MATERIALS: MaterialDef[] = [
+  { id: MATERIAL_ID, name: "test", E: 1, Re: 1, rho: 1, readOnly: false },
+];
+const PROFILES: ProfileDef[] = [
+  { id: PROFILE_ID, name: "test", shape: { kind: "rect", b: 1, h: 1 } },
+];
+
 const beam = (
   bid: ID,
   start: Point2,
@@ -75,7 +85,8 @@ const beam = (
   positionStart: start,
   positionEnd: end,
   fixedNodesBodyIDs,
-  linearMass: 1,
+  materialID: MATERIAL_ID,
+  profileID: PROFILE_ID,
 });
 
 const gear = (
@@ -106,6 +117,8 @@ function mechanism(mechanicalElements: MechanicalElement[]): Mechanism {
     mechanicalElements,
     constraintElements: [],
     loads: [],
+    materials: MATERIALS,
+    profiles: PROFILES,
     history: [],
     future: [],
   };

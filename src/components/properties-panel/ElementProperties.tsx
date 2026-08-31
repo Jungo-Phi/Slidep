@@ -51,12 +51,12 @@ import {
   create_radius_dimension,
 } from "./element-dimensions";
 import ElementPicker from "./components/ElementPicker";
+import MaterialProfileSection from "./components/MaterialProfileSection";
 import { DEFAULT } from "../../constants/physics-specs";
 import {
   ANGLE,
   ANGULAR_VELOCITY,
   LENGTH,
-  LINEAR_MASS,
   MASS,
   MOMENT,
   STIFFNESS,
@@ -241,7 +241,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                           onClick={() =>
                             applyActions([{ type: "DeleteElement", element }])
                           }
-                          title={t("action_delete")}
+                          title={t("delete")}
                           sx={{ borderRadius: 3 }}
                         >
                           <Delete sx={{ width: 20, height: 20 }} />
@@ -316,7 +316,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                     <Tooltip
                       disableInteractive
                       title={t(
-                        element.isGrounded ? "ground_release" : "ground_anchor",
+                        element.isGrounded ? "release" : "anchor",
                       )}
                     >
                       <IconButton
@@ -486,7 +486,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                       ),
                     )
                   }
-                  title={t("action_delete")}
+                  title={t("delete")}
                   onMouseEnter={(_e) => handleMouseEnter(element, true)}
                   onMouseLeave={handleMouseLeave}
                   sx={{ borderRadius: 4 }}
@@ -1021,32 +1021,12 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                 </Box>
               )}
               {element.type === "beam" && (
-                <Box
-                  sx={{
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    gap: 0.5,
-                  }}
-                >
-                  <Typography variant="caption">{t("linear_mass")}</Typography>
-                  <NumberInput
-                    label=""
-                    kind={LINEAR_MASS}
-                    value={element.linearMass}
-                    onChange={(linearMass) =>
-                      applyActions([
-                        {
-                          type: "ChangeLinearMass",
-                          id: element.id,
-                          delta: linearMass - element.linearMass,
-                        },
-                      ])
-                    }
-                    unsigned
-                    large
-                  />
-                </Box>
+                <MaterialProfileSection
+                  element={element}
+                  materials={mechanism.materials}
+                  profiles={mechanism.profiles}
+                  applyActions={applyActions}
+                />
               )}
               {element.type === "spring" && (
                 <Box

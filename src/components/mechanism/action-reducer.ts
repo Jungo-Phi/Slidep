@@ -11,13 +11,17 @@ import {
   ForceElement,
   DistributedForceElement,
   MomentElement,
+  MaterialDef,
+  ProfileDef,
 } from "../../types";
 import { is_nameable } from "../../utils/element-queries";
 import {
   get_constraint_element_from_id,
   get_element_from_id,
   get_load_element_from_id,
+  get_material_from_id,
   get_mechanical_element_from_id,
+  get_profile_from_id,
 } from "./connect-actions";
 
 /**
@@ -55,11 +59,15 @@ export function actionReducer(
     ...ce,
   }));
   let loadElements = mechanism.loads.map((l) => ({ ...l })); // TODO : clone_load ?
+  let materials = mechanism.materials.map((m) => ({ ...m }));
+  let profiles = mechanism.profiles.map((p) => ({ ...p, shape: { ...p.shape } }));
   const viewport = { ...mechanism.viewport };
   let floor = { ...mechanism.simulation.floor };
   let gravity = mechanism.simulation.gravity;
   let collisions = mechanism.simulation.collisions;
   let element: UnionElement;
+  let material: MaterialDef;
+  let profile: ProfileDef;
   actions.forEach((action) => {
     switch (action.type) {
       case "CreateElement":
@@ -183,12 +191,59 @@ export function actionReducer(
         }
         element.surfaceMass += action.delta * (revert ? -1 : 1);
         break;
-      case "ChangeLinearMass":
+      case "AssignMaterial":
         element = get_mechanical_element_from_id(action.id, mechanicalElements);
         if (element.type !== "beam") {
           break;
         }
-        element.linearMass += action.delta * (revert ? -1 : 1);
+        element.materialID = revert ? action.oldMaterialID : action.newMaterialID;
+        break;
+      case "AssignProfile":
+        element = get_mechanical_element_from_id(action.id, mechanicalElements);
+        if (element.type !== "beam") {
+          break;
+        }
+        element.profileID = revert ? action.oldProfileID : action.newProfileID;
+        break;
+      case "CreateMaterial":
+      case "DeleteMaterial":
+        if (revert !== (action.type === "DeleteMaterial")) {
+          materials = materials.filter((m) => m.id !== action.material.id);
+        } else {
+          materials.push({ ...action.material });
+        }
+        break;
+      case "RenameMaterial":
+        material = get_material_from_id(action.id, materials);
+        material.name = revert ? action.oldName : action.newName;
+        break;
+      case "ChangeMaterialE":
+        material = get_material_from_id(action.id, materials);
+        material.E += action.delta * (revert ? -1 : 1);
+        break;
+      case "ChangeMaterialRe":
+        material = get_material_from_id(action.id, materials);
+        material.Re += action.delta * (revert ? -1 : 1);
+        break;
+      case "ChangeMaterialRho":
+        material = get_material_from_id(action.id, materials);
+        material.rho += action.delta * (revert ? -1 : 1);
+        break;
+      case "CreateProfile":
+      case "DeleteProfile":
+        if (revert !== (action.type === "DeleteProfile")) {
+          profiles = profiles.filter((p) => p.id !== action.profile.id);
+        } else {
+          profiles.push({ ...action.profile, shape: { ...action.profile.shape } });
+        }
+        break;
+      case "RenameProfile":
+        profile = get_profile_from_id(action.id, profiles);
+        profile.name = revert ? action.oldName : action.newName;
+        break;
+      case "ChangeProfileShape":
+        profile = get_profile_from_id(action.id, profiles);
+        profile.shape = revert ? action.oldShape : action.newShape;
         break;
       case "GroundNode":
         const node = get_mechanical_element_from_id(
@@ -499,6 +554,8 @@ export function actionReducer(
     mechanicalElements: mechanicalElements,
     constraintElements: constraintElements,
     loads: loadElements,
+    materials,
+    profiles,
     history: mechanism.history,
     future: mechanism.future,
   };

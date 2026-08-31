@@ -210,18 +210,17 @@ export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
         }}
       >
         <Typography fontSize={"large"} fontWeight={500} sx={{ flexShrink: 0 }}>
-          {t("gallery_title")}
+          {t("my_mechanisms")}
         </Typography>
 
         <TextField
           size="small"
           variant="outlined"
-          placeholder={t("gallery_search_placeholder")}
+          placeholder={t("search_placeholder")}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           slotProps={{
             input: {
-              disableUnderline: true,
               startAdornment: (
                 <Search
                   fontSize="small"
@@ -243,12 +242,12 @@ export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
             flexShrink: 0,
           }}
         >
-          <Tooltip disableInteractive title={t("gallery_storage_notice")}>
+          <Tooltip disableInteractive title={t("storage_notice")}>
             <InfoOutlined
               sx={{ fontSize: 20, color: "text.secondary", ml: -1, mr: 4 }}
             />
           </Tooltip>
-          <Tooltip disableInteractive title={t("gallery_import_tooltip")}>
+          <Tooltip disableInteractive title={t("import_tooltip")}>
             <Button
               size="small"
               color="inherit"
@@ -256,15 +255,15 @@ export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
               onClick={onImport}
               sx={{ textTransform: "none", fontSize: "0.8rem", px: 1.5 }}
             >
-              {t("gallery_import")}
+              {t("import")}
             </Button>
           </Tooltip>
           <Tooltip
             disableInteractive
             title={t(
               mechanismRecords.length === 0
-                ? "gallery_export_all_empty"
-                : "gallery_export_all_tooltip",
+                ? "export_all_empty"
+                : "export_all_tooltip",
             )}
           >
             <span>
@@ -276,7 +275,7 @@ export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
                 onClick={onExportAll}
                 sx={{ textTransform: "none", fontSize: "0.8rem", px: 1.5 }}
               >
-                {t("gallery_export_all")}
+                {t("export_all")}
               </Button>
             </span>
           </Tooltip>
@@ -289,12 +288,16 @@ export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
 
       <DialogContent dividers sx={{ p: 2 }}>
         {searching && sortedMechanismRecords.length === 0 ? (
-          <Typography
-            color="text.secondary"
-            sx={{ textAlign: "center", mt: 4 }}
+          <Box
+            sx={{
+              height: "100%",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
           >
-            {t("gallery_no_results")}
-          </Typography>
+            <Typography color="text.secondary">{t("no_results")}</Typography>
+          </Box>
         ) : (
           <Box sx={{ display: "flex", gap: 1.5, alignItems: "flex-start" }}>
             {cardColumns.map((column, columnIndex) => (
@@ -335,7 +338,7 @@ export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
                       sx={{ fontSize: 48, color: "text.secondary", mb: 1 }}
                     />
                     <Typography variant="h6" color="text.secondary">
-                      {t("gallery_new")}
+                      {t("new_mechanism")}
                     </Typography>
                   </Box>
                 )}

@@ -87,7 +87,7 @@ export const ProbesSection: React.FC<ProbesSectionProps> = ({
         }}
       >
         <Typography variant="subtitle2" color="textDisabled">
-          {t("palette_measurements")}
+          {t("measurements")}
         </Typography>
         <IconButton
           color="inherit"

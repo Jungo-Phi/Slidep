@@ -2,7 +2,11 @@ import { Point2, ZERO } from "../../types/point2";
 import type { CanvasState } from "../../types/canvas-state";
 import { get_hovered_elements_by_rect } from "./get-hover";
 import { Action, CanvasEvent } from "../../types/actions";
-import { HoveredPart, names_element } from "../../types/hovered-part";
+import {
+  HoveredPart,
+  is_load_value_label,
+  names_element,
+} from "../../types/hovered-part";
 import {
   BeamElement,
   BeltElement,
@@ -16,8 +20,10 @@ import {
   ID,
   Link,
   LoadElement,
+  MaterialDef,
   MechanicalElement,
   MomentElement,
+  ProfileDef,
   ViewportState,
 } from "../../types";
 import {
@@ -102,6 +108,67 @@ function multiple_selection_state(
   return { type: "SelectedMultiple", elementIDs: kept };
 }
 
+/** `EditingValue` for a load's value label (force/moment magnitude, or a
+ *  distributed force's start/end), or `undefined` if `hoveredPart` isn't one. */
+function load_value_editing_state(
+  hoveredPart: HoveredPart,
+  loadElements: LoadElement[],
+): CanvasState | undefined {
+  if (!is_load_value_label(hoveredPart)) return undefined;
+  const load = get_load_element_from_id(hoveredPart.id, loadElements);
+  const part =
+    hoveredPart.part === "start-value"
+      ? "start"
+      : hoveredPart.part === "end-value"
+        ? "end"
+        : undefined;
+  return {
+    type: "EditingValue",
+    elementID: load.id,
+    value:
+      load.type === "moment"
+        ? load.value
+        : load.type === "force"
+          ? load.vector.length()
+          : // Unsigned, like the label it is opened from: the side of
+            // the beam an end pushes on is set by dragging, not typed.
+            Math.abs(part === "end" ? load.magnitudeEnd : load.magnitudeStart),
+    part,
+  };
+}
+
+/** `MovingForce`/`MovingMoment`/`MovingDistributedForce` to arm dragging a load's
+ *  body/handle, or `undefined` if `hoveredPart` isn't one — its value label never
+ *  arms a drag, it opens the value editor instead (see `load_value_editing_state`). */
+function load_drag_state(hoveredPart: HoveredPart): CanvasState | undefined {
+  switch (hoveredPart.type) {
+    case "Force":
+      return { type: "MovingForce", elementID: hoveredPart.id };
+    case "Moment":
+      return { type: "MovingMoment", elementID: hoveredPart.id };
+    case "DistributedForce":
+      if (
+        hoveredPart.part === "start-value" ||
+        hoveredPart.part === "end-value"
+      )
+        return undefined;
+      return hoveredPart.part === "body"
+        ? {
+            type: "MovingDistributedForce",
+            elementID: hoveredPart.id,
+            part: "body",
+            grabT: hoveredPart.t ?? 0.5,
+          }
+        : {
+            type: "MovingDistributedForce",
+            elementID: hoveredPart.id,
+            part: hoveredPart.part,
+          };
+    default:
+      return undefined;
+  }
+}
+
 export function canvasStateReducer(
   state: CanvasState,
   hoveredPart: HoveredPart,
@@ -111,6 +178,8 @@ export function canvasStateReducer(
   mechanicalElements: MechanicalElement[],
   constraintElements: ConstraintElement[],
   loadElements: LoadElement[] = [],
+  materials: MaterialDef[],
+  profiles: ProfileDef[],
   viewport: ViewportState,
   setCanvasState: (state: CanvasState) => void,
   applyActions: (actions: Action[]) => void,
@@ -146,6 +215,8 @@ export function canvasStateReducer(
             mechanicalElements,
             constraintElements,
             loadElements,
+            materials,
+            profiles,
             viewport,
           );
           if (closing.newCanvasState) setCanvasState(closing.newCanvasState);
@@ -225,6 +296,15 @@ export function canvasStateReducer(
               setCanvasState({ type: "Selecting" });
               break;
             }
+            // L'étiquette de valeur d'une charge s'édite aussi pendant la
+            // simulation (hot-reload) : même priorité que sonde/moteur.
+            if (state.type !== "EditingValue" && state.type !== "PlacingValue") {
+              const editing = load_value_editing_state(hoveredPart, loadElements);
+              if (editing) {
+                setCanvasState(editing);
+                break;
+              }
+            }
             const simConstraint = constraintElements.find(
               (element) => element.id === hoveredPart.id,
             );
@@ -276,42 +356,13 @@ export function canvasStateReducer(
           // clic. C'est une cible distincte du corps, donc aucun drag n'est à
           // armer ici. Le reste de la charge (corps, poignées) tombe dans le cas
           // générique plus bas : sélection + drag armé via `pendingHit`.
-          if (
-            (hoveredPart.type === "Force" ||
-              hoveredPart.type === "DistributedForce" ||
-              hoveredPart.type === "Moment") &&
-            (hoveredPart.part === "value" ||
-              hoveredPart.part === "start-value" ||
-              hoveredPart.part === "end-value")
-          ) {
-            // Pendant une saisie, on ne fait rien : le blur de l'input s'en charge.
-            if (state.type === "EditingValue" || state.type === "PlacingValue")
+          // Pendant une saisie, on ne fait rien : le blur de l'input s'en charge.
+          if (state.type !== "EditingValue" && state.type !== "PlacingValue") {
+            const editing = load_value_editing_state(hoveredPart, loadElements);
+            if (editing) {
+              setCanvasState(editing);
               break;
-            const load = get_load_element_from_id(hoveredPart.id, loadElements);
-            const part =
-              hoveredPart.part === "start-value"
-                ? "start"
-                : hoveredPart.part === "end-value"
-                  ? "end"
-                  : undefined;
-            setCanvasState({
-              type: "EditingValue",
-              elementID: load.id,
-              value:
-                load.type === "moment"
-                  ? load.value
-                  : load.type === "force"
-                    ? load.vector.length()
-                    : // Unsigned, like the label it is opened from: the side of
-                      // the beam an end pushes on is set by dragging, not typed.
-                      Math.abs(
-                        part === "end"
-                          ? load.magnitudeEnd
-                          : load.magnitudeStart,
-                      ),
-              part,
-            });
-            break;
+            }
           }
           const constraint = constraintElements.find(
             (element) => element.id === hoveredPart.id,
@@ -427,6 +478,8 @@ export function canvasStateReducer(
             mechanicalElements,
             constraintElements,
             loadElements,
+            materials,
+            profiles,
             viewport,
           );
           if (r.newCanvasState) setCanvasState(r.newCanvasState);
@@ -508,6 +561,14 @@ export function canvasStateReducer(
           )
             break;
           if (isSimulating) {
+            // Une charge s'édite par drag comme en édition (hot-reload), même en
+            // arrière de la simulation live : ce n'est pas un grab du mécanisme,
+            // juste une action ChangeForce/ChangeMoment/ChangeDistributedForce.
+            const loadDragging = load_drag_state(hit);
+            if (loadDragging) {
+              setCanvasState(loadDragging);
+              break;
+            }
             // Behind the recording frontier the loop replays snapshots and never
             // consults the grab, so a drag there would pull on nothing.
             if (!canSimulationGrab) break;
@@ -695,30 +756,12 @@ export function canvasStateReducer(
               break;
             }
             case "Force":
-              setCanvasState({ type: "MovingForce", elementID: hit.id });
-              break;
             case "Moment":
-              setCanvasState({ type: "MovingMoment", elementID: hit.id });
+            case "DistributedForce": {
+              const dragging = load_drag_state(hit);
+              if (dragging) setCanvasState(dragging);
               break;
-            case "DistributedForce":
-              // Les étiquettes de valeur n'arment jamais de drag (elles ouvrent
-              // l'éditeur au mouseDown), mais le type les autorise ici.
-              if (hit.part === "start-value" || hit.part === "end-value") break;
-              setCanvasState(
-                hit.part === "body"
-                  ? {
-                      type: "MovingDistributedForce",
-                      elementID: hit.id,
-                      part: "body",
-                      grabT: hit.t ?? 0.5,
-                    }
-                  : {
-                      type: "MovingDistributedForce",
-                      elementID: hit.id,
-                      part: hit.part,
-                    },
-              );
-              break;
+            }
           }
           break;
         }

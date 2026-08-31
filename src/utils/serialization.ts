@@ -4,9 +4,11 @@ import {
   ConstraintElement,
   DEFAULT_SIMULATION,
   LoadElement,
+  MaterialDef,
   MechanicalElement,
   Mechanism,
   Point2,
+  ProfileDef,
   SerializedMechanism,
   ViewportState,
 } from "../types";
@@ -14,8 +16,10 @@ import {
   SerializedAction,
   SerializedConstraintElement,
   SerializedLoadElement,
+  SerializedMaterialDef,
   SerializedMechanicalElement,
   SerializedPoint2,
+  SerializedProfileDef,
   SerializedViewportState,
 } from "../types/serialized";
 import { CURRENT_FORMAT_VERSION, migrate_document } from "./migrate-mechanism";
@@ -222,8 +226,36 @@ function deserialize_load_element(s: SerializedLoadElement): LoadElement {
   ) as unknown as LoadElement;
 }
 
+/** Loads alone, for the lightweight recorder channel that updates a running
+ *  simulation's load values without recompiling the whole model. */
+export function serialize_loads(loads: LoadElement[]): SerializedLoadElement[] {
+  return loads.map(serialize_load_element);
+}
+
+export function deserialize_loads(
+  serializedLoads: SerializedLoadElement[],
+): LoadElement[] {
+  return serializedLoads.map(deserialize_load_element);
+}
+
 function serialize_viewport(e: ViewportState): SerializedViewportState {
   return JSON.parse(JSON.stringify(e));
+}
+
+function serialize_material(m: MaterialDef): SerializedMaterialDef {
+  return JSON.parse(JSON.stringify(m));
+}
+
+function deserialize_material(s: SerializedMaterialDef): MaterialDef {
+  return s as unknown as MaterialDef;
+}
+
+function serialize_profile(p: ProfileDef): SerializedProfileDef {
+  return JSON.parse(JSON.stringify(p));
+}
+
+function deserialize_profile(s: SerializedProfileDef): ProfileDef {
+  return s as unknown as ProfileDef;
 }
 
 /** `null` counts: refusing it would leave a plain `{x, y}` where the rest of the app expects a `Point2`, which throws on the first method call. */
@@ -304,6 +336,8 @@ export function serialize_mechanism(mechanism: Mechanism): SerializedMechanism {
       serialize_constraint_element,
     ),
     loads: mechanism.loads.map((l) => serialize_load_element(l)),
+    materials: mechanism.materials.map(serialize_material),
+    profiles: mechanism.profiles.map(serialize_profile),
     history: mechanism.history.map((actions) =>
       actions.map((action) => serialize_action(action)),
     ),
@@ -327,6 +361,8 @@ export function deserialize_mechanism(
       deserialize_constraint_element,
     ),
     loads: (serializedMechanism.loads ?? []).map(deserialize_load_element),
+    materials: (serializedMechanism.materials ?? []).map(deserialize_material),
+    profiles: (serializedMechanism.profiles ?? []).map(deserialize_profile),
     history: serializedMechanism.history.map((serializedActions) =>
       serializedActions.map((serializedAction) =>
         deserialize_action(serializedAction),

@@ -24,6 +24,8 @@ const RIGHT = id("n2");
 const SPRING = id("s1");
 const DAMPER = id("d1");
 const BEAM = id("b1");
+const MATERIAL = id("material");
+const PROFILE = id("profile");
 
 const anchor = (nid: ID, x: number, edges: ID[]): PivotElement => ({
   type: "pivot",
@@ -104,7 +106,8 @@ describe("parallel_edge_offsets", () => {
         fixedNodeStartID: LEFT,
         fixedNodeEndID: RIGHT,
         fixedNodesBodyIDs: [],
-        linearMass: 1,
+        materialID: MATERIAL,
+        profileID: PROFILE,
       },
     ];
     expect(parallel_edge_offsets(twoBeams).size).toBe(0);

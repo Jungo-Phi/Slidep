@@ -17,6 +17,9 @@ import {
 const id = (s: string) =>
   `00000000-0000-0000-0000-${s.padStart(12, "0")}` as ID;
 
+const MATERIAL = id("material1");
+const PROFILE = id("profile1");
+
 function emptyMechanism(): Mechanism {
   return {
     metadata: DEFAULT_METADATA,
@@ -26,6 +29,8 @@ function emptyMechanism(): Mechanism {
     mechanicalElements: [],
     constraintElements: [],
     loads: [],
+    materials: [],
+    profiles: [],
     history: [],
     future: [],
   };
@@ -41,7 +46,8 @@ const BEAM: BeamElement = {
   fixedNodeStartID: undefined,
   fixedNodeEndID: undefined,
   fixedNodesBodyIDs: [],
-  linearMass: 1,
+  materialID: MATERIAL,
+  profileID: PROFILE,
 };
 
 const PIVOT: PivotElement = {
@@ -481,5 +487,152 @@ describe("actionReducer — moment", () => {
     );
     const m = result.loads[0] as MomentElement;
     expect(m.value).toBe(5);
+  });
+});
+
+describe("la bibliothèque matériaux/profilés", () => {
+  const material = {
+    id: MATERIAL,
+    name: "Acier",
+    E: 210e9,
+    Re: 235e6,
+    rho: 7850,
+    readOnly: false,
+  };
+  const profile = { id: PROFILE, name: "Rectangle", shape: { kind: "rect" as const, b: 0.02, h: 0.02 } };
+
+  it("crée un matériau, et l'annule (revert)", () => {
+    const created = actionReducer(
+      emptyMechanism(),
+      [{ type: "CreateMaterial", material }],
+      false,
+    );
+    expect(created.materials).toEqual([material]);
+
+    const reverted = actionReducer(
+      { ...emptyMechanism(), materials: [material] },
+      [{ type: "CreateMaterial", material }],
+      true,
+    );
+    expect(reverted.materials).toEqual([]);
+  });
+
+  it("supprime un matériau, et l'annule (revert)", () => {
+    const mech = { ...emptyMechanism(), materials: [material] };
+    const deleted = actionReducer(mech, [{ type: "DeleteMaterial", material }], false);
+    expect(deleted.materials).toEqual([]);
+
+    const restored = actionReducer(emptyMechanism(), [{ type: "DeleteMaterial", material }], true);
+    expect(restored.materials).toEqual([material]);
+  });
+
+  it("renomme un matériau, et l'annule (revert)", () => {
+    const mech = { ...emptyMechanism(), materials: [material] };
+    const renamed = actionReducer(
+      mech,
+      [{ type: "RenameMaterial", id: MATERIAL, newName: "Inox", oldName: "Acier" }],
+      false,
+    );
+    expect(renamed.materials[0].name).toBe("Inox");
+
+    const reverted = actionReducer(
+      { ...emptyMechanism(), materials: [{ ...material, name: "Inox" }] },
+      [{ type: "RenameMaterial", id: MATERIAL, newName: "Inox", oldName: "Acier" }],
+      true,
+    );
+    expect(reverted.materials[0].name).toBe("Acier");
+  });
+
+  it("édite E/Re/ρ par delta, et annule (revert)", () => {
+    const mech = { ...emptyMechanism(), materials: [material] };
+    const changed = actionReducer(
+      mech,
+      [
+        { type: "ChangeMaterialE", id: MATERIAL, delta: 10e9 },
+        { type: "ChangeMaterialRe", id: MATERIAL, delta: 5e6 },
+        { type: "ChangeMaterialRho", id: MATERIAL, delta: -50 },
+      ],
+      false,
+    );
+    expect(changed.materials[0]).toMatchObject({ E: 220e9, Re: 240e6, rho: 7800 });
+
+    const reverted = actionReducer(
+      { ...emptyMechanism(), materials: [changed.materials[0]] },
+      [
+        { type: "ChangeMaterialE", id: MATERIAL, delta: 10e9 },
+        { type: "ChangeMaterialRe", id: MATERIAL, delta: 5e6 },
+        { type: "ChangeMaterialRho", id: MATERIAL, delta: -50 },
+      ],
+      true,
+    );
+    expect(reverted.materials[0]).toMatchObject(material);
+  });
+
+  it("crée et supprime un profilé, et annule chacune (revert)", () => {
+    const created = actionReducer(emptyMechanism(), [{ type: "CreateProfile", profile }], false);
+    expect(created.profiles).toEqual([profile]);
+    const createReverted = actionReducer(
+      { ...emptyMechanism(), profiles: [profile] },
+      [{ type: "CreateProfile", profile }],
+      true,
+    );
+    expect(createReverted.profiles).toEqual([]);
+
+    const deleted = actionReducer(
+      { ...emptyMechanism(), profiles: [profile] },
+      [{ type: "DeleteProfile", profile }],
+      false,
+    );
+    expect(deleted.profiles).toEqual([]);
+    const deleteReverted = actionReducer(
+      emptyMechanism(),
+      [{ type: "DeleteProfile", profile }],
+      true,
+    );
+    expect(deleteReverted.profiles).toEqual([profile]);
+  });
+
+  it("change la forme d'un profilé (y compris son genre), et annule (revert)", () => {
+    const newShape = { kind: "round" as const, d: 0.016 };
+    const mech = { ...emptyMechanism(), profiles: [profile] };
+    const changed = actionReducer(
+      mech,
+      [
+        {
+          type: "ChangeProfileShape",
+          id: PROFILE,
+          newShape,
+          oldShape: profile.shape,
+        },
+      ],
+      false,
+    );
+    expect(changed.profiles[0].shape).toEqual(newShape);
+
+    const reverted = actionReducer(
+      { ...emptyMechanism(), profiles: [{ ...profile, shape: newShape }] },
+      [
+        {
+          type: "ChangeProfileShape",
+          id: PROFILE,
+          newShape,
+          oldShape: profile.shape,
+        },
+      ],
+      true,
+    );
+    expect(reverted.profiles[0].shape).toEqual(profile.shape);
+  });
+
+  it("un beam référençant le matériau/profilé n'est pas affecté par une édition de la bibliothèque", () => {
+    const mech = { ...emptyMechanism(), mechanicalElements: [BEAM], materials: [material], profiles: [profile] };
+    const result = actionReducer(
+      mech,
+      [{ type: "RenameMaterial", id: MATERIAL, newName: "Inox", oldName: "Acier" }],
+      false,
+    );
+    const beam = result.mechanicalElements[0] as BeamElement;
+    expect(beam.materialID).toBe(MATERIAL);
+    expect(beam.profileID).toBe(PROFILE);
   });
 });

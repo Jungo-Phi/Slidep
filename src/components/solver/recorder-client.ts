@@ -1,6 +1,6 @@
-import { Mechanism } from "../../types";
+import { LoadElement, Mechanism } from "../../types";
 import { SimulationSnapshot, SnapshotLayout } from "../../types/runtime-state";
-import { serialize_mechanism } from "../../utils/serialization";
+import { serialize_loads, serialize_mechanism } from "../../utils/serialization";
 import {
   MAX_RECORDING_TIME,
   SimGrab,
@@ -133,6 +133,11 @@ export class RecorderClient {
   /** Both modes: whether the next steps detect and resist the floor. */
   setFloor(on: boolean): void {
     this.post({ type: "floor", on });
+  }
+
+  /** Swap in new load values without recompiling the model — see `Recorder.setLoads`. */
+  setLoads(loads: LoadElement[]): void {
+    this.post({ type: "loads", loads: serialize_loads(loads) });
   }
 
   /** Where the simulated clock is being asked to get to. */

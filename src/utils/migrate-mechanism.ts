@@ -8,10 +8,15 @@
  */
 
 import { DEFAULT } from "../constants/physics-specs";
+import {
+  default_material,
+  default_profile,
+  seed_material_catalog,
+} from "../constants/material-profile-catalog";
 import { DEFAULT_SIMULATION, SerializedMechanism } from "../types";
 
 /** The format `serialize_mechanism` writes today. */
-export const CURRENT_FORMAT_VERSION = 8;
+export const CURRENT_FORMAT_VERSION = 10;
 
 /** A document mid-migration: its shape belongs to no version in particular. */
 type RawDocument = Record<string, unknown>;
@@ -124,6 +129,53 @@ const MIGRATIONS: MigrationStep[] = [
     apply: (doc) => ({
       ...doc,
       simulation: is_record(doc.simulation) ? doc.simulation : DEFAULT_SIMULATION,
+    }),
+  },
+  {
+    to: 9,
+    // `linearMass` disappears from `BeamElement` in favour of a `materialID`/`profileID` pair
+    // resolved against the mechanism's own library. Every beam gets the same default couple —
+    // steel, 20×20 mm rectangle — seeded once here regardless of whatever `linearMass` it used
+    // to carry: a hard cut, not a best-effort conversion, since no prior data maps cleanly onto
+    // a section's `A`/`I_Gz`/`v`.
+    preservesHistory: true,
+    apply: (doc) => {
+      const material = default_material();
+      const profile = default_profile();
+      return {
+        ...doc,
+        materials: [material],
+        profiles: [profile],
+        mechanicalElements: as_array(doc.mechanicalElements).map((el) =>
+          assign_default_material_profile(el, material.id, profile.id),
+        ),
+        history: assign_default_material_profile_in_stack(
+          doc.history,
+          material.id,
+          profile.id,
+        ),
+        future: assign_default_material_profile_in_stack(
+          doc.future,
+          material.id,
+          profile.id,
+        ),
+      };
+    },
+  },
+  {
+    to: 10,
+    // The catalogue is seeded into every mechanism's own `materials`, `readOnly: true`, so a
+    // beam's picker offers steel/aluminium/… directly instead of needing a copy step.
+    // Everything already in the document is `readOnly: false` — a user made it.
+    preservesHistory: true,
+    apply: (doc) => ({
+      ...doc,
+      materials: [
+        ...as_array(doc.materials).map(add_material_read_only_default),
+        ...seed_material_catalog(),
+      ],
+      history: add_material_read_only_default_in_stack(doc.history),
+      future: add_material_read_only_default_in_stack(doc.future),
     }),
   },
 ];
@@ -343,6 +395,81 @@ const rescale_motor_speed_in_action = (action: unknown): unknown => {
 const rescale_motor_speed_in_stack = (stack: unknown): unknown[][] =>
   as_array(stack).map((bundle) =>
     as_array(bundle).map(rescale_motor_speed_in_action),
+  );
+
+/** v8 → v9: a beam's `linearMass` becomes a `materialID`/`profileID` pair, both pointing at
+ *  the single default couple seeded into `materials`/`profiles` for the whole document. */
+const assign_default_material_profile = (
+  element: unknown,
+  materialID: string,
+  profileID: string,
+): unknown => {
+  if (!is_record(element) || element.type !== "beam") return element;
+  const { linearMass: _linearMass, ...rest } = element;
+  return { ...rest, materialID, profileID };
+};
+
+/** The same defaulting where an action carries a whole beam element: `CreateElement` and
+ *  `DeleteElement`. A stored `ChangeLinearMass` names a field that no longer exists on the
+ *  element it targets — it becomes a no-op rather than dropping the whole undo stack over one
+ *  action type, the same trade `close_belt_in_action` made for a renamed field. */
+const assign_default_material_profile_in_action = (
+  action: unknown,
+  materialID: string,
+  profileID: string,
+): unknown => {
+  if (!is_record(action)) return action;
+  switch (action.type) {
+    case "CreateElement":
+    case "DeleteElement":
+      return {
+        ...action,
+        element: assign_default_material_profile(
+          action.element,
+          materialID,
+          profileID,
+        ),
+      };
+    case "ChangeLinearMass":
+      return { type: "Blank" };
+    default:
+      return action;
+  }
+};
+
+const assign_default_material_profile_in_stack = (
+  stack: unknown,
+  materialID: string,
+  profileID: string,
+): unknown[][] =>
+  as_array(stack).map((bundle) =>
+    as_array(bundle).map((action) =>
+      assign_default_material_profile_in_action(action, materialID, profileID),
+    ),
+  );
+
+/** v9 → v10: every material gains `readOnly`, `false` for anything already in the document. */
+const add_material_read_only_default = (material: unknown): unknown => {
+  if (!is_record(material)) return material;
+  return { readOnly: false, ...material };
+};
+
+/** The same defaulting where an action carries a whole material: `CreateMaterial` and
+ *  `DeleteMaterial`. */
+const add_material_read_only_default_in_action = (action: unknown): unknown => {
+  if (!is_record(action)) return action;
+  switch (action.type) {
+    case "CreateMaterial":
+    case "DeleteMaterial":
+      return { ...action, material: add_material_read_only_default(action.material) };
+    default:
+      return action;
+  }
+};
+
+const add_material_read_only_default_in_stack = (stack: unknown): unknown[][] =>
+  as_array(stack).map((bundle) =>
+    as_array(bundle).map(add_material_read_only_default_in_action),
   );
 
 const is_record = (value: unknown): value is Record<string, unknown> =>

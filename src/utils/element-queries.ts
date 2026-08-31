@@ -55,12 +55,13 @@ export function is_nameable(
  * Which overlays make sense on this element — the honest denominator of the `n/total` counters in the "Afficher" menu.
  *  - trajectory: a single moving point → nodes only
  *  - velocity: anything whose position is sampled (nodes, gears, edge midpoint)
- *  - force: reaction forces live at the joints (nodes) and in the members (edges)
- *  - stress (MPa): an internal effort in a member → edges only
+ *  - force: a reaction is a point object → nodes only
+ *
+ * A beam's stress colouring (normal/bending/utilization) is not here — it's not a per-element
+ * flag, see `BeamStressLens` (docs/plan-efforts-interieurs.md phase 9).
  */
 export function available_overlays(element: MechanicalElement): OverlayKind[] {
   const isNode = is_node_element(element);
-  const isEdge = "positionStart" in element;
   return OVERLAY_KIND_ORDER.filter((kind) => {
     switch (kind) {
       case "trajectory":
@@ -68,9 +69,7 @@ export function available_overlays(element: MechanicalElement): OverlayKind[] {
       case "velocity":
         return true;
       case "force":
-        return isNode || isEdge;
-      case "stress":
-        return isEdge;
+        return isNode;
     }
   });
 }

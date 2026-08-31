@@ -16,7 +16,7 @@ export const STRINGS = {
     de: "Unbenannt",
     es: "Sin título",
   },
-  toolbar_library: {
+  mechanism_library: {
     fr: "Bibliothèque de mécanismes",
     en: "Mechanism library",
     de: "Mechanismen-Bibliothek",
@@ -94,79 +94,79 @@ export const STRINGS = {
     es: "Combina la estática y la cinemática [ ∑F = ma ]",
   },
 
-  toolbar_reset: {
+  reset: {
     fr: "Réinitialiser (Esc)",
     en: "Reset (Esc)",
     de: "Zurücksetzen (Esc)",
     es: "Reiniciar (Esc)",
   },
-  toolbar_go_to_start: {
+  go_to_start: {
     fr: "Aller au début de l'enregistrement",
     en: "Go to start of recording",
     de: "Zum Anfang der Aufzeichnung springen",
     es: "Ir al inicio de la grabación",
   },
-  toolbar_play: {
+  play: {
     fr: "Lecture (Space)",
     en: "Play (Space)",
     de: "Abspielen (Space)",
     es: "Reproducir (Space)",
   },
-  toolbar_pause: {
+  pause: {
     fr: "Pause (Space)",
     en: "Pause (Space)",
     de: "Pause (Space)",
     es: "Pausa (Space)",
   },
-  toolbar_go_to_end: {
+  go_to_end: {
     fr: "Aller à la fin de l'enregistrement",
     en: "Go to end of recording",
     de: "Zum Ende der Aufzeichnung springen",
     es: "Ir al final de la grabación",
   },
-  toolbar_slow_down: {
+  slow_down: {
     fr: "Ralentir la simulation",
     en: "Slow the simulation down",
     de: "Simulation verlangsamen",
     es: "Ralentizar la simulación",
   },
-  toolbar_reset_speed: {
+  reset_speed: {
     fr: "Réinitialiser la vitesse",
     en: "Reset the speed",
     de: "Geschwindigkeit zurücksetzen",
     es: "Restablecer la velocidad",
   },
-  toolbar_speed_up: {
+  speed_up: {
     fr: "Accélérer la simulation",
     en: "Speed the simulation up",
     de: "Simulation beschleunigen",
     es: "Acelerar la simulación",
   },
-  timeline_dead_point: {
+  dead_point: {
     fr: "Blocage",
     en: "Stall",
     de: "Blockade",
     es: "Bloqueo",
   },
-  timeline_dead_point_released: {
+  dead_point_released: {
     fr: "Déblocage",
     en: "Release",
     de: "Freigabe",
     es: "Desbloqueo",
   },
-  timeline_belt_detach: {
+  belt_detach: {
     fr: "Déconnexion courroie",
     en: "Belt disconnection",
     de: "Riementrennung",
     es: "Desconexión correa",
   },
-  timeline_belt_reattach: {
+  belt_reattach: {
     fr: "Reconnexion courroie",
     en: "Belt reconnection",
     de: "Riemenverbindung",
     es: "Reconexión correa",
   },
-  toolbar_export_animation: {
+  export_animation: {
     fr: "Exporter une animation (à venir)",
     en: "Export an animation (coming soon)",
     de: "Animation exportieren (in Vorbereitung)",
@@ -209,9 +209,8 @@ export const STRINGS = {
     de: "Kollisionen aus",
     es: "Colisiones desactivadas",
   },
-  // "Boden"/"Suelo" already name the palette's fixed-anchor tool (`tool_ground`) — this is
-  // a different, distinct concept (a physical floor mechanisms fall/roll onto), so it needs
-  // its own words in every language, not just fr/en.
+  // "Boden"/"Suelo" already name the palette's fixed-anchor tool (`ground`)
+  // This is a different, distinct concept, so it needs its own words in every language.
   floor: {
     fr: "Plancher",
     en: "Floor",
@@ -231,55 +230,55 @@ export const STRINGS = {
     es: "Piso desactivado",
   },
 
-  toolbar_recenter: {
+  recenter: {
     fr: "Recentrer la vue",
     en: "Recenter the view",
     de: "Ansicht zentrieren",
     es: "Recentrar la vista",
   },
-  toolbar_zoom: {
+  zoom: {
     fr: "Zoom",
     en: "Zoom",
     de: "Zoom",
     es: "Zoom",
   },
-  toolbar_zoom_in: {
+  zoom_in: {
     fr: "Zoomer",
     en: "Zoom in",
     de: "Vergrößern",
     es: "Acercar",
   },
-  toolbar_zoom_out: {
+  zoom_out: {
     fr: "Dézoomer",
     en: "Zoom out",
     de: "Verkleinern",
     es: "Alejar",
   },
-  toolbar_undo: {
+  undo: {
     fr: "Annuler (Ctrl+Z)",
     en: "Undo (Ctrl+Z)",
     de: "Rückgängig (Ctrl+Z)",
     es: "Deshacer (Ctrl+Z)",
   },
-  toolbar_redo: {
+  redo: {
     fr: "Rétablir (Ctrl+Y)",
     en: "Redo (Ctrl+Y)",
     de: "Wiederherstellen (Ctrl+Y)",
     es: "Rehacer (Ctrl+Y)",
   },
-  toolbar_language: {
+  language: {
     fr: "Langue",
     en: "Language",
     de: "Sprache",
     es: "Idioma",
   },
-  toolbar_settings: {
+  settings: {
     fr: "Paramètres",
     en: "Settings",
     de: "Einstellungen",
     es: "Ajustes",
   },
-  toolbar_about: {
+  about: {
     fr: "À propos de Slidep",
     en: "About Slidep",
     de: "Über Slidep",
@@ -287,50 +286,50 @@ export const STRINGS = {
   },
 
   // ── Settings menu ─────────────────────────────────────────────────────────
-  settings_show_grid: {
+  show_grid: {
     fr: "Afficher la grille",
     en: "Show the grid",
     de: "Raster anzeigen",
     es: "Mostrar la cuadrícula",
   },
-  settings_snap_to_grid: {
+  snap_to_grid: {
     fr: "Aimanter à la grille",
     en: "Snap to the grid",
     de: "Am Raster ausrichten",
     es: "Ajustar a la cuadrícula",
   },
-  settings_angle_step: {
+  angle_step: {
     fr: "Pas angulaire",
     en: "Angle step",
     de: "Winkelschritt",
     es: "Paso angular",
   },
-  settings_angle_step_custom: {
+  angle_step_custom: {
     fr: "Personnalisé",
     en: "Custom",
     de: "Benutzerdefiniert",
     es: "Personalizado",
   },
-  settings_highlight_snap: {
+  highlight_snap: {
     fr: "Surligner les lignes aimantées",
     en: "Highlight snapped lines",
     de: "Ausgerichtete Linien hervorheben",
     es: "Resaltar las líneas ajustadas",
   },
-  settings_show_angle_guides: {
+  show_angle_guides: {
     fr: "Afficher les guides d'angle",
     en: "Show angle guides",
     de: "Winkelhilfslinien anzeigen",
     es: "Mostrar las guías de ángulo",
   },
-  settings_show_constraints: {
+  show_constraints: {
     fr: "Afficher les contraintes",
     en: "Show the constraints",
     de: "Zwangsbedingungen anzeigen",
     es: "Mostrar las restricciones",
   },
-  settings_theme: { fr: "Thème", en: "Theme", de: "Design", es: "Tema" },
-  settings_element_style: {
+  theme: { fr: "Thème", en: "Theme", de: "Design", es: "Tema" },
+  element_style: {
     fr: "Style des éléments",
     en: "Element style",
     de: "Elementstil",
@@ -347,97 +346,97 @@ export const STRINGS = {
   },
 
   // ── About dialog ──────────────────────────────────────────────────────────
-  about_title: {
+  title: {
     fr: "À propos",
     en: "About",
     de: "Über",
     es: "Acerca de",
   },
-  about_intro: {
+  intro: {
     fr: "Slidep est un laboratoire de mécanique virtuel. Conçu pour une prise en main immédiate, il permet de construire et voir s'animer instantanément ses propres mécanismes.",
     en: "Slidep is a virtual mechanics lab. Built to be picked up straight away, it lets you build your own mechanisms and watch them come to life instantly.",
     de: "Slidep ist ein virtuelles Mechaniklabor. Es ist auf sofortigen Einstieg ausgelegt und lässt Sie eigene Mechanismen bauen und ihnen augenblicklich beim Laufen zusehen.",
     es: "Slidep es un laboratorio de mecánica virtual. Pensado para empezar de inmediato, permite construir tus propios mecanismos y verlos animarse al instante.",
   },
-  about_story: {
+  story: {
     fr: "C'est l'application que j'aurais aimé avoir quand j'étais étudiant en génie mécanique. Slidep se place entre le schéma papier-crayon et le solveur par éléments finis. Mais sa force réside plutôt dans les itérations rapides. Slidep donne tout de suite des ordres de grandeur, et permet surtout de voir l'impact de changements sur un design en temps réel.",
     en: "This is the application I wish I had as a mechanical engineering student. Slidep sits between the pencil-and-paper sketch and the finite element solver. Its real strength, though, is fast iteration: Slidep gives orders of magnitude right away, and above all shows what a change does to a design in real time.",
     de: "Das ist die Anwendung, die ich mir als Maschinenbaustudent gewünscht hätte. Slidep steht zwischen der Handskizze und dem Finite-Elemente-Solver. Seine eigentliche Stärke liegt aber im schnellen Iterieren: Slidep liefert sofort Größenordnungen und zeigt vor allem in Echtzeit, was eine Änderung mit einem Entwurf macht.",
     es: "Es la aplicación que me habría gustado tener cuando estudiaba ingeniería mecánica. Slidep se sitúa entre el esquema a lápiz y el solucionador por elementos finitos. Pero su verdadera fuerza está en la iteración rápida: Slidep da órdenes de magnitud enseguida y, sobre todo, muestra en tiempo real el efecto de un cambio en un diseño.",
   },
-  about_roadmap: {
+  roadmap: {
     fr: "Slidep devrait bientôt permettre de gérer les collisions et de partager ses mécanismes. À terme, l'objectif est d'ajouter le dessin en 3D, et peut-être même y faire de la dynamique des fluides.",
     en: "Slidep should soon handle collisions and let you share your mechanisms. Further out, the aim is to add 3D drawing, and perhaps even fluid dynamics.",
     de: "Slidep soll bald Kollisionen beherrschen und das Teilen eigener Mechanismen erlauben. Längerfristig ist 3D-Zeichnen geplant und vielleicht sogar Strömungsdynamik.",
     es: "Slidep debería pronto gestionar las colisiones y permitir compartir tus mecanismos. A más largo plazo, el objetivo es añadir el dibujo en 3D, y quizá incluso dinámica de fluidos.",
   },
-  about_realtime_title: {
+  realtime_title: {
     fr: "Temps réel",
     en: "Real time",
     de: "Echtzeit",
     es: "Tiempo real",
   },
-  about_realtime_body: {
+  realtime_body: {
     fr: "La simulation se recalcule pendant que vous manipulez le mécanisme.",
     en: "The simulation recomputes while you handle the mechanism.",
     de: "Die Simulation rechnet weiter, während Sie den Mechanismus bewegen.",
     es: "La simulación se recalcula mientras manipulas el mecanismo.",
   },
-  about_offline_title: {
+  offline_title: {
     fr: "Hors ligne",
     en: "Offline",
     de: "Offline",
     es: "Sin conexión",
   },
-  about_offline_body: {
+  offline_body: {
     fr: "Installez Slidep depuis votre navigateur pour l'utiliser sans connexion.",
     en: "Install Slidep from your browser to use it without a connection.",
     de: "Installieren Sie Slidep aus dem Browser heraus, um es ohne Verbindung zu nutzen.",
     es: "Instala Slidep desde tu navegador para usarlo sin conexión.",
   },
-  about_local_title: {
+  local_title: {
     fr: "Chez vous",
     en: "Yours alone",
     de: "Bei Ihnen",
     es: "En tu equipo",
   },
-  about_local_body: {
+  local_body: {
     fr: "Vos mécanismes restent sur votre machine. Pas de compte, pas de serveur.",
     en: "Your mechanisms stay on your machine. No account, no server.",
     de: "Ihre Mechanismen bleiben auf Ihrem Rechner. Kein Konto, kein Server.",
     es: "Tus mecanismos permanecen en tu equipo. Sin cuenta, sin servidor.",
   },
-  about_contribute: {
+  contribute: {
     fr: "Si vous êtes intéressé par le projet ou souhaitez contribuer, écrivez-moi.",
     en: "If the project interests you, or you would like to contribute, write to me.",
     de: "Wenn Sie das Projekt interessiert oder Sie beitragen möchten, schreiben Sie mir.",
     es: "Si te interesa el proyecto o quieres contribuir, escríbeme.",
   },
-  about_version: {
+  version: {
     fr: "Version",
     en: "Version",
     de: "Version",
     es: "Versión",
   },
-  about_license: {
+  license: {
     fr: "Licence",
     en: "License",
     de: "Lizenz",
     es: "Licencia",
   },
-  about_license_tbd: {
+  license_tbd: {
     fr: "à définir",
     en: "to be decided",
     de: "noch offen",
     es: "por definir",
   },
-  about_contact: {
+  contact: {
     fr: "Contact",
     en: "Contact",
     de: "Kontakt",
     es: "Contacto",
   },
-  about_code: { fr: "Code", en: "Code", de: "Code", es: "Código" },
+  code: { fr: "Code", en: "Code", de: "Code", es: "Código" },
 
   // ── Library actions and their reports ─────────────────────────────────────
   mechanism_loaded: {
@@ -577,43 +576,31 @@ export const STRINGS = {
 
   // ── Element palette ───────────────────────────────────────────────────────
   // Group titles sit in a column barely wider than one icon: keep them short.
-  palette_interface: {
+  interface: {
     fr: "Interface",
     en: "Interface",
     de: "Oberfläche",
     es: "Interfaz",
   },
-  palette_connections: {
+  connections: {
     fr: "Liaisons",
     en: "Connections",
     de: "Verbindungen",
     es: "Conexiones",
   },
-  palette_structure: {
+  structure: {
     fr: "Structure",
     en: "Structure",
     de: "Struktur",
     es: "Estructura",
   },
-  palette_dynamics: {
-    fr: "Dynamique",
-    en: "Dynamics",
-    de: "Dynamik",
-    es: "Dinámica",
-  },
-  palette_constraints: {
-    fr: "Contraintes",
-    en: "Constraints",
-    de: "Bedingungen",
-    es: "Restricciones",
-  },
-  palette_loads: {
+  loads: {
     fr: "Charges",
     en: "Loads",
     de: "Lasten",
     es: "Cargas",
   },
-  palette_measurements: {
+  measurements: {
     fr: "Mesures",
     en: "Measurements",
     de: "Messungen",
@@ -684,8 +671,8 @@ export const STRINGS = {
     de: "Parallel",
     es: "Paralelo",
   },
-  tool_force: { fr: "Force", en: "Force", de: "Kraft", es: "Fuerza" },
-  tool_moment: { fr: "Moment", en: "Moment", de: "Moment", es: "Momento" },
+  force: { fr: "Force", en: "Force", de: "Kraft", es: "Fuerza" },
+  moment: { fr: "Moment", en: "Moment", de: "Moment", es: "Momento" },
   tool_probe: { fr: "Sonde", en: "Probe", de: "Sonde", es: "Sonda" },
 
   // ── Display layers ────────────────────────────────────────────────────────
@@ -713,49 +700,103 @@ export const STRINGS = {
     de: "Reaktionskräfte",
     es: "Fuerzas de reacción",
   },
-  overlay_velocity_one: {
+  velocity_one: {
     fr: "Vitesse",
     en: "Velocity",
     de: "Geschwindigkeit",
     es: "Velocidad",
   },
-  overlay_velocity_other: {
+  velocity_other: {
     fr: "Vitesses",
     en: "Velocities",
     de: "Geschwindigkeiten",
     es: "Velocidades",
   },
-  overlay_stress_one: {
-    fr: "Contrainte (MPa)",
-    en: "Stress (MPa)",
-    de: "Spannung (MPa)",
-    es: "Tensión (MPa)",
+  stress_legend_overstress: {
+    fr: "Dépassé",
+    en: "Exceeded",
+    de: "Überschritten",
+    es: "Superado",
   },
-  overlay_stress_other: {
-    fr: "Contraintes (MPa)",
-    en: "Stress (MPa)",
-    de: "Spannungen (MPa)",
-    es: "Tensiones (MPa)",
+  stress_legend_compression: {
+    fr: "Compression",
+    en: "Compression",
+    de: "Druck",
+    es: "Compresión",
   },
-  overlays_button: {
+  stress_legend_tension: {
+    fr: "Traction",
+    en: "Tension",
+    de: "Zug",
+    es: "Tracción",
+  },
+  beam_stress_lens: {
+    fr: "Contraintes",
+    en: "Stress",
+    de: "Spannung",
+    es: "Tensión",
+  },
+  beam_stress_lens_none: {
+    fr: "Aucune",
+    en: "None",
+    de: "Keine",
+    es: "Ninguna",
+  },
+  beam_stress_lens_normal: {
+    fr: "Contraintes normales",
+    en: "Normal stresses",
+    de: "Normalspannungen",
+    es: "Tensiones normales",
+  },
+  beam_stress_lens_bending: {
+    fr: "Contraintes de flexion",
+    en: "Bending stresses",
+    de: "Biegespannungen",
+    es: "Tensiones de flexión",
+  },
+  beam_stress_lens_utilization: {
+    fr: "Taux de travail",
+    en: "Utilization ratio",
+    de: "Ausnutzungsgrad",
+    es: "Tasa de utilización",
+  },
+  beam_stress_lens_shear: {
+    fr: "Taux de cisaillement",
+    en: "Shear utilization ratio",
+    de: "Schubausnutzungsgrad",
+    es: "Tasa de utilización al cortante",
+  },
+  trajectory_style_continuous: {
+    fr: "Trait continu",
+    en: "Solid line",
+    de: "Durchgezogene Linie",
+    es: "Línea continua",
+  },
+  trajectory_style_dotted: {
+    fr: "Points",
+    en: "Dots",
+    de: "Punkte",
+    es: "Puntos",
+  },
+  show: {
     fr: "Afficher",
     en: "Show",
     de: "Anzeigen",
     es: "Mostrar",
   },
-  overlays_button_tooltip: {
+  show_tooltip: {
     fr: "Afficher les calques",
     en: "Show the layers",
     de: "Ebenen anzeigen",
     es: "Mostrar las capas",
   },
-  overlays_show_all: {
+  show_all: {
     fr: "Tout afficher",
     en: "Show all",
     de: "Alle anzeigen",
     es: "Mostrar todo",
   },
-  overlays_hide_all: {
+  hide_all: {
     fr: "Tout cacher",
     en: "Hide all",
     de: "Alle ausblenden",
@@ -763,103 +804,103 @@ export const STRINGS = {
   },
 
   // ── Mechanisms gallery ────────────────────────────────────────────────────
-  gallery_title: {
+  my_mechanisms: {
     fr: "Mes mécanismes",
     en: "My mechanisms",
     de: "Meine Mechanismen",
     es: "Mis mecanismos",
   },
-  gallery_storage_notice: {
+  storage_notice: {
     fr: "Vos mécanismes sont enregistrés dans ce navigateur : vider ses données les efface. Exportez-les pour les conserver.",
     en: "Your mechanisms are saved in this browser: clearing its data erases them. Export them to keep them.",
     de: "Ihre Mechanismen liegen in diesem Browser: Werden dessen Daten gelöscht, sind sie weg. Exportieren Sie sie, um sie zu behalten.",
     es: "Tus mecanismos se guardan en este navegador: borrar sus datos los elimina. Expórtalos para conservarlos.",
   },
-  gallery_import: {
+  import: {
     fr: "Importer",
     en: "Import",
     de: "Importieren",
     es: "Importar",
   },
-  gallery_import_tooltip: {
+  import_tooltip: {
     fr: "Ouvrir un .slidep ou une archive .zip",
     en: "Open a .slidep file or a .zip archive",
     de: "Eine .slidep-Datei oder ein .zip-Archiv öffnen",
     es: "Abrir un .slidep o un archivo .zip",
   },
-  gallery_export_all: {
+  export_all: {
     fr: "Tout exporter",
     en: "Export all",
     de: "Alle exportieren",
     es: "Exportar todo",
   },
-  gallery_export_all_tooltip: {
+  export_all_tooltip: {
     fr: "Tout exporter dans une archive .zip",
     en: "Export everything to a .zip archive",
     de: "Alles in ein .zip-Archiv exportieren",
     es: "Exportar todo a un archivo .zip",
   },
-  gallery_export_all_empty: {
+  export_all_empty: {
     fr: "Aucun mécanisme à exporter",
     en: "No mechanism to export",
     de: "Kein Mechanismus zum Exportieren",
     es: "Ningún mecanismo que exportar",
   },
-  gallery_new: {
+  new_mechanism: {
     fr: "Nouveau mécanisme",
     en: "New mechanism",
     de: "Neuer Mechanismus",
     es: "Nuevo mecanismo",
   },
-  gallery_export: {
+  export: {
     fr: "Exporter",
     en: "Export",
     de: "Exportieren",
     es: "Exportar",
   },
-  gallery_duplicate: {
+  duplicate: {
     fr: "Dupliquer",
     en: "Duplicate",
     de: "Duplizieren",
     es: "Duplicar",
   },
-  action_delete: {
+  delete: {
     fr: "Supprimer",
     en: "Delete",
     de: "Löschen",
     es: "Eliminar",
   },
-  gallery_parts_one: {
+  parts_one: {
     fr: "{count} pièce",
     en: "{count} part",
     de: "{count} Teil",
     es: "{count} pieza",
   },
-  gallery_parts_other: {
+  parts_other: {
     fr: "{count} pièces",
     en: "{count} parts",
     de: "{count} Teile",
     es: "{count} piezas",
   },
-  gallery_add_tag: {
+  add_tag: {
     fr: "Ajouter un tag",
     en: "Add a tag",
     de: "Tag hinzufügen",
     es: "Añadir una etiqueta",
   },
-  gallery_search_placeholder: {
+  search_placeholder: {
     fr: "Rechercher…",
     en: "Search…",
     de: "Suchen…",
     es: "Buscar…",
   },
-  gallery_no_results: {
+  no_results: {
     fr: "Rien trouvé",
     en: "Nothing found",
     de: "Nichts gefunden",
     es: "No se encontró nada",
   },
-  gallery_no_tag_suggestions: {
+  no_tag_suggestions: {
     fr: "Aucune suggestion",
     en: "No suggestions",
     de: "Keine Vorschläge",
@@ -1083,29 +1124,35 @@ export const STRINGS = {
   },
 
   // ── Properties panel ──────────────────────────────────────────────────────
-  tab_project: {
+  project: {
     fr: "Projet",
     en: "Project",
     de: "Projekt",
     es: "Proyecto",
   },
-  tab_elements: {
+  elements: {
     fr: "Éléments",
     en: "Elements",
     de: "Elemente",
     es: "Elementos",
   },
-  tab_constraints: {
+  constraints: {
     fr: "Contraintes",
     en: "Constraints",
     de: "Bedingungen",
     es: "Restricciones",
   },
-  tab_analysis: {
+  analysis: {
     fr: "Analyse",
     en: "Analysis",
     de: "Analyse",
     es: "Análisis",
+  },
+  materials: {
+    fr: "Matériaux",
+    en: "Materials",
+    de: "Materialien",
+    es: "Materiales",
   },
 
   project_title: { fr: "Titre", en: "Title", de: "Titel", es: "Título" },
@@ -1259,6 +1306,145 @@ export const STRINGS = {
     de: "Flächenmasse",
     es: "Masa superficial",
   },
+  // ── Material/profile catalogue ─────────────────────────────────────────
+  material_acier: {
+    fr: "Acier",
+    en: "Steel",
+    de: "Stahl",
+    es: "Acero",
+  },
+  material_aluminium: {
+    fr: "Aluminium",
+    en: "Aluminium",
+    de: "Aluminium",
+    es: "Aluminio",
+  },
+  material_inox: {
+    fr: "Inox",
+    en: "Stainless steel",
+    de: "Edelstahl",
+    es: "Acero inoxidable",
+  },
+  material_bois: {
+    fr: "Bois",
+    en: "Wood",
+    de: "Holz",
+    es: "Madera",
+  },
+  profile_rectangle: {
+    fr: "Rectangle plein",
+    en: "Solid rectangle",
+    de: "Vollrechteck",
+    es: "Rectángulo macizo",
+  },
+  profile_round: {
+    fr: "Rond plein",
+    en: "Solid round",
+    de: "Vollrundstab",
+    es: "Redondo macizo",
+  },
+  profile_tube: {
+    fr: "Tube",
+    en: "Tube",
+    de: "Rohr",
+    es: "Tubo",
+  },
+  profile_box: {
+    fr: "Rectangle creux",
+    en: "Hollow rectangle",
+    de: "Hohlkastenprofil",
+    es: "Rectángulo hueco",
+  },
+  material_label: {
+    fr: "Matériau",
+    en: "Material",
+    de: "Material",
+    es: "Material",
+  },
+  profile_label: {
+    fr: "Profilé",
+    en: "Profile",
+    de: "Profil",
+    es: "Perfil",
+  },
+  open_in_library: {
+    fr: "Modifier dans la bibliothèque",
+    en: "Edit in the library",
+    de: "In der Bibliothek bearbeiten",
+    es: "Editar en la biblioteca",
+  },
+  profile_i_beam: {
+    fr: "Profilé en I",
+    en: "I-beam",
+    de: "I-Profil",
+    es: "Perfil en I",
+  },
+  profiles_section: {
+    fr: "Profilés",
+    en: "Profiles",
+    de: "Profile",
+    es: "Perfiles",
+  },
+  add_material: {
+    fr: "Ajouter un matériau",
+    en: "Add a material",
+    de: "Material hinzufügen",
+    es: "Añadir un material",
+  },
+  add_profile: {
+    fr: "Ajouter un profilé",
+    en: "Add a profile",
+    de: "Profil hinzufügen",
+    es: "Añadir un perfil",
+  },
+  material_field_E: {
+    fr: "Module de Young (E)",
+    en: "Young's modulus (E)",
+    de: "Elastizitätsmodul (E)",
+    es: "Módulo de Young (E)",
+  },
+  material_field_Re: {
+    fr: "Limite élastique (Re)",
+    en: "Yield strength (Re)",
+    de: "Streckgrenze (Re)",
+    es: "Límite elástico (Re)",
+  },
+  material_field_rho: {
+    fr: "Masse volumique (ρ)",
+    en: "Density (ρ)",
+    de: "Dichte (ρ)",
+    es: "Densidad (ρ)",
+  },
+  used_by_beams_one: {
+    fr: "Utilisé par {count} poutre",
+    en: "Used by {count} beam",
+    de: "Verwendet von {count} Balken",
+    es: "Usado por {count} viga",
+  },
+  used_by_beams_other: {
+    fr: "Utilisé par {count} poutres",
+    en: "Used by {count} beams",
+    de: "Verwendet von {count} Balken",
+    es: "Usado por {count} vigas",
+  },
+  unused_entry: {
+    fr: "Non utilisé",
+    en: "Unused",
+    de: "Unbenutzt",
+    es: "Sin usar",
+  },
+  delete_disabled_last_entry: {
+    fr: "Impossible de supprimer la dernière entrée",
+    en: "Can't delete the last entry",
+    de: "Der letzte Eintrag kann nicht gelöscht werden",
+    es: "No se puede eliminar la última entrada",
+  },
+  catalog_entry_locked: {
+    fr: "Entrée du catalogue — dupliquez-la pour la modifier",
+    en: "Catalogue entry — duplicate it to edit",
+    de: "Katalogeintrag — zum Bearbeiten duplizieren",
+    es: "Entrada del catálogo — duplícala para editarla",
+  },
   length_unlock: {
     fr: "Débloquer la longueur",
     en: "Unlock the length",
@@ -1273,52 +1459,52 @@ export const STRINGS = {
   },
   frame: { fr: "Repère", en: "Frame", de: "Bezugspunkt", es: "Referencia" },
   frame_world: { fr: "Monde", en: "World", de: "Welt", es: "Mundo" },
-  belt_closed: {
+  closed: {
     fr: "Fermée",
     en: "Closed",
     de: "Geschlossen",
     es: "Cerrada",
   },
-  belt_open: { fr: "Libre", en: "Open", de: "Offen", es: "Abierta" },
-  belt_closed_tooltip: {
+  open: { fr: "Libre", en: "Open", de: "Offen", es: "Abierta" },
+  closed_tooltip: {
     fr: "Les deux extrémités tiennent à une même jonction",
     en: "Both ends are held by one junction",
     de: "Beide Enden hängen an derselben Verbindung",
     es: "Ambos extremos están sujetos a una misma unión",
   },
-  belt_open_tooltip: {
+  open_tooltip: {
     fr: "Les extrémités sont libres",
     en: "The ends are free",
     de: "Die Enden sind frei",
     es: "Los extremos están libres",
   },
-  ground_anchored: {
+  anchored: {
     fr: "Ancré",
     en: "Anchored",
     de: "Verankert",
     es: "Anclado",
   },
-  ground_free: { fr: "Libre", en: "Free", de: "Frei", es: "Libre" },
-  ground_anchor: { fr: "Ancrer", en: "Anchor", de: "Verankern", es: "Anclar" },
-  ground_release: {
+  free: { fr: "Libre", en: "Free", de: "Frei", es: "Libre" },
+  anchor: { fr: "Ancrer", en: "Anchor", de: "Verankern", es: "Anclar" },
+  release: {
     fr: "Libérer",
     en: "Release",
     de: "Lösen",
     es: "Liberar",
   },
-  connection_flip: {
+  flip: {
     fr: "Inverser la direction",
     en: "Flip the direction",
     de: "Richtung umkehren",
     es: "Invertir la dirección",
   },
-  connection_open_belt: {
+  open_belt: {
     fr: "Ouvrir la courroie",
     en: "Open the belt",
     de: "Riemen öffnen",
     es: "Abrir la correa",
   },
-  connection_disconnect: {
+  disconnect: {
     fr: "Déconnecter",
     en: "Disconnect",
     de: "Trennen",
@@ -1326,151 +1512,150 @@ export const STRINGS = {
   },
 
   // ── Connection slots ──────────────────────────────────────────────────────
-  slot_belt: { fr: "Courroie", en: "Belt", de: "Riemen", es: "Correa" },
-  slot_gears: {
+  gears: {
     fr: "Engrenages",
     en: "Gears",
     de: "Zahnräder",
     es: "Engranajes",
   },
-  slot_fixed_edges: {
+  fixed_edges: {
     fr: "Barres fixées",
     en: "Fixed edges",
     de: "Feste Stäbe",
     es: "Barras fijas",
   },
-  slot_rotating_edges: {
+  rotating_edges: {
     fr: "Barres tournantes",
     en: "Rotating edges",
     de: "Drehende Stäbe",
     es: "Barras giratorias",
   },
-  slot_parent: { fr: "Rail", en: "Track", de: "Schiene", es: "Carril" },
-  slot_start_node: {
+  parent: { fr: "Rail", en: "Track", de: "Schiene", es: "Carril" },
+  start_node: {
     fr: "Nœud de début",
     en: "Start node",
     de: "Startknoten",
     es: "Nodo inicial",
   },
-  slot_end_node: {
+  end_node: {
     fr: "Nœud de fin",
     en: "End node",
     de: "Endknoten",
     es: "Nodo final",
   },
-  slot_axle: { fr: "Axe", en: "Axle", de: "Achse", es: "Eje" },
-  slot_body_nodes: {
+  axle: { fr: "Axe", en: "Axle", de: "Achse", es: "Eje" },
+  body_nodes: {
     fr: "Nœuds du corps",
     en: "Body nodes",
     de: "Körperknoten",
     es: "Nodos del cuerpo",
   },
-  slot_meshed_gears: {
+  meshed_gears: {
     fr: "Engrenages",
     en: "Meshed gears",
     de: "Verzahnung ",
     es: "Engranajes",
   },
-  slot_fixed_gears: {
+  fixed_gears: {
     fr: "Engrenages fixés",
     en: "Fixed gears",
     de: "Feste Zahnräder",
     es: "Engranajes fijos",
   },
-  slot_fixed_nodes: {
+  fixed_nodes: {
     fr: "Nœuds fixés",
     en: "Fixed nodes",
     de: "Feste Knoten",
     es: "Nodos fijos",
   },
-  slot_junction: {
+  junction: {
     fr: "Jonction",
     en: "Junction",
     de: "Verbindung",
     es: "Unión",
   },
-  slot_empty: { fr: "Vide", en: "Empty", de: "Leer", es: "Vacío" },
+  empty: { fr: "Vide", en: "Empty", de: "Leer", es: "Vacío" },
 
   // ── Analysis panel ────────────────────────────────────────────────────────
-  link_motor: {
+  locked_motor: {
     fr: "Moteur bloqué",
     en: "Locked motor",
     de: "Blockierter Motor",
     es: "Motor bloqueado",
   },
-  link_fixed_on_segment: {
+  fixed_on_segment: {
     fr: "Position sur poutre",
     en: "Position on beam",
     de: "Position auf Balken",
     es: "Posición en la viga",
   },
-  link_slide_on_segment: {
+  slide_on_segment: {
     fr: "Glissement",
     en: "Sliding",
     de: "Gleiten",
     es: "Deslizamiento",
   },
-  link_keep_orientation: {
+  keep_orientation: {
     fr: "Orientation",
     en: "Orientation",
     de: "Ausrichtung",
     es: "Orientación",
   },
-  link_gear_meshing: {
+  gear_meshing: {
     fr: "Engrènement",
     en: "Meshing",
     de: "Verzahnung",
     es: "Engrane",
   },
-  link_gear_ratio: {
+  gear_ratio: {
     fr: "Rapport d'engrenage",
     en: "Gear ratio",
     de: "Übersetzung",
     es: "Relación de engranaje",
   },
-  link_coaxial: {
+  coaxial: {
     fr: "Coaxialité",
     en: "Coaxiality",
     de: "Koaxialität",
     es: "Coaxialidad",
   },
-  link_gear_perimeter_pin: {
+  gear_perimeter_pin: {
     fr: "Liaison engrenage",
     en: "Gear link",
     de: "Zahnradbindung",
     es: "Enlace de engranaje",
   },
-  link_beam_follows_angle: {
+  beam_follows_angle: {
     fr: "Solidarité engrenage",
     en: "Fixed to gear",
     de: "Starr mit Zahnrad",
     es: "Solidario al engranaje",
   },
-  link_normal: {
+  normal: {
     fr: "Perpendicularité",
     en: "Perpendicularity",
     de: "Rechtwinkligkeit",
     es: "Perpendicularidad",
   },
-  link_parallel: {
+  parallel: {
     fr: "Parallélisme",
     en: "Parallelism",
     de: "Parallelität",
     es: "Paralelismo",
   },
-  link_equal_length: {
+  equal_length: {
     fr: "Égalité de longueur",
     en: "Equal length",
     de: "Gleiche Länge",
     es: "Igualdad de longitud",
   },
-  link_horizontal: {
+  horizontal: {
     fr: "Horizontalité",
     en: "Horizontality",
     de: "Waagerechtigkeit",
     es: "Horizontalidad",
   },
-  link_vertical: {
+  vertical: {
     fr: "Verticalité",
     en: "Verticality",
     de: "Senkrechtigkeit",
@@ -1519,12 +1704,6 @@ export const STRINGS = {
     en: "Exactly the joints needed to hold, with none repeated.",
     de: "Genau so viele Verbindungen wie nötig, ohne Wiederholung.",
     es: "Justo las uniones necesarias para sostenerse, sin redundancia.",
-  },
-  ddl_no_motor: {
-    fr: "Mouvement libre",
-    en: "Free motion",
-    de: "Freie Bewegung",
-    es: "Movimiento libre",
   },
   ddl_no_motor_hint: {
     fr: "Rien ne pilote ce mouvement : déplacez le mécanisme à la main.",
@@ -1592,13 +1771,13 @@ export const STRINGS = {
     de: "Keine Verbindung lässt sich für sich entfernen: die Redundanz steckt in einer von ihnen, nicht zwischen ganzen Verbindungen.",
     es: "Ninguna unión puede quitarse por sí sola: la redundancia está dentro de una de ellas, no entre uniones enteras.",
   },
-  link_belt_no_slip: {
+  belt_no_slip: {
     fr: "Non-glissement de courroie",
     en: "Belt no-slip",
     de: "Riemen-Schlupffreiheit",
     es: "Correa sin deslizamiento",
   },
-  link_belt_length: {
+  belt_length: {
     fr: "Longueur de courroie",
     en: "Belt length",
     de: "Riemenlänge",
@@ -1719,6 +1898,18 @@ export const STRINGS = {
     de: "Warte auf Daten…",
     es: "Esperando datos…",
   },
+  cohesion_kinematic: {
+    fr: "Efforts internes non calculés en mode cinématique",
+    en: "Internal forces are not computed in kinematic mode",
+    de: "Innere Kräfte werden im kinematischen Modus nicht berechnet",
+    es: "Los esfuerzos internos no se calculan en modo cinemático",
+  },
+  cohesion_residual: {
+    fr: "résidu :",
+    en: "residual:",
+    de: "Residuum:",
+    es: "residuo:",
+  },
   measures_select_element: {
     fr: "Sélectionnez un élément pour voir ses grandeurs",
     en: "Select an element to see its quantities",
@@ -1732,19 +1923,12 @@ export const STRINGS = {
     de: "Position",
     es: "Posición",
   },
-  metric_velocity: {
-    fr: "Vitesse",
-    en: "Velocity",
-    de: "Geschwindigkeit",
-    es: "Velocidad",
-  },
   metric_angular_velocity: {
     fr: "Vitesse angulaire",
     en: "Angular velocity",
     de: "Winkelgeschwindigkeit",
     es: "Velocidad angular",
   },
-  metric_force: { fr: "Force", en: "Force", de: "Kraft", es: "Fuerza" },
   metric_force_start: {
     fr: "Force (début)",
     en: "Force (start)",
@@ -1757,7 +1941,6 @@ export const STRINGS = {
     de: "Kraft (Ende)",
     es: "Fuerza (fin)",
   },
-  metric_moment: { fr: "Moment", en: "Moment", de: "Moment", es: "Momento" },
   metric_moment_start: {
     fr: "Moment (début)",
     en: "Moment (start)",

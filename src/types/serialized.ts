@@ -2,8 +2,10 @@ import {
   Action,
   ConstraintElement,
   LoadElement,
+  MaterialDef,
   MechanicalElement,
   Point2,
+  ProfileDef,
   ViewportState,
 } from "../types";
 
@@ -25,3 +27,5 @@ export type SerializedConstraintElement = Serialized<ConstraintElement>;
 export type SerializedLoadElement = Serialized<LoadElement>;
 export type SerializedViewportState = Serialized<ViewportState>;
 export type SerializedAction = Serialized<Action>;
+export type SerializedMaterialDef = Serialized<MaterialDef>;
+export type SerializedProfileDef = Serialized<ProfileDef>;

@@ -180,7 +180,9 @@ function merge_value_edit(lastAction: Action, newAction: Action): void {
     case "ChangeSlidingFriction":
     case "ChangeRotationalFriction":
     case "ChangeSurfaceMass":
-    case "ChangeLinearMass":
+    case "ChangeMaterialE":
+    case "ChangeMaterialRe":
+    case "ChangeMaterialRho":
       if (newAction.type !== lastAction.type) break;
       lastAction.delta += newAction.delta;
       break;
@@ -398,6 +400,8 @@ export function apply_actions(mechanism: Mechanism, actions: Action[]): Mechanis
     mechanicalElements: [...mechanism.mechanicalElements],
     constraintElements: [...mechanism.constraintElements],
     loads: [...mechanism.loads],
+    materials: mechanism.materials,
+    profiles: mechanism.profiles,
     viewport: { ...mechanism.viewport },
     simulation: mechanism.simulation,
     metadata: { ...mechanism.metadata },

@@ -64,7 +64,7 @@ export function ddl_status(
       if (mobility === 0) return rigid;
       if (drivers === 0)
         return {
-          label: t("ddl_no_motor"),
+          label: t("ddl_free_motion"),
           hint: t("ddl_no_motor_hint"),
           color: BLUE,
         };

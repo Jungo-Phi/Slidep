@@ -1,0 +1,221 @@
+--- a/src/components/solver/PBD_kinematic_solver.ts
++++ b/src/components/solver/PBD_kinematic_solver.ts
+@@ -262,6 +262,51 @@
+   maxGrabAmplitude: Infinity,
+ };
+ 
++/* ── TEMPORARY EXPERIMENT: symmetric Gauss-Seidel sweep order ────────────────
++ * Off unless SLIDEP_SSOR is set. "all" alternates every link; "nobelt" alternates
++ * everything except the belt's deliberately redundant conditioning set, which keeps its
++ * own slots and its own forward relative order; "perchain" alternates a link only when
++ * its whole kinematic chain is tree-shaped (no closed-belt machinery anywhere in it —
++ * see `tag_ssor_tree_links` in simulation-engine.ts, which is what sets `ssorTree` on
++ * the link objects this reads). To be removed once measured. */
++const SSOR_MODE: string =
++  (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env
++    ?.SLIDEP_SSOR ?? "off";
++
++const BELT_MACHINERY = new Set([
++  "BeltLength",
++  "BeltPin",
++  "BeltJunction",
++  "BeltSegmentNoSlip",
++  "BeltSubChainAggregate",
++  "BeltFollowsTangent",
++]);
++
++function ssor_pinned(link: Link): boolean {
++  if (SSOR_MODE === "beltall") return BELT_MACHINERY.has(link.type);
++  if (SSOR_MODE === "perchain")
++    return !(link as Record<string, unknown>).ssorTree;
++  return (
++    link.type === "BeltSubChainAggregate" ||
++    (link.type === "BeltSegmentNoSlip" && link.closed)
++  );
++}
++
++function ssor_reverse_order(links: Link[]): Int32Array | null {
++  if (SSOR_MODE === "off") return null;
++  const n = links.length;
++  const order = new Int32Array(n);
++  if (SSOR_MODE === "all") {
++    for (let i = 0; i < n; i++) order[i] = n - 1 - i;
++    return order;
++  }
++  const free: number[] = [];
++  for (let i = 0; i < n; i++) if (!ssor_pinned(links[i])) free.push(i);
++  let k = free.length - 1;
++  for (let i = 0; i < n; i++) order[i] = ssor_pinned(links[i]) ? i : free[k--];
++  return order;
++}
++
+ /**
+  * Total motion still to come if the current per-sweep decay holds, in the unit of `now`.
+  * `Infinity` when it is not decaying — nothing can be bounded, so nothing is cut short.
+@@ -508,6 +553,8 @@
+     }
+   }
+ 
++  const ssorReverse = ssor_reverse_order(links);
++
+   let maxError: number = 0;
+   for (let i = 0; i < nbIterations; i++) {
+     maxError = 0;
+@@ -516,7 +563,10 @@
+     prevY.set(nodes.y);
+     prevA.set(nodes.angle);
+ 
+-    links.forEach((link, idx) => {
++    const sweepOrder = ssorReverse && i % 2 === 1 ? ssorReverse : null;
++    for (let step = 0; step < links.length; step++) {
++      const idx = sweepOrder ? sweepOrder[step] : step;
++      const link = links[idx];
+       const s = slots[idx];
+       if (traceX && traceY && traceA) {
+         traceX.set(nodes.x);
+@@ -871,7 +921,7 @@
+         }
+         if (residuals) residuals[idx] = residual;
+       }
+-    });
++    }
+ 
+     // ── What this sweep actually moved ────────────────────────────────────────
+     // Angles are measured alongside positions, never instead of them: the coupling
+--- a/src/components/solver/simulation-engine.ts
++++ b/src/components/solver/simulation-engine.ts
+@@ -56,7 +56,7 @@
+   snapshot_belt_wraps,
+   snapshot_point,
+ } from "./snapshot";
+-import { sort_links } from "./utils";
++import { keys_of, sort_links } from "./utils";
+ 
+ /**
+  * The step every recorded instant is spaced by, whatever the playback speed and whatever
+@@ -272,6 +272,8 @@
+   /** Each beam's own cohesion-torsor spec, read only by `step_dynamic_simulation` — see
+    *  `BeamCohesionSpec`. */
+   beamCohesionSpecs: BeamCohesionSpec[];
++  /** TEMPORARY EXPERIMENT (see `tag_ssor_tree_links`): free keys in a loop-free chain. */
++  ssorTreeKeys: Set<string>;
+ };
+ 
+ /** Which snapshot slots each solver node writes to: a fused key feeds one slot per key it
+@@ -678,6 +680,75 @@
+     l.gearPosKeys = (l.gearPosKeys as string[]).map(from);
+ }
+ 
++/* ── TEMPORARY EXPERIMENT: per-chain SSOR classification ──────────────────────
++ * Returns the free variable keys that sit in a connected component with no closed-belt
++ * machinery anywhere in it — the redundant set `analysis-model.ts`'s
++ * `closed_loop_surplus`/`BeltSubChainAggregate` pruning also targets. Also tags every
++ * compiled link touching one of those keys with `ssorTree = true`, which is what
++ * `PBD_kinematic_solver.ts`'s SSOR prototype reads directly off the link object (no
++ * import — see the patch's own note on why `analysis-model.ts` cannot be reached from
++ * the solver). The key set is carried further, on `SimulationModel.ssorTreeKeys`, so a
++ * link built fresh every frame/substep from a KNOWN model key — a beam's dynamics-only
++ * midpoint `FixedOnSegment`, chiefly — can still be classified without re-running this
++ * (a HandleGrab/collision link touches no model key and is left untagged: NOT tree, i.e.
++ * fixed order — conservative). A belt that disconnects mid-run keeps its chain pinned
++ * even once it has actually become a tree, until the next full compile. To be removed
++ * once measured, alongside solver-ssor.patch. */
++function tag_ssor_tree_links(nodes: KinNodes, links: Link[]): Set<string> {
++  const isFree = (key: string) =>
++    (nodes.positions.has(key) && nodes.posMasses.get(key) !== 0) ||
++    nodes.angles.has(key);
++
++  const parent = new Map<string, string>();
++  const add = (key: string) => {
++    if (!parent.has(key)) parent.set(key, key);
++  };
++  const find = (key: string): string => {
++    let root = key;
++    while (parent.get(root) !== root) root = parent.get(root)!;
++    let walk = key;
++    while (parent.get(walk) !== root) {
++      const next = parent.get(walk)!;
++      parent.set(walk, root);
++      walk = next;
++    }
++    return root;
++  };
++  const union = (a: string, b: string) => {
++    add(a);
++    add(b);
++    const ra = find(a);
++    const rb = find(b);
++    if (ra !== rb) parent.set(ra, rb);
++  };
++
++  const freeKeys = links.map((link) => keys_of(link).filter(isFree));
++  freeKeys.forEach((free) => {
++    free.forEach(add);
++    for (let i = 1; i < free.length; i++) union(free[0], free[i]);
++  });
++
++  const loopRoots = new Set<string>();
++  links.forEach((link, i) => {
++    const conditioning =
++      link.type === "BeltSubChainAggregate" ||
++      (link.type === "BeltSegmentNoSlip" && link.closed);
++    if (conditioning && freeKeys[i].length > 0)
++      loopRoots.add(find(freeKeys[i][0]));
++  });
++
++  const treeKeys = new Set<string>();
++  for (const key of parent.keys()) if (!loopRoots.has(find(key))) treeKeys.add(key);
++
++  links.forEach((link, i) => {
++    const free = freeKeys[i];
++    if (free.length > 0 && !loopRoots.has(find(free[0])))
++      (link as Record<string, unknown>).ssorTree = true;
++  });
++
++  return treeKeys;
++}
++
+ /**
+  * Compile the frozen simulation model from a mechanism (called on entering
+  * simulation). Parses sim nodes + links, fuses coincidence links, sorts.
+@@ -762,6 +833,8 @@
+   // ── Sort links (anchored nodes first for better convergence) ──
+   links = sort_links(links, nodes.posMasses);
+ 
++  const ssorTreeKeys = tag_ssor_tree_links(nodes, links);
++
+   const gearRadii = new Map<ID, number>();
+   for (const element of mechanism.mechanicalElements)
+     if (element.type === "gear") gearRadii.set(element.id, element.radius);
+@@ -830,6 +903,7 @@
+       slots: Int32Array.from(slotList),
+     },
+     beamCohesionSpecs: build_beam_cohesion_specs(mechanism.mechanicalElements, links),
++    ssorTreeKeys,
+   };
+ }
+ 
+@@ -1389,14 +1463,21 @@
+       const vs = velocities.get(startKey) ?? ZERO;
+       const ve = velocities.get(endKey) ?? ZERO;
+       velocities.set(midKey, vs.lerp(ve, 0.5));
+-      midLinks.push({
++      const midLink: Link = {
+         type: "FixedOnSegment",
+         ddl: 2,
+         key1: startKey,
+         key2: endKey,
+         key3: midKey,
+         t: 0.5,
+-      });
++      };
++      // TEMPORARY EXPERIMENT: this link is rebuilt every substep, so it never carries the
++      // compile-time tag `tag_ssor_tree_links` sets on `model.links` — classify it the same
++      // way, from the model's own key set, so a beam's rotational-inertia midpoint does not
++      // silently fall back to "pinned" inside an otherwise fully alternated tree chain.
++      if (model.ssorTreeKeys.has(startKey) || model.ssorTreeKeys.has(endKey))
++        (midLink as Record<string, unknown>).ssorTree = true;
++      midLinks.push(midLink);
+     }
+ 
+     // ── Grab (transient, this substep only) ── no belt state to share: dynamic mode tracks

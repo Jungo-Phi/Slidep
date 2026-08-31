@@ -6,8 +6,10 @@ import {
   Action,
   BeamElement,
   ID,
+  MaterialDef,
   MechanicalElement,
   PivotElement,
+  ProfileDef,
 } from "../types";
 
 const id = (s: string) =>
@@ -15,6 +17,14 @@ const id = (s: string) =>
 
 const PIVOT_ID = id("p1");
 const BEAM_ID = id("b1");
+const MATERIAL_ID = id("m1");
+const PROFILE_ID = id("pr1");
+const MATERIALS: MaterialDef[] = [
+  { id: MATERIAL_ID, name: "test", E: 1, Re: 1, rho: 1, readOnly: false },
+];
+const PROFILES: ProfileDef[] = [
+  { id: PROFILE_ID, name: "test", shape: { kind: "rect", b: 1, h: 1 } },
+];
 
 const PIVOT: PivotElement = {
   type: "pivot",
@@ -38,7 +48,8 @@ const BEAM: BeamElement = {
   fixedNodeStartID: PIVOT_ID,
   fixedNodeEndID: undefined,
   fixedNodesBodyIDs: [],
-  linearMass: 1,
+  materialID: MATERIAL_ID,
+  profileID: PROFILE_ID,
 };
 
 function mechanism(mechanicalElements: MechanicalElement[]): Mechanism {
@@ -50,6 +61,8 @@ function mechanism(mechanicalElements: MechanicalElement[]): Mechanism {
     mechanicalElements,
     constraintElements: [],
     loads: [],
+    materials: MATERIALS,
+    profiles: PROFILES,
     history: [],
     future: [],
   };

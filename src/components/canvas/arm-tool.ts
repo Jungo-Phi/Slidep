@@ -106,12 +106,17 @@ function first_step(
     case "PlacingForceStart":
     case "PlacingMomentStart":
     case "PlacingProbe":
+      // Never reaches the beam branch of `handle_placing_element` (that needs
+      // `PlacingBeamEnd`, which arming never produces — see this function's own doc), so
+      // the material/profile library it would otherwise read is never touched here.
       return handle_placing_element(
         { type: toolState },
         part,
         mechanicalElements,
         constraintElements,
         loads,
+        [],
+        [],
         viewport,
       );
     default:

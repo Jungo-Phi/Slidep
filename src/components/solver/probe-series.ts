@@ -225,6 +225,7 @@ function force_at(
   let any = false;
   for (const r of snapshot.reactions) {
     if (r.kind !== "force" || !r.key.split(",").includes(key)) continue;
+    if (Number.isNaN(r.fx) || Number.isNaN(r.fy)) continue;
     fx += r.fx;
     fy += r.fy;
     atAnchor = r.atAnchor;
@@ -260,6 +261,7 @@ function moment_at(
   let any = false;
   for (const r of snapshot.reactions) {
     if (r.kind !== "torque" || !r.key.split(",").includes(key)) continue;
+    if (Number.isNaN(r.torque)) continue;
     sum += r.torque;
     atAnchor = r.atAnchor;
     any = true;

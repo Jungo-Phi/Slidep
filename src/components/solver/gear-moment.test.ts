@@ -35,6 +35,8 @@ function mechanism(
     mechanicalElements,
     constraintElements: [],
     loads,
+    materials: [],
+    profiles: [],
     history: [],
     future: [],
   };

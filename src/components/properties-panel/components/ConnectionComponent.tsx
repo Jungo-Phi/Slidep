@@ -170,7 +170,7 @@ const Connection: React.FC<ConnectionProps> = ({
                 ml: -0.5,
               }}
               onClick={handleSwitchMeshedGearDirection}
-              title={t("connection_flip")}
+              title={t("flip")}
               size="small"
             >
               <DirectionIcon
@@ -190,7 +190,7 @@ const Connection: React.FC<ConnectionProps> = ({
               color="error"
               onClick={handleDisconnect}
               title={t(
-                opensBelt ? "connection_open_belt" : "connection_disconnect",
+                opensBelt ? "open_belt" : "disconnect",
               )}
               size="small"
             >

@@ -18,6 +18,10 @@ import {
 } from "../../types";
 import { CanvasState } from "../../types/canvas-state";
 import {
+  default_profile,
+  seed_material_catalog,
+} from "../../constants/material-profile-catalog";
+import {
   debounce,
   fit_viewport_to_bounds,
   FileImport,
@@ -321,6 +325,8 @@ export function useMechanismLibrary({
       mechanicalElements: [],
       constraintElements: [],
       loads: [],
+      materials: seed_material_catalog(),
+      profiles: [default_profile()],
       history: [],
       future: [],
     };

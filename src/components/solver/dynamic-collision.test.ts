@@ -3,6 +3,7 @@ import { DEFAULT_METADATA, DEFAULT_SIMULATION, Mechanism } from "../../types/mec
 import { Point2 } from "../../types/point2";
 import { GRAVITY } from "../../constants/physics-specs";
 import type { BeamElement, ID, MassElement, MechanicalElement, PivotElement } from "../../types/element";
+import type { MaterialDef, ProfileDef } from "../../types/material";
 import {
   RECORD_DT,
   compile_simulation_model,
@@ -21,9 +22,18 @@ const pivot = (pid: ID, position: Point2): PivotElement => ({
   type: "pivot", id: pid, probes: [], overlays: {}, position, isGrounded: true,
   rotatingEdgesIDs: [], fixedGearsIDs: [], rotationalFriction: 0,
 });
+const MATERIAL_ID = id();
+const PROFILE_ID = id();
+const MATERIALS: MaterialDef[] = [
+  { id: MATERIAL_ID, name: "test", E: 1, Re: 1, rho: 1, readOnly: false },
+];
+const PROFILES: ProfileDef[] = [
+  { id: PROFILE_ID, name: "test", shape: { kind: "rect", b: 1, h: 1 } },
+];
 const beam = (bid: ID, start: Point2, end: Point2, startID?: ID, endID?: ID): BeamElement => ({
   type: "beam", id: bid, probes: [], overlays: {}, positionStart: start, positionEnd: end,
-  fixedNodeStartID: startID, fixedNodeEndID: endID, fixedNodesBodyIDs: [], linearMass: 1,
+  fixedNodeStartID: startID, fixedNodeEndID: endID, fixedNodesBodyIDs: [],
+  materialID: MATERIAL_ID, profileID: PROFILE_ID,
 });
 const mass = (mid: ID, position: Point2): MassElement => ({
   type: "mass", id: mid, probes: [], overlays: {}, position, isGrounded: false,
@@ -32,7 +42,8 @@ const mass = (mid: ID, position: Point2): MassElement => ({
 function mechanism(mechanicalElements: MechanicalElement[]): Mechanism {
   return { metadata: DEFAULT_METADATA, viewport: { scale: 1, pan: new Point2(0, 0) },
     simulation: DEFAULT_SIMULATION,
-    mechanicalElements, constraintElements: [], loads: [], history: [], future: [] };
+    mechanicalElements, constraintElements: [], loads: [],
+    materials: MATERIALS, profiles: PROFILES, history: [], future: [] };
 }
 
 describe("rebond en mode dynamique", () => {

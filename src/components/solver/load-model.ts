@@ -129,11 +129,16 @@ const add_to = (map: Map<string, Point2>, key: string, v: Point2): void => {
  * acceleration — called every frame, since an edge-frame load's world direction follows that
  * edge's current orientation.
  *
- * A distributed load lumps 50/50 onto the beam's two ends, same simplification `mass-model.ts`
- * makes for a beam's own mass: exact for a uniform load (`magnitudeStart === magnitudeEnd`,
- * the common case), an approximation for a tapered one — the alternative (splitting by the
- * trapezoid's actual centroid) buys static consistency this quasi-static XPBD step does not
- * otherwise have anyway.
+ * A distributed load's resultant and moment (about either end) are matched EXACTLY, for any
+ * trapezoidal (affine) shape — not just the uniform case (`magnitudeStart === magnitudeEnd`)
+ * a plain 50/50 split gets right. Unlike `mass-model.ts`'s own 1/6–2/3–1/6 lumping, this needs
+ * no third point: mass lumping has a THIRD independent quantity to match (rotational inertia),
+ * which two point masses can never reach regardless of weighting — a real deficiency only a
+ * third point closes. A force distribution has no such third quantity: on a rigid body, only
+ * the net resultant and net moment matter (Newton's second law and its rotational counterpart
+ * read nothing else), and an affine field has exactly two free parameters — so two points,
+ * correctly weighted, already capture it exactly. See docs/plan-efforts-interieurs.md
+ * correction 2.
  */
 export function resolve_load_forces(
   loads: CompiledLoad[],
@@ -152,11 +157,14 @@ export function resolve_load_forces(
         const end = positions.get(load.endKey);
         if (!start || !end) break;
         const length = start.distance_to(end);
-        const total = ((load.magnitudeStart + load.magnitudeEnd) / 2) * length;
         const direction = to_world(load.direction, load.edge, positions);
-        const half = direction.mul(total / 2);
-        add_to(forces, load.startKey, half);
-        add_to(forces, load.endKey, half);
+        // Equivalent nodal loads for a trapezoidal density w(s) = w0·(1−s/L) + w1·(s/L) — the
+        // classic beam-FEM result, reduces to the uniform 50/50 split when w0 = w1.
+        const { magnitudeStart: w0, magnitudeEnd: w1 } = load;
+        const atStart = direction.mul((length / 6) * (2 * w0 + w1));
+        const atEnd = direction.mul((length / 6) * (w0 + 2 * w1));
+        add_to(forces, load.startKey, atStart);
+        add_to(forces, load.endKey, atEnd);
         break;
       }
       case "torque":

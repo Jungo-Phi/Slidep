@@ -24,7 +24,7 @@ import {
   type EdgeProbe,
   type HoverTargets,
 } from "../components/canvas/get-hover";
-import { Action, ID, MechanicalElement, UnionElement } from "../types";
+import { Action, ID, MaterialDef, MechanicalElement, ProfileDef, UnionElement } from "../types";
 
 /**
  * Property: any state reachable through gestures the UI offers is a valid
@@ -40,6 +40,17 @@ const fresh = (): ID => {
   counter += 1;
   return `00000000-0000-0000-0000-${String(counter).padStart(12, "0")}` as ID;
 };
+
+/** Every generated beam takes this one couple — no gadget or command here ever touches the
+ *  library, so a single fixed pair stays valid through the whole fuzz run. */
+const MATERIAL_ID = fresh();
+const PROFILE_ID = fresh();
+const MATERIALS: MaterialDef[] = [
+  { id: MATERIAL_ID, name: "test", E: 1, Re: 1, rho: 1, readOnly: false },
+];
+const PROFILES: ProfileDef[] = [
+  { id: PROFILE_ID, name: "test", shape: { kind: "rect", b: 1, h: 1 } },
+];
 
 // ─── Gadgets: small, individually valid fragments ─────────────────────────────
 
@@ -98,7 +109,8 @@ function build_gadget(gadget: Gadget, x: number): MechanicalElement[] {
           fixedNodeStartID: undefined,
           fixedNodeEndID: undefined,
           fixedNodesBodyIDs: [],
-          linearMass: 1,
+          materialID: MATERIAL_ID,
+          profileID: PROFILE_ID,
         },
       ];
     case "pivotOnBeam": {
@@ -126,7 +138,8 @@ function build_gadget(gadget: Gadget, x: number): MechanicalElement[] {
           fixedNodeStartID: pivotID,
           fixedNodeEndID: undefined,
           fixedNodesBodyIDs: [],
-          linearMass: 1,
+          materialID: MATERIAL_ID,
+          profileID: PROFILE_ID,
         },
       ];
     }
@@ -176,6 +189,8 @@ function build_mechanism(gadgets: Gadget[]): Mechanism {
     mechanicalElements,
     constraintElements: [],
     loads: [],
+    materials: MATERIALS,
+    profiles: PROFILES,
     history: [],
     future: [],
   };
@@ -400,7 +415,7 @@ function run_tool(
   hoveredPart: HoveredPart,
   mechanism: Mechanism,
 ): MouseDownResult {
-  const { mechanicalElements, constraintElements, loads } = mechanism;
+  const { mechanicalElements, constraintElements, loads, materials, profiles } = mechanism;
   return is_placement_tool(state)
     ? handle_placing_element(
         state,
@@ -408,6 +423,8 @@ function run_tool(
         mechanicalElements,
         constraintElements,
         loads,
+        materials,
+        profiles,
         { scale: 1, pan: ZERO },
       )
     : handle_placing_constraint(

@@ -142,20 +142,14 @@ describe("migrate_document", () => {
         rotationalFriction: DEFAULT.ROTATIONAL_FRICTION,
       },
       { surfaceMass: DEFAULT.SURFACE_MASS },
-      { linearMass: DEFAULT.LINEAR_MASS },
+      {},
     ]);
-  });
-
-  it("does not override a value already present", () => {
-    const result = migrate_document(
-      doc({
-        formatVersion: 2,
-        mechanicalElements: [
-          { type: "beam", id: "b1", linearMass: 42 },
-        ],
-      }),
-    );
-    expect(result.mechanicalElements[0]).toMatchObject({ linearMass: 42 });
+    // The beam's own `linearMass` (filled in by this very step) is itself replaced by the
+    // v9 step further down the chain — see "assigns the default material/profile couple to
+    // every beam" below.
+    expect(result.mechanicalElements[4]).not.toHaveProperty("linearMass");
+    expect(result.mechanicalElements[4]).toHaveProperty("materialID");
+    expect(result.mechanicalElements[4]).toHaveProperty("profileID");
   });
 
   // Called directly rather than through `migrate_document`: a document this old also
@@ -433,6 +427,111 @@ describe("migrate_document", () => {
     };
     const result = migrate_document(doc({ formatVersion: 7, simulation }));
     expect(result.simulation).toEqual(simulation);
+  });
+
+  it("assigns the default material/profile couple to every beam, even one that already carried a linearMass", () => {
+    const result = migrate_document(
+      doc({
+        formatVersion: 8,
+        mechanicalElements: [
+          { type: "beam", id: "b1", linearMass: 42 },
+          { type: "beam", id: "b2", linearMass: 1 },
+        ],
+      }),
+    );
+    // The couple itself, plus the read-only catalogue the v9 → v10 step seeds alongside it.
+    expect(result.materials.length).toBeGreaterThan(1);
+    expect(result.profiles).toHaveLength(1);
+    const [material] = result.materials as unknown as { id: string; readOnly: boolean }[];
+    const [profile] = result.profiles as unknown as { id: string }[];
+    expect(material.readOnly).toBe(false);
+    expect(result.mechanicalElements).toEqual([
+      {
+        type: "beam",
+        id: "b1",
+        materialID: material.id,
+        profileID: profile.id,
+      },
+      {
+        type: "beam",
+        id: "b2",
+        materialID: material.id,
+        profileID: profile.id,
+      },
+    ]);
+  });
+
+  it("carries the same couple into the undo stack, and turns a stored ChangeLinearMass into a no-op", () => {
+    const step = MIGRATION_STEPS.find((s) => s.to === 9)!;
+    const result = step.apply(
+      doc({
+        formatVersion: 8,
+        history: [
+          [
+            {
+              type: "CreateElement",
+              element: { type: "beam", id: "b1", linearMass: 1 },
+            },
+          ],
+          [{ type: "ChangeLinearMass", id: "b1", delta: 5 }],
+        ],
+        future: [
+          [{ type: "DeleteElement", element: { type: "beam", id: "b2", linearMass: 1 } }],
+        ],
+      }),
+    );
+    const [material] = result.materials as unknown as { id: string }[];
+    const [profile] = result.profiles as unknown as { id: string }[];
+    expect(result.history).toEqual([
+      [
+        {
+          type: "CreateElement",
+          element: { type: "beam", id: "b1", materialID: material.id, profileID: profile.id },
+        },
+      ],
+      [{ type: "Blank" }],
+    ]);
+    expect(result.future).toEqual([
+      [
+        {
+          type: "DeleteElement",
+          element: { type: "beam", id: "b2", materialID: material.id, profileID: profile.id },
+        },
+      ],
+    ]);
+  });
+
+  it("backfills readOnly:false on an existing material and seeds the read-only catalogue alongside it", () => {
+    const step = MIGRATION_STEPS.find((s) => s.to === 10)!;
+    const result = step.apply(
+      doc({
+        formatVersion: 9,
+        materials: [{ id: "m1", name: "Custom", E: 1, Re: 1, rho: 1 }],
+      }),
+    );
+    const materials = result.materials as unknown as { id: string; readOnly: boolean }[];
+    expect(materials[0]).toEqual({ id: "m1", name: "Custom", E: 1, Re: 1, rho: 1, readOnly: false });
+    expect(materials.length).toBeGreaterThan(1);
+    expect(materials.slice(1).every((m) => m.readOnly)).toBe(true);
+  });
+
+  it("backfills readOnly:false on a material carried by a stored CreateMaterial/DeleteMaterial action", () => {
+    const step = MIGRATION_STEPS.find((s) => s.to === 10)!;
+    const material = { id: "m1", name: "Custom", E: 1, Re: 1, rho: 1 };
+    const result = step.apply(
+      doc({
+        formatVersion: 9,
+        materials: [],
+        history: [[{ type: "CreateMaterial", material }]],
+        future: [[{ type: "DeleteMaterial", material }]],
+      }),
+    );
+    expect(result.history).toEqual([
+      [{ type: "CreateMaterial", material: { ...material, readOnly: false } }],
+    ]);
+    expect(result.future).toEqual([
+      [{ type: "DeleteMaterial", material: { ...material, readOnly: false } }],
+    ]);
   });
 
   it("refuses a document from a newer format", () => {

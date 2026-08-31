@@ -180,6 +180,17 @@ export function snapshot_velocity(
   return Number.isNaN(x) ? undefined : new Point2(x, snapshot.velocities[2 * i + 1]);
 }
 
+/** The acceleration recorded for `key` in a dynamic-mode snapshot — see `snapshot_point`. */
+export function snapshot_acceleration(
+  snapshot: DynamicSnapshot,
+  key: string,
+): Point2 | undefined {
+  const i = snapshot.layout.index.get(key);
+  if (i === undefined) return undefined;
+  const x = snapshot.accelerations[2 * i];
+  return Number.isNaN(x) ? undefined : new Point2(x, snapshot.accelerations[2 * i + 1]);
+}
+
 /** The angular velocity (rad/s) recorded for `key` in a dynamic-mode snapshot — see
  *  `snapshot_angle`. */
 export function snapshot_angle_velocity(

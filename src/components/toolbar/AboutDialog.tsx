@@ -18,7 +18,7 @@ interface AboutDialogProps {
 
 export const AboutDialog: React.FC<AboutDialogProps> = ({ open, onClose }) => (
   <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-    <DialogTitle fontSize={"large"}>{t("about_title")}</DialogTitle>
+    <DialogTitle fontSize={"large"}>{t("title")}</DialogTitle>
     <IconButton
       onClick={onClose}
       sx={() => ({
@@ -30,11 +30,11 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({ open, onClose }) => (
       <Close />
     </IconButton>
     <DialogContent dividers>
-      <Typography gutterBottom>{t("about_intro")}</Typography>
+      <Typography gutterBottom>{t("intro")}</Typography>
 
-      <Typography gutterBottom>{t("about_story")}</Typography>
+      <Typography gutterBottom>{t("story")}</Typography>
 
-      <Typography>{t("about_roadmap")}</Typography>
+      <Typography>{t("roadmap")}</Typography>
 
       <Box
         sx={{
@@ -47,18 +47,18 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({ open, onClose }) => (
         {[
           {
             icon: <Bolt sx={{ fontSize: 20 }} />,
-            title: t("about_realtime_title"),
-            body: t("about_realtime_body"),
+            title: t("realtime_title"),
+            body: t("realtime_body"),
           },
           {
             icon: <CloudOff sx={{ fontSize: 20 }} />,
-            title: t("about_offline_title"),
-            body: t("about_offline_body"),
+            title: t("offline_title"),
+            body: t("offline_body"),
           },
           {
             icon: <Lock sx={{ fontSize: 20 }} />,
-            title: t("about_local_title"),
-            body: t("about_local_body"),
+            title: t("local_title"),
+            body: t("local_body"),
           },
         ].map((feature) => (
           <Box key={feature.title}>
@@ -83,7 +83,7 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({ open, onClose }) => (
         ))}
       </Box>
 
-      <Typography sx={{ mt: 3 }}>{t("about_contribute")}</Typography>
+      <Typography sx={{ mt: 3 }}>{t("contribute")}</Typography>
     </DialogContent>
     <DialogContent>
       <Box
@@ -97,17 +97,17 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({ open, onClose }) => (
         }}
       >
         <Typography variant="body2" color="text.secondary">
-          {t("about_version")}
+          {t("version")}
         </Typography>
         <Typography variant="body2">{__APP_VERSION__}</Typography>
 
         <Typography variant="body2" color="text.secondary">
-          {t("about_license")}
+          {t("license")}
         </Typography>
-        <Typography variant="body2">{t("about_license_tbd")}</Typography>
+        <Typography variant="body2">{t("license_tbd")}</Typography>
 
         <Typography variant="body2" color="text.secondary">
-          {t("about_contact")}
+          {t("contact")}
         </Typography>
         <MuiLink
           variant="body2"
@@ -118,7 +118,7 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({ open, onClose }) => (
         </MuiLink>
 
         <Typography variant="body2" color="text.secondary">
-          {t("about_code")}
+          {t("code")}
         </Typography>
         <MuiLink
           variant="body2"

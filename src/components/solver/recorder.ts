@@ -1,4 +1,4 @@
-import { Mechanism } from "../../types";
+import { LoadElement, Mechanism } from "../../types";
 import { ZERO } from "../../types/point2";
 import {
   DynamicSnapshot,
@@ -24,6 +24,7 @@ import {
   step_dynamic_simulation,
   step_simulation,
 } from "./simulation-engine";
+import { compile_loads } from "./load-model";
 import { RecorderMode } from "./recorder-protocol";
 
 /**
@@ -49,6 +50,9 @@ const REWIND_WINDOW = 5;
  */
 export class Recorder {
   private model: SimulationModel | null = null;
+  /** The mechanism `model` was compiled from — kept only for `setLoads`, which recompiles
+   *  `compiledLoads` against it without touching anything else the model bakes in. */
+  private mechanism: Mechanism | null = null;
   private mode: RecorderMode = "kinematic";
   /** Dynamic mode only: whether the predict step integrates `GRAVITY`. */
   private gravityOn = true;
@@ -84,6 +88,7 @@ export class Recorder {
     resumeFrom: SimulationSnapshot | null,
   ): void {
     this.mode = mode;
+    this.mechanism = mechanism;
     this.model = compile_simulation_model(mechanism, mode === "dynamic", true);
     this.limit = max_recording_time(this.model.layout);
     this.last = resumeFrom;
@@ -111,6 +116,18 @@ export class Recorder {
   /** Both modes: whether the next steps detect and resist the floor. */
   setFloor(on: boolean): void {
     this.floorOn = on;
+  }
+
+  /**
+   * Swap in new load values (magnitude, direction…) without recompiling the model: targets
+   * and solver keys are unchanged, so `compile_loads` alone — cheap, just the loads array —
+   * is all a value edit needs. A topology change (a load's target, a new/deleted load) still
+   * goes through `load`.
+   */
+  setLoads(loads: LoadElement[]): void {
+    if (!this.model || !this.mechanism) return;
+    this.mechanism = { ...this.mechanism, loads };
+    this.model.compiledLoads = compile_loads(this.mechanism, this.model.keyMap);
   }
 
   /**
@@ -201,32 +218,65 @@ export class Recorder {
     while (frontier + produced + RECORD_DT <= dueUntil) {
       produced += RECORD_DT;
       const t = frontier + produced;
-      latest =
-        this.mode === "kinematic"
-          ? step_simulation(
-              this.model,
-              t,
-              latest as KinematicSnapshot | null,
-              RECORD_DT,
-              this.grab ?? undefined,
-              undefined,
-              undefined,
-              (state) => this.journal.push({ t, state }),
-              this.collisionsOn,
-              this.floorOn,
-            )
-          : step_dynamic_simulation(
-              this.model,
-              t,
-              latest as DynamicSnapshot | null,
-              RECORD_DT,
-              this.gravityOn ? GRAVITY : ZERO,
-              this.grab ?? undefined,
-              undefined,
-              undefined,
-              this.collisionsOn,
-              this.floorOn,
-            );
+      // The very first step of a fresh load has nothing to warm-start from — `latest` is
+      // still `null` here. Stepping it with `dt = 0` instead of `RECORD_DT` makes this
+      // instant a plain re-projection of the edition geometry onto the constraints (motors
+      // don't advance their target, forces integrate nothing), so `t = 0` is genuinely the
+      // edition state rather than one step past it.
+      const stepDt = latest === null ? 0 : RECORD_DT;
+      if (this.mode === "kinematic") {
+        latest = step_simulation(
+          this.model,
+          t,
+          latest as KinematicSnapshot | null,
+          stepDt,
+          this.grab ?? undefined,
+          undefined,
+          undefined,
+          (state) => this.journal.push({ t, state }),
+          this.collisionsOn,
+          this.floorOn,
+        );
+      } else {
+        const gravity = this.gravityOn ? GRAVITY : ZERO;
+        let dynamicSnapshot = step_dynamic_simulation(
+          this.model,
+          t,
+          latest as DynamicSnapshot | null,
+          stepDt,
+          gravity,
+          this.grab ?? undefined,
+          undefined,
+          undefined,
+          this.collisionsOn,
+          this.floorOn,
+        );
+        // The re-projection above has no elapsed time, so it reports no reactions (see
+        // `step_dynamic_simulation`) — a zero dt cannot be turned into a force. A probe step,
+        // real dt but warm-started from that very same edition state, reads the forces
+        // actually in play at t = 0; only its reactions are kept, its pose is discarded, so
+        // the frame everyone sees still stays the exact edition geometry above.
+        if (stepDt === 0) {
+          const probe = step_dynamic_simulation(
+            this.model,
+            t,
+            null,
+            RECORD_DT,
+            gravity,
+            this.grab ?? undefined,
+            undefined,
+            undefined,
+            this.collisionsOn,
+            this.floorOn,
+          );
+          dynamicSnapshot = {
+            ...dynamicSnapshot,
+            reactions: probe.reactions,
+            beamCohesion: probe.beamCohesion,
+          };
+        }
+        latest = dynamicSnapshot;
+      }
       solved++;
       // Every instant is kept while the user is holding the mechanism: the display sits on
       // the frontier then, so an instant dropped there is one the grabbed part is drawn a

@@ -28,7 +28,7 @@ function spring(
 describe("get_links_simulation — spring rest length", () => {
   it("defaults to the drawn distance when the user set none", () => {
     const elements = [spring()];
-    const links = get_links_simulation(elements, get_sim_nodes(elements));
+    const links = get_links_simulation(elements, get_sim_nodes(elements), [], []);
     expect(links).toContainEqual(
       expect.objectContaining({ type: "Spring", restLength: 50 }),
     );
@@ -36,7 +36,7 @@ describe("get_links_simulation — spring rest length", () => {
 
   it("uses the user's rest length once set, even though it differs from the drawn distance", () => {
     const elements = [spring({ restLength: 80 })];
-    const links = get_links_simulation(elements, get_sim_nodes(elements));
+    const links = get_links_simulation(elements, get_sim_nodes(elements), [], []);
     expect(links).toContainEqual(
       expect.objectContaining({ type: "Spring", restLength: 80 }),
     );

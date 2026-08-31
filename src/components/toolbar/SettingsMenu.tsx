@@ -99,7 +99,7 @@ export const SettingsMenu: React.FC<SettingsMenuProps> = ({
 
   return (
     <>
-      <Tooltip disableInteractive title={t("toolbar_settings")}>
+      <Tooltip disableInteractive title={t("settings")}>
         <IconButton
           color="inherit"
           size="small"
@@ -133,7 +133,7 @@ export const SettingsMenu: React.FC<SettingsMenuProps> = ({
                 )}
               </Box>
             }
-            label={t("settings_show_grid")}
+            label={t("show_grid")}
             sx={{ margin: 0 }}
           />
         </MenuItem>
@@ -148,7 +148,7 @@ export const SettingsMenu: React.FC<SettingsMenuProps> = ({
                 )}
               </Box>
             }
-            label={t("settings_snap_to_grid")}
+            label={t("snap_to_grid")}
             sx={{ margin: 0 }}
           />
         </MenuItem>
@@ -169,7 +169,7 @@ export const SettingsMenu: React.FC<SettingsMenuProps> = ({
                 )}
               </Box>
             }
-            label={t("settings_highlight_snap")}
+            label={t("highlight_snap")}
             sx={{ margin: 0 }}
           />
         </MenuItem>
@@ -190,7 +190,7 @@ export const SettingsMenu: React.FC<SettingsMenuProps> = ({
                 )}
               </Box>
             }
-            label={t("settings_show_angle_guides")}
+            label={t("show_angle_guides")}
             sx={{ margin: 0 }}
           />
         </MenuItem>
@@ -207,7 +207,7 @@ export const SettingsMenu: React.FC<SettingsMenuProps> = ({
           }}
         >
           <Typography variant="body2" color="textDisabled" sx={{ flexGrow: 1 }}>
-            {t("settings_angle_step")}
+            {t("angle_step")}
           </Typography>
           <Box sx={{ display: "flex", alignItems: "center" }}>
             {isCustomAngleStep && (
@@ -275,7 +275,7 @@ export const SettingsMenu: React.FC<SettingsMenuProps> = ({
                 </MenuItem>
               ))}
               <MenuItem value="custom" sx={{ fontSize: "body2.fontSize" }}>
-                {t("settings_angle_step_custom")}
+                {t("angle_step_custom")}
               </MenuItem>
             </Select>
           </Box>
@@ -285,7 +285,7 @@ export const SettingsMenu: React.FC<SettingsMenuProps> = ({
         <MenuItem disableRipple disabled>
           <FormControlLabel
             control={<Switch size="small" disabled />}
-            label={t("settings_show_constraints")}
+            label={t("show_constraints")}
           />
         </MenuItem>
         <Divider />
@@ -301,7 +301,7 @@ export const SettingsMenu: React.FC<SettingsMenuProps> = ({
           }}
         >
           <Typography variant="body2" color="textDisabled">
-            {t("settings_theme")}
+            {t("theme")}
           </Typography>
           <ToggleButtonGroup
             exclusive
@@ -356,7 +356,7 @@ export const SettingsMenu: React.FC<SettingsMenuProps> = ({
         })}
         <Divider />
         <MenuItem disabled sx={{ fontSize: "0.85rem" }}>
-          {t("settings_element_style")}
+          {t("element_style")}
         </MenuItem>
       </Menu>
     </>

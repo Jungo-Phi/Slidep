@@ -224,6 +224,31 @@ export const MOMENT_SCALING = {
   MIN_PX: LOAD_SCALING.MIN_PX / 2,
 };
 
+/**
+ * Below this fraction of a `NegligibilityPool` field's own running max, a value reads as
+ * negligible — hidden on a canvas overlay, flattened on a probe/cohesion chart (see
+ * `negligibility-pool.ts`'s `is_negligible`). One ratio shared by every quantity kind
+ * (force, moment, length, angle, linear/angular velocity): a product decision, not derived
+ * from anything else, so it lives here rather than being tuned per call site.
+ */
+export const NEGLIGIBLE_RATIO = 0.01;
+
+/**
+ * Absolute floors a `NegligibilityPool` field's running max is never allowed below, even
+ * when nothing bigger was ever recorded — without this, a mechanism that only ever produces
+ * noise of one kind (nothing larger of that kind anywhere in the recording) sets its own
+ * pool scale from that noise, so `NEGLIGIBLE_RATIO` has nothing to filter it against (see
+ * `negligibility-pool.ts`'s `extend_negligibility_pool`). Only `MIN_LENGTH`/`MIN_ANGLE`/
+ * `MIN_TIME` are independent product decisions: force reuses `LOAD_SCALING.MIN_VALUE` (the
+ * smallest force this app ever bothers drawing distinctly), and `force`/`moment`/velocities
+ * derive from these plus the mechanism's own bounding-box diagonal wherever their physical
+ * dimension allows it (a moment's lever arm, a velocity's own distance-over-time) — see
+ * `pool_floors`.
+ */
+export const MIN_LENGTH_POOL = 0.01; // m
+export const MIN_ANGLE_POOL = 0.01; // rad
+export const MIN_TIME_POOL = 1; // s
+
 /** The physics-overlay quantities drawn on the canvas: a probed velocity, and the two flavours of reaction force/moment a constraint can carry. */
 export type PhysicsOverlayKind =
   | "velocity"
@@ -239,6 +264,104 @@ export const PHYSICS_OVERLAY_COLOR: Record<PhysicsOverlayKind, string> = {
   "reaction-support": "#B8410D",
   "reaction-internal": "#60A45F",
 };
+
+/** The three internal-force diagrams of one beam, shown together in the analysis panel
+ *  (docs/plan-efforts-interieurs.md phase 5bis). */
+export type CohesionQuantity = "N" | "T" | "Mf";
+
+/**
+ * Its own hue family, deliberately clear of both `PHYSICS_OVERLAY_COLOR` (measured, not
+ * drawn-as-a-field — a diagram and a reaction arrow can be on the same beam at once) and
+ * `COLORS.DELETION_STROKE` (redundancy symbol): a violet/pink/teal trio reads as "diagram"
+ * on sight, never as "error" or "reaction".
+ */
+export const COHESION_DIAGRAM_COLOR: Record<CohesionQuantity, string> = {
+  N: "#8B5CF6",
+  T: "#EC4899",
+  Mf: "#14B8A6",
+};
+
+/**
+ * Tension vs compression, for the `normal`/`bending` beam-fill lenses (docs/plan-efforts-
+ * interieurs.md phase 9) — unlike the panel's `COHESION_DIAGRAM_COLOR.N` (one curve, sign read
+ * off its own axis), a beam's fill has no axis, so the sign has to be the color. The standard
+ * mechanics-textbook pairing (warm = pulling, cool = pushing), not `COHESION_DIAGRAM_COLOR`'s
+ * violet family: this reads on sight without a legend, which a shade of violet would not.
+ */
+export const SIGNED_STRESS_COLOR = {
+  tension: "#DC2626",
+  compression: "#2563EB",
+} as const;
+
+/**
+ * `SIGNED_STRESS_COLOR`'s two hues as a diverging ramp, for interpolating a beam-fill gradient
+ * (`signed_stress_color`, `drawing-functions.ts`): compression at `t = -1`, a neutral "nothing
+ * to show" tone at `t = 0` (an unstressed span reads as no color at all, not as a third hue
+ * competing with the other two), tension at `t = 1`.
+ */
+export const SIGNED_STRESS_RAMP: readonly {
+  t: number;
+  rgb: readonly [number, number, number];
+}[] = [
+  { t: -1, rgb: [0x25, 0x63, 0xeb] },
+  { t: 0, rgb: [0xe5, 0xe7, 0xeb] },
+  { t: 1, rgb: [0xdc, 0x26, 0x26] },
+] as const;
+
+/**
+ * The stress overlay's own scale (canvas, phase 6): a beam's fill, colored along its axis by
+ * `|σ|max(s)/Re`. The classic FEM post-processor "rainbow" — blue (low) through cyan, green,
+ * yellow, to red — read on sight by anyone who has used a stress plot before. The two ends
+ * deliberately match `SIGNED_STRESS_COLOR`'s tension/compression hues, tying the beam-fill
+ * lenses to the same palette family without being the same read.
+ *
+ * `t = 1` is NOT "at the elastic limit" — it is `StressScaleCache.max`, the highest ratio ever
+ * RECORDED (`cohesion-field.ts`), so the full spectrum stays legible even when nothing in the
+ * mechanism comes close to `Re`. A ratio that actually reaches 1 draws in
+ * `STRESS_OVERSTRESS_COLOR` instead, off this scale entirely.
+ */
+export const STRESS_RAMP: readonly {
+  t: number;
+  rgb: readonly [number, number, number];
+}[] = [
+  { t: 0, rgb: [0x25, 0x63, 0xeb] },
+  { t: 0.25, rgb: [0x0e, 0xa5, 0xe9] },
+  { t: 0.5, rgb: [0x22, 0xc5, 0x5e] },
+  { t: 0.75, rgb: [0xea, 0xb3, 0x08] },
+  { t: 1, rgb: [0xdc, 0x26, 0x26] },
+] as const;
+
+/**
+ * A ratio at or past 1 — the section has reached or exceeded `Re` somewhere along it. Deliberately
+ * outside `STRESS_RAMP`'s own hue range (its own red is a relative "worst point recorded", not an
+ * absolute "over the limit") so the two can never be confused for one another.
+ */
+export const STRESS_OVERSTRESS_COLOR = "#000000";
+
+/**
+ * Floor for the `normal`/`bending` beam-fill lenses' own scale (`StressScaleCache.maxNormal`/
+ * `.maxBending`, `cohesion-field.ts`), as a fraction of that beam's own `Re`. Unlike
+ * `utilization`/`shear`, `normal` and `bending` have no admissible-limit ratio of their own to
+ * fall back on — their scale is purely "highest ever recorded", so a mechanism where nothing is
+ * genuinely loaded (only self-weight, or a numerical residual near the solver's own noise
+ * floor) would otherwise stretch that noise across the FULL ramp, same contrast as a real load.
+ * Below this fraction of `Re`, the lens reads flat/neutral instead of manufacturing contrast
+ * out of nothing to show.
+ */
+export const NEGLIGIBLE_STRESS_FRACTION = 0.01;
+
+/**
+ * The stress overlay's legend: screen-anchored bottom-left, drawn only while at least one beam
+ * shows the overlay. A recalibrated ramp reads as arbitrary color without one — the whole
+ * reason it exists (revised after seeing the overlay drawn without it).
+ */
+export const STRESS_LEGEND = {
+  MARGIN: 16,
+  BAR_WIDTH: 240,
+  BAR_HEIGHT: 10,
+  GAP: 6,
+  FONT: "11px Arial",
+} as const;
 
 /**
  * Showing one degree of freedom by swinging the mechanism along it (analysis panel).

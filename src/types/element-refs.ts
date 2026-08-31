@@ -119,9 +119,14 @@ export type NoTypeTagFalsePositive = Assert<
 
 // ─── Table shape ──────────────────────────────────────────────────────────────
 
+/** What a reference field may point to: an element type, or a mechanism-level library entry
+ *  (`materials`/`profiles` — not elements, so out of `ElementType`, but the same single
+ *  declaration and the same anti-dangling-ref hardening cover them). */
+export type RefTarget = ElementType | "material" | "profile";
+
 interface RefSpecBase {
-  /** The element types this reference may point to. */
-  target: readonly ElementType[];
+  /** The element types (or library kinds) this reference may point to. */
+  target: readonly RefTarget[];
   /** Whether the field must resolve to an existing element. */
   required: boolean;
 }
@@ -200,6 +205,8 @@ const BEAM_REFS: RefTable<BeamElement> = {
   fixedNodeStartID: { target: NODE_TYPES, required: false },
   fixedNodeEndID: { target: NODE_TYPES, required: false },
   fixedNodesBodyIDs: { target: NODE_TYPES, required: false },
+  materialID: { target: ["material"], required: true },
+  profileID: { target: ["profile"], required: true },
 };
 
 const SPRING_REFS: RefTable<SpringElement> = {

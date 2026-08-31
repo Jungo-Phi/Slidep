@@ -43,6 +43,8 @@ const SPRING = id("s1");
 const MASS = id("m1");
 const BELT_AXLE = id("a2");
 const BELT_GEAR = id("g2");
+const MATERIAL = id("material");
+const PROFILE = id("profile");
 const BELT = id("be1");
 const PLAIN_BELT = id("be2");
 const DIM = id("d1");
@@ -94,7 +96,8 @@ const beam: BeamElement = {
   fixedNodeStartID: JOIN,
   fixedNodeEndID: undefined,
   fixedNodesBodyIDs: [],
-  linearMass: 1,
+  materialID: MATERIAL,
+  profileID: PROFILE,
 };
 const spring: SpringElement = {
   type: "spring",

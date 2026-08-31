@@ -1,20 +1,20 @@
 {
-  "formatVersion": 8,
+  "formatVersion": 10,
   "metadata": {
     "name": "CP",
     "description": "",
     "author": "",
     "createdAt": 1787322466914,
-    "modifiedAt": 1787685128198,
+    "modifiedAt": 1787907347708,
     "tags": [],
     "lastSimulationMode": "dynamic"
   },
   "viewport": {
-    "scale": 32480,
     "pan": {
-      "x": 92.80000000000001,
-      "y": 425.5
-    }
+      "x": 160.0953545862243,
+      "y": 382.6032142709287
+    },
+    "scale": 27766.401057684627
   },
   "simulation": {
     "gravity": true,
@@ -31,9 +31,9 @@
       "id": "6e72968e-0d97-4510-9046-bb65655d0f0d",
       "probes": [],
       "overlays": {
-        "velocity": true,
-        "force": true,
-        "trajectory": true
+        "velocity": false,
+        "force": false,
+        "trajectory": false
       },
       "fixedEdgesIDs": [
         "9e6e2c17-10f3-47e1-8e4d-ed9c9061a96e"
@@ -47,31 +47,83 @@
     {
       "type": "beam",
       "id": "9e6e2c17-10f3-47e1-8e4d-ed9c9061a96e",
-      "probes": [],
-      "overlays": {},
+      "probes": [
+        {
+          "metric": "force-start",
+          "components": {
+            "x": false,
+            "y": false,
+            "norm": true
+          }
+        },
+        {
+          "metric": "force-end",
+          "components": {
+            "x": false,
+            "y": false,
+            "norm": true
+          }
+        },
+        {
+          "metric": "moment-start",
+          "components": {
+            "x": false,
+            "y": false,
+            "norm": true
+          }
+        },
+        {
+          "metric": "moment-end",
+          "components": {
+            "x": false,
+            "y": false,
+            "norm": true
+          }
+        }
+      ],
+      "overlays": {
+        "force": false,
+        "stress": false,
+        "velocity": false,
+        "diagram": true,
+        "axial": false
+      },
       "positionStart": {
         "x": 0,
         "y": 0
       },
       "positionEnd": {
         "x": 0.03,
-        "y": 0
+        "y": -5.4911210230360824e-9
       },
       "fixedNodesBodyIDs": [
         "88583caa-6ee5-44be-b46d-ec0bf807c908"
       ],
-      "linearMass": 1,
       "fixedNodeStartID": "6e72968e-0d97-4510-9046-bb65655d0f0d",
-      "fixedNodeEndID": "82eb4b1a-4209-4d3a-8177-d573f1c02731"
+      "fixedNodeEndID": "82eb4b1a-4209-4d3a-8177-d573f1c02731",
+      "materialID": "9d4165b0-e576-4292-8f81-fae5bc4fa3dc",
+      "profileID": "e72ac346-a3b5-4ae0-b7ea-a919afa1e434"
     },
     {
       "type": "mass",
       "id": "82eb4b1a-4209-4d3a-8177-d573f1c02731",
-      "probes": [],
-      "overlays": {},
+      "probes": [
+        {
+          "metric": "position",
+          "components": {
+            "x": false,
+            "y": false,
+            "norm": true
+          }
+        }
+      ],
+      "overlays": {
+        "trajectory": false,
+        "force": false
+      },
       "position": {
         "x": 0.03,
-        "y": 0
+        "y": -5.4911210230360824e-9
       },
       "isGrounded": false,
       "fixedEdgesIDs": [
@@ -83,21 +135,116 @@
       "type": "pivot",
       "id": "88583caa-6ee5-44be-b46d-ec0bf807c908",
       "probes": [],
-      "overlays": {},
+      "overlays": {
+        "trajectory": false,
+        "force": false
+      },
       "position": {
         "x": 0.015,
-        "y": 0
+        "y": -2.7455605115180412e-9
       },
       "isGrounded": false,
       "rotatingEdgesIDs": [
+        "e1ddd9cd-2d2c-458b-989c-761032ea5322",
         "9e6e2c17-10f3-47e1-8e4d-ed9c9061a96e"
       ],
       "fixedGearsIDs": [],
       "rotationalFriction": 0.001
+    },
+    {
+      "type": "beam",
+      "id": "e1ddd9cd-2d2c-458b-989c-761032ea5322",
+      "probes": [],
+      "overlays": {
+        "force": false,
+        "stress": false,
+        "diagram": false
+      },
+      "positionStart": {
+        "x": 0.015,
+        "y": -2.7455605115180412e-9
+      },
+      "positionEnd": {
+        "x": 0.02000001144002119,
+        "y": -4.575682913580526e-9
+      },
+      "fixedNodesBodyIDs": [],
+      "fixedNodeStartID": "88583caa-6ee5-44be-b46d-ec0bf807c908",
+      "materialID": "9d4165b0-e576-4292-8f81-fae5bc4fa3dc",
+      "profileID": "e72ac346-a3b5-4ae0-b7ea-a919afa1e434",
+      "fixedNodeEndID": "330aea55-022b-4094-a748-581c70a54a54"
+    },
+    {
+      "type": "mass",
+      "id": "330aea55-022b-4094-a748-581c70a54a54",
+      "probes": [],
+      "overlays": {},
+      "position": {
+        "x": 0.02000001144002119,
+        "y": -4.575682913580526e-9
+      },
+      "isGrounded": false,
+      "fixedEdgesIDs": [
+        "e1ddd9cd-2d2c-458b-989c-761032ea5322"
+      ],
+      "mass": 100
     }
   ],
   "constraintElements": [],
   "loads": [],
+  "materials": [
+    {
+      "readOnly": false,
+      "id": "9d4165b0-e576-4292-8f81-fae5bc4fa3dc",
+      "name": "Acier",
+      "E": 210000000000,
+      "Re": 235000000,
+      "rho": 7850
+    },
+    {
+      "id": "c8be6e0d-0bd0-4740-aa1e-c5e49a94917c",
+      "name": "Acier",
+      "E": 210000000000,
+      "Re": 235000000,
+      "rho": 7850,
+      "readOnly": true
+    },
+    {
+      "id": "5697ba4c-d358-4631-ae96-ef427a4208f2",
+      "name": "Aluminium",
+      "E": 70000000000,
+      "Re": 195000000,
+      "rho": 2700,
+      "readOnly": true
+    },
+    {
+      "id": "391d399e-93d5-4288-8b63-2e8df6544e8a",
+      "name": "Inox",
+      "E": 200000000000,
+      "Re": 215000000,
+      "rho": 8000,
+      "readOnly": true
+    },
+    {
+      "id": "0e90eac5-06df-4041-82e2-f1961c803c01",
+      "name": "Bois",
+      "E": 11000000000,
+      "Re": 24000000,
+      "rho": 450,
+      "readOnly": true
+    }
+  ],
+  "profiles": [
+    {
+      "id": "e72ac346-a3b5-4ae0-b7ea-a919afa1e434",
+      "name": "Rectangle plein",
+      "shape": {
+        "kind": "rect",
+        "b": 0.02,
+        "h": 0.02
+      }
+    }
+  ],
   "history": [
     [
       {
@@ -189,7 +336,8 @@
             "y": 0
           },
           "fixedNodesBodyIDs": [],
-          "linearMass": 1
+          "materialID": "9d4165b0-e576-4292-8f81-fae5bc4fa3dc",
+          "profileID": "e72ac346-a3b5-4ae0-b7ea-a919afa1e434"
         }
       },
       {
@@ -529,15 +677,106 @@
           "radMasses": []
         }
       }
-    ]
-  ],
-  "future": [
+    ],
+    [
+      {
+        "type": "SetShowOverlay",
+        "elementID": "88583caa-6ee5-44be-b46d-ec0bf807c908",
+        "kind": "trajectory",
+        "newValue": true,
+        "oldValue": false
+      }
+    ],
+    [
+      {
+        "type": "SetShowOverlay",
+        "elementID": "88583caa-6ee5-44be-b46d-ec0bf807c908",
+        "kind": "trajectory",
+        "newValue": false,
+        "oldValue": true
+      }
+    ],
+    [
+      {
+        "type": "SetShowOverlay",
+        "elementID": "88583caa-6ee5-44be-b46d-ec0bf807c908",
+        "kind": "trajectory",
+        "newValue": true,
+        "oldValue": false
+      }
+    ],
+    [
+      {
+        "type": "SetShowOverlay",
+        "elementID": "88583caa-6ee5-44be-b46d-ec0bf807c908",
+        "kind": "trajectory",
+        "newValue": false,
+        "oldValue": true
+      }
+    ],
+    [
+      {
+        "type": "SetShowOverlay",
+        "elementID": "88583caa-6ee5-44be-b46d-ec0bf807c908",
+        "kind": "trajectory",
+        "newValue": true,
+        "oldValue": false
+      }
+    ],
+    [
+      {
+        "type": "SetShowOverlay",
+        "elementID": "88583caa-6ee5-44be-b46d-ec0bf807c908",
+        "kind": "trajectory",
+        "newValue": false,
+        "oldValue": true
+      }
+    ],
+    [
+      {
+        "type": "SetShowOverlay",
+        "elementID": "82eb4b1a-4209-4d3a-8177-d573f1c02731",
+        "kind": "trajectory",
+        "newValue": true,
+        "oldValue": false
+      },
+      {
+        "type": "SetShowOverlay",
+        "elementID": "88583caa-6ee5-44be-b46d-ec0bf807c908",
+        "kind": "trajectory",
+        "newValue": true,
+        "oldValue": false
+      }
+    ],
+    [
+      {
+        "type": "SetShowOverlay",
+        "elementID": "9e6e2c17-10f3-47e1-8e4d-ed9c9061a96e",
+        "kind": "force",
+        "newValue": true,
+        "oldValue": false
+      },
+      {
+        "type": "SetShowOverlay",
+        "elementID": "82eb4b1a-4209-4d3a-8177-d573f1c02731",
+        "kind": "force",
+        "newValue": true,
+        "oldValue": false
+      },
+      {
+        "type": "SetShowOverlay",
+        "elementID": "88583caa-6ee5-44be-b46d-ec0bf807c908",
+        "kind": "force",
+        "newValue": true,
+        "oldValue": false
+      }
+    ],
     [
       {
         "type": "CreateElement",
         "element": {
           "type": "beam",
-          "id": "58d25818-8ba3-484d-9e8a-a61930572b28",
+          "id": "e1ddd9cd-2d2c-458b-989c-761032ea5322",
           "probes": [],
           "overlays": {},
           "positionStart": {
@@ -546,23 +785,24 @@
           },
           "positionEnd": {
             "x": 0.015,
-            "y": -0.005249384236453202
+            "y": -0.004999999999999999
           },
           "fixedNodesBodyIDs": [],
-          "linearMass": 1
+          "materialID": "9d4165b0-e576-4292-8f81-fae5bc4fa3dc",
+          "profileID": "e72ac346-a3b5-4ae0-b7ea-a919afa1e434"
         }
       },
       {
         "type": "ConnectsRotatingEdges",
         "disconnect": false,
         "elementID": "88583caa-6ee5-44be-b46d-ec0bf807c908",
-        "connectID": "58d25818-8ba3-484d-9e8a-a61930572b28",
+        "connectID": "e1ddd9cd-2d2c-458b-989c-761032ea5322",
         "index": 0
       },
       {
         "type": "ConnectsFixedNodeStart",
         "disconnect": false,
-        "elementID": "58d25818-8ba3-484d-9e8a-a61930572b28",
+        "elementID": "e1ddd9cd-2d2c-458b-989c-761032ea5322",
         "connectID": "88583caa-6ee5-44be-b46d-ec0bf807c908"
       },
       {
@@ -571,10 +811,10 @@
         "newNodes": {
           "positions": [
             [
-              "58d25818-8ba3-484d-9e8a-a61930572b28:end",
+              "e1ddd9cd-2d2c-458b-989c-761032ea5322:end",
               {
                 "x": 0.015,
-                "y": -0.005249384236453202
+                "y": -0.004999999999999999
               }
             ],
             [
@@ -613,7 +853,7 @@
               }
             ],
             [
-              "58d25818-8ba3-484d-9e8a-a61930572b28:start",
+              "e1ddd9cd-2d2c-458b-989c-761032ea5322:start",
               {
                 "x": 0.015,
                 "y": 0
@@ -623,7 +863,7 @@
           "radii": [],
           "posMasses": [
             [
-              "58d25818-8ba3-484d-9e8a-a61930572b28:end",
+              "e1ddd9cd-2d2c-458b-989c-761032ea5322:end",
               1
             ],
             [
@@ -635,7 +875,7 @@
               1
             ],
             [
-              "88583caa-6ee5-44be-b46d-ec0bf807c908,58d25818-8ba3-484d-9e8a-a61930572b28:start",
+              "88583caa-6ee5-44be-b46d-ec0bf807c908,e1ddd9cd-2d2c-458b-989c-761032ea5322:start",
               1
             ]
           ],
@@ -705,6 +945,1634 @@
           "radMasses": []
         }
       }
+    ],
+    [
+      {
+        "type": "SetShowOverlay",
+        "elementID": "e1ddd9cd-2d2c-458b-989c-761032ea5322",
+        "kind": "force",
+        "newValue": true,
+        "oldValue": false
+      }
+    ],
+    [
+      {
+        "type": "SetProbes",
+        "elementID": "6e72968e-0d97-4510-9046-bb65655d0f0d",
+        "newProbes": [
+          {
+            "metric": "force",
+            "components": {
+              "x": false,
+              "y": false,
+              "norm": true
+            }
+          }
+        ],
+        "oldProbes": []
+      }
+    ],
+    [
+      {
+        "type": "SetProbes",
+        "elementID": "6e72968e-0d97-4510-9046-bb65655d0f0d",
+        "newProbes": [
+          {
+            "metric": "force",
+            "components": {
+              "x": true,
+              "y": false,
+              "norm": true
+            }
+          }
+        ],
+        "oldProbes": [
+          {
+            "metric": "force",
+            "components": {
+              "x": false,
+              "y": false,
+              "norm": true
+            }
+          }
+        ]
+      }
+    ],
+    [
+      {
+        "type": "SetProbes",
+        "elementID": "6e72968e-0d97-4510-9046-bb65655d0f0d",
+        "newProbes": [
+          {
+            "metric": "force",
+            "components": {
+              "x": true,
+              "y": true,
+              "norm": true
+            }
+          }
+        ],
+        "oldProbes": [
+          {
+            "metric": "force",
+            "components": {
+              "x": true,
+              "y": false,
+              "norm": true
+            }
+          }
+        ]
+      }
+    ],
+    [
+      {
+        "type": "SetProbes",
+        "elementID": "6e72968e-0d97-4510-9046-bb65655d0f0d",
+        "newProbes": [
+          {
+            "metric": "force",
+            "components": {
+              "x": true,
+              "y": true,
+              "norm": false
+            }
+          }
+        ],
+        "oldProbes": [
+          {
+            "metric": "force",
+            "components": {
+              "x": true,
+              "y": true,
+              "norm": true
+            }
+          }
+        ]
+      }
+    ],
+    [
+      {
+        "type": "SetProbes",
+        "elementID": "6e72968e-0d97-4510-9046-bb65655d0f0d",
+        "newProbes": [
+          {
+            "metric": "force",
+            "components": {
+              "x": true,
+              "y": false,
+              "norm": false
+            }
+          }
+        ],
+        "oldProbes": [
+          {
+            "metric": "force",
+            "components": {
+              "x": true,
+              "y": true,
+              "norm": false
+            }
+          }
+        ]
+      }
+    ],
+    [
+      {
+        "type": "SetProbes",
+        "elementID": "6e72968e-0d97-4510-9046-bb65655d0f0d",
+        "newProbes": [
+          {
+            "metric": "force",
+            "components": {
+              "x": true,
+              "y": true,
+              "norm": false
+            }
+          }
+        ],
+        "oldProbes": [
+          {
+            "metric": "force",
+            "components": {
+              "x": true,
+              "y": false,
+              "norm": false
+            }
+          }
+        ]
+      }
+    ],
+    [
+      {
+        "type": "SetProbes",
+        "elementID": "6e72968e-0d97-4510-9046-bb65655d0f0d",
+        "newProbes": [
+          {
+            "metric": "force",
+            "components": {
+              "x": false,
+              "y": true,
+              "norm": false
+            }
+          }
+        ],
+        "oldProbes": [
+          {
+            "metric": "force",
+            "components": {
+              "x": true,
+              "y": true,
+              "norm": false
+            }
+          }
+        ]
+      }
+    ],
+    [
+      {
+        "type": "SetProbes",
+        "elementID": "6e72968e-0d97-4510-9046-bb65655d0f0d",
+        "newProbes": [
+          {
+            "metric": "force",
+            "components": {
+              "x": true,
+              "y": true,
+              "norm": false
+            }
+          }
+        ],
+        "oldProbes": [
+          {
+            "metric": "force",
+            "components": {
+              "x": false,
+              "y": true,
+              "norm": false
+            }
+          }
+        ]
+      }
+    ],
+    [
+      {
+        "type": "SetProbes",
+        "elementID": "6e72968e-0d97-4510-9046-bb65655d0f0d",
+        "newProbes": [
+          {
+            "metric": "force",
+            "components": {
+              "x": false,
+              "y": true,
+              "norm": false
+            }
+          }
+        ],
+        "oldProbes": [
+          {
+            "metric": "force",
+            "components": {
+              "x": true,
+              "y": true,
+              "norm": false
+            }
+          }
+        ]
+      }
+    ],
+    [
+      {
+        "type": "SetProbes",
+        "elementID": "6e72968e-0d97-4510-9046-bb65655d0f0d",
+        "newProbes": [
+          {
+            "metric": "force",
+            "components": {
+              "x": false,
+              "y": true,
+              "norm": true
+            }
+          }
+        ],
+        "oldProbes": [
+          {
+            "metric": "force",
+            "components": {
+              "x": false,
+              "y": true,
+              "norm": false
+            }
+          }
+        ]
+      }
+    ],
+    [
+      {
+        "type": "SetProbes",
+        "elementID": "6e72968e-0d97-4510-9046-bb65655d0f0d",
+        "newProbes": [
+          {
+            "metric": "force",
+            "components": {
+              "x": false,
+              "y": false,
+              "norm": true
+            }
+          }
+        ],
+        "oldProbes": [
+          {
+            "metric": "force",
+            "components": {
+              "x": false,
+              "y": true,
+              "norm": true
+            }
+          }
+        ]
+      }
+    ],
+    [
+      {
+        "type": "SetProbes",
+        "elementID": "9e6e2c17-10f3-47e1-8e4d-ed9c9061a96e",
+        "newProbes": [
+          {
+            "metric": "angular-velocity",
+            "components": {
+              "x": false,
+              "y": false,
+              "norm": true
+            }
+          }
+        ],
+        "oldProbes": []
+      }
+    ],
+    [
+      {
+        "type": "SetProbes",
+        "elementID": "9e6e2c17-10f3-47e1-8e4d-ed9c9061a96e",
+        "newProbes": [],
+        "oldProbes": [
+          {
+            "metric": "angular-velocity",
+            "components": {
+              "x": false,
+              "y": false,
+              "norm": true
+            }
+          }
+        ]
+      }
+    ],
+    [
+      {
+        "type": "SetProbes",
+        "elementID": "9e6e2c17-10f3-47e1-8e4d-ed9c9061a96e",
+        "newProbes": [
+          {
+            "metric": "force-start",
+            "components": {
+              "x": false,
+              "y": false,
+              "norm": true
+            }
+          }
+        ],
+        "oldProbes": []
+      }
+    ],
+    [
+      {
+        "type": "SetProbes",
+        "elementID": "9e6e2c17-10f3-47e1-8e4d-ed9c9061a96e",
+        "newProbes": [
+          {
+            "metric": "force-start",
+            "components": {
+              "x": false,
+              "y": false,
+              "norm": true
+            }
+          },
+          {
+            "metric": "force-end",
+            "components": {
+              "x": false,
+              "y": false,
+              "norm": true
+            }
+          }
+        ],
+        "oldProbes": [
+          {
+            "metric": "force-start",
+            "components": {
+              "x": false,
+              "y": false,
+              "norm": true
+            }
+          }
+        ]
+      }
+    ],
+    [
+      {
+        "type": "SetProbes",
+        "elementID": "9e6e2c17-10f3-47e1-8e4d-ed9c9061a96e",
+        "newProbes": [
+          {
+            "metric": "force-start",
+            "components": {
+              "x": false,
+              "y": false,
+              "norm": true
+            }
+          },
+          {
+            "metric": "force-end",
+            "components": {
+              "x": false,
+              "y": false,
+              "norm": true
+            }
+          },
+          {
+            "metric": "moment-start",
+            "components": {
+              "x": false,
+              "y": false,
+              "norm": true
+            }
+          }
+        ],
+        "oldProbes": [
+          {
+            "metric": "force-start",
+            "components": {
+              "x": false,
+              "y": false,
+              "norm": true
+            }
+          },
+          {
+            "metric": "force-end",
+            "components": {
+              "x": false,
+              "y": false,
+              "norm": true
+            }
+          }
+        ]
+      }
+    ],
+    [
+      {
+        "type": "SetProbes",
+        "elementID": "9e6e2c17-10f3-47e1-8e4d-ed9c9061a96e",
+        "newProbes": [
+          {
+            "metric": "force-start",
+            "components": {
+              "x": false,
+              "y": false,
+              "norm": true
+            }
+          },
+          {
+            "metric": "force-end",
+            "components": {
+              "x": false,
+              "y": false,
+              "norm": true
+            }
+          },
+          {
+            "metric": "moment-start",
+            "components": {
+              "x": false,
+              "y": false,
+              "norm": true
+            }
+          },
+          {
+            "metric": "moment-end",
+            "components": {
+              "x": false,
+              "y": false,
+              "norm": true
+            }
+          }
+        ],
+        "oldProbes": [
+          {
+            "metric": "force-start",
+            "components": {
+              "x": false,
+              "y": false,
+              "norm": true
+            }
+          },
+          {
+            "metric": "force-end",
+            "components": {
+              "x": false,
+              "y": false,
+              "norm": true
+            }
+          },
+          {
+            "metric": "moment-start",
+            "components": {
+              "x": false,
+              "y": false,
+              "norm": true
+            }
+          }
+        ]
+      }
+    ],
+    [
+      {
+        "type": "SetProbes",
+        "elementID": "6e72968e-0d97-4510-9046-bb65655d0f0d",
+        "newProbes": [],
+        "oldProbes": [
+          {
+            "metric": "force",
+            "components": {
+              "x": false,
+              "y": false,
+              "norm": true
+            }
+          }
+        ]
+      }
+    ],
+    [
+      {
+        "type": "SetShowOverlay",
+        "elementID": "9e6e2c17-10f3-47e1-8e4d-ed9c9061a96e",
+        "kind": "stress",
+        "newValue": true,
+        "oldValue": false
+      },
+      {
+        "type": "SetShowOverlay",
+        "elementID": "e1ddd9cd-2d2c-458b-989c-761032ea5322",
+        "kind": "stress",
+        "newValue": true,
+        "oldValue": false
+      }
+    ],
+    [
+      {
+        "type": "SetShowOverlay",
+        "elementID": "6e72968e-0d97-4510-9046-bb65655d0f0d",
+        "kind": "velocity",
+        "newValue": false,
+        "oldValue": true
+      }
+    ],
+    [
+      {
+        "type": "SetShowOverlay",
+        "elementID": "6e72968e-0d97-4510-9046-bb65655d0f0d",
+        "kind": "force",
+        "newValue": false,
+        "oldValue": true
+      },
+      {
+        "type": "SetShowOverlay",
+        "elementID": "9e6e2c17-10f3-47e1-8e4d-ed9c9061a96e",
+        "kind": "force",
+        "newValue": false,
+        "oldValue": true
+      },
+      {
+        "type": "SetShowOverlay",
+        "elementID": "88583caa-6ee5-44be-b46d-ec0bf807c908",
+        "kind": "force",
+        "newValue": false,
+        "oldValue": true
+      },
+      {
+        "type": "SetShowOverlay",
+        "elementID": "82eb4b1a-4209-4d3a-8177-d573f1c02731",
+        "kind": "force",
+        "newValue": false,
+        "oldValue": true
+      },
+      {
+        "type": "SetShowOverlay",
+        "elementID": "e1ddd9cd-2d2c-458b-989c-761032ea5322",
+        "kind": "force",
+        "newValue": false,
+        "oldValue": true
+      }
+    ],
+    [
+      {
+        "type": "SetShowOverlay",
+        "elementID": "6e72968e-0d97-4510-9046-bb65655d0f0d",
+        "kind": "trajectory",
+        "newValue": false,
+        "oldValue": true
+      },
+      {
+        "type": "SetShowOverlay",
+        "elementID": "88583caa-6ee5-44be-b46d-ec0bf807c908",
+        "kind": "trajectory",
+        "newValue": false,
+        "oldValue": true
+      },
+      {
+        "type": "SetShowOverlay",
+        "elementID": "82eb4b1a-4209-4d3a-8177-d573f1c02731",
+        "kind": "trajectory",
+        "newValue": false,
+        "oldValue": true
+      }
+    ],
+    [
+      {
+        "type": "SetShowOverlay",
+        "elementID": "9e6e2c17-10f3-47e1-8e4d-ed9c9061a96e",
+        "kind": "stress",
+        "newValue": false,
+        "oldValue": true
+      },
+      {
+        "type": "SetShowOverlay",
+        "elementID": "e1ddd9cd-2d2c-458b-989c-761032ea5322",
+        "kind": "stress",
+        "newValue": false,
+        "oldValue": true
+      }
+    ],
+    [
+      {
+        "type": "SetShowOverlay",
+        "elementID": "9e6e2c17-10f3-47e1-8e4d-ed9c9061a96e",
+        "kind": "stress",
+        "newValue": true,
+        "oldValue": false
+      },
+      {
+        "type": "SetShowOverlay",
+        "elementID": "e1ddd9cd-2d2c-458b-989c-761032ea5322",
+        "kind": "stress",
+        "newValue": true,
+        "oldValue": false
+      }
+    ],
+    [
+      {
+        "type": "SetShowOverlay",
+        "elementID": "6e72968e-0d97-4510-9046-bb65655d0f0d",
+        "kind": "force",
+        "newValue": true,
+        "oldValue": false
+      },
+      {
+        "type": "SetShowOverlay",
+        "elementID": "9e6e2c17-10f3-47e1-8e4d-ed9c9061a96e",
+        "kind": "force",
+        "newValue": true,
+        "oldValue": false
+      },
+      {
+        "type": "SetShowOverlay",
+        "elementID": "88583caa-6ee5-44be-b46d-ec0bf807c908",
+        "kind": "force",
+        "newValue": true,
+        "oldValue": false
+      },
+      {
+        "type": "SetShowOverlay",
+        "elementID": "82eb4b1a-4209-4d3a-8177-d573f1c02731",
+        "kind": "force",
+        "newValue": true,
+        "oldValue": false
+      },
+      {
+        "type": "SetShowOverlay",
+        "elementID": "e1ddd9cd-2d2c-458b-989c-761032ea5322",
+        "kind": "force",
+        "newValue": true,
+        "oldValue": false
+      }
+    ],
+    [
+      {
+        "type": "SetShowOverlay",
+        "elementID": "9e6e2c17-10f3-47e1-8e4d-ed9c9061a96e",
+        "kind": "stress",
+        "newValue": false,
+        "oldValue": true
+      },
+      {
+        "type": "SetShowOverlay",
+        "elementID": "e1ddd9cd-2d2c-458b-989c-761032ea5322",
+        "kind": "stress",
+        "newValue": false,
+        "oldValue": true
+      }
+    ],
+    [
+      {
+        "type": "SetShowOverlay",
+        "elementID": "6e72968e-0d97-4510-9046-bb65655d0f0d",
+        "kind": "force",
+        "newValue": false,
+        "oldValue": true
+      },
+      {
+        "type": "SetShowOverlay",
+        "elementID": "9e6e2c17-10f3-47e1-8e4d-ed9c9061a96e",
+        "kind": "force",
+        "newValue": false,
+        "oldValue": true
+      },
+      {
+        "type": "SetShowOverlay",
+        "elementID": "88583caa-6ee5-44be-b46d-ec0bf807c908",
+        "kind": "force",
+        "newValue": false,
+        "oldValue": true
+      },
+      {
+        "type": "SetShowOverlay",
+        "elementID": "82eb4b1a-4209-4d3a-8177-d573f1c02731",
+        "kind": "force",
+        "newValue": false,
+        "oldValue": true
+      },
+      {
+        "type": "SetShowOverlay",
+        "elementID": "e1ddd9cd-2d2c-458b-989c-761032ea5322",
+        "kind": "force",
+        "newValue": false,
+        "oldValue": true
+      }
+    ],
+    [
+      {
+        "type": "CreateElement",
+        "element": {
+          "type": "force",
+          "id": "75fc65cb-de97-4bdb-bb43-844051261b12",
+          "targetID": "82eb4b1a-4209-4d3a-8177-d573f1c02731",
+          "vector": {
+            "x": 99.99999999999996,
+            "y": 0
+          },
+          "frame": {
+            "mode": "edge",
+            "edgeID": "9e6e2c17-10f3-47e1-8e4d-ed9c9061a96e"
+          }
+        }
+      }
+    ],
+    [
+      {
+        "type": "DeleteElement",
+        "element": {
+          "type": "force",
+          "id": "75fc65cb-de97-4bdb-bb43-844051261b12",
+          "targetID": "82eb4b1a-4209-4d3a-8177-d573f1c02731",
+          "vector": {
+            "x": 99.99999999999996,
+            "y": 0
+          },
+          "frame": {
+            "mode": "edge",
+            "edgeID": "9e6e2c17-10f3-47e1-8e4d-ed9c9061a96e"
+          }
+        }
+      },
+      {
+        "type": "CreateElement",
+        "element": {
+          "type": "force",
+          "id": "b1fa8309-d663-492b-abc5-ff1ace0b7db9",
+          "targetID": "82eb4b1a-4209-4d3a-8177-d573f1c02731",
+          "vector": {
+            "x": 0,
+            "y": -100
+          },
+          "frame": {
+            "mode": "edge",
+            "edgeID": "9e6e2c17-10f3-47e1-8e4d-ed9c9061a96e"
+          }
+        }
+      }
+    ],
+    [
+      {
+        "type": "ChangeForce",
+        "id": "b1fa8309-d663-492b-abc5-ff1ace0b7db9",
+        "newVector": {
+          "x": 143.5316801152447,
+          "y": -139.27906089321272
+        },
+        "oldVector": {
+          "x": 0,
+          "y": -100
+        }
+      },
+      {
+        "type": "Blank"
+      }
+    ],
+    [
+      {
+        "type": "DeleteElement",
+        "element": {
+          "type": "force",
+          "id": "b1fa8309-d663-492b-abc5-ff1ace0b7db9",
+          "targetID": "82eb4b1a-4209-4d3a-8177-d573f1c02731",
+          "vector": {
+            "x": 143.5316801152447,
+            "y": -139.27906089321272
+          },
+          "frame": {
+            "mode": "edge",
+            "edgeID": "9e6e2c17-10f3-47e1-8e4d-ed9c9061a96e"
+          }
+        }
+      }
+    ],
+    [
+      {
+        "type": "SetShowOverlay",
+        "elementID": "9e6e2c17-10f3-47e1-8e4d-ed9c9061a96e",
+        "kind": "diagram",
+        "newValue": true,
+        "oldValue": false
+      }
+    ],
+    [
+      {
+        "type": "MoveEdgeEnd",
+        "id": "e1ddd9cd-2d2c-458b-989c-761032ea5322",
+        "newPosition": {
+          "x": 0.02,
+          "y": -1.0155586880881937e-12
+        },
+        "oldPosition": {
+          "x": 0.015446893694387235,
+          "y": -0.005
+        }
+      },
+      {
+        "type": "UpdatePositionsToValidState",
+        "masterActionType": "MoveEdgeEnd",
+        "newNodes": {
+          "positions": [
+            [
+              "e1ddd9cd-2d2c-458b-989c-761032ea5322:end",
+              {
+                "x": 0.02000002288004238,
+                "y": -2.9736329814176987e-8
+              }
+            ],
+            [
+              "6e72968e-0d97-4510-9046-bb65655d0f0d",
+              {
+                "x": 0,
+                "y": 0
+              }
+            ],
+            [
+              "9e6e2c17-10f3-47e1-8e4d-ed9c9061a96e:start",
+              {
+                "x": 0,
+                "y": 0
+              }
+            ],
+            [
+              "82eb4b1a-4209-4d3a-8177-d573f1c02731",
+              {
+                "x": 0.03,
+                "y": -1.5233374611124447e-12
+              }
+            ],
+            [
+              "9e6e2c17-10f3-47e1-8e4d-ed9c9061a96e:end",
+              {
+                "x": 0.03,
+                "y": -1.5233374611124447e-12
+              }
+            ],
+            [
+              "88583caa-6ee5-44be-b46d-ec0bf807c908",
+              {
+                "x": 0.015,
+                "y": -7.616687305562224e-13
+              }
+            ],
+            [
+              "e1ddd9cd-2d2c-458b-989c-761032ea5322:start",
+              {
+                "x": 0.015,
+                "y": -7.616687305562224e-13
+              }
+            ]
+          ],
+          "radii": [],
+          "posMasses": [
+            [
+              "e1ddd9cd-2d2c-458b-989c-761032ea5322:end",
+              1
+            ],
+            [
+              "6e72968e-0d97-4510-9046-bb65655d0f0d,9e6e2c17-10f3-47e1-8e4d-ed9c9061a96e:start",
+              0
+            ],
+            [
+              "82eb4b1a-4209-4d3a-8177-d573f1c02731,9e6e2c17-10f3-47e1-8e4d-ed9c9061a96e:end",
+              1
+            ],
+            [
+              "88583caa-6ee5-44be-b46d-ec0bf807c908,e1ddd9cd-2d2c-458b-989c-761032ea5322:start",
+              1
+            ]
+          ],
+          "radMasses": []
+        },
+        "oldNodes": {
+          "positions": [
+            [
+              "6e72968e-0d97-4510-9046-bb65655d0f0d",
+              {
+                "x": 0,
+                "y": 0
+              }
+            ],
+            [
+              "9e6e2c17-10f3-47e1-8e4d-ed9c9061a96e:start",
+              {
+                "x": 0,
+                "y": 0
+              }
+            ],
+            [
+              "9e6e2c17-10f3-47e1-8e4d-ed9c9061a96e:end",
+              {
+                "x": 0.03,
+                "y": 0
+              }
+            ],
+            [
+              "82eb4b1a-4209-4d3a-8177-d573f1c02731",
+              {
+                "x": 0.03,
+                "y": 0
+              }
+            ],
+            [
+              "88583caa-6ee5-44be-b46d-ec0bf807c908",
+              {
+                "x": 0.015,
+                "y": 0
+              }
+            ],
+            [
+              "e1ddd9cd-2d2c-458b-989c-761032ea5322:start",
+              {
+                "x": 0.015,
+                "y": -7.616687305562223e-12
+              }
+            ],
+            [
+              "e1ddd9cd-2d2c-458b-989c-761032ea5322:end",
+              {
+                "x": 0.014999246648671583,
+                "y": -0.004999999950862864
+              }
+            ]
+          ],
+          "radii": [],
+          "posMasses": [
+            [
+              "6e72968e-0d97-4510-9046-bb65655d0f0d",
+              0
+            ],
+            [
+              "9e6e2c17-10f3-47e1-8e4d-ed9c9061a96e:start",
+              1
+            ],
+            [
+              "9e6e2c17-10f3-47e1-8e4d-ed9c9061a96e:end",
+              1
+            ],
+            [
+              "82eb4b1a-4209-4d3a-8177-d573f1c02731",
+              1
+            ],
+            [
+              "88583caa-6ee5-44be-b46d-ec0bf807c908",
+              1
+            ],
+            [
+              "e1ddd9cd-2d2c-458b-989c-761032ea5322:start",
+              1
+            ],
+            [
+              "e1ddd9cd-2d2c-458b-989c-761032ea5322:end",
+              1
+            ]
+          ],
+          "radMasses": []
+        }
+      }
+    ],
+    [
+      {
+        "type": "CreateElement",
+        "element": {
+          "type": "join",
+          "id": "6ae48d56-fa5e-4c06-9557-8031ccf6b52a",
+          "probes": [],
+          "overlays": {},
+          "fixedEdgesIDs": [],
+          "position": {
+            "x": 0.02,
+            "y": -1.0155586880881937e-12
+          },
+          "isGrounded": false
+        }
+      },
+      {
+        "type": "ConnectsFixedEdges",
+        "disconnect": false,
+        "elementID": "6ae48d56-fa5e-4c06-9557-8031ccf6b52a",
+        "connectID": "9e6e2c17-10f3-47e1-8e4d-ed9c9061a96e",
+        "index": 0
+      },
+      {
+        "type": "ConnectsFixedNodesBody",
+        "disconnect": false,
+        "elementID": "9e6e2c17-10f3-47e1-8e4d-ed9c9061a96e",
+        "connectID": "6ae48d56-fa5e-4c06-9557-8031ccf6b52a",
+        "index": 0
+      },
+      {
+        "type": "ConnectsFixedEdges",
+        "disconnect": false,
+        "elementID": "6ae48d56-fa5e-4c06-9557-8031ccf6b52a",
+        "connectID": "e1ddd9cd-2d2c-458b-989c-761032ea5322",
+        "index": 0
+      },
+      {
+        "type": "ConnectsFixedNodeEnd",
+        "disconnect": false,
+        "elementID": "e1ddd9cd-2d2c-458b-989c-761032ea5322",
+        "connectID": "6ae48d56-fa5e-4c06-9557-8031ccf6b52a"
+      },
+      {
+        "type": "UpdatePositionsToValidState",
+        "masterActionType": "CreateElement",
+        "newNodes": {
+          "positions": [
+            [
+              "6e72968e-0d97-4510-9046-bb65655d0f0d",
+              {
+                "x": 0,
+                "y": 0
+              }
+            ],
+            [
+              "9e6e2c17-10f3-47e1-8e4d-ed9c9061a96e:start",
+              {
+                "x": 0,
+                "y": 0
+              }
+            ],
+            [
+              "82eb4b1a-4209-4d3a-8177-d573f1c02731",
+              {
+                "x": 0.03,
+                "y": -5.4911210230360824e-9
+              }
+            ],
+            [
+              "9e6e2c17-10f3-47e1-8e4d-ed9c9061a96e:end",
+              {
+                "x": 0.03,
+                "y": -5.4911210230360824e-9
+              }
+            ],
+            [
+              "88583caa-6ee5-44be-b46d-ec0bf807c908",
+              {
+                "x": 0.015,
+                "y": -2.7455605115180412e-9
+              }
+            ],
+            [
+              "e1ddd9cd-2d2c-458b-989c-761032ea5322:start",
+              {
+                "x": 0.015,
+                "y": -2.7455605115180412e-9
+              }
+            ],
+            [
+              "6ae48d56-fa5e-4c06-9557-8031ccf6b52a",
+              {
+                "x": 0.02000001144002119,
+                "y": -4.575682913580526e-9
+              }
+            ],
+            [
+              "e1ddd9cd-2d2c-458b-989c-761032ea5322:end",
+              {
+                "x": 0.02000001144002119,
+                "y": -4.575682913580526e-9
+              }
+            ]
+          ],
+          "radii": [],
+          "posMasses": [
+            [
+              "6e72968e-0d97-4510-9046-bb65655d0f0d,9e6e2c17-10f3-47e1-8e4d-ed9c9061a96e:start",
+              0
+            ],
+            [
+              "82eb4b1a-4209-4d3a-8177-d573f1c02731,9e6e2c17-10f3-47e1-8e4d-ed9c9061a96e:end",
+              1
+            ],
+            [
+              "88583caa-6ee5-44be-b46d-ec0bf807c908,e1ddd9cd-2d2c-458b-989c-761032ea5322:start",
+              1
+            ],
+            [
+              "6ae48d56-fa5e-4c06-9557-8031ccf6b52a,e1ddd9cd-2d2c-458b-989c-761032ea5322:end",
+              1
+            ]
+          ],
+          "radMasses": []
+        },
+        "oldNodes": {
+          "positions": [
+            [
+              "6e72968e-0d97-4510-9046-bb65655d0f0d",
+              {
+                "x": 0,
+                "y": 0
+              }
+            ],
+            [
+              "9e6e2c17-10f3-47e1-8e4d-ed9c9061a96e:start",
+              {
+                "x": 0,
+                "y": 0
+              }
+            ],
+            [
+              "9e6e2c17-10f3-47e1-8e4d-ed9c9061a96e:end",
+              {
+                "x": 0.03,
+                "y": -1.5233374611124447e-12
+              }
+            ],
+            [
+              "82eb4b1a-4209-4d3a-8177-d573f1c02731",
+              {
+                "x": 0.03,
+                "y": -1.5233374611124447e-12
+              }
+            ],
+            [
+              "88583caa-6ee5-44be-b46d-ec0bf807c908",
+              {
+                "x": 0.015,
+                "y": -7.616687305562224e-13
+              }
+            ],
+            [
+              "e1ddd9cd-2d2c-458b-989c-761032ea5322:start",
+              {
+                "x": 0.015,
+                "y": -7.616687305562224e-13
+              }
+            ],
+            [
+              "e1ddd9cd-2d2c-458b-989c-761032ea5322:end",
+              {
+                "x": 0.02000002288004238,
+                "y": -2.9736329814176987e-8
+              }
+            ]
+          ],
+          "radii": [],
+          "posMasses": [
+            [
+              "6e72968e-0d97-4510-9046-bb65655d0f0d",
+              0
+            ],
+            [
+              "9e6e2c17-10f3-47e1-8e4d-ed9c9061a96e:start",
+              1
+            ],
+            [
+              "9e6e2c17-10f3-47e1-8e4d-ed9c9061a96e:end",
+              1
+            ],
+            [
+              "82eb4b1a-4209-4d3a-8177-d573f1c02731",
+              1
+            ],
+            [
+              "88583caa-6ee5-44be-b46d-ec0bf807c908",
+              1
+            ],
+            [
+              "e1ddd9cd-2d2c-458b-989c-761032ea5322:start",
+              1
+            ],
+            [
+              "e1ddd9cd-2d2c-458b-989c-761032ea5322:end",
+              1
+            ]
+          ],
+          "radMasses": []
+        }
+      }
+    ],
+    [
+      {
+        "type": "ConnectsFixedNodeEnd",
+        "disconnect": true,
+        "elementID": "e1ddd9cd-2d2c-458b-989c-761032ea5322",
+        "connectID": "6ae48d56-fa5e-4c06-9557-8031ccf6b52a",
+        "index": 0
+      },
+      {
+        "type": "ConnectsFixedNodesBody",
+        "disconnect": true,
+        "elementID": "9e6e2c17-10f3-47e1-8e4d-ed9c9061a96e",
+        "connectID": "6ae48d56-fa5e-4c06-9557-8031ccf6b52a",
+        "index": 0
+      },
+      {
+        "type": "DeleteElement",
+        "element": {
+          "type": "join",
+          "id": "6ae48d56-fa5e-4c06-9557-8031ccf6b52a",
+          "probes": [],
+          "overlays": {},
+          "fixedEdgesIDs": [
+            "e1ddd9cd-2d2c-458b-989c-761032ea5322",
+            "9e6e2c17-10f3-47e1-8e4d-ed9c9061a96e"
+          ],
+          "position": {
+            "x": 0.02000001144002119,
+            "y": -4.575682913580526e-9
+          },
+          "isGrounded": false
+        }
+      },
+      {
+        "type": "UpdatePositionsToValidState",
+        "masterActionType": "ConnectsFixedNodeEnd",
+        "newNodes": {
+          "positions": [
+            [
+              "e1ddd9cd-2d2c-458b-989c-761032ea5322:end",
+              {
+                "x": 0.02000001144002119,
+                "y": -4.575682913580526e-9
+              }
+            ],
+            [
+              "6e72968e-0d97-4510-9046-bb65655d0f0d",
+              {
+                "x": 0,
+                "y": 0
+              }
+            ],
+            [
+              "9e6e2c17-10f3-47e1-8e4d-ed9c9061a96e:start",
+              {
+                "x": 0,
+                "y": 0
+              }
+            ],
+            [
+              "82eb4b1a-4209-4d3a-8177-d573f1c02731",
+              {
+                "x": 0.03,
+                "y": -5.4911210230360824e-9
+              }
+            ],
+            [
+              "9e6e2c17-10f3-47e1-8e4d-ed9c9061a96e:end",
+              {
+                "x": 0.03,
+                "y": -5.4911210230360824e-9
+              }
+            ],
+            [
+              "88583caa-6ee5-44be-b46d-ec0bf807c908",
+              {
+                "x": 0.015,
+                "y": -2.7455605115180412e-9
+              }
+            ],
+            [
+              "e1ddd9cd-2d2c-458b-989c-761032ea5322:start",
+              {
+                "x": 0.015,
+                "y": -2.7455605115180412e-9
+              }
+            ]
+          ],
+          "radii": [],
+          "posMasses": [
+            [
+              "e1ddd9cd-2d2c-458b-989c-761032ea5322:end",
+              1
+            ],
+            [
+              "6e72968e-0d97-4510-9046-bb65655d0f0d,9e6e2c17-10f3-47e1-8e4d-ed9c9061a96e:start",
+              0
+            ],
+            [
+              "82eb4b1a-4209-4d3a-8177-d573f1c02731,9e6e2c17-10f3-47e1-8e4d-ed9c9061a96e:end",
+              1
+            ],
+            [
+              "88583caa-6ee5-44be-b46d-ec0bf807c908,e1ddd9cd-2d2c-458b-989c-761032ea5322:start",
+              1
+            ]
+          ],
+          "radMasses": []
+        },
+        "oldNodes": {
+          "positions": [
+            [
+              "6e72968e-0d97-4510-9046-bb65655d0f0d",
+              {
+                "x": 0,
+                "y": 0
+              }
+            ],
+            [
+              "9e6e2c17-10f3-47e1-8e4d-ed9c9061a96e:start",
+              {
+                "x": 0,
+                "y": 0
+              }
+            ],
+            [
+              "9e6e2c17-10f3-47e1-8e4d-ed9c9061a96e:end",
+              {
+                "x": 0.03,
+                "y": -5.4911210230360824e-9
+              }
+            ],
+            [
+              "82eb4b1a-4209-4d3a-8177-d573f1c02731",
+              {
+                "x": 0.03,
+                "y": -5.4911210230360824e-9
+              }
+            ],
+            [
+              "88583caa-6ee5-44be-b46d-ec0bf807c908",
+              {
+                "x": 0.015,
+                "y": -2.7455605115180412e-9
+              }
+            ],
+            [
+              "e1ddd9cd-2d2c-458b-989c-761032ea5322:start",
+              {
+                "x": 0.015,
+                "y": -2.7455605115180412e-9
+              }
+            ],
+            [
+              "e1ddd9cd-2d2c-458b-989c-761032ea5322:end",
+              {
+                "x": 0.02000001144002119,
+                "y": -4.575682913580526e-9
+              }
+            ],
+            [
+              "6ae48d56-fa5e-4c06-9557-8031ccf6b52a",
+              {
+                "x": 0.02000001144002119,
+                "y": -4.575682913580526e-9
+              }
+            ]
+          ],
+          "radii": [],
+          "posMasses": [
+            [
+              "6e72968e-0d97-4510-9046-bb65655d0f0d",
+              0
+            ],
+            [
+              "9e6e2c17-10f3-47e1-8e4d-ed9c9061a96e:start",
+              1
+            ],
+            [
+              "9e6e2c17-10f3-47e1-8e4d-ed9c9061a96e:end",
+              1
+            ],
+            [
+              "82eb4b1a-4209-4d3a-8177-d573f1c02731",
+              1
+            ],
+            [
+              "88583caa-6ee5-44be-b46d-ec0bf807c908",
+              1
+            ],
+            [
+              "e1ddd9cd-2d2c-458b-989c-761032ea5322:start",
+              1
+            ],
+            [
+              "e1ddd9cd-2d2c-458b-989c-761032ea5322:end",
+              1
+            ],
+            [
+              "6ae48d56-fa5e-4c06-9557-8031ccf6b52a",
+              1
+            ]
+          ],
+          "radMasses": []
+        }
+      }
+    ],
+    [
+      {
+        "type": "CreateElement",
+        "element": {
+          "type": "mass",
+          "id": "330aea55-022b-4094-a748-581c70a54a54",
+          "probes": [],
+          "overlays": {},
+          "position": {
+            "x": 0.02000001144002119,
+            "y": -4.575682913580526e-9
+          },
+          "isGrounded": false,
+          "fixedEdgesIDs": [],
+          "mass": 1
+        }
+      },
+      {
+        "type": "ConnectsFixedEdges",
+        "disconnect": false,
+        "elementID": "330aea55-022b-4094-a748-581c70a54a54",
+        "connectID": "e1ddd9cd-2d2c-458b-989c-761032ea5322",
+        "index": 0
+      },
+      {
+        "type": "ConnectsFixedNodeEnd",
+        "disconnect": false,
+        "elementID": "e1ddd9cd-2d2c-458b-989c-761032ea5322",
+        "connectID": "330aea55-022b-4094-a748-581c70a54a54"
+      },
+      {
+        "type": "UpdatePositionsToValidState",
+        "masterActionType": "CreateElement",
+        "newNodes": {
+          "positions": [
+            [
+              "6e72968e-0d97-4510-9046-bb65655d0f0d",
+              {
+                "x": 0,
+                "y": 0
+              }
+            ],
+            [
+              "9e6e2c17-10f3-47e1-8e4d-ed9c9061a96e:start",
+              {
+                "x": 0,
+                "y": 0
+              }
+            ],
+            [
+              "82eb4b1a-4209-4d3a-8177-d573f1c02731",
+              {
+                "x": 0.03,
+                "y": -5.4911210230360824e-9
+              }
+            ],
+            [
+              "9e6e2c17-10f3-47e1-8e4d-ed9c9061a96e:end",
+              {
+                "x": 0.03,
+                "y": -5.4911210230360824e-9
+              }
+            ],
+            [
+              "88583caa-6ee5-44be-b46d-ec0bf807c908",
+              {
+                "x": 0.015,
+                "y": -2.7455605115180412e-9
+              }
+            ],
+            [
+              "e1ddd9cd-2d2c-458b-989c-761032ea5322:start",
+              {
+                "x": 0.015,
+                "y": -2.7455605115180412e-9
+              }
+            ],
+            [
+              "330aea55-022b-4094-a748-581c70a54a54",
+              {
+                "x": 0.02000001144002119,
+                "y": -4.575682913580526e-9
+              }
+            ],
+            [
+              "e1ddd9cd-2d2c-458b-989c-761032ea5322:end",
+              {
+                "x": 0.02000001144002119,
+                "y": -4.575682913580526e-9
+              }
+            ]
+          ],
+          "radii": [],
+          "posMasses": [
+            [
+              "6e72968e-0d97-4510-9046-bb65655d0f0d,9e6e2c17-10f3-47e1-8e4d-ed9c9061a96e:start",
+              0
+            ],
+            [
+              "82eb4b1a-4209-4d3a-8177-d573f1c02731,9e6e2c17-10f3-47e1-8e4d-ed9c9061a96e:end",
+              1
+            ],
+            [
+              "88583caa-6ee5-44be-b46d-ec0bf807c908,e1ddd9cd-2d2c-458b-989c-761032ea5322:start",
+              1
+            ],
+            [
+              "330aea55-022b-4094-a748-581c70a54a54,e1ddd9cd-2d2c-458b-989c-761032ea5322:end",
+              1
+            ]
+          ],
+          "radMasses": []
+        },
+        "oldNodes": {
+          "positions": [
+            [
+              "6e72968e-0d97-4510-9046-bb65655d0f0d",
+              {
+                "x": 0,
+                "y": 0
+              }
+            ],
+            [
+              "9e6e2c17-10f3-47e1-8e4d-ed9c9061a96e:start",
+              {
+                "x": 0,
+                "y": 0
+              }
+            ],
+            [
+              "9e6e2c17-10f3-47e1-8e4d-ed9c9061a96e:end",
+              {
+                "x": 0.03,
+                "y": -5.4911210230360824e-9
+              }
+            ],
+            [
+              "82eb4b1a-4209-4d3a-8177-d573f1c02731",
+              {
+                "x": 0.03,
+                "y": -5.4911210230360824e-9
+              }
+            ],
+            [
+              "88583caa-6ee5-44be-b46d-ec0bf807c908",
+              {
+                "x": 0.015,
+                "y": -2.7455605115180412e-9
+              }
+            ],
+            [
+              "e1ddd9cd-2d2c-458b-989c-761032ea5322:start",
+              {
+                "x": 0.015,
+                "y": -2.7455605115180412e-9
+              }
+            ],
+            [
+              "e1ddd9cd-2d2c-458b-989c-761032ea5322:end",
+              {
+                "x": 0.02000001144002119,
+                "y": -4.575682913580526e-9
+              }
+            ]
+          ],
+          "radii": [],
+          "posMasses": [
+            [
+              "6e72968e-0d97-4510-9046-bb65655d0f0d",
+              0
+            ],
+            [
+              "9e6e2c17-10f3-47e1-8e4d-ed9c9061a96e:start",
+              1
+            ],
+            [
+              "9e6e2c17-10f3-47e1-8e4d-ed9c9061a96e:end",
+              1
+            ],
+            [
+              "82eb4b1a-4209-4d3a-8177-d573f1c02731",
+              1
+            ],
+            [
+              "88583caa-6ee5-44be-b46d-ec0bf807c908",
+              1
+            ],
+            [
+              "e1ddd9cd-2d2c-458b-989c-761032ea5322:start",
+              1
+            ],
+            [
+              "e1ddd9cd-2d2c-458b-989c-761032ea5322:end",
+              1
+            ]
+          ],
+          "radMasses": []
+        }
+      }
+    ],
+    [
+      {
+        "type": "ChangeMass",
+        "id": "330aea55-022b-4094-a748-581c70a54a54",
+        "delta": 99
+      }
+    ],
+    [
+      {
+        "type": "SetProbes",
+        "elementID": "82eb4b1a-4209-4d3a-8177-d573f1c02731",
+        "newProbes": [
+          {
+            "metric": "position",
+            "components": {
+              "x": false,
+              "y": false,
+              "norm": true
+            }
+          }
+        ],
+        "oldProbes": []
+      }
     ]
-  ]
+  ],
+  "future": []
 }

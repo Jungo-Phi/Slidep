@@ -75,7 +75,7 @@ export const TagChipsEditor: React.FC<TagChipsEditorProps> = ({
       )}
       <Chip
         icon={<Settings sx={{ fontSize: 14 }} />}
-        label={tn("gallery_parts", mechanismLength)}
+        label={tn("parts", mechanismLength)}
         size="small"
         sx={{
           height: 20,
@@ -190,7 +190,7 @@ export const TagChipsEditor: React.FC<TagChipsEditorProps> = ({
           )}
         />
       ) : (
-        <Tooltip disableInteractive title={t("gallery_add_tag")}>
+        <Tooltip disableInteractive title={t("add_tag")}>
           <Chip
             label={<Add sx={{ fontSize: 14, display: "block" }} />}
             size="small"

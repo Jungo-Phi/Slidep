@@ -153,6 +153,7 @@ describe("réactions", () => {
     positions: new Float64Array(0),
     angles: new Float64Array(0),
     velocities: new Float64Array(0),
+    accelerations: new Float64Array(0),
     angleVelocities: new Float64Array(0),
     reactions,
   });

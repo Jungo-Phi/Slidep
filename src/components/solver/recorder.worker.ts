@@ -1,4 +1,7 @@
-import { deserialize_mechanism } from "../../utils/serialization";
+import {
+  deserialize_loads,
+  deserialize_mechanism,
+} from "../../utils/serialization";
 import { Recorder } from "./recorder";
 import {
   FromRecorder,
@@ -108,6 +111,9 @@ self.onmessage = (event: MessageEvent<ToRecorder>) => {
       break;
     case "grab":
       recorder.setGrab(message.grab ? revive_grab(message.grab) : null);
+      break;
+    case "loads":
+      recorder.setLoads(deserialize_loads(message.loads));
       break;
     case "gravity":
       recorder.setGravity(message.on);

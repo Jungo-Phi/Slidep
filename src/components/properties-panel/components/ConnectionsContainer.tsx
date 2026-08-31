@@ -15,17 +15,17 @@ import { ordered_body_nodes } from "../element-order";
 import { StringKey, t } from "../../../i18n";
 
 const CONTAINER_NAME_KEYS: Record<ConnectsActionType, StringKey> = {
-  ConnectsAttachedBelt: "slot_belt",
-  ConnectsAttachedGears: "slot_gears",
-  ConnectsFixedEdges: "slot_fixed_edges",
-  ConnectsParentBeam: "slot_parent",
-  ConnectsFixedNodeStart: "slot_start_node",
-  ConnectsFixedNodeEnd: "slot_end_node",
-  ConnectsParentAxle: "slot_axle",
-  ConnectsRotatingEdges: "slot_rotating_edges",
-  ConnectsFixedNodesBody: "slot_body_nodes",
-  ConnectsMeshedGears: "slot_meshed_gears",
-  ConnectsFixedGears: "slot_fixed_gears",
+  ConnectsAttachedBelt: "belt",
+  ConnectsAttachedGears: "gears",
+  ConnectsFixedEdges: "fixed_edges",
+  ConnectsParentBeam: "parent",
+  ConnectsFixedNodeStart: "start_node",
+  ConnectsFixedNodeEnd: "end_node",
+  ConnectsParentAxle: "axle",
+  ConnectsRotatingEdges: "rotating_edges",
+  ConnectsFixedNodesBody: "body_nodes",
+  ConnectsMeshedGears: "meshed_gears",
+  ConnectsFixedGears: "fixed_gears",
 };
 
 interface ConnectionsContainerProps {
@@ -67,9 +67,9 @@ export const ConnectionsContainer: React.FC<ConnectionsContainerProps> = ({
     containerType === "ConnectsFixedNodeStart" &&
       element.type === "belt" &&
       element.closed
-      ? "slot_junction"
+      ? "junction"
       : containerType === "ConnectsFixedNodesBody" && element.type === "gear"
-        ? "slot_fixed_nodes"
+        ? "fixed_nodes"
         : CONTAINER_NAME_KEYS[containerType],
   );
 
@@ -136,7 +136,7 @@ export const ConnectionsContainer: React.FC<ConnectionsContainerProps> = ({
         )}
         {connections.length === 0 && (
           <Typography variant="caption" color="textDisabled">
-            {t("slot_empty")}
+            {t("empty")}
           </Typography>
         )}
       </Box>

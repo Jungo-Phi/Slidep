@@ -18,6 +18,7 @@ import type {
   SliderElement,
   SlidepElement,
 } from "../../types/element";
+import type { MaterialDef, ProfileDef } from "../../types/material";
 
 /**
  * A node names an edge once, however many ways that edge rests on it. Fusing two
@@ -43,6 +44,15 @@ const pivot = (nid: ID, x: number, rotating: ID[] = []): PivotElement => ({
   rotationalFriction: 0,
 });
 
+const MATERIAL_ID = id(90);
+const PROFILE_ID = id(91);
+const MATERIALS: MaterialDef[] = [
+  { id: MATERIAL_ID, name: "test", E: 1, Re: 1, rho: 1, readOnly: false },
+];
+const PROFILES: ProfileDef[] = [
+  { id: PROFILE_ID, name: "test", shape: { kind: "rect", b: 1, h: 1 } },
+];
+
 const beam = (
   bid: ID,
   start: ID | undefined,
@@ -58,7 +68,8 @@ const beam = (
   fixedNodeStartID: start,
   fixedNodeEndID: end,
   fixedNodesBodyIDs: body,
-  linearMass: 1,
+  materialID: MATERIAL_ID,
+  profileID: PROFILE_ID,
 });
 
 const mechanism = (mechanicalElements: MechanicalElement[]): Mechanism => ({
@@ -68,6 +79,8 @@ const mechanism = (mechanicalElements: MechanicalElement[]): Mechanism => ({
   mechanicalElements,
   constraintElements: [],
   loads: [],
+  materials: MATERIALS,
+  profiles: PROFILES,
   history: [],
   future: [],
 });

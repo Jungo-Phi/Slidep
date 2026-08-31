@@ -8,6 +8,7 @@ export * from "./canvas-state";
 export * from "./element";
 export * from "./hovered-part";
 export * from "./load-geometry";
+export * from "./material";
 export * from "./mechanism";
 export * from "./point2";
 export * from "./runtime-state";

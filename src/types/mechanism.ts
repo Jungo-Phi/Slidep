@@ -1,12 +1,15 @@
 import { Action } from "./actions";
 import { SimulationMode } from "./app-mode";
 import { MechanicalElement, ConstraintElement, LoadElement } from "./element";
+import { MaterialDef, ProfileDef } from "./material";
 import { Point2 } from "./point2";
 import {
   SerializedAction,
   SerializedConstraintElement,
   SerializedLoadElement,
+  SerializedMaterialDef,
   SerializedMechanicalElement,
+  SerializedProfileDef,
   SerializedViewportState,
 } from "./serialized";
 import { DBSchema } from "idb";
@@ -76,6 +79,10 @@ export interface Mechanism {
   mechanicalElements: MechanicalElement[];
   constraintElements: ConstraintElement[];
   loads: LoadElement[];
+  /** This mechanism's own materials and profiles — copied from the catalogue, never a live
+   *  reference to it. A `BeamElement` names one of each by id. */
+  materials: MaterialDef[];
+  profiles: ProfileDef[];
   history: Action[][];
   future: Action[][];
 }
@@ -89,6 +96,8 @@ export interface SerializedMechanism {
   mechanicalElements: SerializedMechanicalElement[];
   constraintElements: SerializedConstraintElement[];
   loads: SerializedLoadElement[];
+  materials: SerializedMaterialDef[];
+  profiles: SerializedProfileDef[];
   history: SerializedAction[][];
   future: SerializedAction[][];
 }

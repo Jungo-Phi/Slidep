@@ -82,6 +82,8 @@ function mechanism(mels: MechanicalElement[]): Mechanism {
     mechanicalElements: mels,
     constraintElements: [],
     loads: [],
+    materials: [],
+    profiles: [],
     history: [],
     future: [],
   };

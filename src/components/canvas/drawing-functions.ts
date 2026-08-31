@@ -16,6 +16,10 @@ import {
   INTERACTION_SPECS,
   PhysicsOverlayKind,
   PHYSICS_OVERLAY_COLOR,
+  SIGNED_STRESS_RAMP,
+  STRESS_RAMP,
+  STRESS_OVERSTRESS_COLOR,
+  STRESS_LEGEND,
   TEXT_SPECS,
   REDUNDANCY_SYMBOL,
 } from "../../constants/rendering-specs";
@@ -62,6 +66,7 @@ import {
   LENGTH,
   MASS,
   MOMENT,
+  STRESS,
   QuantityKind,
   format_mantissa,
   format_quantity,
@@ -416,12 +421,14 @@ function draw_graduation_label(
   x: number,
   y: number,
 ) {
+  ctx.save();
   ctx.lineWidth = GRADUATION.HALO_WIDTH;
   ctx.strokeStyle = COLORS.BACKGROUND;
   ctx.lineJoin = "round";
   ctx.strokeText(text, x, y);
   ctx.fillStyle = COLORS.BADGE_STROKE;
   ctx.fillText(text, x, y);
+  ctx.restore();
 }
 
 /**
@@ -849,12 +856,202 @@ export function draw_mass(
   draw_text(ctx, position, text);
 }
 
+/** Shared by every stress-fill ramp (`stress_ramp_color`, `magnitude_stress_color`,
+ *  `signed_stress_color`): linear interpolation between the two stops of `ramp` that bracket
+ *  `t`, clamped to `ramp`'s own ends outside its range. */
+function interpolate_color_ramp(
+  ramp: readonly { t: number; rgb: readonly [number, number, number] }[],
+  t: number,
+): string {
+  let lo = ramp[0];
+  let hi = ramp[ramp.length - 1];
+  for (let i = 0; i < ramp.length - 1; i++) {
+    if (t >= ramp[i].t && t <= ramp[i + 1].t) {
+      lo = ramp[i];
+      hi = ramp[i + 1];
+      break;
+    }
+  }
+  const span = hi.t - lo.t || 1;
+  const u = (t - lo.t) / span;
+  const [r, g, b] = lo.rgb.map((c, i) => Math.round(c + (hi.rgb[i] - c) * u));
+  return `rgb(${r}, ${g}, ${b})`;
+}
+
+/** Linear interpolation on `STRESS_RAMP`. `ratio` at or past 1 is `STRESS_OVERSTRESS_COLOR`,
+ *  unconditionally — past the elastic limit is never a matter of scale, and stays a per-beam
+ *  ratio check even though the ramp itself no longer is (`Re` differs beam to beam). Below
+ *  that, `stress` (Pa, absolute) is read as a fraction of `scaleMaxStress`
+ *  (`StressScaleCache.maxStress`) — an absolute scale, so it can be labelled with one real
+ *  stress value in the legend instead of a bare, per-beam-relative percentage. `0` or negative
+ *  `scaleMaxStress` (nothing recorded yet) reads as the bottom of the ramp. */
+export function stress_ramp_color(
+  ratio: number,
+  stress: number,
+  scaleMaxStress: number,
+): string {
+  // A NaN input (a solver reaction gone degenerate) must still resolve to a paintable color —
+  // every comparison against it is false, so it would otherwise fall through every branch
+  // below and reach `addColorStop` as "rgb(NaN, NaN, NaN)".
+  if (Number.isNaN(ratio) || Number.isNaN(stress)) {
+    const [r, g, b] = STRESS_RAMP[0].rgb;
+    return `rgb(${r}, ${g}, ${b})`;
+  }
+  if (ratio >= 1) return STRESS_OVERSTRESS_COLOR;
+  const t =
+    scaleMaxStress > 0 ? Math.min(Math.max(stress / scaleMaxStress, 0), 1) : 0;
+  return interpolate_color_ramp(STRESS_RAMP, t);
+}
+
+/**
+ * `STRESS_RAMP` read on a plain magnitude, no sign, no overstress threshold — the `bending`
+ * lens' own color (docs/plan-efforts-interieurs.md phase 9). Unlike `normal`, a single cut in
+ * bending is in tension on one fibre and compression on the other AT ONCE: there is no whole-
+ * section state to sign, so this reads `|Mf·v/I|` the same way `stress_ramp_color` reads
+ * `utilization` — "how much", not "which way". `scaleMax <= 0` or a non-finite `magnitude`
+ * reads as the ramp's own bottom. */
+export function magnitude_stress_color(
+  magnitude: number,
+  scaleMax: number,
+): string {
+  if (!Number.isFinite(magnitude) || scaleMax <= 0) {
+    const [r, g, b] = STRESS_RAMP[0].rgb;
+    return `rgb(${r}, ${g}, ${b})`;
+  }
+  const t = Math.min(Math.max(magnitude / scaleMax, 0), 1);
+  return interpolate_color_ramp(STRESS_RAMP, t);
+}
+
+/** Converts `bending_stress_stops`' raw (signed) readings into the beam's gradient stops via
+ *  `magnitude_stress_color` — the sign itself is dropped here, in drawing territory, not in
+ *  `cohesion-field.ts`: the physics function stays the honest signed reading, this is a display
+ *  choice. No re-stepping needed, same reasoning as `signed_stress_fill_stops`. */
+export function magnitude_stress_fill_stops(
+  rawStops: { offset: number; stress: number }[],
+  scaleMax: number,
+): BeamFillStop[] {
+  return rawStops.map((stop) => ({
+    offset: stop.offset,
+    color: magnitude_stress_color(Math.abs(stop.stress), scaleMax),
+  }));
+}
+
+/**
+ * Converts `stress_utilization_stops`'/`shear_utilization_stops`' raw readings into the beam's
+ * gradient stops, stepping — never fading — across every point where `ratio` crosses 1: the
+ * elastic limit (or `τ_adm`) is a real physical boundary, not a place for the ramp to blend
+ * into `STRESS_OVERSTRESS_COLOR` over a span of samples. `field.samples` carries no station
+ * there (it isn't a discontinuity of the internal-force field itself, only of where this
+ * overlay's color happens to jump), so the step is snapped to the first sample past the
+ * crossing rather than the exact abscissa — close enough at the sample density
+ * `compute_cohesion_field` already uses, and far simpler than root-finding through
+ * `max_fiber_stress`'s/`max_shear_stress`'s non-smooth terms.
+ */
+export function beam_fill_stops(
+  rawStops: { offset: number; ratio: number; stress: number }[],
+  scaleMaxStress: number,
+): BeamFillStop[] {
+  const result: BeamFillStop[] = [];
+  let prevRatio: number | undefined;
+  for (const stop of rawStops) {
+    const color = stress_ramp_color(stop.ratio, stop.stress, scaleMaxStress);
+    if (prevRatio !== undefined && prevRatio >= 1 !== stop.ratio >= 1) {
+      const justBefore =
+        stop.ratio >= 1
+          ? // Entering overstress: the ramp's own color one instant before it steps to black.
+            stress_ramp_color(0.999999, stop.stress, scaleMaxStress)
+          : // Leaving overstress: black right up to the boundary, then straight into the ramp.
+            STRESS_OVERSTRESS_COLOR;
+      result.push({ offset: stop.offset, color: justBefore });
+    }
+    result.push({ offset: stop.offset, color });
+    prevRatio = stop.ratio;
+  }
+  return result;
+}
+
+/**
+ * A `STRESS_RAMP`-reading lens' legend — screen-anchored bottom-left, a gradient bar reading
+ * `STRESS_RAMP` directly (0 to `scaleMaxStress`, labelled as an absolute stress — a real number
+ * a user can compare against a material's own `Re`, far more informative than a bare
+ * percentage). `overstressLabel` given (the `utilization` lens, phase 6) also draws a separate
+ * swatch in `STRESS_OVERSTRESS_COLOR`, apart from the bar, never at its right end: it means
+ * something categorically different ("past the limit"), not a position on the scale, and
+ * drawing it as the bar's own last segment would say otherwise. `undefined` (the `bending`
+ * lens, phase 9) omits it: a magnitude with no threshold of its own has nothing to mark past
+ * the bar's own top.
+ */
+export function draw_stress_legend(
+  ctx: CanvasRenderingContext2D,
+  height: number,
+  scaleMaxStress: number,
+  overstressLabel?: string,
+) {
+  const { MARGIN, BAR_WIDTH, BAR_HEIGHT, GAP, FONT } = STRESS_LEGEND;
+  const barX = MARGIN;
+  const barY = height - MARGIN - BAR_HEIGHT;
+
+  ctx.save();
+  ctx.font = FONT;
+
+  const gradient = ctx.createLinearGradient(barX, 0, barX + BAR_WIDTH, 0);
+  for (const stop of STRESS_RAMP) {
+    const [r, g, b] = stop.rgb;
+    gradient.addColorStop(stop.t, `rgb(${r}, ${g}, ${b})`);
+  }
+  ctx.fillStyle = gradient;
+  ctx.strokeStyle = COLORS.BADGE_STROKE;
+  ctx.lineWidth = 1;
+
+  ctx.fillRect(barX, barY, BAR_WIDTH, BAR_HEIGHT);
+  ctx.strokeRect(barX + 0.5, barY + 0.5, BAR_WIDTH - 1, BAR_HEIGHT - 1);
+
+  ctx.textBaseline = "bottom";
+  ctx.textAlign = "left";
+  draw_graduation_label(ctx, "0", barX, barY - GAP);
+  ctx.textAlign = "right";
+  draw_graduation_label(
+    ctx,
+    format_quantity(scaleMaxStress, STRESS, 0),
+    barX + BAR_WIDTH,
+    barY - GAP,
+  );
+
+  if (overstressLabel !== undefined) {
+    const swatchX = barX + BAR_WIDTH + GAP;
+    ctx.fillStyle = STRESS_OVERSTRESS_COLOR;
+    ctx.fillRect(swatchX, barY, BAR_HEIGHT, BAR_HEIGHT);
+    ctx.strokeRect(swatchX + 0.5, barY + 0.5, BAR_HEIGHT - 1, BAR_HEIGHT - 1);
+
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    draw_graduation_label(
+      ctx,
+      overstressLabel,
+      swatchX + BAR_HEIGHT + GAP,
+      barY + BAR_HEIGHT / 2,
+    );
+  }
+
+  ctx.restore();
+}
+
+/** One stop of the stress overlay's fill gradient — `offset` a fraction of the beam's own
+ *  length (0 at `start`), `color` already ramped. Two stops at the same `offset` draw a hard
+ *  step, for a discontinuity that must not be smoothed away (same convention as the panel's
+ *  own diagrams). */
+export interface BeamFillStop {
+  offset: number;
+  color: string;
+}
+
 export function draw_beam(
   ctx: CanvasRenderingContext2D,
   start: ScreenPoint,
   end: ScreenPoint,
   isStartJoin: boolean = false,
   isEndJoin: boolean = false,
+  stressStops?: BeamFillStop[],
 ) {
   const sL = DIM.BEAM_WIDTH - STROKE_WIDTHS.STANDARD + ctx.lineWidth;
   const sideS = DIM.BEAM_WIDTH - STROKE_WIDTHS.STANDARD - ctx.lineWidth;
@@ -863,16 +1060,34 @@ export function draw_beam(
   const oldFillStyle = ctx.fillStyle;
 
   ctx.save();
-  ctx.translate(start.x, start.y);
-  ctx.rotate(end.sub(start).angle());
-  const length = start.distance_to(end);
+  try {
+    ctx.translate(start.x, start.y);
+    ctx.rotate(end.sub(start).angle());
+    const length = start.distance_to(end);
 
-  ctx.fillStyle = ctx.strokeStyle;
-  ctx.fillRect(-sL / 2 + startJ, -sL / 2, length + sL - endJ - startJ, sL);
-  ctx.fillStyle = oldFillStyle;
-  ctx.fillRect(-sideS / 2, -sideS / 2, length + sideS, sideS);
-
-  ctx.restore();
+    ctx.fillStyle = ctx.strokeStyle;
+    ctx.fillRect(-sL / 2 + startJ, -sL / 2, length + sL - endJ - startJ, sL);
+    // Built here, under this call's own translate/rotate: a gradient's coordinates are only
+    // guaranteed to line up with the shape they fill when both are resolved under the same
+    // transform, so it cannot be built by the caller and handed in.
+    if (stressStops && stressStops.length > 0) {
+      const gradient = ctx.createLinearGradient(0, 0, length, 0);
+      for (const stop of stressStops)
+        gradient.addColorStop(
+          Math.min(Math.max(stop.offset, 0), 1),
+          stop.color,
+        );
+      ctx.fillStyle = gradient;
+    } else {
+      ctx.fillStyle = oldFillStyle;
+    }
+    ctx.fillRect(-sideS / 2, -sideS / 2, length + sideS, sideS);
+  } finally {
+    // A stray exception (an invalid gradient color stop, say) must never skip this: leaving
+    // the translate/rotate above unwound would rotate every element drawn after this one for
+    // the rest of the session, canvas-wide.
+    ctx.restore();
+  }
 }
 
 export function draw_spring(
@@ -2187,6 +2402,95 @@ export function draw_overlay_moment_label(
     "",
     MOMENT,
   );
+  ctx.restore();
+}
+
+// ─── Signed stress fill (normal beam-fill lens only, phase 9) ──────────────────
+
+/** Linear interpolation on `SIGNED_STRESS_RAMP`, `t = stress/scaleMax` clamped to `[-1, 1]` —
+ *  docs/plan-efforts-interieurs.md phase 9, the `normal` lens' counterpart to
+ *  `stress_ramp_color`. No danger threshold of its own (no `STRESS_OVERSTRESS_COLOR`
+ *  equivalent): unlike the utilization ratio, there is no `σ_adm`-style limit to step to.
+ *  `scaleMax <= 0` (nothing recorded yet) or a non-finite `stress` reads as the ramp's own
+ *  neutral midpoint. Only `normal` uses this diverging ramp — `bending` has no whole-section
+ *  traction/compression state to sign (see `magnitude_stress_color`'s own doc), so it reads
+ *  `STRESS_RAMP` on a plain magnitude instead. */
+export function signed_stress_color(stress: number, scaleMax: number): string {
+  if (!Number.isFinite(stress) || scaleMax <= 0) {
+    const [r, g, b] = SIGNED_STRESS_RAMP[1].rgb;
+    return `rgb(${r}, ${g}, ${b})`;
+  }
+  const t = Math.min(Math.max(stress / scaleMax, -1), 1);
+  return interpolate_color_ramp(SIGNED_STRESS_RAMP, t);
+}
+
+/**
+ * Converts `normal_stress_stops`' raw readings (`cohesion-field.ts`) into the beam's gradient
+ * stops. No re-stepping needed here, unlike `beam_fill_stops`: a discontinuity already reaches
+ * this function as two stops at the same `offset` — `field.samples`' own "just before/after"
+ * pairing (phase 4) — so mapping straight through already draws it as a hard step.
+ */
+export function signed_stress_fill_stops(
+  rawStops: { offset: number; stress: number }[],
+  scaleMax: number,
+): BeamFillStop[] {
+  return rawStops.map((stop) => ({
+    offset: stop.offset,
+    color: signed_stress_color(stop.stress, scaleMax),
+  }));
+}
+
+/**
+ * The `normal` lens' own legend — screen-anchored bottom-left, same position and geometry as
+ * `draw_stress_legend`, a diverging gradient bar reading `SIGNED_STRESS_RAMP` from `-scaleMax`
+ * to `+scaleMax`. No swatch: unlike the utilization ratio, `normal` has no danger threshold to
+ * mark past the bar's own two ends — just the value at each one. `compressionLabel`/
+ * `tensionLabel` name what the colour means: here, unlike `bending`, the sign really is a
+ * state of the whole section (pushed or pulled together), so a word earns its place.
+ */
+export function draw_signed_stress_legend(
+  ctx: CanvasRenderingContext2D,
+  height: number,
+  scaleMax: number,
+  compressionLabel: string,
+  tensionLabel: string,
+) {
+  const { MARGIN, BAR_WIDTH, BAR_HEIGHT, GAP, FONT } = STRESS_LEGEND;
+  const barX = MARGIN;
+  const barY = height - MARGIN - BAR_HEIGHT;
+
+  ctx.save();
+  ctx.font = FONT;
+
+  const gradient = ctx.createLinearGradient(barX, 0, barX + BAR_WIDTH, 0);
+  for (const stop of SIGNED_STRESS_RAMP) {
+    const [r, g, b] = stop.rgb;
+    // `SIGNED_STRESS_RAMP.t` runs -1…1, a canvas gradient stop 0…1.
+    gradient.addColorStop((stop.t + 1) / 2, `rgb(${r}, ${g}, ${b})`);
+  }
+  ctx.fillStyle = gradient;
+  ctx.strokeStyle = COLORS.BADGE_STROKE;
+  ctx.lineWidth = 1;
+
+  ctx.fillRect(barX, barY, BAR_WIDTH, BAR_HEIGHT);
+  ctx.strokeRect(barX + 0.5, barY + 0.5, BAR_WIDTH - 1, BAR_HEIGHT - 1);
+
+  ctx.textBaseline = "bottom";
+  ctx.textAlign = "left";
+  draw_graduation_label(
+    ctx,
+    `${format_quantity(-scaleMax, STRESS, 0)} · ${compressionLabel}`,
+    barX,
+    barY - GAP,
+  );
+  ctx.textAlign = "right";
+  draw_graduation_label(
+    ctx,
+    `${format_quantity(scaleMax, STRESS, 0)} · ${tensionLabel}`,
+    barX + BAR_WIDTH,
+    barY - GAP,
+  );
+
   ctx.restore();
 }
 

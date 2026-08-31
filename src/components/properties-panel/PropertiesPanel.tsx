@@ -5,6 +5,7 @@ import {
   Build as ElementIcon,
   Straighten as ConstraintsIcon,
   Assessment as AnalysisIcon,
+  Layers as LibraryIcon,
 } from "@mui/icons-material";
 import {
   Action,
@@ -18,14 +19,16 @@ import {
 } from "../../types";
 import { ConstraintResidual } from "../../types/runtime-state";
 import { COLORS } from "../../constants/rendering-specs";
-import { HoveredPart } from "../../types/hovered-part";
+import { HoveredAbscissa, HoveredPart } from "../../types/hovered-part";
 import { CanvasState, selected_ids } from "../../types/canvas-state";
 import { ProjectInfoSection } from "./ProjectInfoSection";
 import ElementProperties from "./ElementProperties";
 import ConstraintsPanel from "./ConstraintsPanel";
 import AnalysisPanel from "./AnalysisPanel";
+import MaterialsLibraryPanel, { LibraryFocusRequest } from "./MaterialsLibraryPanel";
 import { host_mechanical_element } from "../mechanism/connect-actions";
 import { ElementNavigationContext } from "./element-navigation";
+import { LibraryNavigationContext } from "./library-navigation";
 import { CanvasHighlight } from "../canvas/draw-canvas";
 import { RedundancySymbol } from "../solver/redundancy-symbols";
 import { t } from "../../i18n";
@@ -58,6 +61,15 @@ export interface PropertiesPanelProps {
   activeTab: PropertiesPanelTab;
   setActiveTab: (tab: PropertiesPanelTab) => void;
   unsatisfied: ConstraintResidual[];
+  /** Publishes the abscissa hovered on a beam's N/T/Mf diagrams, for the canvas to mark. */
+  setHoveredAbscissa: (hovered: HoveredAbscissa | null) => void;
+  /** Sets which library section is hovered — also what tints the canvas for as long as the
+   *  hover lasts. The value itself is read straight from the app by the canvas, not through
+   *  this panel. */
+  setLibrarySection: (section: "materials" | "profiles" | null) => void;
+  /** A library row hovered there, for the canvas to accentuate its beams and fade the rest. */
+  hoveredLibraryEntryID: ID | null;
+  setHoveredLibraryEntryID: (id: ID | null) => void;
 }
 
 export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
@@ -80,6 +92,10 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
   unsatisfied,
   runtimeState,
   setRuntimeState,
+  setHoveredAbscissa,
+  setLibrarySection,
+  hoveredLibraryEntryID,
+  setHoveredLibraryEntryID,
 }) => {
   const handleProjectInfoChange = (info: MechanismMetadata) => {
     updateMetadata({
@@ -131,8 +147,23 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
     [setActiveTab],
   );
 
+  // A beam's material/profile picker's own "where can I edit this?" link — jumps to the
+  // library tab with that entry selected there. Local: only `MaterialsLibraryPanel`, a child
+  // of this same component, needs to read the request.
+  const [libraryFocusRequest, setLibraryFocusRequest] = React.useState<LibraryFocusRequest | null>(
+    null,
+  );
+  const focusLibraryEntry = React.useCallback(
+    (section: "materials" | "profiles", id: ID) => {
+      setActiveTab("library");
+      setLibraryFocusRequest({ section, id });
+    },
+    [setActiveTab],
+  );
+
   return (
     <ElementNavigationContext.Provider value={drillDownToElement}>
+      <LibraryNavigationContext.Provider value={focusLibraryEntry}>
       <Paper
         sx={{
           width: 300,
@@ -183,22 +214,27 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
               {
                 id: "project" as PropertiesPanelTab,
                 icon: ProjectIcon,
-                label: t("tab_project"),
+                label: t("project"),
               },
               {
                 id: "elements" as PropertiesPanelTab,
                 icon: ElementIcon,
-                label: t("tab_elements"),
+                label: t("elements"),
               },
               {
                 id: "constraints" as PropertiesPanelTab,
                 icon: ConstraintsIcon,
-                label: t("tab_constraints"),
+                label: t("constraints"),
+              },
+              {
+                id: "library" as PropertiesPanelTab,
+                icon: LibraryIcon,
+                label: t("materials"),
               },
               {
                 id: "analysis" as PropertiesPanelTab,
                 icon: AnalysisIcon,
-                label: t("tab_analysis"),
+                label: t("analysis"),
               },
             ].map((tab) => {
               return (
@@ -212,6 +248,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                         display: "flex",
                         alignItems: "center",
                         gap: 0.5,
+                        margin: -1,
                       }}
                     >
                       <tab.icon fontSize="small" />
@@ -280,6 +317,18 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
               mechanism={mechanism}
             />
           )}
+          {activeTab === "library" && (
+            <MaterialsLibraryPanel
+              mechanism={mechanism}
+              applyActions={applyActions}
+              setHoveredSection={setLibrarySection}
+              hoveredEntryID={hoveredLibraryEntryID}
+              setHoveredEntryID={setHoveredLibraryEntryID}
+              hoveredPart={hoveredPart}
+              focusRequest={libraryFocusRequest}
+              onFocusHandled={() => setLibraryFocusRequest(null)}
+            />
+          )}
           {activeTab === "analysis" && (
             <AnalysisPanel
               setHighlight={setHighlight}
@@ -297,10 +346,12 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
               runtimeState={runtimeState}
               setRuntimeState={setRuntimeState}
               selectedElement={selectedElement}
+              setHoveredAbscissa={setHoveredAbscissa}
             />
           )}
         </Box>
       </Paper>
+      </LibraryNavigationContext.Provider>
     </ElementNavigationContext.Provider>
   );
 };

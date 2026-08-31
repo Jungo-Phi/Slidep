@@ -32,7 +32,7 @@ describe("ddl_status", () => {
 
   it("cinématique : compare mobilités et moteurs", () => {
     expect(label(0, 0, "kinematic")).toBe(t("ddl_rigid"));
-    expect(label(1, 0, "kinematic")).toBe(t("ddl_no_motor"));
+    expect(label(1, 0, "kinematic")).toBe(t("ddl_free_motion"));
     expect(label(1, 1, "kinematic")).toBe(t("ddl_determined"));
     expect(label(2, 1, "kinematic")).toBe(t("ddl_underdriven"));
     expect(label(1, 2, "kinematic")).toBe(t("ddl_overdriven"));
@@ -40,7 +40,7 @@ describe("ddl_status", () => {
 
   it("dynamique : un degré libre est normal, le mouvement vient des efforts", () => {
     expect(label(0, 0, "dynamic")).toBe(t("ddl_rigid"));
-    expect(label(2, 0, "dynamic")).toBe(t("ddl_no_motor"));
+    expect(label(2, 0, "dynamic")).toBe(t("ddl_free_motion"));
     expect(label(1, 1, "dynamic")).toBe(t("ddl_determined"));
   });
 

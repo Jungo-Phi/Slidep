@@ -897,27 +897,35 @@ export function PBD_solve(
     movedRing[slot] = moved;
     turnedRing[slot] = turned;
 
-    // A dynamics step always runs its full `nbIterations`: the early exits above assume the
-    // sweep is creeping toward a fixed point it may never reach exactly (edition) or that a
-    // motionless mechanism is worth cutting short (kinematic); neither notion applies once
-    // gravity keeps every frame moving regardless of how settled the constraints are.
-    if (!dynamics) {
-      if (maxError < epsilon) break;
+    // Within-sweep convergence is the same question dynamics or not: the predict step
+    // already fixed this frame's/substep's target once, before the loop started (see
+    // `frameStart` above), so what is left is Gauss-Seidel creeping toward THAT fixed point —
+    // gravity moving the NEXT frame further has no bearing on whether THIS sweep is still
+    // correcting anything. Forcing a dynamics step through its full `nbIterations` regardless
+    // of how far it had already converged is what let a heavy mass ratio (a slow-converging
+    // chain — `remaining_motion`'s own geometric decay applies just the same) leave a
+    // residual proportional to how far short of `nbIterations` it needed, instead of the
+    // small one it actually converges to given enough sweeps — see the mass-ratio pivot
+    // residual this fixed.
+    if (maxError < epsilon) break;
 
-      if (i < minSweepsBeforeExit) continue;
+    if (i < minSweepsBeforeExit) continue;
 
-      if (exitOn === "constraints") {
-        if (maxSeverity < CONSTRAINT_EXIT_SEVERITY) break;
-      } else if (
-        remaining_motion(moved, movedBefore) < remainingThreshold &&
-        remaining_motion(turned, turnedBefore) < REMAINING_RAD
-      )
-        break;
-    }
+    if (exitOn === "constraints") {
+      if (maxSeverity < CONSTRAINT_EXIT_SEVERITY) break;
+    } else if (
+      remaining_motion(moved, movedBefore) < remainingThreshold &&
+      remaining_motion(turned, turnedBefore) < REMAINING_RAD
+    )
+      break;
   }
 
   // ── Dynamics: the frame's velocity, from the whole displacement since `frameStart` ──
-  if (dynamics && frameStartX && frameStartY && frameStartA) {
+  // `dt = 0` marks a re-projection step (see `Recorder.advance`'s first instant): no time
+  // elapsed, so there is no velocity to derive — dividing by it would give every
+  // already-satisfied dof (`Δx = 0`, common on a freshly imported, exactly-constrained
+  // mechanism) a `0 × Infinity = NaN` instead of the `0` it actually is.
+  if (dynamics && dynamics.dt > 0 && frameStartX && frameStartY && frameStartA) {
     const invDt = 1 / dynamics.dt;
     for (let n = 0; n < nodes.count; n++) {
       if (nodes.w[n] === 0) continue; // anchored: no velocity to speak of
@@ -942,7 +950,15 @@ export function PBD_solve(
   // invents any), so the anchor's share is minus the sum of every other dof's. That only
   // resolves cleanly with exactly one anchored dof on the link; with more, the split between
   // them is genuinely indeterminate from this alone, and is left unreported.
-  if (dynamics?.reactions && reactionAccum && reactionScratchX && reactionScratchA) {
+  // Same `dt = 0` case as the velocity block above: no reaction is meaningful for a
+  // re-projection step, and `invDt2` would be `Infinity`.
+  if (
+    dynamics?.reactions &&
+    dynamics.dt > 0 &&
+    reactionAccum &&
+    reactionScratchX &&
+    reactionScratchA
+  ) {
     const reactions = dynamics.reactions;
     const invDt2 = 1 / (dynamics.dt * dynamics.dt);
     const impulseX = new Float64Array(reactionScratchX.length);
@@ -1013,6 +1029,7 @@ export function PBD_solve(
           kind: "force",
           fx,
           fy,
+          linkIndex: idx,
         });
       }
 
@@ -1041,6 +1058,7 @@ export function PBD_solve(
             atAnchor: nodes.w[slotA] === 0,
             kind: "torque",
             torque: moment,
+            linkIndex: idx,
           });
           reactions.push({
             type: link.type,
@@ -1049,6 +1067,7 @@ export function PBD_solve(
             atAnchor: nodes.w[slotB] === 0,
             kind: "torque",
             torque: moment,
+            linkIndex: idx,
           });
         }
       }
@@ -1067,6 +1086,7 @@ export function PBD_solve(
           atAnchor: w === 0,
           kind: "torque",
           torque,
+          linkIndex: idx,
         });
       }
     });

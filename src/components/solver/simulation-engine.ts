@@ -24,8 +24,9 @@ import {
   mark_passive_belt_pins,
   rebuild_belt_q_links,
 } from "./parsing";
-import { DynamicsInput, PBD_kinematic_solver } from "./PBD_kinematic_solver";
+import { DynamicsInput, PBD_kinematic_solver, SolverMaps } from "./PBD_kinematic_solver";
 import { DynamicMassModel, compute_dynamic_mass_model } from "./mass-model";
+import { BeamCohesionSpec, build_beam_cohesion_specs, resolve_beam_cohesion } from "./beam-cohesion";
 import { CompiledLoad, compile_loads, resolve_load_forces } from "./load-model";
 import {
   CompiledSpringDamper,
@@ -268,6 +269,9 @@ export type SimulationModel = {
    * moves fast is cheaper than a second bbox pass over `positions`.
    */
   extent: number;
+  /** Each beam's own cohesion-torsor spec, read only by `step_dynamic_simulation` — see
+   *  `BeamCohesionSpec`. */
+  beamCohesionSpecs: BeamCohesionSpec[];
 };
 
 /** Which snapshot slots each solver node writes to: a fused key feeds one slot per key it
@@ -696,7 +700,13 @@ export function compile_simulation_model(
   includeFloor: boolean = false,
 ): SimulationModel {
   const nodes = get_sim_nodes(mechanism.mechanicalElements);
-  let links = get_links_simulation(mechanism.mechanicalElements, nodes, dynamicRigidity);
+  let links = get_links_simulation(
+    mechanism.mechanicalElements,
+    nodes,
+    mechanism.materials,
+    mechanism.profiles,
+    dynamicRigidity,
+  );
   const keyMap = new Map<string, string>();
 
   // The floor's anchor: a fixed node with no backing `MechanicalElement`, injected once
@@ -819,6 +829,7 @@ export function compile_simulation_model(
       start,
       slots: Int32Array.from(slotList),
     },
+    beamCohesionSpecs: build_beam_cohesion_specs(mechanism.mechanicalElements, links),
   };
 }
 
@@ -1243,16 +1254,51 @@ export function step_simulation(
 }
 
 /**
- * Sweeps a dynamic frame runs, fixed (see `PBD_solve`'s `dynamics` bypass of the early
- * exit — a falling mechanism has no fixed point to converge to). Same order of magnitude as
- * `SIMULATION_SWEEPS`; unmeasured, a starting point to retune once gravity is on screen.
+ * CEILING on the Gauss-Seidel sweeps a dynamic SUBSTEP may run — not a fixed count: dynamics
+ * now exits early on the same converged-residual/decayed-motion criteria `PBD_solve` already
+ * uses for edition and kinematic simulation, so a substep almost always stops well short of
+ * this. What the ceiling has to cover is the substep that DOESN'T converge quickly — a heavy
+ * mass hinged onto a comparatively massless member (an extreme mass ratio slows Gauss-Seidel's
+ * own convergence rate, regardless of how small the substep's predicted displacement is) — so
+ * it is sized like `SIMULATION_SWEEPS`, the same ceiling kinematic mode already trusts for its
+ * own worst case, rather than the far smaller budget a well-behaved substep would need on its
+ * own.
  */
 const DYNAMIC_SWEEPS = 200;
 
 /**
+ * Physical substeps per recorded frame — see docs/plan-efforts-interieurs.md's reaction-leak
+ * finding. `PBD_kinematic_solver` reads a link's reaction off the impulse accumulated across
+ * one call's whole Gauss-Seidel sweep; that reading is only axial (for a pure `Distance` link)
+ * to first order in how far the predict step displaced a point relative to that link's own
+ * length — correct once the displacement is small, measurably NOT once it isn't (a short,
+ * light member under a comparatively large load can move a non-negligible fraction of its own
+ * length in one predict step). More sweeps of the SAME single step never closes this — the
+ * position converges either way, only the reaction reading does not — but a smaller `dt` does,
+ * proportionally to its square, because it shrinks the predict displacement itself.
+ *
+ * 16 closes a deliberately adversarial 2-bar repro (short members, no self-weight, a load
+ * large enough to move the joint ~5% of a member's length per step) from a ~7% spurious
+ * shear/bending reading down to numerical noise, and brings a real multi-member mechanism
+ * (`Treillis.slidep`) within ~10% of the value 128 substeps converges to — 32 gets closer
+ * still, but the jump from 32 to 128 barely moves it further, so 32 is already near the true
+ * fixed point; 16 trades a bit of that last stretch for half the cost. `DYNAMIC_SWEEPS` is
+ * left unchanged (not divided down) on purpose: shrinking it to hold the total sweep budget
+ * roughly constant looked promising in the same measurement, but every OTHER scenario this
+ * solver handles (collisions, longer chains, more DOF) needs its own convergence check before
+ * that trade is safe to make — a follow-up, not this one.
+ *
+ * Position/velocity carry over between substeps like any other warm start; only the LAST
+ * substep's reactions and `unsatisfied` diagnostics are kept, since earlier ones read an
+ * intermediate, not-yet-converged state.
+ */
+const DYNAMIC_SUBSTEPS = 16;
+
+/**
  * Advance a DYNAMIC-mode frame: gravity (today; any other force joins later) integrated in
  * the predict step, XPBD velocity read back from the whole displacement, everything else
- * the same rigid-constraint sweep `step_simulation` runs.
+ * the same rigid-constraint sweep `step_simulation` runs — split into `substeps` physical
+ * substeps (see `DYNAMIC_SUBSTEPS`), each running the full body below in turn.
  *
  * Deliberately narrower than `step_simulation` for now:
  *  - no motor-target refresh — a motor's `targetAngle` stays wherever the model was
@@ -1278,6 +1324,8 @@ export function step_dynamic_simulation(
   collisionsOn: boolean = false,
   /** Same reasoning as `collisionsOn`, gated independently — see `collision_links`. */
   floorOn: boolean = false,
+  /** See `DYNAMIC_SUBSTEPS`. Exposed for tests that need to isolate its effect. */
+  substeps: number = DYNAMIC_SUBSTEPS,
 ): DynamicSnapshot {
   const positions = new Map(model.nodes.positions);
   const angles = new Map(model.nodes.angles);
@@ -1309,177 +1357,215 @@ export function step_dynamic_simulation(
     });
   }
 
-  // ── Beam midpoints (dynamics-only, every frame) ── a virtual mass, not a real element:
-  // pinned onto the live segment so the beam's own rotational inertia comes out right — see
-  // `DynamicMassModel.beamMidpoints`. Position is recomputed from THIS frame's start/end
-  // regardless of any warm start, since it is fully determined by them (`t = 0.5`, never a
-  // free DOF) — but velocity DOES need seeding: left at 0, the predict step leaves the
-  // midpoint sitting at last frame's spot while `start`/`end` predict onward under their own
-  // warm-started velocity, so `FixedOnSegment` spends the whole sweep dragging it back into
-  // place — pulling `end` backwards right along with it, since the projection corrects both
-  // ends of a violated constraint. Seeding it at the segment's own linear interpolation of
-  // `start`/`end`'s velocity — exactly what a rigid rod's midpoint velocity actually is —
-  // starts the constraint already near-satisfied, so nothing gets eaten.
-  const midLinks: Link[] = [];
-  for (const { midKey, startKey, endKey } of model.dynamicMasses.beamMidpoints) {
-    const s = positions.get(startKey);
-    const e = positions.get(endKey);
-    if (!s || !e) continue;
-    positions.set(midKey, s.lerp(e, 0.5));
-    const vs = velocities.get(startKey) ?? ZERO;
-    const ve = velocities.get(endKey) ?? ZERO;
-    velocities.set(midKey, vs.lerp(ve, 0.5));
-    midLinks.push({
-      type: "FixedOnSegment",
-      ddl: 2,
-      key1: startKey,
-      key2: endKey,
-      key3: midKey,
-      t: 0.5,
-    });
-  }
+  // Whole-frame d'Alembert acceleration (phase 2) reads the velocity change across ALL
+  // substeps, never one alone — captured once, before the first, against `dt` (not `subDt`)
+  // below.
+  const velocitiesBeforeSolve = new Map(velocities);
+  const subDt = dt / substeps;
+  let reactions: LinkReaction[] | undefined;
+  let result: SolverMaps | undefined;
 
-  // ── Grab (transient, this frame only) ── no belt state to share: dynamic mode tracks none.
-  // The kinematic `Spring`/`MotorBeam`/`MotorAngle` links are dropped here: dynamic mode
-  // pulls them out of the sweep and applies real forces/torques below instead (see
-  // `spring-damper-model.ts`, `motor-model.ts`) — left in, they would double up, once as a
-  // soft position constraint and once as an actual force.
-  const links: Link[] = grab_links(model, grab, positions, new Map(), new Map()).filter(
-    (link) =>
-      link.type !== "Spring" &&
-      link.type !== "MotorBeam" &&
-      link.type !== "MotorAngle",
-  );
-  links.push(...midLinks);
-  if (collisionsOn || floorOn)
-    links.push(
-      ...collision_links(
+  for (let sub = 0; sub < substeps; sub++) {
+    const isLastSubstep = sub === substeps - 1;
+
+    // ── Beam midpoints (dynamics-only, every substep) ── a virtual mass, not a real
+    // element: pinned onto the live segment so the beam's own rotational inertia comes out
+    // right — see `DynamicMassModel.beamMidpoints`. Position is recomputed from THIS
+    // substep's start/end regardless of any warm start, since it is fully determined by
+    // them (`t = 0.5`, never a free DOF) — but velocity DOES need seeding: left at 0, the
+    // predict step leaves the midpoint sitting at last substep's spot while `start`/`end`
+    // predict onward under their own warm-started velocity, so `FixedOnSegment` spends the
+    // whole sweep dragging it back into place — pulling `end` backwards right along with
+    // it, since the projection corrects both ends of a violated constraint. Seeding it at
+    // the segment's own linear interpolation of `start`/`end`'s velocity — exactly what a
+    // rigid rod's midpoint velocity actually is — starts the constraint already
+    // near-satisfied, so nothing gets eaten.
+    const midLinks: Link[] = [];
+    for (const { midKey, startKey, endKey } of model.dynamicMasses.beamMidpoints) {
+      const s = positions.get(startKey);
+      const e = positions.get(endKey);
+      if (!s || !e) continue;
+      positions.set(midKey, s.lerp(e, 0.5));
+      const vs = velocities.get(startKey) ?? ZERO;
+      const ve = velocities.get(endKey) ?? ZERO;
+      velocities.set(midKey, vs.lerp(ve, 0.5));
+      midLinks.push({
+        type: "FixedOnSegment",
+        ddl: 2,
+        key1: startKey,
+        key2: endKey,
+        key3: midKey,
+        t: 0.5,
+      });
+    }
+
+    // ── Grab (transient, this substep only) ── no belt state to share: dynamic mode tracks
+    // none. The kinematic `Spring`/`MotorBeam`/`MotorAngle` links are dropped here: dynamic
+    // mode pulls them out of the sweep and applies real forces/torques below instead (see
+    // `spring-damper-model.ts`, `motor-model.ts`) — left in, they would double up, once as
+    // a soft position constraint and once as an actual force.
+    const links: Link[] = grab_links(model, grab, positions, new Map(), new Map()).filter(
+      (link) =>
+        link.type !== "Spring" &&
+        link.type !== "MotorBeam" &&
+        link.type !== "MotorAngle",
+    );
+    links.push(...midLinks);
+    if (collisionsOn || floorOn)
+      links.push(
+        ...collision_links(
+          model.collisionCandidates,
+          positions,
+          model.extent,
+          collisionsOn,
+          floorOn,
+          model.floorNormal,
+        ),
+      );
+
+    // ── User loads, spring/damper and motor forces, resolved against THIS substep's live
+    // positions and pre-predict velocities — all three follow the mechanism as it moves. ──
+    const { forces, torques } = resolve_load_forces(model.compiledLoads, positions);
+    const merge_forces = (extra: Map<string, Point2>) => {
+      for (const [key, f] of extra) forces.set(key, (forces.get(key) ?? ZERO).add(f));
+    };
+    merge_forces(resolve_spring_damper_forces(model.compiledSpringDampers, positions, velocities));
+    const motorContribution = resolve_motor_torques(
+      model.compiledMotors,
+      subDt,
+      positions,
+      velocities,
+      angleVelocities,
+      model.dynamicMasses.posMasses,
+      model.dynamicMasses.angleMasses,
+    );
+    merge_forces(motorContribution.forces);
+    for (const [key, t] of motorContribution.torques)
+      torques.set(key, (torques.get(key) ?? 0) + t);
+
+    // An anchored node never feels the predict step's acceleration (it cannot move
+    // regardless of `gx/gy` — see `PBD_kinematic_solver`), so its own weight has to be
+    // restated here as an ordinary force to reach the anchored-dof reaction fallback. A
+    // free node needs none of this: its weight already comes out mass-independent, exactly
+    // like real gravity.
+    const groundedWeights = new Map<string, Point2>();
+    for (const [key, mass] of model.dynamicMasses.groundedMasses)
+      if (mass > 0) groundedWeights.set(key, gravity.mul(mass));
+    merge_forces(groundedWeights);
+
+    // ── XPBD solve ── `velocities`/`angleVelocities` are mutated in place with the
+    // result. Snapshot the incoming velocity first: restitution below needs both what the
+    // substep started with and what the plain (inelastic) solve produced, to know how much
+    // bounce to add back.
+    const subVelocitiesBeforeSolve = new Map(velocities);
+    // Diagnostics (reactions, unsatisfied) only collected on the LAST substep — an earlier
+    // one reads an intermediate, not-yet-converged state (see `DYNAMIC_SUBSTEPS`), and
+    // collecting them costs a per-link bookkeeping step across the whole sweep a caller
+    // measuring pure solver performance skips.
+    const stepReactions: LinkReaction[] | undefined =
+      isLastSubstep && collectDiagnostics ? [] : undefined;
+    const dynamics: DynamicsInput = {
+      dt: subDt,
+      gx: gravity.x,
+      gy: gravity.y,
+      velocities,
+      angleVelocities,
+      forces,
+      torques,
+      angleMasses: model.dynamicMasses.angleMasses,
+      reactions: stepReactions,
+    };
+    result = PBD_kinematic_solver(
+      positions,
+      new Map<string, number>(),
+      model.dynamicMasses.posMasses,
+      new Map<string, number>(),
+      links,
+      sweeps,
+      undefined,
+      angles,
+      isLastSubstep && collectDiagnostics,
+      // Ignored: `dynamics` overrides the exit criterion with a fixed sweep count.
+      "motion",
+      0,
+      dynamics,
+    );
+    model.extent = result.extent;
+    reactions = stepReactions;
+
+    // ── Restitution: bounce whatever collision constraints actually resolved this
+    // substep, instead of leaving them at the plain solve's inelastic (velocity ≈ 0)
+    // response. Reads THIS substep's freshly solved extent, unlike `collision_links` above
+    // (which needed an estimate before the solve had run) — already the accurate answer,
+    // so no lag to spend. ──
+    if (collisionsOn || floorOn)
+      apply_collision_restitution(
         model.collisionCandidates,
-        positions,
-        model.extent,
+        result.positions,
+        model.dynamicMasses.posMasses,
+        subVelocitiesBeforeSolve,
+        velocities,
+        DEFAULT.RESTITUTION,
+        result.extent,
         collisionsOn,
         floorOn,
         model.floorNormal,
-      ),
-    );
+      );
+  }
 
-  // ── User loads, spring/damper and motor forces, resolved against THIS frame's live
-  // positions and pre-predict velocities — all three follow the mechanism as it moves. ──
-  const { forces, torques } = resolve_load_forces(model.compiledLoads, positions);
-  const merge_forces = (extra: Map<string, Point2>) => {
-    for (const [key, f] of extra) forces.set(key, (forces.get(key) ?? ZERO).add(f));
-  };
-  merge_forces(resolve_spring_damper_forces(model.compiledSpringDampers, positions, velocities));
-  const motorContribution = resolve_motor_torques(
-    model.compiledMotors,
-    dt,
-    positions,
-    velocities,
-    angleVelocities,
-    model.dynamicMasses.posMasses,
-    model.dynamicMasses.angleMasses,
-  );
-  merge_forces(motorContribution.forces);
-  for (const [key, t] of motorContribution.torques)
-    torques.set(key, (torques.get(key) ?? 0) + t);
-
-  // An anchored node never feels the predict step's acceleration (it cannot move regardless
-  // of `gx/gy` — see `PBD_kinematic_solver`), so its own weight has to be restated here as an
-  // ordinary force to reach the anchored-dof reaction fallback. A free node needs none of
-  // this: its weight already comes out mass-independent, exactly like real gravity.
-  const groundedWeights = new Map<string, Point2>();
-  for (const [key, mass] of model.dynamicMasses.groundedMasses)
-    if (mass > 0) groundedWeights.set(key, gravity.mul(mass));
-  merge_forces(groundedWeights);
-
-  // ── XPBD solve ── `velocities`/`angleVelocities` are mutated in place with the result.
-  // Snapshot the incoming velocity first: restitution below needs both what the frame
-  // started with and what the plain (inelastic) solve produced, to know how much bounce to
-  // add back.
-  const velocitiesBeforeSolve = new Map(velocities);
-  // Same flag as `unsatisfied`: both are for display, and both cost a per-link bookkeeping
-  // step across the whole sweep that a caller measuring pure solver performance skips.
-  const reactions: LinkReaction[] | undefined = collectDiagnostics ? [] : undefined;
-  const dynamics: DynamicsInput = {
-    dt,
-    gx: gravity.x,
-    gy: gravity.y,
-    velocities,
-    angleVelocities,
-    forces,
-    torques,
-    angleMasses: model.dynamicMasses.angleMasses,
-    reactions,
-  };
-  const result = PBD_kinematic_solver(
-    positions,
-    new Map<string, number>(),
-    model.dynamicMasses.posMasses,
-    new Map<string, number>(),
-    links,
-    sweeps,
-    undefined,
-    angles,
-    collectDiagnostics,
-    // Ignored: `dynamics` overrides the exit criterion with a fixed sweep count.
-    "motion",
-    0,
-    dynamics,
-  );
-  model.extent = result.extent;
-
-  // ── Restitution: bounce whatever collision constraints actually resolved this frame,
-  // instead of leaving them at the plain solve's inelastic (velocity ≈ 0) response. Reads
-  // THIS frame's freshly solved extent, unlike `collision_links` above (which needed an
-  // estimate before the solve had run) — already the accurate answer, so no lag to spend. ──
-  if (collisionsOn || floorOn)
-    apply_collision_restitution(
-      model.collisionCandidates,
-      result.positions,
-      model.dynamicMasses.posMasses,
-      velocitiesBeforeSolve,
-      velocities,
-      DEFAULT.RESTITUTION,
-      result.extent,
-      collisionsOn,
-      floorOn,
-      model.floorNormal,
-    );
+  // `substeps` is always >= 1, so the loop above ran at least once.
+  const finalResult = result!;
 
   // ── Into the snapshot's slots, fused keys decoupled back to one slot per original key ──
   const layout = model.layout;
   const { keys: fusedKeys, start, slots } = model.fill;
   const outPositions = new Float64Array(layout.keys.length * 2);
   const outVelocities = new Float64Array(layout.keys.length * 2);
+  const outAccelerations = new Float64Array(layout.keys.length * 2);
   for (let i = 0; i < fusedKeys.length; i++) {
-    const p = result.positions.get(fusedKeys[i]);
+    const p = finalResult.positions.get(fusedKeys[i]);
     const v = velocities.get(fusedKeys[i]);
     const x = p ? p.x : NaN;
     const y = p ? p.y : NaN;
     const vx = v ? v.x : NaN;
     const vy = v ? v.y : NaN;
+    // For d'Alembert (see docs/plan-efforts-interieurs.md phase 2): the frame's whole
+    // velocity change, straight from the two maps the solve itself produced — never a
+    // finite difference across recorded (decimated, interpolated) snapshots. Missing on
+    // either side reads as 0 (at rest), not NaN: an anchored dof simply never gets a
+    // `velocities` entry, and a dof with no prior frame to warm-start from started at rest.
+    const vBefore = velocitiesBeforeSolve.get(fusedKeys[i]) ?? ZERO;
+    const vAfter = velocities.get(fusedKeys[i]) ?? ZERO;
+    // `dt = 0` is the re-projection step (see `Recorder.advance`'s first instant): no time
+    // elapsed to divide by, and both velocities are 0 there regardless.
+    const ax = dt > 0 ? (vAfter.x - vBefore.x) / dt : 0;
+    const ay = dt > 0 ? (vAfter.y - vBefore.y) / dt : 0;
     for (let s = start[i]; s < start[i + 1]; s++) {
       outPositions[2 * slots[s]] = x;
       outPositions[2 * slots[s] + 1] = y;
       outVelocities[2 * slots[s]] = vx;
       outVelocities[2 * slots[s] + 1] = vy;
+      outAccelerations[2 * slots[s]] = ax;
+      outAccelerations[2 * slots[s] + 1] = ay;
     }
   }
   // The reserved grab slots: only the bridge node this frame's own grab added, if any — and
   // never a velocity, since a grab bridge does not exist across frames to warm-start one.
   for (const key of GRAB_KEYS) {
     const slot = layout.index.get(key)!;
-    const p = result.positions.get(key);
+    const p = finalResult.positions.get(key);
     outPositions[2 * slot] = p ? p.x : NaN;
     outPositions[2 * slot + 1] = p ? p.y : NaN;
     outVelocities[2 * slot] = NaN;
     outVelocities[2 * slot + 1] = NaN;
+    outAccelerations[2 * slot] = NaN;
+    outAccelerations[2 * slot + 1] = NaN;
   }
 
   const outAngles = new Float64Array(layout.angleKeys.length);
   const outAngleVelocities = new Float64Array(layout.angleKeys.length);
   for (let i = 0; i < layout.angleKeys.length; i++) {
-    const a = result.angles.get(layout.angleKeys[i]);
+    const a = finalResult.angles.get(layout.angleKeys[i]);
     outAngles[i] = a === undefined ? NaN : a;
     const v = angleVelocities.get(layout.angleKeys[i]);
     outAngleVelocities[i] = v === undefined ? NaN : v;
@@ -1491,9 +1577,13 @@ export function step_dynamic_simulation(
     positions: outPositions,
     angles: outAngles,
     velocities: outVelocities,
+    accelerations: outAccelerations,
     angleVelocities: outAngleVelocities,
-    unsatisfied: result.unsatisfied,
+    unsatisfied: finalResult.unsatisfied,
     reactions,
+    beamCohesion: reactions
+      ? resolve_beam_cohesion(model.beamCohesionSpecs, reactions, finalResult.positions)
+      : undefined,
   };
 }
 
@@ -1580,10 +1670,12 @@ export function dynamic_snapshot_at(
     positions: lerp(a.positions, b.positions),
     angles: lerp(a.angles, b.angles),
     velocities: lerp(a.velocities, b.velocities),
+    accelerations: lerp(a.accelerations, b.accelerations),
     angleVelocities: lerp(a.angleVelocities, b.angleVelocities),
     // Diagnostics belong to a state the solver actually produced.
     unsatisfied: a.unsatisfied,
     reactions: a.reactions,
+    beamCohesion: a.beamCohesion,
   };
 }
 

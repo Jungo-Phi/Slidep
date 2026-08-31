@@ -99,6 +99,7 @@ const adaptive = (baseSymbol: string, baseFactor: number = 1): QuantityKind => (
 });
 
 export const FORCE = adaptive("N");
+export const LINEAR_VELOCITY = adaptive("m/s");
 export const MOMENT: QuantityKind = {
   ...adaptive("N·m"),
   submultipleOnSuffix: "m",
@@ -125,6 +126,17 @@ export const LINEAR_MASS: QuantityKind = {
 export const SURFACE_MASS: QuantityKind = {
   ...adaptive("g/m²", 1e-3),
   renamedFrom: { exp: 6, symbol: "T/m²" },
+};
+export const STRESS = adaptive("Pa");
+/** Fixed, not adaptive: material densities span a narrow range (~0.9 to ~20 g/cm³) that stays
+ *  readable in one unit, unlike `MASS` or `FORCE` which can land anywhere across many decades.
+ *  `valueSI` is stored in kg/m³; "kg/m³" itself still parses as an alternate typed unit. */
+export const DENSITY: QuantityKind = {
+  adaptive: false,
+  units: [
+    { symbol: "g/cm³", factor: 1000 },
+    { symbol: "kg/m³", factor: 1 },
+  ],
 };
 
 /**
@@ -180,7 +192,11 @@ export function display_unit(
   // In units of `base`, not of `valueSI` — the two coincide everywhere but `MASS`, whose
   // base (the gram) isn't the unit `valueSI` is actually stored in (the kilogram).
   const magnitude = Math.abs(valueSI) / base.factor;
-  if (magnitude === 0) return { symbol: base.symbol, factor: base.factor };
+  // A diverging solver can feed a NaN/Infinity value through here — fall back to the base
+  // unit rather than let an unbucketable exponent reach the `SI_PREFIXES.find` below.
+  if (magnitude === 0 || !Number.isFinite(magnitude)) {
+    return { symbol: base.symbol, factor: base.factor };
+  }
   // Rounded before the bucket is picked, not for the mantissa itself: `floor` is
   // discontinuous exactly at a bucket edge, so a magnitude landing a single ULP under a
   // round one (1 N·m read back as 0.9999999999999999, say — routine for a value a live

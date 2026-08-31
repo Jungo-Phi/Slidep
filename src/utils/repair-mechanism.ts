@@ -69,17 +69,30 @@ export function repair_mechanism(mechanism: Mechanism): {
     const byID = new Map<ID, MechanicalElement>(
       current.mechanicalElements.map((el) => [el.id, el]),
     );
+    // Library entries — a mechanism's own materials/profiles — are reference targets too
+    // (`BeamElement.materialID`/`profileID`), but not mechanical elements, so they need
+    // their own lookup rather than `byID`.
+    const materialIDs = new Set(current.materials.map((m) => m.id));
+    const profileIDs = new Set(current.profiles.map((p) => p.id));
 
     // A reference is dead when nothing answers to it, or when what answers is
-    // not a kind this field accepts. Only mechanical elements are ever targets.
+    // not a kind this field accepts.
     const is_dead = (spec: AnyRefSpec) => (id: ID) => {
       const target = byID.get(id);
-      return !target || !spec.target.includes(target.type);
+      if (target) return !spec.target.includes(target.type);
+      if (materialIDs.has(id)) return !spec.target.includes("material");
+      if (profileIDs.has(id)) return !spec.target.includes("profile");
+      return true;
     };
 
     const name = (id: ID) => {
       const el = byID.get(id);
-      return el ? shown_element_name(el) : legible_id(id);
+      if (el) return shown_element_name(el);
+      const material = current.materials.find((m) => m.id === id);
+      if (material) return material.name;
+      const profile = current.profiles.find((p) => p.id === id);
+      if (profile) return profile.name;
+      return legible_id(id);
     };
 
     /**

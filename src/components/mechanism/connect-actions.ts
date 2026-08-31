@@ -12,6 +12,7 @@ import type {
   SlidepElement,
   UnionElement,
 } from "../../types/element";
+import type { MaterialDef, ProfileDef } from "../../types/material";
 import { Action, ConnectsActionType } from "../../types";
 import { Point2 } from "../../types/point2";
 import { HoveredPart, names_element } from "../../types/hovered-part";
@@ -33,6 +34,20 @@ export function get_mechanical_element_from_id(
   const element = mechanicalElements.find((element) => element.id === id);
   if (element) return element;
   throw new Error(`Mechanical element with id "${legible_id(id)}" not found`);
+}
+
+/** Returns the mechanism's own material from the id — a library entry, never an element. */
+export function get_material_from_id(id: ID, materials: MaterialDef[]): MaterialDef {
+  const material = materials.find((material) => material.id === id);
+  if (material) return material;
+  throw new Error(`Material with id "${legible_id(id)}" not found`);
+}
+
+/** Returns the mechanism's own profile from the id — same reasoning as `get_material_from_id`. */
+export function get_profile_from_id(id: ID, profiles: ProfileDef[]): ProfileDef {
+  const profile = profiles.find((profile) => profile.id === id);
+  if (profile) return profile;
+  throw new Error(`Profile with id "${legible_id(id)}" not found`);
 }
 
 /** Returns the constraint element from the id. */

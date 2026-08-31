@@ -18,6 +18,7 @@ import type {
   SliderElement,
   SpringElement,
 } from "../../types/element";
+import type { MaterialDef, ProfileDef } from "../../types/material";
 
 /**
  * Two edges holding the same two nodes collapse into one — a spring and a damper
@@ -36,6 +37,14 @@ const BAR = id();
 const OTHER = id();
 const SLIDER_ON_BAR = id();
 const SLIDER_ON_OTHER = id();
+const MATERIAL_ID = id();
+const PROFILE_ID = id();
+const MATERIALS: MaterialDef[] = [
+  { id: MATERIAL_ID, name: "test", E: 1, Re: 1, rho: 1, readOnly: false },
+];
+const PROFILES: ProfileDef[] = [
+  { id: PROFILE_ID, name: "test", shape: { kind: "rect", b: 1, h: 1 } },
+];
 
 const pivot = (pid: ID, x: number, edges: ID[] = []): PivotElement => ({
   type: "pivot",
@@ -76,7 +85,8 @@ const beam = (
   fixedNodeStartID: start,
   fixedNodeEndID: end,
   fixedNodesBodyIDs: body,
-  linearMass: 1,
+  materialID: MATERIAL_ID,
+  profileID: PROFILE_ID,
 });
 
 const spring = (
@@ -120,6 +130,8 @@ function mechanism(
     mechanicalElements,
     constraintElements,
     loads,
+    materials: MATERIALS,
+    profiles: PROFILES,
     history: [],
     future: [],
   };

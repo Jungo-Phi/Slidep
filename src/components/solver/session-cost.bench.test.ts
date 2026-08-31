@@ -92,7 +92,12 @@ describe("ce qu'une session coûte", () => {
       const mechanism = loadFixture(json);
       const ms = median(40, () => {
         const nodes = get_sim_nodes(mechanism.mechanicalElements);
-        const links = get_links_simulation(mechanism.mechanicalElements, nodes);
+        const links = get_links_simulation(
+          mechanism.mechanicalElements,
+          nodes,
+          mechanism.materials,
+          mechanism.profiles,
+        );
         get_sim_degrees_of_freedom(nodes, links);
       });
       console.log(

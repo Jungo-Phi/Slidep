@@ -2,7 +2,7 @@
  * Runtime state types for slidep simulation
  */
 
-import { ID, LoadElement, MechanicalElement } from "./element";
+import { ConstraintElement, ID, LoadElement, MechanicalElement } from "./element";
 
 /**
  * Simulation speed presets
@@ -45,6 +45,13 @@ export type LinkReaction =
       kind: "force";
       fx: number;
       fy: number;
+      /** This reaction's emitting link's index in `step_dynamic_simulation`'s per-frame
+       *  `links` array (Spring/MotorBeam/MotorAngle already dropped) — see
+       *  `build_beam_cohesion_specs`. A plain number, not the link itself: this is written
+       *  once per reaction in the solver's hot per-frame sweep, where an extra allocation
+       *  (an array, an object) is the dominant cost. Undefined for a reaction with no single
+       *  emitting link (there is none today, but the field stays optional for that case). */
+      linkIndex?: number;
     }
   | {
       type: string;
@@ -53,7 +60,45 @@ export type LinkReaction =
       atAnchor: boolean;
       kind: "torque";
       torque: number;
+      /** See the `force` variant's `linkIndex`. */
+      linkIndex?: number;
     };
+
+/**
+ * A beam's own cohesion torsor at each end, and the point loads its attached nodes
+ * transmit — see docs/plan-efforts-interieurs.md phase 3. Isolates what beam A itself
+ * carries at a shared, coincidence-fused key from whatever ELSE is coincident there (another
+ * beam, a support, a motor): `LinkReaction`/`force_at` alone cannot do that, since two
+ * elements fused at the same key report under the very same `key` string.
+ */
+export interface BeamCohesion {
+  beamID: ID;
+  /**
+   * What this beam's OWN rigidity (its length link, any welded-hub couple, any attached
+   * body's pin) applies onto whatever is coincident at its start/end — the raw
+   * `LinkReaction` sense, uniform at both ends, NOT `force_at`'s anchor-conditional
+   * "classical support reaction". Deliberately not yet the cut torsor `R_coh`: the two ends
+   * need opposite further treatment to become that (see `cohesion-field.ts`'s
+   * `r_coh_start`/`r_coh_end`), an asymmetry inherent to the cut convention itself.
+   */
+  /** `atAnchor`: whether this dof was immovable in the solve (`w = 0`) — same sense as
+   *  `LinkReaction.atAnchor`. `cohesion-field.ts` reads it to tell a genuine support reading
+   *  apart from a free dof's own tautological cancellation of a directly-applied load. */
+  start: { fx: number; fy: number; m: number; atAnchor: boolean };
+  /** Same reading at the beam's OTHER end — independent of `start` (no integration along
+   *  the span involved), so `cohesion-field.ts` can use it as the loop-residual reference. */
+  end: { fx: number; fy: number; m: number; atAnchor: boolean };
+  /**
+   * Force each attached node (a join/mass/slider body pinned or sliding on this beam's
+   * span) transmits TO the beam, at its CURRENT abscissa (0 = start, 1 = end, recomputed
+   * every frame from live positions — a slider's abscissa moves, see
+   * `Point2.parameter_on_segment`). Excludes the beam's own `:mid` inertia artifact
+   * (`DynamicMassModel.beamMidpoints`): that reaction is not tagged into any beam's
+   * `internalLinkIndices` in the first place, since the midpoint's `FixedOnSegment` is
+   * built fresh every frame outside the compiled `model.links` this is precomputed from.
+   */
+  attachedNodes: { nodeID: ID; s: number; fx: number; fy: number }[];
+}
 
 /**
  * Which key sits at which slot of a snapshot's arrays. Held once per recording and shared
@@ -136,12 +181,24 @@ export interface DynamicSnapshot extends SimulationSnapshot {
   angles: Float64Array;
   /** vx and vy interleaved, 2 per `layout.keys` entry — same slotting as `positions`. */
   velocities: Float64Array;
+  /**
+   * ax and ay interleaved, 2 per `layout.keys` entry — same slotting as `positions`. The
+   * frame's whole `(v_after − v_before) / dt`, taken where the frame itself is computed
+   * (`step_dynamic_simulation`) rather than differentiated from these (decimated,
+   * interpolated) snapshots afterward — see docs/plan-efforts-interieurs.md phase 2. A dof
+   * with no velocity change reads 0, not NaN: an anchored dof never accelerates, and a dof
+   * with no prior frame to warm-start from is taken as starting at rest.
+   */
+  accelerations: Float64Array;
   /** One per `layout.angleKeys` entry — same slotting as `angles`. */
   angleVelocities: Float64Array;
   unsatisfied?: ConstraintResidual[];
   /** Per-constraint reaction forces/torques this frame — see `LinkReaction`. Undefined when
    *  not collected (the same optionality as `unsatisfied`). */
   reactions?: LinkReaction[];
+  /** Each beam's own cohesion torsor, resolved from `reactions` — see `BeamCohesion`.
+   *  Undefined under the same `collectDiagnostics` gate as `reactions`. */
+  beamCohesion?: BeamCohesion[];
 }
 
 /**
@@ -159,6 +216,73 @@ export interface ParameterSnapshot {
   mechanicalElements: MechanicalElement[];
   loads: LoadElement[];
 }
+
+/**
+ * Running max magnitude of each physical "kind" of quantity found anywhere in the
+ * mechanism, over the whole recording — the reference scale a value is judged negligible
+ * against (`negligibility-pool.ts`'s `is_negligible`). A residual reaction of 1e-6 N next
+ * to a real 500 N one, or a 0.1mm wobble on a 10m mechanism, needs SOME scale to be
+ * negligible relative TO — never an arbitrary absolute floor, since a featherweight
+ * mechanism's forces are all small and none of them should read as "nothing".
+ */
+export interface NegligibilityPool {
+  /** Identity of the mechanism this pool was built from — an edit invalidates it (see
+   *  `extend_negligibility_pool`'s `appendable` check). */
+  elements: MechanicalElement[];
+  constraints: ConstraintElement[];
+  /** Snapshots folded in so far, and the last one — same rebuild-vs-append test
+   *  `StressScaleCache` uses (`cohesion-field.ts`). */
+  consumed: number;
+  boundary: DynamicSnapshot | null;
+  /** m — seeded from the mechanism's own bounding-box diagonal, then grown by any
+   *  recorded displacement past it. */
+  length: number;
+  /** rad */
+  angle: number;
+  /** N */
+  force: number;
+  /** N·m */
+  moment: number;
+  /** m/s */
+  linearVelocity: number;
+  /** rad/s */
+  angularVelocity: number;
+  /** Absolute per-kind floor these fields are seeded from and never fall below — the
+   *  mechanism's own geometry where its dimension allows it, a fixed product constant
+   *  otherwise (see `pool_floors` in `negligibility-pool.ts`). Recomputed only when the
+   *  pool itself is rebuilt (a geometry change), not on every extend. */
+  floors: NegligibilityFloors;
+}
+
+export interface NegligibilityFloors {
+  length: number;
+  angle: number;
+  force: number;
+  moment: number;
+  linearVelocity: number;
+  angularVelocity: number;
+}
+
+export const EMPTY_NEGLIGIBILITY_POOL: NegligibilityPool = {
+  elements: [],
+  constraints: [],
+  consumed: 0,
+  boundary: null,
+  length: 0,
+  angle: 0,
+  force: 0,
+  moment: 0,
+  linearVelocity: 0,
+  angularVelocity: 0,
+  floors: {
+    length: 0,
+    angle: 0,
+    force: 0,
+    moment: 0,
+    linearVelocity: 0,
+    angularVelocity: 0,
+  },
+};
 
 // ─────────────────────────────────────────────────────────────
 // Main runtime state
@@ -194,6 +318,10 @@ export interface RuntimeState {
    * because it would pull on frames the solver is not computing.
    */
   scrubbed: boolean;
+
+  /** Running per-kind scale, for hiding/flattening negligible reactions, velocities, and
+   *  probe curves — see `NegligibilityPool`. */
+  negligibilityPool: NegligibilityPool;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -221,4 +349,5 @@ export const DEFAULT_RUNTIME_STATE: RuntimeState = {
   simulationSnapshots: [],
   parameterSnapshots: [],
   scrubbed: false,
+  negligibilityPool: EMPTY_NEGLIGIBILITY_POOL,
 };

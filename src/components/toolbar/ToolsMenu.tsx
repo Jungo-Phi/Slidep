@@ -1,6 +1,13 @@
 import React, { useState } from "react";
 import { Box, Divider, IconButton, Menu, Tooltip } from "@mui/material";
-import { Add, Info, Redo, Remove, Undo, ZoomIn } from "@mui/icons-material";
+import {
+  Add,
+  Info,
+  Redo,
+  Remove,
+  Undo,
+  ZoomIn,
+} from "@mui/icons-material";
 import { Lang } from "../../i18n";
 import { t } from "../../i18n";
 import { Mechanism, ViewportState } from "../../types";
@@ -80,7 +87,7 @@ const ZoomControls: React.FC<ZoomControlsProps> = ({
 
   return (
     <Box sx={{ display: "flex", alignItems: "center" }}>
-      <Tooltip disableInteractive title={t("toolbar_zoom_out")}>
+      <Tooltip disableInteractive title={t("zoom_out")}>
         <span>
           <IconButton
             color="inherit"
@@ -93,7 +100,7 @@ const ZoomControls: React.FC<ZoomControlsProps> = ({
           </IconButton>
         </span>
       </Tooltip>
-      <Tooltip disableInteractive title={t("toolbar_recenter")}>
+      <Tooltip disableInteractive title={t("recenter")}>
         <Box
           component="button"
           onClick={() =>
@@ -126,7 +133,7 @@ const ZoomControls: React.FC<ZoomControlsProps> = ({
             : "—"}
         </Box>
       </Tooltip>
-      <Tooltip disableInteractive title={t("toolbar_zoom_in")}>
+      <Tooltip disableInteractive title={t("zoom_in")}>
         <span>
           <IconButton
             color="inherit"
@@ -148,7 +155,7 @@ const ZoomMenu: React.FC<ZoomControlsProps> = (props) => {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   return (
     <>
-      <Tooltip disableInteractive title={t("toolbar_zoom")}>
+      <Tooltip disableInteractive title={t("zoom")}>
         <IconButton
           color="inherit"
           size="small"
@@ -254,7 +261,7 @@ export const ToolsMenu: React.FC<ToolsMenuProps> = ({
     />
 
     {/* Undo / Redo */}
-    <Tooltip disableInteractive title={t("toolbar_undo")}>
+    <Tooltip disableInteractive title={t("undo")}>
       <span>
         <IconButton
           color="inherit"
@@ -266,7 +273,7 @@ export const ToolsMenu: React.FC<ToolsMenuProps> = ({
         </IconButton>
       </span>
     </Tooltip>
-    <Tooltip disableInteractive title={t("toolbar_redo")}>
+    <Tooltip disableInteractive title={t("redo")}>
       <span>
         <IconButton
           color="inherit"
@@ -302,7 +309,7 @@ export const ToolsMenu: React.FC<ToolsMenuProps> = ({
     />
 
     {/* À propos */}
-    <Tooltip disableInteractive title={t("toolbar_about")}>
+    <Tooltip disableInteractive title={t("about")}>
       <IconButton color="inherit" size="small" onClick={onOpenAbout}>
         <Info sx={{ fontSize: 20 }} />
       </IconButton>

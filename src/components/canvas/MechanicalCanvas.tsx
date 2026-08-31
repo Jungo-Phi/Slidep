@@ -3,9 +3,11 @@ import {
   Action,
   ChangeDimensionActionType,
   AppMode,
+  BeamStressLens,
   CanvasEvent,
   CanvasState,
   ConstraintElement,
+  HoveredAbscissa,
   HoveredPart,
   ID,
   Mechanism,
@@ -17,16 +19,21 @@ import {
   ScreenPoint,
   WorldPoint,
 } from "../../types";
-import { world2screen, screen2world } from "../../utils";
+import { world2screen, world2screen_vec, screen2world } from "../../utils";
 import {
   CONSTRAINT_REVEAL_COOLDOWN_MS,
   CONSTRAINT_REVEAL_FADE_MS,
   MODE_ANIMATION,
+  STROKE_WIDTHS,
+  COLORS,
+  DIM,
 } from "../../constants/rendering-specs";
 import { Box, Tooltip } from "@mui/material";
 import { type Instance as PopperInstance } from "@popperjs/core";
 import { CanvasHighlight, draw_mechanical_canvas } from "./draw-canvas";
 import { RedundancySymbol } from "../solver/redundancy-symbols";
+import type { CohesionField } from "../solver/cohesion-field";
+import type { BeamElement } from "../../types/element";
 import { canvasStateReducer } from "./canvas-state-reducer";
 import { get_element_from_id } from "../mechanism/connect-actions";
 import { load_value_anchor } from "../../utils/load-geom";
@@ -56,24 +63,25 @@ import {
 
 /** What `OnCanvasValueEditor` formats and parses the element's value as — `undefined` for
  *  `gear-ratio` (dimensionless, "ratio" mode reads it directly). */
-const VALUE_EDITOR_KIND: Partial<Record<UnionElement["type"], QuantityKind>> =
-  {
-    "dimension-edge": LENGTH,
-    "dimension-node-to-node": LENGTH,
-    "dimension-edge-to-node": LENGTH,
-    "dimension-radius": LENGTH,
-    "dimension-belt": LENGTH,
-    "dimension-angle": ANGLE,
-    force: FORCE,
-    moment: MOMENT,
-    "distributed-force": LOAD_INTENSITY,
-  };
+const VALUE_EDITOR_KIND: Partial<Record<UnionElement["type"], QuantityKind>> = {
+  "dimension-edge": LENGTH,
+  "dimension-node-to-node": LENGTH,
+  "dimension-edge-to-node": LENGTH,
+  "dimension-radius": LENGTH,
+  "dimension-belt": LENGTH,
+  "dimension-angle": ANGLE,
+  force: FORCE,
+  moment: MOMENT,
+  "distributed-force": LOAD_INTENSITY,
+};
 import { OnCanvasProbeMetricSelector } from "./ProbeMetricSelector";
 import {
   draw_axes,
   draw_floor,
   draw_graduations,
   draw_grid,
+  draw_stress_legend,
+  draw_signed_stress_legend,
   draw_overlay_arrow,
   draw_overlay_arrow_label,
   draw_overlay_moment,
@@ -170,6 +178,11 @@ interface MechanicalCanvasProps {
   snapToGrid: boolean;
   snapSettings: SnapSettings;
   showGrid: boolean;
+  /** Which reading tints every beam's fill — mechanism-wide, see `BeamStressLens`'s own doc
+   *  (docs/plan-efforts-interieurs.md phase 9). */
+  beamStressLens: BeamStressLens;
+  /** Trajectory overlay style: dots at fixed spacing versus one continuous stroke. */
+  trajectoryDotted: boolean;
   /**
    * What the recording loop publishes each frame, or `null` outside simulation.
    *
@@ -195,6 +208,14 @@ interface MechanicalCanvasProps {
   modePreviewRef: React.RefObject<Mechanism | null>;
   /** How a redundant constraint the analysis panel is pointing at would yield. */
   redundancySymbols: RedundancySymbol[];
+  /** An abscissa hovered on the analysis panel's N/T/Mf diagrams, marked on the beam — see
+   *  docs/plan-efforts-interieurs.md phase 5bis. `null` outside that hover. */
+  hoveredAbscissa: HoveredAbscissa | null;
+  /** Which of the library dialog's two sections tints the beams — undefined while that
+   *  dialog is closed. */
+  librarySection?: "materials" | "profiles";
+  /** The row hovered there, if any — accentuates its beams and fades the rest. */
+  hoveredLibraryEntryID?: ID | null;
 }
 
 /** The simulated mechanism and probe trajectories at the cursor, for one frame. */
@@ -207,6 +228,26 @@ export interface LiveFrame {
   /** The moment half of a reaction, wherever a rigid weld's force-couple carries one —
    *  same gating as `overlayArrows`. */
   overlayMoments: OverlayMoment[];
+  /**
+   * Every beam's cohesion field, dynamic mode only — docs/plan-efforts-interieurs.md
+   * phase 4. Consumed by the analysis panel's N/T/Mf diagrams (phase 5bis) and the beam-fill
+   * lens below (phase 9).
+   */
+  cohesionFields?: CohesionField[];
+  /** The `normal` lens' shared scale (`StressScaleCache.maxNormal`) — the highest `|N/A|` ever
+   *  recorded, Pa. `0` outside dynamic mode or before anything has been recorded yet. */
+  normalStressScale: number;
+  /** The `bending` lens' shared scale (`StressScaleCache.maxBending`) — the highest
+   *  `|Mf·v/I|` ever recorded, Pa. `0` outside dynamic mode or before anything has been
+   *  recorded yet. */
+  bendingStressScale: number;
+  /** The `utilization` lens' shared ramp top (`StressScaleCache.maxStress`, `cohesion-field.ts`)
+   *  — the highest `|σ|max` ever recorded, Pa. `0` outside dynamic mode or before anything has
+   *  been recorded yet. */
+  stressScale: number;
+  /** The `shear` lens' shared ramp top (`StressScaleCache.maxShear`) — the highest `τ_max`
+   *  ever recorded, Pa. `0` outside dynamic mode or before anything has been recorded yet. */
+  shearStressScale: number;
 }
 
 const EMPTY_TRAJECTORIES: TrajectoryDisplay[] = [];
@@ -241,10 +282,15 @@ export const MechanicalCanvas = forwardRef<
       snapToGrid,
       snapSettings,
       showGrid,
+      beamStressLens,
+      trajectoryDotted,
       liveFrameRef,
       highlight,
       modePreviewRef,
       redundancySymbols,
+      hoveredAbscissa,
+      librarySection,
+      hoveredLibraryEntryID,
     },
     ref,
   ) => {
@@ -287,6 +333,12 @@ export const MechanicalCanvas = forwardRef<
     highlightRef.current = highlight;
     const redundancySymbolsRef = useRef(redundancySymbols);
     redundancySymbolsRef.current = redundancySymbols;
+    const hoveredAbscissaRef = useRef(hoveredAbscissa);
+    hoveredAbscissaRef.current = hoveredAbscissa;
+    const librarySectionRef = useRef(librarySection);
+    librarySectionRef.current = librarySection;
+    const hoveredLibraryEntryIDRef = useRef(hoveredLibraryEntryID);
+    hoveredLibraryEntryIDRef.current = hoveredLibraryEntryID;
     const onSpaceKeyRef = useRef(onSpaceKey);
     onSpaceKeyRef.current = onSpaceKey;
     const onEscapeKeyRef = useRef(onEscapeKey);
@@ -462,7 +514,8 @@ export const MechanicalCanvas = forwardRef<
       if (showGrid) draw_grid(ctx, viewport, canvas.width, canvas.height);
 
       draw_axes(ctx, viewport, canvas.width, canvas.height);
-      if (showGrid) draw_graduations(ctx, viewport, canvas.width, canvas.height);
+      if (showGrid)
+        draw_graduations(ctx, viewport, canvas.width, canvas.height);
 
       // Under the mechanism, like the grid: it is scaffolding for the gesture in
       // progress, not something being drawn.
@@ -484,12 +537,7 @@ export const MechanicalCanvas = forwardRef<
 
       // Trajectoires des points sondés, sous les éléments du mécanisme.
       for (const trajectory of live?.trajectories ?? EMPTY_TRAJECTORIES)
-        draw_trajectory(
-          ctx,
-          viewport,
-          trajectory,
-          false /* TODO : add variable */,
-        );
+        draw_trajectory(ctx, viewport, trajectory, trajectoryDotted);
 
       // Retour visuel undo/redo : révèle les recréations, prépare les fantômes.
       processConstraintChange();
@@ -580,7 +628,67 @@ export const MechanicalCanvas = forwardRef<
         highlight: highlightRef.current,
         redundancySymbols: redundancySymbolsRef.current,
         now,
+        libraryTint: librarySectionRef.current
+          ? {
+              section: librarySectionRef.current,
+              materials: mechanismRef.current.materials,
+              profiles: mechanismRef.current.profiles,
+              hoveredEntryID: hoveredLibraryEntryIDRef.current ?? null,
+            }
+          : undefined,
+        // Feeds the beam-fill lens' own fill — undefined outside dynamic mode, where there is
+        // no cohesion field to color it with.
+        materials: mechanismRef.current.materials,
+        profiles: mechanismRef.current.profiles,
+        cohesionFields:
+          appModeRef.current === "dynamic" ? live?.cohesionFields : undefined,
+        beamStressLens,
+        stressScale: live?.stressScale ?? 0,
+        normalStressScale: live?.normalStressScale ?? 0,
+        bendingStressScale: live?.bendingStressScale ?? 0,
+        shearStressScale: live?.shearStressScale ?? 0,
       });
+
+      // The active beam-fill lens' own legend (phase 9) — screen-anchored, drawn only while
+      // there is a mechanism with at least one beam to read it against.
+      if (
+        appModeRef.current === "dynamic" &&
+        beamStressLens !== "none" &&
+        mechanismRef.current.mechanicalElements.some((el) => el.type === "beam")
+      ) {
+        switch (beamStressLens) {
+          case "utilization":
+            draw_stress_legend(
+              ctx,
+              canvas.height,
+              live?.stressScale ?? 0,
+              t("stress_legend_overstress"),
+            );
+            break;
+          case "normal":
+            draw_signed_stress_legend(
+              ctx,
+              canvas.height,
+              live?.normalStressScale ?? 0,
+              t("stress_legend_compression"),
+              t("stress_legend_tension"),
+            );
+            break;
+          case "bending":
+            // `STRESS_RAMP` on a plain magnitude, no swatch — see `magnitude_stress_color`'s
+            // own doc for why `bending` has no sign to show, unlike `normal`.
+            draw_stress_legend(ctx, canvas.height, live?.bendingStressScale ?? 0);
+            break;
+          case "shear":
+            draw_stress_legend(
+              ctx,
+              canvas.height,
+              live?.shearStressScale ?? 0,
+              t("stress_legend_overstress"),
+            );
+            break;
+        }
+      }
 
       // Vitesses / réactions mesurées, par-dessus les éléments qu'elles habillent. Seule une
       // réaction (jamais une vitesse — son unité affichée n'est pas encore la bonne, voir
@@ -605,15 +713,53 @@ export const MechanicalCanvas = forwardRef<
                 overlay_arrow_hit(mouseScreen, viewport, arrow),
             )
           : undefined;
-      for (const arrow of overlayArrows) draw_overlay_arrow(ctx, viewport, arrow);
+      for (const arrow of overlayArrows)
+        draw_overlay_arrow(ctx, viewport, arrow);
       for (const moment of overlayMoments)
         draw_overlay_moment(ctx, viewport, moment);
       // The hovered label last, on top of every arrow/moment just drawn: an arrow drawn
       // later in the loops above must not obstruct another one's label.
       if (hoveredArrow) draw_overlay_arrow_label(ctx, viewport, hoveredArrow);
-      if (hoveredMoment) draw_overlay_moment_label(ctx, viewport, hoveredMoment);
+      if (hoveredMoment)
+        draw_overlay_moment_label(ctx, viewport, hoveredMoment);
+
+      // The abscissa hovered on the selected beam's N/T/Mf diagrams (panel) — docs/plan-
+      // efforts-interieurs.md phase 5bis. A tick crossing the beam, not a probe marker
+      // (`draw_probe`'s circle+crosshair means something else — a measurement point).
+      const hovered = hoveredAbscissaRef.current;
+      if (hovered) {
+        const beam = mechanismRef.current.mechanicalElements.find(
+          (el): el is BeamElement =>
+            el.type === "beam" && el.id === hovered.beamID,
+        );
+        const length = beam?.positionEnd.distance_to(beam.positionStart);
+        if (beam && length && length > 1e-9) {
+          const ratio = Math.max(0, Math.min(1, hovered.s / length));
+          const point = beam.positionStart.lerp(beam.positionEnd, ratio);
+          const perp = world2screen_vec(
+            beam.positionEnd.sub(beam.positionStart),
+            viewport,
+          )
+            .normalize()
+            .perp();
+          ctx.save();
+          ctx.strokeStyle = COLORS.ELEMENT_STROKE;
+          ctx.lineWidth = STROKE_WIDTHS.HOVERED;
+          const half = DIM.BEAM_WIDTH;
+          const position = world2screen(point, viewport);
+          const a = position.add(perp.mul(half));
+          const b = position.sub(perp.mul(half));
+          ctx.beginPath();
+          ctx.moveTo(a.x, a.y);
+          ctx.lineTo(b.x, b.y);
+          ctx.stroke();
+          ctx.restore();
+        }
+      }
     }, [
       showGrid,
+      beamStressLens,
+      trajectoryDotted,
       snapSettings.highlightSnap,
       snapSettings.showAngleGuides,
       computeVisibleConstraints,
@@ -850,11 +996,6 @@ export const MechanicalCanvas = forwardRef<
         }
         if (event.type === "KeyDown" && event.key === " ") {
           onSpaceKeyRef.current();
-          // En édition, Espace lance la simulation : on repart d'un canvas
-          // propre. En simulation il ne fait que play/pause — garder la
-          // sélection, dont l'onglet Analyse affiche les grandeurs.
-          if (appModeRef.current === "edition")
-            setCanvasState({ type: "Selecting" });
           return;
         }
         if (event.type === "KeyDown") {
@@ -892,6 +1033,8 @@ export const MechanicalCanvas = forwardRef<
           currMech.mechanicalElements,
           currMech.constraintElements,
           currMech.loads,
+          currMech.materials,
+          currMech.profiles,
           currMech.viewport,
           setCanvasState,
           applyActions,
@@ -1078,7 +1221,10 @@ export const MechanicalCanvas = forwardRef<
               ["Selecting", "SelectedElement"].includes(canvasState.type) &&
               hoveredPart.type !== "Void" &&
               hoveredPart.type !== "Probe" &&
-              hoveredPart.type !== "MotorArrow"
+              hoveredPart.type !== "MotorArrow" &&
+              hoveredPart.type !== "Force" &&
+              hoveredPart.type !== "Moment" &&
+              hoveredPart.type !== "DistributedForce"
             ? "grab"
             : ["Erasing", "ErasingMultiple"].includes(canvasState.type)
               ? eraser_cursor()
@@ -1402,7 +1548,8 @@ export const MechanicalCanvas = forwardRef<
                           // upside down, which the magnitude alone can't express, so that
                           // part of `oldAngle` is carried over unchanged.
                           newValue: floor_raw_angle_from_acute(
-                            newValue * (floor_acute_angle(oldAngle) < 0 ? -1 : 1),
+                            newValue *
+                              (floor_acute_angle(oldAngle) < 0 ? -1 : 1),
                             oldAngle,
                           ),
                           oldValue: oldAngle,

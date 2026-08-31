@@ -88,8 +88,8 @@ export const SimulationTimeline: React.FC<SimulationTimelineProps> = ({
         kind: "belt" as const,
         label: t(
           event.kind === "detach"
-            ? "timeline_belt_detach"
-            : "timeline_belt_reattach",
+            ? "belt_detach"
+            : "belt_reattach",
         ),
       })),
       ...dead_points(snapshots).map((point) => ({
@@ -97,8 +97,8 @@ export const SimulationTimeline: React.FC<SimulationTimelineProps> = ({
         kind: "dead-point" as const,
         label: t(
           point.kind === "blocked"
-            ? "timeline_dead_point"
-            : "timeline_dead_point_released",
+            ? "dead_point"
+            : "dead_point_released",
         ),
       })),
     ];
@@ -354,7 +354,7 @@ export const SimulationTimeline: React.FC<SimulationTimelineProps> = ({
         </Tooltip>
       </Box>
 
-      <Tooltip disableInteractive title={t("toolbar_export_animation")}>
+      <Tooltip disableInteractive title={t("export_animation")}>
         <span>
           <IconButton
             size="small"

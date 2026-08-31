@@ -7,7 +7,7 @@ import {
   TextField,
   Divider,
 } from "@mui/material";
-import { ContentCopy, Delete, Download } from "@mui/icons-material";
+import { AddToPhotos, Delete, Download } from "@mui/icons-material";
 import { SerializedMechanism } from "../../types";
 import { t } from "../../i18n";
 import MechanismThumbnail from "./MechanismThumbnail";
@@ -206,7 +206,7 @@ export const MechanismCard: React.FC<MechanismCardProps> = ({
                   transition: "width 0.15s, opacity 0.15s, margin-left 0.15s",
                 }}
               >
-                <Tooltip disableInteractive title={t("gallery_duplicate")}>
+                <Tooltip disableInteractive title={t("duplicate")}>
                   <IconButton
                     size="small"
                     color="inherit"
@@ -215,10 +215,10 @@ export const MechanismCard: React.FC<MechanismCardProps> = ({
                       onDuplicate(mechanismRecord.metadata.createdAt);
                     }}
                   >
-                    <ContentCopy fontSize="small" />
+                    <AddToPhotos fontSize="small" />
                   </IconButton>
                 </Tooltip>
-                <Tooltip disableInteractive title={t("gallery_export")}>
+                <Tooltip disableInteractive title={t("export")}>
                   <IconButton
                     size="small"
                     color="inherit"
@@ -230,7 +230,7 @@ export const MechanismCard: React.FC<MechanismCardProps> = ({
                     <Download fontSize="small" />
                   </IconButton>
                 </Tooltip>
-                <Tooltip disableInteractive title={t("action_delete")}>
+                <Tooltip disableInteractive title={t("delete")}>
                   <IconButton
                     size="small"
                     color="error"

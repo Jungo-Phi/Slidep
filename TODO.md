@@ -10,15 +10,28 @@
 
 ### À faire rapidement
 
-- Différencier "Forces de réaction" et "Efforts internes"
+**Simulation**
 
-- Cacher les charges minuscules (réaction)
-- Hover sur les graphs met en évidence les éléments concernés
+- 🔨 Ajouter la masse (kg) à coté de linear/surface mass
+- 🔨 Mettre à jour le hover en simulation quand le mécanisme bouge sans grab
+- 🔨 Sélectionner et éditer les loads en simulation
+
+- 🚨 En cinématique, quand l'alignement n'est juste pas parfait (alors que le défaut peut ne même pas s'afficher), le mécanisme bouge tout seul (voir "Le mécanisme qui bouge tout seul.slidep").
+- 🔨 Donner a tous les ressorts en cinématique la même "élasticité".
+- 🚨 Bug avec le mécanisme "Poutre sur joint de courroie"
+- 🚨 Bug avec le mécanisme "Ressorts sur moteur"
+- Passer la simulation en Rust WASM pour accélérer ?
+
+---
+
+- 🚨 Le moteur se bloque avec "Jansen", wtf !?
+- 🚨 Hover sur des contraintes cachées, wtf !?
+- 🚨 Hover des loads sous les edges, wtf !?
+- 🚨 Un snap sur la grille ne se fait pas toujours bien aux valeurs rondes, wtf !?
 
 **Physique**
 
 - ❇️ Voir ce que fait "LinkReaction" exactement, et dessiner les forces de réaction de gears au point de contact.
-- 🔨 Rendre la physique plus exacte avec du substepping
 - 🤔 Afficher les loads (charges) en dynamique ?
 - Interpoler sub snapshot les overlays à l'affichage en x0.1 (notamment les forces de réaction)
 
@@ -32,6 +45,30 @@
 - Jansen a le moteur qui bloque mais rien n'est indiqué et le couple d'y change rien
 - Qu'est-ce qui change entre "Double Cantilever.slidep" et "Double Cantilever bis.slidep" pour que "Double Cantilever.slidep" perde sa rigidité ?
 
+---
+
+- Le point zéro devrait être collé à l'axe (à gauche) dans les diagrames d'efforts internes
+- efforts internes : normaliser les graphiques
+- Rendre les contraintes non-éditables en simulation
+
+- Différencier "Forces de réaction" et "Efforts internes"
+
+- Clean cette putain de section "élément en simulation
+
+---
+
+- Hover sur les graphs met en évidence les éléments concernés
+- Travailler les couleurs, avec les thèmes
+
+- Écart assumé dans 5bis : pas d'avertissement d'hyperstatisme affiché, seulement le résidu de bouclage (ChainMobility.hyperstaticity pas branché — jugé pas prioritaire pour ce premier passage).
+
+**Dans l'onglet "Matériaux & profilés"**
+
+1. La distinction entre les 2 sections est moche.
+2. Shémas : supprimer le rectangle par dessus, nettoyer
+3. Lien qui renvoie à "ou peut-on modifier sa valeur ?
+4. Le hover devrait être une couleur transparente
+
 **Collisions**
 
 - 🔨 Vérifier que les contacts "émettent" des force dans les 2 sens
@@ -39,18 +76,6 @@
 - 🔨 Ajouter un filtre géométrique grossier (bounding box, grille spatiale) pour les collisions (recalculé peu souvent)
 - 🔨 Vérifier les éléments exclus des collisions
 - 🆕 Indiquer les collisions sur le canvas (point de contact)
-
-**Simulation**
-
-- 🔨 Ajouter la masse (kg) à coté de linear/surface mass
-- 🔨 Mettre à jour le hover en simulation quand le mécanisme bouge sans grab
-- 🔨 Sélectionner et éditer les loads en simulation
-
-- 🚨 En cinématique, quand l'alignement n'est juste pas parfait (alors que le défaut peut ne même pas s'afficher), le mécanisme bouge tout seul (voir "Le mécanisme qui bouge tout seul.slidep").
-- 🔨 Donner a tous les ressorts en cinématique la même "élasticité".
-- 🚨 Bug avec le mécanisme "Poutre sur joint de courroie"
-- 🚨 Bug avec le mécanisme "Ressorts sur moteur"
-- Passer la simulation en Rust WASM pour accélérer ?
 
 **Solveur géométrique**
 

@@ -22,6 +22,8 @@ function mechanism(mechanicalElements: MechanicalElement[]): Mechanism {
     mechanicalElements,
     constraintElements: [],
     loads: [],
+    materials: [],
+    profiles: [],
     history: [],
     future: [],
   };

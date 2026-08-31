@@ -4,7 +4,7 @@ import {
   KinematicSnapshot,
   SimulationSnapshot,
 } from "../../types/runtime-state";
-import { SerializedMechanism } from "../../types";
+import { SerializedLoadElement, SerializedMechanism } from "../../types";
 import { SimGrab } from "./simulation-engine";
 import { BeltShape } from "./snapshot";
 
@@ -67,6 +67,9 @@ export type ToRecorder =
    */
   | { type: "rewind"; resumeFrom: SimulationSnapshot; epoch: number }
   | { type: "grab"; grab: SimGrab | null }
+  /** A load's value(s) changed (magnitude, direction…) without touching topology: swaps the
+   *  compiled loads in place instead of the full `load` recompile — see `Recorder.setLoads`. */
+  | { type: "loads"; loads: SerializedLoadElement[] }
   /**
    * Where the simulated clock should get to. Sent every displayed frame and never awaited:
    * the worker runs towards the target on its own, so it is never idle waiting to be asked.

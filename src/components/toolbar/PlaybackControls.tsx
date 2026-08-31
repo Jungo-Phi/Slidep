@@ -24,6 +24,7 @@ import { t } from "../../i18n";
 import {
   Action,
   AppMode,
+  BeamStressLens,
   Mechanism,
   MechanismMetadata,
   SimulationSpeed,
@@ -95,6 +96,10 @@ interface PlaybackControlsProps {
   handleSpaceKey: () => void;
   onOpenGallery: () => void;
   saveStatus: SaveStatus;
+  beamStressLens: BeamStressLens;
+  setBeamStressLens: (lens: BeamStressLens) => void;
+  trajectoryDotted: boolean;
+  setTrajectoryDotted: (dotted: boolean) => void;
   /** Rendered at the end of the right-hand section. */
   rightSlot?: React.ReactNode;
 }
@@ -114,6 +119,10 @@ export const PlaybackControls: React.FC<PlaybackControlsProps> = ({
   handleSpaceKey,
   onOpenGallery,
   saveStatus,
+  beamStressLens,
+  setBeamStressLens,
+  trajectoryDotted,
+  setTrajectoryDotted,
   rightSlot,
 }) => (
   <>
@@ -122,6 +131,7 @@ export const PlaybackControls: React.FC<PlaybackControlsProps> = ({
         display: "flex",
         alignItems: "center",
         gap: tight ? 0.25 : 0.75,
+        minWidth: 0,
       }}
     >
       <ProjectHeader
@@ -131,8 +141,6 @@ export const PlaybackControls: React.FC<PlaybackControlsProps> = ({
         saveStatus={saveStatus}
       />
     </Box>
-
-    <Box sx={{ flex: 1 }} />
 
     {/* Section centrale — tout ce qui pilote ou reflète l'exécution : mode,
         lecture, vitesse, réglages physiques et calques. */}
@@ -210,7 +218,7 @@ export const PlaybackControls: React.FC<PlaybackControlsProps> = ({
 
       {!condensed && <Divider flexItem sx={{ mx: 0.5 }} />}
 
-      <Tooltip disableInteractive title={t("toolbar_reset")}>
+      <Tooltip disableInteractive title={t("reset")}>
         <span>
           <IconButton
             size="small"
@@ -233,7 +241,7 @@ export const PlaybackControls: React.FC<PlaybackControlsProps> = ({
 
       {/* Play/Pause toujours actif ; les autres boutons sont désactivés en
           mode Édition ou en bout de course. */}
-      <Tooltip disableInteractive title={t("toolbar_go_to_start")}>
+      <Tooltip disableInteractive title={t("go_to_start")}>
         <span>
           <IconButton
             size="small"
@@ -257,7 +265,7 @@ export const PlaybackControls: React.FC<PlaybackControlsProps> = ({
 
       <Tooltip
         disableInteractive
-        title={t(runtimeState.isPlaying ? "toolbar_pause" : "toolbar_play")}
+        title={t(runtimeState.isPlaying ? "pause" : "play")}
       >
         <IconButton
           size="small"
@@ -278,7 +286,7 @@ export const PlaybackControls: React.FC<PlaybackControlsProps> = ({
         </IconButton>
       </Tooltip>
 
-      <Tooltip disableInteractive title={t("toolbar_go_to_end")}>
+      <Tooltip disableInteractive title={t("go_to_end")}>
         <span>
           <IconButton
             size="small"
@@ -313,7 +321,7 @@ export const PlaybackControls: React.FC<PlaybackControlsProps> = ({
           setRuntimeState((prev) => ({ ...prev, speed: s }));
         return (
           <Box sx={{ display: "flex", alignItems: "center" }}>
-            <Tooltip disableInteractive title={t("toolbar_slow_down")}>
+            <Tooltip disableInteractive title={t("slow_down")}>
               <span>
                 <IconButton
                   size="small"
@@ -326,7 +334,7 @@ export const PlaybackControls: React.FC<PlaybackControlsProps> = ({
                 </IconButton>
               </span>
             </Tooltip>
-            <Tooltip disableInteractive title={t("toolbar_reset_speed")}>
+            <Tooltip disableInteractive title={t("reset_speed")}>
               <Box
                 component="button"
                 onClick={() => setSpeed(1)}
@@ -356,7 +364,7 @@ export const PlaybackControls: React.FC<PlaybackControlsProps> = ({
                 {runtimeState.speed}×
               </Box>
             </Tooltip>
-            <Tooltip disableInteractive title={t("toolbar_speed_up")}>
+            <Tooltip disableInteractive title={t("speed_up")}>
               <span>
                 <IconButton
                   size="small"
@@ -437,16 +445,19 @@ export const PlaybackControls: React.FC<PlaybackControlsProps> = ({
       <OverlaysMenu
         mechanicalElements={mechanism.mechanicalElements}
         applyActions={applyActions}
+        beamStressLens={beamStressLens}
+        onChangeBeamStressLens={setBeamStressLens}
+        trajectoryDotted={trajectoryDotted}
+        onChangeTrajectoryDotted={setTrajectoryDotted}
         condensed={condensed}
       />
     </Box>
-
-    <Box sx={{ flex: 1 }} />
 
     <Box
       sx={{
         display: "flex",
         alignItems: "center",
+        justifyContent: "flex-end",
       }}
     >
       {rightSlot}

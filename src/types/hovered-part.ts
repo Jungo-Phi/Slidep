@@ -66,3 +66,31 @@ export function names_element(
 export function is_hovered(part: HoveredPart, id: ID): boolean {
   return names_element(part) && part.id === id;
 }
+
+/** Whether the hover is a load's displayed value (magnitude), a click-to-edit
+ *  target distinct from its body/handles. */
+export function is_load_value_label(
+  part: HoveredPart,
+): part is Extract<
+  HoveredPart,
+  { type: "Force" | "Moment" | "DistributedForce" }
+> & { part: "value" | "start-value" | "end-value" } {
+  return (
+    ((part.type === "Force" || part.type === "Moment") &&
+      part.part === "value") ||
+    (part.type === "DistributedForce" &&
+      (part.part === "start-value" || part.part === "end-value"))
+  );
+}
+
+/**
+ * An abscissa hovered along one beam's own N/T/Mf diagram (docs/plan-efforts-interieurs.md
+ * phase 5bis), for the canvas to mark on the beam itself. Deliberately its own channel
+ * rather than a `HoveredPart` case: `HoveredPart` doubles as interaction/hit-testing state
+ * (drag handles, deletion), and this is purely informational — panel → canvas only.
+ */
+export interface HoveredAbscissa {
+  beamID: ID;
+  /** 0 at the beam's own `positionStart`, `length` at `positionEnd`. */
+  s: number;
+}

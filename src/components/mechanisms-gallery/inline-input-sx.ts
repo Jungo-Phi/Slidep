@@ -2,8 +2,9 @@ import { SxProps, Theme } from "@mui/material";
 
 /**
  * For a `standard`-variant `TextField` with `disableUnderline`: no border at rest, a plain
- * background fill on focus instead of the underline. Shared by every inline text edit in the
- * gallery (search, tag entry, name rename) so they read as one family of input.
+ * background fill on focus instead of the underline. Shared by every inline text edit that
+ * wants this look — the gallery's own (search, tag entry, name rename) and, since, a
+ * material/profile's name in its library dialog — so they all read as one family of input.
  */
 export const INLINE_INPUT_SX: SxProps<Theme> = {
   px: 0.5,

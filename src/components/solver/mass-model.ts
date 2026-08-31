@@ -1,5 +1,6 @@
 import { Mechanism } from "../../types";
 import { DEFAULT } from "../../constants/physics-specs";
+import { beam_linear_mass } from "../../utils/section-properties";
 
 /**
  * Real inverse masses for the dynamic step, as opposed to the binary 0/1 (`grounded`/`free`)
@@ -47,12 +48,21 @@ export interface DynamicMassModel {
 export const BEAM_END_MASS_FRACTION = 1 / 6;
 
 /**
- * Smallest lumped mass a node may resolve to, so an isolated node — or one connected only to
- * springs/dampers, neither of which carries mass of its own — never divides by zero. Reuses
- * the point-mass default rather than inventing a separate constant: a node with nothing to
- * lump onto it behaves like an implicit 1 kg point mass.
+ * Fallback mass for a node with NOTHING physical lumped onto it — an isolated point, or one
+ * connected only to springs/dampers, neither of which carries mass of its own — so it never
+ * divides by zero. Reuses the point-mass default rather than inventing a separate constant: a
+ * node with nothing to lump onto it behaves like an implicit 1 kg point mass.
+ *
+ * Only ever substituted for an EXACT zero (`floored_mass` below) — a small but real lumped
+ * mass (a light beam's own midpoint, `mass-model.ts`'s `BEAM_END_MASS_FRACTION` share) must
+ * stay exactly what it is, however far under 1 kg: flooring it too inflates that beam's own
+ * self-weight/inertia by however much 1 kg exceeds its true mass, silently, in both the
+ * dynamics itself and anything reading its reactions (`beam-cohesion.ts`).
  */
 const MASS_FLOOR = DEFAULT.MASS;
+
+/** `mass`, unless it is exactly zero (nothing physical lumped there) — see `MASS_FLOOR`. */
+const floored_mass = (mass: number): number => (mass > 0 ? mass : MASS_FLOOR);
 
 /**
  * Lumps each element's mass onto its own solver key(s) — half to each end of a beam, all of
@@ -82,8 +92,14 @@ export function compute_dynamic_mass_model(
 
   for (const element of mechanism.mechanicalElements) {
     if (element.type === "beam") {
+      const linearMass = beam_linear_mass(
+        element.materialID,
+        element.profileID,
+        mechanism.materials,
+        mechanism.profiles,
+      );
       const mass =
-        element.linearMass * element.positionStart.distance_to(element.positionEnd);
+        linearMass * element.positionStart.distance_to(element.positionEnd);
       add(`${element.id}:start`, mass * BEAM_END_MASS_FRACTION);
       add(`${element.id}:end`, mass * BEAM_END_MASS_FRACTION);
       if (mass > 0) {
@@ -117,13 +133,12 @@ export function compute_dynamic_mass_model(
       groundedMasses.set(key, lumped.get(key) ?? 0);
       continue;
     }
-    const mass = Math.max(lumped.get(key) ?? 0, MASS_FLOOR);
-    posMasses.set(key, 1 / mass);
+    posMasses.set(key, 1 / floored_mass(lumped.get(key) ?? 0));
   }
   // A beam's midpoint is never a real element key, so it never goes through the anchored
   // branch above — it has nothing to be grounded BY, only mass to resist being moved.
   for (const { midKey } of beamMidpoints)
-    posMasses.set(midKey, 1 / Math.max(lumped.get(midKey) ?? 0, MASS_FLOOR));
+    posMasses.set(midKey, 1 / floored_mass(lumped.get(midKey) ?? 0));
 
   return { posMasses, angleMasses, groundedMasses, beamMidpoints };
 }

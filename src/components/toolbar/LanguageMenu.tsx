@@ -18,7 +18,7 @@ export const LanguageMenu: React.FC<LanguageMenuProps> = ({
 
   return (
     <>
-      <Tooltip disableInteractive title={t("toolbar_language")}>
+      <Tooltip disableInteractive title={t("language")}>
         <IconButton
           color="inherit"
           size="small"

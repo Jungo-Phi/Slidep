@@ -11,13 +11,13 @@ import { StringKey, t } from "../../i18n";
 
 export const PROBE_METRIC_LABEL_KEYS: Record<ProbeMetric, StringKey> = {
   position: "metric_position",
-  velocity: "metric_velocity",
+  velocity: "velocity_one",
   angle: "angle",
   "angular-velocity": "metric_angular_velocity",
-  force: "metric_force",
+  force: "force",
   "force-start": "metric_force_start",
   "force-end": "metric_force_end",
-  moment: "metric_moment",
+  moment: "moment",
   "moment-start": "metric_moment_start",
   "moment-end": "metric_moment_end",
 };

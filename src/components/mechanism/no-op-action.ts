@@ -29,8 +29,13 @@ export function is_noop_action(action: Action): boolean {
     case "ChangeSlidingFriction":
     case "ChangeRotationalFriction":
     case "ChangeSurfaceMass":
-    case "ChangeLinearMass":
+    case "ChangeMaterialE":
+    case "ChangeMaterialRe":
+    case "ChangeMaterialRho":
       return action.delta === 0;
+    case "RenameMaterial":
+    case "RenameProfile":
+      return action.newName === action.oldName;
     case "ChangeDimensionEdgeValue":
     case "ChangeDimensionNodeToNodeValue":
     case "ChangeDimensionEdgeToNodeValue":

@@ -14,6 +14,8 @@ const GEAR_B = id(3);
 const PIVOT = id(4);
 const SPRING = id(5);
 const BEAM = id(6);
+const MATERIAL = id(7);
+const PROFILE = id(8);
 
 /** One axle carrying two gears, plus a lone pivot, a spring and a beam. */
 function build(): MechanicalElement[] {
@@ -89,7 +91,8 @@ function build(): MechanicalElement[] {
       fixedNodeStartID: undefined,
       fixedNodeEndID: undefined,
       fixedNodesBodyIDs: [],
-      linearMass: 1,
+      materialID: MATERIAL,
+      profileID: PROFILE,
     },
   ];
 }

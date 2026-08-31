@@ -7,6 +7,7 @@ import {
   UnionElement,
 } from "./element";
 import { GeomNodes } from "./kinematic-solver-links";
+import { MaterialDef, ProfileDef, ProfileShape } from "./material";
 import { ScreenPoint, WorldPoint } from "./mechanism";
 
 /** Events captured on the canvas */
@@ -37,8 +38,7 @@ export type ChangeConstantActionType =
   | "ChangeDamping"
   | "ChangeSlidingFriction"
   | "ChangeRotationalFriction"
-  | "ChangeSurfaceMass"
-  | "ChangeLinearMass";
+  | "ChangeSurfaceMass";
 export type MoveElementActionType =
   | "MoveNode"
   | "MoveEdgeStart"
@@ -181,11 +181,6 @@ export type Action =
     }
   | {
       type: "ChangeSurfaceMass";
-      id: ID;
-      delta: number;
-    }
-  | {
-      type: "ChangeLinearMass";
       id: ID;
       delta: number;
     }
@@ -334,6 +329,23 @@ export type Action =
     }
   | { type: "ChangeMoment"; id: ID; newValue: number; oldValue: number }
   | { type: "SetLoadFrame"; id: ID; newFrame: LoadFrame; oldFrame: LoadFrame }
+  | { type: "AssignMaterial"; id: ID; newMaterialID: ID; oldMaterialID: ID }
+  | { type: "AssignProfile"; id: ID; newProfileID: ID; oldProfileID: ID }
+  | { type: "CreateMaterial"; material: MaterialDef }
+  | { type: "DeleteMaterial"; material: MaterialDef }
+  | { type: "RenameMaterial"; id: ID; newName: string; oldName: string }
+  | { type: "ChangeMaterialE"; id: ID; delta: number }
+  | { type: "ChangeMaterialRe"; id: ID; delta: number }
+  | { type: "ChangeMaterialRho"; id: ID; delta: number }
+  | { type: "CreateProfile"; profile: ProfileDef }
+  | { type: "DeleteProfile"; profile: ProfileDef }
+  | { type: "RenameProfile"; id: ID; newName: string; oldName: string }
+  | {
+      type: "ChangeProfileShape";
+      id: ID;
+      newShape: ProfileShape;
+      oldShape: ProfileShape;
+    }
   | {
       type: "SetProbes";
       elementID: ID;

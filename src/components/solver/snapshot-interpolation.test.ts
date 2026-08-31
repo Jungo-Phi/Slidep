@@ -243,6 +243,7 @@ describe("réactions à travers l'interpolation dynamique", () => {
     positions: Float64Array.of(t, 0),
     angles: new Float64Array(0),
     velocities: Float64Array.of(0, 0),
+    accelerations: Float64Array.of(0, 0),
     angleVelocities: new Float64Array(0),
     reactions,
   });

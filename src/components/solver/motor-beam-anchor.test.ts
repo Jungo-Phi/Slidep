@@ -7,6 +7,7 @@ import type {
   MechanicalElement,
   PivotElement,
 } from "../../types/element";
+import type { MaterialDef, ProfileDef } from "../../types/material";
 import {
   RECORD_DT,
   compile_simulation_model,
@@ -61,8 +62,18 @@ const beam = (
   fixedNodeStartID: startID,
   fixedNodeEndID: endID,
   fixedNodesBodyIDs: [],
-  linearMass: 1,
+  materialID: MATERIAL_ID,
+  profileID: PROFILE_ID,
 });
+
+const MATERIAL_ID = id();
+const PROFILE_ID = id();
+const MATERIALS: MaterialDef[] = [
+  { id: MATERIAL_ID, name: "test", E: 1, Re: 1, rho: 1, readOnly: false },
+];
+const PROFILES: ProfileDef[] = [
+  { id: PROFILE_ID, name: "test", shape: { kind: "rect", b: 1, h: 1 } },
+];
 
 function mechanism(mechanicalElements: MechanicalElement[]): Mechanism {
   return {
@@ -73,6 +84,8 @@ function mechanism(mechanicalElements: MechanicalElement[]): Mechanism {
     mechanicalElements,
     constraintElements: [],
     loads: [],
+    materials: MATERIALS,
+    profiles: PROFILES,
     history: [],
     future: [],
   };

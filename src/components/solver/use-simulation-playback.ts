@@ -12,12 +12,14 @@ import {
 import {
   ConstraintResidual,
   DynamicSnapshot,
+  EMPTY_NEGLIGIBILITY_POOL,
   KinematicSnapshot,
   RuntimeState,
 } from "../../types/runtime-state";
+import { CanvasState } from "../../types/canvas-state";
 import { LiveFrame } from "../canvas/MechanicalCanvas";
 import { OverlayArrow, OverlayMoment } from "../canvas/drawing-functions";
-import { overlay_shown } from "../../utils/element-queries";
+import { is_node_element, overlay_shown } from "../../utils/element-queries";
 import {
   MAX_RECORDING_TIME,
   RECORD_DT,
@@ -48,6 +50,18 @@ import {
   trajectories_at,
 } from "./probe-series";
 import { PROBE_ELEMENT_COLORS } from "../properties-panel/components/ProbeChart";
+import {
+  CohesionField,
+  compute_cohesion_field,
+  EMPTY_STRESS_SCALE_CACHE,
+  extend_stress_scale,
+  shear_admissible_stress,
+  StressScaleCache,
+} from "./cohesion-field";
+import { GRAVITY } from "../../constants/physics-specs";
+import { NEGLIGIBLE_STRESS_FRACTION } from "../../constants/rendering-specs";
+import { extend_negligibility_pool, is_negligible } from "./negligibility-pool";
+import { beam_strength } from "../../utils/section-properties";
 
 /** How often the simulation clock reaches React. Text and controls, not motion. */
 const CLOCK_MIRROR_MS = 100;
@@ -82,6 +96,33 @@ const CURSOR_RATE_ALPHA = 0.1;
 const worker_lead = (simDt: number): number =>
   Math.max(2 * simDt, 2 * RETAIN_DT);
 
+/**
+ * Floors for the beam-fill lenses' own shared scales (see `NEGLIGIBLE_STRESS_FRACTION`'s own
+ * doc): `NEGLIGIBLE_STRESS_FRACTION` of the LOWEST admissible reference among the mechanism's
+ * own beams — `Re` for `normal`/`bending`, `τ_adm` for `shear` (its own comparison basis,
+ * `shear_admissible_stress(Re)`, not `Re` directly — a beam's shear reading is judged against
+ * ITS OWN admissible shear, so the floor tracks the same reference the ratio itself does). The
+ * lowest across beams, not an average or the first found, so the floor never hides a real
+ * reading for whichever material has the least room to begin with. `0` (a no-op against
+ * `Math.max`) when no beam resolves a material/profile, same "nothing to scale yet" case
+ * `StressScaleCache` itself falls back to.
+ */
+function negligible_stress_floors(mechanism: Mechanism): { stress: number; shear: number } {
+  let minRe = Infinity;
+  let minTauAdm = Infinity;
+  for (const el of mechanism.mechanicalElements) {
+    if (el.type !== "beam") continue;
+    const strength = beam_strength(el.materialID, el.profileID, mechanism.materials, mechanism.profiles);
+    if (!strength) continue;
+    minRe = Math.min(minRe, strength.Re);
+    minTauAdm = Math.min(minTauAdm, shear_admissible_stress(strength.Re));
+  }
+  return {
+    stress: Number.isFinite(minRe) ? minRe * NEGLIGIBLE_STRESS_FRACTION : 0,
+    shear: Number.isFinite(minTauAdm) ? minTauAdm * NEGLIGIBLE_STRESS_FRACTION : 0,
+  };
+}
+
 export type SimulationLimitReason = "time" | "memory";
 
 /**
@@ -99,7 +140,10 @@ export type SimulationLimitReason = "time" | "memory";
 export function simulationResetPatch(
   mode: AppMode,
   mechanism: Mechanism,
-): Pick<RuntimeState, "time" | "simulationSnapshots" | "parameterSnapshots" | "scrubbed"> {
+): Pick<
+  RuntimeState,
+  "time" | "simulationSnapshots" | "parameterSnapshots" | "scrubbed" | "negligibilityPool"
+> {
   return {
     time: 0,
     simulationSnapshots: [],
@@ -114,6 +158,11 @@ export function simulationResetPatch(
           ]
         : [],
     scrubbed: false,
+    // Dynamic mode is the only one that ever grows this pool (see the recording loop
+    // below) — every other mode leaves it untouched, so without this it keeps whatever a
+    // previous dynamic run left behind for the entire lifetime of the new mode, judging
+    // unrelated readings negligible against a scale that has nothing to do with them.
+    negligibilityPool: EMPTY_NEGLIGIBILITY_POOL,
   };
 }
 
@@ -129,7 +178,9 @@ export type UseSimulationPlaybackArgs = {
   mechanism: Mechanism;
   appMode: AppMode;
   setAppMode: (mode: AppMode) => void;
-  setCanvasState: (state: { type: "Selecting" }) => void;
+  setCanvasState: (
+    update: CanvasState | ((prev: CanvasState) => CanvasState),
+  ) => void;
   /** Dynamic mode only: whether the predict step integrates gravity. Read every render
    *  through a ref, like `mechanism`/`appMode` — see the class doc below. */
   gravity: boolean;
@@ -179,6 +230,7 @@ export function useSimulationPlayback({
   /** What the canvas draws, republished every frame. */
   const liveFrameRef = useRef<LiveFrame | null>(null);
   const trajectoryCacheRef = useRef<TrajectoryCache>(EMPTY_TRAJECTORY_CACHE);
+  const stressScaleCacheRef = useRef<StressScaleCache>(EMPTY_STRESS_SCALE_CACHE);
   const lastWallTimeRef = useRef<number | null>(null);
   /** Simulated seconds per real second the producer sustains, low-passed. */
   const cursorRateRef = useRef<number>(1);
@@ -199,6 +251,11 @@ export function useSimulationPlayback({
   /** Set by a caller (e.g. a probe-only edit) right before the mechanism updates, so the
    *  recompile effect below can skip a recompile that would otherwise discard snapshots. */
   const probeOnlyEditRef = useRef<boolean>(false);
+  /** Set by a caller right before the mechanism updates when the edit only changed load
+   *  values (magnitude, direction…), never their target or count — the recompile effect
+   *  below then swaps `compiledLoads` in place (`Recorder.setLoads`) instead of recompiling
+   *  the whole model, which a continuous drag would otherwise do dozens of times a second. */
+  const loadValueOnlyEditRef = useRef<boolean>(false);
   const timelineTrackRef = useRef<HTMLDivElement | null>(null);
   /**
    * The recording worker: it owns the compiled model and everything measured about it, and
@@ -266,6 +323,10 @@ export function useSimulationPlayback({
       recorder().setGravity(gravityRef.current);
       recorder().setCollisions(collisionsRef.current);
       recorder().setFloor(floorRef.current);
+      // Ask for frame 0 right away, without waiting for play: `advance` below picks it up
+      // as soon as the worker answers, so the first frame's reactions are there to read
+      // (elements panel, measures) even while the simulation sits paused.
+      recorder().target(0);
     }
     // Capture the flag synchronously: the setRuntimeState updater below runs
     // later, after this line has already reset the ref to false.
@@ -304,12 +365,40 @@ export function useSimulationPlayback({
   useEffect(() => {
     const probeOnly = probeOnlyEditRef.current;
     probeOnlyEditRef.current = false;
+    const loadValueOnly = loadValueOnlyEditRef.current;
+    loadValueOnlyEditRef.current = false;
     const mode = simulationRef.current.appMode;
     if (mode === "edition") return;
     // Probe-config edits don't affect the simulated motion: keep the model
     // and the already-recorded snapshots.
     if (probeOnly) return;
     const rs = sim_clock();
+    // Snapshots ahead of the cursor were solved under the old values, whichever kind of edit
+    // this is — this bookkeeping is about what stays valid, not about the model itself.
+    const truncate = () =>
+      setRuntimeState((prev) => ({
+        ...prev,
+        simulationSnapshots: prev.simulationSnapshots.filter((s) => s.t <= rs.time),
+        // Strict `<`, not `<=`: an edit made without the clock having moved since the last one
+        // (two edits at the same instant, including the very first at t=0) replaces that
+        // entry instead of leaving a duplicate a lookup could resolve to either side of.
+        parameterSnapshots: [
+          ...prev.parameterSnapshots.filter((s) => s.t < rs.time),
+          {
+            t: rs.time,
+            mechanicalElements: mechanism.mechanicalElements,
+            loads: mechanism.loads,
+          },
+        ],
+      }));
+    // A load's values changed but not its target/count: swap them into the already-compiled
+    // model instead of recompiling it — the whole point being that a continuous drag can call
+    // this many times a second, unlike every other edit here.
+    if (loadValueOnly) {
+      recorder().setLoads(mechanism.loads);
+      truncate();
+      return;
+    }
     const snaps = rs.simulationSnapshots;
     const baseSnap =
       snaps.length > 0 ? snaps[snapshot_index_at(snaps, rs.time)] : null;
@@ -321,21 +410,7 @@ export function useSimulationPlayback({
           ? apply_snapshot_to_mechanism(mechanism, baseSnap as KinematicSnapshot)
           : apply_dynamic_snapshot_to_mechanism(mechanism, baseSnap as DynamicSnapshot);
     recorder().load(recorder_mode(mode), baseMech, baseSnap);
-    setRuntimeState((prev) => ({
-      ...prev,
-      simulationSnapshots: prev.simulationSnapshots.filter((s) => s.t <= rs.time),
-      // Strict `<`, not `<=`: an edit made without the clock having moved since the last one
-      // (two edits at the same instant, including the very first at t=0) replaces that
-      // entry instead of leaving a duplicate a lookup could resolve to either side of.
-      parameterSnapshots: [
-        ...prev.parameterSnapshots.filter((s) => s.t < rs.time),
-        {
-          t: rs.time,
-          mechanicalElements: mechanism.mechanicalElements,
-          loads: mechanism.loads,
-        },
-      ],
-    }));
+    truncate();
     // Depend on geometry/topology only, not the whole mechanism: a viewport
     // (pan/zoom) change keeps these array refs identical, so it no longer
     // recompiles the simulation model nor truncates the snapshots.
@@ -365,6 +440,7 @@ export function useSimulationPlayback({
       if (!is_simulating(mode)) {
         liveFrameRef.current = null;
         trajectoryCacheRef.current = EMPTY_TRAJECTORY_CACHE;
+        stressScaleCacheRef.current = EMPTY_STRESS_SCALE_CACHE;
         shownSnaps = null;
         return;
       }
@@ -433,23 +509,75 @@ export function useSimulationPlayback({
       // optionally carrying a moment too (a rigid weld's force-couple, reduced).
       const overlayArrows: OverlayArrow[] = [];
       const overlayMoments: OverlayMoment[] = [];
+      // The N/T/Mf field, every beam, dynamic mode only — no overlay flag gates it (see
+      // `LiveFrame.cohesionFields`'s own doc): phase 5bis's panel diagrams show it for
+      // whichever beam is selected, not a persistent per-element setting.
+      const cohesionFields: CohesionField[] = [];
+      // Floors for `normal`/`bending`/`shear`'s own scales (see `negligible_stress_floors`'s
+      // doc) — 0 (a no-op) outside dynamic mode, where there is nothing to scale in the first
+      // place.
+      let negligibleStress = 0;
+      let negligibleShear = 0;
       if (mode === "dynamic") {
         const dynSnap = snapshot as DynamicSnapshot;
+        const gravity = gravityRef.current ? GRAVITY : new Point2(0, 0);
+        ({ stress: negligibleStress, shear: negligibleShear } = negligible_stress_floors(mech));
+        // The beam-fill lenses' shared scales, extended with whatever got recorded since the
+        // last frame (never rebuilt) — docs/plan-efforts-interieurs.md phase 9. Scans the FULL
+        // recording, not just `dynSnap`, so each scale reflects the worst value ever seen
+        // rather than rescaling to whichever instant is currently displayed.
+        stressScaleCacheRef.current = extend_stress_scale(
+          stressScaleCacheRef.current,
+          mech.mechanicalElements,
+          mech.loads,
+          rs.simulationSnapshots as DynamicSnapshot[],
+          gravity,
+          mech.materials,
+          mech.profiles,
+        );
+        const pool = rs.negligibilityPool;
         for (const el of geometryMechanism.mechanicalElements) {
           if ("position" in el && overlay_shown(el, "velocity")) {
             const v = element_velocity(el, dynSnap);
-            if (v) overlayArrows.push({ at: el.position, vector: v, kind: "velocity" });
+            // A residual velocity next to nothing else moving is noise, not motion — see
+            // negligibility-pool.ts. Hidden rather than drawn tiny: a clamped-to-minimum
+            // arrow would still read as "something moves here".
+            if (v && !is_negligible(v.length(), pool.linearVelocity))
+              overlayArrows.push({ at: el.position, vector: v, kind: "velocity" });
           }
-          if (overlay_shown(el, "force")) {
+          // `is_node_element`, not just the flag: `available_overlays` no longer offers
+          // "force" on an edge (a beam's own two arrows were a false "one force per member"
+          // summary), but a mechanism saved before that change can still carry a stale
+          // `true` there.
+          if (overlay_shown(el, "force") && is_node_element(el)) {
             for (const r of element_reactions(el, dynSnap)) {
               const kind = r.atAnchor ? "reaction-support" : "reaction-internal";
-              overlayArrows.push({ at: r.at, vector: r.vector, kind });
+              if (!is_negligible(r.vector.length(), pool.force))
+                overlayArrows.push({ at: r.at, vector: r.vector, kind });
               // `r.moment` is the solver's raw CCW-positive convention; `draw_moment`
               // (and every other moment on screen) reads the data model's clockwise-
               // positive one instead — negate once, here, same flip `load-model.ts`
               // applies for a user-authored `MomentElement`.
-              if (r.moment !== undefined)
+              if (
+                r.moment !== undefined &&
+                !is_negligible(r.moment, pool.moment)
+              )
                 overlayMoments.push({ at: r.at, torque: -r.moment, kind });
+            }
+          }
+          if (el.type === "beam") {
+            const cohesion = dynSnap.beamCohesion?.find((c) => c.beamID === el.id);
+            if (cohesion) {
+              const field = compute_cohesion_field(
+                el,
+                mech.materials,
+                mech.profiles,
+                cohesion,
+                mech.loads,
+                dynSnap,
+                gravity,
+              );
+              if (field) cohesionFields.push(field);
             }
           }
         }
@@ -460,6 +588,11 @@ export function useSimulationPlayback({
           : geometryMechanism,
         overlayArrows,
         overlayMoments,
+        cohesionFields,
+        stressScale: stressScaleCacheRef.current.maxStress,
+        normalStressScale: Math.max(stressScaleCacheRef.current.maxNormal, negligibleStress),
+        bendingStressScale: Math.max(stressScaleCacheRef.current.maxBending, negligibleStress),
+        shearStressScale: Math.max(stressScaleCacheRef.current.maxShear, negligibleShear),
         // Headed at the instant actually DRAWN, which a held grab moves off the cursor:
         // a trail stopping short of the mechanism it belongs to is the same offset again.
         trajectories: trajectories_at(trajectoryCacheRef.current, snapshot.t).map(
@@ -555,7 +688,7 @@ export function useSimulationPlayback({
     };
 
     const advance = (wallTime: number) => {
-      const { appMode: mode } = simulationRef.current;
+      const { appMode: mode, mechanism: mech } = simulationRef.current;
       const rs = sim_clock();
 
       if (!is_simulating(mode) || !rs.isPlaying) {
@@ -572,6 +705,31 @@ export function useSimulationPlayback({
           // so reloading the worker first is pure waste.
           if (!replayingRef.current && !rs.scrubbed && is_simulating(mode))
             discardUnshown();
+        }
+        // Paused before ever playing: `target(0)` was posted the moment this mode was
+        // entered (see the `[appMode]` effect), so pick up frame 0 as soon as the worker
+        // answers — the panel and overlays must not wait for Play to show real reactions.
+        // Self-terminating: once merged, `simulationSnapshots` is no longer empty and this
+        // is skipped on every later tick.
+        if (is_simulating(mode) && rs.simulationSnapshots.length === 0) {
+          const { snapshots: newSnaps } = recorder().drain();
+          if (newSnaps.length > 0)
+            setRuntimeState((prev) => {
+              const simulationSnapshots = [...prev.simulationSnapshots, ...newSnaps];
+              return {
+                ...prev,
+                simulationSnapshots,
+                negligibilityPool:
+                  mode === "dynamic"
+                    ? extend_negligibility_pool(
+                        prev.negligibilityPool,
+                        mech.mechanicalElements,
+                        mech.constraintElements,
+                        simulationSnapshots as DynamicSnapshot[],
+                      )
+                    : prev.negligibilityPool,
+              };
+            });
         }
         return;
       }
@@ -677,16 +835,28 @@ export function useSimulationPlayback({
               ? prev.simulationSnapshots[prev.simulationSnapshots.length - 1].t
               : -RECORD_DT;
           const uniqueSnaps = newSnaps.filter((s) => s.t > prevFrontier);
+          const simulationSnapshots =
+            uniqueSnaps.length > 0
+              ? [...prev.simulationSnapshots, ...uniqueSnaps]
+              : prev.simulationSnapshots;
           return {
             ...prev,
             // Landing the cursor ON the end, as the replay branch does: stopping it where it
             // happened to be would leave the last recorded instants unseen.
             time: exhausted && reached !== null ? reached : newTime,
             ...(exhausted ? { isPlaying: false } : {}),
-            simulationSnapshots:
-              uniqueSnaps.length > 0
-                ? [...prev.simulationSnapshots, ...uniqueSnaps]
-                : prev.simulationSnapshots,
+            simulationSnapshots,
+            // Dynamic mode only — reactions/velocities don't exist on a kinematic
+            // snapshot, same gating as the overlay arrows built below.
+            negligibilityPool:
+              mode === "dynamic"
+                ? extend_negligibility_pool(
+                    prev.negligibilityPool,
+                    mech.mechanicalElements,
+                    mech.constraintElements,
+                    simulationSnapshots as DynamicSnapshot[],
+                  )
+                : prev.negligibilityPool,
           };
         });
       }
@@ -710,8 +880,13 @@ export function useSimulationPlayback({
         // of resetting isPlaying to false right after we set it.
         autoPlayOnEnterRef.current = true;
         setAppMode(lastSimulationMode);
-        // Entering simulation restarts from a clean canvas, just like Space does in the canvas handler.
-        setCanvasState({ type: "Selecting" });
+        // Entering simulation abandons any in-progress tool/gesture, like Space does in the
+        // canvas handler — but a settled selection carries over, it isn't a gesture to abandon.
+        setCanvasState((prev) =>
+          prev.type === "SelectedElement" || prev.type === "SelectedMultiple"
+            ? prev
+            : { type: "Selecting" },
+        );
       } else {
         setRuntimeState((prev) => ({ ...prev, isPlaying: !prev.isPlaying }));
       }
@@ -897,5 +1072,6 @@ export function useSimulationPlayback({
     autoPlayOnEnterRef,
     simStartHistoryLengthRef,
     probeOnlyEditRef,
+    loadValueOnlyEditRef,
   };
 }

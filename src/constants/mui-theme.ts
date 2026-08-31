@@ -9,6 +9,7 @@ declare module "@mui/material/styles" {
     toolbar: string;
     sunken: string;
     hoverOpaque: string;
+    sunkenOpaque: string;
   }
   /** `palette.divider` is the one for `paper`; these name the other surfaces. */
   interface Palette {
@@ -426,6 +427,10 @@ const mui_palette = (s: ThemeSpec) => {
       // Opaque equivalent of `background.default` under `action.hover`'s veil,
       // for surfaces that must hide what's beneath rather than tint it.
       hoverOpaque: mix(s.appBackground, towards, 0.1),
+      // Same idea for `background.sunken`, mixed onto `paper` rather than `appBackground` —
+      // `sunken` is normally used as a CSS background stacked over a card's own paper, which
+      // an SVG fill can't reproduce by referencing the translucent token directly.
+      sunkenOpaque: mix(s.paper, towards, 0.04),
     },
     text: {
       primary: s.ink,

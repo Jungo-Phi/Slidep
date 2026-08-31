@@ -8,9 +8,11 @@ import {
   ID,
   JoinElement,
   LoadElement,
+  MaterialDef,
   MechanicalElement,
   NodeElement,
   PivotElement,
+  ProfileDef,
   SlidepElement,
   ViewportState,
 } from "../../types";
@@ -85,6 +87,8 @@ export function handle_placing_element(
   mechanicalElements: MechanicalElement[],
   constraintElements: ConstraintElement[],
   loads: LoadElement[],
+  materials: MaterialDef[],
+  profiles: ProfileDef[],
   viewport: ViewportState,
 ): MouseDownResult {
   switch (state.type) {
@@ -133,6 +137,8 @@ export function handle_placing_element(
         mechanicalElements,
         constraintElements,
         loads,
+        materials,
+        profiles,
         viewport,
       );
 
@@ -300,6 +306,8 @@ function handle_place_element(
   mechanicalElements: MechanicalElement[],
   constraintElements: ConstraintElement[],
   loads: LoadElement[],
+  materials: MaterialDef[],
+  profiles: ProfileDef[],
   viewport: ViewportState,
 ): MouseDownResult {
   // Toggle motor on an existing pivot node
@@ -470,7 +478,11 @@ function handle_place_element(
         fixedNodeStartID: undefined,
         fixedNodeEndID: undefined,
         fixedNodesBodyIDs: [],
-        linearMass: DEFAULT.LINEAR_MASS,
+        // A freshly placed beam always takes the library's first material/profile — no
+        // picker at placement time; the assignment is changed afterwards from the beam's
+        // own properties.
+        materialID: materials[0].id,
+        profileID: profiles[0].id,
       };
       break;
     case "PlacingSpringEnd":

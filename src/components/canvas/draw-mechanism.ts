@@ -8,6 +8,7 @@ import {
 } from "../../constants/rendering-specs";
 import {
   BeamElement,
+  BeamStressLens,
   BeltElement,
   ConstraintElement,
   DistributedForceElement,
@@ -16,19 +17,24 @@ import {
   GearElement,
   ID,
   LoadElement,
+  MaterialDef,
   MechanicalElement,
   MomentElement,
   NodeElement,
+  ProfileDef,
   ScreenPoint,
   UnionElement,
   ViewportState,
 } from "../../types";
 import { HoveredPart, names_element } from "../../types/hovered-part";
+import { PROBE_ELEMENT_COLORS } from "../properties-panel/components/ProbeChart";
 import { nodes_under_segment } from "./body-crossings";
 import { CanvasState } from "../../types/canvas-state";
 import { element_refs } from "../../types/element-refs";
 import {
   draw_beam,
+  BeamFillStop,
+  beam_fill_stops,
   draw_belt_loop,
   draw_belt_open,
   BeltWinding,
@@ -59,6 +65,8 @@ import {
   draw_parallel_leg_bottom,
   draw_parallel_leg_top,
   draw_redundancy_symbol,
+  magnitude_stress_fill_stops,
+  signed_stress_fill_stops,
 } from "./drawing-functions";
 import { RedundancySymbol } from "../solver/redundancy-symbols";
 import { offset_ends, parallel_edge_offsets } from "./parallel-edges";
@@ -98,12 +106,23 @@ import {
   draw_belt_closure_marks,
 } from "./belt-vias";
 import { FORCE, LOAD_INTENSITY, rad_to_deg } from "../../utils/quantity-format";
+import {
+  bending_stress_stops,
+  CohesionField,
+  normal_stress_stops,
+  shear_admissible_stress,
+  shear_utilization_stops,
+  stress_utilization_stops,
+} from "../solver/cohesion-field";
+import { beam_strength } from "../../utils/section-properties";
 
 const TAU = 2 * Math.PI;
 
 /** Shared empty set, so a frame with nothing doomed allocates none. */
 const EMPTY_IDS: ReadonlySet<ID> = new Set<ID>();
 const EMPTY_SYMBOLS: RedundancySymbol[] = [];
+const EMPTY_LIBRARY: never[] = [];
+const EMPTY_COHESION_FIELDS: CohesionField[] = [];
 
 /**
  * Screen angle of the beam a node rides, 0 when it rides none. Screen and not
@@ -457,6 +476,10 @@ export function draw_edge_fake_end(
  * Omitting them is a safety net, never a fix: a dangling reference is a defect
  * the validator reports and `repair_mechanism` clears at load time. What this
  * buys is that the defect costs one invisible element instead of a blank canvas.
+ *
+ * A `materialID`/`profileID` is excluded from this check: it names a library entry, never an
+ * element `mechanicalElements` could hold, and drawing never resolves it — a beam's own
+ * geometry is all `draw_beam` ever needs.
  */
 function undrawable_elements(
   allElements: UnionElement[],
@@ -465,7 +488,12 @@ function undrawable_elements(
   const present = new Set<ID>(mechanicalElements.map((element) => element.id));
   const undrawable = new Set<ID>();
   for (const element of allElements) {
-    const dangling = element_refs(element).some((ref) => !present.has(ref.id));
+    const dangling = element_refs(element).some(
+      (ref) =>
+        !ref.spec.target.includes("material") &&
+        !ref.spec.target.includes("profile") &&
+        !present.has(ref.id),
+    );
     if (dangling) undrawable.add(element.id);
   }
   return undrawable;
@@ -520,6 +548,44 @@ export type CanvasDrawing = {
   /** `performance.now()`, ms — drives the symbols' pulse. Passed in rather than read here so a
    *  test can call this function with a fixed value. */
   now?: number;
+  /**
+   * The library panel's own tinting — present only
+   * while a library section is hovered, undefined the rest of the time (edition's normal
+   * colors apply). Every beam is colored by index into whichever list `section` names;
+   * `hoveredEntryID` (a row the panel itself is pointing at, not the canvas — see
+   * `draw_mechanism`'s own `hoveredPart`) thickens its beams, the same way any other hover
+   * does — it does not fade the rest, which would hide the very tint it is a legend for.
+   */
+  libraryTint?: {
+    section: "materials" | "profiles";
+    materials: MaterialDef[];
+    profiles: ProfileDef[];
+    hoveredEntryID: ID | null;
+  };
+  /** This mechanism's own material/profile library — resolves a beam's section/`Re` for the
+   *  beam-fill lens below. Undefined outside dynamic mode, where there is nothing to color. */
+  materials?: MaterialDef[];
+  profiles?: ProfileDef[];
+  /** One beam's internal-force field per entry (phase 4) — already computed for the panel
+   *  diagrams. What feeds the beam-fill lens below, for every beam. */
+  cohesionFields?: CohesionField[];
+  /** Which reading tints every beam's fill — mechanism-wide, not per-element (docs/plan-
+   *  efforts-interieurs.md phase 9). `undefined`/`"none"` colors nothing. */
+  beamStressLens?: BeamStressLens;
+  /** The `utilization` lens' shared ramp top (`StressScaleCache.maxStress`, `cohesion-field.ts`)
+   *  — the highest `|σ|max` ever recorded, Pa. `0` outside dynamic mode or before anything has
+   *  been recorded yet. */
+  stressScale?: number;
+  /** The `normal` lens' shared scale (`StressScaleCache.maxNormal`) — the highest `|N/A|` ever
+   *  recorded, Pa. `0` outside dynamic mode or before anything has been recorded yet. */
+  normalStressScale?: number;
+  /** The `bending` lens' shared scale (`StressScaleCache.maxBending`) — the highest
+   *  `|Mf·v/I|` ever recorded, Pa. `0` outside dynamic mode or before anything has been
+   *  recorded yet. */
+  bendingStressScale?: number;
+  /** The `shear` lens' shared ramp top (`StressScaleCache.maxShear`) — the highest `τ_max`
+   *  ever recorded, Pa. `0` outside dynamic mode or before anything has been recorded yet. */
+  shearStressScale?: number;
 };
 
 /**
@@ -547,6 +613,15 @@ export function draw_mechanism(
     highlight = NO_HIGHLIGHT,
     redundancySymbols = EMPTY_SYMBOLS,
     now = 0,
+    libraryTint,
+    materials = EMPTY_LIBRARY,
+    profiles = EMPTY_LIBRARY,
+    cohesionFields = EMPTY_COHESION_FIELDS,
+    beamStressLens = "none",
+    stressScale = 0,
+    normalStressScale = 0,
+    bendingStressScale = 0,
+    shearStressScale = 0,
   } = drawing;
   const focused = highlight.kind === "focus" ? highlight.elements : EMPTY_IDS;
   const faulty = highlight.kind === "fault" ? highlight.elements : EMPTY_IDS;
@@ -639,6 +714,88 @@ export function draw_mechanism(
   // Read once for the whole frame: the drawing and the hover share this map, so
   // the stroke and the cursor cannot disagree on where an edge is.
   const parallelOffsets = parallel_edge_offsets(mechanicalElements);
+
+  // The library dialog's tint — every beam's own color, and which of them share the
+  // hovered row's material/profile (see `CanvasDrawing.libraryTint`'s own doc).
+  const beamTintColors = new Map<ID, string>();
+  const beamTintHovered = new Set<ID>();
+  if (libraryTint) {
+    const entries =
+      libraryTint.section === "materials" ? libraryTint.materials : libraryTint.profiles;
+    const colorByEntryID = new Map(
+      entries.map((entry, i) => [entry.id, PROBE_ELEMENT_COLORS[i % PROBE_ELEMENT_COLORS.length]]),
+    );
+    for (const element of mechanicalElements) {
+      if (element.type !== "beam") continue;
+      const entryID =
+        libraryTint.section === "materials" ? element.materialID : element.profileID;
+      const color = colorByEntryID.get(entryID);
+      if (color) beamTintColors.set(element.id, color);
+      if (libraryTint.hoveredEntryID !== null && entryID === libraryTint.hoveredEntryID)
+        beamTintHovered.add(element.id);
+    }
+  }
+
+  // The beam-fill lens' own fill (phase 9, formerly phase 6's `stress` alone): one gradient's
+  // worth of stops per beam, from that beam's own cohesion field — ramped/colored and, for
+  // `utilization`/`shear`, stepped at their own limit here (drawing territory); the `*_stops`
+  // functions themselves stay physics-only. Every beam at once, not gated per-element: the
+  // lens is mechanism-wide (`BeamStressLens`'s own doc). Skipped for a beam without a
+  // resolvable material/profile (a dangling reference mid-edit) or without a field (outside
+  // dynamic mode, where there is nothing to color).
+  const beamStressStops = new Map<ID, BeamFillStop[]>();
+  if (beamStressLens !== "none") {
+    for (const field of cohesionFields) {
+      const beam = mechanicalElements.find(
+        (el): el is BeamElement => el.type === "beam" && el.id === field.beamID,
+      );
+      if (!beam) continue;
+      const strength = beam_strength(beam.materialID, beam.profileID, materials, profiles);
+      if (!strength) continue;
+      switch (beamStressLens) {
+        case "utilization":
+          beamStressStops.set(
+            beam.id,
+            beam_fill_stops(
+              stress_utilization_stops(field, strength.section, strength.Re),
+              stressScale,
+            ),
+          );
+          break;
+        case "normal":
+          beamStressStops.set(
+            beam.id,
+            signed_stress_fill_stops(
+              normal_stress_stops(field, strength.section),
+              normalStressScale,
+            ),
+          );
+          break;
+        case "bending":
+          beamStressStops.set(
+            beam.id,
+            magnitude_stress_fill_stops(
+              bending_stress_stops(field, strength.section),
+              bendingStressScale,
+            ),
+          );
+          break;
+        case "shear":
+          beamStressStops.set(
+            beam.id,
+            beam_fill_stops(
+              shear_utilization_stops(
+                field,
+                strength.section,
+                shear_admissible_stress(strength.Re),
+              ),
+              shearStressScale,
+            ),
+          );
+          break;
+      }
+    }
+  }
 
   // A gear normally draws under belts, so a belt wrapping it traces right over
   // its rim. Hovering/selecting/erase-hovering it re-draws it once more, after
@@ -791,6 +948,18 @@ export function draw_mechanism(
       if (element.type === "gear") {
         ctx.lineWidth = STROKE_WIDTHS.GEAR;
       }
+      // The library dialog's tint (`CanvasDrawing.libraryTint`) — a beam's own base color
+      // while that panel is open. Kept through selection below (a halo still marks it as
+      // selected) since hiding it there is exactly what a beam picked to check its own
+      // material/profile color would do first.
+      let beamTint: string | undefined;
+      if (element.type === "beam") {
+        beamTint = beamTintColors.get(element.id);
+        if (beamTint) {
+          ctx.strokeStyle = beamTint;
+          ctx.fillStyle = beamTint;
+        }
+      }
 
       // Thicken the stroke if element is hovered. Loads are left out: they pick
       // their width per sub-part below, from loadRestWidth / loadHoverWidth.
@@ -804,10 +973,10 @@ export function draw_mechanism(
           : COLORS.SELECTION_STROKE;
         ctx.strokeStyle = isLoadElement
           ? COLORS.SELECTION_ACCENT
-          : COLORS.SELECTION_STROKE;
+          : (beamTint ?? COLORS.SELECTION_STROKE);
         ctx.fillStyle = isLoadElement
           ? COLORS.SELECTION_ACCENT
-          : COLORS.FILL_BODY;
+          : (beamTint ?? COLORS.FILL_BODY);
         ctx.shadowBlur = INTERACTION_SPECS.SELECTION_HALO_SIZE;
       }
       // Add red stroke and make semi-transparent if element is to be deleted
@@ -822,6 +991,16 @@ export function draw_mechanism(
         ctx.strokeStyle = COLORS.DELETION_STROKE;
       // Fade out revealed constraints at the end of their hover cooldown.
       if (constraintOpacity !== undefined) ctx.globalAlpha *= constraintOpacity;
+      // A row hovered in the library panel: its own beams thicken, same as any other hover —
+      // the rest keep their tint, undimmed.
+      if (
+        libraryTint &&
+        libraryTint.hoveredEntryID !== null &&
+        element.type === "beam" &&
+        beamTintHovered.has(element.id)
+      ) {
+        ctx.lineWidth += STROKE_WIDTHS.HOVER_GAIN;
+      }
       // Tombstone of a just-deleted constraint (undo/redo feedback).
       const isGhost = ghostConstraintIDs.has(element.id);
       if (isGhost) ctx.strokeStyle = COLORS.DELETION_STROKE;
@@ -1017,6 +1196,9 @@ export function draw_mechanism(
                 end,
                 !!element.fixedNodeStartID,
                 !!element.fixedNodeEndID,
+                // The library tint takes priority when both are active — the dialog's hover
+                // feedback is the more immediate one, and the two are not meant to compete.
+                beamTint ? undefined : beamStressStops.get(element.id),
               );
               break;
             case "spring":

@@ -137,7 +137,7 @@ export const ConstraintsPanel: React.FC<ConstraintsPanelProps> = ({
                 onClick={() =>
                   applyActions([{ type: "DeleteElement", element: constraint }])
                 }
-                title={t("action_delete")}
+                title={t("delete")}
                 sx={{ borderRadius: 3 }}
               >
                 <Delete sx={{ width: 20, height: 20 }} />

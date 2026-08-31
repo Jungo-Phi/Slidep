@@ -42,6 +42,9 @@ interface NumberInputProps {
    *  decoration next to it — so typing over it ("12mm", "3cm", "150kN") is how a unit is
    *  overridden for that one entry. */
   kind?: QuantityKind;
+  /** A read-only view of `value` — the catalogue's own entries, never a mechanism's own. No
+   *  focus, no stepper, no edits reach `onChange`. */
+  disabled?: boolean;
 }
 
 export const NumberInput: React.FC<NumberInputProps> = ({
@@ -56,6 +59,7 @@ export const NumberInput: React.FC<NumberInputProps> = ({
   pillAdornment = false,
   precision = 1,
   kind,
+  disabled = false,
 }) => {
   const unit = kind ? display_unit(value, kind) : RAW_UNIT;
   const format = (v: number) => {
@@ -163,7 +167,7 @@ export const NumberInput: React.FC<NumberInputProps> = ({
     // A `kind` field accepts unit letters typed inline ("12mm", "150kN"), stand-ins `loose`
     // folds back to the real symbol ("N*m", "Nm" for "N·m"; "m2" for "m²"), and the
     // physicist's superscript exponent ("s⁻¹"); a plain one stays digits-only.
-    const pattern = kind ? /[^0-9.a-zA-Zµμ°·²⁻¹*^/ -]/g : /[^0-9.]/g;
+    const pattern = kind ? /[^0-9.a-zA-Zµμ°·²³⁻¹*^/ -]/g : /[^0-9.]/g;
     const body = rest.replace(pattern, "").replace(/(\.[^.]*)\./g, "$1");
     return (negative ? "-" : "") + body;
   };
@@ -196,6 +200,7 @@ export const NumberInput: React.FC<NumberInputProps> = ({
       <TextField
         label={label}
         type="text"
+        disabled={disabled}
         inputProps={{ inputMode: "decimal" }}
         value={displayed}
         onChange={(e) => setLocalValue(filterInput(e.target.value))}
@@ -282,7 +287,7 @@ export const NumberInput: React.FC<NumberInputProps> = ({
           height,
         }}
         InputProps={{
-          endAdornment: (
+          endAdornment: disabled ? undefined : (
             <Box sx={{ display: "flex", alignItems: "center", mr: -1.6 }}>
               <Box sx={{ display: "flex", flexDirection: "column" }}>
                 <IconButton

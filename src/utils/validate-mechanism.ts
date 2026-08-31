@@ -6,7 +6,7 @@ import {
   UnionElement,
 } from "../types/element";
 import type { ConstraintElement } from "../types/element";
-import { element_ref_fields } from "../types/element-refs";
+import { element_ref_fields, RefTarget } from "../types/element-refs";
 import { Point2 } from "../types/point2";
 import { Mechanism } from "../types/mechanism";
 import { legible_id, shown_element_name } from "./string-math";
@@ -145,12 +145,18 @@ export function validate_mechanism(
   const allByID = new Map<ID, UnionElement>(
     allElements.map((e): [ID, UnionElement] => [e.id, e]),
   );
+  // Library entries — a mechanism's own materials/profiles — are reference targets too
+  // (`BeamElement.materialID`/`profileID`), but not elements: kept out of `allByID` and
+  // checked separately below.
+  const materialByID = new Map(mechanism.materials.map((m) => [m.id, m]));
+  const profileByID = new Map(mechanism.profiles.map((p) => [p.id, p]));
 
   // Uses shown_element_name when the element exists, legible_id as fallback.
   function name(id: ID): string {
     if (!id) return t("validation_missing_id");
     const el = allByID.get(id);
-    return el ? shown_element_name(el) : legible_id(id);
+    if (el) return shown_element_name(el);
+    return materialByID.get(id)?.name ?? profileByID.get(id)?.name ?? legible_id(id);
   }
 
   // ── Duplicate IDs ────────────────────────────────────────────────────────────
@@ -205,7 +211,14 @@ export function validate_mechanism(
           continue;
         }
         const target = mechByID.get(refID);
-        if (!target) {
+        const targetType: RefTarget | undefined =
+          target?.type ??
+          (materialByID.has(refID)
+            ? "material"
+            : profileByID.has(refID)
+              ? "profile"
+              : undefined);
+        if (targetType === undefined) {
           errors.push({
             code: "MISSING_REFERENCE",
             message: t("validation_unknown_reference", {
@@ -217,14 +230,14 @@ export function validate_mechanism(
           });
           continue;
         }
-        if (!spec.target.includes(target.type)) {
+        if (!spec.target.includes(targetType)) {
           errors.push({
             code: "WRONG_TYPE",
             message: t("validation_wrong_type", {
               field,
               expected: spec.target.join(", "),
               name: name(refID),
-              type: target.type,
+              type: targetType,
             }),
             elementID: el.id,
             relatedID: refID,
@@ -234,6 +247,7 @@ export function validate_mechanism(
         const back_reference = BACK_REFERENCE[field];
         if (
           back_reference &&
+          target &&
           isMechanical.has(el) &&
           !back_reference(el as MechanicalElement, target)
         ) {

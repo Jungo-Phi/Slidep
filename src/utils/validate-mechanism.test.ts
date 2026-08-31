@@ -13,8 +13,10 @@ import {
   GearElement,
   ID,
   LoadElement,
+  MaterialDef,
   MechanicalElement,
   PivotElement,
+  ProfileDef,
 } from "../types";
 
 const id = (s: string) =>
@@ -25,11 +27,21 @@ const BEAM_ID = id("b1");
 const AXLE_ID = id("p2");
 const GEAR_ID = id("g1");
 const GEAR2_ID = id("g2");
+const MATERIAL_ID = id("m1");
+const PROFILE_ID = id("pr1");
+const MATERIALS: MaterialDef[] = [
+  { id: MATERIAL_ID, name: "test", E: 1, Re: 1, rho: 1, readOnly: false },
+];
+const PROFILES: ProfileDef[] = [
+  { id: PROFILE_ID, name: "test", shape: { kind: "rect", b: 1, h: 1 } },
+];
 
 function mechanism(
   mechanicalElements: MechanicalElement[],
   constraintElements: ConstraintElement[] = [],
   loads: LoadElement[] = [],
+  materials: MaterialDef[] = MATERIALS,
+  profiles: ProfileDef[] = PROFILES,
 ): Mechanism {
   return {
     metadata: DEFAULT_METADATA,
@@ -39,6 +51,8 @@ function mechanism(
     mechanicalElements,
     constraintElements,
     loads,
+    materials,
+    profiles,
     history: [],
     future: [],
   };
@@ -70,7 +84,8 @@ function beam(over: Partial<BeamElement> = {}): BeamElement {
     fixedNodeStartID: PIVOT_ID,
     fixedNodeEndID: undefined,
     fixedNodesBodyIDs: [],
-    linearMass: 1,
+    materialID: MATERIAL_ID,
+    profileID: PROFILE_ID,
     ...over,
   };
 }

@@ -10,6 +10,7 @@ import type {
   MechanicalElement,
   PivotElement,
 } from "../../types/element";
+import type { MaterialDef, ProfileDef } from "../../types/material";
 import { DynamicSnapshot, LinkReaction } from "../../types/runtime-state";
 import { DynamicsInput, PBD_kinematic_solver } from "./PBD_kinematic_solver";
 import {
@@ -133,9 +134,21 @@ let nextID = 0;
 const id = (): ID =>
   `00000000-0000-0000-0000-${String(++nextID).padStart(12, "0")}` as ID;
 
+/** Every beam in this file wants a linear mass of 1 (kg/m) — a 1×1 m rectangle, ρ = 1. */
+const MATERIAL_ID = id();
+const PROFILE_ID = id();
+const MATERIALS: MaterialDef[] = [
+  { id: MATERIAL_ID, name: "test", E: 1, Re: 1, rho: 1, readOnly: false },
+];
+const PROFILES: ProfileDef[] = [
+  { id: PROFILE_ID, name: "test", shape: { kind: "rect", b: 1, h: 1 } },
+];
+
 function mechanism(
   mechanicalElements: MechanicalElement[],
   loads: ForceElement[],
+  materials: MaterialDef[] = MATERIALS,
+  profiles: ProfileDef[] = PROFILES,
 ): Mechanism {
   return {
     metadata: DEFAULT_METADATA,
@@ -144,6 +157,8 @@ function mechanism(
     mechanicalElements,
     constraintElements: [],
     loads,
+    materials,
+    profiles,
     history: [],
     future: [],
   };
@@ -177,7 +192,8 @@ describe("réaction d'appui d'une poutre montée sur un pivot ancré", () => {
       positionEnd: new Point2(200, 0),
       fixedNodeStartID: PIVOT,
       fixedNodesBodyIDs: [],
-      linearMass: 1,
+      materialID: MATERIAL_ID,
+      profileID: PROFILE_ID,
     };
     const force: ForceElement = {
       type: "force",
@@ -228,7 +244,8 @@ describe("réaction d'appui d'un cantilever (poutre encastrée sur un join ancr�
       positionEnd: new Point2(1, 0),
       fixedNodeStartID: JOIN,
       fixedNodesBodyIDs: [],
-      linearMass: 1,
+      materialID: MATERIAL_ID,
+      profileID: PROFILE_ID,
     };
     const force: ForceElement = {
       type: "force",

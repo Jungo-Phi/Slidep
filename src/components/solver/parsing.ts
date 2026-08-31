@@ -8,10 +8,12 @@ import {
   GeomNodes,
   ID,
   Link,
+  MaterialDef,
   MechanicalElement,
   Point2,
   PivotElement,
   KinNodes,
+  ProfileDef,
   SpringElement,
 } from "../../types";
 import { measure_belt_length } from "../../utils/belt-geom";
@@ -26,6 +28,7 @@ import {
   hasStakeholderBeyond,
 } from "./experimental/belt-aggregate";
 import { BEAM_END_MASS_FRACTION } from "./mass-model";
+import { beam_linear_mass } from "../../utils/section-properties";
 
 /**
  * A driven beam's own moment of inertia about its pivot, parallel-axis theorem:
@@ -33,11 +36,16 @@ import { BEAM_END_MASS_FRACTION } from "./mass-model";
  * the pivot's world position. Covers both an end-pivoted arm (`a = L/2`, giving the familiar
  * `mL²/3`) and one welded through its body (`fixedNodesBodyIDs`, arbitrary `a`) with the same
  * formula — `motor_arm` already resolves which case applies; this only needs where the pivot
- * actually sits.
+ * actually sits. `linearMass` is passed in rather than resolved here: the caller already
+ * needs it for the arm's own end mass, so it is computed once and shared.
  */
-function beam_pivot_inertia(beam: BeamElement, pivotPos: Point2): number {
+function beam_pivot_inertia(
+  beam: BeamElement,
+  pivotPos: Point2,
+  linearMass: number,
+): number {
   const length = beam.positionStart.distance_to(beam.positionEnd);
-  const mass = beam.linearMass * length;
+  const mass = linearMass * length;
   const center = beam.positionStart.lerp(beam.positionEnd, 0.5);
   const a = pivotPos.distance_to(center);
   return (mass * length * length) / 12 + mass * a * a;
@@ -911,6 +919,8 @@ export function get_links_geometric(
 export function get_links_simulation(
   mechanicalElements: MechanicalElement[],
   nodes: KinNodes,
+  materials: MaterialDef[],
+  profiles: ProfileDef[],
   dynamicRigidity: boolean = false,
 ): Link[] {
   const links: Link[] = [];
@@ -1199,8 +1209,14 @@ export function get_links_simulation(
       if (!beam || beam.type !== "beam") return;
       const arm = motor_arm(element, beam);
       if (!arm) return;
+      const linearMass = beam_linear_mass(
+        beam.materialID,
+        beam.profileID,
+        materials,
+        profiles,
+      );
       const beamMass =
-        beam.linearMass * beam.positionStart.distance_to(beam.positionEnd);
+        linearMass * beam.positionStart.distance_to(beam.positionEnd);
       links.push({
         type: "MotorBeam",
         ddl: 1,
@@ -1211,7 +1227,7 @@ export function get_links_simulation(
         omega,
         targetAngle: arm.dir.angle(),
         owner: element.id,
-        armInertia: beam_pivot_inertia(beam, element.position),
+        armInertia: beam_pivot_inertia(beam, element.position, linearMass),
         armEndMass: beamMass * BEAM_END_MASS_FRACTION,
       });
     });

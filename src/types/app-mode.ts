@@ -18,4 +18,5 @@ export type PropertiesPanelTab =
   | "project"
   | "elements"
   | "constraints"
+  | "library"
   | "analysis";

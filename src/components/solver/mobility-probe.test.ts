@@ -12,10 +12,12 @@ import {
   BeltElement,
   ID,
   JoinElement,
+  MaterialDef,
   MechanicalElement,
   Mechanism,
   PivotElement,
   Point2,
+  ProfileDef,
   SliderElement,
 } from "../../types";
 import { DEFAULT_METADATA, DEFAULT_SIMULATION } from "../../types/mechanism";
@@ -28,6 +30,15 @@ const id = (s: string) =>
   `00000000-0000-0000-0000-${s.padStart(12, "0")}` as ID;
 const P = (x: number, y: number) => new Point2(x, y);
 
+const MATERIAL_ID = id("material");
+const PROFILE_ID = id("profile");
+const MATERIALS: MaterialDef[] = [
+  { id: MATERIAL_ID, name: "test", E: 1, Re: 1, rho: 1, readOnly: false },
+];
+const PROFILES: ProfileDef[] = [
+  { id: PROFILE_ID, name: "test", shape: { kind: "rect", b: 1, h: 1 } },
+];
+
 function mechanism(mechanicalElements: MechanicalElement[]): Mechanism {
   return {
     metadata: DEFAULT_METADATA,
@@ -37,6 +48,8 @@ function mechanism(mechanicalElements: MechanicalElement[]): Mechanism {
     mechanicalElements,
     constraintElements: [],
     loads: [],
+    materials: MATERIALS,
+    profiles: PROFILES,
     history: [],
     future: [],
   };
@@ -105,7 +118,8 @@ function beam(
     fixedNodeStartID: s ? id(s) : undefined,
     fixedNodeEndID: e ? id(e) : undefined,
     fixedNodesBodyIDs: body,
-    linearMass: 1,
+    materialID: MATERIAL_ID,
+    profileID: PROFILE_ID,
   };
 }
 
