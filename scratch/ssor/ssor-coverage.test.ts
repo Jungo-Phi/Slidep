@@ -3,11 +3,17 @@ import { appendFileSync, readdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { load_mechanism } from "../../src/utils/load-mechanism";
 import { compile_simulation_model } from "../../src/components/solver/simulation-engine";
+import { solveNodesFromMaps } from "../../src/components/solver/nodes";
+import { resolve_slots } from "../../src/components/solver/link-slots";
+import { reversed_sweep_order } from "../../src/components/solver/sweep-order";
 
 /**
- * Does per-chain classification ever actually SPLIT a mechanism? If every mechanism is
- * either wholly tree or wholly loop, "per chain" collapses to "alternate iff this
- * mechanism has no closed belt", and the union-find plumbing buys nothing.
+ * Which mechanisms of the gallery the shipped sweep alternation actually reaches, and
+ * whether they carry a loop at all — the two columns a change of criterion moves.
+ *
+ * Counts the compiled model's own links only. A dynamics step adds one `FixedOnSegment` per
+ * massive beam (its rotational-inertia midpoint), so the live count is a little higher; this
+ * is a diagnostic of the criterion, not of a frame.
  */
 describe("SSOR coverage", () => {
   it("gallery", () => {
@@ -21,9 +27,23 @@ describe("SSOR coverage", () => {
         ).mechanism;
         const model = compile_simulation_model(mech);
         const links = model.links;
-        const tagged = links.filter(
-          (l) => (l as unknown as Record<string, unknown>).ssorAlternate,
-        ).length;
+        const nodes = solveNodesFromMaps(
+          model.nodes.positions,
+          model.dynamicMasses.posMasses,
+          model.nodes.angles,
+          new Map(),
+          new Map(),
+          0,
+          new Map(),
+          new Map(),
+          model.dynamicMasses.angleMasses,
+        );
+        const order = reversed_sweep_order(links, resolve_slots(links, nodes), nodes);
+        // A reordered slot is a link the alternation moves; the middle one of an odd run
+        // maps to itself, so this reads one low there. Close enough for a coverage column.
+        const tagged = order
+          ? order.reduce((n, to, from) => n + (to === from ? 0 : 1), 0)
+          : 0;
         // Untagged is NOT the same as "in a loop": a link every one of whose keys is
         // anchored holds no free key either, so it reads untagged too. Only a mechanism
         // that actually carries closed-belt machinery can be untagged FOR that reason.

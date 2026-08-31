@@ -42,6 +42,7 @@ import {
   writeVelocitiesBack,
 } from "./nodes";
 import { LinkSlots, resolve_slots } from "./link-slots";
+import { reversed_sweep_order } from "./sweep-order";
 
 export type SolverMaps = {
   positions: Map<string, Point2>;
@@ -508,6 +509,11 @@ export function PBD_solve(
     }
   }
 
+  // Odd sweeps run the non-redundant chains backwards — see `reversed_sweep_order` for why
+  // that is a direct solve there and unsafe elsewhere. Dynamics only: it is the only mode
+  // carrying real masses, so the only one where a mass ratio can build a residual at all.
+  const reversed = dynamics ? reversed_sweep_order(links, slots, nodes) : null;
+
   let maxError: number = 0;
   for (let i = 0; i < nbIterations; i++) {
     maxError = 0;
@@ -516,7 +522,10 @@ export function PBD_solve(
     prevY.set(nodes.y);
     prevA.set(nodes.angle);
 
-    links.forEach((link, idx) => {
+    const sweepOrder = reversed !== null && i % 2 === 1 ? reversed : null;
+    for (let step = 0; step < links.length; step++) {
+      const idx = sweepOrder === null ? step : sweepOrder[step];
+      const link = links[idx];
       const s = slots[idx];
       if (traceX && traceY && traceA) {
         traceX.set(nodes.x);
@@ -871,7 +880,7 @@ export function PBD_solve(
         }
         if (residuals) residuals[idx] = residual;
       }
-    });
+    }
 
     // ── What this sweep actually moved ────────────────────────────────────────
     // Angles are measured alongside positions, never instead of them: the coupling

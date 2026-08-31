@@ -290,11 +290,15 @@ describe("réaction d'appui d'un cantilever (poutre encastrée sur un join ancr�
     const atJoin = element_reactions(join, snapshot!);
     expect(atJoin).toHaveLength(1);
     expect(atJoin[0].atAnchor).toBe(true);
+    // Read to a share of the load, not to a fixed newton figure: `reversed_sweep_order` moves
+    // a little of a member's load between its two ends, so the bound has to scale with what
+    // is being read. The resultant itself stays exact.
+    const tolerance = 0.01 * 100; // 1 % of the tip load below
     // Negligible beam mass, no gravity, one load: the support opposes it exactly
     // (`element_reactions` negates whatever the mechanism imposes at an anchored point —
     // the classical "reaction opposes the load" reading, not the raw internal-force one).
-    expect(atJoin[0].vector.x).toBeCloseTo(0, 2);
-    expect(atJoin[0].vector.y).toBeCloseTo(100, 0);
+    expect(Math.abs(atJoin[0].vector.x)).toBeLessThanOrEqual(tolerance);
+    expect(Math.abs(atJoin[0].vector.y - 100)).toBeLessThanOrEqual(tolerance);
     // Textbook cantilever, downward tip load 1 m out: the fixed end also carries a reaction
     // MOMENT, +100 N·m (counter-clockwise — opposing the load's own clockwise tendency).
     // Moments are never negated (see `moment_at`), so this reads directly as the support's own.

@@ -1,0 +1,3053 @@
+{
+  "formatVersion": 10,
+  "metadata": {
+    "name": "Balance",
+    "description": "",
+    "author": "",
+    "createdAt": 1788182307718,
+    "modifiedAt": 1788183134032,
+    "tags": [],
+    "lastSimulationMode": "dynamic"
+  },
+  "viewport": {
+    "pan": {
+      "x": 597.5877685546875,
+      "y": 535.9190063476562
+    },
+    "scale": 1000
+  },
+  "simulation": {
+    "gravity": true,
+    "collisions": false,
+    "floor": {
+      "enabled": false,
+      "height": 0,
+      "angle": 0
+    }
+  },
+  "mechanicalElements": [
+    {
+      "type": "beam",
+      "id": "3e5d4413-9183-482c-b8a9-5b100a53e6ff",
+      "probes": [],
+      "overlays": {},
+      "positionStart": {
+        "x": 0,
+        "y": 0.2
+      },
+      "positionEnd": {
+        "x": -0.1,
+        "y": 0
+      },
+      "fixedNodeStartID": "60d28138-dda3-40dc-bc94-bb519546b5c8",
+      "fixedNodeEndID": "1c6235ea-df63-49b6-8e87-27ce82d66381",
+      "fixedNodesBodyIDs": [],
+      "materialID": "ce478fcc-24f1-4c34-b52c-1973d94eb780",
+      "profileID": "07317d4d-0428-4de8-8546-e78a1bae7b33"
+    },
+    {
+      "type": "beam",
+      "id": "0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6",
+      "probes": [
+        {
+          "metric": "force-start",
+          "components": {
+            "x": false,
+            "y": false,
+            "norm": true
+          }
+        }
+      ],
+      "overlays": {},
+      "positionStart": {
+        "x": 0,
+        "y": 0.2
+      },
+      "positionEnd": {
+        "x": 0.1,
+        "y": 0
+      },
+      "fixedNodeStartID": "60d28138-dda3-40dc-bc94-bb519546b5c8",
+      "fixedNodeEndID": "4c797149-0760-459d-ae57-6abfca8f8a8c",
+      "fixedNodesBodyIDs": [],
+      "materialID": "ce478fcc-24f1-4c34-b52c-1973d94eb780",
+      "profileID": "07317d4d-0428-4de8-8546-e78a1bae7b33"
+    },
+    {
+      "type": "join",
+      "id": "4c797149-0760-459d-ae57-6abfca8f8a8c",
+      "probes": [],
+      "overlays": {
+        "trajectory": false,
+        "force": true
+      },
+      "fixedEdgesIDs": [
+        "0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6"
+      ],
+      "position": {
+        "x": 0.1,
+        "y": 0
+      },
+      "isGrounded": true
+    },
+    {
+      "type": "pivot",
+      "id": "60d28138-dda3-40dc-bc94-bb519546b5c8",
+      "probes": [],
+      "overlays": {
+        "trajectory": false,
+        "force": true
+      },
+      "position": {
+        "x": 0,
+        "y": 0.2
+      },
+      "isGrounded": false,
+      "rotatingEdgesIDs": [
+        "0957d7e3-95d9-4762-a8f6-15005b7d49b9",
+        "3e5d4413-9183-482c-b8a9-5b100a53e6ff",
+        "0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6"
+      ],
+      "fixedGearsIDs": [],
+      "rotationalFriction": 0.001
+    },
+    {
+      "type": "beam",
+      "id": "0957d7e3-95d9-4762-a8f6-15005b7d49b9",
+      "probes": [
+        {
+          "metric": "angle",
+          "components": {
+            "x": false,
+            "y": false,
+            "norm": true
+          }
+        }
+      ],
+      "overlays": {},
+      "positionStart": {
+        "x": -0.30000000000000004,
+        "y": 0.2
+      },
+      "positionEnd": {
+        "x": 0.4,
+        "y": 0.2
+      },
+      "fixedNodeStartID": "c0582e8f-c56a-4fa6-a5c4-358adefd6f20",
+      "fixedNodeEndID": "9e0baf2d-1a37-459b-a70b-570e4d872e6b",
+      "fixedNodesBodyIDs": [
+        "60d28138-dda3-40dc-bc94-bb519546b5c8"
+      ],
+      "materialID": "ce478fcc-24f1-4c34-b52c-1973d94eb780",
+      "profileID": "07317d4d-0428-4de8-8546-e78a1bae7b33"
+    },
+    {
+      "type": "mass",
+      "id": "9e0baf2d-1a37-459b-a70b-570e4d872e6b",
+      "probes": [],
+      "overlays": {
+        "trajectory": false,
+        "force": true
+      },
+      "position": {
+        "x": 0.4,
+        "y": 0.2
+      },
+      "isGrounded": false,
+      "fixedEdgesIDs": [
+        "0957d7e3-95d9-4762-a8f6-15005b7d49b9"
+      ],
+      "mass": 10
+    },
+    {
+      "type": "spring",
+      "id": "6ac6def8-4bda-4af9-993a-1d0e6d3cb54f",
+      "probes": [],
+      "overlays": {},
+      "positionStart": {
+        "x": -0.30000000000000004,
+        "y": 0.2
+      },
+      "positionEnd": {
+        "x": -0.1,
+        "y": 0
+      },
+      "fixedNodeStartID": "c0582e8f-c56a-4fa6-a5c4-358adefd6f20",
+      "fixedNodeEndID": "1c6235ea-df63-49b6-8e87-27ce82d66381",
+      "stiffness": 10000
+    },
+    {
+      "type": "pivot",
+      "id": "c0582e8f-c56a-4fa6-a5c4-358adefd6f20",
+      "probes": [],
+      "overlays": {
+        "trajectory": false,
+        "force": true
+      },
+      "position": {
+        "x": -0.30000000000000004,
+        "y": 0.2
+      },
+      "isGrounded": false,
+      "rotatingEdgesIDs": [
+        "b98a5151-bca7-403e-9468-72319caee546",
+        "0957d7e3-95d9-4762-a8f6-15005b7d49b9",
+        "6ac6def8-4bda-4af9-993a-1d0e6d3cb54f"
+      ],
+      "fixedGearsIDs": [],
+      "rotationalFriction": 0.001
+    },
+    {
+      "type": "pivot",
+      "id": "1c6235ea-df63-49b6-8e87-27ce82d66381",
+      "probes": [],
+      "overlays": {
+        "trajectory": false,
+        "force": true
+      },
+      "position": {
+        "x": -0.1,
+        "y": 0
+      },
+      "isGrounded": true,
+      "rotatingEdgesIDs": [
+        "b98a5151-bca7-403e-9468-72319caee546",
+        "3e5d4413-9183-482c-b8a9-5b100a53e6ff",
+        "6ac6def8-4bda-4af9-993a-1d0e6d3cb54f"
+      ],
+      "fixedGearsIDs": [],
+      "rotationalFriction": 0.001
+    },
+    {
+      "type": "damper",
+      "id": "b98a5151-bca7-403e-9468-72319caee546",
+      "probes": [],
+      "overlays": {},
+      "positionStart": {
+        "x": -0.30000000000000004,
+        "y": 0.2
+      },
+      "positionEnd": {
+        "x": -0.1,
+        "y": 0
+      },
+      "fixedNodeStartID": "c0582e8f-c56a-4fa6-a5c4-358adefd6f20",
+      "fixedNodeEndID": "1c6235ea-df63-49b6-8e87-27ce82d66381",
+      "damping": 200
+    }
+  ],
+  "constraintElements": [],
+  "loads": [],
+  "materials": [
+    {
+      "id": "ce478fcc-24f1-4c34-b52c-1973d94eb780",
+      "name": "Acier",
+      "E": 210000000000,
+      "Re": 235000000,
+      "rho": 7850,
+      "readOnly": true
+    },
+    {
+      "id": "faf920d6-ab45-4dfa-851e-4bbec1565400",
+      "name": "Aluminium",
+      "E": 70000000000,
+      "Re": 195000000,
+      "rho": 2700,
+      "readOnly": true
+    },
+    {
+      "id": "d0ab7d44-ee0e-4fa0-bf0c-51e113f2e144",
+      "name": "Inox",
+      "E": 200000000000,
+      "Re": 215000000,
+      "rho": 8000,
+      "readOnly": true
+    },
+    {
+      "id": "a890dddc-7765-4499-ab17-194a8881d7e1",
+      "name": "Bois",
+      "E": 11000000000,
+      "Re": 24000000,
+      "rho": 450,
+      "readOnly": true
+    }
+  ],
+  "profiles": [
+    {
+      "id": "07317d4d-0428-4de8-8546-e78a1bae7b33",
+      "name": "Rectangle plein",
+      "shape": {
+        "kind": "rect",
+        "b": 0.02,
+        "h": 0.02
+      }
+    }
+  ],
+  "history": [
+    [
+      {
+        "type": "CreateElement",
+        "element": {
+          "type": "beam",
+          "id": "3e5d4413-9183-482c-b8a9-5b100a53e6ff",
+          "probes": [],
+          "overlays": {},
+          "positionStart": {
+            "x": 0,
+            "y": 0.2
+          },
+          "positionEnd": {
+            "x": -0.1,
+            "y": 0
+          },
+          "fixedNodesBodyIDs": [],
+          "materialID": "ce478fcc-24f1-4c34-b52c-1973d94eb780",
+          "profileID": "07317d4d-0428-4de8-8546-e78a1bae7b33"
+        }
+      },
+      {
+        "type": "UpdatePositionsToValidState",
+        "masterActionType": "CreateElement",
+        "newNodes": {
+          "positions": [
+            [
+              "3e5d4413-9183-482c-b8a9-5b100a53e6ff:start",
+              {
+                "x": 0,
+                "y": 0.2
+              }
+            ],
+            [
+              "3e5d4413-9183-482c-b8a9-5b100a53e6ff:end",
+              {
+                "x": -0.1,
+                "y": 0
+              }
+            ]
+          ],
+          "radii": [],
+          "posMasses": [
+            [
+              "3e5d4413-9183-482c-b8a9-5b100a53e6ff:start",
+              1
+            ],
+            [
+              "3e5d4413-9183-482c-b8a9-5b100a53e6ff:end",
+              1
+            ]
+          ],
+          "radMasses": []
+        },
+        "oldNodes": {
+          "positions": [],
+          "radii": [],
+          "posMasses": [],
+          "radMasses": []
+        }
+      }
+    ],
+    [
+      {
+        "type": "CreateElement",
+        "element": {
+          "type": "beam",
+          "id": "0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6",
+          "probes": [],
+          "overlays": {},
+          "positionStart": {
+            "x": 0,
+            "y": 0.2
+          },
+          "positionEnd": {
+            "x": 0.1,
+            "y": 0
+          },
+          "fixedNodesBodyIDs": [],
+          "materialID": "ce478fcc-24f1-4c34-b52c-1973d94eb780",
+          "profileID": "07317d4d-0428-4de8-8546-e78a1bae7b33"
+        }
+      },
+      {
+        "type": "CreateElement",
+        "element": {
+          "type": "join",
+          "id": "b8b35989-89d0-47bf-8afa-0a8d816ddf0f",
+          "probes": [],
+          "overlays": {},
+          "fixedEdgesIDs": [],
+          "position": {
+            "x": 0,
+            "y": 0.2
+          },
+          "isGrounded": false
+        }
+      },
+      {
+        "type": "ConnectsFixedEdges",
+        "disconnect": false,
+        "elementID": "b8b35989-89d0-47bf-8afa-0a8d816ddf0f",
+        "connectID": "3e5d4413-9183-482c-b8a9-5b100a53e6ff",
+        "index": 0
+      },
+      {
+        "type": "ConnectsFixedNodeStart",
+        "disconnect": false,
+        "elementID": "3e5d4413-9183-482c-b8a9-5b100a53e6ff",
+        "connectID": "b8b35989-89d0-47bf-8afa-0a8d816ddf0f"
+      },
+      {
+        "type": "ConnectsFixedEdges",
+        "disconnect": false,
+        "elementID": "b8b35989-89d0-47bf-8afa-0a8d816ddf0f",
+        "connectID": "0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6",
+        "index": 0
+      },
+      {
+        "type": "ConnectsFixedNodeStart",
+        "disconnect": false,
+        "elementID": "0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6",
+        "connectID": "b8b35989-89d0-47bf-8afa-0a8d816ddf0f"
+      },
+      {
+        "type": "UpdatePositionsToValidState",
+        "masterActionType": "CreateElement",
+        "newNodes": {
+          "positions": [
+            [
+              "3e5d4413-9183-482c-b8a9-5b100a53e6ff:end",
+              {
+                "x": -0.1,
+                "y": 0
+              }
+            ],
+            [
+              "0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6:end",
+              {
+                "x": 0.1,
+                "y": 0
+              }
+            ],
+            [
+              "b8b35989-89d0-47bf-8afa-0a8d816ddf0f",
+              {
+                "x": 0,
+                "y": 0.2
+              }
+            ],
+            [
+              "3e5d4413-9183-482c-b8a9-5b100a53e6ff:start",
+              {
+                "x": 0,
+                "y": 0.2
+              }
+            ],
+            [
+              "0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6:start",
+              {
+                "x": 0,
+                "y": 0.2
+              }
+            ]
+          ],
+          "radii": [],
+          "posMasses": [
+            [
+              "3e5d4413-9183-482c-b8a9-5b100a53e6ff:end",
+              1
+            ],
+            [
+              "0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6:end",
+              1
+            ],
+            [
+              "b8b35989-89d0-47bf-8afa-0a8d816ddf0f,3e5d4413-9183-482c-b8a9-5b100a53e6ff:start,0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6:start",
+              1
+            ]
+          ],
+          "radMasses": []
+        },
+        "oldNodes": {
+          "positions": [
+            [
+              "3e5d4413-9183-482c-b8a9-5b100a53e6ff:start",
+              {
+                "x": 0,
+                "y": 0.2
+              }
+            ],
+            [
+              "3e5d4413-9183-482c-b8a9-5b100a53e6ff:end",
+              {
+                "x": -0.1,
+                "y": 0
+              }
+            ]
+          ],
+          "radii": [],
+          "posMasses": [
+            [
+              "3e5d4413-9183-482c-b8a9-5b100a53e6ff:start",
+              1
+            ],
+            [
+              "3e5d4413-9183-482c-b8a9-5b100a53e6ff:end",
+              1
+            ]
+          ],
+          "radMasses": []
+        }
+      }
+    ],
+    [
+      {
+        "type": "CreateElement",
+        "element": {
+          "type": "join",
+          "id": "a206a29e-a381-4e25-b8a8-cbb2ae55538e",
+          "probes": [],
+          "overlays": {},
+          "fixedEdgesIDs": [],
+          "position": {
+            "x": -0.1,
+            "y": 0
+          },
+          "isGrounded": true
+        }
+      },
+      {
+        "type": "ConnectsFixedEdges",
+        "disconnect": false,
+        "elementID": "a206a29e-a381-4e25-b8a8-cbb2ae55538e",
+        "connectID": "3e5d4413-9183-482c-b8a9-5b100a53e6ff",
+        "index": 0
+      },
+      {
+        "type": "ConnectsFixedNodeEnd",
+        "disconnect": false,
+        "elementID": "3e5d4413-9183-482c-b8a9-5b100a53e6ff",
+        "connectID": "a206a29e-a381-4e25-b8a8-cbb2ae55538e"
+      },
+      {
+        "type": "UpdatePositionsToValidState",
+        "masterActionType": "CreateElement",
+        "newNodes": {
+          "positions": [
+            [
+              "0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6:end",
+              {
+                "x": 0.1,
+                "y": 0
+              }
+            ],
+            [
+              "a206a29e-a381-4e25-b8a8-cbb2ae55538e",
+              {
+                "x": -0.1,
+                "y": 0
+              }
+            ],
+            [
+              "3e5d4413-9183-482c-b8a9-5b100a53e6ff:end",
+              {
+                "x": -0.1,
+                "y": 0
+              }
+            ],
+            [
+              "b8b35989-89d0-47bf-8afa-0a8d816ddf0f",
+              {
+                "x": 0,
+                "y": 0.2
+              }
+            ],
+            [
+              "3e5d4413-9183-482c-b8a9-5b100a53e6ff:start",
+              {
+                "x": 0,
+                "y": 0.2
+              }
+            ],
+            [
+              "0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6:start",
+              {
+                "x": 0,
+                "y": 0.2
+              }
+            ]
+          ],
+          "radii": [],
+          "posMasses": [
+            [
+              "0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6:end",
+              1
+            ],
+            [
+              "a206a29e-a381-4e25-b8a8-cbb2ae55538e,3e5d4413-9183-482c-b8a9-5b100a53e6ff:end",
+              0
+            ],
+            [
+              "b8b35989-89d0-47bf-8afa-0a8d816ddf0f,3e5d4413-9183-482c-b8a9-5b100a53e6ff:start,0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6:start",
+              1
+            ]
+          ],
+          "radMasses": []
+        },
+        "oldNodes": {
+          "positions": [
+            [
+              "3e5d4413-9183-482c-b8a9-5b100a53e6ff:start",
+              {
+                "x": 0,
+                "y": 0.2
+              }
+            ],
+            [
+              "3e5d4413-9183-482c-b8a9-5b100a53e6ff:end",
+              {
+                "x": -0.1,
+                "y": 0
+              }
+            ],
+            [
+              "0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6:start",
+              {
+                "x": 0,
+                "y": 0.2
+              }
+            ],
+            [
+              "0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6:end",
+              {
+                "x": 0.1,
+                "y": 0
+              }
+            ],
+            [
+              "b8b35989-89d0-47bf-8afa-0a8d816ddf0f",
+              {
+                "x": 0,
+                "y": 0.2
+              }
+            ]
+          ],
+          "radii": [],
+          "posMasses": [
+            [
+              "3e5d4413-9183-482c-b8a9-5b100a53e6ff:start",
+              1
+            ],
+            [
+              "3e5d4413-9183-482c-b8a9-5b100a53e6ff:end",
+              1
+            ],
+            [
+              "0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6:start",
+              1
+            ],
+            [
+              "0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6:end",
+              1
+            ],
+            [
+              "b8b35989-89d0-47bf-8afa-0a8d816ddf0f",
+              1
+            ]
+          ],
+          "radMasses": []
+        }
+      }
+    ],
+    [
+      {
+        "type": "CreateElement",
+        "element": {
+          "type": "join",
+          "id": "4c797149-0760-459d-ae57-6abfca8f8a8c",
+          "probes": [],
+          "overlays": {},
+          "fixedEdgesIDs": [],
+          "position": {
+            "x": 0.1,
+            "y": 0
+          },
+          "isGrounded": true
+        }
+      },
+      {
+        "type": "ConnectsFixedEdges",
+        "disconnect": false,
+        "elementID": "4c797149-0760-459d-ae57-6abfca8f8a8c",
+        "connectID": "0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6",
+        "index": 0
+      },
+      {
+        "type": "ConnectsFixedNodeEnd",
+        "disconnect": false,
+        "elementID": "0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6",
+        "connectID": "4c797149-0760-459d-ae57-6abfca8f8a8c"
+      },
+      {
+        "type": "UpdatePositionsToValidState",
+        "masterActionType": "CreateElement",
+        "newNodes": {
+          "positions": [
+            [
+              "a206a29e-a381-4e25-b8a8-cbb2ae55538e",
+              {
+                "x": -0.1,
+                "y": 0
+              }
+            ],
+            [
+              "3e5d4413-9183-482c-b8a9-5b100a53e6ff:end",
+              {
+                "x": -0.1,
+                "y": 0
+              }
+            ],
+            [
+              "b8b35989-89d0-47bf-8afa-0a8d816ddf0f",
+              {
+                "x": 0,
+                "y": 0.2
+              }
+            ],
+            [
+              "3e5d4413-9183-482c-b8a9-5b100a53e6ff:start",
+              {
+                "x": 0,
+                "y": 0.2
+              }
+            ],
+            [
+              "0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6:start",
+              {
+                "x": 0,
+                "y": 0.2
+              }
+            ],
+            [
+              "4c797149-0760-459d-ae57-6abfca8f8a8c",
+              {
+                "x": 0.1,
+                "y": 0
+              }
+            ],
+            [
+              "0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6:end",
+              {
+                "x": 0.1,
+                "y": 0
+              }
+            ]
+          ],
+          "radii": [],
+          "posMasses": [
+            [
+              "a206a29e-a381-4e25-b8a8-cbb2ae55538e,3e5d4413-9183-482c-b8a9-5b100a53e6ff:end",
+              0
+            ],
+            [
+              "b8b35989-89d0-47bf-8afa-0a8d816ddf0f,3e5d4413-9183-482c-b8a9-5b100a53e6ff:start,0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6:start",
+              1
+            ],
+            [
+              "4c797149-0760-459d-ae57-6abfca8f8a8c,0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6:end",
+              0
+            ]
+          ],
+          "radMasses": []
+        },
+        "oldNodes": {
+          "positions": [
+            [
+              "3e5d4413-9183-482c-b8a9-5b100a53e6ff:start",
+              {
+                "x": 0,
+                "y": 0.2
+              }
+            ],
+            [
+              "3e5d4413-9183-482c-b8a9-5b100a53e6ff:end",
+              {
+                "x": -0.1,
+                "y": 0
+              }
+            ],
+            [
+              "0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6:start",
+              {
+                "x": 0,
+                "y": 0.2
+              }
+            ],
+            [
+              "0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6:end",
+              {
+                "x": 0.1,
+                "y": 0
+              }
+            ],
+            [
+              "b8b35989-89d0-47bf-8afa-0a8d816ddf0f",
+              {
+                "x": 0,
+                "y": 0.2
+              }
+            ],
+            [
+              "a206a29e-a381-4e25-b8a8-cbb2ae55538e",
+              {
+                "x": -0.1,
+                "y": 0
+              }
+            ]
+          ],
+          "radii": [],
+          "posMasses": [
+            [
+              "3e5d4413-9183-482c-b8a9-5b100a53e6ff:start",
+              1
+            ],
+            [
+              "3e5d4413-9183-482c-b8a9-5b100a53e6ff:end",
+              1
+            ],
+            [
+              "0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6:start",
+              1
+            ],
+            [
+              "0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6:end",
+              1
+            ],
+            [
+              "b8b35989-89d0-47bf-8afa-0a8d816ddf0f",
+              1
+            ],
+            [
+              "a206a29e-a381-4e25-b8a8-cbb2ae55538e",
+              0
+            ]
+          ],
+          "radMasses": []
+        }
+      }
+    ],
+    [
+      {
+        "type": "CreateElement",
+        "element": {
+          "type": "pivot",
+          "id": "60d28138-dda3-40dc-bc94-bb519546b5c8",
+          "probes": [],
+          "overlays": {},
+          "position": {
+            "x": 0,
+            "y": 0.2
+          },
+          "isGrounded": false,
+          "rotatingEdgesIDs": [],
+          "fixedGearsIDs": [],
+          "rotationalFriction": 0.001
+        }
+      },
+      {
+        "type": "DeleteElement",
+        "element": {
+          "type": "join",
+          "id": "b8b35989-89d0-47bf-8afa-0a8d816ddf0f",
+          "probes": [],
+          "overlays": {},
+          "fixedEdgesIDs": [
+            "0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6",
+            "3e5d4413-9183-482c-b8a9-5b100a53e6ff"
+          ],
+          "position": {
+            "x": 0,
+            "y": 0.2
+          },
+          "isGrounded": false
+        }
+      },
+      {
+        "type": "ConnectsRotatingEdges",
+        "disconnect": false,
+        "elementID": "60d28138-dda3-40dc-bc94-bb519546b5c8",
+        "connectID": "0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6",
+        "index": 0
+      },
+      {
+        "type": "ConnectsRotatingEdges",
+        "disconnect": false,
+        "elementID": "60d28138-dda3-40dc-bc94-bb519546b5c8",
+        "connectID": "3e5d4413-9183-482c-b8a9-5b100a53e6ff",
+        "index": 0
+      },
+      {
+        "type": "ConnectsFixedNodeStart",
+        "disconnect": true,
+        "elementID": "0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6",
+        "connectID": "b8b35989-89d0-47bf-8afa-0a8d816ddf0f"
+      },
+      {
+        "type": "ConnectsFixedNodeStart",
+        "disconnect": false,
+        "elementID": "0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6",
+        "connectID": "60d28138-dda3-40dc-bc94-bb519546b5c8"
+      },
+      {
+        "type": "ConnectsFixedNodeStart",
+        "disconnect": true,
+        "elementID": "3e5d4413-9183-482c-b8a9-5b100a53e6ff",
+        "connectID": "b8b35989-89d0-47bf-8afa-0a8d816ddf0f"
+      },
+      {
+        "type": "ConnectsFixedNodeStart",
+        "disconnect": false,
+        "elementID": "3e5d4413-9183-482c-b8a9-5b100a53e6ff",
+        "connectID": "60d28138-dda3-40dc-bc94-bb519546b5c8"
+      },
+      {
+        "type": "UpdatePositionsToValidState",
+        "masterActionType": "CreateElement",
+        "newNodes": {
+          "positions": [
+            [
+              "a206a29e-a381-4e25-b8a8-cbb2ae55538e",
+              {
+                "x": -0.1,
+                "y": 0
+              }
+            ],
+            [
+              "3e5d4413-9183-482c-b8a9-5b100a53e6ff:end",
+              {
+                "x": -0.1,
+                "y": 0
+              }
+            ],
+            [
+              "60d28138-dda3-40dc-bc94-bb519546b5c8",
+              {
+                "x": 0,
+                "y": 0.2
+              }
+            ],
+            [
+              "3e5d4413-9183-482c-b8a9-5b100a53e6ff:start",
+              {
+                "x": 0,
+                "y": 0.2
+              }
+            ],
+            [
+              "0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6:start",
+              {
+                "x": 0,
+                "y": 0.2
+              }
+            ],
+            [
+              "4c797149-0760-459d-ae57-6abfca8f8a8c",
+              {
+                "x": 0.1,
+                "y": 0
+              }
+            ],
+            [
+              "0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6:end",
+              {
+                "x": 0.1,
+                "y": 0
+              }
+            ]
+          ],
+          "radii": [],
+          "posMasses": [
+            [
+              "a206a29e-a381-4e25-b8a8-cbb2ae55538e,3e5d4413-9183-482c-b8a9-5b100a53e6ff:end",
+              0
+            ],
+            [
+              "60d28138-dda3-40dc-bc94-bb519546b5c8,3e5d4413-9183-482c-b8a9-5b100a53e6ff:start,0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6:start",
+              1
+            ],
+            [
+              "4c797149-0760-459d-ae57-6abfca8f8a8c,0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6:end",
+              0
+            ]
+          ],
+          "radMasses": []
+        },
+        "oldNodes": {
+          "positions": [
+            [
+              "3e5d4413-9183-482c-b8a9-5b100a53e6ff:start",
+              {
+                "x": 0,
+                "y": 0.2
+              }
+            ],
+            [
+              "3e5d4413-9183-482c-b8a9-5b100a53e6ff:end",
+              {
+                "x": -0.1,
+                "y": 0
+              }
+            ],
+            [
+              "0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6:start",
+              {
+                "x": 0,
+                "y": 0.2
+              }
+            ],
+            [
+              "0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6:end",
+              {
+                "x": 0.1,
+                "y": 0
+              }
+            ],
+            [
+              "a206a29e-a381-4e25-b8a8-cbb2ae55538e",
+              {
+                "x": -0.1,
+                "y": 0
+              }
+            ],
+            [
+              "4c797149-0760-459d-ae57-6abfca8f8a8c",
+              {
+                "x": 0.1,
+                "y": 0
+              }
+            ],
+            [
+              "b8b35989-89d0-47bf-8afa-0a8d816ddf0f",
+              {
+                "x": 0,
+                "y": 0.2
+              }
+            ]
+          ],
+          "radii": [],
+          "posMasses": [
+            [
+              "3e5d4413-9183-482c-b8a9-5b100a53e6ff:start",
+              1
+            ],
+            [
+              "3e5d4413-9183-482c-b8a9-5b100a53e6ff:end",
+              1
+            ],
+            [
+              "0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6:start",
+              1
+            ],
+            [
+              "0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6:end",
+              1
+            ],
+            [
+              "a206a29e-a381-4e25-b8a8-cbb2ae55538e",
+              0
+            ],
+            [
+              "4c797149-0760-459d-ae57-6abfca8f8a8c",
+              0
+            ],
+            [
+              "b8b35989-89d0-47bf-8afa-0a8d816ddf0f",
+              1
+            ]
+          ],
+          "radMasses": []
+        }
+      }
+    ],
+    [
+      {
+        "type": "CreateElement",
+        "element": {
+          "type": "beam",
+          "id": "0957d7e3-95d9-4762-a8f6-15005b7d49b9",
+          "probes": [],
+          "overlays": {},
+          "positionStart": {
+            "x": -0.30000000000000004,
+            "y": 0.2
+          },
+          "positionEnd": {
+            "x": 0.4,
+            "y": 0.2
+          },
+          "fixedNodesBodyIDs": [],
+          "materialID": "ce478fcc-24f1-4c34-b52c-1973d94eb780",
+          "profileID": "07317d4d-0428-4de8-8546-e78a1bae7b33"
+        }
+      },
+      {
+        "type": "ConnectsRotatingEdges",
+        "disconnect": false,
+        "elementID": "60d28138-dda3-40dc-bc94-bb519546b5c8",
+        "connectID": "0957d7e3-95d9-4762-a8f6-15005b7d49b9",
+        "index": 0
+      },
+      {
+        "type": "ConnectsFixedNodesBody",
+        "disconnect": false,
+        "elementID": "0957d7e3-95d9-4762-a8f6-15005b7d49b9",
+        "connectID": "60d28138-dda3-40dc-bc94-bb519546b5c8",
+        "index": 0
+      },
+      {
+        "type": "UpdatePositionsToValidState",
+        "masterActionType": "CreateElement",
+        "newNodes": {
+          "positions": [
+            [
+              "0957d7e3-95d9-4762-a8f6-15005b7d49b9:start",
+              {
+                "x": -0.30000000000000004,
+                "y": 0.2
+              }
+            ],
+            [
+              "0957d7e3-95d9-4762-a8f6-15005b7d49b9:end",
+              {
+                "x": 0.4,
+                "y": 0.2
+              }
+            ],
+            [
+              "a206a29e-a381-4e25-b8a8-cbb2ae55538e",
+              {
+                "x": -0.1,
+                "y": 0
+              }
+            ],
+            [
+              "3e5d4413-9183-482c-b8a9-5b100a53e6ff:end",
+              {
+                "x": -0.1,
+                "y": 0
+              }
+            ],
+            [
+              "60d28138-dda3-40dc-bc94-bb519546b5c8",
+              {
+                "x": 0,
+                "y": 0.2
+              }
+            ],
+            [
+              "3e5d4413-9183-482c-b8a9-5b100a53e6ff:start",
+              {
+                "x": 0,
+                "y": 0.2
+              }
+            ],
+            [
+              "0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6:start",
+              {
+                "x": 0,
+                "y": 0.2
+              }
+            ],
+            [
+              "4c797149-0760-459d-ae57-6abfca8f8a8c",
+              {
+                "x": 0.1,
+                "y": 0
+              }
+            ],
+            [
+              "0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6:end",
+              {
+                "x": 0.1,
+                "y": 0
+              }
+            ]
+          ],
+          "radii": [],
+          "posMasses": [
+            [
+              "0957d7e3-95d9-4762-a8f6-15005b7d49b9:start",
+              1
+            ],
+            [
+              "0957d7e3-95d9-4762-a8f6-15005b7d49b9:end",
+              1
+            ],
+            [
+              "a206a29e-a381-4e25-b8a8-cbb2ae55538e,3e5d4413-9183-482c-b8a9-5b100a53e6ff:end",
+              0
+            ],
+            [
+              "60d28138-dda3-40dc-bc94-bb519546b5c8,3e5d4413-9183-482c-b8a9-5b100a53e6ff:start,0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6:start",
+              1
+            ],
+            [
+              "4c797149-0760-459d-ae57-6abfca8f8a8c,0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6:end",
+              0
+            ]
+          ],
+          "radMasses": []
+        },
+        "oldNodes": {
+          "positions": [
+            [
+              "3e5d4413-9183-482c-b8a9-5b100a53e6ff:start",
+              {
+                "x": 0,
+                "y": 0.2
+              }
+            ],
+            [
+              "3e5d4413-9183-482c-b8a9-5b100a53e6ff:end",
+              {
+                "x": -0.1,
+                "y": 0
+              }
+            ],
+            [
+              "0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6:start",
+              {
+                "x": 0,
+                "y": 0.2
+              }
+            ],
+            [
+              "0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6:end",
+              {
+                "x": 0.1,
+                "y": 0
+              }
+            ],
+            [
+              "a206a29e-a381-4e25-b8a8-cbb2ae55538e",
+              {
+                "x": -0.1,
+                "y": 0
+              }
+            ],
+            [
+              "4c797149-0760-459d-ae57-6abfca8f8a8c",
+              {
+                "x": 0.1,
+                "y": 0
+              }
+            ],
+            [
+              "60d28138-dda3-40dc-bc94-bb519546b5c8",
+              {
+                "x": 0,
+                "y": 0.2
+              }
+            ]
+          ],
+          "radii": [],
+          "posMasses": [
+            [
+              "3e5d4413-9183-482c-b8a9-5b100a53e6ff:start",
+              1
+            ],
+            [
+              "3e5d4413-9183-482c-b8a9-5b100a53e6ff:end",
+              1
+            ],
+            [
+              "0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6:start",
+              1
+            ],
+            [
+              "0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6:end",
+              1
+            ],
+            [
+              "a206a29e-a381-4e25-b8a8-cbb2ae55538e",
+              0
+            ],
+            [
+              "4c797149-0760-459d-ae57-6abfca8f8a8c",
+              0
+            ],
+            [
+              "60d28138-dda3-40dc-bc94-bb519546b5c8",
+              1
+            ]
+          ],
+          "radMasses": []
+        }
+      }
+    ],
+    [
+      {
+        "type": "CreateElement",
+        "element": {
+          "type": "mass",
+          "id": "9e0baf2d-1a37-459b-a70b-570e4d872e6b",
+          "probes": [],
+          "overlays": {},
+          "position": {
+            "x": 0.4,
+            "y": 0.2
+          },
+          "isGrounded": false,
+          "fixedEdgesIDs": [],
+          "mass": 1
+        }
+      },
+      {
+        "type": "ConnectsFixedEdges",
+        "disconnect": false,
+        "elementID": "9e0baf2d-1a37-459b-a70b-570e4d872e6b",
+        "connectID": "0957d7e3-95d9-4762-a8f6-15005b7d49b9",
+        "index": 0
+      },
+      {
+        "type": "ConnectsFixedNodeEnd",
+        "disconnect": false,
+        "elementID": "0957d7e3-95d9-4762-a8f6-15005b7d49b9",
+        "connectID": "9e0baf2d-1a37-459b-a70b-570e4d872e6b"
+      },
+      {
+        "type": "UpdatePositionsToValidState",
+        "masterActionType": "CreateElement",
+        "newNodes": {
+          "positions": [
+            [
+              "0957d7e3-95d9-4762-a8f6-15005b7d49b9:start",
+              {
+                "x": -0.30000000000000004,
+                "y": 0.2
+              }
+            ],
+            [
+              "a206a29e-a381-4e25-b8a8-cbb2ae55538e",
+              {
+                "x": -0.1,
+                "y": 0
+              }
+            ],
+            [
+              "3e5d4413-9183-482c-b8a9-5b100a53e6ff:end",
+              {
+                "x": -0.1,
+                "y": 0
+              }
+            ],
+            [
+              "60d28138-dda3-40dc-bc94-bb519546b5c8",
+              {
+                "x": 0,
+                "y": 0.2
+              }
+            ],
+            [
+              "3e5d4413-9183-482c-b8a9-5b100a53e6ff:start",
+              {
+                "x": 0,
+                "y": 0.2
+              }
+            ],
+            [
+              "0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6:start",
+              {
+                "x": 0,
+                "y": 0.2
+              }
+            ],
+            [
+              "4c797149-0760-459d-ae57-6abfca8f8a8c",
+              {
+                "x": 0.1,
+                "y": 0
+              }
+            ],
+            [
+              "0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6:end",
+              {
+                "x": 0.1,
+                "y": 0
+              }
+            ],
+            [
+              "9e0baf2d-1a37-459b-a70b-570e4d872e6b",
+              {
+                "x": 0.4,
+                "y": 0.2
+              }
+            ],
+            [
+              "0957d7e3-95d9-4762-a8f6-15005b7d49b9:end",
+              {
+                "x": 0.4,
+                "y": 0.2
+              }
+            ]
+          ],
+          "radii": [],
+          "posMasses": [
+            [
+              "0957d7e3-95d9-4762-a8f6-15005b7d49b9:start",
+              1
+            ],
+            [
+              "a206a29e-a381-4e25-b8a8-cbb2ae55538e,3e5d4413-9183-482c-b8a9-5b100a53e6ff:end",
+              0
+            ],
+            [
+              "60d28138-dda3-40dc-bc94-bb519546b5c8,3e5d4413-9183-482c-b8a9-5b100a53e6ff:start,0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6:start",
+              1
+            ],
+            [
+              "4c797149-0760-459d-ae57-6abfca8f8a8c,0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6:end",
+              0
+            ],
+            [
+              "9e0baf2d-1a37-459b-a70b-570e4d872e6b,0957d7e3-95d9-4762-a8f6-15005b7d49b9:end",
+              1
+            ]
+          ],
+          "radMasses": []
+        },
+        "oldNodes": {
+          "positions": [
+            [
+              "3e5d4413-9183-482c-b8a9-5b100a53e6ff:start",
+              {
+                "x": 0,
+                "y": 0.2
+              }
+            ],
+            [
+              "3e5d4413-9183-482c-b8a9-5b100a53e6ff:end",
+              {
+                "x": -0.1,
+                "y": 0
+              }
+            ],
+            [
+              "0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6:start",
+              {
+                "x": 0,
+                "y": 0.2
+              }
+            ],
+            [
+              "0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6:end",
+              {
+                "x": 0.1,
+                "y": 0
+              }
+            ],
+            [
+              "a206a29e-a381-4e25-b8a8-cbb2ae55538e",
+              {
+                "x": -0.1,
+                "y": 0
+              }
+            ],
+            [
+              "4c797149-0760-459d-ae57-6abfca8f8a8c",
+              {
+                "x": 0.1,
+                "y": 0
+              }
+            ],
+            [
+              "60d28138-dda3-40dc-bc94-bb519546b5c8",
+              {
+                "x": 0,
+                "y": 0.2
+              }
+            ],
+            [
+              "0957d7e3-95d9-4762-a8f6-15005b7d49b9:start",
+              {
+                "x": -0.30000000000000004,
+                "y": 0.2
+              }
+            ],
+            [
+              "0957d7e3-95d9-4762-a8f6-15005b7d49b9:end",
+              {
+                "x": 0.4,
+                "y": 0.2
+              }
+            ]
+          ],
+          "radii": [],
+          "posMasses": [
+            [
+              "3e5d4413-9183-482c-b8a9-5b100a53e6ff:start",
+              1
+            ],
+            [
+              "3e5d4413-9183-482c-b8a9-5b100a53e6ff:end",
+              1
+            ],
+            [
+              "0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6:start",
+              1
+            ],
+            [
+              "0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6:end",
+              1
+            ],
+            [
+              "a206a29e-a381-4e25-b8a8-cbb2ae55538e",
+              0
+            ],
+            [
+              "4c797149-0760-459d-ae57-6abfca8f8a8c",
+              0
+            ],
+            [
+              "60d28138-dda3-40dc-bc94-bb519546b5c8",
+              1
+            ],
+            [
+              "0957d7e3-95d9-4762-a8f6-15005b7d49b9:start",
+              1
+            ],
+            [
+              "0957d7e3-95d9-4762-a8f6-15005b7d49b9:end",
+              1
+            ]
+          ],
+          "radMasses": []
+        }
+      }
+    ],
+    [
+      {
+        "type": "ChangeMass",
+        "id": "9e0baf2d-1a37-459b-a70b-570e4d872e6b",
+        "delta": 9
+      }
+    ],
+    [
+      {
+        "type": "CreateElement",
+        "element": {
+          "type": "spring",
+          "id": "6ac6def8-4bda-4af9-993a-1d0e6d3cb54f",
+          "probes": [],
+          "overlays": {},
+          "positionStart": {
+            "x": -0.30000000000000004,
+            "y": 0.2
+          },
+          "positionEnd": {
+            "x": -0.1,
+            "y": 0
+          },
+          "stiffness": 100
+        }
+      },
+      {
+        "type": "CreateElement",
+        "element": {
+          "type": "join",
+          "id": "66a4ae8f-818b-4a53-98c1-b2b79f16f06c",
+          "probes": [],
+          "overlays": {},
+          "fixedEdgesIDs": [],
+          "position": {
+            "x": -0.30000000000000004,
+            "y": 0.2
+          },
+          "isGrounded": false
+        }
+      },
+      {
+        "type": "ConnectsFixedEdges",
+        "disconnect": false,
+        "elementID": "66a4ae8f-818b-4a53-98c1-b2b79f16f06c",
+        "connectID": "0957d7e3-95d9-4762-a8f6-15005b7d49b9",
+        "index": 0
+      },
+      {
+        "type": "ConnectsFixedNodeStart",
+        "disconnect": false,
+        "elementID": "0957d7e3-95d9-4762-a8f6-15005b7d49b9",
+        "connectID": "66a4ae8f-818b-4a53-98c1-b2b79f16f06c"
+      },
+      {
+        "type": "ConnectsFixedEdges",
+        "disconnect": false,
+        "elementID": "66a4ae8f-818b-4a53-98c1-b2b79f16f06c",
+        "connectID": "6ac6def8-4bda-4af9-993a-1d0e6d3cb54f",
+        "index": 0
+      },
+      {
+        "type": "ConnectsFixedNodeStart",
+        "disconnect": false,
+        "elementID": "6ac6def8-4bda-4af9-993a-1d0e6d3cb54f",
+        "connectID": "66a4ae8f-818b-4a53-98c1-b2b79f16f06c"
+      },
+      {
+        "type": "ConnectsFixedEdges",
+        "disconnect": false,
+        "elementID": "a206a29e-a381-4e25-b8a8-cbb2ae55538e",
+        "connectID": "6ac6def8-4bda-4af9-993a-1d0e6d3cb54f",
+        "index": 0
+      },
+      {
+        "type": "ConnectsFixedNodeEnd",
+        "disconnect": false,
+        "elementID": "6ac6def8-4bda-4af9-993a-1d0e6d3cb54f",
+        "connectID": "a206a29e-a381-4e25-b8a8-cbb2ae55538e"
+      },
+      {
+        "type": "UpdatePositionsToValidState",
+        "masterActionType": "CreateElement",
+        "newNodes": {
+          "positions": [
+            [
+              "60d28138-dda3-40dc-bc94-bb519546b5c8",
+              {
+                "x": 0,
+                "y": 0.2
+              }
+            ],
+            [
+              "3e5d4413-9183-482c-b8a9-5b100a53e6ff:start",
+              {
+                "x": 0,
+                "y": 0.2
+              }
+            ],
+            [
+              "0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6:start",
+              {
+                "x": 0,
+                "y": 0.2
+              }
+            ],
+            [
+              "4c797149-0760-459d-ae57-6abfca8f8a8c",
+              {
+                "x": 0.1,
+                "y": 0
+              }
+            ],
+            [
+              "0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6:end",
+              {
+                "x": 0.1,
+                "y": 0
+              }
+            ],
+            [
+              "9e0baf2d-1a37-459b-a70b-570e4d872e6b",
+              {
+                "x": 0.4,
+                "y": 0.2
+              }
+            ],
+            [
+              "0957d7e3-95d9-4762-a8f6-15005b7d49b9:end",
+              {
+                "x": 0.4,
+                "y": 0.2
+              }
+            ],
+            [
+              "66a4ae8f-818b-4a53-98c1-b2b79f16f06c",
+              {
+                "x": -0.30000000000000004,
+                "y": 0.2
+              }
+            ],
+            [
+              "0957d7e3-95d9-4762-a8f6-15005b7d49b9:start",
+              {
+                "x": -0.30000000000000004,
+                "y": 0.2
+              }
+            ],
+            [
+              "6ac6def8-4bda-4af9-993a-1d0e6d3cb54f:start",
+              {
+                "x": -0.30000000000000004,
+                "y": 0.2
+              }
+            ],
+            [
+              "a206a29e-a381-4e25-b8a8-cbb2ae55538e",
+              {
+                "x": -0.1,
+                "y": 0
+              }
+            ],
+            [
+              "3e5d4413-9183-482c-b8a9-5b100a53e6ff:end",
+              {
+                "x": -0.1,
+                "y": 0
+              }
+            ],
+            [
+              "6ac6def8-4bda-4af9-993a-1d0e6d3cb54f:end",
+              {
+                "x": -0.1,
+                "y": 0
+              }
+            ]
+          ],
+          "radii": [],
+          "posMasses": [
+            [
+              "60d28138-dda3-40dc-bc94-bb519546b5c8,3e5d4413-9183-482c-b8a9-5b100a53e6ff:start,0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6:start",
+              1
+            ],
+            [
+              "4c797149-0760-459d-ae57-6abfca8f8a8c,0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6:end",
+              0
+            ],
+            [
+              "9e0baf2d-1a37-459b-a70b-570e4d872e6b,0957d7e3-95d9-4762-a8f6-15005b7d49b9:end",
+              1
+            ],
+            [
+              "66a4ae8f-818b-4a53-98c1-b2b79f16f06c,0957d7e3-95d9-4762-a8f6-15005b7d49b9:start,6ac6def8-4bda-4af9-993a-1d0e6d3cb54f:start",
+              1
+            ],
+            [
+              "a206a29e-a381-4e25-b8a8-cbb2ae55538e,3e5d4413-9183-482c-b8a9-5b100a53e6ff:end,6ac6def8-4bda-4af9-993a-1d0e6d3cb54f:end",
+              0
+            ]
+          ],
+          "radMasses": []
+        },
+        "oldNodes": {
+          "positions": [
+            [
+              "3e5d4413-9183-482c-b8a9-5b100a53e6ff:start",
+              {
+                "x": 0,
+                "y": 0.2
+              }
+            ],
+            [
+              "3e5d4413-9183-482c-b8a9-5b100a53e6ff:end",
+              {
+                "x": -0.1,
+                "y": 0
+              }
+            ],
+            [
+              "0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6:start",
+              {
+                "x": 0,
+                "y": 0.2
+              }
+            ],
+            [
+              "0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6:end",
+              {
+                "x": 0.1,
+                "y": 0
+              }
+            ],
+            [
+              "a206a29e-a381-4e25-b8a8-cbb2ae55538e",
+              {
+                "x": -0.1,
+                "y": 0
+              }
+            ],
+            [
+              "4c797149-0760-459d-ae57-6abfca8f8a8c",
+              {
+                "x": 0.1,
+                "y": 0
+              }
+            ],
+            [
+              "60d28138-dda3-40dc-bc94-bb519546b5c8",
+              {
+                "x": 0,
+                "y": 0.2
+              }
+            ],
+            [
+              "0957d7e3-95d9-4762-a8f6-15005b7d49b9:start",
+              {
+                "x": -0.30000000000000004,
+                "y": 0.2
+              }
+            ],
+            [
+              "0957d7e3-95d9-4762-a8f6-15005b7d49b9:end",
+              {
+                "x": 0.4,
+                "y": 0.2
+              }
+            ],
+            [
+              "9e0baf2d-1a37-459b-a70b-570e4d872e6b",
+              {
+                "x": 0.4,
+                "y": 0.2
+              }
+            ]
+          ],
+          "radii": [],
+          "posMasses": [
+            [
+              "3e5d4413-9183-482c-b8a9-5b100a53e6ff:start",
+              1
+            ],
+            [
+              "3e5d4413-9183-482c-b8a9-5b100a53e6ff:end",
+              1
+            ],
+            [
+              "0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6:start",
+              1
+            ],
+            [
+              "0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6:end",
+              1
+            ],
+            [
+              "a206a29e-a381-4e25-b8a8-cbb2ae55538e",
+              0
+            ],
+            [
+              "4c797149-0760-459d-ae57-6abfca8f8a8c",
+              0
+            ],
+            [
+              "60d28138-dda3-40dc-bc94-bb519546b5c8",
+              1
+            ],
+            [
+              "0957d7e3-95d9-4762-a8f6-15005b7d49b9:start",
+              1
+            ],
+            [
+              "0957d7e3-95d9-4762-a8f6-15005b7d49b9:end",
+              1
+            ],
+            [
+              "9e0baf2d-1a37-459b-a70b-570e4d872e6b",
+              1
+            ]
+          ],
+          "radMasses": []
+        }
+      }
+    ],
+    [
+      {
+        "type": "CreateElement",
+        "element": {
+          "type": "pivot",
+          "id": "c0582e8f-c56a-4fa6-a5c4-358adefd6f20",
+          "probes": [],
+          "overlays": {},
+          "position": {
+            "x": -0.30000000000000004,
+            "y": 0.2
+          },
+          "isGrounded": false,
+          "rotatingEdgesIDs": [],
+          "fixedGearsIDs": [],
+          "rotationalFriction": 0.001
+        }
+      },
+      {
+        "type": "DeleteElement",
+        "element": {
+          "type": "join",
+          "id": "66a4ae8f-818b-4a53-98c1-b2b79f16f06c",
+          "probes": [],
+          "overlays": {},
+          "fixedEdgesIDs": [
+            "6ac6def8-4bda-4af9-993a-1d0e6d3cb54f",
+            "0957d7e3-95d9-4762-a8f6-15005b7d49b9"
+          ],
+          "position": {
+            "x": -0.30000000000000004,
+            "y": 0.2
+          },
+          "isGrounded": false
+        }
+      },
+      {
+        "type": "ConnectsRotatingEdges",
+        "disconnect": false,
+        "elementID": "c0582e8f-c56a-4fa6-a5c4-358adefd6f20",
+        "connectID": "6ac6def8-4bda-4af9-993a-1d0e6d3cb54f",
+        "index": 0
+      },
+      {
+        "type": "ConnectsRotatingEdges",
+        "disconnect": false,
+        "elementID": "c0582e8f-c56a-4fa6-a5c4-358adefd6f20",
+        "connectID": "0957d7e3-95d9-4762-a8f6-15005b7d49b9",
+        "index": 0
+      },
+      {
+        "type": "ConnectsFixedNodeStart",
+        "disconnect": true,
+        "elementID": "6ac6def8-4bda-4af9-993a-1d0e6d3cb54f",
+        "connectID": "66a4ae8f-818b-4a53-98c1-b2b79f16f06c"
+      },
+      {
+        "type": "ConnectsFixedNodeStart",
+        "disconnect": false,
+        "elementID": "6ac6def8-4bda-4af9-993a-1d0e6d3cb54f",
+        "connectID": "c0582e8f-c56a-4fa6-a5c4-358adefd6f20"
+      },
+      {
+        "type": "ConnectsFixedNodeStart",
+        "disconnect": true,
+        "elementID": "0957d7e3-95d9-4762-a8f6-15005b7d49b9",
+        "connectID": "66a4ae8f-818b-4a53-98c1-b2b79f16f06c"
+      },
+      {
+        "type": "ConnectsFixedNodeStart",
+        "disconnect": false,
+        "elementID": "0957d7e3-95d9-4762-a8f6-15005b7d49b9",
+        "connectID": "c0582e8f-c56a-4fa6-a5c4-358adefd6f20"
+      },
+      {
+        "type": "UpdatePositionsToValidState",
+        "masterActionType": "CreateElement",
+        "newNodes": {
+          "positions": [
+            [
+              "60d28138-dda3-40dc-bc94-bb519546b5c8",
+              {
+                "x": 0,
+                "y": 0.2
+              }
+            ],
+            [
+              "3e5d4413-9183-482c-b8a9-5b100a53e6ff:start",
+              {
+                "x": 0,
+                "y": 0.2
+              }
+            ],
+            [
+              "0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6:start",
+              {
+                "x": 0,
+                "y": 0.2
+              }
+            ],
+            [
+              "4c797149-0760-459d-ae57-6abfca8f8a8c",
+              {
+                "x": 0.1,
+                "y": 0
+              }
+            ],
+            [
+              "0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6:end",
+              {
+                "x": 0.1,
+                "y": 0
+              }
+            ],
+            [
+              "9e0baf2d-1a37-459b-a70b-570e4d872e6b",
+              {
+                "x": 0.4,
+                "y": 0.2
+              }
+            ],
+            [
+              "0957d7e3-95d9-4762-a8f6-15005b7d49b9:end",
+              {
+                "x": 0.4,
+                "y": 0.2
+              }
+            ],
+            [
+              "c0582e8f-c56a-4fa6-a5c4-358adefd6f20",
+              {
+                "x": -0.30000000000000004,
+                "y": 0.2
+              }
+            ],
+            [
+              "0957d7e3-95d9-4762-a8f6-15005b7d49b9:start",
+              {
+                "x": -0.30000000000000004,
+                "y": 0.2
+              }
+            ],
+            [
+              "6ac6def8-4bda-4af9-993a-1d0e6d3cb54f:start",
+              {
+                "x": -0.30000000000000004,
+                "y": 0.2
+              }
+            ],
+            [
+              "a206a29e-a381-4e25-b8a8-cbb2ae55538e",
+              {
+                "x": -0.1,
+                "y": 0
+              }
+            ],
+            [
+              "3e5d4413-9183-482c-b8a9-5b100a53e6ff:end",
+              {
+                "x": -0.1,
+                "y": 0
+              }
+            ],
+            [
+              "6ac6def8-4bda-4af9-993a-1d0e6d3cb54f:end",
+              {
+                "x": -0.1,
+                "y": 0
+              }
+            ]
+          ],
+          "radii": [],
+          "posMasses": [
+            [
+              "60d28138-dda3-40dc-bc94-bb519546b5c8,3e5d4413-9183-482c-b8a9-5b100a53e6ff:start,0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6:start",
+              1
+            ],
+            [
+              "4c797149-0760-459d-ae57-6abfca8f8a8c,0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6:end",
+              0
+            ],
+            [
+              "9e0baf2d-1a37-459b-a70b-570e4d872e6b,0957d7e3-95d9-4762-a8f6-15005b7d49b9:end",
+              1
+            ],
+            [
+              "c0582e8f-c56a-4fa6-a5c4-358adefd6f20,0957d7e3-95d9-4762-a8f6-15005b7d49b9:start,6ac6def8-4bda-4af9-993a-1d0e6d3cb54f:start",
+              1
+            ],
+            [
+              "a206a29e-a381-4e25-b8a8-cbb2ae55538e,3e5d4413-9183-482c-b8a9-5b100a53e6ff:end,6ac6def8-4bda-4af9-993a-1d0e6d3cb54f:end",
+              0
+            ]
+          ],
+          "radMasses": []
+        },
+        "oldNodes": {
+          "positions": [
+            [
+              "3e5d4413-9183-482c-b8a9-5b100a53e6ff:start",
+              {
+                "x": 0,
+                "y": 0.2
+              }
+            ],
+            [
+              "3e5d4413-9183-482c-b8a9-5b100a53e6ff:end",
+              {
+                "x": -0.1,
+                "y": 0
+              }
+            ],
+            [
+              "0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6:start",
+              {
+                "x": 0,
+                "y": 0.2
+              }
+            ],
+            [
+              "0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6:end",
+              {
+                "x": 0.1,
+                "y": 0
+              }
+            ],
+            [
+              "a206a29e-a381-4e25-b8a8-cbb2ae55538e",
+              {
+                "x": -0.1,
+                "y": 0
+              }
+            ],
+            [
+              "4c797149-0760-459d-ae57-6abfca8f8a8c",
+              {
+                "x": 0.1,
+                "y": 0
+              }
+            ],
+            [
+              "60d28138-dda3-40dc-bc94-bb519546b5c8",
+              {
+                "x": 0,
+                "y": 0.2
+              }
+            ],
+            [
+              "0957d7e3-95d9-4762-a8f6-15005b7d49b9:start",
+              {
+                "x": -0.30000000000000004,
+                "y": 0.2
+              }
+            ],
+            [
+              "0957d7e3-95d9-4762-a8f6-15005b7d49b9:end",
+              {
+                "x": 0.4,
+                "y": 0.2
+              }
+            ],
+            [
+              "9e0baf2d-1a37-459b-a70b-570e4d872e6b",
+              {
+                "x": 0.4,
+                "y": 0.2
+              }
+            ],
+            [
+              "6ac6def8-4bda-4af9-993a-1d0e6d3cb54f:start",
+              {
+                "x": -0.30000000000000004,
+                "y": 0.2
+              }
+            ],
+            [
+              "6ac6def8-4bda-4af9-993a-1d0e6d3cb54f:end",
+              {
+                "x": -0.1,
+                "y": 0
+              }
+            ],
+            [
+              "66a4ae8f-818b-4a53-98c1-b2b79f16f06c",
+              {
+                "x": -0.30000000000000004,
+                "y": 0.2
+              }
+            ]
+          ],
+          "radii": [],
+          "posMasses": [
+            [
+              "3e5d4413-9183-482c-b8a9-5b100a53e6ff:start",
+              1
+            ],
+            [
+              "3e5d4413-9183-482c-b8a9-5b100a53e6ff:end",
+              1
+            ],
+            [
+              "0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6:start",
+              1
+            ],
+            [
+              "0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6:end",
+              1
+            ],
+            [
+              "a206a29e-a381-4e25-b8a8-cbb2ae55538e",
+              0
+            ],
+            [
+              "4c797149-0760-459d-ae57-6abfca8f8a8c",
+              0
+            ],
+            [
+              "60d28138-dda3-40dc-bc94-bb519546b5c8",
+              1
+            ],
+            [
+              "0957d7e3-95d9-4762-a8f6-15005b7d49b9:start",
+              1
+            ],
+            [
+              "0957d7e3-95d9-4762-a8f6-15005b7d49b9:end",
+              1
+            ],
+            [
+              "9e0baf2d-1a37-459b-a70b-570e4d872e6b",
+              1
+            ],
+            [
+              "6ac6def8-4bda-4af9-993a-1d0e6d3cb54f:start",
+              1
+            ],
+            [
+              "6ac6def8-4bda-4af9-993a-1d0e6d3cb54f:end",
+              1
+            ],
+            [
+              "66a4ae8f-818b-4a53-98c1-b2b79f16f06c",
+              1
+            ]
+          ],
+          "radMasses": []
+        }
+      }
+    ],
+    [
+      {
+        "type": "CreateElement",
+        "element": {
+          "type": "pivot",
+          "id": "1c6235ea-df63-49b6-8e87-27ce82d66381",
+          "probes": [],
+          "overlays": {},
+          "position": {
+            "x": -0.1,
+            "y": 0
+          },
+          "isGrounded": false,
+          "rotatingEdgesIDs": [],
+          "fixedGearsIDs": [],
+          "rotationalFriction": 0.001
+        }
+      },
+      {
+        "type": "DeleteElement",
+        "element": {
+          "type": "join",
+          "id": "a206a29e-a381-4e25-b8a8-cbb2ae55538e",
+          "probes": [],
+          "overlays": {},
+          "fixedEdgesIDs": [
+            "6ac6def8-4bda-4af9-993a-1d0e6d3cb54f",
+            "3e5d4413-9183-482c-b8a9-5b100a53e6ff"
+          ],
+          "position": {
+            "x": -0.1,
+            "y": 0
+          },
+          "isGrounded": true
+        }
+      },
+      {
+        "type": "GroundNode",
+        "id": "1c6235ea-df63-49b6-8e87-27ce82d66381",
+        "grounded": true
+      },
+      {
+        "type": "ConnectsRotatingEdges",
+        "disconnect": false,
+        "elementID": "1c6235ea-df63-49b6-8e87-27ce82d66381",
+        "connectID": "6ac6def8-4bda-4af9-993a-1d0e6d3cb54f",
+        "index": 0
+      },
+      {
+        "type": "ConnectsRotatingEdges",
+        "disconnect": false,
+        "elementID": "1c6235ea-df63-49b6-8e87-27ce82d66381",
+        "connectID": "3e5d4413-9183-482c-b8a9-5b100a53e6ff",
+        "index": 0
+      },
+      {
+        "type": "ConnectsFixedNodeEnd",
+        "disconnect": true,
+        "elementID": "6ac6def8-4bda-4af9-993a-1d0e6d3cb54f",
+        "connectID": "a206a29e-a381-4e25-b8a8-cbb2ae55538e"
+      },
+      {
+        "type": "ConnectsFixedNodeEnd",
+        "disconnect": false,
+        "elementID": "6ac6def8-4bda-4af9-993a-1d0e6d3cb54f",
+        "connectID": "1c6235ea-df63-49b6-8e87-27ce82d66381"
+      },
+      {
+        "type": "ConnectsFixedNodeEnd",
+        "disconnect": true,
+        "elementID": "3e5d4413-9183-482c-b8a9-5b100a53e6ff",
+        "connectID": "a206a29e-a381-4e25-b8a8-cbb2ae55538e"
+      },
+      {
+        "type": "ConnectsFixedNodeEnd",
+        "disconnect": false,
+        "elementID": "3e5d4413-9183-482c-b8a9-5b100a53e6ff",
+        "connectID": "1c6235ea-df63-49b6-8e87-27ce82d66381"
+      },
+      {
+        "type": "UpdatePositionsToValidState",
+        "masterActionType": "CreateElement",
+        "newNodes": {
+          "positions": [
+            [
+              "60d28138-dda3-40dc-bc94-bb519546b5c8",
+              {
+                "x": 0,
+                "y": 0.2
+              }
+            ],
+            [
+              "3e5d4413-9183-482c-b8a9-5b100a53e6ff:start",
+              {
+                "x": 0,
+                "y": 0.2
+              }
+            ],
+            [
+              "0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6:start",
+              {
+                "x": 0,
+                "y": 0.2
+              }
+            ],
+            [
+              "4c797149-0760-459d-ae57-6abfca8f8a8c",
+              {
+                "x": 0.1,
+                "y": 0
+              }
+            ],
+            [
+              "0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6:end",
+              {
+                "x": 0.1,
+                "y": 0
+              }
+            ],
+            [
+              "9e0baf2d-1a37-459b-a70b-570e4d872e6b",
+              {
+                "x": 0.4,
+                "y": 0.2
+              }
+            ],
+            [
+              "0957d7e3-95d9-4762-a8f6-15005b7d49b9:end",
+              {
+                "x": 0.4,
+                "y": 0.2
+              }
+            ],
+            [
+              "c0582e8f-c56a-4fa6-a5c4-358adefd6f20",
+              {
+                "x": -0.30000000000000004,
+                "y": 0.2
+              }
+            ],
+            [
+              "0957d7e3-95d9-4762-a8f6-15005b7d49b9:start",
+              {
+                "x": -0.30000000000000004,
+                "y": 0.2
+              }
+            ],
+            [
+              "6ac6def8-4bda-4af9-993a-1d0e6d3cb54f:start",
+              {
+                "x": -0.30000000000000004,
+                "y": 0.2
+              }
+            ],
+            [
+              "1c6235ea-df63-49b6-8e87-27ce82d66381",
+              {
+                "x": -0.1,
+                "y": 0
+              }
+            ],
+            [
+              "3e5d4413-9183-482c-b8a9-5b100a53e6ff:end",
+              {
+                "x": -0.1,
+                "y": 0
+              }
+            ],
+            [
+              "6ac6def8-4bda-4af9-993a-1d0e6d3cb54f:end",
+              {
+                "x": -0.1,
+                "y": 0
+              }
+            ]
+          ],
+          "radii": [],
+          "posMasses": [
+            [
+              "60d28138-dda3-40dc-bc94-bb519546b5c8,3e5d4413-9183-482c-b8a9-5b100a53e6ff:start,0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6:start",
+              1
+            ],
+            [
+              "4c797149-0760-459d-ae57-6abfca8f8a8c,0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6:end",
+              0
+            ],
+            [
+              "9e0baf2d-1a37-459b-a70b-570e4d872e6b,0957d7e3-95d9-4762-a8f6-15005b7d49b9:end",
+              1
+            ],
+            [
+              "c0582e8f-c56a-4fa6-a5c4-358adefd6f20,0957d7e3-95d9-4762-a8f6-15005b7d49b9:start,6ac6def8-4bda-4af9-993a-1d0e6d3cb54f:start",
+              1
+            ],
+            [
+              "1c6235ea-df63-49b6-8e87-27ce82d66381,3e5d4413-9183-482c-b8a9-5b100a53e6ff:end,6ac6def8-4bda-4af9-993a-1d0e6d3cb54f:end",
+              0
+            ]
+          ],
+          "radMasses": []
+        },
+        "oldNodes": {
+          "positions": [
+            [
+              "3e5d4413-9183-482c-b8a9-5b100a53e6ff:start",
+              {
+                "x": 0,
+                "y": 0.2
+              }
+            ],
+            [
+              "3e5d4413-9183-482c-b8a9-5b100a53e6ff:end",
+              {
+                "x": -0.1,
+                "y": 0
+              }
+            ],
+            [
+              "0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6:start",
+              {
+                "x": 0,
+                "y": 0.2
+              }
+            ],
+            [
+              "0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6:end",
+              {
+                "x": 0.1,
+                "y": 0
+              }
+            ],
+            [
+              "a206a29e-a381-4e25-b8a8-cbb2ae55538e",
+              {
+                "x": -0.1,
+                "y": 0
+              }
+            ],
+            [
+              "4c797149-0760-459d-ae57-6abfca8f8a8c",
+              {
+                "x": 0.1,
+                "y": 0
+              }
+            ],
+            [
+              "60d28138-dda3-40dc-bc94-bb519546b5c8",
+              {
+                "x": 0,
+                "y": 0.2
+              }
+            ],
+            [
+              "0957d7e3-95d9-4762-a8f6-15005b7d49b9:start",
+              {
+                "x": -0.30000000000000004,
+                "y": 0.2
+              }
+            ],
+            [
+              "0957d7e3-95d9-4762-a8f6-15005b7d49b9:end",
+              {
+                "x": 0.4,
+                "y": 0.2
+              }
+            ],
+            [
+              "9e0baf2d-1a37-459b-a70b-570e4d872e6b",
+              {
+                "x": 0.4,
+                "y": 0.2
+              }
+            ],
+            [
+              "6ac6def8-4bda-4af9-993a-1d0e6d3cb54f:start",
+              {
+                "x": -0.30000000000000004,
+                "y": 0.2
+              }
+            ],
+            [
+              "6ac6def8-4bda-4af9-993a-1d0e6d3cb54f:end",
+              {
+                "x": -0.1,
+                "y": 0
+              }
+            ],
+            [
+              "c0582e8f-c56a-4fa6-a5c4-358adefd6f20",
+              {
+                "x": -0.30000000000000004,
+                "y": 0.2
+              }
+            ]
+          ],
+          "radii": [],
+          "posMasses": [
+            [
+              "3e5d4413-9183-482c-b8a9-5b100a53e6ff:start",
+              1
+            ],
+            [
+              "3e5d4413-9183-482c-b8a9-5b100a53e6ff:end",
+              1
+            ],
+            [
+              "0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6:start",
+              1
+            ],
+            [
+              "0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6:end",
+              1
+            ],
+            [
+              "a206a29e-a381-4e25-b8a8-cbb2ae55538e",
+              0
+            ],
+            [
+              "4c797149-0760-459d-ae57-6abfca8f8a8c",
+              0
+            ],
+            [
+              "60d28138-dda3-40dc-bc94-bb519546b5c8",
+              1
+            ],
+            [
+              "0957d7e3-95d9-4762-a8f6-15005b7d49b9:start",
+              1
+            ],
+            [
+              "0957d7e3-95d9-4762-a8f6-15005b7d49b9:end",
+              1
+            ],
+            [
+              "9e0baf2d-1a37-459b-a70b-570e4d872e6b",
+              1
+            ],
+            [
+              "6ac6def8-4bda-4af9-993a-1d0e6d3cb54f:start",
+              1
+            ],
+            [
+              "6ac6def8-4bda-4af9-993a-1d0e6d3cb54f:end",
+              1
+            ],
+            [
+              "c0582e8f-c56a-4fa6-a5c4-358adefd6f20",
+              1
+            ]
+          ],
+          "radMasses": []
+        }
+      }
+    ],
+    [
+      {
+        "type": "ChangeStiffness",
+        "id": "6ac6def8-4bda-4af9-993a-1d0e6d3cb54f",
+        "delta": 9900
+      }
+    ],
+    [
+      {
+        "type": "CreateElement",
+        "element": {
+          "type": "damper",
+          "id": "b98a5151-bca7-403e-9468-72319caee546",
+          "probes": [],
+          "overlays": {},
+          "positionStart": {
+            "x": -0.30000000000000004,
+            "y": 0.2
+          },
+          "positionEnd": {
+            "x": -0.1,
+            "y": 0
+          },
+          "damping": 0.5
+        }
+      },
+      {
+        "type": "ConnectsRotatingEdges",
+        "disconnect": false,
+        "elementID": "c0582e8f-c56a-4fa6-a5c4-358adefd6f20",
+        "connectID": "b98a5151-bca7-403e-9468-72319caee546",
+        "index": 0
+      },
+      {
+        "type": "ConnectsFixedNodeStart",
+        "disconnect": false,
+        "elementID": "b98a5151-bca7-403e-9468-72319caee546",
+        "connectID": "c0582e8f-c56a-4fa6-a5c4-358adefd6f20"
+      },
+      {
+        "type": "ConnectsRotatingEdges",
+        "disconnect": false,
+        "elementID": "1c6235ea-df63-49b6-8e87-27ce82d66381",
+        "connectID": "b98a5151-bca7-403e-9468-72319caee546",
+        "index": 0
+      },
+      {
+        "type": "ConnectsFixedNodeEnd",
+        "disconnect": false,
+        "elementID": "b98a5151-bca7-403e-9468-72319caee546",
+        "connectID": "1c6235ea-df63-49b6-8e87-27ce82d66381"
+      },
+      {
+        "type": "UpdatePositionsToValidState",
+        "masterActionType": "CreateElement",
+        "newNodes": {
+          "positions": [
+            [
+              "60d28138-dda3-40dc-bc94-bb519546b5c8",
+              {
+                "x": 0,
+                "y": 0.2
+              }
+            ],
+            [
+              "3e5d4413-9183-482c-b8a9-5b100a53e6ff:start",
+              {
+                "x": 0,
+                "y": 0.2
+              }
+            ],
+            [
+              "0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6:start",
+              {
+                "x": 0,
+                "y": 0.2
+              }
+            ],
+            [
+              "4c797149-0760-459d-ae57-6abfca8f8a8c",
+              {
+                "x": 0.1,
+                "y": 0
+              }
+            ],
+            [
+              "0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6:end",
+              {
+                "x": 0.1,
+                "y": 0
+              }
+            ],
+            [
+              "9e0baf2d-1a37-459b-a70b-570e4d872e6b",
+              {
+                "x": 0.4,
+                "y": 0.2
+              }
+            ],
+            [
+              "0957d7e3-95d9-4762-a8f6-15005b7d49b9:end",
+              {
+                "x": 0.4,
+                "y": 0.2
+              }
+            ],
+            [
+              "c0582e8f-c56a-4fa6-a5c4-358adefd6f20",
+              {
+                "x": -0.30000000000000004,
+                "y": 0.2
+              }
+            ],
+            [
+              "0957d7e3-95d9-4762-a8f6-15005b7d49b9:start",
+              {
+                "x": -0.30000000000000004,
+                "y": 0.2
+              }
+            ],
+            [
+              "6ac6def8-4bda-4af9-993a-1d0e6d3cb54f:start",
+              {
+                "x": -0.30000000000000004,
+                "y": 0.2
+              }
+            ],
+            [
+              "b98a5151-bca7-403e-9468-72319caee546:start",
+              {
+                "x": -0.30000000000000004,
+                "y": 0.2
+              }
+            ],
+            [
+              "1c6235ea-df63-49b6-8e87-27ce82d66381",
+              {
+                "x": -0.1,
+                "y": 0
+              }
+            ],
+            [
+              "3e5d4413-9183-482c-b8a9-5b100a53e6ff:end",
+              {
+                "x": -0.1,
+                "y": 0
+              }
+            ],
+            [
+              "6ac6def8-4bda-4af9-993a-1d0e6d3cb54f:end",
+              {
+                "x": -0.1,
+                "y": 0
+              }
+            ],
+            [
+              "b98a5151-bca7-403e-9468-72319caee546:end",
+              {
+                "x": -0.1,
+                "y": 0
+              }
+            ]
+          ],
+          "radii": [],
+          "posMasses": [
+            [
+              "60d28138-dda3-40dc-bc94-bb519546b5c8,3e5d4413-9183-482c-b8a9-5b100a53e6ff:start,0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6:start",
+              1
+            ],
+            [
+              "4c797149-0760-459d-ae57-6abfca8f8a8c,0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6:end",
+              0
+            ],
+            [
+              "9e0baf2d-1a37-459b-a70b-570e4d872e6b,0957d7e3-95d9-4762-a8f6-15005b7d49b9:end",
+              1
+            ],
+            [
+              "c0582e8f-c56a-4fa6-a5c4-358adefd6f20,0957d7e3-95d9-4762-a8f6-15005b7d49b9:start,6ac6def8-4bda-4af9-993a-1d0e6d3cb54f:start,b98a5151-bca7-403e-9468-72319caee546:start",
+              1
+            ],
+            [
+              "1c6235ea-df63-49b6-8e87-27ce82d66381,3e5d4413-9183-482c-b8a9-5b100a53e6ff:end,6ac6def8-4bda-4af9-993a-1d0e6d3cb54f:end,b98a5151-bca7-403e-9468-72319caee546:end",
+              0
+            ]
+          ],
+          "radMasses": []
+        },
+        "oldNodes": {
+          "positions": [
+            [
+              "3e5d4413-9183-482c-b8a9-5b100a53e6ff:start",
+              {
+                "x": 0,
+                "y": 0.2
+              }
+            ],
+            [
+              "3e5d4413-9183-482c-b8a9-5b100a53e6ff:end",
+              {
+                "x": -0.1,
+                "y": 0
+              }
+            ],
+            [
+              "0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6:start",
+              {
+                "x": 0,
+                "y": 0.2
+              }
+            ],
+            [
+              "0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6:end",
+              {
+                "x": 0.1,
+                "y": 0
+              }
+            ],
+            [
+              "4c797149-0760-459d-ae57-6abfca8f8a8c",
+              {
+                "x": 0.1,
+                "y": 0
+              }
+            ],
+            [
+              "60d28138-dda3-40dc-bc94-bb519546b5c8",
+              {
+                "x": 0,
+                "y": 0.2
+              }
+            ],
+            [
+              "0957d7e3-95d9-4762-a8f6-15005b7d49b9:start",
+              {
+                "x": -0.30000000000000004,
+                "y": 0.2
+              }
+            ],
+            [
+              "0957d7e3-95d9-4762-a8f6-15005b7d49b9:end",
+              {
+                "x": 0.4,
+                "y": 0.2
+              }
+            ],
+            [
+              "9e0baf2d-1a37-459b-a70b-570e4d872e6b",
+              {
+                "x": 0.4,
+                "y": 0.2
+              }
+            ],
+            [
+              "6ac6def8-4bda-4af9-993a-1d0e6d3cb54f:start",
+              {
+                "x": -0.30000000000000004,
+                "y": 0.2
+              }
+            ],
+            [
+              "6ac6def8-4bda-4af9-993a-1d0e6d3cb54f:end",
+              {
+                "x": -0.1,
+                "y": 0
+              }
+            ],
+            [
+              "c0582e8f-c56a-4fa6-a5c4-358adefd6f20",
+              {
+                "x": -0.30000000000000004,
+                "y": 0.2
+              }
+            ],
+            [
+              "1c6235ea-df63-49b6-8e87-27ce82d66381",
+              {
+                "x": -0.1,
+                "y": 0
+              }
+            ]
+          ],
+          "radii": [],
+          "posMasses": [
+            [
+              "3e5d4413-9183-482c-b8a9-5b100a53e6ff:start",
+              1
+            ],
+            [
+              "3e5d4413-9183-482c-b8a9-5b100a53e6ff:end",
+              1
+            ],
+            [
+              "0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6:start",
+              1
+            ],
+            [
+              "0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6:end",
+              1
+            ],
+            [
+              "4c797149-0760-459d-ae57-6abfca8f8a8c",
+              0
+            ],
+            [
+              "60d28138-dda3-40dc-bc94-bb519546b5c8",
+              1
+            ],
+            [
+              "0957d7e3-95d9-4762-a8f6-15005b7d49b9:start",
+              1
+            ],
+            [
+              "0957d7e3-95d9-4762-a8f6-15005b7d49b9:end",
+              1
+            ],
+            [
+              "9e0baf2d-1a37-459b-a70b-570e4d872e6b",
+              1
+            ],
+            [
+              "6ac6def8-4bda-4af9-993a-1d0e6d3cb54f:start",
+              1
+            ],
+            [
+              "6ac6def8-4bda-4af9-993a-1d0e6d3cb54f:end",
+              1
+            ],
+            [
+              "c0582e8f-c56a-4fa6-a5c4-358adefd6f20",
+              1
+            ],
+            [
+              "1c6235ea-df63-49b6-8e87-27ce82d66381",
+              0
+            ]
+          ],
+          "radMasses": []
+        }
+      }
+    ],
+    [
+      {
+        "type": "ChangeDamping",
+        "id": "b98a5151-bca7-403e-9468-72319caee546",
+        "delta": 499.5
+      }
+    ],
+    [
+      {
+        "type": "SetProbes",
+        "elementID": "0957d7e3-95d9-4762-a8f6-15005b7d49b9",
+        "newProbes": [
+          {
+            "metric": "angle",
+            "components": {
+              "x": false,
+              "y": false,
+              "norm": true
+            }
+          }
+        ],
+        "oldProbes": []
+      }
+    ],
+    [
+      {
+        "type": "ChangeDamping",
+        "id": "b98a5151-bca7-403e-9468-72319caee546",
+        "delta": -300
+      }
+    ],
+    [
+      {
+        "type": "SetProbes",
+        "elementID": "0b35a9b2-8ab3-47c3-8eae-c34a4eb262b6",
+        "newProbes": [
+          {
+            "metric": "force-start",
+            "components": {
+              "x": false,
+              "y": false,
+              "norm": true
+            }
+          }
+        ],
+        "oldProbes": []
+      }
+    ],
+    [
+      {
+        "type": "SetShowOverlay",
+        "elementID": "4c797149-0760-459d-ae57-6abfca8f8a8c",
+        "kind": "trajectory",
+        "newValue": true,
+        "oldValue": false
+      },
+      {
+        "type": "SetShowOverlay",
+        "elementID": "60d28138-dda3-40dc-bc94-bb519546b5c8",
+        "kind": "trajectory",
+        "newValue": true,
+        "oldValue": false
+      },
+      {
+        "type": "SetShowOverlay",
+        "elementID": "9e0baf2d-1a37-459b-a70b-570e4d872e6b",
+        "kind": "trajectory",
+        "newValue": true,
+        "oldValue": false
+      },
+      {
+        "type": "SetShowOverlay",
+        "elementID": "c0582e8f-c56a-4fa6-a5c4-358adefd6f20",
+        "kind": "trajectory",
+        "newValue": true,
+        "oldValue": false
+      },
+      {
+        "type": "SetShowOverlay",
+        "elementID": "1c6235ea-df63-49b6-8e87-27ce82d66381",
+        "kind": "trajectory",
+        "newValue": true,
+        "oldValue": false
+      }
+    ],
+    [
+      {
+        "type": "SetShowOverlay",
+        "elementID": "4c797149-0760-459d-ae57-6abfca8f8a8c",
+        "kind": "force",
+        "newValue": true,
+        "oldValue": false
+      },
+      {
+        "type": "SetShowOverlay",
+        "elementID": "60d28138-dda3-40dc-bc94-bb519546b5c8",
+        "kind": "force",
+        "newValue": true,
+        "oldValue": false
+      },
+      {
+        "type": "SetShowOverlay",
+        "elementID": "9e0baf2d-1a37-459b-a70b-570e4d872e6b",
+        "kind": "force",
+        "newValue": true,
+        "oldValue": false
+      },
+      {
+        "type": "SetShowOverlay",
+        "elementID": "c0582e8f-c56a-4fa6-a5c4-358adefd6f20",
+        "kind": "force",
+        "newValue": true,
+        "oldValue": false
+      },
+      {
+        "type": "SetShowOverlay",
+        "elementID": "1c6235ea-df63-49b6-8e87-27ce82d66381",
+        "kind": "force",
+        "newValue": true,
+        "oldValue": false
+      }
+    ],
+    [
+      {
+        "type": "SetShowOverlay",
+        "elementID": "4c797149-0760-459d-ae57-6abfca8f8a8c",
+        "kind": "trajectory",
+        "newValue": false,
+        "oldValue": true
+      },
+      {
+        "type": "SetShowOverlay",
+        "elementID": "60d28138-dda3-40dc-bc94-bb519546b5c8",
+        "kind": "trajectory",
+        "newValue": false,
+        "oldValue": true
+      },
+      {
+        "type": "SetShowOverlay",
+        "elementID": "9e0baf2d-1a37-459b-a70b-570e4d872e6b",
+        "kind": "trajectory",
+        "newValue": false,
+        "oldValue": true
+      },
+      {
+        "type": "SetShowOverlay",
+        "elementID": "c0582e8f-c56a-4fa6-a5c4-358adefd6f20",
+        "kind": "trajectory",
+        "newValue": false,
+        "oldValue": true
+      },
+      {
+        "type": "SetShowOverlay",
+        "elementID": "1c6235ea-df63-49b6-8e87-27ce82d66381",
+        "kind": "trajectory",
+        "newValue": false,
+        "oldValue": true
+      }
+    ]
+  ],
+  "future": []
+}

@@ -393,10 +393,152 @@ critère, sans lui aucune courroie ouverte n'a jamais sa chance) — mais il ne 
 l'arbitrage de la section suivante, et ne doit plus être vendu comme le levier qui débloque
 `Core XY`.
 
-## DÉCISION PRODUIT EN ATTENTE — la taxe de 0.57 % sur les efforts intérieurs
+**Contre-vérification de l'anti-résultat, et ce qu'elle révèle.** `finalMaxResidual` est lu sur
+le DERNIER sweep seulement, donc toujours à la même parité — alors que le résidu OSCILLE d'un
+facteur 2 d'un sweep à l'autre sous alternance. Soupçon légitime d'artefact de mesure : la
+« dégradation » pouvait n'être que l'amplitude de l'oscillation, échantillonnée du mauvais côté.
+Mesuré en ajoutant l'avant-dernier sweep et en prenant le MINIMUM de la paire (comparaison
+sans parité) :
 
-**Statut : à trancher par Arnaud, plus tard. C'est le seul blocage à la mise en production de
-l'alternance par chaîne.** Tout le reste est mesuré et favorable.
+| frame | `off` | `perchain` | rapport |
+| --- | --- | --- | --- |
+| 1 | 8.26e-6 | 1.71e-5 | 2.07× |
+| 5 | 4.70e-5 | 8.20e-5 | 1.75× |
+| 10 | 1.07e-4 | 1.86e-4 | 1.75× |
+| 15 | 1.80e-4 | 3.02e-4 | 1.68× |
+
+**Soupçon réfuté, anti-résultat confirmé** : même à la parité favorable, l'alternance reste 1.7 à
+2.1× moins bonne à budget égal. L'oscillation est bien réelle (sous `off`, dernier et
+avant-dernier sont quasi égaux ; sous alternance, exactement 2×) mais elle s'ajoute à une
+enveloppe réellement plus haute, elle ne l'explique pas.
+
+**Et ça change la conclusion générale, au-delà de `Core XY`.** L'alternance n'est pas « bonne
+partout sauf sur les courroies fermées ». Elle est :
+
+- **exacte sur un ARBRE** (`CP.slidep`, 1e-17) — c'est une substitution avant/arrière ;
+- **contre-productive sur une BOUCLE** (`Core XY`, 1.7-2× de résidu en plus à budget égal) — un
+  aller-retour n'y est plus une résolution directe, et l'oscillation qu'il installe coûte plus
+  qu'elle ne rapporte ;
+- **divergente sur une boucle à mode libre** (courroie fermée, 72 %).
+
+Or le critère actuel ne distingue que le troisième cas. Il laisse donc l'alternance tourner sur
+`Jansen`, `Puente`, `Treillis`, `Vilbrequin`, `Core XY` — tous `boucle=OUI` dans
+`ssor-coverage` — c'est-à-dire précisément là où elle est un coût net. **Le critère devrait être
+l'acyclicité réelle**, ce que `ssorTree` prétendait nommer sans jamais le calculer. La détection
+de cycle existe déjà (union-find sur le graphe des clés libres, colonne `boucle` de
+`ssor-coverage`) : c'est une quinzaine de lignes, déjà écrites, à déplacer dans le classificateur.
+Seul `CP.slidep` et les vrais arbres alterneraient alors — exactement là où le gain est mesuré.
+
+### Cinquième passe : le problème est-il un problème d'ARBRE ? Oui, et ça ferme le sujet
+
+Quatre passes n'avaient mesuré le ratio de masse que sur `CP.slidep`, qui est un arbre. Toute
+la valeur de l'alternance en dépendait, sans que personne ait vérifié si les boucles souffrent
+du même mal. `Vilbrequin + masse lourde.slidep` (un système bielle-manivelle — boucle
+cinématique fermée, aucune courroie — portant une masse sur sa bielle) répond, via
+`scratch/ssor/ssor-loop-mass-probe.test.ts`.
+
+Métrique : pire erreur géométrique laissée par le solveur sur les contraintes lisibles
+directement sur les positions (longueur d'une poutre, place d'un nœud rigidement fixé sur sa
+poutre — la contrainte même qui lâche sur `CP.slidep`). En mètres, donc comparable, **et
+rapportée à l'échelle propre de chaque mécanisme**, qui n'est pas la même : `CP.slidep` fait
+3 cm d'envergure, le vilbrequin 63 cm.
+
+| masse | `CP.slidep` (ARBRE, 3 cm) | | `Vilbrequin` (BOUCLE, 63 cm) | |
+| --- | --- | --- | --- | --- |
+| | absolu | % de l'envergure | absolu | % de l'envergure |
+| 1 kg | 1.12e-5 | 0.04 % | 3.08e-7 | 0.00005 % |
+| 100 kg | 1.57e-3 | 5.2 % | 1.23e-6 | 0.0002 % |
+| 1000 kg | 1.71e-2 | 57 % | 9.91e-6 | 0.0016 % |
+| 3000 kg | 6.37e-2 | **212 %** | 3.30e-5 | **0.005 %** |
+
+**La boucle est immunisée, à quatre ordres de grandeur près.** À 3000 kg l'arbre est disloqué
+(l'erreur dépasse deux fois sa propre taille) tandis que la boucle reste **vingt fois sous le
+seuil à partir duquel Slidep signale seulement une contrainte comme non satisfaite**
+(`DIAGNOSTIC_TOLERANCE_RATIO`, 0.1 % de l'envergure). L'erreur croît bien avec la masse dans les
+deux cas, mais sur la boucle elle part de si bas qu'elle n'arrive nulle part.
+
+L'hypothèse tient donc, et elle a une explication simple : une boucle se referme sur elle-même,
+donc chaque nœud est tenu par plusieurs chemins et la correction n'a pas à remonter toute la
+chaîne. Le pathos naît du bout libre chargé — grue, bras, pendule, balance — c'est-à-dire d'un
+arbre.
+
+**Conséquence directe : l'alternance restreinte aux arbres est une réponse COMPLÈTE, pas la
+moitié d'une.** Il n'y a pas de second chantier à prévoir pour les boucles, parce qu'il n'y a pas
+de problème à y résoudre. L'option 0 (agrégat), que la quatrième passe recadrait « sur ce que
+l'alternance ne peut pas toucher », perd du même coup sa dernière justification dans ce
+document.
+
+Mesuré au passage, sur le même mécanisme sous alternance : 1.31e-7 / 8.60e-7 / 8.67e-6 / 3.37e-5
+aux mêmes masses — c'est-à-dire **légèrement meilleur à faible masse, identique à forte masse**.
+L'alternance n'est donc pas nocive sur toute boucle, contrairement à ce que la quatrième passe
+laissait croire : `Core XY` la paie parce qu'il SATURE son budget de sweeps (43 liens, 200 sweeps
+épuisés à chaque frame), pas parce qu'il est une boucle. Le critère d'acyclicité reste le bon
+choix — conservateur, il n'abandonne rien de mesurable — mais pour cette raison-là, pas pour
+celle qu'on croyait.
+
+## DÉCISION PRODUIT — PRISE : ~1 % d'erreur sur les efforts est acceptable
+
+**Tranché par Arnaud.** Slidep peut supporter de l'ordre de 1 % d'erreur sur la lecture des
+efforts. La taxe de 0.57 % mesurée ci-dessous n'est donc pas un blocage : l'alternance peut
+passer en production. En parallèle, et sans bloquer la mise en production, on cherchera comment
+corriger la lecture elle-même (voir « la troisième voie » plus bas).
+
+### Ce que ça donne comme forme de mise en production
+
+La décision, combinée à la cinquième passe, réduit beaucoup le chantier — trois observations
+qui se cumulent :
+
+1. **Le problème est dynamique.** La cinématique n'a que des masses binaires 0/1 (`parsing.ts`,
+   cause 1 du « vrai pourquoi ») : aucun ratio de masse ne peut y naître, donc rien à y corriger.
+2. **Le problème est arborescent.** Cinquième passe : une boucle chargée à 3000 kg reste vingt
+   fois sous le seuil de signalement.
+3. Donc la règle de production tient en une ligne : **alterner l'ordre de balayage uniquement
+   pour les liens d'une chaîne ACYCLIQUE, et uniquement dans un pas DYNAMIQUE.**
+
+Le gain est intégralement conservé (le seul cas mesuré où il existe est `CP.slidep`, un arbre en
+dynamique) et le rayon d'impact s'effondre :
+
+- **Plus aucune logique spécifique aux courroies.** Une courroie fermée boucle par construction ;
+  une courroie ouverte aussi, via l'arête de raccourci qu'ajoute `BeltSubChainAggregate`. Le
+  critère d'acyclicité les exclut toutes les deux sans les nommer. `BELT_MACHINERY`, le test
+  `closed`, la distinction ouverte/fermée des passes 2 à 4 : tout disparaît.
+- **La conséquence 2 disparaît.** `mobility-probe.ts` appelle `PBD_solve` sans `dynamics`
+  (`mobility-probe.ts:275`) : l'oracle de rang, donc le panneau des contraintes dispensables, ne
+  voit jamais l'alternance.
+- **Les tests cinématiques ne bougent plus.** `bit-exact`, `belt-closed-determinism`,
+  `recorder-rewind`, `falsify-constraint` passent tous par `step_simulation` ou par l'analyse,
+  jamais par `step_dynamic_simulation`.
+
+Restent donc exactement les deux tests qui portent la taxe acceptée — `beam-cohesion.test.ts` et
+`reaction-forces.test.ts` — à re-baseliner en exprimant la tolérance qu'ils admettent plutôt
+qu'en recopiant les nouvelles valeurs.
+
+### Le détail de la taxe, pour mémoire
+
+Deux conséquences avaient été identifiées. Le gate « dynamique seulement » ci-dessus en annule
+une ; l'autre est celle qu'Arnaud a acceptée. Les deux restent consignées ici : si le gate devait
+sauter un jour, la seconde revient.
+
+### Conséquence 2 — le panneau des contraintes dispensables change ce qu'il affiche
+
+`probe_chain_mobility` et `find_redundant_links` (`mobility-probe.ts`) appellent `PBD_solve`
+comme oracle — c'est le principe même de l'analyse par sondage, et sa qualité (voir l'en-tête de
+`mobility-probe.ts` : « rien ici ne réimplémente une contrainte »). Le revers : **l'ordre de
+balayage affecte l'oracle exactement comme il affecte la simulation.** Mesuré sur `Core XY` en
+quatrième passe : `h = 6`, 33 à 34 liens sur 43 jugés interchangeables par leave-one-out, et
+**un lien bascule dedans/dehors** selon le mode (34 → 33).
+
+Sans conséquence sur la simulation (positions et sévérité inchangées). Mais `redundant-links.ts`
+alimente le panneau qui dit à l'utilisateur QUELLES contraintes il peut retirer — donc cette
+liste changerait. Sur un ensemble aussi dégénéré (34 candidats équivalents), n'importe quel
+choix est défendable et aucun n'est « le bon » ; ça reste un affichage qui bouge sans que rien
+n'ait changé dans le dessin.
+
+**Annulée par la forme retenue** : `mobility-probe.ts:275` appelle `PBD_solve` sans `dynamics`,
+donc l'oracle de rang n'alterne jamais. Le critère d'acyclicité l'aurait de toute façon écartée
+de son côté (`Core XY` est une boucle). Deux verrous indépendants plutôt qu'un.
+
+### Conséquence 1 — la taxe de 0.57 % sur les efforts intérieurs
 
 **Ce qui est en jeu, précisément.** Activer l'alternance fait disparaître le problème de ratio de
 masse (résidu 6.4e-2 → 1.0e-17 sur `CP.slidep` à 3000 kg) et coûte, en échange, une erreur de
@@ -756,34 +898,63 @@ Ce que ça change concrètement : les options 3 et 4 perdent leur meilleur argum
 avis corrigés), l'option 5 gagne le sien mais pas pour la raison qu'on croyait (les réactions
 hyperstatiques, pas la convergence), et deux directions bien moins chères passent devant.
 
-Ordre que je propose (état au terme de la troisième passe) :
+Ordre que je propose (état au terme de la cinquième passe, décision réactions prise) :
 
 1. ~~**Prototyper l'alternance par chaîne.**~~ **Fait et mesuré** — exacte sur les arbres,
    neutre sur les courroies, 3 échecs sur 848 dont 2 sont la taxe sur les réactions. Prototype
    dans `scratch/ssor/`, pas en production.
-2. **Trancher la question des réactions**, qui est désormais le seul blocage à l'adoption. Elle
-   s'est précisée : ce n'est pas une perte mais une redistribution entre les deux extrémités d'un
-   même membre, donc elle touche les diagrammes d'efforts intérieurs et pas les réactions
-   d'appui. Deux sous-questions : est-ce que ce qu'on affiche aujourd'hui est déjà exact hors
-   alternance (le −100.000000 de la ligne de base est-il robuste, ou un heureux hasard du budget
-   de sweeps ?), et si oui, 0.57 % est-il un prix acceptable pour la disparition du problème de
-   ratio de masse ?
+2. ~~**Trancher la question des réactions.**~~ **Tranché** : Slidep peut supporter ~1 %
+   d'erreur sur la lecture des efforts, la taxe de 0.57 % n'est donc pas un blocage. Reste
+   ouvert, sans bloquer : chercher comment corriger la lecture elle-même (la troisième voie —
+   recalculer les réactions une fois convergé plutôt que de les intégrer le long du chemin).
 3. ~~**Resserrer le critère aux courroies FERMÉES** et remesurer `Core XY`.~~ **Fait et
    mesuré** — sûr (aucune régression), mais sans le gain espéré : `Core XY` sature déjà son
    budget de sweeps sans alternance, et le résidu au même budget est 1.4-2× PIRE sous
    alternance, pas meilleur. Patch dans `scratch/ssor/solver-ssor-closedbelt.patch`. La
    phrase « le plus gros retour sur investissement restant » ci-dessus était une
    extrapolation du comptage de liens, pas une mesure — voir la quatrième passe.
-4. **Agrégat de sous-chaîne (option 0)**, à recadrer : sa cible initiale (les chaînes sérielles)
-   est déjà couverte par l'alternance. Sa valeur restante est sur ce que l'alternance ne peut PAS
-   toucher, c'est-à-dire les boucles fermées — un autre chantier, avec un autre critère de
-   sûreté. **Attention à l'interaction** : un agrégat rigide est redondant par construction,
-   c'est-à-dire exactement ce que le critère de l'alternance est censé épingler — et ce critère
-   ne reconnaît aujourd'hui que la machinerie de courroie. Les deux ensemble, sans précaution,
-   réintroduisent la divergence.
-5. **Poutres en corps rigides** (cause 3 du « vrai pourquoi »). Le gain structurel, indépendant
-   de tout choix de solveur.
-6. **Compliance sur les liens `Distance`**, si la lecture des efforts sur structure hyperstatique
+4. ~~**Mise en production.**~~ **Faite.** `src/components/solver/sweep-order.ts`
+   (`reversed_sweep_order`), branché dans `PBD_solve`. Deux verrous : pas dynamique
+   uniquement, et chaîne non redondante uniquement. Suite complète 848/848, et les deux
+   seuls tests déplacés (`beam-cohesion`, `reaction-forces`) re-baselinés en exprimant la
+   tolérance qu'ils admettent — une part de la charge lue, pas une valeur recopiée.
+
+   **Le critère n'est PAS l'acyclicité, contrairement à ce qui avait été convenu**, et il a
+   fallu deux corrections pour arriver au bon.
+
+   *Première* : un cycle de graphe ne distingue pas une boucle cinématique d'une barre rigide
+   portant un cavalier — le `FixedOnSegment` qui épingle un nœud sur une poutre forme un
+   triangle avec le `Distance` de cette poutre, donc tout mécanisme à poutre chargée lit
+   « cyclique », `CP.slidep` compris, c'est-à-dire le seul cas où le gain existe. Remplacé par
+   un comptage de redondance : une chaîne alterne si les lignes de contrainte qu'elle porte
+   (`Σ ddl`) ne dépassent pas ses inconnues libres.
+
+   *Seconde, et c'est la leçon* : **le comptage ne voit pas une dépendance linéaire.** Une
+   courroie porte un brin de trop sur une boucle fermée, et un agrégat qui est la somme
+   télescopée des lois qu'il couvre — chacun ajoute une ligne ET une inconnue, donc aucun
+   comptage ne les distingue d'une contrainte utile. `Huygens` passait ainsi 18 liens sur 19
+   en alternance, et la suite ne l'attrapait pas : `belt-closed-determinism` est cinématique,
+   et la cinématique n'alterne plus. Mesuré en écrivant la sonde qui manquait
+   (`scratch/ssor/ssor-belt-dynamic-probe.test.ts`, deux listages du même mécanisme en
+   dynamique) : **écart de 30.8° à 30 frames, 3.2e7° à 120, 1.8e8° à 240.** Pas une dérive,
+   une explosion — et un bug qui partait en production. Le critère final nomme donc ces deux
+   types de liens en plus du comptage, en reprenant la connaissance que `analysis-model.ts`
+   porte déjà (`closed_loop_surplus`). Le comptage reste nécessaire de son côté : c'est lui
+   qui épingle les treillis hyperstatiques et `Core XY`.
+
+   Ce que ça laisse alterner, sur la galerie : `CP.slidep`, les cantilevers, `Vilbrequin`
+   (avec ou sans masse), `Puente`, `Treillis` (6/7), `Line from rotation`, `Balance`,
+   `Test slider`, `Petit`, `Roues isolées`, `trac-comp`. Ce que ça épingle : tout ce qui porte
+   une courroie, `Jansen`, `Core XY`.
+5. ~~**Agrégat de sous-chaîne (option 0)**~~ — **abandonné**. Sa cible initiale (les chaînes
+   sérielles) est couverte par l'alternance ; sa cible de repli (les boucles) n'a pas de problème
+   à résoudre, la cinquième passe l'a mesuré. Plus rien dans ce document ne la motive. Si elle
+   revenait un jour, retenir l'interaction identifiée en quatrième passe : un agrégat rigide est
+   redondant par construction, donc exactement ce que le critère de l'alternance doit épingler.
+6. **Poutres en corps rigides** (cause 3 du « vrai pourquoi »). Le gain structurel, indépendant
+   de tout choix de solveur — et le seul point de cette liste que quatre passes de mesure
+   n'ont pas entamé.
+7. **Compliance sur les liens `Distance`**, si la lecture des efforts sur structure hyperstatique
    doit rester affichée telle quelle.
 
 Les options 4 et 6 restent des horizons légitimes, mais plus rien dans ce document ne justifie
@@ -806,10 +977,10 @@ probablement celle qui compte le plus pour un utilisateur.
 
 Sans rapport avec la convergence, relevés en lisant, non corrigés :
 
-- **`slidingFriction` / `rotationalFriction` sont des champs morts.** Saisis dans l'UI, migrés,
-  édités par le reducer, portés par les types — et lus par aucun fichier de
-  `src/components/solver/`. Même défaut que celui identifié pour `mass` en cinématique, mais dans
-  TOUS les modes.
+- ~~**`slidingFriction` / `rotationalFriction` sont des champs morts.**~~ **Faux départ** :
+  saisis dans l'UI, migrés, édités par le reducer, portés par les types et lus par aucun fichier
+  de `src/components/solver/` — c'est exact, mais c'est un **chantier en cours**, pas un défaut.
+  Rien à corriger ici.
 - **`epsilon` est le dernier seuil absolu d'un solveur devenu relatif partout ailleurs.**
   `PBD_kinematic_solver.ts:319` et `:373`, valeur 1e-6, jamais passé par aucun appelant, comparé
   à un `maxError` qui mélange mètres et radians. Sur un mécanisme au plancher `MIN_EXTENT_M`

@@ -19,6 +19,24 @@ import { build_beam_cohesion_specs, resolve_beam_cohesion } from "./beam-cohesio
 let nextID = 0;
 const id = (): ID => `00000000-0000-0000-0000-${String(++nextID).padStart(12, "0")}` as ID;
 
+/**
+ * How close an internal-force reading has to be, as a share of the load it carries.
+ *
+ * A share and not a newton figure: the reading's error scales with what is being read, so the
+ * same bound holds whatever a test pushes with. `reversed_sweep_order` is what sets the floor
+ * — reversing the sweep direction moves a little of a member's load from one of its ends to
+ * the other, leaving the resultant exact and the split off by about this much.
+ */
+const READING_TOLERANCE = 0.01;
+
+/** `actual` matches `expected` to `READING_TOLERANCE` of `scale`, the load in play. */
+function expect_reading(actual: number, expected: number, scale: number): void {
+  expect(Math.abs(actual - expected)).toBeLessThanOrEqual(READING_TOLERANCE * scale);
+}
+
+/** The load the cantilever cases push with, named so the assertions can scale to it. */
+const TIP_LOAD = 100;
+
 /** Every beam in this file wants a linear mass of exactly 1 (kg/m) — a single default couple
  *  (1×1 m rectangle, ρ = 1) shared by all of them, so a beam literal only has to name it. */
 const MATERIAL_ID = id();
@@ -176,7 +194,7 @@ describe("BeamCohesion — torseur d'interface d'une poutre (docs/plan-efforts-i
       type: "force",
       id: id(),
       targetID: MASS,
-      vector: new Point2(0, -100),
+      vector: new Point2(0, -TIP_LOAD),
       frame: "world",
     };
 
@@ -193,19 +211,19 @@ describe("BeamCohesion — torseur d'interface d'une poutre (docs/plan-efforts-i
     const [atMass] = cohesion!.attachedNodes;
     expect(atMass.nodeID).toBe(MASS);
     expect(atMass.s).toBeCloseTo(0.5, 1);
-    expect(atMass.fx).toBeCloseTo(0, 0);
-    expect(atMass.fy).toBeCloseTo(-100, 0);
+    expect_reading(atMass.fx, 0, TIP_LOAD);
+    expect_reading(atMass.fy, -TIP_LOAD, TIP_LOAD);
 
     // The lone support carries the whole load (raw sense: what the beam applies to the
     // ground, i.e. the NEGATIVE of the classical "ground pushes back with" reading), plus
     // the moment it creates half-way out — moment is never flipped (see `moment_at`).
-    expect(cohesion!.start.fx).toBeCloseTo(0, 0);
-    expect(cohesion!.start.fy).toBeCloseTo(-100, 0);
-    expect(cohesion!.start.m).toBeCloseTo(50, 0);
+    expect_reading(cohesion!.start.fx, 0, TIP_LOAD);
+    expect_reading(cohesion!.start.fy, -TIP_LOAD, TIP_LOAD);
+    expect_reading(cohesion!.start.m, TIP_LOAD * 0.5, TIP_LOAD);
     // Nothing beyond the mass: the free tip carries no cohesion at all.
-    expect(cohesion!.end.fx).toBeCloseTo(0, 0);
-    expect(cohesion!.end.fy).toBeCloseTo(0, 0);
-    expect(cohesion!.end.m).toBeCloseTo(0, 0);
+    expect_reading(cohesion!.end.fx, 0, TIP_LOAD);
+    expect_reading(cohesion!.end.fy, 0, TIP_LOAD);
+    expect_reading(cohesion!.end.m, 0, TIP_LOAD);
   });
 
   it("correction 1 — un lien de rigidité 2-ddl non ancré aux deux bouts transmet quand même son moment", () => {

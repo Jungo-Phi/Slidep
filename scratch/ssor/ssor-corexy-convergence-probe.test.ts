@@ -40,7 +40,7 @@ describe("SSOR Core XY convergence probe", () => {
 
     const MARKS = [1, 5, 10, 15];
     let prev: KinematicSnapshot | null = null;
-    const lines = [`### Core XY convergence — SSOR=${process.env.SLIDEP_SSOR ?? "off"}`];
+    const lines = [`### Core XY convergence — SSOR=production`];
     for (let i = 0; i < Math.max(...MARKS) + 1; i++) {
       const grab = {
         gearID: driven.id,

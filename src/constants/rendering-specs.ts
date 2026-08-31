@@ -572,7 +572,7 @@ export const DIM = {
   // Trajectory
   TRAJECTORY_LINE_WIDTH: 1.5,
   TRAJECTORY_DOT_RADIUS: 2.5,
-  TRAJECTORY_DOT_STEP: 8,
+  TRAJECTORY_DOT_STEP: 1, // TODO : rendre éditable ?
 } as const;
 
 export const TEXT_SPECS = {

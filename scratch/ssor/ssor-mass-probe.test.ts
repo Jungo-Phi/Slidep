@@ -73,7 +73,7 @@ describe("SSOR mass-ratio probe", () => {
     const base = load_mechanism(JSON.parse(cpJson)).mechanism;
     const { beam1 } = find_pivot_and_beam1(base);
     const heavy = find_heavy_mass(base, beam1);
-    const lines = [`### CP.slidep — SSOR=${process.env.SLIDEP_SSOR ?? "off"}`];
+    const lines = [`### CP.slidep — SSOR=production`];
     for (const mass of [1, 100, 300, 1000, 3000]) {
       const r = worst_pivot_residual(with_mass(base, heavy.id, mass), 40);
       lines.push(`mass=${mass}\tworstResidual=${r.toExponential(3)}`);

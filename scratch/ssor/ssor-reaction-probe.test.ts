@@ -126,7 +126,7 @@ describe("SSOR reaction-tax probe", () => {
     const [atJoin] = element_reactions(join, snapshot!);
     const atBeamEnd = element_reactions(beam, snapshot!).find((r) => !r.atAnchor)!;
     const lines = [
-      `### cantilever-join — SSOR=${process.env.SLIDEP_SSOR ?? "off"}`,
+      `### cantilever-join — SSOR=production`,
       `join.fx=${atJoin.vector.x.toFixed(6)} (expect 0)`,
       `join.fy=${atJoin.vector.y.toFixed(6)} (expect 100)`,
       `join.moment=${atJoin.moment.toFixed(6)} (expect 100)`,
@@ -144,7 +144,7 @@ describe("SSOR reaction-tax probe", () => {
       snapshot = step_dynamic_simulation(model, i * RECORD_DT, snapshot, RECORD_DT, new Point2(0, 0));
     const cohesion = snapshot!.beamCohesion?.find((c) => c.beamID === beam.id)!;
     const lines = [
-      `### cantilever-midspan — SSOR=${process.env.SLIDEP_SSOR ?? "off"}`,
+      `### cantilever-midspan — SSOR=production`,
       `start.fy=${cohesion.start.fy.toFixed(6)} (expect -100)`,
       `start.m=${cohesion.start.m.toFixed(6)} (expect 50)`,
       `end.fy=${cohesion.end.fy.toFixed(6)} (expect 0)`,

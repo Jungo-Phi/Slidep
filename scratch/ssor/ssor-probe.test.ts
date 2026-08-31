@@ -110,7 +110,7 @@ describe("SSOR probe", () => {
         gap: +maxGap(ref[i].angles, alt[i].angles).toFixed(4),
         ratio: +(maxGap(ref[i].angles, alt[i].angles) / ref[i].travel).toFixed(5),
       }));
-      const lines = [`### ${name} — SSOR=${process.env.SLIDEP_SSOR ?? "off"}`];
+      const lines = [`### ${name} — SSOR=production`];
       for (const r of rows)
         lines.push(
           `frames=${r.frames}\ttravel=${r.travel}\tgap=${r.gap}\tratio=${r.ratio}`,
