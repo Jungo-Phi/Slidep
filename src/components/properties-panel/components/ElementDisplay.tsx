@@ -57,6 +57,10 @@ const ElementDisplayComponent: React.FC<ElementDisplayProps> = ({
   // row: the rename text, or (when present) one of the trailing controls.
   const [renameHovered, setRenameHovered] = useState(false);
   const [trailingHovered, setTrailingHovered] = useState(false);
+  // `hovered` below also goes true from a hover arriving elsewhere (the canvas
+  // highlighting this same element) — the right cue for the background tint, but
+  // not for the tooltip, which must only follow the pointer actually being here.
+  const [locallyHovered, setLocallyHovered] = useState(false);
 
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -100,11 +104,13 @@ const ElementDisplayComponent: React.FC<ElementDisplayProps> = ({
   );
 
   const handleMouseEnter = () => {
+    setLocallyHovered(true);
     if (!element || isEditing || !interactive) return;
     setHoveredPart(element_to_hovered_part(element));
   };
 
   const handleMouseLeave = () => {
+    setLocallyHovered(false);
     if (isEditing) return;
     setHoveredPart({ type: "Void", position: ZERO });
   };
@@ -223,7 +229,7 @@ const ElementDisplayComponent: React.FC<ElementDisplayProps> = ({
           open={
             interactive &&
             !isEditing &&
-            hovered &&
+            locallyHovered &&
             !renameHovered &&
             !trailingHovered
           }
@@ -277,24 +283,22 @@ const ElementDisplayComponent: React.FC<ElementDisplayProps> = ({
             }}
           />
         ) : canRename ? (
-          <Tooltip title={t("element_rename_hint")}>
-            <Typography
-              onClick={handleTextClick}
-              onMouseEnter={() => setRenameHovered(true)}
-              onMouseLeave={() => setRenameHovered(false)}
-              sx={{
-                ...textStyleCommon,
-                fontSize: fontSizeValue,
-                cursor: "text",
-                userSelect: "none",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                display: "inline-block",
-              }}
-            >
-              {initialName}
-            </Typography>
-          </Tooltip>
+          <Typography
+            onClick={handleTextClick}
+            onMouseEnter={() => setRenameHovered(true)}
+            onMouseLeave={() => setRenameHovered(false)}
+            sx={{
+              ...textStyleCommon,
+              fontSize: fontSizeValue,
+              cursor: "text",
+              userSelect: "none",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              display: "inline-block",
+            }}
+          >
+            {initialName}
+          </Typography>
         ) : (
           <Typography
             sx={{

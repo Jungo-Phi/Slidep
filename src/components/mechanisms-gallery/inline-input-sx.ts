@@ -14,5 +14,5 @@ export const INLINE_INPUT_SX: SxProps<Theme> = {
   // The standard variant pads 4px above and 5px below by default, to leave room for the
   // underline. That asymmetry goes unnoticed with the underline as an anchor, but reads as
   // off-center text once `disableUnderline` removes it.
-  "& .MuiInputBase-input": { paddingTop: "4px", paddingBottom: "4px" },
+  "& .MuiInputBase-input": { py: "2px" },
 };

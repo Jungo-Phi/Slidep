@@ -439,12 +439,11 @@ describe("migrate_document", () => {
         ],
       }),
     );
-    // The couple itself, plus the read-only catalogue the v9 → v10 step seeds alongside it.
+    // The couple itself, plus the catalogue the v9 → v10 step seeds alongside it.
     expect(result.materials.length).toBeGreaterThan(1);
     expect(result.profiles).toHaveLength(1);
-    const [material] = result.materials as unknown as { id: string; readOnly: boolean }[];
+    const [material] = result.materials as unknown as { id: string }[];
     const [profile] = result.profiles as unknown as { id: string }[];
-    expect(material.readOnly).toBe(false);
     expect(result.mechanicalElements).toEqual([
       {
         type: "beam",
@@ -501,7 +500,7 @@ describe("migrate_document", () => {
     ]);
   });
 
-  it("backfills readOnly:false on an existing material and seeds the read-only catalogue alongside it", () => {
+  it("seeds the catalogue alongside an existing material", () => {
     const step = MIGRATION_STEPS.find((s) => s.to === 10)!;
     const result = step.apply(
       doc({
@@ -509,29 +508,9 @@ describe("migrate_document", () => {
         materials: [{ id: "m1", name: "Custom", E: 1, Re: 1, rho: 1 }],
       }),
     );
-    const materials = result.materials as unknown as { id: string; readOnly: boolean }[];
-    expect(materials[0]).toEqual({ id: "m1", name: "Custom", E: 1, Re: 1, rho: 1, readOnly: false });
+    const materials = result.materials as unknown as { id: string }[];
+    expect(materials[0]).toEqual({ id: "m1", name: "Custom", E: 1, Re: 1, rho: 1 });
     expect(materials.length).toBeGreaterThan(1);
-    expect(materials.slice(1).every((m) => m.readOnly)).toBe(true);
-  });
-
-  it("backfills readOnly:false on a material carried by a stored CreateMaterial/DeleteMaterial action", () => {
-    const step = MIGRATION_STEPS.find((s) => s.to === 10)!;
-    const material = { id: "m1", name: "Custom", E: 1, Re: 1, rho: 1 };
-    const result = step.apply(
-      doc({
-        formatVersion: 9,
-        materials: [],
-        history: [[{ type: "CreateMaterial", material }]],
-        future: [[{ type: "DeleteMaterial", material }]],
-      }),
-    );
-    expect(result.history).toEqual([
-      [{ type: "CreateMaterial", material: { ...material, readOnly: false } }],
-    ]);
-    expect(result.future).toEqual([
-      [{ type: "DeleteMaterial", material: { ...material, readOnly: false } }],
-    ]);
   });
 
   it("refuses a document from a newer format", () => {

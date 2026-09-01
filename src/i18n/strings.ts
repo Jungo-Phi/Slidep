@@ -1324,6 +1324,12 @@ export const STRINGS = {
     de: "Flächenmasse",
     es: "Masa superficial",
   },
+  inertia: {
+    fr: "Moment d'inertie",
+    en: "Moment of inertia",
+    de: "Trägheitsmoment",
+    es: "Momento de inercia",
+  },
   // ── Material/profile catalogue ─────────────────────────────────────────
   material_acier: {
     fr: "Acier",
@@ -1480,12 +1486,6 @@ export const STRINGS = {
     en: "Used by {count} beams",
     de: "Verwendet von {count} Balken",
     es: "Usado por {count} vigas",
-  },
-  unused_entry: {
-    fr: "Non utilisé",
-    en: "Unused",
-    de: "Unbenutzt",
-    es: "Sin usar",
   },
   delete_disabled_last_entry: {
     fr: "Impossible de supprimer la dernière entrée",
@@ -2130,12 +2130,6 @@ export const STRINGS = {
     en: " — norm",
     de: " — Norm",
     es: " — norma",
-  },
-  element_rename_hint: {
-    fr: "Modifier le nom",
-    en: "Change the name",
-    de: "Namen ändern",
-    es: "Cambiar el nombre",
   },
   element_select_hint: {
     fr: "Sélectionner",

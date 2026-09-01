@@ -17,7 +17,7 @@
 
 - Le point zéro devrait être collé à l'axe (à gauche) dans les diagrames d'efforts internes
 - efforts internes : normaliser les graphiques
-- Rendre les contraintes non-éditables en simulation
+- Rendre les dimensions non-éditables en simulation
 
 - Clean cette putain de section "élément en simulation
 

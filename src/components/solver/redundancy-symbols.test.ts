@@ -31,7 +31,7 @@ const P = (x: number, y: number) => new Point2(x, y);
 const MATERIAL_ID = id("material");
 const PROFILE_ID = id("profile");
 const MATERIALS: MaterialDef[] = [
-  { id: MATERIAL_ID, name: "test", E: 1, Re: 1, rho: 1, readOnly: false },
+  { id: MATERIAL_ID, name: "test", E: 1, Re: 1, rho: 1 },
 ];
 const PROFILES: ProfileDef[] = [
   { id: PROFILE_ID, name: "test", shape: { kind: "rect", b: 1, h: 1 } },

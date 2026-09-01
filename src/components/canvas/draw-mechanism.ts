@@ -948,18 +948,12 @@ export function draw_mechanism(
       if (element.type === "gear") {
         ctx.lineWidth = STROKE_WIDTHS.GEAR;
       }
-      // The library dialog's tint (`CanvasDrawing.libraryTint`) — a beam's own base color
-      // while that panel is open. Kept through selection below (a halo still marks it as
-      // selected) since hiding it there is exactly what a beam picked to check its own
-      // material/profile color would do first.
-      let beamTint: string | undefined;
-      if (element.type === "beam") {
-        beamTint = beamTintColors.get(element.id);
-        if (beamTint) {
-          ctx.strokeStyle = beamTint;
-          ctx.fillStyle = beamTint;
-        }
-      }
+      // The library dialog's tint (`CanvasDrawing.libraryTint`) — drawn as a translucent film
+      // over the beam's own normal colors (below, once the shape itself is drawn), not as a
+      // replacement for them: the beam still reads as a beam, the tint just marks which
+      // material/profile it belongs to.
+      const beamTint =
+        element.type === "beam" ? beamTintColors.get(element.id) : undefined;
 
       // Thicken the stroke if element is hovered. Loads are left out: they pick
       // their width per sub-part below, from loadRestWidth / loadHoverWidth.
@@ -973,10 +967,10 @@ export function draw_mechanism(
           : COLORS.SELECTION_STROKE;
         ctx.strokeStyle = isLoadElement
           ? COLORS.SELECTION_ACCENT
-          : (beamTint ?? COLORS.SELECTION_STROKE);
+          : COLORS.SELECTION_STROKE;
         ctx.fillStyle = isLoadElement
           ? COLORS.SELECTION_ACCENT
-          : (beamTint ?? COLORS.FILL_BODY);
+          : COLORS.FILL_BODY;
         ctx.shadowBlur = INTERACTION_SPECS.SELECTION_HALO_SIZE;
       }
       // Add red stroke and make semi-transparent if element is to be deleted
@@ -1200,6 +1194,22 @@ export function draw_mechanism(
                 // feedback is the more immediate one, and the two are not meant to compete.
                 beamTint ? undefined : beamStressStops.get(element.id),
               );
+              if (beamTint) {
+                // A translucent film over the beam just drawn, not a replacement for its own
+                // colors — same shape, same join flags, redrawn on top at reduced opacity.
+                ctx.save();
+                ctx.strokeStyle = beamTint;
+                ctx.fillStyle = beamTint;
+                ctx.globalAlpha *= INTERACTION_SPECS.LIBRARY_TINT_OPACITY;
+                draw_beam(
+                  ctx,
+                  start,
+                  end,
+                  !!element.fixedNodeStartID,
+                  !!element.fixedNodeEndID,
+                );
+                ctx.restore();
+              }
               break;
             case "spring":
               draw_spring(ctx, start, end, element.restLength, viewport.scale);

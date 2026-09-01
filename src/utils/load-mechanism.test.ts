@@ -11,7 +11,7 @@ const MATERIAL_ID = "00000000-0000-0000-0000-00000000m001" as ID;
 const PROFILE_ID = "00000000-0000-0000-0000-00000000p001" as ID;
 
 const materials: MaterialDef[] = [
-  { id: MATERIAL_ID, name: "test", E: 1, Re: 1, rho: 1, readOnly: false },
+  { id: MATERIAL_ID, name: "test", E: 1, Re: 1, rho: 1 },
 ];
 const profiles: ProfileDef[] = [
   { id: PROFILE_ID, name: "test", shape: { kind: "rect", b: 1, h: 1 } },

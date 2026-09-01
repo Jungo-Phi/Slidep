@@ -43,7 +43,7 @@ function material_profile(linearMass: number): {
   return {
     materialID,
     profileID,
-    materials: [{ id: materialID, name: "test", E: 1, Re: 1, rho: linearMass, readOnly: false }],
+    materials: [{ id: materialID, name: "test", E: 1, Re: 1, rho: linearMass }],
     profiles: [{ id: profileID, name: "test", shape: { kind: "rect", b: 1, h: 1 } }],
   };
 }

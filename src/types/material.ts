@@ -4,8 +4,6 @@ import { ID } from "./element";
  * A mechanism's own material. Every catalogue entry (steel, aluminium…) is seeded into
  * `Mechanism.materials` once, at creation or migration — never read live from the catalogue —
  * so a shared mechanism stays self-sufficient even if the app's catalogue changes later.
- * `readOnly` marks those seeded entries: locked against rename/edit/delete, but selectable and
- * duplicable like any other.
  */
 export interface MaterialDef {
   id: ID;
@@ -17,7 +15,6 @@ export interface MaterialDef {
   Re: number;
   /** kg/m³ */
   rho: number;
-  readOnly: boolean;
 }
 
 /** A cross-section shape and its cotes, in metres. `h`/`d` sit in the drawing plane — bending

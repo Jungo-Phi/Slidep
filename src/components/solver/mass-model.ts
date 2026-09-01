@@ -1,6 +1,7 @@
 import { Mechanism } from "../../types";
 import { DEFAULT } from "../../constants/physics-specs";
 import { beam_linear_mass } from "../../utils/section-properties";
+import { gear_inertia, gear_mass } from "../../utils/gear-mass";
 
 /**
  * Real inverse masses for the dynamic step, as opposed to the binary 0/1 (`grounded`/`free`)
@@ -112,11 +113,10 @@ export function compute_dynamic_mass_model(
         });
       }
     } else if (element.type === "gear") {
-      const mass = element.surfaceMass * Math.PI * element.radius * element.radius;
-      add(element.id, mass);
-      // Solid disk: J = ½mr². The gear's own node carries the mass; its angle DOF is a
-      // separate solver variable and gets the matching inertia.
-      const inertia = 0.5 * mass * element.radius * element.radius;
+      add(element.id, gear_mass(element.surfaceMass, element.radius));
+      // The gear's own node carries the mass; its angle DOF is a separate solver variable and
+      // gets the matching inertia.
+      const inertia = gear_inertia(element.surfaceMass, element.radius);
       angleMasses.set(element.id, inertia > 0 ? 1 / inertia : 0);
     } else if (element.type === "mass") {
       add(element.id, element.mass);

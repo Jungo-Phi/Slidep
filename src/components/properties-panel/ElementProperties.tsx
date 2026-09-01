@@ -55,6 +55,7 @@ import { DEFAULT } from "../../constants/physics-specs";
 import {
   ANGLE,
   ANGULAR_VELOCITY,
+  INERTIA,
   LENGTH,
   MASS,
   MOMENT,
@@ -63,6 +64,7 @@ import {
   DAMPING,
   wrap_angle_rad,
 } from "../../utils/quantity-format";
+import { gear_inertia, surface_mass_for_inertia } from "../../utils/gear-mass";
 
 /** The ground/unground button's icon, reused as the ElementPicker "world" option
  *  so a motor's anchor reads with the same visual language as the ground toggle. */
@@ -243,9 +245,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                             onMouseEnter={() => handleMouseEnter(element, true)}
                             onMouseLeave={handleMouseLeave}
                             onClick={() =>
-                              applyActions([
-                                { type: "DeleteElement", element },
-                              ])
+                              applyActions([{ type: "DeleteElement", element }])
                             }
                             sx={{ borderRadius: 3 }}
                           >
@@ -937,7 +937,6 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                 alignItems: "center",
                 justifyContent: "center",
                 gap: 2,
-                mt: -1,
               }}
             >
               {"rotatingEdgesIDs" in element && (
@@ -992,6 +991,27 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                         type: "ChangeSurfaceMass",
                         id: element.id,
                         delta: surfaceMass - element.surfaceMass,
+                      },
+                    ])
+                  }
+                  unsigned
+                  large
+                />
+              )}
+              {element.type === "gear" && (
+                <NumberInput
+                  label="J"
+                  title={t("inertia")}
+                  kind={INERTIA}
+                  value={gear_inertia(element.surfaceMass, element.radius)}
+                  onChange={(inertia) =>
+                    applyActions([
+                      {
+                        type: "ChangeSurfaceMass",
+                        id: element.id,
+                        delta:
+                          surface_mass_for_inertia(inertia, element.radius) -
+                          element.surfaceMass,
                       },
                     ])
                   }

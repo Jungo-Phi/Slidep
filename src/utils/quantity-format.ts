@@ -127,6 +127,13 @@ export const SURFACE_MASS: QuantityKind = {
   ...adaptive("g/m²", 1e-3),
   renamedFrom: { exp: 6, symbol: "T/m²" },
 };
+
+/** A rotational inertia (SI kg·m²), prefixed on the gram like `MASS` for the same reason. No
+ *  `submultipleOnSuffix`: prefixing the "m²" down a decade would scale it by 1e-6, not 1e-3. */
+export const INERTIA: QuantityKind = {
+  ...adaptive("g·m²", 1e-3),
+  renamedFrom: { exp: 6, symbol: "T·m²" },
+};
 export const STRESS = adaptive("Pa");
 /** Fixed, not adaptive: material densities span a narrow range (~0.9 to ~20 g/cm³) that stays
  *  readable in one unit, unlike `MASS` or `FORCE` which can land anywhere across many decades.

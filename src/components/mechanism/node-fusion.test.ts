@@ -47,7 +47,7 @@ const pivot = (nid: ID, x: number, rotating: ID[] = []): PivotElement => ({
 const MATERIAL_ID = id(90);
 const PROFILE_ID = id(91);
 const MATERIALS: MaterialDef[] = [
-  { id: MATERIAL_ID, name: "test", E: 1, Re: 1, rho: 1, readOnly: false },
+  { id: MATERIAL_ID, name: "test", E: 1, Re: 1, rho: 1 },
 ];
 const PROFILES: ProfileDef[] = [
   { id: PROFILE_ID, name: "test", shape: { kind: "rect", b: 1, h: 1 } },

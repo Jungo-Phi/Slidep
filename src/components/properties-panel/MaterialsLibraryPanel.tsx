@@ -8,35 +8,51 @@ import {
   Tooltip,
   TextField,
   Typography,
+  Divider,
 } from "@mui/material";
-import { Add, Close, AddToPhotos, Lock } from "@mui/icons-material";
-import { Action, BeamElement, HoveredPart, ID, Mechanism } from "../../types";
+import {
+  Add,
+  Close,
+  AddToPhotos,
+  KeyboardArrowDown,
+  ChevronRight,
+  DragIndicator,
+} from "@mui/icons-material";
+import {
+  Action,
+  BeamElement,
+  CanvasState,
+  HoveredPart,
+  ID,
+  Mechanism,
+} from "../../types";
 import { ProfileShape } from "../../types/material";
 import {
   default_material,
   default_profile,
   default_shape_for_kind,
 } from "../../constants/material-profile-catalog";
-import {
-  material_usage_count,
-  profile_usage_count,
-} from "../../utils/library-usage";
 import { validate_profile_shape } from "../../utils/section-properties";
+import { unique_copy_name } from "../../utils/unique-name";
 import NumberInput from "./components/NumberInput";
 import SectionSchema from "./components/SectionSchema";
+import ElementDisplay from "./components/ElementDisplay";
 import { PROBE_ELEMENT_COLORS } from "./components/ProbeChart";
 import { INLINE_INPUT_SX } from "../mechanisms-gallery/inline-input-sx";
 import { DENSITY, LENGTH, STRESS } from "../../utils/quantity-format";
-import { t } from "../../i18n";
+import { t, tn } from "../../i18n";
 
 /**
  * The properties panel's own "library" tab: create, rename, edit, duplicate and delete a
- * mechanism's own materials and profiles, master/detail —
- * a compact list selects the entry whose fields show below.
+ * mechanism's own materials and profiles. Each material/profile is a group: the beams that use
+ * it are listed right under its own header, and dragging a beam onto a different group's header
+ * reassigns it — the target is already on screen, no need to open a menu to find it. A group's
+ * numeric fields (E/Re/ρ, or a profile's cotes) and its beam list both live behind its own
+ * expand toggle — any number of groups at once, not an accordion — so a collapsed entry costs a
+ * single line. Reassigning every beam in a group at once works whether or not it's expanded: its
+ * own handle sits right in the header, not in the (possibly hidden) list below.
  *
- * Materials alone carry a catalogue: steel, aluminium… are seeded into every mechanism's own
- * `materials` at creation/migration (`seed_material_catalog`), `readOnly` — ordinary entries,
- * selectable and assignable like any other, just locked against rename/edit/delete.
+ * Materials alone carry a catalogue: steel, aluminium… are seeded into every mechanism's own `materials` at creation/migration (`seed_material_catalog`) as ordinary entries.
  * Duplicating one is how it becomes a normal, editable entry. Profiles have no such catalogue:
  * their "kind" (rectangle, tube…) already is that structure, and picking one already seeds
  * sensible cotes (`default_shape_for_kind`) — a second, parallel list of presets would just
@@ -50,24 +66,34 @@ import { t } from "../../i18n";
 const swatch = (index: number) =>
   PROBE_ELEMENT_COLORS[index % PROBE_ELEMENT_COLORS.length];
 
-// ─── Inline rename, fit to its own text — like a renamed element in `ElementDisplay` ─────────
+/** A group's own swatch, as a light wash over its whole background rather than a dot next to
+ *  its name — the 2-digit suffix is an 8-digit hex color's own alpha channel. */
+const swatch_tint = (index: number) => `${swatch(index)}22`;
+
+// A beam belongs to exactly one material group and one profile group at once — separate mime
+// types per section keep a drag started in one from being droppable in the other, and a
+// second pair (a whole group's own id, rather than one beam's) lets the group handle bar
+// reassign every beam in the group in one drop, instead of one at a time.
+const MATERIAL_BEAM_MIME = "application/x-slidep-beam-id+material";
+const MATERIAL_GROUP_MIME = "application/x-slidep-material-id";
+const PROFILE_BEAM_MIME = "application/x-slidep-beam-id+profile";
+const PROFILE_GROUP_MIME = "application/x-slidep-profile-id";
+
+// ─── Inline rename — a truncating label at rest, like a mechanism's own name in the gallery;
+// fit-to-text only while actively editing, like a renamed element in `ElementDisplay` ─────────
 
 export interface InlineNameProps {
   name: string;
   onCommit: (newName: string) => void;
-  /** Same font/sizing as editable — only the HTML `readonly` attribute differs — so a locked
-   *  catalogue entry's name reads at the same size as everyone else's, not smaller. */
-  readOnly?: boolean;
 }
 
-export const InlineName: React.FC<InlineNameProps> = ({
-  name,
-  onCommit,
-  readOnly = false,
-}) => {
+export const InlineName: React.FC<InlineNameProps> = ({ name, onCommit }) => {
+  const [editing, setEditing] = React.useState(false);
   const [draft, setDraft] = React.useState(name);
   const [width, setWidth] = React.useState(0);
-  React.useEffect(() => setDraft(name), [name]);
+  React.useEffect(() => {
+    if (!editing) setDraft(name);
+  }, [name, editing]);
   const discardRef = React.useRef(false);
   const inputRef = React.useRef<HTMLInputElement>(null);
 
@@ -75,7 +101,7 @@ export const InlineName: React.FC<InlineNameProps> = ({
   // from the real metrics and clipped the text's tail) — a hidden span sharing that exact font
   // is the only reliable way to size a text input to its content.
   React.useEffect(() => {
-    if (!inputRef.current) return;
+    if (!editing || !inputRef.current) return;
     const span = document.createElement("span");
     span.style.visibility = "hidden";
     span.style.position = "absolute";
@@ -85,21 +111,48 @@ export const InlineName: React.FC<InlineNameProps> = ({
     document.body.appendChild(span);
     setWidth(span.offsetWidth);
     document.body.removeChild(span);
-  }, [draft]);
+  }, [draft, editing]);
+
+  if (!editing)
+    return (
+      <Typography
+        variant="body2"
+        noWrap
+        onClick={(e) => {
+          e.stopPropagation();
+          setEditing(true);
+        }}
+        sx={{
+          ...INLINE_INPUT_SX,
+          minWidth: 0,
+          cursor: "text",
+        }}
+      >
+        {name}
+      </Typography>
+    );
 
   return (
     <TextField
       variant="standard"
       value={draft}
-      disabled={readOnly}
+      autoFocus
       onChange={(e) => setDraft(e.target.value)}
       onClick={(e) => e.stopPropagation()}
       inputRef={inputRef}
       InputProps={{ disableUnderline: true }}
       sx={{
         ...INLINE_INPUT_SX,
-        width: Math.max(24, width + 16),
+        width: Math.max(24, width + 8),
         flexShrink: 0,
+        // Matches the `body2` Typography this replaces while editing — without it, the input
+        // falls back to the theme's default (larger) input font and the row visibly resizes.
+        "& .MuiInputBase-input": {
+          paddingTop: "4px",
+          paddingBottom: "4px",
+          fontSize: "0.875rem",
+          lineHeight: 1.43,
+        },
       }}
       onKeyDown={(e) => {
         if (e.key === "Escape") {
@@ -110,6 +163,7 @@ export const InlineName: React.FC<InlineNameProps> = ({
         }
       }}
       onBlur={() => {
+        setEditing(false);
         if (discardRef.current) {
           discardRef.current = false;
           setDraft(name);
@@ -122,123 +176,257 @@ export const InlineName: React.FC<InlineNameProps> = ({
   );
 };
 
-// ─── The compact list row, shared shape for materials and profiles ───────────────────────────
+// ─── A beam nested under its material/profile group — draggable onto another group's header ──
 
-interface ListRowProps {
+interface DraggableBeamRowProps {
+  beam: BeamElement;
+  dragMimeType: string;
+  hoveredPart: HoveredPart;
+  setHoveredPart: (hoveredPart: HoveredPart) => void;
+  selectedIds: ID[];
+  setCanvasState: (state: CanvasState) => void;
+  applyActions: (actions: Action[]) => void;
+}
+
+const DraggableBeamRow: React.FC<DraggableBeamRowProps> = ({
+  beam,
+  dragMimeType,
+  hoveredPart,
+  setHoveredPart,
+  selectedIds,
+  setCanvasState,
+  applyActions,
+}) => (
+  <Box
+    draggable
+    onDragStart={(e) => {
+      e.dataTransfer.setData(dragMimeType, beam.id);
+      e.dataTransfer.effectAllowed = "move";
+    }}
+    sx={{
+      display: "flex",
+      alignItems: "center",
+      cursor: "grab",
+      "&:active": { cursor: "grabbing" },
+      // The handle itself picks up a background on hover — it's the part that's grabbable,
+      // so it's the part that should say so, not the row as a whole.
+      "&:hover .drag-handle": { backgroundColor: "action.selected" },
+    }}
+  >
+    <Box
+      className="drag-handle"
+      sx={{
+        display: "flex",
+        alignItems: "center",
+        borderRadius: 1.5,
+        mr: 0.25,
+      }}
+    >
+      <DragIndicator
+        fontSize="inherit"
+        sx={{ fontSize: 22, mx: -0.25, py: "2px", color: "text.disabled" }}
+      />
+    </Box>
+    <ElementDisplay
+      element={beam}
+      hoveredPart={hoveredPart}
+      setHoveredPart={setHoveredPart}
+      selectedIds={selectedIds}
+      setCanvasState={setCanvasState}
+      applyActions={applyActions}
+      size="small"
+      editable={false}
+    />
+  </Box>
+);
+
+// ─── The whole group's own handle — grabs every one of its beams at once, dropped on another
+// group's header the same way a single beam is. Lives in the header row itself (not beside the
+// beam list) so it works whether the group is expanded or not, and so its own drag image can
+// just be that header — see `LibraryEntryGroup`'s `headerRef`. Only worth showing once a group
+// holds more than one beam: with just one, its own row's handle already does the same thing. ─
+
+interface GroupHandleBarProps {
+  dragMimeType: string;
+  groupID: ID;
+  headerRef: React.RefObject<HTMLDivElement | null>;
+}
+
+const GroupHandleBar: React.FC<GroupHandleBarProps> = ({
+  dragMimeType,
+  groupID,
+  headerRef,
+}) => (
+  <Box
+    draggable
+    onDragStart={(e) => {
+      e.dataTransfer.setData(dragMimeType, groupID);
+      e.dataTransfer.effectAllowed = "move";
+      if (headerRef.current)
+        e.dataTransfer.setDragImage(headerRef.current, 12, 12);
+    }}
+    sx={{
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      borderRadius: 1.5,
+      cursor: "grab",
+      "&:active": { cursor: "grabbing" },
+      "&:hover": { backgroundColor: "action.selected" },
+    }}
+  >
+    <DragIndicator
+      fontSize="inherit"
+      sx={{ fontSize: 22, mx: -0.25, color: "text.disabled" }}
+    />
+  </Box>
+);
+
+// ─── The compact, collapsible header shared by a material or a profile group ─────────────────
+
+interface LibraryEntryGroupProps {
   index: number;
   name: string;
-  usageCount?: number;
-  selected: boolean;
-  isHighlighted: boolean;
-  /** A catalogue-seeded entry (`MaterialDef.readOnly`) — no rename, no delete; "duplicate" is
-   *  how it becomes an ordinary, editable one. */
-  readOnly?: boolean;
-  /** Ignored when `readOnly`. */
+  usageCount: number;
+  expanded: boolean;
+  onToggleExpand: () => void;
+  /** The hovered canvas beam belongs to this entry, or this entry's own row is hovered — tints
+   *  the whole group so it's found at a glance even while collapsed. */
+  isCanvasHighlighted: boolean;
   canDelete?: boolean;
-  onSelect: () => void;
   onHoverStart: () => void;
   onHoverEnd: () => void;
   onRename?: (newName: string) => void;
   onDuplicate: () => void;
   onDelete?: () => void;
+  dragOver: boolean;
+  onDragOver: (e: React.DragEvent) => void;
+  onDragLeave: (e: React.DragEvent) => void;
+  onDrop: (e: React.DragEvent) => void;
+  groupRef?: (el: HTMLDivElement | null) => void;
+  /** The whole group's own drag, offered from a small handle in the header itself — undefined
+   *  when there's nothing to grab as a group (0 or 1 beam). */
+  groupDrag?: { id: ID; mimeType: string };
+  detail?: React.ReactNode;
+  children?: React.ReactNode;
 }
 
-const ListRow: React.FC<ListRowProps> = ({
+const LibraryEntryGroup: React.FC<LibraryEntryGroupProps> = ({
   index,
   name,
-  usageCount = 0,
-  selected,
-  isHighlighted,
-  readOnly = false,
+  usageCount,
+  expanded,
+  onToggleExpand,
+  isCanvasHighlighted,
   canDelete = true,
-  onSelect,
   onHoverStart,
   onHoverEnd,
   onRename,
   onDuplicate,
   onDelete,
-}) => (
-  <Box
-    onClick={onSelect}
-    onMouseEnter={onHoverStart}
-    onMouseLeave={onHoverEnd}
-    sx={{
-      display: "flex",
-      alignItems: "center",
-      gap: 0.5,
-      py: 0.5,
-      px: 1,
-      cursor: "pointer",
-      borderBottom: 1,
-      borderColor: "divider",
-      backgroundColor: selected
-        ? "action.selected"
-        : isHighlighted
-          ? "action.hover"
-          : "transparent",
-    }}
-  >
+  dragOver,
+  onDragOver,
+  onDragLeave,
+  onDrop,
+  groupRef,
+  groupDrag,
+  detail,
+  children,
+}) => {
+  const headerRef = React.useRef<HTMLDivElement>(null);
+
+  return (
     <Box
+      ref={groupRef}
+      // The whole group — header and its beam rows — is the drop target, not just the header
+      // line: a bigger target is a faster one to hit while dragging.
+      onDragOver={onDragOver}
+      onDragLeave={onDragLeave}
+      onDrop={onDrop}
       sx={{
-        width: 10,
-        height: 10,
-        borderRadius: "50%",
-        backgroundColor: swatch(index),
-        flexShrink: 0,
+        borderBottom: 1,
+        borderColor: "divider",
+        backgroundColor: dragOver ? "action.selected" : swatch_tint(index),
+        outline: dragOver ? "2px dashed" : "none",
+        outlineColor: "primary.main",
+        outlineOffset: -2,
       }}
-    />
-    <InlineName name={name} onCommit={onRename!} readOnly={readOnly} />
-    <Box sx={{ flexGrow: 1 }} />
-    {!readOnly && (
-      <Typography
-        variant="caption"
-        color="text.secondary"
-        sx={{ flexShrink: 0 }}
-      >
-        {usageCount > 0 ? usageCount : t("unused_entry")}
-      </Typography>
-    )}
-    <Tooltip title={t("duplicate")}>
-      <IconButton
-        size="small"
-        color="primary"
-        onClick={(e) => {
-          e.stopPropagation();
-          onDuplicate();
+    >
+      <Box
+        ref={headerRef}
+        onClick={onToggleExpand}
+        onMouseEnter={onHoverStart}
+        onMouseLeave={onHoverEnd}
+        sx={{
+          display: "flex",
+          alignItems: "center",
+          gap: 0.5,
+          p: 0.5,
+          cursor: "pointer",
+          backgroundColor:
+            isCanvasHighlighted && !dragOver ? "action.hover" : "transparent",
         }}
       >
-        <AddToPhotos fontSize="inherit" />
-      </IconButton>
-    </Tooltip>
-    {readOnly ? (
-      <Tooltip title={t("delete_disabled_readonly")}>
-        <span>
-          <IconButton size="small" disabled>
-            <Lock fontSize="inherit" />
-          </IconButton>
-        </span>
-      </Tooltip>
-    ) : (
-      <Tooltip
-        title={canDelete ? t("delete") : t("delete_disabled_last_entry")}
-      >
-        <span>
+        <IconButton size="small" sx={{ p: 0.25 }} disableRipple>
+          {expanded ? (
+            <KeyboardArrowDown fontSize="inherit" />
+          ) : (
+            <ChevronRight fontSize="inherit" />
+          )}
+        </IconButton>
+        {groupDrag && (
+          <GroupHandleBar
+            dragMimeType={groupDrag.mimeType}
+            groupID={groupDrag.id}
+            headerRef={headerRef}
+          />
+        )}
+        <Tooltip title={tn("used_by_beams", usageCount)}>
+          <Typography variant="caption" color="text.secondary" sx={{ mr: 0.5 }}>
+            {usageCount}
+          </Typography>
+        </Tooltip>
+        <InlineName name={name} onCommit={onRename!} />
+        <Box sx={{ flexGrow: 1 }} />
+        <Tooltip title={t("duplicate")}>
           <IconButton
             size="small"
-            color="error"
+            color="primary"
             onClick={(e) => {
               e.stopPropagation();
-              onDelete!();
+              onDuplicate();
             }}
-            disabled={!canDelete}
           >
-            <Close fontSize="inherit" />
+            <AddToPhotos fontSize="inherit" />
           </IconButton>
-        </span>
-      </Tooltip>
-    )}
-  </Box>
-);
+        </Tooltip>
+        <Tooltip
+          title={canDelete ? t("delete") : t("delete_disabled_last_entry")}
+        >
+          <span>
+            <IconButton
+              size="small"
+              color="error"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete!();
+              }}
+              disabled={!canDelete}
+            >
+              <Close fontSize="inherit" />
+            </IconButton>
+          </span>
+        </Tooltip>
+      </Box>
+      {expanded && (
+        <>
+          {detail}
+          {children}
+        </>
+      )}
+    </Box>
+  );
+};
 
 // ─── Materials ─────────────────────────────────────────────────────────────────────────────────
 
@@ -246,7 +434,6 @@ export interface MaterialDetailProps {
   E: number;
   Re: number;
   rho: number;
-  readOnly?: boolean;
   onChangeE?: (newE: number) => void;
   onChangeRe?: (newRe: number) => void;
   onChangeRho?: (newRho: number) => void;
@@ -256,41 +443,46 @@ export const MaterialDetail: React.FC<MaterialDetailProps> = ({
   E,
   Re,
   rho,
-  readOnly = false,
   onChangeE,
   onChangeRe,
   onChangeRho,
 }) => (
-  <Box
-    sx={{ display: "flex", flexDirection: "column", gap: 1, px: 1.5, py: 1.5 }}
-  >
-    <NumberInput
-      label="E"
-      title={t("material_field_E")}
-      kind={STRESS}
-      value={E}
-      onChange={onChangeE ?? (() => {})}
-      unsigned
-      disabled={readOnly}
-    />
-    <NumberInput
-      label="Re"
-      title={t("material_field_Re")}
-      kind={STRESS}
-      value={Re}
-      onChange={onChangeRe ?? (() => {})}
-      unsigned
-      disabled={readOnly}
-    />
-    <NumberInput
-      label="ρ"
-      title={t("material_field_rho")}
-      kind={DENSITY}
-      value={rho}
-      onChange={onChangeRho ?? (() => {})}
-      unsigned
-      disabled={readOnly}
-    />
+  <Box>
+    <Divider />
+    <Box
+      sx={{
+        display: "flex",
+        flexWrap: "wrap",
+        justifyContent: "center",
+        gap: 1,
+        p: 1.5,
+      }}
+    >
+      <NumberInput
+        label="E"
+        title={t("material_field_E")}
+        kind={STRESS}
+        value={E}
+        onChange={onChangeE ?? (() => {})}
+        unsigned
+      />
+      <NumberInput
+        label="Re"
+        title={t("material_field_Re")}
+        kind={STRESS}
+        value={Re}
+        onChange={onChangeRe ?? (() => {})}
+        unsigned
+      />
+      <NumberInput
+        label="ρ"
+        title={t("material_field_rho")}
+        kind={DENSITY}
+        value={rho}
+        onChange={onChangeRho ?? (() => {})}
+        unsigned
+      />
+    </Box>
   </Box>
 );
 
@@ -477,42 +669,43 @@ const ShapeCotes: React.FC<ShapeCotesProps> = ({
 
 export interface ProfileDetailProps {
   shape: ProfileShape;
-  readOnly?: boolean;
   onChangeShape?: (newShape: ProfileShape) => void;
 }
 
 export const ProfileDetail: React.FC<ProfileDetailProps> = ({
   shape,
-  readOnly = false,
   onChangeShape,
 }) => (
-  <Box
-    sx={{ display: "flex", flexDirection: "column", gap: 1, px: 1.5, py: 1.5 }}
-  >
-    <Select
-      size="small"
-      value={shape.kind}
-      disabled={readOnly}
-      onChange={(e) =>
-        onChangeShape?.(
-          default_shape_for_kind(e.target.value as ProfileShape["kind"]),
-        )
-      }
-    >
-      {SHAPE_KINDS.map((kind) => (
-        <MenuItem key={kind} value={kind}>
-          {shape_kind_label(kind)}
-        </MenuItem>
-      ))}
-    </Select>
-    <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
-      <ShapeCotes
-        shape={shape}
-        onChange={readOnly ? () => {} : onChangeShape!}
-        disabled={readOnly}
-      />
+  <Box>
+    <Divider />
+    <Box sx={{ display: "flex", flexDirection: "column", gap: 1, p: 1.5 }}>
+      <Select
+        size="small"
+        value={shape.kind}
+        onChange={(e) =>
+          onChangeShape?.(
+            default_shape_for_kind(e.target.value as ProfileShape["kind"]),
+          )
+        }
+      >
+        {SHAPE_KINDS.map((kind) => (
+          <MenuItem key={kind} value={kind}>
+            {shape_kind_label(kind)}
+          </MenuItem>
+        ))}
+      </Select>
+      <Box
+        sx={{
+          display: "flex",
+          flexWrap: "wrap",
+          justifyContent: "center",
+          gap: 1,
+        }}
+      >
+        <ShapeCotes shape={shape} onChange={onChangeShape!} />
+      </Box>
+      <SectionSchema shape={shape} />
     </Box>
-    <SectionSchema shape={shape} />
   </Box>
 );
 
@@ -536,7 +729,11 @@ interface MaterialsLibraryPanelProps {
   /** The canvas's own hover, read (never written) here — the reverse direction: a beam
    *  hovered on the canvas lights up the row it belongs to. */
   hoveredPart: HoveredPart;
-  /** Set from the elements tab's own "where can I edit this?" link — selects that entry here
+  setHoveredPart: (hoveredPart: HoveredPart) => void;
+  /** Threaded down to each beam row so it can select/highlight like any other `ElementDisplay`. */
+  selectedIds: ID[];
+  setCanvasState: (state: CanvasState) => void;
+  /** Set from the elements tab's own "where can I edit this?" link — expands that entry here
    *  once, then must be acknowledged so the next visit doesn't re-apply it. */
   focusRequest: LibraryFocusRequest | null;
   onFocusHandled: () => void;
@@ -549,52 +746,79 @@ export const MaterialsLibraryPanel: React.FC<MaterialsLibraryPanelProps> = ({
   hoveredEntryID,
   setHoveredEntryID,
   hoveredPart,
+  setHoveredPart,
+  selectedIds,
+  setCanvasState,
   focusRequest,
   onFocusHandled,
 }) => {
-  // The master/detail selection — which entry's fields show below its list. Local: unlike
-  // `hoveredSection`/hover, the canvas has no need to know it.
-  const [selectedMaterialID, setSelectedMaterialID] = React.useState<ID | null>(
+  // Which entries are open — their own detail (E/Re/ρ, or cotes) and beam list both, together.
+  // Any number at once per section: nothing here is mutually exclusive.
+  const [expandedMaterialIDs, setExpandedMaterialIDs] = React.useState<Set<ID>>(
+    new Set(),
+  );
+  const [expandedProfileIDs, setExpandedProfileIDs] = React.useState<Set<ID>>(
+    new Set(),
+  );
+  const toggleMaterialExpand = (id: ID) =>
+    setExpandedMaterialIDs((cur) => {
+      const next = new Set(cur);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const toggleProfileExpand = (id: ID) =>
+    setExpandedProfileIDs((cur) => {
+      const next = new Set(cur);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  const [dragOverMaterialID, setDragOverMaterialID] = React.useState<ID | null>(
     null,
   );
-  const [selectedProfileID, setSelectedProfileID] = React.useState<ID | null>(
+  const [dragOverProfileID, setDragOverProfileID] = React.useState<ID | null>(
     null,
   );
+
+  const materialGroupRefs = React.useRef(new Map<ID, HTMLDivElement>());
+  const profileGroupRefs = React.useRef(new Map<ID, HTMLDivElement>());
 
   React.useEffect(() => {
     if (!focusRequest) return;
-    if (focusRequest.section === "materials")
-      setSelectedMaterialID(focusRequest.id);
-    else setSelectedProfileID(focusRequest.id);
+    if (focusRequest.section === "materials") {
+      setExpandedMaterialIDs((cur) => new Set(cur).add(focusRequest.id));
+      materialGroupRefs.current
+        .get(focusRequest.id)
+        ?.scrollIntoView({ block: "nearest" });
+    } else {
+      setExpandedProfileIDs((cur) => new Set(cur).add(focusRequest.id));
+      profileGroupRefs.current
+        .get(focusRequest.id)
+        ?.scrollIntoView({ block: "nearest" });
+    }
     onFocusHandled();
   }, [focusRequest, onFocusHandled]);
 
+  const beams = mechanism.mechanicalElements.filter(
+    (el): el is BeamElement => el.type === "beam",
+  );
+
   const hoveredBeam =
     hoveredPart.type === "Edge"
-      ? mechanism.mechanicalElements.find(
-          (el): el is BeamElement =>
-            el.type === "beam" && el.id === hoveredPart.id,
-        )
+      ? beams.find((el) => el.id === hoveredPart.id)
       : undefined;
 
-  // Falls back to the first entry so the detail pane is never empty while the library holds
-  // at least one — including right after the selected entry was deleted.
-  const ownSelectedMaterial =
-    mechanism.materials.find((m) => m.id === selectedMaterialID) ??
-    mechanism.materials[0];
-  const ownSelectedProfile =
-    mechanism.profiles.find((p) => p.id === selectedProfileID) ??
-    mechanism.profiles[0];
-
   const addMaterial = () => {
-    const material = default_material();
+    const material = default_material(mechanism.materials.map((m) => m.name));
     applyActions([{ type: "CreateMaterial", material }]);
-    setSelectedMaterialID(material.id);
+    setExpandedMaterialIDs((cur) => new Set(cur).add(material.id));
   };
   const addProfile = () => {
-    const profile = default_profile();
+    const profile = default_profile(mechanism.profiles.map((p) => p.name));
     applyActions([{ type: "CreateProfile", profile }]);
-    setSelectedProfileID(profile.id);
+    setExpandedProfileIDs((cur) => new Set(cur).add(profile.id));
   };
 
   const deleteMaterial = (materialID: ID) => {
@@ -605,11 +829,8 @@ export const MaterialsLibraryPanel: React.FC<MaterialsLibraryPanelProps> = ({
     if (!fallback) return;
     const material = mechanism.materials.find((m) => m.id === materialID);
     if (!material) return;
-    const reassign: Action[] = mechanism.mechanicalElements
-      .filter(
-        (el): el is BeamElement =>
-          el.type === "beam" && el.materialID === materialID,
-      )
+    const reassign: Action[] = beams
+      .filter((beam) => beam.materialID === materialID)
       .map((beam) => ({
         type: "AssignMaterial",
         id: beam.id,
@@ -623,11 +844,8 @@ export const MaterialsLibraryPanel: React.FC<MaterialsLibraryPanelProps> = ({
     if (!fallback) return;
     const profile = mechanism.profiles.find((p) => p.id === profileID);
     if (!profile) return;
-    const reassign: Action[] = mechanism.mechanicalElements
-      .filter(
-        (el): el is BeamElement =>
-          el.type === "beam" && el.profileID === profileID,
-      )
+    const reassign: Action[] = beams
+      .filter((beam) => beam.profileID === profileID)
       .map((beam) => ({
         type: "AssignProfile",
         id: beam.id,
@@ -637,9 +855,108 @@ export const MaterialsLibraryPanel: React.FC<MaterialsLibraryPanelProps> = ({
     applyActions([...reassign, { type: "DeleteProfile", profile }]);
   };
 
+  const handleMaterialDragOver = (e: React.DragEvent, targetID: ID) => {
+    if (
+      !e.dataTransfer.types.includes(MATERIAL_BEAM_MIME) &&
+      !e.dataTransfer.types.includes(MATERIAL_GROUP_MIME)
+    )
+      return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    setDragOverMaterialID(targetID);
+  };
+  const handleMaterialDragLeave = (e: React.DragEvent, targetID: ID) => {
+    // dragleave also fires when the pointer moves onto a child (a nested beam row) still
+    // inside the same group — only clear once it has actually left the group's box.
+    if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+    setDragOverMaterialID((cur) => (cur === targetID ? null : cur));
+  };
+  const handleMaterialDrop = (targetID: ID) => (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOverMaterialID(null);
+    const groupID = e.dataTransfer.getData(MATERIAL_GROUP_MIME) as ID;
+    if (groupID) {
+      if (groupID === targetID) return;
+      applyActions(
+        beams
+          .filter((beam) => beam.materialID === groupID)
+          .map((beam) => ({
+            type: "AssignMaterial",
+            id: beam.id,
+            newMaterialID: targetID,
+            oldMaterialID: groupID,
+          })),
+      );
+      return;
+    }
+    const beamID = e.dataTransfer.getData(MATERIAL_BEAM_MIME) as ID;
+    const beam = beams.find((b) => b.id === beamID);
+    if (!beam || beam.materialID === targetID) return;
+    applyActions([
+      {
+        type: "AssignMaterial",
+        id: beam.id,
+        newMaterialID: targetID,
+        oldMaterialID: beam.materialID,
+      },
+    ]);
+  };
+
+  const handleProfileDragOver = (e: React.DragEvent, targetID: ID) => {
+    if (
+      !e.dataTransfer.types.includes(PROFILE_BEAM_MIME) &&
+      !e.dataTransfer.types.includes(PROFILE_GROUP_MIME)
+    )
+      return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    setDragOverProfileID(targetID);
+  };
+  const handleProfileDragLeave = (e: React.DragEvent, targetID: ID) => {
+    if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+    setDragOverProfileID((cur) => (cur === targetID ? null : cur));
+  };
+  const handleProfileDrop = (targetID: ID) => (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOverProfileID(null);
+    const groupID = e.dataTransfer.getData(PROFILE_GROUP_MIME) as ID;
+    if (groupID) {
+      if (groupID === targetID) return;
+      applyActions(
+        beams
+          .filter((beam) => beam.profileID === groupID)
+          .map((beam) => ({
+            type: "AssignProfile",
+            id: beam.id,
+            newProfileID: targetID,
+            oldProfileID: groupID,
+          })),
+      );
+      return;
+    }
+    const beamID = e.dataTransfer.getData(PROFILE_BEAM_MIME) as ID;
+    const beam = beams.find((b) => b.id === beamID);
+    if (!beam || beam.profileID === targetID) return;
+    applyActions([
+      {
+        type: "AssignProfile",
+        id: beam.id,
+        newProfileID: targetID,
+        oldProfileID: beam.profileID,
+      },
+    ]);
+  };
+
   return (
     <Box>
       {/* ── Matériaux ── */}
+      <Typography
+        variant="subtitle2"
+        fontWeight={600}
+        sx={{ pl: 3, pt: 2, mb: -1.5 }}
+      >
+        {t("materials")}
+      </Typography>
       <Box
         onMouseEnter={() => setHoveredSection("materials")}
         onMouseLeave={() => {
@@ -647,36 +964,38 @@ export const MaterialsLibraryPanel: React.FC<MaterialsLibraryPanelProps> = ({
           setHoveredEntryID(null);
         }}
         sx={{
-          borderRadius: 3,
+          borderRadius: 2,
           margin: 2,
           backgroundColor: "background.sunken",
+          overflow: "hidden",
         }}
       >
-        <Typography
-          variant="subtitle2"
-          fontWeight={600}
-          sx={{ px: 2, pt: 1.5 }}
-        >
-          {t("materials")}
-        </Typography>
-        <Box sx={{ mt: 0.5 }}>
-          {mechanism.materials.map((material, i) => (
-            <ListRow
+        {mechanism.materials.map((material, i) => {
+          const materialBeams = beams.filter(
+            (beam) => beam.materialID === material.id,
+          );
+          return (
+            <LibraryEntryGroup
               key={material.id}
+              groupRef={(el) => {
+                if (el) materialGroupRefs.current.set(material.id, el);
+                else materialGroupRefs.current.delete(material.id);
+              }}
               index={i}
               name={material.name}
-              usageCount={material_usage_count(
-                mechanism.mechanicalElements,
-                material.id,
-              )}
-              readOnly={material.readOnly}
-              selected={ownSelectedMaterial?.id === material.id}
-              isHighlighted={
+              usageCount={materialBeams.length}
+              expanded={expandedMaterialIDs.has(material.id)}
+              onToggleExpand={() => toggleMaterialExpand(material.id)}
+              groupDrag={
+                materialBeams.length > 1
+                  ? { id: material.id, mimeType: MATERIAL_GROUP_MIME }
+                  : undefined
+              }
+              isCanvasHighlighted={
                 hoveredBeam?.materialID === material.id ||
                 hoveredEntryID === material.id
               }
               canDelete={mechanism.materials.length > 1}
-              onSelect={() => setSelectedMaterialID(material.id)}
               onHoverStart={() => setHoveredEntryID(material.id)}
               onHoverEnd={() => setHoveredEntryID(null)}
               onRename={(newName) =>
@@ -696,61 +1015,98 @@ export const MaterialsLibraryPanel: React.FC<MaterialsLibraryPanelProps> = ({
                     material: {
                       ...material,
                       id: crypto.randomUUID() as ID,
-                      readOnly: false,
+                      name: unique_copy_name(
+                        material.name,
+                        mechanism.materials.map((m) => m.name),
+                      ),
                     },
                   },
                 ])
               }
               onDelete={() => deleteMaterial(material.id)}
-            />
-          ))}
-        </Box>
+              dragOver={dragOverMaterialID === material.id}
+              onDragOver={(e) => handleMaterialDragOver(e, material.id)}
+              onDragLeave={(e) => handleMaterialDragLeave(e, material.id)}
+              onDrop={handleMaterialDrop(material.id)}
+              detail={
+                <MaterialDetail
+                  E={material.E}
+                  Re={material.Re}
+                  rho={material.rho}
+                  onChangeE={(newE) =>
+                    applyActions([
+                      {
+                        type: "ChangeMaterialE",
+                        id: material.id,
+                        delta: newE - material.E,
+                      },
+                    ])
+                  }
+                  onChangeRe={(newRe) =>
+                    applyActions([
+                      {
+                        type: "ChangeMaterialRe",
+                        id: material.id,
+                        delta: newRe - material.Re,
+                      },
+                    ])
+                  }
+                  onChangeRho={(newRho) =>
+                    applyActions([
+                      {
+                        type: "ChangeMaterialRho",
+                        id: material.id,
+                        delta: newRho - material.rho,
+                      },
+                    ])
+                  }
+                />
+              }
+            >
+              {materialBeams.length > 0 && (
+                <Box>
+                  <Divider />
+                  <Box
+                    sx={{
+                      display: "flex",
+                      flexDirection: "column",
+                      pl: 3.5,
+                      py: 0.5,
+                    }}
+                  >
+                    {materialBeams.map((beam) => (
+                      <DraggableBeamRow
+                        key={beam.id}
+                        beam={beam}
+                        dragMimeType={MATERIAL_BEAM_MIME}
+                        hoveredPart={hoveredPart}
+                        setHoveredPart={setHoveredPart}
+                        selectedIds={selectedIds}
+                        setCanvasState={setCanvasState}
+                        applyActions={applyActions}
+                      />
+                    ))}
+                  </Box>
+                </Box>
+              )}
+            </LibraryEntryGroup>
+          );
+        })}
         <Button
           fullWidth
           size="small"
           startIcon={<Add fontSize="small" />}
           onClick={addMaterial}
+          sx={{ borderRadius: 0 }}
         >
           {t("add_material")}
         </Button>
-        {ownSelectedMaterial && (
-          <MaterialDetail
-            E={ownSelectedMaterial.E}
-            Re={ownSelectedMaterial.Re}
-            rho={ownSelectedMaterial.rho}
-            readOnly={ownSelectedMaterial.readOnly}
-            onChangeE={(newE) =>
-              applyActions([
-                {
-                  type: "ChangeMaterialE",
-                  id: ownSelectedMaterial.id,
-                  delta: newE - ownSelectedMaterial.E,
-                },
-              ])
-            }
-            onChangeRe={(newRe) =>
-              applyActions([
-                {
-                  type: "ChangeMaterialRe",
-                  id: ownSelectedMaterial.id,
-                  delta: newRe - ownSelectedMaterial.Re,
-                },
-              ])
-            }
-            onChangeRho={(newRho) =>
-              applyActions([
-                {
-                  type: "ChangeMaterialRho",
-                  id: ownSelectedMaterial.id,
-                  delta: newRho - ownSelectedMaterial.rho,
-                },
-              ])
-            }
-          />
-        )}
       </Box>
 
       {/* ── Profilés ── */}
+      <Typography variant="subtitle2" fontWeight={600} sx={{ pl: 3, mb: -1.5 }}>
+        {t("profiles_section")}
+      </Typography>
       <Box
         onMouseEnter={() => setHoveredSection("profiles")}
         onMouseLeave={() => {
@@ -758,35 +1114,38 @@ export const MaterialsLibraryPanel: React.FC<MaterialsLibraryPanelProps> = ({
           setHoveredEntryID(null);
         }}
         sx={{
-          borderRadius: 3,
+          borderRadius: 2,
           margin: 2,
           backgroundColor: "background.sunken",
+          overflow: "hidden",
         }}
       >
-        <Typography
-          variant="subtitle2"
-          fontWeight={600}
-          sx={{ px: 2, pt: 1.5 }}
-        >
-          {t("profiles_section")}
-        </Typography>
-        <Box sx={{ mt: 0.5 }}>
-          {mechanism.profiles.map((profile, i) => (
-            <ListRow
+        {mechanism.profiles.map((profile, i) => {
+          const profileBeams = beams.filter(
+            (beam) => beam.profileID === profile.id,
+          );
+          return (
+            <LibraryEntryGroup
               key={profile.id}
+              groupRef={(el) => {
+                if (el) profileGroupRefs.current.set(profile.id, el);
+                else profileGroupRefs.current.delete(profile.id);
+              }}
               index={i}
               name={profile.name}
-              usageCount={profile_usage_count(
-                mechanism.mechanicalElements,
-                profile.id,
-              )}
-              selected={ownSelectedProfile?.id === profile.id}
-              isHighlighted={
+              usageCount={profileBeams.length}
+              expanded={expandedProfileIDs.has(profile.id)}
+              onToggleExpand={() => toggleProfileExpand(profile.id)}
+              groupDrag={
+                profileBeams.length > 1
+                  ? { id: profile.id, mimeType: PROFILE_GROUP_MIME }
+                  : undefined
+              }
+              isCanvasHighlighted={
                 hoveredBeam?.profileID === profile.id ||
                 hoveredEntryID === profile.id
               }
               canDelete={mechanism.profiles.length > 1}
-              onSelect={() => setSelectedProfileID(profile.id)}
               onHoverStart={() => setHoveredEntryID(profile.id)}
               onHoverEnd={() => setHoveredEntryID(null)}
               onRename={(newName) =>
@@ -803,37 +1162,76 @@ export const MaterialsLibraryPanel: React.FC<MaterialsLibraryPanelProps> = ({
                 applyActions([
                   {
                     type: "CreateProfile",
-                    profile: { ...profile, id: crypto.randomUUID() as ID },
+                    profile: {
+                      ...profile,
+                      id: crypto.randomUUID() as ID,
+                      name: unique_copy_name(
+                        profile.name,
+                        mechanism.profiles.map((p) => p.name),
+                      ),
+                    },
                   },
                 ])
               }
               onDelete={() => deleteProfile(profile.id)}
-            />
-          ))}
-        </Box>
+              dragOver={dragOverProfileID === profile.id}
+              onDragOver={(e) => handleProfileDragOver(e, profile.id)}
+              onDragLeave={(e) => handleProfileDragLeave(e, profile.id)}
+              onDrop={handleProfileDrop(profile.id)}
+              detail={
+                <ProfileDetail
+                  shape={profile.shape}
+                  onChangeShape={(newShape) =>
+                    applyActions([
+                      {
+                        type: "ChangeProfileShape",
+                        id: profile.id,
+                        newShape,
+                        oldShape: profile.shape,
+                      },
+                    ])
+                  }
+                />
+              }
+            >
+              {profileBeams.length > 0 && (
+                <Box>
+                  <Divider />
+                  <Box
+                    sx={{
+                      display: "flex",
+                      flexDirection: "column",
+                      pl: 3.5,
+                      py: 0.5,
+                    }}
+                  >
+                    {profileBeams.map((beam) => (
+                      <DraggableBeamRow
+                        key={beam.id}
+                        beam={beam}
+                        dragMimeType={PROFILE_BEAM_MIME}
+                        hoveredPart={hoveredPart}
+                        setHoveredPart={setHoveredPart}
+                        selectedIds={selectedIds}
+                        setCanvasState={setCanvasState}
+                        applyActions={applyActions}
+                      />
+                    ))}
+                  </Box>
+                </Box>
+              )}
+            </LibraryEntryGroup>
+          );
+        })}
         <Button
           fullWidth
           size="small"
           startIcon={<Add fontSize="small" />}
           onClick={addProfile}
+          sx={{ borderRadius: 0 }}
         >
           {t("add_profile")}
         </Button>
-        {ownSelectedProfile && (
-          <ProfileDetail
-            shape={ownSelectedProfile.shape}
-            onChangeShape={(newShape) =>
-              applyActions([
-                {
-                  type: "ChangeProfileShape",
-                  id: ownSelectedProfile.id,
-                  newShape,
-                  oldShape: ownSelectedProfile.shape,
-                },
-              ])
-            }
-          />
-        )}
       </Box>
     </Box>
   );

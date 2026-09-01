@@ -13,12 +13,19 @@ import { Add, Close, KeyboardArrowDown, OpenInNew } from "@mui/icons-material";
 import { Action, ID } from "../../../types";
 import { BeamElement } from "../../../types/element";
 import { MaterialDef, ProfileDef } from "../../../types/material";
-import { default_material, default_profile } from "../../../constants/material-profile-catalog";
+import {
+  default_material,
+  default_profile,
+} from "../../../constants/material-profile-catalog";
 import { beam_linear_mass } from "../../../utils/section-properties";
-import { LINEAR_MASS, format_quantity } from "../../../utils/quantity-format";
+import { MASS, format_quantity } from "../../../utils/quantity-format";
 import { t } from "../../../i18n";
 import { useLibraryNavigation } from "../library-navigation";
-import { InlineName, MaterialDetail, ProfileDetail } from "../MaterialsLibraryPanel";
+import {
+  InlineName,
+  MaterialDetail,
+  ProfileDetail,
+} from "../MaterialsLibraryPanel";
 import SectionSchema from "./SectionSchema";
 
 /**
@@ -50,7 +57,18 @@ interface LibraryPickerProps {
 
 /** Forwards its own root, so the parent can dock the "just created" panel on it. */
 const LibraryPicker = React.forwardRef<HTMLDivElement, LibraryPickerProps>(
-  ({ label, entries, selectedID, onSelect, onCreateNew, createNewLabel, onOpenInLibrary }, ref) => {
+  (
+    {
+      label,
+      entries,
+      selectedID,
+      onSelect,
+      onCreateNew,
+      createNewLabel,
+      onOpenInLibrary,
+    },
+    ref,
+  ) => {
     const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
     const selected = entries.find((entry) => entry.id === selectedID);
 
@@ -84,7 +102,11 @@ const LibraryPicker = React.forwardRef<HTMLDivElement, LibraryPickerProps>(
             <OpenInNew fontSize="inherit" />
           </IconButton>
         </Tooltip>
-        <Menu anchorEl={anchorEl} open={!!anchorEl} onClose={() => setAnchorEl(null)}>
+        <Menu
+          anchorEl={anchorEl}
+          open={!!anchorEl}
+          onClose={() => setAnchorEl(null)}
+        >
           {entries.map((entry) => (
             <MenuItem
               key={entry.id}
@@ -132,21 +154,24 @@ export const MaterialProfileSection: React.FC<MaterialProfileSectionProps> = ({
   const focusLibraryEntry = useLibraryNavigation();
   const material = materials.find((m) => m.id === element.materialID);
   const profile = profiles.find((p) => p.id === element.profileID);
-  const linearMass = beam_linear_mass(
-    element.materialID,
-    element.profileID,
-    materials,
-    profiles,
-  );
+  const mass =
+    beam_linear_mass(
+      element.materialID,
+      element.profileID,
+      materials,
+      profiles,
+    ) * element.positionStart.distance_to(element.positionEnd);
 
   const materialPickerRef = React.useRef<HTMLDivElement>(null);
   const profilePickerRef = React.useRef<HTMLDivElement>(null);
   // Which "just created" panel is open, docked on its own picker — never both: creating one
   // replaces whatever the other picker had open, same as any other popover on this row.
-  const [openPanel, setOpenPanel] = React.useState<"materials" | "profiles" | null>(null);
+  const [openPanel, setOpenPanel] = React.useState<
+    "materials" | "profiles" | null
+  >(null);
 
   const createMaterial = () => {
-    const newMaterial = default_material();
+    const newMaterial = default_material(materials.map((m) => m.name));
     applyActions([
       { type: "CreateMaterial", material: newMaterial },
       {
@@ -159,7 +184,7 @@ export const MaterialProfileSection: React.FC<MaterialProfileSectionProps> = ({
     setOpenPanel("materials");
   };
   const createProfile = () => {
-    const newProfile = default_profile();
+    const newProfile = default_profile(profiles.map((p) => p.name));
     applyActions([
       { type: "CreateProfile", profile: newProfile },
       {
@@ -191,7 +216,9 @@ export const MaterialProfileSection: React.FC<MaterialProfileSectionProps> = ({
         }
         onCreateNew={createMaterial}
         createNewLabel={t("add_material")}
-        onOpenInLibrary={() => focusLibraryEntry("materials", element.materialID)}
+        onOpenInLibrary={() =>
+          focusLibraryEntry("materials", element.materialID)
+        }
       />
       <Popover
         open={openPanel === "materials"}
@@ -207,14 +234,19 @@ export const MaterialProfileSection: React.FC<MaterialProfileSectionProps> = ({
                 alignItems: "center",
                 justifyContent: "space-between",
                 px: 1,
-                pt: 0.5,
+                py: 0.5,
               }}
             >
               <InlineName
                 name={material.name}
                 onCommit={(newName) =>
                   applyActions([
-                    { type: "RenameMaterial", id: material.id, newName, oldName: material.name },
+                    {
+                      type: "RenameMaterial",
+                      id: material.id,
+                      newName,
+                      oldName: material.name,
+                    },
                   ])
                 }
               />
@@ -229,16 +261,30 @@ export const MaterialProfileSection: React.FC<MaterialProfileSectionProps> = ({
               Re={material.Re}
               rho={material.rho}
               onChangeE={(newE) =>
-                applyActions([{ type: "ChangeMaterialE", id: material.id, delta: newE - material.E }])
+                applyActions([
+                  {
+                    type: "ChangeMaterialE",
+                    id: material.id,
+                    delta: newE - material.E,
+                  },
+                ])
               }
               onChangeRe={(newRe) =>
                 applyActions([
-                  { type: "ChangeMaterialRe", id: material.id, delta: newRe - material.Re },
+                  {
+                    type: "ChangeMaterialRe",
+                    id: material.id,
+                    delta: newRe - material.Re,
+                  },
                 ])
               }
               onChangeRho={(newRho) =>
                 applyActions([
-                  { type: "ChangeMaterialRho", id: material.id, delta: newRho - material.rho },
+                  {
+                    type: "ChangeMaterialRho",
+                    id: material.id,
+                    delta: newRho - material.rho,
+                  },
                 ])
               }
             />
@@ -285,7 +331,12 @@ export const MaterialProfileSection: React.FC<MaterialProfileSectionProps> = ({
                 name={profile.name}
                 onCommit={(newName) =>
                   applyActions([
-                    { type: "RenameProfile", id: profile.id, newName, oldName: profile.name },
+                    {
+                      type: "RenameProfile",
+                      id: profile.id,
+                      newName,
+                      oldName: profile.name,
+                    },
                   ])
                 }
               />
@@ -312,8 +363,12 @@ export const MaterialProfileSection: React.FC<MaterialProfileSectionProps> = ({
         )}
       </Popover>
       {profile && <SectionSchema shape={profile.shape} />}
-      <Typography variant="caption" color="text.secondary" sx={{ textAlign: "center" }}>
-        {t("linear_mass")} : {format_quantity(linearMass, LINEAR_MASS)}
+      <Typography
+        variant="caption"
+        color="text.secondary"
+        sx={{ textAlign: "center" }}
+      >
+        {t("mass")} : {format_quantity(mass, MASS)}
       </Typography>
     </Box>
   );

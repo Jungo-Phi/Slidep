@@ -169,6 +169,8 @@ export const INTERACTION_SPECS = {
   GHOST_PREVIEW_OPACITY: 0.6,
   GEAR_ON_BELT_GROW: 15,
   BELT_GRAB_RADIUS: 4,
+  /** Opacity of the library dialog's tint film, over the beam's own normal colors. */
+  LIBRARY_TINT_OPACITY: 0.35,
 } as const;
 
 /** Dash pattern of a construction line (snap feedback): fine enough to read as an aid rather than as something drawn. */
@@ -461,6 +463,24 @@ export const CONSTRAINT_REVEAL_FADE_MS = 200;
 export const SNACKBAR_DURATION = {
   DEFAULT: 3000,
   REPORT: 12000,
+};
+
+/**
+ * The properties panel's floating scrollbar: the thumb is drawn over the content rather than in a
+ * column of its own, so the width the children get never changes when the panel starts scrolling.
+ */
+export const OVERLAY_SCROLLBAR = {
+  /** Thumb width, and how far it sits from the right edge (px). */
+  WIDTH: 6,
+  /** How far the track stays clear of the top and bottom edges (px). */
+  MARGIN: 2,
+  /** Shortest the thumb ever gets, however long the content is (px). */
+  MIN_THUMB_HEIGHT: 28,
+  /** Shortest it gets while squeezed against an edge by an overscroll (px). */
+  MIN_SQUEEZED_HEIGHT: 8,
+  /** Time without scrolling, pointer off the panel, before the thumb fades (ms). */
+  IDLE_MS: 900,
+  FADE_MS: 200,
 };
 
 export const CURSOR_STYLE = {

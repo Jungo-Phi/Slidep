@@ -128,7 +128,9 @@ const MIGRATIONS: MigrationStep[] = [
     preservesHistory: true,
     apply: (doc) => ({
       ...doc,
-      simulation: is_record(doc.simulation) ? doc.simulation : DEFAULT_SIMULATION,
+      simulation: is_record(doc.simulation)
+        ? doc.simulation
+        : DEFAULT_SIMULATION,
     }),
   },
   {
@@ -164,18 +166,12 @@ const MIGRATIONS: MigrationStep[] = [
   },
   {
     to: 10,
-    // The catalogue is seeded into every mechanism's own `materials`, `readOnly: true`, so a
-    // beam's picker offers steel/aluminium/… directly instead of needing a copy step.
-    // Everything already in the document is `readOnly: false` — a user made it.
+    // The catalogue is seeded into every mechanism's own `materials`, so a beam's picker
+    // offers steel/aluminium/… directly instead of needing a copy step.
     preservesHistory: true,
     apply: (doc) => ({
       ...doc,
-      materials: [
-        ...as_array(doc.materials).map(add_material_read_only_default),
-        ...seed_material_catalog(),
-      ],
-      history: add_material_read_only_default_in_stack(doc.history),
-      future: add_material_read_only_default_in_stack(doc.future),
+      materials: [...as_array(doc.materials), ...seed_material_catalog()],
     }),
   },
 ];
@@ -448,30 +444,6 @@ const assign_default_material_profile_in_stack = (
     ),
   );
 
-/** v9 → v10: every material gains `readOnly`, `false` for anything already in the document. */
-const add_material_read_only_default = (material: unknown): unknown => {
-  if (!is_record(material)) return material;
-  return { readOnly: false, ...material };
-};
-
-/** The same defaulting where an action carries a whole material: `CreateMaterial` and
- *  `DeleteMaterial`. */
-const add_material_read_only_default_in_action = (action: unknown): unknown => {
-  if (!is_record(action)) return action;
-  switch (action.type) {
-    case "CreateMaterial":
-    case "DeleteMaterial":
-      return { ...action, material: add_material_read_only_default(action.material) };
-    default:
-      return action;
-  }
-};
-
-const add_material_read_only_default_in_stack = (stack: unknown): unknown[][] =>
-  as_array(stack).map((bundle) =>
-    as_array(bundle).map(add_material_read_only_default_in_action),
-  );
-
 const is_record = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
@@ -492,8 +464,7 @@ export function migrate_document(raw: unknown): SerializedMechanism {
   let doc = { ...raw } as RawDocument;
   // Never `CURRENT_FORMAT_VERSION`: that reads a legacy document as already
   // up to date and skips every step it owes.
-  let version =
-    typeof doc.formatVersion === "number" ? doc.formatVersion : 1;
+  let version = typeof doc.formatVersion === "number" ? doc.formatVersion : 1;
 
   if (version > CURRENT_FORMAT_VERSION)
     throw new Error(

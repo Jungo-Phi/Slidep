@@ -165,7 +165,6 @@ describe("beam_strength", () => {
     E: 210e9,
     Re: 250e6,
     rho: 7850,
-    readOnly: false,
   };
   const profile: ProfileDef = {
     id: PROFILE_ID,

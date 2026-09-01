@@ -37,7 +37,7 @@ const FRAMED_FORCE = id(8);
 const MATERIAL = id(9);
 const PROFILE = id(10);
 const MATERIALS: MaterialDef[] = [
-  { id: MATERIAL, name: "test", E: 1, Re: 1, rho: 1, readOnly: false },
+  { id: MATERIAL, name: "test", E: 1, Re: 1, rho: 1 },
 ];
 const PROFILES: ProfileDef[] = [
   { id: PROFILE, name: "test", shape: { kind: "rect", b: 1, h: 1 } },

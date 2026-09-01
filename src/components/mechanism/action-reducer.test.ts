@@ -497,7 +497,6 @@ describe("la bibliothèque matériaux/profilés", () => {
     E: 210e9,
     Re: 235e6,
     rho: 7850,
-    readOnly: false,
   };
   const profile = { id: PROFILE, name: "Rectangle", shape: { kind: "rect" as const, b: 0.02, h: 0.02 } };
 

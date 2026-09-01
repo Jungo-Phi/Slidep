@@ -30,7 +30,7 @@ const GEAR2_ID = id("g2");
 const MATERIAL_ID = id("m1");
 const PROFILE_ID = id("pr1");
 const MATERIALS: MaterialDef[] = [
-  { id: MATERIAL_ID, name: "test", E: 1, Re: 1, rho: 1, readOnly: false },
+  { id: MATERIAL_ID, name: "test", E: 1, Re: 1, rho: 1 },
 ];
 const PROFILES: ProfileDef[] = [
   { id: PROFILE_ID, name: "test", shape: { kind: "rect", b: 1, h: 1 } },

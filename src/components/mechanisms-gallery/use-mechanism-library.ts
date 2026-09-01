@@ -21,6 +21,7 @@ import {
   default_profile,
   seed_material_catalog,
 } from "../../constants/material-profile-catalog";
+import { unique_copy_name } from "../../utils/unique-name";
 import {
   debounce,
   fit_viewport_to_bounds,
@@ -288,9 +289,7 @@ export function useMechanismLibrary({
       while (takenIds.has(id)) id++;
 
       const base = record.metadata.name || t("untitled");
-      let name = t("copy_of", { name: base });
-      for (let n = 2; takenNames.has(name); n++)
-        name = t("copy_of_n", { name: base, n });
+      const name = unique_copy_name(base, takenNames);
 
       const now = Date.now();
       const duplicated: SerializedMechanism = {

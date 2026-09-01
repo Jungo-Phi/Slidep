@@ -31,6 +31,7 @@ import { ElementNavigationContext } from "./element-navigation";
 import { LibraryNavigationContext } from "./library-navigation";
 import { CanvasHighlight } from "../canvas/draw-canvas";
 import { RedundancySymbol } from "../solver/redundancy-symbols";
+import { OverlayScrollArea } from "./components/OverlayScrollArea";
 import { t } from "../../i18n";
 
 export interface PropertiesPanelProps {
@@ -278,7 +279,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
           </Tabs>
         </Box>
 
-        <Box sx={{ overflow: "auto", flexGrow: 1 }}>
+        <OverlayScrollArea sx={{ flexGrow: 1 }}>
           {activeTab === "project" && (
             <ProjectInfoSection
               mechanism={mechanism}
@@ -327,6 +328,9 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
               hoveredEntryID={hoveredLibraryEntryID}
               setHoveredEntryID={setHoveredLibraryEntryID}
               hoveredPart={hoveredPart}
+              setHoveredPart={setHoveredPart}
+              selectedIds={selectedIds}
+              setCanvasState={setCanvasState}
               focusRequest={libraryFocusRequest}
               onFocusHandled={() => setLibraryFocusRequest(null)}
             />
@@ -351,7 +355,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
               setHoveredAbscissa={setHoveredAbscissa}
             />
           )}
-        </Box>
+        </OverlayScrollArea>
       </Paper>
       </LibraryNavigationContext.Provider>
     </ElementNavigationContext.Provider>
