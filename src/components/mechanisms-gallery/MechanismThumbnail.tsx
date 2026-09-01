@@ -2,12 +2,9 @@ import React, { useEffect, useMemo, useRef } from "react";
 import { Box, useTheme } from "@mui/material";
 import { SerializedMechanism } from "../../types";
 import { load_mechanism } from "../../utils";
-import { draw_thumbnail } from "../canvas/render-thumbnail";
-import { animate_mode } from "../solver/mode-animation";
-import {
-  THUMBNAIL_MARGIN,
-  THUMBNAIL_MODE_ANIMATION,
-} from "../../constants/rendering-specs";
+import { draw_thumbnail } from "../canvas/drawing/render-thumbnail";
+import { animate_mode } from "../solver/analysis/mode-animation";
+import { THUMBNAIL_MARGIN, THUMBNAIL_MODE_ANIMATION } from "../../constants/interaction-specs";
 import { thumbnail_mode } from "./thumbnail-mode";
 
 /** Résolution du rendu, en 4:3. Bien au-dessus de la taille d'affichage, pour

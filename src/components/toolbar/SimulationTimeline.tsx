@@ -5,13 +5,13 @@ import { AppMode, is_simulating } from "../../types";
 import { KinematicSnapshot, RuntimeState } from "../../types/runtime-state";
 import { format_sim_time } from "../../utils";
 import { t } from "../../i18n";
-import { at_recording_end } from "../solver/simulation-engine";
+import { at_recording_end } from "../solver/dynamics/simulation-engine";
 import {
   set_sim_clock as setRuntimeState,
   sim_clock,
-} from "../solver/sim-clock";
-import { belt_events } from "../solver/belt-events";
-import { dead_points } from "../solver/dead-points";
+} from "../solver/dynamics/sim-clock";
+import { belt_events } from "../solver/recording/belt-events";
+import { dead_points } from "../solver/kinematics/dead-points";
 
 /** Something worth marking on the rail, whatever found it. */
 type TimelineEvent = {

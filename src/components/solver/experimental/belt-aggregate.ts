@@ -17,7 +17,7 @@ import {
   unwrapArrival,
   viasFrom,
 } from "./belt-noslip-q";
-import { LinkSlots } from "../link-slots";
+import { LinkSlots } from "../kinematics/link-slots";
 import { SimNodes } from "../nodes";
 
 type Agg = Extract<Link, { type: "BeltSubChainAggregate" }>;

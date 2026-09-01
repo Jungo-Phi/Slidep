@@ -1,7 +1,7 @@
 import React from "react";
 import { Box, SxProps, Theme } from "@mui/material";
 import { alpha } from "@mui/material/styles";
-import { OVERLAY_SCROLLBAR } from "../../../constants/rendering-specs";
+import { OVERLAY_SCROLLBAR } from "../../../constants/interaction-specs";
 import {
   ThumbSpec,
   scroll_top_for_thumb,
@@ -10,6 +10,7 @@ import {
 
 const SPEC: ThumbSpec = {
   minHeight: OVERLAY_SCROLLBAR.MIN_THUMB_HEIGHT,
+  minSqueezed: OVERLAY_SCROLLBAR.MIN_SQUEEZED_HEIGHT,
   margin: OVERLAY_SCROLLBAR.MARGIN,
 };
 

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { TextField, Typography, Box } from "@mui/material";
-import { COLORS } from "../../constants/rendering-specs";
+import { COLORS } from "../../theme/canvas-theme";
 import { value2ratio } from "../../utils";
 import { ScreenPoint } from "../../types";
 import {

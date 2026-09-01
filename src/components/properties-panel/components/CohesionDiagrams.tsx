@@ -1,11 +1,8 @@
 import React from "react";
 import { Box, Typography, useTheme } from "@mui/material";
-import { CohesionField, CohesionSample } from "../../solver/cohesion-field";
-import { is_negligible, NEGLIGIBLE_RATIO } from "../../solver/negligibility-pool";
-import {
-  CohesionQuantity,
-  COHESION_DIAGRAM_COLOR,
-} from "../../../constants/rendering-specs";
+import { CohesionField, CohesionSample } from "../../solver/recording/cohesion-field";
+import { is_negligible, NEGLIGIBLE_RATIO } from "../../solver/recording/negligibility-pool";
+import { CohesionQuantity, COHESION_DIAGRAM_COLOR } from "../../../constants/physics-display-specs";
 import { t } from "../../../i18n";
 
 /**

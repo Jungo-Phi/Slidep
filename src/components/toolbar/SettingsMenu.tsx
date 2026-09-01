@@ -31,12 +31,12 @@ import {
   THEME_FAMILIES,
   ThemeMode,
   ThemeName,
-} from "../../constants/mui-theme";
+} from "../../theme/mui-theme";
 import {
   ANGLE_STEPS,
   CUSTOM_ANGLE_STEP,
   type SnapSettings,
-} from "../canvas/snap-corridor";
+} from "../../utils/snap-corridor";
 import NumberInput from "../properties-panel/components/NumberInput";
 import { ANGLE, rad_to_deg } from "../../utils/quantity-format";
 

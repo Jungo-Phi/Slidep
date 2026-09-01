@@ -16,14 +16,14 @@ import { legality_for_state } from "../components/mechanism/connection-rules";
 import {
   handle_placing_element,
   MouseDownResult,
-} from "../components/canvas/placing-element-actions";
-import { handle_placing_constraint } from "../components/canvas/placing-constraint-actions";
+} from "../components/canvas/tools/placing-element-actions";
+import { handle_placing_constraint } from "../components/canvas/tools/placing-constraint-actions";
 import {
   HOVER_TARGETS,
   type BeltProbe,
   type EdgeProbe,
   type HoverTargets,
-} from "../components/canvas/get-hover";
+} from "../components/canvas/picking/get-hover";
 import { Action, ID, MaterialDef, MechanicalElement, ProfileDef, UnionElement } from "../types";
 
 /**

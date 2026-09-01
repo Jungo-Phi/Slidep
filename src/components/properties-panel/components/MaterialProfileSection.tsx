@@ -25,7 +25,7 @@ import {
   InlineName,
   MaterialDetail,
   ProfileDetail,
-} from "../MaterialsLibraryPanel";
+} from "../panels/MaterialsLibraryPanel";
 import SectionSchema from "./SectionSchema";
 
 /**

@@ -30,9 +30,9 @@ import {
   SimulationSpeed,
 } from "../../types";
 import { RuntimeState } from "../../types/runtime-state";
-import { at_recording_end } from "../solver/simulation-engine";
-import { set_sim_clock as setRuntimeState } from "../solver/sim-clock";
-import { simulationResetPatch } from "../solver/use-simulation-playback";
+import { at_recording_end } from "../solver/dynamics/simulation-engine";
+import { set_sim_clock as setRuntimeState } from "../solver/dynamics/sim-clock";
+import { simulationResetPatch } from "../solver/recording/use-simulation-playback";
 import { OverlaysMenu } from "./OverlaysMenu";
 import { ProjectHeader } from "./ProjectHeader";
 import { SaveStatus } from "../mechanisms-gallery/use-mechanism-library";

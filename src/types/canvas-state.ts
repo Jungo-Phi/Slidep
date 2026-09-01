@@ -1,4 +1,4 @@
-import { HoveredPart } from "../types/hovered-part";
+import { HoveredPart } from "./hovered-part";
 import { ID } from "./element";
 import type { Link } from "./kinematic-solver-links";
 import { WorldPoint } from "./mechanism";

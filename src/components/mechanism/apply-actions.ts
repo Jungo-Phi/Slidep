@@ -1,10 +1,10 @@
 import { Action, GeomNodes, Mechanism } from "../../types";
 
-import { resolveGeometricConstraints } from "../solver/geometric-solver";
+import { resolveGeometricConstraints } from "../solver/kinematics/geometric-solver";
 import {
   get_constraint_nodes as get_constraint_positions,
   get_geom_nodes,
-} from "../solver/parsing";
+} from "../solver/kinematics/parsing";
 import { clone_mechanism } from "../../utils";
 import { assert_actions_preserve_validity } from "../../utils/assert-mechanism";
 import { actionReducer } from "./action-reducer";

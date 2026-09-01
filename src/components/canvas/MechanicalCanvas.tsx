@@ -20,37 +20,32 @@ import {
   WorldPoint,
 } from "../../types";
 import { world2screen, world2screen_vec, screen2world } from "../../utils";
-import {
-  CONSTRAINT_REVEAL_COOLDOWN_MS,
-  CONSTRAINT_REVEAL_FADE_MS,
-  MODE_ANIMATION,
-  STROKE_WIDTHS,
-  COLORS,
-  DIM,
-} from "../../constants/rendering-specs";
+import { COLORS } from "../../theme/canvas-theme";
+import { CONSTRAINT_REVEAL_COOLDOWN_MS, CONSTRAINT_REVEAL_FADE_MS, MODE_ANIMATION } from "../../constants/interaction-specs";
+import { STROKE_WIDTHS, DIM } from "../../constants/rendering-specs";
 import { Box, Tooltip } from "@mui/material";
 import { type Instance as PopperInstance } from "@popperjs/core";
-import { CanvasHighlight, draw_mechanical_canvas } from "./draw-canvas";
-import { RedundancySymbol } from "../solver/redundancy-symbols";
-import type { CohesionField } from "../solver/cohesion-field";
+import { CanvasHighlight, draw_mechanical_canvas } from "./drawing/draw-canvas";
+import { RedundancySymbol } from "../solver/analysis/redundancy-symbols";
+import type { CohesionField } from "../solver/recording/cohesion-field";
 import type { BeamElement } from "../../types/element";
-import { canvasStateReducer } from "./canvas-state-reducer";
+import { canvasStateReducer } from "./tools/canvas-state-reducer";
 import { get_element_from_id } from "../mechanism/connect-actions";
 import { load_value_anchor } from "../../utils/load-geom";
 import { is_zero_load } from "../../utils/load-scale";
 import { t } from "../../i18n";
-import { get_hovered_part } from "./get-hover";
-import { clamp_to_bounds } from "./hover-bounds";
-import { snap_hover } from "./point-snap";
+import { get_hovered_part } from "./picking/get-hover";
+import { clamp_to_bounds } from "./picking/hover-bounds";
+import { snap_hover } from "./snapping/point-snap";
 import {
   NO_FEEDBACK,
   type SnapFeedback,
   type SnapSettings,
-} from "./snap-corridor";
-import { snap_dimension_position } from "./dimension-snap";
-import { snap_load_hover } from "./load-snap";
+} from "../../utils/snap-corridor";
+import { snap_dimension_position } from "./snapping/dimension-snap";
+import { snap_load_hover } from "./snapping/load-snap";
 import { compute_visible_constraints, connected_constraints } from "./utils";
-import { eraser_cursor } from "./cursors";
+import { eraser_cursor } from "./drawing/cursors";
 import { OnCanvasValueEditor } from "./OnCanvasValueEditor";
 import {
   ANGLE,
@@ -94,7 +89,7 @@ import {
   OverlayArrow,
   OverlayMoment,
   TrajectoryDisplay,
-} from "./drawing-functions";
+} from "./drawing/drawing-functions";
 import {
   floor_acute_angle,
   floor_raw_angle_from_acute,

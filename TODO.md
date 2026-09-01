@@ -12,9 +12,6 @@
 
 **UI**
 
-- Afficher la masse au lieu de la masse linéique (en lecture seule)
-- Donner un matériau et une épaisseur aux gears ?
-
 - Le point zéro devrait être collé à l'axe (à gauche) dans les diagrames d'efforts internes
 - efforts internes : normaliser les graphiques
 - Rendre les dimensions non-éditables en simulation

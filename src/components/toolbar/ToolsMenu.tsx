@@ -11,8 +11,8 @@ import {
 import { Lang } from "../../i18n";
 import { t } from "../../i18n";
 import { Mechanism, ViewportState } from "../../types";
-import { ThemeMode, ThemeName } from "../../constants/mui-theme";
-import type { SnapSettings } from "../canvas/snap-corridor";
+import { ThemeMode, ThemeName } from "../../theme/mui-theme";
+import type { SnapSettings } from "../../utils/snap-corridor";
 import { LanguageMenu } from "./LanguageMenu";
 import { SettingsMenu } from "./SettingsMenu";
 import { MAX_GRID_SCALE, MIN_GRID_SCALE } from "../../utils/grid";

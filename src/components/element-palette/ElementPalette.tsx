@@ -12,14 +12,14 @@ import { darken } from "@mui/material/styles";
 import { icon } from "./iconDataUris";
 
 import { AppMode, CanvasState } from "../../types";
-import { COLORS } from "../../constants/rendering-specs";
+import { COLORS } from "../../theme/canvas-theme";
 import {
   shortcut_label,
   tool_state,
   ToolStateType,
 } from "../../constants/shortcuts";
 import { get_constraint_element_from_id } from "../mechanism/connect-actions";
-import { armed_tool_state } from "../canvas/arm-tool";
+import { armed_tool_state } from "../canvas/tools/arm-tool";
 import { Mechanism } from "../../types";
 import { StringKey, t } from "../../i18n";
 

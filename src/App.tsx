@@ -52,17 +52,17 @@ import {
   zoom_delta_to,
   zoom_on_point,
 } from "./utils";
-import { useThemeChoice } from "./constants/use-theme-choice";
+import { useThemeChoice } from "./theme/use-theme-choice";
 import { get_language, Lang, set_language, t } from "./i18n";
-import { SNACKBAR_DURATION } from "./constants/rendering-specs";
+import { SNACKBAR_DURATION } from "./constants/interaction-specs";
 import MechanicalCanvas, {
   ConstraintChangeSignal,
 } from "./components/canvas/MechanicalCanvas";
-import { CanvasHighlight, NO_HIGHLIGHT } from "./components/canvas/draw-canvas";
+import { CanvasHighlight, NO_HIGHLIGHT } from "./components/canvas/drawing/draw-canvas";
 import {
   EMPTY_REDUNDANCY_SYMBOLS,
   RedundancySymbol,
-} from "./components/solver/redundancy-symbols";
+} from "./components/solver/analysis/redundancy-symbols";
 
 import { ElementPalette } from "./components/element-palette";
 import { PropertiesPanel } from "./components/properties-panel/PropertiesPanel";
@@ -70,7 +70,7 @@ import { AboutDialog } from "./components/toolbar/AboutDialog";
 import { SimulationTimeline } from "./components/toolbar/SimulationTimeline";
 import { ToolsMenu } from "./components/toolbar/ToolsMenu";
 import { PlaybackControls } from "./components/toolbar/PlaybackControls";
-import { set_sim_clock as setRuntimeState } from "./components/solver/sim-clock";
+import { set_sim_clock as setRuntimeState } from "./components/solver/dynamics/sim-clock";
 import {
   apply_dynamic_snapshot_to_mechanism,
   apply_parameter_snapshot_to_mechanism,
@@ -78,18 +78,18 @@ import {
   dynamic_snapshot_at,
   parameter_snapshot_at,
   snapshot_at,
-} from "./components/solver/simulation-engine";
+} from "./components/solver/dynamics/simulation-engine";
 import {
   useSimulationPlayback,
   SimulationLimitReason,
-} from "./components/solver/use-simulation-playback";
+} from "./components/solver/recording/use-simulation-playback";
 import { CanvasState } from "./types/canvas-state";
 import {
   ANGLE_STEPS,
   DEFAULT_SNAP_SETTINGS,
   migrate_snap_settings,
   type SnapSettings,
-} from "./components/canvas/snap-corridor";
+} from "./utils/snap-corridor";
 import { HoveredAbscissa, HoveredPart } from "./types/hovered-part";
 import { actionReducer } from "./components/mechanism/action-reducer";
 import { assert_actions_preserve_validity } from "./utils/assert-mechanism";

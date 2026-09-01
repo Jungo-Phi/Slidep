@@ -37,10 +37,7 @@ import {
   save_to_file,
   serialize_mechanism,
 } from "../../utils";
-import {
-  PREVIEW_MIN_ZOOM,
-  SNACKBAR_DURATION,
-} from "../../constants/rendering-specs";
+import { PREVIEW_MIN_ZOOM, SNACKBAR_DURATION } from "../../constants/interaction-specs";
 import { t, tn } from "../../i18n";
 
 const DB_VERSION = 3;

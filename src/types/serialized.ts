@@ -7,7 +7,7 @@ import {
   Point2,
   ProfileDef,
   ViewportState,
-} from "../types";
+} from ".";
 
 /** `JSON.stringify` has no spelling for `NaN` or `Infinity` and writes `null`, so a stored coordinate is not always a number. */
 export type SerializedPoint2 = { x: number | null; y: number | null };

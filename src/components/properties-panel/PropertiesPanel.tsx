@@ -18,19 +18,19 @@ import {
   SimulationConfig,
 } from "../../types";
 import { ConstraintResidual } from "../../types/runtime-state";
-import { COLORS } from "../../constants/rendering-specs";
+import { COLORS } from "../../theme/canvas-theme";
 import { HoveredAbscissa, HoveredPart } from "../../types/hovered-part";
 import { CanvasState, selected_ids } from "../../types/canvas-state";
-import { ProjectInfoSection } from "./ProjectInfoSection";
-import ElementProperties from "./ElementProperties";
-import ConstraintsPanel from "./ConstraintsPanel";
-import AnalysisPanel from "./AnalysisPanel";
-import MaterialsLibraryPanel, { LibraryFocusRequest } from "./MaterialsLibraryPanel";
+import { ProjectInfoSection } from "./panels/ProjectInfoSection";
+import ElementProperties from "./panels/ElementProperties";
+import ConstraintsPanel from "./panels/ConstraintsPanel";
+import AnalysisPanel from "./panels/AnalysisPanel";
+import MaterialsLibraryPanel, { LibraryFocusRequest } from "./panels/MaterialsLibraryPanel";
 import { host_mechanical_element } from "../mechanism/connect-actions";
 import { ElementNavigationContext } from "./element-navigation";
 import { LibraryNavigationContext } from "./library-navigation";
-import { CanvasHighlight } from "../canvas/draw-canvas";
-import { RedundancySymbol } from "../solver/redundancy-symbols";
+import { CanvasHighlight } from "../canvas/drawing/draw-canvas";
+import { RedundancySymbol } from "../solver/analysis/redundancy-symbols";
 import { OverlayScrollArea } from "./components/OverlayScrollArea";
 import { t } from "../../i18n";
 

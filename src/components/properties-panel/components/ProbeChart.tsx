@@ -1,7 +1,7 @@
 import React, { useRef } from "react";
 import { Box, Typography, useTheme } from "@mui/material";
-import { ProbeCurveKey } from "../../solver/probe-series";
-import { NEGLIGIBLE_RATIO } from "../../solver/negligibility-pool";
+import { ProbeCurveKey } from "../../solver/recording/probe-series";
+import { NEGLIGIBLE_RATIO } from "../../solver/recording/negligibility-pool";
 
 /**
  * Categorical palette for the plotted curves. Unlike the UI's semantic roles,

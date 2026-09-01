@@ -1,7 +1,7 @@
 import React from "react";
 import { Mechanism } from "../../types";
-import { AnalysisModel } from "../solver/analysis-model";
-import { animate_mode } from "../solver/mode-animation";
+import { AnalysisModel } from "../solver/analysis/analysis-model";
+import { animate_mode } from "../solver/analysis/mode-animation";
 import { ChainAnalysis } from "./useDofAnalysis";
 
 /** Which mode is being shown, if any. */

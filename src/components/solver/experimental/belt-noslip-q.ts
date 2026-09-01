@@ -11,7 +11,7 @@ import {
   BeltVia,
   BeltPiece,
 } from "../../../utils/belt-path";
-import { LinkSlots } from "../link-slots";
+import { LinkSlots } from "../kinematics/link-slots";
 import { Nodes, SimNodes } from "../nodes";
 
 /**

@@ -1,6 +1,6 @@
 import { Link, Point2 } from "../types";
-import * as C from "../components/solver/constraint-functions";
-import { LinkSlots, resolve_slots } from "../components/solver/link-slots";
+import * as C from "../components/solver/kinematics/constraint-functions";
+import { LinkSlots, resolve_slots } from "../components/solver/kinematics/link-slots";
 import {
   ABSENT,
   SolveNodes,

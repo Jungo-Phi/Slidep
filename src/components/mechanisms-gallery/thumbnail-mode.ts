@@ -3,9 +3,9 @@ import {
   AnalysisChain,
   AnalysisModel,
   build_analysis_model,
-} from "../solver/analysis-model";
-import { probe_chain_mobility } from "../solver/mobility-probe";
-import { canonical_modes, MotionMode } from "../solver/motion-modes";
+} from "../solver/analysis/analysis-model";
+import { probe_chain_mobility } from "../solver/analysis/mobility-probe";
+import { canonical_modes, MotionMode } from "../solver/analysis/motion-modes";
 
 export type ThumbnailMode = {
   model: AnalysisModel;

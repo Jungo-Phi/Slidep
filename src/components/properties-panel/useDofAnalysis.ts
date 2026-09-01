@@ -4,13 +4,13 @@ import {
   AnalysisChain,
   AnalysisModel,
   build_analysis_model,
-} from "../solver/analysis-model";
-import { ChainMobility, probe_mobility } from "../solver/mobility-probe";
+} from "../solver/analysis/analysis-model";
+import { ChainMobility, probe_mobility } from "../solver/analysis/mobility-probe";
 import {
   canonical_modes,
   chain_highlight,
   MotionMode,
-} from "../solver/motion-modes";
+} from "../solver/analysis/motion-modes";
 import { ID } from "../../types";
 
 /** One chain, with what the counting says, what the solver measured, and the motions it found. */

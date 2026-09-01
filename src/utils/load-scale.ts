@@ -8,7 +8,7 @@
  * (see `world2screen_length`).
  */
 
-import { LOAD_SCALING, MOMENT_SCALING } from "../constants/rendering-specs";
+import { LOAD_SCALING, MOMENT_SCALING } from "../constants/physics-display-specs";
 
 interface LoadRuler {
   REF_VALUE: number;

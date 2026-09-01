@@ -12,8 +12,8 @@
  * hues are substituted for that theme's before the URI is built. Results are
  * cached per theme: the substitution runs once per icon per theme, not per draw.
  */
-import { ICON_COLORS } from "../../constants/rendering-specs";
-import { CanvasPalette } from "../../constants/mui-theme";
+import { ICON_COLORS } from "../../theme/canvas-theme";
+import { CanvasPalette } from "../../theme/mui-theme";
 
 const rawIcons = import.meta.glob("../../assets/icons/palette/*.svg", {
   query: "?raw",
