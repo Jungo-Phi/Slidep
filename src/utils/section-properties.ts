@@ -29,17 +29,12 @@ export function section_properties(shape: ProfileShape): SectionProperties {
   switch (shape.kind) {
     case "rect": {
       const { b, h } = shape;
-      return { A: b * h, I: (b * h ** 3) / 12, v: h / 2, Q: (b * h ** 2) / 8, b };
-    }
-    case "round": {
-      const { d } = shape;
-      const r = d / 2;
       return {
-        A: (Math.PI * d ** 2) / 4,
-        I: (Math.PI * d ** 4) / 64,
-        v: r,
-        Q: (2 / 3) * r ** 3,
-        b: d,
+        A: b * h,
+        I: (b * h ** 3) / 12,
+        v: h / 2,
+        Q: (b * h ** 2) / 8,
+        b,
       };
     }
     case "box": {
@@ -52,6 +47,17 @@ export function section_properties(shape: ProfileShape): SectionProperties {
         v: h / 2,
         Q: (b * h ** 2 - bi * hi ** 2) / 8,
         b: 2 * e,
+      };
+    }
+    case "round": {
+      const { d } = shape;
+      const r = d / 2;
+      return {
+        A: (Math.PI * d ** 2) / 4,
+        I: (Math.PI * d ** 4) / 64,
+        v: r,
+        Q: (2 / 3) * r ** 3,
+        b: d,
       };
     }
     case "tube": {
@@ -94,8 +100,6 @@ export function validate_profile_shape(shape: ProfileShape): boolean {
   switch (shape.kind) {
     case "rect":
       return shape.b > 0 && shape.h > 0;
-    case "round":
-      return shape.d > 0;
     case "box":
       return (
         shape.b > 0 &&
@@ -104,6 +108,8 @@ export function validate_profile_shape(shape: ProfileShape): boolean {
         shape.e < shape.b / 2 &&
         shape.e < shape.h / 2
       );
+    case "round":
+      return shape.d > 0;
     case "tube":
       return shape.d > 0 && shape.e > 0 && shape.e < shape.d / 2;
     case "I":
@@ -118,8 +124,10 @@ export function validate_profile_shape(shape: ProfileShape): boolean {
   }
 }
 
-const find_material = (id: ID, materials: MaterialDef[]): MaterialDef | undefined =>
-  materials.find((m) => m.id === id);
+const find_material = (
+  id: ID,
+  materials: MaterialDef[],
+): MaterialDef | undefined => materials.find((m) => m.id === id);
 
 const find_profile = (id: ID, profiles: ProfileDef[]): ProfileDef | undefined =>
   profiles.find((p) => p.id === id);
@@ -167,6 +175,9 @@ export function max_fiber_stress(
 
 /** The neutral axis' own shear stress, `τ_max = |T|·Q/(I·b)` (Jouravski) — where shear peaks
  *  across the section, docs/plan-efforts-interieurs.md phase 9 chantier 2. */
-export function max_shear_stress(T: number, section: SectionProperties): number {
+export function max_shear_stress(
+  T: number,
+  section: SectionProperties,
+): number {
   return (Math.abs(T) * section.Q) / (section.I * section.b);
 }

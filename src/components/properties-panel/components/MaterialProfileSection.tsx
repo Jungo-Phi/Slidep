@@ -1,6 +1,7 @@
 import React from "react";
 import {
   Box,
+  Button,
   Divider,
   IconButton,
   Menu,
@@ -9,7 +10,13 @@ import {
   Tooltip,
   Typography,
 } from "@mui/material";
-import { Add, Close, KeyboardArrowDown, OpenInNew } from "@mui/icons-material";
+import {
+  Add,
+  Check,
+  Close,
+  KeyboardArrowDown,
+  OpenInNew,
+} from "@mui/icons-material";
 import { Action, ID } from "../../../types";
 import { BeamElement } from "../../../types/element";
 import { MaterialDef, ProfileDef } from "../../../types/material";
@@ -18,7 +25,12 @@ import {
   default_profile,
 } from "../../../constants/material-profile-catalog";
 import { beam_linear_mass } from "../../../utils/section-properties";
-import { MASS, format_quantity } from "../../../utils/quantity-format";
+import {
+  DENSITY,
+  MASS,
+  STRESS,
+  format_quantity,
+} from "../../../utils/quantity-format";
 import { t } from "../../../i18n";
 import { useLibraryNavigation } from "../library-navigation";
 import {
@@ -30,10 +42,12 @@ import SectionSchema from "./SectionSchema";
 
 /**
  * A beam's material/profile assignment. Each picker
- * offers the mechanism's own library, plus "+ Nouveau…" at the bottom of its menu, which
- * creates a fresh entry, assigns it here, then opens a small panel docked on the picker to name
- * and configure it right there — dimensioning a beam that needs a profile absent from the
- * library shouldn't mean losing the beam's own context to go do that elsewhere. The small link
+ * offers the mechanism's own library, plus "+ Nouveau…" at the bottom of its menu, which opens a
+ * small panel docked on the picker to name and configure a new entry right there — dimensioning a
+ * beam that needs a profile absent from the library shouldn't mean losing the beam's own context
+ * to go do that elsewhere.
+ * That entry is a draft until the panel's own "Create": dismissing the panel (click away, Escape, ✕) leaves both the library and the beam untouched, and confirming creates and assigns it in a single undo step.
+ * The small link
  * icon does a different thing for the entry already assigned: it jumps to the library tab, to
  * answer "where can I edit this?" — duplicate/delete and the usage count only make sense there,
  * since that entry may already be shared by other beams.
@@ -73,8 +87,16 @@ const LibraryPicker = React.forwardRef<HTMLDivElement, LibraryPickerProps>(
     const selected = entries.find((entry) => entry.id === selectedID);
 
     return (
-      <Box ref={ref} sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-        <Typography variant="caption" sx={{ minWidth: 64 }}>
+      <Box
+        ref={ref}
+        sx={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 1.5,
+        }}
+      >
+        <Typography variant="subtitle2" sx={{ minWidth: 50 }}>
           {label}
         </Typography>
         <Box
@@ -86,19 +108,16 @@ const LibraryPicker = React.forwardRef<HTMLDivElement, LibraryPickerProps>(
             borderRadius: 3,
             border: 1,
             borderColor: "divider",
-            px: 1,
+            pl: 1,
             py: 0.25,
-            flex: 1,
             "&:hover": { backgroundColor: "action.hover" },
           }}
         >
-          <Typography variant="body2" sx={{ flex: 1 }}>
-            {selected?.name ?? ""}
-          </Typography>
+          <Typography variant="body2">{selected?.name ?? ""} </Typography>
           <KeyboardArrowDown fontSize="small" />
         </Box>
         <Tooltip title={t("open_in_library")}>
-          <IconButton size="small" onClick={onOpenInLibrary}>
+          <IconButton size="small" onClick={onOpenInLibrary} sx={{ ml: 3 }}>
             <OpenInNew fontSize="inherit" />
           </IconButton>
         </Tooltip>
@@ -138,6 +157,11 @@ const LibraryPicker = React.forwardRef<HTMLDivElement, LibraryPickerProps>(
 );
 LibraryPicker.displayName = "LibraryPicker";
 
+/** An entry being configured in its docked panel — held here, outside the mechanism, until confirmed. */
+type Draft =
+  | { section: "materials"; material: MaterialDef }
+  | { section: "profiles"; profile: ProfileDef };
+
 interface MaterialProfileSectionProps {
   element: BeamElement;
   materials: MaterialDef[];
@@ -152,7 +176,6 @@ export const MaterialProfileSection: React.FC<MaterialProfileSectionProps> = ({
   applyActions,
 }) => {
   const focusLibraryEntry = useLibraryNavigation();
-  const material = materials.find((m) => m.id === element.materialID);
   const profile = profiles.find((p) => p.id === element.profileID);
   const mass =
     beam_linear_mass(
@@ -161,40 +184,52 @@ export const MaterialProfileSection: React.FC<MaterialProfileSectionProps> = ({
       materials,
       profiles,
     ) * element.positionStart.distance_to(element.positionEnd);
+  const material = materials.find((m) => m.id === element.materialID)!;
 
   const materialPickerRef = React.useRef<HTMLDivElement>(null);
   const profilePickerRef = React.useRef<HTMLDivElement>(null);
-  // Which "just created" panel is open, docked on its own picker — never both: creating one
-  // replaces whatever the other picker had open, same as any other popover on this row.
-  const [openPanel, setOpenPanel] = React.useState<
-    "materials" | "profiles" | null
-  >(null);
+  // The entry being drafted, docked on its own picker — never both: starting one drops whatever
+  // the other picker had open, same as any other popover on this row.
+  const [draft, setDraft] = React.useState<Draft | null>(null);
+  const draftMaterial = draft?.section === "materials" ? draft.material : null;
+  const draftProfile = draft?.section === "profiles" ? draft.profile : null;
 
-  const createMaterial = () => {
-    const newMaterial = default_material(materials.map((m) => m.name));
+  const editDraftMaterial = (patch: Partial<MaterialDef>) =>
+    setDraft((cur) =>
+      cur?.section === "materials"
+        ? { ...cur, material: { ...cur.material, ...patch } }
+        : cur,
+    );
+  const editDraftProfile = (patch: Partial<ProfileDef>) =>
+    setDraft((cur) =>
+      cur?.section === "profiles"
+        ? { ...cur, profile: { ...cur.profile, ...patch } }
+        : cur,
+    );
+
+  const createMaterial = (material: MaterialDef) => {
     applyActions([
-      { type: "CreateMaterial", material: newMaterial },
+      { type: "CreateMaterial", material },
       {
         type: "AssignMaterial",
         id: element.id,
-        newMaterialID: newMaterial.id,
+        newMaterialID: material.id,
         oldMaterialID: element.materialID,
       },
     ]);
-    setOpenPanel("materials");
+    setDraft(null);
   };
-  const createProfile = () => {
-    const newProfile = default_profile(profiles.map((p) => p.name));
+  const createProfile = (profile: ProfileDef) => {
     applyActions([
-      { type: "CreateProfile", profile: newProfile },
+      { type: "CreateProfile", profile },
       {
         type: "AssignProfile",
         id: element.id,
-        newProfileID: newProfile.id,
+        newProfileID: profile.id,
         oldProfileID: element.profileID,
       },
     ]);
-    setOpenPanel("profiles");
+    setDraft(null);
   };
 
   return (
@@ -214,80 +249,62 @@ export const MaterialProfileSection: React.FC<MaterialProfileSectionProps> = ({
             },
           ])
         }
-        onCreateNew={createMaterial}
+        onCreateNew={() =>
+          setDraft({
+            section: "materials",
+            material: default_material(materials.map((m) => m.name)),
+          })
+        }
         createNewLabel={t("add_material")}
         onOpenInLibrary={() =>
           focusLibraryEntry("materials", element.materialID)
         }
       />
       <Popover
-        open={openPanel === "materials"}
+        open={!!draftMaterial}
         anchorEl={materialPickerRef.current}
-        onClose={() => setOpenPanel(null)}
+        onClose={() => setDraft(null)}
         anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
       >
-        {material && (
+        {draftMaterial && (
           <Box sx={{ width: 260 }}>
             <Box
               sx={{
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "space-between",
-                px: 1,
-                py: 0.5,
+                bgcolor: "background.default",
+                p: 1,
               }}
             >
               <InlineName
-                name={material.name}
-                onCommit={(newName) =>
-                  applyActions([
-                    {
-                      type: "RenameMaterial",
-                      id: material.id,
-                      newName,
-                      oldName: material.name,
-                    },
-                  ])
-                }
+                name={draftMaterial.name}
+                onCommit={(name) => editDraftMaterial({ name })}
               />
-              <Tooltip title={t("close")}>
-                <IconButton size="small" onClick={() => setOpenPanel(null)}>
+              <Tooltip title={t("cancel")}>
+                <IconButton size="small" onClick={() => setDraft(null)}>
                   <Close fontSize="inherit" />
                 </IconButton>
               </Tooltip>
             </Box>
             <MaterialDetail
-              E={material.E}
-              Re={material.Re}
-              rho={material.rho}
-              onChangeE={(newE) =>
-                applyActions([
-                  {
-                    type: "ChangeMaterialE",
-                    id: material.id,
-                    delta: newE - material.E,
-                  },
-                ])
-              }
-              onChangeRe={(newRe) =>
-                applyActions([
-                  {
-                    type: "ChangeMaterialRe",
-                    id: material.id,
-                    delta: newRe - material.Re,
-                  },
-                ])
-              }
-              onChangeRho={(newRho) =>
-                applyActions([
-                  {
-                    type: "ChangeMaterialRho",
-                    id: material.id,
-                    delta: newRho - material.rho,
-                  },
-                ])
-              }
+              E={draftMaterial.E}
+              Re={draftMaterial.Re}
+              rho={draftMaterial.rho}
+              onChangeE={(E) => editDraftMaterial({ E })}
+              onChangeRe={(Re) => editDraftMaterial({ Re })}
+              onChangeRho={(rho) => editDraftMaterial({ rho })}
             />
+            <Divider />
+            <Button
+              fullWidth
+              size="small"
+              startIcon={<Check fontSize="small" />}
+              onClick={() => createMaterial(draftMaterial)}
+              sx={{ borderRadius: 0 }}
+            >
+              {t("create")}
+            </Button>
           </Box>
         )}
       </Popover>
@@ -306,70 +323,99 @@ export const MaterialProfileSection: React.FC<MaterialProfileSectionProps> = ({
             },
           ])
         }
-        onCreateNew={createProfile}
+        onCreateNew={() =>
+          setDraft({
+            section: "profiles",
+            profile: default_profile(profiles.map((p) => p.name)),
+          })
+        }
         createNewLabel={t("add_profile")}
         onOpenInLibrary={() => focusLibraryEntry("profiles", element.profileID)}
       />
       <Popover
-        open={openPanel === "profiles"}
+        open={!!draftProfile}
         anchorEl={profilePickerRef.current}
-        onClose={() => setOpenPanel(null)}
+        onClose={() => setDraft(null)}
         anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
       >
-        {profile && (
+        {draftProfile && (
           <Box sx={{ width: 260 }}>
             <Box
               sx={{
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "space-between",
-                px: 1,
-                pt: 0.5,
+                bgcolor: "background.default",
+                p: 1,
               }}
             >
               <InlineName
-                name={profile.name}
-                onCommit={(newName) =>
-                  applyActions([
-                    {
-                      type: "RenameProfile",
-                      id: profile.id,
-                      newName,
-                      oldName: profile.name,
-                    },
-                  ])
-                }
+                name={draftProfile.name}
+                onCommit={(name) => editDraftProfile({ name })}
               />
-              <Tooltip title={t("close")}>
-                <IconButton size="small" onClick={() => setOpenPanel(null)}>
+              <Tooltip title={t("cancel")}>
+                <IconButton size="small" onClick={() => setDraft(null)}>
                   <Close fontSize="inherit" />
                 </IconButton>
               </Tooltip>
             </Box>
             <ProfileDetail
-              shape={profile.shape}
-              onChangeShape={(newShape) =>
-                applyActions([
-                  {
-                    type: "ChangeProfileShape",
-                    id: profile.id,
-                    newShape,
-                    oldShape: profile.shape,
-                  },
-                ])
-              }
+              shape={draftProfile.shape}
+              onChangeShape={(shape) => editDraftProfile({ shape })}
             />
+            <Divider />
+            <Button
+              fullWidth
+              size="small"
+              startIcon={<Check fontSize="small" />}
+              onClick={() => createProfile(draftProfile)}
+              sx={{ borderRadius: 0 }}
+            >
+              {t("create")}
+            </Button>
           </Box>
         )}
       </Popover>
       {profile && <SectionSchema shape={profile.shape} />}
-      <Typography
-        variant="caption"
-        color="text.secondary"
-        sx={{ textAlign: "center" }}
+      <Box
+        sx={{
+          display: "flex",
+          flexWrap: "wrap",
+          justifyContent: "center",
+          rowGap: 1,
+          columnGap: 3,
+          px: 4,
+        }}
       >
-        {t("mass")} : {format_quantity(mass, MASS)}
-      </Typography>
+        <Typography
+          variant="caption"
+          color="text.secondary"
+          sx={{ textAlign: "center" }}
+        >
+          E : {format_quantity(material.E, STRESS)}
+        </Typography>
+        <Typography
+          variant="caption"
+          color="text.secondary"
+          sx={{ textAlign: "center" }}
+        >
+          Re : {format_quantity(material.Re, STRESS)}
+        </Typography>
+        <Typography
+          variant="caption"
+          color="text.secondary"
+          sx={{ textAlign: "center" }}
+        >
+          ρ : {format_quantity(material.rho, DENSITY)}
+        </Typography>
+        <Typography
+          variant="caption"
+          color="text.secondary"
+          sx={{ textAlign: "center" }}
+        >
+          {t("mass")} : {format_quantity(mass, MASS)}
+        </Typography>
+      </Box>
     </Box>
   );
 };

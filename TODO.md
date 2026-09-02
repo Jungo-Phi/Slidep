@@ -12,6 +12,8 @@
 
 **UI**
 
+- Le hover des éléments depuis le panneau latéral ne devrait pas faire apparaitre les contraintes
+
 - Le point zéro devrait être collé à l'axe (à gauche) dans les diagrames d'efforts internes
 - efforts internes : normaliser les graphiques
 - Rendre les dimensions non-éditables en simulation

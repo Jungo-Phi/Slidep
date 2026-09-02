@@ -21,8 +21,8 @@ export interface MaterialDef {
  *  is always about the out-of-plane axis in 2D, so that is the cote that resists it. */
 export type ProfileShape =
   | { kind: "rect"; b: number; h: number }
-  | { kind: "round"; d: number }
   | { kind: "box"; b: number; h: number; e: number }
+  | { kind: "round"; d: number }
   | { kind: "tube"; d: number; e: number }
   | { kind: "I"; b: number; h: number; tw: number; tf: number };
 

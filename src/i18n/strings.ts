@@ -888,6 +888,18 @@ export const STRINGS = {
     de: "Schließen",
     es: "Cerrar",
   },
+  cancel: {
+    fr: "Annuler",
+    en: "Cancel",
+    de: "Abbrechen",
+    es: "Cancelar",
+  },
+  create: {
+    fr: "Créer",
+    en: "Create",
+    de: "Erstellen",
+    es: "Crear",
+  },
   parts_one: {
     fr: "{count} pièce",
     en: "{count} part",
@@ -1356,28 +1368,28 @@ export const STRINGS = {
     es: "Madera",
   },
   profile_rectangle: {
-    fr: "Rectangle plein",
-    en: "Solid rectangle",
-    de: "Vollrechteck",
-    es: "Rectángulo macizo",
-  },
-  profile_round: {
-    fr: "Rond plein",
-    en: "Solid round",
-    de: "Vollrundstab",
-    es: "Redondo macizo",
-  },
-  profile_tube: {
-    fr: "Tube",
-    en: "Tube",
-    de: "Rohr",
-    es: "Tubo",
+    fr: "Rectangle",
+    en: "Rectangle",
+    de: "Rechteck",
+    es: "Rectángulo",
   },
   profile_box: {
     fr: "Rectangle creux",
     en: "Hollow rectangle",
     de: "Hohlkastenprofil",
     es: "Rectángulo hueco",
+  },
+  profile_round: {
+    fr: "Rond",
+    en: "Round",
+    de: "Rund",
+    es: "Redondo",
+  },
+  profile_tube: {
+    fr: "Tube",
+    en: "Tube",
+    de: "Rohr",
+    es: "Tubo",
   },
   material_label: {
     fr: "Matériau",

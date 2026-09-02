@@ -1,7 +1,10 @@
 import React from "react";
 import { Box, SxProps, Theme } from "@mui/material";
 import { alpha } from "@mui/material/styles";
-import { OVERLAY_SCROLLBAR } from "../../../constants/interaction-specs";
+import {
+  DRAG_AUTO_SCROLL,
+  OVERLAY_SCROLLBAR,
+} from "../../../constants/interaction-specs";
 import {
   ThumbSpec,
   scroll_top_for_thumb,
@@ -134,6 +137,43 @@ export const OverlayScrollArea: React.FC<OverlayScrollAreaProps> = ({
       thumb.addEventListener("pointercancel", onRelease);
     };
 
+    // Native HTML5 drag and drop auto-scrolls the page itself near a viewport edge, but not an
+    // arbitrary `overflow` container nested inside it — so a drag that needs to reach a group
+    // above or below the fold (the library panel's own reassignment drag, chiefly) has to drive
+    // this scroller by hand. Speed ramps with proximity rather than a flat rate once inside the
+    // edge band, so it reads as a gentle pull rather than a jump the moment the cursor crosses in.
+    let scrollSpeed = 0;
+    let scrollRAF: number | null = null;
+    const scrollStep = () => {
+      if (scrollSpeed === 0) {
+        scrollRAF = null;
+        return;
+      }
+      scroller.scrollTop += scrollSpeed;
+      scrollRAF = requestAnimationFrame(scrollStep);
+    };
+    const setAutoScrollSpeed = (speed: number) => {
+      scrollSpeed = speed;
+      if (scrollSpeed !== 0 && scrollRAF === null)
+        scrollRAF = requestAnimationFrame(scrollStep);
+    };
+    const onDragOver = (event: DragEvent) => {
+      const rect = scroller.getBoundingClientRect();
+      const fromTop = event.clientY - rect.top;
+      const fromBottom = rect.bottom - event.clientY;
+      const { EDGE_PX, MAX_SPEED_PX_PER_FRAME } = DRAG_AUTO_SCROLL;
+      if (fromTop < EDGE_PX)
+        setAutoScrollSpeed(
+          -MAX_SPEED_PX_PER_FRAME * (1 - Math.max(fromTop, 0) / EDGE_PX),
+        );
+      else if (fromBottom < EDGE_PX)
+        setAutoScrollSpeed(
+          MAX_SPEED_PX_PER_FRAME * (1 - Math.max(fromBottom, 0) / EDGE_PX),
+        );
+      else setAutoScrollSpeed(0);
+    };
+    const stopAutoScroll = () => setAutoScrollSpeed(0);
+
     // The scroller's own box says nothing about how tall its content grew, hence both.
     const observer = new ResizeObserver(draw);
     observer.observe(scroller);
@@ -144,16 +184,25 @@ export const OverlayScrollArea: React.FC<OverlayScrollAreaProps> = ({
     area.addEventListener("pointerleave", onLeave);
     thumb.addEventListener("wheel", onWheel, { passive: false });
     thumb.addEventListener("pointerdown", onPointerDown);
+    scroller.addEventListener("dragover", onDragOver);
+    scroller.addEventListener("drop", stopAutoScroll);
+    // Not `scroller`: a drag that ends past its bounds (dropped elsewhere, or cancelled) would
+    // never fire `dragleave`/`drop` on it, and the scroll would run away.
+    window.addEventListener("dragend", stopAutoScroll);
     draw();
 
     return () => {
       window.clearTimeout(idle);
+      if (scrollRAF !== null) cancelAnimationFrame(scrollRAF);
       observer.disconnect();
       scroller.removeEventListener("scroll", onScroll);
       area.removeEventListener("pointerenter", onEnter);
       area.removeEventListener("pointerleave", onLeave);
       thumb.removeEventListener("wheel", onWheel);
       thumb.removeEventListener("pointerdown", onPointerDown);
+      scroller.removeEventListener("dragover", onDragOver);
+      scroller.removeEventListener("drop", stopAutoScroll);
+      window.removeEventListener("dragend", stopAutoScroll);
       document.body.style.userSelect = "";
     };
   }, []);

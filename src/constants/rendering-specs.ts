@@ -190,6 +190,57 @@ export const DIM = {
   TRAJECTORY_DOT_STEP: 1, // TODO : rendre éditable ?
 } as const;
 
+const SCHEMA_DIM_OFFSET = 20;
+
+/**
+ * The cross-section schema on a beam's properties (materials panel): a technical drawing rather
+ * than a canvas element, so every size here is a screen-px decision, constant whatever section
+ * it ends up drawing. The view is cropped to what the drawing actually covers and rendered one
+ * unit to the pixel, so these numbers read literally — `SECTION_SIZE` is the one that says how
+ * big the schema comes out.
+ *
+ * `MAX_ASPECT` and `MIN_THICKNESS` are what let a section stay readable when its own proportions
+ * would make it unreadable — the cotes keep carrying the true values whatever those two do.
+ */
+export const SECTION_SCHEMA = {
+  /** Drawn size of the section's largest extent. Everything else is annotation around it, so this is what sets how big the schema reads. */
+  SECTION_SIZE: 72,
+  /** Uniform border kept around everything the drawing covers, labels included. */
+  PAD: 6,
+  FONT: 10,
+  /** Distance from the section's edge to the first dimension line on that side. */
+  DIM_OFFSET: SCHEMA_DIM_OFFSET,
+  /** Distance between two dimension lines stacked on the same side. */
+  DIM_STEP: 18,
+  TEXT_GAP: 3,
+  /** How far an extension line runs past the dimension line it reaches. */
+  EXT_OVERSHOOT: 3,
+  ARROW: 5,
+  /** The neutral axis pokes out of the section, but stops short of the dimension lines. */
+  AXIS_OVERSHOOT: SCHEMA_DIM_OFFSET / 4,
+  /** Angle above the horizontal a round wall's cote is read along: off the horizontal so the
+   *  cote does not sit on the neutral axis, off the vertical so it costs the schema no height. */
+  ROUND_WALL_ANGLE: 20,
+
+  /** Beyond this width-to-height ratio the section is drawn stubbier than it is: a 200×5 flat
+   *  would otherwise come out as a hairline with nowhere to hang a cote. */
+  MAX_ASPECT: 5,
+  /** Walls are thickened until the thinnest of them reaches this fraction of the section's
+   *  short side — below it the two edges merge and the cote has nothing left to point at. */
+  MIN_THICKNESS: 1 / 20,
+  /** …and never below this many px, whatever the fraction works out to: on a section the aspect
+   *  clamp already flattened, a fraction of the short side is itself sub-pixel. */
+  MIN_THICKNESS_PX: 2,
+  /** Ceiling that thickening may not push a wall past, so a section whose thinnest wall is
+   *  minute cannot have its thickest one swallow the section. */
+  MAX_THICKNESS: 1 / 4,
+
+  OUTLINE_WIDTH: 1.5,
+  DIM_WIDTH: 1,
+  EXT_WIDTH: 0.75,
+  AXIS_DASH: "6,2,1,2",
+} as const;
+
 export const TEXT_SPECS = {
   TEXT_FONT: "16px Arial",
   TEXT_ALIGN: "center",

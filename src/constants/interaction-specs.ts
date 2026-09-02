@@ -115,6 +115,17 @@ export const OVERLAY_SCROLLBAR = {
   FADE_MS: 200,
 };
 
+/**
+ * Native HTML5 drag and drop does not auto-scroll a nested `overflow` container the way it
+ * does the page itself, so `OverlayScrollArea` drives it manually: the closer the pointer gets
+ * to the top/bottom edge inside `EDGE_PX`, the faster it scrolls, up to `MAX_SPEED_PX_PER_FRAME`
+ * right at the edge.
+ */
+export const DRAG_AUTO_SCROLL = {
+  EDGE_PX: 36,
+  MAX_SPEED_PX_PER_FRAME: 14,
+};
+
 export const CURSOR_STYLE = {
   HOVER: "grab",
   MOVE: "grabbing",

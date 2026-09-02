@@ -490,8 +490,8 @@ export const MaterialDetail: React.FC<MaterialDetailProps> = ({
 
 const SHAPE_KINDS: ProfileShape["kind"][] = [
   "rect",
-  "round",
   "box",
+  "round",
   "tube",
   "I",
 ];
@@ -500,10 +500,10 @@ const shape_kind_label = (kind: ProfileShape["kind"]): string => {
   switch (kind) {
     case "rect":
       return t("profile_rectangle");
-    case "round":
-      return t("profile_round");
     case "box":
       return t("profile_box");
+    case "round":
+      return t("profile_round");
     case "tube":
       return t("profile_tube");
     case "I":
@@ -576,16 +576,6 @@ const ShapeCotes: React.FC<ShapeCotesProps> = ({
           />
         </>
       );
-    case "round":
-      return (
-        <CoteField
-          label="d"
-          title={t("profile_field_diameter")}
-          value={shape.d}
-          onChange={(d) => commit({ ...shape, d })}
-          disabled={disabled}
-        />
-      );
     case "box":
       return (
         <>
@@ -611,6 +601,16 @@ const ShapeCotes: React.FC<ShapeCotesProps> = ({
             disabled={disabled}
           />
         </>
+      );
+    case "round":
+      return (
+        <CoteField
+          label="d"
+          title={t("profile_field_diameter")}
+          value={shape.d}
+          onChange={(d) => commit({ ...shape, d })}
+          disabled={disabled}
+        />
       );
     case "tube":
       return (

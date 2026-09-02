@@ -64,7 +64,10 @@ import {
   DAMPING,
   wrap_angle_rad,
 } from "../../../utils/quantity-format";
-import { gear_inertia, surface_mass_for_inertia } from "../../../utils/gear-mass";
+import {
+  gear_inertia,
+  surface_mass_for_inertia,
+} from "../../../utils/gear-mass";
 
 /** The ground/unground button's icon, reused as the ElementPicker "world" option
  *  so a motor's anchor reads with the same visual language as the ground toggle. */

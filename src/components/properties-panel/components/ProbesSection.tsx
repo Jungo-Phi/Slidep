@@ -46,37 +46,43 @@ export const ProbesSection: React.FC<ProbesSectionProps> = ({
           gap: 0.25,
         }}
       >
-        {available_overlays(element).map((kind) => (
-          <Box
-            key={kind}
-            onClick={() =>
-              applyActions(
-                set_overlay(element, kind, !overlay_shown(element, kind)),
-              )
-            }
-            sx={{
-              display: "flex",
-              alignItems: "center",
-              gap: 0.5,
-              p: 0.5,
-              cursor: "pointer",
-              borderRadius: 1,
-              "&:hover": { backgroundColor: "action.hover" },
-            }}
-          >
-            {overlay_shown(element, kind) ? (
-              <Visibility fontSize="small" />
-            ) : (
-              <VisibilityOff fontSize="small" />
-            )}
-            <Typography variant="caption">
-              {tn(
-                OVERLAY_LABEL_KEYS[kind],
-                overlay_label_count([element], kind),
+        {available_overlays(element).map((kind) => {
+          const shown = overlay_shown(element, kind);
+          return (
+            <Box
+              key={kind}
+              component="button"
+              type="button"
+              role="switch"
+              aria-checked={shown}
+              onClick={() => applyActions(set_overlay(element, kind, !shown))}
+              sx={(theme) => ({
+                display: "flex",
+                alignItems: "center",
+                gap: 0.5,
+                p: 0.5,
+                border: 0,
+                cursor: "pointer",
+                borderRadius: 1.5,
+                color: shown ? "text.primary" : "text.secondary",
+                backgroundColor: "transparent",
+                "&:hover": { backgroundColor: theme.palette.action.hover },
+              })}
+            >
+              {shown ? (
+                <Visibility fontSize="small" />
+              ) : (
+                <VisibilityOff fontSize="small" />
               )}
-            </Typography>
-          </Box>
-        ))}
+              <Typography variant="caption">
+                {tn(
+                  OVERLAY_LABEL_KEYS[kind],
+                  overlay_label_count([element], kind),
+                )}
+              </Typography>
+            </Box>
+          );
+        })}
       </Box>
       <Box
         sx={{
