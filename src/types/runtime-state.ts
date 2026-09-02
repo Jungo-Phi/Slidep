@@ -64,6 +64,35 @@ export type LinkReaction =
       linkIndex?: number;
     };
 
+/** One motorized pivot's own mechanical power this frame — τ·ω of the joint it drives,
+ *  signed (negative when the load back-drives the motor rather than the other way round).
+ *  See `motor-model.ts`'s `resolve_motor_torques`. */
+export interface MotorPowerSample {
+  pivotID: ID;
+  watts: number;
+}
+
+/**
+ * The whole mechanism's mechanical energy this frame, plus the instantaneous rate a damper
+ * is bleeding it off at — everything `energy-balance.ts` needs to check the solver against
+ * itself: kinetic + potential should only ever change by what a motor put in or a damper took
+ * out, so a growing gap between the two is the PBD solver's own numerical drift, not a
+ * mechanical property (see `docs/plan-analyse-ddl.md`'s ~0.98 spectral radius). Always
+ * collected (cheap, one pass over the elements that carry mass/stiffness/damping — same
+ * reasoning as `MotorPowerSample`), so undefined only where a snapshot predates this field.
+ */
+export interface EnergySample {
+  /** J — Σ ½mv² over every free translational dof, + Σ ½Jω² over every gear's own angle. */
+  kinetic: number;
+  /** J — Σ −m·(gravity·position), gravity off reads a constant (irrelevant to the balance,
+   *  which only ever compares a CHANGE against this frame's start). */
+  potentialGravity: number;
+  /** J — Σ ½k(L−L₀)² over every spring. */
+  potentialSpring: number;
+  /** W — Σ b·(closing speed)² over every damper: always ≥ 0, energy LEAVING the mechanism. */
+  damperPower: number;
+}
+
 /**
  * A beam's own cohesion torsor at each end, and the point loads its attached nodes
  * transmit — see docs/plan-efforts-interieurs.md phase 3. Isolates what beam A itself
@@ -196,6 +225,12 @@ export interface DynamicSnapshot extends SimulationSnapshot {
   /** Per-constraint reaction forces/torques this frame — see `LinkReaction`. Undefined when
    *  not collected (the same optionality as `unsatisfied`). */
   reactions?: LinkReaction[];
+  /** Every motorized pivot's own power this frame — see `MotorPowerSample`. Always collected
+   *  (cheap, one entry per motor, unlike `reactions`' per-link cost), so undefined only where
+   *  a snapshot predates this field rather than under `collectDiagnostics`. */
+  motorPower?: MotorPowerSample[];
+  /** The mechanism's own energy balance this frame — see `EnergySample`. */
+  energy?: EnergySample;
   /** Each beam's own cohesion torsor, resolved from `reactions` — see `BeamCohesion`.
    *  Undefined under the same `collectDiagnostics` gate as `reactions`. */
   beamCohesion?: BeamCohesion[];
@@ -247,6 +282,8 @@ export interface NegligibilityPool {
   linearVelocity: number;
   /** rad/s */
   angularVelocity: number;
+  /** W */
+  power: number;
   /** Absolute per-kind floor these fields are seeded from and never fall below — the
    *  mechanism's own geometry where its dimension allows it, a fixed product constant
    *  otherwise (see `pool_floors` in `negligibility-pool.ts`). Recomputed only when the
@@ -261,6 +298,7 @@ export interface NegligibilityFloors {
   moment: number;
   linearVelocity: number;
   angularVelocity: number;
+  power: number;
 }
 
 export const EMPTY_NEGLIGIBILITY_POOL: NegligibilityPool = {
@@ -274,6 +312,7 @@ export const EMPTY_NEGLIGIBILITY_POOL: NegligibilityPool = {
   moment: 0,
   linearVelocity: 0,
   angularVelocity: 0,
+  power: 0,
   floors: {
     length: 0,
     angle: 0,
@@ -281,6 +320,7 @@ export const EMPTY_NEGLIGIBILITY_POOL: NegligibilityPool = {
     moment: 0,
     linearVelocity: 0,
     angularVelocity: 0,
+    power: 0,
   },
 };
 

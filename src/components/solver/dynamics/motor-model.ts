@@ -1,5 +1,6 @@
 import { ID, Link, MechanicalElement, Point2 } from "../../../types";
 import { ZERO } from "../../../types/point2";
+import { MotorPowerSample } from "../../../types/runtime-state";
 
 /**
  * A `MotorBeam`/`MotorAngle` LINK, plus the torque limit its owning pivot's `MotorConfig`
@@ -13,6 +14,9 @@ import { ZERO } from "../../../types/point2";
 export type CompiledMotor =
   | {
       kind: "beam";
+      /** The pivot ELEMENT this motor is configured on — distinct from `pivotKey`, its
+       *  solver key: this is what a probe or the properties panel names the reading after. */
+      pivotID: ID;
       pivotKey: string;
       drivenKey: string;
       /** The beam this one turns relative to, when not grounded — same pivot. */
@@ -27,6 +31,8 @@ export type CompiledMotor =
     }
   | {
       kind: "angle";
+      /** See the `beam` variant's own field. */
+      pivotID: ID;
       angleKey: string;
       /** The anchor arm's own pivot/end, when this gear turns relative to a beam rather than
        *  the ground — a gear has no angle DOF of its own to read the anchor's rotation off. */
@@ -55,6 +61,7 @@ export function compile_motors(
       if (torqueLimit === undefined) continue;
       motors.push({
         kind: "beam",
+        pivotID: link.owner!,
         pivotKey: link.pivotKey,
         drivenKey: link.drivenKey,
         anchorKey: link.anchorKey,
@@ -68,6 +75,7 @@ export function compile_motors(
       if (torqueLimit === undefined) continue;
       motors.push({
         kind: "angle",
+        pivotID: link.owner!,
         angleKey: link.angleKey,
         anchorPivotKey: link.anchorPivotKey,
         anchorKey: link.anchorKey,
@@ -131,9 +139,14 @@ export function resolve_motor_torques(
   angleVelocities: Map<string, number>,
   posMasses: Map<string, number>,
   angleMasses: Map<string, number>,
-): { forces: Map<string, Point2>; torques: Map<string, number> } {
+): {
+  forces: Map<string, Point2>;
+  torques: Map<string, number>;
+  power: MotorPowerSample[];
+} {
   const forces = new Map<string, Point2>();
   const torques = new Map<string, number>();
+  const power: MotorPowerSample[] = [];
   const add_force = (key: string, v: Point2) => {
     const prev = forces.get(key);
     forces.set(key, prev ? prev.add(v) : v);
@@ -156,6 +169,7 @@ export function resolve_motor_torques(
       const needed = ((motor.omega - (ownV - refV)) / wAngle) / dt;
       const applied = clamp(needed, motor.torqueLimit);
       torques.set(motor.angleKey, (torques.get(motor.angleKey) ?? 0) + applied);
+      power.push({ pivotID: motor.pivotID, watts: applied * (ownV - refV) });
     } else {
       const w = posMasses.get(motor.drivenKey) ?? 1;
       if (w <= 0) continue; // driven end anchored: nothing to push
@@ -181,8 +195,9 @@ export function resolve_motor_torques(
       const F = tHat.mul(applied / r);
       add_force(motor.drivenKey, F);
       add_force(motor.pivotKey, F.mul(-1)); // reaction; inert if the pivot is anchored
+      power.push({ pivotID: motor.pivotID, watts: applied * (ownV - refV) });
     }
   }
 
-  return { forces, torques };
+  return { forces, torques, power };
 }

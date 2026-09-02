@@ -36,6 +36,18 @@ export interface BeamCohesionSpec {
   /** Nodes pinned or sliding on this beam's span, and the (already-fused) key each reports
    *  its own reaction at. */
   attachedNodes: { nodeID: ID; nodeKey: string }[];
+  /**
+   * `${beamID}:mid` — the virtual rotational-inertia node `mass-model.ts` pins onto this
+   * beam's span with a fresh `FixedOnSegment` every dynamics substep (`BEAM_END_MASS_
+   * FRACTION`). Never present in `links` at spec-build time (it is only ever appended
+   * per-substep, after this beam's own `Distance`/rigidity links are already fixed), so
+   * `internalLinkIndices` cannot carry its index the way it does for a genuine attached
+   * node's link — `resolve_beam_cohesion` instead finds that link's CURRENT index each frame
+   * by searching for the reaction reported at this exact key, which nothing else can ever
+   * share. Deterministic by construction (`compute_dynamic_mass_model`), so no extra plumbing
+   * is needed to know it here.
+   */
+  midKey: string;
 }
 
 const RIGIDITY_TYPES = new Set(["Angle", "KeepOrientation", "BeamFollowsAngle"]);
@@ -121,7 +133,15 @@ export function build_beam_cohesion_specs(
       }
     }
 
-    specs.push({ beamID: beam.id, k0, k1, internalLinkIndices, weldKeyOf, attachedNodes });
+    specs.push({
+      beamID: beam.id,
+      k0,
+      k1,
+      internalLinkIndices,
+      weldKeyOf,
+      attachedNodes,
+      midKey: `${beam.id}:mid`,
+    });
   }
   return specs;
 }
@@ -136,14 +156,30 @@ export function resolve_beam_cohesion(
   reactions: LinkReaction[],
   positions: Map<string, Point2>,
 ): BeamCohesion[] {
+  // A beam's own midpoint link is appended fresh each substep (see `BeamCohesionSpec.midKey`),
+  // so its index among THIS frame's reactions is never known ahead of time the way a genuine
+  // internal link's is — recovered here instead from the one reaction that can only ever be
+  // it: whichever reaction lands on `midKey` itself, a key private to this one beam.
+  const midLinkIndexOf = new Map<string, number>();
+  for (const r of reactions) {
+    if (r.kind === "force" && r.linkIndex !== undefined) midLinkIndexOf.set(r.key, r.linkIndex);
+  }
+
   return specs.map((spec) => {
     const start = { fx: 0, fy: 0, m: 0, atAnchor: false };
     const end = { fx: 0, fy: 0, m: 0, atAnchor: false };
     const attachedForces = new Map<ID, { fx: number; fy: number }>();
+    const midLinkIndex = midLinkIndexOf.get(spec.midKey);
 
     for (const r of reactions) {
+      // Its reaction at k0/k1 is the rotational-inertia lump's OWN weight reaching the two
+      // real endpoints — internal to the beam's own structure (same treatment as its rigid-
+      // length `Distance` link), never a genuine external attachment, so it folds directly
+      // into `start`/`end` rather than through `attachedForces` — see `BeamCohesionSpec.midKey`.
+      const isMidLink =
+        midLinkIndex !== undefined && r.linkIndex === midLinkIndex && r.kind === "force";
       const isInternalLink =
-        r.linkIndex !== undefined && spec.internalLinkIndices.has(r.linkIndex);
+        isMidLink || (r.linkIndex !== undefined && spec.internalLinkIndices.has(r.linkIndex));
       // `PBD_kinematic_solver` reports a directly-applied external force at an ANCHORED dof
       // as its own `"External"` reaction (never carrying a `linkIndex` — it belongs to no
       // link), specifically because the ground has to supply it and nothing else would. At

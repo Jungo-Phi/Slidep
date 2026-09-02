@@ -448,6 +448,7 @@ export type ProbeMetric =
   | "velocity"
   | "angle"
   | "angular-velocity"
+  | "motor-power"
   | "force"
   | "force-start"
   | "force-end"

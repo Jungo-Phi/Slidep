@@ -10,6 +10,7 @@ import {
   List,
   ListItem,
   Tooltip,
+  Typography,
 } from "@mui/material";
 import { Delete, Lock, LockOpen } from "@mui/icons-material";
 import {
@@ -59,15 +60,19 @@ import {
   LENGTH,
   MASS,
   MOMENT,
+  POWER,
   STIFFNESS,
   SURFACE_MASS,
   DAMPING,
+  format_quantity,
   wrap_angle_rad,
 } from "../../../utils/quantity-format";
 import {
   gear_inertia,
   surface_mass_for_inertia,
 } from "../../../utils/gear-mass";
+import { get_dynamic_metric_at } from "../../solver/recording/probe-series";
+import { DynamicSnapshot } from "../../../types/runtime-state";
 
 /** The ground/unground button's icon, reused as the ElementPicker "world" option
  *  so a motor's anchor reads with the same visual language as the ground toggle. */
@@ -295,6 +300,17 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
   const displayMotorConfig =
     analysedElement?.type === "pivot" ? analysedElement.motor : undefined;
   const motorConfig = element.type === "pivot" ? element.motor : undefined;
+  // The motor's own instantaneous draw — only a dynamic run has real torque/velocity to
+  // read it from (kinematic motors just track position, `motor-power` reads empty there).
+  const motorPowerSample =
+    motorConfig && appMode === "dynamic"
+      ? get_dynamic_metric_at(
+          element,
+          "motor-power",
+          runtimeState.simulationSnapshots as DynamicSnapshot[],
+          runtimeState.time,
+        )
+      : undefined;
 
   // Beams the pivot's motor can push against: the beams rotating about it.
   const motorBeams: BeamElement[] =
@@ -512,139 +528,147 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
       <Divider sx={{ mt: 1, mb: 1.5 }} />
 
       {"position" in element && (
-        <StructureOnly disabled={simulating}>
+        <Box
+          sx={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 2,
+            m: 1,
+          }}
+        >
           <Box
             sx={{
               display: "flex",
-              flexDirection: "column",
+              flexDirection: "row",
               alignItems: "center",
               justifyContent: "center",
               gap: 2,
-              m: 1,
             }}
           >
+            <VectorInput
+              value={element.position}
+              onChange={(pos) =>
+                applyActions([
+                  {
+                    type: "MoveNode",
+                    id: element.id,
+                    newPosition: pos,
+                    oldPosition: element.position,
+                    committed: true,
+                  },
+                ])
+              }
+            />
+            {element.type === "pivot" && (
+              <Tooltip
+                title={t(element.motor ? "motor_revert" : "motor_convert")}
+              >
+                <IconButton
+                  color="inherit"
+                  size="small"
+                  onClick={() => {
+                    const actions: Action[] = [
+                      {
+                        type: "SetMotorConfig",
+                        id: element.id,
+                        newConfig: element.motor
+                          ? undefined
+                          : {
+                              speed: DEFAULT.MOTOR_SPEED,
+                              torque: DEFAULT.MOTOR_TORQUE,
+                            },
+                        oldConfig: element.motor,
+                      },
+                    ];
+                    if (!element.motor && !element.isGrounded) {
+                      actions.push({
+                        type: "GroundNode",
+                        id: element.id,
+                        grounded: true,
+                      });
+                    }
+                    applyActions(actions);
+                  }}
+                  sx={{ padding: 0.25, border: 1, borderColor: "divider" }}
+                >
+                  <Box
+                    component="img"
+                    style={{ width: 24, height: 24 }}
+                    src={icon(element.motor ? "motor" : "motor-off")}
+                  />
+                </IconButton>
+              </Tooltip>
+            )}
+            {element.type === "gear" && (
+              <NumberInput
+                label="R"
+                title={t("radius")}
+                kind={LENGTH}
+                value={element.radius}
+                onChange={(radius) => {
+                  applyActions([
+                    {
+                      type: "ChangeGearRadius",
+                      id: element.id,
+                      newRadius: radius,
+                      oldRadius: element.radius,
+                      target: new Point2(
+                        element.position.x + radius,
+                        element.position.y,
+                      ),
+                      committed: true,
+                    },
+                  ]);
+                }}
+                large
+                unsigned
+                adornment={
+                  linkedConstraint
+                    ? {
+                        icon: Lock,
+                        title: t("length_unlock"),
+                        color: "secondary",
+                        onMouseEnter: () =>
+                          handleMouseEnter(linkedConstraint, true),
+                        onMouseLeave: handleMouseLeave,
+                        onClick: () =>
+                          applyActions([
+                            {
+                              type: "DeleteElement",
+                              element: linkedConstraint,
+                            },
+                          ]),
+                      }
+                    : {
+                        icon: LockOpen,
+                        title: t("length_lock"),
+                        onClick: () =>
+                          applyActions([
+                            {
+                              type: "CreateElement",
+                              element: create_radius_dimension(
+                                element,
+                                mechanism.viewport,
+                              ),
+                            },
+                          ]),
+                      }
+                }
+              />
+            )}
+          </Box>
+          {element.type === "pivot" && element.motor && (
             <Box
               sx={{
                 display: "flex",
-                flexDirection: "row",
+                flexDirection: "column",
                 alignItems: "center",
                 justifyContent: "center",
-                gap: 2,
+                gap: 1,
               }}
             >
-              <VectorInput
-                value={element.position}
-                onChange={(pos) =>
-                  applyActions([
-                    {
-                      type: "MoveNode",
-                      id: element.id,
-                      newPosition: pos,
-                      oldPosition: element.position,
-                      committed: true,
-                    },
-                  ])
-                }
-              />
-              {element.type === "pivot" && (
-                <Tooltip
-                  title={t(element.motor ? "motor_revert" : "motor_convert")}
-                >
-                  <IconButton
-                    color="inherit"
-                    size="small"
-                    onClick={() => {
-                      const actions: Action[] = [
-                        {
-                          type: "SetMotorConfig",
-                          id: element.id,
-                          newConfig: element.motor
-                            ? undefined
-                            : {
-                                speed: DEFAULT.MOTOR_SPEED,
-                                torque: DEFAULT.MOTOR_TORQUE,
-                              },
-                          oldConfig: element.motor,
-                        },
-                      ];
-                      if (!element.motor && !element.isGrounded) {
-                        actions.push({
-                          type: "GroundNode",
-                          id: element.id,
-                          grounded: true,
-                        });
-                      }
-                      applyActions(actions);
-                    }}
-                    sx={{ padding: 0.25, border: 1, borderColor: "divider" }}
-                  >
-                    <Box
-                      component="img"
-                      style={{ width: 24, height: 24 }}
-                      src={icon(element.motor ? "motor" : "motor-off")}
-                    />
-                  </IconButton>
-                </Tooltip>
-              )}
-              {element.type === "gear" && (
-                <NumberInput
-                  label="R"
-                  title={t("radius")}
-                  kind={LENGTH}
-                  value={element.radius}
-                  onChange={(radius) => {
-                    applyActions([
-                      {
-                        type: "ChangeGearRadius",
-                        id: element.id,
-                        newRadius: radius,
-                        oldRadius: element.radius,
-                        target: new Point2(
-                          element.position.x + radius,
-                          element.position.y,
-                        ),
-                        committed: true,
-                      },
-                    ]);
-                  }}
-                  large
-                  unsigned
-                  adornment={
-                    linkedConstraint
-                      ? {
-                          icon: Lock,
-                          title: t("length_unlock"),
-                          color: "secondary",
-                          onMouseEnter: () =>
-                            handleMouseEnter(linkedConstraint, true),
-                          onMouseLeave: handleMouseLeave,
-                          onClick: () =>
-                            applyActions([
-                              {
-                                type: "DeleteElement",
-                                element: linkedConstraint,
-                              },
-                            ]),
-                        }
-                      : {
-                          icon: LockOpen,
-                          title: t("length_lock"),
-                          onClick: () =>
-                            applyActions([
-                              {
-                                type: "CreateElement",
-                                element: create_radius_dimension(
-                                  element,
-                                  mechanism.viewport,
-                                ),
-                              },
-                            ]),
-                        }
-                  }
-                />
-              )}
-            </Box>
-            {element.type === "pivot" && element.motor && (
               <Box
                 sx={{
                   display: "flex",
@@ -692,9 +716,19 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                   large
                 />
               </Box>
-            )}
-          </Box>
-        </StructureOnly>
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ display: "block", textAlign: "center", mb: -0.5 }}
+              >
+                {t("metric_motor_power")} :{" "}
+                {motorPowerSample?.values.length
+                  ? format_quantity(motorPowerSample.values[0].value, POWER)
+                  : "—"}
+              </Typography>
+            </Box>
+          )}
+        </Box>
       )}
 
       {"positionStart" in element && (

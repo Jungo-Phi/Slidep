@@ -21,6 +21,7 @@ export function is_vector_metric(metric: ProbeMetric): boolean {
   return (
     metric !== "angle" &&
     metric !== "angular-velocity" &&
+    metric !== "motor-power" &&
     metric !== "moment" &&
     metric !== "moment-start" &&
     metric !== "moment-end"
@@ -558,6 +559,11 @@ export function get_probe_series(
       return { t, curves: [{ key: "value", values: omega }], unit: "tr/min" };
     }
 
+    case "motor-power":
+      // No torque in the kinematic solver (motors drive position directly); dynamic mode
+      // fills this in.
+      return { t: [], curves: [], unit: "W" };
+
     case "force":
     case "force-start":
     case "force-end":
@@ -702,6 +708,18 @@ export function get_dynamic_probe_series(
         omega.push((v * 60) / (2 * Math.PI)); // rad/s -> tr/min, same unit as the motor speed
       }
       return { t, curves: [{ key: "value", values: omega }], unit: "tr/min" };
+    }
+
+    case "motor-power": {
+      const t: number[] = [];
+      const watts: number[] = [];
+      for (const snap of snapshots) {
+        const sample = snap.motorPower?.find((p) => p.pivotID === element.id);
+        if (!sample) continue;
+        t.push(snap.t);
+        watts.push(sample.watts);
+      }
+      return { t, curves: [{ key: "value", values: watts }], unit: "W" };
     }
 
     case "force":

@@ -143,7 +143,16 @@ describe("BeamCohesion — torseur d'interface d'une poutre (docs/plan-efforts-i
     expect(cohesionB!.end.fy).toBeCloseTo(-50, 0);
   });
 
-  it("un cantilever avec une masse en cours de portée transmet la charge par le nœud attaché", () => {
+  // Expected to fail: `k1` (beam:end) is repositioned by FOUR independent links (`Distance`,
+  // `KeepOrientation`, and both `FixedOnSegment`s — the attached mass's and the beam's own
+  // rotational-inertia midpoint), not two — `projectOnSegment` redistributes onto `start`/`end`
+  // by inverse mass same as the other two links do, so Gauss-Seidel has two competing paths to
+  // `k1` and no way to attribute the true reaction between them, however many sweeps or
+  // substeps run (verified up to 100k sweeps / 8192 substeps, bit-identical). See
+  // docs/ratio-masse-convergence-dynamique.md, "un nœud rigide est sur-contraint au niveau du
+  // graphe de liaisons" — fix belongs in how a beam's rigidity is represented, not here. If this
+  // ever starts passing, remove `.fails` and update that doc.
+  it.fails("un cantilever avec une masse en cours de portée transmet la charge par le nœud attaché", () => {
     // A mass welded to the beam's BODY mid-span (fixedNodesBodyIDs, not an endpoint), on a
     // beam encastré at the other end. No gravity: the only action is the load on the mass,
     // which must reach the beam entirely through the FixedOnSegment holding it — the

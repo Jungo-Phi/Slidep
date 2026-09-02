@@ -12,24 +12,22 @@
 
 **UI**
 
-- Le hover des éléments depuis le panneau latéral ne devrait pas faire apparaitre les contraintes
-
-- Le point zéro devrait être collé à l'axe (à gauche) dans les diagrames d'efforts internes
-- efforts internes : normaliser les graphiques
-- Rendre les dimensions non-éditables en simulation
-
 - Clean cette putain de section "élément en simulation
 
 - Hover sur les graphs met en évidence les éléments concernés
 - Travailler les couleurs, avec les thèmes
 - Afficher les contraintes dans les joins ?
+- 🔨 Les contraintes ne devrait pas apparaitre au hover quand on est en train de placer un élément. En fait, elle ne devrait apparaitre que dans les états "Idle"
 - Hot-reload des masses, ressorts et amortisseurs en simulation
 - Afficher "déplacez ce mécanisme à la main" uniqument un cinématique
-- Rendre TRAJECTORY_DOT_STEP éditable ?
+- Rendre les dimensions non-éditables en simulation
+- 🆕 Rendre TRAJECTORY_DOT_STEP éditable ?
+- 🆕 Ajouter des réglages généraux pour les types d'unités affichées (Tr/min VS s-1) ?
 
 ---
 
 - Angle affiché dans les mesures "Balance.slidep" est faux. L'angle du graph ne correspond pas à celui de l'élément
+- Afficher les graphiques à frame=0 (pas "en attente de données...")
 
 **Dans l'onglet "Matériaux & profilés"**
 
@@ -44,6 +42,7 @@
 
 **Simulation**
 
+- 🤔 Qu'est-ce qu'on fait pour afficher les hyperstatismes en dynamique (contraintes) ?
 - 🔨 Mettre à jour le hover en simulation quand le mécanisme bouge sans grab
 - 🚨 En cinématique, quand l'alignement n'est juste pas parfait (alors que le défaut peut ne même pas s'afficher), le mécanisme bouge tout seul (voir "Le mécanisme qui bouge tout seul.slidep").
 - 🔨 Donner a tous les ressorts en cinématique la même "élasticité".
@@ -55,6 +54,7 @@
 
 - 🚨 Le moteur se bloque avec "Jansen", wtf !?
 - 🚨 Hover sur des contraintes cachées, wtf !?
+- Le hover des éléments depuis le panneau latéral ne devrait pas faire apparaitre les contraintes
 - 🚨 Hover des loads sous les edges, wtf !?
 - 🚨 Un snap sur la grille ne se fait pas toujours bien aux valeurs rondes, wtf !?
 
@@ -91,13 +91,6 @@
 - 🔨 Ignorer des grounds si nécessaire.
 - 🚨 Généralement laisser les nodes sur les edges en "SlideOn"
 - 🤔 Que faire quand on entre une valeur dans le panneau latéral que les contraintes existantes ne permettent pas ?
-
-**Visualisation**
-
-- 🆕 Afficher les vitesses
-- 🆕 Afficher les forces de réaction
-- 🆕 Afficher les contraintes (à partir des déformations ?)
-- 🆕 Afficher puissance et énergie
 
 **Feedback et cas d'erreur**
 
@@ -156,7 +149,6 @@
 - 🔨 Afficher le point grabbé en simulation
 - 🔨 Theme transition : certaines couleurs changent instantanément (grille + autres éléments spéciaux du canvas)
 - 🔨 Les couleurs des selected loads ne sont pas assez différenciée
-- 🔨 Les contraintes ne devrait pas apparaitre au hover quand on est en train de placer un élément. En fait, elle ne devrait apparaitre que dans les états "Idle"
 - 🔨 Ajouter un délais (2s) avant d'afficher "mécanisme(s) exporté(s)"
 - 🔨 Dessiner un join avec le ground à PlacingGround (quand c'est approprié)
 - 🆕 Afficher des syboles au hover des numberInput start, end, longueur et angle

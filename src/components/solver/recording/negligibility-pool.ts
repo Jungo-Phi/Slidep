@@ -16,6 +16,7 @@ import {
   LENGTH,
   LINEAR_VELOCITY,
   MOMENT,
+  POWER,
   QuantityKind,
 } from "../../../utils/quantity-format";
 
@@ -42,13 +43,15 @@ export function is_negligible(value: number, poolMax: number): boolean {
 export function pool_floors(boundsDiagonal: number): NegligibilityFloors {
   const length = Math.max(boundsDiagonal, MIN_LENGTH_POOL);
   const force = LOAD_SCALING.MIN_VALUE;
+  const linearVelocity = length / MIN_TIME_POOL;
   return {
     length,
     angle: MIN_ANGLE_POOL,
     force,
     moment: force * length,
-    linearVelocity: length / MIN_TIME_POOL,
+    linearVelocity,
     angularVelocity: MIN_ANGLE_POOL / MIN_TIME_POOL,
+    power: force * linearVelocity,
   };
 }
 
@@ -72,11 +75,12 @@ export function extend_negligibility_pool(
     snapshots.length >= cache.consumed &&
     (cache.consumed === 0 || snapshots[cache.consumed - 1] === cache.boundary);
 
-  let { length, angle, force, moment, linearVelocity, angularVelocity, floors } = cache;
+  let { length, angle, force, moment, linearVelocity, angularVelocity, power, floors } =
+    cache;
   if (!appendable) {
     const bounds = mechanism_bounds(elements, constraints);
     floors = pool_floors(bounds ? bounds.min.distance_to(bounds.max) : 0);
-    ({ length, angle, force, moment, linearVelocity, angularVelocity } = floors);
+    ({ length, angle, force, moment, linearVelocity, angularVelocity, power } = floors);
   }
 
   // The reference instant displacement/angle are measured against — always the
@@ -121,6 +125,10 @@ export function extend_negligibility_pool(
         }
       }
     }
+    if (snap.motorPower) {
+      for (const p of snap.motorPower)
+        if (!Number.isNaN(p.watts)) power = Math.max(power, Math.abs(p.watts));
+    }
   }
 
   return {
@@ -134,6 +142,7 @@ export function extend_negligibility_pool(
     moment,
     linearVelocity,
     angularVelocity,
+    power,
     floors,
   };
 }
@@ -144,7 +153,13 @@ export function pool_key_for_metric(
   metric: ProbeMetric,
 ): keyof Pick<
   NegligibilityPool,
-  "length" | "angle" | "force" | "moment" | "linearVelocity" | "angularVelocity"
+  | "length"
+  | "angle"
+  | "force"
+  | "moment"
+  | "linearVelocity"
+  | "angularVelocity"
+  | "power"
 > {
   switch (metric) {
     case "position":
@@ -155,6 +170,8 @@ export function pool_key_for_metric(
       return "angle";
     case "angular-velocity":
       return "angularVelocity";
+    case "motor-power":
+      return "power";
     case "force":
     case "force-start":
     case "force-end":
@@ -183,6 +200,8 @@ export function quantity_kind_for_metric(metric: ProbeMetric): QuantityKind {
       return ANGLE;
     case "angular-velocity":
       return ANGULAR_VELOCITY();
+    case "motor-power":
+      return POWER;
     case "force":
     case "force-start":
     case "force-end":

@@ -606,6 +606,60 @@ export const STRINGS = {
     de: "Messungen",
     es: "Medidas",
   },
+  energy_balance_heading: {
+    fr: "Bilan énergétique",
+    en: "Energy balance",
+    de: "Energiebilanz",
+    es: "Balance energético",
+  },
+  energy_balance_kinetic: {
+    fr: "Cinétique",
+    en: "Kinetic",
+    de: "Kinetisch",
+    es: "Cinética",
+  },
+  energy_balance_kinetic_hint: {
+    fr: "Énergie cinétique : translation + rotation",
+    en: "Kinetic energy: translation + rotation",
+    de: "Kinetische Energie: Translation + Rotation",
+    es: "Energía cinética: traslación + rotación",
+  },
+  energy_balance_potential: {
+    fr: "Potentielle",
+    en: "Potential",
+    de: "Potentiell",
+    es: "Potencial",
+  },
+  energy_balance_potential_hint: {
+    fr: "Énergie potentielle : gravité + ressorts",
+    en: "Potential energy: gravity + springs",
+    de: "Potentielle Energie: Schwerkraft + Federn",
+    es: "Energía potencial: gravedad + resortes",
+  },
+  energy_balance_mechanical: {
+    fr: "Totale",
+    en: "Total",
+    de: "Gesamt",
+    es: "Total",
+  },
+  energy_balance_mechanical_hint: {
+    fr: "Énergie mécanique totale : Cinétique + Potentielle",
+    en: "Total mechanical energy: kinetic + potential",
+    de: "Gesamte mechanische Energie: kinetisch + potentiell",
+    es: "Energía mecánica total: cinética + potencial",
+  },
+  energy_balance_net_work: {
+    fr: "Travail net",
+    en: "Net work",
+    de: "Nettoarbeit",
+    es: "Trabajo neto",
+  },
+  energy_balance_net_work_hint: {
+    fr: "Énergie entrante/sortante : Moteurs − Amortisseurs. Sa variation devrait correspondre à celle de l'énergie totale.",
+    en: "Energy in/out: Motors − Dampers. Its change should match the total energy's own change.",
+    de: "Ein-/ausgehende Energie: Motoren − Dämpfer. Ihre Änderung sollte der Änderung der Gesamtenergie entsprechen.",
+    es: "Energía entrante/saliente: Motores − Amortiguadores. Su variación debería coincidir con la de la energía total.",
+  },
 
   tool_select: {
     fr: "Sélection",
@@ -2000,6 +2054,12 @@ export const STRINGS = {
     en: "Angular velocity",
     de: "Winkelgeschwindigkeit",
     es: "Velocidad angular",
+  },
+  metric_motor_power: {
+    fr: "Puissance moteur",
+    en: "Motor power",
+    de: "Motorleistung",
+    es: "Potencia del motor",
   },
   metric_force_start: {
     fr: "Force (début)",

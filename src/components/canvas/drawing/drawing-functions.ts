@@ -995,7 +995,7 @@ export function draw_stress_legend(
   ctx.textAlign = "right";
   draw_graduation_label(
     ctx,
-    format_quantity(scaleMaxStress, STRESS, 0),
+    format_quantity(scaleMaxStress, STRESS, 1),
     barX + BAR_WIDTH,
     barY - GAP,
   );
@@ -2462,14 +2462,14 @@ export function draw_signed_stress_legend(
   ctx.textAlign = "left";
   draw_graduation_label(
     ctx,
-    `${format_quantity(-scaleMax, STRESS, 0)} · ${compressionLabel}`,
+    `${format_quantity(-scaleMax, STRESS, 1)} · ${compressionLabel}`,
     barX,
     barY - GAP,
   );
   ctx.textAlign = "right";
   draw_graduation_label(
     ctx,
-    `${format_quantity(scaleMax, STRESS, 0)} · ${tensionLabel}`,
+    `${format_quantity(scaleMax, STRESS, 1)} · ${tensionLabel}`,
     barX + BAR_WIDTH,
     barY - GAP,
   );

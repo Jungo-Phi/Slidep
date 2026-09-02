@@ -14,6 +14,7 @@ export const PROBE_METRIC_LABEL_KEYS: Record<ProbeMetric, StringKey> = {
   velocity: "velocity_one",
   angle: "angle",
   "angular-velocity": "metric_angular_velocity",
+  "motor-power": "metric_motor_power",
   force: "force",
   "force-start": "metric_force_start",
   "force-end": "metric_force_end",
@@ -27,6 +28,7 @@ export const PROBE_METRIC_ORDER: ProbeMetric[] = [
   "velocity",
   "angle",
   "angular-velocity",
+  "motor-power",
   "force",
   "force-start",
   "force-end",
@@ -60,12 +62,19 @@ function reaction_metric_available(
   return metric === "force" || metric === "moment" ? !isEdge : isEdge;
 }
 
+/** A motor's own mechanical power (τ·ω) only exists where there is a motor to read it
+ *  from — a pivot with a `motor` config, never a bare pivot or any other element type. */
+function motor_power_available(element: MechanicalElement): boolean {
+  return element.type === "pivot" && !!element.motor;
+}
+
 export function probe_metric_available(
   metric: ProbeMetric,
   element: MechanicalElement,
 ): boolean {
   if (metric === "angle" || metric === "angular-velocity")
     return angular_metric_available(element);
+  if (metric === "motor-power") return motor_power_available(element);
   if (
     metric === "force" ||
     metric === "force-start" ||

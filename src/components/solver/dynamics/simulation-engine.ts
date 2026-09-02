@@ -11,8 +11,10 @@ import {
 import {
   ConstraintResidual,
   DynamicSnapshot,
+  EnergySample,
   KinematicSnapshot,
   LinkReaction,
+  MotorPowerSample,
   ParameterSnapshot,
   SimulationSnapshot,
   SnapshotLayout,
@@ -1363,6 +1365,7 @@ export function step_dynamic_simulation(
   const velocitiesBeforeSolve = new Map(velocities);
   const subDt = dt / substeps;
   let reactions: LinkReaction[] | undefined;
+  let motorPower: MotorPowerSample[] = [];
   let result: SolverMaps | undefined;
 
   for (let sub = 0; sub < substeps; sub++) {
@@ -1442,6 +1445,9 @@ export function step_dynamic_simulation(
     merge_forces(motorContribution.forces);
     for (const [key, t] of motorContribution.torques)
       torques.set(key, (torques.get(key) ?? 0) + t);
+    // Cheap (one entry per motor) unlike `reactions`, so kept on every substep rather than
+    // gated behind `collectDiagnostics` — the last substep's values are what the frame ends on.
+    motorPower = motorContribution.power;
 
     // An anchored node never feels the predict step's acceleration (it cannot move
     // regardless of `gx/gy` — see `PBD_kinematic_solver`), so its own weight has to be
@@ -1515,6 +1521,13 @@ export function step_dynamic_simulation(
 
   // `substeps` is always >= 1, so the loop above ran at least once.
   const finalResult = result!;
+  const energy = compute_energy_sample(
+    model,
+    finalResult.positions,
+    velocities,
+    angleVelocities,
+    gravity,
+  );
 
   // ── Into the snapshot's slots, fused keys decoupled back to one slot per original key ──
   const layout = model.layout;
@@ -1581,10 +1594,68 @@ export function step_dynamic_simulation(
     angleVelocities: outAngleVelocities,
     unsatisfied: finalResult.unsatisfied,
     reactions,
+    motorPower,
+    energy,
     beamCohesion: reactions
       ? resolve_beam_cohesion(model.beamCohesionSpecs, reactions, finalResult.positions)
       : undefined,
   };
+}
+
+/**
+ * This frame's whole-mechanism energy balance (`EnergySample`) — reads the SAME fused-key
+ * maps `step_dynamic_simulation` just solved with (`model.dynamicMasses`,
+ * `model.compiledSpringDampers`), rather than rebuilding a mass model from the raw mechanism:
+ * the masses/positions/velocities a frame's own solve used are exactly what its energy
+ * balance has to be measured against. Anchored dofs (`posMasses` reading 0, same test the
+ * solver itself uses) are skipped entirely, kinetic and potential alike — immobile, so their
+ * absence only shifts `potentialGravity` by a constant the balance never looks at (it only
+ * ever compares a CHANGE against this recording's own first frame).
+ */
+function compute_energy_sample(
+  model: SimulationModel,
+  positions: Map<string, Point2>,
+  velocities: Map<string, Point2>,
+  angleVelocities: Map<string, number>,
+  gravity: Point2,
+): EnergySample {
+  let kinetic = 0;
+  let potentialGravity = 0;
+  for (const [key, invMass] of model.dynamicMasses.posMasses) {
+    if (invMass <= 0) continue;
+    const mass = 1 / invMass;
+    const v = velocities.get(key);
+    if (v) kinetic += 0.5 * mass * (v.x * v.x + v.y * v.y);
+    const p = positions.get(key);
+    if (p) potentialGravity -= mass * (p.x * gravity.x + p.y * gravity.y);
+  }
+  for (const [key, invInertia] of model.dynamicMasses.angleMasses) {
+    if (invInertia <= 0) continue;
+    const w = angleVelocities.get(key) ?? 0;
+    kinetic += 0.5 * (w * w) / invInertia;
+  }
+
+  let potentialSpring = 0;
+  let damperPower = 0;
+  for (const sd of model.compiledSpringDampers) {
+    const start = positions.get(sd.startKey);
+    const end = positions.get(sd.endKey);
+    if (!start || !end) continue;
+    const delta = end.sub(start);
+    const length = delta.length();
+    if (sd.kind === "spring") {
+      const stretch = length - sd.restLength;
+      potentialSpring += 0.5 * sd.stiffness * stretch * stretch;
+    } else if (length > 1e-9) {
+      const axis = delta.mul(1 / length);
+      const relV = (velocities.get(sd.endKey) ?? ZERO)
+        .sub(velocities.get(sd.startKey) ?? ZERO)
+        .dot(axis);
+      damperPower += sd.damping * relV * relV;
+    }
+  }
+
+  return { kinetic, potentialGravity, potentialSpring, damperPower };
 }
 
 /**
@@ -1675,6 +1746,8 @@ export function dynamic_snapshot_at(
     // Diagnostics belong to a state the solver actually produced.
     unsatisfied: a.unsatisfied,
     reactions: a.reactions,
+    motorPower: a.motorPower,
+    energy: a.energy,
     beamCohesion: a.beamCohesion,
   };
 }

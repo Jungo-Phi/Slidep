@@ -13,6 +13,7 @@ import {
   Tooltip,
   List,
   ListItem,
+  Collapse,
   useTheme,
 } from "@mui/material";
 import {
@@ -23,6 +24,7 @@ import {
   Troubleshoot,
   Tune,
   Close,
+  ExpandMore,
 } from "@mui/icons-material";
 import {
   Action,
@@ -97,10 +99,12 @@ import { ddl_status } from "../ddl-status";
 import { AnimatedMode, useModeAnimation } from "../useModeAnimation";
 import {
   ANGULAR_VELOCITY,
+  ENERGY,
   LENGTH,
   display_unit,
   format_quantity,
 } from "../../../utils/quantity-format";
+import { compute_energy_balance } from "../../solver/analysis/energy-balance";
 
 interface AnalysisPanelProps {
   mechanism: Mechanism;
@@ -186,6 +190,27 @@ const fault = (elements: Iterable<ID>): CanvasHighlight => ({
 
 /** Stable identity for the resting state, like `NO_HIGHLIGHT`. */
 const EMPTY_SYMBOLS: RedundancySymbol[] = [];
+
+/** The four curves the "Bilan énergétique" chart can show — see `EnergyBalanceSeries`. */
+const ENERGY_COMPONENTS = ["kinetic", "potential", "mechanical", "netWorkIn"] as const;
+type EnergyComponent = (typeof ENERGY_COMPONENTS)[number];
+
+const ENERGY_COMPONENT_LABEL_KEYS: Record<EnergyComponent, StringKey> = {
+  kinetic: "energy_balance_kinetic",
+  potential: "energy_balance_potential",
+  mechanical: "energy_balance_mechanical",
+  netWorkIn: "energy_balance_net_work",
+};
+
+/** What each curve actually is — on its own chip rather than a single header tooltip, since
+ *  the four are different enough (one is a rate integral, the rest are state) that a shared
+ *  blurb either says too little about each or grows too long to skim. */
+const ENERGY_COMPONENT_HINT_KEYS: Record<EnergyComponent, StringKey> = {
+  kinetic: "energy_balance_kinetic_hint",
+  potential: "energy_balance_potential_hint",
+  mechanical: "energy_balance_mechanical_hint",
+  netWorkIn: "energy_balance_net_work_hint",
+};
 
 /** The motor config to *show*, resolved through `analysedElementOf` — the pose on screen,
  *  which while scrubbed can hold a different value than the live mechanism. */
@@ -693,6 +718,21 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
   const { palette } = useTheme();
   const curveColors = probe_curve_colors(palette.primary.main);
   const [superpose, setSuperpose] = React.useState(false);
+  // Collapsed by default: a diagnostic for the solver's own conservation, not something most
+  // mechanisms need read every run — see docs discussion, "Bilan énergétique".
+  const [energyExpanded, setEnergyExpanded] = React.useState(false);
+  // "Totale" and "travail net" on by default — the pair the diagnostic is actually about;
+  // kinetic/potential are there to answer "where did it go", opted into like x/y/norm.
+  const [energyComponents, setEnergyComponents] = React.useState<
+    Record<EnergyComponent, boolean>
+  >({ kinetic: false, potential: false, mechanical: true, netWorkIn: true });
+  const energyBalance = React.useMemo(
+    () =>
+      appMode === "dynamic"
+        ? compute_energy_balance(runtimeState.simulationSnapshots as DynamicSnapshot[])
+        : { t: [], kinetic: [], potential: [], mechanical: [], netWorkIn: [] },
+    [appMode, runtimeState.simulationSnapshots],
+  );
   const [metricMenu, setMetricMenu] = React.useState<{
     elementID: ID;
     anchorEl: HTMLElement;
@@ -1117,6 +1157,127 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
           <Divider />
         </>
       )}
+
+      {/* Bilan énergétique — diagnostic du solveur, pas une mesure du mécanisme : replié par
+          défaut, jamais recalculé côté solveur (voir `EnergySample`), donc gratuit à ouvrir. */}
+      {appMode === "dynamic" &&
+        (() => {
+          const componentColors: Record<EnergyComponent, string> = {
+            kinetic: PROBE_ELEMENT_COLORS[1],
+            potential: PROBE_ELEMENT_COLORS[2],
+            mechanical: curveColors.value,
+            netWorkIn: PROBE_ELEMENT_COLORS[4],
+          };
+          const curves: ChartCurve[] = ENERGY_COMPONENTS.filter(
+            (k) => energyComponents[k],
+          ).map((k) => ({
+            id: k,
+            color: componentColors[k],
+            t: energyBalance.t,
+            values: energyBalance[k],
+          }));
+          const peak = curves.reduce(
+            (m, c) => c.values.reduce((mm, v) => Math.max(mm, Math.abs(v)), m),
+            0,
+          );
+          const unit = display_unit(peak, ENERGY);
+          return (
+            <>
+              <Box sx={{ mx: 2 }}>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
+                  <Typography variant="subtitle2" fontWeight={600} sx={{ flex: 1 }}>
+                    {t("energy_balance_heading")}
+                    {/* Only once there is a chart to name a unit for — collapsed, the
+                        heading describes the section, not a reading. */}
+                    {energyExpanded && (
+                      <Typography
+                        component="span"
+                        variant="subtitle2"
+                        color="text.secondary"
+                      >
+                        {` (${unit.symbol})`}
+                      </Typography>
+                    )}
+                  </Typography>
+                  <IconButton
+                    size="small"
+                    onClick={() => setEnergyExpanded((prev) => !prev)}
+                    sx={{ borderRadius: 3 }}
+                  >
+                    <ExpandMore
+                      fontSize="small"
+                      sx={{
+                        transform: energyExpanded ? "rotate(180deg)" : "none",
+                        transition: "transform 0.15s ease",
+                      }}
+                    />
+                  </IconButton>
+                </Box>
+                <Collapse in={energyExpanded}>
+                  <Box sx={{ pt: 0.5 }}>
+                    <Box
+                      sx={{
+                        display: "flex",
+                        flexWrap: "wrap",
+                        justifyContent: "center",
+                        gap: 0.5,
+                        mb: 0.5,
+                      }}
+                    >
+                      {ENERGY_COMPONENTS.map((k) => (
+                        <Tooltip key={k} title={t(ENERGY_COMPONENT_HINT_KEYS[k])}>
+                          <Chip
+                            label={t(ENERGY_COMPONENT_LABEL_KEYS[k])}
+                            size="small"
+                            clickable
+                            onClick={() =>
+                              setEnergyComponents((prev) => ({ ...prev, [k]: !prev[k] }))
+                            }
+                            sx={{
+                              height: 20,
+                              "& .MuiChip-label": { px: 1 },
+                              fontSize: "0.7rem",
+                              fontWeight: 600,
+                              color: energyComponents[k] ? "common.white" : "text.secondary",
+                              backgroundColor: energyComponents[k]
+                                ? componentColors[k]
+                                : "background.sunken",
+                              "&:hover": {
+                                backgroundColor: energyComponents[k]
+                                  ? componentColors[k]
+                                  : "action.hover",
+                              },
+                            }}
+                          />
+                        </Tooltip>
+                      ))}
+                    </Box>
+                    <ProbeChart
+                      curves={curves}
+                      currentTime={runtimeState.time}
+                      poolMax={0}
+                      ownFloor={0}
+                      unitFactor={unit.factor}
+                      // Never forced: `potential`/`mechanical` carry the drawing's own
+                      // coordinate-origin offset (see `EnergyBalanceSeries`), so pulling 0
+                      // into view could squash their real excursion the way it would for a
+                      // `position` chart — same reasoning as `metric_shows_zero`'s exceptions.
+                      showZero={false}
+                      emptyMessage={
+                        curves.length === 0
+                          ? t("chart_no_component")
+                          : t("chart_waiting")
+                      }
+                      onSeek={seekTime}
+                    />
+                  </Box>
+                </Collapse>
+              </Box>
+
+              <Divider />
+            </>
+          );
+        })()}
 
       {/* Mesures : sondes actives + graphiques */}
       <Box sx={{ mx: 2, display: "flex", flexDirection: "column", gap: 1 }}>

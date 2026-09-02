@@ -100,6 +100,8 @@ const adaptive = (baseSymbol: string, baseFactor: number = 1): QuantityKind => (
 
 export const FORCE = adaptive("N");
 export const LINEAR_VELOCITY = adaptive("m/s");
+export const POWER = adaptive("W");
+export const ENERGY = adaptive("J");
 export const MOMENT: QuantityKind = {
   ...adaptive("N·m"),
   submultipleOnSuffix: "m",

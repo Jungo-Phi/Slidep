@@ -62,7 +62,7 @@ corriger la contrainte B dérange ce que la contrainte A venait de satisfaire.
 Le taux de décroissance de cette convergence (le rayon spectral de l'itération) est justement ce
 que le code documente déjà pour l'effet de longueur de chaîne :
 
-> `PBD_kinematic_solver.ts:172-184` — *« r ≈ 1 − c/N² »* pour une chaîne de N liens.
+> `PBD_kinematic_solver.ts:172-184` — _« r ≈ 1 − c/N² »_ pour une chaîne de N liens.
 
 Un ratio de masse extrême a exactement le même effet qu'une chaîne plus longue : sur
 `CP.slidep`, la correction de la masse lourde doit être quasi entièrement absorbée par le pivot
@@ -91,11 +91,7 @@ est représentée par **deux points indépendants reliés par un lien `Distance`
   est juste et documenté, mais c'est un nœud et une contrainte de plus par poutre, en dynamique
   uniquement, pour une propriété que le modèle aurait dû porter.
 
-Passer les poutres en corps rigides divise `N` par ~2, donc `1 − r` par ~4, supprime le nœud
-milieu et ses effets de bord, ne touche ni le noyau du solveur ni les courroies, et laisse
-ouvert le choix de solveur pour plus tard. C'est le meilleur rapport gain/risque de tout ce
-document, et il ne figure dans aucune des options ci-dessous parce qu'il n'est pas une option de
-solveur.
+Passer les poutres en corps rigides divise `N` par ~2 en dynamique, donc `1 − r` par ~4, supprime le nœud milieu et ses effets de bord, ne touche ni le noyau du solveur ni les courroies, et laisse ouvert le choix de solveur pour plus tard. Plus de détails sur cet idée sont à trouver dans _docs/poutre-corps-rigide-dynamique.md_
 
 ### Donc, sur le fix déjà appliqué
 
@@ -126,12 +122,12 @@ une cause identifiée. Banc rejouable : `scratch/ssor/` (README + patch).
 Résidu maximal du pivot de `CP.slidep` sur 40 frames, valeurs par défaut du solveur, en mètres :
 
 | masse suspendue | sans alternance | avec alternance |
-| --- | --- | --- |
-| 1 kg | 1.12e-5 | 2.38e-21 |
-| 100 kg | 1.57e-3 | 3.72e-19 |
-| 300 kg | 5.47e-3 | 8.05e-19 |
-| 1000 kg | 1.71e-2 | 3.41e-18 |
-| 3000 kg | 6.37e-2 | 1.04e-17 |
+| --------------- | --------------- | --------------- |
+| 1 kg            | 1.12e-5         | 2.38e-21        |
+| 100 kg          | 1.57e-3         | 3.72e-19        |
+| 300 kg          | 5.47e-3         | 8.05e-19        |
+| 1000 kg         | 1.71e-2         | 3.41e-18        |
+| 3000 kg         | 6.37e-2         | 1.04e-17        |
 
 Quinze ordres de grandeur, et une dépendance à la masse qui subsiste seulement au niveau de
 l'arrondi machine. Ce n'est pas une convergence accélérée, c'est une **résolution exacte** : sur
@@ -148,21 +144,21 @@ de plusieurs semaines de travail.** Le tableau ci-dessous est à lire en gardant
 test échoue au-delà de 1 %) :
 
 | frames | sans alternance | alternance totale | alternance sauf conditionnement courroie |
-| --- | --- | --- | --- |
-| 30 | 0.40 % | 3.5 % | 0.29 % |
-| 60 | 1.00 % | 27 % | 1.7 % |
-| 120 | 0.41 % | 43 % | 4.1 % |
-| 240 | 0.45 % | **72 %** | 0.85 % |
-| 360 | 0.46 % | 33 % | 0.65 % |
-| 480 | 1.22 % | 30 % | 1.1 % |
+| ------ | --------------- | ----------------- | ---------------------------------------- |
+| 30     | 0.40 %          | 3.5 %             | 0.29 %                                   |
+| 60     | 1.00 %          | 27 %              | 1.7 %                                    |
+| 120    | 0.41 %          | 43 %              | 4.1 %                                    |
+| 240    | 0.45 %          | **72 %**          | 0.85 %                                   |
+| 360    | 0.46 %          | 33 %              | 0.65 %                                   |
+| 480    | 1.22 %          | 30 %              | 1.1 %                                    |
 
 Trois lectures, dans l'ordre d'importance :
 
 **1. L'alternance totale diverge, et la cause est la redondance délibérée des courroies.** Une
 courroie fermée porte un jeu de contraintes volontairement surdéterminé — un
 `BeltSegmentNoSlip` de trop par boucle, plus `BeltSubChainAggregate` — et `analysis-model.ts`
-le dit noir sur blanc : *« le solveur veut chaque brin pour le conditionnement, le compte de
-rang ne doit pas tous les avoir »*. Sur un système redondant, Gauss-Seidel converge vers un
+le dit noir sur blanc : _« le solveur veut chaque brin pour le conditionnement, le compte de
+rang ne doit pas tous les avoir »_. Sur un système redondant, Gauss-Seidel converge vers un
 point du noyau **choisi par l'ordre de parcours** ; le point fixe du balayage avant et celui du
 balayage arrière ne sont pas le même, et alterner ne converge donc vers ni l'un ni l'autre.
 Épingler ce seul jeu de liens (ils gardent leurs créneaux et leur ordre avant, tout le reste
@@ -172,7 +168,7 @@ redondance assumée ailleurs dans le modèle.
 
 **2. Mais ce n'est pas toute l'histoire, et l'hypothèse « c'est la courroie » est réfutée pour
 le reste.** Il subsiste une erreur 2 à 4× la ligne de base, et elle ne vient PAS des liens de
-courroie : épingler *toute* la machinerie courroie au lieu du seul jeu redondant donne 5.63°
+courroie : épingler _toute_ la machinerie courroie au lieu du seul jeu redondant donne 5.63°
 contre 5.41°, soit rien. Elle vient de l'alternance des liens ordinaires, et elle a le même
 caractère que l'erreur déjà présente sans alternance — bornée, oscillante, jamais croissante.
 À noter d'ailleurs : la ligne de base elle-même atteint 1.00 % à 60 frames et 1.22 % à 480,
@@ -312,7 +308,7 @@ sa chaîne à lui seul, seulement quand `link.closed` (il porte déjà ce champ,
 
 - `ssor-coverage` : `Core XY` 0/43 → 41/43 liens alternés, `Core XY - 2 moteurs` 0/46 → 44/46.
   Les quatre mécanismes à courroie FERMÉE (`Huygens`, `Poulie bloqueuse`, `Déconnexion
-  courroie`, `Poutre sur joint de courroie`) restent épinglés à 0 alterné, sans changement.
+courroie`, `Poutre sur joint de courroie`) restent épinglés à 0 alterné, sans changement.
 - Non-régression bit-exacte sur tout le reste : `ssor-probe` donne des gaps identiques à
   trois chiffres significatifs sur `Huygens`/`Poulie bloqueuse` aux six horizons,
   `ssor-reaction-probe` redonne exactement 0.571496 (la même taxe qu'en troisième passe), et
@@ -400,12 +396,12 @@ facteur 2 d'un sweep à l'autre sous alternance. Soupçon légitime d'artefact d
 Mesuré en ajoutant l'avant-dernier sweep et en prenant le MINIMUM de la paire (comparaison
 sans parité) :
 
-| frame | `off` | `perchain` | rapport |
-| --- | --- | --- | --- |
-| 1 | 8.26e-6 | 1.71e-5 | 2.07× |
-| 5 | 4.70e-5 | 8.20e-5 | 1.75× |
-| 10 | 1.07e-4 | 1.86e-4 | 1.75× |
-| 15 | 1.80e-4 | 3.02e-4 | 1.68× |
+| frame | `off`   | `perchain` | rapport |
+| ----- | ------- | ---------- | ------- |
+| 1     | 8.26e-6 | 1.71e-5    | 2.07×   |
+| 5     | 4.70e-5 | 8.20e-5    | 1.75×   |
+| 10    | 1.07e-4 | 1.86e-4    | 1.75×   |
+| 15    | 1.80e-4 | 3.02e-4    | 1.68×   |
 
 **Soupçon réfuté, anti-résultat confirmé** : même à la parité favorable, l'alternance reste 1.7 à
 2.1× moins bonne à budget égal. L'oscillation est bien réelle (sous `off`, dernier et
@@ -443,13 +439,13 @@ poutre — la contrainte même qui lâche sur `CP.slidep`). En mètres, donc com
 rapportée à l'échelle propre de chaque mécanisme**, qui n'est pas la même : `CP.slidep` fait
 3 cm d'envergure, le vilbrequin 63 cm.
 
-| masse | `CP.slidep` (ARBRE, 3 cm) | | `Vilbrequin` (BOUCLE, 63 cm) | |
-| --- | --- | --- | --- | --- |
-| | absolu | % de l'envergure | absolu | % de l'envergure |
-| 1 kg | 1.12e-5 | 0.04 % | 3.08e-7 | 0.00005 % |
-| 100 kg | 1.57e-3 | 5.2 % | 1.23e-6 | 0.0002 % |
-| 1000 kg | 1.71e-2 | 57 % | 9.91e-6 | 0.0016 % |
-| 3000 kg | 6.37e-2 | **212 %** | 3.30e-5 | **0.005 %** |
+| masse   | `CP.slidep` (ARBRE, 3 cm) |                  | `Vilbrequin` (BOUCLE, 63 cm) |                  |
+| ------- | ------------------------- | ---------------- | ---------------------------- | ---------------- |
+|         | absolu                    | % de l'envergure | absolu                       | % de l'envergure |
+| 1 kg    | 1.12e-5                   | 0.04 %           | 3.08e-7                      | 0.00005 %        |
+| 100 kg  | 1.57e-3                   | 5.2 %            | 1.23e-6                      | 0.0002 %         |
+| 1000 kg | 1.71e-2                   | 57 %             | 9.91e-6                      | 0.0016 %         |
+| 3000 kg | 6.37e-2                   | **212 %**        | 3.30e-5                      | **0.005 %**      |
 
 **La boucle est immunisée, à quatre ordres de grandeur près.** À 3000 kg l'arbre est disloqué
 (l'erreur dépasse deux fois sa propre taille) tandis que la boucle reste **vingt fois sous le
@@ -632,8 +628,8 @@ possibles, indépendantes du choix de solveur :
 ### 0. Agrégat de sous-chaîne rigide (le trick des courroies, généralisé)
 
 Absent de la liste initiale, et pourtant déjà en production ici — pour les courroies seulement.
-`experimental/belt-aggregate.ts` : *« Sommer les lois de segment d'une courroie télescope ses q
-intérieurs, laissant une équation purement positionnelle. »* C'est une contrainte de **niveau
+`experimental/belt-aggregate.ts` : _« Sommer les lois de segment d'une courroie télescope ses q
+intérieurs, laissant une équation purement positionnelle. »_ C'est une contrainte de **niveau
 grossier** : impliquée par les contraintes fines, donc elle ne déplace pas le point fixe, mais
 elle propage l'information d'un bout à l'autre de la sous-chaîne en UN sweep au lieu de N.
 
@@ -922,14 +918,14 @@ Ordre que je propose (état au terme de la cinquième passe, décision réaction
    **Le critère n'est PAS l'acyclicité, contrairement à ce qui avait été convenu**, et il a
    fallu deux corrections pour arriver au bon.
 
-   *Première* : un cycle de graphe ne distingue pas une boucle cinématique d'une barre rigide
+   _Première_ : un cycle de graphe ne distingue pas une boucle cinématique d'une barre rigide
    portant un cavalier — le `FixedOnSegment` qui épingle un nœud sur une poutre forme un
    triangle avec le `Distance` de cette poutre, donc tout mécanisme à poutre chargée lit
    « cyclique », `CP.slidep` compris, c'est-à-dire le seul cas où le gain existe. Remplacé par
    un comptage de redondance : une chaîne alterne si les lignes de contrainte qu'elle porte
    (`Σ ddl`) ne dépassent pas ses inconnues libres.
 
-   *Seconde* : **le comptage ne voit pas une dépendance linéaire.** Une courroie porte un brin
+   _Seconde_ : **le comptage ne voit pas une dépendance linéaire.** Une courroie porte un brin
    de trop sur une boucle fermée, et un agrégat qui est la somme télescopée des lois qu'il
    couvre — chacun ajoute une ligne ET une inconnue, donc aucun comptage ne les distingue d'une
    contrainte utile. `Huygens` passait ainsi 18 liens sur 19 en alternance. Le critère final
@@ -950,6 +946,7 @@ Ordre que je propose (état au terme de la cinquième passe, décision réaction
    (avec ou sans masse), `Puente`, `Treillis` (6/7), `Line from rotation`, `Balance`,
    `Test slider`, `Petit`, `Roues isolées`, `trac-comp`. Ce que ça épingle : tout ce qui porte
    une courroie, `Jansen`, `Core XY`.
+
 5. ~~**Agrégat de sous-chaîne (option 0)**~~ — **abandonné**. Sa cible initiale (les chaînes
    sérielles) est couverte par l'alternance ; sa cible de repli (les boucles) n'a pas de problème
    à résoudre, la cinquième passe l'a mesuré. Plus rien dans ce document ne la motive. Si elle
@@ -987,10 +984,10 @@ fermée à partir d'une autre poulie — ce qui ne change rien au mécanisme des
 les angles des engrenages :
 
 | frames | écart entre deux listages |
-| --- | --- |
-| 30 | 35.1° |
-| 60 | 68.2° |
-| 120 | **1.08e8 °** |
+| ------ | ------------------------- |
+| 30     | 35.1°                     |
+| 60     | 68.2°                     |
+| 120    | **1.08e8 °**              |
 
 Un écart de 1e8 degrés, c'est 300 000 tours en une seconde de temps simulé : au moins un des
 deux listages ne dérive pas, il **explose**. Ce n'est donc pas de la sensibilité aux conditions
@@ -1006,7 +1003,7 @@ question — « lister une courroie fermée autrement ne doit rien changer » �
 récent ; les courroies ne l'ont jamais été.
 
 **Pistes, non vérifiées.** `step_dynamic_simulation` est documenté comme délibérément plus
-étroit que son homologue cinématique : *pas de suivi de déconnexion de courroie*, et les
+étroit que son homologue cinématique : _pas de suivi de déconnexion de courroie_, et les
 `Spring`/`MotorBeam`/`MotorAngle` retirés du balayage. Une courroie qui devrait lâcher une
 poulie mais reste contrainte géométriquement est un candidat naturel à l'emballement. L'autre
 suspect est la boucle de `rebake_belt_pin_refs` : elle rebake `s0`/`thetaRef0` une fois par
@@ -1031,8 +1028,8 @@ Sans rapport avec la convergence, relevés en lisant, non corrigés :
   (1 mm), il vaut 1e-3 de l'extent — soit exactement `DIAGNOSTIC_TOLERANCE_RATIO` : la sortie
   « plus rien ne bouge » se déclencherait au niveau que les diagnostics appellent « violé ».
 - **Trois commentaires périmés**, dont deux trompeurs :
-  - `simulation-engine.ts:1488` — « *Ignored: `dynamics` overrides the exit criterion with a
-    fixed sweep count* ». Plus vrai depuis le fix ratio-de-masse : `PBD_solve` n'a plus aucun
+  - `simulation-engine.ts:1488` — « _Ignored: `dynamics` overrides the exit criterion with a
+    fixed sweep count_ ». Plus vrai depuis le fix ratio-de-masse : `PBD_solve` n'a plus aucun
     garde `dynamics` autour de la sortie anticipée. Le commentaire dit l'inverse du code sur
     précisément le point que ce doc analyse.
   - `kinematic-solver-links.ts:400` et `:455` — `BeltSegmentNoSlip` et `BeltSubChainAggregate`
@@ -1048,3 +1045,107 @@ Sans rapport avec la convergence, relevés en lisant, non corrigés :
   `substeps` à l'état de l'UI ferait dépendre la trajectoire simulée de ce que l'utilisateur a
   ouvert. Conditionner `collectDiagnostics` est en revanche gratuit et sans effet sur le
   mouvement.
+
+## Question ouverte — un nœud rigide est sur-contraint au niveau du graphe de liaisons
+
+Trouvé en creusant un bug séparé (`beam-cohesion.ts`, lecture de T/Mf en bout de poutre), pas
+mesuré dans la manip elle-même — mais même famille de sujet (comment le solveur répartit une
+réaction entre liaisons), donc noté ici.
+
+**Le cas** : un cantilever encastré (`join` `isGrounded`, `fixedEdgesIDs`) avec une masse
+`fixedNodesBodyIDs` posée exactement à mi-portée, `dynamicRigidity: true`. Cas-jouet de
+`beam-cohesion.test.ts` (« un cantilever avec une masse en cours de portée... »), sans gravité.
+Statique classique : réaction d'appui = −P exactement, aucune ambiguïté possible (un seul appui,
+un seul chemin de charge). Le solveur donne −101,143 au lieu de −100 (1,14 % d'écart) — stable au
+bit près, pas un résidu qui se réduit.
+
+**Vérifié, deux pistes exclues** :
+- Pas un problème de convergence Gauss-Seidel : identique de 200 à 100 000 sweeps.
+- Pas le "reaction-leak" de `DYNAMIC_SUBSTEPS` (déplacement de predict trop grand pour la
+  lecture au premier ordre) : identique de 16 à 8192 substeps (dt ÷ ~500). Ce défaut-là se
+  résorbe avec plus de substeps ; celui-ci ne bouge pas d'un bit, donc ce n'est pas la même
+  famille.
+
+**Cause identifiée** : `k1` (`beam:end`) est repositionné par QUATRE liaisons indépendantes au
+lieu de 2 — `Distance` (longueur), `KeepOrientation` (angle), et les DEUX `FixedOnSegment`
+(masse attachée + point milieu virtuel de l'inertie de rotation, `BEAM_END_MASS_FRACTION`).
+`applyFixedOnSegmentConstraint` → `projectOnSegment` (`constraint-functions.ts:110-124`) ne
+déplace pas que le nœud épinglé : il redistribue sa correction sur `(start, end, node)` au
+prorata de leur masse inverse — donc CHAQUE `FixedOnSegment` bouge aussi `k1`, exactement comme
+`Distance`+`KeepOrientation` le font déjà séparément. Comptage brut des ddl : 4 inconnues (k1,
+mid), 4 équations → a l'air isostatique. Mais le graphe de contraintes a un vrai doublon : deux
+chemins concurrents (`Distance`+`KeepOrientation` d'un côté, les `FixedOnSegment` de l'autre)
+peuvent chacun, seuls, repositionner `k1`. Gauss-Seidel converge vers la bonne position finale,
+mais la façon dont il attribue "qui a fait quoi" entre les quatre liaisons dépend de l'ordre de
+résolution — d'où un résidu stable, reproductible, insensible à toute itération.
+
+**Un cas plus parlant, où le même défaut ne se contente plus d'un biais fixe mais oscille** :
+`test-mechanisms/Double Cantilever bis.slidep` — deux poutres encastrées bout à bout (un `join`
+non-ancré les soude, `Angle` à 180° pour rester droites, l'autre bout encastré au sol), chargées en
+bout. Le graphe de liaisons compilé montre le nœud de soudure touché par **SIX** liaisons pour 2
+ddl : `Distance`+`Angle` de la première poutre, `KeepOrientation` de l'encastrement, `Distance` de
+la seconde poutre, plus les DEUX `FixedOnSegment` des points milieux virtuels (un par poutre) — le
+même doublon que ci-dessus, mais empilé deux fois. En simulant 24 frames : la position du bout
+libre reste statique à 6 microns près (`y` entre −0,000039 et −0,000045 m, du bruit), mais la
+réaction lue en cohésion entre en **cycle limite de période 3, non amorti** : `start.fy` de la
+première poutre oscille de −16,9 à −30,5 (quasi ×2), son moment de 4,3 à 23,5 (×5), et la seconde
+poutre voit son `start.fy` **changer de signe** entre +3,4 et −65,3. Rien de tout ça n'est
+physique — le mécanisme ne bouge quasiment pas ; c'est la conversion impulsion→force en 1/dt²
+(`PBD_kinematic_solver.ts:1030-1031`) qui amplifie à l'extrême une répartition de crédit
+déjà instable entre les six chemins concurrents, et qui boucle sur elle-même via la vitesse
+warm-startée d'une frame à l'autre au lieu de se stabiliser sur un seul biais fixe comme dans le
+cas à un seul nœud sur-contraint.
+
+**Pourquoi ce n'est pas un correctif de `beam-cohesion.ts`** : la lecture des réactions est fidèle
+à ce que le solveur calcule réellement ; le problème est en amont, dans la création des liaisons.
+Une fusion `Distance`+`KeepOrientation` en une seule contrainte "soudure rigide" à 2 ddl
+supprimerait un des deux chemins concurrents, mais pas l'autre (les `FixedOnSegment`
+continueraient à re-toucher `k1` indépendamment juste après) — un mieux partiel, pas une
+correction. La suppression complète du doublon demande que la rigidité de la poutre ne soit plus
+une contrainte séparée du tout — exactement ce que propose [[poutre-corps-rigide-dynamique]] : un
+corps à 3 ddl n'a rien à disputer avec un `FixedOnSegment`, puisqu'il n'y a plus deux chemins, un
+seul corps qui encaisse toutes les forces généralisées d'un coup.
+
+## Deuxième défaut, distinct — une contrainte à 4 points double-compte sa propre réaction quand deux de ses clés coïncident
+
+Trouvé sur le même fichier (`Double Cantilever bis.slidep`) en creusant une question différente :
+pas l'amplitude générale (ci-dessus), mais pourquoi T/Mf ne sont PAS continus à la jonction entre
+les deux poutres, et pourquoi `Mf` reste bloqué à exactement 0 en début de seconde poutre à
+chaque frame. Cause distincte de celle du dessus, plus précise et plus largement actionnable :
+elle touche a priori toute soudure poutre-à-poutre via un `join`, pas seulement les nœuds
+sur-contraints.
+
+**Le mécanisme** : le `join` non-ancré qui soude les deux poutres crée un lien `Angle` à 4 points
+(`key1..key4`, `constraint-functions.ts` / `link-slots.ts:62-70`) où `key2` (fin de la première
+poutre) et `key3` (début de la seconde) sont le **même nœud physique** — les deux poutres se
+rejoignent exactement là. `projectAngleC` (`constraint-functions.ts:429-436`) traite les 4 clés
+comme 4 points indépendants :
+```
+setPoint(nodes, e1, pe1.add(g_e1.mul(lambda * w_e1)));  // correction "vue depuis poutre 1"
+setPoint(nodes, s2, ps2.add(g_s2.mul(lambda * w_s2)));  // e1 et s2 = même case mémoire → écrase
+```
+`g_e1` et `g_s2` sont des gradients géométriquement différents (perpendiculaires aux deux segments
+respectifs) : le second `setPoint` écrase silencieusement le premier, un seul déplacement survit
+réellement sur ce nœud. Mais la lecture des réactions dans `PBD_kinematic_solver` continue de
+rapporter une réaction *par slot nommé du lien* plutôt que par nœud physique unique — vérifié sur
+les données brutes : les deux entrées `"Angle"` à la clé de soudure sont **rigoureusement
+identiques** à chaque frame (même `fx`, même `fy` à la précision flottante près), signature d'une
+lecture avant/après faite deux fois sur la même case mémoire plutôt que de deux corrections
+réellement distinctes. `beam-cohesion.ts` (`resolve_beam_cohesion`) additionne ensuite les deux
+sans dédoublonner par `linkIndex`, d'où un double comptage de cette contribution dans la cohésion
+de CHAQUE poutre adjacente — et donc une vraie discontinuité de T/Mf au lieu d'une lecture
+cohérente de part et d'autre du même point de coupe.
+
+**Pas encore vérifié** : si le même repli last-write-wins affecte aussi `Normal`, `Parallel` et
+`EqualLength` (même famille de lien à 4 points, `link-slots.ts:62-65`) chaque fois que deux de
+leurs clés coïncident, ou si c'est spécifique à `Angle`. Pas vérifié non plus si un correctif
+ciblé (dédoublonner par nœud physique à la lecture des réactions, ou sommer les deux gradients
+au lieu d'écraser dans `projectAngleC`) suffit sans toucher au reste du solveur — contrairement au
+défaut du dessus, celui-ci n'a pas l'air structurellement lié à la représentation poutre = 2
+points + liens, donc un correctif local semble possible sans attendre
+[[poutre-corps-rigide-dynamique]].
+
+**Décision actée** : pas de desserrage de la tolérance du test pour faire passer ce cas — le test
+qui échoue reste un indicateur volontaire d'un problème non résolu, pas un faux positif à
+maquiller. Marqué `it.fails` dans `beam-cohesion.test.ts` avec renvoi à cette section, plutôt que
+laissé rouge en continu ou skippé sans trace.

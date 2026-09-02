@@ -52,6 +52,26 @@ function value_at(field: CohesionField, s: number, quantity: CohesionQuantity): 
   return va + u * (vb - va);
 }
 
+/** The hovered dot's own height: matches `value_at` off a discontinuity, but once the cursor
+ *  is snapped onto one (`hoveredS !== hoveredValueS`) reads the exact before/after sample
+ *  instead of interpolating from the raw position — otherwise the dot keeps sliding
+ *  vertically for tiny mouse movements inside the snap tolerance while its `x` is already
+ *  pinned, i.e. it never visually "snaps" the way the abscissa does. Which of the two
+ *  co-located samples to use still comes from the raw position's side of the jump, exactly
+ *  as `value_at` alone would pick — just resolved once, not continuously. */
+function hovered_value(
+  field: CohesionField,
+  hoveredS: number,
+  hoveredValueS: number,
+  quantity: CohesionQuantity,
+): number {
+  if (hoveredS === hoveredValueS) return value_at(field, hoveredValueS, quantity);
+  const matches = field.samples.filter((sample) => Math.abs(sample.s - hoveredS) < 1e-6);
+  if (matches.length === 0) return value_at(field, hoveredValueS, quantity);
+  const chosen = hoveredValueS <= hoveredS ? matches[0] : matches[matches.length - 1];
+  return sample_value(chosen, quantity);
+}
+
 interface OneDiagramProps {
   field: CohesionField;
   quantity: CohesionQuantity;
@@ -98,6 +118,9 @@ const OneDiagram: React.FC<OneDiagramProps> = ({
     dataMin = 0;
     dataMax = 0;
   }
+  // The raw reading itself, before any axis flattening — a real "always zero" beam (a
+  // two-force member's T/Mf, say), not just a span too small to bother auto-zooming into.
+  const allZero = dataMin === 0 && dataMax === 0;
   const spanRaw = dataMax - dataMin;
   let yMin: number;
   let yMax: number;
@@ -180,8 +203,8 @@ const OneDiagram: React.FC<OneDiagramProps> = ({
       style={{ width: "100%", height: "auto", display: "block" }}
     >
       <line
-        x1={GUTTER - 2}
-        x2={GUTTER - 2}
+        x1={GUTTER}
+        x2={GUTTER}
         y1={PAD_TOP}
         y2={VIEW_H - PAD_BOTTOM}
         stroke={divider}
@@ -190,7 +213,7 @@ const OneDiagram: React.FC<OneDiagramProps> = ({
       {/* The abscissa itself (y = 0) — always drawn, the reference the filled area anchors
        *  to, not a dashed hint shown only when the data happens to straddle zero. */}
       <line
-        x1={GUTTER - 2}
+        x1={GUTTER}
         x2={VIEW_W - PAD_RIGHT}
         y1={zeroY}
         y2={zeroY}
@@ -237,6 +260,38 @@ const OneDiagram: React.FC<OneDiagramProps> = ({
         strokeLinejoin="round"
       />
       <circle cx={extremumX} cy={extremumY} r={2.5} fill={color} />
+      {allZero ? (
+        <text
+          x={GUTTER - 5}
+          y={(PAD_TOP + (VIEW_H - PAD_BOTTOM)) / 2 + FONT_SIZE / 2 - 1}
+          fontSize={FONT_SIZE}
+          fill={textSecondary}
+          textAnchor="end"
+        >
+          0
+        </text>
+      ) : (
+        <>
+          <text
+            x={GUTTER - 5}
+            y={PAD_TOP + FONT_SIZE - 1}
+            fontSize={FONT_SIZE}
+            fill={textSecondary}
+            textAnchor="end"
+          >
+            {fmt(dataMax)}
+          </text>
+          <text
+            x={GUTTER - 5}
+            y={VIEW_H - PAD_BOTTOM - 1}
+            fontSize={FONT_SIZE}
+            fill={textSecondary}
+            textAnchor="end"
+          >
+            {fmt(dataMin)}
+          </text>
+        </>
+      )}
       {hoveredS !== null && hoveredValueS !== null && (
         <>
           <line
@@ -250,30 +305,12 @@ const OneDiagram: React.FC<OneDiagramProps> = ({
           />
           <circle
             cx={toX(hoveredS)}
-            cy={toY(value_at(field, hoveredValueS, quantity))}
+            cy={toY(hovered_value(field, hoveredS, hoveredValueS, quantity))}
             r={2}
             fill={color}
           />
         </>
       )}
-      <text
-        x={GUTTER - 5}
-        y={PAD_TOP + FONT_SIZE - 1}
-        fontSize={FONT_SIZE}
-        fill={textSecondary}
-        textAnchor="end"
-      >
-        {fmt(dataMax)}
-      </text>
-      <text
-        x={GUTTER - 5}
-        y={VIEW_H - PAD_BOTTOM - 1}
-        fontSize={FONT_SIZE}
-        fill={textSecondary}
-        textAnchor="end"
-      >
-        {fmt(dataMin)}
-      </text>
       <text
         x={5}
         y={(PAD_TOP + (VIEW_H - PAD_BOTTOM)) / 2 + FONT_SIZE / 2 - 1}
