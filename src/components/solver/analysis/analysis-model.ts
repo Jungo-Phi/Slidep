@@ -23,7 +23,7 @@ export type PruneReason =
   | "inert"
   /**
    * Redundant by construction — present for solver conditioning, adds no rank.
-   * `BeltSubChainAggregate`, and one strand law per closed belt loop.
+   * `BeltSubChainAggregate`, `BeltLoopClosure`, and one strand law per closed belt loop.
    */
   | "conditioning"
   /** A driver, not a joint: counted separately. */
@@ -182,6 +182,8 @@ export function variable_keys_of(link: Link): string[] {
         ...(link.angleKeyStart ? [link.angleKeyStart] : []),
         ...(link.angleKeyEnd ? [link.angleKeyEnd] : []),
       ];
+    case "BeltLoopClosure":
+      return [...link.gearPosKeys, ...link.gearAngleKeys];
     case "HandleGrab":
       return [link.grabbedKey];
   }
@@ -200,8 +202,9 @@ const is_driver = (l: Link) =>
  * gallery's belt drives, and each of them falls to `h = 0` once this row is dropped, with
  * the mobility unchanged.
  *
- * Same family as `BeltSubChainAggregate`: the solver wants every strand for conditioning,
- * the rank count must not have them all. Open belts have no loop to close and keep theirs.
+ * Same family as `BeltSubChainAggregate` and `BeltLoopClosure`: the solver wants every
+ * strand for conditioning, the rank count must not have them all. Open belts have no loop
+ * to close and keep theirs.
  *
  * Which one goes is decided by `segIndex`, a property of the belt's own geometry — never by
  * the order links happen to be parsed in.
@@ -349,7 +352,11 @@ export function build_analysis_model(mechanism: Mechanism): AnalysisModel {
       pruned.push({ link, reason: "transient" });
       continue;
     }
-    if (link.type === "BeltSubChainAggregate" || loopSurplus.has(link)) {
+    if (
+      link.type === "BeltSubChainAggregate" ||
+      link.type === "BeltLoopClosure" ||
+      loopSurplus.has(link)
+    ) {
       pruned.push({ link, reason: "conditioning" });
       continue;
     }

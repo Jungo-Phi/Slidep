@@ -31,7 +31,10 @@ import {
 } from "./constraint-functions";
 import { solver_trace } from "./solver-trace";
 import { applyBeltSegmentNoSlip } from "../experimental/belt-noslip-q";
-import { applyBeltSubChainAggregate } from "../experimental/belt-aggregate";
+import {
+  applyBeltLoopClosure,
+  applyBeltSubChainAggregate,
+} from "../experimental/belt-aggregate";
 import {
   MIN_EXTENT_M,
   SolveNodes,
@@ -808,6 +811,9 @@ export function PBD_solve(
         case "BeltSubChainAggregate":
           err = applyBeltSubChainAggregate(nodes, s, link, 1.0);
           break;
+        case "BeltLoopClosure":
+          err = applyBeltLoopClosure(nodes, s, link, 1.0);
+          break;
         case "HandleGrab":
           // Transient interaction, not a constraint to report.
           report = false;
@@ -977,12 +983,22 @@ export function PBD_solve(
       const s = slots[idx];
       const acc = reactionAccum[idx];
 
+      // Two of a link's own slots may resolve to the SAME node — a `join` welding one beam
+      // onto the next puts it on both segments of their shared `Angle`. Its displacement was
+      // accumulated once per slot, so counting both would report and sum the same impulse
+      // twice; only its first slot stands for it.
+      const repeated = (k: number): boolean => {
+        const slot = s.pos[k];
+        for (let j = 0; j < k; j++) if (s.pos[j] === slot) return true;
+        return false;
+      };
+
       let sumX = 0;
       let sumY = 0;
       let anchoredPos = -1;
       let anchoredPosCount = 0;
       for (let k = 0; k < s.pos.length; k++) {
-        const slot = s.pos[k];
+        const slot = repeated(k) ? -1 : s.pos[k];
         const w = slot >= 0 ? nodes.w[slot] : 0;
         if (slot >= 0 && w > 0) {
           impulseX[k] = acc.dx[k] / w;
@@ -1023,7 +1039,7 @@ export function PBD_solve(
       if (anchoredAngCount === 1) impulseA[anchoredAng] = -sumA;
 
       for (let k = 0; k < s.pos.length; k++) {
-        const slot = s.pos[k];
+        const slot = repeated(k) ? -1 : s.pos[k];
         if (slot < 0) continue;
         const w = nodes.w[slot];
         if (w === 0 && anchoredPosCount !== 1) continue; // indeterminate, see above

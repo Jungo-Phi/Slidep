@@ -17,7 +17,7 @@
  */
 
 import { ID } from "../../../types";
-import { KinematicSnapshot } from "../../../types/runtime-state";
+import { SimulationSnapshot } from "../../../types/runtime-state";
 import { snapshot_belt_detached } from "../snapshot";
 
 export type BeltEvent = {
@@ -37,8 +37,13 @@ export type BeltEvent = {
  *
  * A belt absent from a snapshot's layout is skipped rather than read as "nothing detached":
  * an edit can add a belt mid-recording, and the frames before it knew nothing of it.
+ *
+ * Generic over `SimulationSnapshot`: kinematic and dynamic recordings carry the same detach
+ * block (see `SnapshotLayout`), so this reads either — unlike dead-point events, which stay
+ * kinematic-only (a mechanism driven by an imposed-position motor has no dynamic-mode
+ * equivalent).
  */
-export function belt_events(snapshots: KinematicSnapshot[]): BeltEvent[] {
+export function belt_events<S extends SimulationSnapshot>(snapshots: S[]): BeltEvent[] {
   const events: BeltEvent[] = [];
   /** Detached indices per belt, as of the last snapshot that knew the belt. */
   const previous = new Map<ID, Set<number>>();

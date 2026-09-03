@@ -477,6 +477,25 @@ export type Link = {
       arrivals?: number[];
       angleMetric?: "rim";
     }
+  // EXPERIMENTAL (belt loop closure). A closed belt's segment laws telescope around
+  // the loop to an identity — one equation short of full rank — leaving one free mode
+  // (every pulley's rim moved by the same amount) that sequential per-segment solving
+  // resolves arbitrarily, listing order first. Built only when the loop has fewer than
+  // two stakeholders (see hasStakeholderBeyond, belt-aggregate.ts): with two or more,
+  // BeltSubChainAggregate already ties the loop down and this would only fight it.
+  // Never emitted by the parser — see experimental/belt-aggregate.ts.
+  | {
+      type: "BeltLoopClosure";
+      ddl: 1;
+      gearPosKeys: string[];
+      gearAngleKeys: string[];
+      radii: number[];
+      directions: boolean[];
+      h0: number[]; // baked h per segment i, from via i to via (i+1) % n
+      theta0: number[]; // baked angle per pulley
+      arrivals?: number[]; // continuous unwrap reference per via, updated in place
+      owner?: ID;
+    }
   | { type: "HandleGrab"; ddl: 1; grabbedKey: string; value: Point2 | number }
   | {
       type: "Spring";

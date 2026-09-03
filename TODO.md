@@ -10,35 +10,31 @@
 
 ### À faire rapidement
 
+**Qwick fix**
+
+- La puissance affichée devrait être celle que le moteur peut fournir (et pas la puissance instantanée), on devrait donc ensuite pouvoir comparer la puissance du moteur à la puissance instantanée. Le calcul devrait aussi être revu pour prendre en compte ce qu'apporte vraiment le moteur et ce qui tient de l'inertie.
+
+- 🔨 Afficher la masse des gears
+- 🔨 Afficher les contraintes dans les joins
+- 🔨 Afficher "déplacez ce mécanisme à la main" uniqument un cinématique ?
+- 🔨 Afficher les graphiques à frame=0 (pas "en attente de données...")
+- 🚨 Hot-reload des masses, ressorts et amortisseurs en simulation
+- 🚨 Rendre les dimensions non-éditables en simulation
+
 **UI**
 
-- Clean cette putain de section "élément en simulation
+- 🔨 Clean cette putain de section "élément en simulation
+- 🔨 Travailler les couleurs, avec les thèmes
 
-- Hover sur les graphs met en évidence les éléments concernés
-- Travailler les couleurs, avec les thèmes
-- Afficher les contraintes dans les joins ?
+- 🔨 Hover sur les graphs met en évidence les éléments concernés
 - 🔨 Les contraintes ne devrait pas apparaitre au hover quand on est en train de placer un élément. En fait, elle ne devrait apparaitre que dans les états "Idle"
-- Hot-reload des masses, ressorts et amortisseurs en simulation
-- Afficher "déplacez ce mécanisme à la main" uniqument un cinématique
-- Rendre les dimensions non-éditables en simulation
-- 🆕 Rendre TRAJECTORY_DOT_STEP éditable ?
-- 🆕 Ajouter des réglages généraux pour les types d'unités affichées (Tr/min VS s-1) ?
+- Ajouter l'énergie apportée par l'utilisateur dans "Travil net" (Bilan énergétique)
 
----
+**Informations fausses**
 
-- Angle affiché dans les mesures "Balance.slidep" est faux. L'angle du graph ne correspond pas à celui de l'élément
-- Afficher les graphiques à frame=0 (pas "en attente de données...")
+- 🚨 Angle affiché dans les mesures "Balance.slidep" est faux. L'angle du graph ne correspond pas à celui de l'élément
 
-**Dans l'onglet "Matériaux & profilés"**
-
-1. La distinction entre les 2 sections est moche.
-2. Shémas : supprimer le rectangle par dessus, nettoyer
-3. Lien qui renvoie à "ou peut-on modifier sa valeur ?
-4. Le hover devrait être une couleur transparente
-
----
-
-- Différencier "Forces de réaction" et "Efforts internes"
+- 🚨 Différencier "Forces de réaction" et "Efforts internes"
 
 **Simulation**
 
@@ -100,7 +96,6 @@
 ### À faire plus tard
 
 - 🆕 Ajouter des méchanismes exemple dans la gallerie ("Jansen's linkage", "Slidep", "IK", "Horloge", "Dynamique (Huygens?)")
-- 🔨 A un certain niveau, l'espacement de grille est chiant (snap)
 
 **Mobile mode**
 
@@ -167,11 +162,11 @@
 - 🆕 Afficher le ratio avec une autre gear dans les connections de l'élément
 - 🔨 Donner des couleurs aux tags
 - 🆕 Scroll dans NumberInput
+- 🆕 Rendre TRAJECTORY_DOT_STEP éditable
+- 🆕 Ajouter des réglages généraux pour les types d'unités affichées (Tr/min VS s-1) ?
 
 **Refactor des dossiers**
 
-- ❇️ Trier le fichier de constante (et le séparer en plusieurs si nécessaire)
-- ❇️ Réorganisation des fichiers en sous-dossiers
 - ❇️ Refactor connect-actions.ts (< 600 lignes)
 - 🤔 Refactor drawing-functions.ts ?
 - 🤔 Refactor constraint-functions.ts ?

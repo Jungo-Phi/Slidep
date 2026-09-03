@@ -2,7 +2,6 @@ import { ID } from "../../types/element";
 import { Point2 } from "../../types/point2";
 import {
   DynamicSnapshot,
-  KinematicSnapshot,
   SimulationSnapshot,
   SnapshotLayout,
 } from "../../types/runtime-state";
@@ -84,10 +83,16 @@ export function angles_length(layout: SnapshotLayout): number {
   return layout.arrivalBase + (layout.detachBase - layout.wrapBase);
 }
 
-/** One per-pulley block of a belt, or `undefined` when this snapshot carries none — the
- *  belt is unknown, or its state had not been seeded yet. */
-function belt_block(
-  snapshot: KinematicSnapshot,
+/**
+ * One per-pulley block of a belt, or `undefined` when this snapshot carries none — the
+ * belt is unknown, or its state had not been seeded yet.
+ *
+ * Generic over `SimulationSnapshot`: kinematic and dynamic snapshots share the same
+ * wrap/detach/arrival layout past `angleKeys` (both compile through
+ * `compile_simulation_model`), so one body serves either.
+ */
+function belt_block<S extends SimulationSnapshot>(
+  snapshot: S,
   belt: ID,
   base: number,
 ): number[] | undefined {
@@ -104,16 +109,16 @@ function belt_block(
 }
 
 /** Continuous wrap angle per attached pulley of `belt`, in `attachedGearsIDs` order. */
-export function snapshot_belt_wraps(
-  snapshot: KinematicSnapshot,
+export function snapshot_belt_wraps<S extends SimulationSnapshot>(
+  snapshot: S,
   belt: ID,
 ): number[] | undefined {
   return belt_block(snapshot, belt, snapshot.layout.wrapBase);
 }
 
 /** Continuous arrival rim angle per attached pulley of `belt`, same order. */
-export function snapshot_belt_arrivals(
-  snapshot: KinematicSnapshot,
+export function snapshot_belt_arrivals<S extends SimulationSnapshot>(
+  snapshot: S,
   belt: ID,
 ): number[] | undefined {
   return belt_block(snapshot, belt, snapshot.layout.arrivalBase);
@@ -124,8 +129,8 @@ export function snapshot_belt_arrivals(
  * it has lost none, `undefined` only when the snapshot does not know this belt: the two say
  * different things, and a caller putting the state back needs to tell them apart.
  */
-export function snapshot_belt_detached(
-  snapshot: KinematicSnapshot,
+export function snapshot_belt_detached<S extends SimulationSnapshot>(
+  snapshot: S,
   belt: ID,
 ): number[] | undefined {
   const { beltIndex, beltStart, detachBase } = snapshot.layout;
@@ -141,9 +146,8 @@ export function snapshot_belt_detached(
 /**
  * Generic over `SimulationSnapshot`: `positions` is always exactly `2 * layout.keys.length`
  * long on either concrete subtype, so a position slot is never out of bounds whichever kind
- * this is called with. Kinematic-only accessors (the belt ones below) do NOT get the same
- * treatment — they index past that bound on purpose, which only a `KinematicSnapshot`'s
- * longer `angles` array has room for.
+ * this is called with. The belt accessors above index past `angleKeys.length` on purpose —
+ * both concrete subtypes' `angles` array has room for it (see `SnapshotLayout`).
  */
 export function snapshot_point<S extends SimulationSnapshot>(
   snapshot: S,
@@ -157,8 +161,8 @@ export function snapshot_point<S extends SimulationSnapshot>(
 
 /** The angle (rad) recorded for `key`, or `undefined` when this snapshot has none. Generic
  *  like `snapshot_point`, for the same reason — an angle slot never exceeds
- *  `layout.angleKeys.length`, which both concrete subtypes size their `angles` array to (or
- *  beyond, for `KinematicSnapshot`'s belt blocks — never under). */
+ *  `layout.angleKeys.length`, which both concrete subtypes size their `angles` array to at
+ *  least (and beyond, for the belt blocks that follow it). */
 export function snapshot_angle<S extends SimulationSnapshot>(
   snapshot: S,
   key: string,

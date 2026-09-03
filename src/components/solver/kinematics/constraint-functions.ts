@@ -379,9 +379,8 @@ export function applyEqualLengthConstraint(
  *   • chaque Δpᵢ est ⟂ au segment → la longueur n'est touchée qu'au 2ᵈ ordre ;
  *   • la correction demandée est celle obtenue → raideur/convergence prévisibles.
  *
- * Comme ‖perp(vᵢ)‖² = ‖vᵢ‖², on a ‖∇ᵢC‖² = 1/‖vᵢ‖² : le dénominateur se
- * simplifie et n'a jamais besoin de la longueur au carré des gradients écrite
- * explicitement.
+ * Comme ‖perp(vᵢ)‖² = ‖vᵢ‖², on a ‖∇ᵢC‖² = 1/‖vᵢ‖² tant que les quatre points
+ * sont distincts — ce qui n'est pas garanti, voir `projectAngleC`.
  * ──────────────────────────────────────────────────────────────────────── */
 
 /**
@@ -389,6 +388,12 @@ export function applyEqualLengthConstraint(
  * (−π, π]) sur les quatre extrémités des deux segments, en respectant la
  * mobilité point par point. Utilisé par Angle, Parallel et Normal — seule
  * change la façon de calculer `C`.
+ *
+ * Two of the four ends may be the SAME node: a `join` welding one beam's end onto the
+ * next's start puts that node on both segments at once. Its gradient is then the sum of
+ * the two it would carry separately, and both the denominator and the correction are built
+ * on that merged gradient — written per end instead, the second write would silently
+ * overwrite the first and the node would move by one of its two shares.
  *
  * Ne fait rien et renvoie |C| si aucune correction n'est possible (segment
  * dégénéré ou tous les points ancrés).
@@ -414,6 +419,9 @@ function projectAngleC(
   const g_s2 = v2.perp().mul(-1 / l2sq); //  −perp(v₂)/‖v₂‖²
   const g_e2 = g_s2.mul(-1); //  +perp(v₂)/‖v₂‖²
 
+  if (s1 === e1 || s1 === s2 || s1 === e2 || e1 === s2 || e1 === e2 || s2 === e2)
+    return projectAngleCMerged(nodes, s1, e1, s2, e2, g_s1, g_s2, C, stiffness);
+
   const w_s1 = nodes.w[s1];
   const w_e1 = nodes.w[e1];
   const w_s2 = nodes.w[s2];
@@ -437,6 +445,74 @@ function projectAngleC(
 
   return Math.abs(C);
 }
+
+/** Scratch for the merged projection below — at most four ends. */
+const angleSlot = new Int32Array(4);
+const angleGradX = new Float64Array(4);
+const angleGradY = new Float64Array(4);
+
+/**
+ * `projectAngleC` where two of the four ends are the same node: its gradient is the sum of
+ * the two it would carry separately, so the four ends are merged per node first and both
+ * `Σ wᵢ‖∇ᵢC‖²` and the corrections are built on the merged gradients. Written per end
+ * instead, the second `setPoint` would overwrite the first and the node would move by one
+ * of its two shares alone.
+ *
+ * Split out rather than folded in so that a link whose ends ARE distinct — every one but a
+ * weld — keeps the closed-form denominator it had, to the bit.
+ */
+function projectAngleCMerged(
+  nodes: Nodes,
+  s1: number,
+  e1: number,
+  s2: number,
+  e2: number,
+  g_s1: Point2,
+  g_s2: Point2,
+  C: number,
+  stiffness: number,
+): number {
+  let n = 0;
+  const push = (slot: number, gx: number, gy: number) => {
+    for (let k = 0; k < n; k++)
+      if (angleSlot[k] === slot) {
+        angleGradX[k] += gx;
+        angleGradY[k] += gy;
+        return;
+      }
+    angleSlot[n] = slot;
+    angleGradX[n] = gx;
+    angleGradY[n] = gy;
+    n++;
+  };
+  push(s1, g_s1.x, g_s1.y);
+  push(e1, -g_s1.x, -g_s1.y);
+  push(s2, g_s2.x, g_s2.y);
+  push(e2, -g_s2.x, -g_s2.y);
+
+  let denom = 0;
+  for (let k = 0; k < n; k++)
+    denom +=
+      nodes.w[angleSlot[k]] *
+      (angleGradX[k] * angleGradX[k] + angleGradY[k] * angleGradY[k]);
+  if (denom < 1e-12) return Math.abs(C);
+
+  const lambda = (-C / denom) * stiffness;
+  for (let k = 0; k < n; k++) {
+    const slot = angleSlot[k];
+    const w = nodes.w[slot];
+    setPoint(
+      nodes,
+      slot,
+      point(nodes, slot).add(
+        new Point2(angleGradX[k] * lambda * w, angleGradY[k] * lambda * w),
+      ),
+    );
+  }
+
+  return Math.abs(C);
+}
+
 
 /** Ramène un écart angulaire dans (−π, π]. */
 function wrapPi(a: number): number {

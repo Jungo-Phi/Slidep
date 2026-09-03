@@ -21,6 +21,7 @@ import { LinkSlots } from "../kinematics/link-slots";
 import { SimNodes } from "../nodes";
 
 type Agg = Extract<Link, { type: "BeltSubChainAggregate" }>;
+type LoopClosure = Extract<Link, { type: "BeltLoopClosure" }>;
 
 /**
  * The cut criterion for belt sub-chain aggregates.
@@ -38,6 +39,7 @@ const BELT_MACHINERY = new Set([
   "BeltJunction",
   "BeltSegmentNoSlip",
   "BeltSubChainAggregate",
+  "BeltLoopClosure",
   "BeltFollowsTangent",
 ]);
 
@@ -410,4 +412,147 @@ export function applyBeltSubChainAggregate(
     nodes.y[slot] += gy * k;
   });
   return Math.abs(C);
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// The loop closure link (closed belt, fewer than two stakeholders)
+// ───────────────────────────────────────────────────────────────────────────
+
+/**
+ * Build the loop closure link for a closed belt with fewer than two stakeholders —
+ * the case `buildBeltAggregateLinks` cannot cover, since a single cut (or none)
+ * degenerates its telescoped sum to `BeltLength` again (see its own doc comment).
+ * Returns nothing on an open belt, on too few pulleys, or once two stakeholders
+ * already give the loop a `BeltSubChainAggregate`.
+ */
+export function buildBeltLoopClosureLink(
+  positions: Map<string, Point2>,
+  angles: Map<string, number>,
+  links: Link[],
+  spec: BeltAggregateSpec,
+): LoopClosure[] {
+  if (!spec.closed || spec.gearAngleKeys.length < 2) return [];
+  const cuts = spec.cutAngles ?? beltCutAngles(links, spec.gearAngleKeys, spec.owner);
+  if (cuts.size >= 2) return [];
+
+  const vias = viasFrom(positions, spec);
+  if (!vias) return [];
+  const pieces = belt_pieces(vias, true);
+  const arrivals = new Array(vias.length).fill(0);
+  for (const p of pieces)
+    if (p.kind === "arc") arrivals[p.gearIndex] = p.startAngle;
+
+  const segs = pieces
+    .map((piece, i) => ({ piece, i }))
+    .filter((s) => s.piece.kind === "segment");
+  if (segs.length !== spec.gearPosKeys.length) return [];
+
+  const h0 = segs.map(
+    (s) => segmentH(vias, pieces, s.i, arrivals.slice(), false)?.h ?? 0,
+  );
+  const theta0 = spec.gearAngleKeys.map((k) => angles.get(k) ?? 0);
+
+  return [
+    {
+      type: "BeltLoopClosure",
+      ddl: 1,
+      gearPosKeys: spec.gearPosKeys,
+      gearAngleKeys: spec.gearAngleKeys,
+      radii: spec.radii,
+      directions: spec.directions,
+      h0,
+      theta0,
+      arrivals,
+      owner: spec.owner,
+    },
+  ];
+}
+
+/** Per-via scratch for `applyBeltLoopClosure`, grown once and reused. */
+let psiScratch = new Float64Array(16);
+let cScratch = new Float64Array(16);
+let sScratch = new Float64Array(16);
+
+/**
+ * Apply the loop closure: the minimum rim-weighted correction that makes every
+ * segment's no-slip law hold AT ONCE, computed directly rather than by relaxing
+ * segments one at a time. The per-segment law `q_i − q_{i+1} = Δh_i`, summed
+ * cyclically, telescopes to an identity — the loop's residuals `C_i` are
+ * consistent (sum to ~0) but individually meaningless in isolation; only their
+ * cumulative shape (the prefix sum `S`) says how a rim-length correction has to
+ * be shared out. Centering `S` on its own mean picks the unique correction of
+ * least weighted norm, the same choice `applyBeltSegmentNoSlip` makes for a
+ * single strand — here made for the whole loop in one shot, so it does not
+ * depend on which strand a sweep happens to visit first.
+ */
+export function applyBeltLoopClosure(
+  nodes: SimNodes,
+  s: LinkSlots,
+  link: LoopClosure,
+  stiffness = 1.0,
+): number {
+  const n = link.radii.length;
+  if (n < 2) return 0;
+  const sc = belt_shared_scratch(n);
+  for (let v = 0; v < n; v++) {
+    const slot = s.pos[v];
+    if (slot < 0) return 0;
+    sc.cx[v] = nodes.x[slot];
+    sc.cy[v] = nodes.y[slot];
+    sc.r[v] = link.radii[v];
+    sc.ccw[v] = link.directions[v] ? 1 : 0;
+  }
+  for (let p = 0; p < n; p++) belt_solve_pair(sc, p, n);
+
+  if (psiScratch.length < n) {
+    psiScratch = new Float64Array(n);
+    cScratch = new Float64Array(n);
+    sScratch = new Float64Array(n);
+  }
+  for (let v = 0; v < n; v++) {
+    if (sc.r[v] > 0 && belt_solve_arc(sc, v, n, true)) {
+      const psi = unwrapArrival(sc.arcAngle[v], link.arrivals?.[v]);
+      psiScratch[v] = psi;
+      if (link.arrivals) link.arrivals[v] = psi;
+    } else {
+      psiScratch[v] = 0;
+    }
+  }
+
+  const rEps = (v: number) => link.radii[v] * (link.directions[v] ? -1 : 1);
+
+  let maxAbsC = 0;
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n;
+    const u = sc.r[i] > 0 ? rEps(i) * psiScratch[i] + sc.r[i] * sc.arcWrap[i] : 0;
+    const v = sc.r[j] > 0 ? rEps(j) * psiScratch[j] : 0;
+    const h = sc.ell[i] + u - v;
+
+    const iAng = s.ang[i];
+    const jAng = s.ang[j];
+    const thetaI = iAng >= 0 ? nodes.angle[iAng] : 0;
+    const thetaJ = jAng >= 0 ? nodes.angle[jAng] : 0;
+    const qI = rEps(i) * (thetaI - link.theta0[i]);
+    const qJ = rEps(j) * (thetaJ - link.theta0[j]);
+
+    const c = qI - qJ - (h - link.h0[i]);
+    cScratch[i] = c;
+    maxAbsC = Math.max(maxAbsC, Math.abs(c));
+  }
+
+  sScratch[0] = 0;
+  for (let i = 1; i < n; i++) sScratch[i] = sScratch[i - 1] + cScratch[i - 1];
+  let meanS = 0;
+  for (let i = 0; i < n; i++) meanS += sScratch[i];
+  meanS /= n;
+
+  for (let i = 0; i < n; i++) {
+    const ang = s.ang[i];
+    if (ang < 0) continue;
+    const re = rEps(i);
+    if (Math.abs(re) < 1e-9) continue;
+    nodes.angle[ang] += ((sScratch[i] - meanS) / re) * stiffness;
+  }
+
+  return maxAbsC;
 }

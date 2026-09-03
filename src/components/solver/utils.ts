@@ -97,6 +97,8 @@ export function keys_of(link: Link): string[] {
       ];
     case "BeamFollowsAngle":
       return [link.pivotKey, link.drivenKey, link.angleKey];
+    case "BeltLoopClosure":
+      return [...link.gearPosKeys];
     case "HandleGrab":
       return [link.grabbedKey];
   }

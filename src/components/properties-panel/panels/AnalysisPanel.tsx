@@ -1480,7 +1480,7 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
                         ]
                       }
                       ownFloor={
-                        runtimeState.negligibilityPool.floors[
+                        runtimeState.negligibilityPool.ownFloors[
                           pool_key_for_metric(probe.metric)
                         ]
                       }
@@ -1569,7 +1569,7 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
                     runtimeState.negligibilityPool[pool_key_for_metric(metric)]
                   }
                   ownFloor={
-                    runtimeState.negligibilityPool.floors[
+                    runtimeState.negligibilityPool.ownFloors[
                       pool_key_for_metric(metric)
                     ]
                   }

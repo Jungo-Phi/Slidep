@@ -78,20 +78,21 @@ export const SimulationTimeline: React.FC<SimulationTimelineProps> = ({
    * the rail while it is still being written.
    */
   const events = React.useMemo((): TimelineEvent[] => {
-    if (appMode !== "kinematic") return [];
+    // Belt contact is tracked by both engines (see `SnapshotLayout`), so this reads
+    // whichever mode is active. Dead points stay kinematic-only below: a dead point is a
+    // mobility singularity under an imposed-position motor, which dynamic mode has no
+    // equivalent of.
+    const beltMarks = belt_events(runtimeState.simulationSnapshots).map((event) => ({
+      t: event.t,
+      kind: "belt" as const,
+      label: t(event.kind === "detach" ? "belt_detach" : "belt_reattach"),
+    }));
+    if (appMode !== "kinematic") return beltMarks;
     // Narrowed by the check above: only a kinematic run fills `simulationSnapshots`
-    // while that mode is active. Belt/dead-point events have no dynamic-mode meaning yet.
+    // while that mode is active.
     const snapshots = runtimeState.simulationSnapshots as KinematicSnapshot[];
     return [
-      ...belt_events(snapshots).map((event) => ({
-        t: event.t,
-        kind: "belt" as const,
-        label: t(
-          event.kind === "detach"
-            ? "belt_detach"
-            : "belt_reattach",
-        ),
-      })),
+      ...beltMarks,
       ...dead_points(snapshots).map((point) => ({
         t: point.t,
         kind: "dead-point" as const,

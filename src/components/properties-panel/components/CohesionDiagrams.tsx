@@ -1,8 +1,17 @@
 import React from "react";
 import { Box, Typography, useTheme } from "@mui/material";
-import { CohesionField, CohesionSample } from "../../solver/recording/cohesion-field";
-import { is_negligible, NEGLIGIBLE_RATIO } from "../../solver/recording/negligibility-pool";
-import { CohesionQuantity, COHESION_DIAGRAM_COLOR } from "../../../constants/physics-display-specs";
+import {
+  CohesionField,
+  CohesionSample,
+} from "../../solver/recording/cohesion-field";
+import {
+  is_negligible,
+  NEGLIGIBLE_RATIO,
+} from "../../solver/recording/negligibility-pool";
+import {
+  CohesionQuantity,
+  COHESION_DIAGRAM_COLOR,
+} from "../../../constants/physics-display-specs";
 import { t } from "../../../i18n";
 
 /**
@@ -19,7 +28,7 @@ const VIEW_H = 56;
 const GUTTER = 30;
 const PAD_TOP = 3;
 const PAD_BOTTOM = 3;
-const PAD_RIGHT = 4;
+const PAD_RIGHT = 6;
 const FONT_SIZE = 9;
 
 const sample_value = (
@@ -38,7 +47,11 @@ const fmt = (v: number): string => {
  *  samples, never a true smooth curve). At a discontinuity this naturally resolves to
  *  whichever side `s` sits on, since the bracket search only crosses to the far side once
  *  `s` is past the jump's own abscissa entirely. */
-function value_at(field: CohesionField, s: number, quantity: CohesionQuantity): number {
+function value_at(
+  field: CohesionField,
+  s: number,
+  quantity: CohesionQuantity,
+): number {
   const samples = field.samples;
   let i = 0;
   while (i < samples.length - 1 && samples[i + 1].s <= s) i++;
@@ -65,10 +78,14 @@ function hovered_value(
   hoveredValueS: number,
   quantity: CohesionQuantity,
 ): number {
-  if (hoveredS === hoveredValueS) return value_at(field, hoveredValueS, quantity);
-  const matches = field.samples.filter((sample) => Math.abs(sample.s - hoveredS) < 1e-6);
+  if (hoveredS === hoveredValueS)
+    return value_at(field, hoveredValueS, quantity);
+  const matches = field.samples.filter(
+    (sample) => Math.abs(sample.s - hoveredS) < 1e-6,
+  );
   if (matches.length === 0) return value_at(field, hoveredValueS, quantity);
-  const chosen = hoveredValueS <= hoveredS ? matches[0] : matches[matches.length - 1];
+  const chosen =
+    hoveredValueS <= hoveredS ? matches[0] : matches[matches.length - 1];
   return sample_value(chosen, quantity);
 }
 
@@ -312,7 +329,7 @@ const OneDiagram: React.FC<OneDiagramProps> = ({
         </>
       )}
       <text
-        x={5}
+        x={6}
         y={(PAD_TOP + (VIEW_H - PAD_BOTTOM)) / 2 + FONT_SIZE / 2 - 1}
         fontSize={FONT_SIZE}
         fill={color}
@@ -367,7 +384,7 @@ export const CohesionDiagrams: React.FC<CohesionDiagramsProps> = ({
           alignItems: "center",
           justifyContent: "center",
           px: 1,
-          borderRadius: 3,
+          borderRadius: 1,
           backgroundColor: "background.sunken",
         }}
       >
@@ -424,7 +441,7 @@ export const CohesionDiagrams: React.FC<CohesionDiagramsProps> = ({
       onMouseLeave={handleLeave}
       sx={{
         mx: 2,
-        borderRadius: 3,
+        borderRadius: 1,
         backgroundColor: "background.sunken",
         overflow: "hidden",
         cursor: "crosshair",

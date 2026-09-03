@@ -416,7 +416,21 @@ function resolve_leader(
   // The leader picks up where the cote stops on the section itself, never at the bounding box:
   // what it has to clear is the feature it measures, and a wall buried in the section is
   // already clear of everything else.
-  const elbow = add(from, scale(a.out, DIM_OFFSET));
+  //
+  // `DIM_OFFSET` is calibrated for cotes that already start at the section's edge; run along a
+  // single axis from deep inside instead (a web's `tw`) and it can overshoot the edge, reaching
+  // as far out as an edge cote's own dimension line. So on a single axis it is capped at that
+  // edge, kept the same clear gap `TEXT_GAP` stands other lines off a feature. A leader running
+  // off both axes (a bore wall, read along a radius) has no such edge to cap against — its
+  // silhouette is a circle, not this box — so it keeps the plain offset.
+  const axis_aligned = (a.out.x === 0) !== (a.out.y === 0);
+  let reach: number = DIM_OFFSET;
+  if (axis_aligned) {
+    const boundary = a.out.y === 0 ? d.hw : d.hh;
+    const start = a.out.y === 0 ? from.x : from.y;
+    reach = Math.min(reach, Math.max(0, boundary - Math.abs(start) - TEXT_GAP));
+  }
+  const elbow = add(from, scale(a.out, reach));
   const carried = carried_label(
     elbow,
     { x: a.out.x >= 0 ? 1 : -1, y: 0 },

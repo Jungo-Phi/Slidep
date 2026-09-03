@@ -187,6 +187,14 @@ export function resolve_slots(links: Link[], nodes: Nodes): LinkSlots[] {
           rad: EMPTY,
         };
 
+      // pos/ang: one per pulley, in belt order — no start/end, a loop has no terminal.
+      case "BeltLoopClosure":
+        return {
+          pos: many(link.gearPosKeys, P),
+          ang: many(link.gearAngleKeys, A),
+          rad: EMPTY,
+        };
+
       // A grab targets either a position or a radius (edition), so the key is looked up
       // in both spaces; only one of them resolves.
       case "HandleGrab":

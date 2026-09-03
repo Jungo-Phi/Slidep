@@ -25,6 +25,7 @@ import {
 import { buildBeltSegmentNoSlipLinks } from "../experimental/belt-noslip-q";
 import {
   buildBeltAggregateLinks,
+  buildBeltLoopClosureLink,
   hasStakeholderBeyond,
 } from "../experimental/belt-aggregate";
 import { BEAM_END_MASS_FRACTION } from "../dynamics/mass-model";
@@ -695,6 +696,7 @@ export function belt_q_links(nodes: KinNodes, links: Link[]): Link[] {
           writePositions: false,
         }),
         ...buildBeltAggregateLinks(nodes.positions, nodes.angles, links, spec),
+        ...buildBeltLoopClosureLink(nodes.positions, nodes.angles, links, spec),
       );
     }
   return out;
@@ -724,7 +726,8 @@ export function rebuild_belt_q_links(
     (l) =>
       !(
         (l.type === "BeltSegmentNoSlip" ||
-          l.type === "BeltSubChainAggregate") &&
+          l.type === "BeltSubChainAggregate" ||
+          l.type === "BeltLoopClosure") &&
         l.owner === belt.owner
       ),
   );
@@ -747,6 +750,7 @@ export function rebuild_belt_q_links(
       writePositions: false,
     }),
     ...buildBeltAggregateLinks(positions, angles, kept, spec),
+    ...buildBeltLoopClosureLink(positions, angles, kept, spec),
   );
   return kept;
 }

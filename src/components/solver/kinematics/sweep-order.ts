@@ -102,7 +102,11 @@ export function reversed_sweep_order(
     const root = find(own[0]);
     rows[root] += links[i].ddl;
     const type = links[i].type;
-    if (type === "BeltSubChainAggregate" || type === "BeltSegmentNoSlip")
+    if (
+      type === "BeltSubChainAggregate" ||
+      type === "BeltSegmentNoSlip" ||
+      type === "BeltLoopClosure"
+    )
       dependent[root] = 1;
   }
 

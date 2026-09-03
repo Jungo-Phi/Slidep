@@ -18,6 +18,7 @@ import {
   extend_negligibility_pool,
   is_negligible,
   metric_shows_zero,
+  own_floors,
   pool_floors,
   pool_key_for_metric,
   quantity_kind_for_metric,
@@ -170,6 +171,7 @@ describe("extend_negligibility_pool", () => {
     // non plus, voir "un plancher absolu..." ci-dessous.
     expect(rebuilt.linearVelocity).toBe(pool_floors(5).linearVelocity);
     expect(rebuilt.length).toBe(5);
+    expect(rebuilt.ownFloors.length).toBe(own_floors(5).length);
   });
 
   it("un historique tronqué (rewind) reconstruit plutôt que de garder un max périmé", () => {
@@ -220,6 +222,29 @@ describe("pool_floors", () => {
 
   it("une géométrie dégénérée (diagonale nulle) retombe sur le plancher de longueur", () => {
     expect(pool_floors(0).length).toBe(MIN_LENGTH_POOL);
+  });
+
+  it("une diagonale mesurable, même sous le plancher, n'est pas remontée dessus", () => {
+    // Un petit mécanisme (ici 1 mm) doit rester mesurable pour `poolMax` — le plancher n'est
+    // là que pour l'absence totale de géométrie, pas pour hausser les petites.
+    expect(pool_floors(0.001).length).toBe(0.001);
+  });
+});
+
+describe("own_floors", () => {
+  it("dérive de la géométrie, ratio'ée par NEGLIGIBLE_RATIO, ce qui a une dimension de longueur", () => {
+    const floors = own_floors(5); // diagonale du mécanisme
+    expect(floors.length).toBe(NEGLIGIBLE_RATIO * 5);
+    expect(floors.moment).toBe(LOAD_SCALING.MIN_VALUE * (NEGLIGIBLE_RATIO * 5));
+    expect(floors.linearVelocity).toBe((NEGLIGIBLE_RATIO * 5) / MIN_TIME_POOL);
+    // Sans dimension de longueur exploitable : les mêmes constantes fixes que `pool_floors`.
+    expect(floors.angle).toBe(MIN_ANGLE_POOL);
+    expect(floors.force).toBe(LOAD_SCALING.MIN_VALUE);
+    expect(floors.angularVelocity).toBe(MIN_ANGLE_POOL / MIN_TIME_POOL);
+  });
+
+  it("une géométrie dégénérée (diagonale nulle) retombe sur le plancher de longueur, pas sur un ratio de zéro", () => {
+    expect(own_floors(0).length).toBe(MIN_LENGTH_POOL);
   });
 });
 

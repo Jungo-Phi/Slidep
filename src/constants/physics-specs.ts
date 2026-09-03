@@ -18,25 +18,16 @@ export const DEFAULT = {
 } as const;
 
 /**
- * Below this fraction of a `NegligibilityPool` field's own running max, a value reads as
- * negligible — hidden on a canvas overlay, flattened on a probe/cohesion chart (see
- * `negligibility-pool.ts`'s `is_negligible`). One ratio shared by every quantity kind
- * (force, moment, length, angle, linear/angular velocity): a product decision, not derived
- * from anything else, so it lives here rather than being tuned per call site.
+ * Below this fraction of a reference scale, a value reads as negligible — hidden on a canvas overlay, flattened on a probe/cohesion chart (see `negligibility-pool.ts`'s `is_negligible`, and `own_floors` for the chart case).
+ * The reference scale differs by caller: a `NegligibilityPool` field's own running max for `is_negligible`, the mechanism's own bounding-box diagonal for `own_floors`.
+ * One ratio shared by every quantity kind (force, moment, length, angle, linear/angular velocity) and every caller: a product decision, not derived from anything else, so it lives here rather than being tuned per call site.
  */
-export const NEGLIGIBLE_RATIO = 0.01;
+export const NEGLIGIBLE_RATIO = 0.001;
 
 /**
- * Absolute floors a `NegligibilityPool` field's running max is never allowed below, even
- * when nothing bigger was ever recorded — without this, a mechanism that only ever produces
- * noise of one kind (nothing larger of that kind anywhere in the recording) sets its own
- * pool scale from that noise, so `NEGLIGIBLE_RATIO` has nothing to filter it against (see
- * `negligibility-pool.ts`'s `extend_negligibility_pool`). Only `MIN_LENGTH`/`MIN_ANGLE`/
- * `MIN_TIME` are independent product decisions: force reuses `LOAD_SCALING.MIN_VALUE` (the
- * smallest force this app ever bothers drawing distinctly), and `force`/`moment`/velocities
- * derive from these plus the mechanism's own bounding-box diagonal wherever their physical
- * dimension allows it (a moment's lever arm, a velocity's own distance-over-time) — see
- * `pool_floors`.
+ * The fallback floor for a mechanism with no measurable size at all — `boundsDiagonal` exactly 0, from an empty mechanism or one collapsed to a single point (see `pool_floors` and `own_floors` in `negligibility-pool.ts`).
+ * Any actual size, however small, is used as its own scale instead: `NEGLIGIBLE_RATIO` still has something real to filter noise against.
+ * `MIN_ANGLE_POOL`/`MIN_TIME_POOL` need no such fallback — angle and time floors are always their own flat constants, never derived from the mechanism's size.
  */
 export const MIN_LENGTH_POOL = 0.01; // m
 export const MIN_ANGLE_POOL = 0.01; // rad

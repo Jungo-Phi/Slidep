@@ -149,7 +149,7 @@ describe("BeamCohesion — torseur d'interface d'une poutre (docs/plan-efforts-i
   // by inverse mass same as the other two links do, so Gauss-Seidel has two competing paths to
   // `k1` and no way to attribute the true reaction between them, however many sweeps or
   // substeps run (verified up to 100k sweeps / 8192 substeps, bit-identical). See
-  // docs/ratio-masse-convergence-dynamique.md, "un nœud rigide est sur-contraint au niveau du
+  // docs/poutre-corps-rigide-dynamique.md, "un nœud rigide est sur-contraint au niveau du
   // graphe de liaisons" — fix belongs in how a beam's rigidity is represented, not here. If this
   // ever starts passing, remove `.fails` and update that doc.
   it.fails("un cantilever avec une masse en cours de portée transmet la charge par le nœud attaché", () => {

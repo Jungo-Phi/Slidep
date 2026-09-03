@@ -152,6 +152,8 @@ function held_shapes(link: Link): Held {
       return points(link.posKeyA, link.posKeyB);
     case "BeltSubChainAggregate":
       return points(...link.gearPosKeys);
+    case "BeltLoopClosure":
+      return points(...link.gearPosKeys);
 
     case "HandleGrab":
       return points(link.grabbedKey);

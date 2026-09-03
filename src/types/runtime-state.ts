@@ -202,10 +202,10 @@ export interface KinematicSnapshot extends SimulationSnapshot {
  */
 export interface DynamicSnapshot extends SimulationSnapshot {
   /**
-   * Gear rotation angles (rad), one per `layout.angleKeys` entry — and nothing past it.
-   * Unlike `KinematicSnapshot.angles`, there is no belt-wrap/detach/arrival block: dynamic
-   * mode does not track belt contact (yet), so `layout.wrapBase` and beyond do not apply
-   * here.
+   * Gear rotation angles (rad), then each belt's per-pulley continuous wrap/detach/arrival
+   * block — same layout as `KinematicSnapshot.angles`, see `SnapshotLayout`. Both engines
+   * compile through the same `compile_simulation_model`, so the slots exist here whether or
+   * not a given recording ever exercises them.
    */
   angles: Float64Array;
   /** vx and vy interleaved, 2 per `layout.keys` entry — same slotting as `positions`. */
@@ -284,11 +284,12 @@ export interface NegligibilityPool {
   angularVelocity: number;
   /** W */
   power: number;
-  /** Absolute per-kind floor these fields are seeded from and never fall below — the
-   *  mechanism's own geometry where its dimension allows it, a fixed product constant
-   *  otherwise (see `pool_floors` in `negligibility-pool.ts`). Recomputed only when the
-   *  pool itself is rebuilt (a geometry change), not on every extend. */
+  /** Per-kind floor these fields are seeded from and never fall below — the mechanism's own geometry where its dimension allows it, a fixed product constant otherwise (see `pool_floors` in `negligibility-pool.ts`).
+   *  Recomputed only when the pool itself is rebuilt (a geometry change), not on every extend. */
   floors: NegligibilityFloors;
+  /** Same shape as `floors`, but scaled for a direct comparison against a single reading rather than for seeding a running max — what `ProbeChart`'s `ownFloor` prop needs (see `own_floors` in `negligibility-pool.ts`).
+   *  Recomputed alongside `floors`. */
+  ownFloors: NegligibilityFloors;
 }
 
 export interface NegligibilityFloors {
@@ -314,6 +315,15 @@ export const EMPTY_NEGLIGIBILITY_POOL: NegligibilityPool = {
   angularVelocity: 0,
   power: 0,
   floors: {
+    length: 0,
+    angle: 0,
+    force: 0,
+    moment: 0,
+    linearVelocity: 0,
+    angularVelocity: 0,
+    power: 0,
+  },
+  ownFloors: {
     length: 0,
     angle: 0,
     force: 0,

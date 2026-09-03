@@ -1087,7 +1087,8 @@ export function step_simulation(
         (l) =>
           !(
             (l.type === "BeltSegmentNoSlip" ||
-              l.type === "BeltSubChainAggregate") &&
+              l.type === "BeltSubChainAggregate" ||
+              l.type === "BeltLoopClosure") &&
             owners.has(l.owner)
           ),
       );
@@ -1302,12 +1303,20 @@ const DYNAMIC_SUBSTEPS = 16;
  * the same rigid-constraint sweep `step_simulation` runs — split into `substeps` physical
  * substeps (see `DYNAMIC_SUBSTEPS`), each running the full body below in turn.
  *
- * Deliberately narrower than `step_simulation` for now:
- *  - no motor-target refresh — a motor's `targetAngle` stays wherever the model was
- *    compiled with, since plan étape 5 ("couple imposé vs position imposée") is what
- *    decides how a motor belongs in a force-driven step in the first place;
- *  - no belt-disconnect tracking — a belt stays geometrically constrained but never drops a
- *    pulley.
+ * Deliberately narrower than `step_simulation` for now: no motor-target refresh — a motor's
+ * `targetAngle` stays wherever the model was compiled with, since plan étape 5 ("couple
+ * imposé vs position imposée") is what decides how a motor belongs in a force-driven step in
+ * the first place. Everything else `step_simulation` does once per frame before its own solve
+ * — gear-mesh angle unwrap, belt disconnect/reattach tracking, junction re-baking, belt state
+ * sharing — runs here too, but once per SUBSTEP rather than once per frame: both the unwrapped
+ * `GearMeshAngle.alpha` and the belt's tracked wrap feed a constraint that runs every sweep of
+ * the solve about to happen, and holding either at its value from the START of the frame across
+ * all `DYNAMIC_SUBSTEPS` substeps measurably reintroduces the very listing-order sensitivity
+ * this bookkeeping exists to remove — negligible for a slow kinematic frame, enough to blow up
+ * a chaotic pendulum train within 60 frames of free fall (see `docs/courroie-dynamique.md`).
+ * Only the no-slip links' REBUILD (after a disconnect/reattach) is deferred to once, after the
+ * last substep, against the state the frame's own solve agrees with — same reasoning as
+ * `step_simulation`'s own post-solve rebuild.
  * Grab is kept: it is core interaction, not a load, and costs nothing extra to support
  * (`grab_links` is shared with `step_simulation`).
  */
@@ -1359,6 +1368,13 @@ export function step_dynamic_simulation(
     });
   }
 
+  // Belts a disconnect/reattach touched this frame, across every substep it happened in —
+  // their no-slip links are rebuilt once, after the LAST substep (see below).
+  const beltsToRewire = new Set<Extract<Link, { type: "BeltLength" }>>();
+  const wrapsByBelt = new Map<ID, number[]>();
+  const arrivalsByBelt = new Map<ID, number[]>();
+  const disconnectedByBelt = new Map<ID, boolean[]>();
+
   // Whole-frame d'Alembert acceleration (phase 2) reads the velocity change across ALL
   // substeps, never one alone — captured once, before the first, against `dt` (not `subDt`)
   // below.
@@ -1370,6 +1386,76 @@ export function step_dynamic_simulation(
 
   for (let sub = 0; sub < substeps; sub++) {
     const isLastSubstep = sub === substeps - 1;
+
+    // ── Gear-mesh angle unwrap + belt-contact bookkeeping — EVERY substep, not once per
+    // frame. Both feed `applyGearMeshAngleConstraint`/`applyBeltLengthConstraint` on every
+    // sweep of the solve about to run; measured directly (`docs/courroie-dynamique.md`):
+    // measuring them once at frame start and holding that hint stale across all
+    // `DYNAMIC_SUBSTEPS` substeps injects a small, listing-order-dependent bias into the
+    // belt-length constraint whenever the mechanism moves fast within the frame (free fall,
+    // not a slow motor-driven kinematic step) — negligible on its own, but enough for a
+    // chaotic pendulum train to blow up within 60 frames. The disconnect/reattach EVENT
+    // itself stays rare regardless of how often it is tested for, so testing it this often
+    // costs nothing beyond the same trig `step_simulation` already pays once per (unsubstepped)
+    // frame, `substeps` times over.
+    model.links.forEach((link) => {
+      if (link.type === "GearMeshAngle") {
+        const p1 = positions.get(link.posKey1);
+        const p2 = positions.get(link.posKey2);
+        if (p1 && p2) {
+          const raw = p2.sub(p1).angle();
+          link.alpha = link.alpha + wrap_angle(raw - link.alpha);
+        }
+      } else if (link.type === "BeltLength") {
+        if (update_belt_disconnects(link, positions, model.extent))
+          beltsToRewire.add(link);
+      }
+    });
+
+    // A pulley just left the belt, or came back onto it → re-bake the closed-belt junction
+    // refs onto the new loop, then drop the belt's no-slip links for the rest of the frame
+    // (rebuilt after the last substep, against the state the frame's own solve agrees with —
+    // see the matching comment in `step_simulation`). Re-baking again on a later substep
+    // that flips the SAME belt again is harmless: it re-elects/re-projects onto whatever the
+    // loop looks like now, which is exactly what a fresh flip needs anyway.
+    if (beltsToRewire.size > 0) {
+      const rewiring = [...beltsToRewire];
+      rebake_belt_pin_refs(model.links, rewiring, positions, angles);
+      if (beltContact.rebuildQLinks) {
+        const owners = new Set(rewiring.map((b) => b.owner));
+        model.links = model.links.filter(
+          (l) =>
+            !(
+              (l.type === "BeltSegmentNoSlip" ||
+                l.type === "BeltSubChainAggregate" ||
+                l.type === "BeltLoopClosure") &&
+              owners.has(l.owner)
+            ),
+        );
+      }
+    }
+
+    // Share each belt's sim state (continuous wraps + disconnected mask) with its junction
+    // links, same as `step_simulation` — see that block's comment for why the mask is needed.
+    // `arrivalsByBelt` is not shared to any link (no junction reads it mid-solve), only kept
+    // for the snapshot written at the end of the frame.
+    wrapsByBelt.clear();
+    arrivalsByBelt.clear();
+    disconnectedByBelt.clear();
+    for (const link of model.links)
+      if (link.type === "BeltLength" && link.owner !== undefined) {
+        if (link.wraps) wrapsByBelt.set(link.owner, link.wraps);
+        if (link.arrivals) arrivalsByBelt.set(link.owner, link.arrivals);
+        if (link.disconnected) disconnectedByBelt.set(link.owner, link.disconnected);
+      }
+    for (const link of model.links) {
+      if (link.type === "BeltPin") {
+        link.wraps = wrapsByBelt.get(link.beltID);
+        link.disconnected = disconnectedByBelt.get(link.beltID);
+      } else if (link.type === "BeltFollowsTangent") {
+        link.disconnected = disconnectedByBelt.get(link.beltID);
+      }
+    }
 
     // ── Beam midpoints (dynamics-only, every substep) ── a virtual mass, not a real
     // element: pinned onto the live segment so the beam's own rotational inertia comes out
@@ -1402,12 +1488,18 @@ export function step_dynamic_simulation(
       });
     }
 
-    // ── Grab (transient, this substep only) ── no belt state to share: dynamic mode tracks
-    // none. The kinematic `Spring`/`MotorBeam`/`MotorAngle` links are dropped here: dynamic
-    // mode pulls them out of the sweep and applies real forces/torques below instead (see
-    // `spring-damper-model.ts`, `motor-model.ts`) — left in, they would double up, once as
-    // a soft position constraint and once as an actual force.
-    const links: Link[] = grab_links(model, grab, positions, new Map(), new Map()).filter(
+    // ── Grab (transient, this substep only) ── belt maps refreshed just above, this
+    // substep. The kinematic `Spring`/`MotorBeam`/`MotorAngle` links are dropped here:
+    // dynamic mode pulls them out of the sweep and applies real forces/torques below instead
+    // (see `spring-damper-model.ts`, `motor-model.ts`) — left in, they would double up, once
+    // as a soft position constraint and once as an actual force.
+    const links: Link[] = grab_links(
+      model,
+      grab,
+      positions,
+      wrapsByBelt,
+      disconnectedByBelt,
+    ).filter(
       (link) =>
         link.type !== "Spring" &&
         link.type !== "MotorBeam" &&
@@ -1491,7 +1583,8 @@ export function step_dynamic_simulation(
       undefined,
       angles,
       isLastSubstep && collectDiagnostics,
-      // Ignored: `dynamics` overrides the exit criterion with a fixed sweep count.
+      // A dynamics step exits on the same residual as any other: `sweeps` is its ceiling,
+      // not its count.
       "motion",
       0,
       dynamics,
@@ -1521,6 +1614,23 @@ export function step_dynamic_simulation(
 
   // `substeps` is always >= 1, so the loop above ran at least once.
   const finalResult = result!;
+
+  // ── Belt topology changed this frame → rebuild its no-slip links, AFTER every substep has
+  // run — same reasoning as `step_simulation`: baking against the warm start instead would
+  // freeze in whatever the frame's own solve was about to correct.
+  if (beltsToRewire.size > 0 && beltContact.rebuildQLinks) {
+    for (const belt of beltsToRewire)
+      model.links = sort_links(
+        rebuild_belt_q_links(
+          model.links,
+          belt,
+          finalResult.positions,
+          finalResult.angles,
+        ),
+        model.dynamicMasses.posMasses,
+      );
+  }
+
   const energy = compute_energy_sample(
     model,
     finalResult.positions,
@@ -1575,7 +1685,7 @@ export function step_dynamic_simulation(
     outAccelerations[2 * slot + 1] = NaN;
   }
 
-  const outAngles = new Float64Array(layout.angleKeys.length);
+  const outAngles = new Float64Array(angles_length(layout));
   const outAngleVelocities = new Float64Array(layout.angleKeys.length);
   for (let i = 0; i < layout.angleKeys.length; i++) {
     const a = finalResult.angles.get(layout.angleKeys[i]);
@@ -1583,6 +1693,20 @@ export function step_dynamic_simulation(
     const v = angleVelocities.get(layout.angleKeys[i]);
     outAngleVelocities[i] = v === undefined ? NaN : v;
   }
+  // Then each belt's per-pulley wrap/detach/arrival block, exactly as `step_simulation`
+  // writes it — the last substep's `wrapsByBelt`/`arrivalsByBelt`/`disconnectedByBelt` are
+  // this frame's converged belt state, kept up to date every substep above.
+  layout.belts.forEach((id, r) => {
+    const wraps = wrapsByBelt.get(id);
+    const arrivals = arrivalsByBelt.get(id);
+    const disconnected = disconnectedByBelt.get(id);
+    for (let p = layout.beltStart[r]; p < layout.beltStart[r + 1]; p++) {
+      const k = p - layout.beltStart[r];
+      outAngles[layout.wrapBase + p] = wraps ? wraps[k] : NaN;
+      outAngles[layout.detachBase + p] = disconnected?.[k] ? 1 : 0;
+      outAngles[layout.arrivalBase + p] = arrivals ? arrivals[k] : NaN;
+    }
+  });
 
   return {
     t,
@@ -1709,11 +1833,12 @@ export function snapshot_at(
 
 /**
  * `snapshot_at`'s dynamic-mode counterpart: same interpolation of position/angle, plus
- * velocity — and no belt-topology guard, since dynamic mode tracks no belt contact to guard.
- * Kept separate rather than folded into one generic function: the two snapshot kinds differ
- * in exactly the fields this interpolates, and forcing them through a shared body would cost
- * more in indirection than the ~20 duplicated lines below are worth. `snapshot_index_at` is
- * the part that IS shared, being purely a search over `.t`.
+ * velocity, and the same belt-topology guard now that dynamic mode tracks belt contact too
+ * (see `same_belt_topology`). Kept separate rather than folded into one generic function:
+ * the two snapshot kinds differ in exactly the extra fields this interpolates (velocity,
+ * acceleration…), and forcing them through a shared body would cost more in indirection
+ * than the ~20 duplicated lines below are worth. `snapshot_index_at` is the part that IS
+ * shared, being purely a search over `.t`.
  */
 export function dynamic_snapshot_at(
   snapshots: DynamicSnapshot[],
@@ -1729,6 +1854,7 @@ export function dynamic_snapshot_at(
   if (u <= 0) return a;
   // Slot i means one thing on each side of an edit, so two layouts never average.
   if (a.layout !== b.layout) return a;
+  if (!same_belt_topology(a, b)) return a;
 
   const lerp = (from: Float64Array, to: Float64Array) => {
     const out = new Float64Array(from.length);
@@ -1818,11 +1944,9 @@ export function parameter_snapshot_at(
 }
 
 /** Same pulleys detached on both sides. Only sound on one layout, where the flags of a
- *  given pulley are the same slot on both sides. */
-function same_belt_topology(
-  a: KinematicSnapshot,
-  b: KinematicSnapshot,
-): boolean {
+ *  given pulley are the same slot on both sides. Generic over `SimulationSnapshot`: both
+ *  concrete subtypes carry the same detach block (see `SnapshotLayout`). */
+function same_belt_topology<S extends SimulationSnapshot>(a: S, b: S): boolean {
   // The flag block alone. The arrival angles that follow it are continuous like the wraps,
   // so comparing them would find every pair of instants different and never interpolate.
   for (let i = a.layout.detachBase; i < a.layout.arrivalBase; i++)
@@ -1831,13 +1955,18 @@ function same_belt_topology(
 }
 
 /**
- * Apply a kinematic snapshot's positions/angles to a mechanism copy for
- * rendering. Does NOT modify the original mechanism (editing state). Radii are
- * unchanged in simulation, so gears keep their edit-time radius.
+ * Apply a snapshot's positions/angles/belt-contact to a mechanism copy for rendering. Does
+ * NOT modify the original mechanism (editing state). Radii are unchanged in simulation, so
+ * gears keep their edit-time radius.
+ *
+ * Generic over `SimulationSnapshot`: kinematic and dynamic snapshots carry the same
+ * wrap/detach/arrival belt block (see `SnapshotLayout`), so one body reads either kind —
+ * `apply_snapshot_to_mechanism`/`apply_dynamic_snapshot_to_mechanism` below are thin,
+ * concretely-typed wrappers a caller picks between on `AppMode`, without a runtime branch.
  */
-export function apply_snapshot_to_mechanism(
+function apply_snapshot_fields<S extends SimulationSnapshot>(
   mechanism: Mechanism,
-  snapshot: KinematicSnapshot,
+  snapshot: S,
 ): Mechanism {
   const newElements = mechanism.mechanicalElements.map((el) => {
     if ("position" in el) {
@@ -1885,49 +2014,20 @@ export function apply_snapshot_to_mechanism(
   return { ...mechanism, mechanicalElements: newElements };
 }
 
-/**
- * `apply_snapshot_to_mechanism`'s dynamic-mode counterpart: same position/angle/spring-
- * rest-length mapping, minus the belt fields — dynamic mode tracks no belt contact, so
- * `disconnectedGearIndices`/`gearWraps` are left untouched (a belt draws as fully engaged,
- * which is the correct look until dynamic mode tracks disconnection at all). Kept separate
- * rather than folded into one function for the same reason as `dynamic_snapshot_at`: the two
- * only diverge on belts, and threading a "does this snapshot have belt data" flag through
- * one body would cost more than the ~15 duplicated lines below.
- */
+/** `apply_snapshot_fields`, typed to a kinematic recording. */
+export function apply_snapshot_to_mechanism(
+  mechanism: Mechanism,
+  snapshot: KinematicSnapshot,
+): Mechanism {
+  return apply_snapshot_fields(mechanism, snapshot);
+}
+
+/** `apply_snapshot_fields`, typed to a dynamic recording. */
 export function apply_dynamic_snapshot_to_mechanism(
   mechanism: Mechanism,
   snapshot: DynamicSnapshot,
 ): Mechanism {
-  const newElements = mechanism.mechanicalElements.map((el) => {
-    if ("position" in el) {
-      const pos = snapshot_point(snapshot, el.id);
-      if (!pos) return el;
-      if (el.type === "gear") {
-        const ang = snapshot_angle(snapshot, el.id);
-        return {
-          ...el,
-          position: pos,
-          ...(ang !== undefined ? { angle: ang } : {}),
-        };
-      }
-      return { ...el, position: pos };
-    } else {
-      const start = snapshot_point(snapshot, `${el.id}:start`);
-      const end = snapshot_point(snapshot, `${el.id}:end`);
-      const restLength =
-        el.type === "spring" || el.type === "damper"
-          ? (el.restLength ?? el.positionStart.distance_to(el.positionEnd))
-          : undefined;
-      return {
-        ...el,
-        ...(start ? { positionStart: start } : {}),
-        ...(end ? { positionEnd: end } : {}),
-        ...(restLength !== undefined ? { restLength } : {}),
-      };
-    }
-  });
-
-  return { ...mechanism, mechanicalElements: newElements };
+  return apply_snapshot_fields(mechanism, snapshot);
 }
 
 /**

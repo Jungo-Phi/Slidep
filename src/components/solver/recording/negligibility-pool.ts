@@ -31,17 +31,9 @@ export function is_negligible(value: number, poolMax: number): boolean {
   return poolMax > 0 && Math.abs(value) < NEGLIGIBLE_RATIO * poolMax;
 }
 
-/**
- * The absolute, geometry-independent-where-it-must-be-so floor each pool field is seeded
- * from (see `extend_negligibility_pool`) — never derived from anything ever recorded, so a
- * mechanism that only ever produces noise of one kind still has a real scale to be judged
- * negligible against. `boundsDiagonal` is the mechanism's own bounding-box diagonal (0 for a
- * degenerate/empty one): `length` is the only field the mechanism's size enters directly,
- * so it seeds `moment` (force × lever arm) and the velocities (distance / `MIN_TIME_POOL`)
- * in turn; `angle` and `force` have no such lever, so each is its own flat constant.
- */
-export function pool_floors(boundsDiagonal: number): NegligibilityFloors {
-  const length = Math.max(boundsDiagonal, MIN_LENGTH_POOL);
+/** `length` is the only field the mechanism's size enters directly, so it seeds `moment` (force × lever arm) and the velocities (distance / `MIN_TIME_POOL`) in turn.
+ *  `angle` and `force` have no such lever, so each is its own flat constant. */
+function length_derived_floors(length: number): NegligibilityFloors {
   const force = LOAD_SCALING.MIN_VALUE;
   const linearVelocity = length / MIN_TIME_POOL;
   return {
@@ -56,12 +48,27 @@ export function pool_floors(boundsDiagonal: number): NegligibilityFloors {
 }
 
 /**
- * Extends `cache` with whatever snapshots were recorded since the last call — an append,
- * never a rescan, same reasoning as `StressScaleCache`/`extend_stress_scale`
- * (`cohesion-field.ts`): redoing the whole history every frame would cost the square of the
- * recording's length. An edit (different `elements`/`constraints`) or a rewound/truncated
- * history (fewer snapshots than already consumed) rebuilds from scratch instead — the
- * running maxima cannot just keep whatever a now-discarded future once recorded.
+ * The floor each `NegligibilityPool` field is seeded from (see `extend_negligibility_pool`) — never derived from anything ever recorded, so a mechanism that only ever produces noise of one kind still has a real scale to be judged negligible against.
+ * `boundsDiagonal` is the mechanism's own bounding-box diagonal, used as-is — the ratio that turns it into a negligibility threshold is applied once, downstream, by `is_negligible`'s own caller.
+ * `MIN_LENGTH_POOL` only stands in when there's no diagonal to use at all (0: an empty mechanism, or one collapsed to a single point).
+ */
+export function pool_floors(boundsDiagonal: number): NegligibilityFloors {
+  return length_derived_floors(boundsDiagonal > 0 ? boundsDiagonal : MIN_LENGTH_POOL);
+}
+
+/**
+ * The floor `ProbeChart`'s `ownFloor` prop needs: whether a curve's own excursion is a real spread worth two numbers, or negligible next to how big this specific mechanism physically is.
+ * Unlike `pool_floors`, `NEGLIGIBLE_RATIO` is applied here rather than by a downstream caller — `ownFloor` is compared directly against a curve's own excursion, never through `is_negligible`.
+ */
+export function own_floors(boundsDiagonal: number): NegligibilityFloors {
+  return length_derived_floors(
+    boundsDiagonal > 0 ? NEGLIGIBLE_RATIO * boundsDiagonal : MIN_LENGTH_POOL,
+  );
+}
+
+/**
+ * Extends `cache` with whatever snapshots were recorded since the last call — an append, never a rescan, same reasoning as `StressScaleCache`/`extend_stress_scale` (`cohesion-field.ts`): redoing the whole history every frame would cost the square of the recording's length.
+ * An edit (different `elements`/`constraints`) or a rewound/truncated history (fewer snapshots than already consumed) rebuilds from scratch instead — the running maxima cannot just keep whatever a now-discarded future once recorded.
  */
 export function extend_negligibility_pool(
   cache: NegligibilityPool,
@@ -75,11 +82,22 @@ export function extend_negligibility_pool(
     snapshots.length >= cache.consumed &&
     (cache.consumed === 0 || snapshots[cache.consumed - 1] === cache.boundary);
 
-  let { length, angle, force, moment, linearVelocity, angularVelocity, power, floors } =
-    cache;
+  let {
+    length,
+    angle,
+    force,
+    moment,
+    linearVelocity,
+    angularVelocity,
+    power,
+    floors,
+    ownFloors,
+  } = cache;
   if (!appendable) {
     const bounds = mechanism_bounds(elements, constraints);
-    floors = pool_floors(bounds ? bounds.min.distance_to(bounds.max) : 0);
+    const boundsDiagonal = bounds ? bounds.min.distance_to(bounds.max) : 0;
+    floors = pool_floors(boundsDiagonal);
+    ownFloors = own_floors(boundsDiagonal);
     ({ length, angle, force, moment, linearVelocity, angularVelocity, power } = floors);
   }
 
@@ -144,6 +162,7 @@ export function extend_negligibility_pool(
     angularVelocity,
     power,
     floors,
+    ownFloors,
   };
 }
 

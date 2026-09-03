@@ -13,15 +13,10 @@ import { snapshot_point } from "../snapshot";
 // to hold — only the reaction (force) does — so the pivot straying off the beam's midpoint is
 // purely a measure of how well the solver converged, not of anything physical.
 //
-// Today it does depend on the mass: `DYNAMIC_SWEEPS` runs a FIXED Gauss-Seidel sweep count per
-// substep with no residual-based exit (`PBD_kinematic_solver.ts`'s `if (!dynamics)` gate around
-// `maxError < epsilon`), unlike kinematic mode, which iterates to that same residual regardless
-// of mass ratio. A heavier hanging mass makes the pivot/heavy-mass ratio more extreme, Gauss-
-// Seidel converges proportionally slower, and the FIXED budget leaves a proportionally bigger
-// residual behind — see the conversation this test comes out of. These tests pin the target:
-// residual bounded, and roughly mass-independent, the way kinematic mode already is. They are
-// expected to FAIL until dynamics gets an equivalent residual-based exit (with a raised sweep
-// ceiling to actually use it) — see PBD_kinematic_solver.ts:900-916.
+// What it takes to hold: a dynamics step exits on the same residual as a kinematic one, and
+// the sweep order alternates on an acyclic chain, which turns the round trip Gauss-Seidel
+// needs into a direct solve — see docs/ratio-masse-convergence-dynamique.md. Without either,
+// the residual grows with the mass ratio instead of staying bounded.
 
 const GRAVITY = new Point2(0, -9.81);
 
