@@ -11,34 +11,31 @@
 import { LOAD_SCALING, MOMENT_SCALING } from "../constants/physics-display-specs";
 
 interface LoadRuler {
-  REF_VALUE: number;
-  PX_SCALE: number;
-  LOG_BASE: number;
-  MIN_VALUE: number;
+  FLOOR_VALUE: number;
   MIN_PX: number;
+  PX_PER_DECADE: number;
 }
 
 // ─── Display scale ──────────────────────────────────────────────────────────
+// One decade of magnitude, one fixed step of drawn length, from `FLOOR_VALUE`
+// up: every decade of the range is worth the same on screen, so a load of a few
+// newtons is as distinguishable from its neighbours as one of a few kilonewtons,
+// and the whole plausible range still fits on screen. Values below `FLOOR_VALUE`
+// all draw at `MIN_PX` — the ruler has no bottom of its own.
 
 function stored2screen(value: number, ruler: LoadRuler): number {
-  const unsigned = Math.max(
-    ruler.MIN_PX,
+  const magnitude = Math.max(Math.abs(value), ruler.FLOOR_VALUE);
+  const unsigned =
     ruler.MIN_PX +
-      (ruler.PX_SCALE * Math.log(Math.abs(value) / ruler.REF_VALUE + 1)) /
-        Math.log(ruler.LOG_BASE),
-  );
+    ruler.PX_PER_DECADE * Math.log10(magnitude / ruler.FLOOR_VALUE);
   return value < 0 ? -unsigned : unsigned;
 }
 
 function screen2stored(value: number, ruler: LoadRuler): number {
   const unsigned = Math.max(
-    ruler.MIN_VALUE,
-    ruler.REF_VALUE *
-      (Math.pow(
-        ruler.LOG_BASE,
-        (Math.abs(value) - ruler.MIN_PX) / ruler.PX_SCALE,
-      ) -
-        1),
+    ruler.FLOOR_VALUE,
+    ruler.FLOOR_VALUE *
+      Math.pow(10, (Math.abs(value) - ruler.MIN_PX) / ruler.PX_PER_DECADE),
   );
   return value < 0 ? -unsigned : unsigned;
 }
@@ -76,7 +73,7 @@ export function screen2stored_moment(radius: number): number {
  */
 export function nearest_round_load_value(
   value: number,
-  ruler: Pick<LoadRuler, "MIN_VALUE"> & { SNAP_MANTISSAS: readonly number[] } = LOAD_SCALING,
+  ruler: { MIN_VALUE: number; SNAP_MANTISSAS: readonly number[] } = LOAD_SCALING,
 ): number {
   const magnitude = Math.max(ruler.MIN_VALUE, Math.abs(value));
   const decade = Math.floor(Math.log10(magnitude));

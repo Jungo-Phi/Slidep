@@ -1,37 +1,38 @@
 /** How a physical quantity becomes something visible: the rulers that turn a force or a moment into a drawn length, and the palettes that turn a stress or a reaction into a colour. */
 
 export const LOAD_SCALING = {
-  /** Reference force value (N) for scaling. */
-  REF_VALUE: 100,
-  /** Drawn length (world px) of a reference-magnitude load. */
-  PX_SCALE: 50,
-  /** Log base of force scaling. Extending the drawn length by `PX_SCALE` will multiply the force value by `SCALE_BASE`. */
-  LOG_BASE: 2,
-  /** Minimal force value : 0.1 (N). */
+  /** Value a load is drawn at while being placed, before a drag has given it one (N). */
+  PREVIEW_VALUE: 100,
+  /** Smallest force value that counts as real (N): floor of the snap ladder, and the seed the negligibility pool judges a recorded force against. */
   MIN_VALUE: 0.1,
-  /** Minimal drawn force length (world px). */
-  MIN_PX: 40,
+  /** The value drawn at `MIN_PX` — the bottom of the ruler, below which every load draws the same length (N). */
+  FLOOR_VALUE: 1,
+  /** Drawn length (screen px) of a `FLOOR_VALUE` load. Never below the arrow head's own length, or the arrow stops reading as one. */
+  MIN_PX: 30,
+  /** Drawn length (screen px) each decade of magnitude adds. Sets both how far apart two loads read and how coarse a value drag feels: the `SNAP_MANTISSAS` rungs land about a third of it apart. */
+  PX_PER_DECADE: 35,
   /** Mantissas of the round values a load drag snaps to, one set per decade
-   *  (…, 1, 2, 5, 10, 20, 50, 100, …). Pure powers of ten would sit ~166 px
-   *  apart at the current scale, leaving most of a drag with no rung nearby. */
+   *  (…, 1, 2, 5, 10, 20, 50, 100, …). Pure powers of ten would leave most of
+   *  a drag with no rung nearby. */
   SNAP_MANTISSAS: [1, 2, 5],
 };
 
-/** Same ruler as `LOAD_SCALING` (same `PX_SCALE`/`LOG_BASE`/`SNAP_MANTISSAS`), but centred on
- *  moments' own typical range: torques are commonly tenths of N·m, not hundreds of N, so
- *  sharing `LOAD_SCALING`'s `REF_VALUE`/`MIN_VALUE` flattened every moment near `MIN_PX`,
- *  indistinguishable from one another. */
+/** The same ruler as `LOAD_SCALING`, on a moment's own range: torques are commonly tenths of
+ *  N·m, not hundreds of N. Halved, because a moment's footprint is its arc's DIAMETER — it is
+ *  drawn around a node instead of pointing away from one — so that diameter reads on the very
+ *  ruler a force arrow's length does. */
 export const MOMENT_SCALING = {
   ...LOAD_SCALING,
-  /** Reference moment value (N·m) for scaling. */
-  REF_VALUE: 1,
-  /** Minimal moment value (N·m). */
+  /** Value a moment is drawn at while being placed (N·m). */
+  PREVIEW_VALUE: 1,
+  /** Smallest moment value that counts as real (N·m). */
   MIN_VALUE: 0.01,
-  /** Minimal drawn arc radius (world px) — a moment's arc used to be drawn at a force
-   *  arrow's length divided by two (so its diameter, not its radius, read like the arrow);
-   *  half of `LOAD_SCALING.MIN_PX` keeps that same floor now that the radius is computed
-   *  directly on its own ruler instead of through that division. */
+  /** The value drawn at `MIN_PX` (N·m). */
+  FLOOR_VALUE: 0.01,
+  /** Minimal drawn arc radius (screen px). */
   MIN_PX: LOAD_SCALING.MIN_PX / 2,
+  /** Arc radius (screen px) each decade of magnitude adds. */
+  PX_PER_DECADE: LOAD_SCALING.PX_PER_DECADE / 2,
 };
 
 /** The physics-overlay quantities drawn on the canvas: a probed velocity, and the two flavours of reaction force/moment a constraint can carry. */

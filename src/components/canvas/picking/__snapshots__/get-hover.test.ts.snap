@@ -17,7 +17,7 @@ exports[`get_hovered_part > pique la même chose qu'avant sur toute la matrice �
    plain belt run         → BeltBody plain-belt (300, -500) [section 0]
    plain belt end         → Edge plain-belt (600, -500) [end]
    dimension              → Constraint dim (300, 80)
-   force arrow            → Force force (600, 64.27)
+   force arrow            → Force force (600, 86.07)
    probe badge            → Probe mass (600, 20)
    empty space            → Void (900, 900)
 ── SelectingMultiple
@@ -55,7 +55,7 @@ exports[`get_hovered_part > pique la même chose qu'avant sur toute la matrice �
    plain belt run         → BeltBody plain-belt (300, -500) [section 0]
    plain belt end         → Edge plain-belt (600, -500) [end]
    dimension              → Constraint dim (300, 80)
-   force arrow            → Force force (600, 64.27)
+   force arrow            → Force force (600, 86.07)
    probe badge            → Probe mass (600, 20)
    empty space            → Void (900, 900)
 ── SelectedElement
@@ -74,7 +74,7 @@ exports[`get_hovered_part > pique la même chose qu'avant sur toute la matrice �
    plain belt run         → BeltBody plain-belt (300, -500) [section 0]
    plain belt end         → Edge plain-belt (600, -500) [end]
    dimension              → Constraint dim (300, 80)
-   force arrow            → Force force (600, 64.27)
+   force arrow            → Force force (600, 86.07)
    probe badge            → Probe mass (600, 20)
    empty space            → Void (900, 900)
 ── MovingNode
@@ -283,8 +283,8 @@ exports[`get_hovered_part > pique la même chose qu'avant sur toute la matrice �
    plain belt run         → BeltBody plain-belt (300, -500) [section 0]
    plain belt end         → Edge plain-belt (600, -500) [end, deleting]
    dimension              → Constraint dim (300, 80) [deleting]
-   force arrow            → Force force (600, 64.27) [deleting]
-   probe badge            → Force force (600, 64.27) [deleting]
+   force arrow            → Force force (600, 86.07) [deleting]
+   probe badge            → Force force (600, 86.07) [deleting]
    empty space            → Void (900, 900)
 ── ErasingMultiple
    axle centre            → Void (0, 0)
@@ -1138,7 +1138,7 @@ exports[`get_hovered_part > pique la même chose qu'avant sur toute la matrice �
    plain belt run         → BeltBody plain-belt (300, -500) [section 0]
    plain belt end         → Edge plain-belt (600, -500) [end]
    dimension              → Constraint dim (300, 80)
-   force arrow            → Force force (600, 64.27)
+   force arrow            → Force force (600, 86.07)
    probe badge            → Probe mass (600, 20)
    empty space            → Void (900, 900)
 ── EditingValue
@@ -1157,7 +1157,7 @@ exports[`get_hovered_part > pique la même chose qu'avant sur toute la matrice �
    plain belt run         → BeltBody plain-belt (300, -500) [section 0]
    plain belt end         → Edge plain-belt (600, -500) [end]
    dimension              → Constraint dim (300, 80)
-   force arrow            → Force force (600, 64.27)
+   force arrow            → Force force (600, 86.07)
    probe badge            → Probe mass (600, 20)
    empty space            → Void (900, 900)
 ── SimulationDragging

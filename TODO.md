@@ -10,11 +10,11 @@
 
 ### À faire de plus important prochainement
 
-- Régler l'affichage des loads trop grands
-
 - Ajouter l'outil de mesure
 
 - Sélection multiple
+
+- Frottement des pivot, sliders et contacts
 
 - Améliorer la perf
 
@@ -24,12 +24,9 @@
 
 **Qwick fix**
 
-Dans "Double cantilever", le moment de réaction est le même à l'ancrage qu'au milieu. Est-ce normal ?
-
+- Ajouter une croix à la barre de recherche
 - Corriger les diagrammes d'efforts internes (valeur à zéro)
 - Les trais indicatifs des valeurs max dans les diagrammes des efforts (vu dans Mf) s'accumulent
-
-Dans le mécanisme "Masse suspendue.slidep" que je viens d'ajouter, qui se stabilise à 1s, je vois des efforts tranchants alors qu'il ne devrait pas y en avoir (toutes les jontions sont des pivot).
 
 - La puissance affichée devrait être celle que le moteur peut fournir (et pas la puissance instantanée), on devrait donc ensuite pouvoir comparer la puissance du moteur à la puissance instantanée. Le calcul devrait aussi être revu pour prendre en compte ce qu'apporte vraiment le moteur et ce qui tient de l'inertie.
 
@@ -51,17 +48,16 @@ Dans le mécanisme "Masse suspendue.slidep" que je viens d'ajouter, qui se stabi
 
 - 🔨 Hover sur les graphs met en évidence les éléments concernés
 - 🔨 Les contraintes ne devrait pas apparaitre au hover quand on est en train de placer un élément. En fait, elle ne devrait apparaitre que dans les états "Idle"
-- Ajouter l'énergie apportée par l'utilisateur dans "Travil net" (Bilan énergétique)
+- Ajouter l'énergie apportée par les charges et par l'utilisateur dans "Travil net" (Bilan énergétique)
 
 **Informations fausses**
 
 - 🚨 Angle affiché dans les mesures "Balance.slidep" est faux. L'angle du graph ne correspond pas à celui de l'élément
 
-- 🚨 Différencier "Forces de réaction" et "Efforts internes"
-
 **Simulation**
 
 - 🤔 Qu'est-ce qu'on fait pour afficher les hyperstatismes en dynamique (contraintes) ?
+- 🤔 Différencier "Forces de réaction" et "Efforts internes"
 - 🔨 Mettre à jour le hover en simulation quand le mécanisme bouge sans grab
 - 🚨 En cinématique, quand l'alignement n'est juste pas parfait (alors que le défaut peut ne même pas s'afficher), le mécanisme bouge tout seul (voir "Le mécanisme qui bouge tout seul.slidep").
 - 🔨 Donner a tous les ressorts en cinématique la même "élasticité".
@@ -69,6 +65,10 @@ Dans le mécanisme "Masse suspendue.slidep" que je viens d'ajouter, qui se stabi
 - 🚨 Bug avec le mécanisme "Ressorts sur moteur"
 - Passer la simulation en Rust WASM pour accélérer ?
 - 🔨 Finir le boulot de "ratio-masse-convergence-dynamique.md" sur CP.slidep
+- 🚨 Dans "Double cantilever", le moment de réaction est le même à l'ancrage qu'au milieu. Est-ce normal ?
+- Regarder les contraintes au moment du choc dans "Test slider.slidep"
+- Et pour une poutre flottante à t=0
+- La trajectoire sur CoreXY en dynamique est fausse
 
 ---
 

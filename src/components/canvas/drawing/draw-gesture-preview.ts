@@ -295,7 +295,7 @@ export function draw_gesture_preview(
       break;
     }
     case "PlacingForceStart": {
-      const force_length = stored2screen_load(LOAD_SCALING.REF_VALUE);
+      const force_length = stored2screen_load(LOAD_SCALING.PREVIEW_VALUE);
       if (hoveredPart.type === "Edge" && hoveredPart.part === "body") {
         const beam = get_mechanical_element_from_id(
           hoveredPart.id,
@@ -310,15 +310,15 @@ export function draw_gesture_preview(
           viewport,
         ).with_length(force_length);
         draw_distributed_force(ctx, start, end, delta, delta);
-        draw_force(ctx, start, delta, LOAD_SCALING.REF_VALUE, false, LOAD_INTENSITY);
-        draw_force(ctx, end, delta, LOAD_SCALING.REF_VALUE, false, LOAD_INTENSITY);
+        draw_force(ctx, start, delta, LOAD_SCALING.PREVIEW_VALUE, false, LOAD_INTENSITY);
+        draw_force(ctx, end, delta, LOAD_SCALING.PREVIEW_VALUE, false, LOAD_INTENSITY);
         break;
       }
       draw_force(
         ctx,
         world2screen(hoveredPart.position, viewport),
         world2screen_vec(UP, viewport).with_length(force_length),
-        LOAD_SCALING.REF_VALUE,
+        LOAD_SCALING.PREVIEW_VALUE,
         false,
         FORCE,
       );
@@ -378,8 +378,8 @@ export function draw_gesture_preview(
       draw_moment(
         ctx,
         world2screen(hoveredPart.position, viewport),
-        stored2screen_moment(MOMENT_SCALING.REF_VALUE),
-        MOMENT_SCALING.REF_VALUE,
+        stored2screen_moment(MOMENT_SCALING.PREVIEW_VALUE),
+        MOMENT_SCALING.PREVIEW_VALUE,
       );
       break;
     }
