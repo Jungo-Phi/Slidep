@@ -124,6 +124,18 @@ export const STRESS_RAMP: readonly {
 export const STRESS_OVERSTRESS_COLOR = "#000000";
 
 /**
+ * A beam whose cohesion torsor is not determined by its own equilibrium
+ * (`BeamCohesion.determinate`): the solver attributed its share of the load rather than
+ * deriving it, so the whole field along that beam is indicative and no point of it means what
+ * the ramp would say. Drawn FLAT in this one colour instead of ramped — a gradient would state
+ * a variation along the beam that is not known.
+ *
+ * Outside `STRESS_RAMP`'s blue→red range, and distinct from `STRESS_OVERSTRESS_COLOR`'s black,
+ * so the three reads never collapse into one another.
+ */
+export const STRESS_INDETERMINATE_COLOR = "#ec4899";
+
+/**
  * Floor for the `normal`/`bending` beam-fill lenses' own scale (`StressScaleCache.maxNormal`/
  * `.maxBending`, `cohesion-field.ts`), as a fraction of that beam's own `Re`. Unlike
  * `utilization`/`shear`, `normal` and `bending` have no admissible-limit ratio of their own to

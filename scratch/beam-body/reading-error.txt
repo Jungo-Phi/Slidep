@@ -1,0 +1,26 @@
+mécanisme                       poutre       écart N  % de la lecture
+Test slider                     b17c87      533.2911  100.57 %
+Vilbrequin                      5b6d41       12.9670  100.23 %
+CP                              e1ddd9     2820.6145  99.99 %
+Vilbrequin + masse lourde       5b6d41     1965.0861  97.14 %
+Huygen's chain drive            f1c526       24.8097  94.68 %
+Double Cantilever bis           834438       58.3536  69.67 %
+Huygen's chain drive            97e333       16.0520  59.00 %
+Vilbrequin double slider        c52764        2.0091  55.55 %
+Poulie bloqueuse                59e263        9.6679  50.78 %
+Vilbrequin double slider        f2ffb3        5.6811  49.44 %
+Petit                           14fe52        0.0779  45.08 %
+Huygen's chain drive            3c4f36        8.2680  40.12 %
+Huygen's chain drive            53221f        8.2249  40.06 %
+Double Cantilever               7672aa       16.8296  39.82 %
+Balance                         0957d7      153.6975  34.61 %
+Test slider                     02be84        2.0408  4.56 %
+Puente                          9dabef        2.4570  0.57 %
+CP                              9e6e2c       10.2586  0.36 %
+Core XY                         5682b6        0.0250  0.07 %
+Core XY                         b5938c        0.0250  0.07 %
+Core XY - 2 moteurs             5682b6        0.0041  0.01 %
+Core XY - 2 moteurs             b5938c        0.0008  0.00 %
+Cantilever simple               76d204        0.0000  0.00 %
+Cantilever                      7672aa        0.0000  0.00 %
+Déconnexion courroie            d9e1ed        0.0000  0.00 %

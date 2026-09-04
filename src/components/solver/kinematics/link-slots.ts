@@ -15,6 +15,46 @@ export interface LinkSlots {
 
 const EMPTY = new Int32Array(0);
 
+/**
+ * Every field a link can carry a POSITION key in. One list, because two very different
+ * readers need the same answer: `rewrite_position_keys` (which rewrites them on fusion) and
+ * `position_keys_of` below (which asks what a link touches). A link type that grows a key
+ * field and is not added here goes silently unnoticed by both.
+ */
+export const POSITION_KEY_FIELDS = [
+  "key1",
+  "key2",
+  "key3",
+  "key4",
+  "grabbedKey",
+  "pivotKey",
+  "drivenKey",
+  "anchorKey",
+  "anchorPivotKey",
+  "posKey1",
+  "posKey2",
+  "nodeKey",
+  "centerKey",
+  // Belt links carry their position keys in dedicated fields.
+  "startKey",
+  "endKey",
+  "centerKeyA",
+  "centerKeyB",
+  "gearPosKey",
+] as const;
+
+/** The position keys a link names, in no particular order. */
+export function position_keys_of(link: Link): string[] {
+  const l = link as unknown as Record<string, unknown>;
+  const out: string[] = [];
+  for (const field of POSITION_KEY_FIELDS)
+    if (typeof l[field] === "string") out.push(l[field] as string);
+  // BeltLength's wrapped-pulley centres live in an array.
+  if (Array.isArray(l.gearPosKeys)) out.push(...(l.gearPosKeys as string[]));
+  return out;
+}
+
+
 /** Resolves every link's keys against `nodes`. Unknown keys become `ABSENT`. */
 export function resolve_slots(links: Link[], nodes: Nodes): LinkSlots[] {
   const posIndex = nodes.index;

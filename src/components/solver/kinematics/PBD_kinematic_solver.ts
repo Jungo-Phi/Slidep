@@ -518,6 +518,13 @@ export function PBD_solve(
   const reversed = dynamics ? reversed_sweep_order(links, slots, nodes) : null;
 
   let maxError: number = 0;
+  // XPBD multipliers, one per link, accumulated across the sweeps of THIS solve — which is
+  // one substep, the interval `α̃ = α/dt²` is written against. Only a dynamics step has a
+  // meaningful `dt`, so a kinematic solve leaves every constraint rigid and never touches
+  // this. See `Compliance`.
+  const lambda = new Float64Array(links.length);
+  const invDtSq = dynamics && dynamics.dt > 0 ? 1 / (dynamics.dt * dynamics.dt) : 0;
+
   for (let i = 0; i < nbIterations; i++) {
     maxError = 0;
     maxSeverity = 0;
@@ -557,6 +564,9 @@ export function PBD_solve(
             link.distance,
             1.0,
             link.preferredAxis,
+            link.compliance && invDtSq > 0
+              ? { alphaTilde: link.compliance * invDtSq, lambda, index: idx }
+              : undefined,
           );
           break;
         case "MinDistance":

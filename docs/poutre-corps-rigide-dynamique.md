@@ -46,6 +46,12 @@ résolution : ~5 % de l'envergure du mécanisme dans les deux cas. C'est la sign
 pas d'un réglage de solveur — et sur le reste de la galerie l'erreur reste sous 0.04 %, ce qui
 isole bien `CP.slidep` comme le cas où le modèle craque.
 
+> **Toujours vrai sur le code actuel**, remesuré après la pose de la compliance axiale sur les
+> liens `Distance` : le membre de 5 mm de `CP` s'allonge de 54.5 % à l'image 30 et de 19.7 % à
+> l'image 600, soit 9.1 % puis 3.3 % de l'envergure. Ça ne se résorbe pas, et ce n'est pas la
+> compliance qui travaille — 20 % de déformation est deux ordres au-delà de tout domaine
+> élastique. Détail dans [[ratio-masse-convergence-dynamique]], « Ce qui reste ouvert ».
+
 **Un corps rigide ne peut ni s'allonger ni laisser glisser ce qui lui est soudé.** Les deux
 modes de défaillance disparaissent par construction, ils ne sont pas atténués. La cause — une
 contrainte de distance entre deux masses ponctuelles très inégales — n'existe plus : la masse
@@ -167,6 +173,16 @@ déjà instable entre les six chemins concurrents, et qui boucle sur elle-même 
 warm-startée d'une frame à l'autre au lieu de se stabiliser sur un seul biais fixe comme dans le
 cas à un seul nœud sur-contraint.
 
+> **Mesuré une fois de plus, et cette fois sur une BOUCLE réelle.** `Masse suspendue` à densité
+> réelle, résidu de marche en multiples du poids propre de chaque poutre : 0.9 à 2.8 × avec
+> l'alternance et le nœud milieu, 0.002 à 0.2 × sans l'alternance, et exactement 0.000 à
+> `rho = 0` (donc sans nœud milieu compilé du tout). Le diagnostic de cette section tient donc
+> au-delà du cantilever-jouet. Couper l'alternance reste sans issue : `Epan` passe de 113.65 à
+> 113.21 kN contre 114.5 attendu, l'alternance étant ce qui fait du balayage un solve direct.
+>
+> **Ce défaut n'atteint plus les efforts affichés** (phase 10), mais il atteint toujours la
+> géométrie, et c'est à ce titre seul qu'il compte désormais pour ce document.
+
 **Pourquoi ce n'est pas un correctif de `beam-cohesion.ts`** : la lecture des réactions est fidèle
 à ce que le solveur calcule réellement ; le problème est en amont, dans la création des liaisons.
 Une fusion `Distance`+`KeepOrientation` en une seule contrainte "soudure rigide" à 2 ddl
@@ -273,6 +289,22 @@ extérieures au corps en un torseur à son origine, puis l'intégration le long 
 volontairement la même synthèse charge→force, en lock-step manuel. Le passage au corps touche
 les deux et casse en silence si une seule est mise à jour.
 
+> **Fait, et pas par ce chantier-ci.** L'algorithme différent existe : c'est la phase 10 de
+> `plan-efforts-interieurs.md`, écrite pour une tout autre raison (aucune des deux lectures
+> d'alors n'était juste partout). Elle fait exactement la réduction d'Alembert décrite ci-dessus,
+> en résolvant un système d'équilibre sur la géométrie convergée, et **elle ne lit plus une seule
+> réaction de lien**. Trois conséquences pour ce document :
+>
+> - `beam-cohesion.ts` est passé de ~480 à 77 lignes et ne fait plus que résoudre `k0`/`k1` et
+>   les nœuds de portée. Il s'ancre toujours sur le `Distance` de la poutre — le point ci-dessus
+>   reste vrai — mais ce n'est plus un algorithme à reconcevoir, c'est une ligne à changer : un
+>   corps connaît ses deux extrémités sans avoir besoin d'un lien pour les nommer.
+> - **L'étape 2 du découpage n'est plus « la seule qui demande de concevoir ».** La conception est
+>   faite et livrée. Ce qui reste de l'étape 2 est un portage comme les autres.
+> - Le couplage `resolve_load_forces` / `direct_point_actions` reste à surveiller, et un
+>   troisième consommateur s'y est ajouté : `statics/statics-frame.ts::distributedDensityOn`,
+>   qui lit la même charge répartie sous forme de densité.
+
 ### Trois choses qui deviennent PLUS simples
 
 - **Une charge de type `couple` est aujourd'hui synthétisée en paire de forces** ±k·ŷ aux deux
@@ -299,7 +331,7 @@ argument, donc `dynamicRigidity` y reste `false` ; seul `recording/recorder.ts:9
 | étape | contenu | ce que ça casse |
 | ----- | ------- | --------------- |
 | 1 | poutre ISOLÉE (rien de soudé dessus) devient un corps à 3 ddl, `start`/`end` dérivés | son `Distance` et son `KeepOrientation` disparaissent ; `beam-inertia`, les deux `Cantilever` |
-| 2 | masses/joins soudés en cours de portée + réécriture de `beam-cohesion` et `cohesion-field` | toute lecture N/T/Mf — `beam-cohesion`, `cohesion-field`, `reaction-forces`, `beam-cohesion-diagnostic` |
+| 2 | masses/joins soudés en cours de portée ; `beam-cohesion` n'a plus qu'à nommer les deux bouts d'un corps, la lecture elle-même ne bouge pas (phase 10) | `beam-cohesion`, `reaction-forces` |
 | 3 | frontière hybride : moyeu-engrenage, jonction-courroie, pivot-moteur soudés à une poutre | `Vilbrequin*`, `Core XY*`, `Huygens`, `Jansen`, `motor-beam-anchor`, `gear-moment` |
 | 4 | collisions contre une poutre-corps | `collision-candidates`, `dynamic-collision`, `collision-simulation` |
 | 5 | re-baseline général et sondes | `bit-exact-reference.json`, trajectoires enregistrées |
@@ -314,6 +346,14 @@ révision faite en voyant que `GearPerimeterPin` existait déjà). La partie con
 un portage de quelques semaines ; la partie efforts est une conception, et les collisions un
 quatrième front. **Plusieurs semaines à environ deux mois**, avec l'étape 2 comme principal
 risque de dépassement.
+
+> **À réviser à la baisse.** Le risque de dépassement était l'étape 2, parce qu'elle demandait de
+> concevoir une lecture des efforts qui ne s'appuie pas sur des liaisons internes. Cette
+> conception est faite et en production (phase 10), et elle est **indifférente au modèle de
+> poutre** : elle lit une géométrie, des masses continues et des accélérations, jamais un lien.
+> Il reste les contraintes, les collisions et le re-baselining — trois portages. L'argument qui
+> reste pour ce chantier est celui de la SIMULATION (allongement, glissement du cavalier, nœud
+> sur-contraint), plus du tout celui de la lecture des efforts.
 
 ## Écarté en chemin, et corrigé — une contrainte à 4 points dont deux clés coïncident
 

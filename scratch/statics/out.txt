@@ -1,0 +1,22 @@
+
+===== beams=Beam Epan, Beam Iqla, Beam Ulsu, Beam Lukn, Beam Dode | massless=false =====
+determinate: Beam Epan=false Beam Iqla=false Beam Ulsu=false Beam Lukn=false Beam Dode=true
+N Beam Epan      mean=115.17 kN  [108.06 … 120.95]
+N Beam Iqla      mean=34.63 kN  [32.49 … 36.36]
+N Beam Ulsu      mean=-59.95 kN  [-61.22 … -58.59]
+N Beam Lukn      mean=-120.60 kN  [-126.64 … -113.16]
+N Beam Dode      mean=0.01 kN  [0.01 … 0.01]
+R Pivot Uqin     x=0.40 kN [-0.90 … 1.75]  y=164.60 kN [156.35 … 171.01]
+R Pivot Dicu     x=-0.48 kN [-0.53 … -0.43]  y=-115.17 kN [-120.94 … -108.06]
+|v| masse: mean=0.0172 m/s  max=0.0279
+
+===== beams=Beam Epan, Beam Iqla, Beam Ulsu, Beam Lukn, Beam Dode | massless=true =====
+determinate: Beam Epan=false Beam Iqla=false Beam Ulsu=false Beam Lukn=false Beam Dode=true
+N Beam Epan      mean=115.27 kN  [105.87 … 122.99]
+N Beam Iqla      mean=34.62 kN  [31.80 … 36.94]
+N Beam Ulsu      mean=-59.90 kN  [-62.07 … -57.52]
+N Beam Lukn      mean=-120.37 kN  [-128.43 … -110.55]
+N Beam Dode      mean=0.00 kN  [0.00 … 0.00]
+R Pivot Uqin     x=0.53 kN [-0.98 … 2.22]  y=164.34 kN [153.07 … 173.09]
+R Pivot Dicu     x=-0.55 kN [-0.63 … -0.47]  y=-115.27 kN [-122.99 … -105.87]
+|v| masse: mean=0.0203 m/s  max=0.0331

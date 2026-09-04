@@ -1,0 +1,12 @@
+
+===== Double Cantilever =====
+Join Uner + Beam Kedi                            anchor=true  cov=true  residu=(0.00, 0.00) |r|/echelle=0.0000 momentResidu=0.000 reaction=(-0.00, 41.14) Mr=25.486
+Join Maom + Beam Kedi + Beam Lijl                anchor=false cov=true  residu=(0.01, -17.70) |r|/echelle=0.6968 momentResidu=-8.850 
+Beam Lijl                                        anchor=false cov=true  residu=(0.00, 0.00) |r|/echelle=0.0000 momentResidu=0.000 
+
+===== Masse suspendue =====
+Pivot Dicu + Beam Epan                           anchor=true  cov=true  residu=(0.00, 0.00) |r|/echelle=0.0000 momentResidu=0.000 reaction=(-475.24, -114327.97) Mr=-0.168
+Pivot Egru + Beam Epan + Beam Iqla + Beam Lukn   anchor=false cov=true  residu=(-0.00, -0.00) |r|/echelle=0.0000 momentResidu=0.000 
+Pivot Asve + Beam Iqla + Beam Ulsu + Beam Dode   anchor=false cov=true  residu=(50.55, -1.62) |r|/echelle=0.0008 momentResidu=5.357 
+Pivot Uqin + Beam Ulsu + Beam Lukn               anchor=true  cov=true  residu=(0.00, 0.00) |r|/echelle=0.0000 momentResidu=0.000 reaction=(662.75, 163788.03) Mr=5.929
+Mass Osas + Beam Dode                            anchor=false cov=true  residu=(0.00, 0.00) |r|/echelle=0.0000 momentResidu=0.000 

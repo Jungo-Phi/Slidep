@@ -62,6 +62,10 @@ export interface CohesionField {
    *
    */
   loopResidual: { fx: number; fy: number; m: number };
+  /** Carried through from `BeamCohesion.determinate`: whether the boundary torsor this field
+   *  marches from is a statement about the mechanism, or the solver's own account of how it
+   *  got there. The march itself is exact either way — it can only be as good as its start. */
+  determinate: boolean;
 }
 
 /**
@@ -90,53 +94,13 @@ function r_coh_start(cohesion: BeamCohesion): { fx: number; fy: number; m: numbe
   return { fx: cohesion.start.fx, fy: cohesion.start.fy, m: -cohesion.start.m };
 }
 
-/**
- * `distributedShare` — see `distributed_end_share`'s own doc: a FREE `k1` needs a distributed
- * load's own nodal artefact added back before the flip, or `loopResidual` reads a spurious gap
- * whenever such a load reaches the free end (the field itself, `N`/`T`/`Mf`, is unaffected —
- * this only feeds the diagnostic comparison below, never the march). A point load or a
- * moment's couple needs no such addition: the march already excludes their own boundary
- * station (never subtracted), so their tautological cancellation at a free end already
- * matches what the march leaves out — only a distributed load's density is integrated BY the
- * march right up to the boundary, with nothing excluded there to correct for.
- *
- * Only for a FREE `k1` (`!cohesion.end.atAnchor`): an ANCHORED one already has this same
- * share folded into `cohesion.end` by `beam-cohesion.ts` (its own `"External"` `LinkReaction`
- * — see `isExternalAtEnd`), so adding it again here would double it.
- */
-function r_coh_end(
-  cohesion: BeamCohesion,
-  distributedShare: Point2,
-): { fx: number; fy: number; m: number } {
-  const share = cohesion.end.atAnchor ? { x: 0, y: 0 } : distributedShare;
-  return {
-    fx: -(cohesion.end.fx + share.x),
-    fy: -(cohesion.end.fy + share.y),
-    m: -cohesion.end.m,
-  };
-}
-
-/** A distributed load's own nodal share at `k1` — the SAME equivalent-nodal weighting
- *  `resolve_load_forces` applies (see its own doc). Recomputed here because it is exactly
- *  what `r_coh_end` needs added back: unlike an ANCHORED end (whose share arrives as its own
- *  `"External"` `LinkReaction`, folded into `BeamCohesion.end` by `beam-cohesion.ts`), a FREE
- *  dof never gets one — a directly-applied force there never shows up as a link reaction at
- *  all, since the dof's own internal-rigidity reading already IS that force's negation, by
- *  plain equilibrium at rest. */
-function distributed_end_share(
-  beam: BeamElement,
-  loads: LoadElement[],
-  snapshot: DynamicSnapshot,
-  length: number,
-): Point2 {
-  let share = new Point2(0, 0);
-  for (const load of loads) {
-    if (load.type !== "distributed-force" || load.targetID !== beam.id) continue;
-    const direction = resolve_frame_vector(load.direction, load.frame, snapshot);
-    const { magnitudeStart: w0, magnitudeEnd: w1 } = load;
-    share = share.add(direction.mul((length / 6) * (w0 + 2 * w1)));
-  }
-  return share;
+/** The mirror of `r_coh_start` at the far end: the same reading, taken at the other boundary
+ *  of the same body, and flipped by Newton's third law — see `r_coh_start` for why the force
+ *  needs that flip and the moment does not. `beam-cohesion.ts` has already freed both ends of
+ *  the solver's own boundary artefacts (the endpoint mass lump, a distributed load's nodal
+ *  share), so nothing is added back here. */
+function r_coh_end(cohesion: BeamCohesion): { fx: number; fy: number; m: number } {
+  return { fx: -cohesion.end.fx, fy: -cohesion.end.fy, m: -cohesion.end.m };
 }
 
 function resolve_frame_vector(vector: Point2, frame: LoadFrame, snapshot: DynamicSnapshot): Point2 {
@@ -211,7 +175,23 @@ function density_at_ends(
   const yhat = xhat.perp();
   const omega = length > 1e-9 ? vEnd.sub(vStart).dot(yhat) / length : 0;
   const alpha = length > 1e-9 ? aEnd.sub(aStart).dot(yhat) / length : 0;
-  const a_of = (s: number) => aStart.add(yhat.mul(alpha * s)).sub(xhat.mul(omega * omega * s));
+  // The rigid-body field, written about the beam's CENTRE rather than about its start.
+  //
+  // The two are the same field whenever the frame's recorded accelerations satisfy rigidity —
+  // `a(σ)` is affine, so its mean over the span is its midpoint value. They differ when they do
+  // not, and then anchoring on `aStart` inherits that one endpoint's whole error: measured on a
+  // freely spinning beam, an endpoint reading 27× short of its own centripetal acceleration
+  // turned a pure tension into a monotone compression. The centre is the average of both ends,
+  // so it carries half of each error instead of all of one — and it is the same figure the
+  // beam's Newton equation uses (`equilibrium-solve.ts`), which is what keeps the march and
+  // the torsor it starts from talking about one body.
+  const aCentre = aStart.lerp(aEnd, 0.5);
+  const a_of = (s: number) => {
+    const fromCentre = s - length / 2;
+    return aCentre
+      .add(yhat.mul(alpha * fromCentre))
+      .sub(xhat.mul(omega * omega * fromCentre));
+  };
 
   let w0 = gravity.sub(a_of(0)).mul(linearMass);
   let w1 = gravity.sub(a_of(length)).mul(linearMass);
@@ -331,7 +311,7 @@ export function compute_cohesion_field(
     return { s: best.s, value: pick(best) };
   };
 
-  const rL = r_coh_end(cohesion, distributed_end_share(beam, loads, snapshot, length));
+  const rL = r_coh_end(cohesion);
   const RL_expected = new Point2(rL.fx, rL.fy);
   const loopResidual = {
     fx: R.x - RL_expected.x,
@@ -350,6 +330,7 @@ export function compute_cohesion_field(
       Mf: extremumOf((s) => s.Mf),
     },
     loopResidual,
+    determinate: cohesion.determinate,
   };
 }
 

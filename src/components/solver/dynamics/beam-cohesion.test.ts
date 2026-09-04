@@ -10,11 +10,9 @@ import type {
   MechanicalElement,
   PivotElement,
 } from "../../../types/element";
-import type { Link, LinkReaction } from "../../../types";
 import type { MaterialDef, ProfileDef } from "../../../types/material";
 import { DynamicSnapshot } from "../../../types/runtime-state";
 import { RECORD_DT, compile_simulation_model, step_dynamic_simulation } from "./simulation-engine";
-import { build_beam_cohesion_specs, resolve_beam_cohesion } from "./beam-cohesion";
 
 let nextID = 0;
 const id = (): ID => `00000000-0000-0000-0000-${String(++nextID).padStart(12, "0")}` as ID;
@@ -42,7 +40,7 @@ const TIP_LOAD = 100;
 const MATERIAL_ID = id();
 const PROFILE_ID = id();
 const MATERIALS: MaterialDef[] = [
-  { id: MATERIAL_ID, name: "test", E: 1, Re: 1, rho: 1 },
+  { id: MATERIAL_ID, name: "test", E: 210e9, Re: 1, rho: 1 },
 ];
 const PROFILES: ProfileDef[] = [
   { id: PROFILE_ID, name: "test", shape: { kind: "rect", b: 1, h: 1 } },
@@ -143,16 +141,14 @@ describe("BeamCohesion — torseur d'interface d'une poutre (docs/plan-efforts-i
     expect(cohesionB!.end.fy).toBeCloseTo(-50, 0);
   });
 
-  // Expected to fail: `k1` (beam:end) is repositioned by FOUR independent links (`Distance`,
+  // Used to fail by 1.14 %: `k1` is repositioned by FOUR independent links (`Distance`,
   // `KeepOrientation`, and both `FixedOnSegment`s — the attached mass's and the beam's own
-  // rotational-inertia midpoint), not two — `projectOnSegment` redistributes onto `start`/`end`
-  // by inverse mass same as the other two links do, so Gauss-Seidel has two competing paths to
-  // `k1` and no way to attribute the true reaction between them, however many sweeps or
-  // substeps run (verified up to 100k sweeps / 8192 substeps, bit-identical). See
-  // docs/poutre-corps-rigide-dynamique.md, "un nœud rigide est sur-contraint au niveau du
-  // graphe de liaisons" — fix belongs in how a beam's rigidity is represented, not here. If this
-  // ever starts passing, remove `.fails` and update that doc.
-  it.fails("un cantilever avec une masse en cours de portée transmet la charge par le nœud attaché", () => {
+  // rotational-inertia midpoint), so Gauss-Seidel had two competing paths to it and no way to
+  // attribute the true reaction between them, however many sweeps or substeps ran. That
+  // competition is still there in the SOLVER; what changed is that the torsor no longer asks
+  // it — it is solved from equilibrium instead (docs/plan-efforts-interieurs.md phase 10).
+  // See also docs/ratio-masse-convergence-dynamique.md.
+  it("un cantilever avec une masse en cours de portée transmet la charge par le nœud attaché", () => {
     // A mass welded to the beam's BODY mid-span (fixedNodesBodyIDs, not an endpoint), on a
     // beam encastré at the other end. No gravity: the only action is the load on the mass,
     // which must reach the beam entirely through the FixedOnSegment holding it — the
@@ -235,52 +231,4 @@ describe("BeamCohesion — torseur d'interface d'une poutre (docs/plan-efforts-i
     expect_reading(cohesion!.end.m, 0, TIP_LOAD);
   });
 
-  it("correction 1 — un lien de rigidité 2-ddl non ancré aux deux bouts transmet quand même son moment", () => {
-    // A beam rigidly welded to a MOBILE hub (e.g. following a non-grounded gear, the
-    // "mécanisme, mode dynamique" case docs/plan-efforts-interieurs.md's correction 1
-    // calls out): `BeamFollowsAngle`'s own reaction is reported at both `pivotKey` (the
-    // hub) and `drivenKey` (the beam's free end) with the SAME torque value and
-    // `atAnchor: false` at both, since neither end is grounded. `weldKeyOf` — built
-    // structurally from the link's own `pivotKey` — is what lets `resolve_beam_cohesion`
-    // attribute it to the hub end and not to the free end, instead of dropping it (as
-    // `atAnchor` alone used to) or double-counting it at both.
-    const BEAM = id();
-    const HUB = `${BEAM}:start`; // the beam's own start IS the welded hub (pivotKey)
-    const TIP = `${BEAM}:end`;
-
-    const beam: BeamElement = {
-      type: "beam",
-      id: BEAM,
-      probes: [],
-      overlays: {},
-      positionStart: new Point2(0, 0),
-      positionEnd: new Point2(1, 0),
-      fixedNodesBodyIDs: [],
-      materialID: MATERIAL_ID,
-      profileID: PROFILE_ID,
-    };
-
-    const links: Link[] = [
-      { type: "Distance", ddl: 1, key1: HUB, key2: TIP, distance: 1, owner: BEAM },
-      {
-        type: "BeamFollowsAngle",
-        ddl: 1,
-        pivotKey: HUB,
-        drivenKey: TIP,
-        angleKey: "gear",
-        offset: 0,
-      },
-    ];
-
-    const specs = build_beam_cohesion_specs([beam], links);
-    const reactions: LinkReaction[] = [
-      { type: "BeamFollowsAngle", key: HUB, atAnchor: false, kind: "torque", torque: 42, linkIndex: 1 },
-      { type: "BeamFollowsAngle", key: TIP, atAnchor: false, kind: "torque", torque: 42, linkIndex: 1 },
-    ];
-
-    const [cohesion] = resolve_beam_cohesion(specs, reactions, new Map());
-    expect(cohesion.start.m).toBeCloseTo(42, 6);
-    // Not double-counted at the free end, which only ever echoes the same raw value.
-    expect(cohesion.end.m).toBeCloseTo(0, 6);
-  });
 });

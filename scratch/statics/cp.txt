@@ -1,0 +1,22 @@
+envergure de reference = 0.03000 m
+--- image 30
+  poutre 9e6e2c : repos=0.03000 actuel=0.03000 allongement=0.000 % = 0.000 % de l'envergure
+  poutre e1ddd9 : repos=0.00500 actuel=0.00773 allongement=54.515 % = 9.086 % de l'envergure
+  join 6e7296 : ecart a la poutre = 0.000e+0 m = 0.000 % de l'envergure
+  mass 82eb4b : ecart a la poutre = 0.000e+0 m = 0.000 % de l'envergure
+  pivot 88583c : ecart a la poutre = 0.000e+0 m = 0.000 % de l'envergure
+  mass 330aea : ecart a la poutre = 8.674e-19 m = 0.000 % de l'envergure
+--- image 200
+  poutre 9e6e2c : repos=0.03000 actuel=0.03000 allongement=-0.000 % = -0.000 % de l'envergure
+  poutre e1ddd9 : repos=0.00500 actuel=0.00614 allongement=22.826 % = 3.804 % de l'envergure
+  join 6e7296 : ecart a la poutre = 0.000e+0 m = 0.000 % de l'envergure
+  mass 82eb4b : ecart a la poutre = 0.000e+0 m = 0.000 % de l'envergure
+  pivot 88583c : ecart a la poutre = 0.000e+0 m = 0.000 % de l'envergure
+  mass 330aea : ecart a la poutre = 0.000e+0 m = 0.000 % de l'envergure
+--- image 600
+  poutre 9e6e2c : repos=0.03000 actuel=0.03000 allongement=-0.000 % = -0.000 % de l'envergure
+  poutre e1ddd9 : repos=0.00500 actuel=0.00598 allongement=19.674 % = 3.279 % de l'envergure
+  join 6e7296 : ecart a la poutre = 0.000e+0 m = 0.000 % de l'envergure
+  mass 82eb4b : ecart a la poutre = 0.000e+0 m = 0.000 % de l'envergure
+  pivot 88583c : ecart a la poutre = 0.000e+0 m = 0.000 % de l'envergure
+  mass 330aea : ecart a la poutre = 0.000e+0 m = 0.000 % de l'envergure

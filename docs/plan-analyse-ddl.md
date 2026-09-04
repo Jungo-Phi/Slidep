@@ -88,6 +88,18 @@ non-glissement des courroies, l'écart avec la simulation réelle atteint 16 DDL
 - **Deux nombres séparés, jamais leur différence.** `m` (mobilité) et `h` (hyperstatisme, contraintes
   redondantes). Aucun DDL négatif nulle part. `m=0, h=3` se lit « rigide » **et** « hyperstatique
   degré 3 ».
+
+  > **`h` a maintenant un second calcul, indépendant.** La passe de statique
+  > (`plan-efforts-interieurs.md` phase 10) rend `StaticsSolution.indeterminacy` = la déficience
+  > de rang de son système d'équilibre, qui est le même nombre par un tout autre chemin : celui-ci
+  > mesure par le solveur (`mobility-probe.ts` projette des perturbations), celui-là par le rang
+  > d'une matrice assemblée. Ils devraient s'accorder, et un désaccord dirait qu'un des deux
+  > modèles a tort — c'est le contrôle croisé le moins cher disponible sur `h`, encore à câbler.
+  >
+  > Un écart LÉGITIME existe cependant : la passe de statique ajoute une inconnue extérieure à
+  > tout nœud que touche une courroie, un engrènement ou un contact, faute de les modéliser. Son
+  > `indeterminacy` compte donc ces inconnues-là en plus (sur `Core XY`, 23 contre 0). La
+  > comparaison n'est honnête que sur un mécanisme sans courroie ni engrenage.
 - **Par chaîne, jamais de somme globale.** Une seule chaîne (cas courant) n'affiche pas d'en-tête —
   le panneau reste aussi sobre qu'avant. Chaîne non ancrée → badge avec explication en infobulle.
 - **Survoler un mode anime le mécanisme** le long de ce degré de liberté (chaque pose est résolue à

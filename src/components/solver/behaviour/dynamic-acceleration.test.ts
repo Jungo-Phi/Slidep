@@ -22,7 +22,7 @@ const id = (): ID => `00000000-0000-0000-0000-${String(++nextID).padStart(12, "0
 const MATERIAL_ID = id();
 const PROFILE_ID = id();
 const MATERIALS: MaterialDef[] = [
-  { id: MATERIAL_ID, name: "test", E: 1, Re: 1, rho: 0.001 },
+  { id: MATERIAL_ID, name: "test", E: 210e9, Re: 1, rho: 0.001 },
 ];
 const PROFILES: ProfileDef[] = [
   { id: PROFILE_ID, name: "test", shape: { kind: "rect", b: 1, h: 1 } },

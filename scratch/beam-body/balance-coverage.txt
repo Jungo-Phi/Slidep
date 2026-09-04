@@ -1,0 +1,26 @@
+Balance                            2/3
+Cantilever simple                  1/1
+Cantilever                         1/1
+Core XY - 2 moteurs                2/9
+Core XY                            2/9
+CP                                 2/2
+Double Cantilever bis              1/2
+Double Cantilever                  1/2
+Déconnexion courroie               1/4
+Huygen's chain drive               4/4
+Jansen's linkage (upside-down)     0/10
+Jansen's linkage                   0/10
+Line from rotation                 0/9
+Petit                              1/2
+Poulie bloqueuse                   1/2
+Poutre sur joint de courroie       0/1
+Puente                             1/18
+Roues isolées                      0/0
+Test slider                        2/2
+trac-comp                          1/2
+Treillis                           1/6
+Vilbrequin + masse lourde          1/2
+Vilbrequin double slider           2/7
+Vilbrequin                         1/2
+
+TOTAL 28/110 poutres

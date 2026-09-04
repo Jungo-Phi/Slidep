@@ -651,6 +651,11 @@ export const MechanicalCanvas = forwardRef<
         beamStressLens !== "none" &&
         mechanismRef.current.mechanicalElements.some((el) => el.type === "beam")
       ) {
+        // Only where the mechanism actually holds one: a swatch for a colour nothing on
+        // screen is drawn in would be noise.
+        const indeterminateLabel = live?.cohesionFields?.some((f) => !f.determinate)
+          ? t("stress_legend_indeterminate")
+          : undefined;
         switch (beamStressLens) {
           case "utilization":
             draw_stress_legend(
@@ -658,6 +663,7 @@ export const MechanicalCanvas = forwardRef<
               canvas.height,
               live?.stressScale ?? 0,
               t("stress_legend_overstress"),
+              indeterminateLabel,
             );
             break;
           case "normal":
@@ -667,12 +673,20 @@ export const MechanicalCanvas = forwardRef<
               live?.normalStressScale ?? 0,
               t("stress_legend_compression"),
               t("stress_legend_tension"),
+              indeterminateLabel,
             );
             break;
           case "bending":
-            // `STRESS_RAMP` on a plain magnitude, no swatch — see `magnitude_stress_color`'s
-            // own doc for why `bending` has no sign to show, unlike `normal`.
-            draw_stress_legend(ctx, canvas.height, live?.bendingStressScale ?? 0);
+            // `STRESS_RAMP` on a plain magnitude, no overstress swatch — see
+            // `magnitude_stress_color`'s own doc for why `bending` has no sign to show,
+            // unlike `normal`.
+            draw_stress_legend(
+              ctx,
+              canvas.height,
+              live?.bendingStressScale ?? 0,
+              undefined,
+              indeterminateLabel,
+            );
             break;
           case "shear":
             draw_stress_legend(
@@ -680,6 +694,7 @@ export const MechanicalCanvas = forwardRef<
               canvas.height,
               live?.shearStressScale ?? 0,
               t("stress_legend_overstress"),
+              indeterminateLabel,
             );
             break;
         }

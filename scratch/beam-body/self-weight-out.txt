@@ -1,0 +1,12 @@
+
+── poutre de 1 m, masse 1 kg — vérité: start.fy = -9.8100, start.m = 4.9050
+  alternance=ON   start.fy=-9.8100 (écart 0.0000, 0.00 %)  start.m=4.9050 (0.00 %)  flèche=-7.60e-7
+      8 réactions: Distance@:start*=-0.000 Distance@w4:end=0.000 KeepOrientation@:start*=-4.905 KeepOrientation@w4:end=4.905 FixedOnSegment@:start*=-3.270 FixedOnSegment@w4:end=-3.270 FixedOnSegment@w4:mid=6.540 External@:start*=-1.635
+  alternance=OFF  start.fy=-9.8100 (écart 0.0000, 0.00 %)  start.m=4.9050 (0.00 %)  flèche=-7.60e-7
+      8 réactions: Distance@:start*=-0.000 Distance@w6:end=0.000 KeepOrientation@:start*=-4.905 KeepOrientation@w6:end=4.905 FixedOnSegment@:start*=-3.270 FixedOnSegment@w6:end=-3.270 FixedOnSegment@w6:mid=6.540 External@:start*=-1.635
+
+── poutre de 3 m, masse 3 kg — vérité: start.fy = -29.4300, start.m = 44.1450
+  alternance=ON   start.fy=-19.6200 (écart 9.8100, 33.33 %)  start.m=29.4300 (-33.33 %)  flèche=-6.98e-19
+      8 réactions: Distance@:start*=-0.000 Distance@w8:end=0.000 KeepOrientation@:start*=-9.810 KeepOrientation@w8:end=9.810 FixedOnSegment@:start*=-4.905 FixedOnSegment@w8:end=-4.905 FixedOnSegment@w8:mid=9.810 External@:start*=-4.905
+  alternance=OFF  start.fy=-19.6200 (écart 9.8100, 33.33 %)  start.m=29.4300 (-33.33 %)  flèche=-6.98e-19
+      8 réactions: Distance@:start*=-0.000 Distance@10:end=0.000 KeepOrientation@:start*=-9.810 KeepOrientation@10:end=9.810 FixedOnSegment@:start*=-4.905 FixedOnSegment@10:end=-4.905 FixedOnSegment@10:mid=9.810 External@:start*=-4.905

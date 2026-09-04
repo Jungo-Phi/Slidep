@@ -1,0 +1,32 @@
+Verite Masse suspendue : Epan +114.5  Iqla +34.3  Ulsu -59.8  Lukn -119.5  Dode +49.05 kN ; appuis Dicu -114.5, Uqin +163.5
+Verite Double Cantilever : encastrement 40.804 N, moment 25.402 N.m
+
+===== Double Cantilever =====
+inconnues=14 lignes=15 indetermination=0 residu=0.0000 (echelle 15.4)
+  Beam Kedi    -> Join Uner+Beam Kedi                        s=0.000 F=(0.00, -40.80) M=-25.402 [FFM]
+  Beam Kedi    -> Join Maom+Beam Kedi+Beam Lijl              s=0.500 F=(-0.00, 25.40) M=8.850 [FFM]
+  Beam Lijl    -> Join Maom+Beam Kedi+Beam Lijl              s=0.000 F=(0.00, -25.40) M=-8.850 [FFM]
+  Beam Lijl    -> Beam Lijl                                  s=0.500 F=(-0.00, 10.00) M=0.000 [FFM]
+  APPUI/EXT    -> Join Uner+Beam Kedi                        s=  -   F=(-0.00, 40.80) M=25.402 [FFM]
+  N Beam Kedi    = 0.000 kN
+  N Beam Lijl    = -0.000 kN
+
+===== Masse suspendue =====
+inconnues=24 lignes=30 indetermination=0 residu=5.3239 (echelle 49081.6)
+  Beam Epan    -> Pivot Dicu+Beam Epan                       s=0.000 F=(461.28, 114562.93) M=0.000 [FFM]
+  Beam Epan    -> Pivot Egru+Beam Epan+Beam Iqla+Beam Lukn   s=0.500 F=(-461.28, -114601.45) M=0.000 [FFM]
+  Beam Iqla    -> Pivot Egru+Beam Epan+Beam Iqla+Beam Lukn   s=0.000 F=(34413.42, -154.01) M=0.000 [FFM]
+  Beam Iqla    -> Pivot Asve+Beam Iqla+Beam Ulsu+Beam Dode   s=0.500 F=(-34413.42, 115.50) M=0.000 [FFM]
+  Beam Ulsu    -> Pivot Asve+Beam Iqla+Beam Ulsu+Beam Dode   s=0.000 F=(34620.09, 48973.78) M=0.000 [FFM]
+  Beam Ulsu    -> Pivot Uqin+Beam Ulsu+Beam Lukn             s=0.610 F=(-34620.10, -49020.77) M=0.000 [FFM]
+  Beam Lukn    -> Pivot Uqin+Beam Ulsu+Beam Lukn             s=0.000 F=(33952.14, -114795.64) M=0.000 [FFM]
+  Beam Lukn    -> Pivot Egru+Beam Epan+Beam Iqla+Beam Lukn   s=0.522 F=(-33952.14, 114755.46) M=0.000 [FFM]
+  Beam Dode    -> Pivot Asve+Beam Iqla+Beam Ulsu+Beam Dode   s=0.000 F=(-206.68, -49089.28) M=0.000 [FFM]
+  Beam Dode    -> Mass Osas+Beam Dode                        s=0.100 F=(206.39, 49081.57) M=0.000 [FFM]
+  APPUI/EXT    -> Pivot Dicu+Beam Epan                       s=  -   F=(-461.28, -114562.93) M=0.000 [FFM]
+  APPUI/EXT    -> Pivot Uqin+Beam Ulsu+Beam Lukn             s=  -   F=(667.95, 163816.40) M=0.000 [FFM]
+  N Beam Epan    = 114.564 kN
+  N Beam Iqla    = 34.414 kN
+  N Beam Ulsu    = -59.975 kN
+  N Beam Lukn    = -119.711 kN
+  N Beam Dode    = 49.090 kN

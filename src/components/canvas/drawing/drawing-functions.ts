@@ -4,7 +4,7 @@
 
 import { COLORS, ICON_COLORS } from "../../../theme/canvas-theme";
 import { HIT_TOLERANCE, INTERACTION_SPECS, MODE_ANIMATION } from "../../../constants/interaction-specs";
-import { PhysicsOverlayKind, PHYSICS_OVERLAY_COLOR, SIGNED_STRESS_RAMP, STRESS_RAMP, STRESS_OVERSTRESS_COLOR, STRESS_LEGEND } from "../../../constants/physics-display-specs";
+import { PhysicsOverlayKind, PHYSICS_OVERLAY_COLOR, SIGNED_STRESS_RAMP, STRESS_RAMP, STRESS_INDETERMINATE_COLOR, STRESS_OVERSTRESS_COLOR, STRESS_LEGEND } from "../../../constants/physics-display-specs";
 import { STROKE_WIDTHS, DIM, FLOOR, GRADUATION, GRID_ALPHA, GUIDE_DASH, ICON_TINT, TEXT_SPECS, REDUNDANCY_SYMBOL } from "../../../constants/rendering-specs";
 import { FloorConfig } from "../../../types/mechanism";
 import {
@@ -969,6 +969,9 @@ export function draw_stress_legend(
   height: number,
   scaleMaxStress: number,
   overstressLabel?: string,
+  /** Shown only when the mechanism actually holds a beam whose field is indicative — see
+   *  `STRESS_INDETERMINATE_COLOR`. An unexplained colour on screen is worse than none. */
+  indeterminateLabel?: string,
 ) {
   const { MARGIN, BAR_WIDTH, BAR_HEIGHT, GAP, FONT } = STRESS_LEGEND;
   const barX = MARGIN;
@@ -1000,23 +1003,50 @@ export function draw_stress_legend(
     barY - GAP,
   );
 
-  if (overstressLabel !== undefined) {
-    const swatchX = barX + BAR_WIDTH + GAP;
-    ctx.fillStyle = STRESS_OVERSTRESS_COLOR;
-    ctx.fillRect(swatchX, barY, BAR_HEIGHT, BAR_HEIGHT);
-    ctx.strokeRect(swatchX + 0.5, barY + 0.5, BAR_HEIGHT - 1, BAR_HEIGHT - 1);
-
-    ctx.textAlign = "left";
-    ctx.textBaseline = "middle";
-    draw_graduation_label(
+  ctx.textAlign = "left";
+  ctx.textBaseline = "middle";
+  let swatchX = barX + BAR_WIDTH + GAP;
+  if (overstressLabel !== undefined)
+    swatchX = draw_legend_swatch(
       ctx,
+      swatchX,
+      barY,
+      BAR_HEIGHT,
+      GAP,
+      STRESS_OVERSTRESS_COLOR,
       overstressLabel,
-      swatchX + BAR_HEIGHT + GAP,
-      barY + BAR_HEIGHT / 2,
     );
-  }
+  if (indeterminateLabel !== undefined)
+    draw_legend_swatch(
+      ctx,
+      swatchX,
+      barY,
+      BAR_HEIGHT,
+      GAP,
+      STRESS_INDETERMINATE_COLOR,
+      indeterminateLabel,
+    );
 
   ctx.restore();
+}
+
+/** One square of colour and its label, laid out left to right; returns where the next one
+ *  starts. Assumes `textAlign`/`textBaseline` are already left/middle. */
+function draw_legend_swatch(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  size: number,
+  gap: number,
+  color: string,
+  label: string,
+): number {
+  ctx.fillStyle = color;
+  ctx.fillRect(x, y, size, size);
+  ctx.strokeRect(x + 0.5, y + 0.5, size - 1, size - 1);
+  const labelX = x + size + gap;
+  draw_graduation_label(ctx, label, labelX, y + size / 2);
+  return labelX + ctx.measureText(label).width + gap * 2;
 }
 
 /** One stop of the stress overlay's fill gradient — `offset` a fraction of the beam's own
@@ -2426,7 +2456,7 @@ export function signed_stress_fill_stops(
 /**
  * The `normal` lens' own legend — screen-anchored bottom-left, same position and geometry as
  * `draw_stress_legend`, a diverging gradient bar reading `SIGNED_STRESS_RAMP` from `-scaleMax`
- * to `+scaleMax`. No swatch: unlike the utilization ratio, `normal` has no danger threshold to
+ * to `+scaleMax`. No DANGER swatch: unlike the utilization ratio, `normal` has no threshold to
  * mark past the bar's own two ends — just the value at each one. `compressionLabel`/
  * `tensionLabel` name what the colour means: here, unlike `bending`, the sign really is a
  * state of the whole section (pushed or pulled together), so a word earns its place.
@@ -2437,6 +2467,9 @@ export function draw_signed_stress_legend(
   scaleMax: number,
   compressionLabel: string,
   tensionLabel: string,
+  /** Same swatch as `draw_stress_legend`'s: this lens reads the same fields, so it shows the
+   *  same indicative beams and owes the same explanation. */
+  indeterminateLabel?: string,
 ) {
   const { MARGIN, BAR_WIDTH, BAR_HEIGHT, GAP, FONT } = STRESS_LEGEND;
   const barX = MARGIN;
@@ -2473,6 +2506,20 @@ export function draw_signed_stress_legend(
     barX + BAR_WIDTH,
     barY - GAP,
   );
+
+  if (indeterminateLabel !== undefined) {
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    draw_legend_swatch(
+      ctx,
+      barX + BAR_WIDTH + GAP,
+      barY,
+      BAR_HEIGHT,
+      GAP,
+      STRESS_INDETERMINATE_COLOR,
+      indeterminateLabel,
+    );
+  }
 
   ctx.restore();
 }

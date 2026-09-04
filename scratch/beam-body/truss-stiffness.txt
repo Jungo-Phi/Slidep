@@ -1,0 +1,3 @@
+rigide                       (6 liens compliants)  start.fy = 9579:-1035.51  49b5:-1.32  75d7:-3.13  0ba2:-9.56  8f01:-1015.68  08fd:-1008.89
+souple                       (6 liens compliants)  start.fy = 9579:-1034.57  49b5:-1.12  75d7:-2.96  0ba2:-9.61  8f01:-1015.14  08fd:-1008.46
+souple, un membre allégé     (6 liens compliants)  start.fy = 9579:-1034.85  49b5:-0.41  75d7:-2.37  0ba2:-9.80  8f01:-1015.82  08fd:-1008.42

@@ -1,0 +1,11 @@
+interfaces=2 colonnes=4 lignes=9 h=0 residu=7.639e-5 echelle=9.399e-5
+nodeMass(k0)=0.000e+0 nodeMass(k1)=0.000e+0 beamMass=1.014e+0 spec.mass=1.000e+0
+accel(k0)=7.388e-2,1.176e-2  accel(k1)=-7.388e-2,-1.176e-2
+  poutre s=0.000 node=b:start F=(-5.174e-6,3.104e-5) M=0.000e+0 det=truetruetrue foreign=false
+  poutre s=1.014 node=b:end F=(5.174e-6,-3.104e-5) M=0.000e+0 det=truetruetrue foreign=false
+start=(-5.174e-6, 3.104e-5, m=0.000e+0)
+end=(5.174e-6, -3.104e-5, m=0.000e+0)
+determinate=true
+N: min=-9.693e-17 max=4.866e-1  extremum s=0.507 v=4.866e-1
+|min|/max = 1.99e-16
+T max=1.076e-4  Mf max=6.300e-5

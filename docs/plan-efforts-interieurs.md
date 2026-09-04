@@ -58,7 +58,8 @@ avec la phase 6, `draw_beam` n'ayant qu'un seul emplacement de remplissage. Remp
 flexion`, `taux de travail`, `taux de cisaillement` — sélecteur global à la place des deux
 `OverlayFlags` `axial`/`stress`, retrait complet de l'ancien overlay `N` par flèches).
 
-**Restent :** phase 7 (sondes), phase 8 (réactions d'appui, **pas encore arbitrée**).
+**Restent :** phase 7 (sondes), phase 8 (réactions d'appui — absorbée par la phase 10, qui la
+calcule), phase 10 (passe de statique, **en cours**).
 
 ---
 
@@ -102,6 +103,11 @@ flexion`, `taux de travail`, `taux de cisaillement` — sélecteur global à la 
    au bout libre correspond déjà à ce qu'elle omet). `BeamCohesion.start`/`.end` portent
    maintenant un `atAnchor` pour distinguer les deux cas. Testé dans `cohesion-field.test.ts`
    (résidu entièrement fermé, `fx`/`fy`/`m`).
+
+   **Périmé depuis la correction 6.** `isExternalAtEnd`, le conditionnel sur `atAnchor` et
+   `distributed_end_share` n'existent plus : la part nodale d'une charge répartie est rendue à la
+   matière aux deux bouts indifféremment, dans `beam-cohesion.ts`. Le trou que ce paragraphe
+   décrit est toujours réel, seul le remède a changé de place.
 
 3. **Trois tests du plan manquaient**, ajoutés dans `cohesion-field.test.ts` : le cas de référence sur
    deux appuis (`T = −P/2`, `Mf = +PL/4`), la charge répartie uniforme (`Mf` parabolique, `T` linéaire
@@ -308,9 +314,10 @@ actées).
 - **Les discontinuités ne sont pas lissées.** Le saut de `T` sous une charge ponctuelle et la cassure
   de `Mf` au même endroit _sont_ la signature visuelle qu'il y a quelque chose d'accroché là. C'est
   le meilleur argument pédagogique du chantier, il ne doit pas se perdre dans une interpolation.
-- **`Mf` se trace avec son axe positif vers le bas**, pour que la courbe ressemble à la déformée
-  (« la poutre sourit »). Vestige utile de la convention « côté des fibres tendues » : dans un
-  panneau l'axe est étiqueté, l'ambiguïté est levée autrement, mais l'intuition mérite d'être gardée.
+- **`Mf` partage l'axe Y mathématique standard de `N`/`T`** (positif vers le haut). Un temps tracé
+  positif vers le bas pour rappeler la déformée (« la poutre sourit »), revenu en arrière : l'axe est
+  étiqueté dans le panneau, l'ambiguïté est déjà levée par le chiffre, et un axe cohérent entre les
+  trois diagrammes compte plus que le clin d'œil visuel à la déformée.
 - **L'extremum** marqué d'un point (pas d'étiquette de valeur — retirée après retour utilisateur,
   jugée redondante avec l'axe Y et l'aire remplie).
 - **Chaque diagramme porte son propre axe des abscisses (y = 0)**, tracé en permanence — pas
@@ -615,6 +622,290 @@ des paramètres en plus sur `draw_stress_legend`.
 
 **Unités.** `format_quantity(_, STRESS, _)` existe déjà (utilisé par `draw_stress_legend` pour
 `scaleMaxStress`) : Pa/MPa/GPa automatique, rien à écrire de neuf pour `normale`/`flexion`.
+
+---
+
+## Phase 10 — passe de statique · **en cours**
+
+Les efforts affichés cessent d'être lus dans le solveur. Ils sont **résolus**, sur la géométrie
+convergée de chaque image, par un système d'équilibre indépendant de XPBD.
+
+### Pourquoi, mesuré
+
+Deux lectures cohabitaient (`BeamCohesion.determinate`) et **aucune des deux n'est bonne partout** :
+
+| lecture                          | `Masse suspendue` (treillis, boucle, articulations) | `Double Cantilever` (flexion, soudure) |
+| -------------------------------- | --------------------------------------------------- | -------------------------------------- |
+| λ (somme des réactions de liens) | `N` à ~1 % du calcul à la main                       | `T` faux de 60 %, `Mf` perdu en entier |
+| balance (corps libre d'une poutre) | perd 100 % de la charge (7.7 N pour 49 kN)         | exacte                                 |
+
+Les trois défauts derrière ces chiffres ont été localisés par le bilan aux nœuds
+(`node-balance.ts`), et deux sont corrigés — voir corrections 4 à 6. Le troisième, la soudure
+partagée, ne se corrige pas localement :
+
+- **λ ne sait pas partager une soudure.** Le lien `Angle` d'un `join` porte les clés
+  `[racine, join, join, pointe]` ; les deux poutres y trouvent chacune `k0` et `k1` et le
+  réclament toutes deux comme interne. Le partage EST pourtant structurel — le gradient vaut
+  `±perp(vᵢ)/lᵢ²` par segment, donc un couple pur `∓λ` sur chacun — mais il n'est pas lisible :
+  les réactions sont mesurées en avant/après du déplacement du nœud, par slot
+  ([PBD_kinematic_solver.ts:848](../src/components/solver/kinematics/PBD_kinematic_solver.ts#L848)),
+  un dispositif volontairement agnostique de la contrainte, et deux slots aliasés lisent le même
+  déplacement.
+- **Et sous cette soudure, le nœud sur-contraint** de `poutre-corps-rigide-dynamique.md`. Mesuré
+  ici sur une boucle réelle et plus seulement sur le cantilever-jouet : résidu de marche en
+  multiples du poids propre de chaque poutre, sur `Masse suspendue` à densité réelle —
+
+  | balayage         | avec nœud milieu  | sans (invalide : −2/3 de masse) |
+  | ---------------- | ----------------- | ------------------------------- |
+  | alternance **ON**  | **0.9 – 2.8 ×** | ~0.67 ×                         |
+  | alternance **OFF** | **0.002 – 0.2 ×** | ~0.67 ×                        |
+
+  À `rho = 0` — donc sans nœud milieu compilé du tout — le résidu de force est exactement 0.000
+  dans les quatre cases. L'erreur exige l'alternance **et** le nœud milieu, comme le dit cette
+  doc-là. Couper l'alternance n'est pas une porte de sortie : `Epan` passe alors de 113.65 à
+  113.21 kN contre 114.5 attendu, l'alternance étant ce qui fait du balayage un solve direct.
+
+**Décision : ni le découpage de l'`Angle`, ni poutre=corps, pour ce chantier.** Ce sont deux
+défauts de la LECTURE de λ, et la passe de statique ne lit aucune réaction de lien — elle part de
+la géométrie, des masses continues (`μL`, `mL²/12`) et des accélérations enregistrées. Les deux
+sortent du tableau par construction. Poutre=corps reste justifié par ses propres arguments
+(géométrie de `CP.slidep`, ratio de masse) et ne raccourcirait pas celui-ci : son étape 2 demande
+de toute façon de reconcevoir la lecture des efforts en « réduction d'Alembert des actions
+extérieures au corps en un torseur », c'est-à-dire ceci.
+
+### État
+
+**Fait :** l'algèbre (`statics/matrix.ts` et `statics/least-squares.ts` — moindres carrés de
+norme minimale, rang, espace nul, `minimise_energy`), l'assemblage (`statics/equilibrium-model.ts`, mise en
+page des inconnues indépendante de l'image), la résolution par image
+(`statics/equilibrium-solve.ts`) et la lecture d'une image enregistrée
+(`statics/statics-frame.ts`). Vérifié contre le calcul à la main :
+
+| | indétermination | résidu | contrôle |
+| --- | --- | --- | --- |
+| `Double Cantilever` | 0 | 0.0000 | encastrement **−40.80 N / −25.402 N·m** contre 40.804 / 25.402 analytiques ; soudure partagée **action-réaction exacte**, couple 8.850 N·m |
+| `Masse suspendue` | 0 | 1.1e-4 × échelle | les cinq `N` et les deux appuis à **moins de 0.33 %** du calcul à la main |
+
+Les deux défauts que la lecture de λ ne peut pas corriger disparaissent : la soudure partagée
+sort juste des deux côtés, et le nœud sur-contraint n'est jamais consulté.
+
+**Faits aussi :** les blocs de flexibilité (`statics/flexibility.ts`). `U = ∫N²/2EA + ∫Mf²/2EI`
+intégré exactement (Gauss à 4 points par tronçon, `Mf²` montant au degré 6), avec son terme
+linéaire — non décoratif : une poutre qui porte son propre poids a des efforts intérieurs qui ne
+s'annulent pas avec les inconnues. **Pas de terme de cisaillement** : `G` demanderait un
+coefficient de Poisson que `MaterialDef` ne porte pas, et l'inventer ferait diverger les
+références du cours, qui sont toutes Euler-Bernoulli. Vérifié au chiffre près :
+
+| cas | h | résultat |
+| --- | --- | --- |
+| encastrée-appuyée, charge répartie | 2 | `3wL/8` à l'appui simple, `5wL/8` et `−wL²/8` à l'encastrement, `N = 0` |
+| bi-encastrée, charge répartie | 3 | `wL/2` de réaction, `∓wL²/12` aux appuis, `wL²/24` à mi-portée |
+
+Les deux redondances de la première (au lieu de la seule du cours) sont l'appariement axial
+qu'aucun appui à rouleau ne relâche ici ; l'énergie minimale y met exactement zéro.
+
+**Fait : la publication.** `step_dynamic_simulation` ne lit plus aucune réaction de lien pour la
+cohésion — il résout (`statics/publish.ts`). Les deux anciennes lectures ont disparu avec elle :
+`resolve_beam_cohesion`, `CohesionBalance`, `balance_torsor`, `own_lumps`, `terminal_load`, et
+les champs de `BeamCohesionSpec` qui n'existaient que pour elles (`internalLinkIndices`,
+`weldKeyOf`, `balanceable`). Le spec est réduit à ce qu'un CORPS demande : ses deux clés fusées,
+les nœuds sur sa portée, sa masse. `StaticsSystem` est assemblé une fois à la compilation, la
+résolution est par image, sous le même `collectDiagnostics` que `reactions`.
+
+Correspondance des conventions, vérifiée sur les deux cas de référence : la **force** passe telle
+quelle (les deux sens disent « ce que la poutre applique sur le nœud ») ; le **moment** est
+retourné, `BeamCohesion.m` héritant du sens brut de `LinkReaction` ; un **nœud attaché** garde ce
+que la poutre y REÇOIT, et son abscisse en fraction de la portée.
+
+### Deux corrections que la publication a fait sortir
+
+Les deux tiennent au même point : l'accélération enregistrée aux extrémités ne satisfait pas
+toujours la rigidité, et il faut choisir où ancrer le champ.
+
+- **L'accélération du centre de masse est la moyenne des deux bouts**, pas le champ
+  rigide extrapolé depuis `a₀`. Les deux coïncident exactement sur une image cohérente — `a(σ)`
+  est affine, donc sa moyenne EST sa valeur à mi-portée. Elles divergent sinon, et l'extrapolation
+  met alors l'équation de la poutre en contradiction avec celles de ses nœuds, qui lisent ces
+  mêmes accélérations mesurées : sur une poutre libre en rotation dont les bouts n'avaient pas
+  fini de se poser sur leur cercle, la contradiction atteignait **58 % de l'échelle** du système.
+- **La marche de `cohesion-field.ts` s'ancre au centre elle aussi.** Ancré sur `aStart`, le champ
+  hérite de toute l'erreur d'un seul bout : la même poutre en rotation, dont un bout lisait 27×
+  moins que son accélération centripète, produisait une **compression monotone** là où la
+  physique demande une traction symétrique. Ancré au centre, le résultat est exact — pic à
+  mi-portée, **zéro machine aux deux bouts libres**, ce qui est la réponse du continu et rend
+  caduque la vieille excuse « le bout porte encore un lump ».
+
+### Le coût réel, par image, dans le moteur
+
+Mesuré sur toute la galerie, avec et sans `collectDiagnostics` :
+
+| | pas PBD seul | avec la statique | surcoût |
+| --- | --- | --- | --- |
+| la plupart des mécanismes | 0.2 – 4 ms | 0.3 – 5.4 ms | **+0.1 à +2 ms** |
+| `Puente` (18 poutres) | 14.2 ms | 23.2 ms | +9.0 ms |
+| `Core XY` (9 poutres, h = 23) | 21.7 – 79.6 ms | 34.4 – 93.8 ms | +12.7 à +14.2 ms |
+
+Le tout tourne dans le worker d'enregistrement (`recorder.ts` est le seul appelant hors tests),
+donc jamais sur le thread d'affichage.
+
+### Le coût, mesuré sur toute la galerie
+
+Une décomposition par image, et elle grandit en `O(n³)` :
+
+| | inconnues × lignes | h | assemblage + solve |
+| --- | --- | --- | --- |
+| `Masse suspendue`, `Treillis`, `Vilbrequin`… | ≤ 30 × 36 | 0–1 | **< 1.5 ms** |
+| `Line from rotation`, `Huygens` | ~44 × 51 | 0–4 | 4–6 ms |
+| `Jansen` | 47 × 51 | 1 | 11 ms |
+| `Vilbrequin double slider` | 51 × 54 | 3 | 15 ms |
+| `Puente` | 83 × 93 | 1 | **62 ms** |
+| `Core XY` | 105 × 84 | 23 | **110 ms** |
+
+La flexibilité n'y ajoute rien de mesurable : c'est la décomposition qui domine. Un premier
+passage d'optimisation (normes de colonnes portées au lieu d'être recalculées à chaque paire) a
+déjà gagné ~2.5×, et a fait apparaître un piège consigné dans `dense.test.ts` : une sortie de
+Jacobi trop précoce rapporte un rang **trop haut**, donc une structure hyperstatique lue comme
+isostatique — la seule erreur qu'un compte de redondance ne doit jamais faire.
+
+**Échange fait : Jacobi → décomposition orthogonale complète.** Jacobi était le mauvais outil à
+`n ≈ 100`. `least-squares.ts` fait maintenant une QR de Householder avec pivotage de colonnes,
+complétée par des réflexions à droite (`xTZRZF`) pour l'espace nul — `O(mn²)` une seule fois.
+
+Vérifié avant de trancher, sur les 24 mécanismes de la galerie à **deux poses chacun** :
+
+- **0 désaccord de rang sur 48 cas**, `h` allant de 0 à 23 ;
+- écart relatif maximal sur les torseurs résolus : **2.7e-11**, c'est-à-dire l'arithmétique
+  flottante et pas une autre réponse ;
+- 5 à 7× plus rapide que le Jacobi optimisé, 14 à 20× plus rapide que la version d'origine.
+
+| | avant (Jacobi d'origine) | après (QR) |
+| --- | --- | --- |
+| toute la galerie sauf les deux ci-dessous | ≤ 40 ms | **≤ 2.3 ms** |
+| `Puente` (83 × 93) | 165 ms | **8.2 ms** |
+| `Core XY` (105 × 84, h = 23) | 280 ms | **14–20 ms** |
+
+Le seuil de rang est le même des deux côtés (`max(m, n)·1e-11` de l'entrée dominante) : en
+dessous, c'est de la poussière sur une matrice dont les entrées sont des bras de levier en
+mètres et des coefficients unitaires, jamais une contrainte.
+
+### La formulation — énergie complémentaire minimale
+
+Inconnues `x` : les composantes de réaction de liaison. Équations `A·x = b` : trois par corps
+(`ΣF = m·a_G`, `ΣM_G = I·α`), l'inertie en d'Alembert depuis `DynamicSnapshot.accelerations`.
+
+```
+minimiser  ½·xᵀ·F·x     sous     A·x = b
+```
+
+`F` étant la flexibilité de chaque membre — c'est le théorème de Menabrea. Résolu en un seul
+système KKT :
+
+```
+[ F   Aᵀ ] [ x ]   [ 0 ]
+[ A   0  ] [ λ ] = [ b ]
+```
+
+**Un seul chemin de code pour l'isostatique et l'hyperstatique.** Si `A` est de rang plein, `F`
+ne joue aucun rôle et on retombe exactement sur la réponse d'équilibre : pas de structure primaire
+à choisir, pas de redondantes à sélectionner. Si `A` est déficient, `F` choisit le membre
+élastiquement correct de la famille. `F` est bloc-diagonale par membre, en forme fermée pour une
+poutre droite, à partir des `E`/`A`/`I` de la phase 1 et du `Q`/`b` de la phase 9.
+
+**Écartée : la solution de norme minimale** (pseudo-inverse sans `F`). Elle ne correspond à aucun
+matériau — plausible et faux, ce que ce plan a déjà tranché de ne pas faire.
+
+`A·x = b` peut être légèrement **incompatible** si les accélérations enregistrées ne bouclent pas
+exactement : c'est donc un problème à deux étages — minimiser `‖A·x − b‖` d'abord, `xᵀFx` parmi
+les minimiseurs ensuite.
+
+### Ce qui est résoluble ainsi, et ce qui ne l'est pas
+
+- **Isostatique : exact**, sans aucune hypothèse de matériau.
+- **Hyperstatique de poutres et de ressorts : exact**, c'est la réponse du cours. Cas de référence
+  sans ambiguïté à écrire en test : encastrée-appuyée sous charge répartie (`R = 3wL/8`,
+  `M = −wL²/8`), bi-encastrée (`wL²/12` aux appuis, `wL²/24` au milieu), poutre continue sur trois
+  appuis.
+- **Unilatéral : non.** Un contact ne travaille qu'en compression ; dès que le partage
+  hyperstatique passe par là, ce n'est plus un système linéaire mais un problème de
+  complémentarité. **Les contacts restent un cas à part assumé.**
+- **Non modélisé, à trancher le jour venu** : raideur d'engrènement, et flambement — le modèle est
+  en petits déplacements autour de la pose courante, ce qui est correct puisqu'on recalcule à
+  chaque image, mais une barre élancée en compression ne préviendra pas.
+
+### Courroies et engrenages — second temps, pas hors sujet
+
+Le périmètre du premier passage les laisse dehors (`NodeBalance.covered` passe à faux dès qu'un de
+leurs liens touche un nœud), mais ce sont des éléments qu'on voudra modéliser.
+
+- **Engrenage : pas d'efforts intérieurs dans la surface du disque.** Ce qu'on attend de lui, c'est
+  qu'il transmette correctement au reste du système, pas qu'il porte un champ.
+- **Courroie : oui, et c'est faisable.** Le modèle de courroie de Slidep est volontairement non
+  réaliste sur un point qui joue ici en notre faveur — un brin y **supporte la compression**.
+  L'unilatéralité qui rendrait le problème complémentaire n'existe donc pas, et une courroie reste
+  calculable par le même système linéaire.
+- Si certaines contraintes de liaison des courroies doivent bouger pour ça, ça se discute à ce
+  moment-là.
+
+### L'écart assumé, à ne pas découvrir en route
+
+Le jour où cette passe tourne, **l'affichage devient plus juste que la simulation.** Sur une
+structure hyperstatique, XPBD répartit selon les compliances qu'il porte — l'axial seul
+(`beam_axial_compliance`), pas la flexion — pendant que l'affichage répartira selon la raideur
+complète. L'animation montrera donc une déformation qui ne correspond pas exactement aux efforts
+affichés. C'est le bon arbitrage — la simulation fait le mouvement, l'affichage fait les efforts —
+et il se referme le jour où les compliances de flexion entrent dans le solveur.
+
+### Le bilan aux nœuds — `node-balance.ts` · **fait**
+
+`resolve_node_balance` : pour chaque nœud fusionné,
+`Σ(ce que les poutres y appliquent) + charges/ressorts/moteurs + m·g − m·a`. Résidu de force et de
+moment, réaction et moment d'appui aux nœuds ancrés, `scale` pour lire le résidu en relatif,
+`covered` pour refuser explicitement ce qui n'est pas modélisé.
+
+**C'est le contrôle que `loopResidual` ne peut structurellement pas faire.** Celui-là compare la
+marche d'une poutre à sa propre lecture au bout, deux grandeurs issues du même torseur : une poutre
+portant 5 t lisait 7.7 N avec un résidu de 0.002 N. Le bilan aux nœuds confronte une poutre à tout
+ce qui lui est coïncident, donc il ne peut fermer que si les lectures sont d'accord avec le
+mécanisme. Les deux restent complémentaires : le nœud contraint la **somme** des poutres qui s'y
+rejoignent, la marche contraint **chaque poutre** séparément.
+
+Gardé après la passe de statique : c'est l'assemblage dont elle a besoin, et son résidu reste la
+vérification de sortie.
+
+---
+
+## Corrections 4 à 6 — trouvées par le bilan aux nœuds
+
+4. **Le corps libre perdait tout ce qui est terminal en `k1`.** `balance_torsor` bâtissait
+   l'équilibre sur `spec.mass` (la masse propre de la poutre) et `directForceAt` (les
+   `LoadElement` seuls). Une masse fusionnée sur `k1` n'est ni un lien — donc `farEndFree` reste
+   vrai — ni une charge : elle disparaissait du bilan. `terminal_load` la porte maintenant, via
+   `CohesionBalance.massAt`. Et `directForceAt` voit désormais ressorts et amortisseurs : un
+   ressort laisse au moins un lien `Spring` que `farEndFree` repère, un **amortisseur ne laisse
+   rien du tout**.
+
+5. **Les deux lectures n'étaient pas d'accord sur à qui appartiennent les lumps de bout.**
+   `mass-model.ts` pose `BEAM_END_MASS_FRACTION` de chaque poutre sur ses nœuds d'extrémité ; le
+   chemin balance et la marche de `cohesion-field.ts` les comptent dans la poutre, le chemin λ les
+   laissait sur le nœud. C'est l'identité du « loses a whole `BEAM_END_MASS_FRACTION` lump »
+   consigné dans `runtime-state.ts` : pas une erreur d'attribution, un désaccord de convention,
+   donc exactement corrigeable.
+
+6. **`start` et `end` sont maintenant la même lecture aux deux bords du même corps.** Le corps est
+   la **matière** de la poutre ; les deux nœuds sont dehors, et `start`/`end` valent ce que la
+   matière leur applique. Trois asymétries retirées :
+   - `balance_torsor` ajoutait `directForceAt(k0)` : une charge posée au départ rejoint son appui
+     directement, la coupe en `0⁺` ne la transmet pas. Seul `k1` reste, parce que le nœud lointain
+     tombe dans le corps libre — rien d'autre ne le tient, c'est ce que `balanceable` vérifie — et
+     y amène sa charge.
+   - `isExternalAtEnd` repliait la réaction `"External"` d'un bout ancré, qui mélange trois choses :
+     le poids de la masse ancrée (à la poutre), la part nodale d'une charge répartie (à la poutre)
+     et les charges ponctuelles du nœud (au sol). Retirée au profit des deux termes explicites
+     ci-dessous — ce qui supprime au passage un double comptage latent quand plusieurs poutres
+     partagent un même ancrage.
+   - La correction de lump et la part nodale d'une charge répartie s'appliquent maintenant aux
+     **deux** bouts, ancrés ou non, dans le même terme. `r_coh_end` n'a plus rien à rajouter, et
+     `BeamCohesion` perd son `atAnchor`, qui n'avait plus de lecteur.
 
 ---
 

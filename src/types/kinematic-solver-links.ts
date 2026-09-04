@@ -32,6 +32,12 @@ export type Link = {
       key1: string;
       key2: string;
       distance: number;
+      /**
+       * Axial compliance in m/N (`L/EA`, `beam_axial_compliance`) — absent or 0 means rigid,
+       * which is every link but a beam's own length. Read ONLY by a dynamics step: it is
+       * divided by `dt²`, which a kinematic solve has no meaningful value for.
+       */
+      compliance?: number;
       // Which way coincident points should part. Ignored as soon as they are
       // apart, since the axis between them is then the real one.
       preferredAxis?: Point2;

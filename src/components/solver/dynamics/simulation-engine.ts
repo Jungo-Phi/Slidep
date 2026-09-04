@@ -27,8 +27,15 @@ import {
   rebuild_belt_q_links,
 } from "../kinematics/parsing";
 import { DynamicsInput, PBD_kinematic_solver, SolverMaps } from "../kinematics/PBD_kinematic_solver";
+import { POSITION_KEY_FIELDS } from "../kinematics/link-slots";
+import { beam_linear_mass, beam_strength } from "../../../utils/section-properties";
 import { DynamicMassModel, compute_dynamic_mass_model } from "./mass-model";
-import { BeamCohesionSpec, build_beam_cohesion_specs, resolve_beam_cohesion } from "./beam-cohesion";
+import { BeamCohesionSpec, build_beam_cohesion_specs } from "./beam-cohesion";
+import { StaticsSystem, build_statics_system } from "../statics/equilibrium-model";
+import { solve_statics } from "../statics/equilibrium-solve";
+import { build_flexibility } from "../statics/flexibility";
+import { beam_cohesion_from_statics } from "../statics/publish";
+import { StaticsBeam, statics_frame } from "../statics/statics-frame";
 import { CompiledLoad, compile_loads, resolve_load_forces } from "./load-model";
 import {
   CompiledSpringDamper,
@@ -274,6 +281,12 @@ export type SimulationModel = {
   /** Each beam's own cohesion-torsor spec, read only by `step_dynamic_simulation` — see
    *  `BeamCohesionSpec`. */
   beamCohesionSpecs: BeamCohesionSpec[];
+  /** The equilibrium system whose solution IS each beam's cohesion torsor — see
+   *  docs/plan-efforts-interieurs.md phase 10. Its layout depends only on the mechanism's
+   *  topology, never on a pose, so it is assembled once here and refilled every frame. */
+  staticsSystem: StaticsSystem;
+  /** Material and profile per beam, for the statics pass's masses and stiffnesses. */
+  staticsBeams: StaticsBeam[];
 };
 
 /** Which snapshot slots each solver node writes to: a fused key feeds one slot per key it
@@ -652,27 +665,7 @@ export function rewire_belts(
  *  fields (angleKey…) are left untouched — angles live in a separate map. */
 function rewrite_position_keys(link: Link, from: (k: string) => string): void {
   const l = link as Record<string, unknown>;
-  for (const f of [
-    "key1",
-    "key2",
-    "key3",
-    "key4",
-    "grabbedKey",
-    "pivotKey",
-    "drivenKey",
-    "anchorKey",
-    "anchorPivotKey",
-    "posKey1",
-    "posKey2",
-    "nodeKey",
-    "centerKey",
-    // Belt links carry their position keys in dedicated fields.
-    "startKey",
-    "endKey",
-    "centerKeyA",
-    "centerKeyB",
-    "gearPosKey",
-  ]) {
+  for (const f of POSITION_KEY_FIELDS) {
     if (typeof l[f] === "string") l[f] = from(l[f] as string);
   }
   // BeltLength's wrapped-pulley centres live in an array.
@@ -812,6 +805,19 @@ export function compile_simulation_model(
     if (link.type === "BeltLength" && link.owner !== undefined)
       belts.push({ id: link.owner, pulleys: link.gearPosKeys.length });
 
+  const beamCohesionSpecs = build_beam_cohesion_specs(mechanism, links, (beamID) => {
+    const beam = mechanism.mechanicalElements.find((e) => e.id === beamID);
+    if (!beam || beam.type !== "beam") return 0;
+    return (
+      beam_linear_mass(
+        beam.materialID,
+        beam.profileID,
+        mechanism.materials,
+        mechanism.profiles,
+      ) * beam.positionStart.distance_to(beam.positionEnd)
+    );
+  });
+
   return {
     nodes,
     links,
@@ -831,7 +837,36 @@ export function compile_simulation_model(
       start,
       slots: Int32Array.from(slotList),
     },
-    beamCohesionSpecs: build_beam_cohesion_specs(mechanism.mechanicalElements, links),
+    beamCohesionSpecs,
+    staticsSystem: build_statics_system(
+      beamCohesionSpecs,
+      links,
+      mechanism.mechanicalElements,
+      (key) => (dynamicMasses.posMasses.get(key) ?? 1) <= 0,
+    ),
+    staticsBeams: mechanism.mechanicalElements.flatMap((e) => {
+      if (e.type !== "beam") return [];
+      const strength = beam_strength(
+        e.materialID,
+        e.profileID,
+        mechanism.materials,
+        mechanism.profiles,
+      );
+      const E = mechanism.materials.find((m) => m.id === e.materialID)?.E ?? 0;
+      return [
+        {
+          id: e.id,
+          linearMass: beam_linear_mass(
+            e.materialID,
+            e.profileID,
+            mechanism.materials,
+            mechanism.profiles,
+          ),
+          EA: strength ? E * strength.section.A : 0,
+          EI: strength ? E * strength.section.I : 0,
+        },
+      ];
+    }),
   };
 }
 
@@ -1708,6 +1743,65 @@ export function step_dynamic_simulation(
     }
   });
 
+  // Loads resolved once more against the CONVERGED positions — the balance reads the state
+  // the frame ended on, not the one each substep started from. Only the point forces matter
+  // here: a beam carrying a distributed load is not balanced (see `BeamCohesionSpec`).
+  //
+  // Springs and dampers join them because they are forces, not links, in dynamic mode. A
+  // spring at least leaves a `Spring` link behind, which `farEndFree` sees; a DAMPER leaves
+  // nothing at all, so without this a beam damped at its free end balances as though nothing
+  // were there. Motors need no such treatment: their own link names the driven key, which
+  // disqualifies the balance before it is ever read.
+  const frameLoads = resolve_load_forces(model.compiledLoads, finalResult.positions);
+
+
+  const frameExternalForces = frameLoads.forces;
+  for (const [key, f] of resolve_spring_damper_forces(
+    model.compiledSpringDampers,
+    finalResult.positions,
+    velocities,
+  ))
+    frameExternalForces.set(key, (frameExternalForces.get(key) ?? ZERO).add(f));
+
+  // ── Each beam's cohesion torsor, SOLVED rather than read off the sweep ──
+  //
+  // See docs/plan-efforts-interieurs.md phase 10. Nothing below asks the solver what its own
+  // corrections meant: the two defects that made that unanswerable — a weld's `Angle` link
+  // claimed by both beams it joins, and the over-constrained endpoint node — are properties of
+  // how XPBD credits itself, and equilibrium does not care. What this reads is the converged
+  // geometry, the beams' continuum masses and this frame's accelerations.
+  const staticsFrame = statics_frame({
+    gravity,
+    positionOf: (key) => finalResult.positions.get(key),
+    velocityOf: (key) => velocities.get(key) ?? ZERO,
+    // The same whole-frame d'Alembert term `outAccelerations` carries, read by fused key
+    // rather than by snapshot slot — a fused key is not always a layout key.
+    accelerationOf: (key) => {
+      if (dt <= 0) return ZERO;
+      const before = velocitiesBeforeSolve.get(key) ?? ZERO;
+      const after = velocities.get(key) ?? ZERO;
+      return after.sub(before).mul(1 / dt);
+    },
+    externalForceAt: (key) => frameExternalForces.get(key) ?? ZERO,
+    distributedShareAt: (key) => frameLoads.distributed.get(key) ?? ZERO,
+    masses: model.dynamicMasses,
+    specs: model.beamCohesionSpecs,
+    loads: model.compiledLoads,
+    beams: model.staticsBeams,
+  });
+  const beam_cohesion = collectDiagnostics
+    ? beam_cohesion_from_statics(
+        model.beamCohesionSpecs,
+        staticsFrame,
+        solve_statics(
+          model.staticsSystem,
+          model.beamCohesionSpecs,
+          staticsFrame,
+          build_flexibility(model.staticsSystem, model.beamCohesionSpecs, staticsFrame),
+        ),
+      )
+    : undefined;
+
   return {
     t,
     layout,
@@ -1720,9 +1814,7 @@ export function step_dynamic_simulation(
     reactions,
     motorPower,
     energy,
-    beamCohesion: reactions
-      ? resolve_beam_cohesion(model.beamCohesionSpecs, reactions, finalResult.positions)
-      : undefined,
+    beamCohesion: collectDiagnostics ? beam_cohesion : undefined,
   };
 }
 

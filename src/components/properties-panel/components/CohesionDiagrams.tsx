@@ -170,10 +170,7 @@ const OneDiagram: React.FC<OneDiagramProps> = ({
   const ySpan = yMax - yMin;
 
   const plotH = VIEW_H - PAD_TOP - PAD_BOTTOM;
-  // `Mf`'s axis points DOWN (positive = "the beam smiles") — see "Décisions actées".
-  const flip = quantity === "Mf";
-  const toY = (v: number) =>
-    PAD_TOP + (flip ? (v - yMin) / ySpan : 1 - (v - yMin) / ySpan) * plotH;
+  const toY = (v: number) => PAD_TOP + (1 - (v - yMin) / ySpan) * plotH;
 
   let d = "";
   field.samples.forEach((sample, i) => {
@@ -463,6 +460,15 @@ export const CohesionDiagrams: React.FC<CohesionDiagramsProps> = ({
       ))}
       {/* Residual: a modelling/convergence indicator, never the physics itself — kept small
        *  and only shown once it is large enough to matter next to the values above. */}
+      {!field.determinate && (
+        <Typography
+          variant="caption"
+          color="warning.main"
+          sx={{ display: "block", px: 1, pb: 0.5 }}
+        >
+          {t("cohesion_indeterminate")}
+        </Typography>
+      )}
       {residualMagnitude > 1e-6 && (
         <Typography
           variant="caption"

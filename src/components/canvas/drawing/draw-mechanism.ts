@@ -1,6 +1,7 @@
 import { COLORS } from "../../../theme/canvas-theme";
 import { INTERACTION_SPECS } from "../../../constants/interaction-specs";
 import { DIM, TEXT_SPECS, DRAWING_ORDER, STROKE_WIDTHS } from "../../../constants/rendering-specs";
+import { STRESS_INDETERMINATE_COLOR } from "../../../constants/physics-display-specs";
 import {
   BeamElement,
   BeamStressLens,
@@ -747,6 +748,15 @@ export function draw_mechanism(
       if (!beam) continue;
       const strength = beam_strength(beam.materialID, beam.profileID, materials, profiles);
       if (!strength) continue;
+      // Its share of the load was attributed, not derived — every lens reads the same field,
+      // so none of them has anything to ramp. Flat, in a hue no ramp uses.
+      if (!field.determinate) {
+        beamStressStops.set(beam.id, [
+          { offset: 0, color: STRESS_INDETERMINATE_COLOR },
+          { offset: 1, color: STRESS_INDETERMINATE_COLOR },
+        ]);
+        continue;
+      }
       switch (beamStressLens) {
         case "utilization":
           beamStressStops.set(

@@ -1,0 +1,27 @@
+
+===== Double Cantilever (10 N en bout, 15.402 N par demi-poutre) =====
+poutre         grandeur         actuel       λ seul   exact
+Beam Kedi      N                 0.021        0.021   0
+Beam Kedi      T               -41.139      -41.139   -40.804
+Beam Kedi      Mf              -25.486      -25.486   -25.402
+Beam Lijl      N (det)          -0.006       -0.019   0
+Beam Lijl      T               -25.402      -40.536   -25.402
+Beam Lijl      Mf               -8.850        0.000   -8.850
+
+===== Masse suspendue (5 T) =====
+poutre         grandeur         actuel       λ seul   exact
+Beam Epan      N            115168.583   115168.583   114500
+Beam Epan      T               -15.058      -15.058   
+Beam Epan      Mf                0.180        0.180   
+Beam Iqla      N             34627.439    34627.439   34300
+Beam Iqla      T               -47.200      -47.200   
+Beam Iqla      Mf                0.000        0.000   
+Beam Ulsu      N            -59954.733   -59954.733   -59800
+Beam Ulsu      T               -11.638      -11.638   
+Beam Ulsu      Mf                0.000        0.000   
+Beam Lukn      N           -120595.041  -120595.041   -119500
+Beam Lukn      T                -2.241       -2.241   
+Beam Lukn      Mf               -4.775       -4.775   
+Beam Dode      N (det)           7.702    49063.424   49050
+Beam Dode      T                -0.000        2.712   
+Beam Dode      Mf               -0.000        0.000   

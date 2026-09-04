@@ -1,0 +1,37 @@
+Beam Kedi L=0.5000 mu=3.1400 kg/m  m=1.5700 kg  poids=15.402 N  mat=5d0767 prof=771a2e
+Beam Lijl L=0.5000 mu=3.1400 kg/m  m=1.5700 kg  poids=15.402 N  mat=5d0767 prof=771a2e
+loads [{"type":"force","id":"2ec8f10d-7fad-47b1-92ad-2abe8a6c5c34","targetID":"7672aa05-c1df-419d-a593-1524e5de0aca","anchor":"end","vector":{"x":0,"y":-10},"frame":{"mode":"edge","edgeID":"7672aa05-c1df-419d-a593-1524e5de0aca"}}]
+
+LIENS:
+  Distance ddl=1 {"type":"Distance","ddl":1,"key1":"f4ada183-9a96-4f32-8508-1c658ee9601e,f6cbdda6-d70d-4c87-99bd-02f5edc88116:start","key2":"22091bd7-7351-47d1-bb5b-e1a9e505c02a,f6cbdda6-d70d-4c87-99bd-02f5edc88116:end,7672aa05-c1df-419d
+  KeepOrientation ddl=1 {"type":"KeepOrientation","ddl":1,"key1":"f4ada183-9a96-4f32-8508-1c658ee9601e,f6cbdda6-d70d-4c87-99bd-02f5edc88116:start","key2":"22091bd7-7351-47d1-bb5b-e1a9e505c02a,f6cbdda6-d70d-4c87-99bd-02f5edc88116:end,7672aa05-c1
+  Angle ddl=1 {"type":"Angle","ddl":1,"key1":"f4ada183-9a96-4f32-8508-1c658ee9601e,f6cbdda6-d70d-4c87-99bd-02f5edc88116:start","key2":"22091bd7-7351-47d1-bb5b-e1a9e505c02a,f6cbdda6-d70d-4c87-99bd-02f5edc88116:end,7672aa05-c1df-419d-a5
+  Distance ddl=1 {"type":"Distance","ddl":1,"key1":"22091bd7-7351-47d1-bb5b-e1a9e505c02a,f6cbdda6-d70d-4c87-99bd-02f5edc88116:end,7672aa05-c1df-419d-a593-1524e5de0aca:start","key2":"7672aa05-c1df-419d-a593-1524e5de0aca:end","distance":0.
+
+COHESION (massif):
+  Beam Kedi det=false T(0)=-41.139 Mf(0)=-25.486 startAnchor=true endAnchor=false attached=[]
+  Beam Lijl det=true T(0)=-25.402 Mf(0)=-8.850 startAnchor=false endAnchor=false attached=[]
+
+REACTIONS (toutes):
+  Distance         anchor=true f4ada183-9a96-4f32-8508-1c658ee9601e,f6cbdda6-d70d-4c87-99bd   f=(0.019,-0.000)
+  Distance         anchor=false 22091bd7-7351-47d1-bb5b-e1a9e505c02a,f6cbdda6-d70d-4c87-99bd   f=(-0.019,0.000)
+  Distance         anchor=true f4ada183-9a96-4f32-8508-1c658ee9601e,f6cbdda6-d70d-4c87-99bd   m=-0.000
+  Distance         anchor=false 22091bd7-7351-47d1-bb5b-e1a9e505c02a,f6cbdda6-d70d-4c87-99bd   m=-0.000
+  KeepOrientation  anchor=true f4ada183-9a96-4f32-8508-1c658ee9601e,f6cbdda6-d70d-4c87-99bd   f=(-0.023,-50.971)
+  KeepOrientation  anchor=false 22091bd7-7351-47d1-bb5b-e1a9e505c02a,f6cbdda6-d70d-4c87-99bd   f=(0.023,50.971)
+  KeepOrientation  anchor=true f4ada183-9a96-4f32-8508-1c658ee9601e,f6cbdda6-d70d-4c87-99bd   m=25.486
+  KeepOrientation  anchor=false 22091bd7-7351-47d1-bb5b-e1a9e505c02a,f6cbdda6-d70d-4c87-99bd   m=25.486
+  Angle            anchor=true f4ada183-9a96-4f32-8508-1c658ee9601e,f6cbdda6-d70d-4c87-99bd   f=(0.008,17.701)
+  Angle            anchor=false 22091bd7-7351-47d1-bb5b-e1a9e505c02a,f6cbdda6-d70d-4c87-99bd   f=(-0.002,-35.402)
+  Angle            anchor=false 7672aa05-c1df-419d-a593-1524e5de0aca:end                       f=(-0.006,17.701)
+  Distance         anchor=false 22091bd7-7351-47d1-bb5b-e1a9e505c02a,f6cbdda6-d70d-4c87-99bd   f=(-0.002,-0.000)
+  Distance         anchor=false 7672aa05-c1df-419d-a593-1524e5de0aca:end                       f=(0.002,0.000)
+  Distance         anchor=false 22091bd7-7351-47d1-bb5b-e1a9e505c02a,f6cbdda6-d70d-4c87-99bd   m=-0.000
+  Distance         anchor=false 7672aa05-c1df-419d-a593-1524e5de0aca:end                       m=-0.000
+  FixedOnSegment   anchor=true f4ada183-9a96-4f32-8508-1c658ee9601e,f6cbdda6-d70d-4c87-99bd   f=(-0.000,-5.302)
+  FixedOnSegment   anchor=false 22091bd7-7351-47d1-bb5b-e1a9e505c02a,f6cbdda6-d70d-4c87-99bd   f=(-0.000,-5.302)
+  FixedOnSegment   anchor=false f6cbdda6-d70d-4c87-99bd-02f5edc88116:mid                       f=(0.001,10.603)
+  FixedOnSegment   anchor=false 22091bd7-7351-47d1-bb5b-e1a9e505c02a,f6cbdda6-d70d-4c87-99bd   f=(0.000,-5.134)
+  FixedOnSegment   anchor=false 7672aa05-c1df-419d-a593-1524e5de0aca:end                       f=(0.000,-5.134)
+  FixedOnSegment   anchor=false 7672aa05-c1df-419d-a593-1524e5de0aca:mid                       f=(0.000,10.268)
+  External         anchor=true f4ada183-9a96-4f32-8508-1c658ee9601e,f6cbdda6-d70d-4c87-99bd   f=(0.000,-2.567)

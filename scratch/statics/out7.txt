@@ -1,0 +1,29 @@
+Masse suspendue, densite reelle. Vérité : Epan +114.5  Iqla +34.3  Ulsu -59.8  Lukn -119.5  Dode +49.05 kN
+
+--- alternance=ON   AVEC nœud milieu (compilés: 5)
+  Beam Epan    N=113.650 kN   |residu|=99.921 N = 2.594 x poids propre (38.53 N)
+  Beam Iqla    N=34.171 kN   |residu|=60.804 N = 1.579 x poids propre (38.51 N)
+  Beam Ulsu    N=-59.991 kN   |residu|=41.580 N = 0.885 x poids propre (46.99 N)
+  Beam Lukn    N=-119.006 kN   |residu|=112.292 N = 2.795 x poids propre (40.18 N)
+  Beam Dode    N=48.999 kN   |residu|=0.002 N = 0.000 x poids propre (7.70 N)
+
+--- alternance=ON   SANS nœud milieu (compilés: 5)
+  Beam Epan    N=113.912 kN   |residu|=25.691 N = 0.667 x poids propre (38.53 N)
+  Beam Iqla    N=34.213 kN   |residu|=25.685 N = 0.667 x poids propre (38.51 N)
+  Beam Ulsu    N=-60.097 kN   |residu|=24.635 N = 0.524 x poids propre (46.99 N)
+  Beam Lukn    N=-118.979 kN   |residu|=18.938 N = 0.471 x poids propre (40.18 N)
+  Beam Dode    N=49.124 kN   |residu|=0.002 N = 0.000 x poids propre (7.70 N)
+
+--- alternance=OFF  AVEC nœud milieu (compilés: 5)
+  Beam Epan    N=113.214 kN   |residu|=0.088 N = 0.002 x poids propre (38.53 N)
+  Beam Iqla    N=33.998 kN   |residu|=0.071 N = 0.002 x poids propre (38.51 N)
+  Beam Ulsu    N=-59.636 kN   |residu|=6.715 N = 0.143 x poids propre (46.99 N)
+  Beam Lukn    N=-118.308 kN   |residu|=7.840 N = 0.195 x poids propre (40.18 N)
+  Beam Dode    N=48.838 kN   |residu|=0.002 N = 0.000 x poids propre (7.70 N)
+
+--- alternance=OFF  SANS nœud milieu (compilés: 5)
+  Beam Epan    N=113.169 kN   |residu|=25.684 N = 0.667 x poids propre (38.53 N)
+  Beam Iqla    N=33.969 kN   |residu|=25.617 N = 0.665 x poids propre (38.51 N)
+  Beam Ulsu    N=-59.604 kN   |residu|=24.523 N = 0.522 x poids propre (46.99 N)
+  Beam Lukn    N=-118.194 kN   |residu|=18.975 N = 0.472 x poids propre (40.18 N)
+  Beam Dode    N=48.814 kN   |residu|=0.002 N = 0.000 x poids propre (7.70 N)

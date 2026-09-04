@@ -1,0 +1,3 @@
+f=9  bilan |R|=1.444e-12   réactions |R|=0.000e+0   (vérité: 0)
+f=19  bilan |R|=2.063e-11   réactions |R|=0.000e+0   (vérité: 0)
+f=29  bilan |R|=2.063e-11   réactions |R|=0.000e+0   (vérité: 0)

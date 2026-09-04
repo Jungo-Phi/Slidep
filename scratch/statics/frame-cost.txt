@@ -1,0 +1,25 @@
+mecanisme                        poutres   sans diag   avec diag (statique incluse)   surcout
+Balance                              3       2.70 ms       3.78 ms   +1.08 ms
+CP                                   2       2.98 ms       3.07 ms   +0.10 ms
+Cantilever simple                    1       0.31 ms       0.32 ms   +0.01 ms
+Cantilever                           1       0.26 ms       0.47 ms   +0.22 ms
+Core XY - 2 moteurs                  9      21.74 ms      34.40 ms   +12.65 ms
+Core XY                              9      79.61 ms      93.81 ms   +14.20 ms
+Double Cantilever bis                2       0.52 ms       0.58 ms   +0.06 ms
+Double Cantilever                    2       0.48 ms       0.62 ms   +0.14 ms
+Déconnexion courroie                 4      36.32 ms      33.72 ms   -2.60 ms
+Huygen's chain drive                 4      29.22 ms      30.03 ms   +0.81 ms
+Jansen's linkage (upside-down)      10       3.37 ms       5.40 ms   +2.02 ms
+Jansen's linkage                    10       3.12 ms       4.81 ms   +1.69 ms
+Line from rotation                   9       2.09 ms       4.12 ms   +2.03 ms
+Masse suspendue                      5       3.54 ms       4.50 ms   +0.96 ms
+Petit                                2       0.37 ms       0.37 ms   -0.01 ms
+Poulie bloqueuse                     2       7.46 ms       8.41 ms   +0.95 ms
+Poutre sur joint de courroie         1       2.88 ms       1.52 ms   -1.35 ms
+Puente                              18      14.17 ms      23.18 ms   +9.01 ms
+Test slider                          2       0.84 ms       1.32 ms   +0.48 ms
+Treillis                             6       4.23 ms       5.38 ms   +1.15 ms
+Vilbrequin + masse lourde            2       3.05 ms       3.59 ms   +0.54 ms
+Vilbrequin double slider             7       1.51 ms       4.58 ms   +3.07 ms
+Vilbrequin                           2       0.56 ms       0.74 ms   +0.18 ms
+trac-comp                            2       0.22 ms       0.36 ms   +0.14 ms

@@ -741,6 +741,19 @@ export function applyHandleGrabConstraint(
  * when the caller knows which way the points should part (a belt terminal leaves
  * along the loop tangent); without one it falls back to a fixed diagonal, which
  * keeps the outcome deterministic instead of frame-dependent. */
+/**
+ * XPBD state for ONE compliant constraint: the multiplier accumulated since the substep
+ * started, and the compliance divided by `dt²` that the accumulation is weighed against.
+ * Absent, the constraint is rigid and the projection is exactly the one it always was.
+ */
+export interface Compliance {
+  /** `α/dt²`, in the same units as `Σ wᵢ‖∇ᵢC‖²`. */
+  alphaTilde: number;
+  /** Read and written in place — λ is per constraint and per SUBSTEP, never per sweep. */
+  lambda: Float64Array;
+  index: number;
+}
+
 export function applyDistanceConstraint(
   nodes: Nodes,
   i1: number,
@@ -748,6 +761,7 @@ export function applyDistanceConstraint(
   targetDist: number,
   stiffness: number = 1.0,
   preferredAxis?: Point2,
+  compliance?: Compliance,
 ): number {
   if (i1 < 0 || i2 < 0) return 0;
   const w1 = nodes.w[i1];
@@ -774,10 +788,24 @@ export function applyDistanceConstraint(
   }
   const length = Math.sqrt(dx * dx + dy * dy);
   const error = length - targetDist;
-  const diff = error / length;
 
-  const k1 = diff * (w1 / totalW) * stiffness;
-  const k2 = diff * (w2 / totalW) * stiffness;
+  // XPBD: Δλ = (−C − α̃·λ) / (Σ wᵢ‖∇ᵢC‖² + α̃), and Δpᵢ = Δλ·wᵢ·∇ᵢC. With α̃ = 0 this is
+  // −C/Σwᵢ and λ never appears — the rigid projection this has always been, to the bit.
+  // A real compliance instead lets the constraint hold a finite force, which is what makes
+  // the share of load between the members of a hyperstatic structure their stiffnesses'
+  // business rather than the sweep order's.
+  let scaled: number;
+  if (compliance && compliance.alphaTilde > 0) {
+    const { alphaTilde, lambda, index } = compliance;
+    const dLambda = (-error - alphaTilde * lambda[index]) / (totalW + alphaTilde);
+    lambda[index] += dLambda;
+    scaled = -dLambda;
+  } else {
+    scaled = error / totalW;
+  }
+
+  const k1 = (scaled / length) * w1 * stiffness;
+  const k2 = (scaled / length) * w2 * stiffness;
   nodes.x[i1] = x1 + dx * k1;
   nodes.y[i1] = y1 + dy * k1;
   nodes.x[i2] = nodes.x[i2] - dx * k2;

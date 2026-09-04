@@ -1,0 +1,20 @@
+
+===== Double Cantilever | massless=true =====
+Beam Kedi    det=false p0=(0.000,0.000) L=0.500  N(0)=0.055  T(0)=-49.430  Mf(0)=-44.525
+Beam Lijl    det=true  p0=(0.500,-0.000) L=0.500  N(0)=0.000  T(0)=-10.000  Mf(0)=-5.000
+  anchor f4ada183-9a96-4f32-8508-1c658ee9601e,f6cbdda6-d70d-4c87-99bd-02f5edc88116:start Distance         f=(0.059,-0.000)
+  anchor f4ada183-9a96-4f32-8508-1c658ee9601e,f6cbdda6-d70d-4c87-99bd-02f5edc88116:start Distance         m=0.000
+  anchor f4ada183-9a96-4f32-8508-1c658ee9601e,f6cbdda6-d70d-4c87-99bd-02f5edc88116:start KeepOrientation  f=(-0.043,-89.050)
+  anchor f4ada183-9a96-4f32-8508-1c658ee9601e,f6cbdda6-d70d-4c87-99bd-02f5edc88116:start KeepOrientation  m=44.525
+  anchor f4ada183-9a96-4f32-8508-1c658ee9601e,f6cbdda6-d70d-4c87-99bd-02f5edc88116:start Angle            f=(0.017,39.620)
+
+===== Double Cantilever | massless=false =====
+Beam Kedi    det=false p0=(0.000,0.000) L=0.500  N(0)=0.021  T(0)=-41.139  Mf(0)=-25.486
+Beam Lijl    det=true  p0=(0.500,-0.000) L=0.500  N(0)=-0.006  T(0)=-25.402  Mf(0)=-8.850
+  anchor f4ada183-9a96-4f32-8508-1c658ee9601e,f6cbdda6-d70d-4c87-99bd-02f5edc88116:start Distance         f=(0.019,-0.000)
+  anchor f4ada183-9a96-4f32-8508-1c658ee9601e,f6cbdda6-d70d-4c87-99bd-02f5edc88116:start Distance         m=-0.000
+  anchor f4ada183-9a96-4f32-8508-1c658ee9601e,f6cbdda6-d70d-4c87-99bd-02f5edc88116:start KeepOrientation  f=(-0.023,-50.971)
+  anchor f4ada183-9a96-4f32-8508-1c658ee9601e,f6cbdda6-d70d-4c87-99bd-02f5edc88116:start KeepOrientation  m=25.486
+  anchor f4ada183-9a96-4f32-8508-1c658ee9601e,f6cbdda6-d70d-4c87-99bd-02f5edc88116:start Angle            f=(0.008,17.701)
+  anchor f4ada183-9a96-4f32-8508-1c658ee9601e,f6cbdda6-d70d-4c87-99bd-02f5edc88116:start FixedOnSegment   f=(-0.000,-5.302)
+  anchor f4ada183-9a96-4f32-8508-1c658ee9601e,f6cbdda6-d70d-4c87-99bd-02f5edc88116:start External         f=(0.000,-2.567)

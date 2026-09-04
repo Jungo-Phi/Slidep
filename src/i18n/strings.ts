@@ -2030,6 +2030,18 @@ export const STRINGS = {
     de: "Innere Kräfte werden im kinematischen Modus nicht berechnet",
     es: "Los esfuerzos internos no se calculan en modo cinemático",
   },
+  stress_legend_indeterminate: {
+    fr: "indéterminé",
+    en: "indeterminate",
+    de: "unbestimmt",
+    es: "indeterminado",
+  },
+  cohesion_indeterminate: {
+    fr: "valeurs indicatives : cette poutre transmet à ses deux extrémités, le partage des efforts n'est pas déterminé par son seul équilibre",
+    en: "indicative values: this beam transmits at both ends, so its share of the load is not settled by its own equilibrium alone",
+    de: "Richtwerte: Dieser Träger überträgt an beiden Enden, sein Lastanteil folgt daher nicht allein aus seinem eigenen Gleichgewicht",
+    es: "valores indicativos: esta viga transmite en sus dos extremos, por lo que su reparto de esfuerzos no lo determina su propio equilibrio",
+  },
   cohesion_residual: {
     fr: "résidu :",
     en: "residual:",

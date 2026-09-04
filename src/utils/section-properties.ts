@@ -147,6 +147,28 @@ export function beam_linear_mass(
   return material.rho * section_properties(profile.shape).A;
 }
 
+/**
+ * A beam's axial compliance `L/(E·A)` in m/N — how far a newton of tension stretches it.
+ *
+ * This is the α of XPBD: it is what makes the share of load between the members of a
+ * HYPERSTATIC structure a matter of their stiffnesses rather than of the order the solver
+ * happens to visit them in. Zero (rigid, the previous behaviour) for a dangling material or
+ * profile reference, the same defensive case `beam_linear_mass` covers.
+ */
+export function beam_axial_compliance(
+  materialID: ID,
+  profileID: ID,
+  materials: MaterialDef[],
+  profiles: ProfileDef[],
+  length: number,
+): number {
+  const material = find_material(materialID, materials);
+  const profile = find_profile(profileID, profiles);
+  if (!material || !profile) return 0;
+  const EA = material.E * section_properties(profile.shape).A;
+  return EA > 0 ? length / EA : 0;
+}
+
 /** A beam's section properties and yield strength, resolved from its assigned material and
  *  profile — `undefined` for a dangling reference, the same defensive case `beam_linear_mass`
  *  covers for a mid-edit intermediate state. */

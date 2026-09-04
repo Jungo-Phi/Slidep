@@ -8,18 +8,41 @@
 
 ---
 
+### À faire de plus important prochainement
+
+- Régler l'affichage des loads trop grands
+
+- Ajouter l'outil de mesure
+
+- Sélection multiple
+
+- Améliorer la perf
+
+- Changement de parent de slider
+
 ### À faire rapidement
 
 **Qwick fix**
 
+Dans "Double cantilever", le moment de réaction est le même à l'ancrage qu'au milieu. Est-ce normal ?
+
+- Corriger les diagrammes d'efforts internes (valeur à zéro)
+- Les trais indicatifs des valeurs max dans les diagrammes des efforts (vu dans Mf) s'accumulent
+
+Dans le mécanisme "Masse suspendue.slidep" que je viens d'ajouter, qui se stabilise à 1s, je vois des efforts tranchants alors qu'il ne devrait pas y en avoir (toutes les jontions sont des pivot).
+
 - La puissance affichée devrait être celle que le moteur peut fournir (et pas la puissance instantanée), on devrait donc ensuite pouvoir comparer la puissance du moteur à la puissance instantanée. Le calcul devrait aussi être revu pour prendre en compte ce qu'apporte vraiment le moteur et ce qui tient de l'inertie.
 
 - 🔨 Afficher la masse des gears
+- 🔨 Afficher I avec les profilés
+- 🔨 Afficher la masse totale (ou ça ?)
 - 🔨 Afficher les contraintes dans les joins
-- 🔨 Afficher "déplacez ce mécanisme à la main" uniqument un cinématique ?
+- 🔨 Afficher les "draw_beam_end" en couleur de contrainte
 - 🔨 Afficher les graphiques à frame=0 (pas "en attente de données...")
 - 🚨 Hot-reload des masses, ressorts et amortisseurs en simulation
 - 🚨 Rendre les dimensions non-éditables en simulation
+
+**Outil de mesure (aka. la petite règle dans le coin)**
 
 **UI**
 
@@ -45,6 +68,7 @@
 - 🚨 Bug avec le mécanisme "Poutre sur joint de courroie"
 - 🚨 Bug avec le mécanisme "Ressorts sur moteur"
 - Passer la simulation en Rust WASM pour accélérer ?
+- 🔨 Finir le boulot de "ratio-masse-convergence-dynamique.md" sur CP.slidep
 
 ---
 

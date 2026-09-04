@@ -1,0 +1,11 @@
+
+===== Double Cantilever =====
+Beam Kedi      det=false residu fx=0.005 fy=-18.036 m=-8.767
+Beam Lijl      det=true  residu fx=0.000 fy=-0.000 m=0.000
+
+===== Masse suspendue =====
+Beam Epan      det=false residu fx=30.100 fy=-95.843 m=7.626
+Beam Iqla      det=false residu fx=19.741 fy=-58.127 m=16.889
+Beam Ulsu      det=false residu fx=-12.746 fy=46.215 m=13.784
+Beam Lukn      det=false residu fx=31.824 fy=-100.454 m=0.527
+Beam Dode      det=true  residu fx=0.000 fy=0.002 m=0.000

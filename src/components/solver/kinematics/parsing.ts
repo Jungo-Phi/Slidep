@@ -29,7 +29,7 @@ import {
   hasStakeholderBeyond,
 } from "../experimental/belt-aggregate";
 import { BEAM_END_MASS_FRACTION } from "../dynamics/mass-model";
-import { beam_linear_mass } from "../../../utils/section-properties";
+import { beam_axial_compliance, beam_linear_mass } from "../../../utils/section-properties";
 
 /**
  * A driven beam's own moment of inertia about its pivot, parallel-axis theorem:
@@ -963,13 +963,21 @@ export function get_links_simulation(
         // Rigid length
         const k1 = `${element.id}:start`;
         const k2 = `${element.id}:end`;
+        const restLength = element.positionEnd.distance_to(element.positionStart);
         links.push({
           type: "Distance",
           ddl: 1,
           key1: k1,
           key2: k2,
-          distance: element.positionEnd.distance_to(element.positionStart),
+          distance: restLength,
           owner: element.id,
+          compliance: beam_axial_compliance(
+            element.materialID,
+            element.profileID,
+            materials,
+            profiles,
+            restLength,
+          ),
         });
         addDistancePair(k1, k2);
 

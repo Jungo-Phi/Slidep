@@ -1,0 +1,8 @@
+alternance=ON   milieux=OUI(2)  amplitude start.fy par poutre = [0.0001, 0.0001]
+    dernières valeurs: -67.80/-83.75  -67.80/-83.75  -67.80/-83.75  -67.80/-83.75
+alternance=ON   milieux=NON  amplitude start.fy par poutre = [19.7003, 39.4006]
+    dernières valeurs: -24.20/-33.00  -24.40/-33.40  -7.70/-0.00  -25.50/-35.60
+alternance=OFF  milieux=OUI(2)  amplitude start.fy par poutre = [0.0000, 0.0000]
+    dernières valeurs: -40.93/-40.54  -40.93/-40.54  -40.93/-40.54  -40.93/-40.54
+alternance=OFF  milieux=NON  amplitude start.fy par poutre = [19.7003, 39.4006]
+    dernières valeurs: -24.20/-33.00  -24.40/-33.40  -7.70/-0.00  -25.50/-35.60

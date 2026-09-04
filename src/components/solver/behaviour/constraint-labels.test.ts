@@ -53,7 +53,7 @@ const dimension = {
 } as ConstraintElement;
 
 const materials: MaterialDef[] = [
-  { id: MATERIAL_ID, name: "test", E: 1, Re: 1, rho: 1 },
+  { id: MATERIAL_ID, name: "test", E: 210e9, Re: 1, rho: 1 },
 ];
 const profiles: ProfileDef[] = [
   { id: PROFILE_ID, name: "test", shape: { kind: "rect", b: 1, h: 1 } },

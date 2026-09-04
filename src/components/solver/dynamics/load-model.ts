@@ -143,9 +143,23 @@ const add_to = (map: Map<string, Point2>, key: string, v: Point2): void => {
 export function resolve_load_forces(
   loads: CompiledLoad[],
   positions: Map<string, Point2>,
-): { forces: Map<string, Point2>; torques: Map<string, number> } {
+): {
+  forces: Map<string, Point2>;
+  torques: Map<string, number>;
+  /**
+   * The distributed-load part of `forces` alone, by key.
+   *
+   * A distributed load acts on the beam's MATERIAL; splitting it onto the two end nodes is a
+   * numerical device, and one that anything reading a cut torsor has to undo — the cohesion
+   * march integrates the real density right up to the boundary, so the nodal share would
+   * otherwise be counted a second time (`beam-cohesion.ts`). Kept apart from a point load,
+   * which really does act on the node and needs no such undoing.
+   */
+  distributed: Map<string, Point2>;
+} {
   const forces = new Map<string, Point2>();
   const torques = new Map<string, number>();
+  const distributed = new Map<string, Point2>();
 
   for (const load of loads) {
     switch (load.kind) {
@@ -165,6 +179,8 @@ export function resolve_load_forces(
         const atEnd = direction.mul((length / 6) * (w0 + 2 * w1));
         add_to(forces, load.startKey, atStart);
         add_to(forces, load.endKey, atEnd);
+        add_to(distributed, load.startKey, atStart);
+        add_to(distributed, load.endKey, atEnd);
         break;
       }
       case "torque":
@@ -189,5 +205,5 @@ export function resolve_load_forces(
     }
   }
 
-  return { forces, torques };
+  return { forces, torques, distributed };
 }

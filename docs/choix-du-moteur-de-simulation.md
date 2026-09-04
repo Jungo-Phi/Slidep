@@ -14,7 +14,8 @@ Deux choses à lire avant les options :
   la dure : une option peut rendre les positions exactes au bit près ET dégrader les efforts
   lus, parce qu'une réaction se lit sur le CHEMIN de convergence et non sur son point
   d'arrivée ;
-- **la question des réactions hyperstatiques**, qui n'est pas une question de solveur mais de
+- **la question des réactions hyperstatiques** (depuis **réglée en post-traitement**, voir la
+  section dédiée), qui n'est pas une question de solveur mais de
   physique représentée, et que le choix de famille conditionne.
 
 ## Cadre d'évaluation
@@ -37,6 +38,11 @@ avec une pièce lourde au bout d'un membre léger touche la même limite à des 
   qu'ils se découplent : une option peut rendre les positions exactes au bit près ET dégrader les
   efforts lus, parce qu'une réaction est lue sur le CHEMIN de convergence et pas sur son point
   d'arrivée. À mesurer séparément, systématiquement.
+
+  > **Cet axe a beaucoup rétréci.** Les efforts intérieurs et les réactions d'appui affichés sont
+  > désormais résolus sur le point d'ARRIVÉE (phase 10), donc insensibles à l'ordre de résolution.
+  > `LinkReaction` reste lu sur le chemin, et reste ce que les sondes et l'overlay de forces
+  > montrent — c'est là, et seulement là, que cet axe se mesure encore.
 - **Coût de maintenance** — surface de code touchée, complexité ajoutée pour la suite.
 - **Effort d'implémentation** — ordre de grandeur (jours / semaines / mois).
 
@@ -68,6 +74,24 @@ possibles, indépendantes du choix de solveur :
 - **donner une vraie raideur** — vrai XPBD, `α = 1/(EA/L)` sur les liens `Distance`, calculable
   depuis `section-properties`. Ça rend le partage physique sans changer de famille de solveur, et
   c'est une fraction infime du coût de l'option 5.
+
+> **Réglé, par une troisième réponse que cette section n'envisageait pas** — `plan-efforts-
+> interieurs.md` phase 10. Au lieu de demander au solveur une répartition qu'il n'a pas les
+> moyens de connaître, les efforts affichés sont **résolus à part**, sur la géométrie convergée :
+> équilibre de chaque corps, inertie en d'Alembert, moindres carrés avec révélation de rang.
+> Trois conséquences pour l'arbitrage de ce document :
+>
+> - la question hyperstatique **cesse d'être un critère de choix de solveur**. Elle est traitée
+>   en post-traitement et le restera quel que soit le moteur retenu ;
+> - le rang du système donne l'indétermination réelle, et l'hyperstatique est tranché par
+>   l'énergie complémentaire minimale (Menabrea) à partir des `E`/`A`/`I` déjà présents — donc
+>   la première réponse (« détecter et refuser ») est disponible **par composante**, et la
+>   seconde n'est plus nécessaire pour l'affichage ;
+> - la compliance axiale a tout de même été posée sur les liens `Distance` entre-temps
+>   (`beam_axial_compliance`), pour la simulation. **Écart assumé qui en découle** : sur une
+>   structure hyperstatique, l'animation répartit selon l'axial seul pendant que l'affichage
+>   répartit selon la raideur complète. Les deux ne diront pas la même chose tant que la
+>   compliance de flexion n'entre pas dans le solveur.
 
 ## Options
 
@@ -350,13 +374,71 @@ Ce qui n'est PAS dans cette liste et passe devant elle : les poutres en corps ri
 sont pas un choix de solveur mais un choix de MODÈLE, et qui ont leur propre document
 ([[poutre-corps-rigide-dynamique]]).
 
+## La raideur axiale, en production
+
+**Décision prise (Arnaud) : il faut donner une vraie raideur.** Faite, pour l'axial.
+
+`PBD_solve` était rigide partout : `stiffness = 1.0`, pas de α, pas d'accumulateur λ — le nom
+XPBD dans les commentaires ne servait qu'à la relecture de vitesse. Le `Distance` propre à
+chaque poutre porte désormais sa compliance `α = L/(E·A)` (`beam_axial_compliance`), et
+`applyDistanceConstraint` résout la forme XPBD :
+
+```
+Δλ = (−C − α̃·λ) / (Σ wᵢ‖∇ᵢC‖² + α̃)      α̃ = α/dt²
+```
+
+Deux propriétés qui rendent le changement sûr :
+
+- **α̃ = 0 redonne la projection rigide au bit près** — λ n'apparaît même pas. Tout lien sans
+  compliance (tout sauf la longueur propre d'une poutre) est inchangé.
+- **Dynamique uniquement.** α̃ divise par `dt²`, dont un solve cinématique n'a aucune valeur
+  sensée. `bit-exact` passe donc sans recapture.
+
+### Ce que ça change, mesuré
+
+Sur `Treillis.slidep` (hyperstatique), en rendant UN membre dix fois plus souple :
+
+| membre | rigide | souple | un membre allégé ×10 |
+| ------ | ------ | ------ | -------------------- |
+| petit `49b5` | −1.32 | −1.12 | **−0.41** |
+| petit `75d7` | −3.13 | −2.96 | **−2.37** |
+| principal `9579` | −1035.51 | −1034.57 | −1034.85 |
+
+C'est exactement le comportement attendu d'une structure : **la part des membres redondants
+suit les raideurs, celle des membres du chemin isostatique ne bouge pas** — elle n'est pas à
+la redondance de la répartir. Avant, la première était choisie par l'ordre de balayage.
+
+Garde : `behaviour/axial-compliance.test.ts`, écrit sur cette dépendance-là et non sur les
+chiffres.
+
+### Deux conséquences à connaître
+
+**1. `E` est devenu porteur dans la simulation.** Il ne nourrissait que la lecture de
+contrainte ; il nourrit maintenant la dynamique. Les 19 fichiers de test qui portaient
+`E: 1` — un placeholder, pas une valeur physique : 1 Pa est plus mou que la gelée — faisaient
+des poutres en élastique et ont été passés à l'acier (`210e9`). Aucun ne dépendait de `E: 1`
+autrement, la suite repasse entière. Un mécanisme réel n'est pas concerné : la migration
+attribue l'acier du catalogue.
+
+Ordre de grandeur pour un acier 20×20 mm : `α̃ ≈ 0.04` contre un dénominateur de ~4, soit ~1 %
+de souplesse — assez pour départager une hyperstatique, invisible autrement.
+
+**2. C'est l'axial seulement.** Une poutre est désormais compliante en traction/compression et
+reste infiniment rigide en flexion : `KeepOrientation` et `Angle` n'ont pas de compliance. Pour
+un TREILLIS (articulé) c'est toute l'histoire, et c'est le cas hyperstatique courant. Pour un
+PORTIQUE, la part de flexion reste choisie par le solveur. La suite naturelle est `α = L/(EI)`
+sur les liens de rigidité, mais elle n'a pas la même simplicité : le lien angulaire ne porte
+pas une longueur d'où déduire sa compliance aussi directement.
+
 ## La question qui compte pour un utilisateur
 
 Que fait Slidep d'un mécanisme hyperstatique — c'est-à-dire du cas courant en RDM ?
 
-Aujourd'hui il affiche un chiffre que l'ordre de parcours du solveur détermine. Refuser de
-l'afficher est presque gratuit (`ChainMobility` sait déjà calculer `h = m − G`) ; le rendre juste
-demande une raideur, donc la version bon marché de l'option 5.
+**Tranché pour l'axial** (voir la section précédente) : une raideur a été donnée, et le partage
+entre membres d'un treillis suit désormais les `EA` au lieu de l'ordre de balayage. Reste la
+flexion, où le chiffre affiché est toujours choisi par le solveur — et reste la question de ce
+qu'on montre à l'utilisateur là où il l'est encore. Refuser d'afficher est presque gratuit
+(`ChainMobility` sait déjà calculer `h = m − G`).
 
 Cette question-là ne dépend d'aucune des six options — elle dépend de ce que Slidep veut être :
 un simulateur de mécanismes qui affiche des efforts en diagnostic secondaire, ou un outil de RDM

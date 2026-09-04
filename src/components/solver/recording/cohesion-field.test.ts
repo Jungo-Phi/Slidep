@@ -43,7 +43,7 @@ function material_profile(linearMass: number): {
   return {
     materialID,
     profileID,
-    materials: [{ id: materialID, name: "test", E: 1, Re: 1, rho: linearMass }],
+    materials: [{ id: materialID, name: "test", E: 210e9, Re: 1, rho: linearMass }],
     profiles: [{ id: profileID, name: "test", shape: { kind: "rect", b: 1, h: 1 } }],
   };
 }
@@ -272,11 +272,9 @@ describe("cohesion-field — le champ N/T/Mf par coupe (docs/plan-efforts-interi
       expect(sample.Mf).toBeCloseTo(0, 1);
       expect(sample.N).toBeGreaterThanOrEqual(-1e-6); // tension (or zero), never compression
     }
-    // Peaks at the centre (s = L/2 = 0.5) — NOT necessarily zero at the free ends: this
-    // solver lumps a beam's mass onto 3 points (1/6, 2/3, 1/6, see mass-model.ts), so the
-    // very end still carries real inertia of its own and needs a real force to stay on its
-    // circular path. Only a true continuum tip (zero mass right at s = 0) would read N = 0
-    // there — a discretization fact, not a bug (see `BeamCohesion`'s own doc on `:mid`).
+    // Peaks at the centre (s = L/2 = 0.5) and vanishes at both free ends — the continuum
+    // answer, which is what the field now reports: the beam owns its whole mass, so there is
+    // no lump sitting at the tip needing a force of its own to stay on its circular path.
     expect(field!.extremum.N.s).toBeCloseTo(0.5, 1);
     expect(field!.extremum.N.value).toBeGreaterThan(0);
   });
@@ -324,9 +322,10 @@ describe("cohesion-field — le champ N/T/Mf par coupe (docs/plan-efforts-interi
     // BACK onto its support, i.e. the negative of that.
     const cohesion: BeamCohesion = {
       beamID: BEAM,
-      start: { fx: 0, fy: -P / 2, m: 0, atAnchor: true },
-      end: { fx: 0, fy: -P / 2, m: 0, atAnchor: true },
+      start: { fx: 0, fy: -P / 2, m: 0 },
+      end: { fx: 0, fy: -P / 2, m: 0 },
       attachedNodes: [{ nodeID: MASS, s: 0.5, fx: 0, fy: -P }],
+      determinate: true,
     };
 
     const layout: SnapshotLayout = {
@@ -409,9 +408,10 @@ describe("cohesion-field — le champ N/T/Mf par coupe (docs/plan-efforts-interi
 
     const cohesion: BeamCohesion = {
       beamID: BEAM,
-      start: { fx: 0, fy: (-w * L) / 2, m: 0, atAnchor: true },
-      end: { fx: 0, fy: (-w * L) / 2, m: 0, atAnchor: true },
+      start: { fx: 0, fy: (-w * L) / 2, m: 0 },
+      end: { fx: 0, fy: (-w * L) / 2, m: 0 },
       attachedNodes: [],
+      determinate: true,
     };
 
     const layout: SnapshotLayout = {
@@ -648,6 +648,7 @@ describe("stress_utilization_stops — le taux d'utilisation du panneau/canvas (
       Mf: { s: 1, value: 100 },
     },
     loopResidual: { fx: 0, fy: 0, m: 0 },
+    determinate: true,
   };
 
   it("one stop per sample, offset as a fraction of the beam's own length", () => {
@@ -686,6 +687,7 @@ describe("normal_stress_stops / bending_stress_stops — the normal/bending lens
       Mf: { s: 1, value: -100 },
     },
     loopResidual: { fx: 0, fy: 0, m: 0 },
+    determinate: true,
   };
 
   it("normal_stress_stops = N/A, signed like N itself", () => {
@@ -732,6 +734,7 @@ describe("shear_utilization_stops — le taux de cisaillement (phase 9, chantier
       Mf: { s: 0, value: 0 },
     },
     loopResidual: { fx: 0, fy: 0, m: 0 },
+    determinate: true,
   };
 
   it("shear_admissible_stress = Re/√3 — von Mises reduced to pure shear", () => {

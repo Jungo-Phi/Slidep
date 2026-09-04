@@ -113,10 +113,10 @@ export interface BeamCohesion {
   /** `atAnchor`: whether this dof was immovable in the solve (`w = 0`) — same sense as
    *  `LinkReaction.atAnchor`. `cohesion-field.ts` reads it to tell a genuine support reading
    *  apart from a free dof's own tautological cancellation of a directly-applied load. */
-  start: { fx: number; fy: number; m: number; atAnchor: boolean };
+  start: { fx: number; fy: number; m: number };
   /** Same reading at the beam's OTHER end — independent of `start` (no integration along
    *  the span involved), so `cohesion-field.ts` can use it as the loop-residual reference. */
-  end: { fx: number; fy: number; m: number; atAnchor: boolean };
+  end: { fx: number; fy: number; m: number };
   /**
    * Force each attached node (a join/mass/slider body pinned or sliding on this beam's
    * span) transmits TO the beam, at its CURRENT abscissa (0 = start, 1 = end, recomputed
@@ -127,6 +127,21 @@ export interface BeamCohesion {
    * built fresh every frame outside the compiled `model.links` this is precomputed from.
    */
   attachedNodes: { nodeID: ID; s: number; fx: number; fy: number }[];
+  /**
+   * Whether this torsor is a statement about the mechanism or the solver's own account of
+   * how it got there.
+   *
+   * `true` — balanced off the CONVERGED STATE: the beam's own mass against gravity and its
+   * acceleration, plus what rides on its span, plus the loads applied to it. Nothing is
+   * transmitted at its far end, so the balance closes with no unknown and the reading is
+   * exact (`resolve_beam_cohesion`).
+   *
+   * `false` — summed from the reactions each link reports, which is an ATTRIBUTION of the
+   * correction path between the links that share it. Measured against the balanced reading
+   * on the beams where both apply, that attribution differs by up to 100 %. A reader should
+   * treat such a torsor as indicative, not as a figure.
+   */
+  determinate: boolean;
 }
 
 /**
