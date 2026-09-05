@@ -153,6 +153,19 @@ const SIZING_GEAR: HoverTargets = {
   belt: "runs-tangent",
 };
 
+/**
+ * What the ruler aims at: the landmarks a drawing is dimensioned between. A gear is taken by
+ * its rim, and `"whole"` is what says so — the ruler keeps the gear, not the point of it under
+ * the cursor, and settles that point against its other end. A gear's centre is reached through
+ * its axle, a node like any other. Belts are left out: a point on a route of tangents and arcs
+ * is no landmark.
+ */
+const MEASURING: HoverTargets = {
+  node: "centre",
+  gear: "whole",
+  edge: "ends+body",
+};
+
 /** Nothing is a target: the gesture reads the free cursor. */
 const NOTHING: HoverTargets = {};
 
@@ -238,6 +251,11 @@ export const HOVER_TARGETS: Record<CanvasStateType, HoverTargets> = {
   PlacingMomentEnd: NOTHING,
   PlacingProbe: { node: "centre", gear: "rim-top", edge: "body-centre" },
   PlacingProbeMetrics: NOTHING,
+
+  Measuring: MEASURING,
+  MeasuringFrom: MEASURING,
+  // A ruler already read still aims: the next reading starts without re-arming anything.
+  Measured: MEASURING,
 
   // A belt is measured whole, from its body, so only DimensionStart sees it.
   // Dimensions already placed are targets too, so the armed tool can edit one

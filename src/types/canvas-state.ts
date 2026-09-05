@@ -1,4 +1,5 @@
 import { HoveredPart } from "./hovered-part";
+import type { Measure, MeasureAnchor } from "./measure";
 import { ID } from "./element";
 import type { Link } from "./kinematic-solver-links";
 import { WorldPoint } from "./mechanism";
@@ -44,6 +45,9 @@ export type CanvasStateType =
   | "PlacingMomentEnd"
   | "PlacingProbe"
   | "PlacingProbeMetrics"
+  | "Measuring"
+  | "MeasuringFrom"
+  | "Measured"
   | "DimensionStart"
   | "DimensionNode"
   | "DimensionEdge"
@@ -156,6 +160,12 @@ export type CanvasState =
       position: WorldPoint;
       armed?: boolean;
     }
+  // The ruler, in its three moments: out and waiting, holding one end, and read. It measures
+  // without touching the mechanism, so it lives in the canvas state and nowhere else —
+  // leaving the tool is what clears it.
+  | { type: "Measuring" }
+  | { type: "MeasuringFrom"; start: MeasureAnchor }
+  | { type: "Measured"; measure: Measure }
   | { type: "DimensionStart" } // Dimensioning tool active
   | { type: "DimensionNode"; nodeID: ID } // Dimension from a node to ?
   | { type: "DimensionEdge"; edgeID: ID } // Dimension of an edge / from an edge to ?

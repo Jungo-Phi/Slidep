@@ -3,7 +3,6 @@ import {
   Box,
   Button,
   Divider,
-  IconButton,
   ListItemIcon,
   Menu,
   MenuItem,
@@ -36,6 +35,7 @@ import {
   overlay_targets,
   set_all_overlays,
 } from "../properties-panel/overlay-actions";
+import CommandCountRow from "../properties-panel/components/CommandCountRow";
 import { t, tn } from "../../i18n";
 
 const BEAM_STRESS_LENS_LABEL_KEYS = {
@@ -73,12 +73,7 @@ interface OverlayMenuRowProps {
   children?: React.ReactNode;
 }
 
-/**
- * One layer: label, n/total counter, and the two bulk commands as bare icons.
- * The counter carries the ternary state (none / some / all) — which is what
- * makes the pair legible as two commands rather than one toggle — so the icons
- * only have to carry the action, not the state.
- */
+/** One layer of the menu: the bulk pair, under the layer's own name. */
 const OverlayMenuRow: React.FC<OverlayMenuRowProps> = ({
   kind,
   shown,
@@ -87,59 +82,14 @@ const OverlayMenuRow: React.FC<OverlayMenuRowProps> = ({
   onSetAll,
   children,
 }) => (
-  <Box
-    sx={{
-      display: "flex",
-      alignItems: "center",
-      gap: 0.5,
-      px: 1.5,
-      py: 0.25,
-      opacity: total === 0 ? 0.4 : 1,
-    }}
+  <CommandCountRow
+    label={tn(OVERLAY_LABEL_KEYS[kind], labelCount)}
+    on={shown}
+    total={total}
+    onSetAll={onSetAll}
   >
-    <Typography variant="body2" sx={{ flex: 1, whiteSpace: "nowrap" }}>
-      {tn(OVERLAY_LABEL_KEYS[kind], labelCount)}
-    </Typography>
     {children}
-    <Typography
-      variant="caption"
-      color="inherit"
-      sx={{
-        pr: 0.5,
-        minWidth: 30,
-        textAlign: "right",
-        fontVariantNumeric: "tabular-nums",
-      }}
-    >
-      {shown}/{total}
-    </Typography>
-    <Tooltip title={t("show_all")}>
-      <span>
-        <IconButton
-          size="small"
-          color="inherit"
-          onClick={() => onSetAll(true)}
-          disabled={total === 0 || shown === total}
-          sx={{ p: 0.5 }}
-        >
-          <Visibility fontSize="small" />
-        </IconButton>
-      </span>
-    </Tooltip>
-    <Tooltip title={t("hide_all")}>
-      <span>
-        <IconButton
-          size="small"
-          color="inherit"
-          onClick={() => onSetAll(false)}
-          disabled={total === 0 || shown === 0}
-          sx={{ p: 0.5 }}
-        >
-          <VisibilityOff fontSize="small" />
-        </IconButton>
-      </span>
-    </Tooltip>
-  </Box>
+  </CommandCountRow>
 );
 
 /**

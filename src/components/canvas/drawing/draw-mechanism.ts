@@ -90,6 +90,7 @@ import {
   belt_section_insertion_index,
 } from "../../../utils/belt-path";
 import { replaced_constraint_ids } from "../tools/placing-constraint-actions";
+import { ruler_is_out } from "../tools/measure";
 import {
   connected_constraints,
   is_constraint_type,
@@ -192,21 +193,18 @@ function is_selected(elementID: ID, state: CanvasState): boolean {
 }
 
 /**
- * Whether `elementID` is about to be erased — itself, or as part of the cascade
- * the hovered element drags along. `doomed` holds that cascade, computed once
- * per frame from the deletion itself (see `deletion_closure`).
+ * Whether `elementID` is about to be erased — itself, or as part of the cascade whatever aims at
+ * it drags along. `doomed` holds that cascade, computed once per frame from the deletion itself
+ * (see `deletion_closure`), whether the eraser or a panel command is what named the roots.
  */
 function is_erase_hovered(
   elementID: ID,
-  hoveredPart: HoveredPart,
   state: CanvasState,
   constraintElements: ConstraintElement[],
   doomed: ReadonlySet<ID>,
 ): boolean {
   return (
-    (names_element(hoveredPart) &&
-      hoveredPart.deleting &&
-      doomed.has(elementID)) ||
+    doomed.has(elementID) ||
     (state.type === "ErasingMultiple" &&
       [
         ...state.hoveredElementIDs,
@@ -421,7 +419,7 @@ export function draw_edge_fake_end(
   faulty: ReadonlySet<ID>,
   length: number,
 ) {
-  if (is_erase_hovered(edge.id, hoveredPart, state, constraintElements, doomed))
+  if (is_erase_hovered(edge.id, state, constraintElements, doomed))
     return;
 
   ctx.save();
@@ -432,7 +430,8 @@ export function draw_edge_fake_end(
   ctx.lineWidth = STROKE_WIDTHS.STANDARD;
 
   if (
-    (is_hovered(edge.id, hoveredPart, constraintElements) ||
+    ((is_hovered(edge.id, hoveredPart, constraintElements) &&
+      !ruler_is_out(state)) ||
       focused.has(edge.id) ||
       faulty.has(edge.id)) &&
     !is_edge_end_hovered(edge.id, hoveredPart, state)
@@ -496,19 +495,24 @@ function undrawable_elements(
 }
 
 /**
- * Elements the analysis panel is pointing at, and why.
+ * Elements a panel is pointing at, and why.
  *
  * The reason travels with the set because the drawing differs: `focus` picks parts out —
- * a kinematic chain, or what one motion mode moves — and draws them hovered, while `fault`
- * marks the constraints an audit found dispensable and draws them red. Two parallel sets
- * would have let a caller light the same element both ways at once, which means nothing.
+ * a kinematic chain, or what one motion mode moves — and draws them hovered, `fault`
+ * marks the constraints an audit found dispensable and draws them red, and `erase` shows what
+ * a delete command would take, cascade included, in the eraser's own rendering. Two parallel
+ * sets would have let a caller light the same element both ways at once, which means nothing.
+ *
+ * `pick` draws exactly like `focus`, and exists to say the pointing is NOT an analysis: the
+ * selection panel naming its own elements has no reason to make the dimensions step aside the
+ * way a motion mode does (see `MechanicalCanvas`' dimension fade).
  *
  * Fading everything else was the first idea for `focus` and it reads backwards: the eye
  * follows the change, and the change would be on the parts one is NOT pointing at.
  */
 export type CanvasHighlight = {
   elements: ReadonlySet<ID>;
-  kind: "focus" | "fault";
+  kind: "focus" | "pick" | "fault" | "erase";
 };
 
 /** Nothing pointed at. Shared, so a quiet frame keeps a stable identity. */
@@ -539,6 +543,9 @@ export type CanvasDrawing = {
    *  ladder is invisible, so the dimension goes into relief to say so. */
   dimensionSnapped?: boolean;
   highlight?: CanvasHighlight;
+  /** The elements the ruler is holding whole, lit in the measurement hue. A ruler marks what
+   *  it takes whole by lighting the element itself, never by drawing a shape around it. */
+  measured?: ReadonlySet<ID>;
   /** How a redundant constraint the analysis panel is pointing at would yield. */
   redundancySymbols?: RedundancySymbol[];
   /** `performance.now()`, ms — drives the symbols' pulse. Passed in rather than read here so a
@@ -607,6 +614,7 @@ export function draw_mechanism(
     hideProbes = false,
     dimensionSnapped = false,
     highlight = NO_HIGHLIGHT,
+    measured = EMPTY_IDS,
     redundancySymbols = EMPTY_SYMBOLS,
     now = 0,
     libraryTint,
@@ -619,8 +627,12 @@ export function draw_mechanism(
     bendingStressScale = 0,
     shearStressScale = 0,
   } = drawing;
-  const focused = highlight.kind === "focus" ? highlight.elements : EMPTY_IDS;
+  const focused =
+    highlight.kind === "focus" || highlight.kind === "pick"
+      ? highlight.elements
+      : EMPTY_IDS;
   const faulty = highlight.kind === "fault" ? highlight.elements : EMPTY_IDS;
+  const rulerOut = ruler_is_out(state);
 
   let allElements: UnionElement[] = mechanicalElements as UnionElement[];
   if (!hideConstraints) allElements = allElements.concat(constraintElements);
@@ -645,17 +657,27 @@ export function draw_mechanism(
     ? crossed_node_ids(hoveredPart, state, mechanicalElements, viewport)
     : EMPTY_IDS;
 
-  // What the eraser would take, so the whole cascade turns red before the click
-  // rather than the aimed element alone.
-  const doomed =
-    names_element(hoveredPart) && hoveredPart.deleting
-      ? deletion_closure(
-          hoveredPart.id,
-          mechanicalElements,
-          constraintElements,
-          loads,
-        )
-      : EMPTY_IDS;
+  // What the eraser — or a panel's own delete command, through an `erase` highlight — would
+  // take, so the whole cascade turns red before the click rather than the aimed element alone.
+  const doomedRoots: readonly ID[] =
+    highlight.kind === "erase"
+      ? [...highlight.elements]
+      : names_element(hoveredPart) && hoveredPart.deleting
+        ? [hoveredPart.id]
+        : [];
+  let doomed: ReadonlySet<ID> = EMPTY_IDS;
+  if (doomedRoots.length > 0) {
+    const cascade = new Set<ID>();
+    for (const root of doomedRoots)
+      for (const id of deletion_closure(
+        root,
+        mechanicalElements,
+        constraintElements,
+        loads,
+      ))
+        cascade.add(id);
+    doomed = cascade;
+  }
 
   // The dimensions the aimed placement would replace: the preview draws their
   // replacement, so they step aside instead of doubling it.
@@ -853,7 +875,6 @@ export function draw_mechanism(
           const isSelected = is_selected(constraintId, state);
           const isEraseHovered = is_erase_hovered(
             constraintId,
-            hoveredPart,
             state,
             constraintElements,
             doomed,
@@ -919,7 +940,6 @@ export function draw_mechanism(
       const isSelected = is_selected(element.id, state);
       const isEraseHovered = is_erase_hovered(
         element.id,
-        hoveredPart,
         state,
         constraintElements,
         doomed,
@@ -940,8 +960,14 @@ export function draw_mechanism(
         (dimensionSnapped &&
           state.type === "MovingConstraint" &&
           state.elementID === element.id);
+      // The cursor's hover is silent while the ruler is out: what it points at is already
+      // said in the measurement hue, and a thickened stroke over it would say it twice, in
+      // the language of a tool that is not the one in hand. The elevation `isCursorHovered`
+      // drives further down is a stacking order, not a mark, and stays.
       const isHovered =
-        focused.has(element.id) || faulty.has(element.id) || isCursorHovered;
+        focused.has(element.id) ||
+        faulty.has(element.id) ||
+        (isCursorHovered && !rulerOut);
 
       ctx.shadowBlur = 0;
       ctx.globalAlpha = 1;
@@ -978,6 +1004,9 @@ export function draw_mechanism(
           : COLORS.FILL_BODY;
         ctx.shadowBlur = INTERACTION_SPECS.SELECTION_HALO_SIZE;
       }
+      // Held whole by the ruler: re-inked in the measurement hue, and nothing more. The halo
+      // is the selection's own mark and stays its alone.
+      if (measured.has(element.id)) ctx.strokeStyle = COLORS.MEASURE;
       // Add red stroke and make semi-transparent if element is to be deleted
       if (isEraseHovered) {
         if (!isLoadElement) ctx.strokeStyle = COLORS.DELETION_STROKE;

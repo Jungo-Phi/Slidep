@@ -322,12 +322,6 @@ export const STRINGS = {
     de: "Winkelhilfslinien anzeigen",
     es: "Mostrar las guías de ángulo",
   },
-  show_constraints: {
-    fr: "Afficher les contraintes",
-    en: "Show the constraints",
-    de: "Zwangsbedingungen anzeigen",
-    es: "Mostrar las restricciones",
-  },
   theme: { fr: "Thème", en: "Theme", de: "Design", es: "Tema" },
   element_style: {
     fr: "Style des éléments",
@@ -694,6 +688,200 @@ export const STRINGS = {
   spring: { fr: "Ressort", en: "Spring", de: "Feder", es: "Resorte" },
   mass: { fr: "Masse", en: "Mass", de: "Masse", es: "Masa" },
   motor: { fr: "Moteur", en: "Motor", de: "Motor", es: "Motor" },
+  selection_damper_one: {
+    fr: "{count} amortisseur",
+    en: "{count} damper",
+    de: "{count} Dämpfer",
+    es: "{count} amortiguador",
+  },
+  selection_damper_other: {
+    fr: "{count} amortisseurs",
+    en: "{count} dampers",
+    de: "{count} Dämpfer",
+    es: "{count} amortiguadores",
+  },
+  selection_spring_one: {
+    fr: "{count} ressort",
+    en: "{count} spring",
+    de: "{count} Feder",
+    es: "{count} resorte",
+  },
+  selection_spring_other: {
+    fr: "{count} ressorts",
+    en: "{count} springs",
+    de: "{count} Federn",
+    es: "{count} resortes",
+  },
+  selection_mass_one: {
+    fr: "{count} masse",
+    en: "{count} mass",
+    de: "{count} Masse",
+    es: "{count} masa",
+  },
+  selection_mass_other: {
+    fr: "{count} masses",
+    en: "{count} masses",
+    de: "{count} Massen",
+    es: "{count} masas",
+  },
+  selection_motor_one: {
+    fr: "{count} moteur",
+    en: "{count} motor",
+    de: "{count} Motor",
+    es: "{count} motor",
+  },
+  selection_motor_other: {
+    fr: "{count} moteurs",
+    en: "{count} motors",
+    de: "{count} Motoren",
+    es: "{count} motores",
+  },
+  selection_slider_one: {
+    fr: "{count} glissière",
+    en: "{count} slider",
+    de: "{count} Schiebeführung",
+    es: "{count} corredera",
+  },
+  selection_slider_other: {
+    fr: "{count} glissières",
+    en: "{count} sliders",
+    de: "{count} Schiebeführungen",
+    es: "{count} correderas",
+  },
+  // "slidep" (pivot carried by a slider) has no translated name — the user wants it
+  // kept as-is in every language rather than translated.
+  selection_slidep_one: {
+    fr: "{count} slidep",
+    en: "{count} slidep",
+    de: "{count} slidep",
+    es: "{count} slidep",
+  },
+  selection_slidep_other: {
+    fr: "{count} slideps",
+    en: "{count} slideps",
+    de: "{count} slideps",
+    es: "{count} slideps",
+  },
+  selection_pivot_one: {
+    fr: "{count} pivot",
+    en: "{count} pivot",
+    de: "{count} Drehgelenk",
+    es: "{count} pivote",
+  },
+  selection_pivot_other: {
+    fr: "{count} pivots",
+    en: "{count} pivots",
+    de: "{count} Drehgelenke",
+    es: "{count} pivotes",
+  },
+  selection_belt_one: {
+    fr: "{count} courroie",
+    en: "{count} belt",
+    de: "{count} Riemen",
+    es: "{count} correa",
+  },
+  selection_belt_other: {
+    fr: "{count} courroies",
+    en: "{count} belts",
+    de: "{count} Riemen",
+    es: "{count} correas",
+  },
+  selection_gear_one: {
+    fr: "{count} engrenage",
+    en: "{count} gear",
+    de: "{count} Zahnrad",
+    es: "{count} engranaje",
+  },
+  selection_gear_other: {
+    fr: "{count} engrenages",
+    en: "{count} gears",
+    de: "{count} Zahnräder",
+    es: "{count} engranajes",
+  },
+  selection_join_one: {
+    fr: "{count} jointure",
+    en: "{count} join",
+    de: "{count} Verbindung",
+    es: "{count} unión",
+  },
+  selection_join_other: {
+    fr: "{count} jointures",
+    en: "{count} joins",
+    de: "{count} Verbindungen",
+    es: "{count} uniones",
+  },
+  selection_beam_one: {
+    fr: "{count} poutre",
+    en: "{count} beam",
+    de: "{count} Balken",
+    es: "{count} viga",
+  },
+  selection_beam_other: {
+    fr: "{count} poutres",
+    en: "{count} beams",
+    de: "{count} Balken",
+    es: "{count} vigas",
+  },
+  elements_empty: {
+    fr: "Pas encore d'éléments",
+    en: "No elements yet",
+    de: "Noch keine Elemente",
+    es: "Aún no hay elementos",
+  },
+  selection_count_one: {
+    fr: "{count} élément",
+    en: "{count} element",
+    de: "{count} Element",
+    es: "{count} elemento",
+  },
+  selection_count_other: {
+    fr: "{count} éléments",
+    en: "{count} elements",
+    de: "{count} Elemente",
+    es: "{count} elementos",
+  },
+  selection_remove_group: {
+    fr: "Retirer de la sélection",
+    en: "Remove from selection",
+    de: "Aus der Auswahl entfernen",
+    es: "Quitar de la selección",
+  },
+  mixed_value: {
+    fr: "mixte",
+    en: "mixed",
+    de: "gemischt",
+    es: "mixto",
+  },
+  selection_total_mass: {
+    fr: "Masse totale",
+    en: "Total mass",
+    de: "Gesamtmasse",
+    es: "Masa total",
+  },
+  selection_total_length: {
+    fr: "Longueur de poutres",
+    en: "Beam length",
+    de: "Trägerlänge",
+    es: "Longitud de vigas",
+  },
+  selection_delete: {
+    fr: "Supprimer la sélection",
+    en: "Delete selection",
+    de: "Auswahl löschen",
+    es: "Eliminar la selección",
+  },
+  selection_select_group: {
+    fr: "Sélectionner ce groupe",
+    en: "Select this group",
+    de: "Diese Gruppe auswählen",
+    es: "Seleccionar este grupo",
+  },
+  selection_keep_group: {
+    fr: "Ne garder que ce groupe",
+    en: "Keep only this group",
+    de: "Nur diese Gruppe behalten",
+    es: "Conservar solo este grupo",
+  },
   dimension: { fr: "Dimension", en: "Dimension", de: "Bemaßung", es: "Cota" },
   tool_gear_ratio: {
     fr: "Rapport d'engrenages",
@@ -740,6 +928,29 @@ export const STRINGS = {
     es: "Fuerza lineal (fin)",
   },
   tool_probe: { fr: "Sonde", en: "Probe", de: "Sonde", es: "Sonda" },
+
+  // ── Ruler ─────────────────────────────────────────────────────────────────
+  tool_ruler: { fr: "Règle", en: "Ruler", de: "Lineal", es: "Regla" },
+  ruler_hint: {
+    fr: "Cliquez deux points ou deux barres pour leur angle.",
+    en: "Click two points or two bars for the angle between them.",
+    de: "Zwei Punkte anklicken oder zwei Stäbe für ihren Winkel.",
+    es: "Haga clic en dos puntos o en dos barras para su ángulo.",
+  },
+  ruler_distance: {
+    fr: "Distance",
+    en: "Distance",
+    de: "Abstand",
+    es: "Distancia",
+  },
+  ruler_radius: { fr: "Rayon", en: "Radius", de: "Radius", es: "Radio" },
+  ruler_angle: { fr: "Angle", en: "Angle", de: "Winkel", es: "Ángulo" },
+  ruler_close: {
+    fr: "Ranger la règle",
+    en: "Put the ruler away",
+    de: "Lineal weglegen",
+    es: "Guardar la regla",
+  },
 
   // ── Display layers ────────────────────────────────────────────────────────
   overlay_trajectory_one: {

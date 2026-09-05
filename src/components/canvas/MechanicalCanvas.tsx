@@ -30,6 +30,10 @@ import { RedundancySymbol } from "../solver/analysis/redundancy-symbols";
 import type { CohesionField } from "../solver/recording/cohesion-field";
 import type { BeamElement } from "../../types/element";
 import { canvasStateReducer } from "./tools/canvas-state-reducer";
+import { measured_elements, shown_readout } from "./tools/measure";
+import MeasureWidget, {
+  type MeasureReadoutHandle,
+} from "./MeasureWidget";
 import { get_element_from_id } from "../mechanism/connect-actions";
 import { load_value_anchor } from "../../utils/load-geom";
 import { is_zero_load } from "../../utils/load-scale";
@@ -120,7 +124,6 @@ const STRUCTURAL_KEYS = new Set([
   "r",
   "s",
   "t",
-  "u",
   "w",
   "Delete",
 ]);
@@ -313,6 +316,10 @@ export const MechanicalCanvas = forwardRef<
     // Set beside every `setHoveredPart`: the guide belongs to the snap that
     // produced the hovered point, and would be a lie recomputed from it.
     const snapFeedbackRef = useRef<SnapFeedback>(NO_FEEDBACK);
+    
+    // The ruler's readings are written into its widget from the animation loop, never
+    // through a render: under a simulation they change every frame.
+    const measureReadoutRef = useRef<MeasureReadoutHandle>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const mechanismRef = useRef(mechanism);
@@ -545,9 +552,12 @@ export const MechanicalCanvas = forwardRef<
       // picks out parts a cluttered drawing hides. So the dimensions step aside as soon as
       // the panel points at anything, as they already do in simulation. Faded rather than
       // cut, so travelling down a card's rows does not make them blink.
+      const analysingKind =
+        highlightRef.current.kind === "focus" ||
+        highlightRef.current.kind === "fault";
       const analysing =
         modePreviewRef.current !== null ||
-        highlightRef.current.elements.size > 0;
+        (analysingKind && highlightRef.current.elements.size > 0);
       if (analysing) lastSwingAtRef.current = now;
       // They leave at once but come back late: crossing from one row to the next passes
       // through a frame or two pointing at nothing, and dimensions flashing in between
@@ -616,6 +626,12 @@ export const MechanicalCanvas = forwardRef<
         visibleConstraints,
         ghostConstraintIDs: ghostIDs,
         cursorOnCanvas: cursorOnCanvasRef.current,
+        measured: measured_elements(
+          canvasStateRef.current,
+          hoveredPartRef.current,
+          mechanismRef.current.mechanicalElements,
+          cursorOnCanvasRef.current,
+        ),
         // A running kinematic simulation moves the mechanism away from the poses the loads
         // were placed at, so they step aside rather than point at nothing.
         hideLoads: appModeRef.current === "kinematic",
@@ -643,6 +659,17 @@ export const MechanicalCanvas = forwardRef<
         bendingStressScale: live?.bendingStressScale ?? 0,
         shearStressScale: live?.shearStressScale ?? 0,
       });
+
+      // The ruler reads the mechanism as it is drawn — under a simulation, the live pose,
+      // not the one it was laid on. Pushed straight into the widget: these numbers change
+      // every frame, and React is not the way to move four of them.
+      measureReadoutRef.current?.update(
+        shown_readout(
+          canvasStateRef.current,
+          hoveredPartRef.current,
+          mechanismRef.current.mechanicalElements,
+        ),
+      );
 
       // The active beam-fill lens' own legend (phase 9) — screen-anchored, drawn only while
       // there is a mechanism with at least one beam to read it against.
@@ -1258,6 +1285,9 @@ export const MechanicalCanvas = forwardRef<
                     "EqualConstraintGear",
                     "GearRatioConstraintStart",
                     "GearRatioConstraintGear",
+                    "Measuring",
+                    "MeasuringFrom",
+                    "Measured",
                   ].includes(canvasState.type)
                 ? "crosshair"
                 : "default";
@@ -1598,6 +1628,12 @@ export const MechanicalCanvas = forwardRef<
               />
             );
           })()}
+        <MeasureWidget
+          ref={measureReadoutRef}
+          canvasState={canvasState}
+          onArm={() => setCanvasState({ type: "Measuring" })}
+          onDisarm={() => setCanvasState({ type: "Selecting" })}
+        />
       </Box>
     );
   },

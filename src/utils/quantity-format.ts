@@ -9,6 +9,9 @@
 
 import { t } from "../i18n";
 
+/** What a plain number is read in: itself, unlabelled. */
+const RAW_UNIT: QuantityUnit = { symbol: "", factor: 1 };
+
 const SI_PREFIXES: { exp: number; symbol: string }[] = [
   { exp: -9, symbol: "n" },
   { exp: -6, symbol: "µ" },
@@ -261,6 +264,28 @@ export function format_quantity(
 ): string {
   const unit = display_unit(valueSI, kind);
   return `${to_mantissa(valueSI, unit, precision)} ${unit.symbol}`;
+}
+
+/**
+ * Whether two SI values are indistinguishable in a field showing `kind` at `precision` — the
+ * only sense in which several elements can be said to agree on a value.
+ *
+ * Comparing the doubles instead answers a question nobody asked: a solver leaves two lengths it
+ * was told to make equal differing in their last bits, and a field would then have to claim they
+ * are mixed while showing the same number for each of them.
+ */
+export function same_shown_value(
+  a: number,
+  b: number,
+  kind?: QuantityKind,
+  precision = 1,
+): boolean {
+  const unitA = kind ? display_unit(a, kind) : RAW_UNIT;
+  const unitB = kind ? display_unit(b, kind) : RAW_UNIT;
+  return (
+    unitA.symbol === unitB.symbol &&
+    to_mantissa(a, unitA, precision) === to_mantissa(b, unitB, precision)
+  );
 }
 
 /**

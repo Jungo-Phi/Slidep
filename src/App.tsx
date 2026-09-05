@@ -312,13 +312,16 @@ const App: React.FC = () => {
       if (
         canvasState.type === "Erasing" ||
         canvasState.type === "ErasingMultiple" ||
-        canvasState.type === "EditingValue"
+        canvasState.type === "EditingValue" ||
+        canvasState.type === "SelectingMultiple" ||
+        // The ruler reads in its own corner of the canvas and names no element, so there is
+        // nothing for a tab to show and no reason to leave the one being read.
+        canvasState.type === "Measuring" ||
+        canvasState.type === "MeasuringFrom" ||
+        canvasState.type === "Measured"
       ) {
-        // Armed tool / transient value edit: never moves the tab.
-      } else if (canvasState.type === "SelectingMultiple") {
-        setActiveTab(
-          canvasState.elementIDs.length > 0 ? "elements" : "project",
-        );
+        // Armed tool / transient value edit / box-select in progress: never moves the tab
+        // mid-drag — it resolves once SelectingMultiple settles into its final state on mouseup.
       } else if ("elementID" in canvasState) {
         if (
           mechanism.mechanicalElements.find(

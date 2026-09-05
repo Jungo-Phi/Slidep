@@ -14,9 +14,12 @@ declare module "@mui/material/styles" {
   /** `palette.divider` is the one for `paper`; these name the other surfaces. */
   interface Palette {
     dividers: { ground: string; paper: string; toolbar: string };
+    /** The ruler's own hue, for the interface it puts over the canvas. */
+    measure: string;
   }
   interface PaletteOptions {
     dividers?: { ground: string; paper: string; toolbar: string };
+    measure?: string;
   }
 }
 
@@ -41,6 +44,9 @@ export interface CanvasPalette {
   SELECTION_STROKE: string;
   SELECTION_BOX: string;
   SELECTION_ACCENT: string;
+  /** Everything the ruler draws. A register of its own: a measurement is neither part of the
+   *  drawing, nor a selection, nor something acting on the mechanism. */
+  MEASURE: string;
   DELETION_STROKE: string;
   DELETION_BOX: string;
 
@@ -70,6 +76,7 @@ export interface ThemeSpec {
 
   deletionStroke?: string;
   deletionBox?: string;
+  measure?: string;
 
   gridContrast?: number;
   /** Mixes grid steps toward this colour instead of pure black/white — for a theme whose grid is meant to read as the same ink as everything else drawn on it. */
@@ -243,6 +250,12 @@ const divider_colors = (s: ThemeSpec) => {
 /** Deletion reads as a warning in every theme, so it never varies. */
 const DELETION_STROKE = "#A4315D";
 const DELETION_BOX = "#ED5E71";
+/** Green-leaning, to stay clear of the selection cyans a theme may reach for. */
+const MEASURE_LIGHT = "#0A8A72";
+const MEASURE_DARK = "#2FD3AA";
+
+const measure_color = (s: ThemeSpec) =>
+  s.measure ?? (s.mode === "dark" ? MEASURE_DARK : MEASURE_LIGHT);
 
 const SPECS = {
   "slidep-light": {
@@ -440,6 +453,7 @@ const mui_palette = (s: ThemeSpec) => {
     // The default lands on `paper`, which is what most of the interface is made of.
     divider: divider_colors(s).paper,
     dividers: divider_colors(s),
+    measure: measure_color(s),
     action: {
       hover: `rgba(${veil}, 0.1)`,
       hoverOpacity: 0.1,
@@ -480,6 +494,7 @@ export const canvas_palette = (s: ThemeSpec): CanvasPalette => {
     SELECTION_ACCENT: selection_accent(s.accent),
     DELETION_STROKE: s.deletionStroke ?? DELETION_STROKE,
     DELETION_BOX: s.deletionBox ?? DELETION_BOX,
+    MEASURE: measure_color(s),
 
     RECOLOR_ICONS: s.recolorIcons ?? true,
   };

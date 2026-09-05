@@ -21,7 +21,10 @@ const move_node = (overrides: Partial<Extract<Action, { type: "MoveNode" }>> = {
 describe("bundle_geometry", () => {
   it("solves before the bundle for a drag, taking it as the trigger", () => {
     const drag = move_node();
-    expect(bundle_geometry([drag])).toEqual({ solve: "before", trigger: drag });
+    expect(bundle_geometry([drag])).toEqual({
+      solve: "before",
+      triggers: [drag],
+    });
   });
 
   it("solves after the bundle for a value it merely reads back, with no trigger", () => {
@@ -31,7 +34,7 @@ describe("bundle_geometry", () => {
       elementID: A,
       connectID: B,
     };
-    expect(bundle_geometry([connect])).toEqual({ solve: "after" });
+    expect(bundle_geometry([connect])).toEqual({ solve: "after", triggers: [] });
   });
 
   it("does not solve for a load creation: a force rides its host, it does not constrain it", () => {
@@ -45,7 +48,7 @@ describe("bundle_geometry", () => {
         vector: new Point2(1, 0),
       } as never,
     };
-    expect(bundle_geometry([create])).toEqual({ solve: "none" });
+    expect(bundle_geometry([create])).toEqual({ solve: "none", triggers: [] });
   });
 
   // The bug the table exists to make impossible: a gear dropped onto a belt
@@ -65,7 +68,10 @@ describe("bundle_geometry", () => {
       index: 0,
       clockwise: true,
     };
-    expect(bundle_geometry([createGear, attach])).toEqual({ solve: "after" });
+    expect(bundle_geometry([createGear, attach])).toEqual({
+      solve: "after",
+      triggers: [],
+    });
   });
 
   it("lets the trigger's own timing settle a mixed bundle, a drag that also fuses two edges", () => {
@@ -82,13 +88,45 @@ describe("bundle_geometry", () => {
     };
     expect(bundle_geometry([drag, fusion, deleted])).toEqual({
       solve: "before",
-      trigger: drag,
+      triggers: [drag],
     });
   });
 
   it("does nothing for a bundle with no geometric meaning", () => {
     const rename: Action = { type: "UpdateElementName", id: A, newName: "x" };
-    expect(bundle_geometry([rename])).toEqual({ solve: "none" });
+    expect(bundle_geometry([rename])).toEqual({ solve: "none", triggers: [] });
+  });
+
+  it("keeps every pull of a field written to a whole selection at once", () => {
+    const lengthen = (id: ID): Action => ({
+      type: "ChangeEdgeLength",
+      id,
+      newLength: 2,
+      oldLength: 1,
+    });
+    expect(bundle_geometry([lengthen(A), lengthen(B)])).toEqual({
+      solve: "before",
+      triggers: [lengthen(A), lengthen(B)],
+    });
+  });
+
+  it("solves after a bundle mixing both timings: the dimension's value has to be written first", () => {
+    const lengthen: Action = {
+      type: "ChangeEdgeLength",
+      id: A,
+      newLength: 2,
+      oldLength: 1,
+    };
+    const dimensioned: Action = {
+      type: "ChangeDimensionEdgeValue",
+      id: B,
+      newValue: 2,
+      oldValue: 1,
+    };
+    expect(bundle_geometry([lengthen, dimensioned])).toEqual({
+      solve: "after",
+      triggers: [lengthen, dimensioned],
+    });
   });
 });
 

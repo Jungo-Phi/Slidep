@@ -881,9 +881,15 @@ export function useSimulationPlayback({
         autoPlayOnEnterRef.current = true;
         setAppMode(lastSimulationMode);
         // Entering simulation abandons any in-progress tool/gesture, like Space does in the
-        // canvas handler — but a settled selection carries over, it isn't a gesture to abandon.
+        // canvas handler — but a settled selection carries over, it isn't a gesture to
+        // abandon. Nor is the ruler: it reads the mechanism without touching it, and watching
+        // a reading run is the whole point of having laid it down before pressing play.
         setCanvasState((prev) =>
-          prev.type === "SelectedElement" || prev.type === "SelectedMultiple"
+          prev.type === "SelectedElement" ||
+          prev.type === "SelectedMultiple" ||
+          prev.type === "Measuring" ||
+          prev.type === "MeasuringFrom" ||
+          prev.type === "Measured"
             ? prev
             : { type: "Selecting" },
         );

@@ -9,6 +9,7 @@ import {
   parse_quantity,
   to_mantissa,
 } from "../../../utils/quantity-format";
+import { t } from "../../../i18n";
 
 const RAW_UNIT: QuantityUnit = { symbol: "", factor: 1 };
 
@@ -46,6 +47,10 @@ interface NumberInputProps {
   /** A read-only view of `value` — the catalogue's own entries, never a mechanism's own. No
    *  focus, no stepper, no edits reach `onChange`. */
   disabled?: boolean;
+  /** `value` is one arbitrary member of a multi-selection that doesn't actually agree on it — the
+   *  field says so instead of showing a value that would look settled when it isn't. Typing still
+   *  works as normal and is read the same way by `onChange`. */
+  mixed?: boolean;
 }
 
 export const NumberInput: React.FC<NumberInputProps> = ({
@@ -62,6 +67,7 @@ export const NumberInput: React.FC<NumberInputProps> = ({
   precision = 1,
   kind,
   disabled = false,
+  mixed = false,
 }) => {
   const unit = kind ? display_unit(value, kind) : RAW_UNIT;
   const format = (v: number) => {
@@ -107,8 +113,9 @@ export const NumberInput: React.FC<NumberInputProps> = ({
 
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Out of focus the field is a view of the value, never of a leftover edit.
-  const displayed = focused ? localValue : format(value);
+  // Out of focus the field is a view of the value, never of a leftover edit — except
+  // `mixed`, which has no single value to show and starts blank instead.
+  const displayed = focused ? localValue : mixed ? "" : format(value);
 
   const stopRepeating = useCallback(() => {
     if (intervalRef.current !== null) {
@@ -188,9 +195,11 @@ export const NumberInput: React.FC<NumberInputProps> = ({
   const refused = focused && localValue.trim() !== "" && entered === null;
 
   // Leaving the field validates the entry; an unreadable one is dropped and the field
-  // goes back to showing the value.
+  // goes back to showing the value. Entering what it already showed changes nothing — unless it
+  // showed nothing to begin with, `value` then being one element's among several that differ, and
+  // typing it the value the others are being given.
   const commitLocalValue = () => {
-    if (localValue === format(value)) return;
+    if (!mixed && localValue === format(value)) return;
     if (entered !== null) onChange(entered);
   };
 
@@ -208,19 +217,25 @@ export const NumberInput: React.FC<NumberInputProps> = ({
           label={label}
           type="text"
           disabled={disabled}
+          placeholder={mixed ? t("mixed_value") : undefined}
+          // An empty field would otherwise keep its label sitting on the placeholder.
+          InputLabelProps={mixed ? { shrink: true } : undefined}
           inputProps={{ inputMode: "decimal" }}
           value={displayed}
           onChange={(e) => setLocalValue(filterInput(e.target.value))}
           inputRef={inputRef}
           onFocus={() => {
-            setLocalValue(format(value));
+            setLocalValue(mixed ? "" : format(value));
             setFocused(true);
             // The unit suffix is part of the displayed text but not something a user
             // overwriting the number wants swept up with it — select just the digits.
             // Deferred: a focus from a click still has its mouseup to come, which would
             // otherwise collapse the selection to the click point right after this.
-            const mantissaLength = to_mantissa(value, unit, precision).toString().length;
-            setTimeout(() => inputRef.current?.setSelectionRange(0, mantissaLength), 10);
+            // Mixed starts blank, so there's nothing to select.
+            if (!mixed) {
+              const mantissaLength = to_mantissa(value, unit, precision).toString().length;
+              setTimeout(() => inputRef.current?.setSelectionRange(0, mantissaLength), 10);
+            }
           }}
           onKeyDown={(e) => {
             if (e.key === "Enter") {
@@ -362,6 +377,9 @@ export const NumberInput: React.FC<NumberInputProps> = ({
                         px: 0.5,
                         ml: -0.25,
                         fontSize: large ? "20px" : "16px",
+                        // Nothing shared to state: the icon says what a click would do, not
+                        // where the elements currently stand.
+                        ...(mixed && { opacity: 0.45 }),
                       }}
                     >
                       <adornment.icon fontSize="inherit" />

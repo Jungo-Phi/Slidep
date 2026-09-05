@@ -2,6 +2,7 @@ import {
   EqualEdges,
   HorizontalAlignEdge,
   HorizontalAlignNodes,
+  MassElement,
   MechanicalElement,
   NodeElement,
   NormalEdges,
@@ -21,6 +22,20 @@ export function is_node_element(el: MechanicalElement): el is NodeElement {
     el.type === "slidep" ||
     el.type === "join" ||
     el.type === "mass"
+  );
+}
+
+/**
+ * Type guard: elements that can be anchored to the ground — every node but a mass (free by
+ * definition) and a motorised pivot, whose anchoring is decided by its motor's mount instead.
+ */
+export function is_groundable(
+  el: MechanicalElement,
+): el is Exclude<NodeElement, MassElement> {
+  return (
+    is_node_element(el) &&
+    el.type !== "mass" &&
+    !(el.type === "pivot" && el.motor !== undefined)
   );
 }
 

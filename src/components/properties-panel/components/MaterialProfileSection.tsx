@@ -20,11 +20,11 @@ import {
 import { Action, ID } from "../../../types";
 import { BeamElement } from "../../../types/element";
 import { MaterialDef, ProfileDef } from "../../../types/material";
+import { beam_linear_mass } from "../../../utils/section-properties";
 import {
   default_material,
   default_profile,
 } from "../../../constants/material-profile-catalog";
-import { beam_linear_mass } from "../../../utils/section-properties";
 import {
   DENSITY,
   MASS,
@@ -41,16 +41,17 @@ import {
 import SectionSchema from "./SectionSchema";
 
 /**
- * A beam's material/profile assignment. Each picker
+ * The material/profile assignment of a beam, or of a whole selection of them at once — a picker
+ * showing "mixte" when they don't agree, and assigning to every one of them. Each picker
  * offers the mechanism's own library, plus "+ Nouveau…" at the bottom of its menu, which opens a
  * small panel docked on the picker to name and configure a new entry right there — dimensioning a
  * beam that needs a profile absent from the library shouldn't mean losing the beam's own context
  * to go do that elsewhere.
  * That entry is a draft until the panel's own "Create": dismissing the panel (click away, Escape, ✕) leaves both the library and the beam untouched, and confirming creates and assigns it in a single undo step.
  * The small link
- * icon does a different thing for the entry already assigned: it jumps to the library tab, to
- * answer "where can I edit this?" — duplicate/delete and the usage count only make sense there,
- * since that entry may already be shared by other beams.
+ * icon does a different thing for the entries already assigned: it jumps to the library tab and
+ * opens each of them, to answer "where can I edit this?" — duplicate/delete and the usage count
+ * only make sense there, since those entries may already be shared by other beams.
  *
  * The material picker's own `entries` already includes the catalogue (steel, aluminium…) —
  * seeded read-only into every mechanism's library, so nothing here treats them specially; they
@@ -62,7 +63,8 @@ import SectionSchema from "./SectionSchema";
 interface LibraryPickerProps {
   label: string;
   entries: { id: ID; name: string }[];
-  selectedID: ID;
+  /** `undefined` when the beams it stands for don't agree on one — assigning still reaches them all. */
+  selectedID: ID | undefined;
   onSelect: (id: ID) => void;
   onCreateNew: () => void;
   createNewLabel: string;
@@ -113,7 +115,9 @@ const LibraryPicker = React.forwardRef<HTMLDivElement, LibraryPickerProps>(
             "&:hover": { backgroundColor: "action.hover" },
           }}
         >
-          <Typography variant="body2">{selected?.name ?? ""} </Typography>
+          <Typography variant="body2">
+            {selected?.name ?? t("mixed_value")}{" "}
+          </Typography>
           <KeyboardArrowDown fontSize="small" />
         </Box>
         <Tooltip title={t("open_in_library")}>
@@ -162,29 +166,64 @@ type Draft =
   | { section: "materials"; material: MaterialDef }
   | { section: "profiles"; profile: ProfileDef };
 
+/** The one id `read` gives for every beam, or `undefined` if they don't all give the same. */
+function common_id(
+  elements: BeamElement[],
+  read: (element: BeamElement) => ID,
+): ID | undefined {
+  const first = read(elements[0]);
+  return elements.every((el) => read(el) === first) ? first : undefined;
+}
+
 interface MaterialProfileSectionProps {
-  element: BeamElement;
+  /** One beam, or every beam of a multi-selection — an assignment goes to all of them. */
+  elements: BeamElement[];
   materials: MaterialDef[];
   profiles: ProfileDef[];
   applyActions: (actions: Action[]) => void;
 }
 
 export const MaterialProfileSection: React.FC<MaterialProfileSectionProps> = ({
-  element,
+  elements,
   materials,
   profiles,
   applyActions,
 }) => {
   const focusLibraryEntry = useLibraryNavigation();
-  const profile = profiles.find((p) => p.id === element.profileID);
-  const mass =
+  const materialID = common_id(elements, (el) => el.materialID);
+  const profileID = common_id(elements, (el) => el.profileID);
+  const profile = profiles.find((p) => p.id === profileID);
+  const material = materials.find((m) => m.id === materialID);
+  /** Every entry the beams use, first one first — what the "open in library" link opens. */
+  const used = (read: (element: BeamElement) => ID) => [
+    ...new Set(elements.map(read)),
+  ];
+  // One beam only: a selection reads its mass off its own totals instead, where it also counts
+  // what isn't a beam.
+  const soleBeam = elements.length === 1 ? elements[0] : undefined;
+  const beamMass =
+    soleBeam &&
     beam_linear_mass(
-      element.materialID,
-      element.profileID,
+      soleBeam.materialID,
+      soleBeam.profileID,
       materials,
       profiles,
-    ) * element.positionStart.distance_to(element.positionEnd);
-  const material = materials.find((m) => m.id === element.materialID)!;
+    ) * soleBeam.positionStart.distance_to(soleBeam.positionEnd);
+
+  const assignMaterial = (newMaterialID: ID): Action[] =>
+    elements.map((el) => ({
+      type: "AssignMaterial",
+      id: el.id,
+      newMaterialID,
+      oldMaterialID: el.materialID,
+    }));
+  const assignProfile = (newProfileID: ID): Action[] =>
+    elements.map((el) => ({
+      type: "AssignProfile",
+      id: el.id,
+      newProfileID,
+      oldProfileID: el.profileID,
+    }));
 
   const materialPickerRef = React.useRef<HTMLDivElement>(null);
   const profilePickerRef = React.useRef<HTMLDivElement>(null);
@@ -210,44 +249,27 @@ export const MaterialProfileSection: React.FC<MaterialProfileSectionProps> = ({
   const createMaterial = (material: MaterialDef) => {
     applyActions([
       { type: "CreateMaterial", material },
-      {
-        type: "AssignMaterial",
-        id: element.id,
-        newMaterialID: material.id,
-        oldMaterialID: element.materialID,
-      },
+      ...assignMaterial(material.id),
     ]);
     setDraft(null);
   };
   const createProfile = (profile: ProfileDef) => {
     applyActions([
       { type: "CreateProfile", profile },
-      {
-        type: "AssignProfile",
-        id: element.id,
-        newProfileID: profile.id,
-        oldProfileID: element.profileID,
-      },
+      ...assignProfile(profile.id),
     ]);
     setDraft(null);
   };
 
   return (
-    <Box sx={{ px: 2, display: "flex", flexDirection: "column", gap: 1 }}>
+    <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
       <LibraryPicker
         ref={materialPickerRef}
         label={t("material_label")}
         entries={materials}
-        selectedID={element.materialID}
+        selectedID={materialID}
         onSelect={(newMaterialID) =>
-          applyActions([
-            {
-              type: "AssignMaterial",
-              id: element.id,
-              newMaterialID,
-              oldMaterialID: element.materialID,
-            },
-          ])
+          applyActions(assignMaterial(newMaterialID))
         }
         onCreateNew={() =>
           setDraft({
@@ -257,7 +279,10 @@ export const MaterialProfileSection: React.FC<MaterialProfileSectionProps> = ({
         }
         createNewLabel={t("add_material")}
         onOpenInLibrary={() =>
-          focusLibraryEntry("materials", element.materialID)
+          focusLibraryEntry(
+            "materials",
+            used((el) => el.materialID),
+          )
         }
       />
       <Popover
@@ -312,17 +337,8 @@ export const MaterialProfileSection: React.FC<MaterialProfileSectionProps> = ({
         ref={profilePickerRef}
         label={t("profile_label")}
         entries={profiles}
-        selectedID={element.profileID}
-        onSelect={(newProfileID) =>
-          applyActions([
-            {
-              type: "AssignProfile",
-              id: element.id,
-              newProfileID,
-              oldProfileID: element.profileID,
-            },
-          ])
-        }
+        selectedID={profileID}
+        onSelect={(newProfileID) => applyActions(assignProfile(newProfileID))}
         onCreateNew={() =>
           setDraft({
             section: "profiles",
@@ -330,7 +346,12 @@ export const MaterialProfileSection: React.FC<MaterialProfileSectionProps> = ({
           })
         }
         createNewLabel={t("add_profile")}
-        onOpenInLibrary={() => focusLibraryEntry("profiles", element.profileID)}
+        onOpenInLibrary={() =>
+          focusLibraryEntry(
+            "profiles",
+            used((el) => el.profileID),
+          )
+        }
       />
       <Popover
         open={!!draftProfile}
@@ -382,39 +403,47 @@ export const MaterialProfileSection: React.FC<MaterialProfileSectionProps> = ({
           display: "flex",
           flexWrap: "wrap",
           justifyContent: "center",
-          rowGap: 1,
-          columnGap: 3,
-          px: 4,
+          rowGap: 0.5,
+          columnGap: 2,
+          px: 1,
         }}
       >
-        <Typography
-          variant="caption"
-          color="text.secondary"
-          sx={{ textAlign: "center" }}
-        >
-          E : {format_quantity(material.E, STRESS)}
-        </Typography>
-        <Typography
-          variant="caption"
-          color="text.secondary"
-          sx={{ textAlign: "center" }}
-        >
-          Re : {format_quantity(material.Re, STRESS)}
-        </Typography>
-        <Typography
-          variant="caption"
-          color="text.secondary"
-          sx={{ textAlign: "center" }}
-        >
-          ρ : {format_quantity(material.rho, DENSITY)}
-        </Typography>
-        <Typography
-          variant="caption"
-          color="text.secondary"
-          sx={{ textAlign: "center" }}
-        >
-          {t("mass")} : {format_quantity(mass, MASS)}
-        </Typography>
+        {material && (
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            sx={{ textAlign: "center" }}
+          >
+            E : {format_quantity(material.E, STRESS)}
+          </Typography>
+        )}
+        {material && (
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            sx={{ textAlign: "center" }}
+          >
+            Re : {format_quantity(material.Re, STRESS)}
+          </Typography>
+        )}
+        {material && (
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            sx={{ textAlign: "center" }}
+          >
+            ρ : {format_quantity(material.rho, DENSITY)}
+          </Typography>
+        )}
+        {beamMass !== undefined && (
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            sx={{ textAlign: "center" }}
+          >
+            {t("mass")} : {format_quantity(beamMass, MASS)}
+          </Typography>
+        )}
       </Box>
     </Box>
   );

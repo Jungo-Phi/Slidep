@@ -713,7 +713,8 @@ export const ProfileDetail: React.FC<ProfileDetailProps> = ({
 
 export interface LibraryFocusRequest {
   section: "materials" | "profiles";
-  id: ID;
+  /** Every entry to open — more than one when the beams asking don't share theirs. */
+  ids: ID[];
 }
 
 interface MaterialsLibraryPanelProps {
@@ -787,16 +788,18 @@ export const MaterialsLibraryPanel: React.FC<MaterialsLibraryPanelProps> = ({
 
   React.useEffect(() => {
     if (!focusRequest) return;
+    const { ids } = focusRequest;
+    if (ids.length === 0) return;
+    // The first entry is what gets scrolled to: with several open, one of them has to be the
+    // one the view lands on, and the picker lists them in that order.
     if (focusRequest.section === "materials") {
-      setExpandedMaterialIDs((cur) => new Set(cur).add(focusRequest.id));
+      setExpandedMaterialIDs((cur) => new Set([...cur, ...ids]));
       materialGroupRefs.current
-        .get(focusRequest.id)
+        .get(ids[0])
         ?.scrollIntoView({ block: "nearest" });
     } else {
-      setExpandedProfileIDs((cur) => new Set(cur).add(focusRequest.id));
-      profileGroupRefs.current
-        .get(focusRequest.id)
-        ?.scrollIntoView({ block: "nearest" });
+      setExpandedProfileIDs((cur) => new Set([...cur, ...ids]));
+      profileGroupRefs.current.get(ids[0])?.scrollIntoView({ block: "nearest" });
     }
     onFocusHandled();
   }, [focusRequest, onFocusHandled]);

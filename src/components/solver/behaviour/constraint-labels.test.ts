@@ -83,7 +83,7 @@ describe("constraint labels after a solve", () => {
       oldPosition: new Point2(50, 0),
     } as never;
 
-    const solved = resolveGeometricConstraints(mechanism, move, [
+    const solved = resolveGeometricConstraints(mechanism, [move], [
       move,
     ]).positions.get(DIM);
 

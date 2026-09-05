@@ -14,6 +14,7 @@ import {
   format_quantity,
   parse_quantity,
   rad_to_deg,
+  same_shown_value,
 } from "./quantity-format";
 
 describe("format_quantity — fixed kinds", () => {
@@ -254,5 +255,24 @@ describe("round-trip", () => {
       const parsed = parse_quantity(text, FORCE, unit);
       expect(parsed).toBeCloseTo(valueSI, 3);
     }
+  });
+});
+
+describe("same_shown_value", () => {
+  it("holds two values a solver left differing below the shown digit to be the same", () => {
+    expect(same_shown_value(0.5, 0.5 + 1e-9, LENGTH)).toBe(true);
+  });
+
+  it("tells apart two values the field would show differently", () => {
+    expect(same_shown_value(0.5, 0.5001, LENGTH)).toBe(false);
+  });
+
+  it("reads the precision it is given, not the value's own digits", () => {
+    expect(same_shown_value(0.12, 0.1234, undefined, 1)).toBe(true);
+    expect(same_shown_value(0.12, 0.1234, undefined, 3)).toBe(false);
+  });
+
+  it("separates two values an adaptive kind would not even show in the same unit", () => {
+    expect(same_shown_value(0.9999, 1.0001, FORCE, 0)).toBe(false);
   });
 });

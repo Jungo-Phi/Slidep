@@ -146,27 +146,34 @@ function action_geometry(action: Action): ActionGeometry {
 
 export type BundleGeometry = {
   solve: SolveTiming;
-  /** The action the solve answers to, absent when nothing is being pulled. */
-  trigger?: Action;
+  /** The actions the solve answers to, empty when nothing is being pulled. */
+  triggers: Action[];
 };
 
 /**
  * What a bundle asks of the geometry, read from the actions themselves rather
  * than from a name declared at the call site.
  *
- * At most one action in a bundle ever pulls — a gesture has a single master
- * edit, and the corrections joined to it (fusions, belt closures, anchoring)
- * never do. So when a trigger exists, its own timing settles the bundle's:
- * there is nothing to arbitrate between a pull and the corrections that answer
- * to the state it leaves.
+ * A gesture pulls once, and the corrections joined to it (fusions, belt
+ * closures, anchoring) never pull at all; a panel field written to a whole
+ * selection pulls once per element, each stating its own value. The pulls
+ * settle the bundle's timing, and `"after"` wins a bundle that mixes both: a
+ * dimension's value only becomes a constraint once written, whereas a length or
+ * a radius states its own link either way.
  */
 export function bundle_geometry(actions: Action[]): BundleGeometry {
-  const trigger = actions.find((a) => action_geometry(a).pulls);
-  if (trigger) return { solve: action_geometry(trigger).solve, trigger };
+  const triggers = actions.filter((a) => action_geometry(a).pulls);
+  if (triggers.length > 0)
+    return {
+      solve: triggers.some((a) => action_geometry(a).solve === "after")
+        ? "after"
+        : "before",
+      triggers,
+    };
   const solve = actions.some((a) => action_geometry(a).solve === "after")
     ? "after"
     : "none";
-  return { solve };
+  return { solve, triggers };
 }
 
 /**

@@ -3,15 +3,7 @@
  * Displays properties for element elements
  */
 
-import {
-  Box,
-  IconButton,
-  Divider,
-  List,
-  ListItem,
-  Tooltip,
-  Typography,
-} from "@mui/material";
+import { Box, IconButton, Divider, Tooltip, Typography } from "@mui/material";
 import { Delete, Lock, LockOpen } from "@mui/icons-material";
 import {
   ID,
@@ -31,16 +23,24 @@ import {
   ZERO,
 } from "../../../types";
 import ConnectionsProperties from "./ConnectionsProperties";
-import { delete_element } from "../../mechanism/connect-actions";
+import {
+  delete_element,
+  delete_elements,
+} from "../../mechanism/connect-actions";
 import { HoveredPart } from "../../../types/hovered-part";
 import NumberInput from "../components/NumberInput";
 import SignedNumberInput from "../components/SignedNumberInput";
 import ElementDisplay from "../components/ElementDisplay";
-import { sorted_for_display } from "../element-order";
+import ElementsOverview from "../components/ElementsOverview";
+import {
+  CanvasHighlight,
+  NO_HIGHLIGHT,
+} from "../../canvas/drawing/draw-canvas";
 import ElementMeasures from "./ElementMeasures";
 import { t } from "../../../i18n";
 import { element_to_hovered_part, linked_constraint } from "../../canvas/utils";
 import { measure_belt_length } from "../../../utils/belt-geom";
+import { is_groundable } from "../../../utils/element-queries";
 import React from "react";
 import { icon } from "../../element-palette/iconDataUris";
 import StructureOnly from "../components/StructureOnly";
@@ -93,6 +93,8 @@ interface ElementPropertiesProps {
   analysedMechanism: Mechanism;
   appMode: AppMode;
   runtimeState: RuntimeState;
+  /** Names what the canvas should pick out, and why — see the same prop on `PropertiesPanel`. */
+  setHighlight: (highlight: CanvasHighlight) => void;
 }
 
 export const ElementProperties: React.FC<ElementPropertiesProps> = ({
@@ -106,6 +108,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
   analysedMechanism,
   appMode,
   runtimeState,
+  setHighlight,
 }) => {
   const simulating = appMode !== "edition";
   const element: MechanicalElement | undefined =
@@ -135,152 +138,29 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
   };
 
   if (!element) {
-    const hasElements = mechanism.mechanicalElements.length > 0;
     return (
-      <Box
-        sx={{
-          borderRadius: 3,
-          margin: 2,
-          backgroundColor: "background.sunken",
+      <ElementsOverview
+        selectedIds={selectedIds}
+        mechanism={mechanism}
+        hoveredPart={hoveredPart}
+        setHoveredPart={setHoveredPart}
+        setCanvasState={setCanvasState}
+        applyActions={applyActions}
+        setHighlight={setHighlight}
+        simulating={simulating}
+        onDeleteSelection={() => {
+          applyActions(
+            delete_elements(
+              selectedIds,
+              mechanism.mechanicalElements,
+              mechanism.constraintElements,
+              mechanism.loads,
+            ),
+          );
+          setHighlight(NO_HIGHLIGHT);
+          setCanvasState({ type: "Selecting" });
         }}
-      >
-        <List
-          disablePadding
-          sx={{
-            display: "flex",
-            alignItems: "center",
-            flexDirection: "column",
-            width: "100%",
-          }}
-        >
-          {sorted_for_display(mechanism.mechanicalElements).map((element) => (
-            <React.Fragment key={element.id}>
-              <ListItem disablePadding>
-                <ElementDisplay
-                  element={element}
-                  hoveredPart={hoveredPart}
-                  setHoveredPart={setHoveredPart}
-                  selectedIds={selectedIds}
-                  setCanvasState={setCanvasState}
-                  applyActions={applyActions}
-                  size="medium"
-                  editable={true}
-                  trailingControls={
-                    <>
-                      {element.type === "mass" && (
-                        <NumberInput
-                          label="m"
-                          title={t("mass")}
-                          kind={MASS}
-                          value={element.mass}
-                          onChange={(mass) =>
-                            applyActions([
-                              {
-                                type: "ChangeMass",
-                                id: element.id,
-                                delta: mass - element.mass,
-                              },
-                            ])
-                          }
-                          accent
-                          unsigned
-                        />
-                      )}
-                      {element.type === "spring" && (
-                        <NumberInput
-                          label="k"
-                          title={t("stiffness")}
-                          kind={STIFFNESS}
-                          value={element.stiffness}
-                          onChange={(stiffness) =>
-                            applyActions([
-                              {
-                                type: "ChangeStiffness",
-                                id: element.id,
-                                delta: stiffness - element.stiffness,
-                              },
-                            ])
-                          }
-                          accent
-                          unsigned
-                        />
-                      )}
-                      {element.type === "damper" && (
-                        <NumberInput
-                          label="b"
-                          title={t("damping")}
-                          kind={DAMPING}
-                          value={element.damping}
-                          onChange={(damping) =>
-                            applyActions([
-                              {
-                                type: "ChangeDamping",
-                                id: element.id,
-                                delta: damping - element.damping,
-                              },
-                            ])
-                          }
-                          accent
-                          unsigned
-                        />
-                      )}
-                      {element.type === "pivot" && element.motor && (
-                        <StructureOnly disabled={simulating}>
-                          <SignedNumberInput
-                            label="ω"
-                            title={t("motor_speed_label")}
-                            kind={ANGULAR_VELOCITY()}
-                            value={element.motor.speed}
-                            onChange={(speed) => {
-                              const motor = element.motor!;
-                              applyActions([
-                                {
-                                  type: "SetMotorConfig",
-                                  id: element.id,
-                                  newConfig: { ...motor, speed },
-                                  oldConfig: motor,
-                                },
-                              ]);
-                            }}
-                            accent
-                          />
-                        </StructureOnly>
-                      )}
-                      <StructureOnly disabled={simulating} row>
-                        <Tooltip title={t("delete")}>
-                          <IconButton
-                            color="error"
-                            onMouseEnter={() => handleMouseEnter(element, true)}
-                            onMouseLeave={handleMouseLeave}
-                            onClick={() =>
-                              applyActions([{ type: "DeleteElement", element }])
-                            }
-                            sx={{ borderRadius: 3 }}
-                          >
-                            <Delete sx={{ width: 20, height: 20 }} />
-                          </IconButton>
-                        </Tooltip>
-                      </StructureOnly>
-                    </>
-                  }
-                />
-              </ListItem>
-            </React.Fragment>
-          ))}
-        </List>
-        {!hasElements && (
-          <Box
-            sx={{
-              padding: 2,
-              textAlign: "center",
-              fontSize: "0.875rem",
-              color: "text.disabled",
-            }}
-          >
-            Pas encore d'éléments
-          </Box>
-        )}
-      </Box>
+      />
     );
   }
 
@@ -335,40 +215,34 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
           trailingControls={
             <>
               <StructureOnly disabled={simulating} row>
-                {"isGrounded" in element &&
-                  element.type !== "mass" &&
-                  !(element.type === "pivot" && element.motor) && (
-                    <Tooltip
-                      title={t(element.isGrounded ? "release" : "anchor")}
+                {is_groundable(element) && (
+                  <Tooltip title={t(element.isGrounded ? "release" : "anchor")}>
+                    <IconButton
+                      color="inherit"
+                      size="small"
+                      onClick={() =>
+                        applyActions([
+                          {
+                            type: "GroundNode",
+                            id: element.id,
+                            grounded: !element.isGrounded,
+                          },
+                        ])
+                      }
+                      sx={{
+                        padding: 0.2,
+                        border: 1,
+                        borderColor: "divider",
+                      }}
                     >
-                      <IconButton
-                        color="inherit"
-                        size="small"
-                        onClick={() =>
-                          applyActions([
-                            {
-                              type: "GroundNode",
-                              id: element.id,
-                              grounded: !element.isGrounded,
-                            },
-                          ])
-                        }
-                        sx={{
-                          padding: 0.2,
-                          border: 1,
-                          borderColor: "divider",
-                        }}
-                      >
-                        <Box
-                          component="img"
-                          style={{ width: 28, height: 28 }}
-                          src={icon(
-                            element.isGrounded ? "ground" : "ground-off",
-                          )}
-                        />
-                      </IconButton>
-                    </Tooltip>
-                  )}
+                      <Box
+                        component="img"
+                        style={{ width: 28, height: 28 }}
+                        src={icon(element.isGrounded ? "ground" : "ground-off")}
+                      />
+                    </IconButton>
+                  </Tooltip>
+                )}
               </StructureOnly>
 
               {element.type === "pivot" && element.motor && motorConfig && (
@@ -961,133 +835,124 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
           <Box
             sx={{
               display: "flex",
-              flexDirection: "column",
+              flexDirection: "row",
               alignItems: "center",
               justifyContent: "center",
               gap: 2,
+              mx: 2,
             }}
           >
-            <Box
-              sx={{
-                display: "flex",
-                flexDirection: "row",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 2,
-              }}
-            >
-              {"rotatingEdgesIDs" in element && (
-                <NumberInput
-                  label="μᵣ"
-                  title={t("rotational_friction")}
-                  value={element.rotationalFriction}
-                  onChange={(rotationalFriction) =>
-                    applyActions([
-                      {
-                        type: "ChangeRotationalFriction",
-                        id: element.id,
-                        delta: rotationalFriction - element.rotationalFriction,
-                      },
-                    ])
-                  }
-                  unsigned
-                  large
-                  precision={3}
-                  step={0.001}
-                />
-              )}
-              {"parentBeamID" in element && (
-                <NumberInput
-                  label="μₛ"
-                  title={t("sliding_friction")}
-                  value={element.slidingFriction}
-                  onChange={(slidingFriction) =>
-                    applyActions([
-                      {
-                        type: "ChangeSlidingFriction",
-                        id: element.id,
-                        delta: slidingFriction - element.slidingFriction,
-                      },
-                    ])
-                  }
-                  unsigned
-                  large
-                  precision={2}
-                  step={0.01}
-                />
-              )}
-              {element.type === "gear" && (
-                <NumberInput
-                  label="mₛ"
-                  title={t("surface_mass")}
-                  kind={SURFACE_MASS}
-                  value={element.surfaceMass}
-                  onChange={(surfaceMass) =>
-                    applyActions([
-                      {
-                        type: "ChangeSurfaceMass",
-                        id: element.id,
-                        delta: surfaceMass - element.surfaceMass,
-                      },
-                    ])
-                  }
-                  unsigned
-                  large
-                />
-              )}
-              {element.type === "gear" && (
-                <NumberInput
-                  label="J"
-                  title={t("inertia")}
-                  kind={INERTIA}
-                  value={gear_inertia(element.surfaceMass, element.radius)}
-                  onChange={(inertia) =>
-                    applyActions([
-                      {
-                        type: "ChangeSurfaceMass",
-                        id: element.id,
-                        delta:
-                          surface_mass_for_inertia(inertia, element.radius) -
-                          element.surfaceMass,
-                      },
-                    ])
-                  }
-                  unsigned
-                  large
-                />
-              )}
-              {element.type === "beam" && (
-                <MaterialProfileSection
-                  element={element}
-                  materials={mechanism.materials}
-                  profiles={mechanism.profiles}
-                  applyActions={applyActions}
-                />
-              )}
-              {element.type === "spring" && (
-                <NumberInput
-                  label="L₀"
-                  title={t("rest_length")}
-                  kind={LENGTH}
-                  value={
-                    element.restLength ??
-                    element.positionStart.distance_to(element.positionEnd)
-                  }
-                  onChange={(restLength) =>
-                    applyActions([
-                      {
-                        type: "UpdateElementRestLength",
-                        id: element.id,
-                        newValue: restLength,
-                        oldValue: element.restLength,
-                      },
-                    ])
-                  }
-                  unsigned
-                  large
-                />
-              )}
-            </Box>
+            {"rotatingEdgesIDs" in element && (
+              <NumberInput
+                label="μᵣ"
+                title={t("rotational_friction")}
+                value={element.rotationalFriction}
+                onChange={(rotationalFriction) =>
+                  applyActions([
+                    {
+                      type: "ChangeRotationalFriction",
+                      id: element.id,
+                      delta: rotationalFriction - element.rotationalFriction,
+                    },
+                  ])
+                }
+                unsigned
+                large
+                precision={3}
+                step={0.001}
+              />
+            )}
+            {"parentBeamID" in element && (
+              <NumberInput
+                label="μₛ"
+                title={t("sliding_friction")}
+                value={element.slidingFriction}
+                onChange={(slidingFriction) =>
+                  applyActions([
+                    {
+                      type: "ChangeSlidingFriction",
+                      id: element.id,
+                      delta: slidingFriction - element.slidingFriction,
+                    },
+                  ])
+                }
+                unsigned
+                large
+                precision={2}
+                step={0.01}
+              />
+            )}
+            {element.type === "gear" && (
+              <NumberInput
+                label="mₛ"
+                title={t("surface_mass")}
+                kind={SURFACE_MASS}
+                value={element.surfaceMass}
+                onChange={(surfaceMass) =>
+                  applyActions([
+                    {
+                      type: "ChangeSurfaceMass",
+                      id: element.id,
+                      delta: surfaceMass - element.surfaceMass,
+                    },
+                  ])
+                }
+                unsigned
+                large
+              />
+            )}
+            {element.type === "gear" && (
+              <NumberInput
+                label="J"
+                title={t("inertia")}
+                kind={INERTIA}
+                value={gear_inertia(element.surfaceMass, element.radius)}
+                onChange={(inertia) =>
+                  applyActions([
+                    {
+                      type: "ChangeSurfaceMass",
+                      id: element.id,
+                      delta:
+                        surface_mass_for_inertia(inertia, element.radius) -
+                        element.surfaceMass,
+                    },
+                  ])
+                }
+                unsigned
+                large
+              />
+            )}
+            {element.type === "beam" && (
+              <MaterialProfileSection
+                elements={[element]}
+                materials={mechanism.materials}
+                profiles={mechanism.profiles}
+                applyActions={applyActions}
+              />
+            )}
+            {element.type === "spring" && (
+              <NumberInput
+                label="L₀"
+                title={t("rest_length")}
+                kind={LENGTH}
+                value={
+                  element.restLength ??
+                  element.positionStart.distance_to(element.positionEnd)
+                }
+                onChange={(restLength) =>
+                  applyActions([
+                    {
+                      type: "UpdateElementRestLength",
+                      id: element.id,
+                      newValue: restLength,
+                      oldValue: element.restLength,
+                    },
+                  ])
+                }
+                unsigned
+                large
+              />
+            )}
           </Box>
         </>
       )}

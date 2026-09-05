@@ -77,13 +77,21 @@ function min_length_links(
 }
 
 /**
- * Resolves geometric constraints for a given mechanism and a triggering action.
+ * Resolves geometric constraints for a given mechanism and the actions it pulls against.
  */
 export function resolveGeometricConstraints(
   mechanism: Mechanism,
-  /** The action the solve pulls against, absent when the bundle only reshapes the graph (connections, deletions). */
-  trigger: Action | undefined,
-  /** The whole bundle. Only the separation of what it disconnects reads it — every other rule answers to `trigger` alone. */
+  /**
+   * The actions the solve pulls against — empty when the bundle only reshapes the graph
+   * (connections, deletions).
+   *
+   * Several only ever come from one panel field written to a whole selection at once, where each
+   * states its own element's value and the constraints they add compose. A gesture brings exactly
+   * one: a grab has a single point and a single pin, so the branches below that set one keep
+   * assuming they run alone.
+   */
+  triggers: readonly Action[],
+  /** The whole bundle. Only the separation of what it disconnects reads it — every other rule answers to the triggers alone. */
   bundleActions: Action[],
 ): GeomNodes {
   // *
@@ -125,7 +133,11 @@ export function resolveGeometricConstraints(
   // MoveElements mute nodes.positions avant le solve : on garde les positions
   // d'origine pour que la mise à jour des contraintes voie un vrai "avant".
   let preMovePositions: Map<string, Point2> | undefined = undefined;
-  if (trigger) {
+  /** The bundle's triggers of one type, narrowed to it. */
+  const triggers_of = <T extends Action["type"]>(type: T) =>
+    triggers.filter((a): a is Extract<Action, { type: T }> => a.type === type);
+
+  for (const trigger of triggers) {
     switch (trigger.type) {
       case "MoveNode":
         if (trigger.committed) pin = `${trigger.id}`;
@@ -305,7 +317,7 @@ export function resolveGeometricConstraints(
 
   // Ancrages pré-fusion : les clés individuelles disparaissent après la fusion Coincidence ;
   // Math.min() propagera ensuite ces valeurs à la clé fusionnée.
-  if (trigger && trigger.type === "ChangeGearRadius") {
+  for (const trigger of triggers_of("ChangeGearRadius")) {
     // Keep the centre stable only when the radius is free to grow (no mesh and
     // no radius dimension). When meshed or radius-constrained, the centre must
     // stay free so the gear can move to keep tangency / honour the held radius.
@@ -322,7 +334,7 @@ export function resolveGeometricConstraints(
       nodes.posMasses.set(`${trigger.id}`, 0);
     }
   }
-  if (trigger && trigger.type === "MoveNode") {
+  for (const trigger of triggers_of("MoveNode")) {
     const movedEl = mechanism.mechanicalElements.find(
       (e) => e.id === trigger.id,
     );
@@ -451,7 +463,7 @@ export function resolveGeometricConstraints(
   let ddl: number;
 
   // Beam sélectionné
-  if (trigger && trigger.type === "MoveEdgeBody") {
+  for (const trigger of triggers_of("MoveEdgeBody")) {
     const movedEdge = mechanism.mechanicalElements.find(
       (e) => e.id === trigger.id,
     )! as EdgeElement;

@@ -44,6 +44,9 @@ export const TOOL_SHORTCUTS = {
   PlacingForceStart: ["f"],
   PlacingMomentStart: ["o"],
   PlacingProbe: ["i"],
+
+  // Not a palette tool: the ruler is armed from its own corner of the canvas.
+  Measuring: ["u"],
 } as const satisfies Partial<Record<ToolStateType, readonly string[]>>;
 
 /** Key names to display as something other than their `KeyboardEvent.key`. */

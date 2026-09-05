@@ -85,6 +85,11 @@ export const edition_palette = (): {
             "DraggingFloorHeight",
             "DraggingFloorAngle",
             "EditingFloorValue",
+            // The ruler has no palette button of its own — it is armed and read from its own
+            // corner of the canvas. It lights this one, which is the tool it falls back to.
+            "Measuring",
+            "MeasuringFrom",
+            "Measured",
           ].includes(state.type) ||
           // Une saisie ouverte depuis un outil resté armé laisse cet outil
           // allumé : c'est lui qu'on retrouve en sortie, pas la sélection.

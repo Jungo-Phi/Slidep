@@ -10,12 +10,15 @@ import { measure_belt_length } from "../../utils/belt-geom";
 import { DIM } from "../../constants/rendering-specs";
 
 /**
- * How far a dimension created from the panel stands off what it measures — a
- * screen distance, so it lands where it can be read whatever the zoom, and never
- * a hundred times the mechanism away.
+ * How far a dimension nobody placed stands off what it measures — a screen distance, so it
+ * lands where it can be read whatever the zoom, and never a hundred times the mechanism away.
+ *
+ * Read by the ruler as well: a reading and a cote of the same thing sit in the same place, so
+ * one does not read as an odd version of the other.
  */
-const auto_offset = (viewport: ViewportState) =>
+export const auto_dimension_offset = (viewport: ViewportState) =>
   screen2world_length(DIM.AUTO_DIMENSION_OFFSET, viewport);
+
 
 export const create_length_dimension = (
   element: EdgeElement,
@@ -31,7 +34,7 @@ export const create_length_dimension = (
   const offset = positionEnd
     .sub(positionStart)
     .perp()
-    .with_length(auto_offset(viewport));
+    .with_length(auto_dimension_offset(viewport));
   const position = mid.add(offset);
   if (element.type === "belt") {
     return {
@@ -56,7 +59,7 @@ export const create_radius_dimension = (
   viewport: ViewportState,
 ): ConstraintElement => {
   const position = gear.position.add(
-    ONE.with_length(gear.radius + auto_offset(viewport)),
+    ONE.with_length(gear.radius + auto_dimension_offset(viewport)),
   );
   return {
     type: "dimension-radius",

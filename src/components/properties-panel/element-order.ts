@@ -7,7 +7,7 @@ import {
 } from "../../types/element";
 
 /** A motored pivot reads as its own kind in the palette, so the lists give it its own group too. */
-type DisplayType = MechanicalElementType | "motor";
+export type DisplayType = MechanicalElementType | "motor";
 
 /** Display order of the panel lists: mirrors the palette's grouping so a list and the palette read the same way. */
 const TYPE_ORDER: DisplayType[] = [
@@ -41,7 +41,7 @@ const CONSTRAINT_TYPE_ORDER: ConstraintElementType[] = [
   "parallel",
 ];
 
-function display_type(element: MechanicalElement): DisplayType {
+export function display_type(element: MechanicalElement): DisplayType {
   return element.type === "pivot" && element.motor ? "motor" : element.type;
 }
 

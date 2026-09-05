@@ -155,9 +155,9 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
     null,
   );
   const focusLibraryEntry = React.useCallback(
-    (section: "materials" | "profiles", id: ID) => {
+    (section: "materials" | "profiles", ids: ID[]) => {
       setActiveTab("library");
-      setLibraryFocusRequest({ section, id });
+      setLibraryFocusRequest({ section, ids });
     },
     [setActiveTab],
   );
@@ -308,6 +308,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
               analysedMechanism={analysedMechanism}
               appMode={appMode}
               runtimeState={runtimeState}
+              setHighlight={setHighlight}
             />
           )}
           {activeTab === "constraints" && (

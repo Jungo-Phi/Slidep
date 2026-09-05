@@ -10,15 +10,23 @@
 
 ### À faire de plus important prochainement
 
-- Ajouter l'outil de mesure
-
-- Sélection multiple
-
 - Frottement des pivot, sliders et contacts
 
 - Améliorer la perf
 
 - Changement de parent de slider
+- Reset de longueur au repos ressort
+
+- Finesser UI hiérarchie + rendre plus clair la sélection de même type
+- Enlever (m / k / b / ω) du raccourcis dans ElementDisplay ?
+- Clarifier ou les NumberInput on _accent_ ?
+- Enlever les readOnly de la sélection multiple ?
+
+- Enlever le gras
+- Supprimer le label "Sélectionner"
+- ❇️ Renommer "titre" et "label" de ElementDisplay (confusant)
+- ❇️ Unifier l'usage des séparateurs en pleine largeur (mx: -1, qui annule la marge du conteneur)
+- ❇️ Trier le dossier "utils"
 
 ### À faire rapidement
 
@@ -34,8 +42,9 @@
 - 🔨 Afficher I avec les profilés
 - 🔨 Afficher la masse totale (ou ça ?)
 - 🔨 Afficher les contraintes dans les joins
-- 🔨 Afficher les "draw_beam_end" en couleur de contrainte
+- 🔨 Afficher les "draw_beam_end" en couleur de contrainte et hover matériaux
 - 🔨 Afficher les graphiques à frame=0 (pas "en attente de données...")
+- 🔨 La distance d'écartement à la séparation d'éléments devrait dépendre du zoom
 - 🚨 Hot-reload des masses, ressorts et amortisseurs en simulation
 - 🚨 Rendre les dimensions non-éditables en simulation
 
@@ -72,6 +81,7 @@
 
 ---
 
+- 🚨 Un ctrl+y de remplacement d'élément n'a pas reset la simulation, wtf !?
 - 🚨 Le moteur se bloque avec "Jansen", wtf !?
 - 🚨 Hover sur des contraintes cachées, wtf !?
 - Le hover des éléments depuis le panneau latéral ne devrait pas faire apparaitre les contraintes
@@ -246,9 +256,7 @@
 **Sélection multiple**
 
 - 🤔 Penser le panneau : plusieurs éléments sélectionnés (même/différent type)
-- 🆕 Sélection multiple d'éléments du même type -> modifier paramètres simultanément (IU adaptée + actions multiples)
 - 🚨 Shift + Click sur l'unique élément sélectionné ne le désélectionne pas
-- 🤔 Shift + Click de sélection multiple sur les ElementDisplay de l'onglet éléments aussi
 - 🆕 Ajouter le copié-collé
 - 🤔 Symétrie / Rotation / Scale d'éléments multiples.
 - 🤔 Click droit sur le canvas devrait proposer des choses (undo/redo, copy/paste, recentrer, etc.) (et sur un élément ?)

@@ -59,6 +59,12 @@ const GRID_SNAPPED_STATES = new Set<CanvasStateType>([
   "PlacingMotor",
   "PlacingPivot",
   "PlacingSlider",
+  // The ruler puts a point down like any other tool, so it answers to the grid like any
+  // other — including along a bar, where mid-span is a rung: laying an end there is a
+  // reading worth having, and nothing else lands on it.
+  "Measuring",
+  "MeasuringFrom",
+  "Measured",
 ]);
 
 /** `value` pulled onto the nearest grid line, or left alone when none is near enough. */

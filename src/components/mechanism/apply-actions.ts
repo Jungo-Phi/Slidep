@@ -282,7 +282,7 @@ function same_id(a: Action, b: Action): boolean {
 export function apply_actions(mechanism: Mechanism, actions: Action[]): Mechanism {
   actions = with_corrections(mechanism, actions);
   const newAction = actions[0];
-  const { solve, trigger } = bundle_geometry(actions);
+  const { solve, triggers } = bundle_geometry(actions);
   let newActions = actions;
   let newNodes: GeomNodes | undefined;
   let newHistory: Action[][] | undefined = undefined;
@@ -296,7 +296,7 @@ export function apply_actions(mechanism: Mechanism, actions: Action[]): Mechanis
       solve === "before"
         ? mechanism
         : actionReducer(clone_mechanism(mechanism), actions, false);
-    newNodes = resolveGeometricConstraints(solvedOn, trigger, actions);
+    newNodes = resolveGeometricConstraints(solvedOn, triggers, actions);
     newActions = [
       ...actions,
       {

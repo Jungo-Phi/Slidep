@@ -8,7 +8,6 @@ import {
   Menu,
   MenuItem,
   Select,
-  Switch,
   ToggleButton,
   ToggleButtonGroup,
   Tooltip,
@@ -282,13 +281,6 @@ export const SettingsMenu: React.FC<SettingsMenuProps> = ({
           </Box>
         </MenuItem>
 
-        <Divider />
-        <MenuItem disableRipple disabled>
-          <FormControlLabel
-            control={<Switch size="small" disabled />}
-            label={t("show_constraints")}
-          />
-        </MenuItem>
         <Divider />
         <Box
           sx={{

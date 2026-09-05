@@ -74,6 +74,7 @@ import { GRAB_BELT_KEY } from "../../solver/snapshot";
 import { HIT_TOLERANCE } from "../../../constants/interaction-specs";
 import { handle_placing_element } from "./placing-element-actions";
 import { handle_placing_constraint } from "./placing-constraint-actions";
+import { build_measure, measure_anchor, ruler_step_back } from "./measure";
 import { snapped } from "../snapping/point-snap";
 import {
   DEFAULT_SNAP_SETTINGS,
@@ -98,7 +99,7 @@ function mechanical_only(
 }
 
 /** The state a selection of `elementIDs` calls for, once the overlays are out. */
-function multiple_selection_state(
+export function multiple_selection_state(
   elementIDs: ID[],
   mechanicalElements: MechanicalElement[],
 ): CanvasState {
@@ -486,6 +487,26 @@ export function canvasStateReducer(
           actions.push(...r.actions);
           break;
         }
+        case "MeasuringFrom":
+          // The second click seals what the preview was already showing.
+          setCanvasState({
+            type: "Measured",
+            measure: build_measure(
+              state.start,
+              hoveredPart,
+              mechanicalElements,
+            ),
+          });
+          break;
+        case "Measuring":
+        case "Measured":
+          // A reading always replaces the one on show: the ruler is one instrument, not a
+          // collection.
+          setCanvasState({
+            type: "MeasuringFrom",
+            start: measure_anchor(hoveredPart, mechanicalElements),
+          });
+          break;
         case "DimensionStart":
         case "DimensionNode":
         case "DimensionEdge":
@@ -1387,11 +1408,22 @@ export function canvasStateReducer(
       break;
 
     case "MouseRightButtonDown":
-      setCanvasState({ type: "Selecting" });
+      setCanvasState(ruler_step_back(state) ?? { type: "Selecting" });
       break;
 
     case "KeyDown":
       switch (event.key) {
+        // Before the shortcut table below, which would read Escape as "arm the selection
+        // tool" and put the ruler away in one press.
+        case "Escape": {
+          const stepBack = ruler_step_back(state);
+          if (stepBack) {
+            setCanvasState(stepBack);
+            break;
+          }
+          setCanvasState({ type: "Selecting" });
+          break;
+        }
         case "Delete":
           switch (state.type) {
             case "SelectedElement":
