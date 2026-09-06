@@ -33,6 +33,7 @@ const zeroEnergy = (kinetic: number): EnergySample => ({
   potentialGravity: 0,
   potentialSpring: 0,
   damperPower: 0,
+  frictionPower: 0,
 });
 
 describe("bilan énergétique", () => {
@@ -66,8 +67,8 @@ describe("bilan énergétique", () => {
     // potential (at rest, top) to kinetic (moving, bottom) — neither is shifted to read 0
     // at the start, unlike a relative-to-start display would.
     const s = compute_energy_balance([
-      frame(0, { kinetic: 0, potentialGravity: 10, potentialSpring: 0, damperPower: 0 }),
-      frame(1, { kinetic: 6, potentialGravity: 4, potentialSpring: 0, damperPower: 0 }),
+      frame(0, { ...zeroEnergy(0), potentialGravity: 10 }),
+      frame(1, { ...zeroEnergy(6), potentialGravity: 4 }),
     ]);
     expect(s.kinetic).toEqual([0, 6]);
     expect(s.potential).toEqual([10, 4]);
@@ -90,6 +91,17 @@ describe("bilan énergétique", () => {
       ),
     );
     // Net power is 5 - 3 = 2 W, held constant: work over 1 s is exactly 2 J.
+    expect(s.netWorkIn).toEqual([0, 2]);
+  });
+
+  it("un joint frottant retranche sa puissance dissipée comme un amortisseur", () => {
+    const s = compute_energy_balance(
+      [0, 1].map((t) =>
+        frame(t, { ...zeroEnergy(0), frictionPower: 3 }, [
+          { pivotID: pivot("m"), watts: 5 },
+        ]),
+      ),
+    );
     expect(s.netWorkIn).toEqual([0, 2]);
   });
 

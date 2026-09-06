@@ -26,7 +26,7 @@ import { HoveredPart, names_element } from "../../../types/hovered-part";
 import { PROBE_ELEMENT_COLORS } from "../../properties-panel/components/ProbeChart";
 import { nodes_under_segment } from "../picking/body-crossings";
 import { CanvasState } from "../../../types/canvas-state";
-import { element_refs } from "../../../types/element-refs";
+import { has_dangling_ref } from "../../../types/element-refs";
 import {
   draw_beam,
   BeamFillStop,
@@ -467,14 +467,6 @@ export function draw_edge_fake_end(
  * The elements that cannot be drawn, because a reference they hold names an
  * element that is not there. Drawing resolves those referents through strict
  * getters, so attempting one throws and takes the whole frame with it.
- *
- * Omitting them is a safety net, never a fix: a dangling reference is a defect
- * the validator reports and `repair_mechanism` clears at load time. What this
- * buys is that the defect costs one invisible element instead of a blank canvas.
- *
- * A `materialID`/`profileID` is excluded from this check: it names a library entry, never an
- * element `mechanicalElements` could hold, and drawing never resolves it — a beam's own
- * geometry is all `draw_beam` ever needs.
  */
 function undrawable_elements(
   allElements: UnionElement[],
@@ -482,15 +474,8 @@ function undrawable_elements(
 ): Set<ID> {
   const present = new Set<ID>(mechanicalElements.map((element) => element.id));
   const undrawable = new Set<ID>();
-  for (const element of allElements) {
-    const dangling = element_refs(element).some(
-      (ref) =>
-        !ref.spec.target.includes("material") &&
-        !ref.spec.target.includes("profile") &&
-        !present.has(ref.id),
-    );
-    if (dangling) undrawable.add(element.id);
-  }
+  for (const element of allElements)
+    if (has_dangling_ref(element, present)) undrawable.add(element.id);
   return undrawable;
 }
 

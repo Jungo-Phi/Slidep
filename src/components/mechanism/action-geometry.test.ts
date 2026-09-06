@@ -131,15 +131,14 @@ describe("bundle_geometry", () => {
 });
 
 describe("continues_previous_gesture", () => {
-  it("continues for an uncommitted drag frame", () => {
+  // Typed or dragged makes no difference here: what ends a run is the seal its author
+  // pushes — a drag's mouse-up Blank, a numeric field's own — never the value itself.
+  it("continues for a drag frame, committed or not", () => {
     expect(continues_previous_gesture([move_node({ committed: false })])).toBe(
       true,
     );
-  });
-
-  it("starts a new entry for a committed (typed) value, even of a coalescing type", () => {
     expect(continues_previous_gesture([move_node({ committed: true })])).toBe(
-      false,
+      true,
     );
   });
 

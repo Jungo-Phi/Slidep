@@ -59,6 +59,10 @@ export function is_noop_action(action: Action): boolean {
       return action.newValue === action.oldValue;
     case "SetShowOverlay":
       return action.newValue === action.oldValue;
+    // A boundary marker with no entry to close — nothing preceded it, or what did was
+    // dropped for netting to nothing.
+    case "Blank":
+      return true;
     case "ChangeFloorHeight":
     case "ChangeFloorAngle":
       return action.newValue === action.oldValue;

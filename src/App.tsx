@@ -39,7 +39,6 @@ import {
   Point2,
   PropertiesPanelTab,
   SimulationConfig,
-  UnionElement,
   ViewportChange,
   ZERO,
   is_simulating,
@@ -54,7 +53,10 @@ import {
 } from "./utils";
 import { useThemeChoice } from "./theme/use-theme-choice";
 import { get_language, Lang, set_language, t } from "./i18n";
-import { SNACKBAR_DURATION } from "./constants/interaction-specs";
+import {
+  SNACKBAR_DURATION,
+  VALUE_EDIT_COALESCE_MS,
+} from "./constants/interaction-specs";
 import MechanicalCanvas, {
   ConstraintChangeSignal,
 } from "./components/canvas/MechanicalCanvas";
@@ -94,6 +96,15 @@ import { HoveredAbscissa, HoveredPart } from "./types/hovered-part";
 import { actionReducer } from "./components/mechanism/action-reducer";
 import { assert_actions_preserve_validity } from "./utils/assert-mechanism";
 import { apply_actions } from "./components/mechanism/apply-actions";
+import {
+  HistorySeal,
+  HistorySealContext,
+} from "./components/mechanism/history-seal";
+import {
+  is_load_value_only_bundle,
+  is_observation_only_bundle,
+  is_structure_bundle,
+} from "./components/mechanism/action-kind";
 import MechanismsGallery from "./components/mechanisms-gallery/MechanismsGallery";
 import {
   fit_to_content,
@@ -104,73 +115,6 @@ import {
 const CONDENSED_BREAKPOINT = 1400;
 /** Retire en plus les séparateurs et resserre les espacements pour les fenêtres vraiment étroites. */
 const TIGHT_BREAKPOINT = 1100;
-
-/**
- * The three classes an edit can fall into during a simulation.
- *
- *  - **observation** (probe configs, overlay visibility): affects neither the
- *    model nor the snapshots — no recompile, no truncation.
- *  - **parameter** (loads, motor speed, gravity/collisions/the floor): takes effect at
- *    the current time. The past snapshots stay valid, the future ones are truncated and
- *    the motion is recomputed from there. Does NOT leave simulation mode.
- *  - **structure** (geometry, dimensions, node grounding, connections): forbidden at
- *    the source by greying out the controls (ElementProperties); the exit to edition
- *    remains only as a safety net.
- */
-const OBSERVATION_ACTIONS: Action["type"][] = ["SetProbes", "SetShowOverlay"];
-
-const PARAMETER_ACTIONS: Action["type"][] = [
-  "SetMotorConfig",
-  "ChangeForce",
-  "ChangeDistributedForce",
-  "ChangeMoment",
-  "SetLoadFrame",
-  "SetFloorEnabled",
-  "ChangeFloorHeight",
-  "ChangeFloorAngle",
-  "SetGravity",
-  "SetCollisions",
-];
-
-const is_observation_only_bundle = (actions: Action[]) =>
-  actions.length > 0 &&
-  actions.every((a) => OBSERVATION_ACTIONS.includes(a.type));
-
-/** A load's value changing (magnitude, direction…) — never its target or count — is the one
- *  parameter edit cheap enough to swap into the running model without a full recompile (see
- *  `Recorder.setLoads`). A drag can fire this many times a second, unlike every other edit. */
-const LOAD_VALUE_ACTIONS: Action["type"][] = [
-  "ChangeForce",
-  "ChangeDistributedForce",
-  "ChangeMoment",
-];
-
-const is_load_value_only_bundle = (actions: Action[]) =>
-  actions.length > 0 &&
-  actions.every((a) => LOAD_VALUE_ACTIONS.includes(a.type));
-
-/** A load creation/deletion is a parameter edit too (a load is an input, not
- *  structure); any other Create/Delete is structural. */
-const is_load_element = (el: UnionElement) =>
-  el.type === "force" ||
-  el.type === "moment" ||
-  el.type === "distributed-force";
-
-const is_parameter_action = (a: Action) =>
-  PARAMETER_ACTIONS.includes(a.type) ||
-  ((a.type === "CreateElement" || a.type === "DeleteElement") &&
-    is_load_element(a.element));
-
-/** Structure edits are the ones the simulation cannot absorb: they still exit
- *  to edition (the safety net behind the greyed-out controls). `Blank` is an
- *  undo-boundary marker, not an edit — it never forces that exit on its own. */
-const is_structure_bundle = (actions: Action[]) =>
-  actions.some(
-    (a) =>
-      a.type !== "Blank" &&
-      !OBSERVATION_ACTIONS.includes(a.type) &&
-      !is_parameter_action(a),
-  );
 
 /** Whether a canvas state is an armed placement tool waiting for its first click — no element selected, no gesture started. */
 const is_armed_tool_waiting = (state: CanvasState, mechanism: Mechanism) => {
@@ -385,7 +329,7 @@ const App: React.FC = () => {
     resetSimulationState: resetSimulationStateFor,
     simulationRef,
     simStartHistoryLengthRef,
-    probeOnlyEditRef,
+    observationOnlyEditRef,
     loadValueOnlyEditRef,
   } = useSimulationPlayback({
     mechanism,
@@ -561,7 +505,7 @@ const App: React.FC = () => {
 
   const applyActions = useCallback(
     (actions: Action[]) => {
-      if (is_observation_only_bundle(actions)) probeOnlyEditRef.current = true;
+      if (is_observation_only_bundle(actions)) observationOnlyEditRef.current = true;
       else if (is_load_value_only_bundle(actions))
         loadValueOnlyEditRef.current = true;
       if (
@@ -590,10 +534,35 @@ const App: React.FC = () => {
       setCanvasState,
       exitToEdition,
       simulationRef,
-      probeOnlyEditRef,
+      observationOnlyEditRef,
       loadValueOnlyEditRef,
     ],
   );
+
+  // The field a coalescing run is open for, and the timer that ends it. A run only ever
+  // holds the newest entry open, so one of each is enough for the whole app.
+  const sealKeyRef = useRef<string | null>(null);
+  const sealTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const historySeal: HistorySeal = useMemo(() => {
+    const close = () => {
+      if (sealTimerRef.current !== null) clearTimeout(sealTimerRef.current);
+      sealTimerRef.current = null;
+      sealKeyRef.current = null;
+      applyActions([{ type: "Blank" }]);
+    };
+    return {
+      arm: (key) => {
+        // Called before the step it belongs to, so the run it interrupts still ends on its
+        // own last entry rather than on the one this step is about to write.
+        if (sealKeyRef.current !== null && sealKeyRef.current !== key) close();
+        sealKeyRef.current = key;
+        if (sealTimerRef.current !== null) clearTimeout(sealTimerRef.current);
+        sealTimerRef.current = setTimeout(close, VALUE_EDIT_COALESCE_MS);
+      },
+      close,
+    };
+  }, [applyActions]);
 
   /** Repère les contraintes-icônes recréées/supprimées par un undo/redo pour que le canvas les fasse réapparaître (reveal) ou s'estomper (fantôme rouge). */
   const signalConstraintChange = useCallback(
@@ -629,10 +598,10 @@ const App: React.FC = () => {
     if (mechanismRef.current.history.length === 0) return;
 
     const isInSim = simulationRef.current.appMode !== "edition";
-    const probeOnly = is_observation_only_bundle(
+    const observationOnly = is_observation_only_bundle(
       mechanismRef.current.history.slice(-1)[0],
     );
-    if (probeOnly) probeOnlyEditRef.current = true;
+    if (observationOnly) observationOnlyEditRef.current = true;
 
     setMechanism((prevMechanism) => {
       const lastActionsForUndo = [
@@ -673,7 +642,7 @@ const App: React.FC = () => {
       return newMechanism;
     });
 
-    if (isInSim && !probeOnly) {
+    if (isInSim && !observationOnly) {
       const isEditionAction =
         mechanismRef.current.history.length <= simStartHistoryLengthRef.current;
       if (isEditionAction) {
@@ -690,7 +659,7 @@ const App: React.FC = () => {
     signalConstraintChange,
     setCanvasState,
     simulationRef,
-    probeOnlyEditRef,
+    observationOnlyEditRef,
     simStartHistoryLengthRef,
   ]);
 
@@ -698,7 +667,7 @@ const App: React.FC = () => {
     if (mechanismRef.current.future.length === 0) return;
 
     if (is_observation_only_bundle(mechanismRef.current.future.slice(-1)[0]))
-      probeOnlyEditRef.current = true;
+      observationOnlyEditRef.current = true;
 
     setMechanism((prevMechanism) => {
       const nextActions = prevMechanism.future.slice(-1)[0];
@@ -739,7 +708,7 @@ const App: React.FC = () => {
 
     // In simulation, the [mechanism] effect recompiles + truncates snapshots.
     markDirty();
-  }, [markDirty, signalConstraintChange, setCanvasState, probeOnlyEditRef]);
+  }, [markDirty, signalConstraintChange, setCanvasState, observationOnlyEditRef]);
 
   // Window-wide drop target for importing .slidep/.zip files, independent of
   // whatever React element the pointer happens to be over (incl. portaled
@@ -847,301 +816,303 @@ const App: React.FC = () => {
 
   return (
     <ThemeProvider theme={currentTheme}>
-      <CssBaseline />
-      <Box
-        sx={{
-          display: "flex",
-          flexDirection: "column",
-          height: "100vh",
-          overflow: "hidden",
-        }}
-      >
-        {/* App Bar */}
-        <AppBar
-          position="static"
-          elevation={0}
+      <HistorySealContext.Provider value={historySeal}>
+        <CssBaseline />
+        <Box
           sx={{
-            backgroundColor: "background.toolbar",
-            border: "none",
-            borderRadius: 0,
-            // A rule in the top bar is read against the toolbar, never against
-            // the `paper` the default divider is cut for.
-            "& .MuiDivider-root": { borderColor: "dividers.toolbar" },
+            display: "flex",
+            flexDirection: "column",
+            height: "100vh",
+            overflow: "hidden",
           }}
         >
-          {/* ── Toolbar principale ── */}
-          <Toolbar
-            variant="dense"
-            disableGutters
+          {/* App Bar */}
+          <AppBar
+            position="static"
+            elevation={0}
             sx={{
-              display: "grid",
-              // Equal side columns keep the center column geometrically centered
-              // regardless of how wide the title or the right-hand controls are.
-              gridTemplateColumns: "1fr auto 1fr",
-              alignItems: "center",
-              px: 1,
-              gap: 0.5,
-              minHeight: "40px !important",
+              backgroundColor: "background.toolbar",
+              border: "none",
+              borderRadius: 0,
+              // A rule in the top bar is read against the toolbar, never against
+              // the `paper` the default divider is cut for.
+              "& .MuiDivider-root": { borderColor: "dividers.toolbar" },
             }}
           >
-            <PlaybackControls
-              appMode={appMode}
-              setAppMode={setAppMode}
-              mechanism={mechanism}
-              updateMetadata={updateMetadata}
-              applyActions={applyActions}
-              condensed={condensed}
-              tight={tight}
-              timeline={timeline}
-              runtimeState={runtimeState}
-              resetToStart={resetToStart}
-              handleSpaceKey={handleSpaceKey}
-              onOpenGallery={handleOpenGallery}
-              saveStatus={saveStatus}
-              beamStressLens={beamStressLens}
-              setBeamStressLens={setBeamStressLens}
-              trajectoryDotted={trajectoryDotted}
-              setTrajectoryDotted={setTrajectoryDotted}
-              rightSlot={
-                <ToolsMenu
-                  mechanism={mechanism}
-                  recenterTarget={recenterTarget}
-                  onRecenter={(target) =>
-                    setMechanism((prev) => ({ ...prev, viewport: target }))
-                  }
-                  undoMechanism={undoMechanism}
-                  redoMechanism={redoMechanism}
-                  onZoomTo={zoomTo}
-                  tight={tight}
-                  language={language}
-                  onSelectLang={handleSelectLang}
-                  showGrid={showGrid}
-                  setShowGrid={setShowGrid}
-                  snapToGrid={snapToGrid}
-                  setSnapToGrid={setSnapToGrid}
-                  snapSettings={snapSettings}
-                  setSnapSettings={setSnapSettings}
-                  isCustomAngleStep={isCustomAngleStep}
-                  themeChoice={themeChoice}
-                  systemDark={systemDark}
-                  changeTheme={changeTheme}
-                  previewLater={previewLater}
-                  onOpenAbout={handleInfoOpen}
-                />
-              }
-            />
-          </Toolbar>
-        </AppBar>
+            {/* ── Toolbar principale ── */}
+            <Toolbar
+              variant="dense"
+              disableGutters
+              sx={{
+                display: "grid",
+                // Equal side columns keep the center column geometrically centered
+                // regardless of how wide the title or the right-hand controls are.
+                gridTemplateColumns: "1fr auto 1fr",
+                alignItems: "center",
+                px: 1,
+                gap: 0.5,
+                minHeight: "40px !important",
+              }}
+            >
+              <PlaybackControls
+                appMode={appMode}
+                setAppMode={setAppMode}
+                mechanism={mechanism}
+                updateMetadata={updateMetadata}
+                applyActions={applyActions}
+                condensed={condensed}
+                tight={tight}
+                timeline={timeline}
+                runtimeState={runtimeState}
+                resetToStart={resetToStart}
+                handleSpaceKey={handleSpaceKey}
+                onOpenGallery={handleOpenGallery}
+                saveStatus={saveStatus}
+                beamStressLens={beamStressLens}
+                setBeamStressLens={setBeamStressLens}
+                trajectoryDotted={trajectoryDotted}
+                setTrajectoryDotted={setTrajectoryDotted}
+                rightSlot={
+                  <ToolsMenu
+                    mechanism={mechanism}
+                    recenterTarget={recenterTarget}
+                    onRecenter={(target) =>
+                      setMechanism((prev) => ({ ...prev, viewport: target }))
+                    }
+                    undoMechanism={undoMechanism}
+                    redoMechanism={redoMechanism}
+                    onZoomTo={zoomTo}
+                    tight={tight}
+                    language={language}
+                    onSelectLang={handleSelectLang}
+                    showGrid={showGrid}
+                    setShowGrid={setShowGrid}
+                    snapToGrid={snapToGrid}
+                    setSnapToGrid={setSnapToGrid}
+                    snapSettings={snapSettings}
+                    setSnapSettings={setSnapSettings}
+                    isCustomAngleStep={isCustomAngleStep}
+                    themeChoice={themeChoice}
+                    systemDark={systemDark}
+                    changeTheme={changeTheme}
+                    previewLater={previewLater}
+                    onOpenAbout={handleInfoOpen}
+                  />
+                }
+              />
+            </Toolbar>
+          </AppBar>
 
-        {/* Main content area */}
-        <Box
-          component="main"
-          sx={{
-            flexGrow: 1,
-            display: "flex",
-            flexDirection: "row",
-            overflow: "hidden",
-            backgroundColor: "background.default",
-          }}
-        >
-          <ElementPalette
-            setCanvasState={setCanvasState}
-            canvasState={canvasState}
-            mechanism={mechanism}
-            appMode={appMode}
-            onExitToEdition={exitToEdition}
-            onPauseSim={pauseSimulation}
-          />
-
-          <Box sx={{ flexGrow: 1, minWidth: 0, position: "relative" }}>
-            <MechanicalCanvas
-              ref={canvasRef}
+          {/* Main content area */}
+          <Box
+            component="main"
+            sx={{
+              flexGrow: 1,
+              display: "flex",
+              flexDirection: "row",
+              overflow: "hidden",
+              backgroundColor: "background.default",
+            }}
+          >
+            <ElementPalette
               setCanvasState={setCanvasState}
               canvasState={canvasState}
-              applyActions={applyActions}
-              changeViewport={changeViewport}
               mechanism={mechanism}
-              setHoveredPart={setHoveredPart}
-              hoveredPart={hoveredPart}
-              undoMechanism={undoMechanism}
-              redoMechanism={redoMechanism}
               appMode={appMode}
-              activeTab={activeTab}
-              constraintChangeRef={constraintChangeRef}
-              onSpaceKey={handleSpaceKey}
-              onEscapeKey={handleEscapeKey}
               onExitToEdition={exitToEdition}
               onPauseSim={pauseSimulation}
-              onSimulationGrab={handleSimulationGrab}
-              onSimulationGrabEnd={handleSimulationGrabEnd}
-              canSimulationGrab={canSimulationGrab}
-              snapToGrid={snapToGrid}
-              snapSettings={snapSettings}
-              showGrid={showGrid}
-              beamStressLens={beamStressLens}
-              trajectoryDotted={trajectoryDotted}
-              liveFrameRef={liveFrameRef}
-              highlight={highlight}
-              modePreviewRef={modePreviewRef}
-              redundancySymbols={redundancySymbols}
-              hoveredAbscissa={hoveredAbscissa}
-              librarySection={
-                activeTab === "library" ? (librarySection ?? undefined) : undefined
-              }
-              hoveredLibraryEntryID={hoveredLibraryEntryID}
             />
 
-            {appMode !== "edition" && (
-              <SimulationTimeline
+            <Box sx={{ flexGrow: 1, minWidth: 0, position: "relative" }}>
+              <MechanicalCanvas
+                ref={canvasRef}
+                setCanvasState={setCanvasState}
+                canvasState={canvasState}
+                applyActions={applyActions}
+                changeViewport={changeViewport}
+                mechanism={mechanism}
+                setHoveredPart={setHoveredPart}
+                hoveredPart={hoveredPart}
+                undoMechanism={undoMechanism}
+                redoMechanism={redoMechanism}
                 appMode={appMode}
-                runtimeState={runtimeState}
-                timeline={timeline}
-                timelineTrackRef={timelineTrackRef}
+                activeTab={activeTab}
+                constraintChangeRef={constraintChangeRef}
+                onSpaceKey={handleSpaceKey}
+                onEscapeKey={handleEscapeKey}
+                onExitToEdition={exitToEdition}
+                onPauseSim={pauseSimulation}
+                onSimulationGrab={handleSimulationGrab}
+                onSimulationGrabEnd={handleSimulationGrabEnd}
+                canSimulationGrab={canSimulationGrab}
+                snapToGrid={snapToGrid}
+                snapSettings={snapSettings}
+                showGrid={showGrid}
+                beamStressLens={beamStressLens}
+                trajectoryDotted={trajectoryDotted}
+                liveFrameRef={liveFrameRef}
+                highlight={highlight}
+                modePreviewRef={modePreviewRef}
+                redundancySymbols={redundancySymbols}
+                hoveredAbscissa={hoveredAbscissa}
+                librarySection={
+                  activeTab === "library" ? (librarySection ?? undefined) : undefined
+                }
+                hoveredLibraryEntryID={hoveredLibraryEntryID}
               />
-            )}
-          </Box>
 
-          <PropertiesPanel
-            setHighlight={setHighlight}
-            setRedundancySymbols={setRedundancySymbols}
-            modePreviewRef={modePreviewRef}
-            setCanvasState={setCanvasState}
-            clearSelectionKeepTab={clearSelectionKeepTab}
-            canvasState={canvasState}
-            applyActions={applyActions}
-            mechanism={mechanism}
-            analysedMechanism={analysedMechanism}
-            hoveredPart={hoveredPart}
-            setHoveredPart={setHoveredPart}
-            updateMetadata={updateMetadata}
-            allTags={allTags}
-            setRuntimeState={setRuntimeState}
-            runtimeState={runtimeState}
-            setSimulationConfig={setSimulationConfig}
-            simulationConfig={simulationConfig}
-            appMode={appMode}
-            activeTab={activeTab}
-            setActiveTab={setActiveTab}
-            unsatisfied={currentUnsatisfied}
-            setHoveredAbscissa={setHoveredAbscissa}
-            setLibrarySection={setLibrarySection}
-            hoveredLibraryEntryID={hoveredLibraryEntryID}
-            setHoveredLibraryEntryID={setHoveredLibraryEntryID}
-          />
-        </Box>
-      </Box>
-      <MechanismsGallery
-        open={galleryOpen}
-        onClose={closeGallery}
-        mechanismRecords={savedMechanisms}
-        onLoad={handleLoadFromGallery}
-        onRename={handleRenameFromGallery}
-        onDelete={handleDeleteFromGallery}
-        onDuplicate={handleDuplicateFromGallery}
-        onUpdateTags={handleUpdateTagsFromGallery}
-        onNew={handleNewFromGallery}
-        onImport={handleMenuButtonUpload}
-        onExport={handleExportRecord}
-        onExportAll={handleExportAllRecords}
-      />
-      <AboutDialog open={infoOpen} onClose={handleInfoClose} />
-      <Snackbar
-        open={snackbar.open}
-        autoHideDuration={snackbar.duration ?? SNACKBAR_DURATION.DEFAULT}
-        onClose={() => setSnackbar((prev) => ({ ...prev, open: false }))}
-        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
-      >
-        <Box
-          sx={{
-            display: "flex",
-            alignItems: "center",
-            gap: 1.5,
-            pl: 2,
-            pr: 1.5,
-            py: 1,
-            borderRadius: 999,
-            // Deliberately a dark scrim rather than a themed surface: the toast
-            // floats over the canvas and must stay legible against any drawing.
-            backgroundColor: (t) => alpha(t.palette.common.black, 0.53),
-            backdropFilter: "blur(6px)",
-            color: "common.white",
-            fontSize: "0.85rem",
-            fontWeight: 500,
-            // Inset rather than a real border, so the pill's radius stays exact.
-            ...(snackbar.severity === "warning" && {
-              boxShadow: (t) => `inset 0 0 0 1.5px ${t.palette.warning.main}`,
-            }),
-          }}
-        >
-          {snackbar.severity === "warning" && (
-            <WarningAmber
-              sx={{ fontSize: 17, color: "warning.main", flexShrink: 0 }}
+              {appMode !== "edition" && (
+                <SimulationTimeline
+                  appMode={appMode}
+                  runtimeState={runtimeState}
+                  timeline={timeline}
+                  timelineTrackRef={timelineTrackRef}
+                />
+              )}
+            </Box>
+
+            <PropertiesPanel
+              setHighlight={setHighlight}
+              setRedundancySymbols={setRedundancySymbols}
+              modePreviewRef={modePreviewRef}
+              setCanvasState={setCanvasState}
+              clearSelectionKeepTab={clearSelectionKeepTab}
+              canvasState={canvasState}
+              applyActions={applyActions}
+              mechanism={mechanism}
+              analysedMechanism={analysedMechanism}
+              hoveredPart={hoveredPart}
+              setHoveredPart={setHoveredPart}
+              updateMetadata={updateMetadata}
+              allTags={allTags}
+              setRuntimeState={setRuntimeState}
+              runtimeState={runtimeState}
+              setSimulationConfig={setSimulationConfig}
+              simulationConfig={simulationConfig}
+              appMode={appMode}
+              activeTab={activeTab}
+              setActiveTab={setActiveTab}
+              unsatisfied={currentUnsatisfied}
+              setHoveredAbscissa={setHoveredAbscissa}
+              setLibrarySection={setLibrarySection}
+              hoveredLibraryEntryID={hoveredLibraryEntryID}
+              setHoveredLibraryEntryID={setHoveredLibraryEntryID}
             />
-          )}
-          <Typography
-            sx={{
-              fontSize: "inherit",
-              fontWeight: "inherit",
-              color: "inherit",
-            }}
-          >
-            {snackbar.message}
-          </Typography>
-          <IconButton
-            size="small"
-            onClick={() => setSnackbar((prev) => ({ ...prev, open: false }))}
-            sx={{
-              color: (t) => alpha(t.palette.common.white, 0.6),
-              p: 0.25,
-              "&:hover": { color: "common.white" },
-            }}
-          >
-            <Close sx={{ fontSize: 14 }} />
-          </IconButton>
+          </Box>
         </Box>
-      </Snackbar>
-      <Fade in={isDraggingFile}>
-        <Box
-          sx={{
-            position: "fixed",
-            inset: 0,
-            // Above dialogs (the gallery included) and the snackbar: the drop target is the whole window, whatever is open on top of it.
-            zIndex: (t) => t.zIndex.tooltip + 100,
-            pointerEvents: "none",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            // A constant dark veil rather than a themed surface, so the drop
-            // zone reads the same over any drawing/theme underneath — same
-            // choice as the snackbar's scrim below.
-            backgroundColor: (t) => alpha(t.palette.common.black, 0.55),
-            backdropFilter: "blur(2px)",
-          }}
+        <MechanismsGallery
+          open={galleryOpen}
+          onClose={closeGallery}
+          mechanismRecords={savedMechanisms}
+          onLoad={handleLoadFromGallery}
+          onRename={handleRenameFromGallery}
+          onDelete={handleDeleteFromGallery}
+          onDuplicate={handleDuplicateFromGallery}
+          onUpdateTags={handleUpdateTagsFromGallery}
+          onNew={handleNewFromGallery}
+          onImport={handleMenuButtonUpload}
+          onExport={handleExportRecord}
+          onExportAll={handleExportAllRecords}
+        />
+        <AboutDialog open={infoOpen} onClose={handleInfoClose} />
+        <Snackbar
+          open={snackbar.open}
+          autoHideDuration={snackbar.duration ?? SNACKBAR_DURATION.DEFAULT}
+          onClose={() => setSnackbar((prev) => ({ ...prev, open: false }))}
+          anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
         >
           <Box
             sx={{
-              m: 3,
-              px: 5,
-              py: 4,
-              borderRadius: 3,
-              border: "2px dashed",
-              borderColor: "primary.main",
               display: "flex",
-              flexDirection: "column",
               alignItems: "center",
               gap: 1.5,
-              color: "primary.main",
+              pl: 2,
+              pr: 1.5,
+              py: 1,
+              borderRadius: 999,
+              // Deliberately a dark scrim rather than a themed surface: the toast
+              // floats over the canvas and must stay legible against any drawing.
+              backgroundColor: (t) => alpha(t.palette.common.black, 0.53),
+              backdropFilter: "blur(6px)",
+              color: "common.white",
+              fontSize: "0.85rem",
+              fontWeight: 500,
+              // Inset rather than a real border, so the pill's radius stays exact.
+              ...(snackbar.severity === "warning" && {
+                boxShadow: (t) => `inset 0 0 0 1.5px ${t.palette.warning.main}`,
+              }),
             }}
           >
-            <UploadFile sx={{ fontSize: 40, color: "inherit" }} />
+            {snackbar.severity === "warning" && (
+              <WarningAmber
+                sx={{ fontSize: 17, color: "warning.main", flexShrink: 0 }}
+              />
+            )}
             <Typography
-              sx={{ fontSize: "1.1rem", fontWeight: 600, color: "inherit" }}
+              sx={{
+                fontSize: "inherit",
+                fontWeight: "inherit",
+                color: "inherit",
+              }}
             >
-              {t("drop_to_import")}
+              {snackbar.message}
             </Typography>
+            <IconButton
+              size="small"
+              onClick={() => setSnackbar((prev) => ({ ...prev, open: false }))}
+              sx={{
+                color: (t) => alpha(t.palette.common.white, 0.6),
+                p: 0.25,
+                "&:hover": { color: "common.white" },
+              }}
+            >
+              <Close sx={{ fontSize: 14 }} />
+            </IconButton>
           </Box>
-        </Box>
-      </Fade>
+        </Snackbar>
+        <Fade in={isDraggingFile}>
+          <Box
+            sx={{
+              position: "fixed",
+              inset: 0,
+              // Above dialogs (the gallery included) and the snackbar: the drop target is the whole window, whatever is open on top of it.
+              zIndex: (t) => t.zIndex.tooltip + 100,
+              pointerEvents: "none",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              // A constant dark veil rather than a themed surface, so the drop
+              // zone reads the same over any drawing/theme underneath — same
+              // choice as the snackbar's scrim below.
+              backgroundColor: (t) => alpha(t.palette.common.black, 0.55),
+              backdropFilter: "blur(2px)",
+            }}
+          >
+            <Box
+              sx={{
+                m: 3,
+                px: 5,
+                py: 4,
+                borderRadius: 3,
+                border: "2px dashed",
+                borderColor: "primary.main",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: 1.5,
+                color: "primary.main",
+              }}
+            >
+              <UploadFile sx={{ fontSize: 40, color: "inherit" }} />
+              <Typography
+                sx={{ fontSize: "1.1rem", fontWeight: 600, color: "inherit" }}
+              >
+                {t("drop_to_import")}
+              </Typography>
+            </Box>
+          </Box>
+        </Fade>
+      </HistorySealContext.Provider>
     </ThemeProvider>
   );
 };

@@ -306,10 +306,6 @@ export function canvasStateReducer(
                 break;
               }
             }
-            const simConstraint = constraintElements.find(
-              (element) => element.id === hoveredPart.id,
-            );
-            if (simConstraint && "value" in simConstraint) break;
             setCanvasState({
               type: "SelectedElement",
               elementID: hoveredPart.id,
@@ -1331,9 +1327,19 @@ export function canvasStateReducer(
               field: "height",
               value: floor.height,
             });
-          else setCanvasState({ type: "Selecting" });
+          else {
+            actions.push({ type: "Blank" });
+            setCanvasState({ type: "Selecting" });
+          }
           break;
         case "DraggingFloorAngle":
+          // Same threshold the drag itself answers to: below it nothing was pushed, so there
+          // is no entry to seal.
+          if (
+            worldMousePos.distance_to(state.downPos) * viewport.scale >=
+            HIT_TOLERANCE.DRAG_START
+          )
+            actions.push({ type: "Blank" });
           setCanvasState({ type: "Selecting" });
           break;
         case "SelectingMultiple":

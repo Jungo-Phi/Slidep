@@ -16,7 +16,7 @@ import {
 } from "./superposition";
 import { belt_is_looped } from "../../utils/belt-rules";
 import { bundle_geometry, continues_previous_gesture } from "./action-geometry";
-import { is_noop_entry } from "./no-op-action";
+import { is_noop_action, is_noop_entry } from "./no-op-action";
 
 /** Whether a bundle can have changed which nodes an edge holds. */
 function may_change_terminals(actions: Action[]): boolean {
@@ -364,7 +364,12 @@ export function apply_actions(mechanism: Mechanism, actions: Action[]): Mechanis
     // second time against the identical, unmutated `mechanism`).
     const mergedAction = { ...lastAction };
     merge_value_edit(mergedAction, newAction);
-    newHistory = [...mechanism.history.slice(0, -1), [mergedAction]];
+    // A run that came back to where it started leaves nothing to undo — stepping up then back
+    // down. Dropped here rather than left for `staleNoop`, which would only see it once the
+    // next action arrived, and meanwhile the entry would swallow a Ctrl+Z without moving.
+    newHistory = is_noop_action(mergedAction)
+      ? mechanism.history.slice(0, -1)
+      : [...mechanism.history.slice(0, -1), [mergedAction]];
   } else if (
     lastActions &&
     lastActions.length >= 2 &&

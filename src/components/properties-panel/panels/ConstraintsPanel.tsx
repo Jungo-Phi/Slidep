@@ -10,6 +10,7 @@ import { CanvasState, Action, Mechanism, ZERO } from "../../../types";
 import { HoveredPart } from "../../../types/hovered-part";
 import NumberInput from "../components/NumberInput";
 import ElementDisplay from "../components/ElementDisplay";
+import StructureOnly from "../components/StructureOnly";
 import React from "react";
 import RatioInput from "../components/RatioInput";
 import {
@@ -72,7 +73,14 @@ export const ConstraintsPanel: React.FC<ConstraintsPanelProps> = ({
           size="medium"
           editable={true}
           trailingControls={
-            <>
+            <StructureOnly
+              actions={[
+                "ChangeDimensionEdgeValue",
+                "ChangeGearRatioValue",
+                "DeleteElement",
+              ]}
+              row
+            >
               {(() => {
                 switch (constraint.type) {
                   case "dimension-edge":
@@ -151,7 +159,7 @@ export const ConstraintsPanel: React.FC<ConstraintsPanelProps> = ({
                   <Delete sx={{ width: 20, height: 20 }} />
                 </IconButton>
               </Tooltip>
-            </>
+            </StructureOnly>
           }
         />
       </ListItem>

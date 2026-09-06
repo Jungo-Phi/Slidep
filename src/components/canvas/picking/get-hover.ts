@@ -50,6 +50,7 @@ import {
   probe_badge_position,
   geometric_badge_positions,
 } from "../utils";
+import { has_dangling_ref } from "../../../types/element-refs";
 import { offset_ends, parallel_edge_offsets } from "../drawing/parallel-edges";
 import { floor_screen_geometry, motor_arrow_geometry } from "../drawing/drawing-functions";
 import { FloorConfig } from "../../../types/mechanism";
@@ -944,12 +945,14 @@ function hovered_probe_badge(
   mouseScreen: ScreenPoint,
   mechanicalElements: MechanicalElement[],
   excluded_elements: ID[],
+  present: Set<ID>,
   state: CanvasState,
   viewport: ViewportState,
 ): HoveredPart | undefined {
   if (!HOVER_TARGETS[state.type].probeBadge) return undefined;
   for (const element of mechanicalElements) {
     if (excluded_elements.includes(element.id)) continue;
+    if (has_dangling_ref(element, present)) continue;
     if (!element.probes || element.probes.length === 0) continue;
     const badge = probe_badge_position(element, viewport);
     if (mouseScreen.distance_to(badge) > HIT_TOLERANCE.PROBE) continue;
@@ -964,19 +967,29 @@ function hovered_probe_badge(
 }
 
 /**
- * The geometric-constraint badge (align/normal/parallel/equal) under the
- * cursor, if the tool may pick a constraint at all — same gate the old
- * position-based constraint badges used.
+ * The geometric-constraint badge (align/normal/parallel/equal) under the cursor, if the tool
+ * may pick a constraint at all.
+ *
+ * A badge answers only where one is drawn, so the gates below are those of the badge loop in
+ * `draw_mechanism`: `visibleConstraints` — a badge not yet revealed by a hover on its host is
+ * no target, and reaching into the empty space where it would sit must not conjure it — plus
+ * the host and the constraint being drawable at all.
  */
 function hovered_geometric_badge(
   mouseScreen: ScreenPoint,
   mechanicalElements: MechanicalElement[],
   constraintElements: ConstraintElement[],
+  visibleConstraints: Map<ID, number>,
+  excluded_elements: ID[],
+  present: Set<ID>,
   state: CanvasState,
   viewport: ViewportState,
+  isSimulating: boolean,
 ): HoveredPart | undefined {
-  if (!HOVER_TARGETS[state.type].overlays) return undefined;
+  if (isSimulating || !HOVER_TARGETS[state.type].overlays) return undefined;
   for (const host of mechanicalElements) {
+    if (excluded_elements.includes(host.id)) continue;
+    if (has_dangling_ref(host, present)) continue;
     for (const { constraintId, position } of geometric_badge_positions(
       host.id,
       mechanicalElements,
@@ -985,6 +998,10 @@ function hovered_geometric_badge(
     )) {
       if (mouseScreen.distance_to(position) > HIT_TOLERANCE.CONSTRAINT)
         continue;
+      if (!visibleConstraints.has(constraintId)) continue;
+      if (excluded_elements.includes(constraintId)) continue;
+      const constraint = constraintElements.find((c) => c.id === constraintId);
+      if (!constraint || has_dangling_ref(constraint, present)) continue;
       return {
         type: "Constraint",
         position: screen2world(position, viewport),
@@ -1029,6 +1046,7 @@ function hovered_motor_arrow(
   mouseScreen: ScreenPoint,
   mechanicalElements: MechanicalElement[],
   excluded_elements: ID[],
+  present: Set<ID>,
   state: CanvasState,
   viewport: ViewportState,
 ): HoveredPart | undefined {
@@ -1036,6 +1054,7 @@ function hovered_motor_arrow(
   for (const element of mechanicalElements) {
     if (element.type !== "pivot" || !element.motor) continue;
     if (excluded_elements.includes(element.id)) continue;
+    if (has_dangling_ref(element, present)) continue;
     const centre = world2screen(element.position, viewport);
     const radialDistance = Math.abs(
       mouseScreen.distance_to(centre) - DIM.MOTOR_ARROW_RADIUS,
@@ -1075,6 +1094,7 @@ export function get_hovered_part(
   floor: FloorConfig,
   /** What the previous frame of this drag asked for, when there is one. */
   askedPosition?: Point2,
+  isSimulating: boolean = false,
 ): HoveredPart {
   // Picking only: an element being dragged is under the cursor by construction
   // and must never be its own target. What it may legally reach is decided by
@@ -1127,6 +1147,10 @@ export function get_hovered_part(
   const is_legal = legality_for_state(state, mechanicalElements);
   // The same map the drawing reads, so the cursor answers where the stroke is.
   const parallelOffsets = parallel_edge_offsets(mechanicalElements);
+  // What the sweeps below check their targets against: an element naming an absent one is not
+  // drawn, so it must not answer either — and probing it would resolve that name through a
+  // strict getter, which throws.
+  const present = new Set<ID>(mechanicalElements.map((element) => element.id));
 
   const position = mousePos.clone();
   // Picking is a screen question — every `HIT_TOLERANCE` is a number of pixels —
@@ -1206,6 +1230,7 @@ export function get_hovered_part(
         mouseScreen,
         mechanicalElements,
         excluded_elements,
+        present,
         state,
         viewport,
       );
@@ -1220,8 +1245,12 @@ export function get_hovered_part(
         mouseScreen,
         mechanicalElements,
         constraintElements,
+        visibleConstraints,
+        excluded_elements,
+        present,
         state,
         viewport,
+        isSimulating,
       );
       if (badgeHover) return badgeHover;
       continue;
@@ -1233,6 +1262,7 @@ export function get_hovered_part(
         mouseScreen,
         mechanicalElements,
         excluded_elements,
+        present,
         state,
         viewport,
       );
@@ -1242,12 +1272,17 @@ export function get_hovered_part(
     const one_type_elements = elements.filter((e) => e.type === type).reverse();
     for (const element of one_type_elements) {
       if (excluded_elements.includes(element.id)) continue;
+      if (has_dangling_ref(element, present)) continue;
       // Skip constraints hidden by the current context (mode / tab / hover).
       if (
         is_constraint_type(element.type) &&
         !visibleConstraints.has(element.id)
       )
         continue;
+      // A simulation runs on the model it was compiled from: nothing a constraint carries
+      // can be edited, moved or removed until it ends, so the ones still drawn — the
+      // constraints tab shows them all — answer to no cursor.
+      if (isSimulating && is_constraint_type(element.type)) continue;
       // Geometry first: legality is only consulted for an element the cursor is
       // actually over, otherwise an opaque refusal would block from anywhere.
       const hoveredPart = get_hovered_part_of_element(

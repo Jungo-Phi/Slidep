@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   ANGLE,
+  ANGULAR_DAMPING,
   ANGULAR_VELOCITY,
   FORCE,
   LENGTH,
@@ -69,6 +70,12 @@ describe("format_quantity — MOMENT's compound unit", () => {
     // power like 1 N·m instead of bit-exact on it — the bucket choice must not care.
     expect(format_quantity(0.9999999999999999, MOMENT, 0)).toBe("1 N·m");
     expect(format_quantity(1.0000000000000002, MOMENT, 0)).toBe("1 N·m");
+  });
+
+  it("prefixes the length factor mid-symbol too, where it is not the last one", () => {
+    expect(format_quantity(0.001, ANGULAR_DAMPING, 0)).toBe("1 N·mm·s");
+    expect(format_quantity(0.0000015, ANGULAR_DAMPING, 1)).toBe("1.5 N·µm·s");
+    expect(format_quantity(1500, ANGULAR_DAMPING, 1)).toBe("1.5 kN·m·s");
   });
 });
 
@@ -194,6 +201,12 @@ describe("parse_quantity — loosened unit spellings", () => {
       0.005,
       9,
     );
+  });
+
+  it("reads the length factor's prefix mid-symbol too ('N·mm·s')", () => {
+    expect(
+      parse_quantity("5N*mm*s", ANGULAR_DAMPING, default_unit(ANGULAR_DAMPING)),
+    ).toBeCloseTo(0.005, 9);
   });
 
   it("reads an exponent typed as a caret, a bare digit, or the superscript itself", () => {

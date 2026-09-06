@@ -44,6 +44,12 @@ import {
 } from "./spring-damper-model";
 import { CompiledMotor, compile_motors, resolve_motor_torques } from "./motor-model";
 import {
+  CompiledFriction,
+  compile_frictions,
+  friction_power,
+  resolve_friction_forces,
+} from "./friction-model";
+import {
   CollisionCandidates,
   FLOOR_ANCHOR_KEY,
   build_collision_candidates,
@@ -262,6 +268,8 @@ export type SimulationModel = {
   /** Motors, torque-limited form — read only by `step_dynamic_simulation`, which also drops
    *  their kinematic `MotorBeam`/`MotorAngle` LINKs from the sweep (see `CompiledMotor`). */
   compiledMotors: CompiledMotor[];
+  /** Frictional pivots/sliders, viscous form — read only by `step_dynamic_simulation` (see `CompiledFriction`). */
+  compiledFrictions: CompiledFriction[];
   /** Pairs collision detection may test each frame — see `build_collision_candidates`. */
   collisionCandidates: CollisionCandidates;
   /** The floor's unit normal, baked in from `mechanism.simulation.floor.angle` at compile
@@ -769,6 +777,7 @@ export function compile_simulation_model(
   const compiledLoads = compile_loads(mechanism, keyMap);
   const compiledSpringDampers = compile_springs_dampers(mechanism, keyMap);
   const compiledMotors = compile_motors(links, mechanism.mechanicalElements);
+  const compiledFrictions = compile_frictions(mechanism, keyMap);
   // The rest pose's own scale, seeded once here and kept current frame to frame after — see
   // `SimulationModel.extent`.
   const extent = positions_extent(nodes.positions) || MIN_EXTENT_M;
@@ -827,6 +836,7 @@ export function compile_simulation_model(
     compiledLoads,
     compiledSpringDampers,
     compiledMotors,
+    compiledFrictions,
     collisionCandidates,
     floorNormal,
     extent,
@@ -1572,6 +1582,18 @@ export function step_dynamic_simulation(
     merge_forces(motorContribution.forces);
     for (const [key, t] of motorContribution.torques)
       torques.set(key, (torques.get(key) ?? 0) + t);
+    const frictionContribution = resolve_friction_forces(
+      model.compiledFrictions,
+      subDt,
+      positions,
+      velocities,
+      angleVelocities,
+      model.dynamicMasses.posMasses,
+      model.dynamicMasses.angleMasses,
+    );
+    merge_forces(frictionContribution.forces);
+    for (const [key, t] of frictionContribution.torques)
+      torques.set(key, (torques.get(key) ?? 0) + t);
     // Cheap (one entry per motor) unlike `reactions`, so kept on every substep rather than
     // gated behind `collectDiagnostics` — the last substep's values are what the frame ends on.
     motorPower = motorContribution.power;
@@ -1871,7 +1893,18 @@ function compute_energy_sample(
     }
   }
 
-  return { kinetic, potentialGravity, potentialSpring, damperPower };
+  return {
+    kinetic,
+    potentialGravity,
+    potentialSpring,
+    damperPower,
+    frictionPower: friction_power(
+      model.compiledFrictions,
+      positions,
+      velocities,
+      angleVelocities,
+    ),
+  };
 }
 
 /**

@@ -25,8 +25,9 @@ export interface EnergyBalanceSeries {
   mechanical: number[];
   /**
    * J — cumulative net work IN since the start of the recording: every motor's own power
-   * (`DynamicSnapshot.motorPower`, summed) minus what the dampers bled off
-   * (`EnergySample.damperPower`), integrated trapezoidally over the recorded frames.
+   * (`DynamicSnapshot.motorPower`, summed) minus what the dampers and the frictional joints
+   * bled off (`EnergySample.damperPower`/`frictionPower`), integrated trapezoidally over the
+   * recorded frames.
    * Trapezoidal rather than a running Euler sum because frames land at `RECORD_DT` apart,
    * coarser than the solver's own substeps — a power curve that moves within a frame is still
    * integrated at its two recorded ends. Its own slope should match `mechanical`'s; comparing
@@ -61,11 +62,17 @@ export function compute_energy_balance(
 
   for (const snap of snapshots) {
     if (!snap.energy) continue;
-    const { kinetic: ec, potentialGravity, potentialSpring, damperPower } = snap.energy;
+    const {
+      kinetic: ec,
+      potentialGravity,
+      potentialSpring,
+      damperPower,
+      frictionPower,
+    } = snap.energy;
     const ep = potentialGravity + potentialSpring;
 
     const motorPower = (snap.motorPower ?? []).reduce((sum, m) => sum + m.watts, 0);
-    const netPower = motorPower - damperPower;
+    const netPower = motorPower - damperPower - frictionPower;
     if (prevT !== undefined && prevNetPower !== undefined)
       work += ((netPower + prevNetPower) / 2) * (snap.t - prevT);
     prevT = snap.t;

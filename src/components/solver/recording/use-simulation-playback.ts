@@ -248,9 +248,10 @@ export function useSimulationPlayback({
   const waitedForReachedRef = useRef<number>(0);
   const autoPlayOnEnterRef = useRef<boolean>(false);
   const simStartHistoryLengthRef = useRef<number>(0);
-  /** Set by a caller (e.g. a probe-only edit) right before the mechanism updates, so the
-   *  recompile effect below can skip a recompile that would otherwise discard snapshots. */
-  const probeOnlyEditRef = useRef<boolean>(false);
+  /** Set by a caller right before the mechanism updates when the edit changes neither the
+   *  model nor the recorded instants (a probe's config, an element's name), so the recompile
+   *  effect below can skip a recompile that would otherwise discard snapshots. */
+  const observationOnlyEditRef = useRef<boolean>(false);
   /** Set by a caller right before the mechanism updates when the edit only changed load
    *  values (magnitude, direction…), never their target or count — the recompile effect
    *  below then swaps `compiledLoads` in place (`Recorder.setLoads`) instead of recompiling
@@ -363,15 +364,15 @@ export function useSimulationPlayback({
   // simulated state (apply the last snapshot first) so motor angle and gear
   // rotations stay continuous across the edit.
   useEffect(() => {
-    const probeOnly = probeOnlyEditRef.current;
-    probeOnlyEditRef.current = false;
+    const observationOnly = observationOnlyEditRef.current;
+    observationOnlyEditRef.current = false;
     const loadValueOnly = loadValueOnlyEditRef.current;
     loadValueOnlyEditRef.current = false;
     const mode = simulationRef.current.appMode;
     if (mode === "edition") return;
-    // Probe-config edits don't affect the simulated motion: keep the model
+    // Observation edits don't affect the simulated motion: keep the model
     // and the already-recorded snapshots.
-    if (probeOnly) return;
+    if (observationOnly) return;
     const rs = sim_clock();
     // Snapshots ahead of the cursor were solved under the old values, whichever kind of edit
     // this is — this bookkeeping is about what stays valid, not about the model itself.
@@ -1077,7 +1078,7 @@ export function useSimulationPlayback({
     simulationRef,
     autoPlayOnEnterRef,
     simStartHistoryLengthRef,
-    probeOnlyEditRef,
+    observationOnlyEditRef,
     loadValueOnlyEditRef,
   };
 }

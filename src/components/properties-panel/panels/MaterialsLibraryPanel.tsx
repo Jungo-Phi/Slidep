@@ -420,6 +420,7 @@ const LibraryEntryGroup: React.FC<LibraryEntryGroupProps> = ({
       </Box>
       {expanded && (
         <>
+          <Divider />
           {detail}
           {children}
         </>
@@ -447,42 +448,39 @@ export const MaterialDetail: React.FC<MaterialDetailProps> = ({
   onChangeRe,
   onChangeRho,
 }) => (
-  <Box>
-    <Divider />
-    <Box
-      sx={{
-        display: "flex",
-        flexWrap: "wrap",
-        justifyContent: "center",
-        gap: 1,
-        p: 1.5,
-      }}
-    >
-      <NumberInput
-        label="E"
-        title={t("material_field_E")}
-        kind={STRESS}
-        value={E}
-        onChange={onChangeE ?? (() => {})}
-        unsigned
-      />
-      <NumberInput
-        label="Re"
-        title={t("material_field_Re")}
-        kind={STRESS}
-        value={Re}
-        onChange={onChangeRe ?? (() => {})}
-        unsigned
-      />
-      <NumberInput
-        label="ρ"
-        title={t("material_field_rho")}
-        kind={DENSITY}
-        value={rho}
-        onChange={onChangeRho ?? (() => {})}
-        unsigned
-      />
-    </Box>
+  <Box
+    sx={{
+      display: "flex",
+      flexWrap: "wrap",
+      justifyContent: "center",
+      gap: 1,
+      p: 1.5,
+    }}
+  >
+    <NumberInput
+      label="E"
+      title={t("material_field_E")}
+      kind={STRESS}
+      value={E}
+      onChange={onChangeE ?? (() => {})}
+      unsigned
+    />
+    <NumberInput
+      label="Re"
+      title={t("material_field_Re")}
+      kind={STRESS}
+      value={Re}
+      onChange={onChangeRe ?? (() => {})}
+      unsigned
+    />
+    <NumberInput
+      label="ρ"
+      title={t("material_field_rho")}
+      kind={DENSITY}
+      value={rho}
+      onChange={onChangeRho ?? (() => {})}
+      unsigned
+    />
   </Box>
 );
 
@@ -676,35 +674,33 @@ export const ProfileDetail: React.FC<ProfileDetailProps> = ({
   shape,
   onChangeShape,
 }) => (
-  <Box>
-    <Divider />
-    <Box sx={{ display: "flex", flexDirection: "column", gap: 1, p: 1.5 }}>
-      <Select
-        size="small"
-        value={shape.kind}
-        onChange={(e) =>
-          onChangeShape?.(
-            default_shape_for_kind(e.target.value as ProfileShape["kind"]),
-          )
-        }
-      >
-        {SHAPE_KINDS.map((kind) => (
-          <MenuItem key={kind} value={kind}>
-            {shape_kind_label(kind)}
-          </MenuItem>
-        ))}
-      </Select>
-      <Box
-        sx={{
-          display: "flex",
-          flexWrap: "wrap",
-          justifyContent: "center",
-          gap: 1,
-        }}
-      >
-        <ShapeCotes shape={shape} onChange={onChangeShape!} />
-      </Box>
-      <SectionSchema shape={shape} />
+  <Box sx={{ display: "flex", flexDirection: "column", gap: 1, p: 1.5 }}>
+    <Select
+      size="small"
+      sx={{ alignSelf: "center" }}
+      value={shape.kind}
+      onChange={(e) =>
+        onChangeShape?.(
+          default_shape_for_kind(e.target.value as ProfileShape["kind"]),
+        )
+      }
+    >
+      {SHAPE_KINDS.map((kind) => (
+        <MenuItem key={kind} value={kind}>
+          {shape_kind_label(kind)}
+        </MenuItem>
+      ))}
+    </Select>
+    <SectionSchema shape={shape} />
+    <Box
+      sx={{
+        display: "flex",
+        flexWrap: "wrap",
+        justifyContent: "center",
+        gap: 1,
+      }}
+    >
+      <ShapeCotes shape={shape} onChange={onChangeShape!} />
     </Box>
   </Box>
 );
@@ -799,7 +795,9 @@ export const MaterialsLibraryPanel: React.FC<MaterialsLibraryPanelProps> = ({
         ?.scrollIntoView({ block: "nearest" });
     } else {
       setExpandedProfileIDs((cur) => new Set([...cur, ...ids]));
-      profileGroupRefs.current.get(ids[0])?.scrollIntoView({ block: "nearest" });
+      profileGroupRefs.current
+        .get(ids[0])
+        ?.scrollIntoView({ block: "nearest" });
     }
     onFocusHandled();
   }, [focusRequest, onFocusHandled]);

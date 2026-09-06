@@ -21,12 +21,14 @@ import {
   Mechanism,
   MechanicalElement,
   OVERLAY_KIND_ORDER,
+  ZERO,
 } from "../../../types";
 import { HoveredPart } from "../../../types/hovered-part";
 import {
   CanvasHighlight,
   NO_HIGHLIGHT,
 } from "../../canvas/drawing/draw-canvas";
+import { element_to_hovered_part } from "../../canvas/utils";
 import {
   display_type,
   DisplayType,
@@ -34,7 +36,7 @@ import {
 } from "../element-order";
 import { get_element_icon } from "../../element-palette/elementIcon";
 import { multiple_selection_state } from "../../canvas/tools/canvas-state-reducer";
-import ElementRow from "./ElementRow";
+import ElementDisplay from "./ElementDisplay";
 import GroupProperties from "./GroupProperties";
 import CommandCountRow from "./CommandCountRow";
 import StructureOnly from "./StructureOnly";
@@ -98,10 +100,9 @@ interface ElementsOverviewProps {
   setCanvasState: (state: CanvasState) => void;
   applyActions: (actions: Action[]) => void;
   setHighlight: (highlight: CanvasHighlight) => void;
-  simulating: boolean;
-  /** Destroys every selected element at once — the counterpart of the Delete key, which the panel
-   *  would otherwise be the only place not to offer. Never offered for the whole mechanism. */
-  onDeleteSelection: () => void;
+  /** Destroys elements by the handful — the counterpart of the Delete key, which the panel would
+   *  otherwise be the only place not to offer. Leaves the canvas out of whatever it was selecting. */
+  onDeleteElements: (ids: ID[]) => void;
 }
 
 /**
@@ -112,9 +113,10 @@ interface ElementsOverviewProps {
  *
  * It shows a multi-selection, or the whole mechanism when nothing is selected — the same list of
  * the same elements, so it is one component. What a selection adds is what can only be said of
- * one: dropping a type out of it, narrowing it down to a single type, destroying it whole. Without
- * a selection those give way to the gesture the mechanism-wide list has instead: clicking a type
- * selects it.
+ * one: dropping a type out of it, narrowing it down to a single type. Without a selection those
+ * give way to the gestures the mechanism-wide list has instead: clicking a header selects what it
+ * names, and its delete button destroys it. Destroying is offered either way — a header stands for
+ * what it lists, whether or not the canvas holds it selected.
  *
  * Collapsed, so the panel's height follows the number of types present rather than the number of
  * elements: twenty beams are one line, not twenty. A group of one has no group to speak of — its
@@ -133,8 +135,7 @@ export const ElementsOverview: React.FC<ElementsOverviewProps> = ({
   setCanvasState,
   applyActions,
   setHighlight,
-  simulating,
-  onDeleteSelection,
+  onDeleteElements,
 }) => {
   const mechanicalElements = mechanism.mechanicalElements;
   const selecting = selectedIds.length > 0;
@@ -144,6 +145,7 @@ export const ElementsOverview: React.FC<ElementsOverviewProps> = ({
       : mechanicalElements,
   );
   const listed = groups.flatMap((group) => group.elements);
+  const listedIds = listed.map((el) => el.id);
   const [expanded, setExpanded] = React.useState<ReadonlySet<DisplayType>>(
     new Set(),
   );
@@ -161,9 +163,11 @@ export const ElementsOverview: React.FC<ElementsOverviewProps> = ({
     setCanvasState(multiple_selection_state(remaining, mechanicalElements));
   };
 
-  // Selecting a type is always worth a click; narrowing a selection down to one of its types is
-  // not, once it holds nothing else.
+  // Selecting a type is always worth a click.
+  // Narrowing a selection down to one of its types is not, once it holds nothing else.
   const groupIsClickable = !selecting || groups.length > 1;
+  // The header stands for everything listed, which a selection already holds.
+  const headerIsClickable = !selecting;
 
   const selectGroup = (group: SelectionGroup) => {
     setCanvasState(
@@ -172,6 +176,10 @@ export const ElementsOverview: React.FC<ElementsOverviewProps> = ({
         mechanicalElements,
       ),
     );
+  };
+
+  const selectListed = () => {
+    setCanvasState(multiple_selection_state(listedIds, mechanicalElements));
   };
 
   const deselectOne = (id: ID) => {
@@ -189,6 +197,59 @@ export const ElementsOverview: React.FC<ElementsOverviewProps> = ({
     mechanism.profiles,
   );
 
+  /** One row of the list: icon, name, and delete — or, inside a selection, a control that just
+   *  drops this one element out of it, destroying the model from three levels deep in a
+   *  selection-refinement list reading as far too heavy a click. */
+  const elementRow = (element: MechanicalElement, size: "small" | "medium") => {
+    const controlIcon = size === "small" ? 16 : 20;
+    return (
+      <ElementDisplay
+        element={element}
+        hoveredPart={hoveredPart}
+        setHoveredPart={setHoveredPart}
+        selectedIds={selectedIds}
+        setCanvasState={setCanvasState}
+        applyActions={applyActions}
+        size={size}
+        editable
+        trailingControls={
+          selecting ? (
+            <Tooltip title={t("selection_remove_group")}>
+              <IconButton
+                size="small"
+                onClick={() => deselectOne(element.id)}
+                sx={{ borderRadius: 3 }}
+              >
+                <Close sx={{ width: controlIcon, height: controlIcon }} />
+              </IconButton>
+            </Tooltip>
+          ) : (
+            <StructureOnly actions={["DeleteElement"]} row>
+              <Tooltip title={t("delete")}>
+                <IconButton
+                  color="error"
+                  size="small"
+                  onMouseEnter={() =>
+                    setHoveredPart(element_to_hovered_part(element, true))
+                  }
+                  onMouseLeave={() =>
+                    setHoveredPart({ type: "Void", position: ZERO })
+                  }
+                  onClick={() =>
+                    applyActions([{ type: "DeleteElement", element }])
+                  }
+                  sx={{ borderRadius: 3 }}
+                >
+                  <Delete sx={{ width: controlIcon, height: controlIcon }} />
+                </IconButton>
+              </Tooltip>
+            </StructureOnly>
+          )
+        }
+      />
+    );
+  };
+
   const groupRow = (group: SelectionGroup) => {
     const isExpanded = expanded.has(group.type);
     return (
@@ -204,47 +265,44 @@ export const ElementsOverview: React.FC<ElementsOverviewProps> = ({
             <ChevronRight fontSize="small" />
           )}
         </IconButton>
-        <Tooltip
-          title={
-            groupIsClickable
-              ? t(selecting ? "selection_keep_group" : "selection_select_group")
-              : ""
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            gap: 0.25,
+            flex: 1,
+            px: -0.5,
+            borderRadius: 3,
+            cursor: groupIsClickable ? "pointer" : "default",
+            ...(groupIsClickable && {
+              "&:hover": { backgroundColor: "action.hover" },
+            }),
+          }}
+          onClick={groupIsClickable ? () => selectGroup(group) : undefined}
+          onMouseEnter={() =>
+            setHighlight({
+              elements: new Set(group.elements.map((el) => el.id)),
+              kind: "pick",
+            })
           }
+          onMouseLeave={() => setHighlight(NO_HIGHLIGHT)}
         >
           <Box
+            component="img"
+            src={group.icon}
+            draggable={false}
+            sx={{ width: TYPE_ICON, height: TYPE_ICON, ml: 0.25 }}
+          />
+          <Typography
             sx={{
-              display: "flex",
-              alignItems: "center",
-              gap: 0.25,
-              flex: 1,
-              px: -0.5,
-              borderRadius: 3,
-              cursor: groupIsClickable ? "pointer" : "default",
-              ...(groupIsClickable && {
-                "&:hover": { backgroundColor: "action.hover" },
-              }),
+              fontWeight: selecting ? 800 : 500,
+              fontSize: TYPE_FONT_SIZE,
             }}
-            onClick={groupIsClickable ? () => selectGroup(group) : undefined}
-            onMouseEnter={() =>
-              setHighlight({
-                elements: new Set(group.elements.map((el) => el.id)),
-                kind: "pick",
-              })
-            }
-            onMouseLeave={() => setHighlight(NO_HIGHLIGHT)}
           >
-            <Box
-              component="img"
-              src={group.icon}
-              draggable={false}
-              sx={{ width: TYPE_ICON, height: TYPE_ICON, ml: 0.25 }}
-            />
-            <Typography sx={{ fontWeight: 500, fontSize: TYPE_FONT_SIZE }}>
-              {tn(GROUP_LABEL_KEYS[group.type], group.elements.length)}
-            </Typography>
-          </Box>
-        </Tooltip>
-        {selecting && (
+            {tn(GROUP_LABEL_KEYS[group.type], group.elements.length)}
+          </Typography>
+        </Box>
+        {selecting ? (
           <Tooltip title={t("selection_remove_group")}>
             <IconButton
               size="small"
@@ -254,6 +312,28 @@ export const ElementsOverview: React.FC<ElementsOverviewProps> = ({
               <Close sx={{ width: 20, height: 20 }} />
             </IconButton>
           </Tooltip>
+        ) : (
+          <StructureOnly actions={["DeleteElement"]} row>
+            <Tooltip title={t("selection_delete_group")}>
+              <IconButton
+                color="error"
+                size="small"
+                onMouseEnter={() =>
+                  setHighlight({
+                    elements: new Set(group.elements.map((el) => el.id)),
+                    kind: "erase",
+                  })
+                }
+                onMouseLeave={() => setHighlight(NO_HIGHLIGHT)}
+                onClick={() =>
+                  onDeleteElements(group.elements.map((el) => el.id))
+                }
+                sx={{ borderRadius: 3 }}
+              >
+                <Delete sx={{ width: 20, height: 20 }} />
+              </IconButton>
+            </Tooltip>
+          </StructureOnly>
         )}
       </Box>
     );
@@ -278,24 +358,30 @@ export const ElementsOverview: React.FC<ElementsOverviewProps> = ({
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", m: 2, gap: 1 }}>
-      <IconButton
+      <Box
         sx={{
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
           borderRadius: 5,
-          padding: 0,
           mx: -1,
           mt: -1,
+          cursor: headerIsClickable ? "pointer" : "default",
           backgroundColor: "transparent",
-          "&:hover": { backgroundColor: "action.hover" },
-          "&:focus-visible": {
-            backgroundColor: "action.selected",
+          ...(headerIsClickable && {
+            "&:hover": { backgroundColor: "action.hover" },
+          }),
+          "&:has(.element-display-actions:hover)": {
+            backgroundColor: "transparent",
           },
         }}
-        disableRipple
+        onClick={headerIsClickable ? selectListed : undefined}
+        onMouseEnter={() =>
+          setHighlight({ elements: new Set(listedIds), kind: "pick" })
+        }
+        onMouseLeave={() => setHighlight(NO_HIGHLIGHT)}
       >
-        <Box
+        <IconButton
           sx={{
             display: "flex",
             alignItems: "center",
@@ -303,7 +389,15 @@ export const ElementsOverview: React.FC<ElementsOverviewProps> = ({
             gap: 1,
             my: 0.5,
             minWidth: 0,
+            padding: 0,
+            cursor: "inherit",
+            backgroundColor: "transparent",
+            "&:hover": { backgroundColor: "transparent" },
+            "&:focus-visible": {
+              backgroundColor: "action.selected",
+            },
           }}
+          disableRipple
         >
           <Box
             sx={{
@@ -331,30 +425,34 @@ export const ElementsOverview: React.FC<ElementsOverviewProps> = ({
           <Typography variant="subtitle1" noWrap sx={{ fontWeight: 500 }}>
             {tn("selection_count", listed.length)}
           </Typography>
-        </Box>
-        {selecting ? (
-          <StructureOnly disabled={simulating}>
-            <Tooltip title={t("selection_delete")}>
+        </IconButton>
+        <Box
+          className="element-display-actions"
+          sx={{ display: "contents" }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <StructureOnly actions={["DeleteElement"]}>
+            <Tooltip
+              title={t(selecting ? "selection_delete" : "selection_delete_all")}
+            >
               <IconButton
                 color="error"
                 onMouseEnter={() =>
                   setHighlight({
-                    elements: new Set(selectedIds),
+                    elements: new Set(listedIds),
                     kind: "erase",
                   })
                 }
                 onMouseLeave={() => setHighlight(NO_HIGHLIGHT)}
-                onClick={onDeleteSelection}
+                onClick={() => onDeleteElements(listedIds)}
                 sx={{ borderRadius: 4 }}
               >
                 <Delete />
               </IconButton>
             </Tooltip>
           </StructureOnly>
-        ) : (
-          <Box />
-        )}
-      </IconButton>
+        </Box>
+      </Box>
 
       <Divider sx={{ mx: -2 }} />
 
@@ -367,22 +465,9 @@ export const ElementsOverview: React.FC<ElementsOverviewProps> = ({
               overflow: "hidden",
             }}
           >
-            {group.elements.length === 1 ? (
-              <ElementRow
-                element={group.elements[0]}
-                hoveredPart={hoveredPart}
-                setHoveredPart={setHoveredPart}
-                selectedIds={selectedIds}
-                setCanvasState={setCanvasState}
-                applyActions={applyActions}
-                simulating={simulating}
-                size="medium"
-                readOnly
-                onDeselect={selecting ? deselectOne : undefined}
-              />
-            ) : (
-              groupRow(group)
-            )}
+            {group.elements.length === 1
+              ? elementRow(group.elements[0], "medium")
+              : groupRow(group)}
             {group.elements.length > 1 && expanded.has(group.type) && (
               <List
                 disablePadding
@@ -397,18 +482,7 @@ export const ElementsOverview: React.FC<ElementsOverviewProps> = ({
               >
                 {group.elements.map((el) => (
                   <ListItem disablePadding key={el.id}>
-                    <ElementRow
-                      element={el}
-                      hoveredPart={hoveredPart}
-                      setHoveredPart={setHoveredPart}
-                      selectedIds={selectedIds}
-                      setCanvasState={setCanvasState}
-                      applyActions={applyActions}
-                      simulating={simulating}
-                      size="small"
-                      readOnly
-                      onDeselect={selecting ? deselectOne : undefined}
-                    />
+                    {elementRow(el, "small")}
                   </ListItem>
                 ))}
               </List>
@@ -421,7 +495,6 @@ export const ElementsOverview: React.FC<ElementsOverviewProps> = ({
               materials={mechanism.materials}
               profiles={mechanism.profiles}
               applyActions={applyActions}
-              simulating={simulating}
             />
           </Box>
         </Box>

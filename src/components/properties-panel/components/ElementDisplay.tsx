@@ -6,7 +6,6 @@ import { HoveredPart, is_hovered } from "../../../types/hovered-part";
 import { element_to_hovered_part } from "../../canvas/utils";
 import { is_nameable, shown_element_name } from "../../../utils";
 import { useElementNavigation } from "../element-navigation";
-import { t } from "../../../i18n";
 
 interface ElementDisplayProps {
   element: UnionElement;
@@ -116,8 +115,9 @@ const ElementDisplayComponent: React.FC<ElementDisplayProps> = ({
   };
 
   // Selecting from inside the panel is an explicit "tell me more about this
-  // one" gesture: it drills down to the elements tab, wherever the card sits.
-  // A canvas selection goes through neither of these and keeps the active tab.
+  // one" gesture: it drills down to the tab hosting the element, wherever the
+  // card sits. A canvas selection goes through neither of these and keeps the
+  // active tab.
   const handleSelect = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!element || isEditing || !interactive) return;
@@ -125,7 +125,7 @@ const ElementDisplayComponent: React.FC<ElementDisplayProps> = ({
       type: "SelectedElement",
       elementID: element.id,
     });
-    drillDown();
+    drillDown(element);
   };
 
   const handleNameChange = (newName: string) => {
@@ -225,7 +225,7 @@ const ElementDisplayComponent: React.FC<ElementDisplayProps> = ({
         borderColor={"transparent"}
       >
         <Tooltip
-          title={t("element_select_hint")}
+          title={""}
           open={
             interactive &&
             !isEditing &&

@@ -63,13 +63,10 @@ describe("apply_actions — no-op edits do not enter the history", () => {
     expect(after.history).toHaveLength(1);
   });
 
-  // A coalescing value edit (e.g. holding the stepper button) has no "end of
-  // gesture" signal the way a canvas drag has the mouse-up Blank — nothing
-  // calls apply_actions again to notice the cancellation on its own. It is
-  // cleaned up lazily instead: the next unrelated edit finds it stale, once
-  // nothing will ever merge into it again, and drops it before recording
-  // itself.
-  it("keeps a cancelled-out entry until the next unrelated edit sweeps it away", () => {
+  // Successive edits of one field fold into a single entry, so a run that came back to the
+  // value it started from leaves nothing to undo — and leaves it the moment it happens,
+  // rather than sitting there swallowing a Ctrl+Z until something else is edited.
+  it("drops a run that cancels itself out", () => {
     const mech = mechanism();
     const grown = apply_actions(mech, [
       { type: "ChangeMass", id: MASS, delta: 2 },
@@ -78,14 +75,13 @@ describe("apply_actions — no-op edits do not enter the history", () => {
     const settled = apply_actions(grown, [
       { type: "ChangeMass", id: MASS, delta: -2 },
     ]);
-    expect(settled.history).toHaveLength(1);
+    expect(settled.history).toHaveLength(0);
 
-    const swept = apply_actions(settled, [
+    const next = apply_actions(settled, [
       { type: "ChangeStiffness", id: MASS, delta: 3 },
     ]);
-    expect(swept.history).toHaveLength(1);
-    expect(swept.history[0]).toEqual([
-      { type: "ChangeStiffness", id: MASS, delta: 3 },
+    expect(next.history).toEqual([
+      [{ type: "ChangeStiffness", id: MASS, delta: 3 }],
     ]);
   });
 

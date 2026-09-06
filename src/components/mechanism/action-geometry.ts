@@ -177,16 +177,15 @@ export function bundle_geometry(actions: Action[]): BundleGeometry {
 }
 
 /**
- * Whether a bundle continues the previous one rather than starting a new
- * history entry — a drag being one gesture, and so one undo, however many
- * frames it took.
+ * Whether a bundle continues the previous one rather than starting a new history entry — a
+ * drag being one gesture, and so one undo, however many frames it took.
  *
- * A committed value is excluded: typing a number is a decision of its own, and
- * folding it into the drag that preceded it would undo both at once.
+ * Says nothing about where the gesture ends: that is the `Blank` a drag pushes on mouse-up,
+ * and the one a numeric field pushes when its run of steps runs dry (see `history-seal`).
+ * Anything that means to stand alone in the history has to seal itself that way.
  */
 export function continues_previous_gesture(actions: Action[]): boolean {
   const first = actions[0];
   if (!first) return false;
-  if ("committed" in first && first.committed) return false;
   return action_geometry(first).coalesces;
 }

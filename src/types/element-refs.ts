@@ -406,3 +406,23 @@ export function element_refs(element: UnionElement): ElementRef[] {
     ids.map((id) => ({ field, id, spec })),
   );
 }
+
+/**
+ * Whether `element` names something absent from `present`, the IDs a mechanism currently holds.
+ * A `materialID`/`profileID` never counts: it names a library entry, not an element.
+ *
+ * Drawing and hit-testing both read it to skip such an element, a safety net rather than a fix —
+ * a dangling reference is a defect the validator reports and `repair_mechanism` clears at load
+ * time, and what this buys is that it costs one inert element instead of a blank canvas.
+ */
+export function has_dangling_ref(
+  element: UnionElement,
+  present: Set<ID>,
+): boolean {
+  return element_refs(element).some(
+    (ref) =>
+      !ref.spec.target.includes("material") &&
+      !ref.spec.target.includes("profile") &&
+      !present.has(ref.id),
+  );
+}

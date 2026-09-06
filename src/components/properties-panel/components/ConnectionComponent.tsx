@@ -7,17 +7,26 @@ import {
   Mechanism,
 } from "../../../types";
 import { IconButton, Tooltip } from "@mui/material";
-import { LinkOff, RotateLeft, RotateRight } from "@mui/icons-material";
 import {
+  ArrowDownward,
+  ArrowUpward,
+  LinkOff,
+  RotateLeft,
+  RotateRight,
+} from "@mui/icons-material";
+import {
+  can_be_rail,
   disconnect_element,
   get_connection_pair_types,
   get_connections,
   open_belt,
+  set_rail,
 } from "../../mechanism/connect-actions";
 import { belt_junction_id } from "../../../utils/belt-rules";
 import { HoveredPart } from "../../../types/hovered-part";
 import { ID } from "../../../types/element";
 import ElementDisplay from "./ElementDisplay";
+import StructureOnly from "./StructureOnly";
 import { t } from "../../../i18n";
 
 interface ConnectionProps {
@@ -50,32 +59,47 @@ const Connection: React.FC<ConnectionProps> = ({
       index = get_connections(element, "ConnectsAttachedGears").indexOf(
         connectedElement.id,
       );
-      applyActions(
-        [
-          {
-            type: "SwitchAttachedGearDirection",
-            id: element.id,
-            index,
-            clockwise: !element.attachedGearsIDs[index].clockwise,
-          },
-        ],
-      );
+      applyActions([
+        {
+          type: "SwitchAttachedGearDirection",
+          id: element.id,
+          index,
+          clockwise: !element.attachedGearsIDs[index].clockwise,
+        },
+      ]);
     } else if (connectedElement.type === "belt") {
       index = get_connections(
         connectedElement,
         "ConnectsAttachedGears",
       ).indexOf(element.id);
-      applyActions(
-        [
-          {
-            type: "SwitchAttachedGearDirection",
-            id: connectedElement.id,
-            index,
-            clockwise: !connectedElement.attachedGearsIDs[index].clockwise,
-          },
-        ],
-      );
+      applyActions([
+        {
+          type: "SwitchAttachedGearDirection",
+          id: connectedElement.id,
+          index,
+          clockwise: !connectedElement.attachedGearsIDs[index].clockwise,
+        },
+      ]);
     }
+  };
+
+  // A slider or slidep hands the rail role from one bar it holds to another: the
+  // row of a bar crossing its body offers to take the role, the rail's own row to
+  // drop it.
+  const railHost = "parentBeamID" in element ? element : undefined;
+  const dropsRail = !!railHost && containerType === "ConnectsParentBeam";
+  const takesRail =
+    !!railHost &&
+    (containerType === "ConnectsFixedEdges" ||
+      containerType === "ConnectsRotatingEdges") &&
+    can_be_rail(railHost, connectedElement);
+
+  const handleSetRail = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!railHost) return;
+    applyActions(
+      set_rail(railHost, dropsRail ? undefined : connectedElement.id),
+    );
   };
 
   // The belt–junction link of a closed belt, seen from either side. Its removal
@@ -98,25 +122,23 @@ const Connection: React.FC<ConnectionProps> = ({
       applyActions(open_belt(belt));
       return;
     }
-    applyActions(
-      [
-        disconnect_element(
-          element,
-          connectedElement,
-          containerType,
-          mechanism.mechanicalElements,
-        ),
-        ...get_connection_pair_types(element.id, connectedElement).map(
-          (pairType) =>
-            disconnect_element(
-              connectedElement,
-              element,
-              pairType,
-              mechanism.mechanicalElements,
-            ),
-        ),
-      ],
-    );
+    applyActions([
+      disconnect_element(
+        element,
+        connectedElement,
+        containerType,
+        mechanism.mechanicalElements,
+      ),
+      ...get_connection_pair_types(element.id, connectedElement).map(
+        (pairType) =>
+          disconnect_element(
+            connectedElement,
+            element,
+            pairType,
+            mechanism.mechanicalElements,
+          ),
+      ),
+    ]);
   };
 
   const showDirectionButton =
@@ -158,7 +180,15 @@ const Connection: React.FC<ConnectionProps> = ({
       size="small"
       editable={false}
       trailingControls={
-        <>
+        <StructureOnly
+          actions={[
+            "SwitchAttachedGearDirection",
+            "ConnectsParentBeam",
+            containerType,
+            "CloseBelt",
+          ]}
+          row
+        >
           {showDirectionButton && (
             <Tooltip title={t("flip")}>
               <IconButton
@@ -181,10 +211,38 @@ const Connection: React.FC<ConnectionProps> = ({
               </IconButton>
             </Tooltip>
           )}
+          {(takesRail || dropsRail) && (
+            <Tooltip title={t(dropsRail ? "unset_rail" : "set_rail")}>
+              <IconButton
+                sx={{
+                  borderRadius: 5,
+                  "&:hover": {
+                    backgroundColor: "action.hover",
+                  },
+                  my: -0.5,
+                  ml: -0.5,
+                }}
+                onClick={handleSetRail}
+                size="small"
+              >
+                {dropsRail ? (
+                  <ArrowDownward
+                    fontSize="small"
+                    color="secondary"
+                    sx={{ mx: -0.1, my: -0.4 }}
+                  />
+                ) : (
+                  <ArrowUpward
+                    fontSize="small"
+                    color="secondary"
+                    sx={{ mx: -0.1, my: -0.4 }}
+                  />
+                )}
+              </IconButton>
+            </Tooltip>
+          )}
           {showDisconnectButton && (
-            <Tooltip
-              title={t(opensBelt ? "open_belt" : "disconnect")}
-            >
+            <Tooltip title={t(opensBelt ? "open_belt" : "disconnect")}>
               <IconButton
                 sx={{
                   borderRadius: 5,
@@ -199,7 +257,7 @@ const Connection: React.FC<ConnectionProps> = ({
               </IconButton>
             </Tooltip>
           )}
-        </>
+        </StructureOnly>
       }
     ></ElementDisplay>
   );

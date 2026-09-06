@@ -8,47 +8,28 @@
 
 ---
 
-### À faire de plus important prochainement
-
-- Frottement des pivot, sliders et contacts
-
-- Améliorer la perf
-
-- Changement de parent de slider
-- Reset de longueur au repos ressort
-
-- Finesser UI hiérarchie + rendre plus clair la sélection de même type
-- Enlever (m / k / b / ω) du raccourcis dans ElementDisplay ?
-- Clarifier ou les NumberInput on _accent_ ?
-- Enlever les readOnly de la sélection multiple ?
-
-- Enlever le gras
-- Supprimer le label "Sélectionner"
-- ❇️ Renommer "titre" et "label" de ElementDisplay (confusant)
-- ❇️ Unifier l'usage des séparateurs en pleine largeur (mx: -1, qui annule la marge du conteneur)
-- ❇️ Trier le dossier "utils"
-
 ### À faire rapidement
+
+- 🚨 Un ctrl+y de remplacement d'élément n'a pas reset la simulation, wtf !?
+- 🚨 Le moteur se bloque avec "Jansen", wtf !?
+- Le hover des éléments depuis le panneau latéral ne devrait pas faire apparaitre les contraintes
+- 🚨 Hover des loads sous les edges, wtf !?
+- 🚨 Un snap sur la grille ne se fait pas toujours bien aux valeurs rondes, wtf !?
+- 🚨 L'angle affiché dans les mesures "Balance.slidep" est faux. L'angle du graph ne correspond pas à celui de l'élément
 
 **Qwick fix**
 
-- Ajouter une croix à la barre de recherche
-- Corriger les diagrammes d'efforts internes (valeur à zéro)
-- Les trais indicatifs des valeurs max dans les diagrammes des efforts (vu dans Mf) s'accumulent
+- 🔨 Corriger les diagrammes d'efforts internes (valeur à zéro)
+- 🔨 Les trais indicatifs des valeurs max dans les diagrammes des efforts (vu dans Mf) s'accumulent
 
-- La puissance affichée devrait être celle que le moteur peut fournir (et pas la puissance instantanée), on devrait donc ensuite pouvoir comparer la puissance du moteur à la puissance instantanée. Le calcul devrait aussi être revu pour prendre en compte ce qu'apporte vraiment le moteur et ce qui tient de l'inertie.
+- 🔨 La puissance affichée devrait être celle que le moteur peut fournir (et pas la puissance instantanée), on devrait donc ensuite pouvoir comparer la puissance du moteur à la puissance instantanée. Le calcul devrait aussi être revu pour prendre en compte ce qu'apporte vraiment le moteur et ce qui tient de l'inertie.
 
 - 🔨 Afficher la masse des gears
 - 🔨 Afficher I avec les profilés
-- 🔨 Afficher la masse totale (ou ça ?)
-- 🔨 Afficher les contraintes dans les joins
+- 🔨 Afficher les contraintes dans les joins et l'intérieur des sliders et pivots
 - 🔨 Afficher les "draw_beam_end" en couleur de contrainte et hover matériaux
 - 🔨 Afficher les graphiques à frame=0 (pas "en attente de données...")
 - 🔨 La distance d'écartement à la séparation d'éléments devrait dépendre du zoom
-- 🚨 Hot-reload des masses, ressorts et amortisseurs en simulation
-- 🚨 Rendre les dimensions non-éditables en simulation
-
-**Outil de mesure (aka. la petite règle dans le coin)**
 
 **UI**
 
@@ -57,11 +38,9 @@
 
 - 🔨 Hover sur les graphs met en évidence les éléments concernés
 - 🔨 Les contraintes ne devrait pas apparaitre au hover quand on est en train de placer un élément. En fait, elle ne devrait apparaitre que dans les états "Idle"
+- 🔨 Les contraintes ne devrait pas apparaitre au hover de leur position si elles sont cachées
 - Ajouter l'énergie apportée par les charges et par l'utilisateur dans "Travil net" (Bilan énergétique)
-
-**Informations fausses**
-
-- 🚨 Angle affiché dans les mesures "Balance.slidep" est faux. L'angle du graph ne correspond pas à celui de l'élément
+- 🆕 Rendre visible les ctrl+y/z invisibles : clignottement dans l'onglet
 
 **Simulation**
 
@@ -78,15 +57,6 @@
 - Regarder les contraintes au moment du choc dans "Test slider.slidep"
 - Et pour une poutre flottante à t=0
 - La trajectoire sur CoreXY en dynamique est fausse
-
----
-
-- 🚨 Un ctrl+y de remplacement d'élément n'a pas reset la simulation, wtf !?
-- 🚨 Le moteur se bloque avec "Jansen", wtf !?
-- 🚨 Hover sur des contraintes cachées, wtf !?
-- Le hover des éléments depuis le panneau latéral ne devrait pas faire apparaitre les contraintes
-- 🚨 Hover des loads sous les edges, wtf !?
-- 🚨 Un snap sur la grille ne se fait pas toujours bien aux valeurs rondes, wtf !?
 
 **Physique**
 
@@ -160,7 +130,6 @@
 - 🔨 La transparence de deletion des probes est inconsistante
 - 🔨 Choisir x/y/norme pour les mesures superposées
 - 🔨 Possible de hover sur probe quand placingProbe (pareil pour gearRatio et Dimension)
-- 🆕 Mesurer la masse totale d'un mécanisme
 
 **🔨 Trajectoires**
 
@@ -172,7 +141,6 @@
 
 **Canvas**
 
-- 🚨 SnapToGrid pas 100% fiable (nottament snapX + snapY) ?
 - 🚨 Ne pas ajouter un remplacement d'élément identique à l'historique
 - 🆕 Ajouter un nouvel élément "Commentaire" sur le canvas
 - 🔨 Afficher le point grabbé en simulation
@@ -192,7 +160,6 @@
 
 - 🤔 On confond toujours les boutons "reset" et "retour au départ" (et un peu de changement de vitesse de simulation). En déplacer vers la timeline ?
 - 🔨 OnCanvasValueEditor trop large avec des points "."
-- 🆕 Ajouter boutons pour changer le parentBeam des slider et slideps
 - 🆕 Afficher le ratio avec une autre gear dans les connections de l'élément
 - 🔨 Donner des couleurs aux tags
 - 🆕 Scroll dans NumberInput
@@ -200,6 +167,10 @@
 - 🆕 Ajouter des réglages généraux pour les types d'unités affichées (Tr/min VS s-1) ?
 
 **Refactor des dossiers**
+
+- ❇️ Renommer "titre" et "label" de ElementDisplay (confusant)
+- ❇️ Unifier l'usage des séparateurs en pleine largeur (mx: -1, qui annule la marge du conteneur)
+- ❇️ Trier le dossier "utils"
 
 - ❇️ Refactor connect-actions.ts (< 600 lignes)
 - 🤔 Refactor drawing-functions.ts ?
@@ -248,14 +219,13 @@
 
 **Preview de hover**
 
-- 🤔 Ce n'est pas toujours clair quand un élément est placé ou en train d'être placé : transparence de l'élément en train d'être placé
+- 🤔 Ce n'est pas toujours clair quand un élément est placé ou en train d'être placé : transparence de l'élément en train d'être placé ?
 - 🤔 Preview des éléments déconnectés au hover de déconnexion (après le chantier courroie : réutiliser le mécanisme d'état visé porté par le canvasState et retiré du tracé de preview)
 - 🤔 Preview de la courroie explusée d'un gear ?
 - 🔨 Le hover d'un edge lors du placement d'un objet sur une de ses extrémités devrait mettre en évidence tout l'edge
 
 **Sélection multiple**
 
-- 🤔 Penser le panneau : plusieurs éléments sélectionnés (même/différent type)
 - 🚨 Shift + Click sur l'unique élément sélectionné ne le désélectionne pas
 - 🆕 Ajouter le copié-collé
 - 🤔 Symétrie / Rotation / Scale d'éléments multiples.
@@ -266,10 +236,6 @@
 **Panneaux et UI**
 
 - 🆕 Changer le nom de l'onglet du browser en "Mon mécanisme - Slidep"
-- 🔨 Choisir quels éléments sont : disabled={simulating}
-- 🔨 Ajouter un title="xxx" à tous les trailing controls
-- 🤔 Bouton "Play" sur moteur en simu ?
-- 🔨 Ajouter "Angle" dans les edges
 - ❇️ Unifier les tailles des éléments UI
 - ❇️ S'assurer que la police est toujours la même
 - 🆕 Se déplacer dans le temps de la simu avec les flèches du clavier
@@ -280,8 +246,9 @@
 - 🆕 Ajouter paramètre : Afficher / Cacher les probes
 - 🔨 Le nom des graphiques est affiché au dessus, mais en dessous quand fusionné
 - 🔨 Les couleurs des graphiques ne changent pas en thème sombre et ne sont pas les mêmes que les trajectoires dessinées
+- 🆕 Lire les valeurs à l'instant T sur les graphiques
 - 🆕 export CSV / image des graphiques
-- 🆕 pin graphique en grand ?
+- 🤔 pin graphique en grand ?
 - 🆕 Mesures d'accélération, jerk ?
 - 🆕 zoom graphique (horizontal = dans le temps)
 
@@ -310,14 +277,6 @@
 - 🆕 Motorisation de sliders (verins)
 - 🆕 Limites d'angle des pivots
 
-**Interactions et UI**
-
-- 🆕 Rendre visible les ctrl+y/z invisibles : clicgnottement dans l'onglet
-- 🤔 Bundler les actions avec un debounce ?
-- 🔨 Ajouter des "Blank" quand on change une valeur depuis les propriétés ?
-- 🤔 Afficher "shown_name d'un élément au hover de celui-ci ?
-- 🤔 Test utilisateur : "ESCAPE" doit-il faire revenir en édition en 1/2 clicks ?
-
 **Export et divers**
 
 - 🆕 Boucler le replay (et choisir le temps de rebouclage)
@@ -341,7 +300,7 @@
 
 - 🆕 Implémenter algorithme de statique (matrices, ΣF=0)
 - 🆕 Solver Statique algébrique (résolution d'inconnues)
-- 🆕 Modification topologie en simulation : pause auto + bascule temporaire Édition
+- 🤔 Modification topologie en simulation : pause auto + bascule temporaire Édition ?
 
 ### [ Slidep 3D ]
 

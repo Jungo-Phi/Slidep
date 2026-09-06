@@ -846,6 +846,18 @@ export const STRINGS = {
     de: "Aus der Auswahl entfernen",
     es: "Quitar de la selección",
   },
+  selection_delete_all: {
+    fr: "Tout supprimer",
+    en: "Delete everything",
+    de: "Alles löschen",
+    es: "Eliminar todo",
+  },
+  selection_delete_group: {
+    fr: "Supprimer ces éléments",
+    en: "Delete these elements",
+    de: "Diese Elemente löschen",
+    es: "Eliminar estos elementos",
+  },
   mixed_value: {
     fr: "mixte",
     en: "mixed",
@@ -869,18 +881,6 @@ export const STRINGS = {
     en: "Delete selection",
     de: "Auswahl löschen",
     es: "Eliminar la selección",
-  },
-  selection_select_group: {
-    fr: "Sélectionner ce groupe",
-    en: "Select this group",
-    de: "Diese Gruppe auswählen",
-    es: "Seleccionar este grupo",
-  },
-  selection_keep_group: {
-    fr: "Ne garder que ce groupe",
-    en: "Keep only this group",
-    de: "Nur diese Gruppe behalten",
-    es: "Conservar solo este grupo",
   },
   dimension: { fr: "Dimension", en: "Dimension", de: "Bemaßung", es: "Cota" },
   tool_gear_ratio: {
@@ -1188,6 +1188,12 @@ export const STRINGS = {
     en: "Search…",
     de: "Suchen…",
     es: "Buscar…",
+  },
+  clear_search: {
+    fr: "Effacer la recherche",
+    en: "Clear search",
+    de: "Suche löschen",
+    es: "Borrar la búsqueda",
   },
   no_results: {
     fr: "Rien trouvé",
@@ -1560,16 +1566,16 @@ export const STRINGS = {
   },
   angle: { fr: "Angle", en: "Angle", de: "Winkel", es: "Ángulo" },
   sliding_friction: {
-    fr: "Frottement linéaire",
-    en: "Sliding friction",
-    de: "Gleitreibung",
-    es: "Fricción lineal",
+    fr: "Frottement visqueux linéaire",
+    en: "Viscous sliding friction",
+    de: "Viskose Gleitreibung",
+    es: "Fricción viscosa lineal",
   },
   rotational_friction: {
-    fr: "Frottement angulaire",
-    en: "Rotational friction",
-    de: "Drehreibung",
-    es: "Fricción angular",
+    fr: "Frottement visqueux angulaire",
+    en: "Viscous rotational friction",
+    de: "Viskose Drehreibung",
+    es: "Fricción viscosa angular",
   },
   linear_mass: {
     fr: "Masse linéique",
@@ -1582,6 +1588,12 @@ export const STRINGS = {
     en: "Rest length",
     de: "Ruhelänge",
     es: "Longitud en reposo",
+  },
+  back_to_rest: {
+    fr: "Remettre au repos",
+    en: "Back to rest",
+    de: "Zurück in die Ruhelage",
+    es: "Volver al reposo",
   },
   stiffness: {
     fr: "Raideur",
@@ -1840,6 +1852,18 @@ export const STRINGS = {
     en: "Open the belt",
     de: "Riemen öffnen",
     es: "Abrir la correa",
+  },
+  set_rail: {
+    fr: "Utiliser comme rail",
+    en: "Use as track",
+    de: "Als Schiene verwenden",
+    es: "Usar como carril",
+  },
+  unset_rail: {
+    fr: "Ne plus utiliser comme rail",
+    en: "Stop using as track",
+    de: "Nicht mehr als Schiene verwenden",
+    es: "Dejar de usar como carril",
   },
   disconnect: {
     fr: "Déconnecter",
@@ -2425,12 +2449,6 @@ export const STRINGS = {
     en: " — norm",
     de: " — Norm",
     es: " — norma",
-  },
-  element_select_hint: {
-    fr: "Sélectionner",
-    en: "Select",
-    de: "Auswählen",
-    es: "Seleccionar",
   },
   archive_filename: {
     fr: "Mes mécanismes.zip",

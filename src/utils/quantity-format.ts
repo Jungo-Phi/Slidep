@@ -49,10 +49,11 @@ export interface QuantityKind {
    *  slot) reads "T", 1e9 g ("Gg") reads "kT". From `exp` up, `display_unit` restarts the
    *  ladder on `symbol` instead of `units[0].symbol`. */
   renamedFrom?: { exp: number; symbol: string };
-  /** For a compound base unit (force times length — "N·m"), the suffix a submultiple decade
-   *  prefixes instead of the whole symbol: a small moment reads "N·mm", never "mN·m" — the
-   *  physical convention prefixes the length factor down, never the force factor. Multiples
-   *  still prefix the whole symbol as usual ("kN·m"), so this only changes negative `exp`. */
+  /**
+   * For a compound base unit (a force times a length — "N·m", "N·m·s"), the factor within the symbol that a submultiple decade prefixes instead of the whole symbol.
+   * A small moment reads "N·mm", never "mN·m", and a small angular damping "N·mm·s": the physical convention prefixes the length factor down, never the force factor.
+   * Multiples still prefix the whole symbol as usual ("kN·m"), so this only changes negative `exp`.
+   */
   submultipleOnSuffix?: string;
 }
 
@@ -113,6 +114,11 @@ export const STIFFNESS = adaptive("N/m");
 /** N·s/m reduces to kg/s — a mass per time, same family as `MASS` rather than `STIFFNESS`.
  *  Prefixed on the gram like `MASS`, for the same reason: "kg" already carries "kilo". */
 export const DAMPING: QuantityKind = adaptive("g/s", 1e-3);
+/** A pivot's viscous friction (N·m·s/rad), the rotational counterpart of `DAMPING`. A moment times a time, so it prefixes down on the length like `MOMENT`: "N·mm·s". */
+export const ANGULAR_DAMPING: QuantityKind = {
+  ...adaptive("N·m·s"),
+  submultipleOnSuffix: "m",
+};
 /** A distributed load's intensity — same unit as `STIFFNESS`, kept distinct so a caller
  *  names what the field actually is. */
 export const LOAD_INTENSITY = adaptive("N/m");
@@ -189,6 +195,12 @@ export function default_unit(kind: QuantityKind): QuantityUnit {
   return kind.units[0];
 }
 
+/** `symbol` with `prefix` inserted on the `factor` inside it rather than ahead of the whole thing — see `QuantityKind.submultipleOnSuffix`. */
+function prefixed_factor(symbol: string, factor: string, prefix: string): string {
+  const at = symbol.indexOf(factor);
+  return `${symbol.slice(0, at)}${prefix}${symbol.slice(at)}`;
+}
+
 /**
  * `valueSI` split into a mantissa and the unit it is worth showing in: `units[0]` for a
  * fixed kind, or whichever SI-prefixed unit of an adaptive one keeps the mantissa in
@@ -234,9 +246,8 @@ export function display_unit(
   }
   const prefix = SI_PREFIXES.find((p) => p.exp === exp)!;
   if (exp < 0 && kind.submultipleOnSuffix) {
-    const stem = base.symbol.slice(0, -kind.submultipleOnSuffix.length);
     return {
-      symbol: `${stem}${prefix.symbol}${kind.submultipleOnSuffix}`,
+      symbol: prefixed_factor(base.symbol, kind.submultipleOnSuffix, prefix.symbol),
       factor: 10 ** exp * base.factor,
     };
   }
@@ -374,11 +385,11 @@ export function parse_quantity(
   if (prefix) return mantissa * 10 ** prefix.exp * base.factor;
 
   if (kind.submultipleOnSuffix) {
-    const stem = base.symbol.slice(0, -kind.submultipleOnSuffix.length);
+    const suffix = kind.submultipleOnSuffix;
     const suffixPrefix = SI_PREFIXES.find(
       (p) =>
         p.exp < 0 &&
-        loose(`${stem}${p.symbol}${kind.submultipleOnSuffix}`) === loose(typedUnit),
+        loose(prefixed_factor(base.symbol, suffix, p.symbol)) === loose(typedUnit),
     );
     if (suffixPrefix) return mantissa * 10 ** suffixPrefix.exp * base.factor;
   }

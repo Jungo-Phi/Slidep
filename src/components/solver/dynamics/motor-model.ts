@@ -89,7 +89,7 @@ export function compile_motors(
 
 /** Angular velocity of the arm `pivotKey → armKey` about `pivotKey`, positive
  *  counter-clockwise — `undefined` where either end is missing or the arm has collapsed. */
-function arm_angular_velocity(
+export function arm_angular_velocity(
   pivotKey: string,
   armKey: string,
   positions: Map<string, Point2>,

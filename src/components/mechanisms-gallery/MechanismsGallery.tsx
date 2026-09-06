@@ -62,6 +62,7 @@ export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
   onExportAll,
 }) => {
   const [search, setSearch] = useState("");
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const searching = search.trim().length > 0;
 
   // Set right after a duplication so the new card opens straight into name editing;
@@ -219,6 +220,7 @@ export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
           placeholder={t("search_placeholder")}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
+          inputRef={searchInputRef}
           slotProps={{
             input: {
               startAdornment: (
@@ -226,6 +228,26 @@ export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
                   fontSize="small"
                   sx={{ mr: 1, ml: -0.5, color: "text.secondary" }}
                 />
+              ),
+              endAdornment: search.length > 0 && (
+                <Tooltip title={t("clear_search")}>
+                  <IconButton
+                    size="small"
+                    aria-label={t("clear_search")}
+                    onClick={() => {
+                      setSearch("");
+                      searchInputRef.current?.focus();
+                    }}
+                    sx={{
+                      borderRadius: 1,
+                      mr: -1.3,
+                      p: 0.3,
+                      color: "text.secondary",
+                    }}
+                  >
+                    <Close sx={{ fontSize: 16 }} />
+                  </IconButton>
+                </Tooltip>
               ),
             },
           }}

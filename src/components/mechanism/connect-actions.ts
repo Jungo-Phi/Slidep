@@ -10,10 +10,15 @@ import type {
   MechanicalElement,
   NodeElement,
   SlidepElement,
+  SliderElement,
   UnionElement,
 } from "../../types/element";
 import type { MaterialDef, ProfileDef } from "../../types/material";
-import { Action, ConnectsActionType } from "../../types";
+import {
+  Action,
+  ConnectsActionType,
+  ConnectsArrayActionType,
+} from "../../types";
 import { Point2 } from "../../types/point2";
 import { HoveredPart, names_element } from "../../types/hovered-part";
 import { connected_constraints, node_on_beam_body } from "../canvas/utils";
@@ -1770,6 +1775,78 @@ export function connect_node_and_edge(
       });
     }
   }
+  return actions;
+}
+
+/**
+ * Whether `edge` can take the rail role for `node`.
+ *
+ * Only a beam crossing the node's body qualifies: the solver slides a node
+ * along the beams whose `fixedNodesBodyIDs` name it, and a beam merely pinned
+ * to the node by one of its ends would follow it instead of guiding it.
+ */
+export function can_be_rail(
+  node: MechanicalElement,
+  edge: MechanicalElement,
+): boolean {
+  return (
+    "parentBeamID" in node &&
+    edge.type === "beam" &&
+    edge.fixedNodesBodyIDs.includes(node.id)
+  );
+}
+
+/**
+ * Hands the rail role to `beamID`, or drops it when undefined: the promoted
+ * beam leaves the node's edge list, the outgoing rail takes the place it left.
+ *
+ * Both bars stay connected to the node throughout — only the role moves, so the
+ * beams keep the node in their `fixedNodesBodyIDs` and no geometry is at stake.
+ * `beamID` must be a beam the node already holds, and one `can_be_rail` accepts.
+ */
+export function set_rail(
+  node: SliderElement | SlidepElement,
+  beamID: ID | undefined,
+): Action[] {
+  if (beamID === node.parentBeamID) return [];
+  const listType: ConnectsArrayActionType =
+    "fixedEdgesIDs" in node ? "ConnectsFixedEdges" : "ConnectsRotatingEdges";
+  const index =
+    beamID === undefined ? 0 : get_connections(node, listType).indexOf(beamID);
+  if (index < 0) return [];
+
+  const outgoing = node.parentBeamID;
+  const actions: Action[] = [];
+  if (beamID !== undefined)
+    actions.push({
+      type: listType,
+      disconnect: true,
+      elementID: node.id,
+      connectID: beamID,
+      index,
+    });
+  if (outgoing !== undefined)
+    actions.push({
+      type: "ConnectsParentBeam",
+      disconnect: true,
+      elementID: node.id,
+      connectID: outgoing,
+    });
+  if (beamID !== undefined)
+    actions.push({
+      type: "ConnectsParentBeam",
+      disconnect: false,
+      elementID: node.id,
+      connectID: beamID,
+    });
+  if (outgoing !== undefined)
+    actions.push({
+      type: listType,
+      disconnect: false,
+      elementID: node.id,
+      connectID: outgoing,
+      index,
+    });
   return actions;
 }
 

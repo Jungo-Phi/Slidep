@@ -76,6 +76,13 @@ export const THUMBNAIL_MARGIN = {
 } as const;
 
 /**
+ * How long a numeric field waits, after a step, for the next one before closing its history
+ * entry. A run of arrow clicks — up, up, then back down — undoes in one go; the same field
+ * touched again later starts its own entry.
+ */
+export const VALUE_EDIT_COALESCE_MS = 800;
+
+/**
  * Durée (ms) pendant laquelle les badges de contraintes d'un élément restent
  * affichés après avoir cessé de le survoler (hover-reveal en édition).
  */

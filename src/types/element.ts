@@ -105,7 +105,7 @@ export type OverlayFlags = Partial<Record<OverlayKind, boolean>>;
 
 export type OverlayKind = "trajectory" | "force" | "velocity";
 
-export const OVERLAY_KIND_ORDER: OverlayKind[] = ["trajectory", "force", "velocity"];
+export const OVERLAY_KIND_ORDER: OverlayKind[] = ["trajectory", "velocity", "force"];
 
 /**
  * A beam's fill colour, mechanism-wide — docs/plan-efforts-interieurs.md phase 9. Unlike
@@ -185,6 +185,7 @@ export interface SliderElement extends BaseNodeElement {
   type: "slider";
   parentBeamID?: ID;
   fixedEdgesIDs: ID[];
+  /** Viscous, N·s/m: the force resisting a slide is this times the sliding speed. */
   slidingFriction: number;
 }
 
@@ -202,6 +203,10 @@ export interface PivotElement extends BaseNodeElement {
   rotatingEdgesIDs: ID[];
   fixedGearsIDs: ID[];
   motor?: MotorConfig;
+  /**
+   * Viscous, N·m·s/rad: the torque resisting the joint is this times its relative angular speed.
+   * See `friction-model.ts` for which two bodies that speed is measured between.
+   */
   rotationalFriction: number;
 }
 
@@ -211,7 +216,9 @@ export interface SlidepElement extends BaseNodeElement {
   parentBeamID?: ID;
   rotatingEdgesIDs: ID[];
   fixedGearsIDs: ID[];
+  /** See `SliderElement.slidingFriction`. */
   slidingFriction: number;
+  /** See `PivotElement.rotationalFriction`. */
   rotationalFriction: number;
 }
 

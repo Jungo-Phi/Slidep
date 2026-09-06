@@ -92,15 +92,13 @@ const LibraryPicker = React.forwardRef<HTMLDivElement, LibraryPickerProps>(
       <Box
         ref={ref}
         sx={{
-          display: "flex",
+          display: "grid",
+          gridTemplateColumns: "1fr auto 1fr",
           alignItems: "center",
-          justifyContent: "space-between",
           gap: 1.5,
         }}
       >
-        <Typography variant="subtitle2" sx={{ minWidth: 50 }}>
-          {label}
-        </Typography>
+        <Typography variant="subtitle2">{label}</Typography>
         <Box
           onClick={(e) => setAnchorEl(e.currentTarget)}
           sx={{
@@ -121,7 +119,11 @@ const LibraryPicker = React.forwardRef<HTMLDivElement, LibraryPickerProps>(
           <KeyboardArrowDown fontSize="small" />
         </Box>
         <Tooltip title={t("open_in_library")}>
-          <IconButton size="small" onClick={onOpenInLibrary} sx={{ ml: 3 }}>
+          <IconButton
+            size="small"
+            onClick={onOpenInLibrary}
+            sx={{ justifySelf: "end" }}
+          >
             <OpenInNew fontSize="inherit" />
           </IconButton>
         </Tooltip>
@@ -312,6 +314,7 @@ export const MaterialProfileSection: React.FC<MaterialProfileSectionProps> = ({
                 </IconButton>
               </Tooltip>
             </Box>
+            <Divider sx={{ mb: 1 }} />
             <MaterialDetail
               E={draftMaterial.E}
               Re={draftMaterial.Re}
@@ -320,16 +323,17 @@ export const MaterialProfileSection: React.FC<MaterialProfileSectionProps> = ({
               onChangeRe={(Re) => editDraftMaterial({ Re })}
               onChangeRho={(rho) => editDraftMaterial({ rho })}
             />
-            <Divider />
-            <Button
-              fullWidth
-              size="small"
-              startIcon={<Check fontSize="small" />}
-              onClick={() => createMaterial(draftMaterial)}
-              sx={{ borderRadius: 0 }}
-            >
-              {t("create")}
-            </Button>
+            <Box sx={{ display: "flex", justifyContent: "center", p: 1 }}>
+              <Button
+                fullWidth
+                size="small"
+                variant="outlined"
+                startIcon={<Check fontSize="small" />}
+                onClick={() => createMaterial(draftMaterial)}
+              >
+                {t("create")}
+              </Button>
+            </Box>
           </Box>
         )}
       </Popover>
@@ -380,20 +384,22 @@ export const MaterialProfileSection: React.FC<MaterialProfileSectionProps> = ({
                 </IconButton>
               </Tooltip>
             </Box>
+            <Divider sx={{ mb: 1 }} />
             <ProfileDetail
               shape={draftProfile.shape}
               onChangeShape={(shape) => editDraftProfile({ shape })}
             />
-            <Divider />
-            <Button
-              fullWidth
-              size="small"
-              startIcon={<Check fontSize="small" />}
-              onClick={() => createProfile(draftProfile)}
-              sx={{ borderRadius: 0 }}
-            >
-              {t("create")}
-            </Button>
+            <Box sx={{ display: "flex", justifyContent: "center", p: 1 }}>
+              <Button
+                fullWidth
+                size="small"
+                variant="outlined"
+                startIcon={<Check fontSize="small" />}
+                onClick={() => createProfile(draftProfile)}
+              >
+                {t("create")}
+              </Button>
+            </Box>
           </Box>
         )}
       </Popover>

@@ -10,6 +10,7 @@ import {
   parse_quantity,
   to_mantissa,
 } from "../../utils/quantity-format";
+import { useHistorySeal } from "../mechanism/history-seal";
 
 const RAW_UNIT: QuantityUnit = { symbol: "", factor: 1 };
 /** Decimal places a canvas edit rounds to — the same as `NumberInput`'s own default. */
@@ -62,6 +63,7 @@ export const OnCanvasValueEditor: React.FC<OnCanvasValueEditorProps> = ({
   onCommit,
   onCancel,
 }) => {
+  const seal = useHistorySeal();
   const [val1, setVal1] = useState("");
   const [val2, setVal2] = useState("");
   // The unit `initialValue` opened in, fixed for the editor's lifetime rather than re-picked
@@ -117,15 +119,22 @@ export const OnCanvasValueEditor: React.FC<OnCanvasValueEditorProps> = ({
     val1.trim() !== "" &&
     (mode === "single" || val2.trim() !== "");
 
+  // A validated value stands alone in the history: what it replaced is one Ctrl+Z away, however
+  // long the editor stayed open.
+  const commit = (newValue: number) => {
+    onCommit(newValue);
+    seal.close();
+  };
+
   const handleLeave = () => {
     if (entered === null) onCancel();
-    else onCommit(entered);
+    else commit(entered);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
       // An unusable entry keeps the editor open, on the red field that says why.
-      if (entered !== null) onCommit(entered);
+      if (entered !== null) commit(entered);
     } else if (e.key === "Escape") {
       onCancel();
     } else if (mode === "ratio") {

@@ -959,6 +959,7 @@ export const MechanicalCanvas = forwardRef<
         // What the previous frame asked of the drag: the mechanism read here has
         // answered that, not the cursor, which has since moved on.
         oldPositionRef.current,
+        appModeRef.current !== "edition",
       );
       let snapFeedback: SnapFeedback = NO_FEEDBACK;
       if (snapToGrid && appModeRef.current === "edition") {

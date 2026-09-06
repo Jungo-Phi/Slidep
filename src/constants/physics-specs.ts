@@ -10,7 +10,13 @@ export const DEFAULT = {
   MASS: 1, // kg
   STIFFNESS: 100, // N/m
   DAMPING: 0.5, // kg/s (= N·s/m)
-  SLIDING_FRICTION: 0.01,
+  SLIDING_FRICTION: 0.1, // N·s/m (viscous, same quantity as DAMPING)
+  /**
+   * N·m·s/rad, viscous.
+   *
+   * No single value suits every joint: the inertia this competes against spans three decades, from a 40 mm gear (~4e-5 kg·m²) to a 0.5 m beam swinging about its end (~4e-2 kg·m²).
+   * Here the beam's speed decays over ~40 s while the gear is held within ~40 ms, so a gear train wants it turned down.
+   */
   ROTATIONAL_FRICTION: 0.001,
   /** Collision restitution: 0 = fully inelastic (the pre-bounce default — a collision just
    *  stops what it blocks), 1 = elastic (bounces back at the same speed it arrived). */

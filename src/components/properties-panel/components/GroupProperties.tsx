@@ -1,5 +1,6 @@
 import React from "react";
 import { Box } from "@mui/material";
+import { Replay } from "@mui/icons-material";
 import {
   Action,
   BeamElement,
@@ -22,6 +23,7 @@ import StructureOnly from "./StructureOnly";
 import MaterialProfileSection from "./MaterialProfileSection";
 import { t } from "../../../i18n";
 import {
+  ANGULAR_DAMPING,
   ANGULAR_VELOCITY,
   DAMPING,
   LENGTH,
@@ -96,7 +98,6 @@ interface GroupPropertiesProps {
   materials: MaterialDef[];
   profiles: ProfileDef[];
   applyActions: (actions: Action[]) => void;
-  simulating: boolean;
 }
 
 /**
@@ -119,7 +120,6 @@ export const GroupProperties: React.FC<GroupPropertiesProps> = ({
   materials,
   profiles,
   applyActions,
-  simulating,
 }) => {
   const alone = elements.length === 1;
 
@@ -136,6 +136,10 @@ export const GroupProperties: React.FC<GroupPropertiesProps> = ({
     STIFFNESS,
   );
   const restLength = common_value(elements, is_spring, rest_length, LENGTH);
+  // No selected spring carries a rest length of its own: they all take the drawn one, and follow it.
+  const restLengthsAreDrawn = !!restLength?.elements.every(
+    (el) => el.restLength === undefined,
+  );
   const damping = common_value(
     elements,
     (el): el is DamperElement => el.type === "damper",
@@ -159,16 +163,15 @@ export const GroupProperties: React.FC<GroupPropertiesProps> = ({
     elements,
     (el): el is PivotElement | SlidepElement => "rotatingEdgesIDs" in el,
     (el) => el.rotationalFriction,
-    undefined,
-    3,
+    ANGULAR_DAMPING,
+    2,
   );
   const slidingFriction = common_value(
     elements,
     (el): el is SliderElement | SlidepElement =>
       "parentBeamID" in el && "slidingFriction" in el,
     (el) => el.slidingFriction,
-    undefined,
-    2,
+    DAMPING,
   );
   const torque = common_value(
     elements,
@@ -236,7 +239,13 @@ export const GroupProperties: React.FC<GroupPropertiesProps> = ({
       }}
     >
       {(length || radius) && (
-        <StructureOnly disabled={simulating}>
+        <StructureOnly
+          actions={[
+            "ChangeEdgeLength",
+            "ChangeDimensionEdgeValue",
+            "ChangeGearRadius",
+          ]}
+        >
           <Row>
             {length && (
               <NumberInput
@@ -339,6 +348,24 @@ export const GroupProperties: React.FC<GroupPropertiesProps> = ({
                 })),
               )
             }
+            implicit={restLengthsAreDrawn}
+            adornment={{
+              icon: Replay,
+              title: t("back_to_rest"),
+              disabled: restLengthsAreDrawn,
+              color: "secondary",
+              onClick: () =>
+                applyActions(
+                  restLength.elements
+                    .filter((el) => el.restLength !== undefined)
+                    .map((el) => ({
+                      type: "UpdateElementRestLength",
+                      id: el.id,
+                      newValue: undefined,
+                      oldValue: el.restLength,
+                    })),
+                ),
+            }}
             unsigned
           />
         </Row>
@@ -382,7 +409,6 @@ export const GroupProperties: React.FC<GroupPropertiesProps> = ({
                 })),
               )
             }
-            accent
             unsigned
           />
         </Row>
@@ -391,8 +417,9 @@ export const GroupProperties: React.FC<GroupPropertiesProps> = ({
         <Row>
           {rotationalFriction && (
             <NumberInput
-              label="μᵣ"
+              label="bᵣ"
               title={t("rotational_friction")}
+              kind={ANGULAR_DAMPING}
               value={rotationalFriction.value}
               mixed={rotationalFriction.mixed}
               onChange={(newValue) =>
@@ -405,14 +432,15 @@ export const GroupProperties: React.FC<GroupPropertiesProps> = ({
                 )
               }
               unsigned
-              precision={3}
-              step={0.001}
+              precision={2}
+              step={0.1}
             />
           )}
           {slidingFriction && (
             <NumberInput
-              label="μₛ"
+              label="bₛ"
               title={t("sliding_friction")}
+              kind={DAMPING}
               value={slidingFriction.value}
               mixed={slidingFriction.mixed}
               onChange={(newValue) =>
@@ -425,8 +453,6 @@ export const GroupProperties: React.FC<GroupPropertiesProps> = ({
                 )
               }
               unsigned
-              precision={2}
-              step={0.01}
             />
           )}
         </Row>
@@ -467,6 +493,7 @@ export const GroupProperties: React.FC<GroupPropertiesProps> = ({
                   })),
                 )
               }
+              accent
             />
           ) : (
             <NumberInput
@@ -488,6 +515,7 @@ export const GroupProperties: React.FC<GroupPropertiesProps> = ({
                   })),
                 )
               }
+              accent
               unsigned
             />
           )}

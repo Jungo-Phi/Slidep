@@ -91,6 +91,8 @@ export interface EnergySample {
   potentialSpring: number;
   /** W — Σ b·(closing speed)² over every damper: always ≥ 0, energy LEAVING the mechanism. */
   damperPower: number;
+  /** W — the same reading over every frictional pivot/slider, apart from `damperPower` so a deliberate loss stays legible next to one a joint charges by itself. */
+  frictionPower: number;
 }
 
 /**

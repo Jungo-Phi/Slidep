@@ -16,7 +16,7 @@ import {
 import { DEFAULT_SIMULATION, SerializedMechanism } from "../types";
 
 /** The format `serialize_mechanism` writes today. */
-export const CURRENT_FORMAT_VERSION = 10;
+export const CURRENT_FORMAT_VERSION = 11;
 
 /** A document mid-migration: its shape belongs to no version in particular. */
 type RawDocument = Record<string, unknown>;
@@ -174,6 +174,15 @@ const MIGRATIONS: MigrationStep[] = [
       materials: [...as_array(doc.materials), ...seed_material_catalog()],
     }),
   },
+  {
+    to: 11,
+    // The stack's `ChangeSlidingFriction`/`ChangeRotationalFriction` deltas carry the old meaning, so undoing back through one would restore a number nothing reads the same way.
+    preservesHistory: false,
+    apply: (doc) => ({
+      ...doc,
+      mechanicalElements: as_array(doc.mechanicalElements).map(reset_friction),
+    }),
+  },
 ];
 
 /** v1 → v2: a belt's `tight` flag becomes `closed`, on the element itself. */
@@ -248,6 +257,20 @@ const add_physical_defaults_in_stack = (stack: unknown): unknown[][] =>
   as_array(stack).map((bundle) =>
     as_array(bundle).map(add_physical_defaults_in_action),
   );
+
+/**
+ * v10 → v11: both friction coefficients become viscous (N·s/m, N·m·s/rad) and go back to their defaults.
+ * They held dimensionless Coulomb coefficients, which measure something else entirely, so there is no conversion to make and keeping the number would leave a joint resisting the wrong thing.
+ */
+const reset_friction = (element: unknown): unknown => {
+  if (!is_record(element)) return element;
+  const reset: Record<string, unknown> = {};
+  if ("slidingFriction" in element)
+    reset.slidingFriction = DEFAULT.SLIDING_FRICTION;
+  if ("rotationalFriction" in element)
+    reset.rotationalFriction = DEFAULT.ROTATIONAL_FRICTION;
+  return Object.keys(reset).length > 0 ? { ...element, ...reset } : element;
+};
 
 /** v3 → v4: a motor's torque limit, absent from every one saved before it existed, falls
  *  back to the same default a freshly placed motor gets. */

@@ -13,14 +13,12 @@ interface VectorInputProps {
   value: Point2;
   onChange: (vector: Point2) => void;
   label?: string;
-  accent?: boolean;
 }
 
 export const VectorInput: React.FC<VectorInputProps> = ({
   value,
   onChange,
   label = "",
-  accent = false,
 }) => {
   return (
     <Box
@@ -42,7 +40,6 @@ export const VectorInput: React.FC<VectorInputProps> = ({
         kind={LENGTH}
         value={value.x}
         onChange={(newX) => onChange(new Point2(newX, value.y))}
-        accent={accent}
       />
       <NumberInput
         label="Y"
@@ -50,7 +47,6 @@ export const VectorInput: React.FC<VectorInputProps> = ({
         kind={LENGTH}
         value={value.y}
         onChange={(newY) => onChange(new Point2(value.x, newY))}
-        accent={accent}
       />
     </Box>
   );

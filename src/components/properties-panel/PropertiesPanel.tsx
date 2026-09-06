@@ -16,6 +16,7 @@ import {
   PropertiesPanelTab,
   RuntimeState,
   SimulationConfig,
+  UnionElement,
 } from "../../types";
 import { ConstraintResidual } from "../../types/runtime-state";
 import { COLORS } from "../../theme/canvas-theme";
@@ -27,7 +28,9 @@ import ConstraintsPanel from "./panels/ConstraintsPanel";
 import AnalysisPanel from "./panels/AnalysisPanel";
 import MaterialsLibraryPanel, { LibraryFocusRequest } from "./panels/MaterialsLibraryPanel";
 import { host_mechanical_element } from "../mechanism/connect-actions";
+import { is_constraint_type } from "../canvas/utils";
 import { ElementNavigationContext } from "./element-navigation";
+import { SimulationLockContext } from "./simulation-lock";
 import { LibraryNavigationContext } from "./library-navigation";
 import { CanvasHighlight } from "../canvas/drawing/draw-canvas";
 import { RedundancySymbol } from "../solver/analysis/redundancy-symbols";
@@ -142,9 +145,13 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
     mechanism.loads,
   );
 
-  // Any ElementDisplay clicked anywhere in the panel drills down to the element it names.
+  // Any ElementDisplay clicked anywhere in the panel drills down to the element it names,
+  // in the tab that knows how to show it.
   const drillDownToElement = React.useCallback(
-    () => setActiveTab("elements"),
+    (element: UnionElement) =>
+      setActiveTab(
+        is_constraint_type(element.type) ? "constraints" : "elements",
+      ),
     [setActiveTab],
   );
 
@@ -163,6 +170,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
   );
 
   return (
+    <SimulationLockContext.Provider value={appMode !== "edition"}>
     <ElementNavigationContext.Provider value={drillDownToElement}>
       <LibraryNavigationContext.Provider value={focusLibraryEntry}>
       <Paper
@@ -360,6 +368,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
       </Paper>
       </LibraryNavigationContext.Provider>
     </ElementNavigationContext.Provider>
+    </SimulationLockContext.Provider>
   );
 };
 

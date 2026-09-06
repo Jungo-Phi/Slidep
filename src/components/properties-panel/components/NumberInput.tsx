@@ -10,6 +10,7 @@ import {
   to_mantissa,
 } from "../../../utils/quantity-format";
 import { t } from "../../../i18n";
+import { useHistorySeal } from "../../mechanism/history-seal";
 
 const RAW_UNIT: QuantityUnit = { symbol: "", factor: 1 };
 
@@ -21,6 +22,8 @@ export interface NumberInputAdornment {
   onMouseEnter?: () => void;
   onMouseLeave?: () => void;
   color?: "primary" | "secondary" | "inherit";
+  /** Greyed out and unclickable, the field's value being already what a click would set it to. */
+  disabled?: boolean;
 }
 
 interface NumberInputProps {
@@ -47,6 +50,10 @@ interface NumberInputProps {
   /** A read-only view of `value` — the catalogue's own entries, never a mechanism's own. No
    *  focus, no stepper, no edits reach `onChange`. */
   disabled?: boolean;
+  /** `value` is not stored on the element: it is derived from something else the panel already
+   *  shows, and the element follows that as long as nothing is typed here. Shown in italics, so
+   *  a field standing for a default reads as one. */
+  implicit?: boolean;
   /** `value` is one arbitrary member of a multi-selection that doesn't actually agree on it — the
    *  field says so instead of showing a value that would look settled when it isn't. Typing still
    *  works as normal and is read the same way by `onChange`. */
@@ -67,6 +74,7 @@ export const NumberInput: React.FC<NumberInputProps> = ({
   precision = 1,
   kind,
   disabled = false,
+  implicit = false,
   mixed = false,
 }) => {
   const unit = kind ? display_unit(value, kind) : RAW_UNIT;
@@ -86,6 +94,9 @@ export const NumberInput: React.FC<NumberInputProps> = ({
   // bubbles), which would otherwise stack the field's title on top of the
   // adornment's own — blank the field's out for as long as the adornment's shows.
   const [adornmentHovered, setAdornmentHovered] = useState(false);
+  // One key per field, so a run of steps here ends the one another field had open.
+  const seal = useHistorySeal();
+  const sealKey = React.useId();
 
   useEffect(() => {
     valueRef.current = value;
@@ -161,14 +172,26 @@ export const NumberInput: React.FC<NumberInputProps> = ({
               ? snapped - actualStep
               : snapped - grain;
       };
-      onChange(getSteppedValue() * unit.factor);
+      const step_once = () => {
+        seal.arm(sealKey);
+        onChange(getSteppedValue() * unit.factor);
+      };
+      step_once();
       timeoutRef.current = setTimeout(() => {
-        intervalRef.current = setInterval(() => {
-          onChange(getSteppedValue() * unit.factor);
-        }, holdInterval);
+        intervalRef.current = setInterval(step_once, holdInterval);
       }, holdDelay);
     },
-    [baseValue, grain, holdDelay, holdInterval, onChange, step, unit.factor],
+    [
+      baseValue,
+      grain,
+      holdDelay,
+      holdInterval,
+      onChange,
+      seal,
+      sealKey,
+      step,
+      unit.factor,
+    ],
   );
 
   const filterInput = (val: string) => {
@@ -200,7 +223,9 @@ export const NumberInput: React.FC<NumberInputProps> = ({
   // typing it the value the others are being given.
   const commitLocalValue = () => {
     if (!mixed && localValue === format(value)) return;
-    if (entered !== null) onChange(entered);
+    if (entered === null) return;
+    onChange(entered);
+    seal.close();
   };
 
   return (
@@ -257,6 +282,8 @@ export const NumberInput: React.FC<NumberInputProps> = ({
               paddingY: "7px",
               paddingLeft: "8px",
               paddingRight: "-6px",
+              ...(implicit &&
+                !focused && { fontStyle: "italic", color: "text.secondary" }),
             },
             "& .MuiInputBase-root": {
               marginY: "-2px",
@@ -298,14 +325,13 @@ export const NumberInput: React.FC<NumberInputProps> = ({
                 borderBottomRightRadius: adornmentRadius,
               },
             }),
-            "& .MuiInputLabel-root": accent
-              ? {
-                  color: "primary.main",
-                  fontWeight: 500,
-                  fontSize: large ? "1em" : "0.92em",
-                  pl: large ? 0 : 0.4,
-                }
-              : {},
+            "& .MuiInputLabel-root": {
+              fontSize: large ? "1em" : "0.92em",
+              pl: large ? 0 : 0.4,
+              // Colour only: the accent must never shift a label's size or position, or two
+              // neighbouring fields stop lining up.
+              ...(accent && { color: "primary.main", fontWeight: 500 }),
+            },
             height,
           }}
           InputProps={{
@@ -353,9 +379,12 @@ export const NumberInput: React.FC<NumberInputProps> = ({
                 </Box>
                 {adornment && (
                   <Tooltip title={adornment.title}>
-                    <IconButton
-                      color={adornment.color}
-                      onClick={adornment.onClick}
+                    {/* The hover lives on the wrapper, not the button: a disabled
+                        button takes no pointer event, and would leave both the
+                        tooltip and the field's own title unswapped. */}
+                    <Box
+                      component="span"
+                      sx={{ display: "flex" }}
                       onMouseEnter={() => {
                         setAdornmentHovered(true);
                         adornment.onMouseEnter?.();
@@ -364,26 +393,37 @@ export const NumberInput: React.FC<NumberInputProps> = ({
                         setAdornmentHovered(false);
                         adornment.onMouseLeave?.();
                       }}
-                      sx={{
-                        height: height + 2,
-                        ...(pillAdornment
-                          ? {
-                              borderTopLeftRadius: 0,
-                              borderBottomLeftRadius: 0,
-                              borderTopRightRadius: adornmentRadius,
-                              borderBottomRightRadius: adornmentRadius,
-                            }
-                          : { borderRadius: 0.75 }),
-                        px: 0.5,
-                        ml: -0.25,
-                        fontSize: large ? "20px" : "16px",
-                        // Nothing shared to state: the icon says what a click would do, not
-                        // where the elements currently stand.
-                        ...(mixed && { opacity: 0.45 }),
-                      }}
                     >
-                      <adornment.icon fontSize="inherit" />
-                    </IconButton>
+                      <IconButton
+                        color={adornment.color}
+                        // A click on the icon is a decision, like a typed value: its own entry,
+                        // and it ends whatever run the arrows had open.
+                        onClick={() => {
+                          adornment.onClick();
+                          seal.close();
+                        }}
+                        disabled={adornment.disabled}
+                        sx={{
+                          height: height + 2,
+                          ...(pillAdornment
+                            ? {
+                                borderTopLeftRadius: 0,
+                                borderBottomLeftRadius: 0,
+                                borderTopRightRadius: adornmentRadius,
+                                borderBottomRightRadius: adornmentRadius,
+                              }
+                            : { borderRadius: 0.75 }),
+                          px: 0.5,
+                          ml: -0.25,
+                          fontSize: large ? "20px" : "16px",
+                          // Nothing shared to state: the icon says what a click would do, not
+                          // where the elements currently stand.
+                          ...(mixed && { opacity: 0.45 }),
+                        }}
+                      >
+                        <adornment.icon fontSize="inherit" />
+                      </IconButton>
+                    </Box>
                   </Tooltip>
                 )}
               </Box>

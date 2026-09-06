@@ -4,7 +4,7 @@
  */
 
 import { Box, IconButton, Divider, Tooltip, Typography } from "@mui/material";
-import { Delete, Lock, LockOpen } from "@mui/icons-material";
+import { Delete, Lock, LockOpen, Replay } from "@mui/icons-material";
 import {
   ID,
   LoadElement,
@@ -64,6 +64,7 @@ import {
   STIFFNESS,
   SURFACE_MASS,
   DAMPING,
+  ANGULAR_DAMPING,
   format_quantity,
   wrap_angle_rad,
 } from "../../../utils/quantity-format";
@@ -147,11 +148,10 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
         setCanvasState={setCanvasState}
         applyActions={applyActions}
         setHighlight={setHighlight}
-        simulating={simulating}
-        onDeleteSelection={() => {
+        onDeleteElements={(ids) => {
           applyActions(
             delete_elements(
-              selectedIds,
+              ids,
               mechanism.mechanicalElements,
               mechanism.constraintElements,
               mechanism.loads,
@@ -163,6 +163,10 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
       />
     );
   }
+
+  // A spring with no rest length of its own takes the drawn one, and follows it.
+  const restLengthIsDrawn =
+    element.type === "spring" && element.restLength === undefined;
 
   const linkedConstraint = linked_constraint(
     element,
@@ -214,7 +218,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
           editable={true}
           trailingControls={
             <>
-              <StructureOnly disabled={simulating} row>
+              <StructureOnly actions={["GroundNode"]} row>
                 {is_groundable(element) && (
                   <Tooltip title={t(element.isGrounded ? "release" : "anchor")}>
                     <IconButton
@@ -246,71 +250,73 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
               </StructureOnly>
 
               {element.type === "pivot" && element.motor && motorConfig && (
-                <ElementPicker
-                  label="Ancrage moteur"
-                  options={motorBeams}
-                  extraOption={{
-                    label: t("ground"),
-                    icon: GroundIcon,
-                    selected: motorConfig.parentBeamID === undefined,
-                  }}
-                  selected={motorBeams.find(
-                    (beam) => beam.id === motorConfig.parentBeamID,
-                  )}
-                  onSelectExtra={() =>
-                    applyActions([
-                      {
-                        type: "SetMotorConfig",
-                        id: element.id,
-                        newConfig: {
-                          ...motorConfig,
-                          parentBeamID: undefined,
+                <StructureOnly actions={["SetMotorConfig", "GroundNode"]} row>
+                  <ElementPicker
+                    label="Ancrage moteur"
+                    options={motorBeams}
+                    extraOption={{
+                      label: t("ground"),
+                      icon: GroundIcon,
+                      selected: motorConfig.parentBeamID === undefined,
+                    }}
+                    selected={motorBeams.find(
+                      (beam) => beam.id === motorConfig.parentBeamID,
+                    )}
+                    onSelectExtra={() =>
+                      applyActions([
+                        {
+                          type: "SetMotorConfig",
+                          id: element.id,
+                          newConfig: {
+                            ...motorConfig,
+                            parentBeamID: undefined,
+                          },
+                          oldConfig: motorConfig,
                         },
-                        oldConfig: motorConfig,
-                      },
-                      ...(element.isGrounded
-                        ? []
-                        : ([
-                            {
-                              type: "GroundNode",
-                              id: element.id,
-                              grounded: true,
-                            },
-                          ] satisfies Action[])),
-                    ])
-                  }
-                  onSelectElement={(beam) =>
-                    applyActions([
-                      {
-                        type: "SetMotorConfig",
-                        id: element.id,
-                        newConfig: { ...motorConfig, parentBeamID: beam.id },
-                        oldConfig: motorConfig,
-                      },
-                      ...(element.isGrounded
-                        ? ([
-                            {
-                              type: "GroundNode",
-                              id: element.id,
-                              grounded: false,
-                            },
-                          ] satisfies Action[])
-                        : []),
-                    ])
-                  }
-                  onHoverElement={(beam) =>
-                    setHoveredPart(element_to_hovered_part(beam, false))
-                  }
-                  onHoverEnd={() =>
-                    setHoveredPart({ type: "Void", position: ZERO })
-                  }
-                  hoveredPart={hoveredPart}
-                  setHoveredPart={setHoveredPart}
-                  selectedIds={selectedIds}
-                  setCanvasState={setCanvasState}
-                  applyActions={applyActions}
-                  large
-                />
+                        ...(element.isGrounded
+                          ? []
+                          : ([
+                              {
+                                type: "GroundNode",
+                                id: element.id,
+                                grounded: true,
+                              },
+                            ] satisfies Action[])),
+                      ])
+                    }
+                    onSelectElement={(beam) =>
+                      applyActions([
+                        {
+                          type: "SetMotorConfig",
+                          id: element.id,
+                          newConfig: { ...motorConfig, parentBeamID: beam.id },
+                          oldConfig: motorConfig,
+                        },
+                        ...(element.isGrounded
+                          ? ([
+                              {
+                                type: "GroundNode",
+                                id: element.id,
+                                grounded: false,
+                              },
+                            ] satisfies Action[])
+                          : []),
+                      ])
+                    }
+                    onHoverElement={(beam) =>
+                      setHoveredPart(element_to_hovered_part(beam, false))
+                    }
+                    onHoverEnd={() =>
+                      setHoveredPart({ type: "Void", position: ZERO })
+                    }
+                    hoveredPart={hoveredPart}
+                    setHoveredPart={setHoveredPart}
+                    selectedIds={selectedIds}
+                    setCanvasState={setCanvasState}
+                    applyActions={applyActions}
+                    large
+                  />
+                </StructureOnly>
               )}
               {element.type === "mass" && (
                 <NumberInput
@@ -372,7 +378,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                   unsigned
                 />
               )}
-              <StructureOnly disabled={simulating} row>
+              <StructureOnly actions={["DeleteElement"]} row>
                 <Tooltip title={t("delete")}>
                   <IconButton
                     color="error"
@@ -412,127 +418,138 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
             m: 1,
           }}
         >
-          <Box
-            sx={{
-              display: "flex",
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 2,
-            }}
+          <StructureOnly
+            actions={[
+              "MoveNode",
+              "SetMotorConfig",
+              "GroundNode",
+              "ChangeGearRadius",
+              "CreateElement",
+              "DeleteElement",
+            ]}
           >
-            <VectorInput
-              value={element.position}
-              onChange={(pos) =>
-                applyActions([
-                  {
-                    type: "MoveNode",
-                    id: element.id,
-                    newPosition: pos,
-                    oldPosition: element.position,
-                    committed: true,
-                  },
-                ])
-              }
-            />
-            {element.type === "pivot" && (
-              <Tooltip
-                title={t(element.motor ? "motor_revert" : "motor_convert")}
-              >
-                <IconButton
-                  color="inherit"
-                  size="small"
-                  onClick={() => {
-                    const actions: Action[] = [
-                      {
-                        type: "SetMotorConfig",
-                        id: element.id,
-                        newConfig: element.motor
-                          ? undefined
-                          : {
-                              speed: DEFAULT.MOTOR_SPEED,
-                              torque: DEFAULT.MOTOR_TORQUE,
-                            },
-                        oldConfig: element.motor,
-                      },
-                    ];
-                    if (!element.motor && !element.isGrounded) {
-                      actions.push({
-                        type: "GroundNode",
-                        id: element.id,
-                        grounded: true,
-                      });
-                    }
-                    applyActions(actions);
-                  }}
-                  sx={{ padding: 0.25, border: 1, borderColor: "divider" }}
-                >
-                  <Box
-                    component="img"
-                    style={{ width: 24, height: 24 }}
-                    src={icon(element.motor ? "motor" : "motor-off")}
-                  />
-                </IconButton>
-              </Tooltip>
-            )}
-            {element.type === "gear" && (
-              <NumberInput
-                label="R"
-                title={t("radius")}
-                kind={LENGTH}
-                value={element.radius}
-                onChange={(radius) => {
+            <Box
+              sx={{
+                display: "flex",
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 2,
+              }}
+            >
+              <VectorInput
+                value={element.position}
+                onChange={(pos) =>
                   applyActions([
                     {
-                      type: "ChangeGearRadius",
+                      type: "MoveNode",
                       id: element.id,
-                      newRadius: radius,
-                      oldRadius: element.radius,
-                      target: new Point2(
-                        element.position.x + radius,
-                        element.position.y,
-                      ),
+                      newPosition: pos,
+                      oldPosition: element.position,
                       committed: true,
                     },
-                  ]);
-                }}
-                large
-                unsigned
-                adornment={
-                  linkedConstraint
-                    ? {
-                        icon: Lock,
-                        title: t("length_unlock"),
-                        color: "secondary",
-                        onMouseEnter: () =>
-                          handleMouseEnter(linkedConstraint, true),
-                        onMouseLeave: handleMouseLeave,
-                        onClick: () =>
-                          applyActions([
-                            {
-                              type: "DeleteElement",
-                              element: linkedConstraint,
-                            },
-                          ]),
-                      }
-                    : {
-                        icon: LockOpen,
-                        title: t("length_lock"),
-                        onClick: () =>
-                          applyActions([
-                            {
-                              type: "CreateElement",
-                              element: create_radius_dimension(
-                                element,
-                                mechanism.viewport,
-                              ),
-                            },
-                          ]),
-                      }
+                  ])
                 }
               />
-            )}
-          </Box>
+              {element.type === "pivot" && (
+                <Tooltip
+                  title={t(element.motor ? "motor_revert" : "motor_convert")}
+                >
+                  <IconButton
+                    color="inherit"
+                    size="small"
+                    onClick={() => {
+                      const actions: Action[] = [
+                        {
+                          type: "SetMotorConfig",
+                          id: element.id,
+                          newConfig: element.motor
+                            ? undefined
+                            : {
+                                speed: DEFAULT.MOTOR_SPEED,
+                                torque: DEFAULT.MOTOR_TORQUE,
+                              },
+                          oldConfig: element.motor,
+                        },
+                      ];
+                      if (!element.motor && !element.isGrounded) {
+                        actions.push({
+                          type: "GroundNode",
+                          id: element.id,
+                          grounded: true,
+                        });
+                      }
+                      applyActions(actions);
+                    }}
+                    sx={{ padding: 0.25, border: 1, borderColor: "divider" }}
+                  >
+                    <Box
+                      component="img"
+                      style={{ width: 24, height: 24 }}
+                      src={icon(element.motor ? "motor" : "motor-off")}
+                    />
+                  </IconButton>
+                </Tooltip>
+              )}
+              {element.type === "gear" && (
+                <NumberInput
+                  label="R"
+                  title={t("radius")}
+                  kind={LENGTH}
+                  value={element.radius}
+                  onChange={(radius) => {
+                    applyActions([
+                      {
+                        type: "ChangeGearRadius",
+                        id: element.id,
+                        newRadius: radius,
+                        oldRadius: element.radius,
+                        target: new Point2(
+                          element.position.x + radius,
+                          element.position.y,
+                        ),
+                        committed: true,
+                      },
+                    ]);
+                  }}
+                  large
+                  unsigned
+                  adornment={
+                    linkedConstraint
+                      ? {
+                          icon: Lock,
+                          title: t("length_unlock"),
+                          color: "secondary",
+                          onMouseEnter: () =>
+                            handleMouseEnter(linkedConstraint, true),
+                          onMouseLeave: handleMouseLeave,
+                          onClick: () =>
+                            applyActions([
+                              {
+                                type: "DeleteElement",
+                                element: linkedConstraint,
+                              },
+                            ]),
+                        }
+                      : {
+                          icon: LockOpen,
+                          title: t("length_lock"),
+                          onClick: () =>
+                            applyActions([
+                              {
+                                type: "CreateElement",
+                                element: create_radius_dimension(
+                                  element,
+                                  mechanism.viewport,
+                                ),
+                              },
+                            ]),
+                        }
+                  }
+                />
+              )}
+            </Box>
+          </StructureOnly>
           {element.type === "pivot" && element.motor && (
             <Box
               sx={{
@@ -588,6 +605,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                     ]);
                   }}
                   large
+                  accent
                 />
               </Box>
               <Typography
@@ -606,7 +624,19 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
       )}
 
       {"positionStart" in element && (
-        <StructureOnly disabled={simulating}>
+        <StructureOnly
+          actions={[
+            "MoveEdgeStart",
+            "MoveEdgeEnd",
+            "ChangeEdgeLength",
+            "ChangeBeltLength",
+            "ChangeDimensionEdgeValue",
+            "ChangeDimensionBeltValue",
+            "ChangeEdgeAngle",
+            "CreateElement",
+            "DeleteElement",
+          ]}
+        >
           <Box
             sx={{
               display: "flex",
@@ -794,17 +824,15 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
       )}
 
       <Divider sx={{ mt: 1.5, mb: 1 }} />
-      <StructureOnly disabled={simulating}>
-        <ConnectionsProperties
-          element={element}
-          hoveredPart={hoveredPart}
-          setHoveredPart={setHoveredPart}
-          selectedIds={selectedIds}
-          setCanvasState={setCanvasState}
-          applyActions={applyActions}
-          mechanism={mechanism}
-        />
-      </StructureOnly>
+      <ConnectionsProperties
+        element={element}
+        hoveredPart={hoveredPart}
+        setHoveredPart={setHoveredPart}
+        selectedIds={selectedIds}
+        setCanvasState={setCanvasState}
+        applyActions={applyActions}
+        mechanism={mechanism}
+      />
       {elementLoads.length > 0 && (
         <Box>
           <Divider sx={{ my: 1 }} />
@@ -844,8 +872,9 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
           >
             {"rotatingEdgesIDs" in element && (
               <NumberInput
-                label="μᵣ"
+                label="bᵣ"
                 title={t("rotational_friction")}
+                kind={ANGULAR_DAMPING}
                 value={element.rotationalFriction}
                 onChange={(rotationalFriction) =>
                   applyActions([
@@ -858,14 +887,15 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                 }
                 unsigned
                 large
-                precision={3}
-                step={0.001}
+                precision={2}
+                step={0.1}
               />
             )}
             {"parentBeamID" in element && (
               <NumberInput
-                label="μₛ"
+                label="bₛ"
                 title={t("sliding_friction")}
+                kind={DAMPING}
                 value={element.slidingFriction}
                 onChange={(slidingFriction) =>
                   applyActions([
@@ -878,8 +908,6 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                 }
                 unsigned
                 large
-                precision={2}
-                step={0.01}
               />
             )}
             {element.type === "gear" && (
@@ -949,6 +977,22 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                     },
                   ])
                 }
+                implicit={restLengthIsDrawn}
+                adornment={{
+                  icon: Replay,
+                  title: t("back_to_rest"),
+                  disabled: restLengthIsDrawn,
+                  color: "secondary",
+                  onClick: () =>
+                    applyActions([
+                      {
+                        type: "UpdateElementRestLength",
+                        id: element.id,
+                        newValue: undefined,
+                        oldValue: element.restLength,
+                      },
+                    ]),
+                }}
                 unsigned
                 large
               />
