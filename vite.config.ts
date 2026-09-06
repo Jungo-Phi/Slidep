@@ -10,8 +10,7 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      // Met à jour le service worker automatiquement quand une nouvelle
-      // version est déployée (pas de prompt à l'utilisateur).
+      // A new build takes control as soon as it is installed; src/utils/service-worker.ts decides when the page reloads to pick it up.
       registerType: "autoUpdate",
       // Génère icônes + balises <link> à partir de pwa-assets.config.ts.
       pwaAssets: { config: true },
