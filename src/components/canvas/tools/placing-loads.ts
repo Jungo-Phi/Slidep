@@ -27,12 +27,9 @@ import { frame_from_drag } from "../snapping/load-snap";
 /**
  * The load a drag would create, from where it started to where the cursor is.
  *
- * The preview and the commit both build it: the ghost is then drawn through the
- * very helpers that draw a placed load, so what the user sees under the cursor is
- * the element they are about to get, not a second guess at it.
+ * The preview and the commit both build it: the ghost is then drawn through the very helpers that draw a placed load, so what the user sees under the cursor is the element they are about to get, not a second guess at it.
  *
- * They return `undefined` when the drag started on something that carries no such
- * load — the tool simply produces nothing.
+ * They return `undefined` when the drag started on something that carries no such load — the tool simply produces nothing.
  */
 
 /** Stands in for the id of a load that only exists as a preview. */
@@ -88,8 +85,7 @@ export function distributed_force_from_drag(
   const magnitude = screen2stored_load(
     world2screen_length(drag.length(), viewport),
   );
-  // The cursor is already direction-snapped (see snap_load_hover): a load that
-  // landed on its beam's axial/normal references that beam and follows it.
+  // The cursor is already direction-snapped (see snap_load_hover): a load that landed on its beam's axial/normal references that beam and follows it.
   const frame = frame_from_drag(
     world2screen_vec(drag, viewport),
     [beam],
@@ -119,8 +115,7 @@ export function moment_from_drag(
     type: "moment",
     id,
     targetID: startHover.id,
-    // The side of the support the cursor ends on picks the rotation sign;
-    // afterwards only the panel can flip it, a drag just resizes the arc.
+    // The side of the support the cursor ends on picks the rotation sign; afterwards only the panel can flip it, a drag just resizes the arc.
     value:
       screen2stored_moment(
         world2screen_length(startHover.position.distance_to(cursor), viewport),

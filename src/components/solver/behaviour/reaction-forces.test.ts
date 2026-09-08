@@ -24,8 +24,7 @@ const GRAVITY_Y = -9.81; // world is Y-up, so "down" is negative
 const DT = 1 / 120;
 
 /** A mass hanging at rest directly below a grounded anchor, on a rigid rod — the simplest
- *  case with a known answer: at equilibrium the rod's tension exactly cancels gravity, so
- *  the reaction is `mass · g` at each end, opposite in sign. */
+ * case with a known answer: at equilibrium the rod's tension exactly cancels gravity, so the reaction is `mass · g` at each end, opposite in sign. */
 function pendulum_at_rest(mass: number) {
   const positions = new Map<string, Point2>([
     ["anchor", new Point2(0, 0)],
@@ -166,10 +165,8 @@ function mechanism(
 
 describe("réaction d'appui d'une poutre montée sur un pivot ancré", () => {
   it("apparaît au pivot, à travers la fusion de coïncidence", () => {
-    // The exact repro: a beam's start welded to a grounded pivot (Coincidence-fused, see
-    // `compile_simulation_model`), a force at its free end. The pivot's own key is never
-    // the reaction's `key` post-fusion — `element_reactions` has to match the fused,
-    // comma-joined one instead.
+    // The exact repro: a beam's start welded to a grounded pivot (Coincidence-fused, see `compile_simulation_model`), a force at its free end.
+    // The pivot's own key is never the reaction's `key` post-fusion — `element_reactions` has to match the fused, comma-joined one instead.
     const PIVOT = id();
     const BEAM = id();
     const pivot: PivotElement = {
@@ -259,15 +256,9 @@ describe("réaction d'appui d'un cantilever (poutre encastrée sur un join ancr�
   }
 
   it("reste invisible au vrai appui sans dynamicRigidity — le figeage cinématique du join rend le lien indéterminable", () => {
-    // The repro this whole chain of fixes started from: `add_rigidity_links` anchors
-    // (mass 0) BOTH ends of an endpoint-welded beam under a grounded join — correct
-    // kinematic geometry, but in dynamic mode the Distance link between two anchored
-    // dofs is "indeterminate, see above" (`anchoredPosCount !== 1`) and reports nothing.
-    // `dynamicRigidity` is what fixes it — this guards that the OLD, still-default
-    // (kinematic/analysis) behavior stays as documented, not silently "fixed" by
-    // accident. The beam's own free end DOES now show something (the isolated-anchor
-    // fix above catches the load applied directly there), just not at the join — the
-    // load's true destination is still invisible without `dynamicRigidity`.
+    // The repro this whole chain of fixes started from: `add_rigidity_links` anchors (mass 0) BOTH ends of an endpoint-welded beam under a grounded join — correct kinematic geometry, but in dynamic mode the Distance link between two anchored dofs is "indeterminate, see above" (`anchoredPosCount !== 1`) and reports nothing.
+    // `dynamicRigidity` is what fixes it — this guards that the OLD, still-default (kinematic/analysis) behavior stays as documented, not silently "fixed" by accident.
+    // The beam's own free end DOES now show something (the isolated-anchor fix above catches the load applied directly there), just not at the join — the load's true destination is still invisible without `dynamicRigidity`.
     const { join, beam, mech } = cantilever();
     const model = compile_simulation_model(mech); // dynamicRigidity defaults to false
     let snapshot: DynamicSnapshot | null = null;
@@ -290,25 +281,19 @@ describe("réaction d'appui d'un cantilever (poutre encastrée sur un join ancr�
     const atJoin = element_reactions(join, snapshot!);
     expect(atJoin).toHaveLength(1);
     expect(atJoin[0].atAnchor).toBe(true);
-    // Read to a share of the load, not to a fixed newton figure: `reversed_sweep_order` moves
-    // a little of a member's load between its two ends, so the bound has to scale with what
-    // is being read. The resultant itself stays exact.
+    // Read to a share of the load, not to a fixed newton figure: `reversed_sweep_order` moves a little of a member's load between its two ends, so the bound has to scale with what is being read.
+    // The resultant itself stays exact.
     const tolerance = 0.01 * 100; // 1 % of the tip load below
-    // Negligible beam mass, no gravity, one load: the support opposes it exactly
-    // (`element_reactions` negates whatever the mechanism imposes at an anchored point —
-    // the classical "reaction opposes the load" reading, not the raw internal-force one).
+    // Negligible beam mass, no gravity, one load: the support opposes it exactly (`element_reactions` negates whatever the mechanism imposes at an anchored point — the classical "reaction opposes the load" reading, not the raw internal-force one).
     expect(Math.abs(atJoin[0].vector.x)).toBeLessThanOrEqual(tolerance);
     expect(Math.abs(atJoin[0].vector.y - 100)).toBeLessThanOrEqual(tolerance);
-    // Textbook cantilever, downward tip load 1 m out: the fixed end also carries a reaction
-    // MOMENT, +100 N·m (counter-clockwise — opposing the load's own clockwise tendency).
+    // Textbook cantilever, downward tip load 1 m out: the fixed end also carries a reaction MOMENT, +100 N·m (counter-clockwise — opposing the load's own clockwise tendency).
     // Moments are never negated (see `moment_at`), so this reads directly as the support's own.
     expect(atJoin[0].moment).toBeCloseTo(100, 0);
 
-    // The free end sees a real, non-anchored reaction too — the load is no longer
-    // silently dropped into a zero-mass dof. Not a "support", so its force isn't negated:
-    // this is the internal force holding the tip up, same sign as what balances the load
-    // there. Its moment is the SAME +100 — a couple's moment is reference-independent, so
-    // it reads identically at either end of the rigid connection.
+    // The free end sees a real, non-anchored reaction too — the load is no longer silently dropped into a zero-mass dof.
+    // Not a "support", so its force isn't negated: this is the internal force holding the tip up, same sign as what balances the load there.
+    // Its moment is the SAME +100 — a couple's moment is reference-independent, so it reads identically at either end of the rigid connection.
     const atBeamEnd = element_reactions(beam, snapshot!).find((r) => !r.atAnchor);
     expect(atBeamEnd).toBeDefined();
     expect(atBeamEnd!.vector.y).toBeCloseTo(100, 0);
@@ -318,10 +303,7 @@ describe("réaction d'appui d'un cantilever (poutre encastrée sur un join ancr�
 
 describe("réaction d'un nœud ancré isolé", () => {
   it("reporte la force externe directement appliquée, sans aucun lien pour la porter", () => {
-    // The other half of the same underlying gap: `PBD_kinematic_solver`'s reaction
-    // bookkeeping is entirely link-based (`links.forEach`), so a `Force` load on a
-    // grounded node with nothing else attached — no link ever touches its key — was
-    // reported as reaction-free, even though the whole load lands straight on the ground.
+    // The other half of the same underlying gap: `PBD_kinematic_solver`'s reaction bookkeeping is entirely link-based (`links.forEach`), so a `Force` load on a grounded node with nothing else attached — no link ever touches its key — was reported as reaction-free, even though the whole load lands straight on the ground.
     const positions = new Map<string, Point2>([["anchor", new Point2(0, 0)]]);
     const posMasses = new Map<string, number>([["anchor", 0]]);
     const reactions: LinkReaction[] = [];
@@ -418,10 +400,8 @@ describe("réaction d'un nœud ancré isolé", () => {
   });
 
   it("porte son propre poids sous gravité, sans aucune charge appliquée", () => {
-    // Same node, no `Force` element this time — gravity alone has to reach the anchored-dof
-    // reaction fallback. It does so via `DynamicMassModel.groundedMasses`
-    // (`step_dynamic_simulation` restates `mass · gravity` as an ordinary force there, since
-    // an anchored node never feels the predict step's acceleration in the first place).
+    // Same node, no `Force` element this time — gravity alone has to reach the anchored-dof reaction fallback.
+    // It does so via `DynamicMassModel.groundedMasses` (`step_dynamic_simulation` restates `mass · gravity` as an ordinary force there, since an anchored node never feels the predict step's acceleration in the first place).
     const MASS = id();
     const mass: MassElement = {
       type: "mass",
@@ -453,9 +433,8 @@ describe("réaction d'un nœud ancré isolé", () => {
   });
 
   it("ne prête aucun poids fantôme à un ancrage vide", () => {
-    // A grounded join with nothing attached lumps no mass at all (`compute_dynamic_mass_model`
-    // leaves it unfloored for anchored keys, on purpose — see `groundedMasses`'s doc). It must
-    // stay silent under gravity, not report `MASS_FLOOR`'s worth of weight from nothing.
+    // A grounded join with nothing attached lumps no mass at all (`compute_dynamic_mass_model` leaves it unfloored for anchored keys, on purpose — see `groundedMasses`'s doc).
+    // It must stay silent under gravity, not report `MASS_FLOOR`'s worth of weight from nothing.
     const JOIN = id();
     const join: JoinElement = {
       type: "join",

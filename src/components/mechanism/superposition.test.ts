@@ -21,9 +21,8 @@ import type {
 import type { MaterialDef, ProfileDef } from "../../types/material";
 
 /**
- * Two edges holding the same two nodes collapse into one — a spring and a damper
- * apart. These run through `apply_actions`, the only entry point that owes the
- * invariant, so they cover the correction pass and not just its parts.
+ * Two edges holding the same two nodes collapse into one — a spring and a damper apart.
+ * These run through `apply_actions`, the only entry point that owes the invariant, so they cover the correction pass and not just its parts.
  */
 
 let nextID = 0;
@@ -162,9 +161,7 @@ const find = (m: Mechanism, elementID: ID) =>
   m.mechanicalElements.find((el) => el.id === elementID);
 
 /**
- * Applies a bundle, refusing an invalid seed first: `issues_introduced` forgives
- * whatever was already broken, so a faulty fixture would silently excuse the
- * very defect these tests look for.
+ * Applies a bundle, refusing an invalid seed first: `issues_introduced` forgives whatever was already broken, so a faulty fixture would silently excuse the very defect these tests look for.
  */
 function apply(before: Mechanism, actions: Action[]): Mechanism {
   expect(validate_mechanism(before)).toBeNull();
@@ -173,9 +170,8 @@ function apply(before: Mechanism, actions: Action[]): Mechanism {
 
 describe("superposition — deux edges sur les mêmes nœuds", () => {
   it("fusionne une barre sur une barre en gardant les nœuds de corps des deux", () => {
-    // Two bars that already exist, each carrying a slider. Dragging the end of
-    // one onto the other's superposes them — the case a fresh stroke never
-    // reaches, since a new bar carries nothing yet.
+    // Two bars that already exist, each carrying a slider.
+    // Dragging the end of one onto the other's superposes them — the case a fresh stroke never reaches, since a new bar carries nothing yet.
     const before = mechanism([
       pivot(A, 0, [BAR, OTHER]),
       pivot(B, 100, [BAR]),
@@ -297,7 +293,7 @@ describe("superposition — le ressort posé sur une barre à bout libre", () =>
   const SPRING = id();
 
   /** Beam A—(free end). The spring is drawn from A to that free end, which mints
-   *  a join to marry the two — and superposes them. */
+   * a join to marry the two — and superposes them. */
   const before = () => mechanism([pivot(A, 0, [BAR]), beam(BAR, A, undefined)]);
 
   const gesture: Action[] = [
@@ -350,8 +346,7 @@ describe("superposition — le ressort posé sur une barre à bout libre", () =>
   ];
 
   it("garde le ressort dessiné, pas la barre que le join vient de reterminer", () => {
-    // The join re-terminates the beam too, so re-termination alone would let the
-    // beam pass for the newcomer and swallow the spring.
+    // The join re-terminates the beam too, so re-termination alone would let the beam pass for the newcomer and swallow the spring.
     const after = apply(before(), gesture);
 
     expect(find(after, SPRING)?.type).toBe("spring");
@@ -402,8 +397,7 @@ describe("superposition — ce que la fusion emporte", () => {
       pivot(B, 100, [BAR]),
       beam(BAR, A, B),
     ]);
-    // The newcomer runs B→A and carries a force at its start, which sits on B.
-    // Absorbed into a survivor running A→B, that start becomes the end.
+    // The newcomer runs B→A and carries a force at its start, which sits on B. Absorbed into a survivor running A→B, that start becomes the end.
     const after = apply(before, [
       ...draw(beam(OTHER, B, A)),
       {
@@ -433,8 +427,7 @@ describe("superposition — ce que la fusion emporte", () => {
       pivot(B, 100, [BAR]),
       beam(BAR, A, B),
     ]);
-    // Both dimensions measure the same bar once the newcomer is absorbed: only
-    // one may survive.
+    // Both dimensions measure the same bar once the newcomer is absorbed: only one may survive.
     const after = apply(before, [
       ...draw(beam(OTHER, A, B)),
       {

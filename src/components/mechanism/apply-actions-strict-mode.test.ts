@@ -46,9 +46,7 @@ const mechanism = (): Mechanism => ({
 });
 
 /**
- * Mimics what React 18 StrictMode does to a `setState(prev => ...)` functional
- * updater in development: call it twice against the SAME `prev`, keep only the
- * second call's return value — exactly what App.tsx's `applyActions` is.
+ * Mimics what React 18 StrictMode does to a `setState(prev => ...)` functional updater in development: call it twice against the SAME `prev`, keep only the second call's return value — exactly what App.tsx's `applyActions` is.
  */
 function strictModeApply(
   prev: Mechanism,

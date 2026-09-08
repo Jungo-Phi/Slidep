@@ -1,16 +1,12 @@
 /**
  * Central registry of palette icon data URIs.
  *
- * Each SVG under assets/icons/palette is imported as a raw string and inlined
- * as a `data:image/svg+xml,...` URI. The bytes therefore ship inside the JS
- * bundle: no separate network request in dev or prod, and icons render
- * instantly (no loading flash, no placeholder needed). The returned string is
- * a stable, reusable URL usable both by `<img src>` and canvas `drawImage`.
+ * Each SVG under assets/icons/palette is imported as a raw string and inlined as a `data:image/svg+xml,...` URI. The bytes therefore ship inside the JS bundle: no separate network request in dev or prod, and icons render instantly (no loading flash, no placeholder needed).
+ * The returned string is a stable, reusable URL usable both by `<img src>` and canvas `drawImage`.
  *
- * The SVGs were authored in the classic hues — a navy stroke on a cream ground —
- * which vanish on a dark canvas. So for any theme that asks for it, the source
- * hues are substituted for that theme's before the URI is built. Results are
- * cached per theme: the substitution runs once per icon per theme, not per draw.
+ * The SVGs were authored in the classic hues — a navy stroke on a cream ground — which vanish on a dark canvas.
+ * So for any theme that asks for it, the source hues are substituted for that theme's before the URI is built.
+ * Results are cached per theme: the substitution runs once per icon per theme, not per draw.
  */
 import { ICON_COLORS } from "../../theme/canvas-theme";
 import { CanvasPalette } from "../../theme/mui-theme";
@@ -33,9 +29,8 @@ for (const [path, raw] of Object.entries(rawIcons)) {
 }
 
 /**
- * The color literals baked into the source SVGs, and the palette role each one
- * plays. A literal absent from this map (a grey, the probe cyan) is left alone:
- * it reads on any background.
+ * The color literals baked into the source SVGs, and the palette role each one plays.
+ * A literal absent from this map (a grey, the probe cyan) is left alone: it reads on any background.
  */
 const SOURCE_HUES: Record<string, keyof CanvasPalette> = {
   "rgb(0,29,89)": "ELEMENT_STROKE",
@@ -52,10 +47,9 @@ const SOURCE_HUES: Record<string, keyof CanvasPalette> = {
   white: "BACKGROUND",
 };
 
-// Colours appear in the sources as `rgb()`, as hex, and — in a few icons — as
-// the bare keywords `black` / `white`. Miss the keywords and those icons quietly
-// keep their classic colours, which is how the ground and motor icons stayed
-// navy on a dark canvas. Only whole words match, so an id can never be mangled.
+// Colours appear in the sources as `rgb()`, as hex, and — in a few icons — as the bare keywords `black` / `white`.
+// Miss the keywords and those icons quietly keep their classic colours, which is how the ground and motor icons stayed navy on a dark canvas.
+// Only whole words match, so an id can never be mangled.
 const COLOR_LITERAL =
   /rgb\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*\)|#[0-9a-fA-F]{6}\b|#[0-9a-fA-F]{3}\b|\b(?:black|white)\b/g;
 
@@ -88,12 +82,10 @@ const icons_for = (palette: CanvasPalette): Record<string, string> => {
 };
 
 /**
- * Data URI for a palette icon, by basename (e.g. `icon("beam")`), in the active
- * theme's colors. Call it at render/draw time — a module-level constant built
- * from it would freeze on whichever theme was active at import.
+ * Data URI for a palette icon, by basename (e.g. `icon("beam")`), in the active theme's colors.
+ * Call it at render/draw time — a module-level constant built from it would freeze on whichever theme was active at import.
  *
- * Reads `ICON_COLORS`, not `COLORS`: during a theme fade the latter holds an
- * intermediate palette, which would key a fresh set of URIs on every frame.
+ * Reads `ICON_COLORS`, not `COLORS`: during a theme fade the latter holds an intermediate palette, which would key a fresh set of URIs on every frame.
  */
 export const icon = (name: string): string => {
   const uri = icons_for(ICON_COLORS)[name];

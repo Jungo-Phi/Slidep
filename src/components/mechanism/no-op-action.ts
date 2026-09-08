@@ -1,10 +1,8 @@
 import { Action } from "../../types";
 
 /**
- * Whether `action`'s own edit nets to no change — same value in and out, or a
- * zero delta. Only the types that carry a directly comparable old/new pair or
- * delta are covered; anything without one (connections, creation, load frame,
- * motor config…) is never a no-op here, whatever it did.
+ * Whether `action`'s own edit nets to no change — same value in and out, or a zero delta.
+ * Only the types that carry a directly comparable old/new pair or delta are covered; anything without one (connections, creation, load frame, motor config…) is never a no-op here, whatever it did.
  */
 export function is_noop_action(action: Action): boolean {
   switch (action.type) {
@@ -59,8 +57,7 @@ export function is_noop_action(action: Action): boolean {
       return action.newValue === action.oldValue;
     case "SetShowOverlay":
       return action.newValue === action.oldValue;
-    // A boundary marker with no entry to close — nothing preceded it, or what did was
-    // dropped for netting to nothing.
+    // A boundary marker with no entry to close — nothing preceded it, or what did was dropped for netting to nothing.
     case "Blank":
       return true;
     case "ChangeFloorHeight":
@@ -72,13 +69,9 @@ export function is_noop_action(action: Action): boolean {
 }
 
 /**
- * Whether `entry` — a history-entry candidate — nets to no change. Only
- * entries whose entire purpose is a single master edit qualify: a bare
- * value/position action, or one paired with the `UpdatePositionsToValidState`
- * it produced. A creation folded together with a dimension edit, a
- * connection's separation solve, or anything already sealed (ending in
- * `Blank`) is left alone — dropping those would throw away more than the
- * no-op edit itself.
+ * Whether `entry` — a history-entry candidate — nets to no change.
+ * Only entries whose entire purpose is a single master edit qualify: a bare value/position action, or one paired with the `UpdatePositionsToValidState` it produced.
+ * A creation folded together with a dimension edit, a connection's separation solve, or anything already sealed (ending in `Blank`) is left alone — dropping those would throw away more than the no-op edit itself.
  */
 export function is_noop_entry(entry: Action[] | undefined): boolean {
   if (!entry) return false;

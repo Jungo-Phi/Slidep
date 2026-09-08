@@ -10,10 +10,8 @@ import {
 import { snapshot_point } from "../snapshot";
 
 /**
- * An edit made while simulating recompiles the model and resumes the recording on the last
- * snapshot of the previous one — a snapshot whose slots belong to another layout. The warm
- * start therefore has to go through the keys, and a silent failure to do so does not throw:
- * it restarts the mechanism from the rest state it was compiled at.
+ * An edit made while simulating recompiles the model and resumes the recording on the last snapshot of the previous one — a snapshot whose slots belong to another layout.
+ * The warm start therefore has to go through the keys, and a silent failure to do so does not throw: it restarts the mechanism from the rest state it was compiled at.
  */
 
 describe("reprise après recompilation", () => {

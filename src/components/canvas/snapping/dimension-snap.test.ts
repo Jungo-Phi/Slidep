@@ -15,8 +15,8 @@ import { snap_dimension_position as snap_dim } from "./dimension-snap";
 import { deg_to_rad } from "../../../utils/quantity-format";
 
 /**
- * The angle step the cases below are written against. Pinned rather than read
- * from the defaults: what they check is the snapping, not which step ships.
+ * The angle step the cases below are written against.
+ * Pinned rather than read from the defaults: what they check is the snapping, not which step ships.
  */
 const SETTINGS = { ...DEFAULT_SNAP_SETTINGS, angleStep: deg_to_rad(15) };
 
@@ -83,8 +83,7 @@ describe("snap_dimension_position — cote linéaire", () => {
     expect(snapped.x).toBeCloseTo(500);
   });
 
-  // Half a grid step: a dimension line is annotation, not mechanism, and wants to
-  // sit closer than a whole square while still lining up with its neighbours.
+  // Half a grid step: a dimension line is annotation, not mechanism, and wants to sit closer than a whole square while still lining up with its neighbours.
   it("aimante le déport sur des demi-pas de grille", () => {
     const snapped = snap_dimension_position(
       P(300, 3.5 * STEP + 3),
@@ -93,8 +92,7 @@ describe("snap_dimension_position — cote linéaire", () => {
       NONE,
       VIEW,
     );
-    // A half-integer multiple: landing here (rather than on 3 or 4 * STEP)
-    // is what shows the rung is the half-step, not the whole one.
+    // A half-integer multiple: landing here (rather than on 3 or 4 * STEP) is what shows the rung is the half-step, not the whole one.
     expect(snapped.y).toBeCloseTo(3.5 * STEP);
     // Nothing near the middle, so the label keeps where it was along the bar.
     expect(snapped.x).toBeCloseTo(300);

@@ -43,37 +43,27 @@ import { DENSITY, LENGTH, STRESS } from "../../../utils/quantity-format";
 import { t, tn } from "../../../i18n";
 
 /**
- * The properties panel's own "library" tab: create, rename, edit, duplicate and delete a
- * mechanism's own materials and profiles. Each material/profile is a group: the beams that use
- * it are listed right under its own header, and dragging a beam onto a different group's header
- * reassigns it — the target is already on screen, no need to open a menu to find it. A group's
- * numeric fields (E/Re/ρ, or a profile's cotes) and its beam list both live behind its own
- * expand toggle — any number of groups at once, not an accordion — so a collapsed entry costs a
- * single line. Reassigning every beam in a group at once works whether or not it's expanded: its
- * own handle sits right in the header, not in the (possibly hidden) list below.
+ * The properties panel's own "library" tab: create, rename, edit, duplicate and delete a mechanism's own materials and profiles.
+ * Each material/profile is a group: the beams that use it are listed right under its own header, and dragging a beam onto a different group's header reassigns it — the target is already on screen, no need to open a menu to find it.
+ * A group's numeric fields (E/Re/ρ, or a profile's cotes) and its beam list both live behind its own expand toggle — any number of groups at once, not an accordion — so a collapsed entry costs a single line.
+ * Reassigning every beam in a group at once works whether or not it's expanded: its own handle sits right in the header, not in the (possibly hidden) list below.
  *
  * Materials alone carry a catalogue: steel, aluminium… are seeded into every mechanism's own `materials` at creation/migration (`seed_material_catalog`) as ordinary entries.
- * Duplicating one is how it becomes a normal, editable entry. Profiles have no such catalogue:
- * their "kind" (rectangle, tube…) already is that structure, and picking one already seeds
- * sensible cotes (`default_shape_for_kind`) — a second, parallel list of presets would just
- * duplicate it.
+ * Duplicating one is how it becomes a normal, editable entry.
+ * Profiles have no such catalogue: their "kind" (rectangle, tube…) already is that structure, and picking one already seeds sensible cotes (`default_shape_for_kind`) — a second, parallel list of presets would just duplicate it.
  *
- * Hovering anywhere in a section is what tints the canvas by that category, the same gesture
- * the DDL redundancy audit uses for its groups. Everything here goes through `Action`s —
- * undo/redo covers this exactly like every other edit.
+ * Hovering anywhere in a section is what tints the canvas by that category, the same gesture the DDL redundancy audit uses for its groups.
+ * Everything here goes through `Action`s — undo/redo covers this exactly like every other edit.
  */
 
 const swatch = (index: number) =>
   PROBE_ELEMENT_COLORS[index % PROBE_ELEMENT_COLORS.length];
 
 /** A group's own swatch, as a light wash over its whole background rather than a dot next to
- *  its name — the 2-digit suffix is an 8-digit hex color's own alpha channel. */
+ * its name — the 2-digit suffix is an 8-digit hex color's own alpha channel. */
 const swatch_tint = (index: number) => `${swatch(index)}22`;
 
-// A beam belongs to exactly one material group and one profile group at once — separate mime
-// types per section keep a drag started in one from being droppable in the other, and a
-// second pair (a whole group's own id, rather than one beam's) lets the group handle bar
-// reassign every beam in the group in one drop, instead of one at a time.
+// A beam belongs to exactly one material group and one profile group at once — separate mime types per section keep a drag started in one from being droppable in the other, and a second pair (a whole group's own id, rather than one beam's) lets the group handle bar reassign every beam in the group in one drop, instead of one at a time.
 const MATERIAL_BEAM_MIME = "application/x-slidep-beam-id+material";
 const MATERIAL_GROUP_MIME = "application/x-slidep-material-id";
 const PROFILE_BEAM_MIME = "application/x-slidep-beam-id+profile";
@@ -97,9 +87,7 @@ export const InlineName: React.FC<InlineNameProps> = ({ name, onCommit }) => {
   const discardRef = React.useRef(false);
   const inputRef = React.useRef<HTMLInputElement>(null);
 
-  // Measured against the actual rendered input's own font (never a guessed one, which drifted
-  // from the real metrics and clipped the text's tail) — a hidden span sharing that exact font
-  // is the only reliable way to size a text input to its content.
+  // Measured against the actual rendered input's own font (never a guessed one, which drifted from the real metrics and clipped the text's tail) — a hidden span sharing that exact font is the only reliable way to size a text input to its content.
   React.useEffect(() => {
     if (!editing || !inputRef.current) return;
     const span = document.createElement("span");
@@ -145,8 +133,7 @@ export const InlineName: React.FC<InlineNameProps> = ({ name, onCommit }) => {
         ...INLINE_INPUT_SX,
         width: Math.max(24, width + 8),
         flexShrink: 0,
-        // Matches the `body2` Typography this replaces while editing — without it, the input
-        // falls back to the theme's default (larger) input font and the row visibly resizes.
+        // Matches the `body2` Typography this replaces while editing — without it, the input falls back to the theme's default (larger) input font and the row visibly resizes.
         "& .MuiInputBase-input": {
           paddingTop: "4px",
           paddingBottom: "4px",
@@ -208,8 +195,7 @@ const DraggableBeamRow: React.FC<DraggableBeamRowProps> = ({
       alignItems: "center",
       cursor: "grab",
       "&:active": { cursor: "grabbing" },
-      // The handle itself picks up a background on hover — it's the part that's grabbable,
-      // so it's the part that should say so, not the row as a whole.
+      // The handle itself picks up a background on hover — it's the part that's grabbable, so it's the part that should say so, not the row as a whole.
       "&:hover .drag-handle": { backgroundColor: "action.selected" },
     }}
   >
@@ -241,10 +227,9 @@ const DraggableBeamRow: React.FC<DraggableBeamRowProps> = ({
 );
 
 // ─── The whole group's own handle — grabs every one of its beams at once, dropped on another
-// group's header the same way a single beam is. Lives in the header row itself (not beside the
-// beam list) so it works whether the group is expanded or not, and so its own drag image can
-// just be that header — see `LibraryEntryGroup`'s `headerRef`. Only worth showing once a group
-// holds more than one beam: with just one, its own row's handle already does the same thing. ─
+// group's header the same way a single beam is.
+// Lives in the header row itself (not beside the beam list) so it works whether the group is expanded or not, and so its own drag image can just be that header — see `LibraryEntryGroup`'s `headerRef`.
+// Only worth showing once a group holds more than one beam: with just one, its own row's handle already does the same thing. ─
 
 interface GroupHandleBarProps {
   dragMimeType: string;
@@ -291,7 +276,7 @@ interface LibraryEntryGroupProps {
   expanded: boolean;
   onToggleExpand: () => void;
   /** The hovered canvas beam belongs to this entry, or this entry's own row is hovered — tints
-   *  the whole group so it's found at a glance even while collapsed. */
+   * the whole group so it's found at a glance even while collapsed. */
   isCanvasHighlighted: boolean;
   canDelete?: boolean;
   onHoverStart: () => void;
@@ -305,7 +290,7 @@ interface LibraryEntryGroupProps {
   onDrop: (e: React.DragEvent) => void;
   groupRef?: (el: HTMLDivElement | null) => void;
   /** The whole group's own drag, offered from a small handle in the header itself — undefined
-   *  when there's nothing to grab as a group (0 or 1 beam). */
+   * when there's nothing to grab as a group (0 or 1 beam). */
   groupDrag?: { id: ID; mimeType: string };
   detail?: React.ReactNode;
   children?: React.ReactNode;
@@ -338,8 +323,7 @@ const LibraryEntryGroup: React.FC<LibraryEntryGroupProps> = ({
   return (
     <Box
       ref={groupRef}
-      // The whole group — header and its beam rows — is the drop target, not just the header
-      // line: a bigger target is a faster one to hit while dragging.
+      // The whole group — header and its beam rows — is the drop target, not just the header line: a bigger target is a faster one to hit while dragging.
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
       onDrop={onDrop}
@@ -543,8 +527,7 @@ interface ShapeCotesProps {
 }
 
 /** The cote fields for `shape`'s own kind — never more than what that kind actually holds. A
- *  candidate that violates `validate_profile_shape` (a negative cote, a wall thickness past
- *  the half-cote it's cut from) is dropped rather than committed. */
+ * candidate that violates `validate_profile_shape` (a negative cote, a wall thickness past the half-cote it's cut from) is dropped rather than committed. */
 const ShapeCotes: React.FC<ShapeCotesProps> = ({
   shape,
   onChange,
@@ -717,21 +700,21 @@ interface MaterialsLibraryPanelProps {
   mechanism: Mechanism;
   applyActions: (actions: Action[]) => void;
   /** Which section is hovered — also what tints the canvas for as long as the hover lasts.
-   *  Lifted to the app, not local state: the canvas needs to know it too. */
+   * Lifted to the app, not local state: the canvas needs to know it too. */
   setHoveredSection: (section: "materials" | "profiles" | null) => void;
   /** A row hovered here, for the canvas to accentuate its beams and fade the rest — narrows
-   *  the section-wide tint to just this entry. */
+   * the section-wide tint to just this entry. */
   hoveredEntryID: ID | null;
   setHoveredEntryID: (id: ID | null) => void;
   /** The canvas's own hover, read (never written) here — the reverse direction: a beam
-   *  hovered on the canvas lights up the row it belongs to. */
+   * hovered on the canvas lights up the row it belongs to. */
   hoveredPart: HoveredPart;
   setHoveredPart: (hoveredPart: HoveredPart) => void;
   /** Threaded down to each beam row so it can select/highlight like any other `ElementDisplay`. */
   selectedIds: ID[];
   setCanvasState: (state: CanvasState) => void;
   /** Set from the elements tab's own "where can I edit this?" link — expands that entry here
-   *  once, then must be acknowledged so the next visit doesn't re-apply it. */
+   * once, then must be acknowledged so the next visit doesn't re-apply it. */
   focusRequest: LibraryFocusRequest | null;
   onFocusHandled: () => void;
 }
@@ -786,8 +769,7 @@ export const MaterialsLibraryPanel: React.FC<MaterialsLibraryPanelProps> = ({
     if (!focusRequest) return;
     const { ids } = focusRequest;
     if (ids.length === 0) return;
-    // The first entry is what gets scrolled to: with several open, one of them has to be the
-    // one the view lands on, and the picker lists them in that order.
+    // The first entry is what gets scrolled to: with several open, one of them has to be the one the view lands on, and the picker lists them in that order.
     if (focusRequest.section === "materials") {
       setExpandedMaterialIDs((cur) => new Set([...cur, ...ids]));
       materialGroupRefs.current
@@ -823,9 +805,7 @@ export const MaterialsLibraryPanel: React.FC<MaterialsLibraryPanelProps> = ({
   };
 
   const deleteMaterial = (materialID: ID) => {
-    // In use: reassign every beam holding it to another entry first, one bundled undo step —
-    // this is the "delete" gesture; a blocked dialog isn't. Only truly impossible (this is the
-    // library's last material) leaves the delete button disabled instead.
+    // In use: reassign every beam holding it to another entry first, one bundled undo step — this is the "delete" gesture; a blocked dialog isn't. Only truly impossible (this is the library's last material) leaves the delete button disabled instead.
     const fallback = mechanism.materials.find((m) => m.id !== materialID);
     if (!fallback) return;
     const material = mechanism.materials.find((m) => m.id === materialID);
@@ -867,8 +847,7 @@ export const MaterialsLibraryPanel: React.FC<MaterialsLibraryPanelProps> = ({
     setDragOverMaterialID(targetID);
   };
   const handleMaterialDragLeave = (e: React.DragEvent, targetID: ID) => {
-    // dragleave also fires when the pointer moves onto a child (a nested beam row) still
-    // inside the same group — only clear once it has actually left the group's box.
+    // dragleave also fires when the pointer moves onto a child (a nested beam row) still inside the same group — only clear once it has actually left the group's box.
     if (e.currentTarget.contains(e.relatedTarget as Node)) return;
     setDragOverMaterialID((cur) => (cur === targetID ? null : cur));
   };

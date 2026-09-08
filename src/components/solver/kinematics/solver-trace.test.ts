@@ -42,8 +42,7 @@ describe("solver trace", () => {
   });
 
   it("rapporte une application par lien et par itération", () => {
-    // Un seul lien, satisfait dès le premier balayage : le solveur en exécute
-    // un second, n'y trouve plus rien à corriger, et sort.
+    // Un seul lien, satisfait dès le premier balayage : le solveur en exécute un second, n'y trouve plus rien à corriger, et sort.
     const events = collect_solver_trace(() => solve(3));
     expect(events).toHaveLength(2);
     expect(events.map((e) => e.iteration)).toEqual([0, 1]);

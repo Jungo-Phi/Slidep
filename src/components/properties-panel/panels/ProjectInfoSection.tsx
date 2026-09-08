@@ -30,9 +30,7 @@ import TagChipsEditor from "../../mechanisms-gallery/TagChipsEditor";
 import { t, tn } from "../../../i18n";
 
 /**
- * Categorical badge colors: they exist to tell the codes apart at a glance, not
- * to carry a semantic role, so they are their own palette rather than theme
- * tokens (the badges sit inside an Alert that already conveys error/warning).
+ * Categorical badge colors: they exist to tell the codes apart at a glance, not to carry a semantic role, so they are their own palette rather than theme tokens (the badges sit inside an Alert that already conveys error/warning).
  */
 const ERROR_CODE_COLORS: Record<ValidationErrorCode, string> = {
   DUPLICATE_ID: "#B71C1C",
@@ -113,7 +111,8 @@ export const ProjectInfoSection: React.FC<ProjectInfoSectionProps> = ({
     [mechanism.mechanicalElements, mechanism.constraintElements],
   );
 
-  // Names the element an error points at. Every list is in it: an error can sit on a mechanical element, a constraint or a load.
+  // Names the element an error points at.
+  // Every list is in it: an error can sit on a mechanical element, a constraint or a load.
   const elementByID = useMemo(
     () =>
       new Map<ID, UnionElement>(
@@ -165,8 +164,8 @@ export const ProjectInfoSection: React.FC<ProjectInfoSectionProps> = ({
   // Set by Escape so the blur it triggers discards instead of committing.
   const discardRef = useRef(false);
 
-  // Leaving a field validates it. Metadata does not go through the history, so Escape is
-  // the only way back from an edit and has to restore rather than merely leave.
+  // Leaving a field validates it.
+  // Metadata does not go through the history, so Escape is the only way back from an edit and has to restore rather than merely leave.
   const commitInfo = () => {
     if (discardRef.current) {
       discardRef.current = false;

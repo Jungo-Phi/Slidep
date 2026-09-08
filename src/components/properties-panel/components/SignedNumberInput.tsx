@@ -22,9 +22,7 @@ interface SignedNumberInputProps {
 
 /**
  * Magnitude field + direction switch for a signed quantity (motor speed, moment).
- * The field always displays the magnitude; the sense of rotation is carried by
- * the switch icon alone, and a negative value typed into the field is folded
- * back into the switch.
+ * The field always displays the magnitude; the sense of rotation is carried by the switch icon alone, and a negative value typed into the field is folded back into the switch.
  */
 export const SignedNumberInput: React.FC<SignedNumberInputProps> = ({
   label,
@@ -40,9 +38,8 @@ export const SignedNumberInput: React.FC<SignedNumberInputProps> = ({
   const clockwise = value >= 0;
   const DirectionIcon = clockwise ? RotateRightIcon : RotateLeftIcon;
 
-  // The field shows the magnitude, but still accepts a typed sign: entering a
-  // negative flips the switch rather than showing a negative number. The arrows
-  // step the magnitude, so stepping below zero flips the switch too.
+  // The field shows the magnitude, but still accepts a typed sign: entering a negative flips the switch rather than showing a negative number.
+  // The arrows step the magnitude, so stepping below zero flips the switch too.
   const handleChange = (entered: number) => {
     const flip = entered < 0;
     const magnitude = Math.abs(entered);

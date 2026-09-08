@@ -1,11 +1,8 @@
 /**
  * The parts a constraint names directly.
  *
- * `elements_of_key` answers about a node, and a fused node belongs to everything meeting
- * there — asked about a beam's length it hands back the beam's neighbours as well. Reading a
- * link's keys as the SHAPES it holds narrows that to the truth: a pair of keys spanning a
- * part names the part they span and nothing else, while a key held on its own names whatever
- * sits on that node, because there it really is the node that is being held.
+ * `elements_of_key` answers about a node, and a fused node belongs to everything meeting there — asked about a beam's length it hands back the beam's neighbours as well.
+ * Reading a link's keys as the SHAPES it holds narrows that to the truth: a pair of keys spanning a part names the part they span and nothing else, while a key held on its own names whatever sits on that node, because there it really is the node that is being held.
  */
 
 import { ID, Link } from "../../../types";
@@ -22,9 +19,7 @@ type Held = {
 /**
  * Every element `link` acts on, canonical order, `owner` included.
  *
- * The owner stays in because a constraint is between parts and the owner is only the one the
- * parser filed it under: a joint's angle lock belongs as much to the two beams it holds as to
- * the node holding them.
+ * The owner stays in because a constraint is between parts and the owner is only the one the parser filed it under: a joint's angle lock belongs as much to the two beams it holds as to the node holding them.
  */
 export function constraint_elements(link: Link): ID[] {
   const named = new Set<ID>();
@@ -42,8 +37,7 @@ export function constraint_elements(link: Link): ID[] {
 /**
  * The parts both keys belong to, or everything they name when they share none.
  *
- * Sharing none is a real case rather than something to guard against: a dimension between
- * two points of unrelated parts spans nothing, and there its two ends *are* what it holds.
+ * Sharing none is a real case rather than something to guard against: a dimension between two points of unrelated parts spans nothing, and there its two ends *are* what it holds.
  */
 function spanning(a: string, b: string): ID[] {
   const first = elements_of_key(a);
@@ -68,8 +62,7 @@ function held_shapes(link: Link): Held {
     case "KeepOrientation":
       return segment(link.key1, link.key2);
 
-    // Two nodes brought together, or two gear centres: no span between them to read a
-    // part from, and each one names its own.
+    // Two nodes brought together, or two gear centres: no span between them to read a part from, and each one names its own.
     case "Coincidence":
     case "GearMeshing":
     case "GearRatio":
@@ -101,8 +94,7 @@ function held_shapes(link: Link): Held {
     case "Radius":
       return points(link.key1);
 
-    // Anchored to a beam rather than the ground, a motor holds that beam's arm too —
-    // same shape as "Angle", the closest kin: an angle held between two arms of a hub.
+    // Anchored to a beam rather than the ground, a motor holds that beam's arm too — same shape as "Angle", the closest kin: an angle held between two arms of a hub.
     case "MotorBeam":
       return link.anchorKey === undefined
         ? segment(link.pivotKey, link.drivenKey)
@@ -134,8 +126,7 @@ function held_shapes(link: Link): Held {
         points: [link.angleKey],
       };
 
-    // A belt names its pulleys, each on its own node — it is drawn between them rather
-    // than spanning any one of them.
+    // A belt names its pulleys, each on its own node — it is drawn between them rather than spanning any one of them.
     case "BeltLength":
       return points(link.startKey, link.endKey, ...link.gearPosKeys);
     case "BeltJunction":

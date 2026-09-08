@@ -10,8 +10,8 @@ import type {
 import type { HoveredPart } from "../../../types/hovered-part";
 
 /**
- * A relation is imposed once. Placing a constraint over one that already says
- * the same thing replaces it rather than stacking a second on top.
+ * A relation is imposed once.
+ * Placing a constraint over one that already says the same thing replaces it rather than stacking a second on top.
  */
 
 const EDGE = "00000000-0000-0000-0000-000000000001" as ID;

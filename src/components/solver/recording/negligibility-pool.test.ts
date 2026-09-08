@@ -84,9 +84,7 @@ const torque = (key: string, value: number): LinkReaction => ({
 
 describe("is_negligible", () => {
   it("compare à une fraction (NEGLIGIBLE_RATIO) de l'échelle du pool", () => {
-    // Le comportement testé est la comparaison elle-même, pas la valeur du ratio produit —
-    // dérivée de la constante réelle plutôt que recopiée, pour ne pas casser au moindre
-    // réglage de `NEGLIGIBLE_RATIO`.
+    // Le comportement testé est la comparaison elle-même, pas la valeur du ratio produit — dérivée de la constante réelle plutôt que recopiée, pour ne pas casser au moindre réglage de `NEGLIGIBLE_RATIO`.
     const threshold = NEGLIGIBLE_RATIO * 100;
     expect(is_negligible(threshold * 0.5, 100)).toBe(true);
     expect(is_negligible(threshold * 2, 100)).toBe(false);
@@ -167,8 +165,7 @@ describe("extend_negligibility_pool", () => {
     );
     const otherElements = [node("n", 0, 0), node("m", 3, 4)]; // diagonale = 5
     const rebuilt = extend_negligibility_pool(afterFirst, otherElements, constraints, []);
-    // Repart du plancher de la nouvelle géométrie, pas du 9 précédent — et pas de zéro
-    // non plus, voir "un plancher absolu..." ci-dessous.
+    // Repart du plancher de la nouvelle géométrie, pas du 9 précédent — et pas de zéro non plus, voir "un plancher absolu..." ci-dessous.
     expect(rebuilt.linearVelocity).toBe(pool_floors(5).linearVelocity);
     expect(rebuilt.length).toBe(5);
     expect(rebuilt.ownFloors.length).toBe(own_floors(5).length);
@@ -192,9 +189,7 @@ describe("extend_negligibility_pool", () => {
   });
 
   it("un plancher absolu tient même si rien de plus grand n'a jamais été enregistré", () => {
-    // Un mécanisme qui ne produit jamais qu'un bruit résiduel (ici sous le plancher de
-    // vitesse) garde le plancher comme échelle — il ne se fixe pas sa propre échelle à
-    // partir de ce bruit, sans quoi ce bruit ne serait jamais négligeable face à lui-même.
+    // Un mécanisme qui ne produit jamais qu'un bruit résiduel (ici sous le plancher de vitesse) garde le plancher comme échelle — il ne se fixe pas sa propre échelle à partir de ce bruit, sans quoi ce bruit ne serait jamais négligeable face à lui-même.
     const floor = pool_floors(0).linearVelocity; // diagonale nulle : mécanisme réduit à "n"
     const noisy = [
       snap(layout, 0, { n: [0, 0] }, { n: [floor * 0.3, 0] }),
@@ -209,8 +204,7 @@ describe("pool_floors", () => {
   it("dérive de la géométrie ce qui a une dimension de longueur, d'une constante sinon", () => {
     const floors = pool_floors(5); // diagonale du mécanisme
     expect(floors.length).toBe(5);
-    // Sans dimension de longueur exploitable : des constantes fixes, indépendantes de la
-    // géométrie.
+    // Sans dimension de longueur exploitable : des constantes fixes, indépendantes de la géométrie.
     expect(floors.angle).toBe(MIN_ANGLE_POOL);
     expect(floors.force).toBe(LOAD_SCALING.MIN_VALUE);
     // Un moment est une force fois un bras de levier — celui du mécanisme lui-même.
@@ -225,8 +219,7 @@ describe("pool_floors", () => {
   });
 
   it("une diagonale mesurable, même sous le plancher, n'est pas remontée dessus", () => {
-    // Un petit mécanisme (ici 1 mm) doit rester mesurable pour `poolMax` — le plancher n'est
-    // là que pour l'absence totale de géométrie, pas pour hausser les petites.
+    // Un petit mécanisme (ici 1 mm) doit rester mesurable pour `poolMax` — le plancher n'est là que pour l'absence totale de géométrie, pas pour hausser les petites.
     expect(pool_floors(0.001).length).toBe(0.001);
   });
 });
@@ -286,8 +279,7 @@ describe("quantity_kind_for_metric", () => {
     expect(quantity_kind_for_metric("position")).toBe(LENGTH);
     expect(quantity_kind_for_metric("velocity")).toBe(LINEAR_VELOCITY);
     expect(quantity_kind_for_metric("angle")).toBe(ANGLE);
-    // `ANGULAR_VELOCITY` est une fonction (son symbole se relit à chaque appel) — une
-    // nouvelle instance à chaque appel, donc une égalité de structure, pas de référence.
+    // `ANGULAR_VELOCITY` est une fonction (son symbole se relit à chaque appel) — une nouvelle instance à chaque appel, donc une égalité de structure, pas de référence.
     expect(quantity_kind_for_metric("angular-velocity")).toEqual(ANGULAR_VELOCITY());
     expect(quantity_kind_for_metric("force")).toBe(FORCE);
     expect(quantity_kind_for_metric("force-start")).toBe(FORCE);

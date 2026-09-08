@@ -68,8 +68,7 @@ interface ElementPickerProps<T extends UnionElement> {
 }
 
 /**
- * A control showing the current choice (an element via ElementDisplay, or
- * `extraOption`) that opens a menu to pick among `options` and `extraOption`.
+ * A control showing the current choice (an element via ElementDisplay, or `extraOption`) that opens a menu to pick among `options` and `extraOption`.
  * Hidden when there is nothing to choose from.
  */
 export function ElementPicker<T extends UnionElement>({

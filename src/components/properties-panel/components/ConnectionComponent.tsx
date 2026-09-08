@@ -83,9 +83,7 @@ const Connection: React.FC<ConnectionProps> = ({
     }
   };
 
-  // A slider or slidep hands the rail role from one bar it holds to another: the
-  // row of a bar crossing its body offers to take the role, the rail's own row to
-  // drop it.
+  // A slider or slidep hands the rail role from one bar it holds to another: the row of a bar crossing its body offers to take the role, the rail's own row to drop it.
   const railHost = "parentBeamID" in element ? element : undefined;
   const dropsRail = !!railHost && containerType === "ConnectsParentBeam";
   const takesRail =
@@ -102,9 +100,8 @@ const Connection: React.FC<ConnectionProps> = ({
     );
   };
 
-  // The belt–junction link of a closed belt, seen from either side. Its removal
-  // opens the belt rather than detaching it: one terminal is freed and the loop
-  // cleared, but the junction keeps the other terminal.
+  // The belt–junction link of a closed belt, seen from either side.
+  // Its removal opens the belt rather than detaching it: one terminal is freed and the loop cleared, but the junction keeps the other terminal.
   const belt =
     element.type === "belt"
       ? element

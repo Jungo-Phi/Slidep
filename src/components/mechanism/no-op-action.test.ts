@@ -80,9 +80,7 @@ describe("is_noop_entry", () => {
     expect(is_noop_entry(entry)).toBe(true);
   });
 
-  // A dimension typed right after placing the element folds into the creation's
-  // entry (see apply_actions): dropping that entry for a no-op value would
-  // discard the element creation along with it, so it must be left alone.
+  // A dimension typed right after placing the element folds into the creation's entry (see apply_actions): dropping that entry for a no-op value would discard the element creation along with it, so it must be left alone.
   it("leaves a creation folded with a dimension edit alone, even if the value is a no-op", () => {
     const entry: Action[] = [
       { type: "CreateElement", element: { type: "join" } as never },

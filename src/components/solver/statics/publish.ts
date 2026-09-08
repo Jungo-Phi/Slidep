@@ -4,19 +4,16 @@ import { StaticsFrame } from "./equilibrium-model";
 import { StaticsSolution, StaticsTorsor } from "./equilibrium-solve";
 
 /**
- * Turn the solved interface torsors into the `BeamCohesion` the rest of the app reads — see
- * docs/plan-efforts-interieurs.md phase 10.
+ * Turn the solved interface torsors into the `BeamCohesion` the rest of the app reads — see docs/plan-efforts-interieurs.md phase 10.
  *
  * Two sign conventions meet here, and they are not the same one:
  *
- * - **Force** is carried straight through. `StaticsTorsor` and `BeamCohesion.start`/`.end` both
- *   mean "what the beam applies onto whatever sits at that node".
- * - **Moment** is flipped. `BeamCohesion`'s `m` inherits the raw `LinkReaction` sense, in which
- *   the couple is the one applied ONTO the beam — `cohesion-field.ts`'s `r_coh_start` flips it
- *   back to get `Mf`. Verified against a plain cantilever: only this way does `Mf(0)` come out
- *   at `−P·L` rather than growing toward the free tip.
- * - **An attached node's** entry holds what the beam RECEIVES there, again the opposite of what
- *   it applies, and its abscissa as a fraction of the span rather than in metres.
+ * - **Force** is carried straight through.
+ * `StaticsTorsor` and `BeamCohesion.start`/`.end` both mean "what the beam applies onto whatever sits at that node".
+ * - **Moment** is flipped.
+ * `BeamCohesion`'s `m` inherits the raw `LinkReaction` sense, in which the couple is the one applied ONTO the beam — `cohesion-field.ts`'s `r_coh_start` flips it back to get `Mf`.
+ * Verified against a plain cantilever: only this way does `Mf(0)` come out at `−P·L` rather than growing toward the free tip.
+ * - **An attached node's** entry holds what the beam RECEIVES there, again the opposite of what it applies, and its abscissa as a fraction of the span rather than in metres.
  */
 function flip_moment(torsor: StaticsTorsor): { fx: number; fy: number; m: number } {
   return { fx: torsor.fx, fy: torsor.fy, m: -torsor.m };
@@ -58,10 +55,8 @@ export function beam_cohesion_from_statics(
       ];
     });
 
-    // A beam is only as good as its worst component: one undetermined share makes the whole
-    // field along it indicative, since the march carries that share the entire span. `foreign`
-    // counts the same way — a belt or a gear mesh pulling at one of its nodes is not something
-    // this model resolved, it is something it declined to describe.
+    // A beam is only as good as its worst component: one undetermined share makes the whole field along it indicative, since the march carries that share the entire span.
+    // `foreign` counts the same way — a belt or a gear mesh pulling at one of its nodes is not something this model resolved, it is something it declined to describe.
     const settled = (torsor: StaticsTorsor | undefined) =>
       torsor !== undefined &&
       !torsor.foreign &&

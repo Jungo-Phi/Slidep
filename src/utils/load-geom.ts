@@ -1,14 +1,10 @@
 /**
  * Where a load sits on screen.
  *
- * Loads are drawn at a fixed screen size: a magnitude becomes a length in px
- * (see `load-scale.ts`), and only the *direction* comes from the world. So every
- * position here is a `ScreenPoint`, and the world→screen y flip is applied once,
- * in the three `*_screen_geometry` builders below.
+ * Loads are drawn at a fixed screen size: a magnitude becomes a length in px (see `load-scale.ts`), and only the *direction* comes from the world.
+ * So every position here is a `ScreenPoint`, and the world→screen y flip is applied once, in the three `*_screen_geometry` builders below.
  *
- * Those builders are the single source of truth: drawing, hit-testing and the
- * on-canvas value editor all read them, so a load is picked exactly where it is
- * drawn and its value is typed exactly where it is written.
+ * Those builders are the single source of truth: drawing, hit-testing and the on-canvas value editor all read them, so a load is picked exactly where it is drawn and its value is typed exactly where it is written.
  */
 
 import type {
@@ -45,8 +41,7 @@ import {
 // ─── Supports ───────────────────────────────────────────────────────────────
 
 /**
- * World centre a moment's arc is drawn around: the middle of an edge, or a
- * gear's centre.
+ * World centre a moment's arc is drawn around: the middle of an edge, or a gear's centre.
  */
 export function moment_center_position(
   load: MomentElement,
@@ -78,10 +73,7 @@ function force_base_position(
 // ─── Value labels ───────────────────────────────────────────────────────────
 
 /**
- * Position of the value label of an arrow drawn from `base` along
- * `displayVector`: past the tip, pushed away by a superellipse radius so the
- * text clears the arrowhead by a margin that follows the label's own aspect
- * (wider horizontally than vertically) instead of a constant gap.
+ * Position of the value label of an arrow drawn from `base` along `displayVector`: past the tip, pushed away by a superellipse radius so the text clears the arrowhead by a margin that follows the label's own aspect (wider horizontally than vertically) instead of a constant gap.
  */
 export function force_label_position_screen(
   base: ScreenPoint,
@@ -169,8 +161,7 @@ export function distributed_screen_geometry(
     vectorEnd,
     tipStart: start.add(vectorStart),
     tipEnd: end.add(vectorEnd),
-    // Each endpoint arrow is drawn from its own beam end, so its label sits
-    // exactly where `draw_force` puts it for that arrow.
+    // Each endpoint arrow is drawn from its own beam end, so its label sits exactly where `draw_force` puts it for that arrow.
     labelStart: force_label_position_screen(start, vectorStart),
     labelEnd: force_label_position_screen(end, vectorEnd),
   };
@@ -193,8 +184,7 @@ export function moment_screen_geometry(
 }
 
 /**
- * Screen position of a load's editable value label — the anchor the on-canvas
- * value editor centers on, and the centre of its hit target in `get-hover.ts`.
+ * Screen position of a load's editable value label — the anchor the on-canvas value editor centers on, and the centre of its hit target in `get-hover.ts`.
  * For a distributed force, `part` selects the start or end magnitude label.
  */
 export function load_value_anchor(
@@ -222,10 +212,8 @@ export function load_value_anchor(
 // ─── Drags ──────────────────────────────────────────────────────────────────
 
 /**
- * A world drag vector (base→cursor) → the magnitude vector a force stores:
- * same world direction, length the value the drag reads on the display ruler.
- * The viewport is only there to measure that drag in screen px, the unit the
- * ruler is graduated in.
+ * A world drag vector (base→cursor) → the magnitude vector a force stores: same world direction, length the value the drag reads on the display ruler.
+ * The viewport is only there to measure that drag in screen px, the unit the ruler is graduated in.
  */
 export function drag2stored_force_vector(
   worldDrag: WorldPoint,

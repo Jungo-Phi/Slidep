@@ -10,11 +10,9 @@ import { measure_belt_length } from "../../utils/belt-geom";
 import { DIM } from "../../constants/rendering-specs";
 
 /**
- * How far a dimension nobody placed stands off what it measures — a screen distance, so it
- * lands where it can be read whatever the zoom, and never a hundred times the mechanism away.
+ * How far a dimension nobody placed stands off what it measures — a screen distance, so it lands where it can be read whatever the zoom, and never a hundred times the mechanism away.
  *
- * Read by the ruler as well: a reading and a cote of the same thing sit in the same place, so
- * one does not read as an odd version of the other.
+ * Read by the ruler as well: a reading and a cote of the same thing sit in the same place, so one does not read as an odd version of the other.
  */
 export const auto_dimension_offset = (viewport: ViewportState) =>
   screen2world_length(DIM.AUTO_DIMENSION_OFFSET, viewport);

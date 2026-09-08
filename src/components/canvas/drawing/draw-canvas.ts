@@ -6,11 +6,9 @@ export type { CanvasDrawing, CanvasHighlight } from "./draw-mechanism";
 export { NO_HIGHLIGHT } from "./draw-mechanism";
 
 /**
- * Dessine tout le canvas mécanique : le mécanisme lui-même, les lectures de la
- * règle, puis, si le curseur est dessus, le fantôme du geste d'outil en cours.
+ * Dessine tout le canvas mécanique : le mécanisme lui-même, les lectures de la règle, puis, si le curseur est dessus, le fantôme du geste d'outil en cours.
  *
- * La règle est dessinée hors de ce dernier : une mesure se lit, et la lire veut
- * dire quitter le canvas des yeux.
+ * La règle est dessinée hors de ce dernier : une mesure se lit, et la lire veut dire quitter le canvas des yeux.
  */
 export function draw_mechanical_canvas(
   ctx: CanvasRenderingContext2D,

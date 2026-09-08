@@ -4,15 +4,13 @@ import { UnionElement } from "../types";
 
 const STANDARD_STROKE = 2;
 /** Added to an element's own width when it is hovered. A gain rather than a
- *  fixed width, so that emphasis stays proportionate on a stroke that does not
- *  rest at `STANDARD` — a gear outline jumping straight to a belt's weight reads
- *  as a belt, not as a hovered gear. */
+ * fixed width, so that emphasis stays proportionate on a stroke that does not rest at `STANDARD` — a gear outline jumping straight to a belt's weight reads as a belt, not as a hovered gear. */
 const HOVER_GAIN = 1.5;
 
 export const STROKE_WIDTHS = {
   STANDARD: STANDARD_STROKE,
   /** Gears rest on a light outline: they are large, and a full-weight circle
-   *  would compete with the belt riding on that same perimeter. */
+   * would compete with the belt riding on that same perimeter. */
   GEAR: (STANDARD_STROKE * 3) / 4,
   GROUND_BAR: 3.5,
   SPIRE: 4,
@@ -43,12 +41,12 @@ export const GRID_ALPHA = {
 export const GUIDE_DASH = [12, 8] as const;
 
 /** The floor: an infinite line, drawn clipped to the canvas — every size here is a screen-px
- *  drawing decision, constant across zoom, like `REDUNDANCY_SYMBOL`'s. */
+ * drawing decision, constant across zoom, like `REDUNDANCY_SYMBOL`'s. */
 export const FLOOR = {
   /** How far along the line the angle-rotation handle sits from the height anchor. */
   ANGLE_HANDLE_PX: 150,
   /** Radius of the angle-constraint arc drawn when the floor isn't flat — inside the
-   *  handle, so the two never overlap. */
+   * handle, so the two never overlap. */
   ANGLE_ARC_PX: 150,
   /** Half-length of the tick mark drawn across the line at the height anchor. */
   ANCHOR_TICK_PX: 12,
@@ -61,10 +59,7 @@ export const FLOOR = {
 /**
  * Showing how a redundant constraint yields, drawn rather than measured (analysis panel).
  *
- * Every size here is a drawing decision in screen pixels, constant across zoom: the point this
- * replaces the strain animation for is that a symbol has no measured response to calibrate,
- * only a glyph to place and swing gently — its geometry (position, direction) still comes from
- * the mechanism, but its size never does.
+ * Every size here is a drawing decision in screen pixels, constant across zoom: the point this replaces the strain animation for is that a symbol has no measured response to calibrate, only a glyph to place and swing gently — its geometry (position, direction) still comes from the mechanism, but its size never does.
  */
 export const REDUNDANCY_SYMBOL = {
   /** How far a "gap" symbol's two ticks pull apart from their rest position, in px. */
@@ -96,10 +91,9 @@ export const DIM = {
   /** Shortest edge a gesture may draw, and smallest gear it may size — in **screen** px, so that what one can see and grab does not depend on the zoom. Neither is a world minimum: the solver has none. */
   MIN_EDGE_LENGTH: 30,
 
-  // How far a disconnection pushes apart the elements it leaves superposed, so
-  // that what is still connected reads at a glance. Purely a legibility gap: it
-  // holds for one solve, not as a standing minimum distance. A world distance
-  // (20 mm), not a screen one, despite living among this object's px constants.
+  // How far a disconnection pushes apart the elements it leaves superposed, so that what is still connected reads at a glance.
+  // Purely a legibility gap: it holds for one solve, not as a standing minimum distance.
+  // A world distance (20 mm), not a screen one, despite living among this object's px constants.
   DISCONNECT_SEPARATION: 0.02,
 
   // Beam
@@ -178,8 +172,7 @@ export const DIM = {
   // Probe
   PROBE_OFFSET: 20,
 
-  // Geometric constraint badges (align/normal/parallel/equal), anchored to
-  // their host(s) — below it, so they stay clear of the probe badge above.
+  // Geometric constraint badges (align/normal/parallel/equal), anchored to their host(s) — below it, so they stay clear of the probe badge above.
   GEOMETRIC_BADGE_OFFSET: 20,
   GEOMETRIC_BADGE_GAP: 4,
   PROBE_RADIUS: 6,
@@ -193,14 +186,10 @@ export const DIM = {
 const SCHEMA_DIM_OFFSET = 20;
 
 /**
- * The cross-section schema on a beam's properties (materials panel): a technical drawing rather
- * than a canvas element, so every size here is a screen-px decision, constant whatever section
- * it ends up drawing. The view is cropped to what the drawing actually covers and rendered one
- * unit to the pixel, so these numbers read literally — `SECTION_SIZE` is the one that says how
- * big the schema comes out.
+ * The cross-section schema on a beam's properties (materials panel): a technical drawing rather than a canvas element, so every size here is a screen-px decision, constant whatever section it ends up drawing.
+ * The view is cropped to what the drawing actually covers and rendered one unit to the pixel, so these numbers read literally — `SECTION_SIZE` is the one that says how big the schema comes out.
  *
- * `MAX_ASPECT` and `MIN_THICKNESS` are what let a section stay readable when its own proportions
- * would make it unreadable — the cotes keep carrying the true values whatever those two do.
+ * `MAX_ASPECT` and `MIN_THICKNESS` are what let a section stay readable when its own proportions would make it unreadable — the cotes keep carrying the true values whatever those two do.
  */
 export const SECTION_SCHEMA = {
   /** Drawn size of the section's largest extent. Everything else is annotation around it, so this is what sets how big the schema reads. */
@@ -219,20 +208,20 @@ export const SECTION_SCHEMA = {
   /** The neutral axis pokes out of the section, but stops short of the dimension lines. */
   AXIS_OVERSHOOT: SCHEMA_DIM_OFFSET / 4,
   /** Angle above the horizontal a round wall's cote is read along: off the horizontal so the
-   *  cote does not sit on the neutral axis, off the vertical so it costs the schema no height. */
+   * cote does not sit on the neutral axis, off the vertical so it costs the schema no height. */
   ROUND_WALL_ANGLE: 20,
 
   /** Beyond this width-to-height ratio the section is drawn stubbier than it is: a 200×5 flat
-   *  would otherwise come out as a hairline with nowhere to hang a cote. */
+   * would otherwise come out as a hairline with nowhere to hang a cote. */
   MAX_ASPECT: 5,
   /** Walls are thickened until the thinnest of them reaches this fraction of the section's
-   *  short side — below it the two edges merge and the cote has nothing left to point at. */
+   * short side — below it the two edges merge and the cote has nothing left to point at. */
   MIN_THICKNESS: 1 / 20,
   /** …and never below this many px, whatever the fraction works out to: on a section the aspect
-   *  clamp already flattened, a fraction of the short side is itself sub-pixel. */
+   * clamp already flattened, a fraction of the short side is itself sub-pixel. */
   MIN_THICKNESS_PX: 2,
   /** Ceiling that thickening may not push a wall past, so a section whose thinnest wall is
-   *  minute cannot have its thickest one swallow the section. */
+   * minute cannot have its thickest one swallow the section. */
   MAX_THICKNESS: 1 / 4,
 
   OUTLINE_WIDTH: 1.5,
@@ -254,8 +243,7 @@ export const ICON_TINT = {
 } as const;
 
 /**
- * The world axes' graduations: small ticks and numbers riding `draw_axes`'s
- * lines, at the same spacing a point snaps to.
+ * The world axes' graduations: small ticks and numbers riding `draw_axes`'s lines, at the same spacing a point snaps to.
  */
 export const GRADUATION = {
   /** How far a tick's stroke extends either side of the axis line, in px. */
@@ -268,9 +256,7 @@ export const GRADUATION = {
   /** Width of the background-coloured halo stroked under each label, so the digits stay legible over a grid line crossing behind them. */
   HALO_WIDTH: 3,
   /**
-   * The units a graduation can be shown in, coarsest first: km, m, mm, µm —
-   * every third power of ten, so switching units is switching by exactly the
-   * digits a thousand adds.
+   * The units a graduation can be shown in, coarsest first: km, m, mm, µm — every third power of ten, so switching units is switching by exactly the digits a thousand adds.
    */
   UNITS: [
     { scale: -3, suffix: "km" },

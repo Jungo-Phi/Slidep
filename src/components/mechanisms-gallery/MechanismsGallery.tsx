@@ -43,8 +43,7 @@ interface MechanismsGalleryProps {
   onExportAll: () => void;
 }
 
-// Hauteur de la carte "Nouveau mécanisme" quand la bibliothèque est vide,
-// faute de carte existante dont copier la hauteur.
+// Hauteur de la carte "Nouveau mécanisme" quand la bibliothèque est vide, faute de carte existante dont copier la hauteur.
 const NEW_CARD_FALLBACK_HEIGHT = 300;
 
 export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
@@ -65,8 +64,7 @@ export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
   const searchInputRef = useRef<HTMLInputElement>(null);
   const searching = search.trim().length > 0;
 
-  // Set right after a duplication so the new card opens straight into name editing;
-  // cleared as soon as that card consumes it, so it never re-triggers on a later render.
+  // Set right after a duplication so the new card opens straight into name editing; cleared as soon as that card consumes it, so it never re-triggers on a later render.
   const [justDuplicatedId, setJustDuplicatedId] = useState<number | null>(null);
   const handleDuplicate = async (createdAtId: number) => {
     const duplicated = await onDuplicate(createdAtId);
@@ -74,8 +72,8 @@ export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
     return duplicated;
   };
 
-  // Valeurs déjà utilisées quelque part dans la bibliothèque. Les trois modes de simulation
-  // sont toujours suggérés en plus, comme point de départ le plus courant pour trier.
+  // Valeurs déjà utilisées quelque part dans la bibliothèque.
+  // Les trois modes de simulation sont toujours suggérés en plus, comme point de départ le plus courant pour trier.
   const usedTags = useMemo(() => {
     const set = new Set<string>();
     for (const record of mechanismRecords)
@@ -103,9 +101,7 @@ export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
       );
     });
 
-  // Nombre de colonnes réellement affiché au palier courant, pour pouvoir répartir
-  // les cartes nous-mêmes (voir plus bas) plutôt que de laisser `columns` CSS le
-  // faire colonne par colonne, ce qui casserait l'ordre de lecture.
+  // Nombre de colonnes réellement affiché au palier courant, pour pouvoir répartir les cartes nous-mêmes (voir plus bas) plutôt que de laisser `columns` CSS le faire colonne par colonne, ce qui casserait l'ordre de lecture.
   const theme = useTheme();
   const isSm = useMediaQuery(theme.breakpoints.up("sm"));
   const isMd = useMediaQuery(theme.breakpoints.up("md"));
@@ -122,10 +118,7 @@ export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
         ? 2
         : 1;
 
-  // Répartition en "round-robin" (carte i -> colonne i % columnCount) : ça lit comme
-  // du texte (ligne par ligne, gauche à droite) tout en gardant l'empilement compact
-  // par colonne d'une hauteur de carte variable, contrairement à `columns` CSS qui
-  // remplit une colonne entière avant de passer à la suivante.
+  // Répartition en "round-robin" (carte i -> colonne i % columnCount) : ça lit comme du texte (ligne par ligne, gauche à droite) tout en gardant l'empilement compact par colonne d'une hauteur de carte variable, contrairement à `columns` CSS qui remplit une colonne entière avant de passer à la suivante.
   const cardColumns = useMemo(() => {
     const columns: SerializedMechanism[][] = Array.from(
       { length: columnCount },
@@ -139,9 +132,7 @@ export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
     return columns;
   }, [sortedMechanismRecords, columnCount, searching]);
 
-  // Hauteur de la carte "Nouveau mécanisme" : celle de la plus petite carte de la
-  // première ligne (le premier élément de chaque colonne, mesuré en vrai puisque la
-  // hauteur d'une carte dépend de son contenu — description, nombre de tags).
+  // Hauteur de la carte "Nouveau mécanisme" : celle de la plus petite carte de la première ligne (le premier élément de chaque colonne, mesuré en vrai puisque la hauteur d'une carte dépend de son contenu — description, nombre de tags).
   const [firstRowHeights, setFirstRowHeights] = useState<
     Record<number, number>
   >({});
@@ -211,7 +202,7 @@ export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
         }}
       >
         <Typography fontSize={"large"} fontWeight={500} sx={{ flexShrink: 0 }}>
-          {t("my_mechanisms")}
+          {t("library")}
         </Typography>
 
         <TextField
@@ -384,8 +375,7 @@ export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
                       onNameEditStarted={() => setJustDuplicatedId(null)}
                     />
                   );
-                  // Le premier élément de chaque colonne (première ligne) est mesuré
-                  // pour dimensionner la carte "Nouveau mécanisme" sur le plus petit.
+                  // Le premier élément de chaque colonne (première ligne) est mesuré pour dimensionner la carte "Nouveau mécanisme" sur le plus petit.
                   if (rowIndex !== 0) return card;
                   return (
                     <Box

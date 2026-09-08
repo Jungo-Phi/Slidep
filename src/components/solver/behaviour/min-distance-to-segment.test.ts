@@ -4,18 +4,16 @@ import type { Link } from "../../../types";
 import { PBD_kinematic_solver } from "../kinematics/PBD_kinematic_solver";
 
 /**
- * `MinDistanceToSegment` is `MinDistance`'s counterpart for a point against a segment
- * (extremities included) rather than another point — the primitive collisions are built on
- * (see plan `swift-bouncing-kitten`).
+ * `MinDistanceToSegment` is `MinDistance`'s counterpart for a point against a segment (extremities included) rather than another point — the primitive collisions are built on (see plan `swift-bouncing-kitten`).
  */
 
 const P = (x: number, y: number) => new Point2(x, y);
 const SWEEPS = 200;
 
 /** A point pulled (via HandleGrab) from `from` toward `pullTo`, against a fixed segment
- *  from (0,0) to (100,0), with or without the contact link. `side` is `+1` for the segment's
- *  `(0,1)` normal side (where every `from` below is), matching what `collision_links` would
- *  read off `from`. Returns where the point ends up. */
+ * from (0,0) to (100,0), with or without the contact link.
+ * `side` is `+1` for the segment's `(0,1)` normal side (where every `from` below is), matching what `collision_links` would read off `from`.
+ * Returns where the point ends up. */
 function pull_against_segment(
   offset: number | undefined,
   from: Point2,
@@ -71,10 +69,7 @@ describe("MinDistanceToSegment", () => {
   });
 
   it("bloque même un saut d'un seul coup qui traverserait toute la bande", () => {
-    // `side` est fixé une fois pour toutes (lu sur `from`, comme le ferait
-    // `collision_links`), donc la porte reste signée même si une seule correction de grab
-    // envoie le point loin de l'autre côté — contrairement à une porte non signée
-    // (`distance >= offset`), qui lirait ce point comme "arrivé, dégagé".
+    // `side` est fixé une fois pour toutes (lu sur `from`, comme le ferait `collision_links`), donc la porte reste signée même si une seule correction de grab envoie le point loin de l'autre côté — contrairement à une porte non signée (`distance >= offset`), qui lirait ce point comme "arrivé, dégagé".
     const stopped = pull_against_segment(5, P(50, 20), P(50, -200));
     expect(stopped.y).toBeCloseTo(5, 0);
   });
@@ -85,9 +80,7 @@ describe("MinDistanceToSegment", () => {
   });
 
   it("respecte les extrémités : au-delà, rien ne bloque", () => {
-    // Tiré vers un point aligné avec le segment mais hors de son étendue (x=150) :
-    // le pied de perpendiculaire clampe à l'extrémité (100,0), à plus de 50 de distance —
-    // hors de portée d'un offset de 5, donc rien ne bloque le trajet.
+    // Tiré vers un point aligné avec le segment mais hors de son étendue (x=150) : le pied de perpendiculaire clampe à l'extrémité (100,0), à plus de 50 de distance — hors de portée d'un offset de 5, donc rien ne bloque le trajet.
     const passed = pull_against_segment(5, P(150, 20), P(150, 2));
     expect(passed.distance_to(P(150, 2))).toBeLessThan(0.5);
   });

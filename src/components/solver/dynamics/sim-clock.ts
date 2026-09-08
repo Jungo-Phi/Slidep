@@ -4,17 +4,13 @@ import { DEFAULT_RUNTIME_STATE, RuntimeState } from "../../../types/runtime-stat
 /**
  * The simulation clock, held outside React.
  *
- * `time` and `simulationSnapshots` change on every recorded frame, and nobody *decides* them. Carrying them in a state the whole tree depends on asked React to
- * reconcile the application sixty times a second — measured at 42 ms per render in a
- * production build, for a canvas that draws in 2 ms. They live here instead; React only
- * mirrors them, at a rate that suits reading numbers rather than moving a mechanism.
+ * `time` and `simulationSnapshots` change on every recorded frame, and nobody *decides* them.
+ * Carrying them in a state the whole tree depends on asked React to reconcile the application sixty times a second — measured at 42 ms per render in a production build, for a canvas that draws in 2 ms.
+ * They live here instead; React only mirrors them, at a rate that suits reading numbers rather than moving a mechanism.
  *
- * Read it with {@link useSimClock} to re-render on change, or {@link sim_clock} for the
- * authoritative value — the recording loop needs the latter, since a mirror one frame late
- * would make the clock drift by whatever the mirror skipped.
+ * Read it with {@link useSimClock} to re-render on change, or {@link sim_clock} for the authoritative value — the recording loop needs the latter, since a mirror one frame late would make the clock drift by whatever the mirror skipped.
  *
- * Writing goes through {@link set_sim_clock}, whose signature is React's on purpose: every
- * `setRuntimeState(prev => …)` call site keeps working unchanged.
+ * Writing goes through {@link set_sim_clock}, whose signature is React's on purpose: every `setRuntimeState(prev => …)` call site keeps working unchanged.
  */
 
 /** Fields a user just asked for: they must reach the screen on this frame, not the next. */
@@ -52,11 +48,9 @@ function subscribe(listener: Listener): () => void {
 }
 
 /**
- * Mirrors the clock into the calling component, which re-renders at most every
- * `minIntervalMs` on frame-driven change — and always at once on a change of intent.
+ * Mirrors the clock into the calling component, which re-renders at most every `minIntervalMs` on frame-driven change — and always at once on a change of intent.
  *
- * Call it as low in the tree as the value is actually read: the whole point is that the
- * component which re-renders is a leaf, not the application.
+ * Call it as low in the tree as the value is actually read: the whole point is that the component which re-renders is a leaf, not the application.
  */
 export function useSimClock(minIntervalMs: number): RuntimeState {
   const [, bump] = useReducer((n: number) => n + 1, 0);
@@ -74,8 +68,7 @@ export function useSimClock(minIntervalMs: number): RuntimeState {
         flush();
         return;
       }
-      // A pending timer already carries this change: the mirror reads the store when it
-      // renders, so there is nothing per-change to keep.
+      // A pending timer already carries this change: the mirror reads the store when it renders, so there is nothing per-change to keep.
       if (timer !== null) return;
       const due = minIntervalMs - (performance.now() - last);
       if (due <= 0) flush();

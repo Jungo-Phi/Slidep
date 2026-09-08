@@ -1,17 +1,13 @@
 /**
  * Where a driven mechanism stops going round: the instants a motor could not push through.
  *
- * The classic dead point — crank and rod aligned, a slider at the end of its stroke — where
- * the input turns and the mechanism does not follow. It is NOT a change of mobility: `m`
- * stays what it was, and the analysis panel keeps reporting it. What fails is the
- * *transmission*, and it is the fault a designer actually meets.
+ * The classic dead point — crank and rod aligned, a slider at the end of its stroke — where the input turns and the mechanism does not follow.
+ * It is NOT a change of mobility: `m` stays what it was, and the analysis panel keeps reporting it.
+ * What fails is the *transmission*, and it is the fault a designer actually meets.
  *
- * The verdict is **read, not recomputed**. `step_simulation` compares each motor's achieved
- * advance against its commanded one at the frame it runs, and files the shortfall in the
- * snapshot's `unsatisfied` list. That verdict is dated: it belongs to the settings the frame
- * was recorded under. Deriving it here instead would mean dividing yesterday's motion by
- * today's commanded rate — and reversing a motor mid-run would flip the ratio on every past
- * frame at once, reading the whole recording as one block starting at zero.
+ * The verdict is **read, not recomputed**. `step_simulation` compares each motor's achieved advance against its commanded one at the frame it runs, and files the shortfall in the snapshot's `unsatisfied` list.
+ * That verdict is dated: it belongs to the settings the frame was recorded under.
+ * Deriving it here instead would mean dividing yesterday's motion by today's commanded rate — and reversing a motor mid-run would flip the ratio on every past frame at once, reading the whole recording as one block starting at zero.
  *
  * Free, therefore, and a pure function of the recording, like `belt_events`.
  */
@@ -34,9 +30,7 @@ export type DeadPoint = {
   /**
    * Going into the block, or coming out of it.
    *
-   * Both are reported, as a belt reports leaving a pulley and taking it back: getting out of
-   * a dead point is what reversing a motor is for, and a release with nothing to show for it
-   * would leave the reader unsure whether the escape worked.
+   * Both are reported, as a belt reports leaving a pulley and taking it back: getting out of a dead point is what reversing a motor is for, and a release with nothing to show for it would leave the reader unsure whether the escape worked.
    */
   kind: "blocked" | "released";
 };
@@ -54,8 +48,7 @@ const blocked_motors = (snapshot: KinematicSnapshot): Set<ID> => {
 /**
  * Every instant a motor stalls along `snapshots`, in time order.
  *
- * Pure, and cheap enough to redo whenever the recording grows: the per-frame work is
- * reading a list that is empty on almost every frame.
+ * Pure, and cheap enough to redo whenever the recording grows: the per-frame work is reading a list that is empty on almost every frame.
  */
 export function dead_points(
   snapshots: KinematicSnapshot[],
@@ -78,17 +71,15 @@ export function dead_points(
     for (const [motor, run] of running) {
       if (blocked.has(motor)) continue;
       running.delete(motor);
-      // Only a run that was reported can be reported as over. A release stands on the
-      // first free frame, the one that carries the change — the same convention as the
-      // belt marks, and as the block's own start.
+      // Only a run that was reported can be reported as over.
+      // A release stands on the first free frame, the one that carries the change — the same convention as the belt marks, and as the block's own start.
       if (run.frames >= minBlockedFrames) listOf(motor).released.push(snapshot.t);
     }
     for (const motor of blocked) {
       const run = running.get(motor) ?? { since: snapshot.t, frames: 0 };
       run.frames++;
       running.set(motor, run);
-      // Reported on the frame it becomes certain, timed at the frame it began: the mark
-      // must sit where the mechanism stopped, not where the count was reached.
+      // Reported on the frame it becomes certain, timed at the frame it began: the mark must sit where the mechanism stopped, not where the count was reached.
       if (run.frames === minBlockedFrames) listOf(motor).blocked.push(run.since);
     }
   }

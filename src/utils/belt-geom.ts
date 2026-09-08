@@ -3,13 +3,10 @@ import { BeltElement, GearElement, MechanicalElement, Point2 } from "../types";
 import { BeltVia, belt_pieces } from "./belt-path";
 
 /**
- * Build the ordered via-points of a belt (start terminal → gears → end
- * terminal) from the mechanism, resolving each attached gear. Shared by the
- * length measurement and the geometric solver's belt-length constraint.
+ * Build the ordered via-points of a belt (start terminal → gears → end terminal) from the mechanism, resolving each attached gear.
+ * Shared by the length measurement and the geometric solver's belt-length constraint.
  *
- * Pulleys the belt has lost contact with in simulation are left out: the belt
- * runs straight past them, and its route is what everything downstream — the
- * length, the hover, a dimension's leader — has to be read against.
+ * Pulleys the belt has lost contact with in simulation are left out: the belt runs straight past them, and its route is what everything downstream — the length, the hover, a dimension's leader — has to be read against.
  */
 export function get_belt_vias(
   belt: BeltElement,
@@ -34,13 +31,10 @@ export function get_belt_vias(
 }
 
 /**
- * The belt as it will be once pulley `index` is off it. Interpret a section
- * index against this rather than the stored belt whenever a gesture carries a
- * pending removal, since dropping a pulley renumbers the sections.
+ * The belt as it will be once pulley `index` is off it.
+ * Interpret a section index against this rather than the stored belt whenever a gesture carries a pending removal, since dropping a pulley renumbers the sections.
  *
- * `closed` is deliberately left untouched: whether the shortened belt still
- * loops is settled at commit time, and flipping it here would renumber the
- * sections a second time mid-gesture.
+ * `closed` is deliberately left untouched: whether the shortened belt still loops is settled at commit time, and flipping it here would renumber the sections a second time mid-gesture.
  */
 export function belt_without_gear(
   belt: BeltElement,
@@ -57,9 +51,8 @@ export function belt_without_gear(
 }
 
 /**
- * The via chain a belt's geometry is actually read from: a closed belt is the
- * pulley cycle (no terminals — the junction rides on the loop), a loose one the
- * terminal-to-terminal chain. Feed the pair straight to `belt_pieces`.
+ * The via chain a belt's geometry is actually read from: a closed belt is the pulley cycle (no terminals — the junction rides on the loop), a loose one the terminal-to-terminal chain.
+ * Feed the pair straight to `belt_pieces`.
  */
 export function get_belt_path(
   belt: BeltElement,
@@ -146,42 +139,32 @@ export function get_gear_angles(
 }
 
 /**
- * Mesure la longueur mécanique d'une courroie : segments droits tangents + arcs
- * d'enroulement, au rayon brut (le `+BELT_WIDTH/2` du dessin est cosmétique).
- * Une courroie **tendue** est une boucle fermée sur ses poulies ; une courroie
- * libre est une chaîne ouverte entre ses extrémités.
+ * Mesure la longueur mécanique d'une courroie : segments droits tangents + arcs d'enroulement, au rayon brut (le `+BELT_WIDTH/2` du dessin est cosmétique).
+ * Une courroie **tendue** est une boucle fermée sur ses poulies ; une courroie libre est une chaîne ouverte entre ses extrémités.
  */
 export function measure_belt_length(
   belt: BeltElement,
   mechanicalElements: MechanicalElement[],
 ): number {
-  // Open chain: a terminal resting on its pulley's rim needs no special case — its
-  // tangent run is simply of length 0 and the arc already reaches it.
+  // Open chain: a terminal resting on its pulley's rim needs no special case — its tangent run is simply of length 0 and the arc already reaches it.
   const { vias, closed } = get_belt_path(belt, mechanicalElements);
   return belt_pieces(vias, closed).reduce((acc, p) => acc + p.length, 0);
 }
 
 /**
- * Which gesture brought the gear and the belt together, which decides where they
- * touch and so which way the belt winds.
+ * Which gesture brought the gear and the belt together, which decides where they touch and so which way the belt winds.
  *
- * `gear-onto-belt` — the gear is pressed against the section where it lies, so
- * the belt bulges towards the gear and wraps its far side.
- * `belt-onto-gear` — the belt is pulled to the rim point under the cursor, the
- * near side, and wraps the other way round.
+ * `gear-onto-belt` — the gear is pressed against the section where it lies, so the belt bulges towards the gear and wraps its far side.
+ * `belt-onto-gear` — the belt is pulled to the rim point under the cursor, the near side, and wraps the other way round.
  */
 export type BeltGearApproach = "gear-onto-belt" | "belt-onto-gear";
 
 /**
  * Which way a belt winds around a gear inserted in one of its straight sections.
  *
- * `referencePoint` is the gear's *centre* for `gear-onto-belt` — the gear's own
- * position is what is growing or landing there, the cursor is incidental. For
- * `belt-onto-gear` it is the rim point under the cursor: the belt is being
- * dragged onto a gear that already sits still, so the cursor is what picks
- * which side it wraps. The two only disagree when the gear's rim crosses the
- * belt's line (its centre is closer to the line than its radius) — otherwise
- * every rim point sits on the same side as the centre anyway.
+ * `referencePoint` is the gear's *centre* for `gear-onto-belt` — the gear's own position is what is growing or landing there, the cursor is incidental.
+ * For `belt-onto-gear` it is the rim point under the cursor: the belt is being dragged onto a gear that already sits still, so the cursor is what picks which side it wraps.
+ * The two only disagree when the gear's rim crosses the belt's line (its centre is closer to the line than its radius) — otherwise every rim point sits on the same side as the centre anyway.
  */
 export function belt_wrap_direction(
   referencePoint: Point2,
@@ -200,8 +183,7 @@ export function belt_wrap_direction(
 }
 
 /**
- * Which way a belt winds around `gear` when it ARRIVES at the rim point
- * `contact`, coming from `from` — the previous via of the route.
+ * Which way a belt winds around `gear` when it ARRIVES at the rim point `contact`, coming from `from` — the previous via of the route.
  */
 export function belt_wrap_arriving(
   gear: GearElement,
@@ -212,8 +194,8 @@ export function belt_wrap_arriving(
 }
 
 /**
- * Which way it winds when it LEAVES the rim point `contact` towards `to` — the
- * next via of the route. Travelling the other way round winds the other way.
+ * Which way it winds when it LEAVES the rim point `contact` towards `to` — the next via of the route.
+ * Travelling the other way round winds the other way.
  */
 export function belt_wrap_leaving(
   gear: GearElement,

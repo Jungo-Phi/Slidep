@@ -11,10 +11,8 @@ import { element_reactions, get_probe_series } from "./probe-series";
 import { make_snapshot_layout } from "../snapshot";
 
 /**
- * What a probe plots, read off snapshots built by hand so the expected numbers can be
- * stated rather than recorded. The series walks the whole recording on every render, so it
- * resolves each element to a slot once per layout — the case that matters is therefore a
- * recording spanning two of them, which is what an edit mid-session produces.
+ * What a probe plots, read off snapshots built by hand so the expected numbers can be stated rather than recorded.
+ * The series walks the whole recording on every render, so it resolves each element to a slot once per layout — the case that matters is therefore a recording spanning two of them, which is what an edit mid-session produces.
  */
 
 const node = (id: string) =>
@@ -102,8 +100,8 @@ describe("séries de sonde", () => {
   });
 
   it("vitesse angulaire : en tours par minute", () => {
-    // A quarter turn per second is 15 tr/min. Not a faster one: the unwrapping reads half a
-    // turn per sample or more as a step backwards, which is aliasing, not a defect.
+    // A quarter turn per second is 15 tr/min.
+    // Not a faster one: the unwrapping reads half a turn per sample or more as a step backwards, which is aliasing, not a defect.
     const spinning = [0, 1, 2].map((t) =>
       snapshot(layout, t, { n: [0, 0] }, { g: (t * Math.PI) / 2 }),
     );
@@ -173,8 +171,7 @@ describe("réactions", () => {
   });
 
   it("une clé fusionnée (jointure) reste trouvée par l'id d'origine de chaque élément", () => {
-    // What `compile_simulation_model`'s coincidence fusion leaves behind: a beam welded to a
-    // pivot shares one solver key, comma-joined — neither original id equals it outright.
+    // What `compile_simulation_model`'s coincidence fusion leaves behind: a beam welded to a pivot shares one solver key, comma-joined — neither original id equals it outright.
     const snap = dynamicSnapshot([reaction("pivot,e:start", 3, -1, true)]);
     expect(element_reactions(node("pivot"), snap)[0].vector).toEqual({ x: -3, y: 1 });
     expect(element_reactions(beam("e"), snap)[0].vector).toEqual({ x: -3, y: 1 });
@@ -200,9 +197,7 @@ describe("réactions", () => {
   });
 
   it("un moment ne se négate jamais, appui ou non — contrairement à la force", () => {
-    // Verified against a textbook cantilever: `PBD_kinematic_solver.ts`'s per-link moment is
-    // already computed AT the anchor FROM the free end's own (already correctly-signed) force
-    // — negating it again would flip it back to the load's own moment, not the support's.
+    // Verified against a textbook cantilever: `PBD_kinematic_solver.ts`'s per-link moment is already computed AT the anchor FROM the free end's own (already correctly-signed) force — negating it again would flip it back to the load's own moment, not the support's.
     const atAnchor = dynamicSnapshot([moment("n", 100, true)]);
     expect(element_reactions(node("n"), atAnchor)[0].moment).toBe(100);
     const atInternal = dynamicSnapshot([moment("n", 100, false)]);

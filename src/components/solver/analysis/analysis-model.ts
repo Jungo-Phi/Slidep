@@ -1,13 +1,11 @@
 /**
  * The model the degrees-of-freedom analysis reads, derived from the simulation's own.
  *
- * Answers, for a mechanism: which variables are free, which links actually constrain them,
- * and how both split into independent kinematic chains. It stops at the counting level —
- * `grublerCount` is `m − h`, a lower bound on mobility, not the mobility itself. Measuring
- * `m` needs the solver (see the mobility probe); this module is what the probe runs on.
+ * Answers, for a mechanism: which variables are free, which links actually constrain them, and how both split into independent kinematic chains.
+ * It stops at the counting level — `grublerCount` is `m − h`, a lower bound on mobility, not the mobility itself.
+ * Measuring `m` needs the solver (see the mobility probe); this module is what the probe runs on.
  *
- * Built on `compile_simulation_model`, never on the raw parsing: without the belt no-slip
- * links a belt transmits nothing, and the counts drift by up to 16 on a Core XY.
+ * Built on `compile_simulation_model`, never on the raw parsing: without the belt no-slip links a belt transmits nothing, and the counts drift by up to 16 on a Core XY.
  */
 
 import { ID, KinNodes, Link, Mechanism } from "../../../types";
@@ -34,8 +32,8 @@ export type PruneReason =
 export type PrunedLink = { link: Link; reason: PruneReason };
 
 /**
- * One independent kinematic chain: a connected group of free variables, and the links
- * that constrain them. Moving a chain never moves another.
+ * One independent kinematic chain: a connected group of free variables, and the links that constrain them.
+ * Moving a chain never moves another.
  */
 export type AnalysisChain = {
   /** First variable key in canonical order — stable across edits that leave the chain intact. */
@@ -45,9 +43,7 @@ export type AnalysisChain = {
   /**
    * This chain's scalar unknowns, canonical order.
    *
-   * Carried rather than re-derived from `variableKeys`, because that key alone cannot say
-   * which it is: a gear's centre and its angle are both filed under the bare gear id, so
-   * reading the kind back off the key drops one of the two.
+   * Carried rather than re-derived from `variableKeys`, because that key alone cannot say which it is: a gear's centre and its angle are both filed under the bare gear id, so reading the kind back off the key drops one of the two.
    */
   variables: Variable[];
   /** 2 per free position, 1 per angle. */
@@ -64,20 +60,18 @@ export type AnalysisChain = {
   /**
    * The chain's own parts: those holding one of its free variables, plus its motors.
    *
-   * What a highlight shows. The rest of the frame is left out on purpose: every chain hangs
-   * off the same anchors, so including them said nothing about which chain was pointed at
-   * and lit up most of the mechanism. Motors are the exception — they are what the reader
-   * reaches for, and every mode of the chain names one.
+   * What a highlight shows.
+   * The rest of the frame is left out on purpose: every chain hangs off the same anchors, so including them said nothing about which chain was pointed at and lit up most of the mechanism.
+   * Motors are the exception — they are what the reader reaches for, and every mode of the chain names one.
    *
-   * Contains the union of its modes' `moves` by construction, since a mode moves a subset of
-   * these variables and is driven by a subset of these motors.
+   * Contains the union of its modes' `moves` by construction, since a mode moves a subset of these variables and is driven by a subset of these motors.
    */
   elements: ID[];
 };
 
 /**
- * One scalar unknown. `key` indexes the solver's own maps, so it stays in the raw (fused)
- * form; the ORDER of `variableOrder` is what is canonical, not the spelling of the keys.
+ * One scalar unknown.
+ * `key` indexes the solver's own maps, so it stays in the raw (fused) form; the ORDER of `variableOrder` is what is canonical, not the spelling of the keys.
  */
 export type Variable = { key: string; component: "x" | "y" | "angle" };
 
@@ -97,9 +91,8 @@ export type AnalysisModel = {
 /**
  * Every variable key a link touches, positions and angles alike.
  *
- * Distinct from `keys_of`, which feeds `sort_links` and only ever needed position keys —
- * widening it there would reorder the solver's sweep. `analysis-model.test.ts` asserts this
- * one covers `keys_of` on every link type, so the two cannot drift apart unnoticed.
+ * Distinct from `keys_of`, which feeds `sort_links` and only ever needed position keys — widening it there would reorder the solver's sweep.
+ * `analysis-model.test.ts` asserts this one covers `keys_of` on every link type, so the two cannot drift apart unnoticed.
  */
 export function variable_keys_of(link: Link): string[] {
   switch (link.type) {
@@ -195,19 +188,14 @@ const is_driver = (l: Link) =>
 /**
  * One strand law per **closed** belt: the loop's own redundancy, not the design's.
  *
- * Each strand of a belt carries a no-slip law tying two consecutive pulleys. Walk a closed
- * loop and those laws compose back into the identity, so `N` strands only ever carry `N − 1`
- * independent rows. Counted whole they invent one degree of hyperstaticity per belt, which
- * the panel would then report on a perfectly sound mechanism — measured on four of the
- * gallery's belt drives, and each of them falls to `h = 0` once this row is dropped, with
- * the mobility unchanged.
+ * Each strand of a belt carries a no-slip law tying two consecutive pulleys.
+ * Walk a closed loop and those laws compose back into the identity, so `N` strands only ever carry `N − 1` independent rows.
+ * Counted whole they invent one degree of hyperstaticity per belt, which the panel would then report on a perfectly sound mechanism — measured on four of the gallery's belt drives, and each of them falls to `h = 0` once this row is dropped, with the mobility unchanged.
  *
- * Same family as `BeltSubChainAggregate` and `BeltLoopClosure`: the solver wants every
- * strand for conditioning, the rank count must not have them all. Open belts have no loop
- * to close and keep theirs.
+ * Same family as `BeltSubChainAggregate` and `BeltLoopClosure`: the solver wants every strand for conditioning, the rank count must not have them all.
+ * Open belts have no loop to close and keep theirs.
  *
- * Which one goes is decided by `segIndex`, a property of the belt's own geometry — never by
- * the order links happen to be parsed in.
+ * Which one goes is decided by `segIndex`, a property of the belt's own geometry — never by the order links happen to be parsed in.
  */
 function closed_loop_surplus(links: Link[]): Set<Link> {
   const strongest = new Map<ID, Link & { type: "BeltSegmentNoSlip" }>();
@@ -223,16 +211,11 @@ function closed_loop_surplus(links: Link[]): Set<Link> {
 /**
  * Carry a belt's lost pulleys into the freshly compiled model.
  *
- * `compile_simulation_model` always builds a belt whole: which pulleys it has come off is
- * simulation state, seeded from a snapshot rather than something a mechanism carries into a
- * compile. The analysis, though, reads the pose on screen — which in a paused recording is
- * one where the belt may run straight past a pulley. Keeping that pulley's strand law both
- * hides the freedom the belt has just released and constrains an angle nothing touches any
- * more: measured on `Déconnexion courroie`, `m = 1` where the mechanism plainly has 2.
+ * `compile_simulation_model` always builds a belt whole: which pulleys it has come off is simulation state, seeded from a snapshot rather than something a mechanism carries into a compile.
+ * The analysis, though, reads the pose on screen — which in a paused recording is one where the belt may run straight past a pulley.
+ * Keeping that pulley's strand law both hides the freedom the belt has just released and constrains an angle nothing touches any more: measured on `Déconnexion courroie`, `m = 1` where the mechanism plainly has 2.
  *
- * Rewired through the simulation's own `rewire_belts`, not by a rule of our own: the strands
- * of a shortened belt are rebuilt and re-baked, never patched, and the analysis has no
- * business holding a second opinion on what a belt is.
+ * Rewired through the simulation's own `rewire_belts`, not by a rule of our own: the strands of a shortened belt are rebuilt and re-baked, never patched, and the analysis has no business holding a second opinion on what a belt is.
  */
 function apply_belt_disconnections(
   mechanism: Mechanism,
@@ -249,8 +232,7 @@ function apply_belt_disconnections(
     if (link.type !== "BeltLength" || link.owner === undefined) continue;
     const off = dropped.get(link.owner);
     if (!off) continue;
-    // `gearPosKeys` keeps the order and length of `attachedGearsIDs`, which is what the
-    // element's indices name — coincidence fusion rewrites the keys, never their order.
+    // `gearPosKeys` keeps the order and length of `attachedGearsIDs`, which is what the element's indices name — coincidence fusion rewrites the keys, never their order.
     link.disconnected = link.gearPosKeys.map((_, i) => off.has(i));
     detached.push(link);
   }
@@ -260,10 +242,9 @@ function apply_belt_disconnections(
 /**
  * Canonical form of a solver key.
  *
- * Coincidence fusion names a merged node by joining its parts in the order the links were
- * parsed, so the same mechanism loaded with its elements in another order yields a
- * different *string* for the same node. Sorting the parts makes the name depend on the
- * node alone. Never use it to read `nodes` — only to order and to identify.
+ * Coincidence fusion names a merged node by joining its parts in the order the links were parsed, so the same mechanism loaded with its elements in another order yields a different *string* for the same node.
+ * Sorting the parts makes the name depend on the node alone.
+ * Never use it to read `nodes` — only to order and to identify.
  */
 export function canonical_key(key: string): string {
   return key.includes(",") ? key.split(",").sort().join(",") : key;
@@ -307,21 +288,16 @@ class Partition {
 /**
  * Build the analysis model for a mechanism at its current configuration.
  *
- * The chain graph spans **free variables only**: an anchored node is not a variable, so it
- * is not a vertex, and two assemblies that merely hang off the same frame stay separate —
- * which is what independence means here, since moving one does not move the other. A
- * grounded node shared by two assemblies therefore splits them rather than joining them.
+ * The chain graph spans **free variables only**: an anchored node is not a variable, so it is not a vertex, and two assemblies that merely hang off the same frame stay separate — which is what independence means here, since moving one does not move the other.
+ * A grounded node shared by two assemblies therefore splits them rather than joining them.
  *
- * Its edges are the links, **and the elements**: a part is one body, so the unknowns filed
- * under it belong together even where no link ties them. That is the only thing holding a
- * gear's spin to its own centre.
+ * Its edges are the links, **and the elements**: a part is one body, so the unknowns filed under it belong together even where no link ties them.
+ * That is the only thing holding a gear's spin to its own centre.
  *
- * A group with no free variable at all — a beam pinned to the frame at both ends, a lone
- * grounded join nothing else touches — still gets its own chain: trivial (`DDL = 0`,
- * nothing to probe), but present. An element the file holds is never left unaccounted for.
+ * A group with no free variable at all — a beam pinned to the frame at both ends, a lone grounded join nothing else touches — still gets its own chain: trivial (`DDL = 0`, nothing to probe), but present.
+ * An element the file holds is never left unaccounted for.
  *
- * Canonical throughout: keys are sorted, and fused keys are compared through
- * `canonical_key`, so two loads of the same mechanism produce the same model.
+ * Canonical throughout: keys are sorted, and fused keys are compared through `canonical_key`, so two loads of the same mechanism produce the same model.
  */
 export function build_analysis_model(mechanism: Mechanism): AnalysisModel {
   const compiled = compile_simulation_model(mechanism);
@@ -360,8 +336,7 @@ export function build_analysis_model(mechanism: Mechanism): AnalysisModel {
       pruned.push({ link, reason: "conditioning" });
       continue;
     }
-    // Angles are never anchored, so a link touching one is never inert — testing
-    // positions alone would drop a GearMeshAngle between two grounded axles.
+    // Angles are never anchored, so a link touching one is never inert — testing positions alone would drop a GearMeshAngle between two grounded axles.
     const keys = variable_keys_of(link).filter(isVariable);
     if (keys.length > 0 && keys.every((key) => anchored.has(key)))
       pruned.push({ link, reason: "inert" });
@@ -382,13 +357,9 @@ export function build_analysis_model(mechanism: Mechanism): AnalysisModel {
   ];
 
   // ── Which keys each element owns ─────────────────────────────────────────
-  // A part is one body whatever the solver files under it, and links are not the only
-  // thing that ties its unknowns together: nothing constrains a gear's spin to its own
-  // centre, yet a gear carried by a chain is not a mechanism of its own.
+  // A part is one body whatever the solver files under it, and links are not the only thing that ties its unknowns together: nothing constrains a gear's spin to its own centre, yet a gear carried by a chain is not a mechanism of its own.
   const keysByElement = new Map<ID, { free: string[]; anchored: string[] }>();
-  // Which list a key goes in is the caller's to say, never read back off the key: a gear's
-  // centre and its spin share one bare id, so a grounded gear would file its free angle as
-  // anchored.
+  // Which list a key goes in is the caller's to say, never read back off the key: a gear's centre and its spin share one bare id, so a grounded gear would file its free angle as anchored.
   const noteKey = (key: string, into: "free" | "anchored") => {
     for (const el of elements_of_key(key)) {
       let held = keysByElement.get(el);
@@ -413,9 +384,8 @@ export function build_analysis_model(mechanism: Mechanism): AnalysisModel {
 
   // ── Partition the anchored keys among themselves, via the rigidity welds that
   // pruned their links as inert ────────────────────────────────────────────
-  // A key entirely pinned to the frame carries no mobility, but a group of them welded
-  // together — a beam between two grounded joins, say — is still a physical object the
-  // file holds. This is what lets it keep its own identity instead of dissolving.
+  // A key entirely pinned to the frame carries no mobility, but a group of them welded together — a beam between two grounded joins, say — is still a physical object the file holds.
+  // This is what lets it keep its own identity instead of dissolving.
   const anchoredPartition = new Partition();
   for (const key of anchored) anchoredPartition.add(key);
   for (const { link, reason } of pruned) {
@@ -468,8 +438,7 @@ export function build_analysis_model(mechanism: Mechanism): AnalysisModel {
     for (const el of elements_of_key(key)) bucket.elements.add(el);
   }
 
-  // Anchored keys directly reached by a link that also touches a free variable,
-  // mapped to that chain's root.
+  // Anchored keys directly reached by a link that also touches a free variable, mapped to that chain's root.
   const claimedAnchors = new Map<string, string>();
   for (const link of links) {
     const keys = variable_keys_of(link).filter(isVariable);
@@ -480,10 +449,8 @@ export function build_analysis_model(mechanism: Mechanism): AnalysisModel {
       if (anchored.has(key)) claimedAnchors.set(key, root);
   }
 
-  // An element holding a free key and an anchored one is mounted on the frame, whether or
-  // not a link says so: a gear pinned to a grounded axle spins freely, and its chain is
-  // held all the same. Without this the spin reads as an unanchored chain adrift, next to
-  // a second, trivial one for the axle it turns on.
+  // An element holding a free key and an anchored one is mounted on the frame, whether or not a link says so: a gear pinned to a grounded axle spins freely, and its chain is held all the same.
+  // Without this the spin reads as an unanchored chain adrift, next to a second, trivial one for the axle it turns on.
   for (const { free, anchored: pinned } of keysByElement.values()) {
     if (free.length === 0 || pinned.length === 0) continue;
     const root = partition.find(free[0]);
@@ -491,19 +458,15 @@ export function build_analysis_model(mechanism: Mechanism): AnalysisModel {
     for (const key of pinned) claimedAnchors.set(key, root);
   }
 
-  // A claim on one member of a welded anchored group covers the whole group: it is
-  // one physical object, reached from a free chain wherever it touches it. A join
-  // fixed to the middle of an otherwise-moving beam, say, is only ever mentioned
-  // together with the beam's two (also anchored) ends — its `FixedOnSegment` is
-  // itself inert — so it is never directly claimed, only through this propagation.
+  // A claim on one member of a welded anchored group covers the whole group: it is one physical object, reached from a free chain wherever it touches it.
+  // A join fixed to the middle of an otherwise-moving beam, say, is only ever mentioned together with the beam's two (also anchored) ends — its `FixedOnSegment` is itself inert — so it is never directly claimed, only through this propagation.
   // Everything left unclaimed after it is genuinely spoken for by no free chain.
   const claimedGroups = new Map<string, string>();
   for (const [key, root] of claimedAnchors)
     claimedGroups.set(anchoredPartition.find(key), root);
 
-  // Unclaimed anchored groups: no free variable anywhere in them, so nothing above
-  // ever visits them. Each becomes its own short, indicative chain — DDL = 0, nothing
-  // to probe, just the fact that it is there and going nowhere.
+  // Unclaimed anchored groups: no free variable anywhere in them, so nothing above ever visits them.
+  // Each becomes its own short, indicative chain — DDL = 0, nothing to probe, just the fact that it is there and going nowhere.
   for (const key of anchored) {
     if (claimedGroups.has(anchoredPartition.find(key))) continue;
     const bucket = bucketOf(`anchor:${anchoredPartition.find(key)}`);
@@ -521,9 +484,7 @@ export function build_analysis_model(mechanism: Mechanism): AnalysisModel {
       into(bucket);
       return;
     }
-    // Nothing free here: the link still belongs to whichever anchored group it
-    // touches, claimed or not — a motor turning a pivot welded only to the frame,
-    // say, must not be dropped just because that pivot owns no free variable.
+    // Nothing free here: the link still belongs to whichever anchored group it touches, claimed or not — a motor turning a pivot welded only to the frame, say, must not be dropped just because that pivot owns no free variable.
     const anchorKey = keys.find((key) => anchored.has(key));
     if (anchorKey === undefined) return;
     const claimedRoot = claimedGroups.get(anchoredPartition.find(anchorKey));
@@ -547,9 +508,7 @@ export function build_analysis_model(mechanism: Mechanism): AnalysisModel {
       const constraintRows = bucket.links.reduce((sum, l) => sum + l.ddl, 0);
       const elements = [...bucket.elements].sort();
       return {
-        // A trivial chain owns no variable to name it after — its first element does,
-        // under a prefix, since that element may well hold a free variable elsewhere and
-        // two chains sharing an id would share a React key and a cached audit.
+        // A trivial chain owns no variable to name it after — its first element does, under a prefix, since that element may well hold a free variable elsewhere and two chains sharing an id would share a React key and a cached audit.
         id: bucket.variableKeys[0]
           ? canonical_key(bucket.variableKeys[0])
           : `anchor:${elements[0] ?? ""}`,
@@ -564,9 +523,7 @@ export function build_analysis_model(mechanism: Mechanism): AnalysisModel {
         elements,
       };
     })
-    // A chain with a variable to report first — grounded before floating, largest
-    // before small — and every trivial, fully anchored group last: it is there for
-    // completeness, not because it is what the design is about.
+    // A chain with a variable to report first — grounded before floating, largest before small — and every trivial, fully anchored group last: it is there for completeness, not because it is what the design is about.
     .sort(
       (a, b) =>
         Number(a.freeVariables === 0) - Number(b.freeVariables === 0) ||

@@ -1,12 +1,10 @@
 /**
  * The single declaration of every ID reference an element can hold.
  *
- * `ELEMENT_REFS` maps each element type to its reference fields, saying what
- * each may point to and whether it must resolve. Validation, repair and test
- * generation all read this table instead of enumerating fields by hand.
+ * `ELEMENT_REFS` maps each element type to its reference fields, saying what each may point to and whether it must resolve.
+ * Validation, repair and test generation all read this table instead of enumerating fields by hand.
  *
- * Reference fields are derived from the types, not from naming conventions, so
- * adding one to an element breaks compilation until it is declared here.
+ * Reference fields are derived from the types, not from naming conventions, so adding one to an element breaks compilation until it is declared here.
  */
 
 import type {
@@ -61,8 +59,8 @@ export const EDGE_TYPES = [
 ] as const satisfies readonly ElementType[];
 
 /**
- * Edges an alignment constraint may hold. A belt takes the shape its pulleys
- * impose, so aligning it means nothing — the hover refuses it too.
+ * Edges an alignment constraint may hold.
+ * A belt takes the shape its pulleys impose, so aligning it means nothing — the hover refuses it too.
  */
 const ALIGNABLE_EDGE_TYPES = [
   "beam",
@@ -80,10 +78,8 @@ const NODE_OR_EDGE = [...NODE_TYPES, ...EDGE_TYPES] as const;
 type IsTrue<T> = true extends T ? true : false;
 
 /**
- * Whether `T` can hold an `ID`, looking through arrays, unions and nested
- * objects. Tests `T extends ID` and never the reverse: `ID` is a template
- * literal subtype of `string`, so the opposite direction would match every
- * plain string field.
+ * Whether `T` can hold an `ID`, looking through arrays, unions and nested objects.
+ * Tests `T extends ID` and never the reverse: `ID` is a template literal subtype of `string`, so the opposite direction would match every plain string field.
  */
 type HoldsID<T> = T extends ID
   ? true
@@ -120,8 +116,7 @@ export type NoTypeTagFalsePositive = Assert<
 // ─── Table shape ──────────────────────────────────────────────────────────────
 
 /** What a reference field may point to: an element type, or a mechanism-level library entry
- *  (`materials`/`profiles` — not elements, so out of `ElementType`, but the same single
- *  declaration and the same anti-dangling-ref hardening cover them). */
+ * (`materials`/`profiles` — not elements, so out of `ElementType`, but the same single declaration and the same anti-dangling-ref hardening cover them). */
 export type RefTarget = ElementType | "material" | "profile";
 
 interface RefSpecBase {
@@ -134,10 +129,8 @@ interface RefSpecBase {
 /**
  * A reference field of element type `T` holding a value of type `V`.
  *
- * A bare `ID` or `ID[]` needs nothing more: reading and repairing it are
- * generic. Any other shape declares `extract` to read its IDs and `prune` to
- * return the element without the dead ones — the two come as a pair, so a
- * reference the table can read is always one it can repair.
+ * A bare `ID` or `ID[]` needs nothing more: reading and repairing it are generic.
+ * Any other shape declares `extract` to read its IDs and `prune` to return the element without the dead ones — the two come as a pair, so a reference the table can read is always one it can repair.
  */
 export type RefSpec<T = never, V = unknown> = RefSpecBase &
   (
@@ -174,8 +167,7 @@ const PIVOT_REFS: RefTable<PivotElement> = {
     target: ["beam"],
     required: false,
     extract: (motor) => (motor.parentBeamID ? [motor.parentBeamID] : []),
-    // Clearing `parentBeamID` alone would leave a motor neither grounded nor
-    // carried by a beam, which is invalid in itself: the motor goes instead.
+    // Clearing `parentBeamID` alone would leave a motor neither grounded nor carried by a beam, which is invalid in itself: the motor goes instead.
     prune: (pivot) => ({ ...pivot, motor: undefined }),
   },
 };
@@ -226,8 +218,8 @@ const BELT_REFS: RefTable<BeltElement> = {
     target: ["gear"],
     required: false,
     extract: (gears) => gears.map((gear) => gear.id),
-    // `disconnectedGearIndices` and `gearWraps` index into the list, so dropping
-    // an entry shifts them. Both are simulation caches: clearing them is enough.
+    // `disconnectedGearIndices` and `gearWraps` index into the list, so dropping an entry shifts them.
+    // Both are simulation caches: clearing them is enough.
     prune: (belt, dead) => ({
       ...belt,
       attachedGearsIDs: belt.attachedGearsIDs.filter((gear) => !dead(gear.id)),
@@ -382,9 +374,8 @@ export interface ElementRef {
 }
 
 /**
- * Every reference field of `element`, in table order, each with the IDs it
- * currently holds. An absent optional field yields an empty `ids`, which is how
- * a `required` field with nothing in it is detected.
+ * Every reference field of `element`, in table order, each with the IDs it currently holds.
+ * An absent optional field yields an empty `ids`, which is how a `required` field with nothing in it is detected.
  */
 export function element_ref_fields(element: UnionElement): ElementRefField[] {
   const table = ELEMENT_REFS[element.type] as Record<string, AnyRefSpec>;
@@ -411,9 +402,7 @@ export function element_refs(element: UnionElement): ElementRef[] {
  * Whether `element` names something absent from `present`, the IDs a mechanism currently holds.
  * A `materialID`/`profileID` never counts: it names a library entry, not an element.
  *
- * Drawing and hit-testing both read it to skip such an element, a safety net rather than a fix —
- * a dangling reference is a defect the validator reports and `repair_mechanism` clears at load
- * time, and what this buys is that it costs one inert element instead of a blank canvas.
+ * Drawing and hit-testing both read it to skip such an element, a safety net rather than a fix — a dangling reference is a defect the validator reports and `repair_mechanism` clears at load time, and what this buys is that it costs one inert element instead of a blank canvas.
  */
 export function has_dangling_ref(
   element: UnionElement,

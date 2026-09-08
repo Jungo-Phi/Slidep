@@ -28,17 +28,16 @@ export function legible_id(id: ID): string {
     throw new Error("ID invalide");
   }
 
-  // 1. Alphabets "Propres" (21 lettres)
-  // Voyelles classiques (5)
+  // 1.
+  // Alphabets "Propres" (21 lettres) Voyelles classiques (5)
   const voyelles = "aeiou";
   // Consonnes standards (16) : on enlève q, w, x, y, z
   const consonnes = "bcdfghjklmnpqrstv";
-  // Consonnes de fin autorisées (6) : uniquement les liquides/nasales/sifflantes douces (l, m, n, r, s, v)
-  // On exclut les occlusives (b, d, g, k, p, t) et les frottantes dures (f) en position finale après une consonne.
+  // Consonnes de fin autorisées (6) : uniquement les liquides/nasales/sifflantes douces (l, m, n, r, s, v) On exclut les occlusives (b, d, g, k, p, t) et les frottantes dures (f) en position finale après une consonne.
   const consonnes_finales = "lmnrsv";
 
-  // 2. Définition des structures (Le "Plan")
-  // On évite les structures qui finissent par 2 consonnes dures.
+  // 2.
+  // Définition des structures (Le "Plan") On évite les structures qui finissent par 2 consonnes dures.
   const structures = [
     // Structures classiques (60% des cas)
     { pattern: "CVCV", map: [consonnes, voyelles, consonnes, voyelles] }, // Talo
@@ -65,12 +64,14 @@ export function legible_id(id: ID): string {
     }, // Talm, Berc
   ];
 
-  // 3. Sélection de la structure (basée sur la 1ère section)
+  // 3.
+  // Sélection de la structure (basée sur la 1ère section)
   const selector = parseInt(parts[0].substring(0, 8), 16);
   const structureIndex = selector % structures.length;
   const currentStructure = structures[structureIndex];
 
-  // 4. Génération des 4 lettres (sections 2 à 5)
+  // 4.
+  // Génération des 4 lettres (sections 2 à 5)
   const result: string[] = [];
 
   for (let i = 0; i < 4; i++) {
@@ -158,8 +159,7 @@ export function value2ratio(
 /**
  * A simulated time, for display: `45.3s` under the minute, `2m53s` past it.
  *
- * Truncated rather than rounded, so the label never shows an instant the recording has not
- * got to — and never reads `60.0s` for something the next tenth calls `1m00s`.
+ * Truncated rather than rounded, so the label never shows an instant the recording has not got to — and never reads `60.0s` for something the next tenth calls `1m00s`.
  */
 export function format_sim_time(seconds: number): string {
   const tenths = Math.max(0, Math.floor(seconds * 10));

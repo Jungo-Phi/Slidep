@@ -29,8 +29,7 @@ export const RatioInput: React.FC<RatioInputProps> = ({ value, onChange }) => {
   // Set by Escape so the blur it triggers discards instead of committing.
   const discardRef = useRef(false);
 
-  // Leaving the pair validates the entry; an unusable ratio is dropped, and one that
-  // says nothing new is only put back in normal form.
+  // Leaving the pair validates the entry; an unusable ratio is dropped, and one that says nothing new is only put back in normal form.
   const handleLeave = () => {
     if (discardRef.current) {
       discardRef.current = false;
@@ -103,8 +102,7 @@ export const RatioInput: React.FC<RatioInputProps> = ({ value, onChange }) => {
           borderColor: "text.primary",
         },
         "&:focus-within": {
-          // Thicker on focus; the extra pixel is taken out of the padding so the
-          // content does not shift.
+          // Thicker on focus; the extra pixel is taken out of the padding so the content does not shift.
           border: "2px solid",
           borderColor: "primary.main",
           padding: "0 3px",

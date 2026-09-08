@@ -63,9 +63,7 @@ describe("apply_actions — no-op edits do not enter the history", () => {
     expect(after.history).toHaveLength(1);
   });
 
-  // Successive edits of one field fold into a single entry, so a run that came back to the
-  // value it started from leaves nothing to undo — and leaves it the moment it happens,
-  // rather than sitting there swallowing a Ctrl+Z until something else is edited.
+  // Successive edits of one field fold into a single entry, so a run that came back to the value it started from leaves nothing to undo — and leaves it the moment it happens, rather than sitting there swallowing a Ctrl+Z until something else is edited.
   it("drops a run that cancels itself out", () => {
     const mech = mechanism();
     const grown = apply_actions(mech, [

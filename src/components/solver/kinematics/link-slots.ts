@@ -2,10 +2,8 @@ import { Link } from "../../../types";
 import { ABSENT, EditNodes, Nodes, SimNodes } from "../nodes";
 
 /**
- * A link's keys resolved to node slots, in a layout fixed per link type (see the switch
- * below). Recomputed at the start of every solve rather than cached on the link:
- * `rebake_belt_pin_refs` rewrites belt reference keys mid-simulation, and the cost is
- * O(links) against 300 sweeps.
+ * A link's keys resolved to node slots, in a layout fixed per link type (see the switch below).
+ * Recomputed at the start of every solve rather than cached on the link: `rebake_belt_pin_refs` rewrites belt reference keys mid-simulation, and the cost is O(links) against 300 sweeps.
  */
 export interface LinkSlots {
   pos: Int32Array;
@@ -16,10 +14,9 @@ export interface LinkSlots {
 const EMPTY = new Int32Array(0);
 
 /**
- * Every field a link can carry a POSITION key in. One list, because two very different
- * readers need the same answer: `rewrite_position_keys` (which rewrites them on fusion) and
- * `position_keys_of` below (which asks what a link touches). A link type that grows a key
- * field and is not added here goes silently unnoticed by both.
+ * Every field a link can carry a POSITION key in.
+ * One list, because two very different readers need the same answer: `rewrite_position_keys` (which rewrites them on fusion) and `position_keys_of` below (which asks what a link touches).
+ * A link type that grows a key field and is not added here goes silently unnoticed by both.
  */
 export const POSITION_KEY_FIELDS = [
   "key1",
@@ -159,8 +156,7 @@ export function resolve_slots(links: Link[], nodes: Nodes): LinkSlots[] {
           rad: EMPTY,
         };
 
-      // pos: start, end, then one per pulley. ang: the belt travel φ (simulation only).
-      // rad: one per pulley (edition only, when a length dimension resizes them).
+      // pos: start, end, then one per pulley. ang: the belt travel φ (simulation only). rad: one per pulley (edition only, when a length dimension resizes them).
       case "BeltLength":
         return {
           pos: Int32Array.of(P(link.startKey), P(link.endKey), ...link.gearPosKeys.map(P)),
@@ -235,8 +231,7 @@ export function resolve_slots(links: Link[], nodes: Nodes): LinkSlots[] {
           rad: EMPTY,
         };
 
-      // A grab targets either a position or a radius (edition), so the key is looked up
-      // in both spaces; only one of them resolves.
+      // A grab targets either a position or a radius (edition), so the key is looked up in both spaces; only one of them resolves.
       case "HandleGrab":
         return {
           pos: Int32Array.of(P(link.grabbedKey)),

@@ -10,18 +10,15 @@ import {
 } from "../dynamics/simulation-engine";
 
 /**
- * What the DISCONNECTION looks like from the outside, which is how the defect was seen:
- * how far the mechanism jumps on the transition frame, and which constraints stay
- * unsatisfied afterwards — every family, not just the belt's own.
+ * What the DISCONNECTION looks like from the outside, which is how the defect was seen: how far the mechanism jumps on the transition frame, and which constraints stay unsatisfied afterwards — every family, not just the belt's own.
  *
- * The q-link rebuild is switched on and off in the same process, so the two columns are
- * comparable.
+ * The q-link rebuild is switched on and off in the same process, so the two columns are comparable.
  */
 
 const loadFixture = () => load_mechanism(JSON.parse(disconnectJson)).mechanism;
 
 /** This fixture's own extent, so a threshold swept below in px of arc can be turned into the
- *  ratio `beltContact.detachRatio`/`reattachRatio` now expect — see `nodes_extent`. */
+ * ratio `beltContact.detachRatio`/`reattachRatio` now expect — see `nodes_extent`. */
 const FIXTURE_EXTENT = compile_simulation_model(loadFixture()).extent;
 
 /** Largest single-node move between two frames, in px: the jump one actually sees. */
@@ -110,8 +107,7 @@ describe("qualité de la déconnexion", () => {
 
   /**
    * Le saut de la frame de transition, en fonction du moment où la poulie est lâchée.
-   * Détacher à l'arc EXACTEMENT nul, c'est la lâcher quand elle ne tient déjà plus rien
-   * mais que le mécanisme est déjà contraint par elle.
+   * Détacher à l'arc EXACTEMENT nul, c'est la lâcher quand elle ne tient déjà plus rien mais que le mécanisme est déjà contraint par elle.
    */
   it("seuil de détachement contre saut de transition", () => {
     for (const detach of [0, 0.5, 1, 2, 5, 10]) {
@@ -125,8 +121,8 @@ describe("qualité de la déconnexion", () => {
   }, 600_000);
 
   /**
-   * Témoin : le moteur repart en arrière AVANT la tangence, donc rien ne se détache
-   * jamais. Ce qui reste violé ici est le fond de ce mécanisme, pas le rattachement.
+   * Témoin : le moteur repart en arrière AVANT la tangence, donc rien ne se détache jamais.
+   * Ce qui reste violé ici est le fond de ce mécanisme, pas le rattachement.
    */
   it("témoin sans détachement", () => {
     const dt = 1 / 120;

@@ -20,8 +20,7 @@ import type {
 import type { MaterialDef, ProfileDef } from "../../types/material";
 
 /**
- * The rail role travels between the bars a slider already holds: it never
- * changes what is connected to what, only which of those bars guides the slide.
+ * The rail role travels between the bars a slider already holds: it never changes what is connected to what, only which of those bars guides the slide.
  */
 
 const id = (n: number): ID =>
@@ -129,8 +128,7 @@ const sliderOf = (m: Mechanism): SliderElement =>
   m.mechanicalElements.find((el) => el.id === SLIDER) as SliderElement;
 
 describe("choix du rail d'un slider", () => {
-  // Two bars cross the slider's body and one hangs from it: the crossing one is
-  // promoted, the rail it replaces lands back where it came from.
+  // Two bars cross the slider's body and one hangs from it: the crossing one is promoted, the rail it replaces lands back where it came from.
   const crossed = (): MechanicalElement[] => [
     slider(RAIL, [CROSSING, HANGING]),
     body_beam(RAIL, 0),

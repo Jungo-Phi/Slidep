@@ -26,7 +26,7 @@ import { StringKey, t } from "../../i18n";
 /** How clicking this palette button behaves when simulation is active.
  *  - "structural"   : exits to edition first (elements, forces)
  *  - "constraint"   : pauses simulation, stays in sim mode (dimensions, constraints)
- *  - "observational": no sim effect (probes)
+ * - "observational": no sim effect (probes)
  */
 type SimBehavior = "structural" | "constraint" | "observational";
 
@@ -45,11 +45,8 @@ export interface PaletteElement {
 }
 
 /**
- * Built on demand rather than as a module constant: the icons and highlight
- * colors it holds come from the active theme, and a constant would freeze them
- * on whichever theme was loaded first. Exported for `ElementPalette.test.ts`'s
- * coverage check — see the note there on why a `CanvasStateType` can't silently
- * highlight nothing.
+ * Built on demand rather than as a module constant: the icons and highlight colors it holds come from the active theme, and a constant would freeze them on whichever theme was loaded first.
+ * Exported for `ElementPalette.test.ts`'s coverage check — see the note there on why a `CanvasStateType` can't silently highlight nothing.
  */
 export const edition_palette = (): {
   titleKey: StringKey;
@@ -85,14 +82,13 @@ export const edition_palette = (): {
             "DraggingFloorHeight",
             "DraggingFloorAngle",
             "EditingFloorValue",
-            // The ruler has no palette button of its own — it is armed and read from its own
-            // corner of the canvas. It lights this one, which is the tool it falls back to.
+            // The ruler has no palette button of its own — it is armed and read from its own corner of the canvas.
+            // It lights this one, which is the tool it falls back to.
             "Measuring",
             "MeasuringFrom",
             "Measured",
           ].includes(state.type) ||
-          // Une saisie ouverte depuis un outil resté armé laisse cet outil
-          // allumé : c'est lui qu'on retrouve en sortie, pas la sélection.
+          // Une saisie ouverte depuis un outil resté armé laisse cet outil allumé : c'est lui qu'on retrouve en sortie, pas la sélection.
           (state.type === "EditingValue" && !state.rearm),
         hilightColor: COLORS.SELECTION_BOX,
         hilightHoverColor: darken(COLORS.SELECTION_BOX, 0.2),
@@ -397,16 +393,14 @@ export const ElementPalette: React.FC<ElementPaletteProps> = ({
   onExitToEdition,
   onPauseSim,
 }) => {
-  // Rebuilt on every render, which is how the icons and highlight colors follow
-  // a theme change: both are read from the active canvas palette at call time.
+  // Rebuilt on every render, which is how the icons and highlight colors follow a theme change: both are read from the active canvas palette at call time.
   const palette = edition_palette();
 
   const handleElementClick = (
     element: PaletteElement,
     isHighlighted: boolean,
   ) => {
-    // Clicking the armed tool disarms it, like Escape — minus Escape's effect on
-    // a running simulation, which a palette click has no business triggering.
+    // Clicking the armed tool disarms it, like Escape — minus Escape's effect on a running simulation, which a palette click has no business triggering.
     if (isHighlighted && element.goToStateType !== "Selecting") {
       setCanvasState(tool_state("Selecting"));
       return;
@@ -441,11 +435,8 @@ export const ElementPalette: React.FC<ElementPaletteProps> = ({
   const columnsRef = useRef(columns);
   columnsRef.current = columns;
 
-  // The narrowest layout that still fits the canvas area, measured rather than
-  // estimated: the section titles and dividers vary with the theme's metrics, so
-  // the current height is the only reliable starting point. Everything but the
-  // icon grids keeps the same height when the column count changes, hence the
-  // reasoning on deltas.
+  // The narrowest layout that still fits the canvas area, measured rather than estimated: the section titles and dividers vary with the theme's metrics, so the current height is the only reliable starting point.
+  // Everything but the icon grids keeps the same height when the column count changes, hence the reasoning on deltas.
   useLayoutEffect(() => {
     const paper = paperRef.current;
     const area = paper?.parentElement;

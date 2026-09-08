@@ -49,7 +49,7 @@ export interface ViewportState {
 }
 
 /** An infinite line mechanisms can fall/roll onto — not the palette's fixed anchor
- *  ("Sol"/`tool_ground`), a distinct, optional, draggable simulation surface. */
+ * ("Sol"/`tool_ground`), a distinct, optional, draggable simulation surface. */
 export interface FloorConfig {
   enabled: boolean;
   /** World-space height (metres) of a point on the line, along its own normal. */
@@ -80,7 +80,8 @@ export interface Mechanism {
   constraintElements: ConstraintElement[];
   loads: LoadElement[];
   /** This mechanism's own materials and profiles — copied from the catalogue, never a live
-   *  reference to it. A `BeamElement` names one of each by id. */
+   * reference to it.
+   * A `BeamElement` names one of each by id. */
   materials: MaterialDef[];
   profiles: ProfileDef[];
   history: Action[][];

@@ -3,8 +3,7 @@ import React from "react";
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, fireEvent, screen, cleanup } from "@testing-library/react";
 
-// The icons barrel opens thousands of files under the test transform; the field only needs
-// the two arrows, and they draw nothing this test looks at.
+// The icons barrel opens thousands of files under the test transform; the field only needs the two arrows, and they draw nothing this test looks at.
 vi.mock("@mui/icons-material", () => ({
   KeyboardArrowUp: () => null,
   KeyboardArrowDown: () => null,

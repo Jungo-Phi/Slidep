@@ -4,11 +4,9 @@ import type { Link } from "../../../types";
 import { PBD_kinematic_solver } from "../kinematics/PBD_kinematic_solver";
 
 /**
- * Ce que deviennent l'engrènement et la longueur d'une barre quand on pousse au-delà de
- * ce que la borne autorise.
+ * Ce que deviennent l'engrènement et la longueur d'une barre quand on pousse au-delà de ce que la borne autorise.
  *
- * Les planchers sont injectés, jamais lus de l'app : ce qui est vérifié ici est le partage
- * de la correction entre la grandeur planchée et le reste, pas la valeur des bornes.
+ * Les planchers sont injectés, jamais lus de l'app : ce qui est vérifié ici est le partage de la correction entre la grandeur planchée et le reste, pas la valeur des bornes.
  */
 
 const P = (x: number, y: number) => new Point2(x, y);
@@ -73,9 +71,7 @@ describe("le plancher de rayon", () => {
     const solved = push_together(FLOOR, 5);
     expect(solved.rA).toBeGreaterThanOrEqual(FLOOR);
     expect(solved.rB).toBeGreaterThanOrEqual(FLOOR);
-    // Les deux rayons au plancher, l'engrènement veut exactement leur somme : la
-    // correction que les rayons refusent est passée aux positions, qui s'arrêtent là
-    // au lieu de suivre la prise jusqu'à 5.
+    // Les deux rayons au plancher, l'engrènement veut exactement leur somme : la correction que les rayons refusent est passée aux positions, qui s'arrêtent là au lieu de suivre la prise jusqu'à 5.
     expect(meshed(solved)).toBeLessThan(MESHED);
     expect(solved.span).toBeGreaterThan(2 * FLOOR - MESHED);
   });
@@ -161,8 +157,8 @@ describe("le plancher de longueur", () => {
     expect(squeeze_bar(FLOOR, 5)).toBeGreaterThan(FLOOR - MESHED);
   });
 
-  // Une `Distance` ramènerait aussi la barre à 80 : elle tire dans les deux sens. Une
-  // inégalité inactive ne fait rien du tout, et « rien » se lit au bit près.
+  // Une `Distance` ramènerait aussi la barre à 80 : elle tire dans les deux sens.
+  // Une inégalité inactive ne fait rien du tout, et « rien » se lit au bit près.
   it("ne dit rien tant qu'elle est plus longue", () => {
     expect(squeeze_bar(FLOOR, 200)).toBe(squeeze_bar(undefined, 200));
   });

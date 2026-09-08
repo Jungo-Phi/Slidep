@@ -1,16 +1,12 @@
 /**
  * The motions a chain's mobility is made of, in a form worth showing.
  *
- * The probe returns *a* basis of the motion space — orthonormal, correct, and shaped by the
- * random directions that happened to find it. Two of its vectors are as meaningful to a
- * reader as two random combinations of "the arm swings" and "the slider travels", and they
- * would change shape at the slightest edit.
+ * The probe returns *a* basis of the motion space — orthonormal, correct, and shaped by the random directions that happened to find it.
+ * Two of its vectors are as meaningful to a reader as two random combinations of "the arm swings" and "the slider travels", and they would change shape at the slightest edit.
  *
- * This module re-derives a basis of the same space from directions that mean something: each
- * element's own translations, its rotation about itself, each gear's spin. Pure linear
- * algebra on the space the probe already found — no further solve — so the result depends on
- * the space alone and not on how it was discovered. That is what makes the modes stable
- * enough to name, to hover and to animate.
+ * This module re-derives a basis of the same space from directions that mean something: each element's own translations, its rotation about itself, each gear's spin.
+ * Pure linear algebra on the space the probe already found — no further solve — so the result depends on the space alone and not on how it was discovered.
+ * That is what makes the modes stable enough to name, to hover and to animate.
  */
 
 import { PREVIEW_MIN_ZOOM } from "../../../constants/interaction-specs";
@@ -25,9 +21,7 @@ import {
 import { ChainMobility, angle_levers, chain_extent } from "./mobility-probe";
 
 /**
- * Smallest world length worth treating as non-zero — a chain flattened below this is no more
- * resolved than a preview at its own zoom floor already renders it, so extent guards and swing
- * amplitudes alike bottom out here rather than at an independently chosen value.
+ * Smallest world length worth treating as non-zero — a chain flattened below this is no more resolved than a preview at its own zoom floor already renders it, so extent guards and swing amplitudes alike bottom out here rather than at an independently chosen value.
  */
 export const MIN_VISIBLE_LENGTH = grid_metrics(PREVIEW_MIN_ZOOM).step;
 
@@ -37,10 +31,7 @@ const CONTRIBUTOR_SHARE = 0.02;
 /**
  * Share of the mode's widest motion below which a variable counts as still.
  *
- * Relative, because a mode is a unit vector: on a mechanism with many unknowns every
- * component is small, so an absolute cut would silently drop parts that visibly move — the
- * animation scales the whole mode until its widest unknown is legible, and everything else
- * moves in the same proportion.
+ * Relative, because a mode is a unit vector: on a mechanism with many unknowns every component is small, so an absolute cut would silently drop parts that visibly move — the animation scales the whole mode until its widest unknown is legible, and everything else moves in the same proportion.
  */
 const MOVING_SHARE = 0.01;
 
@@ -59,8 +50,7 @@ export type MotionMode = {
   /**
    * Elements that move, most first — a ranking, for naming and reading.
    *
-   * Not the set to highlight: the small shares are trimmed off, and a fused key's weight is
-   * split between its elements, so a part that genuinely moves can fall below the cut.
+   * Not the set to highlight: the small shares are trimmed off, and a fused key's weight is split between its elements, so a part that genuinely moves can fall below the cut.
    */
   contributors: ModeContributor[];
   /** Every element the mode moves, plus its motors. This is what a highlight must show. */
@@ -69,33 +59,29 @@ export type MotionMode = {
    * The element the mode is named after.
    *
    * A motor that drives the mode when there is one, otherwise the element that moves most.
-   * A motor is the handle a reader already has on a freedom — naming the mode after the
-   * largest amplitude instead would be arbitrary where naming it after its motor is not.
+   * A motor is the handle a reader already has on a freedom — naming the mode after the largest amplitude instead would be arbitrary where naming it after its motor is not.
    */
   dominant: ID;
   /** Set when `dominant` is a motor driving this mode, rather than merely its biggest mover. */
   drivenByMotor: boolean;
   /**
-   * The motion touches a single element — a freedom that moves nothing else. Often a gear
-   * spinning in the void, which is a design oversight rather than a mechanism.
+   * The motion touches a single element — a freedom that moves nothing else.
+   * Often a gear spinning in the void, which is a design oversight rather than a mechanism.
    */
   localized: boolean;
 };
 
 /**
- * Elements to light when the chain itself is pointed at: everything any of its modes moves,
- * and every motor acting on it.
+ * Elements to light when the chain itself is pointed at: everything any of its modes moves, and every motor acting on it.
  *
- * Pointing at a chain and then at one of its modes must narrow the highlight, never move it
- * elsewhere. Taking the union is what makes that true in both directions at once — and it
- * drops the free variables no mode moves, which the constraints have pinned: the chain owns
- * them on paper, but nothing about them is a freedom.
+ * Pointing at a chain and then at one of its modes must narrow the highlight, never move it elsewhere.
+ * Taking the union is what makes that true in both directions at once — and it drops the free variables no mode moves, which the constraints have pinned: the chain owns them on paper, but nothing about them is a freedom.
  *
- * The motors are added whole rather than gathered from the modes, so an over-motorised
- * chain still shows the motor that drives nothing. That is precisely what its card says.
+ * The motors are added whole rather than gathered from the modes, so an over-motorised chain still shows the motor that drives nothing.
+ * That is precisely what its card says.
  *
- * A chain with no mobility has no union to take. Its own parts are the honest answer there:
- * "this group is the rigid one" is exactly what the card says.
+ * A chain with no mobility has no union to take.
+ * Its own parts are the honest answer there: "this group is the rigid one" is exactly what the card says.
  */
 export function chain_highlight(
   chain: AnalysisChain,
@@ -112,10 +98,8 @@ export function chain_highlight(
 /**
  * Motors of the chain that drive no mode of it.
  *
- * Empty on any sound design — `name_after_motors` gives each motor a freedom of its own,
- * and one is left over only when there are more motors than mobilities. That motor has no
- * row to be named on, so without this it appears nowhere at all: neither its presence nor
- * its speed would be reachable from the panel that just called the chain over-driven.
+ * Empty on any sound design — `name_after_motors` gives each motor a freedom of its own, and one is left over only when there are more motors than mobilities.
+ * That motor has no row to be named on, so without this it appears nowhere at all: neither its presence nor its speed would be reachable from the panel that just called the chain over-driven.
  */
 export function undriven_motors(
   chain: AnalysisChain,
@@ -137,9 +121,8 @@ type Candidate = { vector: Float64Array; order: number };
 /**
  * Rigid-body and spin directions of every element of the chain, in canonical order.
  *
- * These are what a reader recognises: a part sliding, a part turning, a wheel spinning. None
- * of them need satisfy the constraints — they are only the vocabulary the motion space is
- * then expressed in.
+ * These are what a reader recognises: a part sliding, a part turning, a wheel spinning.
+ * None of them need satisfy the constraints — they are only the vocabulary the motion space is then expressed in.
  */
 function element_candidates(
   model: AnalysisModel,
@@ -171,8 +154,7 @@ function element_candidates(
         candidates.push({ vector, order: order++ });
       }
 
-      // Rotation about the element's own centre: a point turns about it, and an angle the
-      // element carries turns with it — one radian, worth `lever` metres at the rim.
+      // Rotation about the element's own centre: a point turns about it, and an angle the element carries turns with it — one radian, worth `lever` metres at the rim.
       let cx = 0;
       let cy = 0;
       let count = 0;
@@ -248,9 +230,7 @@ function project_into(
 /**
  * How the mode's motion divides between elements, strongest first.
  *
- * A fused key names several elements at once and its weight is split evenly between them:
- * charging each one the full amount instead would let an element that appears in every key
- * of a linkage collect a share of one, and read as though it moved alone.
+ * A fused key names several elements at once and its weight is split evenly between them: charging each one the full amount instead would let an element that appears in every key of a linkage collect a share of one, and read as though it moved alone.
  */
 function contributors_of(
   vector: Float64Array,
@@ -270,8 +250,7 @@ function contributors_of(
   const ranked = [...weight.entries()]
     .map(([id, w]) => ({ id, share: w / total }))
     .sort((a, b) => b.share - a.share || a.id.localeCompare(b.id));
-  // The strongest one always stays, however thin its share: spread over enough parts every
-  // share falls under the cut, and a mode with no contributor at all would have no name.
+  // The strongest one always stays, however thin its share: spread over enough parts every share falls under the cut, and a mode with no contributor at all would have no name.
   const kept = ranked.filter((c) => c.share >= CONTRIBUTOR_SHARE);
   return kept.length > 0 ? kept : ranked.slice(0, 1);
 }
@@ -279,12 +258,10 @@ function contributors_of(
 /**
  * Elements the mode actually moves.
  *
- * Counted as a set rather than weighed: "this freedom touches one part and nothing else" is
- * a statement about which parts move, not about how the motion is shared out. Weighing it
- * would call a linkage's coupler a lone mover, since it belongs to every fused node.
+ * Counted as a set rather than weighed: "this freedom touches one part and nothing else" is a statement about which parts move, not about how the motion is shared out.
+ * Weighing it would call a linkage's coupler a lone mover, since it belongs to every fused node.
  *
- * What stays put is left out, motors included — a motor's own unknown turns in most of its
- * chain's modes, so lighting it wherever it is touched put it on every neighbouring row.
+ * What stays put is left out, motors included — a motor's own unknown turns in most of its chain's modes, so lighting it wherever it is touched put it on every neighbouring row.
  * The one it drives gets it back in `canonical_modes`, by name.
  *
  * Monotone in the moving set, which is what keeps a mode's highlight inside its chain's.
@@ -308,8 +285,7 @@ function moved_elements(
 /**
  * Re-express a chain's motion space in element-shaped directions.
  *
- * Greedy on the strongest remaining projection: the direction the constraints accommodate
- * best comes first, so a Core XY answers with its two axes rather than two mixtures of them.
+ * Greedy on the strongest remaining projection: the direction the constraints accommodate best comes first, so a Core XY answers with its two axes rather than two mixtures of them.
  * Ties fall back to canonical element order, which keeps the choice deterministic.
  */
 export function canonical_modes(
@@ -357,22 +333,19 @@ export function canonical_modes(
       vector,
       contributors,
       moves: named,
-      // Replaced by `name_modes` below; a mode always moves something, so there is always
-      // a part to fall back on and the name is never absent.
+      // Replaced by `name_modes` below; a mode always moves something, so there is always a part to fall back on and the name is never absent.
       dominant: contributors[0]?.id ?? named[0],
       drivenByMotor: false,
       localized: moves.size === 1,
     };
   });
   name_modes(chain, variables, modes);
-  // A driven row is named after its motor, so a highlight without it would contradict the
-  // name the reader is pointing at. Only that row gets it: the motor drives this freedom
-  // and no other.
+  // A driven row is named after its motor, so a highlight without it would contradict the name the reader is pointing at.
+  // Only that row gets it: the motor drives this freedom and no other.
   for (const mode of modes)
     if (mode.drivenByMotor && !mode.moves.includes(mode.dominant))
       mode.moves = [...mode.moves, mode.dominant].sort();
-  // Driven freedoms first: they are what the mechanism was built to have, and a reader looks
-  // for them before the play left over around them.
+  // Driven freedoms first: they are what the mechanism was built to have, and a reader looks for them before the play left over around them.
   return modes
     .map((mode, order) => ({ mode, order }))
     .sort(
@@ -386,10 +359,8 @@ export function canonical_modes(
 /**
  * Give every mode a name of its own.
  *
- * Motors first, each claiming the mode it drives; the rest fall back to the element that
- * moves most among those not yet spoken for. Two modes sharing a name would be
- * indistinguishable in the panel, and a mechanism's freedoms are rarely about one same part
- * twice.
+ * Motors first, each claiming the mode it drives; the rest fall back to the element that moves most among those not yet spoken for.
+ * Two modes sharing a name would be indistinguishable in the panel, and a mechanism's freedoms are rarely about one same part twice.
  */
 function name_modes(
   chain: AnalysisChain,
@@ -412,9 +383,7 @@ function name_modes(
 /**
  * Give each motor the mode it drives, and let that mode take the motor's name.
  *
- * Greedy on the strongest coupling: a motor claims the mode that moves its own driven unknown
- * most, and a mode already claimed is left alone — so more motors than modes, or two motors
- * on one freedom, resolve without either of them silently winning twice.
+ * Greedy on the strongest coupling: a motor claims the mode that moves its own driven unknown most, and a mode already claimed is left alone — so more motors than modes, or two motors on one freedom, resolve without either of them silently winning twice.
  */
 function name_after_motors(
   chain: AnalysisChain,

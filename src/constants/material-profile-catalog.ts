@@ -1,5 +1,6 @@
 /**
- * The application-level catalogue of materials and profiles. Constants, translated — as opposed to a mechanism's own library, what a `BeamElement` actually references.
+ * The application-level catalogue of materials and profiles.
+ * Constants, translated — as opposed to a mechanism's own library, what a `BeamElement` actually references.
  * `seed_material_catalog` copies every material here into a mechanism's own `materials` once, at creation/migration (a fresh id each, name frozen in whatever language was active.
  *
  * Functions, not plain constants, because the name has to read the active language at call time — the same reason `ANGULAR_VELOCITY` in quantity-format.ts is one (see its own doc).
@@ -50,7 +51,7 @@ export const PROFILE_CATALOG: CatalogProfile[] = [
 ];
 
 /** A fresh library copy of a catalogue material — a new id, its name frozen in the active
- *  language. */
+ * language. */
 export const catalog_material_def = (entry: CatalogMaterial): MaterialDef => ({
   id: crypto.randomUUID() as ID,
   name: entry.name(),
@@ -60,8 +61,8 @@ export const catalog_material_def = (entry: CatalogMaterial): MaterialDef => ({
 });
 
 /** Every catalogue material, copied into a mechanism's own library — see this file's own
- *  doc. Always seeded in this order, so `materials[0]` (steel) is what a beam with no other
- *  reference to fall back on takes (`placing-element-actions.ts`). */
+ * doc.
+ * Always seeded in this order, so `materials[0]` (steel) is what a beam with no other reference to fall back on takes (`placing-element-actions.ts`). */
 export function seed_material_catalog(): MaterialDef[] {
   return MATERIAL_CATALOG.map((entry) => catalog_material_def(entry));
 }
@@ -74,9 +75,8 @@ export const catalog_profile_def = (entry: CatalogProfile): ProfileDef => ({
 });
 
 /** The catalogue's own shape for `kind` — what switching a profile to a new shape kind
- *  resets its cotes to, since the old ones (a different field set entirely) carry no
- *  sensible value across the switch. Every kind the catalogue lists is covered by
- *  construction (`PROFILE_CATALOG` carries all five), so this never falls through. */
+ * resets its cotes to, since the old ones (a different field set entirely) carry no sensible value across the switch.
+ * Every kind the catalogue lists is covered by construction (`PROFILE_CATALOG` carries all five), so this never falls through. */
 export function default_shape_for_kind(
   kind: ProfileShape["kind"],
 ): ProfileShape {
@@ -86,12 +86,9 @@ export function default_shape_for_kind(
 }
 
 /**
- * A fresh, editable starting point — steel's own values, the plain 20×20 mm rectangle — for
- * "+ Nouveau…": something to rename and tweak rather than an empty, invalid entry. The name is
- * a plain placeholder ("Matériau 1", "Matériau 2"…), not the catalogue material it borrows its
- * values from — that name would misleadingly suggest it still is that material.
- * `existingNames` is whatever materials it must not collide with; empty for a document-level
- * fallback, which never collides since nothing else exists at that point (`migrate-mechanism.ts`).
+ * A fresh, editable starting point — steel's own values, the plain 20×20 mm rectangle — for "+ Nouveau…": something to rename and tweak rather than an empty, invalid entry.
+ * The name is a plain placeholder ("Matériau 1", "Matériau 2"…), not the catalogue material it borrows its values from — that name would misleadingly suggest it still is that material.
+ * `existingNames` is whatever materials it must not collide with; empty for a document-level fallback, which never collides since nothing else exists at that point (`migrate-mechanism.ts`).
  */
 export function default_material(existingNames: Iterable<string> = []): MaterialDef {
   return {
@@ -101,8 +98,7 @@ export function default_material(existingNames: Iterable<string> = []): Material
 }
 
 /** Same idea as `default_material`, for a profile: a plain placeholder ("Profilé 1", "Profilé
- *  2"…) rather than the shape's own catalogue name — that name would go stale the moment the
- *  shape kind is switched, which picking a shape immediately invites. */
+ * 2"…) rather than the shape's own catalogue name — that name would go stale the moment the shape kind is switched, which picking a shape immediately invites. */
 export function default_profile(existingNames: Iterable<string> = []): ProfileDef {
   return {
     ...catalog_profile_def(PROFILE_CATALOG[0]),

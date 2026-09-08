@@ -1,16 +1,12 @@
 /**
  * Does falsifying a constraint tell redundant from independent?
  *
- * The bench the design rests on. Leave-one-out already answers by rank; this asks by
- * consequence, and the two must agree — one bench, two independent methods, which is what
- * made the mobility probe trustworthy.
+ * The bench the design rests on.
+ * Leave-one-out already answers by rank; this asks by consequence, and the two must agree — one bench, two independent methods, which is what made the mobility probe trustworthy.
  *
- * What it establishes today: the principle holds, and on every mechanism but Core XY the
- * two verdicts match constraint for constraint. What it also establishes, and pins so it
- * cannot be forgotten: **no single size of lie separates them everywhere**. Told small, the
- * lie misses redundancies; told large, it catches an independent constraint that simply
- * cannot reach its new pose. That is the same scale-dependence the mobility probe's first
- * acceptance criterion died of, and it has to be answered before this becomes a detector.
+ * What it establishes today: the principle holds, and on every mechanism but Core XY the two verdicts match constraint for constraint.
+ * What it also establishes, and pins so it cannot be forgotten: **no single size of lie separates them everywhere**. Told small, the lie misses redundancies; told large, it catches an independent constraint that simply cannot reach its new pose.
+ * That is the same scale-dependence the mobility probe's first acceptance criterion died of, and it has to be answered before this becomes a detector.
  */
 
 import { describe, expect, it } from "vitest";
@@ -125,10 +121,9 @@ const RESISTED = 0.1;
 /**
  * How much of the lie the mechanism refuses to absorb.
  *
- * Near zero the constraint's target was free to move and everything followed. Anything
- * appreciable means the lie stayed on the table — nothing could satisfy the set. Not bounded
- * by one: the residual it leaves behind lands on other constraints, through levers that can
- * multiply it several times over.
+ * Near zero the constraint's target was free to move and everything followed.
+ * Anything appreciable means the lie stayed on the table — nothing could satisfy the set.
+ * Not bounded by one: the residual it leaves behind lands on other constraints, through levers that can multiply it several times over.
  */
 function resistance(
   model: AnalysisModel,
@@ -185,8 +180,8 @@ const SLOW = 120_000;
 
 describe("falsify", () => {
   it("une barre en double refuse le mensonge, une barre indépendante l'encaisse", () => {
-    // Deux barres entre les deux mêmes pivots : l'une des deux est de trop. Allonger
-    // n'importe laquelle demanderait à l'autre de mentir aussi, ce qu'elle ne peut pas.
+    // Deux barres entre les deux mêmes pivots : l'une des deux est de trop.
+    // Allonger n'importe laquelle demanderait à l'autre de mentir aussi, ce qu'elle ne peut pas.
     const doubled = build_analysis_model(
       mechanism([
         pivot("p1", P(0, 0), true, [id("b1"), id("b2")]),
@@ -225,9 +220,8 @@ describe("falsify", () => {
   it(
     "s'accorde avec le leave-one-out, constrainte par contrainte",
     () => {
-      // Deux chemins vers la même question — le rang d'un côté, la conséquence de
-      // l'autre. Un désaccord voudrait dire que l'une des deux se trompe, et rien ne
-      // dirait laquelle sans ce banc.
+      // Deux chemins vers la même question — le rang d'un côté, la conséquence de l'autre.
+      // Un désaccord voudrait dire que l'une des deux se trompe, et rien ne dirait laquelle sans ce banc.
       for (const json of [vilbrequin, jansen, poulie, huygens, doubleSlider]) {
         const { missed, invented } = disagreements(analysed(json), BIG_LIE);
         expect(missed.map((l) => l.type)).toEqual([]);
@@ -243,15 +237,14 @@ describe("falsify", () => {
       // Le point qui bloque, mesuré sur Core XY et figé ici pour qu'il ne se perde pas.
       const model = analysed(coreXY);
 
-      // Gros mensonge : une `Distance` pourtant indépendante résiste. Elle ne peut pas
-      // atteindre sa nouvelle pose — une butée de glissière, pas un rang.
+      // Gros mensonge : une `Distance` pourtant indépendante résiste.
+      // Elle ne peut pas atteindre sa nouvelle pose — une butée de glissière, pas un rang.
       const big = disagreements(model, BIG_LIE);
       expect(big.missed).toEqual([]);
       expect(big.invented.length).toBeGreaterThan(0);
 
-      // Petit mensonge : l'accusation à tort disparaît, mais de vraies redondances
-      // passent sous le seuil. Le verrou d'angle en est l'exemple — son bras de levier
-      // est celui de la chaîne entière, donc le mensonge qu'il reçoit est minuscule.
+      // Petit mensonge : l'accusation à tort disparaît, mais de vraies redondances passent sous le seuil.
+      // Le verrou d'angle en est l'exemple — son bras de levier est celui de la chaîne entière, donc le mensonge qu'il reçoit est minuscule.
       const small = disagreements(model, SMALL_LIE);
       expect(small.invented).toEqual([]);
       expect(small.missed.length).toBeGreaterThan(0);
@@ -260,15 +253,14 @@ describe("falsify", () => {
   );
 
   it("couvre tout Core XY, glissières comprises", () => {
-    // La couverture est une donnée du chantier, pas une note de bas de page. Une
-    // glissière n'a pas de valeur propre : son mensonge est une place, à côté du rail.
+    // La couverture est une donnée du chantier, pas une note de bas de page.
+    // Une glissière n'a pas de valeur propre : son mensonge est une place, à côté du rail.
     const chain = analysed(coreXY).chains[0];
     expect(chain.links.filter((l) => !is_falsifiable(l))).toEqual([]);
   });
 
   it("ce qui tient une quantité à zéro n'a rien à décaler", () => {
-    // La part qui reste découverte, et pourquoi : falsifier un parallélisme demanderait
-    // au solveur un terme qu'il n'a pas.
+    // La part qui reste découverte, et pourquoi : falsifier un parallélisme demanderait au solveur un terme qu'il n'a pas.
     const keys = {
       ddl: 1 as const,
       key1: "a",

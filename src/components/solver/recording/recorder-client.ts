@@ -12,10 +12,8 @@ import { snapshot_layout } from "../snapshot";
 /**
  * The main thread's handle on the recording worker.
  *
- * Nothing here waits: `target` is fire-and-forget, and `drain` hands over whatever has
- * arrived since the last call. The display therefore never blocks on the solver — which is
- * the whole point of the chantier — at the price of the cursor trailing the worker by up to
- * a message, which is a fraction of a frame.
+ * Nothing here waits: `target` is fire-and-forget, and `drain` hands over whatever has arrived since the last call.
+ * The display therefore never blocks on the solver — which is the whole point of the chantier — at the price of the cursor trailing the worker by up to a message, which is a fraction of a frame.
  */
 export class RecorderClient {
   private worker: Worker;
@@ -24,9 +22,8 @@ export class RecorderClient {
   /** Where the recording ends, or `null` while nothing has come back yet. */
   private reached: number | null = null;
   /**
-   * The slots the epoch's snapshots are written in, from the `layout` message the worker
-   * posts on every load. Put back on each arriving snapshot, which is what gives all the
-   * snapshots of one recording the single shared layout `snapshot_at` compares by identity.
+   * The slots the epoch's snapshots are written in, from the `layout` message the worker posts on every load.
+   * Put back on each arriving snapshot, which is what gives all the snapshots of one recording the single shared layout `snapshot_at` compares by identity.
    */
   private layout: SnapshotLayout | null = null;
   /** How long the loaded mechanism records, from the worker that sized it. */
@@ -50,9 +47,8 @@ export class RecorderClient {
         this.limit = max_recording_time(this.layout);
         return;
       }
-      // Messages are delivered in order and the layout is posted on load, so it is here
-      // before any snapshot of its epoch. Reading them without it would silently place
-      // every key at the wrong slot, so they are dropped rather than guessed at.
+      // Messages are delivered in order and the layout is posted on load, so it is here before any snapshot of its epoch.
+      // Reading them without it would silently place every key at the wrong slot, so they are dropped rather than guessed at.
       if (!this.layout) {
         console.error("[recorder worker] snapshots avant leur disposition");
         return;
@@ -61,8 +57,7 @@ export class RecorderClient {
         this.queued.push({ ...wire, layout: this.layout });
       this.reached = message.reached;
     };
-    // Without these a worker that throws — or a message that fails to clone — simply goes
-    // quiet, and the only symptom is a simulated clock that never advances.
+    // Without these a worker that throws — or a message that fails to clone — simply goes quiet, and the only symptom is a simulated clock that never advances.
     this.worker.onerror = (event) =>
       console.error("[recorder worker]", event.message, event);
     this.worker.onmessageerror = (event) =>
@@ -86,8 +81,7 @@ export class RecorderClient {
     this.queued = [];
     this.layout = null;
     this.reached = resumeFrom?.t ?? null;
-    // Without its undo history: the worker only ever simulates, and that array is the
-    // bulk of a long editing session — re-serialised on every edit made while running.
+    // Without its undo history: the worker only ever simulates, and that array is the bulk of a long editing session — re-serialised on every edit made while running.
     this.post({
       type: "load",
       mode,
@@ -100,9 +94,7 @@ export class RecorderClient {
   /**
    * Go back to an instant already recorded, keeping the loaded mechanism.
    *
-   * Same epoch bump as a `load` — the instants past the target are still in flight and must
-   * not be appended after it — but the layout is kept: the model has not changed, so the
-   * snapshots that follow are written in the same slots.
+   * Same epoch bump as a `load` — the instants past the target are still in flight and must not be appended after it — but the layout is kept: the model has not changed, so the snapshots that follow are written in the same slots.
    */
   rewind(resumeFrom: SimulationSnapshot): void {
     this.epoch++;

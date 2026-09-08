@@ -12,8 +12,7 @@ import { KinematicSnapshot } from "../../../types/runtime-state";
 import { snapshot_point } from "../snapshot";
 
 /**
- * End-to-end wiring of the `collisionsOn` toggle through `step_simulation`: a hammer beam
- * (pivoted, swung by a drag) against a fixed wall beam it is not otherwise connected to.
+ * End-to-end wiring of the `collisionsOn` toggle through `step_simulation`: a hammer beam (pivoted, swung by a drag) against a fixed wall beam it is not otherwise connected to.
  */
 
 let nextID = 0;
@@ -122,8 +121,7 @@ describe("collisionsOn dans step_simulation", () => {
       beam(WALL, new Point2(0, -15), new Point2(100, -15), WS, WE),
     ]);
     const tip = drag(before, `${HAMMER}:end`, new Point2(50, 10), false);
-    // Pulled straight down past the wall (y = -15): without collisions it swings all the
-    // way to where the rigid arm points straight down, past the wall.
+    // Pulled straight down past the wall (y = -15): without collisions it swings all the way to where the rigid arm points straight down, past the wall.
     expect(tip.y).toBeGreaterThan(-12);
   });
 
@@ -146,10 +144,7 @@ describe("collisionsOn dans step_simulation", () => {
   });
 
   it("bloque même une poutre partie loin du mur, tirée d'un coup dès la 1ère frame", () => {
-    // Starts well beyond any fixed activation radius (35 units), so a filter that only
-    // includes candidates already close would miss it entirely for this frame — and a hard
-    // single-frame grab pull (a fast drag) reaches all the way across in that one frame,
-    // with nothing left to catch it on the next.
+    // Starts well beyond any fixed activation radius (35 units), so a filter that only includes candidates already close would miss it entirely for this frame — and a hard single-frame grab pull (a fast drag) reaches all the way across in that one frame, with nothing left to catch it on the next.
     const HP = id();
     const HAMMER = id();
     const WS = id();

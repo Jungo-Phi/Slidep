@@ -38,9 +38,8 @@ export type ValidationErrorCode =
   | "PARENT_BEAM_CONFLICT";
 
 /**
- * What a constraint says, independently of how it was written: its type and its
- * operands, order-independent. Two constraints sharing a key say the same thing
- * twice.
+ * What a constraint says, independently of how it was written: its type and its operands, order-independent.
+ * Two constraints sharing a key say the same thing twice.
  */
 export function constraint_key(constraint: ConstraintElement): string {
   const ids = element_ref_fields(constraint).flatMap(({ ids }) => ids);
@@ -80,8 +79,7 @@ function node_refs_edge(node: MechanicalElement, edgeID: ID): boolean {
 /**
  * Whether `target` points back at `source`, per reference field.
  *
- * A field absent from this map carries no reciprocity requirement — that is the
- * case for constraint and load references, which are one-way by nature.
+ * A field absent from this map carries no reciprocity requirement — that is the case for constraint and load references, which are one-way by nature.
  */
 const BACK_REFERENCE: Record<
   string,
@@ -124,10 +122,8 @@ const CONSTRAINT_ENDPOINT_PAIRS: [string, string][] = [
  * Validates a mechanism's internal consistency.
  * Returns null if valid, or an array of errors otherwise.
  *
- * Reference checks — existence, target type, self-reference, duplicates — are
- * driven by `ELEMENT_REFS`, so they cover every element alike: mechanical,
- * constraint and load. The passes that follow encode the rules the table cannot
- * express: reciprocity, duplicate IDs, meshing and motor coherence.
+ * Reference checks — existence, target type, self-reference, duplicates — are driven by `ELEMENT_REFS`, so they cover every element alike: mechanical, constraint and load.
+ * The passes that follow encode the rules the table cannot express: reciprocity, duplicate IDs, meshing and motor coherence.
  */
 export function validate_mechanism(
   mechanism: Mechanism,
@@ -145,9 +141,7 @@ export function validate_mechanism(
   const allByID = new Map<ID, UnionElement>(
     allElements.map((e): [ID, UnionElement] => [e.id, e]),
   );
-  // Library entries — a mechanism's own materials/profiles — are reference targets too
-  // (`BeamElement.materialID`/`profileID`), but not elements: kept out of `allByID` and
-  // checked separately below.
+  // Library entries — a mechanism's own materials/profiles — are reference targets too (`BeamElement.materialID`/`profileID`), but not elements: kept out of `allByID` and checked separately below.
   const materialByID = new Map(mechanism.materials.map((m) => [m.id, m]));
   const profileByID = new Map(mechanism.profiles.map((p) => [p.id, p]));
 
@@ -459,11 +453,9 @@ export interface ConstraintViolation {
 }
 
 /**
- * Computes geometric errors for each constraint and mechanical liaison,
- * returning violations where error > threshold.
+ * Computes geometric errors for each constraint and mechanical liaison, returning violations where error > threshold.
  *
- * Thresholds: thresholdPx for distances (px), thresholdDeg for angles (°),
- * thresholdRatio for gear-ratio (dimensionless).
+ * Thresholds: thresholdPx for distances (px), thresholdDeg for angles (°), thresholdRatio for gear-ratio (dimensionless).
  */
 export function compute_constraint_violations(
   mechanism: Mechanism,
@@ -886,8 +878,7 @@ export function compute_constraint_violations(
   }
 
   // ── Liaisons: a belt terminal rests ON its pulley's rim, never inside ────────
-  // A closed belt has no free terminal: its junction rides the loop, which runs
-  // outside every pulley by construction.
+  // A closed belt has no free terminal: its junction rides the loop, which runs outside every pulley by construction.
   for (const el of mels) {
     if (el.type !== "belt" || el.closed) continue;
     const e = edgePos.get(el.id);

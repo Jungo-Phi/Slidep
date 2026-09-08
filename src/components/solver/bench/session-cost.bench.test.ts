@@ -18,8 +18,8 @@ import { GRAB_KEYS } from "../snapshot";
 import { get_sim_degrees_of_freedom } from "../utils";
 
 /**
- * TEMPORARY — what a render of the analysis panel costs, and what a long session costs in
- * memory. Both are chantier 6 items that no bench had ever looked at.
+ * TEMPORARY — what a render of the analysis panel costs, and what a long session costs in memory.
+ * Both are chantier 6 items that no bench had ever looked at.
  */
 
 // The project has no `@types/node`; this bench is the only thing here that reads the heap.
@@ -30,10 +30,9 @@ declare const process: {
 /**
  * What a session retains, in bytes.
  *
- * `heapUsed` ALONE IS WRONG HERE: a typed array's contents live outside the JS heap, so it
- * reports a snapshot's object headers and its belt `Map`s but not its numbers — which are
- * now nearly all of it. Measured that way, `Jansen` came out at 0.50 ko for two arrays that
- * are 0.55 ko on their own. `external` is where those bytes are counted.
+ * `heapUsed` ALONE IS WRONG HERE: a typed array's contents live outside the JS heap, so it reports a snapshot's object headers and its belt `Map`s but not its numbers — which are now nearly all of it.
+ * Measured that way, `Jansen` came out at 0.50 ko for two arrays that are 0.55 ko on their own.
+ * `external` is where those bytes are counted.
  */
 const retained = () => {
   const m = process.memoryUsage();
@@ -137,9 +136,7 @@ describe("ce qu'une session coûte", () => {
     console.log("  |---|---|---|---|");
     for (const seconds of [5, 15, 30, 60]) {
       const snapshots = record(coreXY2, Math.round(seconds / RECORD_DT));
-      // The call is now cheap enough that collecting the PREVIOUS recording lands inside the
-      // timed window and dominates it: measured without this, 30 s came out five times
-      // faster than 15 s. Settle first so what is timed is the walk, not the allocator.
+      // The call is now cheap enough that collecting the PREVIOUS recording lands inside the timed window and dominates it: measured without this, 30 s came out five times faster than 15 s. Settle first so what is timed is the walk, not the allocator.
       settle();
       const ms = median(20, () => {
         get_probe_series(element, "position", snapshots);
@@ -159,8 +156,7 @@ describe("ce qu'une session coûte", () => {
       );
       return;
     }
-    // Held to the end of the test: what is measured is what a session RETAINS, so nothing
-    // here may become collectable while the heap is being read.
+    // Held to the end of the test: what is measured is what a session RETAINS, so nothing here may become collectable while the heap is being read.
     const kept: KinematicSnapshot[][] = [];
     console.log(
       "\n  `tableaux` est la taille des deux Float64Array seuls : le plancher que le retenu" +
@@ -173,8 +169,7 @@ describe("ce qu'une session coûte", () => {
     console.log("  |---|---|---|---|---|---|");
     for (const [name, json] of MECHANISMS) {
       const FRAMES = Math.round(20 / RECORD_DT); // 20 simulated seconds
-      // A first recording warms the allocator and the compiled code, so the second one
-      // measures the snapshots rather than the machinery around them.
+      // A first recording warms the allocator and the compiled code, so the second one measures the snapshots rather than the machinery around them.
       record(json, 240);
       settle();
       const before = retained();

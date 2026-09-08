@@ -1,23 +1,15 @@
 /**
  * How a redundant constraint would yield, drawn rather than measured.
  *
- * The strain animation this replaces earned its shape from a solve: a lie told to the
- * mechanism, scaled and clamped until the picture read as motion. That whole apparatus —
- * two-pass calibration, a ceiling, a dead-response floor, the choice of stretch over travel —
- * existed to make a *measured* response legible. A symbol has none of that to buy back: its
- * size is a drawing decision, fixed in screen pixels, so there is nothing left to calibrate
- * and no solve to spend. What it keeps from that work is the geometry — which points a
- * constraint holds, and which way it lets go — read once from the resting pose.
+ * The strain animation this replaces earned its shape from a solve: a lie told to the mechanism, scaled and clamped until the picture read as motion.
+ * That whole apparatus — two-pass calibration, a ceiling, a dead-response floor, the choice of stretch over travel — existed to make a *measured* response legible.
+ * A symbol has none of that to buy back: its size is a drawing decision, fixed in screen pixels, so there is nothing left to calibrate and no solve to spend.
+ * What it keeps from that work is the geometry — which points a constraint holds, and which way it lets go — read once from the resting pose.
  *
- * Three shapes, chosen from what the gallery's redundant links are, not from the full type
- * union: `Distance` / `BeltLength` / `BeltSegmentNoSlip` hold a length, so they show as two
- * points pulled apart. `Angle` holds two arms at a fixed spread, so it shows as arcs coming
- * loose from their shared vertex — as does a `Distance` with `angleLock` set, a triangulation
- * chord standing in for a hub's angle lock rather than a real dimension.
- * `SlideOnSegment` / `FixedOnSegment` / `GearPerimeterPin` pin a point to a rail — straight
- * or, for the perimeter pin, the rim of a gear — so they show as the point lifting off it. A
- * link outside that set gets no symbol; the red highlight it already carries is not lost,
- * only left undecorated.
+ * Three shapes, chosen from what the gallery's redundant links are, not from the full type union: `Distance` / `BeltLength` / `BeltSegmentNoSlip` hold a length, so they show as two points pulled apart.
+ * `Angle` holds two arms at a fixed spread, so it shows as arcs coming loose from their shared vertex — as does a `Distance` with `angleLock` set, a triangulation chord standing in for a hub's angle lock rather than a real dimension.
+ * `SlideOnSegment` / `FixedOnSegment` / `GearPerimeterPin` pin a point to a rail — straight or, for the perimeter pin, the rim of a gear — so they show as the point lifting off it.
+ * A link outside that set gets no symbol; the red highlight it already carries is not lost, only left undecorated.
  */
 
 import { ID, Link, Point2 } from "../../../types";
@@ -34,8 +26,7 @@ export type RedundancySymbol =
 export const EMPTY_REDUNDANCY_SYMBOLS: RedundancySymbol[] = [];
 
 /**
- * The symbol for `link`'s failure mode at the model's current pose, or `undefined` when its
- * type carries none.
+ * The symbol for `link`'s failure mode at the model's current pose, or `undefined` when its type carries none.
  */
 export function redundancy_symbol(
   model: AnalysisModel,
@@ -51,11 +42,9 @@ export function redundancy_symbol(
     case "BeltSegmentNoSlip":
       return gap(at(link.posKeyA), at(link.posKeyB));
     case "BeltLength": {
-      // An open belt's terminals are real, distinct nodes. A closed belt has none —
-      // `startKey`/`endKey` are still set (parsing always fills them), and can even
-      // resolve to the SAME fused point, which reads as a zero-length gap rather than
-      // a missing one. Two of its own pulleys stand in instead: a location to point
-      // at, not a literal strand.
+      // An open belt's terminals are real, distinct nodes.
+      // A closed belt has none — `startKey`/`endKey` are still set (parsing always fills them), and can even resolve to the SAME fused point, which reads as a zero-length gap rather than a missing one.
+      // Two of its own pulleys stand in instead: a location to point at, not a literal strand.
       const [a, b] = link.closed
         ? [at(link.gearPosKeys[0]), at(link.gearPosKeys[1])]
         : [at(link.startKey), at(link.endKey)];
@@ -98,15 +87,9 @@ function gap(
 }
 
 /**
- * `vertex` is read from the lock's own owner, never guessed from where the two segments
- * happen to meet — they may not meet at all. `add_rigidity_links` locks a hub's welded beams
- * against its *rail*, and a body node sits partway along that rail's full span rather than at
- * either of its ends: on "poutre sur deux sliders", the rail is `(0,0)–(400,0)` and the carried
- * beam `(100,0)–(300,0)`, sharing no endpoint at all, while the lock is physically at the
- * slider, `(100,0)`. Each arm then points from the vertex along its own segment's direction,
- * signed toward whichever of the segment's two ends is farther — the direction that segment
- * actually extends away from the hub, not necessarily the one either of its own endpoints sit
- * at.
+ * `vertex` is read from the lock's own owner, never guessed from where the two segments happen to meet — they may not meet at all.
+ * `add_rigidity_links` locks a hub's welded beams against its *rail*, and a body node sits partway along that rail's full span rather than at either of its ends: on "poutre sur deux sliders", the rail is `(0,0)–(400,0)` and the carried beam `(100,0)–(300,0)`, sharing no endpoint at all, while the lock is physically at the slider, `(100,0)`.
+ * Each arm then points from the vertex along its own segment's direction, signed toward whichever of the segment's two ends is farther — the direction that segment actually extends away from the hub, not necessarily the one either of its own endpoints sit at.
  */
 function diverge(
   model: AnalysisModel,
@@ -140,10 +123,8 @@ function arm_from(
 }
 
 /**
- * Diverge symbol for a triangulation chord standing in for a hub's angle lock (see
- * `angleLock` on `Distance` links). `p1`/`p2` are the chord's own endpoints, each already the
- * far end of one welded beam, so the arms need no direction lookup — just the unit vector
- * from the hub to each.
+ * Diverge symbol for a triangulation chord standing in for a hub's angle lock (see `angleLock` on `Distance` links).
+ * `p1`/`p2` are the chord's own endpoints, each already the far end of one welded beam, so the arms need no direction lookup — just the unit vector from the hub to each.
  */
 function diverge_at_hub(
   model: AnalysisModel,
@@ -178,8 +159,7 @@ function element_position(
 }
 
 /**
- * `bias`, when given, is the constraint's own `normalOffset`: a slider already asked to sit
- * off its rail lifts further the same way it already leans, rather than flipping side.
+ * `bias`, when given, is the constraint's own `normalOffset`: a slider already asked to sit off its rail lifts further the same way it already leans, rather than flipping side.
  */
 function off_straight_rail(
   s: Point2 | undefined,

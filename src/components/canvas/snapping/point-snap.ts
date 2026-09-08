@@ -4,7 +4,8 @@
  * Applied on the hovered position, in world space, so what the gesture puts down is what the cursor showed.
  * Every tolerance is a screen distance: how close one has to aim is a matter of pixels, not of how far the drawing is zoomed.
  *
- * A hover is not always all-or-nothing. Aiming at the body of a beam leaves the point free to slide along it, and that freedom answers to the grid like any other — so a node dropped on a long bar can land where the bar crosses a grid line, on the bar and on the grid at once.
+ * A hover is not always all-or-nothing.
+ * Aiming at the body of a beam leaves the point free to slide along it, and that freedom answers to the grid like any other — so a node dropped on a long bar can land where the bar crosses a grid line, on the bar and on the grid at once.
  */
 
 import type { CanvasState, CanvasStateType } from "../../../types/canvas-state";
@@ -59,9 +60,7 @@ const GRID_SNAPPED_STATES = new Set<CanvasStateType>([
   "PlacingMotor",
   "PlacingPivot",
   "PlacingSlider",
-  // The ruler puts a point down like any other tool, so it answers to the grid like any
-  // other — including along a bar, where mid-span is a rung: laying an end there is a
-  // reading worth having, and nothing else lands on it.
+  // The ruler puts a point down like any other tool, so it answers to the grid like any other — including along a bar, where mid-span is a rung: laying an end there is a reading worth having, and nothing else lands on it.
   "Measuring",
   "MeasuringFrom",
   "Measured",
@@ -76,7 +75,9 @@ export function snapped(value: number, step: number, tolerance: number): number 
 /**
  * The grid lines a point has come to rest on, both of them when it sits on a crossing.
  *
- * Read off the landed position rather than from whichever rule moved it there. Being on a grid line is a fact about a point, not a claim about what put it there — and a point that reaches a crossing is on **both** lines, however it arrived. Deciding « x or y » from the rule that fired is what made the indicator flip between the two under a cursor that had barely moved.
+ * Read off the landed position rather than from whichever rule moved it there.
+ * Being on a grid line is a fact about a point, not a claim about what put it there — and a point that reaches a crossing is on **both** lines, however it arrived.
+ * Deciding « x or y » from the rule that fired is what made the indicator flip between the two under a cursor that had barely moved.
  *
  * An exact test, not a tolerant one: a point that was never snapped falls on a multiple of the step only by an accident float arithmetic does not have.
  */
@@ -124,7 +125,8 @@ function snap_on_line(
     bestDistance = Math.abs(along);
     best = along;
   };
-  // Where the line meets each family of grid lines. One it runs parallel to it meets at infinity, which the tolerance turns away on its own.
+  // Where the line meets each family of grid lines.
+  // One it runs parallel to it meets at infinity, which the tolerance turns away on its own.
   const crossing = (coordinate: number, rate: number) => {
     if (Math.abs(rate) < 1e-9) return;
     consider((Math.round(coordinate / step) * step - coordinate) / rate);
@@ -211,7 +213,8 @@ const CROSSING_REACH = 2 * SNAP_CORRIDOR;
 /**
  * Where two rays cross, when that is a place the point could reasonably be meant to be.
  *
- * Two bars holding the same node each offer a direction, and the node can honour both at once — the same way the grid's two axes are honoured together rather than one winning. A pair running nearly parallel meets far away, and the reach turns it down.
+ * Two bars holding the same node each offer a direction, and the node can honour both at once — the same way the grid's two axes are honoured together rather than one winning.
+ * A pair running nearly parallel meets far away, and the reach turns it down.
  */
 function rays_crossing(
   position: WorldPoint,
@@ -259,7 +262,8 @@ function edge_of(
 /**
  * Whether a guide is a grid line under another name.
  *
- * A bar drawn horizontally from a point already on the grid runs *along* a grid line: showing it as a direction holding the point would say « 0° » where what the eye reads — and what the point is genuinely aligned with — is the grid. The grid line says it, and says it better.
+ * A bar drawn horizontally from a point already on the grid runs *along* a grid line: showing it as a direction holding the point would say « 0° » where what the eye reads — and what the point is genuinely aligned with — is the grid.
+ * The grid line says it, and says it better.
  */
 function runs_along_grid(guide: SnapGuide, step: number): boolean {
   const on_grid = (value: number) =>
@@ -322,7 +326,8 @@ export function snap_hover(
     if (hits.length === 0)
       return landed(snap_free(hovered.position, step, tolerance));
 
-    // Two bars holding the same node each offer a direction, and honouring both at once is what puts the node exactly where the two lines meet. Tried best pair first, so a third bar only steps in when a better one has nothing to cross.
+    // Two bars holding the same node each offer a direction, and honouring both at once is what puts the node exactly where the two lines meet.
+    // Tried best pair first, so a third bar only steps in when a better one has nothing to cross.
     for (let i = 0; i < hits.length; i++)
       for (let j = i + 1; j < hits.length; j++) {
         const crossing = rays_crossing(
@@ -352,13 +357,10 @@ export function snap_hover(
     );
   }
 
-  // A point on a rim is characterised by its bearing, not by its x and y: what makes
-  // it deliberate is landing on a round angle from the centre, which is the very
-  // ladder a drawn edge answers to.
+  // A point on a rim is characterised by its bearing, not by its x and y: what makes it deliberate is landing on a round angle from the centre, which is the very ladder a drawn edge answers to.
   //
-  // Only where the rim follows the cursor. The tangency point of a gear being sized
-  // is settled by the two centres, and the top of a rim by the drawing — neither is
-  // aimed, so neither is snapped.
+  // Only where the rim follows the cursor.
+  // The tangency point of a gear being sized is settled by the two centres, and the top of a rim by the drawing — neither is aimed, so neither is snapped.
   if (hovered.type === "GearTooth" && HOVER_TARGETS[state.type].gear === "rim") {
     const gear = mechanicalElements.find((el) => el.id === hovered.id);
     if (gear?.type !== "gear") return free(hovered.position);

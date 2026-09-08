@@ -21,10 +21,8 @@ interface CommandCountRowProps {
 }
 
 /**
- * A bulk on/off pair over a set of elements: label, n/total counter, and the two commands as
- * bare icons. The counter carries the ternary state (none / some / all) — which is what makes
- * the pair legible as two commands rather than one toggle — so the icons only have to carry the
- * action, not the state.
+ * A bulk on/off pair over a set of elements: label, n/total counter, and the two commands as bare icons.
+ * The counter carries the ternary state (none / some / all) — which is what makes the pair legible as two commands rather than one toggle — so the icons only have to carry the action, not the state.
  */
 export const CommandCountRow: React.FC<CommandCountRowProps> = ({
   label,

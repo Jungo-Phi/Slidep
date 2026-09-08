@@ -15,29 +15,20 @@ import { screen2world_length } from "../../../utils";
 /**
  * Where the cursor is allowed to be, given what the gesture is about to produce.
  *
- * Called once on the world cursor before anything reads it, so hit-testing and
- * the gestures taking the raw mouse share one bounded point. Applied afterwards
- * instead, an element would settle somewhere the cursor never was.
+ * Called once on the world cursor before anything reads it, so hit-testing and the gestures taking the raw mouse share one bounded point.
+ * Applied afterwards instead, an element would settle somewhere the cursor never was.
  *
- * Placing an element and dragging one answer to the same bounds — a beam is no
- * shorter for having just been drawn.
+ * Placing an element and dragging one answer to the same bounds — a beam is no shorter for having just been drawn.
  *
- * Every minimum here is a **screen** distance, converted through the viewport:
- * what these bounds protect is the ability to see and grab what one is drawing,
- * which is a matter of pixels. Zoomed in, a beam of ten world units becomes a
- * legitimate thing to draw; zoomed out, one of a thousand is the shortest that
- * can still be aimed at.
+ * Every minimum here is a **screen** distance, converted through the viewport: what these bounds protect is the ability to see and grab what one is drawing, which is a matter of pixels.
+ * Zoomed in, a beam of ten world units becomes a legitimate thing to draw; zoomed out, one of a thousand is the shortest that can still be aimed at.
  *
- * A minimum never grows what is already under it. Resizing something is not the
- * occasion to edit a size nobody aimed at: a gear of four units drawn at zoom 8
- * is a deliberate gear, and dezooming until it measures ten pixels must not blow
- * it out to thirty on the first grab of its rim. So what a resize answers to is
- * the screen minimum *or* the size in hand, whichever is smaller — a floor that
- * forbids shrinking further without ever pushing outwards. Zooming in lowers it
- * and gives the small sizes back.
+ * A minimum never grows what is already under it.
+ * Resizing something is not the occasion to edit a size nobody aimed at: a gear of four units drawn at zoom 8 is a deliberate gear, and dezooming until it measures ten pixels must not blow it out to thirty on the first grab of its rim.
+ * So what a resize answers to is the screen minimum *or* the size in hand, whichever is smaller — a floor that forbids shrinking further without ever pushing outwards.
+ * Zooming in lowers it and gives the small sizes back.
  *
- * These are aids to hovering, not invariants: hit tolerance and grid snapping
- * both run downstream and may pull the point back inside by a few pixels.
+ * These are aids to hovering, not invariants: hit tolerance and grid snapping both run downstream and may pull the point back inside by a few pixels.
  */
 export function clamp_to_bounds(
   point: Point2,
@@ -59,11 +50,8 @@ export function clamp_to_bounds(
       return bound ? from_base(point, bound.centre, bound.minRadius) : point;
     }
 
-    // The belt being routed has no element yet, so the pulley its end wraps is
-    // read from the gesture: the last one routed, or — before any is — the gear
-    // the gesture started on, which joins `attachedGearsIDs` only at
-    // finalisation. With no pulley at all the belt is one straight span from its
-    // start and answers to the same minimum length as any other edge.
+    // The belt being routed has no element yet, so the pulley its end wraps is read from the gesture: the last one routed, or — before any is — the gear the gesture started on, which joins `attachedGearsIDs` only at finalisation.
+    // With no pulley at all the belt is one straight span from its start and answers to the same minimum length as any other edge.
     case "PlacingBeltEnd": {
       const gears = state.attachedGearsIDs;
       const gearID =
@@ -77,11 +65,9 @@ export function clamp_to_bounds(
         : from_base(point, state.startHover.position, minEdgeLength);
     }
 
-    // A node pinned to an edge terminal carries that terminal with it, so it
-    // answers to the same bounds — once per edge it holds. Overlapping bounds
-    // are not reconciled: the last one wins. A minimum length is an aid to
-    // hovering, not an invariant, and a node held by two edges whose far ends
-    // are that close is already a corner case.
+    // A node pinned to an edge terminal carries that terminal with it, so it answers to the same bounds — once per edge it holds.
+    // Overlapping bounds are not reconciled: the last one wins.
+    // A minimum length is an aid to hovering, not an invariant, and a node held by two edges whose far ends are that close is already a corner case.
     case "MovingNode":
       return pinned_edge_terminals(state.elementID, mechanicalElements).reduce(
         (bounded, { edge, which }) =>
@@ -117,11 +103,9 @@ export function clamp_to_bounds(
 }
 
 /**
- * Where a gear-sizing gesture measures its radius from, and the smallest it may
- * leave it — `undefined` for any other gesture.
+ * Where a gear-sizing gesture measures its radius from, and the smallest it may leave it — `undefined` for any other gesture.
  *
- * Placing has no gear yet, so nothing to ratchet against: a gear one is drawing
- * answers to the screen minimum alone.
+ * Placing has no gear yet, so nothing to ratchet against: a gear one is drawing answers to the screen minimum alone.
  */
 function sizing_bound(
   state: CanvasState,
@@ -139,16 +123,11 @@ function sizing_bound(
 }
 
 /**
- * Whether `target` sits closer to the centre than the radius a sizing gesture
- * may leave the gear at.
+ * Whether `target` sits closer to the centre than the radius a sizing gesture may leave the gear at.
  *
- * The bound the free cursor answers to, asked of an aimed target instead. A
- * target keeps its own position — that is what makes it a target — so the only
- * way to hold the bound against one is to stop offering it: the rim cannot be
- * brought there, so there is nothing to aim at. Silently, like every other place
- * a gesture simply cannot reach; and without it a target sitting on the axle
- * would size the gear down to nothing, which is where meshing, belt geometry and
- * ratios all divide by zero.
+ * The bound the free cursor answers to, asked of an aimed target instead.
+ * A target keeps its own position — that is what makes it a target — so the only way to hold the bound against one is to stop offering it: the rim cannot be brought there, so there is nothing to aim at.
+ * Silently, like every other place a gesture simply cannot reach; and without it a target sitting on the axle would size the gear down to nothing, which is where meshing, belt geometry and ratios all divide by zero.
  */
 export function out_of_sizing_reach(
   target: Point2,
@@ -162,9 +141,7 @@ export function out_of_sizing_reach(
 
 /**
  * How close the two ends of a belt that cannot close may come, in screen px.
- * Strictly inside the tolerance that triggers the refusal, never on it: held
- * exactly on the threshold, the `<=` deciding whether the refusal shows flips
- * with rounding on every mouse move, and the cursor and its message blink.
+ * Strictly inside the tolerance that triggers the refusal, never on it: held exactly on the threshold, the `<=` deciding whether the refusal shows flips with rounding on every mouse move, and the cursor and its message blink.
  */
 const UNCLOSABLE_BELT_GAP = HIT_TOLERANCE.NODE - 1;
 
@@ -177,10 +154,9 @@ function clamp_edge_terminal(
   viewport: ViewportState,
 ): Point2 {
   const opposite = which === "start" ? edge.positionEnd : edge.positionStart;
-  // A belt may bring its two ends together — that is the loop closing. Short of
-  // the pulleys the loop needs, they stop just before touching: near enough for
-  // the refusal to be offered, far enough not to merge. A plain span has no
-  // closure to aim at, and shortening it onto itself would only make a point.
+  // A belt may bring its two ends together — that is the loop closing.
+  // Short of the pulleys the loop needs, they stop just before touching: near enough for the refusal to be offered, far enough not to merge.
+  // A plain span has no closure to aim at, and shortening it onto itself would only make a point.
   const minLength = Math.min(
     screen2world_length(
       edge.type !== "belt"
@@ -190,8 +166,7 @@ function clamp_edge_terminal(
           : UNCLOSABLE_BELT_GAP,
       viewport,
     ),
-    // Never longer than the edge already is: dragging one end of a bar that
-    // measures ten pixels must not stretch it to thirty.
+    // Never longer than the edge already is: dragging one end of a bar that measures ten pixels must not stretch it to thirty.
     edge.positionStart.distance_to(edge.positionEnd),
   );
   const bounded = from_base(point, opposite, minLength);
@@ -223,9 +198,8 @@ export function pinned_edge_terminals(
 /**
  * The element `id` names, when it is of `type`.
  *
- * Canvas state can outlive what it points at — a drag whose target is deleted —
- * and this file runs on every mouse move, ahead of everything else. A miss
- * yields the unbounded cursor instead of throwing in the app's hottest path.
+ * Canvas state can outlive what it points at — a drag whose target is deleted — and this file runs on every mouse move, ahead of everything else.
+ * A miss yields the unbounded cursor instead of throwing in the app's hottest path.
  */
 function element_of_type<T extends MechanicalElement["type"]>(
   id: ID,
@@ -244,8 +218,8 @@ function from_base(point: Point2, base: Point2, minLength: number): Point2 {
 }
 
 /**
- * Keep a belt terminal out of the pulley it wraps. It may sit ON the rim — that
- * is a wound end — but never inside.
+ * Keep a belt terminal out of the pulley it wraps.
+ * It may sit ON the rim — that is a wound end — but never inside.
  */
 function clamp_outside_gear(
   pos: Point2,

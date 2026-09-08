@@ -137,8 +137,7 @@ describe("redundancy_symbol", () => {
     const symbol = redundancy_symbol(model, length!);
     expect(symbol?.kind).toBe("gap");
     if (symbol?.kind !== "gap") return;
-    // Les deux points tenus, exactement — le lien connaît ses pivots par
-    // construction dans ce cas synthétique.
+    // Les deux points tenus, exactement — le lien connaît ses pivots par construction dans ce cas synthétique.
     expect([symbol.a.x, symbol.a.y]).toEqual([0, 0]);
     expect([symbol.b.x, symbol.b.y]).toEqual([100, 0]);
   });
@@ -161,8 +160,7 @@ describe("redundancy_symbol", () => {
     const symbol = redundancy_symbol(model, lock!);
     expect(symbol?.kind).toBe("diverge");
     if (symbol?.kind !== "diverge") return;
-    // Le sommet est le slider s1 (100, 0), où le rail et la poutre portée se
-    // rencontrent — jamais l'autre bout de l'un ou l'autre segment.
+    // Le sommet est le slider s1 (100, 0), où le rail et la poutre portée se rencontrent — jamais l'autre bout de l'un ou l'autre segment.
     expect(symbol.vertex.x).toBeCloseTo(100);
     expect(symbol.vertex.y).toBeCloseTo(0);
     expect(symbol.arm1.length()).toBeCloseTo(1);
@@ -191,9 +189,7 @@ describe("redundancy_symbol", () => {
   });
 
   it("une courroie fermée s'écarte entre deux poulies, jamais entre un start et un end fantômes", () => {
-    // Sur une courroie fermée, `startKey`/`endKey` ne sont pas absents des positions —
-    // ils y résolvent tous les deux, mais vers le MÊME point fusionné : un `??` qui ne
-    // teste que l'absence ne tombe donc jamais sur le repli, et l'écart mesuré est nul.
+    // Sur une courroie fermée, `startKey`/`endKey` ne sont pas absents des positions — ils y résolvent tous les deux, mais vers le MÊME point fusionné : un `??` qui ne teste que l'absence ne tombe donc jamais sur le repli, et l'écart mesuré est nul.
     // "Poulie bloqueuse" est ce cas mesuré : sa seule candidate est `BeltLength`.
     const model = build_analysis_model(
       load_mechanism(JSON.parse(poulie)).mechanism,

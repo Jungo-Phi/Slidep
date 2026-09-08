@@ -92,12 +92,9 @@ function row_texts(readout: MeasureReadout | null): Record<Row, string> {
 }
 
 /**
- * The ruler's corner of the canvas: the button that takes it out, and — in the same place,
- * once it is out — what it reads.
+ * The ruler's corner of the canvas: the button that takes it out, and — in the same place, once it is out — what it reads.
  *
- * The numbers are written straight into the DOM rather than held in React state: under a
- * running simulation they change every frame, and re-rendering the canvas subtree sixty times
- * a second to move four numbers is not a trade worth making.
+ * The numbers are written straight into the DOM rather than held in React state: under a running simulation they change every frame, and re-rendering the canvas subtree sixty times a second to move four numbers is not a trade worth making.
  */
 const MeasureWidget = forwardRef<MeasureReadoutHandle, MeasureWidgetProps>(
   ({ canvasState, onArm, onDisarm }, ref) => {
@@ -107,10 +104,8 @@ const MeasureWidget = forwardRef<MeasureReadoutHandle, MeasureWidgetProps>(
     useImperativeHandle(ref, () => ({
       update(readout) {
         const texts = row_texts(readout);
-        // A reading only shows the rows it can fill — an angle has no span, a radius no
-        // direction — rather than leaving them struck through. Hidden from here rather than
-        // from a render: which reading a gesture is building follows the cursor, frame by
-        // frame.
+        // A reading only shows the rows it can fill — an angle has no span, a radius no direction — rather than leaving them struck through.
+        // Hidden from here rather than from a render: which reading a gesture is building follows the cursor, frame by frame.
         const shown: readonly Row[] = readout
           ? SHOWN[readout.kind]
           : SHOWN.distance;
@@ -119,8 +114,7 @@ const MeasureWidget = forwardRef<MeasureReadoutHandle, MeasureWidgetProps>(
           const hidden = !shown.includes(row);
           if (line && line.hidden !== hidden) line.hidden = hidden;
           const node = valueRefs.current[row];
-          // Only on a change: this runs every frame, and writing an unchanged string still
-          // costs a layout invalidation.
+          // Only on a change: this runs every frame, and writing an unchanged string still costs a layout invalidation.
           if (node && node.textContent !== texts[row])
             node.textContent = texts[row];
         }
@@ -158,8 +152,7 @@ const MeasureWidget = forwardRef<MeasureReadoutHandle, MeasureWidgetProps>(
                 width: 24,
                 height: 24,
                 display: "block",
-                // The fade is on the glyph alone: the ground under it is what makes the
-                // button findable, and fading both together hid it altogether.
+                // The fade is on the glyph alone: the ground under it is what makes the button findable, and fading both together hid it altogether.
                 opacity: 0.5,
                 transition: "opacity 120ms",
               }}
@@ -218,8 +211,7 @@ const MeasureWidget = forwardRef<MeasureReadoutHandle, MeasureWidgetProps>(
               }}
               sx={{
                 display: "flex",
-                // An explicit `display` outranks the `hidden` attribute's own rule, so the
-                // rows a reading has nothing to say in would stay on screen without this.
+                // An explicit `display` outranks the `hidden` attribute's own rule, so the rows a reading has nothing to say in would stay on screen without this.
                 "&[hidden]": { display: "none" },
                 alignItems: "baseline",
                 justifyContent: "space-between",

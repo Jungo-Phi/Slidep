@@ -2,17 +2,14 @@
  * Showing a degree of freedom by moving the mechanism along it.
  *
  * A mode is a direction in the space of unknowns; read as a list of numbers it says nothing.
- * Swung back and forth, it is immediately legible — "this is what that freedom does". This
- * module turns one mode into a sequence of poses a canvas can draw.
+ * Swung back and forth, it is immediately legible — "this is what that freedom does".
+ * This module turns one mode into a sequence of poses a canvas can draw.
  *
- * Each pose is **solved**, not merely displaced. A mode is a tangent direction, so following
- * it in a straight line stretches the very bars it is meant to leave rigid; re-projecting on
- * the constraints after each step keeps the drawing a mechanism rather than a rubber sketch,
- * and lets the swing be wide enough to read. It costs one solve per frame, warm-started from
- * the pose already on screen, which is a fraction of the measurement's own budget.
+ * Each pose is **solved**, not merely displaced.
+ * A mode is a tangent direction, so following it in a straight line stretches the very bars it is meant to leave rigid; re-projecting on the constraints after each step keeps the drawing a mechanism rather than a rubber sketch, and lets the swing be wide enough to read.
+ * It costs one solve per frame, warm-started from the pose already on screen, which is a fraction of the measurement's own budget.
  *
- * Nothing here writes to the mechanism it was given: a pose is a drawing, and letting go of
- * the animation must leave the design exactly as it was.
+ * Nothing here writes to the mechanism it was given: a pose is a drawing, and letting go of the animation must leave the design exactly as it was.
  */
 
 import { MODE_ANIMATION } from "../../../constants/interaction-specs";
@@ -35,11 +32,10 @@ export type ModeAnimation = {
 /**
  * Swing `mechanism` along `mode`, one pose per call.
  *
- * The swing starts and ends at the rest pose, so letting go of it never leaves the drawing
- * somewhere unexpected — `sin` is zero at zero.
+ * The swing starts and ends at the rest pose, so letting go of it never leaves the drawing somewhere unexpected — `sin` is zero at zero.
  */
 /** Overrides for callers with a different purpose than the analysis panel's precise
- *  reading — a gallery thumbnail, say — that may want a wider, quicker swing. */
+ * reading — a gallery thumbnail, say — that may want a wider, quicker swing. */
 export type ModeAnimationTuning = {
   amplitudeRatio?: number;
   periodS?: number;
@@ -59,8 +55,7 @@ export function animate_mode(
 
   const variables = chain.variables;
   const nodes = rest_nodes(model);
-  // The lever keeps the chain's own scale: it converts this chain's angles to millimetres,
-  // which has nothing to do with how far the drawing should swing.
+  // The lever keeps the chain's own scale: it converts this chain's angles to millimetres, which has nothing to do with how far the drawing should swing.
   const levers = angle_levers(
     model,
     variables,
@@ -71,10 +66,9 @@ export function animate_mode(
     v.component === "angle" ? angleSlotOf(nodes, v.key) : slotOf(nodes, v.key),
   );
 
-  // Scaled so the widest-moving unknown covers `AMPLITUDE_RATIO` of the chain, whatever the
-  // mode's shape. A mode with no motion at all would divide by zero; it cannot occur (modes
-  // are unit vectors) but the guard costs nothing. Floored at `MIN_VISIBLE_LENGTH` so a
-  // degenerate (near-zero-extent) chain still swings visibly, rather than not at all.
+  // Scaled so the widest-moving unknown covers `AMPLITUDE_RATIO` of the chain, whatever the mode's shape.
+  // A mode with no motion at all would divide by zero; it cannot occur (modes are unit vectors) but the guard costs nothing.
+  // Floored at `MIN_VISIBLE_LENGTH` so a degenerate (near-zero-extent) chain still swings visibly, rather than not at all.
   let widest = 0;
   for (const value of mode.vector) widest = Math.max(widest, Math.abs(value));
   const swing = (Math.max(amplitudeRatio * extent, MIN_VISIBLE_LENGTH) /

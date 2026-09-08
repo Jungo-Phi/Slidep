@@ -17,8 +17,8 @@ export default defineConfig({
       // SW actif aussi en `vite dev` pour pouvoir tester le hors-ligne.
       devOptions: { enabled: true },
       workbox: {
-        // Pré-cache tous les assets buildés (app shell), y compris le wasm
-        // éventuel et les polices locales. Les gros fichiers passent en cache.
+        // Pré-cache tous les assets buildés (app shell), y compris le wasm éventuel et les polices locales.
+        // Les gros fichiers passent en cache.
         globPatterns: ["**/*.{js,css,html,svg,png,ico,woff,woff2}"],
         // Navigation hors-ligne : sert index.html pour toute route inconnue.
         navigateFallback: "index.html",
@@ -34,8 +34,7 @@ export default defineConfig({
         orientation: "any",
         start_url: "/",
         scope: "/",
-        // Bump `?v=` whenever the source logo changes: installed desktop PWAs only
-        // refresh their launcher icon when the manifest URLs differ, not the bytes.
+        // Bump `?v=` whenever the source logo changes: installed desktop PWAs only refresh their launcher icon when the manifest URLs differ, not the bytes.
         icons: [
           { src: "pwa-64x64.png?v=2", sizes: "64x64", type: "image/png" },
           { src: "pwa-192x192.png?v=2", sizes: "192x192", type: "image/png" },

@@ -8,9 +8,8 @@ import { compile_simulation_model } from "../dynamics/simulation-engine";
 import { viasFrom } from "../experimental/belt-noslip-q";
 
 /**
- * Where the time of one belt-constraint application goes, on the real geometries of the
- * dossier. Five variants of the SAME computation, alternated in one process (never two
- * runs compared), so the split between arithmetic and boxing is readable:
+ * Where the time of one belt-constraint application goes, on the real geometries of the dossier.
+ * Five variants of the SAME computation, alternated in one process (never two runs compared), so the split between arithmetic and boxing is readable:
  *
  *   pieces        what a constraint does today, minus the via rebuild
  *   vias+pieces   what it really does per application (vias reboxed from raw coords)
@@ -68,8 +67,8 @@ function loadVias(w: Workspace, vias: BeltVia[]): void {
 }
 
 /**
- * One tangent pair, scalar: transcribed from `Point2.circles_link` term for term, then
- * the strand length. Writes departure on `a` and arrival on `b`.
+ * One tangent pair, scalar: transcribed from `Point2.circles_link` term for term, then the strand length.
+ * Writes departure on `a` and arrival on `b`.
  */
 function tangentPair(w: Workspace, a: number, b: number, p: number): void {
   const dx = w.cx[b] - w.cx[a];

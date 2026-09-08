@@ -11,9 +11,7 @@ import {
 } from "../snapshot";
 
 /**
- * The client's half of the worker protocol: the layout crosses once per load and is put
- * back on the snapshots that follow, so a recording's snapshots end up sharing one layout
- * object — the identity everything downstream compares by.
+ * The client's half of the worker protocol: the layout crosses once per load and is put back on the snapshots that follow, so a recording's snapshots end up sharing one layout object — the identity everything downstream compares by.
  */
 
 class FakeWorker {
@@ -100,9 +98,8 @@ describe("protocole du client d'enregistrement", () => {
   });
 
   it("replace les poulies d'une courroie dans la disposition", () => {
-    // Without the belt section, every belt slot loses its owner on this side: the contact
-    // flags read back as "nothing detached" and the belt is drawn wrapped around a pulley
-    // it left. One gear angle, then three wraps, three flags, three arrival angles.
+    // Without the belt section, every belt slot loses its owner on this side: the contact flags read back as "nothing detached" and the belt is drawn wrapped around a pulley it left.
+    // One gear angle, then three wraps, three flags, three arrival angles.
     worker.deliver({
       type: "layout",
       keys: ["n"],

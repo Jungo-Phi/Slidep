@@ -21,10 +21,8 @@ import type {
 import type { MaterialDef, ProfileDef } from "../../types/material";
 
 /**
- * A node names an edge once, however many ways that edge rests on it. Fusing two
- * nodes is where those ways pile up — the two ends of one bar landing together,
- * a node sitting on the body of the bar it also terminates — and each defect
- * here was a list left saying it twice, or once too few.
+ * A node names an edge once, however many ways that edge rests on it.
+ * Fusing two nodes is where those ways pile up — the two ends of one bar landing together, a node sitting on the body of the bar it also terminates — and each defect here was a list left saying it twice, or once too few.
  */
 
 const id = (n: number): ID =>
@@ -91,8 +89,8 @@ const BAR = id(3);
 const FRESH = id(4);
 
 describe("fusion d'un pivot et d'un slider que la même barre relie", () => {
-  // The bar runs from the pivot to the slider, so each of them names it. The
-  // slidep that replaces the pair must still name it once.
+  // The bar runs from the pivot to the slider, so each of them names it.
+  // The slidep that replaces the pair must still name it once.
   const spanned = (): MechanicalElement[] => [
     pivot(PIVOT, 0, [BAR]),
     {
@@ -149,10 +147,8 @@ describe("fusion d'un pivot et d'un slider que la même barre relie", () => {
 });
 
 describe("un slider dont la barre est déjà le parentBeamID", () => {
-  // A beamBodyHover catch during placement, and the body-crossing sweep that
-  // follows it in the same gesture, can both name the same node for the same
-  // edge. The second call must be a true no-op — not a fixedEdgesIDs entry
-  // alongside the parentBeamID that already says the same thing.
+  // A beamBodyHover catch during placement, and the body-crossing sweep that follows it in the same gesture, can both name the same node for the same edge.
+  // The second call must be a true no-op — not a fixedEdgesIDs entry alongside the parentBeamID that already says the same thing.
   it("un second appel en body ne duplique pas la barre dans fixedEdgesIDs", () => {
     const slider: SliderElement = {
       type: "slider",
@@ -181,8 +177,7 @@ describe("un slider dont la barre est déjà le parentBeamID", () => {
 
 describe("une extrémité quittant un nœud qui tient la barre autrement", () => {
   // A fusion can leave a node both terminating a bar and sitting on its body.
-  // The node lists that bar once for the two, so moving the end away must leave
-  // the entry — the body pin still needs it.
+  // The node lists that bar once for the two, so moving the end away must leave the entry — the body pin still needs it.
   it("garde l'entrée quand le nœud reste sur le corps", () => {
     const elements: MechanicalElement[] = [
       pivot(PIVOT, 0, [BAR]),

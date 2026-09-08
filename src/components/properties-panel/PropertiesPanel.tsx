@@ -68,8 +68,8 @@ export interface PropertiesPanelProps {
   /** Publishes the abscissa hovered on a beam's N/T/Mf diagrams, for the canvas to mark. */
   setHoveredAbscissa: (hovered: HoveredAbscissa | null) => void;
   /** Sets which library section is hovered — also what tints the canvas for as long as the
-   *  hover lasts. The value itself is read straight from the app by the canvas, not through
-   *  this panel. */
+   * hover lasts.
+   * The value itself is read straight from the app by the canvas, not through this panel. */
   setLibrarySection: (section: "materials" | "profiles" | null) => void;
   /** A library row hovered there, for the canvas to accentuate its beams and fade the rest. */
   hoveredLibraryEntryID: ID | null;
@@ -133,20 +133,18 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
 
   const selectedID: ID | undefined = (canvasState as { elementID?: ID })
     .elementID;
-  // Every id currently selected — for a plain click, the same singleton as
-  // selectedID; for a box selection, the whole group. Threaded down so any
-  // ElementDisplay can tell whether it names one of them.
+  // Every id currently selected — for a plain click, the same singleton as selectedID; for a box selection, the whole group.
+  // Threaded down so any ElementDisplay can tell whether it names one of them.
   const selectedIds = selected_ids(canvasState);
-  // The mechanical element the selection points at (a selected load resolves to
-  // its host). Shared by the elements tab and the analysis tab's measures section.
+  // The mechanical element the selection points at (a selected load resolves to its host).
+  // Shared by the elements tab and the analysis tab's measures section.
   const selectedElement = host_mechanical_element(
     selectedID,
     mechanism.mechanicalElements,
     mechanism.loads,
   );
 
-  // Any ElementDisplay clicked anywhere in the panel drills down to the element it names,
-  // in the tab that knows how to show it.
+  // Any ElementDisplay clicked anywhere in the panel drills down to the element it names, in the tab that knows how to show it.
   const drillDownToElement = React.useCallback(
     (element: UnionElement) =>
       setActiveTab(
@@ -155,9 +153,8 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
     [setActiveTab],
   );
 
-  // A beam's material/profile picker's own "where can I edit this?" link — jumps to the
-  // library tab with that entry selected there. Local: only `MaterialsLibraryPanel`, a child
-  // of this same component, needs to read the request.
+  // A beam's material/profile picker's own "where can I edit this?" link — jumps to the library tab with that entry selected there.
+  // Local: only `MaterialsLibraryPanel`, a child of this same component, needs to read the request.
   const [libraryFocusRequest, setLibraryFocusRequest] = React.useState<LibraryFocusRequest | null>(
     null,
   );

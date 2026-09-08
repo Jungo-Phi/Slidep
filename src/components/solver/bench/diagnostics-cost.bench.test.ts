@@ -14,17 +14,13 @@ import {
 } from "../dynamics/simulation-engine";
 
 /**
- * What the permanent residual collection costs — the `collectDiagnostics` item of
- * `plan-fluidite.md` chantier 5, credited there with ~8 % of a simulation frame.
+ * What the permanent residual collection costs — the `collectDiagnostics` item of `plan-fluidite.md` chantier 5, credited there with ~8 % of a simulation frame.
  *
- * **Measured on frames that advance time**, not on re-solves of a settled state: a warm
- * mechanism re-solved from its own solution exits after a handful of sweeps and reports
- * microseconds, which measures the early exit and nothing else. Each sample therefore steps
- * the simulation forward, exactly as the app does.
+ * **Measured on frames that advance time**, not on re-solves of a settled state: a warm mechanism re-solved from its own solution exits after a handful of sweeps and reports microseconds, which measures the early exit and nothing else.
+ * Each sample therefore steps the simulation forward, exactly as the app does.
  *
- * The two settings alternate inside one process and the order flips every pass, because the
- * dossier forbids comparing timings taken at different moments; the minimum is kept. Both
- * follow the same trajectory — the flag changes what is recorded, never what is computed.
+ * The two settings alternate inside one process and the order flips every pass, because the dossier forbids comparing timings taken at different moments; the minimum is kept.
+ * Both follow the same trajectory — the flag changes what is recorded, never what is computed.
  */
 
 const MECHANISMS: [string, string][] = [
@@ -64,9 +60,8 @@ function runner(json: string, collectDiagnostics: boolean) {
 }
 
 /**
- * ms per frame for both settings, stepped **alternately, frame by frame**, on two identical
- * models. Anything that drifts during the run — JIT tiers, GC, thermal — then hits both
- * within a frame of each other instead of landing on whichever ran first.
+ * ms per frame for both settings, stepped **alternately, frame by frame**, on two identical models.
+ * Anything that drifts during the run — JIT tiers, GC, thermal — then hits both within a frame of each other instead of landing on whichever ran first.
  */
 function lockstepMs(json: string): { on: number; off: number } {
   const stepOn = runner(json, true);
@@ -78,8 +73,7 @@ function lockstepMs(json: string): { on: number; off: number } {
   let accOn = 0;
   let accOff = 0;
   for (let i = 0; i < FRAMES; i++) {
-    // Which of the two goes first alternates too, so neither is systematically the one
-    // that pays for a cache line the other then finds warm.
+    // Which of the two goes first alternates too, so neither is systematically the one that pays for a cache line the other then finds warm.
     const onFirst = i % 2 === 0;
     for (const on of onFirst ? [true, false] : [false, true]) {
       const from = performance.now();
@@ -124,9 +118,8 @@ describe("coût de la collecte de résidus", () => {
   }, 900_000);
 
   /**
-   * Which mechanisms carry the three belt links still on the boxed path — the other
-   * chantier 5 item. A link absent from a mechanism cannot be optimised for it, so this
-   * table decides where the work would land before any of it is done.
+   * Which mechanisms carry the three belt links still on the boxed path — the other chantier 5 item.
+   * A link absent from a mechanism cannot be optimised for it, so this table decides where the work would land before any of it is done.
    */
   it("recense les liens de courroie restés sur le chemin boxé", () => {
     const BOXED = ["BeltPin", "BeltJunction", "BeltFollowsTangent"] as const;

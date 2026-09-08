@@ -3,15 +3,12 @@ import { Link } from "../../../types";
 /**
  * Debug tracing of the PBD solve, off by default.
  *
- * The solver is a Gauss-Seidel sweep: every link is applied in turn, each one
- * reading what the previous ones left. A residual measured at the end of a
- * solve says which constraints are unhappy, never which one pushed against
- * which — that only shows in what each individual application moves. This is
- * the hook that exposes it.
+ * The solver is a Gauss-Seidel sweep: every link is applied in turn, each one reading what the previous ones left.
+ * A residual measured at the end of a solve says which constraints are unhappy, never which one pushed against which — that only shows in what each individual application moves.
+ * This is the hook that exposes it.
  *
- * Usage: wrap the run in `collect_solver_trace`, or call `set_solver_trace`
- * directly for a long-running capture. Enabling it copies the position map
- * before every link application, so expect the solve to be far slower.
+ * Usage: wrap the run in `collect_solver_trace`, or call `set_solver_trace` directly for a long-running capture.
+ * Enabling it copies the position map before every link application, so expect the solve to be far slower.
  */
 
 /** What one constraint application did. */
@@ -44,8 +41,7 @@ export function solver_trace(): SolverTrace | null {
 }
 
 /**
- * Runs `body` with tracing on and returns everything the solver did, restoring
- * the previous trace afterwards (including when `body` throws).
+ * Runs `body` with tracing on and returns everything the solver did, restoring the previous trace afterwards (including when `body` throws).
  */
 export function collect_solver_trace(body: () => void): SolverTraceEvent[] {
   const events: SolverTraceEvent[] = [];
@@ -60,8 +56,8 @@ export function collect_solver_trace(body: () => void): SolverTraceEvent[] {
 }
 
 /** Total distance each link moved the mechanism, worst first — who is pushing
- *  hardest, once the solve should have settled. `from` skips the early sweeps,
- *  where every link legitimately moves a lot. */
+ * hardest, once the solve should have settled.
+ * `from` skips the early sweeps, where every link legitimately moves a lot. */
 export function trace_by_link(
   events: SolverTraceEvent[],
   from = 0,

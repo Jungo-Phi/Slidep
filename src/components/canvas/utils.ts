@@ -22,12 +22,10 @@ import { DIM } from "../../constants/rendering-specs";
 import { world2screen } from "../../utils/viewport";
 
 /**
- * Screen position of an element's probe badge: above its centre, or above the
- * middle of an edge. Drawing and hit-testing both read it here, so the badge is
- * picked exactly where it is drawn.
+ * Screen position of an element's probe badge: above its centre, or above the middle of an edge.
+ * Drawing and hit-testing both read it here, so the badge is picked exactly where it is drawn.
  *
- * The offset is a screen distance, so the badge keeps its gap to the element at
- * any zoom.
+ * The offset is a screen distance, so the badge keeps its gap to the element at any zoom.
  */
 export function probe_badge_position(
   element: MechanicalElement,
@@ -151,8 +149,8 @@ export function element_to_hovered_part(
         id: element.id,
         deleting,
       };
-    // Attached badges have no position of their own — anchored to their host(s)
-    // instead (see geometric_badge_positions). Nothing here reads it back.
+    // Attached badges have no position of their own — anchored to their host(s) instead (see geometric_badge_positions).
+    // Nothing here reads it back.
     case "horizontal-align-edge":
     case "horizontal-align-nodes":
     case "vertical-align-edge":
@@ -267,15 +265,10 @@ export function is_geometric_constraint_type(
 }
 
 /**
- * Screen positions of the geometric-constraint badges (align/normal/parallel/
- * equal) attached to one host element, one entry per constraint, stacked in a
- * row below it. Drawing and hit-testing both read it here, so a badge is
- * picked exactly where it is drawn.
+ * Screen positions of the geometric-constraint badges (align/normal/parallel/ equal) attached to one host element, one entry per constraint, stacked in a row below it.
+ * Drawing and hit-testing both read it here, so a badge is picked exactly where it is drawn.
  *
- * A constraint with two hosts (e.g. `parallel` between two edges) is returned
- * here once per host it is asked about — it is drawn next to each, so hovering
- * either edge reveals it, and there is nothing to place that could collide
- * with an unrelated badge the way a single free-floating position could.
+ * A constraint with two hosts (e.g. `parallel` between two edges) is returned here once per host it is asked about — it is drawn next to each, so hovering either edge reveals it, and there is nothing to place that could collide with an unrelated badge the way a single free-floating position could.
  */
 export function geometric_badge_positions(
   hostID: ID,
@@ -335,14 +328,12 @@ export function linked_constraint(
 }
 
 /**
- * Computes which constraints should be visible and at which opacity (0–1) given
- * the current context. A constraint absent from the returned map is hidden
- * (neither drawn nor hit-testable). Rules :
+ * Computes which constraints should be visible and at which opacity (0–1) given the current context.
+ * A constraint absent from the returned map is hidden (neither drawn nor hit-testable).
+ * Rules :
  * - Onglet "constraints" : toutes les contraintes, opaques (prioritaire sur le mode).
  * - Sinon en simulation : aucune contrainte.
- * - Sinon (édition, autre onglet) : dimensions toujours opaques ; badges
- *   géométriques uniquement pour les contraintes révélées au survol
- *   (`revealedOpacities`, avec leur opacité de fondu).
+ * - Sinon (édition, autre onglet) : dimensions toujours opaques ; badges géométriques uniquement pour les contraintes révélées au survol (`revealedOpacities`, avec leur opacité de fondu).
  * La contrainte en cours de sélection / déplacement / édition reste opaque.
  */
 export function compute_visible_constraints(
@@ -365,8 +356,7 @@ export function compute_visible_constraints(
     if (c.type.startsWith("dimension-") || c.type === "gear-ratio")
       visible.set(c.id, 1);
 
-  // Badges révélés au survol : conserve la plus forte opacité (ne baisse jamais
-  // une dimension déjà à 1).
+  // Badges révélés au survol : conserve la plus forte opacité (ne baisse jamais une dimension déjà à 1).
   for (const [id, opacity] of revealedOpacities)
     visible.set(id, Math.max(visible.get(id) ?? 0, opacity));
 

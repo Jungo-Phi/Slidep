@@ -232,6 +232,24 @@ export interface Flexibility {
   linear: Float64Array;
 }
 
+/** What minimising the complementary energy settles, and what it leaves open. */
+export interface EnergyMinimum {
+  /** The member of the family that stores the least energy. */
+  x: Float64Array;
+  /**
+   * The directions the energy does not choose between either, in the unknowns' own
+   * coordinates and orthonormal like `LeastSquares.nullSpace`.
+   *
+   * Empty whenever `F` is positive-definite over `ker(A)`, which a redundancy between beams
+   * always is — moving one changes some member's `N` or `Mf`, hence its energy. What survives
+   * here is what no member's flexibility reaches: two supports at one node trading a reaction
+   * the structure never feels, or a redundancy carried by a beam with no usable section. A
+   * caller reporting which quantities its answer actually pins should read THIS and not
+   * `ker(A)`, which only says what equilibrium alone pins.
+   */
+  residualNull: Float64Array[];
+}
+
 /**
  * Pick the member of the solution family that stores the least elastic energy — Menabrea's
  * theorem, and the whole reason the hyperstatic case has an answer at all.
@@ -249,9 +267,9 @@ export function minimise_energy(
   nullSpace: Float64Array[],
   applyF: (x: Float64Array) => Float64Array,
   linear?: Float64Array,
-): Float64Array {
+): EnergyMinimum {
   const h = nullSpace.length;
-  if (h === 0) return base;
+  if (h === 0) return { x: base, residualNull: [] };
 
   const fn = nullSpace.map(applyF);
   const m = zeros(h, h);
@@ -271,9 +289,16 @@ export function minimise_energy(
 
   // `NᵀFN` is symmetric positive semi-definite; least squares covers the semi-definite case
   // (a redundancy no member's flexibility reaches) without a special path.
-  const z = solve_least_squares(m, rhs).x;
+  const energy = solve_least_squares(m, rhs);
+  const combine = (weights: Float64Array): Float64Array => {
+    const out = new Float64Array(base.length);
+    for (let i = 0; i < h; i++)
+      for (let k = 0; k < out.length; k++) out[k] += weights[i] * nullSpace[i][k];
+    return out;
+  };
+
   const x = Float64Array.from(base);
-  for (let i = 0; i < h; i++)
-    for (let k = 0; k < x.length; k++) x[k] += z[i] * nullSpace[i][k];
-  return x;
+  const step = combine(energy.x);
+  for (let k = 0; k < x.length; k++) x[k] += step[k];
+  return { x, residualNull: energy.nullSpace.map(combine) };
 }

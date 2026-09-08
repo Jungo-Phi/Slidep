@@ -130,8 +130,7 @@ describe("l'outil sol sur un moteur", () => {
     return legality_for_state({ type: "PlacingGround" }, elements)(driven);
   };
 
-  // The tool toggles, so aiming it at an anchored motor means removing the very
-  // support it drives against.
+  // The tool toggles, so aiming it at an anchored motor means removing the very support it drives against.
   it("refuse de désancrer celui qui n'a pas de barre d'appui", () => {
     expect(verdict(motor(true))).toMatchObject({
       allowed: false,

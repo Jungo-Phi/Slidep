@@ -61,8 +61,7 @@ describe("rebond en mode dynamique", () => {
     const model = compile_simulation_model(before);
     let snapshot: DynamicSnapshot | null = null;
     let maxUpwardVelocityAfterContact = -Infinity;
-    // ~4.5 s to free-fall 100 units under GRAVITY from rest (0.5·g·t² = 100) — enough
-    // frames to comfortably reach and bounce off the floor.
+    // ~4.5 s to free-fall 100 units under GRAVITY from rest (0.5·g·t² = 100) — enough frames to comfortably reach and bounce off the floor.
     const FRAMES = 700;
     for (let i = 0; i < FRAMES; i++) {
       snapshot = step_dynamic_simulation(
@@ -75,8 +74,7 @@ describe("rebond en mode dynamique", () => {
         if (v) maxUpwardVelocityAfterContact = Math.max(maxUpwardVelocityAfterContact, v.y);
       }
     }
-    // Once it has reached the floor, it must at some point be moving back UP — a plain
-    // inelastic stop would keep vy at/near zero, never clearly positive.
+    // Once it has reached the floor, it must at some point be moving back UP — a plain inelastic stop would keep vy at/near zero, never clearly positive.
     expect(maxUpwardVelocityAfterContact).toBeGreaterThan(1);
   });
 

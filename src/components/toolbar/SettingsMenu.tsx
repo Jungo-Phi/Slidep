@@ -46,9 +46,7 @@ const theme_family_label = (name: string): string => {
 };
 
 /**
- * The ambience the whole app is in, whichever family it wears — the choice is
- * global, as it is in the system it can defer to, and not a property of each
- * family.
+ * The ambience the whole app is in, whichever family it wears — the choice is global, as it is in the system it can defer to, and not a property of each family.
  */
 const THEME_MODES: {
   mode: ThemeMode;
@@ -116,9 +114,7 @@ export const SettingsMenu: React.FC<SettingsMenuProps> = ({
         }}
         anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
         transformOrigin={{ vertical: "top", horizontal: "right" }}
-        // Leaving the list — for another setting or out of the menu
-        // entirely — drops the preview, armed or showing, and restores
-        // the chosen theme.
+        // Leaving the list — for another setting or out of the menu entirely — drops the preview, armed or showing, and restores the chosen theme.
         MenuListProps={{ onMouseLeave: () => previewLater(null) }}
       >
         <MenuItem disableRipple onClick={() => setShowGrid(!showGrid)}>

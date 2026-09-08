@@ -98,9 +98,8 @@ export function get_element_from_id(
 }
 
 /**
- * The mechanical element a selection resolves to: itself, or — when a load is
- * selected — the element the load is applied to. A load has no panel of its own;
- * it is shown (and edited) inside its host's properties.
+ * The mechanical element a selection resolves to: itself, or — when a load is selected — the element the load is applied to.
+ * A load has no panel of its own; it is shown (and edited) inside its host's properties.
  */
 export function host_mechanical_element(
   elementID: ID | undefined,
@@ -119,10 +118,8 @@ export function host_mechanical_element(
 /**
  * Every container of `connectedElement` that holds `elementID`.
  *
- * A pair can be linked through more than one container — a gear sitting in both
- * its axle's `fixedGearsIDs` and its `rotatingEdgesIDs`, say. Disconnecting only
- * the first one leaves the others pointing at a deleted element, so callers must
- * handle all of them.
+ * A pair can be linked through more than one container — a gear sitting in both its axle's `fixedGearsIDs` and its `rotatingEdgesIDs`, say.
+ * Disconnecting only the first one leaves the others pointing at a deleted element, so callers must handle all of them.
  */
 export function get_connection_pair_types(
   elementID: ID,
@@ -329,11 +326,10 @@ export function disconnect_element(
 /**
  * Actions that open a closed belt into a loose one.
  *
- * When one junction node still fuses both terminals, the start is freed so the
- * two ends can part (the disconnection-separation pass slides it along the belt);
- * the end keeps the junction, so the node survives holding a single terminal.
- * Then the closed flag is cleared. A belt already free of its junction only needs
- * the flag. Call it on a belt whose loop no longer holds — see `belt_is_looped`.
+ * When one junction node still fuses both terminals, the start is freed so the two ends can part (the disconnection-separation pass slides it along the belt); the end keeps the junction, so the node survives holding a single terminal.
+ * Then the closed flag is cleared.
+ * A belt already free of its junction only needs the flag.
+ * Call it on a belt whose loop no longer holds — see `belt_is_looped`.
  */
 export function open_belt(belt: BeltElement): Action[] {
   const actions: Action[] = [];
@@ -350,10 +346,9 @@ export function open_belt(belt: BeltElement): Action[] {
 }
 
 /**
- * The point of the loop nearest to `p`, read from the belt as the loop it is
- * about to become — the pulley cycle, terminals dropped. Same geometry the
- * geometric `BeltJunction` projects onto, so a junction seated here starts on
- * the outline. `p` itself when there is no loop to speak of.
+ * The point of the loop nearest to `p`, read from the belt as the loop it is about to become — the pulley cycle, terminals dropped.
+ * Same geometry the geometric `BeltJunction` projects onto, so a junction seated here starts on the outline.
+ * `p` itself when there is no loop to speak of.
  */
 function nearest_point_on_belt_loop(
   belt: BeltElement,
@@ -369,18 +364,15 @@ function nearest_point_on_belt_loop(
 }
 
 /**
- * Actions that close a belt into a loop, reusing whatever its terminals already
- * hold rather than always minting a junction:
+ * Actions that close a belt into a loop, reusing whatever its terminals already hold rather than always minting a junction:
  *
  *   • both terminals free          → a fresh join holds both;
- *   • one terminal already on a node → that node is the junction, the free end
- *                                      joins it (no new join, no duplicate);
+ * • one terminal already on a node → that node is the junction, the free end joins it (no new join, no duplicate);
  *   • both on the same node          → it is already the junction;
  *   • both on different nodes         → the two are fused like a node dropped on
- *                                      a node, then both terminals share it.
+ * a node, then both terminals share it.
  *
- * `position` is only read when a fresh join is minted, and then only to pick the
- * nearest point of the loop it lands on.
+ * `position` is only read when a fresh join is minted, and then only to pick the nearest point of the loop it lands on.
  */
 export function close_belt_actions(
   belt: BeltElement,
@@ -402,9 +394,7 @@ export function close_belt_actions(
       probes: [],
       overlays: {},
       fixedEdgesIDs: [],
-      // Seat the junction on the loop it closes, not under the cursor: the
-      // geometric BeltJunction then has ~no error to solve, so the belt itself
-      // does not shift to meet a junction dropped away from its outline.
+      // Seat the junction on the loop it closes, not under the cursor: the geometric BeltJunction then has ~no error to solve, so the belt itself does not shift to meet a junction dropped away from its outline.
       position: nearest_point_on_belt_loop(belt, position, mechanicalElements),
       isGrounded: false,
     };
@@ -433,9 +423,8 @@ export function close_belt_actions(
     ];
   }
 
-  // One terminal pinned: reuse its node, attach the free end to it. The node
-  // already lists the belt (reciprocal of the pinned terminal), so nothing is
-  // created and it is never listed twice.
+  // One terminal pinned: reuse its node, attach the free end to it.
+  // The node already lists the belt (reciprocal of the pinned terminal), so nothing is created and it is never listed twice.
   if (!startNode || !endNode) {
     const junction = (startNode ?? endNode)!;
     return [
@@ -456,8 +445,8 @@ export function close_belt_actions(
     ];
   }
 
-  // Both terminals on different nodes: fuse them. The start's node survives and
-  // keeps the start; the end's node is absorbed, its belt end retargeted onto it.
+  // Both terminals on different nodes: fuse them.
+  // The start's node survives and keeps the start; the end's node is absorbed, its belt end retargeted onto it.
   const startEl = get_mechanical_element_from_id(
     startNode,
     mechanicalElements,
@@ -510,10 +499,8 @@ export function delete_element(
     element.type === "slider" ||
     element.type === "spring"
   ) {
-    // Each cut is emitted once. An edge holding both its ends on one node names
-    // it twice, so the node is reached twice — and the second disconnect would
-    // carry the same index as the first, whose splice has already shifted the
-    // list: it would take out a neighbour instead.
+    // Each cut is emitted once.
+    // An edge holding both its ends on one node names it twice, so the node is reached twice — and the second disconnect would carry the same index as the first, whose splice has already shifted the list: it would take out a neighbour instead.
     const cut = new Set<string>();
     get_connection_types(element)
       .filter((ct) => !(isCascade && ct === "ConnectsParentAxle"))
@@ -569,9 +556,8 @@ export function delete_element(
     }),
   );
 
-  // A load lives on its host and goes with it. One merely *framed* on the
-  // deleted edge survives, back in world coordinates — the fallback
-  // `repair_mechanism` already applies to that reference at load time.
+  // A load lives on its host and goes with it.
+  // One merely *framed* on the deleted edge survives, back in world coordinates — the fallback `repair_mechanism` already applies to that reference at load time.
   loadElements.forEach((load) => {
     if (load.targetID === elementID) {
       actions.push({ type: "DeleteElement", element: load });
@@ -595,10 +581,8 @@ export function delete_element(
 /**
  * Every element deleting `elementID` would take with it, itself included.
  *
- * Read off the very actions the deletion emits, so what the eraser highlights
- * and what it removes cannot drift apart. Falls back to the element alone if
- * they cannot be computed: this runs every frame under the cursor, where a
- * dangling reference must not take the canvas down before the click does.
+ * Read off the very actions the deletion emits, so what the eraser highlights and what it removes cannot drift apart.
+ * Falls back to the element alone if they cannot be computed: this runs every frame under the cursor, where a dangling reference must not take the canvas down before the click does.
  */
 export function deletion_closure(
   elementID: ID,
@@ -622,9 +606,7 @@ export function deletion_closure(
 }
 
 /**
- * A copy whose mutable containers are detached, so a simulation can advance over
- * it without ever reaching the caller's state — nor, for a freshly built
- * element, the very object its `CreateElement` action carries.
+ * A copy whose mutable containers are detached, so a simulation can advance over it without ever reaching the caller's state — nor, for a freshly built element, the very object its `CreateElement` action carries.
  */
 function clone_element_for_simulation(
   el: MechanicalElement,
@@ -654,13 +636,10 @@ export function clone_for_simulation(
 }
 
 /**
- * Applies a single structural action (Create, Delete or Connect/Disconnect) to
- * mutable simulated-state arrays.
+ * Applies a single structural action (Create, Delete or Connect/Disconnect) to mutable simulated-state arrays.
  *
- * Any caller that emits several bundles of actions in one gesture must advance
- * this state between them: a bundle computed against the state as it was before
- * a previous one can name an element that is already gone, and the reducer
- * throws on it. `simMech` must come from `clone_for_simulation`.
+ * Any caller that emits several bundles of actions in one gesture must advance this state between them: a bundle computed against the state as it was before a previous one can name an element that is already gone, and the reducer throws on it.
+ * `simMech` must come from `clone_for_simulation`.
  */
 export function apply_to_sim_state(
   action: Action,
@@ -692,8 +671,7 @@ export function apply_to_sim_state(
     return;
   }
   if (action.type === "SetLoadFrame") {
-    // simLoad shares its entries with the caller's state, so this replaces
-    // rather than mutates.
+    // simLoad shares its entries with the caller's state, so this replaces rather than mutates.
     const index = simLoad.findIndex((l) => l.id === action.id);
     const load = index === -1 ? undefined : simLoad[index];
     if (load && "frame" in load)
@@ -767,13 +745,10 @@ export function apply_to_sim_state(
 }
 
 /**
- * A gesture that emits several bundles of actions, each computed against the
- * state the previous ones leave behind.
+ * A gesture that emits several bundles of actions, each computed against the state the previous ones leave behind.
  *
- * Composing two `connect_elements` calls against the same starting state is a
- * defect, not a shortcut: the first may take a node over and delete it, and the
- * second then names an element the reducer will not find. Any multi-step gesture
- * goes through here.
+ * Composing two `connect_elements` calls against the same starting state is a defect, not a shortcut: the first may take a node over and delete it, and the second then names an element the reducer will not find.
+ * Any multi-step gesture goes through here.
  */
 export interface Simulation {
   readonly mechanicalElements: MechanicalElement[];
@@ -823,9 +798,7 @@ export function start_simulation(
 /**
  * Deletes multiple elements as a single consistent action bundle.
  *
- * Each element is deleted against the state as it looks after all prior
- * deletions in the batch — so indices are always correct and no action
- * ever references an already-deleted element.
+ * Each element is deleted against the state as it looks after all prior deletions in the batch — so indices are always correct and no action ever references an already-deleted element.
  */
 export function delete_elements(
   elementIDs: ID[],
@@ -840,8 +813,7 @@ export function delete_elements(
   );
 
   for (const id of elementIDs) {
-    // Skip if a previous deletion in this batch already removed this element
-    // (e.g. a constraint shared by two deleted mechanical elements).
+    // Skip if a previous deletion in this batch already removed this element (e.g. a constraint shared by two deleted mechanical elements).
     const exists =
       sim.mechanicalElements.some((e) => e.id === id) ||
       sim.constraintElements.some((e) => e.id === id) ||
@@ -874,8 +846,7 @@ function transfer_edge_connections_to_node(
 ) {
   const actions: Action[] = [];
   const connected = get_mechanical_element_from_id(edgeID, mechanicalElements);
-  // A node's fixedEdges/rotatingEdges may also reference a pinned gear: transfer
-  // the gear-side pin (fixedNodesBodyIDs) from source to dest instead.
+  // A node's fixedEdges/rotatingEdges may also reference a pinned gear: transfer the gear-side pin (fixedNodesBodyIDs) from source to dest instead.
   if (connected.type === "gear") {
     const index = connected.fixedNodesBodyIDs.indexOf(sourceNodeID);
     if (index !== -1) {
@@ -926,8 +897,7 @@ function transfer_edge_connections_to_node(
       connectID: destNodeID,
     });
   }
-  // Both nodes may already sit on this body, in which case the survivor only
-  // takes the place it already holds.
+  // Both nodes may already sit on this body, in which case the survivor only takes the place it already holds.
   if (
     "fixedNodesBodyIDs" in connectedEdge &&
     connectedEdge.fixedNodesBodyIDs.includes(sourceNodeID)
@@ -1060,9 +1030,7 @@ function transfer_internal_connections(
 /**
  * Transfer les connections des edges à `sourceNode` vers `destNode` (sauf pour AttachedBelt).
  *
- * Exemple : rotatingEdgeID(2).endID = 1
- * -> transfer_connection_id(node(1), node(3))
- * -> rotatingEdgeID(2).endID = 3
+ * Exemple : rotatingEdgeID(2).endID = 1 -> transfer_connection_id(node(1), node(3)) -> rotatingEdgeID(2).endID = 3
  *
  * Returns the actions to perform disconnections and connections.
  */
@@ -1114,12 +1082,9 @@ function transfer_external_connections(
 const DROP = "drop" as const;
 
 /**
- * The same constraint said of `destNodeID` instead of `sourceNodeID`, `DROP`
- * when the move robs it of meaning, or `undefined` when it says nothing about
- * the absorbed node.
+ * The same constraint said of `destNodeID` instead of `sourceNodeID`, `DROP` when the move robs it of meaning, or `undefined` when it says nothing about the absorbed node.
  *
- * A relation between the two nodes being fused becomes a relation of one node to
- * itself, which constrains nothing.
+ * A relation between the two nodes being fused becomes a relation of one node to itself, which constrains nothing.
  */
 function retargeted_constraint(
   constraint: ConstraintElement,
@@ -1165,9 +1130,7 @@ function retargeted_constraint(
 /**
  * Moves onto `destNodeID` every constraint held on the node being absorbed.
  *
- * One left relating an element to itself goes, and so does one that would end up
- * repeating a relation the mechanism already states — fusing two nodes can bring
- * two dimensions onto the very same pair.
+ * One left relating an element to itself goes, and so does one that would end up repeating a relation the mechanism already states — fusing two nodes can bring two dimensions onto the very same pair.
  */
 function transfer_constraint_connections(
   sourceNodeID: ID,
@@ -1198,12 +1161,9 @@ function transfer_constraint_connections(
 }
 
 /**
- * The edges a fused node ends up turning about: those both nodes held, each
- * named once, minus the beam it now slides along.
+ * The edges a fused node ends up turning about: those both nodes held, each named once, minus the beam it now slides along.
  *
- * A bar running from one of the two to the other is held by each of them, so a
- * plain concatenation lists it twice — and that is the ordinary case, not a
- * corner one: fusing the ends of a bar is how a linkage gets folded up.
+ * A bar running from one of the two to the other is held by each of them, so a plain concatenation lists it twice — and that is the ordinary case, not a corner one: fusing the ends of a bar is how a linkage gets folded up.
  */
 function fused_edges(
   first: readonly ID[],
@@ -1218,11 +1178,8 @@ function fused_edges(
 /**
  * Moves onto `destNodeID` the loads applied to the node being absorbed.
  *
- * A node carries at most one force — the same rule `connect_node_and_edge`
- * applies when an edge end lands on one — so a force meeting one already there
- * is dropped rather than stacked. Nothing else ever rests on a node: a moment
- * turns an edge or a gear, a distributed force runs along a beam, and either
- * would have nowhere to go.
+ * A node carries at most one force — the same rule `connect_node_and_edge` applies when an edge end lands on one — so a force meeting one already there is dropped rather than stacked.
+ * Nothing else ever rests on a node: a moment turns an edge or a gear, a distributed force runs along a beam, and either would have nowhere to go.
  */
 function transfer_load_connections(
   sourceNodeID: ID,
@@ -1247,14 +1204,11 @@ function transfer_load_connections(
 }
 
 /**
- * Fuses `hoveredNode` into `selectedNode`: the actions that merge two nodes
- * landing on one another, keeping every connection either carried.
+ * Fuses `hoveredNode` into `selectedNode`: the actions that merge two nodes landing on one another, keeping every connection either carried.
  *
- * A pivot meeting a slider (either order) becomes a slidep — the one node that
- * both turns and slides; the slidep inherits the pivot's id so a gear's
- * `parentAxleID` stays valid. Otherwise `selectedNode` takes over and
- * `hoveredNode` is deleted, its links transferred. Shared with the belt closure,
- * which merges the two junction nodes exactly as a drag would.
+ * A pivot meeting a slider (either order) becomes a slidep — the one node that both turns and slides; the slidep inherits the pivot's id so a gear's `parentAxleID` stays valid.
+ * Otherwise `selectedNode` takes over and `hoveredNode` is deleted, its links transferred.
+ * Shared with the belt closure, which merges the two junction nodes exactly as a drag would.
  */
 export function fuse_nodes(
   selectedNode: NodeElement,
@@ -1307,8 +1261,7 @@ export function fuse_nodes(
       ...transfer_load_connections(hoveredNode.id, selectedNode.id, loads),
     );
   } else if (selectedNode.type === "slider" && hoveredNode.type === "pivot") {
-    // Fuse them into a Slidep — symétrique au cas pivot+slider :
-    // le slidep hérite de l'ID du pivot pour que gear.parentAxleID reste valide.
+    // Fuse them into a Slidep — symétrique au cas pivot+slider : le slidep hérite de l'ID du pivot pour que gear.parentAxleID reste valide.
     const parentBeam = node_on_beam_body(hoveredNode, mechanicalElements);
     const parentBeamID = selectedNode.parentBeamID
       ? selectedNode.parentBeamID
@@ -1355,8 +1308,7 @@ export function fuse_nodes(
   } else {
     // Takeover de selectedNode sur hoveredNode
     actions.push({ type: "DeleteElement", element: hoveredNode });
-    // A mass never inherits an anchor: it is the one node that cannot
-    // be grounded.
+    // A mass never inherits an anchor: it is the one node that cannot be grounded.
     if (
       hoveredNode.isGrounded &&
       !selectedNode.isGrounded &&
@@ -1394,15 +1346,12 @@ export function fuse_nodes(
 export type OwnPartKind = "node" | "start" | "end" | "body" | "gear";
 
 /**
- * The `selectedPart` to hand to `connect_elements`: what the element being placed
- * or dragged offers to the target.
+ * The `selectedPart` to hand to `connect_elements`: what the element being placed or dragged offers to the target.
  *
- * An endpoint becomes a body connection when the target is a node the edge is
- * being drawn past — it ends up mid-edge, not at the tip. Placing and dragging
- * answer to this identically, which is the whole reason this is one function.
+ * An endpoint becomes a body connection when the target is a node the edge is being drawn past — it ends up mid-edge, not at the tip.
+ * Placing and dragging answer to this identically, which is the whole reason this is one function.
  *
- * The position is carried only to satisfy `HoveredPart`; `connect_elements`
- * reads the type, the id and the part, never the position.
+ * The position is carried only to satisfy `HoveredPart`; `connect_elements` reads the type, the id and the part, never the position.
  */
 export function own_part(
   elementID: ID,
@@ -1461,8 +1410,7 @@ export function connect_elements(
   ) {
     return [];
   }
-  // Close a belt onto itself: the terminal offered while it is being placed, or
-  // its own opposite end while one is dragged onto the other.
+  // Close a belt onto itself: the terminal offered while it is being placed, or its own opposite end while one is dragged onto the other.
   if (
     hoveredPart.type === "BeltClosure" ||
     hoveredPart.id === selectedPart.id
@@ -1628,17 +1576,14 @@ export function connect_elements(
 /**
  * Connects a node and an edge bidirectionally.
  *
- * Idempotent: a link already present on either side is not emitted again, so
- * re-connecting an existing pair is a no-op rather than a duplicate entry.
+ * Idempotent: a link already present on either side is not emitted again, so re-connecting an existing pair is a no-op rather than a duplicate entry.
  */
 /**
  * Releases one end of an edge from the node currently holding it.
  *
- * A node names an edge once, whatever number of ways that edge rests on it — an
- * end, the other end, a point of its body. So the entry goes only when this
- * endpoint was the last of them; cutting it while another still holds would
- * strand that one. The `parentBeamID` a slider slides along is left alone in
- * every case: an endpoint moving away does not end a slide.
+ * A node names an edge once, whatever number of ways that edge rests on it — an end, the other end, a point of its body.
+ * So the entry goes only when this endpoint was the last of them; cutting it while another still holds would strand that one.
+ * The `parentBeamID` a slider slides along is left alone in every case: an endpoint moving away does not end a slide.
  */
 function detach_edge_end(
   edge: EdgeElement,
@@ -1677,9 +1622,7 @@ export function connect_node_and_edge(
   loads: LoadElement[] = [],
 ): Action[] {
   const actions: Action[] = [];
-  // A slider names its rail through parentBeamID alone — once this edge holds
-  // that role, re-offering it (e.g. a second body crossing in the same
-  // gesture) is already satisfied, not a fixed edge to add on top of it.
+  // A slider names its rail through parentBeamID alone — once this edge holds that role, re-offering it (e.g. a second body crossing in the same gesture) is already satisfied, not a fixed edge to add on top of it.
   const alreadyParentBeam =
     "parentBeamID" in node && node.parentBeamID === edge.id;
   if (
@@ -1781,9 +1724,7 @@ export function connect_node_and_edge(
 /**
  * Whether `edge` can take the rail role for `node`.
  *
- * Only a beam crossing the node's body qualifies: the solver slides a node
- * along the beams whose `fixedNodesBodyIDs` name it, and a beam merely pinned
- * to the node by one of its ends would follow it instead of guiding it.
+ * Only a beam crossing the node's body qualifies: the solver slides a node along the beams whose `fixedNodesBodyIDs` name it, and a beam merely pinned to the node by one of its ends would follow it instead of guiding it.
  */
 export function can_be_rail(
   node: MechanicalElement,
@@ -1797,11 +1738,9 @@ export function can_be_rail(
 }
 
 /**
- * Hands the rail role to `beamID`, or drops it when undefined: the promoted
- * beam leaves the node's edge list, the outgoing rail takes the place it left.
+ * Hands the rail role to `beamID`, or drops it when undefined: the promoted beam leaves the node's edge list, the outgoing rail takes the place it left.
  *
- * Both bars stay connected to the node throughout — only the role moves, so the
- * beams keep the node in their `fixedNodesBodyIDs` and no geometry is at stake.
+ * Both bars stay connected to the node throughout — only the role moves, so the beams keep the node in their `fixedNodesBodyIDs` and no geometry is at stake.
  * `beamID` must be a beam the node already holds, and one `can_be_rail` accepts.
  */
 export function set_rail(
@@ -1864,8 +1803,7 @@ function node_at_edge_part(
 /**
  * Connects 2 edges together (beam body / gear perimeter) by creating a join at the contact point.
  *
- * Idempotent: two ends already held by the same node are left alone, rather than
- * given a second join that would orphan the first.
+ * Idempotent: two ends already held by the same node are left alone, rather than given a second join that would orphan the first.
  */
 function connect_two_edges(
   edge1: EdgeElement | GearElement,
@@ -1948,15 +1886,12 @@ export function attach_gear_to_belt(
 }
 
 /**
- * A gear carries one belt. When a new belt takes a gear another already holds,
- * the previous belt lets go of it (the closure-correction pass then opens that
- * belt if it drops below a loop). A freshly placed gear is not in the mechanism
- * yet, so it holds nothing and this is a no-op.
+ * A gear carries one belt.
+ * When a new belt takes a gear another already holds, the previous belt lets go of it (the closure-correction pass then opens that belt if it drops below a loop).
+ * A freshly placed gear is not in the mechanism yet, so it holds nothing and this is a no-op.
  *
- * Both directions are cut, not just the belt's list: `attachedBeltID` is written
- * by the connect that follows, but undoing that write clears it to `undefined`
- * rather than back to the old belt. Cutting the gear→belt side here makes the
- * eviction reversible — the undo restores the previous belt on both sides.
+ * Both directions are cut, not just the belt's list: `attachedBeltID` is written by the connect that follows, but undoing that write clears it to `undefined` rather than back to the old belt.
+ * Cutting the gear→belt side here makes the eviction reversible — the undo restores the previous belt on both sides.
  */
 export function evict_belt_from_gear(
   gearID: ID,

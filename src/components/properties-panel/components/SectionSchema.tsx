@@ -10,13 +10,10 @@ import {
 } from "./section-schema-layout";
 
 /**
- * The cross-section schema on a beam's properties: its shape, its cotes, and which one is `h` —
- * the cote that resists bending, drawn vertically here because that is the plane the 2D
- * mechanism itself is drawn in. A written convention would go unread; this is the thing that
- * actually settles it.
+ * The cross-section schema on a beam's properties: its shape, its cotes, and which one is `h` — the cote that resists bending, drawn vertically here because that is the plane the 2D mechanism itself is drawn in.
+ * A written convention would go unread; this is the thing that actually settles it.
  *
- * Only the painting lives here: what to draw comes from `section-schema-describe`, where to put
- * it from `section-schema-layout`, and how big from `SECTION_SCHEMA`.
+ * Only the painting lives here: what to draw comes from `section-schema-describe`, where to put it from `section-schema-layout`, and how big from `SECTION_SCHEMA`.
  */
 
 const line_props = ({ from, to }: Segment) => ({
@@ -79,8 +76,7 @@ export const SectionSchema: React.FC<SectionSchemaProps> = ({ shape }) => {
       <svg
         viewBox={`${viewBox.x} ${viewBox.y} ${viewBox.w} ${viewBox.h}`}
         style={{
-          // One drawing unit to the pixel, so a label or a stroke keeps the same weight on every
-          // profile however wide a view that profile ended up needing.
+          // One drawing unit to the pixel, so a label or a stroke keeps the same weight on every profile however wide a view that profile ended up needing.
           width: viewBox.w,
           maxWidth: "100%",
           height: "auto",

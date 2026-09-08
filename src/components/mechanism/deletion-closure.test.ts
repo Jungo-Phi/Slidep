@@ -18,9 +18,8 @@ import type {
 import type { MaterialDef, ProfileDef } from "../../types/material";
 
 /**
- * What the eraser highlights must be what it removes. These pin the closure to
- * the deletion itself: whatever `delete_element` decides to take, the hover has
- * to have shown in red first.
+ * What the eraser highlights must be what it removes.
+ * These pin the closure to the deletion itself: whatever `delete_element` decides to take, the hover has to have shown in red first.
  */
 
 const id = (n: number): ID =>
@@ -159,8 +158,7 @@ describe("deletion_closure", () => {
   });
 
   it("takes a constraint that names a cascaded gear", () => {
-    // The dimension hangs off GEAR_A, which the axle takes with it: erasing the
-    // axle must show the dimension going too, two links down.
+    // The dimension hangs off GEAR_A, which the axle takes with it: erasing the axle must show the dimension going too, two links down.
     expect(closure_of(AXLE).has(DIM_RADIUS)).toBe(true);
   });
 
@@ -179,9 +177,8 @@ describe("deletion_closure", () => {
     expect(doomed.has(LONE)).toBe(false);
   });
 
-  // A node fusion can bring both ends of a beam onto one node. That beam then
-  // names the node twice, so the deletion reaches it twice — and two cuts
-  // carrying the same index would splice the neighbour out on the second pass.
+  // A node fusion can bring both ends of a beam onto one node.
+  // That beam then names the node twice, so the deletion reaches it twice — and two cuts carrying the same index would splice the neighbour out on the second pass.
   it("cuts a node once when the deleted edge holds it by both ends", () => {
     const LOOPED = id(20);
     const NEIGHBOUR = id(21);
@@ -233,9 +230,7 @@ describe("deletion_closure", () => {
     expect(cuts).toHaveLength(1);
   });
 
-  // A fusion deletes the absorbed node outright rather than through
-  // `delete_element`, so a force resting on it has to be carried over by hand or
-  // it is left naming an element that no longer exists.
+  // A fusion deletes the absorbed node outright rather than through `delete_element`, so a force resting on it has to be carried over by hand or it is left naming an element that no longer exists.
   it("carries a force off the node a fusion absorbs", () => {
     const KEPT = id(40);
     const ABSORBED = id(41);
@@ -290,8 +285,8 @@ describe("deletion_closure", () => {
     expect(validate_mechanism(after)).toBeNull();
   });
 
-  // The node lists that beam once for its two ends. Moving one end away must
-  // leave the entry, or the end that stays is stranded.
+  // The node lists that beam once for its two ends.
+  // Moving one end away must leave the entry, or the end that stays is stranded.
   it("keeps the node's entry when only one of the two ends leaves", () => {
     const LOOPED = id(30);
     const OLD = id(31);

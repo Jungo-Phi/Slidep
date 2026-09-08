@@ -14,11 +14,9 @@ export type ThumbnailMode = {
 };
 
 /**
- * The first mode of a mechanism's first chain, for a gallery card to swing on hover — `null`
- * if the mechanism has no freedom to show.
+ * The first mode of a mechanism's first chain, for a gallery card to swing on hover — `null` if the mechanism has no freedom to show.
  *
- * Cached per element list: hovering the same card twice costs nothing after the first time,
- * and cards nobody hovers never pay for an analysis nobody sees.
+ * Cached per element list: hovering the same card twice costs nothing after the first time, and cards nobody hovers never pay for an analysis nobody sees.
  */
 const ANALYZED = new WeakMap<MechanicalElement[], ThumbnailMode | null>();
 

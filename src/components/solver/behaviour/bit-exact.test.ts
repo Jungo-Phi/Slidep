@@ -1,6 +1,5 @@
 /* eslint-disable @typescript-eslint/ban-ts-comment */
-// @ts-nocheck — temporary scaffolding: it reads and writes its fixture through node's
-// `fs`, and the project has no `@types/node`. Goes away with the file.
+// @ts-nocheck — temporary scaffolding: it reads and writes its fixture through node's `fs`, and the project has no `@types/node`. Goes away with the file.
 import { describe, it, expect } from "vitest";
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
@@ -20,21 +19,17 @@ import { PBD_kinematic_solver } from "../kinematics/PBD_kinematic_solver";
 import { sort_links } from "../utils";
 
 /**
- * TEMPORARY — the acceptance criterion of the belt-geometry work (`docs/belt-kinematic-
- * solver/plan-implementation.md`, chantier 4): the optimisation only changes how the belt
- * geometry is computed, never what it computes, so every mechanism must end on
- * bit-identical numbers. Delete this file and its fixture once that chantier is done.
+ * TEMPORARY — the acceptance criterion of the belt-geometry work (`docs/belt-kinematic- solver/plan-implementation.md`, chantier 4): the optimisation only changes how the belt geometry is computed, never what it computes, so every mechanism must end on bit-identical numbers.
+ * Delete this file and its fixture once that chantier is done.
  *
  * `CAPTURE=1 npx vitest run src/components/solver/bit-exact.test.ts` rewrites the fixture.
- * Recapture ONLY when a change is meant to move the numbers, and say so — the whole value
- * of this file is that nothing quietly drifts under it.
+ * Recapture ONLY when a change is meant to move the numbers, and say so — the whole value of this file is that nothing quietly drifts under it.
  */
 
 const FIXTURE = resolve(__dirname, "__fixtures__/bit-exact-reference.json");
 
 /**
- * Les trois derniers n'ont aucune courroie : ils sont le témoin qui dit qu'un changement
- * de géométrie de courroie n'a touché que les courroies.
+ * Les trois derniers n'ont aucune courroie : ils sont le témoin qui dit qu'un changement de géométrie de courroie n'a touché que les courroies.
  */
 const MECHANISMS: [string, string][] = [
   ["Core XY - 2 moteurs", coreXY2],
@@ -58,7 +53,7 @@ const scalarRows = (m: Map<string, number>): Rows =>
   [...m.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1)).map(([k, v]) => [k, v]);
 
 /** The same rows, read out of a snapshot's slots. Slots with no value (the reserved grab
- *  bridges, on a frame that has no grab) are keys the snapshot does not carry. */
+ * bridges, on a frame that has no grab) are keys the snapshot does not carry. */
 const snapshotRows = (s): { positions: Rows; angles: Rows } => ({
   positions: positionRows(
     new Map(
@@ -107,9 +102,8 @@ function runSimulation(json: string, frames: number, withGrab: boolean) {
 }
 
 /**
- * Edition path, driven straight at the solver: geometric links carry the radius DOFs
- * (`Radius`, `GearRatio`, `GearMeshing`, `BeltLength.radKeys`) that the simulation never
- * exercises. A `HandleGrab` on one free node stands in for the drag.
+ * Edition path, driven straight at the solver: geometric links carry the radius DOFs (`Radius`, `GearRatio`, `GearMeshing`, `BeltLength.radKeys`) that the simulation never exercises.
+ * A `HandleGrab` on one free node stands in for the drag.
  */
 function runGeometric(json: string) {
   const mechanism = loadFixture(json);
@@ -164,11 +158,9 @@ describe("écart à la référence", () => {
       return;
     }
     const expected = JSON.parse(readFileSync(FIXTURE, "utf8"));
-    // Matched by KEY, not by index, so that a change in how nodes are ordered or named is
-    // not read as a change in what the solver computes.
+    // Matched by KEY, not by index, so that a change in how nodes are ordered or named is not read as a change in what the solver computes.
     const perScenario: [string, number, number][] = [];
-    // A key the reference has and the run does not is silently skipped below, so an empty
-    // comparison would read as a perfect one: count what was actually looked at.
+    // A key the reference has and the run does not is silently skipped below, so an empty comparison would read as a perfect one: count what was actually looked at.
     let expectedKeys = 0;
     let comparedKeys = 0;
     for (const scenario of Object.keys(expected)) {
@@ -177,9 +169,7 @@ describe("écart à la référence", () => {
       let scenarioWorst = 0;
       let scenarioCompared = 0;
       for (const family of Object.keys(b)) {
-        // A whole scenario or family the reference has and the run no longer
-        // produces — a mechanism dropped from the list — leaves its keys
-        // uncompared rather than throwing: the count below is what says so.
+        // A whole scenario or family the reference has and the run no longer produces — a mechanism dropped from the list — leaves its keys uncompared rather than throwing: the count below is what says so.
         const mine = new Map((a?.[family] ?? []).map(([k, ...v]) => [k, v]));
         for (const [key, ...values] of b[family]) {
           const actualValues = mine.get(key);
@@ -208,8 +198,7 @@ describe("écart à la référence", () => {
     );
     expect(comparedKeys).toBe(expectedKeys);
 
-    // Bit-identical, not "close": the point is to catch a rewrite that computes the same
-    // geometry a different way and drifts by a last-place digit.
+    // Bit-identical, not "close": the point is to catch a rewrite that computes the same geometry a different way and drifts by a last-place digit.
     expect(worst).toBe(0);
   }, 300_000);
 });

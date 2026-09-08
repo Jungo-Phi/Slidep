@@ -15,10 +15,8 @@ interface TagChipsEditorProps {
 }
 
 /**
- * Tags rendered as chips, editable in place: hovering a chip swaps its label for a "×" (an
- * absolutely-positioned overlay, so the chip never changes width) and a trailing "+" chip
- * turns into a freeSolo autocomplete. Shared by the gallery card and the project panel so
- * tags are edited the same way wherever they show up.
+ * Tags rendered as chips, editable in place: hovering a chip swaps its label for a "×" (an absolutely-positioned overlay, so the chip never changes width) and a trailing "+" chip turns into a freeSolo autocomplete.
+ * Shared by the gallery card and the project panel so tags are edited the same way wherever they show up.
  */
 export const TagChipsEditor: React.FC<TagChipsEditorProps> = ({
   tags,

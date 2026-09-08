@@ -26,16 +26,12 @@ import { CURRENT_FORMAT_VERSION, migrate_document } from "./migrate-mechanism";
 
 // --- Point2 fields carried by actions
 //
-// `JSON.stringify` flattens a Point2 into a plain `{x, y}`, so every Point2
-// field of every action has to be revived by hand on the way back in. The table
-// below is derived from the `Action` union so that `tsc` — not a code review —
-// catches a forgotten field: adding a Point2 to an action makes the entry
-// incomplete, and adding a new action that carries one makes the whole key
-// missing. Both are compile errors.
+// `JSON.stringify` flattens a Point2 into a plain `{x, y}`, so every Point2 field of every action has to be revived by hand on the way back in.
+// The table below is derived from the `Action` union so that `tsc` — not a code review — catches a forgotten field: adding a Point2 to an action makes the entry incomplete, and adding a new action that carries one makes the whole key missing.
+// Both are compile errors.
 //
-// Known limit: only *top-level* Point2 fields are detected. No action nests a
-// Point2 inside an object or an array today; if one ever does, it needs its own
-// handling in `deserialize_action` (see `UpdatePositionsToValidState`).
+// Known limit: only *top-level* Point2 fields are detected.
+// No action nests a Point2 inside an object or an array today; if one ever does, it needs its own handling in `deserialize_action` (see `UpdatePositionsToValidState`).
 
 type ActionOfType<T extends Action["type"]> = Extract<Action, { type: T }>;
 
@@ -227,7 +223,7 @@ function deserialize_load_element(s: SerializedLoadElement): LoadElement {
 }
 
 /** Loads alone, for the lightweight recorder channel that updates a running
- *  simulation's load values without recompiling the whole model. */
+ * simulation's load values without recompiling the whole model. */
 export function serialize_loads(loads: LoadElement[]): SerializedLoadElement[] {
   return loads.map(serialize_load_element);
 }
@@ -420,9 +416,7 @@ export function save_all_to_zip(
 
   for (const record of records) {
     const base = sanitize_filename(record.metadata.name || unnamed);
-    // Probing every candidate rather than counting per base: a mechanism
-    // actually named "Bielle (2)" must not be overwritten by the suffix
-    // generated for a second "Bielle".
+    // Probing every candidate rather than counting per base: a mechanism actually named "Bielle (2)" must not be overwritten by the suffix generated for a second "Bielle".
     let entry = `${base}.slidep`;
     for (let n = 2; entry in files; n++) entry = `${base} (${n}).slidep`;
     files[entry] = strToU8(JSON.stringify(record, null, 2));
@@ -442,12 +436,9 @@ export interface FileImport {
 }
 
 /**
- * Parses one or more `.slidep` files and/or `.zip` archives of them, picked
- * from a file input or dropped onto the window.
+ * Parses one or more `.slidep` files and/or `.zip` archives of them, picked from a file input or dropped onto the window.
  *
- * A single `.slidep` file opens straight in the editor (`isArchive: false`);
- * anything else — several files, a zip, a mix — fills the library instead,
- * since there's no single obvious mechanism to open.
+ * A single `.slidep` file opens straight in the editor (`isArchive: false`); anything else — several files, a zip, a mix — fills the library instead, since there's no single obvious mechanism to open.
  */
 export async function load_mechanisms_from_filelist(
   files: FileList | File[],

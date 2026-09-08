@@ -19,8 +19,7 @@ import {
 import { t } from "../../../i18n";
 
 /** Reserved height of the section in the analysis tab: the panel must not change
- *  shape when the user drags elements around, which is the most frequent gesture
- *  in a motor-less simulation. */
+ * shape when the user drags elements around, which is the most frequent gesture in a motor-less simulation. */
 export const ELEMENT_MEASURES_HEIGHT = 116;
 
 const CURVE_LABELS: Record<ProbeCurveKey, string> = {
@@ -95,10 +94,8 @@ interface ElementMeasuresProps {
 }
 
 /**
- * The measured quantities of one element at the current simulation time — what
- * the mechanism *does*, as opposed to the loads (inputs) that live in its
- * properties. Shown both in the analysis tab (as the reserved "selected element"
- * section) and in the elements tab, so drilling down never loses information.
+ * The measured quantities of one element at the current simulation time — what the mechanism *does*, as opposed to the loads (inputs) that live in its properties.
+ * Shown both in the analysis tab (as the reserved "selected element" section) and in the elements tab, so drilling down never loses information.
  */
 export const ElementMeasures: React.FC<ElementMeasuresProps> = ({
   element,

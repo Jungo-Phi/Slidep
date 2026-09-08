@@ -68,8 +68,7 @@ describe("animate_mode", () => {
   });
 
   it("garde les poutres rigides tout au long du balancement", () => {
-    // C'est la raison d'être du solve par pose : suivre la tangente en ligne
-    // droite étirerait les barres qu'un mode est censé laisser rigides.
+    // C'est la raison d'être du solve par pose : suivre la tangente en ligne droite étirerait les barres qu'un mode est censé laisser rigides.
     for (const json of [vilbrequin, jansen, coreXY]) {
       const { mechanism, model, chain, mode } = first_mode(json);
       const rest = beam_lengths(mechanism);

@@ -19,7 +19,7 @@ export const DEFAULT = {
    */
   ROTATIONAL_FRICTION: 0.001,
   /** Collision restitution: 0 = fully inelastic (the pre-bounce default — a collision just
-   *  stops what it blocks), 1 = elastic (bounces back at the same speed it arrived). */
+   * stops what it blocks), 1 = elastic (bounces back at the same speed it arrived). */
   RESTITUTION: 0.9,
 } as const;
 

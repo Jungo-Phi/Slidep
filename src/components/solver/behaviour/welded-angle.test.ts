@@ -3,15 +3,11 @@ import { Point2 } from "../../../types";
 import { applyAngleConstraint } from "../../../test/constraint-map-api";
 
 /**
- * An `Angle` link between two beams welded end to start: its four keys are only three
- * nodes, the middle one standing for both `key2` and `key3`. Measured on the gallery
- * (`Double Cantilever.slidep`, `Double Cantilever bis.slidep`), that is the only place a
- * link's own keys collide today — but nothing forbids `Normal`, `Parallel` or
- * `EqualLength` from the same, and they share the projection tested here.
+ * An `Angle` link between two beams welded end to start: its four keys are only three nodes, the middle one standing for both `key2` and `key3`.
+ * Measured on the gallery (`Double Cantilever.slidep`, `Double Cantilever bis.slidep`), that is the only place a link's own keys collide today — but nothing forbids `Normal`, `Parallel` or `EqualLength` from the same, and they share the projection tested here.
  *
- * The shared node's gradient is the SUM of the two it carries, one per segment. Written
- * per key instead, the second write overwrites the first, and the correction stops being
- * `λ·wᵢ·∇ᵢC` on that node — which is what the assertions below are really about.
+ * The shared node's gradient is the SUM of the two it carries, one per segment.
+ * Written per key instead, the second write overwrites the first, and the correction stops being `λ·wᵢ·∇ᵢC` on that node — which is what the assertions below are really about.
  */
 describe("un angle dont deux clés sont le même nœud", () => {
   /** Two unit segments meeting at `mid`, currently straight, asked to fold by `target`. */
@@ -50,9 +46,8 @@ describe("un angle dont deux clés sont le même nœud", () => {
 
     expect(residual).toBeCloseTo(0.2, 6);
     expect(angle).toBeCloseTo(0.2, 2);
-    // Equal masses, nothing anchored: an angle is internal to the chain, so its projection
-    // may turn the chain but never push it. Half the shared node's correction going missing
-    // leaves exactly that push behind — measured at a quarter of the correction itself.
+    // Equal masses, nothing anchored: an angle is internal to the chain, so its projection may turn the chain but never push it.
+    // Half the shared node's correction going missing leaves exactly that push behind — measured at a quarter of the correction itself.
     expect(net.length()).toBeLessThan(1e-12);
   });
 

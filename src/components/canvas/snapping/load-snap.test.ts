@@ -27,10 +27,7 @@ const screen = (x: number, y: number) =>
   new Point2(x, y).as_space<"screen">() as ScreenPoint;
 
 describe("snap_direction", () => {
-  // The defect this replaced: a beam a hair off vertical was absorbed by the
-  // world's own vertical, and the frame was then read BACK from the angle that
-  // produced — so the load ended up stored at 89.5° from its beam, following it
-  // askew for ever, with nothing on screen to say so.
+  // The defect this replaced: a beam a hair off vertical was absorbed by the world's own vertical, and the frame was then read BACK from the angle that produced — so the load ended up stored at 89.5° from its beam, following it askew for ever, with nothing on screen to say so.
   it("rend un quart de tour exact sur une barre presque verticale", () => {
     const bar = beam(89.5);
     // Aimed roughly along the beam's normal, a couple of degrees off.
@@ -82,9 +79,8 @@ describe("snap_direction", () => {
     });
   });
 
-  // The corridor is a width in px, not an angle: the same angular error is
-  // caught on a short arrow and not on a long one. An angular tolerance would
-  // do the opposite, its catch widening with every pixel pulled.
+  // The corridor is a width in px, not an angle: the same angular error is caught on a short arrow and not on a long one.
+  // An angular tolerance would do the opposite, its catch widening with every pixel pulled.
   it("resserre l'angle admis à mesure que la flèche s'allonge", () => {
     const off = (length: number) =>
       snap_direction(

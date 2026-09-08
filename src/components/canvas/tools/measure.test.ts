@@ -281,8 +281,7 @@ describe("a gear, which is held by its rim", () => {
       onRim(GEAR2, P(30, 0)),
       overlapping,
     );
-    // 60 between the centres against 70 of radii: they interfere by 10, which must not read
-    // like a gap of 10.
+    // 60 between the centres against 70 of radii: they interfere by 10, which must not read like a gap of 10.
     expect(measure_readout(measure, overlapping)).toMatchObject({
       kind: "distance",
       distance: -10,
@@ -389,8 +388,7 @@ describe("what a reading takes whole", () => {
     expect(between(onBody(BEAM, P(25, 0)), onBody(BEAM, P(75, 0)))).toEqual([
       BEAM,
     ]);
-    // A point of that same bar is a point, not the bar — the node at the other end is a
-    // point in itself, so it is taken whole.
+    // A point of that same bar is a point, not the bar — the node at the other end is a point in itself, so it is taken whole.
     expect(between(onBody(BEAM, P(25, 0)), onNode(P(5, 5)))).toEqual([PIVOT]);
   });
 });

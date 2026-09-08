@@ -14,10 +14,8 @@ import { Recorder } from "../recording/recorder";
 import { snapshot_layout } from "../snapshot";
 
 /**
- * The recording is the same at every playback speed — the promise the fixed `RECORD_DT`
- * makes. Speed decides how fast the cursor asks for instants, never which instants get
- * solved, so a mechanism recorded at ×10 must be the one recorded at ×1, snapshot for
- * snapshot.
+ * The recording is the same at every playback speed — the promise the fixed `RECORD_DT` makes.
+ * Speed decides how fast the cursor asks for instants, never which instants get solved, so a mechanism recorded at ×10 must be the one recorded at ×1, snapshot for snapshot.
  */
 
 const loadFixture = (json: string) => load_mechanism(JSON.parse(json)).mechanism;
@@ -28,8 +26,7 @@ function record(json: string, speed: number, wanted: number): SimulationSnapshot
   recorder.load("kinematic", loadFixture(json), null);
   const all: SimulationSnapshot[] = [];
   let target = 0;
-  // Bounded so a recorder that stops producing fails on the length assertion rather than
-  // spinning here.
+  // Bounded so a recorder that stops producing fails on the length assertion rather than spinning here.
   for (let frame = 0; frame < 10_000 && all.length < wanted; frame++) {
     target += (speed * 1) / 60;
     for (let slice = 0; slice < 50; slice++) {
@@ -54,10 +51,8 @@ describe("une tranche rend compte de sa progression", () => {
     expect(first.snapshots).toHaveLength(1);
 
     const second = recorder.advance(10, 0);
-    // One instant in two is kept, so this one lands on a step that is not: the batch is
-    // empty and only `solved` and `reached` say that anything happened. Read as nothing
-    // happening, the cursor concludes the producer has stopped, slows down, asks for less,
-    // and the recording winds itself to a standstill.
+    // One instant in two is kept, so this one lands on a step that is not: the batch is empty and only `solved` and `reached` say that anything happened.
+    // Read as nothing happening, the cursor concludes the producer has stopped, slows down, asks for less, and the recording winds itself to a standstill.
     expect(second.snapshots).toHaveLength(0);
     expect(second.solved).toBe(1);
     expect(second.reached).toBeGreaterThan(first.reached);
@@ -66,9 +61,8 @@ describe("une tranche rend compte de sa progression", () => {
 
 describe("la fin d'un enregistrement se reconnaît", () => {
   it("tolère la dérive de l'accumulation, qu'un `>=` nu manquerait", () => {
-    // A recorded instant is a running sum of RECORD_DT: replayed here as the recorder
-    // builds it, the last one lands just SHORT of the round number it stands for. Compared
-    // exactly, the end of the recording is never reached and the playback never stops.
+    // A recorded instant is a running sum of RECORD_DT: replayed here as the recorder builds it, the last one lands just SHORT of the round number it stands for.
+    // Compared exactly, the end of the recording is never reached and the playback never stops.
     let t = 0;
     while (t + RECORD_DT <= MAX_RECORDING_TIME) t += RECORD_DT;
     expect(t).not.toBe(MAX_RECORDING_TIME);
@@ -91,7 +85,7 @@ describe("la durée enregistrable se règle sur la mémoire", () => {
   const time_of = (nodes: number) => max_recording_time(layout_of(nodes));
 
   /** The smallest mechanism the budget binds on before the ceiling does. Searched rather
-   *  than written down, so the test says nothing about what the budget happens to be. */
+   * than written down, so the test says nothing about what the budget happens to be. */
   const bound_by_memory = () => {
     let nodes = 64;
     while (time_of(nodes) === MAX_RECORDING_TIME) nodes *= 2;
@@ -108,9 +102,7 @@ describe("la durée enregistrable se règle sur la mémoire", () => {
     expect(time_of(nodes) % 60).toBe(0);
   });
 
-  // A million keys is what the floor has to be shown on, and laying them out
-  // costs real time: the default budget is not meant for it, and this asserts a
-  // returned duration, never how fast it was reached.
+  // A million keys is what the floor has to be shown on, and laying them out costs real time: the default budget is not meant for it, and this asserts a returned duration, never how fast it was reached.
   it(
     "ne descend jamais sous la minute, quitte à dépasser le budget",
     () => {
@@ -164,10 +156,7 @@ describe("l'enregistrement ne dépend pas de la vitesse de lecture", () => {
         `  ${name} : Δt ${worstT.toExponential(2)} s, ` +
           `Δposition ${worstPosition.toExponential(2)} px, Δangle ${worstAngle.toExponential(2)} rad`,
       );
-      // The states match to the bit, MODULO that same rounding: the motor startup ramp
-      // (see `MOTOR_STARTUP_RAMP_S`) reads `t` directly, so the two speeds' own last-bit
-      // disagreement on `t` now has one path into position/angle, where before `t` only
-      // ever bookkept elapsed time and never fed the physics itself.
+      // The states match to the bit, MODULO that same rounding: the motor startup ramp (see `MOTOR_STARTUP_RAMP_S`) reads `t` directly, so the two speeds' own last-bit disagreement on `t` now has one path into position/angle, where before `t` only ever bookkept elapsed time and never fed the physics itself.
       expect(worstT).toBeLessThan(1e-9);
       expect(worstPosition).toBeLessThan(1e-9);
       expect(worstAngle).toBeLessThan(1e-9);

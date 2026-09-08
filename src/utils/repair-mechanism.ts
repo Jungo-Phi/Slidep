@@ -1,16 +1,12 @@
 /**
  * Makes every reference of a mechanism resolve, so the strict getters are safe.
  *
- * Runs on the way in — never on the way out. A mechanism that turns incoherent
- * while the app holds it is a bug the guards must surface, not something to
- * launder on save.
+ * Runs on the way in — never on the way out.
+ * A mechanism that turns incoherent while the app holds it is a bug the guards must surface, not something to launder on save.
  *
- * Scope is deliberately narrow: references that point at nothing or at the
- * wrong kind of element, and coordinates that are not finite numbers. Those are
- * what make a getter throw or a drawing call crash. Non-reciprocal connections,
- * duplicate IDs and domain contradictions are left to the validator, because
- * repairing them means guessing which side told the truth — with one named
- * exception below (parentBeamID vs fixedEdgesIDs), where the guess isn't one.
+ * Scope is deliberately narrow: references that point at nothing or at the wrong kind of element, and coordinates that are not finite numbers.
+ * Those are what make a getter throw or a drawing call crash.
+ * Non-reciprocal connections, duplicate IDs and domain contradictions are left to the validator, because repairing them means guessing which side told the truth — with one named exception below (parentBeamID vs fixedEdgesIDs), where the guess isn't one.
  */
 
 import { ID, MechanicalElement, UnionElement } from "../types/element";
@@ -44,19 +40,16 @@ export interface Repair {
 }
 
 /**
- * Guards the fixed-point loop. Each round removes at least one element, so the
- * element count already bounds it; this only keeps a logic error from spinning.
+ * Guards the fixed-point loop.
+ * Each round removes at least one element, so the element count already bounds it; this only keeps a logic error from spinning.
  */
 const MAX_ROUNDS = 100;
 
 /**
- * The mechanism with every dangling and wrongly-typed reference removed, and
- * the list of what that cost. A healthy mechanism comes back as the very same
- * object, so callers can memoize on identity.
+ * The mechanism with every dangling and wrongly-typed reference removed, and the list of what that cost.
+ * A healthy mechanism comes back as the very same object, so callers can memoize on identity.
  *
- * `history` and `future` are dropped as soon as anything is repaired: undo
- * entries carry whole elements, and replaying one would put back what was just
- * taken out.
+ * `history` and `future` are dropped as soon as anything is repaired: undo entries carry whole elements, and replaying one would put back what was just taken out.
  */
 export function repair_mechanism(mechanism: Mechanism): {
   mechanism: Mechanism;
@@ -69,14 +62,11 @@ export function repair_mechanism(mechanism: Mechanism): {
     const byID = new Map<ID, MechanicalElement>(
       current.mechanicalElements.map((el) => [el.id, el]),
     );
-    // Library entries — a mechanism's own materials/profiles — are reference targets too
-    // (`BeamElement.materialID`/`profileID`), but not mechanical elements, so they need
-    // their own lookup rather than `byID`.
+    // Library entries — a mechanism's own materials/profiles — are reference targets too (`BeamElement.materialID`/`profileID`), but not mechanical elements, so they need their own lookup rather than `byID`.
     const materialIDs = new Set(current.materials.map((m) => m.id));
     const profileIDs = new Set(current.profiles.map((p) => p.id));
 
-    // A reference is dead when nothing answers to it, or when what answers is
-    // not a kind this field accepts.
+    // A reference is dead when nothing answers to it, or when what answers is not a kind this field accepts.
     const is_dead = (spec: AnyRefSpec) => (id: ID) => {
       const target = byID.get(id);
       if (target) return !spec.target.includes(target.type);
@@ -98,8 +88,7 @@ export function repair_mechanism(mechanism: Mechanism): {
     /**
      * The element with every non-finite point sent back to the origin.
      *
-     * Only the element's own top-level fields are looked at, which is the same
-     * reach `revive_points` has when it rebuilds them on load.
+     * Only the element's own top-level fields are looked at, which is the same reach `revive_points` has when it rebuilds them on load.
      */
     const repair_points = <T extends UnionElement>(element: T): T => {
       let repaired = element;
@@ -120,14 +109,10 @@ export function repair_mechanism(mechanism: Mechanism): {
     };
 
     /**
-     * The element with its parentBeamID removed from fixedEdgesIDs, when both
-     * name the same beam.
+     * The element with its parentBeamID removed from fixedEdgesIDs, when both name the same beam.
      *
-     * A slider either rides a beam's body or holds one fixed at a point — never
-     * both at once. Unlike the dead-reference repairs above, there is nothing to
-     * guess here: parentBeamID is the one connection tool ever sets deliberately
-     * for this pair, so it wins and the fixedEdgesIDs entry, always a leftover
-     * of a stale double-connect, is dropped.
+     * A slider either rides a beam's body or holds one fixed at a point — never both at once.
+     * Unlike the dead-reference repairs above, there is nothing to guess here: parentBeamID is the one connection tool ever sets deliberately for this pair, so it wins and the fixedEdgesIDs entry, always a leftover of a stale double-connect, is dropped.
      */
     const repair_parent_beam_conflict = <T extends UnionElement>(
       element: T,
@@ -154,14 +139,9 @@ export function repair_mechanism(mechanism: Mechanism): {
     };
 
     /**
-     * The element with any gear removed from rotatingEdgesIDs that also sits in
-     * fixedGearsIDs.
+     * The element with any gear removed from rotatingEdgesIDs that also sits in fixedGearsIDs.
      *
-     * A gear is either keyed to its axle or free to rotate against it — never
-     * both. fixedGearsIDs wins: it mirrors parentAxleID, the gear's own
-     * deliberate choice of axle, while a matching rotatingEdgesIDs entry only
-     * means the node once separately took the gear's rim, before a fusion
-     * carried the axle relation onto it too.
+     * A gear is either keyed to its axle or free to rotate against it — never both. fixedGearsIDs wins: it mirrors parentAxleID, the gear's own deliberate choice of axle, while a matching rotatingEdgesIDs entry only means the node once separately took the gear's rim, before a fusion carried the axle relation onto it too.
      */
     const repair_gear_role_conflict = <T extends UnionElement>(
       element: T,
@@ -274,8 +254,8 @@ export function repair_mechanism(mechanism: Mechanism): {
     if (!changed) break;
     current = { ...current, mechanicalElements, constraintElements, loads };
 
-    // Only removing an element can strand the references that named it; pruning
-    // a field cannot. Constraints and loads are named by nobody.
+    // Only removing an element can strand the references that named it; pruning a field cannot.
+    // Constraints and loads are named by nobody.
     if (removedMechanical === 0) break;
 
     if (round === MAX_ROUNDS - 1)
@@ -285,8 +265,7 @@ export function repair_mechanism(mechanism: Mechanism): {
   const viewport = repair_viewport(current.viewport, repairs);
   if (repairs.length === 0) return { mechanism, repairs };
 
-  // The history is worth keeping when only the framing was wrong: undo entries
-  // carry elements, and none of them can put back a broken viewport.
+  // The history is worth keeping when only the framing was wrong: undo entries carry elements, and none of them can put back a broken viewport.
   const framingOnly = repairs.every((r) => r.code === "VIEWPORT_RESET");
   return {
     mechanism: framingOnly

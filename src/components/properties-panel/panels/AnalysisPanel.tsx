@@ -111,9 +111,8 @@ interface AnalysisPanelProps {
   /**
    * The mechanism in the pose on screen: what the figures describe.
    *
-   * Distinct from `mechanism`, which stays the edited one. In simulation the two differ,
-   * and everything the panel can act on — a motor's speed, an element's probes — must go
-   * to the edited mechanism, never to the pose a recording happens to be showing.
+   * Distinct from `mechanism`, which stays the edited one.
+   * In simulation the two differ, and everything the panel can act on — a motor's speed, an element's probes — must go to the edited mechanism, never to the pose a recording happens to be showing.
    */
   analysedMechanism: Mechanism;
   appMode: AppMode;
@@ -126,7 +125,7 @@ interface AnalysisPanelProps {
   runtimeState: RuntimeState;
   setRuntimeState: React.Dispatch<React.SetStateAction<RuntimeState>>;
   /** The mechanical element the canvas selection points at (a selected load
-   *  resolves to its host), or undefined when nothing is selected. */
+   * resolves to its host), or undefined when nothing is selected. */
   selectedElement: MechanicalElement | undefined;
   /** Names the elements the canvas should pick out; empty clears the highlight. */
   setHighlight: (highlight: CanvasHighlight) => void;
@@ -203,8 +202,7 @@ const ENERGY_COMPONENT_LABEL_KEYS: Record<EnergyComponent, StringKey> = {
 };
 
 /** What each curve actually is — on its own chip rather than a single header tooltip, since
- *  the four are different enough (one is a rate integral, the rest are state) that a shared
- *  blurb either says too little about each or grows too long to skim. */
+ * the four are different enough (one is a rate integral, the rest are state) that a shared blurb either says too little about each or grows too long to skim. */
 const ENERGY_COMPONENT_HINT_KEYS: Record<EnergyComponent, StringKey> = {
   kinetic: "energy_balance_kinetic_hint",
   potential: "energy_balance_potential_hint",
@@ -213,7 +211,7 @@ const ENERGY_COMPONENT_HINT_KEYS: Record<EnergyComponent, StringKey> = {
 };
 
 /** The motor config to *show*, resolved through `analysedElementOf` — the pose on screen,
- *  which while scrubbed can hold a different value than the live mechanism. */
+ * which while scrubbed can hold a different value than the live mechanism. */
 const motor_config_at = (
   analysedElementOf: (id: ID) => MechanicalElement | undefined,
   id: ID,
@@ -225,10 +223,8 @@ const motor_config_at = (
 /**
  * A motor's speed, wherever its row sits — a mode it drives, or none at all.
  *
- * `element` (live) is what the edit is built against — id and `oldConfig` must always name
- * the mechanism's actual current config, whatever value happens to be on screen. `displayConfig`
- * is only what's shown before the user touches it: while scrubbed to a past instant, it is the
- * config that was in effect there, which can differ from the live one.
+ * `element` (live) is what the edit is built against — id and `oldConfig` must always name the mechanism's actual current config, whatever value happens to be on screen.
+ * `displayConfig` is only what's shown before the user touches it: while scrubbed to a past instant, it is the config that was in effect there, which can differ from the live one.
  */
 const MotorSpeed: React.FC<{
   element: MechanicalElement | undefined;
@@ -270,12 +266,12 @@ const ChainCard: React.FC<{
   /**
    * The element a mode is named after — absent only in the moment after a deletion.
    *
-   * The analysis is debounced, so for up to its delay the modes still name a part the
-   * mechanism no longer holds. Rare, brief, and not worth blanking the panel over.
+   * The analysis is debounced, so for up to its delay the modes still name a part the mechanism no longer holds.
+   * Rare, brief, and not worth blanking the panel over.
    */
   elementOf: (id: ID) => MechanicalElement | undefined;
   /** Same lookup, in the pose on screen — only for the motor speed shown, never for the
-   *  action `elementOf`'s result feeds; see `MotorSpeed`. */
+   * action `elementOf`'s result feeds; see `MotorSpeed`. */
   analysedElementOf: (id: ID) => MechanicalElement | undefined;
   animated: AnimatedMode;
   setAnimated: (animated: AnimatedMode) => void;
@@ -314,14 +310,12 @@ const ChainCard: React.FC<{
   const { chain, mobility, modes, highlight } = analysis;
   const status = ddl_status(mobility.mobility, chain.motors.length, appMode);
   const idleMotors = undriven_motors(chain, modes);
-  // The card's own hover, not its animation: entering a mode row keeps it true, since
-  // `onMouseEnter` does not fire again for children and `onMouseLeave` waits for the card.
+  // The card's own hover, not its animation: entering a mode row keeps it true, since `onMouseEnter` does not fire again for children and `onMouseLeave` waits for the card.
   const [hovered, setHovered] = React.useState(false);
 
   return (
     <Box
-      // Pointing at a chain lights it on the canvas; leaving lets the whole
-      // mechanism come back.
+      // Pointing at a chain lights it on the canvas; leaving lets the whole mechanism come back.
       onMouseEnter={() => {
         setHovered(true);
         setHighlight(focus(highlight));
@@ -382,8 +376,7 @@ const ChainCard: React.FC<{
               animated?.chainIndex === index &&
               animated?.modeIndex === modeIndex;
             const named = elementOf(mode.dominant);
-            // A driven mode carries its motor's speed: now that modes name their
-            // motors, a separate motors list would say the same thing twice.
+            // A driven mode carries its motor's speed: now that modes name their motors, a separate motors list would say the same thing twice.
             const motor =
               mode.drivenByMotor && named?.type === "pivot" && named.motor
                 ? named
@@ -397,16 +390,13 @@ const ChainCard: React.FC<{
                 onMouseEnter={() => {
                   if (!modesPlayable) return;
                   setAnimated({ chainIndex: index, modeIndex });
-                  // Everything the mode moves, not just what it is named after:
-                  // `contributors` is a ranking, trimmed of its small shares.
+                  // Everything the mode moves, not just what it is named after: `contributors` is a ranking, trimmed of its small shares.
                   setHighlight(focus(mode.moves));
                 }}
                 onMouseLeave={() => {
                   if (!modesPlayable) return;
                   setAnimated(null);
-                  // The row sits inside the chain's card, which gets no enter
-                  // event of its own on the way out — hand the chain back its
-                  // own highlight rather than clearing the canvas.
+                  // The row sits inside the chain's card, which gets no enter event of its own on the way out — hand the chain back its own highlight rather than clearing the canvas.
                   setHighlight(focus(highlight));
                 }}
                 sx={{
@@ -470,8 +460,7 @@ const ChainCard: React.FC<{
                 </Box>
                 {motor && (
                   <Box
-                    // Reaching for the speed is not pointing at the mode: the swing
-                    // stops so the value can be read while it is being changed.
+                    // Reaching for the speed is not pointing at the mode: the swing stops so the value can be read while it is being changed.
                     onMouseEnter={() => {
                       setAnimated(null);
                       setHighlight(focus(highlight));
@@ -623,8 +612,7 @@ const ChainCard: React.FC<{
               </Typography>
             ) : (
               <Box
-                // The whole set at once, then one at a time on each row: the reader sees
-                // where the redundancy lives before picking through it.
+                // The whole set at once, then one at a time on each row: the reader sees where the redundancy lives before picking through it.
                 onMouseEnter={() => {
                   setHighlight(fault(audit.groups.flatMap((g) => g.elements)));
                   setRedundancySymbols(symbolsFor(audit.links));
@@ -718,11 +706,9 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
   const { palette } = useTheme();
   const curveColors = probe_curve_colors(palette.primary.main);
   const [superpose, setSuperpose] = React.useState(false);
-  // Collapsed by default: a diagnostic for the solver's own conservation, not something most
-  // mechanisms need read every run — see docs discussion, "Bilan énergétique".
+  // Collapsed by default: a diagnostic for the solver's own conservation, not something most mechanisms need read every run — see docs discussion, "Bilan énergétique".
   const [energyExpanded, setEnergyExpanded] = React.useState(false);
-  // "Totale" and "travail net" on by default — the pair the diagnostic is actually about;
-  // kinetic/potential are there to answer "where did it go", opted into like x/y/norm.
+  // "Totale" and "travail net" on by default — the pair the diagnostic is actually about; kinetic/potential are there to answer "where did it go", opted into like x/y/norm.
   const [energyComponents, setEnergyComponents] = React.useState<
     Record<EnergyComponent, boolean>
   >({ kinetic: false, potential: false, mechanical: true, netWorkIn: true });
@@ -794,8 +780,7 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
     ? probedElements.find((el) => el.id === metricMenu.elementID)
     : undefined;
 
-  // The superposed view only makes sense with several probed elements; fall
-  // back to the per-element view (and its hidden switch) below that.
+  // The superposed view only makes sense with several probed elements; fall back to the per-element view (and its hidden switch) below that.
   const superposed = superpose && probedElements.length >= 2;
 
   const analysis = useDofAnalysis(analysedMechanism);
@@ -803,9 +788,7 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
   /** The mode being pointed at, if any. */
   const [animated, setAnimated] = React.useState<AnimatedMode>(null);
 
-  // Starting the simulation leaves the pointer where it was, so no row is ever told it has
-  // been left: without this the row it sits on goes on beating for a swing that has stopped
-  // and a mechanism that is now moving of its own accord.
+  // Starting the simulation leaves the pointer where it was, so no row is ever told it has been left: without this the row it sits on goes on beating for a swing that has stopped and a mechanism that is now moving of its own accord.
   const modesPlayable = !runtimeState.isPlaying;
   React.useEffect(() => {
     if (!modesPlayable) setAnimated(null);
@@ -817,8 +800,8 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
   );
   const [auditing, setAuditing] = React.useState<string | null>(null);
 
-  // An audit describes one measurement of one mechanism. A new measurement makes every
-  // answer stale at once, however little the edit changed.
+  // An audit describes one measurement of one mechanism.
+  // A new measurement makes every answer stale at once, however little the edit changed.
   const measuredModel = analysis.model;
   React.useEffect(() => {
     setAudits(new Map());
@@ -830,8 +813,8 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
       if (!measuredModel) return;
       const { chain, mobility } = chainAnalysis;
       setAuditing(chain.id);
-      // Seconds of solving on a big chain, and it blocks the thread. Handing the browser
-      // one frame first is what lets the button show it was pressed.
+      // Seconds of solving on a big chain, and it blocks the thread.
+      // Handing the browser one frame first is what lets the button show it was pressed.
       setTimeout(() => {
         const found = find_redundant_links(measuredModel, chain, mobility);
         setAudits((prev) => new Map(prev).set(chain.id, found));
@@ -855,8 +838,8 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
     [measuredModel],
   );
 
-  // Still means analysable and showable: edition, or a simulation on pause. While it plays
-  // the mechanism already moves, and a mode swinging on top of it would only muddle that.
+  // Still means analysable and showable: edition, or a simulation on pause.
+  // While it plays the mechanism already moves, and a mode swinging on top of it would only muddle that.
   useModeAnimation(
     modePreviewRef,
     analysis.mechanism,
@@ -866,8 +849,7 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
     modesPlayable,
   );
 
-  // Leaving the tab unmounts the panel without a mouse-leave, which would strand the
-  // highlight — and a redundancy symbol — on a canvas nothing is pointing at any more.
+  // Leaving the tab unmounts the panel without a mouse-leave, which would strand the highlight — and a redundancy symbol — on a canvas nothing is pointing at any more.
   React.useEffect(
     () => () => {
       setHighlight(NO_HIGHLIGHT);
@@ -888,11 +870,7 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
     [analysedMechanism.mechanicalElements],
   );
 
-  // N/T/Mf diagrams (docs/plan-efforts-interieurs.md phase 5bis) — a beam selected, dynamic
-  // mode, read off the recorded snapshot nearest the cursor the same way every other measure
-  // in this panel does (`ElementMeasures`'s own `get_dynamic_metric_at`), rather than the
-  // live per-frame ref the canvas itself draws from: this panel re-renders declaratively off
-  // `runtimeState`, not off a `requestAnimationFrame` loop.
+  // N/T/Mf diagrams (docs/plan-efforts-interieurs.md phase 5bis) — a beam selected, dynamic mode, read off the recorded snapshot nearest the cursor the same way every other measure in this panel does (`ElementMeasures`'s own `get_dynamic_metric_at`), rather than the live per-frame ref the canvas itself draws from: this panel re-renders declaratively off `runtimeState`, not off a `requestAnimationFrame` loop.
   const selectedBeam: BeamElement | undefined =
     selectedElement?.type === "beam" ? selectedElement : undefined;
   const cohesionField = React.useMemo(() => {
@@ -926,8 +904,7 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
     mechanism.profiles,
   ]);
 
-  // Clears the canvas's hover marker on deselection and when this panel goes away — nothing
-  // else ever un-sets it once a diagram stops being hovered without the mouse ever leaving.
+  // Clears the canvas's hover marker on deselection and when this panel goes away — nothing else ever un-sets it once a diagram stops being hovered without the mouse ever leaving.
   React.useEffect(() => {
     if (!selectedBeam) {
       setHoveredAbscissa(null);
@@ -1258,10 +1235,7 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
                       poolMax={0}
                       ownFloor={0}
                       unitFactor={unit.factor}
-                      // Never forced: `potential`/`mechanical` carry the drawing's own
-                      // coordinate-origin offset (see `EnergyBalanceSeries`), so pulling 0
-                      // into view could squash their real excursion the way it would for a
-                      // `position` chart — same reasoning as `metric_shows_zero`'s exceptions.
+                      // Never forced: `potential`/`mechanical` carry the drawing's own coordinate-origin offset (see `EnergyBalanceSeries`), so pulling 0 into view could squash their real excursion the way it would for a `position` chart — same reasoning as `metric_shows_zero`'s exceptions.
                       showZero={false}
                       emptyMessage={
                         curves.length === 0
@@ -1363,10 +1337,7 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
                 // Data exists but every component toggle is off
                 const noComponentSelected =
                   series.t.length >= 2 && curves.length === 0;
-                // The chart's own SI prefix (mN, µN, kN…), picked from what it actually
-                // shows rather than the metric's bare base unit — named once here, in the
-                // header, so every label inside the chart can stay a bare mantissa in the
-                // same unit instead of repeating it.
+                // The chart's own SI prefix (mN, µN, kN…), picked from what it actually shows rather than the metric's bare base unit — named once here, in the header, so every label inside the chart can stay a bare mantissa in the same unit instead of repeating it.
                 const peak = curves.reduce(
                   (m, c) =>
                     c.values.reduce((mm, v) => Math.max(mm, Math.abs(v)), m),
@@ -1537,8 +1508,7 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
                   ]
                 : [];
             });
-            // The chart's own SI prefix, picked from what it actually shows — see the
-            // per-element mode above for the same reasoning.
+            // The chart's own SI prefix, picked from what it actually shows — see the per-element mode above for the same reasoning.
             const peak = curves.reduce(
               (m, c) =>
                 c.values.reduce((mm, v) => Math.max(mm, Math.abs(v)), m),

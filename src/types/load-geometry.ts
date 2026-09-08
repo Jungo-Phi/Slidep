@@ -1,8 +1,6 @@
 /**
- * What a load occupies on screen, once its magnitudes have been run through the
- * display ruler. Built by the `*_screen_geometry` functions of
- * `utils/load-geom.ts`, and read by drawing, hit-testing and the on-canvas value
- * editor alike — so a load is picked exactly where it is drawn.
+ * What a load occupies on screen, once its magnitudes have been run through the display ruler.
+ * Built by the `*_screen_geometry` functions of `utils/load-geom.ts`, and read by drawing, hit-testing and the on-canvas value editor alike — so a load is picked exactly where it is drawn.
  */
 
 import type { ScreenPoint, WorldPoint } from "./mechanism";

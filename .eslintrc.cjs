@@ -20,10 +20,8 @@ module.exports = {
   },
   plugins: ['react-refresh'],
   rules: {
-    // Bloquant, et pas seulement 'warn' (défaut de react-hooks/recommended) :
-    // une dep manquante fige une closure et casse le comportement à distance —
-    // p. ex. snapToGrid mort en édition parce que handleEvent avait capturé un
-    // appMode périmé. Le warning était bien émis, mais noyé dans le bruit.
+    // Bloquant, et pas seulement 'warn' (défaut de react-hooks/recommended) : une dep manquante fige une closure et casse le comportement à distance — p. ex. snapToGrid mort en édition parce que handleEvent avait capturé un appMode périmé.
+    // Le warning était bien émis, mais noyé dans le bruit.
     'react-hooks/exhaustive-deps': 'error',
     'react-refresh/only-export-components': [
       'warn',
@@ -33,12 +31,10 @@ module.exports = {
       'warn',
       { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
     ],
-    // TypeScript already flags real scope errors here; the codebase uses
-    // unbraced `case` blocks widely (reducers, serialization).
+    // TypeScript already flags real scope errors here; the codebase uses unbraced `case` blocks widely (reducers, serialization).
     'no-case-declarations': 'off',
     '@typescript-eslint/no-explicit-any': 'warn',
-    // Real smell (MechanicalCanvas.tsx:275) but fixing it changes runtime
-    // behaviour — surfaced as a warning rather than blocking the lint run.
+    // Real smell (MechanicalCanvas.tsx:275) but fixing it changes runtime behaviour — surfaced as a warning rather than blocking the lint run.
     '@typescript-eslint/no-non-null-asserted-optional-chain': 'warn',
   },
   overrides: [

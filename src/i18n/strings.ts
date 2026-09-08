@@ -1,9 +1,8 @@
 import { Lang } from "./languages";
 
 /**
- * Every text the app shows, each key carrying its four languages side by side so that adding
- * one cannot leave a language behind. `{placeholders}` are filled by `t`; a `_one`/`_other`
- * pair is a plural, read through `tn`.
+ * Every text the app shows, each key carrying its four languages side by side so that adding one cannot leave a language behind.
+ * `{placeholders}` are filled by `t`; a `_one`/`_other` pair is a plural, read through `tn`.
  *
  * Element names are deliberately absent: they are stored in the mechanism and stay English.
  * So do keyboard shortcuts, whose letters are chosen for an English keyboard.
@@ -209,8 +208,7 @@ export const STRINGS = {
     de: "Kollisionen aus",
     es: "Colisiones desactivadas",
   },
-  // "Boden"/"Suelo" already name the palette's fixed-anchor tool (`ground`)
-  // This is a different, distinct concept, so it needs its own words in every language.
+  // "Boden"/"Suelo" already name the palette's fixed-anchor tool (`ground`) This is a different, distinct concept, so it needs its own words in every language.
   floor: {
     fr: "Plancher",
     en: "Floor",
@@ -748,8 +746,7 @@ export const STRINGS = {
     de: "{count} Schiebeführungen",
     es: "{count} correderas",
   },
-  // "slidep" (pivot carried by a slider) has no translated name — the user wants it
-  // kept as-is in every language rather than translated.
+  // "slidep" (pivot carried by a slider) has no translated name — the user wants it kept as-is in every language rather than translated.
   selection_slidep_one: {
     fr: "{count} slidep",
     en: "{count} slidep",
@@ -822,11 +819,11 @@ export const STRINGS = {
     de: "{count} Balken",
     es: "{count} vigas",
   },
-  elements_empty: {
-    fr: "Pas encore d'éléments",
-    en: "No elements yet",
-    de: "Noch keine Elemente",
-    es: "Aún no hay elementos",
+  mechanism_empty: {
+    fr: "Mécanisme vide",
+    en: "Empty mechanism",
+    de: "Leerer Mechanismus",
+    es: "Mecanismo vacío",
   },
   selection_count_one: {
     fr: "{count} élément",
@@ -1081,11 +1078,11 @@ export const STRINGS = {
   },
 
   // ── Mechanisms gallery ────────────────────────────────────────────────────
-  my_mechanisms: {
-    fr: "Mes mécanismes",
-    en: "My mechanisms",
-    de: "Meine Mechanismen",
-    es: "Mis mecanismos",
+  library: {
+    fr: "Bibliothèque",
+    en: "Library",
+    de: "Bibliothek",
+    es: "Biblioteca",
   },
   storage_notice: {
     fr: "Vos mécanismes sont enregistrés dans ce navigateur : vider ses données les efface. Exportez-les pour les conserver.",
@@ -1209,8 +1206,7 @@ export const STRINGS = {
   },
 
   // ── Mechanism validation ──────────────────────────────────────────────────
-  // Field and type names inside these stay as the code spells them: they name the document,
-  // not the mechanics, and a translated field name would point at nothing.
+  // Field and type names inside these stay as the code spells them: they name the document, not the mechanics, and a translated field name would point at nothing.
   validation_missing_id: {
     fr: "<ID manquant>",
     en: "<missing ID>",
@@ -2272,10 +2268,10 @@ export const STRINGS = {
     es: "indeterminado",
   },
   cohesion_indeterminate: {
-    fr: "valeurs indicatives : cette poutre transmet à ses deux extrémités, le partage des efforts n'est pas déterminé par son seul équilibre",
-    en: "indicative values: this beam transmits at both ends, so its share of the load is not settled by its own equilibrium alone",
-    de: "Richtwerte: Dieser Träger überträgt an beiden Enden, sein Lastanteil folgt daher nicht allein aus seinem eigenen Gleichgewicht",
-    es: "valores indicativos: esta viga transmite en sus dos extremos, por lo que su reparto de esfuerzos no lo determina su propio equilibrio",
+    fr: "valeurs indicatives : le partage des efforts passe par une liaison que le calcul ne modélise pas — courroie, engrenage ou contact",
+    en: "indicative values: the load path runs through a joint this computation does not model — a belt, a gear mesh or a contact",
+    de: "Richtwerte: Der Kraftfluss läuft über eine Verbindung, die diese Berechnung nicht modelliert — Riemen, Zahneingriff oder Kontakt",
+    es: "valores indicativos: el reparto de esfuerzos pasa por una unión que este cálculo no modela: una correa, un engranaje o un contacto",
   },
   cohesion_residual: {
     fr: "résidu :",

@@ -16,7 +16,7 @@ export interface ProbeCurve {
 }
 
 /** Whether `metric` plots as x/y/norm (a direction in the plane) rather than a single
- *  "value" curve — false for the angular and moment metrics, which are scalars. */
+ * "value" curve — false for the angular and moment metrics, which are scalars. */
 export function is_vector_metric(metric: ProbeMetric): boolean {
   return (
     metric !== "angle" &&
@@ -29,8 +29,7 @@ export function is_vector_metric(metric: ProbeMetric): boolean {
 }
 
 /** Time series of a probed metric: shared time axis + one array per curve.
- *  Empty `t` means no data (no snapshots yet, or metric not computed in the
- *  current simulation mode — e.g. force in kinematic). */
+ * Empty `t` means no data (no snapshots yet, or metric not computed in the current simulation mode — e.g. force in kinematic). */
 export interface ProbeSeries {
   t: number[];
   curves: ProbeCurve[];
@@ -38,12 +37,9 @@ export interface ProbeSeries {
 }
 
 /**
- * Where a probe samples an element, as slots into one layout: `a` alone for a node or a
- * body's position, `a` and `b` for an edge — sampled at its midpoint, oriented start → end —
- * and `angle` for a gear's own rotation. −1 where the layout has no such key.
+ * Where a probe samples an element, as slots into one layout: `a` alone for a node or a body's position, `a` and `b` for an edge — sampled at its midpoint, oriented start → end — and `angle` for a gear's own rotation. −1 where the layout has no such key.
  *
- * Resolved once per layout, not once per snapshot: a series walks the whole recording, and
- * all its snapshots share one layout until an edit.
+ * Resolved once per layout, not once per snapshot: a series walks the whole recording, and all its snapshots share one layout until an edit.
  */
 interface ProbeSlots {
   a: number;
@@ -72,9 +68,7 @@ function probe_slots(
 const sampled = new Float64Array(2);
 
 /** The probed point, into `sampled`. False when the snapshot carries no value for it.
- *  Generic over `SimulationSnapshot`: a position/angle slot is never out of bounds on
- *  either concrete subtype (see `snapshot_point`), so this reads a dynamic-mode trajectory
- *  exactly like a kinematic one. */
+ * Generic over `SimulationSnapshot`: a position/angle slot is never out of bounds on either concrete subtype (see `snapshot_point`), so this reads a dynamic-mode trajectory exactly like a kinematic one. */
 function read_position<S extends SimulationSnapshot>(
   snapshot: S,
   slots: ProbeSlots,
@@ -97,7 +91,7 @@ function read_position<S extends SimulationSnapshot>(
 }
 
 /** Oriented angle of the element (rad): gear own angle, or edge direction. Generic like
- *  `read_position`, for the same reason. */
+ * `read_position`, for the same reason. */
 function read_angle<S extends SimulationSnapshot>(
   snapshot: S,
   slots: ProbeSlots,
@@ -114,8 +108,8 @@ function read_angle<S extends SimulationSnapshot>(
 }
 
 /** The probed point's velocity, into `sampled` — same edge-midpoint averaging as
- *  `read_position`. `DynamicSnapshot`-only: velocity has no meaning where nothing
- *  integrates a force (kinematic mode drives position directly). */
+ * `read_position`.
+ * `DynamicSnapshot`-only: velocity has no meaning where nothing integrates a force (kinematic mode drives position directly). */
 function read_velocity(snapshot: DynamicSnapshot, slots: ProbeSlots): boolean {
   if (slots.a < 0) return false;
   const v = snapshot.velocities;
@@ -135,14 +129,10 @@ function read_velocity(snapshot: DynamicSnapshot, slots: ProbeSlots): boolean {
 }
 
 /**
- * Angular velocity of the element (rad/s), read directly rather than finite-differenced —
- * `DynamicSnapshot` carries it as real solver state (see `SimNodes.vAngle`), so there is
- * nothing to derive.
+ * Angular velocity of the element (rad/s), read directly rather than finite-differenced — `DynamicSnapshot` carries it as real solver state (see `SimNodes.vAngle`), so there is nothing to derive.
  *
- * A gear reads its own `angleVelocities` slot. An edge has no angle DOF of its own to read
- * (its orientation is derived from its two endpoints, never a state variable) — its angular
- * velocity is derived the same way `motor-model.ts`'s `arm_angular_velocity` derives an arm's:
- * the endpoints' relative velocity, tangential component, divided by the edge's length.
+ * A gear reads its own `angleVelocities` slot.
+ * An edge has no angle DOF of its own to read (its orientation is derived from its two endpoints, never a state variable) — its angular velocity is derived the same way `motor-model.ts`'s `arm_angular_velocity` derives an arm's: the endpoints' relative velocity, tangential component, divided by the edge's length.
  */
 function read_angular_velocity(
   snapshot: DynamicSnapshot,
@@ -168,17 +158,15 @@ function read_angular_velocity(
   const vbx = v[2 * slots.b];
   const vby = v[2 * slots.b + 1];
   if (Number.isNaN(vax) || Number.isNaN(vbx)) return undefined;
-  // Tangential component of the relative velocity, over the arm's length — same
-  // (end-start) × F / L form as a torque, here with velocity standing in for force.
+  // Tangential component of the relative velocity, over the arm's length — same (end-start) × F / L form as a torque, here with velocity standing in for force.
   const relVx = vbx - vax;
   const relVy = vby - vay;
   return (dx * relVy - dy * relVx) / (length * length);
 }
 
 /**
- * The element's own velocity right now, at the point `probe_slots` samples it — the same
- * anchor `get_dynamic_probe_series`'s "velocity" curve reads over time, here for a single
- * frame (the canvas overlay arrow). `undefined` when the snapshot carries none for it.
+ * The element's own velocity right now, at the point `probe_slots` samples it — the same anchor `get_dynamic_probe_series`'s "velocity" curve reads over time, here for a single frame (the canvas overlay arrow).
+ * `undefined` when the snapshot carries none for it.
  */
 export function element_velocity(
   element: MechanicalElement,
@@ -189,32 +177,29 @@ export function element_velocity(
 }
 
 /** One point of an element where a reaction acts — a node/gear has one, an edge has two
- *  (its own start and end), each independent: a beam's root and tip carry unrelated loads. */
+ * (its own start and end), each independent: a beam's root and tip carry unrelated loads. */
 export interface ElementReaction {
   at: Point2;
   vector: Point2;
   /** N·m, signed — the couple a rigid (non-rotating) weld's two-point force pair reduces
-   *  to (see `PBD_kinematic_solver.ts`'s per-link moment). Absent where nothing at this
-   *  point carries one, e.g. a plain hinge or a two-force member's own axial pull. */
+   * to (see `PBD_kinematic_solver.ts`'s per-link moment).
+   * Absent where nothing at this point carries one, e.g. a plain hinge or a two-force member's own axial pull. */
   moment?: number;
   /** From `LinkReaction.atAnchor` — a support reaction (against the ground) rather than an
-   *  internal one (between two mobile parts), so a consumer can tell the two apart. */
+   * internal one (between two mobile parts), so a consumer can tell the two apart. */
   atAnchor: boolean;
 }
 
 /** At a support (`atAnchor`), what "reaction" means flips: `LinkReaction` measures what the
- *  mechanism itself exerts ON that fixed point (Newton's third law from each link's own
- *  perspective, folded together — see PBD_kinematic_solver.ts's dynamics block). The
- *  classical support reaction a user expects — what the ground pushes back WITH, opposing
- *  the load — is exactly the negative of that. A non-anchored point has no ground to react
- *  from, so it keeps the raw member value (e.g. a rod's own tension, felt at either end). */
+ * mechanism itself exerts ON that fixed point (Newton's third law from each link's own perspective, folded together — see PBD_kinematic_solver.ts's dynamics block).
+ * The classical support reaction a user expects — what the ground pushes back WITH, opposing the load — is exactly the negative of that.
+ * A non-anchored point has no ground to react from, so it keeps the raw member value (e.g. a rod's own tension, felt at either end). */
 function oppose_at_support<T>(value: T, atAnchor: boolean, negate: (v: T) => T): T {
   return atAnchor ? negate(value) : value;
 }
 
 /** Every `force`-kind `LinkReaction` touching solver key `key`, summed. `key` may itself be
- *  plain, but a reaction's own `key` may be a fused (comma-joined) one when the dof it
- *  reports at is shared with another element — hence membership, not equality. */
+ * plain, but a reaction's own `key` may be a fused (comma-joined) one when the dof it reports at is shared with another element — hence membership, not equality. */
 function force_at(
   key: string,
   snapshot: DynamicSnapshot,
@@ -240,17 +225,8 @@ function force_at(
 }
 
 /**
- * Every `torque`-kind `LinkReaction` touching solver key `key`, summed — same membership as
- * `force_at`, but **never negated**, anchor or not: unlike a force (reported directly at the
- * point it acts, so an anchored one needs flipping to read as "what the support pushes back
- * WITH"), this moment is already computed at the anchor by taking the free end's OWN force —
- * already the "what the support pushes back with" quantity — about the anchor's position
- * (`PBD_kinematic_solver.ts`'s per-link moment: `cross(freeEnd − anchor, forceAtFreeEnd)`,
- * reference-point-independent since a link's own force always sums to zero across its ends).
- * Flipping it again would double the negation and read as the load's own moment, not the
- * support's — verified against a textbook cantilever: a downward tip load produces a
- * *positive* (opposing, counter-clockwise) reaction moment at the fixed end, only correct
- * un-negated.
+ * Every `torque`-kind `LinkReaction` touching solver key `key`, summed — same membership as `force_at`, but **never negated**, anchor or not: unlike a force (reported directly at the point it acts, so an anchored one needs flipping to read as "what the support pushes back WITH"), this moment is already computed at the anchor by taking the free end's OWN force — already the "what the support pushes back with" quantity — about the anchor's position (`PBD_kinematic_solver.ts`'s per-link moment: `cross(freeEnd − anchor, forceAtFreeEnd)`, reference-point-independent since a link's own force always sums to zero across its ends).
+ * Flipping it again would double the negation and read as the load's own moment, not the support's — verified against a textbook cantilever: a downward tip load produces a *positive* (opposing, counter-clockwise) reaction moment at the fixed end, only correct un-negated.
  */
 function moment_at(
   key: string,
@@ -288,13 +264,11 @@ function point_reaction(
 }
 
 /** Which point of an element a reaction is read at: a node/gear/body has only `"node"`,
- *  an edge only `"start"`/`"end"` — `element_reaction_at` returns `undefined` for the
- *  shape the element doesn't have. */
+ * an edge only `"start"`/`"end"` — `element_reaction_at` returns `undefined` for the shape the element doesn't have. */
 export type ReactionPoint = "node" | "start" | "end";
 
 /** The reaction at one specific point of an element — the building block behind both
- *  `element_reactions` (all of an element's points, for the canvas overlay) and the
- *  probe series/instant readers (one named point at a time, e.g. "force-start"). */
+ * `element_reactions` (all of an element's points, for the canvas overlay) and the probe series/instant readers (one named point at a time, e.g. "force-start"). */
 function element_reaction_at(
   element: MechanicalElement,
   which: ReactionPoint,
@@ -311,10 +285,8 @@ function element_reaction_at(
 }
 
 /**
- * Every reaction acting on this element — the canvas overlay arrow's "force" reading. A
- * node/gear resolves to at most one entry (its own key); an edge to at most two, one per
- * endpoint (`id:start`/`id:end`, same keying `probe_slots` uses elsewhere) — a beam's root
- * reaction and its tip reaction are unrelated quantities, never merged into one arrow.
+ * Every reaction acting on this element — the canvas overlay arrow's "force" reading.
+ * A node/gear resolves to at most one entry (its own key); an edge to at most two, one per endpoint (`id:start`/`id:end`, same keying `probe_slots` uses elsewhere) — a beam's root reaction and its tip reaction are unrelated quantities, never merged into one arrow.
  */
 export function element_reactions(
   element: MechanicalElement,
@@ -336,8 +308,7 @@ export interface ProbeTrajectory {
 }
 
 /** One trajectory being accumulated: the path, and the time each point was
- *  recorded at (the sampling can skip a snapshot, so the two arrays are not
- *  indexed by snapshot). */
+ * recorded at (the sampling can skip a snapshot, so the two arrays are not indexed by snapshot). */
 interface TrajectoryBuild {
   elementID: ID;
   points: Point2[];
@@ -345,11 +316,11 @@ interface TrajectoryBuild {
 }
 
 /** Trajectories built so far, plus what they were built from. Opaque: pass it
- *  back to `extend_probe_trajectories`, never read it. */
+ * back to `extend_probe_trajectories`, never read it. */
 export interface TrajectoryCache {
   elements: MechanicalElement[];
   /** Number of snapshots consumed, and the last one consumed — its identity is
-   *  what tells an append apart from a rewritten history. */
+   * what tells an append apart from a rewritten history. */
   consumed: number;
   boundary: SimulationSnapshot | null;
   built: TrajectoryBuild[];
@@ -385,11 +356,9 @@ function sample_into(
 }
 
 /**
- * Trajectories of every node whose `trajectory` overlay is on, in mechanical-
- * element order. The recording only ever grows, so the cache is extended with
- * the new snapshots instead of being rebuilt — pass the returned cache back on
- * the next call. Anything else (elements edited, history truncated or reset)
- * rebuilds from scratch.
+ * Trajectories of every node whose `trajectory` overlay is on, in mechanical- element order.
+ * The recording only ever grows, so the cache is extended with the new snapshots instead of being rebuilt — pass the returned cache back on the next call.
+ * Anything else (elements edited, history truncated or reset) rebuilds from scratch.
  */
 export function extend_probe_trajectories(
   cache: TrajectoryCache,
@@ -418,7 +387,8 @@ export function extend_probe_trajectories(
 }
 
 /** Index of the first point recorded after `time` — the trajectory's head at
- *  that playback time. `times` is sorted, so the scan is a binary search. */
+ * that playback time.
+ * `times` is sorted, so the scan is a binary search. */
 function head_count(times: number[], time: number): number {
   let lo = 0;
   let hi = times.length;
@@ -431,7 +401,7 @@ function head_count(times: number[], time: number): number {
 }
 
 /** Reads the accumulated trajectories at a playback time. The point arrays are
- *  shared with the cache, not copied: treat them as read-only. */
+ * shared with the cache, not copied: treat them as read-only. */
 export function trajectories_at(
   cache: TrajectoryCache,
   time: number,
@@ -444,10 +414,8 @@ export function trajectories_at(
 }
 
 /**
- * Extract the plottable time series of one probe metric from the recorded
- * kinematic snapshots. Velocity is derived from positions by central finite
- * differences; edge angles are unwrapped so the curve stays continuous across
- * the ±180° seam.
+ * Extract the plottable time series of one probe metric from the recorded kinematic snapshots.
+ * Velocity is derived from positions by central finite differences; edge angles are unwrapped so the curve stays continuous across the ±180° seam.
  */
 export function get_probe_series(
   element: MechanicalElement,
@@ -489,9 +457,7 @@ export function get_probe_series(
         }
       }
 
-      // Position "norm" is the displacement from the start of the recording
-      // (‖p‖ would be the distance to the arbitrary canvas origin); velocity
-      // norm is the plain magnitude ‖v‖.
+      // Position "norm" is the displacement from the start of the recording (‖p‖ would be the distance to the arbitrary canvas origin); velocity norm is the plain magnitude ‖v‖.
       const position = metric === "position" && xs.length > 0;
       const ox = position ? xs[0] : 0;
       const oy = position ? ys[0] : 0;
@@ -560,8 +526,7 @@ export function get_probe_series(
     }
 
     case "motor-power":
-      // No torque in the kinematic solver (motors drive position directly); dynamic mode
-      // fills this in.
+      // No torque in the kinematic solver (motors drive position directly); dynamic mode fills this in.
       return { t: [], curves: [], unit: "W" };
 
     case "force":
@@ -591,13 +556,8 @@ const REACTION_POINT: Record<
 };
 
 /**
- * `get_probe_series`'s dynamic-mode counterpart: same curves, but velocity and angular
- * velocity are read directly off `DynamicSnapshot`'s real solver state (`read_velocity`,
- * `read_angular_velocity`) instead of finite-differenced from position — no differencing
- * noise, since dynamic mode has the actual quantity. Position/angle are otherwise identical
- * to the kinematic case (`read_position`/`read_angle` are already generic), duplicated
- * rather than shared with `get_probe_series`: the two only diverge on velocity, and forcing
- * both through one body costs more indirection than the position/angle cases are worth.
+ * `get_probe_series`'s dynamic-mode counterpart: same curves, but velocity and angular velocity are read directly off `DynamicSnapshot`'s real solver state (`read_velocity`, `read_angular_velocity`) instead of finite-differenced from position — no differencing noise, since dynamic mode has the actual quantity.
+ * Position/angle are otherwise identical to the kinematic case (`read_position`/`read_angle` are already generic), duplicated rather than shared with `get_probe_series`: the two only diverge on velocity, and forcing both through one body costs more indirection than the position/angle cases are worth.
  */
 export function get_dynamic_probe_series(
   element: MechanicalElement,
@@ -621,8 +581,7 @@ export function get_dynamic_probe_series(
         xs.push(sampled[0]);
         ys.push(sampled[1]);
       }
-      // Displacement from the start of the recording, like `get_probe_series`'s position
-      // norm — ‖p‖ would be the distance to the arbitrary canvas origin.
+      // Displacement from the start of the recording, like `get_probe_series`'s position norm — ‖p‖ would be the distance to the arbitrary canvas origin.
       const ox = xs.length > 0 ? xs[0] : 0;
       const oy = xs.length > 0 ? ys[0] : 0;
       return {
@@ -757,8 +716,7 @@ export function get_dynamic_probe_series(
         const r = element_reaction_at(element, which, snap);
         if (r?.moment === undefined) continue;
         t.push(snap.t);
-        // Solver's raw moment is CCW-positive; the data model (and every moment drawn on
-        // screen, see `use-simulation-playback.ts`) reads clockwise-positive — negate once.
+        // Solver's raw moment is CCW-positive; the data model (and every moment drawn on screen, see `use-simulation-playback.ts`) reads clockwise-positive — negate once.
         values.push(-r.moment);
       }
       return { t, curves: [{ key: "value", values }], unit: "N·m" };
@@ -771,13 +729,12 @@ export interface MetricSample {
   metric: ProbeMetric;
   unit: string;
   /** One entry per curve of the metric ("x"/"y"/"norm", or "value"). Empty when
-   *  the metric has no data yet (no snapshots, or not computed in this mode). */
+   * the metric has no data yet (no snapshots, or not computed in this mode). */
   values: { key: ProbeCurveKey; value: number }[];
 }
 
 /**
- * The instantaneous value of `metric` at simulation time `t`: the same series
- * `get_probe_series` plots, sampled at the recorded time closest to `t`.
+ * The instantaneous value of `metric` at simulation time `t`: the same series `get_probe_series` plots, sampled at the recorded time closest to `t`.
  */
 export function get_metric_at(
   element: MechanicalElement,
@@ -788,8 +745,7 @@ export function get_metric_at(
   const series = get_probe_series(element, metric, snapshots);
   if (series.t.length === 0) return { metric, unit: series.unit, values: [] };
 
-  // Nearest recorded sample: the series time axis is uniform (RECORD_DT), but
-  // scan for the closest rather than assume it — snapshots can start late.
+  // Nearest recorded sample: the series time axis is uniform (RECORD_DT), but scan for the closest rather than assume it — snapshots can start late.
   let best = 0;
   for (let i = 1; i < series.t.length; i++) {
     if (Math.abs(series.t[i] - t) < Math.abs(series.t[best] - t)) best = i;

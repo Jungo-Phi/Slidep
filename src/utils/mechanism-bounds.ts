@@ -13,17 +13,11 @@ export interface Bounds {
 }
 
 /**
- * Boîte englobante, en coordonnées monde, des ancres du modèle : positions des
- * nœuds, extrémités des arêtes, disque des engrenages (dents comprises),
- * étiquettes des contraintes.
+ * Boîte englobante, en coordonnées monde, des ancres du modèle : positions des nœuds, extrémités des arêtes, disque des engrenages (dents comprises), étiquettes des contraintes.
  *
- * Approximative par nature : l'encombrement *dessiné* des glyphes (bâti,
- * moteur, texte d'une cote) ne vit que dans les fonctions de dessin et n'est
- * pas repris ici.
+ * Approximative par nature : l'encombrement *dessiné* des glyphes (bâti, moteur, texte d'une cote) ne vit que dans les fonctions de dessin et n'est pas repris ici.
  *
- * Les charges en sont exclues : elles sont dessinées à taille écran fixe, donc
- * leur encombrement en unités monde dépend du zoom qu'on cherche justement à
- * déduire de cette boîte.
+ * Les charges en sont exclues : elles sont dessinées à taille écran fixe, donc leur encombrement en unités monde dépend du zoom qu'on cherche justement à déduire de cette boîte.
  *
  * `undefined` si rien à cadrer.
  */

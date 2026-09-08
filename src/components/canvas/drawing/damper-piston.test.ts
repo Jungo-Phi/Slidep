@@ -4,13 +4,10 @@ import { Point2 } from "../../../types/point2";
 import type { ScreenPoint } from "../../../types";
 
 /**
- * The piston is read off the canvas calls rather than from a private helper: the
- * defect this guards against lives in the drawing, not in the arithmetic.
+ * The piston is read off the canvas calls rather than from a private helper: the defect this guards against lives in the drawing, not in the arithmetic.
  *
- * `draw_damper` strokes the rod from `TAC` to `piston_x + TAC/2` in a frame it
- * has translated and rotated onto the damper. Placing the damper horizontally at
- * the origin makes that frame the identity, so the rod's far end is read
- * straight off the `lineTo` that follows the `moveTo(TAC, 0)`.
+ * `draw_damper` strokes the rod from `TAC` to `piston_x + TAC/2` in a frame it has translated and rotated onto the damper.
+ * Placing the damper horizontally at the origin makes that frame the identity, so the rod's far end is read straight off the `lineTo` that follows the `moveTo(TAC, 0)`.
  */
 function piston_reach(length: number, restLength?: number): number {
   const calls: { op: string; x: number; y: number }[] = [];
@@ -55,8 +52,7 @@ describe("le piston de l'amortisseur", () => {
   const LENGTH = 400;
 
   it("ne bouge pas quand la simulation démarre", () => {
-    // Entering simulation freezes restLength at the current world length, so the
-    // first simulated frame is drawn at stretch 1 — the very state edition shows.
+    // Entering simulation freezes restLength at the current world length, so the first simulated frame is drawn at stretch 1 — the very state edition shows.
     const edition = piston_reach(LENGTH);
     const firstSimulatedFrame = piston_reach(LENGTH, LENGTH);
     expect(firstSimulatedFrame).toBeCloseTo(edition, 9);

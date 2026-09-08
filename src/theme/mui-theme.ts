@@ -45,7 +45,7 @@ export interface CanvasPalette {
   SELECTION_BOX: string;
   SELECTION_ACCENT: string;
   /** Everything the ruler draws. A register of its own: a measurement is neither part of the
-   *  drawing, nor a selection, nor something acting on the mechanism. */
+   * drawing, nor a selection, nor something acting on the mechanism. */
   MEASURE: string;
   DELETION_STROKE: string;
   DELETION_BOX: string;
@@ -173,8 +173,7 @@ const GRID_RAMP = {
 const grid_colors = (s: ThemeSpec) => {
   const ramp = GRID_RAMP[s.mode];
   const contrast = s.gridContrast ?? 1;
-  // Darken a light ground, lighten a dark one — either way the ground keeps its
-  // own hue, unless a theme opts into a tinted grid via `gridTint`.
+  // Darken a light ground, lighten a dark one — either way the ground keeps its own hue, unless a theme opts into a tinted grid via `gridTint`.
   const towards = s.gridTint ?? (s.mode === "dark" ? "#FFFFFF" : "#000000");
   const step = (v: number) => mix(s.appBackground, towards, v * contrast);
   const axis = step(ramp.GRID_AXIS);
@@ -191,23 +190,27 @@ const SNAP_SATURATION = 0.33;
 /**
  * How far off the paper a snap indicator stands, as a WCAG contrast ratio.
  *
- * One figure for every theme, and deliberately **not** the grid's own: the grid ramp is far heavier on a dark ground than on a light one, and heavier again on the blueprints, so an indicator pegged to it inherited a weight that swung by three to one across the set. What it has to be is the same discreet mark everywhere.
+ * One figure for every theme, and deliberately **not** the grid's own: the grid ramp is far heavier on a dark ground than on a light one, and heavier again on the blueprints, so an indicator pegged to it inherited a weight that swung by three to one across the set.
+ * What it has to be is the same discreet mark everywhere.
  */
 const SNAP_CONTRAST = 1.5;
 
 /**
  * Where a theme drives its grid harder than the rest, the share of that excess the indicator keeps.
  *
- * A blueprint draws its grid near-white on blue, five times off the paper where the other themes sit under three: held to the common figure there, the indicator was fainter than the lines it has to stand out from. This is a floor, never a ceiling — every theme whose grid is ordinary stays on `SNAP_CONTRAST` exactly.
+ * A blueprint draws its grid near-white on blue, five times off the paper where the other themes sit under three: held to the common figure there, the indicator was fainter than the lines it has to stand out from.
+ * This is a floor, never a ceiling — every theme whose grid is ordinary stays on `SNAP_CONTRAST` exactly.
  */
 const SNAP_GRID_SHARE = 0.25;
 
 /**
  * The colour every snap indicator is drawn in: the body's hue, at a weight fixed once for all themes.
  *
- * The grid's family says « here is the paper », and a hold on it has to be a different statement — drawn in a step of the grid ramp it read as one more grid line, and vanished where it fell on an axis. Hence the hue.
+ * The grid's family says « here is the paper », and a hold on it has to be a different statement — drawn in a step of the grid ramp it read as one more grid line, and vanished where it fell on an axis.
+ * Hence the hue.
  *
- * The weight is set by **contrast**, not by lightness: a tinted colour reads stronger than a grey of the same lightness, and by a different amount on a dark ground than on a light one. So the lightness is solved for, on the side the theme's own grid steps towards.
+ * The weight is set by **contrast**, not by lightness: a tinted colour reads stronger than a grey of the same lightness, and by a different amount on a dark ground than on a light one.
+ * So the lightness is solved for, on the side the theme's own grid steps towards.
  */
 const snap_color = (s: ThemeSpec, axis: string): string => {
   const { h } = to_hsl(s.fillBody);
@@ -217,7 +220,8 @@ const snap_color = (s: ThemeSpec, axis: string): string => {
     1 + SNAP_GRID_SHARE * (contrast_ratio(axis, ground) - 1),
   );
   const shade = (l: number) => to_hex({ h, s: SNAP_SATURATION, l });
-  // Contrast is monotone in lightness on either side of the ground, so a bisection on one side finds it. Twenty halvings take the interval well under one 8-bit level.
+  // Contrast is monotone in lightness on either side of the ground, so a bisection on one side finds it.
+  // Twenty halvings take the interval well under one 8-bit level.
   const lighter = s.mode === "dark";
   let lo = lighter ? to_hsl(ground).l : 0;
   let hi = lighter ? 1 : to_hsl(ground).l;
@@ -230,9 +234,8 @@ const snap_color = (s: ThemeSpec, axis: string): string => {
 };
 
 /**
- * How far a rule steps off the surface it is drawn on. One step, applied to each
- * surface in turn: a divider is only ever read against what it lies on, so a
- * single colour for all of them is right on one surface and wrong on the others.
+ * How far a rule steps off the surface it is drawn on.
+ * One step, applied to each surface in turn: a divider is only ever read against what it lies on, so a single colour for all of them is right on one surface and wrong on the others.
  */
 const DIVIDER_STEP = { light: 0.2, dark: 0.26 };
 
@@ -423,8 +426,7 @@ const status_palette = (s: ThemeSpec) => {
 
 const mui_palette = (s: ThemeSpec) => {
   const dark = s.mode === "dark";
-  // The veil darkens a light ground and lightens a dark one: a black veil on a
-  // dark background is invisible.
+  // The veil darkens a light ground and lightens a dark one: a black veil on a dark background is invisible.
   const veil = dark ? "255, 255, 255" : "0, 0, 0";
   const towards = dark ? "#FFFFFF" : "#000000";
   return {
@@ -437,12 +439,9 @@ const mui_palette = (s: ThemeSpec) => {
       toolbar: s.toolbar,
       sunken: `rgba(${veil}, 0.04)`,
       hover: `rgba(${veil}, 0.08)`,
-      // Opaque equivalent of `background.default` under `action.hover`'s veil,
-      // for surfaces that must hide what's beneath rather than tint it.
+      // Opaque equivalent of `background.default` under `action.hover`'s veil, for surfaces that must hide what's beneath rather than tint it.
       hoverOpaque: mix(s.appBackground, towards, 0.1),
-      // Same idea for `background.sunken`, mixed onto `paper` rather than `appBackground` —
-      // `sunken` is normally used as a CSS background stacked over a card's own paper, which
-      // an SVG fill can't reproduce by referencing the translucent token directly.
+      // Same idea for `background.sunken`, mixed onto `paper` rather than `appBackground` — `sunken` is normally used as a CSS background stacked over a card's own paper, which an SVG fill can't reproduce by referencing the translucent token directly.
       sunkenOpaque: mix(s.paper, towards, 0.04),
     },
     text: {
@@ -465,8 +464,7 @@ const mui_palette = (s: ThemeSpec) => {
 
 export const canvas_palette = (s: ThemeSpec): CanvasPalette => {
   const towards = s.mode === "dark" ? "#FFFFFF" : "#000000";
-  // The drawing sits on the app's own ground; `paper` belongs to what floats
-  // above it — badges included, small labels laid over the drawing.
+  // The drawing sits on the app's own ground; `paper` belongs to what floats above it — badges included, small labels laid over the drawing.
   const ground = s.appBackground;
 
   return {
@@ -482,7 +480,8 @@ export const canvas_palette = (s: ThemeSpec): CanvasPalette => {
     // A step off the ground, like the grid, but deliberately outside `gridContrast`: a theme that wants a loud grid does not want a loud badge outline.
     BADGE_STROKE: mix(ground, towards, 0.4),
     BADGE_FILL: s.paper,
-    // Selection pushes the paper further into its own tone — the opposite of `towards`, which pulls against it. A theme whose paper already sits at the extreme gets no lift and leans on the outline alone.
+    // Selection pushes the paper further into its own tone — the opposite of `towards`, which pulls against it.
+    // A theme whose paper already sits at the extreme gets no lift and leans on the outline alone.
     BADGE_FILL_SELECTED: mix(
       s.paper,
       s.mode === "dark" ? "#000000" : "#FFFFFF",
@@ -594,8 +593,7 @@ const typography = {
 };
 
 /**
- * Spacing configuration
- * Base unit: 8px (MUI default)
+ * Spacing configuration Base unit: 8px (MUI default)
  */
 const spacing = 8;
 
@@ -612,9 +610,7 @@ const components: ThemeOptions["components"] = {
           transitionProperty: "background-color, border-color, color, fill",
           transitionDuration: `${THEME_TRANSITION_MS}ms`,
           transitionTimingFunction: "linear",
-          // Le fondu prime sur la transition propre du composant (survol, focus),
-          // qui autrement gagnerait sur la spécificité et laisserait l'élément
-          // sauter d'un thème à l'autre au milieu du fondu.
+          // Le fondu prime sur la transition propre du composant (survol, focus), qui autrement gagnerait sur la spécificité et laisserait l'élément sauter d'un thème à l'autre au milieu du fondu.
           transitionDelay: "0s",
         },
       body: { backgroundColor: palette.background.default },
@@ -731,8 +727,8 @@ export const DEFAULT_THEME: ThemeName = "slidep-light";
 export const THEME_SPECS: Record<ThemeName, ThemeSpec> = SPECS;
 
 /**
- * Ce que l'utilisateur choisit : une famille et un mode. « Système » suit la
- * préférence du navigateur, et la suit encore si elle change.
+ * Ce que l'utilisateur choisit : une famille et un mode.
+ * « Système » suit la préférence du navigateur, et la suit encore si elle change.
  */
 export type ThemeMode = "light" | "dark" | "system";
 
@@ -755,8 +751,7 @@ export const THEME_FAMILIES: ThemeFamily[] = (() => {
     by_name.set(spec.family, family);
   }
   return [...by_name.values()].map((family) => {
-    // Le menu propose clair/sombre/système à toute famille : une famille
-    // borgne y afficherait un bouton qui ne mène nulle part.
+    // Le menu propose clair/sombre/système à toute famille : une famille borgne y afficherait un bouton qui ne mène nulle part.
     if (!family.light || !family.dark)
       throw new Error(`La famille « ${family.name} » n'a pas ses deux modes`);
     return family as ThemeFamily;

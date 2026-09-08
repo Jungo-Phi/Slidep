@@ -43,20 +43,17 @@ interface NumberInputProps {
   /** Decimal places shown and stepped to. Defaults to 1, fine for every value at unit scale (kg, N/m…); friction-like coefficients need more. */
   precision?: number;
   /** Formats and parses `value` (always SI) as a physical quantity instead of a bare number.
-   *  The unit is plain text alongside the digits — part of what is shown and edited, not a
-   *  decoration next to it — so typing over it ("12mm", "3cm", "150kN") is how a unit is
-   *  overridden for that one entry. */
+   * The unit is plain text alongside the digits — part of what is shown and edited, not a decoration next to it — so typing over it ("12mm", "3cm", "150kN") is how a unit is overridden for that one entry. */
   kind?: QuantityKind;
   /** A read-only view of `value` — the catalogue's own entries, never a mechanism's own. No
-   *  focus, no stepper, no edits reach `onChange`. */
+   * focus, no stepper, no edits reach `onChange`. */
   disabled?: boolean;
   /** `value` is not stored on the element: it is derived from something else the panel already
-   *  shows, and the element follows that as long as nothing is typed here. Shown in italics, so
-   *  a field standing for a default reads as one. */
+   * shows, and the element follows that as long as nothing is typed here.
+   * Shown in italics, so a field standing for a default reads as one. */
   implicit?: boolean;
   /** `value` is one arbitrary member of a multi-selection that doesn't actually agree on it — the
-   *  field says so instead of showing a value that would look settled when it isn't. Typing still
-   *  works as normal and is read the same way by `onChange`. */
+   * field says so instead of showing a value that would look settled when it isn't. Typing still works as normal and is read the same way by `onChange`. */
   mixed?: boolean;
 }
 
@@ -90,9 +87,7 @@ export const NumberInput: React.FC<NumberInputProps> = ({
   const [focused, setFocused] = useState(false);
   // Set by Escape so the blur it triggers discards instead of committing.
   const discardRef = useRef(false);
-  // Hovering the adornment bubbles up into the field's own Tooltip (mouseover
-  // bubbles), which would otherwise stack the field's title on top of the
-  // adornment's own — blank the field's out for as long as the adornment's shows.
+  // Hovering the adornment bubbles up into the field's own Tooltip (mouseover bubbles), which would otherwise stack the field's title on top of the adornment's own — blank the field's out for as long as the adornment's shows.
   const [adornmentHovered, setAdornmentHovered] = useState(false);
   // One key per field, so a run of steps here ends the one another field had open.
   const seal = useHistorySeal();
@@ -124,8 +119,7 @@ export const NumberInput: React.FC<NumberInputProps> = ({
 
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Out of focus the field is a view of the value, never of a leftover edit — except
-  // `mixed`, which has no single value to show and starts blank instead.
+  // Out of focus the field is a view of the value, never of a leftover edit — except `mixed`, which has no single value to show and starts blank instead.
   const displayed = focused ? localValue : mixed ? "" : format(value);
 
   const stopRepeating = useCallback(() => {
@@ -196,13 +190,9 @@ export const NumberInput: React.FC<NumberInputProps> = ({
 
   const filterInput = (val: string) => {
     const negative = !unsigned && val.startsWith("-");
-    // Stripped off before filtering, and alone allowed to survive it: a leading sign is the
-    // field's own, but a `-` past it belongs to a unit's exponent ("s-1", "min-1") and must
-    // stay legible through the same pass that strips everything else unrecognised.
+    // Stripped off before filtering, and alone allowed to survive it: a leading sign is the field's own, but a `-` past it belongs to a unit's exponent ("s-1", "min-1") and must stay legible through the same pass that strips everything else unrecognised.
     const rest = negative ? val.slice(1) : val;
-    // A `kind` field accepts unit letters typed inline ("12mm", "150kN"), stand-ins `loose`
-    // folds back to the real symbol ("N*m", "Nm" for "N·m"; "m2" for "m²"), and the
-    // physicist's superscript exponent ("s⁻¹"); a plain one stays digits-only.
+    // A `kind` field accepts unit letters typed inline ("12mm", "150kN"), stand-ins `loose` folds back to the real symbol ("N*m", "Nm" for "N·m"; "m2" for "m²"), and the physicist's superscript exponent ("s⁻¹"); a plain one stays digits-only.
     const pattern = kind ? /[^0-9.a-zA-Zµμ°·²³⁻¹*^/ -]/g : /[^0-9.]/g;
     const body = rest.replace(pattern, "").replace(/(\.[^.]*)\./g, "$1");
     return (negative ? "-" : "") + body;
@@ -213,14 +203,12 @@ export const NumberInput: React.FC<NumberInputProps> = ({
     return parsed === null || isNaN(parsed) ? null : parsed;
   };
   const entered = parseLocal(localValue);
-  // A refusal shows up while typing rather than only at blur, so leaving the field on an
-  // unusable entry isn't a silent discard. A field still being filled stays neutral.
+  // A refusal shows up while typing rather than only at blur, so leaving the field on an unusable entry isn't a silent discard.
+  // A field still being filled stays neutral.
   const refused = focused && localValue.trim() !== "" && entered === null;
 
-  // Leaving the field validates the entry; an unreadable one is dropped and the field
-  // goes back to showing the value. Entering what it already showed changes nothing — unless it
-  // showed nothing to begin with, `value` then being one element's among several that differ, and
-  // typing it the value the others are being given.
+  // Leaving the field validates the entry; an unreadable one is dropped and the field goes back to showing the value.
+  // Entering what it already showed changes nothing — unless it showed nothing to begin with, `value` then being one element's among several that differ, and typing it the value the others are being given.
   const commitLocalValue = () => {
     if (!mixed && localValue === format(value)) return;
     if (entered === null) return;
@@ -252,10 +240,8 @@ export const NumberInput: React.FC<NumberInputProps> = ({
           onFocus={() => {
             setLocalValue(mixed ? "" : format(value));
             setFocused(true);
-            // The unit suffix is part of the displayed text but not something a user
-            // overwriting the number wants swept up with it — select just the digits.
-            // Deferred: a focus from a click still has its mouseup to come, which would
-            // otherwise collapse the selection to the click point right after this.
+            // The unit suffix is part of the displayed text but not something a user overwriting the number wants swept up with it — select just the digits.
+            // Deferred: a focus from a click still has its mouseup to come, which would otherwise collapse the selection to the click point right after this.
             // Mixed starts blank, so there's nothing to select.
             if (!mixed) {
               const mantissaLength = to_mantissa(value, unit, precision).toString().length;
@@ -304,8 +290,7 @@ export const NumberInput: React.FC<NumberInputProps> = ({
                   borderColor: (theme) => alpha(theme.palette.primary.main, 0.5),
                 },
               }),
-              // Wins over `accent`'s tint below it: a refusal is worth surfacing even on an
-              // already-coloured field like the motor's torque or speed.
+              // Wins over `accent`'s tint below it: a refusal is worth surfacing even on an already-coloured field like the motor's torque or speed.
               ...(refused && {
                 backgroundColor: (theme) => alpha(theme.palette.error.main, 0.15),
                 "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
@@ -328,8 +313,7 @@ export const NumberInput: React.FC<NumberInputProps> = ({
             "& .MuiInputLabel-root": {
               fontSize: large ? "1em" : "0.92em",
               pl: large ? 0 : 0.4,
-              // Colour only: the accent must never shift a label's size or position, or two
-              // neighbouring fields stop lining up.
+              // Colour only: the accent must never shift a label's size or position, or two neighbouring fields stop lining up.
               ...(accent && { color: "primary.main", fontWeight: 500 }),
             },
             height,
@@ -396,8 +380,7 @@ export const NumberInput: React.FC<NumberInputProps> = ({
                     >
                       <IconButton
                         color={adornment.color}
-                        // A click on the icon is a decision, like a typed value: its own entry,
-                        // and it ends whatever run the arrows had open.
+                        // A click on the icon is a decision, like a typed value: its own entry, and it ends whatever run the arrows had open.
                         onClick={() => {
                           adornment.onClick();
                           seal.close();
@@ -416,8 +399,7 @@ export const NumberInput: React.FC<NumberInputProps> = ({
                           px: 0.5,
                           ml: -0.25,
                           fontSize: large ? "20px" : "16px",
-                          // Nothing shared to state: the icon says what a click would do, not
-                          // where the elements currently stand.
+                          // Nothing shared to state: the icon says what a click would do, not where the elements currently stand.
                           ...(mixed && { opacity: 0.45 }),
                         }}
                       >

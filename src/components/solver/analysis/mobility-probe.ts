@@ -1,28 +1,23 @@
 /**
  * Mobility of a kinematic chain, measured with the solver rather than derived from a count.
  *
- * A PBD sweep is an alternating projection onto the constraint manifolds, so for a small
- * perturbation `δ` around a satisfied configuration
+ * A PBD sweep is an alternating projection onto the constraint manifolds, so for a small perturbation `δ` around a satisfied configuration
  *
- *     P(δ) = ( solve(x + ε·δ) − solve(x) ) / ε
+ * P(δ) = ( solve(x + ε·δ) − solve(x) ) / ε
  *
- * lands back on the manifold: it is the projection of `δ` onto the motions the constraints
- * allow. Probing with enough directions and orthogonalising what comes back spans that
- * space, and its dimension **is** the mobility `m`.
+ * lands back on the manifold: it is the projection of `δ` onto the motions the constraints allow.
+ * Probing with enough directions and orthogonalising what comes back spans that space, and its dimension **is** the mobility `m`.
  *
- * Measured against `solve(x)` rather than `x`, so that a configuration the model does not
- * quite hold satisfied costs accuracy and never a phantom mode (see `rest`).
+ * Measured against `solve(x)` rather than `x`, so that a configuration the model does not quite hold satisfied costs accuracy and never a phantom mode (see `rest`).
  *
- * Nothing here re-implements a constraint. The analysis therefore cannot disagree with the
- * simulation about what moves — which is the whole reason for measuring rather than
- * assembling a Jacobian.
+ * Nothing here re-implements a constraint.
+ * The analysis therefore cannot disagree with the simulation about what moves — which is the whole reason for measuring rather than assembling a Jacobian.
  *
- * The hyperstaticity falls out by counting: `h = m − G`, `G` being the chain's Grübler
- * count. Since `rank ≤ Σddl`, `m ≥ G` always holds — a probe run that returns less has
- * missed a mode, and that impossibility is what the exhaustive fallback keys on.
+ * The hyperstaticity falls out by counting: `h = m − G`, `G` being the chain's Grübler count.
+ * Since `rank ≤ Σddl`, `m ≥ G` always holds — a probe run that returns less has missed a mode, and that impossibility is what the exhaustive fallback keys on.
  *
- * **Local.** Everything here describes the configuration it was called at. A mechanism at a
- * dead point has a different rank, and that is a property of the pose, not a defect.
+ * **Local.** Everything here describes the configuration it was called at.
+ * A mechanism at a dead point has a different rank, and that is a property of the pose, not a defect.
  */
 
 import { ID } from "../../../types";
@@ -38,22 +33,17 @@ import { angleSlotOf, slotOf, solveNodesFromMaps } from "../nodes";
 /**
  * Perturbation size, as a fraction of the chain's own extent.
  *
- * A fraction and nothing else — no floor in millimetres. Any absolute floor eventually
- * exceeds the chain it probes, and a probe worth half the mechanism leaves the linear
- * regime the whole projection argument rests on: measured, a floor of 1 mm makes a chain
- * 2 mm across report a mode that does not exist, and a floor of 0.01 mm does the same at
- * 0.02 mm. Purely relative, the answer holds from a couple of microns to a couple of metres.
+ * A fraction and nothing else — no floor in millimetres.
+ * Any absolute floor eventually exceeds the chain it probes, and a probe worth half the mechanism leaves the linear regime the whole projection argument rests on: measured, a floor of 1 mm makes a chain 2 mm across report a mode that does not exist, and a floor of 0.01 mm does the same at 0.02 mm.
+ * Purely relative, the answer holds from a couple of microns to a couple of metres.
  */
 const PROBE_AMPLITUDE_RATIO = 0.01;
 
 /**
  * How much of a candidate direction must survive being projected a second time.
  *
- * `P` is a projection, so a genuine motion satisfies `P(P(δ)) = P(δ)` and comes back whole,
- * while anything the constraints merely resist weakly collapses. Comparing a candidate to
- * ITSELF this way is what makes the test scale-free: judging the first projection's norm
- * instead would compare against a random direction's overlap with the motion space, which
- * shrinks like `√(m/n)` and would therefore depend on how big the mechanism is.
+ * `P` is a projection, so a genuine motion satisfies `P(P(δ)) = P(δ)` and comes back whole, while anything the constraints merely resist weakly collapses.
+ * Comparing a candidate to ITSELF this way is what makes the test scale-free: judging the first projection's norm instead would compare against a random direction's overlap with the motion space, which shrinks like `√(m/n)` and would therefore depend on how big the mechanism is.
  */
 const REPROJECTION_TOLERANCE = 0.5;
 
@@ -91,9 +81,8 @@ export type ChainMobility = {
   /**
    * How far the configuration handed in sits off the constraints, in probe steps.
    *
-   * `0` on a chain the model holds satisfied. Anything of order 1 or more means the modes
-   * describe the nearby pose the solver settled on rather than the one on screen — the
-   * measurement is still sound, the pose it answers for is not the one asked about.
+   * `0` on a chain the model holds satisfied.
+   * Anything of order 1 or more means the modes describe the nearby pose the solver settled on rather than the one on screen — the measurement is still sound, the pose it answers for is not the one asked about.
    */
   restDrift: number;
 };
@@ -102,8 +91,7 @@ export type ChainMobility = {
  * Deterministic probe directions.
  *
  * A fixed seed, never `Math.random`: the same mechanism must answer the same thing twice.
- * The draw only decides how the space is *discovered* — `m` is a dimension, and the modes
- * reported to the user are re-derived from the space itself.
+ * The draw only decides how the space is *discovered* — `m` is a dimension, and the modes reported to the user are re-derived from the space itself.
  */
 function make_rng(seed = 0x9e3779b9): () => number {
   let state = seed >>> 0;
@@ -121,10 +109,8 @@ function make_rng(seed = 0x9e3779b9): () => number {
 /**
  * What one radian of an angle unknown is worth in metres.
  *
- * Positions are metres and angles radians; without a lever the two cannot share a
- * norm, a tolerance, or a notion of orthogonality, and the same mechanism drawn ten times
- * larger would answer differently. A gear's own radius is that lever — the rim is where its
- * rotation is felt.
+ * Positions are metres and angles radians; without a lever the two cannot share a norm, a tolerance, or a notion of orthogonality, and the same mechanism drawn ten times larger would answer differently.
+ * A gear's own radius is that lever — the rim is where its rotation is felt.
  */
 export function angle_levers(
   model: AnalysisModel,
@@ -146,9 +132,7 @@ export function angle_levers(
 /**
  * Extent of the whole mechanism: the scale a reader judges any motion against.
  *
- * Distinct from a chain's own extent, which is the right scale for *measuring* one chain but
- * the wrong one for *showing* it — two chains of different sizes would then swing by
- * different amounts, and a lone node, having no extent of its own, would barely stir.
+ * Distinct from a chain's own extent, which is the right scale for *measuring* one chain but the wrong one for *showing* it — two chains of different sizes would then swing by different amounts, and a lone node, having no extent of its own, would barely stir.
  */
 export function model_extent(model: AnalysisModel): number {
   let minX = Infinity;
@@ -294,15 +278,11 @@ export function probe_chain_mobility(
   /**
    * What the solve does to the base configuration on its own, subtracted from every probe.
    *
-   * A configuration the constraints already satisfy gives zero and nothing changes. One they
-   * do not turns `settle` affine — `settle(δ) = Aδ + c`, with the same `c` whichever way the
-   * chain is pushed — and that constant is a direction like any other to a routine looking
-   * for a span: it survives re-projection, is admitted, and inflates `m` by one. Removing it
-   * leaves `Aδ`, the honest projection about the pose the solver settles on.
+   * A configuration the constraints already satisfy gives zero and nothing changes.
+   * One they do not turns `settle` affine — `settle(δ) = Aδ + c`, with the same `c` whichever way the chain is pushed — and that constant is a direction like any other to a routine looking for a span: it survives re-projection, is admitted, and inflates `m` by one.
+   * Removing it leaves `Aδ`, the honest projection about the pose the solver settles on.
    *
-   * Measured on `Déconnexion courroie` while the belt has a pulley off: a junction 316 mm
-   * from where its constraint wants it, and a chain of 2 DDL reported with 3 and one degree
-   * of hyperstaticity.
+   * Measured on `Déconnexion courroie` while the belt has a pulley off: a junction 316 mm from where its constraint wants it, and a chain of 2 DDL reported with 3 and one degree of hyperstaticity.
    */
   const rest = settle(new Float64Array(n));
   for (const value of rest) restDrift += value * value;
@@ -316,8 +296,8 @@ export function probe_chain_mobility(
   const basis: Float64Array[] = [];
 
   /**
-   * Try one direction. What comes back is only admitted once a second projection
-   * confirms the constraints leave it alone — see `REPROJECTION_TOLERANCE`.
+   * Try one direction.
+   * What comes back is only admitted once a second projection confirms the constraints leave it alone — see `REPROJECTION_TOLERANCE`.
    */
   const admit = (direction: Float64Array): boolean => {
     const candidate = project(direction);

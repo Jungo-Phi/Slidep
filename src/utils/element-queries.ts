@@ -26,8 +26,7 @@ export function is_node_element(el: MechanicalElement): el is NodeElement {
 }
 
 /**
- * Type guard: elements that can be anchored to the ground — every node but a mass (free by
- * definition) and a motorised pivot, whose anchoring is decided by its motor's mount instead.
+ * Type guard: elements that can be anchored to the ground — every node but a mass (free by definition) and a motorised pivot, whose anchoring is decided by its motor's mount instead.
  */
 export function is_groundable(
   el: MechanicalElement,
@@ -68,12 +67,11 @@ export function is_nameable(
 
 /**
  * Which overlays make sense on this element — the honest denominator of the `n/total` counters in the "Afficher" menu.
- *  - trajectory: a single moving point → nodes only
- *  - velocity: anything whose position is sampled (nodes, gears, edge midpoint)
- *  - force: a reaction is a point object → nodes only
+ * - trajectory: a single moving point → nodes only
+ * - velocity: anything whose position is sampled (nodes, gears, edge midpoint)
+ * - force: a reaction is a point object → nodes only
  *
- * A beam's stress colouring (normal/bending/utilization) is not here — it's not a per-element
- * flag, see `BeamStressLens` (docs/plan-efforts-interieurs.md phase 9).
+ * A beam's stress colouring (normal/bending/utilization) is not here — it's not a per-element flag, see `BeamStressLens` (docs/plan-efforts-interieurs.md phase 9).
  */
 export function available_overlays(element: MechanicalElement): OverlayKind[] {
   const isNode = is_node_element(element);

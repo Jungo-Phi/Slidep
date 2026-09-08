@@ -89,8 +89,7 @@ describe("parallel_edge_offsets", () => {
     expect(parallel_edge_offsets(alone).size).toBe(0);
   });
 
-  // Two beams never coexist — the fusion collapses them — so the offset must not
-  // be handed out on a pair that is not the allowed one.
+  // Two beams never coexist — the fusion collapses them — so the offset must not be handed out on a pair that is not the allowed one.
   it("n'écarte rien quand la paire n'est pas ressort + amortisseur", () => {
     const twoBeams: MechanicalElement[] = [
       anchor(LEFT, 0, [SPRING, BEAM]),
@@ -124,8 +123,7 @@ describe("parallel_edge_offsets", () => {
 });
 
 /**
- * The whole point of sharing one offset between the stroke and the cursor: what
- * the eye sees on one side must be what the cursor picks there.
+ * The whole point of sharing one offset between the stroke and the cursor: what the eye sees on one side must be what the cursor picks there.
  */
 describe("le curseur répond là où le trait est dessiné", () => {
   const at = (cursor: Point2) =>
@@ -161,8 +159,7 @@ describe("le curseur répond là où le trait est dessiné", () => {
   });
 
   it("répond sur l'axe, pas sur le trait décalé", () => {
-    // The offset shows two elements at once; it is not a second place for one
-    // to be, so a gesture reading the hover gets a point on the real edge.
+    // The offset shows two elements at once; it is not a second place for one to be, so a gesture reading the hover gets a point on the real edge.
     const hovered = at(drawn_middle(DIM.PARALLEL_EDGE_OFFSET));
     expect(hovered.position.y).toBeCloseTo(0, 6);
   });

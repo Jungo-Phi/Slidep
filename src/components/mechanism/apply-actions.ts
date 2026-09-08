@@ -29,13 +29,9 @@ function may_change_terminals(actions: Action[]): boolean {
 }
 
 /**
- * Appends the fusions a bundle owes to the superposition invariant: two edges
- * left holding the same pair of nodes collapse into one, a spring and a damper
- * apart.
+ * Appends the fusions a bundle owes to the superposition invariant: two edges left holding the same pair of nodes collapse into one, a spring and a damper apart.
  *
- * Stated here rather than at each call site because superposition is not the
- * privilege of the drawing tools — fusing two nodes brings two edges onto the
- * same pair without either being drawn.
+ * Stated here rather than at each call site because superposition is not the privilege of the drawing tools — fusing two nodes brings two edges onto the same pair without either being drawn.
  */
 function with_superposition_fusions(
   mechanism: Mechanism,
@@ -55,11 +51,8 @@ function with_superposition_fusions(
 }
 
 /**
- * Appends the corrections a bundle owes to the belt-closure invariant, in both
- * directions: a belt whose loop no longer holds (a pulley lost, a terminal freed
- * from its junction) must open; a belt that a gesture just made looped (both
- * terminals brought onto one node, ≥2 pulleys) must close. Stated once here,
- * against the state the bundle leaves, rather than at every call site.
+ * Appends the corrections a bundle owes to the belt-closure invariant, in both directions: a belt whose loop no longer holds (a pulley lost, a terminal freed from its junction) must open; a belt that a gesture just made looped (both terminals brought onto one node, ≥2 pulleys) must close.
+ * Stated once here, against the state the bundle leaves, rather than at every call site.
  *
  * The corrections join the bundle, so they solve, record and undo as one with it.
  */
@@ -86,26 +79,20 @@ function with_belt_closure_corrections(
 }
 
 /**
- * Appends the corrections a bundle owes to the motor invariant: a motor drives
- * from the ground or from a beam, never from neither. One left with neither is
- * anchored, keeping the mechanism it drives coherent.
+ * Appends the corrections a bundle owes to the motor invariant: a motor drives from the ground or from a beam, never from neither.
+ * One left with neither is anchored, keeping the mechanism it drives coherent.
  *
- * The whole invariant rather than the dangling-reference case alone: a motor
- * also ends up driving nothing when a fusion carries it onto a node that is not
- * anchored, and there is no dead reference to notice that by.
+ * The whole invariant rather than the dangling-reference case alone: a motor also ends up driving nothing when a fusion carries it onto a node that is not anchored, and there is no dead reference to notice that by.
  *
- * Stated against the state the bundle leaves rather than inside the deletion,
- * because a beam vanishes by more routes than the eraser — an edge fusion
- * absorbs one too. `motor.parentBeamID` is nested inside the config, so no
- * connection container carries it and no disconnect pass ever sees it.
+ * Stated against the state the bundle leaves rather than inside the deletion, because a beam vanishes by more routes than the eraser — an edge fusion absorbs one too.
+ * `motor.parentBeamID` is nested inside the config, so no connection container carries it and no disconnect pass ever sees it.
  */
 function with_motor_anchoring(
   mechanism: Mechanism,
   actions: Action[],
 ): Action[] {
-  // Anything that reshapes the mechanism can leave a motor driving nothing. A
-  // bundle that merely toggles an anchor is left alone: undoing that on the spot
-  // would make the user's own gesture look like it did nothing.
+  // Anything that reshapes the mechanism can leave a motor driving nothing.
+  // A bundle that merely toggles an anchor is left alone: undoing that on the spot would make the user's own gesture look like it did nothing.
   const mayStrand = actions.some(
     (a) =>
       a.type === "DeleteElement" ||
@@ -124,8 +111,7 @@ function with_motor_anchoring(
     if (parentBeamID === undefined && el.isGrounded) return [];
 
     const anchored: Action[] = [];
-    // A reference left over from the beam it drove against would contradict the
-    // anchor that replaces it.
+    // A reference left over from the beam it drove against would contradict the anchor that replaces it.
     if (parentBeamID !== undefined)
       anchored.push({
         type: "SetMotorConfig",
@@ -143,12 +129,9 @@ function with_motor_anchoring(
 /**
  * The corrections a bundle owes the mechanism's invariants, appended to it.
  *
- * Each pass judges the state the bundle leaves rather than the gesture that
- * produced it, so they hold whatever path the actions came from — fusions first,
- * the closure pass then judging what they leave.
+ * Each pass judges the state the bundle leaves rather than the gesture that produced it, so they hold whatever path the actions came from — fusions first, the closure pass then judging what they leave.
  *
- * Anyone applying a bundle outside `apply_actions` must go through here: without
- * it they get a mechanism the application never shows.
+ * Anyone applying a bundle outside `apply_actions` must go through here: without it they get a mechanism the application never shows.
  */
 export function with_corrections(
   mechanism: Mechanism,
@@ -167,10 +150,8 @@ type MasterActionType = Extract<
 >["masterActionType"];
 
 /**
- * Folds a value-only edit (mechanism 1: `MoveConstraint`, the `Change*` constant
- * edits, the load edits) into the single action of the history entry it
- * continues. Stiffness-like deltas accumulate; the rest overwrite with the
- * latest value, since they carry an absolute position or vector rather than a step.
+ * Folds a value-only edit (mechanism 1: `MoveConstraint`, the `Change*` constant edits, the load edits) into the single action of the history entry it continues.
+ * Stiffness-like deltas accumulate; the rest overwrite with the latest value, since they carry an absolute position or vector rather than a step.
  */
 function merge_value_edit(lastAction: Action, newAction: Action): void {
   switch (lastAction.type) {
@@ -217,11 +198,7 @@ function merge_value_edit(lastAction: Action, newAction: Action): void {
 }
 
 /**
- * Folds a geometry-solving edit (mechanism 2: the `MoveElement` family, the
- * `ChangeDimension` family minus the gear ratio) into the gesture's history
- * entry: the entry's `UpdatePositionsToValidState` takes the freshly solved
- * nodes, and the master edit it recorded takes the latest value — so a single
- * undo reverts the whole gesture to before it started, not to its first frame.
+ * Folds a geometry-solving edit (mechanism 2: the `MoveElement` family, the `ChangeDimension` family minus the gear ratio) into the gesture's history entry: the entry's `UpdatePositionsToValidState` takes the freshly solved nodes, and the master edit it recorded takes the latest value — so a single undo reverts the whole gesture to before it started, not to its first frame.
  */
 function merge_solved_edit(
   secondToLastAction: Action,
@@ -270,9 +247,7 @@ function merge_solved_edit(
 }
 
 /**
- * Whether two actions share an `id` — every mechanism-1 type carries one except the
- * floor's, which needs none: there is only ever one floor, so two id-less actions of
- * the same type (already checked by the caller) are always about it.
+ * Whether two actions share an `id` — every mechanism-1 type carries one except the floor's, which needs none: there is only ever one floor, so two id-less actions of the same type (already checked by the caller) are always about it.
  */
 function same_id(a: Action, b: Action): boolean {
   if ("id" in a && "id" in b) return a.id === b.id;
@@ -301,9 +276,7 @@ export function apply_actions(mechanism: Mechanism, actions: Action[]): Mechanis
       ...actions,
       {
         type: "UpdatePositionsToValidState",
-        // `solve !== "none"` only for the categories action-geometry maps to
-        // the MoveElement / ChangeDimension / Connects / CloseBelt / creation
-        // triggers this field's type expects.
+        // `solve !== "none"` only for the categories action-geometry maps to the MoveElement / ChangeDimension / Connects / CloseBelt / creation triggers this field's type expects.
         masterActionType: newAction.type as MasterActionType,
         newNodes,
         oldNodes,
@@ -316,19 +289,11 @@ export function apply_actions(mechanism: Mechanism, actions: Action[]): Mechanis
       ? mechanism.history[mechanism.history.length - 1]
       : undefined;
   const lastAction = lastActions?.[lastActions.length - 1];
-  // Whether the entry this call is NOT going to merge into (different type,
-  // different id, or nothing to merge with) turned out, now that nothing else
-  // will ever touch it, to have netted to no change — a drag or value edit
-  // that ended up back where it started.
+  // Whether the entry this call is NOT going to merge into (different type, different id, or nothing to merge with) turned out, now that nothing else will ever touch it, to have netted to no change — a drag or value edit that ended up back where it started.
   const staleNoop = is_noop_entry(lastActions);
 
-  // The value editor's first commit right after placing the element is part
-  // of the creation gesture, not a follow-up edit: it folds into the same
-  // history entry so a single undo removes the whole dimension. The creation
-  // bundle ends either on the `CreateElement` itself (a plain dimension,
-  // whose auto-measured value needs no geometry solve) or on the
-  // `UpdatePositionsToValidState` a constraining type like a gear ratio
-  // appends after it.
+  // The value editor's first commit right after placing the element is part of the creation gesture, not a follow-up edit: it folds into the same history entry so a single undo removes the whole dimension.
+  // The creation bundle ends either on the `CreateElement` itself (a plain dimension, whose auto-measured value needs no geometry solve) or on the `UpdatePositionsToValidState` a constraining type like a gear ratio appends after it.
   if (
     lastActions &&
     lastAction &&
@@ -358,15 +323,11 @@ export function apply_actions(mechanism: Mechanism, actions: Action[]): Mechanis
     same_id(newAction, lastAction)
   ) {
     // Mechanism 1: the previous entry is the single value-only action itself.
-    // Cloned rather than mutated in place — `lastAction` is reachable from the
-    // mechanism React just handed us, and mutating it would corrupt whatever
-    // else still holds that reference (StrictMode replays this same updater a
-    // second time against the identical, unmutated `mechanism`).
+    // Cloned rather than mutated in place — `lastAction` is reachable from the mechanism React just handed us, and mutating it would corrupt whatever else still holds that reference (StrictMode replays this same updater a second time against the identical, unmutated `mechanism`).
     const mergedAction = { ...lastAction };
     merge_value_edit(mergedAction, newAction);
-    // A run that came back to where it started leaves nothing to undo — stepping up then back
-    // down. Dropped here rather than left for `staleNoop`, which would only see it once the
-    // next action arrived, and meanwhile the entry would swallow a Ctrl+Z without moving.
+    // A run that came back to where it started leaves nothing to undo — stepping up then back down.
+    // Dropped here rather than left for `staleNoop`, which would only see it once the next action arrived, and meanwhile the entry would swallow a Ctrl+Z without moving.
     newHistory = is_noop_action(mergedAction)
       ? mechanism.history.slice(0, -1)
       : [...mechanism.history.slice(0, -1), [mergedAction]];

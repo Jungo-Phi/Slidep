@@ -20,10 +20,8 @@ const id = (): ID => `00000000-0000-0000-0000-${String(++nextID).padStart(12, "0
 /**
  * How close an internal-force reading has to be, as a share of the load it carries.
  *
- * A share and not a newton figure: the reading's error scales with what is being read, so the
- * same bound holds whatever a test pushes with. `reversed_sweep_order` is what sets the floor
- * — reversing the sweep direction moves a little of a member's load from one of its ends to
- * the other, leaving the resultant exact and the split off by about this much.
+ * A share and not a newton figure: the reading's error scales with what is being read, so the same bound holds whatever a test pushes with.
+ * `reversed_sweep_order` is what sets the floor — reversing the sweep direction moves a little of a member's load from one of its ends to the other, leaving the resultant exact and the split off by about this much.
  */
 const READING_TOLERANCE = 0.01;
 
@@ -36,7 +34,7 @@ function expect_reading(actual: number, expected: number, scale: number): void {
 const TIP_LOAD = 100;
 
 /** Every beam in this file wants a linear mass of exactly 1 (kg/m) — a single default couple
- *  (1×1 m rectangle, ρ = 1) shared by all of them, so a beam literal only has to name it. */
+ * (1×1 m rectangle, ρ = 1) shared by all of them, so a beam literal only has to name it. */
 const MATERIAL_ID = id();
 const PROFILE_ID = id();
 const MATERIALS: MaterialDef[] = [
@@ -80,10 +78,9 @@ const pivot = (pid: ID, position: Point2, rotatingEdgesIDs: ID[]): PivotElement 
 
 describe("BeamCohesion — torseur d'interface d'une poutre (docs/plan-efforts-interieurs.md phase 3)", () => {
   it("isole l'effort propre à A là où force_at sommait A et B (le cas diagnostic)", () => {
-    // Same A-frame as beam-cohesion-diagnostic.test.ts: two struts from grounded supports
-    // meeting at a free apex, loaded straight down. F_A = (50, 50), F_B = (-50, 50) — see
-    // that file for the full statics. `beamCohesion` should recover F_A directly, unlike
-    // `element_reactions`'s fused-key sum (0, 100).
+    // Same A-frame as beam-cohesion-diagnostic.test.ts: two struts from grounded supports meeting at a free apex, loaded straight down.
+    // F_A = (50, 50), F_B = (-50, 50) — see that file for the full statics.
+    // `beamCohesion` should recover F_A directly, unlike `element_reactions`'s fused-key sum (0, 100).
     const GA = id();
     const GB = id();
     const P0 = id();
@@ -127,9 +124,7 @@ describe("BeamCohesion — torseur d'interface d'une poutre (docs/plan-efforts-i
     // "end" = the apex (beam A's own end): the free-dof reading, F_A directly.
     expect(cohesionA!.end.fx).toBeCloseTo(50, 0);
     expect(cohesionA!.end.fy).toBeCloseTo(50, 0);
-    // "start" = GA (anchored): the raw `LinkReaction` sense — what beam A's own rigidity
-    // applies onto the ground — is the NEGATIVE of what A applies onto the apex (Newton's
-    // third law across a massless two-force member with no other load along it).
+    // "start" = GA (anchored): the raw `LinkReaction` sense — what beam A's own rigidity applies onto the ground — is the NEGATIVE of what A applies onto the apex (Newton's third law across a massless two-force member with no other load along it).
     expect(cohesionA!.start.fx).toBeCloseTo(-50, 0);
     expect(cohesionA!.start.fy).toBeCloseTo(-50, 0);
 
@@ -141,26 +136,15 @@ describe("BeamCohesion — torseur d'interface d'une poutre (docs/plan-efforts-i
     expect(cohesionB!.end.fy).toBeCloseTo(-50, 0);
   });
 
-  // Used to fail by 1.14 %: `k1` is repositioned by FOUR independent links (`Distance`,
-  // `KeepOrientation`, and both `FixedOnSegment`s — the attached mass's and the beam's own
-  // rotational-inertia midpoint), so Gauss-Seidel had two competing paths to it and no way to
-  // attribute the true reaction between them, however many sweeps or substeps ran. That
-  // competition is still there in the SOLVER; what changed is that the torsor no longer asks
-  // it — it is solved from equilibrium instead (docs/plan-efforts-interieurs.md phase 10).
+  // Used to fail by 1.14 %: `k1` is repositioned by FOUR independent links (`Distance`, `KeepOrientation`, and both `FixedOnSegment`s — the attached mass's and the beam's own rotational-inertia midpoint), so Gauss-Seidel had two competing paths to it and no way to attribute the true reaction between them, however many sweeps or substeps ran.
+  // That competition is still there in the SOLVER; what changed is that the torsor no longer asks it — it is solved from equilibrium instead (docs/plan-efforts-interieurs.md phase 10).
   // See also docs/ratio-masse-convergence-dynamique.md.
   it("un cantilever avec une masse en cours de portée transmet la charge par le nœud attaché", () => {
-    // A mass welded to the beam's BODY mid-span (fixedNodesBodyIDs, not an endpoint), on a
-    // beam encastré at the other end. No gravity: the only action is the load on the mass,
-    // which must reach the beam entirely through the FixedOnSegment holding it — the
-    // "attached node" channel this phase adds. `dynamicRigidity: true` for a REAL moment
-    // reaction at the join, same as reaction-forces.test.ts's cantilever.
+    // A mass welded to the beam's BODY mid-span (fixedNodesBodyIDs, not an endpoint), on a beam encastré at the other end.
+    // No gravity: the only action is the load on the mass, which must reach the beam entirely through the FixedOnSegment holding it — the "attached node" channel this phase adds.
+    // `dynamicRigidity: true` for a REAL moment reaction at the join, same as reaction-forces.test.ts's cantilever.
     //
-    // Deliberately only one end grounded: with BOTH beam endpoints anchored (a genuine
-    // simply-supported span), the beam's own `Distance`/`FixedOnSegment` links would have
-    // two simultaneously-anchored dofs each, and `PBD_kinematic_solver` explicitly declines
-    // to split an anchored reaction between more than one anchor ("indeterminate... left
-    // unreported") — a pre-existing solver limitation, not something phase 3 can read
-    // around.
+    // Deliberately only one end grounded: with BOTH beam endpoints anchored (a genuine simply-supported span), the beam's own `Distance`/`FixedOnSegment` links would have two simultaneously-anchored dofs each, and `PBD_kinematic_solver` explicitly declines to split an anchored reaction between more than one anchor ("indeterminate... left unreported") — a pre-existing solver limitation, not something phase 3 can read around.
     const JOIN = id();
     const BEAM = id();
     const MASS = id();
@@ -219,9 +203,7 @@ describe("BeamCohesion — torseur d'interface d'une poutre (docs/plan-efforts-i
     expect_reading(atMass.fx, 0, TIP_LOAD);
     expect_reading(atMass.fy, -TIP_LOAD, TIP_LOAD);
 
-    // The lone support carries the whole load (raw sense: what the beam applies to the
-    // ground, i.e. the NEGATIVE of the classical "ground pushes back with" reading), plus
-    // the moment it creates half-way out — moment is never flipped (see `moment_at`).
+    // The lone support carries the whole load (raw sense: what the beam applies to the ground, i.e. the NEGATIVE of the classical "ground pushes back with" reading), plus the moment it creates half-way out — moment is never flipped (see `moment_at`).
     expect_reading(cohesion!.start.fx, 0, TIP_LOAD);
     expect_reading(cohesion!.start.fy, -TIP_LOAD, TIP_LOAD);
     expect_reading(cohesion!.start.m, TIP_LOAD * 0.5, TIP_LOAD);

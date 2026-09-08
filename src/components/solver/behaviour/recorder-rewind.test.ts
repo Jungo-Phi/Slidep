@@ -9,18 +9,16 @@ import { snapshot_belt_detached } from "../snapshot";
 /**
  * Pausing must not change what is simulated.
  *
- * The worker is aimed past the cursor on purpose, so a pause always drops instants it had
- * already solved and goes back to the last one shown. Going back used to mean recompiling
- * the mechanism, which silently put every belt back on the pulleys the run had taken it off
- * — and the two runs parted company a few seconds later.
+ * The worker is aimed past the cursor on purpose, so a pause always drops instants it had already solved and goes back to the last one shown.
+ * Going back used to mean recompiling the mechanism, which silently put every belt back on the pulleys the run had taken it off — and the two runs parted company a few seconds later.
  */
 
 const fixture = () => load_mechanism(JSON.parse(disconnectJson)).mechanism;
 
 /** Everything recorded up to `to`, and the recorder left sitting there. */
 function record(recorder: Recorder, to: number): KinematicSnapshot[] {
-  // No budget: a test measures a trajectory, not how much of it fits in a frame. Cast: this
-  // whole file is belt topology, which only a kinematic recorder ever produces.
+  // No budget: a test measures a trajectory, not how much of it fits in a frame.
+  // Cast: this whole file is belt topology, which only a kinematic recorder ever produces.
   return recorder.advance(to, Infinity).snapshots as KinematicSnapshot[];
 }
 
@@ -79,15 +77,13 @@ describe("reprise après une pause", () => {
   };
 
   it("reprend sur l'instant montré sans rien changer à la suite", () => {
-    // The instants re-solved from there are the ones that were already solved, so the two
-    // runs land on the very same state — not merely on a close one.
+    // The instants re-solved from there are the ones that were already solved, so the two runs land on the very same state — not merely on a close one.
     expect(biggestGap(last(uninterrupted()), pauseAt(PAUSE))).toBeLessThan(1e-9);
   }, 30000);
 
   it("reprend même quand la courroie a lâché dans les images jetées", () => {
-    // The case the flip journal is there for: a pause drops instants a belt changed
-    // topology in, so the no-slip links and junction references it re-baked at the flip
-    // have to be taken back. Measuring them afresh lands close, not on the same state.
+    // The case the flip journal is there for: a pause drops instants a belt changed topology in, so the no-slip links and junction references it re-baked at the flip have to be taken back.
+    // Measuring them afresh lands close, not on the same state.
     const series = uninterrupted();
     const belt = series[0].layout.belts[0];
     const flags = (s: KinematicSnapshot) =>
@@ -120,8 +116,7 @@ describe("reprise après une pause", () => {
   }, 30000);
 
   it("retrouve la topologie quand une édition force la recompilation", () => {
-    // An edit during simulation has no journal to fall back on: the model is new, and the
-    // belt's state has to be read back off the snapshot it resumes on.
+    // An edit during simulation has no journal to fall back on: the model is new, and the belt's state has to be read back off the snapshot it resumes on.
     const recorder = new Recorder();
     recorder.load("kinematic", fixture(), null);
     const shown = record(recorder, PAUSE);

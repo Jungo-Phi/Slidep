@@ -14,18 +14,12 @@ import {
 import { snapshot_acceleration, snapshot_point } from "../snapshot";
 
 /**
- * A truss holding 5 t on two grounded pivots, against the reference every figure here was
- * hand-computed from: the beams weigh 17.5 kg all told against a 49.05 kN load, so plain
- * statics answers it to a fraction of a percent.
+ * A truss holding 5 t on two grounded pivots, against the reference every figure here was hand-computed from: the beams weigh 17.5 kg all told against a 49.05 kN load, so plain statics answers it to a fraction of a percent.
  *
  *   Epan  +114.5 kN   Iqla  +34.3 kN   Uslu  −59.8 kN   Lukn  −119.5 kN   Dode  +49.05 kN
  *   Dicu  −114.5 kN (vertical)         Uqin  +163.5 kN (vertical)
  *
- * What makes it worth a behaviour test rather than an injected torsor: it is a closed loop of
- * links, the case the per-beam readings cannot settle on their own, and it caught both of the
- * defects this guards — a free body that lost everything terminal at the far end (Dode read
- * 7.7 N, its own weight, for the 49 kN it carries) and the two readings disagreeing over which
- * side of the cut a beam's endpoint mass lump falls on.
+ * What makes it worth a behaviour test rather than an injected torsor: it is a closed loop of links, the case the per-beam readings cannot settle on their own, and it caught both of the defects this guards — a free body that lost everything terminal at the far end (Dode read 7.7 N, its own weight, for the 49 kN it carries) and the two readings disagreeing over which side of the cut a beam's endpoint mass lump falls on.
  */
 const GRAVITY = new Point2(0, -9.81);
 const ZERO = new Point2(0, 0);
@@ -42,17 +36,14 @@ function unfused<T>(key: string, read: (part: string) => T | undefined): T | und
 /**
  * Frames to run, and how many of the last ones to average over.
  *
- * The start-up vibration damps out inside the first three seconds; what remains is the mass
- * swinging as an undamped pendulum (period ≈ 0.63 s, its own suspension being 0.1 m long),
- * and the statics reference is the MEAN of that swing, not any one frame of it. Averaging
- * over three-odd periods is what makes a percent-level comparison meaningful at all — read
- * one frame and the same figures move by ±6 %.
+ * The start-up vibration damps out inside the first three seconds; what remains is the mass swinging as an undamped pendulum (period ≈ 0.63 s, its own suspension being 0.1 m long), and the statics reference is the MEAN of that swing, not any one frame of it.
+ * Averaging over three-odd periods is what makes a percent-level comparison meaningful at all — read one frame and the same figures move by ±6 %.
  */
 const FRAMES = 400;
 const AVERAGED = 120;
 
 /** One dynamic run per mechanism, shared by every assertion below: each is 400 frames, and
- *  re-simulating them per test is the whole cost of this file. */
+ * re-simulating them per test is the whole cost of this file. */
 const runs = new Map<string, ReturnType<typeof simulate>>();
 function run(json: string = trussJson) {
   const cached = runs.get(json);
@@ -78,8 +69,7 @@ function simulate(json: string) {
         const p = unfused(key, (part) => snapshot_point(snapshot!, part));
         if (p) positions.set(key, p);
       }
-    // This mechanism carries neither spring nor damper, so the loads alone are the whole of
-    // what `step_dynamic_simulation` itself feeds the balance.
+    // This mechanism carries neither spring nor damper, so the loads alone are the whole of what `step_dynamic_simulation` itself feeds the balance.
     const loads = resolve_load_forces(model.compiledLoads, positions).forces;
     const at = snapshot;
     frames.push({
@@ -99,7 +89,7 @@ function simulate(json: string) {
 }
 
 /** The one node no beam starts from and only one beam ends at — a free tip, where the whole
- *  balance is that beam against whatever hangs there and nothing else. */
+ * balance is that beam against whatever hangs there and nothing else. */
 function terminal_key(specs: { k0: string; k1: string }[]): string {
   const starts = new Set(specs.map((s) => s.k0));
   const ends = specs.map((s) => s.k1).filter((k) => !starts.has(k));
@@ -130,8 +120,7 @@ describe("bilan aux nœuds d'un treillis chargé", () => {
 
     for (const balance of last(frames).balances) {
       if (!balance.covered || balance.atAnchor) continue;
-      // Relative to the largest single action summed there: a newton means nothing next to
-      // the 115 kN some of these nodes carry, and everything next to the 2 N others do.
+      // Relative to the largest single action summed there: a newton means nothing next to the 115 kN some of these nodes carry, and everything next to the 2 N others do.
       expect(balance.residual.length() / balance.scale).toBeLessThan(0.01);
     }
   }, 30_000);
@@ -141,8 +130,7 @@ describe("bilan aux nœuds d'un treillis chargé", () => {
     const anchors = frames[0].balances.filter((b) => b.atAnchor).map((b) => b.key);
     expect(anchors).toHaveLength(2);
 
-    // Horizontal components are left out on purpose: statics puts them at ~0, and what the
-    // simulation shows there is the pendulum's own swing, not a reaction.
+    // Horizontal components are left out on purpose: statics puts them at ~0, and what the simulation shows there is the pendulum's own swing, not a reaction.
     const vertical = anchors
       .map((key) =>
         mean(frames.map((f) => f.balances.find((b) => b.key === key)!.reaction!.y)),
@@ -154,9 +142,8 @@ describe("bilan aux nœuds d'un treillis chargé", () => {
 
   it("la poutre qui porte la masse lit la charge, pas son propre poids", () => {
     const { mechanism, frames } = run();
-    // The beam hanging under the free end: the only one whose far end is terminal, so the
-    // only one read off a free-body balance rather than off the link reactions. Read its own
-    // weight (7.7 N against 49 kN) before the free body was closed.
+    // The beam hanging under the free end: the only one whose far end is terminal, so the only one read off a free-body balance rather than off the link reactions.
+    // Read its own weight (7.7 N against 49 kN) before the free body was closed.
     const hanger = mechanism.mechanicalElements.find(
       (e) => e.type === "beam" && e.positionEnd.distance_to(e.positionStart) < 0.2,
     )!;
@@ -167,13 +154,11 @@ describe("bilan aux nœuds d'un treillis chargé", () => {
 });
 
 /**
- * A cantilever cut in two by a `join`, welded to the frame, 10 N at the tip over 15.402 N of
- * self-weight per half. Statics answers its root exactly: 40.804 N and 25.402 N·m.
+ * A cantilever cut in two by a `join`, welded to the frame, 10 N at the tip over 15.402 N of self-weight per half.
+ * Statics answers its root exactly: 40.804 N and 25.402 N·m.
  *
- * Its free tip is what the truss above cannot check. A beam's endpoint mass lump is a sixth
- * of its own weight — noise beside a 5 t load, and a quarter of everything at this tip, so
- * this is where the two readings' disagreement over which side of the cut that lump falls on
- * actually shows.
+ * Its free tip is what the truss above cannot check.
+ * A beam's endpoint mass lump is a sixth of its own weight — noise beside a 5 t load, and a quarter of everything at this tip, so this is where the two readings' disagreement over which side of the cut that lump falls on actually shows.
  */
 describe("bilan aux nœuds d'un cantilever soudé", () => {
   it("le bout libre ferme : le lump d'extrémité appartient à la poutre", () => {

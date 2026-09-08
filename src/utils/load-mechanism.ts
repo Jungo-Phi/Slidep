@@ -1,10 +1,8 @@
 /**
  * The one way a mechanism enters the app from outside — the library, a file.
  *
- * Migrating, reviving and repairing in that order: the migration chain leaves a
- * document of the current format, deserialization turns it into objects, and the
- * repair guarantees that every reference resolves. Everything downstream may
- * then assume a coherent mechanism.
+ * Migrating, reviving and repairing in that order: the migration chain leaves a document of the current format, deserialization turns it into objects, and the repair guarantees that every reference resolves.
+ * Everything downstream may then assume a coherent mechanism.
  */
 
 import { Mechanism } from "../types";

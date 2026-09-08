@@ -23,16 +23,15 @@ import {
 export { NEGLIGIBLE_RATIO };
 
 /**
- * Whether `value` is small enough, next to `poolMax` (its own kind's running max), to read
- * as noise rather than a real reading. `poolMax` of 0 means nothing of this kind has ever
- * been seen — nothing is negligible against an empty pool.
+ * Whether `value` is small enough, next to `poolMax` (its own kind's running max), to read as noise rather than a real reading.
+ * `poolMax` of 0 means nothing of this kind has ever been seen — nothing is negligible against an empty pool.
  */
 export function is_negligible(value: number, poolMax: number): boolean {
   return poolMax > 0 && Math.abs(value) < NEGLIGIBLE_RATIO * poolMax;
 }
 
 /** `length` is the only field the mechanism's size enters directly, so it seeds `moment` (force × lever arm) and the velocities (distance / `MIN_TIME_POOL`) in turn.
- *  `angle` and `force` have no such lever, so each is its own flat constant. */
+ * `angle` and `force` have no such lever, so each is its own flat constant. */
 function length_derived_floors(length: number): NegligibilityFloors {
   const force = LOAD_SCALING.MIN_VALUE;
   const linearVelocity = length / MIN_TIME_POOL;
@@ -101,9 +100,7 @@ export function extend_negligibility_pool(
     ({ length, angle, force, moment, linearVelocity, angularVelocity, power } = floors);
   }
 
-  // The reference instant displacement/angle are measured against — always the
-  // recording's very first snapshot, "at rest", so the pool reflects how far anything has
-  // ever strayed rather than a moving target.
+  // The reference instant displacement/angle are measured against — always the recording's very first snapshot, "at rest", so the pool reflects how far anything has ever strayed rather than a moving target.
   const ref = snapshots.length > 0 ? snapshots[0] : null;
   for (let i = appendable ? cache.consumed : 0; i < snapshots.length; i++) {
     const snap = snapshots[i];
@@ -167,7 +164,7 @@ export function extend_negligibility_pool(
 }
 
 /** Which `NegligibilityPool` field bounds a given probe metric's own kind — the one lookup
- *  a new metric needs to join the negligibility rule, no new threshold to invent. */
+ * a new metric needs to join the negligibility rule, no new threshold to invent. */
 export function pool_key_for_metric(
   metric: ProbeMetric,
 ): keyof Pick<
@@ -203,11 +200,7 @@ export function pool_key_for_metric(
 }
 
 /**
- * Which `QuantityKind` a probe metric's value formats as — `format_quantity`'s own adaptive
- * SI prefix (mN, µN, kN…) is what actually solves "how to show a small value" rather than a
- * fixed-decimals formatter rounding it away to "0.00": a real reading stays legible however
- * small it is next to the mechanism, and a genuinely zero one is caught on its own numeric
- * merit instead (see `ProbeChart`'s absolute-epsilon check), not because formatting hid it.
+ * Which `QuantityKind` a probe metric's value formats as — `format_quantity`'s own adaptive SI prefix (mN, µN, kN…) is what actually solves "how to show a small value" rather than a fixed-decimals formatter rounding it away to "0.00": a real reading stays legible however small it is next to the mechanism, and a genuinely zero one is caught on its own numeric merit instead (see `ProbeChart`'s absolute-epsilon check), not because formatting hid it.
  */
 export function quantity_kind_for_metric(metric: ProbeMetric): QuantityKind {
   switch (metric) {
@@ -233,11 +226,8 @@ export function quantity_kind_for_metric(metric: ProbeMetric): QuantityKind {
 }
 
 /** Metrics whose zero is an arbitrary reference (the canvas origin, an orientation
- *  convention) rather than a real physical state — forcing it into a chart's axis would
- *  squash a real reading that happens to sit far from it. An exception list, not an
- *  inclusion list: everything else defaults to showing zero, since for a force, a
- *  velocity, a moment, an angular velocity, zero IS a meaningful state ("at rest", "no
- *  load") — a new metric should get that for free rather than needing to ask for it. */
+ * convention) rather than a real physical state — forcing it into a chart's axis would squash a real reading that happens to sit far from it.
+ * An exception list, not an inclusion list: everything else defaults to showing zero, since for a force, a velocity, a moment, an angular velocity, zero IS a meaningful state ("at rest", "no load") — a new metric should get that for free rather than needing to ask for it. */
 const METRICS_WITH_ARBITRARY_ZERO: ReadonlySet<ProbeMetric> = new Set([
   "position",
   "angle",

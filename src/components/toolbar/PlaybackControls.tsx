@@ -159,10 +159,7 @@ export const PlaybackControls: React.FC<PlaybackControlsProps> = ({
         onChange={(_e, newMode: AppMode) => {
           if (!newMode) return;
           setAppMode(newMode);
-          // Same tick as `setAppMode`, not left to the hook's own effect: switching directly
-          // between kinematic and dynamic (no edition in between) otherwise leaves a render
-          // where `appMode` already reads the new mode but `runtimeState.simulationSnapshots`
-          // still holds the other mode's snapshot shape — see `simulationResetPatch`.
+          // Same tick as `setAppMode`, not left to the hook's own effect: switching directly between kinematic and dynamic (no edition in between) otherwise leaves a render where `appMode` already reads the new mode but `runtimeState.simulationSnapshots` still holds the other mode's snapshot shape — see `simulationResetPatch`.
           setRuntimeState((prev) => ({
             ...prev,
             ...simulationResetPatch(newMode, mechanism),
@@ -351,8 +348,7 @@ export const PlaybackControls: React.FC<PlaybackControlsProps> = ({
                   fontVariantNumeric: "tabular-nums",
                   lineHeight: 1,
                   borderRadius: 1,
-                  // La vitesse nominale est un état neutre : seul un
-                  // réglage non standard mérite d'attirer l'œil.
+                  // La vitesse nominale est un état neutre : seul un réglage non standard mérite d'attirer l'œil.
                   color:
                     runtimeState.speed === 1
                       ? "text.secondary"

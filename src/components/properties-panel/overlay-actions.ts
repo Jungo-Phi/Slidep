@@ -3,8 +3,7 @@ import { available_overlays, overlay_shown } from "../../utils/element-queries";
 import { PluralKey } from "../../i18n";
 
 /** Human label of each overlay layer, singular or plural depending on how many
- *  elements it's said of — see `tn` (the "Afficher" menu says it of several
- *  elements at once, a single element's own panel switch says it of just itself). */
+ * elements it's said of — see `tn` (the "Afficher" menu says it of several elements at once, a single element's own panel switch says it of just itself). */
 export const OVERLAY_LABEL_KEYS: Record<OverlayKind, PluralKey> = {
   trajectory: "overlay_trajectory",
   force: "overlay_force",
@@ -20,10 +19,8 @@ export function overlay_targets(
 }
 
 /**
- * How many distinct `kind` quantities ONE element of that kind carries — the number `tn`
- * needs to pick singular or plural for `OVERLAY_LABEL_KEYS[kind]`. One for every kind: each is
- * a single field read off one beam (or node), even "stress", which folds N and Mf into one
- * utilization ratio rather than showing them separately.
+ * How many distinct `kind` quantities ONE element of that kind carries — the number `tn` needs to pick singular or plural for `OVERLAY_LABEL_KEYS[kind]`.
+ * One for every kind: each is a single field read off one beam (or node), even "stress", which folds N and Mf into one utilization ratio rather than showing them separately.
  */
 function overlay_label_weight(kind: OverlayKind): number {
   switch (kind) {
@@ -55,7 +52,7 @@ export function overlay_count(
 }
 
 /** True as soon as one layer shows at least one element — the single bit that
- *  lights up the "Afficher" button ("something is drawn over my canvas"). */
+ * lights up the "Afficher" button ("something is drawn over my canvas"). */
 export function any_overlay_shown(elements: MechanicalElement[]): boolean {
   return elements.some((el) =>
     available_overlays(el).some((kind) => overlay_shown(el, kind)),
@@ -63,8 +60,8 @@ export function any_overlay_shown(elements: MechanicalElement[]): boolean {
 }
 
 /**
- * Bulk command: show/hide `kind` on every element it applies to. Emits one
- * action per element whose state actually differs (a command, not a toggle).
+ * Bulk command: show/hide `kind` on every element it applies to.
+ * Emits one action per element whose state actually differs (a command, not a toggle).
  * Observation-only: the recorded snapshots are preserved.
  */
 export function set_all_overlays(

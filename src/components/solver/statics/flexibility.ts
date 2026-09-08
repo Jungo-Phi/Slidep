@@ -5,27 +5,19 @@ import { StaticsFrame, StaticsSystem } from "./equilibrium-model";
 import { BeamState, abscissa, beam_state, cross } from "./equilibrium-solve";
 
 /**
- * The complementary energy of a mechanism, as a quadratic form over the equilibrium unknowns —
- * see docs/plan-efforts-interieurs.md phase 10.
+ * The complementary energy of a mechanism, as a quadratic form over the equilibrium unknowns — see docs/plan-efforts-interieurs.md phase 10.
  *
- * This is what answers a hyperstatic structure. Equilibrium alone leaves a family of solutions;
- * the real one is the member that stores the least strain energy (Menabrea), and that is a
- * question about `E`, `A` and `I` rather than about the mechanism's shape.
+ * This is what answers a hyperstatic structure.
+ * Equilibrium alone leaves a family of solutions; the real one is the member that stores the least strain energy (Menabrea), and that is a question about `E`, `A` and `I` rather than about the mechanism's shape.
  *
- * ```
- * U = ∫ N(s)²/(2EA) ds  +  ∫ Mf(s)²/(2EI) ds
- * ```
+ * ``` U = ∫ N(s)²/(2EA) ds + ∫ Mf(s)²/(2EI) ds ```
  *
- * **No shear term.** `τ` needs `G`, hence Poisson's ratio, which `MaterialDef` does not carry —
- * and inventing one would be a second unjustified number, the same reason `σ_adm = Re` carries
- * no safety factor. It also would not be an improvement: shear flexibility contributes at order
- * `(h/L)²` on the slender beams this models, and every textbook figure these are checked against
- * (`3wL/8`, `wL²/12`) is Euler-Bernoulli, so adding it would make the references disagree.
+ * **No shear term.** `τ` needs `G`, hence Poisson's ratio, which `MaterialDef` does not carry — and inventing one would be a second unjustified number, the same reason `σ_adm = Re` carries no safety factor.
+ * It also would not be an improvement: shear flexibility contributes at order `(h/L)²` on the slender beams this models, and every textbook figure these are checked against (`3wL/8`, `wL²/12`) is Euler-Bernoulli, so adding it would make the references disagree.
  */
 
 /** Four-point Gauss-Legendre on `[-1, 1]`. `N²` reaches degree 4 and `Mf²` degree 6 between two
- *  interfaces, and four points are exact through degree 7 — so the integrals below are exact,
- *  not approximated. */
+ * interfaces, and four points are exact through degree 7 — so the integrals below are exact, not approximated. */
 const GAUSS_NODES = [
   -0.8611363115940526, -0.3399810435848563, 0.3399810435848563, 0.8611363115940526,
 ];
@@ -42,9 +34,8 @@ interface Cut {
 /**
  * `N` and `Mf` at one cut, as a row over the unknowns plus the part the known loads already fix.
  *
- * `R_coh(s) = Σ_{sⱼ<s} Fⱼ − W(s)` and `M_coh(s) = Σ_{sⱼ<s} [(sⱼ−s)·(x̂ × Fⱼ) + Mⱼ] − Mw(s)`,
- * the plan's own cut convention with the upstream part `[0, s]`. Both are affine in the
- * unknowns, which is precisely why the energy comes out quadratic and this can be a matrix.
+ * `R_coh(s) = Σ_{sⱼ<s} Fⱼ − W(s)` and `M_coh(s) = Σ_{sⱼ<s} [(sⱼ−s)·(x̂ × Fⱼ) + Mⱼ] − Mw(s)`, the plan's own cut convention with the upstream part `[0, s]`.
+ * Both are affine in the unknowns, which is precisely why the energy comes out quadratic and this can be a matrix.
  */
 function cut_rows(
   s: number,
@@ -76,8 +67,7 @@ function cut_rows(
 /**
  * Build `F` and `g` for one frame.
  *
- * Returns `undefined` when no beam has a usable section — there is then nothing to minimise,
- * and an all-zero form would silently make every hyperstatic split look equally good.
+ * Returns `undefined` when no beam has a usable section — there is then nothing to minimise, and an all-zero form would silently make every hyperstatic split look equally good.
  */
 export function build_flexibility(
   system: StaticsSystem,
@@ -85,8 +75,8 @@ export function build_flexibility(
   frame: StaticsFrame,
 ): Flexibility | undefined {
   const size = system.columns;
-  // Dense and symmetric. Sized by the unknowns, which stay in the hundreds even on the whole
-  // gallery's largest mechanism, so the square never becomes the cost.
+  // Dense and symmetric.
+  // Sized by the unknowns, which stay in the hundreds even on the whole gallery's largest mechanism, so the square never becomes the cost.
   const f = new Float64Array(size * size);
   const linear = new Float64Array(size);
   let any = false;
@@ -102,9 +92,8 @@ export function build_flexibility(
       .map((face) => ({ s: abscissa(face, spec, state, frame), columns: face.columns }))
       .sort((a, b) => a.s - b.s);
 
-    // The load the beam carries whatever the unknowns do: its distributed load plus its own
-    // weight against its own acceleration. Affine in `s`, since the rigid-body acceleration
-    // field `a(σ) = a₀ + ŷ·α·σ − x̂·ω²·σ` is.
+    // The load the beam carries whatever the unknowns do: its distributed load plus its own weight against its own acceleration.
+    // Affine in `s`, since the rigid-body acceleration field `a(σ) = a₀ + ŷ·α·σ − x̂·ω²·σ` is.
     const density = frame.distributedDensityOn(spec.beamID);
     const mu = frame.beamMass(spec.beamID) / state.length;
     const a0 = frame.accelerationOf(spec.k0);

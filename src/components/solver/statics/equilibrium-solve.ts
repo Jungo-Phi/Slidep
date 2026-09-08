@@ -3,11 +3,14 @@ import { BeamCohesionSpec } from "../dynamics/beam-cohesion";
 import { Matrix, add_at, zeros } from "./matrix";
 import { Flexibility, minimise_energy, solve_least_squares } from "./least-squares";
 import { StaticsFrame, StaticsInterface, StaticsSystem } from "./equilibrium-model";
+import { BeltVia, belt_pieces } from "../../../utils/belt-path";
 
 /** One resolved interface torsor, in plain mechanics units: the force and the counter-
  *  clockwise couple the beam applies onto the node (or the frame onto the node, at a support). */
 export interface StaticsTorsor {
   beamID?: ID;
+  /** The gear applying this torsor, at its axle or at one of its rim pins. */
+  gearID?: ID;
   nodeKey: string;
   /** Abscissa along the beam, in metres from its start. `NaN` for a support. */
   s: number;
@@ -15,7 +18,8 @@ export interface StaticsTorsor {
   fy: number;
   m: number;
   /**
-   * Whether equilibrium alone fixes this torsor at this pose.
+   * Whether the solve fixes this torsor at this pose — by equilibrium alone when it was given
+   * no flexibility, by equilibrium plus minimum complementary energy when it was.
    *
    * Per component and not per beam, which matters: a beam between two pinned supports has an
    * undetermined `N` and a perfectly determined `Mf`, and reporting the whole beam as unknown
@@ -125,13 +129,88 @@ export function distributed_resultant(
   };
 }
 
+/** Below this, a component of a unit vector is numerical dust rather than a coupling. Read
+ *  both when splitting the null space and when asking whether a direction moves a column, so
+ *  the two never disagree over whether a vector touches something. */
+const COUPLING_EPSILON = 1e-8;
+
+/** Orthonormalise in order, dropping whatever the vectors before it already span. Plain
+ *  modified Gram-Schmidt: these live in `ker(A)`'s own coordinates, a handful of dimensions
+ *  even on the most redundant mechanism in the gallery. */
+function orthonormalise(vectors: Float64Array[], size: number): Float64Array[] {
+  const basis: Float64Array[] = [];
+  for (const vector of vectors) {
+    const v = Float64Array.from(vector);
+    for (const b of basis) {
+      let dot = 0;
+      for (let i = 0; i < size; i++) dot += b[i] * v[i];
+      for (let i = 0; i < size; i++) v[i] -= dot * b[i];
+    }
+    let norm = 0;
+    for (let i = 0; i < size; i++) norm += v[i] * v[i];
+    norm = Math.sqrt(norm);
+    if (norm <= COUPLING_EPSILON) continue;
+    for (let i = 0; i < size; i++) v[i] /= norm;
+    basis.push(v);
+  }
+  return basis;
+}
+
+/**
+ * Split the redundancies into the ones the model owns and the ones it does not.
+ *
+ * A `foreign` unknown stands for a belt, a gear mesh or a contact this model has no term for,
+ * and it costs no energy — so left in the minimisation it is a free lunch: the energy hands it
+ * every newton it can, because a beam that carries nothing stores nothing. That answer is
+ * arbitrary, and worse than arbitrary in that it looks settled. Menabrea is therefore allowed
+ * to choose only along `owned`, the directions that leave every unmodelled action where it is;
+ * whatever `unowned` touches is reported as unknown, however far from the belt it sits.
+ */
+function split_null_space(
+  system: StaticsSystem,
+  nullSpace: Float64Array[],
+): { owned: Float64Array[]; unowned: Float64Array[] } {
+  const h = nullSpace.length;
+  const foreignColumns: number[] = [];
+  for (const face of system.interfaces)
+    if (face.foreign)
+      for (const column of [face.columns.fx, face.columns.fy, face.columns.m])
+        if (column >= 0) foreignColumns.push(column);
+  if (h === 0 || foreignColumns.length === 0)
+    return { owned: nullSpace, unowned: [] };
+
+  // One row per unmodelled component, read across the null basis: its span is exactly the
+  // directions that move that component, and its orthogonal complement the ones that do not.
+  const unowned = orthonormalise(
+    foreignColumns.map((column) => Float64Array.from(nullSpace, (n) => n[column])),
+    h,
+  );
+  const axes = Array.from({ length: h }, (_, i) => {
+    const e = new Float64Array(h);
+    e[i] = 1;
+    return e;
+  });
+  const owned = orthonormalise([...unowned, ...axes], h).slice(unowned.length);
+
+  /** Back from the null space's coordinates to the unknowns'. Orthonormal in, orthonormal
+   *  out: `nullSpace` is itself orthonormal. */
+  const lift = (weights: Float64Array): Float64Array => {
+    const out = new Float64Array(nullSpace[0].length);
+    for (let i = 0; i < h; i++)
+      for (let k = 0; k < out.length; k++) out[k] += weights[i] * nullSpace[i][k];
+    return out;
+  };
+  return { owned: owned.map(lift), unowned: unowned.map(lift) };
+}
+
 /**
  * Assemble and solve one frame's equilibrium.
  *
  * `flexibility` applies `F` to a vector of unknowns — the block-diagonal member flexibility
- * of the minimum-complementary-energy formulation. Omit it and an indeterminate system falls
- * back to the minimum-norm solution, which is **not** an answer: read `determined` and report
- * the rest as unknown rather than showing it.
+ * of the minimum-complementary-energy formulation, which is what gives a hyperstatic structure
+ * an answer. Omit it and an indeterminate system falls back to the minimum-norm solution,
+ * which is **not** an answer: read `determined` and report the rest as unknown rather than
+ * showing it.
  */
 export function solve_statics(
   system: StaticsSystem,
@@ -140,6 +219,7 @@ export function solve_statics(
   flexibility?: Flexibility,
 ): StaticsSolution | undefined {
   const specOf = new Map(specs.map((s) => [s.beamID, s]));
+  const gearOf = new Map(system.gears.map((g) => [g.id, g]));
   const states = new Map<ID, BeamState>();
   for (const spec of specs) {
     const state = beam_state(spec, frame);
@@ -149,9 +229,11 @@ export function solve_statics(
   const a: Matrix = zeros(system.rows, system.columns);
   const b = new Float64Array(system.rows);
   const rowOfBeam = new Map<ID, number>();
+  const rowOfGear = new Map<ID, number>();
   const rowOfNode = new Map<string, number>();
   for (const body of system.bodies) {
     if (body.kind === "beam" && body.beamID !== undefined) rowOfBeam.set(body.beamID, body.row);
+    if (body.kind === "gear" && body.gearID !== undefined) rowOfGear.set(body.gearID, body.row);
     if (body.kind === "node" && body.nodeKey !== undefined) rowOfNode.set(body.nodeKey, body.row);
   }
 
@@ -170,6 +252,17 @@ export function solve_statics(
     // physics — only which of the two models the reading belongs to.
     const inertia = (mass * state.length * state.length) / 12;
     b[row + 2] = distributed.moment - inertia * state.angularAcceleration;
+  }
+
+  for (const gear of system.gears) {
+    const row = rowOfGear.get(gear.id);
+    const centre = frame.positionOf(gear.centreKey);
+    if (row === undefined || !centre) continue;
+    const acceleration = frame.accelerationOf(gear.centreKey);
+    // The same shape as a beam's, one term shorter: a disc carries no distributed load, and gravity works at its centre so it makes no moment there.
+    b[row] = gear.mass * (frame.gravity.x - acceleration.x);
+    b[row + 1] = gear.mass * (frame.gravity.y - acceleration.y);
+    b[row + 2] = -gear.inertia * frame.gearAngularAcceleration(gear.id);
   }
 
   for (const [key, row] of rowOfNode) {
@@ -192,6 +285,21 @@ export function solve_statics(
       add_at(a, nodeRow + 1, fy, 1);
       if (m >= 0) add_at(a, nodeRow + 2, m, 1);
     }
+    if (face.gearID !== undefined) {
+      const gearRow = rowOfGear.get(face.gearID);
+      const gear = gearOf.get(face.gearID);
+      const centre = gear && frame.positionOf(gear.centreKey);
+      const at = frame.positionOf(face.nodeKey);
+      if (gearRow === undefined || !centre || !at) continue;
+      // Same convention as a beam's: the unknown is what the GEAR applies onto the node, and its moment is taken about the gear's own centre.
+      const arm = at.sub(centre);
+      add_at(a, gearRow, fx, 1);
+      add_at(a, gearRow + 1, fy, 1);
+      add_at(a, gearRow + 2, fx, cross(arm, 1, 0));
+      add_at(a, gearRow + 2, fy, cross(arm, 0, 1));
+      if (m >= 0) add_at(a, gearRow + 2, m, 1);
+      continue;
+    }
     if (face.beamID === undefined) continue;
 
     const spec = specOf.get(face.beamID);
@@ -208,16 +316,108 @@ export function solve_statics(
     if (m >= 0) add_at(a, beamRow + 2, m, 1);
   }
 
-  const solved = solve_least_squares(a, b);
-  const x = flexibility
-    ? minimise_energy(solved.x, solved.nullSpace, flexibility.applyF, flexibility.linear)
-    : solved.x;
+  for (const belt of system.belts) {
+    // The belt as it actually lies this frame: a pulley it has left touches nothing, so it drops out of the path and the strand runs straight on to the next one it still holds.
+    const contact: { via: BeltVia; index: number }[] = [];
+    belt.viaKeys.forEach((key, i) => {
+      const gone =
+        belt.viaGears[i] !== undefined &&
+        belt.length.disconnected?.[belt.closed ? i : i - 1] === true;
+      const pos = frame.positionOf(key);
+      if (gone || !pos) return;
+      contact.push({
+        via: { pos, radius: belt.radii[i], clockwise: belt.clockwise[i] },
+        index: i,
+      });
+    });
+    if (contact.length < 2) continue;
 
-  // A component is settled by equilibrium when no direction of the solution family moves it.
-  // The null vectors are unit-norm, so this compares a share of one against a share of one.
-  const FIXED = 1e-8;
+    /** One end of a strand pulling on whichever body its via stands for: a pulley takes it at its rim, with the arm that turns it; a terminal is a bare point. */
+    const pull = (viaIndex: number, at: Point2, u: Point2, sign: number, column: number) => {
+      const gearID = belt.viaGears[viaIndex];
+      if (gearID !== undefined) {
+        const gearRow = rowOfGear.get(gearID);
+        const gear = gearOf.get(gearID);
+        const centre = gear && frame.positionOf(gear.centreKey);
+        if (gearRow === undefined || !centre) return;
+        // A body row reads `Σ (what it applies) = … − (what is applied to it)`, hence the flip.
+        const arm = at.sub(centre);
+        add_at(a, gearRow, column, -sign * u.x);
+        add_at(a, gearRow + 1, column, -sign * u.y);
+        add_at(a, gearRow + 2, column, -sign * cross(arm, u.x, u.y));
+        return;
+      }
+      const nodeRow = rowOfNode.get(belt.viaKeys[viaIndex]);
+      if (nodeRow === undefined) return;
+      // A node row reads `Σ (what is applied onto it)`, so a strand enters it as it pulls.
+      add_at(a, nodeRow, column, sign * u.x);
+      add_at(a, nodeRow + 1, column, sign * u.y);
+    };
+
+    for (const piece of belt_pieces(
+      contact.map((c) => c.via),
+      belt.closed,
+    )) {
+      if (piece.kind !== "segment") continue;
+      const span = piece.to.sub(piece.from);
+      if (span.length_squared() < 1e-18) continue;
+      const u = span.normalize();
+      const from = contact[piece.gearIndexA].index;
+      const to = contact[piece.gearIndexB].index;
+      const column = belt.columns[from];
+      if (column === undefined) continue;
+      // A tension pulls both of its ends towards each other: `+T·u` where it leaves, `−T·u` where it lands.
+      pull(from, piece.from, u, 1, column);
+      pull(to, piece.to, u, -1, column);
+    }
+  }
+
+  for (const coupling of system.couplings) {
+    const rowA = rowOfGear.get(coupling.gearA);
+    const rowB = rowOfGear.get(coupling.gearB);
+    if (rowA === undefined || rowB === undefined) continue;
+    const column = coupling.column;
+    if (coupling.kind === "coaxial") {
+      // `θ₁ − θ₂ = offset` passes a couple `+C` to one and `−C` to the other, and no force: their centres are the same point.
+      // Both rows read `Σ (what the gear applies) = … − (what is applied TO it)`, hence the flip.
+      add_at(a, rowA + 2, column, -1);
+      add_at(a, rowB + 2, column, 1);
+      continue;
+    }
+    const centreA = gearOf.get(coupling.gearA);
+    const centreB = gearOf.get(coupling.gearB);
+    const pa = centreA && frame.positionOf(centreA.centreKey);
+    const pb = centreB && frame.positionOf(centreB.centreKey);
+    if (!pa || !pb) continue;
+    const span = pb.sub(pa);
+    if (span.length_squared() < 1e-18) continue;
+    // The teeth push along the common tangent, at the pitch point on the line of centres.
+    // One unknown: `GearMeshAngle` corrects `r₁θ₁ + r₂θ₂`, so its multiplier reaches the two gears with arms `r₁` and `r₂` of the SAME sign — external meshing, which is the only kind that `+` describes.
+    const tangent = span.normalize().perp();
+    add_at(a, rowA, column, -tangent.x);
+    add_at(a, rowA + 1, column, -tangent.y);
+    add_at(a, rowA + 2, column, -coupling.radiusA);
+    add_at(a, rowB, column, tangent.x);
+    add_at(a, rowB + 1, column, tangent.y);
+    add_at(a, rowB + 2, column, -coupling.radiusB);
+  }
+
+  const solved = solve_least_squares(a, b);
+  const split = split_null_space(system, solved.nullSpace);
+  const minimum = flexibility
+    ? minimise_energy(solved.x, split.owned, flexibility.applyF, flexibility.linear)
+    : undefined;
+  const x = minimum ? minimum.x : solved.x;
+
+  // A component is settled when nothing the answer is still free to move along touches it.
+  // With a flexibility that is NOT `ker(A)`: Menabrea picks one member of the redundancies
+  // the model owns, so a plain over-constrained frame is an answer rather than an unknown.
+  // What stays open is what it may not choose within (`unowned`) and what it could not
+  // (`residualNull`). The vectors are unit-norm throughout, so this compares a share of one
+  // against a share of one.
+  const open = minimum ? [...split.unowned, ...minimum.residualNull] : solved.nullSpace;
   const varies = (column: number) =>
-    column >= 0 && solved.nullSpace.some((n) => Math.abs(n[column]) > FIXED);
+    column >= 0 && open.some((n) => Math.abs(n[column]) > COUPLING_EPSILON);
 
   let scale = 0;
   for (const value of b) scale = Math.max(scale, Math.abs(value));
@@ -228,6 +428,7 @@ export function solve_statics(
       const state = face.beamID !== undefined ? states.get(face.beamID) : undefined;
       return {
         beamID: face.beamID,
+        gearID: face.gearID,
         nodeKey: face.nodeKey,
         s: spec && state ? abscissa(face, spec, state, frame) : Number.NaN,
         fx: x[face.columns.fx],

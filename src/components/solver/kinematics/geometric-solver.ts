@@ -21,16 +21,16 @@ import { DIM } from "../../../constants/rendering-specs";
 import { screen2world_length } from "../../../utils";
 
 /**
- * Hard cap on the sweeps one edition solve may run. Not a convergence target — the solve
- * exits on constraint satisfaction — but the guard that keeps an unsatisfiable sketch,
- * which is a legitimate thing to be drawing, from running forever.
+ * Hard cap on the sweeps one edition solve may run.
+ * Not a convergence target — the solve exits on constraint satisfaction — but the guard that keeps an unsatisfiable sketch, which is a legitimate thing to be drawing, from running forever.
  */
 const EDITION_SWEEPS = 300;
 
 /**
  * Where a radius grab takes hold of the rim: on the bearing of the target it is pulled to, never on the cursor's.
  *
- * Exported so that asking what the grab was granted reads the very handle the solve moved. Rebuilt elsewhere, the two drift, and a hover then measures a bearing where the gesture only ever produced a radius.
+ * Exported so that asking what the grab was granted reads the very handle the solve moved.
+ * Rebuilt elsewhere, the two drift, and a hover then measures a bearing where the gesture only ever produced a radius.
  */
 export function gear_grab_handle(
   center: Point2,
@@ -48,11 +48,13 @@ const key_pair = (a: string, b: string) => (a < b ? `${a}|${b}` : `${b}|${a}`);
 /**
  * The floor each straight edge answers to, one link per edge.
  *
- * Unlike a gear radius, a length is not a quantity the solver stores — it is the distance between two nodes, and there is no writer to clamp. The floor has to be a constraint like any other, and a one-sided one: a bar may be as long as it likes.
+ * Unlike a gear radius, a length is not a quantity the solver stores — it is the distance between two nodes, and there is no writer to clamp.
+ * The floor has to be a constraint like any other, and a one-sided one: a bar may be as long as it likes.
  *
  * Never longer than the edge already measures, for the reason the cursor bounds give: a resize answers to what one can see *or* to the size in hand, whichever is smaller, and never blows out a bar drawn short at high zoom.
  *
- * Belts are left out. Their two ends are meant to meet — that is the loop closing — and their length is the run around the pulleys, not the span between the terminals.
+ * Belts are left out.
+ * Their two ends are meant to meet — that is the loop closing — and their length is the run around the pulleys, not the span between the terminals.
  */
 function min_length_links(
   mechanicalElements: Mechanism["mechanicalElements"],
@@ -82,32 +84,26 @@ function min_length_links(
 export function resolveGeometricConstraints(
   mechanism: Mechanism,
   /**
-   * The actions the solve pulls against — empty when the bundle only reshapes the graph
-   * (connections, deletions).
+   * The actions the solve pulls against — empty when the bundle only reshapes the graph (connections, deletions).
    *
-   * Several only ever come from one panel field written to a whole selection at once, where each
-   * states its own element's value and the constraints they add compose. A gesture brings exactly
-   * one: a grab has a single point and a single pin, so the branches below that set one keep
-   * assuming they run alone.
+   * Several only ever come from one panel field written to a whole selection at once, where each states its own element's value and the constraints they add compose.
+   * A gesture brings exactly one: a grab has a single point and a single pin, so the branches below that set one keep assuming they run alone.
    */
   triggers: readonly Action[],
   /** The whole bundle. Only the separation of what it disconnects reads it — every other rule answers to the triggers alone. */
   bundleActions: Action[],
 ): GeomNodes {
-  // *
-  // Phase A : Création du graphe de dépendances
-  // *
+  // * Phase A : Création du graphe de dépendances *
 
-  // 1. Initialize nodes (positions and radii) of the dependency graph
-  // 2. Initialize edges (links) of the dependency graph
+  // 1.
+  // Initialize nodes (positions and radii) of the dependency graph 2.
+  // Initialize edges (links) of the dependency graph
   const nodes = get_geom_nodes(mechanism.mechanicalElements);
   let links = get_links_geometric(
     mechanism.mechanicalElements,
     mechanism.constraintElements,
   );
-  // Pushed before the fusion below, so their keys are rewritten with everyone
-  // else's; the ones a dimension already answers for are dropped after it, when
-  // both are stated in the same keys.
+  // Pushed before the fusion below, so their keys are rewritten with everyone else's; the ones a dimension already answers for are dropped after it, when both are stated in the same keys.
   links.push(
     ...min_length_links(
       mechanism.mechanicalElements,
@@ -116,9 +112,8 @@ export function resolveGeometricConstraints(
   );
 
   // Un rayon dimensionné est fixe : on l'ancre (radMass 0) à sa valeur cible.
-  // Aucune contrainte (engrènement, pin de périmètre, grab…) ne peut alors le
-  // modifier — le nœud épinglé suit le rayon au lieu de le changer. Sans
-  // dimension, radMass reste 1 : le rayon est un DDL libre, redimensionnable.
+  // Aucune contrainte (engrènement, pin de périmètre, grab…) ne peut alors le modifier — le nœud épinglé suit le rayon au lieu de le changer.
+  // Sans dimension, radMass reste 1 : le rayon est un DDL libre, redimensionnable.
   mechanism.constraintElements.forEach((c) => {
     if (c.type === "dimension-radius" && nodes.radii.has(c.gearID)) {
       nodes.radii.set(c.gearID, c.value);
@@ -130,8 +125,7 @@ export function resolveGeometricConstraints(
   let grabConnectionID: string | undefined = undefined;
   /** Key of a node whose value was typed: pinned rather than pulled, once fusion is done. */
   let pin: string | undefined = undefined;
-  // MoveElements mute nodes.positions avant le solve : on garde les positions
-  // d'origine pour que la mise à jour des contraintes voie un vrai "avant".
+  // MoveElements mute nodes.positions avant le solve : on garde les positions d'origine pour que la mise à jour des contraintes voie un vrai "avant".
   let preMovePositions: Map<string, Point2> | undefined = undefined;
   /** The bundle's triggers of one type, narrowed to it. */
   const triggers_of = <T extends Action["type"]>(type: T) =>
@@ -218,16 +212,13 @@ export function resolveGeometricConstraints(
         break;
       case "ChangeGearRadius": {
         if (trigger.committed) {
-          // Same as a dimensioned radius: anchored at its value, so meshing and pins
-          // move the gear rather than the number the user just typed.
+          // Same as a dimensioned radius: anchored at its value, so meshing and pins move the gear rather than the number the user just typed.
           nodes.radii.set(`${trigger.id}`, trigger.newRadius);
           nodes.radMasses.set(`${trigger.id}`, 0);
           break;
         }
-        // Grab a point that slides on the gear perimeter and pull it toward
-        // the mouse. A `GearMeshing` link against a zero-radius bridge keeps
-        // |centre − bridge| = radius (radius stays a DOF), so the solver
-        // shares the correction between the radius and the centre position.
+        // Grab a point that slides on the gear perimeter and pull it toward the mouse.
+        // A `GearMeshing` link against a zero-radius bridge keeps |centre − bridge| = radius (radius stays a DOF), so the solver shares the correction between the radius and the centre position.
         const center = nodes.positions.get(`${trigger.id}`);
         const radius = nodes.radii.get(`${trigger.id}`);
         if (center && radius !== undefined) {
@@ -270,8 +261,7 @@ export function resolveGeometricConstraints(
         });
         break;
       case "ChangeBeltLength": {
-        // Momentary inextensible-belt constraint: hold the whole loop at the
-        // requested length while the gears relax to satisfy it.
+        // Momentary inextensible-belt constraint: hold the whole loop at the requested length while the gears relax to satisfy it.
         const belt = get_mechanical_element_from_id(
           trigger.id,
           mechanism.mechanicalElements,
@@ -287,15 +277,12 @@ export function resolveGeometricConstraints(
         }
         break;
       }
-      // Every other trigger type solves against the mechanism the bundle has
-      // already applied, so the value or connection it stated is already part
-      // of the graph `get_links_geometric` read above — nothing more to add here.
+      // Every other trigger type solves against the mechanism the bundle has already applied, so the value or connection it stated is already part of the graph `get_links_geometric` read above — nothing more to add here.
     }
   }
 
   // Momentary: pushes apart what this bundle detached, then it is gone.
-  // `separation_links` filters on each action's own `disconnect` flag, so
-  // calling it unconditionally is safe even when the bundle detaches nothing.
+  // `separation_links` filters on each action's own `disconnect` flag, so calling it unconditionally is safe even when the bundle detaches nothing.
   links.push(
     ...separation_links(bundleActions, mechanism, belt_terminal_axes(mechanism)),
   );
@@ -315,12 +302,10 @@ export function resolveGeometricConstraints(
     });
   }
 
-  // Ancrages pré-fusion : les clés individuelles disparaissent après la fusion Coincidence ;
-  // Math.min() propagera ensuite ces valeurs à la clé fusionnée.
+  // Ancrages pré-fusion : les clés individuelles disparaissent après la fusion Coincidence ; Math.min() propagera ensuite ces valeurs à la clé fusionnée.
   for (const trigger of triggers_of("ChangeGearRadius")) {
-    // Keep the centre stable only when the radius is free to grow (no mesh and
-    // no radius dimension). When meshed or radius-constrained, the centre must
-    // stay free so the gear can move to keep tangency / honour the held radius.
+    // Keep the centre stable only when the radius is free to grow (no mesh and no radius dimension).
+    // When meshed or radius-constrained, the centre must stay free so the gear can move to keep tangency / honour the held radius.
     const gearEl = get_mechanical_element_from_id(
       trigger.id,
       mechanism.mechanicalElements,
@@ -352,9 +337,7 @@ export function resolveGeometricConstraints(
     }
   }
 
-  // *
-  // Phase B : Adaptation du graphe de dépendances
-  // *
+  // * Phase B : Adaptation du graphe de dépendances *
 
   // Fuse coincidence links
   links.forEach((lc) => {
@@ -408,11 +391,8 @@ export function resolveGeometricConstraints(
   });
   links = links.filter((link) => link.type !== "Coincidence");
 
-  // A length the user has stated wins over the floor, however short: the two would
-  // otherwise pull the same pair of points opposite ways and settle in between,
-  // leaving the dimension silently wrong. Matched on the fused keys, so a length
-  // dimensioned edge-wise and one dimensioned between its two terminal nodes are
-  // recognised as the same statement.
+  // A length the user has stated wins over the floor, however short: the two would otherwise pull the same pair of points opposite ways and settle in between, leaving the dimension silently wrong.
+  // Matched on the fused keys, so a length dimensioned edge-wise and one dimensioned between its two terminal nodes are recognised as the same statement.
   const dimensioned = new Set(
     links
       .filter((link) => link.type === "Distance")
@@ -425,10 +405,8 @@ export function resolveGeometricConstraints(
         !dimensioned.has(key_pair(link.key1, link.key2)),
     );
 
-  // A typed value is imposed, not pulled: the node is anchored ON it and the rest of the
-  // sketch is what yields — or what reports itself violated, which is the honest answer
-  // when the value cannot be held. This has to come AFTER the fusion above, which deletes
-  // the key it was asked about and replaces the pair by its midpoint.
+  // A typed value is imposed, not pulled: the node is anchored ON it and the rest of the sketch is what yields — or what reports itself violated, which is the honest answer when the value cannot be held.
+  // This has to come AFTER the fusion above, which deletes the key it was asked about and replaces the pair by its midpoint.
   if (pin !== undefined && grabPoint instanceof Point2) {
     const key = nodes.positions.has(pin)
       ? pin
@@ -494,19 +472,18 @@ export function resolveGeometricConstraints(
   // TODO : Autres beams (dans l'ORDRE) : si il y a 3 ou plus degré de liberté ALORS contrainte de parallélisme.
   // TODO : Autres beams (dans l'ORDRE) : si il y a 3 ou plus degré de liberté ALORS contrainte de longueur.
 
-  // start with last link, which is HandleGrab if there is one
-  // let startLinkIndex: number = links.length - 1;
+  // start with last link, which is HandleGrab if there is one let startLinkIndex: number = links.length - 1;
 
   // Ordonner la liste
   links = sort_links(links, nodes.posMasses);
 
-  // console.log("pos : ", [...nodes.positions.keys()]);
-  // console.log("links : ", links);
+  // console.log("pos : ", [...nodes.positions.keys()]); console.log("links : ", links);
   /*
   console.log("DDL : ", get_geom_degrees_of_freedom(nodes, links));
   */
 
-  // 3. PBD (Position Based Dynamics)
+  // 3.
+  // PBD (Position Based Dynamics)
   const solvedNodes = PBD_kinematic_solver(
     new Map(nodes.positions),
     new Map(nodes.radii),
@@ -518,10 +495,8 @@ export function resolveGeometricConstraints(
     undefined,
     false,
     "constraints",
-    // The same bound the cursor answers to, handed to the constraints: a radius is
-    // written by meshing, by a ratio and by a belt's length as much as by the grab, and
-    // those know nothing of what one can see. In screen px through the viewport, so a
-    // gear drawn small at high zoom stays a gear one may keep.
+    // The same bound the cursor answers to, handed to the constraints: a radius is written by meshing, by a ratio and by a belt's length as much as by the grab, and those know nothing of what one can see.
+    // In screen px through the viewport, so a gear drawn small at high zoom stays a gear one may keep.
     screen2world_length(DIM.MIN_GEAR_RADIUS, mechanism.viewport),
   );
 
@@ -600,8 +575,8 @@ export function resolveGeometricConstraints(
           oldEdgeStart,
           oldEdgeEnd,
         );
-        // The label rides the gap between edge and node. A node that sat on the
-        // edge offers no gap to scale from, so the offset stays as the user left it.
+        // The label rides the gap between edge and node.
+        // A node that sat on the edge offers no gap to scale from, so the offset stays as the user left it.
         const oldGap = oldNode.distance2line(oldEdgeStart, oldEdgeEnd);
         if (oldGap > DEGENERATE_LENGTH)
           local.y *= newNode.distance2line(newEdgeStart, newEdgeEnd) / oldGap;

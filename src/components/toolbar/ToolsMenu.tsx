@@ -21,15 +21,15 @@ import { MAX_GRID_SCALE, MIN_GRID_SCALE } from "../../utils/grid";
 const VIEWPORT_BUTTON_SX = { px: 0.2, py: 0.5, borderRadius: 1 } as const;
 
 /** Zoom as a share of the framing "Recentrer" aims for — the one a document opens at, so
- *  100 % is where every mechanism starts. Kept short: three digits are plenty to place
- *  oneself, and the toolbar cannot afford a number that grows. */
+ * 100 % is where every mechanism starts.
+ * Kept short: three digits are plenty to place oneself, and the toolbar cannot afford a number that grows. */
 const format_zoom = (scale: number, reference: number): string => {
   const pct = (scale / reference) * 100;
   return pct >= 10 ? String(Math.round(pct)) : pct.toPrecision(2);
 };
 
 /** The zoom steps the buttons walk, in percent of that same framing: a click always lands
- *  on a reading one can name, which a constant ratio per click never does. */
+ * on a reading one can name, which a constant ratio per click never does. */
 const ZOOM_STEPS = [
   5, 10, 15, 20, 25, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150,
   160, 180, 200, 250, 300, 350, 400, 500, 600, 800, 1000,
@@ -39,9 +39,8 @@ const ZOOM_STEPS = [
 const STEP_EPS = 1e-6;
 
 /**
- * The scale the next step in `direction` sits at, or null at the ladder's end (or out of
- * the grid's own zoom range). A zoom set by wheel lands between steps: it snaps to the
- * next one in the direction of travel, which puts the reading back on a round value.
+ * The scale the next step in `direction` sits at, or null at the ladder's end (or out of the grid's own zoom range).
+ * A zoom set by wheel lands between steps: it snaps to the next one in the direction of travel, which puts the reading back on a round value.
  */
 const next_zoom_scale = (
   scale: number,
@@ -69,7 +68,7 @@ interface ZoomControlsProps {
 }
 
 /** The viewport stepper: the zoom steps frame the current zoom, which doubles as the
- *  "Recentrer" command — clicking it is what brings the reading back to 100 %. */
+ * "Recentrer" command — clicking it is what brings the reading back to 100 %. */
 const ZoomControls: React.FC<ZoomControlsProps> = ({
   viewport,
   recenterTarget,
@@ -120,8 +119,7 @@ const ZoomControls: React.FC<ZoomControlsProps> = ({
             fontVariantNumeric: "tabular-nums",
             lineHeight: 1,
             borderRadius: 1,
-            // Being framed on the mechanism is the neutral state: only a viewport one
-            // click away from it is worth the eye.
+            // Being framed on the mechanism is the neutral state: only a viewport one click away from it is worth the eye.
             color: "text.secondary",
             "&:hover": {
               backgroundColor: framed ? "transparent" : "action.hover",

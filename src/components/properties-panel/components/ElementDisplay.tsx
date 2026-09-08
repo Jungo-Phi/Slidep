@@ -20,9 +20,8 @@ interface ElementDisplayProps {
   trailingControls?: React.ReactNode;
   interactive?: boolean;
   /** Overrides the hover cursor when it diverges from `interactive` — e.g. a
-   *  non-interactive preview (no click, no highlight of its own) that still sits
-   *  inside a parent which opens something on click, like FrameControl's edge
-   *  display. Defaults to mirroring `interactive`. */
+   * non-interactive preview (no click, no highlight of its own) that still sits inside a parent which opens something on click, like FrameControl's edge display.
+   * Defaults to mirroring `interactive`. */
   cursor?: "pointer" | "default";
 }
 
@@ -52,13 +51,10 @@ const ElementDisplayComponent: React.FC<ElementDisplayProps> = ({
   const [inputValue, setInputValue] = useState(initialName);
   const [isEditing, setIsEditing] = useState(false);
   const [inputWidth, setInputWidth] = useState<number>(0);
-  // Suppress the select tooltip while a more specific one is showing over the same
-  // row: the rename text, or (when present) one of the trailing controls.
+  // Suppress the select tooltip while a more specific one is showing over the same row: the rename text, or (when present) one of the trailing controls.
   const [renameHovered, setRenameHovered] = useState(false);
   const [trailingHovered, setTrailingHovered] = useState(false);
-  // `hovered` below also goes true from a hover arriving elsewhere (the canvas
-  // highlighting this same element) — the right cue for the background tint, but
-  // not for the tooltip, which must only follow the pointer actually being here.
+  // `hovered` below also goes true from a hover arriving elsewhere (the canvas highlighting this same element) — the right cue for the background tint, but not for the tooltip, which must only follow the pointer actually being here.
   const [locallyHovered, setLocallyHovered] = useState(false);
 
   const inputRef = useRef<HTMLInputElement>(null);
@@ -114,10 +110,8 @@ const ElementDisplayComponent: React.FC<ElementDisplayProps> = ({
     setHoveredPart({ type: "Void", position: ZERO });
   };
 
-  // Selecting from inside the panel is an explicit "tell me more about this
-  // one" gesture: it drills down to the tab hosting the element, wherever the
-  // card sits. A canvas selection goes through neither of these and keeps the
-  // active tab.
+  // Selecting from inside the panel is an explicit "tell me more about this one" gesture: it drills down to the tab hosting the element, wherever the card sits.
+  // A canvas selection goes through neither of these and keeps the active tab.
   const handleSelect = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!element || isEditing || !interactive) return;

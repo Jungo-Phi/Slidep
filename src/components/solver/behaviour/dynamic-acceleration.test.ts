@@ -43,9 +43,7 @@ function mechanism(mechanicalElements: MechanicalElement[]): Mechanism {
   };
 }
 
-// This is what phase 4 (le champ, par coupe) leans on for the inertia term `−μ·a(s)`: the
-// accumulated `(v_after − v_before) / dt` `step_dynamic_simulation` now exposes per dof —
-// see docs/plan-efforts-interieurs.md phase 2.
+// This is what phase 4 (le champ, par coupe) leans on for the inertia term `−μ·a(s)`: the accumulated `(v_after − v_before) / dt` `step_dynamic_simulation` now exposes per dof — see docs/plan-efforts-interieurs.md phase 2.
 describe("DynamicSnapshot.accelerations", () => {
   it("un point libre en chute libre accélère de g, dès la première frame", () => {
     const MASS = id();

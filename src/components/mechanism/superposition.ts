@@ -1,9 +1,7 @@
 /**
- * Collapsing superposed edges: two edges holding the same pair of nodes draw
- * over one another and constrain the mechanism twice, so one absorbs the other.
+ * Collapsing superposed edges: two edges holding the same pair of nodes draw over one another and constrain the mechanism twice, so one absorbs the other.
  *
- * The rule itself lives in `edge-rules`; what is here is the machinery that
- * carries a fused edge's belongings over before it goes.
+ * The rule itself lives in `edge-rules`; what is here is the machinery that carries a fused edge's belongings over before it goes.
  */
 
 import type { Action } from "../../types";
@@ -39,10 +37,8 @@ interface EdgeFusion {
 /**
  * How a group of edges sharing two nodes must collapse.
  *
- * Two edges of one type are the same edge written twice: the eldest survives and
- * accumulates, so a stray second stroke over an existing bar costs nothing. Two
- * of different types are a conversion: the edge the gesture just brought takes
- * the others over, which is what draws a spring over a beam and gets a spring.
+ * Two edges of one type are the same edge written twice: the eldest survives and accumulates, so a stray second stroke over an existing bar costs nothing.
+ * Two of different types are a conversion: the edge the gesture just brought takes the others over, which is what draws a spring over a beam and gets a spring.
  *
  * `newness` ranks the candidates for that role; ties go to the youngest.
  */
@@ -83,9 +79,7 @@ function fusions_in_group(
 /**
  * Moves the nodes pinned along the absorbed edge onto the survivor.
  *
- * Only a beam carries nodes on its body, so a survivor that is not one releases
- * them instead — turning a bar into a spring drops the sliders that rode it,
- * exactly as erasing the bar would.
+ * Only a beam carries nodes on its body, so a survivor that is not one releases them instead — turning a bar into a spring drops the sliders that rode it, exactly as erasing the bar would.
  */
 function transfer_body_nodes(
   absorbedID: ID,
@@ -99,10 +93,7 @@ function transfer_body_nodes(
     const node = sim.mechanicalElements.find((el) => el.id === nodeID);
     if (!node) continue;
 
-    // Both directions are cut before the survivor is offered: `connect_node_and_edge`
-    // reads the node's `parentBeamID` to decide how to seat an edge, and would
-    // demote the survivor to a plain edge list while the absorbed one still
-    // holds that slot.
+    // Both directions are cut before the survivor is offered: `connect_node_and_edge` reads the node's `parentBeamID` to decide how to seat an edge, and would demote the survivor to a plain edge list while the absorbed one still holds that slot.
     sim.step(
       get_connection_pair_types(absorbedID, node).map((pairType) =>
         disconnect_element(node, absorbed, pairType, sim.mechanicalElements),
@@ -132,11 +123,9 @@ function transfer_body_nodes(
 }
 
 /**
- * The same constraint, said of the survivor instead of the absorbed edge, or
- * `undefined` when it says nothing about the absorbed edge.
+ * The same constraint, said of the survivor instead of the absorbed edge, or `undefined` when it says nothing about the absorbed edge.
  *
- * `reversed` tells that the survivor runs from the other node: an angle read
- * along the edge's own direction is then measured from the opposite side.
+ * `reversed` tells that the survivor runs from the other node: an angle read along the edge's own direction is then measured from the opposite side.
  */
 function retarget_constraint(
   constraint: ConstraintElement,
@@ -188,9 +177,7 @@ function names_one_element_twice(constraint: ConstraintElement): boolean {
 /**
  * Retargets every constraint held on the absorbed edge onto the survivor.
  *
- * One that would relate the survivor to itself, or repeat a relation the
- * mechanism already carries, is left where it is: the deletion that follows
- * takes it.
+ * One that would relate the survivor to itself, or repeat a relation the mechanism already carries, is left where it is: the deletion that follows takes it.
  */
 function transfer_constraints(
   absorbedID: ID,
@@ -221,12 +208,9 @@ function transfer_constraints(
 }
 
 /**
- * The same load, applied to the survivor instead of the absorbed edge, or
- * `undefined` when it must not follow.
+ * The same load, applied to the survivor instead of the absorbed edge, or `undefined` when it must not follow.
  *
- * A `reversed` survivor runs from the other node, so its two ends trade places
- * and its local frame is the absorbed one turned by half a turn — a direction
- * stored in that frame keeps its world bearing only by changing sign.
+ * A `reversed` survivor runs from the other node, so its two ends trade places and its local frame is the absorbed one turned by half a turn — a direction stored in that frame keeps its world bearing only by changing sign.
  */
 function retarget_load(
   load: LoadElement,
@@ -304,11 +288,9 @@ function transfer_loads(
 }
 
 /**
- * Fuses the absorbed edge into the survivor: its body nodes, constraints and
- * loads move over, then it is deleted like any other element.
+ * Fuses the absorbed edge into the survivor: its body nodes, constraints and loads move over, then it is deleted like any other element.
  *
- * The transfers run first on purpose — whatever they have moved no longer names
- * the absorbed edge, so the deletion only takes what could not follow.
+ * The transfers run first on purpose — whatever they have moved no longer names the absorbed edge, so the deletion only takes what could not follow.
  */
 export function fuse_edges(
   survivorID: ID,
@@ -357,13 +339,10 @@ function terminals_held(
 }
 
 /**
- * Drops a junction the gesture minted and the fusion has made pointless: a join
- * is created to hold two edge ends together, and one of them has just been
- * absorbed into the other.
+ * Drops a junction the gesture minted and the fusion has made pointless: a join is created to hold two edge ends together, and one of them has just been absorbed into the other.
  *
- * Only joins born in this very bundle are considered — one the user placed is
- * theirs to keep, however little it holds. A join still pinned to a body, or
- * holding both ends of a belt it closes, is doing its job and stays.
+ * Only joins born in this very bundle are considered — one the user placed is theirs to keep, however little it holds.
+ * A join still pinned to a body, or holding both ends of a belt it closes, is doing its job and stays.
  */
 function drop_spent_junctions(
   created: ReadonlySet<ID>,
@@ -392,10 +371,8 @@ function drop_spent_junctions(
 /**
  * The fusions a state owes to the superposition invariant, as one bundle.
  *
- * `newness` ranks the edges the gesture just brought; among edges of different
- * types it decides who survives, and it may be empty — a fusion born of two
- * nodes merging brought no edge at all. `created` names what the bundle minted,
- * so a junction the fusion strands can be taken back.
+ * `newness` ranks the edges the gesture just brought; among edges of different types it decides who survives, and it may be empty — a fusion born of two nodes merging brought no edge at all.
+ * `created` names what the bundle minted, so a junction the fusion strands can be taken back.
  */
 export function superposition_fusions(
   mechanicalElements: MechanicalElement[],
@@ -433,9 +410,8 @@ const RETERMINATED = 1;
 /**
  * How firmly a bundle designates each edge as the one the gesture brought.
  *
- * The two ranks are not cosmetic. Seating a new spring on a bar's free end mints
- * a join, and that join re-terminates the bar too — so re-termination alone
- * would let the bar pass for the newcomer and swallow the spring the user drew.
+ * The two ranks are not cosmetic.
+ * Seating a new spring on a bar's free end mints a join, and that join re-terminates the bar too — so re-termination alone would let the bar pass for the newcomer and swallow the spring the user drew.
  * Only a drag, which creates nothing, wins on re-termination.
  */
 export function edge_newness(actions: readonly Action[]): Map<ID, number> {

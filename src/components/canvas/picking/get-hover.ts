@@ -59,8 +59,8 @@ import { gear_grab_handle } from "../../solver/kinematics/geometric-solver";
 import { out_of_sizing_reach } from "./hover-bounds";
 
 /**
- * How a target answers one tool, per family. `doc/hover-matrix.md` is the
- * readable form of the table below and explains every empty cell.
+ * How a target answers one tool, per family.
+ * `doc/hover-matrix.md` is the readable form of the table below and explains every empty cell.
  */
 type NodeProbe =
   /** The node itself. */
@@ -103,12 +103,12 @@ export type BeltProbe =
   | "ends";
 
 /** Which of the overlays drawn over the mechanism — constraints and loads —
- *  a tool may pick. */
+ * a tool may pick. */
 export type OverlayProbe =
   /** Both, as a selection tool takes anything. */
   | "all"
   /** Constraints only: the dimensioning tool reaches its own labels to edit
-   *  them, and a load is none of its business. */
+   * them, and a load is none of its business. */
   | "constraints";
 
 export type HoverTargets = {
@@ -118,12 +118,10 @@ export type HoverTargets = {
   belt?: BeltProbe;
   overlays?: OverlayProbe;
   /** The probe badge, picked to edit what its host measures. The eraser is
-   *  deliberately not among these: a probe is removed with its host, and a
-   *  badge sitting off to the side must not become a way to delete it. */
+   * deliberately not among these: a probe is removed with its host, and a badge sitting off to the side must not become a way to delete it. */
   probeBadge?: true;
   /** The rotation-direction arrow drawn on a motorized pivot. Excluded from
-   *  the eraser for the same reason as `probeBadge`: it flips the motor, it
-   *  does not remove anything. */
+   * the eraser for the same reason as `probeBadge`: it flips the motor, it does not remove anything. */
   motorArrow?: true;
 };
 
@@ -155,11 +153,10 @@ const SIZING_GEAR: HoverTargets = {
 };
 
 /**
- * What the ruler aims at: the landmarks a drawing is dimensioned between. A gear is taken by
- * its rim, and `"whole"` is what says so — the ruler keeps the gear, not the point of it under
- * the cursor, and settles that point against its other end. A gear's centre is reached through
- * its axle, a node like any other. Belts are left out: a point on a route of tangents and arcs
- * is no landmark.
+ * What the ruler aims at: the landmarks a drawing is dimensioned between.
+ * A gear is taken by its rim, and `"whole"` is what says so — the ruler keeps the gear, not the point of it under the cursor, and settles that point against its other end.
+ * A gear's centre is reached through its axle, a node like any other.
+ * Belts are left out: a point on a route of tangents and arcs is no landmark.
  */
 const MEASURING: HoverTargets = {
   node: "centre",
@@ -171,10 +168,8 @@ const MEASURING: HoverTargets = {
 const NOTHING: HoverTargets = {};
 
 /**
- * States where grabbing the floor is a meaningful gesture: idle browsing, and the
- * floor's own handles. Everywhere else — placing or dragging a mechanical element,
- * say — the cursor is choosing a point for that gesture, not reaching for the floor,
- * even when it happens to pass near the line.
+ * States where grabbing the floor is a meaningful gesture: idle browsing, and the floor's own handles.
+ * Everywhere else — placing or dragging a mechanical element, say — the cursor is choosing a point for that gesture, not reaching for the floor, even when it happens to pass near the line.
  */
 const FLOOR_HOVER_STATES = new Set<CanvasStateType>([
   "Selecting",
@@ -188,10 +183,8 @@ const FLOOR_HOVER_STATES = new Set<CanvasStateType>([
 /**
  * The one place a tool declares what it may pick.
  *
- * `Record<CanvasStateType, …>` is the point: a new state does not compile until
- * it has answered for all six families. Before this table the answer was spread
- * over six parallel `switch`, and forgetting one was silent — the tool simply
- * stopped seeing a kind of target.
+ * `Record<CanvasStateType, …>` is the point: a new state does not compile until it has answered for all six families.
+ * Before this table the answer was spread over six parallel `switch`, and forgetting one was silent — the tool simply stopped seeing a kind of target.
  */
 export const HOVER_TARGETS: Record<CanvasStateType, HoverTargets> = {
   Selecting: SELECT_ALL,
@@ -259,8 +252,7 @@ export const HOVER_TARGETS: Record<CanvasStateType, HoverTargets> = {
   Measured: MEASURING,
 
   // A belt is measured whole, from its body, so only DimensionStart sees it.
-  // Dimensions already placed are targets too, so the armed tool can edit one
-  // without being put down first.
+  // Dimensions already placed are targets too, so the armed tool can edit one without being put down first.
   DimensionStart: {
     node: "centre",
     gear: "rim",
@@ -292,8 +284,8 @@ export const HOVER_TARGETS: Record<CanvasStateType, HoverTargets> = {
 };
 
 /**
- * Where the edge being drawn or dragged runs from, for the "drawn past a node"
- * pick. Only a beam takes a node on its body.
+ * Where the edge being drawn or dragged runs from, for the "drawn past a node" pick.
+ * Only a beam takes a node on its body.
  */
 function drawn_past_base(
   state: CanvasState,
@@ -318,18 +310,13 @@ function drawn_past_base(
 /**
  * Where the part being dragged actually sits, once the solver has had its say.
  *
- * A drag does not pin anything to the cursor: `resolveGeometricConstraints`
- * frees the grabbed part and pulls it with a `HandleGrab` that competes with
- * every other constraint. What comes back is what the mechanism granted, and it
- * falls short whenever an anchor, a dimension or a slide holds the part back.
+ * A drag does not pin anything to the cursor: `resolveGeometricConstraints` frees the grabbed part and pulls it with a `HandleGrab` that competes with every other constraint.
+ * What comes back is what the mechanism granted, and it falls short whenever an anchor, a dimension or a slide holds the part back.
  *
- * Every case here must answer with the handle that solve took hold of, built
- * from the same target it was handed. Most grab a part the mechanism carries,
- * so reading it back is an identity; the one that does not borrows the
- * solver's own constructor rather than repeating it.
+ * Every case here must answer with the handle that solve took hold of, built from the same target it was handed.
+ * Most grab a part the mechanism carries, so reading it back is an identity; the one that does not borrows the solver's own constructor rather than repeating it.
  *
- * Belts are left out on purpose: a terminal rides its pulley's rim by
- * construction, so it stands off the cursor even when nothing is holding it.
+ * Belts are left out on purpose: a terminal rides its pulley's rim by construction, so it stands off the cursor even when nothing is holding it.
  */
 function granted_grab_point(
   state: CanvasState,
@@ -354,10 +341,8 @@ function granted_grab_point(
       return "positionStart" in dragged
         ? dragged.positionStart.lerp(dragged.positionEnd, state.t)
         : undefined;
-    // This one grabs no part of the gear but a handle the solver makes: the
-    // rim point facing what was asked. Read back that way, the caller's
-    // comparison reduces to the only thing this gesture ever produces — a
-    // radius.
+    // This one grabs no part of the gear but a handle the solver makes: the rim point facing what was asked.
+    // Read back that way, the caller's comparison reduces to the only thing this gesture ever produces — a radius.
     case "ChangingGearRadius":
       return dragged.type === "gear"
         ? gear_grab_handle(dragged.position, dragged.radius, askedPosition)
@@ -368,9 +353,8 @@ function granted_grab_point(
 }
 
 /**
- * The centre of the gear a sizing gesture is bringing to a target. It is what
- * both the gear tangency and the belt tangency are measured from — a rim point
- * would answer a different question.
+ * The centre of the gear a sizing gesture is bringing to a target.
+ * It is what both the gear tangency and the belt tangency are measured from — a rim point would answer a different question.
  */
 function placed_gear_center(
   state: CanvasState,
@@ -398,10 +382,8 @@ function probe_node(
   const center = world2screen(node.position, viewport);
   const distance = mouseScreen.distance_to(center);
 
-  // A moment aimed at an axle lands on the gear it carries: reaching for the
-  // centre of a gear is a natural way to designate that gear, and the axle
-  // itself takes no moment. Without this, only the rim is a target — the whole
-  // middle of the gear is a dead zone.
+  // A moment aimed at an axle lands on the gear it carries: reaching for the centre of a gear is a natural way to designate that gear, and the axle itself takes no moment.
+  // Without this, only the rim is a target — the whole middle of the gear is a dead zone.
   if (mode === "carried-gear") {
     if (distance > HIT_TOLERANCE.NODE) return null;
     if (!("fixedGearsIDs" in node) || node.fixedGearsIDs.length === 0)
@@ -507,8 +489,7 @@ function probe_edge(
 ): HoveredPart | null {
   const nodeStart = world2screen(edge.positionStart, viewport);
   const nodeEnd = world2screen(edge.positionEnd, viewport);
-  // The terminals answer on their nodes, where they are drawn and where the
-  // gesture grabs them; only the body follows the offset.
+  // The terminals answer on their nodes, where they are drawn and where the gesture grabs them; only the body follows the offset.
   const { start, end } = offset_ends(nodeStart, nodeEnd, lateralOffset);
   if (mode !== "body" && mode !== "body-centre") {
     if (mouseScreen.distance_to(nodeStart) <= HIT_TOLERANCE.NODE)
@@ -531,8 +512,7 @@ function probe_edge(
     if (mode === "ends+beam-body" && edge.type !== "beam") return null;
   }
 
-  // Aimed at where the body is drawn, but answering on the axis: the offset is
-  // a way of showing two elements at once, not a second place for one to be.
+  // Aimed at where the body is drawn, but answering on the axis: the offset is a way of showing two elements at once, not a second place for one to be.
   if (mouseScreen.distance2segment(start, end) > HIT_TOLERANCE.EDGE)
     return null;
   return {
@@ -585,19 +565,16 @@ function probe_belt(
     if (mode === "ends") return null;
   }
 
-  // `section` is the index of the piece in this list, closed loop included, so
-  // hit-testing and drawing name the same stretches of belt.
+  // `section` is the index of the piece in this list, closed loop included, so hit-testing and drawing name the same stretches of belt.
   const { vias, closed } = get_belt_path(belt, mechanicalElements);
   const pieces = belt_pieces(vias, closed);
 
-  // Arcs first: a stretch wrapped on a pulley wins over the runs it joins, whose
-  // ends it touches.
+  // Arcs first: a stretch wrapped on a pulley wins over the runs it joins, whose ends it touches.
   if (mode === "full" || mode === "runs+arcs") {
     for (let section = 0; section < pieces.length; section++) {
       const piece = pieces[section];
       if (piece.kind !== "arc") continue;
-      // Clamped to the swept sector, so the arc keeps its extent across the ±π
-      // seam and never answers on the pulley's free side.
+      // Clamped to the swept sector, so the arc keeps its extent across the ±π seam and never answers on the pulley's free side.
       const onArc = nearest_point_on_piece(mousePos, piece);
       if (mousePos.distance_to(onArc) > HIT_TOLERANCE.NODE / viewport.scale / 2)
         continue;
@@ -622,8 +599,7 @@ function probe_belt(
       continue;
 
     if (mode === "runs-tangent") {
-      // The run answers only where the gear can actually meet it: its centre
-      // must project inside the segment, not past one of its ends.
+      // The run answers only where the gear can actually meet it: its centre must project inside the segment, not past one of its ends.
       if (
         !gearRef ||
         gearRef.distance2segment(from, to) > gearRef.distance2line(from, to)
@@ -657,14 +633,10 @@ function probe_belt(
 /**
  * Returns the hovered part of the element, or null if no part is hovered.
  *
- * Hit-testing is done in screen px, the unit every `HIT_TOLERANCE` is written
- * in. The answer goes back to world, as `HoveredPart` demands: an element's own
- * anchor is handed over untouched — never round-tripped through the screen,
- * whose float noise would break the `.equals` the reducer compares moves with —
- * and only a point derived from the cursor is converted back.
+ * Hit-testing is done in screen px, the unit every `HIT_TOLERANCE` is written in.
+ * The answer goes back to world, as `HoveredPart` demands: an element's own anchor is handed over untouched — never round-tripped through the screen, whose float noise would break the `.equals` the reducer compares moves with — and only a point derived from the cursor is converted back.
  *
- * The belt is the exception, still probed in world: its path carries per-via
- * winding directions that the y flip reverses (see `probe_belt`).
+ * The belt is the exception, still probed in world: its path carries per-via winding directions that the y flip reverses (see `probe_belt`).
  */
 function get_hovered_part_of_element(
   element: UnionElement,
@@ -871,9 +843,8 @@ function get_hovered_part_of_element(
           id: element.id,
           part: "body",
           deleting: state.type === "Erasing",
-          // The tips are the profile at t = 0 and t = 1, so the parameter along
-          // the crest line is the parameter along the beam. A load with both
-          // ends at zero has no crest line to read it off — grab its middle.
+          // The tips are the profile at t = 0 and t = 1, so the parameter along the crest line is the parameter along the beam.
+          // A load with both ends at zero has no crest line to read it off — grab its middle.
           t: mouseScreen.parameter_on_segment(tipStart, tipEnd),
         };
       }
@@ -906,13 +877,11 @@ function get_hovered_part_of_element(
 }
 
 /**
- * Where the cursor is held back to when an opaque element refuses it: the edge
- * of its hit zone. Nothing can then be dropped stacked on top of it — the
- * refusal is felt as a resistance rather than read as an error.
+ * Where the cursor is held back to when an opaque element refuses it: the edge of its hit zone.
+ * Nothing can then be dropped stacked on top of it — the refusal is felt as a resistance rather than read as an error.
  *
- * Only a refusal with a point to push away from pushes back: a node's centre, or
- * the terminal of an edge. A gear is refused at its rim and a body along its
- * length, and neither has an inside to be pushed out of.
+ * Only a refusal with a point to push away from pushes back: a node's centre, or the terminal of an edge.
+ * A gear is refused at its rim and a body along its length, and neither has an inside to be pushed out of.
  */
 function pushed_out_of(
   element: UnionElement,
@@ -967,13 +936,9 @@ function hovered_probe_badge(
 }
 
 /**
- * The geometric-constraint badge (align/normal/parallel/equal) under the cursor, if the tool
- * may pick a constraint at all.
+ * The geometric-constraint badge (align/normal/parallel/equal) under the cursor, if the tool may pick a constraint at all.
  *
- * A badge answers only where one is drawn, so the gates below are those of the badge loop in
- * `draw_mechanism`: `visibleConstraints` — a badge not yet revealed by a hover on its host is
- * no target, and reaching into the empty space where it would sit must not conjure it — plus
- * the host and the constraint being drawable at all.
+ * A badge answers only where one is drawn, so the gates below are those of the badge loop in `draw_mechanism`: `visibleConstraints` — a badge not yet revealed by a hover on its host is no target, and reaching into the empty space where it would sit must not conjure it — plus the host and the constraint being drawable at all.
  */
 function hovered_geometric_badge(
   mouseScreen: ScreenPoint,
@@ -1017,9 +982,7 @@ function hovered_geometric_badge(
 const ARROW_TAU = 2 * Math.PI;
 
 /**
- * Whether `angle` falls on the arc from `start` to `end`, swept the way
- * `ctx.arc`'s own `anticlockwise` flag would draw it, with `margin` radians
- * of slack on each end — the arrow head is wider than the stroke it caps.
+ * Whether `angle` falls on the arc from `start` to `end`, swept the way `ctx.arc`'s own `anticlockwise` flag would draw it, with `margin` radians of slack on each end — the arrow head is wider than the stroke it caps.
  */
 function angle_on_arc(
   angle: number,
@@ -1036,11 +999,8 @@ function angle_on_arc(
 }
 
 /**
- * The motor's rotation-direction arrow under the cursor, if the tool may pick
- * one at all. Hit-tested on the arc the arrow is actually drawn on — its
- * radius (`MOTOR_ARROW_RADIUS`) and its angular span, not the full ring
- * around the motor's disc, so the disc stays a normal node target and the
- * dead half of the circle does not answer for the arrow.
+ * The motor's rotation-direction arrow under the cursor, if the tool may pick one at all.
+ * Hit-tested on the arc the arrow is actually drawn on — its radius (`MOTOR_ARROW_RADIUS`) and its angular span, not the full ring around the motor's disc, so the disc stays a normal node target and the dead half of the circle does not answer for the arrow.
  */
 function hovered_motor_arrow(
   mouseScreen: ScreenPoint,
@@ -1080,8 +1040,7 @@ function hovered_motor_arrow(
 }
 
 /**
- * Detects which part of a mechanism is being hovered at a given point
- * Returns the hovered part and the corresponding point on that part
+ * Detects which part of a mechanism is being hovered at a given point Returns the hovered part and the corresponding point on that part
  */
 export function get_hovered_part(
   mechanicalElements: MechanicalElement[],
@@ -1096,9 +1055,8 @@ export function get_hovered_part(
   askedPosition?: Point2,
   isSimulating: boolean = false,
 ): HoveredPart {
-  // Picking only: an element being dragged is under the cursor by construction
-  // and must never be its own target. What it may legally reach is decided by
-  // legality_for_state.
+  // Picking only: an element being dragged is under the cursor by construction and must never be its own target.
+  // What it may legally reach is decided by legality_for_state.
   const excluded_elements: ID[] = [];
   if (
     state.type === "MovingNode" ||
@@ -1109,10 +1067,8 @@ export function get_hovered_part(
   ) {
     excluded_elements.push(state.elementID);
   }
-  // The nodes a gear carries ride its rim, so they sit under the cursor for the
-  // whole gesture and would answer with the radius the gear already has —
-  // locking it on its own value. Its axle is excluded on the same grounds: it
-  // is the centre the radius is measured from.
+  // The nodes a gear carries ride its rim, so they sit under the cursor for the whole gesture and would answer with the radius the gear already has — locking it on its own value.
+  // Its axle is excluded on the same grounds: it is the centre the radius is measured from.
   if (state.type === "ChangingGearRadius") {
     const sized = get_mechanical_element_from_id(
       state.elementID,
@@ -1120,9 +1076,8 @@ export function get_hovered_part(
     ) as GearElement;
     excluded_elements.push(...sized.fixedNodesBodyIDs, sized.parentAxleID);
   }
-  // A node holding a belt terminal drags that terminal onto the cursor, so the
-  // main loop would keep answering with the held end. Exclude such a belt and
-  // let the closure section below offer its *other* terminal instead.
+  // A node holding a belt terminal drags that terminal onto the cursor, so the main loop would keep answering with the held end.
+  // Exclude such a belt and let the closure section below offer its *other* terminal instead.
   if (state.type === "MovingNode") {
     for (const element of mechanicalElements)
       if (
@@ -1147,14 +1102,11 @@ export function get_hovered_part(
   const is_legal = legality_for_state(state, mechanicalElements);
   // The same map the drawing reads, so the cursor answers where the stroke is.
   const parallelOffsets = parallel_edge_offsets(mechanicalElements);
-  // What the sweeps below check their targets against: an element naming an absent one is not
-  // drawn, so it must not answer either — and probing it would resolve that name through a
-  // strict getter, which throws.
+  // What the sweeps below check their targets against: an element naming an absent one is not drawn, so it must not answer either — and probing it would resolve that name through a strict getter, which throws.
   const present = new Set<ID>(mechanicalElements.map((element) => element.id));
 
   const position = mousePos.clone();
-  // Picking is a screen question — every `HIT_TOLERANCE` is a number of pixels —
-  // so the cursor is converted once here and compared in that space throughout.
+  // Picking is a screen question — every `HIT_TOLERANCE` is a number of pixels — so the cursor is converted once here and compared in that space throughout.
   const mouseScreen = world2screen(mousePos, viewport);
 
   const elements: UnionElement[] = (mechanicalElements as UnionElement[])
@@ -1189,14 +1141,10 @@ export function get_hovered_part(
   }
 
   // A drag can only meet what it reaches.
-  // When the solver has granted the grabbed part a place short of what the gesture asked for
-  // (an anchor holding it, a dimensioned length, a slide it cannot leave)
-  // whatever lies under the cursor is not under the element, and aiming at it targets nothing.
+  // When the solver has granted the grabbed part a place short of what the gesture asked for (an anchor holding it, a dimensioned length, a slide it cannot leave) whatever lies under the cursor is not under the element, and aiming at it targets nothing.
   // Ignored rather than refused: there is no gesture to explain, the cursor is simply over empty space as far as this element is concerned.
   //
-  // Measured against what was asked rather than against the cursor,
-  // because the hover runs before the move of its own frame is applied: the cursor has already advanced past the position this state answers to,
-  // and that head start is not a constraint holding anything back.
+  // Measured against what was asked rather than against the cursor, because the hover runs before the move of its own frame is applied: the cursor has already advanced past the position this state answers to, and that head start is not a constraint holding anything back.
   if (askedPosition) {
     const granted = granted_grab_point(
       state,
@@ -1214,17 +1162,12 @@ export function get_hovered_part(
 
   // A node the bar is merely drawn PAST, held back until the sweep is over.
   //
-  // That hit only asks the node to lie somewhere along the line, so a whole row
-  // of aligned nodes answers to it at once — and the first one swept would win
-  // over the node the cursor is actually sitting on, which is never what was
-  // aimed at. A centre under the cursor outranks them all; among themselves, the
-  // nearest one does.
+  // That hit only asks the node to lie somewhere along the line, so a whole row of aligned nodes answers to it at once — and the first one swept would win over the node the cursor is actually sitting on, which is never what was aimed at.
+  // A centre under the cursor outranks them all; among themselves, the nearest one does.
   let past: { part: HoveredPart; distance: number } | undefined;
 
   for (const type of HOVER_ORDER) {
-    // Badges are not elements, so the family is swept whole at the rank
-    // `DRAWING_ORDER` gives "probe" — above its host, which the badge overlaps
-    // and which would otherwise answer for it.
+    // Badges are not elements, so the family is swept whole at the rank `DRAWING_ORDER` gives "probe" — above its host, which the badge overlaps and which would otherwise answer for it.
     if (type === "probe") {
       const badgeHover = hovered_probe_badge(
         mouseScreen,
@@ -1237,9 +1180,7 @@ export function get_hovered_part(
       if (badgeHover) return badgeHover;
       continue;
     }
-    // Same reasoning as "probe": a geometric badge (align/normal/parallel/equal)
-    // is anchored to its host(s), not an element of its own, so it is swept as
-    // a family rather than through the per-element switch below.
+    // Same reasoning as "probe": a geometric badge (align/normal/parallel/equal) is anchored to its host(s), not an element of its own, so it is swept as a family rather than through the per-element switch below.
     if (type === "geometricBadge") {
       const badgeHover = hovered_geometric_badge(
         mouseScreen,
@@ -1255,8 +1196,7 @@ export function get_hovered_part(
       if (badgeHover) return badgeHover;
       continue;
     }
-    // Same reasoning as "probe": the arrow rides on the pivot it belongs to,
-    // above it, so it must be swept before that pivot answers instead.
+    // Same reasoning as "probe": the arrow rides on the pivot it belongs to, above it, so it must be swept before that pivot answers instead.
     if (type === "motorArrow") {
       const arrowHover = hovered_motor_arrow(
         mouseScreen,
@@ -1279,12 +1219,9 @@ export function get_hovered_part(
         !visibleConstraints.has(element.id)
       )
         continue;
-      // A simulation runs on the model it was compiled from: nothing a constraint carries
-      // can be edited, moved or removed until it ends, so the ones still drawn — the
-      // constraints tab shows them all — answer to no cursor.
+      // A simulation runs on the model it was compiled from: nothing a constraint carries can be edited, moved or removed until it ends, so the ones still drawn — the constraints tab shows them all — answer to no cursor.
       if (isSimulating && is_constraint_type(element.type)) continue;
-      // Geometry first: legality is only consulted for an element the cursor is
-      // actually over, otherwise an opaque refusal would block from anywhere.
+      // Geometry first: legality is only consulted for an element the cursor is actually over, otherwise an opaque refusal would block from anywhere.
       const hoveredPart = get_hovered_part_of_element(
         element,
         mechanicalElements,
@@ -1306,10 +1243,7 @@ export function get_hovered_part(
         continue;
       const verdict = is_legal(element, hoveredPart);
       if (verdict.allowed) {
-        // Landing back on the gear the belt started on, anywhere on its rim
-        // (not just the exact starting pixel, already caught above): the same
-        // closing gesture as returning to the start, since a bare via there
-        // would just duplicate the gear in the route instead of shutting the loop.
+        // Landing back on the gear the belt started on, anywhere on its rim (not just the exact starting pixel, already caught above): the same closing gesture as returning to the start, since a bare via there would just duplicate the gear in the route instead of shutting the loop.
         if (
           state.type === "PlacingBeltEnd" &&
           hoveredPart.type === "GearTooth" &&
@@ -1400,9 +1334,8 @@ export function get_hovered_part(
       };
     }
   } else if (state.type === "MovingNode") {
-    // A node holding one belt terminal, dragged onto that belt's *other*
-    // terminal, closes the loop by becoming its junction. Offer the end the node
-    // does not hold; the one it holds rides the cursor and is never the target.
+    // A node holding one belt terminal, dragged onto that belt's *other* terminal, closes the loop by becoming its junction.
+    // Offer the end the node does not hold; the one it holds rides the cursor and is never the target.
     for (const belt of mechanicalElements) {
       if (belt.type !== "belt") continue;
       const holdsStart = belt.fixedNodeStartID === state.elementID;
@@ -1432,8 +1365,7 @@ export function get_hovered_part(
   }
 
   // The floor's handles: checked last, so an overlapping mechanism element always wins.
-  // Only where grabbing the floor makes sense — a placement/drag gesture passing near
-  // the line is choosing a point for that gesture, not reaching for the floor.
+  // Only where grabbing the floor makes sense — a placement/drag gesture passing near the line is choosing a point for that gesture, not reaching for the floor.
   if (floor.enabled && FLOOR_HOVER_STATES.has(state.type)) {
     const { anchor, direction, angleHandle, angleLabel } = floor_screen_geometry(
       viewport,
@@ -1441,10 +1373,8 @@ export function get_hovered_part(
     );
     if (mouseScreen.distance_to(angleHandle) <= HIT_TOLERANCE.NODE)
       return { type: "FloorAngle", position: screen2world(angleHandle, viewport) };
-    // The label reads as a click target only where it's actually drawn — see the same
-    // threshold `draw_floor` hides it behind at exactly flat. A separate hover from the
-    // handle above: one drags the angle, the other opens its value to type, the same
-    // split a load's body and its value label have.
+    // The label reads as a click target only where it's actually drawn — see the same threshold `draw_floor` hides it behind at exactly flat.
+    // A separate hover from the handle above: one drags the angle, the other opens its value to type, the same split a load's body and its value label have.
     const angleLabelShown = Math.abs(floor_acute_angle(floor.angle)) > 1e-6;
     if (
       angleLabelShown &&

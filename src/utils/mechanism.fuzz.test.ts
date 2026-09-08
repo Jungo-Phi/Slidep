@@ -27,12 +27,10 @@ import {
 import { Action, ID, MaterialDef, MechanicalElement, ProfileDef, UnionElement } from "../types";
 
 /**
- * Property: any state reachable through gestures the UI offers is a valid
- * mechanism. A counter-example is always a real defect — either the operation
- * is wrong, or the interface should not have offered it.
+ * Property: any state reachable through gestures the UI offers is a valid mechanism.
+ * A counter-example is always a real defect — either the operation is wrong, or the interface should not have offered it.
  *
- * Commands never fabricate an Action: they call the very functions the canvas
- * calls, with operands drawn from the current state.
+ * Commands never fabricate an Action: they call the very functions the canvas calls, with operands drawn from the current state.
  */
 
 let counter = 0;
@@ -42,7 +40,7 @@ const fresh = (): ID => {
 };
 
 /** Every generated beam takes this one couple — no gadget or command here ever touches the
- *  library, so a single fixed pair stays valid through the whole fuzz run. */
+ * library, so a single fixed pair stays valid through the whole fuzz run. */
 const MATERIAL_ID = fresh();
 const PROFILE_ID = fresh();
 const MATERIALS: MaterialDef[] = [
@@ -204,7 +202,7 @@ const EDGE_PARTS = ["start", "end", "body"] as const;
 const SELECT_ALL_TARGETS = HOVER_TARGETS.Selecting;
 
 /** A belt is only ever an `Edge` at its two terminals: its body is a `BeltBody`,
- *  reported with a section index that this generator cannot produce yet. */
+ * reported with a section index that this generator cannot produce yet. */
 const BELT_PARTS = ["start", "end"] as const;
 
 /** Which parts of an edge a probe mode reports. */
@@ -227,19 +225,15 @@ function edge_parts(
 
 /** Which parts of a belt a probe mode reports, of those this generator can build. */
 function belt_parts(mode: BeltProbe): readonly ("start" | "end")[] {
-  // "runs+arcs" and "runs-tangent" report `BeltBody` only, which needs a section
-  // index — out of reach until `parts_of` can produce one.
+  // "runs+arcs" and "runs-tangent" report `BeltBody` only, which needs a section index — out of reach until `parts_of` can produce one.
   return mode === "ends" || mode === "full" ? BELT_PARTS : [];
 }
 
 /**
  * The parts of an element a tool would report under the cursor.
  *
- * `legality_for_state` is only half the oracle: a rule refuses a target the tool
- * can *see*, while `HOVER_TARGETS` decides which families it looks at at all.
- * Handing a tool a part it never probes explores a gesture the interface has no
- * way to produce, and the resulting invalid state accuses the code of a defect
- * that belongs to the generator.
+ * `legality_for_state` is only half the oracle: a rule refuses a target the tool can *see*, while `HOVER_TARGETS` decides which families it looks at at all.
+ * Handing a tool a part it never probes explores a gesture the interface has no way to produce, and the resulting invalid state accuses the code of a defect that belongs to the generator.
  */
 function parts_of(
   element: MechanicalElement,
@@ -289,10 +283,8 @@ function parts_of(
 // ─── Tools ────────────────────────────────────────────────────────────────────
 
 /**
- * The two placement state machines, driven exactly as the canvas drives them on
- * mouse-down. Building a belt, a motor or a load through its own tool is what
- * keeps the generator from having to hand-craft those shapes — a hand-made
- * gadget that is subtly wrong makes the code under test look guilty.
+ * The two placement state machines, driven exactly as the canvas drives them on mouse-down.
+ * Building a belt, a motor or a load through its own tool is what keeps the generator from having to hand-craft those shapes — a hand-made gadget that is subtly wrong makes the code under test look guilty.
  */
 type PlacementToolState = Parameters<typeof handle_placing_element>[0];
 type ConstraintToolState = Parameters<typeof handle_placing_constraint>[0];
@@ -348,7 +340,7 @@ const CONSTRAINT_TOOL_TYPES = [
 type Assert<T extends true> = T;
 
 /** A state a handler accepts but the lists above forgot would silently become
- *  "idle", and every gesture it leads to would leave the explored space. */
+ * "idle", and every gesture it leads to would leave the explored space. */
 export type NoUnlistedPlacementTool = Assert<
   Exclude<
     PlacementToolState["type"],
@@ -371,9 +363,8 @@ function is_placement_tool(state: ToolState): state is PlacementToolState {
 }
 
 /**
- * The tool a returned canvas state continues, if any. A gesture that ends in a
- * value editor or a probe popover leaves both families: the generator treats it
- * as the user dismissing it, which is the only outcome it can express.
+ * The tool a returned canvas state continues, if any.
+ * A gesture that ends in a value editor or a probe popover leaves both families: the generator treats it as the user dismissing it, which is the only outcome it can express.
  */
 function as_tool(state: CanvasState): ToolState | undefined {
   const known = [
@@ -384,9 +375,8 @@ function as_tool(state: CanvasState): ToolState | undefined {
 }
 
 /**
- * The tools a click may start from — the palette, in effect. `PlacingProbe` is
- * left out: it opens a metric popover the generator has no way to answer, so it
- * would only spend budget returning to idle.
+ * The tools a click may start from — the palette, in effect.
+ * `PlacingProbe` is left out: it opens a metric popover the generator has no way to answer, so it would only spend budget returning to idle.
  */
 const ROOT_TOOLS: ToolState[] = [
   { type: "PlacingBeamStart" },
@@ -486,8 +476,8 @@ function drag_state(selectedPart: HoveredPart): CanvasState {
 }
 
 /**
- * What the canvas carries between two clicks. `tool` is the active tool and how
- * far it is through its own gesture — a belt is three clicks, a dimension two.
+ * What the canvas carries between two clicks.
+ * `tool` is the active tool and how far it is through its own gesture — a belt is three clicks, a dimension two.
  * `undefined` is the selection tool: any drag or delete goes back to it.
  */
 interface Session {
@@ -511,9 +501,7 @@ function is_offered(
 }
 
 /**
- * Applies a bundle the way the application does, minus the geometric solver: the
- * invariant corrections `apply_actions` appends are part of the gesture, so a
- * harness that skipped them would judge a state the user is never shown.
+ * Applies a bundle the way the application does, minus the geometric solver: the invariant corrections `apply_actions` appends are part of the gesture, so a harness that skipped them would judge a state the user is never shown.
  */
 function apply(mechanism: Mechanism, actions: Action[]): Mechanism {
   if (actions.length === 0) return mechanism;
@@ -546,14 +534,12 @@ function run_command(session: Session, command: Command): Session {
         tool: as_tool(result.newCanvasState ?? state),
       };
     }
-    // Dragging and erasing belong to the selection tool: reaching for them puts
-    // whatever tool was active back to idle.
+    // Dragging and erasing belong to the selection tool: reaching for them puts whatever tool was active back to idle.
     case "connect": {
       const selected = pick(mechanicalElements, command.a);
       const hovered = pick(mechanicalElements, command.b);
       if (selected.id === hovered.id) return session;
-      // The grabbed part comes from the selection tool; the target comes from
-      // what the drag itself probes.
+      // The grabbed part comes from the selection tool; the target comes from what the drag itself probes.
       const selectedParts = parts_of(selected);
       if (selectedParts.length === 0) return { mechanism, tool: undefined };
       const selectedPart = pick(selectedParts, command.partA);
@@ -561,8 +547,7 @@ function run_command(session: Session, command: Command): Session {
       const hoveredParts = parts_of(hovered, HOVER_TARGETS[state.type]);
       if (hoveredParts.length === 0) return { mechanism, tool: undefined };
       const hoveredPart = pick(hoveredParts, command.partB);
-      // The gesture is only explored if the interface would offer it — same
-      // oracle the hover consults, so the generator cannot drift from the UI.
+      // The gesture is only explored if the interface would offer it — same oracle the hover consults, so the generator cannot drift from the UI.
       if (
         !legality_for_state(state, mechanicalElements)(hovered, hoveredPart)
           .allowed
@@ -609,9 +594,8 @@ function run_command(session: Session, command: Command): Session {
 declare const process: { env: Record<string, string | undefined> };
 
 /**
- * Budget of the committed run. `FUZZ=1 FUZZ_RUNS=8000 FUZZ_COMMANDS=14 npx vitest run
- * src/utils/mechanism.fuzz.test.ts` replays the deep probe, which reaches
- * defects the default budget almost never hits.
+ * Budget of the committed run.
+ * `FUZZ=1 FUZZ_RUNS=8000 FUZZ_COMMANDS=14 npx vitest run src/utils/mechanism.fuzz.test.ts` replays the deep probe, which reaches defects the default budget almost never hits.
  */
 const NUM_RUNS = Number(process.env.FUZZ_RUNS ?? 300);
 const MAX_COMMANDS = Number(process.env.FUZZ_COMMANDS ?? 6);
@@ -626,9 +610,7 @@ function run_sequence(seed: Gadget[], commands: Command[]): void {
   expect(validate_mechanism(session.mechanism)).toBeNull();
 
   for (let step = 0; step < commands.length; step++) {
-    // An exception escaping an operation is the worst outcome and the least
-    // readable one: without the sequence that produced it, there is nothing to
-    // replay.
+    // An exception escaping an operation is the worst outcome and the least readable one: without the sequence that produced it, there is nothing to replay.
     try {
       session = run_command(session, commands[step]);
     } catch (error) {
@@ -707,15 +689,11 @@ describe("fuzzing — les gestes de l'UI préservent la validité", () => {
 });
 
 /**
- * Counter-examples the deep probe found, kept as executable records rather than
- * prose: the default budget reaches none of them, so without these the suite is
- * green while nothing guards the fixes.
+ * Counter-examples the deep probe found, kept as executable records rather than prose: the default budget reaches none of them, so without these the suite is green while nothing guards the fixes.
  */
 /**
- * Defects the deep probe found in the placement tools, all three killed by
- * making `handle_place_element` advance a simulated state between its successive
- * `connect_elements` calls. Kept as `it` — they are the regression net for that
- * composition, and the gesture that produced each one is still explored.
+ * Defects the deep probe found in the placement tools, all three killed by making `handle_place_element` advance a simulated state between its successive `connect_elements` calls.
+ * Kept as `it` — they are the regression net for that composition, and the gesture that produced each one is still explored.
  */
 describe("fuzzing — le placement compose ses étapes", () => {
   it("l'outil engrenage sur un pivot existant ne lève plus", () => {
@@ -751,8 +729,7 @@ describe("fuzzing — le placement compose ses étapes", () => {
 });
 
 /**
- * Two nodes carried by the same body, then merged: the survivor must take the
- * place it already holds rather than be named twice.
+ * Two nodes carried by the same body, then merged: the survivor must take the place it already holds rather than be named twice.
  */
 describe("fuzzing — la fusion ne duplique pas une référence de corps", () => {
   it("un nœud absorbé par un autre du même corps ne le dédouble pas", () => {
@@ -784,10 +761,8 @@ describe("fuzzing — la fusion ne duplique pas une référence de corps", () =>
 });
 
 /**
- * A fusion can bring both ends of one beam onto a single node. That beam then
- * names the node twice, so deleting it reached the node twice and emitted the
- * same cut twice — the second carrying an index the first splice had already
- * invalidated, which took a neighbouring edge out of the node's list.
+ * A fusion can bring both ends of one beam onto a single node.
+ * That beam then names the node twice, so deleting it reached the node twice and emitted the same cut twice — the second carrying an index the first splice had already invalidated, which took a neighbouring edge out of the node's list.
  */
 describe("fuzzing — la suppression ne coupe chaque lien qu'une fois", () => {
   it("une barre repliée sur un nœud n'emporte pas la voisine", () => {
@@ -803,10 +778,8 @@ describe("fuzzing — la suppression ne coupe chaque lien qu'une fois", () => {
 });
 
 /**
- * Two gestures the rules now refuse. The sequences no longer build anything —
- * the refusal drops the offending command — so they only guard against the rule
- * being lost; what each rule actually says is asserted in
- * `connection-rules.test.ts`.
+ * Two gestures the rules now refuse.
+ * The sequences no longer build anything — the refusal drops the offending command — so they only guard against the rule being lost; what each rule actually says is asserted in `connection-rules.test.ts`.
  */
 describe("fuzzing — gestes désormais refusés", () => {
   it("le corps d'un ressort ne s'accroche pas à un nœud", () => {

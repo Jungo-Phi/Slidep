@@ -14,7 +14,8 @@ type PayloadFree<S> = S extends { type: CanvasStateType }
 export type ToolStateType = PayloadFree<CanvasState>;
 
 /**
- * Which key(s) arm which tool, in palette order. Raw `KeyboardEvent.key` values, hence case-sensitive: a lowercase letter only matches without Shift.
+ * Which key(s) arm which tool, in palette order.
+ * Raw `KeyboardEvent.key` values, hence case-sensitive: a lowercase letter only matches without Shift.
  */
 export const TOOL_SHORTCUTS = {
   Selecting: ["Escape"],
@@ -64,8 +65,8 @@ export function shortcut_label(stateType: ToolStateType): string {
 }
 
 /**
- * Which tool a pressed key arms, keyed by `key.toLowerCase()` so shortcuts work regardless
- * of Shift/Caps Lock. Throws if two tools claim the same key.
+ * Which tool a pressed key arms, keyed by `key.toLowerCase()` so shortcuts work regardless of Shift/Caps Lock.
+ * Throws if two tools claim the same key.
  */
 export const TOOL_STATE_BY_KEY: Readonly<Record<string, ToolStateType>> =
   (() => {

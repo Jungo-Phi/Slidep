@@ -13,15 +13,11 @@ import {
 import { snapshot_angle } from "../snapshot";
 
 /**
- * A closed belt's travel is a free mode — every pulley turning by as much leaves the
- * geometry unchanged — so nothing outside the belt may excite it, or the answer becomes
- * a function of the order the belt happens to be listed in.
+ * A closed belt's travel is a free mode — every pulley turning by as much leaves the geometry unchanged — so nothing outside the belt may excite it, or the answer becomes a function of the order the belt happens to be listed in.
  *
- * Asked of both engines, and they need different drives. The kinematic block turns a pulley
- * by hand and takes the motor out: there, a motor is a position constraint, so it pins the
- * mode outright and would hide whatever else moves it. Dynamic mode has gravity and real
- * torque instead, and its motor pins nothing — which is why the same mechanism is asked
- * twice below, once falling under its own weight and once driven.
+ * Asked of both engines, and they need different drives.
+ * The kinematic block turns a pulley by hand and takes the motor out: there, a motor is a position constraint, so it pins the mode outright and would hide whatever else moves it.
+ * Dynamic mode has gravity and real torque instead, and its motor pins nothing — which is why the same mechanism is asked twice below, once falling under its own weight and once driven.
  */
 
 const deg = (r: number) => (r * 180) / Math.PI;
@@ -52,9 +48,8 @@ function unpowered(mechanism: Mechanism): Mechanism {
 }
 
 /**
- * Final gear angles after `frames` frames, keyed by gear id — the one name no listing
- * order can change. `spin` names a pulley to turn by hand (a tooth grab following a
- * circling cursor), the belt travel it produces being what must not depend on listing.
+ * Final gear angles after `frames` frames, keyed by gear id — the one name no listing order can change.
+ * `spin` names a pulley to turn by hand (a tooth grab following a circling cursor), the belt travel it produces being what must not depend on listing.
  */
 function gearAngles(
   mechanism: Mechanism,
@@ -65,14 +60,11 @@ function gearAngles(
 }
 
 /**
- * Final gear angles, and how far each gear actually travelled — the sum of its per-frame
- * |Δθ|, not its net angle.
+ * Final gear angles, and how far each gear actually travelled — the sum of its per-frame |Δθ|, not its net angle.
  *
- * The distinction is load-bearing for the guard below: the hand drive follows a cursor
- * circling the rim, so the NET angle oscillates and passes near zero, which makes any ratio
- * taken against it meaningless. Measured on production values: the net angle of
- * `Poulie bloqueuse` reaches 1.72° at 120 frames against a 0.38° listing gap — 22 %, on a
- * mechanism that is perfectly deterministic. Cumulative travel only grows.
+ * The distinction is load-bearing for the guard below: the hand drive follows a cursor circling the rim, so the NET angle oscillates and passes near zero, which makes any ratio taken against it meaningless.
+ * Measured on production values: the net angle of `Poulie bloqueuse` reaches 1.72° at 120 frames against a 0.38° listing gap — 22 %, on a mechanism that is perfectly deterministic.
+ * Cumulative travel only grows.
  */
 function spun(
   mechanism: Mechanism,
@@ -138,8 +130,7 @@ describe("déterminisme des courroies fermées", () => {
       );
       const gaps = [1, 2].map((by) => maxGap(reference, rest(by)));
 
-      // Nothing drives the mechanism, so nothing may turn — a closed belt that
-      // travels on its own is the free mode being excited from outside.
+      // Nothing drives the mechanism, so nothing may turn — a closed belt that travels on its own is the free mode being excited from outside.
       expect(drift).toBeLessThan(1e-10);
       for (const gap of gaps) expect(gap).toBeLessThan(1e-10);
     }, 60_000);
@@ -150,11 +141,8 @@ describe("déterminisme des courroies fermées", () => {
       );
       if (!belt || belt.type !== "belt") throw new Error("courroie introuvable");
       const driven = belt.attachedGearsIDs[0].id;
-      // 120 frames, not 60: the listing gap does not accumulate — it oscillates inside a
-      // band of a few tenths of a degree — so the run has to be long enough for the travel
-      // to outgrow that band before their ratio means anything. Measured on Huygens: 1.9 %
-      // at 60 frames (19° of travel), 0.32 % at 120 (33°), 0.24 % at 480, with the gap
-      // itself flat throughout.
+      // 120 frames, not 60: the listing gap does not accumulate — it oscillates inside a band of a few tenths of a degree — so the run has to be long enough for the travel to outgrow that band before their ratio means anything.
+      // Measured on Huygens: 1.9 % at 60 frames (19° of travel), 0.32 % at 120 (33°), 0.24 % at 480, with the gap itself flat throughout.
       const drive = (by: number) =>
         spun(unpowered(rotated(json, by)), 120, driven);
 
@@ -164,10 +152,8 @@ describe("déterminisme des courroies fermées", () => {
       );
       const gaps = [1, 2].map((by) => maxGap(reference.angles, drive(by).angles));
 
-      // What is left is convergence, not indeterminacy: the sub-chains are cut and
-      // summed in another order, and the sweeps stop on a tolerance, not on a fixed
-      // point. It stays a fraction of a percent of the travel — of the travel actually
-      // covered, which is why `travel` and not the net angle (see `spun`).
+      // What is left is convergence, not indeterminacy: the sub-chains are cut and summed in another order, and the sweeps stop on a tolerance, not on a fixed point.
+      // It stays a fraction of a percent of the travel — of the travel actually covered, which is why `travel` and not the net angle (see `spun`).
       expect(travelled).toBeGreaterThan(10);
       for (const gap of gaps) expect(gap).toBeLessThan(travelled / 100);
     }, 60_000);
@@ -184,17 +170,14 @@ describe("déterminisme des courroies fermées", () => {
 });
 
 /* ════════════════════════════════════════════════════════════════════════
- *  The same question, of `step_dynamic_simulation`
- * ════════════════════════════════════════════════════════════════════════ */
+ * The same question, of `step_dynamic_simulation` ════════════════════════════════════════════════════════════════════════ */
 
 const GRAVITY = new Point2(0, -9.81);
 const REST = new Point2(0, 0);
 
 /**
- * Final gear angles and cumulative travel after `frames` DYNAMIC frames — the same two
- * readings `spun` takes of the kinematic engine, so the two can be compared directly.
- * Nothing is driven by hand here: dynamic mode has gravity and the motor's own torque to
- * turn a mechanism with, which the kinematic sweep has not.
+ * Final gear angles and cumulative travel after `frames` DYNAMIC frames — the same two readings `spun` takes of the kinematic engine, so the two can be compared directly.
+ * Nothing is driven by hand here: dynamic mode has gravity and the motor's own torque to turn a mechanism with, which the kinematic sweep has not.
  */
 function fell(
   mechanism: Mechanism,
@@ -239,16 +222,14 @@ describe("déterminisme des courroies fermées, en dynamique", () => {
         ...[...reference.values()].map((a) => Math.abs(deg(a))),
       );
 
-      // Nothing pushes: no gravity, no motor torque. Same question as the kinematic case
-      // above, and the same answer — a belt that travels here travels on its own.
+      // Nothing pushes: no gravity, no motor torque.
+      // Same question as the kinematic case above, and the same answer — a belt that travels here travels on its own.
       expect(drift).toBeLessThan(1e-9);
       for (const by of [1, 2]) expect(maxGap(reference, rest(by))).toBeLessThan(1e-9);
     }, 60_000);
 
     it(`${name} — tombant sous son propre poids, le listage ne change pas les angles`, () => {
-      // 60 frames, half a second: `Huygen's chain drive` is a weight-driven clock train with
-      // nothing to escape it, so it accelerates for as long as it is left running and its
-      // pendulums eventually make it chaotic — which no listing can be held to.
+      // 60 frames, half a second: `Huygen's chain drive` is a weight-driven clock train with nothing to escape it, so it accelerates for as long as it is left running and its pendulums eventually make it chaotic — which no listing can be held to.
       const fall = (by: number) => fell(unpowered(rotated(json, by)), 60, GRAVITY);
       const reference = fall(0);
       const travelled = maxTravel(reference.travel);
@@ -269,16 +250,11 @@ describe("déterminisme des courroies fermées, en dynamique", () => {
       expect(maxGap(reference.angles, driven(by).angles)).toBeLessThan(travelled / 100);
   }, 60_000);
 
-  // Expected to fail: a closed belt carries one strand law more than it has independent
-  // ones, and the surplus is shared out differently depending on which strand the listing
-  // makes first. The kinematic engine hides it — its motor is a position constraint, which
-  // pins the loop back every frame — while dynamic mode drives through a torque and leaves
-  // the loop's own travel free, so the mismatch integrates instead. Measured on this
-  // mechanism: 0.27 % of the travel kinematic, 17 % dynamic, and it is not a convergence
-  // budget (bit-identical from 200 to 3200 sweeps, and from 1 to 64 substeps) nor the
-  // alternating sweep order (bit-identical with it off). The signature is a belt-length
-  // redistribution, not a circulation: the driven pulley's rim displacement is exactly
-  // minus the sum of the others'. See docs/courroie-dynamique.md.
+  // Expected to fail: a closed belt carries one strand law more than it has independent ones, and the surplus is shared out differently depending on which strand the listing makes first.
+  // The kinematic engine hides it — its motor is a position constraint, which pins the loop back every frame — while dynamic mode drives through a torque and leaves the loop's own travel free, so the mismatch integrates instead.
+  // Measured on this mechanism: 0.27 % of the travel kinematic, 17 % dynamic, and it is not a convergence budget (bit-identical from 200 to 3200 sweeps, and from 1 to 64 substeps) nor the alternating sweep order (bit-identical with it off).
+  // The signature is a belt-length redistribution, not a circulation: the driven pulley's rim displacement is exactly minus the sum of the others'.
+  // See docs/courroie-dynamique.md.
   it.fails("Huygen's chain drive — entraîné par son moteur, le listage ne change pas les angles", () => {
     const driven = (by: number) => fell(rotated(huygensJson, by), 60, GRAVITY);
     const reference = driven(0);

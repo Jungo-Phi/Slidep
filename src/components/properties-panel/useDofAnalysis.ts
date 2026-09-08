@@ -35,9 +35,7 @@ export type DofAnalysis = {
   /**
    * The pose the model describes — which the debounce lets fall behind the one on screen.
    *
-   * Handed out so an animation swings the mechanism the model actually knows: swinging the
-   * newer pose along an older model moves the chain from where it used to be and leaves
-   * everything else where it is, a hybrid pose belonging to no instant.
+   * Handed out so an animation swings the mechanism the model actually knows: swinging the newer pose along an older model moves the chain from where it used to be and leaves everything else where it is, a hybrid pose belonging to no instant.
    */
   mechanism: Mechanism | undefined;
   chains: ChainAnalysis[];
@@ -48,31 +46,27 @@ export type DofAnalysis = {
 /**
  * Measurements already made, by the element list they describe.
  *
- * Outliving the component is the point: the panel is mounted by its tab, so leaving it and
- * coming back would otherwise re-measure a mechanism nobody has touched, and the figures
- * would blink back in. Keyed weakly, so a superseded edit's element list is collected with
- * the entry that describes it.
+ * Outliving the component is the point: the panel is mounted by its tab, so leaving it and coming back would otherwise re-measure a mechanism nobody has touched, and the figures would blink back in.
+ * Keyed weakly, so a superseded edit's element list is collected with the entry that describes it.
  */
 const MEASURED = new WeakMap<MechanicalElement[], Measurement>();
 
 /**
- * How long a *change* must settle before it is measured. First display never waits.
+ * How long a *change* must settle before it is measured.
+ * First display never waits.
  *
- * Not the autosave's 1.5 s: that delay suits a background write nobody watches, whereas
- * these figures answer the edit just made. The measurement costs up to ~27 ms on the
- * heaviest mechanism of the gallery — nothing at all once, too much per frame of a burst.
+ * Not the autosave's 1.5 s: that delay suits a background write nobody watches, whereas these figures answer the edit just made.
+ * The measurement costs up to ~27 ms on the heaviest mechanism of the gallery — nothing at all once, too much per frame of a burst.
  */
 const CHANGE_DEBOUNCE_MS = 200;
 
 /**
  * Degrees of freedom of `mechanism`, per kinematic chain.
  *
- * Keyed on `mechanicalElements`, never on the mechanism itself: a viewport pan or zoom
- * rebuilds the mechanism object every frame while leaving that array untouched, and the
- * analysis reads nothing else — loads, metadata and history do not enter it.
+ * Keyed on `mechanicalElements`, never on the mechanism itself: a viewport pan or zoom rebuilds the mechanism object every frame while leaving that array untouched, and the analysis reads nothing else — loads, metadata and history do not enter it.
  *
- * Only call it from a component mounted when the figures are on screen: the analysis runs
- * the solver several times. `AnalysisPanel` is mounted by its tab, so mounting is the gate.
+ * Only call it from a component mounted when the figures are on screen: the analysis runs the solver several times.
+ * `AnalysisPanel` is mounted by its tab, so mounting is the gate.
  */
 export function useDofAnalysis(mechanism: Mechanism): DofAnalysis {
   const elements = mechanism.mechanicalElements;
@@ -81,8 +75,7 @@ export function useDofAnalysis(mechanism: Mechanism): DofAnalysis {
   /** Kept so a change does not blank the panel while the next measurement runs. */
   const shown = React.useRef<Measurement | undefined>(undefined);
 
-  // Any mechanism carrying this element list yields the same analysis, so reading the
-  // latest one at measurement time cannot pick up a mismatched pair.
+  // Any mechanism carrying this element list yields the same analysis, so reading the latest one at measurement time cannot pick up a mismatched pair.
   const latest = React.useRef(mechanism);
   latest.current = mechanism;
 

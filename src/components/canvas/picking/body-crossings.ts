@@ -3,7 +3,8 @@
  *
  * Aligning several nodes and then drawing one bar through them is the natural way to say « these are all held by this bar » — but the gesture aims at one point, so only the two ends would ever connect, and the nodes under the body would sit on it without being attached to it.
  *
- * What decides the beam's **position** stays a single hover; this only adds who it connects to. Keeping the two apart is what makes the feature small: nothing in the hover system has to learn to name several targets at once.
+ * What decides the beam's **position** stays a single hover; this only adds who it connects to.
+ * Keeping the two apart is what makes the feature small: nothing in the hover system has to learn to name several targets at once.
  */
 
 import type {

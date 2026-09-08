@@ -3,9 +3,7 @@ import { Point2, Space } from "../types/point2";
 /**
  * A via-point of a belt path: a pulley the belt wraps or a terminal endpoint (radius 0).
  *
- * Tagged with its space like `Point2`, and defaulting to `"world"` the same way: a
- * screen path is not just mirrored coordinates, it also flips every `clockwise`, so
- * feeding one where the other is expected is a mistake worth catching.
+ * Tagged with its space like `Point2`, and defaulting to `"world"` the same way: a screen path is not just mirrored coordinates, it also flips every `clockwise`, so feeding one where the other is expected is a mistake worth catching.
  */
 export type BeltVia<S extends Space = "world"> = {
   pos: Point2<S>;
@@ -56,14 +54,10 @@ export type BeltPiece<S extends Space = "world"> =
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * A belt's tangent geometry in flat arrays, allocated once and reused: a solver
- * constraint rebuilds what it needs three hundred times a frame, and the objects it used
- * to allocate for that dominated its cost.
+ * A belt's tangent geometry in flat arrays, allocated once and reused: a solver constraint rebuilds what it needs three hundred times a frame, and the objects it used to allocate for that dominated its cost.
  *
- * Pair `p` runs from via `p` to via `(p+1) % n`: `dep` is where the belt leaves via `p`,
- * `arr` where it lands on the next one. Everything else — strand lengths, contact arcs —
- * derives from those two points, so a constraint that needs one strand solves two pairs
- * instead of the whole belt.
+ * Pair `p` runs from via `p` to via `(p+1) % n`: `dep` is where the belt leaves via `p`, `arr` where it lands on the next one.
+ * Everything else — strand lengths, contact arcs — derives from those two points, so a constraint that needs one strand solves two pairs instead of the whole belt.
  */
 export interface BeltScratch {
   cx: Float64Array;
@@ -109,8 +103,7 @@ export function belt_shared_scratch(n: number): BeltScratch {
 
 /**
  * Solve tangent pair `p` (via `p` → via `(p+1) % n`) into `dep`/`arr`/`ell`.
- * Transcribed from `Point2.circles_link` term for term, including its degenerate
- * branch — the geometry must not shift by a last-place digit.
+ * Transcribed from `Point2.circles_link` term for term, including its degenerate branch — the geometry must not shift by a last-place digit.
  */
 export function belt_solve_pair(sc: BeltScratch, p: number, n: number): void {
   const a = p;
@@ -124,8 +117,7 @@ export function belt_solve_pair(sc: BeltScratch, p: number, n: number): void {
   const gap = same ? sc.r[a] - sc.r[b] : sc.r[b] + sc.r[a];
   let sx: number, sy: number, ex: number, ey: number;
   if (d < (same ? Math.abs(gap) : gap)) {
-    // Nested/overlapping circles: `circles_link` falls back to the radial points, and
-    // `Point2.div` answers (0, 0) on a zero length.
+    // Nested/overlapping circles: `circles_link` falls back to the radial points, and `Point2.div` answers (0, 0) on a zero length.
     const ux = d === 0 ? 0 : dx / d;
     const uy = d === 0 ? 0 : dy / d;
     sx = ux * sc.r[a];
@@ -165,8 +157,7 @@ export function belt_solve_pairs(
 }
 
 /**
- * Whether via `v` carries a contact arc: it needs a radius, and an open belt's two
- * terminals are only ever touched by one strand.
+ * Whether via `v` carries a contact arc: it needs a radius, and an open belt's two terminals are only ever touched by one strand.
  */
 export function belt_has_arc(
   sc: BeltScratch,
@@ -192,7 +183,8 @@ export function belt_arrival_angle(
 
 /**
  * The contact arc of via `v` — arrival angle and wrap, into `arcAngle`/`arcWrap`.
- * Needs pairs `v−1` (arrival) and `v` (departure) solved. False when there is no arc.
+ * Needs pairs `v−1` (arrival) and `v` (departure) solved.
+ * False when there is no arc.
  * `wrap` overrides the geometric wrap with a continuous (winding) one.
  */
 export function belt_solve_arc(
@@ -217,8 +209,8 @@ export function belt_solve_arc(
 }
 
 /**
- * Where an arc-length falls on a belt. Filled in place so that locating a point allocates
- * nothing — the caller keeps one of these for the life of the module.
+ * Where an arc-length falls on a belt.
+ * Filled in place so that locating a point allocates nothing — the caller keeps one of these for the life of the module.
  */
 export interface BeltAt {
   /** Total path length, summed in traversal order. */
@@ -248,13 +240,10 @@ export function belt_at(): BeltAt {
 }
 
 /**
- * Point, tangent and bounding vias at arc-length `s`, straight from the scratch — the
- * scalar twin of `belt_point_tangent` followed by a piece lookup, in one traversal and
- * without building a single `BeltPiece`.
+ * Point, tangent and bounding vias at arc-length `s`, straight from the scratch — the scalar twin of `belt_point_tangent` followed by a piece lookup, in one traversal and without building a single `BeltPiece`.
  *
- * Needs the pairs already solved (`belt_solve_pairs`). Transcribed term for term from the
- * boxed pair, including the order lengths are summed in: floating-point addition is not
- * associative, and the two must answer the same bits.
+ * Needs the pairs already solved (`belt_solve_pairs`).
+ * Transcribed term for term from the boxed pair, including the order lengths are summed in: floating-point addition is not associative, and the two must answer the same bits.
  */
 export function belt_total(
   sc: BeltScratch,
@@ -265,8 +254,7 @@ export function belt_total(
   const pairs = closed ? n : Math.max(0, n - 1);
   let total = 0;
   let count = 0;
-  // Summed in the order the pieces are traversed, arcs interleaved with strands, because
-  // floating-point addition is not associative and this must match the boxed walk.
+  // Summed in the order the pieces are traversed, arcs interleaved with strands, because floating-point addition is not associative and this must match the boxed walk.
   if (closed)
     for (let v = 0; v < n; v++) {
       if (belt_solve_arc(sc, v, n, closed, wraps?.[v])) {
@@ -314,8 +302,8 @@ export function belt_locate(
   }
 
   let local = closed && total > 0 ? ((s % total) + total) % total : s;
-  // The last piece answers for any `s` past the end, which is how the boxed walk behaves
-  // when it reaches its final index. Remembered rather than recomputed.
+  // The last piece answers for any `s` past the end, which is how the boxed walk behaves when it reaches its final index.
+  // Remembered rather than recomputed.
   let lastIsArc = false;
   let lastIndex = -1;
   let lastLocal = 0;
@@ -400,8 +388,7 @@ export function belt_load_vias(sc: BeltScratch, vias: BeltVia<Space>[]): void {
 
 /**
  * Split a belt into its ordered geometric pieces (tangent segments + gear arcs).
- * `closed` treats the vias as a cycle (closed belt: gears only, wrap gN→g0);
- * otherwise as an open path (loose belt: terminals at both ends carry no arc).
+ * `closed` treats the vias as a cycle (closed belt: gears only, wrap gN→g0); otherwise as an open path (loose belt: terminals at both ends carry no arc).
  * Order for closed: arc(v0), seg(v0→v1), arc(v1), … ; for open: seg, arc, seg, …
  *
  * Boxes the scalar core above into objects, for drawing, hit-testing and edition.
@@ -456,11 +443,8 @@ export function belt_pieces<S extends Space = "world">(
       pushSeg(v);
     }
   } else {
-    // A terminal resting ON its pulley's rim is NOT a special case: circles_link
-    // then returns the radial rim point, so the run is emitted with length 0 and
-    // the arc already reaches the terminal. Keeping that degenerate run is what
-    // lets the length constraint recover its tangent point (and hence the no-slip
-    // coupling to the belt travel φ) while an end touches a pulley.
+    // A terminal resting ON its pulley's rim is NOT a special case: circles_link then returns the radial rim point, so the run is emitted with length 0 and the arc already reaches the terminal.
+    // Keeping that degenerate run is what lets the length constraint recover its tangent point (and hence the no-slip coupling to the belt travel φ) while an end touches a pulley.
     for (let p = 0; p < pairCount; p++) {
       pushSeg(p);
       pushArc(p + 1);
@@ -472,11 +456,8 @@ export function belt_pieces<S extends Space = "world">(
 /**
  * A belt `section` is an index into `belt_pieces(vias, closed)`.
  *
- * The two traversals do not share a parity: an open path starts on a run
- * (`seg, arc, seg…`), a closed one on an arc (`arc, seg, arc…`). Read the
- * helpers below rather than deriving anything from `section` by hand — the
- * closed case also shifts the indices, since it has no start terminal to offset
- * the pulleys.
+ * The two traversals do not share a parity: an open path starts on a run (`seg, arc, seg…`), a closed one on an arc (`arc, seg, arc…`).
+ * Read the helpers below rather than deriving anything from `section` by hand — the closed case also shifts the indices, since it has no start terminal to offset the pulleys.
  */
 export function belt_section_is_run(section: number, closed: boolean): boolean {
   return closed ? section % 2 === 1 : section % 2 === 0;
@@ -507,10 +488,8 @@ export function belt_section_gear_index(
 }
 
 /**
- * Where the two runs adjacent to arc `section` merge once its pulley leaves the
- * belt, expressed in the numbering of the shortened belt (`gearCount` counts the
- * pulleys BEFORE the removal). A closed path wraps around, so the first pulley's
- * arc merges into the last run.
+ * Where the two runs adjacent to arc `section` merge once its pulley leaves the belt, expressed in the numbering of the shortened belt (`gearCount` counts the pulleys BEFORE the removal).
+ * A closed path wraps around, so the first pulley's arc merges into the last run.
  */
 export function belt_merged_run_section(
   section: number,
@@ -524,8 +503,8 @@ export function belt_merged_run_section(
 }
 
 /**
- * Raw wrap angle (∈ [0, 2π)) of each via on the path, 0 for terminals / vias
- * with no arc. Index-aligned to `vias`.
+ * Raw wrap angle (∈ [0, 2π)) of each via on the path, 0 for terminals / vias with no arc.
+ * Index-aligned to `vias`.
  */
 export function belt_wraps(vias: BeltVia<Space>[], closed = false): number[] {
   const wraps = new Array(vias.length).fill(0);
@@ -535,13 +514,11 @@ export function belt_wraps(vias: BeltVia<Space>[], closed = false): number[] {
 }
 
 /**
- * Raw ARRIVAL rim angle (the arc's `startAngle`, ∈ (−π, π]) of each via, 0 for
- * terminals / vias with no arc. Index-aligned to `vias`.
+ * Raw ARRIVAL rim angle (the arc's `startAngle`, ∈ (−π, π]) of each via, 0 for terminals / vias with no arc.
+ * Index-aligned to `vias`.
  *
- * This is the angle the belt touches down at. Together with the wrap it fixes the
- * terminal's belt arc-length position IN THE PULLEY'S FRAME — the quantity the
- * no-slip differential must be written in (see `applyBeltLengthConstraint`), because
- * the free-strand length alone is a V at the tangency point and cannot be used.
+ * This is the angle the belt touches down at.
+ * Together with the wrap it fixes the terminal's belt arc-length position IN THE PULLEY'S FRAME — the quantity the no-slip differential must be written in (see `applyBeltLengthConstraint`), because the free-strand length alone is a V at the tangency point and cannot be used.
  */
 export function belt_arrivals(
   vias: BeltVia<Space>[],
@@ -554,10 +531,8 @@ export function belt_arrivals(
 }
 
 /**
- * Advance a continuous (unwrapped) wrap angle per via from its previous value,
- * so a wrap that shrinks through 0 goes NEGATIVE (contact lost) and one that
- * grows past 2π keeps climbing (winding), instead of the raw [0,2π) value
- * jumping across the 0/2π seam. `prev` undefined → seed with the raw wrap.
+ * Advance a continuous (unwrapped) wrap angle per via from its previous value, so a wrap that shrinks through 0 goes NEGATIVE (contact lost) and one that grows past 2π keeps climbing (winding), instead of the raw [0,2π) value jumping across the 0/2π seam.
+ * `prev` undefined → seed with the raw wrap.
  */
 export function advance_continuous_wraps(
   vias: BeltVia<Space>[],
@@ -577,10 +552,7 @@ export function advance_continuous_wraps(
 }
 
 /**
- * Nearest point of a belt piece to `p`, clamped to the piece's real extent: a
- * segment is clamped to its endpoints, an arc to its **wrapped** angular sector
- * (from belt arrival to departure) — so a point never snaps onto the free,
- * non-contact side of a pulley.
+ * Nearest point of a belt piece to `p`, clamped to the piece's real extent: a segment is clamped to its endpoints, an arc to its **wrapped** angular sector (from belt arrival to departure) — so a point never snaps onto the free, non-contact side of a pulley.
  */
 export function nearest_point_on_piece<S extends Space = "world">(
   p: Point2<S>,
@@ -610,9 +582,8 @@ export function nearest_point_on_piece<S extends Space = "world">(
 }
 
 /**
- * Project a point onto a belt path: returns the arc-length `s`, the on-belt
- * `point`, and the unit `tangent` there. Uses the clamped nearest point of each
- * piece (so it never lands on a pulley's free side).
+ * Project a point onto a belt path: returns the arc-length `s`, the on-belt `point`, and the unit `tangent` there.
+ * Uses the clamped nearest point of each piece (so it never lands on a pulley's free side).
  */
 export function belt_project<S extends Space = "world">(
   vias: BeltVia<S>[],
@@ -655,8 +626,8 @@ export function belt_project<S extends Space = "world">(
 }
 
 /**
- * Point and unit tangent at arc-length `s` along a belt path (wrapping for a
- * closed path). Tangent points in the clockwise of increasing `s` (belt travel).
+ * Point and unit tangent at arc-length `s` along a belt path (wrapping for a closed path).
+ * Tangent points in the clockwise of increasing `s` (belt travel).
  */
 export function belt_point_tangent<S extends Space = "world">(
   vias: BeltVia<S>[],

@@ -33,11 +33,8 @@ interface OverlayScrollAreaProps {
 }
 
 /**
- * Vertical scroll area whose scrollbar floats over the content instead of taking a column of its
- * own: the width the children get never changes, so nothing shifts sideways when the content starts
- * overflowing and full-bleed rules still reach the edge. The thumb shows while the pointer is on
- * the area or while it scrolls, and is the only part that answers to the pointer — a track would
- * catch clicks meant for the content under it.
+ * Vertical scroll area whose scrollbar floats over the content instead of taking a column of its own: the width the children get never changes, so nothing shifts sideways when the content starts overflowing and full-bleed rules still reach the edge.
+ * The thumb shows while the pointer is on the area or while it scrolls, and is the only part that answers to the pointer — a track would catch clicks meant for the content under it.
  */
 export const OverlayScrollArea: React.FC<OverlayScrollAreaProps> = ({
   children,
@@ -48,8 +45,7 @@ export const OverlayScrollArea: React.FC<OverlayScrollAreaProps> = ({
   const contentRef = React.useRef<HTMLDivElement>(null);
   const thumbRef = React.useRef<HTMLDivElement>(null);
 
-  // Everything below drives the thumb through the DOM: on a panel this heavy, re-rendering the
-  // children at every scroll event to move a 5 px bar is not worth it.
+  // Everything below drives the thumb through the DOM: on a panel this heavy, re-rendering the children at every scroll event to move a 5 px bar is not worth it.
   React.useEffect(() => {
     const area = areaRef.current;
     const scroller = scrollerRef.current;
@@ -85,8 +81,7 @@ export const OverlayScrollArea: React.FC<OverlayScrollAreaProps> = ({
     };
 
     const onScroll = () => show(hovered || dragging);
-    // Watched on the area, not on the scroller: the thumb is the scroller's sibling, so a pointer
-    // moving onto it would leave the scroller and fade away the very bar it is reaching for.
+    // Watched on the area, not on the scroller: the thumb is the scroller's sibling, so a pointer moving onto it would leave the scroller and fade away the very bar it is reaching for.
     const onEnter = () => {
       hovered = true;
       show(true);
@@ -137,11 +132,8 @@ export const OverlayScrollArea: React.FC<OverlayScrollAreaProps> = ({
       thumb.addEventListener("pointercancel", onRelease);
     };
 
-    // Native HTML5 drag and drop auto-scrolls the page itself near a viewport edge, but not an
-    // arbitrary `overflow` container nested inside it — so a drag that needs to reach a group
-    // above or below the fold (the library panel's own reassignment drag, chiefly) has to drive
-    // this scroller by hand. Speed ramps with proximity rather than a flat rate once inside the
-    // edge band, so it reads as a gentle pull rather than a jump the moment the cursor crosses in.
+    // Native HTML5 drag and drop auto-scrolls the page itself near a viewport edge, but not an arbitrary `overflow` container nested inside it — so a drag that needs to reach a group above or below the fold (the library panel's own reassignment drag, chiefly) has to drive this scroller by hand.
+    // Speed ramps with proximity rather than a flat rate once inside the edge band, so it reads as a gentle pull rather than a jump the moment the cursor crosses in.
     let scrollSpeed = 0;
     let scrollRAF: number | null = null;
     const scrollStep = () => {
@@ -186,8 +178,7 @@ export const OverlayScrollArea: React.FC<OverlayScrollAreaProps> = ({
     thumb.addEventListener("pointerdown", onPointerDown);
     scroller.addEventListener("dragover", onDragOver);
     scroller.addEventListener("drop", stopAutoScroll);
-    // Not `scroller`: a drag that ends past its bounds (dropped elsewhere, or cancelled) would
-    // never fire `dragleave`/`drop` on it, and the scroll would run away.
+    // Not `scroller`: a drag that ends past its bounds (dropped elsewhere, or cancelled) would never fire `dragleave`/`drop` on it, and the scroll would run away.
     window.addEventListener("dragend", stopAutoScroll);
     draw();
 

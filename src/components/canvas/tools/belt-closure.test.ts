@@ -85,9 +85,7 @@ describe("closing a belt while placing it", () => {
     expect(hovered.type).toBe("BeltClosure");
   });
 
-  // The gear a belt starts on is folded into the route only at finalisation, so
-  // the real gesture — start on A, click B, come back — reaches the closure with
-  // a single routed pulley, and its own start gear under the cursor.
+  // The gear a belt starts on is folded into the route only at finalisation, so the real gesture — start on A, click B, come back — reaches the closure with a single routed pulley, and its own start gear under the cursor.
   it("offers the closure over the start gear, which the route lists last", () => {
     const gesture: CanvasState = {
       ...routing,
@@ -106,8 +104,8 @@ describe("closing a belt while placing it", () => {
     expect(hovered.type).toBe("BeltClosure");
   });
 
-  // The closure names no element, so `sim.holds` cannot vouch for it. It used to
-  // be dropped on that ground, and the belt was created open.
+  // The closure names no element, so `sim.holds` cannot vouch for it.
+  // It used to be dropped on that ground, and the belt was created open.
   it("creates the junction and closes the loop", () => {
     const closure: HoveredPart = { type: "BeltClosure", position: START };
     const { actions } = handle_placing_element(
@@ -127,22 +125,18 @@ describe("closing a belt while placing it", () => {
       expect.objectContaining({ type: "CloseBelt", closed: true }),
     );
 
-    // Both terminals must land on the junction, otherwise the loop is only
-    // closed as far as the `closed` flag is concerned.
+    // Both terminals must land on the junction, otherwise the loop is only closed as far as the `closed` flag is concerned.
     const join = created.find((a) => a.element.type === "join")!.element;
     for (const type of ["ConnectsFixedNodeStart", "ConnectsFixedNodeEnd"])
       expect(actions).toContainEqual(
         expect.objectContaining({ type, connectID: join.id }),
       );
 
-    // The junction has to be solved onto the loop — a bundle read as having
-    // no geometric meaning (the old "Other" mislabel) would skip that solve.
+    // The junction has to be solved onto the loop — a bundle read as having no geometric meaning (the old "Other" mislabel) would skip that solve.
     expect(bundle_geometry(actions).solve).toBe("after");
   });
 
-  // The route is attached after the belt is created, so the closure used to run
-  // on a belt with no pulleys yet: there was no loop to seat the junction on and
-  // it stayed under the cursor, letting the solver drag the pulleys to meet it.
+  // The route is attached after the belt is created, so the closure used to run on a belt with no pulleys yet: there was no loop to seat the junction on and it stayed under the cursor, letting the solver drag the pulleys to meet it.
   it("seats the junction on the loop, away from the closing cursor", () => {
     const far = P(0, -200); // start well above the gears, rims at y = -40
     const fromVoid: Extract<CanvasState, { type: "PlacingBeltEnd" }> = {
@@ -168,17 +162,15 @@ describe("closing a belt while placing it", () => {
       .element as JoinElement;
     expect(join.position.y).toBeCloseTo(-40);
 
-    // Both terminals are born on the loop too. Left under the cursor they would
-    // drag the junction back off it: the coincidence fusion seeds the fused node
-    // at the plain midpoint of the three.
+    // Both terminals are born on the loop too.
+    // Left under the cursor they would drag the junction back off it: the coincidence fusion seeds the fused node at the plain midpoint of the three.
     const belt = created.find((a) => a.element.type === "belt")!
       .element as BeltElement;
     expect(belt.positionStart.y).toBeCloseTo(-40);
     expect(belt.positionEnd.y).toBeCloseTo(-40);
   });
 
-  // Started in the void and over nothing, so the pick reaches the closure rule
-  // instead of being answered by whatever lies under the start.
+  // Started in the void and over nothing, so the pick reaches the closure rule instead of being answered by whatever lies under the start.
   it("refuses to close a belt that runs over no pulley", () => {
     const loose = P(500, -300);
     const pulleyless: CanvasState = {
@@ -200,8 +192,7 @@ describe("closing a belt while placing it", () => {
     expect(hovered).toHaveProperty("rejected");
   });
 
-  // A band around a single wheel transmits nothing, so one pulley is not enough
-  // even though the geometry would draw.
+  // A band around a single wheel transmits nothing, so one pulley is not enough even though the geometry would draw.
   it("refuses to close a belt that runs over a single pulley", () => {
     const oneGear: CanvasState = {
       ...routing,
@@ -223,9 +214,7 @@ describe("closing a belt while placing it", () => {
 });
 
 describe("the gear a belt is started on", () => {
-  // It enters the route only at finalisation, so it used to be caught solely by
-  // the click on a *second* gear: a belt started and ended on one pulley each
-  // came out attached to neither.
+  // It enters the route only at finalisation, so it used to be caught solely by the click on a *second* gear: a belt started and ended on one pulley each came out attached to neither.
   const attached = (actions: Action[]) =>
     actions
       .filter((a) => a.type === "ConnectsAttachedGears")
@@ -360,8 +349,7 @@ describe("closing a belt by dragging its terminal node onto the other end", () =
     expect(hovered).toMatchObject({ type: "Edge", id: BELT, part: "end" });
   });
 
-  // The inversion guard: a node holding the END must be offered the START, not
-  // the end it already holds.
+  // The inversion guard: a node holding the END must be offered the START, not the end it already holds.
   it("offers the free start when the node holds the end", () => {
     const mech = [
       ...MECH,
@@ -454,8 +442,7 @@ describe("two belts never meet", () => {
     });
   });
 
-  // The body stays crossable: an opaque refusal there would hide whatever the
-  // belt runs over from every belt gesture.
+  // The body stays crossable: an opaque refusal there would hide whatever the belt runs over from every belt gesture.
   it("lets the body of another belt be crossed", () => {
     const mech = [...MECH, other()];
     expect(legality_for_state(routing, mech)(mech[4], body)).toMatchObject({
@@ -464,9 +451,8 @@ describe("two belts never meet", () => {
     });
   });
 
-  // A belt reaching its own junction is closing, not meeting a stranger. The
-  // pair is refused as already connected, but transparently: made opaque, the
-  // refusal would mask the terminal the closure aims at.
+  // A belt reaching its own junction is closing, not meeting a stranger.
+  // The pair is refused as already connected, but transparently: made opaque, the refusal would mask the terminal the closure aims at.
   it("never turns opaque on a belt's own junction", () => {
     const mech = [...MECH, other({ fixedNodeStartID: NODE }), holder];
     const dragging: CanvasState = {

@@ -21,8 +21,7 @@ type TimelineEvent = {
 };
 
 /**
- * One colour per family, and never a second shape: the marks share a form so the rail reads
- * as one kind of object, and the colour says which family without anything to decipher.
+ * One colour per family, and never a second shape: the marks share a form so the rail reads as one kind of object, and the colour says which family without anything to decipher.
  */
 const MARK_COLOR: Record<TimelineEvent["kind"], string> = {
   belt: "warning.main",
@@ -62,34 +61,26 @@ export const SimulationTimeline: React.FC<SimulationTimelineProps> = ({
   /**
    * A mark is under the pointer, so the rail must hold its own tooltip back.
    *
-   * The marks sit inside the track, which therefore stays hovered under them: without
-   * this the time bubble and the mark's label open on top of one another, and the one
-   * the pointer is actually on is the one that loses.
+   * The marks sit inside the track, which therefore stays hovered under them: without this the time bubble and the mark's label open on top of one another, and the one the pointer is actually on is the one that loses.
    */
   const [markHovered, setMarkHovered] = useState(false);
 
   /**
    * Instants where a belt changed pulleys, grouped by the frame that carries them.
    *
-   * Read off the snapshots, never measured: the simulation decides contact itself and
-   * writes it into every frame, so this costs a scan of flags — 0.9 ms over twenty
-   * seconds of recording, against 42 ms for a single mobility measurement. It can
-   * therefore be redone whenever the recording grows, which is what puts the marks on
-   * the rail while it is still being written.
+   * Read off the snapshots, never measured: the simulation decides contact itself and writes it into every frame, so this costs a scan of flags — 0.9 ms over twenty seconds of recording, against 42 ms for a single mobility measurement.
+   * It can therefore be redone whenever the recording grows, which is what puts the marks on the rail while it is still being written.
    */
   const events = React.useMemo((): TimelineEvent[] => {
-    // Belt contact is tracked by both engines (see `SnapshotLayout`), so this reads
-    // whichever mode is active. Dead points stay kinematic-only below: a dead point is a
-    // mobility singularity under an imposed-position motor, which dynamic mode has no
-    // equivalent of.
+    // Belt contact is tracked by both engines (see `SnapshotLayout`), so this reads whichever mode is active.
+    // Dead points stay kinematic-only below: a dead point is a mobility singularity under an imposed-position motor, which dynamic mode has no equivalent of.
     const beltMarks = belt_events(runtimeState.simulationSnapshots).map((event) => ({
       t: event.t,
       kind: "belt" as const,
       label: t(event.kind === "detach" ? "belt_detach" : "belt_reattach"),
     }));
     if (appMode !== "kinematic") return beltMarks;
-    // Narrowed by the check above: only a kinematic run fills `simulationSnapshots`
-    // while that mode is active.
+    // Narrowed by the check above: only a kinematic run fills `simulationSnapshots` while that mode is active.
     const snapshots = runtimeState.simulationSnapshots as KinematicSnapshot[];
     return [
       ...beltMarks,
@@ -108,13 +99,11 @@ export const SimulationTimeline: React.FC<SimulationTimelineProps> = ({
   /**
    * Those marks the rail can actually place, merged when they would overlap.
    *
-   * Past the cursor is dropped rather than clamped. While recording, the worker is aimed
-   * ahead of the cursor and the rail spans `[0, cursor]` with the head pinned to its end —
-   * so a later event has no place on it, and pausing deletes that overshoot anyway. A mark
-   * pinned to the end would announce something that has not happened yet and may never.
+   * Past the cursor is dropped rather than clamped.
+   * While recording, the worker is aimed ahead of the cursor and the rail spans `[0, cursor]` with the head pinned to its end — so a later event has no place on it, and pausing deletes that overshoot anyway.
+   * A mark pinned to the end would announce something that has not happened yet and may never.
    *
-   * Two events closer together than a mark is wide are one mark carrying both labels: a
-   * second tick drawn over the first says nothing and steals the hover from it.
+   * Two events closer together than a mark is wide are one mark carrying both labels: a second tick drawn over the first says nothing and steals the hover from it.
    */
   const marks = React.useMemo(() => {
     if (timeline.duration <= 0) return [];
@@ -192,9 +181,7 @@ export const SimulationTimeline: React.FC<SimulationTimelineProps> = ({
         onMouseEnter={() => setTimelineHovered(true)}
         onMouseLeave={() => {
           setTimelineHovered(false);
-          // Also cleared here: a mark unmounting under the pointer — the recording grows
-          // and regroups them — never fires its own leave, and would hold the rail's
-          // tooltip shut for good.
+          // Also cleared here: a mark unmounting under the pointer — the recording grows and regroups them — never fires its own leave, and would hold the rail's tooltip shut for good.
           setMarkHovered(false);
         }}
         onMouseDown={(e) => {
@@ -217,8 +204,7 @@ export const SimulationTimeline: React.FC<SimulationTimelineProps> = ({
                 ...prev,
                 time: t,
                 isPlaying: false,
-                // Dropped ON the end is not scrubbing: playing from there
-                // extends the recording instead of replaying nothing.
+                // Dropped ON the end is not scrubbing: playing from there extends the recording instead of replaying nothing.
                 scrubbed: !at_recording_end(prev.simulationSnapshots,t),
               };
             });
@@ -264,8 +250,7 @@ export const SimulationTimeline: React.FC<SimulationTimelineProps> = ({
           <Tooltip
             key={mark.t}
             placement="bottom"
-            // Held back while scrubbing: the pointer is then following the head, not
-            // pointing at what it happens to pass over.
+            // Held back while scrubbing: the pointer is then following the head, not pointing at what it happens to pass over.
             disableHoverListener={timelineDragging}
             title={`${format_sim_time(mark.t)} · ${mark.labels.join(" · ")}`}
           >
@@ -293,8 +278,7 @@ export const SimulationTimeline: React.FC<SimulationTimelineProps> = ({
                 borderRadius: 1.5,
                 cursor: "pointer",
                 backgroundColor: MARK_COLOR[dominant_kind(mark.kinds)],
-                // Widened on hover rather than moved or recoloured: the mark must stay
-                // exactly where its instant is, and a 3 px target is hard to hit.
+                // Widened on hover rather than moved or recoloured: the mark must stay exactly where its instant is, and a 3 px target is hard to hit.
                 "&::before": {
                   content: '""',
                   position: "absolute",

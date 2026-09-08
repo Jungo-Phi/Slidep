@@ -10,8 +10,8 @@ export type GeomNodes = {
 };
 
 /** Nodes for the kinematic simulation: positions + gear angles.
- *  Radii are constants in simulation (baked into the links), not variables.
- *  Angles are never anchored, so they carry no mass map. */
+ * Radii are constants in simulation (baked into the links), not variables.
+ * Angles are never anchored, so they carry no mass map. */
 export type KinNodes = {
   positions: Map<string, Point2>;
   posMasses: Map<string, number>;
@@ -21,8 +21,8 @@ export type KinNodes = {
 /** Kinds of (non oriented) connections between points. */
 export type Link = {
   /** Element this constraint belongs to, for diagnostics and canvas
-   *  selection. Optional: purely internal links (Coincidence, grab) leave it
-   *  unset and are never surfaced as "unsatisfied constraints". */
+   * selection.
+   * Optional: purely internal links (Coincidence, grab) leave it unset and are never surfaced as "unsatisfied constraints". */
   owner?: ID;
 } & (
   | { type: "Coincidence"; ddl: 2; key1: string; key2: string }
@@ -33,28 +33,23 @@ export type Link = {
       key2: string;
       distance: number;
       /**
-       * Axial compliance in m/N (`L/EA`, `beam_axial_compliance`) — absent or 0 means rigid,
-       * which is every link but a beam's own length. Read ONLY by a dynamics step: it is
-       * divided by `dt²`, which a kinematic solve has no meaningful value for.
+       * Axial compliance in m/N (`L/EA`, `beam_axial_compliance`) — absent or 0 means rigid, which is every link but a beam's own length.
+       * Read ONLY by a dynamics step: it is divided by `dt²`, which a kinematic solve has no meaningful value for.
        */
       compliance?: number;
-      // Which way coincident points should part. Ignored as soon as they are
-      // apart, since the axis between them is then the real one.
+      // Which way coincident points should part.
+      // Ignored as soon as they are apart, since the axis between them is then the real one.
       preferredAxis?: Point2;
-      // True when this length is standing in for a hub's angle lock (SSS
-      // triangulation of two welded beams) rather than a real dimension. Read
-      // by the redundancy symbol, which then draws it as a diverging angle
-      // instead of a parting gap.
+      // True when this length is standing in for a hub's angle lock (SSS triangulation of two welded beams) rather than a real dimension.
+      // Read by the redundancy symbol, which then draws it as a diverging angle instead of a parting gap.
       angleLock?: true;
     }
   | {
       /**
        * Holds two points at least `distance` apart, and says nothing once they are.
        *
-       * `ddl: 0` because an inequality is not a lost degree of freedom: inactive it
-       * constrains nothing, and active it is a boundary the sketch rests against, not a
-       * relation it must satisfy. Counting it would make every bar look one degree
-       * stiffer than it is.
+       * `ddl: 0` because an inequality is not a lost degree of freedom: inactive it constrains nothing, and active it is a boundary the sketch rests against, not a relation it must satisfy.
+       * Counting it would make every bar look one degree stiffer than it is.
        */
       type: "MinDistance";
       ddl: 0;
@@ -64,17 +59,12 @@ export type Link = {
     }
   | {
       /**
-       * `MinDistance`'s counterpart for a point against a segment (key1, key2) rather than
-       * another point: holds key3 at least `offset` from its nearest point on the segment —
-       * extremities included — and says nothing once it is. `ddl: 0` for the same reason as
-       * `MinDistance`. Used for collisions: a plain node contact uses a small numerical
-       * `offset`; a gear-vs-beam contact uses the gear's radius.
+       * `MinDistance`'s counterpart for a point against a segment (key1, key2) rather than another point: holds key3 at least `offset` from its nearest point on the segment — extremities included — and says nothing once it is.
+       * `ddl: 0` for the same reason as `MinDistance`.
+       * Used for collisions: a plain node contact uses a small numerical `offset`; a gear-vs-beam contact uses the gear's radius.
        *
-       * `side` (+1/-1, of `key2 − key1`'s left normal) fixes which side key3 is kept clear
-       * of — set once when the link is built (see `collision_links`), not re-read from
-       * key3's current position every sweep, so a single oversized correction cannot read as
-       * "arrived on its other, now-current side" and stop being pushed back. See
-       * `applyPointSegmentContactConstraint`.
+       * `side` (+1/-1, of `key2 − key1`'s left normal) fixes which side key3 is kept clear of — set once when the link is built (see `collision_links`), not re-read from key3's current position every sweep, so a single oversized correction cannot read as "arrived on its other, now-current side" and stop being pushed back.
+       * See `applyPointSegmentContactConstraint`.
        */
       type: "MinDistanceToSegment";
       ddl: 0;
@@ -94,15 +84,10 @@ export type Link = {
     }
   | {
       /**
-       * `MinDistanceToSegment`'s counterpart for an infinite line — the floor — instead of a
-       * bounded segment: holds `key3` at least `offset` from the line through `key1` (a fixed
-       * anchor, `invMass = 0`), in the direction `normal` already points, and says nothing
-       * once it is. `ddl: 0` for the same reason as `MinDistance`.
+       * `MinDistanceToSegment`'s counterpart for an infinite line — the floor — instead of a bounded segment: holds `key3` at least `offset` from the line through `key1` (a fixed anchor, `invMass = 0`), in the direction `normal` already points, and says nothing once it is.
+       * `ddl: 0` for the same reason as `MinDistance`.
        *
-       * No `side`, unlike `MinDistanceToSegment`: `normal` is baked in once from the floor's
-       * angle when the model compiles and the anchor never moves, so there is no live
-       * geometry a fixed side would otherwise need protecting against — see
-       * `applyPointLineContactConstraint`.
+       * No `side`, unlike `MinDistanceToSegment`: `normal` is baked in once from the floor's angle when the model compiles and the anchor never moves, so there is no live geometry a fixed side would otherwise need protecting against — see `applyPointLineContactConstraint`.
        */
       type: "MinDistanceToLine";
       ddl: 0;
@@ -111,10 +96,9 @@ export type Link = {
       normal: Point2;
       offset: number;
     }
-  // `normalOffset` (both OnSegment links) holds the point that many metres OFF the
-  // segment, on the side it already lies. Absent = on it. It is the target the redundancy
-  // analysis shifts to ask a slider whether it can be moved at all — a slider having no
-  // value of its own, there is nothing else to lie to it about.
+  // `normalOffset` (both OnSegment links) holds the point that many metres OFF the segment, on the side it already lies.
+  // Absent = on it.
+  // It is the target the redundancy analysis shifts to ask a slider whether it can be moved at all — a slider having no value of its own, there is nothing else to lie to it about.
   | {
       type: "SlideOnSegment";
       ddl: 1;
@@ -186,10 +170,7 @@ export type Link = {
       radKey1: string;
       radKey2: string;
     }
-  // Gear ratio (edition): r1/r2 = ratio. key1/key2 are the gear CENTRE keys (they
-  // participate in the position graph and are subject to Coincidence fusion, e.g.
-  // a gear fused with its axle); radKey1/radKey2 are the RADIUS-map keys (bare gear
-  // ids, never fused) — like GearMeshing, the radii must be read from unfused keys.
+  // Gear ratio (edition): r1/r2 = ratio. key1/key2 are the gear CENTRE keys (they participate in the position graph and are subject to Coincidence fusion, e.g. a gear fused with its axle); radKey1/radKey2 are the RADIUS-map keys (bare gear ids, never fused) — like GearMeshing, the radii must be read from unfused keys.
   | {
       type: "GearRatio";
       ddl: 1;
@@ -199,14 +180,11 @@ export type Link = {
       radKey2: string;
       ratio: number;
     }
-  // Inextensible belt, ONE link per belt, both solvers' simulation path. Holds the
-  // total drawn length at `length`; gradient wrt a pulley centre = −(sum of adjacent
-  // tangent units). For a CLOSED belt that is all it does. For an OPEN
-  // (loose) belt it ALSO governs the two terminal endpoints: the length pins the SUM
-  // of their free runs while the shared travel φ drives their DIFFERENTIAL (one run
-  // winds in as the other feeds out), and an exhausted run winds onto its pulley and
-  // orbits with θ (start on gearPosKeys[0], end on gearPosKeys[last]) so the motor
-  // never blocks. Bidirectional: dragging a free end advances φ.
+  // Inextensible belt, ONE link per belt, both solvers' simulation path.
+  // Holds the total drawn length at `length`; gradient wrt a pulley centre = −(sum of adjacent tangent units).
+  // For a CLOSED belt that is all it does.
+  // For an OPEN (loose) belt it ALSO governs the two terminal endpoints: the length pins the SUM of their free runs while the shared travel φ drives their DIFFERENTIAL (one run winds in as the other feeds out), and an exhausted run winds onto its pulley and orbits with θ (start on gearPosKeys[0], end on gearPosKeys[last]) so the motor never blocks.
+  // Bidirectional: dragging a free end advances φ.
   | {
       type: "BeltLength";
       ddl: 1;
@@ -218,28 +196,22 @@ export type Link = {
       directions: boolean[];
       length: number;
       closed: boolean;
-      // Edition only: the pulleys' RADIUS-map keys (bare gear ids, never fused), same
-      // order as `radii`. When present the length constraint also treats the radii as
-      // DOFs (∂L/∂r = wrap), so a length dimension resizes the pulleys. Absent in the
-      // simulation, where radii are baked.
+      // Edition only: the pulleys' RADIUS-map keys (bare gear ids, never fused), same order as `radii`.
+      // When present the length constraint also treats the radii as DOFs (∂L/∂r = wrap), so a length dimension resizes the pulleys.
+      // Absent in the simulation, where radii are baked.
       radKeys?: string[];
-      // Continuous (unwrapped) wrap per pulley, tracked each frame; whole turns feed
-      // the length so winding past 2π stays smooth. disconnected = lost contact.
+      // Continuous (unwrapped) wrap per pulley, tracked each frame; whole turns feed the length so winding past 2π stays smooth. disconnected = lost contact.
       wraps?: number[];
-      // Continuous (unwrapped) ARRIVAL rim angle per pulley — the angle the belt touches
-      // down at. The no-slip differential is written in the pulley's frame (fs ± r·ψ), so
-      // it needs ψ on a continuous branch. Tracked each frame alongside `wraps`.
+      // Continuous (unwrapped) ARRIVAL rim angle per pulley — the angle the belt touches down at.
+      // The no-slip differential is written in the pulley's frame (fs ± r·ψ), so it needs ψ on a continuous branch.
+      // Tracked each frame alongside `wraps`.
       arrivals?: number[];
       disconnected?: boolean[];
       // ── Open-belt terminal handling (unused when closed) ──
-      // The two terminals are just FREE ends: the length moves them (each along its belt
-      // tangent) and the no-slip differential couples them to the belt travel φ. They do
-      // NOT grip/wind — winding is done by attaching a terminal to a gear with a JOIN
-      // (its GearPerimeterPin carries it around).
-      // A terminal JOINED to its adjacent pulley (winch). Static: the join exists in the
-      // mechanism or it does not — never a runtime state. Such an end has no tangent
-      // strand: it pays the belt out through that pulley's ARC, so the length constraint
-      // must not move it — its GearPerimeterPin owns it.
+      // The two terminals are just FREE ends: the length moves them (each along its belt tangent) and the no-slip differential couples them to the belt travel φ. They do NOT grip/wind — winding is done by attaching a terminal to a gear with a JOIN (its GearPerimeterPin carries it around).
+      // A terminal JOINED to its adjacent pulley (winch).
+      // Static: the join exists in the mechanism or it does not — never a runtime state.
+      // Such an end has no tangent strand: it pays the belt out through that pulley's ARC, so the length constraint must not move it — its GearPerimeterPin owns it.
       startWound?: boolean;
       endWound?: boolean;
     }
@@ -250,19 +222,14 @@ export type Link = {
       nodeKey: string;
       gearPosKeys: string[];
       radii: number[];
-      // Bare (never-fused) gear ids, same order as `radii`, for reading the LIVE radius
-      // from the radii map when a length dimension resizes the pulleys in edition.
+      // Bare (never-fused) gear ids, same order as `radii`, for reading the LIVE radius from the radii map when a length dimension resizes the pulleys in edition.
       radKeys: string[];
       directions: boolean[];
     }
-  // Belt pin (simulation): the attached node `nodeKey` rides the belt at
-  // arc-length s = s0 + r_ref·ε_ref·(θ_ref − θ_ref0) — i.e. it travels as the
-  // belt rotates (θ_ref = reference pulley angle, ε = dir?1:−1). Bidirectional:
-  // dragging the node along the belt advances θ_ref (which turns every pulley via
-  // the strand no-slips), and pulling it off the belt snaps it back. Radii + refs
-  // baked.
-  // A closed belt is a closed pulley loop; a loose belt is the open path
-  // start-terminal → pulleys → end-terminal (`closed:false` + startKey/endKey).
+  // Belt pin (simulation): the attached node `nodeKey` rides the belt at arc-length s = s0 + r_ref·ε_ref·(θ_ref − θ_ref0) — i.e. it travels as the belt rotates (θ_ref = reference pulley angle, ε = dir?1:−1).
+  // Bidirectional: dragging the node along the belt advances θ_ref (which turns every pulley via the strand no-slips), and pulling it off the belt snaps it back.
+  // Radii + refs baked.
+  // A closed belt is a closed pulley loop; a loose belt is the open path start-terminal → pulleys → end-terminal (`closed:false` + startKey/endKey).
   | {
       type: "BeltPin";
       ddl: 2;
@@ -276,30 +243,24 @@ export type Link = {
       refAngleKey: string;
       s0: number;
       thetaRef0: number;
-      // Open (loose) belt: rides the open path with r=0 terminals. Absent/true =
-      // closed loop (its junction).
+      // Open (loose) belt: rides the open path with r=0 terminals.
+      // Absent/true = closed loop (its junction).
       closed?: boolean;
       startKey?: string;
       endKey?: string;
-      // Continuous wrap per pulley (copied from the belt's BeltLength link)
-      // so the junction travels around wound pulleys (>2π).
+      // Continuous wrap per pulley (copied from the belt's BeltLength link) so the junction travels around wound pulleys (>2π).
       // Undefined until the first sim frame.
       wraps?: number[];
-      // Pulleys that lost contact mid-sim (copied from BeltLength). The junction
-      // rides the REDUCED loop (disconnected gears skipped); s0/thetaRef0/refIndex
-      // are re-baked at the disconnect event so it doesn't jump.
+      // Pulleys that lost contact mid-sim (copied from BeltLength).
+      // The junction rides the REDUCED loop (disconnected gears skipped); s0/thetaRef0/refIndex are re-baked at the disconnect event so it doesn't jump.
       disconnected?: boolean[];
       // One-way: the node rides the belt without driving it — no θ_ref, no pulley.
-      // Set on a closure node nobody but the belt has a say in, whose position is
-      // then a readout of the belt travel rather than a hold on it.
+      // Set on a closure node nobody but the belt has a say in, whose position is then a readout of the belt travel rather than a hold on it.
       passive?: boolean;
     }
-  // Belt follows tangent (simulation): a beam welded to the belt junction keeps
-  // its orientation aligned with the belt tangent at the junction — angle(driven
-  // − pivot) = tangentAngle(s) + offset, s = s0 + r_ref·ε_ref·(θ_ref − θ_ref0).
-  // Bidirectional, weighted by the local curvature: on an arc, rotating the beam
-  // advances the belt; on a straight run the tangent is fixed so the beam just
-  // tracks it. Baked geometry.
+  // Belt follows tangent (simulation): a beam welded to the belt junction keeps its orientation aligned with the belt tangent at the junction — angle(driven − pivot) = tangentAngle(s) + offset, s = s0 + r_ref·ε_ref·(θ_ref − θ_ref0).
+  // Bidirectional, weighted by the local curvature: on an arc, rotating the beam advances the belt; on a straight run the tangent is fixed so the beam just tracks it.
+  // Baked geometry.
   | {
       type: "BeltFollowsTangent";
       ddl: 1;
@@ -315,8 +276,8 @@ export type Link = {
       s0: number;
       thetaRef0: number;
       offset: number;
-      // Pulleys that lost contact mid-sim (copied from BeltLength). The tangent is
-      // read from the REDUCED loop; s0/thetaRef0/refIndex re-baked at disconnect.
+      // Pulleys that lost contact mid-sim (copied from BeltLength).
+      // The tangent is read from the REDUCED loop; s0/thetaRef0/refIndex re-baked at disconnect.
       disconnected?: boolean[];
     }
   | {
@@ -326,26 +287,18 @@ export type Link = {
       drivenKey: string;
       omega: number;
       /** The driven beam's own moment of inertia about `pivotKey` (parallel-axis theorem:
-       *  `mL²/12 + m·a²`, `a` the pivot's distance from the beam's centre) — the analytic
-       *  value a point mass at `drivenKey` alone cannot give. See `mass-model.ts`'s
-       *  `BEAM_END_MASS_FRACTION` for why. */
+       * `mL²/12 + m·a²`, `a` the pivot's distance from the beam's centre) — the analytic value a point mass at `drivenKey` alone cannot give.
+       * See `mass-model.ts`'s `BEAM_END_MASS_FRACTION` for why. */
       armInertia: number;
       /** How much of `drivenKey`'s fused mass is this beam's own share (`mass ×
-       *  BEAM_END_MASS_FRACTION`) — subtracted back out before the dynamics step's torque
-       *  control law treats the REST of that fused mass (another beam, a gear, a mass
-       *  element) as a point at the arm's radius, so the beam's own contribution is never
-       *  counted twice. */
+       * BEAM_END_MASS_FRACTION`) — subtracted back out before the dynamics step's torque control law treats the REST of that fused mass (another beam, a gear, a mass element) as a point at the arm's radius, so the beam's own contribution is never counted twice. */
       armEndMass: number;
       // The anchor beam's free end (undefined = grounded, the world is the reference).
       // `pivotKey` doubles as the anchor's own pivot: both beams turn about the same hinge.
       anchorKey?: string;
-      // Last frame's raw pivot→anchor angle, so the per-frame refresh can fold the anchor's
-      // OWN motion into `targetAngle` as a one-frame delta on top of `driven`'s ACTUAL current
-      // angle — never an independent target. That is what keeps a beam-anchored motor exactly
-      // as soft as a grounded one (never more than one frame's commanded motion ahead of
-      // reality, so an over-constrained mechanism blocks the motor first, not the other way
-      // round) while still following the anchor's own rotation. Unused when `anchorKey` is
-      // undefined.
+      // Last frame's raw pivot→anchor angle, so the per-frame refresh can fold the anchor's OWN motion into `targetAngle` as a one-frame delta on top of `driven`'s ACTUAL current angle — never an independent target.
+      // That is what keeps a beam-anchored motor exactly as soft as a grounded one (never more than one frame's commanded motion ahead of reality, so an over-constrained mechanism blocks the motor first, not the other way round) while still following the anchor's own rotation.
+      // Unused when `anchorKey` is undefined.
       anchorAngle?: number;
       targetAngle: number;
     }
@@ -354,9 +307,7 @@ export type Link = {
       ddl: 1;
       angleKey: string;
       omega: number;
-      // Same idea as `MotorBeam`'s anchor, for a gear driven relative to a beam instead of
-      // the ground: the beam has no angle node, so its orientation is read from these two
-      // position keys (the shared pivot, and the beam's free end) rather than one angle key.
+      // Same idea as `MotorBeam`'s anchor, for a gear driven relative to a beam instead of the ground: the beam has no angle node, so its orientation is read from these two position keys (the shared pivot, and the beam's free end) rather than one angle key.
       anchorPivotKey?: string;
       anchorKey?: string;
       /** Last frame's raw anchorPivotKey→anchorKey angle — see `MotorBeam.anchorAngle`. */
@@ -403,10 +354,10 @@ export type Link = {
       angleKey: string;
       offset: number;
     }
-  // EXPERIMENTAL (belt "q" model, behind USE_Q_MODEL). One instance per tangent
-  // segment a→b of a belt: no-slip q_a − q_b = Δh, q_k = r_k·ε_k·θ_k. Replaces the
-  // single shared φ of BeltPhaseGear by a per-segment chain. Never emitted by the
-  // parser — only the measurement bench builds these. See experimental/belt-noslip-q.ts.
+  // EXPERIMENTAL (belt "q" model, behind USE_Q_MODEL).
+  // One instance per tangent segment a→b of a belt: no-slip q_a − q_b = Δh, q_k = r_k·ε_k·θ_k. Replaces the single shared φ of BeltPhaseGear by a per-segment chain.
+  // Never emitted by the parser — only the measurement bench builds these.
+  // See experimental/belt-noslip-q.ts.
   | {
       type: "BeltSegmentNoSlip";
       ddl: 1;
@@ -421,8 +372,7 @@ export type Link = {
       theta0A: number;
       theta0B: number;
       h0: number; // baked h at rest
-      // The whole ordered belt geometry, shared by every segment of the belt, so
-      // each instance can recompute h (ℓ + u_a − v_b) from the live positions.
+      // The whole ordered belt geometry, shared by every segment of the belt, so each instance can recompute h (ℓ + u_a − v_b) from the live positions.
       gearPosKeys: string[];
       radii: number[];
       directions: boolean[];
@@ -430,37 +380,33 @@ export type Link = {
       startKey?: string;
       endKey?: string;
       segIndex: number; // which tangent piece of belt_pieces(vias, closed) this is
-      // The via the strand departs from, i.e. its TANGENT PAIR index — which the piece
-      // index above is not: skipped arcs shift the piece list.
+      // The via the strand departs from, i.e. its TANGENT PAIR index — which the piece index above is not: skipped arcs shift the piece list.
       viaA: number;
       // Continuous arrival-angle unwrapping reference, per via, updated in place.
       arrivals?: number[];
-      // If true the constraint also writes posKeyA/posKeyB along the strand tangent
-      // (option 2); false = angles only (option 1).
+      // If true the constraint also writes posKeyA/posKeyB along the strand tangent (option 2); false = angles only (option 1).
       writePositions: boolean;
-      // Angular mobility of θ_a / θ_b, the analogue of posMasses for angles: 1 =
-      // free, 0 = pinned (another constraint assigns this angle outright, so the
-      // projection must not send it any correction). Absent = 1.
+      // Angular mobility of θ_a / θ_b, the analogue of posMasses for angles: 1 = free, 0 = pinned (another constraint assigns this angle outright, so the projection must not send it any correction).
+      // Absent = 1.
       angleMobA?: number;
       angleMobB?: number;
-      // "full" = write the two centres with the FULL positional gradient of C
-      // (tangent + arc, ∂C/∂c = (d + (s_a−s_b)·n̂)/ℓ), giving the no-slip
-      // positional authority. Overrides writePositions' tangent-only path.
+      // "full" = write the two centres with the FULL positional gradient of C (tangent + arc, ∂C/∂c = (d + (s_a−s_b)·n̂)/ℓ), giving the no-slip positional authority.
+      // Overrides writePositions' tangent-only path.
       authority?: "full";
-      // Metric of the angle DOFs in the projection. Absent = "unit" (w_θ = 1),
-      // where an angle of radius r is r² times more mobile than a centre. "rim"
-      // (w_θ = 1/r²) makes an angle exactly as mobile as a point of its own rim —
-      // the metric GearPerimeterPin, BeltPin and BeltPhaseGear already use.
+      // Metric of the angle DOFs in the projection.
+      // Absent = "unit" (w_θ = 1), where an angle of radius r is r² times more mobile than a centre.
+      // "rim" (w_θ = 1/r²) makes an angle exactly as mobile as a point of its own rim — the metric GearPerimeterPin, BeltPin and BeltPhaseGear already use.
       angleMetric?: "rim";
     }
-  // EXPERIMENTAL (belt sub-chain aggregate). The telescoped sum of a run of
-  // consecutive no-slip laws: C = q_début − q_fin − Σ Δh. Its interior q's have
-  // cancelled, so it has no internal degree of freedom to relax into — that is the
-  // whole point. Never emitted by the parser. See experimental/belt-aggregate.ts.
+  // EXPERIMENTAL (belt sub-chain aggregate).
+  // The telescoped sum of a run of consecutive no-slip laws: C = q_début − q_fin − Σ Δh. Its interior q's have cancelled, so it has no internal degree of freedom to relax into — that is the whole point.
+  // Never emitted by the parser.
+  // See experimental/belt-aggregate.ts.
   | {
       type: "BeltSubChainAggregate";
       ddl: 1;
-      // The two bounds. A dead terminal has no angle key and rEps 0 (q ≡ 0).
+      // The two bounds.
+      // A dead terminal has no angle key and rEps 0 (q ≡ 0).
       angleKeyStart?: string;
       angleKeyEnd?: string;
       rEpsStart: number;
@@ -476,19 +422,15 @@ export type Link = {
       startKey?: string;
       endKey?: string;
       segIndices: number[]; // the belt_pieces indices of this sub-chain's strands
-      // The same strands as TANGENT PAIR indices (the via each departs from), which the
-      // piece indices above are not: skipped arcs shift the piece list. Cyclically
-      // contiguous, so the vias the run touches run from `viaIndices[0]` onwards.
+      // The same strands as TANGENT PAIR indices (the via each departs from), which the piece indices above are not: skipped arcs shift the piece list.
+      // Cyclically contiguous, so the vias the run touches run from `viaIndices[0]` onwards.
       viaIndices: number[];
       arrivals?: number[];
       angleMetric?: "rim";
     }
-  // EXPERIMENTAL (belt loop closure). A closed belt's segment laws telescope around
-  // the loop to an identity — one equation short of full rank — leaving one free mode
-  // (every pulley's rim moved by the same amount) that sequential per-segment solving
-  // resolves arbitrarily, listing order first. Built only when the loop has fewer than
-  // two stakeholders (see hasStakeholderBeyond, belt-aggregate.ts): with two or more,
-  // BeltSubChainAggregate already ties the loop down and this would only fight it.
+  // EXPERIMENTAL (belt loop closure).
+  // A closed belt's segment laws telescope around the loop to an identity — one equation short of full rank — leaving one free mode (every pulley's rim moved by the same amount) that sequential per-segment solving resolves arbitrarily, listing order first.
+  // Built only when the loop has fewer than two stakeholders (see hasStakeholderBeyond, belt-aggregate.ts): with two or more, BeltSubChainAggregate already ties the loop down and this would only fight it.
   // Never emitted by the parser — see experimental/belt-aggregate.ts.
   | {
       type: "BeltLoopClosure";

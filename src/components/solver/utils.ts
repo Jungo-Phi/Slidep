@@ -18,8 +18,8 @@ export function get_geom_degrees_of_freedom(
 
 /**
  * Degrees of freedom for the kinematic simulation.
- * Variables: positions (×2) + gear angles (×1), minus link DOF and anchored
- * positions. Angles are never anchored, so they carry no mass term.
+ * Variables: positions (×2) + gear angles (×1), minus link DOF and anchored positions.
+ * Angles are never anchored, so they carry no mass term.
  */
 export function get_sim_degrees_of_freedom(
   nodes: KinNodes,
@@ -34,7 +34,8 @@ export function get_sim_degrees_of_freedom(
 }
 
 /** Position keys a link touches, for ordering the sweep. Angle keys are absent on purpose:
- *  the sort only cares about distance to an anchor. `variable_keys_of` is the complete one. */
+ * the sort only cares about distance to an anchor.
+ * `variable_keys_of` is the complete one. */
 export function keys_of(link: Link): string[] {
   switch (link.type) {
     case "Radius":
@@ -111,7 +112,8 @@ export function sort_links(
   links: Link[],
   posMasses: Map<string, number>,
 ): Link[] {
-  // 1. Construire l'index clé → liens qui la touchent
+  // 1.
+  // Construire l'index clé → liens qui la touchent
   const key_to_links = new Map<string, number[]>();
   links.forEach((link, i) => {
     keys_of(link).forEach((k) => {
@@ -120,7 +122,8 @@ export function sort_links(
     });
   });
 
-  // 2. BFS : priorité aux liens touchant une clé ancrée (masse = 0)
+  // 2.
+  // BFS : priorité aux liens touchant une clé ancrée (masse = 0)
   const visited = new Array(links.length).fill(false);
   const result: Link[] = [];
   const queue: number[] = [];

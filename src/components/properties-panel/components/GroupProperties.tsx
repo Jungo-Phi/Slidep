@@ -36,11 +36,10 @@ import {
 } from "../../../utils/quantity-format";
 
 /**
- * One value the group's elements give for a field, and whether they agree. `undefined` when none
- * of them carries it — which is how a group only renders the fields its own type has.
+ * One value the group's elements give for a field, and whether they agree.
+ * `undefined` when none of them carries it — which is how a group only renders the fields its own type has.
  *
- * `kind` and `precision` are the field's own: agreeing means agreeing on what it would show, so
- * they must be the pair passed to the input below — see `same_shown_value`.
+ * `kind` and `precision` are the field's own: agreeing means agreeing on what it would show, so they must be the pair passed to the input below — see `same_shown_value`.
  */
 function common_value<T extends MechanicalElement>(
   elements: MechanicalElement[],
@@ -101,18 +100,13 @@ interface GroupPropertiesProps {
 }
 
 /**
- * The fields one group of the selection shares, editable for all of it at once. A group is one
- * element type, so every field here speaks for the whole group and nothing else — which is what
- * lets `L` mean the beams' length under the beams and the springs' under the springs.
+ * The fields one group of the selection shares, editable for all of it at once.
+ * A group is one element type, so every field here speaks for the whole group and nothing else — which is what lets `L` mean the beams' length under the beams and the springs' under the springs.
  *
- * A control loses whatever part of itself cannot be shared — the motor's direction switch, since
- * a sense of rotation is read off one motor's place in the mechanism — but only while the group
- * holds more than one element: alone, an element keeps its own panel's full control.
+ * A control loses whatever part of itself cannot be shared — the motor's direction switch, since a sense of rotation is read off one motor's place in the mechanism — but only while the group holds more than one element: alone, an element keeps its own panel's full control.
  *
- * Deliberately excludes the geometry that carries a position — position and angle — since canvas
- * drag already moves a selection together and setting them all to one absolute value would
- * collapse them onto each other. A length or a radius is not in that class: three beams sharing
- * a length stay three beams, each about its own start.
+ * Deliberately excludes the geometry that carries a position — position and angle — since canvas drag already moves a selection together and setting them all to one absolute value would collapse them onto each other.
+ * A length or a radius is not in that class: three beams sharing a length stay three beams, each about its own start.
  */
 export const GroupProperties: React.FC<GroupPropertiesProps> = ({
   elements,
@@ -187,8 +181,7 @@ export const GroupProperties: React.FC<GroupPropertiesProps> = ({
   );
   const beams = elements.filter((el): el is BeamElement => el.type === "beam");
 
-  // A dimensioned edge is lengthened through its dimension, exactly as its own panel does —
-  // writing the edge directly would leave the two disagreeing until the solver pulled it back.
+  // A dimensioned edge is lengthened through its dimension, exactly as its own panel does — writing the edge directly would leave the two disagreeing until the solver pulled it back.
   const set_length = (
     el: BeamElement | SpringElement | DamperElement,
     newLength: number,

@@ -1,9 +1,8 @@
 /**
  * The ruler: what its ends hold on to, what a click builds, and what the whole reads.
  *
- * Everything is resolved against the mechanism it is read with, which during a simulation is
- * the live pose — so a reading is of the mechanism as it stands now, not of the pose the ruler
- * was laid on. A reading whose element is gone goes quiet rather than reporting a stale point.
+ * Everything is resolved against the mechanism it is read with, which during a simulation is the live pose — so a reading is of the mechanism as it stands now, not of the pose the ruler was laid on.
+ * A reading whose element is gone goes quiet rather than reporting a stale point.
  */
 
 import type { CanvasState } from "../../../types/canvas-state";
@@ -94,9 +93,8 @@ export function gear_of(
 }
 
 /**
- * Where an end stands before the other one is known, or nothing if what it was laid on has
- * since gone. A gear answers with its centre, which is not where it is measured from — see
- * `measure_points`, the only place a gear's own point is settled.
+ * Where an end stands before the other one is known, or nothing if what it was laid on has since gone.
+ * A gear answers with its centre, which is not where it is measured from — see `measure_points`, the only place a gear's own point is settled.
  */
 export function anchor_base(
   anchor: MeasureAnchor,
@@ -126,8 +124,7 @@ export function anchor_base(
 /** The point of `gear`'s rim nearest `toward`. */
 function rim_point(gear: GearElement, toward: WorldPoint): WorldPoint {
   const spoke = toward.sub(gear.position);
-  // Aimed at the centre itself, the rim offers no direction and every point of it is as near
-  // as any other.
+  // Aimed at the centre itself, the rim offers no direction and every point of it is as near as any other.
   if (spoke.length() < 1e-9) return gear.position;
   return gear.position.add(spoke.with_length(gear.radius));
 }
@@ -160,14 +157,11 @@ function bar_of(anchor: MeasureAnchor): ID | undefined {
 /**
  * The two ends of a distance reading as points, or nothing if either has lost what it held.
  *
- * The one place a gear's own point is settled, being the only place both ends are known: a
- * gear is held by its rim, and which point of the rim is the one nearest the opposite end.
- * Both are answered from the centres, which for two gears is exact — the nearest points of
- * two circles lie on the line joining them.
+ * The one place a gear's own point is settled, being the only place both ends are known: a gear is held by its rim, and which point of the rim is the one nearest the opposite end.
+ * Both are answered from the centres, which for two gears is exact — the nearest points of two circles lie on the line joining them.
  *
- * `crossed` says the two ends have passed each other, which only rims can do: two gears sunk
- * into one another give back rim points in the wrong order. It is what turns the reading
- * negative, so an interference of 2 mm does not read like a gap of 2 mm.
+ * `crossed` says the two ends have passed each other, which only rims can do: two gears sunk into one another give back rim points in the wrong order.
+ * It is what turns the reading negative, so an interference of 2 mm does not read like a gap of 2 mm.
  */
 export function measure_span(
   measure: Measure,
@@ -184,8 +178,7 @@ export function measure_span(
   return {
     from,
     to,
-    // Ends that did not move off their base cannot have crossed: the two vectors are then the
-    // same one, and its dot product with itself is never negative.
+    // Ends that did not move off their base cannot have crossed: the two vectors are then the same one, and its dot product with itself is never negative.
     crossed: to.sub(from).dot(toBase.sub(fromBase)) < 0,
   };
 }
@@ -205,9 +198,7 @@ export function spanned_edge(measure: Measure): ID | undefined {
 /**
  * Where an angle reading sits and how wide it opens, as the bars stand now.
  *
- * The vertex is where the two bars' lines cross, which moves with them; the arc is anchored on
- * the bisector of the quadrant the clicks picked out, at the radius they set — so it stays in
- * its own corner and keeps its size however the mechanism swings.
+ * The vertex is where the two bars' lines cross, which moves with them; the arc is anchored on the bisector of the quadrant the clicks picked out, at the radius they set — so it stays in its own corner and keeps its size however the mechanism swings.
  */
 export function angle_geometry(
   measure: Extract<Measure, { kind: "angle" }>,
@@ -241,8 +232,7 @@ export function angle_geometry(
     .mul(measure.flipEnd ? -1 : 1)
     .normalize();
   const bisector = v1.add(v2);
-  // At a straight angle the bisector vanishes, and either side of the two bars is as good
-  // as the other.
+  // At a straight angle the bisector vanishes, and either side of the two bars is as good as the other.
   const direction =
     bisector.length() > 1e-9 ? bisector.normalize() : v1.perp().normalize();
   return {
@@ -282,11 +272,9 @@ export function measure_readout(
 /**
  * The reading a second click on `hoveredPart` would seal.
  *
- * Two bar bodies give the angle between them, the way the dimensioning tool's second edge
- * does — and the two clicked points, which lie in the corner being aimed at, settle which of
- * the four quadrants that is. One thing clicked twice reads itself instead, a span or an angle
- * with itself being nothing: a bar gives its length, a gear its radius. Everything else is a
- * distance between the two ends.
+ * Two bar bodies give the angle between them, the way the dimensioning tool's second edge does — and the two clicked points, which lie in the corner being aimed at, settle which of the four quadrants that is.
+ * One thing clicked twice reads itself instead, a span or an angle with itself being nothing: a bar gives its length, a gear its radius.
+ * Everything else is a distance between the two ends.
  */
 export function build_measure(
   start: MeasureAnchor,
@@ -318,8 +306,7 @@ export function build_measure(
     const from = anchor_base(start, elements);
     const to = anchor_base(end, elements);
     if (startEdge && endEdge && from && to) {
-      // Strictly inside the corner being aimed at, which the cursor itself is not: it sits on
-      // the second bar, where the quadrant test has nothing to bite on.
+      // Strictly inside the corner being aimed at, which the cursor itself is not: it sits on the second bar, where the quadrant test has nothing to bite on.
       const corner = from.lerp(to, 0.5);
       const quadrant = resolve_angle_constraint_quadrant(
         startEdge.positionStart,
@@ -334,8 +321,7 @@ export function build_measure(
         endEdge.positionStart,
         endEdge.positionEnd,
       );
-      // Parallel bars cross nowhere: the ruler falls back to the distance between the two
-      // points aimed at, the one thing still worth reading there.
+      // Parallel bars cross nowhere: the ruler falls back to the distance between the two points aimed at, the one thing still worth reading there.
       if (quadrant && vertex)
         return {
           kind: "angle",
@@ -353,9 +339,9 @@ export function build_measure(
 }
 
 /**
- * Where a refusal — Escape, the right button — leaves the ruler: back to its previous step,
- * one at a time. A reading is dropped before the instrument is, so a misplaced end costs one
- * key rather than the whole gesture. Answers nothing for a state the ruler is not in.
+ * Where a refusal — Escape, the right button — leaves the ruler: back to its previous step, one at a time.
+ * A reading is dropped before the instrument is, so a misplaced end costs one key rather than the whole gesture.
+ * Answers nothing for a state the ruler is not in.
  */
 export function ruler_step_back(state: CanvasState): CanvasState | undefined {
   switch (state.type) {
@@ -370,9 +356,8 @@ export function ruler_step_back(state: CanvasState): CanvasState | undefined {
 }
 
 /**
- * What the ruler shows right now: the reading it holds, or — while one end is down — the one
- * the next click would seal. The preview is therefore exactly what clicking produces, with no
- * second rule to keep in step with the first.
+ * What the ruler shows right now: the reading it holds, or — while one end is down — the one the next click would seal.
+ * The preview is therefore exactly what clicking produces, with no second rule to keep in step with the first.
  */
 export function shown_measure(
   state: CanvasState,
@@ -400,10 +385,9 @@ const NOTHING_MEASURED: ReadonlySet<ID> = new Set();
 /**
  * The elements a reading takes whole rather than as a point of.
  *
- * A node always, being a point in itself. A gear always — which point of its rim is measured
- * is settled by the opposite end. A bar only for its own length or for an angle, where the
- * direction of the whole bar is what is read; anywhere else it contributes one point of its
- * body, and that point is what gets marked.
+ * A node always, being a point in itself.
+ * A gear always — which point of its rim is measured is settled by the opposite end.
+ * A bar only for its own length or for an angle, where the direction of the whole bar is what is read; anywhere else it contributes one point of its body, and that point is what gets marked.
  */
 export function whole_elements(measure: Measure): ID[] {
   switch (measure.kind) {
@@ -426,11 +410,9 @@ export function whole_elements(measure: Measure): ID[] {
 }
 
 /**
- * Every reading the ruler puts on the canvas: the one it holds, and — while it holds no end —
- * what the element under the cursor reads of itself.
+ * Every reading the ruler puts on the canvas: the one it holds, and — while it holds no end — what the element under the cursor reads of itself.
  *
- * The single answer to "what is on screen", so the drawing and the elements lit for it cannot
- * disagree about which readings there are.
+ * The single answer to "what is on screen", so the drawing and the elements lit for it cannot disagree about which readings there are.
  */
 export function shown_readings(
   state: CanvasState,

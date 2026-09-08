@@ -61,7 +61,7 @@ import {
 } from "../../utils/quantity-format";
 
 /** What `OnCanvasValueEditor` formats and parses the element's value as — `undefined` for
- *  `gear-ratio` (dimensionless, "ratio" mode reads it directly). */
+ * `gear-ratio` (dimensionless, "ratio" mode reads it directly). */
 const VALUE_EDITOR_KIND: Partial<Record<UnionElement["type"], QuantityKind>> = {
   "dimension-edge": LENGTH,
   "dimension-node-to-node": LENGTH,
@@ -131,7 +131,7 @@ const STRUCTURAL_KEYS = new Set([
 const CONSTRAINT_KEYS = new Set(["d", "e", "h", "l", "n", "q", "v"]);
 
 /** One line per distinct failure: the loop retries every frame, so an unguarded
- *  log buries the console sixty times a second. */
+ * log buries the console sixty times a second. */
 const reportedRenderFailures = new Set<string>();
 function report_render_failure(error: unknown): void {
   const key = error instanceof Error ? error.message : String(error);
@@ -141,10 +141,8 @@ function report_render_failure(error: unknown): void {
 }
 
 /**
- * Demande de retour visuel après un undo/redo touchant des contraintes-icônes :
- * les `revealIDs` sont révélées (recréation ou déplacement/édition), les
- * `removed` sont affichées en fantôme rouge qui s'estompe. `seq` est un compteur
- * monotone pour ne traiter chaque signal qu'une fois.
+ * Demande de retour visuel après un undo/redo touchant des contraintes-icônes : les `revealIDs` sont révélées (recréation ou déplacement/édition), les `removed` sont affichées en fantôme rouge qui s'estompe.
+ * `seq` est un compteur monotone pour ne traiter chaque signal qu'une fois.
  */
 export interface ConstraintChangeSignal {
   revealIDs: ID[];
@@ -177,16 +175,14 @@ interface MechanicalCanvasProps {
   snapSettings: SnapSettings;
   showGrid: boolean;
   /** Which reading tints every beam's fill — mechanism-wide, see `BeamStressLens`'s own doc
-   *  (docs/plan-efforts-interieurs.md phase 9). */
+   * (docs/plan-efforts-interieurs.md phase 9). */
   beamStressLens: BeamStressLens;
   /** Trajectory overlay style: dots at fixed spacing versus one continuous stroke. */
   trajectoryDotted: boolean;
   /**
    * What the recording loop publishes each frame, or `null` outside simulation.
    *
-   * A ref rather than a prop because the canvas must not wait for a render to show a
-   * mechanism that moved: it draws from its own RAF loop, and the clock deliberately
-   * reaches React at a fraction of the frame rate.
+   * A ref rather than a prop because the canvas must not wait for a render to show a mechanism that moved: it draws from its own RAF loop, and the clock deliberately reaches React at a fraction of the frame rate.
    */
   liveFrameRef: React.RefObject<LiveFrame | null>;
   /** Elements the analysis panel is pointing at, and why (see `CanvasHighlight`). */
@@ -194,23 +190,20 @@ interface MechanicalCanvasProps {
   /**
    * A pose the analysis panel is swinging along one motion mode, or `null`.
    *
-   * A ref for the same reason as `liveFrameRef`: it changes every frame, and the draw loop
-   * must not wait for a render.
+   * A ref for the same reason as `liveFrameRef`: it changes every frame, and the draw loop must not wait for a render.
    *
-   * It wins over the live frame, which is only ever set in simulation and would otherwise
-   * hide the swing on a PAUSED recording — the one place the feature has most to say, since
-   * the analysis then describes the pose the recording is stopped on. Nothing is lost the
-   * other way round: the panel only animates while the mechanism is still, so this is null
-   * for the whole of a playing simulation.
+   * It wins over the live frame, which is only ever set in simulation and would otherwise hide the swing on a PAUSED recording — the one place the feature has most to say, since the analysis then describes the pose the recording is stopped on.
+   * Nothing is lost the other way round: the panel only animates while the mechanism is still, so this is null for the whole of a playing simulation.
    */
   modePreviewRef: React.RefObject<Mechanism | null>;
   /** How a redundant constraint the analysis panel is pointing at would yield. */
   redundancySymbols: RedundancySymbol[];
   /** An abscissa hovered on the analysis panel's N/T/Mf diagrams, marked on the beam — see
-   *  docs/plan-efforts-interieurs.md phase 5bis. `null` outside that hover. */
+   * docs/plan-efforts-interieurs.md phase 5bis.
+   * `null` outside that hover. */
   hoveredAbscissa: HoveredAbscissa | null;
   /** Which of the library dialog's two sections tints the beams — undefined while that
-   *  dialog is closed. */
+   * dialog is closed. */
   librarySection?: "materials" | "profiles";
   /** The row hovered there, if any — accentuates its beams and fades the rest. */
   hoveredLibraryEntryID?: ID | null;
@@ -221,30 +214,27 @@ export interface LiveFrame {
   mechanism: Mechanism;
   trajectories: TrajectoryDisplay[];
   /** Velocity/reaction arrows for elements with the matching overlay on — dynamic mode
-   *  only, empty everywhere else. */
+   * only, empty everywhere else. */
   overlayArrows: OverlayArrow[];
   /** The moment half of a reaction, wherever a rigid weld's force-couple carries one —
-   *  same gating as `overlayArrows`. */
+   * same gating as `overlayArrows`. */
   overlayMoments: OverlayMoment[];
   /**
-   * Every beam's cohesion field, dynamic mode only — docs/plan-efforts-interieurs.md
-   * phase 4. Consumed by the analysis panel's N/T/Mf diagrams (phase 5bis) and the beam-fill
-   * lens below (phase 9).
+   * Every beam's cohesion field, dynamic mode only — docs/plan-efforts-interieurs.md phase 4.
+   * Consumed by the analysis panel's N/T/Mf diagrams (phase 5bis) and the beam-fill lens below (phase 9).
    */
   cohesionFields?: CohesionField[];
   /** The `normal` lens' shared scale (`StressScaleCache.maxNormal`) — the highest `|N/A|` ever
-   *  recorded, Pa. `0` outside dynamic mode or before anything has been recorded yet. */
+   * recorded, Pa. `0` outside dynamic mode or before anything has been recorded yet. */
   normalStressScale: number;
   /** The `bending` lens' shared scale (`StressScaleCache.maxBending`) — the highest
-   *  `|Mf·v/I|` ever recorded, Pa. `0` outside dynamic mode or before anything has been
-   *  recorded yet. */
+   * `|Mf·v/I|` ever recorded, Pa. `0` outside dynamic mode or before anything has been recorded yet. */
   bendingStressScale: number;
   /** The `utilization` lens' shared ramp top (`StressScaleCache.maxStress`, `cohesion-field.ts`)
-   *  — the highest `|σ|max` ever recorded, Pa. `0` outside dynamic mode or before anything has
-   *  been recorded yet. */
+   * — the highest `|σ|max` ever recorded, Pa. `0` outside dynamic mode or before anything has been recorded yet. */
   stressScale: number;
   /** The `shear` lens' shared ramp top (`StressScaleCache.maxShear`) — the highest `τ_max`
-   *  ever recorded, Pa. `0` outside dynamic mode or before anything has been recorded yet. */
+   * ever recorded, Pa. `0` outside dynamic mode or before anything has been recorded yet. */
   shearStressScale: number;
 }
 
@@ -292,8 +282,8 @@ export const MechanicalCanvas = forwardRef<
     },
     ref,
   ) => {
-    // Cached container geometry. Reading it back from the DOM forces a layout,
-    // which neither the render loop nor a pointer move can afford to pay for.
+    // Cached container geometry.
+    // Reading it back from the DOM forces a layout, which neither the render loop nor a pointer move can afford to pay for.
     const canvasRectRef = useRef<{
       left: number;
       top: number;
@@ -309,16 +299,13 @@ export const MechanicalCanvas = forwardRef<
       center: ScreenPoint;
     } | null>(null);
     const mouseButtonDownRef = useRef<"none" | "left" | "right">("none");
-    // The hovered part is shared with the panels, which designate an element by
-    // hovering its card. Only a hover pointed at on the canvas carries a cursor
-    // for a tool to preview under.
+    // The hovered part is shared with the panels, which designate an element by hovering its card.
+    // Only a hover pointed at on the canvas carries a cursor for a tool to preview under.
     const cursorOnCanvasRef = useRef(false);
-    // Set beside every `setHoveredPart`: the guide belongs to the snap that
-    // produced the hovered point, and would be a lie recomputed from it.
+    // Set beside every `setHoveredPart`: the guide belongs to the snap that produced the hovered point, and would be a lie recomputed from it.
     const snapFeedbackRef = useRef<SnapFeedback>(NO_FEEDBACK);
     
-    // The ruler's readings are written into its widget from the animation loop, never
-    // through a render: under a simulation they change every frame.
+    // The ruler's readings are written into its widget from the animation loop, never through a render: under a simulation they change every frame.
     const measureReadoutRef = useRef<MeasureReadoutHandle>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
@@ -366,15 +353,12 @@ export const MechanicalCanvas = forwardRef<
       Array<{ constraint: ConstraintElement; timestamp: number }>
     >([]);
     const lastConstraintChangeSeqRef = useRef(0);
-    // Renvoie vers le handleEvent courant : onMouseUpHandler est capturé dans le
-    // handleEvent mémoïsé, il doit rester stable sans figer la closure.
+    // Renvoie vers le handleEvent courant : onMouseUpHandler est capturé dans le handleEvent mémoïsé, il doit rester stable sans figer la closure.
     const handleEventRef = useRef<(event: CanvasEvent) => void>(() => {});
 
-    // The live frame wins: a render must not put the edit-time positions back under the
-    // pointer for the frame it takes the draw loop to overwrite them again.
-    // What is drawn when nothing overrides it. `render` runs from the draw loop and does
-    // not list the prop among its dependencies, so it reads the resting pose from here
-    // rather than from a closure that would freeze on the first frame.
+    // The live frame wins: a render must not put the edit-time positions back under the pointer for the frame it takes the draw loop to overwrite them again.
+    // What is drawn when nothing overrides it.
+    // `render` runs from the draw loop and does not list the prop among its dependencies, so it reads the resting pose from here rather than from a closure that would freeze on the first frame.
     restingRef.current = mechanism;
     mechanismRef.current =
       modePreviewRef.current ?? liveFrameRef.current?.mechanism ?? mechanism;
@@ -382,13 +366,12 @@ export const MechanicalCanvas = forwardRef<
     canvasStateRef.current = canvasState;
 
     /** Re-reads the container geometry. Call it whenever the canvas may have
-     *  moved or been resized — the cache serves every frame in between. */
+     * moved or been resized — the cache serves every frame in between. */
     const measureCanvas = useCallback(() => {
       const container = containerRef.current;
       if (!container) return null;
       const rect = container.getBoundingClientRect();
-      // The backing store is integral: keep the cached size in step with it, so
-      // the screen↔world conversions don't drift by a fraction of a pixel.
+      // The backing store is integral: keep the cached size in step with it, so the screen↔world conversions don't drift by a fraction of a pixel.
       const measured = {
         left: rect.left,
         top: rect.top,
@@ -410,8 +393,7 @@ export const MechanicalCanvas = forwardRef<
     }, [measureCanvas]);
 
     // Rafraîchit les contraintes révélées d'après l'élément (ou le badge) survolé.
-    // Appelé à chaque frame → les badges restent affichés tant qu'on survole,
-    // même sans bouger la souris.
+    // Appelé à chaque frame → les badges restent affichés tant qu'on survole, même sans bouger la souris.
     const refreshRevealFromHover = useCallback((hovered: HoveredPart) => {
       if (appModeRef.current !== "edition") return;
       const now = performance.now();
@@ -460,8 +442,8 @@ export const MechanicalCanvas = forwardRef<
       );
     }, [refreshRevealFromHover]);
 
-    // Traite un éventuel signal d'undo/redo : révèle les contraintes recréées et
-    // ajoute les supprimées à la liste des fantômes. N'agit qu'une fois par seq.
+    // Traite un éventuel signal d'undo/redo : révèle les contraintes recréées et ajoute les supprimées à la liste des fantômes.
+    // N'agit qu'une fois par seq.
     const processConstraintChange = useCallback(() => {
       const change = constraintChangeRef.current;
       if (!change || change.seq === lastConstraintChangeSeqRef.current) return;
@@ -487,30 +469,23 @@ export const MechanicalCanvas = forwardRef<
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
 
-      // The simulated positions — and the pose a mode is being swung through — land here,
-      // not through a prop: hit-testing and hover read the same ref, so they stay on the
-      // mechanism that is actually drawn. Both change every frame, which no render follows.
+      // The simulated positions — and the pose a mode is being swung through — land here, not through a prop: hit-testing and hover read the same ref, so they stay on the mechanism that is actually drawn.
+      // Both change every frame, which no render follows.
       const live = liveFrameRef.current;
       mechanismRef.current =
         modePreviewRef.current ?? live?.mechanism ?? restingRef.current;
 
-      // Writing width/height reallocates the backing store even when the value
-      // is unchanged, so the canvas only follows the container when it moves.
+      // Writing width/height reallocates the backing store even when the value is unchanged, so the canvas only follows the container when it moves.
       const rect = canvasRectRef.current ?? measureCanvas();
       if (!rect) return;
       if (canvas.width !== rect.width) canvas.width = rect.width;
       if (canvas.height !== rect.height) canvas.height = rect.height;
 
-      // Canvas state survives across frames: an opacity or a halo left on by the
-      // previous frame would fade the grid and everything drawn before the first
-      // reset.
+      // Canvas state survives across frames: an opacity or a halo left on by the previous frame would fade the grid and everything drawn before the first reset.
       ctx.shadowBlur = 0;
       ctx.globalAlpha = 1;
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      // The viewport is camera state, not part of the pose: it must track the mechanism
-      // being edited even while `mechanismRef` points at a stale analysed/preview copy
-      // (a mode swing, say), or panning while one is shown would snap the drawing back
-      // to whatever viewport was current when that copy was made.
+      // The viewport is camera state, not part of the pose: it must track the mechanism being edited even while `mechanismRef` points at a stale analysed/preview copy (a mode swing, say), or panning while one is shown would snap the drawing back to whatever viewport was current when that copy was made.
       const viewport = restingRef.current.viewport;
 
       if (showGrid) draw_grid(ctx, viewport, canvas.width, canvas.height);
@@ -519,8 +494,7 @@ export const MechanicalCanvas = forwardRef<
       if (showGrid)
         draw_graduations(ctx, viewport, canvas.width, canvas.height);
 
-      // Under the mechanism, like the grid: it is scaffolding for the gesture in
-      // progress, not something being drawn.
+      // Under the mechanism, like the grid: it is scaffolding for the gesture in progress, not something being drawn.
       if (cursorOnCanvasRef.current) {
         const held = snapFeedbackRef.current;
         draw_snap_feedback(
@@ -547,11 +521,9 @@ export const MechanicalCanvas = forwardRef<
 
       const now = performance.now();
 
-      // A dimension states a design value, and the analysis is not about design values: a
-      // mode swings the mechanism away from the pose it was dimensioned at, and a chain
-      // picks out parts a cluttered drawing hides. So the dimensions step aside as soon as
-      // the panel points at anything, as they already do in simulation. Faded rather than
-      // cut, so travelling down a card's rows does not make them blink.
+      // A dimension states a design value, and the analysis is not about design values: a mode swings the mechanism away from the pose it was dimensioned at, and a chain picks out parts a cluttered drawing hides.
+      // So the dimensions step aside as soon as the panel points at anything, as they already do in simulation.
+      // Faded rather than cut, so travelling down a card's rows does not make them blink.
       const analysingKind =
         highlightRef.current.kind === "focus" ||
         highlightRef.current.kind === "fault";
@@ -559,9 +531,7 @@ export const MechanicalCanvas = forwardRef<
         modePreviewRef.current !== null ||
         (analysingKind && highlightRef.current.elements.size > 0);
       if (analysing) lastSwingAtRef.current = now;
-      // They leave at once but come back late: crossing from one row to the next passes
-      // through a frame or two pointing at nothing, and dimensions flashing in between
-      // would be worse than their absence.
+      // They leave at once but come back late: crossing from one row to the next passes through a frame or two pointing at nothing, and dimensions flashing in between would be worse than their absence.
       const returning =
         !analysing &&
         now - lastSwingAtRef.current > MODE_ANIMATION.DIMENSION_RETURN_DELAY_MS;
@@ -596,8 +566,7 @@ export const MechanicalCanvas = forwardRef<
         return true;
       });
 
-      // The floor: under every mechanism element (it's a surface they rest on, not
-      // one of them), but over the grid/axes/graduations, unlike the grid itself.
+      // The floor: under every mechanism element (it's a surface they rest on, not one of them), but over the grid/axes/graduations, unlike the grid itself.
       draw_floor(
         ctx,
         viewport,
@@ -632,8 +601,7 @@ export const MechanicalCanvas = forwardRef<
           mechanismRef.current.mechanicalElements,
           cursorOnCanvasRef.current,
         ),
-        // A running kinematic simulation moves the mechanism away from the poses the loads
-        // were placed at, so they step aside rather than point at nothing.
+        // A running kinematic simulation moves the mechanism away from the poses the loads were placed at, so they step aside rather than point at nothing.
         hideLoads: appModeRef.current === "kinematic",
         dimensionSnapped: snapFeedbackRef.current.distanceSnapped ?? false,
         highlight: highlightRef.current,
@@ -647,8 +615,7 @@ export const MechanicalCanvas = forwardRef<
               hoveredEntryID: hoveredLibraryEntryIDRef.current ?? null,
             }
           : undefined,
-        // Feeds the beam-fill lens' own fill — undefined outside dynamic mode, where there is
-        // no cohesion field to color it with.
+        // Feeds the beam-fill lens' own fill — undefined outside dynamic mode, where there is no cohesion field to color it with.
         materials: mechanismRef.current.materials,
         profiles: mechanismRef.current.profiles,
         cohesionFields:
@@ -660,9 +627,8 @@ export const MechanicalCanvas = forwardRef<
         shearStressScale: live?.shearStressScale ?? 0,
       });
 
-      // The ruler reads the mechanism as it is drawn — under a simulation, the live pose,
-      // not the one it was laid on. Pushed straight into the widget: these numbers change
-      // every frame, and React is not the way to move four of them.
+      // The ruler reads the mechanism as it is drawn — under a simulation, the live pose, not the one it was laid on.
+      // Pushed straight into the widget: these numbers change every frame, and React is not the way to move four of them.
       measureReadoutRef.current?.update(
         shown_readout(
           canvasStateRef.current,
@@ -671,15 +637,13 @@ export const MechanicalCanvas = forwardRef<
         ),
       );
 
-      // The active beam-fill lens' own legend (phase 9) — screen-anchored, drawn only while
-      // there is a mechanism with at least one beam to read it against.
+      // The active beam-fill lens' own legend (phase 9) — screen-anchored, drawn only while there is a mechanism with at least one beam to read it against.
       if (
         appModeRef.current === "dynamic" &&
         beamStressLens !== "none" &&
         mechanismRef.current.mechanicalElements.some((el) => el.type === "beam")
       ) {
-        // Only where the mechanism actually holds one: a swatch for a colour nothing on
-        // screen is drawn in would be noise.
+        // Only where the mechanism actually holds one: a swatch for a colour nothing on screen is drawn in would be noise.
         const indeterminateLabel = live?.cohesionFields?.some((f) => !f.determinate)
           ? t("stress_legend_indeterminate")
           : undefined;
@@ -704,9 +668,7 @@ export const MechanicalCanvas = forwardRef<
             );
             break;
           case "bending":
-            // `STRESS_RAMP` on a plain magnitude, no overstress swatch — see
-            // `magnitude_stress_color`'s own doc for why `bending` has no sign to show,
-            // unlike `normal`.
+            // `STRESS_RAMP` on a plain magnitude, no overstress swatch — see `magnitude_stress_color`'s own doc for why `bending` has no sign to show, unlike `normal`.
             draw_stress_legend(
               ctx,
               canvas.height,
@@ -727,16 +689,14 @@ export const MechanicalCanvas = forwardRef<
         }
       }
 
-      // Vitesses / réactions mesurées, par-dessus les éléments qu'elles habillent. Seule une
-      // réaction (jamais une vitesse — son unité affichée n'est pas encore la bonne, voir
-      // `OverlayArrow.vector`) révèle sa valeur au survol, comme un load placé.
+      // Vitesses / réactions mesurées, par-dessus les éléments qu'elles habillent.
+      // Seule une réaction (jamais une vitesse — son unité affichée n'est pas encore la bonne, voir `OverlayArrow.vector`) révèle sa valeur au survol, comme un load placé.
       const overlayArrows = live?.overlayArrows ?? EMPTY_OVERLAY_ARROWS;
       const overlayMoments = live?.overlayMoments ?? EMPTY_OVERLAY_MOMENTS;
       const mouseScreen = cursorOnCanvasRef.current
         ? mousePositionRef.current
         : null;
-      // A moment wins the tie over its own force, same priority `HOVER_ORDER` gives a
-      // placed moment over a placed force.
+      // A moment wins the tie over its own force, same priority `HOVER_ORDER` gives a placed moment over a placed force.
       const hoveredMoment = mouseScreen
         ? overlayMoments.find((moment) =>
             overlay_moment_hit(mouseScreen, viewport, moment),
@@ -754,15 +714,13 @@ export const MechanicalCanvas = forwardRef<
         draw_overlay_arrow(ctx, viewport, arrow);
       for (const moment of overlayMoments)
         draw_overlay_moment(ctx, viewport, moment);
-      // The hovered label last, on top of every arrow/moment just drawn: an arrow drawn
-      // later in the loops above must not obstruct another one's label.
+      // The hovered label last, on top of every arrow/moment just drawn: an arrow drawn later in the loops above must not obstruct another one's label.
       if (hoveredArrow) draw_overlay_arrow_label(ctx, viewport, hoveredArrow);
       if (hoveredMoment)
         draw_overlay_moment_label(ctx, viewport, hoveredMoment);
 
-      // The abscissa hovered on the selected beam's N/T/Mf diagrams (panel) — docs/plan-
-      // efforts-interieurs.md phase 5bis. A tick crossing the beam, not a probe marker
-      // (`draw_probe`'s circle+crosshair means something else — a measurement point).
+      // The abscissa hovered on the selected beam's N/T/Mf diagrams (panel) — docs/plan- efforts-interieurs.md phase 5bis.
+      // A tick crossing the beam, not a probe marker (`draw_probe`'s circle+crosshair means something else — a measurement point).
       const hovered = hoveredAbscissaRef.current;
       if (hovered) {
         const beam = mechanismRef.current.mechanicalElements.find(
@@ -821,9 +779,8 @@ export const MechanicalCanvas = forwardRef<
           });
           pendingZoomRef.current = null;
         }
-        // A frame that throws must not take the loop with it: the canvas is
-        // cleared before drawing, so a dead loop leaves the user staring at the
-        // bare grid with no way back. Losing one frame is recoverable.
+        // A frame that throws must not take the loop with it: the canvas is cleared before drawing, so a dead loop leaves the user staring at the bare grid with no way back.
+        // Losing one frame is recoverable.
         try {
           render();
         } catch (error) {
@@ -842,16 +799,11 @@ export const MechanicalCanvas = forwardRef<
       return () => window.removeEventListener("resize", handleResize);
     }, [render]);
 
-    // Logique "bouton relâché" partagée : appelée par pointerup/pointercancel
-    // et par le reducer (undo/redo forcent un relâchement). Ne touche pas à la
-    // capture du pointeur (gérée dans les handlers pointer qui ont l'événement).
+    // Logique "bouton relâché" partagée : appelée par pointerup/pointercancel et par le reducer (undo/redo forcent un relâchement).
+    // Ne touche pas à la capture du pointeur (gérée dans les handlers pointer qui ont l'événement).
     //
-    // Idempotent par nécessité : certains navigateurs déclenchent pointercancel
-    // juste après un pointerup déjà traité pour le même relâchement (autour de
-    // releasePointerCapture notamment), les deux dans le même tick — avant que
-    // canvasStateRef n'ait pu se rafraîchir au rendu suivant. Sans cette garde,
-    // le deuxième appel rejoue le scellement du geste sur un état encore
-    // "MovingXXX" et double une action de l'historique.
+    // Idempotent par nécessité : certains navigateurs déclenchent pointercancel juste après un pointerup déjà traité pour le même relâchement (autour de releasePointerCapture notamment), les deux dans le même tick — avant que canvasStateRef n'ait pu se rafraîchir au rendu suivant.
+    // Sans cette garde, le deuxième appel rejoue le scellement du geste sur un état encore "MovingXXX" et double une action de l'historique.
     const onMouseUpHandler = useCallback(() => {
       if (mouseButtonDownRef.current === "none") return;
       handleEventRef.current({
@@ -865,8 +817,7 @@ export const MechanicalCanvas = forwardRef<
     ) => {
       window.getSelection()?.removeAllRanges();
       cursorOnCanvasRef.current = true;
-      // A gesture is rare enough to pay for one measurement, and it catches the
-      // case the observer cannot see: a canvas moved without being resized.
+      // A gesture is rare enough to pay for one measurement, and it catches the case the observer cannot see: a canvas moved without being resized.
       measureCanvas();
       // Capture le pointeur : une fois le bouton enfoncé, les pointermove / pointerup continuent d'arriver sur le canvas même si le curseur sort de ses limites.
       event.currentTarget.setPointerCapture(event.pointerId);
@@ -938,8 +889,7 @@ export const MechanicalCanvas = forwardRef<
     } => {
       const currMech = mechanismRef.current;
 
-      // Bounded here, where the cursor enters the system, so that hit-testing
-      // and the gestures reading the raw mouse share one bounded point.
+      // Bounded here, where the cursor enters the system, so that hit-testing and the gestures reading the raw mouse share one bounded point.
       // TODO : pourquoi bound ?
       const worldMousePos = clamp_to_bounds(
         screen2world(mousePositionRef.current, currMech.viewport),
@@ -956,8 +906,7 @@ export const MechanicalCanvas = forwardRef<
         canvasStateRef.current,
         currMech.viewport,
         currMech.simulation.floor,
-        // What the previous frame asked of the drag: the mechanism read here has
-        // answered that, not the cursor, which has since moved on.
+        // What the previous frame asked of the drag: the mechanism read here has answered that, not the cursor, which has since moved on.
         oldPositionRef.current,
         appModeRef.current !== "edition",
       );
@@ -1009,10 +958,8 @@ export const MechanicalCanvas = forwardRef<
           currMech.viewport,
         );
       }
-      // Both snaps above rewrite the point after it was bounded, and the grid
-      // one pulls it a long way — onto the very centre of a gear being sized,
-      // when that centre sits on the grid. Only the free point is restored: a
-      // hovered element keeps its own position, which is what makes it a target.
+      // Both snaps above rewrite the point after it was bounded, and the grid one pulls it a long way — onto the very centre of a gear being sized, when that centre sits on the grid.
+      // Only the free point is restored: a hovered element keeps its own position, which is what makes it a target.
       if (newHoveredPart.type === "Void")
         newHoveredPart.position = clamp_to_bounds(
           newHoveredPart.position,
@@ -1105,8 +1052,7 @@ export const MechanicalCanvas = forwardRef<
     );
     handleEventRef.current = handleEvent;
 
-    // The hover answers the armed tool, so it goes stale when the tool changes
-    // under a still cursor — a click that ends a placement, a shortcut, Escape.
+    // The hover answers the armed tool, so it goes stale when the tool changes under a still cursor — a click that ends a placement, a shortcut, Escape.
     // Recomputed without the reducer: this is a refresh, not a gesture.
     useEffect(() => {
       const { hoveredPart: refreshed, snapFeedback } = computeHover();
@@ -1125,9 +1071,8 @@ export const MechanicalCanvas = forwardRef<
       const active = document.activeElement;
       if (!active) return false;
       const tag = active.tagName.toLowerCase();
-      // Only text-like inputs should swallow shortcuts. A checkbox/radio/switch
-      // (MUI Switch is <input type="checkbox">) or a button must NOT count as
-      // "typing", otherwise Space toggles it instead of triggering play/pause.
+      // Only text-like inputs should swallow shortcuts.
+      // A checkbox/radio/switch (MUI Switch is <input type="checkbox">) or a button must NOT count as "typing", otherwise Space toggles it instead of triggering play/pause.
       if (tag === "input") {
         const type = (active as HTMLInputElement).type.toLowerCase();
         const NON_TEXT = new Set([
@@ -1153,8 +1098,7 @@ export const MechanicalCanvas = forwardRef<
       return false;
     };
 
-    // The measured element stays selected either way; only the tool differs,
-    // the probe tool going on to place another.
+    // The measured element stays selected either way; only the tool differs, the probe tool going on to place another.
     const closeProbeMetricsPopover = useCallback(() => {
       const state = canvasStateRef.current;
       if (state.type !== "PlacingProbeMetrics") return;
@@ -1169,9 +1113,7 @@ export const MechanicalCanvas = forwardRef<
       const handleGlobalKeyDown = (event: KeyboardEvent) => {
         if (isTypingInInput()) return;
         if (canvasStateRef.current.type === "PlacingProbeMetrics") {
-          // Escape must close the popover even when focus has drifted off it
-          // (e.g. after Tab) — the local handler on the Paper only catches it
-          // while focus is still inside.
+          // Escape must close the popover even when focus has drifted off it (e.g. after Tab) — the local handler on the Paper only catches it while focus is still inside.
           if (event.key === "Escape") closeProbeMetricsPopover();
           return;
         }
@@ -1232,10 +1174,8 @@ export const MechanicalCanvas = forwardRef<
       event.preventDefault();
     };
 
-    // Why the gesture is refused here. Anchored on the raw cursor rather than on
-    // the hovered point: a refusal reports its point pushed out to the edge of
-    // the hit zone, which swings across it for a one-pixel move and would send
-    // the bubble jumping from one side of the cursor to the other.
+    // Why the gesture is refused here.
+    // Anchored on the raw cursor rather than on the hovered point: a refusal reports its point pushed out to the edge of the hit zone, which swings across it for a one-pixel move and would send the bubble jumping from one side of the cursor to the other.
     const rejection =
       hoveredPart.type === "Void" && hoveredPart.rejected
         ? {
@@ -1293,8 +1233,7 @@ export const MechanicalCanvas = forwardRef<
                 ? "crosshair"
                 : "default";
 
-    // Les deux états de saisie partagent l'éditeur ; ils ne diffèrent que par
-    // ce qu'ENTER et ESCAPE font en sortie (voir `onCommit` / `onCancel`).
+    // Les deux états de saisie partagent l'éditeur ; ils ne diffèrent que par ce qu'ENTER et ESCAPE font en sortie (voir `onCommit` / `onCancel`).
     const isPlacingValue = canvasState.type === "PlacingValue";
     const isEditingValue = canvasState.type === "EditingValue";
     const editingElement =
@@ -1307,9 +1246,8 @@ export const MechanicalCanvas = forwardRef<
           )
         : null;
 
-    // Commit an edited value for a load (force magnitude, moment value, or a
-    // distributed force's start/end magnitude). Returns true if it handled the
-    // element, false for non-load elements (dimensions/constraints).
+    // Commit an edited value for a load (force magnitude, moment value, or a distributed force's start/end magnitude).
+    // Returns true if it handled the element, false for non-load elements (dimensions/constraints).
     const commitLoadValue = (element: UnionElement, newValue: number) => {
       switch (element.type) {
         case "force":
@@ -1327,9 +1265,7 @@ export const MechanicalCanvas = forwardRef<
             {
               type: "ChangeMoment",
               id: element.id,
-              // The editor shows the magnitude unsigned: a moment's sign is
-              // its rotation direction, picked when it is placed, so editing
-              // the value here resizes the arc without turning it around.
+              // The editor shows the magnitude unsigned: a moment's sign is its rotation direction, picked when it is placed, so editing the value here resizes the arc without turning it around.
               newValue: newValue * (element.value < 0 ? -1 : 1),
               oldValue: element.value,
             },
@@ -1338,10 +1274,8 @@ export const MechanicalCanvas = forwardRef<
         case "distributed-force": {
           const editingEnd =
             canvasState.type === "EditingValue" && canvasState.part === "end";
-          // The editor opens on the magnitude: the sign of an end is which side
-          // of the beam it pushes on. Committing it unchanged must therefore
-          // never turn the load over, so the typed sign is read as a flip of
-          // wherever that end currently points, not as the new sign itself.
+          // The editor opens on the magnitude: the sign of an end is which side of the beam it pushes on.
+          // Committing it unchanged must therefore never turn the load over, so the typed sign is read as a flip of wherever that end currently points, not as the new sign itself.
           const edited =
             newValue *
             ((editingEnd ? element.magnitudeEnd : element.magnitudeStart) < 0
@@ -1374,11 +1308,8 @@ export const MechanicalCanvas = forwardRef<
           height: "100%",
           overflow: "hidden",
           position: "relative",
-          // The ground the drawing sits on. It belongs to the container, not to
-          // the (transparent, cleared every frame) canvas: as a theme role it
-          // cross-fades with the rest of the interface on a theme change, where
-          // a `COLORS` read baked into an inline style would freeze on whichever
-          // palette was current when React last rendered.
+          // The ground the drawing sits on.
+          // It belongs to the container, not to the (transparent, cleared every frame) canvas: as a theme role it cross-fades with the rest of the interface on a theme change, where a `COLORS` read baked into an inline style would freeze on whichever palette was current when React last rendered.
           backgroundColor: "background.default",
         }}
       >
@@ -1429,9 +1360,7 @@ export const MechanicalCanvas = forwardRef<
         {editingElement && (isEditingValue || isPlacingValue) && (
           <OnCanvasValueEditor
             mode={editingElement.type === "gear-ratio" ? "ratio" : "single"}
-            // Loads reuse the value captured at trigger time (force magnitude,
-            // moment value, or the distributed start/end magnitude); dimensions
-            // and constraints carry it on the element.
+            // Loads reuse the value captured at trigger time (force magnitude, moment value, or the distributed start/end magnitude); dimensions and constraints carry it on the element.
             initialValue={
               editingElement.type === "moment"
                 ? Math.abs(editingElement.value)
@@ -1440,10 +1369,7 @@ export const MechanicalCanvas = forwardRef<
                   : canvasState.value
             }
             kind={VALUE_EDITOR_KIND[editingElement.type]}
-            // A distributed load's end is the one value here that can be
-            // turned around (a minus flips it across the beam) and the one that
-            // can legitimately be set to zero — as long as its opposite end is
-            // still carrying something, otherwise the load would vanish.
+            // A distributed load's end is the one value here that can be turned around (a minus flips it across the beam) and the one that can legitimately be set to zero — as long as its opposite end is still carrying something, otherwise the load would vanish.
             signed={"targetID" in editingElement}
             allowZero={
               editingElement.type === "distributed-force" &&
@@ -1454,8 +1380,7 @@ export const MechanicalCanvas = forwardRef<
               )
             }
             position={
-              // Loads have no `.position`; their editable label sits at a
-              // computed screen anchor next to the drawn value.
+              // Loads have no `.position`; their editable label sits at a computed screen anchor next to the drawn value.
               editingElement.type === "force" ||
               editingElement.type === "moment" ||
               editingElement.type === "distributed-force"
@@ -1463,8 +1388,7 @@ export const MechanicalCanvas = forwardRef<
                     editingElement,
                     mechanism.mechanicalElements,
                     mechanism.viewport,
-                    // Seule une charge existante est ré-éditée : un `PlacingValue`
-                    // ne concerne que les cotes, qui n'ont pas de `part`.
+                    // Seule une charge existante est ré-éditée : un `PlacingValue` ne concerne que les cotes, qui n'ont pas de `part`.
                     isEditingValue ? canvasState.part : undefined,
                   )
                 : world2screen(
@@ -1513,9 +1437,8 @@ export const MechanicalCanvas = forwardRef<
                   ]);
                 }
               }
-              // Valider sur un élément qu'on vient de poser réarme son outil,
-              // pour en enchaîner un autre sans repasser par la palette. Une
-              // cote éditée depuis un outil resté armé y revient de même.
+              // Valider sur un élément qu'on vient de poser réarme son outil, pour en enchaîner un autre sans repasser par la palette.
+              // Une cote éditée depuis un outil resté armé y revient de même.
               if (isPlacingValue) {
                 if (editingElement.type === "gear-ratio") {
                   setCanvasState({ type: "GearRatioConstraintStart" });
@@ -1532,8 +1455,7 @@ export const MechanicalCanvas = forwardRef<
               }
             }}
             onCancel={() => {
-              // Annuler la saisie d'un élément qu'on vient de poser le retire :
-              // sans valeur, il n'a jamais vraiment existé.
+              // Annuler la saisie d'un élément qu'on vient de poser le retire : sans valeur, il n'a jamais vraiment existé.
               if (isPlacingValue) {
                 applyActions([
                   {
@@ -1580,13 +1502,8 @@ export const MechanicalCanvas = forwardRef<
                         }
                       : {
                           type: "ChangeFloorAngle",
-                          // `newValue` is the unsigned magnitude the editor opened on (see
-                          // its `initialValue` in `canvas-state-reducer.ts`) — no sign typed
-                          // keeps the floor leaning the way it already was, same idiom as a
-                          // distributed load's end (`commitLoadValue`); a typed "-" flips it.
-                          // The stored angle also carries whether the floor is flipped
-                          // upside down, which the magnitude alone can't express, so that
-                          // part of `oldAngle` is carried over unchanged.
+                          // `newValue` is the unsigned magnitude the editor opened on (see its `initialValue` in `canvas-state-reducer.ts`) — no sign typed keeps the floor leaning the way it already was, same idiom as a distributed load's end (`commitLoadValue`); a typed "-" flips it.
+                          // The stored angle also carries whether the floor is flipped upside down, which the magnitude alone can't express, so that part of `oldAngle` is carried over unchanged.
                           newValue: floor_raw_angle_from_acute(
                             newValue *
                               (floor_acute_angle(oldAngle) < 0 ? -1 : 1),

@@ -1,9 +1,8 @@
 /**
  * Turning solver state back into a mechanism a canvas can draw.
  *
- * Shared by the animations the analysis panel plays — swinging along a motion mode, and
- * straining against a falsified constraint. Neither writes to the mechanism it was handed:
- * a pose is a drawing, and letting go of an animation must leave the design as it was.
+ * Shared by the animations the analysis panel plays — swinging along a motion mode, and straining against a falsified constraint.
+ * Neither writes to the mechanism it was handed: a pose is a drawing, and letting go of an animation must leave the design as it was.
  */
 
 import { Mechanism, Point2 } from "../../../types";
@@ -13,8 +12,7 @@ import { SolveNodes, solveNodesFromMaps } from "../nodes";
 /**
  * Positions and angles of the ORIGINAL keys.
  *
- * Coincidence fusion holds several original keys in one node, and elements are named by the
- * original ones — a beam knows `id:start`, not the fused node it ended up sharing.
+ * Coincidence fusion holds several original keys in one node, and elements are named by the original ones — a beam knows `id:start`, not the fused node it ended up sharing.
  */
 export type Pose = {
   positions: Map<string, Point2>;
@@ -61,17 +59,13 @@ export function mechanism_at(mechanism: Mechanism, pose: Pose): Mechanism {
       const positionStart = pose.positions.get(`${el.id}:start`);
       const positionEnd = pose.positions.get(`${el.id}:end`);
       if (!positionStart && !positionEnd) return el;
-      // A belt's wraps are a RECORDED quantity — how far it had turned onto each pulley at
-      // the instant the snapshot was taken. This pose is one we made up, so they no longer
-      // describe it: carried through, they hold every arc at the angle it had while the
-      // pulleys move and turn underneath. Dropped, the drawing solves the belt against the
-      // geometry it is given, which is what edition does. Which pulleys the belt has come
-      // off is a topology and stays: the swing does not put a belt back on.
+      // A belt's wraps are a RECORDED quantity — how far it had turned onto each pulley at the instant the snapshot was taken.
+      // This pose is one we made up, so they no longer describe it: carried through, they hold every arc at the angle it had while the pulleys move and turn underneath.
+      // Dropped, the drawing solves the belt against the geometry it is given, which is what edition does.
+      // Which pulleys the belt has come off is a topology and stays: the swing does not put a belt back on.
       const unwrapped = el.type === "belt" ? { gearWraps: undefined } : {};
-      // A spring or damper draws a fixed number of coils at its natural length and stretches
-      // between them. Freezing that length on the animated copy keeps the coils from being
-      // recounted every frame, exactly as the simulation does — the user's typed value for a
-      // spring, else the edit-time positions.
+      // A spring or damper draws a fixed number of coils at its natural length and stretches between them.
+      // Freezing that length on the animated copy keeps the coils from being recounted every frame, exactly as the simulation does — the user's typed value for a spring, else the edit-time positions.
       const restLength =
         el.type === "spring" || el.type === "damper"
           ? (el.restLength ?? el.positionStart.distance_to(el.positionEnd))

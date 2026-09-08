@@ -10,8 +10,8 @@ import type { HoveredPart as Hovered } from "../../../types";
 import { deg_to_rad } from "../../../utils/quantity-format";
 
 /**
- * The angle step the cases below are written against. Pinned rather than read
- * from the defaults: what they check is the snapping, not which step ships.
+ * The angle step the cases below are written against.
+ * Pinned rather than read from the defaults: what they check is the snapping, not which step ships.
  */
 const SETTINGS = { ...DEFAULT_SNAP_SETTINGS, angleStep: deg_to_rad(15) };
 
@@ -78,8 +78,7 @@ describe("snap_hover /rayon", () => {
     startHover: voidAt(P(0, 0)),
   };
 
-  // Rounding x and y apart would round everything except the radius, which is
-  // the only quantity the gesture produces.
+  // Rounding x and y apart would round everything except the radius, which is the only quantity the gesture produces.
   it("aimante la distance au centre, pas les coordonnées", () => {
     const snapped = snapped_at(voidAt(P(0, -(2 * STEP + 4))), state, MECH, VIEW);
     expect(snapped.length()).toBeCloseTo(2 * STEP);
@@ -110,8 +109,7 @@ describe("snap_hover /survol glissant", () => {
     expect(snapped_at(onBody(P(midway, 0)), state, MECH, VIEW).x).toBe(midway);
   });
 
-  // The family the bar runs parallel to is met at infinity; the tolerance has to
-  // turn it away on its own, without a division blowing up first.
+  // The family the bar runs parallel to is met at infinity; the tolerance has to turn it away on its own, without a division blowing up first.
   it("ne se laisse pas emporter par la famille de lignes parallèle", () => {
     const vertical = [beam(P(0, 0), P(0, 1010))];
     const snapped = snapped_at(onBody(P(0, midway)), state, vertical, VIEW);
@@ -146,8 +144,7 @@ describe("snap_hover / angle", () => {
     expect(snapped.angle()).toBeCloseTo(deg(37));
   });
 
-  // Landing on a round angle AND a round place at once is the point of combining
-  // the two: the ray is chosen first, then the point slides along it.
+  // Landing on a round angle AND a round place at once is the point of combining the two: the ray is chosen first, then the point slides along it.
   it("glisse le long du rayon retenu jusqu'au croisement de la grille", () => {
     const raw = Point2.from_polar(4 * STEP - 3, 0);
     const snapped = snapped_at(voidAt(raw), placing, MECH, VIEW);
@@ -168,9 +165,8 @@ describe("snap_hover / angle", () => {
     expect(guides[0].direction.angle()).toBeCloseTo(deg(30), 9);
   });
 
-  // The guide claims to be holding the point. Read back from the snapped
-  // position it would often be a lie: the grid is made of round directions, so
-  // a point pulled onto it by the grid alone lands on one by coincidence.
+  // The guide claims to be holding the point.
+  // Read back from the snapped position it would often be a lie: the grid is made of round directions, so a point pulled onto it by the grid alone lands on one by coincidence.
   it("ne montre aucun guide quand c'est la grille seule qui a tenu le point", () => {
     // Off every multiple of 15° at that distance, and a hair from a grid crossing.
     const raw = P(6 * STEP - 3, 4 * STEP + 2);
@@ -214,20 +210,15 @@ describe("snap_hover / deux rayons à la fois", () => {
   ];
   const moving: CanvasState = { type: "MovingNode", elementID: NODE };
 
-  // The two bars each offer a direction, and honouring both at once is what puts
-  // the node exactly where the two lines meet — the way the grid's two axes are
-  // honoured together rather than one winning.
+  // The two bars each offer a direction, and honouring both at once is what puts the node exactly where the two lines meet — the way the grid's two axes are honoured together rather than one winning.
   it("pose le nœud au croisement des deux directions", () => {
-    // Within the corridor of the horizontal from (0,600) and of the vertical
-    // from (600,0), but on neither exactly.
+    // Within the corridor of the horizontal from (0,600) and of the vertical from (600,0), but on neither exactly.
     const snapped = snap(voidAt(P(604, 596)), moving, held(), VIEW);
     expect(snapped.position.x).toBeCloseTo(600);
     expect(snapped.position.y).toBeCloseTo(600);
   });
 
-  // Both bars run from a point already on the grid, so each of their rays IS a
-  // grid line: saying "0°" and "90°" would name the same two lines twice, and
-  // less well.
+  // Both bars run from a point already on the grid, so each of their rays IS a grid line: saying "0°" and "90°" would name the same two lines twice, and less well.
   it("annonce les deux lignes de grille plutôt que deux angles", () => {
     const snapped = snap(voidAt(P(604, 596)), moving, held(), VIEW);
     expect(snapped.guides).toEqual([]);
@@ -293,8 +284,7 @@ describe("snap_hover / jante d'engrenage", () => {
     expect(snapped.position.angle()).toBeCloseTo(deg(37));
   });
 
-  // Sizing a gear against another puts the rim point on the line of the two
-  // centres: it is not aimed, so it must not be snapped.
+  // Sizing a gear against another puts the rim point on the line of the two centres: it is not aimed, so it must not be snapped.
   it("ne touche pas au point de tangence d'un engrenage qu'on dimensionne", () => {
     const raw = Point2.from_polar(200, deg(31.5));
     const sizing: CanvasState = { type: "ChangingGearRadius", elementID: GEAR };

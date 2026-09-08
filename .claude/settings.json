@@ -16,5 +16,18 @@
       "Bash(git show*TODO.md*)",
       "PowerShell(git show*TODO.md*)"
     ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/comment-lint.mjs --hook"
+          }
+        ]
+      }
+    ]
   }
 }

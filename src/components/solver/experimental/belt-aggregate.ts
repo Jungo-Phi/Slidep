@@ -26,10 +26,9 @@ type LoopClosure = Extract<Link, { type: "BeltLoopClosure" }>;
 /**
  * The cut criterion for belt sub-chain aggregates.
  *
- * Summing a belt's segment laws telescopes its interior `q`s away, leaving a purely
- * positional equation. That elimination is only legitimate while nobody outside the
- * belt has a say in those angles: the moment someone does, eliminating an angle hides
- * what they had to say about it. So a sub-chain must end wherever that happens.
+ * Summing a belt's segment laws telescopes its interior `q`s away, leaving a purely positional equation.
+ * That elimination is only legitimate while nobody outside the belt has a say in those angles: the moment someone does, eliminating an angle hides what they had to say about it.
+ * So a sub-chain must end wherever that happens.
  */
 
 /** Link types that constitute a belt's own machinery, as opposed to a stakeholder. */
@@ -82,14 +81,11 @@ export function linkKeys(link: Link): string[] {
 /**
  * Does anything other than this belt have a say in `angleKey`?
  *
- * A stakeholder can speak in either of two syntactic forms, and both count equally:
- * by WRITING the angle outright — a motor assigns it and shares no key at all — or by
- * SHARING a DOF with it, as a pin, a gear mesh or a beam does. Testing only one form
- * misses half the cases: a coupling test misses motors, a writing test misses pins.
+ * A stakeholder can speak in either of two syntactic forms, and both count equally: by WRITING the angle outright — a motor assigns it and shares no key at all — or by SHARING a DOF with it, as a pin, a gear mesh or a beam does.
+ * Testing only one form misses half the cases: a coupling test misses motors, a writing test misses pins.
  * Hence the single question above rather than a list of link types to special-case.
  *
- * A belt's own machinery does not count, but ANOTHER belt's does — a pulley shared by
- * two belts is a stakeholder of each.
+ * A belt's own machinery does not count, but ANOTHER belt's does — a pulley shared by two belts is a stakeholder of each.
  */
 export function hasStakeholderBeyond(
   links: Link[],
@@ -146,15 +142,11 @@ export interface BeltAggregateSpec {
 }
 
 /**
- * One aggregate per sub-chain of a belt, cut wherever an angle has a stakeholder
- * beyond the belt. Returns NOTHING when the belt has no cut: its single sub-chain
- * would run dead end to dead end, where the aggregate is `BeltLength` term for term
- * and carries no information the length constraint does not already hold.
+ * One aggregate per sub-chain of a belt, cut wherever an angle has a stakeholder beyond the belt.
+ * Returns NOTHING when the belt has no cut: its single sub-chain would run dead end to dead end, where the aggregate is `BeltLength` term for term and carries no information the length constraint does not already hold.
  *
- * On a closed belt the strands after the last cut wrap around to join those before
- * the first, so N cuts give exactly N sub-chains. A single cut therefore yields ONE
- * sub-chain whose two bounds are the same angle — `q` cancels and it degenerates to
- * `BeltLength` again.
+ * On a closed belt the strands after the last cut wrap around to join those before the first, so N cuts give exactly N sub-chains.
+ * A single cut therefore yields ONE sub-chain whose two bounds are the same angle — `q` cancels and it degenerates to `BeltLength` again.
  */
 export function buildBeltAggregateLinks(
   positions: Map<string, Point2>,
@@ -265,10 +257,8 @@ let gradX = new Float64Array(16);
 let gradY = new Float64Array(16);
 
 /**
- * The same residual and gradients, on the scalar core: the run's tangent pairs are
- * solved into the shared scratch and everything else is read from it, so an application
- * allocates nothing. Gradients land in `gradX`/`gradY`, indexed by via, over the
- * `viaCount` vias the run touches from `link.viaIndices[0]` onwards.
+ * The same residual and gradients, on the scalar core: the run's tangent pairs are solved into the shared scratch and everything else is read from it, so an application allocates nothing.
+ * Gradients land in `gradX`/`gradY`, indexed by via, over the `viaCount` vias the run touches from `link.viaIndices[0]` onwards.
  */
 function evaluateScalar(
   nodes: SimNodes,
@@ -289,9 +279,7 @@ function evaluateScalar(
   const load = (v: number) =>
     loadBeltVia(sc, nodes, s, link, 2, iStart, iEnd, v);
 
-  // The run is cyclically contiguous, so its vias run from the first strand's departure
-  // via to the last one's arrival — and the pair BEFORE the first carries that first
-  // via's contact arc.
+  // The run is cyclically contiguous, so its vias run from the first strand's departure via to the last one's arrival — and the pair BEFORE the first carries that first via's contact arc.
   const first = link.viaIndices[0];
   const viaCount = Math.min(link.viaIndices.length + 1, n);
   for (let k = 0; k < viaCount; k++) {
@@ -358,8 +346,9 @@ function evaluateScalar(
 }
 
 /**
- * Apply one sub-chain aggregate. Writes both bound angles and every mobile centre of
- * the run. Returns the residual |C| in belt-px.
+ * Apply one sub-chain aggregate.
+ * Writes both bound angles and every mobile centre of the run.
+ * Returns the residual |C| in belt-px.
  */
 export function applyBeltSubChainAggregate(
   nodes: SimNodes,
@@ -419,11 +408,8 @@ export function applyBeltSubChainAggregate(
 // ───────────────────────────────────────────────────────────────────────────
 
 /**
- * Build the loop closure link for a closed belt with fewer than two stakeholders —
- * the case `buildBeltAggregateLinks` cannot cover, since a single cut (or none)
- * degenerates its telescoped sum to `BeltLength` again (see its own doc comment).
- * Returns nothing on an open belt, on too few pulleys, or once two stakeholders
- * already give the loop a `BeltSubChainAggregate`.
+ * Build the loop closure link for a closed belt with fewer than two stakeholders — the case `buildBeltAggregateLinks` cannot cover, since a single cut (or none) degenerates its telescoped sum to `BeltLength` again (see its own doc comment).
+ * Returns nothing on an open belt, on too few pulleys, or once two stakeholders already give the loop a `BeltSubChainAggregate`.
  */
 export function buildBeltLoopClosureLink(
   positions: Map<string, Point2>,
@@ -474,16 +460,9 @@ let cScratch = new Float64Array(16);
 let sScratch = new Float64Array(16);
 
 /**
- * Apply the loop closure: the minimum rim-weighted correction that makes every
- * segment's no-slip law hold AT ONCE, computed directly rather than by relaxing
- * segments one at a time. The per-segment law `q_i − q_{i+1} = Δh_i`, summed
- * cyclically, telescopes to an identity — the loop's residuals `C_i` are
- * consistent (sum to ~0) but individually meaningless in isolation; only their
- * cumulative shape (the prefix sum `S`) says how a rim-length correction has to
- * be shared out. Centering `S` on its own mean picks the unique correction of
- * least weighted norm, the same choice `applyBeltSegmentNoSlip` makes for a
- * single strand — here made for the whole loop in one shot, so it does not
- * depend on which strand a sweep happens to visit first.
+ * Apply the loop closure: the minimum rim-weighted correction that makes every segment's no-slip law hold AT ONCE, computed directly rather than by relaxing segments one at a time.
+ * The per-segment law `q_i − q_{i+1} = Δh_i`, summed cyclically, telescopes to an identity — the loop's residuals `C_i` are consistent (sum to ~0) but individually meaningless in isolation; only their cumulative shape (the prefix sum `S`) says how a rim-length correction has to be shared out.
+ * Centering `S` on its own mean picks the unique correction of least weighted norm, the same choice `applyBeltSegmentNoSlip` makes for a single strand — here made for the whole loop in one shot, so it does not depend on which strand a sweep happens to visit first.
  */
 export function applyBeltLoopClosure(
   nodes: SimNodes,

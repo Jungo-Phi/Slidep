@@ -114,9 +114,8 @@ function valid_pair(): MechanicalElement[] {
 }
 
 /**
- * A coherent closed belt: two pulleys on their own axles, both terminals held by
- * one junction, every link reciprocal. Override the belt to break one half of
- * the closure equivalence.
+ * A coherent closed belt: two pulleys on their own axles, both terminals held by one junction, every link reciprocal.
+ * Override the belt to break one half of the closure equivalence.
  */
 function closed_belt_mechanism(over: Partial<BeltElement> = {}): Mechanism {
   const [beltID, joinID, ax2, gear2] = ["blt", "j1", "p3", "g2"].map(id);
@@ -495,8 +494,7 @@ describe("compute_constraint_violations — extrémité de courroie dans sa poul
     expect(violation!.unit).toBe("px");
   });
 
-  // A wound end rests exactly on the rim: the tangent run is of length 0, which
-  // is legitimate and must not be reported.
+  // A wound end rests exactly on the rim: the tangent run is of length 0, which is legitimate and must not be reported.
   it("accepte un bout posé sur la jante", () => {
     const mech = open_belt_mechanism(new Point2(0, -10), new Point2(100, 10));
     expect(messages(mech)).toEqual([]);

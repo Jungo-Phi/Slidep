@@ -8,7 +8,7 @@ import {
 } from "./section-schema-layout";
 
 /** Every kind, each in an ordinary size and in one deliberately awkward enough to break a
- *  layout that reasons about a fixed box instead of the section it actually drew. */
+ * layout that reasons about a fixed box instead of the section it actually drew. */
 const SHAPES: ProfileShape[] = [
   { kind: "rect", b: 0.05, h: 0.05 },
   { kind: "rect", b: 0.1, h: 0.02 },
@@ -40,7 +40,7 @@ function true_extent(shape: ProfileShape): { w: number; h: number } {
 }
 
 /** Everything the drawing paints, labels and arrowheads included — the check that the cropped
- *  view really did cover it all. */
+ * view really did cover it all. */
 function content_box(layout: SchemaLayout) {
   const xs = [
     -layout.drawn.hw,
@@ -73,8 +73,8 @@ function content_box(layout: SchemaLayout) {
 }
 
 /**
- * How far each dimension line sits past the section's edge on the side it is read from. A cote
- * drawn on the feature itself lands on no side at all.
+ * How far each dimension line sits past the section's edge on the side it is read from.
+ * A cote drawn on the feature itself lands on no side at all.
  */
 function side_gaps(layout: SchemaLayout): number[] {
   const { hw, hh } = layout.drawn;
@@ -101,8 +101,7 @@ describe("layout_section_schema", () => {
     expect(box.y0).toBeGreaterThanOrEqual(viewBox.y);
     expect(box.x1).toBeLessThanOrEqual(viewBox.x + viewBox.w);
     expect(box.y1).toBeLessThanOrEqual(viewBox.y + viewBox.h);
-    // Cropped, so no profile carries slack: the vertical border is the same top and bottom, and
-    // the horizontal one is whatever it takes to keep the section itself centred.
+    // Cropped, so no profile carries slack: the vertical border is the same top and bottom, and the horizontal one is whatever it takes to keep the section itself centred.
     const pad = Math.min(box.x0 - viewBox.x, viewBox.x + viewBox.w - box.x1);
     expect(box.y0 - viewBox.y).toBeCloseTo(pad, 6);
     expect(viewBox.y + viewBox.h - box.y1).toBeCloseTo(pad, 6);
@@ -125,8 +124,7 @@ describe("layout_section_schema", () => {
       for (const [param, width] of Object.entries(drawn.t)) {
         expect(width, param).toBeGreaterThan(1);
       }
-      // The cote a wall carries needs two edges to point at: whatever the clamp did, the wall
-      // may never eat the feature it is cut from.
+      // The cote a wall carries needs two edges to point at: whatever the clamp did, the wall may never eat the feature it is cut from.
       if (shape.kind === "box" || shape.kind === "tube") {
         expect(2 * drawn.t.e).toBeLessThan(2 * Math.min(drawn.hw, drawn.hh));
       }
@@ -174,8 +172,7 @@ describe("layout_section_schema", () => {
     // `h` spans the whole section: turned, centred, no run needed.
     expect(h.text.rotated).toBe(true);
     expect(h.leader).toHaveLength(0);
-    // A flange is a few px deep: the line runs on past it, downwards — away from the top, where
-    // it would have cost the schema height — and the label rides that run, still turned.
+    // A flange is a few px deep: the line runs on past it, downwards — away from the top, where it would have cost the schema height — and the label rides that run, still turned.
     expect(tf.leader).toHaveLength(1);
     expect(tf.text.rotated).toBe(true);
     const run = tf.leader[0];
@@ -222,8 +219,7 @@ describe("layout_section_schema", () => {
       tf: 0.01,
     });
     const { tw } = by_name(layout);
-    // The web is a couple of px wide at the centre: its leader has no business reaching as far
-    // out as a cote read off the flange edge does.
+    // The web is a couple of px wide at the centre: its leader has no business reaching as far out as a cote read off the flange edge does.
     expect(tw.leader[0].from.x).toBeCloseTo(layout.drawn.t.tw / 2, 6);
     expect(tw.leader[0].to.x).toBeLessThan(layout.drawn.hw);
     // …and it sits below the neutral axis, clear of both it and `tf`'s own run.

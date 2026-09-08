@@ -132,7 +132,7 @@ describe("énergie complémentaire minimale", () => {
     const chosen = minimise_energy(solved.x, solved.nullSpace, () => {
       throw new Error("F ne doit jamais être consultée sur un système déterminé");
     });
-    expect(arr(chosen)).toEqual(arr(solved.x));
+    expect(arr(chosen.x)).toEqual(arr(solved.x));
   });
 
   it("répartit selon les souplesses, pas selon la norme", () => {
@@ -147,9 +147,9 @@ describe("énergie complémentaire minimale", () => {
       Float64Array.from(x, (value: number, i: number) => flexibility[i] * value),
     );
     // ½(f₀x₀² + f₁x₁²) under x₀ + x₁ = 4 is least at x₀/x₁ = f₁/f₀ = 3.
-    expect(arr(chosen)[0]).toBeCloseTo(3, 10);
-    expect(arr(chosen)[1]).toBeCloseTo(1, 10);
-    expect(arr(chosen)[0] + arr(chosen)[1]).toBeCloseTo(4, 10);
+    expect(arr(chosen.x)[0]).toBeCloseTo(3, 10);
+    expect(arr(chosen.x)[1]).toBeCloseTo(1, 10);
+    expect(arr(chosen.x)[0] + arr(chosen.x)[1]).toBeCloseTo(4, 10);
   });
 
   it("porte le terme linéaire, que le poids propre rend non nul", () => {
@@ -163,7 +163,7 @@ describe("énergie complémentaire minimale", () => {
       Float64Array.from([2, 0]),
     );
     // ½(x₀² + x₁²) + 2x₀ under x₀ + x₁ = 0 is least at x₀ = −1, x₁ = +1.
-    expect(arr(chosen)[0]).toBeCloseTo(-1, 10);
-    expect(arr(chosen)[1]).toBeCloseTo(1, 10);
+    expect(arr(chosen.x)[0]).toBeCloseTo(-1, 10);
+    expect(arr(chosen.x)[1]).toBeCloseTo(1, 10);
   });
 });

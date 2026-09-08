@@ -4,29 +4,16 @@ import { contact_eps } from "./collision-detection";
 import { MIN_EXTENT_M } from "../nodes";
 
 /**
- * Dynamic mode only: a collision constraint already gets a physically plausible (if fully
- * inelastic) velocity response for free — XPBD reads velocity back as
- * `(solved − frameStart)/dt`, so a node a contact stopped cold simply moved little in the
- * blocked direction. Restitution replaces that "little" with `-e × incoming velocity`
- * (`e` = 0 keeps today's inelastic behaviour, `e` = 1 an elastic bounce) for whichever
- * contacts actually fired this frame — found by checking the SOLVED geometry against each
- * candidate's own resting boundary, since nothing in the position solve records which
- * constraint did work.
+ * Dynamic mode only: a collision constraint already gets a physically plausible (if fully inelastic) velocity response for free — XPBD reads velocity back as `(solved − frameStart)/dt`, so a node a contact stopped cold simply moved little in the blocked direction.
+ * Restitution replaces that "little" with `-e × incoming velocity` (`e` = 0 keeps today's inelastic behaviour, `e` = 1 an elastic bounce) for whichever contacts actually fired this frame — found by checking the SOLVED geometry against each candidate's own resting boundary, since nothing in the position solve records which constraint did work.
  *
- * Point-vs-segment contacts (a node or a gear against a beam) redistribute the impulse across
- * the segment's two endpoints the same `t`/`1−t`, mass-weighted way
- * `applyPointSegmentContactConstraint`'s position correction already does — physically the
- * same operation, an impulse instead of a displacement, so the weighting has to match.
+ * Point-vs-segment contacts (a node or a gear against a beam) redistribute the impulse across the segment's two endpoints the same `t`/`1−t`, mass-weighted way `applyPointSegmentContactConstraint`'s position correction already does — physically the same operation, an impulse instead of a displacement, so the weighting has to match.
  */
 
 /**
- * Beyond a contact's resting boundary, still close enough to have been the one the solve
- * just settled — the position solve converges TO the boundary, never past it, so this is
- * slack for float error and Gauss-Seidel's own residual, not a second contact margin.
+ * Beyond a contact's resting boundary, still close enough to have been the one the solve just settled — the position solve converges TO the boundary, never past it, so this is slack for float error and Gauss-Seidel's own residual, not a second contact margin.
  *
- * A ratio of the mechanism's own extent, same reasoning as `CONTACT_EPS_RATIO` in
- * `collision-detection.ts` — 1e-3 is the 1 mm this was tuned at, at the roughly metre-scale
- * mechanisms it was tuned on.
+ * A ratio of the mechanism's own extent, same reasoning as `CONTACT_EPS_RATIO` in `collision-detection.ts` — 1e-3 is the 1 mm this was tuned at, at the roughly metre-scale mechanisms it was tuned on.
  */
 const CONTACT_SLACK_RATIO = 1e-3;
 
@@ -35,8 +22,7 @@ function velocity_of(map: Map<string, Point2>, key: string): Point2 {
 }
 
 /** Reflects the relative normal velocity of two point-like contacts (`keyA` vs `keyB`,
- *  resting `boundary` apart) — shared by point-circle and circle-circle, both already plain
- *  point pairs once their radii are folded into `boundary`. */
+ * resting `boundary` apart) — shared by point-circle and circle-circle, both already plain point pairs once their radii are folded into `boundary`. */
 function reflect_point_point(
   keyA: string,
   keyB: string,
@@ -74,9 +60,7 @@ function reflect_point_point(
 }
 
 /** Same idea against a segment (`segKey1`-`segKey2`) instead of a second point: the contact
- *  point on the segment is `lerp(seg1, seg2, t)`, and the impulse is redistributed across
- *  both ends weighted by `(1−t)`/`t` and their own masses — `applyPointSegmentContactConstraint`
- *  redistributes its position correction the identical way. */
+ * point on the segment is `lerp(seg1, seg2, t)`, and the impulse is redistributed across both ends weighted by `(1−t)`/`t` and their own masses — `applyPointSegmentContactConstraint` redistributes its position correction the identical way. */
 function reflect_point_segment(
   pointKey: string,
   segKey1: string,
@@ -128,9 +112,7 @@ function reflect_point_segment(
 }
 
 /** Same idea against the floor's line: `normal` is fixed rather than read off the geometry
- *  (an infinite line has the same direction everywhere), so unlike `reflect_point_segment`
- *  there is no `t` to redistribute across — only the point and the anchor (`invMass = 0`,
- *  so `wAnchor` zeroes its own share below) share the impulse. */
+ * (an infinite line has the same direction everywhere), so unlike `reflect_point_segment` there is no `t` to redistribute across — only the point and the anchor (`invMass = 0`, so `wAnchor` zeroes its own share below) share the impulse. */
 function reflect_point_line(
   pointKey: string,
   anchorKey: string,
@@ -170,9 +152,7 @@ function reflect_point_line(
 
 /**
  * Applies restitution to every candidate that actually resolved into contact this frame.
- * `positions` is the SOLVED (post-solve) state; `before` the velocities the frame started
- * with (snapshot it before calling the solver — it mutates `velocities` in place into what
- * becomes `after`); `after` is mutated further, in place, with the bounced result.
+ * `positions` is the SOLVED (post-solve) state; `before` the velocities the frame started with (snapshot it before calling the solver — it mutates `velocities` in place into what becomes `after`); `after` is mutated further, in place, with the bounced result.
  */
 export function apply_collision_restitution(
   candidates: CollisionCandidates,

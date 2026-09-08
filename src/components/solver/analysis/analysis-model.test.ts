@@ -129,9 +129,9 @@ const counts = (els: MechanicalElement[]) =>
 
 describe("build_analysis_model — cas synthétiques", () => {
   it("un bâti soudé au sol ne compte ni mobilité ni redondance", () => {
-    // Un join groundé ancre l'extrémité opposée de sa poutre, et la fusion des
-    // Coincidence rend le Distance restant purement inerte. Sans élagage, le
-    // décompte brut donnait −5. Il reste une chaîne triviale : le bâti existe.
+    // Un join groundé ancre l'extrémité opposée de sa poutre, et la fusion des Coincidence rend le Distance restant purement inerte.
+    // Sans élagage, le décompte brut donnait −5.
+    // Il reste une chaîne triviale : le bâti existe.
     const model = build_analysis_model(mechanism(GROUNDED_FRAME("b1", 0)));
     expect(model.links).toHaveLength(0);
     expect(model.pruned.filter((p) => p.reason === "inert")).toHaveLength(1);
@@ -165,9 +165,8 @@ describe("build_analysis_model — cas synthétiques", () => {
   });
 
   it("deux poutres redondantes entre les mêmes pivots : l'élagage ne peut pas le voir", () => {
-    // m = 1 (rotation autour de p1), h = 1 (les deux longueurs disent la même
-    // chose) → G = 0. Aucun lien n'est inerte : seul le rang peut trancher, ce
-    // qui est la raison d'être de la sonde de mobilité.
+    // m = 1 (rotation autour de p1), h = 1 (les deux longueurs disent la même chose) → G = 0.
+    // Aucun lien n'est inerte : seul le rang peut trancher, ce qui est la raison d'être de la sonde de mobilité.
     const model = build_analysis_model(
       mechanism([
         pivot("p1", P(0, 0), true, [id("b1"), id("b2")]),
@@ -182,8 +181,8 @@ describe("build_analysis_model — cas synthétiques", () => {
   });
 
   it("deux poutres sur un même pivot groundé sont deux chaînes indépendantes", () => {
-    // Elles pivotent chacune de leur côté : les relier par le sol dirait le
-    // contraire. Le graphe ne porte que sur les variables libres.
+    // Elles pivotent chacune de leur côté : les relier par le sol dirait le contraire.
+    // Le graphe ne porte que sur les variables libres.
     const model = build_analysis_model(
       mechanism([
         pivot("p1", P(0, 0), true, [id("b1"), id("b2")]),
@@ -240,8 +239,7 @@ describe("build_analysis_model — cas synthétiques", () => {
     const els = [...FOUR_BAR, beam("z9", P(500, 500), P(600, 500))];
     const forward = build_analysis_model(mechanism(els));
     const backward = build_analysis_model(mechanism([...els].reverse()));
-    // Les clés fusionnées sont nommées dans l'ordre de parsing : c'est leur forme
-    // canonique qui identifie le nœud, pas leur orthographe.
+    // Les clés fusionnées sont nommées dans l'ordre de parsing : c'est leur forme canonique qui identifie le nœud, pas leur orthographe.
     const order = (m: typeof forward) =>
       m.variableOrder.map((v) => `${canonical_key(v.key)}#${v.component}`);
     expect(order(backward)).toEqual(order(forward));
@@ -292,11 +290,9 @@ describe("build_analysis_model — mécanismes de référence", () => {
   });
 
   it("un join groundé soudé au milieu d'une barre reste dans la chaîne de cette barre", () => {
-    // b93f0555 est fixé par FixedOnSegment au milieu de la barre 096ac8ba, dont les
-    // deux bouts sont eux-mêmes ancrés (pris dans le décompte ci-dessus). Son seul
-    // lien est donc inerte — mais il reste soudé, via ce lien, au même bloc ancré
-    // que la barre, laquelle est réclamée par la chaîne 1 ailleurs. Il ne doit pas
-    // se détacher en chaîne triviale à part.
+    // b93f0555 est fixé par FixedOnSegment au milieu de la barre 096ac8ba, dont les deux bouts sont eux-mêmes ancrés (pris dans le décompte ci-dessus).
+    // Son seul lien est donc inerte — mais il reste soudé, via ce lien, au même bloc ancré que la barre, laquelle est réclamée par la chaîne 1 ailleurs.
+    // Il ne doit pas se détacher en chaîne triviale à part.
     const model = fixture(doubleSlider);
     const midJoin = "b93f0555-aabd-4c47-ac33-a363a80425fe" as ID;
     expect(model.chains).toHaveLength(3);
@@ -304,8 +300,7 @@ describe("build_analysis_model — mécanismes de référence", () => {
   });
 
   it("les agrégats de courroie sont élagués comme conditionnement", () => {
-    // Un BeltSubChainAggregate est la somme télescopée des BeltSegmentNoSlip qu'il
-    // couvre : le compter fabriquerait de l'hyperstatisme inexistant.
+    // Un BeltSubChainAggregate est la somme télescopée des BeltSegmentNoSlip qu'il couvre : le compter fabriquerait de l'hyperstatisme inexistant.
     for (const json of [coreXY, coreXY2, huygens, poulie, decon]) {
       const model = fixture(json);
       expect(
@@ -326,10 +321,8 @@ describe("build_analysis_model — mécanismes de référence", () => {
   });
 
   it("Roues isolées : une roue portée reste avec ce qui la porte", () => {
-    // Trois roues, dont deux montées l'une sur l'autre. Rien ne relie l'angle d'une
-    // roue à son centre, donc le seul graphe des liens éparpillait ce mécanisme en
-    // quatre chaînes : le spin de chaque roue partait seul, et le pivot moteur ancré
-    // formait en plus un doublon trivial de celui de sa roue.
+    // Trois roues, dont deux montées l'une sur l'autre.
+    // Rien ne relie l'angle d'une roue à son centre, donc le seul graphe des liens éparpillait ce mécanisme en quatre chaînes : le spin de chaque roue partait seul, et le pivot moteur ancré formait en plus un doublon trivial de celui de sa roue.
     const model = fixture(roues);
     expect(model.chains).toHaveLength(2);
     // Aucune n'est flottante : les deux roues portantes sont sur des pivots groundés.
@@ -339,9 +332,8 @@ describe("build_analysis_model — mécanismes de référence", () => {
   });
 
   it("deux chaînes ne portent jamais le même identifiant", () => {
-    // L'identifiant sert de clé React à la liste du panneau et de clé de cache aux
-    // audits de redondance. Une chaîne triviale se nomme d'après son premier élément,
-    // lequel peut très bien porter une variable libre ailleurs — d'où le préfixe.
+    // L'identifiant sert de clé React à la liste du panneau et de clé de cache aux audits de redondance.
+    // Une chaîne triviale se nomme d'après son premier élément, lequel peut très bien porter une variable libre ailleurs — d'où le préfixe.
     for (const json of [vilbrequin, jansen, coreXY, doubleSlider, roues]) {
       const ids = fixture(json).chains.map((c) => c.id);
       expect(new Set(ids).size).toBe(ids.length);
@@ -353,8 +345,7 @@ describe("build_analysis_model — mécanismes de référence", () => {
     expect(G(vilbrequin)).toEqual([1]);
     expect(G(slider)).toEqual([1]);
     expect(G(jansen)).toEqual([0]);
-    // Les trois mécanismes à boucle fermée valent un de plus que le décompte brut :
-    // une loi de brin par boucle est élaguée, voir `closed_loop_surplus`.
+    // Les trois mécanismes à boucle fermée valent un de plus que le décompte brut : une loi de brin par boucle est élaguée, voir `closed_loop_surplus`.
     expect(G(decon)).toEqual([1]);
     expect(G(poulie)).toEqual([0]);
     expect(G(coreXY)).toEqual([-4]);
@@ -380,8 +371,7 @@ describe("build_analysis_model — mécanismes de référence", () => {
 
 describe("variable_keys_of", () => {
   it("couvre keys_of sur tous les liens des mécanismes de référence", () => {
-    // Les deux extracteurs ne doivent pas diverger : keys_of sert le tri du
-    // solveur (positions seules), celui-ci sert l'analyse (positions + angles).
+    // Les deux extracteurs ne doivent pas diverger : keys_of sert le tri du solveur (positions seules), celui-ci sert l'analyse (positions + angles).
     const seen = new Set<Link["type"]>();
     for (const json of [
       vilbrequin,

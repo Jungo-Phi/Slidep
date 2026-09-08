@@ -101,31 +101,25 @@ interface ElementsOverviewProps {
   applyActions: (actions: Action[]) => void;
   setHighlight: (highlight: CanvasHighlight) => void;
   /** Destroys elements by the handful — the counterpart of the Delete key, which the panel would
-   *  otherwise be the only place not to offer. Leaves the canvas out of whatever it was selecting. */
+   * otherwise be the only place not to offer.
+   * Leaves the canvas out of whatever it was selecting. */
   onDeleteElements: (ids: ID[]) => void;
 }
 
 /**
- * The elements tab's list: one section per element type, carrying that type's own common fields
- * and, behind its chevron, its elements one by one. A group is both what you read the list as and
- * what you edit it through — two parallel lists, one naming the types and one editing them, would
- * have said the same thing twice.
+ * The elements tab's list: one section per element type, carrying that type's own common fields and, behind its chevron, its elements one by one.
+ * A group is both what you read the list as and what you edit it through — two parallel lists, one naming the types and one editing them, would have said the same thing twice.
  *
- * It shows a multi-selection, or the whole mechanism when nothing is selected — the same list of
- * the same elements, so it is one component. What a selection adds is what can only be said of
- * one: dropping a type out of it, narrowing it down to a single type. Without a selection those
- * give way to the gestures the mechanism-wide list has instead: clicking a header selects what it
- * names, and its delete button destroys it. Destroying is offered either way — a header stands for
- * what it lists, whether or not the canvas holds it selected.
+ * It shows a multi-selection, or the whole mechanism when nothing is selected — the same list of the same elements, so it is one component.
+ * What a selection adds is what can only be said of one: dropping a type out of it, narrowing it down to a single type.
+ * Without a selection those give way to the gestures the mechanism-wide list has instead: clicking a header selects what it names, and its delete button destroys it.
+ * Destroying is offered either way — a header stands for what it lists, whether or not the canvas holds it selected.
  *
- * Collapsed, so the panel's height follows the number of types present rather than the number of
- * elements: twenty beams are one line, not twenty. A group of one has no group to speak of — its
- * own row stands in for the header.
+ * Collapsed, so the panel's height follows the number of types present rather than the number of elements: twenty beams are one line, not twenty.
+ * A group of one has no group to speak of — its own row stands in for the header, and for the list's own header too when it is the whole list.
  *
- * The tint runs under a type's own header and its elements, the way a section title carries its
- * own band; the fields it commands sit below it on the panel's own ground. The display layers and
- * the totals stay outside the groups altogether — they cut across the types, and a per-type
- * counter of them would only fragment what reads better whole.
+ * The tint runs under a type's own header and its elements, the way a section title carries its own band; the fields it commands sit below it on the panel's own ground.
+ * The display layers and the totals stay outside the groups altogether — they cut across the types, and a per-type counter of them would only fragment what reads better whole.
  */
 export const ElementsOverview: React.FC<ElementsOverviewProps> = ({
   selectedIds,
@@ -168,6 +162,11 @@ export const ElementsOverview: React.FC<ElementsOverviewProps> = ({
   const groupIsClickable = !selecting || groups.length > 1;
   // The header stands for everything listed, which a selection already holds.
   const headerIsClickable = !selecting;
+  // One icon beside "5 beams" reads as the beam and not as the five, so a lone type shows its own twice.
+  const titleIcons =
+    groups.length === 1
+      ? [groups[0].icon, groups[0].icon]
+      : groups.slice(0, SHOWN_TYPE_ICONS).map((group) => group.icon);
 
   const selectGroup = (group: SelectionGroup) => {
     setCanvasState(
@@ -198,8 +197,7 @@ export const ElementsOverview: React.FC<ElementsOverviewProps> = ({
   );
 
   /** One row of the list: icon, name, and delete — or, inside a selection, a control that just
-   *  drops this one element out of it, destroying the model from three levels deep in a
-   *  selection-refinement list reading as far too heavy a click. */
+   * drops this one element out of it, destroying the model from three levels deep in a selection-refinement list reading as far too heavy a click. */
   const elementRow = (element: MechanicalElement, size: "small" | "medium") => {
     const controlIcon = size === "small" ? 16 : 20;
     return (
@@ -339,122 +337,132 @@ export const ElementsOverview: React.FC<ElementsOverviewProps> = ({
     );
   };
 
+  /** The list's own header: the icons of the types it holds, what it counts, and the delete that stands for all of it. */
+  const headerRow = () => (
+    <Box
+      sx={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        borderRadius: 5,
+        mx: -1,
+        mt: -1,
+        cursor: headerIsClickable ? "pointer" : "default",
+        backgroundColor: "transparent",
+        ...(headerIsClickable && {
+          "&:hover": { backgroundColor: "action.hover" },
+        }),
+        "&:has(.element-display-actions:hover)": {
+          backgroundColor: "transparent",
+        },
+      }}
+      onClick={headerIsClickable ? selectListed : undefined}
+      onMouseEnter={() =>
+        setHighlight({ elements: new Set(listedIds), kind: "pick" })
+      }
+      onMouseLeave={() => setHighlight(NO_HIGHLIGHT)}
+    >
+      <IconButton
+        sx={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 1,
+          my: 0.5,
+          minWidth: 0,
+          padding: 0,
+          cursor: "inherit",
+          backgroundColor: "transparent",
+          "&:hover": { backgroundColor: "transparent" },
+          "&:focus-visible": {
+            backgroundColor: "action.selected",
+          },
+        }}
+        disableRipple
+      >
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            flexShrink: 0,
+            mx: 1,
+          }}
+        >
+          {titleIcons.map((src, index) => (
+            <Box
+              key={index}
+              component="img"
+              src={src}
+              draggable={false}
+              sx={{ width: TITLE_ICON, height: TITLE_ICON, mx: -0.5 }}
+            />
+          ))}
+          {groups.length > SHOWN_TYPE_ICONS && (
+            <Typography color="text.primary" fontWeight={800} marginX={0.75}>
+              +{groups.length - SHOWN_TYPE_ICONS}
+            </Typography>
+          )}
+        </Box>
+        <Typography variant="subtitle1" noWrap sx={{ fontWeight: 500 }}>
+          {tn("selection_count", listed.length)}
+        </Typography>
+      </IconButton>
+      <Box
+        className="element-display-actions"
+        sx={{ display: "contents" }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <StructureOnly actions={["DeleteElement"]}>
+          <Tooltip
+            title={t(selecting ? "selection_delete" : "selection_delete_all")}
+          >
+            <IconButton
+              color="error"
+              onMouseEnter={() =>
+                setHighlight({
+                  elements: new Set(listedIds),
+                  kind: "erase",
+                })
+              }
+              onMouseLeave={() => setHighlight(NO_HIGHLIGHT)}
+              onClick={() => onDeleteElements(listedIds)}
+              sx={{ borderRadius: 4 }}
+            >
+              <Delete />
+            </IconButton>
+          </Tooltip>
+        </StructureOnly>
+      </Box>
+    </Box>
+  );
+
+  // Taken out of the flow and anchored to the scroll area, the panel's one positioned ancestor: the message centres itself on the whole panel and leaves nothing to scroll.
   if (groups.length === 0)
     return (
       <Box
         sx={{
-          m: 2,
-          p: 2,
-          textAlign: "center",
-          borderRadius: 3,
-          backgroundColor: "background.sunken",
-          color: "text.disabled",
-          fontSize: "0.875rem",
+          position: "absolute",
+          inset: 0,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
         }}
       >
-        {t("elements_empty")}
+        <Typography variant="body2" color="text.disabled">
+          {t("mechanism_empty")}
+        </Typography>
       </Box>
     );
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", m: 2, gap: 1 }}>
-      <Box
-        sx={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          borderRadius: 5,
-          mx: -1,
-          mt: -1,
-          cursor: headerIsClickable ? "pointer" : "default",
-          backgroundColor: "transparent",
-          ...(headerIsClickable && {
-            "&:hover": { backgroundColor: "action.hover" },
-          }),
-          "&:has(.element-display-actions:hover)": {
-            backgroundColor: "transparent",
-          },
-        }}
-        onClick={headerIsClickable ? selectListed : undefined}
-        onMouseEnter={() =>
-          setHighlight({ elements: new Set(listedIds), kind: "pick" })
-        }
-        onMouseLeave={() => setHighlight(NO_HIGHLIGHT)}
-      >
-        <IconButton
-          sx={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 1,
-            my: 0.5,
-            minWidth: 0,
-            padding: 0,
-            cursor: "inherit",
-            backgroundColor: "transparent",
-            "&:hover": { backgroundColor: "transparent" },
-            "&:focus-visible": {
-              backgroundColor: "action.selected",
-            },
-          }}
-          disableRipple
-        >
-          <Box
-            sx={{
-              display: "flex",
-              alignItems: "center",
-              flexShrink: 0,
-              mx: 0.5,
-            }}
-          >
-            {groups.slice(0, SHOWN_TYPE_ICONS).map((group) => (
-              <Box
-                key={group.type}
-                component="img"
-                src={group.icon}
-                draggable={false}
-                sx={{ width: TITLE_ICON, height: TITLE_ICON }}
-              />
-            ))}
-            {groups.length > SHOWN_TYPE_ICONS && (
-              <Typography color="text.primary" fontWeight={800} marginX={0.5}>
-                +{groups.length - SHOWN_TYPE_ICONS}
-              </Typography>
-            )}
-          </Box>
-          <Typography variant="subtitle1" noWrap sx={{ fontWeight: 500 }}>
-            {tn("selection_count", listed.length)}
-          </Typography>
-        </IconButton>
-        <Box
-          className="element-display-actions"
-          sx={{ display: "contents" }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <StructureOnly actions={["DeleteElement"]}>
-            <Tooltip
-              title={t(selecting ? "selection_delete" : "selection_delete_all")}
-            >
-              <IconButton
-                color="error"
-                onMouseEnter={() =>
-                  setHighlight({
-                    elements: new Set(listedIds),
-                    kind: "erase",
-                  })
-                }
-                onMouseLeave={() => setHighlight(NO_HIGHLIGHT)}
-                onClick={() => onDeleteElements(listedIds)}
-                sx={{ borderRadius: 4 }}
-              >
-                <Delete />
-              </IconButton>
-            </Tooltip>
-          </StructureOnly>
-        </Box>
-      </Box>
-
-      <Divider sx={{ mx: -2 }} />
+      {/* A single element's own row names it and carries its delete: a header above it would say all of that twice. */}
+      {listed.length > 1 && (
+        <>
+          {headerRow()}
+          <Divider sx={{ mx: -2 }} />
+        </>
+      )}
 
       {groups.map((group) => (
         <Box key={group.type}>

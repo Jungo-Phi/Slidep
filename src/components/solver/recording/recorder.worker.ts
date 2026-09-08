@@ -13,15 +13,11 @@ import {
 /**
  * The recording loop, off the UI thread.
  *
- * It does **not** answer one request per displayed frame: that would leave it idle between
- * frames and buy no throughput at all. It runs towards a target the main thread keeps
- * moving, in slices, and posts what it produced as it goes.
+ * It does **not** answer one request per displayed frame: that would leave it idle between frames and buy no throughput at all.
+ * It runs towards a target the main thread keeps moving, in slices, and posts what it produced as it goes.
  *
- * A slice is bounded by the same budget the synchronous loop used — not to protect a
- * display it no longer blocks, but so that pending messages (a new target, a grab, an edit)
- * get a turn between two slices. Yielding through a `MessageChannel` is what lets them
- * through: the message queue is only served between macrotasks, and unlike `setTimeout` a
- * port round-trip carries no minimum delay.
+ * A slice is bounded by the same budget the synchronous loop used — not to protect a display it no longer blocks, but so that pending messages (a new target, a grab, an edit) get a turn between two slices.
+ * Yielding through a `MessageChannel` is what lets them through: the message queue is only served between macrotasks, and unlike `setTimeout` a port round-trip carries no minimum delay.
  */
 
 const recorder = new Recorder();
@@ -48,9 +44,8 @@ function slice(): void {
   if (snapshots.length > 0)
     post({
       type: "snapshots",
-      // Stripped of the layout the client already holds for this epoch. Cast: `snapshots`
-      // is typed to the mode-agnostic base, but its actual shape (Kinematic vs Dynamic)
-      // follows the `mode` this recorder was `load`ed with — always one of `WireSnapshot`.
+      // Stripped of the layout the client already holds for this epoch.
+      // Cast: `snapshots` is typed to the mode-agnostic base, but its actual shape (Kinematic vs Dynamic) follows the `mode` this recorder was `load`ed with — always one of `WireSnapshot`.
       snapshots: snapshots.map(
         ({ layout: _layout, ...wire }) => wire,
       ) as WireSnapshot[],
@@ -58,9 +53,9 @@ function slice(): void {
       epoch,
     });
 
-  // Still behind → come back after the message queue has had its turn. Solving nothing while
-  // behind means the model is not loaded; stopping then avoids a spin. It is `solved` and
-  // not the batch that says so: a slice can end on an instant that is not kept.
+  // Still behind → come back after the message queue has had its turn.
+  // Solving nothing while behind means the model is not loaded; stopping then avoids a spin.
+  // It is `solved` and not the batch that says so: a slice can end on an instant that is not kept.
   if (solved > 0 && reached < targetTime) schedule();
 }
 
@@ -95,16 +90,15 @@ self.onmessage = (event: MessageEvent<ToRecorder>) => {
             epoch,
           });
       }
-      // The target comes back to where the recording restarts. Keeping the previous one
-      // would send the worker racing to re-record the whole of the last session in one
-      // burst — which is exactly what leaving simulation and coming back looked like.
+      // The target comes back to where the recording restarts.
+      // Keeping the previous one would send the worker racing to re-record the whole of the last session in one burst — which is exactly what leaving simulation and coming back looked like.
       targetTime = message.resumeFrom?.t ?? 0;
       running = true;
       schedule();
       break;
     case "rewind":
-      // The model is untouched, so the layout the client holds still describes it and is
-      // not posted again. Only the epoch moves, to drop the instants still in flight.
+      // The model is untouched, so the layout the client holds still describes it and is not posted again.
+      // Only the epoch moves, to drop the instants still in flight.
       epoch = message.epoch;
       recorder.rewind(message.resumeFrom);
       targetTime = message.resumeFrom.t;
@@ -126,8 +120,7 @@ self.onmessage = (event: MessageEvent<ToRecorder>) => {
       break;
     case "target":
       targetTime = message.targetTime;
-      // A target is also what resumes after a `stop`: pausing and playing again must not
-      // need the model to be reloaded.
+      // A target is also what resumes after a `stop`: pausing and playing again must not need the model to be reloaded.
       running = true;
       schedule();
       break;

@@ -161,10 +161,9 @@ describe("canonical_modes", () => {
   });
 
   it("une roue qui tourne dans le vide est un DDL parasite nommé", () => {
-    // Le pivot est groundé, la roue n'engrène rien : son angle est libre et ne
-    // bouge qu'elle. C'est exactement ce que « localized » doit attraper.
-    // L'axe doit lister la roue : sans ça le parser n'émet aucune Coincidence
-    // et la roue flotte librement, ce qui n'est pas le cas qu'on teste.
+    // Le pivot est groundé, la roue n'engrène rien : son angle est libre et ne bouge qu'elle.
+    // C'est exactement ce que « localized » doit attraper.
+    // L'axe doit lister la roue : sans ça le parser n'émet aucune Coincidence et la roue flotte librement, ce qui n'est pas le cas qu'on teste.
     const [modes] = modes_of([
       pivot("p1", P(0, 0), true, [], [id("g1")]),
       gear("g1", P(0, 0), "p1", 40),
@@ -200,8 +199,7 @@ describe("canonical_modes", () => {
   });
 
   it("les parts d'un mode forment une répartition", () => {
-    // Une clé fusionnée partage son poids entre ses éléments, donc la somme vaut
-    // au plus 1 — le seuil CONTRIBUTOR_SHARE en retranche les miettes.
+    // Une clé fusionnée partage son poids entre ses éléments, donc la somme vaut au plus 1 — le seuil CONTRIBUTOR_SHARE en retranche les miettes.
     for (const modes of fixture(huygens))
       for (const mode of modes) {
         const sum = mode.contributors.reduce((s, c) => s + c.share, 0);
@@ -211,9 +209,8 @@ describe("canonical_modes", () => {
   });
 
   it("ce qui bouge englobe ce qui nomme", () => {
-    // `contributors` est un classement, rogné des petites parts et divisé entre
-    // les éléments d'une clé fusionnée ; `moves` est l'ensemble à surligner. Les
-    // confondre laissait des pièces bouger sans être mises en évidence.
+    // `contributors` est un classement, rogné des petites parts et divisé entre les éléments d'une clé fusionnée ; `moves` est l'ensemble à surligner.
+    // Les confondre laissait des pièces bouger sans être mises en évidence.
     for (const chains of [fixture(coreXY), fixture(huygens), fixture(jansen)])
       for (const modes of chains)
         for (const mode of modes) {
@@ -238,8 +235,8 @@ describe("canonical_modes", () => {
   });
 
   it("deux modes d'une chaîne ne portent pas le même nom", () => {
-    // Sauf s'il n'y a qu'un élément à nommer : la masse libre a deux modes de
-    // translation et une seule pièce. L'indice de rangée les distingue alors.
+    // Sauf s'il n'y a qu'un élément à nommer : la masse libre a deux modes de translation et une seule pièce.
+    // L'indice de rangée les distingue alors.
     for (const chains of [
       fixture(coreXY),
       fixture(huygens),
@@ -254,8 +251,7 @@ describe("canonical_modes", () => {
   });
 
   it("le moteur d'un mode piloté est mis en évidence avec lui", () => {
-    // Le pivot moteur est ancré, donc il ne bouge pas : sans exception il sortirait
-    // du surlignage, alors que la rangée porte son nom.
+    // Le pivot moteur est ancré, donc il ne bouge pas : sans exception il sortirait du surlignage, alors que la rangée porte son nom.
     const [modes] = fixture(vilbrequin);
     const driven = modes.find((m) => m.drivenByMotor)!;
     expect(driven.dominant).toBeDefined();
@@ -263,10 +259,8 @@ describe("canonical_modes", () => {
   });
 
   it("un moteur n'est mis en évidence que dans le mode qu'il pilote", () => {
-    // La clé qu'un moteur pilote bouge dans presque tous les modes de sa chaîne :
-    // l'allumer partout où elle bouge le posait sur les rangées voisines, alors qu'il
-    // n'y pilote rien. Ce double pendule motorisé a deux modes, le moteur n'en tient
-    // qu'un.
+    // La clé qu'un moteur pilote bouge dans presque tous les modes de sa chaîne : l'allumer partout où elle bouge le posait sur les rangées voisines, alors qu'il n'y pilote rien.
+    // Ce double pendule motorisé a deux modes, le moteur n'en tient qu'un.
     const [modes] = modes_of([
       { ...pivot("p1", P(0, 0), true, [id("b1")]), motor: { speed: 10, torque: 1 } },
       pivot("p2", P(100, 0), false, [id("b1"), id("b2")]),
@@ -287,8 +281,7 @@ describe("canonical_modes", () => {
   });
 
   it("un moteur sans mobilité à piloter est nommé pour lui-même", () => {
-    // Il n'a aucune rangée de mode où figurer : sans cette liste il n'existerait nulle
-    // part dans le panneau, qui vient pourtant d'annoncer la chaîne sur-motorisée.
+    // Il n'a aucune rangée de mode où figurer : sans cette liste il n'existerait nulle part dans le panneau, qui vient pourtant d'annoncer la chaîne sur-motorisée.
     const [{ chain, modes }] = analyse(
       mechanism([
         { ...pivot("p1", P(0, 0), true, [id("b1")]), motor: { speed: 10, torque: 1 } },
@@ -314,9 +307,7 @@ describe("canonical_modes", () => {
   });
 
   it("le survol d'une chaîne montre aussi ses moteurs sans mode", () => {
-    // Une chaîne sur-motorisée a plus de moteurs que de mobilités : celui qui ne
-    // revendique aucune rangée sortirait de l'union des modes, alors que la carte de
-    // la chaîne parle bien de lui.
+    // Une chaîne sur-motorisée a plus de moteurs que de mobilités : celui qui ne revendique aucune rangée sortirait de l'union des modes, alors que la carte de la chaîne parle bien de lui.
     // Un quatre-barres motorisé aux deux bâtis : une seule mobilité pour deux moteurs.
     const [{ chain, modes }] = analyse(
       mechanism([
@@ -340,9 +331,7 @@ describe("canonical_modes", () => {
   });
 
   it("un mode ne met en évidence que des pièces de sa chaîne", () => {
-    // Survoler une chaîne puis l'un de ses modes doit restreindre le surlignage, jamais
-    // le déplacer ailleurs : sans cette inclusion, un mode allumait le bâti que sa
-    // chaîne n'allume pas, et la chaîne taisait le moteur que son mode montrait.
+    // Survoler une chaîne puis l'un de ses modes doit restreindre le surlignage, jamais le déplacer ailleurs : sans cette inclusion, un mode allumait le bâti que sa chaîne n'allume pas, et la chaîne taisait le moteur que son mode montrait.
     for (const json of [vilbrequin, jansen, coreXY, huygens, doubleSlider])
       for (const { chain, modes } of analysed(json))
         for (const mode of modes)
@@ -350,8 +339,7 @@ describe("canonical_modes", () => {
   });
 
   it("le survol d'une chaîne montre l'union de ses modes, pas plus", () => {
-    // L'autre sens de l'inclusion : une variable libre qu'aucun mode ne bouge est une
-    // variable que les contraintes ont épinglée, et la chaîne n'a pas à s'en réclamer.
+    // L'autre sens de l'inclusion : une variable libre qu'aucun mode ne bouge est une variable que les contraintes ont épinglée, et la chaîne n'a pas à s'en réclamer.
     for (const json of [vilbrequin, coreXY, huygens, doubleSlider])
       for (const { chain, modes } of analysed(json))
         expect(new Set(chain_highlight(chain, modes))).toEqual(
@@ -360,8 +348,7 @@ describe("canonical_modes", () => {
   });
 
   it("une chaîne rigide se rabat sur ses propres pièces", () => {
-    // p3 est libre, mais deux barres le tiennent vers des pivots ancrés : la chaîne
-    // existe, sa mobilité est nulle, et il n'y a aucune union à prendre.
+    // p3 est libre, mais deux barres le tiennent vers des pivots ancrés : la chaîne existe, sa mobilité est nulle, et il n'y a aucune union à prendre.
     const els = [
       pivot("p1", P(0, 0), true, [id("b1")]),
       pivot("p2", P(200, 0), true, [id("b2")]),

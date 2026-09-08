@@ -12,14 +12,10 @@ export function clamp_scale(scale: number): number {
 }
 
 /**
- * Keeps one screen axis from panning the world frame's edge past the canvas's own — the
- * mechanism stays reachable, never scrolled off into empty space it cannot be brought back
- * from. Symmetric in `pan` because the frame is centred on the world origin: `x` and `y`
- * (mirrored or not) clamp the same way.
+ * Keeps one screen axis from panning the world frame's edge past the canvas's own — the mechanism stays reachable, never scrolled off into empty space it cannot be brought back from.
+ * Symmetric in `pan` because the frame is centred on the world origin: `x` and `y` (mirrored or not) clamp the same way.
  *
- * Once the frame is narrower than the canvas — zoomed out enough that the whole 1000 km
- * square fits with room to spare — there is no useful position to pan to inside that slack,
- * so it is centred instead of left wherever the last unclamped pan happened to leave it.
+ * Once the frame is narrower than the canvas — zoomed out enough that the whole 1000 km square fits with room to spare — there is no useful position to pan to inside that slack, so it is centred instead of left wherever the last unclamped pan happened to leave it.
  */
 function clamp_axis(pan: number, scale: number, viewportSize: number): number {
   const frameSize = 2 * WORLD_FRAME_HALF_EXTENT * scale;
@@ -92,7 +88,8 @@ export function screen2world_length(
 }
 
 /**
- * An angle from world to screen. The y flip reverses the sense of rotation, so a world angle θ is drawn at −θ, and what turns counter-clockwise in world turns clockwise on screen.
+ * An angle from world to screen.
+ * The y flip reverses the sense of rotation, so a world angle θ is drawn at −θ, and what turns counter-clockwise in world turns clockwise on screen.
  *
  * Its own inverse, hence the single function.
  */
@@ -101,7 +98,7 @@ export function world2screen_angle(angle: number): number {
 }
 
 /** The wheel delta that takes a viewport from `fromScale` to `toScale`, so a control aiming
- *  at an exact scale goes through the same path as a gesture. */
+ * at an exact scale goes through the same path as a gesture. */
 export function zoom_delta_to(fromScale: number, toScale: number): number {
   return -VIEWPORT_ZOOM_SENSITIVITY * Math.log2(toScale / fromScale);
 }
@@ -109,11 +106,7 @@ export function zoom_delta_to(fromScale: number, toScale: number): number {
 /**
  * Zooms on `point`, clamped to the grid's own zoom range and the world frame.
  *
- * The scale is clamped first, and the pan that keeps `point` fixed is computed from that
- * clamped scale rather than the raw one — so a scroll that would overshoot a bound instead
- * eases to a stop at it: the ratio `clampedScale / oldScale` is 1 right at the bound, which
- * leaves `pan` exactly where it was, rather than snapping to a value consistent with a scale
- * the viewport never actually reached.
+ * The scale is clamped first, and the pan that keeps `point` fixed is computed from that clamped scale rather than the raw one — so a scroll that would overshoot a bound instead eases to a stop at it: the ratio `clampedScale / oldScale` is 1 right at the bound, which leaves `pan` exactly where it was, rather than snapping to a value consistent with a scale the viewport never actually reached.
  */
 export function zoom_on_point(
   deltaY: number,
@@ -138,9 +131,7 @@ export interface FitViewportOptions {
 /**
  * Zoom and pan framing `bounds` inside a `width` × `height` viewport.
  *
- * No margin beyond `ratioMargin` is added around the content: a fixed
- * world-unit margin would swamp a small mechanism, shrinking it toward the
- * middle of the frame instead of filling it.
+ * No margin beyond `ratioMargin` is added around the content: a fixed world-unit margin would swamp a small mechanism, shrinking it toward the middle of the frame instead of filling it.
  */
 export function fit_viewport_to_bounds(
   bounds: Bounds | undefined,
@@ -161,8 +152,8 @@ export function fit_viewport_to_bounds(
   );
   const scale = Number.isFinite(fitScale) ? fitScale : defaultZoom;
 
-  // The pan that lands the content's centre on the viewport's centre. `world2screen`
-  // flips y on the way, so what has to be cancelled is the flipped offset.
+  // The pan that lands the content's centre on the viewport's centre.
+  // `world2screen` flips y on the way, so what has to be cancelled is the flipped offset.
   const contentCenter = bounds.min.lerp(bounds.max, 0.5);
   return {
     scale,

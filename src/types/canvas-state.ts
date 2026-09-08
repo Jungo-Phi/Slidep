@@ -99,10 +99,10 @@ export type CanvasState =
       type: "MovingBeltBody";
       elementID: ID;
       /** The run the drag carries, numbered on the belt MINUS `removingGearIndex`
-       *  — read it through `belt_without_gear`, never against the stored belt. */
+       * — read it through `belt_without_gear`, never against the stored belt. */
       section: number;
       /** Set when the grab was on an arc: that pulley only leaves the belt at the
-       *  drop, so an abandoned gesture costs nothing and the path never opens. */
+       * drop, so an abandoned gesture costs nothing and the path never opens. */
       removingGearIndex?: number;
     }
   | { type: "ChangingGearRadius"; elementID: ID }
@@ -113,7 +113,7 @@ export type CanvasState =
       elementID: ID;
       part: "body";
       /** Where along the beam the crest line was grabbed: that point is what
-       *  follows the cursor, so an off-centre grab does not swing the load. */
+       * follows the cursor, so an off-centre grab does not swing the load. */
       grabT: number;
     }
   | { type: "MovingMoment"; elementID: ID }
@@ -151,18 +151,15 @@ export type CanvasState =
   | { type: "PlacingMomentStart" }
   | { type: "PlacingMomentEnd"; startHover: HoveredPart }
   | { type: "PlacingProbe" }
-  // Metric selector popover open on an element, reached either by placing a
-  // probe (`armed`, so closing it re-arms the tool) or by clicking the badge of
-  // one already there (closing leaves that element selected).
+  // Metric selector popover open on an element, reached either by placing a probe (`armed`, so closing it re-arms the tool) or by clicking the badge of one already there (closing leaves that element selected).
   | {
       type: "PlacingProbeMetrics";
       elementID: ID;
       position: WorldPoint;
       armed?: boolean;
     }
-  // The ruler, in its three moments: out and waiting, holding one end, and read. It measures
-  // without touching the mechanism, so it lives in the canvas state and nowhere else —
-  // leaving the tool is what clears it.
+  // The ruler, in its three moments: out and waiting, holding one end, and read.
+  // It measures without touching the mechanism, so it lives in the canvas state and nowhere else — leaving the tool is what clears it.
   | { type: "Measuring" }
   | { type: "MeasuringFrom"; start: MeasureAnchor }
   | { type: "Measured"; measure: Measure }
@@ -190,16 +187,12 @@ export type CanvasState =
   | { type: "GearRatioConstraintStart" }
   | { type: "GearRatioConstraintGear"; startGearID: ID }
   | { type: "MovingConstraint"; elementID: ID }
-  // Both drag the floor directly, continuously once past the same drag-start threshold
-  // `SelectedElement` gates its own drag on. `downPos` is what that threshold measures
-  // against, and — unmoved by mouse-up — what turns the gesture into a click that opens
-  // `EditingFloorValue` instead.
+  // Both drag the floor directly, continuously once past the same drag-start threshold `SelectedElement` gates its own drag on.
+  // `downPos` is what that threshold measures against, and — unmoved by mouse-up — what turns the gesture into a click that opens `EditingFloorValue` instead.
   | { type: "DraggingFloorHeight"; downPos: WorldPoint }
   | { type: "DraggingFloorAngle"; downPos: WorldPoint }
-  // Les deux états de saisie d'une valeur au canvas. Ils partagent l'éditeur
-  // mais pas les issues : sur un élément qui vient d'être posé, ESCAPE le
-  // supprime et ENTER réarme l'outil pour en poser un autre ; sur un élément
-  // déjà existant, ESCAPE annule la saisie et ENTER le laisse sélectionné.
+  // Les deux états de saisie d'une valeur au canvas.
+  // Ils partagent l'éditeur mais pas les issues : sur un élément qui vient d'être posé, ESCAPE le supprime et ENTER réarme l'outil pour en poser un autre ; sur un élément déjà existant, ESCAPE annule la saisie et ENTER le laisse sélectionné.
   | {
       type: "PlacingValue";
       elementID: ID;
@@ -212,7 +205,8 @@ export type CanvasState =
       /** Quelle magnitude d'une force répartie est éditée. */
       part?: "start" | "end";
       /** L'outil à réarmer en sortie, quand la saisie a été ouverte depuis un
-       *  outil encore armé. Absent : la saisie laisse l'élément sélectionné. */
+       * outil encore armé.
+       * Absent : la saisie laisse l'élément sélectionné. */
       rearm?: "DimensionStart";
     }
   | {
@@ -224,12 +218,12 @@ export type CanvasState =
       beltPin?: Extract<Link, { type: "BeltPin" }>;
     }
   /** Opened on a click (no drag) on a floor handle — see `DraggingFloorHeight`/
-   *  `DraggingFloorAngle`. Always leaves the floor selected on exit: there is no
-   *  `PlacingValue`-style "delete on Escape" counterpart, since the floor already existed. */
+   * `DraggingFloorAngle`.
+   * Always leaves the floor selected on exit: there is no `PlacingValue`-style "delete on Escape" counterpart, since the floor already existed. */
   | { type: "EditingFloorValue"; field: "height" | "angle"; value: number };
 
 /** Every element id the canvas state currently treats as selected/focused: one id for
- *  most states (drag, edit, single selection), several under a multiple selection. */
+ * most states (drag, edit, single selection), several under a multiple selection. */
 export function selected_ids(state: CanvasState): ID[] {
   if ("elementIDs" in state) return state.elementIDs;
   if ("elementID" in state) return [state.elementID];

@@ -376,8 +376,8 @@ describe("repair_mechanism", () => {
     expect(second).toEqual([]);
     expect(twice).toBe(once);
 
-    // Reference errors are the ones repair promises to clear. Reciprocity and
-    // domain rules are the validator's business, not its.
+    // Reference errors are the ones repair promises to clear.
+    // Reciprocity and domain rules are the validator's business, not its.
     const referenceCodes = ["MISSING_REFERENCE", "WRONG_TYPE"];
     const remaining = validate_mechanism(once) ?? [];
     expect(remaining.filter((e) => referenceCodes.includes(e.code))).toEqual(

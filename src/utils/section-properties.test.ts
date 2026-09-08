@@ -131,8 +131,7 @@ describe("max_fiber_stress", () => {
   });
 
   it("combines by adding magnitudes — the worse of the two fibres, whatever the signs", () => {
-    // σ(±v) = N/A ± Mf·v/I; the worse fibre's magnitude is always |N/A| + |Mf|·v/I,
-    // regardless of which sign combination is fed in (max(|a+b|,|a−b|) = |a|+|b|).
+    // σ(±v) = N/A ± Mf·v/I; the worse fibre's magnitude is always |N/A| + |Mf|·v/I, regardless of which sign combination is fed in (max(|a+b|,|a−b|) = |a|+|b|).
     const expected = 1000 / section.A + (50 * section.v) / section.I;
     expect(max_fiber_stress(1000, 50, section)).toBeCloseTo(expected, 6);
     expect(max_fiber_stress(1000, -50, section)).toBeCloseTo(expected, 6);

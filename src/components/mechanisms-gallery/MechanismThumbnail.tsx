@@ -8,21 +8,19 @@ import { THUMBNAIL_MARGIN, THUMBNAIL_MODE_ANIMATION } from "../../constants/inte
 import { thumbnail_mode } from "./thumbnail-mode";
 
 /** Résolution du rendu, en 4:3. Bien au-dessus de la taille d'affichage, pour
- *  rester net sur un écran à forte densité. */
+ * rester net sur un écran à forte densité. */
 const RENDER_WIDTH = 512;
 const RENDER_HEIGHT = 512;
 
 interface MechanismThumbnailProps {
   record: SerializedMechanism;
   /** Zooms the framing in while true, and swings the mechanism along its first mode
-   *  — a mechanism with no freedom just gets the zoom. */
+   * — a mechanism with no freedom just gets the zoom. */
   hovered: boolean;
 }
 
 /**
- * Miniature d'un mécanisme, redessinée plutôt que chargée depuis une image
- * stockée : elle suit donc le thème courant, et la sauvegarde n'a plus à encoder
- * quoi que ce soit.
+ * Miniature d'un mécanisme, redessinée plutôt que chargée depuis une image stockée : elle suit donc le thème courant, et la sauvegarde n'a plus à encoder quoi que ce soit.
  */
 export const MechanismThumbnail: React.FC<MechanismThumbnailProps> = ({
   record,
@@ -31,19 +29,16 @@ export const MechanismThumbnail: React.FC<MechanismThumbnailProps> = ({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   // Redessiner quand le thème change : les couleurs du dessin en dépendent.
   const theme = useTheme();
-  // Repairs silently: a card is no place to report damage, but a broken record
-  // must not take the gallery down with it.
+  // Repairs silently: a card is no place to report damage, but a broken record must not take the gallery down with it.
   const mechanism = useMemo(() => load_mechanism(record).mechanism, [record]);
-  // Survives across hover toggles (each one restarts the effect below) so the zoom eases
-  // onward from wherever it is instead of snapping back to `REST` between two hovers.
+  // Survives across hover toggles (each one restarts the effect below) so the zoom eases onward from wherever it is instead of snapping back to `REST` between two hovers.
   const zoomRef = useRef(0);
 
   useEffect(() => {
     const ctx = canvasRef.current?.getContext("2d");
     if (!ctx) return;
 
-    // Only a mechanism with a freedom to show gets a swing; one with none still gets the
-    // zoom below, which is its only reaction to the hover.
+    // Only a mechanism with a freedom to show gets a swing; one with none still gets the zoom below, which is its only reaction to the hover.
     const found = hovered ? thumbnail_mode(mechanism) : null;
     const animation = found
       ? animate_mode(mechanism, found.model, found.chain, found.mode, {
@@ -57,8 +52,7 @@ export const MechanismThumbnail: React.FC<MechanismThumbnailProps> = ({
     let last = performance.now();
     const step = () => {
       const now = performance.now();
-      // A tab left in the background hands back a huge delta; clamping keeps the
-      // swing (and the zoom ramp below) from jumping on the frame the window comes back.
+      // A tab left in the background hands back a huge delta; clamping keeps the swing (and the zoom ramp below) from jumping on the frame the window comes back.
       const dt = Math.min((now - last) / 1000, 1 / 20);
       last = now;
 
@@ -72,8 +66,7 @@ export const MechanismThumbnail: React.FC<MechanismThumbnailProps> = ({
       ctx.clearRect(0, 0, RENDER_WIDTH, RENDER_HEIGHT);
       draw_thumbnail(ctx, pose, RENDER_WIDTH, RENDER_HEIGHT, zoomRef.current);
 
-      // Stops once the zoom has settled and there's no swing to keep drawing —
-      // a resting thumbnail costs nothing between hovers.
+      // Stops once the zoom has settled and there's no swing to keep drawing — a resting thumbnail costs nothing between hovers.
       if (animation || zoomRef.current !== target) {
         frame = requestAnimationFrame(step);
       }
@@ -84,8 +77,7 @@ export const MechanismThumbnail: React.FC<MechanismThumbnailProps> = ({
   }, [mechanism, theme, hovered]);
 
   return (
-    // The ground the drawing sits on, as on the canvas itself: a preview is a
-    // small view of the app's own surface, not of the card carrying it.
+    // The ground the drawing sits on, as on the canvas itself: a preview is a small view of the app's own surface, not of the card carrying it.
     <Box
       sx={{
         position: "relative",

@@ -1,6 +1,5 @@
 /**
- * ElementProperties component
- * Displays properties for element elements
+ * ElementProperties component Displays properties for element elements
  */
 
 import { Box, IconButton, List, ListItem, Tooltip } from "@mui/material";
@@ -46,9 +45,7 @@ export const ConstraintsPanel: React.FC<ConstraintsPanelProps> = ({
     setHoveredPart({ type: "Void", position: ZERO });
   };
 
-  // Dimensions carry a value and their own on-canvas position; the geometric
-  // constraints (align/normal/parallel/equal) carry neither — split into two
-  // groups rather than one list mixing an editable number with a bare delete.
+  // Dimensions carry a value and their own on-canvas position; the geometric constraints (align/normal/parallel/equal) carry neither — split into two groups rather than one list mixing an editable number with a bare delete.
   const dimensions = sorted_constraints_for_display(
     mechanism.constraintElements.filter(
       (c) => !is_geometric_constraint_type(c.type),

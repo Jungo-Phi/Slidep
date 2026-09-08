@@ -10,15 +10,34 @@
 
 ### À faire rapidement
 
+- Pouvoir hover et sélectionner des trucs quand un panneau est ouvert
+- Hover preview des contraintes
+
+- Mécanismes exemple
+- Clarifier contraintes non-respectées
+- Rendre la physique exacte (cas faux, première frames, etc.)
+- Bloquer moteur si couple demandé suppérieur couple disponible
+- Clarifier le grab en dynamique (grab -> force ?)
+- 🔨 Clean cette putain de section "élément en simulation
+- Mobile mode
+- Ajouter mesures globales (contrainte max) ou "Contrainte max sur la poutre"
+- Clean les meusures
+
+- Supprimer poutre sur joint de courroie
+- Ajouter contraintes de coincidence (point - ligne)
+- Comment connecter ou non des engrenages sur le même axe ?
+- Faire fonctionner les treuils
+
 - 🚨 Un ctrl+y de remplacement d'élément n'a pas reset la simulation, wtf !?
 - 🚨 Le moteur se bloque avec "Jansen", wtf !?
 - Le hover des éléments depuis le panneau latéral ne devrait pas faire apparaitre les contraintes
 - 🚨 Hover des loads sous les edges, wtf !?
 - 🚨 Un snap sur la grille ne se fait pas toujours bien aux valeurs rondes, wtf !?
-- 🚨 L'angle affiché dans les mesures "Balance.slidep" est faux. L'angle du graph ne correspond pas à celui de l'élément
+- 🚨 L'angle affiché dans les mesures "Balance.slidep" est faux. L'angle du graph ne correspond pas à celui de l'élément, Vitesse angulaire aussi est faux (rapport TAU manquant)
 
 **Qwick fix**
 
+- force-distribuée : "force totale" -> "force équivalente"
 - 🔨 Corriger les diagrammes d'efforts internes (valeur à zéro)
 - 🔨 Les trais indicatifs des valeurs max dans les diagrammes des efforts (vu dans Mf) s'accumulent
 
@@ -33,7 +52,6 @@
 
 **UI**
 
-- 🔨 Clean cette putain de section "élément en simulation
 - 🔨 Travailler les couleurs, avec les thèmes
 
 - 🔨 Hover sur les graphs met en évidence les éléments concernés
@@ -152,6 +170,7 @@
 - 🔨 Hover une probe devrait hover l'élément aussi
 - 🆕 Sélectionner les dimensions (sur la flèche)
 - 🔨 Rendre les hitbox exactes (contraintes, noeuds)
+- 🤔 Caméra qui suit le mécanisme en simulation ?
 
 - 🔨 Afficher le point de contact pour placingGearRadius sur belt
 - ❇️ Wrap VS windings ?

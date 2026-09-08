@@ -9,16 +9,12 @@ import {
 /**
  * Reading a snapshot: it holds raw numbers, and the layout says which key sits where.
  *
- * The accessors below answer like the `Map` they replace — `undefined` when the snapshot
- * carries no value for that key, whether because the key has no slot at all or because its
- * slot holds NaN. Reading a slot directly (`positions[2 * i]`) is the fast path and is what
- * hot loops do, but they own the NaN check then.
+ * The accessors below answer like the `Map` they replace — `undefined` when the snapshot carries no value for that key, whether because the key has no slot at all or because its slot holds NaN. Reading a slot directly (`positions[2 * i]`) is the fast path and is what hot loops do, but they own the NaN check then.
  */
 
 /**
- * Bridge nodes a grab adds to the solve for one frame. They have a reserved slot in every
- * layout — their key set is fixed, unlike their presence — and hold NaN on frames without
- * a grab.
+ * Bridge nodes a grab adds to the solve for one frame.
+ * They have a reserved slot in every layout — their key set is fixed, unlike their presence — and hold NaN on frames without a grab.
  */
 export const GRAB_BRIDGE_KEY = "grab_bridge";
 export const GRAB_PERIMETER_KEY = "grab_perimeter";
@@ -26,9 +22,8 @@ export const GRAB_BELT_KEY = "grab_belt";
 export const GRAB_KEYS = [GRAB_BRIDGE_KEY, GRAB_PERIMETER_KEY, GRAB_BELT_KEY];
 
 /**
- * The layout of a recording, from the key sets of the model it was compiled from. `keys`
- * are the snapshot's own position keys — decoupled, one per part of a fused key — and the
- * grab slots are appended here so no caller can forget them.
+ * The layout of a recording, from the key sets of the model it was compiled from.
+ * `keys` are the snapshot's own position keys — decoupled, one per part of a fused key — and the grab slots are appended here so no caller can forget them.
  */
 export function make_snapshot_layout(
   keys: string[],
@@ -45,7 +40,7 @@ export interface BeltShape {
 }
 
 /** A layout over exactly these slots, grab keys included: the form the wire carries, where
- *  the reserved slots are already part of `keys`. */
+ * the reserved slots are already part of `keys`. */
 export function snapshot_layout(
   keys: string[],
   angleKeys: string[],
@@ -84,12 +79,9 @@ export function angles_length(layout: SnapshotLayout): number {
 }
 
 /**
- * One per-pulley block of a belt, or `undefined` when this snapshot carries none — the
- * belt is unknown, or its state had not been seeded yet.
+ * One per-pulley block of a belt, or `undefined` when this snapshot carries none — the belt is unknown, or its state had not been seeded yet.
  *
- * Generic over `SimulationSnapshot`: kinematic and dynamic snapshots share the same
- * wrap/detach/arrival layout past `angleKeys` (both compile through
- * `compile_simulation_model`), so one body serves either.
+ * Generic over `SimulationSnapshot`: kinematic and dynamic snapshots share the same wrap/detach/arrival layout past `angleKeys` (both compile through `compile_simulation_model`), so one body serves either.
  */
 function belt_block<S extends SimulationSnapshot>(
   snapshot: S,
@@ -125,9 +117,8 @@ export function snapshot_belt_arrivals<S extends SimulationSnapshot>(
 }
 
 /**
- * Indices, into `attachedGearsIDs`, of the pulleys `belt` has lost contact with. Empty when
- * it has lost none, `undefined` only when the snapshot does not know this belt: the two say
- * different things, and a caller putting the state back needs to tell them apart.
+ * Indices, into `attachedGearsIDs`, of the pulleys `belt` has lost contact with.
+ * Empty when it has lost none, `undefined` only when the snapshot does not know this belt: the two say different things, and a caller putting the state back needs to tell them apart.
  */
 export function snapshot_belt_detached<S extends SimulationSnapshot>(
   snapshot: S,
@@ -144,10 +135,8 @@ export function snapshot_belt_detached<S extends SimulationSnapshot>(
 
 /** The position recorded for `key`, or `undefined` when this snapshot has none. */
 /**
- * Generic over `SimulationSnapshot`: `positions` is always exactly `2 * layout.keys.length`
- * long on either concrete subtype, so a position slot is never out of bounds whichever kind
- * this is called with. The belt accessors above index past `angleKeys.length` on purpose —
- * both concrete subtypes' `angles` array has room for it (see `SnapshotLayout`).
+ * Generic over `SimulationSnapshot`: `positions` is always exactly `2 * layout.keys.length` long on either concrete subtype, so a position slot is never out of bounds whichever kind this is called with.
+ * The belt accessors above index past `angleKeys.length` on purpose — both concrete subtypes' `angles` array has room for it (see `SnapshotLayout`).
  */
 export function snapshot_point<S extends SimulationSnapshot>(
   snapshot: S,
@@ -160,9 +149,7 @@ export function snapshot_point<S extends SimulationSnapshot>(
 }
 
 /** The angle (rad) recorded for `key`, or `undefined` when this snapshot has none. Generic
- *  like `snapshot_point`, for the same reason — an angle slot never exceeds
- *  `layout.angleKeys.length`, which both concrete subtypes size their `angles` array to at
- *  least (and beyond, for the belt blocks that follow it). */
+ * like `snapshot_point`, for the same reason — an angle slot never exceeds `layout.angleKeys.length`, which both concrete subtypes size their `angles` array to at least (and beyond, for the belt blocks that follow it). */
 export function snapshot_angle<S extends SimulationSnapshot>(
   snapshot: S,
   key: string,
@@ -196,7 +183,7 @@ export function snapshot_acceleration(
 }
 
 /** The angular velocity (rad/s) recorded for `key` in a dynamic-mode snapshot — see
- *  `snapshot_angle`. */
+ * `snapshot_angle`. */
 export function snapshot_angle_velocity(
   snapshot: DynamicSnapshot,
   key: string,

@@ -59,8 +59,7 @@ const mechanism: Mechanism = {
 };
 
 describe("load_mechanism", () => {
-  // `JSON.stringify` writes NaN as `null`, and a `{x: null, y: null}` left as a
-  // plain object throws on the first `Point2` method the canvas calls.
+  // `JSON.stringify` writes NaN as `null`, and a `{x: null, y: null}` left as a plain object throws on the first `Point2` method the canvas calls.
   it("brings a point back as a Point2 even when the file stored it as null", () => {
     const stored = JSON.parse(JSON.stringify(serialize_mechanism(mechanism)));
     expect(stored.constraintElements[0].position).toEqual({

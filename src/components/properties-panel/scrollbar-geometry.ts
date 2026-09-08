@@ -26,8 +26,7 @@ function travel(metrics: ScrollMetrics, height: number, margin: number): number 
 
 /**
  * Thumb due for a scroller in this state, or null when its content fits and no thumb is drawn.
- * `overscroll` is how far the panel is currently pulled past an edge — signed the way the content
- * moves, so positive is a pull at the top — and squeezes the thumb against the edge it is held at.
+ * `overscroll` is how far the panel is currently pulled past an edge — signed the way the content moves, so positive is a pull at the top — and squeezes the thumb against the edge it is held at.
  */
 export function thumb_geometry(
   metrics: ScrollMetrics,
@@ -56,8 +55,7 @@ export function thumb_geometry(
 }
 
 /**
- * How far a pull of `distance` px past an edge actually moves the panel: the first pixels follow
- * at `resistance`, then it stiffens and never reaches `limit` however hard it is pushed.
+ * How far a pull of `distance` px past an edge actually moves the panel: the first pixels follow at `resistance`, then it stiffens and never reaches `limit` however hard it is pushed.
  */
 export function rubber_band(
   distance: number,

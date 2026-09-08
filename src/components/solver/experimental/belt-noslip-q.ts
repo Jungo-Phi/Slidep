@@ -15,20 +15,13 @@ import { LinkSlots } from "../kinematics/link-slots";
 import { Nodes, SimNodes } from "../nodes";
 
 /**
- * The belt's no-slip law, one instance per tangent strand: what the upstream pulley pays
- * out, minus what the downstream one takes in, equals that strand's elongation — CONTACT
- * ARCS INCLUDED. Ignoring the arcs is wrong by 88 px on a motion whose answer is known
- * exactly, and by up to 22 % on the Core XY.
+ * The belt's no-slip law, one instance per tangent strand: what the upstream pulley pays out, minus what the downstream one takes in, equals that strand's elongation — CONTACT ARCS INCLUDED. Ignoring the arcs is wrong by 88 px on a motion whose answer is known exactly, and by up to 22 % on the Core XY.
  *
- * It writes ANGLES ONLY. That is a measured decision, not an omission: given authority
- * over the positions, strand by strand, each one satisfies its equation by deforming the
- * belt — precisely the slip it exists to forbid. The positional grip lives one level up,
- * in `BeltSubChainAggregate`, whose telescoped sum has no interior degree of freedom to
- * relax into.
+ * It writes ANGLES ONLY. That is a measured decision, not an omission: given authority over the positions, strand by strand, each one satisfies its equation by deforming the belt — precisely the slip it exists to forbid.
+ * The positional grip lives one level up, in `BeltSubChainAggregate`, whose telescoped sum has no interior degree of freedom to relax into.
  *
- * Law of one tangent segment a→b:  q_a − q_b = Δh,  h = ℓ + u_a − v_b,
- * q_k = r_k·ε_k·θ_k,  ε_k = dir?−1:1. The half-arcs u_a (departure on a) and v_b
- * (arrival on b) are in belt-px in the lab frame; h⁰ is baked at rest.
+ * Law of one tangent segment a→b: q_a − q_b = Δh, h = ℓ + u_a − v_b, q_k = r_k·ε_k·θ_k, ε_k = dir?−1:1.
+ * The half-arcs u_a (departure on a) and v_b (arrival on b) are in belt-px in the lab frame; h⁰ is baked at rest.
  */
 
 type Seg = Extract<Link, { type: "BeltSegmentNoSlip" }>;
@@ -41,7 +34,8 @@ function at(positions: Map<string, Point2>, key: string): Point2 | undefined {
 }
 
 /** Continuous (unwrapped) angle nearest to `ref`, so the ±π atan2 seam never
- *  injects 2π of phantom belt between sweeps. Same trick as BeltLength's psiArr. */
+ * injects 2π of phantom belt between sweeps.
+ * Same trick as BeltLength's psiArr. */
 export function unwrapArrival(raw: number, ref: number | undefined): number {
   if (ref === undefined) return raw;
   let d = raw - (((ref % TAU) + TAU) % TAU);
@@ -82,9 +76,9 @@ function arcOf(pieces: BeltPiece[], viaIndex: number) {
 }
 
 /**
- * h = ℓ + u_a − v_b for the segment `segIndex` (whose endpoints are vias
- * `viaA`→`viaB`). `arrivals` (per via) is the continuous-angle reference and is
- * updated in place when `track` is set. Returns null on a degenerate geometry.
+ * h = ℓ + u_a − v_b for the segment `segIndex` (whose endpoints are vias `viaA`→`viaB`).
+ * `arrivals` (per via) is the continuous-angle reference and is updated in place when `track` is set.
+ * Returns null on a degenerate geometry.
  */
 export function segmentH(
   vias: BeltVia[],
@@ -101,7 +95,7 @@ export function segmentH(
 
   const rEps = (v: number) => vias[v].radius * (vias[v].clockwise ? -1 : 1);
 
-  // u_a = departure half-arc on a = r_a·ε_a·ψ_arr(a) + r_a·wrap_a  (0 for a terminal)
+  // u_a = departure half-arc on a = r_a·ε_a·ψ_arr(a) + r_a·wrap_a (0 for a terminal)
   let u = 0;
   const arcA = arcOf(pieces, a);
   if (arcA) {
@@ -109,7 +103,7 @@ export function segmentH(
     if (arrivals && track) arrivals[a] = psiA;
     u = rEps(a) * psiA + vias[a].radius * arcA.wrap;
   }
-  // v_b = arrival half-arc on b = r_b·ε_b·ψ_arr(b)  (0 for a terminal)
+  // v_b = arrival half-arc on b = r_b·ε_b·ψ_arr(b) (0 for a terminal)
   let v = 0;
   const arcB = arcOf(pieces, b);
   if (arcB) {
@@ -125,9 +119,8 @@ export function segmentH(
 }
 
 /**
- * Weight of an angle DOF in the projection metric. "rim" (w_θ = 1/r²) makes the
- * angle exactly as mobile as a point of its own rim, so a strand shares its
- * correction equally between its two pulleys instead of ∝ r².
+ * Weight of an angle DOF in the projection metric.
+ * "rim" (w_θ = 1/r²) makes the angle exactly as mobile as a point of its own rim, so a strand shares its correction equally between its two pulleys instead of ∝ r².
  */
 /** The `rim` metric: an angle of radius r is as mobile as a point on its own rim. */
 export const rimWeight = (rEps: number): number =>
@@ -181,10 +174,8 @@ export function loadBeltVia(
 }
 
 /**
- * h = ℓ + u_a − v_b of one strand, solving only the two tangent pairs it rests on: its
- * own (strand length, arrival on b) and the previous one (arrival on a, whose contact
- * arc closes between the two). The rest of the belt does not enter the answer, and this
- * is the hot path — one instance per strand, three hundred sweeps a frame.
+ * h = ℓ + u_a − v_b of one strand, solving only the two tangent pairs it rests on: its own (strand length, arrival on b) and the previous one (arrival on a, whose contact arc closes between the two).
+ * The rest of the belt does not enter the answer, and this is the hot path — one instance per strand, three hundred sweeps a frame.
  */
 function strandH(
   nodes: SimNodes,
@@ -206,7 +197,7 @@ function strandH(
   if (!load(a) || !load(b)) return null;
   belt_solve_pair(sc, a, n);
 
-  // u_a = departure half-arc on a = r_a·ε_a·ψ_arr(a) + r_a·wrap_a  (0 for a terminal)
+  // u_a = departure half-arc on a = r_a·ε_a·ψ_arr(a) + r_a·wrap_a (0 for a terminal)
   let u = 0;
   if (belt_has_arc(sc, a, n, closed)) {
     const prev = (a - 1 + pairs) % pairs;
@@ -217,7 +208,7 @@ function strandH(
     if (link.arrivals && track) link.arrivals[a] = psiA;
     u = sc.r[a] * (sc.ccw[a] === 1 ? -1 : 1) * psiA + sc.r[a] * sc.arcWrap[a];
   }
-  // v_b = arrival half-arc on b = r_b·ε_b·ψ_arr(b)  (0 for a terminal)
+  // v_b = arrival half-arc on b = r_b·ε_b·ψ_arr(b) (0 for a terminal)
   let v = 0;
   if (belt_has_arc(sc, b, n, closed)) {
     const psiB = unwrapArrival(
@@ -231,9 +222,9 @@ function strandH(
 }
 
 /**
- * Apply one segment no-slip. Writes θ_a, θ_b (option 1); also the two centres
- * along the strand tangent when `link.writePositions` (option 2). Returns the
- * residual |C| in belt-px.
+ * Apply one segment no-slip.
+ * Writes θ_a, θ_b (option 1); also the two centres along the strand tangent when `link.writePositions` (option 2).
+ * Returns the residual |C| in belt-px.
  */
 export function applyBeltSegmentNoSlip(
   nodes: SimNodes,
@@ -253,10 +244,8 @@ export function applyBeltSegmentNoSlip(
 
   const C = qA - qB - (h - link.h0); // belt-px
 
-  // ∂C/∂θ_a = r_a·ε_a, ∂C/∂θ_b = −r_b·ε_b, in the `rim` metric (w_θ = 1/r²) that makes
-  // an angle exactly as mobile as a point of its own rim. Angles only: giving a strand
-  // authority over the positions makes it COMPLIANT — it satisfies its own equation by
-  // deforming the belt, which is the slip it exists to forbid.
+  // ∂C/∂θ_a = r_a·ε_a, ∂C/∂θ_b = −r_b·ε_b, in the `rim` metric (w_θ = 1/r²) that makes an angle exactly as mobile as a point of its own rim.
+  // Angles only: giving a strand authority over the positions makes it COMPLIANT — it satisfies its own equation by deforming the belt, which is the slip it exists to forbid.
   const mobA = rimWeight(link.rEpsA);
   const mobB = rimWeight(link.rEpsB);
   const writeA = iA >= 0 && Math.abs(link.rEpsA) > 1e-9;
@@ -274,14 +263,11 @@ export function applyBeltSegmentNoSlip(
 }
 
 /**
- * Δh = h − h⁰ of one segment, from the live positions. This is the signed
- * quantity a sub-chain's telescoping sum adds up to: summing `q_a − q_b = Δh`
- * along consecutive strands cancels every interior `q`, leaving
- * `q_début − q_fin = Σ Δh`. Between two points where q is held (a dead end, a
- * frozen pulley) the left side vanishes and what remains is PURELY positional.
+ * Δh = h − h⁰ of one segment, from the live positions.
+ * This is the signed quantity a sub-chain's telescoping sum adds up to: summing `q_a − q_b = Δh` along consecutive strands cancels every interior `q`, leaving `q_début − q_fin = Σ Δh`.
+ * Between two points where q is held (a dead end, a frozen pulley) the left side vanishes and what remains is PURELY positional.
  *
- * Read-only: `track` is off, so the shared continuous-arrivals array is never
- * mutated — a measurement must not perturb what it measures.
+ * Read-only: `track` is off, so the shared continuous-arrivals array is never mutated — a measurement must not perturb what it measures.
  */
 export function beltSegmentDeltaH(
   positions: Map<string, Point2>,
@@ -296,14 +282,10 @@ export function beltSegmentDeltaH(
 
 /**
  * Angular mobilities derived from the links that ALREADY write each gear angle.
- * An angle is pinned (mobility 0) when another constraint assigns it outright,
- * so no correction sent there can survive the sweep:
- *  - a `GearPerimeterPin` whose node AND centre are both anchored — proven to
- *    give ∂θ_new/∂θ_old = 0 (see belt-gear-pin-arbitration.md §1);
- *  - a `MotorAngle`, when `includeMotors` — it likewise reassigns its target
- *    every sweep, though at stiffness 0.5, so it is a soft driver rather than a
- *    hard Dirichlet condition. Hence the switch: the two readings are measured
- *    separately, never assumed equivalent.
+ * An angle is pinned (mobility 0) when another constraint assigns it outright, so no correction sent there can survive the sweep:
+ * - a `GearPerimeterPin` whose node AND centre are both anchored — proven to give ∂θ_new/∂θ_old = 0 (see belt-gear-pin-arbitration.md §1);
+ * - a `MotorAngle`, when `includeMotors` — it likewise reassigns its target every sweep, though at stiffness 0.5, so it is a soft driver rather than a hard Dirichlet condition.
+ * Hence the switch: the two readings are measured separately, never assumed equivalent.
  * Angles nothing pins are absent from the map, i.e. mobility 1.
  */
 export function deriveAngleMobilities(
@@ -343,9 +325,8 @@ export interface BeltNoSlipSpec {
 }
 
 /**
- * Build one BeltSegmentNoSlip link per tangent segment of a belt, baking h⁰ and
- * θ⁰ from the current positions/angles. All segments of a belt share one
- * continuous-arrivals array so unwrapping stays consistent across the chain.
+ * Build one BeltSegmentNoSlip link per tangent segment of a belt, baking h⁰ and θ⁰ from the current positions/angles.
+ * All segments of a belt share one continuous-arrivals array so unwrapping stays consistent across the chain.
  */
 export function buildBeltSegmentNoSlipLinks(
   positions: Map<string, Point2>,

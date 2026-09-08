@@ -125,8 +125,7 @@ function mechanism(mechanicalElements: MechanicalElement[]): Mechanism {
 }
 
 describe("apply_actions opens a belt whose loop the bundle breaks", () => {
-  // Deleting the junction node leaves the belt closed with nothing holding its
-  // ends — the correction must open it so the mechanism stays valid.
+  // Deleting the junction node leaves the belt closed with nothing holding its ends — the correction must open it so the mechanism stays valid.
   it("opens the belt when its junction node is deleted", () => {
     const mech = mechanism(closed_belt());
     const actions = delete_element(JOIN, mech.mechanicalElements, [], []);
@@ -139,8 +138,8 @@ describe("apply_actions opens a belt whose loop the bundle breaks", () => {
     expect(validate_mechanism(result)).toBeNull();
   });
 
-  // Cases 2 & 3: disconnecting a closed belt from its junction (from either
-  // panel side) runs open_belt. The junction must keep the other terminal.
+  // Cases 2 & 3: disconnecting a closed belt from its junction (from either panel side) runs open_belt.
+  // The junction must keep the other terminal.
   it("keeps the belt attached to its junction by one end when opened", () => {
     const mech = mechanism(closed_belt());
     const beltEl = mech.mechanicalElements.find(

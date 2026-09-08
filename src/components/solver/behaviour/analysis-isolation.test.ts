@@ -1,16 +1,11 @@
 /**
  * The analysis panel must not be able to change what the simulation produces.
  *
- * It measures and animates on the pose the recording is stopped on, which means it compiles
- * a model and runs the solver over the same mechanism the recording came from. Any state
- * shared by reference between the two — a snapshot's arrays, a belt's wrap state, a link
- * object — would make looking at a mechanism alter it, and a belt drive is where that would
- * show first, its topology being re-derived from the pose at every reload.
+ * It measures and animates on the pose the recording is stopped on, which means it compiles a model and runs the solver over the same mechanism the recording came from.
+ * Any state shared by reference between the two — a snapshot's arrays, a belt's wrap state, a link object — would make looking at a mechanism alter it, and a belt drive is where that would show first, its topology being re-derived from the pose at every reload.
  *
- * Recorded on a belt mechanism for that reason, and compared frame by frame rather than at
- * the end: a divergence that settles back would otherwise pass. The pause falls AFTER the
- * belt has dropped a pulley (frame 96), so the analysis is exercised on the path where it
- * rewires the belt it was given.
+ * Recorded on a belt mechanism for that reason, and compared frame by frame rather than at the end: a divergence that settles back would otherwise pass.
+ * The pause falls AFTER the belt has dropped a pulley (frame 96), so the analysis is exercised on the path where it rewires the belt it was given.
  */
 
 import { describe, expect, it } from "vitest";

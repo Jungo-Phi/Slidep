@@ -1,10 +1,6 @@
 /**
- * The dynamic engine now tracks belt contact the same way the kinematic one does (see
- * `docs/courroie-dynamique.md`), but the DRAWING path lagged behind it:
- * `apply_dynamic_snapshot_to_mechanism` had no belt branch at all, so a disconnected pulley
- * kept drawing as if the belt still ran onto it. This is the mirror of what
- * `analysis-isolation.test.ts` checks for `apply_snapshot_to_mechanism` — here the question is
- * simply whether the belt fields make it onto the drawn mechanism at all.
+ * The dynamic engine now tracks belt contact the same way the kinematic one does (see `docs/courroie-dynamique.md`), but the DRAWING path lagged behind it: `apply_dynamic_snapshot_to_mechanism` had no belt branch at all, so a disconnected pulley kept drawing as if the belt still ran onto it.
+ * This is the mirror of what `analysis-isolation.test.ts` checks for `apply_snapshot_to_mechanism` — here the question is simply whether the belt fields make it onto the drawn mechanism at all.
  */
 
 import { describe, expect, it } from "vitest";
@@ -49,8 +45,7 @@ describe("le dessin dynamique reflète le décrochage de courroie", () => {
     const belt = shown.mechanicalElements.find((e) => e.type === "belt");
     if (!belt || belt.type !== "belt") throw new Error("courroie introuvable");
 
-    // Not a hardcoded pulley index (that would test a geometry accident, not the wiring):
-    // whatever the snapshot itself says detached is what the drawn mechanism must carry.
+    // Not a hardcoded pulley index (that would test a geometry accident, not the wiring): whatever the snapshot itself says detached is what the drawn mechanism must carry.
     expect(belt.disconnectedGearIndices).toEqual(
       snapshot_belt_detached(snapshot, belt.id),
     );

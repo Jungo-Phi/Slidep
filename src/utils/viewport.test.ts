@@ -90,8 +90,7 @@ describe("zoom_on_point", () => {
       scale: 1,
     };
     const after = zoom_on_point(-1000, screen(0, 800), nearCorner, 1000, 800);
-    // A pan already inside the frame is a fixed point of `clamp_pan`: re-clamping it
-    // changes nothing, which is exactly what "still inside the frame" means.
+    // A pan already inside the frame is a fixed point of `clamp_pan`: re-clamping it changes nothing, which is exactly what "still inside the frame" means.
     const reclamped = clamp_pan(after.pan, after.scale, 1000, 800);
     expect(reclamped.x).toBe(after.pan.x);
     expect(reclamped.y).toBe(after.pan.y);

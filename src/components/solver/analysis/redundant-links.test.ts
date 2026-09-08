@@ -141,16 +141,15 @@ const fixture = (json: string) =>
 /**
  * Room for the measurements that audit a real mechanism.
  *
- * An audit is one mobility measurement per link, so a gallery chain costs hundreds of
- * solves — comfortably inside the default alone, not when the suite runs files in
- * parallel. The budget is the suite's contention, not the algorithm's speed.
+ * An audit is one mobility measurement per link, so a gallery chain costs hundreds of solves — comfortably inside the default alone, not when the suite runs files in parallel.
+ * The budget is the suite's contention, not the algorithm's speed.
  */
 const SLOW = 30_000;
 
 describe("find_redundant_links", () => {
   it("deux barres qui disent la même chose sont toutes deux signalées", () => {
-    // h = 1, et pourtant deux liens sont individuellement retirables : l'un des deux
-    // est de trop, et rien ne dit lequel. C'est la formulation honnête.
+    // h = 1, et pourtant deux liens sont individuellement retirables : l'un des deux est de trop, et rien ne dit lequel.
+    // C'est la formulation honnête.
     const [{ mobility, redundancy }] = audited([
       pivot("p1", P(0, 0), true, [id("b1"), id("b2")]),
       pivot("p2", P(100, 0), false, [id("b1"), id("b2")]),
@@ -164,10 +163,9 @@ describe("find_redundant_links", () => {
   });
 
   it("un groupe montre les deux côtés de sa contrainte, et rien au-delà", () => {
-    // Une contrainte est entre des pièces. L'`owner` n'est que celle sous laquelle le
-    // parser l'a rangée : pointer elle seule laissait chercher contre quoi elle lutte.
-    // Mais la lire nœud par nœud débordait à l'inverse — les nœuds du rail portent aussi
-    // l'autre slider, qui n'a rien à voir avec ce verrou-ci.
+    // Une contrainte est entre des pièces.
+    // L'`owner` n'est que celle sous laquelle le parser l'a rangée : pointer elle seule laissait chercher contre quoi elle lutte.
+    // Mais la lire nœud par nœud débordait à l'inverse — les nœuds du rail portent aussi l'autre slider, qui n'a rien à voir avec ce verrou-ci.
     const [{ redundancy }] = audited([
       join("g1", P(0, 0), true, [id("rail")]),
       join("g2", P(400, 0), true, [id("rail")]),
@@ -189,8 +187,7 @@ describe("find_redundant_links", () => {
   it(
     "une courroie parle d'une seule voix",
     () => {
-      // Sa loi de non-glissement est un lien par brin : signalés un par un, ils
-      // noieraient un lecteur qui n'a dessiné qu'une courroie.
+      // Sa loi de non-glissement est un lien par brin : signalés un par un, ils noieraient un lecteur qui n'a dessiné qu'une courroie.
       for (const { redundancy } of fixture(huygens)) {
         const belts = redundancy.links.filter(
           (l) => l.type === "BeltSegmentNoSlip",
@@ -223,9 +220,8 @@ describe("find_redundant_links", () => {
   });
 
   it("les verrous d'angle des deux sliders sont les liens de trop", () => {
-    // Le défaut trouvé en phase 2 : la poutre portée est colinéaire au rail par
-    // construction, donc les deux `Angle` d'`add_rigidity_links` verrouillent une
-    // orientation déjà imposée. L'outil doit maintenant les nommer.
+    // Le défaut trouvé en phase 2 : la poutre portée est colinéaire au rail par construction, donc les deux `Angle` d'`add_rigidity_links` verrouillent une orientation déjà imposée.
+    // L'outil doit maintenant les nommer.
     const [{ mobility, redundancy }] = audited([
       join("g1", P(0, 0), true, [id("rail")]),
       join("g2", P(400, 0), true, [id("rail")]),
@@ -236,17 +232,15 @@ describe("find_redundant_links", () => {
     ]);
     expect(mobility.hyperstaticity).toBe(2);
     expect(redundancy.links.filter((l) => l.type === "Angle")).toHaveLength(2);
-    // Et la mesure de ce qu'un test par lien ne sait pas faire : les deux
-    // `SlideOnSegment` sortent aussi, car retirer l'un laisse l'autre plus la
-    // distance et les verrous tenir la poutre. Quatre candidats pour h = 2.
+    // Et la mesure de ce qu'un test par lien ne sait pas faire : les deux `SlideOnSegment` sortent aussi, car retirer l'un laisse l'autre plus la distance et les verrous tenir la poutre.
+    // Quatre candidats pour h = 2.
     expect(redundancy.links.length).toBeGreaterThan(mobility.hyperstaticity);
   });
 
   it(
     "ne signale jamais rien sur une chaîne isostatique",
     () => {
-      // Les chaînes hyperstatiques sont sautées plutôt que mesurées : l'audit de Core XY
-      // coûte 2,6 s à lui seul, et ce n'est pas ce que ce test regarde.
+      // Les chaînes hyperstatiques sont sautées plutôt que mesurées : l'audit de Core XY coûte 2,6 s à lui seul, et ce n'est pas ce que ce test regarde.
       for (const json of [
         vilbrequin,
         jansen,
@@ -274,8 +268,7 @@ describe("find_redundant_links", () => {
   it(
     "retirer un lien signalé ne libère effectivement aucun mouvement",
     () => {
-      // La propriété qui définit la sortie, vérifiée sur un mécanisme réel plutôt que
-      // sur la seule construction synthétique.
+      // La propriété qui définit la sortie, vérifiée sur un mécanisme réel plutôt que sur la seule construction synthétique.
       const model = build_analysis_model(
         load_mechanism(JSON.parse(jansen)).mechanism,
       );

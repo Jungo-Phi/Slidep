@@ -10,12 +10,10 @@ import {
 } from "../components/solver/nodes";
 
 /**
- * Map-shaped façade over the indexed constraint API, for the constraint tests and the
- * measurement benches: they build small `Map` fixtures by hand and assert on them, which
- * reads far better than slot arithmetic. Production calls the indexed functions directly.
+ * Map-shaped façade over the indexed constraint API, for the constraint tests and the measurement benches: they build small `Map` fixtures by hand and assert on them, which reads far better than slot arithmetic.
+ * Production calls the indexed functions directly.
  *
- * Each wrapper keeps the signature the constraint had before the index port, marshals
- * into node storage, applies, and writes the results back into the caller's maps.
+ * Each wrapper keeps the signature the constraint had before the index port, marshals into node storage, applies, and writes the results back into the caller's maps.
  */
 
 const EMPTY_MAP = () => new Map<string, number>();

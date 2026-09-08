@@ -84,10 +84,8 @@ import {
 } from "../../../utils/snap-corridor";
 
 /**
- * A multiple selection holds mechanical elements only. Constraints and loads are
- * overlays on those elements: they follow them when the selection moves, so
- * taking one into the selection would only ask the move to carry an element the
- * mechanism does not have.
+ * A multiple selection holds mechanical elements only.
+ * Constraints and loads are overlays on those elements: they follow them when the selection moves, so taking one into the selection would only ask the move to carry an element the mechanism does not have.
  */
 function mechanical_only(
   elementIDs: ID[],
@@ -110,7 +108,7 @@ export function multiple_selection_state(
 }
 
 /** `EditingValue` for a load's value label (force/moment magnitude, or a
- *  distributed force's start/end), or `undefined` if `hoveredPart` isn't one. */
+ * distributed force's start/end), or `undefined` if `hoveredPart` isn't one. */
 function load_value_editing_state(
   hoveredPart: HoveredPart,
   loadElements: LoadElement[],
@@ -139,8 +137,7 @@ function load_value_editing_state(
 }
 
 /** `MovingForce`/`MovingMoment`/`MovingDistributedForce` to arm dragging a load's
- *  body/handle, or `undefined` if `hoveredPart` isn't one — its value label never
- *  arms a drag, it opens the value editor instead (see `load_value_editing_state`). */
+ * body/handle, or `undefined` if `hoveredPart` isn't one — its value label never arms a drag, it opens the value editor instead (see `load_value_editing_state`). */
 function load_drag_state(hoveredPart: HoveredPart): CanvasState | undefined {
   switch (hoveredPart.type) {
     case "Force":
@@ -205,9 +202,8 @@ export function canvasStateReducer(
   const actions: Action[] = [];
   switch (event.type) {
     case "MouseLeftButtonDown":
-      // A closure names no element, so only the belt placement that offered it
-      // can act on one — every other state sees empty space. Handled here so
-      // the states below are typed against a target that has an id.
+      // A closure names no element, so only the belt placement that offered it can act on one — every other state sees empty space.
+      // Handled here so the states below are typed against a target that has an id.
       if (hoveredPart.type === "BeltClosure") {
         if (state.type === "PlacingBeltEnd") {
           const closing = handle_placing_element(
@@ -225,10 +221,8 @@ export function canvasStateReducer(
         }
         break;
       }
-      // Same reasoning as `BeltClosure` just above: handled here so the states below are
-      // typed against a target that has an id. Height/angle only change while editing —
-      // a recompile is what makes them take effect, so there is nothing useful to drag
-      // mid-simulation.
+      // Same reasoning as `BeltClosure` just above: handled here so the states below are typed against a target that has an id.
+      // Height/angle only change while editing — a recompile is what makes them take effect, so there is nothing useful to drag mid-simulation.
       if (hoveredPart.type === "FloorHeight" || hoveredPart.type === "FloorAngle") {
         if (!isSimulating)
           setCanvasState({
@@ -240,9 +234,8 @@ export function canvasStateReducer(
           });
         break;
       }
-      // The angle's displayed value: a click-to-edit target of its own, separate from the
-      // drag handle above — same split as a load's body vs. its value label. Opens directly,
-      // no drag phase, since the text itself is never dragged.
+      // The angle's displayed value: a click-to-edit target of its own, separate from the drag handle above — same split as a load's body vs. its value label.
+      // Opens directly, no drag phase, since the text itself is never dragged.
       if (hoveredPart.type === "FloorAngleValue") {
         if (!isSimulating)
           setCanvasState({
@@ -252,18 +245,16 @@ export function canvasStateReducer(
           });
         break;
       }
-      // An opaque refusal is binding, not advisory: the spot showing the
-      // forbidden cursor takes nothing, whatever tool is armed. The tool stays
-      // armed so the user can aim again.
+      // An opaque refusal is binding, not advisory: the spot showing the forbidden cursor takes nothing, whatever tool is armed.
+      // The tool stays armed so the user can aim again.
       if (hoveredPart.type === "Void" && hoveredPart.rejected) break;
       switch (state.type) {
         case "Selecting":
         case "SelectedElement":
         case "EditingValue":
         case "PlacingValue":
-          // Le badge d'une sonde ouvre le choix des grandeurs mesurées, la même
-          // boîte qu'à la pose. Avant tout le reste, y compris la simulation :
-          // c'est là qu'on veut le plus souvent y toucher.
+          // Le badge d'une sonde ouvre le choix des grandeurs mesurées, la même boîte qu'à la pose.
+          // Avant tout le reste, y compris la simulation : c'est là qu'on veut le plus souvent y toucher.
           if (hoveredPart.type === "Probe") {
             setCanvasState({
               type: "PlacingProbeMetrics",
@@ -272,10 +263,8 @@ export function canvasStateReducer(
             });
             break;
           }
-          // La flèche de sens inverse le moteur d'un clic, sans passer par un
-          // état de placement : un bascule immédiat, comme le switch
-          // marche/arrêt du panneau de propriétés. Avant tout le reste, y
-          // compris la simulation, pour la même raison que la sonde ci-dessus.
+          // La flèche de sens inverse le moteur d'un clic, sans passer par un état de placement : un bascule immédiat, comme le switch marche/arrêt du panneau de propriétés.
+          // Avant tout le reste, y compris la simulation, pour la même raison que la sonde ci-dessus.
           if (hoveredPart.type === "MotorArrow") {
             const pivot = get_mechanical_element_from_id(
               hoveredPart.id,
@@ -297,8 +286,7 @@ export function canvasStateReducer(
               setCanvasState({ type: "Selecting" });
               break;
             }
-            // L'étiquette de valeur d'une charge s'édite aussi pendant la
-            // simulation (hot-reload) : même priorité que sonde/moteur.
+            // L'étiquette de valeur d'une charge s'édite aussi pendant la simulation (hot-reload) : même priorité que sonde/moteur.
             if (state.type !== "EditingValue" && state.type !== "PlacingValue") {
               const editing = load_value_editing_state(hoveredPart, loadElements);
               if (editing) {
@@ -349,10 +337,9 @@ export function canvasStateReducer(
             });
             break;
           }
-          // Étiquette de valeur d'une charge : on ouvre l'éditeur dès le 1ᵉʳ
-          // clic. C'est une cible distincte du corps, donc aucun drag n'est à
-          // armer ici. Le reste de la charge (corps, poignées) tombe dans le cas
-          // générique plus bas : sélection + drag armé via `pendingHit`.
+          // Étiquette de valeur d'une charge : on ouvre l'éditeur dès le 1ᵉʳ clic.
+          // C'est une cible distincte du corps, donc aucun drag n'est à armer ici.
+          // Le reste de la charge (corps, poignées) tombe dans le cas générique plus bas : sélection + drag armé via `pendingHit`.
           // Pendant une saisie, on ne fait rien : le blur de l'input s'en charge.
           if (state.type !== "EditingValue" && state.type !== "PlacingValue") {
             const editing = load_value_editing_state(hoveredPart, loadElements);
@@ -364,8 +351,7 @@ export function canvasStateReducer(
           const constraint = constraintElements.find(
             (element) => element.id === hoveredPart.id,
           );
-          // Dimension (contrainte à valeur) : pendant une saisie, on ne fait
-          // rien ici — le blur de l'input s'en charge.
+          // Dimension (contrainte à valeur) : pendant une saisie, on ne fait rien ici — le blur de l'input s'en charge.
           if (
             constraint &&
             "value" in constraint &&
@@ -435,8 +421,7 @@ export function canvasStateReducer(
             });
             break;
           }
-          // A deletion changes connections, so it solves like any other
-          // connection change (its separation spreads what it detaches).
+          // A deletion changes connections, so it solves like any other connection change (its separation spreads what it detaches).
           actions.push(
             ...delete_element(
               hoveredPart.id,
@@ -496,8 +481,7 @@ export function canvasStateReducer(
           break;
         case "Measuring":
         case "Measured":
-          // A reading always replaces the one on show: the ruler is one instrument, not a
-          // collection.
+          // A reading always replaces the one on show: the ruler is one instrument, not a collection.
           setCanvasState({
             type: "MeasuringFrom",
             start: measure_anchor(hoveredPart, mechanicalElements),
@@ -522,8 +506,8 @@ export function canvasStateReducer(
         case "EqualConstraintGear":
         case "GearRatioConstraintStart":
         case "GearRatioConstraintGear": {
-          // Clicking a dimension already placed edits its value instead of
-          // starting a new one. The tool stays armed behind the editor.
+          // Clicking a dimension already placed edits its value instead of starting a new one.
+          // The tool stays armed behind the editor.
           if (state.type === "DimensionStart" && names_element(hoveredPart)) {
             const dimension = constraintElements.find(
               (element) => element.id === hoveredPart.id,
@@ -578,16 +562,13 @@ export function canvasStateReducer(
           )
             break;
           if (isSimulating) {
-            // Une charge s'édite par drag comme en édition (hot-reload), même en
-            // arrière de la simulation live : ce n'est pas un grab du mécanisme,
-            // juste une action ChangeForce/ChangeMoment/ChangeDistributedForce.
+            // Une charge s'édite par drag comme en édition (hot-reload), même en arrière de la simulation live : ce n'est pas un grab du mécanisme, juste une action ChangeForce/ChangeMoment/ChangeDistributedForce.
             const loadDragging = load_drag_state(hit);
             if (loadDragging) {
               setCanvasState(loadDragging);
               break;
             }
-            // Behind the recording frontier the loop replays snapshots and never
-            // consults the grab, so a drag there would pull on nothing.
+            // Behind the recording frontier the loop replays snapshots and never consults the grab, so a drag there would pull on nothing.
             if (!canSimulationGrab) break;
             let simKey: string | null = null;
             let simElementID: ID | null = null;
@@ -597,10 +578,7 @@ export function canvasStateReducer(
               | undefined = undefined;
             let beltPin: Extract<Link, { type: "BeltPin" }> | undefined =
               undefined;
-            // A closed belt's junction is a point of the belt like any other, so a
-            // grab there is a belt-body grab at that arc-length — whether the cursor
-            // caught the node holding the junction (the usual case: a join is drawn
-            // over the belt) or the belt's own terminal.
+            // A closed belt's junction is a point of the belt like any other, so a grab there is a belt-body grab at that arc-length — whether the cursor caught the node holding the junction (the usual case: a join is drawn over the belt) or the belt's own terminal.
             const junctionBelt = mechanicalElements.find(
               (e): e is BeltElement =>
                 e.type === "belt" &&
@@ -624,8 +602,7 @@ export function canvasStateReducer(
               simElementID = junctionBelt.id;
               beltPin = junctionPin;
             } else if (hit.type === "GearTooth") {
-              // Grab a gear tooth → rotate the gear: capture the angle offset of
-              // the grabbed point relative to the gear angle (held constant).
+              // Grab a gear tooth → rotate the gear: capture the angle offset of the grabbed point relative to the gear angle (held constant).
               const grabbedGear = get_mechanical_element_from_id(
                 hit.id,
                 mechanicalElements,
@@ -643,9 +620,7 @@ export function canvasStateReducer(
               simKey = hit.id;
               simElementID = hit.id;
             } else if (hit.type === "BeltBody") {
-              // Grab any point of a closed belt → rotate the belt with the point
-              // under the cursor: bake a transient BeltPin at the grabbed
-              // arc-length (from the live sim geometry).
+              // Grab any point of a closed belt → rotate the belt with the point under the cursor: bake a transient BeltPin at the grabbed arc-length (from the live sim geometry).
               const belt = get_mechanical_element_from_id(
                 hit.id,
                 mechanicalElements,
@@ -747,8 +722,8 @@ export function canvasStateReducer(
                   section: hit.section,
                 });
               } else {
-                // An arc: the drag carries the run the two runs it joined merge
-                // into. The pulley itself only comes off at the drop.
+                // An arc: the drag carries the run the two runs it joined merge into.
+                // The pulley itself only comes off at the drop.
                 setCanvasState({
                   type: "MovingBeltBody",
                   elementID: hit.id,
@@ -762,8 +737,7 @@ export function canvasStateReducer(
               }
               break;
             case "Constraint": {
-              // Attached badges (align/normal/parallel/equal) have no position
-              // of their own to drag — anchored to their host(s) instead.
+              // Attached badges (align/normal/parallel/equal) have no position of their own to drag — anchored to their host(s) instead.
               const dragged = constraintElements.find((c) => c.id === hit.id);
               if (dragged && "position" in dragged)
                 setCanvasState({
@@ -860,12 +834,8 @@ export function canvasStateReducer(
             distForce.targetID,
             mechanicalElements,
           ) as BeamElement;
-          // Every handle does the same thing — slide along the load's direction
-          // — and only differs in what the slid length means. Aiming is not
-          // part of any of them: the direction is chosen when the load is
-          // placed and edited in the panel, so a load dragged across its beam
-          // simply goes negative instead of swinging round, which would make
-          // its two ends look like they had swapped.
+          // Every handle does the same thing — slide along the load's direction — and only differs in what the slid length means.
+          // Aiming is not part of any of them: the direction is chosen when the load is placed and edited in the panel, so a load dragged across its beam simply goes negative instead of swinging round, which would make its two ends look like they had swapped.
           let newMagnitudeStart = distForce.magnitudeStart;
           let newMagnitudeEnd = distForce.magnitudeEnd;
           const worldDirection = frame2world_transform(
@@ -874,8 +844,7 @@ export function canvasStateReducer(
             mechanicalElements,
           );
           const projection_at = (base: Point2) =>
-            // Signed: past the base the projection goes negative and the arrow
-            // flips to the other side of the beam rather than being clamped.
+            // Signed: past the base the projection goes negative and the arrow flips to the other side of the beam rather than being clamped.
             // In screen px, the unit the display ruler is graduated in.
             world2screen_length(
               hoveredPart.position.sub(base).dot(worldDirection),
@@ -895,13 +864,8 @@ export function canvasStateReducer(
               );
               break;
             case "body": {
-              // The grabbed point of the crest line follows the cursor and both
-              // magnitudes are translated with it, keeping their difference
-              // fixed: the taper is a property of the load, not something
-              // moving it should rewrite. So pushing the load towards its beam
-              // takes the trailing end through zero into the negatives — it
-              // crosses to the other side — instead of collapsing the trapezoid
-              // into a rectangle.
+              // The grabbed point of the crest line follows the cursor and both magnitudes are translated with it, keeping their difference fixed: the taper is a property of the load, not something moving it should rewrite.
+              // So pushing the load towards its beam takes the trailing end through zero into the negatives — it crosses to the other side — instead of collapsing the trapezoid into a rectangle.
               const grabbed =
                 distForce.magnitudeStart +
                 (distForce.magnitudeEnd - distForce.magnitudeStart) *
@@ -942,8 +906,7 @@ export function canvasStateReducer(
           actions.push({
             type: "ChangeMoment",
             id: state.elementID,
-            // The drag radius maps back through the arc's own scale; the sign
-            // is a placement choice, so a move only ever resizes the arc.
+            // The drag radius maps back through the arc's own scale; the sign is a placement choice, so a move only ever resizes the arc.
             newValue:
               screen2stored_moment(
                 world2screen_length(
@@ -960,12 +923,9 @@ export function canvasStateReducer(
             state.elementID,
             mechanicalElements,
           ) as GearElement;
-          // Grab a point on the perimeter and pull the rim onto what is hovered:
-          // a meshing gear, a belt run, a node to size against. The hover has
-          // already placed the tangency point, so the rim lands on it instead of
-          // stopping short; on empty space it follows the free cursor.
-          // The geometric solver decides whether the radius grows or the centre
-          // moves (radius-constrained / meshed) — see resolveGeometricConstraints.
+          // Grab a point on the perimeter and pull the rim onto what is hovered: a meshing gear, a belt run, a node to size against.
+          // The hover has already placed the tangency point, so the rim lands on it instead of stopping short; on empty space it follows the free cursor.
+          // The geometric solver decides whether the radius grows or the centre moves (radius-constrained / meshed) — see resolveGeometricConstraints.
           const gearTarget =
             hoveredPart.type === "Void" ? worldMousePos : hoveredPart.position;
           actions.push({
@@ -977,22 +937,18 @@ export function canvasStateReducer(
           });
           break;
         case "DraggingFloorHeight": {
-          // Below the threshold: still a candidate click (see `MouseButtonUp`), so the
-          // floor must not have moved yet when it turns out to be one.
+          // Below the threshold: still a candidate click (see `MouseButtonUp`), so the floor must not have moved yet when it turns out to be one.
           if (
             worldMousePos.distance_to(state.downPos) * viewport.scale <
             HIT_TOLERANCE.DRAG_START
           )
             break;
-          // The line keeps its angle: only its offset along its own normal changes, so
-          // dragging reads as sliding the floor perpendicular to itself. `normal.y` is
-          // `cos(angle)`, zero only for a vertical floor (a wall) — a line through (0, h)
-          // is then x = 0 for every h, so there is nothing a height drag could mean.
+          // The line keeps its angle: only its offset along its own normal changes, so dragging reads as sliding the floor perpendicular to itself.
+          // `normal.y` is `cos(angle)`, zero only for a vertical floor (a wall) — a line through (0, h) is then x = 0 for every h, so there is nothing a height drag could mean.
           const { normal } = floor_anchor_and_normal(floor);
           if (Math.abs(normal.y) > 1e-6) {
             let newHeight = worldMousePos.dot(normal) / normal.y;
-            // The anchor sits on the y-axis (x = 0), so this is the same grid the free
-            // point snap answers to — including landing exactly on 0.
+            // The anchor sits on the y-axis (x = 0), so this is the same grid the free point snap answers to — including landing exactly on 0.
             if (snapToGrid)
               newHeight = snapped(
                 newHeight,
@@ -1013,14 +969,11 @@ export function canvasStateReducer(
             HIT_TOLERANCE.DRAG_START
           )
             break;
-          // Rotates the line to keep pointing at the cursor from its own anchor —
-          // the angle handle drawn `FLOOR.ANGLE_HANDLE_PX` along it is what is grabbed.
+          // Rotates the line to keep pointing at the cursor from its own anchor — the angle handle drawn `FLOOR.ANGLE_HANDLE_PX` along it is what is grabbed.
           const anchor = new Point2(0, floor.height);
           const toCursor = worldMousePos.sub(anchor);
           if (toCursor.length_squared() > 1e-9) {
-            // Same ladder of round directions a drawn bar answers to (see `angle_hits`),
-            // read in screen space so the corridor is a screen distance like every other
-            // snap tolerance.
+            // Same ladder of round directions a drawn bar answers to (see `angle_hits`), read in screen space so the corridor is a screen distance like every other snap tolerance.
             const found = snapToGrid
               ? best_ladder_ray(
                   world2screen_vec(toCursor, viewport),
@@ -1088,14 +1041,8 @@ export function canvasStateReducer(
           break;
         case "MovingConstraint": {
           if (hoveredPart.position.equals(oldPosition)) break;
-          // The constraint's own position, not `oldPosition`: that one tracks
-          // the last hover, which only snaps to the anchor within
-          // `HIT_TOLERANCE.CONSTRAINT` — a drag started fast enough leaves it
-          // reporting raw cursor positions instead, and since `MoveConstraint`
-          // never solves, nothing downstream corrects a wrong value baked in
-          // here. `ChangeForce`/`ChangeDistributedForce`/`ChangeMoment` below
-          // already read their `old*` from the live element for the same
-          // reason.
+          // The constraint's own position, not `oldPosition`: that one tracks the last hover, which only snaps to the anchor within `HIT_TOLERANCE.CONSTRAINT` — a drag started fast enough leaves it reporting raw cursor positions instead, and since `MoveConstraint` never solves, nothing downstream corrects a wrong value baked in here.
+          // `ChangeForce`/`ChangeDistributedForce`/`ChangeMoment` below already read their `old*` from the live element for the same reason.
           const constraint = get_constraint_element_from_id(
             state.elementID,
             constraintElements,
@@ -1112,8 +1059,7 @@ export function canvasStateReducer(
         case "SimulationDragging":
           onSimulationGrab(
             state.grabbedKey,
-            // For a gear-tooth or belt grab, follow the raw mouse (rotation
-            // target), not the hovered part which could snap to another element.
+            // For a gear-tooth or belt grab, follow the raw mouse (rotation target), not the hovered part which could snap to another element.
             state.gearPerimeter || state.beltPin
               ? worldMousePos
               : hoveredPart.position,
@@ -1128,8 +1074,7 @@ export function canvasStateReducer(
       if (mouseButtonDown !== "left") break;
       switch (state.type) {
         case "Selecting":
-          // Déjà traitée au bouton enfoncé (bascule immédiate) : le clic ne
-          // doit pas en plus sélectionner le pivot porteur au relâchement.
+          // Déjà traitée au bouton enfoncé (bascule immédiate) : le clic ne doit pas en plus sélectionner le pivot porteur au relâchement.
           if (hoveredPart.type === "MotorArrow") break;
           if (!names_element(hoveredPart)) break;
           setCanvasState({
@@ -1141,8 +1086,7 @@ export function canvasStateReducer(
           if (hoveredPart.type === "MotorArrow") break;
           if (!names_element(hoveredPart)) break;
           if (hoveredPart.id === state.elementID) {
-            // Un clic simple (sans drag) sur une dimension ouvre directement
-            // l'édition de sa valeur.
+            // Un clic simple (sans drag) sur une dimension ouvre directement l'édition de sa valeur.
             const constraint = constraintElements.find(
               (element) => element.id === hoveredPart.id,
             );
@@ -1199,9 +1143,7 @@ export function canvasStateReducer(
             state.elementID,
             mechanicalElements,
           ) as BeltElement;
-          // Removal and insertion travel as one bundle: they apply in order, and
-          // the closure pass judges the net result, so swapping a pulley for
-          // another never opens the belt in between.
+          // Removal and insertion travel as one bundle: they apply in order, and the closure pass judges the net result, so swapping a pulley for another never opens the belt in between.
           const removing = state.removingGearIndex;
           const shortened =
             removing === undefined ? belt : belt_without_gear(belt, removing);
@@ -1238,9 +1180,8 @@ export function canvasStateReducer(
               mechanicalElements,
               "belt-onto-gear",
             );
-            // Empty means the carried section is not a run of the shortened belt,
-            // so it was renumbered wrong: committing the removal alone would cost
-            // a pulley for nothing. Drop the whole gesture instead.
+            // Empty means the carried section is not a run of the shortened belt, so it was renumbered wrong: committing the removal alone would cost a pulley for nothing.
+            // Drop the whole gesture instead.
             if (attach.length === 0) beltActions.length = 0;
             else beltActions.push(...attach);
           }
@@ -1288,8 +1229,7 @@ export function canvasStateReducer(
               ).parentAxleID
           ) {
             // Pin the dragged gear to the hovered node/edge (GEAR on NODE/EDGE).
-            // The gear's own axle is excluded so dragging the tooth toward the
-            // centre keeps resizing instead of self-pinning.
+            // The gear's own axle is excluded so dragging the tooth toward the centre keeps resizing instead of self-pinning.
             actions.push(
               ...connect_elements(
                 hoveredPart,
@@ -1312,12 +1252,8 @@ export function canvasStateReducer(
           });
           break;
         case "DraggingFloorHeight":
-          // Never moved past the drag-start threshold: a click, not a drag — opens the
-          // editor on the height this handle carries, the same "click to type precisely,
-          // drag to eyeball it" split `ChangingGearRadius` has no counterpart for (a
-          // radius has no typed-entry path of its own). The angle handle has no such
-          // fallback: its value has its own click-to-edit target, the displayed text
-          // (`FloorAngleValue`, handled at `MouseLeftButtonDown` above).
+          // Never moved past the drag-start threshold: a click, not a drag — opens the editor on the height this handle carries, the same "click to type precisely, drag to eyeball it" split `ChangingGearRadius` has no counterpart for (a radius has no typed-entry path of its own).
+          // The angle handle has no such fallback: its value has its own click-to-edit target, the displayed text (`FloorAngleValue`, handled at `MouseLeftButtonDown` above).
           if (
             worldMousePos.distance_to(state.downPos) * viewport.scale <
             HIT_TOLERANCE.DRAG_START
@@ -1333,8 +1269,7 @@ export function canvasStateReducer(
           }
           break;
         case "DraggingFloorAngle":
-          // Same threshold the drag itself answers to: below it nothing was pushed, so there
-          // is no entry to seal.
+          // Same threshold the drag itself answers to: below it nothing was pushed, so there is no entry to seal.
           if (
             worldMousePos.distance_to(state.downPos) * viewport.scale >=
             HIT_TOLERANCE.DRAG_START
@@ -1366,8 +1301,7 @@ export function canvasStateReducer(
           break;
         case "MovingSelectionMultiple":
           if (!state.hasMoved) {
-            // Simple clic (sans déplacement) sur un élément de la sélection
-            // multiple → ne sélectionner que cet élément.
+            // Simple clic (sans déplacement) sur un élément de la sélection multiple → ne sélectionner que cet élément.
             setCanvasState({
               type: "SelectedElement",
               elementID: state.grabbedID,
@@ -1419,8 +1353,7 @@ export function canvasStateReducer(
 
     case "KeyDown":
       switch (event.key) {
-        // Before the shortcut table below, which would read Escape as "arm the selection
-        // tool" and put the ruler away in one press.
+        // Before the shortcut table below, which would read Escape as "arm the selection tool" and put the ruler away in one press.
         case "Escape": {
           const stepBack = ruler_step_back(state);
           if (stepBack) {

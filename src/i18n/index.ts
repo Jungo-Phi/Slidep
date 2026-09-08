@@ -26,8 +26,7 @@ let current: Lang = (() => {
 export const get_language = (): Lang => current;
 
 /**
- * Switching language re-renders nothing on its own: React follows through the `language` state
- * App keeps alongside this, and every component reads its text with `t` on the way down.
+ * Switching language re-renders nothing on its own: React follows through the `language` state App keeps alongside this, and every component reads its text with `t` on the way down.
  */
 export function set_language(lang: Lang): void {
   current = lang;
@@ -47,8 +46,8 @@ export function t(
 }
 
 /**
- * The `_one` or `_other` half of `key`, whichever `count` calls for, with `{count}` already
- * filled in. French counts zero as singular; the other three do not.
+ * The `_one` or `_other` half of `key`, whichever `count` calls for, with `{count}` already filled in.
+ * French counts zero as singular; the other three do not.
  */
 export function tn(
   key: PluralKey,

@@ -27,10 +27,16 @@ const ZERO = new Point2(0, 0);
 const BEAM = "beam" as ID;
 const START = "n0" as ID;
 const END = "n1" as ID;
+const BELT = "belt" as ID;
 
-/** `startType` and `endType` are what makes the case: `join` is a fixed end, `pivot` a pinned
- *  one. Everything else — span, load, section — is shared. */
-function stand(startType: "join" | "pivot", endType: "join" | "pivot") {
+/** `startType` and `endType` are what makes the case: `join` is a fixed end, `pivot` a pinned one.
+ * `beltTip` swaps the far end's support for a belt pin — something this model has no term for, hence an unknown of its own.
+ * Everything else — span, load, section — is shared. */
+function stand(
+  startType: "join" | "pivot",
+  endType: "join" | "pivot",
+  beltTip = false,
+) {
   const elements = [
     { type: "beam", id: BEAM },
     { type: startType, id: START },
@@ -49,6 +55,21 @@ function stand(startType: "join" | "pivot", endType: "join" | "pivot") {
   const links: Link[] = [
     { type: "Distance", ddl: 1, key1: START, key2: END, distance: L, owner: BEAM },
   ];
+  if (beltTip)
+    links.push({
+      type: "BeltPin",
+      ddl: 2,
+      beltID: BELT,
+      nodeKey: END,
+      gearPosKeys: [],
+      gearAngleKeys: [],
+      radii: [],
+      directions: [],
+      refIndex: 0,
+      refAngleKey: BELT,
+      s0: 0,
+      thetaRef0: 0,
+    } as unknown as Link);
 
   const positions = new Map<string, Point2>([
     [START, new Point2(0, 0)],
@@ -64,13 +85,15 @@ function stand(startType: "join" | "pivot", endType: "join" | "pivot") {
     beamMass: () => 0,
     distributedDensityOn: () => ({ at0: new Point2(0, -W), slope: ZERO }),
     beamStiffness: () => ({ EA, EI }),
+    gearAngularAcceleration: () => 0,
   };
 
   const system = build_statics_system(
     [spec],
+    [],
     links,
     elements,
-    (key) => key === START || key === END,
+    (key) => key === START || (!beltTip && key === END),
   );
   const flexibility = build_flexibility(system, [spec], frame);
   expect(flexibility).toBeDefined();
@@ -148,5 +171,25 @@ describe("poutre bi-encastrée sous charge répartie", () => {
     // one upstream interface at `s = 0`, and `Mw(L/2) = wL²/8` for a uniform `w`.
     const atMid = (-L / 2) * start.fy + start.m - (W * L * L) / 8;
     expect(atMid).toBeCloseTo((W * L * L) / 24, 6);
+  });
+});
+
+describe("ce que la passe déclare résolu", () => {
+  it("une redondance entre poutres est une réponse, pas une inconnue", () => {
+    // Three redundancies, and nothing unknown: the flexibility chose among them, so what the
+    // reader is owed is the diagram and not a warning over it.
+    const { solution, beamAt } = stand("join", "join");
+    expect(solution.indeterminacy).toBe(3);
+    for (const node of [START, END])
+      expect(beamAt(node).determined).toEqual({ fx: true, fy: true, m: true });
+  });
+
+  it("laisse indéterminé ce qu'une action non modélisée peut atteindre", () => {
+    // The same beam with its far end held by a belt instead of by the frame.
+    // A belt is not a body here, so its pull is an unknown carrying no energy of its own — and an unknown that costs nothing is the cheapest place to put the load, which would answer the split by arithmetic rather than by physics.
+    // Neither end may be reported as settled.
+    const { beamAt } = stand("join", "join", true);
+    expect(beamAt(END).determined.fy).toBe(false);
+    expect(beamAt(START).determined.fy).toBe(false);
   });
 });

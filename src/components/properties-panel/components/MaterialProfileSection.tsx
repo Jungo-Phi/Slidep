@@ -41,23 +41,13 @@ import {
 import SectionSchema from "./SectionSchema";
 
 /**
- * The material/profile assignment of a beam, or of a whole selection of them at once — a picker
- * showing "mixte" when they don't agree, and assigning to every one of them. Each picker
- * offers the mechanism's own library, plus "+ Nouveau…" at the bottom of its menu, which opens a
- * small panel docked on the picker to name and configure a new entry right there — dimensioning a
- * beam that needs a profile absent from the library shouldn't mean losing the beam's own context
- * to go do that elsewhere.
+ * The material/profile assignment of a beam, or of a whole selection of them at once — a picker showing "mixte" when they don't agree, and assigning to every one of them.
+ * Each picker offers the mechanism's own library, plus "+ Nouveau…" at the bottom of its menu, which opens a small panel docked on the picker to name and configure a new entry right there — dimensioning a beam that needs a profile absent from the library shouldn't mean losing the beam's own context to go do that elsewhere.
  * That entry is a draft until the panel's own "Create": dismissing the panel (click away, Escape, ✕) leaves both the library and the beam untouched, and confirming creates and assigns it in a single undo step.
- * The small link
- * icon does a different thing for the entries already assigned: it jumps to the library tab and
- * opens each of them, to answer "where can I edit this?" — duplicate/delete and the usage count
- * only make sense there, since those entries may already be shared by other beams.
+ * The small link icon does a different thing for the entries already assigned: it jumps to the library tab and opens each of them, to answer "where can I edit this?" — duplicate/delete and the usage count only make sense there, since those entries may already be shared by other beams.
  *
- * The material picker's own `entries` already includes the catalogue (steel, aluminium…) —
- * seeded read-only into every mechanism's library, so nothing here treats them specially; they
- * pick and assign exactly like any other material. Profiles
- * carry no such catalogue: their own shape kind already is the catalogue (see
- * `MaterialsLibraryPanel`'s own doc).
+ * The material picker's own `entries` already includes the catalogue (steel, aluminium…) — seeded read-only into every mechanism's library, so nothing here treats them specially; they pick and assign exactly like any other material.
+ * Profiles carry no such catalogue: their own shape kind already is the catalogue (see `MaterialsLibraryPanel`'s own doc).
  */
 
 interface LibraryPickerProps {
@@ -200,8 +190,7 @@ export const MaterialProfileSection: React.FC<MaterialProfileSectionProps> = ({
   const used = (read: (element: BeamElement) => ID) => [
     ...new Set(elements.map(read)),
   ];
-  // One beam only: a selection reads its mass off its own totals instead, where it also counts
-  // what isn't a beam.
+  // One beam only: a selection reads its mass off its own totals instead, where it also counts what isn't a beam.
   const soleBeam = elements.length === 1 ? elements[0] : undefined;
   const beamMass =
     soleBeam &&
@@ -229,8 +218,7 @@ export const MaterialProfileSection: React.FC<MaterialProfileSectionProps> = ({
 
   const materialPickerRef = React.useRef<HTMLDivElement>(null);
   const profilePickerRef = React.useRef<HTMLDivElement>(null);
-  // The entry being drafted, docked on its own picker — never both: starting one drops whatever
-  // the other picker had open, same as any other popover on this row.
+  // The entry being drafted, docked on its own picker — never both: starting one drops whatever the other picker had open, same as any other popover on this row.
   const [draft, setDraft] = React.useState<Draft | null>(null);
   const draftMaterial = draft?.section === "materials" ? draft.material : null;
   const draftProfile = draft?.section === "profiles" ? draft.profile : null;

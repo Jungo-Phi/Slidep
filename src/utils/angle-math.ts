@@ -4,8 +4,7 @@ import { Point2 } from "../types";
  * Détermine les paramètres d'orientation pour une contrainte d'angle entre deux segments, en fonction du point de placement de la cote.
  *
  * Cette fonction résout l'ambiguïté des 4 quadrants formés par l'intersection de deux droites.
- * Elle définit quels vecteurs directeurs utiliser (via les flags 'flip') et le sens de rotation
- * (horaire ou anti-horaire) pour mesurer l'angle intérieur du quadrant sélectionné (en degrés).
+ * Elle définit quels vecteurs directeurs utiliser (via les flags 'flip') et le sens de rotation (horaire ou anti-horaire) pour mesurer l'angle intérieur du quadrant sélectionné (en degrés).
  */
 export function resolve_angle_constraint_quadrant(
   start1: Point2,
@@ -26,8 +25,7 @@ export function resolve_angle_constraint_quadrant(
   if (!intersection) return null;
   const posDir = position.sub(intersection);
 
-  // The product of two cross products: a quartic (m⁴) quantity, so the margin below
-  // scales by the fourth power of the old millimetre-flavoured threshold (-10e-4).
+  // The product of two cross products: a quartic (m⁴) quantity, so the margin below scales by the fourth power of the old millimetre-flavoured threshold (-10e-4).
   const flipStart = delta2.cross(posDir) * delta2.cross(delta1) < -1e-15;
   const flipEnd = delta1.cross(posDir) * delta1.cross(delta2) < -1e-15;
 

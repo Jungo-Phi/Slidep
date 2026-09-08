@@ -2,13 +2,12 @@ import { ID, Point2 } from "../../../types";
 import { BeamCohesionSpec } from "../dynamics/beam-cohesion";
 import { CompiledLoad } from "../dynamics/load-model";
 import { BEAM_END_MASS_FRACTION, DynamicMassModel } from "../dynamics/mass-model";
-import { StaticsFrame } from "./equilibrium-model";
+import { StaticsFrame, StaticsGear } from "./equilibrium-model";
 
 const ZERO = new Point2(0, 0);
 
 /** A beam's section, already resolved against the mechanism's material and profile libraries.
- *  Resolved once at compile time rather than looked up per frame — none of it moves, and a
- *  dangling reference reads as zero here instead of failing mid-solve. */
+ * Resolved once at compile time rather than looked up per frame — none of it moves, and a dangling reference reads as zero here instead of failing mid-solve. */
 export interface StaticsBeam {
   id: ID;
   /** kg/m. The beam's mass is this times its CURRENT span. */
@@ -20,17 +19,21 @@ export interface StaticsBeam {
 export interface StaticsFrameInputs {
   gravity: Point2;
   /** All three take FUSED solver keys — `BeamCohesionSpec`'s own. A caller reading a snapshot
-   *  has to unfuse; the dynamics step already holds its maps in this form. */
+   * has to unfuse; the dynamics step already holds its maps in this form. */
   positionOf: (key: string) => Point2 | undefined;
   velocityOf: (key: string) => Point2;
   accelerationOf: (key: string) => Point2;
   /** Everything applied at a node that is not a beam and not gravity: loads, spring and damper
-   *  forces, a motor's force couple. */
+   * forces, a motor's force couple. */
   externalForceAt: (key: string) => Point2;
   /** The distributed-load part of `externalForceAt`, which is subtracted back out — see
-   *  `distributedDensityOn`. */
+   * `distributedDensityOn`. */
   distributedShareAt: (key: string) => Point2;
+  /** A gear's angular acceleration (rad/s²), by gear id. */
+  angularAccelerationOf: (gearID: ID) => number;
   masses: DynamicMassModel;
+  /** The gears the assembly carries as bodies — `StaticsSystem.gears`, not every gear drawn: only a carried one owns its own mass here rather than leaving it lumped on its axle node. */
+  gears: StaticsGear[];
   specs: BeamCohesionSpec[];
   loads: CompiledLoad[];
   beams: StaticsBeam[];
@@ -53,9 +56,7 @@ function to_world(
 /**
  * Read one frame as the statics assembly needs it.
  *
- * Built from accessors rather than from a snapshot so the dynamics step — which holds exactly
- * these maps mid-solve and has no snapshot yet — and a panel reading a recorded frame can share
- * one construction.
+ * Built from accessors rather than from a snapshot so the dynamics step — which holds exactly these maps mid-solve and has no snapshot yet — and a panel reading a recorded frame can share one construction.
  */
 export function statics_frame(inputs: StaticsFrameInputs): StaticsFrame {
   const { positionOf } = inputs;
@@ -69,12 +70,14 @@ export function statics_frame(inputs: StaticsFrameInputs): StaticsFrame {
     return p0 && p1 ? p1.distance_to(p0) : 0;
   };
 
-  // Each node's share of the beams' own mass, which belongs to the beams and not to it — the
-  // convention this whole chantier settled on, and the one `node-balance.ts` checks against.
+  // Each node's share of the beams' own mass, which belongs to the beams and not to it — the convention this whole chantier settled on, and the one `node-balance.ts` checks against.
   const lumps = new Map<string, number>();
   for (const spec of inputs.specs)
     for (const key of [spec.k0, spec.k1])
       lumps.set(key, (lumps.get(key) ?? 0) + spec.mass * BEAM_END_MASS_FRACTION);
+  // A carried gear's mass moves the same way: `mass-model.ts` lumps a disc onto its axle key, and a gear that has its own equilibrium row must not also be weighed there.
+  for (const gear of inputs.gears)
+    lumps.set(gear.centreKey, (lumps.get(gear.centreKey) ?? 0) + gear.mass);
 
   return {
     gravity: inputs.gravity,
@@ -88,11 +91,9 @@ export function statics_frame(inputs: StaticsFrameInputs): StaticsFrame {
       return Math.max(0, lumped - (lumps.get(key) ?? 0));
     },
     beamMass: (beamID) => (beamOf.get(beamID)?.linearMass ?? 0) * length_of(beamID),
+    gearAngularAcceleration: inputs.angularAccelerationOf,
     /**
-     * A distributed load acts on the beam's MATERIAL. The dynamics step has to split it onto
-     * the two end nodes (`resolve_load_forces`); here it stays where it physically is, which
-     * is also the only form the flexibility integrals can use — hence `distributedShareAt`
-     * being subtracted from `externalForceAt` above, or the same load would be carried twice.
+     * A distributed load acts on the beam's MATERIAL. The dynamics step has to split it onto the two end nodes (`resolve_load_forces`); here it stays where it physically is, which is also the only form the flexibility integrals can use — hence `distributedShareAt` being subtracted from `externalForceAt` above, or the same load would be carried twice.
      */
     distributedDensityOn: (beamID) => {
       const spec = specOf.get(beamID);

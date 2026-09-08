@@ -1,5 +1,5 @@
 /** Row-major dense matrix, sized for what an equilibrium assembly produces — a few dozen to a
- *  few hundred rows either way. */
+ * few hundred rows either way. */
 export interface Matrix {
   rows: number;
   cols: number;

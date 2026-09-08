@@ -1,12 +1,8 @@
 /**
- * The frame a load's direction is stored in, and the edges a load may take one
- * from.
+ * The frame a load's direction is stored in, and the edges a load may take one from.
  *
- * For `frame: "world"` the stored components already are world coordinates. For
- * `frame: { mode: "edge" }` they live in the referenced edge's local frame
- * (x = start→end axis, y = normal) and must be rotated by the edge's current
- * orientation to reach world space — which is what makes a load follow the beam
- * it was aimed along.
+ * For `frame: "world"` the stored components already are world coordinates.
+ * For `frame: { mode: "edge" }` they live in the referenced edge's local frame (x = start→end axis, y = normal) and must be rotated by the edge's current orientation to reach world space — which is what makes a load follow the beam it was aimed along.
  */
 
 import { Point2 } from "../types/point2";
@@ -68,8 +64,8 @@ export function world2frame_transform(
 }
 
 /**
- * Edges physically attached to a node — candidate reference edges for a force's
- * edge frame. Covers both the node's own edge lists and edges pinned to it.
+ * Edges physically attached to a node — candidate reference edges for a force's edge frame.
+ * Covers both the node's own edge lists and edges pinned to it.
  */
 export function node_candidate_edges(
   node: MechanicalElement,
@@ -95,9 +91,7 @@ export function node_candidate_edges(
 }
 
 /**
- * Edges a force anchored at (targetID, anchor) can snap to / reference: for a
- * node target, all its attached edges; for an edge target, that edge plus the
- * edges of the node fixed at the anchored endpoint.
+ * Edges a force anchored at (targetID, anchor) can snap to / reference: for a node target, all its attached edges; for an edge target, that edge plus the edges of the node fixed at the anchored endpoint.
  */
 export function force_snap_edges(
   targetID: ID,

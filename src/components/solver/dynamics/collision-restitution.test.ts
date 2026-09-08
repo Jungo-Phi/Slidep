@@ -5,9 +5,7 @@ import { apply_collision_restitution } from "./collision-restitution";
 import { contact_eps } from "./collision-detection";
 
 const P = (x: number, y: number) => new Point2(x, y);
-// An arbitrary, fixed extent for every scenario below — none of them cares about scale, only
-// about the resting margin `contact_eps` derives from it, so one shared value keeps the
-// geometry (built around that margin) legible without tying these tests to `CONTACT_EPS_RATIO`.
+// An arbitrary, fixed extent for every scenario below — none of them cares about scale, only about the resting margin `contact_eps` derives from it, so one shared value keeps the geometry (built around that margin) legible without tying these tests to `CONTACT_EPS_RATIO`.
 const EXTENT = 1;
 const EPS = contact_eps(EXTENT);
 
@@ -30,8 +28,7 @@ describe("apply_collision_restitution", () => {
       // The resting position sits `contact_eps(EXTENT)` past the raw radius — mirror it here.
       pointCircle: [{ pointKey: "ball", centerKey: "anchor", radius: boundary - EPS }],
     };
-    // Resting exactly at the boundary (anchor at the origin, ball straight above), the plain
-    // (inelastic) solve already stopped it — this is what "after" looks like BEFORE restitution.
+    // Resting exactly at the boundary (anchor at the origin, ball straight above), the plain (inelastic) solve already stopped it — this is what "after" looks like BEFORE restitution.
     const positions = new Map([["ball", P(0, boundary)], ["anchor", P(0, 0)]]);
     const posMasses = new Map([["ball", 1], ["anchor", 0]]);
     const before = new Map([["ball", P(0, -10)], ["anchor", P(0, 0)]]);

@@ -15,9 +15,8 @@ import { handle_placing_element } from "./placing-element-actions";
 import { handle_placing_constraint } from "./placing-constraint-actions";
 
 /**
- * Whether a tool in `stateType` may take `element` as a whole. A selection names
- * an element, never one of its ends or one of a belt's runs, so a step that only
- * picks those has nothing to take.
+ * Whether a tool in `stateType` may take `element` as a whole.
+ * A selection names an element, never one of its ends or one of a belt's runs, so a step that only picks those has nothing to take.
  */
 function targets_whole_element(
   stateType: CanvasStateType,
@@ -43,8 +42,7 @@ function targets_whole_element(
 
 /** The selection as the hover that would have named it. */
 function selected_part(element: MechanicalElement): HoveredPart {
-  // A belt is a target of its own, which `element_to_hovered_part` flattens to
-  // an edge; the run is not read past a first step, which takes the belt whole.
+  // A belt is a target of its own, which `element_to_hovered_part` flattens to an edge; the run is not read past a first step, which takes the belt whole.
   if (element.type === "belt")
     return {
       type: "BeltBody",
@@ -57,9 +55,8 @@ function selected_part(element: MechanicalElement): HoveredPart {
 }
 
 /**
- * The steps a further element can be handed to. Only constraints chain: the
- * states left by a load or a probe read the cursor as a vector or anchor a
- * popover, and name no second element.
+ * The steps a further element can be handed to.
+ * Only constraints chain: the states left by a load or a probe read the cursor as a vector or anchor a popover, and name no second element.
  */
 const CHAINABLE_STEPS = [
   "DimensionNode",
@@ -106,9 +103,7 @@ function first_step(
     case "PlacingForceStart":
     case "PlacingMomentStart":
     case "PlacingProbe":
-      // Never reaches the beam branch of `handle_placing_element` (that needs
-      // `PlacingBeamEnd`, which arming never produces — see this function's own doc), so
-      // the material/profile library it would otherwise read is never touched here.
+      // Never reaches the beam branch of `handle_placing_element` (that needs `PlacingBeamEnd`, which arming never produces — see this function's own doc), so the material/profile library it would otherwise read is never touched here.
       return handle_placing_element(
         { type: toolState },
         part,
@@ -146,15 +141,12 @@ function selected_elements(
 }
 
 /**
- * The state arming `toolState` lands in. The selected elements are handed to the
- * tool in the order they were picked, as the clicks they stand for — dimensioning
- * the angle between two selected edges then costs one click instead of three.
+ * The state arming `toolState` lands in.
+ * The selected elements are handed to the tool in the order they were picked, as the clicks they stand for — dimensioning the angle between two selected edges then costs one click instead of three.
  *
- * Arming never edits the mechanism: a step that builds on its own, as a second
- * edge handed to the parallel tool would, is dropped and the tool waits for a
- * click on the canvas. That leaves the dimensioning tool as the only one a
- * multiple selection carries beyond its first step. Anything the selection
- * cannot start arms the tool plainly.
+ * Arming never edits the mechanism: a step that builds on its own, as a second edge handed to the parallel tool would, is dropped and the tool waits for a click on the canvas.
+ * That leaves the dimensioning tool as the only one a multiple selection carries beyond its first step.
+ * Anything the selection cannot start arms the tool plainly.
  */
 export function armed_tool_state(
   toolState: ToolStateType,

@@ -156,7 +156,7 @@ const App: React.FC = () => {
   });
 
   /** An abscissa hovered on the analysis panel's N/T/Mf diagrams, for the canvas to mark on
-   *  the beam — see docs/plan-efforts-interieurs.md phase 5bis. */
+   * the beam — see docs/plan-efforts-interieurs.md phase 5bis. */
   const [hoveredAbscissa, setHoveredAbscissa] = useState<HoveredAbscissa | null>(null);
 
   /** Elements the analysis panel is pointing at, and why (see `CanvasHighlight`). */
@@ -210,8 +210,7 @@ const App: React.FC = () => {
     setStorageItem("snapSettings", snapSettings);
   }, [snapSettings]);
 
-  // La largeur de la top-bar suit la fenêtre, pas le canvas : ces requêtes
-  // re-rendent le composant à chaque franchissement de palier.
+  // La largeur de la top-bar suit la fenêtre, pas le canvas : ces requêtes re-rendent le composant à chaque franchissement de palier.
   const condensed = useMediaQuery(`(max-width:${CONDENSED_BREAKPOINT}px)`);
   const tight = useMediaQuery(`(max-width:${TIGHT_BREAKPOINT}px)`);
   const [simulationConfig, setSimulationConfig] = useState<SimulationConfig>(
@@ -258,14 +257,12 @@ const App: React.FC = () => {
         canvasState.type === "ErasingMultiple" ||
         canvasState.type === "EditingValue" ||
         canvasState.type === "SelectingMultiple" ||
-        // The ruler reads in its own corner of the canvas and names no element, so there is
-        // nothing for a tab to show and no reason to leave the one being read.
+        // The ruler reads in its own corner of the canvas and names no element, so there is nothing for a tab to show and no reason to leave the one being read.
         canvasState.type === "Measuring" ||
         canvasState.type === "MeasuringFrom" ||
         canvasState.type === "Measured"
       ) {
-        // Armed tool / transient value edit / box-select in progress: never moves the tab
-        // mid-drag — it resolves once SelectingMultiple settles into its final state on mouseup.
+        // Armed tool / transient value edit / box-select in progress: never moves the tab mid-drag — it resolves once SelectingMultiple settles into its final state on mouseup.
       } else if ("elementID" in canvasState) {
         if (
           mechanism.mechanicalElements.find(
@@ -367,9 +364,7 @@ const App: React.FC = () => {
 
   const analysedMechanism = useMemo(() => {
     if (!is_simulating(appMode)) return mechanism;
-    // Narrowed by the `is_simulating` check above: only a kinematic or dynamic run ever
-    // fills `simulationSnapshots` while its own mode is active, and the concrete shape
-    // follows which — the same invariant `Recorder` itself relies on.
+    // Narrowed by the `is_simulating` check above: only a kinematic or dynamic run ever fills `simulationSnapshots` while its own mode is active, and the concrete shape follows which — the same invariant `Recorder` itself relies on.
     const snapshot =
       appMode === "kinematic"
         ? snapshot_at(runtimeState.simulationSnapshots as KinematicSnapshot[], runtimeState.time)
@@ -389,8 +384,7 @@ const App: React.FC = () => {
     return paramSnapshot
       ? apply_parameter_snapshot_to_mechanism(geometryMechanism, paramSnapshot)
       : geometryMechanism;
-    // Depend on geometry/parameters only, not the whole mechanism: a viewport (pan/zoom)
-    // change keeps these array refs identical, so it must not re-derive the pose on screen.
+    // Depend on geometry/parameters only, not the whole mechanism: a viewport (pan/zoom) change keeps these array refs identical, so it must not re-derive the pose on screen.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     appMode,
@@ -439,8 +433,8 @@ const App: React.FC = () => {
     [markDirty],
   );
 
-  // Valeurs déjà utilisées quelque part dans la bibliothèque. Les trois modes de simulation
-  // sont toujours suggérés en plus, comme point de départ le plus courant pour trier.
+  // Valeurs déjà utilisées quelque part dans la bibliothèque.
+  // Les trois modes de simulation sont toujours suggérés en plus, comme point de départ le plus courant pour trier.
   const usedTags = useMemo(() => {
     const set = new Set<string>();
     for (const record of savedMechanisms)
@@ -486,7 +480,7 @@ const App: React.FC = () => {
   }, []);
 
   /** Zooms the canvas's middle to an exact scale — what the toolbar's zoom steps aim at,
-   *  routed through the same gesture path as the wheel. */
+   * routed through the same gesture path as the wheel. */
   const zoomTo = useCallback(
     (scale: number) => {
       const canvas = canvasRef.current;
@@ -539,8 +533,8 @@ const App: React.FC = () => {
     ],
   );
 
-  // The field a coalescing run is open for, and the timer that ends it. A run only ever
-  // holds the newest entry open, so one of each is enough for the whole app.
+  // The field a coalescing run is open for, and the timer that ends it.
+  // A run only ever holds the newest entry open, so one of each is enough for the whole app.
   const sealKeyRef = useRef<string | null>(null);
   const sealTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -553,8 +547,7 @@ const App: React.FC = () => {
     };
     return {
       arm: (key) => {
-        // Called before the step it belongs to, so the run it interrupts still ends on its
-        // own last entry rather than on the one this step is about to write.
+        // Called before the step it belongs to, so the run it interrupts still ends on its own last entry rather than on the one this step is about to write.
         if (sealKeyRef.current !== null && sealKeyRef.current !== key) close();
         sealKeyRef.current = key;
         if (sealTimerRef.current !== null) clearTimeout(sealTimerRef.current);
@@ -574,9 +567,7 @@ const App: React.FC = () => {
       for (const c of after) {
         if (c.type.startsWith("dimension-") || c.type === "gear-ratio")
           continue;
-        // Attached badges have no position/value of their own to have changed —
-        // recreation (including by undo/redo) is the only way one of these gets
-        // revealed here.
+        // Attached badges have no position/value of their own to have changed — recreation (including by undo/redo) is the only way one of these gets revealed here.
         if (!beforeById.has(c.id)) revealIDs.push(c.id);
       }
       for (const c of before) {
@@ -710,10 +701,8 @@ const App: React.FC = () => {
     markDirty();
   }, [markDirty, signalConstraintChange, setCanvasState, observationOnlyEditRef]);
 
-  // Window-wide drop target for importing .slidep/.zip files, independent of
-  // whatever React element the pointer happens to be over (incl. portaled
-  // dialogs like the gallery). The enter/leave counter is the standard trick
-  // to keep the overlay visible while the pointer crosses child elements.
+  // Window-wide drop target for importing .slidep/.zip files, independent of whatever React element the pointer happens to be over (incl. portaled dialogs like the gallery).
+  // The enter/leave counter is the standard trick to keep the overlay visible while the pointer crosses child elements.
   const [isDraggingFile, setIsDraggingFile] = useState(false);
   useEffect(() => {
     let dragCounter = 0;
@@ -765,8 +754,8 @@ const App: React.FC = () => {
   };
 
   /** Which section is hovered in the library tab — also what tints the canvas for as long as
-   *  that hover lasts, the same "hover a group to color it" gesture the DDL redundancy audit
-   *  already uses. `null` the rest of the time. */
+   * that hover lasts, the same "hover a group to color it" gesture the DDL redundancy audit already uses.
+   * `null` the rest of the time. */
   const [librarySection, setLibrarySection] = useState<"materials" | "profiles" | null>(
     null,
   );
@@ -779,8 +768,7 @@ const App: React.FC = () => {
     }
   }, [activeTab]);
 
-  // The chosen language lives in `i18n`, which every module reads through `t`; this state is
-  // only what makes React repaint the app around it.
+  // The chosen language lives in `i18n`, which every module reads through `t`; this state is only what makes React repaint the app around it.
   const [language, setLanguageState] = useState<Lang>(get_language);
   const handleSelectLang = (newLanguage: Lang) => {
     set_language(newLanguage);
@@ -788,8 +776,7 @@ const App: React.FC = () => {
   };
 
   /**
-   * App starts: frame the (still empty) mechanism like "Recentrer" would, which
-   * is only measurable once the canvas has been laid out.
+   * App starts: frame the (still empty) mechanism like "Recentrer" would, which is only measurable once the canvas has been laid out.
    */
   useLayoutEffect(() => {
     let frame = 0;
@@ -834,8 +821,7 @@ const App: React.FC = () => {
               backgroundColor: "background.toolbar",
               border: "none",
               borderRadius: 0,
-              // A rule in the top bar is read against the toolbar, never against
-              // the `paper` the default divider is cut for.
+              // A rule in the top bar is read against the toolbar, never against the `paper` the default divider is cut for.
               "& .MuiDivider-root": { borderColor: "dividers.toolbar" },
             }}
           >
@@ -845,8 +831,7 @@ const App: React.FC = () => {
               disableGutters
               sx={{
                 display: "grid",
-                // Equal side columns keep the center column geometrically centered
-                // regardless of how wide the title or the right-hand controls are.
+                // Equal side columns keep the center column geometrically centered regardless of how wide the title or the right-hand controls are.
                 gridTemplateColumns: "1fr auto 1fr",
                 alignItems: "center",
                 px: 1,
@@ -1030,8 +1015,7 @@ const App: React.FC = () => {
               pr: 1.5,
               py: 1,
               borderRadius: 999,
-              // Deliberately a dark scrim rather than a themed surface: the toast
-              // floats over the canvas and must stay legible against any drawing.
+              // Deliberately a dark scrim rather than a themed surface: the toast floats over the canvas and must stay legible against any drawing.
               backgroundColor: (t) => alpha(t.palette.common.black, 0.53),
               backdropFilter: "blur(6px)",
               color: "common.white",
@@ -1081,9 +1065,7 @@ const App: React.FC = () => {
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              // A constant dark veil rather than a themed surface, so the drop
-              // zone reads the same over any drawing/theme underneath — same
-              // choice as the snackbar's scrim below.
+              // A constant dark veil rather than a themed surface, so the drop zone reads the same over any drawing/theme underneath — same choice as the snackbar's scrim below.
               backgroundColor: (t) => alpha(t.palette.common.black, 0.55),
               backdropFilter: "blur(2px)",
             }}

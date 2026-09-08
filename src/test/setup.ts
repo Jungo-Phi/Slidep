@@ -1,6 +1,5 @@
 /**
- * Vitest setup file
- * Configures testing environment
+ * Vitest setup file Configures testing environment
  *
  * Runs under both the `node` and `jsdom` environments; the DOM mocks and matchers are installed only when a document exists.
  */

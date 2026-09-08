@@ -51,10 +51,8 @@ describe("bundle_geometry", () => {
     expect(bundle_geometry([create])).toEqual({ solve: "none", triggers: [] });
   });
 
-  // The bug the table exists to make impossible: a gear dropped onto a belt
-  // mid-route attaches via `ConnectsAttachedGears`, created alongside the gear
-  // and its axle. Naming that bundle "Other" by hand (as the old dispatch did)
-  // skipped the solve the junction needs — here it is derived instead.
+  // The bug the table exists to make impossible: a gear dropped onto a belt mid-route attaches via `ConnectsAttachedGears`, created alongside the gear and its axle.
+  // Naming that bundle "Other" by hand (as the old dispatch did) skipped the solve the junction needs — here it is derived instead.
   it("solves after a bundle that creates a mechanical element and connects it", () => {
     const createGear: Action = {
       type: "CreateElement",
@@ -131,8 +129,7 @@ describe("bundle_geometry", () => {
 });
 
 describe("continues_previous_gesture", () => {
-  // Typed or dragged makes no difference here: what ends a run is the seal its author
-  // pushes — a drag's mouse-up Blank, a numeric field's own — never the value itself.
+  // Typed or dragged makes no difference here: what ends a run is the seal its author pushes — a drag's mouse-up Blank, a numeric field's own — never the value itself.
   it("continues for a drag frame, committed or not", () => {
     expect(continues_previous_gesture([move_node({ committed: false })])).toBe(
       true,

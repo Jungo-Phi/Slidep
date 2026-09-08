@@ -7,12 +7,10 @@ import {
 import { shown_element_name } from "./string-math";
 
 /**
- * Development guard: reports in the console when an action bundle leaves the
- * mechanism referentially broken, naming the actions responsible.
+ * Development guard: reports in the console when an action bundle leaves the mechanism referentially broken, naming the actions responsible.
  *
- * Only issues absent from `before` are reported, so an already-broken mechanism
- * does not drown every later edit in noise. Never throws — a diagnostic must not
- * become the crash it is meant to catch.
+ * Only issues absent from `before` are reported, so an already-broken mechanism does not drown every later edit in noise.
+ * Never throws — a diagnostic must not become the crash it is meant to catch.
  */
 export function assert_actions_preserve_validity(
   before: Mechanism,
@@ -49,9 +47,8 @@ export function assert_actions_preserve_validity(
 }
 
 /**
- * Deliberately excludes `message`: it embeds resolved element names, so a rename
- * would make an untouched issue look new. Two issues sharing code and both IDs
- * but sitting on different fields therefore collapse into one.
+ * Deliberately excludes `message`: it embeds resolved element names, so a rename would make an untouched issue look new.
+ * Two issues sharing code and both IDs but sitting on different fields therefore collapse into one.
  */
 function issue_key(issue: MechanismValidationError): string {
   return `${issue.code}|${issue.elementID ?? ""}|${issue.relatedID ?? ""}`;

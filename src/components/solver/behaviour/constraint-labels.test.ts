@@ -73,8 +73,8 @@ const mechanism: Mechanism = {
 };
 
 describe("constraint labels after a solve", () => {
-  // The label's offset is rescaled by how the edge-to-node gap grew. A node
-  // sitting on the edge gives a zero gap, and the ratio used to be 0/0.
+  // The label's offset is rescaled by how the edge-to-node gap grew.
+  // A node sitting on the edge gives a zero gap, and the ratio used to be 0/0.
   it("keeps a finite position when the dimensioned gap is zero", () => {
     const move = {
       type: "MoveNode",

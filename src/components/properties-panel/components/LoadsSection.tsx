@@ -53,9 +53,7 @@ const change_distributed_force = (
 });
 
 /**
- * Change a load's frame while preserving its visual direction: re-express the
- * stored vector/direction through the reference edge's current orientation so the
- * arrow doesn't jump — only its behaviour under motion changes.
+ * Change a load's frame while preserving its visual direction: re-express the stored vector/direction through the reference edge's current orientation so the arrow doesn't jump — only its behaviour under motion changes.
  */
 const frame_change_actions = (
   load: ForceElement | DistributedForceElement,
@@ -97,7 +95,7 @@ const frame_change_actions = (
 };
 
 /** Finds the edge a load's frame currently refers to, among the candidates
- *  offered by the ElementPicker or (if it fell out of them) all elements. */
+ * offered by the ElementPicker or (if it fell out of them) all elements. */
 const frame_current_edge = (
   frame: LoadFrame,
   candidateEdges: EdgeElement[],
@@ -118,7 +116,7 @@ interface LoadsSectionProps {
   mechanicalElements: MechanicalElement[];
   loads: LoadElement[];
   /** Same loads, in the pose on screen — only for the values shown while scrubbed; every
-   *  write below still goes through `loads`, matched by id (see `ElementProperties`). */
+   * write below still goes through `loads`, matched by id (see `ElementProperties`). */
   displayLoads: LoadElement[];
   selectedLoadID: ID | undefined;
   hoveredPart: HoveredPart;

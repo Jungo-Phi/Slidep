@@ -1,12 +1,8 @@
 /**
- * What each profile kind looks like and which cotes are read off it — the only file to touch
- * when a new `ProfileShape` kind appears. Everything here is expressed against the *drawn*
- * geometry (`DrawnShape`, px, centred on the section's own centre) and never against the view:
- * where a cote ends up on screen is `section-schema-layout`'s business.
+ * What each profile kind looks like and which cotes are read off it — the only file to touch when a new `ProfileShape` kind appears.
+ * Everything here is expressed against the *drawn* geometry (`DrawnShape`, px, centred on the section's own centre) and never against the view: where a cote ends up on screen is `section-schema-layout`'s business.
  *
- * Cotes are placed to cost the schema as little height as possible — a thickness goes out to
- * the side rather than off the top, since the panel has width to spare and the profiles that
- * matter are tall.
+ * Cotes are placed to cost the schema as little height as possible — a thickness goes out to the side rather than off the top, since the panel has width to spare and the profiles that matter are tall.
  */
 
 import { ProfileShape } from "../../../types/material";
@@ -37,12 +33,10 @@ interface CoteBase {
 }
 
 /**
- * Measured on the section, its dimension line pushed clear of it on `side` with extension lines
- * running back to the two measured points. For a cote those lines can reach without cutting
- * across the section — an overall extent, or a wall lying on the bounding box edge.
+ * Measured on the section, its dimension line pushed clear of it on `side` with extension lines running back to the two measured points.
+ * For a cote those lines can reach without cutting across the section — an overall extent, or a wall lying on the bounding box edge.
  *
- * The measured axis follows from `side`: a cote read off a vertical side measures vertically,
- * and `at` is then its x.
+ * The measured axis follows from `side`: a cote read off a vertical side measures vertically, and `at` is then its x.
  */
 export interface OffsetCote extends CoteBase {
   kind: "offset";
@@ -54,9 +48,8 @@ export interface OffsetCote extends CoteBase {
 }
 
 /**
- * Drawn where the feature actually is, with a leader running out of the section to carry the
- * label. For a feature buried inside the outline, which extension lines could not reach without
- * cutting across the section.
+ * Drawn where the feature actually is, with a leader running out of the section to carry the label.
+ * For a feature buried inside the outline, which extension lines could not reach without cutting across the section.
  */
 export interface LeaderCote extends CoteBase {
   kind: "leader";
@@ -120,7 +113,7 @@ const width_cote = (value: number): Annotation => ({
 });
 
 /** The bending cote, read off the left — vertical here because that is the plane the 2D
- *  mechanism is drawn in, which is what settles which cote resists bending. */
+ * mechanism is drawn in, which is what settles which cote resists bending. */
 const height_cote = (value: number): Annotation => ({
   kind: "offset",
   name: "h",
@@ -141,7 +134,7 @@ const diameter_cote = (value: number): Annotation => ({
 });
 
 /** A straight wall's thickness, read off the right at the top corner: both its points lie on the
- *  bounding box, so extension lines reach them, and the side costs the schema no height. */
+ * bounding box, so extension lines reach them, and the side costs the schema no height. */
 const wall_cote = (
   name: string,
   value: number,
@@ -200,8 +193,7 @@ export function describe_shape(shape: ProfileShape): ShapeDescription {
         path: (d) => `${circle_path(d.hw)} ${circle_path(d.hw - d.t.e)}`,
         annotations: [
           diameter_cote(shape.d),
-          // A bore has no straight edge to hang a cote off, so the wall is read along a radius —
-          // the only direction that crosses it squarely.
+          // A bore has no straight edge to hang a cote off, so the wall is read along a radius — the only direction that crosses it squarely.
           {
             kind: "leader",
             name: "e",
@@ -226,9 +218,8 @@ export function describe_shape(shape: ProfileShape): ShapeDescription {
           width_cote(shape.b),
           height_cote(shape.h),
           wall_cote("tf", shape.tf, "tf"),
-          // Across the web, three quarters of the way down to the bottom flange: clear of the
-          // neutral axis, and low enough to pass under the run `tf`'s own label makes down the
-          // right-hand side. Its leader then leaves through the open notch.
+          // Across the web, three quarters of the way down to the bottom flange: clear of the neutral axis, and low enough to pass under the run `tf`'s own label makes down the right-hand side.
+          // Its leader then leaves through the open notch.
           {
             kind: "leader",
             name: "tw",

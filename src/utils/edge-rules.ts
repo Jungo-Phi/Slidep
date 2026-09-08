@@ -1,27 +1,22 @@
 /**
  * When two edges are superposed, stated once for everyone who needs to know.
  *
- * Pure predicates over the elements alone, so the hover rules, the validator and
- * the fusion pass all read the same rule without pulling each other in.
+ * Pure predicates over the elements alone, so the hover rules, the validator and the fusion pass all read the same rule without pulling each other in.
  */
 
 import type { EdgeType, MechanicalElement } from "../types/element";
 
 /**
- * The one pair of types allowed to hold the same two nodes: a spring and a
- * damper in parallel model a real assembly (Kelvin-Voigt), so they coexist and
- * are drawn side by side. Any other combination is a superposition to collapse —
- * a new edge type is never superposable until it is named here.
+ * The one pair of types allowed to hold the same two nodes: a spring and a damper in parallel model a real assembly (Kelvin-Voigt), so they coexist and are drawn side by side.
+ * Any other combination is a superposition to collapse — a new edge type is never superposable until it is named here.
  */
 export const COEXISTING_EDGE_TYPES: readonly EdgeType[] = ["spring", "damper"];
 
 /**
- * The two nodes an edge holds, as an order-independent key — `undefined` when it
- * holds fewer than two.
+ * The two nodes an edge holds, as an order-independent key — `undefined` when it holds fewer than two.
  *
- * A belt never answers: it is defined by the pulleys it runs over, so two belts
- * sharing terminals are not the same belt. A degenerate edge, both ends on one
- * node, does not answer either.
+ * A belt never answers: it is defined by the pulleys it runs over, so two belts sharing terminals are not the same belt.
+ * A degenerate edge, both ends on one node, does not answer either.
  */
 export function edge_terminal_pair(edge: MechanicalElement): string | undefined {
   if (!("positionStart" in edge) || edge.type === "belt") return undefined;

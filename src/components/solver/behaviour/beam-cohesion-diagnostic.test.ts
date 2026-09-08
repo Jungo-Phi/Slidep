@@ -43,25 +43,17 @@ function mechanism(mechanicalElements: MechanicalElement[], loads: ForceElement[
 
 describe("diagnostic docs/plan-efforts-interieurs.md point 2 — deux poutres réunies par un pivot", () => {
   it("force_at somme les deux poutres à la clé fusionnée, au lieu d'isoler l'effort propre à A", () => {
-    // A-frame: two pin-pin struts from grounded supports GA/GB meeting at a free apex P0,
-    // loaded straight down at the apex. Statically determinate (each strut is a two-force
-    // member), so the true axial force each beam carries is known in closed form — this is
-    // the reference the current `force_at` reading is checked against, not a guess.
+    // A-frame: two pin-pin struts from grounded supports GA/GB meeting at a free apex P0, loaded straight down at the apex.
+    // Statically determinate (each strut is a two-force member), so the true axial force each beam carries is known in closed form — this is the reference the current `force_at` reading is checked against, not a guess.
     //
-    //        P0 (0, 100)
-    //       /  \
+    // P0 (0, 100) / \
     //      /    \
-    //  GA ------- GB
-    // (-100,0)  (100,0)
+    // GA ------- GB (-100,0) (100,0)
     //
-    // Node equilibrium at P0 (massless-in-the-limit, no gravity): F_A + F_B + P_ext = 0,
-    // with F_A along the GA→P0 axis and F_B along the GB→P0 axis (two-force members).
-    // Solving: F_A = (50, 50) — beam A alone pushes the apex up-and-right (compression,
-    // propping the apex up against the load). F_B = (-50, 50), the mirror image.
-    // F_A + F_B = (0, 100) = −P_ext: the two struts' combined reaction is trivially the
-    // opposite of the load, by node equilibrium — true of ANY strut arrangement here,
-    // and exactly the "quantity that tends toward the opposite of the external load,
-    // not the effort in A" the plan warns about.
+    // Node equilibrium at P0 (massless-in-the-limit, no gravity): F_A + F_B + P_ext = 0, with F_A along the GA→P0 axis and F_B along the GB→P0 axis (two-force members).
+    // Solving: F_A = (50, 50) — beam A alone pushes the apex up-and-right (compression, propping the apex up against the load).
+    // F_B = (-50, 50), the mirror image.
+    // F_A + F_B = (0, 100) = −P_ext: the two struts' combined reaction is trivially the opposite of the load, by node equilibrium — true of ANY strut arrangement here, and exactly the "quantity that tends toward the opposite of the external load, not the effort in A" the plan warns about.
     const GA = id();
     const GB = id();
     const P0 = id();

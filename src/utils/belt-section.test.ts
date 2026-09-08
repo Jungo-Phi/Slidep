@@ -26,8 +26,7 @@ const GEARS = [pulley(-100, 0), pulley(100, 0), pulley(0, 150)];
 const OPEN: BeltVia[] = [terminal(-300, -200), ...GEARS, terminal(300, -200)];
 
 describe("belt section convention", () => {
-  // The helpers exist so no caller re-derives the parity by hand; this is what
-  // ties them to the traversal they describe.
+  // The helpers exist so no caller re-derives the parity by hand; this is what ties them to the traversal they describe.
   it.each([
     ["open", OPEN, false],
     ["closed", GEARS, true],
@@ -40,8 +39,7 @@ describe("belt section convention", () => {
       );
   });
 
-  // The grab that pulls a pulley off the belt reads this; deriving it by hand is
-  // what made a closed belt disconnect a gear when the user grabbed a straight run.
+  // The grab that pulls a pulley off the belt reads this; deriving it by hand is what made a closed belt disconnect a gear when the user grabbed a straight run.
   it.each([
     ["open", OPEN, false],
     ["closed", GEARS, true],
@@ -68,8 +66,7 @@ describe("belt section convention", () => {
       );
   });
 
-  // The two parities differ, and so do the indices: a closed path has no start
-  // terminal to offset the pulleys by one.
+  // The two parities differ, and so do the indices: a closed path has no start terminal to offset the pulleys by one.
   it("inserts a pulley between the two the run joins", () => {
     const runs = (vias: BeltVia[], closed: boolean) =>
       belt_pieces(vias, closed).flatMap((piece, section) =>
@@ -87,8 +84,7 @@ describe("belt section convention", () => {
         const offset = closed ? 0 : 1;
         const before = piece.gearIndexA - offset;
         const after = piece.gearIndexB - offset;
-        // The newcomer lands right after the pulley the run leaves — wrapping
-        // to the end of the list for the run that closes a loop.
+        // The newcomer lands right after the pulley the run leaves — wrapping to the end of the list for the run that closes a loop.
         expect(index).toBe(before + 1);
         if (after >= 0 && after < gears.length && after !== 0)
           expect(index).toBeLessThanOrEqual(after);

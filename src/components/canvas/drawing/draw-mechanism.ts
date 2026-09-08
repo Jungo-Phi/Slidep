@@ -122,8 +122,8 @@ const EMPTY_LIBRARY: never[] = [];
 const EMPTY_COHESION_FIELDS: CohesionField[] = [];
 
 /**
- * Screen angle of the beam a node rides, 0 when it rides none. Screen and not
- * world: it is fed to `ctx.rotate`, which turns the glyph the other way round.
+ * Screen angle of the beam a node rides, 0 when it rides none.
+ * Screen and not world: it is fed to `ctx.rotate`, which turns the glyph the other way round.
  */
 function parent_beam_screen_angle(
   element: MechanicalElement,
@@ -138,10 +138,8 @@ function parent_beam_screen_angle(
 }
 
 /**
- * Per-via winding spec for a belt: a pulley wound past a full turn (|wrap| ≥ 2π)
- * gets a coil growing one BELT_WIDTH per turn. It grows OUTWARD on the departure
- * side by default; on a winch (a terminal pinned to the first/last pulley) it
- * grows INWARD so the free (load) run stays on the rim and doesn't visually lean.
+ * Per-via winding spec for a belt: a pulley wound past a full turn (|wrap| ≥ 2π) gets a coil growing one BELT_WIDTH per turn.
+ * It grows OUTWARD on the departure side by default; on a winch (a terminal pinned to the first/last pulley) it grows INWARD so the free (load) run stays on the rim and doesn't visually lean.
  * `viaWraps` is index-aligned to the belt's vias (0 for the two terminals).
  */
 function belt_windings(
@@ -162,8 +160,7 @@ function belt_windings(
 function is_selected(elementID: ID, state: CanvasState): boolean {
   return (
     (state.type === "SelectedElement" && state.elementID === elementID) ||
-    // Its metric popover is open: the element being measured reads as selected,
-    // the cursor having left the canvas for the popover.
+    // Its metric popover is open: the element being measured reads as selected, the cursor having left the canvas for the popover.
     (state.type === "PlacingProbeMetrics" && state.elementID === elementID) ||
     (state.type === "MovingNode" && state.elementID === elementID) ||
     (state.type === "MovingEdgeStartPoint" && state.elementID === elementID) ||
@@ -193,9 +190,8 @@ function is_selected(elementID: ID, state: CanvasState): boolean {
 }
 
 /**
- * Whether `elementID` is about to be erased — itself, or as part of the cascade whatever aims at
- * it drags along. `doomed` holds that cascade, computed once per frame from the deletion itself
- * (see `deletion_closure`), whether the eraser or a panel command is what named the roots.
+ * Whether `elementID` is about to be erased — itself, or as part of the cascade whatever aims at it drags along.
+ * `doomed` holds that cascade, computed once per frame from the deletion itself (see `deletion_closure`), whether the eraser or a panel command is what named the roots.
  */
 function is_erase_hovered(
   elementID: ID,
@@ -243,8 +239,7 @@ function is_edge_end_hovered(
 }
 
 /**
- * The terminal of `elementID` that must carry the free-end handle: the one under
- * the cursor, or the one a drag holds — the handle stays put for the whole gesture.
+ * The terminal of `elementID` that must carry the free-end handle: the one under the cursor, or the one a drag holds — the handle stays put for the whole gesture.
  */
 function handled_edge_terminal(
   elementID: ID,
@@ -262,9 +257,8 @@ function handled_edge_terminal(
 }
 
 /**
- * The node the cursor is really on when the hover names an edge terminal, or the
- * start a belt closes onto. A held terminal is grabbed through its node: the node
- * is what lights up, and no free-end handle is ever drawn over it.
+ * The node the cursor is really on when the hover names an edge terminal, or the start a belt closes onto.
+ * A held terminal is grabbed through its node: the node is what lights up, and no free-end handle is ever drawn over it.
  */
 function hovered_terminal_node(
   hoveredPart: HoveredPart,
@@ -289,9 +283,8 @@ function hovered_terminal_node(
 }
 
 /**
- * Whether the gesture is about to close `belt` on itself: one terminal rides the
- * cursor and the hover offers the opposite one as its target. The preview must
- * then be the loop, not an open path with both ends on the same point.
+ * Whether the gesture is about to close `belt` on itself: one terminal rides the cursor and the hover offers the opposite one as its target.
+ * The preview must then be the loop, not an open path with both ends on the same point.
  */
 function is_closing_belt(
   belt: BeltElement,
@@ -320,8 +313,7 @@ function is_closing_belt(
 
 /**
  * Whether a load element is hovered, optionally restricted to one of its parts.
- * Loads emphasize per part rather than as a whole: hovering a value label must
- * light up that label and the geometry, but not the element's other label.
+ * Loads emphasize per part rather than as a whole: hovering a value label must light up that label and the geometry, but not the element's other label.
  */
 function is_load_hovered(
   elementID: ID,
@@ -341,7 +333,8 @@ function is_load_hovered(
 /**
  * The nodes the beam being drawn would pick up along its body, thickened like an ordinary hover.
  *
- * They are connected without ever having been aimed at, so without this the bar would silently take hold of whatever it happened to cross. Empty for every other tool: only a beam has a body to hold a node.
+ * They are connected without ever having been aimed at, so without this the bar would silently take hold of whatever it happened to cross.
+ * Empty for every other tool: only a beam has a body to hold a node.
  */
 function crossed_node_ids(
   hoveredPart: HoveredPart,
@@ -366,8 +359,7 @@ function is_hovered(
   constraintElements: ConstraintElement[],
 ): boolean {
   if (!names_element(hoveredPart)) return false;
-  // A badge names its host, but hovering it highlights the badge alone —
-  // lighting up the element too would read as two targets for one gesture.
+  // A badge names its host, but hovering it highlights the badge alone — lighting up the element too would read as two targets for one gesture.
   if (hoveredPart.type === "Probe" || hoveredPart.type === "MotorArrow")
     return false;
   if (hoveredPart.id === elementID && !hoveredPart.deleting) return true;
@@ -403,8 +395,8 @@ function is_hovered(
 }
 
 /**
- * Draw tiny pieces of edges to make them appear over some part. `position` is
- * the screen point the stub is centred on — the node the edge is fixed to.
+ * Draw tiny pieces of edges to make them appear over some part.
+ * `position` is the screen point the stub is centred on — the node the edge is fixed to.
  */
 export function draw_edge_fake_end(
   ctx: CanvasRenderingContext2D,
@@ -464,9 +456,8 @@ export function draw_edge_fake_end(
 }
 
 /**
- * The elements that cannot be drawn, because a reference they hold names an
- * element that is not there. Drawing resolves those referents through strict
- * getters, so attempting one throws and takes the whole frame with it.
+ * The elements that cannot be drawn, because a reference they hold names an element that is not there.
+ * Drawing resolves those referents through strict getters, so attempting one throws and takes the whole frame with it.
  */
 function undrawable_elements(
   allElements: UnionElement[],
@@ -482,18 +473,12 @@ function undrawable_elements(
 /**
  * Elements a panel is pointing at, and why.
  *
- * The reason travels with the set because the drawing differs: `focus` picks parts out —
- * a kinematic chain, or what one motion mode moves — and draws them hovered, `fault`
- * marks the constraints an audit found dispensable and draws them red, and `erase` shows what
- * a delete command would take, cascade included, in the eraser's own rendering. Two parallel
- * sets would have let a caller light the same element both ways at once, which means nothing.
+ * The reason travels with the set because the drawing differs: `focus` picks parts out — a kinematic chain, or what one motion mode moves — and draws them hovered, `fault` marks the constraints an audit found dispensable and draws them red, and `erase` shows what a delete command would take, cascade included, in the eraser's own rendering.
+ * Two parallel sets would have let a caller light the same element both ways at once, which means nothing.
  *
- * `pick` draws exactly like `focus`, and exists to say the pointing is NOT an analysis: the
- * selection panel naming its own elements has no reason to make the dimensions step aside the
- * way a motion mode does (see `MechanicalCanvas`' dimension fade).
+ * `pick` draws exactly like `focus`, and exists to say the pointing is NOT an analysis: the selection panel naming its own elements has no reason to make the dimensions step aside the way a motion mode does (see `MechanicalCanvas`' dimension fade).
  *
- * Fading everything else was the first idea for `focus` and it reads backwards: the eye
- * follows the change, and the change would be on the parts one is NOT pointing at.
+ * Fading everything else was the first idea for `focus` and it reads backwards: the eye follows the change, and the change would be on the parts one is NOT pointing at.
  */
 export type CanvasHighlight = {
   elements: ReadonlySet<ID>;
@@ -519,30 +504,26 @@ export type CanvasDrawing = {
   /** Among those, the ones an undo is about to bring back. */
   ghostConstraintIDs?: Set<ID>;
   /** Whether the cursor is over the canvas: what a tool previews follows it, so
-   *  it is not drawn for a hover designated from a panel. */
+   * it is not drawn for a hover designated from a panel. */
   cursorOnCanvas?: boolean;
   hideConstraints?: boolean;
   hideLoads?: boolean;
   hideProbes?: boolean;
   /** The dimension the gesture is placing or dragging has its stand-off on a rung. Its own
-   *  ladder is invisible, so the dimension goes into relief to say so. */
+   * ladder is invisible, so the dimension goes into relief to say so. */
   dimensionSnapped?: boolean;
   highlight?: CanvasHighlight;
   /** The elements the ruler is holding whole, lit in the measurement hue. A ruler marks what
-   *  it takes whole by lighting the element itself, never by drawing a shape around it. */
+   * it takes whole by lighting the element itself, never by drawing a shape around it. */
   measured?: ReadonlySet<ID>;
   /** How a redundant constraint the analysis panel is pointing at would yield. */
   redundancySymbols?: RedundancySymbol[];
   /** `performance.now()`, ms — drives the symbols' pulse. Passed in rather than read here so a
-   *  test can call this function with a fixed value. */
+   * test can call this function with a fixed value. */
   now?: number;
   /**
-   * The library panel's own tinting — present only
-   * while a library section is hovered, undefined the rest of the time (edition's normal
-   * colors apply). Every beam is colored by index into whichever list `section` names;
-   * `hoveredEntryID` (a row the panel itself is pointing at, not the canvas — see
-   * `draw_mechanism`'s own `hoveredPart`) thickens its beams, the same way any other hover
-   * does — it does not fade the rest, which would hide the very tint it is a legend for.
+   * The library panel's own tinting — present only while a library section is hovered, undefined the rest of the time (edition's normal colors apply).
+   * Every beam is colored by index into whichever list `section` names; `hoveredEntryID` (a row the panel itself is pointing at, not the canvas — see `draw_mechanism`'s own `hoveredPart`) thickens its beams, the same way any other hover does — it does not fade the rest, which would hide the very tint it is a legend for.
    */
   libraryTint?: {
     section: "materials" | "profiles";
@@ -551,28 +532,29 @@ export type CanvasDrawing = {
     hoveredEntryID: ID | null;
   };
   /** This mechanism's own material/profile library — resolves a beam's section/`Re` for the
-   *  beam-fill lens below. Undefined outside dynamic mode, where there is nothing to color. */
+   * beam-fill lens below.
+   * Undefined outside dynamic mode, where there is nothing to color. */
   materials?: MaterialDef[];
   profiles?: ProfileDef[];
   /** One beam's internal-force field per entry (phase 4) — already computed for the panel
-   *  diagrams. What feeds the beam-fill lens below, for every beam. */
+   * diagrams.
+   * What feeds the beam-fill lens below, for every beam. */
   cohesionFields?: CohesionField[];
   /** Which reading tints every beam's fill — mechanism-wide, not per-element (docs/plan-
-   *  efforts-interieurs.md phase 9). `undefined`/`"none"` colors nothing. */
+   * efforts-interieurs.md phase 9).
+   * `undefined`/`"none"` colors nothing. */
   beamStressLens?: BeamStressLens;
   /** The `utilization` lens' shared ramp top (`StressScaleCache.maxStress`, `cohesion-field.ts`)
-   *  — the highest `|σ|max` ever recorded, Pa. `0` outside dynamic mode or before anything has
-   *  been recorded yet. */
+   * — the highest `|σ|max` ever recorded, Pa. `0` outside dynamic mode or before anything has been recorded yet. */
   stressScale?: number;
   /** The `normal` lens' shared scale (`StressScaleCache.maxNormal`) — the highest `|N/A|` ever
-   *  recorded, Pa. `0` outside dynamic mode or before anything has been recorded yet. */
+   * recorded, Pa. `0` outside dynamic mode or before anything has been recorded yet. */
   normalStressScale?: number;
   /** The `bending` lens' shared scale (`StressScaleCache.maxBending`) — the highest
-   *  `|Mf·v/I|` ever recorded, Pa. `0` outside dynamic mode or before anything has been
-   *  recorded yet. */
+   * `|Mf·v/I|` ever recorded, Pa. `0` outside dynamic mode or before anything has been recorded yet. */
   bendingStressScale?: number;
   /** The `shear` lens' shared ramp top (`StressScaleCache.maxShear`) — the highest `τ_max`
-   *  ever recorded, Pa. `0` outside dynamic mode or before anything has been recorded yet. */
+   * ever recorded, Pa. `0` outside dynamic mode or before anything has been recorded yet. */
   shearStressScale?: number;
 };
 
@@ -642,8 +624,7 @@ export function draw_mechanism(
     ? crossed_node_ids(hoveredPart, state, mechanicalElements, viewport)
     : EMPTY_IDS;
 
-  // What the eraser — or a panel's own delete command, through an `erase` highlight — would
-  // take, so the whole cascade turns red before the click rather than the aimed element alone.
+  // What the eraser — or a panel's own delete command, through an `erase` highlight — would take, so the whole cascade turns red before the click rather than the aimed element alone.
   const doomedRoots: readonly ID[] =
     highlight.kind === "erase"
       ? [...highlight.elements]
@@ -664,8 +645,7 @@ export function draw_mechanism(
     doomed = cascade;
   }
 
-  // The dimensions the aimed placement would replace: the preview draws their
-  // replacement, so they step aside instead of doubling it.
+  // The dimensions the aimed placement would replace: the preview draws their replacement, so they step aside instead of doubling it.
   const replaced = hideConstraints
     ? EMPTY_IDS
     : replaced_constraint_ids(
@@ -714,12 +694,10 @@ export function draw_mechanism(
   }
   ctx.lineWidth = STROKE_WIDTHS.STANDARD;
 
-  // Read once for the whole frame: the drawing and the hover share this map, so
-  // the stroke and the cursor cannot disagree on where an edge is.
+  // Read once for the whole frame: the drawing and the hover share this map, so the stroke and the cursor cannot disagree on where an edge is.
   const parallelOffsets = parallel_edge_offsets(mechanicalElements);
 
-  // The library dialog's tint — every beam's own color, and which of them share the
-  // hovered row's material/profile (see `CanvasDrawing.libraryTint`'s own doc).
+  // The library dialog's tint — every beam's own color, and which of them share the hovered row's material/profile (see `CanvasDrawing.libraryTint`'s own doc).
   const beamTintColors = new Map<ID, string>();
   const beamTintHovered = new Set<ID>();
   if (libraryTint) {
@@ -739,13 +717,9 @@ export function draw_mechanism(
     }
   }
 
-  // The beam-fill lens' own fill (phase 9, formerly phase 6's `stress` alone): one gradient's
-  // worth of stops per beam, from that beam's own cohesion field — ramped/colored and, for
-  // `utilization`/`shear`, stepped at their own limit here (drawing territory); the `*_stops`
-  // functions themselves stay physics-only. Every beam at once, not gated per-element: the
-  // lens is mechanism-wide (`BeamStressLens`'s own doc). Skipped for a beam without a
-  // resolvable material/profile (a dangling reference mid-edit) or without a field (outside
-  // dynamic mode, where there is nothing to color).
+  // The beam-fill lens' own fill (phase 9, formerly phase 6's `stress` alone): one gradient's worth of stops per beam, from that beam's own cohesion field — ramped/colored and, for `utilization`/`shear`, stepped at their own limit here (drawing territory); the `*_stops` functions themselves stay physics-only.
+  // Every beam at once, not gated per-element: the lens is mechanism-wide (`BeamStressLens`'s own doc).
+  // Skipped for a beam without a resolvable material/profile (a dangling reference mid-edit) or without a field (outside dynamic mode, where there is nothing to color).
   const beamStressStops = new Map<ID, BeamFillStop[]>();
   if (beamStressLens !== "none") {
     for (const field of cohesionFields) {
@@ -755,8 +729,8 @@ export function draw_mechanism(
       if (!beam) continue;
       const strength = beam_strength(beam.materialID, beam.profileID, materials, profiles);
       if (!strength) continue;
-      // Its share of the load was attributed, not derived — every lens reads the same field,
-      // so none of them has anything to ramp. Flat, in a hue no ramp uses.
+      // Its share of the load was attributed, not derived — every lens reads the same field, so none of them has anything to ramp.
+      // Flat, in a hue no ramp uses.
       if (!field.determinate) {
         beamStressStops.set(beam.id, [
           { offset: 0, color: STRESS_INDETERMINATE_COLOR },
@@ -809,9 +783,8 @@ export function draw_mechanism(
     }
   }
 
-  // A gear normally draws under belts, so a belt wrapping it traces right over
-  // its rim. Hovering/selecting/erase-hovering it re-draws it once more, after
-  // belts, so it comes forward — still under nodes, drawn later in this pass.
+  // A gear normally draws under belts, so a belt wrapping it traces right over its rim.
+  // Hovering/selecting/erase-hovering it re-draws it once more, after belts, so it comes forward — still under nodes, drawn later in this pass.
   const elevatedGears: {
     element: GearElement;
     isHovered: boolean;
@@ -929,15 +902,13 @@ export function draw_mechanism(
         constraintElements,
         doomed,
       );
-      // A terminal held by a node is grabbed through it: the node takes the
-      // hover, and the handle that would sit on top of it is not drawn.
+      // A terminal held by a node is grabbed through it: the node takes the hover, and the handle that would sit on top of it is not drawn.
       const handleTerminal =
         terminalNodeID === undefined
           ? handled_edge_terminal(element.id, hoveredPart, state)
           : undefined;
       const isEdgeEndHovered = handleTerminal !== undefined;
-      // Cursor-driven only: a group highlight (focused/faulty) must not, by
-      // itself, pull a motor to the front — see the "pivot" case below.
+      // Cursor-driven only: a group highlight (focused/faulty) must not, by itself, pull a motor to the front — see the "pivot" case below.
       const isCursorHovered =
         is_hovered(element.id, hoveredPart, constraintElements) ||
         element.id === terminalNodeID ||
@@ -945,10 +916,8 @@ export function draw_mechanism(
         (dimensionSnapped &&
           state.type === "MovingConstraint" &&
           state.elementID === element.id);
-      // The cursor's hover is silent while the ruler is out: what it points at is already
-      // said in the measurement hue, and a thickened stroke over it would say it twice, in
-      // the language of a tool that is not the one in hand. The elevation `isCursorHovered`
-      // drives further down is a stacking order, not a mark, and stays.
+      // The cursor's hover is silent while the ruler is out: what it points at is already said in the measurement hue, and a thickened stroke over it would say it twice, in the language of a tool that is not the one in hand.
+      // The elevation `isCursorHovered` drives further down is a stacking order, not a mark, and stays.
       const isHovered =
         focused.has(element.id) ||
         faulty.has(element.id) ||
@@ -964,15 +933,12 @@ export function draw_mechanism(
       if (element.type === "gear") {
         ctx.lineWidth = STROKE_WIDTHS.GEAR;
       }
-      // The library dialog's tint (`CanvasDrawing.libraryTint`) — drawn as a translucent film
-      // over the beam's own normal colors (below, once the shape itself is drawn), not as a
-      // replacement for them: the beam still reads as a beam, the tint just marks which
-      // material/profile it belongs to.
+      // The library dialog's tint (`CanvasDrawing.libraryTint`) — drawn as a translucent film over the beam's own normal colors (below, once the shape itself is drawn), not as a replacement for them: the beam still reads as a beam, the tint just marks which material/profile it belongs to.
       const beamTint =
         element.type === "beam" ? beamTintColors.get(element.id) : undefined;
 
-      // Thicken the stroke if element is hovered. Loads are left out: they pick
-      // their width per sub-part below, from loadRestWidth / loadHoverWidth.
+      // Thicken the stroke if element is hovered.
+      // Loads are left out: they pick their width per sub-part below, from loadRestWidth / loadHoverWidth.
       if (isHovered && !isEdgeEndHovered && !isLoadElement)
         ctx.lineWidth += STROKE_WIDTHS.HOVER_GAIN;
       // Add blue halo and blue stroke if element is selected
@@ -989,23 +955,21 @@ export function draw_mechanism(
           : COLORS.FILL_BODY;
         ctx.shadowBlur = INTERACTION_SPECS.SELECTION_HALO_SIZE;
       }
-      // Held whole by the ruler: re-inked in the measurement hue, and nothing more. The halo
-      // is the selection's own mark and stays its alone.
+      // Held whole by the ruler: re-inked in the measurement hue, and nothing more.
+      // The halo is the selection's own mark and stays its alone.
       if (measured.has(element.id)) ctx.strokeStyle = COLORS.MEASURE;
       // Add red stroke and make semi-transparent if element is to be deleted
       if (isEraseHovered) {
         if (!isLoadElement) ctx.strokeStyle = COLORS.DELETION_STROKE;
         ctx.globalAlpha = INTERACTION_SPECS.DELETION_OPACITY;
       }
-      // A joint the redundancy audit found dispensable. The eraser's red, because it reads
-      // as a warning in every theme — but at full opacity, since this is something to look
-      // at, not something on its way out.
+      // A joint the redundancy audit found dispensable.
+      // The eraser's red, because it reads as a warning in every theme — but at full opacity, since this is something to look at, not something on its way out.
       if (faulty.has(element.id) && !isLoadElement)
         ctx.strokeStyle = COLORS.DELETION_STROKE;
       // Fade out revealed constraints at the end of their hover cooldown.
       if (constraintOpacity !== undefined) ctx.globalAlpha *= constraintOpacity;
-      // A row hovered in the library panel: its own beams thicken, same as any other hover —
-      // the rest keep their tint, undimmed.
+      // A row hovered in the library panel: its own beams thicken, same as any other hover — the rest keep their tint, undimmed.
       if (
         libraryTint &&
         libraryTint.hoveredEntryID !== null &&
@@ -1020,8 +984,7 @@ export function draw_mechanism(
       const hideText =
         (state.type === "EditingValue" || state.type === "PlacingValue") &&
         state.elementID === element.id;
-      // Widths a load's sub-parts choose from: the element's own width when at
-      // rest, the hovered width for the part under the cursor.
+      // Widths a load's sub-parts choose from: the element's own width when at rest, the hovered width for the part under the cursor.
       const loadRestWidth = ctx.lineWidth;
       const loadHoverWidth = loadRestWidth + STROKE_WIDTHS.HOVER_GAIN;
 
@@ -1060,10 +1023,9 @@ export function draw_mechanism(
               const arrowHovered =
                 hoveredPart.type === "MotorArrow" &&
                 hoveredPart.id === element.id;
-              // A motor rides under the bars, drawn before them. Standing out means
-              // coming up over them, and only then are the bars faked back on top.
-              // A non-grounded motor is mounted on its parent beam, so it must
-              // always ride above it — not just while hovered/selected.
+              // A motor rides under the bars, drawn before them.
+              // Standing out means coming up over them, and only then are the bars faked back on top.
+              // A non-grounded motor is mounted on its parent beam, so it must always ride above it — not just while hovered/selected.
               const ridesOnBeam = element.motor && !element.isGrounded;
               if (
                 element.motor &&
@@ -1081,8 +1043,7 @@ export function draw_mechanism(
                   arrowHovered,
                 );
 
-                // The bar the stator pushes against passes under the body: that is
-                // what tells it apart from the ones the motor turns.
+                // The bar the stator pushes against passes under the body: that is what tells it apart from the ones the motor turns.
                 const rotatingEdges = element.rotatingEdgesIDs.filter(
                   (el) => el !== element.motor!.parentBeamID,
                 );
@@ -1175,8 +1136,7 @@ export function draw_mechanism(
             world2screen_angle(element.angle),
             isHovered,
           );
-          // Cursor-driven only, same as the motor's front-bringing rule above: a
-          // group highlight (focused/faulty) must not by itself elevate a gear.
+          // Cursor-driven only, same as the motor's front-bringing rule above: a group highlight (focused/faulty) must not by itself elevate a gear.
           if (isCursorHovered || isSelected || isEraseHovered) {
             elevatedGears.push({
               element,
@@ -1209,13 +1169,11 @@ export function draw_mechanism(
                 end,
                 !!element.fixedNodeStartID,
                 !!element.fixedNodeEndID,
-                // The library tint takes priority when both are active — the dialog's hover
-                // feedback is the more immediate one, and the two are not meant to compete.
+                // The library tint takes priority when both are active — the dialog's hover feedback is the more immediate one, and the two are not meant to compete.
                 beamTint ? undefined : beamStressStops.get(element.id),
               );
               if (beamTint) {
-                // A translucent film over the beam just drawn, not a replacement for its own
-                // colors — same shape, same join flags, redrawn on top at reduced opacity.
+                // A translucent film over the beam just drawn, not a replacement for its own colors — same shape, same join flags, redrawn on top at reduced opacity.
                 ctx.save();
                 ctx.strokeStyle = beamTint;
                 ctx.fillStyle = beamTint;
@@ -1251,9 +1209,8 @@ export function draw_mechanism(
           break;
         }
         case "belt": {
-          // Pulleys the path skips: those that lost belt contact during
-          // simulation, and the one a drag is about to pull off. Both are drawn
-          // as if the belt ran straight past them.
+          // Pulleys the path skips: those that lost belt contact during simulation, and the one a drag is about to pull off.
+          // Both are drawn as if the belt ran straight past them.
           const removingGearIndex =
             state.type === "MovingBeltBody" && state.elementID === element.id
               ? state.removingGearIndex
@@ -1263,8 +1220,7 @@ export function draw_mechanism(
           );
           if (removingGearIndex !== undefined)
             disconnectedGears.add(removingGearIndex);
-          // The carried section is numbered on the belt without that pulley, so
-          // every section-indexed read below goes through this one.
+          // The carried section is numbered on the belt without that pulley, so every section-indexed read below goes through this one.
           const pathBelt =
             removingGearIndex === undefined
               ? element
@@ -1280,8 +1236,8 @@ export function draw_mechanism(
               };
             })
             .filter((_, i) => !disconnectedGears.has(i));
-          // Preview the pulley where the commit will actually put it. An arc
-          // section takes none, and the belt is then previewed unchanged.
+          // Preview the pulley where the commit will actually put it.
+          // An arc section takes none, and the belt is then previewed unchanged.
           const preview_pulley = (
             section: number,
             entry: { gear: GearElement; clockwise: boolean },
@@ -1419,15 +1375,11 @@ export function draw_mechanism(
               break;
             }
           }
-          // A terminal dragged onto the other one shows the loop the drop makes,
-          // not an open path whose two ends sit on the same point.
+          // A terminal dragged onto the other one shows the loop the drop makes, not an open path whose two ends sit on the same point.
           const isClosing = is_closing_belt(element, hoveredPart, state);
           if ((element.closed || isClosing) && attachedGears.length > 0) {
-            // Closed belt: continuous closed loop around the pulleys, drawn
-            // independently of the junction position (no free ends). In
-            // simulation, pass the tracked continuous wraps (filtered to the
-            // still-connected gears, same as attachedGears) so a pulley about to
-            // disconnect is drawn straight-past, not wrapped a full turn.
+            // Closed belt: continuous closed loop around the pulleys, drawn independently of the junction position (no free ends).
+            // In simulation, pass the tracked continuous wraps (filtered to the still-connected gears, same as attachedGears) so a pulley about to disconnect is drawn straight-past, not wrapped a full turn.
             const loopWraps = element.gearWraps
               ? element.gearWraps.filter((_, i) => !disconnectedGears.has(i))
               : [];
@@ -1465,8 +1417,7 @@ export function draw_mechanism(
               ),
               viewport,
             );
-            // A terminal pinned onto its adjacent pulley (winch) makes that
-            // pulley coil inward so the free run stays on the rim.
+            // A terminal pinned onto its adjacent pulley (winch) makes that pulley coil inward so the free run stays on the rim.
             const startExternal =
               !!element.fixedNodeStartID &&
               attachedGears.length > 0 &&
@@ -1586,8 +1537,7 @@ export function draw_mechanism(
             element.flipStart,
             element.flipEnd,
             world2screen(element.position, viewport),
-            // `draw_dimension_angle` draws in degrees (like the live placement preview,
-            // which computes its angle that way); `element.value` is stored in SI radians.
+            // `draw_dimension_angle` draws in degrees (like the live placement preview, which computes its angle that way); `element.value` is stored in SI radians.
             rad_to_deg(element.value),
             hideText,
           );
@@ -1660,8 +1610,7 @@ export function draw_mechanism(
               ? loadHoverWidth
               : loadRestWidth,
           );
-          // Hovering the arrow reveals the tip handle it would drag, and the
-          // drag itself keeps it under the cursor.
+          // Hovering the arrow reveals the tip handle it would drag, and the drag itself keeps it under the cursor.
           if (
             is_load_hovered(force.id, hoveredPart, "body") ||
             (state.type === "MovingForce" && state.elementID === force.id)

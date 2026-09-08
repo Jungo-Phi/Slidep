@@ -19,7 +19,8 @@ export interface SnapGuide {
 /**
  * What a snap took hold of, so the drawing can show it.
  *
- * Everything here comes **out of** the snap and is never read back from the position it produced. A point pulled onto the grid alone lands on a round direction often enough by coincidence — the grid is made of them — and feedback derived from the result would claim holds the snap never had.
+ * Everything here comes **out of** the snap and is never read back from the position it produced.
+ * A point pulled onto the grid alone lands on a round direction often enough by coincidence — the grid is made of them — and feedback derived from the result would claim holds the snap never had.
  */
 export interface SnapFeedback {
   /** Construction lines the point is held on. Two of them when it sits on their crossing. */
@@ -47,7 +48,7 @@ export interface SnapSettings {
 }
 
 /** The angle steps the menu offers, the first being the one a drawing starts on. Degrees at
- *  the design level (15°, 22.5°...) converted once to the radians `angleStep` is stored in. */
+ * the design level (15°, 22.5°...) converted once to the radians `angleStep` is stored in. */
 export const ANGLE_STEPS = [15, 22.5, 30, 45, 90].map(deg_to_rad);
 
 /** Where "custom" starts. Deliberately outside `ANGLE_STEPS`, so choosing it reveals the field meant to change it. */
@@ -60,12 +61,8 @@ export const DEFAULT_SNAP_SETTINGS: SnapSettings = {
 };
 
 /**
- * A `SnapSettings` blob a browser still has saved from before `angleStep` moved from degrees
- * to radians reads back with a value no genuine radian step reaches — the largest is `Math.PI`
- * (a straight angle, already an absurdly coarse snap), while the smallest surviving degree
- * value (15, the finest preset) is nearly five times past it. `localStorage` carries no
- * version tag to migrate against for a setting this size, so this one-time bounds check
- * stands in for one.
+ * A `SnapSettings` blob a browser still has saved from before `angleStep` moved from degrees to radians reads back with a value no genuine radian step reaches — the largest is `Math.PI` (a straight angle, already an absurdly coarse snap), while the smallest surviving degree value (15, the finest preset) is nearly five times past it.
+ * `localStorage` carries no version tag to migrate against for a setting this size, so this one-time bounds check stands in for one.
  */
 export function migrate_snap_settings(settings: SnapSettings): SnapSettings {
   return settings.angleStep > Math.PI
@@ -93,14 +90,16 @@ export const SNAP_CORRIDOR = HIT_TOLERANCE.SNAP;
 /**
  * How short a drag is to leave unaimed.
  *
- * Every ray passes through the origin, so near it they all lie inside each other's lane and the retained one would be decided by nothing at all. The snap only starts once the drag says something about direction.
+ * Every ray passes through the origin, so near it they all lie inside each other's lane and the retained one would be decided by nothing at all.
+ * The snap only starts once the drag says something about direction.
  */
 export const SNAP_DEAD_RADIUS = 15;
 
 /**
  * Two rays closer than this, where the cursor is, are one target.
  *
- * A beam half a degree off vertical offers a ray that close to the world's own; without a margin, the retained one would flip from one pixel to the next, and with it the direction that gets stored. The margin makes it a tie, which the order of the candidates then settles.
+ * A beam half a degree off vertical offers a ray that close to the world's own; without a margin, the retained one would flip from one pixel to the next, and with it the direction that gets stored.
+ * The margin makes it a tie, which the order of the candidates then settles.
  */
 export const SNAP_SEPARATION = 1;
 

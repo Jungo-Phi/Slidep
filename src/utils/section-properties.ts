@@ -2,7 +2,7 @@ import { MaterialDef, ProfileDef, ProfileShape } from "../types/material";
 import { ID } from "../types/element";
 
 /** A cross-section's derived mechanical properties — never stored, always recomputed from
- *  the profile's shape. */
+ * the profile's shape. */
 export interface SectionProperties {
   /** m² */
   A: number;
@@ -11,19 +11,17 @@ export interface SectionProperties {
   /** m — distance from that axis to the extreme fibre. */
   v: number;
   /** m³ — first moment of area of the half-section above the neutral axis, about that axis
-   *  (`docs/plan-efforts-interieurs.md` phase 9, chantier 2). Together with `b` below, gives
-   *  `τ_max = T·Q/(I·b)` (Jouravski) at the neutral axis, where shear peaks. */
+   * (`docs/plan-efforts-interieurs.md` phase 9, chantier 2).
+   * Together with `b` below, gives `τ_max = T·Q/(I·b)` (Jouravski) at the neutral axis, where shear peaks. */
   Q: number;
   /** m — width of material actually present AT the neutral axis, not the section's overall
-   *  width: for `box`/`tube` the neutral axis crosses the two hollow side walls only (`2·e`),
-   *  for `I` it crosses the web only (`tw`). */
+   * width: for `box`/`tube` the neutral axis crosses the two hollow side walls only (`2·e`), for `I` it crosses the web only (`tw`). */
   b: number;
 }
 
 /**
- * `{ A, I, v, Q, b }` for `shape`. Every shape here is symmetric about the bending axis, so `v`
- * is always half the in-plane cote (`h` or `d`) — keep that invariant if a `U`/`L` profile is
- * ever added, since those have two distinct `v` and an offset centroid instead.
+ * `{ A, I, v, Q, b }` for `shape`.
+ * Every shape here is symmetric about the bending axis, so `v` is always half the in-plane cote (`h` or `d`) — keep that invariant if a `U`/`L` profile is ever added, since those have two distinct `v` and an offset centroid instead.
  */
 export function section_properties(shape: ProfileShape): SectionProperties {
   switch (shape.kind) {
@@ -76,8 +74,7 @@ export function section_properties(shape: ProfileShape): SectionProperties {
     case "I": {
       const { b, h, tw, tf } = shape;
       const hi = h - 2 * tf;
-      // Neutral axis at mid-height: the flange contributes its own area at its own centroid's
-      // distance, the web only the half of it above the axis, at half ITS OWN distance.
+      // Neutral axis at mid-height: the flange contributes its own area at its own centroid's distance, the web only the half of it above the axis, at half ITS OWN distance.
       const Q = b * tf * (h / 2 - tf / 2) + (tw * hi ** 2) / 8;
       return {
         A: b * h - (b - tw) * hi,
@@ -91,10 +88,8 @@ export function section_properties(shape: ProfileShape): SectionProperties {
 }
 
 /**
- * Whether `shape`'s cotes describe a physically sound section — every cote strictly
- * positive, and every wall thickness strictly under the half-cote it is cut from. Rejects at
- * the saisie (the properties panel calls this before accepting a typed value) rather than
- * letting `section_properties` produce a negative `I` from a self-intersecting section.
+ * Whether `shape`'s cotes describe a physically sound section — every cote strictly positive, and every wall thickness strictly under the half-cote it is cut from.
+ * Rejects at the saisie (the properties panel calls this before accepting a typed value) rather than letting `section_properties` produce a negative `I` from a self-intersecting section.
  */
 export function validate_profile_shape(shape: ProfileShape): boolean {
   switch (shape.kind) {
@@ -133,8 +128,7 @@ const find_profile = (id: ID, profiles: ProfileDef[]): ProfileDef | undefined =>
   profiles.find((p) => p.id === id);
 
 /** A beam's linear mass (kg/m), `ρ·A` of its assigned material and profile — derived, never
- *  stored on the element itself. 0 for a dangling reference, which validation forbids in a
- *  well-formed mechanism but a mid-edit intermediate state can still momentarily hold. */
+ * stored on the element itself. 0 for a dangling reference, which validation forbids in a well-formed mechanism but a mid-edit intermediate state can still momentarily hold. */
 export function beam_linear_mass(
   materialID: ID,
   profileID: ID,
@@ -150,10 +144,8 @@ export function beam_linear_mass(
 /**
  * A beam's axial compliance `L/(E·A)` in m/N — how far a newton of tension stretches it.
  *
- * This is the α of XPBD: it is what makes the share of load between the members of a
- * HYPERSTATIC structure a matter of their stiffnesses rather than of the order the solver
- * happens to visit them in. Zero (rigid, the previous behaviour) for a dangling material or
- * profile reference, the same defensive case `beam_linear_mass` covers.
+ * This is the α of XPBD: it is what makes the share of load between the members of a HYPERSTATIC structure a matter of their stiffnesses rather than of the order the solver happens to visit them in.
+ * Zero (rigid, the previous behaviour) for a dangling material or profile reference, the same defensive case `beam_linear_mass` covers.
  */
 export function beam_axial_compliance(
   materialID: ID,
@@ -170,8 +162,7 @@ export function beam_axial_compliance(
 }
 
 /** A beam's section properties and yield strength, resolved from its assigned material and
- *  profile — `undefined` for a dangling reference, the same defensive case `beam_linear_mass`
- *  covers for a mid-edit intermediate state. */
+ * profile — `undefined` for a dangling reference, the same defensive case `beam_linear_mass` covers for a mid-edit intermediate state. */
 export function beam_strength(
   materialID: ID,
   profileID: ID,
@@ -185,8 +176,7 @@ export function beam_strength(
 }
 
 /** The section's worst fibre, `|σ|max(s) = |N|/A + |Mf|·v/I` — folded from the two fibre
- *  stresses `N/A ± Mf·v/I` via `max(|a+b|, |a−b|) = |a|+|b|`, so both are covered without
- *  evaluating them separately. */
+ * stresses `N/A ± Mf·v/I` via `max(|a+b|, |a−b|) = |a|+|b|`, so both are covered without evaluating them separately. */
 export function max_fiber_stress(
   N: number,
   Mf: number,
@@ -196,7 +186,7 @@ export function max_fiber_stress(
 }
 
 /** The neutral axis' own shear stress, `τ_max = |T|·Q/(I·b)` (Jouravski) — where shear peaks
- *  across the section, docs/plan-efforts-interieurs.md phase 9 chantier 2. */
+ * across the section, docs/plan-efforts-interieurs.md phase 9 chantier 2. */
 export function max_shear_stress(
   T: number,
   section: SectionProperties,

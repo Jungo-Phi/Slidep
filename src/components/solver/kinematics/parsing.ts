@@ -32,13 +32,9 @@ import { BEAM_END_MASS_FRACTION } from "../dynamics/mass-model";
 import { beam_axial_compliance, beam_linear_mass } from "../../../utils/section-properties";
 
 /**
- * A driven beam's own moment of inertia about its pivot, parallel-axis theorem:
- * `J = mL²/12 + m·a²`, `a` the (rigid, so rest-pose-only) distance from the beam's centre to
- * the pivot's world position. Covers both an end-pivoted arm (`a = L/2`, giving the familiar
- * `mL²/3`) and one welded through its body (`fixedNodesBodyIDs`, arbitrary `a`) with the same
- * formula — `motor_arm` already resolves which case applies; this only needs where the pivot
- * actually sits. `linearMass` is passed in rather than resolved here: the caller already
- * needs it for the arm's own end mass, so it is computed once and shared.
+ * A driven beam's own moment of inertia about its pivot, parallel-axis theorem: `J = mL²/12 + m·a²`, `a` the (rigid, so rest-pose-only) distance from the beam's centre to the pivot's world position.
+ * Covers both an end-pivoted arm (`a = L/2`, giving the familiar `mL²/3`) and one welded through its body (`fixedNodesBodyIDs`, arbitrary `a`) with the same formula — `motor_arm` already resolves which case applies; this only needs where the pivot actually sits.
+ * `linearMass` is passed in rather than resolved here: the caller already needs it for the arm's own end mass, so it is computed once and shared.
  */
 function beam_pivot_inertia(
   beam: BeamElement,
@@ -52,21 +48,14 @@ function beam_pivot_inertia(
   return (mass * length * length) / 12 + mass * a * a;
 }
 
-// sin of the angle between the two spokes, not an absolute area: an absolute threshold
-// stops catching the degenerate case as the spokes get longer (area scales with length²),
-// and fails on beams of ~1m already bent by a fraction of a degree — e.g. residual float
-// drift from a prior simulation — where the Distance fallback is nearly unconstrained in
-// rotation (its derivative w.r.t. angle vanishes at collinear).
+// sin of the angle between the two spokes, not an absolute area: an absolute threshold stops catching the degenerate case as the spokes get longer (area scales with length²), and fails on beams of ~1m already bent by a fraction of a degree — e.g. residual float drift from a prior simulation — where the Distance fallback is nearly unconstrained in rotation (its derivative w.r.t. angle vanishes at collinear).
 const COLLINEAR_SIN_EPS = Math.sin((15 * Math.PI) / 180);
 
 /**
- * Map a spring element's physical stiffness (>0, default 1) to a per-iteration
- * PBD relaxation factor in (0, 1). Monotonic: stiffer → closer to 1 (less yield),
- * softer → closer to 0. This is NOT a physical k — in this quasi-static solver a
- * per-iteration factor saturates over the iteration count, so it only sets how
- * readily the spring yields to rigid constraints, not a true relative stiffness
- * (that needs the future dynamic XPBD mode). Capped below 1 to stay softer than
- * rigid constraints (stiffness 1.0).
+ * Map a spring element's physical stiffness (>0, default 1) to a per-iteration PBD relaxation factor in (0, 1).
+ * Monotonic: stiffer → closer to 1 (less yield), softer → closer to 0.
+ * This is NOT a physical k — in this quasi-static solver a per-iteration factor saturates over the iteration count, so it only sets how readily the spring yields to rigid constraints, not a true relative stiffness (that needs the future dynamic XPBD mode).
+ * Capped below 1 to stay softer than rigid constraints (stiffness 1.0).
  */
 function spring_relaxation_factor(stiffness: number): number {
   const k = Math.max(stiffness, 0);
@@ -109,10 +98,7 @@ export function get_geom_nodes(
     }
   });
 
-  // Nodes fixed to a gear perimeter get a virtual zero radius so a GearMeshing
-  // bridge (added in get_links_geometric) can pin them at |node − centre| =
-  // gear.radius while the gear radius stays a free DOF. radMass 0 keeps that
-  // virtual radius constant.
+  // Nodes fixed to a gear perimeter get a virtual zero radius so a GearMeshing bridge (added in get_links_geometric) can pin them at |node − centre| = gear.radius while the gear radius stays a free DOF. radMass 0 keeps that virtual radius constant.
   mechanicalElements.forEach((element) => {
     if (element.type !== "gear") return;
     element.fixedNodesBodyIDs.forEach((nodeId) => {
@@ -150,10 +136,7 @@ export function get_sim_nodes(
     } else {
       let ps = element.positionStart;
       let pe = element.positionEnd;
-      // A belt terminal drawn ON its gear (winding) is seeded ON THE RIM (radius r):
-      // the constraint places wound terminals on the rim, and the length is baked from
-      // there too, so seeding on a tooth (radius r + teeth) would leave the initial
-      // config out of equilibrium and a FREE gear would jump at sim launch.
+      // A belt terminal drawn ON its gear (winding) is seeded ON THE RIM (radius r): the constraint places wound terminals on the rim, and the length is baked from there too, so seeding on a tooth (radius r + teeth) would leave the initial config out of equilibrium and a FREE gear would jump at sim launch.
       if (element.type === "belt") {
         const gears = (element as BeltElement).attachedGearsIDs;
         const snapToRim = (pos: Point2, gearId: ID | undefined): Point2 => {
@@ -313,8 +296,7 @@ export function constraint_to_link(element: ConstraintElement): Link {
         ratio: element.value,
       };
     case "dimension-belt":
-      // Needs the belt's gears/radii, unavailable here — built in
-      // get_links_geometric (filtered out before this call).
+      // Needs the belt's gears/radii, unavailable here — built in get_links_geometric (filtered out before this call).
       throw new Error("dimension-belt is handled in get_links_geometric");
   }
 }
@@ -332,9 +314,10 @@ const gearById = (
 };
 
 /**
- * Closed-belt junction link: the join node (fused start==end) sits on the closure
- * of the belt's last/first wrapped gears (its neighbours). Radii baked. Null for
- * loose belts or belts with no gear. Used by both solvers.
+ * Closed-belt junction link: the join node (fused start==end) sits on the closure of the belt's last/first wrapped gears (its neighbours).
+ * Radii baked.
+ * Null for loose belts or belts with no gear.
+ * Used by both solvers.
  */
 function belt_junction_link(
   belt: BeltElement,
@@ -360,9 +343,9 @@ function belt_junction_link(
 }
 
 /**
- * Belt pin (simulation): the junction node rides the closed belt and travels as
- * it rotates. `s0` = the junction's arc-length on the closed loop at sim start;
- * the reference pulley is the first attached gear. Null for loose/empty belts.
+ * Belt pin (simulation): the junction node rides the closed belt and travels as it rotates.
+ * `s0` = the junction's arc-length on the closed loop at sim start; the reference pulley is the first attached gear.
+ * Null for loose/empty belts.
  */
 function belt_pin_link(
   belt: BeltElement,
@@ -400,15 +383,11 @@ function belt_pin_link(
 }
 
 /**
- * Transient BeltPin for grabbing an ARBITRARY point of a belt in simulation (like
- * the junction, but at the grabbed arc-length): the bridge node `nodeKey` rides
- * the belt at s = s0 + r_ref·ε_ref·(θ_ref − θ_ref0), with `s0` the grabbed point's
- * arc-length and `θ_ref0` the reference gear's CURRENT angle — so pulling it
- * (HandleGrab) advances the belt travel and turns the pulleys while the grabbed
- * point stays under the cursor. A closed belt rides its closed pulley loop; a loose
- * belt rides its open path (terminals included). Gears/positions read from the live
- * sim state in `byId`. Null when the belt has no pulley to drive. `wraps`/
- * `disconnected` are refreshed per frame in step_simulation.
+ * Transient BeltPin for grabbing an ARBITRARY point of a belt in simulation (like the junction, but at the grabbed arc-length): the bridge node `nodeKey` rides the belt at s = s0 + r_ref·ε_ref·(θ_ref − θ_ref0), with `s0` the grabbed point's arc-length and `θ_ref0` the reference gear's CURRENT angle — so pulling it (HandleGrab) advances the belt travel and turns the pulleys while the grabbed point stays under the cursor.
+ * A closed belt rides its closed pulley loop; a loose belt rides its open path (terminals included).
+ * Gears/positions read from the live sim state in `byId`.
+ * Null when the belt has no pulley to drive.
+ * `wraps`/ `disconnected` are refreshed per frame in step_simulation.
  */
 export function belt_body_grab_pin(
   belt: BeltElement,
@@ -460,12 +439,9 @@ export function belt_body_grab_pin(
 }
 
 /**
- * Every edge welded to a hub node, as {edgeId, drivenKey, dir}: the endpoint to
- * drive angularly and the current hub→endpoint direction. Covers an edge welded at
- * either endpoint (drive the OTHER end) and a beam welded through its BODY (drive
- * the farther end, for the lever arm). Shared by the two places a hub imposes its
- * rotation on connected edges: a node fixed on a gear perimeter, and a rigid node
- * at a closed-belt junction.
+ * Every edge welded to a hub node, as {edgeId, drivenKey, dir}: the endpoint to drive angularly and the current hub→endpoint direction.
+ * Covers an edge welded at either endpoint (drive the OTHER end) and a beam welded through its BODY (drive the farther end, for the lever arm).
+ * Shared by the two places a hub imposes its rotation on connected edges: a node fixed on a gear perimeter, and a rigid node at a closed-belt junction.
  */
 function welded_edge_spokes(
   nodeId: ID,
@@ -474,9 +450,8 @@ function welded_edge_spokes(
 ): { edgeId: ID; drivenKey: string; dir: Point2 }[] {
   const spokes: { edgeId: ID; drivenKey: string; dir: Point2 }[] = [];
   mechanicalElements.forEach((el) => {
-    // Rigid members only (beam/spring/damper). A belt is flexible — its ends are
-    // governed by the belt links (length / winding / junction), never rotated
-    // rigidly with the hub — so it is never a spoke.
+    // Rigid members only (beam/spring/damper).
+    // A belt is flexible — its ends are governed by the belt links (length / winding / junction), never rotated rigidly with the hub — so it is never a spoke.
     if (!("positionStart" in el) || el.type === "belt") return;
     let drivenKey: string;
     let dir: Point2;
@@ -502,10 +477,8 @@ function welded_edge_spokes(
 export type MotorArm = { pivotKey: string; drivenKey: string; dir: Point2 };
 
 /**
- * The arm a motor pivot drives (or is anchored to): the edge's free end, and the
- * hub→end direction. Covers an edge welded at either endpoint (drive the OTHER end)
- * and one welded through its body (drive the farther end, for the lever arm) —
- * same shape as `welded_edge_spokes`, but for a free hinge rather than a rigid hub.
+ * The arm a motor pivot drives (or is anchored to): the edge's free end, and the hub→end direction.
+ * Covers an edge welded at either endpoint (drive the OTHER end) and one welded through its body (drive the farther end, for the lever arm) — same shape as `welded_edge_spokes`, but for a free hinge rather than a rigid hub.
  */
 function motor_arm(
   pivot: PivotElement,
@@ -524,8 +497,7 @@ function motor_arm(
     dir = edge.positionStart.sub(edge.positionEnd);
   } else {
     // The motor pivot sits on the edge between its endpoints (a body node).
-    // Drive the farthest endpoint about the pivot — the longer arm gives
-    // better angular conditioning.
+    // Drive the farthest endpoint about the pivot — the longer arm gives better angular conditioning.
     const pivotPos = pivot.position;
     pivotKey = pivot.id;
     const toStart = edge.positionStart.sub(pivotPos);
@@ -543,11 +515,9 @@ function motor_arm(
 }
 
 /**
- * Belt-follows-tangent links (simulation): every edge welded to a closed belt's
- * junction node keeps its orientation aligned with the belt tangent there, so it
- * rotates as the belt travels. Only a RIGID hub (join/mass/slider — those with
- * fixedEdgesIDs) drives its edges this way; a pivot/slidep junction is a free
- * hinge (no orientation lock). Empty for loose/empty belts or a free-hinge node.
+ * Belt-follows-tangent links (simulation): every edge welded to a closed belt's junction node keeps its orientation aligned with the belt tangent there, so it rotates as the belt travels.
+ * Only a RIGID hub (join/mass/slider — those with fixedEdgesIDs) drives its edges this way; a pivot/slidep junction is a free hinge (no orientation lock).
+ * Empty for loose/empty belts or a free-hinge node.
  */
 function belt_follows_tangent_links(
   belt: BeltElement,
@@ -596,12 +566,11 @@ function belt_follows_tangent_links(
 }
 
 /**
- * Inextensible-belt link — ONE per belt. Radii baked, target `length` (defaults to
- * the current measured length). Null for a belt with no gear. For a TIGHT belt it
- * just holds the closed loop's length; for a LOOSE belt it also governs the two
- * terminals (φ-driven differential + winding), so it carries the extra open-belt
- * fields (phaseKey, diff0, external winch flags). Used by the simulation and, on
- * demand, by the edition length edit/dimension.
+ * Inextensible-belt link — ONE per belt.
+ * Radii baked, target `length` (defaults to the current measured length).
+ * Null for a belt with no gear.
+ * For a TIGHT belt it just holds the closed loop's length; for a LOOSE belt it also governs the two terminals (φ-driven differential + winding), so it carries the extra open-belt fields (phaseKey, diff0, external winch flags).
+ * Used by the simulation and, on demand, by the edition length edit/dimension.
  */
 export function belt_length_link(
   belt: BeltElement,
@@ -635,16 +604,13 @@ export function belt_length_link(
     ...(editable ? { radKeys: gears.map(({ id }) => id) } : {}),
     owner: belt.id,
   };
-  // Closed belt, or a GEARLESS belt (an inert straight segment): just the base length
-  // link. The winding/φ machinery below needs at least one gear (it reads gears[0] /
-  // gears[last]); a gearless belt has none, so the constraint just holds the
-  // end-to-end distance (beam-like) via its no-active-gears branch.
+  // Closed belt, or a GEARLESS belt (an inert straight segment): just the base length link.
+  // The winding/φ machinery below needs at least one gear (it reads gears[0] / gears[last]); a gearless belt has none, so the constraint just holds the end-to-end distance (beam-like) via its no-active-gears branch.
   if (belt.closed || gears.length === 0) return base;
 
   // ── Loose belt. A terminal is a free end UNLESS it is JOINed to its own adjacent
-  // pulley — that is the winch: the join's GearPerimeterPin carries the end around, and
-  // the belt is paid out by the pulley's ARC, not by a tangent strand. A STATIC property
-  // of the mechanism (the join is there or it is not), never a runtime state.
+  // pulley — that is the winch: the join's GearPerimeterPin carries the end around, and the belt is paid out by the pulley's ARC, not by a tangent strand.
+  // A STATIC property of the mechanism (the join is there or it is not), never a runtime state.
   const woundOn = (nodeId: ID | undefined, gearId: ID | undefined): boolean => {
     if (!nodeId || !gearId) return false;
     const g = gearById(gearId, byId);
@@ -666,14 +632,10 @@ export function elements_by_id(
 }
 
 /**
- * Belt no-slip links (simulation): one `BeltSegmentNoSlip` per tangent strand, plus one
- * `BeltSubChainAggregate` per sub-chain between two angles somebody else has a say in.
+ * Belt no-slip links (simulation): one `BeltSegmentNoSlip` per tangent strand, plus one `BeltSubChainAggregate` per sub-chain between two angles somebody else has a say in.
  *
- * Emitted here rather than in `get_links_simulation` because both bake their rest state
- * `h⁰` from the positions, and coincidence fusion moves a fused node to the midpoint of
- * its parts — baking before it would bake a geometry that no longer exists. The cut
- * criterion needs the complete link list for the same reason it runs last: it asks
- * whether anything OTHER than this belt has a say in each pulley's angle.
+ * Emitted here rather than in `get_links_simulation` because both bake their rest state `h⁰` from the positions, and coincidence fusion moves a fused node to the midpoint of its parts — baking before it would bake a geometry that no longer exists.
+ * The cut criterion needs the complete link list for the same reason it runs last: it asks whether anything OTHER than this belt has a say in each pulley's angle.
  */
 export function belt_q_links(nodes: KinNodes, links: Link[]): Link[] {
   const out: Link[] = [];
@@ -703,15 +665,12 @@ export function belt_q_links(nodes: KinNodes, links: Link[]): Link[] {
 }
 
 /**
- * Rebuild one belt's no-slip links against the CURRENT topology and state, dropping the
- * old ones. Called when a pulley leaves the belt or comes back: the strands and their
- * baked `h⁰` name the pulleys of the belt as it was, and there is nothing to patch —
- * `h⁰` of the merged strand is not derived from the two it replaces, it is measured.
+ * Rebuild one belt's no-slip links against the CURRENT topology and state, dropping the old ones.
+ * Called when a pulley leaves the belt or comes back: the strands and their baked `h⁰` name the pulleys of the belt as it was, and there is nothing to patch — `h⁰` of the merged strand is not derived from the two it replaces, it is measured.
  *
  * No jump by construction: baking against the current state puts `C = 0` at this frame.
- * What it does cost is memory — the rebuild resets the `q` origin of the WHOLE belt, so
- * whatever travel had accumulated is forgotten. That, not the geometry, is why a belt
- * must not be allowed to flip back and forth (see the reattachment hysteresis).
+ * What it does cost is memory — the rebuild resets the `q` origin of the WHOLE belt, so whatever travel had accumulated is forgotten.
+ * That, not the geometry, is why a belt must not be allowed to flip back and forth (see the reattachment hysteresis).
  */
 export function rebuild_belt_q_links(
   links: Link[],
@@ -756,14 +715,10 @@ export function rebuild_belt_q_links(
 }
 
 /**
- * Turn the closure pin of every closed belt nobody else has a say in into a passive
- * follower (see `applyBeltPinConstraint`). The question is the one the cut criterion
- * asks of an angle, asked here of the junction node: a link naming it is a stakeholder,
- * and so is the ground — an anchored junction speaks by holding the node still, without
- * naming it anywhere.
+ * Turn the closure pin of every closed belt nobody else has a say in into a passive follower (see `applyBeltPinConstraint`).
+ * The question is the one the cut criterion asks of an angle, asked here of the junction node: a link naming it is a stakeholder, and so is the ground — an anchored junction speaks by holding the node still, without naming it anywhere.
  *
- * Runs where `belt_q_links` does, and for the same reason: the node key is only final
- * once coincidence fusion has merged the junction with whatever sits on it.
+ * Runs where `belt_q_links` does, and for the same reason: the node key is only final once coincidence fusion has merged the junction with whatever sits on it.
  */
 export function mark_passive_belt_pins(nodes: KinNodes, links: Link[]): void {
   for (const link of links) {
@@ -776,8 +731,7 @@ export function mark_passive_belt_pins(nodes: KinNodes, links: Link[]): void {
 
 /*
  * Parse elements + user constraints into links for the geometric solver (edition).
- * User constraints/dimensions apply; edge lengths and radii are NOT constrained;
- * body nodes are SlideOnSegment (free to slide along beams).
+ * User constraints/dimensions apply; edge lengths and radii are NOT constrained; body nodes are SlideOnSegment (free to slide along beams).
  */
 export function get_links_geometric(
   mechanicalElements: MechanicalElement[],
@@ -842,9 +796,8 @@ export function get_links_geometric(
           });
         }
       });
-      // Nodes pinned to the perimeter stay at |node − centre| = radius. The node
-      // acts as a zero-radius bridge (see get_geom_nodes), so the meshing keeps
-      // it on the perimeter as the radius or the centre moves.
+      // Nodes pinned to the perimeter stay at |node − centre| = radius.
+      // The node acts as a zero-radius bridge (see get_geom_nodes), so the meshing keeps it on the perimeter as the radius or the centre moves.
       element.fixedNodesBodyIDs.forEach((nodeId) => {
         links.push({
           type: "GearMeshing",
@@ -866,9 +819,8 @@ export function get_links_geometric(
         });
       });
     }
-    // Closed-belt junction stays on the belt outline (edition). The belt LENGTH
-    // is constrained in edition ONLY when the user pins it with a
-    // dimension-belt (otherwise the length is a free DOF).
+    // Closed-belt junction stays on the belt outline (edition).
+    // The belt LENGTH is constrained in edition ONLY when the user pins it with a dimension-belt (otherwise the length is a free DOF).
     if (element.type === "belt") {
       const junction = belt_junction_link(element, byId);
       if (junction) links.push(junction);
@@ -899,26 +851,18 @@ export function get_links_geometric(
  * Parse elements into links for the kinematic simulation.
  *
  * Differences vs the geometric solver:
- *  - user constraints/dimensions do NOT apply (they are editing aids);
- *  - edge lengths and gear radii are CONSTRAINED to their current value;
- *  - body nodes are FixedOnSegment (joins/masses) — frozen ratio — while
- *    sliders/slideps stay SlideOnSegment;
- *  - rigidity: non-grounded hubs use triangulation; grounded hubs anchor the
- *    connected beams' endpoints (welded to ground), or — under `dynamicRigidity`
- *    — keep their orientation instead, real mass and all — see add_rigidity_links;
- *  - gear angle constraints (coaxial + epicyclic meshing) are added;
- *  - motors add a constraint (they do not pin a position).
+ * - user constraints/dimensions do NOT apply (they are editing aids);
+ * - edge lengths and gear radii are CONSTRAINED to their current value;
+ * - body nodes are FixedOnSegment (joins/masses) — frozen ratio — while sliders/slideps stay SlideOnSegment;
+ * - rigidity: non-grounded hubs use triangulation; grounded hubs anchor the connected beams' endpoints (welded to ground), or — under `dynamicRigidity` — keep their orientation instead, real mass and all — see add_rigidity_links;
+ * - gear angle constraints (coaxial + epicyclic meshing) are added;
+ * - motors add a constraint (they do not pin a position).
  *
- * `nodes` is mutated to anchor grounded hubs (posMasses set to 0) UNLESS
- * `dynamicRigidity` routes that hub to `KeepOrientation` instead. Keys are
- * pre-fusion; compile_simulation_model rewrites them when fusing Coincidence links.
+ * `nodes` is mutated to anchor grounded hubs (posMasses set to 0) UNLESS `dynamicRigidity` routes that hub to `KeepOrientation` instead.
+ * Keys are pre-fusion; compile_simulation_model rewrites them when fusing Coincidence links.
  *
- * `dynamicRigidity` (default off): a grounded join/mass/slider's rigid beams keep
- * real mass/inertia instead of being pinned outright — see add_rigidity_links for
- * why. Off for kinematic mode and the mobility/redundancy analysis model, which
- * only care about the resulting geometry and would otherwise see two constraints
- * where a plain anchor prunes to nothing; on for dynamic-mode simulation, where a
- * pinned free end would make an applied load invisible to the solver.
+ * `dynamicRigidity` (default off): a grounded join/mass/slider's rigid beams keep real mass/inertia instead of being pinned outright — see add_rigidity_links for why.
+ * Off for kinematic mode and the mobility/redundancy analysis model, which only care about the resulting geometry and would otherwise see two constraints where a plain anchor prunes to nothing; on for dynamic-mode simulation, where a pinned free end would make an applied load invisible to the solver.
  */
 export function get_links_simulation(
   mechanicalElements: MechanicalElement[],
@@ -931,8 +875,7 @@ export function get_links_simulation(
   const byId = new Map<ID, MechanicalElement>();
   mechanicalElements.forEach((el) => byId.set(el.id, el));
 
-  // Track pairs that already have a Distance/length constraint, to avoid
-  // redundant chords in trusses.
+  // Track pairs that already have a Distance/length constraint, to avoid redundant chords in trusses.
   const distancePairs = new Set<string>();
   const addDistancePair = (a: string, b: string) => {
     distancePairs.add(`${a}|${b}`);
@@ -981,8 +924,7 @@ export function get_links_simulation(
         });
         addDistancePair(k1, k2);
 
-        // Body nodes: joins/masses are frozen on the beam (FixedOnSegment),
-        // sliders/slideps keep sliding (SlideOnSegment).
+        // Body nodes: joins/masses are frozen on the beam (FixedOnSegment), sliders/slideps keep sliding (SlideOnSegment).
         element.fixedNodesBodyIDs.forEach((nodeId) => {
           const node = byId.get(nodeId);
           if (!node || !("position" in node)) return;
@@ -990,10 +932,8 @@ export function get_links_simulation(
             element.positionStart,
             element.positionEnd,
           );
-          // Only sliders/slideps slide, and only along their OWN rail
-          // (parentBeam). A slider welded to any other beam's body — or a
-          // join/mass — is frozen at its ratio (FixedOnSegment); grounded ones
-          // are additionally anchored in add_rigidity_links.
+          // Only sliders/slideps slide, and only along their OWN rail (parentBeam).
+          // A slider welded to any other beam's body — or a join/mass — is frozen at its ratio (FixedOnSegment); grounded ones are additionally anchored in add_rigidity_links.
           const slides =
             (node.type === "slider" || node.type === "slidep") &&
             node.parentBeamID === element.id;
@@ -1019,11 +959,9 @@ export function get_links_simulation(
           );
         });
       } else if (element.type === "spring") {
-        // Springs take NO rigid length constraint: a compliant Spring softly
-        // pulls the two endpoints toward their rest length — the user's typed
-        // value, or the current drawn length at sim start when none was set.
-        // Only meaningful where the mechanism leaves a free DOF for it to
-        // resolve. NOT added to distancePairs — it does not triangulate.
+        // Springs take NO rigid length constraint: a compliant Spring softly pulls the two endpoints toward their rest length — the user's typed value, or the current drawn length at sim start when none was set.
+        // Only meaningful where the mechanism leaves a free DOF for it to resolve.
+        // NOT added to distancePairs — it does not triangulate.
         links.push({
           type: "Spring",
           ddl: 0,
@@ -1036,9 +974,8 @@ export function get_links_simulation(
           owner: element.id,
         });
       }
-      // Dampers add no link in the kinematic (quasi-static) solver: a damper is
-      // a velocity-dependent force with no meaning without dynamics. They will
-      // be handled by the future dynamic XPBD mode.
+      // Dampers add no link in the kinematic (quasi-static) solver: a damper is a velocity-dependent force with no meaning without dynamics.
+      // They will be handled by the future dynamic XPBD mode.
     }
 
     // Gear axle coincidence (gear center on its pivot/slidep axle)
@@ -1118,10 +1055,9 @@ export function get_links_simulation(
   });
 
   // ── Nodes fixed to a gear perimeter (gear → linkage) ─────────────────────
-  // The node orbits with the gear (GearPerimeterPin). A rigid hub (join/mass/
-  // slider — those with fixedEdgesIDs) additionally makes every edge welded to it
-  // rotate rigidly with the gear (BeamFollowsAngle, one per welded spoke). A
-  // pivot/slidep is a free hinge on the orbiting point.
+  // The node orbits with the gear (GearPerimeterPin).
+  // A rigid hub (join/mass/ slider — those with fixedEdgesIDs) additionally makes every edge welded to it rotate rigidly with the gear (BeamFollowsAngle, one per welded spoke).
+  // A pivot/slidep is a free hinge on the orbiting point.
   mechanicalElements.forEach((element) => {
     if (element.type !== "gear") return;
     const gear = element as GearElement;
@@ -1158,18 +1094,16 @@ export function get_links_simulation(
   });
 
   // ── Belts ────────────────────────────────────────────────────────────────
-  // Inextensible loop (length), closed-belt junction, and rotation transmission
-  // (angle coupling of consecutive wrapped gears). Radii + reference angles are
-  // baked (fixed in simulation).
+  // Inextensible loop (length), closed-belt junction, and rotation transmission (angle coupling of consecutive wrapped gears).
+  // Radii + reference angles are baked (fixed in simulation).
   mechanicalElements.forEach((element) => {
     if (element.type !== "belt") return;
-    // Inextensible loop/chain — ONE link (a cycle when closed, a chain when not). For a
-    // loose belt it also governs both terminals (length sum + φ differential).
+    // Inextensible loop/chain — ONE link (a cycle when closed, a chain when not).
+    // For a loose belt it also governs both terminals (length sum + φ differential).
     const length = belt_length_link(element, byId, mechanicalElements);
     if (length) links.push(length);
     if (element.closed) {
-      // Closed belt: junction node rides the loop and travels as it rotates,
-      // carrying (and re-orienting) any beam welded to it.
+      // Closed belt: junction node rides the loop and travels as it rotates, carrying (and re-orienting) any beam welded to it.
       const pin = belt_pin_link(element, byId);
       if (pin) links.push(pin);
       links.push(
@@ -1195,13 +1129,11 @@ export function get_links_simulation(
   // ── Motors ───────────────────────────────────────────────────────────────
   mechanicalElements.forEach((element) => {
     if (element.type !== "pivot" || !element.motor) return;
-    // Negated: a positive speed reads clockwise on screen (the sense `draw_motor`
-    // shows), which is a *decreasing* angle in the model's counter-clockwise frame.
+    // Negated: a positive speed reads clockwise on screen (the sense `draw_motor` shows), which is a *decreasing* angle in the model's counter-clockwise frame.
     const omega = -element.motor.speed; // rad/s
 
-    // The reference the motor pushes against: the world when grounded, or the arm of
-    // the anchor beam — itself resolved the same way as any driven arm below, since it
-    // turns about the very same pivot. A dangling or degenerate anchor drives nothing.
+    // The reference the motor pushes against: the world when grounded, or the arm of the anchor beam — itself resolved the same way as any driven arm below, since it turns about the very same pivot.
+    // A dangling or degenerate anchor drives nothing.
     const anchorBeamID = element.motor.parentBeamID;
     let anchorArm: MotorArm | undefined;
     if (anchorBeamID !== undefined) {
@@ -1213,8 +1145,7 @@ export function get_links_simulation(
       if (!anchorArm) return;
     }
 
-    // Drive each other rotating beam's orientation about the pivot — relative to the
-    // anchor arm when there is one (the reference, never itself driven), the world otherwise.
+    // Drive each other rotating beam's orientation about the pivot — relative to the anchor arm when there is one (the reference, never itself driven), the world otherwise.
     element.rotatingEdgesIDs.forEach((beamId) => {
       if (beamId === anchorBeamID) return;
       const beam = byId.get(beamId);
@@ -1274,7 +1205,7 @@ type Spoke = {
 };
 
 /** Variable-length spoke: a spring/damper welded to the hub by one endpoint.
- *  Its length is free, so its orientation (not its endpoint distance) is locked. */
+ * Its length is free, so its orientation (not its endpoint distance) is locked. */
 type VarSpoke = {
   edge: SpringElement | DamperElement;
   flip: boolean; // true if the welded end is the edge's END (free end is start)
@@ -1284,27 +1215,14 @@ type VarSpoke = {
  * Add rigidity links for a join / mass / slider hub.
  *
  * Strategy (validated with the user):
- *  - **Non-grounded** join/mass: Distance triangulation between welded beam
- *    endpoints (reusing already-constrained pairs; degenerate chords fall back
- *    to an Angle constraint) → relative angles are preserved.
- *  - **Grounded** join/mass (welded to ground): anchors (mass 0) the free
- *    endpoints of connected beams — endpoint beams' free end, body beams' both
- *    ends. Fully fixes them, no rotational dof to lock separately (an edge
- *    has none of its own). `dynamicRigidity` swaps this for a `KeepOrientation`
- *    on the same beams instead: same resulting geometry (the beam's own length
- *    plus one fixed point plus a fixed direction pins it exactly as hard as two
- *    anchors would), but as a real, force-responsive constraint rather than an
- *    infinite-mass pin — a load on the free end can still move it (resisted by
- *    `KeepOrientation`'s own impulse) instead of vanishing into a zero-mass dof.
- *    Kept OUT of kinematic mode and the mobility/redundancy analysis model:
- *    both only ever care about the resulting geometry, and the plain anchor
- *    prunes to nothing there where two real constraints would not.
- *  - **Slider**: translates but does not rotate. Non-grounded → Angle between
- *    the rail (body beam) and each attached beam. Grounded → the rail slides
- *    through the fixed point (SlideOnSegment + KeepOrientation, unconditionally
- *    — a rail's own length is never fixed, so it was never anchor-able in the
- *    first place); other attached beams follow the same `dynamicRigidity` split
- *    as a join/mass above.
+ * - **Non-grounded** join/mass: Distance triangulation between welded beam endpoints (reusing already-constrained pairs; degenerate chords fall back to an Angle constraint) → relative angles are preserved.
+ * - **Grounded** join/mass (welded to ground): anchors (mass 0) the free endpoints of connected beams — endpoint beams' free end, body beams' both ends.
+ * Fully fixes them, no rotational dof to lock separately (an edge has none of its own).
+ * `dynamicRigidity` swaps this for a `KeepOrientation` on the same beams instead: same resulting geometry (the beam's own length plus one fixed point plus a fixed direction pins it exactly as hard as two anchors would), but as a real, force-responsive constraint rather than an infinite-mass pin — a load on the free end can still move it (resisted by `KeepOrientation`'s own impulse) instead of vanishing into a zero-mass dof.
+ * Kept OUT of kinematic mode and the mobility/redundancy analysis model: both only ever care about the resulting geometry, and the plain anchor prunes to nothing there where two real constraints would not.
+ * - **Slider**: translates but does not rotate.
+ * Non-grounded → Angle between the rail (body beam) and each attached beam.
+ * Grounded → the rail slides through the fixed point (SlideOnSegment + KeepOrientation, unconditionally — a rail's own length is never fixed, so it was never anchor-able in the first place); other attached beams follow the same `dynamicRigidity` split as a join/mass above.
  */
 function add_rigidity_links(
   node: MechanicalElement,
@@ -1318,18 +1236,14 @@ function add_rigidity_links(
   dynamicRigidity: boolean,
 ): void {
   const grounded = "isGrounded" in node && node.isGrounded;
-  // When the hub is pinned to a gear perimeter, its welded beams' orientation is
-  // driven by the gear (BeamFollowsAngle) — a rail→beam orientation lock would
-  // fight it, so the slider skips its rigidity.
+  // When the hub is pinned to a gear perimeter, its welded beams' orientation is driven by the gear (BeamFollowsAngle) — a rail→beam orientation lock would fight it, so the slider skips its rigidity.
   const pinnedToGear = mechanicalElements.some(
     (e) => e.type === "gear" && e.fixedNodesBodyIDs.includes(node.id),
   );
   const nodePos = "position" in node ? node.position : new Point2(0, 0);
   const anchor = (key: string) => nodes.posMasses.set(key, 0);
 
-  // A closed belt's junction join is governed by BeltPin (position) and
-  // BeltFollowsTangent (welded-beam orientation); skip the generic hub rigidity
-  // so they don't fight it.
+  // A closed belt's junction join is governed by BeltPin (position) and BeltFollowsTangent (welded-beam orientation); skip the generic hub rigidity so they don't fight it.
   const isBeltJunction = mechanicalElements.some(
     (e) =>
       e.type === "belt" &&
@@ -1339,7 +1253,8 @@ function add_rigidity_links(
   if (isBeltJunction) return;
 
   /** Lock the relative orientation of two edges welded to the hub (used when a
-   *  varying length forbids triangulation). `flip` marks the END as welded. */
+   * varying length forbids triangulation).
+   * `flip` marks the END as welded. */
   const lockAngle = (
     refEdge: EdgeElement,
     refFlip: boolean,
@@ -1367,7 +1282,7 @@ function add_rigidity_links(
   };
 
   /** Keep a spring/damper's world orientation fixed (welded end already anchored
-   *  to ground): the free end can only slide along the frozen direction. */
+   * to ground): the free end can only slide along the frozen direction. */
   const keepVarOrientation = (vs: VarSpoke) => {
     const d = vs.edge.positionEnd.sub(vs.edge.positionStart);
     if (d.length_squared() < 1e-12) return;
@@ -1382,9 +1297,7 @@ function add_rigidity_links(
   };
 
   /** Keep a rigid beam's world orientation fixed (one of its points already
-   *  pinned to the hub, by Coincidence fusion or FixedOnSegment): the rest of
-   *  its geometry follows from that pin, its own fixed length, and this — with
-   *  no dof set to infinite mass, unlike a straight position anchor would. */
+   * pinned to the hub, by Coincidence fusion or FixedOnSegment): the rest of its geometry follows from that pin, its own fixed length, and this — with no dof set to infinite mass, unlike a straight position anchor would. */
   const keepBeamOrientation = (beam: BeamElement) => {
     const d = beam.positionEnd.sub(beam.positionStart);
     if (d.length_squared() < 1e-12) return;
@@ -1398,8 +1311,8 @@ function add_rigidity_links(
     });
   };
 
-  // Classify connected edges. Beams are rigid (triangulated / anchored); springs
-  // and dampers vary in length, so only their orientation is locked.
+  // Classify connected edges.
+  // Beams are rigid (triangulated / anchored); springs and dampers vary in length, so only their orientation is locked.
   const endpointBeams: Spoke[] = [];
   const bodyBeams: BeamElement[] = [];
   const varSpokes: VarSpoke[] = [];
@@ -1432,9 +1345,7 @@ function add_rigidity_links(
   // ── Slider ───────────────────────────────────────────────────────────────
   if (node.type === "slider") {
     if (grounded) {
-      // Rail slides through the fixed point but keeps its orientation — its own
-      // length is never fixed, so a plain anchor was never an option for it even
-      // in kinematic mode.
+      // Rail slides through the fixed point but keeps its orientation — its own length is never fixed, so a plain anchor was never an option for it even in kinematic mode.
       bodyBeams.forEach(keepBeamOrientation);
       if (dynamicRigidity)
         endpointBeams.forEach((s) => keepBeamOrientation(s.beam));
@@ -1443,13 +1354,10 @@ function add_rigidity_links(
       varSpokes.forEach(keepVarOrientation);
       return;
     }
-    // Pinned to a gear: beams follow the gear angle (BeamFollowsAngle) — skip the
-    // rail→beam orientation lock that would conflict.
+    // Pinned to a gear: beams follow the gear angle (BeamFollowsAngle) — skip the rail→beam orientation lock that would conflict.
     if (pinnedToGear) return;
-    // Non-grounded: a slider translates along its rail (parentBeam) without
-    // rotating, so every other welded edge keeps a fixed orientation relative to
-    // the rail. Welded body beams are additionally frozen on the slider in
-    // position (FixedOnSegment, in get_links_simulation).
+    // Non-grounded: a slider translates along its rail (parentBeam) without rotating, so every other welded edge keeps a fixed orientation relative to the rail.
+    // Welded body beams are additionally frozen on the slider in position (FixedOnSegment, in get_links_simulation).
     const rail =
       bodyBeams.find((b) => b.id === node.parentBeamID) ?? bodyBeams[0];
     if (!rail) return;
@@ -1475,23 +1383,19 @@ function add_rigidity_links(
         anchor(`${b.id}:end`);
       });
     }
-    // Springs/dampers: welded end is grounded (via Coincidence fusion); keep the
-    // orientation so only the length is free.
+    // Springs/dampers: welded end is grounded (via Coincidence fusion); keep the orientation so only the length is free.
     varSpokes.forEach(keepVarOrientation);
     return;
   }
 
-  // Pinned to a gear (not grounded): the welded beams are oriented by the gear
-  // (BeamFollowsAngle, each locked to the gear angle → they rotate rigidly with
-  // it), so triangulating here would be redundant and skew the DOF count.
+  // Pinned to a gear (not grounded): the welded beams are oriented by the gear (BeamFollowsAngle, each locked to the gear angle → they rotate rigidly with it), so triangulating here would be redundant and skew the DOF count.
   if (pinnedToGear) return;
 
   // ── Join / mass, non-grounded: triangulate the rigid hub ─────────────────
-  // One spoke per beam. An endpoint beam contributes its free end. A body beam
-  // is already pinned to the hub by its FixedOnSegment link, so only its
-  // rotation about the node is left to lock — a single endpoint suffices (we
-  // pick the one farther from the node for the better lever arm). Adding both
-  // would emit a redundant link and skew get_sim_degrees_of_freedom.
+  // One spoke per beam.
+  // An endpoint beam contributes its free end.
+  // A body beam is already pinned to the hub by its FixedOnSegment link, so only its rotation about the node is left to lock — a single endpoint suffices (we pick the one farther from the node for the better lever arm).
+  // Adding both would emit a redundant link and skew get_sim_degrees_of_freedom.
   const spokes: Spoke[] = [...endpointBeams];
   bodyBeams.forEach((b) => {
     const useStart =
@@ -1534,10 +1438,8 @@ function add_rigidity_links(
     }
   }
 
-  // Lock variable-length spokes (springs/dampers) to the hub: a varying length
-  // forbids triangulation, so we fix each one's orientation instead. Reference =
-  // a rigid beam spoke when present; otherwise the first variable spoke (locks
-  // the spokes' relative angles, the bundle stays free to rotate as one).
+  // Lock variable-length spokes (springs/dampers) to the hub: a varying length forbids triangulation, so we fix each one's orientation instead.
+  // Reference = a rigid beam spoke when present; otherwise the first variable spoke (locks the spokes' relative angles, the bundle stays free to rotate as one).
   if (varSpokes.length > 0) {
     if (spokes.length > 0) {
       const r = spokes[0];

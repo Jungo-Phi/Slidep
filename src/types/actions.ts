@@ -93,9 +93,8 @@ export type Action =
       newPosition: WorldPoint;
       oldPosition: WorldPoint;
       /**
-       * The value was typed and validated rather than dragged. A drag is a continuous
-       * gesture that must follow the cursor without tearing the sketch, so it pulls softly;
-       * a typed value is a decision, and it is the rest of the sketch that has to give way.
+       * The value was typed and validated rather than dragged.
+       * A drag is a continuous gesture that must follow the cursor without tearing the sketch, so it pulls softly; a typed value is a decision, and it is the rest of the sketch that has to give way.
        */
       committed?: boolean;
     }

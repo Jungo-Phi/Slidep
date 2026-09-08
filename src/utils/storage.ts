@@ -1,6 +1,5 @@
 /**
- * LocalStorage utilities for slidep
- * Handles persistence of mechanisms and user preferences
+ * LocalStorage utilities for slidep Handles persistence of mechanisms and user preferences
  */
 
 /**

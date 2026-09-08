@@ -1,6 +1,5 @@
 /**
- * Types for mechanical elements in slidep
- * Following architecture patterns: PascalCase for types, camelCase for properties
+ * Types for mechanical elements in slidep Following architecture patterns: PascalCase for types, camelCase for properties
  */
 
 import { WorldPoint } from "./mechanism";
@@ -108,11 +107,9 @@ export type OverlayKind = "trajectory" | "force" | "velocity";
 export const OVERLAY_KIND_ORDER: OverlayKind[] = ["trajectory", "velocity", "force"];
 
 /**
- * A beam's fill colour, mechanism-wide — docs/plan-efforts-interieurs.md phase 9. Unlike
- * `OverlayKind`, this is not a per-element flag: `draw_beam` has only one fill slot, so at
- * most one of these reads can be drawn on a beam at a time, and all five are meant for a
- * comparison across the whole mechanism rather than an isolated beam. One global setting, not
- * an `OverlayFlags` entry.
+ * A beam's fill colour, mechanism-wide — docs/plan-efforts-interieurs.md phase 9.
+ * Unlike `OverlayKind`, this is not a per-element flag: `draw_beam` has only one fill slot, so at most one of these reads can be drawn on a beam at a time, and all five are meant for a comparison across the whole mechanism rather than an isolated beam.
+ * One global setting, not an `OverlayFlags` entry.
  */
 export type BeamStressLens = "none" | "normal" | "bending" | "utilization" | "shear";
 
@@ -251,7 +248,7 @@ export interface BeamElement extends BaseEdgeElement {
   type: "beam";
   fixedNodesBodyIDs: ID[];
   /** The mechanism's own library — `A`, `I_Gz` and `v` are derived from these, never
-   *  stored. */
+   * stored. */
   materialID: ID;
   profileID: ID;
 }
@@ -261,9 +258,8 @@ export interface SpringElement extends BaseEdgeElement {
   type: "spring";
   stiffness: number;
   /** The spring's natural length: the user's explicit value, or the drawn distance between its
-   *  endpoints when unset. Feeds the kinematic solver's soft pull (see parsing.ts) and the drawn
-   *  coil count; frozen on the simulated copy by apply_snapshot_to_mechanism so the coil count
-   *  stays fixed while the drawn length varies (accordion). */
+   * endpoints when unset.
+   * Feeds the kinematic solver's soft pull (see parsing.ts) and the drawn coil count; frozen on the simulated copy by apply_snapshot_to_mechanism so the coil count stays fixed while the drawn length varies (accordion). */
   restLength?: number;
 }
 
@@ -272,7 +268,8 @@ export interface DamperElement extends BaseEdgeElement {
   type: "damper";
   damping: number;
   /** Rendering only: natural length at simulation start, frozen on the displayed copy so the
-   *  piston reach stays fixed while the drawn length varies. Undefined in edition. */
+   * piston reach stays fixed while the drawn length varies.
+   * Undefined in edition. */
   restLength?: number;
 }
 
@@ -286,11 +283,11 @@ export interface BeltElement extends BaseEdgeElement {
   attachedGearsIDs: { id: ID; clockwise: boolean }[];
   closed: boolean;
   /** Rendering only (simulation): indices into `attachedGearsIDs` of pulleys that
-   *  lost belt contact this run, so the belt is drawn straight past them.
-   *  Undefined in edition. */
+   * lost belt contact this run, so the belt is drawn straight past them.
+   * Undefined in edition. */
   disconnectedGearIndices?: number[];
   /** Rendering only (simulation): continuous wrap angle per attached pulley;
-   *  |value| > 2π ⇒ the belt has wound onto it (drawn as extra turns). */
+   * |value| > 2π ⇒ the belt has wound onto it (drawn as extra turns). */
   gearWraps?: number[];
 }
 
@@ -413,9 +410,8 @@ export interface GearRatio extends DimensionBaseElement {
 
 /**
  * The reference frame a load's direction is expressed in.
- *  - "world": the direction is absolute
- *  - { mode: "edge", edgeID }: the direction is stored in the edge's local frame
- * (x = start→end axis, y = normal)
+ * - "world": the direction is absolute
+ * - { mode: "edge", edgeID }: the direction is stored in the edge's local frame (x = start→end axis, y = normal)
  *
  * 0° = axial, 90° = normal
  */

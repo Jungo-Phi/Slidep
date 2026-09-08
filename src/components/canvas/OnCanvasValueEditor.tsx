@@ -31,22 +31,20 @@ interface OnCanvasValueEditorProps {
   /** Screen-space anchor (the editor centers itself on this point). */
   position: ScreenPoint;
   /** Formats and parses the field as a physical quantity instead of a bare number — the same
-   *  unit `NumberInput`'s `kind` would pick for `initialValue`, fixed for the life of this
-   *  editor rather than re-picked as the user types, and part of the editable text itself
-   *  rather than a decoration next to it. "single" mode only. */
+   * unit `NumberInput`'s `kind` would pick for `initialValue`, fixed for the life of this editor rather than re-picked as the user types, and part of the editable text itself rather than a decoration next to it.
+   * "single" mode only. */
   kind?: QuantityKind;
   /**
-   * Accept a leading minus. The field always opens on a magnitude — a load's
-   * sign is a direction, and reading a "-" off a label helps nobody — but
-   * typing one is how the user turns that direction around from here. What the
-   * sign then means is the caller's business. "single" mode only.
+   * Accept a leading minus.
+   * The field always opens on a magnitude — a load's sign is a direction, and reading a "-" off a label helps nobody — but typing one is how the user turns that direction around from here.
+   * What the sign then means is the caller's business.
+   * "single" mode only.
    */
   signed: boolean;
   /**
-   * Commit a zero instead of reading it as "cancel". Zero is nonsense for most
-   * quantities an editor opens on (a dimension, a force, a ratio), but it is a
-   * real value for one end of a distributed load: it is what makes it
-   * triangular. Callers pass it only when zero leaves something behind.
+   * Commit a zero instead of reading it as "cancel".
+   * Zero is nonsense for most quantities an editor opens on (a dimension, a force, a ratio), but it is a real value for one end of a distributed load: it is what makes it triangular.
+   * Callers pass it only when zero leaves something behind.
    */
   allowZero: boolean;
   onCommit: (newValue: number) => void;
@@ -66,17 +64,14 @@ export const OnCanvasValueEditor: React.FC<OnCanvasValueEditorProps> = ({
   const seal = useHistorySeal();
   const [val1, setVal1] = useState("");
   const [val2, setVal2] = useState("");
-  // The unit `initialValue` opened in, fixed for the editor's lifetime rather than re-picked
-  // on every keystroke — an adaptive kind mid-edit would otherwise change what a typed number
-  // means as its magnitude crossed a prefix boundary.
+  // The unit `initialValue` opened in, fixed for the editor's lifetime rather than re-picked on every keystroke — an adaptive kind mid-edit would otherwise change what a typed number means as its magnitude crossed a prefix boundary.
   const [unit, setUnit] = useState<QuantityUnit>(RAW_UNIT);
 
   const inputRef1 = useRef<HTMLInputElement>(null);
   const inputRef2 = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    // The unit suffix opens as part of the editable text but should never be swept up by
-    // the initial select-all — only the digits the user is actually here to overwrite.
+    // The unit suffix opens as part of the editable text but should never be swept up by the initial select-all — only the digits the user is actually here to overwrite.
     // Ratio mode selects each field's full text instead: neither part carries a unit.
     let mantissaLength: number | null = null;
     if (mode === "ratio") {
@@ -112,15 +107,14 @@ export const OnCanvasValueEditor: React.FC<OnCanvasValueEditorProps> = ({
     return v1;
   })();
 
-  // A refusal shows up while typing rather than at Enter, so pressing it on a value the
-  // editor will not take is not a silent no-op. A field still being filled stays neutral.
+  // A refusal shows up while typing rather than at Enter, so pressing it on a value the editor will not take is not a silent no-op.
+  // A field still being filled stays neutral.
   const refused =
     entered === null &&
     val1.trim() !== "" &&
     (mode === "single" || val2.trim() !== "");
 
-  // A validated value stands alone in the history: what it replaced is one Ctrl+Z away, however
-  // long the editor stayed open.
+  // A validated value stands alone in the history: what it replaced is one Ctrl+Z away, however long the editor stayed open.
   const commit = (newValue: number) => {
     onCommit(newValue);
     seal.close();
@@ -162,15 +156,11 @@ export const OnCanvasValueEditor: React.FC<OnCanvasValueEditorProps> = ({
   };
 
   const filterInput = (val: string) => {
-    // A `kind` field accepts unit letters typed inline ("12mm", "150kN") and stand-ins
-    // `loose` folds back to the real symbol ("N*m", "Nm" for "N·m"); a plain one, and ratio
-    // mode's two fields, stay digits-only.
+    // A `kind` field accepts unit letters typed inline ("12mm", "150kN") and stand-ins `loose` folds back to the real symbol ("N*m", "Nm" for "N·m"); a plain one, and ratio mode's two fields, stay digits-only.
     const pattern =
       mode === "single" && kind ? /[^0-9.a-zA-Zµμ°·²*^/ ]/g : /[^0-9.]/g;
     const digits = val.replace(pattern, "").replace(/(\..*)\./g, "$1");
-    // The minus is read from the head of the raw input rather than kept in the
-    // filtered string, so it can only ever sit in front of the number — and
-    // typing it alone leaves "-" on screen while the user finishes the value.
+    // The minus is read from the head of the raw input rather than kept in the filtered string, so it can only ever sit in front of the number — and typing it alone leaves "-" on screen while the user finishes the value.
     return signed && val.trimStart().startsWith("-") ? `-${digits}` : digits;
   };
 
@@ -184,8 +174,7 @@ export const OnCanvasValueEditor: React.FC<OnCanvasValueEditorProps> = ({
       color: "text.primary",
       fontSize: "16px", // Match canvas font size & family
       fontFamily: "Arial",
-      // Not a theme-resolvable key in `sx`, so it takes the canvas value; it is
-      // the same navy as `text.primary`.
+      // Not a theme-resolvable key in `sx`, so it takes the canvas value; it is the same navy as `text.primary`.
       caretColor: COLORS.ELEMENT_STROKE,
     },
   };
@@ -201,8 +190,7 @@ export const OnCanvasValueEditor: React.FC<OnCanvasValueEditorProps> = ({
             border: "2px solid",
             borderColor: refused ? "error.main" : "text.primary",
             borderRadius: "18px",
-            // Opaque, not `alpha`'d: a translucent tint would let whatever the canvas
-            // happens to be drawing underneath show through and shift the colour.
+            // Opaque, not `alpha`'d: a translucent tint would let whatever the canvas happens to be drawing underneath show through and shift the colour.
             backgroundColor: (theme) =>
               refused
                 ? `color-mix(in srgb, ${theme.palette.error.main} 20%, ${theme.palette.primary.contrastText})`
@@ -273,8 +261,7 @@ export const OnCanvasValueEditor: React.FC<OnCanvasValueEditorProps> = ({
           border: "2px solid",
           borderColor: refused ? "error.main" : "text.primary",
           borderRadius: "6px",
-          // Opaque, not `alpha`'d: a translucent tint would let whatever the canvas
-          // happens to be drawing underneath show through and shift the colour.
+          // Opaque, not `alpha`'d: a translucent tint would let whatever the canvas happens to be drawing underneath show through and shift the colour.
           backgroundColor: (theme) =>
             refused
               ? `color-mix(in srgb, ${theme.palette.error.main} 20%, ${theme.palette.primary.contrastText})`

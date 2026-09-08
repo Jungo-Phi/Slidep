@@ -25,16 +25,14 @@ describe("the migration chain", () => {
   });
 
   it("is contiguous and ascending", () => {
-    // A step numbered `to` converts from `to - 1`: a gap would leave documents
-    // of the skipped version with no path forward.
+    // A step numbered `to` converts from `to - 1`: a gap would leave documents of the skipped version with no path forward.
     MIGRATION_STEPS.forEach((step, i) => expect(step.to).toBe(i + 2));
   });
 });
 
 describe("migrate_document", () => {
-  // A missing field means the document predates it, so it owes every step. Read
-  // as the current version instead, it would skip them all and keep its old
-  // shape under a new version number.
+  // A missing field means the document predates it, so it owes every step.
+  // Read as the current version instead, it would skip them all and keep its old shape under a new version number.
   it("treats a document with no formatVersion as version 1", () => {
     const result = migrate_document(
       doc({ mechanicalElements: [{ type: "belt", id: "b", tight: true }] }),
@@ -76,9 +74,7 @@ describe("migrate_document", () => {
     expect(beam).toMatchObject({ tight: true });
   });
 
-  // Called directly rather than through `migrate_document`, for the same reason as the
-  // undo-stack tests further down: a document this old also crosses the v5 step, which
-  // drops the stack for an unrelated reason and would leave nothing here to assert on.
+  // Called directly rather than through `migrate_document`, for the same reason as the undo-stack tests further down: a document this old also crosses the v5 step, which drops the stack for an unrelated reason and would leave nothing here to assert on.
   it("renames the flag in the undo stack too", () => {
     const step = MIGRATION_STEPS.find((s) => s.to === 2)!;
     const result = step.apply(
@@ -144,17 +140,13 @@ describe("migrate_document", () => {
       { surfaceMass: DEFAULT.SURFACE_MASS },
       {},
     ]);
-    // The beam's own `linearMass` (filled in by this very step) is itself replaced by the
-    // v9 step further down the chain — see "assigns the default material/profile couple to
-    // every beam" below.
+    // The beam's own `linearMass` (filled in by this very step) is itself replaced by the v9 step further down the chain — see "assigns the default material/profile couple to every beam" below.
     expect(result.mechanicalElements[4]).not.toHaveProperty("linearMass");
     expect(result.mechanicalElements[4]).toHaveProperty("materialID");
     expect(result.mechanicalElements[4]).toHaveProperty("profileID");
   });
 
-  // Called directly rather than through `migrate_document`: a document this old also
-  // crosses the v5 step, which drops the stack for an unrelated reason (see below) and
-  // would leave nothing here to assert on.
+  // Called directly rather than through `migrate_document`: a document this old also crosses the v5 step, which drops the stack for an unrelated reason (see below) and would leave nothing here to assert on.
   it("fills in the same defaults for an element carried by the undo stack", () => {
     const step = MIGRATION_STEPS.find((s) => s.to === 3)!;
     const result = step.apply(
@@ -197,8 +189,7 @@ describe("migrate_document", () => {
       }),
     );
     expect(result.mechanicalElements).toMatchObject([
-      // Also rescaled tr/min → rad/s on the way to the current version — not what this
-      // test is about, but unavoidable since it migrates from v3 all the way up.
+      // Also rescaled tr/min → rad/s on the way to the current version — not what this test is about, but unavoidable since it migrates from v3 all the way up.
       { motor: { speed: (10 * 2 * Math.PI) / 60, torque: DEFAULT.MOTOR_TORQUE } },
       {},
     ]);
@@ -316,14 +307,12 @@ describe("migrate_document", () => {
     ]);
     expect(result.constraintElements).toMatchObject([
       { position: { x: 0.01, y: 0.01 }, value: 0.4 },
-      // Not a length, so untouched by this step — but also rescaled degrees → radians on
-      // the way to the current version by the v7 step below.
+      // Not a length, so untouched by this step — but also rescaled degrees → radians on the way to the current version by the v7 step below.
       { value: 1.2 * (Math.PI / 180) },
       // A gear ratio is dimensionless: untouched by either step.
       { value: 2.5 },
     ]);
-    // The viewport's scale grows by the same factor a distance shrinks by, so
-    // the same screen position still shows the same view.
+    // The viewport's scale grows by the same factor a distance shrinks by, so the same screen position still shows the same view.
     expect(result.viewport).toMatchObject({ scale: 2000, pan: { x: 100, y: 50 } });
   });
 
@@ -353,8 +342,7 @@ describe("migrate_document", () => {
     ]);
   });
 
-  // Called directly rather than through `migrate_document`, for the same reason as the
-  // torque-default step above: `SetMotorConfig` carries a `MotorConfig` outside any element.
+  // Called directly rather than through `migrate_document`, for the same reason as the torque-default step above: `SetMotorConfig` carries a `MotorConfig` outside any element.
   it("rescales a motor's speed carried by SetMotorConfig", () => {
     const step = MIGRATION_STEPS.find((s) => s.to === 6)!;
     const result = step.apply(

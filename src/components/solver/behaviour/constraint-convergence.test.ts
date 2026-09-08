@@ -26,13 +26,11 @@ import { PBD_kinematic_solver } from "../kinematics/PBD_kinematic_solver";
 import { collect_solver_trace } from "../kinematics/solver-trace";
 
 /**
- * Convergence properties every constraint must hold on its own, away from the
- * solver's other links. Each scenario starts violated; the assertions below are
- * then run over all of them.
+ * Convergence properties every constraint must hold on its own, away from the solver's other links.
+ * Each scenario starts violated; the assertions below are then run over all of them.
  *
- * Belt constraints are deliberately absent: they are being reworked, and
- * pinning their current behaviour here would only manufacture failures to
- * update. See doc/contrainte-angle.md.
+ * Belt constraints are deliberately absent: they are being reworked, and pinning their current behaviour here would only manufacture failures to update.
+ * See doc/contrainte-angle.md.
  */
 
 interface State {
@@ -54,8 +52,8 @@ interface Scenario {
   /** Segments whose length the constraint has no business changing. */
   rigid?: [string, string][];
   /** Largest length drift the constraint may legitimately cause, given the
-   *  residual it started from. Defaults to 0.5 % — a rotation about a fixed
-   *  point is exact and drifts none. */
+   * residual it started from.
+   * Defaults to 0.5 % — a rotation about a fixed point is exact and drifts none. */
   rigidBound?: (initialResidual: number, length: number) => number;
   /** Soft or transient by design: exempt from the one-pass assertion. */
   soft?: boolean;
@@ -67,11 +65,9 @@ const P = (x: number, y: number) => new Point2(x, y);
 const deg = (d: number) => (d * Math.PI) / 180;
 
 /**
- * Length drift allowed to an angular projection. Correcting an angle by `C`
- * moves the free end perpendicular to its segment by `L·C`, so the segment
- * measures `L·√(1+C²)` afterwards — second order in `C`, and absorbed by the
- * Distance constraint on the next sweep. A correction that were NOT
- * perpendicular would drift at first order and blow this bound away.
+ * Length drift allowed to an angular projection.
+ * Correcting an angle by `C` moves the free end perpendicular to its segment by `L·C`, so the segment measures `L·√(1+C²)` afterwards — second order in `C`, and absorbed by the Distance constraint on the next sweep.
+ * A correction that were NOT perpendicular would drift at first order and blow this bound away.
  */
 const PERPENDICULAR_DRIFT = (residual: number, length: number) =>
   length * (Math.sqrt(1 + residual * residual) - 1) * 1.1;
@@ -436,8 +432,8 @@ const SCENARIOS: Scenario[] = [
       state.radMasses = new Map([["g", 1]]);
       return state;
     },
-    // Radius n'a pas de fonction dédiée : il est appliqué dans le solveur. On
-    // passe donc par lui, et la trace debug rend le résidu de l'application.
+    // Radius n'a pas de fonction dédiée : il est appliqué dans le solveur.
+    // On passe donc par lui, et la trace debug rend le résidu de l'application.
     apply: (s) => {
       const links: Link[] = [{ type: "Radius", ddl: 1, key1: "g", radius: 80 }];
       const events = collect_solver_trace(() =>
@@ -533,8 +529,7 @@ describe.each(SCENARIOS.map((s) => [s.name, s] as const))(
     if (!scenario.soft)
       it("corrige l'essentiel en une passe", () => {
         const { series } = residuals(scenario);
-        // Une projection PBD à raideur 1 résout la linéarisation d'un coup ; il
-        // ne doit rester qu'un reliquat de second ordre.
+        // Une projection PBD à raideur 1 résout la linéarisation d'un coup ; il ne doit rester qu'un reliquat de second ordre.
         expect(series[1]).toBeLessThan(series[0] * 0.2);
       });
 

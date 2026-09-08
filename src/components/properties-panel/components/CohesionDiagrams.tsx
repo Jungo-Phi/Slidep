@@ -16,10 +16,7 @@ import { t } from "../../../i18n";
 
 /**
  * Three stacked N/T/Mf diagrams of one beam — docs/plan-efforts-interieurs.md phase 5bis.
- * A measurement tool, not a display layer: mounted only while a beam is selected, gone at
- * deselection, one quantity per own y-scale, discontinuities drawn as real jumps (never
- * smoothed — `field.samples` already carries a "just before"/"just after" pair at the same
- * `s` for exactly that reason, see `compute_cohesion_field`).
+ * A measurement tool, not a display layer: mounted only while a beam is selected, gone at deselection, one quantity per own y-scale, discontinuities drawn as real jumps (never smoothed — `field.samples` already carries a "just before"/"just after" pair at the same `s` for exactly that reason, see `compute_cohesion_field`).
  */
 
 const VIEW_W = 260;
@@ -43,10 +40,8 @@ const fmt = (v: number): string => {
 };
 
 /** The curve's own value at a CONTINUOUS abscissa `s` — linear between the two bracketing
- *  samples, so it lies exactly on the drawn polyline (itself already straight between
- *  samples, never a true smooth curve). At a discontinuity this naturally resolves to
- *  whichever side `s` sits on, since the bracket search only crosses to the far side once
- *  `s` is past the jump's own abscissa entirely. */
+ * samples, so it lies exactly on the drawn polyline (itself already straight between samples, never a true smooth curve).
+ * At a discontinuity this naturally resolves to whichever side `s` sits on, since the bracket search only crosses to the far side once `s` is past the jump's own abscissa entirely. */
 function value_at(
   field: CohesionField,
   s: number,
@@ -66,12 +61,8 @@ function value_at(
 }
 
 /** The hovered dot's own height: matches `value_at` off a discontinuity, but once the cursor
- *  is snapped onto one (`hoveredS !== hoveredValueS`) reads the exact before/after sample
- *  instead of interpolating from the raw position — otherwise the dot keeps sliding
- *  vertically for tiny mouse movements inside the snap tolerance while its `x` is already
- *  pinned, i.e. it never visually "snaps" the way the abscissa does. Which of the two
- *  co-located samples to use still comes from the raw position's side of the jump, exactly
- *  as `value_at` alone would pick — just resolved once, not continuously. */
+ * is snapped onto one (`hoveredS !== hoveredValueS`) reads the exact before/after sample instead of interpolating from the raw position — otherwise the dot keeps sliding vertically for tiny mouse movements inside the snap tolerance while its `x` is already pinned, i.e. it never visually "snaps" the way the abscissa does.
+ * Which of the two co-located samples to use still comes from the raw position's side of the jump, exactly as `value_at` alone would pick — just resolved once, not continuously. */
 function hovered_value(
   field: CohesionField,
   hoveredS: number,
@@ -93,16 +84,14 @@ interface OneDiagramProps {
   field: CohesionField;
   quantity: CohesionQuantity;
   /** This quantity's own running scale (force for N/T, moment for Mf) over the whole
-   *  recording — the axis flattens instead of auto-zooming when the field's own excursion
-   *  is negligible next to it (see `is_negligible`). */
+   * recording — the axis flattens instead of auto-zooming when the field's own excursion is negligible next to it (see `is_negligible`). */
   poolMax: number;
   toX: (s: number) => number;
   /** Where the cursor line/dot is DRAWN — snapped to a "point particulier" when close enough,
-   *  otherwise the same as `hoveredValueS`. */
+   * otherwise the same as `hoveredValueS`. */
   hoveredS: number | null;
   /** Where the cursor's VALUE is read from — always the raw, unsnapped position, so a
-   *  snapped cursor still shows the value of whichever side of a jump the mouse actually
-   *  approached from, not an arbitrary pick. */
+   * snapped cursor still shows the value of whichever side of a jump the mouse actually approached from, not an arbitrary pick. */
   hoveredValueS: number | null;
   color: string;
   divider: string;
@@ -110,8 +99,7 @@ interface OneDiagramProps {
 }
 
 /**
- * One quantity's own chart: shares the abscissa scale (`toX`) with its siblings, but its
- * OWN y-scale — the plan's "chacun avec son axe gradué", never one shared scale across N/T/Mf.
+ * One quantity's own chart: shares the abscissa scale (`toX`) with its siblings, but its OWN y-scale — the plan's "chacun avec son axe gradué", never one shared scale across N/T/Mf.
  */
 const OneDiagram: React.FC<OneDiagramProps> = ({
   field,
@@ -135,18 +123,14 @@ const OneDiagram: React.FC<OneDiagramProps> = ({
     dataMin = 0;
     dataMax = 0;
   }
-  // The raw reading itself, before any axis flattening — a real "always zero" beam (a
-  // two-force member's T/Mf, say), not just a span too small to bother auto-zooming into.
+  // The raw reading itself, before any axis flattening — a real "always zero" beam (a two-force member's T/Mf, say), not just a span too small to bother auto-zooming into.
   const allZero = dataMin === 0 && dataMax === 0;
   const spanRaw = dataMax - dataMin;
   let yMin: number;
   let yMax: number;
   if (is_negligible(spanRaw, poolMax)) {
-    // This beam's own excursion is noise next to what this quantity reaches elsewhere in
-    // the mechanism — auto-zooming into it would draw noise as a real signal. Flatten the
-    // axis to the pool's own scale instead (this also covers the flat two-force-member
-    // case, N constant/T,Mf≡0: a real but unchanging reading gets a band sized to the
-    // mechanism's own force scale rather than an arbitrary function of its own value).
+    // This beam's own excursion is noise next to what this quantity reaches elsewhere in the mechanism — auto-zooming into it would draw noise as a real signal.
+    // Flatten the axis to the pool's own scale instead (this also covers the flat two-force-member case, N constant/T,Mf≡0: a real but unchanging reading gets a band sized to the mechanism's own force scale rather than an arbitrary function of its own value).
     const mid = (dataMin + dataMax) / 2;
     const halfSpan = NEGLIGIBLE_RATIO * poolMax;
     yMin = mid - halfSpan;
@@ -157,10 +141,7 @@ const OneDiagram: React.FC<OneDiagramProps> = ({
     yMin = dataMin - pad;
     yMax = dataMax + pad;
   }
-  // The abscissa (y = 0) is always in view, never just when the data happens to straddle
-  // it — otherwise a curve sitting entirely at, say, ~67 never shows its own axis at all,
-  // which is exactly backwards: that IS the case where a reference matters most, to tell a
-  // real (if small) slope apart from visual noise from the auto-scaled band alone.
+  // The abscissa (y = 0) is always in view, never just when the data happens to straddle it — otherwise a curve sitting entirely at, say, ~67 never shows its own axis at all, which is exactly backwards: that IS the case where a reference matters most, to tell a real (if small) slope apart from visual noise from the auto-scaled band alone.
   yMin = Math.min(yMin, 0);
   yMax = Math.max(yMax, 0);
   if (yMin === yMax) {
@@ -178,9 +159,7 @@ const OneDiagram: React.FC<OneDiagramProps> = ({
     d += i === 0 ? `M${p}` : `L${p}`;
   });
 
-  // The filled area between the curve and its own abscissa — the classic diagram look
-  // (same as the retired canvas version), anchored to a REFERENCE axis that is now always
-  // drawn, not just when zero happens to fall inside the auto-scaled band.
+  // The filled area between the curve and its own abscissa — the classic diagram look (same as the retired canvas version), anchored to a REFERENCE axis that is now always drawn, not just when zero happens to fall inside the auto-scaled band.
   const zeroY = toY(0);
   const firstX = toX(field.samples[0].s);
   const lastX = toX(field.samples[field.samples.length - 1].s);
@@ -190,15 +169,11 @@ const OneDiagram: React.FC<OneDiagramProps> = ({
   });
   fillD += ` L${lastX.toFixed(1)} ${zeroY.toFixed(1)} Z`;
 
-  // A tick from the abscissa up to the curve at every "special" point — where a discontinuity
-  // sits (a discrete load, a support, the two ends). A tolerance rather than `===`: the value
-  // walking IN from the left and the value jumping TO from the station itself are computed
-  // through different arithmetic and can land a float apart even at the very same `s`.
+  // A tick from the abscissa up to the curve at every "special" point — where a discontinuity sits (a discrete load, a support, the two ends).
+  // A tolerance rather than `===`: the value walking IN from the left and the value jumping TO from the station itself are computed through different arithmetic and can land a float apart even at the very same `s`.
   const isDiscontinuity = (s: number) =>
     field.discontinuities.some((d) => Math.abs(d - s) < 1e-6);
-  // The right end (`s = length`) gets no explicit tick: the fill area's own closing edge
-  // already draws a line there, from the curve down to the abscissa, so a second one on top
-  // only reads as an odd extra-thick stroke.
+  // The right end (`s = length`) gets no explicit tick: the fill area's own closing edge already draws a line there, from the curve down to the abscissa, so a second one on top only reads as an odd extra-thick stroke.
   const ticks: { s: number; value: number }[] = [];
   for (const s of field.discontinuities) {
     if (s >= field.length - 1e-6) continue;
@@ -236,8 +211,8 @@ const OneDiagram: React.FC<OneDiagramProps> = ({
       />
       <path d={fillD} fill={color} opacity={0.18} stroke="none" />
       {/* The field's own sample grid — a light, neutral tick per point (not the accent
-       *  colour: these are a reading aid, the "points particuliers" below carry the
-       *  meaning). Skips samples that coincide with a discontinuity — that one already
+       * colour: these are a reading aid, the "points particuliers" below carry the meaning).
+       * Skips samples that coincide with a discontinuity — that one already
        *  gets its own, more prominent tick just below. */}
       {field.samples.map(
         (sample, i) =>
@@ -341,20 +316,20 @@ const OneDiagram: React.FC<OneDiagramProps> = ({
 interface CohesionDiagramsProps {
   field: CohesionField | undefined;
   /** The mechanism's own running force/moment scale over the whole recording (see
-   *  `NegligibilityPool`) — N/T flatten against `forcePoolMax`, Mf against `momentPoolMax`. */
+   * `NegligibilityPool`) — N/T flatten against `forcePoolMax`, Mf against `momentPoolMax`. */
   forcePoolMax: number;
   momentPoolMax: number;
   /** Shown in place of the diagrams when `field` is undefined (kinematic mode, or dynamic
-   *  mode with nothing recorded yet). */
+   * mode with nothing recorded yet). */
   emptyMessage: string;
   /** Abscissa hovered over any of the three diagrams — `null` off them. Panel → canvas only
-   *  (see docs/plan-efforts-interieurs.md phase 5bis: the reverse link was cut, unneeded). */
+   * (see docs/plan-efforts-interieurs.md phase 5bis: the reverse link was cut, unneeded). */
   onHoverS?: (s: number | null) => void;
 }
 
 /** How close the cursor must be to a "point particulier" (`field.discontinuities`) to lock
- *  onto it, in the SVG's own viewBox units — proportional to the rendered width regardless
- *  of the container's actual screen size. Everywhere else the cursor is fully continuous. */
+ * onto it, in the SVG's own viewBox units — proportional to the rendered width regardless of the container's actual screen size.
+ * Everywhere else the cursor is fully continuous. */
 const SNAP_TOLERANCE_VIEW = 5;
 
 export const CohesionDiagrams: React.FC<CohesionDiagramsProps> = ({
@@ -365,8 +340,7 @@ export const CohesionDiagrams: React.FC<CohesionDiagramsProps> = ({
   onHoverS,
 }) => {
   const { palette } = useTheme();
-  // `hoveredS` is where the cursor is DRAWN (snapped when close to a discontinuity);
-  // `hoveredValueS` is the raw position, which value readouts always use — see `value_at`.
+  // `hoveredS` is where the cursor is DRAWN (snapped when close to a discontinuity); `hoveredValueS` is the raw position, which value readouts always use — see `value_at`.
   const [hoveredS, setHoveredS] = React.useState<number | null>(null);
   const [hoveredValueS, setHoveredValueS] = React.useState<number | null>(null);
   const wrapperRef = React.useRef<HTMLDivElement | null>(null);
@@ -403,9 +377,7 @@ export const CohesionDiagrams: React.FC<CohesionDiagramsProps> = ({
     const ratio = Math.max(0, Math.min(1, (xView - GUTTER) / plotW));
     const rawS = ratio * field.length;
 
-    // Snap the DRAWN position onto the nearest "point particulier" within tolerance — the
-    // value readout still uses `rawS` (below), so it keeps reading whichever side of a jump
-    // the mouse actually approached from, not an arbitrary pick forced by the snap.
+    // Snap the DRAWN position onto the nearest "point particulier" within tolerance — the value readout still uses `rawS` (below), so it keeps reading whichever side of a jump the mouse actually approached from, not an arbitrary pick forced by the snap.
     const tolerance = (SNAP_TOLERANCE_VIEW / plotW) * field.length;
     let snappedS = rawS;
     let nearestDist = tolerance;

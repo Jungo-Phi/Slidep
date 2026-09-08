@@ -1,16 +1,13 @@
 /**
- * Visual snapping for loads. Applied in MechanicalCanvas on the hovered
- * position, so the placement/drag preview visibly snaps, like the grid does.
+ * Visual snapping for loads.
+ * Applied in MechanicalCanvas on the hovered position, so the placement/drag preview visibly snaps, like the grid does.
  *
  * Everything here works in screen space, the space loads are drawn in.
  *
  * Two independent snaps ride on the same position:
- * - direction, so a load's aim relative to its base lands on a world axis or on
- *   a connected beam's axial/normal;
+ * - direction, so a load's aim relative to its base lands on a world axis or on a connected beam's axial/normal;
  * - length, so the drawn arrow (or arc) lands on one that reads a round value.
- *   Because the display scale is logarithmic, this is done on the drawn length
- *   and not on the value: the tolerance stays a constant number of pixels
- *   whatever the magnitude, exactly like every other snap in the canvas.
+ * Because the display scale is logarithmic, this is done on the drawn length and not on the value: the tolerance stays a constant number of pixels whatever the magnitude, exactly like every other snap in the canvas.
  */
 
 import type { CanvasState } from "../../../types/canvas-state";
@@ -60,7 +57,8 @@ import {
 /**
  * A direction snap, and what it landed on.
  *
- * The frame comes out of the snap rather than being read back from the angle it produced. Recognising an axis after the fact takes a tolerance, and a tolerance turns a beam half a degree off vertical into a beam whose load is stored at 89.5° from it — aimed at its normal, following it for ever a touch askew, and nothing on screen to say so.
+ * The frame comes out of the snap rather than being read back from the angle it produced.
+ * Recognising an axis after the fact takes a tolerance, and a tolerance turns a beam half a degree off vertical into a beam whose load is stored at 89.5° from it — aimed at its normal, following it for ever a touch askew, and nothing on screen to say so.
  */
 export interface DirectionSnap {
   vector: ScreenPoint;
@@ -87,7 +85,8 @@ function edge_axis_rays(
 /**
  * Every direction a load is worth aiming at, **edges first**.
  *
- * An edge outranks the world: a load pulled along a beam follows that beam, whichever way it happens to lie. Order is what carries that rule — where two rays are within `SNAP_SEPARATION` of each other the first wins, so a beam all but vertical keeps its own ray, and the load lands on exactly a quarter turn from it rather than on the world's vertical a hair away.
+ * An edge outranks the world: a load pulled along a beam follows that beam, whichever way it happens to lie.
+ * Order is what carries that rule — where two rays are within `SNAP_SEPARATION` of each other the first wins, so a beam all but vertical keeps its own ray, and the load lands on exactly a quarter turn from it rather than on the world's vertical a hair away.
  */
 function snap_candidates(
   edges: EdgeElement[],
@@ -170,17 +169,10 @@ function snap_arc(position: ScreenPoint, center: ScreenPoint): ScreenPoint {
 }
 
 /**
- * A handle that only slides along `direction`: snap the projection that sets
- * the magnitude, and shift the position by just that much so the rest of the
- * cursor's offset — which the drag ignores anyway — is left alone.
+ * A handle that only slides along `direction`: snap the projection that sets the magnitude, and shift the position by just that much so the rest of the cursor's offset — which the drag ignores anyway — is left alone.
  *
- * `rungs` holds the drawn lengths worth snapping to, **most meaningful first**.
- * A rung landing within `HIT_TOLERANCE.SNAP / 2` of one already kept is dropped:
- * the round-value ladder is multiplicative, so towards zero it piles up rungs
- * that end up a fraction of a pixel apart once the load's gain is applied
- * (with a peak of 300 N/m, the rungs at 1 and 2 sit half a pixel from zero).
- * A mouse cannot tell those apart, so only the rung carrying the most meaning
- * survives — which is how zero wins over "1" next to an end at 300.
+ * `rungs` holds the drawn lengths worth snapping to, **most meaningful first**. A rung landing within `HIT_TOLERANCE.SNAP / 2` of one already kept is dropped: the round-value ladder is multiplicative, so towards zero it piles up rungs that end up a fraction of a pixel apart once the load's gain is applied (with a peak of 300 N/m, the rungs at 1 and 2 sit half a pixel from zero).
+ * A mouse cannot tell those apart, so only the rung carrying the most meaning survives — which is how zero wins over "1" next to an end at 300.
  */
 function snap_along(
   position: ScreenPoint,
@@ -207,13 +199,10 @@ function snap_along(
 // ─── Distributed load rungs ─────────────────────────────────────────────────
 
 /**
- * Drawn lengths one tip of a distributed load is worth snapping to, `other`
- * holding the magnitude at the opposite end.
+ * Drawn lengths one tip of a distributed load is worth snapping to, `other` holding the magnitude at the opposite end.
  *
- * Three configurations the round-value ladder never reaches outrank it: zero
- * (the triangular load), matching the opposite end (the uniform one) and its
- * negative (the antisymmetric one, crossing the beam at mid-span). None exists
- * if that end carries nothing.
+ * Three configurations the round-value ladder never reaches outrank it: zero (the triangular load), matching the opposite end (the uniform one) and its negative (the antisymmetric one, crossing the beam at mid-span).
+ * None exists if that end carries nothing.
  */
 function distributed_tip_rungs(projection: number, other: number): number[] {
   const magnitude = distributed_tip_magnitude(projection, other);
@@ -232,12 +221,9 @@ function distributed_tip_rungs(projection: number, other: number): number[] {
 
 /**
  * Drawn lengths the body bar of a distributed load is worth snapping to.
- * `offsetStart` / `offsetEnd` are the grabbed point's differences to the two
- * endpoint magnitudes (see `distributed_grab_length`).
+ * `offsetStart` / `offsetEnd` are the grabbed point's differences to the two endpoint magnitudes (see `distributed_grab_length`).
  *
- * Both ends shift together, so either of them landing on a round value is worth
- * a rung — snapping the grabbed point instead would be meaningless, its position
- * along the beam being arbitrary.
+ * Both ends shift together, so either of them landing on a round value is worth a rung — snapping the grabbed point instead would be meaningless, its position along the beam being arbitrary.
  */
 function distributed_body_rungs(
   projection: number,
@@ -252,16 +238,11 @@ function distributed_body_rungs(
   const length_of = (end: number, offset: number) =>
     distributed_grab_length(end - offset, offsetStart, offsetEnd);
   const offsets = [offsetStart, offsetEnd];
-  // The two configurations below annul something, so both need the load to have
-  // a taper: on a uniform one they would take its two ends to zero at once and
-  // snap the whole load away to nothing.
+  // The two configurations below annul something, so both need the load to have a taper: on a uniform one they would take its two ends to zero at once and snap the whole load away to nothing.
   const tapered = !is_zero_load(offsetEnd - offsetStart);
-  // Zeroing an end comes first: it is what makes the load triangular, the
-  // round-value ladder never reaches it, and next to a big opposite end it is
-  // the only rung down there that means anything.
+  // Zeroing an end comes first: it is what makes the load triangular, the round-value ladder never reaches it, and next to a big opposite end it is the only rung down there that means anything.
   const zeros = tapered ? offsets.map((offset) => length_of(0, offset)) : [];
-  // Then the load centred on its beam (q at one end, -q at the other), whose
-  // crest line crosses at mid-span.
+  // Then the load centred on its beam (q at one end, -q at the other), whose crest line crosses at mid-span.
   const antisymmetric = tapered
     ? [
         distributed_grab_length(
@@ -344,9 +325,8 @@ export function snap_load_hover(
       if (!load) return position;
       const beam = find_edge(load.targetID);
       if (!beam) return position;
-      // No handle aims the load any more, so all three are the same gesture:
-      // slide along the direction, and pull the length onto one that reads a
-      // round value. Only the length↔value mapping differs.
+      // No handle aims the load any more, so all three are the same gesture: slide along the direction, and pull the length onto one that reads a round value.
+      // Only the length↔value mapping differs.
       const direction = world2screen_vec(
         frame2world_transform(load.direction, load.frame, mechanicalElements),
         viewport,

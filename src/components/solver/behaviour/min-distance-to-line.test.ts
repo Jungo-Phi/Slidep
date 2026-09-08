@@ -4,16 +4,15 @@ import type { Link } from "../../../types";
 import { PBD_kinematic_solver } from "../kinematics/PBD_kinematic_solver";
 
 /**
- * `MinDistanceToLine` is `MinDistanceToSegment`'s counterpart for an infinite line (the
- * floor) instead of a bounded segment — no `side`, no clamp, no corner case.
+ * `MinDistanceToLine` is `MinDistanceToSegment`'s counterpart for an infinite line (the floor) instead of a bounded segment — no `side`, no clamp, no corner case.
  */
 
 const P = (x: number, y: number) => new Point2(x, y);
 const SWEEPS = 200;
 
 /** A point pulled (via HandleGrab) from `from` toward `pullTo`, against a fixed line
- *  through (`anchorX`, 0) with normal (0,1) — "up" is the allowed side — with or without
- *  the contact link. Returns where the point ends up. */
+ * through (`anchorX`, 0) with normal (0,1) — "up" is the allowed side — with or without the contact link.
+ * Returns where the point ends up. */
 function pull_against_line(
   offset: number | undefined,
   from: Point2,

@@ -66,8 +66,7 @@ describe("format_quantity — MOMENT's compound unit", () => {
   });
 
   it("doesn't flip the whole unit for a value a ULP off a bucket edge", () => {
-    // A value a live solver recomputes every frame routinely lands a hair off an exact
-    // power like 1 N·m instead of bit-exact on it — the bucket choice must not care.
+    // A value a live solver recomputes every frame routinely lands a hair off an exact power like 1 N·m instead of bit-exact on it — the bucket choice must not care.
     expect(format_quantity(0.9999999999999999, MOMENT, 0)).toBe("1 N·m");
     expect(format_quantity(1.0000000000000002, MOMENT, 0)).toBe("1 N·m");
   });
@@ -210,8 +209,7 @@ describe("parse_quantity — loosened unit spellings", () => {
   });
 
   it("reads an exponent typed as a caret, a bare digit, or the superscript itself", () => {
-    // "m^2" and the bare "m2" both mean the same as "m²" — the exponent on "m", not "m"
-    // times 2.
+    // "m^2" and the bare "m2" both mean the same as "m²" — the exponent on "m", not "m" times 2.
     expect(
       parse_quantity("5g/m^2", SURFACE_MASS, default_unit(SURFACE_MASS)),
     ).toBeCloseTo(5e-3, 9);

@@ -1,10 +1,8 @@
 /**
  * Brings a stored document up to the file format the code expects.
  *
- * Every mechanism read from outside the app — the library, an imported file —
- * goes through `migrate_document` before anything else looks at it. What comes
- * out is a `SerializedMechanism` of the current version; `deserialize_mechanism`
- * can then assume the shape it knows.
+ * Every mechanism read from outside the app — the library, an imported file — goes through `migrate_document` before anything else looks at it.
+ * What comes out is a `SerializedMechanism` of the current version; `deserialize_mechanism` can then assume the shape it knows.
  */
 
 import { DEFAULT } from "../constants/physics-specs";
@@ -25,23 +23,20 @@ export interface MigrationStep {
   /** The version this step produces. Steps run in ascending order. */
   to: number;
   /**
-   * Whether undo/redo entries survive the step. `false` empties `history` and
-   * `future`: an entry the step cannot convert would undo into a shape no
-   * current code can read. There is no default — each step must decide.
+   * Whether undo/redo entries survive the step.
+   * `false` empties `history` and `future`: an entry the step cannot convert would undo into a shape no current code can read.
+   * There is no default — each step must decide.
    *
-   * Aim for `true`: a rename or a reshaping applies to a stored action as well
-   * as to the current state, and dropping the stack costs the user their undo
-   * for nothing. Reserve `false` for a step that would have to guess — an
-   * action whose meaning is gone, not merely spelled differently.
+   * Aim for `true`: a rename or a reshaping applies to a stored action as well as to the current state, and dropping the stack costs the user their undo for nothing.
+   * Reserve `false` for a step that would have to guess — an action whose meaning is gone, not merely spelled differently.
    */
   preservesHistory: boolean;
   apply: (doc: RawDocument) => RawDocument;
 }
 
 /**
- * The chain, from the oldest step to the newest. A step converts a document of
- * version `to - 1` into one of version `to`, `history` and `future` included
- * when it claims to preserve them.
+ * The chain, from the oldest step to the newest.
+ * A step converts a document of version `to - 1` into one of version `to`, `history` and `future` included when it claims to preserve them.
  */
 const MIGRATIONS: MigrationStep[] = [
   {
@@ -80,11 +75,8 @@ const MIGRATIONS: MigrationStep[] = [
   },
   {
     to: 5,
-    // The undo stack mixes distances into fields with no distance-specific shape
-    // (a `ChangeForce`'s vector, a `MoveElements`' delta) that only the action's
-    // own `type` disambiguates. Converting the document's present state is exact;
-    // guessing that for every action variant is not worth the risk to a reopened
-    // file, so the stack is dropped instead.
+    // The undo stack mixes distances into fields with no distance-specific shape (a `ChangeForce`'s vector, a `MoveElements`' delta) that only the action's own `type` disambiguates.
+    // Converting the document's present state is exact; guessing that for every action variant is not worth the risk to a reopened file, so the stack is dropped instead.
     preservesHistory: false,
     apply: (doc) => ({
       ...doc,
@@ -107,11 +99,7 @@ const MIGRATIONS: MigrationStep[] = [
   },
   {
     to: 7,
-    // The properties panel edits a dimension-angle's value through the same generic
-    // `ChangeDimensionEdgeValue` action every other dimension kind uses (the reducer
-    // dispatches on `id`, not on which of these six action types is named), so a stored
-    // action carrying that type cannot be told apart from one that truly holds a length —
-    // guessing would risk rescaling the wrong quantity, or missing degrees that need it.
+    // The properties panel edits a dimension-angle's value through the same generic `ChangeDimensionEdgeValue` action every other dimension kind uses (the reducer dispatches on `id`, not on which of these six action types is named), so a stored action carrying that type cannot be told apart from one that truly holds a length — guessing would risk rescaling the wrong quantity, or missing degrees that need it.
     preservesHistory: false,
     apply: (doc) => ({
       ...doc,
@@ -122,9 +110,7 @@ const MIGRATIONS: MigrationStep[] = [
   },
   {
     to: 8,
-    // Gravity/collisions/floor move from disjoint, session-only React state onto the
-    // mechanism itself, so a document from before they existed here gets today's defaults
-    // rather than nothing — nothing in `history`/`future` carries them, so no stack reshape.
+    // Gravity/collisions/floor move from disjoint, session-only React state onto the mechanism itself, so a document from before they existed here gets today's defaults rather than nothing — nothing in `history`/`future` carries them, so no stack reshape.
     preservesHistory: true,
     apply: (doc) => ({
       ...doc,
@@ -135,11 +121,8 @@ const MIGRATIONS: MigrationStep[] = [
   },
   {
     to: 9,
-    // `linearMass` disappears from `BeamElement` in favour of a `materialID`/`profileID` pair
-    // resolved against the mechanism's own library. Every beam gets the same default couple —
-    // steel, 20×20 mm rectangle — seeded once here regardless of whatever `linearMass` it used
-    // to carry: a hard cut, not a best-effort conversion, since no prior data maps cleanly onto
-    // a section's `A`/`I_Gz`/`v`.
+    // `linearMass` disappears from `BeamElement` in favour of a `materialID`/`profileID` pair resolved against the mechanism's own library.
+    // Every beam gets the same default couple — steel, 20×20 mm rectangle — seeded once here regardless of whatever `linearMass` it used to carry: a hard cut, not a best-effort conversion, since no prior data maps cleanly onto a section's `A`/`I_Gz`/`v`.
     preservesHistory: true,
     apply: (doc) => {
       const material = default_material();
@@ -166,8 +149,7 @@ const MIGRATIONS: MigrationStep[] = [
   },
   {
     to: 10,
-    // The catalogue is seeded into every mechanism's own `materials`, so a beam's picker
-    // offers steel/aluminium/… directly instead of needing a copy step.
+    // The catalogue is seeded into every mechanism's own `materials`, so a beam's picker offers steel/aluminium/… directly instead of needing a copy step.
     preservesHistory: true,
     apply: (doc) => ({
       ...doc,
@@ -218,7 +200,7 @@ const close_belt_in_stack = (stack: unknown): unknown[][] =>
   as_array(stack).map((bundle) => as_array(bundle).map(close_belt_in_action));
 
 /** v2 → v3: mass and friction, absent from every element saved before they existed,
- *  fall back to the same defaults a freshly placed element gets. */
+ * fall back to the same defaults a freshly placed element gets. */
 const add_physical_defaults = (element: unknown): unknown => {
   if (!is_record(element)) return element;
   switch (element.type) {
@@ -273,7 +255,7 @@ const reset_friction = (element: unknown): unknown => {
 };
 
 /** v3 → v4: a motor's torque limit, absent from every one saved before it existed, falls
- *  back to the same default a freshly placed motor gets. */
+ * back to the same default a freshly placed motor gets. */
 const add_motor_torque_default = (element: unknown): unknown => {
   if (!is_record(element) || element.type !== "pivot") return element;
   const motor = add_motor_config_torque_default(element.motor);
@@ -281,8 +263,7 @@ const add_motor_torque_default = (element: unknown): unknown => {
 };
 
 /** The `MotorConfig` itself, wherever one is carried directly rather than nested in a
- *  pivot — `SetMotorConfig`'s `newConfig`/`oldConfig` — `undefined` (no motor) passes
- *  through unchanged. */
+ * pivot — `SetMotorConfig`'s `newConfig`/`oldConfig` — `undefined` (no motor) passes through unchanged. */
 const add_motor_config_torque_default = (config: unknown): unknown => {
   if (!is_record(config) || typeof config.torque === "number") return config;
   return { torque: DEFAULT.MOTOR_TORQUE, ...config };
@@ -312,7 +293,7 @@ const add_motor_torque_default_in_stack = (stack: unknown): unknown[][] =>
   );
 
 /** v4 → v5: world units become metres. Every stored distance shrinks by it, and a saved
- *  viewport's scale grows by the same factor, so a reopened file frames the same view. */
+ * viewport's scale grows by the same factor, so a reopened file frames the same view. */
 const WORLD_UNIT_RESCALE = 1 / 1000;
 
 const rescale_point = (point: unknown): unknown => {
@@ -326,9 +307,7 @@ const rescale_point = (point: unknown): unknown => {
 };
 
 /** Every mechanical or constraint element's own distances: a position, the two ends of an
- *  edge, a gear's radius, a spring or damper's rest length, a dimension's value — except an
- *  angle (degrees at this version, not yet a length's kind of number regardless) and a gear
- *  ratio (dimensionless), the two dimension families that aren't lengths. */
+ * edge, a gear's radius, a spring or damper's rest length, a dimension's value — except an angle (degrees at this version, not yet a length's kind of number regardless) and a gear ratio (dimensionless), the two dimension families that aren't lengths. */
 const rescale_element = (element: unknown): unknown => {
   if (!is_record(element)) return element;
   const scaled = { ...element };
@@ -354,7 +333,7 @@ const rescale_element = (element: unknown): unknown => {
 };
 
 /** v6 → v7: a dimension-angle's value becomes radians, like `ANGLE` everywhere else, instead
- *  of the one dimension kind that held degrees directly. */
+ * of the one dimension kind that held degrees directly. */
 const DIMENSION_ANGLE_RESCALE = Math.PI / 180;
 
 const rescale_dimension_angle = (element: unknown): unknown => {
@@ -379,7 +358,7 @@ const rescale_viewport = (viewport: unknown): unknown => {
 };
 
 /** v5 → v6: a motor's speed becomes rad/s, like every other stored quantity, instead of the
- *  one field that held tr/min directly. */
+ * one field that held tr/min directly. */
 const MOTOR_SPEED_RESCALE = (2 * Math.PI) / 60;
 
 const rescale_motor_config = (config: unknown): unknown => {
@@ -417,7 +396,7 @@ const rescale_motor_speed_in_stack = (stack: unknown): unknown[][] =>
   );
 
 /** v8 → v9: a beam's `linearMass` becomes a `materialID`/`profileID` pair, both pointing at
- *  the single default couple seeded into `materials`/`profiles` for the whole document. */
+ * the single default couple seeded into `materials`/`profiles` for the whole document. */
 const assign_default_material_profile = (
   element: unknown,
   materialID: string,
@@ -429,9 +408,8 @@ const assign_default_material_profile = (
 };
 
 /** The same defaulting where an action carries a whole beam element: `CreateElement` and
- *  `DeleteElement`. A stored `ChangeLinearMass` names a field that no longer exists on the
- *  element it targets — it becomes a no-op rather than dropping the whole undo stack over one
- *  action type, the same trade `close_belt_in_action` made for a renamed field. */
+ * `DeleteElement`.
+ * A stored `ChangeLinearMass` names a field that no longer exists on the element it targets — it becomes a no-op rather than dropping the whole undo stack over one action type, the same trade `close_belt_in_action` made for a renamed field. */
 const assign_default_material_profile_in_action = (
   action: unknown,
   materialID: string,
@@ -474,19 +452,17 @@ const as_array = (value: unknown): unknown[] =>
   Array.isArray(value) ? value : [];
 
 /**
- * Raises `raw` to `CURRENT_FORMAT_VERSION`. A document without a
- * `formatVersion` is a version 1 that predates the field, not an older format.
+ * Raises `raw` to `CURRENT_FORMAT_VERSION`.
+ * A document without a `formatVersion` is a version 1 that predates the field, not an older format.
  *
- * Throws on a document that is unreadable or too recent — both are cases where
- * carrying on would mean guessing at the user's data.
+ * Throws on a document that is unreadable or too recent — both are cases where carrying on would mean guessing at the user's data.
  */
 export function migrate_document(raw: unknown): SerializedMechanism {
   if (typeof raw !== "object" || raw === null || Array.isArray(raw))
     throw new Error("Document illisible");
 
   let doc = { ...raw } as RawDocument;
-  // Never `CURRENT_FORMAT_VERSION`: that reads a legacy document as already
-  // up to date and skips every step it owes.
+  // Never `CURRENT_FORMAT_VERSION`: that reads a legacy document as already up to date and skips every step it owes.
   let version = typeof doc.formatVersion === "number" ? doc.formatVersion : 1;
 
   if (version > CURRENT_FORMAT_VERSION)

@@ -50,9 +50,8 @@ interface OverlaysMenuProps {
   mechanicalElements: MechanicalElement[];
   applyActions: (actions: Action[]) => void;
   /** Which reading tints every beam's fill, mechanism-wide — see `BeamStressLens`'s own doc
-   *  (docs/plan-efforts-interieurs.md phase 9). Lives here, not in `mechanicalElements`'
-   *  own `OverlayFlags`: unlike trajectories/forces/velocities, the four readings share one
-   *  physical slot (a beam's own fill), so this is a single choice, not a checkbox. */
+   * (docs/plan-efforts-interieurs.md phase 9).
+   * Lives here, not in `mechanicalElements`' own `OverlayFlags`: unlike trajectories/forces/velocities, the four readings share one physical slot (a beam's own fill), so this is a single choice, not a checkbox. */
   beamStressLens: BeamStressLens;
   onChangeBeamStressLens: (lens: BeamStressLens) => void;
   /** Trajectory overlay style: dots at fixed spacing versus one continuous stroke. */
@@ -94,12 +93,9 @@ const OverlayMenuRow: React.FC<OverlayMenuRowProps> = ({
 
 /**
  * The "Afficher ▾" top-bar button: the bulk commands for the display layers.
- * Per-element control lives on the element itself (its panel switch); this menu
- * only does what an element cannot — act on all of them at once.
+ * Per-element control lives on the element itself (its panel switch); this menu only does what an element cannot — act on all of them at once.
  *
- * The button's eye is open as soon as one layer shows one element, shut when
- * nothing is drawn: a single unambiguous bit ("something is superposed on my
- * canvas"), carried by the icon itself rather than by a colour change.
+ * The button's eye is open as soon as one layer shows one element, shut when nothing is drawn: a single unambiguous bit ("something is superposed on my canvas"), carried by the icon itself rather than by a colour change.
  */
 export const OverlaysMenu: React.FC<OverlaysMenuProps> = ({
   mechanicalElements,

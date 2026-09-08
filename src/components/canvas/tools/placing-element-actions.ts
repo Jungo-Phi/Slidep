@@ -152,8 +152,7 @@ export function handle_placing_element(
 
     case "PlacingForceStart":
       if (hoveredPart.type === "Void") return { actions: [] };
-      // The body of a beam takes a distributed force;
-      // its endpoints (and any node) take a point force — same tool, the hovered part decides.
+      // The body of a beam takes a distributed force; its endpoints (and any node) take a point force — same tool, the hovered part decides.
       // Mirrors the two ghosts drawn for this state in `draw-canvas.ts`.
       if (hoveredPart.type === "Edge" && hoveredPart.part === "body")
         return {
@@ -331,8 +330,7 @@ function handle_place_element(
   }
 
   // Add a gear to the belt route being defined.
-  // The gear the gesture started on is folded in only at finalisation (`attached_gears_with_start`),
-  // so it never needs a next-gear click to be caught.
+  // The gear the gesture started on is folded in only at finalisation (`attached_gears_with_start`), so it never needs a next-gear click to be caught.
   if (state.type === "PlacingBeltEnd" && hoveredPart.type === "GearTooth") {
     const newAttachedGearsIDs = [...state.attachedGearsIDs];
     const hoveredGear = get_mechanical_element_from_id(
@@ -365,8 +363,7 @@ function handle_place_element(
     };
   }
 
-  // Create a gear on its axle atomically, the axle being a fresh pivot unless the
-  // gesture started on one that can already carry it.
+  // Create a gear on its axle atomically, the axle being a fresh pivot unless the gesture started on one that can already carry it.
   if (state.type === "PlacingGearRadius") {
     const existingAxle = axle_under(state.startHover, mechanicalElements);
     const axleId = existingAxle ? existingAxle.id : (crypto.randomUUID() as ID);
@@ -427,8 +424,7 @@ function handle_place_element(
         ),
       );
     }
-    // The axle may have taken over the node it landed on, which is then gone:
-    // the rim can only be pinned to what the first step left standing.
+    // The axle may have taken over the node it landed on, which is then gone: the rim can only be pinned to what the first step left standing.
     if (sim.holds(hoveredPart))
       sim.step(
         connect_elements(
@@ -478,9 +474,7 @@ function handle_place_element(
         fixedNodeStartID: undefined,
         fixedNodeEndID: undefined,
         fixedNodesBodyIDs: [],
-        // A freshly placed beam always takes the library's first material/profile — no
-        // picker at placement time; the assignment is changed afterwards from the beam's
-        // own properties.
+        // A freshly placed beam always takes the library's first material/profile — no picker at placement time; the assignment is changed afterwards from the beam's own properties.
         materialID: materials[0].id,
         profileID: profiles[0].id,
       };
@@ -581,9 +575,8 @@ function handle_place_element(
       break;
   }
 
-  // A closing gesture puts both terminals on the junction, and the junction
-  // belongs to the loop. Born there, they agree with the join `close_belt_actions`
-  // seats on that same point, so fusing the three of them moves nothing.
+  // A closing gesture puts both terminals on the junction, and the junction belongs to the loop.
+  // Born there, they agree with the join `close_belt_actions` seats on that same point, so fusing the three of them moves nothing.
   if (
     state.type === "PlacingBeltEnd" &&
     hoveredPart.type === "BeltClosure" &&
@@ -614,9 +607,7 @@ function handle_place_element(
   const sim = start_simulation(mechanicalElements, constraintElements, loads);
   sim.step([{ type: "CreateElement", element: newElement }]);
 
-  // The route is part of what the belt IS, so it is laid down before the
-  // terminals are connected: closing the belt seats its junction on the loop,
-  // which only exists once the pulleys are attached.
+  // The route is part of what the belt IS, so it is laid down before the terminals are connected: closing the belt seats its junction on the loop, which only exists once the pulleys are attached.
   if (state.type === "PlacingBeltEnd") {
     const attachedGears = attached_gears_with_start(
       state,
@@ -651,9 +642,7 @@ function handle_place_element(
   if (
     "startHover" in state &&
     "positionStart" in newElement &&
-    // A closing belt normally attaches to its own start through the closure
-    // below — except when the gesture began on a node, which then becomes the
-    // junction (the closure reuses it instead of minting a fresh one).
+    // A closing belt normally attaches to its own start through the closure below — except when the gesture began on a node, which then becomes the junction (the closure reuses it instead of minting a fresh one).
     (hoveredPart.type !== "BeltClosure" || state.startHover.type === "Node")
   ) {
     sim.step(
@@ -691,14 +680,11 @@ function handle_place_element(
       ),
     );
 
-  // The bar runs over these on its way, having aimed at neither: they connect to
-  // its body. Only a beam has one to hold them — a spring or a damper carries
-  // nothing mid-span. Each is re-checked against the running mechanism, an
-  // earlier attach being free to have absorbed it.
+  // The bar runs over these on its way, having aimed at neither: they connect to its body.
+  // Only a beam has one to hold them — a spring or a damper carries nothing mid-span.
+  // Each is re-checked against the running mechanism, an earlier attach being free to have absorbed it.
   //
-  // A node the gesture's own hovers already named (typically a beamBodyHover
-  // catch, drawn past rather than landed on) sits geometrically under the body
-  // too — excluded here so it isn't connected a second time.
+  // A node the gesture's own hovers already named (typically a beamBodyHover catch, drawn past rather than landed on) sits geometrically under the body too — excluded here so it isn't connected a second time.
   if (state.type === "PlacingBeamEnd" && "positionStart" in newElement) {
     const alreadyConnected = new Set<ID>(
       [state.startHover, hoveredPart]
@@ -749,11 +735,9 @@ function handle_place_element(
 }
 
 /**
- * The belt route's pulleys, with the gear the gesture started on prepended when
- * it isn't already listed. A start on a gear only enters `attachedGearsIDs` once
- * a next via exists to orient its wrap, so on finalisation we fold it in against
- * whatever comes next — the first routed pulley, or the end point. Same wrap
- * formula as the placing preview in `draw-canvas`.
+ * The belt route's pulleys, with the gear the gesture started on prepended when it isn't already listed.
+ * A start on a gear only enters `attachedGearsIDs` once a next via exists to orient its wrap, so on finalisation we fold it in against whatever comes next — the first routed pulley, or the end point.
+ * Same wrap formula as the placing preview in `draw-canvas`.
  */
 export function attached_gears_with_start(
   state: Extract<CanvasState, { type: "PlacingBeltEnd" }>,
@@ -810,9 +794,7 @@ function handle_place_ground(
       ) as NodeElement;
       const grounded = !node.isGrounded;
       const actions: Action[] = [{ type: "GroundNode", id: node.id, grounded }];
-      // Grounding a pivot whose motor drives against a beam would leave it
-      // anchored to both at once — clear the beam frame so it drives from the
-      // ground instead, same as picking "ground" in the properties panel.
+      // Grounding a pivot whose motor drives against a beam would leave it anchored to both at once — clear the beam frame so it drives from the ground instead, same as picking "ground" in the properties panel.
       if (
         grounded &&
         node.type === "pivot" &&
@@ -827,8 +809,7 @@ function handle_place_ground(
       }
       return { actions };
     }
-    // A gear rim anchors the same way an edge does: the ground is a grounded
-    // join pinned to it.
+    // A gear rim anchors the same way an edge does: the ground is a grounded join pinned to it.
     case "Edge":
     case "GearTooth": {
       const newJoin: JoinElement = {

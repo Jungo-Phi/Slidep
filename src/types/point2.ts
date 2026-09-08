@@ -1,14 +1,13 @@
 /**
- * The coordinate space a point lives in. World is the model's own frame
- * (metres, y up); screen is what the canvas draws in (pixels, y down).
+ * The coordinate space a point lives in.
+ * World is the model's own frame (metres, y up); screen is what the canvas draws in (pixels, y down).
  * `utils/viewport.ts` holds the only sanctioned crossings between the two.
  */
 export type Space = "world" | "screen";
 
 /**
- * Under this length a segment counts as a single point. Every local frame built
- * on a segment divides by its length, so a shorter one yields `NaN` rather than
- * a large number, and the `NaN` then spreads to whatever the frame produced.
+ * Under this length a segment counts as a single point.
+ * Every local frame built on a segment divides by its length, so a shorter one yields `NaN` rather than a large number, and the `NaN` then spreads to whatever the frame produced.
  */
 export const DEGENERATE_LENGTH = 1e-9;
 
@@ -17,22 +16,18 @@ function is_degenerate<S extends Space>(delta: Point2<S>): boolean {
 }
 
 /**
- * 2D Point representation with utility methods, tagged with the space it lives
- * in. Mixing the two — subtracting a screen point from a world one, feeding a
- * world angle to a screen glyph — is a mistake the compiler can catch, and one
- * that is otherwise invisible: both are just a pair of numbers.
+ * 2D Point representation with utility methods, tagged with the space it lives in.
+ * Mixing the two — subtracting a screen point from a world one, feeding a world angle to a screen glyph — is a mistake the compiler can catch, and one that is otherwise invisible: both are just a pair of numbers.
  *
- * `S` defaults to `"world"`, so an unannotated `Point2` is a world point. That
- * is where the model lives; a screen point only ever comes out of a conversion,
- * and saying so at that point is the whole benefit.
+ * `S` defaults to `"world"`, so an unannotated `Point2` is a world point.
+ * That is where the model lives; a screen point only ever comes out of a conversion, and saying so at that point is the whole benefit.
  */
 export class Point2<S extends Space = "world"> {
   x: number;
   y: number;
   /**
-   * Phantom: carries `S` into the type so `Point2<"world">` and
-   * `Point2<"screen">` are not the same type. `declare` emits no field, so it
-   * costs nothing at runtime and never reaches serialization.
+   * Phantom: carries `S` into the type so `Point2<"world">` and `Point2<"screen">` are not the same type.
+   * `declare` emits no field, so it costs nothing at runtime and never reaches serialization.
    */
   declare private readonly __space: S;
 
@@ -44,9 +39,8 @@ export class Point2<S extends Space = "world"> {
   /**
    * Reinterpret this point in another space, leaving its numbers untouched.
    *
-   * `utils/viewport.ts` is the only place entitled to this: it is what turns the
-   * arithmetic of a conversion into a point of the target space. Anywhere else
-   * it silences exactly the check `S` exists for.
+   * `utils/viewport.ts` is the only place entitled to this: it is what turns the arithmetic of a conversion into a point of the target space.
+   * Anywhere else it silences exactly the check `S` exists for.
    */
   public as_space<T extends Space>(): Point2<T> {
     return this as unknown as Point2<T>;
@@ -220,8 +214,7 @@ export class Point2<S extends Space = "world"> {
   }
 
   /**
-   * Calcule la proportion **t** entre 0 et 1 (étendu si dépasse)
-   * tel que : this = start.lerp(end, t)
+   * Calcule la proportion **t** entre 0 et 1 (étendu si dépasse) tel que : this = start.lerp(end, t)
    *
    * Si le point n'est pas sur la ligne, il est projeté orthogonalement.
    */
@@ -434,8 +427,7 @@ export class Point2<S extends Space = "world"> {
   /**
    * Le point d'intersection de 2 droites, chacune définie par 2 points.
    *
-   * `NoInfer` on every argument but the first: without it a call mixing spaces
-   * would quietly infer `S` as the union of both and typecheck.
+   * `NoInfer` on every argument but the first: without it a call mixing spaces would quietly infer `S` as the union of both and typecheck.
    */
   public static lines_intersection<S extends Space = "world">(
     start1: Point2<S>,

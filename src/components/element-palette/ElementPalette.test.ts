@@ -11,19 +11,11 @@ import {
 import { Point2 } from "../../types/point2";
 
 /**
- * Every `CanvasStateType` must light up at least one palette icon — otherwise the tool
- * a user is effectively using (dragging the floor, moving a load, mid-dimension) reads
- * as "nothing armed", which is what happened when the floor's drag/edit states and a
- * few `Moving*` load/gear states were added without a matching `hilightRule` entry.
+ * Every `CanvasStateType` must light up at least one palette icon — otherwise the tool a user is effectively using (dragging the floor, moving a load, mid-dimension) reads as "nothing armed", which is what happened when the floor's drag/edit states and a few `Moving*` load/gear states were added without a matching `hilightRule` entry.
  *
- * `HOVER_TARGETS` (`get-hover.ts`) is reused as the canonical, compiler-checked list of
- * every `CanvasStateType` — it is itself a `Record<CanvasStateType, …>`, so it cannot
- * fall out of sync with `canvas-state.ts` the way a hand-copied list could.
+ * `HOVER_TARGETS` (`get-hover.ts`) is reused as the canonical, compiler-checked list of every `CanvasStateType` — it is itself a `Record<CanvasStateType, …>`, so it cannot fall out of sync with `canvas-state.ts` the way a hand-copied list could.
  *
- * Every `hilightRule` only reads `state.type` (and `state.rearm`) except the dimension
- * and gear-ratio tools' `PlacingValue` branch, which looks up the constraint by
- * `state.elementID` to tell the two apart — so `PlacingValue` is the one state that
- * needs a real fixture instead of a bare `{ type }`.
+ * Every `hilightRule` only reads `state.type` (and `state.rearm`) except the dimension and gear-ratio tools' `PlacingValue` branch, which looks up the constraint by `state.elementID` to tell the two apart — so `PlacingValue` is the one state that needs a real fixture instead of a bare `{ type }`.
  */
 
 const DIMENSION_ID = "00000000-0000-0000-0000-000000000dim" as ID;

@@ -27,8 +27,8 @@ const mass: MassElement = {
 };
 
 /**
- * What a running simulation can absorb. The panel greys a control out from the same
- * verdict that decides whether an edit exits to edition, so the two cannot drift apart.
+ * What a running simulation can absorb.
+ * The panel greys a control out from the same verdict that decides whether an edit exits to edition, so the two cannot drift apart.
  */
 describe("is_structure_action", () => {
   it("reads a creation from the element, not the action type", () => {
@@ -45,8 +45,7 @@ describe("is_structure_action", () => {
   });
 
   it("answers a bare type conservatively", () => {
-    // A control names what it emits before it has an element to hand, so a creation it
-    // cannot qualify locks — the safe way round.
+    // A control names what it emits before it has an element to hand, so a creation it cannot qualify locks — the safe way round.
     expect(is_structure_action("CreateElement")).toBe(true);
     expect(is_structure_action("DeleteElement")).toBe(true);
   });

@@ -33,8 +33,7 @@ const LAYOUT: SnapshotLayout = {
 /**
  * A recording where `blocked[i]` says whether the simulation reported the motor stalled.
  *
- * Written by hand rather than simulated: that flag IS what this module reads, and a real
- * mechanism cannot be asked to jam on cue.
+ * Written by hand rather than simulated: that flag IS what this module reads, and a real mechanism cannot be asked to jam on cue.
  */
 function recording(blocked: boolean[]): KinematicSnapshot[] {
   return blocked.map((stuck, i) => ({
@@ -67,23 +66,20 @@ describe("dead_points", () => {
     const found = dead_points(snapshots);
     expect(found.map((p) => p.kind)).toEqual(["blocked", "released"]);
     expect(found.every((p) => p.motor === MOTOR)).toBe(true);
-    // Chacun daté de la frame qui porte le changement — le début du blocage, pas la
-    // frame où il devient certain ; la première frame libre, pas la dernière bloquée.
+    // Chacun daté de la frame qui porte le changement — le début du blocage, pas la frame où il devient certain ; la première frame libre, pas la dernière bloquée.
     expect(found[0].t).toBeCloseTo(snapshots[50].t, 9);
     expect(found[1].t).toBeCloseTo(snapshots[80].t, 9);
   });
 
   it("un blocage qui dure jusqu'au bout n'a pas de sortie", () => {
-    // Rien n'en est sorti : la marque de sortie annoncerait un dégagement que
-    // l'enregistrement ne montre pas.
+    // Rien n'en est sorti : la marque de sortie annoncerait un dégagement que l'enregistrement ne montre pas.
     const found = dead_points(recording([...free(20), ...stuck(30)]));
     expect(found.map((p) => p.kind)).toEqual(["blocked"]);
   });
 
   it("une frame isolée n'est ni un blocage ni une sortie", () => {
-    // Le nombre de frames exigé est injecté : c'est un réglage, pas un fait. La sortie
-    // n'existe que pour un blocage rapporté, sinon une frame isolée écartée à l'entrée
-    // reviendrait par la porte de derrière.
+    // Le nombre de frames exigé est injecté : c'est un réglage, pas un fait.
+    // La sortie n'existe que pour un blocage rapporté, sinon une frame isolée écartée à l'entrée reviendrait par la porte de derrière.
     const snapshots = recording([...free(20), true, ...free(20)]);
     expect(dead_points(snapshots, { minBlockedFrames: 2 })).toEqual([]);
     expect(
@@ -117,18 +113,15 @@ describe("dead_points", () => {
   });
 
   it("allonger l'enregistrement ne déplace pas ce qui précède", () => {
-    // Même exigence que pour les marques de courroie : le rail s'écrit au fil de
-    // l'enregistrement, et une marque qui saute se lit comme un défaut.
+    // Même exigence que pour les marques de courroie : le rail s'écrit au fil de l'enregistrement, et une marque qui saute se lit comme un défaut.
     const full = recording([...free(30), ...stuck(10), ...free(90)]);
     const early = dead_points(full.slice(0, 60));
     expect(dead_points(full).slice(0, early.length)).toEqual(early);
   });
 
   it("ne dépend que de ce que la simulation a enregistré", () => {
-    // Le verdict est daté : il appartient aux réglages sous lesquels la frame a été
-    // enregistrée. Le recalculer ici — diviser le mouvement d'hier par le régime
-    // commandé d'aujourd'hui — faisait basculer tout le passé d'un coup dès qu'on
-    // inversait le moteur en cours de simulation, et posait un blocage à t = 0.
+    // Le verdict est daté : il appartient aux réglages sous lesquels la frame a été enregistrée.
+    // Le recalculer ici — diviser le mouvement d'hier par le régime commandé d'aujourd'hui — faisait basculer tout le passé d'un coup dès qu'on inversait le moteur en cours de simulation, et posait un blocage à t = 0.
     const snapshots = recording([...free(40), ...stuck(20), ...free(40)]);
     const before = dead_points(snapshots);
     // Rien du mécanisme n'entre dans le calcul : il n'y a aucun réglage à périmer.
@@ -152,8 +145,7 @@ function record(json: string, n: number) {
 
 describe("dead_points — mécanismes de référence", () => {
   it("un mécanisme qui tourne rond ne produit aucune marque", () => {
-    // Le vrai risque du détecteur est le faux positif : une marque sur chaque
-    // mécanisme sain rendrait le rail illisible et la fonction inutile.
+    // Le vrai risque du détecteur est le faux positif : une marque sur chaque mécanisme sain rendrait le rail illisible et la fonction inutile.
     for (const json of [vilbrequin, jansen, decon, doubleSlider, coreXY2])
       expect(dead_points(record(json, 300))).toEqual([]);
   }, 60_000);

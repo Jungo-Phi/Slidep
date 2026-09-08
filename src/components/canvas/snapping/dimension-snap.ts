@@ -1,7 +1,9 @@
 /**
  * Where a dimension's line and label come to rest.
  *
- * A dimension's `position` carries two independent things: how far the line stands off what it measures, and where along it the label sits. Both are free, and both have one place that reads as deliberate — a round offset, and the middle of what is being measured. Left to the pixel, a drawing of a dozen dimensions never lines any of them up.
+ * A dimension's `position` carries two independent things: how far the line stands off what it measures, and where along it the label sits.
+ * Both are free, and both have one place that reads as deliberate — a round offset, and the middle of what is being measured.
+ * Left to the pixel, a drawing of a dozen dimensions never lines any of them up.
  *
  * Applies while the dimension is being placed and while it is being dragged: the same position, set by the same gesture.
  */
@@ -38,9 +40,7 @@ import {
 /**
  * The geometry a dimension's position answers to.
  *
- * Every dimension has the same two freedoms, and the same two things worth landing on:
- * **(A) centring** — where along the measured thing the label sits, which has one deliberate answer, its middle;
- * **(B) the stand-off** — how far the line sits from what it measures, which has a ladder of round answers.
+ * Every dimension has the same two freedoms, and the same two things worth landing on: **(A) centring** — where along the measured thing the label sits, which has one deliberate answer, its middle; **(B) the stand-off** — how far the line sits from what it measures, which has a ladder of round answers.
  *
  * `line` covers everything measured between two points: an edge's length, the gap between two nodes, the drop from a node to a beam.
  * `around` covers what is measured about a centre — an angle, a radius — where centring is a direction rather than a place along a span.
@@ -242,16 +242,15 @@ export function snap_dimension_position(
     const offset = position.sub(target.start);
     const along = offset.dot(axis);
     const stand = snap_offset(offset.cross(axis), step, tolerance);
-    // Mid-span for the label, a round stand-off for the line. Independent: landing on one without the other is a perfectly good answer.
+    // Mid-span for the label, a round stand-off for the line.
+    // Independent: landing on one without the other is a perfectly good answer.
     const centred = Math.abs(along - length / 2) < tolerance;
     const middle = target.start.add(axis.mul(length / 2));
     return {
       position: target.start
         .add(axis.mul(centred ? length / 2 : along))
         .sub(axis.perp().mul(stand.value)),
-      // Shown once reached rather than throughout: an axis drawn before the label
-      // is on it is one more line to read, and the eye finds the middle of a span
-      // without help.
+      // Shown once reached rather than throughout: an axis drawn before the label is on it is one more line to read, and the eye finds the middle of a span without help.
       guides: centred ? [{ anchor: middle, direction: axis.perp() }] : [],
       distanceSnapped: stand.landed,
     };

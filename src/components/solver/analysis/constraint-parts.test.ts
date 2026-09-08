@@ -1,10 +1,8 @@
 /**
  * Does a constraint name the parts it holds, and only those?
  *
- * The measure that matters is a negative one: reading every key of a link and taking
- * whatever sits on each node reaches the neighbours of the parts it holds, because a fused
- * node belongs to everything meeting there. These tests pin the narrowing — and pin that it
- * is a narrowing, never a different answer.
+ * The measure that matters is a negative one: reading every key of a link and taking whatever sits on each node reaches the neighbours of the parts it holds, because a fused node belongs to everything meeting there.
+ * These tests pin the narrowing — and pin that it is a narrowing, never a different answer.
  */
 
 import { describe, expect, it } from "vitest";
@@ -145,8 +143,7 @@ function every_key_element(link: Link): ID[] {
 
 describe("constraint_elements", () => {
   it("une longueur ne nomme que sa poutre, pas les voisines de ses nœuds", () => {
-    // Le défaut à lever : les deux nœuds de b2 portent aussi b1 et b3, et une lecture
-    // clé par clé allumait donc tout le quatre-barres pour la longueur d'une seule barre.
+    // Le défaut à lever : les deux nœuds de b2 portent aussi b1 et b3, et une lecture clé par clé allumait donc tout le quatre-barres pour la longueur d'une seule barre.
     const links = links_of([
       pivot("p1", P(0, 0), true, [id("b1")]),
       pivot("p2", P(0, 100), false, [id("b1"), id("b2")]),
@@ -167,8 +164,7 @@ describe("constraint_elements", () => {
   });
 
   it("un verrou d'angle nomme ses deux poutres et le nœud qui les tient", () => {
-    // Là où l'`owner` seul ne suffit pas : la contrainte est entre le rail et la poutre
-    // portée, et le slider n'est que la pièce sous laquelle le parser l'a rangée.
+    // Là où l'`owner` seul ne suffit pas : la contrainte est entre le rail et la poutre portée, et le slider n'est que la pièce sous laquelle le parser l'a rangée.
     const links = links_of([
       join("g1", P(0, 0), true, [id("rail")]),
       join("g2", P(400, 0), true, [id("rail")]),
@@ -183,8 +179,7 @@ describe("constraint_elements", () => {
     expect(constraint_elements(lock!)).toEqual(
       [id("s1"), id("rail"), id("carried")].sort(),
     );
-    // L'autre slider est sur le rail, donc sur les mêmes nœuds — et il n'a rien à voir
-    // avec ce verrou-ci.
+    // L'autre slider est sur le rail, donc sur les mêmes nœuds — et il n'a rien à voir avec ce verrou-ci.
     expect(constraint_elements(lock!)).not.toContain(id("s2"));
   });
 
@@ -202,8 +197,7 @@ describe("constraint_elements", () => {
   });
 
   it("deux points sans pièce commune se nomment tous les deux", () => {
-    // Le repli, qui est un vrai cas et pas une garde : une cote entre deux pièces
-    // étrangères ne traverse rien, et ses deux bouts sont alors ce qu'elle tient.
+    // Le repli, qui est un vrai cas et pas une garde : une cote entre deux pièces étrangères ne traverse rien, et ses deux bouts sont alors ce qu'elle tient.
     const dimension: Link = {
       type: "Distance",
       ddl: 1,
@@ -215,8 +209,8 @@ describe("constraint_elements", () => {
   });
 
   it("ne nomme jamais une pièce que la lecture clé par clé ne nommait pas", () => {
-    // L'invariant qui tient les deux ensemble : c'est un rétrécissement, jamais une
-    // autre réponse. Un type de lien ajouté qui se tromperait de clé le dirait ici.
+    // L'invariant qui tient les deux ensemble : c'est un rétrécissement, jamais une autre réponse.
+    // Un type de lien ajouté qui se tromperait de clé le dirait ici.
     for (const json of [vilbrequin, jansen, huygens, coreXY, doubleSlider]) {
       const model = build_analysis_model(
         load_mechanism(JSON.parse(json)).mechanism,

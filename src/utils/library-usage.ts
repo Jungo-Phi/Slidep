@@ -1,7 +1,7 @@
 import { ID, MechanicalElement } from "../types/element";
 
 /** How many beams reference `materialID` — only beams ever do; the panel's "used by N beams"
- *  counter, and what gates deletion. */
+ * counter, and what gates deletion. */
 export function material_usage_count(
   mechanicalElements: MechanicalElement[],
   materialID: ID,

@@ -25,10 +25,8 @@ import {
 } from "../snapshot";
 
 /**
- * Interpolating between two snapshots is a drawing, not a solve: the average of two states
- * that each satisfy the constraints does not satisfy them. What this measures is how much
- * that costs on the one thing it can visibly break — a rigid beam's length — against the
- * error already present in the recorded snapshots themselves.
+ * Interpolating between two snapshots is a drawing, not a solve: the average of two states that each satisfy the constraints does not satisfy them.
+ * What this measures is how much that costs on the one thing it can visibly break — a rigid beam's length — against the error already present in the recorded snapshots themselves.
  */
 
 const loadFixture = (json: string) => load_mechanism(JSON.parse(json)).mechanism;
@@ -115,15 +113,12 @@ describe("interpolation des snapshots", () => {
     }
 
     console.log(`\n  pire ajout : ${worstAdded.toExponential(3)} px`);
-    // A tenth of a pixel is the scale at which a beam's length change becomes visible on a
-    // canvas; the interpolation must stay well under it to be a free smoothing.
+    // A tenth of a pixel is the scale at which a beam's length change becomes visible on a canvas; the interpolation must stay well under it to be a free smoothing.
     expect(worstAdded).toBeLessThan(0.1);
   }, 300_000);
 
   it("au pas RÉELLEMENT enregistré, l'erreur reste sous le même seuil", () => {
-    // The recorder solves at RECORD_DT and keeps one instant in two, so what the app
-    // interpolates across is twice the step measured above — and the error of a linear
-    // interpolation is second order in it, so this is where it is expected to quadruple.
+    // The recorder solves at RECORD_DT and keeps one instant in two, so what the app interpolates across is twice the step measured above — and the error of a linear interpolation is second order in it, so this is where it is expected to quadruple.
     const FRAMES = 120;
     console.log("\n  | mécanisme | pas 1/120 | pas retenu 1/60 | rapport |");
     console.log("  |---|---|---|---|");
@@ -174,8 +169,7 @@ describe("interpolation des snapshots", () => {
   }, 60_000);
 
   it("ne franchit pas un changement de topologie de courroie", () => {
-    // `Déconnexion courroie` drops a pulley mid-run: across that frame the earlier snapshot
-    // must be held, never a half-detached belt.
+    // `Déconnexion courroie` drops a pulley mid-run: across that frame the earlier snapshot must be held, never a half-detached belt.
     const { snaps } = record(disconnect, 400);
     const detached = (s: KinematicSnapshot) =>
       s.layout.belts
@@ -193,13 +187,12 @@ describe("interpolation des snapshots", () => {
 });
 
 /**
- * Everything that reads a snapshot by time searches the axis rather than dividing by the
- * step. Recording is uniform today, so these hold nothing up on their own — they are what
- * keeps the readers correct if a variable step ever comes back.
+ * Everything that reads a snapshot by time searches the axis rather than dividing by the step.
+ * Recording is uniform today, so these hold nothing up on their own — they are what keeps the readers correct if a variable step ever comes back.
  */
 describe("axe de temps non uniforme", () => {
   /** Snapshots at the given times, carrying one node that moves with time. They share one
-   *  layout, as the snapshots of a single recording do. */
+   * layout, as the snapshots of a single recording do. */
   const at = (times: number[]): KinematicSnapshot[] => {
     const layout = make_snapshot_layout(["n"], ["g"]);
     return times.map((t) => {
@@ -222,8 +215,7 @@ describe("axe de temps non uniforme", () => {
   });
 
   it("interpole sur la durée réelle de l'intervalle, pas sur RECORD_DT", () => {
-    // A gap of 4 s followed by one of 0.5 s: half-way across each is the midpoint
-    // of that gap, which fixed-step arithmetic would place elsewhere entirely.
+    // A gap of 4 s followed by one of 0.5 s: half-way across each is the midpoint of that gap, which fixed-step arithmetic would place elsewhere entirely.
     const snaps = at([0, 4, 4.5]);
     const x = (t: number) => snapshot_point(snapshot_at(snaps, t)!, "n")?.x;
     expect(x(2)).toBeCloseTo(2, 12);
@@ -249,9 +241,7 @@ describe("réactions à travers l'interpolation dynamique", () => {
   });
 
   it("un instant interpolé garde les réactions du côté gauche, comme les contraintes insatisfaites", () => {
-    // A frame drawn between two recorded ticks is most of what playback shows — if it drops
-    // `reactions` (unlike `unsatisfied`, which it already carries over), every overlay arrow
-    // reads empty except at an exact tick or the very last frame (what a grab draws).
+    // A frame drawn between two recorded ticks is most of what playback shows — if it drops `reactions` (unlike `unsatisfied`, which it already carries over), every overlay arrow reads empty except at an exact tick or the very last frame (what a grab draws).
     const reactions: LinkReaction[] = [
       { type: "Distance", key: "n", atAnchor: true, kind: "force", fx: 1, fy: 2 },
     ];

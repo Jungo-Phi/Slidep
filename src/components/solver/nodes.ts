@@ -1,10 +1,8 @@
 import { Point2 } from "../../types/point2";
 
 /**
- * Solver node storage: parallel `Float64Array`s addressed by slot instead of by string
- * key. Keys are resolved to slots once per solve (see `link-slots.ts`); an unknown key
- * resolves to `ABSENT`, which every constraint must treat as a missing node — the same
- * short-circuit `Map.get()` returning `undefined` used to give.
+ * Solver node storage: parallel `Float64Array`s addressed by slot instead of by string key.
+ * Keys are resolved to slots once per solve (see `link-slots.ts`); an unknown key resolves to `ABSENT`, which every constraint must treat as a missing node — the same short-circuit `Map.get()` returning `undefined` used to give.
  */
 export interface Nodes {
   x: Float64Array;
@@ -12,16 +10,13 @@ export interface Nodes {
   /** Inverse mass: 0 = anchored. A node added without one gets 1. */
   w: Float64Array;
   /**
-   * Velocity, in world units/s. Grown alongside `x`/`y`/`w` so a node added mid-solve (a grab
-   * bridge) stays in bounds, but only a dynamics step (see `PBD_solve`'s `dynamics` param)
-   * ever writes anything other than 0 into it — edition and kinematic solves leave it inert.
+   * Velocity, in world units/s. Grown alongside `x`/`y`/`w` so a node added mid-solve (a grab bridge) stays in bounds, but only a dynamics step (see `PBD_solve`'s `dynamics` param) ever writes anything other than 0 into it — edition and kinematic solves leave it inert.
    */
   vx: Float64Array;
   vy: Float64Array;
   /**
-   * External force (N), grown alongside `vx`/`vy` for the same reason. A dynamics step folds
-   * it into the predict step's acceleration as `gx + fx·w` — force divided by mass, added to
-   * gravity — so it is meaningless without a real mass behind it (see `mass-model.ts`).
+   * External force (N), grown alongside `vx`/`vy` for the same reason.
+   * A dynamics step folds it into the predict step's acceleration as `gx + fx·w` — force divided by mass, added to gravity — so it is meaningless without a real mass behind it (see `mass-model.ts`).
    */
   fx: Float64Array;
   fy: Float64Array;
@@ -38,18 +33,16 @@ export interface SimNodes extends Nodes {
   angleIndex: Map<string, number>;
   angleKeys: string[];
   /** Angular velocity (rad/s), one per `angle` slot — see `Nodes.vx`/`vy`. Angle nodes are
-   *  never grown mid-solve, so this is sized once and left there, unlike `vx`/`vy`. */
+   * never grown mid-solve, so this is sized once and left there, unlike `vx`/`vy`. */
   vAngle: Float64Array;
   /**
-   * Inverse rotational inertia (1/(kg·m²)), one per `angle` slot — the rotational analogue
-   * of `Nodes.w`. A node added without one gets 1, same convention. Populated but unused
-   * today: no constraint yet applies a torque or splits an angular correction by inertia
-   * (`applyGearMeshAngleConstraint` splits by radius, a kinematic ratio, not a physical
-   * weight) — this is plumbing for when one does, not a behaviour change on its own.
+   * Inverse rotational inertia (1/(kg·m²)), one per `angle` slot — the rotational analogue of `Nodes.w`.
+   * A node added without one gets 1, same convention.
+   * Populated but unused today: no constraint yet applies a torque or splits an angular correction by inertia (`applyGearMeshAngleConstraint` splits by radius, a kinematic ratio, not a physical weight) — this is plumbing for when one does, not a behaviour change on its own.
    */
   wAngle: Float64Array;
   /** External torque (N·m), one per `angle` slot — the rotational analogue of `Nodes.fx`/`fy`,
-   *  folded into the predict step as `torque · wAngle`. */
+   * folded into the predict step as `torque · wAngle`. */
   torque: Float64Array;
 }
 
@@ -60,8 +53,7 @@ export interface EditNodes extends Nodes {
   wRadius: Float64Array;
   /**
    * Smallest value each radius may be written to, one per slot — see `radiusFloor`.
-   * Never zero: below `MIN_SOLVED_RADIUS`, meshing, belt geometry and ratios all divide
-   * into infinity.
+   * Never zero: below `MIN_SOLVED_RADIUS`, meshing, belt geometry and ratios all divide into infinity.
    */
   minRadius: Float64Array;
   radIndex: Map<string, number>;
@@ -71,8 +63,7 @@ export interface EditNodes extends Nodes {
 /**
  * How small a radius the solver may write, whatever the caller asks for.
  *
- * A numerical guard, not a size: nothing here says how small a gear may be, only that a
- * zero one breaks the arithmetic downstream.
+ * A numerical guard, not a size: nothing here says how small a gear may be, only that a zero one breaks the arithmetic downstream.
  */
 export const MIN_SOLVED_RADIUS = 1e-6;
 
@@ -101,9 +92,9 @@ export function makeNodes(capacity: number = 16): Nodes {
 }
 
 /**
- * Appends a node, or returns the existing slot if the key is already known (without
- * touching its values). Invalidates any `Float64Array` reference held across the call —
- * growing reallocates. Never call it during a sweep.
+ * Appends a node, or returns the existing slot if the key is already known (without touching its values).
+ * Invalidates any `Float64Array` reference held across the call — growing reallocates.
+ * Never call it during a sweep.
  */
 export function addNode(
   nodes: Nodes,
@@ -157,10 +148,8 @@ export function addTo(nodes: Nodes, i: number, dx: number, dy: number): void {
 }
 
 /**
- * Diagonal of the mechanism's bounding box — the scale its own tolerances are judged
- * against (see `PBD_kinematic_solver`'s `DIAGNOSTIC_TOLERANCE_RATIO`/`REMAINING_RATIO`), the
- * same role `model_extent` plays for a chain's swing. `0` for an empty or single-point node
- * set, which the caller floors.
+ * Diagonal of the mechanism's bounding box — the scale its own tolerances are judged against (see `PBD_kinematic_solver`'s `DIAGNOSTIC_TOLERANCE_RATIO`/`REMAINING_RATIO`), the same role `model_extent` plays for a chain's swing.
+ * `0` for an empty or single-point node set, which the caller floors.
  */
 export function nodes_extent(nodes: Nodes): number {
   let minX = Infinity;
@@ -177,7 +166,7 @@ export function nodes_extent(nodes: Nodes): number {
 }
 
 /** Same diagonal as `nodes_extent`, for callers still on the map-shaped API (model
- *  compilation, collision detection) rather than the indexed solver storage. */
+ * compilation, collision detection) rather than the indexed solver storage. */
 export function positions_extent(positions: Map<string, Point2>): number {
   let minX = Infinity;
   let minY = Infinity;
@@ -193,12 +182,8 @@ export function positions_extent(positions: Map<string, Point2>): number {
 }
 
 /**
- * Extent substitute for a mechanism with no measurable size — every node at the same point,
- * or none at all. There is no scale to be relative to, so every extent-relative tolerance in
- * the solver (`PBD_kinematic_solver`'s `DIAGNOSTIC_TOLERANCE_RATIO`/`REMAINING_RATIO`,
- * `collision-detection.ts`'s `CONTACT_EPS_RATIO`, `simulation-engine.ts`'s
- * `beltContact.detachRatio`/`reattachRatio`) falls back to the same 1 mm they were all tuned
- * at.
+ * Extent substitute for a mechanism with no measurable size — every node at the same point, or none at all.
+ * There is no scale to be relative to, so every extent-relative tolerance in the solver (`PBD_kinematic_solver`'s `DIAGNOSTIC_TOLERANCE_RATIO`/`REMAINING_RATIO`, `collision-detection.ts`'s `CONTACT_EPS_RATIO`, `simulation-engine.ts`'s `beltContact.detachRatio`/`reattachRatio`) falls back to the same 1 mm they were all tuned at.
  */
 export const MIN_EXTENT_M = 0.001;
 
@@ -247,9 +232,8 @@ function fillScalars(
 }
 
 /**
- * The solver's internal node set: it carries both extra DOF families so one solver can
- * serve both modes. The constraints themselves declare `Nodes`, `SimNodes` or `EditNodes`
- * according to what they are allowed to touch.
+ * The solver's internal node set: it carries both extra DOF families so one solver can serve both modes.
+ * The constraints themselves declare `Nodes`, `SimNodes` or `EditNodes` according to what they are allowed to touch.
  */
 export type SolveNodes = SimNodes & EditNodes;
 
@@ -260,18 +244,17 @@ export function solveNodesFromMaps(
   radii: Map<string, number>,
   radMasses: Map<string, number>,
   /**
-   * Smallest radius this solve may shrink a gear to, in world units — the caller's, since
-   * only it knows the zoom the bound answers to. A gear already under it keeps its own
-   * radius as its floor: a solve may hold a small gear where it is, never blow it out to a
-   * size nobody asked for. Omitted, only `MIN_SOLVED_RADIUS` applies.
+   * Smallest radius this solve may shrink a gear to, in world units — the caller's, since only it knows the zoom the bound answers to.
+   * A gear already under it keeps its own radius as its floor: a solve may hold a small gear where it is, never blow it out to a size nobody asked for.
+   * Omitted, only `MIN_SOLVED_RADIUS` applies.
    */
   radiusFloor: number = 0,
   /** Warm-started into `vx`/`vy`/`vAngle` — read only by a dynamics step (see
-   *  `PBD_solve`'s `dynamics` param); every other caller leaves these empty. */
+   * `PBD_solve`'s `dynamics` param); every other caller leaves these empty. */
   velocities: Map<string, Point2> = new Map(),
   angleVelocities: Map<string, number> = new Map(),
   /** Populates `wAngle` — see its doc on `SimNodes`. A caller without one gets 1 everywhere,
-   *  same as `posMasses`/`radMasses` when omitted. */
+   * same as `posMasses`/`radMasses` when omitted. */
   angleMasses: Map<string, number> = new Map(),
   /** Populates `fx`/`fy` — read only by a dynamics step, like `velocities`. */
   forces: Map<string, Point2> = new Map(),

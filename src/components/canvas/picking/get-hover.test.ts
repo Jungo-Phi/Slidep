@@ -23,12 +23,10 @@ import {
 } from "../../../types";
 
 /**
- * Characterisation of the hover: every canvas state probed against every target
- * family, at points chosen to land on each part.
+ * Characterisation of the hover: every canvas state probed against every target family, at points chosen to land on each part.
  *
- * It exists to make `get-hover` refactorable. The snapshot is not a specification
- * — `doc/hover-matrix.md` is — but any line that moves without a matching change
- * in that document is a regression.
+ * It exists to make `get-hover` refactorable.
+ * The snapshot is not a specification — `doc/hover-matrix.md` is — but any line that moves without a matching change in that document is a regression.
  */
 
 const id = (s: string) =>
@@ -161,8 +159,7 @@ const belt: BeltElement = {
   closed: false,
 };
 
-// A belt with no pulley, so its single straight run lies on a known line — the
-// runs of the wrapped belt above are tangents, and land nowhere obvious.
+// A belt with no pulley, so its single straight run lies on a known line — the runs of the wrapped belt above are tangents, and land nowhere obvious.
 const plainBelt: BeltElement = {
   type: "belt",
   id: PLAIN_BELT,
@@ -394,9 +391,8 @@ describe("get_hovered_part", () => {
 });
 
 /**
- * A drag reaches only what the solver granted it. The mass sits at (600,0) and
- * the join at (200,0): asking to bring the mass onto the join and being left
- * where it started is what an anchor holding it looks like from here.
+ * A drag reaches only what the solver granted it.
+ * The mass sits at (600,0) and the join at (200,0): asking to bring the mass onto the join and being left where it started is what an anchor holding it looks like from here.
  */
 describe("une cible que le glissement n'atteint pas", () => {
   const dragging: CanvasState = { type: "MovingNode", elementID: MASS };
@@ -418,8 +414,7 @@ describe("une cible que le glissement n'atteint pas", () => {
   });
 
   it("l'est quand ce qui a été demandé a été accordé", () => {
-    // Asked for the mass's own place, and that is where it is: nothing held it
-    // back, so the join under the cursor is a target like any other.
+    // Asked for the mass's own place, and that is where it is: nothing held it back, so the join under the cursor is a target like any other.
     expect(names_element(at(P(600, 0)))).toBe(true);
   });
 
@@ -431,11 +426,8 @@ describe("une cible que le glissement n'atteint pas", () => {
 /**
  * Le même contrôle, pour le geste qui ne produit pas un point mais un rayon.
  *
- * L'engrenage dimensionné est au centre, la cible à 300 avec un rayon de 100 :
- * la tangence est donc en (200,0) et le rayon accordé vaut 200. Le curseur, lui,
- * est ailleurs sur la jante de la cible — mesurer la poignée sur son relèvement
- * plutôt que sur celui de la tangence faisait osciller le survol d'une frame à
- * l'autre.
+ * L'engrenage dimensionné est au centre, la cible à 300 avec un rayon de 100 : la tangence est donc en (200,0) et le rayon accordé vaut 200.
+ * Le curseur, lui, est ailleurs sur la jante de la cible — mesurer la poignée sur son relèvement plutôt que sur celui de la tangence faisait osciller le survol d'une frame à l'autre.
  */
 describe("un rayon que le glissement n'atteint pas", () => {
   const SIZED_AXLE = id("a3");
@@ -531,8 +523,7 @@ describe("probe badge", () => {
     expect(at(BADGE, { type: "Selecting" }).type).toBe("Probe");
   });
 
-  // The decision behind all of this: a probe goes with its host, and a badge off
-  // to the side must never become a way to delete that host by mistake.
+  // The decision behind all of this: a probe goes with its host, and a badge off to the side must never become a way to delete that host by mistake.
   it("is not a target for the eraser", () => {
     expect(at(BADGE, { type: "Erasing" }).type).not.toBe("Probe");
   });

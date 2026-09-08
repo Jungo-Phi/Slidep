@@ -13,13 +13,11 @@ import {
 import { snapshot_angle, snapshot_point } from "../snapshot";
 
 /**
- * Guardrails for the three belt reference mechanisms, on a short horizon: they catch a
- * frank regression of belt behaviour in the default test pass. The detailed measurement
- * harnesses live in `belt-*.bench.test.ts` (`npm run test:bench`).
+ * Guardrails for the three belt reference mechanisms, on a short horizon: they catch a frank regression of belt behaviour in the default test pass.
+ * The detailed measurement harnesses live in `belt-*.bench.test.ts` (`npm run test:bench`).
  *
- * The expected values below describe the CURRENT belt model. Several of them are the
- * documented defects it is meant to fix, so they are expected to change — see
- * `docs/belt-kinematic-solver/plan-implementation.md`.
+ * The expected values below describe the CURRENT belt model.
+ * Several of them are the documented defects it is meant to fix, so they are expected to change — see `docs/belt-kinematic-solver/plan-implementation.md`.
  */
 
 const deg = (r: number) => (r * 180) / Math.PI;
@@ -52,10 +50,8 @@ describe("garde-fous des mécanismes à courroie", () => {
       if (frame === 100) blocked = deg(snapshot_angle(snapshot, motor.angleKey) ?? 0);
     });
 
-    // The motor commands 1 rad/s clockwise, i.e. −100° by frame 100 in the model's
-    // frame, if nothing stopped it. The dead point sits near −57°: the sliders run
-    // the whole of their beams, ends included, so the mechanism reaches it later
-    // than it did when they stopped short of them.
+    // The motor commands 1 rad/s clockwise, i.e. −100° by frame 100 in the model's frame, if nothing stopped it.
+    // The dead point sits near −57°: the sliders run the whole of their beams, ends included, so the mechanism reaches it later than it did when they stopped short of them.
     console.log(`  blocage à ${blocked.toFixed(4)}°`);
     expect(blocked).toBeLessThan(-45);
     expect(blocked).toBeGreaterThan(-62);
@@ -80,8 +76,8 @@ describe("garde-fous des mécanismes à courroie", () => {
     const end = snapshot_point(r, carriage) ?? snapshot_point(r, key)!;
     const ratio = (end.y - start.y) / (end.x - start.x);
 
-    // Freezing one motor leaves a single degree of freedom — the diagonal, Δy/Δx ≈ 1 —
-    // and the frozen motor must stay put. Both follow from the belt no longer slipping.
+    // Freezing one motor leaves a single degree of freedom — the diagonal, Δy/Δx ≈ 1 — and the frozen motor must stay put.
+    // Both follow from the belt no longer slipping.
     console.log(
       `  Δ = (${(end.x - start.x).toFixed(2)}, ${(end.y - start.y).toFixed(2)})  Δy/Δx = ${ratio.toFixed(4)}  figé = ${deg(snapshot_angle(r, frozen.angleKey) ?? 0).toFixed(4)}°`,
     );
@@ -94,10 +90,7 @@ describe("garde-fous des mécanismes à courroie", () => {
   it("Huygen's chain drive — le moteur suit sa consigne", () => {
     const model = compile_simulation_model(loadFixture(huygensJson));
     const motor = motorsOf(model)[0];
-    // Long enough that the motor's own startup ramp (see `MOTOR_STARTUP_RAMP_S`) — a fixed
-    // angle it never makes up, by design — is a small fraction of the total rather than
-    // most of it: at 60 frames it alone was enough to fail this, with nothing holding the
-    // motor back at all.
+    // Long enough that the motor's own startup ramp (see `MOTOR_STARTUP_RAMP_S`) — a fixed angle it never makes up, by design — is a small fraction of the total rather than most of it: at 60 frames it alone was enough to fail this, with nothing holding the motor back at all.
     const frames = 600;
     const r = run(model, frames);
     const tracking =

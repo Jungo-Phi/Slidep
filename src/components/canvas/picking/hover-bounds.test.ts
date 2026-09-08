@@ -76,8 +76,7 @@ const placing = (
 const ON_RIM = P(0, -40);
 
 describe("clamp_to_bounds — extrémité de courroie hors de sa poulie", () => {
-  // The gear the gesture started on joins `attachedGearsIDs` only at
-  // finalisation, so the bound has to read it from `startHover`.
+  // The gear the gesture started on joins `attachedGearsIDs` only at finalisation, so the bound has to read it from `startHover`.
   it("repousse le bout hors de la poulie de départ, avant tout routage", () => {
     const state = placing({
       type: "GearTooth",
@@ -100,8 +99,7 @@ describe("clamp_to_bounds — extrémité de courroie hors de sa poulie", () => 
     expect(clamp_to_bounds(P(200, 0), state, MECH, VIEW)).toEqual(P(200, 0));
   });
 
-  // No pulley at all: the belt is a plain span and answers to the minimum edge
-  // length instead.
+  // No pulley at all: the belt is a plain span and answers to the minimum edge length instead.
   it("garde la longueur minimale quand le départ n'est pas sur une poulie", () => {
     const state = placing({ type: "Void", position: P(0, 0) });
     expect(
@@ -134,8 +132,7 @@ describe("clamp_to_bounds — les minima sont des distances écran", () => {
     }
   });
 
-  // Zoomed in, a beam far shorter than the old world constant becomes something
-  // one can legitimately draw — and the bound must let it through.
+  // Zoomed in, a beam far shorter than the old world constant becomes something one can legitimately draw — and the bound must let it through.
   it("laisse passer une barre courte en unités monde, une fois zoomé", () => {
     const view: ViewportState = { scale: 8, pan: new Point2(0, 0) };
     expect(clamp_to_bounds(P(10, 0), beam(), MECH, view)).toEqual(P(10, 0));
@@ -143,8 +140,7 @@ describe("clamp_to_bounds — les minima sont des distances écran", () => {
 });
 
 /**
- * Dézoomé au point que le minimum écran vaut bien plus que ce que mesurent les
- * fixtures, le seul plancher qui reste est leur propre taille.
+ * Dézoomé au point que le minimum écran vaut bien plus que ce que mesurent les fixtures, le seul plancher qui reste est leur propre taille.
  */
 describe("clamp_to_bounds — un minimum ne fait jamais grandir", () => {
   const sizing: CanvasState = { type: "ChangingGearRadius", elementID: GEAR };
@@ -164,15 +160,13 @@ describe("clamp_to_bounds — un minimum ne fait jamais grandir", () => {
     expect(bounded.distance_to(P(100, 0))).toBeCloseTo(BEAM_LENGTH);
   });
 
-  // Le plancher redescend avec le zoom : c'est ainsi qu'on récupère les petites
-  // tailles, au lieu de les interdire une fois pour toutes.
+  // Le plancher redescend avec le zoom : c'est ainsi qu'on récupère les petites tailles, au lieu de les interdire une fois pour toutes.
   it("laisse rétrécir l'engrenage une fois zoomé", () => {
     const view: ViewportState = { scale: 8, pan: new Point2(0, 0) };
     expect(clamp_to_bounds(P(10, 0), sizing, MECH, view)).toEqual(P(10, 0));
   });
 
-  // Rien en main, rien à cliqueter : la pose répond au minimum écran entier, là
-  // où le redimensionnement au même zoom se serait arrêté au rayon courant.
+  // Rien en main, rien à cliqueter : la pose répond au minimum écran entier, là où le redimensionnement au même zoom se serait arrêté au rayon courant.
   it("pose un engrenage neuf sans rien à cliqueter", () => {
     const placingGear: CanvasState = {
       type: "PlacingGearRadius",

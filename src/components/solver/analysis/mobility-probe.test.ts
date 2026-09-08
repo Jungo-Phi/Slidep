@@ -154,8 +154,8 @@ describe("probe_chain_mobility — valeurs connues d'avance", () => {
   });
 
   it("deux poutres redondantes entre les mêmes pivots : m = 1, h = 1", () => {
-    // Le décompte donne G = 0 et ne peut pas dire lequel des deux termes vaut
-    // quoi. C'est le cas d'école qui justifie la sonde.
+    // Le décompte donne G = 0 et ne peut pas dire lequel des deux termes vaut quoi.
+    // C'est le cas d'école qui justifie la sonde.
     expect(
       mobility([
         pivot("p1", P(0, 0), true, [id("b1"), id("b2")]),
@@ -171,11 +171,7 @@ describe("probe_chain_mobility — valeurs connues d'avance", () => {
   });
 
   it("une poutre portée par deux sliders d'un même rail translate : m = 1, h = 2", () => {
-    // La mobilité est bien 1 (elle coulisse), mais le modèle pose 5 lignes de
-    // contrainte pour un rang de 3 : SlideOnSegment ×2 + Distance suffisent, et
-    // les deux Angle qu'`add_rigidity_links` ajoute par slider verrouillent une
-    // orientation déjà imposée — la poutre portée est colinéaire au rail par
-    // construction, ses deux extrémités y glissant.
+    // La mobilité est bien 1 (elle coulisse), mais le modèle pose 5 lignes de contrainte pour un rang de 3 : SlideOnSegment ×2 + Distance suffisent, et les deux Angle qu'`add_rigidity_links` ajoute par slider verrouillent une orientation déjà imposée — la poutre portée est colinéaire au rail par construction, ses deux extrémités y glissant.
     expect(
       mobility([
         join("g1", P(0, 0), true, [id("rail")]),
@@ -189,11 +185,8 @@ describe("probe_chain_mobility — valeurs connues d'avance", () => {
   });
 
   it("le même mécanisme dessiné plus petit répond la même chose", () => {
-    // La sonde n'a pas d'amplitude plancher, et c'est ce test qui l'interdit : toute
-    // valeur absolue finit par dépasser le mécanisme qu'elle sonde, ce qui sort du
-    // régime linéaire sur lequel repose toute la projection. Un plancher d'un
-    // millimètre faisait répondre 3 à ce double pendule dessiné sur 2 mm — donc un
-    // mode et une redondance qui n'existent pas.
+    // La sonde n'a pas d'amplitude plancher, et c'est ce test qui l'interdit : toute valeur absolue finit par dépasser le mécanisme qu'elle sonde, ce qui sort du régime linéaire sur lequel repose toute la projection.
+    // Un plancher d'un millimètre faisait répondre 3 à ce double pendule dessiné sur 2 mm — donc un mode et une redondance qui n'existent pas.
     const pendulum = (k: number) => [
       pivot("p1", P(0, 0), true, [id("b1")]),
       pivot("p2", P(k, 0), false, [id("b1"), id("b2")]),
@@ -213,11 +206,8 @@ describe("probe_chain_mobility — valeurs connues d'avance", () => {
   });
 
   it("une pose que le modèle ne satisfait pas n'invente pas de mode", () => {
-    // Le quatre-barres, mais la manivelle et la bielle ne se rejoignent pas : la fusion
-    // pose le nœud partagé entre les deux, et aucune des deux longueurs cuites n'y tient.
-    // Le solveur referme donc la boucle avant même qu'on ait poussé, et ce déplacement-là
-    // est le même quelle que soit la direction sondée — une constante, que la sonde compte
-    // comme une direction de plus si on ne la lui retire pas.
+    // Le quatre-barres, mais la manivelle et la bielle ne se rejoignent pas : la fusion pose le nœud partagé entre les deux, et aucune des deux longueurs cuites n'y tient.
+    // Le solveur referme donc la boucle avant même qu'on ait poussé, et ce déplacement-là est le même quelle que soit la direction sondée — une constante, que la sonde compte comme une direction de plus si on ne la lui retire pas.
     const [result] = probe_mobility(
       build_analysis_model(
         mechanism([
@@ -274,11 +264,9 @@ describe("probe_chain_mobility — mécanismes de référence", () => {
   });
 
   it("une poulie que la courroie a lâchée rend son degré de liberté", () => {
-    // La déconnexion est un état de simulation : elle vit sur le lien, semée depuis un
-    // snapshot, et `compile_simulation_model` reconstruit toujours la courroie entière.
+    // La déconnexion est un état de simulation : elle vit sur le lien, semée depuis un snapshot, et `compile_simulation_model` reconstruit toujours la courroie entière.
     // L'analyse lit pourtant la pose affichée, où la courroie passe droit devant la poulie.
-    // Sans en tenir compte, la loi de brin de cette poulie masque la liberté que la courroie
-    // vient de rendre — mesuré 1 au lieu de 2 sur ce mécanisme.
+    // Sans en tenir compte, la loi de brin de cette poulie masque la liberté que la courroie vient de rendre — mesuré 1 au lieu de 2 sur ce mécanisme.
     const { mechanism: mech } = load_mechanism(JSON.parse(decon));
     const belt = mech.mechanicalElements.find((el) => el.type === "belt")!;
     const attached = (belt as { attachedGearsIDs: unknown[] }).attachedGearsIDs;
@@ -316,10 +304,8 @@ describe("probe_chain_mobility — mécanismes de référence", () => {
   });
 
   it("le joint relit son s0 sur la boucle amputée, pas sur l'entière", () => {
-    // `rewire_belts` mesure le `s0` du joint sur la boucle privée de la poulie lâchée ; le
-    // lien qui relit ce `s0` doit parcourir la même. Sinon il pose le joint ailleurs — 316 mm
-    // ailleurs, mesuré sur `Déconnexion courroie` à 2,5 s —, la pose de repos du modèle viole
-    // sa propre contrainte, et la sonde comptait cet écart comme un troisième mode.
+    // `rewire_belts` mesure le `s0` du joint sur la boucle privée de la poulie lâchée ; le lien qui relit ce `s0` doit parcourir la même.
+    // Sinon il pose le joint ailleurs — 316 mm ailleurs, mesuré sur `Déconnexion courroie` à 2,5 s —, la pose de repos du modèle viole sa propre contrainte, et la sonde comptait cet écart comme un troisième mode.
     const { mechanism: mech } = load_mechanism(JSON.parse(decon));
     const belt = mech.mechanicalElements.find((el) => el.type === "belt")!;
     const model = build_analysis_model({
@@ -340,17 +326,15 @@ describe("probe_chain_mobility — mécanismes de référence", () => {
   });
 
   it("m et h de référence", () => {
-    // Valeurs mesurées, stables de tolérance 0.5 à 0.9, à amplitude divisée par
-    // dix, à 200 balayages et en sortie sur le mouvement. Core XY vaut bien ses
-    // deux axes, Jansen son unique DDL — le panneau affichait 6 et −1.
+    // Valeurs mesurées, stables de tolérance 0.5 à 0.9, à amplitude divisée par dix, à 200 balayages et en sortie sur le mouvement.
+    // Core XY vaut bien ses deux axes, Jansen son unique DDL — le panneau affichait 6 et −1.
     const mh = (json: string) =>
       probe_mobility(fixture(json)).map((r) => [r.mobility, r.hyperstaticity]);
     expect(mh(vilbrequin)).toEqual([[1, 0]]);
     expect(mh(slider)).toEqual([[1, 0]]);
     expect(mh(jansen)).toEqual([[1, 1]]);
-    // Les entraînements à boucle fermée sont sains : leur unique hyperstatisme était
-    // la loi de brin en trop du modèle, désormais élaguée. Poulie bloqueuse garde le
-    // sien, qui lui est réel.
+    // Les entraînements à boucle fermée sont sains : leur unique hyperstatisme était la loi de brin en trop du modèle, désormais élaguée.
+    // Poulie bloqueuse garde le sien, qui lui est réel.
     expect(mh(decon)).toEqual([[1, 0]]);
     expect(mh(poulie)).toEqual([[1, 1]]);
     expect(mh(huygens)).toEqual([[6, 0]]);
@@ -363,9 +347,8 @@ describe("probe_chain_mobility — mécanismes de référence", () => {
   });
 
   it("la loi de brin élaguée ne retenait effectivement rien", () => {
-    // Le garde-fou de l'élagage : si la ligne retirée portait une vraie contrainte, la
-    // remettre ferait BAISSER la mobilité. Elle doit être rigoureusement sans effet —
-    // c'est ce qui autorise à la retrancher sans la mesurer à chaque fois.
+    // Le garde-fou de l'élagage : si la ligne retirée portait une vraie contrainte, la remettre ferait BAISSER la mobilité.
+    // Elle doit être rigoureusement sans effet — c'est ce qui autorise à la retrancher sans la mesurer à chaque fois.
     for (const json of [decon, poulie, huygens]) {
       const model = fixture(json);
       const surplus = model.pruned

@@ -1,17 +1,11 @@
 /**
- * Where everything in a section schema lands, the section's own centre being the origin: the
- * section is drawn at a fixed size, each cote is placed at a constant distance from the
- * section's own edge — never from a fixed box, which is what keeps the spacing identical from
- * one profile to the next — and the view is then cropped to whatever that covered, so no
- * profile carries a margin it did not ask for. Cotes sharing a side stack, so they cannot
- * collide.
+ * Where everything in a section schema lands, the section's own centre being the origin: the section is drawn at a fixed size, each cote is placed at a constant distance from the section's own edge — never from a fixed box, which is what keeps the spacing identical from one profile to the next — and the view is then cropped to whatever that covered, so no profile carries a margin it did not ask for.
+ * Cotes sharing a side stack, so they cannot collide.
  *
- * A cote too narrow to carry its own label does not give up on measuring: it runs its dimension
- * line on past the span and sets the label on that run, which is what a drawing does with a
- * wall thickness. Which way it runs is chosen to cost the schema no height.
+ * A cote too narrow to carry its own label does not give up on measuring: it runs its dimension line on past the span and sets the label on that run, which is what a drawing does with a wall thickness.
+ * Which way it runs is chosen to cost the schema no height.
  *
- * The drawing may go out of scale to stay readable (see `MAX_ASPECT` and `MIN_THICKNESS` in
- * `SECTION_SCHEMA`); the values the cotes carry are always the true ones.
+ * The drawing may go out of scale to stay readable (see `MAX_ASPECT` and `MIN_THICKNESS` in `SECTION_SCHEMA`); the values the cotes carry are always the true ones.
  */
 
 import { ProfileShape } from "../../../types/material";
@@ -52,7 +46,7 @@ export interface Segment {
 }
 
 /** An arrowhead closing one end of a dimension: its tip on the measured point, its back edge
- *  centred on `base` — inside the span, or outside it when the span is too short to seat it. */
+ * centred on `base` — inside the span, or outside it when the span is too short to seat it. */
 export interface ArrowHead {
   tip: Point;
   base: Point;
@@ -64,7 +58,7 @@ export interface CoteText {
   anchor: "start" | "middle" | "end";
   baseline: "middle" | "hanging" | "auto";
   /** Turned a quarter-turn to read bottom-to-top, alongside a vertical dimension line — which
-   *  then runs along the label's own baseline, underlining it. */
+   * then runs along the label's own baseline, underlining it. */
   rotated: boolean;
 }
 
@@ -87,7 +81,7 @@ export interface SchemaLayout {
   /** The section as it came out on screen, once fitted and clamped. */
   drawn: DrawnShape;
   /** The outline, `fill-rule="evenodd"` — subpaths past the first are holes. Centred on the
-   *  origin, like everything else here. */
+   * origin, like everything else here. */
   path: string;
   cotes: ResolvedCote[];
   neutralAxis: Segment;
@@ -100,10 +94,8 @@ function cote_label(a: Annotation): string {
 }
 
 /**
- * Advance width of each character a cote label can hold, in ems — the digits and the handful of
- * letters `name = value` is built from. A single average would do to reserve margin, but the
- * dimension line is drawn to this estimate as well, running under the label: a letter as narrow
- * as `t` counted at an average width leaves the line visibly poking out past the text.
+ * Advance width of each character a cote label can hold, in ems — the digits and the handful of letters `name = value` is built from.
+ * A single average would do to reserve margin, but the dimension line is drawn to this estimate as well, running under the label: a letter as narrow as `t` counted at an average width leaves the line visibly poking out past the text.
  */
 const ADVANCE: Record<string, number> = {
   " ": 0.278,
@@ -141,14 +133,12 @@ export function layout_section_schema(shape: ProfileShape): SchemaLayout {
   const w = drawn_ratio >= 1 ? SECTION_SIZE : SECTION_SIZE * drawn_ratio;
   const h = drawn_ratio >= 1 ? SECTION_SIZE / drawn_ratio : SECTION_SIZE;
 
-  // Thicknesses take one scalar scale rather than their own axis: a single parameter has to
-  // come out as a single drawn width, whatever the aspect clamp did to the two axes.
+  // Thicknesses take one scalar scale rather than their own axis: a single parameter has to come out as a single drawn width, whatever the aspect clamp did to the two axes.
   const thickness_scale = Math.min(w / desc.extent.w, h / desc.extent.h);
   const true_widths = Object.entries(desc.thicknesses).map(
     ([name, value]) => [name, value * thickness_scale] as const,
   );
-  // Thinning is fixed by one gain shared by every wall, not by flooring each on its own: two
-  // walls that really do differ must not come out of the clamp drawn the same.
+  // Thinning is fixed by one gain shared by every wall, not by flooring each on its own: two walls that really do differ must not come out of the clamp drawn the same.
   const short = Math.min(w, h);
   const floor = Math.max(short * MIN_THICKNESS, MIN_THICKNESS_PX);
   const thinnest = Math.min(...true_widths.map(([, width]) => width));
@@ -235,8 +225,7 @@ const cote_boxes = (cote: ResolvedCote): Box[] => [
 ];
 
 /** The view the drawing needs: tight on its content, plus `PAD`. Horizontally it is widened to
- *  whichever side reaches further, so the section — drawn about the origin — stays centred in
- *  the panel however lopsided its cotes are. */
+ * whichever side reaches further, so the section — drawn about the origin — stays centred in the panel however lopsided its cotes are. */
 function crop(boxes: Box[]): { x: number; y: number; w: number; h: number } {
   const half = Math.max(...boxes.flatMap((b) => [-b.x0, b.x1])) + PAD;
   const y0 = Math.min(...boxes.map((b) => b.y0)) - PAD;
@@ -260,17 +249,16 @@ const arrowhead_box = (head: ArrowHead): Box =>
   point_box(...arrowhead_points(head));
 
 /** Tip on the measured point, body falling back inside the span — or out of it when the span is
- *  too short to seat both heads. `out` points away from the span. */
+ * too short to seat both heads.
+ * `out` points away from the span. */
 const head = (tip: Point, out: Point, outside: boolean): ArrowHead => ({
   tip,
   base: add(tip, scale(out, outside ? ARROW : -ARROW)),
 });
 
 /**
- * How a label that will not fit between its own two measured points is carried out on the
- * dimension line instead: `run` is the unit direction the line is continued in and `start` the
- * point it leaves from. The label then stands off that continuation exactly as it would off a
- * dimension line it did fit on, so the two placements read the same.
+ * How a label that will not fit between its own two measured points is carried out on the dimension line instead: `run` is the unit direction the line is continued in and `start` the point it leaves from.
+ * The label then stands off that continuation exactly as it would off a dimension line it did fit on, so the two placements read the same.
  */
 function carried_label(
   start: Point,
@@ -350,9 +338,7 @@ function resolve_offset(
     ),
   };
 
-  // The label may sit between the two measured points as long as it does not reach the
-  // extension lines standing at them — that, and nothing about the span's absolute size, is
-  // what says a cote is too cramped to carry its own label.
+  // The label may sit between the two measured points as long as it does not reach the extension lines standing at them — that, and nothing about the span's absolute size, is what says a cote is too cramped to carry its own label.
   if (width <= to - from) {
     return {
       ...common,
@@ -376,9 +362,8 @@ function resolve_offset(
   }
 
   if (vertical && to - from >= 2 * d.hh - 1e-6) {
-    // A vertical cote spanning the whole section has no section left to run alongside: carrying
-    // its label either way would buy legibility with height. It stands off the line instead,
-    // set level, which costs width the panel has to spare.
+    // A vertical cote spanning the whole section has no section left to run alongside: carrying its label either way would buy legibility with height.
+    // It stands off the line instead, set level, which costs width the panel has to spare.
     return {
       ...common,
       leader: [],
@@ -391,9 +376,8 @@ function resolve_offset(
       },
     };
   }
-  // The line runs on towards the section's own middle rather than away from it — alongside the
-  // section, where the other way would push the view out past it. A horizontal cote pays no
-  // height whichever way it runs, so one spanning the whole width simply goes left.
+  // The line runs on towards the section's own middle rather than away from it — alongside the section, where the other way would push the view out past it.
+  // A horizontal cote pays no height whichever way it runs, so one spanning the whole width simply goes left.
   const forward = (from + to) / 2 < 0 ? 1 : -1;
   const carried = carried_label(
     on_line(forward > 0 ? to : from),
@@ -413,16 +397,11 @@ function resolve_leader(
   const from = a.from(d);
   const to = a.to(d);
   const line = seg(from, to);
-  // The leader picks up where the cote stops on the section itself, never at the bounding box:
-  // what it has to clear is the feature it measures, and a wall buried in the section is
-  // already clear of everything else.
+  // The leader picks up where the cote stops on the section itself, never at the bounding box: what it has to clear is the feature it measures, and a wall buried in the section is already clear of everything else.
   //
-  // `DIM_OFFSET` is calibrated for cotes that already start at the section's edge; run along a
-  // single axis from deep inside instead (a web's `tw`) and it can overshoot the edge, reaching
-  // as far out as an edge cote's own dimension line. So on a single axis it is capped at that
-  // edge, kept the same clear gap `TEXT_GAP` stands other lines off a feature. A leader running
-  // off both axes (a bore wall, read along a radius) has no such edge to cap against — its
-  // silhouette is a circle, not this box — so it keeps the plain offset.
+  // `DIM_OFFSET` is calibrated for cotes that already start at the section's edge; run along a single axis from deep inside instead (a web's `tw`) and it can overshoot the edge, reaching as far out as an edge cote's own dimension line.
+  // So on a single axis it is capped at that edge, kept the same clear gap `TEXT_GAP` stands other lines off a feature.
+  // A leader running off both axes (a bore wall, read along a radius) has no such edge to cap against — its silhouette is a circle, not this box — so it keeps the plain offset.
   const axis_aligned = (a.out.x === 0) !== (a.out.y === 0);
   let reach: number = DIM_OFFSET;
   if (axis_aligned) {

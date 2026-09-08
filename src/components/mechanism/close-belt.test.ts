@@ -67,8 +67,7 @@ describe("close_belt_actions", () => {
     ]);
   });
 
-  // Seated under the cursor, the junction starts off the loop and the geometric
-  // BeltJunction pulls the pulleys toward it — the belt moves to meet the join.
+  // Seated under the cursor, the junction starts off the loop and the geometric BeltJunction pulls the pulleys toward it — the belt moves to meet the join.
   it("seats a fresh junction on the loop, not under the cursor", () => {
     const b = belt();
     // Well above the loop, so the nearest belt point is the top run at y = -30.
@@ -84,8 +83,7 @@ describe("close_belt_actions", () => {
     expect(join.position.y).toBeCloseTo(-30);
   });
 
-  // The cursor sits inside the loop here, so the junction is pulled out onto the
-  // nearest run rather than left floating between the pulleys.
+  // The cursor sits inside the loop here, so the junction is pulled out onto the nearest run rather than left floating between the pulleys.
   it("seats it on the loop from inside too", () => {
     const b = belt();
     const actions = close_belt_actions(
@@ -192,8 +190,7 @@ function mechanism(mechanicalElements: MechanicalElement[]): Mechanism {
 }
 
 describe("apply_actions auto-closes a belt a gesture makes looped", () => {
-  // Bringing the free end onto the node that already holds the start makes the
-  // belt looped; the correction must close it without an explicit CloseBelt.
+  // Bringing the free end onto the node that already holds the start makes the belt looped; the correction must close it without an explicit CloseBelt.
   it("closes when both terminals end up on one node", () => {
     const mech = mechanism(loose_belt_on_join());
     const result = apply_actions(mech, [

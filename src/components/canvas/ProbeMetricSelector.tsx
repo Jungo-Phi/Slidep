@@ -38,8 +38,8 @@ export const PROBE_METRIC_ORDER: ProbeMetric[] = [
 ];
 
 /** Angular metrics are only meaningful for oriented elements: gears (own
- *  angle) and two-point edges (segment orientation). Belts follow a path,
- *  nodes are points. */
+ * angle) and two-point edges (segment orientation).
+ * Belts follow a path, nodes are points. */
 function angular_metric_available(element: MechanicalElement): boolean {
   return (
     element.type === "gear" ||
@@ -50,10 +50,8 @@ function angular_metric_available(element: MechanicalElement): boolean {
 }
 
 /** Reaction metrics come in two shapes: a single point for a node/body
- *  element (its own position), or an independent start/end pair for an edge
- *  — a beam's root and tip carry unrelated loads, so they are never merged
- *  into one reading (see `ElementReaction` in `probe-series.ts`). Each
- *  element offers only the shape that matches it. */
+ * element (its own position), or an independent start/end pair for an edge — a beam's root and tip carry unrelated loads, so they are never merged into one reading (see `ElementReaction` in `probe-series.ts`).
+ * Each element offers only the shape that matches it. */
 function reaction_metric_available(
   metric: "force" | "force-start" | "force-end" | "moment" | "moment-start" | "moment-end",
   element: MechanicalElement,
@@ -63,7 +61,7 @@ function reaction_metric_available(
 }
 
 /** A motor's own mechanical power (τ·ω) only exists where there is a motor to read it
- *  from — a pivot with a `motor` config, never a bare pivot or any other element type. */
+ * from — a pivot with a `motor` config, never a bare pivot or any other element type. */
 function motor_power_available(element: MechanicalElement): boolean {
   return element.type === "pivot" && !!element.motor;
 }
@@ -95,7 +93,7 @@ export function available_probe_metrics(
 }
 
 /** The element's probes with `metric` toggled on/off, in canonical order.
- *  Existing configs (display components) are preserved. */
+ * Existing configs (display components) are preserved. */
 export function toggled_probes(
   element: MechanicalElement,
   metric: ProbeMetric,
@@ -129,9 +127,8 @@ interface ProbeMetricSelectorProps {
 }
 
 /**
- * The metrics an element can measure, ticked on and off. Mounted both in the
- * canvas popover and in the properties panel, so the same choice is made from
- * the same list wherever it is reached.
+ * The metrics an element can measure, ticked on and off.
+ * Mounted both in the canvas popover and in the properties panel, so the same choice is made from the same list wherever it is reached.
  */
 export const ProbeMetricSelector: React.FC<ProbeMetricSelectorProps> = ({
   element,
@@ -167,11 +164,9 @@ interface OnCanvasProbeMetricSelectorProps {
 }
 
 /**
- * Popover for picking what an element measures, opened by placing a probe on it
- * or by clicking the badge of one it already carries.
+ * Popover for picking what an element measures, opened by placing a probe on it or by clicking the badge of one it already carries.
  *
- * Each metric applies as it is ticked, like the same list in the properties
- * panel: there is nothing to confirm, so closing it never means losing a choice.
+ * Each metric applies as it is ticked, like the same list in the properties panel: there is nothing to confirm, so closing it never means losing a choice.
  */
 export const OnCanvasProbeMetricSelector: React.FC<
   OnCanvasProbeMetricSelectorProps

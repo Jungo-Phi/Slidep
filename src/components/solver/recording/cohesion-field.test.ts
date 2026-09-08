@@ -29,9 +29,7 @@ let nextID = 0;
 const id = (): ID => `00000000-0000-0000-0000-${String(++nextID).padStart(12, "0")}` as ID;
 
 /** A fresh material+profile pair whose `ρ·A` is exactly `linearMass` — a 1×1 m rectangle so
- *  `A = 1` and `ρ` alone carries the whole value, letting every test keep asserting on the
- *  same linear mass it always has, without caring how it decomposes into `MaterialDef`/
- *  `ProfileDef`. */
+ * `A = 1` and `ρ` alone carries the whole value, letting every test keep asserting on the same linear mass it always has, without caring how it decomposes into `MaterialDef`/ `ProfileDef`. */
 function material_profile(linearMass: number): {
   materialID: ID;
   profileID: ID;
@@ -70,10 +68,8 @@ function mechanism(
 
 describe("cohesion-field — le champ N/T/Mf par coupe (docs/plan-efforts-interieurs.md phase 4)", () => {
   it("cantilever chargé en bout : Mf = -P·L à l'encastrement, 0 au bout libre, linéaire entre les deux", () => {
-    // The plan's own reference shape for a cantilever: Mf negative (diagram drawn above the
-    // beam), magnitude P·L at the fixed end, tapering LINEARLY to zero at the free tip — not
-    // growing toward the tip, which is what an un-flipped moment reading would give instead
-    // (see cohesion-field.ts's r_coh_start doc). No gravity: the tip load is the only action.
+    // The plan's own reference shape for a cantilever: Mf negative (diagram drawn above the beam), magnitude P·L at the fixed end, tapering LINEARLY to zero at the free tip — not growing toward the tip, which is what an un-flipped moment reading would give instead (see cohesion-field.ts's r_coh_start doc).
+    // No gravity: the tip load is the only action.
     const JOIN = id();
     const BEAM = id();
     const join: JoinElement = {
@@ -132,8 +128,7 @@ describe("cohesion-field — le champ N/T/Mf par coupe (docs/plan-efforts-interi
     expect(field).toBeDefined();
 
     const at = (s: number) => {
-      // Nearest sample: dense enough sampling makes this exact to well within tolerance,
-      // except exactly at a discontinuity where two samples share the same `s` — pick either.
+      // Nearest sample: dense enough sampling makes this exact to well within tolerance, except exactly at a discontinuity where two samples share the same `s` — pick either.
       let best = field!.samples[0];
       for (const sample of field!.samples)
         if (Math.abs(sample.s - s) < Math.abs(best.s - s)) best = sample;
@@ -146,19 +141,15 @@ describe("cohesion-field — le champ N/T/Mf par coupe (docs/plan-efforts-interi
     expect(at(0.5).Mf).toBeCloseTo(-50, 0);
     expect(at(1).Mf).toBeCloseTo(0, 0);
 
-    // Loop residual: this field's own march to s = L should land back on phase 3's
-    // independently-derived reading there.
+    // Loop residual: this field's own march to s = L should land back on phase 3's independently-derived reading there.
     expect(field!.loopResidual.fx).toBeCloseTo(0, 0);
     expect(field!.loopResidual.fy).toBeCloseTo(0, 0);
     expect(field!.loopResidual.m).toBeCloseTo(0, 0);
   });
 
   it("poutre isolée en chute libre : N = T = Mf = 0 partout (d'Alembert)", () => {
-    // No support at all: the beam's own weight and its inertia (phase 2's acceleration
-    // field) must cancel EXACTLY, everywhere along the span. If the inertia term were
-    // missing, this would instead show the beam's own weight as a parabolic Mf — the
-    // "diagnostic of a bug that doesn't exist" the plan warns about, made concrete: get the
-    // sign/magnitude of phase 2's acceleration wrong and this test catches it immediately.
+    // No support at all: the beam's own weight and its inertia (phase 2's acceleration field) must cancel EXACTLY, everywhere along the span.
+    // If the inertia term were missing, this would instead show the beam's own weight as a parabolic Mf — the "diagnostic of a bug that doesn't exist" the plan warns about, made concrete: get the sign/magnitude of phase 2's acceleration wrong and this test catches it immediately.
     const BEAM = id();
     const { materialID, profileID, materials, profiles } = material_profile(1);
     const beam: BeamElement = {
@@ -204,12 +195,8 @@ describe("cohesion-field — le champ N/T/Mf par coupe (docs/plan-efforts-interi
   });
 
   it("poutre isolée en rotation libre autour de son centre : T = Mf = 0, N en traction parabolique", () => {
-    // The plan's other d'Alembert test, and the one the free-fall case above cannot cover:
-    // that one has ω = α = 0 throughout, so it never exercises the centrifugal −ω²·s·x̂ term
-    // at all. Here a beam spinning about its own midpoint, no gravity, no support, has
-    // nothing BUT that term: every element pulls inward on its neighbor to stay on its
-    // circular path, so N should be a symmetric TENSION peaking at the centre and vanishing
-    // at both free ends, with T and Mf zero everywhere (no bending, no shear — pure axial).
+    // The plan's other d'Alembert test, and the one the free-fall case above cannot cover: that one has ω = α = 0 throughout, so it never exercises the centrifugal −ω²·s·x̂ term at all.
+    // Here a beam spinning about its own midpoint, no gravity, no support, has nothing BUT that term: every element pulls inward on its neighbor to stay on its circular path, so N should be a symmetric TENSION peaking at the centre and vanishing at both free ends, with T and Mf zero everywhere (no bending, no shear — pure axial).
     const BEAM = id();
     const { materialID, profileID, materials, profiles } = material_profile(1);
     const beam: BeamElement = {
@@ -228,8 +215,7 @@ describe("cohesion-field — le champ N/T/Mf par coupe (docs/plan-efforts-interi
     // Rest frame, to get a valid layout/positions to warm-start from.
     const atRest = step_dynamic_simulation(model, 0, null, RECORD_DT, new Point2(0, 0));
 
-    // Hand-seed a rigid rotation about the beam's own centre (the origin): v = ω × r, ω = 2
-    // rad/s about +z, so v = ω·perp(r) in this codebase's `perp` (CCW) convention.
+    // Hand-seed a rigid rotation about the beam's own centre (the origin): v = ω × r, ω = 2 rad/s about +z, so v = ω·perp(r) in this codebase's `perp` (CCW) convention.
     const omega0 = 2;
     const velocities = new Float64Array(atRest.velocities);
     const setV = (key: string, v: Point2) => {
@@ -240,11 +226,8 @@ describe("cohesion-field — le champ N/T/Mf par coupe (docs/plan-efforts-interi
     setV(`${BEAM}:start`, new Point2(-0.5, 0).perp().mul(omega0));
     setV(`${BEAM}:end`, new Point2(0.5, 0).perp().mul(omega0));
     let snapshot: DynamicSnapshot = { ...atRest, velocities };
-    // One hand-seeded step does not yet behave like steady rotation — the length constraint
-    // has not caught up with the injected velocity, so the frame's own (v_after−v_before)/dt
-    // badly violates phase 2's own rigidity guard-rail ((a_end−a_start)·x̂ should be −ω²L).
-    // A few more steps, warm-starting from the solver's OWN solved velocities each time
-    // (not re-seeded), let it settle onto its circular path before this reads the field.
+    // One hand-seeded step does not yet behave like steady rotation — the length constraint has not caught up with the injected velocity, so the frame's own (v_after−v_before)/dt badly violates phase 2's own rigidity guard-rail ((a_end−a_start)·x̂ should be −ω²L).
+    // A few more steps, warm-starting from the solver's OWN solved velocities each time (not re-seeded), let it settle onto its circular path before this reads the field.
     for (let i = 0; i < 10; i++)
       snapshot = step_dynamic_simulation(
         model,
@@ -272,16 +255,12 @@ describe("cohesion-field — le champ N/T/Mf par coupe (docs/plan-efforts-interi
       expect(sample.Mf).toBeCloseTo(0, 1);
       expect(sample.N).toBeGreaterThanOrEqual(-1e-6); // tension (or zero), never compression
     }
-    // Peaks at the centre (s = L/2 = 0.5) and vanishes at both free ends — the continuum
-    // answer, which is what the field now reports: the beam owns its whole mass, so there is
-    // no lump sitting at the tip needing a force of its own to stay on its circular path.
+    // Peaks at the centre (s = L/2 = 0.5) and vanishes at both free ends — the continuum answer, which is what the field now reports: the beam owns its whole mass, so there is no lump sitting at the tip needing a force of its own to stay on its circular path.
     expect(field!.extremum.N.s).toBeCloseTo(0.5, 1);
     expect(field!.extremum.N.value).toBeGreaterThan(0);
   });
 
-  // Nearest sample to abscissa `s` — dense sampling makes this exact to well within
-  // tolerance, except exactly at a discontinuity where two samples share the same `s`
-  // (the first one in array order is the "just before" reading; see `compute_cohesion_field`).
+  // Nearest sample to abscissa `s` — dense sampling makes this exact to well within tolerance, except exactly at a discontinuity where two samples share the same `s` (the first one in array order is the "just before" reading; see `compute_cohesion_field`).
   const at = (field: CohesionField, s: number) => {
     let best = field.samples[0];
     for (const sample of field.samples) if (Math.abs(sample.s - s) < Math.abs(best.s - s)) best = sample;
@@ -289,15 +268,9 @@ describe("cohesion-field — le champ N/T/Mf par coupe (docs/plan-efforts-interi
   };
 
   it("cas de référence sur deux appuis : T = -P/2, Mf = +PL/4 à mi-portée", () => {
-    // The plan's own reference case ("Décisions actées"): a simply-supported beam under a
-    // point load P at mid-span. `compute_cohesion_field` is pure — state in, field out — so
-    // the reference torsor is injected directly rather than driven through the full dynamic
-    // solver: grounding BOTH of a beam's own endpoints hits a separate, unrelated solver
-    // limitation (its own rigid-length link then has two simultaneously-anchored dofs, an
-    // indeterminate split `PBD_kinematic_solver` declines to report — see
-    // beam-cohesion.test.ts's mid-span-mass test), nothing this case needs to exercise. Both
-    // supports are simple PINS (no moment reaction — unlike the cantilever's encastrement),
-    // so `start`/`end` carry force only.
+    // The plan's own reference case ("Décisions actées"): a simply-supported beam under a point load P at mid-span.
+    // `compute_cohesion_field` is pure — state in, field out — so the reference torsor is injected directly rather than driven through the full dynamic solver: grounding BOTH of a beam's own endpoints hits a separate, unrelated solver limitation (its own rigid-length link then has two simultaneously-anchored dofs, an indeterminate split `PBD_kinematic_solver` declines to report — see beam-cohesion.test.ts's mid-span-mass test), nothing this case needs to exercise.
+    // Both supports are simple PINS (no moment reaction — unlike the cantilever's encastrement), so `start`/`end` carry force only.
     const BEAM = id();
     const MASS = id();
     const L = 2;
@@ -317,9 +290,8 @@ describe("cohesion-field — le champ N/T/Mf par coupe (docs/plan-efforts-interi
       profileID,
     };
 
-    // Statics: each pin carries P/2 up. The raw `LinkReaction` sense read at start/end
-    // (unflipped, both alike — see cohesion-field.ts's own doc) is what the BEAM applies
-    // BACK onto its support, i.e. the negative of that.
+    // Statics: each pin carries P/2 up.
+    // The raw `LinkReaction` sense read at start/end (unflipped, both alike — see cohesion-field.ts's own doc) is what the BEAM applies BACK onto its support, i.e. the negative of that.
     const cohesion: BeamCohesion = {
       beamID: BEAM,
       start: { fx: 0, fy: -P / 2, m: 0 },
@@ -376,10 +348,7 @@ describe("cohesion-field — le champ N/T/Mf par coupe (docs/plan-efforts-interi
   });
 
   it("charge répartie uniforme sur deux appuis : Mf parabolique, T linéaire passant par zéro à mi-portée", () => {
-    // Same rig as the point-load reference case, a uniform distributed load instead: shear
-    // linear from -wL/2 to +wL/2 (zero at mid-span), moment the classic parabola peaking at
-    // wL²/8 there — textbook shapes this integrator has to reproduce from `density_at_ends`
-    // alone (no attached-node discontinuity this time, so nothing jumps).
+    // Same rig as the point-load reference case, a uniform distributed load instead: shear linear from -wL/2 to +wL/2 (zero at mid-span), moment the classic parabola peaking at wL²/8 there — textbook shapes this integrator has to reproduce from `density_at_ends` alone (no attached-node discontinuity this time, so nothing jumps).
     const BEAM = id();
     const L = 2;
     const w = 50; // N/m
@@ -462,12 +431,8 @@ describe("cohesion-field — le champ N/T/Mf par coupe (docs/plan-efforts-interi
   });
 
   it("retournement départ/arrivée : Mf change de signe, T garde sa valeur, N est invariant", () => {
-    // The SAME physical cantilever (fixed at one physical point, loaded at the other), built
-    // twice with which physical point is labelled "start" vs "end" swapped. That labelling
-    // alone fixes x̂ (and so ŷ, and the abscissa's own direction) — never the world's
-    // vertical (see "Décisions actées": the sign must not come from the world frame, since
-    // this flip has to be a discontinuous, orientation-driven fact, never something that
-    // could happen mid-animation as a beam merely passes through vertical).
+    // The SAME physical cantilever (fixed at one physical point, loaded at the other), built twice with which physical point is labelled "start" vs "end" swapped.
+    // That labelling alone fixes x̂ (and so ŷ, and the abscissa's own direction) — never the world's vertical (see "Décisions actées": the sign must not come from the world frame, since this flip has to be a discontinuous, orientation-driven fact, never something that could happen mid-animation as a beam merely passes through vertical).
     const buildField = (reversed: boolean): CohesionField => {
       const JOIN = id();
       const BEAM = id();
@@ -533,8 +498,7 @@ describe("cohesion-field — le champ N/T/Mf par coupe (docs/plan-efforts-interi
     const normal = buildField(false);
     const reversed = buildField(true);
 
-    // N invariant and T keeping its VALUE at the mirrored abscissa (s' = L - s) — only Mf
-    // flips sign, per the plan's own statement of this invariant.
+    // N invariant and T keeping its VALUE at the mirrored abscissa (s' = L - s) — only Mf flips sign, per the plan's own statement of this invariant.
     for (const s of [0, 0.25, 0.5, 0.75, 1]) {
       const a = at(normal, s);
       const b = at(reversed, 1 - s);
@@ -542,24 +506,16 @@ describe("cohesion-field — le champ N/T/Mf par coupe (docs/plan-efforts-interi
       expect(b.T).toBeCloseTo(a.T, 0);
       expect(b.Mf).toBeCloseTo(-a.Mf, 0);
     }
-    // Concretely, not just relatively: the SAME physical fixed end now reads the OPPOSITE
-    // sign from the plan's own cantilever reference (Mf = -P·L there, +P·L here).
+    // Concretely, not just relatively: the SAME physical fixed end now reads the OPPOSITE sign from the plan's own cantilever reference (Mf = -P·L there, +P·L here).
     expect(at(reversed, 1).Mf).toBeCloseTo(100, 0);
   });
 
   it("charge répartie triangulaire sur cantilever : T et Mf suivent la vraie forme, résidu de bouclage fermé (correction 2)", () => {
-    // Same rig as "cantilever chargé en bout", a triangular distributed load instead — zero
-    // at the fixed end, full at the free tip. Non-uniform: the case a plain 50/50 nodal split
-    // (the old `resolve_load_forces`) got the encastrement's reaction wrong by the load's full
-    // resultant, not a rounding error — a `resolve_beam_cohesion` gap (see beam-cohesion.ts's
-    // own doc on `isExternalAtEnd`) that correction 2 also exposed and fixed: a distributed
-    // load's own nodal share landing exactly on a GROUNDED endpoint was invisible to
-    // `cohesion.start`, reported only as an anchor-only `"External"` `LinkReaction`. The
-    // symmetric gap at the FREE tip (no `"External"` reaction ever exists there — see
-    // `distributed_end_share`'s own doc) is closed too.
+    // Same rig as "cantilever chargé en bout", a triangular distributed load instead — zero at the fixed end, full at the free tip.
+    // Non-uniform: the case a plain 50/50 nodal split (the old `resolve_load_forces`) got the encastrement's reaction wrong by the load's full resultant, not a rounding error — a `resolve_beam_cohesion` gap (see beam-cohesion.ts's own doc on `isExternalAtEnd`) that correction 2 also exposed and fixed: a distributed load's own nodal share landing exactly on a GROUNDED endpoint was invisible to `cohesion.start`, reported only as an anchor-only `"External"` `LinkReaction`.
+    // The symmetric gap at the FREE tip (no `"External"` reaction ever exists there — see `distributed_end_share`'s own doc) is closed too.
     //
-    // Closed form: T(s) = 50s² − 50, Mf(s) = 50s − (50/3)s³ − 33.33 (from dMf/ds = −T, with
-    // Mf(0) = −start.m matching the encastrement's own moment reaction).
+    // Closed form: T(s) = 50s² − 50, Mf(s) = 50s − (50/3)s³ − 33.33 (from dMf/ds = −T, with Mf(0) = −start.m matching the encastrement's own moment reaction).
     const JOIN = id();
     const BEAM = id();
     const join: JoinElement = {

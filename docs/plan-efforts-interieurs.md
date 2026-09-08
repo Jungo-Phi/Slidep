@@ -832,19 +832,138 @@ les minimiseurs ensuite.
   en petits déplacements autour de la pose courante, ce qui est correct puisqu'on recalcule à
   chaque image, mais une barre élancée en compression ne préviendra pas.
 
-### Courroies et engrenages — second temps, pas hors sujet
+### Ce que la passe déclare résolu, et le rose qui reste
 
-Le périmètre du premier passage les laisse dehors (`NodeBalance.covered` passe à faux dès qu'un de
-leurs liens touche un nœud), mais ce sont des éléments qu'on voudra modéliser.
+`BeamCohesion.determinate` gouverne trois affichages — remplissage plat rose de la poutre,
+pastille « indéterminé » de la légende, avertissement sous les diagrammes. Il valait « `ker(A)`
+ne bouge pas cette colonne », c'est-à-dire « l'équilibre **seul** tranche » : un critère
+antérieur à la flexibilité, qui rendait rose toute structure hyperstatique alors que Menabrea
+lui donne précisément la réponse du cours. Mesuré sur la galerie : 17 poutres sur 18 sur
+`Puente` (`h = 1`), 4 sur `Vilbrequin double slider`, 3 sur `Jansen`, 2 sur `Balance`.
 
-- **Engrenage : pas d'efforts intérieurs dans la surface du disque.** Ce qu'on attend de lui, c'est
-  qu'il transmette correctement au reste du système, pas qu'il porte un champ.
-- **Courroie : oui, et c'est faisable.** Le modèle de courroie de Slidep est volontairement non
-  réaliste sur un point qui joue ici en notre faveur — un brin y **supporte la compression**.
-  L'unilatéralité qui rendrait le problème complémentaire n'existe donc pas, et une courroie reste
-  calculable par le même système linéaire.
-- Si certaines contraintes de liaison des courroies doivent bouger pour ça, ça se discute à ce
-  moment-là.
+Le critère est maintenant « la réponse est-elle encore libre de bouger ? », en deux morceaux :
+
+- **`residualNull`** (`minimise_energy`) — ce que l'énergie ne tranche pas non plus, c'est-à-dire
+  les directions qu'aucune souplesse de membre n'atteint. Vide sur une redondance entre poutres :
+  la bouger change un `N` ou un `Mf`, donc l'énergie.
+- **`unowned`** (`split_null_space`) — les directions du noyau qui déplacent une inconnue
+  `foreign`. Une inconnue non modélisée **ne coûte aucune énergie**, donc laissée dans la
+  minimisation elle est un repas gratuit : l'énergie lui donne tout ce qu'elle peut, une poutre
+  qui ne porte rien ne stockant rien. Menabrea ne choisit que dans le complément orthogonal, et
+  ce que `unowned` touche est rapporté inconnu.
+
+Sans ce second morceau, la correction rendait **toute** la galerie verte, courroies comprises —
+en publiant des valeurs que l'énergie avait obtenues en déchargeant les poutres sur les courroies.
+C'est le « plausible et faux » que ce plan s'interdit ailleurs, sous une forme qui en plus a l'air
+réglée.
+
+**Le rose restant est donc entièrement du `foreign`**, et il ne se limite pas au voisinage
+immédiat : il se propage par les redondances auxquelles l'inconnue participe. Un seul
+`GearPerimeterPin` rendait `Puente` (18 poutres) et `Vilbrequin` entièrement roses, `Core XY` l'est
+par ses courroies. Il ne se propage pas partout pour autant : `Jansen` et `Vilbrequin double
+slider` portaient chacun un `GearPerimeterPin` et restaient entièrement verts. Les pignons sont
+traités plus bas ; il ne reste que les courroies.
+
+Le libellé `cohesion_indeterminate` nomme cette cause-là. Il n'est pas supprimable tant qu'elle
+existe : la pastille de la légende ne couvre que le canvas, et sans lui les diagrammes du panneau
+afficheraient des courbes plausibles sans rien dire qu'elles sont indicatives. Angle mort assumé de
+sa formulation : une poutre dont la référence matériau ou profilé pend a `EA = EI = 0`, sort de `F`,
+et hérite du même message alors qu'aucune courroie n'est en cause.
+
+**Il ne reste qu'un producteur de `foreign` dans toute la galerie** : `BeltFollowsTangent`, sur
+`Poutre sur joint de courroie`. Le mécanisme lui-même est à garder — c'est le repli honnête le jour
+où le contact unilatéral arrivera, lui que ce plan déclare non résoluble linéairement.
+
+### L'engrenage comme corps · **fait**
+
+**Pas d'efforts intérieurs dans la surface du disque** — ce qu'on attend d'un pignon, c'est qu'il
+transmette correctement au reste du système, pas qu'il porte un champ. Il entre donc comme un corps
+de plus (`StaticsGear`, `StaticsSystem.gears`), avec la forme exacte d'un corps poutre en un terme
+plus court : trois lignes, `I = ½mR²`, la masse et l'inertie lues dans `gear-mass.ts` — les mêmes
+helpers que `mass-model.ts`, pour que le disque de la statique et celui de la dynamique ne puissent
+pas diverger. Sa masse est retirée du forfait nodal de `statics-frame.ts`, comme les lumps de bout
+de poutre : un corps qui porte sa propre équation ne doit pas être pesé deux fois.
+
+Ses interfaces couvrent tout ce qui agit sur lui :
+
+| action | traitement | inconnues |
+| --- | --- | --- |
+| `GearPerimeterPin` | goupille de jante, à son bras vivant `p(nœud) − p(centre)` | force (2) |
+| `BeamFollowsAngle` | moyeu soudé : la même goupille passe en plus un couple | +1 sur la goupille |
+| `GearMeshAngle` | force tangentielle au point de contact | **1**, direction connue |
+| `CoaxialAngle` | deux pignons sur un axe | 1 couple |
+| axe motorisé | le couple moteur | 1 couple, **des deux côtés** |
+
+**Le couple moteur est une inconnue, jamais une valeur lue.** Un actionneur à mouvement imposé est
+une réaction, en statique. La passe n'appelle donc pas `resolve_motor_torques` — mesuré avant de
+trancher : un moteur `angle` ne produit aucune force sur un ddl de position, son couple atterrit sur
+un angle de pignon, et le résidu de l'assemblage est à ~1e-15 sur tous les mécanismes motorisés
+justement parce que l'équation qui en aurait besoin n'existait pas encore. Corollaire à ne pas
+manquer : **l'appui de l'axe doit passer le couple lui aussi**, sinon la ligne de moment du nœud
+d'axe — un point — lit « couple moteur = 0 » et l'invente nul.
+
+**Une seule inconnue par engrènement, et son signe vient de la contrainte.** `GearMeshAngle` corrige
+`r₁θ₁ + r₂θ₂`, donc son multiplicateur atteint les deux pignons avec les bras `r₁` et `r₂` **de même
+signe** — ce qui *est* l'engrènement extérieur, le seul que ce `+` décrive. La direction est fixée
+par la ligne des centres, seule la magnitude est inconnue. Pas d'angle de pression : il faudrait un
+nombre que le modèle ne porte pas, même raison que le cisaillement absent de la flexibilité.
+
+**Un pignon n'est un corps que si toutes ses actions sont modélisées** (`carried_gears`). Une poulie
+qu'une courroie tire encore reste entièrement dehors, revenue au torseur extérieur inconnu à ses
+nœuds. Ce n'est pas de la prudence : un corps dont l'équation oublie la traction d'un brin n'est pas
+une inconnue, c'est une **équation fausse**, et les moindres carrés étalent son erreur sur tous les
+autres corps du mécanisme au lieu de la laisser où elle est. Deux pignons couplés tombent ensemble
+pour la même raison. Et le test « ce lien est-il pris en compte » est **par lien, pas par type** : un
+`GearPerimeterPin` ne compte que pour un pignon effectivement porté.
+
+Vérifié : une manivelle à la main (`gear-body.test.ts` — `R × wL/2` au couple d'axe, la charge droit
+au travers), `Jansen` qui reste vert alors que son engrènement entre dans le système, et le résidu de
+l'assemblage inchangé au niveau machine sur toute la galerie (`Puente` 6.0e-14, `Vilbrequin`
+1.2e-15, `Jansen` 5.3e-15).
+
+### La courroie — un brin, un membre · **fait**
+
+**Une inconnue scalaire par brin tangent, et rien d'autre.** Une courroie n'a pas de masse dans
+Slidep, donc chaque brin est exactement un membre à deux forces : tension constante le long de lui,
+ligne d'action la tangente elle-même. La géométrie sort de `belt_pieces`, qui rend déjà les deux
+points de tangence de chaque segment.
+
+**Les arcs n'ont besoin d'aucune inconnue.** Un point de tangence est à `r` du centre et
+perpendiculaire au brin, donc le moment d'un brin sur sa poulie vaut `±r·T` — et la somme sur les
+deux brins d'une poulie *est* le `r(T₁ − T₂)` qu'elle transmet. La pression répartie sous l'arc n'a
+jamais à être écrite. Pas d'unilatéralité non plus : un brin de Slidep supporte la compression, donc
+`T` est signé et le système reste linéaire.
+
+**La précontrainte est tranchée par l'énergie minimale**, comme n'importe quelle autre redondance.
+Sur une boucle fermée, ajouter la même tension à tous les brins ne change aucun couple — les deux
+bras valent `±r` et s'annulent — donc la statique seule ne la fixe pas. Ce n'est pas le repas gratuit
+du `foreign` : une souplesse nulle, en énergie complémentaire, est exactement la limite du membre
+**infiniment raide**, c'est-à-dire ce qu'est une courroie inextensible dans ce modèle. Le
+`foreign`, lui, n'avait ni ligne d'action ni loi. À noter tout de même comme hypothèse : une vraie
+transmission est posée avec une précontrainte, qui charge les paliers ; le jour où ça compte, la
+réponse est de donner à la courroie une raideur et une longueur au repos, ce qui est du travail
+produit et pas du calcul.
+
+**Le décrochage est lu par image.** Une poulie que la courroie a quittée (`BeltLength.disconnected`,
+tenu à jour sur le lien) ne touche rien : elle sort du chemin et le brin file droit vers la suivante.
+Le nombre de brins, lui, est purement structurel (`n` fermé, `n − 1` ouvert), donc la mise en page
+reste sans état — la colonne d'un brin sauté ne sert simplement pas.
+
+**`BeltFollowsTangent` reste dehors**, et c'est la seule exception : une poutre soudée au joint
+demande à un brin de reprendre un **couple**, ce qui exigerait une raideur de flexion que le modèle
+n'a pas. Sa courroie n'est donc pas portée, et `Poutre sur joint de courroie` reste rose. Ce type de
+connexion n'a pas d'usage réel et cesse d'être supporté ; la ligne partira avec lui.
+
+Vérifié : une corde sur une poulie à la main (`belt-tension.test.ts` — les deux charges ressortent à
+l'axe, le couple vaut `R × (T₁ − T₂)`, résidu machine).
+
+> **Un résidu qui monte n'est pas une régression — c'est ce qui n'était plus caché.** Sur `Huygens`
+> il passe de 3.35e-3 à 1.65e-2 en devenant vert. Localisé : il ne vient ni de l'inertie des pignons
+> (l'annuler ne change rien) ni des courroies, mais des éléments `mass` — les annuler le ramène à
+> 9.26e-5, soit un ordre de grandeur **sous** l'ancienne valeur — et il croît avec le temps de
+> simulation (8.1e-3 à 10 images, 2.5e-1 à 80). C'est le non-bouclage d'Alembert que ce plan
+> annonce, jusqu'ici absorbé par les torseurs `foreign` libres des nœuds de courroie. Un inconnu
+> libre qui éponge une incohérence, c'est précisément le « plausible et faux » qu'on retire.
 
 ### L'écart assumé, à ne pas découvrir en route
 

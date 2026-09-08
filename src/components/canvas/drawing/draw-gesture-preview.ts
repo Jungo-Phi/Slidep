@@ -75,9 +75,7 @@ import { screen_vias, open_belt_vias, draw_belt_closure_marks } from "./belt-via
 import { FORCE, LOAD_INTENSITY } from "../../../utils/quantity-format";
 
 /**
- * What `draw_gesture_preview` needs of a frame: the camera and the current tool
- * gesture, nothing about the mechanism's own drawing state (selection, hover
- * feedback, hidden layers...) — that all belongs to `draw_mechanism` alone.
+ * What `draw_gesture_preview` needs of a frame: the camera and the current tool gesture, nothing about the mechanism's own drawing state (selection, hover feedback, hidden layers...) — that all belongs to `draw_mechanism` alone.
  */
 export type GesturePreviewDrawing = {
   viewport: ViewportState;
@@ -88,9 +86,8 @@ export type GesturePreviewDrawing = {
 };
 
 /**
- * Draws the ghost of the tool gesture in progress — a marquee box, the element a
- * placement would create, the dimension a drag is measuring. Called only while
- * the cursor is over the canvas: with nothing to preview, there is nothing to draw.
+ * Draws the ghost of the tool gesture in progress — a marquee box, the element a placement would create, the dimension a drag is measuring.
+ * Called only while the cursor is over the canvas: with nothing to preview, there is nothing to draw.
  */
 export function draw_gesture_preview(
   ctx: CanvasRenderingContext2D,
@@ -109,15 +106,13 @@ export function draw_gesture_preview(
     state.type === "PlacingDistributedForce" ||
     state.type === "PlacingMomentStart" ||
     state.type === "PlacingMomentEnd";
-  // Cleared before `save` so the matching `restore` leaves the context neutral:
-  // the element pass ends on whatever tint its last element carried.
+  // Cleared before `save` so the matching `restore` leaves the context neutral: the element pass ends on whatever tint its last element carried.
   ctx.save();
   ctx.strokeStyle = isPlacingLoadElement
     ? COLORS.ACCENT
     : COLORS.ELEMENT_STROKE;
   ctx.fillStyle = isPlacingLoadElement ? COLORS.ACCENT : COLORS.FILL_BODY;
-  // A dimension being placed says its stand-off has landed the only way it can:
-  // by thickening, exactly as a placed one does when the drag holds it.
+  // A dimension being placed says its stand-off has landed the only way it can: by thickening, exactly as a placed one does when the drag holds it.
   ctx.lineWidth =
     STROKE_WIDTHS.STANDARD + (dimensionSnapped ? STROKE_WIDTHS.HOVER_GAIN : 0);
   let delta: ScreenPoint;
@@ -234,8 +229,7 @@ export function draw_gesture_preview(
       );
       break;
     case "PlacingBeltEnd": {
-      // Cursor back on the start: so preview the closed loop
-      // The route the click commits: the pulleys already routed, the gear under the cursor appended as clicking it would, and the gear the gesture started on folded in exactly as finalisation does.
+      // Cursor back on the start: so preview the closed loop The route the click commits: the pulleys already routed, the gear under the cursor appended as clicking it would, and the gear the gesture started on folded in exactly as finalisation does.
       const routed = [...state.attachedGearsIDs];
       if (hoveredPart.type === "GearTooth") {
         const hoveredGear = get_mechanical_element_from_id(
@@ -303,8 +297,7 @@ export function draw_gesture_preview(
         ) as BeamElement;
         const start = world2screen(beam.positionStart, viewport);
         const end = world2screen(beam.positionEnd, viewport);
-        // The beam's world normal, so the preview leans to the same side of the
-        // beam whatever the viewport does with it.
+        // The beam's world normal, so the preview leans to the same side of the beam whatever the viewport does with it.
         const delta = world2screen_vec(
           beam.positionEnd.sub(beam.positionStart).perp(),
           viewport,

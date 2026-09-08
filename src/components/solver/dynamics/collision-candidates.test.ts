@@ -14,11 +14,8 @@ import type { MaterialDef, ProfileDef } from "../../../types/material";
 import { build_collision_candidates } from "./collision-candidates";
 
 /**
- * Structural exclusions: what `build_collision_candidates` must never propose as a
- * collision, because it is already held together by a real constraint. Uses the identity
- * key map (no coincidence fusion) — the exclusions under test read raw `fixedNodesBodyIDs`/
- * `meshedGearsIDs`/`parentAxleID`, not fused keys, so fusion is orthogonal to what is
- * checked here (it is exercised end-to-end through `compile_simulation_model` elsewhere).
+ * Structural exclusions: what `build_collision_candidates` must never propose as a collision, because it is already held together by a real constraint.
+ * Uses the identity key map (no coincidence fusion) — the exclusions under test read raw `fixedNodesBodyIDs`/ `meshedGearsIDs`/`parentAxleID`, not fused keys, so fusion is orthogonal to what is checked here (it is exercised end-to-end through `compile_simulation_model` elsewhere).
  */
 
 let nextID = 0;
@@ -158,9 +155,7 @@ describe("build_collision_candidates", () => {
   });
 
   it("exclut l'axe d'une roue contre elle-même, une fois fusionnés", () => {
-    // `compile_simulation_model` fuses a gear's centre with its axle (Coincidence) before
-    // this runs — reproduced here by mapping both raw keys to the same fused one, exactly
-    // what that fusion pass leaves behind.
+    // `compile_simulation_model` fuses a gear's centre with its axle (Coincidence) before this runs — reproduced here by mapping both raw keys to the same fused one, exactly what that fusion pass leaves behind.
     const P = id();
     const G = id();
     const before = mechanism([
@@ -221,8 +216,7 @@ describe("build_collision_candidates", () => {
     const before = mechanism([
       pivot(P, new Point2(50, 0), { fixedGearsIDs: [G] }),
       gear(G, new Point2(50, 0), P),
-      // The beam welds the AXLE's id, never the gear's — the fusion the solver applies at
-      // compile time is what makes them the same node.
+      // The beam welds the AXLE's id, never the gear's — the fusion the solver applies at compile time is what makes them the same node.
       beam(B, new Point2(0, 0), new Point2(100, 0), [P]),
     ]);
     const { circleSegment } = build_collision_candidates(before, IDENTITY);

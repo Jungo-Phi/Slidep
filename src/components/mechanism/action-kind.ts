@@ -3,17 +3,16 @@ import { Action, UnionElement } from "../../types";
 /**
  * The three classes an edit can fall into during a simulation.
  *
- *  - **observation** (probe configs, overlay visibility, names): affects neither the model nor the snapshots (no recompile, no truncation).
- *  - **parameter** : loads, motor speed, the physical values of an element (mass, stiffness, damping, friction, material and profile), gravity/collisions/the floor, takes effect at the current time.
- *    The past snapshots stay valid, the future ones are truncated and the motion is recomputed from there.
+ * - **observation** (probe configs, overlay visibility, names): affects neither the model nor the snapshots (no recompile, no truncation).
+ * - **parameter** : loads, motor speed, the physical values of an element (mass, stiffness, damping, friction, material and profile), gravity/collisions/the floor, takes effect at the current time.
+ * The past snapshots stay valid, the future ones are truncated and the motion is recomputed from there.
  * Does NOT leave simulation mode.
- *  - **structure** (geometry, dimensions, node grounding, connections): exits to edition, which is why the controls emitting one are greyed out mid-run (see `StructureOnly`, which asks this module rather than deciding for itself).
+ * - **structure** (geometry, dimensions, node grounding, connections): exits to edition, which is why the controls emitting one are greyed out mid-run (see `StructureOnly`, which asks this module rather than deciding for itself).
  */
 export const OBSERVATION_ACTIONS: Action["type"][] = [
   "SetProbes",
   "SetShowOverlay",
-  // A name is not a value: nothing the solver reads, and nothing already recorded, depends
-  // on one — so a rename mid-run costs neither a recompile nor the instants ahead.
+  // A name is not a value: nothing the solver reads, and nothing already recorded, depends on one — so a rename mid-run costs neither a recompile nor the instants ahead.
   "UpdateElementName",
   "RenameMaterial",
   "RenameProfile",
@@ -37,10 +36,8 @@ export const PARAMETER_ACTIONS: Action["type"][] = [
   "ChangeDamping",
   "ChangeRotationalFriction",
   "ChangeSlidingFriction",
-  // What a beam is made of and the section it is cut to, whether reached from the beam or
-  // from the catalog: the same kind of physical value as its mass. Deleting a catalog entry
-  // reassigns the beams holding it in the same bundle, so no model is ever left pointing at
-  // a missing one.
+  // What a beam is made of and the section it is cut to, whether reached from the beam or from the catalog: the same kind of physical value as its mass.
+  // Deleting a catalog entry reassigns the beams holding it in the same bundle, so no model is ever left pointing at a missing one.
   "AssignMaterial",
   "AssignProfile",
   "CreateMaterial",
@@ -70,7 +67,7 @@ export const is_load_value_only_bundle = (actions: Action[]) =>
   actions.every((a) => LOAD_VALUE_ACTIONS.includes(a.type));
 
 /** A load creation/deletion is a parameter edit too (a load is an input, not
- *  structure); any other Create/Delete is structural. */
+ * structure); any other Create/Delete is structural. */
 const is_load_element = (el: UnionElement) =>
   el.type === "force" ||
   el.type === "moment" ||

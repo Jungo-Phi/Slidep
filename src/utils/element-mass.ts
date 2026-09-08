@@ -4,8 +4,8 @@ import { gear_mass } from "./gear-mass";
 import { beam_linear_mass } from "./section-properties";
 
 /**
- * The mass an element brings to the mechanism, in kg — the same three sources the solver lumps
- * its masses from. Springs, dampers, belts and the nodes carry none of their own.
+ * The mass an element brings to the mechanism, in kg — the same three sources the solver lumps its masses from.
+ * Springs, dampers, belts and the nodes carry none of their own.
  */
 export function element_mass(
   element: MechanicalElement,

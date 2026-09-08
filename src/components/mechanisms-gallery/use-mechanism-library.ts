@@ -61,7 +61,7 @@ const read_all_records = async (db: IDBPDatabase<SlidepDB>) =>
   (await db.getAll("mechanisms")).map(migrate_document);
 
 /** The framing "Recentrer" aims for: the mechanism's content fit to the canvas,
- *  clear of the ElementPalette overlay on its left edge. */
+ * clear of the ElementPalette overlay on its left edge. */
 export const fit_to_content = (
   mechanism: Mechanism,
   canvas: HTMLCanvasElement,
@@ -95,8 +95,7 @@ export type UseMechanismLibraryArgs = {
 };
 
 /**
- * The mechanism library: the IndexedDB-backed store the gallery reads and writes, plus the
- * autosave that keeps the currently-edited mechanism in it.
+ * The mechanism library: the IndexedDB-backed store the gallery reads and writes, plus the autosave that keeps the currently-edited mechanism in it.
  */
 export function useMechanismLibrary({
   mechanismRef,
@@ -174,8 +173,7 @@ export function useMechanismLibrary({
     (mechanismRecord: SerializedMechanism) => {
       const { mechanism: loaded, repairs } = load_mechanism(mechanismRecord);
       const currentCanvas = canvasRef.current;
-      // A repaired viewport landed on the raw default, which frames nothing
-      // in particular — fit it to the mechanism instead, like "Recentrer".
+      // A repaired viewport landed on the raw default, which frames nothing in particular — fit it to the mechanism instead, like "Recentrer".
       setMechanism(
         currentCanvas && repairs.some((r) => r.code === "VIEWPORT_RESET")
           ? { ...loaded, viewport: fit_to_content(loaded, currentCanvas) }
@@ -204,8 +202,7 @@ export function useMechanismLibrary({
     ],
   );
 
-  // Renaming a record that happens to be the one currently open must also update
-  // the live mechanism — otherwise the next autosave would silently overwrite it.
+  // Renaming a record that happens to be the one currently open must also update the live mechanism — otherwise the next autosave would silently overwrite it.
   const handleRenameFromGallery = useCallback(
     async (createdAtId: number, name: string) => {
       const db = await openMechanismsDB();
@@ -229,8 +226,7 @@ export function useMechanismLibrary({
     [mechanismRef, setMechanism],
   );
 
-  // Same rationale as handleRenameFromGallery: the currently open mechanism must
-  // stay in sync so the next autosave doesn't overwrite the tag change.
+  // Same rationale as handleRenameFromGallery: the currently open mechanism must stay in sync so the next autosave doesn't overwrite the tag change.
   const handleUpdateTagsFromGallery = useCallback(
     async (createdAtId: number, tags: string[]) => {
       const db = await openMechanismsDB();
@@ -333,8 +329,7 @@ export function useMechanismLibrary({
     setSaveStatus("idle");
   }, [canvasRef, setMechanism, setCanvasState, resetSimulationState]);
 
-  // Un import n'écrase jamais un mécanisme existant
-  // L'entrée entre dans la bibliothèque comme une copie, à côté de l'originale.
+  // Un import n'écrase jamais un mécanisme existant L'entrée entre dans la bibliothèque comme une copie, à côté de l'originale.
   const storeImportedRecords = useCallback(
     async (records: SerializedMechanism[]) => {
       const db = await openMechanismsDB();
@@ -342,8 +337,7 @@ export function useMechanismLibrary({
       const takenIds = new Set(existing.map((r) => r.metadata.createdAt));
       const takenNames = new Set(existing.map((r) => r.metadata.name));
 
-      // Importing is an entry, so records are repaired before anything is written:
-      // a known-broken entry must not land in the library when the sound version is already in hand.
+      // Importing is an entry, so records are repaired before anything is written: a known-broken entry must not land in the library when the sound version is already in hand.
       // Reading them all up front also keeps an archive importing fully or not at all.
       const repairs: Repair[] = [];
       const sound = records.map((record) => {

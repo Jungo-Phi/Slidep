@@ -12,10 +12,9 @@ import {
 import { snapshot_point } from "../snapshot";
 
 /**
- * Chantier 5, sur `Déconnexion courroie.slidep`. Ce mécanisme ne TRAVERSE pas la limite
- * de tangence, il s'installe dessus : une fois la poulie lâchée, le brin fusionné passe
- * à travers elle de 0.8 à 5 px pendant cent frames. C'est donc le bon banc pour choisir
- * l'hystérésis — et le seul du dossier qui exerce le rattachement.
+ * Chantier 5, sur `Déconnexion courroie.slidep`.
+ * Ce mécanisme ne TRAVERSE pas la limite de tangence, il s'installe dessus : une fois la poulie lâchée, le brin fusionné passe à travers elle de 0.8 à 5 px pendant cent frames.
+ * C'est donc le bon banc pour choisir l'hystérésis — et le seul du dossier qui exerce le rattachement.
  *
  * Le seuil est balayé DANS LE MÊME PROCESSUS, jamais entre deux exécutions.
  */
@@ -23,7 +22,7 @@ import { snapshot_point } from "../snapshot";
 const loadFixture = () => load_mechanism(JSON.parse(disconnectJson)).mechanism;
 
 /** This fixture's own extent, so a threshold swept below in px of arc can be turned into the
- *  ratio `beltContact.reattachRatio` now expects — see `nodes_extent`. */
+ * ratio `beltContact.reattachRatio` now expects — see `nodes_extent`. */
 const FIXTURE_EXTENT = compile_simulation_model(loadFixture()).extent;
 
 type Belt = Extract<Link, { type: "BeltLength" }>;
@@ -136,9 +135,7 @@ describe("chantier 5 — hystérésis de rattachement", () => {
   }, 600_000);
 
   /**
-   * Aller-retour : le moteur repart en arrière une fois la poulie lâchée, donc la
-   * géométrie repasse par où elle est venue et la poulie revient DU CÔTÉ par lequel elle
-   * est partie — le seul cas où le rattachement peut se produire.
+   * Aller-retour : le moteur repart en arrière une fois la poulie lâchée, donc la géométrie repasse par où elle est venue et la poulie revient DU CÔTÉ par lequel elle est partie — le seul cas où le rattachement peut se produire.
    */
   it("aller-retour moteur inversé", () => {
     for (const [arc, reverseAt] of [
@@ -146,8 +143,7 @@ describe("chantier 5 — hystérésis de rattachement", () => {
       [0.25, 240],
       [1, 240],
       [3, 240],
-      // Reversing right at the frontier is the chatter case: the geometry then hovers on
-      // the tangency instead of walking through it.
+      // Reversing right at the frontier is the chatter case: the geometry then hovers on the tangency instead of walking through it.
       [0, 199],
       [0.25, 199],
       [1, 199],

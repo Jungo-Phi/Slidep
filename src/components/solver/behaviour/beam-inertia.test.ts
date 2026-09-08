@@ -12,13 +12,8 @@ import { DynamicSnapshot } from "../../../types/runtime-state";
 import { snapshot_velocity } from "../snapshot";
 
 /**
- * A motor driving a beam pivoted at one of its own ends, saturated on its torque limit the
- * whole run (target speed far out of reach), isolates the beam's OWN rotational inertia: the
- * requested torque is clamped to `torqueLimit` regardless of any control-law estimate, so the
- * resulting angular acceleration is governed entirely by what the constraint solve thinks the
- * beam weighs where. A uniform rod pivoted at one end has `J = mL²/3` — the two-point
- * (½ mass at each end) model this guards against instead behaves like `J = (m/2)L²`, 1.5×
- * too stiff, and would undershoot the expected tip speed well outside solver noise.
+ * A motor driving a beam pivoted at one of its own ends, saturated on its torque limit the whole run (target speed far out of reach), isolates the beam's OWN rotational inertia: the requested torque is clamped to `torqueLimit` regardless of any control-law estimate, so the resulting angular acceleration is governed entirely by what the constraint solve thinks the beam weighs where.
+ * A uniform rod pivoted at one end has `J = mL²/3` — the two-point (½ mass at each end) model this guards against instead behaves like `J = (m/2)L²`, 1.5× too stiff, and would undershoot the expected tip speed well outside solver noise.
  */
 
 let nextID = 0;
@@ -45,7 +40,7 @@ function mechanism(
 }
 
 /** A material+profile pair whose `ρ·A` is exactly `linearMass` — a 1×1 m rectangle so `A = 1`
- *  and `ρ` alone carries the value. */
+ * and `ρ` alone carries the value. */
 function material_profile(linearMass: number): {
   materialID: ID;
   profileID: ID;
@@ -115,8 +110,7 @@ describe("inertie propre d'une poutre en mode dynamique", () => {
     const tipSpeed = snapshot_velocity(snapshot!, `${DRIVEN}:end`)!.length();
     const expectedTipSpeed = (TORQUE / J_TRUE) * elapsed * LENGTH; // = elapsed * LENGTH here
 
-    // The old two-point model gives J = (m/2)L² = 1.5× J_TRUE, i.e. 1.5× too slow — well
-    // outside this tolerance, which the real distributed inertia comfortably clears.
+    // The old two-point model gives J = (m/2)L² = 1.5× J_TRUE, i.e. 1.5× too slow — well outside this tolerance, which the real distributed inertia comfortably clears.
     expect(tipSpeed).toBeGreaterThan(expectedTipSpeed * 0.8);
     expect(tipSpeed).toBeLessThan(expectedTipSpeed * 1.2);
   });

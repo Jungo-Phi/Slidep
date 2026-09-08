@@ -54,9 +54,7 @@ function is_constraint(element: UnionElement): element is ConstraintElement {
 /**
  * The constraints `result` would repeat, and so takes the place of.
  *
- * The verdict is read off the built constraint rather than the gesture, because
- * the type only settles at construction: an alignment turns horizontal or
- * vertical on the edge's own slope, and two gears made equal become a ratio.
+ * The verdict is read off the built constraint rather than the gesture, because the type only settles at construction: an alignment turns horizontal or vertical on the edge's own slope, and two gears made equal become a ratio.
  */
 function repeated_constraints(
   result: MouseDownResult,
@@ -74,12 +72,9 @@ function repeated_constraints(
 }
 
 /**
- * A relation is imposed once: a constraint repeating one the mechanism already
- * carries takes its place instead of stacking on it — re-dimensioning an edge
- * moves its dimension and re-measures it.
+ * A relation is imposed once: a constraint repeating one the mechanism already carries takes its place instead of stacking on it — re-dimensioning an edge moves its dimension and re-measures it.
  *
- * The eviction goes last so the bundle still opens on the creation, which is
- * what `apply_actions` reads to route it.
+ * The eviction goes last so the bundle still opens on the creation, which is what `apply_actions` reads to route it.
  */
 function evict_repeated_constraint(
   result: MouseDownResult,
@@ -122,15 +117,11 @@ function is_dimension_placement(
 const NOTHING_REPLACED: ReadonlySet<ID> = new Set();
 
 /**
- * The dimensions the aimed placement would take the place of, to hide them while
- * it is aimed — the preview already draws their replacement under the cursor.
- * Only the dimensioning steps answer: the other constraints have no preview, so
- * hiding what they replace would make a badge vanish with nothing to show for it.
+ * The dimensions the aimed placement would take the place of, to hide them while it is aimed — the preview already draws their replacement under the cursor.
+ * Only the dimensioning steps answer: the other constraints have no preview, so hiding what they replace would make a badge vanish with nothing to show for it.
  *
- * A step like `DimensionEdge` hovering an `Edge` does not build yet: it only
- * advances to `DimensionAngle`, still aimed at the same hover. The preview drawn
- * for that frame is the angle's, so the search follows the same chain of
- * no-op transitions — same hover each time, since the click hasn't moved.
+ * A step like `DimensionEdge` hovering an `Edge` does not build yet: it only advances to `DimensionAngle`, still aimed at the same hover.
+ * The preview drawn for that frame is the angle's, so the search follows the same chain of no-op transitions — same hover each time, since the click hasn't moved.
  */
 export function replaced_constraint_ids(
   state: CanvasState,

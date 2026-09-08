@@ -1,6 +1,5 @@
 /**
- * ElementProperties component
- * Displays properties for element elements
+ * ElementProperties component Displays properties for element elements
  */
 
 import { Box, IconButton, Divider, Tooltip, Typography } from "@mui/material";
@@ -76,7 +75,7 @@ import { get_dynamic_metric_at } from "../../solver/recording/probe-series";
 import { DynamicSnapshot } from "../../../types/runtime-state";
 
 /** The ground/unground button's icon, reused as the ElementPicker "world" option
- *  so a motor's anchor reads with the same visual language as the ground toggle. */
+ * so a motor's anchor reads with the same visual language as the ground toggle. */
 const GroundIcon: React.FC<{ sx?: object }> = ({ sx }) => (
   <Box component="img" src={icon("ground")} sx={sx} />
 );
@@ -90,7 +89,7 @@ interface ElementPropertiesProps {
   applyActions: (actions: Action[]) => void;
   mechanism: Mechanism;
   /** The mechanism in the pose on screen — see the same field on `AnalysisPanel`. Only feeds
-   *  the values shown for a motor/load while scrubbed; every write still goes to `mechanism`. */
+   * the values shown for a motor/load while scrubbed; every write still goes to `mechanism`. */
   analysedMechanism: Mechanism;
   appMode: AppMode;
   runtimeState: RuntimeState;
@@ -184,8 +183,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
   const displayMotorConfig =
     analysedElement?.type === "pivot" ? analysedElement.motor : undefined;
   const motorConfig = element.type === "pivot" ? element.motor : undefined;
-  // The motor's own instantaneous draw — only a dynamic run has real torque/velocity to
-  // read it from (kinematic motors just track position, `motor-power` reads empty there).
+  // The motor's own instantaneous draw — only a dynamic run has real torque/velocity to read it from (kinematic motors just track position, `motor-power` reads empty there).
   const motorPowerSample =
     motorConfig && appMode === "dynamic"
       ? get_dynamic_metric_at(
@@ -859,7 +857,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
         element.type === "beam" ||
         element.type === "spring") && (
         <>
-          <Divider sx={{ mt: 1, mb: 1.5 }} />
+          <Divider sx={{ my: 1 }} />
           <Box
             sx={{
               display: "flex",
@@ -868,6 +866,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
               justifyContent: "center",
               gap: 2,
               mx: 2,
+              my: 1.5,
             }}
           >
             {"rotatingEdgesIDs" in element && (

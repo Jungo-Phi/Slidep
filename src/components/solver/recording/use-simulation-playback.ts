@@ -66,46 +66,31 @@ import { beam_strength } from "../../../utils/section-properties";
 /** How often the simulation clock reaches React. Text and controls, not motion. */
 const CLOCK_MIRROR_MS = 100;
 /**
- * How fast the cursor's rate estimate follows the producer. Low on purpose: the answer to
- * "we cannot keep up" is to go slower, evenly, and a rate that tracked every frame's
- * arrivals would just be the stutter it is meant to remove. At 0.1 a change of regime is
- * absorbed over about ten frames.
+ * How fast the cursor's rate estimate follows the producer.
+ * Low on purpose: the answer to "we cannot keep up" is to go slower, evenly, and a rate that tracked every frame's arrivals would just be the stutter it is meant to remove.
+ * At 0.1 a change of regime is absorbed over about ten frames.
  */
 const CURSOR_RATE_ALPHA = 0.1;
 
 /**
  * How far ahead of the cursor the worker is aimed, in simulated seconds.
  *
- * Two frames of it, deliberately. `reached` always describes the target of the PREVIOUS
- * frame — a worker answers between frames, not inside one — so aiming at where the cursor is
- * going leaves the cap sitting exactly on it: it binds on some frames and not others, and
- * the cursor advances in fits, which is visible as the mechanism speeding up and slowing
- * down. One frame of lead cancels the staleness, the second puts the cap comfortably out of
- * the way.
+ * Two frames of it, deliberately.
+ * `reached` always describes the target of the PREVIOUS frame — a worker answers between frames, not inside one — so aiming at where the cursor is going leaves the cap sitting exactly on it: it binds on some frames and not others, and the cursor advances in fits, which is visible as the mechanism speeding up and slowing down.
+ * One frame of lead cancels the staleness, the second puts the cap comfortably out of the way.
  *
- * Never less than two recorded steps, though, and that floor is what makes low speeds
- * watchable: a lead counted in frames shrinks with the playback speed while the recording
- * grid does not. Once it falls under a step — below ×1/3 on a 60 Hz screen — the cursor
- * spends part of its time past the newest snapshot, where `snapshot_at` holds the last one
- * rather than interpolating, and the motion steps at the recording rate instead of the
- * display's.
+ * Never less than two recorded steps, though, and that floor is what makes low speeds watchable: a lead counted in frames shrinks with the playback speed while the recording grid does not.
+ * Once it falls under a step — below ×1/3 on a 60 Hz screen — the cursor spends part of its time past the newest snapshot, where `snapshot_at` holds the last one rather than interpolating, and the motion steps at the recording rate instead of the display's.
  *
- * It costs nothing — the worker stops at its target — beyond recording slightly past what
- * is displayed, which pausing truncates.
+ * It costs nothing — the worker stops at its target — beyond recording slightly past what is displayed, which pausing truncates.
  */
 const worker_lead = (simDt: number): number =>
   Math.max(2 * simDt, 2 * RETAIN_DT);
 
 /**
- * Floors for the beam-fill lenses' own shared scales (see `NEGLIGIBLE_STRESS_FRACTION`'s own
- * doc): `NEGLIGIBLE_STRESS_FRACTION` of the LOWEST admissible reference among the mechanism's
- * own beams — `Re` for `normal`/`bending`, `τ_adm` for `shear` (its own comparison basis,
- * `shear_admissible_stress(Re)`, not `Re` directly — a beam's shear reading is judged against
- * ITS OWN admissible shear, so the floor tracks the same reference the ratio itself does). The
- * lowest across beams, not an average or the first found, so the floor never hides a real
- * reading for whichever material has the least room to begin with. `0` (a no-op against
- * `Math.max`) when no beam resolves a material/profile, same "nothing to scale yet" case
- * `StressScaleCache` itself falls back to.
+ * Floors for the beam-fill lenses' own shared scales (see `NEGLIGIBLE_STRESS_FRACTION`'s own doc): `NEGLIGIBLE_STRESS_FRACTION` of the LOWEST admissible reference among the mechanism's own beams — `Re` for `normal`/`bending`, `τ_adm` for `shear` (its own comparison basis, `shear_admissible_stress(Re)`, not `Re` directly — a beam's shear reading is judged against ITS OWN admissible shear, so the floor tracks the same reference the ratio itself does).
+ * The lowest across beams, not an average or the first found, so the floor never hides a real reading for whichever material has the least room to begin with.
+ * `0` (a no-op against `Math.max`) when no beam resolves a material/profile, same "nothing to scale yet" case `StressScaleCache` itself falls back to.
  */
 function negligible_stress_floors(mechanism: Mechanism): { stress: number; shear: number } {
   let minRe = Infinity;
@@ -126,16 +111,10 @@ function negligible_stress_floors(mechanism: Mechanism): { stress: number; shear
 export type SimulationLimitReason = "time" | "memory";
 
 /**
- * The `RuntimeState` fields whose shape follows `appMode` — `simulationSnapshots` is a
- * `KinematicSnapshot[]` or a `DynamicSnapshot[]` depending on which, and code that reads both
- * together (`analysedMechanism`) trusts `appMode` to say which shape is in there.
+ * The `RuntimeState` fields whose shape follows `appMode` — `simulationSnapshots` is a `KinematicSnapshot[]` or a `DynamicSnapshot[]` depending on which, and code that reads both together (`analysedMechanism`) trusts `appMode` to say which shape is in there.
  *
- * `appMode` is plain React state and updates on its own render; `runtimeState` is a throttled
- * mirror of the sim clock (see `sim-clock.ts`) and can still hold the PREVIOUS mode's
- * snapshots for a render or more after `appMode` has already flipped. Anywhere `appMode` is
- * set outside this hook's own effect below, this patch must be applied in the same
- * synchronous update — not left for the effect to catch up on its own render — or that gap is
- * exactly the window where a stale snapshot array gets decoded with the new mode's shape.
+ * `appMode` is plain React state and updates on its own render; `runtimeState` is a throttled mirror of the sim clock (see `sim-clock.ts`) and can still hold the PREVIOUS mode's snapshots for a render or more after `appMode` has already flipped.
+ * Anywhere `appMode` is set outside this hook's own effect below, this patch must be applied in the same synchronous update — not left for the effect to catch up on its own render — or that gap is exactly the window where a stale snapshot array gets decoded with the new mode's shape.
  */
 export function simulationResetPatch(
   mode: AppMode,
@@ -158,18 +137,13 @@ export function simulationResetPatch(
           ]
         : [],
     scrubbed: false,
-    // Dynamic mode is the only one that ever grows this pool (see the recording loop
-    // below) — every other mode leaves it untouched, so without this it keeps whatever a
-    // previous dynamic run left behind for the entire lifetime of the new mode, judging
-    // unrelated readings negligible against a scale that has nothing to do with them.
+    // Dynamic mode is the only one that ever grows this pool (see the recording loop below) — every other mode leaves it untouched, so without this it keeps whatever a previous dynamic run left behind for the entire lifetime of the new mode, judging unrelated readings negligible against a scale that has nothing to do with them.
     negligibilityPool: EMPTY_NEGLIGIBILITY_POOL,
   };
 }
 
 /**
- * `Recorder`/the worker only know two `RecorderMode`s. `"static"` is still `disabled` in
- * `PlaybackControls` — it has no recording loop of its own yet — so it is not distinguished
- * here; falling back to `"kinematic"` is a harmless default for a mode nobody can reach.
+ * `Recorder`/the worker only know two `RecorderMode`s. `"static"` is still `disabled` in `PlaybackControls` — it has no recording loop of its own yet — so it is not distinguished here; falling back to `"kinematic"` is a harmless default for a mode nobody can reach.
  */
 const recorder_mode = (mode: AppMode): RecorderMode =>
   mode === "dynamic" ? "dynamic" : "kinematic";
@@ -182,25 +156,22 @@ export type UseSimulationPlaybackArgs = {
     update: CanvasState | ((prev: CanvasState) => CanvasState),
   ) => void;
   /** Dynamic mode only: whether the predict step integrates gravity. Read every render
-   *  through a ref, like `mechanism`/`appMode` — see the class doc below. */
+   * through a ref, like `mechanism`/`appMode` — see the class doc below. */
   gravity: boolean;
   /** Both modes: whether the next steps detect and resist collisions. Same reasoning as
-   *  `gravity` — read every render through a ref. */
+   * `gravity` — read every render through a ref. */
   collisions: boolean;
   /** Both modes: whether the next steps detect and resist the floor. Gated independently
-   *  from `collisions` — same reasoning otherwise. */
+   * from `collisions` — same reasoning otherwise. */
   floor: boolean;
   /** Called when the recording hits `MAX_RECORDING_TIME` or the snapshot memory cap. */
   onRecordingLimitReached: (reason: SimulationLimitReason, maxTime: number) => void;
 };
 
 /**
- * Everything needed to drive and observe a simulation — kinematic or dynamic — the recording
- * worker, the RAF loop that steps it, and the handlers Space/Escape/grab feed into it.
+ * Everything needed to drive and observe a simulation — kinematic or dynamic — the recording worker, the RAF loop that steps it, and the handlers Space/Escape/grab feed into it.
  *
- * `mechanism`/`appMode` are read through a ref (`simulationRef`) rather than closed over, so
- * the RAF effect can stay mounted once for the app's lifetime instead of re-subscribing on
- * every render.
+ * `mechanism`/`appMode` are read through a ref (`simulationRef`) rather than closed over, so the RAF effect can stay mounted once for the app's lifetime instead of re-subscribing on every render.
  */
 export function useSimulationPlayback({
   mechanism,
@@ -217,8 +188,7 @@ export function useSimulationPlayback({
   const mechanismRef = useRef(mechanism);
   mechanismRef.current = mechanism;
 
-  // The runtime state is NOT mirrored here: `sim_clock()` is authoritative and always
-  // current, whereas this ref would only ever hold what the last render happened to see.
+  // The runtime state is NOT mirrored here: `sim_clock()` is authoritative and always current, whereas this ref would only ever hold what the last render happened to see.
   const simulationRef = useRef({ mechanism, appMode });
   simulationRef.current = { mechanism, appMode };
   const gravityRef = useRef(gravity);
@@ -239,55 +209,40 @@ export function useSimulationPlayback({
   /**
    * Wall-clock elapsed since then, which is the interval the next rate is measured over.
    *
-   * A frame the worker sent nothing on is not a frame it produced nothing on — it posts only
-   * when it has a recorded instant to hand over, and it keeps one solved step in two. Read
-   * frame by frame, those silent frames sample a rate of zero, the cursor slows, the target
-   * it drives advances less, the worker produces less still: the estimate collapses to a
-   * standstill in well under a second. Waiting instead of concluding is what breaks that loop.
+   * A frame the worker sent nothing on is not a frame it produced nothing on — it posts only when it has a recorded instant to hand over, and it keeps one solved step in two.
+   * Read frame by frame, those silent frames sample a rate of zero, the cursor slows, the target it drives advances less, the worker produces less still: the estimate collapses to a standstill in well under a second.
+   * Waiting instead of concluding is what breaks that loop.
    */
   const waitedForReachedRef = useRef<number>(0);
   const autoPlayOnEnterRef = useRef<boolean>(false);
   const simStartHistoryLengthRef = useRef<number>(0);
   /** Set by a caller right before the mechanism updates when the edit changes neither the
-   *  model nor the recorded instants (a probe's config, an element's name), so the recompile
-   *  effect below can skip a recompile that would otherwise discard snapshots. */
+   * model nor the recorded instants (a probe's config, an element's name), so the recompile effect below can skip a recompile that would otherwise discard snapshots. */
   const observationOnlyEditRef = useRef<boolean>(false);
   /** Set by a caller right before the mechanism updates when the edit only changed load
-   *  values (magnitude, direction…), never their target or count — the recompile effect
-   *  below then swaps `compiledLoads` in place (`Recorder.setLoads`) instead of recompiling
-   *  the whole model, which a continuous drag would otherwise do dozens of times a second. */
+   * values (magnitude, direction…), never their target or count — the recompile effect below then swaps `compiledLoads` in place (`Recorder.setLoads`) instead of recompiling the whole model, which a continuous drag would otherwise do dozens of times a second. */
   const loadValueOnlyEditRef = useRef<boolean>(false);
   const timelineTrackRef = useRef<HTMLDivElement | null>(null);
   /**
-   * The recording worker: it owns the compiled model and everything measured about it, and
-   * produces snapshots on its own thread.
+   * The recording worker: it owns the compiled model and everything measured about it, and produces snapshots on its own thread.
    *
-   * Created when the app mounts and rebuilt after a dispose, never in a `useRef`
-   * initialiser: that argument is evaluated on EVERY render, so it would spawn a worker per
-   * render — and StrictMode's mount/unmount/mount would leave the ref pointing at a
-   * terminated one.
+   * Created when the app mounts and rebuilt after a dispose, never in a `useRef` initialiser: that argument is evaluated on EVERY render, so it would spawn a worker per render — and StrictMode's mount/unmount/mount would leave the ref pointing at a terminated one.
    */
   const recorderRef = useRef<RecorderClient | null>(null);
   const recorder = () => (recorderRef.current ??= new RecorderClient());
   /** Whether the worker was last told to record, so pausing is signalled once. */
   const recordingRef = useRef<boolean>(false);
   /**
-   * Whether playback is re-reading a recording that already extends past the cursor,
-   * rather than extending it.
+   * Whether playback is re-reading a recording that already extends past the cursor, rather than extending it.
    *
-   * Decided ONCE when playback starts, never re-inferred per frame: the frontier
-   * legitimately runs ahead of the cursor while recording — by a step, by the worker's
-   * lead, by a message's latency — so any per-frame comparison eventually reads a live
-   * recording as a replay, and the replay path pauses itself on reaching an end that
-   * recording does not have.
+   * Decided ONCE when playback starts, never re-inferred per frame: the frontier legitimately runs ahead of the cursor while recording — by a step, by the worker's lead, by a message's latency — so any per-frame comparison eventually reads a live recording as a replay, and the replay path pauses itself on reaching an end that recording does not have.
    */
   const replayingRef = useRef<boolean>(false);
   /**
    * Whether the user is holding a part of the mechanism.
    *
-   * What the canvas draws and hit-tests is then the newest computed instant rather than the
-   * one under the cursor — see `publish`. The clock is left alone: it is the drawing that
-   * has to be where the grab is being solved, not the playback that has to run to it.
+   * What the canvas draws and hit-tests is then the newest computed instant rather than the one under the cursor — see `publish`.
+   * The clock is left alone: it is the drawing that has to be where the grab is being solved, not the playback that has to run to it.
    */
   const grabbingRef = useRef<boolean>(false);
 
@@ -304,7 +259,7 @@ export function useSimulationPlayback({
   }, []);
 
   /** Repartir sur des réglages de simulation neufs (vitesse, gravité, collisions,
-   *  lecture/temps, snapshots…) lorsqu'on change de mécanisme. */
+   * lecture/temps, snapshots…) lorsqu'on change de mécanisme. */
   const resetSimulationState = useCallback(
     (setSimulationConfig: (config: SimulationConfig) => void) => {
       setAppMode("edition");
@@ -324,13 +279,10 @@ export function useSimulationPlayback({
       recorder().setGravity(gravityRef.current);
       recorder().setCollisions(collisionsRef.current);
       recorder().setFloor(floorRef.current);
-      // Ask for frame 0 right away, without waiting for play: `advance` below picks it up
-      // as soon as the worker answers, so the first frame's reactions are there to read
-      // (elements panel, measures) even while the simulation sits paused.
+      // Ask for frame 0 right away, without waiting for play: `advance` below picks it up as soon as the worker answers, so the first frame's reactions are there to read (elements panel, measures) even while the simulation sits paused.
       recorder().target(0);
     }
-    // Capture the flag synchronously: the setRuntimeState updater below runs
-    // later, after this line has already reset the ref to false.
+    // Capture the flag synchronously: the setRuntimeState updater below runs later, after this line has already reset the ref to false.
     const shouldAutoPlay = appMode !== "edition" && autoPlayOnEnterRef.current;
     autoPlayOnEnterRef.current = false;
     setRuntimeState((prev) => ({
@@ -340,29 +292,23 @@ export function useSimulationPlayback({
     }));
   }, [appMode]);
 
-  // Dynamic mode only: toggling the gravity Chip mid-run changes what the NEXT steps
-  // integrate, without recompiling — a reload would lose belt/motor state for nothing, and
-  // gravity is not part of what makes a frame's positions valid or not the way geometry is.
+  // Dynamic mode only: toggling the gravity Chip mid-run changes what the NEXT steps integrate, without recompiling — a reload would lose belt/motor state for nothing, and gravity is not part of what makes a frame's positions valid or not the way geometry is.
   useEffect(() => {
     if (is_simulating(appMode)) recorder().setGravity(gravity);
   }, [appMode, gravity]);
 
-  // Same reasoning, both modes: toggling collisions mid-run changes what the NEXT steps
-  // detect, without recompiling or losing belt/motor state.
+  // Same reasoning, both modes: toggling collisions mid-run changes what the NEXT steps detect, without recompiling or losing belt/motor state.
   useEffect(() => {
     if (is_simulating(appMode)) recorder().setCollisions(collisions);
   }, [appMode, collisions]);
 
-  // Same reasoning, gated independently from collisions: a mechanism may want the floor
-  // without general element collisions, or vice versa.
+  // Same reasoning, gated independently from collisions: a mechanism may want the floor without general element collisions, or vice versa.
   useEffect(() => {
     if (is_simulating(appMode)) recorder().setFloor(floor);
   }, [appMode, floor]);
 
-  // Recompile the simulation model + truncate future snapshots whenever the
-  // mechanism is edited during simulation. Re-bake references from the current
-  // simulated state (apply the last snapshot first) so motor angle and gear
-  // rotations stay continuous across the edit.
+  // Recompile the simulation model + truncate future snapshots whenever the mechanism is edited during simulation.
+  // Re-bake references from the current simulated state (apply the last snapshot first) so motor angle and gear rotations stay continuous across the edit.
   useEffect(() => {
     const observationOnly = observationOnlyEditRef.current;
     observationOnlyEditRef.current = false;
@@ -370,19 +316,15 @@ export function useSimulationPlayback({
     loadValueOnlyEditRef.current = false;
     const mode = simulationRef.current.appMode;
     if (mode === "edition") return;
-    // Observation edits don't affect the simulated motion: keep the model
-    // and the already-recorded snapshots.
+    // Observation edits don't affect the simulated motion: keep the model and the already-recorded snapshots.
     if (observationOnly) return;
     const rs = sim_clock();
-    // Snapshots ahead of the cursor were solved under the old values, whichever kind of edit
-    // this is — this bookkeeping is about what stays valid, not about the model itself.
+    // Snapshots ahead of the cursor were solved under the old values, whichever kind of edit this is — this bookkeeping is about what stays valid, not about the model itself.
     const truncate = () =>
       setRuntimeState((prev) => ({
         ...prev,
         simulationSnapshots: prev.simulationSnapshots.filter((s) => s.t <= rs.time),
-        // Strict `<`, not `<=`: an edit made without the clock having moved since the last one
-        // (two edits at the same instant, including the very first at t=0) replaces that
-        // entry instead of leaving a duplicate a lookup could resolve to either side of.
+        // Strict `<`, not `<=`: an edit made without the clock having moved since the last one (two edits at the same instant, including the very first at t=0) replaces that entry instead of leaving a duplicate a lookup could resolve to either side of.
         parameterSnapshots: [
           ...prev.parameterSnapshots.filter((s) => s.t < rs.time),
           {
@@ -392,9 +334,7 @@ export function useSimulationPlayback({
           },
         ],
       }));
-    // A load's values changed but not its target/count: swap them into the already-compiled
-    // model instead of recompiling it — the whole point being that a continuous drag can call
-    // this many times a second, unlike every other edit here.
+    // A load's values changed but not its target/count: swap them into the already-compiled model instead of recompiling it — the whole point being that a continuous drag can call this many times a second, unlike every other edit here.
     if (loadValueOnly) {
       recorder().setLoads(mechanism.loads);
       truncate();
@@ -412,25 +352,21 @@ export function useSimulationPlayback({
           : apply_dynamic_snapshot_to_mechanism(mechanism, baseSnap as DynamicSnapshot);
     recorder().load(recorder_mode(mode), baseMech, baseSnap);
     truncate();
-    // Depend on geometry/topology only, not the whole mechanism: a viewport
-    // (pan/zoom) change keeps these array refs identical, so it no longer
-    // recompiles the simulation model nor truncates the snapshots.
+    // Depend on geometry/topology only, not the whole mechanism: a viewport (pan/zoom) change keeps these array refs identical, so it no longer recompiles the simulation model nor truncates the snapshots.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mechanism.mechanicalElements, mechanism.constraintElements, mechanism.loads]);
 
   // RAF loop: records simulation snapshots while playing in kinematic or dynamic mode
   useEffect(() => {
     let rafId: number;
-    // Spawned here rather than on first use: fetching and parsing the worker chunk is
-    // otherwise paid at the exact moment simulation starts, where it reads as a freeze.
+    // Spawned here rather than on first use: fetching and parsing the worker chunk is otherwise paid at the exact moment simulation starts, where it reads as a freeze.
     recorder();
 
     /**
      * Rebuilds what the canvas draws, from the clock rather than from a render.
      *
-     * Runs on every frame, paused included: scrubbing moves the cursor without React
-     * necessarily re-rendering. It returns at once when nothing it reads has moved, so a
-     * paused simulation costs a few comparisons.
+     * Runs on every frame, paused included: scrubbing moves the cursor without React necessarily re-rendering.
+     * It returns at once when nothing it reads has moved, so a paused simulation costs a few comparisons.
      */
     let shownTime = NaN;
     let shownSnaps: RuntimeState["simulationSnapshots"] | null = null;
@@ -448,9 +384,7 @@ export function useSimulationPlayback({
       const { mechanism: mech } = simulationRef.current;
       const rs = sim_clock();
       const held = grabbingRef.current;
-      // Pausing changes what the trajectories show without moving the clock, so it has to be
-      // part of what makes a frame stale — otherwise the faded segment appears only at the
-      // next scrub.
+      // Pausing changes what the trajectories show without moving the clock, so it has to be part of what makes a frame stale — otherwise the faded segment appears only at the next scrub.
       const extending = rs.isPlaying && !rs.scrubbed;
       if (
         rs.time === shownTime &&
@@ -468,15 +402,11 @@ export function useSimulationPlayback({
 
       // Held: the newest computed instant, not the one under the cursor.
       //
-      // The cursor deliberately trails the frontier — the worker is aimed a `worker_lead`
-      // ahead of it — while the solver applies the grab AT the frontier. So
-      // the grabbed part gets drawn where it was rather than where the mouse just pulled it,
-      // and the drag reads as offset by exactly that trail.
+      // The cursor deliberately trails the frontier — the worker is aimed a `worker_lead` ahead of it — while the solver applies the grab AT the frontier.
+      // So the grabbed part gets drawn where it was rather than where the mouse just pulled it, and the drag reads as offset by exactly that trail.
       //
-      // Only the drawing moves. The clock stays on its own rate: pinning IT to the frontier
-      // makes the playback speed depend on how many frames a message takes to come back
-      // (`t_{n+1} = reached` reads a frontier one frame stale, so the clock advances the
-      // worker's lead every OTHER frame) — measured as a mechanism running visibly fast.
+      // Only the drawing moves.
+      // The clock stays on its own rate: pinning IT to the frontier makes the playback speed depend on how many frames a message takes to come back (`t_{n+1} = reached` reads a frontier one frame stale, so the clock advances the worker's lead every OTHER frame) — measured as a mechanism running visibly fast.
       const snaps = rs.simulationSnapshots;
       const snapshot =
         held && snaps.length > 0
@@ -488,45 +418,33 @@ export function useSimulationPlayback({
         liveFrameRef.current = null;
         return;
       }
-      // The cache is only ever extended by the new snapshots: rebuilding whole trajectories
-      // every frame costs the square of the recorded duration.
+      // The cache is only ever extended by the new snapshots: rebuilding whole trajectories every frame costs the square of the recorded duration.
       trajectoryCacheRef.current = extend_probe_trajectories(
         trajectoryCacheRef.current,
         mech.mechanicalElements,
         rs.simulationSnapshots,
       );
-      // Same instant as `snapshot`, not `rs.time`: a held grab draws the newest computed
-      // frame rather than the one under the cursor, and the motor/load values shown must
-      // match whichever instant that is.
+      // Same instant as `snapshot`, not `rs.time`: a held grab draws the newest computed frame rather than the one under the cursor, and the motor/load values shown must match whichever instant that is.
       const paramSnapshot = parameter_snapshot_at(rs.parameterSnapshots, snapshot.t);
       const geometryMechanism =
         mode === "kinematic"
           ? apply_snapshot_to_mechanism(mech, snapshot as KinematicSnapshot)
           : apply_dynamic_snapshot_to_mechanism(mech, snapshot as DynamicSnapshot);
-      // Velocity/reaction arrows: dynamic mode only, one per element with the matching
-      // overlay on, read at the same instant everything else here draws. Velocity only
-      // means something at a sampled point (node/gear); reactions resolve for those AND
-      // edges, one per endpoint — `element_reactions` returns however many apply, each
-      // optionally carrying a moment too (a rigid weld's force-couple, reduced).
+      // Velocity/reaction arrows: dynamic mode only, one per element with the matching overlay on, read at the same instant everything else here draws.
+      // Velocity only means something at a sampled point (node/gear); reactions resolve for those AND edges, one per endpoint — `element_reactions` returns however many apply, each optionally carrying a moment too (a rigid weld's force-couple, reduced).
       const overlayArrows: OverlayArrow[] = [];
       const overlayMoments: OverlayMoment[] = [];
-      // The N/T/Mf field, every beam, dynamic mode only — no overlay flag gates it (see
-      // `LiveFrame.cohesionFields`'s own doc): phase 5bis's panel diagrams show it for
-      // whichever beam is selected, not a persistent per-element setting.
+      // The N/T/Mf field, every beam, dynamic mode only — no overlay flag gates it (see `LiveFrame.cohesionFields`'s own doc): phase 5bis's panel diagrams show it for whichever beam is selected, not a persistent per-element setting.
       const cohesionFields: CohesionField[] = [];
-      // Floors for `normal`/`bending`/`shear`'s own scales (see `negligible_stress_floors`'s
-      // doc) — 0 (a no-op) outside dynamic mode, where there is nothing to scale in the first
-      // place.
+      // Floors for `normal`/`bending`/`shear`'s own scales (see `negligible_stress_floors`'s doc) — 0 (a no-op) outside dynamic mode, where there is nothing to scale in the first place.
       let negligibleStress = 0;
       let negligibleShear = 0;
       if (mode === "dynamic") {
         const dynSnap = snapshot as DynamicSnapshot;
         const gravity = gravityRef.current ? GRAVITY : new Point2(0, 0);
         ({ stress: negligibleStress, shear: negligibleShear } = negligible_stress_floors(mech));
-        // The beam-fill lenses' shared scales, extended with whatever got recorded since the
-        // last frame (never rebuilt) — docs/plan-efforts-interieurs.md phase 9. Scans the FULL
-        // recording, not just `dynSnap`, so each scale reflects the worst value ever seen
-        // rather than rescaling to whichever instant is currently displayed.
+        // The beam-fill lenses' shared scales, extended with whatever got recorded since the last frame (never rebuilt) — docs/plan-efforts-interieurs.md phase 9.
+        // Scans the FULL recording, not just `dynSnap`, so each scale reflects the worst value ever seen rather than rescaling to whichever instant is currently displayed.
         stressScaleCacheRef.current = extend_stress_scale(
           stressScaleCacheRef.current,
           mech.mechanicalElements,
@@ -540,25 +458,18 @@ export function useSimulationPlayback({
         for (const el of geometryMechanism.mechanicalElements) {
           if ("position" in el && overlay_shown(el, "velocity")) {
             const v = element_velocity(el, dynSnap);
-            // A residual velocity next to nothing else moving is noise, not motion — see
-            // negligibility-pool.ts. Hidden rather than drawn tiny: a clamped-to-minimum
-            // arrow would still read as "something moves here".
+            // A residual velocity next to nothing else moving is noise, not motion — see negligibility-pool.ts.
+            // Hidden rather than drawn tiny: a clamped-to-minimum arrow would still read as "something moves here".
             if (v && !is_negligible(v.length(), pool.linearVelocity))
               overlayArrows.push({ at: el.position, vector: v, kind: "velocity" });
           }
-          // `is_node_element`, not just the flag: `available_overlays` no longer offers
-          // "force" on an edge (a beam's own two arrows were a false "one force per member"
-          // summary), but a mechanism saved before that change can still carry a stale
-          // `true` there.
+          // `is_node_element`, not just the flag: `available_overlays` no longer offers "force" on an edge (a beam's own two arrows were a false "one force per member" summary), but a mechanism saved before that change can still carry a stale `true` there.
           if (overlay_shown(el, "force") && is_node_element(el)) {
             for (const r of element_reactions(el, dynSnap)) {
               const kind = r.atAnchor ? "reaction-support" : "reaction-internal";
               if (!is_negligible(r.vector.length(), pool.force))
                 overlayArrows.push({ at: r.at, vector: r.vector, kind });
-              // `r.moment` is the solver's raw CCW-positive convention; `draw_moment`
-              // (and every other moment on screen) reads the data model's clockwise-
-              // positive one instead — negate once, here, same flip `load-model.ts`
-              // applies for a user-authored `MomentElement`.
+              // `r.moment` is the solver's raw CCW-positive convention; `draw_moment` (and every other moment on screen) reads the data model's clockwise- positive one instead — negate once, here, same flip `load-model.ts` applies for a user-authored `MomentElement`.
               if (
                 r.moment !== undefined &&
                 !is_negligible(r.moment, pool.moment)
@@ -594,16 +505,13 @@ export function useSimulationPlayback({
         normalStressScale: Math.max(stressScaleCacheRef.current.maxNormal, negligibleStress),
         bendingStressScale: Math.max(stressScaleCacheRef.current.maxBending, negligibleStress),
         shearStressScale: Math.max(stressScaleCacheRef.current.maxShear, negligibleShear),
-        // Headed at the instant actually DRAWN, which a held grab moves off the cursor:
-        // a trail stopping short of the mechanism it belongs to is the same offset again.
+        // Headed at the instant actually DRAWN, which a held grab moves off the cursor: a trail stopping short of the mechanism it belongs to is the same offset again.
         trajectories: trajectories_at(trajectoryCacheRef.current, snapshot.t).map(
           (traj, i) => ({
             points: traj.points,
             headCount: traj.headCount,
-            // Read from the intent, not from a comparison of times — the same rule the
-            // timeline head follows. While recording, the frontier runs ahead of the cursor
-            // by the worker's lead and by whatever it is behind, so the faded segment would
-            // show the producer's progress rather than the motion to come.
+            // Read from the intent, not from a comparison of times — the same rule the timeline head follows.
+            // While recording, the frontier runs ahead of the cursor by the worker's lead and by whatever it is behind, so the faded segment would show the producer's progress rather than the motion to come.
             visibleCount: extending ? traj.headCount : traj.points.length,
             color: PROBE_ELEMENT_COLORS[i % PROBE_ELEMENT_COLORS.length],
           }),
@@ -621,19 +529,13 @@ export function useSimulationPlayback({
     /**
      * Drops what was recorded past the cursor, and rewinds the worker with it.
      *
-     * The worker is deliberately aimed ahead of the cursor, so a pause always leaves frames
-     * that were computed and never shown. Keeping them puts the head short of the end of the
-     * timeline it is itself the end of, which reads as the cursor slipping backwards at the
-     * moment of the pause.
+     * The worker is deliberately aimed ahead of the cursor, so a pause always leaves frames that were computed and never shown.
+     * Keeping them puts the head short of the end of the timeline it is itself the end of, which reads as the cursor slipping backwards at the moment of the pause.
      *
-     * Truncating on this side alone would leave a HOLE: the worker sleeps while its own
-     * frontier is past the target, so it would never recompute the span that was dropped.
-     * Rewinding it to the last kept snapshot is what closes the hole, and the epoch it bumps
-     * is what discards the snapshots still in flight.
+     * Truncating on this side alone would leave a HOLE: the worker sleeps while its own frontier is past the target, so it would never recompute the span that was dropped.
+     * Rewinding it to the last kept snapshot is what closes the hole, and the epoch it bumps is what discards the snapshots still in flight.
      *
-     * A rewind and not a reload: the mechanism has not changed, so recompiling it would
-     * throw away everything the run had accumulated on the model — belt contact above all,
-     * which is what made a paused simulation diverge from an uninterrupted one.
+     * A rewind and not a reload: the mechanism has not changed, so recompiling it would throw away everything the run had accumulated on the model — belt contact above all, which is what made a paused simulation diverge from an uninterrupted one.
      */
     const discardUnshown = () => {
       const rs = sim_clock();
@@ -645,8 +547,7 @@ export function useSimulationPlayback({
       const base = kept[kept.length - 1];
       setRuntimeState((prev) => ({
         ...prev,
-        // Onto the instant that is kept, not between two: the head has to land exactly on
-        // the end of the recording rather than a fraction of a step short of it.
+        // Onto the instant that is kept, not between two: the head has to land exactly on the end of the recording rather than a fraction of a step short of it.
         time: base.t,
         simulationSnapshots: kept,
       }));
@@ -656,20 +557,17 @@ export function useSimulationPlayback({
     /**
      * The timeline head, written straight to the DOM.
      *
-     * It is a measure, not an intention, so it must not wait for the mirror: at 10 Hz the
-     * head steps ten times a second across a mechanism that moves sixty. Invisible while
-     * recording, where the head is pinned to the right by construction — which is exactly
-     * why this was thought unnecessary — and plainly visible on replay.
+     * It is a measure, not an intention, so it must not wait for the mirror: at 10 Hz the head steps ten times a second across a mechanism that moves sixty.
+     * Invisible while recording, where the head is pinned to the right by construction — which is exactly why this was thought unnecessary — and plainly visible on replay.
      *
-     * One custom property on the track rather than a ref per element: the dot is a
-     * `Tooltip` child, and that already owns its ref.
+     * One custom property on the track rather than a ref per element: the dot is a `Tooltip` child, and that already owns its ref.
      */
     let paintedPlayhead = "";
     const paintPlayhead = () => {
       const track = timelineTrackRef.current;
       if (!track) {
-        // Gone with the timeline. Forget what was painted, or coming back to a cursor that
-        // happens to sit at the same place would skip the write and leave the head at 0 %.
+        // Gone with the timeline.
+        // Forget what was painted, or coming back to a cursor that happens to sit at the same place would skip the write and leave the head at 0 %.
         paintedPlayhead = "";
         return;
       }
@@ -694,24 +592,16 @@ export function useSimulationPlayback({
 
       if (!is_simulating(mode) || !rs.isPlaying) {
         lastWallTimeRef.current = null;
-        // Tell the worker once, not every frame: left running it would keep recording
-        // towards the last target it was given, well past the pause.
+        // Tell the worker once, not every frame: left running it would keep recording towards the last target it was given, well past the pause.
         if (recordingRef.current) {
           recordingRef.current = false;
           recorder().stop();
-          // Three conditions, and each one guards a different way of losing frames on
-          // purpose: pausing a REPLAY must not delete what is being replayed; a SCRUB also
-          // clears `isPlaying`, and truncating there would delete everything past the point
-          // just jumped to; and LEAVING simulation is about to reset the recording anyway,
-          // so reloading the worker first is pure waste.
+          // Three conditions, and each one guards a different way of losing frames on purpose: pausing a REPLAY must not delete what is being replayed; a SCRUB also clears `isPlaying`, and truncating there would delete everything past the point just jumped to; and LEAVING simulation is about to reset the recording anyway, so reloading the worker first is pure waste.
           if (!replayingRef.current && !rs.scrubbed && is_simulating(mode))
             discardUnshown();
         }
-        // Paused before ever playing: `target(0)` was posted the moment this mode was
-        // entered (see the `[appMode]` effect), so pick up frame 0 as soon as the worker
-        // answers — the panel and overlays must not wait for Play to show real reactions.
-        // Self-terminating: once merged, `simulationSnapshots` is no longer empty and this
-        // is skipped on every later tick.
+        // Paused before ever playing: `target(0)` was posted the moment this mode was entered (see the `[appMode]` effect), so pick up frame 0 as soon as the worker answers — the panel and overlays must not wait for Play to show real reactions.
+        // Self-terminating: once merged, `simulationSnapshots` is no longer empty and this is skipped on every later tick.
         if (is_simulating(mode) && rs.simulationSnapshots.length === 0) {
           const { snapshots: newSnaps } = recorder().drain();
           if (newSnaps.length > 0)
@@ -736,11 +626,9 @@ export function useSimulationPlayback({
       }
       if (!recordingRef.current) {
         recordingRef.current = true;
-        // Decided from the intent that put the cursor there, not from where the cursor
-        // sits: the frontier moves while recording, the flag does not.
+        // Decided from the intent that put the cursor there, not from where the cursor sits: the frontier moves while recording, the flag does not.
         replayingRef.current = rs.scrubbed;
-        // Start optimistic, and forget what was observed in another regime: a rate measured
-        // before a pause, a scrub or a speed change says nothing about this one.
+        // Start optimistic, and forget what was observed in another regime: a rate measured before a pause, a scrub or a speed change says nothing about this one.
         cursorRateRef.current = rs.speed;
         prevReachedRef.current = null;
         waitedForReachedRef.current = 0;
@@ -762,32 +650,27 @@ export function useSimulationPlayback({
               ? prev.simulationSnapshots[prev.simulationSnapshots.length - 1].t
               : 0;
           const nextTime = prev.time + simDt;
-          // Reaching the end of what was recorded stops playback — the recording is not
-          // resumed from here, since the frontier is where the mechanism was left.
+          // Reaching the end of what was recorded stops playback — the recording is not resumed from here, since the frontier is where the mechanism was left.
           if (nextTime >= prevFrontier) {
             replayingRef.current = false;
-            // Caught up with the recording: no longer somewhere the user put us, so
-            // playing again extends instead of replaying.
+            // Caught up with the recording: no longer somewhere the user put us, so playing again extends instead of replaying.
             return { ...prev, time: prevFrontier, isPlaying: false, scrubbed: false };
           }
           return { ...prev, time: nextTime };
         });
       } else {
-        // Create mode. The solving happens in the worker; this frame only says where
-        // the clock is headed and collects whatever came back. Nothing is awaited, so
-        // the display never blocks on the solver however heavy the mechanism.
+        // Create mode.
+        // The solving happens in the worker; this frame only says where the clock is headed and collects whatever came back.
+        // Nothing is awaited, so the display never blocks on the solver however heavy the mechanism.
         const requestedTime = rs.time + simDt;
         recorder().target(requestedTime + worker_lead(simDt));
         const { snapshots: newSnaps, reached } = recorder().drain();
 
-        // The cursor runs at the rate the producer SUSTAINS, not at the one that happened
-        // to arrive this frame. Both reach the same place — falling behind costs time
-        // either way — but at an even pace rather than in fits, which is the only part of
-        // it the eye can see.
+        // The cursor runs at the rate the producer SUSTAINS, not at the one that happened to arrive this frame.
+        // Both reach the same place — falling behind costs time either way — but at an even pace rather than in fits, which is the only part of it the eye can see.
         //
-        // Still capped by the frontier plus a step: past that the cursor would read a time
-        // no snapshot covers, and the timeline would claim progress that was never
-        // computed. Before the first snapshot comes back there is no frontier, so it waits.
+        // Still capped by the frontier plus a step: past that the cursor would read a time no snapshot covers, and the timeline would claim progress that was never computed.
+        // Before the first snapshot comes back there is no frontier, so it waits.
         let newTime = rs.time;
         if (reached !== null) {
           const previousReached = prevReachedRef.current;
@@ -814,14 +697,11 @@ export function useSimulationPlayback({
             reached + RECORD_DT,
           );
         }
-        // The recording has run its full length: the solver will produce nothing more, so
-        // playing on would freeze the mechanism without saying why. Stop, and say it.
+        // The recording has run its full length: the solver will produce nothing more, so playing on would freeze the mechanism without saying why.
+        // Stop, and say it.
         //
-        // No need to check that the cursor has caught up — this branch only runs while
-        // EXTENDING the recording, a cursor left behind being the replay branch's business.
-        // Checking it would in fact never fire: the cursor advances at the rate the producer
-        // sustains, which decays to zero as soon as the recording stops growing, so it comes
-        // to rest short of the end rather than on it.
+        // No need to check that the cursor has caught up — this branch only runs while EXTENDING the recording, a cursor left behind being the replay branch's business.
+        // Checking it would in fact never fire: the cursor advances at the rate the producer sustains, which decays to zero as soon as the recording stops growing, so it comes to rest short of the end rather than on it.
         const maxTime = recorder().maxTime();
         const exhausted = reached !== null && recording_full(reached, maxTime);
         if (exhausted)
@@ -842,13 +722,11 @@ export function useSimulationPlayback({
               : prev.simulationSnapshots;
           return {
             ...prev,
-            // Landing the cursor ON the end, as the replay branch does: stopping it where it
-            // happened to be would leave the last recorded instants unseen.
+            // Landing the cursor ON the end, as the replay branch does: stopping it where it happened to be would leave the last recorded instants unseen.
             time: exhausted && reached !== null ? reached : newTime,
             ...(exhausted ? { isPlaying: false } : {}),
             simulationSnapshots,
-            // Dynamic mode only — reactions/velocities don't exist on a kinematic
-            // snapshot, same gating as the overlay arrows built below.
+            // Dynamic mode only — reactions/velocities don't exist on a kinematic snapshot, same gating as the overlay arrows built below.
             negligibilityPool:
               mode === "dynamic"
                 ? extend_negligibility_pool(
@@ -866,8 +744,8 @@ export function useSimulationPlayback({
     rafId = requestAnimationFrame(step);
     return () => {
       cancelAnimationFrame(rafId);
-      // Cleared, not just terminated: the next mount must build a live one. React runs
-      // every cleanup before every effect, so the `load` that follows recreates it.
+      // Cleared, not just terminated: the next mount must build a live one.
+      // React runs every cleanup before every effect, so the `load` that follows recreates it.
       recorderRef.current?.dispose();
       recorderRef.current = null;
       recordingRef.current = false;
@@ -877,14 +755,11 @@ export function useSimulationPlayback({
   const handleSpaceKey = useCallback(
     (lastSimulationMode: AppMode) => {
       if (appMode === "edition") {
-        // Arm auto-play so the mode-change effect starts the simulation instead
-        // of resetting isPlaying to false right after we set it.
+        // Arm auto-play so the mode-change effect starts the simulation instead of resetting isPlaying to false right after we set it.
         autoPlayOnEnterRef.current = true;
         setAppMode(lastSimulationMode);
-        // Entering simulation abandons any in-progress tool/gesture, like Space does in the
-        // canvas handler — but a settled selection carries over, it isn't a gesture to
-        // abandon. Nor is the ruler: it reads the mechanism without touching it, and watching
-        // a reading run is the whole point of having laid it down before pressing play.
+        // Entering simulation abandons any in-progress tool/gesture, like Space does in the canvas handler — but a settled selection carries over, it isn't a gesture to abandon.
+        // Nor is the ruler: it reads the mechanism without touching it, and watching a reading run is the whole point of having laid it down before pressing play.
         setCanvasState((prev) =>
           prev.type === "SelectedElement" ||
           prev.type === "SelectedMultiple" ||
@@ -901,8 +776,7 @@ export function useSimulationPlayback({
     [appMode, setAppMode, setCanvasState],
   );
 
-  // Escape while the simulation is running behaves like the "Réinitialiser"
-  // button (reset to t=0 and stop); otherwise it exits to edition mode.
+  // Escape while the simulation is running behaves like the "Réinitialiser" button (reset to t=0 and stop); otherwise it exits to edition mode.
   const handleEscapeKey = useCallback(() => {
     if (appMode !== "edition" && sim_clock().isPlaying) {
       recorder().load(recorder_mode(appMode), mechanismRef.current, null);
@@ -954,8 +828,7 @@ export function useSimulationPlayback({
       if (simulationRef.current.appMode === "edition") return;
       grabbingRef.current = true;
       recorder().setGrab(grab);
-      // Start playback if paused: the grab only reaches the solver through the
-      // recording loop, which needs to be running.
+      // Start playback if paused: the grab only reaches the solver through the recording loop, which needs to be running.
       if (!sim_clock().isPlaying) {
         setRuntimeState((prev) => ({ ...prev, isPlaying: true }));
       }
@@ -998,9 +871,8 @@ export function useSimulationPlayback({
   }, []);
 
   /** The violated constraints of the snapshot under the cursor, for what React displays.
-   *  What the canvas draws does NOT come from here: it is published to `liveFrameRef` every
-   *  frame, whereas this follows the mirror. Generic over the mode: `unsatisfied` is a base
-   *  `SimulationSnapshot` field, so this needs no concrete subtype. */
+   * What the canvas draws does NOT come from here: it is published to `liveFrameRef` every frame, whereas this follows the mirror.
+   * Generic over the mode: `unsatisfied` is a base `SimulationSnapshot` field, so this needs no concrete subtype. */
   const currentUnsatisfied: ConstraintResidual[] =
     is_simulating(appMode) && runtimeState.simulationSnapshots.length > 0
       ? (runtimeState.simulationSnapshots[
@@ -1008,26 +880,20 @@ export function useSimulationPlayback({
         ]?.unsatisfied ?? [])
       : [];
 
-  // A grab is a live intervention on the mechanism, so it only has a meaning where the
-  // recording is being extended. Somewhere the user scrubbed to, playback re-reads what
-  // exists and never consults the grab, so the canvas must not offer one.
+  // A grab is a live intervention on the mechanism, so it only has a meaning where the recording is being extended.
+  // Somewhere the user scrubbed to, playback re-reads what exists and never consults the grab, so the canvas must not offer one.
   const canSimulationGrab = is_simulating(appMode) && !runtimeState.scrubbed;
 
   // ── État de la timeline, partagé par la top-bar et le rail ──
   //
-  // `frontier` est le temps le plus avancé déjà calculé. Le curseur en deçà =
-  // relecture ; au niveau de la frontière et en lecture = enregistrement.
+  // `frontier` est le temps le plus avancé déjà calculé.
+  // Le curseur en deçà = relecture ; au niveau de la frontière et en lecture = enregistrement.
   //
-  // Le rail est toujours à l'échelle de la frontière : en enregistrement, on
-  // est par définition au bout du temps connu, donc la tête reste collée à
-  // droite. On la force à 100 % au lieu de calculer `time / frontier` — les
-  // deux avancent ensemble mais pas au même rythme (le temps est continu, les
-  // snapshots arrivent par pas de RECORD_DT), et cet écart d'arrondi est
-  // exactement ce qui faisait vibrer la tête d'une image à l'autre.
+  // Le rail est toujours à l'échelle de la frontière : en enregistrement, on est par définition au bout du temps connu, donc la tête reste collée à droite.
+  // On la force à 100 % au lieu de calculer `time / frontier` — les deux avancent ensemble mais pas au même rythme (le temps est continu, les snapshots arrivent par pas de RECORD_DT), et cet écart d'arrondi est exactement ce qui faisait vibrer la tête d'une image à l'autre.
   //
-  // La POSITION de la tête ne passe pas par ici : elle change à chaque image et
-  // sortirait au rythme du miroir, soit dix fois par seconde pour un canvas qui
-  // en fait soixante. Elle est écrite par la boucle RAF dans `--playhead`.
+  // La POSITION de la tête ne passe pas par ici : elle change à chaque image et sortirait au rythme du miroir, soit dix fois par seconde pour un canvas qui en fait soixante.
+  // Elle est écrite par la boucle RAF dans `--playhead`.
   const {
     simulationSnapshots: timelineSnaps,
     time: timelineTime,
@@ -1039,17 +905,13 @@ export function useSimulationPlayback({
       is_simulating(appMode) && timelineSnaps.length > 0
         ? timelineSnaps[timelineSnaps.length - 1].t
         : 0;
-    // Read from the intent, not from a comparison of times: the frontier deliberately
-    // runs ahead of the cursor while recording, by an amount that varies from frame to
-    // frame (the worker produces in bursts). Comparing them makes the head flicker
-    // between its two appearances at the rhythm of that burstiness.
+    // Read from the intent, not from a comparison of times: the frontier deliberately runs ahead of the cursor while recording, by an amount that varies from frame to frame (the worker produces in bursts).
+    // Comparing them makes the head flicker between its two appearances at the rhythm of that burstiness.
     const recording = timelinePlaying && !timelineScrubbed;
     return {
-      // The total the label announces — the cursor's own time while recording, not the
-      // frontier. The frontier deliberately runs ahead of the cursor by the worker's lead,
-      // and pausing deletes exactly that overshoot, so counting it announces a duration the
-      // user is about to see disappear. It also contradicts the head, which is pinned to the
-      // end of the rail by construction while recording.
+      // The total the label announces — the cursor's own time while recording, not the frontier.
+      // The frontier deliberately runs ahead of the cursor by the worker's lead, and pausing deletes exactly that overshoot, so counting it announces a duration the user is about to see disappear.
+      // It also contradicts the head, which is pinned to the end of the rail by construction while recording.
       duration: recording ? timelineTime : frontier,
       recording,
       atStart: timelineTime <= 0,
@@ -1074,7 +936,7 @@ export function useSimulationPlayback({
     pauseSimulation,
     resetSimulationState,
     /** For callers (undo/redo, applyActions) that need to reason about whether an edit
-     *  reaches back before the simulation started, or should be treated as observation-only. */
+     * reaches back before the simulation started, or should be treated as observation-only. */
     simulationRef,
     autoPlayOnEnterRef,
     simStartHistoryLengthRef,

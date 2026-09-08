@@ -24,18 +24,19 @@ import { LinkSlots } from "./link-slots";
 /**
  * The single writer of a gear radius, so its floor cannot be forgotten at one of the sites that move one.
  *
- * That floor is per slot and settled when the solve starts (`solveNodesFromMaps`): a numerical guard against the zero that meshing, belt geometry and ratios all divide into, raised to the smallest gear one can still see and grab at the current zoom. It is one-sided — a gear held at its floor grows back as soon as there is room — and what it refuses to absorb comes back as an error the next sweep, which the free positions then take instead. That is how two meshed gears pushed together stop moving their centres rather than shrinking to nothing.
+ * That floor is per slot and settled when the solve starts (`solveNodesFromMaps`): a numerical guard against the zero that meshing, belt geometry and ratios all divide into, raised to the smallest gear one can still see and grab at the current zoom.
+ * It is one-sided — a gear held at its floor grows back as soon as there is room — and what it refuses to absorb comes back as an error the next sweep, which the free positions then take instead.
+ * That is how two meshed gears pushed together stop moving their centres rather than shrinking to nothing.
  */
 function write_radius(nodes: EditNodes, slot: number, value: number): void {
   nodes.radius[slot] = Math.max(nodes.minRadius[slot], value);
 }
 
 /* ════════════════════════════════════════════════════════════════════════
- *  OnSegment : point contraint sur le segment (start, end)
- * ════════════════════════════════════════════════════════════════════════
+ * OnSegment : point contraint sur le segment (start, end) ════════════════════════════════════════════════════════════════════════
  *
- * Contrainte vectorielle  C(p) = pNode − lerp(start, end, t) = 0.
- * Le point cible sur le segment est  L(t) = (1−t)·start + t·end, donc
+ * Contrainte vectorielle C(p) = pNode − lerp(start, end, t) = 0.
+ * Le point cible sur le segment est L(t) = (1−t)·start + t·end, donc
  *
  *     ∂C/∂pNode = +I            ‖∇_node‖² = 1
  *     ∂C/∂start = −(1−t)·I      ‖∇_start‖² = (1−t)²
@@ -43,29 +44,23 @@ function write_radius(nodes: EditNodes, slot: number, value: number): void {
  *
  * La projection PBD répartit la correction selon wᵢ‖∇ᵢ‖² :
  *
- *     denom = w_node·1 + w_start·(1−t)² + w_end·t²
+ * denom = w_node·1 + w_start·(1−t)² + w_end·t²
  *     λ     = C / denom            (vectoriel : C est un Point2)
- *     Δp_node  = −λ · w_node·1
- *     Δp_start = +λ · w_start·(1−t)
+ * Δp_node = −λ · w_node·1 Δp_start = +λ · w_start·(1−t)
  *     Δp_end   = +λ · w_end·t
  *
- * L'ancienne pondération  (2·w_node + w_start + w_end)/2  ignorait `t` : elle
- * traitait chaque extrémité comme si t = 0.5. Conséquences mesurées :
- *   • un nœud proche d'une extrémité sur-sollicitait l'AUTRE extrémité (bras de
- *     levier ignoré), injectant du mouvement parasite dans les liens voisins ;
- *   • convergence molle : ~6 itérations là où la projection exacte converge en
- *     une seule (le facteur de sous-relaxation implicite variait avec t).
- * Le TODO « oscillation avec wEnd bloqué » se lève : pas d'oscillation, mais une
- * répartition fausse et une convergence lente.
+ * L'ancienne pondération (2·w_node + w_start + w_end)/2 ignorait `t` : elle traitait chaque extrémité comme si t = 0.5.
+ * Conséquences mesurées :
+ * • un nœud proche d'une extrémité sur-sollicitait l'AUTRE extrémité (bras de levier ignoré), injectant du mouvement parasite dans les liens voisins ;
+ * • convergence molle : ~6 itérations là où la projection exacte converge en une seule (le facteur de sous-relaxation implicite variait avec t).
+ * Le TODO « oscillation avec wEnd bloqué » se lève : pas d'oscillation, mais une répartition fausse et une convergence lente.
  * ──────────────────────────────────────────────────────────────────────── */
 
 /** Facteur commun aux deux contraintes OnSegment : projette pNode sur
  * lerp(start, end, t) avec la pondération PBD correcte (bras de levier `t`).
  * `t` est fourni par l'appelant (fixe pour Fixed, reprojeté pour Slide).
- * `normalOffset` décale la cible perpendiculairement au segment, du côté où le
- * nœud se trouve déjà. Comme `DistanceToLine`, la direction perpendiculaire est
- * lue sur la géométrie courante et sa rotation n'entre pas dans le gradient : la
- * variété visée est exacte, seule la répartition de la correction est approchée. */
+ * `normalOffset` décale la cible perpendiculairement au segment, du côté où le nœud se trouve déjà.
+ * Comme `DistanceToLine`, la direction perpendiculaire est lue sur la géométrie courante et sa rotation n'entre pas dans le gradient : la variété visée est exacte, seule la répartition de la correction est approchée. */
 function projectOnSegment(
   nodes: Nodes,
   iStart: number,
@@ -75,11 +70,8 @@ function projectOnSegment(
   stiffness: number,
   normalOffset: number = 0,
   /** Which side (of `end − start`'s left normal) the offset is applied on. Omitted, the side
-   *  is read off the node's own current position — reproducible but not remembered between
-   *  calls, which is what `FixedOnSegment`/`SlideOnSegment` want. A contact (see
-   *  `applyPointSegmentContactConstraint`) instead fixes it once, so a single oversized
-   *  correction (a grab, in particular) landing the node past the segment does not read as
-   *  "already on its other, now-current side" and stop pushing back. */
+   * is read off the node's own current position — reproducible but not remembered between calls, which is what `FixedOnSegment`/`SlideOnSegment` want.
+   * A contact (see `applyPointSegmentContactConstraint`) instead fixes it once, so a single oversized correction (a grab, in particular) landing the node past the segment does not read as "already on its other, now-current side" and stop pushing back. */
   forcedSide?: number,
 ): number {
   const wNode = nodes.w[iNode];
@@ -104,8 +96,7 @@ function projectOnSegment(
     if (len > 0) {
       const nx = -dy / len;
       const ny = dx / len;
-      // Un nœud pile sur le segment n'a pas de côté : la perpendiculaire gauche
-      // tranche, ce qui rend le décalage reproductible plutôt qu'arbitraire.
+      // Un nœud pile sur le segment n'a pas de côté : la perpendiculaire gauche tranche, ce qui rend le décalage reproductible plutôt qu'arbitraire.
       const side = forcedSide ?? (Cx * nx + Cy * ny < 0 ? -1 : 1);
       Cx -= normalOffset * side * nx;
       Cy -= normalOffset * side * ny;
@@ -127,9 +118,8 @@ function projectOnSegment(
 }
 
 /** Contraint un point (keyNode) à rester sur le segment (keyStart, keyEnd).
- * `t` est reprojeté à chaque itération (glissement libre), borné par une marge
- * pour éviter les extrémités. La contrainte n'agit donc que perpendiculairement
- * au segment : le nœud glisse librement dans le sens tangent. */
+ * `t` est reprojeté à chaque itération (glissement libre), borné par une marge pour éviter les extrémités.
+ * La contrainte n'agit donc que perpendiculairement au segment : le nœud glisse librement dans le sens tangent. */
 export function applySlideOnSegmentConstraint(
   nodes: Nodes,
   iStart: number,
@@ -165,9 +155,8 @@ export function applySlideOnSegmentConstraint(
 }
 
 /** Contraint un point (keyNode) à se trouver exactement au ratio `t` FIXE sur
- * le segment (keyStart, keyEnd), i.e. à lerp(start, end, t). Contrairement à
- * Slide, `t` est constant (mémorisé au grab) : la contrainte agit dans les deux
- * directions (tangent + normal). */
+ * le segment (keyStart, keyEnd), i.e. à lerp(start, end, t).
+ * Contrairement à Slide, `t` est constant (mémorisé au grab) : la contrainte agit dans les deux directions (tangent + normal). */
 export function applyFixedOnSegmentConstraint(
   nodes: Nodes,
   iStart: number,
@@ -190,30 +179,15 @@ export function applyFixedOnSegmentConstraint(
 }
 
 /**
- * Non-penetration between a point (keyNode) and a segment (keyStart, keyEnd): keeps the
- * node at least `offset` from its nearest point on the segment — extremities included, never
- * projected past them — on the fixed `side` (of `end − start`'s left normal; `+1` or `-1`)
- * it is presumed to be approaching from. `offset` is a contact margin, not a physical size: a
- * plain point-vs-beam contact and a gear-vs-beam contact (`offset` = the gear's radius) share
- * this one function.
+ * Non-penetration between a point (keyNode) and a segment (keyStart, keyEnd): keeps the node at least `offset` from its nearest point on the segment — extremities included, never projected past them — on the fixed `side` (of `end − start`'s left normal; `+1` or `-1`) it is presumed to be approaching from.
+ * `offset` is a contact margin, not a physical size: a plain point-vs-beam contact and a gear-vs-beam contact (`offset` = the gear's radius) share this one function.
  *
- * `side` is deliberately an input, not read off the node's own current position the way
- * `SlideOnSegment`/`FixedOnSegment` read theirs: an UNSIGNED gate (violated only when closer
- * than `offset`, whichever side that is) reads a node a single oversized correction has
- * thrown clean across the segment — a grab in particular, whose per-iteration step can
- * exceed the whole contact band — as newly arrived on its far side, and lets it go. Fixing
- * the allowed side once (see `collision_links`, which reads it off the previous frame, before
- * anything this frame could have moved it) makes the gate SIGNED instead: negative once
- * truly past the segment, however far, so it stays violated and gets pulled back rather than
- * being waved through.
+ * `side` is deliberately an input, not read off the node's own current position the way `SlideOnSegment`/`FixedOnSegment` read theirs: an UNSIGNED gate (violated only when closer than `offset`, whichever side that is) reads a node a single oversized correction has thrown clean across the segment — a grab in particular, whose per-iteration step can exceed the whole contact band — as newly arrived on its far side, and lets it go.
+ * Fixing the allowed side once (see `collision_links`, which reads it off the previous frame, before anything this frame could have moved it) makes the gate SIGNED instead: negative once truly past the segment, however far, so it stays violated and gets pulled back rather than being waved through.
  *
- * That signed gate only applies where the node projects INSIDE the segment's span (`t`
- * strictly between the ends): there, `point − foot` is purely along the normal, so "which
- * side" is exactly what a crossing means. At a clamped end, `point − foot` also carries a
- * TANGENTIAL component (how far past the corner it is), which the segment's side does not
- * describe — a point that flew off the end AND past the line should not be dragged back
- * from arbitrarily far away just because of which side it lands on. There, this falls back
- * to the plain (unsigned) Euclidean distance from the corner, same as `MinDistance`.
+ * That signed gate only applies where the node projects INSIDE the segment's span (`t` strictly between the ends): there, `point − foot` is purely along the normal, so "which side" is exactly what a crossing means.
+ * At a clamped end, `point − foot` also carries a TANGENTIAL component (how far past the corner it is), which the segment's side does not describe — a point that flew off the end AND past the line should not be dragged back from arbitrarily far away just because of which side it lands on.
+ * There, this falls back to the plain (unsigned) Euclidean distance from the corner, same as `MinDistance`.
  */
 export function applyPointSegmentContactConstraint(
   nodes: Nodes,
@@ -251,16 +225,12 @@ export function applyPointSegmentContactConstraint(
 }
 
 /**
- * `MinDistanceToSegment`'s counterpart for an infinite line instead of a bounded segment:
- * keeps a point (`iNode`) at least `offset` from the line through `iAnchor`, in the
- * direction `normal` already points, and says nothing once it is.
+ * `MinDistanceToSegment`'s counterpart for an infinite line instead of a bounded segment: keeps a point (`iNode`) at least `offset` from the line through `iAnchor`, in the direction `normal` already points, and says nothing once it is.
  *
- * No `side`, no projection, no corner case. `MinDistanceToSegment` needs `side` fixed once
- * per frame because a real segment's own endpoints can move — its "which side" would
- * otherwise be re-derived from live geometry an oversized correction could have already
- * crossed. A floor's anchor is pinned (`invMass = 0`) and `normal` is baked in from its
- * angle at compile time: neither ever moves during a run, so the direction never goes
- * stale and there is nothing to fix ahead of time. Nor is there a corner to fall off of.
+ * No `side`, no projection, no corner case.
+ * `MinDistanceToSegment` needs `side` fixed once per frame because a real segment's own endpoints can move — its "which side" would otherwise be re-derived from live geometry an oversized correction could have already crossed.
+ * A floor's anchor is pinned (`invMass = 0`) and `normal` is baked in from its angle at compile time: neither ever moves during a run, so the direction never goes stale and there is nothing to fix ahead of time.
+ * Nor is there a corner to fall off of.
  */
 export function applyPointLineContactConstraint(
   nodes: Nodes,
@@ -296,29 +266,22 @@ export function applyPointLineContactConstraint(
 }
 
 /* ════════════════════════════════════════════════════════════════════════
- *  EqualLength : deux segments de même longueur
- * ════════════════════════════════════════════════════════════════════════
+ * EqualLength : deux segments de même longueur ════════════════════════════════════════════════════════════════════════
  *
- * Cible = longueur commune vers laquelle tirer les deux segments. En PBD, le
- * segment le plus MOBILE doit s'adapter le plus, donc peser le MOINS dans la
- * cible → pondération par mobilité CROISÉE :
+ * Cible = longueur commune vers laquelle tirer les deux segments.
+ * En PBD, le segment le plus MOBILE doit s'adapter le plus, donc peser le MOINS dans la cible → pondération par mobilité CROISÉE :
  *
- *     targetLen = (l1·w2 + l2·w1) / (w1 + w2)
+ * targetLen = (l1·w2 + l2·w1) / (w1 + w2)
  *
  * L'ancienne version utilisait (l1·w1 + l2·w2)/(w1+w2) : mobilité NON croisée.
- * Défaut mesuré : segment 1 entièrement ancré (w1 = 0), segment 2 libre. La
- * seule solution est seg2 → l1. L'ancienne calculait targetLen = l2 (elle
- * visait la longueur du segment LIBRE, pas de l'ancré), demandait au segment
- * ancré de s'y conformer — bloqué par sa masse nulle — et ne corrigeait donc
- * RIEN, tout en déclarant l'erreur en boucle. Même motif que le défaut de
- * pondération inversée sur applyAngleConstraint.
+ * Défaut mesuré : segment 1 entièrement ancré (w1 = 0), segment 2 libre.
+ * La seule solution est seg2 → l1.
+ * L'ancienne calculait targetLen = l2 (elle visait la longueur du segment LIBRE, pas de l'ancré), demandait au segment ancré de s'y conformer — bloqué par sa masse nulle — et ne corrigeait donc RIEN, tout en déclarant l'erreur en boucle.
+ * Même motif que le défaut de pondération inversée sur applyAngleConstraint.
  *
- * Note d'ordre : on délègue deux fois à applyDistanceConstraint dans la même
- * passe. Ce n'est pas idempotent au sens strict d'un balayage Gauss-Seidel (le
- * second appel voit déjà l'effet du premier via les positions partagées), mais
- * la cible est calculée AVANT toute écriture, donc les deux segments visent la
- * même valeur. Le solveur re-balaie de toute façon : le résidu inter-segment
- * est absorbé aux passes suivantes.
+ * Note d'ordre : on délègue deux fois à applyDistanceConstraint dans la même passe.
+ * Ce n'est pas idempotent au sens strict d'un balayage Gauss-Seidel (le second appel voit déjà l'effet du premier via les positions partagées), mais la cible est calculée AVANT toute écriture, donc les deux segments visent la même valeur.
+ * Le solveur re-balaie de toute façon : le résidu inter-segment est absorbé aux passes suivantes.
  * ──────────────────────────────────────────────────────────────────────── */
 
 /** Contraint deux segments à avoir la même longueur. */
@@ -355,8 +318,7 @@ export function applyEqualLengthConstraint(
 }
 
 /* ════════════════════════════════════════════════════════════════════════
- *  Projection PBD de contraintes angulaire à 4 points
- * ════════════════════════════════════════════════════════════════════════
+ * Projection PBD de contraintes angulaire à 4 points ════════════════════════════════════════════════════════════════════════
  *
  * Toutes les contraintes ci-dessous imposent une fonction scalaire de la forme
  *
@@ -365,7 +327,7 @@ export function applyEqualLengthConstraint(
  * La projection PBD standard pour une contrainte scalaire est
  *
  *     λ    = −C / Σᵢ wᵢ ‖∇ᵢC‖²
- *     Δpᵢ  = λ · wᵢ · ∇ᵢC
+ * Δpᵢ = λ · wᵢ · ∇ᵢC
  *
  * avec, pour l'angle (perp(x,y) = (−y, x)) :
  *
@@ -373,30 +335,22 @@ export function applyEqualLengthConstraint(
  *     ∇_{s₂}C = −perp(v₂)/‖v₂‖²     ∇_{e₂}C = +perp(v₂)/‖v₂‖²
  *
  * Propriétés obtenues « gratuitement », sans aucun garde-fou :
- *   • un point ancré (wᵢ = 0) ne bouge pas — Δpᵢ s'annule dans la formule ;
- *   • le segment pivote alors autour de ce point (seul mouvement laissé au
- *     point libre par le gradient) ;
- *   • chaque Δpᵢ est ⟂ au segment → la longueur n'est touchée qu'au 2ᵈ ordre ;
- *   • la correction demandée est celle obtenue → raideur/convergence prévisibles.
+ * • un point ancré (wᵢ = 0) ne bouge pas — Δpᵢ s'annule dans la formule ;
+ * • le segment pivote alors autour de ce point (seul mouvement laissé au point libre par le gradient) ;
+ * • chaque Δpᵢ est ⟂ au segment → la longueur n'est touchée qu'au 2ᵈ ordre ;
+ * • la correction demandée est celle obtenue → raideur/convergence prévisibles.
  *
- * Comme ‖perp(vᵢ)‖² = ‖vᵢ‖², on a ‖∇ᵢC‖² = 1/‖vᵢ‖² tant que les quatre points
- * sont distincts — ce qui n'est pas garanti, voir `projectAngleC`.
+ * Comme ‖perp(vᵢ)‖² = ‖vᵢ‖², on a ‖∇ᵢC‖² = 1/‖vᵢ‖² tant que les quatre points sont distincts — ce qui n'est pas garanti, voir `projectAngleC`.
  * ──────────────────────────────────────────────────────────────────────── */
 
 /**
- * Cœur partagé : projette la contrainte scalaire `C` (déjà déballée dans
- * (−π, π]) sur les quatre extrémités des deux segments, en respectant la
- * mobilité point par point. Utilisé par Angle, Parallel et Normal — seule
- * change la façon de calculer `C`.
+ * Cœur partagé : projette la contrainte scalaire `C` (déjà déballée dans (−π, π]) sur les quatre extrémités des deux segments, en respectant la mobilité point par point.
+ * Utilisé par Angle, Parallel et Normal — seule change la façon de calculer `C`.
  *
- * Two of the four ends may be the SAME node: a `join` welding one beam's end onto the
- * next's start puts that node on both segments at once. Its gradient is then the sum of
- * the two it would carry separately, and both the denominator and the correction are built
- * on that merged gradient — written per end instead, the second write would silently
- * overwrite the first and the node would move by one of its two shares.
+ * Two of the four ends may be the SAME node: a `join` welding one beam's end onto the next's start puts that node on both segments at once.
+ * Its gradient is then the sum of the two it would carry separately, and both the denominator and the correction are built on that merged gradient — written per end instead, the second write would silently overwrite the first and the node would move by one of its two shares.
  *
- * Ne fait rien et renvoie |C| si aucune correction n'est possible (segment
- * dégénéré ou tous les points ancrés).
+ * Ne fait rien et renvoie |C| si aucune correction n'est possible (segment dégénéré ou tous les points ancrés).
  */
 function projectAngleC(
   nodes: Nodes,
@@ -413,7 +367,8 @@ function projectAngleC(
   const l2sq = v2.length_squared();
   if (l1sq === 0 || l2sq === 0) return Math.abs(C);
 
-  // Gradients par point. Chaque grad a pour norme² 1/lᵢ².
+  // Gradients par point.
+  // Chaque grad a pour norme² 1/lᵢ².
   const g_s1 = v1.perp().mul(1 / l1sq); //  +perp(v₁)/‖v₁‖²
   const g_e1 = g_s1.mul(-1); //  −perp(v₁)/‖v₁‖²
   const g_s2 = v2.perp().mul(-1 / l2sq); //  −perp(v₂)/‖v₂‖²
@@ -452,14 +407,10 @@ const angleGradX = new Float64Array(4);
 const angleGradY = new Float64Array(4);
 
 /**
- * `projectAngleC` where two of the four ends are the same node: its gradient is the sum of
- * the two it would carry separately, so the four ends are merged per node first and both
- * `Σ wᵢ‖∇ᵢC‖²` and the corrections are built on the merged gradients. Written per end
- * instead, the second `setPoint` would overwrite the first and the node would move by one
- * of its two shares alone.
+ * `projectAngleC` where two of the four ends are the same node: its gradient is the sum of the two it would carry separately, so the four ends are merged per node first and both `Σ wᵢ‖∇ᵢC‖²` and the corrections are built on the merged gradients.
+ * Written per end instead, the second `setPoint` would overwrite the first and the node would move by one of its two shares alone.
  *
- * Split out rather than folded in so that a link whose ends ARE distinct — every one but a
- * weld — keeps the closed-form denominator it had, to the bit.
+ * Split out rather than folded in so that a link whose ends ARE distinct — every one but a weld — keeps the closed-form denominator it had, to the bit.
  */
 function projectAngleCMerged(
   nodes: Nodes,
@@ -522,16 +473,14 @@ function wrapPi(a: number): number {
 }
 
 /* ════════════════════════════════════════════════════════════════════════
- *  applyAngleConstraint (projection PBD)
- * ════════════════════════════════════════════════════════════════════════ */
+ * applyAngleConstraint (projection PBD) ════════════════════════════════════════════════════════════════════════ */
 
 /** Contraint l'angle orienté entre deux segments à valoir targetAngle.
  *
- * flipStart/flipEnd et couterClockwise ne servent qu'à interpréter la cible
- * dans le bon quadrant ; ils ne changent pas la géométrie de la correction.
+ * flipStart/flipEnd et couterClockwise ne servent qu'à interpréter la cible dans le bon quadrant ; ils ne changent pas la géométrie de la correction.
  *
- * Projection PBD : voir l'en-tête du fichier. Un point ancré reste fixe et le
- * segment pivote autour de lui, sans cas particulier ni raccourcissement.
+ * Projection PBD : voir l'en-tête du fichier.
+ * Un point ancré reste fixe et le segment pivote autour de lui, sans cas particulier ni raccourcissement.
  */
 export function applyAngleConstraint(
   nodes: Nodes,
@@ -555,9 +504,8 @@ export function applyAngleConstraint(
   const delta2 = pe2.sub(ps2);
   if (delta1.length_squared() === 0 || delta2.length_squared() === 0) return 0;
 
-  // flip : on interprète la cible sur les vecteurs « virtuels ». Le gradient,
-  // lui, se calcule sur les vrais vecteurs (le flip est une négation globale
-  // qui laisse perp(v)/‖v‖² inchangé au signe près, absorbé par C).
+  // flip : on interprète la cible sur les vecteurs « virtuels ».
+  // Le gradient, lui, se calcule sur les vrais vecteurs (le flip est une négation globale qui laisse perp(v)/‖v‖² inchangé au signe près, absorbé par C).
   const virtV1 = flipStart ? delta1.mul(-1) : delta1;
   const virtV2 = flipEnd ? delta2.mul(-1) : delta2;
   const currentAngle = virtV1.angle_to(virtV2);
@@ -565,19 +513,17 @@ export function applyAngleConstraint(
   const C = wrapPi(currentAngle - targetAngle * (couterClockwise ? -1 : 1));
   if (Math.abs(C) < 0.0001) return 0;
 
-  // On projette avec les vrais delta1/delta2 : θ(virtV) et θ(delta) diffèrent
-  // d'une constante (0 ou π) par segment, donc ∂C/∂p est identique.
+  // On projette avec les vrais delta1/delta2 : θ(virtV) et θ(delta) diffèrent d'une constante (0 ou π) par segment, donc ∂C/∂p est identique.
   return projectAngleC(nodes, s1, e1, s2, e2, delta1, delta2, C, stiffness);
 }
 
 /* ════════════════════════════════════════════════════════════════════════
- *  applyParallelConstraint (projection PBD)
- * ════════════════════════════════════════════════════════════════════════ */
+ * applyParallelConstraint (projection PBD) ════════════════════════════════════════════════════════════════════════ */
 
 /** Contraint deux segments à être parallèles.
  *
- * Cible : angle relatif 0, modulo π (les segments ne sont pas orientés). La
- * correction la plus courte est choisie en ramenant C dans (−π/2, π/2].
+ * Cible : angle relatif 0, modulo π (les segments ne sont pas orientés).
+ * La correction la plus courte est choisie en ramenant C dans (−π/2, π/2].
  * Projection PBD identique à Angle.
  */
 export function applyParallelConstraint(
@@ -607,12 +553,12 @@ export function applyParallelConstraint(
 }
 
 /* ════════════════════════════════════════════════════════════════════════
- *  applyNormalConstraint (projection PBD)
- * ════════════════════════════════════════════════════════════════════════ */
+ * applyNormalConstraint (projection PBD) ════════════════════════════════════════════════════════════════════════ */
 
 /** Contraint deux segments à être perpendiculaires (angle = π/2).
  *
- * Identique à Parallel, cible décalée de π/2. Projection PBD identique.
+ * Identique à Parallel, cible décalée de π/2.
+ * Projection PBD identique.
  */
 export function applyNormalConstraint(
   nodes: Nodes,
@@ -641,22 +587,19 @@ export function applyNormalConstraint(
 }
 
 /* ════════════════════════════════════════════════════════════════════════
- *  applyKeepOrientationConstraint (projection PBD)
- * ════════════════════════════════════════════════════════════════════════
+ * applyKeepOrientationConstraint (projection PBD) ════════════════════════════════════════════════════════════════════════
  *
- * Un seul segment, aligné sur une direction fixe. On peut le voir comme un cas
- * particulier de la contrainte d'angle où le « second segment » est la
- * direction cible, immobile (poids infini → gradient nul côté cible). Il reste
- * donc une contrainte scalaire sur (s, e) :
+ * Un seul segment, aligné sur une direction fixe.
+ * On peut le voir comme un cas particulier de la contrainte d'angle où le « second segment » est la direction cible, immobile (poids infini → gradient nul côté cible).
+ * Il reste donc une contrainte scalaire sur (s, e) :
  *
  *     C(p) = θ(e−s) − θ_dir      (ramené dans (−π, π])
  *     ∇_e C = +perp(v)/‖v‖²      ∇_s C = −perp(v)/‖v‖²
- *     λ = −C / [(w_s + w_e)/‖v‖²]
+ * λ = −C / [(w_s + w_e)/‖v‖²]
  *
  * (v = e−s : bouger `e` de +perp(v) augmente θ(v), d'où le + sur ∇_e.)
  *
- * Comme pour l'angle : une extrémité ancrée reste fixe et le segment pivote
- * autour d'elle, sans passer par le milieu, sans raccourcir.
+ * Comme pour l'angle : une extrémité ancrée reste fixe et le segment pivote autour d'elle, sans passer par le milieu, sans raccourcir.
  * ──────────────────────────────────────────────────────────────────────── */
 
 /** Contraint le segment (keyStart, keyEnd) à rester parallèle à `direction`. */
@@ -734,16 +677,11 @@ export function applyHandleGrabConstraint(
 }
 
 /** Contraint la distance entre deux points à valoir targetDist.
- * L'erreur (écart à la distance cible) est corrigée le long de l'axe p1→p2 :
- * chaque point est déplacé proportionnellement à sa masse (w/totalW) et à stiffness.
+ * L'erreur (écart à la distance cible) est corrigée le long de l'axe p1→p2 : chaque point est déplacé proportionnellement à sa masse (w/totalW) et à stiffness.
  *
- * Coincident points carry no axis, so the separation borrows `preferredAxis`
- * when the caller knows which way the points should part (a belt terminal leaves
- * along the loop tangent); without one it falls back to a fixed diagonal, which
- * keeps the outcome deterministic instead of frame-dependent. */
+ * Coincident points carry no axis, so the separation borrows `preferredAxis` when the caller knows which way the points should part (a belt terminal leaves along the loop tangent); without one it falls back to a fixed diagonal, which keeps the outcome deterministic instead of frame-dependent. */
 /**
- * XPBD state for ONE compliant constraint: the multiplier accumulated since the substep
- * started, and the compliance divided by `dt²` that the accumulation is weighed against.
+ * XPBD state for ONE compliant constraint: the multiplier accumulated since the substep started, and the compliance divided by `dt²` that the accumulation is weighed against.
  * Absent, the constraint is rigid and the projection is exactly the one it always was.
  */
 export interface Compliance {
@@ -789,11 +727,8 @@ export function applyDistanceConstraint(
   const length = Math.sqrt(dx * dx + dy * dy);
   const error = length - targetDist;
 
-  // XPBD: Δλ = (−C − α̃·λ) / (Σ wᵢ‖∇ᵢC‖² + α̃), and Δpᵢ = Δλ·wᵢ·∇ᵢC. With α̃ = 0 this is
-  // −C/Σwᵢ and λ never appears — the rigid projection this has always been, to the bit.
-  // A real compliance instead lets the constraint hold a finite force, which is what makes
-  // the share of load between the members of a hyperstatic structure their stiffnesses'
-  // business rather than the sweep order's.
+  // XPBD: Δλ = (−C − α̃·λ) / (Σ wᵢ‖∇ᵢC‖² + α̃), and Δpᵢ = Δλ·wᵢ·∇ᵢC. With α̃ = 0 this is −C/Σwᵢ and λ never appears — the rigid projection this has always been, to the bit.
+  // A real compliance instead lets the constraint hold a finite force, which is what makes the share of load between the members of a hyperstatic structure their stiffnesses' business rather than the sweep order's.
   let scaled: number;
   if (compliance && compliance.alphaTilde > 0) {
     const { alphaTilde, lambda, index } = compliance;
@@ -816,7 +751,8 @@ export function applyDistanceConstraint(
 /**
  * Empêche deux points de se rapprocher à moins de `minDistance`, et ne dit rien tant qu'ils sont plus loin.
  *
- * L'inégalité est la seule forme correcte pour un plancher : une `Distance` tirerait aussi les points l'un vers l'autre quand ils sont trop loin, et une barre ne serait plus qu'une barre de longueur fixe. Ce qu'elle refuse d'absorber revient au balayage suivant et part aux autres degrés de liberté — c'est ainsi qu'un mécanisme poussé au-delà de sa course s'arrête au lieu de s'effondrer.
+ * L'inégalité est la seule forme correcte pour un plancher : une `Distance` tirerait aussi les points l'un vers l'autre quand ils sont trop loin, et une barre ne serait plus qu'une barre de longueur fixe.
+ * Ce qu'elle refuse d'absorber revient au balayage suivant et part aux autres degrés de liberté — c'est ainsi qu'un mécanisme poussé au-delà de sa course s'arrête au lieu de s'effondrer.
  *
  * Deux points confondus n'ont pas d'axe : la séparation reste au bon soin de `applyDistanceConstraint`, qui en choisit un.
  */
@@ -835,8 +771,8 @@ export function applyMinDistanceConstraint(
 }
 
 /** Contraint la distance perpendiculaire entre un point (keyNode) et une droite
- * définie par (keyStart, keyEnd). Chaque point est déplacé proportionnellement
- * à sa masse pour réduire l'erreur. */
+ * définie par (keyStart, keyEnd).
+ * Chaque point est déplacé proportionnellement à sa masse pour réduire l'erreur. */
 export function applyDistanceToLineConstraint(
   nodes: Nodes,
   iStart: number,
@@ -956,9 +892,8 @@ export function applyVerticalConstraint(
 }
 
 /** Contraint la distance entre deux centres d'engrenages à être exactement r1+r2
- * (condition d'engrènement). La correction est distribuée entre les positions et
- * les rayons selon leurs masses : si les centres sont bloqués, ce sont les rayons
- * qui s'adaptent, et inversement. */
+ * (condition d'engrènement).
+ * La correction est distribuée entre les positions et les rayons selon leurs masses : si les centres sont bloqués, ce sont les rayons qui s'adaptent, et inversement. */
 export function applyGearMeshingConstraint(
   nodes: EditNodes,
   g1: number,
@@ -967,8 +902,7 @@ export function applyGearMeshingConstraint(
   rg2: number,
   stiffness: number = 1.0,
 ): number {
-  // r1/r2 peuvent valoir 0 (pont de rayon nul utilisé par le grab de rayon) :
-  // on teste la présence du nœud, pas la fausseté, sinon la contrainte s'annule.
+  // r1/r2 peuvent valoir 0 (pont de rayon nul utilisé par le grab de rayon) : on teste la présence du nœud, pas la fausseté, sinon la contrainte s'annule.
   if (g1 < 0 || g2 < 0 || rg1 < 0 || rg2 < 0) return 0;
   const p1 = point(nodes, g1);
   const p2 = point(nodes, g2);
@@ -983,8 +917,7 @@ export function applyGearMeshingConstraint(
   const targetDist = r1 + r2;
   const error = dist - targetDist; // signé : positif = trop éloignés
 
-  // Poids total : positions (comptent pour 1 chacune) + rayons (comptent pour 1 chacun)
-  // Un rayon corrige l'erreur de distance de 1 pour 1, comme un point.
+  // Poids total : positions (comptent pour 1 chacune) + rayons (comptent pour 1 chacun) Un rayon corrige l'erreur de distance de 1 pour 1, comme un point.
   const totalW = wPos1 + wPos2 + wRad1 + wRad2;
   if (totalW === 0) return 0;
 
@@ -1011,8 +944,7 @@ export function applyGearMeshingConstraint(
 }
 
 /** Contraint le rapport des rayons de deux engrenages à valoir `ratio` (r1/r2 = ratio).
- * La correction est distribuée entre les deux rayons selon leurs masses :
- * le rayon libre bougera davantage que le rayon ancré. */
+ * La correction est distribuée entre les deux rayons selon leurs masses : le rayon libre bougera davantage que le rayon ancré. */
 export function applyGearRatioConstraint(
   nodes: EditNodes,
   g1: number,
@@ -1030,20 +962,12 @@ export function applyGearRatioConstraint(
   const totalW = w1 + w2;
   if (totalW === 0) return 0;
 
-  // Rayon cible pour chaque engrenage en supposant r1/r2 = ratio :
-  // r1_target = sqrt(r1 * r2 * ratio), r2_target = r1_target / ratio
-  // Approche simplifiée : on cherche le scale s tel que (r1*s) / (r2/s) = ratio
-  // => s² = ratio * r2 / r1, s = sqrt(ratio * r2 / r1)
-  // Mais on distribue juste la correction proportionnellement aux masses :
+  // Rayon cible pour chaque engrenage en supposant r1/r2 = ratio : r1_target = sqrt(r1 * r2 * ratio), r2_target = r1_target / ratio Approche simplifiée : on cherche le scale s tel que (r1*s) / (r2/s) = ratio => s² = ratio * r2 / r1, s = sqrt(ratio * r2 / r1) Mais on distribue juste la correction proportionnellement aux masses :
   const currentRatio = r1 / r2;
   const ratioError = currentRatio - ratio; // signé
   const error = Math.abs(ratioError);
 
-  // Correction : on ajuste r1 à la baisse et r2 à la hausse (ou inversement)
-  // de façon à réduire l'erreur de ratio, pondéré par les masses.
-  // dr1 = -ratioError * r2 * (w1/totalW) * stiffness  (dérivée de r1/r2 par r1 = 1/r2)
-  // dr2 = +ratioError * r1/r2² * r2 * (w2/totalW) * stiffness = ratioError * r1/r2 * ...
-  // Simplifié : on tire les deux rayons vers la cible commune weighted-average.
+  // Correction : on ajuste r1 à la baisse et r2 à la hausse (ou inversement) de façon à réduire l'erreur de ratio, pondéré par les masses. dr1 = -ratioError * r2 * (w1/totalW) * stiffness (dérivée de r1/r2 par r1 = 1/r2) dr2 = +ratioError * r1/r2² * r2 * (w2/totalW) * stiffness = ratioError * r1/r2 * ... Simplifié : on tire les deux rayons vers la cible commune weighted-average.
   const targetR1 = ratio * r2; // r1 si r2 est fixe
   const targetR2 = r1 / ratio; // r2 si r1 est fixe
   if (w1 !== 0)
@@ -1062,8 +986,8 @@ function wrap_angle(a: number): number {
 }
 
 /** Moteur sur beam : fait tourner `drivenKey` autour de `pivotKey` vers l'angle
- * absolu `targetAngle` (angle monde de pivot→driven). Contrainte à priorité
- * normale : si le mécanisme est bloqué, le résidu subsiste sans état invalide. */
+ * absolu `targetAngle` (angle monde de pivot→driven).
+ * Contrainte à priorité normale : si le mécanisme est bloqué, le résidu subsiste sans état invalide. */
 export function applyMotorBeamConstraint(
   nodes: Nodes,
   iPivot: number,
@@ -1098,7 +1022,8 @@ export function applyMotorAngleConstraint(
 }
 
 /** Engrènement épicycloïdal en espace d'angles (couche passive : n'écrit que les
- * nœuds d'angle). `alpha` est l'angle continu de la ligne des centres.
+ * nœuds d'angle).
+ * `alpha` est l'angle continu de la ligne des centres.
  * C = r1·((θ1−θ1₀) − Δα) + r2·((θ2−θ2₀) − Δα), Δα = alpha − alpha0. */
 export function applyGearMeshAngleConstraint(
   nodes: SimNodes,
@@ -1128,9 +1053,7 @@ export function applyGearMeshAngleConstraint(
 
 /** Nœud fixé au périmètre d'un engrenage : couple sa position à l'angle θ.
  * On veut angle(N − centre) = θ + offset et |N − centre| = radius.
- * Bidirectionnel : répartit la correction angulaire entre la rotation de N et
- * l'angle θ, puis contraint le rayon en déplaçant N ET le centre selon leurs
- * masses (si N est ancré, c'est le centre de l'engrenage qui bouge). */
+ * Bidirectionnel : répartit la correction angulaire entre la rotation de N et l'angle θ, puis contraint le rayon en déplaçant N ET le centre selon leurs masses (si N est ancré, c'est le centre de l'engrenage qui bouge). */
 export function applyGearPerimeterPinConstraint(
   nodes: SimNodes,
   iNode: number,
@@ -1161,8 +1084,7 @@ export function applyGearPerimeterPinConstraint(
 
   const dAng = -C * (wN / denom) * stiffness;
   const dTheta = (C / denom) * stiffness;
-  // Correction angulaire : on tourne N autour du centre (le centre reste fixe
-  // pour cette partie) et on ajuste θ.
+  // Correction angulaire : on tourne N autour du centre (le centre reste fixe pour cette partie) et on ajuste θ.
   if (wN !== 0) {
     const cos = Math.cos(dAng);
     const sin = Math.sin(dAng);
@@ -1171,9 +1093,8 @@ export function applyGearPerimeterPinConstraint(
   }
   nodes.angle[iAngle] = theta + dTheta;
 
-  // Correction du rayon : contraint |N − centre| = radius en déplaçant les deux
-  // points selon leurs masses. Le centre de l'engrenage bouge donc aussi pour
-  // résoudre la contrainte (indispensable quand N est ancré ailleurs).
+  // Correction du rayon : contraint |N − centre| = radius en déplaçant les deux points selon leurs masses.
+  // Le centre de l'engrenage bouge donc aussi pour résoudre la contrainte (indispensable quand N est ancré ailleurs).
   const radiusError = applyDistanceConstraint(
     nodes,
     iNode,
@@ -1186,8 +1107,7 @@ export function applyGearPerimeterPinConstraint(
 }
 
 /** Beam attaché à un join fixé sur un engrenage : son orientation suit θ.
- * Fait tourner `drivenKey` autour de `pivotKey` pour que
- * angle(driven − pivot) = θ + offset (bidirectionnel avec θ). */
+ * Fait tourner `drivenKey` autour de `pivotKey` pour que angle(driven − pivot) = θ + offset (bidirectionnel avec θ). */
 export function applyBeamFollowsAngleConstraint(
   nodes: SimNodes,
   iPivot: number,
@@ -1209,11 +1129,8 @@ export function applyBeamFollowsAngleConstraint(
   while (C > Math.PI) C -= 2 * Math.PI;
   while (C <= -Math.PI) C += 2 * Math.PI;
 
-  // Symmetric projection: rotate the beam AND advance θ, split by mobility. The beam
-  // turns about its mobility-weighted fixed point c = (w_driven·pivot + w_pivot·
-  // driven)/(w_pivot+w_driven): an anchored pivot (w_pivot = 0) gives c = pivot
-  // (driven swings about it), a free pivot (a grabbed far end) moves too and
-  // GearPerimeterPin turns the gear.
+  // Symmetric projection: rotate the beam AND advance θ, split by mobility.
+  // The beam turns about its mobility-weighted fixed point c = (w_driven·pivot + w_pivot· driven)/(w_pivot+w_driven): an anchored pivot (w_pivot = 0) gives c = pivot (driven swings about it), a free pivot (a grabbed far end) moves too and GearPerimeterPin turns the gear.
   const wP = nodes.w[iPivot];
   const wD = nodes.w[iDriven];
   const wBeam = wP + wD; // beam-rotation mobility (0 = both ends anchored)
@@ -1231,9 +1148,8 @@ export function applyBeamFollowsAngleConstraint(
   return Math.abs(C);
 }
 
-// Scratch for the belt length, grown once: the active vias (node slot + original gear
-// index, disconnected pulleys skipped) and the slot-keyed gradient accumulation. Keyed by
-// SLOT, not by via, because coincidence fusion can put two vias on one node.
+// Scratch for the belt length, grown once: the active vias (node slot + original gear index, disconnected pulleys skipped) and the slot-keyed gradient accumulation.
+// Keyed by SLOT, not by via, because coincidence fusion can put two vias on one node.
 let lenSlot = new Int32Array(16);
 let lenGear = new Int32Array(16);
 let lenArc = new Uint8Array(16);
@@ -1245,13 +1161,12 @@ let gradY = new Float64Array(16);
  * Courroie inextensible (simulation) : maintient la longueur géométrique totale à `targetLength`.
  * Bouger une poulie redistribue toute la boucle pour conserver la longueur (c'est la transmission de la courroie).
  *
- * Projection PBD de C = L − L₀ : chaque centre bouge de −C·w·∇/Σ(w·|∇|²), avec (théorème de l'enveloppe, les points de tangence glissent librement)
- * ∂L/∂centre = −(somme des tangentes unitaires adjacentes).
+ * Projection PBD de C = L − L₀ : chaque centre bouge de −C·w·∇/Σ(w·|∇|²), avec (théorème de l'enveloppe, les points de tangence glissent librement) ∂L/∂centre = −(somme des tangentes unitaires adjacentes).
  */
 export function applyBeltLengthConstraint(
   /** The one constraint emitted in BOTH modes: the belt geometry is positional in
-   *  simulation, and in edition the pulley radii become DOFs too. Which of the two it
-   *  uses is decided by the link own fields (radKeys), never by the node set. */
+   * simulation, and in edition the pulley radii become DOFs too.
+   * Which of the two it uses is decided by the link own fields (radKeys), never by the node set. */
   nodes: SolveNodes,
   s: LinkSlots,
   link: Extract<Link, { type: "BeltLength" }>,
@@ -1314,9 +1229,7 @@ export function applyBeltLengthConstraint(
   const last = n - 1;
 
   // ── Non-penetration FIRST, before any geometry is read ────────────────────
-  // A terminal can never sit inside its adjacent pulley: `circles_link` switches from a
-  // TANGENT to a RADIAL spoke at d = r, so sampling a terminal that has drifted inside
-  // hands the projection a gradient rotated by 90° and the solver never settles.
+  // A terminal can never sit inside its adjacent pulley: `circles_link` switches from a TANGENT to a RADIAL spoke at d = r, so sampling a terminal that has drifted inside hands the projection a gradient rotated by 90° and the solver never settles.
   const radialContact = (iTerm: number, iCenter: number, rad: number) => {
     if (iTerm < 0 || iCenter < 0) return;
     const tx = nodes.x[iTerm];
@@ -1350,9 +1263,8 @@ export function applyBeltLengthConstraint(
     radialContact(iEnd, lenSlot[last - 1], radii[lenGear[last - 1]]);
   }
 
-  // Vias, from the now-valid positions. In edition (radKeys present) the radii are live
-  // DOFs, so the geometry is measured from the RADII MAP — not the link's baked array —
-  // otherwise the length cannot see them change.
+  // Vias, from the now-valid positions.
+  // In edition (radKeys present) the radii are live DOFs, so the geometry is measured from the RADII MAP — not the link's baked array — otherwise the length cannot see them change.
   const sc = belt_shared_scratch(n);
   for (let v = 0; v < n; v++) {
     const g = lenGear[v];
@@ -1363,9 +1275,8 @@ export function applyBeltLengthConstraint(
   }
   const pairs = belt_solve_pairs(sc, n, closed);
 
-  // ∂L/∂centre = −(sum of adjacent tangent units): each straight span A→B adds −û to A
-  // and +û to B (envelope theorem: arcs add nothing to first-order translation). For an
-  // open belt, also grab the two terminal runs (length + tangent point).
+  // ∂L/∂centre = −(sum of adjacent tangent units): each straight span A→B adds −û to A and +û to B (envelope theorem: arcs add nothing to first-order translation).
+  // For an open belt, also grab the two terminal runs (length + tangent point).
   let length = 0;
   let gradCount = 0;
   const add = (slot: number, gx: number, gy: number) => {
@@ -1408,9 +1319,8 @@ export function applyBeltLengthConstraint(
     length += sc.ell[p];
     const a = p;
     const b = (p + 1) % n;
-    // Terminal runs are captured FIRST: they must survive a ZERO-LENGTH run (an end
-    // resting on its pulley's rim). Dropping them there would null the tangent points,
-    // and the terminals would stop being moved by the length at all.
+    // Terminal runs are captured FIRST: they must survive a ZERO-LENGTH run (an end resting on its pulley's rim).
+    // Dropping them there would null the tangent points, and the terminals would stop being moved by the length at all.
     if (!closed && a === 0) {
       ptSX = sc.arrX[p];
       ptSY = sc.arrY[p];
@@ -1421,8 +1331,8 @@ export function applyBeltLengthConstraint(
       ptEY = sc.depY[p];
       hasPtE = true;
     }
-    // A terminal run's tangent is read off the rim below, never off the run vector —
-    // which vanishes at contact. Its centre gradient is added there too.
+    // A terminal run's tangent is read off the rim below, never off the run vector — which vanishes at contact.
+    // Its centre gradient is added there too.
     if (!closed && (a === 0 || b === last)) return;
     const dx = sc.arrX[p] - sc.depX[p];
     const dy = sc.arrY[p] - sc.depY[p];
@@ -1430,8 +1340,7 @@ export function applyBeltLengthConstraint(
     const len = Math.sqrt(dx * dx + dy * dy);
     const ux = dx / len;
     const uy = dy / len;
-    // Terminals are excluded from the centre gradient — an open belt's ends ride their
-    // own tangent (projected below).
+    // Terminals are excluded from the centre gradient — an open belt's ends ride their own tangent (projected below).
     if (lenGear[a] >= 0) add(lenSlot[a], -ux, -uy);
     if (lenGear[b] >= 0) add(lenSlot[b], ux, uy);
   };
@@ -1451,11 +1360,8 @@ export function applyBeltLengthConstraint(
     }
   }
 
-  // Outward unit tangent at each free terminal, taken from the pulley's RIM rather than
-  // from the run vector `terminal − Ptan`: that vector vanishes as the end reaches the
-  // rim, so neither its direction nor — above all — its SIGN can be read off it there.
-  // Belt travel at a rim point is perp(radial)·sign; the start run travels INTO its gear
-  // and the end run OUT of it, hence the flip on the start.
+  // Outward unit tangent at each free terminal, taken from the pulley's RIM rather than from the run vector `terminal − Ptan`: that vector vanishes as the end reaches the rim, so neither its direction nor — above all — its SIGN can be read off it there.
+  // Belt travel at a rim point is perp(radial)·sign; the start run travels INTO its gear and the end run OUT of it, hence the flip on the start.
   let uSX = 0;
   let uSY = 0;
   let uEX = 0;
@@ -1486,10 +1392,8 @@ export function applyBeltLengthConstraint(
   const C = length - targetLength;
 
   // ── One projection of C = L − L₀, the same in every branch ─────────────────
-  // The DOFs are the pulley centres, the two free terminals (each along its own belt
-  // tangent), and in edition the radii. A terminal JOINED to its adjacent pulley (a
-  // winch) is not free: its `GearPerimeterPin` carries it, and the belt it pays out is
-  // already counted in that pulley's growing arc.
+  // The DOFs are the pulley centres, the two free terminals (each along its own belt tangent), and in edition the radii.
+  // A terminal JOINED to its adjacent pulley (a winch) is not free: its `GearPerimeterPin` carries it, and the belt it pays out is already counted in that pulley's growing arc.
   const startWound = !!link.startWound && lenGear[1] === 0;
   const endWound = !!link.endWound && lenGear[last - 1] === radii.length - 1;
   const wSf = hasUS && !startWound ? nodes.w[iStart] : 0;
@@ -1499,9 +1403,9 @@ export function applyBeltLengthConstraint(
   for (let i = 0; i < gradCount; i++)
     sPos += nodes.w[gradSlot[i]] * (gradX[i] * gradX[i] + gradY[i] * gradY[i]);
 
-  // Edition-only: the radii are DOFs too. Growing a pulley lengthens the belt by its
-  // wrap angle (∂L/∂r = wrap — the tangent-length and tangent-point terms cancel by the
-  // envelope theorem). A dimension-radius freezes its pulley automatically (radMass 0).
+  // Edition-only: the radii are DOFs too.
+  // Growing a pulley lengthens the belt by its wrap angle (∂L/∂r = wrap — the tangent-length and tangent-point terms cancel by the envelope theorem).
+  // A dimension-radius freezes its pulley automatically (radMass 0).
   const radGrad = new Map<number, number>();
   if (s.rad.length > 0) {
     for (let v = 0; v < n; v++) {
@@ -1518,8 +1422,7 @@ export function applyBeltLengthConstraint(
     sRad += nodes.wRadius[slot] * g * g;
   });
 
-  // Feel: when the centres are free to move, they should absorb the change TWICE as much
-  // as the radii (the principled split is 1:1 — set the factor to 1).
+  // Feel: when the centres are free to move, they should absorb the change TWICE as much as the radii (the principled split is 1:1 — set the factor to 1).
   const RADII_ABSORB = 0.5;
   let radScale = 1;
   if (sPos > 1e-12 && sRad > 1e-12)
@@ -1554,12 +1457,10 @@ export function applyBeltLengthConstraint(
 }
 
 /**
- * Jonction d'une courroie tendue : contraint le nœud `nodeKey` (= start==end
- * fusionnés) à se poser sur la pièce la plus proche du contour de la courroie —
- * n'importe quel segment tangent ou arc du **cycle fermé** de poulies — pour
- * garder la boucle continue où que la jonction se trouve. Symétrique : J et le
- * ou les centres de poulie bordant cette pièce bougent (rayons bakés). La
- * tangence sur un arc est structurelle (pas de poulie « dupliquée »). Retire 1 DDL.
+ * Jonction d'une courroie tendue : contraint le nœud `nodeKey` (= start==end fusionnés) à se poser sur la pièce la plus proche du contour de la courroie — n'importe quel segment tangent ou arc du **cycle fermé** de poulies — pour garder la boucle continue où que la jonction se trouve.
+ * Symétrique : J et le ou les centres de poulie bordant cette pièce bougent (rayons bakés).
+ * La tangence sur un arc est structurelle (pas de poulie « dupliquée »).
+ * Retire 1 DDL.
  */
 export function applyBeltJunctionConstraint(
   nodes: EditNodes,
@@ -1574,9 +1475,7 @@ export function applyBeltJunctionConstraint(
   if (iNode < 0 || gearCount === 0) return 0;
   const J = point(nodes, iNode);
 
-  // Edition: the pulleys may be resized in the same solve (a length dimension), so read
-  // the LIVE radius from the radius DOF — the link's baked `radii` array is a frame
-  // behind and would drag the junction off the outline.
+  // Edition: the pulleys may be resized in the same solve (a length dimension), so read the LIVE radius from the radius DOF — the link's baked `radii` array is a frame behind and would drag the junction off the outline.
   const gearRadius = (i: number) =>
     s.rad[i] >= 0 ? nodes.radius[s.rad[i]] : radii[i];
   const vias: BeltVia[] = [];
@@ -1589,9 +1488,8 @@ export function applyBeltJunctionConstraint(
     });
   }
 
-  // Nearest piece (segment or arc) of the closed gear cycle. Distance is to the
-  // piece's clamped extent — for an arc, only its WRAPPED sector counts, so the
-  // junction can't rest on the free side of a pulley.
+  // Nearest piece (segment or arc) of the closed gear cycle.
+  // Distance is to the piece's clamped extent — for an arc, only its WRAPPED sector counts, so the junction can't rest on the free side of a pulley.
   const pieces = belt_pieces(vias, true);
   if (pieces.length === 0) return 0;
   let best = pieces[0];
@@ -1607,8 +1505,7 @@ export function applyBeltJunctionConstraint(
   const wJ = nodes.w[iNode];
 
   if (best.kind === "segment") {
-    // Move J and the segment's two bounding gears along the tangent normal
-    // (translating both centres translates the tangent line exactly).
+    // Move J and the segment's two bounding gears along the tangent normal (translating both centres translates the tangent line exactly).
     const iA = s.pos[1 + best.gearIndexA];
     const iB = s.pos[1 + best.gearIndexB];
     const cA = point(nodes, iA);
@@ -1639,23 +1536,18 @@ export function applyBeltJunctionConstraint(
 }
 
 /**
- * Belt pin (simulation): the attached node `nodeKey` rides the belt at arc-length
- * s = s0 + r_ref·ε_ref·(θ_ref − θ_ref0), so it travels as the belt turns.
- * Bidirectional/symmetric: the TANGENTIAL error advances θ_ref (→ every pulley
- * turns via the strand no-slips) or slides the node, split by mass; the NORMAL error
- * pulls the node back onto the belt, shared with the pulley(s) bounding that
- * piece. A closed belt is a closed pulley loop; a loose belt is the open path
- * start-terminal → pulleys → end-terminal (`closed=false`, terminals from
- * `startKey`/`endKey`). Disconnected pulleys are skipped. Radii + refs baked.
+ * Belt pin (simulation): the attached node `nodeKey` rides the belt at arc-length s = s0 + r_ref·ε_ref·(θ_ref − θ_ref0), so it travels as the belt turns.
+ * Bidirectional/symmetric: the TANGENTIAL error advances θ_ref (→ every pulley turns via the strand no-slips) or slides the node, split by mass; the NORMAL error pulls the node back onto the belt, shared with the pulley(s) bounding that piece.
+ * A closed belt is a closed pulley loop; a loose belt is the open path start-terminal → pulleys → end-terminal (`closed=false`, terminals from `startKey`/`endKey`).
+ * Disconnected pulleys are skipped.
+ * Radii + refs baked.
  *
- * `passive` makes it one-way — the node is moved onto its belt target and nothing
- * else: a node nobody but the belt has a say in reads the belt travel, it does not
- * hold it, and driving θ_ref from it would excite the free travel mode of a closed
- * belt at the mercy of the sweep order.
+ * `passive` makes it one-way — the node is moved onto its belt target and nothing else: a node nobody but the belt has a say in reads the belt travel, it does not hold it, and driving θ_ref from it would excite the free travel mode of a closed belt at the mercy of the sweep order.
  */
 
 /** Scratch for the pin: the gear slot behind each via (−1 for a terminal), the wrap it
- *  rides, and where the arc-length lands. Grown once, reused every application. */
+ * rides, and where the arc-length lands.
+ * Grown once, reused every application. */
 let pinSlot = new Int32Array(16);
 let pinWrap = new Float64Array(16);
 const pinAt = belt_at();
@@ -1683,9 +1575,8 @@ export function applyBeltPinConstraint(
   const jx = nodes.x[iNode];
   const jy = nodes.y[iNode];
 
-  // Ordered vias, straight into the scalar scratch: for an open belt the two r = 0
-  // terminals bracket the still-connected pulleys. `pinSlot[v]` is the via's gear slot,
-  // or −1 for a terminal, which owns no pulley to share the normal correction with.
+  // Ordered vias, straight into the scalar scratch: for an open belt the two r = 0 terminals bracket the still-connected pulleys.
+  // `pinSlot[v]` is the via's gear slot, or −1 for a terminal, which owns no pulley to share the normal correction with.
   const capacity = gearCount + 2;
   if (pinSlot.length < capacity) {
     pinSlot = new Int32Array(capacity);
@@ -1721,8 +1612,8 @@ export function applyBeltPinConstraint(
     if (iEnd < 0) return 0;
     pushVia(iEnd, 0, false, 0);
   }
-  // A closed loop needs ≥2 pulleys; an open path needs ≥1 pulley between its
-  // terminals (start + pulley + end). Otherwise there is nothing to ride.
+  // A closed loop needs ≥2 pulleys; an open path needs ≥1 pulley between its terminals (start + pulley + end).
+  // Otherwise there is nothing to ride.
   if (n < (closed ? 2 : 3)) return 0;
 
   const iRefAngle = s_.ang[0];
@@ -1772,10 +1663,8 @@ export function applyBeltPinConstraint(
   nodes.angle[iRefAngle] =
     thetaRef + (errT * (wTheta / totalT) * stiffness) / rEps;
 
-  // Normal: pull the node back onto the belt, sharing with the pulley(s) bounding the
-  // piece at s (terminals own no pulley), so dragging the node off the belt drags those
-  // pulleys with it. `viaA === viaB` on an arc, and coincidence fusion can put both on one
-  // slot — either way the pulley is counted once.
+  // Normal: pull the node back onto the belt, sharing with the pulley(s) bounding the piece at s (terminals own no pulley), so dragging the node off the belt drags those pulleys with it.
+  // `viaA === viaB` on an arc, and coincidence fusion can put both on one slot — either way the pulley is counted once.
   const slotA = pinAt.viaA >= 0 ? pinSlot[pinAt.viaA] : -1;
   const slotBraw = pinAt.viaB >= 0 ? pinSlot[pinAt.viaB] : -1;
   const slotB = slotBraw === slotA ? -1 : slotBraw;
@@ -1812,11 +1701,9 @@ export function applyBeltPinConstraint(
 }
 
 /**
- * Orientation d'un beam soudé à la jonction d'une courroie (simulation) : son
- * angle suit la tangente de la courroie, angle(driven − pivot) = tangentAngle(s)
- * + offset. Bidirectionnel, pondéré par la courbure locale : sur un arc, tourner
- * le beam avance la courroie (dTangentAngle/dθ_ref = courbure·r_ref·ε_ref) ; sur
- * un segment la tangente est fixe → le beam s'y aligne sans faire voyager.
+ * Orientation d'un beam soudé à la jonction d'une courroie (simulation) : son angle suit la tangente de la courroie, angle(driven − pivot) = tangentAngle(s)
+ * + offset.
+ * Bidirectionnel, pondéré par la courbure locale : sur un arc, tourner le beam avance la courroie (dTangentAngle/dθ_ref = courbure·r_ref·ε_ref) ; sur un segment la tangente est fixe → le beam s'y aligne sans faire voyager.
  */
 
 /** Where the welded beam reads its tangent. Grown once, reused every application. */
@@ -1841,8 +1728,7 @@ export function applyBeltFollowsTangentConstraint(
   if (iPivot < 0 || iDriven < 0 || gearCount === 0) return 0;
   const pivot = point(nodes, iPivot);
   const driven = point(nodes, iDriven);
-  // Reduced loop: skip disconnected pulleys (the tangent is read from the same
-  // loop the belt is drawn on). s0/thetaRef0/refIndex are re-baked at disconnect.
+  // Reduced loop: skip disconnected pulleys (the tangent is read from the same loop the belt is drawn on). s0/thetaRef0/refIndex are re-baked at disconnect.
   const sc = belt_shared_scratch(gearCount);
   let n = 0;
   for (let i = 0; i < gearCount; i++) {
@@ -1873,12 +1759,8 @@ export function applyBeltFollowsTangentConstraint(
   while (C <= -Math.PI) C += 2 * Math.PI;
 
   const dTdTheta = curvature * rEps; // how the tangent angle moves per θ_ref
-  // Symmetric projection over the three concerned DOFs: rotate the beam AND advance
-  // θ_ref, split by mobility. The beam turns about its mobility-weighted fixed point
-  // c = (w_driven·pivot + w_pivot·driven)/(w_pivot+w_driven), so the less mobile end
-  // stays put: an anchored pivot (w_pivot = 0) gives c = pivot (driven swings about
-  // it), while a free pivot (a grabbed far end) moves too and BeltPin turns that
-  // motion into belt travel.
+  // Symmetric projection over the three concerned DOFs: rotate the beam AND advance θ_ref, split by mobility.
+  // The beam turns about its mobility-weighted fixed point c = (w_driven·pivot + w_pivot·driven)/(w_pivot+w_driven), so the less mobile end stays put: an anchored pivot (w_pivot = 0) gives c = pivot (driven swings about it), while a free pivot (a grabbed far end) moves too and BeltPin turns that motion into belt travel.
   const wP = nodes.w[iPivot];
   const wD = nodes.w[iDriven];
   const wBeam = wP + wD; // beam-rotation mobility (0 = both ends anchored)

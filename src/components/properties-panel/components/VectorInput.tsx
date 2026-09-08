@@ -1,6 +1,5 @@
 /**
- * VectorInput component
- * Displays and edits X/Y coordinates of an element
+ * VectorInput component Displays and edits X/Y coordinates of an element
  */
 
 import React from "react";

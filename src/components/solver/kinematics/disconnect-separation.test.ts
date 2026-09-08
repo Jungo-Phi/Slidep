@@ -82,8 +82,7 @@ describe("separation_links", () => {
     });
   });
 
-  // The junction removed from under a closed belt: it cannot be the reference it
-  // no longer exists, so the two terminals must part from each other.
+  // The junction removed from under a closed belt: it cannot be the reference it no longer exists, so the two terminals must part from each other.
   it("parts the survivors pairwise when their partner is deleted", () => {
     const join = pivot(JOIN);
     const links = separation_links(
@@ -116,8 +115,8 @@ describe("separation_links", () => {
     expect(links).toHaveLength(0);
   });
 
-  // Meshed rims meet at r1+r2; parting the centres past that gap lifts the rims
-  // apart. Both gears carry the connection, so the reciprocal must not double it.
+  // Meshed rims meet at r1+r2; parting the centres past that gap lifts the rims apart.
+  // Both gears carry the connection, so the reciprocal must not double it.
   it("parts meshed gear centres past their touching gap, once", () => {
     const g1 = id("g1");
     const g2 = id("g2");
@@ -170,8 +169,7 @@ describe("separation_links", () => {
     expect(links).toHaveLength(0);
   });
 
-  // A body node on a beam lifts off perpendicular; the beam normal is the
-  // solver's own degenerate direction, so a DistanceToLine link is enough.
+  // A body node on a beam lifts off perpendicular; the beam normal is the solver's own degenerate direction, so a DistanceToLine link is enough.
   it("lifts a body node off the beam along its normal", () => {
     const node = id("n1");
     const links = separation_links(
@@ -196,8 +194,7 @@ describe("separation_links", () => {
     });
   });
 
-  // The node-side reciprocal (the node's edge list) names no contact geometry,
-  // so it must not add a second, spurious separation.
+  // The node-side reciprocal (the node's edge list) names no contact geometry, so it must not add a second, spurious separation.
   it("ignores the node-side reciprocal of an edge disconnection", () => {
     const links = separation_links(
       [
@@ -253,8 +250,7 @@ describe("applyDistanceConstraint on coincident points", () => {
     );
   });
 
-  // Coincident *and* a zero target is already satisfied; the old early return
-  // covered the division by zero that would otherwise poison both positions.
+  // Coincident *and* a zero target is already satisfied; the old early return covered the division by zero that would otherwise poison both positions.
   it("leaves a satisfied zero-distance pair alone", () => {
     const positions = new Map([
       ["a", new Point2(5, 5)],

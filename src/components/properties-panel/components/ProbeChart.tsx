@@ -4,10 +4,8 @@ import { ProbeCurveKey } from "../../solver/recording/probe-series";
 import { NEGLIGIBLE_RATIO } from "../../solver/recording/negligibility-pool";
 
 /**
- * Categorical palette for the plotted curves. Unlike the UI's semantic roles,
- * these are chosen for mutual distinguishability, so they are their own palette
- * rather than theme tokens — the scalar curve is the one that borrows the
- * theme's accent, which is why this is a function of it and not a constant.
+ * Categorical palette for the plotted curves.
+ * Unlike the UI's semantic roles, these are chosen for mutual distinguishability, so they are their own palette rather than theme tokens — the scalar curve is the one that borrows the theme's accent, which is why this is a function of it and not a constant.
  */
 export const probe_curve_colors = (
   accent: string,
@@ -48,12 +46,9 @@ const PAD_BOTTOM = 4;
 const PAD_RIGHT = 6;
 const FONT_SIZE = 9;
 /** Max fraction of the flat band's height a "flat" curve (one label, see `ownFlat`) may
- *  visually fill. Without this, the band's half-height is only floored at `ownFloor`, which
- *  doesn't grow with the curve's own excursion — so a curve whose spread sneaks up on
- *  `ownFloor` from below fills up to half the band while still reading as flat and getting a
- *  single label, then jumps straight to a tightly-padded two-label range the instant it
- *  crosses. Keeping the fill bounded well below "looks like a real range" makes that jump
- *  land where the chart actually changes look, not well before it. */
+ * visually fill.
+ * Without this, the band's half-height is only floored at `ownFloor`, which doesn't grow with the curve's own excursion — so a curve whose spread sneaks up on `ownFloor` from below fills up to half the band while still reading as flat and getting a single label, then jumps straight to a tightly-padded two-label range the instant it crosses.
+ * Keeping the fill bounded well below "looks like a real range" makes that jump land where the chart actually changes look, not well before it. */
 const FLAT_FILL_TARGET = 0.25;
 
 interface ProbeChartProps {
@@ -63,18 +58,14 @@ interface ProbeChartProps {
   /** This metric's own running scale (`NegligibilityPool`'s field for its kind), over the whole recording — sizes the flattened band once `ownFloor` (below) has already decided the curve collapses to one reading, so that band still reads as small next to a mechanism that does more elsewhere, rather than as a fixed width regardless of scale. */
   poolMax: number;
   /** This metric's own floor (`NegligibilityPool.ownFloors`' field for its kind, from `own_floors` in `negligibility-pool.ts`) — a curve whose own excursion (`dataMax - dataMin`) sits under this is flat on its own terms, not just small next to the rest of the mechanism, so a single reading is drawn instead of the two extremes either side of it.
-   *  Independent of `poolMax`/`showZero`: those decide how to draw the axis, this alone decides whether there is a real spread to draw two numbers for in the first place. */
+   * Independent of `poolMax`/`showZero`: those decide how to draw the axis, this alone decides whether there is a real spread to draw two numbers for in the first place. */
   ownFloor: number;
   /** The unit the caller is already showing above this chart (its own SI-prefix pick, e.g.
-   *  "mN" for a chart full of small forces) — dividing by this before formatting a label is
-   *  what keeps every number in this chart consistent with that one header, instead of a
-   *  fixed-decimals formatter rounding a real but small value away to "0.00". */
+   * "mN" for a chart full of small forces) — dividing by this before formatting a label is what keeps every number in this chart consistent with that one header, instead of a fixed-decimals formatter rounding a real but small value away to "0.00". */
   unitFactor: number;
   /** Whether `0` is a meaningful reading for this metric (a force, a velocity — "at rest",
-   *  "no load") rather than an arbitrary reference (a position, an angle) — see
-   *  `metric_shows_zero`. Forces the axis to always include it when true; left to the
-   *  natural range otherwise, since forcing it there could squash a real reading that sits
-   *  far from an arbitrary origin. */
+   * "no load") rather than an arbitrary reference (a position, an angle) — see `metric_shows_zero`.
+   * Forces the axis to always include it when true; left to the natural range otherwise, since forcing it there could squash a real reading that sits far from an arbitrary origin. */
   showZero: boolean;
   /** Shown when no curve has data. */
   emptyMessage: string;
@@ -83,9 +74,8 @@ interface ProbeChartProps {
 }
 
 /**
- * Lightweight SVG time chart for probe metrics. Downsamples to roughly one
- * point per horizontal unit, auto-scales the y range, draws a cursor at the
- * current simulation time, and the time can be changed by clicking/dragging like on the timeline.
+ * Lightweight SVG time chart for probe metrics.
+ * Downsamples to roughly one point per horizontal unit, auto-scales the y range, draws a cursor at the current simulation time, and the time can be changed by clicking/dragging like on the timeline.
  */
 export const ProbeChart: React.FC<ProbeChartProps> = ({
   curves,
@@ -98,8 +88,7 @@ export const ProbeChart: React.FC<ProbeChartProps> = ({
   onSeek,
 }) => {
   const svgRef = useRef<SVGSVGElement | null>(null);
-  // SVG paints through presentation attributes, not `sx`, so the theme tokens
-  // have to be resolved to values here rather than passed as role names.
+  // SVG paints through presentation attributes, not `sx`, so the theme tokens have to be resolved to values here rather than passed as role names.
   const { palette } = useTheme();
   const plotted = curves.filter((c) => c.t.length >= 2);
   const hasData = plotted.length > 0;
@@ -134,17 +123,13 @@ export const ProbeChart: React.FC<ProbeChartProps> = ({
         if (v > scanMax) scanMax = v;
       }
     }
-    // What the curve actually reaches — the gutter labels below start from this, not from
-    // the padded/flattened/zero-anchored bound, except where a branch below deliberately
-    // relabels an end (flattened: no real min/max to report; zero-anchored: the axis no
-    // longer starts at the curve's own extreme, so neither should its label).
+    // What the curve actually reaches — the gutter labels below start from this, not from the padded/flattened/zero-anchored bound, except where a branch below deliberately relabels an end (flattened: no real min/max to report; zero-anchored: the axis no longer starts at the curve's own extreme, so neither should its label).
     const dataMin = scanMin;
     const dataMax = scanMax;
     const spanRaw = dataMax - dataMin;
     const mid = (dataMin + dataMax) / 2;
 
-    // In the SAME unit the header above already names (`unitFactor`) — a bare mantissa, no
-    // unit of its own to repeat.
+    // In the SAME unit the header above already names (`unitFactor`) — a bare mantissa, no unit of its own to repeat.
     const fmt = (v: number) => {
       const scaled = v / unitFactor;
       const a = Math.abs(scaled);
@@ -155,23 +140,14 @@ export const ProbeChart: React.FC<ProbeChartProps> = ({
           : scaled.toFixed(2);
     };
 
-    // Flat on its OWN terms — not just small next to the rest of the mechanism (`poolMax`
-    // has no say here): a curve that genuinely climbed from 0 to a real, if pool-small,
-    // reading is a real spread, not noise, whatever `showZero` says about it.
+    // Flat on its OWN terms — not just small next to the rest of the mechanism (`poolMax` has no say here): a curve that genuinely climbed from 0 to a real, if pool-small, reading is a real spread, not noise, whatever `showZero` says about it.
     const ownFlat = spanRaw < ownFloor;
-    // Whether the flat reading is itself (numerically, not just as formatted) zero — a real
-    // (if small) constant reading, like a beam end sitting at a steady 9.97 N, still prints
-    // its own value rather than being forced to "0". Checked against the raw value, never
-    // the formatted label: with an adaptive unit a real reading almost always prints as
-    // something other than "0" anyway, but this must hold regardless of formatting.
+    // Whether the flat reading is itself (numerically, not just as formatted) zero — a real (if small) constant reading, like a beam end sitting at a steady 9.97 N, still prints its own value rather than being forced to "0".
+    // Checked against the raw value, never the formatted label: with an adaptive unit a real reading almost always prints as something other than "0" anyway, but this must hold regardless of formatting.
     const midIsZero = Math.abs(mid) < 1e-9;
 
-    // Each branch below decides its axis bounds and every label together, as one object,
-    // instead of mutating shared `let`s: the zero-gridline bug (drawn from `yMin`/`yMax`
-    // geometry that happened to cross 0, on a metric where 0 isn't a meaningful reference)
-    // came from a derived fact — "is 0 worth a line" — being decided in a different place
-    // than the bounds that produced it. One object per branch makes that impossible to
-    // desync again: nothing outside a branch can see partial state.
+    // Each branch below decides its axis bounds and every label together, as one object, instead of mutating shared `let`s: the zero-gridline bug (drawn from `yMin`/`yMax` geometry that happened to cross 0, on a metric where 0 isn't a meaningful reference) came from a derived fact — "is 0 worth a line" — being decided in a different place than the bounds that produced it.
+    // One object per branch makes that impossible to desync again: nothing outside a branch can see partial state.
     interface AxisPlan {
       yMin: number;
       yMax: number;
@@ -179,7 +155,7 @@ export const ProbeChart: React.FC<ProbeChartProps> = ({
       bottomLabel: string;
       centerLabel: string | null;
       /** A second, "0" label — only set alongside `centerLabel`: the two-label plans below
-       *  already print zero as one of their own two extremes. */
+       * already print zero as one of their own two extremes. */
       zeroLabel: string | null;
       /** Whether 0 is a meaningful reference to draw a gridline for. */
       zeroLine: boolean;
@@ -187,15 +163,8 @@ export const ProbeChart: React.FC<ProbeChartProps> = ({
 
     let plan: AxisPlan;
     if (ownFlat) {
-      // Nothing real to report a spread for — one label rather than a min and a max either
-      // side of it, since printing two numbers this close (often both rounding to the same
-      // digits) reads as a spurious range where there is none. The band drawn around it is
-      // still sized off `poolMax` (never narrower than `ownFloor` itself, so it always
-      // contains the curve it's drawn around) purely so it reads as small against a
-      // mechanism that does more elsewhere, not to decide whether it collapses in the first
-      // place — and never narrower than what keeps the curve's own excursion under
-      // `FLAT_FILL_TARGET` of the band, so it still reads as flat right up to the `ownFlat`
-      // boundary instead of visually filling half the band on a fixed-height floor.
+      // Nothing real to report a spread for — one label rather than a min and a max either side of it, since printing two numbers this close (often both rounding to the same digits) reads as a spurious range where there is none.
+      // The band drawn around it is still sized off `poolMax` (never narrower than `ownFloor` itself, so it always contains the curve it's drawn around) purely so it reads as small against a mechanism that does more elsewhere, not to decide whether it collapses in the first place — and never narrower than what keeps the curve's own excursion under `FLAT_FILL_TARGET` of the band, so it still reads as flat right up to the `ownFlat` boundary instead of visually filling half the band on a fixed-height floor.
       const halfSpan = Math.max(
         NEGLIGIBLE_RATIO * poolMax,
         ownFloor,
@@ -203,10 +172,8 @@ export const ProbeChart: React.FC<ProbeChartProps> = ({
       );
       let flatMin = mid - halfSpan;
       let flatMax = mid + halfSpan;
-      // A meaningful zero still belongs on the axis even when there's only one reading to
-      // print — the distance from it is itself the information ("9.97 N, but resting is 0").
-      // An arbitrary-origin metric has no such reference to show, so its band stays exactly
-      // centred on the reading.
+      // A meaningful zero still belongs on the axis even when there's only one reading to print — the distance from it is itself the information ("9.97 N, but resting is 0").
+      // An arbitrary-origin metric has no such reference to show, so its band stays exactly centred on the reading.
       if (showZero) {
         flatMin = Math.min(flatMin, 0);
         flatMax = Math.max(flatMax, 0);
@@ -218,20 +185,14 @@ export const ProbeChart: React.FC<ProbeChartProps> = ({
         topLabel: centerLabel,
         bottomLabel: centerLabel,
         centerLabel,
-        // The axis was just pulled open to fit 0 in — read that reference too, not just the
-        // one reading, unless the reading already IS that reference (`centerLabel` then).
+        // The axis was just pulled open to fit 0 in — read that reference too, not just the one reading, unless the reading already IS that reference (`centerLabel` then).
         zeroLabel: showZero && !midIsZero ? fmt(0) : null,
-        // `showZero` pulled 0 in on purpose; `midIsZero` means the one reading IS 0, so the
-        // gridline would sit exactly on `centerLabel` — meaningful either way. Without
-        // either, the band still centers on `mid` and can drift past 0 (`halfSpan` is sized
-        // off `poolMax`, not off `mid`), but that's incidental geometry, not a reference
-        // worth a line.
+        // `showZero` pulled 0 in on purpose; `midIsZero` means the one reading IS 0, so the gridline would sit exactly on `centerLabel` — meaningful either way.
+        // Without either, the band still centers on `mid` and can drift past 0 (`halfSpan` is sized off `poolMax`, not off `mid`), but that's incidental geometry, not a reference worth a line.
         zeroLine: showZero || midIsZero,
       };
     } else if (showZero && dataMin >= 0) {
-      // A real reading, however small next to the mechanism (not own-flat, whatever its
-      // scale relative to `poolMax`) — anchor it to true zero rather than a band centred on
-      // itself, or a padding undershoot below zero with nothing to show there.
+      // A real reading, however small next to the mechanism (not own-flat, whatever its scale relative to `poolMax`) — anchor it to true zero rather than a band centred on itself, or a padding undershoot below zero with nothing to show there.
       const pad = spanRaw > 1e-9 ? spanRaw * 0.08 : Math.max(dataMax, 1) * 0.08;
       plan = {
         yMin: 0,
@@ -255,8 +216,7 @@ export const ProbeChart: React.FC<ProbeChartProps> = ({
         zeroLine: true,
       };
     } else {
-      // Already straddles zero (showZero's own doing or not — an arbitrary-origin metric
-      // can too), or doesn't show it at all: pad the range same as ever.
+      // Already straddles zero (showZero's own doing or not — an arbitrary-origin metric can too), or doesn't show it at all: pad the range same as ever.
       const pad =
         spanRaw > 1e-9 ? spanRaw * 0.08 : Math.max(Math.abs(dataMax), 1);
       plan = {
@@ -266,9 +226,7 @@ export const ProbeChart: React.FC<ProbeChartProps> = ({
         bottomLabel: fmt(dataMin),
         centerLabel: null,
         zeroLabel: null,
-        // Judged off the real data, not the padded bounds — the small 8% pad could nudge a
-        // reading that never actually reaches 0 across it, same failure mode as the flat
-        // plan's.
+        // Judged off the real data, not the padded bounds — the small 8% pad could nudge a reading that never actually reaches 0 across it, same failure mode as the flat plan's.
         zeroLine: dataMin <= 0 && dataMax >= 0,
       };
     }
@@ -289,11 +247,8 @@ export const ProbeChart: React.FC<ProbeChartProps> = ({
     const toY = (v: number) => PAD_TOP + (1 - (v - yMin) / ySpan) * plotH;
 
     const cursorX = toX(Math.min(Math.max(currentTime, t0), t1));
-    // Where the single reading actually sits — the box's vertical middle only when the band
-    // is centred on it (an arbitrary-origin metric, or a zero reading), never a fixed spot
-    // once `showZero` has pulled the band toward 0: a label detached from the line it
-    // annotates would read as pointing at nothing. Clamped like `topLabel`/`bottomLabel`'s
-    // own fixed edges, so it never crowds past the plot box even when `mid` sits at its rim.
+    // Where the single reading actually sits — the box's vertical middle only when the band is centred on it (an arbitrary-origin metric, or a zero reading), never a fixed spot once `showZero` has pulled the band toward 0: a label detached from the line it annotates would read as pointing at nothing.
+    // Clamped like `topLabel`/`bottomLabel`'s own fixed edges, so it never crowds past the plot box even when `mid` sits at its rim.
     const centerLabelY = Math.min(
       Math.max(toY(mid), PAD_TOP + FONT_SIZE - 2),
       VIEW_H - PAD_BOTTOM - 2,
@@ -302,12 +257,8 @@ export const ProbeChart: React.FC<ProbeChartProps> = ({
       Math.max(toY(0), PAD_TOP + FONT_SIZE - 2),
       VIEW_H - PAD_BOTTOM - 2,
     );
-    // `zeroLabel` was decided from `midIsZero`, a numeric near-zero test on the raw value —
-    // it says nothing about where `mid` and 0 actually land once squeezed into the same
-    // clamped gutter space (`halfSpan` can dwarf `mid` on a mechanism with a large `poolMax`
-    // elsewhere, putting both labels on the same pixel row). Redundant, overlapping text at
-    // that point, so only draw it once the two rows are actually far enough apart to read as
-    // two separate numbers.
+    // `zeroLabel` was decided from `midIsZero`, a numeric near-zero test on the raw value — it says nothing about where `mid` and 0 actually land once squeezed into the same clamped gutter space (`halfSpan` can dwarf `mid` on a mechanism with a large `poolMax` elsewhere, putting both labels on the same pixel row).
+    // Redundant, overlapping text at that point, so only draw it once the two rows are actually far enough apart to read as two separate numbers.
     const showZeroLabel =
       zeroLabel !== null && Math.abs(zeroLabelY - centerLabelY) >= FONT_SIZE;
 
@@ -356,7 +307,7 @@ export const ProbeChart: React.FC<ProbeChartProps> = ({
           strokeWidth={0.5}
         />
         {/* Zero line — drawn from `zeroLine` (decided alongside the bounds), not re-derived
-         *  from `yMin`/`yMax`: those can dip past 0 as incidental geometry (see `zeroLine`'s
+         * from `yMin`/`yMax`: those can dip past 0 as incidental geometry (see `zeroLine`'s
          *  own comments) without 0 being a meaningful reference for this metric. */}
         {zeroLine && (
           <line
@@ -402,7 +353,7 @@ export const ProbeChart: React.FC<ProbeChartProps> = ({
           opacity={0.6}
         />
         {/* Y label(s), in the left gutter: min/max either side, or — when there is no real
-         *  spread to report two numbers for — one reading (`centerLabel`) plus, when the
+         * spread to report two numbers for — one reading (`centerLabel`) plus, when the
          *  axis was pulled open to fit a meaningful zero in, that zero too. */}
         {centerLabel !== null ? (
           <>

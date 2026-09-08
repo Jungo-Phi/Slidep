@@ -23,8 +23,7 @@ export type HoveredPart =
   | (HoveredElement & { type: "BeltBody"; section: number })
   | { type: "BeltClosure"; position: WorldPoint }
   /** The floor's handles — no `id`, like `BeltClosure`: it names no `MechanicalElement`.
-   *  `FloorAngle` is the drag handle; `FloorAngleValue` is its displayed value, a separate
-   *  click-to-edit target the same way a load's `"value"` part is separate from its body. */
+   * `FloorAngle` is the drag handle; `FloorAngleValue` is its displayed value, a separate click-to-edit target the same way a load's `"value"` part is separate from its body. */
   | { type: "FloorHeight"; position: WorldPoint }
   | { type: "FloorAngle"; position: WorldPoint }
   | { type: "FloorAngleValue"; position: WorldPoint }
@@ -40,8 +39,7 @@ export type HoveredPart =
   | (HoveredElement & { type: "Moment"; part: "body" | "value" });
 
 /**
- * Whether the cursor is on an element rather than on empty space or on a belt's
- * closing terminal, which names none.
+ * Whether the cursor is on an element rather than on empty space or on a belt's closing terminal, which names none.
  */
 export function names_element(
   part: HoveredPart,
@@ -68,7 +66,7 @@ export function is_hovered(part: HoveredPart, id: ID): boolean {
 }
 
 /** Whether the hover is a load's displayed value (magnitude), a click-to-edit
- *  target distinct from its body/handles. */
+ * target distinct from its body/handles. */
 export function is_load_value_label(
   part: HoveredPart,
 ): part is Extract<
@@ -84,10 +82,8 @@ export function is_load_value_label(
 }
 
 /**
- * An abscissa hovered along one beam's own N/T/Mf diagram (docs/plan-efforts-interieurs.md
- * phase 5bis), for the canvas to mark on the beam itself. Deliberately its own channel
- * rather than a `HoveredPart` case: `HoveredPart` doubles as interaction/hit-testing state
- * (drag handles, deletion), and this is purely informational — panel → canvas only.
+ * An abscissa hovered along one beam's own N/T/Mf diagram (docs/plan-efforts-interieurs.md phase 5bis), for the canvas to mark on the beam itself.
+ * Deliberately its own channel rather than a `HoveredPart` case: `HoveredPart` doubles as interaction/hit-testing state (drag handles, deletion), and this is purely informational — panel → canvas only.
  */
 export interface HoveredAbscissa {
   beamID: ID;

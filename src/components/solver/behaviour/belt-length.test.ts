@@ -74,8 +74,8 @@ describe("BeltLength constraint (simulation)", () => {
 
 describe("BeltJunction constraint (closed cycle)", () => {
   it("pulls the junction onto the nearest tangent run of the belt loop", () => {
-    // Two equal pulleys on the x-axis: the closed belt has external tangents at
-    // y = ±40. J just above the top one → snaps onto y = 40.
+    // Two equal pulleys on the x-axis: the closed belt has external tangents at y = ±40.
+    // J just above the top one → snaps onto y = 40.
     const positions = new Map<string, Point2>([
       ["J", P(0, 20)],
       ["gA", P(-100, 0)],
@@ -104,8 +104,7 @@ describe("BeltJunction constraint (closed cycle)", () => {
   });
 
   it("snaps the junction onto a gear arc when that is the nearest piece", () => {
-    // J past the outer edge of gA (well beyond both tangent runs) → nearest
-    // piece is gA's arc: |J − gA| = 40.
+    // J past the outer edge of gA (well beyond both tangent runs) → nearest piece is gA's arc: |J − gA| = 40.
     const positions = new Map<string, Point2>([
       ["J", P(-150, 0)],
       ["gA", P(-100, 0)],
@@ -294,8 +293,7 @@ describe("BeltPin constraint (junction travels with the belt)", () => {
   });
 
   it("is symmetric: dragging the junction off the belt drags the pulleys", () => {
-    // Hold J 20px above the top run; the free pulleys must rise so the belt
-    // reaches it (top external tangent sits at gear.y + 40 → gears → y ≈ 20).
+    // Hold J 20px above the top run; the free pulleys must rise so the belt reaches it (top external tangent sits at gear.y + 40 → gears → y ≈ 20).
     const held = P(0, 60);
     const positions = new Map<string, Point2>([
       ["J", held.clone()],
@@ -404,8 +402,8 @@ describe("BeltFollowsTangent constraint (welded beam orientation)", () => {
   });
 
   it("is symmetric on an arc: rotating the beam advances the belt", () => {
-    // Hold the beam 0.2 rad past the tangent; the pulley angle must move so the
-    // tangent catches up. Curvature·rEps = (1/40)·(+40) = +1 → Δθ = +0.2.
+    // Hold the beam 0.2 rad past the tangent; the pulley angle must move so the tangent catches up.
+    // Curvature·rEps = (1/40)·(+40) = +1 → Δθ = +0.2.
     const a = tangentAngle(s0) + 0.2;
     const positions = new Map<string, Point2>([
       ["piv", P(0, 0)],
@@ -443,10 +441,8 @@ describe("BeltFollowsTangent constraint (welded beam orientation)", () => {
   });
 
   it("is symmetric: a FREE pivot (junction) moves too, it is not held fixed", () => {
-    // Beam held off the tangent with BOTH ends free (mass 1). The old asymmetric
-    // constraint rotated only `end` about a fixed `piv`; the symmetric one turns
-    // the beam about its centre, so the pivot (junction) moves as well — the
-    // motion BeltPin then converts into belt travel when driving the far end.
+    // Beam held off the tangent with BOTH ends free (mass 1).
+    // The old asymmetric constraint rotated only `end` about a fixed `piv`; the symmetric one turns the beam about its centre, so the pivot (junction) moves as well — the motion BeltPin then converts into belt travel when driving the far end.
     const a = tangentAngle(s0) + 0.3;
     const positions = new Map<string, Point2>([
       ["piv", P(0, 0)],
@@ -493,8 +489,8 @@ describe("BeltFollowsTangent constraint (welded beam orientation)", () => {
 });
 
 describe("continuous wrap tracking (mid-sim disconnect signal)", () => {
-  // Open belt, middle pulley wrapped; slide it down through the g0–g2 line so
-  // its wrap shrinks to 0 and past. Terminals (ends) carry no arc.
+  // Open belt, middle pulley wrapped; slide it down through the g0–g2 line so its wrap shrinks to 0 and past.
+  // Terminals (ends) carry no arc.
   const mk = (y: number): BeltVia[] => [
     { pos: P(-100, 0), radius: 30, clockwise: false },
     { pos: P(0, y), radius: 30, clockwise: false },
@@ -502,8 +498,7 @@ describe("continuous wrap tracking (mid-sim disconnect signal)", () => {
   ];
 
   it("goes negative when a pulley loses contact (no 2π jump)", () => {
-    // Middle pulley pokes up from below (small wrap); raise it through the
-    // g0–g2 line → contact vanishes at 0 and goes negative beyond.
+    // Middle pulley pokes up from below (small wrap); raise it through the g0–g2 line → contact vanishes at 0 and goes negative beyond.
     let wraps = advance_continuous_wraps(mk(-20), undefined); // seed low
     for (let y = -20; y <= 10; y += 1)
       wraps = advance_continuous_wraps(mk(y), wraps);
@@ -617,9 +612,7 @@ describe("BeltLength — gearless belt holds its length (point 1)", () => {
 });
 
 describe("loose belt sheds its last pulley → inert (user-decided)", () => {
-  // s and e sit close together above g1, which now wraps the long way (raw wrap
-  // ≈ 4.67 rad > π): from the seeded 0.05 the continuous wrap has crossed the 0/2π
-  // seam to ≤ 0 → contact lost. g0 is already disconnected, so g1 is the LAST one.
+  // s and e sit close together above g1, which now wraps the long way (raw wrap ≈ 4.67 rad > π): from the seeded 0.05 the continuous wrap has crossed the 0/2π seam to ≤ 0 → contact lost. g0 is already disconnected, so g1 is the LAST one.
   const positions = new Map<string, Point2>([
     ["s", P(-35, 80)],
     ["e", P(35, 80)],
@@ -644,8 +637,7 @@ describe("loose belt sheds its last pulley → inert (user-decided)", () => {
 
   it("disconnects even the LAST active pulley (loose → inert segment)", () => {
     const belt = mkBelt(false);
-    // A full wrap-sign flip, not a threshold-boundary case, so any extent comfortably above
-    // this fixture's own ~600-unit span works — the detach ratio it scales barely matters here.
+    // A full wrap-sign flip, not a threshold-boundary case, so any extent comfortably above this fixture's own ~600-unit span works — the detach ratio it scales barely matters here.
     const newly = update_belt_disconnects(belt, positions, 1000);
     expect(belt.disconnected).toEqual([true, true]); // last pulley shed
     expect(newly).toBe(true);
@@ -686,9 +678,8 @@ describe("a terminal touching its pulley keeps its tangent run", () => {
   ];
 
   it("still emits the end run, degenerate (length 0), instead of dropping it", () => {
-    // The run is what carries the gear tangent point Ptan — and Ptan is what the
-    // length constraint reads uE (hence the no-slip C_diff) from. Dropping the run
-    // at contact silently switched no-slip OFF for BOTH ends.
+    // The run is what carries the gear tangent point Ptan — and Ptan is what the length constraint reads uE (hence the no-slip C_diff) from.
+    // Dropping the run at contact silently switched no-slip OFF for BOTH ends.
     const endRun = belt_pieces(vias, false).find(
       (p) => p.kind === "segment" && p.gearIndexB === 2,
     );
@@ -738,9 +729,7 @@ describe("winch: a JOINed end is not a free strand", () => {
 
   it("never drags the pinned terminal off its rim", () => {
     // Its GearPerimeterPin owns it; the belt feeds through the ARC, not a strand.
-    // Treating it as free tugged it tangentially every iteration — and since a
-    // tangent step off a circle is a SECANT, the radius crept up until the winch
-    // fought its own pin and stalled the motor.
+    // Treating it as free tugged it tangentially every iteration — and since a tangent step off a circle is a SECANT, the radius crept up until the winch fought its own pin and stalled the motor.
     expect(Math.abs(run(true))).toBeLessThan(1e-9);
   });
 
@@ -860,9 +849,8 @@ describe("BeltLength resizes pulleys in edition (radii as DOFs)", () => {
     expect(radii.get("gA")! + radii.get("gB")!).toBeCloseTo(220 / Math.PI, 1);
   });
 
-  // A belt too short for its pulleys shrinks them as far as it can. There is no
-  // minimum size to stop at — that is a matter of pixels, not of model — but a
-  // radius must stay strictly positive: the arc lengths divide by it.
+  // A belt too short for its pulleys shrinks them as far as it can.
+  // There is no minimum size to stop at — that is a matter of pixels, not of model — but a radius must stay strictly positive: the arc lengths divide by it.
   it("garde un rayon strictement positif sur une courroie impossible", () => {
     const positions = centres();
     const [radii, radMasses] = freeRadii();

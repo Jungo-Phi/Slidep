@@ -1,20 +1,18 @@
 /**
  * Momentary separation of what a disconnection leaves visually ambiguous.
  *
- * Detaching two elements that still touch on the canvas — superposed at a point,
- * or meeting at a rim — leaves nothing to show they are now free of each other.
- * These links push them apart once, so that what is still connected reads at a
- * glance. Three shapes of contact, three separations:
+ * Detaching two elements that still touch on the canvas — superposed at a point, or meeting at a rim — leaves nothing to show they are now free of each other.
+ * These links push them apart once, so that what is still connected reads at a glance.
+ * Three shapes of contact, three separations:
  *
  *   • an edge terminal on a node   → part the two points (a preferred axis lets
- *                                     a belt end slide along the belt);
+ * a belt end slide along the belt);
  *   • two meshed gear rims         → part the centres past their touching gap;
  *   • a body node on a beam        → lift the node off along the beam normal.
  *
- * Momentary on purpose. A standing minimum distance would fight the legitimate
- * superpositions — a node sliding along a beam it is not fixed to, elements
- * stacked before being connected — and compete with the real constraints. The
- * links live for the solve that follows the disconnection, and nothing after.
+ * Momentary on purpose.
+ * A standing minimum distance would fight the legitimate superpositions — a node sliding along a beam it is not fixed to, elements stacked before being connected — and compete with the real constraints.
+ * The links live for the solve that follows the disconnection, and nothing after.
  */
 
 import { DIM } from "../../../constants/rendering-specs";
@@ -40,11 +38,9 @@ function terminal_on_node(
 export type PreferredAxes = Map<string, Point2>;
 
 /**
- * Belt terminals leave along the belt itself rather than sideways, so a freed
- * end slides on the path instead of jumping off it.
+ * Belt terminals leave along the belt itself rather than sideways, so a freed end slides on the path instead of jumping off it.
  *
- * Each axis is oriented so that the terminal — which the solver moves *against*
- * its axis — travels into the belt, away from the junction it just left.
+ * Each axis is oriented so that the terminal — which the solver moves *against* its axis — travels into the belt, away from the junction it just left.
  */
 export function belt_terminal_axes(mechanism: Mechanism): PreferredAxes {
   const axes: PreferredAxes = new Map();
@@ -64,10 +60,8 @@ export function belt_terminal_axes(mechanism: Mechanism): PreferredAxes {
 /**
  * Momentary links that push apart everything `actions` disconnects.
  *
- * Only the pair that remains — both sides still present — is ambiguous, so any
- * separation naming a deleted element is dropped. The one exception is a node
- * deleted from *under* several edge terminals (a closed belt's junction): the
- * terminals it held stay superposed with each other, so they part pairwise.
+ * Only the pair that remains — both sides still present — is ambiguous, so any separation naming a deleted element is dropped.
+ * The one exception is a node deleted from *under* several edge terminals (a closed belt's junction): the terminals it held stay superposed with each other, so they part pairwise.
  */
 export function separation_links(
   actions: Action[],
@@ -100,8 +94,7 @@ export function separation_links(
   const axisOf = (key: string) => preferredAxes.get(key);
 
   // ── Edge terminals pinned to a node: coincident, part by the separation gap.
-  //    Grouped by node so that deleting the node parts the terminals it held
-  //    from each other instead of from the vanished node.
+  // Grouped by node so that deleting the node parts the terminals it held from each other instead of from the vanished node.
   const terminalsByNode = new Map<ID, Set<string>>();
   for (const action of actions) {
     if (!("disconnect" in action) || !action.disconnect) continue;
@@ -129,7 +122,8 @@ export function separation_links(
   }
 
   // ── Meshed gears touch at the rim: push the centres apart past their current
-  //    gap so the rims part. Both gears carry the connection, hence the dedup.
+  // gap so the rims part.
+  // Both gears carry the connection, hence the dedup.
   const meshedSeen = new Set<string>();
   for (const action of actions) {
     if (action.type !== "ConnectsMeshedGears" || !action.disconnect) continue;
@@ -146,8 +140,7 @@ export function separation_links(
   }
 
   // ── A body node sits on the beam it was fixed to: lift it off the segment.
-  //    The perpendicular direction (the beam normal) is DistanceToLine's own
-  //    fallback when the node is exactly on the line — so no axis to supply.
+  // The perpendicular direction (the beam normal) is DistanceToLine's own fallback when the node is exactly on the line — so no axis to supply.
   for (const action of actions) {
     if (action.type !== "ConnectsFixedNodesBody" || !action.disconnect)
       continue;

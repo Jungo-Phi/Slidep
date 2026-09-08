@@ -4,8 +4,7 @@ import { Point2 } from "../../../types/point2";
 import type { CanvasState, ID, MechanicalElement } from "../../../types";
 
 /**
- * Arming a tool over a selection: the selected element stands for the tool's
- * first click, when the tool can take it whole and takes it without building.
+ * Arming a tool over a selection: the selected element stands for the tool's first click, when the tool can take it whole and takes it without building.
  */
 
 const id = (n: number) => `00000000-0000-0000-0000-00000000000${n}` as ID;

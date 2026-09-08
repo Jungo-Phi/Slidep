@@ -3,19 +3,15 @@ import { ZERO } from "../../../types/point2";
 import { MotorPowerSample } from "../../../types/runtime-state";
 
 /**
- * A `MotorBeam`/`MotorAngle` LINK, plus the torque limit its owning pivot's `MotorConfig`
- * carries — the one thing the link itself does not, since `parsing.ts` builds it for the
- * quasi-static kinematic sweep, which has no notion of torque at all.
+ * A `MotorBeam`/`MotorAngle` LINK, plus the torque limit its owning pivot's `MotorConfig` carries — the one thing the link itself does not, since `parsing.ts` builds it for the quasi-static kinematic sweep, which has no notion of torque at all.
  *
- * Built from the already-compiled links rather than re-deriving which beams/gears a motor
- * drives from the raw mechanism: `parsing.ts`'s arm/anchor resolution (grounded vs mounted on
- * another beam, `motor_arm`) is exactly reused this way, keys already fused.
+ * Built from the already-compiled links rather than re-deriving which beams/gears a motor drives from the raw mechanism: `parsing.ts`'s arm/anchor resolution (grounded vs mounted on another beam, `motor_arm`) is exactly reused this way, keys already fused.
  */
 export type CompiledMotor =
   | {
       kind: "beam";
       /** The pivot ELEMENT this motor is configured on — distinct from `pivotKey`, its
-       *  solver key: this is what a probe or the properties panel names the reading after. */
+       * solver key: this is what a probe or the properties panel names the reading after. */
       pivotID: ID;
       pivotKey: string;
       drivenKey: string;
@@ -24,7 +20,7 @@ export type CompiledMotor =
       omega: number;
       torqueLimit: number;
       /** The driven beam's own analytic moment of inertia about `pivotKey` — see
-       *  `MotorBeam.armInertia`. */
+       * `MotorBeam.armInertia`. */
       armInertia: number;
       /** This beam's own share of `drivenKey`'s fused mass — see `MotorBeam.armEndMass`. */
       armEndMass: number;
@@ -35,7 +31,7 @@ export type CompiledMotor =
       pivotID: ID;
       angleKey: string;
       /** The anchor arm's own pivot/end, when this gear turns relative to a beam rather than
-       *  the ground — a gear has no angle DOF of its own to read the anchor's rotation off. */
+       * the ground — a gear has no angle DOF of its own to read the anchor's rotation off. */
       anchorPivotKey?: string;
       anchorKey?: string;
       omega: number;
@@ -88,7 +84,7 @@ export function compile_motors(
 }
 
 /** Angular velocity of the arm `pivotKey → armKey` about `pivotKey`, positive
- *  counter-clockwise — `undefined` where either end is missing or the arm has collapsed. */
+ * counter-clockwise — `undefined` where either end is missing or the arm has collapsed. */
 export function arm_angular_velocity(
   pivotKey: string,
   armKey: string,
@@ -110,26 +106,14 @@ const clamp = (v: number, limit: number): number =>
   Math.max(-limit, Math.min(limit, v));
 
 /**
- * Torque-limited speed control: each motor asks for whatever torque would close its own
- * velocity gap in exactly this frame — `(ω_commanded − ω_current)·J/dt`, an inertia
- * estimate) — capped at its `torqueLimit`. Under a light load that request sits under the
- * cap, so the motor reaches its commanded speed in one frame, same as the kinematic sweep's
- * position tracking always did. Under a heavy one it saturates: the motor supplies its
- * maximum torque and no more, and how fast it actually turns falls out of the constraint
- * sweep like any other force — a real motor slowing under load rather than always winning
- * the tug-of-war.
+ * Torque-limited speed control: each motor asks for whatever torque would close its own velocity gap in exactly this frame — `(ω_commanded − ω_current)·J/dt`, an inertia estimate) — capped at its `torqueLimit`.
+ * Under a light load that request sits under the cap, so the motor reaches its commanded speed in one frame, same as the kinematic sweep's position tracking always did.
+ * Under a heavy one it saturates: the motor supplies its maximum torque and no more, and how fast it actually turns falls out of the constraint sweep like any other force — a real motor slowing under load rather than always winning the tug-of-war.
  *
- * `MotorBeam`'s `J` is the driven beam's own analytic inertia about the pivot
- * (`armInertia`, parallel-axis theorem — see `parsing.ts`'s `beam_pivot_inertia`) plus
- * whatever ELSE is fused onto the driven node (another beam, a gear, a mass element)
- * approximated as a point at the arm's current radius — `armEndMass` is subtracted back out
- * of that node's fused mass first, so the beam's own share is never counted twice. `MotorAngle`
- * drives a gear's real angle DOF, so its `J` is the real one (`mass-model.ts`'s `angleMasses`,
- * ½mr² for a solid disk), no such split needed.
+ * `MotorBeam`'s `J` is the driven beam's own analytic inertia about the pivot (`armInertia`, parallel-axis theorem — see `parsing.ts`'s `beam_pivot_inertia`) plus whatever ELSE is fused onto the driven node (another beam, a gear, a mass element) approximated as a point at the arm's current radius — `armEndMass` is subtracted back out of that node's fused mass first, so the beam's own share is never counted twice.
+ * `MotorAngle` drives a gear's real angle DOF, so its `J` is the real one (`mass-model.ts`'s `angleMasses`, ½mr² for a solid disk), no such split needed.
  *
- * Reads velocities EXCLUSIVELY relative to each motor's own reference (the ground, or its
- * anchor arm) — computed fresh from live positions/velocities, so a moving anchor needs no
- * separate bookkeeping the way the kinematic sweep's per-frame `targetAngle` refresh does.
+ * Reads velocities EXCLUSIVELY relative to each motor's own reference (the ground, or its anchor arm) — computed fresh from live positions/velocities, so a moving anchor needs no separate bookkeeping the way the kinematic sweep's per-frame `targetAngle` refresh does.
  */
 export function resolve_motor_torques(
   motors: CompiledMotor[],
@@ -184,9 +168,7 @@ export function resolve_motor_torques(
       const refV = motor.anchorKey
         ? (arm_angular_velocity(motor.pivotKey, motor.anchorKey, positions, velocities) ?? 0)
         : 0;
-      // This beam's own share of the driven node's fused mass is already counted, exactly,
-      // in `armInertia` — only the REST of that mass (something else welded to the same
-      // node) still needs the point-at-radius approximation.
+      // This beam's own share of the driven node's fused mass is already counted, exactly, in `armInertia` — only the REST of that mass (something else welded to the same node) still needs the point-at-radius approximation.
       const otherMass = Math.max(0, 1 / w - motor.armEndMass);
       const J = motor.armInertia + otherMass * r * r;
       const needed = ((motor.omega - (ownV - refV)) * J) / dt;

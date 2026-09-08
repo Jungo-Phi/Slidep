@@ -40,8 +40,7 @@ describe("nodes_under_segment", () => {
     ]);
   });
 
-  // The two ends are connected by the gesture's own hovers; a node claimed twice
-  // would end up attached to a tip and to the body at once.
+  // The two ends are connected by the gesture's own hovers; a node claimed twice would end up attached to a tip and to the body at once.
   it("laisse les deux bouts aux survols du geste", () => {
     const mech: MechanicalElement[] = [
       pivot("start", P(0, 0)),
@@ -56,8 +55,7 @@ describe("nodes_under_segment", () => {
     expect(nodes_under_segment(P(0, 0), P(900, 0), mech, VIEW)).toEqual([]);
   });
 
-  // The tolerance is a screen distance, so zooming out brings a node that reads
-  // as being under the bar back under it.
+  // The tolerance is a screen distance, so zooming out brings a node that reads as being under the bar back under it.
   it("mesure l'écart à l'écran, pas dans le monde", () => {
     const mech: MechanicalElement[] = [pivot("off", P(450, 40))];
     const zoomedOut: ViewportState = { ...VIEW, scale: 0.2 };

@@ -17,8 +17,7 @@ import { DynamicSnapshot } from "../../../types/runtime-state";
 import { snapshot_angle_velocity } from "../snapshot";
 
 /** A moment on a gear whose axle is grounded — the common case, and the one that hides a
- *  key-fusion bug: the gear's own position is Coincidence-fused to its pivot, but its angle
- *  DOF never is. */
+ * key-fusion bug: the gear's own position is Coincidence-fused to its pivot, but its angle DOF never is. */
 
 let nextID = 0;
 const id = (): ID =>
@@ -91,9 +90,7 @@ describe("moment appliqué à un gear en mode dynamique", () => {
     }
     const w = snapshot_angle_velocity(snapshot!, GEAR);
     expect(w).toBeDefined();
-    // Positive `value` is clockwise, i.e. negative in the solver's raw angle convention
-    // (see load-model.ts's sign flip) — the bug this guards against silently dropped the
-    // torque, which would leave `w` at exactly 0 rather than merely small.
+    // Positive `value` is clockwise, i.e. negative in the solver's raw angle convention (see load-model.ts's sign flip) — the bug this guards against silently dropped the torque, which would leave `w` at exactly 0 rather than merely small.
     expect(w).toBeLessThan(-1e-4);
   });
 });

@@ -1,18 +1,13 @@
 /**
- * The ruler on the canvas: a dimension drawn for the reader rather than for the drawing, and
- * the feedback that says what the next click would take hold of.
+ * The ruler on the canvas: a dimension drawn for the reader rather than for the drawing, and the feedback that says what the next click would take hold of.
  *
- * In the selection hue — the register of a marquee, not of a cote. A cote states a design
- * value in the drawing's own ink and drives the geometry; a ruler only reports what is there,
- * and the two must never be read for one another.
+ * In the selection hue — the register of a marquee, not of a cote.
+ * A cote states a design value in the drawing's own ink and drives the geometry; a ruler only reports what is there, and the two must never be read for one another.
  *
- * A reading marks each of its ends once: what it takes whole is lit — the element itself, drawn
- * by `draw_mechanism` in this hue, never a shape around it — and what it takes as a point is
- * ringed. `whole_elements` draws that line.
+ * A reading marks each of its ends once: what it takes whole is lit — the element itself, drawn by `draw_mechanism` in this hue, never a shape around it — and what it takes as a point is ringed.
+ * `whole_elements` draws that line.
  *
- * The reading is drawn whether or not the cursor is over the canvas, unlike the hover
- * feedback: a reading is there to be read, and reading it means looking away from where it
- * was laid.
+ * The reading is drawn whether or not the cursor is over the canvas, unlike the hover feedback: a reading is there to be read, and reading it means looking away from where it was laid.
  */
 
 import { COLORS } from "../../../theme/canvas-theme";
@@ -95,8 +90,7 @@ function draw_reading(
         world2screen(gear.position, viewport),
         world2screen_length(gear.radius, viewport),
         world2screen(
-          // Where a radius cote nobody placed would sit, so a reading and a cote of the same
-          // gear land in the same spot.
+          // Where a radius cote nobody placed would sit, so a reading and a cote of the same gear land in the same spot.
           gear.position.add(
             ONE.with_length(gear.radius + auto_dimension_offset(viewport)),
           ),
@@ -137,8 +131,8 @@ function draw_reading(
   const end = world2screen(to, viewport);
   const spread = start.distance_to(end) >= MIN_SCREEN_LENGTH;
   const spanned = spanned_edge(measure);
-  // A length read end to end of one bar would otherwise be drawn along the bar itself, where
-  // neither line nor label can be read. It stands off exactly as its cote would.
+  // A length read end to end of one bar would otherwise be drawn along the bar itself, where neither line nor label can be read.
+  // It stands off exactly as its cote would.
   const label = spanned
     ? world2screen(
         from
@@ -156,8 +150,7 @@ function draw_reading(
     draw_end(ctx, measure.end, end);
   }
 
-  // Unit shown, unlike a cote's: a cote is one of a drawing full of millimetres, a reading is
-  // on its own and says what it is in.
+  // Unit shown, unlike a cote's: a cote is one of a drawing full of millimetres, a reading is on its own and says what it is in.
   ctx.lineWidth = STROKE_WIDTHS.STANDARD;
   draw_dimension_text(
     ctx,
