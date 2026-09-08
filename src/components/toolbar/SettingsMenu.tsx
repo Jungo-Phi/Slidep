@@ -25,6 +25,7 @@ import {
   VisibilityOff,
 } from "@mui/icons-material";
 import { is_string_key, StringKey, t } from "../../i18n";
+import { useNonModalPopup } from "../common/use-non-modal-popup";
 import {
   resolve_theme,
   THEME_FAMILIES,
@@ -87,6 +88,10 @@ export const SettingsMenu: React.FC<SettingsMenuProps> = ({
   previewLater,
 }) => {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const popup = useNonModalPopup(!!anchorEl, anchorEl, () => {
+    previewLater(null);
+    setAnchorEl(null);
+  });
 
   const setSnapSetting = useCallback(
     <K extends keyof SnapSettings>(key: K, value: SnapSettings[K]) =>
@@ -100,18 +105,18 @@ export const SettingsMenu: React.FC<SettingsMenuProps> = ({
         <IconButton
           color="inherit"
           size="small"
-          onClick={(event) => setAnchorEl(event.currentTarget)}
+          onClick={(event) => {
+            const button = event.currentTarget;
+            setAnchorEl((current) => (current ? null : button));
+          }}
         >
           <Settings sx={{ fontSize: 20 }} />
         </IconButton>
       </Tooltip>
       <Menu
+        {...popup}
         anchorEl={anchorEl}
         open={!!anchorEl}
-        onClose={() => {
-          previewLater(null);
-          setAnchorEl(null);
-        }}
         anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
         transformOrigin={{ vertical: "top", horizontal: "right" }}
         // Leaving the list — for another setting or out of the menu entirely — drops the preview, armed or showing, and restores the chosen theme.

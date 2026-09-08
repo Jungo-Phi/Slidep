@@ -55,6 +55,9 @@ interface NumberInputProps {
   /** `value` is one arbitrary member of a multi-selection that doesn't actually agree on it — the
    * field says so instead of showing a value that would look settled when it isn't. Typing still works as normal and is read the same way by `onChange`. */
   mixed?: boolean;
+  /** What the field commands is not happening — a motor the mechanism will not follow.
+   * The value itself is valid, so the field is painted like a refusal without being one, and stays editable: changing it is how one gets out. */
+  alert?: boolean;
 }
 
 export const NumberInput: React.FC<NumberInputProps> = ({
@@ -73,6 +76,7 @@ export const NumberInput: React.FC<NumberInputProps> = ({
   disabled = false,
   implicit = false,
   mixed = false,
+  alert = false,
 }) => {
   const unit = kind ? display_unit(value, kind) : RAW_UNIT;
   const format = (v: number) => {
@@ -290,8 +294,8 @@ export const NumberInput: React.FC<NumberInputProps> = ({
                   borderColor: (theme) => alpha(theme.palette.primary.main, 0.5),
                 },
               }),
-              // Wins over `accent`'s tint below it: a refusal is worth surfacing even on an already-coloured field like the motor's torque or speed.
-              ...(refused && {
+              // Wins over `accent`'s tint above it: what is wrong is worth surfacing even on an already-coloured field like the motor's torque or speed.
+              ...((refused || alert) && {
                 backgroundColor: (theme) => alpha(theme.palette.error.main, 0.15),
                 "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
                   borderColor: "error.main",
@@ -315,6 +319,7 @@ export const NumberInput: React.FC<NumberInputProps> = ({
               pl: large ? 0 : 0.4,
               // Colour only: the accent must never shift a label's size or position, or two neighbouring fields stop lining up.
               ...(accent && { color: "primary.main", fontWeight: 500 }),
+              ...(alert && { color: "error.main", fontWeight: 500 }),
             },
             height,
           }}

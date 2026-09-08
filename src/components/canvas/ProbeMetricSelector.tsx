@@ -1,5 +1,5 @@
 import React, { useLayoutEffect, useRef, useState } from "react";
-import { Box, Checkbox, MenuItem, Paper } from "@mui/material";
+import { Checkbox, MenuItem, Paper } from "@mui/material";
 import {
   DEFAULT_PROBE_COMPONENTS,
   MechanicalElement,
@@ -154,10 +154,18 @@ export const ProbeMetricSelector: React.FC<ProbeMetricSelectorProps> = ({
   );
 };
 
+/** Gap between the anchor and the box's top edge, kept clear so the probe badge stays readable. */
+const ANCHOR_GAP = 14;
+
+/** Breathing room between the box and the edge of the canvas it is held inside. */
+const EDGE_MARGIN = 8;
+
 interface OnCanvasProbeMetricSelectorProps {
   element: MechanicalElement;
   /** Anchor, in screen coordinates. */
   position: ScreenPoint;
+  /** The canvas the box is held inside, whose edges bound it. */
+  containerRef: React.RefObject<HTMLElement | null>;
   /** Called with the element's new probes each time a metric is toggled. */
   onToggle: (newProbes: ProbeConfig[]) => void;
   onClose: () => void;
@@ -170,55 +178,58 @@ interface OnCanvasProbeMetricSelectorProps {
  */
 export const OnCanvasProbeMetricSelector: React.FC<
   OnCanvasProbeMetricSelectorProps
-> = ({ element, position, onToggle, onClose }) => {
+> = ({ element, position, containerRef, onToggle, onClose }) => {
   const paperRef = useRef<HTMLDivElement>(null);
   const [clampOffset, setClampOffset] = useState({ x: 0, y: 0 });
 
+  // The box takes the focus so its list answers the keyboard, and takes it back when it moves to another element — a click on the canvas leaves it on the canvas.
   useLayoutEffect(() => {
     paperRef.current?.focus();
-    const rect = paperRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    const margin = 8;
+  }, [element.id]);
+
+  // Measured from where the box would sit with no offset at all, never from where the last one put it: the correction stays a function of the anchor, and settles in one pass.
+  useLayoutEffect(() => {
+    const paper = paperRef.current;
+    const container = containerRef.current;
+    if (!paper || !container) return;
+    const { width, height } = paper.getBoundingClientRect();
+    const left = position.x - width / 2;
+    const top = position.y + ANCHOR_GAP;
+    const right = left + width;
+    const bottom = top + height;
     let dx = 0;
     let dy = 0;
-    if (rect.left < margin) dx = margin - rect.left;
-    else if (rect.right > window.innerWidth - margin)
-      dx = window.innerWidth - margin - rect.right;
-    if (rect.top < margin) dy = margin - rect.top;
-    else if (rect.bottom > window.innerHeight - margin)
-      dy = window.innerHeight - margin - rect.bottom;
-    if (dx !== 0 || dy !== 0) setClampOffset({ x: dx, y: dy });
-  }, []);
+    if (left < EDGE_MARGIN) dx = EDGE_MARGIN - left;
+    else if (right > container.clientWidth - EDGE_MARGIN)
+      dx = container.clientWidth - EDGE_MARGIN - right;
+    if (top < EDGE_MARGIN) dy = EDGE_MARGIN - top;
+    else if (bottom > container.clientHeight - EDGE_MARGIN)
+      dy = container.clientHeight - EDGE_MARGIN - bottom;
+    setClampOffset({ x: dx, y: dy });
+  }, [containerRef, position.x, position.y]);
 
   return (
-    <>
-      {/* Backdrop: clicking outside closes it */}
-      <Box
-        sx={{ position: "absolute", inset: 0, zIndex: 999 }}
-        onMouseDown={onClose}
-      />
-      <Paper
-        ref={paperRef}
-        tabIndex={-1}
-        onKeyDownCapture={(e) => {
-          if (e.key === "Enter") {
-            e.preventDefault();
-            e.stopPropagation();
-            onClose();
-          }
-        }}
-        sx={{
-          ...PROBE_METRIC_PAPER_SX,
-          position: "absolute",
-          left: position.x,
-          top: position.y,
-          transform: `translate(calc(-50% + ${clampOffset.x}px), calc(14px + ${clampOffset.y}px))`,
-          zIndex: 1000,
-        }}
-      >
-        <ProbeMetricSelector element={element} onToggle={onToggle} />
-      </Paper>
-    </>
+    <Paper
+      ref={paperRef}
+      tabIndex={-1}
+      onKeyDownCapture={(e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          e.stopPropagation();
+          onClose();
+        }
+      }}
+      sx={{
+        ...PROBE_METRIC_PAPER_SX,
+        position: "absolute",
+        left: position.x,
+        top: position.y,
+        transform: `translate(calc(-50% + ${clampOffset.x}px), calc(${ANCHOR_GAP}px + ${clampOffset.y}px))`,
+        zIndex: 1000,
+      }}
+    >
+      <ProbeMetricSelector element={element} onToggle={onToggle} />
+    </Paper>
   );
 };
 

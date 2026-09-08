@@ -13,6 +13,7 @@ import {
   Point2,
   CanvasStateType,
   ScreenPoint,
+  state_under_probe_metrics,
   UP,
   ViewportState,
   WorldPoint,
@@ -244,6 +245,7 @@ export const HOVER_TARGETS: Record<CanvasStateType, HoverTargets> = {
   },
   PlacingMomentEnd: NOTHING,
   PlacingProbe: { node: "centre", gear: "rim-top", edge: "body-centre" },
+  // Never read: picking looks through the metric box at the state under it.
   PlacingProbeMetrics: NOTHING,
 
   Measuring: MEASURING,
@@ -647,7 +649,7 @@ function get_hovered_part_of_element(
   viewport: ViewportState,
   parallelOffsets: Map<ID, number>,
 ): HoveredPart | null {
-  // TODO : à "PlacingBeltEnd", ignorer les gears avec le même parentAxle
+  // TODO: at "PlacingBeltEnd", ignore the gears sharing a parentAxle.
 
   const targets = HOVER_TARGETS[state.type];
   const deleting = state.type === "Erasing";
@@ -1055,6 +1057,7 @@ export function get_hovered_part(
   askedPosition?: Point2,
   isSimulating: boolean = false,
 ): HoveredPart {
+  state = state_under_probe_metrics(state);
   // Picking only: an element being dragged is under the cursor by construction and must never be its own target.
   // What it may legally reach is decided by legality_for_state.
   const excluded_elements: ID[] = [];

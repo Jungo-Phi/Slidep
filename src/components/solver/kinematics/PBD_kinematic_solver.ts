@@ -93,7 +93,7 @@ export type DynamicsInput = {
 };
 
 /**
- * Above this fraction of the mechanism's own extent (see `nodes_extent`) a constraint is reported as unsatisfied, and severity is expressed against it. **One** threshold for every family: residuals reach it already converted to the length they are worth (see `residual_scale`), so an angle and a distance are finally the same kind of number.
+ * Above this fraction of the mechanism's own extent (see `nodes_extent`) a constraint is reported as unsatisfied. **One** threshold for every family: residuals reach it already converted to the length they are worth (see `residual_scale`), so an angle and a distance are the same kind of number.
  *
  * Relative rather than a flat millimetre so a µm-scale mechanism and a km-scale one are each judged against their own size, not one fixed abroad. 1e-3 is a millimetre reinterpreted as a ratio at the roughly metre-scale mechanisms it was originally tuned on.
  *
@@ -165,7 +165,7 @@ function residual_scale(
 const RATE_WINDOW = 8;
 /**
  * Sweeps left after the grab lets go before an exit may be considered, so what it stretched has relaxed.
- * Unmeasured — inherited from the 24 that used to be a flat floor over 20 grab sweeps.
+ * Unmeasured — a small margin over the grab's own sweeps, not a value tuned against anything.
  */
 const GRAB_RELEASE_SWEEPS = 4;
 
@@ -229,27 +229,6 @@ function remaining_motion(now: number, windowAgo: number): number {
   if (!(windowAgo > now)) return Infinity;
   const rate = Math.pow(now / windowAgo, 1 / RATE_WINDOW);
   return (now * rate) / (1 - rate);
-}
-
-
-/**
- * How far past the reporting threshold the worst-off constraint sits.
- * `0` when nothing is reported, `2` when something is twice as violated as it takes to be listed.
- *
- * Dimensionless, and now honestly so: every residual reaches this list already expressed as a length, so there is one threshold to divide by rather than one per family.
- * `extent` is the mechanism's own scale (see `nodes_extent`), the same one the residuals were reported against.
- */
-export function constraint_severity(
-  unsatisfied: ConstraintResidual[] | undefined,
-  extent: number,
-): number {
-  const tolerance = DIAGNOSTIC_TOLERANCE_RATIO * (extent || MIN_EXTENT_M);
-  let worst = 0;
-  for (const u of unsatisfied ?? []) {
-    const s = u.residual / tolerance;
-    if (s > worst) worst = s;
-  }
-  return worst;
 }
 
 /*
@@ -398,7 +377,7 @@ export function PBD_solve(
     angleLever[a] = r !== undefined ? nodes.radius[r] : 1;
   }
 
-  // The mechanism's own scale, read once before the sweeps move anything — everything below that used to be an absolute length is judged against it instead, so a µm-scale mechanism and a km-scale one are each held to their own precision.
+  // The mechanism's own scale, read once before the sweeps move anything — every tolerance below is a fraction of it rather than an absolute length, so a µm-scale mechanism and a km-scale one are each held to their own precision.
   // One bbox pass, negligible next to the sweeps themselves.
   const extent = nodes_extent(nodes) || MIN_EXTENT_M;
   const diagnosticTolerance = DIAGNOSTIC_TOLERANCE_RATIO * extent;

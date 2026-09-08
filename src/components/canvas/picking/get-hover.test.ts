@@ -388,6 +388,41 @@ describe("get_hovered_part", () => {
     }
     expect(lines.join("\n")).toMatchSnapshot();
   });
+
+  // The metric box is an overlay, not a mode: picking looks through it at the state it covers.
+  it("pique à travers la boîte des métriques, comme l'état qu'elle recouvre", () => {
+    const pick = (state: CanvasState) =>
+      PROBES.map(([, cursor]) =>
+        describe_hover(
+          get_hovered_part(
+            MECHANICAL,
+            CONSTRAINTS,
+            LOADS,
+            VISIBLE_CONSTRAINTS,
+            cursor,
+            state,
+            VIEWPORT,
+            DEFAULT_FLOOR,
+          ),
+        ),
+      );
+
+    expect(
+      pick({
+        type: "PlacingProbeMetrics",
+        elementID: BEAM,
+        position: P(300, 0),
+        armed: true,
+      }),
+    ).toEqual(pick({ type: "PlacingProbe" }));
+    expect(
+      pick({
+        type: "PlacingProbeMetrics",
+        elementID: BEAM,
+        position: P(300, 0),
+      }),
+    ).toEqual(pick({ type: "SelectedElement", elementID: BEAM }));
+  });
 });
 
 /**
@@ -424,10 +459,10 @@ describe("une cible que le glissement n'atteint pas", () => {
 });
 
 /**
- * Le même contrôle, pour le geste qui ne produit pas un point mais un rayon.
+ * The same check, for the gesture that yields a radius rather than a point.
  *
- * L'engrenage dimensionné est au centre, la cible à 300 avec un rayon de 100 : la tangence est donc en (200,0) et le rayon accordé vaut 200.
- * Le curseur, lui, est ailleurs sur la jante de la cible — mesurer la poignée sur son relèvement plutôt que sur celui de la tangence faisait osciller le survol d'une frame à l'autre.
+ * The sized gear is at the centre, the target at 300 with a radius of 100: tangency therefore falls at (200,0) and the granted radius is 200.
+ * The cursor sits elsewhere on the target's rim — measuring the handle on its own bearing rather than on the tangency's makes the hover oscillate from one frame to the next.
  */
 describe("un rayon que le glissement n'atteint pas", () => {
   const SIZED_AXLE = id("a3");

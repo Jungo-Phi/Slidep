@@ -13,7 +13,7 @@
  */
 
 import { ID } from "../../../types";
-import { KinematicSnapshot } from "../../../types/runtime-state";
+import { KinematicSnapshot, SimulationSnapshot } from "../../../types/runtime-state";
 
 /** Frames a block must last to be reported, so one uneven frame is not an event. */
 const MIN_BLOCKED_FRAMES = 2;
@@ -38,12 +38,53 @@ export type DeadPoint = {
 const MOTOR_TYPES = new Set(["MotorBeam", "MotorAngle"]);
 
 /** Motors the simulation reported blocked on this frame. */
-const blocked_motors = (snapshot: KinematicSnapshot): Set<ID> => {
+const blocked_motors = (snapshot: SimulationSnapshot): Set<ID> => {
   const blocked = new Set<ID>();
   for (const residual of snapshot.unsatisfied ?? [])
     if (MOTOR_TYPES.has(residual.type)) blocked.add(residual.owner);
   return blocked;
 };
+
+/**
+ * The motors standing blocked at `index`, for a live indicator to light up on.
+ *
+ * Exactly the frames a timeline mark spans, so landing on a mark shows the block it announces.
+ * That takes counting the run in BOTH directions: the mark is timed at the frame the block began, which is `minBlockedFrames - 1` frames before the run is long enough to be certain of, and a witness that only looked backwards would leave those first frames — the very ones a click on the mark lands on — dark.
+ *
+ * Looking ahead costs nothing at the frontier, which is the case flicker could come from: the frames after the last one do not exist yet, so a run that has not yet earned its mark lights nothing until it does.
+ */
+export function motors_blocked_at(
+  snapshots: SimulationSnapshot[],
+  index: number,
+  tuning: DeadPointTuning = {},
+): Set<ID> {
+  const { minBlockedFrames = MIN_BLOCKED_FRAMES } = tuning;
+  if (index < 0 || index >= snapshots.length) return new Set();
+
+  // One read per frame at most, so walking the same neighbours for each motor stays linear in the run.
+  const seen = new Map<number, Set<ID>>();
+  const at = (i: number): Set<ID> => {
+    let blocked = seen.get(i);
+    if (!blocked) seen.set(i, (blocked = blocked_motors(snapshots[i])));
+    return blocked;
+  };
+
+  const here = at(index);
+  const held = new Set<ID>();
+  for (const motor of here) {
+    let frames = 1;
+    for (let i = index - 1; i >= 0 && frames < minBlockedFrames; i--) {
+      if (!at(i).has(motor)) break;
+      frames++;
+    }
+    for (let i = index + 1; i < snapshots.length && frames < minBlockedFrames; i++) {
+      if (!at(i).has(motor)) break;
+      frames++;
+    }
+    if (frames >= minBlockedFrames) held.add(motor);
+  }
+  return held;
+}
 
 /**
  * Every instant a motor stalls along `snapshots`, in time order.

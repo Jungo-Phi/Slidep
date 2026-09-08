@@ -67,7 +67,11 @@ amortisseur), contrairement aux états de placement.
 | `PlacingMomentStart`      | ◆ d  | ◆ e centre | ✅ corps (tout type) ◆ f | ❌       |
 | `PlacingMomentEnd`        | ❌   | ❌         | ❌                       | ❌       |
 | `PlacingProbe`            | ✅   | ✅         | ✅ corps (tout type)     | ❌       |
-| `PlacingProbeMetrics`     | ❌   | ❌         | ❌                       | ❌       |
+| `PlacingProbeMetrics`     | ◆ i  | ◆ i        | ◆ i                      | ◆ i     |
+
+◆ i — `PlacingProbeMetrics` ne vise rien en propre : le survol lit **à travers** la boîte l'état
+qu'elle recouvre (`state_under_probe_metrics`), soit `PlacingProbe` quand elle vient de la pose
+(`armed`), soit `SelectedElement` quand elle vient d'un clic sur la pastille.
 
 Les états « …End » et `PlacingDistributedForce` ne visent **rien** volontairement : le geste définit
 un vecteur, pas une cible, et c'est `snap_load_hover` qui aimante la direction et la longueur sur le
@@ -284,14 +288,22 @@ endroit, et bâtie sur la même liste que celle du panneau latéral (`ProbeMetri
 s'applique dès qu'elle est cochée : il n'y a rien à valider, donc fermer la boîte ne fait jamais
 perdre un choix. `PlacingProbeMetrics` distingue les deux provenances par son drapeau `armed` : venue
 de l'outil sonde elle le réarme en sortie, venue d'un clic sur la pastille elle retombe sur
-`Selecting`. Dans les deux cas le panneau bascule sur l'analyse, où vivent les mesures et leurs
+`SelectedElement`. Dans les deux cas le panneau bascule sur l'analyse, où vivent les mesures et leurs
 courbes.
+
+**La boîte est un calque, pas un mode.** Le canvas dessous continue de survoler et d'encaisser les
+clics comme si elle était fermée : `state_under_probe_metrics` donne l'état qu'elle recouvre, et le
+survol, le curseur et le clic le lisent tous les trois. Un clic sur le canvas fait donc ce qu'il
+aurait fait sans elle — sélectionner, saisir, poser la sonde suivante — et la referme au passage.
+La pastille qui l'a ouverte fait exception : elle la referme, comme le bouton d'un menu referme
+le menu. Armée, la boîte laisse l'aperçu de la prochaine sonde suivre le curseur dès qu'il vise un
+autre élément que celui en cours de réglage.
 
 **L'élément mesuré est dessiné sélectionné tant que la boîte est ouverte** (`is_selected` traite
 `PlacingProbeMetrics` comme les autres états qui désignent un élément), et sa pastille reste
-allumée. Le curseur a quitté le canvas pour la boîte : rien d'autre ne dirait ce qu'on est en train
-de mesurer. À la fermeture, l'élément reste sélectionné — sauf après une pose, où l'outil sonde se
-réarme pour en poser une autre.
+allumée : c'est ce qui dit lequel des éléments la boîte est en train de régler, alors que le survol
+en désigne librement d'autres. À la fermeture, l'élément reste sélectionné — sauf après une pose, où
+l'outil sonde se réarme pour en poser une autre.
 
 Pour retirer une mesure sans toucher à la pièce : décocher la métrique, ici ou dans le panneau.
 

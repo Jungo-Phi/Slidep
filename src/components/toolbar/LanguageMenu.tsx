@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { IconButton, Menu, MenuItem, Tooltip } from "@mui/material";
 import { Language } from "@mui/icons-material";
 import { Lang, LANGUAGE_LABELS, LANGUAGES, t } from "../../i18n";
+import { useNonModalPopup } from "../common/use-non-modal-popup";
 
 interface LanguageMenuProps {
   language: Lang;
@@ -15,6 +16,7 @@ export const LanguageMenu: React.FC<LanguageMenuProps> = ({
 }) => {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const open = !!anchorEl;
+  const popup = useNonModalPopup(open, anchorEl, () => setAnchorEl(null));
 
   return (
     <>
@@ -23,7 +25,10 @@ export const LanguageMenu: React.FC<LanguageMenuProps> = ({
           color="inherit"
           size="small"
           aria-expanded={open}
-          onClick={(event) => setAnchorEl(event.currentTarget)}
+          onClick={(event) => {
+            const button = event.currentTarget;
+            setAnchorEl((current) => (current ? null : button));
+          }}
           sx={{
             gap: 0.4,
             fontSize: "0.72rem",
@@ -36,9 +41,9 @@ export const LanguageMenu: React.FC<LanguageMenuProps> = ({
         </IconButton>
       </Tooltip>
       <Menu
+        {...popup}
         anchorEl={anchorEl}
         open={open}
-        onClose={() => setAnchorEl(null)}
         anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
         transformOrigin={{ vertical: "top", horizontal: "right" }}
         slotProps={{ paper: { style: { maxHeight: 175 } } }}

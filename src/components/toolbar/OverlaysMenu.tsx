@@ -36,6 +36,8 @@ import {
   set_all_overlays,
 } from "../properties-panel/overlay-actions";
 import CommandCountRow from "../properties-panel/components/CommandCountRow";
+import { useNonModalPopup } from "../common/use-non-modal-popup";
+import { TOP_BAR_CONTROL_HEIGHT } from "./toolbar-metrics";
 import { t, tn } from "../../i18n";
 
 const BEAM_STRESS_LENS_LABEL_KEYS = {
@@ -54,6 +56,9 @@ interface OverlaysMenuProps {
    * Lives here, not in `mechanicalElements`' own `OverlayFlags`: unlike trajectories/forces/velocities, the four readings share one physical slot (a beam's own fill), so this is a single choice, not a checkbox. */
   beamStressLens: BeamStressLens;
   onChangeBeamStressLens: (lens: BeamStressLens) => void;
+  /** Resting on a lens tries it on, as resting on a theme does in the settings menu — `null` puts the chosen one back.
+   * Only the beams and the legend follow: the tick below stays on the lens actually chosen. */
+  onPreviewBeamStressLens: (lens: BeamStressLens | null) => void;
   /** Trajectory overlay style: dots at fixed spacing versus one continuous stroke. */
   trajectoryDotted: boolean;
   onChangeTrajectoryDotted: (dotted: boolean) => void;
@@ -102,11 +107,16 @@ export const OverlaysMenu: React.FC<OverlaysMenuProps> = ({
   applyActions,
   beamStressLens,
   onChangeBeamStressLens,
+  onPreviewBeamStressLens,
   trajectoryDotted,
   onChangeTrajectoryDotted,
   condensed = false,
 }) => {
   const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
+  const popup = useNonModalPopup(!!anchorEl, anchorEl, () => {
+    onPreviewBeamStressLens(null);
+    setAnchorEl(null);
+  });
   const anyShown =
     any_overlay_shown(mechanicalElements) || beamStressLens !== "none";
 
@@ -121,7 +131,10 @@ export const OverlaysMenu: React.FC<OverlaysMenuProps> = ({
         <Button
           color="inherit"
           size="small"
-          onClick={(e) => setAnchorEl(e.currentTarget)}
+          onClick={(e) => {
+            const button = e.currentTarget;
+            setAnchorEl((current) => (current ? null : button));
+          }}
           startIcon={
             anyShown ? (
               <Visibility sx={{ fontSize: "18px !important" }} />
@@ -139,7 +152,9 @@ export const OverlaysMenu: React.FC<OverlaysMenuProps> = ({
             fontWeight: 600,
             textTransform: "none",
             px: 0.75,
-            py: 0.25,
+            py: 0,
+            // Held explicitly because the label carries the height: dropping it in `condensed` would otherwise shrink the button.
+            minHeight: TOP_BAR_CONTROL_HEIGHT,
             minWidth: 0,
             letterSpacing: 0,
             // Icon-only: the label's slot would otherwise keep its gap.
@@ -150,13 +165,16 @@ export const OverlaysMenu: React.FC<OverlaysMenuProps> = ({
         </Button>
       </Tooltip>
       <Menu
+        {...popup}
         anchorEl={anchorEl}
         open={!!anchorEl}
-        onClose={() => setAnchorEl(null)}
         anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
         transformOrigin={{ vertical: "top", horizontal: "center" }}
+        // Leaving the list drops the preview, armed or showing, and puts the chosen lens back.
+        MenuListProps={{ onMouseLeave: () => onPreviewBeamStressLens(null) }}
       >
-        <Box sx={{ py: 0.5 }}>
+        {/* Coming back up to the layers is leaving the lenses, the pointer never having left the list. */}
+        <Box sx={{ py: 0.5 }} onMouseEnter={() => onPreviewBeamStressLens(null)}>
           {OVERLAY_KIND_ORDER.map((kind) => {
             const { shown, total } = overlay_count(mechanicalElements, kind);
             const labelCount = overlay_label_count(
@@ -216,7 +234,11 @@ export const OverlaysMenu: React.FC<OverlaysMenuProps> = ({
               key={lens}
               dense
               selected={lens === beamStressLens}
-              onClick={() => onChangeBeamStressLens(lens)}
+              onClick={() => {
+                onPreviewBeamStressLens(null);
+                onChangeBeamStressLens(lens);
+              }}
+              onMouseEnter={() => onPreviewBeamStressLens(lens)}
             >
               <ListItemIcon>
                 {lens === beamStressLens && <Check sx={{ fontSize: 18 }} />}

@@ -18,6 +18,8 @@ interface SignedNumberInputProps {
   accent?: boolean;
   kind?: QuantityKind;
   mixed?: boolean;
+  /** See `NumberInput`'s own `alert`. */
+  alert?: boolean;
 }
 
 /**
@@ -34,6 +36,7 @@ export const SignedNumberInput: React.FC<SignedNumberInputProps> = ({
   accent = false,
   kind,
   mixed = false,
+  alert = false,
 }) => {
   const clockwise = value >= 0;
   const DirectionIcon = clockwise ? RotateRightIcon : RotateLeftIcon;
@@ -58,6 +61,7 @@ export const SignedNumberInput: React.FC<SignedNumberInputProps> = ({
       accent={accent}
       kind={kind}
       mixed={mixed}
+      alert={alert}
       pillAdornment
       adornment={{
         icon: DirectionIcon,

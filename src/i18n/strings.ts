@@ -987,10 +987,10 @@ export const STRINGS = {
     es: "Velocidades",
   },
   stress_legend_overstress: {
-    fr: "Dépassé",
-    en: "Exceeded",
-    de: "Überschritten",
-    es: "Superado",
+    fr: "Limite élastique dépassée",
+    en: "Beyond elastic limit",
+    de: "Elastizitätsgrenze überschritten",
+    es: "Más allá del límite elástico",
   },
   stress_legend_compression: {
     fr: "Compression",
@@ -2164,6 +2164,12 @@ export const STRINGS = {
     de: "Dieser Motor treibt keinen Freiheitsgrad an: die anderen setzen sich über seine Vorgabe hinweg.",
     es: "Este motor no acciona ningún grado de libertad: los demás anularán su mando.",
   },
+  ddl_motor_blocked_hint: {
+    fr: "Ce moteur est bloqué : le mécanisme ne suit plus sa consigne.",
+    en: "This motor is stalled: the mechanism no longer follows its command.",
+    de: "Dieser Motor blockiert: der Mechanismus folgt seiner Vorgabe nicht mehr.",
+    es: "Este motor está bloqueado: el mecanismo ya no sigue su mando.",
+  },
   ddl_measure_incomplete: {
     fr: "Mesure incomplète",
     en: "Incomplete measurement",
@@ -2206,18 +2212,6 @@ export const STRINGS = {
     en: "Selected element",
     de: "Ausgewähltes Element",
     es: "Elemento seleccionado",
-  },
-  analysis_unsatisfied: {
-    fr: "Contraintes non respectées",
-    en: "Unsatisfied constraints",
-    de: "Nicht erfüllte Bedingungen",
-    es: "Restricciones incumplidas",
-  },
-  analysis_all_satisfied: {
-    fr: "Toutes les contraintes sont respectées",
-    en: "All constraints are satisfied",
-    de: "Alle Bedingungen sind erfüllt",
-    es: "Todas las restricciones se cumplen",
   },
   analysis_choose_metrics: {
     fr: "Choisir les mesures",

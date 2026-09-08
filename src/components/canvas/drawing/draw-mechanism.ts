@@ -513,6 +513,9 @@ export type CanvasDrawing = {
    * ladder is invisible, so the dimension goes into relief to say so. */
   dimensionSnapped?: boolean;
   highlight?: CanvasHighlight;
+  /** Motors the simulation cannot push through (see `motors_blocked_at`), marked like anything else the analysis finds at fault.
+   * Unlike `highlight`, held for as long as the block lasts rather than for as long as a panel points at them. */
+  blockedMotors?: ReadonlySet<ID>;
   /** The elements the ruler is holding whole, lit in the measurement hue. A ruler marks what
    * it takes whole by lighting the element itself, never by drawing a shape around it. */
   measured?: ReadonlySet<ID>;
@@ -581,6 +584,7 @@ export function draw_mechanism(
     hideProbes = false,
     dimensionSnapped = false,
     highlight = NO_HIGHLIGHT,
+    blockedMotors = EMPTY_IDS,
     measured = EMPTY_IDS,
     redundancySymbols = EMPTY_SYMBOLS,
     now = 0,
@@ -598,7 +602,15 @@ export function draw_mechanism(
     highlight.kind === "focus" || highlight.kind === "pick"
       ? highlight.elements
       : EMPTY_IDS;
-  const faulty = highlight.kind === "fault" ? highlight.elements : EMPTY_IDS;
+  // A stalled motor is at fault in the same sense a dispensable joint is, and reads the same: the eraser's red at full opacity.
+  // Both sets are empty on almost every frame, so the union is allocated only where they actually meet.
+  const pointedAtFault = highlight.kind === "fault" ? highlight.elements : EMPTY_IDS;
+  const faulty =
+    blockedMotors.size === 0
+      ? pointedAtFault
+      : pointedAtFault.size === 0
+        ? blockedMotors
+        : new Set([...pointedAtFault, ...blockedMotors]);
   const rulerOut = ruler_is_out(state);
 
   let allElements: UnionElement[] = mechanicalElements as UnionElement[];
@@ -685,6 +697,10 @@ export function draw_mechanism(
       (focused.has(element.id) || faulty.has(element.id)
         ? STROKE_WIDTHS.HOVER_GAIN
         : 0);
+    // This pass is what draws a grounded motor at rest, under the bars — the per-element pass below only redraws it on top when something singles it out, so the fault has to be coloured in here too or the body stays black under a red pivot.
+    ctx.strokeStyle = faulty.has(element.id)
+      ? COLORS.DELETION_STROKE
+      : COLORS.ELEMENT_STROKE;
     draw_motor(
       ctx,
       world2screen(element.position, viewport),
@@ -693,6 +709,7 @@ export function draw_mechanism(
     );
   }
   ctx.lineWidth = STROKE_WIDTHS.STANDARD;
+  ctx.strokeStyle = COLORS.ELEMENT_STROKE;
 
   // Read once for the whole frame: the drawing and the hover share this map, so the stroke and the cursor cannot disagree on where an edge is.
   const parallelOffsets = parallel_edge_offsets(mechanicalElements);
@@ -963,7 +980,7 @@ export function draw_mechanism(
         if (!isLoadElement) ctx.strokeStyle = COLORS.DELETION_STROKE;
         ctx.globalAlpha = INTERACTION_SPECS.DELETION_OPACITY;
       }
-      // A joint the redundancy audit found dispensable.
+      // At fault: a joint the redundancy audit found dispensable, or a motor the mechanism will not follow.
       // The eraser's red, because it reads as a warning in every theme — but at full opacity, since this is something to look at, not something on its way out.
       if (faulty.has(element.id) && !isLoadElement)
         ctx.strokeStyle = COLORS.DELETION_STROKE;

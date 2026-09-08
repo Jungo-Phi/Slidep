@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getStorageItem, setStorageItem } from "../utils";
+import { HOVER_PREVIEW_DELAY_MS } from "../constants/interaction-specs";
 import { set_canvas_theme } from "./canvas-theme";
 import {
   DEFAULT_THEME,
@@ -9,12 +10,8 @@ import {
   ThemeName,
 } from "./mui-theme";
 
-/** How long the pointer must rest on a theme before it is tried on. A swipe
- * across the menu on the way somewhere else asks for nothing, and should repaint nothing. */
-const THEME_PREVIEW_DELAY_MS = 100;
-
 /**
- * The app's ambience: a family (Fantaisie, Blueprint, …) crossed with a mode (light/dark/ système), persisted to storage, plus the hover preview the settings menu offers before a choice sticks.
+ * The app's ambience: a family crossed with a mode (light, dark, or the system's own), persisted to storage, plus the hover preview the settings menu offers before a choice sticks.
  */
 export function useThemeChoice() {
   // A theme is chosen as a family and a mode, not as one of the six names: the name is what those two resolve to, once the browser has had its say on "système".
@@ -59,7 +56,7 @@ export function useThemeChoice() {
     previewTimer.current = window.setTimeout(() => {
       previewTimer.current = null;
       setPreviewTheme(name);
-    }, THEME_PREVIEW_DELAY_MS);
+    }, HOVER_PREVIEW_DELAY_MS);
   }, []);
   useEffect(
     () => () => {

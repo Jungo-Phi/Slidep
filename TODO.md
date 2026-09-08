@@ -10,11 +10,8 @@
 
 ### À faire rapidement
 
-- Pouvoir hover et sélectionner des trucs quand un panneau est ouvert
-- Hover preview des contraintes
-
 - Mécanismes exemple
-- Clarifier contraintes non-respectées
+
 - Rendre la physique exacte (cas faux, première frames, etc.)
 - Bloquer moteur si couple demandé suppérieur couple disponible
 - Clarifier le grab en dynamique (grab -> force ?)
@@ -25,6 +22,7 @@
 
 - Supprimer poutre sur joint de courroie
 - Ajouter contraintes de coincidence (point - ligne)
+- Ajouter contraintes de distance parallèle
 - Comment connecter ou non des engrenages sur le même axe ?
 - Faire fonctionner les treuils
 
@@ -56,7 +54,6 @@
 
 - 🔨 Hover sur les graphs met en évidence les éléments concernés
 - 🔨 Les contraintes ne devrait pas apparaitre au hover quand on est en train de placer un élément. En fait, elle ne devrait apparaitre que dans les états "Idle"
-- 🔨 Les contraintes ne devrait pas apparaitre au hover de leur position si elles sont cachées
 - Ajouter l'énergie apportée par les charges et par l'utilisateur dans "Travil net" (Bilan énergétique)
 - 🆕 Rendre visible les ctrl+y/z invisibles : clignottement dans l'onglet
 
@@ -124,11 +121,6 @@
 - 🆕 Suivre le plan _plan-mobile.md_ pour téléphone
 - 🤔 Faire un nouveau plan pour tablette
 - 🆕 Ajouter la feature dans les points clés de "A propos"
-
-**Repenser les "Contraintes non respectées"**
-
-- 🤔 Afficher uniquement les moteurs ? (OU sur la liste des moteurs déjà affichés ?)
-- 🤔 Afficher les contraintes non respectées en colorant les éléments (rouge) ?
 
 **Analyse hyperstatique**
 
@@ -226,8 +218,6 @@
 - 🔨 Finir les traits de DimensionAngle
 - 🔨 Polish de dimensionAngle: arrondir les angles de 0° / 180°, traits extérieurs pour les petits angles
 - 🔨 Le dessin preview de DimensionAngle devrait tendre vers l'angle le plus petit
-- 🔨 Afficher les contraintes non respectées avec des messages (Attention / Brisée) au lieu de e=3.72
-- 🆕 Afficher les contraintes non respectées en couleur sur le canvas
 
 **Placement et remplacement d'éléments**
 

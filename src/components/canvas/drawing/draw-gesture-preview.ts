@@ -13,7 +13,7 @@ import {
   UP,
   ViewportState,
 } from "../../../types";
-import { HoveredPart } from "../../../types/hovered-part";
+import { HoveredPart, is_hovered } from "../../../types/hovered-part";
 import { CanvasState } from "../../../types/canvas-state";
 import {
   draw_beam,
@@ -84,6 +84,20 @@ export type GesturePreviewDrawing = {
   mechanicalElements: MechanicalElement[];
   dimensionSnapped?: boolean;
 };
+
+/** The probe the armed tool would drop here, riding above whatever the cursor names. */
+function draw_probe_under_cursor(
+  ctx: CanvasRenderingContext2D,
+  hoveredPart: HoveredPart,
+  viewport: ViewportState,
+) {
+  const position = hoveredPart.position.clone();
+  if (hoveredPart.type !== "Void")
+    position.y += DIM.PROBE_OFFSET / viewport.scale;
+  ctx.strokeStyle = COLORS.ACCENT;
+  ctx.lineWidth = STROKE_WIDTHS.STANDARD;
+  draw_probe(ctx, world2screen(position, viewport));
+}
 
 /**
  * Draws the ghost of the tool gesture in progress — a marquee box, the element a placement would create, the dimension a drag is measuring.
@@ -624,20 +638,20 @@ export function draw_gesture_preview(
       break;
     }
     case "PlacingProbe": {
-      const position = hoveredPart.position.clone();
-      if (hoveredPart.type !== "Void")
-        position.y += DIM.PROBE_OFFSET / viewport.scale;
-      ctx.strokeStyle = COLORS.ACCENT;
-      ctx.lineWidth = STROKE_WIDTHS.STANDARD;
-      draw_probe(ctx, world2screen(position, viewport));
+      draw_probe_under_cursor(ctx, hoveredPart, viewport);
       break;
     }
     case "PlacingProbeMetrics": {
       const probed = mechanicalElements.find((el) => el.id === state.elementID);
-      if (!probed || (probed.probes?.length ?? 0) > 0) break;
-      ctx.strokeStyle = COLORS.ACCENT;
-      ctx.lineWidth = STROKE_WIDTHS.STANDARD;
-      draw_probe(ctx, probe_badge_position(probed, viewport));
+      // The element being set up wears a probe of its own until a first metric is ticked, which draws a real one.
+      if (probed && (probed.probes?.length ?? 0) === 0) {
+        ctx.strokeStyle = COLORS.ACCENT;
+        ctx.lineWidth = STROKE_WIDTHS.STANDARD;
+        draw_probe(ctx, probe_badge_position(probed, viewport));
+      }
+      // The tool is still armed under the box, so the next probe follows the cursor as soon as it aims somewhere else.
+      if (state.armed && !is_hovered(hoveredPart, state.elementID))
+        draw_probe_under_cursor(ctx, hoveredPart, viewport);
       break;
     }
   }

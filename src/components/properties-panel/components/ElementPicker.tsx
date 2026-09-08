@@ -4,6 +4,7 @@ import { KeyboardArrowDown } from "@mui/icons-material";
 import { Action, CanvasState, ID, UnionElement } from "../../../types";
 import { HoveredPart } from "../../../types/hovered-part";
 import ElementDisplay from "./ElementDisplay";
+import { useNonModalPopup } from "../../common/use-non-modal-popup";
 
 interface ExtraOption {
   label: string;
@@ -88,6 +89,7 @@ export function ElementPicker<T extends UnionElement>({
   large = undefined,
 }: ElementPickerProps<T>) {
   const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
+  const popup = useNonModalPopup(!!anchorEl, anchorEl, () => setAnchorEl(null));
 
   const choose = (fn: () => void) => {
     fn();
@@ -105,7 +107,10 @@ export function ElementPicker<T extends UnionElement>({
     >
       <Tooltip title={label}>
         <Box
-          onClick={(e) => setAnchorEl(e.currentTarget)}
+          onClick={(e) => {
+            const field = e.currentTarget;
+            setAnchorEl((current) => (current ? null : field));
+          }}
           onMouseEnter={() => selected && onHoverElement(selected)}
           onMouseLeave={onHoverEnd}
           sx={{
@@ -144,9 +149,9 @@ export function ElementPicker<T extends UnionElement>({
         </Box>
       </Tooltip>
       <Menu
+        {...popup}
         anchorEl={anchorEl}
         open={!!anchorEl}
-        onClose={() => setAnchorEl(null)}
       >
         {extraOption && (
           <MenuItem

@@ -41,6 +41,7 @@ import { PROBE_ELEMENT_COLORS } from "../components/ProbeChart";
 import { INLINE_INPUT_SX } from "../../mechanisms-gallery/inline-input-sx";
 import { DENSITY, LENGTH, STRESS } from "../../../utils/quantity-format";
 import { t, tn } from "../../../i18n";
+import { useNonModalPopup } from "../../common/use-non-modal-popup";
 
 /**
  * The properties panel's own "library" tab: create, rename, edit, duplicate and delete a mechanism's own materials and profiles.
@@ -656,37 +657,58 @@ export interface ProfileDetailProps {
 export const ProfileDetail: React.FC<ProfileDetailProps> = ({
   shape,
   onChangeShape,
-}) => (
-  <Box sx={{ display: "flex", flexDirection: "column", gap: 1, p: 1.5 }}>
-    <Select
-      size="small"
-      sx={{ alignSelf: "center" }}
-      value={shape.kind}
-      onChange={(e) =>
-        onChangeShape?.(
-          default_shape_for_kind(e.target.value as ProfileShape["kind"]),
-        )
-      }
-    >
-      {SHAPE_KINDS.map((kind) => (
-        <MenuItem key={kind} value={kind}>
-          {shape_kind_label(kind)}
-        </MenuItem>
-      ))}
-    </Select>
-    <SectionSchema shape={shape} />
-    <Box
-      sx={{
-        display: "flex",
-        flexWrap: "wrap",
-        justifyContent: "center",
-        gap: 1,
-      }}
-    >
-      <ShapeCotes shape={shape} onChange={onChangeShape!} />
+}) => {
+  const [open, setOpen] = React.useState(false);
+  const anchorRef = React.useRef<HTMLDivElement>(null);
+  const popup = useNonModalPopup(open, anchorRef.current, () => setOpen(false));
+
+  return (
+    <Box sx={{ display: "flex", flexDirection: "column", gap: 1, p: 1.5 }}>
+      <Box
+        ref={anchorRef}
+        sx={{ alignSelf: "center" }}
+        // The select only ever opens itself, so closing it by clicking it a second time is up to here.
+        onMouseDownCapture={(event) => {
+          if (!open) return;
+          event.preventDefault();
+          event.stopPropagation();
+          setOpen(false);
+        }}
+      >
+        <Select
+          size="small"
+          open={open}
+          onOpen={() => setOpen(true)}
+          onClose={() => setOpen(false)}
+          MenuProps={popup}
+          value={shape.kind}
+          onChange={(e) =>
+            onChangeShape?.(
+              default_shape_for_kind(e.target.value as ProfileShape["kind"]),
+            )
+          }
+        >
+          {SHAPE_KINDS.map((kind) => (
+            <MenuItem key={kind} value={kind}>
+              {shape_kind_label(kind)}
+            </MenuItem>
+          ))}
+        </Select>
+      </Box>
+      <SectionSchema shape={shape} />
+      <Box
+        sx={{
+          display: "flex",
+          flexWrap: "wrap",
+          justifyContent: "center",
+          gap: 1,
+        }}
+      >
+        <ShapeCotes shape={shape} onChange={onChangeShape!} />
+      </Box>
     </Box>
-  </Box>
-);
+  );
+};
 
 // ─── The panel itself ──────────────────────────────────────────────────────────────────────────
 

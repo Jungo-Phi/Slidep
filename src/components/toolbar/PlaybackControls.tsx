@@ -36,8 +36,15 @@ import { simulationResetPatch } from "../solver/recording/use-simulation-playbac
 import { OverlaysMenu } from "./OverlaysMenu";
 import { ProjectHeader } from "./ProjectHeader";
 import { SaveStatus } from "../mechanisms-gallery/use-mechanism-library";
+import {
+  TOP_BAR_CONTROL_HEIGHT,
+  TOP_BAR_DIVIDER_SX,
+  TOP_BAR_GROUP_GAP,
+  TOP_BAR_SECTION_GAP,
+  TOP_BAR_SLIM_BUTTON_SX,
+} from "./toolbar-metrics";
 
-// Crans de vitesse de simulation, du plus lent au plus rapide.
+// Simulation speed steps, slowest to fastest.
 const SPEEDS: SimulationSpeed[] = [0.1, 0.25, 0.5, 1, 2, 4, 10];
 
 interface PhysicsToggleProps {
@@ -98,6 +105,8 @@ interface PlaybackControlsProps {
   saveStatus: SaveStatus;
   beamStressLens: BeamStressLens;
   setBeamStressLens: (lens: BeamStressLens) => void;
+  /** Tries a lens on without picking it, or — with `null` — puts the picked one back (`useStressLensPreview`). */
+  previewBeamStressLens: (lens: BeamStressLens | null) => void;
   trajectoryDotted: boolean;
   setTrajectoryDotted: (dotted: boolean) => void;
   /** Rendered at the end of the right-hand section. */
@@ -121,6 +130,7 @@ export const PlaybackControls: React.FC<PlaybackControlsProps> = ({
   saveStatus,
   beamStressLens,
   setBeamStressLens,
+  previewBeamStressLens,
   trajectoryDotted,
   setTrajectoryDotted,
   rightSlot,
@@ -130,7 +140,7 @@ export const PlaybackControls: React.FC<PlaybackControlsProps> = ({
       sx={{
         display: "flex",
         alignItems: "center",
-        gap: tight ? 0.25 : 0.75,
+        gap: TOP_BAR_GROUP_GAP,
         minWidth: 0,
       }}
     >
@@ -142,16 +152,15 @@ export const PlaybackControls: React.FC<PlaybackControlsProps> = ({
       />
     </Box>
 
-    {/* Section centrale — tout ce qui pilote ou reflète l'exécution : mode,
-        lecture, vitesse, réglages physiques et calques. */}
+    {/* Centre section — everything that drives or reflects the run: mode, playback, speed, physics settings and layers. */}
     <Box
       sx={{
         display: "flex",
         alignItems: "center",
-        gap: tight ? 0.25 : 0.75,
+        gap: TOP_BAR_GROUP_GAP,
       }}
     >
-      {/* Sélecteur de mode */}
+      {/* Mode selector */}
       <ToggleButtonGroup
         value={appMode}
         exclusive
@@ -172,6 +181,7 @@ export const PlaybackControls: React.FC<PlaybackControlsProps> = ({
             });
         }}
         sx={{
+          mr: TOP_BAR_SECTION_GAP,
           "& .MuiToggleButton-root": {
             px: 1,
             py: 0.2,
@@ -213,7 +223,7 @@ export const PlaybackControls: React.FC<PlaybackControlsProps> = ({
         </Tooltip>
       </ToggleButtonGroup>
 
-      {!condensed && <Divider flexItem sx={{ mx: 0.5 }} />}
+      {!condensed && <Divider flexItem sx={TOP_BAR_DIVIDER_SX} />}
 
       <Tooltip title={t("reset")}>
         <span>
@@ -223,8 +233,6 @@ export const PlaybackControls: React.FC<PlaybackControlsProps> = ({
             disabled={appMode === "edition" || !timeline.hasRecording}
             onClick={resetToStart}
             sx={{
-              px: tight ? 0.2 : 0.4,
-              py: 0.4,
               color: "primary.main",
               "&:hover": { backgroundColor: "action.hover" },
             }}
@@ -234,10 +242,9 @@ export const PlaybackControls: React.FC<PlaybackControlsProps> = ({
         </span>
       </Tooltip>
 
-      {!condensed && <Divider flexItem sx={{ mx: 0.2 }} />}
+      {!condensed && <Divider flexItem sx={TOP_BAR_DIVIDER_SX} />}
 
-      {/* Play/Pause toujours actif ; les autres boutons sont désactivés en
-          mode Édition ou en bout de course. */}
+      {/* Play/Pause stays live; the other buttons go dead in edition mode or at the ends of the recording. */}
       <Tooltip title={t("go_to_start")}>
         <span>
           <IconButton
@@ -253,16 +260,14 @@ export const PlaybackControls: React.FC<PlaybackControlsProps> = ({
                 scrubbed: !at_recording_end(prev.simulationSnapshots, 0),
               }))
             }
-            sx={{ p: 0.4, ml: condensed ? -0.5 : 0 }}
+            sx={TOP_BAR_SLIM_BUTTON_SX}
           >
             <FirstPage sx={{ fontSize: 20 }} />
           </IconButton>
         </span>
       </Tooltip>
 
-      <Tooltip
-        title={t(runtimeState.isPlaying ? "pause" : "play")}
-      >
+      <Tooltip title={t(runtimeState.isPlaying ? "pause" : "play")}>
         <IconButton
           size="small"
           onClick={handleSpaceKey}
@@ -270,7 +275,6 @@ export const PlaybackControls: React.FC<PlaybackControlsProps> = ({
             bgcolor: "primary.main",
             color: "primary.contrastText",
             "&:hover": { bgcolor: "primary.dark" },
-            p: 0.5,
             flexShrink: 0,
           }}
         >
@@ -288,7 +292,7 @@ export const PlaybackControls: React.FC<PlaybackControlsProps> = ({
             size="small"
             color="inherit"
             disabled={appMode === "edition" || timeline.atEnd}
-            sx={{ p: 0.4 }}
+            sx={TOP_BAR_SLIM_BUTTON_SX}
             onClick={() =>
               setRuntimeState((prev) => {
                 const snaps = prev.simulationSnapshots;
@@ -308,9 +312,9 @@ export const PlaybackControls: React.FC<PlaybackControlsProps> = ({
         </span>
       </Tooltip>
 
-      {!condensed && <Divider flexItem sx={{ mx: 0.5 }} />}
+      {!condensed && <Divider flexItem sx={TOP_BAR_DIVIDER_SX} />}
 
-      {/* Stepper de vitesse de simulation */}
+      {/* Simulation speed stepper */}
       {(() => {
         const speedIdx = SPEEDS.indexOf(runtimeState.speed);
         const setSpeed = (s: SimulationSpeed) =>
@@ -324,9 +328,9 @@ export const PlaybackControls: React.FC<PlaybackControlsProps> = ({
                   color="inherit"
                   disabled={speedIdx <= 0}
                   onClick={() => setSpeed(SPEEDS[speedIdx - 1])}
-                  sx={{ px: 0.2, py: 0.5, borderRadius: 1 }}
+                  sx={TOP_BAR_SLIM_BUTTON_SX}
                 >
-                  <ChevronLeft sx={{ fontSize: 18 }} />
+                  <ChevronLeft sx={{ fontSize: 20 }} />
                 </IconButton>
               </span>
             </Tooltip>
@@ -340,15 +344,14 @@ export const PlaybackControls: React.FC<PlaybackControlsProps> = ({
                   display: "inline-flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  minWidth: 28,
-                  // Matches the height of the top-bar icon buttons (20px icon + p: 0.4).
-                  minHeight: 26.4,
+                  minWidth: TOP_BAR_CONTROL_HEIGHT,
+                  minHeight: TOP_BAR_CONTROL_HEIGHT,
                   fontSize: "0.7rem",
                   fontWeight: 700,
                   fontVariantNumeric: "tabular-nums",
                   lineHeight: 1,
                   borderRadius: 1,
-                  // La vitesse nominale est un état neutre : seul un réglage non standard mérite d'attirer l'œil.
+                  // Nominal speed is a neutral state: only a setting away from it deserves to catch the eye.
                   color:
                     runtimeState.speed === 1
                       ? "text.secondary"
@@ -366,9 +369,9 @@ export const PlaybackControls: React.FC<PlaybackControlsProps> = ({
                   color="inherit"
                   disabled={speedIdx >= SPEEDS.length - 1}
                   onClick={() => setSpeed(SPEEDS[speedIdx + 1])}
-                  sx={{ px: 0.2, py: 0.5, borderRadius: 1 }}
+                  sx={TOP_BAR_SLIM_BUTTON_SX}
                 >
-                  <ChevronRight sx={{ fontSize: 18 }} />
+                  <ChevronRight sx={{ fontSize: 20 }} />
                 </IconButton>
               </span>
             </Tooltip>
@@ -376,15 +379,14 @@ export const PlaybackControls: React.FC<PlaybackControlsProps> = ({
         );
       })()}
 
-      {!condensed && <Divider flexItem sx={{ mx: 0.5 }} />}
+      {!condensed && <Divider flexItem sx={TOP_BAR_DIVIDER_SX} />}
 
-      {/* Gravity / collisions / floor — reachable in edition too: these are settings of
-          the mechanism, not of the run. */}
+      {/* Gravity / collisions / floor — reachable in edition too: these are settings of the mechanism, not of the run. */}
       <Box
         sx={{
           display: "flex",
           alignItems: "center",
-          gap: condensed ? 0.5 : 0.75,
+          gap: TOP_BAR_GROUP_GAP,
         }}
       >
         <PhysicsToggle
@@ -433,15 +435,22 @@ export const PlaybackControls: React.FC<PlaybackControlsProps> = ({
         />
       </Box>
 
-      <Divider flexItem sx={{ mx: condensed ? 0.25 : 0.5 }} />
+      <Divider
+        flexItem
+        sx={{
+          ...TOP_BAR_DIVIDER_SX,
+          mx: condensed ? 0.25 : TOP_BAR_DIVIDER_SX.mx,
+        }}
+      />
 
-      {/* Display layers: what gets drawn. Reachable in edition too — picking a layer arms
-          what the run will show, it does not draw anything by itself. */}
+      {/* Display layers: what gets drawn.
+          Reachable in edition too — picking a layer arms what the run will show, it does not draw anything by itself. */}
       <OverlaysMenu
         mechanicalElements={mechanism.mechanicalElements}
         applyActions={applyActions}
         beamStressLens={beamStressLens}
         onChangeBeamStressLens={setBeamStressLens}
+        onPreviewBeamStressLens={previewBeamStressLens}
         trajectoryDotted={trajectoryDotted}
         onChangeTrajectoryDotted={setTrajectoryDotted}
         condensed={condensed}

@@ -191,8 +191,8 @@ export type CanvasState =
   // `downPos` is what that threshold measures against, and — unmoved by mouse-up — what turns the gesture into a click that opens `EditingFloorValue` instead.
   | { type: "DraggingFloorHeight"; downPos: WorldPoint }
   | { type: "DraggingFloorAngle"; downPos: WorldPoint }
-  // Les deux états de saisie d'une valeur au canvas.
-  // Ils partagent l'éditeur mais pas les issues : sur un élément qui vient d'être posé, ESCAPE le supprime et ENTER réarme l'outil pour en poser un autre ; sur un élément déjà existant, ESCAPE annule la saisie et ENTER le laisse sélectionné.
+  // The two states for typing a value on the canvas.
+  // They share the editor but not the exits: on an element just put down, ESCAPE removes it and ENTER re-arms the tool for another; on an element that stood there before, ESCAPE drops the entry and ENTER leaves it selected.
   | {
       type: "PlacingValue";
       elementID: ID;
@@ -202,11 +202,10 @@ export type CanvasState =
       type: "EditingValue";
       elementID: ID;
       value: number;
-      /** Quelle magnitude d'une force répartie est éditée. */
+      /** Which magnitude of a distributed force is being edited. */
       part?: "start" | "end";
-      /** L'outil à réarmer en sortie, quand la saisie a été ouverte depuis un
-       * outil encore armé.
-       * Absent : la saisie laisse l'élément sélectionné. */
+      /** The tool to re-arm on exit, when the entry was opened from a tool still armed.
+       * Absent: the entry leaves the element selected. */
       rearm?: "DimensionStart";
     }
   | {
@@ -221,6 +220,17 @@ export type CanvasState =
    * `DraggingFloorAngle`.
    * Always leaves the floor selected on exit: there is no `PlacingValue`-style "delete on Escape" counterpart, since the floor already existed. */
   | { type: "EditingFloorValue"; field: "height" | "angle"; value: number };
+
+/**
+ * The state the probe metric box is laid over, every other state answering for itself.
+ * The box is an overlay, not a mode: the canvas keeps aiming and taking clicks as if it were closed, and closing it lands exactly here.
+ */
+export function state_under_probe_metrics(state: CanvasState): CanvasState {
+  if (state.type !== "PlacingProbeMetrics") return state;
+  return state.armed
+    ? { type: "PlacingProbe" }
+    : { type: "SelectedElement", elementID: state.elementID };
+}
 
 /** Every element id the canvas state currently treats as selected/focused: one id for
  * most states (drag, edit, single selection), several under a multiple selection. */

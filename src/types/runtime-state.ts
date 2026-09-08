@@ -9,9 +9,8 @@ import { ConstraintElement, ID, LoadElement, MechanicalElement } from "./element
  */
 export type SimulationSpeed = 0.1 | 0.25 | 0.5 | 1 | 2 | 4 | 10;
 
-/** A constraint the solver could not satisfy at this frame (e.g. a blocked
- * mechanism).
- * `residual` mixes px (distance) and rad (angle) — a rough severity indicator, not a physical quantity. */
+/** A constraint the solver could not satisfy at this frame (e.g. a blocked mechanism).
+ * `residual` is how far off it is, as a length in metres: every family is converted to the length it is worth (see `PBD_kinematic_solver`'s `residual_scale`), so an angle and a distance compare directly. */
 export interface ConstraintResidual {
   /** Owning element, to reference / highlight on the canvas. */
   owner: ID;

@@ -24,6 +24,7 @@ import {
   MechanicalElement,
   MomentElement,
   ProfileDef,
+  state_under_probe_metrics,
   ViewportState,
 } from "../../../types";
 import {
@@ -168,7 +169,7 @@ function load_drag_state(hoveredPart: HoveredPart): CanvasState | undefined {
 }
 
 export function canvasStateReducer(
-  state: CanvasState,
+  rawState: CanvasState,
   hoveredPart: HoveredPart,
   oldPosition: Point2,
   mouseButtonDown: "none" | "left" | "right",
@@ -200,6 +201,8 @@ export function canvasStateReducer(
   snapSettings: SnapSettings = DEFAULT_SNAP_SETTINGS,
 ) {
   const actions: Action[] = [];
+  // The metric box is an overlay, not a mode: every event answers for the state under it, so the canvas behaves as if the box were closed.
+  const state = state_under_probe_metrics(rawState);
   switch (event.type) {
     case "MouseLeftButtonDown":
       // A closure names no element, so only the belt placement that offered it can act on one — every other state sees empty space.
@@ -248,13 +251,22 @@ export function canvasStateReducer(
       // An opaque refusal is binding, not advisory: the spot showing the forbidden cursor takes nothing, whatever tool is armed.
       // The tool stays armed so the user can aim again.
       if (hoveredPart.type === "Void" && hoveredPart.rejected) break;
+      // A click reaching the badge the box belongs to shuts it, the way a menu is closed by the button that opened it.
+      if (
+        rawState.type === "PlacingProbeMetrics" &&
+        hoveredPart.type === "Probe" &&
+        hoveredPart.id === rawState.elementID
+      ) {
+        setCanvasState(state);
+        break;
+      }
       switch (state.type) {
         case "Selecting":
         case "SelectedElement":
         case "EditingValue":
         case "PlacingValue":
-          // Le badge d'une sonde ouvre le choix des grandeurs mesurées, la même boîte qu'à la pose.
-          // Avant tout le reste, y compris la simulation : c'est là qu'on veut le plus souvent y toucher.
+          // A probe's badge opens the choice of measured quantities, the same box as at placement.
+          // Ahead of everything else, simulation included: this is what one reaches for most often.
           if (hoveredPart.type === "Probe") {
             setCanvasState({
               type: "PlacingProbeMetrics",
@@ -263,8 +275,8 @@ export function canvasStateReducer(
             });
             break;
           }
-          // La flèche de sens inverse le moteur d'un clic, sans passer par un état de placement : un bascule immédiat, comme le switch marche/arrêt du panneau de propriétés.
-          // Avant tout le reste, y compris la simulation, pour la même raison que la sonde ci-dessus.
+          // The direction arrow reverses the motor in one click, with no placement state in between: an immediate toggle, like the on/off switch in the properties panel.
+          // Ahead of everything else, simulation included, for the same reason as the probe above.
           if (hoveredPart.type === "MotorArrow") {
             const pivot = get_mechanical_element_from_id(
               hoveredPart.id,
@@ -280,13 +292,13 @@ export function canvasStateReducer(
             }
             break;
           }
-          // En simulation : pas de multi-sélection, pas de Moving* sur click
+          // In simulation: no multiple selection, and no Moving* on a click.
           if (isSimulating) {
             if (hoveredPart.type === "Void") {
               setCanvasState({ type: "Selecting" });
               break;
             }
-            // L'étiquette de valeur d'une charge s'édite aussi pendant la simulation (hot-reload) : même priorité que sonde/moteur.
+            // A load's value label is editable during simulation too (hot reload): the same priority as the probe and the motor.
             if (state.type !== "EditingValue" && state.type !== "PlacingValue") {
               const editing = load_value_editing_state(hoveredPart, loadElements);
               if (editing) {
@@ -302,7 +314,7 @@ export function canvasStateReducer(
             });
             break;
           }
-          // Logique pour la sélection multiple avec Shift
+          // Multiple selection, with Shift.
           if (state.type === "SelectedElement" && event.shiftKey) {
             if (hoveredPart.type === "Void") {
               setCanvasState({
@@ -315,10 +327,10 @@ export function canvasStateReducer(
                 hoveredElementIDs: [],
               });
             } else if (hoveredPart.id === state.elementID) {
-              // Clic sur l'élément déjà sélectionné
+              // A click on the element that holds the selection.
               setCanvasState({ type: "Selecting" });
             } else {
-              // Clic sur un nouvel élément
+              // A click on another element.
               setCanvasState(
                 multiple_selection_state(
                   [state.elementID, hoveredPart.id],
@@ -337,10 +349,10 @@ export function canvasStateReducer(
             });
             break;
           }
-          // Étiquette de valeur d'une charge : on ouvre l'éditeur dès le 1ᵉʳ clic.
-          // C'est une cible distincte du corps, donc aucun drag n'est à armer ici.
-          // Le reste de la charge (corps, poignées) tombe dans le cas générique plus bas : sélection + drag armé via `pendingHit`.
-          // Pendant une saisie, on ne fait rien : le blur de l'input s'en charge.
+          // A load's value label: the editor opens on the very first click.
+          // It is a target of its own, separate from the body, so there is no drag to arm here.
+          // The rest of the load (body, handles) falls to the generic case below: selection plus a drag armed through `pendingHit`.
+          // While a value is being typed, nothing happens here: the input's blur takes care of it.
           if (state.type !== "EditingValue" && state.type !== "PlacingValue") {
             const editing = load_value_editing_state(hoveredPart, loadElements);
             if (editing) {
@@ -351,7 +363,7 @@ export function canvasStateReducer(
           const constraint = constraintElements.find(
             (element) => element.id === hoveredPart.id,
           );
-          // Dimension (contrainte à valeur) : pendant une saisie, on ne fait rien ici — le blur de l'input s'en charge.
+          // A dimension (a constraint carrying a value): while a value is being typed, nothing happens here — the input's blur takes care of it.
           if (
             constraint &&
             "value" in constraint &&
@@ -385,7 +397,7 @@ export function canvasStateReducer(
               break;
             }
           } else if (event.shiftKey) {
-            // Logique pour la sélection multiple avec Shift
+            // Multiple selection, with Shift.
             setCanvasState(
               multiple_selection_state(
                 state.elementIDs.includes(hoveredPart.id)
@@ -552,7 +564,7 @@ export function canvasStateReducer(
           }
           break;
         case "SelectedElement": {
-          // Le drag ne démarre qu'à partir de la cible capturée au mouseDown (`pendingHit`) et une fois le seuil de déplacement franchi.
+          // The drag starts only from the target captured at mouse-down (`pendingHit`), and only once the movement threshold is crossed.
           const hit = state.pendingHit;
           if (
             !hit ||
@@ -562,7 +574,7 @@ export function canvasStateReducer(
           )
             break;
           if (isSimulating) {
-            // Une charge s'édite par drag comme en édition (hot-reload), même en arrière de la simulation live : ce n'est pas un grab du mécanisme, juste une action ChangeForce/ChangeMoment/ChangeDistributedForce.
+            // A load is dragged as it is in edition (hot reload), the live simulation notwithstanding: this is no grab of the mechanism, just a ChangeForce/ChangeMoment/ChangeDistributedForce action.
             const loadDragging = load_drag_state(hit);
             if (loadDragging) {
               setCanvasState(loadDragging);
@@ -1074,7 +1086,7 @@ export function canvasStateReducer(
       if (mouseButtonDown !== "left") break;
       switch (state.type) {
         case "Selecting":
-          // Déjà traitée au bouton enfoncé (bascule immédiate) : le clic ne doit pas en plus sélectionner le pivot porteur au relâchement.
+          // Handled on button down, as an immediate toggle: the click must not also select the carrying pivot on release.
           if (hoveredPart.type === "MotorArrow") break;
           if (!names_element(hoveredPart)) break;
           setCanvasState({
@@ -1086,7 +1098,7 @@ export function canvasStateReducer(
           if (hoveredPart.type === "MotorArrow") break;
           if (!names_element(hoveredPart)) break;
           if (hoveredPart.id === state.elementID) {
-            // Un clic simple (sans drag) sur une dimension ouvre directement l'édition de sa valeur.
+            // A plain click (no drag) on a dimension opens its value for editing.
             const constraint = constraintElements.find(
               (element) => element.id === hoveredPart.id,
             );
@@ -1301,7 +1313,7 @@ export function canvasStateReducer(
           break;
         case "MovingSelectionMultiple":
           if (!state.hasMoved) {
-            // Simple clic (sans déplacement) sur un élément de la sélection multiple → ne sélectionner que cet élément.
+            // A plain click (no movement) on an element of the multiple selection narrows the selection down to it.
             setCanvasState({
               type: "SelectedElement",
               elementID: state.grabbedID,

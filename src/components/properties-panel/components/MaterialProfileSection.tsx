@@ -39,6 +39,7 @@ import {
   ProfileDetail,
 } from "../panels/MaterialsLibraryPanel";
 import SectionSchema from "./SectionSchema";
+import { useNonModalPopup } from "../../common/use-non-modal-popup";
 
 /**
  * The material/profile assignment of a beam, or of a whole selection of them at once — a picker showing "mixte" when they don't agree, and assigning to every one of them.
@@ -76,6 +77,9 @@ const LibraryPicker = React.forwardRef<HTMLDivElement, LibraryPickerProps>(
     ref,
   ) => {
     const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
+    const popup = useNonModalPopup(!!anchorEl, anchorEl, () =>
+      setAnchorEl(null),
+    );
     const selected = entries.find((entry) => entry.id === selectedID);
 
     return (
@@ -90,7 +94,10 @@ const LibraryPicker = React.forwardRef<HTMLDivElement, LibraryPickerProps>(
       >
         <Typography variant="subtitle2">{label}</Typography>
         <Box
-          onClick={(e) => setAnchorEl(e.currentTarget)}
+          onClick={(e) => {
+            const field = e.currentTarget;
+            setAnchorEl((current) => (current ? null : field));
+          }}
           sx={{
             display: "flex",
             alignItems: "center",
@@ -118,9 +125,9 @@ const LibraryPicker = React.forwardRef<HTMLDivElement, LibraryPickerProps>(
           </IconButton>
         </Tooltip>
         <Menu
+          {...popup}
           anchorEl={anchorEl}
           open={!!anchorEl}
-          onClose={() => setAnchorEl(null)}
         >
           {entries.map((entry) => (
             <MenuItem

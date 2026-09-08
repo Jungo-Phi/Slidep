@@ -13,6 +13,7 @@ import {
   Mechanism,
   Point2,
   PropertiesPanelTab,
+  state_under_probe_metrics,
   UnionElement,
   ViewportChange,
   ZERO,
@@ -141,8 +142,8 @@ function report_render_failure(error: unknown): void {
 }
 
 /**
- * Demande de retour visuel après un undo/redo touchant des contraintes-icônes : les `revealIDs` sont révélées (recréation ou déplacement/édition), les `removed` sont affichées en fantôme rouge qui s'estompe.
- * `seq` est un compteur monotone pour ne traiter chaque signal qu'une fois.
+ * Asks for visual feedback after an undo/redo touching icon constraints: `revealIDs` are revealed (recreated, moved or edited), `removed` are drawn as a red ghost that fades out.
+ * `seq` is a monotonic counter, so each signal is acted on once.
  */
 export interface ConstraintChangeSignal {
   revealIDs: ID[];
@@ -187,6 +188,8 @@ interface MechanicalCanvasProps {
   liveFrameRef: React.RefObject<LiveFrame | null>;
   /** Elements the analysis panel is pointing at, and why (see `CanvasHighlight`). */
   highlight: CanvasHighlight;
+  /** Motors the simulation cannot push through — drawn at fault for as long as the block lasts. */
+  blockedMotors: ReadonlySet<ID>;
   /**
    * A pose the analysis panel is swinging along one motion mode, or `null`.
    *
@@ -274,6 +277,7 @@ export const MechanicalCanvas = forwardRef<
       trajectoryDotted,
       liveFrameRef,
       highlight,
+      blockedMotors,
       modePreviewRef,
       redundancySymbols,
       hoveredAbscissa,
@@ -320,6 +324,8 @@ export const MechanicalCanvas = forwardRef<
     const canvasStateRef = useRef(canvasState);
     const highlightRef = useRef(highlight);
     highlightRef.current = highlight;
+    const blockedMotorsRef = useRef(blockedMotors);
+    blockedMotorsRef.current = blockedMotors;
     const redundancySymbolsRef = useRef(redundancySymbols);
     redundancySymbolsRef.current = redundancySymbols;
     const hoveredAbscissaRef = useRef(hoveredAbscissa);
@@ -346,14 +352,14 @@ export const MechanicalCanvas = forwardRef<
     appModeRef.current = appMode;
     const activeTabRef = useRef(activeTab);
     activeTabRef.current = activeTab;
-    // Contrainte révélée au survol → timestamp du dernier survol (hover-reveal).
+    // A constraint revealed by hover → the timestamp of that last hover.
     const revealMapRef = useRef<Map<ID, number>>(new Map());
-    // Fantômes des contraintes supprimées par undo/redo (objet + timestamp).
+    // Ghosts of the constraints an undo/redo removed, each with its timestamp.
     const ghostListRef = useRef<
       Array<{ constraint: ConstraintElement; timestamp: number }>
     >([]);
     const lastConstraintChangeSeqRef = useRef(0);
-    // Renvoie vers le handleEvent courant : onMouseUpHandler est capturé dans le handleEvent mémoïsé, il doit rester stable sans figer la closure.
+    // Points at the current handleEvent: onMouseUpHandler is captured inside the memoised handleEvent, so it must stay stable without freezing the closure.
     const handleEventRef = useRef<(event: CanvasEvent) => void>(() => {});
 
     // The live frame wins: a render must not put the edit-time positions back under the pointer for the frame it takes the draw loop to overwrite them again.
@@ -392,8 +398,8 @@ export const MechanicalCanvas = forwardRef<
       return () => observer.disconnect();
     }, [measureCanvas]);
 
-    // Rafraîchit les contraintes révélées d'après l'élément (ou le badge) survolé.
-    // Appelé à chaque frame → les badges restent affichés tant qu'on survole, même sans bouger la souris.
+    // Refreshes the revealed constraints from the element (or the badge) under the cursor.
+    // Called every frame → the badges stay up for as long as the hover lasts, even with the mouse still.
     const refreshRevealFromHover = useCallback((hovered: HoveredPart) => {
       if (appModeRef.current !== "edition") return;
       const now = performance.now();
@@ -413,7 +419,7 @@ export const MechanicalCanvas = forwardRef<
       }
     }, []);
 
-    // Map des contraintes visibles (id → opacité 0–1) pour dessin + hit-testing.
+    // The visible constraints (id → opacity 0–1), for drawing and for hit-testing.
     const computeVisibleConstraints = useCallback((): Map<ID, number> => {
       refreshRevealFromHover(hoveredPartRef.current);
       const now = performance.now();
@@ -424,7 +430,7 @@ export const MechanicalCanvas = forwardRef<
           revealMapRef.current.delete(id);
           continue;
         }
-        // Pleine opacité, puis fondu sur les derniers CONSTRAINT_REVEAL_FADE_MS.
+        // Full opacity, then a fade over the last CONSTRAINT_REVEAL_FADE_MS.
         revealedOpacities.set(
           id,
           Math.min(
@@ -442,7 +448,7 @@ export const MechanicalCanvas = forwardRef<
       );
     }, [refreshRevealFromHover]);
 
-    // Traite un éventuel signal d'undo/redo : révèle les contraintes recréées et ajoute les supprimées à la liste des fantômes.
+    // Acts on any undo/redo signal: reveals the recreated constraints and adds the removed ones to the ghost list.
     // N'agit qu'une fois par seq.
     const processConstraintChange = useCallback(() => {
       const change = constraintChangeRef.current;
@@ -451,7 +457,7 @@ export const MechanicalCanvas = forwardRef<
       const now = performance.now();
       const revealSet = new Set(change.revealIDs);
       for (const id of change.revealIDs) revealMapRef.current.set(id, now);
-      // Une contrainte recréée annule son fantôme éventuel.
+      // A recreated constraint cancels whatever ghost it had.
       ghostListRef.current = ghostListRef.current.filter(
         (g) => !revealSet.has(g.constraint.id),
       );
@@ -511,11 +517,11 @@ export const MechanicalCanvas = forwardRef<
         );
       }
 
-      // Trajectoires des points sondés, sous les éléments du mécanisme.
+      // Trajectories of the probed points, under the mechanism's elements.
       for (const trajectory of live?.trajectories ?? EMPTY_TRAJECTORIES)
         draw_trajectory(ctx, viewport, trajectory, trajectoryDotted);
 
-      // Retour visuel undo/redo : révèle les recréations, prépare les fantômes.
+      // Undo/redo feedback: reveals the recreations, prepares the ghosts.
       processConstraintChange();
       const visibleConstraints = computeVisibleConstraints();
 
@@ -554,7 +560,7 @@ export const MechanicalCanvas = forwardRef<
       ghostListRef.current = ghostListRef.current.filter((g) => {
         const age = now - g.timestamp;
         if (age >= CONSTRAINT_REVEAL_COOLDOWN_MS) return false;
-        // Si la contrainte a été recréée entretemps, son fantôme est inutile.
+        // A constraint recreated in the meantime has no use for its ghost.
         if (modelIDs.has(g.constraint.id)) return false;
         const opacity = Math.min(
           1,
@@ -605,6 +611,7 @@ export const MechanicalCanvas = forwardRef<
         hideLoads: appModeRef.current === "kinematic",
         dimensionSnapped: snapFeedbackRef.current.distanceSnapped ?? false,
         highlight: highlightRef.current,
+        blockedMotors: blockedMotorsRef.current,
         redundancySymbols: redundancySymbolsRef.current,
         now,
         libraryTint: librarySectionRef.current
@@ -689,8 +696,8 @@ export const MechanicalCanvas = forwardRef<
         }
       }
 
-      // Vitesses / réactions mesurées, par-dessus les éléments qu'elles habillent.
-      // Seule une réaction (jamais une vitesse — son unité affichée n'est pas encore la bonne, voir `OverlayArrow.vector`) révèle sa valeur au survol, comme un load placé.
+      // Measured velocities and reactions, over the elements they dress.
+      // Only a reaction reveals its value on hover, the way a placed load does — never a velocity, whose displayed unit is not the right one yet (see `OverlayArrow.vector`).
       const overlayArrows = live?.overlayArrows ?? EMPTY_OVERLAY_ARROWS;
       const overlayMoments = live?.overlayMoments ?? EMPTY_OVERLAY_MOMENTS;
       const mouseScreen = cursorOnCanvasRef.current
@@ -799,11 +806,11 @@ export const MechanicalCanvas = forwardRef<
       return () => window.removeEventListener("resize", handleResize);
     }, [render]);
 
-    // Logique "bouton relâché" partagée : appelée par pointerup/pointercancel et par le reducer (undo/redo forcent un relâchement).
-    // Ne touche pas à la capture du pointeur (gérée dans les handlers pointer qui ont l'événement).
+    // The shared "button released" logic: called by pointerup/pointercancel and by the reducer, an undo/redo forcing a release.
+    // Leaves the pointer capture alone: it belongs to the pointer handlers, which hold the event.
     //
-    // Idempotent par nécessité : certains navigateurs déclenchent pointercancel juste après un pointerup déjà traité pour le même relâchement (autour de releasePointerCapture notamment), les deux dans le même tick — avant que canvasStateRef n'ait pu se rafraîchir au rendu suivant.
-    // Sans cette garde, le deuxième appel rejoue le scellement du geste sur un état encore "MovingXXX" et double une action de l'historique.
+    // Idempotent out of necessity: some browsers fire pointercancel right behind a pointerup handled for that same release (around releasePointerCapture in particular), both within one tick — sooner than canvasStateRef can refresh on the next render.
+    // Without this guard, the second call replays the sealing of the gesture on a state still "MovingXXX", and doubles an action in the history.
     const onMouseUpHandler = useCallback(() => {
       if (mouseButtonDownRef.current === "none") return;
       handleEventRef.current({
@@ -819,7 +826,7 @@ export const MechanicalCanvas = forwardRef<
       cursorOnCanvasRef.current = true;
       // A gesture is rare enough to pay for one measurement, and it catches the case the observer cannot see: a canvas moved without being resized.
       measureCanvas();
-      // Capture le pointeur : une fois le bouton enfoncé, les pointermove / pointerup continuent d'arriver sur le canvas même si le curseur sort de ses limites.
+      // Captures the pointer: once the button is down, pointermove and pointerup keep reaching the canvas even when the cursor leaves it.
       event.currentTarget.setPointerCapture(event.pointerId);
       mousePositionRef.current = new Point2<"screen">(
         event.clientX,
@@ -1093,7 +1100,7 @@ export const MechanicalCanvas = forwardRef<
         tag === "textarea" ||
         tag === "select"
       )
-        return true; // TODO : trouver une méthode plus fiable
+        return true; // TODO: find a more reliable method.
       if ((active as HTMLElement).isContentEditable) return true;
       return false;
     };
@@ -1102,11 +1109,7 @@ export const MechanicalCanvas = forwardRef<
     const closeProbeMetricsPopover = useCallback(() => {
       const state = canvasStateRef.current;
       if (state.type !== "PlacingProbeMetrics") return;
-      setCanvasState(
-        state.armed
-          ? { type: "PlacingProbe" }
-          : { type: "SelectedElement", elementID: state.elementID },
-      );
+      setCanvasState(state_under_probe_metrics(state));
     }, [setCanvasState]);
 
     useEffect(() => {
@@ -1189,14 +1192,16 @@ export const MechanicalCanvas = forwardRef<
       rejectionPopperRef.current?.update();
     }, [rejection?.anchor.x, rejection?.anchor.y]);
 
+    // The metric box is an overlay, not a mode: the cursor answers for the state under it.
+    const cursorState = state_under_probe_metrics(canvasState);
     // A refusal outranks every tool: whatever is armed, this spot takes nothing.
     const cursor =
       hoveredPart.type === "Void" && hoveredPart.rejected
         ? "not-allowed"
-        : canvasState.type === "SimulationDragging"
+        : cursorState.type === "SimulationDragging"
           ? "grabbing"
           : canSimulationGrab &&
-              ["Selecting", "SelectedElement"].includes(canvasState.type) &&
+              ["Selecting", "SelectedElement"].includes(cursorState.type) &&
               hoveredPart.type !== "Void" &&
               hoveredPart.type !== "Probe" &&
               hoveredPart.type !== "MotorArrow" &&
@@ -1204,7 +1209,7 @@ export const MechanicalCanvas = forwardRef<
               hoveredPart.type !== "Moment" &&
               hoveredPart.type !== "DistributedForce"
             ? "grab"
-            : ["Erasing", "ErasingMultiple"].includes(canvasState.type)
+            : ["Erasing", "ErasingMultiple"].includes(cursorState.type)
               ? eraser_cursor()
               : [
                     "DimensionStart",
@@ -1229,11 +1234,11 @@ export const MechanicalCanvas = forwardRef<
                     "Measuring",
                     "MeasuringFrom",
                     "Measured",
-                  ].includes(canvasState.type)
+                  ].includes(cursorState.type)
                 ? "crosshair"
                 : "default";
 
-    // Les deux états de saisie partagent l'éditeur ; ils ne diffèrent que par ce qu'ENTER et ESCAPE font en sortie (voir `onCommit` / `onCancel`).
+    // The two entry states share the editor; they differ only in what ENTER and ESCAPE do on the way out (see `onCommit` / `onCancel`).
     const isPlacingValue = canvasState.type === "PlacingValue";
     const isEditingValue = canvasState.type === "EditingValue";
     const editingElement =
@@ -1388,7 +1393,7 @@ export const MechanicalCanvas = forwardRef<
                     editingElement,
                     mechanism.mechanicalElements,
                     mechanism.viewport,
-                    // Seule une charge existante est ré-éditée : un `PlacingValue` ne concerne que les cotes, qui n'ont pas de `part`.
+                    // Only a load that exists is re-edited: a `PlacingValue` concerns dimensions alone, which carry no `part`.
                     isEditingValue ? canvasState.part : undefined,
                   )
                 : world2screen(
@@ -1437,8 +1442,8 @@ export const MechanicalCanvas = forwardRef<
                   ]);
                 }
               }
-              // Valider sur un élément qu'on vient de poser réarme son outil, pour en enchaîner un autre sans repasser par la palette.
-              // Une cote éditée depuis un outil resté armé y revient de même.
+              // Committing on an element just put down re-arms its tool, to chain another without going back to the palette.
+              // A dimension edited from a tool left armed comes back to it the same way.
               if (isPlacingValue) {
                 if (editingElement.type === "gear-ratio") {
                   setCanvasState({ type: "GearRatioConstraintStart" });
@@ -1455,7 +1460,7 @@ export const MechanicalCanvas = forwardRef<
               }
             }}
             onCancel={() => {
-              // Annuler la saisie d'un élément qu'on vient de poser le retire : sans valeur, il n'a jamais vraiment existé.
+              // Cancelling the entry of an element just put down removes it: with no value, it never really existed.
               if (isPlacingValue) {
                 applyActions([
                   {
@@ -1532,6 +1537,7 @@ export const MechanicalCanvas = forwardRef<
                   canvasState.position,
                   mechanism.viewport,
                 )}
+                containerRef={containerRef}
                 onToggle={(newProbes) =>
                   applyActions([
                     {

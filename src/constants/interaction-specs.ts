@@ -6,9 +6,8 @@ export const HIT_TOLERANCE = {
   CONSTRAINT: 20,
   SNAP: 8,
   PROBE: 10,
-  // Distance (px écran) que la souris doit parcourir depuis le mouseDown avant qu'un clic ne bascule en déplacement.
-  // En dessous, c'est un clic ; au-dessus, un drag.
-  // Rend la distinction clic/déplacement indépendante du framerate et de la vitesse de la souris.
+  // How far (screen px) the pointer must travel from the mouseDown for a click to turn into a drag: under it, a click; over it, a drag.
+  // A distance rather than a delay keeps the two apart whatever the framerate and the pointer's speed.
   DRAG_START: 4,
 } as const;
 
@@ -70,24 +69,30 @@ export const THUMBNAIL_MARGIN = {
 } as const;
 
 /**
+ * How long the pointer must rest on a menu entry before the setting it names is tried on — a theme family, a beam-fill lens.
+ * A swipe across the list on the way somewhere else asks for nothing, and should repaint nothing.
+ */
+export const HOVER_PREVIEW_DELAY_MS = 100;
+
+/**
  * How long a numeric field waits, after a step, for the next one before closing its history entry.
  * A run of arrow clicks — up, up, then back down — undoes in one go; the same field touched again later starts its own entry.
  */
 export const VALUE_EDIT_COALESCE_MS = 800;
 
 /**
- * Durée (ms) pendant laquelle les badges de contraintes d'un élément restent affichés après avoir cessé de le survoler (hover-reveal en édition).
+ * How long (ms) an element's constraint badges stay up once the pointer has left it (edition's hover reveal).
  */
 export const CONSTRAINT_REVEAL_COOLDOWN_MS = 900;
 
 /**
- * Durée (ms) du fondu de sortie, à la toute fin du cooldown : les badges sont à pleine opacité jusqu'à `COOLDOWN - FADE`, puis s'estompent vers 0.
+ * How long (ms) the badges take to fade at the very end of that cooldown: full opacity until `COOLDOWN - FADE`, then down to 0.
  */
 export const CONSTRAINT_REVEAL_FADE_MS = 200;
 
 /**
- * Durées (ms) d'affichage des toasts.
- * `REPORT` est pour les messages qui rendent compte de quelque chose de perdu ou de modifié à l'insu de l'utilisateur : ils doivent tenir le temps d'être lus jusqu'au bout.
+ * How long (ms) a toast stays up.
+ * `REPORT` is for the messages that report something lost or changed without the user's knowing: they must hold long enough to be read to the end.
  */
 export const SNACKBAR_DURATION = {
   DEFAULT: 3000,

@@ -18,7 +18,6 @@ import {
   SimulationConfig,
   UnionElement,
 } from "../../types";
-import { ConstraintResidual } from "../../types/runtime-state";
 import { COLORS } from "../../theme/canvas-theme";
 import { HoveredAbscissa, HoveredPart } from "../../types/hovered-part";
 import { CanvasState, selected_ids } from "../../types/canvas-state";
@@ -64,7 +63,8 @@ export interface PropertiesPanelProps {
   appMode: AppMode;
   activeTab: PropertiesPanelTab;
   setActiveTab: (tab: PropertiesPanelTab) => void;
-  unsatisfied: ConstraintResidual[];
+  /** Motors standing blocked at the cursor — see `motors_blocked_at`. */
+  blockedMotors: ReadonlySet<ID>;
   /** Publishes the abscissa hovered on a beam's N/T/Mf diagrams, for the canvas to mark. */
   setHoveredAbscissa: (hovered: HoveredAbscissa | null) => void;
   /** Sets which library section is hovered — also what tints the canvas for as long as the
@@ -93,7 +93,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
   appMode,
   activeTab,
   setActiveTab,
-  unsatisfied,
+  blockedMotors,
   runtimeState,
   setRuntimeState,
   setHoveredAbscissa,
@@ -354,7 +354,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
               setHoveredPart={setHoveredPart}
               selectedIds={selectedIds}
               setCanvasState={setCanvasState}
-              unsatisfied={unsatisfied}
+              blockedMotors={blockedMotors}
               runtimeState={runtimeState}
               setRuntimeState={setRuntimeState}
               selectedElement={selectedElement}

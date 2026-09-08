@@ -60,7 +60,10 @@ import {
 import MechanicalCanvas, {
   ConstraintChangeSignal,
 } from "./components/canvas/MechanicalCanvas";
-import { CanvasHighlight, NO_HIGHLIGHT } from "./components/canvas/drawing/draw-canvas";
+import {
+  CanvasHighlight,
+  NO_HIGHLIGHT,
+} from "./components/canvas/drawing/draw-canvas";
 import {
   EMPTY_REDUNDANCY_SYMBOLS,
   RedundancySymbol,
@@ -72,6 +75,7 @@ import { AboutDialog } from "./components/toolbar/AboutDialog";
 import { SimulationTimeline } from "./components/toolbar/SimulationTimeline";
 import { ToolsMenu } from "./components/toolbar/ToolsMenu";
 import { PlaybackControls } from "./components/toolbar/PlaybackControls";
+import { useStressLensPreview } from "./components/toolbar/use-stress-lens-preview";
 import { set_sim_clock as setRuntimeState } from "./components/solver/dynamics/sim-clock";
 import {
   apply_dynamic_snapshot_to_mechanism,
@@ -85,7 +89,7 @@ import {
   useSimulationPlayback,
   SimulationLimitReason,
 } from "./components/solver/recording/use-simulation-playback";
-import { CanvasState } from "./types/canvas-state";
+import { CanvasState, selected_ids } from "./types/canvas-state";
 import {
   ANGLE_STEPS,
   DEFAULT_SNAP_SETTINGS,
@@ -114,7 +118,7 @@ import {
 /** Raccourcit les libellés (Édition → Édit, masque les labels des chips). */
 const CONDENSED_BREAKPOINT = 1400;
 /** Retire en plus les séparateurs et resserre les espacements pour les fenêtres vraiment étroites. */
-const TIGHT_BREAKPOINT = 1100;
+const TIGHT_BREAKPOINT = 1150;
 
 /** Whether a canvas state is an armed placement tool waiting for its first click — no element selected, no gesture started. */
 const is_armed_tool_waiting = (state: CanvasState, mechanism: Mechanism) => {
@@ -157,7 +161,8 @@ const App: React.FC = () => {
 
   /** An abscissa hovered on the analysis panel's N/T/Mf diagrams, for the canvas to mark on
    * the beam — see docs/plan-efforts-interieurs.md phase 5bis. */
-  const [hoveredAbscissa, setHoveredAbscissa] = useState<HoveredAbscissa | null>(null);
+  const [hoveredAbscissa, setHoveredAbscissa] =
+    useState<HoveredAbscissa | null>(null);
 
   /** Elements the analysis panel is pointing at, and why (see `CanvasHighlight`). */
   const [highlight, setHighlight] = useState<CanvasHighlight>(NO_HIGHLIGHT);
@@ -178,6 +183,9 @@ const App: React.FC = () => {
   const [beamStressLens, setBeamStressLens] = useState<BeamStressLens>(
     getStorageItem<BeamStressLens>("beamStressLens", "none"),
   );
+  const { previewLens, previewLensLater } = useStressLensPreview(appMode);
+  // What the canvas paints the beams with: the lens hovered in the menu while one is being tried on, the chosen one the rest of the time.
+  const activeBeamStressLens = previewLens ?? beamStressLens;
   const [trajectoryDotted, setTrajectoryDotted] = useState<boolean>(
     getStorageItem<boolean>("trajectoryDotted", false),
   );
@@ -210,7 +218,7 @@ const App: React.FC = () => {
     setStorageItem("snapSettings", snapSettings);
   }, [snapSettings]);
 
-  // La largeur de la top-bar suit la fenêtre, pas le canvas : ces requêtes re-rendent le composant à chaque franchissement de palier.
+  // The top bar's width follows the window, not the canvas: these queries re-render the component every time a breakpoint is crossed.
   const condensed = useMediaQuery(`(max-width:${CONDENSED_BREAKPOINT}px)`);
   const tight = useMediaQuery(`(max-width:${TIGHT_BREAKPOINT}px)`);
   const [simulationConfig, setSimulationConfig] = useState<SimulationConfig>(
@@ -222,7 +230,7 @@ const App: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const canvasStateRef = useRef<CanvasState>(canvasState);
   const mechanismRef = useRef<Mechanism>(mechanism);
-  // Canal de retour visuel undo/redo des contraintes-icônes (lu par le canvas).
+  // The channel asking the canvas for visual feedback after an undo/redo that touched icon constraints.
   const constraintChangeRef = useRef<ConstraintChangeSignal | null>(null);
   const constraintChangeSeqRef = useRef(0);
 
@@ -248,7 +256,10 @@ const App: React.FC = () => {
     } else if (
       canvasState.type === "PlacingProbe" ||
       canvasState.type === "PlacingProbeMetrics" ||
-      prevCanvasState.type === "PlacingProbeMetrics"
+      // Closing the metric box leaves its element selected, and the tab on the measures.
+      // A click that lands on something else is a move away from it, and follows the ordinary rules below.
+      (prevCanvasState.type === "PlacingProbeMetrics" &&
+        selected_ids(canvasState)[0] === prevCanvasState.elementID)
     ) {
       setActiveTab("analysis");
     } else if (appMode === "edition") {
@@ -314,7 +325,7 @@ const App: React.FC = () => {
     liveFrameRef,
     timelineTrackRef,
     timeline,
-    currentUnsatisfied,
+    blockedMotors,
     canSimulationGrab,
     handleSpaceKey: handleSpaceKeyForMode,
     handleEscapeKey,
@@ -367,7 +378,10 @@ const App: React.FC = () => {
     // Narrowed by the `is_simulating` check above: only a kinematic or dynamic run ever fills `simulationSnapshots` while its own mode is active, and the concrete shape follows which — the same invariant `Recorder` itself relies on.
     const snapshot =
       appMode === "kinematic"
-        ? snapshot_at(runtimeState.simulationSnapshots as KinematicSnapshot[], runtimeState.time)
+        ? snapshot_at(
+            runtimeState.simulationSnapshots as KinematicSnapshot[],
+            runtimeState.time,
+          )
         : dynamic_snapshot_at(
             runtimeState.simulationSnapshots as DynamicSnapshot[],
             runtimeState.time,
@@ -376,7 +390,10 @@ const App: React.FC = () => {
     const geometryMechanism =
       appMode === "kinematic"
         ? apply_snapshot_to_mechanism(mechanism, snapshot as KinematicSnapshot)
-        : apply_dynamic_snapshot_to_mechanism(mechanism, snapshot as DynamicSnapshot);
+        : apply_dynamic_snapshot_to_mechanism(
+            mechanism,
+            snapshot as DynamicSnapshot,
+          );
     const paramSnapshot = parameter_snapshot_at(
       runtimeState.parameterSnapshots,
       runtimeState.time,
@@ -433,8 +450,8 @@ const App: React.FC = () => {
     [markDirty],
   );
 
-  // Valeurs déjà utilisées quelque part dans la bibliothèque.
-  // Les trois modes de simulation sont toujours suggérés en plus, comme point de départ le plus courant pour trier.
+  // The tags already carried by a mechanism somewhere in the library.
+  // The three simulation modes are always suggested alongside them, as the most common way to sort a library.
   const usedTags = useMemo(() => {
     const set = new Set<string>();
     for (const record of savedMechanisms)
@@ -499,7 +516,8 @@ const App: React.FC = () => {
 
   const applyActions = useCallback(
     (actions: Action[]) => {
-      if (is_observation_only_bundle(actions)) observationOnlyEditRef.current = true;
+      if (is_observation_only_bundle(actions))
+        observationOnlyEditRef.current = true;
       else if (is_load_value_only_bundle(actions))
         loadValueOnlyEditRef.current = true;
       if (
@@ -699,7 +717,12 @@ const App: React.FC = () => {
 
     // In simulation, the [mechanism] effect recompiles + truncates snapshots.
     markDirty();
-  }, [markDirty, signalConstraintChange, setCanvasState, observationOnlyEditRef]);
+  }, [
+    markDirty,
+    signalConstraintChange,
+    setCanvasState,
+    observationOnlyEditRef,
+  ]);
 
   // Window-wide drop target for importing .slidep/.zip files, independent of whatever React element the pointer happens to be over (incl. portaled dialogs like the gallery).
   // The enter/leave counter is the standard trick to keep the overlay visible while the pointer crosses child elements.
@@ -756,11 +779,13 @@ const App: React.FC = () => {
   /** Which section is hovered in the library tab — also what tints the canvas for as long as
    * that hover lasts, the same "hover a group to color it" gesture the DDL redundancy audit already uses.
    * `null` the rest of the time. */
-  const [librarySection, setLibrarySection] = useState<"materials" | "profiles" | null>(
+  const [librarySection, setLibrarySection] = useState<
+    "materials" | "profiles" | null
+  >(null);
+  /** A row hovered there, for the canvas to accentuate its beams and fade the rest. */
+  const [hoveredLibraryEntryID, setHoveredLibraryEntryID] = useState<ID | null>(
     null,
   );
-  /** A row hovered there, for the canvas to accentuate its beams and fade the rest. */
-  const [hoveredLibraryEntryID, setHoveredLibraryEntryID] = useState<ID | null>(null);
   useEffect(() => {
     if (activeTab !== "library") {
       setLibrarySection(null);
@@ -855,6 +880,7 @@ const App: React.FC = () => {
                 saveStatus={saveStatus}
                 beamStressLens={beamStressLens}
                 setBeamStressLens={setBeamStressLens}
+                previewBeamStressLens={previewLensLater}
                 trajectoryDotted={trajectoryDotted}
                 setTrajectoryDotted={setTrajectoryDotted}
                 rightSlot={
@@ -933,15 +959,18 @@ const App: React.FC = () => {
                 snapToGrid={snapToGrid}
                 snapSettings={snapSettings}
                 showGrid={showGrid}
-                beamStressLens={beamStressLens}
+                beamStressLens={activeBeamStressLens}
                 trajectoryDotted={trajectoryDotted}
                 liveFrameRef={liveFrameRef}
                 highlight={highlight}
+                blockedMotors={blockedMotors}
                 modePreviewRef={modePreviewRef}
                 redundancySymbols={redundancySymbols}
                 hoveredAbscissa={hoveredAbscissa}
                 librarySection={
-                  activeTab === "library" ? (librarySection ?? undefined) : undefined
+                  activeTab === "library"
+                    ? (librarySection ?? undefined)
+                    : undefined
                 }
                 hoveredLibraryEntryID={hoveredLibraryEntryID}
               />
@@ -977,7 +1006,7 @@ const App: React.FC = () => {
               appMode={appMode}
               activeTab={activeTab}
               setActiveTab={setActiveTab}
-              unsatisfied={currentUnsatisfied}
+              blockedMotors={blockedMotors}
               setHoveredAbscissa={setHoveredAbscissa}
               setLibrarySection={setLibrarySection}
               hoveredLibraryEntryID={hoveredLibraryEntryID}

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import {
   AppMode,
+  ID,
   Link,
   Mechanism,
   DEFAULT_SIMULATION_CONFIG,
@@ -10,7 +11,6 @@ import {
   is_simulating,
 } from "../../../types";
 import {
-  ConstraintResidual,
   DynamicSnapshot,
   EMPTY_NEGLIGIBILITY_POOL,
   KinematicSnapshot,
@@ -34,6 +34,7 @@ import {
   snapshot_at,
   snapshot_index_at,
 } from "../dynamics/simulation-engine";
+import { motors_blocked_at } from "../kinematics/dead-points";
 import { RecorderClient } from "./recorder-client";
 import { RecorderMode } from "./recorder-protocol";
 import {
@@ -65,6 +66,10 @@ import { beam_strength } from "../../../utils/section-properties";
 
 /** How often the simulation clock reaches React. Text and controls, not motion. */
 const CLOCK_MIRROR_MS = 100;
+
+/** Shared so the common case (nothing blocked) keeps one identity across renders, and a consumer may memoise on it. */
+const EMPTY_BLOCKED_MOTORS: ReadonlySet<ID> = new Set<ID>();
+
 /**
  * How fast the cursor's rate estimate follows the producer.
  * Low on purpose: the answer to "we cannot keep up" is to go slower, evenly, and a rate that tracked every frame's arrivals would just be the stutter it is meant to remove.
@@ -258,8 +263,7 @@ export function useSimulationPlayback({
     setRuntimeState((prev) => ({ ...prev, isPlaying: false }));
   }, []);
 
-  /** Repartir sur des réglages de simulation neufs (vitesse, gravité, collisions,
-   * lecture/temps, snapshots…) lorsqu'on change de mécanisme. */
+  /** Starts over on fresh simulation settings — speed, gravity, collisions, playback, snapshots — as a change of mechanism calls for. */
   const resetSimulationState = useCallback(
     (setSimulationConfig: (config: SimulationConfig) => void) => {
       setAppMode("edition");
@@ -352,7 +356,7 @@ export function useSimulationPlayback({
           : apply_dynamic_snapshot_to_mechanism(mechanism, baseSnap as DynamicSnapshot);
     recorder().load(recorder_mode(mode), baseMech, baseSnap);
     truncate();
-    // Depend on geometry/topology only, not the whole mechanism: a viewport (pan/zoom) change keeps these array refs identical, so it no longer recompiles the simulation model nor truncates the snapshots.
+    // Depend on geometry/topology only, not the whole mechanism: a viewport (pan/zoom) change keeps these array refs identical, so it neither recompiles the simulation model nor truncates the snapshots.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mechanism.mechanicalElements, mechanism.constraintElements, mechanism.loads]);
 
@@ -463,7 +467,7 @@ export function useSimulationPlayback({
             if (v && !is_negligible(v.length(), pool.linearVelocity))
               overlayArrows.push({ at: el.position, vector: v, kind: "velocity" });
           }
-          // `is_node_element`, not just the flag: `available_overlays` no longer offers "force" on an edge (a beam's own two arrows were a false "one force per member" summary), but a mechanism saved before that change can still carry a stale `true` there.
+          // `is_node_element`, not just the flag: `available_overlays` does not offer "force" on an edge (a beam's own two arrows would read as a false "one force per member" summary), yet a saved mechanism can still carry a stale `true` there.
           if (overlay_shown(el, "force") && is_node_element(el)) {
             for (const r of element_reactions(el, dynSnap)) {
               const kind = r.atAnchor ? "reaction-support" : "reaction-internal";
@@ -601,7 +605,7 @@ export function useSimulationPlayback({
             discardUnshown();
         }
         // Paused before ever playing: `target(0)` was posted the moment this mode was entered (see the `[appMode]` effect), so pick up frame 0 as soon as the worker answers — the panel and overlays must not wait for Play to show real reactions.
-        // Self-terminating: once merged, `simulationSnapshots` is no longer empty and this is skipped on every later tick.
+        // Self-terminating: a merge leaves `simulationSnapshots` non-empty, which skips this on every later tick.
         if (is_simulating(mode) && rs.simulationSnapshots.length === 0) {
           const { snapshots: newSnaps } = recorder().drain();
           if (newSnaps.length > 0)
@@ -653,7 +657,7 @@ export function useSimulationPlayback({
           // Reaching the end of what was recorded stops playback — the recording is not resumed from here, since the frontier is where the mechanism was left.
           if (nextTime >= prevFrontier) {
             replayingRef.current = false;
-            // Caught up with the recording: no longer somewhere the user put us, so playing again extends instead of replaying.
+            // Caught up with the recording: the cursor is at the frontier rather than somewhere the user put it, so playing again extends instead of replaying.
             return { ...prev, time: prevFrontier, isPlaying: false, scrubbed: false };
           }
           return { ...prev, time: nextTime };
@@ -870,30 +874,31 @@ export function useSimulationPlayback({
     }));
   }, []);
 
-  /** The violated constraints of the snapshot under the cursor, for what React displays.
+  /** The motors standing blocked at the cursor, for what React displays.
    * What the canvas draws does NOT come from here: it is published to `liveFrameRef` every frame, whereas this follows the mirror.
-   * Generic over the mode: `unsatisfied` is a base `SimulationSnapshot` field, so this needs no concrete subtype. */
-  const currentUnsatisfied: ConstraintResidual[] =
+   * Generic over the mode: `unsatisfied` is a base `SimulationSnapshot` field, so this needs no concrete subtype — dynamic mode simply never files a motor there, since a torque-driven motor has no commanded advance to fall short of. */
+  const blockedMotors: ReadonlySet<ID> =
     is_simulating(appMode) && runtimeState.simulationSnapshots.length > 0
-      ? (runtimeState.simulationSnapshots[
-          snapshot_index_at(runtimeState.simulationSnapshots, runtimeState.time)
-        ]?.unsatisfied ?? [])
-      : [];
+      ? motors_blocked_at(
+          runtimeState.simulationSnapshots,
+          snapshot_index_at(runtimeState.simulationSnapshots, runtimeState.time),
+        )
+      : EMPTY_BLOCKED_MOTORS;
 
   // A grab is a live intervention on the mechanism, so it only has a meaning where the recording is being extended.
   // Somewhere the user scrubbed to, playback re-reads what exists and never consults the grab, so the canvas must not offer one.
   const canSimulationGrab = is_simulating(appMode) && !runtimeState.scrubbed;
 
-  // ── État de la timeline, partagé par la top-bar et le rail ──
+  // ── Timeline state, shared by the top bar and the rail ──
   //
-  // `frontier` est le temps le plus avancé déjà calculé.
-  // Le curseur en deçà = relecture ; au niveau de la frontière et en lecture = enregistrement.
+  // `frontier` is the furthest time already computed.
+  // A cursor short of it means replay; at the frontier and playing means recording.
   //
-  // Le rail est toujours à l'échelle de la frontière : en enregistrement, on est par définition au bout du temps connu, donc la tête reste collée à droite.
-  // On la force à 100 % au lieu de calculer `time / frontier` — les deux avancent ensemble mais pas au même rythme (le temps est continu, les snapshots arrivent par pas de RECORD_DT), et cet écart d'arrondi est exactement ce qui faisait vibrer la tête d'une image à l'autre.
+  // The rail is always scaled to the frontier: while recording, the cursor is by definition at the end of known time, so the head stays pinned to the right.
+  // It is forced to 100 % rather than computed as `time / frontier` — both advance together but not at the same rate (time is continuous, snapshots arrive one RECORD_DT apart), and that rounding gap is exactly what makes the head jitter from one frame to the next.
   //
-  // La POSITION de la tête ne passe pas par ici : elle change à chaque image et sortirait au rythme du miroir, soit dix fois par seconde pour un canvas qui en fait soixante.
-  // Elle est écrite par la boucle RAF dans `--playhead`.
+  // The head's POSITION does not go through here: it changes every frame and would leave at the mirror's rate, ten times a second for a canvas doing sixty.
+  // The RAF loop writes it into `--playhead`.
   const {
     simulationSnapshots: timelineSnaps,
     time: timelineTime,
@@ -925,7 +930,7 @@ export function useSimulationPlayback({
     liveFrameRef,
     timelineTrackRef,
     timeline,
-    currentUnsatisfied,
+    blockedMotors,
     canSimulationGrab,
     handleSpaceKey,
     handleEscapeKey,

@@ -11,15 +11,13 @@ import {
   IconButton,
   Menu,
   Tooltip,
-  List,
-  ListItem,
   Collapse,
   useTheme,
 } from "@mui/material";
+import { alpha } from "@mui/material/styles";
 import {
   Add,
   WarningAmber,
-  CheckCircleOutline,
   InfoOutlined,
   Troubleshoot,
   Tune,
@@ -41,7 +39,6 @@ import {
 } from "../../../types";
 import { CanvasState } from "../../../types/canvas-state";
 import {
-  ConstraintResidual,
   DynamicSnapshot,
   KinematicSnapshot,
   RuntimeState,
@@ -76,7 +73,6 @@ import ProbeChart, {
   PROBE_ELEMENT_COLORS,
 } from "../components/ProbeChart";
 import CohesionDiagrams from "../components/CohesionDiagrams";
-import { get_element_from_id } from "../../mechanism/connect-actions";
 import { element_to_hovered_part } from "../../canvas/utils";
 import { shown_element_name } from "../../../utils";
 import ElementMeasures from "./ElementMeasures";
@@ -100,9 +96,7 @@ import { AnimatedMode, useModeAnimation } from "../useModeAnimation";
 import {
   ANGULAR_VELOCITY,
   ENERGY,
-  LENGTH,
   display_unit,
-  format_quantity,
 } from "../../../utils/quantity-format";
 import { compute_energy_balance } from "../../solver/analysis/energy-balance";
 
@@ -121,7 +115,8 @@ interface AnalysisPanelProps {
   setHoveredPart: (hoveredPart: HoveredPart) => void;
   selectedIds: ID[];
   setCanvasState: (state: CanvasState) => void;
-  unsatisfied: ConstraintResidual[];
+  /** Motors standing blocked at the cursor — see `motors_blocked_at`. */
+  blockedMotors: ReadonlySet<ID>;
   runtimeState: RuntimeState;
   setRuntimeState: React.Dispatch<React.SetStateAction<RuntimeState>>;
   /** The mechanical element the canvas selection points at (a selected load
@@ -230,7 +225,9 @@ const MotorSpeed: React.FC<{
   element: MechanicalElement | undefined;
   displayConfig: MotorConfig | undefined;
   applyActions: (actions: Action[]) => void;
-}> = ({ element, displayConfig, applyActions }) => {
+  /** The mechanism is not following this motor — see `motors_blocked_at`. */
+  blocked?: boolean;
+}> = ({ element, displayConfig, applyActions, blocked = false }) => {
   if (element?.type !== "pivot" || !element.motor) return null;
   const config = element.motor;
   return (
@@ -250,6 +247,7 @@ const MotorSpeed: React.FC<{
         ])
       }
       accent
+      alert={blocked}
     />
   );
 };
@@ -266,7 +264,7 @@ const ChainCard: React.FC<{
   /**
    * The element a mode is named after — absent only in the moment after a deletion.
    *
-   * The analysis is debounced, so for up to its delay the modes still name a part the mechanism no longer holds.
+   * The analysis is debounced, so for up to its delay the modes still name a part the deletion has already removed.
    * Rare, brief, and not worth blanking the panel over.
    */
   elementOf: (id: ID) => MechanicalElement | undefined;
@@ -282,6 +280,8 @@ const ChainCard: React.FC<{
   applyActions: (actions: Action[]) => void;
   /** A running simulation already shows motion; a mode swung over it would only muddle it. */
   modesPlayable: boolean;
+  /** Motors standing blocked at the cursor — see `motors_blocked_at`. */
+  blockedMotors: ReadonlySet<ID>;
   /** The redundancy audit's answer for this chain, or undefined until it is asked for. */
   audit: Redundancy | undefined;
   auditing: boolean;
@@ -303,6 +303,7 @@ const ChainCard: React.FC<{
   setCanvasState,
   applyActions,
   modesPlayable,
+  blockedMotors,
   audit,
   auditing,
   onAudit,
@@ -312,6 +313,8 @@ const ChainCard: React.FC<{
   const idleMotors = undriven_motors(chain, modes);
   // The card's own hover, not its animation: entering a mode row keeps it true, since `onMouseEnter` does not fire again for children and `onMouseLeave` waits for the card.
   const [hovered, setHovered] = React.useState(false);
+  // Which mode row has the cursor on its speed field, so the row's own tooltip can stand aside for the field's — mouseover bubbles, and the two would otherwise stack.
+  const [speedHovered, setSpeedHovered] = React.useState<number | null>(null);
 
   return (
     <Box
@@ -376,7 +379,7 @@ const ChainCard: React.FC<{
               animated?.chainIndex === index &&
               animated?.modeIndex === modeIndex;
             const named = elementOf(mode.dominant);
-            // A driven mode carries its motor's speed: now that modes name their motors, a separate motors list would say the same thing twice.
+            // A driven mode carries its motor's speed: the mode already names the motor, so a separate motors list would say the same thing twice.
             const motor =
               mode.drivenByMotor && named?.type === "pivot" && named.motor
                 ? named
@@ -384,101 +387,119 @@ const ChainCard: React.FC<{
             const motorDisplayConfig = motor
               ? motor_config_at(analysedElementOf, motor.id)
               : undefined;
+            const motorBlocked = motor !== undefined && blockedMotors.has(motor.id);
             return (
-              <Box
+              // The whole row carries the block's explanation, since the whole row is what turns red.
+              // An empty title renders no tooltip, which is how a row that is not blocked — or one whose speed field is speaking for itself — stays silent.
+              <Tooltip
                 key={modeIndex}
-                onMouseEnter={() => {
-                  if (!modesPlayable) return;
-                  setAnimated({ chainIndex: index, modeIndex });
-                  // Everything the mode moves, not just what it is named after: `contributors` is a ranking, trimmed of its small shares.
-                  setHighlight(focus(mode.moves));
-                }}
-                onMouseLeave={() => {
-                  if (!modesPlayable) return;
-                  setAnimated(null);
-                  // The row sits inside the chain's card, which gets no enter event of its own on the way out — hand the chain back its own highlight rather than clearing the canvas.
-                  setHighlight(focus(highlight));
-                }}
-                sx={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 1,
-                  py: 0.2,
-                  borderRadius: 3,
-                  cursor: "default",
-                  backgroundColor: shown ? "action.selected" : "transparent",
-                  ...(shown && {
-                    animation: `mode-beat ${MODE_ANIMATION.PERIOD_S / 2}s ease-in-out infinite`,
-                    "@keyframes mode-beat": {
-                      "0%, 100%": { backgroundColor: "action.selected" },
-                      "50%": { backgroundColor: "action.hover" },
-                    },
-                  }),
-                }}
+                title={
+                  motorBlocked && speedHovered !== modeIndex
+                    ? t("ddl_motor_blocked_hint")
+                    : ""
+                }
               >
-                {/* The mode's identity, and the only inert part of the row while a
-                    simulation plays. Opacity multiplies down the tree, so the speed
-                    input has to sit outside it to keep its own. */}
                 <Box
+                  onMouseEnter={() => {
+                    if (!modesPlayable) return;
+                    setAnimated({ chainIndex: index, modeIndex });
+                    // Everything the mode moves, not just what it is named after: `contributors` is a ranking, trimmed of its small shares.
+                    setHighlight(focus(mode.moves));
+                  }}
+                  onMouseLeave={() => {
+                    if (!modesPlayable) return;
+                    setAnimated(null);
+                    // The row sits inside the chain's card, which gets no enter event of its own on the way out — hand the chain back its own highlight rather than clearing the canvas.
+                    setHighlight(focus(highlight));
+                  }}
                   sx={{
                     display: "flex",
                     alignItems: "center",
                     gap: 1,
-                    flex: 1,
-                    minWidth: 0,
-                    opacity: modesPlayable ? 1 : 0.5,
+                    py: 0.2,
+                    borderRadius: 3,
+                    cursor: "default",
+                    backgroundColor: shown ? "action.selected" : "transparent",
+                    // A block only ever exists while a simulation runs, which is exactly when no mode is being swung, so the two never fight over this background.
+                    ...(motorBlocked && {
+                      backgroundColor: (theme) => alpha(theme.palette.error.main, 0.12),
+                    }),
+                    ...(shown && {
+                      animation: `mode-beat ${MODE_ANIMATION.PERIOD_S / 2}s ease-in-out infinite`,
+                      "@keyframes mode-beat": {
+                        "0%, 100%": { backgroundColor: "action.selected" },
+                        "50%": { backgroundColor: "action.hover" },
+                      },
+                    }),
                   }}
                 >
-                  <Chip
-                    size="small"
-                    color={shown ? "primary" : "default"}
-                    label={modeIndex + 1}
+                  {/* The mode's identity, and the only inert part of the row while a
+                      simulation plays. Opacity multiplies down the tree, so the speed
+                      input has to sit outside it to keep its own. */}
+                  <Box
                     sx={{
-                      width: 18,
-                      height: 18,
-                      ml: 0.5,
-                      pr: 0.75,
-                      fontWeight: 600,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 1,
+                      flex: 1,
+                      minWidth: 0,
+                      opacity: modesPlayable ? 1 : 0.5,
                     }}
-                  />
+                  >
+                    <Chip
+                      size="small"
+                      color={shown ? "primary" : "default"}
+                      label={modeIndex + 1}
+                      sx={{
+                        width: 18,
+                        height: 18,
+                        ml: 0.5,
+                        pr: 0.75,
+                        fontWeight: 600,
+                      }}
+                    />
 
-                  {named && (
-                    <Box sx={{ flex: 1, minWidth: 0 }}>
-                      <ElementDisplay
-                        element={named}
-                        hoveredPart={hoveredPart}
-                        setHoveredPart={setHoveredPart}
-                        selectedIds={selectedIds}
-                        setCanvasState={setCanvasState}
+                    {named && (
+                      <Box sx={{ flex: 1, minWidth: 0 }}>
+                        <ElementDisplay
+                          element={named}
+                          hoveredPart={hoveredPart}
+                          setHoveredPart={setHoveredPart}
+                          selectedIds={selectedIds}
+                          setCanvasState={setCanvasState}
+                          applyActions={applyActions}
+                          size="small"
+                          editable={false}
+                          interactive={false}
+                        />
+                      </Box>
+                    )}
+                  </Box>
+                  {motor && (
+                    <Box
+                      // Reaching for the speed is not pointing at the mode: the swing stops so the value can be read while it is being changed.
+                      onMouseEnter={() => {
+                        setSpeedHovered(modeIndex);
+                        setAnimated(null);
+                        setHighlight(focus(highlight));
+                      }}
+                      onMouseLeave={() => {
+                        setSpeedHovered(null);
+                        if (!modesPlayable) return;
+                        setAnimated({ chainIndex: index, modeIndex });
+                        setHighlight(focus(mode.moves));
+                      }}
+                    >
+                      <MotorSpeed
+                        element={motor}
+                        displayConfig={motorDisplayConfig}
                         applyActions={applyActions}
-                        size="small"
-                        editable={false}
-                        interactive={false}
+                        blocked={motorBlocked}
                       />
                     </Box>
                   )}
                 </Box>
-                {motor && (
-                  <Box
-                    // Reaching for the speed is not pointing at the mode: the swing stops so the value can be read while it is being changed.
-                    onMouseEnter={() => {
-                      setAnimated(null);
-                      setHighlight(focus(highlight));
-                    }}
-                    onMouseLeave={() => {
-                      if (!modesPlayable) return;
-                      setAnimated({ chainIndex: index, modeIndex });
-                      setHighlight(focus(mode.moves));
-                    }}
-                  >
-                    <MotorSpeed
-                      element={motor}
-                      displayConfig={motorDisplayConfig}
-                      applyActions={applyActions}
-                    />
-                  </Box>
-                )}
-              </Box>
+              </Tooltip>
             );
           })}
 
@@ -694,7 +715,7 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
   setHoveredPart,
   selectedIds,
   setCanvasState,
-  unsatisfied,
+  blockedMotors,
   runtimeState,
   setRuntimeState,
   setHighlight,
@@ -1002,6 +1023,7 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
               setCanvasState={setCanvasState}
               applyActions={applyActions}
               modesPlayable={modesPlayable}
+              blockedMotors={blockedMotors}
               audit={audits.get(chainAnalysis.chain.id)}
               auditing={auditing === chainAnalysis.chain.id}
               onAudit={() => runAudit(chainAnalysis)}
@@ -1018,122 +1040,6 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
       </Box>
 
       <Divider />
-
-      {/* Unsatisfied constraints */}
-      {appMode !== "edition" && (
-        <>
-          <Box
-            sx={{
-              display: "flex",
-              alignItems: "center",
-              marginX: 2,
-              gap: 0.75,
-              mb: -1,
-            }}
-          >
-            <Typography variant="subtitle2" fontWeight={600}>
-              {t("analysis_unsatisfied")}
-            </Typography>
-            {unsatisfied.length > 0 && (
-              <Chip
-                size="small"
-                color="error"
-                label={unsatisfied.length}
-                sx={{ height: 18, "& .MuiChip-label": { px: 0.75 } }}
-              />
-            )}
-          </Box>
-          {/* Hauteur stable mais pas grande : une seule ligne dans le cas
-              fréquent (tout est respecté), la boîte de 96 px seulement quand il
-              y a des violations — le saut de hauteur signifie alors quelque chose. */}
-          <Box
-            sx={{
-              height: unsatisfied.length === 0 ? "auto" : 96,
-              overflowY: "auto",
-              marginX: 2,
-              borderRadius: 3,
-              backgroundColor: "background.sunken",
-            }}
-          >
-            <List
-              disablePadding
-              sx={{
-                display: "flex",
-                alignItems: "center",
-                flexDirection: "column",
-                width: "100%",
-              }}
-            >
-              {unsatisfied.map((constraint, index) => (
-                <React.Fragment key={index}>
-                  <ListItem disablePadding>
-                    <Box
-                      sx={{
-                        width: "100%",
-                      }}
-                    >
-                      <ElementDisplay // TODO : Pour des trainlingControls de type Typo dans ce cas, le hover doit aussi marcher sur ces éléments
-                        element={get_element_from_id(
-                          constraint.owner,
-                          mechanism.mechanicalElements,
-                          mechanism.constraintElements,
-                          mechanism.loads,
-                        )}
-                        hoveredPart={hoveredPart}
-                        setHoveredPart={setHoveredPart}
-                        selectedIds={selectedIds}
-                        setCanvasState={setCanvasState}
-                        applyActions={applyActions}
-                        size="small"
-                        editable={false}
-                        trailingControls={
-                          <>
-                            <WarningAmber fontSize="small" color="warning" />
-                            <Typography
-                              variant="caption"
-                              color="text.secondary"
-                            >
-                              {CONSTRAINT_NOUN[constraint.type]
-                                ? t(CONSTRAINT_NOUN[constraint.type])
-                                : constraint.type}{" "}
-                              {`e = ${format_quantity(constraint.residual, LENGTH)}`}
-                            </Typography>
-                          </>
-                        }
-                      />
-                    </Box>
-                  </ListItem>
-                </React.Fragment>
-              ))}
-            </List>
-            {unsatisfied.length === 0 && (
-              <Box
-                sx={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: 0.5,
-                  px: 1,
-                  py: 0.75,
-                }}
-              >
-                <CheckCircleOutline fontSize="small" color="success" />
-                <Typography
-                  noWrap
-                  sx={{
-                    fontSize: "0.8rem",
-                    color: "text.disabled",
-                  }}
-                >
-                  {t("analysis_all_satisfied")}
-                </Typography>
-              </Box>
-            )}
-          </Box>
-
-          <Divider />
-        </>
-      )}
 
       {/* Bilan énergétique — diagnostic du solveur, pas une mesure du mécanisme : replié par
           défaut, jamais recalculé côté solveur (voir `EnergySample`), donc gratuit à ouvrir. */}

@@ -15,10 +15,14 @@ import { ThemeMode, ThemeName } from "../../theme/mui-theme";
 import type { SnapSettings } from "../../utils/snap-corridor";
 import { LanguageMenu } from "./LanguageMenu";
 import { SettingsMenu } from "./SettingsMenu";
+import { useNonModalPopup } from "../common/use-non-modal-popup";
 import { MAX_GRID_SCALE, MIN_GRID_SCALE } from "../../utils/grid";
-
-// Tight like the speed stepper, so the three read as one control.
-const VIEWPORT_BUTTON_SX = { px: 0.2, py: 0.5, borderRadius: 1 } as const;
+import {
+  TOP_BAR_CONTROL_HEIGHT,
+  TOP_BAR_DIVIDER_SX,
+  TOP_BAR_GROUP_GAP,
+  TOP_BAR_SLIM_BUTTON_SX,
+} from "./toolbar-metrics";
 
 /** Zoom as a share of the framing "Recentrer" aims for — the one a document opens at, so
  * 100 % is where every mechanism starts.
@@ -93,7 +97,7 @@ const ZoomControls: React.FC<ZoomControlsProps> = ({
             size="small"
             onClick={() => zoomOut && onZoomTo(zoomOut)}
             disabled={!zoomOut}
-            sx={VIEWPORT_BUTTON_SX}
+            sx={TOP_BAR_SLIM_BUTTON_SX}
           >
             <Remove sx={{ fontSize: 20 }} />
           </IconButton>
@@ -112,7 +116,7 @@ const ZoomControls: React.FC<ZoomControlsProps> = ({
             alignItems: "center",
             justifyContent: "center",
             minWidth: 36,
-            minHeight: 26.4,
+            minHeight: TOP_BAR_CONTROL_HEIGHT,
             px: 0,
             fontSize: "0.7rem",
             fontWeight: 700,
@@ -138,7 +142,7 @@ const ZoomControls: React.FC<ZoomControlsProps> = ({
             size="small"
             onClick={() => zoomIn && onZoomTo(zoomIn)}
             disabled={!zoomIn}
-            sx={VIEWPORT_BUTTON_SX}
+            sx={TOP_BAR_SLIM_BUTTON_SX}
           >
             <Add sx={{ fontSize: 20 }} />
           </IconButton>
@@ -151,6 +155,7 @@ const ZoomControls: React.FC<ZoomControlsProps> = ({
 /** The same stepper behind a single magnifier, for a toolbar with no room for three slots. */
 const ZoomMenu: React.FC<ZoomControlsProps> = (props) => {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const popup = useNonModalPopup(!!anchorEl, anchorEl, () => setAnchorEl(null));
   return (
     <>
       <Tooltip title={t("zoom")}>
@@ -158,15 +163,18 @@ const ZoomMenu: React.FC<ZoomControlsProps> = (props) => {
           color="inherit"
           size="small"
           aria-expanded={!!anchorEl}
-          onClick={(event) => setAnchorEl(event.currentTarget)}
+          onClick={(event) => {
+            const button = event.currentTarget;
+            setAnchorEl((current) => (current ? null : button));
+          }}
         >
           <ZoomIn sx={{ fontSize: 20 }} />
         </IconButton>
       </Tooltip>
       <Menu
+        {...popup}
         anchorEl={anchorEl}
         open={!!anchorEl}
-        onClose={() => setAnchorEl(null)}
         anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
         transformOrigin={{ vertical: "top", horizontal: "center" }}
       >
@@ -231,7 +239,7 @@ export const ToolsMenu: React.FC<ToolsMenuProps> = ({
     sx={{
       display: "flex",
       alignItems: "center",
-      gap: 0.25,
+      gap: TOP_BAR_GROUP_GAP,
       flex: 1,
       justifyContent: "flex-end",
     }}
@@ -252,13 +260,8 @@ export const ToolsMenu: React.FC<ToolsMenuProps> = ({
       />
     )}
 
-    <Divider
-      orientation="vertical"
-      flexItem
-      sx={{ ml: 0.75, mr: 0.5, my: 0.25 }}
-    />
+    <Divider orientation="vertical" flexItem sx={TOP_BAR_DIVIDER_SX} />
 
-    {/* Undo / Redo */}
     <Tooltip title={t("undo")}>
       <span>
         <IconButton
@@ -284,11 +287,7 @@ export const ToolsMenu: React.FC<ToolsMenuProps> = ({
       </span>
     </Tooltip>
 
-    <Divider
-      orientation="vertical"
-      flexItem
-      sx={{ ml: 0.75, mr: 0.5, my: 0.25 }}
-    />
+    <Divider orientation="vertical" flexItem sx={TOP_BAR_DIVIDER_SX} />
 
     <LanguageMenu language={language} onSelectLang={onSelectLang} />
 
@@ -306,7 +305,6 @@ export const ToolsMenu: React.FC<ToolsMenuProps> = ({
       previewLater={previewLater}
     />
 
-    {/* À propos */}
     <Tooltip title={t("about")}>
       <IconButton color="inherit" size="small" onClick={onOpenAbout}>
         <Info sx={{ fontSize: 20 }} />

@@ -4,6 +4,7 @@ import { Apps } from "@mui/icons-material";
 import { icon } from "../element-palette/iconDataUris";
 import { t } from "../../i18n";
 import { SaveStatus } from "../mechanisms-gallery/use-mechanism-library";
+import { TOP_BAR_DIVIDER_SX, TOP_BAR_GROUP_GAP } from "./toolbar-metrics";
 
 interface ProjectHeaderProps {
   /** Drops the wordmark, keeping only the logo — for narrow windows. */
@@ -20,16 +21,22 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
   projectName,
   saveStatus,
 }) => (
-  <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, flex: 1, minWidth: 0 }}>
-    {/* Logo */}
+  <Box
+    sx={{
+      display: "flex",
+      alignItems: "center",
+      gap: TOP_BAR_GROUP_GAP,
+      flex: 1,
+      minWidth: 0,
+    }}
+  >
     <Box
       component="img"
       src={icon("logo")}
       alt="Slidep"
       sx={{ height: 26, display: "block", flexShrink: 0 }}
     />
-    {/* Le mot-symbole est le premier sacrifié : le logo suffit à
-      identifier l'app quand la place manque. */}
+    {/* The wordmark is the first thing sacrificed: the logo alone identifies the app when room runs short. */}
     {!tight && (
       <Typography
         sx={{
@@ -45,19 +52,25 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
       </Typography>
     )}
 
-    <Divider orientation="vertical" flexItem sx={{ mx: tight ? 0.5 : 1 }} />
+    <Divider orientation="vertical" flexItem sx={TOP_BAR_DIVIDER_SX} />
 
-    {/* Bouton Bibliothèque — accès direct à la galerie */}
     <Tooltip title={t("mechanism_library")}>
-      <IconButton color="inherit" size="small" onClick={onOpenGallery} sx={{ m: -1 }}>
+      <IconButton color="inherit" size="small" onClick={onOpenGallery}>
         <Apps sx={{ fontSize: 20 }} />
       </IconButton>
     </Tooltip>
 
-    <Divider orientation="vertical" flexItem sx={{ mx: 1 }} />
+    <Divider orientation="vertical" flexItem sx={TOP_BAR_DIVIDER_SX} />
 
-    {/* Nom du projet + pastille */}
-    <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, minWidth: 0, overflow: "hidden" }}>
+    <Box
+      sx={{
+        display: "flex",
+        alignItems: "center",
+        gap: TOP_BAR_GROUP_GAP,
+        minWidth: 0,
+        overflow: "hidden",
+      }}
+    >
       <Typography
         variant="body2"
         fontWeight={400}
