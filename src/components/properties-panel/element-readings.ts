@@ -1,0 +1,249 @@
+import { ID, MechanicalElement, OverlayKind, ProbeMetric } from "../../types";
+import { DynamicSnapshot } from "../../types/runtime-state";
+import {
+  PHYSICS_OVERLAY_COLOR,
+  PhysicsOverlayKind,
+} from "../../constants/physics-display-specs";
+import { GRAVITY } from "../../constants/physics-specs";
+import { icon, icon_tinted } from "../element-palette/iconDataUris";
+import { available_overlays, is_node_element } from "../../utils/element-queries";
+import { element_carries_mass, element_mass } from "../../utils/element-mass";
+import {
+  MetricSample,
+  ReactionPoint,
+  element_acceleration,
+  element_reactions,
+} from "../solver/recording/probe-series";
+import { probe_metric_available } from "../canvas/ProbeMetricSelector";
+import { MaterialDef, ProfileDef } from "../../types/material";
+import type { FocusedOverlay } from "../canvas/drawing/drawing-functions";
+
+/** Every list that shows an overlay glyph draws it at this size, the one the "Afficher" menu sets. */
+export const OVERLAY_ICON_SIZE = 18;
+
+/**
+ * The glyph that stands for a reading, tinted with the hue the canvas draws it in.
+ * One drawing serves several quantities: an arrow is a weight or an inertial force by its colour alone, exactly as on the canvas.
+ * A reaction has its own, resultant and couple in one glyph, because that is what it is.
+ */
+export function reading_icon(kind: PhysicsOverlayKind): string {
+  const name =
+    kind === "velocity"
+      ? "speed"
+      : kind === "reaction-support" || kind === "reaction-internal"
+        ? "reaction"
+        : "force";
+  return icon_tinted(name, PHYSICS_OVERLAY_COLOR[kind]);
+}
+
+/**
+ * The glyph of a whole overlay layer, for the lists that switch layers rather than read them.
+ * The trajectory's own keeps the theme's stroke: its drawn hue is handed out per shown trajectory so several can be told apart, leaving no one colour to stand for it.
+ */
+export function overlay_icon(kind: OverlayKind): string {
+  switch (kind) {
+    case "trajectory":
+      return icon("trajectory");
+    case "velocity":
+    case "weight":
+    case "inertia":
+      return reading_icon(kind);
+    // An element's own force layer draws the reactions between it and its neighbours; a support's own is switched mechanism-wide.
+    case "force":
+      return reading_icon("reaction-internal");
+  }
+}
+
+/**
+ * One overlay reading of an element: a quantity the canvas draws, and which is therefore read by selecting it rather than by listing its components beside the element itself.
+ * `metrics` names what it measures the way a probe does, which is where each label, unit and layout comes from — two of them for a reaction, whose resultant and couple are one reading but two curves.
+ */
+export interface Reading {
+  focus: FocusedOverlay;
+  metrics: ProbeMetric[];
+  icon: string;
+  color: string;
+}
+
+/**
+ * What one eye switches.
+ * A support reaction has no element flag of its own: it is a property of the problem rather than of the node it sits on, and is switched mechanism-wide (see `OverlaysMenu`), so its group offers no eye.
+ */
+export type ReadingLayer =
+  | { kind: "element-overlay"; overlay: OverlayKind }
+  | { kind: "support-reactions" };
+
+/** Identifies a layer among an element's own — a React key, and how the readings of one layer find each other. */
+export function layer_key(layer: ReadingLayer): string {
+  return layer.kind === "support-reactions" ? layer.kind : layer.overlay;
+}
+
+/**
+ * The readings one layer holds, in the order they are listed under an element.
+ * A layer with several is a group: one eye above, its readings under it.
+ * `readings` empty means the layer is drawn without ever being read — a trajectory.
+ */
+export interface ReadingGroup {
+  layer: ReadingLayer;
+  icon: string;
+  /** The hue the canvas draws it in, absent for a trajectory (see `overlay_icon`). */
+  color?: string;
+  readings: Reading[];
+}
+
+/** What a reaction at `which` measures: the reaction metrics already come in a per-point shape (node, start, end), which is exactly the shape a drawn reaction has.
+ * Both are always named; one with nothing to report at this instant simply shows no reading (see `format_metric`). */
+function reaction_metrics(which: ReactionPoint): ProbeMetric[] {
+  if (which === "node") return ["force", "moment"];
+  if (which === "start") return ["force-start", "moment-start"];
+  return ["force-end", "moment-end"];
+}
+
+/**
+ * The reading a canvas click or a panel row names.
+ * Every kind but the reactions is a `ProbeMetric` of its own name, so only they need `which` to say which point of the element they read at.
+ */
+export function reading_from_focus(focus: FocusedOverlay): Reading {
+  const metrics: ProbeMetric[] =
+    focus.kind === "reaction-support" || focus.kind === "reaction-internal"
+      ? reaction_metrics(focus.which ?? "node")
+      : [focus.kind];
+  return {
+    focus,
+    metrics,
+    icon: reading_icon(focus.kind),
+    color: PHYSICS_OVERLAY_COLOR[focus.kind],
+  };
+}
+
+const reading = (
+  elementID: ID,
+  kind: PhysicsOverlayKind,
+  which?: ReactionPoint,
+): Reading => reading_from_focus({ elementID, kind, which });
+
+/** Whether two readings name the same thing — a canvas click and a panel row meeting on one row. */
+export function same_reading(a: FocusedOverlay, b: FocusedOverlay): boolean {
+  return (
+    a.elementID === b.elementID && a.kind === b.kind && a.which === b.which
+  );
+}
+
+/**
+ * Every reading `element` carries at the instant on screen, grouped by the eye that shows them.
+ * Reactions are read off `snapshot` rather than derived from the element's shape, so the list holds exactly the readings the canvas can draw: which points report a force, and which of them also report a couple, is the solver's answer rather than a property of the element.
+ */
+export function element_reading_groups(
+  element: MechanicalElement,
+  snapshot: DynamicSnapshot | undefined,
+  dynamic: boolean,
+): ReadingGroup[] {
+  const groups: ReadingGroup[] = [];
+  // A trajectory is the one layer the kinematic solver draws too; every other reading here is a force, a mass or an acceleration, which only dynamic mode has.
+  const overlays = dynamic
+    ? available_overlays(element)
+    : available_overlays(element).filter((kind) => kind === "trajectory");
+  const single = (overlay: OverlayKind, kind: PhysicsOverlayKind) => {
+    if (!overlays.includes(overlay)) return;
+    groups.push({
+      layer: { kind: "element-overlay", overlay },
+      icon: reading_icon(kind),
+      color: PHYSICS_OVERLAY_COLOR[kind],
+      readings: [reading(element.id, kind)],
+    });
+  };
+
+  if (overlays.includes("trajectory"))
+    groups.push({
+      layer: { kind: "element-overlay", overlay: "trajectory" },
+      icon: overlay_icon("trajectory"),
+      readings: [],
+    });
+  // `OVERLAY_KIND_ORDER`'s own order, which every other list of these follows.
+  single("velocity", "velocity");
+  single("inertia", "inertia");
+  single("weight", "weight");
+
+  if (!snapshot) return groups;
+  const isNode = is_node_element(element);
+  for (const r of element_reactions(element, snapshot)) {
+    // Only a node ever reads as a support reaction, and only where it is anchored — the same split `use-simulation-playback` colours the arrows by.
+    const support = r.atAnchor && isNode;
+    // A free node's reading is zero wherever beams carry it, and means little where they do not, so nothing draws it — same guard the arrows themselves apply.
+    if (isNode && !support) continue;
+    const kind: PhysicsOverlayKind = support
+      ? "reaction-support"
+      : "reaction-internal";
+    const layer: ReadingLayer = support
+      ? { kind: "support-reactions" }
+      : { kind: "element-overlay", overlay: "force" };
+    let group = groups.find((g) => layer_key(g.layer) === layer_key(layer));
+    if (!group) {
+      group = {
+        layer,
+        icon: reading_icon(kind),
+        color: PHYSICS_OVERLAY_COLOR[kind],
+        readings: [],
+      };
+      groups.push(group);
+    }
+    group.readings.push(reading(element.id, kind, r.which));
+  }
+  return groups;
+}
+
+/**
+ * The quantities read as plain numbers beside the element itself: those no overlay draws, so nothing else on screen says them.
+ * A segment's own position is left out — the point sampled is its mid-span, and its two ends are nodes with panels (and positions) of their own.
+ * Velocity joins them in kinematic mode, where no arrow is drawn for it.
+ */
+export function inspector_value_metrics(
+  element: MechanicalElement,
+  dynamic: boolean,
+): ProbeMetric[] {
+  const metrics: ProbeMetric[] = [
+    "position",
+    ...(dynamic ? [] : (["velocity"] as ProbeMetric[])),
+    "angle",
+    "angular-velocity",
+    "motor-power",
+  ];
+  return metrics.filter(
+    (metric) =>
+      probe_metric_available(metric, element) &&
+      (metric !== "position" || "position" in element),
+  );
+}
+
+/**
+ * The value of a weight or inertia reading, the two no probe series carries: each is a mass times something, so each needs the catalogue that mass is read from (`get_dynamic_metric_at` answers every other reading).
+ * `undefined` where the quantity does not exist right now — gravity off, or no snapshot to read an acceleration from.
+ */
+export function mass_reading_sample(
+  element: MechanicalElement,
+  metric: "weight" | "inertia",
+  snapshot: DynamicSnapshot | undefined,
+  gravityOn: boolean,
+  materials: MaterialDef[],
+  profiles: ProfileDef[],
+): MetricSample | undefined {
+  if (!element_carries_mass(element)) return undefined;
+  const mass = element_mass(element, materials, profiles);
+  if (mass <= 0) return undefined;
+  const vector =
+    metric === "weight"
+      ? gravityOn
+        ? GRAVITY.mul(mass)
+        : undefined
+      : snapshot && element_acceleration(element, snapshot)?.mul(mass);
+  if (!vector) return undefined;
+  return {
+    metric,
+    unit: "N",
+    values: [
+      { key: "x", value: vector.x },
+      { key: "y", value: vector.y },
+      { key: "norm", value: vector.length() },
+    ],
+  };
+}

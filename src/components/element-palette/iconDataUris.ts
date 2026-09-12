@@ -53,9 +53,11 @@ const SOURCE_HUES: Record<string, keyof CanvasPalette> = {
 const COLOR_LITERAL =
   /rgb\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*\)|#[0-9a-fA-F]{6}\b|#[0-9a-fA-F]{3}\b|\b(?:black|white)\b/g;
 
-const recolor = (svg: string, palette: CanvasPalette): string =>
+/** `tint` overrides the accent role alone, whatever the theme would have put there: the hue that says which quantity an icon stands for (see `icon_tinted`). */
+const recolor = (svg: string, palette: CanvasPalette, tint?: string): string =>
   svg.replace(COLOR_LITERAL, (literal) => {
     const key = SOURCE_HUES[literal.toLowerCase().replace(/\s+/g, "")];
+    if (tint && key === "ACCENT") return tint;
     const replacement = key && palette[key];
     return typeof replacement === "string" ? replacement : literal;
   });
@@ -90,5 +92,23 @@ const icons_for = (palette: CanvasPalette): Record<string, string> => {
 export const icon = (name: string): string => {
   const uri = icons_for(ICON_COLORS)[name];
   if (!uri) throw new Error(`Unknown palette icon: ${name}`);
+  return uri;
+};
+
+const tinted = new Map<string, string>();
+
+/**
+ * Data URI for a palette icon whose accent is forced to `color` rather than taken from the theme: how one glyph stands for several quantities, an arrow reading as a weight or as a reaction by its hue alone (`PHYSICS_OVERLAY_COLOR`).
+ * Every other hue of the icon still follows the theme, so it stays legible on either background.
+ */
+export const icon_tinted = (name: string, color: string): string => {
+  const raw = RAW[name];
+  if (!raw) throw new Error(`Unknown palette icon: ${name}`);
+  const key = `${ICON_COLORS.RECOLOR_ICONS ? ICON_COLORS.ELEMENT_STROKE : "source"}|${name}|${color}`;
+  let uri = tinted.get(key);
+  if (!uri) {
+    uri = toDataUri(recolor(raw, ICON_COLORS, color));
+    tinted.set(key, uri);
+  }
   return uri;
 };

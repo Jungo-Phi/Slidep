@@ -36,6 +36,11 @@ import {
   set_all_overlays,
 } from "../properties-panel/overlay-actions";
 import CommandCountRow from "../properties-panel/components/CommandCountRow";
+import {
+  OVERLAY_ICON_SIZE,
+  overlay_icon,
+  reading_icon,
+} from "../properties-panel/element-readings";
 import { useNonModalPopup } from "../common/use-non-modal-popup";
 import { TOP_BAR_CONTROL_HEIGHT } from "./toolbar-metrics";
 import { t, tn } from "../../i18n";
@@ -62,6 +67,10 @@ interface OverlaysMenuProps {
   /** Trajectory overlay style: dots at fixed spacing versus one continuous stroke. */
   trajectoryDotted: boolean;
   onChangeTrajectoryDotted: (dotted: boolean) => void;
+  /** The whole system's free body: every support reaction and every applied load marked at once (docs/plan-efforts-interieurs.md phase 8).
+   * Here rather than on the elements for the same reason the lens is: a support reaction is a property of the problem, not of the element it happens to sit on. */
+  supportReactions: boolean;
+  onChangeSupportReactions: (on: boolean) => void;
   /** Drops the button's label, keeping the eye and the caret. */
   condensed?: boolean;
 }
@@ -87,6 +96,7 @@ const OverlayMenuRow: React.FC<OverlayMenuRowProps> = ({
   children,
 }) => (
   <CommandCountRow
+    icon={overlay_icon(kind)}
     label={tn(OVERLAY_LABEL_KEYS[kind], labelCount)}
     on={shown}
     total={total}
@@ -110,6 +120,8 @@ export const OverlaysMenu: React.FC<OverlaysMenuProps> = ({
   onPreviewBeamStressLens,
   trajectoryDotted,
   onChangeTrajectoryDotted,
+  supportReactions,
+  onChangeSupportReactions,
   condensed = false,
 }) => {
   const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
@@ -118,7 +130,9 @@ export const OverlaysMenu: React.FC<OverlaysMenuProps> = ({
     setAnchorEl(null);
   });
   const anyShown =
-    any_overlay_shown(mechanicalElements) || beamStressLens !== "none";
+    any_overlay_shown(mechanicalElements) ||
+    beamStressLens !== "none" ||
+    supportReactions;
 
   const setAll = (kind: OverlayKind, show: boolean) => {
     const actions = set_all_overlays(mechanicalElements, kind, show);
@@ -174,7 +188,10 @@ export const OverlaysMenu: React.FC<OverlaysMenuProps> = ({
         MenuListProps={{ onMouseLeave: () => onPreviewBeamStressLens(null) }}
       >
         {/* Coming back up to the layers is leaving the lenses, the pointer never having left the list. */}
-        <Box sx={{ py: 0.5 }} onMouseEnter={() => onPreviewBeamStressLens(null)}>
+        <Box
+          sx={{ py: 0.5 }}
+          onMouseEnter={() => onPreviewBeamStressLens(null)}
+        >
           {OVERLAY_KIND_ORDER.map((kind) => {
             const { shown, total } = overlay_count(mechanicalElements, kind);
             const labelCount = overlay_label_count(
@@ -198,18 +215,17 @@ export const OverlaysMenu: React.FC<OverlaysMenuProps> = ({
                     onChange={(_e, value) => {
                       if (value) onChangeTrajectoryDotted(value === "dotted");
                     }}
-                    sx={{ ml: 0.5, "& .MuiToggleButton-root": { p: 0.5 } }}
+                    sx={{
+                      ml: 0.5,
+                      "& .MuiToggleButton-root": { p: 0 },
+                    }}
                   >
-                    <Tooltip
-                      title={t("trajectory_style_continuous")}
-                    >
+                    <Tooltip title={t("trajectory_style_continuous")}>
                       <ToggleButton value="continuous">
                         <Remove fontSize="small" />
                       </ToggleButton>
                     </Tooltip>
-                    <Tooltip
-                      title={t("trajectory_style_dotted")}
-                    >
+                    <Tooltip title={t("trajectory_style_dotted")}>
                       <ToggleButton value="dotted">
                         <MoreHoriz fontSize="small" />
                       </ToggleButton>
@@ -219,6 +235,44 @@ export const OverlaysMenu: React.FC<OverlaysMenuProps> = ({
               </OverlayMenuRow>
             );
           })}
+          <Divider sx={{ my: 0.5 }} />
+          {/* A fourth layer, but one switch for the whole mechanism rather than a bulk pair over a set — so it reads as an element's own overlay switch does (`ProbesSection`), not as the rows above. */}
+          <Box
+            component="button"
+            type="button"
+            role="switch"
+            aria-checked={supportReactions}
+            onClick={() => onChangeSupportReactions(!supportReactions)}
+            sx={(theme) => ({
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              width: "100%",
+              pl: 1.5,
+              pr: 4,
+              py: 0.5,
+              border: 0,
+              cursor: "pointer",
+              color: supportReactions ? "text.primary" : "text.secondary",
+              backgroundColor: "transparent",
+              "&:hover": { backgroundColor: theme.palette.action.hover },
+            })}
+          >
+            <Box sx={{ display: "flex", direction: "row", gap: 0.5 }}>
+              <Box
+                component="img"
+                src={reading_icon("reaction-support")}
+                alt=""
+                sx={{ width: OVERLAY_ICON_SIZE, height: OVERLAY_ICON_SIZE }}
+              />
+              <Typography variant="body2">{t("support_reactions")}</Typography>
+            </Box>
+            {supportReactions ? (
+              <Visibility fontSize="small" />
+            ) : (
+              <VisibilityOff fontSize="small" />
+            )}
+          </Box>
         </Box>
         <Divider />
         <Box sx={{ py: 0.5 }}>

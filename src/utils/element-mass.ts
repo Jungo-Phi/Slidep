@@ -30,3 +30,15 @@ export function element_mass(
       return 0;
   }
 }
+
+/**
+ * Whether the element is one of the three kinds that carry a mass, whatever that mass currently is.
+ * Tells a zero mass apart from a quantity that does not apply.
+ */
+export function element_carries_mass(element: MechanicalElement): boolean {
+  return (
+    element.type === "mass" ||
+    element.type === "gear" ||
+    element.type === "beam"
+  );
+}

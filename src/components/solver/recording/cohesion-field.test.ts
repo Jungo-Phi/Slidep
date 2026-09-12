@@ -147,6 +147,85 @@ describe("cohesion-field — le champ N/T/Mf par coupe (docs/plan-efforts-interi
     expect(field!.loopResidual.m).toBeCloseTo(0, 0);
   });
 
+  it("cantilever encastré par son end : Mf = 0 au bout libre, -P·L à l'encastrement, résidu fermé", () => {
+    // The mirror of the test above, and the only shape that pins the END boundary of `r_coh_end`: with the encastrement at `s = L`, `Mf(L)` is the one that is not zero.
+    // A field marching on a wrongly-signed `end.m` still draws the right curve — the march never reads it — and only `loopResidual` says so, by twice `Mf(L)`.
+    const JOIN = id();
+    const BEAM = id();
+    const join: JoinElement = {
+      type: "join",
+      id: JOIN,
+      probes: [],
+      overlays: {},
+      position: new Point2(1, 0),
+      isGrounded: true,
+      fixedEdgesIDs: [BEAM],
+    };
+    // negligible self-weight/inertia: isolate the load's own shape
+    const { materialID, profileID, materials, profiles } = material_profile(0.001);
+    const beam: BeamElement = {
+      type: "beam",
+      id: BEAM,
+      probes: [],
+      overlays: {},
+      positionStart: new Point2(0, 0),
+      positionEnd: new Point2(1, 0),
+      fixedNodeEndID: JOIN,
+      fixedNodesBodyIDs: [],
+      materialID,
+      profileID,
+    };
+    const force: ForceElement = {
+      type: "force",
+      id: id(),
+      targetID: BEAM,
+      anchor: "start",
+      vector: new Point2(0, -100),
+      frame: "world",
+    };
+    const loads = [force];
+
+    const model = compile_simulation_model(
+      mechanism([join, beam], loads, materials, profiles),
+      true,
+    );
+    let snapshot: DynamicSnapshot | null = null;
+    for (let i = 0; i < 30; i++)
+      snapshot = step_dynamic_simulation(model, i * RECORD_DT, snapshot, RECORD_DT, new Point2(0, 0));
+
+    const cohesion = snapshot!.beamCohesion?.find((c) => c.beamID === BEAM);
+    expect(cohesion).toBeDefined();
+
+    const field = compute_cohesion_field(
+      beam,
+      materials,
+      profiles,
+      cohesion!,
+      loads,
+      snapshot!,
+      new Point2(0, 0),
+    );
+    expect(field).toBeDefined();
+
+    const at = (s: number) => {
+      let best = field!.samples[0];
+      for (const sample of field!.samples)
+        if (Math.abs(sample.s - s) < Math.abs(best.s - s)) best = sample;
+      return best;
+    };
+
+    expect(at(0).Mf).toBeCloseTo(0, 0);
+    expect(at(0.5).Mf).toBeCloseTo(-50, 0);
+    expect(at(1).Mf).toBeCloseTo(-100, 0);
+    // The load is the whole of the shear, all the way along: nothing else is applied between the two ends.
+    expect(at(0).T).toBeCloseTo(100, 0);
+    expect(at(1).T).toBeCloseTo(100, 0);
+
+    expect(field!.loopResidual.fx).toBeCloseTo(0, 0);
+    expect(field!.loopResidual.fy).toBeCloseTo(0, 0);
+    expect(field!.loopResidual.m).toBeCloseTo(0, 0);
+  });
+
   it("poutre isolée en chute libre : N = T = Mf = 0 partout (d'Alembert)", () => {
     // No support at all: the beam's own weight and its inertia (phase 2's acceleration field) must cancel EXACTLY, everywhere along the span.
     // If the inertia term were missing, this would instead show the beam's own weight as a parabolic Mf — the "diagnostic of a bug that doesn't exist" the plan warns about, made concrete: get the sign/magnitude of phase 2's acceleration wrong and this test catches it immediately.

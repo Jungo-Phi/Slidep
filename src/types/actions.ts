@@ -1,4 +1,5 @@
 import {
+  BeamStressLens,
   ID,
   LoadFrame,
   MotorConfig,
@@ -358,6 +359,12 @@ export type Action =
       newValue: boolean;
       oldValue: boolean;
     }
+  | {
+      type: "SetBeamStressLens";
+      newValue: BeamStressLens;
+      oldValue: BeamStressLens;
+    }
+  | { type: "SetSupportReactions"; enabled: boolean }
   | {
       type: "SetMotorConfig";
       id: ID;

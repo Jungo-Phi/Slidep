@@ -834,7 +834,7 @@ export function delete_elements(
 }
 
 /**
- * Transfer les éléments connectés à `edge` de `sourceNodeID` à `destNodeID`
+ * Moves whatever `edge` is connected to from `sourceNodeID` over to `destNodeID`.
  *
  * Returns the actions to perform disconnections and connections.
  */
@@ -924,7 +924,7 @@ function transfer_edge_connections_to_node(
 }
 
 /**
- * Transfer les connections de `sourceNode` à des edges vers `destNode` (sauf pour AttachedBelt).
+ * Moves the connections `sourceNode` holds to edges over to `destNode`, an attached belt excepted.
  *
  * Returns the actions to perform disconnections and connections.
  */
@@ -1000,7 +1000,7 @@ function transfer_internal_connections(
         });
       });
   }
-  // Transférer les gears du source (pivot/slidep) vers le dest
+  // The gears the source axle (pivot/slidep) carries move over to the destination.
   if ("fixedGearsIDs" in sourceNode && "fixedGearsIDs" in destNode) {
     sourceNode.fixedGearsIDs.forEach((gearID) => {
       actions.push({
@@ -1028,7 +1028,7 @@ function transfer_internal_connections(
 }
 
 /**
- * Transfer les connections des edges à `sourceNode` vers `destNode` (sauf pour AttachedBelt).
+ * Moves the connections edges hold to `sourceNode` over to `destNode`, an attached belt excepted.
  *
  * Exemple : rotatingEdgeID(2).endID = 1 -> transfer_connection_id(node(1), node(3)) -> rotatingEdgeID(2).endID = 3
  *
@@ -1261,7 +1261,7 @@ export function fuse_nodes(
       ...transfer_load_connections(hoveredNode.id, selectedNode.id, loads),
     );
   } else if (selectedNode.type === "slider" && hoveredNode.type === "pivot") {
-    // Fuse them into a Slidep — symétrique au cas pivot+slider : le slidep hérite de l'ID du pivot pour que gear.parentAxleID reste valide.
+    // Fuse them into a Slidep, symmetrical with the pivot+slider case: the slidep takes the pivot's own id, so every `gear.parentAxleID` pointing at it stays valid.
     const parentBeam = node_on_beam_body(hoveredNode, mechanicalElements);
     const parentBeamID = selectedNode.parentBeamID
       ? selectedNode.parentBeamID
@@ -1401,6 +1401,9 @@ export function connect_elements(
     hoveredPart.type === "FloorHeight" ||
     hoveredPart.type === "FloorAngle" ||
     hoveredPart.type === "FloorAngleValue" ||
+    // A measured reading names no element to connect to, only the one it is read from.
+    hoveredPart.type === "Overlay" ||
+    selectedPart.type === "Overlay" ||
     selectedPart.type === "Void" ||
     selectedPart.type === "Constraint" ||
     selectedPart.type === "BeltClosure" ||

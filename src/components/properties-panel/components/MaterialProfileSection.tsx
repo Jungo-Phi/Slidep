@@ -52,6 +52,8 @@ import { useNonModalPopup } from "../../common/use-non-modal-popup";
  */
 
 interface LibraryPickerProps {
+  /** The dropdown alone, no name beside it and no way out to the library: what a panel shows when its room is spent elsewhere. */
+  compact?: boolean;
   label: string;
   entries: { id: ID; name: string }[];
   /** `undefined` when the beams it stands for don't agree on one — assigning still reaches them all. */
@@ -66,6 +68,7 @@ interface LibraryPickerProps {
 const LibraryPicker = React.forwardRef<HTMLDivElement, LibraryPickerProps>(
   (
     {
+      compact = false,
       label,
       entries,
       selectedID,
@@ -86,44 +89,51 @@ const LibraryPicker = React.forwardRef<HTMLDivElement, LibraryPickerProps>(
       <Box
         ref={ref}
         sx={{
-          display: "grid",
+          display: compact ? "flex" : "grid",
           gridTemplateColumns: "1fr auto 1fr",
           alignItems: "center",
           gap: 1.5,
+          ...(compact && { flex: 1, minWidth: 0 }),
         }}
       >
-        <Typography variant="subtitle2">{label}</Typography>
-        <Box
-          onClick={(e) => {
-            const field = e.currentTarget;
-            setAnchorEl((current) => (current ? null : field));
-          }}
-          sx={{
-            display: "flex",
-            alignItems: "center",
-            cursor: "pointer",
-            borderRadius: 3,
-            border: 1,
-            borderColor: "divider",
-            pl: 1,
-            py: 0.25,
-            "&:hover": { backgroundColor: "action.hover" },
-          }}
-        >
-          <Typography variant="body2">
-            {selected?.name ?? t("mixed_value")}{" "}
-          </Typography>
-          <KeyboardArrowDown fontSize="small" />
-        </Box>
-        <Tooltip title={t("open_in_library")}>
-          <IconButton
-            size="small"
-            onClick={onOpenInLibrary}
-            sx={{ justifySelf: "end" }}
+        {!compact && <Typography variant="subtitle2">{label}</Typography>}
+        <Tooltip title={compact ? label : ""}>
+          <Box
+            onClick={(e) => {
+              const field = e.currentTarget;
+              setAnchorEl((current) => (current ? null : field));
+            }}
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              cursor: "pointer",
+              borderRadius: 3,
+              border: 1,
+              borderColor: "divider",
+              pl: 1,
+              py: compact ? 0 : 0.25,
+              ...(compact && { flex: 1, minWidth: 0 }),
+              "&:hover": { backgroundColor: "action.hover" },
+            }}
           >
-            <OpenInNew fontSize="inherit" />
-          </IconButton>
+            <Typography variant={compact ? "caption" : "body2"} noWrap>
+              {selected?.name ?? t("mixed_value")}{" "}
+            </Typography>
+            <KeyboardArrowDown fontSize="small" />
+          </Box>
         </Tooltip>
+        {!compact && (
+          <Tooltip title={t("open_in_library")}>
+            <IconButton
+              size="small"
+              onClick={onOpenInLibrary}
+              sx={{ justifySelf: "end" }}
+            >
+              <OpenInNew fontSize="inherit" />
+            </IconButton>
+          </Tooltip>
+        )}
         <Menu
           {...popup}
           anchorEl={anchorEl}
@@ -180,6 +190,8 @@ interface MaterialProfileSectionProps {
   materials: MaterialDef[];
   profiles: ProfileDef[];
   applyActions: (actions: Action[]) => void;
+  /** The two dropdowns side by side and nothing else — no names, no section drawing, no values read off the entries: what a panel shows when its room is spent on other things (`SelectionInspector`). */
+  compact?: boolean;
 }
 
 export const MaterialProfileSection: React.FC<MaterialProfileSectionProps> = ({
@@ -187,6 +199,7 @@ export const MaterialProfileSection: React.FC<MaterialProfileSectionProps> = ({
   materials,
   profiles,
   applyActions,
+  compact = false,
 }) => {
   const focusLibraryEntry = useLibraryNavigation();
   const materialID = common_id(elements, (el) => el.materialID);
@@ -259,8 +272,16 @@ export const MaterialProfileSection: React.FC<MaterialProfileSectionProps> = ({
   };
 
   return (
-    <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+    <Box
+      sx={{
+        display: "flex",
+        flexDirection: compact ? "row" : "column",
+        alignItems: compact ? "center" : "stretch",
+        gap: 1,
+      }}
+    >
       <LibraryPicker
+        compact={compact}
         ref={materialPickerRef}
         label={t("material_label")}
         entries={materials}
@@ -333,6 +354,7 @@ export const MaterialProfileSection: React.FC<MaterialProfileSectionProps> = ({
         )}
       </Popover>
       <LibraryPicker
+        compact={compact}
         ref={profilePickerRef}
         label={t("profile_label")}
         entries={profiles}
@@ -398,10 +420,10 @@ export const MaterialProfileSection: React.FC<MaterialProfileSectionProps> = ({
           </Box>
         )}
       </Popover>
-      {profile && <SectionSchema shape={profile.shape} />}
+      {profile && !compact && <SectionSchema shape={profile.shape} />}
       <Box
         sx={{
-          display: "flex",
+          display: compact ? "none" : "flex",
           flexWrap: "wrap",
           justifyContent: "center",
           rowGap: 0.5,

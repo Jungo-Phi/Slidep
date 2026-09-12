@@ -102,9 +102,15 @@ export type GeometricElement =
 /** Per-element overlay visibility */
 export type OverlayFlags = Partial<Record<OverlayKind, boolean>>;
 
-export type OverlayKind = "trajectory" | "force" | "velocity";
+export type OverlayKind = "trajectory" | "force" | "velocity" | "weight" | "inertia";
 
-export const OVERLAY_KIND_ORDER: OverlayKind[] = ["trajectory", "velocity", "force"];
+export const OVERLAY_KIND_ORDER: OverlayKind[] = [
+  "trajectory",
+  "velocity",
+  "inertia",
+  "weight",
+  "force",
+];
 
 /**
  * A beam's fill colour, mechanism-wide — docs/plan-efforts-interieurs.md phase 9.
@@ -457,7 +463,10 @@ export type ProbeMetric =
   | "force-end"
   | "moment"
   | "moment-start"
-  | "moment-end";
+  | "moment-end"
+  // Never offered in a probe selector (`available_probe_metrics` never returns them) — only ever built directly, for a canvas overlay arrow clicked on ("Poids"/"Force d'inertie"), the same way "force"/"moment" already are for a selected load.
+  | "weight"
+  | "inertia";
 
 /** Which curves of a vector metric are plotted.
  * Ignored for scalar metrics (angle, angular velocity). */

@@ -47,6 +47,7 @@ import {
   overlay_targets,
   set_all_overlays,
 } from "../overlay-actions";
+import { overlay_icon } from "../element-readings";
 import { selection_metrics } from "../selection-metrics";
 import { LENGTH, MASS, format_quantity } from "../../../utils/quantity-format";
 import { PluralKey, t, tn } from "../../../i18n";
@@ -518,6 +519,7 @@ export const ElementsOverview: React.FC<ElementsOverviewProps> = ({
           return (
             <CommandCountRow
               key={kind}
+              icon={overlay_icon(kind)}
               label={tn(
                 OVERLAY_LABEL_KEYS[kind],
                 overlay_label_count(targets, kind),
@@ -533,7 +535,7 @@ export const ElementsOverview: React.FC<ElementsOverviewProps> = ({
         })}
       </Box>
 
-      {(metrics.mass > 0 || metrics.beamCount > 0) && (
+      {(metrics.massCount > 0 || metrics.beamCount > 0) && (
         <>
           <Divider sx={{ mx: -2 }} />
           <Box
@@ -544,7 +546,7 @@ export const ElementsOverview: React.FC<ElementsOverviewProps> = ({
               rowGap: 0.25,
             }}
           >
-            {metrics.mass > 0 && (
+            {metrics.massCount > 0 && (
               <Typography variant="caption" color="text.secondary">
                 {t("selection_total_mass")} :{" "}
                 {format_quantity(metrics.mass, MASS)}

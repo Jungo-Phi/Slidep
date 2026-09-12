@@ -1,6 +1,6 @@
 import { Action } from "./actions";
 import { SimulationMode } from "./app-mode";
-import { MechanicalElement, ConstraintElement, LoadElement } from "./element";
+import { BeamStressLens, MechanicalElement, ConstraintElement, LoadElement } from "./element";
 import { MaterialDef, ProfileDef } from "./material";
 import { Point2 } from "./point2";
 import {
@@ -62,6 +62,10 @@ export interface SimulationSettings {
   gravity: boolean;
   collisions: boolean;
   floor: FloorConfig;
+  /** Which beam-fill reading the canvas colours every beam with — a property of this mechanism, like gravity, not a viewer preference: what is worth checking (bending, shear, utilization…) depends on the structure at hand. */
+  beamStressLens: BeamStressLens;
+  /** Whether the canvas marks the whole system's free body: applied loads and support reactions together, wherever they are, with no per-element flag to set. Mechanism-wide for the same reason as `beamStressLens` — whether the supports are the interesting part is a property of the structure. */
+  supportReactions: boolean;
 }
 
 export const DEFAULT_FLOOR: FloorConfig = { enabled: false, height: 0, angle: 0 };
@@ -70,6 +74,8 @@ export const DEFAULT_SIMULATION: SimulationSettings = {
   gravity: true,
   collisions: false,
   floor: DEFAULT_FLOOR,
+  beamStressLens: "none",
+  supportReactions: false,
 };
 
 export interface Mechanism {

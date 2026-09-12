@@ -6,17 +6,12 @@ import { StaticsSolution, StaticsTorsor } from "./equilibrium-solve";
 /**
  * Turn the solved interface torsors into the `BeamCohesion` the rest of the app reads — see docs/plan-efforts-interieurs.md phase 10.
  *
- * Two sign conventions meet here, and they are not the same one:
- *
- * - **Force** is carried straight through.
- * `StaticsTorsor` and `BeamCohesion.start`/`.end` both mean "what the beam applies onto whatever sits at that node".
- * - **Moment** is flipped.
- * `BeamCohesion`'s `m` inherits the raw `LinkReaction` sense, in which the couple is the one applied ONTO the beam — `cohesion-field.ts`'s `r_coh_start` flips it back to get `Mf`.
- * Verified against a plain cantilever: only this way does `Mf(0)` come out at `−P·L` rather than growing toward the free tip.
- * - **An attached node's** entry holds what the beam RECEIVES there, again the opposite of what it applies, and its abscissa as a fraction of the span rather than in metres.
+ * `StaticsTorsor` and `BeamCohesion.start`/`.end` mean the same thing, all three components alike: "what the beam applies onto whatever sits at that node".
+ * Turning that into the cut torsor `N`/`T`/`Mf` is `cohesion-field.ts`'s `r_coh_start`/`r_coh_end`, and nothing here anticipates it.
+ * **An attached node's** entry is the one exception: it holds what the beam RECEIVES there, the opposite of what it applies, and its abscissa as a fraction of the span rather than in metres.
  */
-function flip_moment(torsor: StaticsTorsor): { fx: number; fy: number; m: number } {
-  return { fx: torsor.fx, fy: torsor.fy, m: -torsor.m };
+function components(torsor: StaticsTorsor): { fx: number; fy: number; m: number } {
+  return { fx: torsor.fx, fy: torsor.fy, m: torsor.m };
 }
 
 const NOTHING = { fx: 0, fy: 0, m: 0 };
@@ -66,8 +61,8 @@ export function beam_cohesion_from_statics(
 
     return {
       beamID: spec.beamID,
-      start: start ? flip_moment(start) : NOTHING,
-      end: end ? flip_moment(end) : NOTHING,
+      start: start ? components(start) : NOTHING,
+      end: end ? components(end) : NOTHING,
       attachedNodes,
       determinate: torsors.length > 0 && torsors.every(settled),
     };

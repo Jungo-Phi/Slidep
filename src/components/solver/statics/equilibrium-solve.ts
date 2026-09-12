@@ -1,4 +1,5 @@
 import { ID, Point2 } from "../../../types";
+import { BalanceSample } from "../../../types/runtime-state";
 import { BeamCohesionSpec } from "../dynamics/beam-cohesion";
 import { Matrix, add_at, zeros } from "./matrix";
 import { Flexibility, minimise_energy, solve_least_squares } from "./least-squares";
@@ -6,7 +7,7 @@ import { StaticsFrame, StaticsInterface, StaticsSystem } from "./equilibrium-mod
 import { BeltVia, belt_pieces } from "../../../utils/belt-path";
 
 /** One resolved interface torsor, in plain mechanics units: the force and the counter-
- *  clockwise couple the beam applies onto the node (or the frame onto the node, at a support). */
+ * clockwise couple the beam applies onto the node (or the frame onto the node, at a support). */
 export interface StaticsTorsor {
   beamID?: ID;
   /** The gear applying this torsor, at its axle or at one of its rim pins. */
@@ -18,27 +19,24 @@ export interface StaticsTorsor {
   fy: number;
   m: number;
   /**
-   * Whether the solve fixes this torsor at this pose — by equilibrium alone when it was given
-   * no flexibility, by equilibrium plus minimum complementary energy when it was.
+   * Whether the solve fixes this torsor at this pose — by equilibrium alone when it was given no flexibility, by equilibrium plus minimum complementary energy when it was.
    *
-   * Per component and not per beam, which matters: a beam between two pinned supports has an
-   * undetermined `N` and a perfectly determined `Mf`, and reporting the whole beam as unknown
-   * would throw away the bending diagram — the very case a reader most wants.
+   * Per component and not per beam, which matters: a beam between two pinned supports has an undetermined `N` and a perfectly determined `Mf`, and reporting the whole beam as unknown would throw away the bending diagram — the very case a reader most wants.
    */
   determined: { fx: boolean; fy: boolean; m: boolean };
   /** Carried through from `StaticsInterface.foreign`: this stands for a belt, a gear mesh or a
-   *  contact the model does not describe, never for an answer. */
+   * contact the model does not describe, never for an answer. */
   foreign: boolean;
 }
 
 export interface StaticsSolution {
   torsors: StaticsTorsor[];
   /** `dim ker(A)` — the degree of static indeterminacy at this pose. Zero means every torsor
-   *  above is exact. Should agree with `ChainMobility.hyperstaticity` summed over the chains
-   *  this covers, which is an independent route to the same number. */
+   * above is exact.
+   * Should agree with `ChainMobility.hyperstaticity` summed over the chains this covers, which is an independent route to the same number. */
   indeterminacy: number;
   /** `‖A·x − b‖`. Not a solver failure: it says the frame handed in is not itself in
-   *  equilibrium, which on a moving mechanism is a d'Alembert term that did not quite close. */
+   * equilibrium, which on a moving mechanism is a d'Alembert term that did not quite close. */
   residual: number;
   /** Largest right-hand side entry, to read `residual` against something. */
   scale: number;
@@ -80,17 +78,92 @@ export function beam_state(spec: BeamCohesionSpec, frame: StaticsFrame): BeamSta
     centre: p0.lerp(p1, 0.5),
     // The mean of the two ends, not the rigid-body field extrapolated from `a₀`.
     //
-    // For a body that really is rigid the two agree exactly — `a(σ) = a₀ + ŷ·α·σ − x̂·ω²·σ` is
-    // affine, so its mean over the span IS its midpoint value. They part company when the
-    // frame's recorded accelerations do not satisfy rigidity, and then only the mean is usable:
-    // the node equations read those same measured accelerations, so extrapolating a different
-    // one for the beam makes the two halves of the system contradict each other. Measured on a
-    // freely spinning beam whose ends had not yet settled onto their circular path, that
-    // contradiction reached 58 % of the equations' own scale and turned a pure tension into a
-    // compression.
+    // For a body that really is rigid the two agree exactly — `a(σ) = a₀ + ŷ·α·σ − x̂·ω²·σ` is affine, so its mean over the span IS its midpoint value.
+    // They part company when the frame's recorded accelerations do not satisfy rigidity, and then only the mean is usable: the node equations read those same measured accelerations, so extrapolating a different one for the beam makes the two halves of the system contradict each other.
+    // Measured on a freely spinning beam whose ends had not yet settled onto their circular path, that contradiction reached 58 % of the equations' own scale and turned a pure tension into a compression.
     centreAcceleration: a0.lerp(a1, 0.5),
     angularVelocity: omega,
     angularAcceleration: alpha,
+  };
+}
+
+/**
+ * The whole movable system's force balance — see `BalanceSample`, which says what the three terms mean and why the support reactions are not among them.
+ * One pass over the same bodies `solve_statics` writes rows for, reading the same figures those rows do, so the two can never describe different systems.
+ */
+export function compute_balance_sample(
+  system: StaticsSystem,
+  specs: BeamCohesionSpec[],
+  frame: StaticsFrame,
+): BalanceSample {
+  let applied = new Point2(0, 0);
+  let weight = new Point2(0, 0);
+  let inertia = new Point2(0, 0);
+  let appliedM = 0;
+  let weightM = 0;
+  let inertiaM = 0;
+  // Every moment is taken about the world origin, which is what makes the three of them addable at all — and what the reader sees the resultant drawn at.
+  const carry = (mass: number, centre: Point2 | undefined, acceleration: Point2) => {
+    const w = frame.gravity.mul(mass);
+    const ma = acceleration.mul(mass);
+    weight = weight.add(w);
+    inertia = inertia.add(ma);
+    if (!centre) return;
+    weightM += cross(centre, w.x, w.y);
+    inertiaM += cross(centre, ma.x, ma.y);
+  };
+
+  for (const body of system.bodies) {
+    if (body.kind === "beam" && body.beamID !== undefined) {
+      const spec = specs.find((s) => s.beamID === body.beamID);
+      const state = spec && beam_state(spec, frame);
+      if (!state) continue;
+      const mass = frame.beamMass(body.beamID);
+      carry(mass, state.centre, state.centreAcceleration);
+      // A rod's own `I·α` about its centre, the same `mL²/12` the beam's own moment row balances.
+      inertiaM +=
+        ((mass * state.length * state.length) / 12) * state.angularAcceleration;
+      // An affine density's own resultant over the span, the shape `distributedDensityOn` is defined to hold, and its moment about the origin integrated the same way rather than reduced to a centroid first.
+      const { at0, slope } = frame.distributedDensityOn(body.beamID);
+      const L = state.length;
+      applied = applied.add(at0.mul(L).add(slope.mul(0.5 * L * L)));
+      appliedM +=
+        cross(state.p0, at0.x, at0.y) * L +
+        cross(state.p0, slope.x, slope.y) * 0.5 * L * L +
+        cross(state.xhat, at0.x, at0.y) * 0.5 * L * L +
+        cross(state.xhat, slope.x, slope.y) * (L * L * L) / 3;
+    } else if (body.kind === "gear" && body.gearID !== undefined) {
+      const gear = system.gears.find((g) => g.id === body.gearID);
+      if (!gear) continue;
+      carry(
+        gear.mass,
+        frame.positionOf(gear.centreKey),
+        frame.accelerationOf(gear.centreKey),
+      );
+      inertiaM += gear.inertia * frame.gearAngularAcceleration(gear.id);
+    } else if (body.kind === "node" && body.nodeKey !== undefined) {
+      const at = frame.positionOf(body.nodeKey);
+      carry(
+        frame.nodeMassAt(body.nodeKey),
+        at,
+        frame.accelerationOf(body.nodeKey),
+      );
+      const external = frame.externalForceAt(body.nodeKey);
+      applied = applied.add(external);
+      if (at) appliedM += cross(at, external.x, external.y);
+    }
+  }
+
+  return {
+    appliedX: applied.x,
+    appliedY: applied.y,
+    appliedM,
+    weightX: weight.x,
+    weightY: weight.y,
+    weightM,
+    inertiaX: inertia.x,
+    inertiaY: inertia.y,
+    inertiaM,
   };
 }
 
@@ -103,8 +176,7 @@ export function abscissa(
 ): number {
   if (face.nodeKey === spec.k0) return 0;
   if (face.nodeKey === spec.k1) return state.length;
-  // A slider's abscissa moves; it is read from the live pose every frame, never from a `t`
-  // frozen at compile time.
+  // A slider's abscissa moves; it is read from the live pose every frame, never from a `t` frozen at compile time.
   const at = frame.positionOf(face.nodeKey);
   return at ? at.parameter_on_segment(state.p0, state.p1) * state.length : 0;
 }
@@ -114,9 +186,8 @@ export const cross = (r: Point2, fx: number, fy: number) => r.x * fy - r.y * fx;
 /**
  * Resultant of an affine load density over a whole beam, and its moment about mid-span.
  *
- * `∫(at0 + slope·σ)dσ` and `∫(σ − L/2)·(x̂ × q(σ))dσ`, both closed form. Only the density's
- * SLOPE contributes to the moment — a uniform load is balanced about the centre by
- * construction, so the whole term is `(x̂ × slope)·L³/12`.
+ * `∫(at0 + slope·σ)dσ` and `∫(σ − L/2)·(x̂ × q(σ))dσ`, both closed form.
+ * Only the density's SLOPE contributes to the moment — a uniform load is balanced about the centre by construction, so the whole term is `(x̂ × slope)·L³/12`.
  */
 export function distributed_resultant(
   density: { at0: Point2; slope: Point2 },
@@ -130,13 +201,11 @@ export function distributed_resultant(
 }
 
 /** Below this, a component of a unit vector is numerical dust rather than a coupling. Read
- *  both when splitting the null space and when asking whether a direction moves a column, so
- *  the two never disagree over whether a vector touches something. */
+ * both when splitting the null space and when asking whether a direction moves a column, so the two never disagree over whether a vector touches something. */
 const COUPLING_EPSILON = 1e-8;
 
 /** Orthonormalise in order, dropping whatever the vectors before it already span. Plain
- *  modified Gram-Schmidt: these live in `ker(A)`'s own coordinates, a handful of dimensions
- *  even on the most redundant mechanism in the gallery. */
+ * modified Gram-Schmidt: these live in `ker(A)`'s own coordinates, a handful of dimensions even on the most redundant mechanism in the gallery. */
 function orthonormalise(vectors: Float64Array[], size: number): Float64Array[] {
   const basis: Float64Array[] = [];
   for (const vector of vectors) {
@@ -159,12 +228,9 @@ function orthonormalise(vectors: Float64Array[], size: number): Float64Array[] {
 /**
  * Split the redundancies into the ones the model owns and the ones it does not.
  *
- * A `foreign` unknown stands for a belt, a gear mesh or a contact this model has no term for,
- * and it costs no energy — so left in the minimisation it is a free lunch: the energy hands it
- * every newton it can, because a beam that carries nothing stores nothing. That answer is
- * arbitrary, and worse than arbitrary in that it looks settled. Menabrea is therefore allowed
- * to choose only along `owned`, the directions that leave every unmodelled action where it is;
- * whatever `unowned` touches is reported as unknown, however far from the belt it sits.
+ * A `foreign` unknown stands for a belt, a gear mesh or a contact this model has no term for, and it costs no energy — so left in the minimisation it is a free lunch: the energy hands it every newton it can, because a beam that carries nothing stores nothing.
+ * That answer is arbitrary, and worse than arbitrary in that it looks settled.
+ * Menabrea is therefore allowed to choose only along `owned`, the directions that leave every unmodelled action where it is; whatever `unowned` touches is reported as unknown, however far from the belt it sits.
  */
 function split_null_space(
   system: StaticsSystem,
@@ -179,8 +245,7 @@ function split_null_space(
   if (h === 0 || foreignColumns.length === 0)
     return { owned: nullSpace, unowned: [] };
 
-  // One row per unmodelled component, read across the null basis: its span is exactly the
-  // directions that move that component, and its orthogonal complement the ones that do not.
+  // One row per unmodelled component, read across the null basis: its span is exactly the directions that move that component, and its orthogonal complement the ones that do not.
   const unowned = orthonormalise(
     foreignColumns.map((column) => Float64Array.from(nullSpace, (n) => n[column])),
     h,
@@ -193,7 +258,7 @@ function split_null_space(
   const owned = orthonormalise([...unowned, ...axes], h).slice(unowned.length);
 
   /** Back from the null space's coordinates to the unknowns'. Orthonormal in, orthonormal
-   *  out: `nullSpace` is itself orthonormal. */
+   * out: `nullSpace` is itself orthonormal. */
   const lift = (weights: Float64Array): Float64Array => {
     const out = new Float64Array(nullSpace[0].length);
     for (let i = 0; i < h; i++)
@@ -206,11 +271,8 @@ function split_null_space(
 /**
  * Assemble and solve one frame's equilibrium.
  *
- * `flexibility` applies `F` to a vector of unknowns — the block-diagonal member flexibility
- * of the minimum-complementary-energy formulation, which is what gives a hyperstatic structure
- * an answer. Omit it and an indeterminate system falls back to the minimum-norm solution,
- * which is **not** an answer: read `determined` and report the rest as unknown rather than
- * showing it.
+ * `flexibility` applies `F` to a vector of unknowns — the block-diagonal member flexibility of the minimum-complementary-energy formulation, which is what gives a hyperstatic structure an answer.
+ * Omit it and an indeterminate system falls back to the minimum-norm solution, which is **not** an answer: read `determined` and report the rest as unknown rather than showing it.
  */
 export function solve_statics(
   system: StaticsSystem,
@@ -247,9 +309,8 @@ export function solve_statics(
     // Σ Fᵢ = m·g + W − m·a_G, the beam's own equilibrium with the node actions moved across.
     b[row] = mass * frame.gravity.x + distributed.force.x - mass * state.centreAcceleration.x;
     b[row + 1] = mass * frame.gravity.y + distributed.force.y - mass * state.centreAcceleration.y;
-    // A uniform straight bar about its own centre. The solver's own three lumps reproduce
-    // exactly this (`2·(m/6)·(L/2)² = mL²/12`), so taking the continuum figure changes no
-    // physics — only which of the two models the reading belongs to.
+    // A uniform straight bar about its own centre.
+    // The solver's own three lumps reproduce exactly this (`2·(m/6)·(L/2)² = mL²/12`), so taking the continuum figure changes no physics — only which of the two models the reading belongs to.
     const inertia = (mass * state.length * state.length) / 12;
     b[row + 2] = distributed.moment - inertia * state.angularAcceleration;
   }
@@ -410,11 +471,9 @@ export function solve_statics(
   const x = minimum ? minimum.x : solved.x;
 
   // A component is settled when nothing the answer is still free to move along touches it.
-  // With a flexibility that is NOT `ker(A)`: Menabrea picks one member of the redundancies
-  // the model owns, so a plain over-constrained frame is an answer rather than an unknown.
-  // What stays open is what it may not choose within (`unowned`) and what it could not
-  // (`residualNull`). The vectors are unit-norm throughout, so this compares a share of one
-  // against a share of one.
+  // With a flexibility that is NOT `ker(A)`: Menabrea picks one member of the redundancies the model owns, so a plain over-constrained frame is an answer rather than an unknown.
+  // What stays open is what it may not choose within (`unowned`) and what it could not (`residualNull`).
+  // The vectors are unit-norm throughout, so this compares a share of one against a share of one.
   const open = minimum ? [...split.unowned, ...minimum.residualNull] : solved.nullSpace;
   const varies = (column: number) =>
     column >= 0 && open.some((n) => Math.abs(n[column]) > COUPLING_EPSILON);

@@ -126,6 +126,8 @@ export const DIM = {
   // Pivot
   PIVOT_OUTER_RADIUS: 9,
   PIVOT_INNER_RADIUS: 4,
+  /** The moment balance's own reference-point ring — a bit bigger than a pivot, so it reads as its own mark rather than as a node that happens to sit there. */
+  MOMENT_BALANCE_MARKER_RADIUS: 13,
   // Motor
   MOTOR_RADIUS: 18,
   MOTOR_CORNER_RADIUS: 2.5,
@@ -180,7 +182,7 @@ export const DIM = {
   // Trajectory
   TRAJECTORY_LINE_WIDTH: 1.5,
   TRAJECTORY_DOT_RADIUS: 2.5,
-  TRAJECTORY_DOT_STEP: 1, // TODO : rendre éditable ?
+  TRAJECTORY_DOT_STEP: 1, // TODO: make this editable?
 } as const;
 
 const SCHEMA_DIM_OFFSET = 20;
@@ -302,6 +304,7 @@ export const HOVER_ORDER: (
   | "probe"
   | "motorArrow"
   | "geometricBadge"
+  | "overlay"
 )[] = [
   "geometricBadge",
   "gear-ratio",
@@ -325,5 +328,7 @@ export const HOVER_ORDER: (
   "moment",
   "force",
   "distributed-force",
+  // A measured reading is drawn over everything, but it never steals the hover from a load one can actually take hold of — it is read, not edited.
+  "overlay",
   "gear",
 ];

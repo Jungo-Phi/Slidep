@@ -113,6 +113,8 @@ const ACTION_GEOMETRY: Record<
   ChangeFloorAngle: NONE_COALESCING,
   SetGravity: NONE,
   SetCollisions: NONE,
+  SetBeamStressLens: NONE,
+  SetSupportReactions: NONE,
 };
 
 const LOAD_TYPES: ReadonlySet<LoadElementType> = new Set([

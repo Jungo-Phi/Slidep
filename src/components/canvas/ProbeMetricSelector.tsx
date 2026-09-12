@@ -21,6 +21,8 @@ export const PROBE_METRIC_LABEL_KEYS: Record<ProbeMetric, StringKey> = {
   moment: "moment",
   "moment-start": "metric_moment_start",
   "moment-end": "metric_moment_end",
+  weight: "overlay_weight_one",
+  inertia: "overlay_inertia_one",
 };
 
 export const PROBE_METRIC_ORDER: ProbeMetric[] = [
@@ -70,6 +72,9 @@ export function probe_metric_available(
   metric: ProbeMetric,
   element: MechanicalElement,
 ): boolean {
+  // A belt is sampled at the mid-point between its two ends, which sits nowhere on the path it actually follows — the same reason `available_overlays` refuses it a velocity arrow.
+  if (metric === "position" || metric === "velocity")
+    return element.type !== "belt";
   if (metric === "angle" || metric === "angular-velocity")
     return angular_metric_available(element);
   if (metric === "motor-power") return motor_power_available(element);

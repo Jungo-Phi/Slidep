@@ -35,7 +35,6 @@ import {
   CanvasHighlight,
   NO_HIGHLIGHT,
 } from "../../canvas/drawing/draw-canvas";
-import ElementMeasures from "./ElementMeasures";
 import { t } from "../../../i18n";
 import { element_to_hovered_part, linked_constraint } from "../../canvas/utils";
 import { measure_belt_length } from "../../../utils/belt-geom";
@@ -110,7 +109,6 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
   runtimeState,
   setHighlight,
 }) => {
-  const simulating = appMode !== "edition";
   const element: MechanicalElement | undefined =
     selectedElement &&
     (selectedElement.type === "force" ||
@@ -1000,18 +998,6 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
         </>
       )}
 
-      {/* Les grandeurs mesurées, sous les propriétés : approfondir depuis
-              l'onglet Analyse ne doit jamais faire perdre ce qu'on y voyait. */}
-      {simulating && (
-        <>
-          <Divider sx={{ my: 1 }} />
-          <ElementMeasures
-            element={element}
-            runtimeState={runtimeState}
-            appMode={appMode}
-          />
-        </>
-      )}
     </Box>
   );
 };

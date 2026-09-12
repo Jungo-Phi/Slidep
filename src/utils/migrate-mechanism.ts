@@ -14,7 +14,7 @@ import {
 import { DEFAULT_SIMULATION, SerializedMechanism } from "../types";
 
 /** The format `serialize_mechanism` writes today. */
-export const CURRENT_FORMAT_VERSION = 11;
+export const CURRENT_FORMAT_VERSION = 13;
 
 /** A document mid-migration: its shape belongs to no version in particular. */
 type RawDocument = Record<string, unknown>;
@@ -122,7 +122,7 @@ const MIGRATIONS: MigrationStep[] = [
   {
     to: 9,
     // `linearMass` disappears from `BeamElement` in favour of a `materialID`/`profileID` pair resolved against the mechanism's own library.
-    // Every beam gets the same default couple — steel, 20×20 mm rectangle — seeded once here regardless of whatever `linearMass` it used to carry: a hard cut, not a best-effort conversion, since no prior data maps cleanly onto a section's `A`/`I_Gz`/`v`.
+    // Every beam gets the same default couple — steel, 20×20 mm rectangle — seeded once here regardless of whatever `linearMass` value it carried: a hard cut, not a best-effort conversion, since no prior data maps cleanly onto a section's `A`/`I_Gz`/`v`.
     preservesHistory: true,
     apply: (doc) => {
       const material = default_material();
@@ -163,6 +163,30 @@ const MIGRATIONS: MigrationStep[] = [
     apply: (doc) => ({
       ...doc,
       mechanicalElements: as_array(doc.mechanicalElements).map(reset_friction),
+    }),
+  },
+  {
+    to: 12,
+    // The beam-fill lens moves from disjoint, localStorage-only state onto the mechanism itself, like gravity/collisions/floor at v8, so a document from before it existed here gets the neutral default rather than nothing.
+    preservesHistory: true,
+    apply: (doc) => ({
+      ...doc,
+      simulation: {
+        beamStressLens: "none",
+        ...(is_record(doc.simulation) ? doc.simulation : {}),
+      },
+    }),
+  },
+  {
+    to: 13,
+    // The support-reaction calque lives on the mechanism, like the beam-fill lens at v12: a document from before it landed here gets it off rather than nothing.
+    preservesHistory: true,
+    apply: (doc) => ({
+      ...doc,
+      simulation: {
+        supportReactions: false,
+        ...(is_record(doc.simulation) ? doc.simulation : {}),
+      },
     }),
   },
 ];
@@ -407,9 +431,8 @@ const assign_default_material_profile = (
   return { ...rest, materialID, profileID };
 };
 
-/** The same defaulting where an action carries a whole beam element: `CreateElement` and
- * `DeleteElement`.
- * A stored `ChangeLinearMass` names a field that no longer exists on the element it targets — it becomes a no-op rather than dropping the whole undo stack over one action type, the same trade `close_belt_in_action` made for a renamed field. */
+/** The same defaulting where an action carries a whole beam element: `CreateElement` and `DeleteElement`.
+ * A stored `ChangeLinearMass` names a field the element it targets does not carry — it becomes a no-op rather than dropping the whole undo stack over one action type, the same trade `close_belt_in_action` makes for a renamed field. */
 const assign_default_material_profile_in_action = (
   action: unknown,
   materialID: string,
@@ -462,7 +485,7 @@ export function migrate_document(raw: unknown): SerializedMechanism {
     throw new Error("Document illisible");
 
   let doc = { ...raw } as RawDocument;
-  // Never `CURRENT_FORMAT_VERSION`: that reads a legacy document as already up to date and skips every step it owes.
+  // Never `CURRENT_FORMAT_VERSION`: that reads an older document as already up to date and skips every step it owes.
   let version = typeof doc.formatVersion === "number" ? doc.formatVersion : 1;
 
   if (version > CURRENT_FORMAT_VERSION)

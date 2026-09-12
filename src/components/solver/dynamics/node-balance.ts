@@ -73,8 +73,8 @@ function covered_keys(links: Link[]): Set<string> {
   return seen;
 }
 
-/** What each beam applies at each of the nodes it touches, in the `LinkReaction` sense
- * `BeamCohesion` already carries — forces as read, couples flipped (`.m` is the couple the weld applies ONTO the beam, so the node receives its opposite; see `cohesion-field.ts`). */
+/** What each beam applies at each of the nodes it touches — exactly what `BeamCohesion`
+ * already carries, all three components as read. */
 function beam_actions(
   specs: BeamCohesionSpec[],
   cohesions: BeamCohesion[],
@@ -92,8 +92,8 @@ function beam_actions(
   for (const cohesion of cohesions) {
     const spec = specOf.get(cohesion.beamID);
     if (!spec) continue;
-    add(spec.k0, new Point2(cohesion.start.fx, cohesion.start.fy), -cohesion.start.m);
-    add(spec.k1, new Point2(cohesion.end.fx, cohesion.end.fy), -cohesion.end.m);
+    add(spec.k0, new Point2(cohesion.start.fx, cohesion.start.fy), cohesion.start.m);
+    add(spec.k1, new Point2(cohesion.end.fx, cohesion.end.fy), cohesion.end.m);
     for (const attached of cohesion.attachedNodes) {
       const key = spec.attachedNodes.find((n) => n.nodeID === attached.nodeID)?.nodeKey;
       // `BeamCohesion.attachedNodes` holds what the BEAM receives; the node receives its opposite.

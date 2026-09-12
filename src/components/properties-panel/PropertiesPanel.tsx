@@ -26,15 +26,28 @@ import ElementProperties from "./panels/ElementProperties";
 import ConstraintsPanel from "./panels/ConstraintsPanel";
 import AnalysisPanel from "./panels/AnalysisPanel";
 import MaterialsLibraryPanel, { LibraryFocusRequest } from "./panels/MaterialsLibraryPanel";
-import { host_mechanical_element } from "../mechanism/connect-actions";
 import { is_constraint_type } from "../canvas/utils";
 import { ElementNavigationContext } from "./element-navigation";
 import { SimulationLockContext } from "./simulation-lock";
 import { LibraryNavigationContext } from "./library-navigation";
 import { CanvasHighlight } from "../canvas/drawing/draw-canvas";
 import { RedundancySymbol } from "../solver/analysis/redundancy-symbols";
+import { DynamicSnapshot } from "../../types/runtime-state";
+import { at_recording_end } from "../solver/dynamics/simulation-engine";
 import { OverlayScrollArea } from "./components/OverlayScrollArea";
+import { PanelSplitter, useSplitShare } from "./components/PanelSplitter";
+import EnergyBalance from "./components/EnergyBalance";
+import SelectionInspector from "./panels/SelectionInspector";
+import { inspected_subject } from "./selection-subject";
 import { t } from "../../i18n";
+import type {
+  HoveredBalanceTerm,
+  MomentBalanceReference,
+} from "../solver/analysis/force-balance";
+import type { FocusedOverlay } from "../canvas/drawing/drawing-functions";
+
+/** The share of the panel's height the analysis tab's subject starts with, the rest going to the mechanism-wide sections below it. Moved by the splitter between them, and remembered from then on. */
+const DEFAULT_SUBJECT_SHARE = 0.45;
 
 export interface PropertiesPanelProps {
   /** Names what the canvas should pick out, and why; empty clears the highlight. */
@@ -67,6 +80,17 @@ export interface PropertiesPanelProps {
   blockedMotors: ReadonlySet<ID>;
   /** Publishes the abscissa hovered on a beam's N/T/Mf diagrams, for the canvas to mark. */
   setHoveredAbscissa: (hovered: HoveredAbscissa | null) => void;
+  /** See `App`'s own `hoveredBalanceTerm`. */
+  setHoveredBalanceTerm: (hovered: HoveredBalanceTerm | null) => void;
+  /** See `App`'s own `momentBalanceReference`. */
+  momentBalanceReference: MomentBalanceReference;
+  setMomentBalanceReference: (reference: MomentBalanceReference) => void;
+  /** See `App`'s own `momentBalanceReferenceHovered`. */
+  setMomentBalanceReferenceHovered: (hovered: boolean) => void;
+  /** See `App`'s own `focusedOverlay`. */
+  focusedOverlay: FocusedOverlay | null;
+  /** Names a physics-overlay reading as selected — `App`'s own `setFocusedOverlay`, the same one a plain click on the canvas arrow itself reports through. */
+  setFocusedOverlay: (overlay: FocusedOverlay) => void;
   /** Sets which library section is hovered — also what tints the canvas for as long as the
    * hover lasts.
    * The value itself is read straight from the app by the canvas, not through this panel. */
@@ -97,6 +121,12 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
   runtimeState,
   setRuntimeState,
   setHoveredAbscissa,
+  setHoveredBalanceTerm,
+  momentBalanceReference,
+  setMomentBalanceReference,
+  setMomentBalanceReferenceHovered,
+  focusedOverlay,
+  setFocusedOverlay,
   setLibrarySection,
   hoveredLibraryEntryID,
   setHoveredLibraryEntryID,
@@ -126,7 +156,9 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
   ) => {
     if (
       tabLabel === activeTab &&
-      (activeTab === "elements" || activeTab === "constraints")
+      (activeTab === "elements" ||
+        activeTab === "constraints" ||
+        activeTab === "analysis")
     )
       clearSelectionKeepTab();
   };
@@ -136,14 +168,21 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
   // Every id currently selected — for a plain click, the same singleton as selectedID; for a box selection, the whole group.
   // Threaded down so any ElementDisplay can tell whether it names one of them.
   const selectedIds = selected_ids(canvasState);
-  // The mechanical element the selection points at (a selected load resolves to its host).
-  // Shared by the elements tab and the analysis tab's measures section.
-  const selectedElement = host_mechanical_element(
-    selectedID,
-    mechanism.mechanicalElements,
-    mechanism.loads,
+  const panelRef = React.useRef<HTMLDivElement>(null);
+  // Scrubbing from a chart: landing on the end of the recording is not scrubbing, since playing from there records on.
+  const seekTime = (time: number) =>
+    setRuntimeState((previous) => ({
+      ...previous,
+      time,
+      isPlaying: false,
+      scrubbed: !at_recording_end(previous.simulationSnapshots, time),
+    }));
+  const [subjectShare, setSubjectShare] = useSplitShare(
+    "analysisSubjectShare",
+    DEFAULT_SUBJECT_SHARE,
   );
-
+  // What the analysis tab's own subject panel is reading: an overlay reading named on the canvas, or whatever the selection points at.
+  const subject = inspected_subject(selectedIds, focusedOverlay, mechanism);
   // Any ElementDisplay clicked anywhere in the panel drills down to the element it names, in the tab that knows how to show it.
   const drillDownToElement = React.useCallback(
     (element: UnionElement) =>
@@ -284,84 +323,137 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
           </Tabs>
         </Box>
 
-        <OverlayScrollArea sx={{ flexGrow: 1 }}>
-          {activeTab === "project" && (
-            <ProjectInfoSection
-              mechanism={mechanism}
-              updateMetadata={handleProjectInfoChange}
-              allTags={allTags}
-              hoveredPart={hoveredPart}
-              setHoveredPart={setHoveredPart}
-              selectedIds={selectedIds}
-              setCanvasState={setCanvasState}
-              applyActions={applyActions}
-            />
+        {/* The regions and nothing else: the splitter measures the share against this, so a tab bar inside it would offset every drag by its own height. */}
+        <Box
+          ref={panelRef}
+          sx={{
+            display: "flex",
+            flexDirection: "column",
+            flex: 1,
+            minHeight: 0,
+          }}
+        >
+          {/* The analysis tab reads two different things at once, so it scrolls as two: what the selection says on top, what the mechanism says below.
+              Sharing one scroll would have the subject's own height — which changes at every selection — move the charts under the reader. */}
+          {activeTab === "analysis" && appMode !== "edition" && (
+            <>
+              <OverlayScrollArea
+                sx={{ flex: `0 0 ${100 * subjectShare}%`, minHeight: 0 }}
+              >
+                <Box sx={{ my: 1 }}>
+                  {/* With nothing selected, the mechanism's own energy takes the region: the one reading there is never an element to hold it against, which is what makes it the thing a selection can replace (see `EnergyBalance`). */}
+                  {subject === undefined && appMode === "dynamic" ? (
+                    <EnergyBalance
+                      snapshots={
+                        runtimeState.simulationSnapshots as DynamicSnapshot[]
+                      }
+                      currentTime={runtimeState.time}
+                      onSeek={seekTime}
+                    />
+                  ) : (
+                    <SelectionInspector
+                      subject={subject}
+                      mechanism={mechanism}
+                      analysedMechanism={analysedMechanism}
+                      runtimeState={runtimeState}
+                      appMode={appMode}
+                      applyActions={applyActions}
+                      setFocusedOverlay={setFocusedOverlay}
+                      hoveredPart={hoveredPart}
+                      setHoveredPart={setHoveredPart}
+                      selectedIds={selectedIds}
+                      setCanvasState={setCanvasState}
+                      setHoveredAbscissa={setHoveredAbscissa}
+                    />
+                  )}
+                </Box>
+              </OverlayScrollArea>
+              <PanelSplitter containerRef={panelRef} onChange={setSubjectShare} />
+            </>
           )}
-          {activeTab === "elements" && (
-            <ElementProperties
-              element={
-                mechanism.mechanicalElements.find(
-                  (el) => el.id === selectedID,
-                ) || mechanism.loads.find((l) => l.id === selectedID)
-              }
-              hoveredPart={hoveredPart}
-              setHoveredPart={setHoveredPart}
-              selectedIds={selectedIds}
-              setCanvasState={setCanvasState}
-              applyActions={applyActions}
-              mechanism={mechanism}
-              analysedMechanism={analysedMechanism}
-              appMode={appMode}
-              runtimeState={runtimeState}
-              setHighlight={setHighlight}
-            />
-          )}
-          {activeTab === "constraints" && (
-            <ConstraintsPanel
-              hoveredPart={hoveredPart}
-              setHoveredPart={setHoveredPart}
-              selectedIds={selectedIds}
-              setCanvasState={setCanvasState}
-              applyActions={applyActions}
-              mechanism={mechanism}
-            />
-          )}
-          {activeTab === "library" && (
-            <MaterialsLibraryPanel
-              mechanism={mechanism}
-              applyActions={applyActions}
-              setHoveredSection={setLibrarySection}
-              hoveredEntryID={hoveredLibraryEntryID}
-              setHoveredEntryID={setHoveredLibraryEntryID}
-              hoveredPart={hoveredPart}
-              setHoveredPart={setHoveredPart}
-              selectedIds={selectedIds}
-              setCanvasState={setCanvasState}
-              focusRequest={libraryFocusRequest}
-              onFocusHandled={() => setLibraryFocusRequest(null)}
-            />
-          )}
-          {activeTab === "analysis" && (
-            <AnalysisPanel
-              setHighlight={setHighlight}
-              setRedundancySymbols={setRedundancySymbols}
-              modePreviewRef={modePreviewRef}
-              mechanism={mechanism}
-              analysedMechanism={analysedMechanism}
-              appMode={appMode}
-              applyActions={applyActions}
-              hoveredPart={hoveredPart}
-              setHoveredPart={setHoveredPart}
-              selectedIds={selectedIds}
-              setCanvasState={setCanvasState}
-              blockedMotors={blockedMotors}
-              runtimeState={runtimeState}
-              setRuntimeState={setRuntimeState}
-              selectedElement={selectedElement}
-              setHoveredAbscissa={setHoveredAbscissa}
-            />
-          )}
-        </OverlayScrollArea>
+          <OverlayScrollArea sx={{ flex: 1, minHeight: 0 }}>
+            {activeTab === "project" && (
+              <ProjectInfoSection
+                mechanism={mechanism}
+                updateMetadata={handleProjectInfoChange}
+                allTags={allTags}
+                hoveredPart={hoveredPart}
+                setHoveredPart={setHoveredPart}
+                selectedIds={selectedIds}
+                setCanvasState={setCanvasState}
+                applyActions={applyActions}
+              />
+            )}
+            {activeTab === "elements" && (
+              <ElementProperties
+                element={
+                  mechanism.mechanicalElements.find(
+                    (el) => el.id === selectedID,
+                  ) || mechanism.loads.find((l) => l.id === selectedID)
+                }
+                hoveredPart={hoveredPart}
+                setHoveredPart={setHoveredPart}
+                selectedIds={selectedIds}
+                setCanvasState={setCanvasState}
+                applyActions={applyActions}
+                mechanism={mechanism}
+                analysedMechanism={analysedMechanism}
+                appMode={appMode}
+                runtimeState={runtimeState}
+                setHighlight={setHighlight}
+              />
+            )}
+            {activeTab === "constraints" && (
+              <ConstraintsPanel
+                hoveredPart={hoveredPart}
+                setHoveredPart={setHoveredPart}
+                selectedIds={selectedIds}
+                setCanvasState={setCanvasState}
+                applyActions={applyActions}
+                mechanism={mechanism}
+              />
+            )}
+            {activeTab === "library" && (
+              <MaterialsLibraryPanel
+                mechanism={mechanism}
+                applyActions={applyActions}
+                setHoveredSection={setLibrarySection}
+                hoveredEntryID={hoveredLibraryEntryID}
+                setHoveredEntryID={setHoveredLibraryEntryID}
+                hoveredPart={hoveredPart}
+                setHoveredPart={setHoveredPart}
+                selectedIds={selectedIds}
+                setCanvasState={setCanvasState}
+                focusRequest={libraryFocusRequest}
+                onFocusHandled={() => setLibraryFocusRequest(null)}
+              />
+            )}
+            {activeTab === "analysis" && (
+              <AnalysisPanel
+                setHighlight={setHighlight}
+                setRedundancySymbols={setRedundancySymbols}
+                modePreviewRef={modePreviewRef}
+                mechanism={mechanism}
+                analysedMechanism={analysedMechanism}
+                appMode={appMode}
+                applyActions={applyActions}
+                hoveredPart={hoveredPart}
+                setHoveredPart={setHoveredPart}
+                selectedIds={selectedIds}
+                canvasState={canvasState}
+                setCanvasState={setCanvasState}
+                blockedMotors={blockedMotors}
+                runtimeState={runtimeState}
+                seekTime={seekTime}
+                setHoveredBalanceTerm={setHoveredBalanceTerm}
+                momentBalanceReference={momentBalanceReference}
+                setMomentBalanceReference={setMomentBalanceReference}
+                setMomentBalanceReferenceHovered={setMomentBalanceReferenceHovered}
+                setFocusedOverlay={setFocusedOverlay}
+              />
+            )}
+          </OverlayScrollArea>
+        </Box>
       </Paper>
       </LibraryNavigationContext.Provider>
     </ElementNavigationContext.Provider>

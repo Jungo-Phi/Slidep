@@ -9,6 +9,7 @@ import {
   BeltElement,
   CanvasState,
   HoveredPart,
+  HoveredReading,
   LoadElement,
   Point2,
   CanvasStateType,
@@ -247,6 +248,8 @@ export const HOVER_TARGETS: Record<CanvasStateType, HoverTargets> = {
   PlacingProbe: { node: "centre", gear: "rim-top", edge: "body-centre" },
   // Never read: picking looks through the metric box at the state under it.
   PlacingProbeMetrics: NOTHING,
+  // A node or a beam's own end can be the moment balance's reference point — nothing else names a single point precisely enough.
+  PickingMomentBalanceNode: { node: "centre", edge: "ends" },
 
   Measuring: MEASURING,
   MeasuringFrom: MEASURING,
@@ -1056,6 +1059,9 @@ export function get_hovered_part(
   /** What the previous frame of this drag asked for, when there is one. */
   askedPosition?: Point2,
   isSimulating: boolean = false,
+  /** The measured reading under the cursor, hit-tested by the caller against the frame it last drew (`MechanicalCanvas`): the arrows exist only in that frame, and their geometry is the drawing's own.
+   * Arbitrated here all the same, so one function decides what the cursor is on. */
+  overlayReading?: { reading: HoveredReading; position: WorldPoint },
 ): HoveredPart {
   state = state_under_probe_metrics(state);
   // Picking only: an element being dragged is under the cursor by construction and must never be its own target.
@@ -1170,6 +1176,16 @@ export function get_hovered_part(
   let past: { part: HoveredPart; distance: number } | undefined;
 
   for (const type of HOVER_ORDER) {
+    // Hit-tested by the caller, but ranked here like everything else: see `overlayReading`.
+    if (type === "overlay") {
+      if (overlayReading)
+        return {
+          type: "Overlay",
+          position: overlayReading.position,
+          reading: overlayReading.reading,
+        };
+      continue;
+    }
     // Badges are not elements, so the family is swept whole at the rank `DRAWING_ORDER` gives "probe" — above its host, which the badge overlaps and which would otherwise answer for it.
     if (type === "probe") {
       const badgeHover = hovered_probe_badge(

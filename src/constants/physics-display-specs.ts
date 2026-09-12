@@ -33,11 +33,13 @@ export const MOMENT_SCALING = {
   PX_PER_DECADE: LOAD_SCALING.PX_PER_DECADE / 2,
 };
 
-/** The physics-overlay quantities drawn on the canvas: a probed velocity, and the two flavours of reaction force/moment a constraint can carry. */
+/** The physics-overlay quantities drawn on the canvas: a probed velocity, the two flavours of reaction force/moment a constraint can carry, and a body's own weight/inertia force. */
 export type PhysicsOverlayKind =
   | "velocity"
   | "reaction-support"
-  | "reaction-internal";
+  | "reaction-internal"
+  | "weight"
+  | "inertia";
 
 /**
  * Distinguishable from a user-placed load's `COLORS.ACCENT` on purpose — an arrow here is measured, not authored.
@@ -47,6 +49,8 @@ export const PHYSICS_OVERLAY_COLOR: Record<PhysicsOverlayKind, string> = {
   velocity: "#2F81F7",
   "reaction-support": "#B8410D",
   "reaction-internal": "#60A45F",
+  weight: "#D4A72C",
+  inertia: "#8250DF",
 };
 
 /** The three internal-force diagrams of one beam, shown together in the analysis panel

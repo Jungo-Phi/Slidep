@@ -18,7 +18,11 @@ import {
 } from "../../../types/runtime-state";
 import { CanvasState } from "../../../types/canvas-state";
 import { LiveFrame } from "../../canvas/MechanicalCanvas";
-import { OverlayArrow, OverlayMoment } from "../../canvas/drawing/drawing-functions";
+import {
+  FocusedOverlay,
+  OverlayArrow,
+  OverlayMoment,
+} from "../../canvas/drawing/drawing-functions";
 import { is_node_element, overlay_shown } from "../../../utils/element-queries";
 import {
   MAX_RECORDING_TIME,
@@ -45,11 +49,14 @@ import {
 import {
   EMPTY_TRAJECTORY_CACHE,
   TrajectoryCache,
+  element_acceleration,
   element_reactions,
   element_velocity,
   extend_probe_trajectories,
   trajectories_at,
 } from "./probe-series";
+import { element_carries_mass, element_mass } from "../../../utils/element-mass";
+import { body_centre } from "../analysis/force-balance";
 import { PROBE_ELEMENT_COLORS } from "../../properties-panel/components/ProbeChart";
 import {
   CohesionField,
@@ -93,7 +100,7 @@ const worker_lead = (simDt: number): number =>
   Math.max(2 * simDt, 2 * RETAIN_DT);
 
 /**
- * Floors for the beam-fill lenses' own shared scales (see `NEGLIGIBLE_STRESS_FRACTION`'s own doc): `NEGLIGIBLE_STRESS_FRACTION` of the LOWEST admissible reference among the mechanism's own beams — `Re` for `normal`/`bending`, `τ_adm` for `shear` (its own comparison basis, `shear_admissible_stress(Re)`, not `Re` directly — a beam's shear reading is judged against ITS OWN admissible shear, so the floor tracks the same reference the ratio itself does).
+ * Floors for the beam-fill lenses' own shared scales (see `NEGLIGIBLE_STRESS_FRACTION`'s own doc): `NEGLIGIBLE_STRESS_FRACTION` of the LOWEST admissible reference among the mechanism's own beams — `Re` for `utilization`/`normal`/`bending`, `τ_adm` for `shear` (its own comparison basis, `shear_admissible_stress(Re)`, not `Re` directly — a beam's shear reading is judged against ITS OWN admissible shear, so the floor tracks the same reference the ratio itself does).
  * The lowest across beams, not an average or the first found, so the floor never hides a real reading for whichever material has the least room to begin with.
  * `0` (a no-op against `Math.max`) when no beam resolves a material/profile, same "nothing to scale yet" case `StressScaleCache` itself falls back to.
  */
@@ -169,6 +176,13 @@ export type UseSimulationPlaybackArgs = {
   /** Both modes: whether the next steps detect and resist the floor. Gated independently
    * from `collisions` — same reasoning otherwise. */
   floor: boolean;
+  /** Whether the free-body diagram is on: every anchored node then shows its support reaction, whatever its own `force` overlay says, and marked (`OverlayArrow.emphasis`).
+   * Same reasoning as `gravity` — read every render through a ref. */
+  supportReactions: boolean;
+  /** The reading `App`'s own `focusedOverlay` names, if any — drawn whatever the overlay settings say, since a selected reading must stay on screen for the selection to mean anything. Same reasoning as `gravity` — read every render through a ref. */
+  focusedOverlay: FocusedOverlay | null;
+  /** The reading the hover names, from the canvas or from a row of the panel pointing at one, drawn for as long as the hover lasts: same reasoning as `focusedOverlay`. */
+  hoveredOverlay: FocusedOverlay | null;
   /** Called when the recording hits `MAX_RECORDING_TIME` or the snapshot memory cap. */
   onRecordingLimitReached: (reason: SimulationLimitReason, maxTime: number) => void;
 };
@@ -186,6 +200,9 @@ export function useSimulationPlayback({
   gravity,
   collisions,
   floor,
+  supportReactions,
+  focusedOverlay,
+  hoveredOverlay,
   onRecordingLimitReached,
 }: UseSimulationPlaybackArgs) {
   const runtimeState = useSimClock(CLOCK_MIRROR_MS);
@@ -202,6 +219,12 @@ export function useSimulationPlayback({
   collisionsRef.current = collisions;
   const floorRef = useRef(floor);
   floorRef.current = floor;
+  const supportReactionsRef = useRef(supportReactions);
+  supportReactionsRef.current = supportReactions;
+  const hoveredOverlayRef = useRef(hoveredOverlay);
+  hoveredOverlayRef.current = hoveredOverlay;
+  const focusedOverlayRef = useRef(focusedOverlay);
+  focusedOverlayRef.current = focusedOverlay;
   /** What the canvas draws, republished every frame. */
   const liveFrameRef = useRef<LiveFrame | null>(null);
   const trajectoryCacheRef = useRef<TrajectoryCache>(EMPTY_TRAJECTORY_CACHE);
@@ -377,6 +400,9 @@ export function useSimulationPlayback({
     let shownMechanism: Mechanism | null = null;
     let shownHeld = false;
     let shownExtending = false;
+    let shownSupportReactions = false;
+    let shownFocusedOverlay: FocusedOverlay | null = null;
+    let shownHoveredOverlay: FocusedOverlay | null = null;
     const publish = (mode: AppMode) => {
       if (!is_simulating(mode)) {
         liveFrameRef.current = null;
@@ -390,12 +416,21 @@ export function useSimulationPlayback({
       const held = grabbingRef.current;
       // Pausing changes what the trajectories show without moving the clock, so it has to be part of what makes a frame stale — otherwise the faded segment appears only at the next scrub.
       const extending = rs.isPlaying && !rs.scrubbed;
+      // Switching the support reactions on changes which arrows this frame carries without moving the clock, exactly as pausing does for the trajectories — left out, the new setting would only appear at the next scrub.
+      const supportReactions = supportReactionsRef.current;
+      // Selecting a reading changes which arrows this frame carries the same way toggling the support-reaction overlay does — a newly-focused one must be able to force its way onto a frame nothing else invalidates (paused, unscrubbed).
+      const focusedOverlay = focusedOverlayRef.current;
+      // Pointing at one does the same, for as long as the pointing lasts.
+      const hoveredOverlay = hoveredOverlayRef.current;
       if (
         rs.time === shownTime &&
         rs.simulationSnapshots === shownSnaps &&
         mech === shownMechanism &&
         held === shownHeld &&
-        extending === shownExtending
+        extending === shownExtending &&
+        supportReactions === shownSupportReactions &&
+        focusedOverlay === shownFocusedOverlay &&
+        hoveredOverlay === shownHoveredOverlay
       )
         return;
       shownTime = rs.time;
@@ -403,6 +438,9 @@ export function useSimulationPlayback({
       shownMechanism = mech;
       shownHeld = held;
       shownExtending = extending;
+      shownSupportReactions = supportReactions;
+      shownFocusedOverlay = focusedOverlay;
+      shownHoveredOverlay = hoveredOverlay;
 
       // Held: the newest computed instant, not the one under the cursor.
       //
@@ -438,9 +476,10 @@ export function useSimulationPlayback({
       // Velocity only means something at a sampled point (node/gear); reactions resolve for those AND edges, one per endpoint — `element_reactions` returns however many apply, each optionally carrying a moment too (a rigid weld's force-couple, reduced).
       const overlayArrows: OverlayArrow[] = [];
       const overlayMoments: OverlayMoment[] = [];
+
       // The N/T/Mf field, every beam, dynamic mode only — no overlay flag gates it (see `LiveFrame.cohesionFields`'s own doc): phase 5bis's panel diagrams show it for whichever beam is selected, not a persistent per-element setting.
       const cohesionFields: CohesionField[] = [];
-      // Floors for `normal`/`bending`/`shear`'s own scales (see `negligible_stress_floors`'s doc) — 0 (a no-op) outside dynamic mode, where there is nothing to scale in the first place.
+      // Floors for the beam-fill lenses' own scales (see `negligible_stress_floors`'s doc) — 0 (a no-op) outside dynamic mode, where there is nothing to scale in the first place.
       let negligibleStress = 0;
       let negligibleShear = 0;
       if (mode === "dynamic") {
@@ -459,26 +498,135 @@ export function useSimulationPlayback({
           mech.profiles,
         );
         const pool = rs.negligibilityPool;
+        // A reading named by the panel or by the cursor stays on screen whatever the overlay settings say: pointing at one would otherwise point at nothing.
+        const namedReadings = [focusedOverlay, hoveredOverlay].filter(
+          (reading): reading is FocusedOverlay => reading !== null,
+        );
+        const is_named_on = (elementID: ID, kind: FocusedOverlay["kind"]) =>
+          namedReadings.some(
+            (reading) =>
+              reading.elementID === elementID && reading.kind === kind,
+          );
         for (const el of geometryMechanism.mechanicalElements) {
-          if ("position" in el && overlay_shown(el, "velocity")) {
+          if (overlay_shown(el, "velocity") || is_named_on(el.id, "velocity")) {
             const v = element_velocity(el, dynSnap);
+            // Drawn from `body_centre`, which for an edge is the mid-span `element_velocity` samples it at.
+            const at = body_centre(el);
             // A residual velocity next to nothing else moving is noise, not motion — see negligibility-pool.ts.
             // Hidden rather than drawn tiny: a clamped-to-minimum arrow would still read as "something moves here".
-            if (v && !is_negligible(v.length(), pool.linearVelocity))
-              overlayArrows.push({ at: el.position, vector: v, kind: "velocity" });
+            if (v && at && !is_negligible(v.length(), pool.linearVelocity))
+              overlayArrows.push({
+                at,
+                vector: v,
+                kind: "velocity",
+                elementID: el.id,
+              });
           }
-          // `is_node_element`, not just the flag: `available_overlays` does not offer "force" on an edge (a beam's own two arrows would read as a false "one force per member" summary), yet a saved mechanism can still carry a stale `true` there.
-          if (overlay_shown(el, "force") && is_node_element(el)) {
+          // Weight (`m·g`) and inertia (`m·a`) share the same free body the force balance itemises: no weight arrow at all with gravity off, same reasoning as `compute_force_balance`'s own weight row.
+          if (element_carries_mass(el)) {
+            const centre = body_centre(el);
+            const mass = element_mass(el, mech.materials, mech.profiles);
+            if (centre && mass > 0) {
+              if (
+                (overlay_shown(el, "weight") || is_named_on(el.id, "weight")) &&
+                gravity.length() > 1e-9
+              ) {
+                const w = gravity.mul(mass);
+                if (!is_negligible(w.length(), pool.force))
+                  // Named the way `force-balance.ts` names its own weight term, so a hovered line of the balance can light THIS arrow instead of drawing another over it — same reasoning as a support reaction's own `id`.
+                  overlayArrows.push({
+                    at: centre,
+                    vector: w,
+                    kind: "weight",
+                    id: `weight:${el.id}`,
+                    elementID: el.id,
+                  });
+              }
+              if (
+                overlay_shown(el, "inertia") ||
+                is_named_on(el.id, "inertia")
+              ) {
+                const a = element_acceleration(el, dynSnap);
+                const f = a?.mul(mass);
+                if (f && !is_negligible(f.length(), pool.force))
+                  overlayArrows.push({ at: centre, vector: f, kind: "inertia", elementID: el.id });
+              }
+            }
+          }
+          // A beam answers with one reading per end, a node with one — `element_reactions` returns however many the element has (see its own doc).
+          // The support-reaction overlay adds every anchored node's own, which no element flag can reach any more.
+          // `!isNode`, not just the flag: `available_overlays` does not offer "force" on a node (its reading is the support reaction, which is the mechanism-wide overlay's business), yet a saved mechanism can still carry a stale `true` there.
+          const isNode = is_node_element(el);
+          const showsOwn = overlay_shown(el, "force") && !isNode;
+          // This element's own reaction readings that something is naming, so they draw with the overlay off.
+          const namedReactions = namedReadings.filter(
+            (reading) =>
+              reading.elementID === el.id &&
+              (reading.kind === "reaction-support" ||
+                reading.kind === "reaction-internal"),
+          );
+          if (
+            showsOwn ||
+            (supportReactions && isNode) ||
+            namedReactions.length > 0
+          ) {
             for (const r of element_reactions(el, dynSnap)) {
-              const kind = r.atAnchor ? "reaction-support" : "reaction-internal";
-              if (!is_negligible(r.vector.length(), pool.force))
-                overlayArrows.push({ at: r.at, vector: r.vector, kind });
+              // Only a NODE ever reads as a support reaction, and only where it is anchored — that reading is the opposed one, what the ground pushes back with.
+              // A beam end says what the beam applies, wherever it sits, so it keeps one colour along the whole member instead of changing it at whichever end happens to land on a support.
+              const isSupport = r.atAnchor && isNode;
+              const kind = isSupport ? "reaction-support" : "reaction-internal";
+              // Naming THIS reaction draws it whole: its resultant and its couple are one reading, so neither is ever shown without the other.
+              const named = namedReactions.some(
+                (reading) => reading.kind === kind && reading.which === r.which,
+              );
+              // Support reactions and nothing else: a free node's reading is zero wherever beams carry it, and means little where they do not.
+              const drawsVector =
+                showsOwn || (supportReactions && isSupport) || named;
+              const drawsMoment = drawsVector;
+              if (!drawsVector && !drawsMoment) continue;
+
+              // Named the way `force-balance.ts` names its own support term, so a hovered line of the balance can light THIS arrow instead of drawing another over it.
+              const id = isSupport ? `support:${el.id}` : undefined;
+              const arrowShown =
+                drawsVector && !is_negligible(r.vector.length(), pool.force);
+              // Orients the half-arc `draw_overlay_moment` draws for this moment, so it lands on one side rather than circling the point whole.
+              // A `reaction-internal` reading takes its owning member's own direction, into the beam from this end. A `reaction-support` one has no member of its own to take it from — it borrows the opposite of its own reaction arrow instead, so the two never draw across each other; with no arrow shown there either, it falls back to the ordinary full loop.
+              const direction = isSupport
+                ? arrowShown
+                  ? r.vector.mul(-1)
+                  : undefined
+                : "positionStart" in el
+                  ? (r.at.distance_to(el.positionStart) <=
+                    r.at.distance_to(el.positionEnd)
+                      ? el.positionEnd
+                      : el.positionStart
+                    ).sub(r.at)
+                  : undefined;
+              if (arrowShown)
+                overlayArrows.push({
+                  at: r.at,
+                  vector: r.vector,
+                  kind,
+                  id,
+                  // The node itself for a support reaction — its own reading, not any one beam's — same element a click on this arrow selects (`FocusedOverlay`).
+                  elementID: el.id,
+                  which: r.which,
+                });
               // `r.moment` is the solver's raw CCW-positive convention; `draw_moment` (and every other moment on screen) reads the data model's clockwise- positive one instead — negate once, here, same flip `load-model.ts` applies for a user-authored `MomentElement`.
               if (
+                drawsMoment &&
                 r.moment !== undefined &&
                 !is_negligible(r.moment, pool.moment)
               )
-                overlayMoments.push({ at: r.at, torque: -r.moment, kind });
+                overlayMoments.push({
+                  at: r.at,
+                  torque: -r.moment,
+                  kind,
+                  id,
+                  elementID: el.id,
+                  which: r.which,
+                  direction,
+                });
             }
           }
           if (el.type === "beam") {
@@ -505,7 +653,8 @@ export function useSimulationPlayback({
         overlayArrows,
         overlayMoments,
         cohesionFields,
-        stressScale: stressScaleCacheRef.current.maxStress,
+
+        stressScale: Math.max(stressScaleCacheRef.current.maxStress, negligibleStress),
         normalStressScale: Math.max(stressScaleCacheRef.current.maxNormal, negligibleStress),
         bendingStressScale: Math.max(stressScaleCacheRef.current.maxBending, negligibleStress),
         shearStressScale: Math.max(stressScaleCacheRef.current.maxShear, negligibleShear),

@@ -191,6 +191,8 @@ export function pool_key_for_metric(
     case "force":
     case "force-start":
     case "force-end":
+    case "weight":
+    case "inertia":
       return "force";
     case "moment":
     case "moment-start":
@@ -217,6 +219,8 @@ export function quantity_kind_for_metric(metric: ProbeMetric): QuantityKind {
     case "force":
     case "force-start":
     case "force-end":
+    case "weight":
+    case "inertia":
       return FORCE;
     case "moment":
     case "moment-start":

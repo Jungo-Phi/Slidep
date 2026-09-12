@@ -21,10 +21,12 @@ import type {
   ScreenPoint,
   ViewportState,
 } from "../../../types";
+import type { MaterialDef, ProfileDef } from "../../../types/material";
 import { ONE, Point2 } from "../../../types/point2";
 import { world2screen, world2screen_length } from "../../../utils";
 import { LENGTH, rad_to_deg } from "../../../utils/quantity-format";
 import { auto_dimension_offset } from "../../properties-panel/element-dimensions";
+import { mechanism_center_of_mass } from "../../solver/analysis/force-balance";
 import {
   draw_dimension,
   draw_dimension_angle,
@@ -40,6 +42,34 @@ import {
   spanned_edge,
 } from "../tools/measure";
 
+/** Radius of the centre-of-mass marker (screen px) — a touch bigger than a ruler endpoint's own ring, since it stands for the whole mechanism rather than one point of it. */
+export const CENTER_OF_MASS_RADIUS = 9;
+
+/**
+ * The classic mechanics symbol for a centre of mass: a circle quartered by a cross, two opposite quadrants filled.
+ * In the ruler's own hue. Also drawn by the moment-balance picker while it is armed, where the same landmark is a click target rather than only something to measure against.
+ */
+export function draw_center_of_mass(ctx: CanvasRenderingContext2D, at: ScreenPoint) {
+  ctx.save();
+  ctx.strokeStyle = COLORS.MEASURE;
+  ctx.fillStyle = COLORS.MEASURE;
+  ctx.lineWidth = STROKE_WIDTHS.STANDARD;
+  ctx.beginPath();
+  ctx.moveTo(at.x, at.y);
+  ctx.arc(at.x, at.y, CENTER_OF_MASS_RADIUS, 0, Math.PI / 2);
+  ctx.closePath();
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(at.x, at.y);
+  ctx.arc(at.x, at.y, CENTER_OF_MASS_RADIUS, Math.PI, Math.PI * 1.5);
+  ctx.closePath();
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(at.x, at.y, CENTER_OF_MASS_RADIUS, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+}
+
 /** Below this the two ends are one point on screen: there is no line to draw and no direction to point an arrow along. */
 const MIN_SCREEN_LENGTH = 4;
 
@@ -53,6 +83,9 @@ export type MeasureDrawing = {
   mechanicalElements: MechanicalElement[];
   /** What the cursor points at is only read while it is over the canvas; a reading already laid is read wherever one looks. */
   cursorOnCanvas: boolean;
+  /** For the centre-of-mass marker — the whole mechanism's, not the selection's, so it stays put whatever gets clicked. */
+  materials: MaterialDef[];
+  profiles: ProfileDef[];
 };
 
 /**
@@ -167,8 +200,11 @@ export function draw_ruler(
   ctx: CanvasRenderingContext2D,
   drawing: MeasureDrawing,
 ) {
-  const { state, hoveredPart, mechanicalElements, cursorOnCanvas } = drawing;
+  const { viewport, state, hoveredPart, mechanicalElements, cursorOnCanvas, materials, profiles } =
+    drawing;
   if (!ruler_is_out(state)) return;
+  const centerOfMass = mechanism_center_of_mass(mechanicalElements, materials, profiles);
+  if (centerOfMass) draw_center_of_mass(ctx, world2screen(centerOfMass, viewport));
   for (const reading of shown_readings(
     state,
     hoveredPart,

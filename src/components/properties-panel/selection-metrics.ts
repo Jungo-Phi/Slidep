@@ -1,10 +1,12 @@
 import { MechanicalElement } from "../../types/element";
 import { MaterialDef, ProfileDef } from "../../types/material";
-import { element_mass } from "../../utils/element-mass";
+import { element_carries_mass, element_mass } from "../../utils/element-mass";
 
 export interface SelectionMetrics {
   /** kg, over everything in the selection that carries mass. */
   mass: number;
+  /** How many of the selection's elements carry a mass at all, whatever its value. */
+  massCount: number;
   /** m, over the selection's beams — the bill of material a frame adds up to. */
   beamLength: number;
   beamCount: number;
@@ -17,14 +19,18 @@ export function selection_metrics(
   profiles: ProfileDef[],
 ): SelectionMetrics {
   let mass = 0;
+  let massCount = 0;
   let beamLength = 0;
   let beamCount = 0;
   for (const element of elements) {
     mass += element_mass(element, materials, profiles);
+    if (element_carries_mass(element)) {
+      massCount += 1;
+    }
     if (element.type === "beam") {
       beamLength += element.positionStart.distance_to(element.positionEnd);
       beamCount += 1;
     }
   }
-  return { mass, beamLength, beamCount };
+  return { mass, massCount, beamLength, beamCount };
 }

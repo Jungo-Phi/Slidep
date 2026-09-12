@@ -1,6 +1,19 @@
 import type { StringKey } from "../i18n";
+import { PhysicsOverlayKind } from "../constants/physics-display-specs";
 import { ID } from "./element";
 import { WorldPoint } from "./mechanism";
+
+/**
+ * Which measured reading is named: the quantity, the element it is read from, and — for a reaction, the one kind an edge carries two of — which of its own points.
+ * A reading is not an element: it has no id of its own.
+ * A reaction is ONE reading, resultant and couple together: that is what the solver computes at a point (`ElementReaction`), and what the two glyphs drawn there stand for.
+ * The same identity a click keeps hold of, which is why `FocusedOverlay` is this very type.
+ */
+export type HoveredReading = {
+  elementID: ID;
+  kind: PhysicsOverlayKind;
+  which?: "node" | "start" | "end";
+};
 
 type HoveredElement = {
   position: WorldPoint;
@@ -36,7 +49,10 @@ export type HoveredPart =
       part: "start" | "end" | "body" | "start-value" | "end-value";
       t?: number;
     })
-  | (HoveredElement & { type: "Moment"; part: "body" | "value" });
+  | (HoveredElement & { type: "Moment"; part: "body" | "value" })
+  /** A measured reading drawn over the mechanism — no `id`, since it names no element of its own: `reading.elementID` is the element it is read FROM, which the canvas lights up alongside it.
+   * In the same register as everything else here, so a reading and an element can never be hovered at once. */
+  | { type: "Overlay"; position: WorldPoint; reading: HoveredReading };
 
 /**
  * Whether the cursor is on an element rather than on empty space or on a belt's closing terminal, which names none.
@@ -50,13 +66,15 @@ export function names_element(
   | { type: "FloorHeight" }
   | { type: "FloorAngle" }
   | { type: "FloorAngleValue" }
+  | { type: "Overlay" }
 > {
   return (
     part.type !== "Void" &&
     part.type !== "BeltClosure" &&
     part.type !== "FloorHeight" &&
     part.type !== "FloorAngle" &&
-    part.type !== "FloorAngleValue"
+    part.type !== "FloorAngleValue" &&
+    part.type !== "Overlay"
   );
 }
 

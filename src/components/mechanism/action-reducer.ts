@@ -65,6 +65,8 @@ export function actionReducer(
   let floor = { ...mechanism.simulation.floor };
   let gravity = mechanism.simulation.gravity;
   let collisions = mechanism.simulation.collisions;
+  let beamStressLens = mechanism.simulation.beamStressLens;
+  let supportReactions = mechanism.simulation.supportReactions;
   let element: UnionElement;
   let material: MaterialDef;
   let profile: ProfileDef;
@@ -508,6 +510,12 @@ export function actionReducer(
       case "SetGravity":
         gravity = action.enabled !== revert;
         break;
+      case "SetBeamStressLens":
+        beamStressLens = revert ? action.oldValue : action.newValue;
+        break;
+      case "SetSupportReactions":
+        supportReactions = action.enabled !== revert;
+        break;
       case "SetCollisions":
         collisions = action.enabled !== revert;
         break;
@@ -550,7 +558,14 @@ export function actionReducer(
   return {
     metadata: mechanism.metadata,
     viewport: viewport,
-    simulation: { ...mechanism.simulation, floor, gravity, collisions },
+    simulation: {
+      ...mechanism.simulation,
+      floor,
+      gravity,
+      collisions,
+      beamStressLens,
+      supportReactions,
+    },
     mechanicalElements: mechanicalElements,
     constraintElements: constraintElements,
     loads: loadElements,

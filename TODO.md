@@ -8,23 +8,85 @@
 
 ---
 
+**ElementMeasures -> SelectionInspector**
+
+- Nettoyer les marges et nettoyer SelectionInspector
+
+- Afficher les valeurs à jour dans l'onglet "éléments"
+
+- Inertie rotationelle ?
+
+**MomentBalanceReference**
+
+- On doit voir le MomentBalanceReference quand on l'édite.
+- Pour MomentBalanceReference, fusionner le bouton et le prop
+
+**Rendre la physique exacte (cas faux)**
+
+- Sur les moments de réactions aux appuis, une force de réaction qui entre dans le calcul des moments n'est pas mise en évidence. Si tu vois exactement de quoi je parle, règle le problème. Mais si tu a des doutes autour de ce point discutons-en.
+
+---
+
+- En dessous de 0.1s, on devrait afficher les centièmes de secondes
+- N'importe quel changement d'étât (ex. CTRL+Z, raccourcis) devrait faire fermer un menu ouvert
+- Mieux gérer rho=0 : Interdire rho=0 ? Ne remplacer les masses que si elles sont libres ?
+- Le parsing pour la masse volumique est nul (refuse T/m3, mg/cm3 et des valeurs trop petites). Est-ce aussi le cas ailleur ?
+- Afficher "0 N" au lieu de "0 nN" quand une force est nulle ?
+- La barre de scroll devrait se cacher, ou au moins se réduire, si on n'a pas scrollé depuis un moment
+- Régler le CTRL+C
+- Le hover de la règle sur les joins n'est pas bon. Et hover de règle devrait épaissir les traits
+- Afficher le signe des moments
+- Hover des loads épaissis les flèches
+- Régler les moments qui se supperposent
+- Régler les forces sont dessinées sur les poutres
+- Re-positionner le texte des moments (quand ils ne sont pas sur tout le tour)
+
+- Double Cantilever : Moment au join
+- Vilbrequin double slider : Quand "Beam Hadu" a un angle de 180°
+- Les cas ou Mf est non nul alors que la poutre est dans le vide
+- Pourquoi les poids des poutres disparaissent quand on fait tourner la simu (Masse suspendue.slidep) ?
+
+- 🚨 Bug avec le mécanisme "Poutre sur joint de courroie"
+- 🚨 Bug avec le mécanisme "Ressorts sur moteur"
+- 🔨 Finir le boulot de "ratio-masse-convergence-dynamique.md" sur CP.slidep
+- 🚨 Dans "Double cantilever", le moment de réaction est le même à l'ancrage qu'au milieu. Est-ce normal ?
+- Regarder les contraintes au moment du choc dans "Test slider.slidep"
+- La trajectoire sur CoreXY en dynamique est fausse
+
 ### À faire rapidement
 
-- Mécanismes exemple
+**Mécanismes exemple :**
 
-- Rendre la physique exacte (cas faux, première frames, etc.)
+"simples"
+
+- Statique : Cantilever
+- Cinématique : Bielle-Manivelle
+- Dynamique : Masse-Ressort-Amortisseur
+
+"impressionnants"
+
+- Statique : Palan
+- Cinématique : Jansen
+- Dynamique : Horloge à pendule
+
+**Hot-reload !!!**
+
+- Que doit-il se passer quand on change une valeur en cours de simualtion (hot-reload), par exemple une masse, puis qu'on reviens en arrière quand sa valeur était différente ? Devrait-on afficher la finale (sockée actuellement), ou la valeur correspondante au temps t de la simulation ? Et quand on quitte la simulation, est-ce qu'on devrait rependre la valeur finale, ou celle affichée au moment t ?
+
+**Priorités sur le plan général**
+
 - Bloquer moteur si couple demandé suppérieur couple disponible
 - Clarifier le grab en dynamique (grab -> force ?)
-- 🔨 Clean cette putain de section "élément en simulation
 - Mobile mode
 - Ajouter mesures globales (contrainte max) ou "Contrainte max sur la poutre"
-- Clean les meusures
+- Clean les mesures
 
 - Supprimer poutre sur joint de courroie
 - Ajouter contraintes de coincidence (point - ligne)
 - Ajouter contraintes de distance parallèle
 - Comment connecter ou non des engrenages sur le même axe ?
 - Faire fonctionner les treuils
+- Copié-collé
 
 - 🚨 Un ctrl+y de remplacement d'élément n'a pas reset la simulation, wtf !?
 - 🚨 Le moteur se bloque avec "Jansen", wtf !?
@@ -38,6 +100,8 @@
 - force-distribuée : "force totale" -> "force équivalente"
 - 🔨 Corriger les diagrammes d'efforts internes (valeur à zéro)
 - 🔨 Les trais indicatifs des valeurs max dans les diagrammes des efforts (vu dans Mf) s'accumulent
+- Au hover des efforts internes, affichers des charges dans la poutre (à la place du simple trait)
+- Ne pas enregistrer un mécanisme vide
 
 - 🔨 La puissance affichée devrait être celle que le moteur peut fournir (et pas la puissance instantanée), on devrait donc ensuite pouvoir comparer la puissance du moteur à la puissance instantanée. Le calcul devrait aussi être revu pour prendre en compte ce qu'apporte vraiment le moteur et ce qui tient de l'inertie.
 
@@ -64,14 +128,7 @@
 - 🔨 Mettre à jour le hover en simulation quand le mécanisme bouge sans grab
 - 🚨 En cinématique, quand l'alignement n'est juste pas parfait (alors que le défaut peut ne même pas s'afficher), le mécanisme bouge tout seul (voir "Le mécanisme qui bouge tout seul.slidep").
 - 🔨 Donner a tous les ressorts en cinématique la même "élasticité".
-- 🚨 Bug avec le mécanisme "Poutre sur joint de courroie"
-- 🚨 Bug avec le mécanisme "Ressorts sur moteur"
 - Passer la simulation en Rust WASM pour accélérer ?
-- 🔨 Finir le boulot de "ratio-masse-convergence-dynamique.md" sur CP.slidep
-- 🚨 Dans "Double cantilever", le moment de réaction est le même à l'ancrage qu'au milieu. Est-ce normal ?
-- Regarder les contraintes au moment du choc dans "Test slider.slidep"
-- Et pour une poutre flottante à t=0
-- La trajectoire sur CoreXY en dynamique est fausse
 
 **Physique**
 
@@ -113,8 +170,6 @@
 - 🆕 Conflit cinématique (deux moteurs incompatibles) : surlignage rouge des éléments conflictuels, panneau contextuel bascule sur onglet Analyse avec message explicatif
 
 ### À faire plus tard
-
-- 🆕 Ajouter des méchanismes exemple dans la gallerie ("Jansen's linkage", "Slidep", "IK", "Horloge", "Dynamique (Huygens?)")
 
 **Mobile mode**
 
@@ -159,8 +214,10 @@
 - 🔨 Ajouter un délais (2s) avant d'afficher "mécanisme(s) exporté(s)"
 - 🔨 Dessiner un join avec le ground à PlacingGround (quand c'est approprié)
 - 🆕 Afficher des syboles au hover des numberInput start, end, longueur et angle
+- 🆕 Afficher des syboles au hover des connexion (ex. beam end = anneau)
 - 🔨 Hover une probe devrait hover l'élément aussi
 - 🆕 Sélectionner les dimensions (sur la flèche)
+- 🆕 Pouvoir mesurer et coter depuis les axes x/y
 - 🔨 Rendre les hitbox exactes (contraintes, noeuds)
 - 🤔 Caméra qui suit le mécanisme en simulation ?
 

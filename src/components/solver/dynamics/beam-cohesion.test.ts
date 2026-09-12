@@ -136,11 +136,11 @@ describe("BeamCohesion — torseur d'interface d'une poutre (docs/plan-efforts-i
     expect(cohesionB!.end.fy).toBeCloseTo(-50, 0);
   });
 
-  // Used to fail by 1.14 %: `k1` is repositioned by FOUR independent links (`Distance`, `KeepOrientation`, and both `FixedOnSegment`s — the attached mass's and the beam's own rotational-inertia midpoint), so Gauss-Seidel had two competing paths to it and no way to attribute the true reaction between them, however many sweeps or substeps ran.
-  // That competition is still there in the SOLVER; what changed is that the torsor no longer asks it — it is solved from equilibrium instead (docs/plan-efforts-interieurs.md phase 10).
+  // `k1` is repositioned by FOUR independent links (`Distance`, `KeepOrientation`, and both `FixedOnSegment`s — the attached mass's and the beam's own rotational-inertia midpoint), so Gauss-Seidel has two competing paths to it and no way to attribute the true reaction between them, however many sweeps or substeps run.
+  // The torsor never asks it: it is solved from equilibrium instead (docs/plan-efforts-interieurs.md phase 10).
   // See also docs/ratio-masse-convergence-dynamique.md.
   it("un cantilever avec une masse en cours de portée transmet la charge par le nœud attaché", () => {
-    // A mass welded to the beam's BODY mid-span (fixedNodesBodyIDs, not an endpoint), on a beam encastré at the other end.
+    // A mass welded to the beam's BODY mid-span (fixedNodesBodyIDs, not an endpoint), on a beam fixed at the other end.
     // No gravity: the only action is the load on the mass, which must reach the beam entirely through the FixedOnSegment holding it — the "attached node" channel this phase adds.
     // `dynamicRigidity: true` for a REAL moment reaction at the join, same as reaction-forces.test.ts's cantilever.
     //
@@ -203,10 +203,10 @@ describe("BeamCohesion — torseur d'interface d'une poutre (docs/plan-efforts-i
     expect_reading(atMass.fx, 0, TIP_LOAD);
     expect_reading(atMass.fy, -TIP_LOAD, TIP_LOAD);
 
-    // The lone support carries the whole load (raw sense: what the beam applies to the ground, i.e. the NEGATIVE of the classical "ground pushes back with" reading), plus the moment it creates half-way out — moment is never flipped (see `moment_at`).
+    // The lone support carries the whole load, plus the moment it creates half-way out — all three in the one sense `BeamCohesion` uses throughout: what the beam applies to the ground, the NEGATIVE of the classical "ground pushes back with" reading.
     expect_reading(cohesion!.start.fx, 0, TIP_LOAD);
     expect_reading(cohesion!.start.fy, -TIP_LOAD, TIP_LOAD);
-    expect_reading(cohesion!.start.m, TIP_LOAD * 0.5, TIP_LOAD);
+    expect_reading(cohesion!.start.m, -TIP_LOAD * 0.5, TIP_LOAD);
     // Nothing beyond the mass: the free tip carries no cohesion at all.
     expect_reading(cohesion!.end.fx, 0, TIP_LOAD);
     expect_reading(cohesion!.end.fy, 0, TIP_LOAD);

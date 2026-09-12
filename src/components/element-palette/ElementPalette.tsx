@@ -87,8 +87,10 @@ export const edition_palette = (): {
             "Measuring",
             "MeasuringFrom",
             "Measured",
+            // Same reasoning: armed from the analysis panel's own picker, not the palette, and it falls back here too.
+            "PickingMomentBalanceNode",
           ].includes(state.type) ||
-          // Une saisie ouverte depuis un outil resté armé laisse cet outil allumé : c'est lui qu'on retrouve en sortie, pas la sélection.
+          // A value edit opened from a tool that stays armed keeps that tool lit: it is what a reader finds on exit, not the selection.
           (state.type === "EditingValue" && !state.rearm),
         hilightColor: COLORS.SELECTION_BOX,
         hilightHoverColor: darken(COLORS.SELECTION_BOX, 0.2),

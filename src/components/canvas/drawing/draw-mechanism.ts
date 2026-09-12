@@ -63,6 +63,7 @@ import {
   draw_redundancy_symbol,
   magnitude_stress_fill_stops,
   signed_stress_fill_stops,
+  type FocusedOverlay,
 } from "./drawing-functions";
 import { RedundancySymbol } from "../../solver/analysis/redundancy-symbols";
 import { offset_ends, parallel_edge_offsets } from "./parallel-edges";
@@ -513,6 +514,10 @@ export type CanvasDrawing = {
    * ladder is invisible, so the dimension goes into relief to say so. */
   dimensionSnapped?: boolean;
   highlight?: CanvasHighlight;
+  /** The element a hovered physics-overlay reading (`OverlayArrow`/`OverlayMoment.elementID`) belongs to — thickened the same way `is_hovered` already does for a hovered constraint's own reference element, so hovering the reading on the canvas points back at its beam. */
+  hoveredOverlayElementID?: ID;
+  /** A physics-overlay reading clicked on the canvas (`App`'s own `focusedOverlay`) — present, no element draws as selected: the reading itself is what is selected now, drawn that way by whichever loop already draws it (`draw_overlay_arrow`/`draw_overlay_moment`), never the body it happens to sit on. */
+  focusedOverlay?: FocusedOverlay | null;
   /** Motors the simulation cannot push through (see `motors_blocked_at`), marked like anything else the analysis finds at fault.
    * Unlike `highlight`, held for as long as the block lasts rather than for as long as a panel points at them. */
   blockedMotors?: ReadonlySet<ID>;
@@ -547,17 +552,23 @@ export type CanvasDrawing = {
    * efforts-interieurs.md phase 9).
    * `undefined`/`"none"` colors nothing. */
   beamStressLens?: BeamStressLens;
+
   /** The `utilization` lens' shared ramp top (`StressScaleCache.maxStress`, `cohesion-field.ts`)
-   * — the highest `|σ|max` ever recorded, Pa. `0` outside dynamic mode or before anything has been recorded yet. */
+   * — the highest `|σ|max` ever recorded, Pa.
+   * Never below its own negligibility floor (`negligible_stress_floors`), so a recording holding nothing but solver noise reads flat rather than ramped across it.
+   * `0` outside dynamic mode or before anything has been recorded yet. */
   stressScale?: number;
   /** The `normal` lens' shared scale (`StressScaleCache.maxNormal`) — the highest `|N/A|` ever
-   * recorded, Pa. `0` outside dynamic mode or before anything has been recorded yet. */
+   * recorded, Pa, floored like `stressScale`.
+   * `0` outside dynamic mode or before anything has been recorded yet. */
   normalStressScale?: number;
   /** The `bending` lens' shared scale (`StressScaleCache.maxBending`) — the highest
-   * `|Mf·v/I|` ever recorded, Pa. `0` outside dynamic mode or before anything has been recorded yet. */
+   * `|Mf·v/I|` ever recorded, Pa, floored like `stressScale`.
+   * `0` outside dynamic mode or before anything has been recorded yet. */
   bendingStressScale?: number;
   /** The `shear` lens' shared ramp top (`StressScaleCache.maxShear`) — the highest `τ_max`
-   * ever recorded, Pa. `0` outside dynamic mode or before anything has been recorded yet. */
+   * ever recorded, Pa, floored like `stressScale` against its own `τ_adm` reference.
+   * `0` outside dynamic mode or before anything has been recorded yet. */
   shearStressScale?: number;
 };
 
@@ -584,6 +595,8 @@ export function draw_mechanism(
     hideProbes = false,
     dimensionSnapped = false,
     highlight = NO_HIGHLIGHT,
+    hoveredOverlayElementID,
+    focusedOverlay,
     blockedMotors = EMPTY_IDS,
     measured = EMPTY_IDS,
     redundancySymbols = EMPTY_SYMBOLS,
@@ -912,7 +925,8 @@ export function draw_mechanism(
         element.type === "force" ||
         element.type === "moment" ||
         element.type === "distributed-force";
-      const isSelected = is_selected(element.id, state);
+      // A focused overlay reading eclipses its own element's selected look — see `CanvasDrawing.focusedOverlay`.
+      const isSelected = is_selected(element.id, state) && !focusedOverlay;
       const isEraseHovered = is_erase_hovered(
         element.id,
         state,
@@ -930,6 +944,7 @@ export function draw_mechanism(
         is_hovered(element.id, hoveredPart, constraintElements) ||
         element.id === terminalNodeID ||
         crossedNodeIDs.has(element.id) ||
+        element.id === hoveredOverlayElementID ||
         (dimensionSnapped &&
           state.type === "MovingConstraint" &&
           state.elementID === element.id);
@@ -1628,8 +1643,9 @@ export function draw_mechanism(
               : loadRestWidth,
           );
           // Hovering the arrow reveals the tip handle it would drag, and the drag itself keeps it under the cursor.
+          // `cursorOnCanvas`, not just the hover: a panel row can point at this same force (`load_hovered_part`) without the cursor ever leaving the panel, and there is nothing there for it to grab.
           if (
-            is_load_hovered(force.id, hoveredPart, "body") ||
+            (cursorOnCanvas && is_load_hovered(force.id, hoveredPart, "body")) ||
             (state.type === "MovingForce" && state.elementID === force.id)
           ) {
             draw_hover_circle(ctx, tip);

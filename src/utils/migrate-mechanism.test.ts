@@ -414,7 +414,39 @@ describe("migrate_document", () => {
       floor: { enabled: true, height: 3, angle: 0.5 },
     };
     const result = migrate_document(doc({ formatVersion: 7, simulation }));
-    expect(result.simulation).toEqual(simulation);
+    expect(result.simulation).toEqual({
+      ...simulation,
+      beamStressLens: "none",
+      supportReactions: false,
+    });
+  });
+
+  it("defaults the beam-fill lens for a document saved before it existed", () => {
+    const simulation = {
+      gravity: true,
+      collisions: false,
+      floor: { enabled: false, height: 0, angle: 0 },
+    };
+    const result = migrate_document(doc({ formatVersion: 11, simulation }));
+    expect(result.simulation).toEqual({
+      ...simulation,
+      beamStressLens: "none",
+      supportReactions: false,
+    });
+  });
+
+  it("defaults the support-reaction calque for a document saved before it existed", () => {
+    const simulation = {
+      gravity: true,
+      collisions: false,
+      floor: { enabled: false, height: 0, angle: 0 },
+      beamStressLens: "bending",
+    };
+    const result = migrate_document(doc({ formatVersion: 12, simulation }));
+    expect(result.simulation).toEqual({
+      ...simulation,
+      supportReactions: false,
+    });
   });
 
   it("assigns the default material/profile couple to every beam, even one that already carried a linearMass", () => {

@@ -13,6 +13,7 @@ import {
   VerticalAlignEdge,
   VerticalAlignNodes,
 } from "../types/element";
+import { element_carries_mass } from "./element-mass";
 
 /** Type guard: node elements — the only ones whose trajectory can be shown. */
 export function is_node_element(el: MechanicalElement): el is NodeElement {
@@ -68,21 +69,25 @@ export function is_nameable(
 /**
  * Which overlays make sense on this element — the honest denominator of the `n/total` counters in the "Afficher" menu.
  * - trajectory: a single moving point → nodes only
- * - velocity: anything whose position is sampled (nodes, gears, edge midpoint)
- * - force: a reaction is a point object → nodes only
+ * - velocity: anything whose position is sampled (nodes, gears, edge midpoint), a belt excepted: it spans its pulleys along a path, so the mid-point between its two ends sits nowhere on it.
+ * - force: an element's own end torsors → edges (two ends) and gears (one).
+ * A node's force reading is the support reaction, which is a property of the problem rather than of the node (docs/plan-efforts-interieurs.md phase 8) and lives in its own mechanism-wide overlay instead.
+ * - weight / inertia: a body's own `m·g` / `m·a`, at its centre of mass → whatever carries a mass (`element_carries_mass`), same set the force balance's own weight/inertia rows draw from.
  *
  * A beam's stress colouring (normal/bending/utilization) is not here — it's not a per-element flag, see `BeamStressLens` (docs/plan-efforts-interieurs.md phase 9).
  */
 export function available_overlays(element: MechanicalElement): OverlayKind[] {
-  const isNode = is_node_element(element);
   return OVERLAY_KIND_ORDER.filter((kind) => {
     switch (kind) {
       case "trajectory":
-        return isNode;
+        return is_node_element(element);
       case "velocity":
-        return true;
+        return element.type !== "belt";
       case "force":
-        return isNode;
+        return !is_node_element(element);
+      case "weight":
+      case "inertia":
+        return element_carries_mass(element);
     }
   });
 }

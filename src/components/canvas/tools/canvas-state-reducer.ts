@@ -1,5 +1,7 @@
 import { Point2, ZERO } from "../../../types/point2";
 import type { CanvasState } from "../../../types/canvas-state";
+import type { MomentBalanceReference } from "../../solver/analysis/force-balance";
+import { moment_balance_hover } from "./moment-balance-picking";
 import { get_hovered_elements_by_rect } from "../picking/get-hover";
 import { Action, CanvasEvent } from "../../../types/actions";
 import {
@@ -199,10 +201,15 @@ export function canvasStateReducer(
   floor: FloorConfig = DEFAULT_FLOOR,
   snapToGrid: boolean = true,
   snapSettings: SnapSettings = DEFAULT_SNAP_SETTINGS,
+  // Reports a node or beam end picked while `PickingMomentBalanceNode` is armed — a UI preference the analysis panel owns, never an `Action`.
+  onMomentBalanceReferencePicked: (reference: MomentBalanceReference) => void = () => {},
 ) {
   const actions: Action[] = [];
   // The metric box is an overlay, not a mode: every event answers for the state under it, so the canvas behaves as if the box were closed.
   const state = state_under_probe_metrics(rawState);
+  // A measured reading is not this reducer's business: naming one never touches `canvasState`, so the click that does it is answered before this is reached (see `MechanicalCanvas`'s own `onSelectOverlay`).
+  // Bailing out here rather than per event keeps every state below typed against a target that has an id.
+  if (hoveredPart.type === "Overlay") return;
   switch (event.type) {
     case "MouseLeftButtonDown":
       // A closure names no element, so only the belt placement that offered it can act on one — every other state sees empty space.
@@ -480,6 +487,19 @@ export function canvasStateReducer(
           actions.push(...r.actions);
           break;
         }
+        case "PickingMomentBalanceNode":
+          // Free space is not a miss here — armed from a panel button, not the palette, and anywhere at all is a legal reference: it becomes a `"point"` of its own.
+          onMomentBalanceReferencePicked(
+            moment_balance_hover(
+              hoveredPart,
+              mechanicalElements,
+              materials,
+              profiles,
+              viewport,
+            ).reference,
+          );
+          setCanvasState({ type: "Selecting" });
+          break;
         case "MeasuringFrom":
           // The second click seals what the preview was already showing.
           setCanvasState({

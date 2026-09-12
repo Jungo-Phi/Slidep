@@ -929,10 +929,10 @@ export const STRINGS = {
   // ── Ruler ─────────────────────────────────────────────────────────────────
   tool_ruler: { fr: "Règle", en: "Ruler", de: "Lineal", es: "Regla" },
   ruler_hint: {
-    fr: "Cliquez deux points ou deux barres pour leur angle.",
-    en: "Click two points or two bars for the angle between them.",
-    de: "Zwei Punkte anklicken oder zwei Stäbe für ihren Winkel.",
-    es: "Haga clic en dos puntos o en dos barras para su ángulo.",
+    fr: "Cliquez pour mesurer.",
+    en: "Click to measure.",
+    de: "Zum Messen klicken.",
+    es: "Haga clic para medir.",
   },
   ruler_distance: {
     fr: "Distance",
@@ -963,16 +963,40 @@ export const STRINGS = {
     es: "Trayectorias",
   },
   overlay_force_one: {
-    fr: "Force de réaction",
-    en: "Reaction force",
-    de: "Reaktionskraft",
-    es: "Fuerza de reacción",
+    fr: "Effort interne",
+    en: "Internal force",
+    de: "Innere Kraft",
+    es: "Esfuerzo interno",
   },
   overlay_force_other: {
-    fr: "Forces de réaction",
-    en: "Reaction forces",
-    de: "Reaktionskräfte",
-    es: "Fuerzas de reacción",
+    fr: "Efforts internes",
+    en: "Internal forces",
+    de: "Innere Kräfte",
+    es: "Esfuerzos internos",
+  },
+  overlay_weight_one: {
+    fr: "Poids",
+    en: "Weight",
+    de: "Gewicht",
+    es: "Peso",
+  },
+  overlay_weight_other: {
+    fr: "Poids",
+    en: "Weights",
+    de: "Gewichte",
+    es: "Pesos",
+  },
+  overlay_inertia_one: {
+    fr: "Force d'inertie",
+    en: "Inertial force",
+    de: "Trägheitskraft",
+    es: "Fuerza de inercia",
+  },
+  overlay_inertia_other: {
+    fr: "Forces d'inertie",
+    en: "Inertial forces",
+    de: "Trägheitskräfte",
+    es: "Fuerzas de inercia",
   },
   velocity_one: {
     fr: "Vitesse",
@@ -1075,6 +1099,12 @@ export const STRINGS = {
     en: "Hide all",
     de: "Alle ausblenden",
     es: "Ocultar todo",
+  },
+  hide: {
+    fr: "Cacher",
+    en: "Hide",
+    de: "Ausblenden",
+    es: "Ocultar",
   },
 
   // ── Mechanisms gallery ────────────────────────────────────────────────────
@@ -2207,19 +2237,13 @@ export const STRINGS = {
     es: "{count} grados de libertad a merced de las cargas: ellas decidirán el movimiento.",
   },
 
-  analysis_selected_element: {
-    fr: "Élément sélectionné",
-    en: "Selected element",
-    de: "Ausgewähltes Element",
-    es: "Elemento seleccionado",
-  },
-  analysis_choose_metrics: {
+  choose_metrics: {
     fr: "Choisir les mesures",
     en: "Choose the measurements",
     de: "Messungen wählen",
     es: "Elegir las medidas",
   },
-  analysis_remove_metric: {
+  remove_metric: {
     fr: "Supprimer cette mesure",
     en: "Remove this measurement",
     de: "Diese Messung entfernen",
@@ -2249,12 +2273,6 @@ export const STRINGS = {
     de: "Warte auf Daten…",
     es: "Esperando datos…",
   },
-  cohesion_kinematic: {
-    fr: "Efforts internes non calculés en mode cinématique",
-    en: "Internal forces are not computed in kinematic mode",
-    de: "Innere Kräfte werden im kinematischen Modus nicht berechnet",
-    es: "Los esfuerzos internos no se calculan en modo cinemático",
-  },
   stress_legend_indeterminate: {
     fr: "indéterminé",
     en: "indeterminate",
@@ -2272,6 +2290,102 @@ export const STRINGS = {
     en: "residual:",
     de: "Residuum:",
     es: "residuo:",
+  },
+  force_balance: {
+    fr: "Bilan des forces",
+    en: "Force balance",
+    de: "Kräftebilanz",
+    es: "Balance de fuerzas",
+  },
+  balance_load: {
+    fr: "Charge",
+    en: "Load",
+    de: "Last",
+    es: "Carga",
+  },
+  balance_weight: {
+    fr: "Poids",
+    en: "Weight",
+    de: "Gewicht",
+    es: "Peso",
+  },
+  balance_support: {
+    fr: "Réaction",
+    en: "Reaction",
+    de: "Reaktion",
+    es: "Reacción",
+  },
+  balance_sum: {
+    fr: "ΣF",
+    en: "ΣF",
+    de: "ΣF",
+    es: "ΣF",
+  },
+  balance_sum_moment: {
+    fr: "ΣM",
+    en: "ΣM",
+    de: "ΣM",
+    es: "ΣM",
+  },
+  balance_inertia: {
+    fr: "m·a",
+    en: "m·a",
+    de: "m·a",
+    es: "m·a",
+  },
+  balance_gap: {
+    fr: "écart",
+    en: "gap",
+    de: "Abweichung",
+    es: "desviío",
+  },
+  balance_reference_pick: {
+    fr: "Choisir le point de référence des moments",
+    en: "Choose the moment reference point",
+    de: "Bezugspunkt für Momente wählen",
+    es: "Elegir el punto de referencia de los momentos",
+  },
+  balance_reference_picking: {
+    fr: "Cliquez n'importe où : un nœud, une extrémité de poutre, le centre de masse…",
+    en: "Click anywhere: a node, a beam end, the centre of mass…",
+    de: "Klicken Sie irgendwo: einen Knoten, ein Balkenende, den Massenschwerpunkt…",
+    es: "Haga clic en cualquier lugar: un nodo, el extremo de una viga, el centro de masa…",
+  },
+  balance_reference_center_of_mass: {
+    fr: "Centre de masse",
+    en: "Centre of mass",
+    de: "Massenschwerpunkt",
+    es: "Centro de masa",
+  },
+  point_start: {
+    fr: "(début)",
+    en: "(start)",
+    de: "(Anfang)",
+    es: "(inicio)",
+  },
+  point_end: {
+    fr: "(fin)",
+    en: "(end)",
+    de: "(Ende)",
+    es: "(fin)",
+  },
+  reaction_support_one: {
+    fr: "Réaction d'appui",
+    en: "Support reaction",
+    de: "Auflagerreaktion",
+    es: "Reacción en el apoyo",
+  },
+  support_reactions: {
+    fr: "Réactions aux appuis",
+    en: "Support reactions",
+    de: "Auflagerreaktionen",
+    es: "Reacciones en los apoyos",
+  },
+  cohesion_residual_heading: {
+    fr: "Résidu de bouclage",
+    en: "Loop residual",
+    de: "Residuum der Schleife",
+    es: "Residuo de cierre",
   },
   measures_select_element: {
     fr: "Sélectionnez un élément pour voir ses grandeurs",

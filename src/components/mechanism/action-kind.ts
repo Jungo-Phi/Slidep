@@ -12,6 +12,8 @@ import { Action, UnionElement } from "../../types";
 export const OBSERVATION_ACTIONS: Action["type"][] = [
   "SetProbes",
   "SetShowOverlay",
+  "SetBeamStressLens",
+  "SetSupportReactions",
   // A name is not a value: nothing the solver reads, and nothing already recorded, depends on one — so a rename mid-run costs neither a recompile nor the instants ahead.
   "UpdateElementName",
   "RenameMaterial",

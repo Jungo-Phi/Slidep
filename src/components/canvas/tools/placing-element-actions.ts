@@ -251,7 +251,9 @@ export function handle_placing_element(
         hoveredPart.type === "BeltClosure" ||
         hoveredPart.type === "FloorHeight" ||
         hoveredPart.type === "FloorAngle" ||
-        hoveredPart.type === "FloorAngleValue"
+        hoveredPart.type === "FloorAngleValue" ||
+        // A probe measures an element; a reading is already one measure of one.
+        hoveredPart.type === "Overlay"
       )
         return { actions: [] };
       // Open the metric selector popover anchored on the clicked element.

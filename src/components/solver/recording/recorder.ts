@@ -226,7 +226,8 @@ export class Recorder {
           this.floorOn,
         );
         // The re-projection above has no elapsed time, so it reports no reactions (see `step_dynamic_simulation`) — a zero dt cannot be turned into a force.
-        // A probe step, real dt but warm-started from that very same edition state, reads the forces actually in play at t = 0; only its reactions are kept, its pose is discarded, so the frame everyone sees still stays the exact edition geometry above.
+        // A probe step, real dt but warm-started from that very same edition state, reads the forces actually in play at t = 0; only its efforts are kept, its pose is discarded, so the frame everyone sees still stays the exact edition geometry above.
+        // Its accelerations travel with them, being an effort themselves here: the cohesion field marches on the d'Alembert density `μ·(g − a)` (`cohesion-field.ts`), so the re-projection's zeros would make a body in free fall carry its own weight as an internal effort.
         if (stepDt === 0) {
           const probe = step_dynamic_simulation(
             this.model,
@@ -243,6 +244,7 @@ export class Recorder {
           dynamicSnapshot = {
             ...dynamicSnapshot,
             reactions: probe.reactions,
+            accelerations: probe.accelerations,
             beamCohesion: probe.beamCohesion,
           };
         }

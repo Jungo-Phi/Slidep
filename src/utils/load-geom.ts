@@ -57,7 +57,7 @@ export function moment_center_position(
 }
 
 /** World position a force is anchored at (node, or an edge endpoint). */
-function force_base_position(
+export function force_base_position(
   load: ForceElement,
   mechanicalElements: MechanicalElement[],
 ): WorldPoint {

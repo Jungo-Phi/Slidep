@@ -2,8 +2,11 @@ import React from "react";
 import { Box, IconButton, Tooltip, Typography } from "@mui/material";
 import { Visibility, VisibilityOff } from "@mui/icons-material";
 import { t } from "../../../i18n";
+import { OVERLAY_ICON_SIZE } from "../element-readings";
 
 interface CommandCountRowProps {
+  /** Data URI of the layer's own glyph, ahead of the label — absent for a set with no glyph of its own. */
+  icon?: string;
   label: string;
   /** How many of `total` are currently on. */
   on: number;
@@ -25,6 +28,7 @@ interface CommandCountRowProps {
  * The counter carries the ternary state (none / some / all) — which is what makes the pair legible as two commands rather than one toggle — so the icons only have to carry the action, not the state.
  */
 export const CommandCountRow: React.FC<CommandCountRowProps> = ({
+  icon,
   label,
   on,
   total,
@@ -48,6 +52,18 @@ export const CommandCountRow: React.FC<CommandCountRowProps> = ({
       "& .MuiIconButton-root.Mui-disabled img": { opacity: 0.4 },
     }}
   >
+    {icon !== undefined && (
+      <Box
+        component="img"
+        src={icon}
+        alt=""
+        sx={{
+          width: OVERLAY_ICON_SIZE,
+          height: OVERLAY_ICON_SIZE,
+          flexShrink: 0,
+        }}
+      />
+    )}
     <Typography variant="body2" sx={{ flex: 1, whiteSpace: "nowrap" }}>
       {label}
     </Typography>

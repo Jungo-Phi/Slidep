@@ -36,6 +36,8 @@ import { StaticsSystem, build_statics_system } from "../statics/equilibrium-mode
 import { solve_statics } from "../statics/equilibrium-solve";
 import { build_flexibility } from "../statics/flexibility";
 import { beam_cohesion_from_statics } from "../statics/publish";
+import { compute_balance_sample } from "../statics/equilibrium-solve";
+import { BEAM_END_MASS_FRACTION } from "./mass-model";
 import { StaticsBeam, statics_frame } from "../statics/statics-frame";
 import { CompiledLoad, compile_loads, resolve_load_forces } from "./load-model";
 import {
@@ -161,7 +163,7 @@ const SIMULATION_SWEEPS = 200;
  *
  * A motor's per-frame target is always exactly one frame's worth of commanded rotation ahead (see `expected` below) — never a backlog — so this is not about the motor asking for too much.
  * It is the kinematic sweep itself: with no velocity carried between frames (unlike dynamics), each frame's 200 Gauss-Seidel sweeps have to close that frame's whole gap on their own, and a slow-converging chain (a long belt, say) cannot always do it in one frame.
- * The shortfall then carries into the next, and drains only gradually — a transient that used to sit under the flat 1 mm diagnostic tolerance by coincidence and now, relative to a mechanism's own (possibly sub-metre) extent, does not always.
+ * The shortfall then carries into the next, and drains only gradually — a transient a tolerance relative to a mechanism's own (possibly sub-metre) extent does not always cover.
  *
  * A linear ramp does not shrink this transient so much as postpone it: the lag it leaves behind tracks the commanded speed at the time, wherever the ramp is, so a short ramp mostly moves the peak later rather than lowering it (measured on `Poulie bloqueuse`, the slowest- converging reference mechanism: 0.68 mm at 0.3 s, 0.56 mm at 0.45 s, 0 at 0.5 s — the last frames of the ramp give the chain just enough consecutive time at near-full speed to fully drain what built up). 0.5 s is that measured floor, not a round number picked for looks.
  */
@@ -177,7 +179,7 @@ function motor_ramp(t: number): number {
  * Ratios rather than flat lengths for the same reason `collision-detection.ts`'s `CONTACT_EPS_RATIO` is — a flat millimetre would drown a µm-scale mechanism and do nothing on a km-scale one.
  *
  * `detachArc` (`detachRatio · extent`) is NOT zero, and that is the whole point.
- * The last sliver of wrap before zero is a degenerate band — the no-slip on a pulley the belt barely grazes goes erratic — so waiting for exactly zero means letting the mechanism strain against a pulley that no longer holds anything, then releasing it all at once.
+ * The last sliver of wrap before zero is a degenerate band — the no-slip on a pulley the belt barely grazes goes erratic — so waiting for exactly zero means letting the mechanism strain against a pulley that has stopped holding anything, then releasing it all at once.
  * Measured on `Déconnexion courroie` (extent ≈ 902, so `detachRatio` swept at 0/5.5e-4/1.1e-3/2.2e-3/ 5.5e-3/1.1e-2 mirrors the historical 0/0.5/1/2/5/10 px sweep): the transition frame lurches **26.1 px** at zero and **1.2 px** at 0.5, and grows again beyond (3.7 px at 2, 18.4 px at 10 — there the pulley still carried belt and dropping it is a real geometric change).
  *
  * The gap between the two is the hysteresis, and it exists for one reason: every flip rebuilds the belt's no-slip links, which resets the `q` origin of the WHOLE belt.
@@ -478,7 +480,7 @@ function reattach_belt_pulleys(
 /**
  * Re-bake the closed-belt junction constraints (BeltPin + BeltFollowsTangent) of belts that just lost a pulley.
  * The junction rides the loop at s = s0 + rε·(θ − θ0); s0 is an arc-length on the loop, so when a pulley disconnects the loop shrinks, s0's meaning shifts, and the junction would JUMP. Fix (mirrors how rewire_belt_mesh re-bakes the mesh θ0): re-project the junction onto the REDUCED loop for a fresh s0 and reset θ0 to the current reference angle (so s = s0 at this frame → no jump).
- * If the reference pulley itself disconnected (its θ is no longer coupled to φ), re-elect the first still-connected pulley.
+ * If the reference pulley itself disconnected (its θ has stopped being coupled to φ), re-elect the first still-connected pulley.
  * Called once per disconnect event; permanent for the run (reset on recompile).
  */
 export function rebake_belt_pin_refs(
@@ -671,7 +673,7 @@ export function compile_simulation_model(
     nodes.posMasses.delete(k1);
     nodes.posMasses.delete(k2);
 
-    // Record key → fused key (incl. previously fused keys mapping forward).
+    // Record key → fused key, keys already fused among them, mapping forward.
     keyMap.set(k1, k_new);
     keyMap.set(k2, k_new);
     keyMap.forEach((v, k) => {
@@ -1221,7 +1223,7 @@ const DYNAMIC_SUBSTEPS = 16;
 /**
  * Advance a DYNAMIC-mode frame: gravity (today; any other force joins later) integrated in the predict step, XPBD velocity read back from the whole displacement, everything else the same rigid-constraint sweep `step_simulation` runs — split into `substeps` physical substeps (see `DYNAMIC_SUBSTEPS`), each running the full body below in turn.
  *
- * Deliberately narrower than `step_simulation` for now: no motor-target refresh — a motor's `targetAngle` stays wherever the model was compiled with, since plan étape 5 ("couple imposé vs position imposée") is what decides how a motor belongs in a force-driven step in the first place.
+ * Deliberately narrower than `step_simulation` for now: no motor-target refresh — a motor's `targetAngle` stays wherever the model was compiled with, the plan's step 5 ("imposed torque versus imposed position") is what decides how a motor belongs in a force-driven step in the first place.
  * Everything else `step_simulation` does once per frame before its own solve — gear-mesh angle unwrap, belt disconnect/reattach tracking, junction re-baking, belt state sharing — runs here too, but once per SUBSTEP rather than once per frame: both the unwrapped `GearMeshAngle.alpha` and the belt's tracked wrap feed a constraint that runs every sweep of the solve about to happen, and holding either at its value from the START of the frame across all `DYNAMIC_SUBSTEPS` substeps measurably reintroduces the very listing-order sensitivity this bookkeeping exists to remove — negligible for a slow kinematic frame, enough to blow up a chaotic pendulum train within 60 frames of free fall (see `docs/courroie-dynamique.md`).
  * Only the no-slip links' REBUILD (after a disconnect/reattach) is deferred to once, after the last substep, against the state the frame's own solve agrees with — same reasoning as `step_simulation`'s own post-solve rebuild.
  * Grab is kept: it is core interaction, not a load, and costs nothing extra to support (`grab_links` is shared with `step_simulation`).
@@ -1282,6 +1284,21 @@ export function step_dynamic_simulation(
 
   // Whole-frame d'Alembert acceleration (phase 2) reads the velocity change across ALL substeps, never one alone — captured once, before the first, against `dt` (not `subDt`) below.
   const velocitiesBeforeSolve = new Map(velocities);
+  // What an anchored node has to restate as a force to reach the reaction fallback below — its OWN weight, the beams' and gears' endpoint shares taken back out.
+  // Those shares are the solver's way of carrying a body's mass, not the node's: the body reports its whole `μL` through its own torsor (`statics-frame.ts`'s `nodeMassAt` draws the same line), so restating them here would have the ground hold a beam's end twice.
+  const groundedWeights = new Map<string, Point2>();
+  {
+    const lumps = new Map<string, number>();
+    for (const spec of model.beamCohesionSpecs)
+      for (const key of [spec.k0, spec.k1])
+        lumps.set(key, (lumps.get(key) ?? 0) + spec.mass * BEAM_END_MASS_FRACTION);
+    for (const gear of model.staticsSystem.gears)
+      lumps.set(gear.centreKey, (lumps.get(gear.centreKey) ?? 0) + gear.mass);
+    for (const [key, mass] of model.dynamicMasses.groundedMasses) {
+      const own = Math.max(0, mass - (lumps.get(key) ?? 0));
+      if (own > 0) groundedWeights.set(key, gravity.mul(own));
+    }
+  }
   const angleVelocitiesBeforeSolve = new Map(angleVelocities);
   const subDt = dt / substeps;
   let reactions: LinkReaction[] | undefined;
@@ -1433,11 +1450,8 @@ export function step_dynamic_simulation(
     // Cheap (one entry per motor) unlike `reactions`, so kept on every substep rather than gated behind `collectDiagnostics` — the last substep's values are what the frame ends on.
     motorPower = motorContribution.power;
 
-    // An anchored node never feels the predict step's acceleration (it cannot move regardless of `gx/gy` — see `PBD_kinematic_solver`), so its own weight has to be restated here as an ordinary force to reach the anchored-dof reaction fallback.
+    // An anchored node never feels the predict step's acceleration (it cannot move regardless of `gx/gy` — see `PBD_kinematic_solver`), so its own weight has to be restated as an ordinary force to reach the anchored-dof reaction fallback — see `groundedWeights` above for what "its own" leaves out.
     // A free node needs none of this: its weight already comes out mass-independent, exactly like real gravity.
-    const groundedWeights = new Map<string, Point2>();
-    for (const [key, mass] of model.dynamicMasses.groundedMasses)
-      if (mass > 0) groundedWeights.set(key, gravity.mul(mass));
     merge_forces(groundedWeights);
 
     // ── XPBD solve ── `velocities`/`angleVelocities` are mutated in place with the
@@ -1631,6 +1645,12 @@ export function step_dynamic_simulation(
     loads: model.compiledLoads,
     beams: model.staticsBeams,
   });
+  // Always, unlike the cohesion below: one pass over the same bodies, with no solve of its own to pay for.
+  const balance = compute_balance_sample(
+    model.staticsSystem,
+    model.beamCohesionSpecs,
+    staticsFrame,
+  );
   const beam_cohesion = collectDiagnostics
     ? beam_cohesion_from_statics(
         model.beamCohesionSpecs,
@@ -1656,6 +1676,7 @@ export function step_dynamic_simulation(
     reactions,
     motorPower,
     energy,
+    balance,
     beamCohesion: collectDiagnostics ? beam_cohesion : undefined,
   };
 }
@@ -1767,7 +1788,7 @@ export function snapshot_at(
 }
 
 /**
- * `snapshot_at`'s dynamic-mode counterpart: same interpolation of position/angle, plus velocity, and the same belt-topology guard now that dynamic mode tracks belt contact too (see `same_belt_topology`).
+ * `snapshot_at`'s dynamic-mode counterpart: same interpolation of position/angle, plus velocity, and the same belt-topology guard, dynamic mode tracking belt contact too (see `same_belt_topology`).
  * Kept separate rather than folded into one generic function: the two snapshot kinds differ in exactly the extra fields this interpolates (velocity, acceleration…), and forcing them through a shared body would cost more in indirection than the ~20 duplicated lines below are worth.
  * `snapshot_index_at` is the part that IS shared, being purely a search over `.t`.
  */
@@ -1805,6 +1826,7 @@ export function dynamic_snapshot_at(
     reactions: a.reactions,
     motorPower: a.motorPower,
     energy: a.energy,
+    balance: a.balance,
     beamCohesion: a.beamCohesion,
   };
 }

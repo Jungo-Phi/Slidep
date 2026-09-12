@@ -1,22 +1,32 @@
-import { forwardRef, useImperativeHandle, useRef } from "react";
-import { Box, IconButton, Paper, Tooltip, Typography } from "@mui/material";
+import { forwardRef, useImperativeHandle, useRef, useState } from "react";
+import {
+  Box,
+  Divider,
+  IconButton,
+  Paper,
+  Tooltip,
+  Typography,
+} from "@mui/material";
 import { alpha } from "@mui/material/styles";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 
+import { Vector } from "../common/Vector";
 import { icon } from "../element-palette/iconDataUris";
 import { shortcut_label } from "../../constants/shortcuts";
 import { t } from "../../i18n";
-import type { CanvasState, MeasureReadout } from "../../types";
+import type { CanvasState, MeasureReadout, WorldPoint } from "../../types";
 import {
   ANGLE,
   LENGTH,
+  default_unit,
   format_mantissa,
   format_quantity,
 } from "../../utils/quantity-format";
 
-/** The readings, pushed in from the canvas's animation loop. `null` blanks them. */
+/** The readings, pushed in from the canvas's animation loop. `null` blanks them.
+ * `centerOfMass` is independent of `readout` — the mechanism's own, not the measurement in progress — and is shown for as long as the ruler is out, `waiting` included. */
 export interface MeasureReadoutHandle {
-  update(readout: MeasureReadout | null): void;
+  update(readout: MeasureReadout | null, centerOfMass?: WorldPoint): void;
 }
 
 interface MeasureWidgetProps {
@@ -62,8 +72,35 @@ const row_label = (row: Row): string => {
 };
 
 const BLANK = "—";
+const LENGTH_UNIT = default_unit(LENGTH);
 
 const degrees = (radians: number) => `${format_mantissa(radians, ANGLE, 1)}°`;
+
+/** The classic centre-of-mass symbol, matching `draw_center_of_mass` on the canvas: a circle quartered by a cross, two opposite quadrants filled. */
+const CenterOfMassIcon = () => (
+  <Box
+    component="svg"
+    viewBox="0 0 20 20"
+    sx={{
+      width: 14,
+      height: 14,
+      display: "block",
+      flexShrink: 0,
+      color: "measure",
+    }}
+  >
+    <path d="M10,10 L18,10 A8,8 0 0 1 10,18 Z" fill="currentColor" />
+    <path d="M10,10 L2,10 A8,8 0 0 1 10,2 Z" fill="currentColor" />
+    <circle
+      cx="10"
+      cy="10"
+      r="8"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+    />
+  </Box>
+);
 
 /** Every row's text for a reading, blank where that reading has nothing to say. */
 function row_texts(readout: MeasureReadout | null): Record<Row, string> {
@@ -94,15 +131,17 @@ function row_texts(readout: MeasureReadout | null): Record<Row, string> {
 /**
  * The ruler's corner of the canvas: the button that takes it out, and — in the same place, once it is out — what it reads.
  *
- * The numbers are written straight into the DOM rather than held in React state: under a running simulation they change every frame, and re-rendering the canvas subtree sixty times a second to move four numbers is not a trade worth making.
+ * The five row numbers are written straight into the DOM rather than held in React state: under a running simulation they change every frame, and re-rendering this widget sixty times a second to move five numbers is not a trade worth making. The centre of mass below them is the one exception — see its own state below.
  */
 const MeasureWidget = forwardRef<MeasureReadoutHandle, MeasureWidgetProps>(
   ({ canvasState, onArm, onDisarm }, ref) => {
     const valueRefs = useRef<Partial<Record<Row, HTMLElement | null>>>({});
     const rowRefs = useRef<Partial<Record<Row, HTMLElement | null>>>({});
+    // Unlike the rows above, driven through React state: it's two numbers, not five, and the re-render it costs each frame is cheap enough to trade for reusing `Vector` as-is.
+    const [centerOfMass, setCenterOfMass] = useState<WorldPoint | null>(null);
 
     useImperativeHandle(ref, () => ({
-      update(readout) {
+      update(readout, nextCenterOfMass) {
         const texts = row_texts(readout);
         // A reading only shows the rows it can fill — an angle has no span, a radius no direction — rather than leaving them struck through.
         // Hidden from here rather than from a render: which reading a gesture is building follows the cursor, frame by frame.
@@ -118,6 +157,7 @@ const MeasureWidget = forwardRef<MeasureReadoutHandle, MeasureWidgetProps>(
           if (node && node.textContent !== texts[row])
             node.textContent = texts[row];
         }
+        setCenterOfMass(nextCenterOfMass ?? null);
       },
     }));
 
@@ -168,16 +208,21 @@ const MeasureWidget = forwardRef<MeasureReadoutHandle, MeasureWidgetProps>(
           right: 12,
           bottom: 12,
           zIndex: 900,
-          width: 196,
-          px: 1.25,
-          py: 0.75,
+          width: 200,
+          px: 1.5,
+          py: 1,
           boxShadow: 4,
           borderRadius: 1.5,
           borderColor: "measure",
         }}
       >
         <Box
-          sx={{ display: "flex", alignItems: "center", gap: 0.75, mb: 0.25 }}
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            gap: 1,
+            mb: 0.5,
+          }}
         >
           <Box
             component="img"
@@ -233,6 +278,37 @@ const MeasureWidget = forwardRef<MeasureReadoutHandle, MeasureWidgetProps>(
             </Box>
           ))
         )}
+
+        {/* Negative margin cancels the panel's own padding, so the rule spans its full width. */}
+        <Divider sx={{ my: 1, mx: -1.5 }} />
+
+        {/* The mechanism's own centre of mass — independent of whatever the ruler above is measuring, so it stays put whether that's a hint or a reading. */}
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 1,
+            mx: -0.5,
+          }}
+        >
+          <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+            <CenterOfMassIcon />
+            <Typography variant="caption" color="text.secondary">
+              {t("balance_reference_center_of_mass")}
+            </Typography>
+          </Box>
+          <Box sx={{ display: "flex", alignItems: "center" }}>
+            <Vector value={centerOfMass} unit={LENGTH_UNIT} />
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ pl: 0.5 }}
+            >
+              {LENGTH_UNIT.symbol}
+            </Typography>
+          </Box>
+        </Box>
       </Paper>
     );
   },

@@ -9,6 +9,7 @@ import {
   ConstraintElement,
   HoveredAbscissa,
   HoveredPart,
+  HoveredReading,
   ID,
   Mechanism,
   Point2,
@@ -16,6 +17,7 @@ import {
   state_under_probe_metrics,
   UnionElement,
   ViewportChange,
+  ViewportState,
   ZERO,
   ScreenPoint,
   WorldPoint,
@@ -29,9 +31,17 @@ import { type Instance as PopperInstance } from "@popperjs/core";
 import { CanvasHighlight, draw_mechanical_canvas } from "./drawing/draw-canvas";
 import { RedundancySymbol } from "../solver/analysis/redundancy-symbols";
 import type { CohesionField } from "../solver/recording/cohesion-field";
+import type {
+  HoveredBalanceTerm,
+  MomentBalanceReference,
+} from "../solver/analysis/force-balance";
+import { mechanism_center_of_mass } from "../solver/analysis/force-balance";
+import { PHYSICS_OVERLAY_COLOR } from "../../constants/physics-display-specs";
 import type { BeamElement } from "../../types/element";
 import { canvasStateReducer } from "./tools/canvas-state-reducer";
-import { measured_elements, shown_readout } from "./tools/measure";
+import { measured_elements, ruler_is_out, shown_readout } from "./tools/measure";
+import { moment_balance_hover } from "./tools/moment-balance-picking";
+import { draw_center_of_mass } from "./drawing/draw-measure";
 import MeasureWidget, {
   type MeasureReadoutHandle,
 } from "./MeasureWidget";
@@ -77,20 +87,17 @@ const VALUE_EDITOR_KIND: Partial<Record<UnionElement["type"], QuantityKind>> = {
 import { OnCanvasProbeMetricSelector } from "./ProbeMetricSelector";
 import {
   draw_axes,
-  draw_floor,
   draw_graduations,
   draw_grid,
   draw_stress_legend,
   draw_signed_stress_legend,
-  draw_overlay_arrow,
-  draw_overlay_arrow_label,
-  draw_overlay_moment,
-  draw_overlay_moment_label,
+  draw_balance_marker,
+  draw_moment_balance_marker,
   draw_snap_feedback,
-  draw_trajectory,
   floor_screen_geometry,
   overlay_arrow_hit,
   overlay_moment_hit,
+  FocusedOverlay,
   OverlayArrow,
   OverlayMoment,
   TrajectoryDisplay,
@@ -180,6 +187,8 @@ interface MechanicalCanvasProps {
   beamStressLens: BeamStressLens;
   /** Trajectory overlay style: dots at fixed spacing versus one continuous stroke. */
   trajectoryDotted: boolean;
+
+
   /**
    * What the recording loop publishes each frame, or `null` outside simulation.
    *
@@ -205,6 +214,26 @@ interface MechanicalCanvasProps {
    * docs/plan-efforts-interieurs.md phase 5bis.
    * `null` outside that hover. */
   hoveredAbscissa: HoveredAbscissa | null;
+  /** The line of the force balance the cursor rests on, and which of its two quantities that
+   * line reads.
+   * Shown whatever calque is on: pointing at a line is asking to see the thing it names.
+   * Where a calque already draws it, that arrow is lit rather than drawn over — see `draw_balance_marker` for the rest. */
+  hoveredBalanceTerm: HoveredBalanceTerm | null;
+  /** Where the force balance's moment is taken about — the origin, or wherever the panel's
+   * reference currently names. Feeds the moment marker's own position, and the ring drawn at it. */
+  momentBalancePoint: WorldPoint;
+  /** A node or beam end clicked while `canvasState.type === "PickingMomentBalanceNode"` — a
+   * UI preference the panel owns, not a mechanism edit, so it never goes through `Action`. */
+  onMomentBalanceReferencePicked: (reference: MomentBalanceReference) => void;
+  /** The panel's own reference-point picker is hovered — draws the ring at `momentBalancePoint`
+   * the same way the picking tool itself does, so a reader can preview it without arming anything. */
+  momentBalanceReferenceHovered: boolean;
+  /** A plain click landing on a physics-overlay arrow (dynamic mode only) — a UI preference the
+   * analysis panel owns, never an `Action`, the same reasoning as `onMomentBalanceReferencePicked`.
+   * Never touches the ordinary element selection — see `App`'s own `focusedOverlay`. */
+  onSelectOverlay?: (overlay: FocusedOverlay) => void;
+  /** The physics-overlay reading `onSelectOverlay` last reported, echoed back so this draws it (and only it) as selected — see `CanvasDrawing.focusedOverlay`. */
+  focusedOverlay?: FocusedOverlay | null;
   /** Which of the library dialog's two sections tints the beams — undefined while that
    * dialog is closed. */
   librarySection?: "materials" | "profiles";
@@ -228,22 +257,25 @@ export interface LiveFrame {
    */
   cohesionFields?: CohesionField[];
   /** The `normal` lens' shared scale (`StressScaleCache.maxNormal`) — the highest `|N/A|` ever
-   * recorded, Pa. `0` outside dynamic mode or before anything has been recorded yet. */
+   * recorded, Pa.
+   * Never below its own negligibility floor (`negligible_stress_floors`), so a recording holding nothing but solver noise reads flat rather than ramped across it.
+   * `0` outside dynamic mode or before anything has been recorded yet. */
   normalStressScale: number;
   /** The `bending` lens' shared scale (`StressScaleCache.maxBending`) — the highest
-   * `|Mf·v/I|` ever recorded, Pa. `0` outside dynamic mode or before anything has been recorded yet. */
+   * `|Mf·v/I|` ever recorded, Pa, floored like `normalStressScale`.
+   * `0` outside dynamic mode or before anything has been recorded yet. */
   bendingStressScale: number;
   /** The `utilization` lens' shared ramp top (`StressScaleCache.maxStress`, `cohesion-field.ts`)
-   * — the highest `|σ|max` ever recorded, Pa. `0` outside dynamic mode or before anything has been recorded yet. */
+   * — the highest `|σ|max` ever recorded, Pa, floored like `normalStressScale`.
+   * `0` outside dynamic mode or before anything has been recorded yet. */
   stressScale: number;
   /** The `shear` lens' shared ramp top (`StressScaleCache.maxShear`) — the highest `τ_max`
-   * ever recorded, Pa. `0` outside dynamic mode or before anything has been recorded yet. */
+   * ever recorded, Pa, floored like `normalStressScale` against its own `τ_adm` reference.
+   * `0` outside dynamic mode or before anything has been recorded yet. */
   shearStressScale: number;
+
 }
 
-const EMPTY_TRAJECTORIES: TrajectoryDisplay[] = [];
-const EMPTY_OVERLAY_ARROWS: OverlayArrow[] = [];
-const EMPTY_OVERLAY_MOMENTS: OverlayMoment[] = [];
 
 export const MechanicalCanvas = forwardRef<
   HTMLCanvasElement,
@@ -281,8 +313,14 @@ export const MechanicalCanvas = forwardRef<
       modePreviewRef,
       redundancySymbols,
       hoveredAbscissa,
+      hoveredBalanceTerm,
+      momentBalancePoint,
+      onMomentBalanceReferencePicked,
+      momentBalanceReferenceHovered,
       librarySection,
       hoveredLibraryEntryID,
+      onSelectOverlay,
+      focusedOverlay,
     },
     ref,
   ) => {
@@ -330,6 +368,22 @@ export const MechanicalCanvas = forwardRef<
     redundancySymbolsRef.current = redundancySymbols;
     const hoveredAbscissaRef = useRef(hoveredAbscissa);
     hoveredAbscissaRef.current = hoveredAbscissa;
+    const hoveredBalanceTermRef = useRef(hoveredBalanceTerm);
+    hoveredBalanceTermRef.current = hoveredBalanceTerm;
+    const momentBalancePointRef = useRef(momentBalancePoint);
+    momentBalancePointRef.current = momentBalancePoint;
+    const onMomentBalanceReferencePickedRef = useRef(
+      onMomentBalanceReferencePicked,
+    );
+    onMomentBalanceReferencePickedRef.current = onMomentBalanceReferencePicked;
+    const onSelectOverlayRef = useRef(onSelectOverlay);
+    onSelectOverlayRef.current = onSelectOverlay;
+    const focusedOverlayRef = useRef(focusedOverlay);
+    focusedOverlayRef.current = focusedOverlay;
+    const momentBalanceReferenceHoveredRef = useRef(
+      momentBalanceReferenceHovered,
+    );
+    momentBalanceReferenceHoveredRef.current = momentBalanceReferenceHovered;
     const librarySectionRef = useRef(librarySection);
     librarySectionRef.current = librarySection;
     const hoveredLibraryEntryIDRef = useRef(hoveredLibraryEntryID);
@@ -449,7 +503,7 @@ export const MechanicalCanvas = forwardRef<
     }, [refreshRevealFromHover]);
 
     // Acts on any undo/redo signal: reveals the recreated constraints and adds the removed ones to the ghost list.
-    // N'agit qu'une fois par seq.
+    // Acts once per `seq`.
     const processConstraintChange = useCallback(() => {
       const change = constraintChangeRef.current;
       if (!change || change.seq === lastConstraintChangeSeqRef.current) return;
@@ -517,10 +571,6 @@ export const MechanicalCanvas = forwardRef<
         );
       }
 
-      // Trajectories of the probed points, under the mechanism's elements.
-      for (const trajectory of live?.trajectories ?? EMPTY_TRAJECTORIES)
-        draw_trajectory(ctx, viewport, trajectory, trajectoryDotted);
-
       // Undo/redo feedback: reveals the recreations, prepares the ghosts.
       processConstraintChange();
       const visibleConstraints = computeVisibleConstraints();
@@ -572,26 +622,19 @@ export const MechanicalCanvas = forwardRef<
         return true;
       });
 
-      // The floor: under every mechanism element (it's a surface they rest on, not one of them), but over the grid/axes/graduations, unlike the grid itself.
-      draw_floor(
-        ctx,
-        viewport,
-        canvas.width,
-        canvas.height,
-        restingRef.current.simulation.floor,
-        hoveredPartRef.current.type === "FloorHeight" ||
-          hoveredPartRef.current.type === "FloorAngle" ||
-          hoveredPartRef.current.type === "FloorAngleValue" ||
-          canvasStateRef.current.type === "DraggingFloorHeight" ||
-          canvasStateRef.current.type === "DraggingFloorAngle",
-        hoveredPartRef.current.type === "FloorAngle" ||
-          canvasStateRef.current.type === "DraggingFloorAngle",
-        hoveredPartRef.current.type === "FloorAngleValue",
-      );
-
       draw_mechanical_canvas(ctx, {
         viewport,
+        canvasWidth: canvas.width,
+        canvasHeight: canvas.height,
         hoveredPart: hoveredPartRef.current,
+        focusedOverlay: focusedOverlayRef.current,
+        hoveredBalanceTerm: hoveredBalanceTermRef.current,
+        overlayArrows: live?.overlayArrows,
+        overlayMoments: live?.overlayMoments,
+        trajectories: live?.trajectories,
+        trajectoryDotted,
+        // The floor is read off the resting mechanism, like the viewport: a simulation moves what rests on it, never the surface itself.
+        floor: restingRef.current.simulation.floor,
         state: canvasStateRef.current,
         mechanicalElements: mechanismRef.current.mechanicalElements,
         constraintElements: ghostConstraints.length
@@ -642,6 +685,14 @@ export const MechanicalCanvas = forwardRef<
           hoveredPartRef.current,
           mechanismRef.current.mechanicalElements,
         ),
+        // Only while the ruler is actually out: the same O(n) pass `draw_ruler` itself does, spared on every other frame.
+        ruler_is_out(canvasStateRef.current)
+          ? mechanism_center_of_mass(
+              mechanismRef.current.mechanicalElements,
+              mechanismRef.current.materials,
+              mechanismRef.current.profiles,
+            )
+          : undefined,
       );
 
       // The active beam-fill lens' own legend (phase 9) — screen-anchored, drawn only while there is a mechanism with at least one beam to read it against.
@@ -696,35 +747,57 @@ export const MechanicalCanvas = forwardRef<
         }
       }
 
-      // Measured velocities and reactions, over the elements they dress.
-      // Only a reaction reveals its value on hover, the way a placed load does — never a velocity, whose displayed unit is not the right one yet (see `OverlayArrow.vector`).
-      const overlayArrows = live?.overlayArrows ?? EMPTY_OVERLAY_ARROWS;
-      const overlayMoments = live?.overlayMoments ?? EMPTY_OVERLAY_MOMENTS;
-      const mouseScreen = cursorOnCanvasRef.current
-        ? mousePositionRef.current
-        : null;
-      // A moment wins the tie over its own force, same priority `HOVER_ORDER` gives a placed moment over a placed force.
-      const hoveredMoment = mouseScreen
-        ? overlayMoments.find((moment) =>
-            overlay_moment_hit(mouseScreen, viewport, moment),
-          )
-        : undefined;
-      const hoveredArrow =
-        mouseScreen && !hoveredMoment
-          ? overlayArrows.find(
-              (arrow) =>
-                arrow.kind !== "velocity" &&
-                overlay_arrow_hit(mouseScreen, viewport, arrow),
-            )
-          : undefined;
-      for (const arrow of overlayArrows)
-        draw_overlay_arrow(ctx, viewport, arrow);
-      for (const moment of overlayMoments)
-        draw_overlay_moment(ctx, viewport, moment);
-      // The hovered label last, on top of every arrow/moment just drawn: an arrow drawn later in the loops above must not obstruct another one's label.
-      if (hoveredArrow) draw_overlay_arrow_label(ctx, viewport, hoveredArrow);
-      if (hoveredMoment)
-        draw_overlay_moment_label(ctx, viewport, hoveredMoment);
+
+      // Where the moment balance is taken about — not persistently, only while its picker is doing something: armed, the ring follows the cursor like any other placement preview; merely hovered, it previews the reference already set. Either way the centre of mass is drawn too, a target of its own, on top of the ring so it is never lost under it.
+      const pickingMomentBalance =
+        canvasStateRef.current.type === "PickingMomentBalanceNode";
+      if (pickingMomentBalance || momentBalanceReferenceHoveredRef.current) {
+        draw_moment_balance_marker(
+          ctx,
+          viewport,
+          pickingMomentBalance
+            ? moment_balance_hover(
+                hoveredPartRef.current,
+                mechanismRef.current.mechanicalElements,
+                mechanismRef.current.materials,
+                mechanismRef.current.profiles,
+                viewport,
+              ).point
+            : momentBalancePointRef.current,
+        );
+        const centerOfMass = mechanism_center_of_mass(
+          mechanismRef.current.mechanicalElements,
+          mechanismRef.current.materials,
+          mechanismRef.current.profiles,
+        );
+        if (centerOfMass)
+          draw_center_of_mass(ctx, world2screen(centerOfMass, viewport));
+      }
+
+      // A body's own weight, in the balance's own colour — never a colour borrowed from another family.
+      // The couple about the moment-balance reference point has no glyph anywhere else on screen, so it always draws while that column is hovered. The force itself does, wherever the weight overlay already shows it (matched by `id` the same way a support reaction is): the scene lights that arrow up on its own, so it is drawn fresh here only when there is nothing on screen to thicken instead.
+      const balanceHover = hoveredBalanceTermRef.current;
+      if (balanceHover && balanceHover.term.kind === "weight") {
+        const { term, quantity } = balanceHover;
+        const shownByOverlay = (live?.overlayArrows ?? []).some(
+          (arrow) => arrow.id === term.id,
+        );
+        const color = PHYSICS_OVERLAY_COLOR.weight;
+        if (quantity === "moment")
+          draw_balance_marker(
+            ctx,
+            viewport,
+            { at: momentBalancePointRef.current, force: ZERO, couple: term.moment },
+            color,
+          );
+        if (!shownByOverlay)
+          draw_balance_marker(
+            ctx,
+            viewport,
+            { at: term.at, force: term.force, couple: 0 },
+            color,
+          );
+      }
 
       // The abscissa hovered on the selected beam's N/T/Mf diagrams (panel) — docs/plan- efforts-interieurs.md phase 5bis.
       // A tick crossing the beam, not a probe marker (`draw_probe`'s circle+crosshair means something else — a measurement point).
@@ -833,6 +906,21 @@ export const MechanicalCanvas = forwardRef<
         event.clientY,
       ).sub(canvasOffsetRef.current);
       if (event.button === 0) {
+        // A plain click landing on a physics-overlay arrow or moment names it, ahead of the ordinary reducer: a selection of its own, drawn on the reading itself rather than on `canvasState`, which this never touches — see `App`'s own `focusedOverlay`.
+        const target =
+          hoveredPartRef.current.type === "Overlay"
+            ? hoveredPartRef.current.reading
+            : null;
+        if (
+          target &&
+          onSelectOverlayRef.current &&
+          appModeRef.current === "dynamic" &&
+          (canvasStateRef.current.type === "Selecting" ||
+            canvasStateRef.current.type === "SelectedElement")
+        ) {
+          onSelectOverlayRef.current(target);
+          return;
+        }
         mouseButtonDownRef.current = "left";
         handleEvent({
           type: "MouseLeftButtonDown",
@@ -884,6 +972,51 @@ export const MechanicalCanvas = forwardRef<
     };
 
     /**
+     * The measured reading under `mouseScreen`, hit-tested against the arrows of the frame last drawn — the only place they exist (see `LiveFrame`), and at most one frame behind the cursor.
+     * A reaction's two glyphs name one reading, so either of them answers with the same one and both light up together.
+     * Silent while the ruler is out, same reasoning as every other hover (`draw-mechanism`'s own `rulerOut`): the measurement hue already says what is under the cursor.
+     * Silent too while the moment-balance picker is armed: only a node or a beam end is a legal target there, and a reading lighting up on top would read as a second, competing tool.
+     */
+    const overlayReadingUnder = useCallback(
+      (
+        mouseScreen: ScreenPoint,
+        viewport: ViewportState,
+      ): { reading: HoveredReading; position: WorldPoint } | undefined => {
+        const live = liveFrameRef.current;
+        if (
+          !live ||
+          !cursorOnCanvasRef.current ||
+          ruler_is_out(canvasStateRef.current) ||
+          canvasStateRef.current.type === "PickingMomentBalanceNode"
+        )
+          return undefined;
+        const moment = live.overlayMoments.find(
+          (candidate) =>
+            candidate.elementID &&
+            overlay_moment_hit(mouseScreen, viewport, candidate),
+        );
+        const arrow = moment
+          ? undefined
+          : live.overlayArrows.find(
+              (candidate) =>
+                candidate.elementID &&
+                overlay_arrow_hit(mouseScreen, viewport, candidate),
+            );
+        const hit = moment ?? arrow;
+        if (!hit?.elementID) return undefined;
+        return {
+          reading: {
+            elementID: hit.elementID,
+            kind: hit.kind,
+            which: hit.which,
+          },
+          position: hit.at,
+        };
+      },
+      [liveFrameRef],
+    );
+
+    /**
      * The hovered part under the last known cursor position, bounded and snapped.
      * Reads the current state, so it answers for whatever tool is armed right now, free of side effects, so it can be called outside a gesture.
      * Returns the bounded cursor too, which gestures read raw.
@@ -916,6 +1049,7 @@ export const MechanicalCanvas = forwardRef<
         // What the previous frame asked of the drag: the mechanism read here has answered that, not the cursor, which has since moved on.
         oldPositionRef.current,
         appModeRef.current !== "edition",
+        overlayReadingUnder(mousePositionRef.current, currMech.viewport),
       );
       let snapFeedback: SnapFeedback = NO_FEEDBACK;
       if (snapToGrid && appModeRef.current === "edition") {
@@ -975,7 +1109,12 @@ export const MechanicalCanvas = forwardRef<
           currMech.viewport,
         );
       return { hoveredPart: newHoveredPart, worldMousePos, snapFeedback };
-    }, [snapToGrid, snapSettings, computeVisibleConstraints]);
+    }, [
+      snapToGrid,
+      snapSettings,
+      computeVisibleConstraints,
+      overlayReadingUnder,
+    ]);
 
     const handleEvent = useCallback(
       (event: CanvasEvent) => {
@@ -1041,6 +1180,7 @@ export const MechanicalCanvas = forwardRef<
           currMech.simulation.floor,
           snapToGrid,
           snapSettings,
+          onMomentBalanceReferencePickedRef.current,
         );
         oldPositionRef.current = newHoveredPart.position.clone();
       },

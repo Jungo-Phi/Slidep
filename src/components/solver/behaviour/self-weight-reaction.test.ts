@@ -12,7 +12,7 @@ import {
 
 /**
  * The simplest reading Slidep makes: a cantilever holding nothing but itself.
- * A uniform beam of mass m encastré at one end carries m·g of shear and m·g·L/2 of moment at its root — no modelling choice, no tolerance, statics.
+ * A uniform beam of mass m fixed at one end carries m·g of shear and m·g·L/2 of moment at its root — no modelling choice, no tolerance, statics.
  *
  * It is also the one case where the beam's virtual midpoint carries the mass it exists for (two thirds of it, `BEAM_END_MASS_FRACTION`), so nothing here can be isolated by removing it: the comparison has to be against the truth.
  */
@@ -87,7 +87,7 @@ describe("un cantilever qui ne porte que lui-même", () => {
     expect(cohesion).toBeDefined();
     // 1 % of the quantity read — the tolerance the effort readings are documented to hold (docs/ratio-masse-convergence-dynamique.md), not a figure fitted to what comes out.
     expect(cohesion!.start.fy).toBeCloseTo(-weight, 2);
-    expect(cohesion!.start.m).toBeCloseTo(moment, 2);
+    expect(cohesion!.start.m).toBeCloseTo(-moment, 2);
   }, 60_000);
 
   // The reading that made this file worth writing: read off the links, the same beam made longer lost a whole `BEAM_END_MASS_FRACTION` lump — −16.67 % at 1.5 m and 2 m, −33.33 % at 3 m and 5 m — while the POSITIONS it came from were exact to 1e-19.
@@ -97,7 +97,7 @@ describe("un cantilever qui ne porte que lui-même", () => {
       const { cohesion, weight, moment } = root_of(length);
       expect(cohesion).toBeDefined();
       expect(cohesion!.start.fy).toBeCloseTo(-weight, 2);
-      expect(cohesion!.start.m).toBeCloseTo(moment, 2);
+      expect(cohesion!.start.m).toBeCloseTo(-moment, 2);
       // And it says so: a reading balanced off the state is the one a reader may take as a figure rather than as an indication (`BeamCohesion.determinate`).
       expect(cohesion!.determinate).toBe(true);
     }

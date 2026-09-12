@@ -8,6 +8,8 @@ export const OVERLAY_LABEL_KEYS: Record<OverlayKind, PluralKey> = {
   trajectory: "overlay_trajectory",
   force: "overlay_force",
   velocity: "velocity",
+  weight: "overlay_weight",
+  inertia: "overlay_inertia",
 };
 
 /** The elements `kind` can be drawn on — the denominator of the n/total counter. */
@@ -27,6 +29,8 @@ function overlay_label_weight(kind: OverlayKind): number {
     case "trajectory":
     case "velocity":
     case "force":
+    case "weight":
+    case "inertia":
       return 1;
   }
 }

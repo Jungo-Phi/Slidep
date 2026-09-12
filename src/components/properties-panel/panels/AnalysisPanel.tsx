@@ -11,7 +11,6 @@ import {
   IconButton,
   Menu,
   Tooltip,
-  Collapse,
   useTheme,
 } from "@mui/material";
 import { alpha } from "@mui/material/styles";
@@ -22,12 +21,10 @@ import {
   Troubleshoot,
   Tune,
   Close,
-  ExpandMore,
 } from "@mui/icons-material";
 import {
   Action,
   AppMode,
-  HoveredAbscissa,
   HoveredPart,
   ID,
   MechanicalElement,
@@ -35,6 +32,7 @@ import {
   MotorConfig,
   ProbeConfig,
   ProbeMetric,
+  WorldPoint,
   ZERO,
 } from "../../../types";
 import { CanvasState } from "../../../types/canvas-state";
@@ -48,18 +46,18 @@ import {
   get_probe_series,
   is_vector_metric,
 } from "../../solver/recording/probe-series";
+import { dynamic_snapshot_at } from "../../solver/dynamics/simulation-engine";
 import {
-  at_recording_end,
-  dynamic_snapshot_at,
-} from "../../solver/dynamics/simulation-engine";
-import { compute_cohesion_field } from "../../solver/recording/cohesion-field";
+  CohesionField,
+  compute_cohesion_field,
+} from "../../solver/recording/cohesion-field";
 import {
   metric_shows_zero,
   pool_key_for_metric,
   quantity_kind_for_metric,
 } from "../../solver/recording/negligibility-pool";
 import { GRAVITY } from "../../../constants/physics-specs";
-import type { BeamElement } from "../../../types/element";
+import type { BeamElement, LoadElement } from "../../../types/element";
 import {
   PROBE_METRIC_LABEL_KEYS,
   PROBE_METRIC_ORDER,
@@ -72,13 +70,23 @@ import ProbeChart, {
   probe_curve_colors,
   PROBE_ELEMENT_COLORS,
 } from "../components/ProbeChart";
-import CohesionDiagrams from "../components/CohesionDiagrams";
+import ForceBalanceTable from "../components/ForceBalanceTable";
+import {
+  BalanceTerm,
+  HoveredBalanceTerm,
+  MomentBalanceReference,
+  compute_force_balance,
+  resolve_moment_balance_point,
+} from "../../solver/analysis/force-balance";
 import { element_to_hovered_part } from "../../canvas/utils";
+import type { FocusedOverlay } from "../../canvas/drawing/drawing-functions";
 import { shown_element_name } from "../../../utils";
-import ElementMeasures from "./ElementMeasures";
 import { MODE_ANIMATION } from "../../../constants/interaction-specs";
 import { StringKey, t, tn } from "../../../i18n";
-import { CanvasHighlight, NO_HIGHLIGHT } from "../../canvas/drawing/draw-canvas";
+import {
+  CanvasHighlight,
+  NO_HIGHLIGHT,
+} from "../../canvas/drawing/draw-canvas";
 import {
   find_redundant_links,
   Redundancy,
@@ -95,10 +103,33 @@ import { ddl_status } from "../ddl-status";
 import { AnimatedMode, useModeAnimation } from "../useModeAnimation";
 import {
   ANGULAR_VELOCITY,
-  ENERGY,
+  FORCE,
+  MOMENT,
   display_unit,
+  format_quantity,
 } from "../../../utils/quantity-format";
-import { compute_energy_balance } from "../../solver/analysis/energy-balance";
+
+/** How the loop-residual list is ordered: a force magnitude and a moment added together, units and all.
+ * Only ever a rank between beams of one mechanism, never a figure shown. */
+const residual_rank = (r: CohesionField["loopResidual"]): number =>
+  Math.hypot(r.fx, r.fy) + Math.abs(r.m);
+
+/** The canvas hover a load's own arrow answers to — what a cursor resting on it would set,
+ * so pointing at its line in the balance thickens the very same stroke. */
+function load_hovered_part(
+  loadID: ID,
+  position: WorldPoint,
+  loads: LoadElement[],
+): HoveredPart {
+  const load = loads.find((candidate) => candidate.id === loadID);
+  const type =
+    load?.type === "moment"
+      ? "Moment"
+      : load?.type === "distributed-force"
+        ? "DistributedForce"
+        : "Force";
+  return { type, id: loadID, position, deleting: false, part: "body" };
+}
 
 interface AnalysisPanelProps {
   mechanism: Mechanism;
@@ -114,22 +145,28 @@ interface AnalysisPanelProps {
   hoveredPart: HoveredPart;
   setHoveredPart: (hoveredPart: HoveredPart) => void;
   selectedIds: ID[];
+  canvasState: CanvasState;
   setCanvasState: (state: CanvasState) => void;
   /** Motors standing blocked at the cursor — see `motors_blocked_at`. */
   blockedMotors: ReadonlySet<ID>;
   runtimeState: RuntimeState;
-  setRuntimeState: React.Dispatch<React.SetStateAction<RuntimeState>>;
-  /** The mechanical element the canvas selection points at (a selected load
-   * resolves to its host), or undefined when nothing is selected. */
-  selectedElement: MechanicalElement | undefined;
+  /** Moves the cursor to an instant read off a chart — see `PropertiesPanel`'s own. */
+  seekTime: (time: number) => void;
   /** Names the elements the canvas should pick out; empty clears the highlight. */
   setHighlight: (highlight: CanvasHighlight) => void;
   /** How a redundant constraint the panel is naming right now would yield; empty clears it. */
   setRedundancySymbols: (symbols: RedundancySymbol[]) => void;
   /** Where the pose the panel is animating is published, for the canvas to draw. */
   modePreviewRef: React.MutableRefObject<Mechanism | null>;
-  /** Publishes the abscissa hovered on the selected beam's N/T/Mf diagrams. */
-  setHoveredAbscissa: (hovered: HoveredAbscissa | null) => void;
+  /** See `App`'s own `hoveredBalanceTerm`. */
+  setHoveredBalanceTerm: (hovered: HoveredBalanceTerm | null) => void;
+  /** See `App`'s own `momentBalanceReference`. */
+  momentBalanceReference: MomentBalanceReference;
+  setMomentBalanceReference: (reference: MomentBalanceReference) => void;
+  /** See `App`'s own `momentBalanceReferenceHovered`. */
+  setMomentBalanceReferenceHovered: (hovered: boolean) => void;
+  /** See `App`'s own `setFocusedOverlay`. */
+  setFocusedOverlay: (overlay: FocusedOverlay) => void;
 }
 
 /** Short human label for a solver link type, shown as the violation kind. */
@@ -186,25 +223,6 @@ const fault = (elements: Iterable<ID>): CanvasHighlight => ({
 const EMPTY_SYMBOLS: RedundancySymbol[] = [];
 
 /** The four curves the "Bilan énergétique" chart can show — see `EnergyBalanceSeries`. */
-const ENERGY_COMPONENTS = ["kinetic", "potential", "mechanical", "netWorkIn"] as const;
-type EnergyComponent = (typeof ENERGY_COMPONENTS)[number];
-
-const ENERGY_COMPONENT_LABEL_KEYS: Record<EnergyComponent, StringKey> = {
-  kinetic: "energy_balance_kinetic",
-  potential: "energy_balance_potential",
-  mechanical: "energy_balance_mechanical",
-  netWorkIn: "energy_balance_net_work",
-};
-
-/** What each curve actually is — on its own chip rather than a single header tooltip, since
- * the four are different enough (one is a rate integral, the rest are state) that a shared blurb either says too little about each or grows too long to skim. */
-const ENERGY_COMPONENT_HINT_KEYS: Record<EnergyComponent, StringKey> = {
-  kinetic: "energy_balance_kinetic_hint",
-  potential: "energy_balance_potential_hint",
-  mechanical: "energy_balance_mechanical_hint",
-  netWorkIn: "energy_balance_net_work_hint",
-};
-
 /** The motor config to *show*, resolved through `analysedElementOf` — the pose on screen,
  * which while scrubbed can hold a different value than the live mechanism. */
 const motor_config_at = (
@@ -387,7 +405,8 @@ const ChainCard: React.FC<{
             const motorDisplayConfig = motor
               ? motor_config_at(analysedElementOf, motor.id)
               : undefined;
-            const motorBlocked = motor !== undefined && blockedMotors.has(motor.id);
+            const motorBlocked =
+              motor !== undefined && blockedMotors.has(motor.id);
             return (
               // The whole row carries the block's explanation, since the whole row is what turns red.
               // An empty title renders no tooltip, which is how a row that is not blocked — or one whose speed field is speaking for itself — stays silent.
@@ -422,7 +441,8 @@ const ChainCard: React.FC<{
                     backgroundColor: shown ? "action.selected" : "transparent",
                     // A block only ever exists while a simulation runs, which is exactly when no mode is being swung, so the two never fight over this background.
                     ...(motorBlocked && {
-                      backgroundColor: (theme) => alpha(theme.palette.error.main, 0.12),
+                      backgroundColor: (theme) =>
+                        alpha(theme.palette.error.main, 0.12),
                     }),
                     ...(shown && {
                       animation: `mode-beat ${MODE_ANIMATION.PERIOD_S / 2}s ease-in-out infinite`,
@@ -523,9 +543,7 @@ const ChainCard: React.FC<{
                   cursor: "default",
                 }}
               >
-                <Tooltip
-                  title={t("ddl_motor_undriven_hint")}
-                >
+                <Tooltip title={t("ddl_motor_undriven_hint")}>
                   <WarningAmber
                     sx={{ fontSize: 16, ml: 0.5, color: "warning.main" }}
                   />
@@ -714,32 +732,23 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
   hoveredPart,
   setHoveredPart,
   selectedIds,
+  canvasState,
   setCanvasState,
   blockedMotors,
   runtimeState,
-  setRuntimeState,
+  seekTime,
   setHighlight,
   setRedundancySymbols,
   modePreviewRef,
-  selectedElement,
-  setHoveredAbscissa,
+  setHoveredBalanceTerm,
+  momentBalanceReference,
+  setMomentBalanceReference,
+  setMomentBalanceReferenceHovered,
+  setFocusedOverlay,
 }) => {
   const { palette } = useTheme();
   const curveColors = probe_curve_colors(palette.primary.main);
   const [superpose, setSuperpose] = React.useState(false);
-  // Collapsed by default: a diagnostic for the solver's own conservation, not something most mechanisms need read every run — see docs discussion, "Bilan énergétique".
-  const [energyExpanded, setEnergyExpanded] = React.useState(false);
-  // "Totale" and "travail net" on by default — the pair the diagnostic is actually about; kinetic/potential are there to answer "where did it go", opted into like x/y/norm.
-  const [energyComponents, setEnergyComponents] = React.useState<
-    Record<EnergyComponent, boolean>
-  >({ kinetic: false, potential: false, mechanical: true, netWorkIn: true });
-  const energyBalance = React.useMemo(
-    () =>
-      appMode === "dynamic"
-        ? compute_energy_balance(runtimeState.simulationSnapshots as DynamicSnapshot[])
-        : { t: [], kinetic: [], potential: [], mechanical: [], netWorkIn: [] },
-    [appMode, runtimeState.simulationSnapshots],
-  );
   const [metricMenu, setMetricMenu] = React.useState<{
     elementID: ID;
     anchorEl: HTMLElement;
@@ -765,15 +774,6 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
   };
 
   /** Click/drag on a chart: scrub the simulation time (and pause), like the timeline. */
-  const seekTime = (t: number) =>
-    setRuntimeState((prev) => ({
-      ...prev,
-      time: t,
-      isPlaying: false,
-      // Landing on the end is not scrubbing: playing from there records on.
-      scrubbed: !at_recording_end(prev.simulationSnapshots, t),
-    }));
-
   const isReactionMetric = (metric: ProbeMetric): boolean =>
     metric === "force" ||
     metric === "force-start" ||
@@ -891,108 +891,210 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
     [analysedMechanism.mechanicalElements],
   );
 
-  // N/T/Mf diagrams (docs/plan-efforts-interieurs.md phase 5bis) — a beam selected, dynamic mode, read off the recorded snapshot nearest the cursor the same way every other measure in this panel does (`ElementMeasures`'s own `get_dynamic_metric_at`), rather than the live per-frame ref the canvas itself draws from: this panel re-renders declaratively off `runtimeState`, not off a `requestAnimationFrame` loop.
-  const selectedBeam: BeamElement | undefined =
-    selectedElement?.type === "beam" ? selectedElement : undefined;
-  const cohesionField = React.useMemo(() => {
-    if (!selectedBeam || appMode !== "dynamic") return undefined;
+
+  // Every beam's own loop residual at the instant on screen, worst first — how far its marched field lands from the torsor the statics pass read independently at its far end (`CohesionField.loopResidual`).
+  // Mechanism-wide rather than for the selected beam alone: what it is read for is finding WHICH beam the physics is off on.
+  const cohesionResiduals = React.useMemo(() => {
+    if (appMode !== "dynamic") return [];
     const dynSnap = dynamic_snapshot_at(
       runtimeState.simulationSnapshots as DynamicSnapshot[],
       runtimeState.time,
     );
-    const cohesion = dynSnap?.beamCohesion?.find(
-      (c) => c.beamID === selectedBeam.id,
-    );
-    if (!dynSnap || !cohesion) return undefined;
+    if (!dynSnap) return [];
     const gravity = mechanism.simulation.gravity ? GRAVITY : ZERO;
-    return compute_cohesion_field(
-      selectedBeam,
-      mechanism.materials,
-      mechanism.profiles,
-      cohesion,
-      mechanism.loads,
-      dynSnap,
-      gravity,
+    const rows: {
+      beam: BeamElement;
+      residual: CohesionField["loopResidual"];
+    }[] = [];
+    for (const el of mechanism.mechanicalElements) {
+      if (el.type !== "beam") continue;
+      const cohesion = dynSnap.beamCohesion?.find((c) => c.beamID === el.id);
+      if (!cohesion) continue;
+      const field = compute_cohesion_field(
+        el,
+        mechanism.materials,
+        mechanism.profiles,
+        cohesion,
+        mechanism.loads,
+        dynSnap,
+        gravity,
+      );
+      if (field) rows.push({ beam: el, residual: field.loopResidual });
+    }
+    return rows.sort(
+      (a, b) => residual_rank(b.residual) - residual_rank(a.residual),
     );
   }, [
-    selectedBeam,
     appMode,
     runtimeState.simulationSnapshots,
     runtimeState.time,
     mechanism.simulation.gravity,
+    mechanism.mechanicalElements,
     mechanism.loads,
     mechanism.materials,
     mechanism.profiles,
   ]);
-
-  // Clears the canvas's hover marker on deselection and when this panel goes away — nothing else ever un-sets it once a diagram stops being hovered without the mouse ever leaving.
-  React.useEffect(() => {
-    if (!selectedBeam) {
-      setHoveredAbscissa(null);
-      return;
+  // `momentBalanceReference` resolved to the pose on screen, the way every other position the panel reads is.
+  const momentBalancePoint = React.useMemo(
+    () =>
+      resolve_moment_balance_point(momentBalanceReference, analysedMechanism),
+    [analysedMechanism, momentBalanceReference],
+  );
+  // What the chip beside the picker reads — `undefined` for a typed point, whose own `VectorInput` already shows it.
+  const momentBalanceReferenceLabel = React.useMemo(() => {
+    switch (momentBalanceReference.kind) {
+      case "point":
+        return undefined;
+      case "center-of-mass":
+        return t("balance_reference_center_of_mass");
+      case "node": {
+        const node = mechanism.mechanicalElements.find(
+          (el) => el.id === momentBalanceReference.nodeID,
+        );
+        return shown_element_name(node);
+      }
+      case "edge-end": {
+        const edge = mechanism.mechanicalElements.find(
+          (el) => el.id === momentBalanceReference.edgeID,
+        );
+        return `${shown_element_name(edge)} ${t(
+          momentBalanceReference.which === "start"
+            ? "point_start"
+            : "point_end",
+        )}`;
+      }
     }
-    return () => setHoveredAbscissa(null);
-  }, [selectedBeam, setHoveredAbscissa]);
+  }, [mechanism.mechanicalElements, momentBalanceReference]);
+  // The free body's own balance at the instant on screen, itemised — read off the pose the panel displays, so a moment arm is measured where the body actually is.
+  const forceBalance = React.useMemo(() => {
+    if (appMode !== "dynamic") return undefined;
+    const dynSnap = dynamic_snapshot_at(
+      runtimeState.simulationSnapshots as DynamicSnapshot[],
+      runtimeState.time,
+    );
+    if (!dynSnap) return undefined;
+    return compute_force_balance(
+      analysedMechanism,
+      dynSnap,
+      mechanism.simulation.gravity ? GRAVITY : ZERO,
+      momentBalancePoint,
+    );
+  }, [
+    appMode,
+    runtimeState.simulationSnapshots,
+    runtimeState.time,
+    analysedMechanism,
+    mechanism.simulation.gravity,
+    momentBalancePoint,
+  ]);
+
+  // Which line of the balance the cursor rests on, held by IDENTITY rather than by the term itself: the terms are rebuilt at every instant, so holding one would freeze the canvas marker on the pose it was first hovered in while the mechanism moves on.
+  const [hoveredBalanceLine, setHoveredBalanceLine] = React.useState<{
+    id: string;
+    quantity: "force" | "moment";
+  } | null>(null);
+  React.useEffect(() => {
+    const term =
+      hoveredBalanceLine &&
+      forceBalance?.actions.find(
+        (action) => action.id === hoveredBalanceLine.id,
+      );
+    setHoveredBalanceTerm(
+      term && hoveredBalanceLine
+        ? { term, quantity: hoveredBalanceLine.quantity }
+        : null,
+    );
+    // A load has an arrow of its own on the canvas, drawn from the mechanism rather than from the overlay set: pointing at either of its two columns is telling the canvas the cursor is on it, which is what thickens its stroke and shows its value — its moment column has no display of its own to fall back on otherwise.
+    if (term && term.kind === "load")
+      setHoveredPart(
+        load_hovered_part(term.elementID, term.at, mechanism.loads),
+      );
+    else setHoveredPart({ type: "Void", position: ZERO });
+  }, [
+    hoveredBalanceLine,
+    forceBalance,
+    setHoveredBalanceTerm,
+    setHoveredPart,
+    mechanism.loads,
+  ]);
+  // Nothing else un-sets it once this panel goes away with the cursor still on a line.
+  React.useEffect(
+    () => () => setHoveredBalanceTerm(null),
+    [setHoveredBalanceTerm],
+  );
+
+  // A term clicked selects the very thing pointing at it already lights up — a load through the ordinary element selection, exactly as clicking its own arrow on the canvas does; a weight or support reaction through `focusedOverlay`, the same register `onSelectOverlay` reports into from a canvas click.
+  const handleClickBalanceTerm = (term: BalanceTerm) => {
+    if (term.kind === "load")
+      setCanvasState({ type: "SelectedElement", elementID: term.elementID });
+    else
+      setFocusedOverlay({
+        elementID: term.elementID,
+        kind: term.kind === "weight" ? "weight" : "reaction-support",
+        which: term.kind === "support" ? "node" : undefined,
+      });
+  };
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 2, my: 2 }}>
       {appMode !== "edition" && (
         <>
-          <Box
-            sx={{
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "left",
-              gap: 0.5,
-            }}
-          >
-            {selectedElement ? (
-              <ElementDisplay
-                element={selectedElement}
-                hoveredPart={hoveredPart}
-                setHoveredPart={setHoveredPart}
-                selectedIds={selectedIds}
-                setCanvasState={setCanvasState}
-                applyActions={applyActions}
-                size={"small"}
-                editable={false}
-              />
-            ) : (
-              <Typography
-                variant="subtitle2"
-                fontWeight={600}
-                sx={{ mx: 2 }}
-                gutterBottom
-              >
-                {t("analysis_selected_element")}
+          {cohesionResiduals.length > 0 && (
+            <Box sx={{ mx: 2 }}>
+              <Typography variant="subtitle2" fontWeight={600} gutterBottom>
+                {t("cohesion_residual_heading")}
               </Typography>
-            )}
+              <Box sx={{ display: "flex", flexDirection: "column", gap: 0.25 }}>
+                {cohesionResiduals.map(({ beam, residual }) => (
+                  <Box
+                    key={beam.id}
+                    sx={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      gap: 1,
+                    }}
+                  >
+                    <Typography variant="caption" noWrap>
+                      {shown_element_name(beam)}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" noWrap>
+                      {format_quantity(
+                        Math.hypot(residual.fx, residual.fy),
+                        FORCE,
+                      )}
+                      {" · "}
+                      {format_quantity(residual.m, MOMENT)}
+                    </Typography>
+                  </Box>
+                ))}
+              </Box>
+            </Box>
+          )}
 
-            <ElementMeasures
-              element={selectedElement}
-              runtimeState={runtimeState}
-              appMode={appMode}
-              reserveHeight
+          {forceBalance && (
+            <ForceBalanceTable
+              balance={forceBalance}
+              onHoverTerm={(term, quantity) =>
+                setHoveredBalanceLine(term ? { id: term.id, quantity } : null)
+              }
+              onClickTerm={handleClickBalanceTerm}
+              referenceLabel={momentBalanceReferenceLabel}
+              referencePoint={momentBalancePoint}
+              pickingReference={canvasState.type === "PickingMomentBalanceNode"}
+              onArmPicking={() =>
+                setCanvasState({ type: "PickingMomentBalanceNode" })
+              }
+              onSetPoint={(point) =>
+                setMomentBalanceReference({ kind: "point", point })
+              }
+              onReferenceHoverChange={setMomentBalanceReferenceHovered}
+              isCustomPoint={momentBalanceReference.kind === "point"}
+              supportReactions={mechanism.simulation.supportReactions}
+              onChangeSupportReactions={(on) =>
+                applyActions([{ type: "SetSupportReactions", enabled: on }])
+              }
             />
-
-            {selectedBeam && (
-              <CohesionDiagrams
-                field={cohesionField}
-                forcePoolMax={runtimeState.negligibilityPool.force}
-                momentPoolMax={runtimeState.negligibilityPool.moment}
-                emptyMessage={t(
-                  appMode === "kinematic"
-                    ? "cohesion_kinematic"
-                    : "chart_waiting",
-                )}
-                onHoverS={(s) =>
-                  setHoveredAbscissa(
-                    s === null ? null : { beamID: selectedBeam.id, s },
-                  )
-                }
-              />
-            )}
-          </Box>
+          )}
 
           <Divider />
         </>
@@ -1041,123 +1143,6 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
 
       <Divider />
 
-      {/* Bilan énergétique — diagnostic du solveur, pas une mesure du mécanisme : replié par
-          défaut, jamais recalculé côté solveur (voir `EnergySample`), donc gratuit à ouvrir. */}
-      {appMode === "dynamic" &&
-        (() => {
-          const componentColors: Record<EnergyComponent, string> = {
-            kinetic: PROBE_ELEMENT_COLORS[1],
-            potential: PROBE_ELEMENT_COLORS[2],
-            mechanical: curveColors.value,
-            netWorkIn: PROBE_ELEMENT_COLORS[4],
-          };
-          const curves: ChartCurve[] = ENERGY_COMPONENTS.filter(
-            (k) => energyComponents[k],
-          ).map((k) => ({
-            id: k,
-            color: componentColors[k],
-            t: energyBalance.t,
-            values: energyBalance[k],
-          }));
-          const peak = curves.reduce(
-            (m, c) => c.values.reduce((mm, v) => Math.max(mm, Math.abs(v)), m),
-            0,
-          );
-          const unit = display_unit(peak, ENERGY);
-          return (
-            <>
-              <Box sx={{ mx: 2 }}>
-                <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
-                  <Typography variant="subtitle2" fontWeight={600} sx={{ flex: 1 }}>
-                    {t("energy_balance_heading")}
-                    {/* Only once there is a chart to name a unit for — collapsed, the
-                        heading describes the section, not a reading. */}
-                    {energyExpanded && (
-                      <Typography
-                        component="span"
-                        variant="subtitle2"
-                        color="text.secondary"
-                      >
-                        {` (${unit.symbol})`}
-                      </Typography>
-                    )}
-                  </Typography>
-                  <IconButton
-                    size="small"
-                    onClick={() => setEnergyExpanded((prev) => !prev)}
-                    sx={{ borderRadius: 3 }}
-                  >
-                    <ExpandMore
-                      fontSize="small"
-                      sx={{
-                        transform: energyExpanded ? "rotate(180deg)" : "none",
-                        transition: "transform 0.15s ease",
-                      }}
-                    />
-                  </IconButton>
-                </Box>
-                <Collapse in={energyExpanded}>
-                  <Box sx={{ pt: 0.5 }}>
-                    <Box
-                      sx={{
-                        display: "flex",
-                        flexWrap: "wrap",
-                        justifyContent: "center",
-                        gap: 0.5,
-                        mb: 0.5,
-                      }}
-                    >
-                      {ENERGY_COMPONENTS.map((k) => (
-                        <Tooltip key={k} title={t(ENERGY_COMPONENT_HINT_KEYS[k])}>
-                          <Chip
-                            label={t(ENERGY_COMPONENT_LABEL_KEYS[k])}
-                            size="small"
-                            clickable
-                            onClick={() =>
-                              setEnergyComponents((prev) => ({ ...prev, [k]: !prev[k] }))
-                            }
-                            sx={{
-                              height: 20,
-                              "& .MuiChip-label": { px: 1 },
-                              fontSize: "0.7rem",
-                              fontWeight: 600,
-                              color: energyComponents[k] ? "common.white" : "text.secondary",
-                              backgroundColor: energyComponents[k]
-                                ? componentColors[k]
-                                : "background.sunken",
-                              "&:hover": {
-                                backgroundColor: energyComponents[k]
-                                  ? componentColors[k]
-                                  : "action.hover",
-                              },
-                            }}
-                          />
-                        </Tooltip>
-                      ))}
-                    </Box>
-                    <ProbeChart
-                      curves={curves}
-                      currentTime={runtimeState.time}
-                      poolMax={0}
-                      ownFloor={0}
-                      unitFactor={unit.factor}
-                      // Never forced: `potential`/`mechanical` carry the drawing's own coordinate-origin offset (see `EnergyBalanceSeries`), so pulling 0 into view could squash their real excursion the way it would for a `position` chart — same reasoning as `metric_shows_zero`'s exceptions.
-                      showZero={false}
-                      emptyMessage={
-                        curves.length === 0
-                          ? t("chart_no_component")
-                          : t("chart_waiting")
-                      }
-                      onSeek={seekTime}
-                    />
-                  </Box>
-                </Collapse>
-              </Box>
-
-              <Divider />
-            </>
-          );
-        })()}
 
       {/* Mesures : sondes actives + graphiques */}
       <Box sx={{ mx: 2, display: "flex", flexDirection: "column", gap: 1 }}>
@@ -1197,7 +1182,7 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
                 size={"small"}
                 editable={false}
                 trailingControls={
-                  <Tooltip title={t("analysis_choose_metrics")}>
+                  <Tooltip title={t("choose_metrics")}>
                     <IconButton
                       size="small"
                       onClick={(e) =>
@@ -1328,9 +1313,7 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
                             }}
                           />
                         ))}
-                      <Tooltip
-                        title={t("analysis_remove_metric")}
-                      >
+                      <Tooltip title={t("remove_metric")}>
                         <IconButton
                           size="small"
                           color="error"

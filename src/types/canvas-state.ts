@@ -45,6 +45,7 @@ export type CanvasStateType =
   | "PlacingMomentEnd"
   | "PlacingProbe"
   | "PlacingProbeMetrics"
+  | "PickingMomentBalanceNode"
   | "Measuring"
   | "MeasuringFrom"
   | "Measured"
@@ -158,6 +159,8 @@ export type CanvasState =
       position: WorldPoint;
       armed?: boolean;
     }
+  // Armed from the analysis panel, not the palette: the next node clicked becomes the point its force balance's moment is taken about. Reports back through a callback rather than an `Action` — a UI preference, not a mechanism edit — and never touches the mechanism itself.
+  | { type: "PickingMomentBalanceNode" }
   // The ruler, in its three moments: out and waiting, holding one end, and read.
   // It measures without touching the mechanism, so it lives in the canvas state and nowhere else — leaving the tool is what clears it.
   | { type: "Measuring" }

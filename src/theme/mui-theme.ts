@@ -159,7 +159,7 @@ const to_hex = ({ h, s, l }: Hsl): string => {
  * The colour a selected accent element takes: the theme's accent, turned up.
  * Same hue — a selection must still read as the same part — but saturated to the hilt and lifted in value, so it separates from the accent it sits next to.
  */
-const selection_accent = (accent: string): string => {
+export const selection_accent = (accent: string): string => {
   const { h, s, l } = to_hsl(accent);
   return to_hex({ h, s: Math.min(1, s + 0.1), l: Math.min(0.66, l + 0.15) });
 };
@@ -398,7 +398,7 @@ const contrast_ratio = (a: string, b: string): number => {
 const STATUS_CONTRAST = 7;
 const STATUS_MAX_LIGHTNESS = 0.8;
 
-/** La couleur de statut éclaircie jusqu'à se détacher du fond, à teinte et saturation constantes. */
+/** The status colour, lightened until it clears the ground, at constant hue and saturation. */
 const lift = (color: string, ground: string): string => {
   const { h, s, l } = to_hsl(color);
   for (let step = l; step < STATUS_MAX_LIGHTNESS; step += 0.01) {
@@ -409,9 +409,9 @@ const lift = (color: string, ground: string): string => {
 };
 
 /**
- * Les statuts d'un thème, lisibles sur son papier.
+ * A theme's status colours, readable on its own ground.
  *
- * Le tableau clair est pris tel quel : ses teintes sont celles de MUI, réglées pour un fond quasi blanc.
+ * The light table is taken as-is: its hues are MUI's own, tuned for a near-white background.
  */
 const status_palette = (s: ThemeSpec) => {
   const base = STATUS[s.mode];
@@ -499,7 +499,7 @@ export const canvas_palette = (s: ThemeSpec): CanvasPalette => {
   };
 };
 
-/** Une spec à mi-chemin entre deux autres, dont `canvas_palette` tire la palette intermédiaire d'un fondu de thème. */
+/** A spec halfway between two others, from which `canvas_palette` draws a theme fade's intermediate palette. */
 export const mix_theme_specs = (
   from: ThemeSpec,
   to: ThemeSpec,
@@ -610,7 +610,7 @@ const components: ThemeOptions["components"] = {
           transitionProperty: "background-color, border-color, color, fill",
           transitionDuration: `${THEME_TRANSITION_MS}ms`,
           transitionTimingFunction: "linear",
-          // Le fondu prime sur la transition propre du composant (survol, focus), qui autrement gagnerait sur la spécificité et laisserait l'élément sauter d'un thème à l'autre au milieu du fondu.
+          // The fade wins over a component's own transition (hover, focus), which would otherwise win on specificity and let the element jump from one theme to the other mid-fade.
           transitionDelay: "0s",
         },
       body: { backgroundColor: palette.background.default },
@@ -723,23 +723,23 @@ export const THEMES = Object.fromEntries(
 
 export const DEFAULT_THEME: ThemeName = "slidep-light";
 
-/** Les specs brutes, dont `set_canvas_theme` tire les palettes d'un fondu. */
+/** The raw specs, from which `set_canvas_theme` draws a fade's palettes. */
 export const THEME_SPECS: Record<ThemeName, ThemeSpec> = SPECS;
 
 /**
- * Ce que l'utilisateur choisit : une famille et un mode.
- * « Système » suit la préférence du navigateur, et la suit encore si elle change.
+ * What the user picks: a family and a mode.
+ * "System" follows the browser's own preference, and keeps following it if it changes.
  */
 export type ThemeMode = "light" | "dark" | "system";
 
-/** Une famille de thèmes et ses deux versants. */
+/** One theme family and its two sides. */
 export interface ThemeFamily {
   name: string;
   light: ThemeName;
   dark: ThemeName;
 }
 
-/** Les familles offertes dans le menu, dans l'ordre de déclaration des specs. */
+/** The families offered in the menu, in the specs' own declaration order. */
 export const THEME_FAMILIES: ThemeFamily[] = (() => {
   const by_name = new Map<string, Partial<ThemeFamily>>();
   for (const [name, spec] of Object.entries(SPECS) as [
@@ -751,7 +751,7 @@ export const THEME_FAMILIES: ThemeFamily[] = (() => {
     by_name.set(spec.family, family);
   }
   return [...by_name.values()].map((family) => {
-    // Le menu propose clair/sombre/système à toute famille : une famille borgne y afficherait un bouton qui ne mène nulle part.
+    // The menu offers light/dark/system to every family: a one-eyed family would show a button there that leads nowhere.
     if (!family.light || !family.dark)
       throw new Error(`La famille « ${family.name} » n'a pas ses deux modes`);
     return family as ThemeFamily;

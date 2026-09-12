@@ -64,23 +64,18 @@ export interface CohesionField {
 }
 
 /**
- * Phase 3's `BeamCohesion.start`/`.end` read as "what this beam's OWN rigidity applies onto whatever's coincident there" (the raw `LinkReaction` sense, uniform at both ends — no anchor-conditional flip).
- * Converting that into the cut torsor `R_coh` needs care, and the FORCE and MOMENT components turn out to need DIFFERENT treatment, each verified independently against known-correct physics rather than assumed symmetric:
+ * `BeamCohesion.start`/`.end` hold one reading in one sense at both ends and for all three components (`publish.ts`): what the beam applies onto whatever is coincident there.
+ * The cut torsor `R_coh(s)` is the action of the downstream part on the upstream one, and at `s = 0` the beam itself IS that downstream part — so its own outward action there already is `R_coh(0⁺)`, while at `s = L` it is that action's Newton's-third-law opposite.
+ * Hence an identity here and a plain negation in `r_coh_end`: two mirrors of one rule, not two rules.
  *
- * Force: `k0` sits at the start of every upstream region for any `s > 0`, so its own raw reading already IS `R_coh(0⁺)` directly — no flip.
- * `k1` sits on the downstream side of every cut before `L`, so reading it at its own end needs a Newton's-third-law flip.
- * (Verified against the plan's reference case and independently against a two-force-member truss joint — both need this exact asymmetry to come out consistent.)
- *
- * Moment: the underlying `LinkReaction` "torque" is computed differently from "force" in `PBD_kinematic_solver` — the SAME value, reference-independent, at both of a link's ends (a couple, not a per-dof impulse) — so it does not inherit force's k0-vs-k1 asymmetry.
- * Read directly it is already the couple the weld applies ONTO the beam, so `M_coh` needs a flip at BOTH ends uniformly.
- * Verified against a plain cantilever (fixed at 0, tip load at L): only `Mf(0) = −start.m` reproduces the textbook `Mf(0) = −P·L`, `Mf(L) = 0`, linear between — the un-flipped reading gives a moment that GROWS toward the free tip instead of tapering to zero there, the wrong shape entirely, not just the wrong sign.
+ * Both ends are pinned by a reference case, since the march itself never reads the far one and so cannot expose a sign error there: a cantilever fixed at 0 under a tip load must give the textbook `Mf(0) = −P·L` tapering to zero at the free tip, and its mirror — fixed at its END, loaded at its start — must give `Mf(L) = −P·L` and close `loopResidual`, the only shape that tests the far end at all, `Mf(L)` being zero in every other one.
  */
 function r_coh_start(cohesion: BeamCohesion): { fx: number; fy: number; m: number } {
-  return { fx: cohesion.start.fx, fy: cohesion.start.fy, m: -cohesion.start.m };
+  return { fx: cohesion.start.fx, fy: cohesion.start.fy, m: cohesion.start.m };
 }
 
 /** The mirror of `r_coh_start` at the far end: the same reading, taken at the other boundary
- * of the same body, and flipped by Newton's third law — see `r_coh_start` for why the force needs that flip and the moment does not.
+ * of the same body, and flipped by Newton's third law — see `r_coh_start` for why this end needs that flip and the other one does not.
  * `beam-cohesion.ts` has already freed both ends of the solver's own boundary artefacts (the endpoint mass lump, a distributed load's nodal share), so nothing is added back here. */
 function r_coh_end(cohesion: BeamCohesion): { fx: number; fy: number; m: number } {
   return { fx: -cohesion.end.fx, fy: -cohesion.end.fy, m: -cohesion.end.m };
@@ -322,7 +317,7 @@ export function stress_utilization_stops(
 /**
  * `τ_max(s) = |T|·Q/(I·b)` at every sample of `field`, at the neutral axis — the `shear` lens' own field, docs/plan-efforts-interieurs.md phase 9 chantier 2.
  * Same shape as `stress_utilization_stops`: `ratio = τ_max/τ_adm` decides overstress, `stress` is the absolute reading the ramp/legend position themselves on.
- * `τ_adm` is passed in, not derived here — chantier 2 tranché on `Re/√3` (von Mises reduced to pure shear), but this function stays agnostic of which constant a caller chooses.
+ * `τ_adm` is passed in, not derived here — chantier 2 settled on `Re/√3` (von Mises reduced to pure shear), but this function stays agnostic of which constant a caller chooses.
  */
 export function shear_utilization_stops(
   field: CohesionField,

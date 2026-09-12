@@ -3,10 +3,12 @@
  */
 
 import { COLORS, ICON_COLORS } from "../../../theme/canvas-theme";
+import { selection_accent } from "../../../theme/mui-theme";
 import { HIT_TOLERANCE, INTERACTION_SPECS, MODE_ANIMATION } from "../../../constants/interaction-specs";
 import { PhysicsOverlayKind, PHYSICS_OVERLAY_COLOR, SIGNED_STRESS_RAMP, STRESS_RAMP, STRESS_INDETERMINATE_COLOR, STRESS_OVERSTRESS_COLOR, STRESS_LEGEND } from "../../../constants/physics-display-specs";
 import { STROKE_WIDTHS, DIM, FLOOR, GRADUATION, GRID_ALPHA, GUIDE_DASH, ICON_TINT, TEXT_SPECS, REDUNDANCY_SYMBOL } from "../../../constants/rendering-specs";
 import { FloorConfig } from "../../../types/mechanism";
+import type { ReactionPoint } from "../../solver/recording/probe-series";
 import {
   floor_acute_angle,
   floor_anchor_and_normal,
@@ -15,6 +17,8 @@ import { RedundancySymbol } from "../../solver/analysis/redundancy-symbols";
 import { Point2 } from "../../../types/point2";
 import { get_element_icon } from "../../element-palette/elementIcon";
 import {
+  HoveredReading,
+  ID,
   ScreenPoint,
   UnionElement,
   ViewportState,
@@ -47,6 +51,7 @@ import type { SnapFeedback } from "../../../utils/snap-corridor";
 import {
   FORCE,
   LENGTH,
+  LINEAR_VELOCITY,
   MASS,
   MOMENT,
   STRESS,
@@ -861,7 +866,7 @@ function interpolate_color_ramp(
 }
 
 /** Linear interpolation on `STRESS_RAMP`. `ratio` at or past 1 is `STRESS_OVERSTRESS_COLOR`,
- * unconditionally — past the elastic limit is never a matter of scale, and stays a per-beam ratio check even though the ramp itself no longer is (`Re` differs beam to beam).
+ * unconditionally — past the elastic limit is never a matter of scale, and stays a per-beam ratio check where the ramp itself is not one (`Re` differs beam to beam).
  * Below that, `stress` (Pa, absolute) is read as a fraction of `scaleMaxStress` (`StressScaleCache.maxStress`) — an absolute scale, so it can be labelled with one real stress value in the legend instead of a bare, per-beam-relative percentage.
  * `0` or negative `scaleMaxStress` (nothing recorded yet) reads as the bottom of the ramp. */
 export function stress_ramp_color(
@@ -2227,8 +2232,8 @@ export function draw_trajectory(
 // ─── Physics overlay (velocity / reaction force) ───────────────────────────────
 
 /**
- * One physics-overlay arrow (velocity or reaction force), ready to draw — see `element_velocity`/`element_reactions` in `probe-series.ts` for where the vector comes from.
- * Dynamic mode only: neither quantity exists in kinematic mode.
+ * One physics-overlay arrow (velocity, reaction, weight or inertia force), ready to draw — see `element_velocity`/`element_acceleration`/`element_reactions` in `probe-series.ts` for where the vector comes from.
+ * Dynamic mode only: none of these quantities exist in kinematic mode.
  * A reaction is further split by `ElementReaction.atAnchor`: a support reaction (against the ground) reads differently from an internal one (between two mobile parts), so they get distinct colours rather than folding into one generic "reaction" arrow.
  */
 export interface OverlayArrow {
@@ -2237,7 +2242,21 @@ export interface OverlayArrow {
   /** World-space vector. Its direction is drawn as-is; its magnitude is remapped through the same log ruler a user-placed load uses (`stored2screen_load`), so an arrow stays legible whatever the underlying unit's typical scale — not calibrated for velocity (mm/s) specifically, a starting point to retune once both are on screen together. */
   vector: WorldPoint;
   kind: PhysicsOverlayKind;
+  /** What this reading is, where anything else may want to point at the same one — the force
+   * balance names its own terms the same way (`BalanceTerm.id`), which is how a hovered line finds the arrow already on screen instead of drawing a second one over it. */
+  id?: string;
+  /** The element this reading is read from.
+   * Lets a hover cross-highlight the two: hovering this arrow lights up the element, hovering the element lights up (and raises) every arrow it owns. */
+  elementID?: ID;
+  /** Which of `elementID`'s own points this is — set alongside `elementID` only for a reaction (`reaction-support`/`reaction-internal`), the one kind an edge can carry two of at once. Lets a click re-derive the exact same reading later (`FocusedOverlay`) rather than only "some reaction on this element". */
+  which?: ReactionPoint;
 }
+
+/**
+ * An overlay reading clicked on the canvas, kept just long enough to re-derive its own value declaratively on every render — never the `OverlayArrow`/`OverlayMoment` object itself, rebuilt from scratch every frame and so unfit to hold onto.
+ * The same identity a hover names (`HoveredReading`), so the two are compared field by field and never confused with the element the reading belongs to.
+ */
+export type FocusedOverlay = HoveredReading;
 
 /**
  * Screen-space base/tip of an overlay arrow — shared by the draw call and the hit test below, so hovering and drawing always agree on where the arrow actually sits.
@@ -2273,11 +2292,14 @@ export function overlay_arrow_hit(
 /**
  * Draws one physics-overlay arrow with `draw_force`'s own geometry (arrowhead, shaft), in a colour that marks it as measured rather than authored.
  * Never labelled itself — one recording can show one arrow per element with the overlay on, and a value on each would clutter faster than it would inform, so a value only ever appears for the one under the cursor, via `draw_overlay_arrow_label` below.
+ * `isSelected` takes the same treatment a selected load does: the halo in the reading's own colour, the stroke turned up to `selection_accent` of it — never the theme's flat selection blue, which would read as "an element" rather than "this particular reading". Its own element loses its selected look the moment this is true (`draw_mechanism`'s own `isSelected`), so the two are never both lit at once.
  */
 export function draw_overlay_arrow(
   ctx: CanvasRenderingContext2D,
   viewport: ViewportState,
   arrow: OverlayArrow,
+  isHovered: boolean = false,
+  isSelected: boolean = false,
 ) {
   const magnitude = arrow.vector.length();
   if (magnitude < 1e-9) return;
@@ -2285,10 +2307,19 @@ export function draw_overlay_arrow(
   const screenVec = world2screen_vec(arrow.vector, viewport).with_length(
     stored2screen_load(magnitude),
   );
+  const baseColor = PHYSICS_OVERLAY_COLOR[arrow.kind];
   ctx.save();
-  ctx.strokeStyle = PHYSICS_OVERLAY_COLOR[arrow.kind];
+  ctx.strokeStyle = isSelected ? selection_accent(baseColor) : baseColor;
   ctx.fillStyle = ctx.strokeStyle;
-  ctx.lineWidth = STROKE_WIDTHS.STANDARD;
+  // Stacks the same way a selected load's own width does: hovering an already-selected reading still thickens it further, rather than the two competing for the same width.
+  ctx.lineWidth =
+    STROKE_WIDTHS.STANDARD +
+    (isSelected ? 1 : 0) +
+    (isHovered ? STROKE_WIDTHS.HOVER_GAIN : 0);
+  if (isSelected) {
+    ctx.shadowColor = baseColor;
+    ctx.shadowBlur = INTERACTION_SPECS.SELECTION_HALO_SIZE;
+  }
   draw_force(ctx, base, screenVec, magnitude, true, FORCE);
   ctx.restore();
 }
@@ -2301,19 +2332,26 @@ export function draw_overlay_arrow_label(
   ctx: CanvasRenderingContext2D,
   viewport: ViewportState,
   arrow: OverlayArrow,
+  isSelected: boolean = false,
 ) {
   const geom = overlay_arrow_screen_geometry(viewport, arrow);
   if (!geom) return;
+  const baseColor = PHYSICS_OVERLAY_COLOR[arrow.kind];
   ctx.save();
-  ctx.strokeStyle = PHYSICS_OVERLAY_COLOR[arrow.kind];
+  // The same treatment the arrow itself takes when selected, so a value and the reading it belongs to read as one thing.
+  ctx.strokeStyle = isSelected ? selection_accent(baseColor) : baseColor;
   ctx.fillStyle = ctx.strokeStyle;
   ctx.lineWidth = STROKE_WIDTHS.STANDARD;
+  if (isSelected) {
+    ctx.shadowColor = baseColor;
+    ctx.shadowBlur = INTERACTION_SPECS.SELECTION_HALO_SIZE;
+  }
   draw_dimension_text(
     ctx,
     force_label_position_screen(geom.base, geom.vector),
     arrow.vector.length(),
     "",
-    FORCE,
+    arrow.kind === "velocity" ? LINEAR_VELOCITY : FORCE,
   );
   ctx.restore();
 }
@@ -2328,9 +2366,18 @@ export interface OverlayMoment {
   /** N·m, in the DATA MODEL's sign convention (positive = clockwise) — `draw_moment`'s own, the opposite of the solver's raw CCW-positive `ElementReaction.moment`, so this is negated once on the way in, at the one place that reads it (`use-simulation-playback.ts`) — the same flip `load-model.ts` already applies for a user-authored `MomentElement`. */
   torque: number;
   kind: Extract<PhysicsOverlayKind, "reaction-support" | "reaction-internal">;
+  /** See `OverlayArrow.id` — the same name, on the rotation half of one reading. */
+  id?: string;
+  /** See `OverlayArrow.elementID` — same owner, same reasoning. */
+  elementID?: ID;
+  /** See `OverlayArrow.which` — the same disambiguator, on the rotation half of one reading. */
+  which?: ReactionPoint;
+  /** World-space, only ever set alongside `elementID`: the owning beam's own direction at this end, pointing away from it along the member. Orients `draw_overlay_moment`'s half-arc so two readings meeting at the same point (different beams, or two ends close together) land on different sides instead of stacking. `undefined` draws the ordinary full-loop glyph. */
+  direction?: WorldPoint;
 }
 
-/** Whether `mouseScreen` sits over `moment`'s arc — same tolerance `moment_screen_geometry`'s hit test uses in `get-hover.ts` for a user-placed moment. */
+/** Whether `mouseScreen` sits over `moment`'s arc — same tolerance `moment_screen_geometry`'s hit test uses in `get-hover.ts` for a user-placed moment.
+ * A `direction`ed reading only draws its own half (`draw_overlay_moment`), so the hit test is narrowed to that same half-plane — otherwise the empty half would still steal the hover. */
 export function overlay_moment_hit(
   mouseScreen: ScreenPoint,
   viewport: ViewportState,
@@ -2340,28 +2387,150 @@ export function overlay_moment_hit(
   const center = world2screen(moment.at, viewport);
   const radius = stored2screen_moment(moment.torque);
   const dist = mouseScreen.distance_to(center);
-  return (
-    dist <= radius + HIT_TOLERANCE.EDGE && dist >= radius - HIT_TOLERANCE.EDGE
-  );
+  if (dist > radius + HIT_TOLERANCE.EDGE || dist < radius - HIT_TOLERANCE.EDGE)
+    return false;
+  if (!moment.direction || moment.direction.length() < 1e-9) return true;
+  const screenDirection = world2screen_vec(moment.direction, viewport);
+  return mouseScreen.sub(center).dot(screenDirection) >= 0;
+}
+
+/** A single arc's own span — well short of a half-turn, so it reads as one mark planted on its own side rather than as half of the full loop it is missing. */
+const HALF_MOMENT_SPAN = TAU / 3;
+
+/**
+ * Draws a single arc-and-arrowhead — one crescent of `draw_moment`'s own glyph, at `HALF_MOMENT_SPAN` instead of its ~124° — centered on `direction` instead of its fixed spot, so a reading whose beam runs a different way lands somewhere else on the circle instead of on top of the previous one.
+ * Overlay-only: a placed `MomentElement` keeps `draw_moment`'s full loop, which has no direction of its own to read from.
+ */
+function draw_half_moment(
+  ctx: CanvasRenderingContext2D,
+  center: ScreenPoint,
+  radius: number,
+  value: number,
+  direction: ScreenPoint,
+) {
+  const clockwise = value >= 0;
+  const centerAngle = direction.angle();
+  const halfSpan = HALF_MOMENT_SPAN / 2;
+  const startAngle = clockwise ? centerAngle - halfSpan : centerAngle + halfSpan;
+  const endAngle = clockwise ? centerAngle + halfSpan : centerAngle - halfSpan;
+  ctx.beginPath();
+  ctx.arc(center.x, center.y, radius, startAngle, endAngle, !clockwise);
+  ctx.stroke();
+  // Tangent to the arc at its own end, so the head points the way the arc is travelling rather than straight out from the centre.
+  const headAngle = clockwise ? endAngle - TAU / 4 : endAngle + TAU / 4;
+  const tip = center
+    .add(Point2.from_polar(radius, endAngle))
+    .sub(Point2.from_polar(DIM.ARROW_HEAD_LENGTH, headAngle));
+  draw_arrow_head(ctx, tip, headAngle);
 }
 
 /**
- * Draws one reaction moment with `draw_moment`'s own geometry (double arc, arrowheads), scaled on its own ruler (`stored2screen_moment`) and coloured like `draw_overlay_arrow`'s matching force so the two read as one reading split across a translation and a rotation.
+ * Draws one reaction moment, scaled on its own ruler (`stored2screen_moment`) and coloured like `draw_overlay_arrow`'s matching force so the two read as one reading split across a translation and a rotation.
+ * A `reaction-internal` reading draws only its own half, oriented along its beam (`draw_half_moment`); a summed `reaction-support` has no single beam to orient by, so it keeps `draw_moment`'s full loop.
  * Never labelled itself, same reasoning as `draw_overlay_arrow` — see `draw_overlay_moment_label`.
+ * `isSelected` — see `draw_overlay_arrow`'s own.
  */
 export function draw_overlay_moment(
   ctx: CanvasRenderingContext2D,
   viewport: ViewportState,
   moment: OverlayMoment,
+  isHovered: boolean = false,
+  isSelected: boolean = false,
 ) {
   if (Math.abs(moment.torque) < 1e-9) return;
   const center = world2screen(moment.at, viewport);
   const radius = stored2screen_moment(moment.torque);
+  const baseColor = PHYSICS_OVERLAY_COLOR[moment.kind];
   ctx.save();
-  ctx.strokeStyle = PHYSICS_OVERLAY_COLOR[moment.kind];
+  ctx.strokeStyle = isSelected ? selection_accent(baseColor) : baseColor;
   ctx.fillStyle = ctx.strokeStyle;
-  ctx.lineWidth = STROKE_WIDTHS.STANDARD;
-  draw_moment(ctx, center, radius, moment.torque, true);
+  // See `draw_overlay_arrow`'s own — the same stacking.
+  ctx.lineWidth =
+    STROKE_WIDTHS.STANDARD +
+    (isSelected ? 1 : 0) +
+    (isHovered ? STROKE_WIDTHS.HOVER_GAIN : 0);
+  if (isSelected) {
+    ctx.shadowColor = baseColor;
+    ctx.shadowBlur = INTERACTION_SPECS.SELECTION_HALO_SIZE;
+  }
+  const screenDirection =
+    moment.direction && moment.direction.length() >= 1e-9
+      ? world2screen_vec(moment.direction, viewport)
+      : undefined;
+  if (screenDirection)
+    draw_half_moment(ctx, center, radius, moment.torque, screenDirection);
+  else draw_moment(ctx, center, radius, moment.torque, true);
+  ctx.restore();
+}
+
+/** What a hovered line of the force balance stands for, in world terms — structurally what
+ * `BalanceTerm` already carries, named here so the canvas needs nothing from the analysis side to draw it. */
+export interface BalanceMarker {
+  at: WorldPoint;
+  force: WorldPoint;
+  /** N·m, counter-clockwise positive — the solver's sense, which `draw_moment` reads the other way round. */
+  couple: number;
+}
+
+/**
+ * A reading of the force balance that NOTHING on screen already draws — a body's own weight where its overlay arrow is not shown, or one term's moment about the reference point, which never has a glyph of its own.
+ * Every other case is pointed at by lighting up the arrow that is already there (`OverlayArrow.id`, `is_load_hovered`) rather than by drawing a second one over it, so what a reader sees stays one mark per quantity.
+ * `color` is always the calque's own — the weight overlay's, the one family this ever draws for.
+ * The value stays at standard weight throughout: this marker only ever appears while the panel names it, never while the cursor itself rests on it, so it has no hover state of its own to turn bold for.
+ */
+export function draw_balance_marker(
+  ctx: CanvasRenderingContext2D,
+  viewport: ViewportState,
+  marker: BalanceMarker,
+  color: string,
+) {
+  const base = world2screen(marker.at, viewport);
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+  ctx.lineWidth = STROKE_WIDTHS.HOVERED;
+  const magnitude = marker.force.length();
+  if (magnitude > 1e-9)
+    draw_force(
+      ctx,
+      base,
+      world2screen_vec(marker.force, viewport).with_length(
+        stored2screen_load(magnitude),
+      ),
+      magnitude,
+      false,
+      FORCE,
+      STROKE_WIDTHS.STANDARD,
+    );
+  // Negated once, the same flip every other moment on screen takes on its way out of the solver's own sense.
+  if (Math.abs(marker.couple) > 1e-9)
+    draw_moment(
+      ctx,
+      base,
+      stored2screen_moment(marker.couple),
+      -marker.couple,
+      false,
+      STROKE_WIDTHS.STANDARD,
+    );
+  ctx.restore();
+}
+
+/**
+ * The moment balance's own reference-point ring, drawn at `point` — bigger than a pivot's own circle, so a node that happens to sit there is not mistaken for it.
+ * Shown while the panel's picker is armed or hovered, whether or not any balance line itself is.
+ */
+export function draw_moment_balance_marker(
+  ctx: CanvasRenderingContext2D,
+  viewport: ViewportState,
+  point: WorldPoint,
+) {
+  const center = world2screen(point, viewport);
+  ctx.save();
+  ctx.strokeStyle = PHYSICS_OVERLAY_COLOR["reaction-support"];
+  ctx.lineWidth = STROKE_WIDTHS.HOVERED;
+  ctx.beginPath();
+  ctx.arc(center.x, center.y, DIM.MOMENT_BALANCE_MARKER_RADIUS, 0, TAU);
+  ctx.stroke();
   ctx.restore();
 }
 
@@ -2373,14 +2542,21 @@ export function draw_overlay_moment_label(
   ctx: CanvasRenderingContext2D,
   viewport: ViewportState,
   moment: OverlayMoment,
+  isSelected: boolean = false,
 ) {
   if (Math.abs(moment.torque) < 1e-9) return;
   const center = world2screen(moment.at, viewport);
   const radius = stored2screen_moment(moment.torque);
+  const baseColor = PHYSICS_OVERLAY_COLOR[moment.kind];
   ctx.save();
-  ctx.strokeStyle = PHYSICS_OVERLAY_COLOR[moment.kind];
+  // See `draw_overlay_arrow_label`: a selected value reads as part of the reading it belongs to.
+  ctx.strokeStyle = isSelected ? selection_accent(baseColor) : baseColor;
   ctx.fillStyle = ctx.strokeStyle;
   ctx.lineWidth = STROKE_WIDTHS.STANDARD;
+  if (isSelected) {
+    ctx.shadowColor = baseColor;
+    ctx.shadowBlur = INTERACTION_SPECS.SELECTION_HALO_SIZE;
+  }
   draw_dimension_text(
     ctx,
     moment_value_label_position(center, radius),
@@ -2390,6 +2566,7 @@ export function draw_overlay_moment_label(
   );
   ctx.restore();
 }
+
 
 // ─── Signed stress fill (normal beam-fill lens only, phase 9) ──────────────────
 

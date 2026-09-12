@@ -2,6 +2,7 @@ import { ID, MechanicalElement, ProbeMetric } from "../../../types/element";
 import { is_node_element, overlay_shown } from "../../../utils/element-queries";
 import { Point2 } from "../../../types/point2";
 import {
+  BeamCohesion,
   DynamicSnapshot,
   KinematicSnapshot,
   SimulationSnapshot,
@@ -128,6 +129,26 @@ function read_velocity(snapshot: DynamicSnapshot, slots: ProbeSlots): boolean {
   return true;
 }
 
+/** The probed point's acceleration, into `sampled` — same edge-midpoint averaging as
+ * `read_velocity`. `DynamicSnapshot`-only, same reasoning. */
+function read_acceleration(snapshot: DynamicSnapshot, slots: ProbeSlots): boolean {
+  if (slots.a < 0) return false;
+  const a = snapshot.accelerations;
+  const ax = a[2 * slots.a];
+  const ay = a[2 * slots.a + 1];
+  if (Number.isNaN(ax)) return false;
+  if (slots.b < 0) {
+    sampled[0] = ax;
+    sampled[1] = ay;
+    return true;
+  }
+  const bx = a[2 * slots.b];
+  if (Number.isNaN(bx)) return false;
+  sampled[0] = ax + (bx - ax) * 0.5;
+  sampled[1] = ay + (a[2 * slots.b + 1] - ay) * 0.5;
+  return true;
+}
+
 /**
  * Angular velocity of the element (rad/s), read directly rather than finite-differenced — `DynamicSnapshot` carries it as real solver state (see `SimNodes.vAngle`), so there is nothing to derive.
  *
@@ -176,17 +197,31 @@ export function element_velocity(
   return read_velocity(snapshot, slots) ? new Point2(sampled[0], sampled[1]) : undefined;
 }
 
+/**
+ * The element's own linear acceleration right now, at the point `probe_slots` samples it — the same anchor `element_velocity` reads, one derivative up.
+ * `undefined` when the snapshot carries none for it.
+ */
+export function element_acceleration(
+  element: MechanicalElement,
+  snapshot: DynamicSnapshot,
+): Point2 | undefined {
+  const slots = probe_slots(element, snapshot.layout);
+  return read_acceleration(snapshot, slots) ? new Point2(sampled[0], sampled[1]) : undefined;
+}
+
 /** One point of an element where a reaction acts — a node/gear has one, an edge has two
  * (its own start and end), each independent: a beam's root and tip carry unrelated loads. */
 export interface ElementReaction {
   at: Point2;
+  /** Which of the element's own points this is — the same disambiguator `element_reaction_at` takes, kept on the result so a caller holding several of an edge's readings at once can still tell them apart. */
+  which: ReactionPoint;
   vector: Point2;
-  /** N·m, signed — the couple a rigid (non-rotating) weld's two-point force pair reduces
-   * to (see `PBD_kinematic_solver.ts`'s per-link moment).
-   * Absent where nothing at this point carries one, e.g. a plain hinge or a two-force member's own axial pull. */
+  /** N·m, signed — at a beam's own end, that beam's cohesion couple (`beam_end_reaction`);
+   * anywhere else, the couple a rigid (non-rotating) weld's two-point force pair reduces to (see `PBD_kinematic_solver.ts`'s per-link moment).
+   * Absent only where nothing at this point reports one at all — a beam end always reads a figure, `0` at a plain hinge. */
   moment?: number;
-  /** From `LinkReaction.atAnchor` — a support reaction (against the ground) rather than an
-   * internal one (between two mobile parts), so a consumer can tell the two apart. */
+  /** From `LinkReaction.atAnchor` — whether this point's dof was immovable in the solve.
+   * At a NODE it also says the reading is opposed, i.e. a support reaction rather than an internal one; a BEAM END is never opposed, so there it says only where the end sits. */
   atAnchor: boolean;
 }
 
@@ -249,6 +284,7 @@ function moment_at(
 /** Force and/or moment at one point — `undefined` iff neither reports anything there. */
 function point_reaction(
   key: string,
+  which: ReactionPoint,
   at: Point2,
   snapshot: DynamicSnapshot,
 ): ElementReaction | undefined {
@@ -257,9 +293,95 @@ function point_reaction(
   if (!f && !m) return undefined;
   return {
     at,
+    which,
     vector: f?.vector ?? new Point2(0, 0),
     moment: m?.moment,
     atAnchor: f?.atAnchor ?? m!.atAnchor,
+  };
+}
+
+/** Whether the dof at `key` was immovable in the solve — the one thing a beam's own cohesion
+ * torsor does not carry, and the only thing `beam_end_reaction` still needs from the raw reactions.
+ * Read the way `force_at` reads it, last reporter wins, so one point never answers two different things depending on which of its readings a caller went through. */
+function anchored_at(key: string, snapshot: DynamicSnapshot): boolean {
+  let atAnchor = false;
+  for (const r of snapshot.reactions ?? [])
+    if (r.key.split(",").includes(key)) atAnchor = r.atAnchor;
+  return atAnchor;
+}
+
+/**
+ * The reaction at one end of a beam, read from that beam's OWN cohesion torsor rather than from the constraint impulses landing on the shared key.
+ * Those impulses belong to everything coincident at a fused node at once, and a couple is filed at BOTH ends of the link reporting it (see `moment_at`), so summing them answers a question about the solve and not about the beam: on two beams welded in line, the weld reads the far encastrement's own couple.
+ * `BeamCohesion` is this beam alone, solved from equilibrium.
+ *
+ * Never opposed at a support, unlike a node's reading: a beam end always says what the beam applies onto whatever sits there, so the two ends of one beam are always each other's opposite and read as one continuous effort along it.
+ * The classical "what the ground pushes back with" is the NODE's reading at that same point (`node_reaction_from_beams`), and the two together are the action/reaction pair.
+ */
+function beam_end_reaction(
+  cohesion: BeamCohesion,
+  which: "start" | "end",
+  at: Point2,
+  snapshot: DynamicSnapshot,
+): ElementReaction {
+  const torsor = which === "start" ? cohesion.start : cohesion.end;
+  return {
+    at,
+    which,
+    vector: new Point2(torsor.fx, torsor.fy),
+    moment: torsor.m,
+    atAnchor: anchored_at(`${cohesion.beamID}:${which}`, snapshot),
+  };
+}
+
+/**
+ * What the beam ends fused into `nodeID`'s dof apply there, summed — `undefined` when no beam reaches it.
+ * A node carries no torsor of its own, so this is the honest reading of one: opposed where it is anchored, the sum is the classical support reaction (one beam or several); where it is not, Newton's third law makes it zero, and the transmitted effort lives on the beam ends themselves, one reading per side.
+ * The fusion is only visible through `LinkReaction.key`, which is why the parts are read from there rather than from the mechanism.
+ *
+ * A load applied directly at the node reaches the ground without passing through a beam, so it joins the sum on its own: the solver files exactly it as an `"External"` reaction on every anchored dof carrying one (`PBD_kinematic_solver`), which is the only term a beam torsor cannot see.
+ */
+function node_reaction_from_beams(
+  nodeID: ID,
+  at: Point2,
+  snapshot: DynamicSnapshot,
+): ElementReaction | undefined {
+  const cohesions = snapshot.beamCohesion;
+  if (!cohesions || cohesions.length === 0) return undefined;
+  let parts: string[] | undefined;
+  for (const r of snapshot.reactions ?? []) {
+    const split = r.key.split(",");
+    if (split.includes(nodeID)) {
+      parts = split;
+      break;
+    }
+  }
+  if (!parts) return undefined;
+
+  let vector = new Point2(0, 0);
+  let moment = 0;
+  let any = false;
+  for (const cohesion of cohesions)
+    for (const which of ["start", "end"] as const) {
+      if (!parts.includes(`${cohesion.beamID}:${which}`)) continue;
+      const end = beam_end_reaction(cohesion, which, at, snapshot);
+      vector = vector.add(end.vector);
+      moment += end.moment ?? 0;
+      any = true;
+    }
+  if (!any) return undefined;
+  for (const r of snapshot.reactions ?? []) {
+    if (r.type !== "External" || !r.key.split(",").includes(nodeID)) continue;
+    if (r.kind === "force") vector = vector.add(new Point2(r.fx, r.fy));
+    else moment += r.torque;
+  }
+  const atAnchor = anchored_at(nodeID, snapshot);
+  return {
+    at,
+    which: "node",
+    vector: oppose_at_support(vector, atAnchor, (v) => v.mul(-1)),
+    moment: oppose_at_support(moment, atAnchor, (m) => -m),
+    atAnchor,
   };
 }
 
@@ -274,14 +396,21 @@ function element_reaction_at(
   which: ReactionPoint,
   snapshot: DynamicSnapshot,
 ): ElementReaction | undefined {
-  if (which === "node")
-    return "position" in element
-      ? point_reaction(element.id, element.position, snapshot)
-      : undefined;
+  if (which === "node") {
+    if (!("position" in element)) return undefined;
+    return (
+      node_reaction_from_beams(element.id, element.position, snapshot) ??
+      point_reaction(element.id, "node", element.position, snapshot)
+    );
+  }
   if (!("positionStart" in element)) return undefined;
-  return which === "start"
-    ? point_reaction(`${element.id}:start`, element.positionStart, snapshot)
-    : point_reaction(`${element.id}:end`, element.positionEnd, snapshot);
+  const at = which === "start" ? element.positionStart : element.positionEnd;
+  // A beam answers from its own torsor whenever the frame carries one; everything else, and a frame recorded without diagnostics, falls back to the raw impulses at the key.
+  if (element.type === "beam") {
+    const cohesion = snapshot.beamCohesion?.find((c) => c.beamID === element.id);
+    if (cohesion) return beam_end_reaction(cohesion, which, at, snapshot);
+  }
+  return point_reaction(`${element.id}:${which}`, which, at, snapshot);
 }
 
 /**
@@ -540,6 +669,11 @@ export function get_probe_series(
     case "moment-end":
       // Not computed by the kinematic solver; dynamic mode fills this in.
       return { t: [], curves: [], unit: "N·m" };
+
+    case "weight":
+    case "inertia":
+      // Never requested through this path — a canvas overlay click builds its own `MetricSample` directly (`AnalysisPanel`), the way a selected load's own components already do.
+      return { t: [], curves: [], unit: "N" };
   }
 }
 
@@ -721,6 +855,11 @@ export function get_dynamic_probe_series(
       }
       return { t, curves: [{ key: "value", values }], unit: "N·m" };
     }
+
+    case "weight":
+    case "inertia":
+      // Never requested through this path — see `get_probe_series`'s own case.
+      return { t: [], curves: [], unit: "N" };
   }
 }
 

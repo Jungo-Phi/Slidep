@@ -103,8 +103,6 @@ interface PlaybackControlsProps {
   handleSpaceKey: () => void;
   onOpenGallery: () => void;
   saveStatus: SaveStatus;
-  beamStressLens: BeamStressLens;
-  setBeamStressLens: (lens: BeamStressLens) => void;
   /** Tries a lens on without picking it, or — with `null` — puts the picked one back (`useStressLensPreview`). */
   previewBeamStressLens: (lens: BeamStressLens | null) => void;
   trajectoryDotted: boolean;
@@ -128,8 +126,6 @@ export const PlaybackControls: React.FC<PlaybackControlsProps> = ({
   handleSpaceKey,
   onOpenGallery,
   saveStatus,
-  beamStressLens,
-  setBeamStressLens,
   previewBeamStressLens,
   trajectoryDotted,
   setTrajectoryDotted,
@@ -448,11 +444,23 @@ export const PlaybackControls: React.FC<PlaybackControlsProps> = ({
       <OverlaysMenu
         mechanicalElements={mechanism.mechanicalElements}
         applyActions={applyActions}
-        beamStressLens={beamStressLens}
-        onChangeBeamStressLens={setBeamStressLens}
+        beamStressLens={mechanism.simulation.beamStressLens}
+        onChangeBeamStressLens={(lens) =>
+          applyActions([
+            {
+              type: "SetBeamStressLens",
+              newValue: lens,
+              oldValue: mechanism.simulation.beamStressLens,
+            },
+          ])
+        }
         onPreviewBeamStressLens={previewBeamStressLens}
         trajectoryDotted={trajectoryDotted}
         onChangeTrajectoryDotted={setTrajectoryDotted}
+        supportReactions={mechanism.simulation.supportReactions}
+        onChangeSupportReactions={(on) =>
+          applyActions([{ type: "SetSupportReactions", enabled: on }])
+        }
         condensed={condensed}
       />
     </Box>

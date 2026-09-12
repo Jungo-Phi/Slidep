@@ -81,14 +81,40 @@ export interface EnergySample {
 }
 
 /**
+ * The whole movable system's force balance this frame, in newtons — the numbers behind the free body's `ΣF = m·a` (docs/plan-efforts-interieurs.md phase 8).
+ *
+ * The free body is what the statics pass writes an equation for (`StaticsSystem.bodies`): every beam at its CONTINUUM mass `μL`, every gear, and every node's own mass — never the solver's ⅙/⅔/⅙ endpoint lumps, so this reads the same mass distribution the support reactions themselves do.
+ * The support reactions are deliberately absent: they are the one term the UI already has, since it draws them, and adding them here would mean resolving them twice from the same solve.
+ * Summing the body equations then gives `applied + weight + Σ(support reactions) = inertia`, the interface torsors cancelling pairwise — which is what makes the reading close at all.
+ */
+export interface BalanceSample {
+  /** N — Σ of every load applied to the movable system, gravity apart: point loads at its nodes and the resultant of every distributed one. */
+  appliedX: number;
+  appliedY: number;
+  /** N·m, counter-clockwise positive — the same loads' moment about the WORLD ORIGIN, which is the point every moment here is reduced to. */
+  appliedM: number;
+  /** N — Σ m·g over the free body. */
+  weightX: number;
+  weightY: number;
+  /** N·m — each body's weight about the origin, taken at its own centre of mass. */
+  weightM: number;
+  /** N — Σ m·a over the same bodies, each at its own centre. */
+  inertiaX: number;
+  inertiaY: number;
+  /** N·m — the same bodies' `r × m·a` about the origin, plus each one's own `I·α` about its centre.
+   * A node contributes no `I·α`: a point has no rotational inertia, the same line `solve_statics` draws. */
+  inertiaM: number;
+}
+
+/**
  * A beam's own cohesion torsor at each end, and the point loads its attached nodes transmit — see docs/plan-efforts-interieurs.md phase 3.
  * Isolates what beam A itself carries at a shared, coincidence-fused key from whatever ELSE is coincident there (another beam, a support, a motor): `LinkReaction`/`force_at` alone cannot do that, since two elements fused at the same key report under the very same `key` string.
  */
 export interface BeamCohesion {
   beamID: ID;
   /**
-   * What this beam's OWN rigidity (its length link, any welded-hub couple, any attached body's pin) applies onto whatever is coincident at its start/end — the raw `LinkReaction` sense, uniform at both ends, NOT `force_at`'s anchor-conditional "classical support reaction".
-   * Deliberately not yet the cut torsor `R_coh`: the two ends need opposite further treatment to become that (see `cohesion-field.ts`'s `r_coh_start`/`r_coh_end`), an asymmetry inherent to the cut convention itself.
+   * What this beam's OWN rigidity (its length link, any welded-hub couple, any attached body's pin) applies onto whatever is coincident at its start/end — one sense at both ends and for all three components, NOT `force_at`'s anchor-conditional "classical support reaction".
+   * Deliberately not yet the cut torsor `R_coh`: reaching that negates the far end and leaves the near one as it is (see `cohesion-field.ts`'s `r_coh_start`/`r_coh_end`), an asymmetry inherent to the cut convention itself.
    */
   /** `atAnchor`: whether this dof was immovable in the solve (`w = 0`) — same sense as
    * `LinkReaction.atAnchor`.
@@ -196,6 +222,9 @@ export interface DynamicSnapshot extends SimulationSnapshot {
   motorPower?: MotorPowerSample[];
   /** The mechanism's own energy balance this frame — see `EnergySample`. */
   energy?: EnergySample;
+  /** The whole movable system's force balance this frame — see `BalanceSample`.
+   * Always collected: one pass over the statics bodies, no solve of its own. */
+  balance?: BalanceSample;
   /** Each beam's own cohesion torsor, resolved from `reactions` — see `BeamCohesion`.
    * Undefined under the same `collectDiagnostics` gate as `reactions`. */
   beamCohesion?: BeamCohesion[];

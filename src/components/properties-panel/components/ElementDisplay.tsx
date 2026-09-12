@@ -119,7 +119,8 @@ const ElementDisplayComponent: React.FC<ElementDisplayProps> = ({
       type: "SelectedElement",
       elementID: element.id,
     });
-    drillDown(element);
+    // Selecting is what a first click does; the tab only follows a click on what is already selected, so naming an element from another tab never pulls the panel out from under the reader.
+    if (selected) drillDown(element);
   };
 
   const handleNameChange = (newName: string) => {

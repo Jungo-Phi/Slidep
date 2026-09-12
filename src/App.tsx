@@ -27,7 +27,6 @@ import {
 import {
   Action,
   AppMode,
-  BeamStressLens,
   ConstraintElement,
   DEFAULT_METADATA,
   DEFAULT_SIMULATION,
@@ -76,6 +75,12 @@ import { SimulationTimeline } from "./components/toolbar/SimulationTimeline";
 import { ToolsMenu } from "./components/toolbar/ToolsMenu";
 import { PlaybackControls } from "./components/toolbar/PlaybackControls";
 import { useStressLensPreview } from "./components/toolbar/use-stress-lens-preview";
+import type {
+  HoveredBalanceTerm,
+  MomentBalanceReference,
+} from "./components/solver/analysis/force-balance";
+import { resolve_moment_balance_point } from "./components/solver/analysis/force-balance";
+import type { FocusedOverlay } from "./components/canvas/drawing/drawing-functions";
 import { set_sim_clock as setRuntimeState } from "./components/solver/dynamics/sim-clock";
 import {
   apply_dynamic_snapshot_to_mechanism,
@@ -164,6 +169,32 @@ const App: React.FC = () => {
   const [hoveredAbscissa, setHoveredAbscissa] =
     useState<HoveredAbscissa | null>(null);
 
+  /** A line of the analysis panel's force balance the cursor rests on, for the canvas to show
+   * the vector it stands for — which is what tells a reader which term of the sum is which. */
+  const [hoveredBalanceTerm, setHoveredBalanceTerm] =
+    useState<HoveredBalanceTerm | null>(null);
+
+  /** Where the force balance's moment is taken about. A UI preference, not a mechanism edit, so
+   * it lives here rather than going through `Action`. */
+  const [momentBalanceReference, setMomentBalanceReference] =
+    useState<MomentBalanceReference>({ kind: "point", point: ZERO });
+  /** The panel's own reference-point picker is hovered — previews the marker on the canvas
+   * without arming the picking tool. */
+  const [momentBalanceReferenceHovered, setMomentBalanceReferenceHovered] =
+    useState(false);
+
+  /** A physics-overlay arrow or moment clicked on the canvas — a UI preference, not a mechanism
+   * edit, the same reasoning as `momentBalanceReference`.
+   * Never touches `canvasState`: naming an overlay is not an element selection, so the two stay independent registers, one read by the analysis panel and both read by the canvas — which draws the reading itself as selected while it stands, and its own element as not (`draw_mechanism`'s own `isSelected`). */
+  const [focusedOverlay, setFocusedOverlay] = useState<FocusedOverlay | null>(
+    null,
+  );
+  // Goes stale the moment anything else happens on the canvas — a new selection, an armed tool, a deselection.
+  // The click that sets it never touches `canvasState` itself, so this is the only thing that ever clears it.
+  useEffect(() => {
+    setFocusedOverlay(null);
+  }, [canvasState]);
+
   /** Elements the analysis panel is pointing at, and why (see `CanvasHighlight`). */
   const [highlight, setHighlight] = useState<CanvasHighlight>(NO_HIGHLIGHT);
 
@@ -180,12 +211,9 @@ const App: React.FC = () => {
   const [showGrid, setShowGrid] = useState<boolean>(
     getStorageItem<boolean>("showGrid", true),
   );
-  const [beamStressLens, setBeamStressLens] = useState<BeamStressLens>(
-    getStorageItem<BeamStressLens>("beamStressLens", "none"),
-  );
   const { previewLens, previewLensLater } = useStressLensPreview(appMode);
   // What the canvas paints the beams with: the lens hovered in the menu while one is being tried on, the chosen one the rest of the time.
-  const activeBeamStressLens = previewLens ?? beamStressLens;
+  const activeBeamStressLens = previewLens ?? mechanism.simulation.beamStressLens;
   const [trajectoryDotted, setTrajectoryDotted] = useState<boolean>(
     getStorageItem<boolean>("trajectoryDotted", false),
   );
@@ -205,10 +233,6 @@ const App: React.FC = () => {
   useEffect(() => {
     setStorageItem("showGrid", showGrid);
   }, [showGrid]);
-
-  useEffect(() => {
-    setStorageItem("beamStressLens", beamStressLens);
-  }, [beamStressLens]);
 
   useEffect(() => {
     setStorageItem("trajectoryDotted", trajectoryDotted);
@@ -347,6 +371,10 @@ const App: React.FC = () => {
     gravity: mechanism.simulation.gravity,
     collisions: mechanism.simulation.collisions,
     floor: mechanism.simulation.floor.enabled,
+    supportReactions: mechanism.simulation.supportReactions,
+    focusedOverlay,
+    hoveredOverlay:
+      hoveredPart.type === "Overlay" ? hoveredPart.reading : null,
     onRecordingLimitReached: (
       reason: SimulationLimitReason,
       maxTime: number,
@@ -411,6 +439,13 @@ const App: React.FC = () => {
     runtimeState.parameterSnapshots,
     runtimeState.time,
   ]);
+
+  /** `momentBalanceReference` resolved to the pose on screen, the way every other position the
+   * panel reads is. */
+  const momentBalancePoint = useMemo(
+    () => resolve_moment_balance_point(momentBalanceReference, analysedMechanism),
+    [analysedMechanism, momentBalanceReference],
+  );
 
   const {
     saveStatus,
@@ -878,8 +913,6 @@ const App: React.FC = () => {
                 handleSpaceKey={handleSpaceKey}
                 onOpenGallery={handleOpenGallery}
                 saveStatus={saveStatus}
-                beamStressLens={beamStressLens}
-                setBeamStressLens={setBeamStressLens}
                 previewBeamStressLens={previewLensLater}
                 trajectoryDotted={trajectoryDotted}
                 setTrajectoryDotted={setTrajectoryDotted}
@@ -967,6 +1000,12 @@ const App: React.FC = () => {
                 modePreviewRef={modePreviewRef}
                 redundancySymbols={redundancySymbols}
                 hoveredAbscissa={hoveredAbscissa}
+                hoveredBalanceTerm={hoveredBalanceTerm}
+                momentBalancePoint={momentBalancePoint}
+                onMomentBalanceReferencePicked={setMomentBalanceReference}
+                momentBalanceReferenceHovered={momentBalanceReferenceHovered}
+                onSelectOverlay={setFocusedOverlay}
+                focusedOverlay={focusedOverlay}
                 librarySection={
                   activeTab === "library"
                     ? (librarySection ?? undefined)
@@ -1008,6 +1047,12 @@ const App: React.FC = () => {
               setActiveTab={setActiveTab}
               blockedMotors={blockedMotors}
               setHoveredAbscissa={setHoveredAbscissa}
+              setHoveredBalanceTerm={setHoveredBalanceTerm}
+              momentBalanceReference={momentBalanceReference}
+              setMomentBalanceReference={setMomentBalanceReference}
+              setMomentBalanceReferenceHovered={setMomentBalanceReferenceHovered}
+              focusedOverlay={focusedOverlay}
+              setFocusedOverlay={setFocusedOverlay}
               setLibrarySection={setLibrarySection}
               hoveredLibraryEntryID={hoveredLibraryEntryID}
               setHoveredLibraryEntryID={setHoveredLibraryEntryID}
