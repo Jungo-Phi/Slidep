@@ -34,6 +34,7 @@ import {
   apply_parameter_snapshot_to_mechanism,
   apply_snapshot_to_mechanism,
   dynamic_snapshot_at,
+  parameter_snapshot,
   parameter_snapshot_at,
   snapshot_at,
   snapshot_index_at,
@@ -139,15 +140,7 @@ export function simulationResetPatch(
     time: 0,
     simulationSnapshots: [],
     parameterSnapshots:
-      mode !== "edition"
-        ? [
-            {
-              t: 0,
-              mechanicalElements: mechanism.mechanicalElements,
-              loads: mechanism.loads,
-            },
-          ]
-        : [],
+      mode !== "edition" ? [parameter_snapshot(0, mechanism)] : [],
     scrubbed: false,
     // Dynamic mode is the only one that ever grows this pool (see the recording loop below) — every other mode leaves it untouched, so without this it keeps whatever a previous dynamic run left behind for the entire lifetime of the new mode, judging unrelated readings negligible against a scale that has nothing to do with them.
     negligibilityPool: EMPTY_NEGLIGIBILITY_POOL,
@@ -167,14 +160,20 @@ export type UseSimulationPlaybackArgs = {
   setCanvasState: (
     update: CanvasState | ((prev: CanvasState) => CanvasState),
   ) => void;
-  /** Dynamic mode only: whether the predict step integrates gravity. Read every render
-   * through a ref, like `mechanism`/`appMode` — see the class doc below. */
+  /**
+   * Dynamic mode only: whether the predict step integrates gravity.
+   * Read every render through a ref, like `mechanism`/`appMode` — see the class doc below.
+   */
   gravity: boolean;
-  /** Both modes: whether the next steps detect and resist collisions. Same reasoning as
-   * `gravity` — read every render through a ref. */
+  /**
+   * Both modes: whether the next steps detect and resist collisions.
+   * Same reasoning as `gravity` — read every render through a ref.
+   */
   collisions: boolean;
-  /** Both modes: whether the next steps detect and resist the floor. Gated independently
-   * from `collisions` — same reasoning otherwise. */
+  /**
+   * Both modes: whether the next steps detect and resist the floor.
+   * Gated independently from `collisions` — same reasoning otherwise.
+   */
   floor: boolean;
   /** Whether the free-body diagram is on: every anchored node then shows its support reaction, whatever its own `force` overlay says, and marked (`OverlayArrow.emphasis`).
    * Same reasoning as `gravity` — read every render through a ref. */
@@ -244,11 +243,9 @@ export function useSimulationPlayback({
   const waitedForReachedRef = useRef<number>(0);
   const autoPlayOnEnterRef = useRef<boolean>(false);
   const simStartHistoryLengthRef = useRef<number>(0);
-  /** Set by a caller right before the mechanism updates when the edit changes neither the
-   * model nor the recorded instants (a probe's config, an element's name), so the recompile effect below can skip a recompile that would otherwise discard snapshots. */
+  /** Set by a caller right before the mechanism updates when the edit changes neither the model nor the recorded instants (a probe's config, an element's name), so the recompile effect below can skip a recompile that would otherwise discard snapshots. */
   const observationOnlyEditRef = useRef<boolean>(false);
-  /** Set by a caller right before the mechanism updates when the edit only changed load
-   * values (magnitude, direction…), never their target or count — the recompile effect below then swaps `compiledLoads` in place (`Recorder.setLoads`) instead of recompiling the whole model, which a continuous drag would otherwise do dozens of times a second. */
+  /** Set by a caller right before the mechanism updates when the edit only changed load values (magnitude, direction…), never their target or count — the recompile effect below then swaps `compiledLoads` in place (`Recorder.setLoads`) instead of recompiling the whole model, which a continuous drag would otherwise do dozens of times a second. */
   const loadValueOnlyEditRef = useRef<boolean>(false);
   const timelineTrackRef = useRef<HTMLDivElement | null>(null);
   /**
@@ -308,6 +305,18 @@ export function useSimulationPlayback({
       recorder().setFloor(floorRef.current);
       // Ask for frame 0 right away, without waiting for play: `advance` below picks it up as soon as the worker answers, so the first frame's reactions are there to read (elements panel, measures) even while the simulation sits paused.
       recorder().target(0);
+      // Entering simulation abandons any in-progress tool or gesture, whichever control started it — most tools cannot be armed mid-run at all.
+      // A settled selection carries over, it isn't a gesture to abandon.
+      // Nor does the ruler: it reads the mechanism without touching it, and watching a reading run is the whole point of having laid it down before pressing play.
+      setCanvasState((prev) =>
+        prev.type === "SelectedElement" ||
+        prev.type === "SelectedMultiple" ||
+        prev.type === "Measuring" ||
+        prev.type === "MeasuringFrom" ||
+        prev.type === "Measured"
+          ? prev
+          : { type: "Selecting" },
+      );
     }
     // Capture the flag synchronously: the setRuntimeState updater below runs later, after this line has already reset the ref to false.
     const shouldAutoPlay = appMode !== "edition" && autoPlayOnEnterRef.current;
@@ -317,7 +326,7 @@ export function useSimulationPlayback({
       ...simulationResetPatch(appMode, mechanismRef.current),
       isPlaying: shouldAutoPlay,
     }));
-  }, [appMode]);
+  }, [appMode, setCanvasState]);
 
   // Dynamic mode only: toggling the gravity Chip mid-run changes what the NEXT steps integrate, without recompiling — a reload would lose belt/motor state for nothing, and gravity is not part of what makes a frame's positions valid or not the way geometry is.
   useEffect(() => {
@@ -354,11 +363,7 @@ export function useSimulationPlayback({
         // Strict `<`, not `<=`: an edit made without the clock having moved since the last one (two edits at the same instant, including the very first at t=0) replaces that entry instead of leaving a duplicate a lookup could resolve to either side of.
         parameterSnapshots: [
           ...prev.parameterSnapshots.filter((s) => s.t < rs.time),
-          {
-            t: rs.time,
-            mechanicalElements: mechanism.mechanicalElements,
-            loads: mechanism.loads,
-          },
+          parameter_snapshot(rs.time, mechanism),
         ],
       }));
     // A load's values changed but not its target/count: swap them into the already-compiled model instead of recompiling it — the whole point being that a continuous drag can call this many times a second, unlike every other edit here.
@@ -466,8 +471,12 @@ export function useSimulationPlayback({
         mech.mechanicalElements,
         rs.simulationSnapshots,
       );
-      // Same instant as `snapshot`, not `rs.time`: a held grab draws the newest computed frame rather than the one under the cursor, and the motor/load values shown must match whichever instant that is.
-      const paramSnapshot = parameter_snapshot_at(rs.parameterSnapshots, snapshot.t);
+      // A held grab draws the newest computed frame rather than the one under the cursor, and the motor/load values shown must match whichever instant that is.
+      // Never earlier than the cursor, though: an edit is logged at the cursor, and the frame drawn there may predate it — paused, no later one ever comes to show it.
+      const paramSnapshot = parameter_snapshot_at(
+        rs.parameterSnapshots,
+        Math.max(snapshot.t, rs.time),
+      );
       const geometryMechanism =
         mode === "kinematic"
           ? apply_snapshot_to_mechanism(mech, snapshot as KinematicSnapshot)
@@ -911,22 +920,11 @@ export function useSimulationPlayback({
         // Arm auto-play so the mode-change effect starts the simulation instead of resetting isPlaying to false right after we set it.
         autoPlayOnEnterRef.current = true;
         setAppMode(lastSimulationMode);
-        // Entering simulation abandons any in-progress tool/gesture, like Space does in the canvas handler — but a settled selection carries over, it isn't a gesture to abandon.
-        // Nor is the ruler: it reads the mechanism without touching it, and watching a reading run is the whole point of having laid it down before pressing play.
-        setCanvasState((prev) =>
-          prev.type === "SelectedElement" ||
-          prev.type === "SelectedMultiple" ||
-          prev.type === "Measuring" ||
-          prev.type === "MeasuringFrom" ||
-          prev.type === "Measured"
-            ? prev
-            : { type: "Selecting" },
-        );
       } else {
         setRuntimeState((prev) => ({ ...prev, isPlaying: !prev.isPlaying }));
       }
     },
-    [appMode, setAppMode, setCanvasState],
+    [appMode, setAppMode],
   );
 
   // Escape while the simulation is running behaves like the "Réinitialiser" button (reset to t=0 and stop); otherwise it exits to edition mode.
@@ -943,13 +941,7 @@ export function useSimulationPlayback({
         current: null,
         history: [],
         simulationSnapshots: [],
-        parameterSnapshots: [
-          {
-            t: 0,
-            mechanicalElements: mechanismRef.current.mechanicalElements,
-            loads: mechanismRef.current.loads,
-          },
-        ],
+        parameterSnapshots: [parameter_snapshot(0, mechanismRef.current)],
         scrubbed: false,
       }));
     } else {
@@ -1013,13 +1005,7 @@ export function useSimulationPlayback({
       current: null,
       history: [],
       simulationSnapshots: [],
-      parameterSnapshots: [
-        {
-          t: 0,
-          mechanicalElements: mechanismRef.current.mechanicalElements,
-          loads: mechanismRef.current.loads,
-        },
-      ],
+      parameterSnapshots: [parameter_snapshot(0, mechanismRef.current)],
     }));
   }, []);
 
@@ -1089,8 +1075,7 @@ export function useSimulationPlayback({
     exitToEdition,
     pauseSimulation,
     resetSimulationState,
-    /** For callers (undo/redo, applyActions) that need to reason about whether an edit
-     * reaches back before the simulation started, or should be treated as observation-only. */
+    /** For callers (undo/redo, applyActions) that need to reason about whether an edit reaches back before the simulation started, or should be treated as observation-only. */
     simulationRef,
     autoPlayOnEnterRef,
     simStartHistoryLengthRef,

@@ -31,26 +31,30 @@ export interface LiveParameter {
 
 /**
  * The live values of `element`, in the order they are shown.
+ * `shown` is the same element at the instant on screen: the values are read off it, while every change is built against `element`, the stored one (see `rebased_bundle`).
  * A beam's material and profile are live too, but they are a choice among a catalogue rather than a number, so they are rendered on their own (see `MaterialProfileSection`).
  */
-export function live_parameters(element: MechanicalElement): LiveParameter[] {
+export function live_parameters(
+  element: MechanicalElement,
+  shown: MechanicalElement = element,
+): LiveParameter[] {
   const params: LiveParameter[] = [];
-  if (element.type === "mass")
+  if (element.type === "mass" && shown.type === "mass")
     params.push({
       label: "m",
       titleKey: "mass",
       kind: MASS,
-      value: element.mass,
+      value: shown.mass,
       change: (mass) => [
         { type: "ChangeMass", id: element.id, delta: mass - element.mass },
       ],
     });
-  if (element.type === "gear") {
+  if (element.type === "gear" && shown.type === "gear") {
     params.push({
       label: "mₛ",
       titleKey: "surface_mass",
       kind: SURFACE_MASS,
-      value: element.surfaceMass,
+      value: shown.surfaceMass,
       change: (surfaceMass) => [
         {
           type: "ChangeSurfaceMass",
@@ -63,7 +67,7 @@ export function live_parameters(element: MechanicalElement): LiveParameter[] {
       label: "J",
       titleKey: "inertia",
       kind: INERTIA,
-      value: gear_inertia(element.surfaceMass, element.radius),
+      value: gear_inertia(shown.surfaceMass, shown.radius),
       // The gear stores a surface mass; its inertia is the same value read through its radius, so editing either writes the one field.
       change: (inertia) => [
         {
@@ -76,12 +80,12 @@ export function live_parameters(element: MechanicalElement): LiveParameter[] {
       ],
     });
   }
-  if (element.type === "spring") {
+  if (element.type === "spring" && shown.type === "spring") {
     params.push({
       label: "k",
       titleKey: "stiffness",
       kind: STIFFNESS,
-      value: element.stiffness,
+      value: shown.stiffness,
       change: (stiffness) => [
         {
           type: "ChangeStiffness",
@@ -95,8 +99,7 @@ export function live_parameters(element: MechanicalElement): LiveParameter[] {
       titleKey: "rest_length",
       kind: LENGTH,
       value:
-        element.restLength ??
-        element.positionStart.distance_to(element.positionEnd),
+        shown.restLength ?? shown.positionStart.distance_to(shown.positionEnd),
       change: (restLength) => [
         {
           type: "UpdateElementRestLength",
@@ -107,12 +110,12 @@ export function live_parameters(element: MechanicalElement): LiveParameter[] {
       ],
     });
   }
-  if (element.type === "damper")
+  if (element.type === "damper" && shown.type === "damper")
     params.push({
       label: "b",
       titleKey: "damping",
       kind: DAMPING,
-      value: element.damping,
+      value: shown.damping,
       change: (damping) => [
         {
           type: "ChangeDamping",
@@ -121,12 +124,12 @@ export function live_parameters(element: MechanicalElement): LiveParameter[] {
         },
       ],
     });
-  if ("rotationalFriction" in element)
+  if ("rotationalFriction" in element && "rotationalFriction" in shown)
     params.push({
       label: "bᵣ",
       titleKey: "rotational_friction",
       kind: ANGULAR_DAMPING,
-      value: element.rotationalFriction,
+      value: shown.rotationalFriction,
       change: (friction) => [
         {
           type: "ChangeRotationalFriction",
@@ -135,12 +138,12 @@ export function live_parameters(element: MechanicalElement): LiveParameter[] {
         },
       ],
     });
-  if ("slidingFriction" in element)
+  if ("slidingFriction" in element && "slidingFriction" in shown)
     params.push({
       label: "bₛ",
       titleKey: "sliding_friction",
       kind: DAMPING,
-      value: element.slidingFriction,
+      value: shown.slidingFriction,
       change: (friction) => [
         {
           type: "ChangeSlidingFriction",
@@ -149,8 +152,9 @@ export function live_parameters(element: MechanicalElement): LiveParameter[] {
         },
       ],
     });
-  if (element.type === "pivot" && element.motor) {
-    const motor = element.motor;
+  if (element.type === "pivot" && shown.type === "pivot" && shown.motor) {
+    // A motor config is replaced whole, so the new one starts from what is shown: a later edit of its other field must not ride along.
+    const motor = shown.motor;
     params.push({
       label: "C",
       titleKey: "motor_torque_label",
@@ -161,7 +165,7 @@ export function live_parameters(element: MechanicalElement): LiveParameter[] {
           type: "SetMotorConfig",
           id: element.id,
           newConfig: { ...motor, torque },
-          oldConfig: motor,
+          oldConfig: element.motor,
         },
       ],
     });
@@ -176,7 +180,7 @@ export function live_parameters(element: MechanicalElement): LiveParameter[] {
           type: "SetMotorConfig",
           id: element.id,
           newConfig: { ...motor, speed },
-          oldConfig: motor,
+          oldConfig: element.motor,
         },
       ],
     });

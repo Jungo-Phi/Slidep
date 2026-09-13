@@ -510,6 +510,18 @@ export const STRINGS = {
     de: "Eine Simulation kann {minutes} Minuten nicht überschreiten",
     es: "Una simulación no puede superar los {minutes} minutos",
   },
+  unavailable_in_simulation: {
+    fr: "Indisponible en simulation",
+    en: "Unavailable during simulation",
+    de: "Während der Simulation nicht verfügbar",
+    es: "No disponible durante la simulación",
+  },
+  simulation_paused_for_edit: {
+    fr: "Simulation mise en pause le temps de cette modification",
+    en: "Simulation paused for this edit",
+    de: "Simulation für diese Bearbeitung angehalten",
+    es: "Simulación en pausa durante esta modificación",
+  },
   recording_limit_memory: {
     fr: "La mémoire ne permet pas de dépasser {minutes} minutes sur ce mécanisme",
     en: "Memory does not allow going past {minutes} minutes on this mechanism",

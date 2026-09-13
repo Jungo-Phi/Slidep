@@ -2,7 +2,8 @@ import { Point2, ScreenPoint, ViewportState, WorldPoint, ZERO } from "../types";
 import { Bounds } from "./mechanism-bounds";
 import { MAX_GRID_SCALE, MIN_GRID_SCALE } from "./grid";
 
-const VIEWPORT_ZOOM_SENSITIVITY = 400; // Nombre de "crans" de molette nécessaires pour multiplier le zoom par 2
+/** Wheel delta that doubles the zoom. */
+const VIEWPORT_ZOOM_SENSITIVITY = 400;
 
 /** Half-side of the square the viewport may pan within: a 1000 km world. */
 export const WORLD_FRAME_HALF_EXTENT = 500_000;
@@ -97,8 +98,7 @@ export function world2screen_angle(angle: number): number {
   return -angle;
 }
 
-/** The wheel delta that takes a viewport from `fromScale` to `toScale`, so a control aiming
- * at an exact scale goes through the same path as a gesture. */
+/** The wheel delta that takes a viewport from `fromScale` to `toScale`, so a control aiming at an exact scale goes through the same path as a gesture. */
 export function zoom_delta_to(fromScale: number, toScale: number): number {
   return -VIEWPORT_ZOOM_SENSITIVITY * Math.log2(toScale / fromScale);
 }
@@ -123,8 +123,8 @@ export function zoom_on_point(
 }
 
 export interface FitViewportOptions {
-  ratioMarginX?: number;
-  ratioMarginY?: number;
+  ratioMarginX: number;
+  ratioMarginY: number;
   defaultZoom: number;
 }
 
@@ -137,7 +137,7 @@ export function fit_viewport_to_bounds(
   bounds: Bounds | undefined,
   width: number,
   height: number,
-  { ratioMarginX = 0.08, ratioMarginY = 0.12, defaultZoom }: FitViewportOptions,
+  { ratioMarginX, ratioMarginY, defaultZoom }: FitViewportOptions,
 ): ViewportState {
   const center: ScreenPoint = new Point2(width / 2, height / 2);
   if (!bounds) return { scale: defaultZoom, pan: center };

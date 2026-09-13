@@ -26,7 +26,7 @@ import {
   ID,
   Mechanism,
 } from "../../../types";
-import { ProfileShape } from "../../../types/material";
+import { MaterialDef, ProfileDef, ProfileShape } from "../../../types/material";
 import {
   default_material,
   default_profile,
@@ -60,8 +60,7 @@ import { useNonModalPopup } from "../../common/use-non-modal-popup";
 const swatch = (index: number) =>
   PROBE_ELEMENT_COLORS[index % PROBE_ELEMENT_COLORS.length];
 
-/** A group's own swatch, as a light wash over its whole background rather than a dot next to
- * its name — the 2-digit suffix is an 8-digit hex color's own alpha channel. */
+/** A group's own swatch, as a light wash over its whole background rather than a dot next to its name — the 2-digit suffix is an 8-digit hex color's own alpha channel. */
 const swatch_tint = (index: number) => `${swatch(index)}22`;
 
 // A beam belongs to exactly one material group and one profile group at once — separate mime types per section keep a drag started in one from being droppable in the other, and a second pair (a whole group's own id, rather than one beam's) lets the group handle bar reassign every beam in the group in one drop, instead of one at a time.
@@ -276,8 +275,7 @@ interface LibraryEntryGroupProps {
   usageCount: number;
   expanded: boolean;
   onToggleExpand: () => void;
-  /** The hovered canvas beam belongs to this entry, or this entry's own row is hovered — tints
-   * the whole group so it's found at a glance even while collapsed. */
+  /** The hovered canvas beam belongs to this entry, or this entry's own row is hovered — tints the whole group so it's found at a glance even while collapsed. */
   isCanvasHighlighted: boolean;
   canDelete?: boolean;
   onHoverStart: () => void;
@@ -290,8 +288,7 @@ interface LibraryEntryGroupProps {
   onDragLeave: (e: React.DragEvent) => void;
   onDrop: (e: React.DragEvent) => void;
   groupRef?: (el: HTMLDivElement | null) => void;
-  /** The whole group's own drag, offered from a small handle in the header itself — undefined
-   * when there's nothing to grab as a group (0 or 1 beam). */
+  /** The whole group's own drag, offered from a small handle in the header itself — undefined when there's nothing to grab as a group (0 or 1 beam). */
   groupDrag?: { id: ID; mimeType: string };
   detail?: React.ReactNode;
   children?: React.ReactNode;
@@ -527,8 +524,10 @@ interface ShapeCotesProps {
   disabled?: boolean;
 }
 
-/** The cote fields for `shape`'s own kind — never more than what that kind actually holds. A
- * candidate that violates `validate_profile_shape` (a negative cote, a wall thickness past the half-cote it's cut from) is dropped rather than committed. */
+/**
+ * The cote fields for `shape`'s own kind — never more than what that kind actually holds.
+ * A candidate that violates `validate_profile_shape` (a negative cote, a wall thickness past the half-cote it's cut from) is dropped rather than committed.
+ */
 const ShapeCotes: React.FC<ShapeCotesProps> = ({
   shape,
   onChange,
@@ -720,29 +719,29 @@ export interface LibraryFocusRequest {
 
 interface MaterialsLibraryPanelProps {
   mechanism: Mechanism;
+  /** The mechanism at the instant on screen: the catalogue and its beams are listed as they stood then, while every write is built against `mechanism` (see `rebased_bundle`). */
+  analysedMechanism: Mechanism;
   applyActions: (actions: Action[]) => void;
   /** Which section is hovered — also what tints the canvas for as long as the hover lasts.
    * Lifted to the app, not local state: the canvas needs to know it too. */
   setHoveredSection: (section: "materials" | "profiles" | null) => void;
-  /** A row hovered here, for the canvas to accentuate its beams and fade the rest — narrows
-   * the section-wide tint to just this entry. */
+  /** A row hovered here, for the canvas to accentuate its beams and fade the rest — narrows the section-wide tint to just this entry. */
   hoveredEntryID: ID | null;
   setHoveredEntryID: (id: ID | null) => void;
-  /** The canvas's own hover, read (never written) here — the reverse direction: a beam
-   * hovered on the canvas lights up the row it belongs to. */
+  /** The canvas's own hover, read (never written) here — the reverse direction: a beam hovered on the canvas lights up the row it belongs to. */
   hoveredPart: HoveredPart;
   setHoveredPart: (hoveredPart: HoveredPart) => void;
   /** Threaded down to each beam row so it can select/highlight like any other `ElementDisplay`. */
   selectedIds: ID[];
   setCanvasState: (state: CanvasState) => void;
-  /** Set from the elements tab's own "where can I edit this?" link — expands that entry here
-   * once, then must be acknowledged so the next visit doesn't re-apply it. */
+  /** Set from the elements tab's own "where can I edit this?" link — expands that entry here once, then must be acknowledged so the next visit doesn't re-apply it. */
   focusRequest: LibraryFocusRequest | null;
   onFocusHandled: () => void;
 }
 
 export const MaterialsLibraryPanel: React.FC<MaterialsLibraryPanelProps> = ({
   mechanism,
+  analysedMechanism,
   applyActions,
   setHoveredSection,
   hoveredEntryID,
@@ -806,9 +805,36 @@ export const MaterialsLibraryPanel: React.FC<MaterialsLibraryPanelProps> = ({
     onFocusHandled();
   }, [focusRequest, onFocusHandled]);
 
-  const beams = mechanism.mechanicalElements.filter(
+  const materials = analysedMechanism.materials;
+  const profiles = analysedMechanism.profiles;
+  const beams = analysedMechanism.mechanicalElements.filter(
     (el): el is BeamElement => el.type === "beam",
   );
+  // What each write is built against: the stored entity, or the one shown when a later edit deleted it — the write brings it back.
+  const stored_beam = (beam: BeamElement) =>
+    (mechanism.mechanicalElements.find((el) => el.id === beam.id) as
+      | BeamElement
+      | undefined) ?? beam;
+  const stored_material = (material: MaterialDef) =>
+    mechanism.materials.find((m) => m.id === material.id) ?? material;
+  const stored_profile = (profile: ProfileDef) =>
+    mechanism.profiles.find((p) => p.id === profile.id) ?? profile;
+  // A rename is an observation, which never brings back an entry a later edit deleted: a zero-sized edit of that entry does, ahead of the rename.
+  const revive_material = (material: MaterialDef): Action[] =>
+    mechanism.materials.some((m) => m.id === material.id)
+      ? []
+      : [{ type: "ChangeMaterialRho", id: material.id, delta: 0 }];
+  const revive_profile = (profile: ProfileDef): Action[] =>
+    mechanism.profiles.some((p) => p.id === profile.id)
+      ? []
+      : [
+          {
+            type: "ChangeProfileShape",
+            id: profile.id,
+            newShape: profile.shape,
+            oldShape: profile.shape,
+          },
+        ];
 
   const hoveredBeam =
     hoveredPart.type === "Edge"
@@ -816,21 +842,22 @@ export const MaterialsLibraryPanel: React.FC<MaterialsLibraryPanelProps> = ({
       : undefined;
 
   const addMaterial = () => {
-    const material = default_material(mechanism.materials.map((m) => m.name));
+    const material = default_material(materials.map((m) => m.name));
     applyActions([{ type: "CreateMaterial", material }]);
     setExpandedMaterialIDs((cur) => new Set(cur).add(material.id));
   };
   const addProfile = () => {
-    const profile = default_profile(mechanism.profiles.map((p) => p.name));
+    const profile = default_profile(profiles.map((p) => p.name));
     applyActions([{ type: "CreateProfile", profile }]);
     setExpandedProfileIDs((cur) => new Set(cur).add(profile.id));
   };
 
   const deleteMaterial = (materialID: ID) => {
-    // In use: reassign every beam holding it to another entry first, one bundled undo step — this is the "delete" gesture; a blocked dialog isn't. Only truly impossible (this is the library's last material) leaves the delete button disabled instead.
-    const fallback = mechanism.materials.find((m) => m.id !== materialID);
+    // In use: reassign every beam holding it to another entry first, one bundled undo step — this is the "delete" gesture; a blocked dialog isn't.
+    // Only truly impossible (this is the library's last material) leaves the delete button disabled instead.
+    const fallback = materials.find((m) => m.id !== materialID);
     if (!fallback) return;
-    const material = mechanism.materials.find((m) => m.id === materialID);
+    const material = materials.find((m) => m.id === materialID);
     if (!material) return;
     const reassign: Action[] = beams
       .filter((beam) => beam.materialID === materialID)
@@ -838,14 +865,17 @@ export const MaterialsLibraryPanel: React.FC<MaterialsLibraryPanelProps> = ({
         type: "AssignMaterial",
         id: beam.id,
         newMaterialID: fallback.id,
-        oldMaterialID: materialID,
+        oldMaterialID: stored_beam(beam).materialID,
       }));
-    applyActions([...reassign, { type: "DeleteMaterial", material }]);
+    applyActions([
+      ...reassign,
+      { type: "DeleteMaterial", material: stored_material(material) },
+    ]);
   };
   const deleteProfile = (profileID: ID) => {
-    const fallback = mechanism.profiles.find((p) => p.id !== profileID);
+    const fallback = profiles.find((p) => p.id !== profileID);
     if (!fallback) return;
-    const profile = mechanism.profiles.find((p) => p.id === profileID);
+    const profile = profiles.find((p) => p.id === profileID);
     if (!profile) return;
     const reassign: Action[] = beams
       .filter((beam) => beam.profileID === profileID)
@@ -853,9 +883,12 @@ export const MaterialsLibraryPanel: React.FC<MaterialsLibraryPanelProps> = ({
         type: "AssignProfile",
         id: beam.id,
         newProfileID: fallback.id,
-        oldProfileID: profileID,
+        oldProfileID: stored_beam(beam).profileID,
       }));
-    applyActions([...reassign, { type: "DeleteProfile", profile }]);
+    applyActions([
+      ...reassign,
+      { type: "DeleteProfile", profile: stored_profile(profile) },
+    ]);
   };
 
   const handleMaterialDragOver = (e: React.DragEvent, targetID: ID) => {
@@ -886,7 +919,7 @@ export const MaterialsLibraryPanel: React.FC<MaterialsLibraryPanelProps> = ({
             type: "AssignMaterial",
             id: beam.id,
             newMaterialID: targetID,
-            oldMaterialID: groupID,
+            oldMaterialID: stored_beam(beam).materialID,
           })),
       );
       return;
@@ -899,7 +932,7 @@ export const MaterialsLibraryPanel: React.FC<MaterialsLibraryPanelProps> = ({
         type: "AssignMaterial",
         id: beam.id,
         newMaterialID: targetID,
-        oldMaterialID: beam.materialID,
+        oldMaterialID: stored_beam(beam).materialID,
       },
     ]);
   };
@@ -931,7 +964,7 @@ export const MaterialsLibraryPanel: React.FC<MaterialsLibraryPanelProps> = ({
             type: "AssignProfile",
             id: beam.id,
             newProfileID: targetID,
-            oldProfileID: groupID,
+            oldProfileID: stored_beam(beam).profileID,
           })),
       );
       return;
@@ -944,14 +977,14 @@ export const MaterialsLibraryPanel: React.FC<MaterialsLibraryPanelProps> = ({
         type: "AssignProfile",
         id: beam.id,
         newProfileID: targetID,
-        oldProfileID: beam.profileID,
+        oldProfileID: stored_beam(beam).profileID,
       },
     ]);
   };
 
   return (
     <Box>
-      {/* ── Matériaux ── */}
+      {/* ── Materials ── */}
       <Typography
         variant="subtitle2"
         fontWeight={600}
@@ -972,7 +1005,7 @@ export const MaterialsLibraryPanel: React.FC<MaterialsLibraryPanelProps> = ({
           overflow: "hidden",
         }}
       >
-        {mechanism.materials.map((material, i) => {
+        {materials.map((material, i) => {
           const materialBeams = beams.filter(
             (beam) => beam.materialID === material.id,
           );
@@ -997,11 +1030,12 @@ export const MaterialsLibraryPanel: React.FC<MaterialsLibraryPanelProps> = ({
                 hoveredBeam?.materialID === material.id ||
                 hoveredEntryID === material.id
               }
-              canDelete={mechanism.materials.length > 1}
+              canDelete={materials.length > 1}
               onHoverStart={() => setHoveredEntryID(material.id)}
               onHoverEnd={() => setHoveredEntryID(null)}
               onRename={(newName) =>
                 applyActions([
+                  ...revive_material(material),
                   {
                     type: "RenameMaterial",
                     id: material.id,
@@ -1019,7 +1053,7 @@ export const MaterialsLibraryPanel: React.FC<MaterialsLibraryPanelProps> = ({
                       id: crypto.randomUUID() as ID,
                       name: unique_copy_name(
                         material.name,
-                        mechanism.materials.map((m) => m.name),
+                        materials.map((m) => m.name),
                       ),
                     },
                   },
@@ -1040,7 +1074,7 @@ export const MaterialsLibraryPanel: React.FC<MaterialsLibraryPanelProps> = ({
                       {
                         type: "ChangeMaterialE",
                         id: material.id,
-                        delta: newE - material.E,
+                        delta: newE - stored_material(material).E,
                       },
                     ])
                   }
@@ -1049,7 +1083,7 @@ export const MaterialsLibraryPanel: React.FC<MaterialsLibraryPanelProps> = ({
                       {
                         type: "ChangeMaterialRe",
                         id: material.id,
-                        delta: newRe - material.Re,
+                        delta: newRe - stored_material(material).Re,
                       },
                     ])
                   }
@@ -1058,7 +1092,7 @@ export const MaterialsLibraryPanel: React.FC<MaterialsLibraryPanelProps> = ({
                       {
                         type: "ChangeMaterialRho",
                         id: material.id,
-                        delta: newRho - material.rho,
+                        delta: newRho - stored_material(material).rho,
                       },
                     ])
                   }
@@ -1105,7 +1139,7 @@ export const MaterialsLibraryPanel: React.FC<MaterialsLibraryPanelProps> = ({
         </Button>
       </Box>
 
-      {/* ── Profilés ── */}
+      {/* ── Profiles ── */}
       <Typography variant="subtitle2" fontWeight={600} sx={{ pl: 3, mb: -1.5 }}>
         {t("profiles_section")}
       </Typography>
@@ -1122,7 +1156,7 @@ export const MaterialsLibraryPanel: React.FC<MaterialsLibraryPanelProps> = ({
           overflow: "hidden",
         }}
       >
-        {mechanism.profiles.map((profile, i) => {
+        {profiles.map((profile, i) => {
           const profileBeams = beams.filter(
             (beam) => beam.profileID === profile.id,
           );
@@ -1147,11 +1181,12 @@ export const MaterialsLibraryPanel: React.FC<MaterialsLibraryPanelProps> = ({
                 hoveredBeam?.profileID === profile.id ||
                 hoveredEntryID === profile.id
               }
-              canDelete={mechanism.profiles.length > 1}
+              canDelete={profiles.length > 1}
               onHoverStart={() => setHoveredEntryID(profile.id)}
               onHoverEnd={() => setHoveredEntryID(null)}
               onRename={(newName) =>
                 applyActions([
+                  ...revive_profile(profile),
                   {
                     type: "RenameProfile",
                     id: profile.id,
@@ -1169,7 +1204,7 @@ export const MaterialsLibraryPanel: React.FC<MaterialsLibraryPanelProps> = ({
                       id: crypto.randomUUID() as ID,
                       name: unique_copy_name(
                         profile.name,
-                        mechanism.profiles.map((p) => p.name),
+                        profiles.map((p) => p.name),
                       ),
                     },
                   },
@@ -1189,7 +1224,7 @@ export const MaterialsLibraryPanel: React.FC<MaterialsLibraryPanelProps> = ({
                         type: "ChangeProfileShape",
                         id: profile.id,
                         newShape,
-                        oldShape: profile.shape,
+                        oldShape: stored_profile(profile).shape,
                       },
                     ])
                   }

@@ -37,7 +37,11 @@ import {
   save_to_file,
   serialize_mechanism,
 } from "../../utils";
-import { PREVIEW_MIN_ZOOM, SNACKBAR_DURATION } from "../../constants/interaction-specs";
+import {
+  CANVAS_FIT_MARGIN,
+  PREVIEW_MIN_ZOOM,
+  SNACKBAR_DURATION,
+} from "../../constants/interaction-specs";
 import { t, tn } from "../../i18n";
 
 const DB_VERSION = 3;
@@ -60,8 +64,7 @@ const openMechanismsDB = () =>
 const read_all_records = async (db: IDBPDatabase<SlidepDB>) =>
   (await db.getAll("mechanisms")).map(migrate_document);
 
-/** The framing "Recentrer" aims for: the mechanism's content fit to the canvas,
- * clear of the ElementPalette overlay on its left edge. */
+/** The framing "Recentrer" aims for: the mechanism's content fit to the canvas, clear of the ElementPalette overlay on its left edge. */
 export const fit_to_content = (
   mechanism: Mechanism,
   canvas: HTMLCanvasElement,
@@ -73,7 +76,7 @@ export const fit_to_content = (
     ),
     canvas.width,
     canvas.height,
-    { defaultZoom: PREVIEW_MIN_ZOOM },
+    { ...CANVAS_FIT_MARGIN, defaultZoom: PREVIEW_MIN_ZOOM },
   );
   return { ...fitted, pan: fitted.pan };
 };
@@ -329,7 +332,7 @@ export function useMechanismLibrary({
     setSaveStatus("idle");
   }, [canvasRef, setMechanism, setCanvasState, resetSimulationState]);
 
-  // Un import n'écrase jamais un mécanisme existant L'entrée entre dans la bibliothèque comme une copie, à côté de l'originale.
+  // An import never overwrites a stored mechanism: it enters the library as a copy, next to the original.
   const storeImportedRecords = useCallback(
     async (records: SerializedMechanism[]) => {
       const db = await openMechanismsDB();
@@ -454,7 +457,7 @@ export function useMechanismLibrary({
     [importFiles, setSnackbar],
   );
 
-  // Export depuis la galerie : les enregistrements y sont déjà sérialisés.
+  // Export from the gallery, whose records are already serialized.
   const handleExportRecord = useCallback((record: SerializedMechanism) => {
     save_to_file(record, `${record.metadata.name || t("untitled")}.slidep`);
   }, []);

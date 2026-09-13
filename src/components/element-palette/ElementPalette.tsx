@@ -20,15 +20,9 @@ import {
 } from "../../constants/shortcuts";
 import { get_constraint_element_from_id } from "../mechanism/connect-actions";
 import { armed_tool_state } from "../canvas/tools/arm-tool";
+import { SIMULATION_TOOLS } from "../../constants/canvas-state-sim-effect";
 import { Mechanism } from "../../types";
 import { StringKey, t } from "../../i18n";
-
-/** How clicking this palette button behaves when simulation is active.
- *  - "structural"   : exits to edition first (elements, forces)
- *  - "constraint"   : pauses simulation, stays in sim mode (dimensions, constraints)
- * - "observational": no sim effect (probes)
- */
-type SimBehavior = "structural" | "constraint" | "observational";
 
 export interface PaletteElement {
   /** Name only: the shortcut is appended at render time. */
@@ -41,7 +35,6 @@ export interface PaletteElement {
   hilightHoverColor: string;
   simHilightColor?: string;
   simHilightHoverColor?: string;
-  simBehavior: SimBehavior;
 }
 
 /**
@@ -60,7 +53,6 @@ export const edition_palette = (): {
         iconSrc: icon("select"),
         simIconSrc: icon("select-sim"),
         goToStateType: "Selecting",
-        simBehavior: "observational",
         hilightRule: (state) =>
           [
             "Selecting",
@@ -101,7 +93,6 @@ export const edition_palette = (): {
         nameKey: "tool_eraser",
         iconSrc: icon("eraser"),
         goToStateType: "Erasing",
-        simBehavior: "structural",
         hilightRule: (state) =>
           state.type === "Erasing" || state.type === "ErasingMultiple",
         hilightColor: COLORS.DELETION_BOX,
@@ -116,7 +107,6 @@ export const edition_palette = (): {
         nameKey: "slider",
         iconSrc: icon("slider"),
         goToStateType: "PlacingSlider",
-        simBehavior: "structural",
         hilightRule: (state) => state.type === "PlacingSlider",
         hilightColor: COLORS.ACCENT,
         hilightHoverColor: COLORS.ACCENT_DARK,
@@ -125,7 +115,6 @@ export const edition_palette = (): {
         nameKey: "pivot",
         iconSrc: icon("pivot"),
         goToStateType: "PlacingPivot",
-        simBehavior: "structural",
         hilightRule: (state) => state.type === "PlacingPivot",
         hilightColor: COLORS.ACCENT,
         hilightHoverColor: COLORS.ACCENT_DARK,
@@ -134,7 +123,6 @@ export const edition_palette = (): {
         nameKey: "belt",
         iconSrc: icon("belt"),
         goToStateType: "PlacingBeltStart",
-        simBehavior: "structural",
         hilightRule: (state) =>
           state.type === "PlacingBeltStart" || state.type === "PlacingBeltEnd",
         hilightColor: COLORS.ACCENT,
@@ -144,7 +132,6 @@ export const edition_palette = (): {
         nameKey: "gear",
         iconSrc: icon("gear"),
         goToStateType: "PlacingGearStart",
-        simBehavior: "structural",
         hilightRule: (state) =>
           state.type === "PlacingGearStart" ||
           state.type === "PlacingGearRadius",
@@ -160,7 +147,6 @@ export const edition_palette = (): {
         nameKey: "join",
         iconSrc: icon("join"),
         goToStateType: "PlacingJoin",
-        simBehavior: "structural",
         hilightRule: (state) => state.type === "PlacingJoin",
         hilightColor: COLORS.ACCENT,
         hilightHoverColor: COLORS.ACCENT_DARK,
@@ -169,7 +155,6 @@ export const edition_palette = (): {
         nameKey: "beam",
         iconSrc: icon("beam"),
         goToStateType: "PlacingBeamStart",
-        simBehavior: "structural",
         hilightRule: (state) =>
           state.type === "PlacingBeamStart" || state.type === "PlacingBeamEnd",
         hilightColor: COLORS.ACCENT,
@@ -179,7 +164,6 @@ export const edition_palette = (): {
         nameKey: "ground",
         iconSrc: icon("ground"),
         goToStateType: "PlacingGround",
-        simBehavior: "structural",
         hilightRule: (state) => state.type === "PlacingGround",
         hilightColor: COLORS.ACCENT,
         hilightHoverColor: COLORS.ACCENT_DARK,
@@ -193,7 +177,6 @@ export const edition_palette = (): {
         nameKey: "damper",
         iconSrc: icon("damper"),
         goToStateType: "PlacingDamperStart",
-        simBehavior: "structural",
         hilightRule: (state) =>
           state.type === "PlacingDamperStart" ||
           state.type === "PlacingDamperEnd",
@@ -204,7 +187,6 @@ export const edition_palette = (): {
         nameKey: "spring",
         iconSrc: icon("spring"),
         goToStateType: "PlacingSpringStart",
-        simBehavior: "structural",
         hilightRule: (state) =>
           state.type === "PlacingSpringStart" ||
           state.type === "PlacingSpringEnd",
@@ -215,7 +197,6 @@ export const edition_palette = (): {
         nameKey: "mass",
         iconSrc: icon("mass"),
         goToStateType: "PlacingMass",
-        simBehavior: "structural",
         hilightRule: (state) => state.type === "PlacingMass",
         hilightColor: COLORS.ACCENT,
         hilightHoverColor: COLORS.ACCENT_DARK,
@@ -224,7 +205,6 @@ export const edition_palette = (): {
         nameKey: "motor",
         iconSrc: icon("motor"),
         goToStateType: "PlacingMotor",
-        simBehavior: "structural",
         hilightRule: (state) => state.type === "PlacingMotor",
         hilightColor: COLORS.ACCENT,
         hilightHoverColor: COLORS.ACCENT_DARK,
@@ -238,7 +218,6 @@ export const edition_palette = (): {
         nameKey: "dimension",
         iconSrc: icon("dimension"),
         goToStateType: "DimensionStart",
-        simBehavior: "constraint",
         hilightRule: (state, mechanism) =>
           [
             "DimensionStart",
@@ -263,7 +242,6 @@ export const edition_palette = (): {
         nameKey: "tool_gear_ratio",
         iconSrc: icon("ratio"),
         goToStateType: "GearRatioConstraintStart",
-        simBehavior: "constraint",
         hilightRule: (state, mechanism) =>
           state.type === "GearRatioConstraintStart" ||
           state.type === "GearRatioConstraintGear" ||
@@ -279,7 +257,6 @@ export const edition_palette = (): {
         nameKey: "tool_equal_lengths",
         iconSrc: icon("equal"),
         goToStateType: "EqualConstraintStart",
-        simBehavior: "constraint",
         hilightRule: (state) =>
           state.type === "EqualConstraintStart" ||
           state.type === "EqualConstraintEdge" ||
@@ -291,7 +268,6 @@ export const edition_palette = (): {
         nameKey: "tool_horizontal_vertical",
         iconSrc: icon("horizontal-vertical"),
         goToStateType: "HorizontalVerticalConstraintStart",
-        simBehavior: "constraint",
         hilightRule: (state) =>
           state.type === "HorizontalVerticalConstraintStart" ||
           state.type === "HorizontalVerticalConstraintNode",
@@ -302,7 +278,6 @@ export const edition_palette = (): {
         nameKey: "tool_normal",
         iconSrc: icon("normal"),
         goToStateType: "NormalConstraintStart",
-        simBehavior: "constraint",
         hilightRule: (state) =>
           state.type === "NormalConstraintStart" ||
           state.type === "NormalConstraintEdge",
@@ -313,7 +288,6 @@ export const edition_palette = (): {
         nameKey: "tool_parallel",
         iconSrc: icon("parallel"),
         goToStateType: "ParallelConstraintStart",
-        simBehavior: "constraint",
         hilightRule: (state) =>
           state.type === "ParallelConstraintStart" ||
           state.type === "ParallelConstraintEdge",
@@ -329,7 +303,6 @@ export const edition_palette = (): {
         nameKey: "force",
         iconSrc: icon("force"),
         goToStateType: "PlacingForceStart",
-        simBehavior: "structural",
         hilightRule: (state) =>
           state.type === "PlacingForceStart" ||
           state.type === "PlacingForceEnd" ||
@@ -341,7 +314,6 @@ export const edition_palette = (): {
         nameKey: "moment",
         iconSrc: icon("moment"),
         goToStateType: "PlacingMomentStart",
-        simBehavior: "structural",
         hilightRule: (state) =>
           state.type === "PlacingMomentStart" ||
           state.type === "PlacingMomentEnd",
@@ -357,7 +329,6 @@ export const edition_palette = (): {
         nameKey: "tool_probe",
         iconSrc: icon("probe"),
         goToStateType: "PlacingProbe",
-        simBehavior: "observational",
         hilightRule: (state) =>
           state.type === "PlacingProbe" || state.type === "PlacingProbeMetrics",
         hilightColor: COLORS.ACCENT,
@@ -383,8 +354,6 @@ interface ElementPaletteProps {
   canvasState: CanvasState;
   mechanism: Mechanism;
   appMode: AppMode;
-  onExitToEdition: () => void;
-  onPauseSim: () => void;
 }
 
 export const ElementPalette: React.FC<ElementPaletteProps> = ({
@@ -392,8 +361,6 @@ export const ElementPalette: React.FC<ElementPaletteProps> = ({
   canvasState,
   mechanism,
   appMode,
-  onExitToEdition,
-  onPauseSim,
 }) => {
   // Rebuilt on every render, which is how the icons and highlight colors follow a theme change: both are read from the active canvas palette at call time.
   const palette = edition_palette();
@@ -406,14 +373,6 @@ export const ElementPalette: React.FC<ElementPaletteProps> = ({
     if (isHighlighted && element.goToStateType !== "Selecting") {
       setCanvasState(tool_state("Selecting"));
       return;
-    }
-    if (appMode !== "edition") {
-      if (element.simBehavior === "structural") {
-        onExitToEdition();
-      } else if (element.simBehavior === "constraint") {
-        onPauseSim();
-      }
-      // "observational" → no sim side-effect
     }
     setCanvasState(
       armed_tool_state(
@@ -545,53 +504,78 @@ export const ElementPalette: React.FC<ElementPaletteProps> = ({
                   : element.iconSrc;
               const key = shortcut_label(element.goToStateType);
               const name = t(element.nameKey);
+              const label = key ? `${name} (${key})` : name;
+              // Same look as the panel's `StructureOnly`: one greyed-out language for "not while the simulation runs".
+              const unavailable =
+                isSimMode && !SIMULATION_TOOLS.has(element.goToStateType);
               return (
                 <Tooltip
                   key={element.goToStateType}
-                  title={key ? `${name} (${key})` : name}
+                  title={
+                    unavailable ? (
+                      <>
+                        {label}
+                        <br />
+                        {t("unavailable_in_simulation")}
+                      </>
+                    ) : (
+                      label
+                    )
+                  }
                   placement="right"
                   arrow
                   onOpen={() => {}}
                 >
-                  <IconButton
-                    onClick={() => handleElementClick(element, isHighlighted)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        handleElementClick(element, isHighlighted);
-                      }
-                    }}
+                  {/* A disabled button fires no pointer events, so the tooltip listens on this wrapper instead. */}
+                  <Box
+                    component="span"
                     sx={{
-                      width: SIZE + 2 * PADDING,
-                      height: SIZE + 2 * PADDING,
-                      borderRadius: 0.75,
-                      backgroundColor: isHighlighted
-                        ? hilightColor
-                        : "transparent",
-                      "&:hover": {
-                        background: isHighlighted
-                          ? hilightHoverColor
-                          : "action.hover",
-                      },
+                      display: "inline-flex",
+                      opacity: unavailable ? 0.3 : 1,
+                      transition: "opacity 0.2s ease",
                     }}
-                    aria-label={name}
                   >
-                    <Box
-                      component="img"
-                      src={iconSrc}
-                      alt={name}
-                      draggable={false}
-                      sx={{
-                        width: SIZE,
-                        height: SIZE,
-                        display: "block",
-                        filter:
-                          canvasState.type && isHighlighted
-                            ? "brightness(0) invert(1)"
-                            : "none",
+                    <IconButton
+                      disabled={unavailable}
+                      onClick={() => handleElementClick(element, isHighlighted)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          handleElementClick(element, isHighlighted);
+                        }
                       }}
-                    />
-                  </IconButton>
+                      sx={{
+                        width: SIZE + 2 * PADDING,
+                        height: SIZE + 2 * PADDING,
+                        borderRadius: 0.75,
+                        backgroundColor: isHighlighted
+                          ? hilightColor
+                          : "transparent",
+                        "&:hover": {
+                          background: isHighlighted
+                            ? hilightHoverColor
+                            : "action.hover",
+                        },
+                      }}
+                      aria-label={name}
+                    >
+                      <Box
+                        component="img"
+                        src={iconSrc}
+                        alt={name}
+                        draggable={false}
+                        sx={{
+                          width: SIZE,
+                          height: SIZE,
+                          display: "block",
+                          filter:
+                            canvasState.type && isHighlighted
+                              ? "brightness(0) invert(1)"
+                              : "none",
+                        }}
+                      />
+                    </IconButton>
+                  </Box>
                 </Tooltip>
               );
             })}

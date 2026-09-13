@@ -46,6 +46,7 @@ import {
   get_mechanical_element_from_id,
 } from "../../mechanism/connect-actions";
 import { TOOL_STATE_BY_KEY } from "../../../constants/shortcuts";
+import { SIMULATION_TOOLS } from "../../../constants/canvas-state-sim-effect";
 import { armed_tool_state } from "./arm-tool";
 import {
   distributed_grab_magnitude,
@@ -110,8 +111,7 @@ export function multiple_selection_state(
   return { type: "SelectedMultiple", elementIDs: kept };
 }
 
-/** `EditingValue` for a load's value label (force/moment magnitude, or a
- * distributed force's start/end), or `undefined` if `hoveredPart` isn't one. */
+/** `EditingValue` for a load's value label (force/moment magnitude, or a distributed force's start/end), or `undefined` if `hoveredPart` isn't one. */
 function load_value_editing_state(
   hoveredPart: HoveredPart,
   loadElements: LoadElement[],
@@ -139,8 +139,10 @@ function load_value_editing_state(
   };
 }
 
-/** `MovingForce`/`MovingMoment`/`MovingDistributedForce` to arm dragging a load's
- * body/handle, or `undefined` if `hoveredPart` isn't one — its value label never arms a drag, it opens the value editor instead (see `load_value_editing_state`). */
+/**
+ * `MovingForce`/`MovingMoment`/`MovingDistributedForce` to arm dragging a load's body/handle, or `undefined` if `hoveredPart` isn't one.
+ * Its value label never arms a drag, it opens the value editor instead (see `load_value_editing_state`).
+ */
 function load_drag_state(hoveredPart: HoveredPart): CanvasState | undefined {
   switch (hoveredPart.type) {
     case "Force":
@@ -1435,7 +1437,7 @@ export function canvasStateReducer(
           break;
         default: {
           const toolState = TOOL_STATE_BY_KEY[event.key.toLowerCase()];
-          if (toolState)
+          if (toolState && (!isSimulating || SIMULATION_TOOLS.has(toolState)))
             setCanvasState(
               armed_tool_state(
                 toolState,

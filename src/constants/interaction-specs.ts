@@ -56,6 +56,12 @@ export const THUMBNAIL_MODE_ANIMATION = {
  */
 export const PREVIEW_MIN_ZOOM = 1000;
 
+/** Framing margins for "Recentrer": the mechanism fit to the canvas, as a fraction of its width and height on each side. */
+export const CANVAS_FIT_MARGIN = {
+  ratioMarginX: 0.16,
+  ratioMarginY: 0.16,
+} as const;
+
 /**
  * Framing margins for a gallery thumbnail, at rest and while a card is hovered.
  *

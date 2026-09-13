@@ -46,7 +46,10 @@ import type {
 } from "../solver/analysis/force-balance";
 import type { FocusedOverlay } from "../canvas/drawing/drawing-functions";
 
-/** The share of the panel's height the analysis tab's subject starts with, the rest going to the mechanism-wide sections below it. Moved by the splitter between them, and remembered from then on. */
+/**
+ * The share of the panel's height the analysis tab's subject starts with, the rest going to the mechanism-wide sections below it.
+ * Moved by the splitter between them, and remembered from then on.
+ */
 const DEFAULT_SUBJECT_SHARE = 0.45;
 
 export interface PropertiesPanelProps {
@@ -91,8 +94,7 @@ export interface PropertiesPanelProps {
   focusedOverlay: FocusedOverlay | null;
   /** Names a physics-overlay reading as selected — `App`'s own `setFocusedOverlay`, the same one a plain click on the canvas arrow itself reports through. */
   setFocusedOverlay: (overlay: FocusedOverlay) => void;
-  /** Sets which library section is hovered — also what tints the canvas for as long as the
-   * hover lasts.
+  /** Sets which library section is hovered — also what tints the canvas for as long as the hover lasts.
    * The value itself is read straight from the app by the canvas, not through this panel. */
   setLibrarySection: (section: "materials" | "profiles" | null) => void;
   /** A library row hovered there, for the canvas to accentuate its beams and fade the rest. */
@@ -416,6 +418,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
             {activeTab === "library" && (
               <MaterialsLibraryPanel
                 mechanism={mechanism}
+                analysedMechanism={analysedMechanism}
                 applyActions={applyActions}
                 setHoveredSection={setLibrarySection}
                 hoveredEntryID={hoveredLibraryEntryID}

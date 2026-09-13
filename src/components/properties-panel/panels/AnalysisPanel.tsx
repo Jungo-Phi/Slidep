@@ -114,8 +114,7 @@ import {
 const residual_rank = (r: CohesionField["loopResidual"]): number =>
   Math.hypot(r.fx, r.fy) + Math.abs(r.m);
 
-/** The canvas hover a load's own arrow answers to — what a cursor resting on it would set,
- * so pointing at its line in the balance thickens the very same stroke. */
+/** The canvas hover a load's own arrow answers to — what a cursor resting on it would set, so pointing at its line in the balance thickens the very same stroke. */
 function load_hovered_part(
   loadID: ID,
   position: WorldPoint,
@@ -213,7 +212,10 @@ const focus = (elements: Iterable<ID>): CanvasHighlight => ({
   kind: "focus",
 });
 
-/** The same, for constraints an audit found dispensable. Drawn red. */
+/**
+ * The same, for constraints an audit found dispensable.
+ * Drawn red.
+ */
 const fault = (elements: Iterable<ID>): CanvasHighlight => ({
   elements: new Set(elements),
   kind: "fault",
@@ -223,8 +225,7 @@ const fault = (elements: Iterable<ID>): CanvasHighlight => ({
 const EMPTY_SYMBOLS: RedundancySymbol[] = [];
 
 /** The four curves the "Bilan énergétique" chart can show — see `EnergyBalanceSeries`. */
-/** The motor config to *show*, resolved through `analysedElementOf` — the pose on screen,
- * which while scrubbed can hold a different value than the live mechanism. */
+/** The motor config to *show*, resolved through `analysedElementOf` — the pose on screen, which while scrubbed can hold a different value than the live mechanism. */
 const motor_config_at = (
   analysedElementOf: (id: ID) => MechanicalElement | undefined,
   id: ID,
@@ -286,8 +287,7 @@ const ChainCard: React.FC<{
    * Rare, brief, and not worth blanking the panel over.
    */
   elementOf: (id: ID) => MechanicalElement | undefined;
-  /** Same lookup, in the pose on screen — only for the motor speed shown, never for the
-   * action `elementOf`'s result feeds; see `MotorSpeed`. */
+  /** Same lookup, in the pose on screen — only for the motor speed shown, never for the action `elementOf`'s result feeds; see `MotorSpeed`. */
   analysedElementOf: (id: ID) => MechanicalElement | undefined;
   animated: AnimatedMode;
   setAnimated: (animated: AnimatedMode) => void;
@@ -901,21 +901,21 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
       runtimeState.time,
     );
     if (!dynSnap) return [];
-    const gravity = mechanism.simulation.gravity ? GRAVITY : ZERO;
+    const gravity = analysedMechanism.simulation.gravity ? GRAVITY : ZERO;
     const rows: {
       beam: BeamElement;
       residual: CohesionField["loopResidual"];
     }[] = [];
-    for (const el of mechanism.mechanicalElements) {
+    for (const el of analysedMechanism.mechanicalElements) {
       if (el.type !== "beam") continue;
       const cohesion = dynSnap.beamCohesion?.find((c) => c.beamID === el.id);
       if (!cohesion) continue;
       const field = compute_cohesion_field(
         el,
-        mechanism.materials,
-        mechanism.profiles,
+        analysedMechanism.materials,
+        analysedMechanism.profiles,
         cohesion,
-        mechanism.loads,
+        analysedMechanism.loads,
         dynSnap,
         gravity,
       );
@@ -928,11 +928,7 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
     appMode,
     runtimeState.simulationSnapshots,
     runtimeState.time,
-    mechanism.simulation.gravity,
-    mechanism.mechanicalElements,
-    mechanism.loads,
-    mechanism.materials,
-    mechanism.profiles,
+    analysedMechanism,
   ]);
   // `momentBalanceReference` resolved to the pose on screen, the way every other position the panel reads is.
   const momentBalancePoint = React.useMemo(
@@ -976,7 +972,7 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
     return compute_force_balance(
       analysedMechanism,
       dynSnap,
-      mechanism.simulation.gravity ? GRAVITY : ZERO,
+      analysedMechanism.simulation.gravity ? GRAVITY : ZERO,
       momentBalancePoint,
     );
   }, [
@@ -984,7 +980,6 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
     runtimeState.simulationSnapshots,
     runtimeState.time,
     analysedMechanism,
-    mechanism.simulation.gravity,
     momentBalancePoint,
   ]);
 
@@ -1004,19 +999,7 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
         ? { term, quantity: hoveredBalanceLine.quantity }
         : null,
     );
-    // A load has an arrow of its own on the canvas, drawn from the mechanism rather than from the overlay set: pointing at either of its two columns is telling the canvas the cursor is on it, which is what thickens its stroke and shows its value — its moment column has no display of its own to fall back on otherwise.
-    if (term && term.kind === "load")
-      setHoveredPart(
-        load_hovered_part(term.elementID, term.at, mechanism.loads),
-      );
-    else setHoveredPart({ type: "Void", position: ZERO });
-  }, [
-    hoveredBalanceLine,
-    forceBalance,
-    setHoveredBalanceTerm,
-    setHoveredPart,
-    mechanism.loads,
-  ]);
+  }, [hoveredBalanceLine, forceBalance, setHoveredBalanceTerm]);
   // Nothing else un-sets it once this panel goes away with the cursor still on a line.
   React.useEffect(
     () => () => setHoveredBalanceTerm(null),
@@ -1074,9 +1057,16 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
           {forceBalance && (
             <ForceBalanceTable
               balance={forceBalance}
-              onHoverTerm={(term, quantity) =>
-                setHoveredBalanceLine(term ? { id: term.id, quantity } : null)
-              }
+              onHoverTerm={(term, quantity) => {
+                setHoveredBalanceLine(term ? { id: term.id, quantity } : null);
+                // Written on entering or leaving a line only: the balance is rebuilt at every instant, and writing on each rebuild would wipe the canvas's own hover while the simulation runs.
+                // A load has an arrow of its own on the canvas, drawn from the mechanism rather than from the overlay set: pointing at either of its two columns is telling the canvas the cursor is on it, which is what thickens its stroke and shows its value.
+                if (term && term.kind === "load")
+                  setHoveredPart(
+                    load_hovered_part(term.elementID, term.at, mechanism.loads),
+                  );
+                else setHoveredPart({ type: "Void", position: ZERO });
+              }}
               onClickTerm={handleClickBalanceTerm}
               referenceLabel={momentBalanceReferenceLabel}
               referencePoint={momentBalancePoint}

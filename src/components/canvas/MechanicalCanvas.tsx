@@ -14,6 +14,7 @@ import {
   Mechanism,
   Point2,
   PropertiesPanelTab,
+  same_hover_target,
   state_under_probe_metrics,
   UnionElement,
   ViewportChange,
@@ -71,8 +72,7 @@ import {
   QuantityKind,
 } from "../../utils/quantity-format";
 
-/** What `OnCanvasValueEditor` formats and parses the element's value as — `undefined` for
- * `gear-ratio` (dimensionless, "ratio" mode reads it directly). */
+/** What `OnCanvasValueEditor` formats and parses the element's value as — `undefined` for `gear-ratio` (dimensionless, "ratio" mode reads it directly). */
 const VALUE_EDITOR_KIND: Partial<Record<UnionElement["type"], QuantityKind>> = {
   "dimension-edge": LENGTH,
   "dimension-node-to-node": LENGTH,
@@ -117,29 +117,7 @@ function mergeRefs<T>(...refs: React.Ref<T>[]) {
   };
 }
 
-// Keys that place or delete structural elements → exit simulation to edition
-const STRUCTURAL_KEYS = new Set([
-  "a",
-  "b",
-  "c",
-  "f",
-  "g",
-  "j",
-  "k",
-  "m",
-  "o",
-  "p",
-  "r",
-  "s",
-  "t",
-  "w",
-  "Delete",
-]);
-// Keys that place constraints/dimensions → pause simulation
-const CONSTRAINT_KEYS = new Set(["d", "e", "h", "l", "n", "q", "v"]);
-
-/** One line per distinct failure: the loop retries every frame, so an unguarded
- * log buries the console sixty times a second. */
+/** One line per distinct failure: the loop retries every frame, so an unguarded log buries the console sixty times a second. */
 const reportedRenderFailures = new Set<string>();
 function report_render_failure(error: unknown): void {
   const key = error instanceof Error ? error.message : String(error);
@@ -173,8 +151,6 @@ interface MechanicalCanvasProps {
   constraintChangeRef: React.MutableRefObject<ConstraintChangeSignal | null>;
   onSpaceKey: () => void;
   onEscapeKey: () => void;
-  onExitToEdition: () => void;
-  onPauseSim: () => void;
   onSimulationGrab: (key: string, target: Point2, bodyRatio?: number) => void;
   onSimulationGrabEnd: () => void;
   /** May a grab be started at all? False while replaying behind the frontier. */
@@ -182,8 +158,7 @@ interface MechanicalCanvasProps {
   snapToGrid: boolean;
   snapSettings: SnapSettings;
   showGrid: boolean;
-  /** Which reading tints every beam's fill — mechanism-wide, see `BeamStressLens`'s own doc
-   * (docs/plan-efforts-interieurs.md phase 9). */
+  /** Which reading tints every beam's fill — mechanism-wide, see `BeamStressLens`'s own doc (docs/plan-efforts-interieurs.md phase 9). */
   beamStressLens: BeamStressLens;
   /** Trajectory overlay style: dots at fixed spacing versus one continuous stroke. */
   trajectoryDotted: boolean;
@@ -210,32 +185,27 @@ interface MechanicalCanvasProps {
   modePreviewRef: React.RefObject<Mechanism | null>;
   /** How a redundant constraint the analysis panel is pointing at would yield. */
   redundancySymbols: RedundancySymbol[];
-  /** An abscissa hovered on the analysis panel's N/T/Mf diagrams, marked on the beam — see
-   * docs/plan-efforts-interieurs.md phase 5bis.
+  /** An abscissa hovered on the analysis panel's N/T/Mf diagrams, marked on the beam — see docs/plan-efforts-interieurs.md phase 5bis.
    * `null` outside that hover. */
   hoveredAbscissa: HoveredAbscissa | null;
-  /** The line of the force balance the cursor rests on, and which of its two quantities that
-   * line reads.
+  /** The line of the force balance the cursor rests on, and which of its two quantities that line reads.
    * Shown whatever calque is on: pointing at a line is asking to see the thing it names.
    * Where a calque already draws it, that arrow is lit rather than drawn over — see `draw_balance_marker` for the rest. */
   hoveredBalanceTerm: HoveredBalanceTerm | null;
-  /** Where the force balance's moment is taken about — the origin, or wherever the panel's
-   * reference currently names. Feeds the moment marker's own position, and the ring drawn at it. */
+  /** Where the force balance's moment is taken about — the origin, or wherever the panel's reference currently names.
+   * Feeds the moment marker's own position, and the ring drawn at it. */
   momentBalancePoint: WorldPoint;
   /** A node or beam end clicked while `canvasState.type === "PickingMomentBalanceNode"` — a
    * UI preference the panel owns, not a mechanism edit, so it never goes through `Action`. */
   onMomentBalanceReferencePicked: (reference: MomentBalanceReference) => void;
-  /** The panel's own reference-point picker is hovered — draws the ring at `momentBalancePoint`
-   * the same way the picking tool itself does, so a reader can preview it without arming anything. */
+  /** The panel's own reference-point picker is hovered — draws the ring at `momentBalancePoint` the same way the picking tool itself does, so a reader can preview it without arming anything. */
   momentBalanceReferenceHovered: boolean;
-  /** A plain click landing on a physics-overlay arrow (dynamic mode only) — a UI preference the
-   * analysis panel owns, never an `Action`, the same reasoning as `onMomentBalanceReferencePicked`.
+  /** A plain click landing on a physics-overlay arrow (dynamic mode only) — a UI preference the analysis panel owns, never an `Action`, the same reasoning as `onMomentBalanceReferencePicked`.
    * Never touches the ordinary element selection — see `App`'s own `focusedOverlay`. */
   onSelectOverlay?: (overlay: FocusedOverlay) => void;
   /** The physics-overlay reading `onSelectOverlay` last reported, echoed back so this draws it (and only it) as selected — see `CanvasDrawing.focusedOverlay`. */
   focusedOverlay?: FocusedOverlay | null;
-  /** Which of the library dialog's two sections tints the beams — undefined while that
-   * dialog is closed. */
+  /** Which of the library dialog's two sections tints the beams — undefined while that dialog is closed. */
   librarySection?: "materials" | "profiles";
   /** The row hovered there, if any — accentuates its beams and fades the rest. */
   hoveredLibraryEntryID?: ID | null;
@@ -245,32 +215,27 @@ interface MechanicalCanvasProps {
 export interface LiveFrame {
   mechanism: Mechanism;
   trajectories: TrajectoryDisplay[];
-  /** Velocity/reaction arrows for elements with the matching overlay on — dynamic mode
-   * only, empty everywhere else. */
+  /** Velocity/reaction arrows for elements with the matching overlay on — dynamic mode only, empty everywhere else. */
   overlayArrows: OverlayArrow[];
-  /** The moment half of a reaction, wherever a rigid weld's force-couple carries one —
-   * same gating as `overlayArrows`. */
+  /** The moment half of a reaction, wherever a rigid weld's force-couple carries one — same gating as `overlayArrows`. */
   overlayMoments: OverlayMoment[];
   /**
    * Every beam's cohesion field, dynamic mode only — docs/plan-efforts-interieurs.md phase 4.
    * Consumed by the analysis panel's N/T/Mf diagrams (phase 5bis) and the beam-fill lens below (phase 9).
    */
   cohesionFields?: CohesionField[];
-  /** The `normal` lens' shared scale (`StressScaleCache.maxNormal`) — the highest `|N/A|` ever
-   * recorded, Pa.
+  /** The `normal` lens' shared scale (`StressScaleCache.maxNormal`) — the highest `|N/A|` ever recorded, Pa.
    * Never below its own negligibility floor (`negligible_stress_floors`), so a recording holding nothing but solver noise reads flat rather than ramped across it.
    * `0` outside dynamic mode or before anything has been recorded yet. */
   normalStressScale: number;
-  /** The `bending` lens' shared scale (`StressScaleCache.maxBending`) — the highest
-   * `|Mf·v/I|` ever recorded, Pa, floored like `normalStressScale`.
+  /** The `bending` lens' shared scale (`StressScaleCache.maxBending`) — the highest `|Mf·v/I|` ever recorded, Pa, floored like `normalStressScale`.
    * `0` outside dynamic mode or before anything has been recorded yet. */
   bendingStressScale: number;
   /** The `utilization` lens' shared ramp top (`StressScaleCache.maxStress`, `cohesion-field.ts`)
    * — the highest `|σ|max` ever recorded, Pa, floored like `normalStressScale`.
    * `0` outside dynamic mode or before anything has been recorded yet. */
   stressScale: number;
-  /** The `shear` lens' shared ramp top (`StressScaleCache.maxShear`) — the highest `τ_max`
-   * ever recorded, Pa, floored like `normalStressScale` against its own `τ_adm` reference.
+  /** The `shear` lens' shared ramp top (`StressScaleCache.maxShear`) — the highest `τ_max` ever recorded, Pa, floored like `normalStressScale` against its own `τ_adm` reference.
    * `0` outside dynamic mode or before anything has been recorded yet. */
   shearStressScale: number;
 
@@ -297,8 +262,6 @@ export const MechanicalCanvas = forwardRef<
       constraintChangeRef,
       onSpaceKey,
       onEscapeKey,
-      onExitToEdition,
-      onPauseSim,
       onSimulationGrab,
       onSimulationGrabEnd,
       canSimulationGrab,
@@ -359,6 +322,10 @@ export const MechanicalCanvas = forwardRef<
     /** When a mode was last being swung, for the delay before dimensions come back. */
     const lastSwingAtRef = useRef(0);
     const hoveredPartRef = useRef(hoveredPart);
+    // Called by the draw loop, set once `computeHover` exists.
+    const refreshHoverOnFrameRef = useRef(() => {});
+    // The simulated frame the hover was last computed against.
+    const hoverFrameRef = useRef<LiveFrame | null>(null);
     const canvasStateRef = useRef(canvasState);
     const highlightRef = useRef(highlight);
     highlightRef.current = highlight;
@@ -392,10 +359,6 @@ export const MechanicalCanvas = forwardRef<
     onSpaceKeyRef.current = onSpaceKey;
     const onEscapeKeyRef = useRef(onEscapeKey);
     onEscapeKeyRef.current = onEscapeKey;
-    const onExitToEditionRef = useRef(onExitToEdition);
-    onExitToEditionRef.current = onExitToEdition;
-    const onPauseSimRef = useRef(onPauseSim);
-    onPauseSimRef.current = onPauseSim;
     const onSimulationGrabRef = useRef(onSimulationGrab);
     onSimulationGrabRef.current = onSimulationGrab;
     const onSimulationGrabEndRef = useRef(onSimulationGrabEnd);
@@ -425,8 +388,10 @@ export const MechanicalCanvas = forwardRef<
     hoveredPartRef.current = hoveredPart;
     canvasStateRef.current = canvasState;
 
-    /** Re-reads the container geometry. Call it whenever the canvas may have
-     * moved or been resized — the cache serves every frame in between. */
+    /**
+     * Re-reads the container geometry.
+     * Call it whenever the canvas may have moved or been resized — the cache serves every frame in between.
+     */
     const measureCanvas = useCallback(() => {
       const container = containerRef.current;
       if (!container) return null;
@@ -633,8 +598,8 @@ export const MechanicalCanvas = forwardRef<
         overlayMoments: live?.overlayMoments,
         trajectories: live?.trajectories,
         trajectoryDotted,
-        // The floor is read off the resting mechanism, like the viewport: a simulation moves what rests on it, never the surface itself.
-        floor: restingRef.current.simulation.floor,
+        // The floor in effect at the instant on screen: a simulation moves what rests on it, never the surface itself, but an edit made during the run can change it.
+        floor: mechanismRef.current.simulation.floor,
         state: canvasStateRef.current,
         mechanicalElements: mechanismRef.current.mechanicalElements,
         constraintElements: ghostConstraints.length
@@ -748,7 +713,8 @@ export const MechanicalCanvas = forwardRef<
       }
 
 
-      // Where the moment balance is taken about — not persistently, only while its picker is doing something: armed, the ring follows the cursor like any other placement preview; merely hovered, it previews the reference already set. Either way the centre of mass is drawn too, a target of its own, on top of the ring so it is never lost under it.
+      // Where the moment balance is taken about — not persistently, only while its picker is doing something: armed, the ring follows the cursor like any other placement preview; merely hovered, it previews the reference already set.
+      // Either way the centre of mass is drawn too, a target of its own, on top of the ring so it is never lost under it.
       const pickingMomentBalance =
         canvasStateRef.current.type === "PickingMomentBalanceNode";
       if (pickingMomentBalance || momentBalanceReferenceHoveredRef.current) {
@@ -775,7 +741,8 @@ export const MechanicalCanvas = forwardRef<
       }
 
       // A body's own weight, in the balance's own colour — never a colour borrowed from another family.
-      // The couple about the moment-balance reference point has no glyph anywhere else on screen, so it always draws while that column is hovered. The force itself does, wherever the weight overlay already shows it (matched by `id` the same way a support reaction is): the scene lights that arrow up on its own, so it is drawn fresh here only when there is nothing on screen to thicken instead.
+      // The couple about the moment-balance reference point has no glyph anywhere else on screen, so it always draws while that column is hovered.
+      // The force itself does, wherever the weight overlay already shows it (matched by `id` the same way a support reaction is): the scene lights that arrow up on its own, so it is drawn fresh here only when there is nothing on screen to thicken instead.
       const balanceHover = hoveredBalanceTermRef.current;
       if (balanceHover && balanceHover.term.kind === "weight") {
         const { term, quantity } = balanceHover;
@@ -866,6 +833,7 @@ export const MechanicalCanvas = forwardRef<
         } catch (error) {
           report_render_failure(error);
         }
+        refreshHoverOnFrameRef.current();
         rafId = requestAnimationFrame(loop);
       };
       rafId = requestAnimationFrame(loop);
@@ -1030,7 +998,7 @@ export const MechanicalCanvas = forwardRef<
       const currMech = mechanismRef.current;
 
       // Bounded here, where the cursor enters the system, so that hit-testing and the gestures reading the raw mouse share one bounded point.
-      // TODO : pourquoi bound ?
+      // TODO: why bound?
       const worldMousePos = clamp_to_bounds(
         screen2world(mousePositionRef.current, currMech.viewport),
         canvasStateRef.current,
@@ -1129,10 +1097,6 @@ export const MechanicalCanvas = forwardRef<
           onSpaceKeyRef.current();
           return;
         }
-        if (event.type === "KeyDown") {
-          if (STRUCTURAL_KEYS.has(event.key)) onExitToEditionRef.current();
-          else if (CONSTRAINT_KEYS.has(event.key)) onPauseSimRef.current();
-        }
         if (
           event.type === "KeyDown" &&
           event.key === "Escape" &&
@@ -1213,6 +1177,25 @@ export const MechanicalCanvas = forwardRef<
       refreshRevealFromHover,
       setHoveredPart,
     ]);
+
+    // A running mechanism moves under a still cursor, so the hover follows each new simulated frame, not only the mouse.
+    // React only hears of it when the target changes: a re-render per frame would cost the whole app.
+    // Left alone during a press, where the gesture recomputes it itself.
+    refreshHoverOnFrameRef.current = () => {
+      const frame = liveFrameRef.current;
+      if (frame === hoverFrameRef.current) return;
+      hoverFrameRef.current = frame;
+      if (
+        !frame ||
+        !cursorOnCanvasRef.current ||
+        mouseButtonDownRef.current !== "none"
+      )
+        return;
+      const { hoveredPart: refreshed, snapFeedback } = computeHover();
+      if (same_hover_target(refreshed, hoveredPartRef.current)) return;
+      snapFeedbackRef.current = snapFeedback;
+      setHoveredPart(refreshed);
+    };
 
     const isTypingInInput = (): boolean => {
       const active = document.activeElement;

@@ -110,18 +110,24 @@ export const SelectionInspector: React.FC<SelectionInspectorProps> = ({
       )) ||
     undefined;
 
+  // The same element at the instant on screen: parameter values are read off it, writes are built against the element itself (see `rebased_bundle`).
+  const shown_of = <T extends MechanicalElement>(el: T): T =>
+    (analysedMechanism.mechanicalElements.find((e) => e.id === el.id) as
+      | T
+      | undefined) ?? el;
+
   const sample_of = (
     element: MechanicalElement,
     metric: ProbeMetric,
   ): MetricSample | undefined =>
     metric === "weight" || metric === "inertia"
       ? mass_reading_sample(
-          element,
+          shown_of(element),
           metric,
           snapshot,
-          mechanism.simulation.gravity,
-          mechanism.materials,
-          mechanism.profiles,
+          analysedMechanism.simulation.gravity,
+          analysedMechanism.materials,
+          analysedMechanism.profiles,
         )
       : dynamic
         ? get_dynamic_metric_at(
@@ -170,23 +176,21 @@ export const SelectionInspector: React.FC<SelectionInspectorProps> = ({
       (c) => c.beamID === selectedBeam?.id,
     );
     if (!selectedBeam || !snapshot || !cohesion) return undefined;
+    const shownBeam =
+      analysedMechanism.mechanicalElements.find(
+        (el): el is BeamElement =>
+          el.type === "beam" && el.id === selectedBeam.id,
+      ) ?? selectedBeam;
     return compute_cohesion_field(
-      selectedBeam,
-      mechanism.materials,
-      mechanism.profiles,
+      shownBeam,
+      analysedMechanism.materials,
+      analysedMechanism.profiles,
       cohesion,
-      mechanism.loads,
+      analysedMechanism.loads,
       snapshot,
-      mechanism.simulation.gravity ? GRAVITY : ZERO,
+      analysedMechanism.simulation.gravity ? GRAVITY : ZERO,
     );
-  }, [
-    selectedBeam,
-    snapshot,
-    mechanism.materials,
-    mechanism.profiles,
-    mechanism.loads,
-    mechanism.simulation.gravity,
-  ]);
+  }, [selectedBeam, snapshot, analysedMechanism]);
   // Clears the canvas's own marker when the diagrams go away — nothing else ever un-sets it once one stops being hovered without the mouse ever leaving it.
   React.useEffect(() => {
     if (!selectedBeam) {
@@ -285,7 +289,7 @@ export const SelectionInspector: React.FC<SelectionInspectorProps> = ({
   );
 
   const element_body = (element: MechanicalElement) => {
-    const parameters = live_parameters(element);
+    const parameters = live_parameters(element, shown_of(element));
     const groups = element_reading_groups(element, snapshot, dynamic);
 
     return (
@@ -336,8 +340,9 @@ export const SelectionInspector: React.FC<SelectionInspectorProps> = ({
         {selectedBeam && (
           <MaterialProfileSection
             elements={[selectedBeam]}
-            materials={mechanism.materials}
-            profiles={mechanism.profiles}
+            shownElements={[shown_of(selectedBeam)]}
+            materials={analysedMechanism.materials}
+            profiles={analysedMechanism.profiles}
             applyActions={applyActions}
             compact
           />

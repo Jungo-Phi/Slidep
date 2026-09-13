@@ -1,4 +1,4 @@
-import { ID, Link, Mechanism, PivotElement, Point2, KinNodes } from "../../../types";
+import { ID, Link, Mechanism, MechanicalElement, Point2, KinNodes } from "../../../types";
 import { ZERO } from "../../../types/point2";
 import { DEFAULT } from "../../../constants/physics-specs";
 import {
@@ -96,8 +96,7 @@ export function is_retained(t: number): boolean {
   return Math.round(t / RECORD_DT) % RETAIN_EVERY === 0;
 }
 
-/** Longest a recording may run, in simulated seconds — no mechanism goes past it, however
- * cheap its instants are. */
+/** Longest a recording may run, in simulated seconds — no mechanism goes past it, however cheap its instants are. */
 export const MAX_RECORDING_TIME = 600;
 
 /**
@@ -108,8 +107,7 @@ export const MAX_RECORDING_TIME = 600;
  */
 const RECORDING_MEMORY_BUDGET = 200 * 1024 * 1024;
 
-/** What an instant costs beyond its numbers: two typed arrays with their buffers, the
- * snapshot object, and its slot in the recording.
+/** What an instant costs beyond its numbers: two typed arrays with their buffers, the snapshot object, and its slot in the recording.
  * Around 15 % on a small mechanism. */
 const SNAPSHOT_OVERHEAD_BYTES = 256;
 
@@ -192,12 +190,10 @@ export const beltContact = {
   rebuildQLinks: true,
 };
 
-/** A motor is reported blocked when, over the frame, the driven element advanced
- * by less than this fraction of its commanded increment ω·dt. */
+/** A motor is reported blocked when, over the frame, the driven element advanced by less than this fraction of its commanded increment ω·dt. */
 const MOTOR_BLOCK_FRACTION = 0.5;
 
-/** Per-frame motor check: where the driver was before the solve and how far it
- * was asked to move, so we can compare against what it actually achieved. */
+/** Per-frame motor check: where the driver was before the solve and how far it was asked to move, so we can compare against what it actually achieved. */
 type MotorCheck = {
   owner: ID;
   type: "MotorBeam" | "MotorAngle";
@@ -230,21 +226,17 @@ export type SimulationModel = {
   gearRadii: Map<ID, number>;
   /** Real masses, read only by `step_dynamic_simulation` — see `DynamicMassModel`. */
   dynamicMasses: DynamicMassModel;
-  /** User loads resolved to solver keys, read only by `step_dynamic_simulation` — see
-   * `CompiledLoad`. */
+  /** User loads resolved to solver keys, read only by `step_dynamic_simulation` — see `CompiledLoad`. */
   compiledLoads: CompiledLoad[];
-  /** Springs and dampers, real-force form — read only by `step_dynamic_simulation`, which
-   * also drops their kinematic `Spring` LINK from the sweep (see `CompiledSpringDamper`). */
+  /** Springs and dampers, real-force form — read only by `step_dynamic_simulation`, which also drops their kinematic `Spring` LINK from the sweep (see `CompiledSpringDamper`). */
   compiledSpringDampers: CompiledSpringDamper[];
-  /** Motors, torque-limited form — read only by `step_dynamic_simulation`, which also drops
-   * their kinematic `MotorBeam`/`MotorAngle` LINKs from the sweep (see `CompiledMotor`). */
+  /** Motors, torque-limited form — read only by `step_dynamic_simulation`, which also drops their kinematic `MotorBeam`/`MotorAngle` LINKs from the sweep (see `CompiledMotor`). */
   compiledMotors: CompiledMotor[];
   /** Frictional pivots/sliders, viscous form — read only by `step_dynamic_simulation` (see `CompiledFriction`). */
   compiledFrictions: CompiledFriction[];
   /** Pairs collision detection may test each frame — see `build_collision_candidates`. */
   collisionCandidates: CollisionCandidates;
-  /** The floor's unit normal, baked in from `mechanism.simulation.floor.angle` at compile
-   * time — fixed for the run, like the anchor node itself (see `FLOOR_ANCHOR_KEY`).
+  /** The floor's unit normal, baked in from `mechanism.simulation.floor.angle` at compile time — fixed for the run, like the anchor node itself (see `FLOOR_ANCHOR_KEY`).
    * Read by `collision_links` regardless of whether the floor is currently enabled, the same way `collisionCandidates.pointFloor`/`circleFloor` are always built. */
   floorNormal: Point2;
   /**
@@ -252,19 +244,16 @@ export type SimulationModel = {
    * Mutated after every `step_simulation`/ `step_dynamic_simulation` call from that frame's `PBD_kinematic_solver` result, and read before the NEXT frame's solve by whatever needs an extent-relative tolerance ahead of it (`collision_links`, `update_belt_disconnects`) — a frame's lag on a quantity that never moves fast is cheaper than a second bbox pass over `positions`.
    */
   extent: number;
-  /** Each beam's own cohesion-torsor spec, read only by `step_dynamic_simulation` — see
-   * `BeamCohesionSpec`. */
+  /** Each beam's own cohesion-torsor spec, read only by `step_dynamic_simulation` — see `BeamCohesionSpec`. */
   beamCohesionSpecs: BeamCohesionSpec[];
-  /** The equilibrium system whose solution IS each beam's cohesion torsor — see
-   * docs/plan-efforts-interieurs.md phase 10.
+  /** The equilibrium system whose solution IS each beam's cohesion torsor — see docs/plan-efforts-interieurs.md phase 10.
    * Its layout depends only on the mechanism's topology, never on a pose, so it is assembled once here and refilled every frame. */
   staticsSystem: StaticsSystem;
   /** Material and profile per beam, for the statics pass's masses and stiffnesses. */
   staticsBeams: StaticsBeam[];
 };
 
-/** Which snapshot slots each solver node writes to: a fused key feeds one slot per key it
- * fuses, and `firstParts` is the key a warm start reads its previous position from. */
+/** Which snapshot slots each solver node writes to: a fused key feeds one slot per key it fuses, and `firstParts` is the key a warm start reads its previous position from. */
 type SnapshotFill = {
   keys: string[];
   firstParts: string[];
@@ -321,8 +310,7 @@ export function restore_rewire_state(
   }
 }
 
-/** A grab during simulation: a node/endpoint key, an edge body at ratio t, or a
- * gear tooth (rotate the gear so the perimeter point at `angleOffset` follows). */
+/** A grab during simulation: a node/endpoint key, an edge body at ratio t, or a gear tooth (rotate the gear so the perimeter point at `angleOffset` follows). */
 export type SimGrab =
   | { key: string; target: Point2 }
   | { edgeID: string; t: number; target: Point2 }
@@ -601,8 +589,7 @@ export function rewire_belts(
     );
 }
 
-/** Position-bearing key fields are rewritten on coincidence fusion; angle key
- * fields (angleKey…) are left untouched — angles live in a separate map. */
+/** Position-bearing key fields are rewritten on coincidence fusion; angle key fields (angleKey…) are left untouched — angles live in a separate map. */
 function rewrite_position_keys(link: Link, from: (k: string) => string): void {
   const l = link as Record<string, unknown>;
   for (const f of POSITION_KEY_FIELDS) {
@@ -916,16 +903,17 @@ function grab_links(
 export function step_simulation(
   model: SimulationModel,
   t: number,
-  /** The frame to warm-start from. Read by key, so it may come from another model —
-   * which is what it is after an edit, the snapshot the recording resumes on. */
+  /**
+   * The frame to warm-start from.
+   * Read by key, so it may come from another model — which is what it is after an edit, the snapshot the recording resumes on.
+   */
   prev: KinematicSnapshot | null,
   dt: number = RECORD_DT,
   grab?: SimGrab,
   sweeps: number = SIMULATION_SWEEPS,
   /** Off only to measure what the collection itself costs; production reads it. */
   collectDiagnostics: boolean = true,
-  /** Called with the model state a belt topology change is about to overwrite, so a caller
-   * that may rewind can keep it.
+  /** Called with the model state a belt topology change is about to overwrite, so a caller that may rewind can keep it.
    * Only ever called on the frames that change it. */
   onRewire?: (state: RewireState) => void,
   /** Re-read every frame, like gravity in dynamic mode — no recompile needed to toggle it. */
@@ -1243,7 +1231,10 @@ export function step_dynamic_simulation(
   collisionsOn: boolean = false,
   /** Same reasoning as `collisionsOn`, gated independently — see `collision_links`. */
   floorOn: boolean = false,
-  /** See `DYNAMIC_SUBSTEPS`. Exposed for tests that need to isolate its effect. */
+  /**
+   * See `DYNAMIC_SUBSTEPS`.
+   * Exposed for tests that need to isolate its effect.
+   */
   substeps: number = DYNAMIC_SUBSTEPS,
 ): DynamicSnapshot {
   const positions = new Map(model.nodes.positions);
@@ -1890,8 +1881,9 @@ export function parameter_snapshot_at(
   return snapshots[lo];
 }
 
-/** Same pulleys detached on both sides. Only sound on one layout, where the flags of a
- * given pulley are the same slot on both sides.
+/**
+ * Same pulleys detached on both sides.
+ * Only sound on one layout, where the flags of a given pulley are the same slot on both sides.
  * Generic over `SimulationSnapshot`: both concrete subtypes carry the same detach block (see `SnapshotLayout`). */
 function same_belt_topology<S extends SimulationSnapshot>(a: S, b: S): boolean {
   // The flag block alone.
@@ -1971,24 +1963,109 @@ export function apply_dynamic_snapshot_to_mechanism(
   return apply_snapshot_fields(mechanism, snapshot);
 }
 
+/** The parameters in effect from `t` onward: `mechanism`'s own, as it stands when this is called. */
+export function parameter_snapshot(
+  t: number,
+  mechanism: Mechanism,
+): ParameterSnapshot {
+  return {
+    t,
+    mechanicalElements: mechanism.mechanicalElements,
+    loads: mechanism.loads,
+    materials: mechanism.materials,
+    profiles: mechanism.profiles,
+    gravity: mechanism.simulation.gravity,
+    collisions: mechanism.simulation.collisions,
+    floor: mechanism.simulation.floor,
+  };
+}
+
+/** `element` carrying the parameter values `shown` had, and nothing else of it. */
+function with_shown_parameters(
+  element: MechanicalElement,
+  shown: MechanicalElement,
+): MechanicalElement {
+  switch (element.type) {
+    case "slider":
+      return shown.type === "slider"
+        ? { ...element, slidingFriction: shown.slidingFriction }
+        : element;
+    case "pivot":
+      return shown.type === "pivot"
+        ? {
+            ...element,
+            motor: shown.motor,
+            rotationalFriction: shown.rotationalFriction,
+          }
+        : element;
+    case "slidep":
+      return shown.type === "slidep"
+        ? {
+            ...element,
+            slidingFriction: shown.slidingFriction,
+            rotationalFriction: shown.rotationalFriction,
+          }
+        : element;
+    case "mass":
+      return shown.type === "mass" ? { ...element, mass: shown.mass } : element;
+    case "gear":
+      return shown.type === "gear"
+        ? { ...element, surfaceMass: shown.surfaceMass }
+        : element;
+    case "beam":
+      return shown.type === "beam"
+        ? {
+            ...element,
+            materialID: shown.materialID,
+            profileID: shown.profileID,
+          }
+        : element;
+    case "spring":
+      return shown.type === "spring"
+        ? {
+            ...element,
+            stiffness: shown.stiffness,
+            restLength: shown.restLength,
+          }
+        : element;
+    case "damper":
+      return shown.type === "damper"
+        ? { ...element, damping: shown.damping, restLength: shown.restLength }
+        : element;
+    default:
+      return element;
+  }
+}
+
 /**
- * Apply a parameter snapshot's motor/load values to a mechanism copy for rendering — the configuration in effect at that instant, distinct from whatever was last edited.
- * Touches only the fields a parameter edit can change (`SetMotorConfig`, `ChangeForce`, `ChangeDistributedForce`, `ChangeMoment`, `SetLoadFrame`); geometry is untouched, so this composes after `apply_snapshot_to_mechanism` without undoing it.
+ * Apply a parameter snapshot to a mechanism copy for rendering — every value the simulation reads, as in effect at that instant rather than as last edited.
+ * Geometry is untouched, so this composes after `apply_snapshot_to_mechanism` without undoing it.
+ * What only changes how a run is read (names, overlays, a material's `Re`) keeps its current value: it is not part of the recorded past.
  */
 export function apply_parameter_snapshot_to_mechanism(
   mechanism: Mechanism,
   snapshot: ParameterSnapshot,
 ): Mechanism {
-  const motorByID = new Map(
-    snapshot.mechanicalElements
-      .filter((el): el is PivotElement => el.type === "pivot")
-      .map((el) => [el.id, el.motor]),
+  const shownByID = new Map(
+    snapshot.mechanicalElements.map((el) => [el.id, el]),
   );
   const loadByID = new Map(snapshot.loads.map((load) => [load.id, load]));
 
   const newElements = mechanism.mechanicalElements.map((el) => {
-    if (el.type !== "pivot" || !motorByID.has(el.id)) return el;
-    return { ...el, motor: motorByID.get(el.id) };
+    const shown = shownByID.get(el.id);
+    return shown ? with_shown_parameters(el, shown) : el;
+  });
+
+  // The catalogue as it stood, entries deleted since included: a beam at that instant may still name one.
+  const currentMaterials = new Map(mechanism.materials.map((m) => [m.id, m]));
+  const materials = snapshot.materials.map((shown) => {
+    const current = currentMaterials.get(shown.id);
+    return current ? { ...shown, name: current.name, Re: current.Re } : shown;
+  });
+  const currentProfiles = new Map(mechanism.profiles.map((p) => [p.id, p]));
+  const profiles = snapshot.profiles.map((shown) => {
+    const current = currentProfiles.get(shown.id);
+    return current ? { ...shown, name: current.name } : shown;
   });
 
   const newLoads = mechanism.loads.map((load) => {
@@ -2009,7 +2086,19 @@ export function apply_parameter_snapshot_to_mechanism(
     return load;
   });
 
-  return { ...mechanism, mechanicalElements: newElements, loads: newLoads };
+  return {
+    ...mechanism,
+    mechanicalElements: newElements,
+    loads: newLoads,
+    materials,
+    profiles,
+    simulation: {
+      ...mechanism.simulation,
+      gravity: snapshot.gravity,
+      collisions: snapshot.collisions,
+      floor: snapshot.floor,
+    },
+  };
 }
 
 export { RECORD_DT };

@@ -92,6 +92,8 @@ const Row: React.FC<{ children: React.ReactNode }> = ({ children }) => (
 interface GroupPropertiesProps {
   /** The elements of one group of the selection — all of the same display type. */
   elements: MechanicalElement[];
+  /** The same elements at the instant on screen, matched by id: values are read off these, while every write is built against `elements` (see `rebased_bundle`). */
+  shownElements?: MechanicalElement[];
   /** Needed to write a length through the dimension holding it, when one does. */
   constraintElements: ConstraintElement[];
   materials: MaterialDef[];
@@ -110,34 +112,43 @@ interface GroupPropertiesProps {
  */
 export const GroupProperties: React.FC<GroupPropertiesProps> = ({
   elements,
+  shownElements = elements,
   constraintElements,
   materials,
   profiles,
   applyActions,
 }) => {
   const alone = elements.length === 1;
+  const shownByID = new Map(shownElements.map((el) => [el.id, el]));
+  const shown = <T extends MechanicalElement>(el: T): T =>
+    (shownByID.get(el.id) as T | undefined) ?? el;
 
   const mass = common_value(
     elements,
     (el): el is MassElement => el.type === "mass",
-    (el) => el.mass,
+    (el) => shown(el).mass,
     MASS,
   );
   const stiffness = common_value(
     elements,
     is_spring,
-    (el) => el.stiffness,
+    (el) => shown(el).stiffness,
     STIFFNESS,
   );
-  const restLength = common_value(elements, is_spring, rest_length, LENGTH);
+  const restLength = common_value(
+    elements,
+    is_spring,
+    (el) => rest_length(shown(el)),
+    LENGTH,
+  );
   // No selected spring carries a rest length of its own: they all take the drawn one, and follow it.
   const restLengthsAreDrawn = !!restLength?.elements.every(
-    (el) => el.restLength === undefined,
+    (el) => shown(el).restLength === undefined,
   );
   const damping = common_value(
     elements,
     (el): el is DamperElement => el.type === "damper",
-    (el) => el.damping,
+    (el) => shown(el).damping,
     DAMPING,
   );
   const length = common_value(
@@ -150,13 +161,13 @@ export const GroupProperties: React.FC<GroupPropertiesProps> = ({
   const surfaceMass = common_value(
     elements,
     is_gear,
-    (el) => el.surfaceMass,
+    (el) => shown(el).surfaceMass,
     SURFACE_MASS,
   );
   const rotationalFriction = common_value(
     elements,
     (el): el is PivotElement | SlidepElement => "rotatingEdgesIDs" in el,
-    (el) => el.rotationalFriction,
+    (el) => shown(el).rotationalFriction,
     ANGULAR_DAMPING,
     2,
   );
@@ -164,19 +175,20 @@ export const GroupProperties: React.FC<GroupPropertiesProps> = ({
     elements,
     (el): el is SliderElement | SlidepElement =>
       "parentBeamID" in el && "slidingFriction" in el,
-    (el) => el.slidingFriction,
+    (el) => shown(el).slidingFriction,
     DAMPING,
   );
   const torque = common_value(
     elements,
     is_motorised,
-    (el) => el.motor.torque,
+    (el) => shown(el).motor.torque,
     MOMENT,
   );
   const speed = common_value(
     elements,
     is_motorised,
-    (el) => (alone ? el.motor.speed : Math.abs(el.motor.speed)),
+    (el) =>
+      alone ? shown(el).motor.speed : Math.abs(shown(el).motor.speed),
     ANGULAR_VELOCITY(),
   );
   const beams = elements.filter((el): el is BeamElement => el.type === "beam");
@@ -463,7 +475,8 @@ export const GroupProperties: React.FC<GroupPropertiesProps> = ({
                 torque.elements.map((el) => ({
                   type: "SetMotorConfig",
                   id: el.id,
-                  newConfig: { ...el.motor, torque: newTorque },
+                  // Replaced whole, so built from what is shown: a later edit of the other field must not ride along.
+                  newConfig: { ...shown(el).motor, torque: newTorque },
                   oldConfig: el.motor,
                 })),
               )
@@ -481,7 +494,7 @@ export const GroupProperties: React.FC<GroupPropertiesProps> = ({
                   speed.elements.map((el) => ({
                     type: "SetMotorConfig",
                     id: el.id,
-                    newConfig: { ...el.motor, speed: newSpeed },
+                    newConfig: { ...shown(el).motor, speed: newSpeed },
                     oldConfig: el.motor,
                   })),
                 )
@@ -501,8 +514,8 @@ export const GroupProperties: React.FC<GroupPropertiesProps> = ({
                     type: "SetMotorConfig",
                     id: el.id,
                     newConfig: {
-                      ...el.motor,
-                      speed: el.motor.speed < 0 ? -magnitude : magnitude,
+                      ...shown(el).motor,
+                      speed: shown(el).motor.speed < 0 ? -magnitude : magnitude,
                     },
                     oldConfig: el.motor,
                   })),
@@ -517,6 +530,7 @@ export const GroupProperties: React.FC<GroupPropertiesProps> = ({
       {beams.length > 0 && (
         <MaterialProfileSection
           elements={beams}
+          shownElements={beams.map((beam) => shown(beam))}
           materials={materials}
           profiles={profiles}
           applyActions={applyActions}

@@ -56,6 +56,12 @@ import {
   SNACKBAR_DURATION,
   VALUE_EDIT_COALESCE_MS,
 } from "./constants/interaction-specs";
+import { CANVAS_STATE_SIM_EFFECT } from "./constants/canvas-state-sim-effect";
+import { rebased_bundle } from "./components/mechanism/parameter-rebase";
+import { set_sim_clock, sim_clock } from "./components/solver/dynamics/sim-clock";
+
+/** Remembers, across sessions, that the notice explaining a pause triggered by an edit has been shown. */
+const PAUSED_FOR_EDIT_NOTICE_KEY = "pausedForEditNoticeShown";
 import MechanicalCanvas, {
   ConstraintChangeSignal,
 } from "./components/canvas/MechanicalCanvas";
@@ -120,9 +126,9 @@ import {
   useMechanismLibrary,
 } from "./components/mechanisms-gallery/use-mechanism-library";
 
-/** Raccourcit les libellés (Édition → Édit, masque les labels des chips). */
+/** Shortens the labels (Édition → Édit) and hides the chip labels. */
 const CONDENSED_BREAKPOINT = 1400;
-/** Retire en plus les séparateurs et resserre les espacements pour les fenêtres vraiment étroites. */
+/** Also drops the separators and tightens the spacing, for really narrow windows. */
 const TIGHT_BREAKPOINT = 1150;
 
 /** Whether a canvas state is an armed placement tool waiting for its first click — no element selected, no gesture started. */
@@ -164,27 +170,25 @@ const App: React.FC = () => {
     position: ZERO,
   });
 
-  /** An abscissa hovered on the analysis panel's N/T/Mf diagrams, for the canvas to mark on
-   * the beam — see docs/plan-efforts-interieurs.md phase 5bis. */
+  /** An abscissa hovered on the analysis panel's N/T/Mf diagrams, for the canvas to mark on the beam — see docs/plan-efforts-interieurs.md phase 5bis. */
   const [hoveredAbscissa, setHoveredAbscissa] =
     useState<HoveredAbscissa | null>(null);
 
-  /** A line of the analysis panel's force balance the cursor rests on, for the canvas to show
-   * the vector it stands for — which is what tells a reader which term of the sum is which. */
+  /** A line of the analysis panel's force balance the cursor rests on, for the canvas to show the vector it stands for — which is what tells a reader which term of the sum is which. */
   const [hoveredBalanceTerm, setHoveredBalanceTerm] =
     useState<HoveredBalanceTerm | null>(null);
 
-  /** Where the force balance's moment is taken about. A UI preference, not a mechanism edit, so
-   * it lives here rather than going through `Action`. */
+  /**
+   * Where the force balance's moment is taken about.
+   * A UI preference, not a mechanism edit, so it lives here rather than going through `Action`.
+   */
   const [momentBalanceReference, setMomentBalanceReference] =
     useState<MomentBalanceReference>({ kind: "point", point: ZERO });
-  /** The panel's own reference-point picker is hovered — previews the marker on the canvas
-   * without arming the picking tool. */
+  /** The panel's own reference-point picker is hovered — previews the marker on the canvas without arming the picking tool. */
   const [momentBalanceReferenceHovered, setMomentBalanceReferenceHovered] =
     useState(false);
 
-  /** A physics-overlay arrow or moment clicked on the canvas — a UI preference, not a mechanism
-   * edit, the same reasoning as `momentBalanceReference`.
+  /** A physics-overlay arrow or moment clicked on the canvas — a UI preference, not a mechanism edit, the same reasoning as `momentBalanceReference`.
    * Never touches `canvasState`: naming an overlay is not an element selection, so the two stay independent registers, one read by the analysis panel and both read by the canvas — which draws the reading itself as selected while it stands, and its own element as not (`draw_mechanism`'s own `isSelected`). */
   const [focusedOverlay, setFocusedOverlay] = useState<FocusedOverlay | null>(
     null,
@@ -391,6 +395,23 @@ const App: React.FC = () => {
     },
   });
 
+  const isPlayingRef = useRef(runtimeState.isPlaying);
+  isPlayingRef.current = runtimeState.isPlaying;
+
+  // Entering a gesture is what pauses or leaves a running simulation, whichever route led to it (see `CANVAS_STATE_SIM_EFFECT`).
+  // Keyed on the state alone: entering simulation with a tool still armed must not bounce straight back to edition.
+  useEffect(() => {
+    if (simulationRef.current.appMode === "edition") return;
+    const effect = CANVAS_STATE_SIM_EFFECT[canvasState.type];
+    if (effect === "exit") exitToEdition();
+    if (effect !== "pause" || !isPlayingRef.current) return;
+    pauseSimulation();
+    // A pause nobody asked for reads as a bug, but only the first time: the notice is not repeated once seen.
+    if (getStorageItem<boolean>(PAUSED_FOR_EDIT_NOTICE_KEY, false)) return;
+    setStorageItem(PAUSED_FOR_EDIT_NOTICE_KEY, true);
+    setSnackbar({ open: true, message: t("simulation_paused_for_edit") });
+  }, [canvasState.type, exitToEdition, pauseSimulation, simulationRef]);
+
   const handleSpaceKey = useCallback(
     () => handleSpaceKeyForMode(mechanism.metadata.lastSimulationMode),
     [handleSpaceKeyForMode, mechanism.metadata.lastSimulationMode],
@@ -435,13 +456,15 @@ const App: React.FC = () => {
     appMode,
     mechanism.mechanicalElements,
     mechanism.loads,
+    mechanism.materials,
+    mechanism.profiles,
+    mechanism.simulation,
     runtimeState.simulationSnapshots,
     runtimeState.parameterSnapshots,
     runtimeState.time,
   ]);
 
-  /** `momentBalanceReference` resolved to the pose on screen, the way every other position the
-   * panel reads is. */
+  /** `momentBalanceReference` resolved to the pose on screen, the way every other position the panel reads is. */
   const momentBalancePoint = useMemo(
     () => resolve_moment_balance_point(momentBalanceReference, analysedMechanism),
     [analysedMechanism, momentBalanceReference],
@@ -531,8 +554,7 @@ const App: React.FC = () => {
     });
   }, []);
 
-  /** Zooms the canvas's middle to an exact scale — what the toolbar's zoom steps aim at,
-   * routed through the same gesture path as the wheel. */
+  /** Zooms the canvas's middle to an exact scale — what the toolbar's zoom steps aim at, routed through the same gesture path as the wheel. */
   const zoomTo = useCallback(
     (scale: number) => {
       const canvas = canvasRef.current;
@@ -551,18 +573,40 @@ const App: React.FC = () => {
 
   const applyActions = useCallback(
     (actions: Action[]) => {
-      if (is_observation_only_bundle(actions))
-        observationOnlyEditRef.current = true;
-      else if (is_load_value_only_bundle(actions))
+      const simulating = simulationRef.current.appMode !== "edition";
+      const observationOnly = is_observation_only_bundle(actions);
+      const structure = is_structure_bundle(actions);
+      // An edit made behind later ones in the recording cuts them off, values included (see `rebased_bundle`).
+      // Their snapshots go now rather than in the recompile effect: an edit arriving before that effect runs must not see them and cut this one off in turn.
+      const clock = sim_clock();
+      // A lone `Blank` closing a coalescing run edits nothing, so it cuts nothing off.
+      const cutOff =
+        simulating &&
+        !observationOnly &&
+        !structure &&
+        actions.some((action) => action.type !== "Blank") &&
+        clock.parameterSnapshots.some((s) => s.t > clock.time)
+          ? parameter_snapshot_at(clock.parameterSnapshots, clock.time)
+          : null;
+      if (cutOff)
+        set_sim_clock((prev) => ({
+          ...prev,
+          parameterSnapshots: prev.parameterSnapshots.filter(
+            (s) => s.t <= prev.time,
+          ),
+        }));
+      if (observationOnly) observationOnlyEditRef.current = true;
+      // The values coming back may be anything, not just this load's: only a full recompile takes them all.
+      else if (!cutOff && is_load_value_only_bundle(actions))
         loadValueOnlyEditRef.current = true;
-      if (
-        simulationRef.current.appMode !== "edition" &&
-        is_structure_bundle(actions)
-      ) {
+      if (simulating && structure) {
         exitToEdition();
       }
       setMechanism((prevMechanism) => {
-        const newMechanism = apply_actions(prevMechanism, actions);
+        const newMechanism = apply_actions(
+          prevMechanism,
+          cutOff ? rebased_bundle(prevMechanism, cutOff, actions) : actions,
+        );
         const cs = canvasStateRef.current;
         if (
           cs.type === "SelectedElement" &&
@@ -610,7 +654,7 @@ const App: React.FC = () => {
     };
   }, [applyActions]);
 
-  /** Repère les contraintes-icônes recréées/supprimées par un undo/redo pour que le canvas les fasse réapparaître (reveal) ou s'estomper (fantôme rouge). */
+  /** Spots the icon constraints an undo/redo recreated or removed, so the canvas reveals them again or fades them out as a red ghost. */
   const signalConstraintChange = useCallback(
     (before: ConstraintElement[], after: ConstraintElement[]) => {
       const beforeById = new Map(before.map((c) => [c.id, c]));
@@ -811,8 +855,7 @@ const App: React.FC = () => {
     setInfoOpen(false);
   };
 
-  /** Which section is hovered in the library tab — also what tints the canvas for as long as
-   * that hover lasts, the same "hover a group to color it" gesture the DDL redundancy audit already uses.
+  /** Which section is hovered in the library tab — also what tints the canvas for as long as that hover lasts, the same "hover a group to color it" gesture the DDL redundancy audit already uses.
    * `null` the rest of the time. */
   const [librarySection, setLibrarySection] = useState<
     "materials" | "profiles" | null
@@ -885,7 +928,7 @@ const App: React.FC = () => {
               "& .MuiDivider-root": { borderColor: "dividers.toolbar" },
             }}
           >
-            {/* ── Toolbar principale ── */}
+            {/* ── Main toolbar ── */}
             <Toolbar
               variant="dense"
               disableGutters
@@ -903,6 +946,7 @@ const App: React.FC = () => {
                 appMode={appMode}
                 setAppMode={setAppMode}
                 mechanism={mechanism}
+                shownSimulation={analysedMechanism.simulation}
                 updateMetadata={updateMetadata}
                 applyActions={applyActions}
                 condensed={condensed}
@@ -945,6 +989,13 @@ const App: React.FC = () => {
                 }
               />
             </Toolbar>
+
+            <SimulationTimeline
+              appMode={appMode}
+              runtimeState={runtimeState}
+              timeline={timeline}
+              timelineTrackRef={timelineTrackRef}
+            />
           </AppBar>
 
           {/* Main content area */}
@@ -963,8 +1014,6 @@ const App: React.FC = () => {
               canvasState={canvasState}
               mechanism={mechanism}
               appMode={appMode}
-              onExitToEdition={exitToEdition}
-              onPauseSim={pauseSimulation}
             />
 
             <Box sx={{ flexGrow: 1, minWidth: 0, position: "relative" }}>
@@ -984,8 +1033,6 @@ const App: React.FC = () => {
                 constraintChangeRef={constraintChangeRef}
                 onSpaceKey={handleSpaceKey}
                 onEscapeKey={handleEscapeKey}
-                onExitToEdition={exitToEdition}
-                onPauseSim={pauseSimulation}
                 onSimulationGrab={handleSimulationGrab}
                 onSimulationGrabEnd={handleSimulationGrabEnd}
                 canSimulationGrab={canSimulationGrab}
@@ -1013,15 +1060,6 @@ const App: React.FC = () => {
                 }
                 hoveredLibraryEntryID={hoveredLibraryEntryID}
               />
-
-              {appMode !== "edition" && (
-                <SimulationTimeline
-                  appMode={appMode}
-                  runtimeState={runtimeState}
-                  timeline={timeline}
-                  timelineTrackRef={timelineTrackRef}
-                />
-              )}
             </Box>
 
             <PropertiesPanel

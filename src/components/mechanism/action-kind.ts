@@ -18,6 +18,8 @@ export const OBSERVATION_ACTIONS: Action["type"][] = [
   "UpdateElementName",
   "RenameMaterial",
   "RenameProfile",
+  // A yield limit judges a run without taking part in it: stresses are measured against it when shown, never when solved or recorded.
+  "ChangeMaterialRe",
 ];
 
 export const PARAMETER_ACTIONS: Action["type"][] = [
@@ -47,7 +49,6 @@ export const PARAMETER_ACTIONS: Action["type"][] = [
   "DeleteMaterial",
   "DeleteProfile",
   "ChangeMaterialE",
-  "ChangeMaterialRe",
   "ChangeMaterialRho",
   "ChangeProfileShape",
 ];
@@ -68,8 +69,7 @@ export const is_load_value_only_bundle = (actions: Action[]) =>
   actions.length > 0 &&
   actions.every((a) => LOAD_VALUE_ACTIONS.includes(a.type));
 
-/** A load creation/deletion is a parameter edit too (a load is an input, not
- * structure); any other Create/Delete is structural. */
+/** A load creation/deletion is a parameter edit too (a load is an input, not structure); any other Create/Delete is structural. */
 const is_load_element = (el: UnionElement) =>
   el.type === "force" ||
   el.type === "moment" ||

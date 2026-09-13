@@ -3,7 +3,7 @@ import { ID, UnionElement } from "../types";
 import { is_nameable } from "./element-queries";
 
 /**
- * Formate un UUID pour le rendre lisible.
+ * Turns a UUID into something readable.
  */
 /*
 export function legible_id(id: ID): string {
@@ -18,9 +18,9 @@ export function legible_id(id: ID): string {
 */
 
 /**
- * Génère un code lisible de 4 lettres (ex: "Talo", "Mira", "Beno").
- * Exclut Q, W, X, Y, Z pour une lisibilité maximale.
- * Empêche les fins de mots dures (ex: "kp", "tz", "gd").
+ * A pronounceable four-letter code derived from an ID (e.g. "Talo", "Mira", "Beno"), stable for a given ID.
+ *
+ * W, X, Y and Z are left out, and a consonant pair never closes the word on a hard sound such as "kp" or "gd".
  */
 export function legible_id(id: ID): string {
   const parts = id.toLowerCase().match(/[0-9a-f]+/g);
@@ -28,50 +28,40 @@ export function legible_id(id: ID): string {
     throw new Error("ID invalide");
   }
 
-  // 1.
-  // Alphabets "Propres" (21 lettres) Voyelles classiques (5)
   const voyelles = "aeiou";
-  // Consonnes standards (16) : on enlève q, w, x, y, z
   const consonnes = "bcdfghjklmnpqrstv";
-  // Consonnes de fin autorisées (6) : uniquement les liquides/nasales/sifflantes douces (l, m, n, r, s, v) On exclut les occlusives (b, d, g, k, p, t) et les frottantes dures (f) en position finale après une consonne.
+  // Soft sounds only (liquids, nasals, soft sibilants): stops and hard fricatives read badly at the end of a word.
   const consonnes_finales = "lmnrsv";
 
-  // 2.
-  // Définition des structures (Le "Plan") On évite les structures qui finissent par 2 consonnes dures.
+  // Picked with equal odds, so a pattern listed twice weighs double.
   const structures = [
-    // Structures classiques (60% des cas)
     { pattern: "CVCV", map: [consonnes, voyelles, consonnes, voyelles] }, // Talo
     {
       pattern: "VCVC",
       map: [voyelles, consonnes, voyelles, consonnes_finales],
-    }, // Arno (fin douce garantie)
-    { pattern: "CVCV2", map: [consonnes, voyelles, consonnes, voyelles] }, // Redondance pour pondérer
+    }, // Aris
+    { pattern: "CVCV2", map: [consonnes, voyelles, consonnes, voyelles] },
 
-    // Structures avec diphtongues (20% des cas)
     {
       pattern: "CVVC",
       map: [consonnes, voyelles, voyelles, consonnes_finales],
-    }, // Loic, Maud
+    }, // Loin
     {
       pattern: "VCCV",
       map: [voyelles, consonnes, consonnes_finales, voyelles],
-    }, // Elsa, Olaf (la 3ème est douce)
+    }, // Elsa
 
-    // Structures terminant par consonne unique (20% des cas)
     {
       pattern: "CVCf",
       map: [consonnes, voyelles, consonnes, consonnes_finales],
-    }, // Talm, Berc
+    }, // Talm
   ];
 
-  // 3.
-  // Sélection de la structure (basée sur la 1ère section)
+  // The first section of the ID picks the pattern, the next four pick the letters.
   const selector = parseInt(parts[0].substring(0, 8), 16);
   const structureIndex = selector % structures.length;
   const currentStructure = structures[structureIndex];
 
-  // 4.
-  // Génération des 4 lettres (sections 2 à 5)
   const result: string[] = [];
 
   for (let i = 0; i < 4; i++) {
@@ -81,7 +71,6 @@ export function legible_id(id: ID): string {
 
     let char = charSet[num % charSet.length];
 
-    // Majuscule en tête
     if (i === 0) {
       char = char.toUpperCase();
     }
@@ -93,7 +82,7 @@ export function legible_id(id: ID): string {
 }
 
 /**
- * Formate l'id d'un élément pour afficher un nom lisible.
+ * The name shown for an element: its own name if it has one, otherwise its type followed by a code derived from its ID.
  */
 export function shown_element_name(element: UnionElement | undefined): string {
   if (!element) return "Not found";
@@ -157,16 +146,19 @@ export function value2ratio(
 }
 
 /**
- * A simulated time, for display: `45.3s` under the minute, `2m53s` past it.
+ * A simulated time, for display: `45.34s` under the minute, `2m53.4s` past it.
  *
- * Truncated rather than rounded, so the label never shows an instant the recording has not got to — and never reads `60.0s` for something the next tenth calls `1m00s`.
+ * Truncated rather than rounded, so the label never shows an instant the recording has not got to — and never reads `60.00s` for something the next hundredth calls `1m00.0s`.
+ * The text never gets narrower as the time grows, which is what lets the timeline size its label on the longest time it can show.
  */
 export function format_sim_time(seconds: number): string {
-  const tenths = Math.max(0, Math.floor(seconds * 10));
-  if (tenths < 600) return `${(tenths / 10).toFixed(1)}s`;
+  // The epsilon keeps a binary representation just below a hundredth, such as 0.29 * 100 = 28.999…, from being truncated a hundredth short.
+  const hundredths = Math.max(0, Math.floor(seconds * 100 + 1e-6));
+  if (hundredths < 6000) return `${(hundredths / 100).toFixed(2)}s`;
+  const tenths = Math.floor(hundredths / 10);
   const whole = Math.floor(tenths / 10);
   const s = whole % 60;
-  return `${Math.floor(whole / 60)}m${s.toString().padStart(2, "0")}s`;
+  return `${Math.floor(whole / 60)}m${s.toString().padStart(2, "0")}.${tenths % 10}s`;
 }
 
 export function format_date(timestamp: number): string {

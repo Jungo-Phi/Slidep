@@ -187,6 +187,8 @@ function common_id(
 interface MaterialProfileSectionProps {
   /** One beam, or every beam of a multi-selection — an assignment goes to all of them. */
   elements: BeamElement[];
+  /** The same beams at the instant on screen: which entries they hold is read off these, while every assignment is built against `elements` (see `rebased_bundle`). */
+  shownElements?: BeamElement[];
   materials: MaterialDef[];
   profiles: ProfileDef[];
   applyActions: (actions: Action[]) => void;
@@ -196,22 +198,23 @@ interface MaterialProfileSectionProps {
 
 export const MaterialProfileSection: React.FC<MaterialProfileSectionProps> = ({
   elements,
+  shownElements = elements,
   materials,
   profiles,
   applyActions,
   compact = false,
 }) => {
   const focusLibraryEntry = useLibraryNavigation();
-  const materialID = common_id(elements, (el) => el.materialID);
-  const profileID = common_id(elements, (el) => el.profileID);
+  const materialID = common_id(shownElements, (el) => el.materialID);
+  const profileID = common_id(shownElements, (el) => el.profileID);
   const profile = profiles.find((p) => p.id === profileID);
   const material = materials.find((m) => m.id === materialID);
   /** Every entry the beams use, first one first — what the "open in library" link opens. */
   const used = (read: (element: BeamElement) => ID) => [
-    ...new Set(elements.map(read)),
+    ...new Set(shownElements.map(read)),
   ];
   // One beam only: a selection reads its mass off its own totals instead, where it also counts what isn't a beam.
-  const soleBeam = elements.length === 1 ? elements[0] : undefined;
+  const soleBeam = shownElements.length === 1 ? shownElements[0] : undefined;
   const beamMass =
     soleBeam &&
     beam_linear_mass(

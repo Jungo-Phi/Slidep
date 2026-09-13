@@ -3,6 +3,8 @@
  */
 
 import { ConstraintElement, ID, LoadElement, MechanicalElement } from "./element";
+import type { MaterialDef, ProfileDef } from "./material";
+import type { FloorConfig } from "./mechanism";
 
 /**
  * Simulation speed presets
@@ -31,14 +33,12 @@ export type LinkReaction =
       type: string;
       owner?: ID;
       key: string;
-      /** Whether this dof was immovable in the solve (`w = 0`) — a support reaction
-       * (against the ground) rather than an internal one (between two mobile parts). */
+      /** Whether this dof was immovable in the solve (`w = 0`) — a support reaction (against the ground) rather than an internal one (between two mobile parts). */
       atAnchor: boolean;
       kind: "force";
       fx: number;
       fy: number;
-      /** This reaction's emitting link's index in `step_dynamic_simulation`'s per-frame
-       * `links` array (Spring/MotorBeam/MotorAngle already dropped) — see `build_beam_cohesion_specs`.
+      /** This reaction's emitting link's index in `step_dynamic_simulation`'s per-frame `links` array (Spring/MotorBeam/MotorAngle already dropped) — see `build_beam_cohesion_specs`.
        * A plain number, not the link itself: this is written once per reaction in the solver's hot per-frame sweep, where an extra allocation (an array, an object) is the dominant cost.
        * Undefined for a reaction with no single emitting link (there is none today, but the field stays optional for that case). */
       linkIndex?: number;
@@ -54,8 +54,7 @@ export type LinkReaction =
       linkIndex?: number;
     };
 
-/** One motorized pivot's own mechanical power this frame — τ·ω of the joint it drives,
- * signed (negative when the load back-drives the motor rather than the other way round).
+/** One motorized pivot's own mechanical power this frame — τ·ω of the joint it drives, signed (negative when the load back-drives the motor rather than the other way round).
  * See `motor-model.ts`'s `resolve_motor_torques`. */
 export interface MotorPowerSample {
   pivotID: ID;
@@ -69,8 +68,7 @@ export interface MotorPowerSample {
 export interface EnergySample {
   /** J — Σ ½mv² over every free translational dof, + Σ ½Jω² over every gear's own angle. */
   kinetic: number;
-  /** J — Σ −m·(gravity·position), gravity off reads a constant (irrelevant to the balance,
-   * which only ever compares a CHANGE against this frame's start). */
+  /** J — Σ −m·(gravity·position), gravity off reads a constant (irrelevant to the balance, which only ever compares a CHANGE against this frame's start). */
   potentialGravity: number;
   /** J — Σ ½k(L−L₀)² over every spring. */
   potentialSpring: number;
@@ -116,12 +114,10 @@ export interface BeamCohesion {
    * What this beam's OWN rigidity (its length link, any welded-hub couple, any attached body's pin) applies onto whatever is coincident at its start/end — one sense at both ends and for all three components, NOT `force_at`'s anchor-conditional "classical support reaction".
    * Deliberately not yet the cut torsor `R_coh`: reaching that negates the far end and leaves the near one as it is (see `cohesion-field.ts`'s `r_coh_start`/`r_coh_end`), an asymmetry inherent to the cut convention itself.
    */
-  /** `atAnchor`: whether this dof was immovable in the solve (`w = 0`) — same sense as
-   * `LinkReaction.atAnchor`.
+  /** `atAnchor`: whether this dof was immovable in the solve (`w = 0`) — same sense as `LinkReaction.atAnchor`.
    * `cohesion-field.ts` reads it to tell a genuine support reading apart from a free dof's own tautological cancellation of a directly-applied load. */
   start: { fx: number; fy: number; m: number };
-  /** Same reading at the beam's OTHER end — independent of `start` (no integration along
-   * the span involved), so `cohesion-field.ts` can use it as the loop-residual reference. */
+  /** Same reading at the beam's OTHER end — independent of `start` (no integration along the span involved), so `cohesion-field.ts` can use it as the loop-residual reference. */
   end: { fx: number; fy: number; m: number };
   /**
    * Force each attached node (a join/mass/slider body pinned or sliding on this beam's span) transmits TO the beam, at its CURRENT abscissa (0 = start, 1 = end, recomputed every frame from live positions — a slider's abscissa moves, see `Point2.parameter_on_segment`).
@@ -173,10 +169,15 @@ export interface SnapshotLayout {
 export interface SimulationSnapshot {
   t: number;
   layout: SnapshotLayout;
-  /** x and y interleaved, 2 per `layout.keys` entry. NaN = no value at this instant. */
+  /**
+   * x and y interleaved, 2 per `layout.keys` entry.
+   * NaN = no value at this instant.
+   */
   positions: Float64Array;
-  /** Gear rotation angles (rad), one per `layout.angleKeys` entry. See the concrete
-   * subtype for what (if anything) follows past that. */
+  /**
+   * Gear rotation angles (rad), one per `layout.angleKeys` entry.
+   * See the concrete subtype for what (if anything) follows past that.
+   */
   angles: Float64Array;
   /** Constraints left unsatisfied at this frame (empty/undefined when all met). */
   unsatisfied?: ConstraintResidual[];
@@ -214,11 +215,15 @@ export interface DynamicSnapshot extends SimulationSnapshot {
   /** One per `layout.angleKeys` entry — same slotting as `angles`. */
   angleVelocities: Float64Array;
   unsatisfied?: ConstraintResidual[];
-  /** Per-constraint reaction forces/torques this frame — see `LinkReaction`. Undefined when
-   * not collected (the same optionality as `unsatisfied`). */
+  /**
+   * Per-constraint reaction forces/torques this frame — see `LinkReaction`.
+   * Undefined when not collected (the same optionality as `unsatisfied`).
+   */
   reactions?: LinkReaction[];
-  /** Every motorized pivot's own power this frame — see `MotorPowerSample`. Always collected
-   * (cheap, one entry per motor, unlike `reactions`' per-link cost), so undefined only where a snapshot predates this field rather than under `collectDiagnostics`. */
+  /**
+   * Every motorized pivot's own power this frame — see `MotorPowerSample`.
+   * Always collected (cheap, one entry per motor, unlike `reactions`' per-link cost), so undefined only where a snapshot predates this field rather than under `collectDiagnostics`.
+   */
   motorPower?: MotorPowerSample[];
   /** The mechanism's own energy balance this frame — see `EnergySample`. */
   energy?: EnergySample;
@@ -231,15 +236,21 @@ export interface DynamicSnapshot extends SimulationSnapshot {
 }
 
 /**
- * The motor/load configuration in effect from `t` onward, until the next entry (or the end of the recording).
+ * Every value the simulation reads, as in effect from `t` onward, until the next entry (or the end of the recording).
  * One entry per parameter edit made during a simulation — sparse, unlike `KinematicSnapshot`'s per-frame sampling — plus one seeded at `t: 0` when the recording starts, so a lookup always has something at or before any `t` it is asked about.
  *
  * Carries the full arrays (as they stood at `t`) rather than a diff: cheap here since entries are rare, and it reuses the same "whole state, keyed by id" shape `KinematicSnapshot`'s consumers already know how to read.
+ * Build one with `parameter_snapshot`, so no field is forgotten.
  */
 export interface ParameterSnapshot {
   t: number;
   mechanicalElements: MechanicalElement[];
   loads: LoadElement[];
+  materials: MaterialDef[];
+  profiles: ProfileDef[];
+  gravity: boolean;
+  collisions: boolean;
+  floor: FloorConfig;
 }
 
 /**
@@ -247,16 +258,13 @@ export interface ParameterSnapshot {
  * A residual reaction of 1e-6 N next to a real 500 N one, or a 0.1mm wobble on a 10m mechanism, needs SOME scale to be negligible relative TO — never an arbitrary absolute floor, since a featherweight mechanism's forces are all small and none of them should read as "nothing".
  */
 export interface NegligibilityPool {
-  /** Identity of the mechanism this pool was built from — an edit invalidates it (see
-   * `extend_negligibility_pool`'s `appendable` check). */
+  /** Identity of the mechanism this pool was built from — an edit invalidates it (see `extend_negligibility_pool`'s `appendable` check). */
   elements: MechanicalElement[];
   constraints: ConstraintElement[];
-  /** Snapshots folded in so far, and the last one — same rebuild-vs-append test
-   * `StressScaleCache` uses (`cohesion-field.ts`). */
+  /** Snapshots folded in so far, and the last one — same rebuild-vs-append test `StressScaleCache` uses (`cohesion-field.ts`). */
   consumed: number;
   boundary: DynamicSnapshot | null;
-  /** m — seeded from the mechanism's own bounding-box diagonal, then grown by any
-   * recorded displacement past it. */
+  /** m — seeded from the mechanism's own bounding-box diagonal, then grown by any recorded displacement past it. */
   length: number;
   /** rad */
   angle: number;
@@ -336,8 +344,7 @@ export interface RuntimeState {
    */
   simulationSnapshots: SimulationSnapshot[];
 
-  /** The motor/load configuration history, truncated and appended to in lockstep with
-   * `simulationSnapshots` — see `ParameterSnapshot`. */
+  /** The parameter history, truncated and appended to in lockstep with `simulationSnapshots` — see `ParameterSnapshot`. */
   parameterSnapshots: ParameterSnapshot[];
 
   /**
@@ -348,8 +355,7 @@ export interface RuntimeState {
    */
   scrubbed: boolean;
 
-  /** Running per-kind scale, for hiding/flattening negligible reactions, velocities, and
-   * probe curves — see `NegligibilityPool`. */
+  /** Running per-kind scale, for hiding/flattening negligible reactions, velocities, and probe curves — see `NegligibilityPool`. */
   negligibilityPool: NegligibilityPool;
 }
 

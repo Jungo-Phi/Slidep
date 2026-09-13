@@ -96,13 +96,14 @@ interface ElementsOverviewProps {
   /** Empty for the whole mechanism, which is what the tab shows when nothing is selected. */
   selectedIds: ID[];
   mechanism: Mechanism;
+  /** The mechanism at the instant on screen: values are read off it, writes are built against `mechanism` (see `rebased_bundle`). */
+  analysedMechanism?: Mechanism;
   hoveredPart: HoveredPart;
   setHoveredPart: (hoveredPart: HoveredPart) => void;
   setCanvasState: (state: CanvasState) => void;
   applyActions: (actions: Action[]) => void;
   setHighlight: (highlight: CanvasHighlight) => void;
-  /** Destroys elements by the handful — the counterpart of the Delete key, which the panel would
-   * otherwise be the only place not to offer.
+  /** Destroys elements by the handful — the counterpart of the Delete key, which the panel would otherwise be the only place not to offer.
    * Leaves the canvas out of whatever it was selecting. */
   onDeleteElements: (ids: ID[]) => void;
 }
@@ -131,6 +132,7 @@ export const ElementsOverview: React.FC<ElementsOverviewProps> = ({
   applyActions,
   setHighlight,
   onDeleteElements,
+  analysedMechanism = mechanism,
 }) => {
   const mechanicalElements = mechanism.mechanicalElements;
   const selecting = selectedIds.length > 0;
@@ -192,13 +194,15 @@ export const ElementsOverview: React.FC<ElementsOverviewProps> = ({
   };
 
   const metrics = selection_metrics(
-    listed,
-    mechanism.materials,
-    mechanism.profiles,
+    listed.map(
+      (el) =>
+        analysedMechanism.mechanicalElements.find((e) => e.id === el.id) ?? el,
+    ),
+    analysedMechanism.materials,
+    analysedMechanism.profiles,
   );
 
-  /** One row of the list: icon, name, and delete — or, inside a selection, a control that just
-   * drops this one element out of it, destroying the model from three levels deep in a selection-refinement list reading as far too heavy a click. */
+  /** One row of the list: icon, name, and delete — or, inside a selection, a control that just drops this one element out of it, destroying the model from three levels deep in a selection-refinement list reading as far too heavy a click. */
   const elementRow = (element: MechanicalElement, size: "small" | "medium") => {
     const controlIcon = size === "small" ? 16 : 20;
     return (
@@ -500,9 +504,10 @@ export const ElementsOverview: React.FC<ElementsOverviewProps> = ({
           <Box>
             <GroupProperties
               elements={group.elements}
+              shownElements={analysedMechanism.mechanicalElements}
               constraintElements={mechanism.constraintElements}
-              materials={mechanism.materials}
-              profiles={mechanism.profiles}
+              materials={analysedMechanism.materials}
+              profiles={analysedMechanism.profiles}
               applyActions={applyActions}
             />
           </Box>

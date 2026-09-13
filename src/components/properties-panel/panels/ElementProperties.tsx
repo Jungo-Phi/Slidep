@@ -73,8 +73,7 @@ import {
 import { get_dynamic_metric_at } from "../../solver/recording/probe-series";
 import { DynamicSnapshot } from "../../../types/runtime-state";
 
-/** The ground/unground button's icon, reused as the ElementPicker "world" option
- * so a motor's anchor reads with the same visual language as the ground toggle. */
+/** The ground/unground button's icon, reused as the ElementPicker "world" option so a motor's anchor reads with the same visual language as the ground toggle. */
 const GroundIcon: React.FC<{ sx?: object }> = ({ sx }) => (
   <Box component="img" src={icon("ground")} sx={sx} />
 );
@@ -87,8 +86,10 @@ interface ElementPropertiesProps {
   setCanvasState: (state: CanvasState) => void;
   applyActions: (actions: Action[]) => void;
   mechanism: Mechanism;
-  /** The mechanism in the pose on screen — see the same field on `AnalysisPanel`. Only feeds
-   * the values shown for a motor/load while scrubbed; every write still goes to `mechanism`. */
+  /**
+   * The mechanism at the instant on screen — see the same field on `AnalysisPanel`.
+   * Feeds the parameter values shown, while every write is still built against `mechanism` (see `rebased_bundle`).
+   */
   analysedMechanism: Mechanism;
   appMode: AppMode;
   runtimeState: RuntimeState;
@@ -140,6 +141,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
       <ElementsOverview
         selectedIds={selectedIds}
         mechanism={mechanism}
+        analysedMechanism={analysedMechanism}
         hoveredPart={hoveredPart}
         setHoveredPart={setHoveredPart}
         setCanvasState={setCanvasState}
@@ -161,18 +163,27 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
     );
   }
 
+  // The same element at the instant on screen: parameter values are read off it, writes are built against `element` (see `rebased_bundle`).
+  const shown_as = <T extends MechanicalElement>(el: T): T =>
+    (analysedMechanism.mechanicalElements.find((e) => e.id === el.id) as
+      | T
+      | undefined) ?? el;
+
   // A spring with no rest length of its own takes the drawn one, and follows it.
   const restLengthIsDrawn =
-    element.type === "spring" && element.restLength === undefined;
+    element.type === "spring" && shown_as(element).restLength === undefined;
 
   const linkedConstraint = linked_constraint(
     element,
     mechanism.constraintElements,
   );
 
-  const elementLoads = mechanism.loads.filter((l) => l.targetID === element.id);
   const displayLoads = analysedMechanism.loads.filter(
     (l) => l.targetID === element.id,
+  );
+  // Each load shown is written through its stored counterpart, or through itself when a later edit deleted it: the write brings it back.
+  const elementLoads = displayLoads.map(
+    (l) => mechanism.loads.find((stored) => stored.id === l.id) ?? l,
   );
   const analysedElement =
     element.type === "pivot"
@@ -319,7 +330,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                   label="m"
                   title={t("mass")}
                   kind={MASS}
-                  value={element.mass}
+                  value={shown_as(element).mass}
                   onChange={(mass) =>
                     applyActions([
                       {
@@ -339,7 +350,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                   label="k"
                   title={t("stiffness")}
                   kind={STIFFNESS}
-                  value={element.stiffness}
+                  value={shown_as(element).stiffness}
                   onChange={(stiffness) =>
                     applyActions([
                       {
@@ -359,7 +370,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                   label="b"
                   title={t("damping")}
                   kind={DAMPING}
-                  value={element.damping}
+                  value={shown_as(element).damping}
                   onChange={(damping) =>
                     applyActions([
                       {
@@ -576,7 +587,8 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                       {
                         type: "SetMotorConfig",
                         id: element.id,
-                        newConfig: { ...motor, torque },
+                        // Replaced whole, so built from what is shown: a later edit of the other field must not ride along.
+                        newConfig: { ...(displayMotorConfig ?? motor), torque },
                         oldConfig: motor,
                       },
                     ]);
@@ -595,7 +607,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                       {
                         type: "SetMotorConfig",
                         id: element.id,
-                        newConfig: { ...motor, speed },
+                        newConfig: { ...(displayMotorConfig ?? motor), speed },
                         oldConfig: motor,
                       },
                     ]);
@@ -872,7 +884,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                 label="bᵣ"
                 title={t("rotational_friction")}
                 kind={ANGULAR_DAMPING}
-                value={element.rotationalFriction}
+                value={shown_as(element).rotationalFriction}
                 onChange={(rotationalFriction) =>
                   applyActions([
                     {
@@ -893,7 +905,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                 label="bₛ"
                 title={t("sliding_friction")}
                 kind={DAMPING}
-                value={element.slidingFriction}
+                value={shown_as(element).slidingFriction}
                 onChange={(slidingFriction) =>
                   applyActions([
                     {
@@ -912,7 +924,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                 label="mₛ"
                 title={t("surface_mass")}
                 kind={SURFACE_MASS}
-                value={element.surfaceMass}
+                value={shown_as(element).surfaceMass}
                 onChange={(surfaceMass) =>
                   applyActions([
                     {
@@ -931,7 +943,10 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                 label="J"
                 title={t("inertia")}
                 kind={INERTIA}
-                value={gear_inertia(element.surfaceMass, element.radius)}
+                value={gear_inertia(
+                  shown_as(element).surfaceMass,
+                  element.radius,
+                )}
                 onChange={(inertia) =>
                   applyActions([
                     {
@@ -950,8 +965,9 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
             {element.type === "beam" && (
               <MaterialProfileSection
                 elements={[element]}
-                materials={mechanism.materials}
-                profiles={mechanism.profiles}
+                shownElements={[shown_as(element)]}
+                materials={analysedMechanism.materials}
+                profiles={analysedMechanism.profiles}
                 applyActions={applyActions}
               />
             )}
@@ -961,7 +977,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                 title={t("rest_length")}
                 kind={LENGTH}
                 value={
-                  element.restLength ??
+                  shown_as(element).restLength ??
                   element.positionStart.distance_to(element.positionEnd)
                 }
                 onChange={(restLength) =>

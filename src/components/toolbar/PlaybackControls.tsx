@@ -93,6 +93,8 @@ interface PlaybackControlsProps {
   appMode: AppMode;
   setAppMode: (mode: AppMode) => void;
   mechanism: Mechanism;
+  /** The simulation settings in effect at the instant on screen: what the physics toggles show, and what they flip. */
+  shownSimulation: Mechanism["simulation"];
   updateMetadata: (metadata: MechanismMetadata) => void;
   applyActions: (actions: Action[]) => void;
   condensed: boolean;
@@ -116,6 +118,7 @@ export const PlaybackControls: React.FC<PlaybackControlsProps> = ({
   appMode,
   setAppMode,
   mechanism,
+  shownSimulation,
   updateMetadata,
   applyActions,
   condensed,
@@ -386,45 +389,39 @@ export const PlaybackControls: React.FC<PlaybackControlsProps> = ({
         }}
       >
         <PhysicsToggle
-          on={mechanism.simulation.gravity}
+          on={shownSimulation.gravity}
           Icon={KeyboardDoubleArrowDown}
-          tooltip={t(
-            mechanism.simulation.gravity ? "gravity_on" : "gravity_off",
-          )}
+          tooltip={t(shownSimulation.gravity ? "gravity_on" : "gravity_off")}
           onToggle={() =>
             applyActions([
-              { type: "SetGravity", enabled: !mechanism.simulation.gravity },
+              { type: "SetGravity", enabled: !shownSimulation.gravity },
             ])
           }
         />
         <PhysicsToggle
-          on={mechanism.simulation.collisions}
+          on={shownSimulation.collisions}
           Icon={JoinInner}
           tooltip={t(
-            mechanism.simulation.collisions
-              ? "collisions_on"
-              : "collisions_off",
+            shownSimulation.collisions ? "collisions_on" : "collisions_off",
           )}
           onToggle={() =>
             applyActions([
               {
                 type: "SetCollisions",
-                enabled: !mechanism.simulation.collisions,
+                enabled: !shownSimulation.collisions,
               },
             ])
           }
         />
         <PhysicsToggle
-          on={mechanism.simulation.floor.enabled}
+          on={shownSimulation.floor.enabled}
           Icon={HorizontalRule}
-          tooltip={t(
-            mechanism.simulation.floor.enabled ? "floor_on" : "floor_off",
-          )}
+          tooltip={t(shownSimulation.floor.enabled ? "floor_on" : "floor_off")}
           onToggle={() =>
             applyActions([
               {
                 type: "SetFloorEnabled",
-                enabled: !mechanism.simulation.floor.enabled,
+                enabled: !shownSimulation.floor.enabled,
               },
             ])
           }

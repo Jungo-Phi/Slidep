@@ -49,13 +49,19 @@ interface SimulationTimelineProps {
   timelineTrackRef: React.RefObject<HTMLDivElement | null>;
 }
 
-/** The floating playback rail: elapsed/total time, seekable track, recording halo. */
+/**
+ * The playback rail: elapsed/total time, seekable track, recording halo.
+ *
+ * Meant as the second row of the top bar, across the whole window, and mounted in every mode so that entering a simulation never shifts the layout.
+ * In edition it stays in place but inert: an empty rail, with no head that would read as a recording of zero length.
+ */
 export const SimulationTimeline: React.FC<SimulationTimelineProps> = ({
   appMode,
   runtimeState,
   timeline,
   timelineTrackRef,
 }) => {
+  const disabled = appMode === "edition";
   const [timelineHovered, setTimelineHovered] = useState(false);
   const [timelineDragging, setTimelineDragging] = useState(false);
   /**
@@ -74,11 +80,13 @@ export const SimulationTimeline: React.FC<SimulationTimelineProps> = ({
   const events = React.useMemo((): TimelineEvent[] => {
     // Belt contact is tracked by both engines (see `SnapshotLayout`), so this reads whichever mode is active.
     // Dead points stay kinematic-only below: a dead point is a mobility singularity under an imposed-position motor, which dynamic mode has no equivalent of.
-    const beltMarks = belt_events(runtimeState.simulationSnapshots).map((event) => ({
-      t: event.t,
-      kind: "belt" as const,
-      label: t(event.kind === "detach" ? "belt_detach" : "belt_reattach"),
-    }));
+    const beltMarks = belt_events(runtimeState.simulationSnapshots).map(
+      (event) => ({
+        t: event.t,
+        kind: "belt" as const,
+        label: t(event.kind === "detach" ? "belt_detach" : "belt_reattach"),
+      }),
+    );
     if (appMode !== "kinematic") return beltMarks;
     // Narrowed by the check above: only a kinematic run fills `simulationSnapshots` while that mode is active.
     const snapshots = runtimeState.simulationSnapshots as KinematicSnapshot[];
@@ -88,9 +96,7 @@ export const SimulationTimeline: React.FC<SimulationTimelineProps> = ({
         t: point.t,
         kind: "dead-point" as const,
         label: t(
-          point.kind === "blocked"
-            ? "dead_point"
-            : "dead_point_released",
+          point.kind === "blocked" ? "dead_point" : "dead_point_released",
         ),
       })),
     ];
@@ -120,7 +126,11 @@ export const SimulationTimeline: React.FC<SimulationTimelineProps> = ({
         if (!last.labels.includes(event.label)) last.labels.push(event.label);
         continue;
       }
-      merged.push({ t: event.t, kinds: new Set([event.kind]), labels: [event.label] });
+      merged.push({
+        t: event.t,
+        kinds: new Set([event.kind]),
+        labels: [event.label],
+      });
     }
     return merged;
   }, [events, timeline.duration]);
@@ -128,40 +138,45 @@ export const SimulationTimeline: React.FC<SimulationTimelineProps> = ({
   return (
     <Box
       sx={{
-        position: "absolute",
-        left: "50%",
-        top: 8,
-        transform: "translateX(-50%)",
-        zIndex: 1000,
         display: "flex",
         alignItems: "center",
-        gap: 1,
-        backgroundColor: "background.toolbar",
-        borderRadius: 999,
-        boxShadow: 3,
-        px: 1.5,
-        width: "min(560px, 60vw)",
-        height: 28,
+        gap: 1.5,
+        pl: 1,
+        pr: 1.5,
+        height: 24,
+        // The same rule as the top bar's own dividers: it splits the bar in two rows without cutting the bar off.
+        borderTop: "1px solid",
+        borderColor: "dividers.toolbar",
       }}
     >
-      {/* Temps courant / durée enregistrée. Chiffres tabulaires et
-          largeur réservée : le libellé ne doit pas pousser le rail
-          à chaque image. Aligné à gauche, pour que la marge de
-          réserve tombe côté rail plutôt que contre le bord. */}
       <Typography
         variant="caption"
         sx={{
           fontVariantNumeric: "tabular-nums",
           fontSize: "0.68rem",
           color: "text.secondary",
+          opacity: disabled ? 0.5 : 1,
           flexShrink: 0,
-          minWidth: timeline.duration < 60 ? "11ch" : "13.5ch",
-          textAlign: "left",
           lineHeight: 1,
         }}
       >
-        <Box component="span" sx={{ color: "text.primary", fontWeight: 700 }}>
-          {format_sim_time(runtimeState.time)}
+        {/* The current time is sized on a hidden copy of the duration, which it never exceeds: the label only widens when the duration's format gains a character, never while replaying.
+            Right-aligned, so the " / duration" part stays still. */}
+        <Box
+          component="span"
+          sx={{
+            display: "inline-grid",
+            justifyItems: "end",
+            fontWeight: 700,
+            "& > *": { gridArea: "1 / 1" },
+          }}
+        >
+          <Box component="span" aria-hidden sx={{ visibility: "hidden" }}>
+            {format_sim_time(timeline.duration)}
+          </Box>
+          <Box component="span" sx={{ color: "text.primary" }}>
+            {format_sim_time(runtimeState.time)}
+          </Box>
         </Box>
         <Box component="span" sx={{ opacity: 0.55 }}>
           {` / ${format_sim_time(timeline.duration)}`}
@@ -176,7 +191,7 @@ export const SimulationTimeline: React.FC<SimulationTimelineProps> = ({
           display: "flex",
           alignItems: "center",
           position: "relative",
-          cursor: "pointer",
+          cursor: disabled ? "default" : "pointer",
         }}
         onMouseEnter={() => setTimelineHovered(true)}
         onMouseLeave={() => {
@@ -185,6 +200,7 @@ export const SimulationTimeline: React.FC<SimulationTimelineProps> = ({
           setMarkHovered(false);
         }}
         onMouseDown={(e) => {
+          if (disabled) return;
           e.preventDefault();
           setTimelineDragging(true);
           const rect = timelineTrackRef.current!.getBoundingClientRect();
@@ -205,7 +221,7 @@ export const SimulationTimeline: React.FC<SimulationTimelineProps> = ({
                 time: t,
                 isPlaying: false,
                 // Dropped ON the end is not scrubbing: playing from there extends the recording instead of replaying nothing.
-                scrubbed: !at_recording_end(prev.simulationSnapshots,t),
+                scrubbed: !at_recording_end(prev.simulationSnapshots, t),
               };
             });
           };
@@ -220,7 +236,6 @@ export const SimulationTimeline: React.FC<SimulationTimelineProps> = ({
           document.addEventListener("mouseup", onUp);
         }}
       >
-        {/* Rail */}
         <Box
           sx={{
             position: "absolute",
@@ -229,112 +244,118 @@ export const SimulationTimeline: React.FC<SimulationTimelineProps> = ({
             height: 4,
             borderRadius: 2,
             backgroundColor: "action.hover",
+            opacity: disabled ? 0.6 : 1,
           }}
         />
-        {/* Fill jusqu'au curseur */}
-        <Box
-          sx={{
-            position: "absolute",
-            left: 0,
-            height: 5,
-            borderRadius: 3,
-            backgroundColor: "primary.main",
-            width: "var(--playhead, 0%)",
-          }}
-        />
-        {/* Where a belt changed pulleys. Sitting ON the rail rather than beside it: the
-            mark states something about that instant of the recording, and reading it
-            anywhere but on the time axis would make it a legend to decipher. Clicking one
-            lands exactly on its frame, which dragging the rail cannot do. */}
-        {marks.map((mark) => (
-          <Tooltip
-            key={mark.t}
-            placement="bottom"
-            // Held back while scrubbing: the pointer is then following the head, not pointing at what it happens to pass over.
-            disableHoverListener={timelineDragging}
-            title={`${format_sim_time(mark.t)} · ${mark.labels.join(" · ")}`}
-          >
-            <Box
-              onMouseEnter={() => setMarkHovered(true)}
-              onMouseLeave={() => setMarkHovered(false)}
-              onMouseDown={(e) => {
-                // The rail seeks from the pointer's x; this knows the exact instant.
-                e.stopPropagation();
-                e.preventDefault();
-                setRuntimeState((prev) => ({
-                  ...prev,
-                  time: mark.t,
-                  isPlaying: false,
-                  scrubbed: !at_recording_end(prev.simulationSnapshots,mark.t),
-                }));
-              }}
-              sx={{
-                position: "absolute",
-                top: "50%",
-                left: `${(mark.t / timeline.duration) * 100}%`,
-                transform: "translate(-50%, -50%)",
-                width: 3,
-                height: 12,
-                borderRadius: 1.5,
-                cursor: "pointer",
-                backgroundColor: MARK_COLOR[dominant_kind(mark.kinds)],
-                // Widened on hover rather than moved or recoloured: the mark must stay exactly where its instant is, and a 3 px target is hard to hit.
-                "&::before": {
-                  content: '""',
-                  position: "absolute",
-                  inset: "-4px -6px",
-                },
-                "&:hover": { transform: "translate(-50%, -50%) scaleX(1.8)" },
-              }}
-            />
-          </Tooltip>
-        ))}
-
-        {/* Dot */}
-        <Tooltip
-          title={format_sim_time(runtimeState.time)}
-          placement="bottom"
-          open={(timelineHovered && !markHovered) || timelineDragging}
-        >
+        {!disabled && (
           <Box
             sx={{
               position: "absolute",
-              top: "50%",
-              left: "var(--playhead, 0%)",
-              transform: `translate(-50%, -50%) scale(${
-                !timeline.recording && (timelineHovered || timelineDragging)
-                  ? 1.3
-                  : 1
-              })`,
-              width: 12,
-              height: 12,
-              borderRadius: "50%",
-              backgroundColor: timeline.recording
-                ? "primary.contrastText"
-                : "primary.main",
-              border: "2px solid",
-              borderColor: "primary.main",
-              boxShadow: (t) =>
-                `0 1px 4px ${alpha(t.palette.common.black, 0.3)}`,
-              pointerEvents: "none",
-              "&::after": timeline.recording
-                ? {
-                    content: '""',
-                    position: "absolute",
-                    inset: -2,
-                    borderRadius: "50%",
-                    border: "2px solid",
-                    borderColor: "primary.main",
-                    animation: "slidepRecHalo 1.1s ease-out infinite",
-                  }
-                : undefined,
-              "@keyframes slidepRecHalo": {
-                "0%": { transform: "scale(1)", opacity: 0.8 },
-                "100%": { transform: "scale(2.8)", opacity: 0 },
-              },
+              left: 0,
+              height: 5,
+              borderRadius: 3,
+              backgroundColor: "primary.main",
+              width: "var(--playhead, 0%)",
             }}
           />
-        </Tooltip>
+        )}
+        {/* Where something happened in the recording.
+            Sitting ON the rail rather than beside it: the mark states something about that instant, and reading it anywhere but on the time axis would make it a legend to decipher.
+            Clicking one lands exactly on its frame, which dragging the rail cannot do. */}
+        {!disabled &&
+          marks.map((mark) => (
+            <Tooltip
+              key={mark.t}
+              placement="bottom"
+              // Held back while scrubbing: the pointer is then following the head, not pointing at what it happens to pass over.
+              disableHoverListener={timelineDragging}
+              title={`${format_sim_time(mark.t)} · ${mark.labels.join(" · ")}`}
+            >
+              <Box
+                onMouseEnter={() => setMarkHovered(true)}
+                onMouseLeave={() => setMarkHovered(false)}
+                onMouseDown={(e) => {
+                  // The rail seeks from the pointer's x; this knows the exact instant.
+                  e.stopPropagation();
+                  e.preventDefault();
+                  setRuntimeState((prev) => ({
+                    ...prev,
+                    time: mark.t,
+                    isPlaying: false,
+                    scrubbed: !at_recording_end(
+                      prev.simulationSnapshots,
+                      mark.t,
+                    ),
+                  }));
+                }}
+                sx={{
+                  position: "absolute",
+                  top: "50%",
+                  left: `${(mark.t / timeline.duration) * 100}%`,
+                  transform: "translate(-50%, -50%)",
+                  width: 3,
+                  height: 12,
+                  borderRadius: 1.5,
+                  cursor: "pointer",
+                  backgroundColor: MARK_COLOR[dominant_kind(mark.kinds)],
+                  // Widened on hover rather than moved or recoloured: the mark must stay exactly where its instant is, and a 3 px target is hard to hit.
+                  "&::before": {
+                    content: '""',
+                    position: "absolute",
+                    inset: "-4px -6px",
+                  },
+                  "&:hover": { transform: "translate(-50%, -50%) scaleX(1.8)" },
+                }}
+              />
+            </Tooltip>
+          ))}
+
+        {!disabled && (
+          <Tooltip
+            title={format_sim_time(runtimeState.time)}
+            placement="bottom"
+            open={(timelineHovered && !markHovered) || timelineDragging}
+          >
+            <Box
+              sx={{
+                position: "absolute",
+                top: "50%",
+                left: "var(--playhead, 0%)",
+                transform: `translate(-50%, -50%) scale(${
+                  !timeline.recording && (timelineHovered || timelineDragging)
+                    ? 1.3
+                    : 1
+                })`,
+                width: 12,
+                height: 12,
+                borderRadius: "50%",
+                backgroundColor: timeline.recording
+                  ? "primary.contrastText"
+                  : "primary.main",
+                border: "2px solid",
+                borderColor: "primary.main",
+                boxShadow: (t) =>
+                  `0 1px 4px ${alpha(t.palette.common.black, 0.3)}`,
+                pointerEvents: "none",
+                "&::after": timeline.recording
+                  ? {
+                      content: '""',
+                      position: "absolute",
+                      inset: -2,
+                      borderRadius: "50%",
+                      border: "2px solid",
+                      borderColor: "primary.main",
+                      animation: "slidepRecHalo 1.1s ease-out infinite",
+                    }
+                  : undefined,
+                "@keyframes slidepRecHalo": {
+                  "0%": { transform: "scale(1)", opacity: 0.8 },
+                  "100%": { transform: "scale(2.8)", opacity: 0 },
+                },
+              }}
+            />
+          </Tooltip>
+        )}
       </Box>
 
       <Tooltip title={t("export_animation")}>
@@ -343,7 +364,7 @@ export const SimulationTimeline: React.FC<SimulationTimelineProps> = ({
             size="small"
             color="inherit"
             disabled
-            sx={{ p: 0.25, flexShrink: 0 }}
+            sx={{ pl: 0.25, pr: 0, flexShrink: 0 }}
           >
             <Gif sx={{ fontSize: 18 }} />
           </IconButton>

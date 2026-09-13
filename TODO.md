@@ -10,6 +10,7 @@
 
 **ElementMeasures -> SelectionInspector**
 
+- Placer les éléments du SelectionInspector dans le même ordre et disposition que dans l'onglet "élément"
 - Nettoyer les marges et nettoyer SelectionInspector
 
 - Afficher les valeurs à jour dans l'onglet "éléments"
@@ -27,7 +28,6 @@
 
 ---
 
-- En dessous de 0.1s, on devrait afficher les centièmes de secondes
 - N'importe quel changement d'étât (ex. CTRL+Z, raccourcis) devrait faire fermer un menu ouvert
 - Mieux gérer rho=0 : Interdire rho=0 ? Ne remplacer les masses que si elles sont libres ?
 - Le parsing pour la masse volumique est nul (refuse T/m3, mg/cm3 et des valeurs trop petites). Est-ce aussi le cas ailleur ?
@@ -68,10 +68,6 @@
 - Statique : Palan
 - Cinématique : Jansen
 - Dynamique : Horloge à pendule
-
-**Hot-reload !!!**
-
-- Que doit-il se passer quand on change une valeur en cours de simualtion (hot-reload), par exemple une masse, puis qu'on reviens en arrière quand sa valeur était différente ? Devrait-on afficher la finale (sockée actuellement), ou la valeur correspondante au temps t de la simulation ? Et quand on quitte la simulation, est-ce qu'on devrait rependre la valeur finale, ou celle affichée au moment t ?
 
 **Priorités sur le plan général**
 
@@ -125,7 +121,6 @@
 
 - 🤔 Qu'est-ce qu'on fait pour afficher les hyperstatismes en dynamique (contraintes) ?
 - 🤔 Différencier "Forces de réaction" et "Efforts internes"
-- 🔨 Mettre à jour le hover en simulation quand le mécanisme bouge sans grab
 - 🚨 En cinématique, quand l'alignement n'est juste pas parfait (alors que le défaut peut ne même pas s'afficher), le mécanisme bouge tout seul (voir "Le mécanisme qui bouge tout seul.slidep").
 - 🔨 Donner a tous les ressorts en cinématique la même "élasticité".
 - Passer la simulation en Rust WASM pour accélérer ?
@@ -211,6 +206,7 @@
 - 🔨 Afficher le point grabbé en simulation
 - 🔨 Theme transition : certaines couleurs changent instantanément (grille + autres éléments spéciaux du canvas)
 - 🔨 Les couleurs des selected loads ne sont pas assez différenciée
+- 🔨 Les couleurs de la top-bar et du canvas ne sont pas assez différenciée
 - 🔨 Ajouter un délais (2s) avant d'afficher "mécanisme(s) exporté(s)"
 - 🔨 Dessiner un join avec le ground à PlacingGround (quand c'est approprié)
 - 🆕 Afficher des syboles au hover des numberInput start, end, longueur et angle
@@ -226,7 +222,6 @@
 
 **Panneaux et UI**
 
-- 🤔 On confond toujours les boutons "reset" et "retour au départ" (et un peu de changement de vitesse de simulation). En déplacer vers la timeline ?
 - 🔨 OnCanvasValueEditor trop large avec des points "."
 - 🆕 Afficher le ratio avec une autre gear dans les connections de l'élément
 - 🔨 Donner des couleurs aux tags
@@ -316,7 +311,7 @@
 - 🆕 export CSV / image des graphiques
 - 🤔 pin graphique en grand ?
 - 🆕 Mesures d'accélération, jerk ?
-- 🆕 zoom graphique (horizontal = dans le temps)
+- 🆕 zoom graphique (horizontal = dans le temps, et scaling vertical qui suit)
 
 ### À faire quand tout le reste est fait
 

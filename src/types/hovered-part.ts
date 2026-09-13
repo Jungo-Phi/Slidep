@@ -83,8 +83,36 @@ export function is_hovered(part: HoveredPart, id: ID): boolean {
   return names_element(part) && part.id === id;
 }
 
-/** Whether the hover is a load's displayed value (magnitude), a click-to-edit
- * target distinct from its body/handles. */
+/**
+ * Whether two hovers name the same target, wherever on it the cursor sits.
+ * What a highlight, a cursor or a click answers to changes only when this is false.
+ */
+export function same_hover_target(a: HoveredPart, b: HoveredPart): boolean {
+  if (a.type !== b.type) return false;
+  if (names_element(a) && names_element(b)) {
+    if (a.id !== b.id || a.deleting !== b.deleting) return false;
+  }
+  const detail = (part: HoveredPart) => ({
+    part: "part" in part ? part.part : undefined,
+    section: "section" in part ? part.section : undefined,
+    beamBodyHover: "beamBodyHover" in part ? part.beamBodyHover : undefined,
+    rejected: "rejected" in part ? part.rejected : undefined,
+    reading: "reading" in part ? part.reading : undefined,
+  });
+  const da = detail(a);
+  const db = detail(b);
+  return (
+    da.part === db.part &&
+    da.section === db.section &&
+    da.beamBodyHover === db.beamBodyHover &&
+    da.rejected === db.rejected &&
+    da.reading?.elementID === db.reading?.elementID &&
+    da.reading?.kind === db.reading?.kind &&
+    da.reading?.which === db.reading?.which
+  );
+}
+
+/** Whether the hover is a load's displayed value (magnitude), a click-to-edit target distinct from its body/handles. */
 export function is_load_value_label(
   part: HoveredPart,
 ): part is Extract<
