@@ -1,6 +1,6 @@
 import { MechanicalElement } from "../types/element";
 import { MaterialDef, ProfileDef } from "../types/material";
-import { gear_mass } from "./gear-mass";
+import { gear_inertia, gear_mass } from "./gear-mass";
 import { beam_linear_mass } from "./section-properties";
 
 /**
@@ -41,4 +41,33 @@ export function element_carries_mass(element: MechanicalElement): boolean {
     element.type === "gear" ||
     element.type === "beam"
   );
+}
+
+/**
+ * Whether the element is a body that turns as a whole, carrying a moment of inertia about its centre of mass on top of its mass.
+ * A mass element is a point: its inertia is a force alone.
+ */
+export function element_has_rotational_inertia(element: MechanicalElement): boolean {
+  return element.type === "gear" || element.type === "beam";
+}
+
+/**
+ * The element's moment of inertia about its own centre of mass, in kg·m²: the same rod `mL²/12` and disc the force balance reads.
+ * `undefined` wherever `element_has_rotational_inertia` says there is none.
+ */
+export function element_centroidal_inertia(
+  element: MechanicalElement,
+  materials: MaterialDef[],
+  profiles: ProfileDef[],
+): number | undefined {
+  switch (element.type) {
+    case "gear":
+      return gear_inertia(element.surfaceMass, element.radius);
+    case "beam": {
+      const length = element.positionStart.distance_to(element.positionEnd);
+      return (element_mass(element, materials, profiles) * length * length) / 12;
+    }
+    default:
+      return undefined;
+  }
 }

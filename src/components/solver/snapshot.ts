@@ -193,3 +193,14 @@ export function snapshot_angle_velocity(
   const v = snapshot.angleVelocities[i];
   return Number.isNaN(v) ? undefined : v;
 }
+
+/** The angular acceleration (rad/s²) recorded for `key` in a dynamic-mode snapshot — see `snapshot_angle`. */
+export function snapshot_angle_acceleration(
+  snapshot: DynamicSnapshot,
+  key: string,
+): number | undefined {
+  const i = snapshot.layout.angleIndex.get(key);
+  if (i === undefined) return undefined;
+  const a = snapshot.angleAccelerations[i];
+  return Number.isNaN(a) ? undefined : a;
+}

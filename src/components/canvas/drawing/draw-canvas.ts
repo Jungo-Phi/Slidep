@@ -59,7 +59,8 @@ type HoveredReadings = {
 /**
  * Whichever reading the hover names, wherever that hover came from: the cursor or a row of the panel pointing at one.
  * Not hit-tested here: a reading and an element are the same register, so one function ranks them both (`get_hovered_part`), and this only reads what it answered.
- * A balance row names a support, and a support carries both a force and a moment, so either column lights up the pair rather than its own half alone.
+ * A balance row lights its force from either column, and a support's own couple only from ΣM, the one line that couple enters.
+ * The element a weight or support term belongs to is lit even where no reading of it is on screen: `MechanicalCanvas` draws that reading itself.
  */
 function hovered_readings(
   hoveredPart: HoveredPart,
@@ -80,10 +81,18 @@ function hovered_readings(
       : undefined);
   const moment =
     moments.find(names_reading) ??
-    (hoveredBalanceTerm
+    (hoveredBalanceTerm?.quantity === "moment"
       ? moments.find((m) => m.id === hoveredBalanceTerm.term.id)
       : undefined);
-  return { arrow, moment, elementID: moment?.elementID ?? arrow?.elementID };
+  const termElementID =
+    hoveredBalanceTerm && hoveredBalanceTerm.term.kind !== "load"
+      ? hoveredBalanceTerm.term.elementID
+      : undefined;
+  return {
+    arrow,
+    moment,
+    elementID: moment?.elementID ?? arrow?.elementID ?? termElementID,
+  };
 }
 
 /**

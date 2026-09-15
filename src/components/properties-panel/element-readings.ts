@@ -1,4 +1,4 @@
-import { ID, MechanicalElement, OverlayKind, ProbeMetric } from "../../types";
+import { MechanicalElement, OverlayKind, ProbeMetric } from "../../types";
 import { DynamicSnapshot } from "../../types/runtime-state";
 import {
   PHYSICS_OVERLAY_COLOR,
@@ -7,11 +7,17 @@ import {
 import { GRAVITY } from "../../constants/physics-specs";
 import { icon, icon_tinted } from "../element-palette/iconDataUris";
 import { available_overlays, is_node_element } from "../../utils/element-queries";
-import { element_carries_mass, element_mass } from "../../utils/element-mass";
+import {
+  element_carries_mass,
+  element_centroidal_inertia,
+  element_has_rotational_inertia,
+  element_mass,
+} from "../../utils/element-mass";
 import {
   MetricSample,
   ReactionPoint,
   element_acceleration,
+  element_angular_acceleration,
   element_reactions,
 } from "../solver/recording/probe-series";
 import { probe_metric_available } from "../canvas/ProbeMetricSelector";
@@ -100,14 +106,20 @@ function reaction_metrics(which: ReactionPoint): ProbeMetric[] {
 }
 
 /**
- * The reading a canvas click or a panel row names.
+ * The reading a canvas click or a panel row names, on `element`, the element it is read from.
  * Every kind but the reactions is a `ProbeMetric` of its own name, so only they need `which` to say which point of the element they read at.
+ * A body that turns as a whole reads its inertia as a force and a couple together, the way a reaction does; a point mass has no couple to read.
  */
-export function reading_from_focus(focus: FocusedOverlay): Reading {
+export function reading_from_focus(
+  focus: FocusedOverlay,
+  element: MechanicalElement,
+): Reading {
   const metrics: ProbeMetric[] =
     focus.kind === "reaction-support" || focus.kind === "reaction-internal"
       ? reaction_metrics(focus.which ?? "node")
-      : [focus.kind];
+      : focus.kind === "inertia" && element_has_rotational_inertia(element)
+        ? ["inertia", "inertia-moment"]
+        : [focus.kind];
   return {
     focus,
     metrics,
@@ -117,10 +129,11 @@ export function reading_from_focus(focus: FocusedOverlay): Reading {
 }
 
 const reading = (
-  elementID: ID,
+  element: MechanicalElement,
   kind: PhysicsOverlayKind,
   which?: ReactionPoint,
-): Reading => reading_from_focus({ elementID, kind, which });
+): Reading =>
+  reading_from_focus({ elementID: element.id, kind, which }, element);
 
 /** Whether two readings name the same thing — a canvas click and a panel row meeting on one row. */
 export function same_reading(a: FocusedOverlay, b: FocusedOverlay): boolean {
@@ -149,7 +162,7 @@ export function element_reading_groups(
       layer: { kind: "element-overlay", overlay },
       icon: reading_icon(kind),
       color: PHYSICS_OVERLAY_COLOR[kind],
-      readings: [reading(element.id, kind)],
+      readings: [reading(element, kind)],
     });
   };
 
@@ -187,7 +200,7 @@ export function element_reading_groups(
       };
       groups.push(group);
     }
-    group.readings.push(reading(element.id, kind, r.which));
+    group.readings.push(reading(element, kind, r.which));
   }
   return groups;
 }
@@ -216,12 +229,12 @@ export function inspector_value_metrics(
 }
 
 /**
- * The value of a weight or inertia reading, the two no probe series carries: each is a mass times something, so each needs the catalogue that mass is read from (`get_dynamic_metric_at` answers every other reading).
- * `undefined` where the quantity does not exist right now — gravity off, or no snapshot to read an acceleration from.
+ * The value of a weight or inertia reading, the ones no probe series carries: each is a mass, or a moment of inertia, times something, so each needs the catalogue that mass is read from (`get_dynamic_metric_at` answers every other reading).
+ * `undefined` where the quantity does not exist right now: gravity off, no snapshot to read an acceleration from, or a point mass asked for a couple.
  */
 export function mass_reading_sample(
   element: MechanicalElement,
-  metric: "weight" | "inertia",
+  metric: "weight" | "inertia" | "inertia-moment",
   snapshot: DynamicSnapshot | undefined,
   gravityOn: boolean,
   materials: MaterialDef[],
@@ -230,6 +243,19 @@ export function mass_reading_sample(
   if (!element_carries_mass(element)) return undefined;
   const mass = element_mass(element, materials, profiles);
   if (mass <= 0) return undefined;
+  if (metric === "inertia-moment") {
+    const inertia = element_centroidal_inertia(element, materials, profiles);
+    const alpha = snapshot
+      ? element_angular_acceleration(element, snapshot)
+      : undefined;
+    if (inertia === undefined || alpha === undefined) return undefined;
+    // The solver turns counter-clockwise positive; every moment on screen reads clockwise positive.
+    return {
+      metric,
+      unit: "N·m",
+      values: [{ key: "value", value: -inertia * alpha }],
+    };
+  }
   const vector =
     metric === "weight"
       ? gravityOn

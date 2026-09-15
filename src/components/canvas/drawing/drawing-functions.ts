@@ -2357,22 +2357,28 @@ export function draw_overlay_arrow_label(
 }
 
 /**
- * A reaction moment, ready to draw — the couple a rigid (non-rotating) weld's two-point force pair reduces to (see `ElementReaction.moment` in `probe-series.ts`).
- * Only ever a support or internal reaction, like `OverlayArrow` minus its "velocity" case: nothing measures an angular velocity today.
+ * A measured couple, ready to draw: a reaction's own (see `ElementReaction.moment` in `probe-series.ts`), or a body's inertial couple `J_G·α`, the rotation half of its inertia.
  */
 export interface OverlayMoment {
   /** World-space point the arc is centred on — the same point its paired force (if any) is drawn from. */
   at: WorldPoint;
-  /** N·m, in the DATA MODEL's sign convention (positive = clockwise) — `draw_moment`'s own, the opposite of the solver's raw CCW-positive `ElementReaction.moment`, so this is negated once on the way in, at the one place that reads it (`use-simulation-playback.ts`) — the same flip `load-model.ts` already applies for a user-authored `MomentElement`. */
+  /** N·m, in the DATA MODEL's sign convention (positive = clockwise) — `draw_moment`'s own, the opposite of the solver's counter-clockwise one, so it is negated on the way in (`use-simulation-playback.ts`), the same flip `load-model.ts` applies for a user-authored `MomentElement`. */
   torque: number;
-  kind: Extract<PhysicsOverlayKind, "reaction-support" | "reaction-internal">;
+  kind: Extract<
+    PhysicsOverlayKind,
+    "reaction-support" | "reaction-internal" | "inertia"
+  >;
   /** See `OverlayArrow.id` — the same name, on the rotation half of one reading. */
   id?: string;
   /** See `OverlayArrow.elementID` — same owner, same reasoning. */
   elementID?: ID;
   /** See `OverlayArrow.which` — the same disambiguator, on the rotation half of one reading. */
   which?: ReactionPoint;
-  /** World-space, only ever set alongside `elementID`: the owning beam's own direction at this end, pointing away from it along the member. Orients `draw_overlay_moment`'s half-arc so two readings meeting at the same point (different beams, or two ends close together) land on different sides instead of stacking. `undefined` draws the ordinary full-loop glyph. */
+  /**
+   * World-space, the side of `at` the half-arc of `draw_overlay_moment` lands on: along the owning beam for a reaction at its end, away from the paired arrow otherwise.
+   * Keeps two glyphs meeting at one point from stacking.
+   * `undefined` draws the ordinary full-loop glyph.
+   */
   direction?: WorldPoint;
 }
 
@@ -2425,8 +2431,8 @@ function draw_half_moment(
 }
 
 /**
- * Draws one reaction moment, scaled on its own ruler (`stored2screen_moment`) and coloured like `draw_overlay_arrow`'s matching force so the two read as one reading split across a translation and a rotation.
- * A `reaction-internal` reading draws only its own half, oriented along its beam (`draw_half_moment`); a summed `reaction-support` has no single beam to orient by, so it keeps `draw_moment`'s full loop.
+ * Draws one measured couple, scaled on its own ruler (`stored2screen_moment`) and coloured like `draw_overlay_arrow`'s matching force so the two read as one reading split across a translation and a rotation.
+ * A couple with a `direction` draws only its own half there (`draw_half_moment`); one with none keeps `draw_moment`'s full loop.
  * Never labelled itself, same reasoning as `draw_overlay_arrow` — see `draw_overlay_moment_label`.
  * `isSelected` — see `draw_overlay_arrow`'s own.
  */
@@ -2473,9 +2479,9 @@ export interface BalanceMarker {
 }
 
 /**
- * A reading of the force balance that NOTHING on screen already draws — a body's own weight where its overlay arrow is not shown, or one term's moment about the reference point, which never has a glyph of its own.
- * Every other case is pointed at by lighting up the arrow that is already there (`OverlayArrow.id`, `is_load_hovered`) rather than by drawing a second one over it, so what a reader sees stays one mark per quantity.
- * `color` is always the calque's own — the weight overlay's, the one family this ever draws for.
+ * A reading of the force balance that NOTHING on screen already draws — a weight or support reaction whose overlay is not shown, or one term's moment about the reference point, which never has a glyph of its own.
+ * Every other case is pointed at by lighting up the reading that is already there (`OverlayArrow.id`, `is_load_hovered`) rather than by drawing a second one over it, so what a reader sees stays one mark per quantity.
+ * `color` is the term's own family's: the load's, the weight overlay's or the support reactions'.
  * The value stays at standard weight throughout: this marker only ever appears while the panel names it, never while the cursor itself rests on it, so it has no hover state of its own to turn bold for.
  */
 export function draw_balance_marker(
@@ -2516,8 +2522,8 @@ export function draw_balance_marker(
 }
 
 /**
- * The moment balance's own reference-point ring, drawn at `point` — bigger than a pivot's own circle, so a node that happens to sit there is not mistaken for it.
- * Shown while the panel's picker is armed or hovered, whether or not any balance line itself is.
+ * The moment balance's own reference-point cross, drawn at `point` — its arms reach past a pivot's own circle, so it reads as its own mark over a node that happens to sit there.
+ * Shown while the panel's picker is armed or hovered, and while a hovered ΣM term has no moment glyph at that point to mark it already.
  */
 export function draw_moment_balance_marker(
   ctx: CanvasRenderingContext2D,
@@ -2525,17 +2531,21 @@ export function draw_moment_balance_marker(
   point: WorldPoint,
 ) {
   const center = world2screen(point, viewport);
+  const half = DIM.MOMENT_BALANCE_MARKER_HALF_SIZE;
   ctx.save();
   ctx.strokeStyle = PHYSICS_OVERLAY_COLOR["reaction-support"];
   ctx.lineWidth = STROKE_WIDTHS.HOVERED;
   ctx.beginPath();
-  ctx.arc(center.x, center.y, DIM.MOMENT_BALANCE_MARKER_RADIUS, 0, TAU);
+  ctx.moveTo(center.x - half, center.y);
+  ctx.lineTo(center.x + half, center.y);
+  ctx.moveTo(center.x, center.y - half);
+  ctx.lineTo(center.x, center.y + half);
   ctx.stroke();
   ctx.restore();
 }
 
 /**
- * Draws only the value label of a hovered reaction moment, at its own `moment_value_label_position`.
+ * Draws only the value label of a hovered overlay couple, at its own `moment_value_label_position`.
  * Meant to be called once, after every arrow and moment on screen, same reasoning as `draw_overlay_arrow_label`.
  */
 export function draw_overlay_moment_label(

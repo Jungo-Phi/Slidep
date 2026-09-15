@@ -1569,11 +1569,15 @@ export function step_dynamic_simulation(
 
   const outAngles = new Float64Array(angles_length(layout));
   const outAngleVelocities = new Float64Array(layout.angleKeys.length);
+  const outAngleAccelerations = new Float64Array(layout.angleKeys.length);
   for (let i = 0; i < layout.angleKeys.length; i++) {
-    const a = finalResult.angles.get(layout.angleKeys[i]);
+    const key = layout.angleKeys[i];
+    const a = finalResult.angles.get(key);
     outAngles[i] = a === undefined ? NaN : a;
-    const v = angleVelocities.get(layout.angleKeys[i]);
+    const v = angleVelocities.get(key);
     outAngleVelocities[i] = v === undefined ? NaN : v;
+    outAngleAccelerations[i] =
+      dt > 0 ? ((v ?? 0) - (angleVelocitiesBeforeSolve.get(key) ?? 0)) / dt : 0;
   }
   // Then each belt's per-pulley wrap/detach/arrival block, exactly as `step_simulation` writes it — the last substep's `wrapsByBelt`/`arrivalsByBelt`/`disconnectedByBelt` are this frame's converged belt state, kept up to date every substep above.
   layout.belts.forEach((id, r) => {
@@ -1663,6 +1667,7 @@ export function step_dynamic_simulation(
     velocities: outVelocities,
     accelerations: outAccelerations,
     angleVelocities: outAngleVelocities,
+    angleAccelerations: outAngleAccelerations,
     unsatisfied: finalResult.unsatisfied,
     reactions,
     motorPower,
@@ -1812,6 +1817,7 @@ export function dynamic_snapshot_at(
     velocities: lerp(a.velocities, b.velocities),
     accelerations: lerp(a.accelerations, b.accelerations),
     angleVelocities: lerp(a.angleVelocities, b.angleVelocities),
+    angleAccelerations: lerp(a.angleAccelerations, b.angleAccelerations),
     // Diagnostics belong to a state the solver actually produced.
     unsatisfied: a.unsatisfied,
     reactions: a.reactions,

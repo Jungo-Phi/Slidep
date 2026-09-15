@@ -5,6 +5,8 @@ import { Action } from "../../../types";
 import { ProbeMetricSelector } from "../../canvas/ProbeMetricSelector";
 import { icon } from "../../element-palette/iconDataUris";
 import { t } from "../../../i18n";
+import { useDismissOnShortcut } from "../../common/dismiss-popups";
+import { is_probes_only_bundle } from "../../mechanism/action-kind";
 
 /**
  * The probe badge as a button: opens the list of what this element can measure, ticked on and off.
@@ -17,6 +19,11 @@ export const ProbeMetricsButton: React.FC<{
   size?: number;
 }> = ({ element, applyActions, size = 28 }) => {
   const [anchorEl, setAnchorEl] = React.useState<HTMLElement | null>(null);
+  useDismissOnShortcut(
+    !!anchorEl,
+    () => setAnchorEl(null),
+    (replayed) => is_probes_only_bundle(replayed, element.id),
+  );
   return (
     <>
       <Tooltip title={t("choose_metrics")}>

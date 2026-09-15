@@ -126,8 +126,8 @@ export const DIM = {
   // Pivot
   PIVOT_OUTER_RADIUS: 9,
   PIVOT_INNER_RADIUS: 4,
-  /** The moment balance's own reference-point ring — a bit bigger than a pivot, so it reads as its own mark rather than as a node that happens to sit there. */
-  MOMENT_BALANCE_MARKER_RADIUS: 13,
+  /** Half the span of each arm of the moment balance's reference-point cross — reaching past a pivot, so it reads as its own mark rather than as a node that happens to sit there. */
+  MOMENT_BALANCE_MARKER_HALF_SIZE: 13,
   // Motor
   MOTOR_RADIUS: 18,
   MOTOR_CORNER_RADIUS: 2.5,

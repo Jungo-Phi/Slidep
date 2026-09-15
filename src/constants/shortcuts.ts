@@ -84,6 +84,17 @@ export const TOOL_STATE_BY_KEY: Readonly<Record<string, ToolStateType>> =
     return byKey;
   })();
 
+/**
+ * Whether a key press is one the canvas acts on — a tool key, undo/redo, delete or play/pause — rather than a key a focused menu navigates with.
+ * Keep it in step with the keys `canvasStateReducer` and `MechanicalCanvas` handle.
+ */
+export function is_canvas_shortcut(key: string, ctrlKey: boolean): boolean {
+  if (key === " " || key === "Delete") return true;
+  const lowerKey = key.toLowerCase();
+  if (ctrlKey && (lowerKey === "z" || lowerKey === "y")) return true;
+  return !!TOOL_STATE_BY_KEY[lowerKey];
+}
+
 /** A payload-free state as a `CanvasState`, which TypeScript cannot distribute on its own. */
 export const tool_state = (stateType: ToolStateType): CanvasState =>
   ({ type: stateType }) as CanvasState;

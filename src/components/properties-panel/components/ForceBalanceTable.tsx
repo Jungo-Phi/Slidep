@@ -12,6 +12,7 @@ import { GpsFixed, Visibility, VisibilityOff } from "@mui/icons-material";
 import { WorldPoint } from "../../../types";
 import { Vector } from "../../common/Vector";
 import VectorInput from "./VectorInput";
+import { useDismissOnShortcut } from "../../common/dismiss-popups";
 import { BalanceTerm, ForceBalance } from "../../solver/analysis/force-balance";
 import { OVERLAY_ICON_SIZE, reading_icon } from "../element-readings";
 import {
@@ -190,6 +191,9 @@ const ForceBalanceTable: React.FC<ForceBalanceTableProps> = ({
 }) => {
   const [pointEditorAnchor, setPointEditorAnchor] =
     React.useState<HTMLElement | null>(null);
+  useDismissOnShortcut(pointEditorAnchor !== null, () =>
+    setPointEditorAnchor(null),
+  );
   const { actions, sum, sumMoment, inertia, inertiaMoment, gap, gapMoment } =
     balance;
   const referencePointUnit = display_unit(

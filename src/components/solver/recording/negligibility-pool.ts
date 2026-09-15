@@ -197,6 +197,7 @@ export function pool_key_for_metric(
     case "moment":
     case "moment-start":
     case "moment-end":
+    case "inertia-moment":
       return "moment";
   }
 }
@@ -225,6 +226,7 @@ export function quantity_kind_for_metric(metric: ProbeMetric): QuantityKind {
     case "moment":
     case "moment-start":
     case "moment-end":
+    case "inertia-moment":
       return MOMENT;
   }
 }

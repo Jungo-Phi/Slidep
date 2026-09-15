@@ -120,7 +120,7 @@ export const SelectionInspector: React.FC<SelectionInspectorProps> = ({
     element: MechanicalElement,
     metric: ProbeMetric,
   ): MetricSample | undefined =>
-    metric === "weight" || metric === "inertia"
+    metric === "weight" || metric === "inertia" || metric === "inertia-moment"
       ? mass_reading_sample(
           shown_of(element),
           metric,

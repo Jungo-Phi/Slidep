@@ -37,6 +37,7 @@ export function metric_shape(metric: ProbeMetric): MetricShape {
     case "moment":
     case "moment-start":
     case "moment-end":
+    case "inertia-moment":
       return "turn";
   }
 }

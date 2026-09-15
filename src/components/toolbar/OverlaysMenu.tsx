@@ -249,7 +249,7 @@ export const OverlaysMenu: React.FC<OverlaysMenuProps> = ({
               justifyContent: "space-between",
               width: "100%",
               pl: 1.5,
-              pr: 4,
+              pr: 3.9,
               py: 0.5,
               border: 0,
               cursor: "pointer",

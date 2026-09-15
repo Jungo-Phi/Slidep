@@ -71,6 +71,8 @@ import ProbeChart, {
   PROBE_ELEMENT_COLORS,
 } from "../components/ProbeChart";
 import ForceBalanceTable from "../components/ForceBalanceTable";
+import { useDismissOnShortcut } from "../../common/dismiss-popups";
+import { is_probes_only_bundle } from "../../mechanism/action-kind";
 import {
   BalanceTerm,
   HoveredBalanceTerm,
@@ -800,6 +802,12 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
   const menuElement = metricMenu
     ? probedElements.find((el) => el.id === metricMenu.elementID)
     : undefined;
+  useDismissOnShortcut(
+    !!metricMenu && !!menuElement,
+    () => setMetricMenu(null),
+    (replayed) =>
+      !!menuElement && is_probes_only_bundle(replayed, menuElement.id),
+  );
 
   // The superposed view only makes sense with several probed elements; fall back to the per-element view (and its hidden switch) below that.
   const superposed = superpose && probedElements.length >= 2;

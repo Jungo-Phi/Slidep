@@ -23,6 +23,7 @@ function frame(
     velocities: new Float64Array(0),
     accelerations: new Float64Array(0),
     angleVelocities: new Float64Array(0),
+    angleAccelerations: new Float64Array(0),
     energy,
     motorPower,
   };

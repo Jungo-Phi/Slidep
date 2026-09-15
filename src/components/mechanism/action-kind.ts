@@ -1,4 +1,4 @@
-import { Action, UnionElement } from "../../types";
+import { Action, ID, UnionElement } from "../../types";
 
 /**
  * The three classes an edit can fall into during a simulation.
@@ -64,6 +64,15 @@ export const LOAD_VALUE_ACTIONS: Action["type"][] = [
 export const is_observation_only_bundle = (actions: Action[]) =>
   actions.length > 0 &&
   actions.every((a) => OBSERVATION_ACTIONS.includes(a.type));
+
+/** Whether a history entry only ticks `elementID`'s metrics on and off, sealed or not — an undo or redo the canvas metric box on that element stays open through. */
+export const is_probes_only_bundle = (actions: Action[], elementID: ID) =>
+  actions.some((a) => a.type === "SetProbes") &&
+  actions.every(
+    (a) =>
+      a.type === "Blank" ||
+      (a.type === "SetProbes" && a.elementID === elementID),
+  );
 
 export const is_load_value_only_bundle = (actions: Action[]) =>
   actions.length > 0 &&

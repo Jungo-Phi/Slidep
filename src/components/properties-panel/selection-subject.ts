@@ -27,7 +27,7 @@ export function inspected_subject(
     if (element)
       return {
         kind: "reading",
-        reading: reading_from_focus(focusedOverlay),
+        reading: reading_from_focus(focusedOverlay, element),
         element,
       };
   }

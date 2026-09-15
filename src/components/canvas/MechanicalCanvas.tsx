@@ -85,6 +85,9 @@ const VALUE_EDITOR_KIND: Partial<Record<UnionElement["type"], QuantityKind>> = {
   "distributed-force": LOAD_INTENSITY,
 };
 import { OnCanvasProbeMetricSelector } from "./ProbeMetricSelector";
+import { dismiss_popups } from "../common/dismiss-popups";
+import { is_canvas_shortcut } from "../../constants/shortcuts";
+import { is_probes_only_bundle } from "../mechanism/action-kind";
 import {
   draw_axes,
   draw_graduations,
@@ -713,11 +716,19 @@ export const MechanicalCanvas = forwardRef<
       }
 
 
-      // Where the moment balance is taken about — not persistently, only while its picker is doing something: armed, the ring follows the cursor like any other placement preview; merely hovered, it previews the reference already set.
-      // Either way the centre of mass is drawn too, a target of its own, on top of the ring so it is never lost under it.
+      // Where the moment balance is taken about — not persistently, only while something reads against it: the picker armed (the cross follows the cursor like any other placement preview), the picker hovered (it previews the reference already set), or a ΣM term hovered whose moment there is zero.
+      // A term with a moment draws its own glyph centred on that point, which already says where it is.
+      // The centre of mass is a target of the picker only, drawn on top of the cross so it is never lost under it.
       const pickingMomentBalance =
         canvasStateRef.current.type === "PickingMomentBalanceNode";
-      if (pickingMomentBalance || momentBalanceReferenceHoveredRef.current) {
+      const pickerActive =
+        pickingMomentBalance || momentBalanceReferenceHoveredRef.current;
+      const balanceHover = hoveredBalanceTermRef.current;
+      if (
+        pickerActive ||
+        (balanceHover?.quantity === "moment" &&
+          Math.abs(balanceHover.term.moment) <= 1e-9)
+      )
         draw_moment_balance_marker(
           ctx,
           viewport,
@@ -731,6 +742,7 @@ export const MechanicalCanvas = forwardRef<
               ).point
             : momentBalancePointRef.current,
         );
+      if (pickerActive) {
         const centerOfMass = mechanism_center_of_mass(
           mechanismRef.current.mechanicalElements,
           mechanismRef.current.materials,
@@ -740,28 +752,45 @@ export const MechanicalCanvas = forwardRef<
           draw_center_of_mass(ctx, world2screen(centerOfMass, viewport));
       }
 
-      // A body's own weight, in the balance's own colour — never a colour borrowed from another family.
-      // The couple about the moment-balance reference point has no glyph anywhere else on screen, so it always draws while that column is hovered.
-      // The force itself does, wherever the weight overlay already shows it (matched by `id` the same way a support reaction is): the scene lights that arrow up on its own, so it is drawn fresh here only when there is nothing on screen to thicken instead.
-      const balanceHover = hoveredBalanceTermRef.current;
-      if (balanceHover && balanceHover.term.kind === "weight") {
+      // A hovered balance term lights what it is built from: its force from ΣF, its force and own couple from ΣM.
+      // Whatever the overlays already show is lit by the scene itself (matched by `id`), so only what nothing on screen shows is drawn here.
+      // A load is always on screen while there is a balance to read, and lights itself through the hover the panel sets.
+      if (balanceHover) {
         const { term, quantity } = balanceHover;
-        const shownByOverlay = (live?.overlayArrows ?? []).some(
-          (arrow) => arrow.id === term.id,
-        );
-        const color = PHYSICS_OVERLAY_COLOR.weight;
-        if (quantity === "moment")
+        const color =
+          term.kind === "load"
+            ? COLORS.ACCENT
+            : PHYSICS_OVERLAY_COLOR[term.kind === "weight" ? "weight" : "reaction-support"];
+        if (term.kind !== "load") {
+          const forceShown = (live?.overlayArrows ?? []).some(
+            (arrow) => arrow.id === term.id,
+          );
+          const coupleShown = (live?.overlayMoments ?? []).some(
+            (moment) => moment.id === term.id,
+          );
           draw_balance_marker(
             ctx,
             viewport,
-            { at: momentBalancePointRef.current, force: ZERO, couple: term.moment },
+            {
+              at: term.at,
+              force: forceShown ? ZERO : term.force,
+              couple: quantity === "moment" && !coupleShown ? term.couple : 0,
+            },
             color,
           );
-        if (!shownByOverlay)
+        }
+        // Taken at its own point of application, a term's moment is its own couple, already lit there: a second glyph at the reference would only stack on it.
+        const reference = momentBalancePointRef.current;
+        const atOwnPoint =
+          Math.abs(term.couple) > 1e-9 &&
+          world2screen(reference, viewport).distance_to(
+            world2screen(term.at, viewport),
+          ) <= 1;
+        if (quantity === "moment" && !atOwnPoint)
           draw_balance_marker(
             ctx,
             viewport,
-            { at: term.at, force: term.force, couple: 0 },
+            { at: reference, force: ZERO, couple: term.moment },
             color,
           );
       }
@@ -1238,11 +1267,29 @@ export const MechanicalCanvas = forwardRef<
     useEffect(() => {
       const handleGlobalKeyDown = (event: KeyboardEvent) => {
         if (isTypingInInput()) return;
-        if (canvasStateRef.current.type === "PlacingProbeMetrics") {
+        const shortcut = is_canvas_shortcut(event.key, event.ctrlKey);
+        // The entry an undo or redo is about to replay: popups showing only what it edits stay open to show the result.
+        const { history, future } = restingRef.current;
+        const key = event.key.toLowerCase();
+        const replayed = !event.ctrlKey
+          ? undefined
+          : key === "z"
+            ? history[history.length - 1]
+            : key === "y"
+              ? future[future.length - 1]
+              : undefined;
+        const state = canvasStateRef.current;
+        if (state.type === "PlacingProbeMetrics") {
           // Escape must close the popover even when focus has drifted off it (e.g. after Tab) — the local handler on the Paper only catches it while focus is still inside.
-          if (event.key === "Escape") closeProbeMetricsPopover();
-          return;
+          if (event.key === "Escape") {
+            closeProbeMetricsPopover();
+            return;
+          }
+          if (!shortcut) return;
+          if (!replayed || !is_probes_only_bundle(replayed, state.elementID))
+            closeProbeMetricsPopover();
         }
+        if (shortcut) dismiss_popups(replayed);
         if (event.key === " ") {
           event.preventDefault();
           (document.activeElement as HTMLElement | null)?.blur?.();

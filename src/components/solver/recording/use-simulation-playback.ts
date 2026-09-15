@@ -51,12 +51,17 @@ import {
   EMPTY_TRAJECTORY_CACHE,
   TrajectoryCache,
   element_acceleration,
+  element_angular_acceleration,
   element_reactions,
   element_velocity,
   extend_probe_trajectories,
   trajectories_at,
 } from "./probe-series";
-import { element_carries_mass, element_mass } from "../../../utils/element-mass";
+import {
+  element_carries_mass,
+  element_centroidal_inertia,
+  element_mass,
+} from "../../../utils/element-mass";
 import { body_centre } from "../analysis/force-balance";
 import { PROBE_ELEMENT_COLORS } from "../../properties-panel/components/ProbeChart";
 import {
@@ -555,10 +560,26 @@ export function useSimulationPlayback({
                 overlay_shown(el, "inertia") ||
                 is_named_on(el.id, "inertia")
               ) {
-                const a = element_acceleration(el, dynSnap);
-                const f = a?.mul(mass);
-                if (f && !is_negligible(f.length(), pool.force))
-                  overlayArrows.push({ at: centre, vector: f, kind: "inertia", elementID: el.id });
+                const f = element_acceleration(el, dynSnap)?.mul(mass);
+                const force =
+                  f && !is_negligible(f.length(), pool.force) ? f : undefined;
+                if (force)
+                  overlayArrows.push({ at: centre, vector: force, kind: "inertia", elementID: el.id });
+                // A body's inertia is one reading, force and couple: the couple is drawn on the side away from the arrow, so the two never cross.
+                const inertia = element_centroidal_inertia(el, mech.materials, mech.profiles);
+                const alpha = element_angular_acceleration(el, dynSnap);
+                if (inertia !== undefined && alpha !== undefined) {
+                  // Clockwise positive on screen, the solver's angles being counter-clockwise.
+                  const torque = -inertia * alpha;
+                  if (!is_negligible(Math.abs(torque), pool.moment))
+                    overlayMoments.push({
+                      at: centre,
+                      torque,
+                      kind: "inertia",
+                      elementID: el.id,
+                      direction: force?.mul(-1),
+                    });
+                }
               }
             }
           }

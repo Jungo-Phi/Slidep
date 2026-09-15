@@ -464,9 +464,10 @@ export type ProbeMetric =
   | "moment"
   | "moment-start"
   | "moment-end"
-  // Never offered in a probe selector (`available_probe_metrics` never returns them) — only ever built directly, for a canvas overlay arrow clicked on ("Poids"/"Force d'inertie"), the same way "force"/"moment" already are for a selected load.
+  // Never offered in a probe selector (`available_probe_metrics` never returns them): only ever built directly, for a weight or inertia reading (`mass_reading_sample`).
   | "weight"
-  | "inertia";
+  | "inertia"
+  | "inertia-moment";
 
 /** Which curves of a vector metric are plotted.
  * Ignored for scalar metrics (angle, angular velocity). */

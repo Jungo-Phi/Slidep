@@ -402,6 +402,7 @@ describe("cohesion-field — le champ N/T/Mf par coupe (docs/plan-efforts-interi
       velocities: new Float64Array(4),
       accelerations: new Float64Array(4),
       angleVelocities: new Float64Array(0),
+      angleAccelerations: new Float64Array(0),
     };
 
     const field = compute_cohesion_field(
@@ -485,6 +486,7 @@ describe("cohesion-field — le champ N/T/Mf par coupe (docs/plan-efforts-interi
       velocities: new Float64Array(4),
       accelerations: new Float64Array(4),
       angleVelocities: new Float64Array(0),
+      angleAccelerations: new Float64Array(0),
     };
 
     const field = compute_cohesion_field(

@@ -245,6 +245,7 @@ export class Recorder {
             ...dynamicSnapshot,
             reactions: probe.reactions,
             accelerations: probe.accelerations,
+            angleAccelerations: probe.angleAccelerations,
             beamCohesion: probe.beamCohesion,
           };
         }

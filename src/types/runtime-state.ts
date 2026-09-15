@@ -214,6 +214,8 @@ export interface DynamicSnapshot extends SimulationSnapshot {
   accelerations: Float64Array;
   /** One per `layout.angleKeys` entry — same slotting as `angles`. */
   angleVelocities: Float64Array;
+  /** One per `layout.angleKeys` entry, rad/s² — the angular twin of `accelerations`, taken the same way and for the same reason. */
+  angleAccelerations: Float64Array;
   unsatisfied?: ConstraintResidual[];
   /**
    * Per-constraint reaction forces/torques this frame — see `LinkReaction`.

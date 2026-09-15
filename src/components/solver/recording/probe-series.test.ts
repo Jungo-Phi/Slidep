@@ -7,7 +7,11 @@ import {
   LinkReaction,
   SnapshotLayout,
 } from "../../../types/runtime-state";
-import { element_reactions, get_probe_series } from "./probe-series";
+import {
+  element_angular_acceleration,
+  element_reactions,
+  get_probe_series,
+} from "./probe-series";
 import { make_snapshot_layout } from "../snapshot";
 
 /**
@@ -128,6 +132,42 @@ describe("séries de sonde", () => {
   });
 });
 
+describe("accélération angulaire", () => {
+  const layout = make_snapshot_layout(["e:start", "e:end", "n"], ["g"]);
+  const dynamic = (
+    positions: number[],
+    accelerations: number[],
+    angleAccelerations: number[],
+  ): DynamicSnapshot => ({
+    t: 0,
+    layout,
+    positions: Float64Array.from(positions),
+    angles: new Float64Array(1),
+    velocities: new Float64Array(6),
+    accelerations: Float64Array.from(accelerations),
+    angleVelocities: new Float64Array(1),
+    angleAccelerations: Float64Array.from(angleAccelerations),
+  });
+
+  it("une arête la lit sur ses deux bouts, sans que la part centripète s'en mêle", () => {
+    // A rod of length 2 turning about its start at ω = 4, α = 3: its end accelerates by α·ẑ×r − ω²·r.
+    const alpha = 3;
+    const omega = 4;
+    const snap = dynamic(
+      [0, 0, 2, 0, 0, 0],
+      [0, 0, -omega * omega * 2, alpha * 2, 0, 0],
+      [0],
+    );
+    expect(element_angular_acceleration(beam("e"), snap)).toBeCloseTo(alpha, 12);
+  });
+
+  it("un engrenage lit son propre slot, un point n'en a aucune", () => {
+    const snap = dynamic([0, 0, 2, 0, 0, 0], new Array(6).fill(0), [7]);
+    expect(element_angular_acceleration(gear("g"), snap)).toBe(7);
+    expect(element_angular_acceleration(node("n"), snap)).toBeUndefined();
+  });
+});
+
 describe("réactions", () => {
   const emptyLayout = make_snapshot_layout([], []);
   const reaction = (key: string, fx: number, fy: number, atAnchor: boolean): LinkReaction => ({
@@ -153,6 +193,7 @@ describe("réactions", () => {
     velocities: new Float64Array(0),
     accelerations: new Float64Array(0),
     angleVelocities: new Float64Array(0),
+    angleAccelerations: new Float64Array(0),
     reactions,
   });
 

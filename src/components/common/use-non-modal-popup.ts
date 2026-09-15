@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from "react";
 import type { SxProps, Theme } from "@mui/material";
+import { useDismissOnShortcut } from "./dismiss-popups";
 
 /** Every MUI popup portals a layer of its own, so a pointer inside any of them is not outside this one. */
 const POPUP_LAYER_SELECTOR = ".MuiModal-root, .MuiPopper-root";
@@ -20,6 +21,7 @@ export interface NonModalPopupProps {
 
 /**
  * Props that make a MUI `Menu`, `Popover` or `Select` menu non-modal: what lies underneath keeps its hover, its wheel and its clicks, and a pointer going down outside dismisses the popup without swallowing the event that did it.
+ * A keyboard shortcut dismisses it too (see `useDismissOnShortcut`).
  * Spread them on the popup — on `MenuProps` for a `Select` — and give it `open` and its anchor.
  *
  * The anchor is spared, so a click on it is its own handler's business: make that handler a toggle, or clicking it while open reopens what the dismissal just closed.
@@ -32,6 +34,7 @@ export function useNonModalPopup(
 ): NonModalPopupProps {
   const dismissRef = useRef(dismiss);
   dismissRef.current = dismiss;
+  useDismissOnShortcut(open, dismiss);
 
   useEffect(() => {
     if (!open) return;

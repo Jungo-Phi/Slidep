@@ -8,19 +8,30 @@
 
 ---
 
+- Mieux gérer rho=0 : Interdire rho=0 ? Ne remplacer les masses que si elles sont libres ?
+
 **ElementMeasures -> SelectionInspector**
 
 - Placer les éléments du SelectionInspector dans le même ordre et disposition que dans l'onglet "élément"
 - Nettoyer les marges et nettoyer SelectionInspector
+- Afficher les longueurs des segments
+- Afficher la force générée par l'allongement ?
+- Afficher la position centrale ?
 
 - Afficher les valeurs à jour dans l'onglet "éléments"
 
-- Inertie rotationelle ?
+- La couleur de sélection aux appuis sélectionnée ne correspond pas à non-sélectionnée
+- Afficher l'inertie rotationelle avec le symbole qui fait tout le tour ?
 
 **MomentBalanceReference**
 
+- Clarifier le schéma "ΣF = m⋅a", "ΣM = J⋅α"
+- Colorer les éléments
+- Clicker sur un élément au placement de MomentBalanceReference ne devrait pas le sélectionner
+
 - On doit voir le MomentBalanceReference quand on l'édite.
 - Pour MomentBalanceReference, fusionner le bouton et le prop
+- Mieux placer le bouton de l'overlay, ou l'enlever ?
 
 **Rendre la physique exacte (cas faux)**
 
@@ -28,20 +39,6 @@
 
 ---
 
-- N'importe quel changement d'étât (ex. CTRL+Z, raccourcis) devrait faire fermer un menu ouvert
-- Mieux gérer rho=0 : Interdire rho=0 ? Ne remplacer les masses que si elles sont libres ?
-- Le parsing pour la masse volumique est nul (refuse T/m3, mg/cm3 et des valeurs trop petites). Est-ce aussi le cas ailleur ?
-- Afficher "0 N" au lieu de "0 nN" quand une force est nulle ?
-- La barre de scroll devrait se cacher, ou au moins se réduire, si on n'a pas scrollé depuis un moment
-- Régler le CTRL+C
-- Le hover de la règle sur les joins n'est pas bon. Et hover de règle devrait épaissir les traits
-- Afficher le signe des moments
-- Hover des loads épaissis les flèches
-- Régler les moments qui se supperposent
-- Régler les forces sont dessinées sur les poutres
-- Re-positionner le texte des moments (quand ils ne sont pas sur tout le tour)
-
-- Double Cantilever : Moment au join
 - Vilbrequin double slider : Quand "Beam Hadu" a un angle de 180°
 - Les cas ou Mf est non nul alors que la poutre est dans le vide
 - Pourquoi les poids des poutres disparaissent quand on fait tourner la simu (Masse suspendue.slidep) ?
@@ -54,6 +51,21 @@
 - La trajectoire sur CoreXY en dynamique est fausse
 
 ### À faire rapidement
+
+**Qwick fixes :**
+
+- Le parsing pour la masse volumique est nul (refuse T/m3, mg/cm3 et des valeurs trop petites). Est-ce aussi le cas ailleur ?
+- Afficher "0 N" au lieu de "0 nN" quand une force est nulle ?
+- La barre de scroll devrait se cacher, ou au moins se réduire, si on n'a pas scrollé depuis un moment
+- Régler le CTRL+C
+- Le hover de la règle sur les joins n'est pas bon. Et hover de règle devrait épaissir les traits
+- Afficher le signe des moments
+- Hover des loads épaissis les flèches
+- Régler les moments qui se supperposent
+- Régler les forces sont dessinées sur les poutres
+- Re-positionner le texte des moments (quand ils ne sont pas sur tout le tour)
+- Pas de snap en dynamique pour le placement/déplacement des charges
+- Dessiner (preview) force et force-distribuée vers le bas
 
 **Mécanismes exemple :**
 
@@ -83,6 +95,8 @@
 - Comment connecter ou non des engrenages sur le même axe ?
 - Faire fonctionner les treuils
 - Copié-collé
+- Clarifier "qu'est-ce qui est simulé ?" pour **dt**. On affiche des positions interpolées, mais pas les forces, ni les valeurs dans le panneau latéral.
+- Revenir sur l'idée de pouvoir modifier le mécanisme en cours de simulation (ex. déconnecter 2 éléments) ?
 
 - 🚨 Un ctrl+y de remplacement d'élément n'a pas reset la simulation, wtf !?
 - 🚨 Le moteur se bloque avec "Jansen", wtf !?

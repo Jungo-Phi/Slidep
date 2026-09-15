@@ -23,6 +23,7 @@ export const PROBE_METRIC_LABEL_KEYS: Record<ProbeMetric, StringKey> = {
   "moment-end": "metric_moment_end",
   weight: "overlay_weight_one",
   inertia: "overlay_inertia_one",
+  "inertia-moment": "metric_inertia_moment",
 };
 
 export const PROBE_METRIC_ORDER: ProbeMetric[] = [

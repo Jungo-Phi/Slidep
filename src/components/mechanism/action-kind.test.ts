@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { is_structure_action, is_structure_bundle } from "./action-kind";
+import {
+  is_probes_only_bundle,
+  is_structure_action,
+  is_structure_bundle,
+} from "./action-kind";
 import { Action } from "../../types";
 import { ForceElement, ID, MassElement } from "../../types/element";
 import { ZERO } from "../../types/point2";
@@ -25,6 +29,36 @@ const mass: MassElement = {
   probes: [],
   overlays: {},
 };
+
+describe("is_probes_only_bundle", () => {
+  const setProbes = (elementID: ID): Action => ({
+    type: "SetProbes",
+    elementID,
+    newProbes: [],
+    oldProbes: [],
+  });
+
+  it("accepts the element's own metric toggles, sealed or not", () => {
+    expect(is_probes_only_bundle([setProbes(id(3))], id(3))).toBe(true);
+    expect(
+      is_probes_only_bundle([setProbes(id(3)), { type: "Blank" }], id(3)),
+    ).toBe(true);
+  });
+
+  it("refuses another element's toggles", () => {
+    expect(is_probes_only_bundle([setProbes(id(4))], id(3))).toBe(false);
+  });
+
+  it("refuses an entry that edits anything else", () => {
+    expect(
+      is_probes_only_bundle(
+        [setProbes(id(3)), { type: "CreateElement", element: load }],
+        id(3),
+      ),
+    ).toBe(false);
+    expect(is_probes_only_bundle([{ type: "Blank" }], id(3))).toBe(false);
+  });
+});
 
 /**
  * What a running simulation can absorb.

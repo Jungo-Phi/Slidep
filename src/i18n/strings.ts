@@ -1010,6 +1010,12 @@ export const STRINGS = {
     de: "Trägheitskräfte",
     es: "Fuerzas de inercia",
   },
+  metric_inertia_moment: {
+    fr: "Couple d'inertie",
+    en: "Inertial torque",
+    de: "Trägheitsdrehmoment",
+    es: "Par de inercia",
+  },
   velocity_one: {
     fr: "Vitesse",
     en: "Velocity",

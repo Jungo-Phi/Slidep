@@ -25,7 +25,8 @@ export function is_vector_metric(metric: ProbeMetric): boolean {
     metric !== "motor-power" &&
     metric !== "moment" &&
     metric !== "moment-start" &&
-    metric !== "moment-end"
+    metric !== "moment-end" &&
+    metric !== "inertia-moment"
   );
 }
 
@@ -207,6 +208,34 @@ export function element_acceleration(
 ): Point2 | undefined {
   const slots = probe_slots(element, snapshot.layout);
   return read_acceleration(snapshot, slots) ? new Point2(sampled[0], sampled[1]) : undefined;
+}
+
+/**
+ * The element's own angular acceleration right now, in rad/s², counter-clockwise positive: the rotational twin of `element_acceleration`.
+ * A gear reads its own recorded slot.
+ * An edge reads it off its two ends: across a rigid rotation their relative acceleration keeps a tangential part only from `α`, the centripetal part being radial.
+ * `undefined` for a point, or when the snapshot carries none for it.
+ */
+export function element_angular_acceleration(
+  element: MechanicalElement,
+  snapshot: DynamicSnapshot,
+): number | undefined {
+  const slots = probe_slots(element, snapshot.layout);
+  if (slots.angle >= 0) {
+    const alpha = snapshot.angleAccelerations[slots.angle];
+    return Number.isNaN(alpha) ? undefined : alpha;
+  }
+  if (slots.a < 0 || slots.b < 0) return undefined;
+  const p = snapshot.positions;
+  const dx = p[2 * slots.b] - p[2 * slots.a];
+  const dy = p[2 * slots.b + 1] - p[2 * slots.a + 1];
+  const lengthSq = dx * dx + dy * dy;
+  if (!(lengthSq > 1e-12)) return undefined;
+  const acc = snapshot.accelerations;
+  const relAx = acc[2 * slots.b] - acc[2 * slots.a];
+  const relAy = acc[2 * slots.b + 1] - acc[2 * slots.a + 1];
+  if (Number.isNaN(relAx) || Number.isNaN(relAy)) return undefined;
+  return (dx * relAy - dy * relAx) / lengthSq;
 }
 
 /** One point of an element where a reaction acts — a node/gear has one, an edge has two
@@ -672,8 +701,12 @@ export function get_probe_series(
 
     case "weight":
     case "inertia":
-      // Never requested through this path — a canvas overlay click builds its own `MetricSample` directly (`AnalysisPanel`), the way a selected load's own components already do.
+      // Never requested through this path: a reading builds its own `MetricSample` directly (`mass_reading_sample`), the way a selected load's own components already do.
       return { t: [], curves: [], unit: "N" };
+
+    case "inertia-moment":
+      // Never requested through this path either, see "inertia" above.
+      return { t: [], curves: [], unit: "N·m" };
   }
 }
 
@@ -860,6 +893,9 @@ export function get_dynamic_probe_series(
     case "inertia":
       // Never requested through this path — see `get_probe_series`'s own case.
       return { t: [], curves: [], unit: "N" };
+
+    case "inertia-moment":
+      return { t: [], curves: [], unit: "N·m" };
   }
 }
 

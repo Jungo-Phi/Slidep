@@ -62,6 +62,7 @@ function snap(
     velocities: vel,
     accelerations: new Float64Array(layout.keys.length * 2),
     angleVelocities: angVel,
+    angleAccelerations: new Float64Array(layout.angleKeys.length),
     reactions,
   };
 }
@@ -84,7 +85,7 @@ const torque = (key: string, value: number): LinkReaction => ({
 
 describe("is_negligible", () => {
   it("compare à une fraction (NEGLIGIBLE_RATIO) de l'échelle du pool", () => {
-    // Le comportement testé est la comparaison elle-même, pas la valeur du ratio produit — dérivée de la constante réelle plutôt que recopiée, pour ne pas casser au moindre réglage de `NEGLIGIBLE_RATIO`.
+    // What is tested is the comparison itself, not the ratio's value: derived from the real constant rather than copied, so tuning `NEGLIGIBLE_RATIO` breaks nothing.
     const threshold = NEGLIGIBLE_RATIO * 100;
     expect(is_negligible(threshold * 0.5, 100)).toBe(true);
     expect(is_negligible(threshold * 2, 100)).toBe(false);
@@ -120,7 +121,7 @@ describe("extend_negligibility_pool", () => {
     expect(pool.angularVelocity).toBe(5);
     expect(pool.force).toBe(5); // ‖(3,4)‖
     expect(pool.moment).toBe(7);
-    expect(pool.length).toBe(6); // déplacement (0,6) depuis le repos (0,0)
+    expect(pool.length).toBe(6); // displacement (0,6) from rest at (0,0)
     expect(pool.angle).toBeCloseTo(0.1, 12);
   });
 
@@ -151,7 +152,7 @@ describe("extend_negligibility_pool", () => {
       constraints,
       extended,
     );
-    expect(afterSecond.linearVelocity).toBe(9); // le nouveau (1) est plus petit, le max reste
+    expect(afterSecond.linearVelocity).toBe(9); // the new value (1) is smaller, so the max stays
     expect(afterSecond.consumed).toBe(2);
   });
 
@@ -163,9 +164,9 @@ describe("extend_negligibility_pool", () => {
       constraints,
       first,
     );
-    const otherElements = [node("n", 0, 0), node("m", 3, 4)]; // diagonale = 5
+    const otherElements = [node("n", 0, 0), node("m", 3, 4)]; // diagonal = 5
     const rebuilt = extend_negligibility_pool(afterFirst, otherElements, constraints, []);
-    // Repart du plancher de la nouvelle géométrie, pas du 9 précédent — et pas de zéro non plus, voir "un plancher absolu..." ci-dessous.
+    // Starts again from the new geometry's floor, not from the earlier 9, and not from zero either: see "un plancher absolu..." below.
     expect(rebuilt.linearVelocity).toBe(pool_floors(5).linearVelocity);
     expect(rebuilt.length).toBe(5);
     expect(rebuilt.ownFloors.length).toBe(own_floors(5).length);
@@ -185,12 +186,12 @@ describe("extend_negligibility_pool", () => {
     expect(afterLong.linearVelocity).toBe(9);
     const truncated = [snap(layout, 0, { n: [0, 0] }, { n: [2, 0] })];
     const rebuilt = extend_negligibility_pool(afterLong, elements, constraints, truncated);
-    expect(rebuilt.linearVelocity).toBe(2); // pas 9 : ce frame-là n'existe plus
+    expect(rebuilt.linearVelocity).toBe(2); // not 9: that frame is gone
   });
 
   it("un plancher absolu tient même si rien de plus grand n'a jamais été enregistré", () => {
-    // Un mécanisme qui ne produit jamais qu'un bruit résiduel (ici sous le plancher de vitesse) garde le plancher comme échelle — il ne se fixe pas sa propre échelle à partir de ce bruit, sans quoi ce bruit ne serait jamais négligeable face à lui-même.
-    const floor = pool_floors(0).linearVelocity; // diagonale nulle : mécanisme réduit à "n"
+    // A mechanism that only ever produces residual noise (here below the velocity floor) keeps the floor as its scale: scaled on that noise, the noise could never be negligible next to itself.
+    const floor = pool_floors(0).linearVelocity; // zero diagonal: the mechanism is just "n"
     const noisy = [
       snap(layout, 0, { n: [0, 0] }, { n: [floor * 0.3, 0] }),
       snap(layout, 1, { n: [0, 0] }, { n: [floor * 0.1, 0] }),
@@ -202,14 +203,14 @@ describe("extend_negligibility_pool", () => {
 
 describe("pool_floors", () => {
   it("dérive de la géométrie ce qui a une dimension de longueur, d'une constante sinon", () => {
-    const floors = pool_floors(5); // diagonale du mécanisme
+    const floors = pool_floors(5); // the mechanism's diagonal
     expect(floors.length).toBe(5);
-    // Sans dimension de longueur exploitable : des constantes fixes, indépendantes de la géométrie.
+    // With no length dimension to use: fixed constants, independent of the geometry.
     expect(floors.angle).toBe(MIN_ANGLE_POOL);
     expect(floors.force).toBe(LOAD_SCALING.MIN_VALUE);
-    // Un moment est une force fois un bras de levier — celui du mécanisme lui-même.
+    // A moment is a force times a lever arm, here the mechanism's own.
     expect(floors.moment).toBe(LOAD_SCALING.MIN_VALUE * 5);
-    // Une vitesse est une distance sur un temps.
+    // A velocity is a distance over a time.
     expect(floors.linearVelocity).toBe(5 / MIN_TIME_POOL);
     expect(floors.angularVelocity).toBe(MIN_ANGLE_POOL / MIN_TIME_POOL);
   });
@@ -219,18 +220,18 @@ describe("pool_floors", () => {
   });
 
   it("une diagonale mesurable, même sous le plancher, n'est pas remontée dessus", () => {
-    // Un petit mécanisme (ici 1 mm) doit rester mesurable pour `poolMax` — le plancher n'est là que pour l'absence totale de géométrie, pas pour hausser les petites.
+    // A small mechanism (here 1 mm) must stay measurable for `poolMax`: the floor only stands in for no geometry at all, it never raises a small one.
     expect(pool_floors(0.001).length).toBe(0.001);
   });
 });
 
 describe("own_floors", () => {
   it("dérive de la géométrie, ratio'ée par NEGLIGIBLE_RATIO, ce qui a une dimension de longueur", () => {
-    const floors = own_floors(5); // diagonale du mécanisme
+    const floors = own_floors(5); // the mechanism's diagonal
     expect(floors.length).toBe(NEGLIGIBLE_RATIO * 5);
     expect(floors.moment).toBe(LOAD_SCALING.MIN_VALUE * (NEGLIGIBLE_RATIO * 5));
     expect(floors.linearVelocity).toBe((NEGLIGIBLE_RATIO * 5) / MIN_TIME_POOL);
-    // Sans dimension de longueur exploitable : les mêmes constantes fixes que `pool_floors`.
+    // With no length dimension to use: the same fixed constants as `pool_floors`.
     expect(floors.angle).toBe(MIN_ANGLE_POOL);
     expect(floors.force).toBe(LOAD_SCALING.MIN_VALUE);
     expect(floors.angularVelocity).toBe(MIN_ANGLE_POOL / MIN_TIME_POOL);
@@ -279,7 +280,7 @@ describe("quantity_kind_for_metric", () => {
     expect(quantity_kind_for_metric("position")).toBe(LENGTH);
     expect(quantity_kind_for_metric("velocity")).toBe(LINEAR_VELOCITY);
     expect(quantity_kind_for_metric("angle")).toBe(ANGLE);
-    // `ANGULAR_VELOCITY` est une fonction (son symbole se relit à chaque appel) — une nouvelle instance à chaque appel, donc une égalité de structure, pas de référence.
+    // `ANGULAR_VELOCITY` is a function that rereads its symbol on every call, so each call gives a new instance: compared by structure, not by reference.
     expect(quantity_kind_for_metric("angular-velocity")).toEqual(ANGULAR_VELOCITY());
     expect(quantity_kind_for_metric("force")).toBe(FORCE);
     expect(quantity_kind_for_metric("force-start")).toBe(FORCE);
