@@ -20,8 +20,24 @@
 
 - Afficher les valeurs à jour dans l'onglet "éléments"
 
+- Ajouter mesures globales (contrainte max) ou "Contrainte max sur la poutre"
+- Ne pas afficher la vitesse des ressorts et amortisseurs
+- 🚨 L'angle affiché dans les mesures "Balance.slidep" est faux. L'angle du graph ne correspond pas à celui de l'élément, Vitesse angulaire aussi est faux (rapport TAU manquant)
+- 🔨 Afficher les trajectoires des edges (les 2 extrémités)
+- 🔨 Afficher les trajectoires des gears (bords tangeants au mouvement ?)
+
 - La couleur de sélection aux appuis sélectionnée ne correspond pas à non-sélectionnée
 - Afficher l'inertie rotationelle avec le symbole qui fait tout le tour ?
+
+**Nouvelles métriques de sonde**
+
+- Longueur / allongement : ressort, amortisseur, barre.
+- Vitesse d'allongement : amortisseur.
+- Effort axial signé : ressort, amortisseur. Peu coûteux, il se déduit des réactions.
+- Tension de courroie. Attention : une courroie à plusieurs brins a plusieurs tensions, il faudra choisir ce qu'on montre.
+- Abscisse sur la barre et vitesse de glissement : coulisseau, slidep.
+- Couple moteur fourni. Il vaut mieux le lire dans le modèle moteur que calculer P/ω, instable quand ω ≈ 0. Il permet de voir si le moteur sature.
+- À discuter : taux de travail max d'une barre (le calcul existe déjà pour le mode de coloration), angle relatif au pivot (ambigu dès trois barres).
 
 **MomentBalanceReference**
 
@@ -54,6 +70,7 @@
 
 **Qwick fixes :**
 
+- Bug dessin ressort nombre de spires
 - Le parsing pour la masse volumique est nul (refuse T/m3, mg/cm3 et des valeurs trop petites). Est-ce aussi le cas ailleur ?
 - Afficher "0 N" au lieu de "0 nN" quand une force est nulle ?
 - La barre de scroll devrait se cacher, ou au moins se réduire, si on n'a pas scrollé depuis un moment
@@ -86,7 +103,6 @@
 - Bloquer moteur si couple demandé suppérieur couple disponible
 - Clarifier le grab en dynamique (grab -> force ?)
 - Mobile mode
-- Ajouter mesures globales (contrainte max) ou "Contrainte max sur la poutre"
 - Clean les mesures
 
 - Supprimer poutre sur joint de courroie
@@ -103,10 +119,10 @@
 - Le hover des éléments depuis le panneau latéral ne devrait pas faire apparaitre les contraintes
 - 🚨 Hover des loads sous les edges, wtf !?
 - 🚨 Un snap sur la grille ne se fait pas toujours bien aux valeurs rondes, wtf !?
-- 🚨 L'angle affiché dans les mesures "Balance.slidep" est faux. L'angle du graph ne correspond pas à celui de l'élément, Vitesse angulaire aussi est faux (rapport TAU manquant)
 
 **Qwick fix**
 
+- C'est quoi le dossier "scratch/" ?
 - force-distribuée : "force totale" -> "force équivalente"
 - 🔨 Corriger les diagrammes d'efforts internes (valeur à zéro)
 - 🔨 Les trais indicatifs des valeurs max dans les diagrammes des efforts (vu dans Mf) s'accumulent
@@ -207,10 +223,7 @@
 
 **🔨 Trajectoires**
 
-- 🔨 Afficher les trajectoires des edges (les 2 extrémités)
-- 🔨 Afficher les trajectoires des gears (bords tangeants au mouvement ?)
 - 🔨 Ne PAS afficher les trajectoires des éléments ancrés.
-- 🔨 Option d'afficher la trajectoire avec des points
 - 🔨 Afficher les trajectoires anciennes de plus en plus transparentes
 
 **Canvas**
@@ -230,6 +243,7 @@
 - 🆕 Pouvoir mesurer et coter depuis les axes x/y
 - 🔨 Rendre les hitbox exactes (contraintes, noeuds)
 - 🤔 Caméra qui suit le mécanisme en simulation ?
+- 🤔 Ajouter un mode d'édition pour déconnecter les éléments (ce qu'on ne peut faire actuellement que par le panneau contextuel) ?
 
 - 🔨 Afficher le point de contact pour placingGearRadius sur belt
 - ❇️ Wrap VS windings ?

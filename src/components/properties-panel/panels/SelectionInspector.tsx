@@ -1,5 +1,6 @@
 import React from "react";
-import { Box, Divider, Typography } from "@mui/material";
+import { Box, Divider, IconButton, Tooltip, Typography } from "@mui/material";
+import { UnfoldLess, UnfoldMore } from "@mui/icons-material";
 import {
   Action,
   AppMode,
@@ -25,19 +26,23 @@ import { dynamic_snapshot_at } from "../../solver/dynamics/simulation-engine";
 import { compute_cohesion_field } from "../../solver/recording/cohesion-field";
 import { GRAVITY } from "../../../constants/physics-specs";
 import { overlay_shown } from "../../../utils/element-queries";
+import { element_mass } from "../../../utils/element-mass";
+import { MASS } from "../../../utils/quantity-format";
+import { getStorageItem, setStorageItem } from "../../../utils/storage";
 import { OVERLAY_LABEL_KEYS, set_overlay } from "../overlay-actions";
 import {
+  InspectorValue,
   Reading,
   ReadingGroup,
   element_reading_groups,
-  inspector_value_metrics,
+  inspector_layout,
   layer_key,
   mass_reading_sample,
   same_reading,
 } from "../element-readings";
 import { InspectedSubject } from "../selection-subject";
-import { live_parameters } from "../live-parameters";
-import { format_metric } from "../metric-display";
+import { LiveParameter, live_parameters } from "../live-parameters";
+import { format_metric, format_scalar } from "../metric-display";
 import CohesionDiagrams from "../components/CohesionDiagrams";
 import ElementDisplay from "../components/ElementDisplay";
 import LoadsSection from "../components/LoadsSection";
@@ -45,7 +50,7 @@ import MaterialProfileSection from "../components/MaterialProfileSection";
 import NumberInput from "../components/NumberInput";
 import ProbeMetricsButton from "../components/ProbeMetricsButton";
 import SignedNumberInput from "../components/SignedNumberInput";
-import { MetricRow, MetricValues } from "../components/MetricRow";
+import { MetricRow, MetricValues, ValueRow } from "../components/MetricRow";
 import ReadingRow from "../components/ReadingRow";
 import { t, tn } from "../../../i18n";
 import type { FocusedOverlay } from "../../canvas/drawing/drawing-functions";
@@ -61,6 +66,9 @@ const reading_label = (layerLabel: string, which?: "node" | "start" | "end") =>
 
 /** What a card is told the selection holds when its own element is not what is selected. */
 const NOTHING_SELECTED: ID[] = [];
+
+/** Whether the details are unfolded, kept across selections and sessions: a reader who wants them wants them for every element. */
+const EXPANDED_STORAGE_KEY = "selectionInspectorExpanded";
 
 interface SelectionInspectorProps {
   subject: InspectedSubject | undefined;
@@ -83,7 +91,8 @@ interface SelectionInspectorProps {
 
 /**
  * What the simulation says about one thing: the element, load or overlay reading the selection points at.
- * The panel's own miniature of the elements tab, kept to what a running simulation can answer or absorb — the live values, the quantities measured at the instant on screen, and the readings the canvas draws over it.
+ * The panel's own miniature of the elements tab, laid out in the same order and kept to what a running simulation can answer or absorb — the live values, the quantities measured at the instant on screen, and the readings the canvas draws over it.
+ * What an element shows folded and unfolded is decided per element type (`inspector_layout`).
  *
  * Sized by its own content: what keeps the charts below from moving as the selection changes is the scroll region it is held in, not any height it reserves for itself (see `AnalysisPanel`).
  */
@@ -109,6 +118,13 @@ export const SelectionInspector: React.FC<SelectionInspectorProps> = ({
         runtimeState.time,
       )) ||
     undefined;
+
+  const [expanded, setExpanded] = React.useState(() =>
+    getStorageItem<boolean>(EXPANDED_STORAGE_KEY, false),
+  );
+  React.useEffect(() => {
+    setStorageItem(EXPANDED_STORAGE_KEY, expanded);
+  }, [expanded]);
 
   // The same element at the instant on screen: parameter values are read off it, writes are built against the element itself (see `rebased_bundle`).
   const shown_of = <T extends MechanicalElement>(el: T): T =>
@@ -237,11 +253,13 @@ export const SelectionInspector: React.FC<SelectionInspectorProps> = ({
   /**
    * One row per reading, each carrying the eye of its own layer.
    * Every row reads the same way, and the eye sits on each of the rows it commands rather than above them — what it hides is the layer, so pointing at it lights up its whole set.
+   * `rowCount` is how many rows the layer shows in all, the ones drawn here included.
    */
   const reading_rows = (
     element: MechanicalElement,
     group: ReadingGroup,
     readings: Reading[],
+    rowCount = group.readings.length,
   ) => {
     const { key, label, eye } = layer_display(element, group);
     // A trajectory is drawn without ever being read, so its row carries the eye alone.
@@ -262,13 +280,47 @@ export const SelectionInspector: React.FC<SelectionInspectorProps> = ({
         selected={
           !!focusedReading && same_reading(focusedReading, reading.focus)
         }
-        commanded={pointedLayer === key && group.readings.length > 1}
+        commanded={pointedLayer === key && rowCount > 1}
         pointed={!!pointedReading && same_reading(pointedReading, reading.focus)}
         onClick={() => setFocusedOverlay(reading.focus)}
         onHoverChange={(hovered) => hover_reading(reading, hovered)}
         {...eye}
       />
     ));
+  };
+
+  /**
+   * A two-ended member's internal readings as the one axial force they both carry.
+   * The canvas only ever names one arrow at a time, so the row points at the start's own, and lights up for either.
+   */
+  const axial_force_row = (
+    element: MechanicalElement,
+    group: ReadingGroup,
+    rowCount: number,
+  ) => {
+    const { key, eye } = layer_display(element, group);
+    const [first] = group.readings;
+    const names_one = (focus: FocusedOverlay | null) =>
+      !!focus && group.readings.some((r) => same_reading(focus, r.focus));
+    return (
+      <ReadingRow
+        key={`${key}-axial`}
+        icon={group.icon}
+        label={t("metric_axial_force")}
+        value={
+          <MetricValues
+            formatted={formatted_of(element, ["axial-force"])}
+            summary
+          />
+        }
+        selected={names_one(focusedReading)}
+        commanded={pointedLayer === key && rowCount > 1}
+        pointed={names_one(pointedReading)}
+        onClick={() => setFocusedOverlay(first.focus)}
+        onHoverChange={(hovered) => hover_reading(first, hovered)}
+        {...eye}
+      />
+    );
   };
 
   /**
@@ -288,74 +340,121 @@ export const SelectionInspector: React.FC<SelectionInspectorProps> = ({
     />
   );
 
+  const parameter_input = (parameter: LiveParameter) =>
+    parameter.signed ? (
+      <SignedNumberInput
+        key={parameter.label}
+        label={parameter.label}
+        title={t(parameter.titleKey)}
+        kind={parameter.kind}
+        value={parameter.value}
+        onChange={(value) => applyActions(parameter.change(value))}
+      />
+    ) : (
+      <NumberInput
+        key={parameter.label}
+        label={parameter.label}
+        title={t(parameter.titleKey)}
+        kind={parameter.kind}
+        value={parameter.value}
+        onChange={(value) => applyActions(parameter.change(value))}
+        unsigned
+        precision={2}
+        accent={parameter.slot === "header"}
+      />
+    );
+
+  const parameter_row = (parameters: LiveParameter[]) =>
+    parameters.length > 0 && (
+      <Box
+        sx={{
+          display: "flex",
+          flexWrap: "wrap",
+          justifyContent: "center",
+          gap: 1,
+          py: 0.5,
+        }}
+      >
+        {parameters.map(parameter_input)}
+      </Box>
+    );
+
+  const value_row = (element: MechanicalElement, value: InspectorValue) =>
+    value === "mass" ? (
+      <ValueRow
+        key={value}
+        label={t("mass")}
+        formatted={format_scalar(
+          element_mass(
+            shown_of(element),
+            analysedMechanism.materials,
+            analysedMechanism.profiles,
+          ),
+          MASS,
+        )}
+      />
+    ) : (
+      <MetricRow key={value} metric={value} sample={sample_of(element, value)} />
+    );
+
   const element_body = (element: MechanicalElement) => {
     const parameters = live_parameters(element, shown_of(element));
-    const groups = element_reading_groups(element, snapshot, dynamic);
+    const in_slot = (slot: LiveParameter["slot"]) =>
+      parameters.filter((parameter) => parameter.slot === slot);
+    const layout = inspector_layout(element, dynamic);
+    const values = expanded
+      ? [...layout.values, ...layout.details]
+      : layout.values;
+    const groups = element_reading_groups(element, snapshot, dynamic).filter(
+      (group) => expanded || layout.featured.includes(layer_key(group.layer)),
+    );
+    const physical = in_slot("physical");
 
     return (
       <>
+        {/* The header holds what the elements tab holds beside the name: the one value that defines the element. */}
         <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
           <Box sx={{ flex: 1, minWidth: 0 }}>{card(element)}</Box>
+          {in_slot("header").map(parameter_input)}
           <ProbeMetricsButton
             element={element}
             applyActions={applyActions}
             size={22}
           />
-        </Box>
-        {parameters.length > 0 && (
-          <Box
-            sx={{
-              display: "flex",
-              flexWrap: "wrap",
-              justifyContent: "center",
-              gap: 1,
-              py: 0.5,
-            }}
-          >
-            {parameters.map((parameter) =>
-              parameter.signed ? (
-                <SignedNumberInput
-                  key={parameter.label}
-                  label={parameter.label}
-                  title={t(parameter.titleKey)}
-                  kind={parameter.kind}
-                  value={parameter.value}
-                  onChange={(value) => applyActions(parameter.change(value))}
-                />
-              ) : (
-                <NumberInput
-                  key={parameter.label}
-                  label={parameter.label}
-                  title={t(parameter.titleKey)}
-                  kind={parameter.kind}
-                  value={parameter.value}
-                  onChange={(value) => applyActions(parameter.change(value))}
-                  unsigned
-                  precision={2}
-                />
-              ),
+          <Tooltip
+            title={t(
+              expanded ? "inspector_hide_details" : "inspector_show_details",
             )}
-          </Box>
-        )}
-        {selectedBeam && (
-          <MaterialProfileSection
-            elements={[selectedBeam]}
-            shownElements={[shown_of(selectedBeam)]}
-            materials={analysedMechanism.materials}
-            profiles={analysedMechanism.profiles}
-            applyActions={applyActions}
-            compact
-          />
-        )}
-        {inspector_value_metrics(element, dynamic).map((metric) => (
-          <MetricRow
-            key={metric}
-            metric={metric}
-            sample={sample_of(element, metric)}
-          />
-        ))}
+          >
+            <IconButton
+              size="small"
+              aria-expanded={expanded}
+              onClick={() => setExpanded(!expanded)}
+            >
+              {expanded ? (
+                <UnfoldLess fontSize="small" />
+              ) : (
+                <UnfoldMore fontSize="small" />
+              )}
+            </IconButton>
+          </Tooltip>
+        </Box>
+        {parameter_row(in_slot("drive"))}
+        {values.map((value) => value_row(element, value))}
         {groups.length > 0 && <Divider sx={{ my: 0.5 }} />}
-        {groups.map((group) => reading_rows(element, group, group.readings))}
+        {groups.map((group) => {
+          const isAxial =
+            layout.axialForce && layer_key(group.layer) === "force";
+          if (!isAxial) return reading_rows(element, group, group.readings);
+          const rowCount = expanded ? group.readings.length + 1 : 1;
+          return (
+            <React.Fragment key={layer_key(group.layer)}>
+              {axial_force_row(element, group, rowCount)}
+              {expanded &&
+                reading_rows(element, group, group.readings, rowCount)}
+            </React.Fragment>
+          );
+        })}
         {/* Dynamic mode only, and silently: the kinematic solver computes no internal force, so a beam there has nothing to say rather than something missing to announce. */}
         {dynamic && selectedBeam && (
           <CohesionDiagrams
@@ -368,6 +467,18 @@ export const SelectionInspector: React.FC<SelectionInspectorProps> = ({
                 s === null ? null : { beamID: selectedBeam.id, s },
               )
             }
+          />
+        )}
+        {(physical.length > 0 || selectedBeam) && <Divider sx={{ my: 0.5 }} />}
+        {parameter_row(physical)}
+        {selectedBeam && (
+          <MaterialProfileSection
+            elements={[selectedBeam]}
+            shownElements={[shown_of(selectedBeam)]}
+            materials={analysedMechanism.materials}
+            profiles={analysedMechanism.profiles}
+            applyActions={applyActions}
+            compact
           />
         )}
       </>

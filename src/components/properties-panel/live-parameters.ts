@@ -15,6 +15,14 @@ import {
 import { gear_inertia, surface_mass_for_inertia } from "../../utils/gear-mass";
 
 /**
+ * Where a live value sits, the same place the elements tab gives it.
+ * - `header`: beside the element's name, the one value that defines it.
+ * - `drive`: a motor's own commands.
+ * - `physical`: the properties listed below everything else.
+ */
+export type LiveParameterSlot = "header" | "drive" | "physical";
+
+/**
  * One physical value of an element that a running simulation absorbs: it takes effect at the current time, the past stays valid and the motion is recomputed from there (see `PARAMETER_ACTIONS`).
  * Everything structural is absent by construction, which is what makes this list safe to render with no `StructureOnly` guard around it.
  */
@@ -26,11 +34,12 @@ export interface LiveParameter {
   value: number;
   /** A value whose sign is part of the reading — a motor's own sense of rotation. */
   signed?: boolean;
+  slot: LiveParameterSlot;
   change: (value: number) => Action[];
 }
 
 /**
- * The live values of `element`, in the order they are shown.
+ * The live values of `element`, in the order the elements tab lists them.
  * `shown` is the same element at the instant on screen: the values are read off it, while every change is built against `element`, the stored one (see `rebased_bundle`).
  * A beam's material and profile are live too, but they are a choice among a catalogue rather than a number, so they are rendered on their own (see `MaterialProfileSection`).
  */
@@ -45,47 +54,18 @@ export function live_parameters(
       titleKey: "mass",
       kind: MASS,
       value: shown.mass,
+      slot: "header",
       change: (mass) => [
         { type: "ChangeMass", id: element.id, delta: mass - element.mass },
       ],
     });
-  if (element.type === "gear" && shown.type === "gear") {
-    params.push({
-      label: "mₛ",
-      titleKey: "surface_mass",
-      kind: SURFACE_MASS,
-      value: shown.surfaceMass,
-      change: (surfaceMass) => [
-        {
-          type: "ChangeSurfaceMass",
-          id: element.id,
-          delta: surfaceMass - element.surfaceMass,
-        },
-      ],
-    });
-    params.push({
-      label: "J",
-      titleKey: "inertia",
-      kind: INERTIA,
-      value: gear_inertia(shown.surfaceMass, shown.radius),
-      // The gear stores a surface mass; its inertia is the same value read through its radius, so editing either writes the one field.
-      change: (inertia) => [
-        {
-          type: "ChangeSurfaceMass",
-          id: element.id,
-          delta:
-            surface_mass_for_inertia(inertia, element.radius) -
-            element.surfaceMass,
-        },
-      ],
-    });
-  }
-  if (element.type === "spring" && shown.type === "spring") {
+  if (element.type === "spring" && shown.type === "spring")
     params.push({
       label: "k",
       titleKey: "stiffness",
       kind: STIFFNESS,
       value: shown.stiffness,
+      slot: "header",
       change: (stiffness) => [
         {
           type: "ChangeStiffness",
@@ -94,61 +74,18 @@ export function live_parameters(
         },
       ],
     });
-    params.push({
-      label: "L₀",
-      titleKey: "rest_length",
-      kind: LENGTH,
-      value:
-        shown.restLength ?? shown.positionStart.distance_to(shown.positionEnd),
-      change: (restLength) => [
-        {
-          type: "UpdateElementRestLength",
-          id: element.id,
-          newValue: restLength,
-          oldValue: element.restLength,
-        },
-      ],
-    });
-  }
   if (element.type === "damper" && shown.type === "damper")
     params.push({
       label: "b",
       titleKey: "damping",
       kind: DAMPING,
       value: shown.damping,
+      slot: "header",
       change: (damping) => [
         {
           type: "ChangeDamping",
           id: element.id,
           delta: damping - element.damping,
-        },
-      ],
-    });
-  if ("rotationalFriction" in element && "rotationalFriction" in shown)
-    params.push({
-      label: "bᵣ",
-      titleKey: "rotational_friction",
-      kind: ANGULAR_DAMPING,
-      value: shown.rotationalFriction,
-      change: (friction) => [
-        {
-          type: "ChangeRotationalFriction",
-          id: element.id,
-          delta: friction - element.rotationalFriction,
-        },
-      ],
-    });
-  if ("slidingFriction" in element && "slidingFriction" in shown)
-    params.push({
-      label: "bₛ",
-      titleKey: "sliding_friction",
-      kind: DAMPING,
-      value: shown.slidingFriction,
-      change: (friction) => [
-        {
-          type: "ChangeSlidingFriction",
-          id: element.id,
-          delta: friction - element.slidingFriction,
         },
       ],
     });
@@ -160,6 +97,7 @@ export function live_parameters(
       titleKey: "motor_torque_label",
       kind: MOMENT,
       value: motor.torque,
+      slot: "drive",
       change: (torque) => [
         {
           type: "SetMotorConfig",
@@ -175,6 +113,7 @@ export function live_parameters(
       kind: ANGULAR_VELOCITY(),
       value: motor.speed,
       signed: true,
+      slot: "drive",
       change: (speed) => [
         {
           type: "SetMotorConfig",
@@ -185,5 +124,85 @@ export function live_parameters(
       ],
     });
   }
+  if ("rotationalFriction" in element && "rotationalFriction" in shown)
+    params.push({
+      label: "bᵣ",
+      titleKey: "rotational_friction",
+      kind: ANGULAR_DAMPING,
+      value: shown.rotationalFriction,
+      slot: "physical",
+      change: (friction) => [
+        {
+          type: "ChangeRotationalFriction",
+          id: element.id,
+          delta: friction - element.rotationalFriction,
+        },
+      ],
+    });
+  if ("slidingFriction" in element && "slidingFriction" in shown)
+    params.push({
+      label: "bₛ",
+      titleKey: "sliding_friction",
+      kind: DAMPING,
+      value: shown.slidingFriction,
+      slot: "physical",
+      change: (friction) => [
+        {
+          type: "ChangeSlidingFriction",
+          id: element.id,
+          delta: friction - element.slidingFriction,
+        },
+      ],
+    });
+  if (element.type === "gear" && shown.type === "gear") {
+    params.push({
+      label: "mₛ",
+      titleKey: "surface_mass",
+      kind: SURFACE_MASS,
+      value: shown.surfaceMass,
+      slot: "physical",
+      change: (surfaceMass) => [
+        {
+          type: "ChangeSurfaceMass",
+          id: element.id,
+          delta: surfaceMass - element.surfaceMass,
+        },
+      ],
+    });
+    params.push({
+      label: "J",
+      titleKey: "inertia",
+      kind: INERTIA,
+      value: gear_inertia(shown.surfaceMass, shown.radius),
+      slot: "physical",
+      // The gear stores a surface mass; its inertia is the same value read through its radius, so editing either writes the one field.
+      change: (inertia) => [
+        {
+          type: "ChangeSurfaceMass",
+          id: element.id,
+          delta:
+            surface_mass_for_inertia(inertia, element.radius) -
+            element.surfaceMass,
+        },
+      ],
+    });
+  }
+  if (element.type === "spring" && shown.type === "spring")
+    params.push({
+      label: "L₀",
+      titleKey: "rest_length",
+      kind: LENGTH,
+      value:
+        shown.restLength ?? shown.positionStart.distance_to(shown.positionEnd),
+      slot: "physical",
+      change: (restLength) => [
+        {
+          type: "UpdateElementRestLength",
+          id: element.id,
+          newValue: restLength,
+          oldValue: element.restLength,
+        },
+      ],
+    });
   return params;
 }
