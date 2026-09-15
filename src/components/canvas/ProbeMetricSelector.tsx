@@ -24,6 +24,14 @@ export const PROBE_METRIC_LABEL_KEYS: Record<ProbeMetric, StringKey> = {
   weight: "overlay_weight_one",
   inertia: "overlay_inertia_one",
   "inertia-moment": "metric_inertia_moment",
+  length: "length",
+  elongation: "metric_elongation",
+  "elongation-velocity": "metric_elongation_velocity",
+  "axial-force": "metric_axial_force",
+  "belt-tension": "metric_belt_tension",
+  "slide-abscissa": "metric_slide_abscissa",
+  "slide-velocity": "metric_slide_velocity",
+  "motor-torque": "metric_motor_torque",
 };
 
 export const PROBE_METRIC_ORDER: ProbeMetric[] = [
@@ -40,8 +48,7 @@ export const PROBE_METRIC_ORDER: ProbeMetric[] = [
   "moment-end",
 ];
 
-/** Angular metrics are only meaningful for oriented elements: gears (own
- * angle) and two-point edges (segment orientation).
+/** Angular metrics are only meaningful for oriented elements: gears (own angle) and two-point edges (segment orientation).
  * Belts follow a path, nodes are points. */
 function angular_metric_available(element: MechanicalElement): boolean {
   return (
@@ -52,8 +59,7 @@ function angular_metric_available(element: MechanicalElement): boolean {
   );
 }
 
-/** Reaction metrics come in two shapes: a single point for a node/body
- * element (its own position), or an independent start/end pair for an edge — a beam's root and tip carry unrelated loads, so they are never merged into one reading (see `ElementReaction` in `probe-series.ts`).
+/** Reaction metrics come in two shapes: a single point for a node/body element (its own position), or an independent start/end pair for an edge — a beam's root and tip carry unrelated loads, so they are never merged into one reading (see `ElementReaction` in `probe-series.ts`).
  * Each element offers only the shape that matches it. */
 function reaction_metric_available(
   metric: "force" | "force-start" | "force-end" | "moment" | "moment-start" | "moment-end",
@@ -63,8 +69,7 @@ function reaction_metric_available(
   return metric === "force" || metric === "moment" ? !isEdge : isEdge;
 }
 
-/** A motor's own mechanical power (τ·ω) only exists where there is a motor to read it
- * from — a pivot with a `motor` config, never a bare pivot or any other element type. */
+/** A motor's own mechanical power (τ·ω) only exists where there is a motor to read it from — a pivot with a `motor` config, never a bare pivot or any other element type. */
 function motor_power_available(element: MechanicalElement): boolean {
   return element.type === "pivot" && !!element.motor;
 }

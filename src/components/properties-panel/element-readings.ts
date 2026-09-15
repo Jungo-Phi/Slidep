@@ -20,7 +20,6 @@ import {
   element_angular_acceleration,
   element_reactions,
 } from "../solver/recording/probe-series";
-import { probe_metric_available } from "../canvas/ProbeMetricSelector";
 import { MaterialDef, ProfileDef } from "../../types/material";
 import type { FocusedOverlay } from "../canvas/drawing/drawing-functions";
 
@@ -79,8 +78,10 @@ export type ReadingLayer =
   | { kind: "element-overlay"; overlay: OverlayKind }
   | { kind: "support-reactions" };
 
+export type LayerKey = OverlayKind | "support-reactions";
+
 /** Identifies a layer among an element's own — a React key, and how the readings of one layer find each other. */
-export function layer_key(layer: ReadingLayer): string {
+export function layer_key(layer: ReadingLayer): LayerKey {
   return layer.kind === "support-reactions" ? layer.kind : layer.overlay;
 }
 
@@ -205,27 +206,102 @@ export function element_reading_groups(
   return groups;
 }
 
+/** A value read as a plain number beside an element: a measured quantity, or its mass, which no series carries. */
+export type InspectorValue = ProbeMetric | "mass";
+
 /**
- * The quantities read as plain numbers beside the element itself: those no overlay draws, so nothing else on screen says them.
- * A segment's own position is left out — the point sampled is its mid-span, and its two ends are nodes with panels (and positions) of their own.
- * Velocity joins them in kinematic mode, where no arrow is drawn for it.
+ * What `SelectionInspector` shows of one element, decided per element type rather than by what a probe can measure.
+ * `values` and the `featured` layers are always on screen; `details` and every other layer only once the reader unfolds them.
+ * A value never repeats what a layer already reads, which is why velocity is a value in kinematic mode only.
  */
-export function inspector_value_metrics(
+export interface InspectorLayout {
+  values: InspectorValue[];
+  details: InspectorValue[];
+  featured: LayerKey[];
+  /** The internal readings at both ends are summed up as one axial force: a massless member pushes equally on both, so they say the same thing twice. */
+  axialForce: boolean;
+}
+
+export function inspector_layout(
   element: MechanicalElement,
   dynamic: boolean,
-): ProbeMetric[] {
-  const metrics: ProbeMetric[] = [
-    "position",
-    ...(dynamic ? [] : (["velocity"] as ProbeMetric[])),
-    "angle",
-    "angular-velocity",
-    "motor-power",
-  ];
-  return metrics.filter(
-    (metric) =>
-      probe_metric_available(metric, element) &&
-      (metric !== "position" || "position" in element),
-  );
+): InspectorLayout {
+  const layout = (
+    values: InspectorValue[],
+    details: InspectorValue[],
+    featured: LayerKey[] = [],
+    axialForce = false,
+  ): InspectorLayout => ({ values, details, featured, axialForce });
+  // An anchored node does not move, so what it says is what the ground pushes back with.
+  const grounded = "isGrounded" in element && element.isGrounded;
+
+  if (!dynamic)
+    switch (element.type) {
+      case "beam":
+        return layout(["angular-velocity"], ["angle", "length"]);
+      case "spring":
+        return layout(["length", "elongation"], ["angle", "angular-velocity"]);
+      case "damper":
+        return layout(["length"], ["angle", "angular-velocity"]);
+      case "belt":
+        return layout([], ["length"]);
+      case "gear":
+        return layout(["angular-velocity"], ["angle"]);
+      case "slider":
+      case "slidep":
+        return layout(
+          ["slide-abscissa", "slide-velocity"],
+          ["position", "velocity"],
+          ["trajectory"],
+        );
+      case "pivot":
+      case "join":
+      case "mass":
+        return grounded
+          ? layout([], ["position"])
+          : layout(["velocity"], ["position"], ["trajectory"]);
+    }
+
+  const at_rest_or_moving: LayerKey = grounded ? "support-reactions" : "velocity";
+  switch (element.type) {
+    case "beam":
+      return layout(
+        [],
+        ["angle", "angular-velocity", "length", "elongation", "mass"],
+        ["force"],
+      );
+    case "spring":
+      return layout(
+        ["length", "elongation"],
+        ["angle", "angular-velocity"],
+        ["force"],
+        true,
+      );
+    case "damper":
+      return layout(
+        ["elongation-velocity"],
+        ["length", "angle", "angular-velocity"],
+        ["force"],
+        true,
+      );
+    case "belt":
+      return layout(["belt-tension"], ["length"]);
+    case "gear":
+      return layout(["angular-velocity"], ["angle"]);
+    case "pivot":
+      return layout(
+        element.motor ? ["motor-power", "motor-torque"] : [],
+        ["position"],
+        [at_rest_or_moving],
+      );
+    case "join":
+      return layout([], ["position"], [at_rest_or_moving]);
+    case "slider":
+    case "slidep":
+      return layout(["slide-abscissa", "slide-velocity"], ["position"], ["velocity"]);
+    case "mass":
+      return layout([], ["position"], [at_rest_or_moving, "inertia"]);
+  }
 }
 
 /**

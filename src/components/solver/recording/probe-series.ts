@@ -16,8 +16,7 @@ export interface ProbeCurve {
   values: number[];
 }
 
-/** Whether `metric` plots as x/y/norm (a direction in the plane) rather than a single
- * "value" curve — false for the angular and moment metrics, which are scalars. */
+/** Whether `metric` plots as x/y/norm (a direction in the plane) rather than a single "value" curve — false for the angular and moment metrics, which are scalars. */
 export function is_vector_metric(metric: ProbeMetric): boolean {
   return (
     metric !== "angle" &&
@@ -92,8 +91,7 @@ function read_position<S extends SimulationSnapshot>(
   return true;
 }
 
-/** Oriented angle of the element (rad): gear own angle, or edge direction. Generic like
- * `read_position`, for the same reason. */
+/** Oriented angle of the element (rad): gear own angle, or edge direction. Generic like `read_position`, for the same reason. */
 function read_angle<S extends SimulationSnapshot>(
   snapshot: S,
   slots: ProbeSlots,
@@ -109,8 +107,7 @@ function read_angle<S extends SimulationSnapshot>(
   return Math.atan2(p[2 * slots.b + 1] - p[2 * slots.a + 1], dx);
 }
 
-/** The probed point's velocity, into `sampled` — same edge-midpoint averaging as
- * `read_position`.
+/** The probed point's velocity, into `sampled` — same edge-midpoint averaging as `read_position`.
  * `DynamicSnapshot`-only: velocity has no meaning where nothing integrates a force (kinematic mode drives position directly). */
 function read_velocity(snapshot: DynamicSnapshot, slots: ProbeSlots): boolean {
   if (slots.a < 0) return false;
@@ -130,8 +127,7 @@ function read_velocity(snapshot: DynamicSnapshot, slots: ProbeSlots): boolean {
   return true;
 }
 
-/** The probed point's acceleration, into `sampled` — same edge-midpoint averaging as
- * `read_velocity`. `DynamicSnapshot`-only, same reasoning. */
+/** The probed point's acceleration, into `sampled` — same edge-midpoint averaging as `read_velocity`. `DynamicSnapshot`-only, same reasoning. */
 function read_acceleration(snapshot: DynamicSnapshot, slots: ProbeSlots): boolean {
   if (slots.a < 0) return false;
   const a = snapshot.accelerations;
@@ -238,15 +234,13 @@ export function element_angular_acceleration(
   return (dx * relAy - dy * relAx) / lengthSq;
 }
 
-/** One point of an element where a reaction acts — a node/gear has one, an edge has two
- * (its own start and end), each independent: a beam's root and tip carry unrelated loads. */
+/** One point of an element where a reaction acts — a node/gear has one, an edge has two (its own start and end), each independent: a beam's root and tip carry unrelated loads. */
 export interface ElementReaction {
   at: Point2;
   /** Which of the element's own points this is — the same disambiguator `element_reaction_at` takes, kept on the result so a caller holding several of an edge's readings at once can still tell them apart. */
   which: ReactionPoint;
   vector: Point2;
-  /** N·m, signed — at a beam's own end, that beam's cohesion couple (`beam_end_reaction`);
-   * anywhere else, the couple a rigid (non-rotating) weld's two-point force pair reduces to (see `PBD_kinematic_solver.ts`'s per-link moment).
+  /** N·m, signed — at a beam's own end, that beam's cohesion couple (`beam_end_reaction`); anywhere else, the couple a rigid (non-rotating) weld's two-point force pair reduces to (see `PBD_kinematic_solver.ts`'s per-link moment).
    * Absent only where nothing at this point reports one at all — a beam end always reads a figure, `0` at a plain hinge. */
   moment?: number;
   /** From `LinkReaction.atAnchor` — whether this point's dof was immovable in the solve.
@@ -254,16 +248,14 @@ export interface ElementReaction {
   atAnchor: boolean;
 }
 
-/** At a support (`atAnchor`), what "reaction" means flips: `LinkReaction` measures what the
- * mechanism itself exerts ON that fixed point (Newton's third law from each link's own perspective, folded together — see PBD_kinematic_solver.ts's dynamics block).
+/** At a support (`atAnchor`), what "reaction" means flips: `LinkReaction` measures what the mechanism itself exerts ON that fixed point (Newton's third law from each link's own perspective, folded together — see PBD_kinematic_solver.ts's dynamics block).
  * The classical support reaction a user expects — what the ground pushes back WITH, opposing the load — is exactly the negative of that.
  * A non-anchored point has no ground to react from, so it keeps the raw member value (e.g. a rod's own tension, felt at either end). */
 function oppose_at_support<T>(value: T, atAnchor: boolean, negate: (v: T) => T): T {
   return atAnchor ? negate(value) : value;
 }
 
-/** Every `force`-kind `LinkReaction` touching solver key `key`, summed. `key` may itself be
- * plain, but a reaction's own `key` may be a fused (comma-joined) one when the dof it reports at is shared with another element — hence membership, not equality. */
+/** Every `force`-kind `LinkReaction` touching solver key `key`, summed. `key` may itself be plain, but a reaction's own `key` may be a fused (comma-joined) one when the dof it reports at is shared with another element — hence membership, not equality. */
 function force_at(
   key: string,
   snapshot: DynamicSnapshot,
@@ -329,8 +321,7 @@ function point_reaction(
   };
 }
 
-/** Whether the dof at `key` was immovable in the solve — the one thing a beam's own cohesion
- * torsor does not carry, and the only thing `beam_end_reaction` still needs from the raw reactions.
+/** Whether the dof at `key` was immovable in the solve — the one thing a beam's own cohesion torsor does not carry, and the only thing `beam_end_reaction` still needs from the raw reactions.
  * Read the way `force_at` reads it, last reporter wins, so one point never answers two different things depending on which of its readings a caller went through. */
 function anchored_at(key: string, snapshot: DynamicSnapshot): boolean {
   let atAnchor = false;
@@ -414,12 +405,10 @@ function node_reaction_from_beams(
   };
 }
 
-/** Which point of an element a reaction is read at: a node/gear/body has only `"node"`,
- * an edge only `"start"`/`"end"` — `element_reaction_at` returns `undefined` for the shape the element doesn't have. */
+/** Which point of an element a reaction is read at: a node/gear/body has only `"node"`, an edge only `"start"`/`"end"` — `element_reaction_at` returns `undefined` for the shape the element doesn't have. */
 export type ReactionPoint = "node" | "start" | "end";
 
-/** The reaction at one specific point of an element — the building block behind both
- * `element_reactions` (all of an element's points, for the canvas overlay) and the probe series/instant readers (one named point at a time, e.g. "force-start"). */
+/** The reaction at one specific point of an element — the building block behind both `element_reactions` (all of an element's points, for the canvas overlay) and the probe series/instant readers (one named point at a time, e.g. "force-start"). */
 function element_reaction_at(
   element: MechanicalElement,
   which: ReactionPoint,
@@ -465,20 +454,17 @@ export interface ProbeTrajectory {
   headCount: number;
 }
 
-/** One trajectory being accumulated: the path, and the time each point was
- * recorded at (the sampling can skip a snapshot, so the two arrays are not indexed by snapshot). */
+/** One trajectory being accumulated: the path, and the time each point was recorded at (the sampling can skip a snapshot, so the two arrays are not indexed by snapshot). */
 interface TrajectoryBuild {
   elementID: ID;
   points: Point2[];
   times: number[];
 }
 
-/** Trajectories built so far, plus what they were built from. Opaque: pass it
- * back to `extend_probe_trajectories`, never read it. */
+/** Trajectories built so far, plus what they were built from. Opaque: pass it back to `extend_probe_trajectories`, never read it. */
 export interface TrajectoryCache {
   elements: MechanicalElement[];
-  /** Number of snapshots consumed, and the last one consumed — its identity is
-   * what tells an append apart from a rewritten history. */
+  /** Number of snapshots consumed, and the last one consumed — its identity is what tells an append apart from a rewritten history. */
   consumed: number;
   boundary: SimulationSnapshot | null;
   built: TrajectoryBuild[];
@@ -544,8 +530,7 @@ export function extend_probe_trajectories(
   };
 }
 
-/** Index of the first point recorded after `time` — the trajectory's head at
- * that playback time.
+/** Index of the first point recorded after `time` — the trajectory's head at that playback time.
  * `times` is sorted, so the scan is a binary search. */
 function head_count(times: number[], time: number): number {
   let lo = 0;
@@ -558,8 +543,7 @@ function head_count(times: number[], time: number): number {
   return lo;
 }
 
-/** Reads the accumulated trajectories at a playback time. The point arrays are
- * shared with the cache, not copied: treat them as read-only. */
+/** Reads the accumulated trajectories at a playback time. The point arrays are shared with the cache, not copied: treat them as read-only. */
 export function trajectories_at(
   cache: TrajectoryCache,
   time: number,
@@ -698,6 +682,16 @@ export function get_probe_series(
     case "moment-end":
       // Not computed by the kinematic solver; dynamic mode fills this in.
       return { t: [], curves: [], unit: "N·m" };
+
+    case "length":
+    case "elongation":
+    case "elongation-velocity":
+    case "axial-force":
+    case "belt-tension":
+    case "slide-abscissa":
+    case "slide-velocity":
+    case "motor-torque":
+      return unrecorded_series(metric);
 
     case "weight":
     case "inertia":
@@ -896,15 +890,50 @@ export function get_dynamic_probe_series(
 
     case "inertia-moment":
       return { t: [], curves: [], unit: "N·m" };
+
+    case "length":
+    case "elongation":
+    case "elongation-velocity":
+    case "axial-force":
+    case "belt-tension":
+    case "slide-abscissa":
+    case "slide-velocity":
+    case "motor-torque":
+      return unrecorded_series(metric);
   }
 }
+
+type UnrecordedMetric =
+  | "length"
+  | "elongation"
+  | "elongation-velocity"
+  | "axial-force"
+  | "belt-tension"
+  | "slide-abscissa"
+  | "slide-velocity"
+  | "motor-torque";
+
+/** The empty series of a metric the recorder does not produce yet (see `ProbeMetric`), in the unit it will read in. */
+function unrecorded_series(metric: UnrecordedMetric): ProbeSeries {
+  return { t: [], curves: [], unit: UNRECORDED_UNIT[metric] };
+}
+
+const UNRECORDED_UNIT: Record<UnrecordedMetric, string> = {
+  length: "m",
+  elongation: "m",
+  "elongation-velocity": "m/s",
+  "axial-force": "N",
+  "belt-tension": "N",
+  "slide-abscissa": "m",
+  "slide-velocity": "m/s",
+  "motor-torque": "N·m",
+};
 
 /** One measured quantity of an element at a given instant. */
 export interface MetricSample {
   metric: ProbeMetric;
   unit: string;
-  /** One entry per curve of the metric ("x"/"y"/"norm", or "value"). Empty when
-   * the metric has no data yet (no snapshots, or not computed in this mode). */
+  /** One entry per curve of the metric ("x"/"y"/"norm", or "value"). Empty when the metric has no data yet (no snapshots, or not computed in this mode). */
   values: { key: ProbeCurveKey; value: number }[];
 }
 

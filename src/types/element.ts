@@ -242,7 +242,7 @@ export interface MassElement extends BaseNodeElement {
 export interface GearElement extends BaseBodyElement {
   type: "gear";
   radius: number;
-  parentAxleID: ID; // pivot ou slidep (jamais null)
+  parentAxleID: ID; // Always a pivot or a slidep.
   fixedNodesBodyIDs: ID[];
   meshedGearsIDs: ID[];
   attachedBeltID?: ID;
@@ -253,8 +253,7 @@ export interface GearElement extends BaseBodyElement {
 export interface BeamElement extends BaseEdgeElement {
   type: "beam";
   fixedNodesBodyIDs: ID[];
-  /** The mechanism's own library — `A`, `I_Gz` and `v` are derived from these, never
-   * stored. */
+  /** The mechanism's own library — `A`, `I_Gz` and `v` are derived from these, never stored. */
   materialID: ID;
   profileID: ID;
 }
@@ -263,8 +262,7 @@ export interface BeamElement extends BaseEdgeElement {
 export interface SpringElement extends BaseEdgeElement {
   type: "spring";
   stiffness: number;
-  /** The spring's natural length: the user's explicit value, or the drawn distance between its
-   * endpoints when unset.
+  /** The spring's natural length: the user's explicit value, or the drawn distance between its endpoints when unset.
    * Feeds the kinematic solver's soft pull (see parsing.ts) and the drawn coil count; frozen on the simulated copy by apply_snapshot_to_mechanism so the coil count stays fixed while the drawn length varies (accordion). */
   restLength?: number;
 }
@@ -273,8 +271,7 @@ export interface SpringElement extends BaseEdgeElement {
 export interface DamperElement extends BaseEdgeElement {
   type: "damper";
   damping: number;
-  /** Rendering only: natural length at simulation start, frozen on the displayed copy so the
-   * piston reach stays fixed while the drawn length varies.
+  /** Rendering only: natural length at simulation start, frozen on the displayed copy so the piston reach stays fixed while the drawn length varies.
    * Undefined in edition. */
   restLength?: number;
 }
@@ -288,12 +285,10 @@ export interface BeltElement extends BaseEdgeElement {
   type: "belt";
   attachedGearsIDs: { id: ID; clockwise: boolean }[];
   closed: boolean;
-  /** Rendering only (simulation): indices into `attachedGearsIDs` of pulleys that
-   * lost belt contact this run, so the belt is drawn straight past them.
+  /** Rendering only (simulation): indices into `attachedGearsIDs` of pulleys that lost belt contact this run, so the belt is drawn straight past them.
    * Undefined in edition. */
   disconnectedGearIndices?: number[];
-  /** Rendering only (simulation): continuous wrap angle per attached pulley;
-   * |value| > 2π ⇒ the belt has wound onto it (drawn as extra turns). */
+  /** Rendering only (simulation): continuous wrap angle per attached pulley; |value| > 2π ⇒ the belt has wound onto it (drawn as extra turns). */
   gearWraps?: number[];
 }
 
@@ -467,7 +462,16 @@ export type ProbeMetric =
   // Never offered in a probe selector (`available_probe_metrics` never returns them): only ever built directly, for a weight or inertia reading (`mass_reading_sample`).
   | "weight"
   | "inertia"
-  | "inertia-moment";
+  | "inertia-moment"
+  // Shown by `SelectionInspector`, but not yet recorded: every series of these is empty, and no probe selector offers them (`PROBE_METRIC_ORDER` leaves them out).
+  | "length"
+  | "elongation"
+  | "elongation-velocity"
+  | "axial-force"
+  | "belt-tension"
+  | "slide-abscissa"
+  | "slide-velocity"
+  | "motor-torque";
 
 /** Which curves of a vector metric are plotted.
  * Ignored for scalar metrics (angle, angular velocity). */

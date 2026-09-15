@@ -3,6 +3,7 @@ import { Point2 } from "../../types/point2";
 import { MetricSample } from "../solver/recording/probe-series";
 import { quantity_kind_for_metric } from "../solver/recording/negligibility-pool";
 import {
+  QuantityKind,
   QuantityUnit,
   display_unit,
   to_mantissa,
@@ -33,11 +34,19 @@ export function metric_shape(metric: ProbeMetric): MetricShape {
     case "angle":
     case "angular-velocity":
     case "motor-power":
+    case "length":
+    case "elongation":
+    case "elongation-velocity":
+    case "axial-force":
+    case "belt-tension":
+    case "slide-abscissa":
+    case "slide-velocity":
       return "scalar";
     case "moment":
     case "moment-start":
     case "moment-end":
     case "inertia-moment":
+    case "motor-torque":
       return "turn";
   }
 }
@@ -57,6 +66,12 @@ export interface FormattedMetric {
   sense?: "cw" | "ccw";
   /** The component pair, for the quantities that show one — drawn stacked, x over y (`Vector`). */
   vector?: WorldPoint;
+}
+
+/** A single SI value laid out like a scalar reading, for a quantity no series carries. */
+export function format_scalar(value: number, kind: QuantityKind): FormattedMetric {
+  const unit = display_unit(Math.abs(value), kind);
+  return { unit, main: to_mantissa(value, unit, PRECISION) };
 }
 
 const curve = (sample: MetricSample, key: string): number | undefined =>

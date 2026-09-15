@@ -163,8 +163,7 @@ export function extend_negligibility_pool(
   };
 }
 
-/** Which `NegligibilityPool` field bounds a given probe metric's own kind — the one lookup
- * a new metric needs to join the negligibility rule, no new threshold to invent. */
+/** Which `NegligibilityPool` field bounds a given probe metric's own kind — the one lookup a new metric needs to join the negligibility rule, no new threshold to invent. */
 export function pool_key_for_metric(
   metric: ProbeMetric,
 ): keyof Pick<
@@ -179,8 +178,13 @@ export function pool_key_for_metric(
 > {
   switch (metric) {
     case "position":
+    case "length":
+    case "elongation":
+    case "slide-abscissa":
       return "length";
     case "velocity":
+    case "elongation-velocity":
+    case "slide-velocity":
       return "linearVelocity";
     case "angle":
       return "angle";
@@ -193,11 +197,14 @@ export function pool_key_for_metric(
     case "force-end":
     case "weight":
     case "inertia":
+    case "axial-force":
+    case "belt-tension":
       return "force";
     case "moment":
     case "moment-start":
     case "moment-end":
     case "inertia-moment":
+    case "motor-torque":
       return "moment";
   }
 }
@@ -208,8 +215,13 @@ export function pool_key_for_metric(
 export function quantity_kind_for_metric(metric: ProbeMetric): QuantityKind {
   switch (metric) {
     case "position":
+    case "length":
+    case "elongation":
+    case "slide-abscissa":
       return LENGTH;
     case "velocity":
+    case "elongation-velocity":
+    case "slide-velocity":
       return LINEAR_VELOCITY;
     case "angle":
       return ANGLE;
@@ -222,21 +234,24 @@ export function quantity_kind_for_metric(metric: ProbeMetric): QuantityKind {
     case "force-end":
     case "weight":
     case "inertia":
+    case "axial-force":
+    case "belt-tension":
       return FORCE;
     case "moment":
     case "moment-start":
     case "moment-end":
     case "inertia-moment":
+    case "motor-torque":
       return MOMENT;
   }
 }
 
-/** Metrics whose zero is an arbitrary reference (the canvas origin, an orientation
- * convention) rather than a real physical state — forcing it into a chart's axis would squash a real reading that happens to sit far from it.
+/** Metrics whose zero is an arbitrary reference (the canvas origin, an orientation convention) rather than a real physical state — forcing it into a chart's axis would squash a real reading that happens to sit far from it.
  * An exception list, not an inclusion list: everything else defaults to showing zero, since for a force, a velocity, a moment, an angular velocity, zero IS a meaningful state ("at rest", "no load") — a new metric should get that for free rather than needing to ask for it. */
 const METRICS_WITH_ARBITRARY_ZERO: ReadonlySet<ProbeMetric> = new Set([
   "position",
   "angle",
+  "length",
 ]);
 
 /** Whether a chart of this metric should force `0` into its visible y-range. */

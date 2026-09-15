@@ -87,11 +87,11 @@ export const MetricValues: React.FC<{
   );
 };
 
-/** One measured quantity of the inspected subject: what it is on the left, what it reads on the right. */
-export const MetricRow: React.FC<{
-  metric: ProbeMetric;
-  sample: MetricSample | undefined;
-}> = ({ metric, sample }) => (
+/** One value of the inspected subject: what it is on the left, what it reads on the right. */
+export const ValueRow: React.FC<{
+  label: string;
+  formatted: FormattedMetric | undefined;
+}> = ({ label, formatted }) => (
   <Box
     sx={{
       display: "flex",
@@ -102,10 +102,21 @@ export const MetricRow: React.FC<{
     }}
   >
     <Typography variant="caption" color="text.secondary" noWrap>
-      {t(PROBE_METRIC_LABEL_KEYS[metric])}
+      {label}
     </Typography>
-    <MetricValue formatted={sample && format_metric(sample)} />
+    <MetricValue formatted={formatted} />
   </Box>
+);
+
+/** One measured quantity of the inspected subject, labelled the way a probe names it. */
+export const MetricRow: React.FC<{
+  metric: ProbeMetric;
+  sample: MetricSample | undefined;
+}> = ({ metric, sample }) => (
+  <ValueRow
+    label={t(PROBE_METRIC_LABEL_KEYS[metric])}
+    formatted={sample && format_metric(sample)}
+  />
 );
 
 export default MetricRow;
