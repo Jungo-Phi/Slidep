@@ -2,7 +2,7 @@ import { Point2 } from "../../types/point2";
 
 /**
  * Solver node storage: parallel `Float64Array`s addressed by slot instead of by string key.
- * Keys are resolved to slots once per solve (see `link-slots.ts`); an unknown key resolves to `ABSENT`, which every constraint must treat as a missing node — the same short-circuit `Map.get()` returning `undefined` used to give.
+ * Keys are resolved to slots once per solve (see `link-slots.ts`); an unknown key resolves to `ABSENT`, which every constraint must treat as a missing node, the way it would read `Map.get()` returning `undefined`.
  */
 export interface Nodes {
   x: Float64Array;
@@ -38,9 +38,13 @@ export interface SimNodes extends Nodes {
   /**
    * Inverse rotational inertia (1/(kg·m²)), one per `angle` slot — the rotational analogue of `Nodes.w`.
    * A node added without one gets 1, same convention.
-   * Populated but unused today: no constraint yet applies a torque or splits an angular correction by inertia (`applyGearMeshAngleConstraint` splits by radius, a kinematic ratio, not a physical weight) — this is plumbing for when one does, not a behaviour change on its own.
    */
   wAngle: Float64Array;
+  /**
+   * Whether `wAngle` holds real inertias, which a constraint coupling an angle to positions has to weigh through its lever arm (dynamics).
+   * False, an angle weighs 1 against any position whatever the lever: the kinematic metric, which only has to converge, not to share momentum right.
+   */
+  inertialAngles: boolean;
   /** External torque (N·m), one per `angle` slot — the rotational analogue of `Nodes.fx`/`fy`,
    * folded into the predict step as `torque · wAngle`. */
   torque: Float64Array;
@@ -253,9 +257,11 @@ export function solveNodesFromMaps(
    * `PBD_solve`'s `dynamics` param); every other caller leaves these empty. */
   velocities: Map<string, Point2> = new Map(),
   angleVelocities: Map<string, number> = new Map(),
-  /** Populates `wAngle` — see its doc on `SimNodes`. A caller without one gets 1 everywhere,
-   * same as `posMasses`/`radMasses` when omitted. */
-  angleMasses: Map<string, number> = new Map(),
+  /**
+   * Populates `wAngle` and turns `inertialAngles` on — see their doc on `SimNodes`.
+   * Omitted, every angle gets 1, same as `posMasses`/`radMasses` when omitted.
+   */
+  angleMasses?: Map<string, number>,
   /** Populates `fx`/`fy` — read only by a dynamics step, like `velocities`. */
   forces: Map<string, Point2> = new Map(),
   /** Populates `torque` — read only by a dynamics step, like `angleVelocities`. */
@@ -269,6 +275,7 @@ export function solveNodesFromMaps(
   nodes.vAngle = new Float64Array(angles.size);
   nodes.wAngle = new Float64Array(angles.size);
   nodes.torque = new Float64Array(angles.size);
+  nodes.inertialAngles = angleMasses !== undefined;
   fillScalars(nodes.angleIndex, nodes.angleKeys, nodes.angle, nodes.wAngle, angles, angleMasses);
   for (const [key, i] of nodes.angleIndex) {
     nodes.vAngle[i] = angleVelocities.get(key) ?? 0;

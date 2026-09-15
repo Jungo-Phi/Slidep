@@ -373,8 +373,9 @@ export function applyBeltSubChainAggregate(
 
   const iS = s.ang[0];
   const iE = s.ang[1];
-  const wS = rimWeight(link.rEpsStart);
-  const wE = rimWeight(link.rEpsEnd);
+  // Bound angles weigh as a point of their own rim kinematically, and by their real inertia in dynamics, where the centres' `w` are real masses too.
+  const wS = nodes.inertialAngles && iS >= 0 ? nodes.wAngle[iS] : rimWeight(link.rEpsStart);
+  const wE = nodes.inertialAngles && iE >= 0 ? nodes.wAngle[iE] : rimWeight(link.rEpsEnd);
   const writeS = iS >= 0 && Math.abs(link.rEpsStart) > 1e-9;
   const writeE = iE >= 0 && Math.abs(link.rEpsEnd) > 1e-9;
 
@@ -386,7 +387,7 @@ export function applyBeltSubChainAggregate(
     if (slot < 0 || nodes.w[slot] === 0) return;
     denom += nodes.w[slot] * (gx * gx + gy * gy);
   });
-  if (denom < 1e-12) return Math.abs(C);
+  if (denom < (nodes.inertialAngles ? Number.MIN_VALUE : 1e-12)) return Math.abs(C);
 
   const lambda = -(C / denom) * stiffness;
 
@@ -521,9 +522,22 @@ export function applyBeltLoopClosure(
 
   sScratch[0] = 0;
   for (let i = 1; i < n; i++) sScratch[i] = sScratch[i - 1] + cScratch[i - 1];
-  let meanS = 0;
-  for (let i = 0; i < n; i++) meanS += sScratch[i];
-  meanS /= n;
+  // The least-norm offset is the mean of `S` weighted by each pulley's rim mass: 1 kinematically, J/r² in dynamics, so a heavier pulley is the one that moves less.
+  const rimMass = (i: number): number => {
+    if (!nodes.inertialAngles) return 1;
+    const ang = s.ang[i];
+    const re = rEps(i);
+    if (ang < 0 || Math.abs(re) < 1e-9 || nodes.wAngle[ang] <= 0) return 0;
+    return 1 / (nodes.wAngle[ang] * re * re);
+  };
+  let weightedS = 0;
+  let totalMass = 0;
+  for (let i = 0; i < n; i++) {
+    const m = rimMass(i);
+    weightedS += m * sScratch[i];
+    totalMass += m;
+  }
+  const meanS = totalMass > 0 ? weightedS / totalMass : 0;
 
   for (let i = 0; i < n; i++) {
     const ang = s.ang[i];

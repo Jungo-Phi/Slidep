@@ -119,10 +119,10 @@ export function segmentH(
 }
 
 /**
- * Weight of an angle DOF in the projection metric.
+ * Weight of an angle DOF in the kinematic projection metric.
  * "rim" (w_θ = 1/r²) makes the angle exactly as mobile as a point of its own rim, so a strand shares its correction equally between its two pulleys instead of ∝ r².
+ * Dynamics weighs angles by their real inertia instead (`SimNodes.inertialAngles`).
  */
-/** The `rim` metric: an angle of radius r is as mobile as a point on its own rim. */
 export const rimWeight = (rEps: number): number =>
   Math.abs(rEps) < 1e-9 ? 1 : 1 / (rEps * rEps);
 
@@ -244,16 +244,16 @@ export function applyBeltSegmentNoSlip(
 
   const C = qA - qB - (h - link.h0); // belt-px
 
-  // ∂C/∂θ_a = r_a·ε_a, ∂C/∂θ_b = −r_b·ε_b, in the `rim` metric (w_θ = 1/r²) that makes an angle exactly as mobile as a point of its own rim.
+  // ∂C/∂θ_a = r_a·ε_a, ∂C/∂θ_b = −r_b·ε_b, weighed in the `rim` metric (w_θ = 1/r²) kinematically, and by each pulley's real inertia in dynamics.
   // Angles only: giving a strand authority over the positions makes it COMPLIANT — it satisfies its own equation by deforming the belt, which is the slip it exists to forbid.
-  const mobA = rimWeight(link.rEpsA);
-  const mobB = rimWeight(link.rEpsB);
+  const mobA = nodes.inertialAngles && iA >= 0 ? nodes.wAngle[iA] : rimWeight(link.rEpsA);
+  const mobB = nodes.inertialAngles && iB >= 0 ? nodes.wAngle[iB] : rimWeight(link.rEpsB);
   const writeA = iA >= 0 && Math.abs(link.rEpsA) > 1e-9;
   const writeB = iB >= 0 && Math.abs(link.rEpsB) > 1e-9;
   let denom = 0;
   if (writeA) denom += mobA * link.rEpsA * link.rEpsA;
   if (writeB) denom += mobB * link.rEpsB * link.rEpsB;
-  if (denom < 1e-12) return Math.abs(C);
+  if (denom < (nodes.inertialAngles ? Number.MIN_VALUE : 1e-12)) return Math.abs(C);
 
   const k = -(C / denom) * stiffness; // = λ
   if (writeA) nodes.angle[iA] = thetaA + k * mobA * link.rEpsA;

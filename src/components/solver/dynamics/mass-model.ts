@@ -45,6 +45,13 @@ const MASS_FLOOR = DEFAULT.MASS;
 const floored_mass = (mass: number): number => (mass > 0 ? mass : MASS_FLOOR);
 
 /**
+ * Share of the lightest real gear inertia given to a gear with none, so that it turns with its train instead of reading as anchored (`wAngle = 0`).
+ * Small enough to drag nothing, large enough for a sweep to still split a correction with it.
+ * With no real gear inertia to compare against, the share is taken of the gear's own inertia at the default surface mass.
+ */
+const INERTIA_FLOOR_SHARE = 1e-3;
+
+/**
  * Lumps each element's mass onto its own solver key(s) — half to each end of a beam, all of it onto a gear's own node, a `MassElement`'s own value onto its node — then folds fused keys together via `keyMap`, exactly like `compile_simulation_model` folded the positions those keys belong to.
  * Has to run AFTER that fusion decision (not on the raw mechanism): three beams meeting at one welded point are one node whose mass is the sum of all three halves, and nothing before fusion knows they are the same node.
  *
@@ -61,7 +68,7 @@ export function compute_dynamic_mass_model(
     lumped.set(fused, (lumped.get(fused) ?? 0) + mass);
   };
 
-  const angleMasses = new Map<string, number>();
+  const gearInertias: { id: string; radius: number; inertia: number }[] = [];
   const beamMidpoints: { midKey: string; startKey: string; endKey: string }[] = [];
 
   for (const element of mechanism.mechanicalElements) {
@@ -88,12 +95,27 @@ export function compute_dynamic_mass_model(
     } else if (element.type === "gear") {
       add(element.id, gear_mass(element.surfaceMass, element.radius));
       // The gear's own node carries the mass; its angle DOF is a separate solver variable and gets the matching inertia.
-      const inertia = gear_inertia(element.surfaceMass, element.radius);
-      angleMasses.set(element.id, inertia > 0 ? 1 / inertia : 0);
+      gearInertias.push({
+        id: element.id,
+        radius: element.radius,
+        inertia: gear_inertia(element.surfaceMass, element.radius),
+      });
     } else if (element.type === "mass") {
       add(element.id, element.mass);
     }
     // Springs, dampers, belts, pivots/slideps/joins carry no mass of their own — see the plan's decisions: they only ever appear as the OTHER end of something that does.
+  }
+
+  const angleMasses = new Map<string, number>();
+  const lightest = Math.min(
+    ...gearInertias.map(({ inertia }) => (inertia > 0 ? inertia : Infinity)),
+  );
+  for (const { id, radius, inertia } of gearInertias) {
+    const reference = Number.isFinite(lightest)
+      ? lightest
+      : gear_inertia(DEFAULT.SURFACE_MASS, radius);
+    const floored = inertia > 0 ? inertia : INERTIA_FLOOR_SHARE * reference;
+    angleMasses.set(id, floored > 0 ? 1 / floored : 0);
   }
 
   const posMasses = new Map<string, number>();
