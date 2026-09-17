@@ -69,6 +69,11 @@ export type MotionMode = {
    * Often a gear spinning in the void, which is a design oversight rather than a mechanism.
    */
   localized: boolean;
+  /**
+   * The motion stirs no mass the mechanism actually has, only nodes standing on the solver's own floor (`DynamicMassModel.flooredKeys`).
+   * How fast it goes is then an artefact of that floor rather than an answer, which is what makes it worth naming instead of showing a figure for.
+   */
+  inertiaFree: boolean;
 };
 
 /**
@@ -283,6 +288,35 @@ function moved_elements(
 }
 
 /**
+ * Whether the motion stirs no mass at all: every variable it moves is one the mechanism gave none to, where the solver's own floor stands instead.
+ * Read on the same `MOVING_SHARE` cut as `moved_elements`, so what counts as moving here is what the panel says moves.
+ */
+function inertia_free(
+  model: AnalysisModel,
+  vector: Float64Array,
+  variables: Variable[],
+): boolean {
+  const { flooredKeys, flooredAngles, posMasses, angleMasses } =
+    model.dynamicMasses;
+  let widest = 0;
+  for (let i = 0; i < variables.length; i++)
+    widest = Math.max(widest, Math.abs(vector[i]));
+  if (widest === 0) return false;
+
+  const floor = widest * MOVING_SHARE;
+  for (let i = 0; i < variables.length; i++) {
+    if (Math.abs(vector[i]) < floor) continue;
+    const { key, component } = variables[i];
+    const carriesMass =
+      component === "angle"
+        ? !flooredAngles.has(key) && (angleMasses.get(key) ?? 0) > 0
+        : !flooredKeys.has(key) && (posMasses.get(key) ?? 0) > 0;
+    if (carriesMass) return false;
+  }
+  return true;
+}
+
+/**
  * Re-express a chain's motion space in element-shaped directions.
  *
  * Greedy on the strongest remaining projection: the direction the constraints accommodate best comes first, so a Core XY answers with its two axes rather than two mixtures of them.
@@ -337,6 +371,7 @@ export function canonical_modes(
       dominant: contributors[0]?.id ?? named[0],
       drivenByMotor: false,
       localized: moves.size === 1,
+      inertiaFree: inertia_free(model, vector, variables),
     };
   });
   name_modes(chain, variables, modes);

@@ -999,16 +999,16 @@ export const STRINGS = {
     es: "Pesos",
   },
   overlay_inertia_one: {
-    fr: "Force d'inertie",
-    en: "Inertial force",
-    de: "Trägheitskraft",
-    es: "Fuerza de inercia",
+    fr: "Inertie",
+    en: "Inertia",
+    de: "Trägheit",
+    es: "Inercia",
   },
   overlay_inertia_other: {
-    fr: "Forces d'inertie",
-    en: "Inertial forces",
-    de: "Trägheitskräfte",
-    es: "Fuerzas de inercia",
+    fr: "Inerties",
+    en: "Inertias",
+    de: "Trägheiten",
+    es: "Inercias",
   },
   metric_inertia_moment: {
     fr: "Couple d'inertie",
@@ -1851,6 +1851,36 @@ export const STRINGS = {
     es: "Bloquear la longitud",
   },
   frame: { fr: "Repère", en: "Frame", de: "Bezugspunkt", es: "Referencia" },
+  quantity_linear: {
+    fr: "Linéaire",
+    en: "Linear",
+    de: "Linear",
+    es: "Lineal",
+  },
+  quantity_angular: {
+    fr: "Angulaire",
+    en: "Angular",
+    de: "Winkel",
+    es: "Angular",
+  },
+  load_applied_on: {
+    fr: "Appliquée sur",
+    en: "Applied on",
+    de: "Angewandt auf",
+    es: "Aplicada en",
+  },
+  reading_read_from: {
+    fr: "Lu sur",
+    en: "Read from",
+    de: "Gemessen an",
+    es: "Leído en",
+  },
+  deselect: {
+    fr: "Désélectionner",
+    en: "Deselect",
+    de: "Auswahl aufheben",
+    es: "Deseleccionar",
+  },
   frame_world: { fr: "Monde", en: "World", de: "Welt", es: "Mundo" },
   closed: {
     fr: "Fermée",
@@ -2255,6 +2285,26 @@ export const STRINGS = {
     es: "{count} grados de libertad a merced de las cargas: ellas decidirán el movimiento.",
   },
 
+  mode_no_inertia: {
+    fr: "sans inertie",
+    en: "no inertia",
+    de: "ohne Trägheit",
+    es: "sin inercia",
+  },
+  mode_no_inertia_hint: {
+    fr: "Ce mouvement n'emporte aucune masse : sa vitesse ne veut rien dire tant que les pièces qu'il déplace n'en ont pas une.",
+    en: "This motion carries no mass: its speed means nothing until the parts it moves are given one.",
+    de: "Diese Bewegung trägt keine Masse: ihre Geschwindigkeit sagt nichts aus, solange die bewegten Teile keine erhalten.",
+    es: "Este movimiento no arrastra ninguna masa: su velocidad no significa nada mientras las piezas que mueve no tengan una.",
+  },
+
+  mass_no_inertia_hint: {
+    fr: "Sans masse ici, un mouvement du mécanisme n'emporte aucune inertie : la simulation lui donne alors une vitesse qui ne veut rien dire.",
+    en: "With no mass here, a motion of the mechanism carries no inertia: the simulation then gives it a speed that means nothing.",
+    de: "Ohne Masse hier trägt eine Bewegung des Mechanismus keine Trägheit: die Simulation gibt ihr dann eine Geschwindigkeit ohne Aussage.",
+    es: "Sin masa aquí, un movimiento del mecanismo no arrastra ninguna inercia: la simulación le da entonces una velocidad que no significa nada.",
+  },
+
   choose_metrics: {
     fr: "Choisir les mesures",
     en: "Choose the measurements",
@@ -2364,10 +2414,10 @@ export const STRINGS = {
     es: "Elegir el punto de referencia de los momentos",
   },
   balance_reference_picking: {
-    fr: "Cliquez n'importe où : un nœud, une extrémité de poutre, le centre de masse…",
-    en: "Click anywhere: a node, a beam end, the centre of mass…",
-    de: "Klicken Sie irgendwo: einen Knoten, ein Balkenende, den Massenschwerpunkt…",
-    es: "Haga clic en cualquier lugar: un nodo, el extremo de una viga, el centro de masa…",
+    fr: "Sélectionner sur le canevas",
+    en: "Pick on the canvas",
+    de: "Auf der Zeichenfläche wählen",
+    es: "Seleccionar en el lienzo",
   },
   balance_reference_center_of_mass: {
     fr: "Centre de masse",
@@ -2471,18 +2521,6 @@ export const STRINGS = {
     en: "Delivered torque",
     de: "Abgegebenes Drehmoment",
     es: "Par entregado",
-  },
-  inspector_show_details: {
-    fr: "Afficher les détails",
-    en: "Show details",
-    de: "Details anzeigen",
-    es: "Mostrar detalles",
-  },
-  inspector_hide_details: {
-    fr: "Masquer les détails",
-    en: "Hide details",
-    de: "Details ausblenden",
-    es: "Ocultar detalles",
   },
   metric_force_start: {
     fr: "Force (début)",

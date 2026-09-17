@@ -8,26 +8,24 @@
 
 ---
 
-- Mieux gérer rho=0 : Interdire rho=0 ? Ne remplacer les masses que si elles sont libres ?
-
 **ElementMeasures -> SelectionInspector**
-
-- Placer les éléments du SelectionInspector dans le même ordre et disposition que dans l'onglet "élément"
-- Nettoyer les marges et nettoyer SelectionInspector
-- Afficher les longueurs des segments
-- Afficher la force générée par l'allongement ?
-- Afficher la position centrale ?
 
 - Afficher les valeurs à jour dans l'onglet "éléments"
 
 - Ajouter mesures globales (contrainte max) ou "Contrainte max sur la poutre"
 - Ne pas afficher la vitesse des ressorts et amortisseurs
 - 🚨 L'angle affiché dans les mesures "Balance.slidep" est faux. L'angle du graph ne correspond pas à celui de l'élément, Vitesse angulaire aussi est faux (rapport TAU manquant)
-- 🔨 Afficher les trajectoires des edges (les 2 extrémités)
-- 🔨 Afficher les trajectoires des gears (bords tangeants au mouvement ?)
 
 - La couleur de sélection aux appuis sélectionnée ne correspond pas à non-sélectionnée
 - Afficher l'inertie rotationelle avec le symbole qui fait tout le tour ?
+
+- Garder l'en-tête hors de la zone scrollable ?
+- N'afficher un moteur qu'une seul fois au maximum dans les DDL
+- afficher en priorité les éléments avec une masse (ex. Mass-ressort)
+- On devrait pouvoir choisir plusieurs ancrages pour un moteur (ex: "Vélo.slidep")
+- Retravailler le dessin des amortisseurs
+- On devrait afficher T/N au lieu de x/y pour les mesures des forces internes
+- Remplacer les "const lastShadowBlur = ctx.shadowBlur; ... ctx.shadowBlur = lastShadowBlur;" par des "ctx.save(); ... ctx.restore();"
 
 **Nouvelles métriques de sonde**
 
@@ -43,11 +41,7 @@
 
 - Clarifier le schéma "ΣF = m⋅a", "ΣM = J⋅α"
 - Colorer les éléments
-- Clicker sur un élément au placement de MomentBalanceReference ne devrait pas le sélectionner
-
-- On doit voir le MomentBalanceReference quand on l'édite.
-- Pour MomentBalanceReference, fusionner le bouton et le prop
-- Mieux placer le bouton de l'overlay, ou l'enlever ?
+- Hover sur le total du bilan devrait hover tous les éléments
 
 **Rendre la physique exacte (cas faux)**
 
@@ -64,13 +58,19 @@
 - 🔨 Finir le boulot de "ratio-masse-convergence-dynamique.md" sur CP.slidep
 - 🚨 Dans "Double cantilever", le moment de réaction est le même à l'ancrage qu'au milieu. Est-ce normal ?
 - Regarder les contraintes au moment du choc dans "Test slider.slidep"
+- 🚨 Un moteur à omega=0 est bloqué dans le vide
 - La trajectoire sur CoreXY en dynamique est fausse
 
 ### À faire rapidement
 
 **Qwick fixes :**
 
-- Bug dessin ressort nombre de spires
+- Changer le mode de simulation ne met pas à jour la date de modification
+- Le hover d'un mode en thème light ne donne pas la bonne luminosité
+- Niveau de zoom à 1%
+- Indiquer, quand on click sur un overlay pour la première fois, qu'il n'est visible qu'en simulation ?
+- Afficher _Aucune_ contrainte par défaut
+- Bug dessin ressort nombre de spires avec la taille du méchanisme
 - Le parsing pour la masse volumique est nul (refuse T/m3, mg/cm3 et des valeurs trop petites). Est-ce aussi le cas ailleur ?
 - Afficher "0 N" au lieu de "0 nN" quand une force est nulle ?
 - La barre de scroll devrait se cacher, ou au moins se réduire, si on n'a pas scrollé depuis un moment
@@ -111,8 +111,9 @@
 - Comment connecter ou non des engrenages sur le même axe ?
 - Faire fonctionner les treuils
 - Copié-collé
-- Clarifier "qu'est-ce qui est simulé ?" pour **dt**. On affiche des positions interpolées, mais pas les forces, ni les valeurs dans le panneau latéral.
+- Clarifier "qu'est-ce qui est simulé ?" pour **dt**. On affiche des positions interpolées, mais pas les forces, les overlays, ni les valeurs dans le panneau latéral.
 - Revenir sur l'idée de pouvoir modifier le mécanisme en cours de simulation (ex. déconnecter 2 éléments) ?
+- Ajouter une section qui explique le type de simulation et ses limites (et paramètres ?)
 
 - 🚨 Un ctrl+y de remplacement d'élément n'a pas reset la simulation, wtf !?
 - 🚨 Le moteur se bloque avec "Jansen", wtf !?
@@ -221,13 +222,9 @@
 - 🔨 Choisir x/y/norme pour les mesures superposées
 - 🔨 Possible de hover sur probe quand placingProbe (pareil pour gearRatio et Dimension)
 
-**🔨 Trajectoires**
-
-- 🔨 Ne PAS afficher les trajectoires des éléments ancrés.
-- 🔨 Afficher les trajectoires anciennes de plus en plus transparentes
-
 **Canvas**
 
+- 🔨 Afficher les trajectoires anciennes de plus en plus transparentes
 - 🚨 Ne pas ajouter un remplacement d'élément identique à l'historique
 - 🆕 Ajouter un nouvel élément "Commentaire" sur le canvas
 - 🔨 Afficher le point grabbé en simulation
@@ -397,3 +394,9 @@
 - 🆕 Ajouter un cube d'orientation
 - 🆕 Créer l'objet "plan"
 - 🆕 Ajouter les noeuds "pivot glissant", "rotule", "rotule à doigt", "cardan", "linéaire annulaire", "hélicoïdale"
+
+### [ Préparer pour les contributions ]
+
+- 🆕 README.md
+- 🆕 Documentation
+- 🆕 Design guidelines

@@ -1,20 +1,11 @@
 import React from "react";
-import {
-  Box,
-  Chip,
-  IconButton,
-  Popover,
-  Tooltip,
-  Typography,
-  useTheme,
-} from "@mui/material";
-import { GpsFixed, Visibility, VisibilityOff } from "@mui/icons-material";
+import { Box, Chip, Popover, Tooltip, Typography, useTheme } from "@mui/material";
+import { GpsFixed } from "@mui/icons-material";
 import { WorldPoint } from "../../../types";
 import { Vector } from "../../common/Vector";
 import VectorInput from "./VectorInput";
-import { useDismissOnShortcut } from "../../common/dismiss-popups";
+import { useNonModalPopup } from "../../common/use-non-modal-popup";
 import { BalanceTerm, ForceBalance } from "../../solver/analysis/force-balance";
-import { OVERLAY_ICON_SIZE, reading_icon } from "../element-readings";
 import {
   FORCE,
   LENGTH,
@@ -156,23 +147,18 @@ interface ForceBalanceTableProps {
   onHoverTerm?: BalanceTermHover;
   /** A term clicked — see `LineProps`' own. */
   onClickTerm?: (term: BalanceTerm) => void;
-  /** What the chip beside the picker reads — absent while the reference is a typed point, whose own chip reads its coordinates instead. */
+  /** What the reference chip reads — absent while the reference is a point of its own, which the chip reads as coordinates instead. */
   referenceLabel?: string;
-  /** The reference resolved to a point — what the coordinate chip reads and its popover's `VectorInput` edits while the reference is a typed point. */
+  /** The reference resolved to a point — what the chip reads with no label to show, and what the editor's `VectorInput` edits. */
   referencePoint: WorldPoint;
   /** Whether the canvas is currently waiting for the next click to name the reference. */
   pickingReference: boolean;
   onArmPicking: () => void;
+  onStopPicking: () => void;
   onSetPoint: (point: WorldPoint) => void;
-  /** The picker button is hovered — previews the reference marker on the canvas without
+  /** The reference chip is hovered — previews the reference marker on the canvas without
    * arming anything. */
   onReferenceHoverChange: (hovered: boolean) => void;
-  /** The reference is a typed point right now, so a coordinate chip reads it — true by default, since the origin is one too. */
-  isCustomPoint: boolean;
-  /** The mechanism-wide free-body switch, offered here as a shortcut: every anchored node's support reaction is one of the terms this table sums.
-   * Its home stays the "Afficher" menu, the only place that turns every layer off at once — see `OverlaysMenu`. */
-  supportReactions: boolean;
-  onChangeSupportReactions: (on: boolean) => void;
 }
 
 const ForceBalanceTable: React.FC<ForceBalanceTableProps> = ({
@@ -183,17 +169,25 @@ const ForceBalanceTable: React.FC<ForceBalanceTableProps> = ({
   referencePoint,
   pickingReference,
   onArmPicking,
+  onStopPicking,
   onSetPoint,
   onReferenceHoverChange,
-  isCustomPoint,
-  supportReactions,
-  onChangeSupportReactions,
 }) => {
-  const [pointEditorAnchor, setPointEditorAnchor] =
-    React.useState<HTMLElement | null>(null);
-  useDismissOnShortcut(pointEditorAnchor !== null, () =>
-    setPointEditorAnchor(null),
-  );
+  const [referenceChip, setReferenceChip] =
+    React.useState<HTMLDivElement | null>(null);
+  // The coordinate editor is the picker's accessory: arming opens it, and a click on the canvas closes it by answering the picker.
+  const [editorOpen, setEditorOpen] = React.useState(false);
+  React.useEffect(() => {
+    if (!pickingReference) setEditorOpen(false);
+  }, [pickingReference]);
+  // A pointer going down on the canvas is the pick itself being aimed — the picker stays armed to answer it, and the canvas disarms it once it has.
+  // A pointer anywhere else aims at nothing the picker can take, so it puts the picker away along with the editor.
+  const editorPopup = useNonModalPopup(editorOpen, referenceChip, (event) => {
+    setEditorOpen(false);
+    const target = event?.target;
+    if (!(target instanceof Element) || !target.closest("canvas"))
+      onStopPicking();
+  });
   const { actions, sum, sumMoment, inertia, inertiaMoment, gap, gapMoment } =
     balance;
   const referencePointUnit = display_unit(
@@ -219,72 +213,53 @@ const ForceBalanceTable: React.FC<ForceBalanceTableProps> = ({
         <Typography variant="subtitle2" fontWeight={600}>
           {t("force_balance")}
         </Typography>
-        {/* The layer's own glyph rides along with the eye: an eye alone in a section header reads as "fold this away" rather than as "draw these on the canvas". */}
-        <Tooltip title={t("support_reactions")}>
-          <IconButton
+        {/* The reference is one control: what it currently is, and the way to change it. */}
+        <Tooltip title={pickingReference ? "" : t("balance_reference_pick")}>
+          <Chip
+            ref={setReferenceChip}
             size="small"
-            role="switch"
-            aria-checked={supportReactions}
-            onClick={() => onChangeSupportReactions(!supportReactions)}
-            sx={{
-              gap: 0.25,
-              borderRadius: 1.5,
-              color: supportReactions ? "text.primary" : "text.disabled",
-            }}
-          >
-            {supportReactions ? (
-              <Visibility fontSize="inherit" />
-            ) : (
-              <VisibilityOff fontSize="inherit" />
-            )}
-            <Box
-              component="img"
-              src={reading_icon("reaction-support")}
-              alt=""
-              sx={{
-                width: OVERLAY_ICON_SIZE,
-                height: OVERLAY_ICON_SIZE,
-                opacity: supportReactions ? 1 : 0.5,
-              }}
-            />
-          </IconButton>
-        </Tooltip>
-        <Tooltip
-          title={t(
-            pickingReference
-              ? "balance_reference_picking"
-              : "balance_reference_pick",
-          )}
-        >
-          <IconButton
-            size="small"
+            icon={<GpsFixed fontSize="inherit" />}
             color={pickingReference ? "primary" : "default"}
-            onClick={onArmPicking}
+            variant="outlined"
+            label={
+              referenceLabel ??
+              `(${to_mantissa(referencePoint.x, referencePointUnit, 1)}; ${to_mantissa(
+                referencePoint.y,
+                referencePointUnit,
+                1,
+              )}) ${referencePointUnit.symbol}`
+            }
+            onClick={() => {
+              if (pickingReference) onStopPicking();
+              else {
+                onArmPicking();
+                setEditorOpen(true);
+              }
+            }}
             onMouseEnter={() => onReferenceHoverChange(true)}
             onMouseLeave={() => onReferenceHoverChange(false)}
-          >
-            <GpsFixed fontSize="inherit" />
-          </IconButton>
-        </Tooltip>
-        {referenceLabel && <Chip size="small" label={referenceLabel} />}
-        {isCustomPoint && (
-          <Chip
-            size="small"
-            label={`(${to_mantissa(referencePoint.x, referencePointUnit, 1)}; ${to_mantissa(
-              referencePoint.y,
-              referencePointUnit,
-              1,
-            )}) ${referencePointUnit.symbol}`}
-            onClick={(event) => setPointEditorAnchor(event.currentTarget)}
           />
-        )}
+        </Tooltip>
+        {/* Non-modal: the canvas underneath keeps the very clicks the armed picker is waiting for. */}
         <Popover
-          open={pointEditorAnchor !== null}
-          anchorEl={pointEditorAnchor}
-          onClose={() => setPointEditorAnchor(null)}
+          {...editorPopup}
+          open={editorOpen}
+          anchorEl={referenceChip}
           anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
         >
-          <Box sx={{ p: 2 }}>
+          <Box
+            sx={{
+              p: 1.5,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: 1,
+            }}
+          >
+            {/* Says the canvas is the other way in: a box of coordinates alone reads as the only one. */}
+            <Typography variant="caption" color="text.secondary">
+              {t("balance_reference_picking")}
+            </Typography>
             <VectorInput value={referencePoint} onChange={onSetPoint} />
           </Box>
         </Popover>

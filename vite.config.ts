@@ -1,26 +1,43 @@
 import { readFileSync } from "node:fs";
-import { defineConfig } from "vite";
+import { defineConfig, Plugin, ViteDevServer } from "vite";
 import react from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
 
 const { version } = JSON.parse(readFileSync("./package.json", "utf-8"));
 
+/**
+ * Makes the dev server answer worker scripts with their body rather than a 304.
+ *
+ * Firefox hands the worker loader an empty source when a module worker's script comes back as a 304, and the only symptom is a simulation that sits at t=0 behind a bare `error` event.
+ */
+const workerFileNo304 = {
+  name: "worker-file-no-304",
+  apply: "serve",
+  configureServer(server: ViteDevServer) {
+    server.middlewares.use((req, _res, next) => {
+      if (req.url?.includes("worker_file")) delete req.headers["if-none-match"];
+      next();
+    });
+  },
+} as const satisfies Plugin;
+
 export default defineConfig({
   define: { __APP_VERSION__: JSON.stringify(version) },
   plugins: [
+    workerFileNo304,
     react(),
     VitePWA({
       // A new build takes control as soon as it is installed; src/utils/service-worker.ts decides when the page reloads to pick it up.
       registerType: "autoUpdate",
-      // Génère icônes + balises <link> à partir de pwa-assets.config.ts.
+      // Icons and their <link> tags come from pwa-assets.config.ts.
       pwaAssets: { config: true },
-      // SW actif aussi en `vite dev` pour pouvoir tester le hors-ligne.
-      devOptions: { enabled: true },
+      // Off in `vite dev`: the worker claims the page while its modules are still loading, and a fetch it takes over can come back empty — the simulation worker's script among them, which leaves the clock frozen at zero and says nothing.
+      // Turn it on to exercise the offline behaviour, and restart the server.
+      devOptions: { enabled: false },
       workbox: {
-        // Pré-cache tous les assets buildés (app shell), y compris le wasm éventuel et les polices locales.
-        // Les gros fichiers passent en cache.
+        // Precaches the whole built app shell, local fonts and any wasm among them.
         globPatterns: ["**/*.{js,css,html,svg,png,ico,woff,woff2}"],
-        // Navigation hors-ligne : sert index.html pour toute route inconnue.
+        // Offline navigation: serves index.html for any route it does not know.
         navigateFallback: "index.html",
         cleanupOutdatedCaches: true,
       },

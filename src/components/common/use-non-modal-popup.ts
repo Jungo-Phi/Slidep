@@ -26,11 +26,13 @@ export interface NonModalPopupProps {
  *
  * The anchor is spared, so a click on it is its own handler's business: make that handler a toggle, or clicking it while open reopens what the dismissal just closed.
  * Reserved for popups whose choices apply as they are made: one holding a draft has something to lose to a stray click, and stays modal.
+ *
+ * `dismiss` is handed the pointer event that dismissed it, for a popup that acts on where the pointer landed; a dismissal from the keyboard has none.
  */
 export function useNonModalPopup(
   open: boolean,
   anchor: HTMLElement | null,
-  dismiss: () => void,
+  dismiss: (event?: PointerEvent) => void,
 ): NonModalPopupProps {
   const dismissRef = useRef(dismiss);
   dismissRef.current = dismiss;
@@ -43,7 +45,7 @@ export function useNonModalPopup(
       if (!(target instanceof Element)) return;
       if (anchor?.contains(target)) return;
       if (target.closest(POPUP_LAYER_SELECTOR)) return;
-      dismissRef.current();
+      dismissRef.current(event);
     };
     // Capture, so the dismissal is decided before anything downstream reacts to the same pointer.
     document.addEventListener("pointerdown", onPointerDown, true);

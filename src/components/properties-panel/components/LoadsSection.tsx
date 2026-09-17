@@ -3,21 +3,19 @@ import { Delete, Public } from "@mui/icons-material";
 import {
   Action,
   CanvasState,
-  DistributedForceElement,
   EdgeElement,
-  ForceElement,
   ID,
   LoadElement,
-  LoadFrame,
   MechanicalElement,
   Point2,
   ZERO,
 } from "../../../types";
+import { node_candidate_edges } from "../../../utils/load-frame";
 import {
-  frame2world_transform,
-  world2frame_transform,
-  node_candidate_edges,
-} from "../../../utils/load-frame";
+  change_distributed_force,
+  frame_change_actions,
+  frame_current_edge,
+} from "../load-actions";
 import { HoveredPart } from "../../../types/hovered-part";
 import ElementDisplay from "./ElementDisplay";
 import ElementPicker from "./ElementPicker";
@@ -32,84 +30,6 @@ import {
   MOMENT,
   wrap_angle_rad,
 } from "../../../utils/quantity-format";
-
-/** Build a SetDistributedForce action from partial new values (rest kept). */
-const change_distributed_force = (
-  load: DistributedForceElement,
-  next: Partial<{
-    newDirection: Point2;
-    newMagnitudeStart: number;
-    newMagnitudeEnd: number;
-  }>,
-): Action => ({
-  type: "ChangeDistributedForce",
-  id: load.id,
-  newDirection: next.newDirection ?? load.direction,
-  oldDirection: load.direction,
-  newMagnitudeStart: next.newMagnitudeStart ?? load.magnitudeStart,
-  oldMagnitudeStart: load.magnitudeStart,
-  newMagnitudeEnd: next.newMagnitudeEnd ?? load.magnitudeEnd,
-  oldMagnitudeEnd: load.magnitudeEnd,
-});
-
-/**
- * Change a load's frame while preserving its visual direction: re-express the stored vector/direction through the reference edge's current orientation so the arrow doesn't jump — only its behaviour under motion changes.
- */
-const frame_change_actions = (
-  load: ForceElement | DistributedForceElement,
-  newFrame: LoadFrame,
-  mechanicalElements: MechanicalElement[],
-): Action[] => {
-  const actions: Action[] = [
-    { type: "SetLoadFrame", id: load.id, newFrame, oldFrame: load.frame },
-  ];
-  if (load.type === "force") {
-    const world = frame2world_transform(
-      load.vector,
-      load.frame,
-      mechanicalElements,
-    );
-    actions.push({
-      type: "ChangeForce",
-      id: load.id,
-      newVector: world2frame_transform(world, newFrame, mechanicalElements),
-      oldVector: load.vector,
-    });
-  } else {
-    const world = frame2world_transform(
-      load.direction,
-      load.frame,
-      mechanicalElements,
-    );
-    actions.push(
-      change_distributed_force(load, {
-        newDirection: world2frame_transform(
-          world,
-          newFrame,
-          mechanicalElements,
-        ),
-      }),
-    );
-  }
-  return actions;
-};
-
-/** Finds the edge a load's frame currently refers to, among the candidates
- * offered by the ElementPicker or (if it fell out of them) all elements. */
-const frame_current_edge = (
-  frame: LoadFrame,
-  candidateEdges: EdgeElement[],
-  mechanicalElements: MechanicalElement[],
-): EdgeElement | undefined => {
-  if (frame === "world") return undefined;
-  const edgeID = frame.edgeID;
-  return (
-    candidateEdges.find((e) => e.id === edgeID) ??
-    (mechanicalElements.find((e) => e.id === edgeID && "positionStart" in e) as
-      | EdgeElement
-      | undefined)
-  );
-};
 
 interface LoadsSectionProps {
   element: MechanicalElement;

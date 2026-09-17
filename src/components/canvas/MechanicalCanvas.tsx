@@ -590,11 +590,16 @@ export const MechanicalCanvas = forwardRef<
         return true;
       });
 
+      const pickingMomentBalance =
+        canvasStateRef.current.type === "PickingMomentBalanceNode";
       draw_mechanical_canvas(ctx, {
         viewport,
         canvasWidth: canvas.width,
         canvasHeight: canvas.height,
-        hoveredPart: hoveredPartRef.current,
+        // The armed picker takes a point, never an element: the cross landing on a node already says what the next click would name, and thickening that node would offer it as something to take hold of.
+        hoveredPart: pickingMomentBalance
+          ? { type: "Void", position: hoveredPartRef.current.position }
+          : hoveredPartRef.current,
         focusedOverlay: focusedOverlayRef.current,
         hoveredBalanceTerm: hoveredBalanceTermRef.current,
         overlayArrows: live?.overlayArrows,
@@ -718,31 +723,15 @@ export const MechanicalCanvas = forwardRef<
 
       // Where the moment balance is taken about — not persistently, only while something reads against it: the picker armed (the cross follows the cursor like any other placement preview), the picker hovered (it previews the reference already set), or a ΣM term hovered whose moment there is zero.
       // A term with a moment draws its own glyph centred on that point, which already says where it is.
-      // The centre of mass is a target of the picker only, drawn on top of the cross so it is never lost under it.
-      const pickingMomentBalance =
-        canvasStateRef.current.type === "PickingMomentBalanceNode";
       const pickerActive =
         pickingMomentBalance || momentBalanceReferenceHoveredRef.current;
       const balanceHover = hoveredBalanceTermRef.current;
-      if (
+      const showsReferenceCross =
         pickerActive ||
         (balanceHover?.quantity === "moment" &&
-          Math.abs(balanceHover.term.moment) <= 1e-9)
-      )
-        draw_moment_balance_marker(
-          ctx,
-          viewport,
-          pickingMomentBalance
-            ? moment_balance_hover(
-                hoveredPartRef.current,
-                mechanismRef.current.mechanicalElements,
-                mechanismRef.current.materials,
-                mechanismRef.current.profiles,
-                viewport,
-              ).point
-            : momentBalancePointRef.current,
-        );
-      if (pickerActive) {
+          Math.abs(balanceHover.term.moment) <= 1e-9);
+      // The landmark of the ruler and of the picker alike, drawn here for both: over the mechanism, where nothing it lands on can bury it.
+      if (pickerActive || ruler_is_out(canvasStateRef.current)) {
         const centerOfMass = mechanism_center_of_mass(
           mechanismRef.current.mechanicalElements,
           mechanismRef.current.materials,
@@ -794,6 +783,23 @@ export const MechanicalCanvas = forwardRef<
             color,
           );
       }
+
+      // Last of everything, the centre of mass included: it is what the next click puts down, and nothing on the canvas may hide it.
+      // Armed, it follows the cursor over the canvas; typed at instead (the coordinate editor, cursor off the canvas), it sits where the coordinates put it, so the point being written is visible as it is written.
+      if (showsReferenceCross)
+        draw_moment_balance_marker(
+          ctx,
+          viewport,
+          pickingMomentBalance && cursorOnCanvasRef.current
+            ? moment_balance_hover(
+                hoveredPartRef.current,
+                mechanismRef.current.mechanicalElements,
+                mechanismRef.current.materials,
+                mechanismRef.current.profiles,
+                viewport,
+              ).point
+            : momentBalancePointRef.current,
+        );
 
       // The abscissa hovered on the selected beam's N/T/Mf diagrams (panel) — docs/plan- efforts-interieurs.md phase 5bis.
       // A tick crossing the beam, not a probe marker (`draw_probe`'s circle+crosshair means something else — a measurement point).

@@ -500,7 +500,7 @@ export function canvasStateReducer(
               viewport,
             ).reference,
           );
-          setCanvasState({ type: "Selecting" });
+          // The picker is put away on the release instead, so the very click that named the point is not read as a selection on its way up.
           break;
         case "MeasuringFrom":
           // The second click seals what the preview was already showing.
@@ -1107,6 +1107,10 @@ export function canvasStateReducer(
     case "MouseButtonUp":
       if (mouseButtonDown !== "left") break;
       switch (state.type) {
+        // What the button down already named is the whole of that click: nothing under the cursor is an element to take hold of here.
+        case "PickingMomentBalanceNode":
+          setCanvasState({ type: "Selecting" });
+          break;
         case "Selecting":
           // Handled on button down, as an immediate toggle: the click must not also select the carrying pivot on release.
           if (hoveredPart.type === "MotorArrow") break;

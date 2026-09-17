@@ -199,6 +199,12 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
   const [libraryFocusRequest, setLibraryFocusRequest] = React.useState<LibraryFocusRequest | null>(
     null,
   );
+  // What the analysis below found to carry no inertia, for the inspector above to paint on those elements' own mass.
+  // Local, and one-way: only the analysis measures it, and only the inspector — its neighbour in this very tab — reads it.
+  const [inertiaFreeElements, setInertiaFreeElements] = React.useState<
+    ReadonlySet<ID>
+  >(() => new Set());
+
   const focusLibraryEntry = React.useCallback(
     (section: "materials" | "profiles", ids: ID[]) => {
       setActiveTab("library");
@@ -366,6 +372,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                       selectedIds={selectedIds}
                       setCanvasState={setCanvasState}
                       setHoveredAbscissa={setHoveredAbscissa}
+                      inertiaFreeElements={inertiaFreeElements}
                     />
                   )}
                 </Box>
@@ -435,6 +442,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
               <AnalysisPanel
                 setHighlight={setHighlight}
                 setRedundancySymbols={setRedundancySymbols}
+                setInertiaFreeElements={setInertiaFreeElements}
                 modePreviewRef={modePreviewRef}
                 mechanism={mechanism}
                 analysedMechanism={analysedMechanism}

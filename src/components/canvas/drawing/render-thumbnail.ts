@@ -1,7 +1,7 @@
 import { COLORS } from "../../../theme/canvas-theme";
 import { PREVIEW_MIN_ZOOM, THUMBNAIL_MARGIN } from "../../../constants/interaction-specs";
 import { Mechanism, ZERO } from "../../../types";
-import { fit_viewport_to_bounds, mechanism_bounds } from "../../../utils";
+import { Bounds, fit_viewport_to_bounds, mechanism_bounds } from "../../../utils";
 import { draw_floor } from "./drawing-functions";
 import { draw_mechanism } from "./draw-mechanism";
 
@@ -9,37 +9,34 @@ const CANVAS_STATE = { type: "Selecting" } as const;
 const HOVERED_PART = { type: "Void", position: ZERO } as const;
 
 /**
- * Dessine la miniature du mécanisme dans un contexte déjà dimensionné.
+ * Framing box of a thumbnail, in world coordinates.
  *
- * Ce n'est pas une photo du canvas visible : on redessine le mécanisme seul, dans un état d'interaction neutre (rien de sélectionné, survolé, ni en cours de placement) et avec un cadrage ajusté à son contenu.
- * La miniature ne dépend donc que du modèle — pas de ce que l'utilisateur avait à l'écran.
+ * Kept out of the drawing so that a caller animating the mechanism computes it once, on the resting pose, and frames every pose of the swing in it.
+ * Fitting each pose in turn would have the viewport follow the swing, which reads as the frame moving around a still mechanism.
  *
- * Elle n'est pas stockée : la galerie la redessine à l'ouverture, ce qui la rend gratuite à la sauvegarde et toujours au thème courant.
+ * Constraints are left out, as the thumbnail draws none.
+ */
+export const thumbnail_bounds = (mechanism: Mechanism): Bounds | undefined =>
+  mechanism_bounds(mechanism.mechanicalElements, []);
+
+/**
+ * Draw the mechanism's thumbnail into an already sized context.
+ *
+ * This is no photograph of the visible canvas: the mechanism alone is redrawn, in a neutral interaction state (nothing selected, hovered, nor being placed), framed on `bounds`.
+ * A thumbnail therefore depends on the model only — not on what the user had on screen.
+ *
+ * It is not stored: the gallery redraws it on opening, which costs the save nothing and keeps it in the current theme.
  */
 export const draw_thumbnail = (
   ctx: CanvasRenderingContext2D,
   mechanism: Mechanism,
   width: number,
   height: number,
+  /** What to frame, from `thumbnail_bounds` — the resting pose's box, not this pose's. */
+  bounds: Bounds | undefined,
   /** Eases the framing from `REST` (0) to `HOVER`'s tighter margins (1) as a card is hovered. */
   zoomProgress = 0,
 ): void => {
-  // Contraintes telles qu'on les voit en édition hors survol : cotations et rapports d'engrenage, sans les badges géométriques.
-  /*
-  const visibleConstraints = compute_visible_constraints(
-    mechanism.constraintElements,
-    "edition",
-    "elements",
-    new Map(),
-    CANVAS_STATE,
-  );
-  */
-  const visibleConstraints = new Map();
-
-  const bounds = mechanism_bounds(
-    mechanism.mechanicalElements,
-    mechanism.constraintElements.filter((c) => visibleConstraints.has(c.id)),
-  );
   const { REST, HOVER } = THUMBNAIL_MARGIN;
   const viewport = fit_viewport_to_bounds(bounds, width, height, {
     defaultZoom: PREVIEW_MIN_ZOOM,
@@ -51,8 +48,8 @@ export const draw_thumbnail = (
       (HOVER.ratioMarginY - REST.ratioMarginY) * zoomProgress,
   });
 
-  // Axes du monde, en coordonnées écran comme dans le rendu principal.
-  // Ils sortent du cadre si le mécanisme est loin de l'origine : c'est voulu.
+  // World axes, in screen coordinates as in the main rendering.
+  // They leave the frame when the mechanism sits far from the origin, which is intended.
   ctx.strokeStyle = COLORS.GRID_AXIS;
   ctx.lineWidth = 1;
   ctx.beginPath();
@@ -72,7 +69,6 @@ export const draw_thumbnail = (
     mechanicalElements: mechanism.mechanicalElements,
     constraintElements: mechanism.constraintElements,
     loads: mechanism.loads,
-    visibleConstraints,
     hideConstraints: true,
     hideProbes: true,
   });

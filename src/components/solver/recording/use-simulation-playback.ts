@@ -690,13 +690,15 @@ export function useSimulationPlayback({
         shearStressScale: Math.max(stressScaleCacheRef.current.maxShear, negligibleShear),
         // Headed at the instant actually DRAWN, which a held grab moves off the cursor: a trail stopping short of the mechanism it belongs to is the same offset again.
         trajectories: trajectories_at(trajectoryCacheRef.current, snapshot.t).map(
-          (traj, i) => ({
+          (traj) => ({
             points: traj.points,
             headCount: traj.headCount,
             // Read from the intent, not from a comparison of times — the same rule the timeline head follows.
             // While recording, the frontier runs ahead of the cursor by the worker's lead and by whatever it is behind, so the faded segment would show the producer's progress rather than the motion to come.
             visibleCount: extending ? traj.headCount : traj.points.length,
-            color: PROBE_ELEMENT_COLORS[i % PROBE_ELEMENT_COLORS.length],
+            // The element's own slot rather than this strand's rank, so a segment's two ends and a gear's two rims read as one trace apiece.
+            color:
+              PROBE_ELEMENT_COLORS[traj.colorIndex % PROBE_ELEMENT_COLORS.length],
           }),
         ),
       };

@@ -52,7 +52,7 @@ import { useNonModalPopup } from "../../common/use-non-modal-popup";
  */
 
 interface LibraryPickerProps {
-  /** The dropdown alone, no name beside it and no way out to the library: what a panel shows when its room is spent elsewhere. */
+  /** The dropdown and its own way out to the library, no name beside them: what a panel shows when its room is spent elsewhere. */
   compact?: boolean;
   label: string;
   entries: { id: ID; name: string }[];
@@ -123,17 +123,16 @@ const LibraryPicker = React.forwardRef<HTMLDivElement, LibraryPickerProps>(
             <KeyboardArrowDown fontSize="small" />
           </Box>
         </Tooltip>
-        {!compact && (
-          <Tooltip title={t("open_in_library")}>
-            <IconButton
-              size="small"
-              onClick={onOpenInLibrary}
-              sx={{ justifySelf: "end" }}
-            >
-              <OpenInNew fontSize="inherit" />
-            </IconButton>
-          </Tooltip>
-        )}
+        {/* Kept in compact too: what answers a beam whose mass reads zero is its material's own ρ, and the way to it should not depend on which panel the beam is being read from. */}
+        <Tooltip title={t("open_in_library")}>
+          <IconButton
+            size="small"
+            onClick={onOpenInLibrary}
+            sx={{ justifySelf: "end", flexShrink: 0 }}
+          >
+            <OpenInNew fontSize="inherit" />
+          </IconButton>
+        </Tooltip>
         <Menu
           {...popup}
           anchorEl={anchorEl}
@@ -192,7 +191,7 @@ interface MaterialProfileSectionProps {
   materials: MaterialDef[];
   profiles: ProfileDef[];
   applyActions: (actions: Action[]) => void;
-  /** The two dropdowns side by side and nothing else — no names, no section drawing, no values read off the entries: what a panel shows when its room is spent on other things (`SelectionInspector`). */
+  /** The two dropdowns side by side, each keeping its way out to the library — no names, no section drawing, no values read off the entries: what a panel shows when its room is spent on other things (`SelectionInspector`). */
   compact?: boolean;
 }
 

@@ -68,7 +68,7 @@ export function is_nameable(
 
 /**
  * Which overlays make sense on this element — the honest denominator of the `n/total` counters in the "Afficher" menu.
- * - trajectory: a single moving point → nodes only
+ * - trajectory: the path a point of the element sweeps → anything but a belt, whose two ends are one and the same junction.
  * - velocity: anything whose position is sampled (nodes, gears, edge midpoint), a belt excepted: it spans its pulleys along a path, so the mid-point between its two ends sits nowhere on it.
  * - force: an element's own end torsors → edges (two ends) and gears (one).
  * A node's force reading is the support reaction, which is a property of the problem rather than of the node (docs/plan-efforts-interieurs.md phase 8) and lives in its own mechanism-wide overlay instead.
@@ -80,7 +80,7 @@ export function available_overlays(element: MechanicalElement): OverlayKind[] {
   return OVERLAY_KIND_ORDER.filter((kind) => {
     switch (kind) {
       case "trajectory":
-        return is_node_element(element);
+        return element.type !== "belt";
       case "velocity":
         return element.type !== "belt";
       case "force":

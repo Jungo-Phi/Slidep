@@ -26,7 +26,7 @@ function record(n: number): KinematicSnapshot[] {
 }
 
 /**
- * `n` recorded DYNAMIC frames of the same mechanism, falling under gravity: its own weight is what pulls the middle pulley off the belt (measured: disconnects at frame 81, stays off), where the kinematic engine above is driven by its motor instead.
+ * `n` recorded DYNAMIC frames of the same mechanism, falling under gravity: its own weight is what pulls the middle pulley off the belt (measured: disconnects at frame 18, stays off), where the kinematic engine above is driven by its motor instead.
  * There is no dynamic-mode motor to spin it with here — a torque, unlike the kinematic position link, pins nothing, so gravity alone is both simpler and enough to exercise a real detach.
  */
 const GRAVITY = new Point2(0, -9.81);
@@ -52,7 +52,7 @@ describe("belt_events", () => {
     const events = belt_events(snapshots);
     expect(events.length).toBeGreaterThan(0);
 
-    // Chaque événement tombe sur la première frame qui porte le changement, et pas une frame plus tard : c'est ce qui autorise à poser une marque à cet instant.
+    // Each event lands on the first frame carrying the change, not one frame later: that is what allows a mark to be placed at that instant.
     for (const event of events) {
       const at = snapshots.findIndex((s) => s.t === event.t);
       expect(at).toBeGreaterThan(0);
@@ -71,14 +71,14 @@ describe("belt_events", () => {
   }, 30_000);
 
   it("allonger l'enregistrement n'efface ni ne déplace ce qui précède", () => {
-    // La timeline pose ses marques au fil de l'enregistrement : une marque qui sauterait ou disparaîtrait à la frame suivante se lirait comme un défaut.
+    // The timeline places its marks as the recording goes: a mark that jumped or vanished on the next frame would read as a defect.
     const snapshots = record(400);
     const early = belt_events(snapshots.slice(0, 200));
     expect(belt_events(snapshots).slice(0, early.length)).toEqual(early);
   }, 30_000);
 
   it("l'état de départ n'est pas un événement", () => {
-    // Un enregistrement repris sur une pose où la courroie a déjà lâché commence avec des poulies détachées, sans que rien ne vienne de se produire.
+    // A recording resumed on a pose where the belt has already let go starts with detached pulleys, without anything having just happened.
     const snapshots = record(400);
     const detachedAt = snapshots.findIndex((s) =>
       s.layout.belts.some(
@@ -93,12 +93,12 @@ describe("belt_events", () => {
 });
 
 /**
- * The same contract, of a DYNAMIC recording: `belt_events` reads `snapshot_belt_detached` off whatever layout it is handed, and a dynamic snapshot now carries the same detach block as a kinematic one (see `SnapshotLayout`) — this is what stopped being true only in the timeline's own lockout, not in the data.
+ * The same contract, of a DYNAMIC recording: `belt_events` reads `snapshot_belt_detached` off whatever layout it is handed, and a dynamic snapshot carries the same detach block as a kinematic one (see `SnapshotLayout`).
  */
 describe("belt_events, en dynamique", () => {
   it("un enregistrement sans changement de contact ne dit rien", () => {
-    // Well before the measured frame-81 disconnect.
-    expect(belt_events(recordDynamic(40))).toEqual([]);
+    // Well before the measured frame-18 disconnect.
+    expect(belt_events(recordDynamic(12))).toEqual([]);
   }, 30_000);
 
   it("nomme la poulie quittée et l'instant exact", () => {

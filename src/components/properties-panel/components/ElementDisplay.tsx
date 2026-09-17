@@ -167,6 +167,9 @@ const ElementDisplayComponent: React.FC<ElementDisplayProps> = ({
   }, [inputValue, isEditing, updateWidth]);
 
   const iconSize = size === "small" ? 24 : size === "medium" ? 28 : 32;
+  // The height the whole row settles at: its glyph, plus the hairline border around it.
+  // What `trailingControls` holds sizes itself (see `ICON_GROUP_SX`), so that a control bringing buttons of its own keeps them.
+  const rowHeight = iconSize + 2;
   const gap = size === "small" ? "1px" : size === "medium" ? "2px" : "6px";
 
   const textStyleCommon = {
@@ -186,6 +189,7 @@ const ElementDisplayComponent: React.FC<ElementDisplayProps> = ({
         })}
       sx={{
         borderRadius: 5,
+        minHeight: rowHeight,
         padding: size === "small" ? "4px" : size === "medium" ? "5px" : "8px",
         backgroundColor:
           !trailingControls && hovered ? "action.hover" : "transparent",
@@ -321,6 +325,7 @@ const ElementDisplayComponent: React.FC<ElementDisplayProps> = ({
         display: "flex",
         alignItems: "center",
         width: "100%",
+        minHeight: rowHeight,
         borderRadius: 5,
         cursor: "pointer",
         justifyContent: "space-between",

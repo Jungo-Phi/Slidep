@@ -3,6 +3,7 @@ import { Box, IconButton, Tooltip, Typography } from "@mui/material";
 import { Visibility, VisibilityOff } from "@mui/icons-material";
 import { t } from "../../../i18n";
 import { OVERLAY_ICON_SIZE } from "../element-readings";
+import { ICON_GROUP_SX, ROW_ICON_BUTTON_SX } from "../inspector-metrics";
 
 interface ReadingRowProps {
   /** Data URI of the layer's own glyph. */
@@ -27,6 +28,12 @@ interface ReadingRowProps {
   onToggle?: () => void;
   /** A reading listed under its own group's header. */
   nested?: boolean;
+  /** Controls belonging to the row itself rather than to its layer, past the eye — the way out of the selection, on the row that opens the panel. */
+  trailing?: React.ReactNode;
+  /** The row names the panel's own subject: read louder than the rows it leads, the way a selected `ElementDisplay` is. */
+  strong?: boolean;
+  /** Overrides the row's own height, for a row that has to line up with a card rather than with its siblings. */
+  height?: number;
 }
 
 /**
@@ -46,6 +53,9 @@ export const ReadingRow: React.FC<ReadingRowProps> = ({
   onEyeHoverChange,
   commanded = false,
   pointed = false,
+  trailing,
+  strong = false,
+  height,
 }) => {
   const row = (
     <Box
@@ -56,9 +66,8 @@ export const ReadingRow: React.FC<ReadingRowProps> = ({
         display: "flex",
         alignItems: "center",
         gap: 0.75,
-        minHeight: 26,
+        minHeight: height ?? 26,
         pl: nested ? 2 : 0.5,
-        pr: 0.25,
         borderRadius: 1.5,
         cursor: onClick ? "pointer" : "default",
         backgroundColor: selected
@@ -66,9 +75,8 @@ export const ReadingRow: React.FC<ReadingRowProps> = ({
         : commanded || pointed
           ? theme.palette.action.hover
           : undefined,
-        "&:hover": onClick
-          ? { backgroundColor: theme.palette.action.hover }
-          : {},
+        // Every row here answers the pointer, clickable or not: each stands for something drawn on the canvas, and the tint is what pairs the two — the same bond an `ElementDisplay` keeps with its own element.
+        "&:hover": { backgroundColor: theme.palette.action.hover },
       })}
     >
       <Box
@@ -83,34 +91,41 @@ export const ReadingRow: React.FC<ReadingRowProps> = ({
         sx={{
           flex: 1,
           minWidth: 0,
+          fontWeight: strong ? 800 : undefined,
           color: shown === false ? "text.secondary" : "text.primary",
         }}
       >
         {label}
       </Typography>
       {value}
-      {onToggle !== undefined && shown !== undefined && (
-        <Tooltip title={t(shown ? "hide" : "show")}>
-          <IconButton
-            size="small"
-            role="switch"
-            aria-checked={shown}
-            onMouseEnter={() => onEyeHoverChange?.(true)}
-            onMouseLeave={() => onEyeHoverChange?.(false)}
-            onClick={(e) => {
-              e.stopPropagation();
-              onToggle();
-            }}
-            sx={{ p: 0.5, color: shown ? "text.primary" : "text.disabled" }}
-          >
-            {shown ? (
-              <Visibility fontSize="small" />
-            ) : (
-              <VisibilityOff fontSize="small" />
-            )}
-          </IconButton>
-        </Tooltip>
-      )}
+      <Box sx={ICON_GROUP_SX}>
+        {onToggle !== undefined && shown !== undefined && (
+          <Tooltip title={t(shown ? "hide" : "show")}>
+            <IconButton
+              size="small"
+              role="switch"
+              aria-checked={shown}
+              onMouseEnter={() => onEyeHoverChange?.(true)}
+              onMouseLeave={() => onEyeHoverChange?.(false)}
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggle();
+              }}
+              sx={{
+                ...ROW_ICON_BUTTON_SX,
+                color: shown ? "text.primary" : "text.disabled",
+              }}
+            >
+              {shown ? (
+                <Visibility fontSize="small" />
+              ) : (
+                <VisibilityOff fontSize="small" />
+              )}
+            </IconButton>
+          </Tooltip>
+        )}
+        {trailing}
+      </Box>
     </Box>
   );
   return row;

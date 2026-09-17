@@ -4,7 +4,10 @@
       "PowerShell(npx tsc --noEmit -p tsconfig.json; \"exit=$LASTEXITCODE\")",
       "Bash(npm run *)",
       "Bash(node \"C:\\\\Users\\\\arnol\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-arnol-Documents-slidep\\\\469628f4-c190-473f-a088-1ecec4ad47c8\\\\scratchpad\\\\fix-simulation-field.js\" --dry)",
-      "Bash(node \"C:\\\\Users\\\\arnol\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-arnol-Documents-slidep\\\\469628f4-c190-473f-a088-1ecec4ad47c8\\\\scratchpad\\\\fix-simulation-field.js\")"
+      "Bash(node \"C:\\\\Users\\\\arnol\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-arnol-Documents-slidep\\\\469628f4-c190-473f-a088-1ecec4ad47c8\\\\scratchpad\\\\fix-simulation-field.js\")",
+      "Bash(node .claude/hooks/comment-lint.mjs src/components/solver/dynamics/mass-model.ts)",
+      "Bash(node .claude/hooks/comment-lint.mjs src/components/solver/behaviour/massless-node-floor.test.ts)",
+      "Bash(npx eslint *)"
     ],
     "deny": [
       "Read(./TODO.md)",

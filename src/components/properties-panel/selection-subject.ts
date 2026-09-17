@@ -4,7 +4,10 @@ import type { FocusedOverlay } from "../canvas/drawing/drawing-functions";
 
 /**
  * What the simulation panel is currently reading: one element, one applied load, or one overlay reading.
- * A reading is not a selection — naming one on the canvas leaves the selection alone (see `App`'s own `focusedOverlay`) — so it is resolved first, and stands in for whatever happens to be selected underneath it.
+ * A reading is not a selection in `CanvasState`'s sense — naming one on the canvas leaves the selection alone (see `App`'s own `focusedOverlay`) — so it is resolved first, and stands in for whatever happens to be selected underneath it.
+ *
+ * To the reader, though, the subject IS what they selected: they clicked an arrow, and its panel came up.
+ * "The selected thing appears at the top" therefore means the SUBJECT appears at the top, whatever `CanvasState` holds — the element for an element, the load for a load, and the reading's own row for a reading, not the element it happens to be read from.
  */
 export type InspectedSubject =
   | { kind: "element"; element: MechanicalElement }

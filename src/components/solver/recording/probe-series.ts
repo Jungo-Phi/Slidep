@@ -1,5 +1,10 @@
 import { ID, MechanicalElement, ProbeMetric } from "../../../types/element";
-import { is_node_element, overlay_shown } from "../../../utils/element-queries";
+import {
+  available_overlays,
+  is_node_element,
+  overlay_shown,
+} from "../../../utils/element-queries";
+import { TRAJECTORY_SAMPLING } from "../../../constants/physics-display-specs";
 import { Point2 } from "../../../types/point2";
 import {
   BeamCohesion,
@@ -16,17 +21,23 @@ export interface ProbeCurve {
   values: number[];
 }
 
-/** Whether `metric` plots as x/y/norm (a direction in the plane) rather than a single "value" curve — false for the angular and moment metrics, which are scalars. */
+/**
+ * Whether `metric` plots as x/y/norm (a direction in the plane) rather than a single "value" curve.
+ * Written as the list of vector metrics rather than of scalar ones: a direction in the plane is the exception here, so a quantity added later reads as a scalar unless it asks not to.
+ */
 export function is_vector_metric(metric: ProbeMetric): boolean {
-  return (
-    metric !== "angle" &&
-    metric !== "angular-velocity" &&
-    metric !== "motor-power" &&
-    metric !== "moment" &&
-    metric !== "moment-start" &&
-    metric !== "moment-end" &&
-    metric !== "inertia-moment"
-  );
+  switch (metric) {
+    case "position":
+    case "velocity":
+    case "force":
+    case "force-start":
+    case "force-end":
+    case "weight":
+    case "inertia":
+      return true;
+    default:
+      return false;
+  }
 }
 
 /** Time series of a probed metric: shared time axis + one array per curve.
@@ -446,19 +457,156 @@ export function element_reactions(
     .filter((r): r is ElementReaction => r !== undefined);
 }
 
-/** The recorded path of one element (canvas trajectory overlay). */
+/** The recorded path of one strand of an element's trajectory overlay. */
 export interface ProbeTrajectory {
   elementID: ID;
+  /** Palette slot — every strand one element draws shares it, so a segment's two ends read as one trace. */
+  colorIndex: number;
   points: Point2[];
   /** Number of points at or before the playback time `time`. */
   headCount: number;
 }
 
-/** One trajectory being accumulated: the path, and the time each point was recorded at (the sampling can skip a snapshot, so the two arrays are not indexed by snapshot). */
-interface TrajectoryBuild {
-  elementID: ID;
+/** One strand being accumulated: the path, and the time each point was recorded at (the sampling can skip a snapshot, so the two arrays are not indexed by snapshot). */
+interface StrandBuild {
   points: Point2[];
   times: number[];
+}
+
+/**
+ * One sampled point of the recording, and the strands it draws.
+ * A node or a segment end draws its own path; a gear's centre draws the two ±radius offsets normal to its travel, the band its disc sweeps — the centre alone would only repeat the path of the axle it is fused with.
+ */
+interface PointBuild {
+  elementID: ID;
+  colorIndex: number;
+  /** Snapshot key the position is read from. */
+  key: string;
+  /** Envelope half-width (m): a gear's radius, 0 for a point drawing its own path. */
+  radius: number;
+  /** Displacement (m) that starts the point drawing, and that its envelope takes a new direction over. */
+  floor: number;
+  strands: StrandBuild[];
+  /** Position the next displacement is measured from: where the point was first seen until it starts drawing, then wherever the envelope last took its direction. */
+  anchorX: number;
+  anchorY: number;
+  /** Time the anchor was recorded at, which the first drawn point is dated by. */
+  anchorT: number;
+  seen: boolean;
+  /** False until the point has travelled `floor` from where it was first seen: what stays put has no trajectory to draw, and an anchored node would otherwise pile one point per snapshot on the one spot. */
+  moving: boolean;
+  /** Unit normal to the travel — envelope only. */
+  normalX: number;
+  normalY: number;
+}
+
+/** See `PointBuild.floor`. */
+function travel_floor(radius: number): number {
+  return Math.max(
+    radius * TRAJECTORY_SAMPLING.ENVELOPE_DIRECTION_RATIO,
+    TRAJECTORY_SAMPLING.MOBILE_TRAVEL,
+  );
+}
+
+/** Pushes one sample onto every strand of `build`: the point itself, or both offsets of its envelope. */
+function emit(build: PointBuild, x: number, y: number, t: number): void {
+  if (build.radius === 0) {
+    build.strands[0].points.push(new Point2(x, y));
+    build.strands[0].times.push(t);
+    return;
+  }
+  const ox = build.normalX * build.radius;
+  const oy = build.normalY * build.radius;
+  build.strands[0].points.push(new Point2(x + ox, y + oy));
+  build.strands[0].times.push(t);
+  build.strands[1].points.push(new Point2(x - ox, y - oy));
+  build.strands[1].times.push(t);
+}
+
+/** Takes one sampled position into the strands `build` draws. */
+function advance(build: PointBuild, x: number, y: number, t: number): void {
+  if (!build.seen) {
+    build.seen = true;
+    build.anchorX = x;
+    build.anchorY = y;
+    build.anchorT = t;
+    return;
+  }
+  const dx = x - build.anchorX;
+  const dy = y - build.anchorY;
+  const travel = Math.sqrt(dx * dx + dy * dy);
+  const stepped = travel > build.floor;
+  if (stepped && build.radius > 0) {
+    let nx = -dy / travel;
+    let ny = dx / travel;
+    // Held on the side it was already on: a reversal retraces the envelope it has just drawn, and a normal that flipped with the travel would instead swap the two strands over, striping the disc with the chord between them.
+    if (nx * build.normalX + ny * build.normalY < 0) {
+      nx = -nx;
+      ny = -ny;
+    }
+    build.normalX = nx;
+    build.normalY = ny;
+  }
+  if (!build.moving) {
+    if (!stepped) return;
+    build.moving = true;
+    // The still stretch before the first move collapses to the one position it held, dated when it was first seen so the playback head finds the strand from that instant on.
+    emit(build, build.anchorX, build.anchorY, build.anchorT);
+  }
+  if (stepped) {
+    build.anchorX = x;
+    build.anchorY = y;
+  }
+  emit(build, x, y, t);
+}
+
+/**
+ * Where one strand is sampled, and which point of the mechanism owns the curve it draws.
+ * Two strands with the same owner draw one curve twice — a segment end welded onto a node, two segments meeting there, the solver fusing all of them into a single point — so only the first of them is kept.
+ */
+interface TrajectoryTarget {
+  elementID: ID;
+  key: string;
+  owner: string;
+  radius: number;
+}
+
+/** The strands `element` asks for, before any is dropped as a duplicate. */
+function element_targets(
+  element: MechanicalElement,
+  byID: Map<ID, MechanicalElement>,
+): TrajectoryTarget[] {
+  if (element.type === "gear") {
+    const axle = byID.get(element.parentAxleID);
+    // What a gear owns is the band it sweeps, not its centre: two gears repeat each other only when they share an axle AND a radius.
+    const centre =
+      axle && "fixedGearsIDs" in axle && axle.fixedGearsIDs.includes(element.id)
+        ? axle.id
+        : element.id;
+    return [
+      {
+        elementID: element.id,
+        key: element.id,
+        owner: `envelope:${centre}:${element.radius}`,
+        radius: element.radius,
+      },
+    ];
+  }
+  if ("positionStart" in element)
+    return (["start", "end"] as const).map((which) => {
+      const key = `${element.id}:${which}`;
+      const node =
+        which === "start" ? element.fixedNodeStartID : element.fixedNodeEndID;
+      return {
+        elementID: element.id,
+        key,
+        owner: node !== undefined && byID.has(node) ? node : key,
+        radius: 0,
+      };
+    });
+  return [
+    { elementID: element.id, key: element.id, owner: element.id, radius: 0 },
+  ];
 }
 
 /** Trajectories built so far, plus what they were built from. Opaque: pass it back to `extend_probe_trajectories`, never read it. */
@@ -467,7 +615,7 @@ export interface TrajectoryCache {
   /** Number of snapshots consumed, and the last one consumed — its identity is what tells an append apart from a rewritten history. */
   consumed: number;
   boundary: SimulationSnapshot | null;
-  built: TrajectoryBuild[];
+  built: PointBuild[];
 }
 
 export const EMPTY_TRAJECTORY_CACHE: TrajectoryCache = {
@@ -477,30 +625,78 @@ export const EMPTY_TRAJECTORY_CACHE: TrajectoryCache = {
   built: [],
 };
 
+/** One build per strand to accumulate, nodes claiming their own point ahead of the segments that end on it. */
+function trajectory_builds(elements: MechanicalElement[]): PointBuild[] {
+  const byID = new Map<ID, MechanicalElement>(
+    elements.map((el) => [el.id, el]),
+  );
+  const shown = elements.filter(
+    (el) =>
+      overlay_shown(el, "trajectory") &&
+      available_overlays(el).includes("trajectory"),
+  );
+  const claimed = new Set<string>();
+  const colors = new Map<ID, number>();
+  const builds: PointBuild[] = [];
+  for (const nodesFirst of [true, false])
+    for (const element of shown) {
+      if (is_node_element(element) !== nodesFirst) continue;
+      for (const target of element_targets(element, byID)) {
+        if (claimed.has(target.owner)) continue;
+        claimed.add(target.owner);
+        let colorIndex = colors.get(target.elementID);
+        if (colorIndex === undefined) {
+          colorIndex = colors.size;
+          colors.set(target.elementID, colorIndex);
+        }
+        builds.push({
+          elementID: target.elementID,
+          colorIndex,
+          key: target.key,
+          radius: target.radius,
+          floor: travel_floor(target.radius),
+          strands: Array.from({ length: target.radius > 0 ? 2 : 1 }, () => ({
+            points: [],
+            times: [],
+          })),
+          anchorX: 0,
+          anchorY: 0,
+          anchorT: 0,
+          seen: false,
+          moving: false,
+          normalX: 0,
+          normalY: 0,
+        });
+      }
+    }
+  return builds;
+}
+
 function sample_into(
-  build: TrajectoryBuild[],
+  builds: PointBuild[],
   snapshots: SimulationSnapshot[],
-  elements: MechanicalElement[],
   from: number,
 ): void {
   let layout: SnapshotLayout | null = null;
-  let slots: ProbeSlots[] = [];
+  let slots: number[] = [];
   for (let i = from; i < snapshots.length; i++) {
     const snap = snapshots[i];
     if (snap.layout !== layout) {
       layout = snap.layout;
-      slots = elements.map((el) => probe_slots(el, layout!));
+      slots = builds.map((build) => layout!.index.get(build.key) ?? -1);
     }
-    build.forEach((traj, k) => {
-      if (!read_position(snap, slots[k])) return;
-      traj.points.push(new Point2(sampled[0], sampled[1]));
-      traj.times.push(snap.t);
-    });
+    for (let k = 0; k < builds.length; k++) {
+      const slot = slots[k];
+      if (slot < 0) continue;
+      const x = snap.positions[2 * slot];
+      if (Number.isNaN(x)) continue;
+      advance(builds[k], x, snap.positions[2 * slot + 1], snap.t);
+    }
   }
 }
 
 /**
- * Trajectories of every node whose `trajectory` overlay is on, in mechanical- element order.
+ * Trajectories of every element whose `trajectory` overlay is on, in mechanical-element order.
  * The recording only ever grows, so the cache is extended with the new snapshots instead of being rebuilt — pass the returned cache back on the next call.
  * Anything else (elements edited, history truncated or reset) rebuilds from scratch.
  */
@@ -514,13 +710,8 @@ export function extend_probe_trajectories(
     snapshots.length >= cache.consumed &&
     (cache.consumed === 0 || snapshots[cache.consumed - 1] === cache.boundary);
 
-  const tracked = elements.filter(
-    (el) => is_node_element(el) && overlay_shown(el, "trajectory"),
-  );
-  const built = appendable
-    ? cache.built
-    : tracked.map((el) => ({ elementID: el.id, points: [], times: [] }));
-  sample_into(built, snapshots, tracked, appendable ? cache.consumed : 0);
+  const built = appendable ? cache.built : trajectory_builds(elements);
+  sample_into(built, snapshots, appendable ? cache.consumed : 0);
 
   return {
     elements,
@@ -548,11 +739,209 @@ export function trajectories_at(
   cache: TrajectoryCache,
   time: number,
 ): ProbeTrajectory[] {
-  return cache.built.map((traj) => ({
-    elementID: traj.elementID,
-    points: traj.points,
-    headCount: head_count(traj.times, time),
-  }));
+  return cache.built.flatMap((build) =>
+    build.strands.map((strand) => ({
+      elementID: build.elementID,
+      colorIndex: build.colorIndex,
+      points: strand.points,
+      headCount: head_count(strand.times, time),
+    })),
+  );
+}
+
+/**
+ * A scalar read off `positions` alone, over the whole recording - both modes read these identically, since nothing here needs a velocity, a force or a solver state.
+ * `reader` resolves its slots once per layout, the same way every series here does, and answers `undefined` at an instant the snapshot carries no value for.
+ */
+function scalar_series<S extends SimulationSnapshot>(
+  snapshots: S[],
+  unit: string,
+  reader: (layout: SnapshotLayout) => (snapshot: S) => number | undefined,
+): ProbeSeries {
+  const t: number[] = [];
+  const values: number[] = [];
+  let layout: SnapshotLayout | null = null;
+  let read: (snapshot: S) => number | undefined = () => undefined;
+  for (const snapshot of snapshots) {
+    if (snapshot.layout !== layout) {
+      layout = snapshot.layout;
+      read = reader(layout);
+    }
+    const value = read(snapshot);
+    if (value === undefined) continue;
+    t.push(snapshot.t);
+    values.push(value);
+  }
+  return { t, curves: [{ key: "value", values }], unit };
+}
+
+/** A series of the same instants carrying `values` instead - how a scalar derived term by term from another one is returned. */
+function mapped_series(
+  source: ProbeSeries,
+  unit: string,
+  of: (value: number) => number,
+): ProbeSeries {
+  return {
+    t: source.t,
+    curves: [{ key: "value", values: (source.curves[0]?.values ?? []).map(of) }],
+    unit,
+  };
+}
+
+/**
+ * A recorded scalar's own rate of change, by the same clamped-end central differences the kinematic velocity curves use.
+ * Used wherever the solver carries no state for the rate itself: differentiating the scalar is then exact by construction, whatever its own definition involves.
+ */
+function rate_of(series: ProbeSeries, unit: string): ProbeSeries {
+  const values = series.curves[0]?.values ?? [];
+  if (values.length < 2) return { t: [], curves: [], unit };
+  const { t } = series;
+  const rate = values.map((_, i) => {
+    const i0 = Math.max(0, i - 1);
+    const i1 = Math.min(values.length - 1, i + 1);
+    const dt = t[i1] - t[i0];
+    return dt > 0 ? (values[i1] - values[i0]) / dt : 0;
+  });
+  return { t, curves: [{ key: "value", values: rate }], unit };
+}
+
+/** The two endpoints of a straight member. A belt is excluded: its own ends say nothing about the path it follows, which is why nothing samples one there (see `probe_metric_available`). */
+function straight_member(element: MechanicalElement): boolean {
+  return "positionStart" in element && element.type !== "belt";
+}
+
+/** The distance between the element's two endpoints at each instant. Empty for anything but a straight member. */
+function length_series<S extends SimulationSnapshot>(
+  element: MechanicalElement,
+  snapshots: S[],
+): ProbeSeries {
+  if (!straight_member(element)) return { t: [], curves: [], unit: "m" };
+  return scalar_series(snapshots, "m", (layout) => {
+    const slots = probe_slots(element, layout);
+    return (snapshot) => {
+      if (slots.a < 0 || slots.b < 0) return undefined;
+      const p = snapshot.positions;
+      const ax = p[2 * slots.a];
+      const bx = p[2 * slots.b];
+      if (Number.isNaN(ax) || Number.isNaN(bx)) return undefined;
+      return Math.hypot(bx - ax, p[2 * slots.b + 1] - p[2 * slots.a + 1]);
+    };
+  });
+}
+
+/**
+ * A spring's natural length, read the way the solver compiled it (`compile_springs_dampers`): the user's own value, or the distance its endpoints were drawn at.
+ * `undefined` for everything else - a damper's `restLength` is a drawing aid with no physical meaning, and no other member has one at all.
+ */
+function rest_length(element: MechanicalElement): number | undefined {
+  if (element.type !== "spring") return undefined;
+  return (
+    element.restLength ?? element.positionStart.distance_to(element.positionEnd)
+  );
+}
+
+/** How far the member is stretched past its natural length, negative when compressed. Empty where the element has no natural length to measure from. */
+function elongation_series<S extends SimulationSnapshot>(
+  element: MechanicalElement,
+  snapshots: S[],
+): ProbeSeries {
+  const rest = rest_length(element);
+  if (rest === undefined) return { t: [], curves: [], unit: "m" };
+  return mapped_series(length_series(element, snapshots), "m", (l) => l - rest);
+}
+
+/** The rail a slider runs along. `undefined` for an element that slides on nothing. */
+function rail_of(element: MechanicalElement): ID | undefined {
+  return (element.type === "slider" || element.type === "slidep") &&
+    element.parentBeamID !== undefined
+    ? element.parentBeamID
+    : undefined;
+}
+
+/**
+ * How far along its rail a slider sits, measured from the rail's own start - the one figure that says where a slider is, whatever the rail itself is doing.
+ * Signed, and not clamped to the rail: a slider driven past an end reads past it rather than reading as if it had stopped there.
+ */
+function abscissa_series<S extends SimulationSnapshot>(
+  element: MechanicalElement,
+  snapshots: S[],
+): ProbeSeries {
+  const rail = rail_of(element);
+  if (rail === undefined) return { t: [], curves: [], unit: "m" };
+  return scalar_series(snapshots, "m", (layout) => {
+    const node = layout.index.get(element.id) ?? -1;
+    const start = layout.index.get(`${rail}:start`) ?? -1;
+    const end = layout.index.get(`${rail}:end`) ?? -1;
+    return (snapshot) => {
+      if (node < 0 || start < 0 || end < 0) return undefined;
+      const p = snapshot.positions;
+      const ax = p[2 * start];
+      const ay = p[2 * start + 1];
+      const dx = p[2 * end] - ax;
+      const dy = p[2 * end + 1] - ay;
+      const px = p[2 * node];
+      if (Number.isNaN(ax) || Number.isNaN(dx) || Number.isNaN(px)) return undefined;
+      const length = Math.hypot(dx, dy);
+      if (!(length > 1e-9)) return undefined;
+      return ((px - ax) * dx + (p[2 * node + 1] - ay) * dy) / length;
+    };
+  });
+}
+
+/**
+ * How fast the member's two ends are separating, read off the solver's own velocities - positive when it lengthens.
+ * The exact quantity a damper's force is built from (`resolve_spring_damper_forces`), rather than a length differentiated after the fact: the force read beside it has to be the one the simulation actually applied.
+ */
+function separation_speed_series(
+  element: MechanicalElement,
+  snapshots: DynamicSnapshot[],
+): ProbeSeries {
+  if (!straight_member(element)) return { t: [], curves: [], unit: "m/s" };
+  return scalar_series(snapshots, "m/s", (layout) => {
+    const slots = probe_slots(element, layout);
+    return (snapshot) => {
+      if (slots.a < 0 || slots.b < 0) return undefined;
+      const p = snapshot.positions;
+      const ax = p[2 * slots.a];
+      const ay = p[2 * slots.a + 1];
+      const dx = p[2 * slots.b] - ax;
+      const dy = p[2 * slots.b + 1] - ay;
+      if (Number.isNaN(ax) || Number.isNaN(dx)) return undefined;
+      const length = Math.hypot(dx, dy);
+      if (!(length > 1e-9)) return undefined;
+      const v = snapshot.velocities;
+      const vax = v[2 * slots.a];
+      const vbx = v[2 * slots.b];
+      if (Number.isNaN(vax) || Number.isNaN(vbx)) return undefined;
+      return (
+        ((vbx - vax) * dx + (v[2 * slots.b + 1] - v[2 * slots.a + 1]) * dy) / length
+      );
+    };
+  });
+}
+
+/**
+ * The force a spring or a damper carries along its own axis, positive in tension - its constitutive law, at the state the solver was in.
+ * Exact rather than inferred: dynamic mode applies `k*(L - L0)` and `b*Ldot` as real forces (`resolve_spring_damper_forces`), so this is the very number the simulation used and not a reconstruction of it.
+ * Empty for every other element: a beam's own axial effort is its cohesion N, read from the diagrams instead.
+ */
+function axial_force_series(
+  element: MechanicalElement,
+  snapshots: DynamicSnapshot[],
+): ProbeSeries {
+  if (element.type === "spring")
+    return mapped_series(
+      elongation_series(element, snapshots),
+      "N",
+      (e) => element.stiffness * e,
+    );
+  if (element.type === "damper")
+    return mapped_series(
+      separation_speed_series(element, snapshots),
+      "N",
+      (v) => element.damping * v,
+    );
+  return { t: [], curves: [], unit: "N" };
 }
 
 /**
@@ -684,12 +1073,26 @@ export function get_probe_series(
       return { t: [], curves: [], unit: "N·m" };
 
     case "length":
+      return length_series(element, snapshots);
+
     case "elongation":
+      return elongation_series(element, snapshots);
+
     case "elongation-velocity":
-    case "axial-force":
-    case "belt-tension":
+      // No solver velocity to read here, so the length is differentiated — the same treatment this mode gives every other rate.
+      return rate_of(length_series(element, snapshots), "m/s");
+
     case "slide-abscissa":
+      return abscissa_series(element, snapshots);
+
     case "slide-velocity":
+      return rate_of(abscissa_series(element, snapshots), "m/s");
+
+    case "axial-force":
+      // Not computed by the kinematic solver; dynamic mode fills this in.
+      return { t: [], curves: [], unit: "N" };
+
+    case "belt-tension":
     case "motor-torque":
       return unrecorded_series(metric);
 
@@ -892,26 +1295,31 @@ export function get_dynamic_probe_series(
       return { t: [], curves: [], unit: "N·m" };
 
     case "length":
+      return length_series(element, snapshots);
+
     case "elongation":
+      return elongation_series(element, snapshots);
+
     case "elongation-velocity":
+      return separation_speed_series(element, snapshots);
+
     case "axial-force":
-    case "belt-tension":
+      return axial_force_series(element, snapshots);
+
     case "slide-abscissa":
+      return abscissa_series(element, snapshots);
+
     case "slide-velocity":
+      // The solver carries no state for an abscissa's own rate, so this one is differentiated rather than read — exact whatever the rail is itself doing.
+      return rate_of(abscissa_series(element, snapshots), "m/s");
+
+    case "belt-tension":
     case "motor-torque":
       return unrecorded_series(metric);
   }
 }
 
-type UnrecordedMetric =
-  | "length"
-  | "elongation"
-  | "elongation-velocity"
-  | "axial-force"
-  | "belt-tension"
-  | "slide-abscissa"
-  | "slide-velocity"
-  | "motor-torque";
+type UnrecordedMetric = "belt-tension" | "motor-torque";
 
 /** The empty series of a metric the recorder does not produce yet (see `ProbeMetric`), in the unit it will read in. */
 function unrecorded_series(metric: UnrecordedMetric): ProbeSeries {
@@ -919,13 +1327,7 @@ function unrecorded_series(metric: UnrecordedMetric): ProbeSeries {
 }
 
 const UNRECORDED_UNIT: Record<UnrecordedMetric, string> = {
-  length: "m",
-  elongation: "m",
-  "elongation-velocity": "m/s",
-  "axial-force": "N",
   "belt-tension": "N",
-  "slide-abscissa": "m",
-  "slide-velocity": "m/s",
   "motor-torque": "N·m",
 };
 

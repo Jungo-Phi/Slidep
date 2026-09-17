@@ -128,6 +128,10 @@ export const DIM = {
   PIVOT_INNER_RADIUS: 4,
   /** Half the span of each arm of the moment balance's reference-point cross — reaching past a pivot, so it reads as its own mark rather than as a node that happens to sit there. */
   MOMENT_BALANCE_MARKER_HALF_SIZE: 13,
+  /** Radius of the centre-of-mass marker — a touch bigger than a ruler endpoint's own ring, since it stands for the whole mechanism rather than one point of it. */
+  CENTER_OF_MASS_RADIUS: 9,
+  /** How far the veil under that marker reaches, as a multiple of its radius: the marker lands wherever the mass puts it, bars included, and the veil is what keeps its shape readable over them. */
+  CENTER_OF_MASS_VEIL_SCALE: 1.5,
   // Motor
   MOTOR_RADIUS: 18,
   MOTOR_CORNER_RADIUS: 2.5,

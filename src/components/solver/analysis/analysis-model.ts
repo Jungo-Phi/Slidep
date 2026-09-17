@@ -14,6 +14,7 @@ import {
   rewire_belts,
   SimulationModel,
 } from "../dynamics/simulation-engine";
+import { DynamicMassModel } from "../dynamics/mass-model";
 
 /** Why a link was dropped from the analysis. */
 export type PruneReason =
@@ -86,6 +87,8 @@ export type AnalysisModel = {
   chains: AnalysisChain[];
   /** Lever arm of each angle DOF: what one radian of it is worth in metres. */
   gearRadii: Map<ID, number>;
+  /** The masses a dynamics solve would answer to, which is what tells a motion carrying inertia from one carrying none. */
+  dynamicMasses: DynamicMassModel;
 };
 
 /**
@@ -532,5 +535,14 @@ export function build_analysis_model(mechanism: Mechanism): AnalysisModel {
         a.id.localeCompare(b.id),
     );
 
-  return { nodes, links, pruned, anchored, variableOrder, chains, gearRadii };
+  return {
+    nodes,
+    links,
+    pruned,
+    anchored,
+    variableOrder,
+    chains,
+    gearRadii,
+    dynamicMasses: compiled.dynamicMasses,
+  };
 }

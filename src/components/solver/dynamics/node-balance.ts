@@ -148,7 +148,12 @@ export function resolve_node_balance(
     const atAnchor = inverseMass <= 0;
     // A free node's mass is floored to `MASS_FLOOR` when nothing physical lumps onto it (`mass-model.ts`), which gives it a weight the mechanism does not have.
     // Read from the same map the solve used all the same: the balance checks the readings against the model that produced them, and that phantom is part of it.
-    const lumped = atAnchor ? (masses.groundedMasses.get(key) ?? 0) : 1 / inverseMass;
+    // Apart from a floor nothing projects (`phantomKeys`), which takes part in no equation and could only read as a weight out of thin air.
+    const lumped = atAnchor
+      ? (masses.groundedMasses.get(key) ?? 0)
+      : masses.phantomKeys.has(key)
+        ? 0
+        : 1 / inverseMass;
     const mass = Math.max(0, lumped - (lumps.get(key) ?? 0));
     const weight = gravity.mul(mass);
     const applied = action.force.add(external).add(weight);

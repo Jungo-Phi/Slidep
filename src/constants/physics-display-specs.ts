@@ -17,6 +17,18 @@ export const LOAD_SCALING = {
   SNAP_MANTISSAS: [1, 2, 5],
 };
 
+/**
+ * How a recorded path turns into a drawn trajectory.
+ */
+export const TRAJECTORY_SAMPLING = {
+  /** Travel (m) a point has to leave its first position by before it draws anything at all.
+   * Numerical rather than visual: it is set to catch what the solver writes back unchanged — an anchored node, a gear on a fixed axle — and stays far below what any zoom could show, so nothing a reader could act on is ever hidden. */
+  MOBILE_TRAVEL: 1e-6,
+  /** Fraction of its radius a gear's centre has to travel before its envelope takes a new direction from it.
+   * Read off two consecutive samples, the direction of a slow centre is round-off; the disc's own size is the only scale the offset need be accurate against. */
+  ENVELOPE_DIRECTION_RATIO: 0.02,
+};
+
 /** The same ruler as `LOAD_SCALING`, on a moment's own range: torques are commonly tenths of
  * N·m, not hundreds of N. Halved, because a moment's footprint is its arc's DIAMETER — it is drawn around a node instead of pointing away from one — so that diameter reads on the very ruler a force arrow's length does. */
 export const MOMENT_SCALING = {

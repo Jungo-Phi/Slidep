@@ -684,6 +684,13 @@ export function compile_simulation_model(
     mechanism,
     keyMap,
     nodes.posMasses,
+    new Set(
+      links
+        .filter((link) => link.type === "BeltPin" && link.passive)
+        .map((link) => (link as Link & { type: "BeltPin" }).nodeKey),
+    ),
+    links,
+    RECORD_DT / DYNAMIC_SUBSTEPS,
   );
   const compiledLoads = compile_loads(mechanism, keyMap);
   const compiledSpringDampers = compile_springs_dampers(mechanism, keyMap);
@@ -1692,6 +1699,7 @@ function compute_energy_sample(
   let potentialGravity = 0;
   for (const [key, invMass] of model.dynamicMasses.posMasses) {
     if (invMass <= 0) continue;
+    if (model.dynamicMasses.phantomKeys.has(key)) continue; // a floor the solve needs, not a mass this balance may count
     const mass = 1 / invMass;
     const v = velocities.get(key);
     if (v) kinetic += 0.5 * mass * (v.x * v.x + v.y * v.y);

@@ -17,6 +17,8 @@ import { t } from "../../../i18n";
 /**
  * Three stacked N/T/Mf diagrams of one beam — docs/plan-efforts-interieurs.md phase 5bis.
  * A measurement tool, not a display layer: mounted only while a beam is selected, gone at deselection, one quantity per own y-scale, discontinuities drawn as real jumps (never smoothed — `field.samples` already carries a "just before"/"just after" pair at the same `s` for exactly that reason, see `compute_cohesion_field`).
+ *
+ * Takes every pixel it is given and insets itself by nothing: three curves squeezed into a column narrower than the panel read as noise, and a host that already pads its own content would otherwise inset them twice.
  */
 
 const VIEW_W = 260;
@@ -349,7 +351,6 @@ export const CohesionDiagrams: React.FC<CohesionDiagramsProps> = ({
     return (
       <Box
         sx={{
-          mx: 2,
           height: VIEW_H * 3 + 16,
           display: "flex",
           alignItems: "center",
@@ -409,7 +410,6 @@ export const CohesionDiagrams: React.FC<CohesionDiagramsProps> = ({
       onMouseMove={handleMove}
       onMouseLeave={handleLeave}
       sx={{
-        mx: 2,
         borderRadius: 1,
         backgroundColor: "background.sunken",
         overflow: "hidden",

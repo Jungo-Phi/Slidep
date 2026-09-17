@@ -157,6 +157,8 @@ interface AnalysisPanelProps {
   setHighlight: (highlight: CanvasHighlight) => void;
   /** How a redundant constraint the panel is naming right now would yield; empty clears it. */
   setRedundancySymbols: (symbols: RedundancySymbol[]) => void;
+  /** Publishes the elements a freedom carrying no inertia moves, for the inspector above to paint the mass they are missing. */
+  setInertiaFreeElements: (elements: ReadonlySet<ID>) => void;
   /** Where the pose the panel is animating is published, for the canvas to draw. */
   modePreviewRef: React.MutableRefObject<Mechanism | null>;
   /** See `App`'s own `hoveredBalanceTerm`. */
@@ -207,6 +209,9 @@ const redundancy_kinds = (group: RedundancyGroup): string => {
     .map(([noun, count]) => (count > 1 ? `${count} × ${noun}` : noun))
     .join(", ");
 };
+
+/** What the panel publishes once it has nothing to say about inertia any more. */
+const NO_ELEMENTS: ReadonlySet<ID> = new Set();
 
 /** Point the canvas at these elements: something to look at, not something wrong with them. */
 const focus = (elements: Iterable<ID>): CanvasHighlight => ({
@@ -409,6 +414,10 @@ const ChainCard: React.FC<{
               : undefined;
             const motorBlocked =
               motor !== undefined && blockedMotors.has(motor.id);
+            // A freedom nothing weighs: in dynamics whatever speed it takes is the solver's own mass floor talking.
+            // Said only there — the other modes never read a mass — and only where no motor drives the freedom, since a prescribed motion answers to its motor rather than to its inertia.
+            const noInertia =
+              appMode === "dynamic" && mode.inertiaFree && !mode.drivenByMotor;
             return (
               // The whole row carries the block's explanation, since the whole row is what turns red.
               // An empty title renders no tooltip, which is how a row that is not blocked — or one whose speed field is speaking for itself — stays silent.
@@ -417,7 +426,9 @@ const ChainCard: React.FC<{
                 title={
                   motorBlocked && speedHovered !== modeIndex
                     ? t("ddl_motor_blocked_hint")
-                    : ""
+                    : noInertia
+                      ? t("mode_no_inertia_hint")
+                      : ""
                 }
               >
                 <Box
@@ -441,8 +452,9 @@ const ChainCard: React.FC<{
                     borderRadius: 3,
                     cursor: "default",
                     backgroundColor: shown ? "action.selected" : "transparent",
-                    // A block only ever exists while a simulation runs, which is exactly when no mode is being swung, so the two never fight over this background.
-                    ...(motorBlocked && {
+                    // Two rows the mechanism cannot answer for, painted alike: a motor it will not follow, and a freedom nothing weighs.
+                    // Swinging a mode wins the background back below, which is what keeps the two from fighting over it.
+                    ...((motorBlocked || noInertia) && {
                       backgroundColor: (theme) =>
                         alpha(theme.palette.error.main, 0.12),
                     }),
@@ -495,6 +507,19 @@ const ChainCard: React.FC<{
                           interactive={false}
                         />
                       </Box>
+                    )}
+
+                    {noInertia && (
+                      <Typography
+                        variant="caption"
+                        sx={{
+                          color: "warning.main",
+                          whiteSpace: "nowrap",
+                          pr: 1,
+                        }}
+                      >
+                        {t("mode_no_inertia")}
+                      </Typography>
                     )}
                   </Box>
                   {motor && (
@@ -741,6 +766,7 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
   seekTime,
   setHighlight,
   setRedundancySymbols,
+  setInertiaFreeElements,
   modePreviewRef,
   setHoveredBalanceTerm,
   momentBalanceReference,
@@ -878,13 +904,30 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
     modesPlayable,
   );
 
+  // A freedom nothing weighs, and everything it moves: the mass those parts are missing is what leaves it without inertia, and the inspector above says so on their own row.
+  // Dynamics only, and never a freedom a motor drives — the same reading the mode rows show.
+  const inertiaFreeElements = React.useMemo(() => {
+    const ids = new Set<ID>();
+    if (appMode !== "dynamic") return ids;
+    for (const { modes } of analysis.chains)
+      for (const mode of modes)
+        if (mode.inertiaFree && !mode.drivenByMotor)
+          for (const id of mode.moves) ids.add(id);
+    return ids;
+  }, [analysis.chains, appMode]);
+
+  React.useEffect(() => {
+    setInertiaFreeElements(inertiaFreeElements);
+  }, [inertiaFreeElements, setInertiaFreeElements]);
+
   // Leaving the tab unmounts the panel without a mouse-leave, which would strand the highlight — and a redundancy symbol — on a canvas nothing is pointing at any more.
   React.useEffect(
     () => () => {
       setHighlight(NO_HIGHLIGHT);
       setRedundancySymbols(EMPTY_SYMBOLS);
+      setInertiaFreeElements(NO_ELEMENTS);
     },
-    [setHighlight, setRedundancySymbols],
+    [setHighlight, setRedundancySymbols, setInertiaFreeElements],
   );
 
   /** The element a mode is named after, for its row's `ElementDisplay`. */
@@ -898,7 +941,6 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
     (id: ID) => analysedMechanism.mechanicalElements.find((el) => el.id === id),
     [analysedMechanism.mechanicalElements],
   );
-
 
   // Every beam's own loop residual at the instant on screen, worst first — how far its marched field lands from the torsor the statics pass read independently at its far end (`CohesionField.loopResidual`).
   // Mechanism-wide rather than for the selected beam alone: what it is read for is finding WHICH beam the physics is off on.
@@ -944,7 +986,7 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
       resolve_moment_balance_point(momentBalanceReference, analysedMechanism),
     [analysedMechanism, momentBalanceReference],
   );
-  // What the chip beside the picker reads — `undefined` for a typed point, whose own `VectorInput` already shows it.
+  // What the reference chip reads — `undefined` for a point of its own, and for an element deleted since: both read as the coordinates the reference resolves to, the origin in the second case.
   const momentBalanceReferenceLabel = React.useMemo(() => {
     switch (momentBalanceReference.kind) {
       case "point":
@@ -955,12 +997,13 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
         const node = mechanism.mechanicalElements.find(
           (el) => el.id === momentBalanceReference.nodeID,
         );
-        return shown_element_name(node);
+        return node && shown_element_name(node);
       }
       case "edge-end": {
         const edge = mechanism.mechanicalElements.find(
           (el) => el.id === momentBalanceReference.edgeID,
         );
+        if (!edge) return undefined;
         return `${shown_element_name(edge)} ${t(
           momentBalanceReference.which === "start"
             ? "point_start"
@@ -1082,15 +1125,11 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
               onArmPicking={() =>
                 setCanvasState({ type: "PickingMomentBalanceNode" })
               }
+              onStopPicking={() => setCanvasState({ type: "Selecting" })}
               onSetPoint={(point) =>
                 setMomentBalanceReference({ kind: "point", point })
               }
               onReferenceHoverChange={setMomentBalanceReferenceHovered}
-              isCustomPoint={momentBalanceReference.kind === "point"}
-              supportReactions={mechanism.simulation.supportReactions}
-              onChangeSupportReactions={(on) =>
-                applyActions([{ type: "SetSupportReactions", enabled: on }])
-              }
             />
           )}
 
@@ -1140,7 +1179,6 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
       </Box>
 
       <Divider />
-
 
       {/* Mesures : sondes actives + graphiques */}
       <Box sx={{ mx: 2, display: "flex", flexDirection: "column", gap: 1 }}>

@@ -1,5 +1,6 @@
 import React from "react";
-import { Box, Typography } from "@mui/material";
+import { Box, Tooltip, Typography } from "@mui/material";
+import { alpha } from "@mui/material/styles";
 import { ProbeMetric } from "../../../types";
 import { MetricSample } from "../../solver/recording/probe-series";
 import { FormattedMetric, format_metric } from "../metric-display";
@@ -30,6 +31,8 @@ export const MetricValue: React.FC<{
     );
   const { unit, main, sense, vector } = formatted;
   const showVector = vector !== undefined && (!summary || main === undefined);
+  // Never both: the components already carry the magnitude, and printing it beside them reads as a third number rather than as a sum of the two.
+  const showMain = main !== undefined && !showVector;
   return (
     <Box
       sx={{
@@ -40,7 +43,7 @@ export const MetricValue: React.FC<{
         fontVariantNumeric: "tabular-nums",
       }}
     >
-      {main !== undefined && (
+      {showMain && (
         <Typography variant="caption" fontWeight={600} noWrap>
           {sense && `${SENSE_GLYPH[sense]} `}
           {main}
@@ -91,30 +94,50 @@ export const MetricValues: React.FC<{
 export const ValueRow: React.FC<{
   label: string;
   formatted: FormattedMetric | undefined;
-}> = ({ label, formatted }) => (
-  <Box
-    sx={{
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "space-between",
-      gap: 1,
-      minHeight: 22,
-    }}
-  >
-    <Typography variant="caption" color="text.secondary" noWrap>
-      {label}
-    </Typography>
-    <MetricValue formatted={formatted} />
-  </Box>
+  /**
+   * What the mechanism cannot answer for about this value, shown on hover.
+   * The row is then painted like a motor the mechanism will not follow (`AnalysisPanel`), the value staying perfectly readable: it is the model behind it that is wanting, not the figure.
+   */
+  alert?: string;
+}> = ({ label, formatted, alert }) => (
+  <Tooltip title={alert ?? ""}>
+    <Box
+      sx={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 1,
+        minHeight: 22,
+        ...(alert && {
+          backgroundColor: (theme) => alpha(theme.palette.error.main, 0.12),
+          borderRadius: 3,
+          px: 0.5,
+        }),
+      }}
+    >
+      <Typography
+        variant="caption"
+        color={alert ? "error.main" : "text.secondary"}
+        noWrap
+      >
+        {label}
+      </Typography>
+      <MetricValue formatted={formatted} />
+    </Box>
+  </Tooltip>
 );
 
-/** One measured quantity of the inspected subject, labelled the way a probe names it. */
+/**
+ * One measured quantity of the inspected subject, labelled the way a probe names it.
+ * `label` overrides that name where the row sits under something that already says part of it — a reaction's own two quantities, under a heading that already named the end they are read at.
+ */
 export const MetricRow: React.FC<{
   metric: ProbeMetric;
   sample: MetricSample | undefined;
-}> = ({ metric, sample }) => (
+  label?: string;
+}> = ({ metric, sample, label }) => (
   <ValueRow
-    label={t(PROBE_METRIC_LABEL_KEYS[metric])}
+    label={label ?? t(PROBE_METRIC_LABEL_KEYS[metric])}
     formatted={sample && format_metric(sample)}
   />
 );

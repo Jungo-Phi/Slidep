@@ -21,12 +21,10 @@ import type {
   ScreenPoint,
   ViewportState,
 } from "../../../types";
-import type { MaterialDef, ProfileDef } from "../../../types/material";
 import { ONE, Point2 } from "../../../types/point2";
 import { world2screen, world2screen_length } from "../../../utils";
 import { LENGTH, rad_to_deg } from "../../../utils/quantity-format";
 import { auto_dimension_offset } from "../../properties-panel/element-dimensions";
-import { mechanism_center_of_mass } from "../../solver/analysis/force-balance";
 import {
   draw_dimension,
   draw_dimension_angle,
@@ -41,16 +39,31 @@ import {
   shown_readings,
   spanned_edge,
 } from "../tools/measure";
+import { INTERACTION_SPECS } from "../../../constants/interaction-specs";
 
-/** Radius of the centre-of-mass marker (screen px) — a touch bigger than a ruler endpoint's own ring, since it stands for the whole mechanism rather than one point of it. */
-export const CENTER_OF_MASS_RADIUS = 9;
+const { CENTER_OF_MASS_RADIUS, CENTER_OF_MASS_VEIL_SCALE } = DIM;
 
 /**
  * The classic mechanics symbol for a centre of mass: a circle quartered by a cross, two opposite quadrants filled.
- * In the ruler's own hue. Also drawn by the moment-balance picker while it is armed, where the same landmark is a click target rather than only something to measure against.
+ * In the ruler's own hue. Drawn over the mechanism by `MechanicalCanvas` — for the ruler, and for the moment-balance picker, where the same landmark is a click target rather than only something to measure against.
+ * It lands wherever the mass puts it, bars and all, so it carries a veil of the background fading out around it to keep its own shape readable over whatever it covers.
  */
-export function draw_center_of_mass(ctx: CanvasRenderingContext2D, at: ScreenPoint) {
+export function draw_center_of_mass(
+  ctx: CanvasRenderingContext2D,
+  at: ScreenPoint,
+) {
   ctx.save();
+
+  ctx.shadowBlur = INTERACTION_SPECS.ICON_HALO_SIZE;
+  ctx.shadowColor = COLORS.BACKGROUND;
+  ctx.fillStyle = COLORS.BACKGROUND + COLORS.ICON_TRANSPARENCY;
+  ctx.beginPath();
+  const veilRadius = CENTER_OF_MASS_RADIUS * CENTER_OF_MASS_VEIL_SCALE;
+  ctx.arc(at.x, at.y, veilRadius, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.shadowBlur = 0;
+  ctx.globalAlpha = 1;
   ctx.strokeStyle = COLORS.MEASURE;
   ctx.fillStyle = COLORS.MEASURE;
   ctx.lineWidth = STROKE_WIDTHS.STANDARD;
@@ -83,9 +96,6 @@ export type MeasureDrawing = {
   mechanicalElements: MechanicalElement[];
   /** What the cursor points at is only read while it is over the canvas; a reading already laid is read wherever one looks. */
   cursorOnCanvas: boolean;
-  /** For the centre-of-mass marker — the whole mechanism's, not the selection's, so it stays put whatever gets clicked. */
-  materials: MaterialDef[];
-  profiles: ProfileDef[];
 };
 
 /**
@@ -170,12 +180,15 @@ function draw_reading(
     ? world2screen(
         from
           .lerp(to, 0.5)
-          .add(to.sub(from).perp().with_length(auto_dimension_offset(viewport))),
+          .add(
+            to.sub(from).perp().with_length(auto_dimension_offset(viewport)),
+          ),
         viewport,
       )
     : start.lerp(end, 0.5);
 
-  if (spread) draw_dimension(ctx, start, end, label, from.distance_to(to), true);
+  if (spread)
+    draw_dimension(ctx, start, end, label, from.distance_to(to), true);
 
   // A bar spanned end to end is lit whole, so neither of its ends is a point to ring.
   if (!spanned) {
@@ -200,11 +213,8 @@ export function draw_ruler(
   ctx: CanvasRenderingContext2D,
   drawing: MeasureDrawing,
 ) {
-  const { viewport, state, hoveredPart, mechanicalElements, cursorOnCanvas, materials, profiles } =
-    drawing;
+  const { state, hoveredPart, mechanicalElements, cursorOnCanvas } = drawing;
   if (!ruler_is_out(state)) return;
-  const centerOfMass = mechanism_center_of_mass(mechanicalElements, materials, profiles);
-  if (centerOfMass) draw_center_of_mass(ctx, world2screen(centerOfMass, viewport));
   for (const reading of shown_readings(
     state,
     hoveredPart,

@@ -59,6 +59,7 @@ import { FloorConfig } from "../../../types/mechanism";
 import { floor_acute_angle } from "../../../utils/floor-geometry";
 import { gear_grab_handle } from "../../solver/kinematics/geometric-solver";
 import { out_of_sizing_reach } from "./hover-bounds";
+import { focus_of_reading } from "../../properties-panel/element-readings";
 
 /**
  * How a target answers one tool, per family.
@@ -1182,7 +1183,8 @@ export function get_hovered_part(
         return {
           type: "Overlay",
           position: overlayReading.position,
-          reading: overlayReading.reading,
+          // A click landing on one end of a member names the effort the whole member carries, so the end is dropped here, where every reader of a hover gets it already merged.
+          reading: focus_of_reading(overlayReading.reading),
         };
       continue;
     }

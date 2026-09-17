@@ -2,13 +2,13 @@ import React, { useEffect, useMemo, useRef } from "react";
 import { Box, useTheme } from "@mui/material";
 import { SerializedMechanism } from "../../types";
 import { load_mechanism } from "../../utils";
-import { draw_thumbnail } from "../canvas/drawing/render-thumbnail";
+import { draw_thumbnail, thumbnail_bounds } from "../canvas/drawing/render-thumbnail";
 import { animate_mode } from "../solver/analysis/mode-animation";
 import { THUMBNAIL_MARGIN, THUMBNAIL_MODE_ANIMATION } from "../../constants/interaction-specs";
 import { thumbnail_mode } from "./thumbnail-mode";
 
-/** Résolution du rendu, en 4:3. Bien au-dessus de la taille d'affichage, pour
- * rester net sur un écran à forte densité. */
+/** Render resolution, square as the card is. Well above the display size, to stay
+ * sharp on a high-density screen. */
 const RENDER_WIDTH = 512;
 const RENDER_HEIGHT = 512;
 
@@ -20,17 +20,19 @@ interface MechanismThumbnailProps {
 }
 
 /**
- * Miniature d'un mécanisme, redessinée plutôt que chargée depuis une image stockée : elle suit donc le thème courant, et la sauvegarde n'a plus à encoder quoi que ce soit.
+ * A mechanism's thumbnail, redrawn rather than loaded from a stored image: it follows the current theme, and the save has nothing left to encode.
  */
 export const MechanismThumbnail: React.FC<MechanismThumbnailProps> = ({
   record,
   hovered,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  // Redessiner quand le thème change : les couleurs du dessin en dépendent.
+  // Redraw when the theme changes: the drawing's colours depend on it.
   const theme = useTheme();
   // Repairs silently: a card is no place to report damage, but a broken record must not take the gallery down with it.
   const mechanism = useMemo(() => load_mechanism(record).mechanism, [record]);
+  // Framed on the resting pose once and for all: a swinging pose refit frame by frame would carry the framing along with it, and the card would read as breathing rather than as a mechanism moving.
+  const bounds = useMemo(() => thumbnail_bounds(mechanism), [mechanism]);
   // Survives across hover toggles (each one restarts the effect below) so the zoom eases onward from wherever it is instead of snapping back to `REST` between two hovers.
   const zoomRef = useRef(0);
 
@@ -64,7 +66,14 @@ export const MechanismThumbnail: React.FC<MechanismThumbnailProps> = ({
 
       const pose = animation ? animation.advance(dt) : mechanism;
       ctx.clearRect(0, 0, RENDER_WIDTH, RENDER_HEIGHT);
-      draw_thumbnail(ctx, pose, RENDER_WIDTH, RENDER_HEIGHT, zoomRef.current);
+      draw_thumbnail(
+        ctx,
+        pose,
+        RENDER_WIDTH,
+        RENDER_HEIGHT,
+        bounds,
+        zoomRef.current,
+      );
 
       // Stops once the zoom has settled and there's no swing to keep drawing — a resting thumbnail costs nothing between hovers.
       if (animation || zoomRef.current !== target) {
@@ -74,7 +83,7 @@ export const MechanismThumbnail: React.FC<MechanismThumbnailProps> = ({
     frame = requestAnimationFrame(step);
 
     return () => cancelAnimationFrame(frame);
-  }, [mechanism, theme, hovered]);
+  }, [mechanism, bounds, theme, hovered]);
 
   return (
     // The ground the drawing sits on, as on the canvas itself: a preview is a small view of the app's own surface, not of the card carrying it.

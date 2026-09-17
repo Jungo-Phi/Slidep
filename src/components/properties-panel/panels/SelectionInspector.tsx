@@ -1,6 +1,6 @@
 import React from "react";
 import { Box, Divider, IconButton, Tooltip, Typography } from "@mui/material";
-import { UnfoldLess, UnfoldMore } from "@mui/icons-material";
+import { Close } from "@mui/icons-material";
 import {
   Action,
   AppMode,
@@ -27,8 +27,17 @@ import { compute_cohesion_field } from "../../solver/recording/cohesion-field";
 import { GRAVITY } from "../../../constants/physics-specs";
 import { overlay_shown } from "../../../utils/element-queries";
 import { element_mass } from "../../../utils/element-mass";
-import { MASS } from "../../../utils/quantity-format";
-import { getStorageItem, setStorageItem } from "../../../utils/storage";
+import { measure_belt_length } from "../../../utils/belt-geom";
+import { LENGTH, MASS } from "../../../utils/quantity-format";
+import {
+  CARD_ICON_BUTTON_SX,
+  FULL_BLEED,
+  HEADER_HEIGHT,
+  HEADER_INSET,
+  ICON_GROUP_SX,
+  ROW_ICON_BUTTON_SX,
+  SUBJECT_VALUES_INSET,
+} from "../inspector-metrics";
 import { OVERLAY_LABEL_KEYS, set_overlay } from "../overlay-actions";
 import {
   InspectorValue,
@@ -37,7 +46,10 @@ import {
   element_reading_groups,
   inspector_layout,
   layer_key,
+  is_series_value,
   mass_reading_sample,
+  merged_internal,
+  reading_quantities,
   same_reading,
 } from "../element-readings";
 import { InspectedSubject } from "../selection-subject";
@@ -45,7 +57,8 @@ import { LiveParameter, live_parameters } from "../live-parameters";
 import { format_metric, format_scalar } from "../metric-display";
 import CohesionDiagrams from "../components/CohesionDiagrams";
 import ElementDisplay from "../components/ElementDisplay";
-import LoadsSection from "../components/LoadsSection";
+import HostRow from "../components/HostRow";
+import LoadInspector from "../components/LoadInspector";
 import MaterialProfileSection from "../components/MaterialProfileSection";
 import NumberInput from "../components/NumberInput";
 import ProbeMetricsButton from "../components/ProbeMetricsButton";
@@ -67,9 +80,6 @@ const reading_label = (layerLabel: string, which?: "node" | "start" | "end") =>
 /** What a card is told the selection holds when its own element is not what is selected. */
 const NOTHING_SELECTED: ID[] = [];
 
-/** Whether the details are unfolded, kept across selections and sessions: a reader who wants them wants them for every element. */
-const EXPANDED_STORAGE_KEY = "selectionInspectorExpanded";
-
 interface SelectionInspectorProps {
   subject: InspectedSubject | undefined;
   /** The edited mechanism: every value written goes to it, and every live parameter is read off it so an edit lands relative to the value actually stored. */
@@ -87,6 +97,8 @@ interface SelectionInspectorProps {
   setCanvasState: (state: CanvasState) => void;
   /** Publishes the abscissa hovered on a beam's own N/T/Mf diagrams, for the canvas to mark. */
   setHoveredAbscissa: (hovered: HoveredAbscissa | null) => void;
+  /** Elements a motion carrying no inertia moves, as the analysis below measured them — their missing mass is what leaves it without one. */
+  inertiaFreeElements: ReadonlySet<ID>;
 }
 
 /**
@@ -109,6 +121,7 @@ export const SelectionInspector: React.FC<SelectionInspectorProps> = ({
   selectedIds,
   setCanvasState,
   setHoveredAbscissa,
+  inertiaFreeElements,
 }) => {
   const dynamic = appMode === "dynamic";
   const snapshot =
@@ -118,13 +131,6 @@ export const SelectionInspector: React.FC<SelectionInspectorProps> = ({
         runtimeState.time,
       )) ||
     undefined;
-
-  const [expanded, setExpanded] = React.useState(() =>
-    getStorageItem<boolean>(EXPANDED_STORAGE_KEY, false),
-  );
-  React.useEffect(() => {
-    setStorageItem(EXPANDED_STORAGE_KEY, expanded);
-  }, [expanded]);
 
   // The same element at the instant on screen: parameter values are read off it, writes are built against the element itself (see `rebased_bundle`).
   const shown_of = <T extends MechanicalElement>(el: T): T =>
@@ -182,21 +188,31 @@ export const SelectionInspector: React.FC<SelectionInspectorProps> = ({
   const pointedReading =
     hoveredPart.type === "Overlay" ? hoveredPart.reading : null;
 
-  // The N/T/Mf field of the beam being read, off the same nearest snapshot every reading here uses rather than the live per-frame ref the canvas draws from.
   const selectedBeam: BeamElement | undefined =
     subject?.kind === "element" && subject.element.type === "beam"
       ? subject.element
       : undefined;
+  /**
+   * The beam whose N/T/Mf field is being read.
+   * A merged internal-effort reading IS that field — its two ends are only where the curves start and stop — so this is the one subject that needs it computed.
+   */
+  const diagramBeam: BeamElement | undefined =
+    subject?.kind === "reading" &&
+    merged_internal(subject.reading.focus) &&
+    subject.element.type === "beam"
+      ? subject.element
+      : undefined;
+  // Off the same nearest snapshot every reading here uses, rather than the live per-frame ref the canvas draws from.
   const cohesionField = React.useMemo(() => {
     const cohesion = snapshot?.beamCohesion?.find(
-      (c) => c.beamID === selectedBeam?.id,
+      (c) => c.beamID === diagramBeam?.id,
     );
-    if (!selectedBeam || !snapshot || !cohesion) return undefined;
+    if (!diagramBeam || !snapshot || !cohesion) return undefined;
     const shownBeam =
       analysedMechanism.mechanicalElements.find(
         (el): el is BeamElement =>
-          el.type === "beam" && el.id === selectedBeam.id,
-      ) ?? selectedBeam;
+          el.type === "beam" && el.id === diagramBeam.id,
+      ) ?? diagramBeam;
     return compute_cohesion_field(
       shownBeam,
       analysedMechanism.materials,
@@ -206,15 +222,15 @@ export const SelectionInspector: React.FC<SelectionInspectorProps> = ({
       snapshot,
       analysedMechanism.simulation.gravity ? GRAVITY : ZERO,
     );
-  }, [selectedBeam, snapshot, analysedMechanism]);
+  }, [diagramBeam, snapshot, analysedMechanism]);
   // Clears the canvas's own marker when the diagrams go away — nothing else ever un-sets it once one stops being hovered without the mouse ever leaving it.
   React.useEffect(() => {
-    if (!selectedBeam) {
+    if (!diagramBeam) {
       setHoveredAbscissa(null);
       return;
     }
     return () => setHoveredAbscissa(null);
-  }, [selectedBeam, setHoveredAbscissa]);
+  }, [diagramBeam, setHoveredAbscissa]);
 
   /**
    * What one layer is called, and the eye that shows it.
@@ -272,10 +288,13 @@ export const SelectionInspector: React.FC<SelectionInspectorProps> = ({
         icon={reading.icon}
         label={reading_label(label, reading.focus.which)}
         value={
-          <MetricValues
-            formatted={formatted_of(element, reading.metrics)}
-            summary
-          />
+          // A reading with no quantity to summarise shows nothing, not a dash: a beam's internal effort is a field, and there is no figure missing to announce.
+          reading.metrics.length > 0 && (
+            <MetricValues
+              formatted={formatted_of(element, reading.metrics)}
+              summary
+            />
+          )
         }
         selected={
           !!focusedReading && same_reading(focusedReading, reading.focus)
@@ -290,44 +309,33 @@ export const SelectionInspector: React.FC<SelectionInspectorProps> = ({
   };
 
   /**
-   * A two-ended member's internal readings as the one axial force they both carry.
-   * The canvas only ever names one arrow at a time, so the row points at the start's own, and lights up for either.
+   * Drops the selection, the one way out every subject of this panel offers.
+   * Rounded to match what it sits in: a card's own shapes are round, a row's are not.
    */
-  const axial_force_row = (
-    element: MechanicalElement,
-    group: ReadingGroup,
-    rowCount: number,
-  ) => {
-    const { key, eye } = layer_display(element, group);
-    const [first] = group.readings;
-    const names_one = (focus: FocusedOverlay | null) =>
-      !!focus && group.readings.some((r) => same_reading(focus, r.focus));
-    return (
-      <ReadingRow
-        key={`${key}-axial`}
-        icon={group.icon}
-        label={t("metric_axial_force")}
-        value={
-          <MetricValues
-            formatted={formatted_of(element, ["axial-force"])}
-            summary
-          />
-        }
-        selected={names_one(focusedReading)}
-        commanded={pointedLayer === key && rowCount > 1}
-        pointed={names_one(pointedReading)}
-        onClick={() => setFocusedOverlay(first.focus)}
-        onHoverChange={(hovered) => hover_reading(first, hovered)}
-        {...eye}
-      />
-    );
-  };
+  const deselect_button = (
+    sx: typeof ROW_ICON_BUTTON_SX | typeof CARD_ICON_BUTTON_SX = ROW_ICON_BUTTON_SX,
+  ) => (
+    <Tooltip title={t("deselect")}>
+      <IconButton
+        size="small"
+        onClick={() => setCanvasState({ type: "Selecting" })}
+        sx={sx}
+      >
+        <Close fontSize="small" />
+      </IconButton>
+    </Tooltip>
+  );
 
   /**
-   * The subject's own element, named.
-   * `owned` false where the element is not what is selected — a reading is, and its element only carries it: the card must not read as selected, and clicking it selects the element rather than following through to its own tab.
+   * The subject's own element, named — the top row when the element IS the subject, and a plain link back to it further down when something else is.
+   * `owned` false where the element is not what is selected: the card must not read as selected, and clicking it selects the element rather than following through to its own tab.
+   * The subject's own card is `medium` and carries the controls that belong to it, so that every kind of subject opens the panel the same way.
    */
-  const card = (element: MechanicalElement, owned = true) => (
+  const card = (
+    element: MechanicalElement,
+    owned = true,
+    trailingControls?: React.ReactNode,
+  ) => (
     <ElementDisplay
       element={element}
       hoveredPart={hoveredPart}
@@ -335,8 +343,9 @@ export const SelectionInspector: React.FC<SelectionInspectorProps> = ({
       selectedIds={owned ? selectedIds : NOTHING_SELECTED}
       setCanvasState={setCanvasState}
       applyActions={applyActions}
-      size="small"
+      size={owned ? "medium" : "small"}
       editable={false}
+      trailingControls={trailingControls}
     />
   );
 
@@ -379,97 +388,105 @@ export const SelectionInspector: React.FC<SelectionInspectorProps> = ({
       </Box>
     );
 
-  const value_row = (element: MechanicalElement, value: InspectorValue) =>
-    value === "mass" ? (
-      <ValueRow
+  const value_row = (
+    element: MechanicalElement,
+    value: InspectorValue,
+    label?: string,
+  ) => {
+    if (value === "mass")
+      return (
+        <ValueRow
+          key={value}
+          label={label ?? t("mass")}
+          formatted={format_scalar(
+            element_mass(
+              shown_of(element),
+              analysedMechanism.materials,
+              analysedMechanism.profiles,
+            ),
+            MASS,
+          )}
+          alert={
+            inertiaFreeElements.has(element.id)
+              ? t("mass_no_inertia_hint")
+              : undefined
+          }
+        />
+      );
+    // A belt's own length is the path it follows around its pulleys, measured on the pose on screen: no recorded series carries it, and it reads the same in edition as under a running simulation.
+    if (value === "belt-length")
+      return (
+        <ValueRow
+          key={value}
+          label={label ?? t("length")}
+          formatted={
+            element.type === "belt"
+              ? format_scalar(
+                  measure_belt_length(
+                    shown_of(element),
+                    analysedMechanism.mechanicalElements,
+                  ),
+                  LENGTH,
+                )
+              : undefined
+          }
+        />
+      );
+    return (
+      <MetricRow
         key={value}
-        label={t("mass")}
-        formatted={format_scalar(
-          element_mass(
-            shown_of(element),
-            analysedMechanism.materials,
-            analysedMechanism.profiles,
-          ),
-          MASS,
-        )}
+        metric={value}
+        sample={sample_of(element, value)}
+        label={label}
       />
-    ) : (
-      <MetricRow key={value} metric={value} sample={sample_of(element, value)} />
     );
+  };
 
   const element_body = (element: MechanicalElement) => {
     const parameters = live_parameters(element, shown_of(element));
     const in_slot = (slot: LiveParameter["slot"]) =>
       parameters.filter((parameter) => parameter.slot === slot);
     const layout = inspector_layout(element, dynamic);
-    const values = expanded
-      ? [...layout.values, ...layout.details]
-      : layout.values;
-    const groups = element_reading_groups(element, snapshot, dynamic).filter(
-      (group) => expanded || layout.featured.includes(layer_key(group.layer)),
+    const layerRows = element_reading_groups(element, snapshot, dynamic).map(
+      (group) => reading_rows(element, group, group.readings),
     );
+    const valueRows = layout.values.map((value) => value_row(element, value));
+    // Each block stays in one run, and only their order is the element type's to choose (see `InspectorLayout.layersFirst`).
+    const [firstBlock, secondBlock] = layout.layersFirst
+      ? [layerRows, valueRows]
+      : [valueRows, layerRows];
     const physical = in_slot("physical");
 
     return (
       <>
-        {/* The header holds what the elements tab holds beside the name: the one value that defines the element. */}
-        <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-          <Box sx={{ flex: 1, minWidth: 0 }}>{card(element)}</Box>
-          {in_slot("header").map(parameter_input)}
-          <ProbeMetricsButton
-            element={element}
-            applyActions={applyActions}
-            size={22}
-          />
-          <Tooltip
-            title={t(
-              expanded ? "inspector_hide_details" : "inspector_show_details",
-            )}
-          >
-            <IconButton
-              size="small"
-              aria-expanded={expanded}
-              onClick={() => setExpanded(!expanded)}
-            >
-              {expanded ? (
-                <UnfoldLess fontSize="small" />
-              ) : (
-                <UnfoldMore fontSize="small" />
-              )}
-            </IconButton>
-          </Tooltip>
+        {/* Beside the name, what the elements tab puts there: the one value that defines the element, then the two ways out — to its probes, and out of the selection. */}
+        <Box sx={HEADER_INSET}>
+          {card(
+            element,
+            true,
+            <>
+              {in_slot("header").map(parameter_input)}
+              <Box sx={ICON_GROUP_SX}>
+                <ProbeMetricsButton
+                  element={element}
+                  applyActions={applyActions}
+                  size={22}
+                />
+                {deselect_button(CARD_ICON_BUTTON_SX)}
+              </Box>
+            </>,
+          )}
         </Box>
+        <Divider sx={{ my: 0.5, ...FULL_BLEED }} />
         {parameter_row(in_slot("drive"))}
-        {values.map((value) => value_row(element, value))}
-        {groups.length > 0 && <Divider sx={{ my: 0.5 }} />}
-        {groups.map((group) => {
-          const isAxial =
-            layout.axialForce && layer_key(group.layer) === "force";
-          if (!isAxial) return reading_rows(element, group, group.readings);
-          const rowCount = expanded ? group.readings.length + 1 : 1;
-          return (
-            <React.Fragment key={layer_key(group.layer)}>
-              {axial_force_row(element, group, rowCount)}
-              {expanded &&
-                reading_rows(element, group, group.readings, rowCount)}
-            </React.Fragment>
-          );
-        })}
-        {/* Dynamic mode only, and silently: the kinematic solver computes no internal force, so a beam there has nothing to say rather than something missing to announce. */}
-        {dynamic && selectedBeam && (
-          <CohesionDiagrams
-            field={cohesionField}
-            forcePoolMax={runtimeState.negligibilityPool.force}
-            momentPoolMax={runtimeState.negligibilityPool.moment}
-            emptyMessage={t("chart_waiting")}
-            onHoverS={(s) =>
-              setHoveredAbscissa(
-                s === null ? null : { beamID: selectedBeam.id, s },
-              )
-            }
-          />
+        {firstBlock}
+        {firstBlock.length > 0 && secondBlock.length > 0 && (
+          <Divider sx={{ my: 0.5, ...FULL_BLEED }} />
         )}
-        {(physical.length > 0 || selectedBeam) && <Divider sx={{ my: 0.5 }} />}
+        {secondBlock}
+        {(physical.length > 0 || selectedBeam) && (
+          <Divider sx={{ my: 0.5, ...FULL_BLEED }} />
+        )}
         {parameter_row(physical)}
         {selectedBeam && (
           <MaterialProfileSection
@@ -495,32 +512,66 @@ export const SelectionInspector: React.FC<SelectionInspectorProps> = ({
     );
     const layer = group && layer_display(element, group);
     // A reaction names both its quantities, but a hinge reports no couple: what has nothing to say here is left out rather than shown as a blank line.
-    const read = reading.metrics.filter(
-      (metric) => (sample_of(element, metric)?.values.length ?? 0) > 0,
+    const spelled = reading_quantities(reading, element);
+    const read = spelled.filter(
+      ({ value }) =>
+        !is_series_value(value) ||
+        (sample_of(element, value)?.values.length ?? 0) > 0,
     );
+    const quantities = read.length > 0 ? read : spelled.slice(0, 1);
     // The reading being read carries its own eye, here on its title: it is the one thing this panel is about, and switching it off from anywhere else would mean leaving it first.
     const siblings =
       group?.readings.filter((r) => !same_reading(r.focus, reading.focus)) ?? [];
     return (
       <>
-        <ReadingRow
-          icon={reading.icon}
-          label={reading_label(layer?.label ?? "", reading.focus.which)}
-          {...layer?.eye}
-        />
-        {/* One line per quantity here, unlike the rows that lead to this one: a reaction is read as a resultant AND a couple, each with its own components. */}
-        {(read.length > 0 ? read : reading.metrics.slice(0, 1)).map((metric) => (
-          <MetricRow
-            key={metric}
-            metric={metric}
-            sample={sample_of(element, metric)}
+        {/* The subject, at the top: a reading is what the reader clicked, so its own row opens the panel, and answers the pointer the way a card does — resting on it draws the arrow and lights the element it is read from, and the canvas lights the row back. */}
+        <Box sx={HEADER_INSET}>
+          <ReadingRow
+            icon={reading.icon}
+            label={reading_label(layer?.label ?? "", reading.focus.which)}
+            strong
+            height={HEADER_HEIGHT}
+            pointed={
+              !!pointedReading && same_reading(pointedReading, reading.focus)
+            }
+            onHoverChange={(hovered) => hover_reading(reading, hovered)}
+            trailing={deselect_button()}
+            {...layer?.eye}
           />
-        ))}
-        {card(element, false)}
+        </Box>
+        <Divider sx={{ my: 0.5, ...FULL_BLEED }} />
+        {/* One line per quantity, each named for what it adds rather than for itself: the heading above has already said which reading this is, and at which end. */}
+        <Box sx={SUBJECT_VALUES_INSET}>
+          {quantities.map(({ value, labelKey }) =>
+            value_row(element, value, t(labelKey)),
+          )}
+        </Box>
+        {/* The reading itself, for a beam: its effort is a field along the member, not a figure at a point. */}
+        {diagramBeam && (
+          <CohesionDiagrams
+            field={cohesionField}
+            forcePoolMax={runtimeState.negligibilityPool.force}
+            momentPoolMax={runtimeState.negligibilityPool.moment}
+            emptyMessage={t("chart_waiting")}
+            onHoverS={(s) =>
+              setHoveredAbscissa(
+                s === null ? null : { beamID: diagramBeam.id, s },
+              )
+            }
+          />
+        )}
+        <HostRow
+          label={t("reading_read_from")}
+          element={element}
+          hoveredPart={hoveredPart}
+          setHoveredPart={setHoveredPart}
+          setCanvasState={setCanvasState}
+          applyActions={applyActions}
+        />
         {/* Whatever else its own layer holds: the other end of a beam, and nothing at all for the layers that carry one reading. */}
         {group && siblings.length > 0 && (
           <>
-            <Divider sx={{ my: 0.5 }} />
+            <Divider sx={{ my: 0.5, ...FULL_BLEED }} />
             {reading_rows(element, group, siblings)}
           </>
         )}
@@ -531,17 +582,20 @@ export const SelectionInspector: React.FC<SelectionInspectorProps> = ({
   const load_body = (
     load_subject: Extract<InspectedSubject, { kind: "load" }>,
   ) => (
-    <LoadsSection
-      element={load_subject.host}
+    <LoadInspector
+      load={load_subject.load}
+      host={load_subject.host}
       mechanicalElements={mechanism.mechanicalElements}
-      loads={[load_subject.load]}
-      displayLoads={analysedMechanism.loads}
-      selectedLoadID={load_subject.load.id}
+      shownLoad={
+        analysedMechanism.loads.find((l) => l.id === load_subject.load.id) ??
+        load_subject.load
+      }
       hoveredPart={hoveredPart}
       setHoveredPart={setHoveredPart}
       selectedIds={selectedIds}
       setCanvasState={setCanvasState}
       applyActions={applyActions}
+      onDeselect={() => setCanvasState({ type: "Selecting" })}
     />
   );
 

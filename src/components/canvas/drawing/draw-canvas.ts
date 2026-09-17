@@ -49,10 +49,11 @@ export type MechanicalCanvasDrawing = Omit<
   hoveredBalanceTerm?: HoveredBalanceTerm | null;
 };
 
-/** The one reading of each kind drawn with its value, and the element it belongs to — see `hovered_readings`. */
+/** The readings drawn with their value, and the element they belong to — see `hovered_readings`.
+ * Several of each kind, since one reading may be drawn at more than one place: a member's internal effort is named once and shown at both its ends. */
 type HoveredReadings = {
-  arrow?: OverlayArrow;
-  moment?: OverlayMoment;
+  arrows: OverlayArrow[];
+  moments: OverlayMoment[];
   elementID?: ID;
 };
 
@@ -73,25 +74,31 @@ function hovered_readings(
     !!reading &&
     reading.elementID === candidate.elementID &&
     reading.kind === candidate.kind &&
-    reading.which === candidate.which;
-  const arrow =
-    arrows.find(names_reading) ??
-    (hoveredBalanceTerm
-      ? arrows.find((a) => a.id === hoveredBalanceTerm.term.id)
-      : undefined);
-  const moment =
-    moments.find(names_reading) ??
-    (hoveredBalanceTerm?.quantity === "moment"
-      ? moments.find((m) => m.id === hoveredBalanceTerm.term.id)
-      : undefined);
+    // No point named means the whole element's own: a member's internal effort is read along it, so it answers for either end (see `merged_internal`).
+    (reading.which === undefined || reading.which === candidate.which);
+  const named_arrows = arrows.filter(names_reading);
+  const hoveredArrows = named_arrows.length > 0
+    ? named_arrows
+    : hoveredBalanceTerm
+      ? arrows.filter((a) => a.id === hoveredBalanceTerm.term.id)
+      : [];
+  const named_moments = moments.filter(names_reading);
+  const hoveredMoments = named_moments.length > 0
+    ? named_moments
+    : hoveredBalanceTerm?.quantity === "moment"
+      ? moments.filter((m) => m.id === hoveredBalanceTerm.term.id)
+      : [];
   const termElementID =
     hoveredBalanceTerm && hoveredBalanceTerm.term.kind !== "load"
       ? hoveredBalanceTerm.term.elementID
       : undefined;
   return {
-    arrow,
-    moment,
-    elementID: moment?.elementID ?? arrow?.elementID ?? termElementID,
+    arrows: hoveredArrows,
+    moments: hoveredMoments,
+    elementID:
+      hoveredMoments[0]?.elementID ??
+      hoveredArrows[0]?.elementID ??
+      termElementID,
   };
 }
 
@@ -116,11 +123,12 @@ function draw_overlay_readings(
     !!focused &&
     candidate.elementID === focused.elementID &&
     candidate.kind === focused.kind &&
-    candidate.which === focused.which;
+    // Same rule as the hover above: a reading with no point named takes both ends of its member.
+    (focused.which === undefined || focused.which === candidate.which);
   // Kept apart from `names_focused`: a selected-but-not-hovered reading must draw at its own, lesser width — not the width a live hover would stack on top of it.
   const is_hovered = (candidate: OverlayArrow | OverlayMoment) =>
-    candidate === hovered.arrow ||
-    candidate === hovered.moment ||
+    (hovered.arrows as (OverlayArrow | OverlayMoment)[]).includes(candidate) ||
+    (hovered.moments as (OverlayArrow | OverlayMoment)[]).includes(candidate) ||
     (hoveredEdgeID !== undefined && candidate.elementID === hoveredEdgeID);
   const emphasized = (candidate: OverlayArrow | OverlayMoment) =>
     is_hovered(candidate) || names_focused(candidate);
@@ -151,22 +159,15 @@ function draw_overlay_readings(
 
   // The labels last, on top of every arrow/moment just drawn: an arrow drawn later in the loops above must not obstruct another one's label.
   // A selected reading keeps its value on screen for as long as it stands, not just while the cursor is on it: that value is what selecting it was for.
-  const labelledArrow = hovered.arrow ?? arrows.find(names_focused);
-  const labelledMoment = hovered.moment ?? moments.find(names_focused);
-  if (labelledArrow)
-    draw_overlay_arrow_label(
-      ctx,
-      viewport,
-      labelledArrow,
-      names_focused(labelledArrow),
-    );
-  if (labelledMoment)
-    draw_overlay_moment_label(
-      ctx,
-      viewport,
-      labelledMoment,
-      names_focused(labelledMoment),
-    );
+  // Every place the named reading is drawn gets its value, not just the first: both ends of a member's own internal effort read at once, which is the whole point of naming it once.
+  const labelledArrows =
+    hovered.arrows.length > 0 ? hovered.arrows : arrows.filter(names_focused);
+  const labelledMoments =
+    hovered.moments.length > 0 ? hovered.moments : moments.filter(names_focused);
+  for (const arrow of labelledArrows)
+    draw_overlay_arrow_label(ctx, viewport, arrow, names_focused(arrow));
+  for (const moment of labelledMoments)
+    draw_overlay_moment_label(ctx, viewport, moment, names_focused(moment));
 }
 
 /** Whether the floor is being reached for, either by the cursor or by the drag already under way. */
@@ -244,8 +245,6 @@ export function draw_mechanical_canvas(
     hoveredPart,
     mechanicalElements: drawing.mechanicalElements,
     cursorOnCanvas: drawing.cursorOnCanvas ?? false,
-    materials: drawing.materials ?? [],
-    profiles: drawing.profiles ?? [],
   });
   if (drawing.cursorOnCanvas)
     draw_gesture_preview(ctx, {

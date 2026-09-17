@@ -10,6 +10,7 @@ import {
 import {
   element_angular_acceleration,
   element_reactions,
+  get_dynamic_probe_series,
   get_probe_series,
 } from "./probe-series";
 import { make_snapshot_layout } from "../snapshot";
@@ -258,5 +259,157 @@ describe("réactions", () => {
     const [r] = element_reactions(node("n"), snap);
     expect(r.vector).toEqual({ x: -0, y: -100 });
     expect(r.moment).toBe(100);
+  });
+});
+
+
+describe("ce qu'un membre et une glissière mesurent d'eux-mêmes", () => {
+  const spring = (id: string, stiffness: number, restLength?: number) =>
+    ({
+      id,
+      type: "spring",
+      positionStart: ZERO,
+      positionEnd: ZERO,
+      stiffness,
+      restLength,
+    }) as unknown as MechanicalElement;
+  const damper = (id: string, damping: number) =>
+    ({
+      id,
+      type: "damper",
+      positionStart: ZERO,
+      positionEnd: ZERO,
+      damping,
+    }) as unknown as MechanicalElement;
+  const belt = (id: string) =>
+    ({
+      id,
+      type: "belt",
+      positionStart: ZERO,
+      positionEnd: ZERO,
+    }) as unknown as MechanicalElement;
+  const slider = (id: string, parentBeamID?: string) =>
+    ({ id, type: "slider", position: ZERO, parentBeamID }) as unknown as MechanicalElement;
+
+  const layout = make_snapshot_layout(["e:start", "e:end", "s", "r:start", "r:end"], []);
+
+  /** A dynamic instant on `layout`: same positions as `snapshot`, plus the velocities the solver carries. */
+  function moving_snapshot(
+    t: number,
+    at: Record<string, [number, number]>,
+    velocities: Record<string, [number, number]> = {},
+  ): DynamicSnapshot {
+    const still = snapshot(layout, t, at);
+    const v = new Float64Array(layout.keys.length * 2).fill(NaN);
+    for (const [key, [vx, vy]] of Object.entries(velocities)) {
+      const i = layout.index.get(key)!;
+      v[2 * i] = vx;
+      v[2 * i + 1] = vy;
+    }
+    return {
+      ...still,
+      velocities: v,
+      accelerations: new Float64Array(layout.keys.length * 2),
+      angleVelocities: new Float64Array(0),
+      angleAccelerations: new Float64Array(0),
+    };
+  }
+
+  /** A member stretching from 2 m to 4 m, one metre per second. */
+  const stretching = [0, 1, 2].map((t) =>
+    snapshot(layout, t, { "e:start": [0, 0], "e:end": [2 + t, 0] }),
+  );
+
+  it("longueur : la distance entre les deux bouts", () => {
+    const s = get_probe_series(spring("e", 10), "length", stretching);
+    expect(s.t).toEqual([0, 1, 2]);
+    expect(curve(s, "value")).toEqual([2, 3, 4]);
+    expect(s.unit).toBe("m");
+  });
+
+  it("longueur : une courroie n'en lit aucune, ses bouts ne disent pas son trajet", () => {
+    expect(get_probe_series(belt("e"), "length", stretching).t).toEqual([]);
+  });
+
+  it("allongement : compté depuis la longueur au repos, négatif en compression", () => {
+    const s = get_probe_series(spring("e", 10, 3), "elongation", stretching);
+    expect(curve(s, "value")).toEqual([-1, 0, 1]);
+  });
+
+  it("allongement : sans longueur au repos à mesurer, rien à lire", () => {
+    // A beam is never at rest at a length of its own, and a damper's own `restLength` only serves its drawing.
+    expect(get_probe_series(beam("e"), "elongation", stretching).t).toEqual([]);
+    expect(get_probe_series(damper("e", 4), "elongation", stretching).t).toEqual([]);
+  });
+
+  it("vitesse d'allongement : en cinématique, la longueur dérivée", () => {
+    const s = get_probe_series(damper("e", 4), "elongation-velocity", stretching);
+    expect(curve(s, "value")).toEqual([1, 1, 1]);
+    expect(s.unit).toBe("m/s");
+  });
+
+  it("vitesse d'allongement : en dynamique, la part axiale du mouvement relatif", () => {
+    // The end runs at (2, 5) along an axis pointing in x: only the 2 lengthens the member.
+    const snaps = [
+      moving_snapshot(
+        0,
+        { "e:start": [0, 0], "e:end": [3, 0] },
+        { "e:start": [0, 0], "e:end": [2, 5] },
+      ),
+    ];
+    const s = get_dynamic_probe_series(damper("e", 4), "elongation-velocity", snaps);
+    expect(curve(s, "value")).toEqual([2]);
+  });
+
+  it("effort axial : la loi du ressort, positif en traction", () => {
+    const snaps = [
+      moving_snapshot(0, { "e:start": [0, 0], "e:end": [3, 0] }, {}),
+      moving_snapshot(1, { "e:start": [0, 0], "e:end": [1, 0] }, {}),
+    ];
+    const s = get_dynamic_probe_series(spring("e", 10, 2), "axial-force", snaps);
+    // Stretched by one metre, then compressed by one.
+    expect(curve(s, "value")).toEqual([10, -10]);
+    expect(s.unit).toBe("N");
+  });
+
+  it("effort axial : celle de l'amortisseur, positif quand il s'allonge", () => {
+    const snaps = [
+      moving_snapshot(
+        0,
+        { "e:start": [0, 0], "e:end": [3, 0] },
+        { "e:start": [0, 0], "e:end": [2, 0] },
+      ),
+    ];
+    const s = get_dynamic_probe_series(damper("e", 4), "axial-force", snaps);
+    expect(curve(s, "value")).toEqual([8]);
+  });
+
+  it("effort axial : le solveur cinématique n'en calcule aucun", () => {
+    expect(get_probe_series(spring("e", 10, 2), "axial-force", stretching).t).toEqual([]);
+  });
+
+  it("abscisse : la distance au début du rail, quoi que le rail lui-même fasse", () => {
+    const snaps = [
+      // A vertical rail, then the same rail turned a quarter and moved: the slider has not budged along it.
+      snapshot(layout, 0, { s: [1, 3], "r:start": [1, 1], "r:end": [1, 5] }),
+      snapshot(layout, 1, { s: [2, 0], "r:start": [0, 0], "r:end": [4, 0] }),
+    ];
+    const s = get_probe_series(slider("s", "r"), "slide-abscissa", snaps);
+    expect(curve(s, "value")).toEqual([2, 2]);
+    expect(s.unit).toBe("m");
+  });
+
+  it("abscisse : rien à lire pour une glissière sans rail", () => {
+    const snaps = [snapshot(layout, 0, { s: [1, 3] })];
+    expect(get_probe_series(slider("s"), "slide-abscissa", snaps).t).toEqual([]);
+  });
+
+  it("vitesse de glissement : l'abscisse dérivée, dans les deux modes", () => {
+    const sliding = [0, 1, 2].map((t) =>
+      snapshot(layout, t, { s: [t, 0], "r:start": [0, 0], "r:end": [9, 0] }),
+    );
+    const s = get_probe_series(slider("s", "r"), "slide-velocity", sliding);
+    expect(curve(s, "value")).toEqual([1, 1, 1]);
+    expect(s.unit).toBe("m/s");
   });
 });

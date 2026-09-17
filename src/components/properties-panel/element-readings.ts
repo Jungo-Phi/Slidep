@@ -1,4 +1,6 @@
 import { MechanicalElement, OverlayKind, ProbeMetric } from "../../types";
+import { StringKey } from "../../i18n";
+import { probe_metric_available } from "../canvas/ProbeMetricSelector";
 import { DynamicSnapshot } from "../../types/runtime-state";
 import {
   PHYSICS_OVERLAY_COLOR,
@@ -43,7 +45,7 @@ export function reading_icon(kind: PhysicsOverlayKind): string {
 
 /**
  * The glyph of a whole overlay layer, for the lists that switch layers rather than read them.
- * The trajectory's own keeps the theme's stroke: its drawn hue is handed out per shown trajectory so several can be told apart, leaving no one colour to stand for it.
+ * The trajectory's own keeps the theme's stroke: its drawn hue is handed out per element shown so several can be told apart, leaving no one colour to stand for it.
  */
 export function overlay_icon(kind: OverlayKind): string {
   switch (kind) {
@@ -116,11 +118,16 @@ export function reading_from_focus(
   element: MechanicalElement,
 ): Reading {
   const metrics: ProbeMetric[] =
-    focus.kind === "reaction-support" || focus.kind === "reaction-internal"
-      ? reaction_metrics(focus.which ?? "node")
-      : focus.kind === "inertia" && element_has_rotational_inertia(element)
-        ? ["inertia", "inertia-moment"]
-        : [focus.kind];
+    // A member's own internal effort, read along it rather than at one of its ends (see `merged_internal`): one axial figure, and for a beam nothing at all — what it carries is the field the diagrams draw, which no single figure stands for (`reading_quantities`).
+    merged_internal(focus)
+      ? element.type === "beam"
+        ? []
+        : ["axial-force"]
+      : focus.kind === "reaction-support" || focus.kind === "reaction-internal"
+        ? reaction_metrics(focus.which ?? "node")
+        : focus.kind === "inertia" && element_has_rotational_inertia(element)
+          ? ["inertia", "inertia-moment"]
+          : [focus.kind];
   return {
     focus,
     metrics,
@@ -135,6 +142,85 @@ const reading = (
   which?: ReactionPoint,
 ): Reading =>
   reading_from_focus({ elementID: element.id, kind, which }, element);
+
+/** One line of what a reading spells out: a quantity, under the name it goes by inside that reading. */
+export interface ReadingQuantity {
+  value: InspectorValue;
+  labelKey: StringKey;
+}
+
+/**
+ * What a reading spells out, line by line, once it is the panel's own subject.
+ * Each line is named for what it adds to the reading rather than for the quantity on its own — under "Velocity", "linear" and "angular" say something, where "velocity" would only repeat the heading above it.
+ * Richer than `Reading.metrics`, which is the summary one row of a list can hold: a weight is read here with the mass it comes from, a velocity with the rotation that goes with it.
+ */
+export function reading_quantities(
+  reading: Reading,
+  element: MechanicalElement,
+): ReadingQuantity[] {
+  switch (reading.focus.kind) {
+    case "velocity": {
+      const linear: ReadingQuantity = {
+        value: "velocity",
+        labelKey: "quantity_linear",
+      };
+      // A point has no rotation of its own to read; an oriented element does.
+      return probe_metric_available("angular-velocity", element)
+        ? [linear, { value: "angular-velocity", labelKey: "quantity_angular" }]
+        : [linear];
+    }
+    // The force, and what it is the weight OF: the mass is the one figure that explains the other, and the way to change it.
+    case "weight":
+      return [
+        { value: "weight", labelKey: "force" },
+        { value: "mass", labelKey: "mass" },
+      ];
+    case "inertia":
+      return element_has_rotational_inertia(element)
+        ? [
+            { value: "inertia", labelKey: "force" },
+            { value: "inertia-moment", labelKey: "moment" },
+          ]
+        : [{ value: "inertia", labelKey: "force" }];
+    case "reaction-internal":
+    case "reaction-support": {
+      // A beam says nothing here: its effort is the field the diagrams draw, not a figure.
+      // A spring or a damper has one axial value, from its own law — plus, at each end welded to a join rather than hinged on a pivot, the couple that weld transmits. Those two are kept apart: unlike the axial force, they are not each other's opposite.
+      if (merged_internal(reading.focus))
+        return element.type === "beam"
+          ? []
+          : [
+              { value: "axial-force", labelKey: "metric_axial_force" },
+              { value: "moment-start", labelKey: "metric_moment_start" },
+              { value: "moment-end", labelKey: "metric_moment_end" },
+            ];
+      const [force, moment] = reaction_metrics(reading.focus.which ?? "node");
+      return [
+        { value: force, labelKey: "force" },
+        { value: moment, labelKey: "moment" },
+      ];
+    }
+  }
+}
+
+/**
+ * Whether this reading is a member's internal effort taken as a whole rather than at one of its ends.
+ * Both ends of a two-point member report the same effort, opposite in sign, so reading them apart says one thing twice — and a beam, whose two ends genuinely differ, is read as the field between them instead (`CohesionDiagrams`).
+ * A gear's own internal reaction sits at its centre and keeps its point, having only ever had one.
+ */
+export function merged_internal(focus: FocusedOverlay): boolean {
+  return focus.kind === "reaction-internal" && focus.which === undefined;
+}
+
+/**
+ * The reading a click names, as the panel and the canvas both understand it.
+ * The one place an end is dropped: a click lands on one arrow, but what it names is the effort the whole member carries.
+ */
+export function focus_of_reading(focus: FocusedOverlay): FocusedOverlay {
+  return focus.kind === "reaction-internal" && focus.which !== "node"
+    ? { elementID: focus.elementID, kind: focus.kind }
+    : focus;
+}
 
 /** Whether two readings name the same thing — a canvas click and a panel row meeting on one row. */
 export function same_reading(a: FocusedOverlay, b: FocusedOverlay): boolean {
@@ -201,25 +287,38 @@ export function element_reading_groups(
       };
       groups.push(group);
     }
-    group.readings.push(reading(element, kind, r.which));
+    // An edge's two ends carry one and the same internal effort, so the layer holds one reading for the member (see `merged_internal`) — the second point it reports at adds nothing.
+    const merged = !support && r.which !== "node";
+    if (merged && group.readings.length > 0) continue;
+    group.readings.push(reading(element, kind, merged ? undefined : r.which));
   }
   return groups;
 }
 
-/** A value read as a plain number beside an element: a measured quantity, or its mass, which no series carries. */
-export type InspectorValue = ProbeMetric | "mass";
+/**
+ * A value read as a plain number beside an element: a measured quantity, or one of the two no series carries.
+ * Those two are read off the mechanism in the pose on screen instead — a mass is not a time series at all, and a belt's length is its whole path around its pulleys, which a recording holds no single slot for.
+ */
+export type InspectorValue = ProbeMetric | "mass" | "belt-length";
+
+/** Whether a value is one a recording carries, as opposed to one the panel works out from the pose on screen. */
+export function is_series_value(value: InspectorValue): value is ProbeMetric {
+  return value !== "mass" && value !== "belt-length";
+}
 
 /**
  * What `SelectionInspector` shows of one element, decided per element type rather than by what a probe can measure.
- * `values` and the `featured` layers are always on screen; `details` and every other layer only once the reader unfolds them.
+ * Everything an element has to say is on screen at once: there is no folded view, and so no line a reader has to go looking for.
  * A value never repeats what a layer already reads, which is why velocity is a value in kinematic mode only.
  */
 export interface InspectorLayout {
   values: InspectorValue[];
-  details: InspectorValue[];
-  featured: LayerKey[];
-  /** The internal readings at both ends are summed up as one axial force: a massless member pushes equally on both, so they say the same thing twice. */
-  axialForce: boolean;
+  /**
+   * Whether the layers come before the values.
+   * The two blocks trade places, never their rows: a layer row carries a control and a value row a figure, so interleaving the two per element type would cost more in legibility than the ordering wins.
+   * True where what the canvas draws IS the element's headline — a beam's internal effort, an anchored node's reaction — false where a plain figure is, such as a gear's own speed.
+   */
+  layersFirst: boolean;
 }
 
 export function inspector_layout(
@@ -228,79 +327,72 @@ export function inspector_layout(
 ): InspectorLayout {
   const layout = (
     values: InspectorValue[],
-    details: InspectorValue[],
-    featured: LayerKey[] = [],
-    axialForce = false,
-  ): InspectorLayout => ({ values, details, featured, axialForce });
+    layersFirst = false,
+  ): InspectorLayout => ({ values, layersFirst });
   // An anchored node does not move, so what it says is what the ground pushes back with.
   const grounded = "isGrounded" in element && element.isGrounded;
 
+  // Kinematic mode draws no force, no mass and no acceleration, so an element is down to its own geometry — and to the trajectory, the one layer this mode does draw.
   if (!dynamic)
     switch (element.type) {
       case "beam":
-        return layout(["angular-velocity"], ["angle", "length"]);
+        return layout(["angle", "angular-velocity", "length"]);
       case "spring":
-        return layout(["length", "elongation"], ["angle", "angular-velocity"]);
+        return layout(["length", "elongation", "angle", "angular-velocity"]);
       case "damper":
-        return layout(["length"], ["angle", "angular-velocity"]);
+        return layout([
+          "length",
+          "elongation-velocity",
+          "angle",
+          "angular-velocity",
+        ]);
       case "belt":
-        return layout([], ["length"]);
+        return layout(["belt-length"]);
       case "gear":
-        return layout(["angular-velocity"], ["angle"]);
+        return layout(["angle", "angular-velocity"]);
       case "slider":
       case "slidep":
-        return layout(
-          ["slide-abscissa", "slide-velocity"],
-          ["position", "velocity"],
-          ["trajectory"],
-        );
+        return layout([
+          "slide-abscissa",
+          "slide-velocity",
+          "position",
+          "velocity",
+        ]);
       case "pivot":
       case "join":
       case "mass":
         return grounded
-          ? layout([], ["position"])
-          : layout(["velocity"], ["position"], ["trajectory"]);
+          ? layout(["position"])
+          : layout(["position", "velocity"]);
     }
 
-  const at_rest_or_moving: LayerKey = grounded ? "support-reactions" : "velocity";
   switch (element.type) {
+    // What a beam is there for is what it carries, so its own end torsors lead and the geometry follows.
+    // No angular velocity in any of these: the velocity reading spells it out already (`reading_quantities`), and saying it twice is what this table is trying to stop.
     case "beam":
-      return layout(
-        [],
-        ["angle", "angular-velocity", "length", "elongation", "mass"],
-        ["force"],
-      );
+      return layout(["angle", "length", "mass"], true);
     case "spring":
-      return layout(
-        ["length", "elongation"],
-        ["angle", "angular-velocity"],
-        ["force"],
-        true,
-      );
+      return layout(["length", "elongation", "angle"], true);
     case "damper":
-      return layout(
-        ["elongation-velocity"],
-        ["length", "angle", "angular-velocity"],
-        ["force"],
-        true,
-      );
+      return layout(["elongation-velocity", "length", "angle"], true);
+    // Its tension is the one thing a belt would have to add, and nothing computes it yet; until then its length is all it says.
     case "belt":
-      return layout(["belt-tension"], ["length"]);
+      return layout(["belt-length"]);
     case "gear":
-      return layout(["angular-velocity"], ["angle"]);
+      return layout(["angle"]);
+    // Anchored, a node is read through the reaction the ground answers with; free, its position and whatever drives it come first.
     case "pivot":
       return layout(
-        element.motor ? ["motor-power", "motor-torque"] : [],
-        ["position"],
-        [at_rest_or_moving],
+        element.motor ? ["motor-power", "position"] : ["position"],
+        grounded,
       );
     case "join":
-      return layout([], ["position"], [at_rest_or_moving]);
+      return layout(["position"], grounded);
     case "slider":
     case "slidep":
-      return layout(["slide-abscissa", "slide-velocity"], ["position"], ["velocity"]);
+      return layout(["slide-abscissa", "slide-velocity", "position"]);
     case "mass":
-      return layout([], ["position"], [at_rest_or_moving, "inertia"]);
+      return layout(["position"], true);
   }
 }
 

@@ -39,7 +39,13 @@ export const PROBE_METRIC_ORDER: ProbeMetric[] = [
   "velocity",
   "angle",
   "angular-velocity",
+  "length",
+  "elongation",
+  "elongation-velocity",
+  "slide-abscissa",
+  "slide-velocity",
   "motor-power",
+  "axial-force",
   "force",
   "force-start",
   "force-end",
@@ -74,6 +80,33 @@ function motor_power_available(element: MechanicalElement): boolean {
   return element.type === "pivot" && !!element.motor;
 }
 
+/**
+ * What a two-point member measures of itself.
+ * `length` needs two ends far enough apart to be a straight run, which a belt's own ends are not (it follows a path between them).
+ * `elongation` needs a natural length to measure from, and only a spring has one; the rate and the axial force follow from the member's own law, which only a spring and a damper have.
+ */
+function member_metric_available(
+  metric: "length" | "elongation" | "elongation-velocity" | "axial-force",
+  element: MechanicalElement,
+): boolean {
+  if (metric === "length")
+    return (
+      element.type === "beam" ||
+      element.type === "spring" ||
+      element.type === "damper"
+    );
+  if (metric === "elongation") return element.type === "spring";
+  return element.type === "spring" || element.type === "damper";
+}
+
+/** Where a slide reads: on the two elements that run along a rail, and only once one is attached to a rail to read against. */
+function slide_metric_available(element: MechanicalElement): boolean {
+  return (
+    (element.type === "slider" || element.type === "slidep") &&
+    element.parentBeamID !== undefined
+  );
+}
+
 export function probe_metric_available(
   metric: ProbeMetric,
   element: MechanicalElement,
@@ -84,6 +117,15 @@ export function probe_metric_available(
   if (metric === "angle" || metric === "angular-velocity")
     return angular_metric_available(element);
   if (metric === "motor-power") return motor_power_available(element);
+  if (
+    metric === "length" ||
+    metric === "elongation" ||
+    metric === "elongation-velocity" ||
+    metric === "axial-force"
+  )
+    return member_metric_available(metric, element);
+  if (metric === "slide-abscissa" || metric === "slide-velocity")
+    return slide_metric_available(element);
   if (
     metric === "force" ||
     metric === "force-start" ||

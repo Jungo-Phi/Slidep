@@ -463,14 +463,15 @@ export type ProbeMetric =
   | "weight"
   | "inertia"
   | "inertia-moment"
-  // Shown by `SelectionInspector`, but not yet recorded: every series of these is empty, and no probe selector offers them (`PROBE_METRIC_ORDER` leaves them out).
+  // What a member or a slide does, offered wherever it means something (`probe_metric_available`).
   | "length"
   | "elongation"
   | "elongation-velocity"
   | "axial-force"
-  | "belt-tension"
   | "slide-abscissa"
   | "slide-velocity"
+  // Named but not yet recorded: every series of these is empty, and no probe selector offers them (`PROBE_METRIC_ORDER` leaves them out).
+  | "belt-tension"
   | "motor-torque";
 
 /** Which curves of a vector metric are plotted.
