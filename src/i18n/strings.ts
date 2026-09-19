@@ -510,12 +510,6 @@ export const STRINGS = {
     de: "Eine Simulation kann {minutes} Minuten nicht überschreiten",
     es: "Una simulación no puede superar los {minutes} minutos",
   },
-  unavailable_in_simulation: {
-    fr: "Indisponible en simulation",
-    en: "Unavailable during simulation",
-    de: "Während der Simulation nicht verfügbar",
-    es: "No disponible durante la simulación",
-  },
   simulation_paused_for_edit: {
     fr: "Simulation mise en pause le temps de cette modification",
     en: "Simulation paused for this edit",
@@ -2323,11 +2317,47 @@ export const STRINGS = {
     de: "Keine Komponente ausgewählt (x, y, Norm)",
     es: "Ninguna componente seleccionada (x, y, norma)",
   },
-  chart_force_kinematic: {
-    fr: "Forces non calculées en mode cinématique",
-    en: "Forces are not computed in kinematic mode",
-    de: "Kräfte werden im kinematischen Modus nicht berechnet",
-    es: "Las fuerzas no se calculan en modo cinemático",
+  chart_not_in_kinematic: {
+    fr: "Non calculé en mode cinématique",
+    en: "Not computed in kinematic mode",
+    de: "Im kinematischen Modus nicht berechnet",
+    es: "No se calcula en modo cinemático",
+  },
+  worst_stress_heading: {
+    fr: "Sollicitation maximale",
+    en: "Peak loading",
+    de: "Höchste Beanspruchung",
+    es: "Solicitación máxima",
+  },
+  worst_stress_normal_hint: {
+    fr: "La poutre la plus proche de sa limite élastique Re, traction et flexion cumulées",
+    en: "The beam closest to its elastic limit Re, tension and bending together",
+    de: "Der Balken, der seiner Elastizitätsgrenze Re am nächsten ist, Zug und Biegung zusammen",
+    es: "La viga más cercana a su límite elástico Re, tracción y flexión juntas",
+  },
+  worst_stress_shear_hint: {
+    fr: "La poutre la plus proche de son cisaillement admissible τ adm = Re/√3",
+    en: "The beam closest to its admissible shear τ adm = Re/√3",
+    de: "Der Balken, der seiner zulässigen Schubspannung τ adm = Re/√3 am nächsten ist",
+    es: "La viga más cercana a su cortante admisible τ adm = Re/√3",
+  },
+  worst_stress_limit: {
+    fr: "limite",
+    en: "limit",
+    de: "Grenze",
+    es: "límite",
+  },
+  worst_stress_indeterminate: {
+    fr: "à vérifier",
+    en: "unverified",
+    de: "zu prüfen",
+    es: "por verificar",
+  },
+  worst_stress_indeterminate_hint: {
+    fr: "Cette poutre appartient à une chaîne hyperstatique : l'effort y est réparti par le solveur selon sa compliance, pas par la rigidité réelle. La valeur est plausible, pas certaine.",
+    en: "This beam belongs to a hyperstatic chain: the solver splits the effort by compliance rather than by true stiffness. The value is plausible, not certain.",
+    de: "Dieser Balken gehört zu einer überbestimmten Kette: der Löser verteilt die Kraft nach Nachgiebigkeit statt nach echter Steifigkeit. Der Wert ist plausibel, nicht sicher.",
+    es: "Esta viga pertenece a una cadena hiperestática: el solucionador reparte el esfuerzo según la flexibilidad, no según la rigidez real. El valor es plausible, no seguro.",
   },
   chart_run_simulation: {
     fr: "Lancez une simulation pour mesurer",
@@ -2400,6 +2430,25 @@ export const STRINGS = {
     en: "m·a",
     de: "m·a",
     es: "m·a",
+  },
+  balance_inertia_moment: {
+    fr: "J·α",
+    en: "J·α",
+    de: "J·α",
+    es: "J·α",
+  },
+  /* The law each block of the balance checks, as its own heading. */
+  balance_law_force: {
+    fr: "ΣF = m·a",
+    en: "ΣF = m·a",
+    de: "ΣF = m·a",
+    es: "ΣF = m·a",
+  },
+  balance_law_moment: {
+    fr: "ΣM = J·α",
+    en: "ΣM = J·α",
+    de: "ΣM = J·α",
+    es: "ΣM = J·α",
   },
   balance_gap: {
     fr: "écart",
@@ -2474,6 +2523,18 @@ export const STRINGS = {
     de: "Winkelgeschwindigkeit",
     es: "Velocidad angular",
   },
+  metric_acceleration: {
+    fr: "Accélération",
+    en: "Acceleration",
+    de: "Beschleunigung",
+    es: "Aceleración",
+  },
+  metric_angular_acceleration: {
+    fr: "Accélération angulaire",
+    en: "Angular acceleration",
+    de: "Winkelbeschleunigung",
+    es: "Aceleración angular",
+  },
   metric_motor_power: {
     fr: "Puissance moteur",
     en: "Motor power",
@@ -2505,7 +2566,7 @@ export const STRINGS = {
     es: "Tensión",
   },
   metric_slide_abscissa: {
-    fr: "Abscisse sur la barre",
+    fr: "Position sur la barre",
     en: "Position along the beam",
     de: "Position auf dem Balken",
     es: "Abscisa en la barra",
@@ -2515,6 +2576,36 @@ export const STRINGS = {
     en: "Sliding speed",
     de: "Gleitgeschwindigkeit",
     es: "Velocidad de deslizamiento",
+  },
+  metric_awaited: {
+    fr: "à venir",
+    en: "coming",
+    de: "folgt",
+    es: "próximamente",
+  },
+  metric_shear_force: {
+    fr: "Effort tranchant",
+    en: "Shear force",
+    de: "Querkraft",
+    es: "Esfuerzo cortante",
+  },
+  metric_bending_moment: {
+    fr: "Moment fléchissant",
+    en: "Bending moment",
+    de: "Biegemoment",
+    es: "Momento flector",
+  },
+  metric_stress: {
+    fr: "Contrainte",
+    en: "Stress",
+    de: "Spannung",
+    es: "Tensión",
+  },
+  metric_shear_stress: {
+    fr: "Contrainte de cisaillement",
+    en: "Shear stress",
+    de: "Schubspannung",
+    es: "Tensión cortante",
   },
   metric_motor_torque: {
     fr: "Couple fourni",

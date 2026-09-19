@@ -1,10 +1,12 @@
 import React from "react";
-import { Box, Chip, Popover, Tooltip, Typography, useTheme } from "@mui/material";
+import { Box, Popover, Tooltip, Typography, useTheme } from "@mui/material";
 import { GpsFixed } from "@mui/icons-material";
 import { WorldPoint } from "../../../types";
 import { Vector } from "../../common/Vector";
 import VectorInput from "./VectorInput";
 import { useNonModalPopup } from "../../common/use-non-modal-popup";
+import { balance_term_color } from "../../../constants/physics-display-specs";
+import { readable_on } from "../../../theme/mui-theme";
 import { BalanceTerm, ForceBalance } from "../../solver/analysis/force-balance";
 import {
   FORCE,
@@ -17,86 +19,154 @@ import {
 } from "../../../utils/quantity-format";
 import { t } from "../../../i18n";
 
-/** Told which term the cursor rests on, and which of its two quantities the line was reading. */
+/** Told what the cursor rests on: one term of a law's left-hand sum, that whole sum (`"total"`), the law's right-hand member (`"inertia"`), or nothing.
+ * `quantity` says which of the two laws is being read — a force points at a vector, a moment at a couple, and the canvas does not show the two the same way. */
 export type BalanceTermHover = (
-  term: BalanceTerm | null,
+  target: BalanceTerm | "total" | "inertia" | null,
   quantity: "force" | "moment",
 ) => void;
 
 /**
- * The free body's balance written as the two equations it is — `ΣF` and `ΣM`, each laid out term by term — see `compute_force_balance` for what the terms are and why the `m·a` they are weighed against comes from the solver rather than from here.
+ * The free body's balance written as the two laws it checks — `ΣF = m·a` and `ΣM = J·α` — see `compute_force_balance` for what the terms are and why the right-hand side comes from the solver rather than from here.
  *
+ * Each law is a block of two rows: the law itself, its two members named and read side by side with the unit and the gap that says whether it closes; and under it, indented to start beneath the left-hand member's own value, what that member adds up.
  * No term is named: what a term stands for is answered by pointing at it, which lights its own vector on the canvas, and a column of labels beside an equation reads as a table rather than as a sum.
  * A measurement tool like `CohesionDiagrams`: it reads the frame under the cursor, so pausing anywhere shows that instant's own figures.
  */
 
-/** One unit for a whole line, chosen on its largest reading: an equation is one quantity added
- * up, so a term switching to its own prefix mid-sum would make the line unreadable as arithmetic. */
-function line_unit(values: number[], kind: QuantityKind): QuantityUnit {
+/** Width a member's own name is given on the law line (`ΣF`, `m·a`), held fixed so the itemisation below can be indented to land under the value it adds up to. */
+const MEMBER_LABEL_WIDTH = 20;
+
+/** Height every row of every block is given, a moment's single figure as much as a force's stacked pair.
+ * Set by the taller of the two, so the block of scalars gets the air rather than the block of vectors getting cramped. */
+const ROW_HEIGHT = 22;
+
+/** One unit for a whole block, chosen on its largest reading: a law is one quantity compared with itself, so a member switching to its own prefix would make the block unreadable as arithmetic. */
+function block_unit(values: number[], kind: QuantityKind): QuantityUnit {
   return display_unit(
     Math.max(...values.map((value) => Math.abs(value)), 0),
     kind,
   );
 }
 
-const Operator: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+/** A word set beside a figure rather than read as one — a member's name, an operator, a unit. */
+const Aside: React.FC<{ children: React.ReactNode; width?: number }> = ({
+  children,
+  width,
+}) => (
   <Typography
     variant="caption"
     color="text.secondary"
     lineHeight={1.2}
-    sx={{ px: 0.25 }}
+    sx={{ minWidth: width }}
   >
     {children}
   </Typography>
 );
 
-interface LineProps {
-  label: string;
-  terms: BalanceTerm[];
+/** A moment, or any other reading that is a plain scalar where it sits. */
+const Scalar: React.FC<{
+  value: number;
   unit: QuantityUnit;
-  render: (term: BalanceTerm) => React.ReactNode;
-  total: React.ReactNode;
-  /** Which of the two quantities this line reads — a term points at a different thing on the canvas depending on it. */
+  color?: string;
+}> = ({ value, unit, color }) => (
+  <Typography
+    variant="caption"
+    lineHeight={1.2}
+    sx={{ px: 0.25, color, fontVariantNumeric: "tabular-nums" }}
+  >
+    {to_mantissa(value, unit, 1)}
+  </Typography>
+);
+
+/** A planar reading, stacked between parentheses like every other vector in the interface — `dense`, and against `ROW_HEIGHT`, so a row of the force law stands as tall as one of the moment law and the two blocks read as one thing. */
+const Pair: React.FC<{
+  value: WorldPoint;
+  unit: QuantityUnit;
+  color?: string;
+}> = ({ value, unit, color }) => (
+  <Box sx={{ color, py: 0.15 }}>
+    <Vector value={value} unit={unit} dense />
+  </Box>
+);
+
+/**
+ * One member of a law, named and read as one thing — `ΣF (1.2 ; 0.0)`.
+ * Both members are pointed at the same way, though only one of them is a sum: what the cursor names is the reading, and each of them has one the canvas can show.
+ */
+const Member: React.FC<{
+  label: string;
+  children: React.ReactNode;
+  onHoverChange: (hovered: boolean) => void;
+}> = ({ label, children, onHoverChange }) => {
+  const { palette } = useTheme();
+  return (
+    <Box
+      onMouseEnter={() => onHoverChange(true)}
+      onMouseLeave={() => onHoverChange(false)}
+      sx={{
+        display: "flex",
+        alignItems: "center",
+        minHeight: ROW_HEIGHT,
+        borderRadius: 1,
+        cursor: "pointer",
+        pl: 0.25,
+        "&:hover": { backgroundColor: palette.action.hover },
+      }}
+    >
+      <Aside width={MEMBER_LABEL_WIDTH}>{label}</Aside>
+      {children}
+    </Box>
+  );
+};
+
+interface TermsRowProps {
+  terms: BalanceTerm[];
+  /** Which of the two quantities this itemisation reads — a term points at a different thing on the canvas depending on it. */
   quantity: "force" | "moment";
+  render: (term: BalanceTerm, color: string) => React.ReactNode;
   onHoverTerm?: BalanceTermHover;
-  /** A term clicked — selects the reading it stands for, exactly as clicking its arrow on the
-   * canvas already does. */
+  /** A term clicked — selects the reading it stands for, exactly as clicking its arrow on the canvas already does. */
   onClickTerm?: (term: BalanceTerm) => void;
 }
 
-/** `label  t₁ + t₂ + … = total   unit`, wrapping where it must. */
-const EquationLine: React.FC<LineProps> = ({
-  label,
+/**
+ * `t₁ + t₂ + …`, indented to start under the value of the member it adds up — which names it, so it carries no label of its own.
+ * Only that indent is given up, so the terms keep nearly the whole width to wrap in: a mechanism carrying more actions grows this row downwards and moves nothing else.
+ */
+const TermsRow: React.FC<TermsRowProps> = ({
   terms,
-  unit,
-  render,
-  total,
   quantity,
+  render,
   onHoverTerm,
   onClickTerm,
 }) => {
   const { palette } = useTheme();
+  const color_of = (term: BalanceTerm) =>
+    readable_on(
+      balance_term_color(term.kind, palette.primary.main, palette.overlay),
+      palette.background.paper,
+    );
   return (
     <Box
       sx={{
         display: "flex",
         flexWrap: "wrap",
         alignItems: "center",
-        rowGap: 0.5,
-        py: 0.25,
+        pl: `${MEMBER_LABEL_WIDTH}px`,
       }}
     >
-      <Typography
-        variant="caption"
-        fontWeight={600}
-        lineHeight={1.2}
-        sx={{ minWidth: 36 }}
-      >
-        {label}
-      </Typography>
       {terms.map((term, index) => (
         <React.Fragment key={term.id}>
-          {index > 0 && <Operator>+</Operator>}
+          {index > 0 && (
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              lineHeight={1.2}
+            >
+              +
+            </Typography>
+          )}
           <Box
             onMouseEnter={() => onHoverTerm?.(term, quantity)}
             onMouseLeave={() => onHoverTerm?.(null, quantity)}
@@ -104,48 +174,70 @@ const EquationLine: React.FC<LineProps> = ({
             sx={{
               display: "flex",
               alignItems: "center",
+              minHeight: ROW_HEIGHT,
               borderRadius: 1,
               cursor: "pointer",
               "&:hover": { backgroundColor: palette.action.hover },
             }}
           >
-            {render(term)}
+            {render(term, color_of(term))}
           </Box>
         </React.Fragment>
       ))}
-      <Operator>=</Operator>
-      {total}
-      <Typography
-        variant="caption"
-        color="text.secondary"
-        lineHeight={1.2}
-        sx={{ pl: 0.5 }}
-      >
-        {unit.symbol}
-      </Typography>
     </Box>
   );
 };
 
-/** A moment, or any other reading that is a plain scalar on its line. */
-const ScalarTerm: React.FC<{ value: number; unit: QuantityUnit }> = ({
-  value,
-  unit,
-}) => (
-  <Typography
-    variant="caption"
-    lineHeight={1.2}
-    sx={{ px: 0.25, fontVariantNumeric: "tabular-nums" }}
+/**
+ * A law, written as the two members it equates and the figures they read — `ΣF (1.2 ; 0.0) = m·a (1.2 ; 0.0) N`.
+ * The law is the line rather than a heading above it: with each member named where it is read, the line states the law and verifies it at once, and the heading that would only repeat it is the room the itemisation needs below.
+ * The unit is named here and nowhere else: a law is one quantity compared with itself, so repeating the symbol on each member says the same thing twice.
+ */
+const LawRow: React.FC<{
+  left: React.ReactNode;
+  right: React.ReactNode;
+  unit: QuantityUnit;
+  gap: React.ReactNode;
+  closed: boolean;
+  /** Sits at the end of the moment law: the point the whole line is taken about. */
+  trailing?: React.ReactNode;
+}> = ({ left, right, unit, gap, closed, trailing }) => (
+  <Box
+    sx={{
+      display: "flex",
+      flexWrap: "wrap",
+      alignItems: "center",
+      minHeight: ROW_HEIGHT,
+      columnGap: 0.5,
+    }}
   >
-    {to_mantissa(value, unit, 1)}
-  </Typography>
+    {left}
+    <Aside>=</Aside>
+    {right}
+    <Aside>{unit.symbol}</Aside>
+    {trailing}
+    <Box sx={{ flex: 1 }} />
+    <Box
+      sx={{
+        display: "flex",
+        alignItems: "center",
+        gap: 0.25,
+        color: closed ? "text.disabled" : "error.main",
+      }}
+    >
+      <Typography variant="caption" lineHeight={1.2} color="inherit">
+        {t("balance_gap")}
+      </Typography>
+      {gap}
+    </Box>
+  </Box>
 );
 
 interface ForceBalanceTableProps {
   balance: ForceBalance;
-  /** The term the cursor rests on, so the canvas can show the very reading it stands for. */
+  /** What the cursor rests on, so the canvas can show the very readings it stands for. */
   onHoverTerm?: BalanceTermHover;
-  /** A term clicked — see `LineProps`' own. */
+  /** A term clicked — see `TermsRowProps`' own. */
   onClickTerm?: (term: BalanceTerm) => void;
   /** What the reference chip reads — absent while the reference is a point of its own, which the chip reads as coordinates instead. */
   referenceLabel?: string;
@@ -161,6 +253,9 @@ interface ForceBalanceTableProps {
   onReferenceHoverChange: (hovered: boolean) => void;
 }
 
+/** Below this, a gap reads as the rounding of the figures shown rather than as a balance that fails to close. */
+const CLOSED_GAP = 0.05;
+
 const ForceBalanceTable: React.FC<ForceBalanceTableProps> = ({
   balance,
   onHoverTerm,
@@ -173,6 +268,7 @@ const ForceBalanceTable: React.FC<ForceBalanceTableProps> = ({
   onSetPoint,
   onReferenceHoverChange,
 }) => {
+  const { palette } = useTheme();
   const [referenceChip, setReferenceChip] =
     React.useState<HTMLDivElement | null>(null);
   // The coordinate editor is the picker's accessory: arming opens it, and a click on the canvas closes it by answering the picker.
@@ -194,135 +290,177 @@ const ForceBalanceTable: React.FC<ForceBalanceTableProps> = ({
     Math.max(Math.abs(referencePoint.x), Math.abs(referencePoint.y)),
     LENGTH,
   );
-  const forceUnit = line_unit(
+  const forceUnit = block_unit(
     actions
       .flatMap((action) => [action.force.x, action.force.y])
       .concat([sum.x, sum.y, inertia.x, inertia.y, gap.x, gap.y]),
     FORCE,
   );
-  const momentUnit = line_unit(
+  const momentUnit = block_unit(
     actions
       .map((action) => action.moment)
       .concat([sumMoment, inertiaMoment, gapMoment]),
     MOMENT,
   );
+  // The right-hand member is the inertia overlay itself — `m·a` and `J·α` are the very arrows and couples that layer draws.
+  const inertiaColor = readable_on(
+    palette.overlay.inertia,
+    palette.background.paper,
+  );
+  // Judged on the mantissas actually printed, not on the raw newtons: a gap the figures cannot show is one the reader has no way to check, and calling it an error would be calling the rounding an error.
+  const closed = (value: number, unit: QuantityUnit) =>
+    Math.abs(value / unit.factor) < CLOSED_GAP;
+
+  /* The reference is one control: what it currently is, and the way to change it.
+     It sits in the ΣM heading, the only line it has any say over — the sum of forces does not depend on where moments are taken. */
+  const reference = (
+    <>
+      <Tooltip title={pickingReference ? "" : t("balance_reference_pick")}>
+        {/* Borderless, and lit on hover like every other thing in these blocks that can be pointed at.
+            An outline drew a box of its own around the reference, which on a coloured paper read as a foreign object set into the heading rather than as the rest of the notation `ΣM` is written in. */}
+        <Box
+          ref={setReferenceChip}
+          onClick={() => {
+            if (pickingReference) onStopPicking();
+            else {
+              onArmPicking();
+              setEditorOpen(true);
+            }
+          }}
+          onMouseEnter={() => onReferenceHoverChange(true)}
+          onMouseLeave={() => onReferenceHoverChange(false)}
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            gap: 0.25,
+            px: 0.5,
+            pt: 0.2,
+            pb: 0.1,
+            borderRadius: 2,
+            cursor: "pointer",
+            color: pickingReference ? "primary.main" : "text.secondary",
+            "&:hover": { backgroundColor: "action.hover" },
+          }}
+        >
+          <GpsFixed sx={{ width: 14, height: 14 }} />
+          {referenceLabel ? (
+            <Typography variant="caption" lineHeight={1.2} maxWidth={60}>
+              {referenceLabel}
+            </Typography>
+          ) : (
+            <>
+              <Vector value={referencePoint} unit={referencePointUnit} dense />
+              <Aside>{referencePointUnit.symbol}</Aside>
+            </>
+          )}
+        </Box>
+      </Tooltip>
+      {/* Non-modal: the canvas underneath keeps the very clicks the armed picker is waiting for. */}
+      <Popover
+        {...editorPopup}
+        open={editorOpen}
+        anchorEl={referenceChip}
+        anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
+      >
+        <Box
+          sx={{
+            p: 1.5,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: 1,
+          }}
+        >
+          {/* Says the canvas is the other way in: a box of coordinates alone reads as the only one. */}
+          <Typography variant="caption" color="text.secondary">
+            {t("balance_reference_picking")}
+          </Typography>
+          <VectorInput value={referencePoint} onChange={onSetPoint} />
+        </Box>
+      </Popover>
+    </>
+  );
+
+  /** Points at a whole member: the left-hand sum with everything it adds up, or the right-hand inertia reading of every body. */
+  const hover_member =
+    (member: "total" | "inertia", quantity: "force" | "moment") =>
+    (hovered: boolean) =>
+      onHoverTerm?.(hovered ? member : null, quantity);
 
   return (
-    <Box sx={{ mx: 2 }}>
-      <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, mb: 0.5 }}>
-        <Typography variant="subtitle2" fontWeight={600}>
-          {t("force_balance")}
-        </Typography>
-        {/* The reference is one control: what it currently is, and the way to change it. */}
-        <Tooltip title={pickingReference ? "" : t("balance_reference_pick")}>
-          <Chip
-            ref={setReferenceChip}
-            size="small"
-            icon={<GpsFixed fontSize="inherit" />}
-            color={pickingReference ? "primary" : "default"}
-            variant="outlined"
-            label={
-              referenceLabel ??
-              `(${to_mantissa(referencePoint.x, referencePointUnit, 1)}; ${to_mantissa(
-                referencePoint.y,
-                referencePointUnit,
-                1,
-              )}) ${referencePointUnit.symbol}`
-            }
-            onClick={() => {
-              if (pickingReference) onStopPicking();
-              else {
-                onArmPicking();
-                setEditorOpen(true);
-              }
-            }}
-            onMouseEnter={() => onReferenceHoverChange(true)}
-            onMouseLeave={() => onReferenceHoverChange(false)}
-          />
-        </Tooltip>
-        {/* Non-modal: the canvas underneath keeps the very clicks the armed picker is waiting for. */}
-        <Popover
-          {...editorPopup}
-          open={editorOpen}
-          anchorEl={referenceChip}
-          anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
-        >
-          <Box
-            sx={{
-              p: 1.5,
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              gap: 1,
-            }}
-          >
-            {/* Says the canvas is the other way in: a box of coordinates alone reads as the only one. */}
-            <Typography variant="caption" color="text.secondary">
-              {t("balance_reference_picking")}
-            </Typography>
-            <VectorInput value={referencePoint} onChange={onSetPoint} />
-          </Box>
-        </Popover>
+    <Box sx={{ mx: 2, display: "flex", flexDirection: "column" }}>
+      <Typography variant="subtitle2" fontWeight={600}>
+        {t("force_balance")}
+      </Typography>
+      <Box>
+        <LawRow
+          left={
+            <Member
+              label={t("balance_sum")}
+              onHoverChange={hover_member("total", "force")}
+            >
+              <Pair value={sum} unit={forceUnit} />
+            </Member>
+          }
+          right={
+            <Member
+              label={t("balance_inertia")}
+              onHoverChange={hover_member("inertia", "force")}
+            >
+              <Pair value={inertia} unit={forceUnit} color={inertiaColor} />
+            </Member>
+          }
+          unit={forceUnit}
+          gap={<Pair value={gap} unit={forceUnit} />}
+          closed={closed(gap.x, forceUnit) && closed(gap.y, forceUnit)}
+        />
+        <TermsRow
+          terms={actions}
+          quantity="force"
+          render={(term, color) => (
+            <Pair value={term.force} unit={forceUnit} color={color} />
+          )}
+          onHoverTerm={onHoverTerm}
+          onClickTerm={onClickTerm}
+        />
       </Box>
-      <EquationLine
-        label={t("balance_sum")}
-        terms={actions}
-        unit={forceUnit}
-        render={(term) => <Vector value={term.force} unit={forceUnit} />}
-        total={<Vector value={sum} unit={forceUnit} />}
-        quantity="force"
-        onHoverTerm={onHoverTerm}
-        onClickTerm={onClickTerm}
-      />
-      <EquationLine
-        label={t("balance_sum_moment")}
-        terms={actions}
-        unit={momentUnit}
-        render={(term) => <ScalarTerm value={term.moment} unit={momentUnit} />}
-        total={<ScalarTerm value={sumMoment} unit={momentUnit} />}
-        quantity="moment"
-        onHoverTerm={onHoverTerm}
-        onClickTerm={onClickTerm}
-      />
-      <Box
-        sx={{
-          display: "flex",
-          flexWrap: "wrap",
-          alignItems: "center",
-          py: 0.25,
-        }}
-      >
-        <Typography variant="caption" fontWeight={600} sx={{ minWidth: 36 }}>
-          {t("balance_inertia")}
-        </Typography>
-        <Vector value={inertia} unit={forceUnit} />
-        <Typography variant="caption" color="text.secondary" sx={{ px: 0.5 }}>
-          {forceUnit.symbol}
-        </Typography>
-        <ScalarTerm value={inertiaMoment} unit={momentUnit} />
-        <Typography variant="caption" color="text.secondary">
-          {momentUnit.symbol}
-        </Typography>
-      </Box>
-      <Box
-        sx={{
-          display: "flex",
-          flexWrap: "wrap",
-          alignItems: "center",
-          py: 0.25,
-        }}
-      >
-        <Typography variant="caption" fontWeight={600} sx={{ minWidth: 36 }}>
-          {t("balance_gap")}
-        </Typography>
-        <Vector value={gap} unit={forceUnit} />
-        <Typography variant="caption" color="text.secondary" sx={{ px: 0.5 }}>
-          {forceUnit.symbol}
-        </Typography>
-        <ScalarTerm value={gapMoment} unit={momentUnit} />
-        <Typography variant="caption" color="text.secondary">
-          {momentUnit.symbol}
-        </Typography>
+
+      <Box>
+        <LawRow
+          left={
+            <Member
+              label={t("balance_sum_moment")}
+              onHoverChange={hover_member("total", "moment")}
+            >
+              <Scalar value={sumMoment} unit={momentUnit} />
+            </Member>
+          }
+          right={
+            <Member
+              label={t("balance_inertia_moment")}
+              onHoverChange={hover_member("inertia", "moment")}
+            >
+              <Scalar
+                value={inertiaMoment}
+                unit={momentUnit}
+                color={inertiaColor}
+              />
+            </Member>
+          }
+          unit={momentUnit}
+          gap={<Scalar value={gapMoment} unit={momentUnit} />}
+          closed={closed(gapMoment, momentUnit)}
+          trailing={reference}
+        />
+        <TermsRow
+          terms={actions}
+          quantity="moment"
+          render={(term, color) => (
+            <Scalar value={term.moment} unit={momentUnit} color={color} />
+          )}
+          onHoverTerm={onHoverTerm}
+          onClickTerm={onClickTerm}
+        />
       </Box>
     </Box>
   );

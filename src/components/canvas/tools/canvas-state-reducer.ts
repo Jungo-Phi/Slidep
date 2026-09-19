@@ -494,6 +494,7 @@ export function canvasStateReducer(
           onMomentBalanceReferencePicked(
             moment_balance_hover(
               hoveredPart,
+              worldMousePos,
               mechanicalElements,
               materials,
               profiles,

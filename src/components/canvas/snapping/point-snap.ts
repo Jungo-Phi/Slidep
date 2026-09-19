@@ -64,6 +64,8 @@ const GRID_SNAPPED_STATES = new Set<CanvasStateType>([
   "Measuring",
   "MeasuringFrom",
   "Measured",
+  // The moment balance's reference falls back to the free point under the cursor when it names nothing (see `moment_balance_hover`), and a reference is read off the drawing: a round place is what makes the moments around it read.
+  "PickingMomentBalanceNode",
 ]);
 
 /** `value` pulled onto the nearest grid line, or left alone when none is near enough. */

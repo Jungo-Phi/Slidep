@@ -4,6 +4,7 @@ import { Mechanism, ZERO } from "../../../types";
 import { Bounds, fit_viewport_to_bounds, mechanism_bounds } from "../../../utils";
 import { draw_floor } from "./drawing-functions";
 import { draw_mechanism } from "./draw-mechanism";
+import { coil_pitch_of_bounds } from "./coil-pitch";
 
 const CANVAS_STATE = { type: "Selecting" } as const;
 const HOVERED_PART = { type: "Void", position: ZERO } as const;
@@ -67,6 +68,8 @@ export const draw_thumbnail = (
     hoveredPart: HOVERED_PART,
     state: CANVAS_STATE,
     mechanicalElements: mechanism.mechanicalElements,
+    // Off `bounds`, which is the resting pose's box for the same reason the framing is: a swing must no more recount a spring's coils than it may move the frame.
+    coilPitch: coil_pitch_of_bounds(bounds),
     constraintElements: mechanism.constraintElements,
     loads: mechanism.loads,
     hideConstraints: true,

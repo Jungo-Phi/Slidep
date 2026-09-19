@@ -28,11 +28,11 @@ const EMPTY_MOMENTS: OverlayMoment[] = [];
 
 /**
  * One frame of the scene: what `draw_mechanism` shows, plus the layers that go under and over it.
- * `hoveredOverlayElementID` is absent on purpose — the reading under the cursor is resolved here, from the same hover the arrows themselves are drawn against.
+ * `hoveredOverlayElementID` and `litLoadIDs` are absent on purpose — what a hover names is resolved here, from the same hover the arrows themselves are drawn against.
  */
 export type MechanicalCanvasDrawing = Omit<
   CanvasDrawing,
-  "hoveredOverlayElementID"
+  "hoveredOverlayElementID" | "litLoadIDs"
 > & {
   /** Canvas size, px — the floor is a line clipped to it, not a shape of its own. */
   canvasWidth: number;
@@ -55,13 +55,16 @@ type HoveredReadings = {
   arrows: OverlayArrow[];
   moments: OverlayMoment[];
   elementID?: ID;
+  /** The loads the hover names, drawn thick — a whole balance line names several at once, which `elementID` cannot carry. */
+  loadIDs: ReadonlySet<ID>;
 };
 
 /**
  * Whichever reading the hover names, wherever that hover came from: the cursor or a row of the panel pointing at one.
  * Not hit-tested here: a reading and an element are the same register, so one function ranks them both (`get_hovered_part`), and this only reads what it answered.
  * A balance row lights its force from either column, and a support's own couple only from ΣM, the one line that couple enters.
- * The element a weight or support term belongs to is lit even where no reading of it is on screen: `MechanicalCanvas` draws that reading itself.
+ * The element a weight or support term belongs to is lit even where no reading of it is on screen: `MechanicalCanvas` draws that reading itself — but only where the hover names ONE term, a whole line naming half the mechanism instead.
+ * A load has no such reading: its own arrow is part of the mechanism, so it is lit by being drawn thick (`loadIDs`), however many the hover names.
  */
 function hovered_readings(
   hoveredPart: HoveredPart,
@@ -76,29 +79,43 @@ function hovered_readings(
     reading.kind === candidate.kind &&
     // No point named means the whole element's own: a member's internal effort is read along it, so it answers for either end (see `merged_internal`).
     (reading.which === undefined || reading.which === candidate.which);
+  const hoveredTerms = hoveredBalanceTerm?.terms ?? [];
+  // The law's right-hand member stands for one reading of every body rather than for any term, so it is matched on the kind instead of on a term's own id.
+  const inertiaNamed = hoveredBalanceTerm?.inertia === true;
+  const in_hovered_terms = (candidate: OverlayArrow | OverlayMoment) =>
+    inertiaNamed
+      ? candidate.kind === "inertia"
+      : hoveredTerms.some((term) => term.id === candidate.id);
   const named_arrows = arrows.filter(names_reading);
-  const hoveredArrows = named_arrows.length > 0
-    ? named_arrows
-    : hoveredBalanceTerm
-      ? arrows.filter((a) => a.id === hoveredBalanceTerm.term.id)
-      : [];
+  const hoveredArrows =
+    named_arrows.length > 0 ? named_arrows : arrows.filter(in_hovered_terms);
   const named_moments = moments.filter(names_reading);
-  const hoveredMoments = named_moments.length > 0
-    ? named_moments
-    : hoveredBalanceTerm?.quantity === "moment"
-      ? moments.filter((m) => m.id === hoveredBalanceTerm.term.id)
-      : [];
-  const termElementID =
-    hoveredBalanceTerm && hoveredBalanceTerm.term.kind !== "load"
-      ? hoveredBalanceTerm.term.elementID
-      : undefined;
+  const hoveredMoments =
+    named_moments.length > 0
+      ? named_moments
+      : hoveredBalanceTerm?.quantity === "moment"
+        ? moments.filter(in_hovered_terms)
+        : [];
+  // One element lit, and only where the hover names one thing — the cursor on a reading, or a single row of the balance.
+  const lone = hoveredTerms.length === 1 ? hoveredTerms[0] : undefined;
+  const fromLoneTerm =
+    lone &&
+    (hoveredMoments[0]?.elementID ??
+      hoveredArrows[0]?.elementID ??
+      (lone.kind === "load" ? undefined : lone.elementID));
   return {
     arrows: hoveredArrows,
     moments: hoveredMoments,
     elementID:
-      hoveredMoments[0]?.elementID ??
-      hoveredArrows[0]?.elementID ??
-      termElementID,
+      named_moments[0]?.elementID ??
+      named_arrows[0]?.elementID ??
+      fromLoneTerm ??
+      undefined,
+    loadIDs: new Set(
+      hoveredTerms
+        .filter((term) => term.kind === "load")
+        .map((term) => term.elementID),
+    ),
   };
 }
 
@@ -238,7 +255,11 @@ export function draw_mechanical_canvas(
     overlayMoments,
   );
 
-  draw_mechanism(ctx, { ...drawing, hoveredOverlayElementID: hovered.elementID });
+  draw_mechanism(ctx, {
+    ...drawing,
+    hoveredOverlayElementID: hovered.elementID,
+    litLoadIDs: hovered.loadIDs,
+  });
   draw_ruler(ctx, {
     viewport,
     state,

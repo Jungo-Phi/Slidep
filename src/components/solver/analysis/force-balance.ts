@@ -39,10 +39,12 @@ export interface BalanceTerm {
   moment: number;
 }
 
-/** One line of the balance under the cursor, and which of its two quantities that line reads
- * — a force row points at a vector, a moment row at a couple, and the two are not shown the same way. */
+/** What the cursor rests on in the balance, and which of its two quantities that reading is about — a force points at a vector, a moment at a couple, and the two are not shown the same way.
+ * A list, not one term: pointing at a total is pointing at everything it adds up, and the canvas answers the same way for one term as for all of them. */
 export interface HoveredBalanceTerm {
-  term: BalanceTerm;
+  terms: BalanceTerm[];
+  /** The hover names the law's RIGHT-hand member (`m·a` / `J·α`) instead — the inertia reading of every body at once, which is no term of the left-hand sum and so leaves `terms` empty. */
+  inertia?: boolean;
   quantity: "force" | "moment";
 }
 

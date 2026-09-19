@@ -82,8 +82,8 @@ const CenterOfMassIcon = () => (
     component="svg"
     viewBox="0 0 20 20"
     sx={{
-      width: 14,
-      height: 14,
+      width: 15,
+      height: 15,
       display: "block",
       flexShrink: 0,
       color: "measure",
@@ -208,7 +208,7 @@ const MeasureWidget = forwardRef<MeasureReadoutHandle, MeasureWidgetProps>(
           right: 12,
           bottom: 12,
           zIndex: 900,
-          width: 200,
+          width: 210,
           px: 1.5,
           py: 1,
           boxShadow: 4,
@@ -303,7 +303,7 @@ const MeasureWidget = forwardRef<MeasureReadoutHandle, MeasureWidgetProps>(
             <Typography
               variant="caption"
               color="text.secondary"
-              sx={{ pl: 0.5 }}
+              sx={{ pl: 0.25 }}
             >
               {LENGTH_UNIT.symbol}
             </Typography>

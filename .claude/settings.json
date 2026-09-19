@@ -10,6 +10,16 @@
       "Bash(npx eslint *)"
     ],
     "deny": [
+      "Bash(git checkout*)",
+      "PowerShell(git checkout*)",
+      "Bash(git restore*)",
+      "PowerShell(git restore*)",
+      "Bash(git reset*)",
+      "PowerShell(git reset*)",
+      "Bash(git stash*)",
+      "PowerShell(git stash*)",
+      "Bash(git clean*)",
+      "PowerShell(git clean*)",
       "Read(./TODO.md)",
       "Edit(./TODO.md)",
       "Bash(*TODO.md*)",

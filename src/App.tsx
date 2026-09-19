@@ -379,6 +379,7 @@ const App: React.FC = () => {
     focusedOverlay,
     hoveredOverlay:
       hoveredPart.type === "Overlay" ? hoveredPart.reading : null,
+    inertiaNamed: hoveredBalanceTerm?.inertia === true,
     onRecordingLimitReached: (
       reason: SimulationLimitReason,
       maxTime: number,

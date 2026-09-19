@@ -69,6 +69,19 @@ interface ProbeChartProps {
   showZero: boolean;
   /** Shown when no curve has data. */
   emptyMessage: string;
+  /**
+   * A limit this metric is read against — an elastic limit for a stress, drawn as a dashed line with its own label.
+   *
+   * It takes part in the vertical scale exactly like a plotted value, so a curve far below its limit reads as far below it: that IS the answer to "am I close to yielding", and a line quietly dropped off-scale would only ever be dropped when everything is fine.
+   */
+  reference?: { value: number; label: string };
+  /**
+   * Whether the pointer is over the plot — for a caller that shows something else while the chart is being read.
+   *
+   * Deliberately not the time under the pointer: whatever a caller marks elsewhere has to be read at the instant already on screen, or it describes a state nothing is showing. Reaching another instant is what `onSeek` is for.
+   * Independent of `onSeek`: pointing is not clicking.
+   */
+  onHover?: (inside: boolean) => void;
   /** Click/drag on the plot seeks the simulation to that time (pauses it). */
   onSeek?: (t: number) => void;
 }
@@ -85,6 +98,8 @@ export const ProbeChart: React.FC<ProbeChartProps> = ({
   unitFactor,
   showZero,
   emptyMessage,
+  reference,
+  onHover,
   onSeek,
 }) => {
   const svgRef = useRef<SVGSVGElement | null>(null);
@@ -123,7 +138,7 @@ export const ProbeChart: React.FC<ProbeChartProps> = ({
         if (v > scanMax) scanMax = v;
       }
     }
-    // What the curve actually reaches — the gutter labels below start from this, not from the padded/flattened/zero-anchored bound, except where a branch below deliberately relabels an end (flattened: no real min/max to report; zero-anchored: the axis no longer starts at the curve's own extreme, so neither should its label).
+    // What the curve actually reaches — the gutter labels below start from this, not from the padded/flattened/zero-anchored bound, except where a branch below deliberately relabels an end (flattened: no real min/max to report; zero-anchored: the axis starts somewhere other than the curve's own extreme, so neither should its label).
     const dataMin = scanMin;
     const dataMax = scanMax;
     const spanRaw = dataMax - dataMin;
@@ -230,6 +245,16 @@ export const ProbeChart: React.FC<ProbeChartProps> = ({
         zeroLine: dataMin <= 0 && dataMax >= 0,
       };
     }
+    // The reference stretches the AXIS to hold its line, never the reported extremes: a chart whose top label read `Re` would be claiming the curve got there.
+    // Applied after every branch above so it widens whatever range they settled on, rather than being padded or relabelled along with the data.
+    if (reference) {
+      plan = {
+        ...plan,
+        yMin: Math.min(plan.yMin, reference.value),
+        yMax: Math.max(plan.yMax, reference.value),
+      };
+    }
+
     const {
       yMin,
       yMax,
@@ -262,6 +287,16 @@ export const ProbeChart: React.FC<ProbeChartProps> = ({
     const showZeroLabel =
       zeroLabel !== null && Math.abs(zeroLabelY - centerLabelY) >= FONT_SIZE;
 
+    /** Whether `clientX` falls inside the plot box rather than over the gutter or the right margin. */
+    const insidePlot = (clientX: number): boolean => {
+      const svg = svgRef.current;
+      if (!svg) return false;
+      const rect = svg.getBoundingClientRect();
+      const xView = ((clientX - rect.left) / rect.width) * VIEW_W;
+      const ratio = (xView - GUTTER) / plotW;
+      return ratio >= 0 && ratio <= 1;
+    };
+
     const seekFromClientX = (clientX: number) => {
       const svg = svgRef.current;
       if (!svg || !onSeek) return;
@@ -281,6 +316,8 @@ export const ProbeChart: React.FC<ProbeChartProps> = ({
           display: "block",
           cursor: onSeek ? "crosshair" : "default",
         }}
+        onMouseMove={onHover ? (e) => onHover(insidePlot(e.clientX)) : undefined}
+        onMouseLeave={onHover ? () => onHover(false) : undefined}
         onMouseDown={
           onSeek
             ? (e) => {
@@ -318,6 +355,31 @@ export const ProbeChart: React.FC<ProbeChartProps> = ({
             stroke={palette.divider}
             strokeWidth={0.5}
           />
+        )}
+        {/* Reference line: dashed, and labelled at its own height rather than in the gutter,
+         * which already carries the curve's own min/max. */}
+        {reference && (
+          <>
+            <line
+              x1={GUTTER - 2}
+              x2={VIEW_W - PAD_RIGHT}
+              y1={toY(reference.value)}
+              y2={toY(reference.value)}
+              stroke={palette.error.main}
+              strokeWidth={0.7}
+              strokeDasharray="3 2"
+              opacity={0.8}
+            />
+            <text
+              x={VIEW_W - PAD_RIGHT}
+              y={Math.max(toY(reference.value) - 1.5, PAD_TOP + FONT_SIZE - 2)}
+              textAnchor="end"
+              fontSize={FONT_SIZE - 1}
+              fill={palette.error.main}
+            >
+              {reference.label}
+            </text>
+          </>
         )}
         {/* Curves */}
         {plotted.map((c) => {

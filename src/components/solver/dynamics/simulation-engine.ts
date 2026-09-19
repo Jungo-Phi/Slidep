@@ -14,7 +14,7 @@ import {
   EnergySample,
   KinematicSnapshot,
   LinkReaction,
-  MotorPowerSample,
+  MotorSample,
   ParameterSnapshot,
   SimulationSnapshot,
   SnapshotLayout,
@@ -1300,7 +1300,7 @@ export function step_dynamic_simulation(
   const angleVelocitiesBeforeSolve = new Map(angleVelocities);
   const subDt = dt / substeps;
   let reactions: LinkReaction[] | undefined;
-  let motorPower: MotorPowerSample[] = [];
+  let motor: MotorSample[] = [];
   let result: SolverMaps | undefined;
 
   for (let sub = 0; sub < substeps; sub++) {
@@ -1446,7 +1446,7 @@ export function step_dynamic_simulation(
     for (const [key, t] of frictionContribution.torques)
       torques.set(key, (torques.get(key) ?? 0) + t);
     // Cheap (one entry per motor) unlike `reactions`, so kept on every substep rather than gated behind `collectDiagnostics` — the last substep's values are what the frame ends on.
-    motorPower = motorContribution.power;
+    motor = motorContribution.samples;
 
     // An anchored node never feels the predict step's acceleration (it cannot move regardless of `gx/gy` — see `PBD_kinematic_solver`), so its own weight has to be restated as an ordinary force to reach the anchored-dof reaction fallback — see `groundedWeights` above for what "its own" leaves out.
     // A free node needs none of this: its weight already comes out mass-independent, exactly like real gravity.
@@ -1677,7 +1677,7 @@ export function step_dynamic_simulation(
     angleAccelerations: outAngleAccelerations,
     unsatisfied: finalResult.unsatisfied,
     reactions,
-    motorPower,
+    motor,
     energy,
     balance,
     beamCohesion: collectDiagnostics ? beam_cohesion : undefined,
@@ -1829,7 +1829,7 @@ export function dynamic_snapshot_at(
     // Diagnostics belong to a state the solver actually produced.
     unsatisfied: a.unsatisfied,
     reactions: a.reactions,
-    motorPower: a.motorPower,
+    motor: a.motor,
     energy: a.energy,
     balance: a.balance,
     beamCohesion: a.beamCohesion,
@@ -2034,17 +2034,22 @@ function with_shown_parameters(
             profileID: shown.profileID,
           }
         : element;
+    // A rest length the user never typed is not a parameter: the snapshot holds `undefined` for it, which must not erase the length `apply_snapshot_fields` froze from the edit-time geometry — the drawing would then recount its coils on every simulated frame.
     case "spring":
       return shown.type === "spring"
         ? {
             ...element,
             stiffness: shown.stiffness,
-            restLength: shown.restLength,
+            restLength: shown.restLength ?? element.restLength,
           }
         : element;
     case "damper":
       return shown.type === "damper"
-        ? { ...element, damping: shown.damping, restLength: shown.restLength }
+        ? {
+            ...element,
+            damping: shown.damping,
+            restLength: shown.restLength ?? element.restLength,
+          }
         : element;
     default:
       return element;

@@ -511,17 +511,7 @@ export const ElementPalette: React.FC<ElementPaletteProps> = ({
               return (
                 <Tooltip
                   key={element.goToStateType}
-                  title={
-                    unavailable ? (
-                      <>
-                        {label}
-                        <br />
-                        {t("unavailable_in_simulation")}
-                      </>
-                    ) : (
-                      label
-                    )
-                  }
+                  title={label}
                   placement="right"
                   arrow
                   onOpen={() => {}}

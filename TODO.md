@@ -10,38 +10,25 @@
 
 **ElementMeasures -> SelectionInspector**
 
-- Afficher les valeurs à jour dans l'onglet "éléments"
+- Gérer le cas ou la ligne des moment est trop large
 
-- Ajouter mesures globales (contrainte max) ou "Contrainte max sur la poutre"
-- Ne pas afficher la vitesse des ressorts et amortisseurs
-- 🚨 L'angle affiché dans les mesures "Balance.slidep" est faux. L'angle du graph ne correspond pas à celui de l'élément, Vitesse angulaire aussi est faux (rapport TAU manquant)
+- Quand on est en simulation, clicker sur un élément dans l'onglet matériaux n'a pas à respecter la règle des 2 clicks. D'ailleur, cette rêgle pourrait être transformées en "Clicker sur l'élément en en-tête"
 
-- La couleur de sélection aux appuis sélectionnée ne correspond pas à non-sélectionnée
 - Afficher l'inertie rotationelle avec le symbole qui fait tout le tour ?
 
-- Garder l'en-tête hors de la zone scrollable ?
+- Donner un contour background aux flèches
+- Hover une flèche épaissis sa tête
+- Changer le style des flèches de vitesse, accélération, etc.
 - N'afficher un moteur qu'une seul fois au maximum dans les DDL
-- afficher en priorité les éléments avec une masse (ex. Mass-ressort)
+- afficher en priorité les éléments avec une masse (ex. Mass-ressort) dans les DDL
 - On devrait pouvoir choisir plusieurs ancrages pour un moteur (ex: "Vélo.slidep")
-- Retravailler le dessin des amortisseurs
 - On devrait afficher T/N au lieu de x/y pour les mesures des forces internes
 - Remplacer les "const lastShadowBlur = ctx.shadowBlur; ... ctx.shadowBlur = lastShadowBlur;" par des "ctx.save(); ... ctx.restore();"
+- Unifier CRLF/LF
 
 **Nouvelles métriques de sonde**
 
-- Longueur / allongement : ressort, amortisseur, barre.
-- Vitesse d'allongement : amortisseur.
-- Effort axial signé : ressort, amortisseur. Peu coûteux, il se déduit des réactions.
 - Tension de courroie. Attention : une courroie à plusieurs brins a plusieurs tensions, il faudra choisir ce qu'on montre.
-- Abscisse sur la barre et vitesse de glissement : coulisseau, slidep.
-- Couple moteur fourni. Il vaut mieux le lire dans le modèle moteur que calculer P/ω, instable quand ω ≈ 0. Il permet de voir si le moteur sature.
-- À discuter : taux de travail max d'une barre (le calcul existe déjà pour le mode de coloration), angle relatif au pivot (ambigu dès trois barres).
-
-**MomentBalanceReference**
-
-- Clarifier le schéma "ΣF = m⋅a", "ΣM = J⋅α"
-- Colorer les éléments
-- Hover sur le total du bilan devrait hover tous les éléments
 
 **Rendre la physique exacte (cas faux)**
 
@@ -70,18 +57,15 @@
 - Niveau de zoom à 1%
 - Indiquer, quand on click sur un overlay pour la première fois, qu'il n'est visible qu'en simulation ?
 - Afficher _Aucune_ contrainte par défaut
-- Bug dessin ressort nombre de spires avec la taille du méchanisme
 - Le parsing pour la masse volumique est nul (refuse T/m3, mg/cm3 et des valeurs trop petites). Est-ce aussi le cas ailleur ?
 - Afficher "0 N" au lieu de "0 nN" quand une force est nulle ?
 - La barre de scroll devrait se cacher, ou au moins se réduire, si on n'a pas scrollé depuis un moment
 - Régler le CTRL+C
 - Le hover de la règle sur les joins n'est pas bon. Et hover de règle devrait épaissir les traits
 - Afficher le signe des moments
-- Hover des loads épaissis les flèches
 - Régler les moments qui se supperposent
 - Régler les forces sont dessinées sur les poutres
 - Re-positionner le texte des moments (quand ils ne sont pas sur tout le tour)
-- Pas de snap en dynamique pour le placement/déplacement des charges
 - Dessiner (preview) force et force-distribuée vers le bas
 
 **Mécanismes exemple :**
@@ -140,8 +124,6 @@
 - 🔨 La distance d'écartement à la séparation d'éléments devrait dépendre du zoom
 
 **UI**
-
-- 🔨 Travailler les couleurs, avec les thèmes
 
 - 🔨 Hover sur les graphs met en évidence les éléments concernés
 - 🔨 Les contraintes ne devrait pas apparaitre au hover quand on est en train de placer un élément. En fait, elle ne devrait apparaitre que dans les états "Idle"
@@ -217,7 +199,7 @@
 
 - 🔨 À la fermeture du menu ProbeMetricSelector, on voit un petit rectangle sur 1 frame
 - 🔨 Pas de sonde sur les courroies
-- 🔨 Ajuster la position des sondes sur ressort+amortisseur
+- 🔨 Sur de combo ressort+amortisseur, ajuster la position des sondes et overlays
 - 🔨 La transparence de deletion des probes est inconsistante
 - 🔨 Choisir x/y/norme pour les mesures superposées
 - 🔨 Possible de hover sur probe quand placingProbe (pareil pour gearRatio et Dimension)
@@ -229,7 +211,6 @@
 - 🆕 Ajouter un nouvel élément "Commentaire" sur le canvas
 - 🔨 Afficher le point grabbé en simulation
 - 🔨 Theme transition : certaines couleurs changent instantanément (grille + autres éléments spéciaux du canvas)
-- 🔨 Les couleurs des selected loads ne sont pas assez différenciée
 - 🔨 Les couleurs de la top-bar et du canvas ne sont pas assez différenciée
 - 🔨 Ajouter un délais (2s) avant d'afficher "mécanisme(s) exporté(s)"
 - 🔨 Dessiner un join avec le ground à PlacingGround (quand c'est approprié)

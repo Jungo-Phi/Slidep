@@ -3,6 +3,11 @@
  */
 
 import { alpha, createTheme, Theme, ThemeOptions } from "@mui/material/styles";
+import {
+  PHYSICS_OVERLAY_KINDS,
+  PHYSICS_OVERLAY_SPEC,
+  PhysicsOverlayKind,
+} from "../constants/physics-display-specs";
 
 declare module "@mui/material/styles" {
   interface TypeBackground {
@@ -16,10 +21,14 @@ declare module "@mui/material/styles" {
     dividers: { ground: string; paper: string; toolbar: string };
     /** The ruler's own hue, for the interface it puts over the canvas. */
     measure: string;
+    /** The overlay readings, in the very colours the canvas draws them (`canvas_palette`) — a figure in the panel and its arrow on the drawing are one reading.
+     * Printed as text or laid on `paper` rather than on the drawing's ground, it goes through `readable_on` first. */
+    overlay: Record<PhysicsOverlayKind, string>;
   }
   interface PaletteOptions {
     dividers?: { ground: string; paper: string; toolbar: string };
     measure?: string;
+    overlay?: Record<PhysicsOverlayKind, string>;
   }
 }
 
@@ -49,6 +58,8 @@ export interface CanvasPalette {
   MEASURE: string;
   DELETION_STROKE: string;
   DELETION_BOX: string;
+  /** The measured readings drawn over the mechanism, one colour per quantity — see `PHYSICS_OVERLAY_SPEC` for what fixes them and `overlay_colors` for what this theme made of it. */
+  OVERLAY: Record<PhysicsOverlayKind, string>;
 
   RECOLOR_ICONS: boolean;
 }
@@ -162,6 +173,19 @@ const to_hex = ({ h, s, l }: Hsl): string => {
 export const selection_accent = (accent: string): string => {
   const { h, s, l } = to_hsl(accent);
   return to_hex({ h, s: Math.min(1, s + 0.1), l: Math.min(0.66, l + 0.15) });
+};
+
+/** How much saturation a selected overlay reading gains over its own colour. */
+const SELECTION_SATURATION_GAIN = 0.25;
+
+/**
+ * The colour a selected overlay reading takes: its own, wound up.
+ * Saturation alone, where `selection_accent` lifts the lightness too — a reading's lightness is what holds it at its own contrast off the ground (`PHYSICS_OVERLAY_SPEC`), so moving it would both undo that and walk the reading towards whatever colour sits above it.
+ * The halo and the extra width a selected reading already carries are what this leans on for the hues that have no saturation left to give.
+ */
+export const selection_reading = (color: string): string => {
+  const { h, s, l } = to_hsl(color);
+  return to_hex({ h, s: Math.min(1, s + SELECTION_SATURATION_GAIN), l });
 };
 
 const GRID_RAMP = {
@@ -395,6 +419,146 @@ const contrast_ratio = (a: string, b: string): number => {
   return (hi + 0.05) / (lo + 0.05);
 };
 
+/**
+ * How far a tinted figure has to stand off the surface it is printed on, as a WCAG contrast ratio.
+ *
+ * The 3:1 floor, not body text's 4.5: a figure tinted this way is always read on a row that already names it, so the hue identifies which reading it is rather than carrying any of it.
+ * A mid-toned paper — a blueprint's blue — leaves no room for both: everything taken to 4.5 on it lands in the same corner of near-white, and four quantities that read as one colour have lost the very thing the tint is for.
+ */
+const READING_CONTRAST = 3;
+
+const readable_cache = new Map<string, string>();
+
+/**
+ * `color` at whatever lightness clears `ground` by `READING_CONTRAST` — and `color` itself where it already does, which on most papers is every hue but one.
+ *
+ * What a canvas hue needs before it can be printed as a figure in the interface: `palette.overlay` is solved against the drawing's ground, where a weight's yellow carries, and that same yellow set as text on a pale panel is barely there.
+ * The hue is what must survive — it is the whole point of tinting the figure — so the lightness is what gives, solved on the side of `ground` that gains contrast: darker ink on a pale surface, lighter on a dark one.
+ *
+ * Saturation rises to hold the colourfulness the lightness costs (HSL chroma, `(1 − |2l − 1|)·s`, kept where the gamut allows).
+ * Without it a hue driven toward either end washes out on the way, which is how four distinct readings end up as four pastels.
+ */
+export const readable_on = (color: string, ground: string): string => {
+  const key = `${color}|${ground}`;
+  const cached = readable_cache.get(key);
+  if (cached !== undefined) return cached;
+  const solved = solve_readable(color, ground);
+  readable_cache.set(key, solved);
+  return solved;
+};
+
+/** `readable_on` without its memo — see it for what this answers.
+ * The memo is what lets a panel call this per figure per frame: the pairs it is ever asked about are a palette against a surface, a handful in all. */
+const solve_readable = (color: string, ground: string): string => {
+  if (contrast_ratio(color, ground) >= READING_CONTRAST) return color;
+  const { h, s, l } = to_hsl(color);
+  return solve_contrast(
+    h,
+    (1 - Math.abs(2 * l - 1)) * s,
+    ground,
+    READING_CONTRAST,
+  );
+};
+
+/**
+ * `h` at the lightness nearest the ground's own that still stands `target` off it, carrying `chroma` as far as the gamut allows — see `readable_on` for why colourfulness is what is held.
+ * Where no lightness reaches the target — a saturated hue on a mid-toned ground — it comes back at that side's extreme, as close as the colour gets.
+ */
+const solve_contrast = (
+  h: number,
+  chroma: number,
+  ground: string,
+  target: number,
+): string => {
+  const shade = (lightness: number) =>
+    to_hex({
+      h,
+      s: Math.min(1, chroma / Math.max(1e-6, 1 - Math.abs(2 * lightness - 1))),
+      l: lightness,
+    });
+  const groundLightness = to_hsl(ground).l;
+  const lighten = groundLightness < 0.5;
+  const enough = (l: number) => contrast_ratio(shade(l), ground) >= target;
+  // Contrast is monotone in the distance from the ground's own lightness, so a bisection on the gaining side finds the smallest move that clears it.
+  // `hi` holds the clearing end throughout when lightening, `lo` when darkening; twenty halvings take the interval well under one 8-bit level.
+  let [lo, hi] = lighten ? [groundLightness, 1] : [0, groundLightness];
+  for (let i = 0; i < 20; i++) {
+    const mid = (lo + hi) / 2;
+    if (enough(mid) === lighten) hi = mid;
+    else lo = mid;
+  }
+  return shade(lighten ? hi : lo);
+};
+
+/** Lab chroma: how much colour a colour carries, 0 for any grey. */
+const chroma_of = (hex: string): number => {
+  const m = HEX.exec(hex);
+  if (!m) throw new Error(`chroma_of() needs #rrggbb, got ${hex}`);
+  const [r, g, b] = [1, 2, 3].map((i) => {
+    const c = parseInt(m[i], 16) / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  });
+  const f = (v: number) => (v > 0.008856 ? Math.cbrt(v) : 7.787 * v + 16 / 116);
+  const x = f((0.4124 * r + 0.3576 * g + 0.1805 * b) / 0.95047);
+  const y = f(0.2126 * r + 0.7152 * g + 0.0722 * b);
+  const z = f((0.0193 * r + 0.1192 * g + 0.9505 * b) / 1.08883);
+  return Math.hypot(500 * (x - y), 200 * (y - z));
+};
+
+/** The most colour this hue carries at this saturation, over every lightness — the measure `OVERLAY_CHROMA_KEEP` is a share of. */
+const peak_chroma = (h: number, saturation: number): number => {
+  let peak = 0;
+  for (let l = 0.06; l <= 0.94; l += 0.02) {
+    const c = Math.min(
+      1,
+      saturation / Math.max(1e-6, 1 - Math.abs(2 * l - 1)),
+    );
+    peak = Math.max(peak, chroma_of(to_hex({ h, s: c, l })));
+  }
+  return peak;
+};
+
+/** What a dark ground adds to every reading's asked-for contrast: the same ratio that reads as ink on paper reads as a shadow on a dark canvas, and a reading has to be lit to be a colour at all. */
+const OVERLAY_DARK_GAIN = 1.3;
+
+/** The share of its own colour a reading keeps. Under it, the contrast it asked for costs more colour than it is worth — a blueprint's mid-toned blue bleaches a violet to lavender to reach 3.6 — and the ask gives way instead. */
+const OVERLAY_CHROMA_KEEP = 0.62;
+
+/** No reading stands off its ground by less than this, however much colour that costs. */
+const OVERLAY_MIN_CONTRAST = 2.4;
+
+/**
+ * Every overlay reading in the colour this theme draws it: its own hue and colourfulness (`PHYSICS_OVERLAY_SPEC`), at the lightness that stands its own contrast off the ground the mechanism is drawn on.
+ * Solved per theme rather than written down once, because a hue that carries on a dark ground is barely there on a pale one — and because what tells the two reactions apart is how far each stands off that ground, which nothing but a solve holds steady from one theme to the next.
+ * The asked-for contrast is the starting point, not the answer: a dark ground gains `OVERLAY_DARK_GAIN`, and a ground that would bleach the hue to reach it gives the contrast back, a fifth at a time, down to `OVERLAY_MIN_CONTRAST`.
+ */
+const overlay_colors = (s: ThemeSpec): Record<PhysicsOverlayKind, string> => {
+  const solved = {} as Record<PhysicsOverlayKind, string>;
+  const dark = to_hsl(s.appBackground).l < 0.5;
+  for (const kind of PHYSICS_OVERLAY_KINDS) {
+    const spec = PHYSICS_OVERLAY_SPEC[kind];
+    const keep = OVERLAY_CHROMA_KEEP * peak_chroma(spec.hue, spec.saturation);
+    let target = spec.contrast + (dark ? OVERLAY_DARK_GAIN : 0);
+    let colour = solve_contrast(
+      spec.hue,
+      spec.saturation,
+      s.appBackground,
+      target,
+    );
+    while (chroma_of(colour) < keep && target > OVERLAY_MIN_CONTRAST) {
+      target = Math.max(OVERLAY_MIN_CONTRAST, target - 0.2);
+      colour = solve_contrast(
+        spec.hue,
+        spec.saturation,
+        s.appBackground,
+        target,
+      );
+    }
+    solved[kind] = colour;
+  }
+  return solved;
+};
+
 const STATUS_CONTRAST = 7;
 const STATUS_MAX_LIGHTNESS = 0.8;
 
@@ -453,6 +617,7 @@ const mui_palette = (s: ThemeSpec) => {
     divider: divider_colors(s).paper,
     dividers: divider_colors(s),
     measure: measure_color(s),
+    overlay: overlay_colors(s),
     action: {
       hover: `rgba(${veil}, 0.1)`,
       hoverOpacity: 0.1,
@@ -494,6 +659,7 @@ export const canvas_palette = (s: ThemeSpec): CanvasPalette => {
     DELETION_STROKE: s.deletionStroke ?? DELETION_STROKE,
     DELETION_BOX: s.deletionBox ?? DELETION_BOX,
     MEASURE: measure_color(s),
+    OVERLAY: overlay_colors(s),
 
     RECOLOR_ICONS: s.recolorIcons ?? true,
   };

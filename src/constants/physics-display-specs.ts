@@ -46,31 +46,65 @@ export const MOMENT_SCALING = {
 };
 
 /** The physics-overlay quantities drawn on the canvas: a probed velocity, the two flavours of reaction force/moment a constraint can carry, and a body's own weight/inertia force. */
-export type PhysicsOverlayKind =
-  | "velocity"
-  | "reaction-support"
-  | "reaction-internal"
-  | "weight"
-  | "inertia";
+export const PHYSICS_OVERLAY_KINDS = [
+  "velocity",
+  "reaction-support",
+  "reaction-internal",
+  "weight",
+  "inertia",
+] as const;
+
+export type PhysicsOverlayKind = (typeof PHYSICS_OVERLAY_KINDS)[number];
+
+/** What a reading is before a theme says what it looks like — `canvas_palette` solves the lightness that stands `contrast` off the ground the reading is drawn on. */
+export interface PhysicsOverlaySpec {
+  /** HSL hue, in degrees. */
+  hue: number;
+  /** HSL saturation, 0 to 1, read at mid lightness — which is the colourfulness `solve_contrast` then carries to whatever lightness it lands on. */
+  saturation: number;
+  /** How far the drawn colour stands off the ground, as a WCAG contrast ratio — how loud the reading is, which is not the same question as which reading it is (that is the hue's).
+   * Read as a wish rather than a figure: a dark ground raises it, and a ground that would bleach the hue to reach it lowers it (`overlay_colors`). */
+  contrast: number;
+}
 
 /**
- * Distinguishable from a user-placed load's `COLORS.ACCENT` on purpose — an arrow here is measured, not authored.
- * Reuses entries of `PROBE_ELEMENT_COLORS` rather than inventing new ones, so a physics overlay reads as the same family as a probe chart; the two reaction kinds share the warm half of the palette (support/internal), apart from velocity's cool blue.
+ * Lightness is deliberately no part of a reading's identity: one hex reads heavy on a dark ground and barely at all on a light one, and a lightness fixed in advance leaves a selected reading nowhere to move but into the slot of whatever sits above it.
+ * The hues are placed by perceptual distance, not by family: each one is as far as it can be from every other reading and from the load's accent, which shares the drawing with them at all times.
+ * Two neighbours are tolerated on purpose, both of them passing states rather than readings: the theme's selection stroke, and the ruler's hue, which velocity sits close to so that the cool half has room for three readings instead of two.
+ * The two reactions are the pair that must never come close, because they can be drawn at the very same point — hence a green and a violet, not two weights of one hue.
+ * Careful when moving these: an HSL degree is not a perceived degree. 180° and 199° are far apart to the eye, while 100° and 128° are all but the same green — the blues stretch and the greens collapse.
  */
-export const PHYSICS_OVERLAY_COLOR: Record<PhysicsOverlayKind, string> = {
-  velocity: "#2F81F7",
-  "reaction-support": "#B8410D",
-  "reaction-internal": "#60A45F",
-  weight: "#D4A72C",
-  inertia: "#8250DF",
+export const PHYSICS_OVERLAY_SPEC: Record<
+  PhysicsOverlayKind,
+  PhysicsOverlaySpec
+> = {
+  velocity: { hue: 180, saturation: 0.93, contrast: 3.8 },
+  "reaction-support": { hue: 100, saturation: 0.7, contrast: 3.4 },
+  "reaction-internal": { hue: 274, saturation: 0.69, contrast: 3.6 },
+  weight: { hue: 48, saturation: 0.7, contrast: 2.6 },
+  inertia: { hue: 199, saturation: 0.55, contrast: 2.6 },
 };
+
+/**
+ * The hue one line of the force balance is drawn and read in — the same colour for the arrow on the canvas and the figure in the panel, which is what says they are one and the same action.
+ * A load keeps the accent it is already drawn with, the other two are the very overlays they itemise.
+ * `accent` and `overlay` are handed in rather than reached for: both are the theme's own, which a constants module has no business reading (`COLORS` on the canvas, `palette` in the interface).
+ */
+export function balance_term_color(
+  kind: "load" | "weight" | "support",
+  accent: string,
+  overlay: Record<PhysicsOverlayKind, string>,
+): string {
+  if (kind === "load") return accent;
+  return overlay[kind === "weight" ? "weight" : "reaction-support"];
+}
 
 /** The three internal-force diagrams of one beam, shown together in the analysis panel
  * (docs/plan-efforts-interieurs.md phase 5bis). */
 export type CohesionQuantity = "N" | "T" | "Mf";
 
 /**
- * Its own hue family, deliberately clear of both `PHYSICS_OVERLAY_COLOR` (measured, not drawn-as-a-field — a diagram and a reaction arrow can be on the same beam at once) and `COLORS.DELETION_STROKE` (redundancy symbol): a violet/pink/teal trio reads as "diagram" on sight, never as "error" or "reaction".
+ * Its own hue family, deliberately clear of both `PHYSICS_OVERLAY_SPEC` (measured, not drawn-as-a-field — a diagram and a reaction arrow can be on the same beam at once) and `COLORS.DELETION_STROKE` (redundancy symbol): a violet/pink/teal trio reads as "diagram" on sight, never as "error" or "reaction".
  */
 export const COHESION_DIAGRAM_COLOR: Record<CohesionQuantity, string> = {
   N: "#8B5CF6",

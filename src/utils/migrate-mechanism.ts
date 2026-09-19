@@ -14,7 +14,7 @@ import {
 import { DEFAULT_SIMULATION, SerializedMechanism } from "../types";
 
 /** The format `serialize_mechanism` writes today. */
-export const CURRENT_FORMAT_VERSION = 13;
+export const CURRENT_FORMAT_VERSION = 14;
 
 /** A document mid-migration: its shape belongs to no version in particular. */
 type RawDocument = Record<string, unknown>;
@@ -187,6 +187,18 @@ const MIGRATIONS: MigrationStep[] = [
         supportReactions: false,
         ...(is_record(doc.simulation) ? doc.simulation : {}),
       },
+    }),
+  },
+  {
+    to: 14,
+    // A probe on one of these is dropped, not converted: what a beam end transmits is read from the canvas overlay now, and no plotted metric means the same thing (the cohesion N/T/Mf are taken along the whole span, not at one end).
+    // The stack survives: a stored `SetProbes` carries probe lists, which this filters exactly as it filters the element's own.
+    preservesHistory: true,
+    apply: (doc) => ({
+      ...doc,
+      mechanicalElements: as_array(doc.mechanicalElements).map(drop_end_reaction_probes),
+      history: drop_end_reaction_probes_in_stack(doc.history),
+      future: drop_end_reaction_probes_in_stack(doc.future),
     }),
   },
 ];
@@ -466,6 +478,39 @@ const assign_default_material_profile_in_stack = (
     as_array(bundle).map((action) =>
       assign_default_material_profile_in_action(action, materialID, profileID),
     ),
+  );
+
+/** v13 → v14: the metrics a selector no longer offers, so a probe left on one would chart nothing. */
+const WITHDRAWN_PROBE_METRICS = new Set([
+  "force-start",
+  "force-end",
+  "moment-start",
+  "moment-end",
+]);
+
+const without_withdrawn = (probes: unknown): unknown[] =>
+  as_array(probes).filter(
+    (probe) => !(is_record(probe) && WITHDRAWN_PROBE_METRICS.has(String(probe.metric))),
+  );
+
+const drop_end_reaction_probes = (element: unknown): unknown => {
+  if (!is_record(element) || !Array.isArray(element.probes)) return element;
+  return { ...element, probes: without_withdrawn(element.probes) };
+};
+
+/** The same filter where an action carries probe lists: `SetProbes` holds both the new list and the one an undo would restore. */
+const drop_end_reaction_probes_in_action = (action: unknown): unknown => {
+  if (!is_record(action) || action.type !== "SetProbes") return action;
+  return {
+    ...action,
+    newProbes: without_withdrawn(action.newProbes),
+    oldProbes: without_withdrawn(action.oldProbes),
+  };
+};
+
+const drop_end_reaction_probes_in_stack = (stack: unknown): unknown[][] =>
+  as_array(stack).map((bundle) =>
+    as_array(bundle).map(drop_end_reaction_probes_in_action),
   );
 
 const is_record = (value: unknown): value is Record<string, unknown> =>

@@ -2,10 +2,8 @@ import { MechanicalElement, OverlayKind, ProbeMetric } from "../../types";
 import { StringKey } from "../../i18n";
 import { probe_metric_available } from "../canvas/ProbeMetricSelector";
 import { DynamicSnapshot } from "../../types/runtime-state";
-import {
-  PHYSICS_OVERLAY_COLOR,
-  PhysicsOverlayKind,
-} from "../../constants/physics-display-specs";
+import { PhysicsOverlayKind } from "../../constants/physics-display-specs";
+import { ICON_COLORS } from "../../theme/canvas-theme";
 import { GRAVITY } from "../../constants/physics-specs";
 import { icon, icon_tinted } from "../element-palette/iconDataUris";
 import { available_overlays, is_node_element } from "../../utils/element-queries";
@@ -40,7 +38,7 @@ export function reading_icon(kind: PhysicsOverlayKind): string {
       : kind === "reaction-support" || kind === "reaction-internal"
         ? "reaction"
         : "force";
-  return icon_tinted(name, PHYSICS_OVERLAY_COLOR[kind]);
+  return icon_tinted(name, ICON_COLORS.OVERLAY[kind]);
 }
 
 /**
@@ -132,7 +130,7 @@ export function reading_from_focus(
     focus,
     metrics,
     icon: reading_icon(focus.kind),
-    color: PHYSICS_OVERLAY_COLOR[focus.kind],
+    color: ICON_COLORS.OVERLAY[focus.kind],
   };
 }
 
@@ -185,15 +183,11 @@ export function reading_quantities(
     case "reaction-internal":
     case "reaction-support": {
       // A beam says nothing here: its effort is the field the diagrams draw, not a figure.
-      // A spring or a damper has one axial value, from its own law — plus, at each end welded to a join rather than hinged on a pivot, the couple that weld transmits. Those two are kept apart: unlike the axial force, they are not each other's opposite.
+      // A spring or a damper is a massless member with a purely axial law, so that one figure is its whole torsor — no couple at either end to read beside it (`member_axial_reaction`).
       if (merged_internal(reading.focus))
         return element.type === "beam"
           ? []
-          : [
-              { value: "axial-force", labelKey: "metric_axial_force" },
-              { value: "moment-start", labelKey: "metric_moment_start" },
-              { value: "moment-end", labelKey: "metric_moment_end" },
-            ];
+          : [{ value: "axial-force", labelKey: "metric_axial_force" }];
       const [force, moment] = reaction_metrics(reading.focus.which ?? "node");
       return [
         { value: force, labelKey: "force" },
@@ -248,7 +242,7 @@ export function element_reading_groups(
     groups.push({
       layer: { kind: "element-overlay", overlay },
       icon: reading_icon(kind),
-      color: PHYSICS_OVERLAY_COLOR[kind],
+      color: ICON_COLORS.OVERLAY[kind],
       readings: [reading(element, kind)],
     });
   };
@@ -282,7 +276,7 @@ export function element_reading_groups(
       group = {
         layer,
         icon: reading_icon(kind),
-        color: PHYSICS_OVERLAY_COLOR[kind],
+        color: ICON_COLORS.OVERLAY[kind],
         readings: [],
       };
       groups.push(group);
@@ -336,7 +330,7 @@ export function inspector_layout(
   if (!dynamic)
     switch (element.type) {
       case "beam":
-        return layout(["angle", "angular-velocity", "length"]);
+        return layout(["length", "angle", "angular-velocity"]);
       case "spring":
         return layout(["length", "elongation", "angle", "angular-velocity"]);
       case "damper":
@@ -368,13 +362,16 @@ export function inspector_layout(
 
   switch (element.type) {
     // What a beam is there for is what it carries, so its own end torsors lead and the geometry follows.
-    // No angular velocity in any of these: the velocity reading spells it out already (`reading_quantities`), and saying it twice is what this table is trying to stop.
+    // No angular velocity for it: its velocity reading spells that out already (`reading_quantities`), and saying it twice is what this table is trying to stop — a spring and a damper have no such reading, so each names its own rotation here.
     case "beam":
-      return layout(["angle", "length", "mass"], true);
+      return layout(["length", "angle", "mass"], true);
     case "spring":
-      return layout(["length", "elongation", "angle"], true);
+      return layout(["length", "elongation", "angle", "angular-velocity"], true);
     case "damper":
-      return layout(["elongation-velocity", "length", "angle"], true);
+      return layout(
+        ["length", "elongation-velocity", "angle", "angular-velocity"],
+        true,
+      );
     // Its tension is the one thing a belt would have to add, and nothing computes it yet; until then its length is all it says.
     case "belt":
       return layout(["belt-length"]);

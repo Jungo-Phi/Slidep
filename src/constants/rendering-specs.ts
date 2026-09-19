@@ -103,8 +103,10 @@ export const DIM = {
   SPRING_INNER_WIDTH: 6,
   SPRING_COIL_RADIUS: 7,
   SPRING_MIN_COILS: 3,
-  /** World length one coil stands for, which fixes how many a spring shows. A world distance (16 mm), not a screen one, despite living among this object's px constants. */
-  SPRING_COIL_PITCH: 0.016,
+  /** Ceiling on the count, for the spring whose rest length dwarfs the mechanism it belongs to — a typed one is free to. */
+  SPRING_MAX_COILS: 20,
+  /** Coils shown by a spring as long as the whole mechanism, which fixes the pitch every other spring is counted against — see `coil_pitch_of_bounds`. A count, not a length: nothing here is in px nor in world units. */
+  SPRING_COILS_PER_SPAN: 20,
   /** How far the coils passing behind the spring recede into the ground. */
   SPRING_BACK_COIL_OPACITY: 0.45,
 

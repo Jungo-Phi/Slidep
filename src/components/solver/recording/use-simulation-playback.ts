@@ -13,6 +13,7 @@ import {
 import {
   DynamicSnapshot,
   EMPTY_NEGLIGIBILITY_POOL,
+  EMPTY_STRESS_SCALE_CACHE,
   KinematicSnapshot,
   RuntimeState,
 } from "../../../types/runtime-state";
@@ -67,10 +68,8 @@ import { PROBE_ELEMENT_COLORS } from "../../properties-panel/components/ProbeCha
 import {
   CohesionField,
   compute_cohesion_field,
-  EMPTY_STRESS_SCALE_CACHE,
   extend_stress_scale,
   shear_admissible_stress,
-  StressScaleCache,
 } from "./cohesion-field";
 import { GRAVITY } from "../../../constants/physics-specs";
 import { NEGLIGIBLE_STRESS_FRACTION } from "../../../constants/physics-display-specs";
@@ -139,7 +138,12 @@ export function simulationResetPatch(
   mechanism: Mechanism,
 ): Pick<
   RuntimeState,
-  "time" | "simulationSnapshots" | "parameterSnapshots" | "scrubbed" | "negligibilityPool"
+  | "time"
+  | "simulationSnapshots"
+  | "parameterSnapshots"
+  | "scrubbed"
+  | "negligibilityPool"
+  | "stressScale"
 > {
   return {
     time: 0,
@@ -149,6 +153,8 @@ export function simulationResetPatch(
     scrubbed: false,
     // Dynamic mode is the only one that ever grows this pool (see the recording loop below) — every other mode leaves it untouched, so without this it keeps whatever a previous dynamic run left behind for the entire lifetime of the new mode, judging unrelated readings negligible against a scale that has nothing to do with them.
     negligibilityPool: EMPTY_NEGLIGIBILITY_POOL,
+    // Same reasoning as the pool above, and one more of its own: every series in it is indexed by position in a recording this reset is throwing away.
+    stressScale: EMPTY_STRESS_SCALE_CACHE,
   };
 }
 
@@ -187,6 +193,8 @@ export type UseSimulationPlaybackArgs = {
   focusedOverlay: FocusedOverlay | null;
   /** The reading the hover names, from the canvas or from a row of the panel pointing at one, drawn for as long as the hover lasts: same reasoning as `focusedOverlay`. */
   hoveredOverlay: FocusedOverlay | null;
+  /** The cursor is on the `m·a` / `J·α` member of the force balance, which stands for the inertia reading of EVERY body at once — no one element to name it on, hence a flag of its own rather than another `FocusedOverlay`. */
+  inertiaNamed: boolean;
   /** Called when the recording hits `MAX_RECORDING_TIME` or the snapshot memory cap. */
   onRecordingLimitReached: (reason: SimulationLimitReason, maxTime: number) => void;
 };
@@ -207,6 +215,7 @@ export function useSimulationPlayback({
   supportReactions,
   focusedOverlay,
   hoveredOverlay,
+  inertiaNamed,
   onRecordingLimitReached,
 }: UseSimulationPlaybackArgs) {
   const runtimeState = useSimClock(CLOCK_MIRROR_MS);
@@ -229,10 +238,11 @@ export function useSimulationPlayback({
   hoveredOverlayRef.current = hoveredOverlay;
   const focusedOverlayRef = useRef(focusedOverlay);
   focusedOverlayRef.current = focusedOverlay;
+  const inertiaNamedRef = useRef(inertiaNamed);
+  inertiaNamedRef.current = inertiaNamed;
   /** What the canvas draws, republished every frame. */
   const liveFrameRef = useRef<LiveFrame | null>(null);
   const trajectoryCacheRef = useRef<TrajectoryCache>(EMPTY_TRAJECTORY_CACHE);
-  const stressScaleCacheRef = useRef<StressScaleCache>(EMPTY_STRESS_SCALE_CACHE);
   const lastWallTimeRef = useRef<number | null>(null);
   /** Simulated seconds per real second the producer sustains, low-passed. */
   const cursorRateRef = useRef<number>(1);
@@ -413,11 +423,11 @@ export function useSimulationPlayback({
     let shownSupportReactions = false;
     let shownFocusedOverlay: FocusedOverlay | null = null;
     let shownHoveredOverlay: FocusedOverlay | null = null;
+    let shownInertiaNamed = false;
     const publish = (mode: AppMode) => {
       if (!is_simulating(mode)) {
         liveFrameRef.current = null;
         trajectoryCacheRef.current = EMPTY_TRAJECTORY_CACHE;
-        stressScaleCacheRef.current = EMPTY_STRESS_SCALE_CACHE;
         shownSnaps = null;
         return;
       }
@@ -432,6 +442,8 @@ export function useSimulationPlayback({
       const focusedOverlay = focusedOverlayRef.current;
       // Pointing at one does the same, for as long as the pointing lasts.
       const hoveredOverlay = hoveredOverlayRef.current;
+      // The `m·a` / `J·α` member pointed at reveals every body's inertia reading, so it makes a frame stale exactly as a named reading does.
+      const inertiaNamed = inertiaNamedRef.current;
       if (
         rs.time === shownTime &&
         rs.simulationSnapshots === shownSnaps &&
@@ -440,7 +452,8 @@ export function useSimulationPlayback({
         extending === shownExtending &&
         supportReactions === shownSupportReactions &&
         focusedOverlay === shownFocusedOverlay &&
-        hoveredOverlay === shownHoveredOverlay
+        hoveredOverlay === shownHoveredOverlay &&
+        inertiaNamed === shownInertiaNamed
       )
         return;
       shownTime = rs.time;
@@ -451,6 +464,7 @@ export function useSimulationPlayback({
       shownSupportReactions = supportReactions;
       shownFocusedOverlay = focusedOverlay;
       shownHoveredOverlay = hoveredOverlay;
+      shownInertiaNamed = inertiaNamed;
 
       // Held: the newest computed instant, not the one under the cursor.
       //
@@ -500,17 +514,6 @@ export function useSimulationPlayback({
         const dynSnap = snapshot as DynamicSnapshot;
         const gravity = gravityRef.current ? GRAVITY : new Point2(0, 0);
         ({ stress: negligibleStress, shear: negligibleShear } = negligible_stress_floors(mech));
-        // The beam-fill lenses' shared scales, extended with whatever got recorded since the last frame (never rebuilt) — docs/plan-efforts-interieurs.md phase 9.
-        // Scans the FULL recording, not just `dynSnap`, so each scale reflects the worst value ever seen rather than rescaling to whichever instant is currently displayed.
-        stressScaleCacheRef.current = extend_stress_scale(
-          stressScaleCacheRef.current,
-          mech.mechanicalElements,
-          mech.loads,
-          rs.simulationSnapshots as DynamicSnapshot[],
-          gravity,
-          mech.materials,
-          mech.profiles,
-        );
         const pool = rs.negligibilityPool;
         // A reading named by the panel or by the cursor stays on screen whatever the overlay settings say: pointing at one would otherwise point at nothing.
         const namedReadings = [focusedOverlay, hoveredOverlay].filter(
@@ -558,7 +561,8 @@ export function useSimulationPlayback({
               }
               if (
                 overlay_shown(el, "inertia") ||
-                is_named_on(el.id, "inertia")
+                is_named_on(el.id, "inertia") ||
+                inertiaNamed
               ) {
                 const f = element_acceleration(el, dynSnap)?.mul(mass);
                 const force =
@@ -684,10 +688,11 @@ export function useSimulationPlayback({
         overlayMoments,
         cohesionFields,
 
-        stressScale: Math.max(stressScaleCacheRef.current.maxStress, negligibleStress),
-        normalStressScale: Math.max(stressScaleCacheRef.current.maxNormal, negligibleStress),
-        bendingStressScale: Math.max(stressScaleCacheRef.current.maxBending, negligibleStress),
-        shearStressScale: Math.max(stressScaleCacheRef.current.maxShear, negligibleShear),
+        // One frame behind whatever the recording loop last published, exactly like `rs.negligibilityPool` above: a running maximum that lags by one instant cannot move a ramp visibly.
+        stressScale: Math.max(rs.stressScale.maxStress, negligibleStress),
+        normalStressScale: Math.max(rs.stressScale.maxNormal, negligibleStress),
+        bendingStressScale: Math.max(rs.stressScale.maxBending, negligibleStress),
+        shearStressScale: Math.max(rs.stressScale.maxShear, negligibleShear),
         // Headed at the instant actually DRAWN, which a held grab moves off the cursor: a trail stopping short of the mechanism it belongs to is the same offset again.
         trajectories: trajectories_at(trajectoryCacheRef.current, snapshot.t).map(
           (traj) => ({
@@ -804,6 +809,18 @@ export function useSimulationPlayback({
                         simulationSnapshots as DynamicSnapshot[],
                       )
                     : prev.negligibilityPool,
+                stressScale:
+                  mode === "dynamic"
+                    ? extend_stress_scale(
+                        prev.stressScale,
+                        mech.mechanicalElements,
+                        mech.loads,
+                        simulationSnapshots as DynamicSnapshot[],
+                        gravityRef.current ? GRAVITY : new Point2(0, 0),
+                        mech.materials,
+                        mech.profiles,
+                      )
+                    : prev.stressScale,
               };
             });
         }
@@ -921,6 +938,18 @@ export function useSimulationPlayback({
                     simulationSnapshots as DynamicSnapshot[],
                   )
                 : prev.negligibilityPool,
+            stressScale:
+              mode === "dynamic"
+                ? extend_stress_scale(
+                    prev.stressScale,
+                    mech.mechanicalElements,
+                    mech.loads,
+                    simulationSnapshots as DynamicSnapshot[],
+                    gravityRef.current ? GRAVITY : new Point2(0, 0),
+                    mech.materials,
+                    mech.profiles,
+                  )
+                : prev.stressScale,
           };
         });
       }

@@ -5,7 +5,12 @@ import {
   DEFAULT_SIMULATION,
   Mechanism,
 } from "../../../types/mechanism";
-import type { BeamElement, ID, PivotElement } from "../../../types/element";
+import type {
+  BeamElement,
+  ID,
+  PivotElement,
+  SpringElement,
+} from "../../../types/element";
 import type { MaterialDef, ProfileDef } from "../../../types/material";
 import {
   apply_parameter_snapshot_to_mechanism,
@@ -23,6 +28,7 @@ const MATERIAL_ID = id();
 const LATE_MATERIAL_ID = id();
 const DELETED_MATERIAL_ID = id();
 const PROFILE_ID = id();
+const SPRING_ID = id();
 
 const pivot = (
   pid: ID,
@@ -52,6 +58,17 @@ const beam = (materialID: ID): BeamElement => ({
   fixedNodesBodyIDs: [],
   materialID,
   profileID: PROFILE_ID,
+});
+
+const spring = (restLength?: number): SpringElement => ({
+  type: "spring",
+  id: SPRING_ID,
+  probes: [],
+  overlays: {},
+  positionStart: new Point2(0, 0),
+  positionEnd: new Point2(1, 0),
+  stiffness: 100,
+  ...(restLength !== undefined ? { restLength } : {}),
 });
 
 const material = (
@@ -134,5 +151,30 @@ describe("apply_parameter_snapshot_to_mechanism", () => {
 
   it("shows the simulation settings in effect at that instant", () => {
     expect(shown.simulation.gravity).toBe(true);
+  });
+});
+
+/**
+ * Entering simulation freezes a spring's natural length on the drawn copy, whether or not the user ever typed one.
+ * The parameter snapshot passes over that copy afterwards, so it has to tell a rest length it carries from one it has nothing to say about — the drawing recounts its coils on every frame if the latter overwrites the frozen one.
+ */
+describe("a spring's rest length through the parameter snapshot", () => {
+  const shownRestLength = (recorded?: number, frozen?: number) => {
+    const shown = apply_parameter_snapshot_to_mechanism(
+      mechanism({ mechanicalElements: [spring(frozen)] }),
+      parameter_snapshot(
+        2,
+        mechanism({ mechanicalElements: [spring(recorded)] }),
+      ),
+    );
+    return (shown.mechanicalElements[0] as SpringElement).restLength;
+  };
+
+  it("keeps the frozen one when no rest length was ever typed", () => {
+    expect(shownRestLength(undefined, 0.4)).toBe(0.4);
+  });
+
+  it("shows the recorded one when the run carries it", () => {
+    expect(shownRestLength(0.7, 0.4)).toBe(0.7);
   });
 });

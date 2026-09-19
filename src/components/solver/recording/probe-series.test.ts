@@ -27,6 +27,9 @@ const gear = (id: string) =>
 const beam = (id: string) =>
   ({ id, type: "beam", positionStart: ZERO, positionEnd: ZERO }) as unknown as MechanicalElement;
 
+/** Degrees are what an angle is easiest to state a case in; the series answers in radians. */
+const rad = (deg: number) => (deg * Math.PI) / 180;
+
 /** A snapshot on `layout`. Keys left unnamed keep the NaN of a slot with no value. */
 function snapshot(
   layout: SnapshotLayout,
@@ -80,32 +83,32 @@ describe("séries de sonde", () => {
     expect(get_probe_series(beam("e"), "position", moving).t).toEqual([]);
   });
 
-  it("angle : celui de l'engrenage, en degrés", () => {
+  it("angle : celui de l'engrenage, en radians", () => {
     const turning = [0, 1].map((t) =>
       snapshot(layout, t, { n: [0, 0] }, { g: t * Math.PI }),
     );
     expect(curve(get_probe_series(gear("g"), "angle", turning), "value")).toEqual([
-      0, 180,
+      0, Math.PI,
     ]);
   });
 
-  it("angle : la direction d'une arête, déroulée à la couture ±180°", () => {
+  it("angle : la direction d'une arête, déroulée à la couture ±π", () => {
     // The beam sweeps past +180°: raw atan2 would jump to −179°, the curve must go to +181°.
     const swinging = [179, 181, 183].map((deg, i) => {
-      const a = (deg * Math.PI) / 180;
+      const a = rad(deg);
       return snapshot(layout, i, {
         "e:start": [0, 0],
         "e:end": [Math.cos(a), Math.sin(a)],
       });
     });
     const values = curve(get_probe_series(beam("e"), "angle", swinging), "value");
-    expect(values[0]).toBeCloseTo(179, 9);
-    expect(values[1]).toBeCloseTo(181, 9);
-    expect(values[2]).toBeCloseTo(183, 9);
+    expect(values[0]).toBeCloseTo(rad(179), 9);
+    expect(values[1]).toBeCloseTo(rad(181), 9);
+    expect(values[2]).toBeCloseTo(rad(183), 9);
   });
 
-  it("vitesse angulaire : en tours par minute", () => {
-    // A quarter turn per second is 15 tr/min.
+  it("vitesse angulaire : en radians par seconde", () => {
+    // A quarter turn per second.
     // Not a faster one: the unwrapping reads half a turn per sample or more as a step backwards, which is aliasing, not a defect.
     const spinning = [0, 1, 2].map((t) =>
       snapshot(layout, t, { n: [0, 0] }, { g: (t * Math.PI) / 2 }),
@@ -114,7 +117,7 @@ describe("séries de sonde", () => {
       get_probe_series(gear("g"), "angular-velocity", spinning),
       "value",
     );
-    for (const v of values) expect(v).toBeCloseTo(15, 12);
+    for (const v of values) expect(v).toBeCloseTo(Math.PI / 2, 12);
   });
 
   it("traverse un changement de disposition sans lire le mauvais slot", () => {
@@ -388,22 +391,69 @@ describe("ce qu'un membre et une glissière mesurent d'eux-mêmes", () => {
     expect(get_probe_series(spring("e", 10, 2), "axial-force", stretching).t).toEqual([]);
   });
 
-  it("abscisse : la distance au début du rail, quoi que le rail lui-même fasse", () => {
+  /** A dynamic instant carrying reactions the element's own keys are caught up in. */
+  const with_reactions = (
+    snap: DynamicSnapshot,
+    reactions: LinkReaction[],
+  ): DynamicSnapshot => ({ ...snap, reactions });
+
+  it("réactions d'un ressort : sa propre loi aux deux bouts, pas ce qui traîne sur la clé fusionnée", () => {
+    // Stretched 2 m past its rest length at 10 N/m: 20 N, whatever the node its start is welded into carries besides.
+    const snap = with_reactions(
+      moving_snapshot(0, { "e:start": [0, 0], "e:end": [5, 0] }),
+      [
+        {
+          type: "Distance",
+          key: "n,e:start",
+          atAnchor: true,
+          kind: "force",
+          fx: 900,
+          fy: 900,
+        },
+      ],
+    );
+    const [start, end] = element_reactions(spring("e", 10, 3), snap);
+    // Each end pulled toward the other, and no couple: the member is massless and its law purely axial.
+    expect(start.vector.x).toBeCloseTo(20, 12);
+    expect(start.vector.y).toBeCloseTo(0, 12);
+    expect(end.vector.x).toBeCloseTo(-20, 12);
+    expect(end.vector.y).toBeCloseTo(0, 12);
+    expect(start.moment).toBeUndefined();
+    expect(end.moment).toBeUndefined();
+    // Still read off the raw reactions: where the end sat in the solve is the one thing the law cannot say.
+    expect(start.atAnchor).toBe(true);
+    expect(end.atAnchor).toBe(false);
+  });
+
+  it("réactions d'un amortisseur : sa loi aussi, opposée d'un bout à l'autre", () => {
+    // Ends separating at 2 m/s along the axis, at 4 N·s/m: 8 N.
+    const snap = moving_snapshot(
+      0,
+      { "e:start": [0, 0], "e:end": [3, 0] },
+      { "e:start": [0, 0], "e:end": [2, 5] },
+    );
+    const [start, end] = element_reactions(damper("e", 4), snap);
+    expect(start.vector.x).toBeCloseTo(8, 12);
+    expect(end.vector.x).toBeCloseTo(-8, 12);
+  });
+
+  it("position sur le rail : la fraction parcourue, quoi que le rail lui-même fasse", () => {
     const snaps = [
       // A vertical rail, then the same rail turned a quarter and moved: the slider has not budged along it.
       snapshot(layout, 0, { s: [1, 3], "r:start": [1, 1], "r:end": [1, 5] }),
       snapshot(layout, 1, { s: [2, 0], "r:start": [0, 0], "r:end": [4, 0] }),
     ];
     const s = get_probe_series(slider("s", "r"), "slide-abscissa", snaps);
-    expect(curve(s, "value")).toEqual([2, 2]);
-    expect(s.unit).toBe("m");
+    // 2 m along a 4 m rail, both times.
+    expect(curve(s, "value")).toEqual([0.5, 0.5]);
   });
 
-  it("abscisse : rien à lire pour une glissière sans rail", () => {
+  it("position sur le rail : rien à lire pour une glissière sans rail", () => {
     const snaps = [snapshot(layout, 0, { s: [1, 3] })];
     expect(get_probe_series(slider("s"), "slide-abscissa", snaps).t).toEqual([]);
   });
 
+  // A speed in m/s, though the position it derives is a fraction of the rail — the two read the abscissa in different units on purpose.
   it("vitesse de glissement : l'abscisse dérivée, dans les deux modes", () => {
     const sliding = [0, 1, 2].map((t) =>
       snapshot(layout, t, { s: [t, 0], "r:start": [0, 0], "r:end": [9, 0] }),

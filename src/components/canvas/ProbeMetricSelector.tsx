@@ -1,5 +1,5 @@
 import React, { useLayoutEffect, useRef, useState } from "react";
-import { Checkbox, MenuItem, Paper } from "@mui/material";
+import { Box, Checkbox, Divider, MenuItem, Paper, Typography } from "@mui/material";
 import {
   DEFAULT_PROBE_COMPONENTS,
   MechanicalElement,
@@ -7,13 +7,16 @@ import {
   ProbeMetric,
 } from "../../types/element";
 import { ScreenPoint } from "../../types";
+import { samples_own_point } from "../../utils/element-queries";
 import { StringKey, t } from "../../i18n";
 
 export const PROBE_METRIC_LABEL_KEYS: Record<ProbeMetric, StringKey> = {
   position: "metric_position",
   velocity: "velocity_one",
+  acceleration: "metric_acceleration",
   angle: "angle",
   "angular-velocity": "metric_angular_velocity",
+  "angular-acceleration": "metric_angular_acceleration",
   "motor-power": "metric_motor_power",
   force: "force",
   "force-start": "metric_force_start",
@@ -28,33 +31,59 @@ export const PROBE_METRIC_LABEL_KEYS: Record<ProbeMetric, StringKey> = {
   elongation: "metric_elongation",
   "elongation-velocity": "metric_elongation_velocity",
   "axial-force": "metric_axial_force",
+  "shear-force": "metric_shear_force",
+  "bending-moment": "metric_bending_moment",
+  stress: "metric_stress",
+  "shear-stress": "metric_shear_stress",
   "belt-tension": "metric_belt_tension",
   "slide-abscissa": "metric_slide_abscissa",
   "slide-velocity": "metric_slide_velocity",
   "motor-torque": "metric_motor_torque",
 };
 
-export const PROBE_METRIC_ORDER: ProbeMetric[] = [
-  "position",
-  "velocity",
-  "angle",
-  "angular-velocity",
-  "length",
-  "elongation",
-  "elongation-velocity",
-  "slide-abscissa",
-  "slide-velocity",
-  "motor-power",
-  "axial-force",
-  "force",
-  "force-start",
-  "force-end",
-  "moment",
-  "moment-start",
-  "moment-end",
+/**
+ * The metrics a selector offers, in sections — the list is drawn with a separator between them, so a beam's dozen readings land as four short groups instead of one wall.
+ *
+ * Sections are the ORDER's own source of truth (`PROBE_METRIC_ORDER` is their concatenation): a metric added to one is offered and grouped by the same edit, and cannot end up listed in a place its group does not explain.
+ * A section every element refuses simply does not appear, along with its separator.
+ *
+ * The four end-of-edge reactions are deliberately absent, and so are `weight`/`inertia`: all of them are read from the canvas overlay rather than plotted over time (see `ProbeMetric`).
+ */
+const PROBE_METRIC_SECTIONS: ProbeMetric[][] = [
+  // Where its own point is, and how that point moves.
+  ["position", "velocity", "acceleration"],
+  // How it turns.
+  ["angle", "angular-velocity", "angular-acceleration"],
+  // What the member measures of itself.
+  [
+    "length",
+    "elongation",
+    "elongation-velocity",
+    "slide-abscissa",
+    "slide-velocity",
+  ],
+  // What a motor delivers.
+  ["motor-power", "motor-torque"],
+  // What a beam carries inside itself, and whether its section holds.
+  ["axial-force", "shear-force", "bending-moment", "stress", "shear-stress"],
+  // What it hands to whatever it is attached to.
+  ["force", "moment"],
+  // Named, with no recorder behind it yet — see `probe_metric_awaited`.
+  ["belt-tension"],
 ];
 
-/** Angular metrics are only meaningful for oriented elements: gears (own angle) and two-point edges (segment orientation).
+export const PROBE_METRIC_ORDER: ProbeMetric[] = PROBE_METRIC_SECTIONS.flat();
+
+/**
+ * Whether the metric is listed to announce a reading that does not exist yet: named, never tickable, since every series of one comes back empty (`unrecorded_series`).
+ * Listed rather than hidden because it is the only thing its element measures — a belt with an empty menu would read as a defect rather than as a reading still to come.
+ */
+export function probe_metric_awaited(metric: ProbeMetric): boolean {
+  return metric === "belt-tension";
+}
+
+
+/** Angular metrics — the orientation and its two rates — are only meaningful for oriented elements: gears (own angle) and two-point edges (segment orientation).
  * Belts follow a path, nodes are points. */
 function angular_metric_available(element: MechanicalElement): boolean {
   return (
@@ -66,30 +95,34 @@ function angular_metric_available(element: MechanicalElement): boolean {
 }
 
 /** Reaction metrics come in two shapes: a single point for a node/body element (its own position), or an independent start/end pair for an edge — a beam's root and tip carry unrelated loads, so they are never merged into one reading (see `ElementReaction` in `probe-series.ts`).
- * Each element offers only the shape that matches it. */
+ * Each element offers only the shape that matches it, and a spring or a damper offers no couple at all: its law is purely axial, so neither of its ends ever reports one (`member_axial_reaction`). */
 function reaction_metric_available(
   metric: "force" | "force-start" | "force-end" | "moment" | "moment-start" | "moment-end",
   element: MechanicalElement,
 ): boolean {
   const isEdge = "positionStart" in element;
-  return metric === "force" || metric === "moment" ? !isEdge : isEdge;
+  if (metric === "force" || metric === "moment") return !isEdge;
+  if (metric === "moment-start" || metric === "moment-end")
+    return isEdge && element.type !== "spring" && element.type !== "damper";
+  return isEdge;
 }
 
-/** A motor's own mechanical power (τ·ω) only exists where there is a motor to read it from — a pivot with a `motor` config, never a bare pivot or any other element type. */
-function motor_power_available(element: MechanicalElement): boolean {
+/** A motor's own readings — the torque it applies and the mechanical power τ·ω that torque carries — only exist where there is a motor to read them from: a pivot with a `motor` config, never a bare pivot or any other element type. */
+function motor_metric_available(element: MechanicalElement): boolean {
   return element.type === "pivot" && !!element.motor;
 }
 
 /**
  * What a two-point member measures of itself.
  * `length` needs two ends far enough apart to be a straight run, which a belt's own ends are not (it follows a path between them).
- * `elongation` needs a natural length to measure from, and only a spring has one; the rate and the axial force follow from the member's own law, which only a spring and a damper have.
+ * `elongation` needs a natural length to measure from, and only a spring has one; its rate follows from the same length.
+ * An axial force is the one reading three different members all have, by three different routes: a spring's and a damper's own constitutive law, and a beam's cohesion `N`.
  */
 function member_metric_available(
   metric: "length" | "elongation" | "elongation-velocity" | "axial-force",
   element: MechanicalElement,
 ): boolean {
-  if (metric === "length")
+  if (metric === "length" || metric === "axial-force")
     return (
       element.type === "beam" ||
       element.type === "spring" ||
@@ -97,6 +130,11 @@ function member_metric_available(
     );
   if (metric === "elongation") return element.type === "spring";
   return element.type === "spring" || element.type === "damper";
+}
+
+/** The efforts and stresses a beam carries inside itself: a beam alone has a section to resolve them against, and a cohesion field to read them from. */
+function beam_metric_available(element: MechanicalElement): boolean {
+  return element.type === "beam";
 }
 
 /** Where a slide reads: on the two elements that run along a rail, and only once one is attached to a rail to read against. */
@@ -111,12 +149,17 @@ export function probe_metric_available(
   metric: ProbeMetric,
   element: MechanicalElement,
 ): boolean {
-  // A belt is sampled at the mid-point between its two ends, which sits nowhere on the path it actually follows — the same reason `available_overlays` refuses it a velocity arrow.
-  if (metric === "position" || metric === "velocity")
-    return element.type !== "belt";
-  if (metric === "angle" || metric === "angular-velocity")
+  // All three read the sampled point itself, so all three are offered exactly where that point belongs to the element (`samples_own_point`) — the same rule that decides its velocity arrow.
+  if (metric === "position" || metric === "velocity" || metric === "acceleration")
+    return samples_own_point(element);
+  if (
+    metric === "angle" ||
+    metric === "angular-velocity" ||
+    metric === "angular-acceleration"
+  )
     return angular_metric_available(element);
-  if (metric === "motor-power") return motor_power_available(element);
+  if (metric === "motor-power" || metric === "motor-torque")
+    return motor_metric_available(element);
   if (
     metric === "length" ||
     metric === "elongation" ||
@@ -126,6 +169,14 @@ export function probe_metric_available(
     return member_metric_available(metric, element);
   if (metric === "slide-abscissa" || metric === "slide-velocity")
     return slide_metric_available(element);
+  if (metric === "belt-tension") return element.type === "belt";
+  if (
+    metric === "shear-force" ||
+    metric === "bending-moment" ||
+    metric === "stress" ||
+    metric === "shear-stress"
+  )
+    return beam_metric_available(element);
   if (
     metric === "force" ||
     metric === "force-start" ||
@@ -145,12 +196,22 @@ export function available_probe_metrics(
   return PROBE_METRIC_ORDER.filter((m) => probe_metric_available(m, element));
 }
 
+/** The same metrics, still grouped, with every section this element refuses dropped — what the list is drawn from. */
+export function available_probe_metric_sections(
+  element: MechanicalElement,
+): ProbeMetric[][] {
+  return PROBE_METRIC_SECTIONS.map((section) =>
+    section.filter((m) => probe_metric_available(m, element)),
+  ).filter((section) => section.length > 0);
+}
+
 /** The element's probes with `metric` toggled on/off, in canonical order.
  * Existing configs (display components) are preserved. */
 export function toggled_probes(
   element: MechanicalElement,
   metric: ProbeMetric,
 ): ProbeConfig[] {
+  if (probe_metric_awaited(metric)) return element.probes ?? [];
   const byMetric = new Map((element.probes ?? []).map((p) => [p.metric, p]));
   if (byMetric.has(metric)) byMetric.delete(metric);
   else
@@ -189,19 +250,40 @@ export const ProbeMetricSelector: React.FC<ProbeMetricSelectorProps> = ({
 }) => {
   return (
     <>
-      {available_probe_metrics(element).map((metric) => (
-        <MenuItem
-          key={metric}
-          dense
-          onClick={() => onToggle(toggled_probes(element, metric))}
-        >
-          <Checkbox
-            size="small"
-            checked={element.probes.some((p) => p.metric === metric)}
-            sx={{ p: 0, ml: -0.5, mr: 1 }}
-          />
-          {t(PROBE_METRIC_LABEL_KEYS[metric])}
-        </MenuItem>
+      {available_probe_metric_sections(element).map((section, index) => (
+        <React.Fragment key={section[0]}>
+          {index > 0 && <Divider sx={{ my: 0.5 }} />}
+          {section.map((metric) =>
+            probe_metric_awaited(metric) ? (
+              <MenuItem key={metric} dense disabled>
+                {/* No checkbox: its own space is kept so the label lines up with the tickable ones, but a box that cannot be ticked would invite the click it then refuses. */}
+                <Box sx={{ width: 18, mr: 1, flexShrink: 0 }} />
+                {t(PROBE_METRIC_LABEL_KEYS[metric])}
+                <Typography
+                  component="span"
+                  variant="caption"
+                  color="text.disabled"
+                  sx={{ ml: 1 }}
+                >
+                  {t("metric_awaited")}
+                </Typography>
+              </MenuItem>
+            ) : (
+              <MenuItem
+                key={metric}
+                dense
+                onClick={() => onToggle(toggled_probes(element, metric))}
+              >
+                <Checkbox
+                  size="small"
+                  checked={element.probes.some((p) => p.metric === metric)}
+                  sx={{ p: 0, ml: -0.5, mr: 1 }}
+                />
+                {t(PROBE_METRIC_LABEL_KEYS[metric])}
+              </MenuItem>
+            ),
+          )}
+        </React.Fragment>
       ))}
     </>
   );

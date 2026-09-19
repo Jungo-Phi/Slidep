@@ -1,6 +1,6 @@
 import { ID, Link, MechanicalElement, Point2 } from "../../../types";
 import { ZERO } from "../../../types/point2";
-import { MotorPowerSample } from "../../../types/runtime-state";
+import { MotorSample } from "../../../types/runtime-state";
 
 /**
  * A `MotorBeam`/`MotorAngle` LINK, plus the torque limit its owning pivot's `MotorConfig` carries — the one thing the link itself does not, since `parsing.ts` builds it for the quasi-static kinematic sweep, which has no notion of torque at all.
@@ -126,11 +126,11 @@ export function resolve_motor_torques(
 ): {
   forces: Map<string, Point2>;
   torques: Map<string, number>;
-  power: MotorPowerSample[];
+  samples: MotorSample[];
 } {
   const forces = new Map<string, Point2>();
   const torques = new Map<string, number>();
-  const power: MotorPowerSample[] = [];
+  const samples: MotorSample[] = [];
   const add_force = (key: string, v: Point2) => {
     const prev = forces.get(key);
     forces.set(key, prev ? prev.add(v) : v);
@@ -153,7 +153,7 @@ export function resolve_motor_torques(
       const needed = ((motor.omega - (ownV - refV)) / wAngle) / dt;
       const applied = clamp(needed, motor.torqueLimit);
       torques.set(motor.angleKey, (torques.get(motor.angleKey) ?? 0) + applied);
-      power.push({ pivotID: motor.pivotID, watts: applied * (ownV - refV) });
+      samples.push({ pivotID: motor.pivotID, watts: applied * (ownV - refV), nm: applied });
     } else {
       const w = posMasses.get(motor.drivenKey) ?? 1;
       if (w <= 0) continue; // driven end anchored: nothing to push
@@ -177,9 +177,9 @@ export function resolve_motor_torques(
       const F = tHat.mul(applied / r);
       add_force(motor.drivenKey, F);
       add_force(motor.pivotKey, F.mul(-1)); // reaction; inert if the pivot is anchored
-      power.push({ pivotID: motor.pivotID, watts: applied * (ownV - refV) });
+      samples.push({ pivotID: motor.pivotID, watts: applied * (ownV - refV), nm: applied });
     }
   }
 
-  return { forces, torques, power };
+  return { forces, torques, samples };
 }

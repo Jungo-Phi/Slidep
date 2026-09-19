@@ -34,7 +34,7 @@ describe("masse fantôme d'un nœud passif", () => {
       const mechanical = energy.kinetic + energy.potentialGravity + energy.potentialSpring;
       if (i === 0) mechanical0 = mechanical;
       else {
-        const motor = (snapshot.motorPower ?? []).reduce((sum, m) => sum + m.watts, 0);
+        const motor = (snapshot.motor ?? []).reduce((sum, m) => sum + m.watts, 0);
         work += (motor - energy.damperPower - energy.frictionPower) * RECORD_DT;
       }
       peakKinetic = Math.max(peakKinetic, energy.kinetic);

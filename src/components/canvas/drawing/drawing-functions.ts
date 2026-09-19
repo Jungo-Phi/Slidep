@@ -3,10 +3,31 @@
  */
 
 import { COLORS, ICON_COLORS } from "../../../theme/canvas-theme";
-import { selection_accent } from "../../../theme/mui-theme";
-import { HIT_TOLERANCE, INTERACTION_SPECS, MODE_ANIMATION } from "../../../constants/interaction-specs";
-import { PhysicsOverlayKind, PHYSICS_OVERLAY_COLOR, SIGNED_STRESS_RAMP, STRESS_RAMP, STRESS_INDETERMINATE_COLOR, STRESS_OVERSTRESS_COLOR, STRESS_LEGEND } from "../../../constants/physics-display-specs";
-import { STROKE_WIDTHS, DIM, FLOOR, GRADUATION, GRID_ALPHA, GUIDE_DASH, ICON_TINT, TEXT_SPECS, REDUNDANCY_SYMBOL } from "../../../constants/rendering-specs";
+import { selection_reading } from "../../../theme/mui-theme";
+import {
+  HIT_TOLERANCE,
+  INTERACTION_SPECS,
+  MODE_ANIMATION,
+} from "../../../constants/interaction-specs";
+import {
+  PhysicsOverlayKind,
+  SIGNED_STRESS_RAMP,
+  STRESS_RAMP,
+  STRESS_INDETERMINATE_COLOR,
+  STRESS_OVERSTRESS_COLOR,
+  STRESS_LEGEND,
+} from "../../../constants/physics-display-specs";
+import {
+  STROKE_WIDTHS,
+  DIM,
+  FLOOR,
+  GRADUATION,
+  GRID_ALPHA,
+  GUIDE_DASH,
+  ICON_TINT,
+  TEXT_SPECS,
+  REDUNDANCY_SYMBOL,
+} from "../../../constants/rendering-specs";
 import { FloorConfig } from "../../../types/mechanism";
 import type { ReactionPoint } from "../../solver/recording/probe-series";
 import {
@@ -639,6 +660,29 @@ export function draw_hover_circle(
   ctx.stroke();
 }
 
+/**
+ * The marker for an abscissa named along a beam: a disc filled with `fill`, glowing in its own colour.
+ *
+ * The halo is what separates it from the beam, rather than a heavy outline: a ring thick enough to read would be a second shape competing with the disc, while a glow of the disc's own hue reads as the disc being lit.
+ * It borrows the selection halo's size, so everything the canvas lights is lit to the same depth.
+ * Deliberately not `draw_probe`'s circle-and-crosshair, which means a measurement point rather than a place along a member.
+ */
+export function draw_abscissa_marker(
+  ctx: CanvasRenderingContext2D,
+  position: ScreenPoint,
+  fill: string,
+) {
+  ctx.shadowColor = fill;
+  ctx.shadowBlur = INTERACTION_SPECS.SELECTION_HALO_SIZE;
+  ctx.beginPath();
+  ctx.arc(position.x, position.y, DIM.BEAM_WIDTH, 0, TAU);
+  ctx.fillStyle = fill;
+  // Twice, so the glow builds to something visible against a beam of a similar tone — one pass of a blurred fill is faint by construction.
+  ctx.fill();
+  ctx.fill();
+  ctx.shadowBlur = 0;
+}
+
 export function draw_pivot(
   ctx: CanvasRenderingContext2D,
   position: ScreenPoint,
@@ -1082,10 +1126,14 @@ export function draw_beam(
   }
 }
 
+/**
+ * `coilPitch` is the world length one coil stands for, from `spring_coil_pitch`; `undefined` for a mechanism with no span at all, where the spring is left to be counted against itself.
+ */
 export function draw_spring(
   ctx: CanvasRenderingContext2D,
   start: ScreenPoint,
   end: ScreenPoint,
+  coilPitch: number | undefined,
   restLength: number | undefined = undefined,
   scale: number = 1,
 ) {
@@ -1093,10 +1141,16 @@ export function draw_spring(
   ctx.translate(start.x, start.y);
   ctx.rotate(end.sub(start).angle());
   const length = start.distance_to(end);
-  const coilNb = Math.max(
-    Math.floor((restLength ?? length / scale) / DIM.SPRING_COIL_PITCH),
-    DIM.SPRING_MIN_COILS,
-  );
+  // Its rest length, never the drawn one: the coils spread and gather as the spring works, they are not recounted.
+  const rest = restLength ?? length / scale;
+  const pitch = coilPitch ?? rest / DIM.SPRING_COILS_PER_SPAN;
+  const coilNb =
+    pitch > 0
+      ? Math.min(
+          Math.max(Math.round(rest / pitch), DIM.SPRING_MIN_COILS),
+          DIM.SPRING_MAX_COILS,
+        )
+      : DIM.SPRING_MIN_COILS;
   const fc = (t: number) => {
     return (Math.sin((t - 0.5) * Math.PI) + 1) / 2;
   };
@@ -1173,14 +1227,26 @@ export function draw_spring(
 }
 
 /**
- * How far down its travel the piston sits, as a fraction, for a damper stretched to `stretch` times its rest length: half way at rest, sliding back toward the cylinder's mouth as the damper extends.
+ * Where a damper's parts sit along its own axis, in screen px, for one drawn `length` px long whose rest length is `restPx` px.
  *
- * One function of the stretch, normalised on its own value at rest, so edition — which *is* rest — and simulation cannot disagree.
- * Two separate expressions would have to be kept equal at `stretch === 1` by hand, and a mismatch there jumps the piston the instant the simulation starts, with nothing having moved.
+ * Rod and cylinder keep the length they had at rest, as a real damper's do: an elongation goes entirely into the rod left in the open, and the piston slides back toward the cylinder's mouth by as much — so the stretch is readable off the drawing, linearly.
+ * The cylinder's own length is not a free choice: it is the one for which the stroke runs out at the same distance from rest on both sides, the piston reaching the mouth in traction and the cylinder filling the whole gap between the end stubs in compression, both at `|length − restPx| = (restPx − 2·TAC) / 3`.
+ * Past that the drawing gives up in the open — the rod stretches, the body shrinks — rather than let the piston leave the cylinder or the cylinder spill over its own nodes.
  */
-function damper_piston_fraction(stretch: number): number {
-  const reach = (s: number) => 1 + 3 * Math.exp(-Math.pow(s / 2, 2));
-  return reach(stretch) / (2 * reach(1));
+function damper_geometry(
+  length: number,
+  restPx: number,
+): { mouth: number; cylinder: number; piston: number } {
+  const cylinderAtRest = Math.max((2 / 3) * (restPx - 2 * DIM.TAC), 0);
+  const cylinder = Math.min(cylinderAtRest, Math.max(length - 2 * DIM.TAC, 0));
+  const closed = length - DIM.TAC;
+  const mouth = closed - cylinder;
+  // Mid-cylinder at rest, and fixed on the rod ever after: it is the cylinder that travels along it.
+  const atRest = restPx - DIM.TAC - cylinderAtRest / 2;
+  // Half the valve, so it stays whole inside the body — unless the body is itself the thinner of the two, where it can only be centred on it.
+  const margin = Math.min(DIM.DAMPER_PISTON_WIDTH, cylinder) / 2;
+  const piston = Math.min(Math.max(atRest, mouth + margin), closed - margin);
+  return { mouth, cylinder, piston };
 }
 
 export function draw_damper(
@@ -1194,10 +1260,11 @@ export function draw_damper(
   ctx.translate(start.x, start.y);
   ctx.rotate(end.sub(start).angle());
   const length = start.distance_to(end);
-  const start_x = length / 4;
   // No rest length to compare against means edition, where the damper is drawn at its natural length by definition.
-  const stretch = restLength ? length / scale / restLength : 1;
-  const piston_x = (length - 2 * DIM.TAC) * damper_piston_fraction(stretch);
+  const { mouth, cylinder, piston } = damper_geometry(
+    length,
+    restLength !== undefined ? restLength * scale : length,
+  );
   const oldStrokeStyle = ctx.strokeStyle;
   const widthChange = ctx.lineWidth - STROKE_WIDTHS.STANDARD;
 
@@ -1217,9 +1284,9 @@ export function draw_damper(
   // Cylinder body
   ctx.beginPath();
   ctx.rect(
-    start_x,
+    mouth,
     -DIM.DAMPER_CYLINDER_DIAMETER / 2,
-    length - DIM.TAC - start_x,
+    cylinder,
     DIM.DAMPER_CYLINDER_DIAMETER,
   );
   ctx.lineWidth = STROKE_WIDTHS.STANDARD + widthChange;
@@ -1228,7 +1295,7 @@ export function draw_damper(
   // Center bar
   ctx.beginPath();
   ctx.moveTo(DIM.TAC, 0);
-  ctx.lineTo(piston_x + DIM.TAC / 2, 0);
+  ctx.lineTo(piston, 0);
   ctx.lineWidth = DIM.DAMPER_INNER_WIDTH + widthChange;
   ctx.strokeStyle = oldStrokeStyle;
   ctx.stroke();
@@ -1252,7 +1319,7 @@ export function draw_damper(
   // Valve
   ctx.beginPath();
   ctx.rect(
-    piston_x + DIM.TAC / 2 - DIM.DAMPER_PISTON_WIDTH / 2,
+    piston - DIM.DAMPER_PISTON_WIDTH / 2,
     -DIM.DAMPER_CYLINDER_DIAMETER / 2 + 3,
     DIM.DAMPER_PISTON_WIDTH,
     DIM.DAMPER_CYLINDER_DIAMETER - 6,
@@ -2292,7 +2359,7 @@ export function overlay_arrow_hit(
 /**
  * Draws one physics-overlay arrow with `draw_force`'s own geometry (arrowhead, shaft), in a colour that marks it as measured rather than authored.
  * Never labelled itself — one recording can show one arrow per element with the overlay on, and a value on each would clutter faster than it would inform, so a value only ever appears for the one under the cursor, via `draw_overlay_arrow_label` below.
- * `isSelected` takes the same treatment a selected load does: the halo in the reading's own colour, the stroke turned up to `selection_accent` of it — never the theme's flat selection blue, which would read as "an element" rather than "this particular reading". Its own element loses its selected look the moment this is true (`draw_mechanism`'s own `isSelected`), so the two are never both lit at once.
+ * `isSelected` keeps the halo in the reading's own colour and winds the stroke up to `selection_reading` of it — never the theme's flat selection blue, which would read as "an element" rather than "this particular reading". Its own element loses its selected look the moment this is true (`draw_mechanism`'s own `isSelected`), so the two are never both lit at once.
  */
 export function draw_overlay_arrow(
   ctx: CanvasRenderingContext2D,
@@ -2307,9 +2374,9 @@ export function draw_overlay_arrow(
   const screenVec = world2screen_vec(arrow.vector, viewport).with_length(
     stored2screen_load(magnitude),
   );
-  const baseColor = PHYSICS_OVERLAY_COLOR[arrow.kind];
+  const baseColor = COLORS.OVERLAY[arrow.kind];
   ctx.save();
-  ctx.strokeStyle = isSelected ? selection_accent(baseColor) : baseColor;
+  ctx.strokeStyle = isSelected ? selection_reading(baseColor) : baseColor;
   ctx.fillStyle = ctx.strokeStyle;
   // Stacks the same way a selected load's own width does: hovering an already-selected reading still thickens it further, rather than the two competing for the same width.
   ctx.lineWidth =
@@ -2336,10 +2403,10 @@ export function draw_overlay_arrow_label(
 ) {
   const geom = overlay_arrow_screen_geometry(viewport, arrow);
   if (!geom) return;
-  const baseColor = PHYSICS_OVERLAY_COLOR[arrow.kind];
+  const baseColor = COLORS.OVERLAY[arrow.kind];
   ctx.save();
   // The same treatment the arrow itself takes when selected, so a value and the reading it belongs to read as one thing.
-  ctx.strokeStyle = isSelected ? selection_accent(baseColor) : baseColor;
+  ctx.strokeStyle = isSelected ? selection_reading(baseColor) : baseColor;
   ctx.fillStyle = ctx.strokeStyle;
   ctx.lineWidth = STROKE_WIDTHS.STANDARD;
   if (isSelected) {
@@ -2417,7 +2484,9 @@ function draw_half_moment(
   const clockwise = value >= 0;
   const centerAngle = direction.angle();
   const halfSpan = HALF_MOMENT_SPAN / 2;
-  const startAngle = clockwise ? centerAngle - halfSpan : centerAngle + halfSpan;
+  const startAngle = clockwise
+    ? centerAngle - halfSpan
+    : centerAngle + halfSpan;
   const endAngle = clockwise ? centerAngle + halfSpan : centerAngle - halfSpan;
   ctx.beginPath();
   ctx.arc(center.x, center.y, radius, startAngle, endAngle, !clockwise);
@@ -2446,9 +2515,9 @@ export function draw_overlay_moment(
   if (Math.abs(moment.torque) < 1e-9) return;
   const center = world2screen(moment.at, viewport);
   const radius = stored2screen_moment(moment.torque);
-  const baseColor = PHYSICS_OVERLAY_COLOR[moment.kind];
+  const baseColor = COLORS.OVERLAY[moment.kind];
   ctx.save();
-  ctx.strokeStyle = isSelected ? selection_accent(baseColor) : baseColor;
+  ctx.strokeStyle = isSelected ? selection_reading(baseColor) : baseColor;
   ctx.fillStyle = ctx.strokeStyle;
   // See `draw_overlay_arrow`'s own — the same stacking.
   ctx.lineWidth =
@@ -2533,7 +2602,7 @@ export function draw_moment_balance_marker(
   const center = world2screen(point, viewport);
   const half = DIM.MOMENT_BALANCE_MARKER_HALF_SIZE;
   ctx.save();
-  ctx.strokeStyle = PHYSICS_OVERLAY_COLOR["reaction-support"];
+  ctx.strokeStyle = COLORS.ACCENT;
   ctx.lineWidth = STROKE_WIDTHS.HOVERED;
   ctx.beginPath();
   ctx.moveTo(center.x - half, center.y);
@@ -2557,10 +2626,10 @@ export function draw_overlay_moment_label(
   if (Math.abs(moment.torque) < 1e-9) return;
   const center = world2screen(moment.at, viewport);
   const radius = stored2screen_moment(moment.torque);
-  const baseColor = PHYSICS_OVERLAY_COLOR[moment.kind];
+  const baseColor = COLORS.OVERLAY[moment.kind];
   ctx.save();
   // See `draw_overlay_arrow_label`: a selected value reads as part of the reading it belongs to.
-  ctx.strokeStyle = isSelected ? selection_accent(baseColor) : baseColor;
+  ctx.strokeStyle = isSelected ? selection_reading(baseColor) : baseColor;
   ctx.fillStyle = ctx.strokeStyle;
   ctx.lineWidth = STROKE_WIDTHS.STANDARD;
   if (isSelected) {
@@ -2576,7 +2645,6 @@ export function draw_overlay_moment_label(
   );
   ctx.restore();
 }
-
 
 // ─── Signed stress fill (normal beam-fill lens only, phase 9) ──────────────────
 

@@ -54,16 +54,20 @@ export type LinkReaction =
       linkIndex?: number;
     };
 
-/** One motorized pivot's own mechanical power this frame — τ·ω of the joint it drives, signed (negative when the load back-drives the motor rather than the other way round).
+/** What one motorized pivot is doing this frame: the torque it applies, and the mechanical power that torque carries.
  * See `motor-model.ts`'s `resolve_motor_torques`. */
-export interface MotorPowerSample {
+export interface MotorSample {
   pivotID: ID;
+  /** W — τ·ω of the joint it drives, signed: negative when the load back-drives the motor rather than the other way round. */
   watts: number;
+  /** N·m, counter-clockwise positive — the solver's own sense, not the data model's clockwise one, like every other torque a snapshot carries (`LinkReaction`).
+   * Already clamped to the motor's `torque` limit, so a motor that has seized reads exactly its ceiling. */
+  nm: number;
 }
 
 /**
  * The whole mechanism's mechanical energy this frame, plus the instantaneous rate a damper is bleeding it off at — everything `energy-balance.ts` needs to check the solver against itself: kinetic + potential should only ever change by what a motor put in or a damper took out, so a growing gap between the two is the PBD solver's own numerical drift, not a mechanical property (see `docs/plan-analyse-ddl.md`'s ~0.98 spectral radius).
- * Always collected (cheap, one pass over the elements that carry mass/stiffness/damping — same reasoning as `MotorPowerSample`), so undefined only where a snapshot predates this field.
+ * Always collected (cheap, one pass over the elements that carry mass/stiffness/damping — same reasoning as `MotorSample`), so undefined only where a snapshot predates this field.
  */
 export interface EnergySample {
   /** J — Σ ½mv² over every free translational dof, + Σ ½Jω² over every gear's own angle. */
@@ -223,10 +227,10 @@ export interface DynamicSnapshot extends SimulationSnapshot {
    */
   reactions?: LinkReaction[];
   /**
-   * Every motorized pivot's own power this frame — see `MotorPowerSample`.
+   * What every motorized pivot is doing this frame — see `MotorSample`.
    * Always collected (cheap, one entry per motor, unlike `reactions`' per-link cost), so undefined only where a snapshot predates this field rather than under `collectDiagnostics`.
    */
-  motorPower?: MotorPowerSample[];
+  motor?: MotorSample[];
   /** The mechanism's own energy balance this frame — see `EnergySample`. */
   energy?: EnergySample;
   /** The whole movable system's force balance this frame — see `BalanceSample`.
@@ -256,6 +260,98 @@ export interface ParameterSnapshot {
 }
 
 /**
+ * One reading of a beam over the whole recording: its value at each recorded instant, and where along the span that value was found.
+ *
+ * Both buffers are indexed by the instant's own position in the recording, never by a push cursor — which is what lets `extend_stress_scale` be re-run over instants it has already folded in without doubling anything, and what lets a buffer be grown (and shared with the previous cache) instead of copied every frame.
+ * `NaN` where the instant carries no reading: a frame recorded without diagnostics, or a beam whose material or profile does not resolve.
+ */
+export interface BeamReadingBuffer {
+  value: Float64Array;
+  /** Abscissa of `value`, in metres from the beam's start. */
+  s: Float64Array;
+}
+
+/**
+ * The most heavily loaded beam at each recorded instant, by one failure mode — what a mechanism-wide reading needs and a per-beam series cannot give.
+ *
+ * Ranked by the RATIO to the limit, never by the stress itself: `max σ` and `max σ/Re` do not name the same beam, and a mechanism mixing a strong material with a weak one would otherwise point at the beam carrying the most stress rather than at the one about to yield.
+ * The stress in pascals is recoverable from the ratio wherever every beam shares one `Re`, which is exactly the case where showing it means anything.
+ *
+ * Indexed by the instant's own position, like every other buffer here.
+ */
+export interface WorstBeamSeries {
+  /** How close to the limit the worst beam is, 1 being at it. `NaN` at an instant where no beam could be read. */
+  ratio: Float64Array;
+  /** Which beam carried it, `null` wherever `ratio` is `NaN`. */
+  beamID: (ID | null)[];
+  /** Metres from that beam's start. */
+  s: Float64Array;
+  /** 1 where that beam's boundary torsor is a statement about the mechanism, 0 where it is the solver's own account of how it got there — carried through from `BeamCohesion.determinate`, because a mechanism-wide worst case that silently mixed the two would read as a figure when it is partly an attribution. */
+  determinate: Uint8Array;
+}
+
+/**
+ * Everything one beam's dimensioning charts read, over the whole recording.
+ *
+ * Each reading is its span's extremum AT that instant, signed and taken where its own magnitude is greatest (`CohesionField.extremum` for the three efforts) — not a running maximum over time, which is what `StressScaleCache`'s own `max*` fields hold.
+ * `sigma`/`tau` are magnitudes, having none of their own sign to keep: `|σ|max` folds a section's two extreme fibres together, and `τ_max` is read at the neutral axis.
+ *
+ * Deliberately NOT capped at `Re`/`τ_adm`, unlike the running maxima that feed the colour ramps: a chart exists to show a beam three times past its elastic limit, where a ramp only has to place a colour.
+ */
+export interface BeamStressSeries {
+  N: BeamReadingBuffer;
+  T: BeamReadingBuffer;
+  Mf: BeamReadingBuffer;
+  sigma: BeamReadingBuffer;
+  tau: BeamReadingBuffer;
+}
+
+/** Which of `BeamStressSeries`' readings a chart is after. */
+export type BeamReadingKey = keyof BeamStressSeries;
+
+/**
+ * The shared scale of every beam-fill lens (phase 9, formerly phase 6 alone): the highest magnitude ever RECORDED for each of the four, across every beam — `maxStress`/`maxShear` (Pa, absolute, not a ratio — `stress_utilization_stops`/`shear_utilization_stops`'s own `ratio` stays the per-beam overstress check, this cache only ever positions the ramp), `maxNormal` (`|N/A|`, Pa) and `maxBending` (`|Mf·v/I|`, Pa).
+ * Absolute rather than `/Re` (or `/τ_adm`) on purpose: both differ beam to beam, so a ratio-based scale could not be labelled with one honest number, and the legend showing a real stress reads far more informative than a bare percentage.
+ *
+ * Scanning the full recording instead of the current frame means each scale only ever ratchets UP, and only when a genuinely new peak is recorded — never from scrubbing, panning, or zooming.
+ * Without this, a lightly-loaded mechanism reads as flat/neutral everywhere, with no contrast between its own more- and less-loaded members.
+ *
+ * `maxStress`/`maxShear`'s own contributions are each capped at ITS OWN beam's `Re`/`τ_adm` before folding into the running max — otherwise a single grossly overstressed beam (already flat `STRESS_OVERSTRESS_COLOR`, wherever it falls) would drag the scale far past any elastic limit actually in play, and everything else washes back out to flat blue: the exact regression this cache exists to fix, just triggered by an outlier instead of by a lightly- loaded mechanism.
+ * `maxNormal`/`maxBending` have no such per-beam ceiling — no threshold of their own to cap at, they are read on their own colour scale rather than checked against a limit.
+ */
+export interface StressScaleCache {
+  elements: MechanicalElement[];
+  loads: LoadElement[];
+  /** Number of snapshots consumed, and the last one consumed — its identity is what tells an
+   * append apart from a rewritten history, same test `TrajectoryCache` uses. */
+  consumed: number;
+  boundary: DynamicSnapshot | null;
+  /** Highest `|σ|max` recorded so far, Pa — each sample capped at its own beam's `Re` first
+   * (see this interface's own doc). 0 until at least one beam with a resolvable material/profile has been recorded — drawing treats that as "nothing to scale yet". */
+  maxStress: number;
+  /** Highest `|N/A|` recorded so far, Pa. 0 until a resolvable beam has been recorded. */
+  maxNormal: number;
+  /** Highest `|Mf·v/I|` recorded so far, Pa. 0 until a resolvable beam has been recorded. */
+  maxBending: number;
+  /** Highest `τ_max` recorded so far, Pa — each sample capped at its own beam's `τ_adm` first,
+   * same reasoning as `maxStress`. 0 until a resolvable beam has been recorded. */
+  maxShear: number;
+  /**
+   * Time axis shared by every beam's series, `count` entries live — one entry per recorded instant, in the order they were recorded.
+   * Shared rather than held per beam: every series here is folded from the very same snapshot list, so they cannot disagree about when an instant happened.
+   */
+  t: Float64Array;
+  /** How many entries of `t` and of every series buffer are live — the buffers themselves are longer (see `grown`). */
+  count: number;
+  /** Which beam is closest to yielding at each instant, and which is closest to shearing — see `WorstBeamSeries`.
+   * Two modes, never folded into one: `max(σ/Re, τ/τ_adm)` would say how bad it is while losing which way it fails. */
+  worstStress: WorstBeamSeries;
+  worstShear: WorstBeamSeries;
+  /** One entry per beam that has ever been folded in, whether or not its material resolved: a beam whose readings are all `NaN` still says "this beam was there", which is what tells an empty chart apart from a missing one. */
+  beams: Map<ID, BeamStressSeries>;
+}
+
+/**
  * Running max magnitude of each physical "kind" of quantity found anywhere in the mechanism, over the whole recording — the reference scale a value is judged negligible against (`negligibility-pool.ts`'s `is_negligible`).
  * A residual reaction of 1e-6 N next to a real 500 N one, or a 0.1mm wobble on a 10m mechanism, needs SOME scale to be negligible relative TO — never an arbitrary absolute floor, since a featherweight mechanism's forces are all small and none of them should read as "nothing".
  */
@@ -278,8 +374,14 @@ export interface NegligibilityPool {
   linearVelocity: number;
   /** rad/s */
   angularVelocity: number;
+  /** m/s² */
+  linearAcceleration: number;
+  /** rad/s² */
+  angularAcceleration: number;
   /** W */
   power: number;
+  /** Dimensionless — a fraction of something whose own whole is the scale, never grown by anything recorded (see `pool_floors`). */
+  ratio: number;
   /** Per-kind floor these fields are seeded from and never fall below — the mechanism's own geometry where its dimension allows it, a fixed product constant otherwise (see `pool_floors` in `negligibility-pool.ts`).
    * Recomputed only when the pool itself is rebuilt (a geometry change), not on every extend. */
   floors: NegligibilityFloors;
@@ -295,7 +397,10 @@ export interface NegligibilityFloors {
   moment: number;
   linearVelocity: number;
   angularVelocity: number;
+  linearAcceleration: number;
+  angularAcceleration: number;
   power: number;
+  ratio: number;
 }
 
 export const EMPTY_NEGLIGIBILITY_POOL: NegligibilityPool = {
@@ -309,7 +414,10 @@ export const EMPTY_NEGLIGIBILITY_POOL: NegligibilityPool = {
   moment: 0,
   linearVelocity: 0,
   angularVelocity: 0,
+  linearAcceleration: 0,
+  angularAcceleration: 0,
   power: 0,
+  ratio: 0,
   floors: {
     length: 0,
     angle: 0,
@@ -317,7 +425,10 @@ export const EMPTY_NEGLIGIBILITY_POOL: NegligibilityPool = {
     moment: 0,
     linearVelocity: 0,
     angularVelocity: 0,
+    linearAcceleration: 0,
+    angularAcceleration: 0,
     power: 0,
+    ratio: 0,
   },
   ownFloors: {
     length: 0,
@@ -326,7 +437,10 @@ export const EMPTY_NEGLIGIBILITY_POOL: NegligibilityPool = {
     moment: 0,
     linearVelocity: 0,
     angularVelocity: 0,
+    linearAcceleration: 0,
+    angularAcceleration: 0,
     power: 0,
+    ratio: 0,
   },
 };
 
@@ -359,6 +473,10 @@ export interface RuntimeState {
 
   /** Running per-kind scale, for hiding/flattening negligible reactions, velocities, and probe curves — see `NegligibilityPool`. */
   negligibilityPool: NegligibilityPool;
+
+  /** Every beam's efforts and stresses over the recording, and the shared scales the beam-fill lenses ramp against — see `StressScaleCache`.
+   * Held here rather than in a ref because the charts that read it are rendered, not drawn: a ref would not tell them a new instant had arrived. */
+  stressScale: StressScaleCache;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -379,6 +497,31 @@ export const DEFAULT_SIMULATION_CONFIG: SimulationConfig = {
   convergenceTolerance: 0.001,
 };
 
+/** No beam readable at any instant — what a mode that never records one leaves behind. */
+export const EMPTY_WORST_BEAM_SERIES: WorstBeamSeries = {
+  ratio: new Float64Array(0),
+  beamID: [],
+  s: new Float64Array(0),
+  determinate: new Uint8Array(0),
+};
+
+/** A cache holding nothing: no recording folded in, no beam known. */
+export const EMPTY_STRESS_SCALE_CACHE: StressScaleCache = {
+  elements: [],
+  loads: [],
+  consumed: 0,
+  boundary: null,
+  maxStress: 0,
+  maxNormal: 0,
+  maxBending: 0,
+  maxShear: 0,
+  t: new Float64Array(0),
+  count: 0,
+  beams: new Map(),
+  worstStress: EMPTY_WORST_BEAM_SERIES,
+  worstShear: EMPTY_WORST_BEAM_SERIES,
+};
+
 export const DEFAULT_RUNTIME_STATE: RuntimeState = {
   isPlaying: false,
   time: 0,
@@ -387,4 +530,5 @@ export const DEFAULT_RUNTIME_STATE: RuntimeState = {
   parameterSnapshots: [],
   scrubbed: false,
   negligibilityPool: EMPTY_NEGLIGIBILITY_POOL,
+  stressScale: EMPTY_STRESS_SCALE_CACHE,
 };

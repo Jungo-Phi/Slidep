@@ -40,6 +40,7 @@ import {
   draw_probe,
   draw_dimension_belt,
 } from "./drawing-functions";
+import { spring_coil_pitch } from "./coil-pitch";
 import { get_mechanical_element_from_id } from "../../mechanism/connect-actions";
 import {
   distributed_screen_geometry,
@@ -229,6 +230,10 @@ export function draw_gesture_preview(
         ctx,
         world2screen(state.startHover.position, viewport),
         world2screen(hoveredPart.position, viewport),
+        spring_coil_pitch(mechanicalElements, [
+          state.startHover.position,
+          hoveredPart.position,
+        ]),
         undefined,
         viewport.scale,
       );

@@ -11,16 +11,23 @@ import { MIN_ANGLE_POOL, MIN_LENGTH_POOL, MIN_TIME_POOL, NEGLIGIBLE_RATIO } from
 import { mechanism_bounds } from "../../../utils/mechanism-bounds";
 import {
   ANGLE,
+  ANGULAR_ACCELERATION,
   ANGULAR_VELOCITY,
   FORCE,
   LENGTH,
+  LINEAR_ACCELERATION,
   LINEAR_VELOCITY,
   MOMENT,
+  PERCENT,
   POWER,
   QuantityKind,
+  STRESS,
 } from "../../../utils/quantity-format";
 
 export { NEGLIGIBLE_RATIO };
+
+/** The scale of a dimensionless fraction — the whole it is taken of, which no mechanism's own size has a say in. */
+const FULL_RATIO = 1;
 
 /**
  * Whether `value` is small enough, next to `poolMax` (its own kind's running max), to read as noise rather than a real reading.
@@ -30,19 +37,27 @@ export function is_negligible(value: number, poolMax: number): boolean {
   return poolMax > 0 && Math.abs(value) < NEGLIGIBLE_RATIO * poolMax;
 }
 
-/** `length` is the only field the mechanism's size enters directly, so it seeds `moment` (force × lever arm) and the velocities (distance / `MIN_TIME_POOL`) in turn.
- * `angle` and `force` have no such lever, so each is its own flat constant. */
-function length_derived_floors(length: number): NegligibilityFloors {
+/** `length` is the only field the mechanism's size enters directly, so it seeds `moment` (force × lever arm), the velocities (distance / `MIN_TIME_POOL`) and the accelerations (one `MIN_TIME_POOL` further down again) in turn.
+ * `angle` and `force` have no such lever, so each is its own flat constant.
+ * `ratio` is handed in rather than derived: a fraction's scale is the whole it is taken of, which is 1 whatever the mechanism measures, and the two callers want that 1 at different scalings. */
+function length_derived_floors(
+  length: number,
+  ratio: number,
+): NegligibilityFloors {
   const force = LOAD_SCALING.MIN_VALUE;
   const linearVelocity = length / MIN_TIME_POOL;
+  const angularVelocity = MIN_ANGLE_POOL / MIN_TIME_POOL;
   return {
     length,
     angle: MIN_ANGLE_POOL,
     force,
     moment: force * length,
     linearVelocity,
-    angularVelocity: MIN_ANGLE_POOL / MIN_TIME_POOL,
+    angularVelocity,
+    linearAcceleration: linearVelocity / MIN_TIME_POOL,
+    angularAcceleration: angularVelocity / MIN_TIME_POOL,
     power: force * linearVelocity,
+    ratio,
   };
 }
 
@@ -52,7 +67,10 @@ function length_derived_floors(length: number): NegligibilityFloors {
  * `MIN_LENGTH_POOL` only stands in when there's no diagonal to use at all (0: an empty mechanism, or one collapsed to a single point).
  */
 export function pool_floors(boundsDiagonal: number): NegligibilityFloors {
-  return length_derived_floors(boundsDiagonal > 0 ? boundsDiagonal : MIN_LENGTH_POOL);
+  return length_derived_floors(
+    boundsDiagonal > 0 ? boundsDiagonal : MIN_LENGTH_POOL,
+    FULL_RATIO,
+  );
 }
 
 /**
@@ -62,6 +80,7 @@ export function pool_floors(boundsDiagonal: number): NegligibilityFloors {
 export function own_floors(boundsDiagonal: number): NegligibilityFloors {
   return length_derived_floors(
     boundsDiagonal > 0 ? NEGLIGIBLE_RATIO * boundsDiagonal : MIN_LENGTH_POOL,
+    NEGLIGIBLE_RATIO * FULL_RATIO,
   );
 }
 
@@ -88,7 +107,10 @@ export function extend_negligibility_pool(
     moment,
     linearVelocity,
     angularVelocity,
+    linearAcceleration,
+    angularAcceleration,
     power,
+    ratio,
     floors,
     ownFloors,
   } = cache;
@@ -97,7 +119,18 @@ export function extend_negligibility_pool(
     const boundsDiagonal = bounds ? bounds.min.distance_to(bounds.max) : 0;
     floors = pool_floors(boundsDiagonal);
     ownFloors = own_floors(boundsDiagonal);
-    ({ length, angle, force, moment, linearVelocity, angularVelocity, power } = floors);
+    ({
+      length,
+      angle,
+      force,
+      moment,
+      linearVelocity,
+      angularVelocity,
+      linearAcceleration,
+      angularAcceleration,
+      power,
+      ratio,
+    } = floors);
   }
 
   // The reference instant displacement/angle are measured against — always the recording's very first snapshot, "at rest", so the pool reflects how far anything has ever strayed rather than a moving target.
@@ -109,6 +142,11 @@ export function extend_negligibility_pool(
       if (!Number.isNaN(vx)) {
         const vy = snap.velocities[2 * k + 1];
         linearVelocity = Math.max(linearVelocity, Math.hypot(vx, vy));
+      }
+      const ax = snap.accelerations[2 * k];
+      if (!Number.isNaN(ax)) {
+        const ay = snap.accelerations[2 * k + 1];
+        linearAcceleration = Math.max(linearAcceleration, Math.hypot(ax, ay));
       }
       if (ref) {
         const px = snap.positions[2 * k];
@@ -123,6 +161,9 @@ export function extend_negligibility_pool(
     for (let k = 0; k < snap.layout.angleKeys.length; k++) {
       const av = snap.angleVelocities[k];
       if (!Number.isNaN(av)) angularVelocity = Math.max(angularVelocity, Math.abs(av));
+      const aa = snap.angleAccelerations[k];
+      if (!Number.isNaN(aa))
+        angularAcceleration = Math.max(angularAcceleration, Math.abs(aa));
       if (ref) {
         const a = snap.angles[k];
         const ra = ref.angles[k];
@@ -140,8 +181,8 @@ export function extend_negligibility_pool(
         }
       }
     }
-    if (snap.motorPower) {
-      for (const p of snap.motorPower)
+    if (snap.motor) {
+      for (const p of snap.motor)
         if (!Number.isNaN(p.watts)) power = Math.max(power, Math.abs(p.watts));
     }
   }
@@ -157,16 +198,25 @@ export function extend_negligibility_pool(
     moment,
     linearVelocity,
     angularVelocity,
+    linearAcceleration,
+    angularAcceleration,
     power,
+    ratio,
     floors,
     ownFloors,
   };
 }
 
-/** Which `NegligibilityPool` field bounds a given probe metric's own kind — the one lookup a new metric needs to join the negligibility rule, no new threshold to invent. */
+/**
+ * Which `NegligibilityPool` field bounds a given probe metric's own kind — the one lookup a new metric needs to join the negligibility rule, no new threshold to invent.
+ *
+ * `undefined` for the two stresses: the pool is built by walking the snapshots, and a stress is nowhere in them — it only exists once a section has been resolved against a cohesion field (`StressScaleCache`), which is where its own scale lives. A chart of one opts out of the negligibility flattening entirely, the way the energy balance does.
+ */
 export function pool_key_for_metric(
   metric: ProbeMetric,
-): keyof Pick<
+):
+  | undefined
+  | keyof Pick<
   NegligibilityPool,
   | "length"
   | "angle"
@@ -174,22 +224,33 @@ export function pool_key_for_metric(
   | "moment"
   | "linearVelocity"
   | "angularVelocity"
+  | "linearAcceleration"
+  | "angularAcceleration"
   | "power"
-> {
+  | "ratio"
+  > {
   switch (metric) {
+    case "stress":
+    case "shear-stress":
+      return undefined;
     case "position":
     case "length":
     case "elongation":
-    case "slide-abscissa":
       return "length";
+    case "slide-abscissa":
+      return "ratio";
     case "velocity":
     case "elongation-velocity":
     case "slide-velocity":
       return "linearVelocity";
+    case "acceleration":
+      return "linearAcceleration";
     case "angle":
       return "angle";
     case "angular-velocity":
       return "angularVelocity";
+    case "angular-acceleration":
+      return "angularAcceleration";
     case "motor-power":
       return "power";
     case "force":
@@ -198,6 +259,7 @@ export function pool_key_for_metric(
     case "weight":
     case "inertia":
     case "axial-force":
+    case "shear-force":
     case "belt-tension":
       return "force";
     case "moment":
@@ -205,6 +267,7 @@ export function pool_key_for_metric(
     case "moment-end":
     case "inertia-moment":
     case "motor-torque":
+    case "bending-moment":
       return "moment";
   }
 }
@@ -217,16 +280,21 @@ export function quantity_kind_for_metric(metric: ProbeMetric): QuantityKind {
     case "position":
     case "length":
     case "elongation":
-    case "slide-abscissa":
       return LENGTH;
+    case "slide-abscissa":
+      return PERCENT;
     case "velocity":
     case "elongation-velocity":
     case "slide-velocity":
       return LINEAR_VELOCITY;
+    case "acceleration":
+      return LINEAR_ACCELERATION;
     case "angle":
       return ANGLE;
     case "angular-velocity":
       return ANGULAR_VELOCITY();
+    case "angular-acceleration":
+      return ANGULAR_ACCELERATION;
     case "motor-power":
       return POWER;
     case "force":
@@ -235,6 +303,7 @@ export function quantity_kind_for_metric(metric: ProbeMetric): QuantityKind {
     case "weight":
     case "inertia":
     case "axial-force":
+    case "shear-force":
     case "belt-tension":
       return FORCE;
     case "moment":
@@ -242,7 +311,11 @@ export function quantity_kind_for_metric(metric: ProbeMetric): QuantityKind {
     case "moment-end":
     case "inertia-moment":
     case "motor-torque":
+    case "bending-moment":
       return MOMENT;
+    case "stress":
+    case "shear-stress":
+      return STRESS;
   }
 }
 

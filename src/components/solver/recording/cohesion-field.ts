@@ -10,6 +10,14 @@ import {
   ProfileDef,
 } from "../../../types";
 import type { BeamElement } from "../../../types/element";
+import { EMPTY_WORST_BEAM_SERIES } from "../../../types/runtime-state";
+import type {
+  BeamReadingBuffer,
+  BeamReadingKey,
+  BeamStressSeries,
+  StressScaleCache,
+  WorstBeamSeries,
+} from "../../../types/runtime-state";
 import { snapshot_acceleration, snapshot_point, snapshot_velocity } from "../snapshot";
 import {
   beam_linear_mass,
@@ -299,6 +307,20 @@ export function compute_cohesion_field(
 }
 
 /**
+ * The field's reading at the sample nearest `s`, in metres from the beam's start.
+ * Nearest rather than interpolated: a station's "just before" and "just after" sit at the very same abscissa with different values (`CohesionField.samples`), so averaging across one would invent a reading the beam never has.
+ */
+export function cohesion_sample_at(
+  field: CohesionField,
+  s: number,
+): CohesionSample | undefined {
+  let best: CohesionSample | undefined;
+  for (const sample of field.samples)
+    if (!best || Math.abs(sample.s - s) < Math.abs(best.s - s)) best = sample;
+  return best;
+}
+
+/**
  * `|σ|max(s)` at every sample of `field` — the stress overlay's own field, one reading per `field.samples` entry, `offset` its fraction of `field.length` (0 at `start`).
  * Carries both `stress` (Pa, absolute — what the overlay's ramp positions itself against, and what its legend labels) and `ratio` (`stress/Re` — what decides overstress, a per-beam boundary the absolute value alone cannot).
  * Stays un-colored on purpose: this is still the physics half, same as the rest of this file — the canvas overlay picks colors from it.
@@ -366,50 +388,105 @@ export function shear_admissible_stress(Re: number): number {
   return Re / Math.sqrt(3);
 }
 
-/**
- * The shared scale of every beam-fill lens (phase 9, formerly phase 6 alone): the highest magnitude ever RECORDED for each of the four, across every beam — `maxStress`/`maxShear` (Pa, absolute, not a ratio — `stress_utilization_stops`/`shear_utilization_stops`'s own `ratio` stays the per-beam overstress check, this cache only ever positions the ramp), `maxNormal` (`|N/A|`, Pa) and `maxBending` (`|Mf·v/I|`, Pa).
- * Absolute rather than `/Re` (or `/τ_adm`) on purpose: both differ beam to beam, so a ratio-based scale could not be labelled with one honest number, and the legend showing a real stress reads far more informative than a bare percentage.
- *
- * Scanning the full recording instead of the current frame means each scale only ever ratchets UP, and only when a genuinely new peak is recorded — never from scrubbing, panning, or zooming.
- * Without this, a lightly-loaded mechanism reads as flat/neutral everywhere, with no contrast between its own more- and less-loaded members.
- *
- * `maxStress`/`maxShear`'s own contributions are each capped at ITS OWN beam's `Re`/`τ_adm` before folding into the running max — otherwise a single grossly overstressed beam (already flat `STRESS_OVERSTRESS_COLOR`, wherever it falls) would drag the scale far past any elastic limit actually in play, and everything else washes back out to flat blue: the exact regression this cache exists to fix, just triggered by an outlier instead of by a lightly- loaded mechanism.
- * `maxNormal`/`maxBending` have no such per-beam ceiling — no threshold of their own to cap at, they are read on their own colour scale rather than checked against a limit.
- */
-export interface StressScaleCache {
-  elements: MechanicalElement[];
-  loads: LoadElement[];
-  /** Number of snapshots consumed, and the last one consumed — its identity is what tells an
-   * append apart from a rewritten history, same test `TrajectoryCache` uses. */
-  consumed: number;
-  boundary: DynamicSnapshot | null;
-  /** Highest `|σ|max` recorded so far, Pa — each sample capped at its own beam's `Re` first
-   * (see this interface's own doc). 0 until at least one beam with a resolvable material/profile has been recorded — drawing treats that as "nothing to scale yet". */
-  maxStress: number;
-  /** Highest `|N/A|` recorded so far, Pa. 0 until a resolvable beam has been recorded. */
-  maxNormal: number;
-  /** Highest `|Mf·v/I|` recorded so far, Pa. 0 until a resolvable beam has been recorded. */
-  maxBending: number;
-  /** Highest `τ_max` recorded so far, Pa — each sample capped at its own beam's `τ_adm` first,
-   * same reasoning as `maxStress`. 0 until a resolvable beam has been recorded. */
-  maxShear: number;
+const GROWTH_FLOOR = 256;
+
+/** `buffer`, long enough to hold `needed` entries — the same one when it already is, a doubled copy otherwise.
+ * Doubling makes the whole recording's worth of appends cost O(n) in total rather than O(n²). */
+function grown(buffer: Float64Array, needed: number): Float64Array {
+  if (buffer.length >= needed) return buffer;
+  let size = Math.max(buffer.length, GROWTH_FLOOR);
+  while (size < needed) size *= 2;
+  const bigger = new Float64Array(size);
+  bigger.set(buffer);
+  return bigger;
 }
 
-export const EMPTY_STRESS_SCALE_CACHE: StressScaleCache = {
-  elements: [],
-  loads: [],
-  consumed: 0,
-  boundary: null,
-  maxStress: 0,
-  maxNormal: 0,
-  maxBending: 0,
-  maxShear: 0,
-};
+function empty_reading(): BeamReadingBuffer {
+  return { value: new Float64Array(0), s: new Float64Array(0) };
+}
+
+function empty_series(): BeamStressSeries {
+  return {
+    N: empty_reading(),
+    T: empty_reading(),
+    Mf: empty_reading(),
+    sigma: empty_reading(),
+    tau: empty_reading(),
+  };
+}
+
+const READING_KEYS: BeamReadingKey[] = ["N", "T", "Mf", "sigma", "tau"];
+
+/** `series` with every buffer long enough for `needed` instants, the new tail filled with `NaN` so an instant never folded in reads as "no value" rather than as 0. */
+function grown_series(series: BeamStressSeries, needed: number): BeamStressSeries {
+  const grown_one = (reading: BeamReadingBuffer): BeamReadingBuffer => {
+    const value = grown(reading.value, needed);
+    if (value === reading.value) return reading;
+    value.fill(NaN, reading.value.length);
+    const s = grown(reading.s, needed);
+    s.fill(NaN, reading.s.length);
+    return { value, s };
+  };
+  const out = {} as BeamStressSeries;
+  for (const key of READING_KEYS) out[key] = grown_one(series[key]);
+  return out;
+}
+
+/** `grown`'s counterpart for a flag buffer. */
+function grown_flags(buffer: Uint8Array, needed: number): Uint8Array {
+  if (buffer.length >= needed) return buffer;
+  let size = Math.max(buffer.length, GROWTH_FLOOR);
+  while (size < needed) size *= 2;
+  const bigger = new Uint8Array(size);
+  bigger.set(buffer);
+  return bigger;
+}
+
+/** `worst` with every buffer long enough for `needed` instants, the new tail reading as "no beam could be read here". */
+function grown_worst(worst: WorstBeamSeries, needed: number): WorstBeamSeries {
+  if (worst.ratio.length >= needed) return worst;
+  const ratio = grown(worst.ratio, needed);
+  ratio.fill(NaN, worst.ratio.length);
+  const s = grown(worst.s, needed);
+  s.fill(NaN, worst.s.length);
+  return {
+    ratio,
+    beamID: worst.beamID,
+    s,
+    determinate: grown_flags(worst.determinate, needed),
+  };
+}
+
+/** An instant's own empty worst case, for a mechanism with no readable beam at it. */
+const NO_WORST = { ratio: -1, beamID: null as ID | null, s: 0, determinate: false };
+
+/** Writes one instant’s worst case, or leaves it reading “no beam could be read here” when nothing was. */
+function put_worst(
+  worst: WorstBeamSeries,
+  i: number,
+  at: { ratio: number; beamID: ID | null; s: number; determinate: boolean },
+): void {
+  if (at.beamID === null) return;
+  worst.ratio[i] = at.ratio;
+  worst.beamID[i] = at.beamID;
+  worst.s[i] = at.s;
+  worst.determinate[i] = at.determinate ? 1 : 0;
+}
+
+/** Writes one instant's reading into `buffer` at `i`. Indexed, never pushed — see `BeamReadingBuffer`. */
+function put(buffer: BeamReadingBuffer, i: number, value: number, s: number): void {
+  buffer.value[i] = value;
+  buffer.s[i] = s;
+}
 
 /**
  * Extends the cache with whatever snapshots were recorded since the last call — never rebuilds from scratch on an append, same reasoning as `extend_probe_trajectories`: redoing the whole history every frame would cost the square of the recording's length.
  * Anything else (elements or loads edited, history truncated or reset) rebuilds from scratch.
- * One field computed per beam per snapshot, feeding all four running maxima at once — the four lenses never need more than one `compute_cohesion_field` call each.
+ *
+ * One field computed per beam per snapshot, feeding the four running maxima AND that beam's own series at once — the four lenses and the five dimensioning charts never need more than one `compute_cohesion_field` call between them.
+ *
+ * Re-running it over instants already folded in is harmless: every write is indexed by the instant's own position (see `BeamReadingBuffer`) and the maxima only ever ratchet up, so a second pass writes the same values into the same slots.
+ * Which means a caller may hand it the same recording twice without having to know whether it already folded it in.
  */
 export function extend_stress_scale(
   cache: StressScaleCache,
@@ -432,9 +509,36 @@ export function extend_stress_scale(
   let maxBending = appendable ? cache.maxBending : 0;
   let maxShear = appendable ? cache.maxShear : 0;
 
-  for (let i = appendable ? cache.consumed : 0; i < snapshots.length; i++) {
+  const count = snapshots.length;
+  const t = grown(appendable ? cache.t : new Float64Array(0), count);
+  const worstStress = grown_worst(
+    appendable ? cache.worstStress : EMPTY_WORST_BEAM_SERIES,
+    count,
+  );
+  const worstShear = grown_worst(
+    appendable ? cache.worstShear : EMPTY_WORST_BEAM_SERIES,
+    count,
+  );
+  // A rebuild starts its series empty rather than growing what the cache holds: an index into them means a position in one specific recording, and a rebuild answers for a different one.
+  const series = new Map<ID, BeamStressSeries>();
+  for (const beam of beams)
+    series.set(
+      beam.id,
+      grown_series(
+        (appendable ? cache.beams.get(beam.id) : undefined) ?? empty_series(),
+        count,
+      ),
+    );
+
+  for (let i = appendable ? cache.consumed : 0; i < count; i++) {
     const snapshot = snapshots[i];
+    t[i] = snapshot.t;
+    // Which beam of this instant is closest to each of its two limits, filled in as the beams go by.
+    const atStress = { ...NO_WORST };
+    const atShear = { ...NO_WORST };
     for (const beam of beams) {
+      // Left at NaN by `grown_series`, which is what an instant with nothing to say reads as.
+      const buffers = series.get(beam.id)!;
       const cohesion = snapshot.beamCohesion?.find((c) => c.beamID === beam.id);
       if (!cohesion) continue;
       const strength = beam_strength(beam.materialID, beam.profileID, materials, profiles);
@@ -450,20 +554,59 @@ export function extend_stress_scale(
       );
       if (!field) continue;
       const tauAdm = shear_admissible_stress(strength.Re);
+
+      // The three efforts: the field already knows where each one peaks along the span.
+      put(buffers.N, i, field.extremum.N.value, field.extremum.N.s);
+      put(buffers.T, i, field.extremum.T.value, field.extremum.T.s);
+      put(buffers.Mf, i, field.extremum.Mf.value, field.extremum.Mf.s);
+
+      // The two stresses have no such extremum of their own — σ folds N and Mf together, so where IT peaks is neither's own peak — and are tracked across the samples here.
+      let peakStress = -1;
+      let peakStressAt = 0;
+      let peakShear = -1;
+      let peakShearAt = 0;
       for (const sample of field.samples) {
-        const stress = Math.min(
-          max_fiber_stress(sample.N, sample.Mf, strength.section),
-          strength.Re,
-        );
-        if (stress > maxStress) maxStress = stress;
+        const stress = max_fiber_stress(sample.N, sample.Mf, strength.section);
+        if (stress > peakStress) {
+          peakStress = stress;
+          peakStressAt = sample.s;
+        }
+        const shear = max_shear_stress(sample.T, strength.section);
+        if (shear > peakShear) {
+          peakShear = shear;
+          peakShearAt = sample.s;
+        }
+        // The running maxima take the same readings CAPPED, the charts take them raw — see `StressScaleCache`'s own doc for why a ramp needs the ceiling and a chart must not have it.
+        const capped = Math.min(stress, strength.Re);
+        if (capped > maxStress) maxStress = capped;
         const normal = Math.abs(sample.N) / strength.section.A;
         if (normal > maxNormal) maxNormal = normal;
         const bending = (Math.abs(sample.Mf) * strength.section.v) / strength.section.I;
         if (bending > maxBending) maxBending = bending;
-        const shear = Math.min(max_shear_stress(sample.T, strength.section), tauAdm);
-        if (shear > maxShear) maxShear = shear;
+        const cappedShear = Math.min(shear, tauAdm);
+        if (cappedShear > maxShear) maxShear = cappedShear;
+      }
+      if (peakStress >= 0) put(buffers.sigma, i, peakStress, peakStressAt);
+      if (peakShear >= 0) put(buffers.tau, i, peakShear, peakShearAt);
+
+      // Ranked by the ratio, not by the stress — see `WorstBeamSeries`.
+      const stressRatio = peakStress / strength.Re;
+      if (stressRatio > atStress.ratio) {
+        atStress.ratio = stressRatio;
+        atStress.beamID = beam.id;
+        atStress.s = peakStressAt;
+        atStress.determinate = cohesion.determinate;
+      }
+      const shearRatio = peakShear / tauAdm;
+      if (shearRatio > atShear.ratio) {
+        atShear.ratio = shearRatio;
+        atShear.beamID = beam.id;
+        atShear.s = peakShearAt;
+        atShear.determinate = cohesion.determinate;
       }
     }
+    put_worst(worstStress, i, atStress);
+    put_worst(worstShear, i, atShear);
   }
 
   return {
@@ -475,5 +618,10 @@ export function extend_stress_scale(
     maxNormal,
     maxBending,
     maxShear,
+    t,
+    count,
+    beams: series,
+    worstStress,
+    worstShear,
   };
 }

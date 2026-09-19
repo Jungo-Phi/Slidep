@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { ID } from "../../../types/element";
-import { DynamicSnapshot, EnergySample, MotorPowerSample } from "../../../types/runtime-state";
+import { DynamicSnapshot, EnergySample, MotorSample } from "../../../types/runtime-state";
 import { make_snapshot_layout } from "../snapshot";
 import { compute_energy_balance } from "./energy-balance";
 
@@ -13,7 +13,7 @@ const pivot = (s: string): ID => `00000000-0000-0000-0000-${s.padStart(12, "0")}
 function frame(
   t: number,
   energy: EnergySample,
-  motorPower: MotorPowerSample[] = [],
+  motor: MotorSample[] = [],
 ): DynamicSnapshot {
   return {
     t,
@@ -25,9 +25,16 @@ function frame(
     angleVelocities: new Float64Array(0),
     angleAccelerations: new Float64Array(0),
     energy,
-    motorPower,
+    motor,
   };
 }
+
+/** A motor delivering `watts`. The balance only ever sums the power, so the torque is here to satisfy the type, not to describe a real τ·ω pair. */
+const motor = (id: string, watts: number): MotorSample => ({
+  pivotID: pivot(id),
+  watts,
+  nm: 0,
+});
 
 const zeroEnergy = (kinetic: number): EnergySample => ({
   kinetic,
@@ -77,7 +84,7 @@ describe("bilan énergétique", () => {
   it("un moteur à puissance constante intègre un travail linéaire dans le temps", () => {
     // 2 W steady from t=0 to t=3: work should read 0, 2, 4, 6 — the trapezoid of a flat curve is exact regardless of how coarsely it's sampled.
     const s = compute_energy_balance(
-      [0, 1, 2, 3].map((t) => frame(t, zeroEnergy(0), [{ pivotID: pivot("m"), watts: 2 }])),
+      [0, 1, 2, 3].map((t) => frame(t, zeroEnergy(0), [motor("m", 2)])),
     );
     expect(s.netWorkIn).toEqual([0, 2, 4, 6]);
   });
@@ -85,7 +92,7 @@ describe("bilan énergétique", () => {
   it("un amortisseur retranche sa puissance dissipée du travail net", () => {
     const s = compute_energy_balance(
       [0, 1].map((t) =>
-        frame(t, { ...zeroEnergy(0), damperPower: 3 }, [{ pivotID: pivot("m"), watts: 5 }]),
+        frame(t, { ...zeroEnergy(0), damperPower: 3 }, [motor("m", 5)]),
       ),
     );
     // Net power is 5 - 3 = 2 W, held constant: work over 1 s is exactly 2 J.
@@ -95,9 +102,7 @@ describe("bilan énergétique", () => {
   it("un joint frottant retranche sa puissance dissipée comme un amortisseur", () => {
     const s = compute_energy_balance(
       [0, 1].map((t) =>
-        frame(t, { ...zeroEnergy(0), frictionPower: 3 }, [
-          { pivotID: pivot("m"), watts: 5 },
-        ]),
+        frame(t, { ...zeroEnergy(0), frictionPower: 3 }, [motor("m", 5)]),
       ),
     );
     expect(s.netWorkIn).toEqual([0, 2]);
@@ -106,10 +111,7 @@ describe("bilan énergétique", () => {
   it("plusieurs moteurs se somment avant intégration", () => {
     const s = compute_energy_balance(
       [0, 1].map((t) =>
-        frame(t, zeroEnergy(0), [
-          { pivotID: pivot("a"), watts: 2 },
-          { pivotID: pivot("b"), watts: 3 },
-        ]),
+        frame(t, zeroEnergy(0), [motor("a", 2), motor("b", 3)]),
       ),
     );
     expect(s.netWorkIn).toEqual([0, 5]);

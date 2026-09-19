@@ -498,6 +498,9 @@ export type CanvasDrawing = {
   hoveredPart: HoveredPart;
   state: CanvasState;
   mechanicalElements: MechanicalElement[];
+  /** The pitch every spring's coils are counted against, from `spring_coil_pitch`.
+   * Required, and taken from the mechanism **at rest** rather than from `mechanicalElements`: a pose stretches the springs it moves, and the span read off it would recount their coils in the middle of the run that is playing them. */
+  coilPitch: number | undefined;
   constraintElements: ConstraintElement[];
   loads?: LoadElement[];
   /** Dimensions to draw, by id, each with the opacity its reveal has reached. */
@@ -516,6 +519,9 @@ export type CanvasDrawing = {
   highlight?: CanvasHighlight;
   /** The element a hovered physics-overlay reading (`OverlayArrow`/`OverlayMoment.elementID`) belongs to — thickened the same way `is_hovered` already does for a hovered constraint's own reference element, so hovering the reading on the canvas points back at its beam. */
   hoveredOverlayElementID?: ID;
+  /** Loads a line of the force balance is naming all at once, drawn thick as if each were hovered.
+   * `hoveredPart` names one thing, which is enough for a single term; a total stands for every load it adds up. */
+  litLoadIDs?: ReadonlySet<ID>;
   /** A physics-overlay reading clicked on the canvas (`App`'s own `focusedOverlay`) — present, no element draws as selected: the reading itself is what is selected now, drawn that way by whichever loop already draws it (`draw_overlay_arrow`/`draw_overlay_moment`), never the body it happens to sit on. */
   focusedOverlay?: FocusedOverlay | null;
   /** Motors the simulation cannot push through (see `motors_blocked_at`), marked like anything else the analysis finds at fault.
@@ -585,6 +591,7 @@ export function draw_mechanism(
     hoveredPart,
     state,
     mechanicalElements,
+    coilPitch,
     constraintElements,
     loads = [],
     visibleConstraints = new Map(),
@@ -596,6 +603,7 @@ export function draw_mechanism(
     dimensionSnapped = false,
     highlight = NO_HIGHLIGHT,
     hoveredOverlayElementID,
+    litLoadIDs,
     focusedOverlay,
     blockedMotors = EMPTY_IDS,
     measured = EMPTY_IDS,
@@ -611,6 +619,10 @@ export function draw_mechanism(
     bendingStressScale = 0,
     shearStressScale = 0,
   } = drawing;
+  /** Whether a load's own geometry is drawn thick — the cursor or a panel row resting on it, or a balance line naming it among several (`litLoadIDs`).
+   * Its value labels are not: they follow the parts of `hoveredPart` alone, exactly as they do for a single hovered term. */
+  const load_lit = (id: ID) =>
+    is_load_hovered(id, hoveredPart) || litLoadIDs?.has(id) === true;
   const focused =
     highlight.kind === "focus" || highlight.kind === "pick"
       ? highlight.elements
@@ -1221,7 +1233,14 @@ export function draw_mechanism(
               }
               break;
             case "spring":
-              draw_spring(ctx, start, end, element.restLength, viewport.scale);
+              draw_spring(
+                ctx,
+                start,
+                end,
+                coilPitch,
+                element.restLength,
+                viewport.scale,
+              );
               break;
             case "damper":
               draw_damper(ctx, start, end, element.restLength, viewport.scale);
@@ -1628,7 +1647,7 @@ export function draw_mechanism(
             mechanicalElements,
             viewport,
           );
-          ctx.lineWidth = is_load_hovered(force.id, hoveredPart)
+          ctx.lineWidth = load_lit(force.id)
             ? loadHoverWidth
             : loadRestWidth;
           draw_force(
@@ -1676,7 +1695,7 @@ export function draw_mechanism(
             state.elementID === id &&
             state.part === "body";
           ctx.lineWidth =
-            is_load_hovered(id, hoveredPart) || heldBody
+            load_lit(id) || heldBody
               ? loadHoverWidth
               : loadRestWidth;
           draw_distributed_force(
@@ -1729,7 +1748,7 @@ export function draw_mechanism(
             mechanicalElements,
             viewport,
           );
-          ctx.lineWidth = is_load_hovered(load.id, hoveredPart)
+          ctx.lineWidth = load_lit(load.id)
             ? loadHoverWidth
             : loadRestWidth;
           draw_moment(

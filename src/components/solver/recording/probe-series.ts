@@ -5,13 +5,16 @@ import {
   overlay_shown,
 } from "../../../utils/element-queries";
 import { TRAJECTORY_SAMPLING } from "../../../constants/physics-display-specs";
+
 import { Point2 } from "../../../types/point2";
 import {
   BeamCohesion,
+  BeamReadingKey,
   DynamicSnapshot,
   KinematicSnapshot,
   SimulationSnapshot,
   SnapshotLayout,
+  StressScaleCache,
 } from "../../../types/runtime-state";
 
 export type ProbeCurveKey = "x" | "y" | "norm" | "value";
@@ -29,6 +32,7 @@ export function is_vector_metric(metric: ProbeMetric): boolean {
   switch (metric) {
     case "position":
     case "velocity":
+    case "acceleration":
     case "force":
     case "force-start":
     case "force-end":
@@ -45,6 +49,7 @@ export function is_vector_metric(metric: ProbeMetric): boolean {
 export interface ProbeSeries {
   t: number[];
   curves: ProbeCurve[];
+  /** The SI unit every value is in, which is what a reader converts FROM: display picks the unit it shows in on its own (`quantity_kind_for_metric`), so an angle is served in radians however many degrees it ends up being printed as. */
   unit: string;
 }
 
@@ -218,16 +223,15 @@ export function element_acceleration(
 }
 
 /**
- * The element's own angular acceleration right now, in rad/s², counter-clockwise positive: the rotational twin of `element_acceleration`.
+ * Angular acceleration of the element (rad/s², counter-clockwise positive) — the rotational twin of `read_acceleration`, in the same slot-keyed shape as `read_angular_velocity` so a series resolves its slots once per layout rather than once per snapshot.
+ *
  * A gear reads its own recorded slot.
  * An edge reads it off its two ends: across a rigid rotation their relative acceleration keeps a tangential part only from `α`, the centripetal part being radial.
- * `undefined` for a point, or when the snapshot carries none for it.
  */
-export function element_angular_acceleration(
-  element: MechanicalElement,
+function read_angular_acceleration(
   snapshot: DynamicSnapshot,
+  slots: ProbeSlots,
 ): number | undefined {
-  const slots = probe_slots(element, snapshot.layout);
   if (slots.angle >= 0) {
     const alpha = snapshot.angleAccelerations[slots.angle];
     return Number.isNaN(alpha) ? undefined : alpha;
@@ -243,6 +247,17 @@ export function element_angular_acceleration(
   const relAy = acc[2 * slots.b + 1] - acc[2 * slots.a + 1];
   if (Number.isNaN(relAx) || Number.isNaN(relAy)) return undefined;
   return (dx * relAy - dy * relAx) / lengthSq;
+}
+
+/**
+ * The element's own angular acceleration at one instant — what the canvas overlay and the panel rows read, the single-frame face of `read_angular_acceleration`.
+ * `undefined` for a point, or when the snapshot carries none for it.
+ */
+export function element_angular_acceleration(
+  element: MechanicalElement,
+  snapshot: DynamicSnapshot,
+): number | undefined {
+  return read_angular_acceleration(snapshot, probe_slots(element, snapshot.layout));
 }
 
 /** One point of an element where a reaction acts — a node/gear has one, an edge has two (its own start and end), each independent: a beam's root and tip carry unrelated loads. */
@@ -416,6 +431,55 @@ function node_reaction_from_beams(
   };
 }
 
+/**
+ * The end torsor of a spring or a damper, from its own constitutive law rather than from the impulses landing on its endpoint key.
+ * That key is fused with the node the end sits on, so reading it answers for everything coincident there — the same trap `BeamCohesion` exists to escape on a beam, except that here there is nothing to isolate: the law IS the member's own force, and `resolve_spring_damper_forces` applies exactly it.
+ * Purely axial, and opposite at the two ends: the member carries no mass. The transverse pair an orientation weld adds at a welded end belongs to that weld, not to the member, and is left out.
+ * Signed like `beam_end_reaction`: what the member applies onto whatever sits at this end, support or not.
+ */
+function member_axial_reaction(
+  element: MechanicalElement,
+  which: "start" | "end",
+  at: Point2,
+  snapshot: DynamicSnapshot,
+): ElementReaction | undefined {
+  const slots = probe_slots(element, snapshot.layout);
+  if (slots.a < 0 || slots.b < 0) return undefined;
+  const p = snapshot.positions;
+  const ax = p[2 * slots.a];
+  const ay = p[2 * slots.a + 1];
+  const dx = p[2 * slots.b] - ax;
+  const dy = p[2 * slots.b + 1] - ay;
+  if (Number.isNaN(ax) || Number.isNaN(dx)) return undefined;
+  const length = Math.hypot(dx, dy);
+  if (!(length > 1e-9)) return undefined;
+
+  // Tension, positive when the member pulls its ends together — the same two laws `axial_force_series` plots.
+  let tension: number;
+  if (element.type === "spring") {
+    const rest = rest_length(element);
+    if (rest === undefined) return undefined;
+    tension = element.stiffness * (length - rest);
+  } else if (element.type === "damper") {
+    const v = snapshot.velocities;
+    const vax = v[2 * slots.a];
+    const vbx = v[2 * slots.b];
+    if (Number.isNaN(vax) || Number.isNaN(vbx)) return undefined;
+    const separation =
+      ((vbx - vax) * dx + (v[2 * slots.b + 1] - v[2 * slots.a + 1]) * dy) / length;
+    tension = element.damping * separation;
+  } else return undefined;
+
+  // Each end is pulled toward the other: along −axis at the end, +axis at the start.
+  const scale = (which === "end" ? -tension : tension) / length;
+  return {
+    at,
+    which,
+    vector: new Point2(dx * scale, dy * scale),
+    atAnchor: anchored_at(`${element.id}:${which}`, snapshot),
+  };
+}
+
 /** Which point of an element a reaction is read at: a node/gear/body has only `"node"`, an edge only `"start"`/`"end"` — `element_reaction_at` returns `undefined` for the shape the element doesn't have. */
 export type ReactionPoint = "node" | "start" | "end";
 
@@ -434,11 +498,13 @@ function element_reaction_at(
   }
   if (!("positionStart" in element)) return undefined;
   const at = which === "start" ? element.positionStart : element.positionEnd;
-  // A beam answers from its own torsor whenever the frame carries one; everything else, and a frame recorded without diagnostics, falls back to the raw impulses at the key.
+  // A beam answers from its own torsor whenever the frame carries one, a spring or a damper from its own law; everything else, and a frame recorded without diagnostics, falls back to the raw impulses at the key.
   if (element.type === "beam") {
     const cohesion = snapshot.beamCohesion?.find((c) => c.beamID === element.id);
     if (cohesion) return beam_end_reaction(cohesion, which, at, snapshot);
   }
+  if (element.type === "spring" || element.type === "damper")
+    return member_axial_reaction(element, which, at, snapshot);
   return point_reaction(`${element.id}:${which}`, which, at, snapshot);
 }
 
@@ -860,15 +926,19 @@ function rail_of(element: MechanicalElement): ID | undefined {
 
 /**
  * How far along its rail a slider sits, measured from the rail's own start - the one figure that says where a slider is, whatever the rail itself is doing.
+ * `normalized` reads it as a fraction of the rail instead of in metres: that is what the `slide-abscissa` metric is, a place on a bar rather than a distance from one of its ends.
+ * The rate is taken of the metric version instead (`slide-velocity`), a sliding speed being a speed.
  * Signed, and not clamped to the rail: a slider driven past an end reads past it rather than reading as if it had stopped there.
  */
 function abscissa_series<S extends SimulationSnapshot>(
   element: MechanicalElement,
   snapshots: S[],
+  normalized: boolean,
 ): ProbeSeries {
   const rail = rail_of(element);
-  if (rail === undefined) return { t: [], curves: [], unit: "m" };
-  return scalar_series(snapshots, "m", (layout) => {
+  const unit = normalized ? "" : "m";
+  if (rail === undefined) return { t: [], curves: [], unit };
+  return scalar_series(snapshots, unit, (layout) => {
     const node = layout.index.get(element.id) ?? -1;
     const start = layout.index.get(`${rail}:start`) ?? -1;
     const end = layout.index.get(`${rail}:end`) ?? -1;
@@ -883,7 +953,8 @@ function abscissa_series<S extends SimulationSnapshot>(
       if (Number.isNaN(ax) || Number.isNaN(dx) || Number.isNaN(px)) return undefined;
       const length = Math.hypot(dx, dy);
       if (!(length > 1e-9)) return undefined;
-      return ((px - ax) * dx + (p[2 * node + 1] - ay) * dy) / length;
+      const along = ((px - ax) * dx + (p[2 * node + 1] - ay) * dy) / length;
+      return normalized ? along / length : along;
     };
   });
 }
@@ -1035,30 +1106,31 @@ export function get_probe_series(
       }
 
       if (metric === "angle")
-        return {
-          t,
-          curves: [
-            { key: "value", values: angles.map((a) => (a * 180) / Math.PI) },
-          ],
-          unit: "deg",
-        };
+        return { t, curves: [{ key: "value", values: angles }], unit: "rad" };
 
-      // Angular velocity by central differences, in tr/min (motor unit)
-      if (angles.length < 2) return { t: [], curves: [], unit: "tr/min" };
+      // Angular velocity by central differences.
+      if (angles.length < 2) return { t: [], curves: [], unit: "rad/s" };
       const omega = angles.map((_, i) => {
         const i0 = Math.max(0, i - 1);
         const i1 = Math.min(angles.length - 1, i + 1);
         const dt = t[i1] - t[i0];
-        return dt > 0
-          ? (((angles[i1] - angles[i0]) / dt) * 60) / (2 * Math.PI)
-          : 0;
+        return dt > 0 ? (angles[i1] - angles[i0]) / dt : 0;
       });
-      return { t, curves: [{ key: "value", values: omega }], unit: "tr/min" };
+      return { t, curves: [{ key: "value", values: omega }], unit: "rad/s" };
     }
 
+    case "acceleration":
+      // Only dynamic mode integrates one. Differentiating this mode's recorded positions twice would answer with its own sampling noise amplified rather than with an acceleration.
+      return { t: [], curves: [], unit: "m/s²" };
+
+    case "angular-acceleration":
+      // Same reason as "acceleration" just above.
+      return { t: [], curves: [], unit: "rad/s²" };
+
     case "motor-power":
-      // No torque in the kinematic solver (motors drive position directly); dynamic mode fills this in.
-      return { t: [], curves: [], unit: "W" };
+    case "motor-torque":
+      // No torque in the kinematic solver (motors drive position directly); dynamic mode fills these in.
+      return { t: [], curves: [], unit: metric === "motor-power" ? "W" : "N·m" };
 
     case "force":
     case "force-start":
@@ -1083,17 +1155,24 @@ export function get_probe_series(
       return rate_of(length_series(element, snapshots), "m/s");
 
     case "slide-abscissa":
-      return abscissa_series(element, snapshots);
+      return abscissa_series(element, snapshots, true);
 
     case "slide-velocity":
-      return rate_of(abscissa_series(element, snapshots), "m/s");
+      return rate_of(abscissa_series(element, snapshots, false), "m/s");
 
     case "axial-force":
       // Not computed by the kinematic solver; dynamic mode fills this in.
       return { t: [], curves: [], unit: "N" };
 
+    case "shear-force":
+    case "bending-moment":
+    case "stress":
+    case "shear-stress":
+      // Never requested through this path: a beam's efforts and stresses are read out of the recording's stress cache instead (`get_beam_stress_series`), which is also where its `axial-force` comes from.
+      return { t: [], curves: [], unit: "" };
+
+
     case "belt-tension":
-    case "motor-torque":
       return unrecorded_series(metric);
 
     case "weight":
@@ -1104,6 +1183,106 @@ export function get_probe_series(
     case "inertia-moment":
       // Never requested through this path either, see "inertia" above.
       return { t: [], curves: [], unit: "N·m" };
+  }
+}
+
+/**
+ * The five readings that dimension a beam, and which `BeamStressSeries` buffer each one plots.
+ * `axial-force` is here as well as in `get_dynamic_probe_series`'s own switch: on a beam it is the cohesion `N`, on a spring or a damper the member's own law, and the element decides which door it goes through.
+ */
+export type BeamStressMetric =
+  | "axial-force"
+  | "shear-force"
+  | "bending-moment"
+  | "stress"
+  | "shear-stress";
+
+const BEAM_READING: Record<BeamStressMetric, BeamReadingKey> = {
+  "axial-force": "N",
+  "shear-force": "T",
+  "bending-moment": "Mf",
+  stress: "sigma",
+  "shear-stress": "tau",
+};
+
+const BEAM_READING_UNIT: Record<BeamStressMetric, string> = {
+  "axial-force": "N",
+  "shear-force": "N",
+  "bending-moment": "N·m",
+  stress: "Pa",
+  "shear-stress": "Pa",
+};
+
+/** Whether `metric` is read from a beam's cohesion field rather than from the snapshots directly — the test that routes it to `get_beam_stress_series`. Only ever true ON a beam: `probe_metric_available` offers four of the five to nothing else, and sends a spring's or a damper's `axial-force` through its own law. */
+export function is_beam_stress_metric(metric: ProbeMetric): metric is BeamStressMetric {
+  return metric in BEAM_READING;
+}
+
+/**
+ * A beam reading over the whole recording, plus where along the span each of its values was found.
+ * The two travel together because they answer one question: a peak stress is only actionable once you know which end of the beam is carrying it.
+ */
+export interface BeamStressReadout {
+  series: ProbeSeries;
+  /** Metres from the beam's start, one per plotted value — same indexing as `series.t`. */
+  abscissa: number[];
+}
+
+/**
+ * `metric` for one beam, read out of the recording's stress cache (`extend_stress_scale`) rather than recomputed.
+ * Empty when the cache holds nothing for this beam: no dynamic recording yet, or a material or profile that does not resolve.
+ *
+ * Instants the cache could not read (`NaN`, see `BeamReadingBuffer`) are dropped rather than plotted as zero, so a gap in the recording reads as a gap.
+ */
+export function get_beam_stress_series(
+  beamID: ID,
+  metric: BeamStressMetric,
+  cache: StressScaleCache,
+): BeamStressReadout {
+  const unit = BEAM_READING_UNIT[metric];
+  const buffers = cache.beams.get(beamID);
+  if (!buffers) return { series: { t: [], curves: [], unit }, abscissa: [] };
+  const reading = buffers[BEAM_READING[metric]];
+
+  const t: number[] = [];
+  const values: number[] = [];
+  const abscissa: number[] = [];
+  for (let i = 0; i < cache.count; i++) {
+    const value = reading.value[i];
+    if (Number.isNaN(value)) continue;
+    t.push(cache.t[i]);
+    values.push(value);
+    abscissa.push(reading.s[i]);
+  }
+  return { series: { t, curves: [{ key: "value", values }], unit }, abscissa };
+}
+
+/**
+ * Whether `metric` reads empty in kinematic mode because that solver never computes it — every metric whose case in `get_probe_series` returns an empty series on principle rather than for want of data.
+ * Kept here, next to that switch, so the chart that has to explain an empty curve and the code that empties it cannot drift apart.
+ *
+ * `belt-tension` is deliberately absent: it is empty in BOTH modes (`unrecorded_series`), which is a different thing to tell the reader.
+ */
+export function metric_needs_dynamics(metric: ProbeMetric): boolean {
+  switch (metric) {
+    case "acceleration":
+    case "angular-acceleration":
+    case "motor-power":
+    case "motor-torque":
+    case "axial-force":
+    case "shear-force":
+    case "bending-moment":
+    case "stress":
+    case "shear-stress":
+    case "force":
+    case "force-start":
+    case "force-end":
+    case "moment":
+    case "moment-start":
+    case "moment-end":
+      return true;
+    default:
+      return false;
   }
 }
 
@@ -1186,6 +1365,33 @@ export function get_dynamic_probe_series(
       };
     }
 
+    case "acceleration": {
+      const t: number[] = [];
+      const ax: number[] = [];
+      const ay: number[] = [];
+      let layout: SnapshotLayout | null = null;
+      let slots = NO_SLOTS;
+      for (const snap of snapshots) {
+        if (snap.layout !== layout) {
+          layout = snap.layout;
+          slots = probe_slots(element, layout);
+        }
+        if (!read_acceleration(snap, slots)) continue;
+        t.push(snap.t);
+        ax.push(sampled[0]);
+        ay.push(sampled[1]);
+      }
+      return {
+        t,
+        curves: [
+          { key: "x", values: ax },
+          { key: "y", values: ay },
+          { key: "norm", values: ax.map((x, i) => Math.hypot(x, ay[i])) },
+        ],
+        unit: "m/s²",
+      };
+    }
+
     case "angle": {
       const t: number[] = [];
       const angles: number[] = [];
@@ -1208,11 +1414,7 @@ export function get_dynamic_probe_series(
         t.push(snap.t);
         angles.push(a);
       }
-      return {
-        t,
-        curves: [{ key: "value", values: angles.map((a) => (a * 180) / Math.PI) }],
-        unit: "deg",
-      };
+      return { t, curves: [{ key: "value", values: angles }], unit: "rad" };
     }
 
     case "angular-velocity": {
@@ -1228,21 +1430,52 @@ export function get_dynamic_probe_series(
         const v = read_angular_velocity(snap, slots);
         if (v === undefined) continue;
         t.push(snap.t);
-        omega.push((v * 60) / (2 * Math.PI)); // rad/s -> tr/min, same unit as the motor speed
+        omega.push(v);
       }
-      return { t, curves: [{ key: "value", values: omega }], unit: "tr/min" };
+      return { t, curves: [{ key: "value", values: omega }], unit: "rad/s" };
+    }
+
+    case "angular-acceleration": {
+      const t: number[] = [];
+      const alpha: number[] = [];
+      let layout: SnapshotLayout | null = null;
+      let slots = NO_SLOTS;
+      for (const snap of snapshots) {
+        if (snap.layout !== layout) {
+          layout = snap.layout;
+          slots = probe_slots(element, layout);
+        }
+        const a = read_angular_acceleration(snap, slots);
+        if (a === undefined) continue;
+        t.push(snap.t);
+        alpha.push(a);
+      }
+      return { t, curves: [{ key: "value", values: alpha }], unit: "rad/s²" };
     }
 
     case "motor-power": {
       const t: number[] = [];
       const watts: number[] = [];
       for (const snap of snapshots) {
-        const sample = snap.motorPower?.find((p) => p.pivotID === element.id);
+        const sample = snap.motor?.find((p) => p.pivotID === element.id);
         if (!sample) continue;
         t.push(snap.t);
         watts.push(sample.watts);
       }
       return { t, curves: [{ key: "value", values: watts }], unit: "W" };
+    }
+
+    case "motor-torque": {
+      const t: number[] = [];
+      const values: number[] = [];
+      for (const snap of snapshots) {
+        const sample = snap.motor?.find((p) => p.pivotID === element.id);
+        if (!sample) continue;
+        t.push(snap.t);
+        // `MotorSample.nm` is counter-clockwise positive and the data model reads clockwise-positive — negate once, exactly as the "moment" case does.
+        values.push(-sample.nm);
+      }
+      return { t, curves: [{ key: "value", values }], unit: "N·m" };
     }
 
     case "force":
@@ -1304,22 +1537,30 @@ export function get_dynamic_probe_series(
       return separation_speed_series(element, snapshots);
 
     case "axial-force":
+      // A spring's or a damper's own law. A BEAM's axial force is its cohesion `N`, which the panel reads from the stress cache instead (`is_beam_stress_metric`) — this answers empty for one, as it does for every other element.
       return axial_force_series(element, snapshots);
 
+    case "shear-force":
+    case "bending-moment":
+    case "stress":
+    case "shear-stress":
+      // Never requested through this path: a beam's efforts and stresses are read out of the recording's stress cache instead (`get_beam_stress_series`), which is also where its `axial-force` comes from.
+      return { t: [], curves: [], unit: "" };
+
+
     case "slide-abscissa":
-      return abscissa_series(element, snapshots);
+      return abscissa_series(element, snapshots, true);
 
     case "slide-velocity":
       // The solver carries no state for an abscissa's own rate, so this one is differentiated rather than read — exact whatever the rail is itself doing.
-      return rate_of(abscissa_series(element, snapshots), "m/s");
+      return rate_of(abscissa_series(element, snapshots, false), "m/s");
 
     case "belt-tension":
-    case "motor-torque":
       return unrecorded_series(metric);
   }
 }
 
-type UnrecordedMetric = "belt-tension" | "motor-torque";
+type UnrecordedMetric = "belt-tension";
 
 /** The empty series of a metric the recorder does not produce yet (see `ProbeMetric`), in the unit it will read in. */
 function unrecorded_series(metric: UnrecordedMetric): ProbeSeries {
@@ -1328,7 +1569,6 @@ function unrecorded_series(metric: UnrecordedMetric): ProbeSeries {
 
 const UNRECORDED_UNIT: Record<UnrecordedMetric, string> = {
   "belt-tension": "N",
-  "motor-torque": "N·m",
 };
 
 /** One measured quantity of an element at a given instant. */

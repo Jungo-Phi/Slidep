@@ -71,6 +71,15 @@ export const ANGLE: QuantityKind = {
   ],
 };
 
+/**
+ * A dimensionless fraction of something, stored as that fraction (a half is `0.5`) and read as a percentage.
+ * Fixed like `LENGTH` and `ANGLE`: a fraction lives in one narrow range by construction, so no prefix ladder has anything to adapt to.
+ */
+export const PERCENT: QuantityKind = {
+  adaptive: false,
+  units: [{ symbol: "%", factor: 0.01 }],
+};
+
 /** `SnapSettings.angleStep` is the one stored field left that holds degrees directly rather
  * than SI radians — a snap-corridor setting, not a mechanism measurement, and internally consistent wherever it's read, so it hasn't followed the rest.
  * Convert at its one display boundary (`SettingsMenu`) with these; a live, degree-native computation feeding a radian-storing field (angle placement, its on-canvas preview) also crosses through them. */
@@ -93,6 +102,8 @@ const adaptive = (baseSymbol: string, baseFactor: number = 1): QuantityKind => (
 
 export const FORCE = adaptive("N");
 export const LINEAR_VELOCITY = adaptive("m/s");
+/** No `submultipleOnSuffix`: prefixing the "s²" down a decade would scale it by 1e-6, not 1e-3 — the same trap `INERTIA`'s "m²" carries. The prefix goes on the metre, where it means what it says. */
+export const LINEAR_ACCELERATION = adaptive("m/s²");
 export const POWER = adaptive("W");
 export const ENERGY = adaptive("J");
 export const MOMENT: QuantityKind = {
@@ -172,6 +183,13 @@ export const ANGULAR_VELOCITY = (): QuantityKind => ({
     { symbol: "rad/s", factor: 1 },
   ],
 });
+
+/**
+ * An angular acceleration, in rad/s².
+ * Adaptive and radian-based, unlike `ANGULAR_VELOCITY` which is fixed and revolution-based: that one exists to spell a motor's commanded speed the way its datasheet does, while this one is only ever read off a chart, where an SI prefix is what keeps a small reading legible.
+ * The prefix lands on the radian ("mrad/s²"), the only factor in the symbol that can carry one — prefixing the "s²" would scale by 1e-6, not 1e-3.
+ */
+export const ANGULAR_ACCELERATION = adaptive("rad/s²");
 
 /** The unit a fixed kind always displays in, or an adaptive kind's SI base unit. */
 export function default_unit(kind: QuantityKind): QuantityUnit {

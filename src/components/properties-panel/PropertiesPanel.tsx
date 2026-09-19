@@ -25,6 +25,7 @@ import { ProjectInfoSection } from "./panels/ProjectInfoSection";
 import ElementProperties from "./panels/ElementProperties";
 import ConstraintsPanel from "./panels/ConstraintsPanel";
 import AnalysisPanel from "./panels/AnalysisPanel";
+import WorstStress from "./components/WorstStress";
 import MaterialsLibraryPanel, { LibraryFocusRequest } from "./panels/MaterialsLibraryPanel";
 import { is_constraint_type } from "../canvas/utils";
 import { ElementNavigationContext } from "./element-navigation";
@@ -351,13 +352,27 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                 <Box sx={{ my: 1 }}>
                   {/* With nothing selected, the mechanism's own energy takes the region: the one reading there is never an element to hold it against, which is what makes it the thing a selection can replace (see `EnergyBalance`). */}
                   {subject === undefined && appMode === "dynamic" ? (
-                    <EnergyBalance
-                      snapshots={
-                        runtimeState.simulationSnapshots as DynamicSnapshot[]
-                      }
-                      currentTime={runtimeState.time}
-                      onSeek={seekTime}
-                    />
+                    <>
+                      <EnergyBalance
+                        snapshots={
+                          runtimeState.simulationSnapshots as DynamicSnapshot[]
+                        }
+                        currentTime={runtimeState.time}
+                        onSeek={seekTime}
+                      />
+                      {/* Under the energy balance, and only once a beam has actually been read: the region's other reading is a solver diagnostic, this one is about the mechanism, and a card that appeared empty on every mechanism without beams would only ever be noise. */}
+                      {runtimeState.stressScale.beams.size > 0 && (
+                        <WorstStress
+                          cache={runtimeState.stressScale}
+                          elements={mechanism.mechanicalElements}
+                          materials={mechanism.materials}
+                          profiles={mechanism.profiles}
+                          currentTime={runtimeState.time}
+                          onSeek={seekTime}
+                          setHoveredAbscissa={setHoveredAbscissa}
+                        />
+                      )}
+                    </>
                   ) : (
                     <SelectionInspector
                       subject={subject}
@@ -457,6 +472,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                 runtimeState={runtimeState}
                 seekTime={seekTime}
                 setHoveredBalanceTerm={setHoveredBalanceTerm}
+                setHoveredAbscissa={setHoveredAbscissa}
                 momentBalanceReference={momentBalanceReference}
                 setMomentBalanceReference={setMomentBalanceReference}
                 setMomentBalanceReferenceHovered={setMomentBalanceReferenceHovered}

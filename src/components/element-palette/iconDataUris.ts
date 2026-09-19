@@ -98,7 +98,7 @@ export const icon = (name: string): string => {
 const tinted = new Map<string, string>();
 
 /**
- * Data URI for a palette icon whose accent is forced to `color` rather than taken from the theme: how one glyph stands for several quantities, an arrow reading as a weight or as a reaction by its hue alone (`PHYSICS_OVERLAY_COLOR`).
+ * Data URI for a palette icon whose accent is forced to `color` rather than taken from the theme: how one glyph stands for several quantities, an arrow reading as a weight or as a reaction by its hue alone (`ICON_COLORS.OVERLAY`).
  * Every other hue of the icon still follows the theme, so it stays legible on either background.
  */
 export const icon_tinted = (name: string, color: string): string => {

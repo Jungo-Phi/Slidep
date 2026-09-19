@@ -23,22 +23,29 @@ import {
   ScreenPoint,
   WorldPoint,
 } from "../../types";
-import { world2screen, world2screen_vec, screen2world } from "../../utils";
+import { world2screen, screen2world } from "../../utils";
 import { COLORS } from "../../theme/canvas-theme";
 import { CONSTRAINT_REVEAL_COOLDOWN_MS, CONSTRAINT_REVEAL_FADE_MS, MODE_ANIMATION } from "../../constants/interaction-specs";
-import { STROKE_WIDTHS, DIM } from "../../constants/rendering-specs";
 import { Box, Tooltip } from "@mui/material";
 import { type Instance as PopperInstance } from "@popperjs/core";
 import { CanvasHighlight, draw_mechanical_canvas } from "./drawing/draw-canvas";
+import { spring_coil_pitch } from "./drawing/coil-pitch";
 import { RedundancySymbol } from "../solver/analysis/redundancy-symbols";
 import type { CohesionField } from "../solver/recording/cohesion-field";
+import { cohesion_sample_at } from "../solver/recording/cohesion-field";
+import { beam_strength, max_fiber_stress } from "../../utils/section-properties";
 import type {
   HoveredBalanceTerm,
   MomentBalanceReference,
 } from "../solver/analysis/force-balance";
 import { mechanism_center_of_mass } from "../solver/analysis/force-balance";
-import { PHYSICS_OVERLAY_COLOR } from "../../constants/physics-display-specs";
+import { balance_term_color } from "../../constants/physics-display-specs";
 import type { BeamElement } from "../../types/element";
+import {
+  anchored_arrows,
+  anchored_moments,
+  balance_term_anchor,
+} from "./drawing/overlay-anchor";
 import { canvasStateReducer } from "./tools/canvas-state-reducer";
 import { measured_elements, ruler_is_out, shown_readout } from "./tools/measure";
 import { moment_balance_hover } from "./tools/moment-balance-picking";
@@ -104,6 +111,8 @@ import {
   OverlayArrow,
   OverlayMoment,
   TrajectoryDisplay,
+  draw_abscissa_marker,
+  stress_ramp_color,
 } from "./drawing/drawing-functions";
 import {
   floor_acute_angle,
@@ -319,6 +328,7 @@ export const MechanicalCanvas = forwardRef<
     const containerRef = useRef<HTMLDivElement>(null);
     const mechanismRef = useRef(mechanism);
     const restingRef = useRef(mechanism);
+    const coilPitchRef = useRef<number | undefined>(undefined);
     /** How much of their opacity the dimensions currently keep, 0…1 (see the fade below). */
     const dimensionFadeRef = useRef(1);
     const lastFadeAtRef = useRef(0);
@@ -386,6 +396,8 @@ export const MechanicalCanvas = forwardRef<
     // What is drawn when nothing overrides it.
     // `render` runs from the draw loop and does not list the prop among its dependencies, so it reads the resting pose from here rather than from a closure that would freeze on the first frame.
     restingRef.current = mechanism;
+    // Off the resting pose, like everything a spring is drawn from but its two ends: what the simulation plays is the same spring throughout, and a mechanism whose span breathes as it moves must not recount its coils under the user's eyes.
+    coilPitchRef.current = spring_coil_pitch(mechanism.mechanicalElements);
     mechanismRef.current =
       modePreviewRef.current ?? liveFrameRef.current?.mechanism ?? mechanism;
     hoveredPartRef.current = hoveredPart;
@@ -592,6 +604,9 @@ export const MechanicalCanvas = forwardRef<
 
       const pickingMomentBalance =
         canvasStateRef.current.type === "PickingMomentBalanceNode";
+      // A mode swing is the one thing that draws a pose the recording knows nothing about, so it is the one thing the readings have to be carried onto — see `anchored_arrows`.
+      const swinging = modePreviewRef.current !== null;
+      const drawnElements = mechanismRef.current.mechanicalElements;
       draw_mechanical_canvas(ctx, {
         viewport,
         canvasWidth: canvas.width,
@@ -602,14 +617,21 @@ export const MechanicalCanvas = forwardRef<
           : hoveredPartRef.current,
         focusedOverlay: focusedOverlayRef.current,
         hoveredBalanceTerm: hoveredBalanceTermRef.current,
-        overlayArrows: live?.overlayArrows,
-        overlayMoments: live?.overlayMoments,
+        overlayArrows:
+          swinging && live
+            ? anchored_arrows(live.overlayArrows, drawnElements)
+            : live?.overlayArrows,
+        overlayMoments:
+          swinging && live
+            ? anchored_moments(live.overlayMoments, drawnElements)
+            : live?.overlayMoments,
         trajectories: live?.trajectories,
         trajectoryDotted,
         // The floor in effect at the instant on screen: a simulation moves what rests on it, never the surface itself, but an edit made during the run can change it.
         floor: mechanismRef.current.simulation.floor,
         state: canvasStateRef.current,
-        mechanicalElements: mechanismRef.current.mechanicalElements,
+        mechanicalElements: drawnElements,
+        coilPitch: coilPitchRef.current,
         constraintElements: ghostConstraints.length
           ? [...modelConstraints, ...ghostConstraints]
           : modelConstraints,
@@ -721,15 +743,13 @@ export const MechanicalCanvas = forwardRef<
       }
 
 
-      // Where the moment balance is taken about — not persistently, only while something reads against it: the picker armed (the cross follows the cursor like any other placement preview), the picker hovered (it previews the reference already set), or a ΣM term hovered whose moment there is zero.
-      // A term with a moment draws its own glyph centred on that point, which already says where it is.
+      // Where the moment balance is taken about — not persistently, only while something reads against it: the picker armed (the cross follows the cursor like any other placement preview), the picker hovered (it previews the reference already set), or anything of the ΣM line hovered.
       const pickerActive =
         pickingMomentBalance || momentBalanceReferenceHoveredRef.current;
       const balanceHover = hoveredBalanceTermRef.current;
+      // Reading a moment is reading it about somewhere, so pointing at one says where.
       const showsReferenceCross =
-        pickerActive ||
-        (balanceHover?.quantity === "moment" &&
-          Math.abs(balanceHover.term.moment) <= 1e-9);
+        pickerActive || balanceHover?.quantity === "moment";
       // The landmark of the ruler and of the picker alike, drawn here for both: over the mechanism, where nothing it lands on can bury it.
       if (pickerActive || ruler_is_out(canvasStateRef.current)) {
         const centerOfMass = mechanism_center_of_mass(
@@ -744,12 +764,15 @@ export const MechanicalCanvas = forwardRef<
       // A hovered balance term lights what it is built from: its force from ΣF, its force and own couple from ΣM.
       // Whatever the overlays already show is lit by the scene itself (matched by `id`), so only what nothing on screen shows is drawn here.
       // A load is always on screen while there is a balance to read, and lights itself through the hover the panel sets.
-      if (balanceHover) {
-        const { term, quantity } = balanceHover;
-        const color =
-          term.kind === "load"
-            ? COLORS.ACCENT
-            : PHYSICS_OVERLAY_COLOR[term.kind === "weight" ? "weight" : "reaction-support"];
+      for (const term of balanceHover?.terms ?? []) {
+        const quantity = balanceHover!.quantity;
+        const color = balance_term_color(
+          term.kind,
+          COLORS.ACCENT,
+          COLORS.OVERLAY,
+        );
+        // Drawn on the body as it stands on screen rather than where the balance was read — see `balance_term_anchor`.
+        const at = balance_term_anchor(term, drawnElements) ?? term.at;
         if (term.kind !== "load") {
           const forceShown = (live?.overlayArrows ?? []).some(
             (arrow) => arrow.id === term.id,
@@ -761,21 +784,23 @@ export const MechanicalCanvas = forwardRef<
             ctx,
             viewport,
             {
-              at: term.at,
+              at,
               force: forceShown ? ZERO : term.force,
               couple: quantity === "moment" && !coupleShown ? term.couple : 0,
             },
             color,
           );
         }
-        // Taken at its own point of application, a term's moment is its own couple, already lit there: a second glyph at the reference would only stack on it.
+        // A term's moment reduced to the reference, drawn there — for ONE term only.
+        // Every term of a line reduces to that same point, so a whole line drawn this way is one pile of arcs; what says a line's moments there instead is its forces, each at its own point of application, around the reference cross the hover brings out.
+        // Skipped too where the term's moment IS its own couple, applied at the reference: it is already lit there, and a second glyph would only stack on it.
         const reference = momentBalancePointRef.current;
         const atOwnPoint =
           Math.abs(term.couple) > 1e-9 &&
           world2screen(reference, viewport).distance_to(
-            world2screen(term.at, viewport),
+            world2screen(at, viewport),
           ) <= 1;
-        if (quantity === "moment" && !atOwnPoint)
+        if (quantity === "moment" && !atOwnPoint && balanceHover!.terms.length === 1)
           draw_balance_marker(
             ctx,
             viewport,
@@ -793,6 +818,7 @@ export const MechanicalCanvas = forwardRef<
           pickingMomentBalance && cursorOnCanvasRef.current
             ? moment_balance_hover(
                 hoveredPartRef.current,
+                screen2world(mousePositionRef.current, viewport),
                 mechanismRef.current.mechanicalElements,
                 mechanismRef.current.materials,
                 mechanismRef.current.profiles,
@@ -801,8 +827,9 @@ export const MechanicalCanvas = forwardRef<
             : momentBalancePointRef.current,
         );
 
-      // The abscissa hovered on the selected beam's N/T/Mf diagrams (panel) — docs/plan- efforts-interieurs.md phase 5bis.
-      // A tick crossing the beam, not a probe marker (`draw_probe`'s circle+crosshair means something else — a measurement point).
+      // Where along a beam the reading of THIS instant was taken, while a chart of it is being read — its N/T/Mf diagrams in the selection inspector, or the mechanism's own worst-case chart.
+      // Always this instant, never the one under the pointer: the beam is drawn in the pose it holds now, so an abscissa from another instant would be marked on a beam that was elsewhere when it was measured.
+      // A disc, filled with the colour the utilization lens would paint that very point: naming the abscissa and saying how hard the beam is working there are one answer, and the ramp is the language that answer is already given in elsewhere.
       const hovered = hoveredAbscissaRef.current;
       if (hovered) {
         const beam = mechanismRef.current.mechanicalElements.find(
@@ -811,25 +838,31 @@ export const MechanicalCanvas = forwardRef<
         );
         const length = beam?.positionEnd.distance_to(beam.positionStart);
         if (beam && length && length > 1e-9) {
-          const ratio = Math.max(0, Math.min(1, hovered.s / length));
-          const point = beam.positionStart.lerp(beam.positionEnd, ratio);
-          const perp = world2screen_vec(
-            beam.positionEnd.sub(beam.positionStart),
+          const along = Math.max(0, Math.min(1, hovered.s / length));
+          const position = world2screen(
+            beam.positionStart.lerp(beam.positionEnd, along),
             viewport,
-          )
-            .normalize()
-            .perp();
+          );
+          // Neutral wherever the stress cannot be resolved — an unset material, or a frame recorded without the diagnostics the field needs. The disc still marks the place.
+          let fill = COLORS.ELEMENT_STROKE;
+          const field = live?.cohesionFields?.find((f) => f.beamID === beam.id);
+          const strength = beam_strength(
+            beam.materialID,
+            beam.profileID,
+            mechanismRef.current.materials,
+            mechanismRef.current.profiles,
+          );
+          const sample = field && cohesion_sample_at(field, hovered.s);
+          if (sample && strength) {
+            const stress = max_fiber_stress(sample.N, sample.Mf, strength.section);
+            fill = stress_ramp_color(
+              stress / strength.Re,
+              stress,
+              live?.stressScale ?? 0,
+            );
+          }
           ctx.save();
-          ctx.strokeStyle = COLORS.ELEMENT_STROKE;
-          ctx.lineWidth = STROKE_WIDTHS.HOVERED;
-          const half = DIM.BEAM_WIDTH;
-          const position = world2screen(point, viewport);
-          const a = position.add(perp.mul(half));
-          const b = position.sub(perp.mul(half));
-          ctx.beginPath();
-          ctx.moveTo(a.x, a.y);
-          ctx.lineTo(b.x, b.y);
-          ctx.stroke();
+          draw_abscissa_marker(ctx, position, fill);
           ctx.restore();
         }
       }
@@ -970,8 +1003,16 @@ export const MechanicalCanvas = forwardRef<
       if (
         mouseButtonDownRef.current === "none" &&
         canvasStateRef.current.type !== "PlacingProbeMetrics"
-      )
+      ) {
         cursorOnCanvasRef.current = false;
+        // A named reading draws itself whatever its own overlay setting says, and nothing off the canvas ever renames it: left standing, it would keep a reading on screen for good.
+        // Only that one case is dropped here — every other hover is what the panel and the cursor both write into, and clearing it would take a highlight away from whatever the cursor moved on to.
+        if (hoveredPartRef.current.type === "Overlay")
+          setHoveredPart({
+            type: "Void",
+            position: hoveredPartRef.current.position,
+          });
+      }
     };
 
     /**
@@ -1055,7 +1096,25 @@ export const MechanicalCanvas = forwardRef<
         overlayReadingUnder(mousePositionRef.current, currMech.viewport),
       );
       let snapFeedback: SnapFeedback = NO_FEEDBACK;
-      if (snapToGrid && appModeRef.current === "edition") {
+      // The moment balance's reference is aimed in dynamic mode, where the picker is the one gesture that puts a point down.
+      const pickingReference =
+        canvasStateRef.current.type === "PickingMomentBalanceNode";
+      // A node, a beam end or the centre of mass under the cursor is a target of its own, and it outranks the grid: pulling the point onto a line beside one would take the aim off the very marker drawn to be aimed at.
+      const holdsOwnTarget =
+        pickingReference &&
+        moment_balance_hover(
+          newHoveredPart,
+          worldMousePos,
+          currMech.mechanicalElements,
+          currMech.materials,
+          currMech.profiles,
+          currMech.viewport,
+        ).reference.kind !== "point";
+      if (
+        snapToGrid &&
+        !holdsOwnTarget &&
+        (appModeRef.current === "edition" || pickingReference)
+      ) {
         const { position, ...feedback } = snap_hover(
           newHoveredPart,
           canvasStateRef.current,
@@ -1084,7 +1143,8 @@ export const MechanicalCanvas = forwardRef<
         if (feedback.guides.length > 0 || feedback.distanceSnapped)
           snapFeedback = feedback;
       }
-      if (newHoveredPart.type === "Void" && appModeRef.current === "edition") {
+      // Runs in every mode, unlike the two snaps above: a load gesture holds a running simulation still (see `CANVAS_STATE_SIM_EFFECT`) and reads the very pose drawn under it, so the beam axes it aims at are the ones on screen.
+      if (newHoveredPart.type === "Void") {
         // Align load direction to world/beam axes, and its length to a round value
         const screenHoverPos = world2screen(
           newHoveredPart.position,

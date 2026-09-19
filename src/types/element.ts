@@ -450,9 +450,12 @@ export interface MomentElement extends LoadBaseElement {
 export type ProbeMetric =
   | "position"
   | "velocity"
+  | "acceleration"
   | "angle"
   | "angular-velocity"
+  | "angular-acceleration"
   | "motor-power"
+  | "motor-torque"
   | "force"
   | "force-start"
   | "force-end"
@@ -468,11 +471,16 @@ export type ProbeMetric =
   | "elongation"
   | "elongation-velocity"
   | "axial-force"
+  // What dimensions a beam, each read at the abscissa where it peaks along the span at that instant — a beam alone offers them, and only dynamic mode computes them (`BeamStressSeries`).
+  // `axial-force` belongs with these on a beam, where it is the cohesion `N`; on a spring or a damper it is the member's own law instead, which is why it is named above rather than here.
+  | "shear-force"
+  | "bending-moment"
+  | "stress"
+  | "shear-stress"
   | "slide-abscissa"
   | "slide-velocity"
-  // Named but not yet recorded: every series of these is empty, and no probe selector offers them (`PROBE_METRIC_ORDER` leaves them out).
-  | "belt-tension"
-  | "motor-torque";
+  // Named but not yet recorded: `unrecorded_series` answers for it in both modes, and no probe selector offers it (`PROBE_METRIC_ORDER` leaves it out).
+  | "belt-tension";
 
 /** Which curves of a vector metric are plotted.
  * Ignored for scalar metrics (angle, angular velocity). */

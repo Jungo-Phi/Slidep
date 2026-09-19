@@ -43,14 +43,20 @@ import {
 } from "../../../types/runtime-state";
 import {
   get_dynamic_probe_series,
+  get_beam_stress_series,
   get_probe_series,
+  is_beam_stress_metric,
   is_vector_metric,
+  metric_needs_dynamics,
+  ProbeSeries,
 } from "../../solver/recording/probe-series";
 import { dynamic_snapshot_at } from "../../solver/dynamics/simulation-engine";
 import {
   CohesionField,
   compute_cohesion_field,
+  shear_admissible_stress,
 } from "../../solver/recording/cohesion-field";
+import { beam_strength } from "../../../utils/section-properties";
 import {
   metric_shows_zero,
   pool_key_for_metric,
@@ -75,13 +81,16 @@ import { useDismissOnShortcut } from "../../common/dismiss-popups";
 import { is_probes_only_bundle } from "../../mechanism/action-kind";
 import {
   BalanceTerm,
+  ForceBalance,
   HoveredBalanceTerm,
   MomentBalanceReference,
   compute_force_balance,
   resolve_moment_balance_point,
 } from "../../solver/analysis/force-balance";
 import { element_to_hovered_part } from "../../canvas/utils";
+import type { HoveredAbscissa } from "../../../types/hovered-part";
 import type { FocusedOverlay } from "../../canvas/drawing/drawing-functions";
+
 import { shown_element_name } from "../../../utils";
 import { MODE_ANIMATION } from "../../../constants/interaction-specs";
 import { StringKey, t, tn } from "../../../i18n";
@@ -132,6 +141,29 @@ function load_hovered_part(
   return { type, id: loadID, position, deleting: false, part: "body" };
 }
 
+/** What the cursor rests on in the balance, named the way it survives a rebuild: one term by its own id, a whole sum, or the law's right-hand member. */
+type HoveredBalanceLine = {
+  id: string | "total" | "inertia";
+  quantity: "force" | "moment";
+};
+
+/** What a hovered line names, resolved against the balance on screen — `null` wherever there is no balance left to read it in, the inertia member included.
+ * That is the only thing that un-names a line whose row was unmounted under the cursor, an unmount firing no leave event.
+ * The inertia member is no term of any sum, so it resolves to itself rather than to a list. */
+function hovered_from(
+  line: HoveredBalanceLine,
+  balance: ForceBalance | undefined,
+): HoveredBalanceTerm | null {
+  if (!balance) return null;
+  if (line.id === "inertia")
+    return { terms: [], inertia: true, quantity: line.quantity };
+  const terms =
+    line.id === "total"
+      ? balance.actions
+      : balance.actions.filter((action) => action.id === line.id);
+  return terms.length > 0 ? { terms, quantity: line.quantity } : null;
+}
+
 interface AnalysisPanelProps {
   mechanism: Mechanism;
   /**
@@ -163,6 +195,8 @@ interface AnalysisPanelProps {
   modePreviewRef: React.MutableRefObject<Mechanism | null>;
   /** See `App`'s own `hoveredBalanceTerm`. */
   setHoveredBalanceTerm: (hovered: HoveredBalanceTerm | null) => void;
+  /** Where along the selected beam a hovered chart's value was found, for the canvas to tick — the same channel the selection inspector's own N/T/Mf diagrams use (`HoveredAbscissa`). */
+  setHoveredAbscissa: (hovered: HoveredAbscissa | null) => void;
   /** See `App`'s own `momentBalanceReference`. */
   momentBalanceReference: MomentBalanceReference;
   setMomentBalanceReference: (reference: MomentBalanceReference) => void;
@@ -769,6 +803,7 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
   setInertiaFreeElements,
   modePreviewRef,
   setHoveredBalanceTerm,
+  setHoveredAbscissa,
   momentBalanceReference,
   setMomentBalanceReference,
   setMomentBalanceReferenceHovered,
@@ -801,19 +836,84 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
     ]);
   };
 
-  /** Click/drag on a chart: scrub the simulation time (and pause), like the timeline. */
-  const isReactionMetric = (metric: ProbeMetric): boolean =>
-    metric === "force" ||
-    metric === "force-start" ||
-    metric === "force-end" ||
-    metric === "moment" ||
-    metric === "moment-start" ||
-    metric === "moment-end";
+  /**
+   * The running scale and the own-floor this metric's chart is judged against, both 0 for a metric the pool does not bound (see `pool_key_for_metric`) — which is how a chart opts out of the negligibility flattening altogether, as the energy balance does.
+   */
+  const pool_scales = (metric: ProbeMetric): { poolMax: number; ownFloor: number } => {
+    const key = pool_key_for_metric(metric);
+    if (!key) return { poolMax: 0, ownFloor: 0 };
+    return {
+      poolMax: runtimeState.negligibilityPool[key],
+      ownFloor: runtimeState.negligibilityPool.ownFloors[key],
+    };
+  };
+
+  /**
+   * What a probe plots, and — for the readings taken along a beam — where along its span each value was found.
+   * A beam's efforts and stresses come out of the recording's stress cache rather than the snapshots (`is_beam_stress_metric`), which is also the one door its `axial-force` goes through; a spring's or a damper's goes through its own law like every other metric.
+   */
+  const probe_readout = (
+    element: MechanicalElement,
+    metric: ProbeMetric,
+  ): { series: ProbeSeries; abscissa?: number[] } => {
+    if (element.type === "beam" && is_beam_stress_metric(metric))
+      return get_beam_stress_series(element.id, metric, runtimeState.stressScale);
+    return {
+      series:
+        appMode === "kinematic"
+          ? get_probe_series(
+              element,
+              metric,
+              runtimeState.simulationSnapshots as KinematicSnapshot[],
+            )
+          : get_dynamic_probe_series(
+              element,
+              metric,
+              runtimeState.simulationSnapshots as DynamicSnapshot[],
+            ),
+    };
+  };
+
+  /** The limit a stress chart is read against: `Re` for a normal stress, `τ_adm` for a shear one. Absent for every other metric, and for a beam whose material or profile does not resolve. */
+  const stress_reference = (
+    element: MechanicalElement,
+    metric: ProbeMetric,
+  ): { value: number; label: string } | undefined => {
+    if (element.type !== "beam") return undefined;
+    if (metric !== "stress" && metric !== "shear-stress") return undefined;
+    const strength = beam_strength(
+      element.materialID,
+      element.profileID,
+      mechanism.materials,
+      mechanism.profiles,
+    );
+    if (!strength) return undefined;
+    return metric === "stress"
+      ? { value: strength.Re, label: "Re" }
+      : { value: shear_admissible_stress(strength.Re), label: "τ adm" };
+  };
+
+  // Withdrawn when the panel goes away: a tick outliving the chart that named it would point at nothing.
+  React.useEffect(() => () => setHoveredAbscissa(null), [setHoveredAbscissa]);
+
+  /** `abscissa` at the recorded instant nearest the one on screen — the same nearest-sample rule `get_metric_at` reads a series by.
+   * Read at `runtimeState.time` rather than wherever the pointer sits: the canvas is posed at that instant, and an abscissa taken from another one would be marked on a beam that was somewhere else when it was measured. */
+  const shown_abscissa = (
+    series: ProbeSeries,
+    abscissa: number[],
+  ): number | null => {
+    if (series.t.length === 0) return null;
+    const time = runtimeState.time;
+    let best = 0;
+    for (let i = 1; i < series.t.length; i++)
+      if (Math.abs(series.t[i] - time) < Math.abs(series.t[best] - time)) best = i;
+    return abscissa[best] ?? null;
+  };
 
   const chart_empty_message = (metric: ProbeMetric): string =>
     t(
-      appMode === "kinematic" && isReactionMetric(metric)
-        ? "chart_force_kinematic"
+      appMode === "kinematic" && metric_needs_dynamics(metric)
+        ? "chart_not_in_kinematic"
         : appMode === "edition"
           ? "chart_run_simulation"
           : "chart_waiting",
@@ -1034,21 +1134,14 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
     momentBalancePoint,
   ]);
 
-  // Which line of the balance the cursor rests on, held by IDENTITY rather than by the term itself: the terms are rebuilt at every instant, so holding one would freeze the canvas marker on the pose it was first hovered in while the mechanism moves on.
-  const [hoveredBalanceLine, setHoveredBalanceLine] = React.useState<{
-    id: string;
-    quantity: "force" | "moment";
-  } | null>(null);
+  // Held by IDENTITY rather than by the terms themselves: the terms are rebuilt at every instant, so holding one would freeze the canvas marker on the pose it was first hovered in while the mechanism moves on.
+  const [hoveredBalanceLine, setHoveredBalanceLine] =
+    React.useState<HoveredBalanceLine | null>(null);
+  // Re-resolves the hovered line against each rebuilt balance, so the canvas marker follows the mechanism — and un-names it as soon as that balance stops holding the line.
+  // It does NOT publish the hover itself: an effect only runs after the commit, so the first frame drawn after the cursor lands would carry nothing and the marker would appear a frame late — `onHoverTerm` writes both states at once instead, resolved from the balance it already holds.
   React.useEffect(() => {
-    const term =
-      hoveredBalanceLine &&
-      forceBalance?.actions.find(
-        (action) => action.id === hoveredBalanceLine.id,
-      );
     setHoveredBalanceTerm(
-      term && hoveredBalanceLine
-        ? { term, quantity: hoveredBalanceLine.quantity }
-        : null,
+      hoveredBalanceLine ? hovered_from(hoveredBalanceLine, forceBalance) : null,
     );
   }, [hoveredBalanceLine, forceBalance, setHoveredBalanceTerm]);
   // Nothing else un-sets it once this panel goes away with the cursor still on a line.
@@ -1108,15 +1201,29 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
           {forceBalance && (
             <ForceBalanceTable
               balance={forceBalance}
-              onHoverTerm={(term, quantity) => {
-                setHoveredBalanceLine(term ? { id: term.id, quantity } : null);
+              onHoverTerm={(target, quantity) => {
+                const line: HoveredBalanceLine | null =
+                  target === null
+                    ? null
+                    : target === "total" || target === "inertia"
+                      ? { id: target, quantity }
+                      : { id: target.id, quantity };
+                const term =
+                  target === null || target === "total" || target === "inertia"
+                    ? null
+                    : target;
+                setHoveredBalanceLine(line);
+                // Published from the event rather than left to the effect above: both land in one render, so the very next frame the canvas draws already carries the marker.
+                setHoveredBalanceTerm(
+                  line ? hovered_from(line, forceBalance) : null,
+                );
                 // Written on entering or leaving a line only: the balance is rebuilt at every instant, and writing on each rebuild would wipe the canvas's own hover while the simulation runs.
-                // A load has an arrow of its own on the canvas, drawn from the mechanism rather than from the overlay set: pointing at either of its two columns is telling the canvas the cursor is on it, which is what thickens its stroke and shows its value.
-                if (term && term.kind === "load")
-                  setHoveredPart(
-                    load_hovered_part(term.elementID, term.at, mechanism.loads),
-                  );
-                else setHoveredPart({ type: "Void", position: ZERO });
+                // A load's own arrow is part of the mechanism rather than of the overlay set, so pointing at its row is telling the canvas the cursor is on it, which is what shows its value. Several at once are lit by the drawing instead (`litLoadIDs`), this register naming only one.
+                setHoveredPart(
+                  term?.kind === "load"
+                    ? load_hovered_part(term.elementID, term.at, mechanism.loads)
+                    : { type: "Void", position: ZERO },
+                );
               }}
               onClickTerm={handleClickBalanceTerm}
               referenceLabel={momentBalanceReferenceLabel}
@@ -1236,18 +1343,8 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
               />
 
               {element.probes.map((probe) => {
-                const series =
-                  appMode === "kinematic"
-                    ? get_probe_series(
-                        element,
-                        probe.metric,
-                        runtimeState.simulationSnapshots as KinematicSnapshot[],
-                      )
-                    : get_dynamic_probe_series(
-                        element,
-                        probe.metric,
-                        runtimeState.simulationSnapshots as DynamicSnapshot[],
-                      );
+                const { series, abscissa } = probe_readout(element, probe.metric);
+                const reference = stress_reference(element, probe.metric);
                 const isVector = is_vector_metric(probe.metric);
                 const curves: ChartCurve[] = series.curves
                   .filter((c) =>
@@ -1370,22 +1467,26 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
                     <ProbeChart
                       curves={curves}
                       currentTime={runtimeState.time}
-                      poolMax={
-                        runtimeState.negligibilityPool[
-                          pool_key_for_metric(probe.metric)
-                        ]
-                      }
-                      ownFloor={
-                        runtimeState.negligibilityPool.ownFloors[
-                          pool_key_for_metric(probe.metric)
-                        ]
-                      }
+                      {...pool_scales(probe.metric)}
                       unitFactor={unit.factor}
                       showZero={metric_shows_zero(probe.metric)}
+                      reference={reference}
                       emptyMessage={
                         noComponentSelected
                           ? t("chart_no_component")
                           : chart_empty_message(probe.metric)
+                      }
+                      onHover={
+                        abscissa
+                          ? (inside) => {
+                              const s = inside
+                                ? shown_abscissa(series, abscissa)
+                                : null;
+                              setHoveredAbscissa(
+                                s === null ? null : { beamID: element.id, s },
+                              );
+                            }
+                          : undefined
                       }
                       onSeek={appMode !== "edition" ? seekTime : undefined}
                     />
@@ -1407,18 +1508,8 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
             );
             const isVector = is_vector_metric(metric);
             const curves: ChartCurve[] = contributors.flatMap((el) => {
-              const series =
-                appMode === "kinematic"
-                  ? get_probe_series(
-                      el,
-                      metric,
-                      runtimeState.simulationSnapshots as KinematicSnapshot[],
-                    )
-                  : get_dynamic_probe_series(
-                      el,
-                      metric,
-                      runtimeState.simulationSnapshots as DynamicSnapshot[],
-                    );
+              // No reference line here: each beam is read against its own `Re`, and several of them have no one line to share.
+              const { series } = probe_readout(el, metric);
               const curve = series.curves.find(
                 (c) => c.key === (isVector ? "norm" : "value"),
               );
@@ -1460,14 +1551,7 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
                 <ProbeChart
                   curves={curves}
                   currentTime={runtimeState.time}
-                  poolMax={
-                    runtimeState.negligibilityPool[pool_key_for_metric(metric)]
-                  }
-                  ownFloor={
-                    runtimeState.negligibilityPool.ownFloors[
-                      pool_key_for_metric(metric)
-                    ]
-                  }
+                  {...pool_scales(metric)}
                   unitFactor={unit.factor}
                   showZero={metric_shows_zero(metric)}
                   emptyMessage={chart_empty_message(metric)}
