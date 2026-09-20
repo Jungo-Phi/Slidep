@@ -1931,8 +1931,7 @@ export function draw_dimension_text(
     : (Math.round(value * 10) / 10).toString() + extension;
   const metrics = ctx.measureText(text);
 
-  const lastShadowBlur = ctx.shadowBlur;
-  const lastShadowColor = ctx.shadowColor;
+  ctx.save();
   ctx.shadowBlur = INTERACTION_SPECS.ICON_HALO_SIZE;
   ctx.shadowColor = COLORS.BACKGROUND;
   // A value pill sits on the ground and keeps it even when selected: it labels the drawing rather than floating above it, and its outline and text already carry the selection.
@@ -1946,9 +1945,8 @@ export function draw_dimension_text(
     5,
   );
   ctx.fill();
+  ctx.restore();
 
-  ctx.shadowBlur = lastShadowBlur;
-  ctx.shadowColor = lastShadowColor;
   ctx.fillStyle = ctx.strokeStyle;
   draw_text(ctx, position, text);
 }
@@ -1964,7 +1962,7 @@ export function draw_gear_ratio(
   ctx.font = TEXT_SPECS.TEXT_FONT;
   const text = value2ratio(value).join(" : ");
   const metrics = ctx.measureText(text);
-  const lastStrokeStyle = ctx.strokeStyle;
+  ctx.save();
   // At rest the pill carries an outline of its own.
   // Any other state has something to say, and says it in the stroke the caller chose.
   if (!selected && !hovered && deletion === "none")
@@ -1978,15 +1976,11 @@ export function draw_gear_ratio(
     28 / 2,
   );
   ctx.stroke();
-  const lastShadowBlur = ctx.shadowBlur;
-  const lastShadowColor = ctx.shadowColor;
   ctx.shadowBlur = INTERACTION_SPECS.ICON_HALO_SIZE;
   ctx.shadowColor = COLORS.BACKGROUND;
   ctx.fillStyle = badge_fill(selected);
   ctx.fill();
-  ctx.shadowBlur = lastShadowBlur;
-  ctx.shadowColor = lastShadowColor;
-  ctx.strokeStyle = lastStrokeStyle;
+  ctx.restore();
   ctx.fillStyle = ctx.strokeStyle;
   draw_text(ctx, position, text);
 }
@@ -2013,8 +2007,7 @@ export function draw_element_icon(
     4,
   );
   ctx.stroke();
-  const lastShadowBlur = ctx.shadowBlur;
-  const lastShadowColor = ctx.shadowColor;
+  ctx.save();
   ctx.shadowBlur = INTERACTION_SPECS.ICON_HALO_SIZE;
   ctx.shadowColor = COLORS.BACKGROUND;
   ctx.fillStyle = badge_fill(selected);
@@ -2043,8 +2036,7 @@ export function draw_element_icon(
       side,
     );
   }
-  ctx.shadowBlur = lastShadowBlur;
-  ctx.shadowColor = lastShadowColor;
+  ctx.restore();
   if (deletion === "ghost") {
     // Strikes a badge through, corner to corner, in the stroke it is outlined with.
     ctx.beginPath();
@@ -2100,7 +2092,7 @@ export function draw_force(
   }
 
   if (hideText) return;
-  const lastLineWidth = ctx.lineWidth;
+  ctx.save();
   if (textLineWidth !== undefined) ctx.lineWidth = textLineWidth;
   draw_dimension_text(
     ctx,
@@ -2109,7 +2101,7 @@ export function draw_force(
     "",
     kind,
   );
-  ctx.lineWidth = lastLineWidth;
+  ctx.restore();
 }
 
 /** Draws a curved moment arrow (arc with arrowhead) centered at `center`.
@@ -2153,7 +2145,7 @@ export function draw_moment(
   draw_arrow_head(ctx, tip2, headAngle2);
 
   if (hideText) return;
-  const lastLineWidth = ctx.lineWidth;
+  ctx.save();
   if (textLineWidth !== undefined) ctx.lineWidth = textLineWidth;
   draw_dimension_text(
     ctx,
@@ -2162,7 +2154,7 @@ export function draw_moment(
     "",
     MOMENT,
   );
-  ctx.lineWidth = lastLineWidth;
+  ctx.restore();
 }
 
 /**
@@ -2178,7 +2170,7 @@ export function draw_distributed_force(
   vectorEnd: ScreenPoint,
   crestLineWidth?: number,
 ) {
-  const lastLineWidth = ctx.lineWidth;
+  ctx.save();
   if (crestLineWidth !== undefined) ctx.lineWidth = crestLineWidth;
   ctx.beginPath();
   const vs = vectorStart.extend_length((2 / 3) * DIM.ARROW_HEAD_OFFSET);
@@ -2186,7 +2178,7 @@ export function draw_distributed_force(
   ctx.moveTo(start.x + vs.x, start.y + vs.y);
   ctx.lineTo(end.x + ve.x, end.y + ve.y);
   ctx.stroke();
-  ctx.lineWidth = lastLineWidth;
+  ctx.restore();
 
   for (let i = 1; i < DIM.NB_DISTRIBUTED_FORCE_ARROWS; i++) {
     const t = i / DIM.NB_DISTRIBUTED_FORCE_ARROWS;
