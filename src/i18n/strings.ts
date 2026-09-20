@@ -2456,11 +2456,11 @@ export const STRINGS = {
     de: "Abweichung",
     es: "desviío",
   },
-  balance_reference_pick: {
-    fr: "Choisir le point de référence des moments",
-    en: "Choose the moment reference point",
-    de: "Bezugspunkt für Momente wählen",
-    es: "Elegir el punto de referencia de los momentos",
+  balance_reference_current: {
+    fr: "Repère : {value}",
+    en: "Reference: {value}",
+    de: "Bezug: {value}",
+    es: "Referencia: {value}",
   },
   balance_reference_picking: {
     fr: "Sélectionner sur le canevas",

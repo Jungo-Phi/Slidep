@@ -19,6 +19,9 @@ interface ElementDisplayProps {
   editable: boolean;
   trailingControls?: React.ReactNode;
   interactive?: boolean;
+  /** A click only replaces the SelectionInspector's subject instead of drilling down to the tab that hosts it — for a card naming something other than the subject itself, e.g. `HostRow`'s "applied on"/"read from" link.
+   * Leaving the inspector is then only a further click away, on the new subject's own header. */
+  staysWithinInspector?: boolean;
   /** Overrides the hover cursor when it diverges from `interactive` — e.g. a
    * non-interactive preview (no click, no highlight of its own) that still sits inside a parent which opens something on click, like FrameControl's edge display.
    * Defaults to mirroring `interactive`. */
@@ -37,6 +40,7 @@ const ElementDisplayComponent: React.FC<ElementDisplayProps> = ({
   trailingControls,
   interactive = true,
   cursor = interactive ? "pointer" : "default",
+  staysWithinInspector = false,
 }) => {
   // A non-interactive display (a label inside a menu item, a frame preview) is never a target of its own, so it shouldn't reflect hover or selection state that belongs to the real, clickable row elsewhere.
   const hovered = interactive && is_hovered(hoveredPart, element.id);
@@ -119,8 +123,7 @@ const ElementDisplayComponent: React.FC<ElementDisplayProps> = ({
       type: "SelectedElement",
       elementID: element.id,
     });
-    // Selecting is what a first click does; the tab only follows a click on what is already selected, so naming an element from another tab never pulls the panel out from under the reader.
-    if (selected) drillDown(element);
+    if (!staysWithinInspector) drillDown(element);
   };
 
   const handleNameChange = (newName: string) => {

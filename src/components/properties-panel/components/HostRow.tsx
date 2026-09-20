@@ -65,6 +65,7 @@ export const HostRow: React.FC<HostRowProps> = ({
         applyActions={applyActions}
         size="small"
         editable={false}
+        staysWithinInspector
       />
     </Box>
   </Box>

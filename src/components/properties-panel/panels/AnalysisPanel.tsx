@@ -1226,6 +1226,7 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
                 );
               }}
               onClickTerm={handleClickBalanceTerm}
+              referenceKind={momentBalanceReference.kind}
               referenceLabel={momentBalanceReferenceLabel}
               referencePoint={momentBalancePoint}
               pickingReference={canvasState.type === "PickingMomentBalanceNode"}

@@ -1,13 +1,17 @@
 import React from "react";
 import { Box, Popover, Tooltip, Typography, useTheme } from "@mui/material";
-import { GpsFixed } from "@mui/icons-material";
 import { WorldPoint } from "../../../types";
 import { Vector } from "../../common/Vector";
 import VectorInput from "./VectorInput";
 import { useNonModalPopup } from "../../common/use-non-modal-popup";
 import { balance_term_color } from "../../../constants/physics-display-specs";
 import { readable_on } from "../../../theme/mui-theme";
-import { BalanceTerm, ForceBalance } from "../../solver/analysis/force-balance";
+import {
+  BalanceTerm,
+  ForceBalance,
+  MomentBalanceReference,
+  moment_balance_reference_glyph,
+} from "../../solver/analysis/force-balance";
 import {
   FORCE,
   LENGTH,
@@ -73,7 +77,7 @@ const Scalar: React.FC<{
   <Typography
     variant="caption"
     lineHeight={1.2}
-    sx={{ px: 0.25, color, fontVariantNumeric: "tabular-nums" }}
+    sx={{ px: 0.25, minWidth: 12, textAlign: "center", color, fontVariantNumeric: "tabular-nums" }}
   >
     {to_mantissa(value, unit, 1)}
   </Typography>
@@ -95,24 +99,52 @@ const Pair: React.FC<{
  * Both members are pointed at the same way, though only one of them is a sum: what the cursor names is the reading, and each of them has one the canvas can show.
  */
 const Member: React.FC<{
-  label: string;
+  label: React.ReactNode;
   children: React.ReactNode;
   onHoverChange: (hovered: boolean) => void;
-}> = ({ label, children, onHoverChange }) => {
+  /**
+   * Whether hovering the label also answers `onHoverChange`, together with the value — the default, since a plain-text label ("ΣF", "m·a", "Jα") carries no interaction of its own to compete with it.
+   * `false` keeps the label OUT of this hover region entirely: ΣM's label is `ForceBalanceTable`'s `reference`, its own clickable control with its own hover — nesting it inside this one would answer both gestures from the same patch of screen.
+   */
+  labelHoversToo?: boolean;
+}> = ({ label, children, onHoverChange, labelHoversToo = true }) => {
   const { palette } = useTheme();
+  const valueSx = {
+    display: "flex",
+    alignItems: "center",
+    minHeight: ROW_HEIGHT,
+    borderRadius: 1,
+    // The default arrow, not a pointer: this box only ever answers a hover (it lights the reading on the canvas), nothing here is bound to a click.
+    cursor: "default",
+    "&:hover": { backgroundColor: palette.action.hover },
+  } as const;
+
+  if (!labelHoversToo)
+    return (
+      <Box
+        sx={{
+          display: "flex",
+          alignItems: "center",
+          minHeight: ROW_HEIGHT,
+          pl: 0.25,
+        }}
+      >
+        <Aside width={MEMBER_LABEL_WIDTH}>{label}</Aside>
+        <Box
+          onMouseEnter={() => onHoverChange(true)}
+          onMouseLeave={() => onHoverChange(false)}
+          sx={valueSx}
+        >
+          {children}
+        </Box>
+      </Box>
+    );
+
   return (
     <Box
       onMouseEnter={() => onHoverChange(true)}
       onMouseLeave={() => onHoverChange(false)}
-      sx={{
-        display: "flex",
-        alignItems: "center",
-        minHeight: ROW_HEIGHT,
-        borderRadius: 1,
-        cursor: "pointer",
-        pl: 0.25,
-        "&:hover": { backgroundColor: palette.action.hover },
-      }}
+      sx={{ ...valueSx, pl: 0.25 }}
     >
       <Aside width={MEMBER_LABEL_WIDTH}>{label}</Aside>
       {children}
@@ -159,13 +191,7 @@ const TermsRow: React.FC<TermsRowProps> = ({
       {terms.map((term, index) => (
         <React.Fragment key={term.id}>
           {index > 0 && (
-            <Typography
-              variant="caption"
-              color="text.secondary"
-              lineHeight={1.2}
-            >
-              +
-            </Typography>
+            <Aside>+</Aside>
           )}
           <Box
             onMouseEnter={() => onHoverTerm?.(term, quantity)}
@@ -176,7 +202,8 @@ const TermsRow: React.FC<TermsRowProps> = ({
               alignItems: "center",
               minHeight: ROW_HEIGHT,
               borderRadius: 1,
-              cursor: "pointer",
+              // A pointer only where a click actually selects something — `onClickTerm` is optional, and without it this box is exactly as inert as `Member`'s own value.
+              cursor: onClickTerm ? "pointer" : "default",
               "&:hover": { backgroundColor: palette.action.hover },
             }}
           >
@@ -199,9 +226,7 @@ const LawRow: React.FC<{
   unit: QuantityUnit;
   gap: React.ReactNode;
   closed: boolean;
-  /** Sits at the end of the moment law: the point the whole line is taken about. */
-  trailing?: React.ReactNode;
-}> = ({ left, right, unit, gap, closed, trailing }) => (
+}> = ({ left, right, unit, gap, closed }) => (
   <Box
     sx={{
       display: "flex",
@@ -215,7 +240,6 @@ const LawRow: React.FC<{
     <Aside>=</Aside>
     {right}
     <Aside>{unit.symbol}</Aside>
-    {trailing}
     <Box sx={{ flex: 1 }} />
     <Box
       sx={{
@@ -239,16 +263,18 @@ interface ForceBalanceTableProps {
   onHoverTerm?: BalanceTermHover;
   /** A term clicked — see `TermsRowProps`' own. */
   onClickTerm?: (term: BalanceTerm) => void;
-  /** What the reference chip reads — absent while the reference is a point of its own, which the chip reads as coordinates instead. */
+  /** Which glyph the reference reads as beside "ΣM" — see `moment_balance_reference_glyph`. */
+  referenceKind: MomentBalanceReference["kind"];
+  /** What the reference names, for the tooltip alone: absent while it is a point of its own, which the tooltip reads as coordinates instead. Never shown inline — the glyph is what the row itself carries. */
   referenceLabel?: string;
-  /** The reference resolved to a point — what the chip reads with no label to show, and what the editor's `VectorInput` edits. */
+  /** The reference resolved to a point — what the tooltip reads with no label to show, and what the editor's `VectorInput` edits. */
   referencePoint: WorldPoint;
   /** Whether the canvas is currently waiting for the next click to name the reference. */
   pickingReference: boolean;
   onArmPicking: () => void;
   onStopPicking: () => void;
   onSetPoint: (point: WorldPoint) => void;
-  /** The reference chip is hovered — previews the reference marker on the canvas without
+  /** The reference glyph is hovered — previews the reference marker on the canvas without
    * arming anything. */
   onReferenceHoverChange: (hovered: boolean) => void;
 }
@@ -260,6 +286,7 @@ const ForceBalanceTable: React.FC<ForceBalanceTableProps> = ({
   balance,
   onHoverTerm,
   onClickTerm,
+  referenceKind,
   referenceLabel,
   referencePoint,
   pickingReference,
@@ -269,8 +296,8 @@ const ForceBalanceTable: React.FC<ForceBalanceTableProps> = ({
   onReferenceHoverChange,
 }) => {
   const { palette } = useTheme();
-  const [referenceChip, setReferenceChip] =
-    React.useState<HTMLDivElement | null>(null);
+  const [referenceAnchor, setReferenceAnchor] =
+    React.useState<HTMLElement | null>(null);
   // The coordinate editor is the picker's accessory: arming opens it, and a click on the canvas closes it by answering the picker.
   const [editorOpen, setEditorOpen] = React.useState(false);
   React.useEffect(() => {
@@ -278,7 +305,7 @@ const ForceBalanceTable: React.FC<ForceBalanceTableProps> = ({
   }, [pickingReference]);
   // A pointer going down on the canvas is the pick itself being aimed — the picker stays armed to answer it, and the canvas disarms it once it has.
   // A pointer anywhere else aims at nothing the picker can take, so it puts the picker away along with the editor.
-  const editorPopup = useNonModalPopup(editorOpen, referenceChip, (event) => {
+  const editorPopup = useNonModalPopup(editorOpen, referenceAnchor, (event) => {
     setEditorOpen(false);
     const target = event?.target;
     if (!(target instanceof Element) || !target.closest("canvas"))
@@ -311,15 +338,26 @@ const ForceBalanceTable: React.FC<ForceBalanceTableProps> = ({
   const closed = (value: number, unit: QuantityUnit) =>
     Math.abs(value / unit.factor) < CLOSED_GAP;
 
-  /* The reference is one control: what it currently is, and the way to change it.
-     It sits in the ΣM heading, the only line it has any say over — the sum of forces does not depend on where moments are taken. */
+  // What the tooltip names: the label where there is one, the point itself otherwise — the only place either is spelled out, since the row itself carries only the glyph. Parenthesised like every other point in the interface, since read alone a bare pair of numbers is not obviously one.
+  const referenceValue = referenceLabel
+    ? referenceLabel
+    : `(${to_mantissa(referencePoint.x, referencePointUnit, 1)}, ${to_mantissa(
+        referencePoint.y,
+        referencePointUnit,
+        1,
+      )}) ${referencePointUnit.symbol}`;
+
+  /**
+   * The reference is one control: what it currently is, and the way to change it.
+   * Read as "ΣM" with a glyph subscripted onto it (`moment_balance_reference_glyph`), with the full value living in the tooltip alone: the equation line never grows past what "ΣM = Jα unit" already costs, whatever the reference happens to be.
+   * Framed, and outside the value's own hover region (`Member`'s `labelHoversToo={false}`): the two are separate controls, each answering its own gesture, so neither box ever nests inside the other's.
+   */
   const reference = (
     <>
-      <Tooltip title={pickingReference ? "" : t("balance_reference_pick")}>
-        {/* Borderless, and lit on hover like every other thing in these blocks that can be pointed at.
-            An outline drew a box of its own around the reference, which on a coloured paper read as a foreign object set into the heading rather than as the rest of the notation `ΣM` is written in. */}
+      <Tooltip title={pickingReference ? "" : t("balance_reference_current", { value: referenceValue })}>
         <Box
-          ref={setReferenceChip}
+          component="span"
+          ref={setReferenceAnchor}
           onClick={() => {
             if (pickingReference) onStopPicking();
             else {
@@ -330,36 +368,37 @@ const ForceBalanceTable: React.FC<ForceBalanceTableProps> = ({
           onMouseEnter={() => onReferenceHoverChange(true)}
           onMouseLeave={() => onReferenceHoverChange(false)}
           sx={{
-            display: "flex",
-            alignItems: "center",
-            gap: 0.25,
-            px: 0.5,
-            pt: 0.2,
-            pb: 0.1,
-            borderRadius: 2,
+            display: "inline-flex",
+            alignItems: "baseline",
+            p: 0.4,
+            borderRadius: 1,
             cursor: "pointer",
-            color: pickingReference ? "primary.main" : "text.secondary",
-            "&:hover": { backgroundColor: "action.hover" },
+            color: pickingReference ? "primary.main" : "inherit",
+            "&:hover": {
+              color: pickingReference ?  "primary.dark" : "inherit",
+              backgroundColor: "action.hover",
+            },
           }}
         >
-          <GpsFixed sx={{ width: 14, height: 14 }} />
-          {referenceLabel ? (
-            <Typography variant="caption" lineHeight={1.2} maxWidth={60}>
-              {referenceLabel}
-            </Typography>
-          ) : (
-            <>
-              <Vector value={referencePoint} unit={referencePointUnit} dense />
-              <Aside>{referencePointUnit.symbol}</Aside>
-            </>
-          )}
+          {t("balance_sum_moment")}
+          <Box
+            component="span"
+            sx={{
+              fontSize: "0.7em",
+              position: "relative",
+              top: "0.35em",
+              ml: "1px",
+            }}
+          >
+            {moment_balance_reference_glyph(referenceKind, referencePoint)}
+          </Box>
         </Box>
       </Tooltip>
       {/* Non-modal: the canvas underneath keeps the very clicks the armed picker is waiting for. */}
       <Popover
         {...editorPopup}
         open={editorOpen}
-        anchorEl={referenceChip}
+        anchorEl={referenceAnchor}
         anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
       >
         <Box
@@ -429,8 +468,9 @@ const ForceBalanceTable: React.FC<ForceBalanceTableProps> = ({
         <LawRow
           left={
             <Member
-              label={t("balance_sum_moment")}
+              label={reference}
               onHoverChange={hover_member("total", "moment")}
+              labelHoversToo={false}
             >
               <Scalar value={sumMoment} unit={momentUnit} />
             </Member>
@@ -450,7 +490,6 @@ const ForceBalanceTable: React.FC<ForceBalanceTableProps> = ({
           unit={momentUnit}
           gap={<Scalar value={gapMoment} unit={momentUnit} />}
           closed={closed(gapMoment, momentUnit)}
-          trailing={reference}
         />
         <TermsRow
           terms={actions}

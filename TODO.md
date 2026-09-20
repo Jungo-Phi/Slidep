@@ -10,10 +10,6 @@
 
 **ElementMeasures -> SelectionInspector**
 
-- Gérer le cas ou la ligne des moment est trop large
-
-- Quand on est en simulation, clicker sur un élément dans l'onglet matériaux n'a pas à respecter la règle des 2 clicks. D'ailleur, cette rêgle pourrait être transformées en "Clicker sur l'élément en en-tête"
-
 - Afficher l'inertie rotationelle avec le symbole qui fait tout le tour ?
 
 - Donner un contour background aux flèches

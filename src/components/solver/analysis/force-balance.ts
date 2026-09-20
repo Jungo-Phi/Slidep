@@ -97,6 +97,28 @@ export type MomentBalanceReference =
   | { kind: "center-of-mass" }
   | { kind: "point"; point: WorldPoint };
 
+/** How near a resolved point must sit to (0, 0) to read as the origin rather than as a point of its own — floating slack only, since `"point"` never arrives at its value through arithmetic (`resolve_moment_balance_point` returns it as stored). */
+const ORIGIN_EPSILON = 1e-9;
+
+/** The letter a reference reads as beside "ΣM": "O" at the origin, "P" for any other point of its own, "G" for the centre of mass — every reader already knows that one — and "A" for a point attached to the mechanism (a node or an edge end), following the type's own fixed/attached split (see its doc). */
+export function moment_balance_reference_glyph(
+  kind: MomentBalanceReference["kind"],
+  point: WorldPoint,
+): string {
+  switch (kind) {
+    case "point":
+      return Math.abs(point.x) < ORIGIN_EPSILON &&
+        Math.abs(point.y) < ORIGIN_EPSILON
+        ? "O"
+        : "P";
+    case "center-of-mass":
+      return "G";
+    case "node":
+    case "edge-end":
+      return "A";
+  }
+}
+
 const ORIGIN = new Point2(0, 0) as WorldPoint;
 
 /** The whole mechanism's own centre of mass — every mass-carrying element's `body_centre`, weighted by `element_mass`. `undefined` where nothing on it carries any (an all-massless mechanism), which reads as the origin at every call site. */
