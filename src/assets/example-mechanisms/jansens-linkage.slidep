@@ -7,7 +7,8 @@
     "createdAt": 1786202595679,
     "modifiedAt": 1789934641201,
     "tags": [
-      "Cinématique"
+      "Kinematic",
+      "Example"
     ],
     "lastSimulationMode": "kinematic"
   },
@@ -920,7 +921,7 @@
     {
       "type": "equal",
       "position": {
-        "x": -1.5571466315122962e-7,
+        "x": -1.5571466315122962e-07,
         "y": 0.09556873495791987
       },
       "id": "ee6b4780-9cc9-4319-b461-0df669b058f4",
@@ -940,7 +941,7 @@
     {
       "type": "equal",
       "position": {
-        "x": -5.773983957624296e-7,
+        "x": -5.773983957624296e-07,
         "y": -0.3057139871749728
       },
       "id": "a3a16992-196e-430d-9d85-965536fdfbad",
@@ -960,7 +961,7 @@
     {
       "type": "equal",
       "position": {
-        "x": -0.0000064678643744571234,
+        "x": -6.4678643744571234e-06,
         "y": -0.6682255939922439
       },
       "id": "da7541cd-a60b-4cdc-b74f-0077e1a193d0",
@@ -970,7 +971,7 @@
     {
       "type": "equal",
       "position": {
-        "x": -0.000007412375111471192,
+        "x": -7.412375111471192e-06,
         "y": -0.689444136972023
       },
       "id": "563b3d3e-db07-415a-985b-2edb9cc93dc3",
@@ -980,7 +981,7 @@
     {
       "type": "equal",
       "position": {
-        "x": 0.000003022198405801646,
+        "x": 3.022198405801646e-06,
         "y": -0.45361934007839977
       },
       "id": "11adb2b6-6197-46aa-b4ba-b70ec3924026",
@@ -1046,421 +1047,6 @@
       }
     }
   ],
-  "history": [
-    [
-      {
-        "type": "SetShowOverlay",
-        "elementID": "c3b08fd8-5078-4679-9d78-8ee1ea920b09",
-        "kind": "force",
-        "newValue": false,
-        "oldValue": true
-      },
-      {
-        "type": "SetShowOverlay",
-        "elementID": "1071aed9-2e09-48fb-9504-cd72c1d40c29",
-        "kind": "force",
-        "newValue": false,
-        "oldValue": true
-      },
-      {
-        "type": "SetShowOverlay",
-        "elementID": "f139b017-ee9f-4d4b-b5a3-e19ea45709a4",
-        "kind": "force",
-        "newValue": false,
-        "oldValue": true
-      },
-      {
-        "type": "SetShowOverlay",
-        "elementID": "0ff94696-ff02-4724-9563-b83d157c7c9a",
-        "kind": "force",
-        "newValue": false,
-        "oldValue": true
-      },
-      {
-        "type": "SetShowOverlay",
-        "elementID": "ff80e840-0971-41f0-8300-7e08076cd54a",
-        "kind": "force",
-        "newValue": false,
-        "oldValue": true
-      },
-      {
-        "type": "SetShowOverlay",
-        "elementID": "6d27b6d3-f736-44da-857d-8ba61983b439",
-        "kind": "force",
-        "newValue": false,
-        "oldValue": true
-      },
-      {
-        "type": "SetShowOverlay",
-        "elementID": "de8fa73c-c109-446e-9c9f-2e7e6186775a",
-        "kind": "force",
-        "newValue": false,
-        "oldValue": true
-      },
-      {
-        "type": "SetShowOverlay",
-        "elementID": "a94b2e1b-1637-490e-b2a0-f6eef4f68578",
-        "kind": "force",
-        "newValue": false,
-        "oldValue": true
-      },
-      {
-        "type": "SetShowOverlay",
-        "elementID": "3129a058-542a-476d-bae2-027c41344f94",
-        "kind": "force",
-        "newValue": false,
-        "oldValue": true
-      },
-      {
-        "type": "SetShowOverlay",
-        "elementID": "94a3a524-152a-4814-a605-ce493baa6f47",
-        "kind": "force",
-        "newValue": false,
-        "oldValue": true
-      },
-      {
-        "type": "SetShowOverlay",
-        "elementID": "4682163b-5ec8-4450-87e5-972caeb2cd97",
-        "kind": "force",
-        "newValue": false,
-        "oldValue": true
-      },
-      {
-        "type": "SetShowOverlay",
-        "elementID": "5476c7d0-0374-4aa3-b539-6c84b960d6fa",
-        "kind": "force",
-        "newValue": false,
-        "oldValue": true
-      },
-      {
-        "type": "SetShowOverlay",
-        "elementID": "8317e770-71fe-46dd-84fc-fdceeacdf246",
-        "kind": "force",
-        "newValue": false,
-        "oldValue": true
-      },
-      {
-        "type": "SetShowOverlay",
-        "elementID": "d6f99cf5-1227-4202-a208-27d349603ddb",
-        "kind": "force",
-        "newValue": false,
-        "oldValue": true
-      },
-      {
-        "type": "SetShowOverlay",
-        "elementID": "c3786e6f-ec81-49d4-9855-5b5fb8257b53",
-        "kind": "force",
-        "newValue": false,
-        "oldValue": true
-      },
-      {
-        "type": "SetShowOverlay",
-        "elementID": "a5ef2785-bdd3-406c-9f39-cd22e9bd958e",
-        "kind": "force",
-        "newValue": false,
-        "oldValue": true
-      },
-      {
-        "type": "SetShowOverlay",
-        "elementID": "a3eacd92-181d-4d0b-9f0c-1c842b48e949",
-        "kind": "force",
-        "newValue": false,
-        "oldValue": true
-      },
-      {
-        "type": "SetShowOverlay",
-        "elementID": "beef1343-ffc0-424e-a1fe-0e4d18e97ed4",
-        "kind": "force",
-        "newValue": false,
-        "oldValue": true
-      },
-      {
-        "type": "SetShowOverlay",
-        "elementID": "edebcac7-6837-4b92-a36e-09d744977e49",
-        "kind": "force",
-        "newValue": false,
-        "oldValue": true
-      },
-      {
-        "type": "SetShowOverlay",
-        "elementID": "28f54983-5660-412b-92fb-478c26628eb8",
-        "kind": "force",
-        "newValue": false,
-        "oldValue": true
-      }
-    ],
-    [
-      {
-        "type": "SetProbes",
-        "elementID": "445f4ce7-d70f-4283-bd6e-28eb4a7a12aa",
-        "newProbes": [],
-        "oldProbes": [
-          {
-            "metric": "motor-power",
-            "components": {
-              "x": false,
-              "y": false,
-              "norm": true
-            }
-          }
-        ]
-      }
-    ],
-    [
-      {
-        "type": "SetProbes",
-        "elementID": "12f4e85e-4c44-4fda-97bd-4e245f5b4ddd",
-        "newProbes": [
-          {
-            "metric": "position",
-            "components": {
-              "x": false,
-              "y": false,
-              "norm": true
-            }
-          }
-        ],
-        "oldProbes": []
-      }
-    ],
-    [
-      {
-        "type": "SetProbes",
-        "elementID": "12f4e85e-4c44-4fda-97bd-4e245f5b4ddd",
-        "newProbes": [
-          {
-            "metric": "position",
-            "components": {
-              "x": true,
-              "y": false,
-              "norm": true
-            }
-          }
-        ],
-        "oldProbes": [
-          {
-            "metric": "position",
-            "components": {
-              "x": false,
-              "y": false,
-              "norm": true
-            }
-          }
-        ]
-      }
-    ],
-    [
-      {
-        "type": "SetProbes",
-        "elementID": "12f4e85e-4c44-4fda-97bd-4e245f5b4ddd",
-        "newProbes": [
-          {
-            "metric": "position",
-            "components": {
-              "x": true,
-              "y": true,
-              "norm": true
-            }
-          }
-        ],
-        "oldProbes": [
-          {
-            "metric": "position",
-            "components": {
-              "x": true,
-              "y": false,
-              "norm": true
-            }
-          }
-        ]
-      }
-    ],
-    [
-      {
-        "type": "SetProbes",
-        "elementID": "12f4e85e-4c44-4fda-97bd-4e245f5b4ddd",
-        "newProbes": [
-          {
-            "metric": "position",
-            "components": {
-              "x": true,
-              "y": true,
-              "norm": false
-            }
-          }
-        ],
-        "oldProbes": [
-          {
-            "metric": "position",
-            "components": {
-              "x": true,
-              "y": true,
-              "norm": true
-            }
-          }
-        ]
-      }
-    ],
-    [
-      {
-        "type": "SetProbes",
-        "elementID": "12f4e85e-4c44-4fda-97bd-4e245f5b4ddd",
-        "newProbes": [
-          {
-            "metric": "position",
-            "components": {
-              "x": true,
-              "y": true,
-              "norm": false
-            }
-          },
-          {
-            "metric": "velocity",
-            "components": {
-              "x": false,
-              "y": false,
-              "norm": true
-            }
-          }
-        ],
-        "oldProbes": [
-          {
-            "metric": "position",
-            "components": {
-              "x": true,
-              "y": true,
-              "norm": false
-            }
-          }
-        ]
-      }
-    ],
-    [
-      {
-        "type": "SetProbes",
-        "elementID": "12f4e85e-4c44-4fda-97bd-4e245f5b4ddd",
-        "newProbes": [
-          {
-            "metric": "position",
-            "components": {
-              "x": true,
-              "y": true,
-              "norm": false
-            }
-          },
-          {
-            "metric": "velocity",
-            "components": {
-              "x": true,
-              "y": false,
-              "norm": true
-            }
-          }
-        ],
-        "oldProbes": [
-          {
-            "metric": "position",
-            "components": {
-              "x": true,
-              "y": true,
-              "norm": false
-            }
-          },
-          {
-            "metric": "velocity",
-            "components": {
-              "x": false,
-              "y": false,
-              "norm": true
-            }
-          }
-        ]
-      }
-    ],
-    [
-      {
-        "type": "SetProbes",
-        "elementID": "12f4e85e-4c44-4fda-97bd-4e245f5b4ddd",
-        "newProbes": [
-          {
-            "metric": "position",
-            "components": {
-              "x": true,
-              "y": true,
-              "norm": false
-            }
-          },
-          {
-            "metric": "velocity",
-            "components": {
-              "x": true,
-              "y": true,
-              "norm": true
-            }
-          }
-        ],
-        "oldProbes": [
-          {
-            "metric": "position",
-            "components": {
-              "x": true,
-              "y": true,
-              "norm": false
-            }
-          },
-          {
-            "metric": "velocity",
-            "components": {
-              "x": true,
-              "y": false,
-              "norm": true
-            }
-          }
-        ]
-      }
-    ],
-    [
-      {
-        "type": "SetProbes",
-        "elementID": "12f4e85e-4c44-4fda-97bd-4e245f5b4ddd",
-        "newProbes": [
-          {
-            "metric": "position",
-            "components": {
-              "x": true,
-              "y": true,
-              "norm": false
-            }
-          },
-          {
-            "metric": "velocity",
-            "components": {
-              "x": true,
-              "y": true,
-              "norm": false
-            }
-          }
-        ],
-        "oldProbes": [
-          {
-            "metric": "position",
-            "components": {
-              "x": true,
-              "y": true,
-              "norm": false
-            }
-          },
-          {
-            "metric": "velocity",
-            "components": {
-              "x": true,
-              "y": true,
-              "norm": true
-            }
-          }
-        ]
-      }
-    ]
-  ],
+  "history": [],
   "future": []
 }

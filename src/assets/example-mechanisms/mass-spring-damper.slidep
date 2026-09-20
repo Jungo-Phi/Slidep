@@ -1,0 +1,169 @@
+{
+  "formatVersion": 14,
+  "metadata": {
+    "name": "Mass-Spring-Damper",
+    "description": "A mass on a spring and damper — tune the stiffness and damping to see how the oscillation settles.",
+    "author": "Arnaud",
+    "createdAt": 1789493572197,
+    "modifiedAt": 1789928405510,
+    "tags": [
+      "Dynamic",
+      "Example"
+    ],
+    "lastSimulationMode": "dynamic"
+  },
+  "viewport": {
+    "pan": {
+      "x": 580,
+      "y": 121.05929858398437
+    },
+    "scale": 2173.2799999999997
+  },
+  "simulation": {
+    "gravity": true,
+    "collisions": false,
+    "floor": {
+      "enabled": false,
+      "height": 0,
+      "angle": 0
+    },
+    "beamStressLens": "none",
+    "supportReactions": true
+  },
+  "mechanicalElements": [
+    {
+      "type": "join",
+      "id": "060b6057-1064-4137-98e0-7e91c90a9d04",
+      "probes": [
+        {
+          "metric": "force",
+          "components": {
+            "x": false,
+            "y": false,
+            "norm": true
+          }
+        }
+      ],
+      "overlays": {},
+      "fixedEdgesIDs": [
+        "3adb2987-9e6b-4999-9bd0-41ee64f5bd44",
+        "544ed328-7285-434b-8354-a4d271e87f1e"
+      ],
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "isGrounded": true
+    },
+    {
+      "type": "mass",
+      "id": "8bc9cb9f-76ef-467a-9232-f628af43048d",
+      "probes": [
+        {
+          "metric": "position",
+          "components": {
+            "x": false,
+            "y": true,
+            "norm": false
+          }
+        }
+      ],
+      "overlays": {
+        "weight": true
+      },
+      "position": {
+        "x": 0,
+        "y": -0.2
+      },
+      "isGrounded": false,
+      "fixedEdgesIDs": [
+        "3adb2987-9e6b-4999-9bd0-41ee64f5bd44",
+        "544ed328-7285-434b-8354-a4d271e87f1e"
+      ],
+      "mass": 1
+    },
+    {
+      "type": "spring",
+      "id": "544ed328-7285-434b-8354-a4d271e87f1e",
+      "probes": [],
+      "overlays": {
+        "force": false
+      },
+      "positionStart": {
+        "x": 0,
+        "y": 0
+      },
+      "positionEnd": {
+        "x": 0,
+        "y": -0.2
+      },
+      "fixedNodeStartID": "060b6057-1064-4137-98e0-7e91c90a9d04",
+      "fixedNodeEndID": "8bc9cb9f-76ef-467a-9232-f628af43048d",
+      "stiffness": 200
+    },
+    {
+      "type": "damper",
+      "id": "3adb2987-9e6b-4999-9bd0-41ee64f5bd44",
+      "probes": [],
+      "overlays": {
+        "force": false
+      },
+      "positionStart": {
+        "x": 0,
+        "y": 0
+      },
+      "positionEnd": {
+        "x": 0,
+        "y": -0.2
+      },
+      "fixedNodeStartID": "060b6057-1064-4137-98e0-7e91c90a9d04",
+      "fixedNodeEndID": "8bc9cb9f-76ef-467a-9232-f628af43048d",
+      "damping": 2
+    }
+  ],
+  "constraintElements": [],
+  "loads": [],
+  "materials": [
+    {
+      "id": "12e0d0b9-7db1-4eab-a6c6-42f5c9f8cc34",
+      "name": "Acier",
+      "E": 210000000000,
+      "Re": 235000000,
+      "rho": 7850
+    },
+    {
+      "id": "d77e97bf-7a05-43a5-8005-b1dd4dd1a88d",
+      "name": "Aluminium",
+      "E": 70000000000,
+      "Re": 195000000,
+      "rho": 2700
+    },
+    {
+      "id": "cd7f6ade-ac89-4110-9d99-14f18bccf31c",
+      "name": "Inox",
+      "E": 200000000000,
+      "Re": 215000000,
+      "rho": 8000
+    },
+    {
+      "id": "7d845c54-d861-4011-ba12-8dc47a543158",
+      "name": "Bois",
+      "E": 11000000000,
+      "Re": 24000000,
+      "rho": 450
+    }
+  ],
+  "profiles": [
+    {
+      "id": "8a912bc6-4129-4230-9c25-65e00034b8ad",
+      "name": "Profilé 1",
+      "shape": {
+        "kind": "rect",
+        "b": 0.02,
+        "h": 0.02
+      }
+    }
+  ],
+  "history": [],
+  "future": []
+}

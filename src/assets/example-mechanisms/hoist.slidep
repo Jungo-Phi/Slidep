@@ -1,0 +1,486 @@
+{
+  "formatVersion": 14,
+  "metadata": {
+    "name": "Hoist",
+    "description": "A block-and-tackle pulley system, trading distance for force to lift a heavy load with a small pull.",
+    "author": "Arnaud",
+    "createdAt": 1789931016736,
+    "modifiedAt": 1789932818692,
+    "tags": [
+      "Static",
+      "Example"
+    ],
+    "lastSimulationMode": "dynamic"
+  },
+  "viewport": {
+    "pan": {
+      "x": 632.6471216933921,
+      "y": 276.7260855806791
+    },
+    "scale": 835.8769230769229
+  },
+  "simulation": {
+    "gravity": true,
+    "collisions": false,
+    "floor": {
+      "enabled": false,
+      "height": 0,
+      "angle": 0
+    },
+    "beamStressLens": "none",
+    "supportReactions": false
+  },
+  "mechanicalElements": [
+    {
+      "type": "pivot",
+      "id": "51ffdc72-6a2a-4fa0-878c-5819375fbc21",
+      "probes": [],
+      "overlays": {},
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "isGrounded": false,
+      "rotatingEdgesIDs": [
+        "2adfed90-5430-4d8b-9fea-d6c39366ad3e",
+        "e7fb2e7c-34bf-4122-aae0-2cdb33e18b1f"
+      ],
+      "fixedGearsIDs": [
+        "2530f8c6-7bca-4b0f-8fbc-64cd364e5e27"
+      ],
+      "rotationalFriction": 0.001
+    },
+    {
+      "type": "gear",
+      "id": "2530f8c6-7bca-4b0f-8fbc-64cd364e5e27",
+      "probes": [],
+      "overlays": {
+        "force": false
+      },
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "angle": 0,
+      "radius": 0.04999999999999998,
+      "parentAxleID": "51ffdc72-6a2a-4fa0-878c-5819375fbc21",
+      "fixedNodesBodyIDs": [],
+      "meshedGearsIDs": [],
+      "attachedBeltID": "83210339-d7f9-4a41-abff-511da37d1428",
+      "surfaceMass": 0
+    },
+    {
+      "type": "pivot",
+      "id": "754c7a50-8ac5-4245-a8b5-bc74f85eac85",
+      "probes": [],
+      "overlays": {},
+      "position": {
+        "x": -0.2,
+        "y": 0
+      },
+      "isGrounded": false,
+      "rotatingEdgesIDs": [
+        "c24369a6-db15-4747-afcd-30604d74f5b3",
+        "e7fb2e7c-34bf-4122-aae0-2cdb33e18b1f"
+      ],
+      "fixedGearsIDs": [
+        "20bf0236-ba84-4396-843b-8a05c3bd07c3"
+      ],
+      "rotationalFriction": 0.001
+    },
+    {
+      "type": "gear",
+      "id": "20bf0236-ba84-4396-843b-8a05c3bd07c3",
+      "probes": [],
+      "overlays": {
+        "force": false
+      },
+      "position": {
+        "x": -0.2,
+        "y": 0
+      },
+      "angle": 0,
+      "radius": 0.04999999999999998,
+      "parentAxleID": "754c7a50-8ac5-4245-a8b5-bc74f85eac85",
+      "fixedNodesBodyIDs": [],
+      "meshedGearsIDs": [],
+      "attachedBeltID": "83210339-d7f9-4a41-abff-511da37d1428",
+      "surfaceMass": 0
+    },
+    {
+      "type": "pivot",
+      "id": "1b62cda7-efd5-4eb3-974d-f809affe2ec1",
+      "probes": [],
+      "overlays": {},
+      "position": {
+        "x": -0.1,
+        "y": -0.200107538567227
+      },
+      "isGrounded": false,
+      "rotatingEdgesIDs": [
+        "a51861c2-8d81-4adc-80ce-cc60bad1c084"
+      ],
+      "fixedGearsIDs": [
+        "673855d3-4f73-4c8c-a454-e38761760bee"
+      ],
+      "rotationalFriction": 0.001
+    },
+    {
+      "type": "gear",
+      "id": "673855d3-4f73-4c8c-a454-e38761760bee",
+      "probes": [],
+      "overlays": {
+        "force": false
+      },
+      "position": {
+        "x": -0.1,
+        "y": -0.200107538567227
+      },
+      "angle": 0,
+      "radius": 0.050000000000000044,
+      "parentAxleID": "1b62cda7-efd5-4eb3-974d-f809affe2ec1",
+      "fixedNodesBodyIDs": [],
+      "meshedGearsIDs": [],
+      "attachedBeltID": "83210339-d7f9-4a41-abff-511da37d1428",
+      "surfaceMass": 0
+    },
+    {
+      "type": "pivot",
+      "id": "bdf4d433-6775-4b9e-8b9e-fb417bebf353",
+      "probes": [],
+      "overlays": {},
+      "position": {
+        "x": 0.1,
+        "y": -0.2001075535651396
+      },
+      "isGrounded": false,
+      "rotatingEdgesIDs": [
+        "a51861c2-8d81-4adc-80ce-cc60bad1c084"
+      ],
+      "fixedGearsIDs": [
+        "0f9c6366-8cb9-40bf-8ea5-2d9cab7f85df"
+      ],
+      "rotationalFriction": 0.001
+    },
+    {
+      "type": "gear",
+      "id": "0f9c6366-8cb9-40bf-8ea5-2d9cab7f85df",
+      "probes": [],
+      "overlays": {
+        "force": false
+      },
+      "position": {
+        "x": 0.1,
+        "y": -0.2001075535651396
+      },
+      "angle": 0,
+      "radius": 0.04999999999999997,
+      "parentAxleID": "bdf4d433-6775-4b9e-8b9e-fb417bebf353",
+      "fixedNodesBodyIDs": [],
+      "meshedGearsIDs": [],
+      "attachedBeltID": "83210339-d7f9-4a41-abff-511da37d1428",
+      "surfaceMass": 0
+    },
+    {
+      "type": "pivot",
+      "id": "4b6f1eae-715f-4f78-849e-45f681c8627e",
+      "probes": [],
+      "overlays": {},
+      "position": {
+        "x": 0.2,
+        "y": 0
+      },
+      "isGrounded": false,
+      "rotatingEdgesIDs": [
+        "4a91e575-2116-48ed-ba57-217a2dab6ca4",
+        "e7fb2e7c-34bf-4122-aae0-2cdb33e18b1f"
+      ],
+      "fixedGearsIDs": [
+        "09b7621d-3c2f-4e9d-8829-4d48fc19e6a1"
+      ],
+      "rotationalFriction": 0.001
+    },
+    {
+      "type": "gear",
+      "id": "09b7621d-3c2f-4e9d-8829-4d48fc19e6a1",
+      "probes": [],
+      "overlays": {},
+      "position": {
+        "x": 0.2,
+        "y": 0
+      },
+      "angle": 0,
+      "radius": 0.050000000000000044,
+      "parentAxleID": "4b6f1eae-715f-4f78-849e-45f681c8627e",
+      "fixedNodesBodyIDs": [],
+      "meshedGearsIDs": [],
+      "attachedBeltID": "83210339-d7f9-4a41-abff-511da37d1428",
+      "surfaceMass": 0
+    },
+    {
+      "type": "belt",
+      "id": "83210339-d7f9-4a41-abff-511da37d1428",
+      "probes": [],
+      "overlays": {},
+      "positionStart": {
+        "x": -0.24999999999985495,
+        "y": -0.5004572826402909
+      },
+      "positionEnd": {
+        "x": 6.97278530051304e-06,
+        "y": -0.20010754606670617
+      },
+      "fixedNodeStartID": "14b0a012-55b7-4ebc-8d3a-9055fa1fee2b",
+      "fixedNodeEndID": "8b04b083-847e-43ea-a105-5774730ede13",
+      "attachedGearsIDs": [
+        {
+          "id": "2530f8c6-7bca-4b0f-8fbc-64cd364e5e27",
+          "clockwise": true
+        },
+        {
+          "id": "0f9c6366-8cb9-40bf-8ea5-2d9cab7f85df",
+          "clockwise": false
+        },
+        {
+          "id": "09b7621d-3c2f-4e9d-8829-4d48fc19e6a1",
+          "clockwise": false
+        },
+        {
+          "id": "673855d3-4f73-4c8c-a454-e38761760bee",
+          "clockwise": true
+        },
+        {
+          "id": "20bf0236-ba84-4396-843b-8a05c3bd07c3",
+          "clockwise": true
+        }
+      ],
+      "closed": false
+    },
+    {
+      "type": "beam",
+      "id": "e7fb2e7c-34bf-4122-aae0-2cdb33e18b1f",
+      "probes": [],
+      "overlays": {},
+      "positionStart": {
+        "x": -0.2,
+        "y": 0
+      },
+      "positionEnd": {
+        "x": 0.2,
+        "y": 0
+      },
+      "fixedNodeStartID": "754c7a50-8ac5-4245-a8b5-bc74f85eac85",
+      "fixedNodeEndID": "4b6f1eae-715f-4f78-849e-45f681c8627e",
+      "fixedNodesBodyIDs": [
+        "51ffdc72-6a2a-4fa0-878c-5819375fbc21"
+      ],
+      "materialID": "57b8bcdb-7329-407a-9250-42ca508365eb",
+      "profileID": "5690c6ea-45b8-4b9f-852b-b173a0e8595d"
+    },
+    {
+      "type": "beam",
+      "id": "c24369a6-db15-4747-afcd-30604d74f5b3",
+      "probes": [],
+      "overlays": {},
+      "positionStart": {
+        "x": -0.2,
+        "y": 0
+      },
+      "positionEnd": {
+        "x": 0,
+        "y": 0.15000000000000002
+      },
+      "fixedNodeStartID": "754c7a50-8ac5-4245-a8b5-bc74f85eac85",
+      "fixedNodeEndID": "7c4b99d4-8d95-495b-8217-9ce648937fb1",
+      "fixedNodesBodyIDs": [],
+      "materialID": "57b8bcdb-7329-407a-9250-42ca508365eb",
+      "profileID": "5690c6ea-45b8-4b9f-852b-b173a0e8595d"
+    },
+    {
+      "type": "beam",
+      "id": "4a91e575-2116-48ed-ba57-217a2dab6ca4",
+      "probes": [],
+      "overlays": {},
+      "positionStart": {
+        "x": 0,
+        "y": 0.15000000000000002
+      },
+      "positionEnd": {
+        "x": 0.2,
+        "y": 0
+      },
+      "fixedNodeStartID": "7c4b99d4-8d95-495b-8217-9ce648937fb1",
+      "fixedNodeEndID": "4b6f1eae-715f-4f78-849e-45f681c8627e",
+      "fixedNodesBodyIDs": [],
+      "materialID": "57b8bcdb-7329-407a-9250-42ca508365eb",
+      "profileID": "5690c6ea-45b8-4b9f-852b-b173a0e8595d"
+    },
+    {
+      "type": "beam",
+      "id": "2adfed90-5430-4d8b-9fea-d6c39366ad3e",
+      "probes": [],
+      "overlays": {},
+      "positionStart": {
+        "x": 0,
+        "y": 0
+      },
+      "positionEnd": {
+        "x": 0,
+        "y": 0.15000000000000002
+      },
+      "fixedNodeStartID": "51ffdc72-6a2a-4fa0-878c-5819375fbc21",
+      "fixedNodeEndID": "7c4b99d4-8d95-495b-8217-9ce648937fb1",
+      "fixedNodesBodyIDs": [],
+      "materialID": "57b8bcdb-7329-407a-9250-42ca508365eb",
+      "profileID": "5690c6ea-45b8-4b9f-852b-b173a0e8595d"
+    },
+    {
+      "type": "pivot",
+      "id": "7c4b99d4-8d95-495b-8217-9ce648937fb1",
+      "probes": [],
+      "overlays": {},
+      "position": {
+        "x": 0,
+        "y": 0.15000000000000002
+      },
+      "isGrounded": true,
+      "rotatingEdgesIDs": [
+        "c24369a6-db15-4747-afcd-30604d74f5b3",
+        "4a91e575-2116-48ed-ba57-217a2dab6ca4",
+        "2adfed90-5430-4d8b-9fea-d6c39366ad3e"
+      ],
+      "fixedGearsIDs": [],
+      "rotationalFriction": 0.001
+    },
+    {
+      "type": "beam",
+      "id": "a51861c2-8d81-4adc-80ce-cc60bad1c084",
+      "probes": [],
+      "overlays": {},
+      "positionStart": {
+        "x": -0.1,
+        "y": -0.200107538567227
+      },
+      "positionEnd": {
+        "x": 0.1,
+        "y": -0.2001075535651396
+      },
+      "fixedNodeStartID": "1b62cda7-efd5-4eb3-974d-f809affe2ec1",
+      "fixedNodeEndID": "bdf4d433-6775-4b9e-8b9e-fb417bebf353",
+      "fixedNodesBodyIDs": [
+        "8b04b083-847e-43ea-a105-5774730ede13"
+      ],
+      "materialID": "57b8bcdb-7329-407a-9250-42ca508365eb",
+      "profileID": "5690c6ea-45b8-4b9f-852b-b173a0e8595d"
+    },
+    {
+      "type": "beam",
+      "id": "8d004bf0-a781-4f71-a08a-57c21b720724",
+      "probes": [],
+      "overlays": {},
+      "positionStart": {
+        "x": 6.97278530051304e-06,
+        "y": -0.20010754606670617
+      },
+      "positionEnd": {
+        "x": 0.0002184730610588211,
+        "y": -0.4000000000000001
+      },
+      "fixedNodeStartID": "8b04b083-847e-43ea-a105-5774730ede13",
+      "fixedNodeEndID": "f2273c36-79f3-4d8f-8571-459b01f77919",
+      "fixedNodesBodyIDs": [],
+      "materialID": "57b8bcdb-7329-407a-9250-42ca508365eb",
+      "profileID": "5690c6ea-45b8-4b9f-852b-b173a0e8595d"
+    },
+    {
+      "type": "join",
+      "id": "8b04b083-847e-43ea-a105-5774730ede13",
+      "probes": [],
+      "overlays": {},
+      "fixedEdgesIDs": [
+        "a51861c2-8d81-4adc-80ce-cc60bad1c084",
+        "8d004bf0-a781-4f71-a08a-57c21b720724",
+        "83210339-d7f9-4a41-abff-511da37d1428"
+      ],
+      "position": {
+        "x": 6.97278530051304e-06,
+        "y": -0.20010754606670617
+      },
+      "isGrounded": false
+    },
+    {
+      "type": "join",
+      "id": "14b0a012-55b7-4ebc-8d3a-9055fa1fee2b",
+      "probes": [],
+      "overlays": {},
+      "fixedEdgesIDs": [
+        "83210339-d7f9-4a41-abff-511da37d1428"
+      ],
+      "position": {
+        "x": -0.24999999999985495,
+        "y": -0.5004572826402909
+      },
+      "isGrounded": true
+    },
+    {
+      "type": "mass",
+      "id": "f2273c36-79f3-4d8f-8571-459b01f77919",
+      "probes": [],
+      "overlays": {},
+      "position": {
+        "x": 0.0002184730610588211,
+        "y": -0.4000000000000001
+      },
+      "isGrounded": false,
+      "fixedEdgesIDs": [
+        "8d004bf0-a781-4f71-a08a-57c21b720724"
+      ],
+      "mass": 1
+    }
+  ],
+  "constraintElements": [],
+  "loads": [],
+  "materials": [
+    {
+      "id": "57b8bcdb-7329-407a-9250-42ca508365eb",
+      "name": "Acier",
+      "E": 210000000000,
+      "Re": 235000000,
+      "rho": 0
+    },
+    {
+      "id": "aa0e1653-d6ad-4bf2-af68-2da79876bd33",
+      "name": "Aluminium",
+      "E": 70000000000,
+      "Re": 195000000,
+      "rho": 2700
+    },
+    {
+      "id": "be482acb-1e8c-486d-81e8-bf3ef8189ce8",
+      "name": "Inox",
+      "E": 200000000000,
+      "Re": 215000000,
+      "rho": 8000
+    },
+    {
+      "id": "f7d6ef10-ed3d-4d55-8f6a-7d2c74673794",
+      "name": "Bois",
+      "E": 11000000000,
+      "Re": 24000000,
+      "rho": 450
+    }
+  ],
+  "profiles": [
+    {
+      "id": "5690c6ea-45b8-4b9f-852b-b173a0e8595d",
+      "name": "Profilé 1",
+      "shape": {
+        "kind": "rect",
+        "b": 0.02,
+        "h": 0.02
+      }
+    }
+  ],
+  "history": [],
+  "future": []
+}

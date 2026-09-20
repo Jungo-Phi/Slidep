@@ -19,10 +19,12 @@ import {
   Close,
   FileOpen,
   InfoOutlined,
+  Restore,
   Search,
 } from "@mui/icons-material";
 import { SerializedMechanism } from "../../types";
 import { t } from "../../i18n";
+import { EXAMPLE_MECHANISMS } from "../../constants/example-mechanisms";
 import MechanismCard from "./MechanismCard";
 import { INLINE_INPUT_SX } from "./inline-input-sx";
 
@@ -41,9 +43,10 @@ interface MechanismsGalleryProps {
   onImport: () => void;
   onExport: (mechanismRecord: SerializedMechanism) => void;
   onExportAll: () => void;
+  onRestoreExamples: () => void;
 }
 
-// Hauteur de la carte "Nouveau mécanisme" quand la bibliothèque est vide, faute de carte existante dont copier la hauteur.
+// Height of the "New mechanism" card when the library is empty, with no existing card to copy the height from.
 const NEW_CARD_FALLBACK_HEIGHT = 300;
 
 export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
@@ -59,10 +62,18 @@ export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
   onImport,
   onExport,
   onExportAll,
+  onRestoreExamples,
 }) => {
   const [search, setSearch] = useState("");
   const searchInputRef = useRef<HTMLInputElement>(null);
   const searching = search.trim().length > 0;
+
+  const presentIds = new Set(
+    mechanismRecords.map((record) => record.metadata.createdAt),
+  );
+  const allExamplesPresent = EXAMPLE_MECHANISMS.every((example) =>
+    presentIds.has(example.metadata.createdAt),
+  );
 
   // Set right after a duplication so the new card opens straight into name editing; cleared as soon as that card consumes it, so it never re-triggers on a later render.
   const [justDuplicatedId, setJustDuplicatedId] = useState<number | null>(null);
@@ -72,8 +83,8 @@ export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
     return duplicated;
   };
 
-  // Valeurs déjà utilisées quelque part dans la bibliothèque.
-  // Les trois modes de simulation sont toujours suggérés en plus, comme point de départ le plus courant pour trier.
+  // Values already used somewhere in the library.
+  // The three simulation modes are always suggested in addition, as the most common starting point for sorting.
   const usedTags = useMemo(() => {
     const set = new Set<string>();
     for (const record of mechanismRecords)
@@ -89,7 +100,7 @@ export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
     ]),
   ].sort();
 
-  // Trier par date de modification décroissante
+  // Sort by descending modification date.
   const sortedMechanismRecords = [...mechanismRecords]
     .sort((a, b) => b.metadata.modifiedAt - a.metadata.modifiedAt)
     .filter((record) => {
@@ -101,7 +112,7 @@ export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
       );
     });
 
-  // Nombre de colonnes réellement affiché au palier courant, pour pouvoir répartir les cartes nous-mêmes (voir plus bas) plutôt que de laisser `columns` CSS le faire colonne par colonne, ce qui casserait l'ordre de lecture.
+  // Number of columns actually shown at the current breakpoint, so cards can be distributed ourselves (see below) instead of letting CSS `columns` do it column by column, which would break reading order.
   const theme = useTheme();
   const isSm = useMediaQuery(theme.breakpoints.up("sm"));
   const isMd = useMediaQuery(theme.breakpoints.up("md"));
@@ -118,21 +129,21 @@ export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
         ? 2
         : 1;
 
-  // Répartition en "round-robin" (carte i -> colonne i % columnCount) : ça lit comme du texte (ligne par ligne, gauche à droite) tout en gardant l'empilement compact par colonne d'une hauteur de carte variable, contrairement à `columns` CSS qui remplit une colonne entière avant de passer à la suivante.
+  // Round-robin distribution (card i -> column i % columnCount): reads like text (row by row, left to right) while keeping the stack compact for a variable card height, unlike CSS `columns`, which fills one whole column before the next.
   const cardColumns = useMemo(() => {
     const columns: SerializedMechanism[][] = Array.from(
       { length: columnCount },
       () => [],
     );
     sortedMechanismRecords.forEach((record, i) => {
-      // La carte "Nouveau Mécanisme" occupe l'index 0, décalant les mécanismes d'un cran.
+      // The "New mechanism" card occupies index 0, shifting the mechanisms by one slot.
       const index = searching ? i : i + 1;
       columns[index % columnCount].push(record);
     });
     return columns;
   }, [sortedMechanismRecords, columnCount, searching]);
 
-  // Hauteur de la carte "Nouveau mécanisme" : celle de la plus petite carte de la première ligne (le premier élément de chaque colonne, mesuré en vrai puisque la hauteur d'une carte dépend de son contenu — description, nombre de tags).
+  // Height of the "New mechanism" card: that of the smallest card in the first row (the first element of each column, measured for real since a card's height depends on its content — description, tag count).
   const [firstRowHeights, setFirstRowHeights] = useState<
     Record<number, number>
   >({});
@@ -291,6 +302,26 @@ export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
               </Button>
             </span>
           </Tooltip>
+          <Tooltip
+            title={t(
+              allExamplesPresent
+                ? "restore_examples_none_missing"
+                : "restore_examples_tooltip",
+            )}
+          >
+            <span>
+              <Button
+                size="small"
+                color="inherit"
+                disabled={allExamplesPresent}
+                startIcon={<Restore fontSize="small" />}
+                onClick={onRestoreExamples}
+                sx={{ textTransform: "none", fontSize: "0.8rem", px: 1.5 }}
+              >
+                {t("restore_examples")}
+              </Button>
+            </span>
+          </Tooltip>
           <Divider orientation="vertical" flexItem sx={{ m: 0.5 }} />
           <Tooltip title={t("close")}>
             <IconButton onClick={onClose} size="small">
@@ -375,7 +406,7 @@ export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
                       onNameEditStarted={() => setJustDuplicatedId(null)}
                     />
                   );
-                  // Le premier élément de chaque colonne (première ligne) est mesuré pour dimensionner la carte "Nouveau mécanisme" sur le plus petit.
+                  // The first element of each column (first row) is measured to size the "New mechanism" card on the smallest one.
                   if (rowIndex !== 0) return card;
                   return (
                     <Box

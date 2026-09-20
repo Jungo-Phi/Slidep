@@ -10,7 +10,6 @@
 
 **Priorités sur le plan général**
 
-- 🆕 Ajouter les mécanismes exemple
 - 🔨 Tension de courroie (Nouvelles métriques de sonde). Attention : une courroie à plusieurs brins a plusieurs tensions, il faudra choisir ce qu'on montre.
 - 🔨 Supprimer le "Résidu de bouclage" (En améliorant la simulation)
 - 🚨 Régler bugs de dessin

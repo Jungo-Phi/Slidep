@@ -1162,6 +1162,36 @@ export const STRINGS = {
     de: "Kein Mechanismus zum Exportieren",
     es: "Ningún mecanismo que exportar",
   },
+  restore_examples: {
+    fr: "Restaurer les exemples",
+    en: "Restore examples",
+    de: "Beispiele wiederherstellen",
+    es: "Restaurar los ejemplos",
+  },
+  restore_examples_tooltip: {
+    fr: "Réajouter les mécanismes exemple supprimés",
+    en: "Add back any example mechanism you've deleted",
+    de: "Gelöschte Beispielmechanismen wieder hinzufügen",
+    es: "Volver a añadir los mecanismos de ejemplo eliminados",
+  },
+  restore_examples_none_missing: {
+    fr: "Tous les exemples sont déjà dans votre bibliothèque",
+    en: "All examples are already in your library",
+    de: "Alle Beispiele sind bereits in Ihrer Bibliothek",
+    es: "Todos los ejemplos ya están en tu biblioteca",
+  },
+  examples_restored_one: {
+    fr: "{count} exemple restauré",
+    en: "{count} example restored",
+    de: "{count} Beispiel wiederhergestellt",
+    es: "{count} ejemplo restaurado",
+  },
+  examples_restored_other: {
+    fr: "{count} exemples restaurés",
+    en: "{count} examples restored",
+    de: "{count} Beispiele wiederhergestellt",
+    es: "{count} ejemplos restaurados",
+  },
   new_mechanism: {
     fr: "Nouveau mécanisme",
     en: "New mechanism",

@@ -1,0 +1,275 @@
+{
+  "formatVersion": 14,
+  "metadata": {
+    "name": "Crankshaft",
+    "description": "A crank-slider mechanism, turning rotation into linear motion — the same principle behind a piston engine.",
+    "author": "Arnaud",
+    "createdAt": 1789927811944,
+    "modifiedAt": 1789928202819,
+    "tags": [
+      "Kinematic",
+      "Example"
+    ],
+    "lastSimulationMode": "kinematic"
+  },
+  "viewport": {
+    "pan": {
+      "x": 475.0823974609375,
+      "y": 400.5
+    },
+    "scale": 1000
+  },
+  "simulation": {
+    "supportReactions": false,
+    "beamStressLens": "none",
+    "gravity": true,
+    "collisions": false,
+    "floor": {
+      "enabled": false,
+      "height": 0,
+      "angle": 0
+    }
+  },
+  "mechanicalElements": [
+    {
+      "rotationalFriction": 0.001,
+      "type": "pivot",
+      "id": "d55cfb04-a70d-424d-a1ef-8251d9dd0186",
+      "probes": [],
+      "overlays": {},
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "isGrounded": true,
+      "rotatingEdgesIDs": [],
+      "fixedGearsIDs": [
+        "54f46a82-92f8-41b7-ac8c-c4ceeb598d17"
+      ],
+      "motor": {
+        "torque": 1,
+        "speed": 2.0943951023931953
+      }
+    },
+    {
+      "surfaceMass": 10,
+      "type": "gear",
+      "id": "54f46a82-92f8-41b7-ac8c-c4ceeb598d17",
+      "probes": [
+        {
+          "metric": "angular-velocity",
+          "components": {
+            "x": false,
+            "y": false,
+            "norm": true
+          }
+        }
+      ],
+      "overlays": {},
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "angle": 0,
+      "radius": 0.08,
+      "parentAxleID": "d55cfb04-a70d-424d-a1ef-8251d9dd0186",
+      "fixedNodesBodyIDs": [
+        "79213b7e-b171-43ca-a919-c9e66e1ff9cd"
+      ],
+      "meshedGearsIDs": []
+    },
+    {
+      "rotationalFriction": 0.001,
+      "type": "pivot",
+      "id": "79213b7e-b171-43ca-a919-c9e66e1ff9cd",
+      "probes": [
+        {
+          "metric": "position",
+          "components": {
+            "x": true,
+            "y": true,
+            "norm": false
+          }
+        }
+      ],
+      "overlays": {},
+      "position": {
+        "x": 0.02942127898532663,
+        "y": -0.07439353972404046
+      },
+      "isGrounded": false,
+      "rotatingEdgesIDs": [
+        "b82472e3-f723-4fc0-9db3-5697f5f06244",
+        "54f46a82-92f8-41b7-ac8c-c4ceeb598d17"
+      ],
+      "fixedGearsIDs": []
+    },
+    {
+      "type": "beam",
+      "id": "b82472e3-f723-4fc0-9db3-5697f5f06244",
+      "probes": [],
+      "overlays": {},
+      "positionStart": {
+        "x": 0.02942127898532663,
+        "y": -0.07439353972404046
+      },
+      "positionEnd": {
+        "x": 0.3200512842660952,
+        "y": -5.4938013522020456e-09
+      },
+      "fixedNodeStartID": "79213b7e-b171-43ca-a919-c9e66e1ff9cd",
+      "fixedNodeEndID": "e9f9f56e-1e89-4b61-8b35-b77b4de85647",
+      "fixedNodesBodyIDs": [],
+      "materialID": "01de2818-b3df-4105-ae9e-b5a0b480b435",
+      "profileID": "9c31247e-df74-4ddf-afa0-9366f439461a"
+    },
+    {
+      "rotationalFriction": 0.001,
+      "type": "pivot",
+      "id": "e9f9f56e-1e89-4b61-8b35-b77b4de85647",
+      "probes": [
+        {
+          "metric": "position",
+          "components": {
+            "x": true,
+            "y": false,
+            "norm": false
+          }
+        }
+      ],
+      "overlays": {},
+      "position": {
+        "x": 0.3200512842660952,
+        "y": -5.4938013522020456e-09
+      },
+      "isGrounded": false,
+      "rotatingEdgesIDs": [
+        "5b6d4145-7718-4940-b098-995340ed2ec6",
+        "b82472e3-f723-4fc0-9db3-5697f5f06244"
+      ],
+      "fixedGearsIDs": []
+    },
+    {
+      "slidingFriction": 0.1,
+      "type": "slider",
+      "id": "74c9c729-b07c-43ee-840b-3a889db84a0b",
+      "probes": [],
+      "overlays": {},
+      "position": {
+        "x": 0.45,
+        "y": 0
+      },
+      "isGrounded": true,
+      "parentBeamID": "5b6d4145-7718-4940-b098-995340ed2ec6",
+      "fixedEdgesIDs": []
+    },
+    {
+      "type": "beam",
+      "id": "5b6d4145-7718-4940-b098-995340ed2ec6",
+      "probes": [],
+      "overlays": {},
+      "positionStart": {
+        "x": 0.3200512842660952,
+        "y": -5.4938013522020456e-09
+      },
+      "positionEnd": {
+        "x": 0.5700512842656998,
+        "y": 5.0753707268875735e-09
+      },
+      "fixedNodeStartID": "e9f9f56e-1e89-4b61-8b35-b77b4de85647",
+      "fixedNodesBodyIDs": [
+        "74c9c729-b07c-43ee-840b-3a889db84a0b"
+      ],
+      "materialID": "01de2818-b3df-4105-ae9e-b5a0b480b435",
+      "profileID": "9c31247e-df74-4ddf-afa0-9366f439461a"
+    }
+  ],
+  "constraintElements": [
+    {
+      "type": "dimension-edge",
+      "position": {
+        "x": 0.18713519036518525,
+        "y": -0.08563505356593029
+      },
+      "id": "3c913b12-28c7-4a7d-804c-7ef32c8f9eb9",
+      "edgeID": "b82472e3-f723-4fc0-9db3-5697f5f06244",
+      "value": 0.3
+    },
+    {
+      "type": "dimension-edge",
+      "position": {
+        "x": 0.44505128030877017,
+        "y": 0.04999999957834518
+      },
+      "id": "eb9a5d2d-f062-4724-9377-a5fec193b2e8",
+      "edgeID": "5b6d4145-7718-4940-b098-995340ed2ec6",
+      "value": 0.25
+    },
+    {
+      "type": "horizontal-align-edge",
+      "id": "5fd2bd28-d168-4594-9084-57b7a091fd27",
+      "edgeID": "5b6d4145-7718-4940-b098-995340ed2ec6"
+    },
+    {
+      "type": "dimension-radius",
+      "position": {
+        "x": 0.1224294379115646,
+        "y": 0.12504412314322633
+      },
+      "id": "b81da301-10b7-4cb9-adb3-9f7db3846a75",
+      "gearID": "54f46a82-92f8-41b7-ac8c-c4ceeb598d17",
+      "value": 0.08
+    }
+  ],
+  "loads": [],
+  "materials": [
+    {
+      "id": "01de2818-b3df-4105-ae9e-b5a0b480b435",
+      "name": "Matériau 1",
+      "E": 210000000000,
+      "Re": 235000000,
+      "rho": 7850
+    },
+    {
+      "id": "8424b85a-d8bc-4b65-afdc-0a3d034e0465",
+      "name": "Acier",
+      "E": 210000000000,
+      "Re": 235000000,
+      "rho": 7850
+    },
+    {
+      "id": "6ad178f1-bbb1-4e7a-bb83-7ff66df9a9fa",
+      "name": "Aluminium",
+      "E": 70000000000,
+      "Re": 195000000,
+      "rho": 2700
+    },
+    {
+      "id": "9c673616-79f8-4f01-a525-e1631bff37a2",
+      "name": "Inox",
+      "E": 200000000000,
+      "Re": 215000000,
+      "rho": 8000
+    },
+    {
+      "id": "a27a1439-dc5f-4187-8536-3b2ae9739b6a",
+      "name": "Bois",
+      "E": 11000000000,
+      "Re": 24000000,
+      "rho": 450
+    }
+  ],
+  "profiles": [
+    {
+      "id": "9c31247e-df74-4ddf-afa0-9366f439461a",
+      "name": "Profilé 1",
+      "shape": {
+        "kind": "rect",
+        "b": 0.02,
+        "h": 0.02
+      }
+    }
+  ],
+  "history": [],
+  "future": []
+}

@@ -489,6 +489,7 @@ const App: React.FC = () => {
     handleFilesDropped,
     handleExportRecord,
     handleExportAllRecords,
+    handleRestoreExamples,
   } = useMechanismLibrary({
     mechanismRef,
     canvasRef,
@@ -1119,6 +1120,7 @@ const App: React.FC = () => {
           onImport={handleMenuButtonUpload}
           onExport={handleExportRecord}
           onExportAll={handleExportAllRecords}
+          onRestoreExamples={handleRestoreExamples}
         />
         <AboutDialog open={infoOpen} onClose={handleInfoClose} />
         <Snackbar

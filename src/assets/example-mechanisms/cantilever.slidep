@@ -1,0 +1,108 @@
+{
+  "formatVersion": 14,
+  "metadata": {
+    "name": "Cantilever",
+    "description": "A beam fixed at one end and loaded at the other — the textbook case for bending under load.",
+    "author": "Arnaud",
+    "createdAt": 1789927559167,
+    "modifiedAt": 1789927766012,
+    "tags": [
+      "Static",
+      "Example"
+    ],
+    "lastSimulationMode": "dynamic"
+  },
+  "viewport": {
+    "pan": {
+      "x": 85.94915771484375,
+      "y": 373.7537841796875
+    },
+    "scale": 1000
+  },
+  "simulation": {
+    "gravity": true,
+    "collisions": false,
+    "floor": {
+      "enabled": false,
+      "height": 0,
+      "angle": 0
+    },
+    "beamStressLens": "utilization",
+    "supportReactions": false
+  },
+  "mechanicalElements": [
+    {
+      "type": "beam",
+      "id": "cbe2fb7a-eccc-4ea2-bc13-75b8d72de978",
+      "probes": [],
+      "overlays": {
+        "force": true
+      },
+      "positionStart": {
+        "x": 0,
+        "y": 0
+      },
+      "positionEnd": {
+        "x": 1,
+        "y": 0
+      },
+      "fixedNodeStartID": "73a97fe4-8254-4578-ba2d-fbfb71bdde4b",
+      "fixedNodesBodyIDs": [],
+      "materialID": "10d1b53e-40a6-4fb2-8118-4a2ab6d68cb0",
+      "profileID": "7ee02104-9c52-4267-b3d7-c4b6b389580c"
+    },
+    {
+      "type": "join",
+      "id": "73a97fe4-8254-4578-ba2d-fbfb71bdde4b",
+      "probes": [],
+      "overlays": {},
+      "fixedEdgesIDs": [
+        "cbe2fb7a-eccc-4ea2-bc13-75b8d72de978"
+      ],
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "isGrounded": true
+    }
+  ],
+  "constraintElements": [],
+  "loads": [
+    {
+      "type": "force",
+      "id": "afcb86b9-5377-4222-964b-212ac8508c18",
+      "targetID": "cbe2fb7a-eccc-4ea2-bc13-75b8d72de978",
+      "anchor": "end",
+      "vector": {
+        "x": 0,
+        "y": -100
+      },
+      "frame": {
+        "mode": "edge",
+        "edgeID": "cbe2fb7a-eccc-4ea2-bc13-75b8d72de978"
+      }
+    }
+  ],
+  "materials": [
+    {
+      "id": "10d1b53e-40a6-4fb2-8118-4a2ab6d68cb0",
+      "name": "Acier",
+      "E": 210000000000,
+      "Re": 235000000,
+      "rho": 7850
+    }
+  ],
+  "profiles": [
+    {
+      "id": "7ee02104-9c52-4267-b3d7-c4b6b389580c",
+      "name": "Profilé 1",
+      "shape": {
+        "kind": "rect",
+        "b": 0.02,
+        "h": 0.02
+      }
+    }
+  ],
+  "history": [],
+  "future": []
+}

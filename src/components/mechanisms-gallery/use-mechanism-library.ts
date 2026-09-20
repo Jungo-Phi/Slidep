@@ -43,19 +43,32 @@ import {
   SNACKBAR_DURATION,
 } from "../../constants/interaction-specs";
 import { t, tn } from "../../i18n";
+import { EXAMPLE_MECHANISMS } from "../../constants/example-mechanisms";
 
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 const DEBOUNCE_AUTOSAVE_TIME_MILLIS = 1500;
 
-/** The mechanism library. Keyed by `metadata.createdAt`, so two records sharing one are the same entry. */
+/** The mechanism library. Keyed by `metadata.createdAt`, so two records sharing one are the same entry.
+ * `EXAMPLE_MECHANISMS` is seeded once, tied to the version bump rather than a separate flag: any library — empty or not — gets them added the first time it is opened past this version.
+ * Deleting one afterwards is final; see `handleRestoreExamples` for the user-facing way back. */
 const openMechanismsDB = () =>
   openDB<SlidepDB>("SlidepDB", DB_VERSION, {
-    upgrade(db) {
+    async upgrade(db, oldVersion, _newVersion, transaction) {
       if (!db.objectStoreNames.contains("mechanisms")) {
         const store = db.createObjectStore("mechanisms", {
           keyPath: "metadata.createdAt",
         });
         store.createIndex("by-date", "metadata.modifiedAt");
+      }
+      if (oldVersion < 4) {
+        // A user who built these examples in the app before they shipped already owns entries under the same createdAt — `add()` on an existing key aborts the whole transaction, so only what's genuinely missing gets seeded.
+        const store = transaction.objectStore("mechanisms");
+        const existingIds = new Set(await store.getAllKeys());
+        await Promise.all(
+          EXAMPLE_MECHANISMS.filter(
+            (example) => !existingIds.has(example.metadata.createdAt),
+          ).map((example) => store.add(example)),
+        );
       }
     },
   });
@@ -485,6 +498,24 @@ export function useMechanismLibrary({
     });
   }, [savedMechanisms, setSnackbar]);
 
+  // Puts back whichever examples are missing (deleted), by their fixed createdAt — one still present, even edited by the user, is left alone rather than reset to its pristine state.
+  const handleRestoreExamples = useCallback(async () => {
+    const db = await openMechanismsDB();
+    const existingIds = new Set(await db.getAllKeys("mechanisms"));
+    const missing = EXAMPLE_MECHANISMS.filter(
+      (example) => !existingIds.has(example.metadata.createdAt),
+    );
+    if (missing.length === 0) return;
+
+    for (const example of missing) await db.put("mechanisms", example);
+
+    setSavedMechanisms(await read_all_records(db));
+    setSnackbar({
+      open: true,
+      message: tn("examples_restored", missing.length),
+    });
+  }, [setSnackbar]);
+
   return {
     saveStatus,
     setSaveStatus,
@@ -503,5 +534,6 @@ export function useMechanismLibrary({
     handleFilesDropped,
     handleExportRecord,
     handleExportAllRecords,
+    handleRestoreExamples,
   };
 }
