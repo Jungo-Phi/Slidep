@@ -8,33 +8,34 @@
 
 ---
 
-**ElementMeasures -> SelectionInspector**
+**Priorités sur le plan général**
 
-- Afficher l'inertie rotationelle avec le symbole qui fait tout le tour ?
-
-- Donner un contour background aux flèches
-- Hover une flèche épaissis sa tête
-- Changer le style des flèches de vitesse, accélération, etc.
-- N'afficher un moteur qu'une seul fois au maximum dans les DDL
-- afficher en priorité les éléments avec une masse (ex. Mass-ressort) dans les DDL
-- On devrait pouvoir choisir plusieurs ancrages pour un moteur (ex: "Vélo.slidep")
-- On devrait afficher T/N au lieu de x/y pour les mesures des forces internes
-- Remplacer les "const lastShadowBlur = ctx.shadowBlur; ... ctx.shadowBlur = lastShadowBlur;" par des "ctx.save(); ... ctx.restore();"
-- Unifier CRLF/LF
-
-**Nouvelles métriques de sonde**
-
-- Tension de courroie. Attention : une courroie à plusieurs brins a plusieurs tensions, il faudra choisir ce qu'on montre.
+- 🆕 Ajouter les mécanismes exemple
+- 🔨 Tension de courroie (Nouvelles métriques de sonde). Attention : une courroie à plusieurs brins a plusieurs tensions, il faudra choisir ce qu'on montre.
+- 🔨 Supprimer le "Résidu de bouclage" (En améliorant la simulation)
+- 🚨 Régler bugs de dessin
+- 🔨 Clean les graphiques
+- 🤔 Clarifier le grab en dynamique (grab -> force ?)
+- 🤔 Clarifier "qu'est-ce qui est simulé ?" pour **dt**. On affiche des positions interpolées, mais pas les forces, les overlays, ni les valeurs dans le panneau latéral.
+- 🔨 Améliorer les performances en édition
+- 🔨 Améliorer les performances en simulation
+- 🆕 Ajouter une section qui explique le type de simulation et ses limites (et paramètres ?)
+- 🔨 Clarifier couple moteur (Bloquer moteur si couple demandé suppérieur couple disponible ?)
+  La puissance affichée devrait être celle que le moteur peut fournir (et pas la puissance instantanée), on devrait donc ensuite pouvoir comparer la puissance du moteur à la puissance instantanée. Le calcul devrait aussi être revu pour prendre en compte ce qu'apporte vraiment le moteur et ce qui tient de l'inertie.
+- 🔨 Supprimer poutre sur joint de courroie
+- 🚨 Faire fonctionner les treuils
+- 🆕 Mobile mode
+- 🆕 Copié-collé
+- 🆕 Ajouter contraintes de distance parallèle
+- 🆕 Ajouter contraintes de coincidence (point - ligne)
+- 🤔 Comment connecter ou non des engrenages sur le même axe ?
+- 🤔 Revenir sur l'idée de pouvoir modifier le mécanisme en cours de simulation (ex. déconnecter 2 éléments) ?
 
 **Rendre la physique exacte (cas faux)**
 
-- Sur les moments de réactions aux appuis, une force de réaction qui entre dans le calcul des moments n'est pas mise en évidence. Si tu vois exactement de quoi je parle, règle le problème. Mais si tu a des doutes autour de ce point discutons-en.
-
----
-
-- Vilbrequin double slider : Quand "Beam Hadu" a un angle de 180°
-- Les cas ou Mf est non nul alors que la poutre est dans le vide
-- Pourquoi les poids des poutres disparaissent quand on fait tourner la simu (Masse suspendue.slidep) ?
+- 🚨 Vilbrequin double slider : Quand "Beam Hadu" a un angle de 180°
+- 🚨 Les cas ou Mf est non nul alors que la poutre est dans le vide
+- 🚨 Pourquoi les poids des poutres disparaissent quand on fait tourner la simu (Masse suspendue.slidep) ?
 
 - 🚨 Bug avec le mécanisme "Poutre sur joint de courroie"
 - 🚨 Bug avec le mécanisme "Ressorts sur moteur"
@@ -44,80 +45,54 @@
 - 🚨 Un moteur à omega=0 est bloqué dans le vide
 - La trajectoire sur CoreXY en dynamique est fausse
 
-### À faire rapidement
-
-**Qwick fixes :**
-
-- Changer le mode de simulation ne met pas à jour la date de modification
-- Le hover d'un mode en thème light ne donne pas la bonne luminosité
-- Niveau de zoom à 1%
-- Indiquer, quand on click sur un overlay pour la première fois, qu'il n'est visible qu'en simulation ?
-- Afficher _Aucune_ contrainte par défaut
-- Le parsing pour la masse volumique est nul (refuse T/m3, mg/cm3 et des valeurs trop petites). Est-ce aussi le cas ailleur ?
-- Afficher "0 N" au lieu de "0 nN" quand une force est nulle ?
-- La barre de scroll devrait se cacher, ou au moins se réduire, si on n'a pas scrollé depuis un moment
-- Régler le CTRL+C
-- Le hover de la règle sur les joins n'est pas bon. Et hover de règle devrait épaissir les traits
-- Afficher le signe des moments
-- Régler les moments qui se supperposent
-- Régler les forces sont dessinées sur les poutres
-- Re-positionner le texte des moments (quand ils ne sont pas sur tout le tour)
-- Dessiner (preview) force et force-distribuée vers le bas
-
-**Mécanismes exemple :**
-
-"simples"
-
-- Statique : Cantilever
-- Cinématique : Bielle-Manivelle
-- Dynamique : Masse-Ressort-Amortisseur
-
-"impressionnants"
-
-- Statique : Palan
-- Cinématique : Jansen
-- Dynamique : Horloge à pendule
-
-**Priorités sur le plan général**
-
-- Bloquer moteur si couple demandé suppérieur couple disponible
-- Clarifier le grab en dynamique (grab -> force ?)
-- Mobile mode
-- Clean les mesures
-
-- Supprimer poutre sur joint de courroie
-- Ajouter contraintes de coincidence (point - ligne)
-- Ajouter contraintes de distance parallèle
-- Comment connecter ou non des engrenages sur le même axe ?
-- Faire fonctionner les treuils
-- Copié-collé
-- Clarifier "qu'est-ce qui est simulé ?" pour **dt**. On affiche des positions interpolées, mais pas les forces, les overlays, ni les valeurs dans le panneau latéral.
-- Revenir sur l'idée de pouvoir modifier le mécanisme en cours de simulation (ex. déconnecter 2 éléments) ?
-- Ajouter une section qui explique le type de simulation et ses limites (et paramètres ?)
+---
 
 - 🚨 Un ctrl+y de remplacement d'élément n'a pas reset la simulation, wtf !?
-- 🚨 Le moteur se bloque avec "Jansen", wtf !?
-- Le hover des éléments depuis le panneau latéral ne devrait pas faire apparaitre les contraintes
+- 🚨 Le moteur se bloque avec "Jansen" (et le couple n'y change rien) wtf !?
 - 🚨 Hover des loads sous les edges, wtf !?
 - 🚨 Un snap sur la grille ne se fait pas toujours bien aux valeurs rondes, wtf !?
 
-**Qwick fix**
+### À faire rapidement
 
-- C'est quoi le dossier "scratch/" ?
-- force-distribuée : "force totale" -> "force équivalente"
+**Very qwick fix**
+
+- 🚨 Arriver à une valeur invalide dans un NumberInput/onCanvasValueEditor met notre curseur à la fin (après l'unité)
+- 🔨 Faire commencer les énergies (bilan) à zéro
+- 🔨 force-distribuée : "force totale" -> "force équivalente"
 - 🔨 Corriger les diagrammes d'efforts internes (valeur à zéro)
 - 🔨 Les trais indicatifs des valeurs max dans les diagrammes des efforts (vu dans Mf) s'accumulent
-- Au hover des efforts internes, affichers des charges dans la poutre (à la place du simple trait)
-- Ne pas enregistrer un mécanisme vide
+- 🔨 Afficher "0 N" au lieu de "0 nN" quand une force est nulle ?
+- 🔨 La barre de scroll devrait se cacher, ou au moins se réduire, si on n'a pas scrollé depuis un moment
+- 🔨 Ne pas enregistrer un mécanisme vide
 
-- 🔨 La puissance affichée devrait être celle que le moteur peut fournir (et pas la puissance instantanée), on devrait donc ensuite pouvoir comparer la puissance du moteur à la puissance instantanée. Le calcul devrait aussi être revu pour prendre en compte ce qu'apporte vraiment le moteur et ce qui tient de l'inertie.
-
+- 🔨 Afficher l'inertie rotationelle avec le symbole qui fait tout le tour ?
+- 🔨 N'afficher un moteur qu'une seul fois au maximum dans les DDL
+- 🔨 afficher en priorité les éléments avec une masse (ex. Mass-ressort) dans les DDL
+- 🔨 On devrait afficher T/N au lieu de x/y pour les mesures des forces internes
 - 🔨 Afficher la masse des gears
 - 🔨 Afficher I avec les profilés
-- 🔨 Afficher les contraintes dans les joins et l'intérieur des sliders et pivots
-- 🔨 Afficher les "draw_beam_end" en couleur de contrainte et hover matériaux
 - 🔨 Afficher les graphiques à frame=0 (pas "en attente de données...")
 - 🔨 La distance d'écartement à la séparation d'éléments devrait dépendre du zoom
+
+**Dessin**
+- 🚨 Le hover de la règle sur les joins n'est pas bon. Et hover de règle devrait épaissir les traits
+- 🔨 Le hover des éléments depuis le panneau latéral ne devrait pas faire apparaitre les contraintes
+- 🔨 Au hover des efforts internes, affichers des charges dans la poutre (à la place du point couleur contrainte)
+- 🔨 Re-positionner le texte des moments (Régler les moments qui se supperposent)
+- 🔨 Dessiner (preview) force et force-distribuée vers le bas
+- 🔨 Donner un contour background aux flèches
+- 🔨 Hover une flèche épaissis sa tête
+- 🔨 Changer le style des flèches de vitesse, accélération, etc.
+- 🔨 Afficher les contraintes dans les joins et l'intérieur des sliders et pivots
+- 🔨 Afficher les "draw_beam_end" en couleur de contrainte et hover matériaux
+- 🔨 Afficher le point grabbé en simulation
+- 🔨 Afficher les trajectoires anciennes de plus en plus transparentes
+
+**Qwick fixes :**
+
+- 🤔 C'est quoi le dossier "scratch/" ?
+- 🤔 Indiquer, quand on click sur un overlay pour la première fois, qu'il n'est visible qu'en simulation (comment ?)
+- 🤔 Afficher le signe des moments
 
 **UI**
 
@@ -129,29 +104,16 @@
 **Simulation**
 
 - 🤔 Qu'est-ce qu'on fait pour afficher les hyperstatismes en dynamique (contraintes) ?
-- 🤔 Différencier "Forces de réaction" et "Efforts internes"
 - 🚨 En cinématique, quand l'alignement n'est juste pas parfait (alors que le défaut peut ne même pas s'afficher), le mécanisme bouge tout seul (voir "Le mécanisme qui bouge tout seul.slidep").
 - 🔨 Donner a tous les ressorts en cinématique la même "élasticité".
-- Passer la simulation en Rust WASM pour accélérer ?
 
 **Physique**
 
 - ❇️ Voir ce que fait "LinkReaction" exactement, et dessiner les forces de réaction de gears au point de contact.
 - 🤔 Afficher les loads (charges) en dynamique ?
 - Interpoler sub snapshot les overlays à l'affichage en x0.1 (notamment les forces de réaction)
-
-- 🆕 Frottements dans les pivots et sliders
 - 🆕 Ajouter ressort de couple
 - 🆕 Ajouter les constantes de frottement / rebond des collisions (CONTACT_EPS ?)
-
-**Cas test à régler**
-
-- Jansen a le moteur qui bloque mais rien n'est indiqué et le couple n'y change rien
-- Qu'est-ce qui change entre "Double Cantilever.slidep" et "Double Cantilever bis.slidep" pour que "Double Cantilever bis.slidep" oscille ?
-
----
-
-- Écart assumé dans 5bis : pas d'avertissement d'hyperstatisme affiché, seulement le résidu de bouclage (ChainMobility.hyperstaticity pas branché — jugé pas prioritaire pour ce premier passage).
 
 **Collisions**
 
@@ -202,10 +164,8 @@
 
 **Canvas**
 
-- 🔨 Afficher les trajectoires anciennes de plus en plus transparentes
 - 🚨 Ne pas ajouter un remplacement d'élément identique à l'historique
 - 🆕 Ajouter un nouvel élément "Commentaire" sur le canvas
-- 🔨 Afficher le point grabbé en simulation
 - 🔨 Theme transition : certaines couleurs changent instantanément (grille + autres éléments spéciaux du canvas)
 - 🔨 Les couleurs de la top-bar et du canvas ne sont pas assez différenciée
 - 🔨 Ajouter un délais (2s) avant d'afficher "mécanisme(s) exporté(s)"
@@ -339,6 +299,7 @@
 
 - 🆕 Motorisation de sliders (verins)
 - 🆕 Limites d'angle des pivots
+- 🆕 On devrait pouvoir choisir plusieurs ancrages pour un moteur (ex: "Vélo.slidep")
 
 **Export et divers**
 

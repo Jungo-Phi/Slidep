@@ -22,6 +22,19 @@ export const OBSERVATION_ACTIONS: Action["type"][] = [
   "ChangeMaterialRe",
 ];
 
+/**
+ * The display settings: which reading the canvas shows, rather than what the mechanism is.
+ *
+ * A subset of the observation actions, but answering a question of its own — the three classes above tell what a running simulation can absorb, this one tells whether the user edited the mechanism at all.
+ * The two do not coincide: renaming an element is an observation action and a genuine edit, whereas picking a stress lens is something a reader carries along, saved so it is found again but never worth marking the mechanism as modified (see `markDirty`).
+ * A probe is left out on purpose: placing one is a deliberate act that stays on the canvas, not a way of looking at what is already drawn.
+ */
+export const DISPLAY_ACTIONS: Action["type"][] = [
+  "SetShowOverlay",
+  "SetBeamStressLens",
+  "SetSupportReactions",
+];
+
 export const PARAMETER_ACTIONS: Action["type"][] = [
   "SetMotorConfig",
   "ChangeForce",
@@ -64,6 +77,9 @@ export const LOAD_VALUE_ACTIONS: Action["type"][] = [
 export const is_observation_only_bundle = (actions: Action[]) =>
   actions.length > 0 &&
   actions.every((a) => OBSERVATION_ACTIONS.includes(a.type));
+
+export const is_display_only_bundle = (actions: Action[]) =>
+  actions.length > 0 && actions.every((a) => DISPLAY_ACTIONS.includes(a.type));
 
 /** Whether a history entry only ticks `elementID`'s metrics on and off, sealed or not — an undo or redo the canvas metric box on that element stays open through. */
 export const is_probes_only_bundle = (actions: Action[], elementID: ID) =>

@@ -35,8 +35,8 @@ const format_zoom = (scale: number, reference: number): string => {
 /** The zoom steps the buttons walk, in percent of that same framing: a click always lands
  * on a reading one can name, which a constant ratio per click never does. */
 const ZOOM_STEPS = [
-  5, 10, 15, 20, 25, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150,
-  160, 180, 200, 250, 300, 350, 400, 500, 600, 800, 1000,
+  1, 2, 3, 4, 5, 10, 15, 20, 25, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140,
+  150, 160, 180, 200, 250, 300, 350, 400, 500, 600, 800, 1000,
 ];
 
 /** Guards against a step being ruled out by the float noise of the zoom round trip. */

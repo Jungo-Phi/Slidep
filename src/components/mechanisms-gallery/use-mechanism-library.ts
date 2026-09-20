@@ -118,19 +118,25 @@ export function useMechanismLibrary({
     galleryOpenRef.current = galleryOpen;
   }, [galleryOpen]);
 
+  // Whether any edit pending in the current debounce window should bump `modifiedAt` — a preference-only change (e.g. `lastSimulationMode`) passes `false`, but it must not suppress the stamp for a real edit coalesced in the same window, so this accumulates with OR instead of just keeping the latest call's flag.
+  const pendingTouchRef = useRef(false);
+
   const performSaveToDB = useCallback(async () => {
-    setSaveStatus("saving");
+    const touch = pendingTouchRef.current;
+    pendingTouchRef.current = false;
+    // A silent save leaves the status pill alone: nothing the user did warrants telling them their work is being written.
+    // A failure still shows, whatever caused the save — a store that cannot be written to concerns every later edit too.
+    if (touch) setSaveStatus("saving");
     try {
       const db = await openMechanismsDB();
       const mechanismToSave = {
         ...mechanismRef.current,
-        metadata: {
-          ...mechanismRef.current.metadata,
-          modifiedAt: Date.now(),
-        },
+        metadata: touch
+          ? { ...mechanismRef.current.metadata, modifiedAt: Date.now() }
+          : mechanismRef.current.metadata,
       };
       await db.put("mechanisms", serialize_mechanism(mechanismToSave));
-      setSaveStatus("saved");
+      if (touch) setSaveStatus("saved");
 
       if (galleryOpenRef.current) {
         setSavedMechanisms(await read_all_records(db));
@@ -147,11 +153,16 @@ export function useMechanismLibrary({
     }, DEBOUNCE_AUTOSAVE_TIME_MILLIS),
   ).current;
 
-  /** Marks an edit as pending save. The one thing every mutation of `mechanism` must call. */
-  const markDirty = useCallback(() => {
-    setSaveStatus("saving");
-    debouncedSave();
-  }, [debouncedSave]);
+  /** Marks an edit as pending save. The one thing every mutation of `mechanism` must call.
+   * `touch` tells whether it counts as modifying the mechanism: `false` persists the change without stamping `modifiedAt` and without showing the save status, for a setting the user carries along rather than an edit they made. */
+  const markDirty = useCallback(
+    (touch = true) => {
+      pendingTouchRef.current = pendingTouchRef.current || touch;
+      if (touch) setSaveStatus("saving");
+      debouncedSave();
+    },
+    [debouncedSave],
+  );
 
   /** App starts: only greet with the gallery when there is something to load. */
   useEffect(() => {

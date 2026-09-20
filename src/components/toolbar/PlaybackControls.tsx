@@ -95,7 +95,7 @@ interface PlaybackControlsProps {
   mechanism: Mechanism;
   /** The simulation settings in effect at the instant on screen: what the physics toggles show, and what they flip. */
   shownSimulation: Mechanism["simulation"];
-  updateMetadata: (metadata: MechanismMetadata) => void;
+  updateMetadata: (metadata: MechanismMetadata, touch?: boolean) => void;
   applyActions: (actions: Action[]) => void;
   condensed: boolean;
   tight: boolean;
@@ -174,10 +174,11 @@ export const PlaybackControls: React.FC<PlaybackControlsProps> = ({
             isPlaying: false,
           }));
           if (newMode !== "edition")
-            updateMetadata({
-              ...mechanism.metadata,
-              lastSimulationMode: newMode,
-            });
+            // Remembering the last mode is a preference, not a content edit — it must not bump `modifiedAt` and surface the mechanism as "recently modified" in the gallery just for having been tried in simulation.
+            updateMetadata(
+              { ...mechanism.metadata, lastSimulationMode: newMode },
+              false,
+            );
         }}
         sx={{
           mr: TOP_BAR_SECTION_GAP,

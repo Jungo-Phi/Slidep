@@ -6,6 +6,12 @@
  */
 
 import { t } from "../i18n";
+import {
+  Dimension,
+  SUPERSCRIPT_TO_ASCII,
+  parse_unit_symbol,
+  same_dimension,
+} from "./unit-algebra";
 
 /** What a plain number is read in: itself, unlabelled. */
 const RAW_UNIT: QuantityUnit = { symbol: "", factor: 1 };
@@ -298,22 +304,6 @@ export function format_mantissa(
   return to_mantissa(valueSI, display_unit(valueSI, kind), precision).toString();
 }
 
-/** The ASCII digit (or "-") each superscript character in a unit symbol like "g/m²" or "s⁻¹"
- * stands for — the far side of the fold `loose` applies to a typed exponent, superscript or caret alike, so every spelling of one converges on the same plain digits. */
-const SUPERSCRIPT_TO_ASCII: Record<string, string> = {
-  "⁰": "0",
-  "¹": "1",
-  "²": "2",
-  "³": "3",
-  "⁴": "4",
-  "⁵": "5",
-  "⁶": "6",
-  "⁷": "7",
-  "⁸": "8",
-  "⁹": "9",
-  "⁻": "-",
-};
-
 /**
  * Loosens a typed unit toward however the app actually prints it, so a plain keyboard reaches the same match a copy-pasted symbol would: "u" and the Greek "μ" both reach the micro sign "µ" our prefixes use (no collision — no unit symbol otherwise contains a bare "u"), a caret exponent ("^2", "^-1") and the superscript it stands for ("²", "⁻¹") both fold to their plain digits, and "*" stands in for the "·" between two multiplied units ("N*m" reaches "N·m").
  * A caret is never itself read as that "·" stand-in — a power is not a multiplication, so "N^m" reaches neither "N·m" nor anything else.
@@ -327,35 +317,59 @@ function loose(symbol: string): string {
     .replace(/[·*]/g, "");
 }
 
-/**
- * Reads free text typed against `kind` back into SI — "12", "12mm", "1.2 cm" all parse against `LENGTH`, the bare form read in `fallbackUnit` (the field's own currently-displayed unit, since that is what an unmarked number means while editing it — never always `units[0]`, or an adaptive field would silently reinterpret "150" typed to overwrite a value it is showing in kN as 150 N).
- * `null` when nothing usable was typed.
- *
- * Unit matching is case-sensitive past `loose`'s leniencies: "MM" or "Mm" fall through to no match, same as an unrecognised word — silently guessing at a typo would risk a value ten decades off whatever the actual intent was.
- */
-export function parse_quantity(
-  text: string,
-  kind: QuantityKind,
-  fallbackUnit: QuantityUnit,
-): number | null {
-  const trimmed = text.trim();
-  const match = trimmed.match(/^(-?[0-9]*\.?[0-9]+)\s*(.*)$/);
-  if (!match) return null;
-  const mantissa = parseFloat(match[1]);
-  if (isNaN(mantissa)) return null;
-  const typedUnit = match[2].trim();
-  if (typedUnit === "") return mantissa * fallbackUnit.factor;
+/** A typed entry split into the number that opens it and whatever unit follows.
+ * The number is as permissive as `parseFloat`: a decimal point on either side of the digits ("5.", ".5") and a scientific exponent ("1.5e-3"), which no unit can be mistaken for — none of ours starts with an "e". */
+const ENTRY = /^([-+]?(?:[0-9]+\.?[0-9]*|\.[0-9]+)(?:[eE][-+]?[0-9]+)?)\s*(.*)$/;
 
+/**
+ * Keeps of a keystroke only what can still become a readable entry, so a field never holds text `parse_quantity` would have to refuse for a reason the user cannot see.
+ * `unit` opens it to the letters and punctuation a unit symbol is spelled with, for a field bound to a `QuantityKind`; without it only a bare number gets through.
+ * `signed` keeps a leading minus, which is the field's own sign — a minus further in belongs to a unit's exponent ("s-1") or to a scientific one, and survives on its own terms.
+ */
+export function filter_quantity_input(
+  text: string,
+  options: { unit?: boolean; signed?: boolean } = {},
+): string {
+  const negative = !!options.signed && text.trimStart().startsWith("-");
+  // A leading sign never survives the filter on its own: it is the field's, put back below only where the field takes one, so the minus a `-` further in stands for stays the exponent's alone.
+  const rest = text.trimStart().replace(/^[-+]+/, "");
+  const pattern = options.unit
+    ? /[^0-9.,a-zA-Zµμ°%·⁰¹²³⁴⁵⁶⁷⁸⁹⁻*^/ +-]/g
+    : /[^0-9.,eE+-]/g;
+  const body = rest
+    .replace(pattern, "")
+    .replace(/,/g, ".")
+    .replace(/(\.[^.]*)\./g, "$1");
+  return (negative ? "-" : "") + body;
+}
+
+/**
+ * Whether `text` is unreadable only because it is half-typed — a lone sign or decimal point, or an exponent whose digits have yet to come ("1e", "1e-").
+ * A field stays neutral on these instead of flashing a refusal between two keystrokes.
+ */
+export function is_entry_in_progress(text: string): boolean {
+  const trimmed = text.trim();
+  return /^[-+]?\.?$/.test(trimmed) || /[eE][-+]?$/.test(trimmed);
+}
+
+/**
+ * The factor `kind` itself gives `typedUnit`: one of its listed units, or a prefixed form of an adaptive one.
+ * `null` when the unit is not one the kind spells out — which is where the dimensional reading takes over.
+ */
+function listed_unit_factor(
+  typedUnit: string,
+  kind: QuantityKind,
+): number | null {
   if (!kind.adaptive) {
     const unit = kind.units.find((u) => loose(u.symbol) === loose(typedUnit));
-    return unit ? mantissa * unit.factor : null;
+    return unit ? unit.factor : null;
   }
   const base = default_unit(kind);
-  if (loose(typedUnit) === loose(base.symbol)) return mantissa * base.factor;
+  if (loose(typedUnit) === loose(base.symbol)) return base.factor;
   const prefix = SI_PREFIXES.find(
     (p) => p.symbol !== "" && loose(`${p.symbol}${base.symbol}`) === loose(typedUnit),
   );
-  if (prefix) return mantissa * 10 ** prefix.exp * base.factor;
+  if (prefix) return 10 ** prefix.exp * base.factor;
 
   if (kind.submultipleOnSuffix) {
     const suffix = kind.submultipleOnSuffix;
@@ -364,19 +378,67 @@ export function parse_quantity(
         p.exp < 0 &&
         loose(prefixed_factor(base.symbol, suffix, p.symbol)) === loose(typedUnit),
     );
-    if (suffixPrefix) return mantissa * 10 ** suffixPrefix.exp * base.factor;
+    if (suffixPrefix) return 10 ** suffixPrefix.exp * base.factor;
   }
 
   const rename = kind.renamedFrom;
   if (!rename) return null;
-  if (loose(typedUnit) === loose(rename.symbol))
-    return mantissa * 10 ** rename.exp * base.factor;
+  if (loose(typedUnit) === loose(rename.symbol)) return 10 ** rename.exp * base.factor;
   const renamedPrefix = SI_PREFIXES.find(
-    (p) =>
-      p.symbol !== "" &&
-      loose(`${p.symbol}${rename.symbol}`) === loose(typedUnit),
+    (p) => p.symbol !== "" && loose(`${p.symbol}${rename.symbol}`) === loose(typedUnit),
   );
-  return renamedPrefix
-    ? mantissa * 10 ** (renamedPrefix.exp + rename.exp) * base.factor
-    : null;
+  return renamedPrefix ? 10 ** (renamedPrefix.exp + rename.exp) * base.factor : null;
+}
+
+/**
+ * What `kind` measures, read off the first of its own units the algebra can decompose.
+ * `null` for a kind every spelling of which is a convention rather than a product of base units ("rpm"), which is then left to its list alone.
+ */
+export function kind_dimension(kind: QuantityKind): Dimension | null {
+  for (const unit of kind.units) {
+    const parsed = parse_unit_symbol(unit.symbol);
+    if (parsed) return parsed.dim;
+  }
+  return null;
+}
+
+/** The factor a unit `kind` never listed is worth, on the sole ground that it measures the same thing — "T/m³" or "mg/cm³" against a density, "N/mm²" against a stress. */
+function derived_unit_factor(
+  typedUnit: string,
+  kind: QuantityKind,
+): number | null {
+  const typed = parse_unit_symbol(typedUnit);
+  const dimension = kind_dimension(kind);
+  if (typed === null || dimension === null) return null;
+  return same_dimension(typed.dim, dimension) ? typed.factor : null;
+}
+
+/**
+ * Reads free text typed against `kind` back into SI — "12", "12mm", "1.2 cm" all parse against `LENGTH`, the bare form read in `fallbackUnit` (the field's own currently-displayed unit, since that is what an unmarked number means while editing it — never always `units[0]`, or an adaptive field would silently reinterpret "150" typed to overwrite a value it is showing in kN as 150 N).
+ * `null` when nothing usable was typed.
+ *
+ * A unit `kind` does not list is read for what it measures instead, and taken when that is what the field holds: "T/m³" and "mg/cm³" against a density, "N·s/m" against a damping.
+ * The list comes first all the same, so a spelling that is a convention rather than a product of base units keeps the reading the list gives it — "min⁻¹" is a revolution per minute, not the reciprocal second the symbol literally says.
+ *
+ * Unit matching is case-sensitive past `loose`'s leniencies: "MM" or "Mm" fall through to no match, same as an unrecognised word — silently guessing at a typo would risk a value ten decades off whatever the actual intent was.
+ *
+ * A comma reads as a decimal point, the separator a numeric keypad types on a French layout.
+ * It is never a thousands separator: "1,000" is one, not a thousand, and `filter_quantity_input` shows the dot back as it is typed so the reading is visible before it is committed.
+ */
+export function parse_quantity(
+  text: string,
+  kind: QuantityKind,
+  fallbackUnit: QuantityUnit,
+): number | null {
+  const trimmed = text.trim().replace(/,/g, ".");
+  const match = trimmed.match(ENTRY);
+  if (!match) return null;
+  const mantissa = parseFloat(match[1]);
+  if (isNaN(mantissa)) return null;
+  const typedUnit = match[2].trim();
+  if (typedUnit === "") return mantissa * fallbackUnit.factor;
+
+  const factor =
+    listed_unit_factor(typedUnit, kind) ?? derived_unit_factor(typedUnit, kind);
+  return factor === null ? null : mantissa * factor;
 }

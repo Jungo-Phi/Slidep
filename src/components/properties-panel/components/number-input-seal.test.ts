@@ -11,6 +11,7 @@ vi.mock("@mui/icons-material", () => ({
 
 import NumberInput from "./NumberInput";
 import { HistorySeal, HistorySealContext } from "../../mechanism/history-seal";
+import { DENSITY } from "../../../utils/quantity-format";
 
 /** What the field asked of the history, in order. */
 const calls: string[] = [];
@@ -73,6 +74,29 @@ describe("what a numeric field tells the history", () => {
     fireEvent.focus(input);
     fireEvent.blur(input);
     expect(calls).toEqual([]);
+  });
+
+  it("says nothing when another unit spells out the value already held", () => {
+    const seen: number[] = [];
+    show({ value: 15000, kind: DENSITY, onChange: (v) => seen.push(v) });
+    const input = screen.getByRole("textbox");
+    fireEvent.focus(input);
+    // The same density as the "15 g/cm³" the field is showing.
+    fireEvent.change(input, { target: { value: "15 T/m^3" } });
+    fireEvent.blur(input);
+    expect(seen).toEqual([]);
+    expect(calls).toEqual([]);
+  });
+
+  it("still commits a unit that spells out a different value", () => {
+    const seen: number[] = [];
+    show({ value: 15000, kind: DENSITY, onChange: (v) => seen.push(v) });
+    const input = screen.getByRole("textbox");
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: "15 kg/m^3" } });
+    fireEvent.blur(input);
+    expect(seen).toEqual([15]);
+    expect(calls).toEqual(["close"]);
   });
 
   it("closes on an adornment click, a decision like a typed value", () => {

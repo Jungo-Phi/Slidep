@@ -8,8 +8,16 @@ import {
   MASS,
   MOMENT,
   SURFACE_MASS,
+  DAMPING,
+  DENSITY,
+  INERTIA,
+  PERCENT,
+  STRESS,
   default_unit,
   deg_to_rad,
+  kind_dimension,
+  filter_quantity_input,
+  is_entry_in_progress,
   display_unit,
   format_mantissa,
   format_quantity,
@@ -17,6 +25,8 @@ import {
   rad_to_deg,
   same_shown_value,
 } from "./quantity-format";
+import type { QuantityKind } from "./quantity-format";
+import { parse_unit_symbol, same_dimension } from "./unit-algebra";
 
 describe("format_quantity — fixed kinds", () => {
   it("shows a length in millimetres, whatever the mechanism's own scale", () => {
@@ -285,5 +295,195 @@ describe("same_shown_value", () => {
 
   it("separates two values an adaptive kind would not even show in the same unit", () => {
     expect(same_shown_value(0.9999, 1.0001, FORCE, 0)).toBe(false);
+  });
+});
+
+describe("parse_quantity — how a number may be written", () => {
+  it("reads a scientific exponent, with or without a unit behind it", () => {
+    expect(parse_quantity("1.5e-3", LENGTH, default_unit(LENGTH))).toBeCloseTo(
+      1.5e-6,
+      12,
+    );
+    expect(parse_quantity("2e3N", FORCE, default_unit(FORCE))).toBeCloseTo(
+      2000,
+      6,
+    );
+  });
+
+  it("reads a decimal point with digits on only one side of it", () => {
+    expect(parse_quantity("5.", LENGTH, default_unit(LENGTH))).toBeCloseTo(
+      0.005,
+      9,
+    );
+    expect(parse_quantity(".5", LENGTH, default_unit(LENGTH))).toBeCloseTo(
+      0.0005,
+      9,
+    );
+  });
+
+  it("reads a comma as that decimal point", () => {
+    expect(parse_quantity("7,8", LENGTH, default_unit(LENGTH))).toBeCloseTo(
+      0.0078,
+      9,
+    );
+    expect(parse_quantity("1,5 cm", LENGTH, default_unit(LENGTH))).toBeCloseTo(
+      0.015,
+      9,
+    );
+  });
+
+  it("still refuses a number it cannot finish reading", () => {
+    expect(parse_quantity(".", LENGTH, default_unit(LENGTH))).toBeNull();
+    expect(parse_quantity("1e", LENGTH, default_unit(LENGTH))).toBeNull();
+  });
+});
+
+describe("filter_quantity_input", () => {
+  it("drops what no entry could contain", () => {
+    expect(filter_quantity_input("12#!mm", { unit: true })).toBe("12mm");
+    expect(filter_quantity_input("12mm", {})).toBe("12");
+  });
+
+  it("shows a comma back as the decimal point it will be read as", () => {
+    expect(filter_quantity_input("7,8", {})).toBe("7.8");
+  });
+
+  it("keeps a leading minus only where the field takes one", () => {
+    expect(filter_quantity_input("-5", { signed: true })).toBe("-5");
+    expect(filter_quantity_input("-5", {})).toBe("5");
+  });
+
+  it("keeps a minus that belongs to an exponent rather than to the field", () => {
+    expect(filter_quantity_input("5min-1", { unit: true })).toBe("5min-1");
+    expect(filter_quantity_input("1e-3", {})).toBe("1e-3");
+  });
+
+  it("leaves a single decimal point standing", () => {
+    expect(filter_quantity_input("1.2.3", {})).toBe("1.23");
+  });
+});
+
+describe("is_entry_in_progress", () => {
+  it("holds a half-typed number to be unfinished rather than wrong", () => {
+    for (const text of ["-", ".", "1e", "1e-"])
+      expect(is_entry_in_progress(text)).toBe(true);
+  });
+
+  it("does not excuse an entry that is simply unreadable", () => {
+    for (const text of ["abc", "5xyz", "1..2"])
+      expect(is_entry_in_progress(text)).toBe(false);
+  });
+});
+
+/** Every kind a field can be bound to, so the consistency check below covers the lot. */
+const ALL_KINDS: [string, QuantityKind][] = [
+  ["LENGTH", LENGTH],
+  ["ANGLE", ANGLE],
+  ["PERCENT", PERCENT],
+  ["FORCE", FORCE],
+  ["MASS", MASS],
+  ["MOMENT", MOMENT],
+  ["SURFACE_MASS", SURFACE_MASS],
+  ["INERTIA", INERTIA],
+  ["DAMPING", DAMPING],
+  ["ANGULAR_DAMPING", ANGULAR_DAMPING],
+  ["STRESS", STRESS],
+  ["DENSITY", DENSITY],
+  ["ANGULAR_VELOCITY", ANGULAR_VELOCITY()],
+];
+
+/** Spellings the algebra is not meant to reach, and why.
+ * "rpm" is a word rather than a product of symbols; "min-1" and "s-1" name only the time a revolution is counted over, the revolution itself being implicit, so read literally they carry the wrong dimension. */
+const CONVENTIONS = new Set(["rpm", "min-1", "min⁻¹", "s-1", "s⁻¹"]);
+
+describe("unit algebra against the kinds' own tables", () => {
+  it("agrees with every factor written by hand", () => {
+    for (const [name, kind] of ALL_KINDS) {
+      const dimension = kind_dimension(kind);
+      expect(dimension, name).not.toBeNull();
+      for (const unit of kind.units) {
+        if (CONVENTIONS.has(unit.symbol)) continue;
+        const parsed = parse_unit_symbol(unit.symbol);
+        expect(parsed, `${name} / ${unit.symbol}`).not.toBeNull();
+        // To the bit, not merely close: a factor a decade off in its last digits is what makes retyping a value in another unit look like an edit.
+        expect(parsed!.factor, `${name} / ${unit.symbol}`).toBe(unit.factor);
+        expect(
+          same_dimension(parsed!.dim, dimension!),
+          `${name} / ${unit.symbol}`,
+        ).toBe(true);
+      }
+    }
+  });
+});
+
+describe("parse_quantity — a unit the kind never listed", () => {
+  it("reads a density however its two halves are prefixed", () => {
+    const perM3 = (text: string) =>
+      parse_quantity(text, DENSITY, default_unit(DENSITY));
+    expect(perM3("1T/m3")).toBeCloseTo(1000, 6);
+    expect(perM3("1mg/cm3")).toBeCloseTo(1, 6);
+    expect(perM3("1kg/dm3")).toBeCloseTo(1000, 6);
+    expect(perM3("1g/L")).toBeCloseTo(1, 6);
+  });
+
+  it("reads a stress in the unit a datasheet prints it in", () => {
+    expect(parse_quantity("1N/mm2", STRESS, default_unit(STRESS))).toBeCloseTo(
+      1e6,
+      0,
+    );
+  });
+
+  it("reads a damping through the equivalence its own base unit rests on", () => {
+    expect(parse_quantity("3N*s/m", DAMPING, default_unit(DAMPING))).toBeCloseTo(
+      3,
+      6,
+    );
+  });
+
+  it("reads the tonne as the SI spells it, next to the app's own", () => {
+    expect(parse_quantity("2t", MASS, default_unit(MASS))).toBeCloseTo(2000, 6);
+    expect(parse_quantity("2T", MASS, default_unit(MASS))).toBeCloseTo(2000, 6);
+  });
+
+  it("reads a prefix too fine for the display ladder to ever print", () => {
+    expect(parse_quantity("5dm", LENGTH, default_unit(LENGTH))).toBeCloseTo(0.5, 9);
+    expect(parse_quantity("5daN", FORCE, default_unit(FORCE))).toBeCloseTo(50, 6);
+  });
+
+  it("reads an inertia written the way it is stored", () => {
+    expect(parse_quantity("4kg*m2", INERTIA, default_unit(INERTIA))).toBeCloseTo(
+      4,
+      6,
+    );
+  });
+
+  it("refuses a unit that measures something else", () => {
+    expect(parse_quantity("5m", FORCE, default_unit(FORCE))).toBeNull();
+    expect(parse_quantity("5kg", LENGTH, default_unit(LENGTH))).toBeNull();
+  });
+
+  it("keeps an angle out of a field holding a bare fraction", () => {
+    expect(parse_quantity("45deg", PERCENT, default_unit(PERCENT))).toBeNull();
+  });
+
+  it("leaves a conventional spelling the reading its own kind gives it", () => {
+    expect(
+      parse_quantity("60min-1", ANGULAR_VELOCITY(), default_unit(ANGULAR_VELOCITY())),
+    ).toBeCloseTo(2 * Math.PI, 9);
+  });
+});
+
+describe("a value retyped in another unit", () => {
+  it("lands on the very double the first spelling did", () => {
+    const d = default_unit(DENSITY);
+    for (const [a, b] of [
+      ["15 g/cm3", "15 T/m^3"],
+      ["20 kg/m3", "20 mg/cm3"],
+      ["2.7 g/cm3", "2.7 kg/dm3"],
+      ["1 kg/m3", "1 g/L"],
+    ])
+      expect(parse_quantity(a, DENSITY, d), `${a} vs ${b}`).toBe(
+        parse_quantity(b, DENSITY, d),
+      );
   });
 });

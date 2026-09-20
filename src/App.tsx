@@ -116,6 +116,7 @@ import {
   HistorySealContext,
 } from "./components/mechanism/history-seal";
 import {
+  is_display_only_bundle,
   is_load_value_only_bundle,
   is_observation_only_bundle,
   is_structure_bundle,
@@ -502,9 +503,9 @@ const App: React.FC = () => {
   }, [galleryOpen, pauseSimulation]);
 
   const updateMetadata = useCallback(
-    (metadata: MechanismMetadata) => {
+    (metadata: MechanismMetadata, touch = true) => {
       setMechanism((prevMechanism) => ({ ...prevMechanism, metadata }));
-      markDirty();
+      markDirty(touch);
     },
     [markDirty],
   );
@@ -619,7 +620,7 @@ const App: React.FC = () => {
         }
         return newMechanism;
       });
-      markDirty();
+      markDirty(!is_display_only_bundle(actions));
     },
     [
       markDirty,
@@ -691,6 +692,10 @@ const App: React.FC = () => {
       mechanismRef.current.history.slice(-1)[0],
     );
     if (observationOnly) observationOnlyEditRef.current = true;
+    // Taking back a display setting is no more an edit than choosing it was.
+    const displayOnly = is_display_only_bundle(
+      mechanismRef.current.history.slice(-1)[0],
+    );
 
     setMechanism((prevMechanism) => {
       const lastActionsForUndo = [
@@ -742,7 +747,7 @@ const App: React.FC = () => {
       // Otherwise the [mechanism] effect recompiles + truncates snapshots.
     }
 
-    markDirty();
+    markDirty(!displayOnly);
   }, [
     markDirty,
     signalConstraintChange,
@@ -757,6 +762,9 @@ const App: React.FC = () => {
 
     if (is_observation_only_bundle(mechanismRef.current.future.slice(-1)[0]))
       observationOnlyEditRef.current = true;
+    const displayOnly = is_display_only_bundle(
+      mechanismRef.current.future.slice(-1)[0],
+    );
 
     setMechanism((prevMechanism) => {
       const nextActions = prevMechanism.future.slice(-1)[0];
@@ -796,7 +804,7 @@ const App: React.FC = () => {
     });
 
     // In simulation, the [mechanism] effect recompiles + truncates snapshots.
-    markDirty();
+    markDirty(!displayOnly);
   }, [
     markDirty,
     signalConstraintChange,

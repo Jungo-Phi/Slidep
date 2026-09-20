@@ -24,11 +24,14 @@ declare module "@mui/material/styles" {
     /** The overlay readings, in the very colours the canvas draws them (`canvas_palette`) — a figure in the panel and its arrow on the drawing are one reading.
      * Printed as text or laid on `paper` rather than on the drawing's ground, it goes through `readable_on` first. */
     overlay: Record<PhysicsOverlayKind, string>;
+    /** `error.main`, thinned to a background tint — for a row or chip flagged as wrong without hiding what's printed on it. */
+    errorSoft: string;
   }
   interface PaletteOptions {
     dividers?: { ground: string; paper: string; toolbar: string };
     measure?: string;
     overlay?: Record<PhysicsOverlayKind, string>;
+    errorSoft?: string;
   }
 }
 
@@ -593,10 +596,12 @@ const mui_palette = (s: ThemeSpec) => {
   // The veil darkens a light ground and lightens a dark one: a black veil on a dark background is invisible.
   const veil = dark ? "255, 255, 255" : "0, 0, 0";
   const towards = dark ? "#FFFFFF" : "#000000";
+  const status = status_palette(s);
   return {
     primary: { main: s.accent, dark: s.accentDark, contrastText: s.onAccent },
     secondary: { main: s.ink, contrastText: s.onAccent },
-    ...status_palette(s),
+    ...status,
+    errorSoft: alpha(status.error.main, 0.12),
     background: {
       default: s.appBackground,
       paper: s.paper,

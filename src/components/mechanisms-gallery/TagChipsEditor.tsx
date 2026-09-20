@@ -118,10 +118,13 @@ export const TagChipsEditor: React.FC<TagChipsEditorProps> = ({
           sx={{
             height: 20,
             fontSize: "0.7rem",
+            transition: "color 0.1s, background-color 0.1s, border-color 0.1s",
             "&:hover .tag-label-text": { opacity: 0 },
             "&:hover .tag-delete-overlay": { opacity: 1 },
             "&:hover": {
-              backgroundColor: "action.hover",
+              color: "error.main",
+              backgroundColor: "errorSoft",
+              borderColor: "transparent",
             },
           }}
         />

@@ -1,6 +1,5 @@
 import React from "react";
 import { Box, Tooltip, Typography } from "@mui/material";
-import { alpha } from "@mui/material/styles";
 import { ProbeMetric } from "../../../types";
 import { MetricSample } from "../../solver/recording/probe-series";
 import { FormattedMetric, format_metric } from "../metric-display";
@@ -109,7 +108,7 @@ export const ValueRow: React.FC<{
         gap: 1,
         minHeight: 22,
         ...(alert && {
-          backgroundColor: (theme) => alpha(theme.palette.error.main, 0.12),
+          backgroundColor: "errorSoft",
           borderRadius: 3,
           px: 0.5,
         }),

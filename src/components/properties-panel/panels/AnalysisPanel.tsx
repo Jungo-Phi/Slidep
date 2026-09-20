@@ -13,7 +13,6 @@ import {
   Tooltip,
   useTheme,
 } from "@mui/material";
-import { alpha } from "@mui/material/styles";
 import {
   Add,
   WarningAmber,
@@ -489,8 +488,7 @@ const ChainCard: React.FC<{
                     // Two rows the mechanism cannot answer for, painted alike: a motor it will not follow, and a freedom nothing weighs.
                     // Swinging a mode wins the background back below, which is what keeps the two from fighting over it.
                     ...((motorBlocked || noInertia) && {
-                      backgroundColor: (theme) =>
-                        alpha(theme.palette.error.main, 0.12),
+                      backgroundColor: "errorSoft",
                     }),
                     ...(shown && {
                       animation: `mode-beat ${MODE_ANIMATION.PERIOD_S / 2}s ease-in-out infinite`,

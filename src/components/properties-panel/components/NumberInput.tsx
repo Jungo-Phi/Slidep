@@ -6,6 +6,8 @@ import {
   QuantityKind,
   QuantityUnit,
   display_unit,
+  filter_quantity_input,
+  is_entry_in_progress,
   parse_quantity,
   to_mantissa,
 } from "../../../utils/quantity-format";
@@ -42,6 +44,9 @@ interface NumberInputProps {
   pillAdornment?: boolean;
   /** Decimal places shown and stepped to. Defaults to 1, fine for every value at unit scale (kg, N/m…); friction-like coefficients need more. */
   precision?: number;
+  /** The increment the arrows snap to between two whole numbers, in the displayed unit.
+   * Defaults to the last decimal `precision` shows, which is what a spinner conventionally steps; give it where the two disagree, a field showing three decimals of a value read in units being unusable at a thousandth per click. */
+  fineStep?: number;
   /** Formats and parses `value` (always SI) as a physical quantity instead of a bare number.
    * The unit is plain text alongside the digits — part of what is shown and edited, not a decoration next to it — so typing over it ("12mm", "3cm", "150kN") is how a unit is overridden for that one entry. */
   kind?: QuantityKind;
@@ -72,6 +77,7 @@ export const NumberInput: React.FC<NumberInputProps> = ({
   adornment,
   pillAdornment = false,
   precision = 1,
+  fineStep,
   kind,
   disabled = false,
   implicit = false,
@@ -110,7 +116,7 @@ export const NumberInput: React.FC<NumberInputProps> = ({
   const width = (large ? 100 : 96) + adornmentWidth;
   const rounding = precision;
   // The finest step the up/down arrows snap to before falling back to `step`.
-  const grain = Math.pow(10, -rounding);
+  const grain = fineStep ?? Math.pow(10, -rounding);
   // Pill-shaped right edge for the direction adornment (SignedNumberInput only).
   const adornmentRadius = (height + 4) / 2;
 
@@ -192,15 +198,8 @@ export const NumberInput: React.FC<NumberInputProps> = ({
     ],
   );
 
-  const filterInput = (val: string) => {
-    const negative = !unsigned && val.startsWith("-");
-    // Stripped off before filtering, and alone allowed to survive it: a leading sign is the field's own, but a `-` past it belongs to a unit's exponent ("s-1", "min-1") and must stay legible through the same pass that strips everything else unrecognised.
-    const rest = negative ? val.slice(1) : val;
-    // A `kind` field accepts unit letters typed inline ("12mm", "150kN"), stand-ins `loose` folds back to the real symbol ("N*m", "Nm" for "N·m"; "m2" for "m²"), and the physicist's superscript exponent ("s⁻¹"); a plain one stays digits-only.
-    const pattern = kind ? /[^0-9.a-zA-Zµμ°·²³⁻¹*^/ -]/g : /[^0-9.]/g;
-    const body = rest.replace(pattern, "").replace(/(\.[^.]*)\./g, "$1");
-    return (negative ? "-" : "") + body;
-  };
+  const filterInput = (val: string) =>
+    filter_quantity_input(val, { unit: !!kind, signed: !unsigned });
 
   const parseLocal = (text: string): number | null => {
     const parsed = kind ? parse_quantity(text, kind, unit) : parseFloat(text);
@@ -209,13 +208,19 @@ export const NumberInput: React.FC<NumberInputProps> = ({
   const entered = parseLocal(localValue);
   // A refusal shows up while typing rather than only at blur, so leaving the field on an unusable entry isn't a silent discard.
   // A field still being filled stays neutral.
-  const refused = focused && localValue.trim() !== "" && entered === null;
+  const refused =
+    focused &&
+    localValue.trim() !== "" &&
+    !is_entry_in_progress(localValue) &&
+    entered === null;
 
   // Leaving the field validates the entry; an unreadable one is dropped and the field goes back to showing the value.
   // Entering what it already showed changes nothing — unless it showed nothing to begin with, `value` then being one element's among several that differ, and typing it the value the others are being given.
+  // Text first, value second: the two say different things. Out and back in without an edit leaves text the field itself wrote, whatever junk the last bits of `value` carry; a unit retyped over an equal value ("15 T/m³" for "15 g/cm³") is a different text for the very same double, and is as much of a non-edit.
   const commitLocalValue = () => {
     if (!mixed && localValue === format(value)) return;
     if (entered === null) return;
+    if (!mixed && entered === value) return;
     onChange(entered);
     seal.close();
   };

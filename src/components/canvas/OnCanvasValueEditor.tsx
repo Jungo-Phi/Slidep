@@ -7,6 +7,8 @@ import {
   QuantityKind,
   QuantityUnit,
   display_unit,
+  filter_quantity_input,
+  is_entry_in_progress,
   parse_quantity,
   to_mantissa,
 } from "../../utils/quantity-format";
@@ -109,10 +111,9 @@ export const OnCanvasValueEditor: React.FC<OnCanvasValueEditorProps> = ({
 
   // A refusal shows up while typing rather than at Enter, so pressing it on a value the editor will not take is not a silent no-op.
   // A field still being filled stays neutral.
+  const filled = (val: string) => val.trim() !== "" && !is_entry_in_progress(val);
   const refused =
-    entered === null &&
-    val1.trim() !== "" &&
-    (mode === "single" || val2.trim() !== "");
+    entered === null && filled(val1) && (mode === "single" || filled(val2));
 
   // A validated value stands alone in the history: what it replaced is one Ctrl+Z away, however long the editor stayed open.
   const commit = (newValue: number) => {
@@ -155,14 +156,9 @@ export const OnCanvasValueEditor: React.FC<OnCanvasValueEditorProps> = ({
     }
   };
 
-  const filterInput = (val: string) => {
-    // A `kind` field accepts unit letters typed inline ("12mm", "150kN") and stand-ins `loose` folds back to the real symbol ("N*m", "Nm" for "N·m"); a plain one, and ratio mode's two fields, stay digits-only.
-    const pattern =
-      mode === "single" && kind ? /[^0-9.a-zA-Zµμ°·²*^/ ]/g : /[^0-9.]/g;
-    const digits = val.replace(pattern, "").replace(/(\..*)\./g, "$1");
-    // The minus is read from the head of the raw input rather than kept in the filtered string, so it can only ever sit in front of the number — and typing it alone leaves "-" on screen while the user finishes the value.
-    return signed && val.trimStart().startsWith("-") ? `-${digits}` : digits;
-  };
+  // Ratio mode's two fields are bare numbers: a unit on either half of a ratio would say nothing the ratio itself doesn't.
+  const filterInput = (val: string) =>
+    filter_quantity_input(val, { unit: mode === "single" && !!kind, signed });
 
   const commonInputStyles = {
     "& .MuiOutlinedInput-notchedOutline": {

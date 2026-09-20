@@ -462,6 +462,10 @@ export const MaterialDetail: React.FC<MaterialDetailProps> = ({
       value={rho}
       onChange={onChangeRho ?? (() => {})}
       unsigned
+      // A density is shown in g/cm³, where a plastic foam and a steel are three decimals apart: one decimal would read both a balsa and a foam as "0".
+      // The arrows keep stepping in tenths all the same, a thousandth of a g/cm³ being a single kg/m³.
+      precision={3}
+      fineStep={0.1}
     />
   </Box>
 );
