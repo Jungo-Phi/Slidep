@@ -1,4 +1,4 @@
-import { BeamCohesion, ID } from "../../../types";
+import { BeamCohesion, BeltStrand, ID } from "../../../types";
 import { BeamCohesionSpec } from "../dynamics/beam-cohesion";
 import { StaticsFrame } from "./equilibrium-model";
 import { StaticsSolution, StaticsTorsor } from "./equilibrium-solve";
@@ -67,4 +67,19 @@ export function beam_cohesion_from_statics(
       determinate: torsors.length > 0 && torsors.every(settled),
     };
   });
+}
+
+/** The solved strands as a snapshot carries them — see `BeltStrand`. */
+export function belt_strands_from_statics(solution: StaticsSolution | undefined): BeltStrand[] {
+  return (solution?.strands ?? []).map((strand) => ({
+    beltID: strand.beltID,
+    fromX: strand.from.x,
+    fromY: strand.from.y,
+    toX: strand.to.x,
+    toY: strand.to.y,
+    fromGear: strand.fromGear,
+    toGear: strand.toGear,
+    tension: strand.tension,
+    determined: strand.determined,
+  }));
 }

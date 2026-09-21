@@ -6,8 +6,9 @@ import { Flexibility, minimise_energy, solve_least_squares } from "./least-squar
 import { StaticsFrame, StaticsInterface, StaticsSystem } from "./equilibrium-model";
 import { BeltVia, belt_pieces } from "../../../utils/belt-path";
 
-/** One resolved interface torsor, in plain mechanics units: the force and the counter-
- * clockwise couple the beam applies onto the node (or the frame onto the node, at a support). */
+/**
+ * One resolved interface torsor, in plain mechanics units: the force and the counter-clockwise couple the beam applies onto the node (or the frame onto the node, at a support).
+ */
 export interface StaticsTorsor {
   beamID?: ID;
   /** The gear applying this torsor, at its axle or at one of its rim pins. */
@@ -24,19 +25,38 @@ export interface StaticsTorsor {
    * Per component and not per beam, which matters: a beam between two pinned supports has an undetermined `N` and a perfectly determined `Mf`, and reporting the whole beam as unknown would throw away the bending diagram — the very case a reader most wants.
    */
   determined: { fx: boolean; fy: boolean; m: boolean };
-  /** Carried through from `StaticsInterface.foreign`: this stands for a belt, a gear mesh or a
-   * contact the model does not describe, never for an answer. */
+  /** Carried through from `StaticsInterface.foreign`: this stands for a belt, a gear mesh or a contact the model does not describe, never for an answer. */
   foreign: boolean;
+}
+
+/** One tangent strand of a belt as it lay this frame, and the tension it carries. */
+export interface StaticsStrand {
+  beltID: ID;
+  /** Where the strand leaves its via, and where it lands on the next one. */
+  from: Point2;
+  to: Point2;
+  /** The pulleys at either end, absent at an open belt's terminal. */
+  fromGear?: ID;
+  toGear?: ID;
+  /** Positive when the strand pulls its two ends towards each other. */
+  tension: number;
+  determined: boolean;
 }
 
 export interface StaticsSolution {
   torsors: StaticsTorsor[];
-  /** `dim ker(A)` — the degree of static indeterminacy at this pose. Zero means every torsor
-   * above is exact.
-   * Should agree with `ChainMobility.hyperstaticity` summed over the chains this covers, which is an independent route to the same number. */
+  /** Every strand of every belt the assembly carries, in path order within a belt. */
+  strands: StaticsStrand[];
+  /**
+   * `dim ker(A)` — the degree of static indeterminacy at this pose.
+   * Zero means every torsor above is exact.
+   * Should agree with `ChainMobility.hyperstaticity` summed over the chains this covers, which is an independent route to the same number.
+   */
   indeterminacy: number;
-  /** `‖A·x − b‖`. Not a solver failure: it says the frame handed in is not itself in
-   * equilibrium, which on a moving mechanism is a d'Alembert term that did not quite close. */
+  /**
+   * `‖A·x − b‖`.
+   * Not a solver failure: it says the frame handed in is not itself in equilibrium, which on a moving mechanism is a d'Alembert term that did not quite close.
+   */
   residual: number;
   /** Largest right-hand side entry, to read `residual` against something. */
   scale: number;
@@ -200,12 +220,16 @@ export function distributed_resultant(
   };
 }
 
-/** Below this, a component of a unit vector is numerical dust rather than a coupling. Read
- * both when splitting the null space and when asking whether a direction moves a column, so the two never disagree over whether a vector touches something. */
+/**
+ * Below this, a component of a unit vector is numerical dust rather than a coupling.
+ * Read both when splitting the null space and when asking whether a direction moves a column, so the two never disagree over whether a vector touches something.
+ */
 const COUPLING_EPSILON = 1e-8;
 
-/** Orthonormalise in order, dropping whatever the vectors before it already span. Plain
- * modified Gram-Schmidt: these live in `ker(A)`'s own coordinates, a handful of dimensions even on the most redundant mechanism in the gallery. */
+/**
+ * Orthonormalise in order, dropping whatever the vectors before it already span.
+ * Plain modified Gram-Schmidt: these live in `ker(A)`'s own coordinates, a handful of dimensions even on the most redundant mechanism in the gallery.
+ */
 function orthonormalise(vectors: Float64Array[], size: number): Float64Array[] {
   const basis: Float64Array[] = [];
   for (const vector of vectors) {
@@ -257,8 +281,7 @@ function split_null_space(
   });
   const owned = orthonormalise([...unowned, ...axes], h).slice(unowned.length);
 
-  /** Back from the null space's coordinates to the unknowns'. Orthonormal in, orthonormal
-   * out: `nullSpace` is itself orthonormal. */
+  /** Back from the null space's coordinates to the unknowns'. Orthonormal in, orthonormal out: `nullSpace` is itself orthonormal. */
   const lift = (weights: Float64Array): Float64Array => {
     const out = new Float64Array(nullSpace[0].length);
     for (let i = 0; i < h; i++)
@@ -267,6 +290,57 @@ function split_null_space(
   };
   return { owned: owned.map(lift), unowned: unowned.map(lift) };
 }
+
+/**
+ * Settle each belt's pretension: shift `x` in place along the free direction that moves its strands, until its slackest strand reads zero.
+ *
+ * Between rigid supports that pretension is a redundancy no member's flexibility reaches, so without this the commonest drive there is would read as unknown.
+ * A belt can only pull, and of every tension equilibrium allows this keeps the least — what the drive needs to transmit its load, and no more.
+ *
+ * `belts` holds each belt's strand columns; returns `free` without the directions it used.
+ * A belt that several free directions move, or one along which its strands do not all stretch together, is left open and keeps reading as unknown.
+ */
+function slacken_belts(
+  x: Float64Array,
+  belts: number[][],
+  free: Float64Array[],
+): Float64Array[] {
+  let remaining = free;
+  for (const columns of belts) {
+    if (columns.length === 0 || remaining.length === 0) continue;
+    const touches = remaining.map((n) => columns.map((c) => n[c]));
+    const reference = touches.reduce((a, b) => (norm(b) > norm(a) ? b : a));
+    const referenceNorm = norm(reference);
+    if (referenceNorm <= COUPLING_EPSILON) continue;
+    const unit = reference.map((v) => v / referenceNorm);
+    const weights = touches.map((t) => t.reduce((s, v, k) => s + v * unit[k], 0));
+    const oneDirection = touches.every((t, i) =>
+      t.every((v, k) => Math.abs(v - weights[i] * unit[k]) <= COUPLING_EPSILON),
+    );
+    if (!oneDirection) continue;
+
+    const direction = new Float64Array(x.length);
+    const weightNorm = norm(weights);
+    remaining.forEach((n, i) => {
+      for (let k = 0; k < x.length; k++) direction[k] += (weights[i] / weightNorm) * n[k];
+    });
+    const sign = unit[0] < 0 ? -1 : 1;
+    if (!columns.every((c) => sign * direction[c] > COUPLING_EPSILON)) continue;
+    for (let k = 0; k < x.length; k++) direction[k] *= sign;
+
+    let shift = -Infinity;
+    for (const c of columns) shift = Math.max(shift, -x[c] / direction[c]);
+    for (let k = 0; k < x.length; k++) x[k] += shift * direction[k];
+    remaining = orthonormalise([direction, ...remaining], x.length).slice(1);
+  }
+  return remaining;
+}
+
+const norm = (v: ArrayLike<number>): number => {
+  let s = 0;
+  for (let i = 0; i < v.length; i++) s += v[i] * v[i];
+  return Math.sqrt(s);
+};
 
 /**
  * Assemble and solve one frame's equilibrium.
@@ -377,6 +451,8 @@ export function solve_statics(
     if (m >= 0) add_at(a, beamRow + 2, m, 1);
   }
 
+  const strands: (Omit<StaticsStrand, "tension" | "determined"> & { column: number })[] = [];
+  const beltColumns: number[][] = [];
   for (const belt of system.belts) {
     // The belt as it actually lies this frame: a pulley it has left touches nothing, so it drops out of the path and the strand runs straight on to the next one it still holds.
     const contact: { via: BeltVia; index: number }[] = [];
@@ -415,6 +491,8 @@ export function solve_statics(
       add_at(a, nodeRow + 1, column, sign * u.y);
     };
 
+    const columns: number[] = [];
+    beltColumns.push(columns);
     for (const piece of belt_pieces(
       contact.map((c) => c.via),
       belt.closed,
@@ -427,6 +505,15 @@ export function solve_statics(
       const to = contact[piece.gearIndexB].index;
       const column = belt.columns[from];
       if (column === undefined) continue;
+      columns.push(column);
+      strands.push({
+        beltID: belt.beltID,
+        from: piece.from,
+        to: piece.to,
+        fromGear: belt.viaGears[from],
+        toGear: belt.viaGears[to],
+        column,
+      });
       // A tension pulls both of its ends towards each other: `+T·u` where it leaves, `−T·u` where it lands.
       pull(from, piece.from, u, 1, column);
       pull(to, piece.to, u, -1, column);
@@ -469,12 +556,14 @@ export function solve_statics(
     ? minimise_energy(solved.x, split.owned, flexibility.applyF, flexibility.linear)
     : undefined;
   const x = minimum ? minimum.x : solved.x;
+  // Only among the redundancies the model owns: a direction that also moves an unmodelled action is not this model's to settle, belt or not.
+  const free = slacken_belts(x, beltColumns, minimum ? minimum.residualNull : split.owned);
 
   // A component is settled when nothing the answer is still free to move along touches it.
   // With a flexibility that is NOT `ker(A)`: Menabrea picks one member of the redundancies the model owns, so a plain over-constrained frame is an answer rather than an unknown.
-  // What stays open is what it may not choose within (`unowned`) and what it could not (`residualNull`).
+  // What stays open is what it may not choose within (`unowned`) and what neither it nor the belts' pretension could (`free`).
   // The vectors are unit-norm throughout, so this compares a share of one against a share of one.
-  const open = minimum ? [...split.unowned, ...minimum.residualNull] : solved.nullSpace;
+  const open = [...split.unowned, ...free];
   const varies = (column: number) =>
     column >= 0 && open.some((n) => Math.abs(n[column]) > COUPLING_EPSILON);
 
@@ -502,6 +591,11 @@ export function solve_statics(
         foreign: face.foreign,
       };
     }),
+    strands: strands.map(({ column, ...strand }) => ({
+      ...strand,
+      tension: x[column],
+      determined: !varies(column),
+    })),
     indeterminacy: solved.nullSpace.length,
     residual: solved.residual,
     scale,

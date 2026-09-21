@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { MechanicalElement } from "../../../types/element";
 import { ZERO } from "../../../types/point2";
 import {
+  BeltStrand,
   DynamicSnapshot,
   KinematicSnapshot,
   LinkReaction,
@@ -461,5 +462,67 @@ describe("ce qu'un membre et une glissière mesurent d'eux-mêmes", () => {
     const s = get_probe_series(slider("s", "r"), "slide-velocity", sliding);
     expect(curve(s, "value")).toEqual([1, 1, 1]);
     expect(s.unit).toBe("m/s");
+  });
+});
+
+describe("tension de courroie", () => {
+  const belt = { id: "b", type: "belt" } as unknown as MechanicalElement;
+  const emptyLayout = make_snapshot_layout([], []);
+  const strand = (
+    beltID: string,
+    from: [number, number],
+    to: [number, number],
+    tension: number,
+    determined = true,
+  ): BeltStrand =>
+    ({
+      beltID,
+      fromX: from[0],
+      fromY: from[1],
+      toX: to[0],
+      toY: to[1],
+      tension,
+      determined,
+    }) as BeltStrand;
+  const at = (t: number, beltStrands: BeltStrand[]): DynamicSnapshot => ({
+    t,
+    layout: emptyLayout,
+    positions: new Float64Array(0),
+    angles: new Float64Array(0),
+    velocities: new Float64Array(0),
+    accelerations: new Float64Array(0),
+    angleVelocities: new Float64Array(0),
+    angleAccelerations: new Float64Array(0),
+    beltStrands,
+  });
+
+  it("lit le brin le plus tendu de sa propre courroie, et d'aucune autre", () => {
+    const snaps = [
+      at(0, [strand("b", [0, 1], [10, 1], 40), strand("b", [10, -1], [0, -1], 5), strand("other", [0, 0], [1, 0], 900)]),
+      at(1, [strand("b", [0, 1], [10, 1], 3), strand("b", [10, -1], [0, -1], 12)]),
+    ];
+    const series = get_dynamic_probe_series(belt, "belt-tension", snaps);
+    expect(series.t).toEqual([0, 1]);
+    expect(curve(series, "value")).toEqual([40, 12]);
+  });
+
+  it("saute un instant dont un brin reste indéterminé, plutôt que d'en donner un maximum faux", () => {
+    const snaps = [
+      at(0, [strand("b", [0, 1], [10, 1], 40), strand("b", [10, -1], [0, -1], 5, false)]),
+      at(1, [strand("b", [0, 1], [10, 1], 7)]),
+    ];
+    expect(get_dynamic_probe_series(belt, "belt-tension", snaps).t).toEqual([1]);
+  });
+
+  it("tire chaque bout d'un brin vers l'autre, et ne montre rien d'un brin indéterminé", () => {
+    const snap = at(0, [strand("b", [0, 0], [4, 0], 10), strand("b", [4, 0], [4, 3], 99, false)]);
+    const reactions = element_reactions(belt, snap);
+    expect(reactions).toHaveLength(2);
+    const [leaving, landing] = reactions;
+    expect(leaving.at).toEqual({ x: 0, y: 0 });
+    expect(leaving.vector).toEqual({ x: 10, y: 0 });
+    expect(landing.at).toEqual({ x: 4, y: 0 });
+    expect(landing.vector.x).toBe(-10);
+    expect(landing.vector.y).toBeCloseTo(0);
   });
 });

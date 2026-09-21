@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { ID, Link, MechanicalElement, Point2 } from "../../../types";
+import { BeltElement, ID, Link, MechanicalElement, Point2 } from "../../../types";
 import { StaticsFrame, StaticsGear, build_statics_system } from "./equilibrium-model";
 import { solve_statics } from "./equilibrium-solve";
+import { belt_strand_on_pose } from "../../../utils/belt-geom";
 
 /**
  * A rope over a pulley, against the two lines anyone would write for it — see docs/plan-efforts-interieurs.md phase 10.
@@ -111,5 +112,109 @@ describe("une corde sur une poulie", () => {
   it("garde le couple déterminé, la tension étant un membre comme un autre", () => {
     const { axle } = rope(150, 50);
     expect(axle.determined).toEqual({ fx: true, fy: true, m: true });
+  });
+});
+
+const DRIVER = "driver" as ID;
+const DRIVEN = "driven" as ID;
+const AXLE_A = "axleA" as ID;
+const AXLE_B = "axleB" as ID;
+const SPAN = 10;
+
+/** A closed belt over two equal pulleys on fixed axles, the driven one braked by `torque` through its own inertia. */
+function drive(torque: number) {
+  const elements = [
+    { type: "pivot", id: AXLE_A },
+    { type: "pivot", id: AXLE_B },
+    { type: "gear", id: DRIVER },
+    { type: "gear", id: DRIVEN },
+  ] as unknown as MechanicalElement[];
+  const gears: StaticsGear[] = [
+    { id: DRIVER, centreKey: AXLE_A, radius: R, mass: 0, inertia: 0 },
+    { id: DRIVEN, centreKey: AXLE_B, radius: R, mass: 0, inertia: 1 },
+  ];
+  const links: Link[] = [
+    {
+      type: "BeltLength",
+      ddl: 1,
+      startKey: "junction",
+      endKey: "junction",
+      gearPosKeys: [AXLE_A, AXLE_B],
+      gearAngleKeys: [DRIVER, DRIVEN],
+      radii: [R, R],
+      directions: [true, true],
+      length: 2 * SPAN + 2 * Math.PI * R,
+      closed: true,
+      owner: BELT,
+    } as unknown as Link,
+    { type: "MotorAngle", ddl: 1, angleKey: DRIVER, omega: 0, targetAngle: 0 },
+  ];
+  const positions = new Map<string, Point2>([
+    [AXLE_A, new Point2(0, 0)],
+    [AXLE_B, new Point2(SPAN, 0)],
+  ]);
+  const frame: StaticsFrame = {
+    gravity: ZERO,
+    positionOf: (key) => positions.get(key),
+    velocityOf: () => ZERO,
+    accelerationOf: () => ZERO,
+    externalForceAt: () => ZERO,
+    nodeMassAt: () => 0,
+    beamMass: () => 0,
+    distributedDensityOn: () => ({ at0: ZERO, slope: ZERO }),
+    beamStiffness: () => undefined,
+    // Unit inertia, so the driven pulley's angular acceleration is the torque it resists with.
+    gearAngularAcceleration: (id) => (id === DRIVEN ? torque : 0),
+  };
+  const system = build_statics_system([], gears, links, elements, (key) => key === AXLE_A || key === AXLE_B);
+  return solve_statics(system, [], frame)!;
+}
+
+describe("une courroie fermée entre deux axes fixes", () => {
+  it("ne porte que la tension qu'il faut pour transmettre, son brin mou à zéro", () => {
+    const solution = drive(30);
+    const tensions = solution.strands.map((s) => s.tension).sort((a, b) => a - b);
+    expect(tensions).toHaveLength(2);
+    expect(tensions[0]).toBeCloseTo(0, 6);
+    expect(tensions[1]).toBeCloseTo(30 / R, 6);
+    expect(solution.strands.every((s) => s.determined)).toBe(true);
+  });
+
+  it("rend alors les réactions d'axe déterminées", () => {
+    const solution = drive(30);
+    // The pretension was what left each axle's pull along the line of centres open, at the pulley and at the support alike.
+    for (const t of solution.torsors) expect(t.determined).toEqual({ fx: true, fy: true, m: true });
+  });
+
+  it("reste tendue sans rien à transmettre, à tension nulle", () => {
+    const solution = drive(0);
+    for (const s of solution.strands) {
+      expect(s.tension).toBeCloseTo(0, 6);
+      expect(s.determined).toBe(true);
+    }
+  });
+  it("se retrouve sur le dessin, brin par brin, par les poulies qu'il relie", () => {
+    // The canvas carries a strand's arrows onto the belt it draws by naming the pulleys at its ends; that must land on the very strand the solve wrote.
+    const belt = {
+      type: "belt",
+      id: BELT,
+      closed: true,
+      positionStart: ZERO,
+      positionEnd: ZERO,
+      attachedGearsIDs: [
+        { id: DRIVER, clockwise: true },
+        { id: DRIVEN, clockwise: true },
+      ],
+    } as unknown as BeltElement;
+    const elements = [
+      belt,
+      { type: "gear", id: DRIVER, position: new Point2(0, 0), radius: R },
+      { type: "gear", id: DRIVEN, position: new Point2(SPAN, 0), radius: R },
+    ] as unknown as MechanicalElement[];
+    for (const strand of drive(30).strands) {
+      const drawn = belt_strand_on_pose(belt, elements, strand.fromGear, strand.toGear)!;
+      expect(drawn.from.distance_to(strand.from)).toBeLessThan(1e-9);
+      expect(drawn.to.distance_to(strand.to)).toBeLessThan(1e-9);
+    }
   });
 });

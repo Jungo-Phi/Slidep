@@ -247,6 +247,7 @@ export class Recorder {
             accelerations: probe.accelerations,
             angleAccelerations: probe.angleAccelerations,
             beamCohesion: probe.beamCohesion,
+            beltStrands: probe.beltStrands,
           };
         }
         latest = dynamicSnapshot;

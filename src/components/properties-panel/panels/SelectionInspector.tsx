@@ -28,7 +28,8 @@ import { GRAVITY } from "../../../constants/physics-specs";
 import { overlay_shown } from "../../../utils/element-queries";
 import { element_mass } from "../../../utils/element-mass";
 import { measure_belt_length } from "../../../utils/belt-geom";
-import { LENGTH, MASS } from "../../../utils/quantity-format";
+import { FORCE, LENGTH, MASS } from "../../../utils/quantity-format";
+import { shown_element_name } from "../../../utils";
 import {
   CARD_ICON_BUTTON_SX,
   FULL_BLEED,
@@ -502,6 +503,27 @@ export const SelectionInspector: React.FC<SelectionInspectorProps> = ({
     );
   };
 
+  /** One row per strand of `belt`, in path order, each named by the pulleys it runs between; a tension the pose leaves open reads as a dash. */
+  const strand_rows = (belt: MechanicalElement) => {
+    const name_of = (gearID: ID | undefined, terminal: "point_start" | "point_end") => {
+      if (gearID === undefined) return `${shown_element_name(belt)} ${t(terminal)}`;
+      return shown_element_name(
+        analysedMechanism.mechanicalElements.find((el) => el.id === gearID),
+      );
+    };
+    return (snapshot?.beltStrands ?? [])
+      .filter((strand) => strand.beltID === belt.id)
+      .map((strand, i) => (
+        <ValueRow
+          key={`strand-${i}`}
+          label={`${name_of(strand.fromGear, "point_start")} – ${name_of(strand.toGear, "point_end")}`}
+          formatted={
+            strand.determined ? format_scalar(strand.tension, FORCE) : undefined
+          }
+        />
+      ));
+  };
+
   const reading_body = (
     reading_subject: Extract<InspectedSubject, { kind: "reading" }>,
   ) => {
@@ -545,6 +567,9 @@ export const SelectionInspector: React.FC<SelectionInspectorProps> = ({
           {quantities.map(({ value, labelKey }) =>
             value_row(element, value, t(labelKey)),
           )}
+          {element.type === "belt" &&
+            merged_internal(reading.focus) &&
+            strand_rows(element)}
         </Box>
         {/* The reading itself, for a beam: its effort is a field along the member, not a figure at a point. */}
         {diagramBeam && (

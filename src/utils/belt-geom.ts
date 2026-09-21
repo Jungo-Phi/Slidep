@@ -1,5 +1,5 @@
 import { get_mechanical_element_from_id } from "../components/mechanism/connect-actions";
-import { BeltElement, GearElement, MechanicalElement, Point2 } from "../types";
+import { BeltElement, GearElement, ID, MechanicalElement, Point2 } from "../types";
 import { BeltVia, belt_pieces } from "./belt-path";
 
 /**
@@ -62,6 +62,30 @@ export function get_belt_path(
   return belt.closed
     ? { vias: vias.slice(1, -1), closed: true }
     : { vias, closed: false };
+}
+
+/**
+ * Where one strand of `belt` runs in the pose `mechanicalElements` holds: the tangent from the pulley `fromGear` to the pulley `toGear`, an absent gear standing for the terminal at that end.
+ * `undefined` when either pulley is not on the belt.
+ */
+export function belt_strand_on_pose(
+  belt: BeltElement,
+  mechanicalElements: MechanicalElement[],
+  fromGear: ID | undefined,
+  toGear: ID | undefined,
+): { from: Point2; to: Point2 } | undefined {
+  const via = (gearID: ID | undefined, terminal: Point2): BeltVia | undefined => {
+    if (gearID === undefined) return { pos: terminal, radius: 0, clockwise: false };
+    const attached = belt.attachedGearsIDs.find(({ id }) => id === gearID);
+    const gear = mechanicalElements.find((el) => el.id === gearID);
+    if (!attached || gear?.type !== "gear") return undefined;
+    return { pos: gear.position, radius: gear.radius, clockwise: attached.clockwise };
+  };
+  const from = via(fromGear, belt.positionStart);
+  const to = via(toGear, belt.positionEnd);
+  if (!from || !to) return undefined;
+  const segment = belt_pieces([from, to]).find((piece) => piece.kind === "segment");
+  return segment && { from: segment.from, to: segment.to };
 }
 
 export function get_gear_angles(
@@ -139,8 +163,8 @@ export function get_gear_angles(
 }
 
 /**
- * Mesure la longueur mécanique d'une courroie : segments droits tangents + arcs d'enroulement, au rayon brut (le `+BELT_WIDTH/2` du dessin est cosmétique).
- * Une courroie **tendue** est une boucle fermée sur ses poulies ; une courroie libre est une chaîne ouverte entre ses extrémités.
+ * A belt's mechanical length: tangent segments plus wrap arcs, at the bare radius (the drawing's `+BELT_WIDTH/2` is cosmetic).
+ * A **tight** belt is a loop closed over its pulleys; a loose one is an open chain between its terminals.
  */
 export function measure_belt_length(
   belt: BeltElement,

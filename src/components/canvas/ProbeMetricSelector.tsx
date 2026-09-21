@@ -1,5 +1,5 @@
 import React, { useLayoutEffect, useRef, useState } from "react";
-import { Box, Checkbox, Divider, MenuItem, Paper, Typography } from "@mui/material";
+import { Checkbox, Divider, MenuItem, Paper } from "@mui/material";
 import {
   DEFAULT_PROBE_COMPONENTS,
   MechanicalElement,
@@ -64,23 +64,20 @@ const PROBE_METRIC_SECTIONS: ProbeMetric[][] = [
   ],
   // What a motor delivers.
   ["motor-power", "motor-torque"],
-  // What a beam carries inside itself, and whether its section holds.
-  ["axial-force", "shear-force", "bending-moment", "stress", "shear-stress"],
+  // What a member carries inside itself, and whether a beam's section holds.
+  [
+    "axial-force",
+    "belt-tension",
+    "shear-force",
+    "bending-moment",
+    "stress",
+    "shear-stress",
+  ],
   // What it hands to whatever it is attached to.
   ["force", "moment"],
-  // Named, with no recorder behind it yet — see `probe_metric_awaited`.
-  ["belt-tension"],
 ];
 
 export const PROBE_METRIC_ORDER: ProbeMetric[] = PROBE_METRIC_SECTIONS.flat();
-
-/**
- * Whether the metric is listed to announce a reading that does not exist yet: named, never tickable, since every series of one comes back empty (`unrecorded_series`).
- * Listed rather than hidden because it is the only thing its element measures — a belt with an empty menu would read as a defect rather than as a reading still to come.
- */
-export function probe_metric_awaited(metric: ProbeMetric): boolean {
-  return metric === "belt-tension";
-}
 
 
 /** Angular metrics — the orientation and its two rates — are only meaningful for oriented elements: gears (own angle) and two-point edges (segment orientation).
@@ -211,7 +208,6 @@ export function toggled_probes(
   element: MechanicalElement,
   metric: ProbeMetric,
 ): ProbeConfig[] {
-  if (probe_metric_awaited(metric)) return element.probes ?? [];
   const byMetric = new Map((element.probes ?? []).map((p) => [p.metric, p]));
   if (byMetric.has(metric)) byMetric.delete(metric);
   else
@@ -253,36 +249,20 @@ export const ProbeMetricSelector: React.FC<ProbeMetricSelectorProps> = ({
       {available_probe_metric_sections(element).map((section, index) => (
         <React.Fragment key={section[0]}>
           {index > 0 && <Divider sx={{ my: 0.5 }} />}
-          {section.map((metric) =>
-            probe_metric_awaited(metric) ? (
-              <MenuItem key={metric} dense disabled>
-                {/* No checkbox: its own space is kept so the label lines up with the tickable ones, but a box that cannot be ticked would invite the click it then refuses. */}
-                <Box sx={{ width: 18, mr: 1, flexShrink: 0 }} />
-                {t(PROBE_METRIC_LABEL_KEYS[metric])}
-                <Typography
-                  component="span"
-                  variant="caption"
-                  color="text.disabled"
-                  sx={{ ml: 1 }}
-                >
-                  {t("metric_awaited")}
-                </Typography>
-              </MenuItem>
-            ) : (
-              <MenuItem
-                key={metric}
-                dense
-                onClick={() => onToggle(toggled_probes(element, metric))}
-              >
-                <Checkbox
-                  size="small"
-                  checked={element.probes.some((p) => p.metric === metric)}
-                  sx={{ p: 0, ml: -0.5, mr: 1 }}
-                />
-                {t(PROBE_METRIC_LABEL_KEYS[metric])}
-              </MenuItem>
-            ),
-          )}
+          {section.map((metric) => (
+            <MenuItem
+              key={metric}
+              dense
+              onClick={() => onToggle(toggled_probes(element, metric))}
+            >
+              <Checkbox
+                size="small"
+                checked={element.probes.some((p) => p.metric === metric)}
+                sx={{ p: 0, ml: -0.5, mr: 1 }}
+              />
+              {t(PROBE_METRIC_LABEL_KEYS[metric])}
+            </MenuItem>
+          ))}
         </React.Fragment>
       ))}
     </>

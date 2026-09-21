@@ -135,9 +135,30 @@ export interface BeamCohesion {
    * Nothing is transmitted at its far end, so the balance closes with no unknown and the reading is exact (`resolve_beam_cohesion`).
    *
    * `false` — summed from the reactions each link reports, which is an ATTRIBUTION of the correction path between the links that share it.
-   * Measured against the balanced reading on the beams where both apply, that attribution differs by up to 100 %. A reader should treat such a torsor as indicative, not as a figure.
+   * Measured against the balanced reading on the beams where both apply, that attribution differs by up to 100 %.
+   * A reader should treat such a torsor as indicative, not as a figure.
    */
   determinate: boolean;
+}
+
+/**
+ * One tangent strand of a belt and the tension it carries, as the statics pass resolved it.
+ * Plain numbers rather than `Point2`, since a snapshot crosses the worker boundary and a class does not survive the copy.
+ */
+export interface BeltStrand {
+  beltID: ID;
+  /** Where the strand leaves its via, and where it lands on the next one, in world metres. */
+  fromX: number;
+  fromY: number;
+  toX: number;
+  toY: number;
+  /** The pulleys at either end, absent at an open belt's terminal — `fromGear` absent is its start, `toGear` absent its end. */
+  fromGear?: ID;
+  toGear?: ID;
+  /** N, positive when the strand pulls its two ends towards each other. */
+  tension: number;
+  /** False where the pose leaves this tension open; a reader shows nothing for it rather than a figure. */
+  determined: boolean;
 }
 
 /**
@@ -239,6 +260,9 @@ export interface DynamicSnapshot extends SimulationSnapshot {
   /** Each beam's own cohesion torsor, resolved from `reactions` — see `BeamCohesion`.
    * Undefined under the same `collectDiagnostics` gate as `reactions`. */
   beamCohesion?: BeamCohesion[];
+  /** Every strand of every belt the statics pass could carry — see `BeltStrand`.
+   * Undefined under the same `collectDiagnostics` gate as `reactions`. */
+  beltStrands?: BeltStrand[];
 }
 
 /**
@@ -322,19 +346,16 @@ export type BeamReadingKey = keyof BeamStressSeries;
 export interface StressScaleCache {
   elements: MechanicalElement[];
   loads: LoadElement[];
-  /** Number of snapshots consumed, and the last one consumed — its identity is what tells an
-   * append apart from a rewritten history, same test `TrajectoryCache` uses. */
+  /** Number of snapshots consumed, and the last one consumed — its identity is what tells an append apart from a rewritten history, same test `TrajectoryCache` uses. */
   consumed: number;
   boundary: DynamicSnapshot | null;
-  /** Highest `|σ|max` recorded so far, Pa — each sample capped at its own beam's `Re` first
-   * (see this interface's own doc). 0 until at least one beam with a resolvable material/profile has been recorded — drawing treats that as "nothing to scale yet". */
+  /** Highest `|σ|max` recorded so far, Pa — each sample capped at its own beam's `Re` first (see this interface's own doc). 0 until at least one beam with a resolvable material/profile has been recorded — drawing treats that as "nothing to scale yet". */
   maxStress: number;
   /** Highest `|N/A|` recorded so far, Pa. 0 until a resolvable beam has been recorded. */
   maxNormal: number;
   /** Highest `|Mf·v/I|` recorded so far, Pa. 0 until a resolvable beam has been recorded. */
   maxBending: number;
-  /** Highest `τ_max` recorded so far, Pa — each sample capped at its own beam's `τ_adm` first,
-   * same reasoning as `maxStress`. 0 until a resolvable beam has been recorded. */
+  /** Highest `τ_max` recorded so far, Pa — each sample capped at its own beam's `τ_adm` first, same reasoning as `maxStress`. 0 until a resolvable beam has been recorded. */
   maxShear: number;
   /**
    * Time axis shared by every beam's series, `count` entries live — one entry per recorded instant, in the order they were recorded.

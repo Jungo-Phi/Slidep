@@ -645,6 +645,7 @@ export function useSimulationPlayback({
                   // The node itself for a support reaction — its own reading, not any one beam's — same element a click on this arrow selects (`FocusedOverlay`).
                   elementID: el.id,
                   which: r.which,
+                  strand: r.strand,
                 });
               // `r.moment` is the solver's raw CCW-positive convention; `draw_moment` (and every other moment on screen) reads the data model's clockwise- positive one instead — negate once, here, same flip `load-model.ts` applies for a user-authored `MomentElement`.
               if (

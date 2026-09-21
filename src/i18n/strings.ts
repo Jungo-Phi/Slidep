@@ -2590,10 +2590,10 @@ export const STRINGS = {
     es: "Esfuerzo axial",
   },
   metric_belt_tension: {
-    fr: "Tension",
-    en: "Tension",
-    de: "Spannung",
-    es: "Tensión",
+    fr: "Tension max",
+    en: "Max tension",
+    de: "Max. Spannung",
+    es: "Tensión máx.",
   },
   metric_slide_abscissa: {
     fr: "Position sur la barre",
@@ -2606,12 +2606,6 @@ export const STRINGS = {
     en: "Sliding speed",
     de: "Gleitgeschwindigkeit",
     es: "Velocidad de deslizamiento",
-  },
-  metric_awaited: {
-    fr: "à venir",
-    en: "coming",
-    de: "folgt",
-    es: "próximamente",
   },
   metric_shear_force: {
     fr: "Effort tranchant",

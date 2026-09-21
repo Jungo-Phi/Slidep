@@ -116,11 +116,13 @@ export function reading_from_focus(
   element: MechanicalElement,
 ): Reading {
   const metrics: ProbeMetric[] =
-    // A member's own internal effort, read along it rather than at one of its ends (see `merged_internal`): one axial figure, and for a beam nothing at all — what it carries is the field the diagrams draw, which no single figure stands for (`reading_quantities`).
+    // A member's own internal effort, read along it rather than at one of its ends (see `merged_internal`): one axial figure, a belt's most loaded strand, and for a beam nothing at all — what it carries is the field the diagrams draw, which no single figure stands for (`reading_quantities`).
     merged_internal(focus)
       ? element.type === "beam"
         ? []
-        : ["axial-force"]
+        : element.type === "belt"
+          ? ["belt-tension"]
+          : ["axial-force"]
       : focus.kind === "reaction-support" || focus.kind === "reaction-internal"
         ? reaction_metrics(focus.which ?? "node")
         : focus.kind === "inertia" && element_has_rotational_inertia(element)
@@ -187,7 +189,9 @@ export function reading_quantities(
       if (merged_internal(reading.focus))
         return element.type === "beam"
           ? []
-          : [{ value: "axial-force", labelKey: "metric_axial_force" }];
+          : element.type === "belt"
+            ? [{ value: "belt-tension", labelKey: "metric_belt_tension" }]
+            : [{ value: "axial-force", labelKey: "metric_axial_force" }];
       const [force, moment] = reaction_metrics(reading.focus.which ?? "node");
       return [
         { value: force, labelKey: "force" },
@@ -200,6 +204,7 @@ export function reading_quantities(
 /**
  * Whether this reading is a member's internal effort taken as a whole rather than at one of its ends.
  * Both ends of a two-point member report the same effort, opposite in sign, so reading them apart says one thing twice — and a beam, whose two ends genuinely differ, is read as the field between them instead (`CohesionDiagrams`).
+ * A belt reports at both ends of every strand, and reads as its most loaded one.
  * A gear's own internal reaction sits at its centre and keeps its point, having only ever had one.
  */
 export function merged_internal(focus: FocusedOverlay): boolean {
@@ -372,9 +377,9 @@ export function inspector_layout(
         ["length", "elongation-velocity", "angle", "angular-velocity"],
         true,
       );
-    // Its tension is the one thing a belt would have to add, and nothing computes it yet; until then its length is all it says.
+    // Its tension is what a belt is there to carry, and its internal-effort layer already reads it.
     case "belt":
-      return layout(["belt-length"]);
+      return layout(["belt-length"], true);
     case "gear":
       return layout(["angle"]);
     // Anchored, a node is read through the reaction the ground answers with; free, its position and whatever drives it come first.

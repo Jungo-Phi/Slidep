@@ -29,7 +29,7 @@ import {
   REDUNDANCY_SYMBOL,
 } from "../../../constants/rendering-specs";
 import { FloorConfig } from "../../../types/mechanism";
-import type { ReactionPoint } from "../../solver/recording/probe-series";
+import type { ReactionPoint, StrandReading } from "../../solver/recording/probe-series";
 import {
   floor_acute_angle,
   floor_anchor_and_normal,
@@ -888,8 +888,7 @@ export function draw_mass(
   draw_text(ctx, position, text);
 }
 
-/** Shared by every stress-fill ramp (`stress_ramp_color`, `magnitude_stress_color`,
- * `signed_stress_color`): linear interpolation between the two stops of `ramp` that bracket `t`, clamped to `ramp`'s own ends outside its range. */
+/** Shared by every stress-fill ramp (`stress_ramp_color`, `magnitude_stress_color`, `signed_stress_color`): linear interpolation between the two stops of `ramp` that bracket `t`, clamped to `ramp`'s own ends outside its range. */
 function interpolate_color_ramp(
   ramp: readonly { t: number; rgb: readonly [number, number, number] }[],
   t: number,
@@ -909,8 +908,7 @@ function interpolate_color_ramp(
   return `rgb(${r}, ${g}, ${b})`;
 }
 
-/** Linear interpolation on `STRESS_RAMP`. `ratio` at or past 1 is `STRESS_OVERSTRESS_COLOR`,
- * unconditionally — past the elastic limit is never a matter of scale, and stays a per-beam ratio check where the ramp itself is not one (`Re` differs beam to beam).
+/** Linear interpolation on `STRESS_RAMP`. `ratio` at or past 1 is `STRESS_OVERSTRESS_COLOR`, unconditionally — past the elastic limit is never a matter of scale, and stays a per-beam ratio check where the ramp itself is not one (`Re` differs beam to beam).
  * Below that, `stress` (Pa, absolute) is read as a fraction of `scaleMaxStress` (`StressScaleCache.maxStress`) — an absolute scale, so it can be labelled with one real stress value in the legend instead of a bare, per-beam-relative percentage.
  * `0` or negative `scaleMaxStress` (nothing recorded yet) reads as the bottom of the ramp. */
 export function stress_ramp_color(
@@ -945,8 +943,7 @@ export function magnitude_stress_color(
   return interpolate_color_ramp(STRESS_RAMP, t);
 }
 
-/** Converts `bending_stress_stops`' raw (signed) readings into the beam's gradient stops via
- * `magnitude_stress_color` — the sign itself is dropped here, in drawing territory, not in `cohesion-field.ts`: the physics function stays the honest signed reading, this is a display choice.
+/** Converts `bending_stress_stops`' raw (signed) readings into the beam's gradient stops via `magnitude_stress_color` — the sign itself is dropped here, in drawing territory, not in `cohesion-field.ts`: the physics function stays the honest signed reading, this is a display choice.
  * No re-stepping needed, same reasoning as `signed_stress_fill_stops`. */
 export function magnitude_stress_fill_stops(
   rawStops: { offset: number; stress: number }[],
@@ -995,8 +992,7 @@ export function draw_stress_legend(
   height: number,
   scaleMaxStress: number,
   overstressLabel?: string,
-  /** Shown only when the mechanism actually holds a beam whose field is indicative — see
-   * `STRESS_INDETERMINATE_COLOR`.
+  /** Shown only when the mechanism actually holds a beam whose field is indicative — see `STRESS_INDETERMINATE_COLOR`.
    * An unexplained colour on screen is worse than none. */
   indeterminateLabel?: string,
 ) {
@@ -1057,8 +1053,7 @@ export function draw_stress_legend(
   ctx.restore();
 }
 
-/** One square of colour and its label, laid out left to right; returns where the next one
- * starts.
+/** One square of colour and its label, laid out left to right; returns where the next one starts.
  * Assumes `textAlign`/`textBaseline` are already left/middle. */
 function draw_legend_swatch(
   ctx: CanvasRenderingContext2D,
@@ -1077,8 +1072,7 @@ function draw_legend_swatch(
   return labelX + ctx.measureText(label).width + gap * 2;
 }
 
-/** One stop of the stress overlay's fill gradient — `offset` a fraction of the beam's own
- * length (0 at `start`), `color` already ramped.
+/** One stop of the stress overlay's fill gradient — `offset` a fraction of the beam's own length (0 at `start`), `color` already ramped.
  * Two stops at the same `offset` draw a hard step, for a discontinuity that must not be smoothed away (same convention as the panel's own diagrams). */
 export interface BeamFillStop {
   offset: number;
@@ -2301,14 +2295,15 @@ export interface OverlayArrow {
   /** World-space vector. Its direction is drawn as-is; its magnitude is remapped through the same log ruler a user-placed load uses (`stored2screen_load`), so an arrow stays legible whatever the underlying unit's typical scale — not calibrated for velocity (mm/s) specifically, a starting point to retune once both are on screen together. */
   vector: WorldPoint;
   kind: PhysicsOverlayKind;
-  /** What this reading is, where anything else may want to point at the same one — the force
-   * balance names its own terms the same way (`BalanceTerm.id`), which is how a hovered line finds the arrow already on screen instead of drawing a second one over it. */
+  /** What this reading is, where anything else may want to point at the same one — the force balance names its own terms the same way (`BalanceTerm.id`), which is how a hovered line finds the arrow already on screen instead of drawing a second one over it. */
   id?: string;
   /** The element this reading is read from.
    * Lets a hover cross-highlight the two: hovering this arrow lights up the element, hovering the element lights up (and raises) every arrow it owns. */
   elementID?: ID;
   /** Which of `elementID`'s own points this is — set alongside `elementID` only for a reaction (`reaction-support`/`reaction-internal`), the one kind an edge can carry two of at once. Lets a click re-derive the exact same reading later (`FocusedOverlay`) rather than only "some reaction on this element". */
   which?: ReactionPoint;
+  /** Set on a belt strand's reaction, so the arrow can be carried onto the belt as it lies on screen (`overlay-anchor.ts`). */
+  strand?: StrandReading;
 }
 
 /**
@@ -2530,8 +2525,7 @@ export function draw_overlay_moment(
   ctx.restore();
 }
 
-/** What a hovered line of the force balance stands for, in world terms — structurally what
- * `BalanceTerm` already carries, named here so the canvas needs nothing from the analysis side to draw it. */
+/** What a hovered line of the force balance stands for, in world terms — structurally what `BalanceTerm` already carries, named here so the canvas needs nothing from the analysis side to draw it. */
 export interface BalanceMarker {
   at: WorldPoint;
   force: WorldPoint;
@@ -2679,8 +2673,7 @@ export function draw_signed_stress_legend(
   scaleMax: number,
   compressionLabel: string,
   tensionLabel: string,
-  /** Same swatch as `draw_stress_legend`'s: this lens reads the same fields, so it shows the
-   * same indicative beams and owes the same explanation. */
+  /** Same swatch as `draw_stress_legend`'s: this lens reads the same fields, so it shows the same indicative beams and owes the same explanation. */
   indeterminateLabel?: string,
 ) {
   const { MARGIN, BAR_WIDTH, BAR_HEIGHT, GAP, FONT } = STRESS_LEGEND;

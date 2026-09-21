@@ -35,7 +35,7 @@ import { BeamCohesionSpec, build_beam_cohesion_specs } from "./beam-cohesion";
 import { StaticsSystem, build_statics_system } from "../statics/equilibrium-model";
 import { solve_statics } from "../statics/equilibrium-solve";
 import { build_flexibility } from "../statics/flexibility";
-import { beam_cohesion_from_statics } from "../statics/publish";
+import { beam_cohesion_from_statics, belt_strands_from_statics } from "../statics/publish";
 import { compute_balance_sample } from "../statics/equilibrium-solve";
 import { BEAM_END_MASS_FRACTION } from "./mass-model";
 import { StaticsBeam, statics_frame } from "../statics/statics-frame";
@@ -1653,16 +1653,12 @@ export function step_dynamic_simulation(
     model.beamCohesionSpecs,
     staticsFrame,
   );
-  const beam_cohesion = collectDiagnostics
-    ? beam_cohesion_from_statics(
+  const statics = collectDiagnostics
+    ? solve_statics(
+        model.staticsSystem,
         model.beamCohesionSpecs,
         staticsFrame,
-        solve_statics(
-          model.staticsSystem,
-          model.beamCohesionSpecs,
-          staticsFrame,
-          build_flexibility(model.staticsSystem, model.beamCohesionSpecs, staticsFrame),
-        ),
+        build_flexibility(model.staticsSystem, model.beamCohesionSpecs, staticsFrame),
       )
     : undefined;
 
@@ -1680,7 +1676,10 @@ export function step_dynamic_simulation(
     motor,
     energy,
     balance,
-    beamCohesion: collectDiagnostics ? beam_cohesion : undefined,
+    beamCohesion: collectDiagnostics
+      ? beam_cohesion_from_statics(model.beamCohesionSpecs, staticsFrame, statics)
+      : undefined,
+    beltStrands: collectDiagnostics ? belt_strands_from_statics(statics) : undefined,
   };
 }
 
@@ -1833,6 +1832,7 @@ export function dynamic_snapshot_at(
     energy: a.energy,
     balance: a.balance,
     beamCohesion: a.beamCohesion,
+    beltStrands: a.beltStrands,
   };
 }
 

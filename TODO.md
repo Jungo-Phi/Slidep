@@ -10,7 +10,7 @@
 
 **Priorités sur le plan général**
 
-- 🔨 Tension de courroie (Nouvelles métriques de sonde). Attention : une courroie à plusieurs brins a plusieurs tensions, il faudra choisir ce qu'on montre.
+- 🚨 Régler bugs de simulation
 - 🔨 Supprimer le "Résidu de bouclage" (En améliorant la simulation)
 - 🚨 Régler bugs de dessin
 - 🔨 Clean les graphiques
@@ -36,7 +36,6 @@
 - 🚨 Les cas ou Mf est non nul alors que la poutre est dans le vide
 - 🚨 Pourquoi les poids des poutres disparaissent quand on fait tourner la simu (Masse suspendue.slidep) ?
 
-- 🚨 Bug avec le mécanisme "Poutre sur joint de courroie"
 - 🚨 Bug avec le mécanisme "Ressorts sur moteur"
 - 🔨 Finir le boulot de "ratio-masse-convergence-dynamique.md" sur CP.slidep
 - 🚨 Dans "Double cantilever", le moment de réaction est le même à l'ancrage qu'au milieu. Est-ce normal ?
@@ -155,7 +154,7 @@
 **Panneau mesures**
 
 - 🔨 À la fermeture du menu ProbeMetricSelector, on voit un petit rectangle sur 1 frame
-- 🔨 Pas de sonde sur les courroies
+- 🔨 Ajuster la position des sondes sur les courroies
 - 🔨 Sur de combo ressort+amortisseur, ajuster la position des sondes et overlays
 - 🔨 La transparence de deletion des probes est inconsistante
 - 🔨 Choisir x/y/norme pour les mesures superposées

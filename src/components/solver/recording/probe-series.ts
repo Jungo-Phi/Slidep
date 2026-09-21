@@ -272,6 +272,15 @@ export interface ElementReaction {
   /** From `LinkReaction.atAnchor` — whether this point's dof was immovable in the solve.
    * At a NODE it also says the reading is opposed, i.e. a support reaction rather than an internal one; a BEAM END is never opposed, so there it says only where the end sits. */
   atAnchor: boolean;
+  /** Set at a belt's strand end only: which strand, and its tension, so the reading can be carried onto another pose of the belt. */
+  strand?: StrandReading;
+}
+
+/** A belt strand named by the pulleys at its ends (see `BeltStrand`), and the tension it was read with. */
+export interface StrandReading {
+  fromGear?: ID;
+  toGear?: ID;
+  tension: number;
 }
 
 /** At a support (`atAnchor`), what "reaction" means flips: `LinkReaction` measures what the mechanism itself exerts ON that fixed point (Newton's third law from each link's own perspective, folded together — see PBD_kinematic_solver.ts's dynamics block).
@@ -516,11 +525,72 @@ export function element_reactions(
   element: MechanicalElement,
   snapshot: DynamicSnapshot,
 ): ElementReaction[] {
+  if (element.type === "belt") return belt_strand_reactions(element.id, snapshot);
   const node = element_reaction_at(element, "node", snapshot);
   if (node) return [node];
   return (["start", "end"] as const)
     .map((which) => element_reaction_at(element, which, snapshot))
     .filter((r): r is ElementReaction => r !== undefined);
+}
+
+/**
+ * What a belt applies at both ends of each strand it carries a known tension in: a pull towards the strand's other end, on the pulley or the terminal it sits on.
+ * `which` is the strand's own end — `"start"` where it leaves its via — and says nothing about the belt's two terminals.
+ */
+function belt_strand_reactions(beltID: ID, snapshot: DynamicSnapshot): ElementReaction[] {
+  const reactions: ElementReaction[] = [];
+  for (const strand of snapshot.beltStrands ?? []) {
+    if (strand.beltID !== beltID || !strand.determined) continue;
+    const dx = strand.toX - strand.fromX;
+    const dy = strand.toY - strand.fromY;
+    const length = Math.hypot(dx, dy);
+    if (!(length > 1e-9)) continue;
+    const pull = new Point2((dx * strand.tension) / length, (dy * strand.tension) / length);
+    const reading: StrandReading = {
+      fromGear: strand.fromGear,
+      toGear: strand.toGear,
+      tension: strand.tension,
+    };
+    reactions.push(
+      {
+        at: new Point2(strand.fromX, strand.fromY),
+        which: "start",
+        vector: pull,
+        atAnchor: false,
+        strand: reading,
+      },
+      {
+        at: new Point2(strand.toX, strand.toY),
+        which: "end",
+        vector: pull.mul(-1),
+        atAnchor: false,
+        strand: reading,
+      },
+    );
+  }
+  return reactions;
+}
+
+/**
+ * A belt's tension at each recorded frame: its most loaded strand's, the one it would be sized on.
+ * A frame where any strand's tension is left open has no maximum to give, and is skipped.
+ */
+function belt_tension_series(beltID: ID, snapshots: DynamicSnapshot[]): ProbeSeries {
+  const t: number[] = [];
+  const values: number[] = [];
+  for (const snap of snapshots) {
+    let max = -Infinity;
+    let known = true;
+    for (const strand of snap.beltStrands ?? []) {
+      if (strand.beltID !== beltID) continue;
+      if (!strand.determined) known = false;
+      max = Math.max(max, strand.tension);
+    }
+    if (!known || max === -Infinity) continue;
+    t.push(snap.t);
+    values.push(max);
+  }
+  return { t, curves: [{ key: "value", values }], unit: "N" };
 }
 
 /** The recorded path of one strand of an element's trajectory overlay. */
@@ -1173,7 +1243,8 @@ export function get_probe_series(
 
 
     case "belt-tension":
-      return unrecorded_series(metric);
+      // Not computed by the kinematic solver; dynamic mode fills this in.
+      return { t: [], curves: [], unit: "N" };
 
     case "weight":
     case "inertia":
@@ -1260,8 +1331,6 @@ export function get_beam_stress_series(
 /**
  * Whether `metric` reads empty in kinematic mode because that solver never computes it — every metric whose case in `get_probe_series` returns an empty series on principle rather than for want of data.
  * Kept here, next to that switch, so the chart that has to explain an empty curve and the code that empties it cannot drift apart.
- *
- * `belt-tension` is deliberately absent: it is empty in BOTH modes (`unrecorded_series`), which is a different thing to tell the reader.
  */
 export function metric_needs_dynamics(metric: ProbeMetric): boolean {
   switch (metric) {
@@ -1280,6 +1349,7 @@ export function metric_needs_dynamics(metric: ProbeMetric): boolean {
     case "moment":
     case "moment-start":
     case "moment-end":
+    case "belt-tension":
       return true;
     default:
       return false;
@@ -1556,20 +1626,9 @@ export function get_dynamic_probe_series(
       return rate_of(abscissa_series(element, snapshots, false), "m/s");
 
     case "belt-tension":
-      return unrecorded_series(metric);
+      return belt_tension_series(element.id, snapshots);
   }
 }
-
-type UnrecordedMetric = "belt-tension";
-
-/** The empty series of a metric the recorder does not produce yet (see `ProbeMetric`), in the unit it will read in. */
-function unrecorded_series(metric: UnrecordedMetric): ProbeSeries {
-  return { t: [], curves: [], unit: UNRECORDED_UNIT[metric] };
-}
-
-const UNRECORDED_UNIT: Record<UnrecordedMetric, string> = {
-  "belt-tension": "N",
-};
 
 /** One measured quantity of an element at a given instant. */
 export interface MetricSample {

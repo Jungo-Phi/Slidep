@@ -479,7 +479,7 @@ export type ProbeMetric =
   | "shear-stress"
   | "slide-abscissa"
   | "slide-velocity"
-  // Named but not yet recorded: `unrecorded_series` answers for it in both modes, and no probe selector offers it (`PROBE_METRIC_ORDER` leaves it out).
+  // A belt's most loaded strand, the tension it would be sized on — dynamic mode only, like every other effort.
   | "belt-tension";
 
 /** Which curves of a vector metric are plotted.
