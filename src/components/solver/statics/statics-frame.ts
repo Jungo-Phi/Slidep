@@ -23,14 +23,16 @@ export interface StaticsFrameInputs {
   positionOf: (key: string) => Point2 | undefined;
   velocityOf: (key: string) => Point2;
   accelerationOf: (key: string) => Point2;
-  /** Everything applied at a node that is not a beam and not gravity: loads, spring and damper
-   * forces, a motor's force couple. */
+  /** Everything known applied at a node that is not a beam and not gravity: loads, spring and damper forces, joint friction.
+   * Never a motor's force couple: the assembly solves for a motor's torque as a reaction. */
   externalForceAt: (key: string) => Point2;
   /** The distributed-load part of `externalForceAt`, which is subtracted back out — see
    * `distributedDensityOn`. */
   distributedShareAt: (key: string) => Point2;
   /** A gear's angular acceleration (rad/s²), by gear id. */
   angularAccelerationOf: (gearID: ID) => number;
+  /** Known torques on a gear's angle, by gear id — see `StaticsFrame.externalTorqueOn`. */
+  externalTorqueOn: (gearID: ID) => number;
   masses: DynamicMassModel;
   /** The gears the assembly carries as bodies — `StaticsSystem.gears`, not every gear drawn: only a carried one owns its own mass here rather than leaving it lumped on its axle node. */
   gears: StaticsGear[];
@@ -92,6 +94,7 @@ export function statics_frame(inputs: StaticsFrameInputs): StaticsFrame {
     },
     beamMass: (beamID) => (beamOf.get(beamID)?.linearMass ?? 0) * length_of(beamID),
     gearAngularAcceleration: inputs.angularAccelerationOf,
+    externalTorqueOn: inputs.externalTorqueOn,
     /**
      * A distributed load acts on the beam's MATERIAL. The dynamics step has to split it onto the two end nodes (`resolve_load_forces`); here it stays where it physically is, which is also the only form the flexibility integrals can use — hence `distributedShareAt` being subtracted from `externalForceAt` above, or the same load would be carried twice.
      */

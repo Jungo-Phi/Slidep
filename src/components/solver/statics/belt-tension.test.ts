@@ -72,6 +72,7 @@ function rope(left: number, right: number) {
     distributedDensityOn: () => ({ at0: ZERO, slope: ZERO }),
     beamStiffness: () => undefined,
     gearAngularAcceleration: () => 0,
+    externalTorqueOn: () => 0,
   };
 
   const system = build_statics_system([], gears, links, elements, (key) => key === AXLE);
@@ -165,6 +166,7 @@ function drive(torque: number) {
     beamStiffness: () => undefined,
     // Unit inertia, so the driven pulley's angular acceleration is the torque it resists with.
     gearAngularAcceleration: (id) => (id === DRIVEN ? torque : 0),
+    externalTorqueOn: () => 0,
   };
   const system = build_statics_system([], gears, links, elements, (key) => key === AXLE_A || key === AXLE_B);
   return solve_statics(system, [], frame)!;

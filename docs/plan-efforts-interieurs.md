@@ -191,9 +191,17 @@ pas et ont pu avancer avant.
 
 ## Phase 2 — accélérations, pour d'Alembert · **faite**
 
-`step_dynamic_simulation` garde déjà `velocitiesBeforeSolve` avant le solve ; `a = (v_après −
-v_avant)/dt` est publié dans `DynamicSnapshot.accelerations`. Fait dans le pas, jamais par
-différenciation des snapshots (décimés et interpolés — le bruit se propagerait dans tout le champ).
+`step_dynamic_simulation` garde `velocitiesBeforeSolve` au début du **dernier sous-pas** ;
+`a = (v_après − v_avant)/subDt` est publié dans `DynamicSnapshot.accelerations`. Fait dans le pas,
+jamais par différenciation des snapshots (décimés et interpolés — le bruit se propagerait dans tout
+le champ).
+
+Le dernier sous-pas et pas l’image entière : XPBD est un Euler implicite, `M·Δv/h` équilibre les
+forces **aux positions de fin de sous-pas**, celles que l’image publie. Moyennée sur les 16
+sous-pas, l’accélération retarde d’une demi-image sur la géométrie, et sur un corps qui tourne vite
+sa part centripète fuit dans les équations de moments — c’était l’essentiel du « non-bouclage
+d’Alembert » (CP : 16 % → 8·10⁻⁵ ; Huygens : 95 % → 8 %). Les forces connues (charges, ressorts,
+frottements) sont de même celles que le dernier sous-pas a appliquées.
 
 Champ d'accélération d'une poutre, corps rigide défini par ses deux extrémités :
 

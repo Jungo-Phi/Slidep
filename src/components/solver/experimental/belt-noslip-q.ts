@@ -17,8 +17,12 @@ import { Nodes, SimNodes } from "../nodes";
 /**
  * The belt's no-slip law, one instance per tangent strand: what the upstream pulley pays out, minus what the downstream one takes in, equals that strand's elongation — CONTACT ARCS INCLUDED. Ignoring the arcs is wrong by 88 px on a motion whose answer is known exactly, and by up to 22 % on the Core XY.
  *
- * It writes ANGLES ONLY. That is a measured decision, not an omission: given authority over the positions, strand by strand, each one satisfies its equation by deforming the belt — precisely the slip it exists to forbid.
+ * Kinematically it writes ANGLES ONLY. That is a measured decision, not an omission: given authority over the positions, strand by strand, each one satisfies its equation by deforming the belt — precisely the slip it exists to forbid.
  * The positional grip lives one level up, in `BeltSubChainAggregate`, whose telescoped sum has no interior degree of freedom to relax into.
+ *
+ * Dynamics writes the centres too, along the law's own gradient, and has to: the multiplier is the strand's tension, which pulls on both centres as well as turning both pulleys.
+ * Left out, a heavy pulley hanging in the belt feels the torque of a tension difference but never its pull — the belt then does work on the mechanism, which gains energy and ends up blowing up.
+ * Real masses weigh the split there, so a centre moves only as much as its inertia allows.
  *
  * Law of one tangent segment a→b: q_a − q_b = Δh, h = ℓ + u_a − v_b, q_k = r_k·ε_k·θ_k, ε_k = dir?−1:1.
  * The half-arcs u_a (departure on a) and v_b (arrival on b) are in belt-px in the lab frame; h⁰ is baked at rest.
@@ -77,7 +81,7 @@ function arcOf(pieces: BeltPiece[], viaIndex: number) {
 
 /**
  * h = ℓ + u_a − v_b for the segment `segIndex` (whose endpoints are vias `viaA`→`viaB`).
- * `arrivals` (per via) is the continuous-angle reference and is updated in place when `track` is set.
+ * `arrivals` and `wraps` (per via) are the continuous references the raw arrival angle and wrap are unwrapped against, updated in place when `track` is set.
  * Returns null on a degenerate geometry.
  */
 export function segmentH(
@@ -86,6 +90,7 @@ export function segmentH(
   segIndex: number,
   arrivals: number[] | undefined,
   track: boolean,
+  wraps?: number[],
 ): { h: number; ell: number; uMinusV: number; tangent: Point2 } | null {
   const seg = pieces[segIndex];
   if (!seg || seg.kind !== "segment") return null;
@@ -101,7 +106,9 @@ export function segmentH(
   if (arcA) {
     const psiA = unwrapArrival(arcA.startAngle, arrivals?.[a]);
     if (arrivals && track) arrivals[a] = psiA;
-    u = rEps(a) * psiA + vias[a].radius * arcA.wrap;
+    const wrapA = unwrapArrival(arcA.wrap, wraps?.[a]);
+    if (wraps && track) wraps[a] = wrapA;
+    u = rEps(a) * psiA + vias[a].radius * wrapA;
   }
   // v_b = arrival half-arc on b = r_b·ε_b·ψ_arr(b) (0 for a terminal)
   let v = 0;
@@ -206,7 +213,9 @@ function strandH(
     if (!belt_solve_arc(sc, a, n, closed)) return null;
     const psiA = unwrapArrival(sc.arcAngle[a], link.arrivals?.[a]);
     if (link.arrivals && track) link.arrivals[a] = psiA;
-    u = sc.r[a] * (sc.ccw[a] === 1 ? -1 : 1) * psiA + sc.r[a] * sc.arcWrap[a];
+    const wrapA = unwrapArrival(sc.arcWrap[a], link.wraps?.[a]);
+    if (link.wraps && track) link.wraps[a] = wrapA;
+    u = sc.r[a] * (sc.ccw[a] === 1 ? -1 : 1) * psiA + sc.r[a] * wrapA;
   }
   // v_b = arrival half-arc on b = r_b·ε_b·ψ_arr(b) (0 for a terminal)
   let v = 0;
@@ -253,11 +262,38 @@ export function applyBeltSegmentNoSlip(
   let denom = 0;
   if (writeA) denom += mobA * link.rEpsA * link.rEpsA;
   if (writeB) denom += mobB * link.rEpsB * link.rEpsB;
+
+  // ∂h/∂c_b = t̂ and ∂h/∂c_a = −t̂, t̂ the strand's own direction a→b: the arcs' change as a centre moves across the strand cancels the tangent's, which is what the arc terms of `h` are for.
+  // So ∂C/∂c_a = +t̂ and ∂C/∂c_b = −t̂ — a plain tension between the two centres.
+  const n = beltViaCount(link);
+  const slotA = nodes.inertialAngles ? beltViaSlot(s, 4, s.pos[2], s.pos[3], link, link.viaA) : -1;
+  const slotB = nodes.inertialAngles
+    ? beltViaSlot(s, 4, s.pos[2], s.pos[3], link, (link.viaA + 1) % n)
+    : -1;
+  let tx = 0;
+  let ty = 0;
+  if (slotA >= 0 && slotB >= 0) {
+    const sc = belt_shared_scratch(n);
+    const lx = sc.arrX[link.viaA] - sc.depX[link.viaA];
+    const ly = sc.arrY[link.viaA] - sc.depY[link.viaA];
+    const ell = Math.sqrt(lx * lx + ly * ly);
+    if (ell > 1e-12) {
+      tx = lx / ell;
+      ty = ly / ell;
+      denom += nodes.w[slotA] + nodes.w[slotB];
+    }
+  }
   if (denom < (nodes.inertialAngles ? Number.MIN_VALUE : 1e-12)) return Math.abs(C);
 
   const k = -(C / denom) * stiffness; // = λ
   if (writeA) nodes.angle[iA] = thetaA + k * mobA * link.rEpsA;
   if (writeB) nodes.angle[iB] = thetaB + k * mobB * -link.rEpsB;
+  if (tx !== 0 || ty !== 0) {
+    nodes.x[slotA] += k * nodes.w[slotA] * tx;
+    nodes.y[slotA] += k * nodes.w[slotA] * ty;
+    nodes.x[slotB] -= k * nodes.w[slotB] * tx;
+    nodes.y[slotB] -= k * nodes.w[slotB] * ty;
+  }
 
   return Math.abs(C);
 }
@@ -276,7 +312,7 @@ export function beltSegmentDeltaH(
   const vias = viasFrom(positions, link);
   if (!vias) return null;
   const pieces = belt_pieces(vias, link.closed);
-  const geom = segmentH(vias, pieces, link.segIndex, link.arrivals, false);
+  const geom = segmentH(vias, pieces, link.segIndex, link.arrivals, false, link.wraps);
   return geom ? geom.h - link.h0 : null;
 }
 
@@ -322,6 +358,25 @@ export interface BeltNoSlipSpec {
   angleMobilities?: Map<string, number>;
   /** Angle metric of the projection; absent = w_θ = 1 (today's behaviour). */
   angleMetric?: "rim";
+  /** Continuous wrap per pulley, in `gearPosKeys` order, when the belt is already running — see `seed_wraps`. */
+  wraps?: (number | undefined)[];
+}
+
+/**
+ * Continuous wrap per via, from the raw geometry, for a belt's strand laws to unwrap against.
+ * `known` holds the belt's own continuous wraps where it is already running: a pulley wound past a full turn reads only its fraction from the geometry, and that reference alone says how many turns sit under it.
+ */
+export function seed_wraps(
+  vias: BeltVia[],
+  pieces: BeltPiece[],
+  gearOf: (via: number) => number,
+  known: (number | undefined)[] | undefined,
+): number[] {
+  const wraps = new Array(vias.length).fill(0);
+  for (const p of pieces)
+    if (p.kind === "arc")
+      wraps[p.gearIndex] = unwrapArrival(p.wrap, known?.[gearOf(p.gearIndex)]);
+  return wraps;
 }
 
 /**
@@ -352,6 +407,7 @@ export function buildBeltSegmentNoSlipLinks(
   // via index → gear index (closed: identity; open: shift by the start terminal).
   const gearOf = (viaIndex: number): number =>
     spec.closed || !spec.startKey ? viaIndex : viaIndex - 1;
+  const wraps = seed_wraps(vias, pieces, gearOf, spec.wraps);
   const isTerminal = (viaIndex: number) => vias[viaIndex].radius <= 0;
 
   const links: Seg[] = [];
@@ -360,7 +416,7 @@ export function buildBeltSegmentNoSlipLinks(
     const a = piece.gearIndexA;
     const b = piece.gearIndexB;
 
-    const geom = segmentH(vias, pieces, segIndex, arrivals.slice(), false);
+    const geom = segmentH(vias, pieces, segIndex, arrivals.slice(), false, wraps.slice());
     if (!geom) return;
 
     const rEps = (v: number) => vias[v].radius * (vias[v].clockwise ? -1 : 1);
@@ -398,6 +454,7 @@ export function buildBeltSegmentNoSlipLinks(
       segIndex,
       viaA: a,
       arrivals, // shared across the belt's segments
+      wraps, // likewise
       writePositions: spec.writePositions,
       authority: spec.authority,
       angleMobA: angleKeyA ? spec.angleMobilities?.get(angleKeyA) : undefined,

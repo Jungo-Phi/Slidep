@@ -8,6 +8,7 @@ import type {
   JoinElement,
   LoadElement,
   MechanicalElement,
+  SliderElement,
 } from "../../../types/element";
 import type { MaterialDef, ProfileDef } from "../../../types/material";
 import type { BeamCohesion, DynamicSnapshot, SnapshotLayout } from "../../../types/runtime-state";
@@ -141,7 +142,7 @@ describe("cohesion-field — le champ N/T/Mf par coupe (docs/plan-efforts-interi
     expect(at(0.5).Mf).toBeCloseTo(-50, 0);
     expect(at(1).Mf).toBeCloseTo(0, 0);
 
-    // Loop residual: this field's own march to s = L should land back on phase 3's independently-derived reading there.
+    // Loop residual: this field's own march to s = L should land back on the independent reading injected there.
     expect(field!.loopResidual.fx).toBeCloseTo(0, 0);
     expect(field!.loopResidual.fy).toBeCloseTo(0, 0);
     expect(field!.loopResidual.m).toBeCloseTo(0, 0);
@@ -224,6 +225,75 @@ describe("cohesion-field — le champ N/T/Mf par coupe (docs/plan-efforts-interi
     expect(field!.loopResidual.fx).toBeCloseTo(0, 0);
     expect(field!.loopResidual.fy).toBeCloseTo(0, 0);
     expect(field!.loopResidual.m).toBeCloseTo(0, 0);
+  });
+
+  it("porte-à-faux sur slider à mi-portée : Mf saute au slider, nul aux deux bouts", () => {
+    // A slider turns with its rail, so it passes a couple onto the beam at mid-span: the only interior station that makes `Mf` jump rather than kink.
+    // Nothing acts on the half before it, so the whole `-P·L/2` appears at the slider and the march has to land back on zero at the loaded tip.
+    const SLIDER = id();
+    const BEAM = id();
+    const slider: SliderElement = {
+      type: "slider",
+      id: SLIDER,
+      probes: [],
+      overlays: {},
+      position: new Point2(0.5, 0),
+      isGrounded: true,
+      parentBeamID: BEAM,
+      fixedEdgesIDs: [],
+      slidingFriction: 0,
+    };
+    // Not the negligible mass of the rigs above: a beam weighing next to nothing drifts along its free sliding axis under the slightest numerical leak, and would leave the slider at its end.
+    const { materialID, profileID, materials, profiles } = material_profile(1);
+    const beam: BeamElement = {
+      type: "beam",
+      id: BEAM,
+      probes: [],
+      overlays: {},
+      positionStart: new Point2(0, 0),
+      positionEnd: new Point2(1, 0),
+      fixedNodesBodyIDs: [SLIDER],
+      materialID,
+      profileID,
+    };
+    const force: ForceElement = {
+      type: "force",
+      id: id(),
+      targetID: BEAM,
+      anchor: "end",
+      vector: new Point2(0, -100),
+      frame: "world",
+    };
+    const loads = [force];
+
+    const model = compile_simulation_model(
+      mechanism([slider, beam], loads, materials, profiles),
+      true,
+    );
+    let snapshot: DynamicSnapshot | null = null;
+    for (let i = 0; i < 30; i++)
+      snapshot = step_dynamic_simulation(model, i * RECORD_DT, snapshot, RECORD_DT, new Point2(0, 0));
+
+    const cohesion = snapshot!.beamCohesion?.find((c) => c.beamID === BEAM);
+    expect(cohesion).toBeDefined();
+    const field = compute_cohesion_field(
+      beam,
+      materials,
+      profiles,
+      cohesion!,
+      loads,
+      snapshot!,
+      new Point2(0, 0),
+    )!;
+
+    // The two samples sitting at the slider are its "just before" and "just after".
+    const atSlider = field.samples.filter((sample) => Math.abs(sample.s - 0.5) < 1e-3);
+    expect(atSlider).toHaveLength(2);
+    expect(atSlider[0].Mf).toBeCloseTo(0, 0);
+    expect(atSlider[1].Mf).toBeCloseTo(-50, 0);
+    expect(field.samples[field.samples.length - 1].Mf).toBeCloseTo(0, 0);
+    expect(field.extremum.Mf.s).toBeCloseTo(0.5, 2);
+    expect(field.loopResidual.m).toBeCloseTo(0, 0);
   });
 
   it("poutre isolée en chute libre : N = T = Mf = 0 partout (d'Alembert)", () => {
@@ -370,12 +440,12 @@ describe("cohesion-field — le champ N/T/Mf par coupe (docs/plan-efforts-interi
     };
 
     // Statics: each pin carries P/2 up.
-    // The raw `LinkReaction` sense read at start/end (unflipped, both alike — see cohesion-field.ts's own doc) is what the BEAM applies BACK onto its support, i.e. the negative of that.
+    // `start`/`end` hold what the BEAM applies onto its supports, the negative of their reactions (see cohesion-field.ts's `r_coh_start`).
     const cohesion: BeamCohesion = {
       beamID: BEAM,
       start: { fx: 0, fy: -P / 2, m: 0 },
       end: { fx: 0, fy: -P / 2, m: 0 },
-      attachedNodes: [{ nodeID: MASS, s: 0.5, fx: 0, fy: -P }],
+      attachedNodes: [{ nodeID: MASS, s: 0.5, fx: 0, fy: -P, m: 0 }],
       determinate: true,
     };
 
@@ -425,6 +495,68 @@ describe("cohesion-field — le champ N/T/Mf par coupe (docs/plan-efforts-interi
     expect(field!.loopResidual.fx).toBeCloseTo(0, 6);
     expect(field!.loopResidual.fy).toBeCloseTo(0, 6);
     expect(field!.loopResidual.m).toBeCloseTo(0, 6);
+  });
+
+  // A rail joint that has slid onto the beam's end is still an attached node, not the endpoint: `end` knows nothing of it, so the boundary must not swallow its action.
+  // Its abscissa can land a hair past 1, as the slider's own projection reads it at an end stop.
+  it("appui glissant arrivé en bout de poutre : son action compte, le résidu se ferme", () => {
+    const BEAM = id();
+    const MASS = id();
+    const RAIL = id();
+    const L = 2;
+    const P = 100;
+    const { materialID, profileID, materials, profiles } = material_profile(0);
+    const beam: BeamElement = {
+      type: "beam",
+      id: BEAM,
+      probes: [],
+      overlays: {},
+      positionStart: new Point2(0, 0),
+      positionEnd: new Point2(L, 0),
+      fixedNodesBodyIDs: [MASS, RAIL],
+      materialID,
+      profileID,
+    };
+    const cohesion: BeamCohesion = {
+      beamID: BEAM,
+      start: { fx: 0, fy: -P / 2, m: 0 },
+      end: { fx: 0, fy: 0, m: 0 },
+      attachedNodes: [
+        { nodeID: MASS, s: 0.5, fx: 0, fy: -P, m: 0 },
+        { nodeID: RAIL, s: 1 + 2e-7, fx: 0, fy: P / 2, m: 0 },
+      ],
+      determinate: true,
+    };
+    const layout: SnapshotLayout = {
+      keys: [`${BEAM}:start`, `${BEAM}:end`],
+      index: new Map([
+        [`${BEAM}:start`, 0],
+        [`${BEAM}:end`, 1],
+      ]),
+      angleKeys: [],
+      angleIndex: new Map(),
+      belts: [],
+      beltIndex: new Map(),
+      beltStart: new Int32Array(0),
+      wrapBase: 0,
+      detachBase: 0,
+      arrivalBase: 0,
+    };
+    const snapshot: DynamicSnapshot = {
+      t: 0,
+      layout,
+      positions: Float64Array.from([0, 0, L, 0]),
+      angles: new Float64Array(0),
+      velocities: new Float64Array(4),
+      accelerations: new Float64Array(4),
+      angleVelocities: new Float64Array(0),
+      angleAccelerations: new Float64Array(0),
+    };
+
+    const field = compute_cohesion_field(beam, materials, profiles, cohesion, [], snapshot, new Point2(0, 0))!;
+    expect(field.extremum.Mf.value).toBeCloseTo((P * L) / 4, 6);
+    expect(field.loopResidual.fy).toBeCloseTo(0, 6);
+    expect(field.loopResidual.m).toBeCloseTo(0, 6);
   });
 
   it("charge répartie uniforme sur deux appuis : Mf parabolique, T linéaire passant par zéro à mi-portée", () => {
@@ -593,8 +725,7 @@ describe("cohesion-field — le champ N/T/Mf par coupe (docs/plan-efforts-interi
 
   it("charge répartie triangulaire sur cantilever : T et Mf suivent la vraie forme, résidu de bouclage fermé (correction 2)", () => {
     // Same rig as "cantilever chargé en bout", a triangular distributed load instead — zero at the fixed end, full at the free tip.
-    // Non-uniform: the case a plain 50/50 nodal split (the old `resolve_load_forces`) got the encastrement's reaction wrong by the load's full resultant, not a rounding error — a `resolve_beam_cohesion` gap (see beam-cohesion.ts's own doc on `isExternalAtEnd`) that correction 2 also exposed and fixed: a distributed load's own nodal share landing exactly on a GROUNDED endpoint was invisible to `cohesion.start`, reported only as an anchor-only `"External"` `LinkReaction`.
-    // The symmetric gap at the FREE tip (no `"External"` reaction ever exists there — see `distributed_end_share`'s own doc) is closed too.
+    // Non-uniform, so a 50/50 nodal split of the load would misplace the fixed end's reaction by the load's whole resultant.
     //
     // Closed form: T(s) = 50s² − 50, Mf(s) = 50s − (50/3)s³ − 33.33 (from dMf/ds = −T, with Mf(0) = −start.m matching the encastrement's own moment reaction).
     const JOIN = id();

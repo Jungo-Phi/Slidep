@@ -286,13 +286,6 @@ export type Link = {
       pivotKey: string;
       drivenKey: string;
       omega: number;
-      /** The driven beam's own moment of inertia about `pivotKey` (parallel-axis theorem:
-       * `mL²/12 + m·a²`, `a` the pivot's distance from the beam's centre) — the analytic value a point mass at `drivenKey` alone cannot give.
-       * See `mass-model.ts`'s `BEAM_END_MASS_FRACTION` for why. */
-      armInertia: number;
-      /** How much of `drivenKey`'s fused mass is this beam's own share (`mass ×
-       * BEAM_END_MASS_FRACTION`) — subtracted back out before the dynamics step's torque control law treats the REST of that fused mass (another beam, a gear, a mass element) as a point at the arm's radius, so the beam's own contribution is never counted twice. */
-      armEndMass: number;
       // The anchor beam's free end (undefined = grounded, the world is the reference).
       // `pivotKey` doubles as the anchor's own pivot: both beams turn about the same hinge.
       anchorKey?: string;
@@ -384,6 +377,8 @@ export type Link = {
       viaA: number;
       // Continuous arrival-angle unwrapping reference, per via, updated in place.
       arrivals?: number[];
+      // Continuous wrap per via, the same kind of reference: a raw wrap lives in [0, 2π) and would drop 2π of rim the moment a pulley wraps a full turn.
+      wraps?: number[];
       // If true the constraint also writes posKeyA/posKeyB along the strand tangent (option 2); false = angles only (option 1).
       writePositions: boolean;
       // Angular mobility of θ_a / θ_b, the analogue of posMasses for angles: 1 = free, 0 = pinned (another constraint assigns this angle outright, so the projection must not send it any correction).
@@ -399,7 +394,7 @@ export type Link = {
       angleMetric?: "rim";
     }
   // EXPERIMENTAL (belt sub-chain aggregate).
-  // The telescoped sum of a run of consecutive no-slip laws: C = q_début − q_fin − Σ Δh. Its interior q's have cancelled, so it has no internal degree of freedom to relax into — that is the whole point.
+  // The telescoped sum of a run of consecutive no-slip laws: C = q_start − q_end − Σ Δh. Its interior q's have cancelled, so it has no internal degree of freedom to relax into — that is the whole point.
   // Never emitted by the parser.
   // See experimental/belt-aggregate.ts.
   | {
@@ -426,6 +421,7 @@ export type Link = {
       // Cyclically contiguous, so the vias the run touches run from `viaIndices[0]` onwards.
       viaIndices: number[];
       arrivals?: number[];
+      wraps?: number[];
       angleMetric?: "rim";
     }
   // EXPERIMENTAL (belt loop closure).
@@ -442,6 +438,7 @@ export type Link = {
       h0: number[]; // baked h per segment i, from via i to via (i+1) % n
       theta0: number[]; // baked angle per pulley
       arrivals?: number[]; // continuous unwrap reference per via, updated in place
+      wraps?: number[]; // continuous wrap per via, updated in place
       owner?: ID;
     }
   | { type: "HandleGrab"; ddl: 1; grabbedKey: string; value: Point2 | number }

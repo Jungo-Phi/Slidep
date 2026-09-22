@@ -79,6 +79,11 @@ export interface StaticsBody {
 
 export interface StaticsSystem {
   interfaces: StaticsInterface[];
+  /**
+   * One extra row per rail joint on a beam's span, reading `x̂·F = 0` on its interface: a rail guides the beam across, never along — until it reaches the beam's end, whose stop does push along (the row then reads `0 = 0`).
+   * Written as an equation rather than by dropping a column because the beam's axis moves while the layout does not.
+   */
+  slides: { face: number; beamID: ID; row: number }[];
   couplings: StaticsCoupling[];
   bodies: StaticsBody[];
   /** The gears carried as bodies, in the order their rows were laid out. */
@@ -99,7 +104,7 @@ export interface StaticsGear {
   centreKey: string;
   /** Pitch radius, in the length space the positions live in. */
   radius: number;
-  /** The uniform disc `mass-model.ts` already gives the dynamics, read from the same helpers so the two can never disagree: `mₛπr²` kg, and `½mr²` kg·m² about its own centre. */
+  /** The disc the dynamics carries, so the two can never disagree: `mₛπr²` kg, and about its centre the inertia its angle is actually weighed with — `½mr²`, or the floor a disc with no surface mass is given. */
   mass: number;
   inertia: number;
 }
@@ -149,7 +154,7 @@ export interface StaticsFrame {
   positionOf: (key: string) => Point2 | undefined;
   velocityOf: (key: string) => Point2;
   accelerationOf: (key: string) => Point2;
-  /** Loads, spring/damper and motor forces at a node — never gravity, which is added here. */
+  /** Loads, spring/damper and joint friction forces at a node — never gravity, which is added here, nor a motor's, which is a reaction. */
   externalForceAt: (key: string) => Point2;
   /** Mass lumped at a node MINUS the beams' own endpoint shares: what genuinely belongs to
    * the node, a `mass` element's own value and nothing else. */
@@ -163,6 +168,8 @@ export interface StaticsFrame {
   distributedDensityOn: (beamID: ID) => { at0: Point2; slope: Point2 };
   /** A gear's own angular acceleration (rad/s²), for the `I·α` its moment row balances. */
   gearAngularAcceleration: (gearID: ID) => number;
+  /** Known torques on a gear's own angle (N·m, counter-clockwise), a joint's friction among them — never a motor's, which the assembly solves for as a reaction. */
+  externalTorqueOn: (gearID: ID) => number;
   /** `EA` and `EI` of a beam's section. Absent while a material or profile reference dangles;
    * the flexibility then has nothing to say about that member. */
   beamStiffness: (beamID: ID) => { EA: number; EI: number } | undefined;
@@ -369,6 +376,28 @@ export function build_statics_system(
   const driven = new Set(
     links.flatMap((link) => (link.type === "MotorAngle" ? [link.angleKey] : [])),
   );
+  // The same holds for a motor turning a beam, and for the body a motor turns against: both pass its couple at the pivot, as `beamID|nodeKey` pairs, while every other body on that pivot stays hinged.
+  // Against the ground, it is the support that passes it (`motorSupports`).
+  const beamBetween = (a: string, b: string) =>
+    specs.find((s) => (s.k0 === a && s.k1 === b) || (s.k0 === b && s.k1 === a));
+  const motorCouples = new Set<string>();
+  const motorSupports = new Set<string>();
+  const coupled = (a: string, b: string, at: string) => {
+    const spec = beamBetween(a, b);
+    if (spec) motorCouples.add(`${spec.beamID}|${at}`);
+  };
+  for (const link of links) {
+    if (link.type === "MotorBeam") {
+      coupled(link.pivotKey, link.drivenKey, link.pivotKey);
+      if (link.anchorKey !== undefined) coupled(link.pivotKey, link.anchorKey, link.pivotKey);
+      else motorSupports.add(link.pivotKey);
+    } else if (
+      link.type === "MotorAngle" &&
+      link.anchorPivotKey !== undefined &&
+      link.anchorKey !== undefined
+    )
+      coupled(link.anchorPivotKey, link.anchorKey, link.anchorPivotKey);
+  }
   const covered = covered_keys(
     links,
     gears.filter((gear) => !carriedIDs.has(gear.id)),
@@ -380,6 +409,7 @@ export function build_statics_system(
     ],
   );
   const interfaces: StaticsInterface[] = [];
+  const slideFaces: { face: number; beamID: ID }[] = [];
   const bodies: StaticsBody[] = [];
   const couplings: StaticsCoupling[] = [];
   let columns = 0;
@@ -416,10 +446,13 @@ export function build_statics_system(
         beamID: spec.beamID,
         nodeKey: end.key,
         s: end.s,
-        columns: claim(is_rigid_node(end.key, byId)),
+        columns: claim(
+          is_rigid_node(end.key, byId) || motorCouples.has(`${spec.beamID}|${end.key}`),
+        ),
         foreign: false,
       });
-    for (const attached of spec.attachedNodes)
+    for (const attached of spec.attachedNodes) {
+      if (attached.slides) slideFaces.push({ face: interfaces.length, beamID: spec.beamID });
       interfaces.push({
         beamID: spec.beamID,
         nodeKey: attached.nodeKey,
@@ -428,6 +461,7 @@ export function build_statics_system(
         columns: claim(is_rigid_node(attached.nodeKey, byId)),
         foreign: false,
       });
+    }
   }
 
   // An axle that passes a couple needs it to reach the ground too: the node between them is a point, and its moment row would otherwise read `motor couple = 0`.
@@ -473,7 +507,9 @@ export function build_statics_system(
       interfaces.push({
         nodeKey: key,
         s: Number.NaN,
-        columns: claim(unmodelled || drivenAxles.has(key) || is_rigid_node(key, byId)),
+        columns: claim(
+          unmodelled || drivenAxles.has(key) || motorSupports.has(key) || is_rigid_node(key, byId),
+        ),
         foreign: unmodelled,
       });
   }
@@ -491,6 +527,7 @@ export function build_statics_system(
   for (const spec of specs) bodies.push({ kind: "beam", beamID: spec.beamID, row: (row += 3) - 3 });
   for (const gear of carried) bodies.push({ kind: "gear", gearID: gear.id, row: (row += 3) - 3 });
   for (const key of nodeKeys) bodies.push({ kind: "node", nodeKey: key, row: (row += 3) - 3 });
+  const slides = slideFaces.map((slide) => ({ ...slide, row: row++ }));
 
-  return { interfaces, couplings, bodies, gears: carried, belts, rows: row, columns };
+  return { interfaces, slides, couplings, bodies, gears: carried, belts, rows: row, columns };
 }

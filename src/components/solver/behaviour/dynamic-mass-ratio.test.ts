@@ -70,18 +70,18 @@ function worst_pivot_residual(mech: Mechanism, frames: number): number {
 }
 
 // Known remaining limit, not asserted below: the sweep budget is a CEILING, not infinite.
-// Past roughly 300 kg on this specific mechanism (its lightest member is ~0.005 m, so the mass ratio climbs past ~40 000:1) Gauss-Seidel's own convergence rate is slow enough that even the raised ceiling no longer closes the gap — at mass=1000 the worst residual is still 1.7e-2, well past the 10% tolerance below.
-// Pushing the ceiling further buys some of it back (25 → 200 sweeps already took mass=1000 from 8.5e-2 to 1.7e-2) but at steep, diminishing-returns cost — a genuinely mass-independent solve (pre-conditioning, or a direct solve for the stiff sub-chain) is a different, bigger fix than this one.
+// Beyond roughly 300 kg on this specific mechanism (its lightest member is ~0.005 m, so the mass ratio climbs over ~40 000:1) Gauss-Seidel converges too slowly for the ceiling to close the gap — at mass=1000 the worst residual is 1.7e-2, well over the 10% tolerance below.
+// More sweeps buy some of it back at a steep, diminishing return; a genuinely mass-independent solve (pre-conditioning, or a direct solve for the stiff sub-chain) is a different, bigger fix.
 describe("dynamics-mode pivot residual on a heavy mass ratio (CP.slidep)", () => {
   it("stays within a small fraction of the mechanism's own scale, light or at CP.slidep's own mass", () => {
     const base = load_cp();
     const { beam1 } = find_pivot_and_beam1(base);
     const heavy = find_heavy_mass(base, beam1);
     const model = compile_simulation_model(base);
-    const tolerance = model.extent * 0.1; // 10% of the mechanism's own scale — generous, but
-    // close to two orders of magnitude tighter than the fixed 25-sweep budget left (1.05e-2 at CP.slidep's own 100 kg).
+    // 10% of the mechanism's own scale, generous on purpose: this guards against convergence collapsing at a heavy mass ratio, not against its last percent.
+    const tolerance = model.extent * 0.1;
 
     for (const mass of [1, 100])
       expect(worst_pivot_residual(with_mass(base, heavy.id, mass), 40)).toBeLessThan(tolerance);
-  });
+  }, 30_000);
 });

@@ -29,7 +29,7 @@ import {
 
 /**
  * The internal-force field along one beam, by cut — see docs/plan-efforts-interieurs.md phase 4.
- * Pure: takes a state (this beam, its phase-3 interface torsor, the loads aimed at it, and the frame's own kinematics) and returns a field.
+ * Pure: takes a state (this beam, its interface torsors from the statics solve, the loads aimed at it, and the frame's own kinematics) and returns a field.
  * Knows nothing about drawing.
  *
  * Sign convention (see the plan's "Décisions actées"): local frame `x̂ = (end−start)/L`, `ŷ = x̂` turned +90° (trig sense).
@@ -60,9 +60,8 @@ export interface CohesionField {
   discontinuities: number[];
   extremum: { N: CohesionExtremum; T: CohesionExtremum; Mf: CohesionExtremum };
   /**
-   * The gap between this field's own `R_coh(L⁻)` (integrated all the way from `s = 0`) and phase 3's OWN, independently-derived reading at the far end (`BeamCohesion.end`, sign- converted the same way `start` was).
-   * Near zero on a well-converged frame; a real gap is either a solver residual or — on a hyperstatic chain — expected, since XPBD then splits effort by compliance and iteration order rather than true stiffness (`ChainMobility. hyperstaticity`, `mobility-probe.ts`): plausible values, not necessarily correct ones.
-   *
+   * The gap between this field's own `R_coh(L⁻)` (integrated all the way from `s = 0`) and the statics solve's independent reading at the far end (`BeamCohesion.end`, sign-converted the same way `start` was).
+   * Near zero whenever the field saw every action the solve balanced; a real gap means an action on the span was dropped on the way, or the frame was not itself in equilibrium (`StaticsSolution.residual`).
    */
   loopResidual: { fx: number; fy: number; m: number };
   /** Carried through from `BeamCohesion.determinate`: whether the boundary torsor this field
@@ -84,7 +83,7 @@ function r_coh_start(cohesion: BeamCohesion): { fx: number; fy: number; m: numbe
 
 /** The mirror of `r_coh_start` at the far end: the same reading, taken at the other boundary
  * of the same body, and flipped by Newton's third law — see `r_coh_start` for why this end needs that flip and the other one does not.
- * `beam-cohesion.ts` has already freed both ends of the solver's own boundary artefacts (the endpoint mass lump, a distributed load's nodal share), so nothing is added back here. */
+ * The statics solve balances the beam's continuum mass and its distributed load where they act, so neither end carries a lumped share to add back here. */
 function r_coh_end(cohesion: BeamCohesion): { fx: number; fy: number; m: number } {
   return { fx: -cohesion.end.fx, fy: -cohesion.end.fy, m: -cohesion.end.m };
 }
@@ -179,25 +178,43 @@ function density_at_ends(
   return { w0, w1 };
 }
 
-/** Every discontinuity abscissa (length units, clamped to `[0, length]`) with the point
- * action(s) landing there, grouped so two coincident actions do not open a zero-length segment.
- * Always includes 0 and `length`, even with nothing to report there. */
-function build_stations(
-  length: number,
-  cohesion: BeamCohesion,
-  direct: PointAction[],
-): { s: number; force: Point2 }[] {
-  const byS = new Map<number, Point2>();
-  const add = (s: number, force: Point2) => {
-    const clamped = Math.max(0, Math.min(length, s));
-    byS.set(clamped, (byS.get(clamped) ?? new Point2(0, 0)).add(force));
-  };
-  add(0, new Point2(0, 0));
-  add(length, new Point2(0, 0));
-  for (const node of cohesion.attachedNodes) add(node.s * length, new Point2(node.fx, node.fy));
-  for (const action of direct) add(action.s, action.force);
-  return [...byS.entries()].sort((a, b) => a[0] - b[0]).map(([s, force]) => ({ s, force }));
+interface Station {
+  s: number;
+  /** What the attached nodes here apply onto the beam — always part of the field, a node at an end included: `start`/`end` only speak for the beam's own endpoint nodes. */
+  attached: Point2;
+  couple: number;
+  /** Loads applied at this abscissa, which reach the beam through its endpoint node and so already sit in `start`/`end` when they land on a boundary. */
+  direct: Point2;
 }
+
+/** Every discontinuity abscissa (length units, clamped to `[0, length]`) with the point actions landing there, grouped so two coincident actions do not open a zero-length segment.
+ * Always includes 0 and `length`, even with nothing to report there. */
+function build_stations(length: number, cohesion: BeamCohesion, direct: PointAction[]): Station[] {
+  const byS = new Map<number, Station>();
+  const at = (s: number): Station => {
+    const clamped = Math.max(0, Math.min(length, s));
+    let station = byS.get(clamped);
+    if (!station) {
+      station = { s: clamped, attached: ZERO_FORCE, couple: 0, direct: ZERO_FORCE };
+      byS.set(clamped, station);
+    }
+    return station;
+  };
+  at(0);
+  at(length);
+  for (const node of cohesion.attachedNodes) {
+    const station = at(node.s * length);
+    station.attached = station.attached.add(new Point2(node.fx, node.fy));
+    station.couple += node.m;
+  }
+  for (const action of direct) {
+    const station = at(action.s);
+    station.direct = station.direct.add(action.force);
+  }
+  return [...byS.values()].sort((a, b) => a.s - b.s);
+}
+
+const ZERO_FORCE = new Point2(0, 0);
 
 export function compute_cohesion_field(
   beam: BeamElement,
@@ -244,15 +261,20 @@ export function compute_cohesion_field(
   let R: Point2 = new Point2(r0.fx, r0.fy);
   let Mf = r0.m;
 
+  // Every station reads twice, just before and just after its jump, so a discontinuity draws as a step.
+  const push = (s: number) => {
+    const sample = toNTM(R, Mf);
+    sample.s = s;
+    samples.push(sample);
+  };
   for (let i = 0; i < stations.length; i++) {
     const station = stations[i];
     const next = stations[i + 1];
-    // Jump the running torsor by this station's own point action — except at a BOUNDARY (s = 0 or s = length, symmetric): whatever sits exactly there already shows up in `cohesion.start`/`.end` (the true reaction if anchored; if free, its exact negative, since a free dof's net force is zero at rest).
-    // Subtracting it here too would double it.
-    if (next && i > 0) R = R.sub(station.force);
-    const before = toNTM(R, Mf);
-    before.s = station.s;
-    samples.push(before);
+    if (i === 0) push(station.s);
+    const interior = i > 0 && next !== undefined;
+    R = R.sub(interior ? station.attached.add(station.direct) : station.attached);
+    Mf -= station.couple;
+    push(station.s);
 
     if (!next) break;
     const segmentLength = next.s - station.s;

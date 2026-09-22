@@ -140,7 +140,10 @@ export function build_flexibility(
   }
 
   if (!any) return undefined;
+  let scale = 0;
+  for (let i = 0; i < size; i++) scale = Math.max(scale, f[i * size + i]);
   return {
+    scale,
     applyF: (x) => {
       const out = new Float64Array(size);
       for (let i = 0; i < size; i++) {

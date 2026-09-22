@@ -13,6 +13,7 @@ import {
   beltViaSlot,
   loadBeltVia,
   rimWeight,
+  seed_wraps,
   segmentH,
   unwrapArrival,
   viasFrom,
@@ -139,6 +140,8 @@ export interface BeltAggregateSpec {
   angleMetric?: "rim";
   /** Bench-only override of where to cut. Absent = the stakeholder criterion. */
   cutAngles?: Set<string>;
+  /** See `BeltNoSlipSpec.wraps`. */
+  wraps?: (number | undefined)[];
 }
 
 /**
@@ -166,6 +169,7 @@ export function buildBeltAggregateLinks(
     if (p.kind === "arc") arrivals[p.gearIndex] = p.startAngle;
 
   const shift = spec.closed || !spec.startKey ? 0 : 1;
+  const wraps = seed_wraps(vias, pieces, (via) => via - shift, spec.wraps);
   const isTerminal = (via: number) => vias[via].radius <= 0;
   const angleOfVia = (via: number) =>
     isTerminal(via) ? undefined : spec.gearAngleKeys[via - shift];
@@ -214,7 +218,7 @@ export function buildBeltAggregateLinks(
   return runs.map((run) => {
     const h0Sum = run.idx.reduce(
       (a, i) =>
-        a + (segmentH(vias, pieces, i, arrivals.slice(), false)?.h ?? 0),
+        a + (segmentH(vias, pieces, i, arrivals.slice(), false, wraps.slice())?.h ?? 0),
       0,
     );
     const viaIndices = run.idx.map((i) => {
@@ -242,6 +246,7 @@ export function buildBeltAggregateLinks(
       segIndices: run.idx,
       viaIndices,
       arrivals,
+      wraps,
       angleMetric: spec.angleMetric,
       owner: spec.owner,
     };
@@ -307,7 +312,9 @@ function evaluateScalar(
       if (!belt_solve_arc(sc, a, n, link.closed)) return null;
       const psiA = unwrapArrival(sc.arcAngle[a], link.arrivals?.[a]);
       if (link.arrivals && track) link.arrivals[a] = psiA;
-      u = sc.r[a] * (sc.ccw[a] === 1 ? -1 : 1) * psiA + sc.r[a] * sc.arcWrap[a];
+      const wrapA = unwrapArrival(sc.arcWrap[a], link.wraps?.[a]);
+      if (link.wraps && track) link.wraps[a] = wrapA;
+      u = sc.r[a] * (sc.ccw[a] === 1 ? -1 : 1) * psiA + sc.r[a] * wrapA;
     }
     let v = 0;
     if (belt_has_arc(sc, b, n, link.closed)) {
@@ -434,8 +441,9 @@ export function buildBeltLoopClosureLink(
     .filter((s) => s.piece.kind === "segment");
   if (segs.length !== spec.gearPosKeys.length) return [];
 
+  const wraps = seed_wraps(vias, pieces, (via) => via, spec.wraps);
   const h0 = segs.map(
-    (s) => segmentH(vias, pieces, s.i, arrivals.slice(), false)?.h ?? 0,
+    (s) => segmentH(vias, pieces, s.i, arrivals.slice(), false, wraps.slice())?.h ?? 0,
   );
   const theta0 = spec.gearAngleKeys.map((k) => angles.get(k) ?? 0);
 
@@ -450,6 +458,7 @@ export function buildBeltLoopClosureLink(
       h0,
       theta0,
       arrivals,
+      wraps,
       owner: spec.owner,
     },
   ];
@@ -494,6 +503,8 @@ export function applyBeltLoopClosure(
       const psi = unwrapArrival(sc.arcAngle[v], link.arrivals?.[v]);
       psiScratch[v] = psi;
       if (link.arrivals) link.arrivals[v] = psi;
+      sc.arcWrap[v] = unwrapArrival(sc.arcWrap[v], link.wraps?.[v]);
+      if (link.wraps) link.wraps[v] = sc.arcWrap[v];
     } else {
       psiScratch[v] = 0;
     }

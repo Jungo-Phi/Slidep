@@ -250,12 +250,9 @@ describe("déterminisme des courroies fermées, en dynamique", () => {
       expect(maxGap(reference.angles, driven(by).angles)).toBeLessThan(travelled / 100);
   }, 60_000);
 
-  // Expected to fail: a closed belt carries one strand law more than it has independent ones, and the surplus is shared out differently depending on which strand the listing makes first.
-  // The kinematic engine hides it — its motor is a position constraint, which pins the loop back every frame — while dynamic mode drives through a torque and leaves the loop's own travel free, so the mismatch integrates instead.
-  // Measured on this mechanism: 0.27 % of the travel kinematic, 17 % dynamic, and it is not a convergence budget (bit-identical from 200 to 3200 sweeps, and from 1 to 64 substeps) nor the alternating sweep order (bit-identical with it off).
-  // The signature is a belt-length redistribution, not a circulation: the driven pulley's rim displacement is exactly minus the sum of the others'.
-  // See docs/courroie-dynamique.md.
-  it.fails("Huygen's chain drive — entraîné par son moteur, le listage ne change pas les angles", () => {
+  // Dynamic mode drives through a torque and leaves the loop's own travel free, so anything the strands' no-slip laws do off their gradient integrates instead of being pinned back every frame, as the kinematic motor does.
+  // Hanging pulleys are what that exposes: each strand's tension has to pull on both centres, not only turn both pulleys, or the belt does work on the mechanism.
+  it("Huygen's chain drive — entraîné par son moteur, le listage ne change pas les angles", () => {
     const driven = (by: number) => fell(rotated(huygensJson, by), 60, GRAVITY);
     const reference = driven(0);
     const travelled = maxTravel(reference.travel);

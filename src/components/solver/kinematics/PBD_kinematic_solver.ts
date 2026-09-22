@@ -45,6 +45,8 @@ import {
   writeVelocitiesBack,
 } from "../nodes";
 import { LinkSlots, resolve_slots } from "./link-slots";
+import { applyBeltValidityContacts } from "./belt-validity";
+import { Drive, apply_drives, finish_drives, resolve_drives } from "../dynamics/drive-constraint";
 import { reversed_sweep_order } from "./sweep-order";
 
 export type SolverMaps = {
@@ -84,6 +86,8 @@ export type DynamicsInput = {
   forces?: Map<string, Point2>;
   /** Torque (N·m), per angle key — see `SimNodes.torque`. Omitted, no angle carries one. */
   torques?: Map<string, number>;
+  /** Motors, solved inside the sweep — see `Drive`. Each one's `torque` is written back. */
+  drives?: Drive[];
   /**
    * Output: an array to fill with each constraint's own reaction, one entry per solver key it touches with a non-zero contribution — see `LinkReaction`.
    * Its presence is the whole opt-in: omitted, `PBD_solve` skips the bookkeeping entirely (an extra before/after read per link per sweep), the same optionality `collectDiagnostics` already has for `unsatisfied`.
@@ -251,6 +255,8 @@ export function PBD_kinematic_solver(
   /** Smallest radius this solve may shrink a gear to, in world units — see `solveNodesFromMaps`. */
   radiusFloor: number = 0,
   dynamics?: DynamicsInput,
+  /** The scale every tolerance is a fraction of — see `PBD_solve`. Omitted, the nodes' own extent this solve. */
+  referenceExtent?: number,
 ): SolverMaps {
   const nodes = solveNodesFromMaps(
     positions,
@@ -277,7 +283,9 @@ export function PBD_kinematic_solver(
       gx: dynamics.gx,
       gy: dynamics.gy,
       reactions: dynamics.reactions,
+      drives: dynamics.drives,
     },
+    referenceExtent,
   );
   writePositionsBack(nodes, positions);
   writeScalarsBack(nodes.angleIndex, nodes.angle, angles);
@@ -302,7 +310,13 @@ export function PBD_solve(
   exitOn: ExitCriterion = "motion",
   /** Present only for a dynamics step — see `DynamicsInput`. Everything else (edition,
    * kinematic simulation) leaves this out and gets the plain PBD sweep unchanged. */
-  dynamics?: Pick<DynamicsInput, "dt" | "gx" | "gy" | "reactions">,
+  dynamics?: Pick<DynamicsInput, "dt" | "gx" | "gy" | "reactions" | "drives">,
+  /**
+   * The scale every tolerance below is a fraction of.
+   * A simulation passes the mechanism's size at t = 0: measured live, a body that has come loose and fallen away would stretch it without bound, and loosen every tolerance with it.
+   * Omitted, the nodes' own extent as this solve starts.
+   */
+  referenceExtent?: number,
 ): ConstraintResidual[] | undefined {
   const slots = resolve_slots(links, nodes);
 
@@ -377,9 +391,8 @@ export function PBD_solve(
     angleLever[a] = r !== undefined ? nodes.radius[r] : 1;
   }
 
-  // The mechanism's own scale, read once before the sweeps move anything — every tolerance below is a fraction of it rather than an absolute length, so a µm-scale mechanism and a km-scale one are each held to their own precision.
-  // One bbox pass, negligible next to the sweeps themselves.
-  const extent = nodes_extent(nodes) || MIN_EXTENT_M;
+  // The mechanism's own scale — every tolerance below is a fraction of it rather than an absolute length, so a µm-scale mechanism and a km-scale one are each held to their own precision.
+  const extent = referenceExtent ?? (nodes_extent(nodes) || MIN_EXTENT_M);
   const diagnosticTolerance = DIAGNOSTIC_TOLERANCE_RATIO * extent;
   const remainingThreshold = REMAINING_RATIO * extent;
 
@@ -399,6 +412,9 @@ export function PBD_solve(
   let frameStartX: Float64Array | null = null;
   let frameStartY: Float64Array | null = null;
   let frameStartA: Float64Array | null = null;
+  // Bound before the predict step: a drive's commanded rotation is measured from where the substep starts.
+  const drives =
+    dynamics?.drives && dynamics.dt > 0 ? resolve_drives(nodes, dynamics.drives, dynamics.dt) : [];
   if (dynamics) {
     frameStartX = nodes.x.slice();
     frameStartY = nodes.y.slice();
@@ -435,6 +451,8 @@ export function PBD_solve(
     prevA.set(nodes.angle);
 
     const sweepOrder = reversed !== null && i % 2 === 1 ? reversed : null;
+    // Ahead of the links, so the geometric constraints have the last word within a sweep; its gap still counts toward convergence, or the sweep could stop with a motor short of its speed.
+    maxError = apply_drives(nodes, drives);
     for (let step = 0; step < links.length; step++) {
       const idx = sweepOrder === null ? step : sweepOrder[step];
       const link = links[idx];
@@ -606,6 +624,8 @@ export function PBD_solve(
           break;
         case "BeltLength":
           err = applyBeltLengthConstraint(nodes, s, link, 1.0);
+          // Right after the length, which is what drives a belt into a state it cannot exist in.
+          err = Math.max(err, applyBeltValidityContacts(nodes, s, link));
           break;
         case "BeltJunction":
           err = applyBeltJunctionConstraint(
@@ -836,6 +856,7 @@ export function PBD_solve(
   // ── Dynamics: the frame's velocity, from the whole displacement since `frameStart` ──
   // `dt = 0` marks a re-projection step (see `Recorder.advance`'s first instant): no time elapsed, so there is no velocity to derive — dividing by it would give every already-satisfied dof (`Δx = 0`, common on a freshly imported, exactly-constrained mechanism) a `0 × Infinity = NaN` instead of the `0` it actually is.
   if (dynamics && dynamics.dt > 0 && frameStartX && frameStartY && frameStartA) {
+    finish_drives(drives, dynamics.dt);
     const invDt = 1 / dynamics.dt;
     for (let n = 0; n < nodes.count; n++) {
       if (nodes.w[n] === 0) continue; // anchored: no velocity to speak of

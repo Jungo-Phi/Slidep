@@ -9,6 +9,7 @@ import {
   belt_wraps,
 } from "../../../utils/belt-path";
 import {
+  BeamCohesion,
   ConstraintResidual,
   DynamicSnapshot,
   EnergySample,
@@ -29,7 +30,7 @@ import {
 import { DynamicsInput, PBD_kinematic_solver, SolverMaps } from "../kinematics/PBD_kinematic_solver";
 import { POSITION_KEY_FIELDS } from "../kinematics/link-slots";
 import { beam_linear_mass, beam_strength } from "../../../utils/section-properties";
-import { gear_inertia, gear_mass } from "../../../utils/gear-mass";
+import { gear_mass } from "../../../utils/gear-mass";
 import { DynamicMassModel, compute_dynamic_mass_model } from "./mass-model";
 import { BeamCohesionSpec, build_beam_cohesion_specs } from "./beam-cohesion";
 import { StaticsSystem, build_statics_system } from "../statics/equilibrium-model";
@@ -45,7 +46,7 @@ import {
   compile_springs_dampers,
   resolve_spring_damper_forces,
 } from "./spring-damper-model";
-import { CompiledMotor, compile_motors, resolve_motor_torques } from "./motor-model";
+import { CompiledMotor, compile_motors, drives_of, motor_samples } from "./motor-model";
 import {
   CompiledFriction,
   compile_frictions,
@@ -173,20 +174,20 @@ function motor_ramp(t: number): number {
 }
 
 /**
- * The belt's contact band, as a ratio of the mechanism's own extent (see `nodes_extent`/`positions_extent`) of wrapped arc: a pulley is let go below `detachRatio · extent` and taken back above `reattachRatio · extent`.
- * Ratios rather than flat lengths for the same reason `collision-detection.ts`'s `CONTACT_EPS_RATIO` is — a flat millimetre would drown a µm-scale mechanism and do nothing on a km-scale one.
+ * The belt's contact band, in wrapped arc, as a ratio of the belt's own strands there: a pulley is let go below `detachRatio` times the two strands either side of it, and taken back above `reattachRatio` times the strand it would join.
+ * Ratios rather than flat lengths, so a µm-scale belt and a km-scale one are each judged at their own size — and of the belt itself, not of the whole mechanism, which a body that has come loose and fallen away would stretch without bound.
  *
- * `detachArc` (`detachRatio · extent`) is NOT zero, and that is the whole point.
+ * The detach threshold is NOT zero, and that is the whole point.
  * The last sliver of wrap before zero is a degenerate band — the no-slip on a pulley the belt barely grazes goes erratic — so waiting for exactly zero means letting the mechanism strain against a pulley that has stopped holding anything, then releasing it all at once.
- * Measured on `Déconnexion courroie` (extent ≈ 902, so `detachRatio` swept at 0/5.5e-4/1.1e-3/2.2e-3/ 5.5e-3/1.1e-2 mirrors the historical 0/0.5/1/2/5/10 px sweep): the transition frame lurches **26.1 px** at zero and **1.2 px** at 0.5, and grows again beyond (3.7 px at 2, 18.4 px at 10 — there the pulley still carried belt and dropping it is a real geometric change).
+ * Measured on `Déconnexion courroie`: releasing at zero lurches the transition frame by about twenty times what this ratio does, and much larger ratios grow the lurch again, the pulley then still carrying belt when it is dropped.
  *
  * The gap between the two is the hysteresis, and it exists for one reason: every flip rebuilds the belt's no-slip links, which resets the `q` origin of the WHOLE belt.
  *
  * Mutable so a bench can sweep it in one process — production never writes it.
  */
 export const beltContact = {
-  detachRatio: 5e-4, // 0.5 mm at the ~1 m extent this was tuned at
-  reattachRatio: 1e-3, // 1 mm at the ~1 m extent this was tuned at
+  detachRatio: 5e-4,
+  reattachRatio: 1e-3,
   rebuildQLinks: true,
 };
 
@@ -240,8 +241,9 @@ export type SimulationModel = {
    * Read by `collision_links` regardless of whether the floor is currently enabled, the same way `collisionCandidates.pointFloor`/`circleFloor` are always built. */
   floorNormal: Point2;
   /**
-   * The mechanism's own scale (see `positions_extent`/`nodes_extent`), as of the last solved frame — the rest pose before the first.
-   * Mutated after every `step_simulation`/ `step_dynamic_simulation` call from that frame's `PBD_kinematic_solver` result, and read before the NEXT frame's solve by whatever needs an extent-relative tolerance ahead of it (`collision_links`, `update_belt_disconnects`) — a frame's lag on a quantity that never moves fast is cheaper than a second bbox pass over `positions`.
+   * The mechanism's own scale (see `positions_extent`), measured on its pose at compile time and fixed for the run.
+   * Every extent-relative tolerance reads it — the solve's convergence and reporting thresholds, the collision margins.
+   * Not re-measured as the mechanism moves: a body that comes loose and falls away would stretch it without bound, and loosen every tolerance with it.
    */
   extent: number;
   /** Each beam's own cohesion-torsor spec, read only by `step_dynamic_simulation` — see `BeamCohesionSpec`. */
@@ -333,7 +335,6 @@ function wrap_angle(a: number): number {
 export function update_belt_disconnects(
   link: Extract<Link, { type: "BeltLength" }>,
   positions: Map<string, Point2>,
-  extent: number,
 ): boolean {
   const n = link.gearPosKeys.length;
   if (!link.disconnected) link.disconnected = new Array(n).fill(false);
@@ -360,6 +361,13 @@ export function update_belt_disconnects(
   }
 
   const raw = belt_wraps(vias, link.closed);
+  // The strands either side of each via: the length the detach threshold is a share of.
+  const around = new Array(vias.length).fill(0);
+  for (const piece of belt_pieces(vias, link.closed))
+    if (piece.kind === "segment") {
+      around[piece.gearIndexA] += piece.length;
+      around[piece.gearIndexB] += piece.length;
+    }
   const rawArr = belt_arrivals(vias, link.closed);
   const offset = link.closed ? 0 : 1; // via index of the first pulley
   const seeding = !link.wraps;
@@ -389,7 +397,7 @@ export function update_belt_disconnects(
     // BeltLength's no-slip differential is written in the pulley's frame (fs ± r·ψ), which needs ψ on a continuous branch — a raw atan2 would jump 2π at the ±π seam and inject 2πr of phantom belt.
     link.arrivals![gi] = unwrap(rawArr[offset + k], link.arrivals![gi]);
     if (
-      cont * link.radii[gi] <= beltContact.detachRatio * (extent || MIN_EXTENT_M) &&
+      cont * link.radii[gi] <= beltContact.detachRatio * around[offset + k] &&
       !link.disconnected![gi] &&
       (!link.closed || activeIdx.length > 1)
     ) {
@@ -397,32 +405,39 @@ export function update_belt_disconnects(
       newlyDisconnected = true;
     }
   });
-  return newlyDisconnected || reattach_belt_pulleys(link, positions, extent);
+  return newlyDisconnected || reattach_belt_pulleys(link, positions);
 }
 
 /**
  * Belt contact REGAINED: a detached pulley the belt has come back onto.
  * Tested by putting the pulley back into the via list and reading the arc it would then wrap — the exact mirror of the detachment test, which is why the two agree at the tangency.
  *
- * Two guards, and neither is optional:
- * - the pulley's centre must project INSIDE the strand it would join, not past one of its ends (same condition the canvas uses to decide a pulley can be dropped on a run) — otherwise a pulley that has drifted off sideways reads as touching;
- * - the arc must exceed `beltContact.reattachRatio · extent`.
+ * Guards, and none is optional:
+ * - only the strand it would join counts, the one between its two neighbours in belt order — another strand of the loop may well cross the pulley on the far side without the belt ever reaching it there;
+ * - that strand must cut the pulley's disc, and the centre must project INSIDE it, not past one of its ends (same condition the canvas uses to decide a pulley can be dropped on a run) — otherwise a pulley that has drifted off sideways reads as touching;
+ * - the arc must exceed `beltContact.reattachRatio` times that strand's length.
  * Detachment stays at exactly zero, which is the geometric truth; only the way back waits.
  * Measured on `Déconnexion courroie`, the belt straightens ACROSS the pulley it just dropped and would re-take it on the very next frame, forever — and every flip resets the whole belt's `q` origin, which is what would make the no-slip blind.
  */
 function reattach_belt_pulleys(
   link: Extract<Link, { type: "BeltLength" }>,
   positions: Map<string, Point2>,
-  extent: number,
 ): boolean {
   if (!link.disconnected?.some(Boolean)) return false;
   let reattached = false;
   for (let gi = 0; gi < link.gearPosKeys.length; gi++) {
     if (!link.disconnected[gi]) continue;
+    // The belt as it runs now with `gi` put back in its place, an open belt's two free ends included, as `update_belt_disconnects` reads it.
     const vias: BeltVia[] = [];
     let index = -1;
     let ok = true;
-    for (let i = 0; i < link.gearPosKeys.length; i++) {
+    const terminal = (key: string) => {
+      const pos = positions.get(key);
+      if (pos) vias.push({ pos, radius: 0, clockwise: false });
+      else ok = false;
+    };
+    if (!link.closed) terminal(link.startKey);
+    for (let i = 0; i < link.gearPosKeys.length && ok; i++) {
       if (link.disconnected[i] && i !== gi) continue;
       const pos = positions.get(link.gearPosKeys[i]);
       if (!pos) {
@@ -432,19 +447,20 @@ function reattach_belt_pulleys(
       if (i === gi) index = vias.length;
       vias.push({ pos, radius: link.radii[i], clockwise: link.directions[i] });
     }
-    if (!ok || index < 0 || vias.length < 2) continue;
+    if (!link.closed && ok) terminal(link.endKey);
+    if (!ok || index < 0 || vias.length < 3) continue;
 
     const centre = vias[index].pos;
-    const onRun = belt_pieces(
-      vias.filter((_, v) => v !== index),
-      link.closed,
-    ).some(
-      (p) =>
-        p.kind === "segment" &&
-        centre.distance2segment(p.from, p.to) <=
-          centre.distance2line(p.from, p.to),
+    const without = vias.filter((_, v) => v !== index);
+    // In `without`, the strand `gi` would join leaves the via just before it.
+    const before = index > 0 ? index - 1 : without.length - 1;
+    const strand = belt_pieces(without, link.closed).find(
+      (p) => p.kind === "segment" && p.gearIndexA === before,
     );
-    if (!onRun) continue;
+    if (!strand || strand.kind !== "segment") continue;
+    const reach = centre.distance2segment(strand.from, strand.to);
+    if (reach > centre.distance2line(strand.from, strand.to) || reach >= vias[index].radius)
+      continue;
 
     const piece = belt_pieces(vias, link.closed).find(
       (p) => p.kind === "arc" && p.gearIndex === index,
@@ -453,7 +469,7 @@ function reattach_belt_pulleys(
     // The raw sweep lives in [0, 2π) and cannot say which side of zero it is on: a pulley the belt misses by 0.027 rad reads 6.2558, i.e. 2π − 0.027, and would be taken back wrapped the LONG way round — measured, +409 px of belt out of nowhere.
     // A pulley coming back into contact always starts from a hair of wrap, so the short side is the only readable one.
     if (piece.wrap >= Math.PI) continue;
-    if (piece.length < beltContact.reattachRatio * (extent || MIN_EXTENT_M)) continue;
+    if (piece.length < beltContact.reattachRatio * strand.length) continue;
 
     // Back on the belt: its continuous state is stale by the whole detachment, so re-seed it from the raw geometry exactly as the first frame does.
     link.disconnected[gi] = false;
@@ -606,6 +622,12 @@ function rewrite_position_keys(link: Link, from: (k: string) => string): void {
  *
  * `dynamicRigidity` (default off, see `get_links_simulation`): pass true only for a model that will actually run `step_dynamic_simulation` — kinematic mode and the mobility/redundancy analysis model want the plain anchor instead.
  */
+/** A gear angle's inertia as the dynamics weighs it, `0` for one it never turns. */
+function angle_inertia(angleMasses: Map<string, number>, id: string): number {
+  const w = angleMasses.get(id) ?? 0;
+  return w > 0 ? 1 / w : 0;
+}
+
 export function compile_simulation_model(
   mechanism: Mechanism,
   dynamicRigidity: boolean = false,
@@ -773,7 +795,8 @@ export function compile_simulation_model(
                 centreKey: keyMap.get(e.id) ?? e.id,
                 radius: e.radius,
                 mass: gear_mass(e.surfaceMass, e.radius),
-                inertia: gear_inertia(e.surfaceMass, e.radius),
+                // The inertia the dynamics gave its angle, floor included: a disc with no surface mass still turns against one, and its moment row must balance that same figure.
+                inertia: angle_inertia(dynamicMasses.angleMasses, e.id),
               },
             ]
           : [],
@@ -1021,7 +1044,7 @@ export function step_simulation(
         link.alpha = link.alpha + wrap_angle(raw - link.alpha);
       }
     } else if (link.type === "BeltLength") {
-      if (update_belt_disconnects(link, positions, model.extent))
+      if (update_belt_disconnects(link, positions))
         beltsToRewire.push(link);
     }
   });
@@ -1096,8 +1119,11 @@ export function step_simulation(
     undefined,
     angles,
     collectDiagnostics,
+    "motion",
+    0,
+    undefined,
+    model.extent,
   );
-  model.extent = result.extent;
 
   // ── Belt topology changed this frame → rebuild its no-slip links, AFTER the solve ──
   // The bake has to happen on a state the other constraints agree with.
@@ -1280,8 +1306,10 @@ export function step_dynamic_simulation(
   const arrivalsByBelt = new Map<ID, number[]>();
   const disconnectedByBelt = new Map<ID, boolean[]>();
 
-  // Whole-frame d'Alembert acceleration (phase 2) reads the velocity change across ALL substeps, never one alone — captured once, before the first, against `dt` (not `subDt`) below.
-  const velocitiesBeforeSolve = new Map(velocities);
+  // The d'Alembert acceleration is the LAST substep's velocity change over `subDt`, re-captured when that substep starts.
+  // XPBD is implicit Euler: `M·(v⁺ − v⁻)/h` balances the forces at the positions the substep ends on, which are the positions the frame publishes.
+  // Averaged over the whole frame instead, the acceleration lags the geometry by half a frame, and on a body turning fast its centripetal part leaks into the moment equations.
+  let velocitiesBeforeSolve = new Map(velocities);
   // What an anchored node has to restate as a force to reach the reaction fallback below — its OWN weight, the beams' and gears' endpoint shares taken back out.
   // Those shares are the solver's way of carrying a body's mass, not the node's: the body reports its whole `μL` through its own torsor (`statics-frame.ts`'s `nodeMassAt` draws the same line), so restating them here would have the ground hold a beam's end twice.
   const groundedWeights = new Map<string, Point2>();
@@ -1297,14 +1325,24 @@ export function step_dynamic_simulation(
       if (own > 0) groundedWeights.set(key, gravity.mul(own));
     }
   }
-  const angleVelocitiesBeforeSolve = new Map(angleVelocities);
+  let angleVelocitiesBeforeSolve = new Map(angleVelocities);
   const subDt = dt / substeps;
   let reactions: LinkReaction[] | undefined;
   let motor: MotorSample[] = [];
+  // What the last substep applied besides constraints, gravity and motors — the actions the published accelerations answer to, which is what the statics has to balance them against.
+  let applied = {
+    forces: new Map<string, Point2>(),
+    distributed: new Map<string, Point2>(),
+    torques: new Map<string, number>(),
+  };
   let result: SolverMaps | undefined;
 
   for (let sub = 0; sub < substeps; sub++) {
     const isLastSubstep = sub === substeps - 1;
+    if (isLastSubstep && sub > 0) {
+      velocitiesBeforeSolve = new Map(velocities);
+      angleVelocitiesBeforeSolve = new Map(angleVelocities);
+    }
 
     // ── Gear-mesh angle unwrap + belt-contact bookkeeping — EVERY substep, not once per
     // frame.
@@ -1319,7 +1357,7 @@ export function step_dynamic_simulation(
           link.alpha = link.alpha + wrap_angle(raw - link.alpha);
         }
       } else if (link.type === "BeltLength") {
-        if (update_belt_disconnects(link, positions, model.extent))
+        if (update_belt_disconnects(link, positions))
           beltsToRewire.add(link);
       }
     });
@@ -1388,7 +1426,8 @@ export function step_dynamic_simulation(
 
     // ── Grab (transient, this substep only) ── belt maps refreshed just above, this
     // substep.
-    // The kinematic `Spring`/`MotorBeam`/`MotorAngle` links are dropped here: dynamic mode pulls them out of the sweep and applies real forces/torques below instead (see `spring-damper-model.ts`, `motor-model.ts`) — left in, they would double up, once as a soft position constraint and once as an actual force.
+    // The kinematic `Spring`/`MotorBeam`/`MotorAngle` links are dropped here: dynamic mode applies a spring as a real force (see `spring-damper-model.ts`) and solves a motor as a torque-bounded drive (see `Drive`), where the kinematic links would impose position outright.
+    // `BeltLoopClosure` goes too: it corrects angles only, off its law's gradient, so against the strands' own no-slip — which dynamics projects along the full gradient — it does work on the mechanism, enough to blow a closed belt up.
     const links: Link[] = grab_links(
       model,
       grab,
@@ -1399,7 +1438,8 @@ export function step_dynamic_simulation(
       (link) =>
         link.type !== "Spring" &&
         link.type !== "MotorBeam" &&
-        link.type !== "MotorAngle",
+        link.type !== "MotorAngle" &&
+        link.type !== "BeltLoopClosure",
     );
     links.push(...midLinks);
     if (collisionsOn || floorOn)
@@ -1416,23 +1456,14 @@ export function step_dynamic_simulation(
 
     // ── User loads, spring/damper and motor forces, resolved against THIS substep's live
     // positions and pre-predict velocities — all three follow the mechanism as it moves. ──
-    const { forces, torques } = resolve_load_forces(model.compiledLoads, positions);
+    const { forces, torques, distributed } = resolve_load_forces(model.compiledLoads, positions);
     const merge_forces = (extra: Map<string, Point2>) => {
       for (const [key, f] of extra) forces.set(key, (forces.get(key) ?? ZERO).add(f));
     };
     merge_forces(resolve_spring_damper_forces(model.compiledSpringDampers, positions, velocities));
-    const motorContribution = resolve_motor_torques(
-      model.compiledMotors,
-      subDt,
-      positions,
-      velocities,
-      angleVelocities,
-      model.dynamicMasses.posMasses,
-      model.dynamicMasses.angleMasses,
-    );
-    merge_forces(motorContribution.forces);
-    for (const [key, t] of motorContribution.torques)
-      torques.set(key, (torques.get(key) ?? 0) + t);
+    // Loads and springs, before motors join the same maps below.
+    const passive = { forces: new Map(forces), torques: new Map(torques) };
+    const drives = drives_of(model.compiledMotors);
     const frictionContribution = resolve_friction_forces(
       model.compiledFrictions,
       subDt,
@@ -1445,8 +1476,13 @@ export function step_dynamic_simulation(
     merge_forces(frictionContribution.forces);
     for (const [key, t] of frictionContribution.torques)
       torques.set(key, (torques.get(key) ?? 0) + t);
-    // Cheap (one entry per motor) unlike `reactions`, so kept on every substep rather than gated behind `collectDiagnostics` — the last substep's values are what the frame ends on.
-    motor = motorContribution.samples;
+    if (isLastSubstep) {
+      for (const [key, f] of frictionContribution.forces)
+        passive.forces.set(key, (passive.forces.get(key) ?? ZERO).add(f));
+      for (const [key, t] of frictionContribution.torques)
+        passive.torques.set(key, (passive.torques.get(key) ?? 0) + t);
+      applied = { ...passive, distributed };
+    }
 
     // An anchored node never feels the predict step's acceleration (it cannot move regardless of `gx/gy` — see `PBD_kinematic_solver`), so its own weight has to be restated as an ordinary force to reach the anchored-dof reaction fallback — see `groundedWeights` above for what "its own" leaves out.
     // A free node needs none of this: its weight already comes out mass-independent, exactly like real gravity.
@@ -1469,6 +1505,7 @@ export function step_dynamic_simulation(
       torques,
       angleMasses: model.dynamicMasses.angleMasses,
       reactions: stepReactions,
+      drives,
     };
     result = PBD_kinematic_solver(
       positions,
@@ -1484,14 +1521,15 @@ export function step_dynamic_simulation(
       "motion",
       0,
       dynamics,
+      model.extent,
     );
-    model.extent = result.extent;
     reactions = stepReactions;
+    // Cheap (one entry per motor) unlike `reactions`, so kept on every substep rather than gated behind `collectDiagnostics` — the last substep's values are what the frame ends on.
+    motor = motor_samples(model.compiledMotors, drives, result.positions, velocities, angleVelocities);
 
     // ── Restitution: bounce whatever collision constraints actually resolved this
     // substep, instead of leaving them at the plain solve's inelastic (velocity ≈ 0) response.
-    // Reads THIS substep's freshly solved extent, unlike `collision_links` above (which needed an estimate before the solve had run) — already the accurate answer,
-    // so no lag to spend. ──
+    // Against the same fixed scale as `collision_links` above. ──
     if (collisionsOn || floorOn)
       apply_collision_restitution(
         model.collisionCandidates,
@@ -1500,7 +1538,7 @@ export function step_dynamic_simulation(
         subVelocitiesBeforeSolve,
         velocities,
         DEFAULT.RESTITUTION,
-        result.extent,
+        model.extent,
         collisionsOn,
         floorOn,
         model.floorNormal,
@@ -1546,13 +1584,13 @@ export function step_dynamic_simulation(
     const y = p ? p.y : NaN;
     const vx = v ? v.x : NaN;
     const vy = v ? v.y : NaN;
-    // For d'Alembert (see docs/plan-efforts-interieurs.md phase 2): the frame's whole velocity change, straight from the two maps the solve itself produced — never a finite difference across recorded (decimated, interpolated) snapshots.
+    // For d'Alembert (see docs/plan-efforts-interieurs.md phase 2): the last substep's velocity change, straight from the two maps the solve itself produced — never a finite difference across recorded (decimated, interpolated) snapshots.
     // Missing on either side reads as 0 (at rest), not NaN: an anchored dof simply never gets a `velocities` entry, and a dof with no prior frame to warm-start from started at rest.
     const vBefore = velocitiesBeforeSolve.get(fusedKeys[i]) ?? ZERO;
     const vAfter = velocities.get(fusedKeys[i]) ?? ZERO;
     // `dt = 0` is the re-projection step (see `Recorder.advance`'s first instant): no time elapsed to divide by, and both velocities are 0 there regardless.
-    const ax = dt > 0 ? (vAfter.x - vBefore.x) / dt : 0;
-    const ay = dt > 0 ? (vAfter.y - vBefore.y) / dt : 0;
+    const ax = dt > 0 ? (vAfter.x - vBefore.x) / subDt : 0;
+    const ay = dt > 0 ? (vAfter.y - vBefore.y) / subDt : 0;
     for (let s = start[i]; s < start[i + 1]; s++) {
       outPositions[2 * slots[s]] = x;
       outPositions[2 * slots[s] + 1] = y;
@@ -1584,7 +1622,7 @@ export function step_dynamic_simulation(
     const v = angleVelocities.get(key);
     outAngleVelocities[i] = v === undefined ? NaN : v;
     outAngleAccelerations[i] =
-      dt > 0 ? ((v ?? 0) - (angleVelocitiesBeforeSolve.get(key) ?? 0)) / dt : 0;
+      dt > 0 ? ((v ?? 0) - (angleVelocitiesBeforeSolve.get(key) ?? 0)) / subDt : 0;
   }
   // Then each belt's per-pulley wrap/detach/arrival block, exactly as `step_simulation` writes it — the last substep's `wrapsByBelt`/`arrivalsByBelt`/`disconnectedByBelt` are this frame's converged belt state, kept up to date every substep above.
   layout.belts.forEach((id, r) => {
@@ -1599,23 +1637,6 @@ export function step_dynamic_simulation(
     }
   });
 
-  // Loads resolved once more against the CONVERGED positions — the balance reads the state the frame ended on, not the one each substep started from.
-  // Only the point forces matter here: a beam carrying a distributed load is not balanced (see `BeamCohesionSpec`).
-  //
-  // Springs and dampers join them because they are forces, not links, in dynamic mode.
-  // A spring at least leaves a `Spring` link behind, which `farEndFree` sees; a DAMPER leaves nothing at all, so without this a beam damped at its free end balances as though nothing were there.
-  // Motors need no such treatment: their own link names the driven key, which disqualifies the balance before it is ever read.
-  const frameLoads = resolve_load_forces(model.compiledLoads, finalResult.positions);
-
-
-  const frameExternalForces = frameLoads.forces;
-  for (const [key, f] of resolve_spring_damper_forces(
-    model.compiledSpringDampers,
-    finalResult.positions,
-    velocities,
-  ))
-    frameExternalForces.set(key, (frameExternalForces.get(key) ?? ZERO).add(f));
-
   // ── Each beam's cohesion torsor, SOLVED rather than read off the sweep ──
   //
   // See docs/plan-efforts-interieurs.md phase 10.
@@ -1625,22 +1646,24 @@ export function step_dynamic_simulation(
     gravity,
     positionOf: (key) => finalResult.positions.get(key),
     velocityOf: (key) => velocities.get(key) ?? ZERO,
-    // The same whole-frame d'Alembert term `outAccelerations` carries, read by fused key rather than by snapshot slot — a fused key is not always a layout key.
+    // The same d'Alembert term `outAccelerations` carries, read by fused key rather than by snapshot slot — a fused key is not always a layout key.
     accelerationOf: (key) => {
       if (dt <= 0) return ZERO;
       const before = velocitiesBeforeSolve.get(key) ?? ZERO;
       const after = velocities.get(key) ?? ZERO;
-      return after.sub(before).mul(1 / dt);
+      return after.sub(before).mul(1 / subDt);
     },
-    externalForceAt: (key) => frameExternalForces.get(key) ?? ZERO,
-    distributedShareAt: (key) => frameLoads.distributed.get(key) ?? ZERO,
-    // The angular twin of `accelerationOf`, read across the whole frame's solve for the same reason.
+    // Loads, springs, dampers and joint friction as the last substep applied them; never a motor's force couple, whose torque the statics solves for as a reaction.
+    externalForceAt: (key) => applied.forces.get(key) ?? ZERO,
+    distributedShareAt: (key) => applied.distributed.get(key) ?? ZERO,
+    // The angular twin of `accelerationOf`, over the same last substep.
     angularAccelerationOf: (gearID) => {
       if (dt <= 0) return 0;
       const before = angleVelocitiesBeforeSolve.get(gearID) ?? 0;
       const after = angleVelocities.get(gearID) ?? 0;
-      return (after - before) / dt;
+      return (after - before) / subDt;
     },
+    externalTorqueOn: (gearID) => applied.torques.get(gearID) ?? 0,
     masses: model.dynamicMasses,
     gears: model.staticsSystem.gears,
     specs: model.beamCohesionSpecs,
@@ -1831,9 +1854,49 @@ export function dynamic_snapshot_at(
     motor: a.motor,
     energy: a.energy,
     balance: a.balance,
-    beamCohesion: a.beamCohesion,
+    // Except the torsors, which the field along each beam marches from against the accelerations above: held while those are blended, the two describe different instants, and on the frame after an impact the diagram stops closing at a free end.
+    // The field is linear in both, so blending them alike keeps it closed wherever the two recorded frames were.
+    beamCohesion: lerp_cohesion(a.beamCohesion, b.beamCohesion, u),
     beltStrands: a.beltStrands,
   };
+}
+
+/** Blend two frames' beam torsors at `u`, or hold the first where the two do not describe the same beams and attached nodes. */
+function lerp_cohesion(
+  a: BeamCohesion[] | undefined,
+  b: BeamCohesion[] | undefined,
+  u: number,
+): BeamCohesion[] | undefined {
+  if (!a || !b || a.length !== b.length) return a;
+  const mix = (x: number, y: number) => x + (y - x) * u;
+  const torsor = (x: BeamCohesion["start"], y: BeamCohesion["start"]) => ({
+    fx: mix(x.fx, y.fx),
+    fy: mix(x.fy, y.fy),
+    m: mix(x.m, y.m),
+  });
+  const blended: BeamCohesion[] = [];
+  for (let i = 0; i < a.length; i++) {
+    const from = a[i];
+    const to = b[i];
+    if (
+      from.beamID !== to.beamID ||
+      from.attachedNodes.length !== to.attachedNodes.length ||
+      from.attachedNodes.some((node, k) => node.nodeID !== to.attachedNodes[k].nodeID)
+    )
+      return a;
+    blended.push({
+      beamID: from.beamID,
+      start: torsor(from.start, to.start),
+      end: torsor(from.end, to.end),
+      attachedNodes: from.attachedNodes.map((node, k) => ({
+        nodeID: node.nodeID,
+        s: mix(node.s, to.attachedNodes[k].s),
+        ...torsor(node, to.attachedNodes[k]),
+      })),
+      determinate: from.determinate && to.determinate,
+    });
+  }
+  return blended;
 }
 
 /**

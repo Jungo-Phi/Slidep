@@ -161,6 +161,7 @@ export function compute_balance_sample(
         frame.accelerationOf(gear.centreKey),
       );
       inertiaM += gear.inertia * frame.gearAngularAcceleration(gear.id);
+      appliedM += frame.externalTorqueOn(gear.id);
     } else if (body.kind === "node" && body.nodeKey !== undefined) {
       const at = frame.positionOf(body.nodeKey);
       carry(
@@ -225,6 +226,9 @@ export function distributed_resultant(
  * Read both when splitting the null space and when asking whether a direction moves a column, so the two never disagree over whether a vector touches something.
  */
 const COUPLING_EPSILON = 1e-8;
+
+/** How close to a beam's end, as a fraction of its length, a rail joint counts as resting on its stop: the projection that clamps it there leaves it a hair either side. */
+const RAIL_STOP = 1e-6;
 
 /**
  * Orthonormalise in order, dropping whatever the vectors before it already span.
@@ -397,7 +401,7 @@ export function solve_statics(
     // The same shape as a beam's, one term shorter: a disc carries no distributed load, and gravity works at its centre so it makes no moment there.
     b[row] = gear.mass * (frame.gravity.x - acceleration.x);
     b[row + 1] = gear.mass * (frame.gravity.y - acceleration.y);
-    b[row + 2] = -gear.inertia * frame.gearAngularAcceleration(gear.id);
+    b[row + 2] = frame.externalTorqueOn(gear.id) - gear.inertia * frame.gearAngularAcceleration(gear.id);
   }
 
   for (const [key, row] of rowOfNode) {
@@ -449,6 +453,19 @@ export function solve_statics(
     add_at(a, beamRow + 2, fx, cross(arm, 1, 0));
     add_at(a, beamRow + 2, fy, cross(arm, 0, 1));
     if (m >= 0) add_at(a, beamRow + 2, m, 1);
+  }
+
+  for (const slide of system.slides) {
+    const state = states.get(slide.beamID);
+    const spec = specOf.get(slide.beamID);
+    if (!state || !spec) continue;
+    const face = system.interfaces[slide.face];
+    // A rail run to the end of the beam sits against its stop, which does push along the beam.
+    const t = abscissa(face, spec, state, frame) / state.length;
+    if (t <= RAIL_STOP || t >= 1 - RAIL_STOP) continue;
+    const { fx, fy } = face.columns;
+    add_at(a, slide.row, fx, state.xhat.x);
+    add_at(a, slide.row, fy, state.xhat.y);
   }
 
   const strands: (Omit<StaticsStrand, "tension" | "determined"> & { column: number })[] = [];
@@ -553,7 +570,13 @@ export function solve_statics(
   const solved = solve_least_squares(a, b);
   const split = split_null_space(system, solved.nullSpace);
   const minimum = flexibility
-    ? minimise_energy(solved.x, split.owned, flexibility.applyF, flexibility.linear)
+    ? minimise_energy(
+        solved.x,
+        split.owned,
+        flexibility.applyF,
+        flexibility.linear,
+        flexibility.scale,
+      )
     : undefined;
   const x = minimum ? minimum.x : solved.x;
   // Only among the redundancies the model owns: a direction that also moves an unmodelled action is not this model's to settle, belt or not.

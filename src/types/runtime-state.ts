@@ -55,7 +55,7 @@ export type LinkReaction =
     };
 
 /** What one motorized pivot is doing this frame: the torque it applies, and the mechanical power that torque carries.
- * See `motor-model.ts`'s `resolve_motor_torques`. */
+ * See `Drive`, which settles that torque inside the solve. */
 export interface MotorSample {
   pivotID: ID;
   /** W — τ·ω of the joint it drives, signed: negative when the load back-drives the motor rather than the other way round. */
@@ -115,28 +115,20 @@ export interface BalanceSample {
 export interface BeamCohesion {
   beamID: ID;
   /**
-   * What this beam's OWN rigidity (its length link, any welded-hub couple, any attached body's pin) applies onto whatever is coincident at its start/end — one sense at both ends and for all three components, NOT `force_at`'s anchor-conditional "classical support reaction".
-   * Deliberately not yet the cut torsor `R_coh`: reaching that negates the far end and leaves the near one as it is (see `cohesion-field.ts`'s `r_coh_start`/`r_coh_end`), an asymmetry inherent to the cut convention itself.
+   * What this beam applies onto whatever is coincident at its start — one sense at both ends and for all three components, NOT a "classical support reaction".
+   * Not yet the cut torsor `R_coh`: reaching that negates the far end and leaves the near one as it is (see `cohesion-field.ts`'s `r_coh_start`/`r_coh_end`), an asymmetry inherent to the cut convention itself.
    */
-  /** `atAnchor`: whether this dof was immovable in the solve (`w = 0`) — same sense as `LinkReaction.atAnchor`.
-   * `cohesion-field.ts` reads it to tell a genuine support reading apart from a free dof's own tautological cancellation of a directly-applied load. */
   start: { fx: number; fy: number; m: number };
   /** Same reading at the beam's OTHER end — independent of `start` (no integration along the span involved), so `cohesion-field.ts` can use it as the loop-residual reference. */
   end: { fx: number; fy: number; m: number };
   /**
-   * Force each attached node (a join/mass/slider body pinned or sliding on this beam's span) transmits TO the beam, at its CURRENT abscissa (0 = start, 1 = end, recomputed every frame from live positions — a slider's abscissa moves, see `Point2.parameter_on_segment`).
-   * Excludes the beam's own `:mid` inertia artifact (`DynamicMassModel.beamMidpoints`): that reaction is not tagged into any beam's `internalLinkIndices` in the first place, since the midpoint's `FixedOnSegment` is built fresh every frame outside the compiled `model.links` this is precomputed from.
+   * Force and couple each attached node (a join/mass/slider body pinned or sliding on this beam's span) transmits TO the beam, at its CURRENT abscissa (0 = start, 1 = end, read from live positions — a slider's abscissa moves).
+   * `m` is zero at a node that cannot pass a couple; a slider turns with its rail and does pass one, which the field along the beam must jump by.
    */
-  attachedNodes: { nodeID: ID; s: number; fx: number; fy: number }[];
+  attachedNodes: { nodeID: ID; s: number; fx: number; fy: number; m: number }[];
   /**
-   * Whether this torsor is a statement about the mechanism or the solver's own account of how it got there.
-   *
-   * `true` — balanced off the CONVERGED STATE: the beam's own mass against gravity and its acceleration, plus what rides on its span, plus the loads applied to it.
-   * Nothing is transmitted at its far end, so the balance closes with no unknown and the reading is exact (`resolve_beam_cohesion`).
-   *
-   * `false` — summed from the reactions each link reports, which is an ATTRIBUTION of the correction path between the links that share it.
-   * Measured against the balanced reading on the beams where both apply, that attribution differs by up to 100 %.
-   * A reader should treat such a torsor as indicative, not as a figure.
+   * Whether the statics solve settled every torsor this beam's field starts from.
+   * `false` when a share stays undetermined or stands for an action the model does not describe (a belt, a contact): the march is exact either way, but then only as good as a start that is indicative, not a figure.
    */
   determinate: boolean;
 }
@@ -233,7 +225,7 @@ export interface DynamicSnapshot extends SimulationSnapshot {
   velocities: Float64Array;
   /**
    * ax and ay interleaved, 2 per `layout.keys` entry — same slotting as `positions`.
-   * The frame's whole `(v_after − v_before) / dt`, taken where the frame itself is computed (`step_dynamic_simulation`) rather than differentiated from these (decimated, interpolated) snapshots afterward — see docs/plan-efforts-interieurs.md phase 2.
+   * The last substep's `(v_after − v_before) / subDt`, the acceleration consistent with the positions the frame ends on, taken where the frame itself is computed (`step_dynamic_simulation`) rather than differentiated from these (decimated, interpolated) snapshots afterward — see docs/plan-efforts-interieurs.md phase 2.
    * A dof with no velocity change reads 0, not NaN: an anchored dof never accelerates, and a dof with no prior frame to warm-start from is taken as starting at rest.
    */
   accelerations: Float64Array;

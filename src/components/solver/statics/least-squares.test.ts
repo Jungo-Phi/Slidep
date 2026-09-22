@@ -27,10 +27,8 @@ describe("rang", () => {
   });
 
   it("tient sur une matrice mal conditionnée et redondante", () => {
-    // Rows spanning nine orders of magnitude — newtons against newton-metres, exactly what an
-    // equilibrium assembly mixes — with three columns that are exact combinations of the
-    // others. A decomposition that gives up early here reports a rank too HIGH, which reads as
-    // "isostatic" on a structure that is not: the one error a redundancy count must not make.
+    // Rows spanning nine orders of magnitude — newtons against newton-metres, exactly what an equilibrium assembly mixes — with three columns that are exact combinations of the others.
+    // A decomposition that gives up early here reports a rank too HIGH, which reads as "isostatic" on a structure that is not: the one error a redundancy count must not make.
     const base = [
       [1e6, 3e5, -2e6, 7e5],
       [-4e5, 9e5, 1e6, -3e5],
@@ -55,10 +53,8 @@ describe("rang", () => {
   });
 
   it("ne confond pas une direction faible avec une direction absente", () => {
-    // Nine orders between the two, and both are real: calling the second absent would report a
-    // free mode a stiff mechanism does not have. The cut sits at `max(m, n)·1e-11` of the
-    // leading entry — anything below that is dust on a matrix whose entries are lever arms in
-    // metres and unit coefficients, never a constraint.
+    // Nine orders between the two, and both are real: calling the second absent would report a free mode a stiff mechanism does not have.
+    // The cut sits at `max(m, n)·1e-11` of the leading entry — anything below that is dust on a matrix whose entries are lever arms in metres and unit coefficients, never a constraint.
     const solved = solve_least_squares(
       matrix([
         [1e6, 0],
@@ -87,8 +83,7 @@ describe("moindres carrés", () => {
   });
 
   it("rend le résidu d'un système sur-déterminé incompatible", () => {
-    // x = 0 and x = 2 at once: the least-squares answer is 1, and the residual says by how much
-    // the equations disagree rather than pretending they do not.
+    // x = 0 and x = 2 at once: the least-squares answer is 1, and the residual says by how much the equations disagree rather than pretending they do not.
     const solved = solve_least_squares(matrix([[1], [1]]), Float64Array.from([0, 2]));
     expect(arr(solved.x)[0]).toBeCloseTo(1, 10);
     expect(solved.residual).toBeCloseTo(Math.SQRT2, 10);
@@ -136,9 +131,8 @@ describe("énergie complémentaire minimale", () => {
   });
 
   it("répartit selon les souplesses, pas selon la norme", () => {
-    // Two members sharing one load: `x₀ + x₁ = 4`. Minimum norm splits it 2/2 whatever the
-    // members are made of; minimum energy splits it in inverse proportion to flexibility — the
-    // stiff member takes the larger share, which is the physics the norm cannot know.
+    // Two members sharing one load: `x₀ + x₁ = 4`.
+    // Minimum norm splits it 2/2 whatever the members are made of; minimum energy splits it in inverse proportion to flexibility — the stiff member takes the larger share, which is the physics the norm cannot know.
     const solved = solve_least_squares(matrix([[1, 1]]), Float64Array.from([4]));
     expect(arr(solved.x)[0]).toBeCloseTo(2, 10);
 
@@ -153,8 +147,7 @@ describe("énergie complémentaire minimale", () => {
   });
 
   it("porte le terme linéaire, que le poids propre rend non nul", () => {
-    // `½f·x² + g·x` over the same line: the optimum moves to where the gradient vanishes, and
-    // ignoring `g` would answer as though every member were unloaded.
+    // `½f·x² + g·x` over the same line: the optimum moves to where the gradient vanishes, and ignoring `g` would answer as though every member were unloaded.
     const solved = solve_least_squares(matrix([[1, 1]]), Float64Array.from([0]));
     const chosen = minimise_energy(
       solved.x,
@@ -165,5 +158,27 @@ describe("énergie complémentaire minimale", () => {
     // ½(x₀² + x₁²) + 2x₀ under x₀ + x₁ = 0 is least at x₀ = −1, x₁ = +1.
     expect(arr(chosen.x)[0]).toBeCloseTo(-1, 10);
     expect(arr(chosen.x)[1]).toBeCloseTo(1, 10);
+  });
+
+  it("laisse ouverte une redondance qu'aucune souplesse n'atteint, même bruitée", () => {
+    // `x₂` is free and no member feels it — a belt's pretension between rigid supports — but rounding leaves it a trace of energy.
+    // Stepping by rounding over rounding would throw it millions of newtons away; it must stay where equilibrium left it, and be reported open.
+    const solved = solve_least_squares(
+      matrix([
+        [1, 1, 0],
+        [1, -1, 0],
+      ]),
+      Float64Array.from([4, 0]),
+    );
+    const flexibility = [1, 1, 1e-25];
+    const chosen = minimise_energy(
+      solved.x,
+      solved.nullSpace,
+      (x: Float64Array) => Float64Array.from(x, (value: number, i: number) => flexibility[i] * value),
+      Float64Array.from([0, 0, 1e-18]),
+      1,
+    );
+    expect(arr(chosen.x)[2]).toBeCloseTo(0, 10);
+    expect(chosen.residualNull).toHaveLength(1);
   });
 });

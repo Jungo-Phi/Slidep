@@ -28,25 +28,7 @@ import {
   buildBeltLoopClosureLink,
   hasStakeholderBeyond,
 } from "../experimental/belt-aggregate";
-import { BEAM_END_MASS_FRACTION } from "../dynamics/mass-model";
-import { beam_axial_compliance, beam_linear_mass } from "../../../utils/section-properties";
-
-/**
- * A driven beam's own moment of inertia about its pivot, parallel-axis theorem: `J = mL²/12 + m·a²`, `a` the (rigid, so rest-pose-only) distance from the beam's centre to the pivot's world position.
- * Covers both an end-pivoted arm (`a = L/2`, giving the familiar `mL²/3`) and one welded through its body (`fixedNodesBodyIDs`, arbitrary `a`) with the same formula — `motor_arm` already resolves which case applies; this only needs where the pivot actually sits.
- * `linearMass` is passed in rather than resolved here: the caller already needs it for the arm's own end mass, so it is computed once and shared.
- */
-function beam_pivot_inertia(
-  beam: BeamElement,
-  pivotPos: Point2,
-  linearMass: number,
-): number {
-  const length = beam.positionStart.distance_to(beam.positionEnd);
-  const mass = linearMass * length;
-  const center = beam.positionStart.lerp(beam.positionEnd, 0.5);
-  const a = pivotPos.distance_to(center);
-  return (mass * length * length) / 12 + mass * a * a;
-}
+import { beam_axial_compliance } from "../../../utils/section-properties";
 
 // sin of the angle between the two spokes, not an absolute area: an absolute threshold stops catching the degenerate case as the spokes get longer (area scales with length²), and fails on beams of ~1m already bent by a fraction of a degree — e.g. residual float drift from a prior simulation — where the Distance fallback is nearly unconstrained in rotation (its derivative w.r.t. angle vanishes at collinear).
 const COLLINEAR_SIN_EPS = Math.sin((15 * Math.PI) / 180);
@@ -54,7 +36,7 @@ const COLLINEAR_SIN_EPS = Math.sin((15 * Math.PI) / 180);
 /**
  * Map a spring element's physical stiffness (>0, default 1) to a per-iteration PBD relaxation factor in (0, 1).
  * Monotonic: stiffer → closer to 1 (less yield), softer → closer to 0.
- * This is NOT a physical k — in this quasi-static solver a per-iteration factor saturates over the iteration count, so it only sets how readily the spring yields to rigid constraints, not a true relative stiffness (that needs the future dynamic XPBD mode).
+ * This is NOT a physical k — in this quasi-static solver a per-iteration factor saturates over the iteration count, so it only sets how readily the spring yields to rigid constraints, not a true relative stiffness — the dynamic mode applies a spring as a real force instead.
  * Capped below 1 to stay softer than rigid constraints (stiffness 1.0).
  */
 function spring_relaxation_factor(stiffness: number): number {
@@ -702,6 +684,8 @@ export function rebuild_belt_q_links(
     endKey: belt.endKey,
     owner: belt.owner,
     angleMetric: "rim" as const,
+    // A running belt may already wind a pulley past a full turn, which the geometry alone cannot tell.
+    wraps: active.map((i) => belt.wraps?.[i]),
   };
   kept.push(
     ...buildBeltSegmentNoSlipLinks(positions, angles, {
@@ -974,8 +958,7 @@ export function get_links_simulation(
           owner: element.id,
         });
       }
-      // Dampers add no link in the kinematic (quasi-static) solver: a damper is a velocity-dependent force with no meaning without dynamics.
-      // They will be handled by the future dynamic XPBD mode.
+      // Dampers add no link in the kinematic (quasi-static) solver: a damper is a velocity-dependent force with no meaning without dynamics, where `spring-damper-model.ts` applies it.
     }
 
     // Gear axle coincidence (gear center on its pivot/slidep axle)
@@ -1152,14 +1135,6 @@ export function get_links_simulation(
       if (!beam || beam.type !== "beam") return;
       const arm = motor_arm(element, beam);
       if (!arm) return;
-      const linearMass = beam_linear_mass(
-        beam.materialID,
-        beam.profileID,
-        materials,
-        profiles,
-      );
-      const beamMass =
-        linearMass * beam.positionStart.distance_to(beam.positionEnd);
       links.push({
         type: "MotorBeam",
         ddl: 1,
@@ -1170,8 +1145,6 @@ export function get_links_simulation(
         omega,
         targetAngle: arm.dir.angle(),
         owner: element.id,
-        armInertia: beam_pivot_inertia(beam, element.position, linearMass),
-        armEndMass: beamMass * BEAM_END_MASS_FRACTION,
       });
     });
 

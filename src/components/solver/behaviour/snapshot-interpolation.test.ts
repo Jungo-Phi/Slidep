@@ -4,8 +4,10 @@ import disconnect from "../../../../test-mechanisms/Déconnexion courroie.slidep
 import huygens from "../../../../test-mechanisms/Huygen's chain drive.slidep?raw";
 import jansen from "../../../../test-mechanisms/Jansen's linkage.slidep?raw";
 import poulie from "../../../../test-mechanisms/Poulie bloqueuse.slidep?raw";
+import testSlider from "../../../../test-mechanisms/Test slider.slidep?raw";
 import vilbrequin from "../../../../test-mechanisms/Vilbrequin.slidep?raw";
-import { Mechanism } from "../../../types";
+import { Mechanism, Point2 } from "../../../types";
+import type { BeamElement } from "../../../types/element";
 import { load_mechanism } from "../../../utils/load-mechanism";
 import {
   RECORD_DT,
@@ -14,8 +16,10 @@ import {
   dynamic_snapshot_at,
   snapshot_at,
   snapshot_index_at,
+  step_dynamic_simulation,
   step_simulation,
 } from "../dynamics/simulation-engine";
+import { compute_cohesion_field } from "../recording/cohesion-field";
 import { DynamicSnapshot, KinematicSnapshot, LinkReaction } from "../../../types/runtime-state";
 import {
   make_snapshot_layout,
@@ -251,4 +255,37 @@ describe("réactions à travers l'interpolation dynamique", () => {
     const mid = dynamic_snapshot_at([a, b], 0.5);
     expect(mid?.reactions).toBe(reactions);
   });
+});
+
+describe("efforts intérieurs à travers l'interpolation dynamique", () => {
+  it("entre deux images, le champ le long d'une poutre se referme encore, y compris juste après un choc", () => {
+    // Test slider's horizontal beam drops onto the end of its rail: the frame of the impact carries a deceleration a hundred times gravity, the next one almost none.
+    // An instant drawn between the two blends those accelerations, so the torsors the field starts from must be blended alike, or the diagram stops closing at the beam's free end.
+    const mechanism = loadFixture(testSlider);
+    const model = compile_simulation_model(mechanism, true);
+    const gravity = new Point2(0, -9.81);
+    const beam = mechanism.mechanicalElements.find(
+      (el): el is BeamElement => el.type === "beam" && el.fixedNodesBodyIDs.length > 0 && !el.fixedNodeStartID,
+    )!;
+    const snaps: DynamicSnapshot[] = [];
+    let snap: DynamicSnapshot | null = null;
+    for (let i = 0; i < 60; i++) {
+      snap = step_dynamic_simulation(model, i * RECORD_DT, snap, RECORD_DT, gravity);
+      snaps.push(snap);
+    }
+
+    let worst = 0;
+    let peak = 0;
+    for (let i = 0; i < snaps.length - 1; i++) {
+      const mid = dynamic_snapshot_at(snaps, (snaps[i].t + snaps[i + 1].t) / 2)!;
+      const cohesion = mid.beamCohesion!.find((c) => c.beamID === beam.id)!;
+      const field = compute_cohesion_field(beam, mechanism.materials, mechanism.profiles, cohesion, mechanism.loads, mid, gravity)!;
+      const mf = Math.abs(field.extremum.Mf.value);
+      peak = Math.max(peak, mf);
+      worst = Math.max(worst, Math.abs(field.loopResidual.m));
+    }
+    // The impact must have been crossed, or the check proves nothing.
+    expect(peak).toBeGreaterThan(10);
+    expect(worst).toBeLessThan(1e-3 * peak);
+  }, 30_000);
 });

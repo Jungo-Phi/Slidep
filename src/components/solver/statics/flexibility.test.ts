@@ -8,15 +8,11 @@ import { build_flexibility } from "./flexibility";
 /**
  * The hyperstatic cases, against the textbook — see docs/plan-efforts-interieurs.md phase 10.
  *
- * These are the whole justification for carrying a flexibility form at all: equilibrium alone
- * leaves a family of answers here, and the figures below (`3wL/8`, `wL²/8`, `wL²/12`) are what
- * a beam made of a real material actually does. They are equalities, not tolerances — the only
- * slack allowed is quadrature and floating point.
+ * These are the whole justification for carrying a flexibility form at all: equilibrium alone leaves a family of answers here, and the figures below (`3wL/8`, `wL²/8`, `wL²/12`) are what a beam made of a real material actually does.
+ * They are equalities, not tolerances — the only slack allowed is quadrature and floating point.
  *
- * The frame is INJECTED rather than simulated: a beam anchored at both ends is a known limit of
- * the PBD solver (its own `Distance` link then has two anchored dofs, indeterminate and never
- * reported), and it is beside the point here. What is under test is the statics formulation,
- * which does not care what produced the geometry.
+ * The frame is INJECTED rather than simulated: a beam anchored at both ends is a known limit of the PBD solver (its own `Distance` link then has two anchored dofs, indeterminate and never reported), and it is beside the point here.
+ * What is under test is the statics formulation, which does not care what produced the geometry.
  */
 const L = 3;
 const W = 400; // N/m, downward
@@ -86,6 +82,7 @@ function stand(
     distributedDensityOn: () => ({ at0: new Point2(0, -W), slope: ZERO }),
     beamStiffness: () => ({ EA, EI }),
     gearAngularAcceleration: () => 0,
+    externalTorqueOn: () => 0,
   };
 
   const system = build_statics_system(
@@ -110,9 +107,9 @@ function stand(
 }
 
 describe("poutre encastrée-appuyée sous charge répartie", () => {
-  // Fixed at one end, pinned at the other, uniform `w` over `L`. Statics alone cannot answer:
-  // five reaction components against three equations. The textbook does — R = 3wL/8 at the
-  // propped end, M = wL²/8 at the fixed one.
+  // Fixed at one end, pinned at the other, uniform `w` over `L`.
+  // Statics alone cannot answer: five reaction components against three equations.
+  // The textbook does — R = 3wL/8 at the propped end, M = wL²/8 at the fixed one.
   const run = () => stand("join", "pivot");
 
   it("est hyperstatique, et la flexibilité tranche", () => {
@@ -126,25 +123,22 @@ describe("poutre encastrée-appuyée sous charge répartie", () => {
     const { supportAt, beamAt } = run();
     expect(supportAt(END).fy).toBeCloseTo((3 * W * L) / 8, 6);
     expect(supportAt(START).fy).toBeCloseTo((5 * W * L) / 8, 6);
-    // `Mf` at the fixed end, in the plan's own cut convention: the beam hogs there, so it is
-    // the negative of the textbook magnitude.
+    // `Mf` at the fixed end, in the plan's own cut convention: the beam hogs there, so it is the negative of the textbook magnitude.
     expect(beamAt(START).m).toBeCloseTo(-(W * L * L) / 8, 6);
     // And the propped end passes no couple at all — it is a hinge.
     expect(beamAt(END).m).toBe(0);
   });
 
   it("ne met aucun effort normal dans une poutre chargée en travers", () => {
-    // The axial redundancy has no load to carry, and least energy puts nothing in it. Minimum
-    // NORM would have done the same here; the case below is the one that tells them apart.
+    // The axial redundancy has no load to carry, and least energy puts nothing in it.
+    // Minimum NORM would have done the same here; the case below is the one that tells them apart.
     const { beamAt } = run();
     expect(beamAt(START).fx).toBeCloseTo(0, 6);
   });
 });
 
 describe("poutre bi-encastrée sous charge répartie", () => {
-  // Both ends fixed: three redundancies, and the classic `wL²/12` at the supports against
-  // `wL²/24` at mid-span — the case every course uses to show that fixing both ends halves
-  // the worst moment.
+  // Both ends fixed: three redundancies, and the classic `wL²/12` at the supports against `wL²/24` at mid-span — the case every course uses to show that fixing both ends halves the worst moment.
   const run = () => stand("join", "join");
 
   it("compte trois redondances", () => {
@@ -163,12 +157,10 @@ describe("poutre bi-encastrée sous charge répartie", () => {
   });
 
   it("le moment à mi-portée vaut wL²/24", () => {
-    // Not an unknown of the system: it is `M_coh(L/2)`, marched from the fixed end — the
-    // property that makes the two figures one answer rather than two.
+    // Not an unknown of the system: it is `M_coh(L/2)`, marched from the fixed end — the property that makes the two figures one answer rather than two.
     const { beamAt } = run();
     const start = beamAt(START);
-    // `M_coh(s) = Σ_{sⱼ<s}[(sⱼ−s)·(x̂ × Fⱼ) + Mⱼ] − Mw(s)` at `s = L/2`, the beam lying on +x:
-    // one upstream interface at `s = 0`, and `Mw(L/2) = wL²/8` for a uniform `w`.
+    // `M_coh(s) = Σ_{sⱼ<s}[(sⱼ−s)·(x̂ × Fⱼ) + Mⱼ] − Mw(s)` at `s = L/2`, the beam lying on +x: one upstream interface at `s = 0`, and `Mw(L/2) = wL²/8` for a uniform `w`.
     const atMid = (-L / 2) * start.fy + start.m - (W * L * L) / 8;
     expect(atMid).toBeCloseTo((W * L * L) / 24, 6);
   });
@@ -176,8 +168,7 @@ describe("poutre bi-encastrée sous charge répartie", () => {
 
 describe("ce que la passe déclare résolu", () => {
   it("une redondance entre poutres est une réponse, pas une inconnue", () => {
-    // Three redundancies, and nothing unknown: the flexibility chose among them, so what the
-    // reader is owed is the diagram and not a warning over it.
+    // Three redundancies, and nothing unknown: the flexibility chose among them, so what the reader is owed is the diagram and not a warning over it.
     const { solution, beamAt } = stand("join", "join");
     expect(solution.indeterminacy).toBe(3);
     for (const node of [START, END])

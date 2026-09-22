@@ -637,8 +637,8 @@ describe("loose belt sheds its last pulley → inert (user-decided)", () => {
 
   it("disconnects even the LAST active pulley (loose → inert segment)", () => {
     const belt = mkBelt(false);
-    // A full wrap-sign flip, not a threshold-boundary case, so any extent comfortably above this fixture's own ~600-unit span works — the detach ratio it scales barely matters here.
-    const newly = update_belt_disconnects(belt, positions, 1000);
+    // A full wrap-sign flip, not a threshold-boundary case, so the detach ratio barely matters here.
+    const newly = update_belt_disconnects(belt, positions);
     expect(belt.disconnected).toEqual([true, true]); // last pulley shed
     expect(newly).toBe(true);
   });
@@ -888,5 +888,51 @@ describe("BeltLength resizes pulleys in edition (radii as DOFs)", () => {
       );
     expect(radii.get("gA")!).toBe(40);
     expect(radii.get("gB")!).toBe(40);
+  });
+});
+
+describe("reattachment only onto the strand a pulley would join", () => {
+  // A closed loop round A and B, with C detached and sitting between them in belt order: it can only come back onto the strand that leaves A, never onto the one running back from B to A, however close that one passes.
+  // C is wrapped the other way round, as a crossed pulley: put back into the loop on the far strand it would then read a short, plausible wrap, which is what let the far strand take it back.
+  const A = P(0, 0);
+  const B = P(400, 0);
+  const strands = belt_pieces(
+    [
+      { pos: A, radius: 30, clockwise: false },
+      { pos: B, radius: 30, clockwise: false },
+    ],
+    true,
+  ).filter((p) => p.kind === "segment");
+  const own = strands.find((p) => p.kind === "segment" && p.gearIndexA === 0)!;
+  const other = strands.find((p) => p.kind === "segment" && p.gearIndexA === 1)!;
+  const mkBelt = (): Extract<Link, { type: "BeltLength" }> => ({
+    type: "BeltLength",
+    ddl: 1,
+    startKey: "",
+    endKey: "",
+    gearPosKeys: ["a", "c", "b"],
+    gearAngleKeys: ["a", "c", "b"],
+    radii: [30, 20, 30],
+    directions: [false, true, false],
+    length: 1000,
+    closed: true,
+    disconnected: [false, true, false],
+    wraps: [Math.PI, 0, Math.PI],
+    arrivals: [0, 0, 0],
+  });
+  const across = (strand: typeof own) => strand.from.lerp(strand.to, 0.5);
+
+  it("takes the pulley back when its own strand cuts it", () => {
+    const belt = mkBelt();
+    const positions = new Map([["a", A], ["b", B], ["c", across(own)]]);
+    update_belt_disconnects(belt, positions);
+    expect(belt.disconnected).toEqual([false, false, false]);
+  });
+
+  it("leaves it off when only the other strand of the loop cuts it", () => {
+    const belt = mkBelt();
+    const positions = new Map([["a", A], ["b", B], ["c", across(other)]]);
+    update_belt_disconnects(belt, positions);
+    expect(belt.disconnected).toEqual([false, true, false]);
   });
 });

@@ -78,6 +78,7 @@ function crank(motorised: boolean) {
     distributedDensityOn: () => ({ at0: new Point2(0, -W), slope: ZERO }),
     beamStiffness: () => ({ EA: 210e9 * 1e-3, EI: 210e9 * 8e-7 }),
     gearAngularAcceleration: () => 0,
+    externalTorqueOn: () => 0,
   };
 
   const system = build_statics_system(

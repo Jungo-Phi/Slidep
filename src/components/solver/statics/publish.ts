@@ -46,6 +46,7 @@ export function beam_cohesion_from_statics(
           s: length > 1e-9 ? torsor.s / length : 0,
           fx: -torsor.fx,
           fy: -torsor.fy,
+          m: -torsor.m,
         },
       ];
     });

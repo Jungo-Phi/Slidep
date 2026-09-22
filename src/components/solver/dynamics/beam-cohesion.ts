@@ -12,8 +12,9 @@ export interface BeamCohesionSpec {
   k0: string;
   /** Fused key of the beam's end. */
   k1: string;
-  /** Nodes pinned or sliding on this beam's span, and the (already-fused) key each sits at. */
-  attachedNodes: { nodeID: ID; nodeKey: string }[];
+  /** Nodes pinned or sliding on this beam's span, and the (already-fused) key each sits at.
+   * `slides` marks a rail joint the beam runs through, which passes no force along the beam. */
+  attachedNodes: { nodeID: ID; nodeKey: string; slides: boolean }[];
   /**
    * `${beamID}:mid` — the virtual rotational-inertia node `mass-model.ts` pins onto this beam's span with a fresh `FixedOnSegment` every dynamics substep (`BEAM_END_MASS_FRACTION`).
    * Named here so the statics pass can leave it out: it is a device for carrying `mL²/12` through a particle solver, not a node of the mechanism, and the statics pass takes that inertia from the continuum figure directly.
@@ -47,7 +48,7 @@ export function build_beam_cohesion_specs(
     const k0 = own.key1;
     const k1 = own.key2;
 
-    const attachedNodes: { nodeID: ID; nodeKey: string }[] = [];
+    const attachedNodes: BeamCohesionSpec["attachedNodes"] = [];
     for (const link of links)
       if (
         link !== own &&
@@ -56,7 +57,11 @@ export function build_beam_cohesion_specs(
         link.key2 === k1 &&
         link.owner !== undefined
       )
-        attachedNodes.push({ nodeID: link.owner, nodeKey: link.key3 });
+        attachedNodes.push({
+          nodeID: link.owner,
+          nodeKey: link.key3,
+          slides: link.type === "SlideOnSegment",
+        });
 
     specs.push({
       beamID: beam.id,

@@ -59,6 +59,7 @@ function solved(json: string, frames: number) {
     externalForceAt: (key) => loads.forces.get(key) ?? ZERO,
     distributedShareAt: (key) => loads.distributed.get(key) ?? ZERO,
     angularAccelerationOf: () => 0, // no gear in either case
+    externalTorqueOn: () => 0,
     masses: model.dynamicMasses,
     gears: system.gears,
     specs: model.beamCohesionSpecs,

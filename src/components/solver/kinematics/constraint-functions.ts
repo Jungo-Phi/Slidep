@@ -20,6 +20,7 @@ import {
   setPoint,
 } from "../nodes";
 import { LinkSlots } from "./link-slots";
+import { unwrapArrival } from "../experimental/belt-noslip-q";
 
 /**
  * The single writer of a gear radius, so its floor cannot be forgotten at one of the sites that move one.
@@ -506,7 +507,8 @@ export function applyAngleConstraint(
   const currentAngle = virtV1.angle_to(virtV2);
 
   const C = wrapPi(currentAngle - targetAngle * (couterClockwise ? -1 : 1));
-  if (Math.abs(C) < 0.0001) return 0;
+  // A numerical zero only: any wider band is backlash, a weld that rattles within it and snaps at its edge.
+  if (Math.abs(C) < 1e-9) return 0;
 
   // Projected with the real delta1/delta2: θ(virtV) and θ(delta) differ by a constant (0 or π) per segment, so ∂C/∂p is the same.
   return projectAngleC(nodes, s1, e1, s2, e2, delta1, delta2, C, stiffness);
@@ -1324,18 +1326,18 @@ export function applyBeltLengthConstraint(
   let ptEY = 0;
   let hasPtE = false;
 
-  /** Contact arc of via `v`: its length, or −1 when it has none. */
+  /**
+   * Contact arc of via `v`: its length, or −1 when it has none.
+   * The wrap is the live one, unwrapped against the belt's continuous reference: that reference is only advanced once a substep, so read as it stands it would stay frozen while the sweep moves the pulleys, and it is what carries the whole turns a raw wrap in [0, 2π) cannot.
+   */
   const arcOfVia = (v: number): number => {
-    const wrap =
-      wraps !== undefined
-        ? lenGear[v] >= 0
-          ? (wraps[lenGear[v]] ?? 0)
-          : 0
-        : undefined;
-    if (!belt_solve_arc(sc, v, n, closed, wrap)) {
+    if (!belt_solve_arc(sc, v, n, closed)) {
       lenArc[v] = 0;
       return -1;
     }
+    if (wraps !== undefined)
+      sc.arcWrap[v] =
+        lenGear[v] >= 0 ? Math.abs(unwrapArrival(sc.arcWrap[v], wraps[lenGear[v]])) : 0;
     lenArc[v] = 1;
     return sc.r[v] * sc.arcWrap[v];
   };

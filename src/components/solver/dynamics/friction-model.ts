@@ -163,7 +163,7 @@ function rotor_radius(
 }
 
 /**
- * The force and torque each frictional joint exerts this substep, from live positions and pre-predict velocities — call it every substep, like `resolve_load_forces` and `resolve_motor_torques`.
+ * The force and torque each frictional joint exerts this substep, from live positions and pre-predict velocities — call it every substep, like `resolve_load_forces`.
  *
  * Each coefficient is capped at `m_eff / dt` (`J_eff / dt` for a hinge), the value that brings its own relative velocity exactly to zero within the substep.
  * A coefficient above that cap is one an explicit integration would overshoot, growing each step instead of dying out, and nothing stops a user typing one.

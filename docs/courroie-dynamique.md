@@ -363,3 +363,29 @@ gravité, < travelled/100 pour le cas sous gravité).
 Attention à l'ordre inverse : la frontière hybride que demanderait
 [[poutre-corps-rigide-dynamique]] passe par les courroies, qui y restent point/angle. Mieux vaut
 qu'elles soient sûres avant de déplacer le sol autour d'elles.
+
+## La tension des brins tire aussi sur les centres — résolu (sept. 2026)
+
+**Cause.** `applyBeltSegmentNoSlip` n’écrivait que les angles des poulies. Son multiplicateur est
+pourtant la tension du brin, qui doit aussi tirer sur les deux centres (`∂h/∂c_a = −t̂`,
+`∂h/∂c_b = +t̂` : les termes d’arc compensent exactement la rotation de la tangente, vérifié par
+différences finies). Sans cette part, une poulie lourde suspendue dans la courroie reçoit le
+couple d’une différence de tensions, mais jamais sa traction : la courroie travaille sur le
+mécanisme. Mesuré sur Huygens : +44 J créés en 0,46 s par les seules réactions de
+`BeltSegmentNoSlip` ; Core XY montait à 660 J.
+
+**Correction.** En dynamique seulement (masses réelles), la loi de brin est projetée sur son
+gradient complet : angles et centres. Le cinématique reste « angles seuls », pour la raison
+mesurée plus haut. `BeltLoopClosure`, qui ne corrige que les angles, hors gradient, se battait
+alors avec les brins et faisait exploser Huygens sans moteur : elle est retirée de la dynamique.
+
+**Effet.** Écart d’énergie de Huygens : 45 J → 0,06 J sur le défilement ; Core XY ne s’emballe
+plus ; Hoist et Huygens referment leurs efforts intérieurs ; le test de déterminisme de Huygens
+entraîné passe.
+
+**Reste.** Huygens explose encore vers 0,6 s : le mécanisme amène une poulie suspendue au contact
+de la poulie motrice, collisions désactivées. Le brin croisé entre elles tombe à zéro, la
+géométrie de la courroie dégénère (repli « cercles qui se chevauchent » de `belt_solve_pair`) et
+la direction du brin tourne de 90° d’un coup. C’est un blocage physique que le modèle ne sait pas
+représenter.
+
