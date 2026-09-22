@@ -154,8 +154,8 @@ describe("probe_chain_mobility — valeurs connues d'avance", () => {
   });
 
   it("deux poutres redondantes entre les mêmes pivots : m = 1, h = 1", () => {
-    // Le décompte donne G = 0 et ne peut pas dire lequel des deux termes vaut quoi.
-    // C'est le cas d'école qui justifie la sonde.
+    // The count gives G = 0 and cannot say what either of its two terms is worth.
+    // This is the textbook case the probe exists for.
     expect(
       mobility([
         pivot("p1", P(0, 0), true, [id("b1"), id("b2")]),
@@ -171,7 +171,7 @@ describe("probe_chain_mobility — valeurs connues d'avance", () => {
   });
 
   it("une poutre portée par deux sliders d'un même rail translate : m = 1, h = 2", () => {
-    // La mobilité est bien 1 (elle coulisse), mais le modèle pose 5 lignes de contrainte pour un rang de 3 : SlideOnSegment ×2 + Distance suffisent, et les deux Angle qu'`add_rigidity_links` ajoute par slider verrouillent une orientation déjà imposée — la poutre portée est colinéaire au rail par construction, ses deux extrémités y glissant.
+    // Mobility really is 1 (it slides), but the model writes 5 constraint rows for a rank of 3: SlideOnSegment ×2 + Distance are enough, and the two Angle links `add_rigidity_links` adds per slider lock an orientation already imposed — the carried beam is collinear with its rail by construction, both of its ends sliding along it.
     expect(
       mobility([
         join("g1", P(0, 0), true, [id("rail")]),
@@ -185,8 +185,8 @@ describe("probe_chain_mobility — valeurs connues d'avance", () => {
   });
 
   it("le même mécanisme dessiné plus petit répond la même chose", () => {
-    // La sonde n'a pas d'amplitude plancher, et c'est ce test qui l'interdit : toute valeur absolue finit par dépasser le mécanisme qu'elle sonde, ce qui sort du régime linéaire sur lequel repose toute la projection.
-    // Un plancher d'un millimètre faisait répondre 3 à ce double pendule dessiné sur 2 mm — donc un mode et une redondance qui n'existent pas.
+    // The probe has no floor amplitude, and this test is what forbids one: any absolute value eventually outgrows the mechanism it probes, which leaves the linear regime the whole projection rests on.
+    // A one-millimetre floor made this double pendulum drawn 2 mm across answer 3 — a mode and a redundancy that do not exist.
     const pendulum = (k: number) => [
       pivot("p1", P(0, 0), true, [id("b1")]),
       pivot("p2", P(k, 0), false, [id("b1"), id("b2")]),
@@ -206,8 +206,8 @@ describe("probe_chain_mobility — valeurs connues d'avance", () => {
   });
 
   it("une pose que le modèle ne satisfait pas n'invente pas de mode", () => {
-    // Le quatre-barres, mais la manivelle et la bielle ne se rejoignent pas : la fusion pose le nœud partagé entre les deux, et aucune des deux longueurs cuites n'y tient.
-    // Le solveur referme donc la boucle avant même qu'on ait poussé, et ce déplacement-là est le même quelle que soit la direction sondée — une constante, que la sonde compte comme une direction de plus si on ne la lui retire pas.
+    // The four-bar, except that crank and rod do not meet: fusing sets the shared node between the two, and neither baked length holds there.
+    // The solver therefore closes the loop before anything is pushed, and that displacement is the same whichever direction is probed — a constant, which the probe counts as one more direction unless it is taken out.
     const [result] = probe_mobility(
       build_analysis_model(
         mechanism([
@@ -221,7 +221,7 @@ describe("probe_chain_mobility — valeurs connues d'avance", () => {
         ]),
       ),
     );
-    // Le garde-fou a bien eu de quoi mordre : la pose est loin de ses contraintes.
+    // The guard had something to bite on: the pose sits far from its own constraints.
     expect(result.restDrift).toBeGreaterThan(1);
     expect([result.mobility, result.hyperstaticity]).toEqual([1, 0]);
   });
@@ -258,15 +258,15 @@ describe("probe_chain_mobility — mécanismes de référence", () => {
   it("Vilbrequin double slider : trois chaînes mesurées séparément", () => {
     const results = probe_mobility(fixture(doubleSlider));
     expect(results).toHaveLength(3);
-    // La masse flottante n'est tenue par rien : ses deux DDL sont entiers.
+    // The floating mass is held by nothing: both of its degrees of freedom are whole.
     expect(results[2].mobility).toBe(2);
     expect(results[2].hyperstaticity).toBe(0);
   });
 
   it("une poulie que la courroie a lâchée rend son degré de liberté", () => {
-    // La déconnexion est un état de simulation : elle vit sur le lien, semée depuis un snapshot, et `compile_simulation_model` reconstruit toujours la courroie entière.
-    // L'analyse lit pourtant la pose affichée, où la courroie passe droit devant la poulie.
-    // Sans en tenir compte, la loi de brin de cette poulie masque la liberté que la courroie vient de rendre — mesuré 1 au lieu de 2 sur ce mécanisme.
+    // Disconnection is simulation state: it lives on the link, seeded from a snapshot, and `compile_simulation_model` always rebuilds the whole belt.
+    // The analysis reads the pose on screen, though, where the belt runs straight past the pulley.
+    // Ignored, that pulley's strand law hides the freedom the belt has just given back — measured 1 instead of 2 on this mechanism.
     const { mechanism: mech } = load_mechanism(JSON.parse(decon));
     const belt = mech.mechanicalElements.find((el) => el.type === "belt")!;
     const attached = (belt as { attachedGearsIDs: unknown[] }).attachedGearsIDs;
@@ -278,7 +278,7 @@ describe("probe_chain_mobility — mécanismes de référence", () => {
         el.id === belt.id ? { ...el, disconnectedGearIndices: [1] } : el,
       ),
     };
-    // Vérité indépendante : la même pose, la poulie retirée de la courroie pour de bon.
+    // An independent truth: the same pose, with the pulley taken off the belt for good.
     const removed = {
       ...mech,
       mechanicalElements: mech.mechanicalElements.map((el) =>
@@ -299,13 +299,13 @@ describe("probe_chain_mobility — mécanismes de référence", () => {
       ),
     );
     expect(strands(withDrop)).toBe(strands(removed));
-    // Et c'est bien un brin de moins qu'avec la courroie entière.
+    // And that is one strand fewer than the whole belt carries.
     expect(strands(withDrop)).toBe(strands(mech) - 1);
   });
 
   it("le joint relit son s0 sur la boucle amputée, pas sur l'entière", () => {
-    // `rewire_belts` mesure le `s0` du joint sur la boucle privée de la poulie lâchée ; le lien qui relit ce `s0` doit parcourir la même.
-    // Sinon il pose le joint ailleurs — 316 mm ailleurs, mesuré sur `Déconnexion courroie` à 2,5 s —, la pose de repos du modèle viole sa propre contrainte, et la sonde comptait cet écart comme un troisième mode.
+    // `rewire_belts` measures the junction's `s0` on the loop the dropped pulley has left; the link that reads that `s0` back must walk the same one.
+    // Otherwise it sets the junction elsewhere — 316 mm elsewhere, measured on `Déconnexion courroie` at 2.5 s — the model's rest pose violates its own constraint, and the probe counted that gap as a third mode.
     const { mechanism: mech } = load_mechanism(JSON.parse(decon));
     const belt = mech.mechanicalElements.find((el) => el.type === "belt")!;
     const model = build_analysis_model({
@@ -326,15 +326,16 @@ describe("probe_chain_mobility — mécanismes de référence", () => {
   });
 
   it("m et h de référence", () => {
-    // Valeurs mesurées, stables de tolérance 0.5 à 0.9, à amplitude divisée par dix, à 200 balayages et en sortie sur le mouvement.
-    // Core XY vaut bien ses deux axes, Jansen son unique DDL — le panneau affichait 6 et −1.
+    // Measured values, stable from tolerance 0.5 to 0.9, at a tenth of the amplitude, at 200 sweeps and when exiting on motion.
+    // Core XY is worth its two axes, Jansen its single degree of freedom.
+    // Jansen's two redundancies are its two welds: removing either one frees two degrees of mobility and drops one of them.
     const mh = (json: string) =>
       probe_mobility(fixture(json)).map((r) => [r.mobility, r.hyperstaticity]);
     expect(mh(vilbrequin)).toEqual([[1, 0]]);
     expect(mh(slider)).toEqual([[1, 0]]);
-    expect(mh(jansen)).toEqual([[1, 1]]);
-    // Les entraînements à boucle fermée sont sains : leur unique hyperstatisme était la loi de brin en trop du modèle, désormais élaguée.
-    // Poulie bloqueuse garde le sien, qui lui est réel.
+    expect(mh(jansen)).toEqual([[1, 2]]);
+    // The closed-loop drives are sound: their one redundancy was the model's surplus strand law, pruned since.
+    // Poulie bloqueuse keeps its own, which is real.
     expect(mh(decon)).toEqual([[1, 0]]);
     expect(mh(poulie)).toEqual([[1, 1]]);
     expect(mh(huygens)).toEqual([[6, 0]]);
@@ -347,8 +348,8 @@ describe("probe_chain_mobility — mécanismes de référence", () => {
   });
 
   it("la loi de brin élaguée ne retenait effectivement rien", () => {
-    // Le garde-fou de l'élagage : si la ligne retirée portait une vraie contrainte, la remettre ferait BAISSER la mobilité.
-    // Elle doit être rigoureusement sans effet — c'est ce qui autorise à la retrancher sans la mesurer à chaque fois.
+    // The pruning guard: if the row taken out carried a real constraint, putting it back would LOWER the mobility.
+    // It must be strictly without effect — which is what allows dropping it without measuring it every time.
     for (const json of [decon, poulie, huygens]) {
       const model = fixture(json);
       const surplus = model.pruned
@@ -376,7 +377,7 @@ describe("probe_chain_mobility — mécanismes de référence", () => {
   });
 
   it("m ≥ G sur tous les mécanismes de référence", () => {
-    // Inégalité mathématique (rang ≤ Σddl) : la violer signifie un mode manqué.
+    // A mathematical inequality (rank ≤ Σdof): violating it means a mode was missed.
     for (const json of [
       vilbrequin,
       slider,

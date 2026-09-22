@@ -58,11 +58,15 @@ export type LinkReaction =
  * See `Drive`, which settles that torque inside the solve. */
 export interface MotorSample {
   pivotID: ID;
-  /** W — τ·ω of the joint it drives, signed: negative when the load back-drives the motor rather than the other way round. */
+  /** W — τ·ω of the joint it drives, signed: negative when the motor holds back a joint the load is driving, whichever way that joint turns. */
   watts: number;
   /** N·m, counter-clockwise positive — the solver's own sense, not the data model's clockwise one, like every other torque a snapshot carries (`LinkReaction`).
    * Already clamped to the motor's `torque` limit, so a motor that has seized reads exactly its ceiling. */
   nm: number;
+  /** rad/s, counter-clockwise positive — the joint's speed relative to what the motor turns against, the one its command is set in. */
+  speed: number;
+  /** The motor is giving its whole `torque` limit: the speed is no longer its command but whatever the load leaves it. */
+  saturated: boolean;
 }
 
 /**
@@ -198,6 +202,11 @@ export interface SimulationSnapshot {
   angles: Float64Array;
   /** Constraints left unsatisfied at this frame (empty/undefined when all met). */
   unsatisfied?: ConstraintResidual[];
+  /**
+   * The motors the mechanism is not following at this frame, by pivot ID; undefined when there are none.
+   * The only input `dead_points` reads: a motor's constraint showing up in `unsatisfied` is a solve that has not converged, not a stall.
+   */
+  stalledMotors?: ID[];
 }
 
 export interface KinematicSnapshot extends SimulationSnapshot {

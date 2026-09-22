@@ -11,6 +11,7 @@ import type { BeamElement } from "../../../types/element";
 import { load_mechanism } from "../../../utils/load-mechanism";
 import {
   RECORD_DT,
+  apply_dynamic_snapshot_to_mechanism,
   apply_snapshot_to_mechanism,
   compile_simulation_model,
   dynamic_snapshot_at,
@@ -20,6 +21,7 @@ import {
   step_simulation,
 } from "../dynamics/simulation-engine";
 import { compute_cohesion_field } from "../recording/cohesion-field";
+import { compute_force_balance } from "../analysis/force-balance";
 import { DynamicSnapshot, KinematicSnapshot, LinkReaction } from "../../../types/runtime-state";
 import {
   make_snapshot_layout,
@@ -287,5 +289,34 @@ describe("efforts intérieurs à travers l'interpolation dynamique", () => {
     // The impact must have been crossed, or the check proves nothing.
     expect(peak).toBeGreaterThan(10);
     expect(worst).toBeLessThan(1e-3 * peak);
+  }, 30_000);
+
+  it("entre deux images, le bilan du corps libre se referme encore", () => {
+    // Same impact, read on the whole mechanism this time: `ΣF` is rebuilt from the blended torsors, so the `m·a` it faces has to be blended along with them.
+    // Judged against the largest action of the instant, never against `ΣF` itself — that total is a small difference between big terms, and on a mechanism at rest it is zero while every term of it is not.
+    const mechanism = loadFixture(testSlider);
+    const model = compile_simulation_model(mechanism, true);
+    const gravity = new Point2(0, -9.81);
+    const snaps: DynamicSnapshot[] = [];
+    let snap: DynamicSnapshot | null = null;
+    for (let i = 0; i < 60; i++) {
+      snap = step_dynamic_simulation(model, i * RECORD_DT, snap, RECORD_DT, gravity);
+      snaps.push(snap);
+    }
+
+    let worst = 0;
+    let peak = 0;
+    for (let i = 0; i < snaps.length - 1; i++) {
+      const mid = dynamic_snapshot_at(snaps, (snaps[i].t + snaps[i + 1].t) / 2)!;
+      const balance = compute_force_balance(apply_dynamic_snapshot_to_mechanism(mechanism, mid), mid, gravity)!;
+      let scale = Math.hypot(balance.inertia.x, balance.inertia.y);
+      for (const action of balance.actions)
+        scale = Math.max(scale, Math.hypot(action.force.x, action.force.y));
+      peak = Math.max(peak, scale);
+      worst = Math.max(worst, Math.hypot(balance.gap.x, balance.gap.y) / scale);
+    }
+    // The impact must have been crossed, or the check proves nothing.
+    expect(peak).toBeGreaterThan(10);
+    expect(worst).toBeLessThan(1e-2);
   }, 30_000);
 });

@@ -9,8 +9,8 @@ import {
   belt_wraps,
 } from "../../../utils/belt-path";
 import {
+  BalanceSample,
   BeamCohesion,
-  ConstraintResidual,
   DynamicSnapshot,
   EnergySample,
   KinematicSnapshot,
@@ -46,7 +46,13 @@ import {
   compile_springs_dampers,
   resolve_spring_damper_forces,
 } from "./spring-damper-model";
-import { CompiledMotor, compile_motors, drives_of, motor_samples } from "./motor-model";
+import {
+  CompiledMotor,
+  compile_motors,
+  drives_of,
+  motor_samples,
+  stalled_motors,
+} from "./motor-model";
 import {
   CompiledFriction,
   compile_frictions,
@@ -222,7 +228,7 @@ export type SimulationModel = {
   fill: SnapshotFill;
   /**
    * Radius of each gear, by id.
-   * Not a solver input — simulation solves no radius — but the lever arm that turns an angular shortfall into the arc it failed to sweep, so a diagnostic can be stated in metres like every other one.
+   * Not a solver input — simulation solves no radius — but the lever arm `build_analysis_model` states an angle in metres with.
    */
   gearRadii: Map<ID, number>;
   /** Real masses, read only by `step_dynamic_simulation` — see `DynamicMassModel`. */
@@ -1182,44 +1188,29 @@ export function step_simulation(
   });
 
   // ── Motor-block detection ──
-  // The motor's own constraint residual stays tiny when blocked (target = current + ω·dt, no backlog), so a generic residual threshold misses it.
-  // Instead compare what the driver actually advanced this frame against its commanded increment: well below it ⇒ blocked.
-  const motorBlocks: ConstraintResidual[] = [];
+  // What the driver actually advanced this frame against its commanded increment, and nothing else: the motor's own constraint residual stays tiny when blocked (target = current + ω·dt, no backlog), and a large one only says the sweep ran out before converging.
+  const stalledMotors: ID[] = [];
   for (const m of motorChecks) {
     let achieved: number | undefined;
-    // How far the driver reaches, so its shortfall can be reported as the arc it failed to sweep rather than as a bare angle — the same scale every other residual is on.
-    let lever = 1;
     if (m.type === "MotorBeam") {
       const p = result.positions.get(m.pivotKey!);
       const d = result.positions.get(m.drivenKey!);
-      if (p && d) {
-        achieved = wrap_angle(d.sub(p).angle() - m.cur);
-        lever = d.distance_to(p);
-      }
+      if (p && d) achieved = wrap_angle(d.sub(p).angle() - m.cur);
     } else {
       const a = result.angles.get(m.angleKey!);
-      if (a !== undefined) {
-        achieved = wrap_angle(a - m.cur);
-        lever = model.gearRadii.get(m.angleKey as ID) ?? 1;
-      }
+      if (a !== undefined) achieved = wrap_angle(a - m.cur);
     }
     if (achieved === undefined) continue;
-    if (Math.abs(achieved) < Math.abs(m.expected) * MOTOR_BLOCK_FRACTION)
-      motorBlocks.push({
-        owner: m.owner,
-        type: m.type,
-        residual: Math.abs(m.expected - achieved) * lever,
-      });
+    if (Math.abs(achieved) < Math.abs(m.expected) * MOTOR_BLOCK_FRACTION) stalledMotors.push(m.owner);
   }
-
-  const unsatisfied = [...motorBlocks, ...(result.unsatisfied ?? [])];
 
   return {
     t,
     layout,
     positions: outPositions,
     angles: outAngles,
-    unsatisfied: unsatisfied.length > 0 ? unsatisfied : undefined,
+    unsatisfied: result.unsatisfied?.length ? result.unsatisfied : undefined,
+    stalledMotors: stalledMotors.length > 0 ? stalledMotors : undefined,
   };
 }
 
@@ -1547,6 +1538,8 @@ export function step_dynamic_simulation(
 
   // `substeps` is always >= 1, so the loop above ran at least once.
   const finalResult = result!;
+  // The re-projection step (`dt = 0`) moves nothing, so every turning motor would read as standing still.
+  const stalledMotors = dt > 0 ? stalled_motors(model.compiledMotors, motor, prev?.motor, dt) : [];
 
   // ── Belt topology changed this frame → rebuild its no-slip links, AFTER every substep has
   // run — same reasoning as `step_simulation`: baking against the warm start instead would freeze in whatever the frame's own solve was about to correct.
@@ -1695,6 +1688,7 @@ export function step_dynamic_simulation(
     angleVelocities: outAngleVelocities,
     angleAccelerations: outAngleAccelerations,
     unsatisfied: finalResult.unsatisfied,
+    stalledMotors: stalledMotors.length > 0 ? stalledMotors : undefined,
     reactions,
     motor,
     energy,
@@ -1810,6 +1804,7 @@ export function snapshot_at(
     angles,
     // Diagnostics belong to a state the solver actually produced.
     unsatisfied: a.unsatisfied,
+    stalledMotors: a.stalledMotors,
   };
 }
 
@@ -1850,15 +1845,30 @@ export function dynamic_snapshot_at(
     angleAccelerations: lerp(a.angleAccelerations, b.angleAccelerations),
     // Diagnostics belong to a state the solver actually produced.
     unsatisfied: a.unsatisfied,
+    stalledMotors: a.stalledMotors,
     reactions: a.reactions,
     motor: a.motor,
     energy: a.energy,
-    balance: a.balance,
     // Except the torsors, which the field along each beam marches from against the accelerations above: held while those are blended, the two describe different instants, and on the frame after an impact the diagram stops closing at a free end.
     // The field is linear in both, so blending them alike keeps it closed wherever the two recorded frames were.
     beamCohesion: lerp_cohesion(a.beamCohesion, b.beamCohesion, u),
+    // And the free body's balance, for the same reason read the other way round: its `m·a` faces the support reactions the torsors above carry, so holding one while the other is blended opens a gap as wide as the step `m·a` takes between two frames.
+    balance: lerp_balance(a.balance, b.balance, u),
     beltStrands: a.beltStrands,
   };
+}
+
+/** Blend two frames' free-body balance at `u`, every term of it: each is a sum over the same bodies at both ends, so blending them apart would describe no instant at all. */
+function lerp_balance(
+  a: BalanceSample | undefined,
+  b: BalanceSample | undefined,
+  u: number,
+): BalanceSample | undefined {
+  if (!a || !b) return a;
+  const out = {} as BalanceSample;
+  for (const key of Object.keys(a) as (keyof BalanceSample)[])
+    out[key] = a[key] + (b[key] - a[key]) * u;
+  return out;
 }
 
 /** Blend two frames' beam torsors at `u`, or hold the first where the two do not describe the same beams and attached nodes. */

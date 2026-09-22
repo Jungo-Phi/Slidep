@@ -108,6 +108,7 @@ export function drives_of(motors: CompiledMotor[]): Drive[] {
           omega: motor.omega,
           torqueLimit: motor.torqueLimit,
           torque: 0,
+          saturated: false,
         }
       : {
           kind: "angle",
@@ -117,12 +118,35 @@ export function drives_of(motors: CompiledMotor[]): Drive[] {
           omega: motor.omega,
           torqueLimit: motor.torqueLimit,
           torque: 0,
+          saturated: false,
         },
   );
 }
 
+/** The joint's speed relative to what the motor turns against, rad/s counter-clockwise, or `undefined` where it cannot be read. */
+function relative_speed(
+  motor: CompiledMotor,
+  positions: Map<string, Point2>,
+  velocities: Map<string, Point2>,
+  angleVelocities: Map<string, number>,
+): number | undefined {
+  let own: number | undefined;
+  let against = 0;
+  if (motor.kind === "beam") {
+    own = arm_angular_velocity(motor.pivotKey, motor.drivenKey, positions, velocities);
+    if (motor.anchorKey)
+      against = arm_angular_velocity(motor.pivotKey, motor.anchorKey, positions, velocities) ?? 0;
+  } else {
+    own = angleVelocities.get(motor.angleKey);
+    if (motor.anchorPivotKey && motor.anchorKey)
+      against =
+        arm_angular_velocity(motor.anchorPivotKey, motor.anchorKey, positions, velocities) ?? 0;
+  }
+  return own === undefined ? undefined : own - against;
+}
+
 /**
- * What each motor did over the substep just solved: the torque its drive settled on, and the power that torque delivers at the speed the joint actually reached.
+ * What each motor did over the substep just solved: the torque its drive settled on, the speed the joint actually reached, and the power the one carries at the other.
  * `drives` must be `drives_of(motors)`'s output, in the same order.
  */
 export function motor_samples(
@@ -133,19 +157,67 @@ export function motor_samples(
   angleVelocities: Map<string, number>,
 ): MotorSample[] {
   return motors.map((motor, i) => {
-    const nm = drives[i].torque;
-    let own: number | undefined;
-    let against = 0;
-    if (motor.kind === "beam") {
-      own = arm_angular_velocity(motor.pivotKey, motor.drivenKey, positions, velocities);
-      if (motor.anchorKey)
-        against = arm_angular_velocity(motor.pivotKey, motor.anchorKey, positions, velocities) ?? 0;
-    } else {
-      own = angleVelocities.get(motor.angleKey);
-      if (motor.anchorPivotKey && motor.anchorKey)
-        against =
-          arm_angular_velocity(motor.anchorPivotKey, motor.anchorKey, positions, velocities) ?? 0;
-    }
-    return { pivotID: motor.pivotID, nm, watts: own === undefined ? 0 : nm * (own - against) };
+    const { torque: nm, saturated } = drives[i];
+    const speed = relative_speed(motor, positions, velocities, angleVelocities) ?? 0;
+    return { pivotID: motor.pivotID, nm, watts: nm * speed, speed, saturated };
   });
+}
+
+/**
+ * Below this fraction of its commanded speed, in the commanded sense, a motor that is not gaining speed is stalled: standing still, crawling, or turned backwards by its load.
+ * Near zero rather than the kinematic mode's half: a motor at its torque limit against a steady load can settle well below its command and still be driving it.
+ */
+const STALL_SPEED_FRACTION = 0.05;
+
+/**
+ * Above this acceleration, rad/s², in the commanded sense, a slow motor is still starting rather than stalled.
+ * Far above the solver's own noise at a standstill (measured under 1e-10), far below any start a reader could see.
+ */
+const GAIN_ACCELERATION_FLOOR = 1e-6;
+
+/**
+ * Above this speed, rad/s, a motor commanded to stand still is slipping — about a turn in an hour and three quarters.
+ * Absolute because a zero command has no speed of its own to scale against.
+ */
+const HOLD_SPEED_FLOOR = 1e-3;
+
+export type StallTuning = {
+  stallSpeedFraction?: number;
+  gainAccelerationFloor?: number;
+  holdSpeedFloor?: number;
+};
+
+/**
+ * The motors the mechanism is not following at the end of a frame, by pivot ID.
+ * A turning motor stalls when its joint is near standstill or turning backwards and not gaining speed the commanded way, whatever holds it there; one commanded to stand still stalls when its load makes it slip past its torque limit.
+ * Overspeed is not a stall: a load driving the joint faster than commanded still turns it the commanded way.
+ * `samples` must be `motor_samples(motors, …)`'s output, in the same order; `previous` is the last frame's, absent at a standing start.
+ */
+export function stalled_motors(
+  motors: CompiledMotor[],
+  samples: MotorSample[],
+  previous: MotorSample[] | undefined,
+  dt: number,
+  tuning: StallTuning = {},
+): ID[] {
+  const {
+    stallSpeedFraction = STALL_SPEED_FRACTION,
+    gainAccelerationFloor = GAIN_ACCELERATION_FLOOR,
+    holdSpeedFloor = HOLD_SPEED_FLOOR,
+  } = tuning;
+  const stalled: ID[] = [];
+  motors.forEach((motor, i) => {
+    const { speed, saturated } = samples[i];
+    if (motor.omega === 0) {
+      if (saturated && Math.abs(speed) > holdSpeedFloor) stalled.push(motor.pivotID);
+      return;
+    }
+    const sense = Math.sign(motor.omega);
+    const along = speed * sense;
+    if (along >= stallSpeedFraction * Math.abs(motor.omega)) return;
+    const before = (previous?.find((p) => p.pivotID === motor.pivotID)?.speed ?? 0) * sense;
+    const gaining = along > 0 && (along - before) / dt > gainAccelerationFloor;
+    if (!gaining) stalled.push(motor.pivotID);
+  });
+  return stalled;
 }

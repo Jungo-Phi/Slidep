@@ -1601,6 +1601,12 @@ export const STRINGS = {
     de: "Drehmoment",
     es: "Par",
   },
+  motor_torque_saturated_hint: {
+    fr: "Couple — maximum atteint : le moteur donne tout son couple, sa vitesse dépend désormais de la charge.",
+    en: "Torque — limit reached: the motor gives all it has, and its speed now depends on the load.",
+    de: "Drehmoment — Grenze erreicht: der Motor gibt sein ganzes Moment, seine Drehzahl hängt nun von der Last ab.",
+    es: "Par — límite alcanzado: el motor da todo su par y su velocidad depende ahora de la carga.",
+  },
   motor_speed_label: {
     fr: "Vitesse",
     en: "Speed",
@@ -2413,12 +2419,6 @@ export const STRINGS = {
     de: "Richtwerte: Der Kraftfluss läuft über eine Verbindung, die diese Berechnung nicht modelliert — Riemen, Zahneingriff oder Kontakt",
     es: "valores indicativos: el reparto de esfuerzos pasa por una unión que este cálculo no modela: una correa, un engranaje o un contacto",
   },
-  cohesion_residual: {
-    fr: "résidu :",
-    en: "residual:",
-    de: "Residuum:",
-    es: "residuo:",
-  },
   force_balance: {
     fr: "Bilan des forces",
     en: "Force balance",
@@ -2480,11 +2480,11 @@ export const STRINGS = {
     de: "ΣM = J·α",
     es: "ΣM = J·α",
   },
-  balance_gap: {
-    fr: "écart",
-    en: "gap",
-    de: "Abweichung",
-    es: "desviío",
+  balance_gap_meaning: {
+    fr: "Imprécision numérique de la simulation",
+    en: "Numerical imprecision of the simulation",
+    de: "Numerische Ungenauigkeit der Simulation",
+    es: "Imprecisión numérica de la simulación",
   },
   balance_reference_current: {
     fr: "Repère : {value}",
@@ -2527,12 +2527,6 @@ export const STRINGS = {
     en: "Support reactions",
     de: "Auflagerreaktionen",
     es: "Reacciones en los apoyos",
-  },
-  cohesion_residual_heading: {
-    fr: "Résidu de bouclage",
-    en: "Loop residual",
-    de: "Residuum der Schleife",
-    es: "Residuo de cierre",
   },
   measures_select_element: {
     fr: "Sélectionnez un élément pour voir ses grandeurs",

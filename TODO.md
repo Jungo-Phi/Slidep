@@ -10,11 +10,10 @@
 
 **Priorités sur le plan général**
 
-- 🚨 Régler bugs de simulation
-- 🔨 Supprimer le "Résidu de bouclage" (En améliorant la simulation)
 - 🚨 Régler bugs de dessin
 - 🔨 Régler problèmes DDL
 - 🔨 Clean les graphiques
+- 🚨 Supprimer les pics de couple dans "Jansen"
 - 🤔 Clarifier le grab en dynamique (grab -> force ?)
 - 🤔 Clarifier "qu'est-ce qui est simulé ?" pour **dt**. On affiche des positions interpolées, mais pas les forces, les overlays, ni les valeurs dans le panneau latéral.
 - 🔨 Améliorer les performances en édition
@@ -39,7 +38,6 @@
 ---
 
 - 🚨 Un ctrl+y de remplacement d'élément n'a pas reset la simulation, wtf !?
-- 🚨 Le moteur se bloque avec "Jansen" (et le couple n'y change rien) wtf !?
 - 🚨 Hover des loads sous les edges, wtf !?
 - 🚨 Un snap sur la grille ne se fait pas toujours bien aux valeurs rondes, wtf !?
 
@@ -68,6 +66,7 @@
 
 **Dessin**
 - 🚨 Le hover de la règle sur les joins n'est pas bon. Et hover de règle devrait épaissir les traits
+- 🔨 En dynamique, ne pas mettre le curseur "grab" sur un élément ancré
 - 🔨 Le hover des éléments depuis le panneau latéral ne devrait pas faire apparaitre les contraintes
 - 🔨 Au hover des efforts internes, affichers des charges dans la poutre (à la place du point couleur contrainte)
 - 🔨 Re-positionner le texte des moments (Régler les moments qui se supperposent)

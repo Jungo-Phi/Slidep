@@ -1064,7 +1064,7 @@ export function useSimulationPlayback({
 
   /** The motors standing blocked at the cursor, for what React displays.
    * What the canvas draws does NOT come from here: it is published to `liveFrameRef` every frame, whereas this follows the mirror.
-   * Generic over the mode: `unsatisfied` is a base `SimulationSnapshot` field, so this needs no concrete subtype — dynamic mode simply never files a motor there, since a torque-driven motor has no commanded advance to fall short of. */
+   * Generic over the mode: `stalledMotors` is a base `SimulationSnapshot` field, which each engine fills by its own criterion. */
   const blockedMotors: ReadonlySet<ID> =
     is_simulating(appMode) && runtimeState.simulationSnapshots.length > 0
       ? motors_blocked_at(

@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Box, IconButton, Tooltip, Typography, alpha } from "@mui/material";
 import { Gif } from "@mui/icons-material";
 import { AppMode, is_simulating } from "../../types";
-import { KinematicSnapshot, RuntimeState } from "../../types/runtime-state";
+import { RuntimeState } from "../../types/runtime-state";
 import { format_sim_time } from "../../utils";
 import { t } from "../../i18n";
 import { at_recording_end } from "../solver/dynamics/simulation-engine";
@@ -78,8 +78,7 @@ export const SimulationTimeline: React.FC<SimulationTimelineProps> = ({
    * It can therefore be redone whenever the recording grows, which is what puts the marks on the rail while it is still being written.
    */
   const events = React.useMemo((): TimelineEvent[] => {
-    // Belt contact is tracked by both engines (see `SnapshotLayout`), so this reads whichever mode is active.
-    // Dead points stay kinematic-only below: a dead point is a mobility singularity under an imposed-position motor, which dynamic mode has no equivalent of.
+    // Belt contact and stalled motors are both filed by either engine, so this reads whichever mode is active.
     const beltMarks = belt_events(runtimeState.simulationSnapshots).map(
       (event) => ({
         t: event.t,
@@ -87,12 +86,9 @@ export const SimulationTimeline: React.FC<SimulationTimelineProps> = ({
         label: t(event.kind === "detach" ? "belt_detach" : "belt_reattach"),
       }),
     );
-    if (appMode !== "kinematic") return beltMarks;
-    // Narrowed by the check above: only a kinematic run fills `simulationSnapshots` while that mode is active.
-    const snapshots = runtimeState.simulationSnapshots as KinematicSnapshot[];
     return [
       ...beltMarks,
-      ...dead_points(snapshots).map((point) => ({
+      ...dead_points(runtimeState.simulationSnapshots).map((point) => ({
         t: point.t,
         kind: "dead-point" as const,
         label: t(
@@ -100,7 +96,7 @@ export const SimulationTimeline: React.FC<SimulationTimelineProps> = ({
         ),
       })),
     ];
-  }, [appMode, runtimeState.simulationSnapshots]);
+  }, [runtimeState.simulationSnapshots]);
 
   /**
    * Those marks the rail can actually place, merged when they would overlap.

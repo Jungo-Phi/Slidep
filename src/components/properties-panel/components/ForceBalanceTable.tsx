@@ -216,8 +216,10 @@ const TermsRow: React.FC<TermsRowProps> = ({
 };
 
 /**
- * A law, written as the two members it equates and the figures they read — `ΣF (1.2 ; 0.0) = m·a (1.2 ; 0.0) N`.
+ * A law, written as the two members it equates and the figures they read — `ΣF (1.2 ; 0.0) = m·a (1.1 ; 0.0) + écart (0.1 ; 0.0) N`.
  * The law is the line rather than a heading above it: with each member named where it is read, the line states the law and verifies it at once, and the heading that would only repeat it is the room the itemisation needs below.
+ * The gap is a term of that line and not a note beside it: it is what the right-hand member is missing for the arithmetic on screen to be exact, and set apart it reads as a verdict on the law rather than as the figure that completes it.
+ * Unnamed, and absent altogether where it would print as zero: the tooltip says what it is for the reader who wonders, and a term that reads "+ 0.0" is one the law does not have.
  * The unit is named here and nowhere else: a law is one quantity compared with itself, so repeating the symbol on each member says the same thing twice.
  */
 const LawRow: React.FC<{
@@ -239,21 +241,28 @@ const LawRow: React.FC<{
     {left}
     <Aside>=</Aside>
     {right}
+    {!closed && (
+      <>
+        <Aside>+</Aside>
+        <Tooltip title={t("balance_gap_meaning")}>
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              minHeight: ROW_HEIGHT,
+              borderRadius: 1,
+              // Same as a member's own reading: nothing here answers a click, only the hover that names it.
+              cursor: "default",
+              color: "error.main",
+              "&:hover": { backgroundColor: "action.hover" },
+            }}
+          >
+            {gap}
+          </Box>
+        </Tooltip>
+      </>
+    )}
     <Aside>{unit.symbol}</Aside>
-    <Box sx={{ flex: 1 }} />
-    <Box
-      sx={{
-        display: "flex",
-        alignItems: "center",
-        gap: 0.25,
-        color: closed ? "text.disabled" : "error.main",
-      }}
-    >
-      <Typography variant="caption" lineHeight={1.2} color="inherit">
-        {t("balance_gap")}
-      </Typography>
-      {gap}
-    </Box>
   </Box>
 );
 
@@ -279,7 +288,7 @@ interface ForceBalanceTableProps {
   onReferenceHoverChange: (hovered: boolean) => void;
 }
 
-/** Below this, a gap reads as the rounding of the figures shown rather than as a balance that fails to close. */
+/** Below this, a gap reads as the rounding of the figures shown rather than as a balance that fails to close, and the law is written without it. */
 const CLOSED_GAP = 0.05;
 
 const ForceBalanceTable: React.FC<ForceBalanceTableProps> = ({

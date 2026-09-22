@@ -50,11 +50,7 @@ import {
   ProbeSeries,
 } from "../../solver/recording/probe-series";
 import { dynamic_snapshot_at } from "../../solver/dynamics/simulation-engine";
-import {
-  CohesionField,
-  compute_cohesion_field,
-  shear_admissible_stress,
-} from "../../solver/recording/cohesion-field";
+import { shear_admissible_stress } from "../../solver/recording/cohesion-field";
 import { beam_strength } from "../../../utils/section-properties";
 import {
   metric_shows_zero,
@@ -62,7 +58,7 @@ import {
   quantity_kind_for_metric,
 } from "../../solver/recording/negligibility-pool";
 import { GRAVITY } from "../../../constants/physics-specs";
-import type { BeamElement, LoadElement } from "../../../types/element";
+import type { LoadElement } from "../../../types/element";
 import {
   PROBE_METRIC_LABEL_KEYS,
   PROBE_METRIC_ORDER,
@@ -113,16 +109,8 @@ import { ddl_status } from "../ddl-status";
 import { AnimatedMode, useModeAnimation } from "../useModeAnimation";
 import {
   ANGULAR_VELOCITY,
-  FORCE,
-  MOMENT,
   display_unit,
-  format_quantity,
 } from "../../../utils/quantity-format";
-
-/** How the loop-residual list is ordered: a force magnitude and a moment added together, units and all.
- * Only ever a rank between beams of one mechanism, never a figure shown. */
-const residual_rank = (r: CohesionField["loopResidual"]): number =>
-  Math.hypot(r.fx, r.fy) + Math.abs(r.m);
 
 /** The canvas hover a load's own arrow answers to — what a cursor resting on it would set, so pointing at its line in the balance thickens the very same stroke. */
 function load_hovered_part(
@@ -1040,44 +1028,6 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
     [analysedMechanism.mechanicalElements],
   );
 
-  // Every beam's own loop residual at the instant on screen, worst first — how far its marched field lands from the torsor the statics pass read independently at its far end (`CohesionField.loopResidual`).
-  // Mechanism-wide rather than for the selected beam alone: what it is read for is finding WHICH beam the physics is off on.
-  const cohesionResiduals = React.useMemo(() => {
-    if (appMode !== "dynamic") return [];
-    const dynSnap = dynamic_snapshot_at(
-      runtimeState.simulationSnapshots as DynamicSnapshot[],
-      runtimeState.time,
-    );
-    if (!dynSnap) return [];
-    const gravity = analysedMechanism.simulation.gravity ? GRAVITY : ZERO;
-    const rows: {
-      beam: BeamElement;
-      residual: CohesionField["loopResidual"];
-    }[] = [];
-    for (const el of analysedMechanism.mechanicalElements) {
-      if (el.type !== "beam") continue;
-      const cohesion = dynSnap.beamCohesion?.find((c) => c.beamID === el.id);
-      if (!cohesion) continue;
-      const field = compute_cohesion_field(
-        el,
-        analysedMechanism.materials,
-        analysedMechanism.profiles,
-        cohesion,
-        analysedMechanism.loads,
-        dynSnap,
-        gravity,
-      );
-      if (field) rows.push({ beam: el, residual: field.loopResidual });
-    }
-    return rows.sort(
-      (a, b) => residual_rank(b.residual) - residual_rank(a.residual),
-    );
-  }, [
-    appMode,
-    runtimeState.simulationSnapshots,
-    runtimeState.time,
-    analysedMechanism,
-  ]);
   // `momentBalanceReference` resolved to the pose on screen, the way every other position the panel reads is.
   const momentBalancePoint = React.useMemo(
     () =>
@@ -1164,38 +1114,6 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
     <Box sx={{ display: "flex", flexDirection: "column", gap: 2, my: 2 }}>
       {appMode !== "edition" && (
         <>
-          {cohesionResiduals.length > 0 && (
-            <Box sx={{ mx: 2 }}>
-              <Typography variant="subtitle2" fontWeight={600} gutterBottom>
-                {t("cohesion_residual_heading")}
-              </Typography>
-              <Box sx={{ display: "flex", flexDirection: "column", gap: 0.25 }}>
-                {cohesionResiduals.map(({ beam, residual }) => (
-                  <Box
-                    key={beam.id}
-                    sx={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      gap: 1,
-                    }}
-                  >
-                    <Typography variant="caption" noWrap>
-                      {shown_element_name(beam)}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary" noWrap>
-                      {format_quantity(
-                        Math.hypot(residual.fx, residual.fy),
-                        FORCE,
-                      )}
-                      {" · "}
-                      {format_quantity(residual.m, MOMENT)}
-                    </Typography>
-                  </Box>
-                ))}
-              </Box>
-            </Box>
-          )}
-
           {forceBalance && (
             <ForceBalanceTable
               balance={forceBalance}

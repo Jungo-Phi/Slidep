@@ -5,6 +5,7 @@ import decon from "../../../../test-mechanisms/Déconnexion courroie.slidep?raw"
 import doubleSlider from "../../../../test-mechanisms/Vilbrequin double slider.slidep?raw";
 import huygens from "../../../../test-mechanisms/Huygen's chain drive.slidep?raw";
 import jansen from "../../../../test-mechanisms/Jansen's linkage.slidep?raw";
+import jansenUp from "../../../../test-mechanisms/Jansen's linkage (upside-down).slidep?raw";
 import poulie from "../../../../test-mechanisms/Poulie bloqueuse.slidep?raw";
 import roues from "../../../../test-mechanisms/Roues isolées.slidep?raw";
 import slider from "../../../../test-mechanisms/Test slider.slidep?raw";
@@ -129,9 +130,9 @@ const counts = (els: MechanicalElement[]) =>
 
 describe("build_analysis_model — cas synthétiques", () => {
   it("un bâti soudé au sol ne compte ni mobilité ni redondance", () => {
-    // Un join groundé ancre l'extrémité opposée de sa poutre, et la fusion des Coincidence rend le Distance restant purement inerte.
-    // Sans élagage, le décompte brut donnait −5.
-    // Il reste une chaîne triviale : le bâti existe.
+    // A grounded join anchors the far end of its beam, and fusing the Coincidence links leaves the remaining Distance purely inert.
+    // Without pruning, the raw count gave −5.
+    // One trivial chain remains: the frame exists.
     const model = build_analysis_model(mechanism(GROUNDED_FRAME("b1", 0)));
     expect(model.links).toHaveLength(0);
     expect(model.pruned.filter((p) => p.reason === "inert")).toHaveLength(1);
@@ -154,7 +155,7 @@ describe("build_analysis_model — cas synthétiques", () => {
     expect(model.chains.every((c) => c.freeVariables === 0)).toBe(true);
     expect(model.chains.every((c) => c.grounded)).toBe(true);
     expect(model.chains.every((c) => c.grublerCount === 0)).toBe(true);
-    // Rien ne se partage entre les deux : ils ne sont pas soudés l'un à l'autre.
+    // The two share nothing: they are not welded to each other.
     const seen = new Set<ID>();
     for (const chain of model.chains)
       for (const el of chain.elements) {
@@ -165,8 +166,8 @@ describe("build_analysis_model — cas synthétiques", () => {
   });
 
   it("deux poutres redondantes entre les mêmes pivots : l'élagage ne peut pas le voir", () => {
-    // m = 1 (rotation autour de p1), h = 1 (les deux longueurs disent la même chose) → G = 0.
-    // Aucun lien n'est inerte : seul le rang peut trancher, ce qui est la raison d'être de la sonde de mobilité.
+    // m = 1 (rotation about p1), h = 1 (both lengths say the same thing) → G = 0.
+    // No link is inert: only the rank can settle this, which is what the mobility probe is for.
     const model = build_analysis_model(
       mechanism([
         pivot("p1", P(0, 0), true, [id("b1"), id("b2")]),
@@ -181,8 +182,8 @@ describe("build_analysis_model — cas synthétiques", () => {
   });
 
   it("deux poutres sur un même pivot groundé sont deux chaînes indépendantes", () => {
-    // Elles pivotent chacune de leur côté : les relier par le sol dirait le contraire.
-    // Le graphe ne porte que sur les variables libres.
+    // Each turns on its own: joining them through the ground would say otherwise.
+    // The graph spans the free variables alone.
     const model = build_analysis_model(
       mechanism([
         pivot("p1", P(0, 0), true, [id("b1"), id("b2")]),
@@ -222,7 +223,7 @@ describe("build_analysis_model — cas synthétiques", () => {
   });
 
   it("un quatre-barres et une poutre libre sont deux chaînes, jamais une somme", () => {
-    // Le panneau affichait 4 pour cet ensemble : 1 + 3, qui ne décrit rien.
+    // Summed, this set reads 4 — 1 + 3, which describes nothing.
     expect(counts([...FOUR_BAR, beam("z9", P(500, 500), P(600, 500))])).toEqual(
       [1, 3],
     );
@@ -239,7 +240,7 @@ describe("build_analysis_model — cas synthétiques", () => {
     const els = [...FOUR_BAR, beam("z9", P(500, 500), P(600, 500))];
     const forward = build_analysis_model(mechanism(els));
     const backward = build_analysis_model(mechanism([...els].reverse()));
-    // Les clés fusionnées sont nommées dans l'ordre de parsing : c'est leur forme canonique qui identifie le nœud, pas leur orthographe.
+    // Fused keys are named in parsing order: what identifies a node is its canonical form, not its spelling.
     const order = (m: typeof forward) =>
       m.variableOrder.map((v) => `${canonical_key(v.key)}#${v.component}`);
     expect(order(backward)).toEqual(order(forward));
@@ -275,12 +276,12 @@ describe("build_analysis_model — mécanismes de référence", () => {
     const model = fixture(doubleSlider);
     expect(model.chains).toHaveLength(3);
     expect(model.chains.filter((c) => !c.grounded)).toHaveLength(1);
-    // Les deux ancrées d'abord, la flottante en dernier.
+    // The two anchored ones first, the floating one last.
     expect(model.chains.map((c) => c.grounded)).toEqual([true, true, false]);
     expect(model.chains.map((c) => c.grublerCount)).toEqual([-1, 2, 2]);
-    // Chacune porte son moteur ; la masse libre n'en a pas.
+    // Each carries its own motor; the free mass has none.
     expect(model.chains.map((c) => c.motors.length)).toEqual([1, 1, 0]);
-    // Chaque chaîne nomme ses propres éléments, sans recouvrement.
+    // Each chain names its own elements, with no overlap.
     const seen = new Set<ID>();
     for (const chain of model.chains)
       for (const el of chain.elements) {
@@ -290,9 +291,9 @@ describe("build_analysis_model — mécanismes de référence", () => {
   });
 
   it("un join groundé soudé au milieu d'une barre reste dans la chaîne de cette barre", () => {
-    // b93f0555 est fixé par FixedOnSegment au milieu de la barre 096ac8ba, dont les deux bouts sont eux-mêmes ancrés (pris dans le décompte ci-dessus).
-    // Son seul lien est donc inerte — mais il reste soudé, via ce lien, au même bloc ancré que la barre, laquelle est réclamée par la chaîne 1 ailleurs.
-    // Il ne doit pas se détacher en chaîne triviale à part.
+    // b93f0555 is held by a FixedOnSegment halfway along bar 096ac8ba, whose two ends are themselves anchored (counted above).
+    // Its only link is therefore inert — yet through that link it stays welded to the same anchored block as the bar, which chain 1 claims elsewhere.
+    // It must not break off into a trivial chain of its own.
     const model = fixture(doubleSlider);
     const midJoin = "b93f0555-aabd-4c47-ac33-a363a80425fe" as ID;
     expect(model.chains).toHaveLength(3);
@@ -300,7 +301,7 @@ describe("build_analysis_model — mécanismes de référence", () => {
   });
 
   it("les agrégats de courroie sont élagués comme conditionnement", () => {
-    // Un BeltSubChainAggregate est la somme télescopée des BeltSegmentNoSlip qu'il couvre : le compter fabriquerait de l'hyperstatisme inexistant.
+    // A BeltSubChainAggregate is the telescoped sum of the BeltSegmentNoSlip links it covers: counting it would manufacture hyperstaticity that is not there.
     for (const json of [coreXY, coreXY2, huygens, poulie, decon]) {
       const model = fixture(json);
       expect(
@@ -313,27 +314,28 @@ describe("build_analysis_model — mécanismes de référence", () => {
   });
 
   it("un GearMeshAngle entre deux axes groundés n'est pas inerte", () => {
-    // Ses deux clés de position sont ancrées, ses deux angles ne le sont jamais.
-    // Le déclarer inerte détachait un angle en fausse chaîne flottante.
-    const model = fixture(jansen);
+    // Both of its position keys are anchored, neither of its angles ever is.
+    // Declaring it inert detached an angle into a spurious floating chain.
+    // The upside-down Jansen is the fixture that holds that case: its two meshed gears sit on two grounded pivots, one of them the motor's.
+    const model = fixture(jansenUp);
     expect(model.links.some((l) => l.type === "GearMeshAngle")).toBe(true);
     expect(model.chains).toHaveLength(1);
   });
 
   it("Roues isolées : une roue portée reste avec ce qui la porte", () => {
-    // Trois roues, dont deux montées l'une sur l'autre.
-    // Rien ne relie l'angle d'une roue à son centre, donc le seul graphe des liens éparpillait ce mécanisme en quatre chaînes : le spin de chaque roue partait seul, et le pivot moteur ancré formait en plus un doublon trivial de celui de sa roue.
+    // Three wheels, two of them mounted on each other.
+    // Nothing ties a wheel's angle to its centre, so the link graph alone scattered this mechanism into four chains: every wheel's spin left on its own, and the anchored motor pivot formed a trivial duplicate of its wheel's besides.
     const model = fixture(roues);
     expect(model.chains).toHaveLength(2);
-    // Aucune n'est flottante : les deux roues portantes sont sur des pivots groundés.
+    // Neither floats: both carrying wheels sit on grounded pivots.
     expect(model.chains.map((c) => c.grounded)).toEqual([true, true]);
     expect(model.chains.map((c) => c.grublerCount)).toEqual([2, 1]);
     expect(model.chains.map((c) => c.motors.length)).toEqual([0, 1]);
   });
 
   it("deux chaînes ne portent jamais le même identifiant", () => {
-    // L'identifiant sert de clé React à la liste du panneau et de clé de cache aux audits de redondance.
-    // Une chaîne triviale se nomme d'après son premier élément, lequel peut très bien porter une variable libre ailleurs — d'où le préfixe.
+    // The id serves as the React key of the panel's list and as the cache key of the redundancy audits.
+    // A trivial chain is named after its first element, which may well carry a free variable elsewhere — hence the prefix.
     for (const json of [vilbrequin, jansen, coreXY, doubleSlider, roues]) {
       const ids = fixture(json).chains.map((c) => c.id);
       expect(new Set(ids).size).toBe(ids.length);
@@ -344,8 +346,10 @@ describe("build_analysis_model — mécanismes de référence", () => {
     const G = (json: string) => fixture(json).chains.map((c) => c.grublerCount);
     expect(G(vilbrequin)).toEqual([1]);
     expect(G(slider)).toEqual([1]);
-    expect(G(jansen)).toEqual([0]);
-    // Les trois mécanismes à boucle fermée valent un de plus que le décompte brut : une loi de brin par boucle est élaguée, voir `closed_loop_surplus`.
+    // Jansen's two welds are what makes it redundant: taking either one out frees two degrees of mobility and drops one of the two redundancies.
+    expect(G(jansen)).toEqual([-1]);
+    expect(G(jansenUp)).toEqual([0]);
+    // The three closed-loop mechanisms are worth one more than the raw count: one strand law per loop is pruned, see `closed_loop_surplus`.
     expect(G(decon)).toEqual([1]);
     expect(G(poulie)).toEqual([0]);
     expect(G(coreXY)).toEqual([-4]);
@@ -362,7 +366,7 @@ describe("build_analysis_model — mécanismes de référence", () => {
       expect(dropped).toHaveLength(1);
       expect(dropped[0].reason).toBe("conditioning");
     }
-    // Les courroies de Core XY sont ouvertes : aucune boucle à refermer, rien à retirer.
+    // Core XY's belts are open: no loop to close, nothing to drop.
     expect(
       fixture(coreXY).pruned.filter((p) => p.link.type === "BeltSegmentNoSlip"),
     ).toHaveLength(0);
@@ -371,7 +375,7 @@ describe("build_analysis_model — mécanismes de référence", () => {
 
 describe("variable_keys_of", () => {
   it("couvre keys_of sur tous les liens des mécanismes de référence", () => {
-    // Les deux extracteurs ne doivent pas diverger : keys_of sert le tri du solveur (positions seules), celui-ci sert l'analyse (positions + angles).
+    // The two extractors must not drift apart: keys_of serves the solver's ordering (positions alone), this one serves the analysis (positions + angles).
     const seen = new Set<Link["type"]>();
     for (const json of [
       vilbrequin,

@@ -400,10 +400,6 @@ export const CohesionDiagrams: React.FC<CohesionDiagramsProps> = ({
     onHoverS?.(null);
   };
 
-  const residual = field.loopResidual;
-  const residualMagnitude =
-    Math.abs(residual.fx) + Math.abs(residual.fy) + Math.abs(residual.m);
-
   return (
     <Box
       ref={wrapperRef}
@@ -430,8 +426,6 @@ export const CohesionDiagrams: React.FC<CohesionDiagramsProps> = ({
           textSecondary={palette.text.secondary}
         />
       ))}
-      {/* Residual: a modelling/convergence indicator, never the physics itself — kept small
-       *  and only shown once it is large enough to matter next to the values above. */}
       {!field.determinate && (
         <Typography
           variant="caption"
@@ -439,16 +433,6 @@ export const CohesionDiagrams: React.FC<CohesionDiagramsProps> = ({
           sx={{ display: "block", px: 1, pb: 0.5 }}
         >
           {t("cohesion_indeterminate")}
-        </Typography>
-      )}
-      {residualMagnitude > 1e-6 && (
-        <Typography
-          variant="caption"
-          color="text.disabled"
-          sx={{ display: "block", px: 1, pb: 0.5 }}
-        >
-          {t("cohesion_residual")} {fmt(residual.fx)}, {fmt(residual.fy)} N ·{" "}
-          {fmt(residual.m)} N·m
         </Typography>
       )}
     </Box>

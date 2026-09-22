@@ -29,11 +29,13 @@ function frame(
   };
 }
 
-/** A motor delivering `watts`. The balance only ever sums the power, so the torque is here to satisfy the type, not to describe a real τ·ω pair. */
+/** A motor delivering `watts`. The balance only ever sums the power, so the other fields are here to satisfy the type, not to describe a real τ·ω pair. */
 const motor = (id: string, watts: number): MotorSample => ({
   pivotID: pivot(id),
   watts,
   nm: 0,
+  speed: 0,
+  saturated: false,
 });
 
 const zeroEnergy = (kinetic: number): EnergySample => ({

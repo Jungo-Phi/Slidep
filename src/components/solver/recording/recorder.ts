@@ -248,6 +248,8 @@ export class Recorder {
             angleAccelerations: probe.angleAccelerations,
             beamCohesion: probe.beamCohesion,
             beltStrands: probe.beltStrands,
+            // `m·a` travels with the accelerations it is built from: read from the re-projection instead, it would be zero while the reactions beside it already carry the forces that produce it, and the free body's `ΣF = m·a` would fail to close by the whole of `ΣF`.
+            balance: probe.balance,
           };
         }
         latest = dynamicSnapshot;

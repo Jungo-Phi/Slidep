@@ -6,7 +6,7 @@ import { SimNodes } from "../nodes";
  * Solved inside the sweep rather than applied as a force beforehand, so the motor meets the inertia of the whole mechanism it drives — a crank feels the 200 kg its rod pushes — instead of an estimate of it.
  * Below its limit the motor holds its commanded speed exactly; at its limit it supplies that torque and no more, and the speed falls out of the rest of the solve.
  *
- * `torque` is an output: what the motor applied onto its driven body over the substep, N·m, counter-clockwise positive.
+ * `torque` and `saturated` are outputs: what the motor applied onto its driven body over the substep, N·m, counter-clockwise positive, and whether that was its whole limit.
  */
 export type Drive = (
   | {
@@ -29,6 +29,7 @@ export type Drive = (
   /** N·m. */
   torqueLimit: number;
   torque: number;
+  saturated: boolean;
 };
 
 const ABSENT = -1;
@@ -84,6 +85,7 @@ export function resolve_drives(nodes: SimNodes, drives: Drive[], dt: number): Re
   const resolved: ResolvedDrive[] = [];
   for (const drive of drives) {
     drive.torque = 0;
+    drive.saturated = false;
     const anchor =
       drive.kind === "beam"
         ? drive.anchorKey !== undefined
@@ -179,5 +181,9 @@ export function apply_drives(nodes: SimNodes, drives: ResolvedDrive[]): number {
 /** Write each drive's torque back once the sweep is over: its multiplier over `dt²`. */
 export function finish_drives(drives: ResolvedDrive[], dt: number): void {
   if (dt <= 0) return;
-  for (const d of drives) d.drive.torque = d.lambda / (dt * dt);
+  for (const d of drives) {
+    d.drive.torque = d.lambda / (dt * dt);
+    // Exact: the clamp in `apply_drives` writes the bound itself.
+    d.drive.saturated = Math.abs(d.lambda) >= d.bound;
+  }
 }

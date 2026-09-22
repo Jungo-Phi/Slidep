@@ -5,7 +5,7 @@
  * It is NOT a change of mobility: `m` stays what it was, and the analysis panel keeps reporting it.
  * What fails is the *transmission*, and it is the fault a designer actually meets.
  *
- * The verdict is **read, not recomputed**. `step_simulation` compares each motor's achieved advance against its commanded one at the frame it runs, and files the shortfall in the snapshot's `unsatisfied` list.
+ * The verdict is **read, not recomputed**: each engine files it in the snapshot's `stalledMotors` at the frame it runs — `step_simulation` from each motor's achieved advance against its commanded one, `step_dynamic_simulation` from the joint's speed (see `stalled_motors`).
  * That verdict is dated: it belongs to the settings the frame was recorded under.
  * Deriving it here instead would mean dividing yesterday's motion by today's commanded rate — and reversing a motor mid-run would flip the ratio on every past frame at once, reading the whole recording as one block starting at zero.
  *
@@ -13,7 +13,7 @@
  */
 
 import { ID } from "../../../types";
-import { KinematicSnapshot, SimulationSnapshot } from "../../../types/runtime-state";
+import { SimulationSnapshot } from "../../../types/runtime-state";
 
 /** Frames a block must last to be reported, so one uneven frame is not an event. */
 const MIN_BLOCKED_FRAMES = 2;
@@ -35,15 +35,9 @@ export type DeadPoint = {
   kind: "blocked" | "released";
 };
 
-const MOTOR_TYPES = new Set(["MotorBeam", "MotorAngle"]);
-
 /** Motors the simulation reported blocked on this frame. */
-const blocked_motors = (snapshot: SimulationSnapshot): Set<ID> => {
-  const blocked = new Set<ID>();
-  for (const residual of snapshot.unsatisfied ?? [])
-    if (MOTOR_TYPES.has(residual.type)) blocked.add(residual.owner);
-  return blocked;
-};
+const blocked_motors = (snapshot: SimulationSnapshot): Set<ID> =>
+  new Set(snapshot.stalledMotors ?? []);
 
 /**
  * The motors standing blocked at `index`, for a live indicator to light up on.
@@ -92,7 +86,7 @@ export function motors_blocked_at(
  * Pure, and cheap enough to redo whenever the recording grows: the per-frame work is reading a list that is empty on almost every frame.
  */
 export function dead_points(
-  snapshots: KinematicSnapshot[],
+  snapshots: SimulationSnapshot[],
   tuning: DeadPointTuning = {},
 ): DeadPoint[] {
   const { minBlockedFrames = MIN_BLOCKED_FRAMES } = tuning;

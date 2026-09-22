@@ -258,7 +258,12 @@ Sorties : les trois champs échantillonnés, les discontinuités, l'extremum de 
 
 ### Confiance
 
-Le résidu est le premier indicateur. Le second existe déjà : `ChainMobility.hyperstaticity`
+Le résidu est le premier indicateur, **réservé aux tests** (`gallery-cohesion-loop.test.ts`) : il
+n'est pas affiché. Mesuré sur la galerie, il reste à la précision machine sur la plupart des
+mécanismes et sous 3·10⁻⁴ de l'effort maximal du mécanisme au pire (Huygens, Petit) — sous le pixel
+sur un diagramme, donc sans rien à dire à l'utilisateur. Ce qu'il mesure est le résidu `A·x − b` de
+la ligne de la poutre dans l'assemblage : l'écart des accélérations XPBD à l'équation du mouvement,
+que les moindres carrés étalent sur les corps. Le second indicateur existe déjà : `ChainMobility.hyperstaticity`
 (`mobility-probe.ts`, affiché dans `AnalysisPanel.tsx`). Sur une chaîne hyperstatique, XPBD répartit
 les efforts selon ses compliances et l'ordre de ses itérations, pas selon les raideurs réelles :
 **les valeurs sont plausibles et fausses**. Il faut le dire — une mention « indicatif », pas un
@@ -301,11 +306,11 @@ canvas par un trait perpendiculaire à la poutre (`draw_abscissa_marker`, épais
 mesure). **Le marqueur d'origine (`draw_start_edge_end`) a été retiré** après retour utilisateur : la
 décision « l'origine doit être visible en permanence sur la poutre » ci-dessous n'est plus appliquée.
 
-**Écart assumé au texte ci-dessous** : le résidu de bouclage s'affiche (discrètement, seulement s'il
-n'est pas négligeable), mais **pas** l'avertissement d'hyperstatisme — `ChainMobility.hyperstaticity`
-vit dans l'analyse par chaîne de `useDofAnalysis`, pas indexée par poutre, et le brancher demandait
-plus de plomberie que ce premier passage ne justifiait. À reprendre séparément si le résidu seul ne
-suffit pas à l'usage.
+**Écart assumé au texte ci-dessous** : le résidu de bouclage **ne s'affiche pas** — ni sous les
+diagrammes, ni en liste dans l'onglet Analyse (voir « Confiance » plus haut : négligeable à l'écran,
+utile seulement aux tests). Ce qui reste sous les diagrammes est la mention « indicatif » quand
+`CohesionField.determinate` est faux : poutre hyperstatique non tranchée, ou effort passant par une
+liaison que le calcul ne modélise pas.
 
 **Le diagramme est un geste de mesure, pas une couche d'affichage.** Il apparaît dans l'onglet
 Analyse quand **une poutre est sélectionnée**, en mode dynamique, et disparaît à la désélection. Pas
@@ -339,8 +344,8 @@ actées).
 - **Survol panneau → canvas** : survoler un diagramme pose un point à l'abscisse correspondante sur la
   poutre. (Le sens inverse — survoler la poutre pour poser une ligne sur les diagrammes — a été
   envisagé puis abandonné : inutile.)
-- Le **résidu de bouclage** et l'avertissement d'hyperstatisme trouvent leur place ici, discrètement
-  (aujourd'hui : résidu seul, voir l'écart assumé plus haut).
+- L'avertissement « indicatif » trouve sa place ici, discrètement. Le résidu de bouclage, non (voir
+  l'écart assumé plus haut).
 
 Cas dégénéré à anticiper : une poutre bi-articulée sans rien dessus est un membre à deux forces —
 `N` constant, `T` et `Mf` nuls, diagrammes plats. C'est correct et informatif (« cette barre ne fait

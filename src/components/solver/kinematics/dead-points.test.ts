@@ -41,15 +41,9 @@ function recording(blocked: boolean[]): KinematicSnapshot[] {
     layout: LAYOUT,
     positions: new Float64Array(0),
     angles: new Float64Array(0),
-    ...(stuck
-      ? {
-          unsatisfied: [
-            { owner: MOTOR, type: "MotorAngle", residual: 1 },
-            // A residual of another kind on the same frame must not read as a block.
-            { owner: MOTOR, type: "Distance", residual: 2 },
-          ],
-        }
-      : {}),
+    ...(stuck ? { stalledMotors: [MOTOR] } : {}),
+    // A motor's own constraint left unconverged is a solve that ran short, not a stall.
+    unsatisfied: [{ owner: MOTOR, type: "MotorAngle", residual: 1 }],
   }));
 }
 
@@ -167,11 +161,11 @@ describe("motors_blocked_at", () => {
     expect(witness(recording([false, true, false]), 1)).toEqual([false, true, false]);
   });
 
-  it("un résidu d'un autre genre sur la même image n'allume rien", () => {
-    // `recording` files a `Distance` residual alongside every block, so a free frame carrying one must stay dark.
+  it("la contrainte du moteur laissée non convergée n'est pas un blocage", () => {
+    // `recording` leaves the motor's own constraint unsatisfied on every frame, as a sweep that ran short does.
     const snapshots = recording(free(4));
-    snapshots[2].unsatisfied = [{ owner: MOTOR, type: "Distance", residual: 2 }];
     expect(witness(snapshots, 2)).toEqual([false, false, false, false]);
+    expect(dead_points(snapshots)).toEqual([]);
   });
 
   it("hors de l'enregistrement, personne n'est bloqué", () => {

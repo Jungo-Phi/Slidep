@@ -6,11 +6,13 @@ import type { MaterialDef, ProfileDef } from "../../../types/material";
 import { DynamicSnapshot } from "../../../types/runtime-state";
 import { GRAVITY } from "../../../constants/physics-specs";
 import { CohesionField, compute_cohesion_field } from "../recording/cohesion-field";
+import { compute_force_balance } from "../analysis/force-balance";
 import { Recorder } from "../recording/recorder";
 
 /**
  * `t = 0` is the one instant the recording does not solve like the others: its pose is a plain re-projection of the edition geometry, and every effort it carries comes from a separate probe step (`Recorder.advance`).
- * What is guarded here is that the probe's d'Alembert term reaches the cohesion field along with its torsor — read against zero accelerations, a body that is in fact accelerating carries its whole weight as a fictitious internal effort, growing from the boundary the field marches from.
+ * What is guarded here is that the probe's d'Alembert term reaches every reading that faces it — the cohesion field along with its torsor, and the free body's `m·a` along with its support reactions.
+ * Read against zero accelerations, a body that is in fact accelerating carries its whole weight as a fictitious internal effort, growing from the boundary the field marches from, and the balance of the whole mechanism fails to close by the whole of `ΣF`.
  */
 
 let n = 0;
@@ -42,8 +44,11 @@ function beam_at(BEAM: ID, supportID: ID | undefined): BeamElement {
   };
 }
 
-/** The cohesion field of `beam` on the frame the recording opens on, taken through the recorder so the probe step is exactly the one the app runs. */
-function frame_zero_field(beam: BeamElement, elements: MechanicalElement[]): CohesionField {
+/** The frame the recording opens on, taken through the recorder so the probe step is exactly the one the app runs, with the mechanism it was recorded from. */
+function frame_zero(elements: MechanicalElement[]): {
+  mechanism: Mechanism;
+  snapshot: DynamicSnapshot;
+} {
   const mechanism: Mechanism = {
     metadata: DEFAULT_METADATA,
     viewport: { scale: 1, pan: new Point2(0, 0) },
@@ -61,6 +66,12 @@ function frame_zero_field(beam: BeamElement, elements: MechanicalElement[]): Coh
   const { snapshots } = recorder.advance(0, Number.POSITIVE_INFINITY);
   const snapshot = snapshots[0] as DynamicSnapshot;
   expect(snapshot.t).toBe(0);
+  return { mechanism, snapshot };
+}
+
+/** The cohesion field of `beam` on that same frame. */
+function frame_zero_field(beam: BeamElement, elements: MechanicalElement[]): CohesionField {
+  const { snapshot } = frame_zero(elements);
   const cohesion = snapshot.beamCohesion!.find((c) => c.beamID === beam.id)!;
   return compute_cohesion_field(
     beam,
@@ -114,5 +125,31 @@ describe("efforts intérieurs à l'instant zéro", () => {
     // The march ends on the torsor the statics pass read at the far end independently: a field that marched on the wrong density would not land there.
     expect(Math.abs(field.loopResidual.fy)).toBeLessThan(LENGTH * G * 1e-3);
     expect(Math.abs(field.loopResidual.m)).toBeLessThan(LENGTH * LENGTH * G * 1e-3);
+  });
+
+  it("le bilan du corps libre se referme, `m·a` lu sur la même sonde que les réactions", () => {
+    const HUB = id();
+    const BEAM = id();
+    const hub: PivotElement = {
+      type: "pivot",
+      id: HUB,
+      probes: [],
+      overlays: {},
+      position: new Point2(0, 0),
+      isGrounded: true,
+      rotatingEdgesIDs: [BEAM],
+      fixedGearsIDs: [],
+      rotationalFriction: 0,
+      motor: undefined,
+    };
+    const beam = beam_at(BEAM, HUB);
+    const { mechanism, snapshot } = frame_zero([hub, beam]);
+    const balance = compute_force_balance(mechanism, snapshot, GRAVITY)!;
+
+    // The rod is turning about its pivot, so the two members are worth something to compare: read off the re-projection instead of the probe, `m·a` would be zero while the reactions beside it carry the whole of this.
+    const weight = LENGTH * G;
+    expect(Math.hypot(balance.inertia.x, balance.inertia.y)).toBeGreaterThan(weight / 10);
+    expect(Math.hypot(balance.gap.x, balance.gap.y)).toBeLessThan(weight * 1e-3);
+    expect(Math.abs(balance.gapMoment)).toBeLessThan(weight * LENGTH * 1e-3);
   });
 });

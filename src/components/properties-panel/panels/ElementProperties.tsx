@@ -71,6 +71,7 @@ import {
   surface_mass_for_inertia,
 } from "../../../utils/gear-mass";
 import { get_dynamic_metric_at } from "../../solver/recording/probe-series";
+import { snapshot_index_at } from "../../solver/dynamics/simulation-engine";
 import { DynamicSnapshot } from "../../../types/runtime-state";
 
 /** The ground/unground button's icon, reused as the ElementPicker "world" option so a motor's anchor reads with the same visual language as the ground toggle. */
@@ -202,6 +203,16 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
           runtimeState.time,
         )
       : undefined;
+  // Read off the frame the cursor stands on, like the stall witness: a diagnostic belongs to a state the solver produced.
+  const dynamicSnapshots = runtimeState.simulationSnapshots as DynamicSnapshot[];
+  const motorSaturated =
+    motorConfig !== undefined &&
+    appMode === "dynamic" &&
+    dynamicSnapshots.length > 0 &&
+    (dynamicSnapshots[snapshot_index_at(dynamicSnapshots, runtimeState.time)].motor?.some(
+      (sample) => sample.pivotID === element.id && sample.saturated,
+    ) ??
+      false);
 
   // Beams the pivot's motor can push against: the beams rotating about it.
   const motorBeams: BeamElement[] =
@@ -578,7 +589,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
               >
                 <NumberInput
                   label="C"
-                  title={t("motor_torque_label")}
+                  title={t(motorSaturated ? "motor_torque_saturated_hint" : "motor_torque_label")}
                   kind={MOMENT}
                   value={(displayMotorConfig ?? element.motor).torque}
                   onChange={(torque) => {
@@ -595,6 +606,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                   }}
                   unsigned
                   large
+                  atLimit={motorSaturated}
                 />
                 <SignedNumberInput
                   label="ω"
