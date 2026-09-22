@@ -147,7 +147,7 @@ export const EnergyBalance: React.FC<{
         poolMax={0}
         ownFloor={0}
         unitFactor={unit.factor}
-        // Never forced: `potential`/`mechanical` carry the drawing's own coordinate-origin offset (see `EnergyBalanceSeries`), so pulling 0 into view could squash their real excursion the way it would for a `position` chart — same reasoning as `metric_shows_zero`'s exceptions.
+        // Never forced: `potential`/`mechanical` are anchored to the recording's first frame, not to a physical rest state (see `EnergyBalanceSeries`) — same reasoning `netWorkIn` already gets, and the same exceptions as `metric_shows_zero`.
         showZero={false}
         emptyMessage={
           curves.length === 0 ? t("chart_no_component") : t("chart_waiting")

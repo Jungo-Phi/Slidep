@@ -1,4 +1,10 @@
-import React, { useRef, useCallback, useState, useEffect } from "react";
+import React, {
+  useRef,
+  useCallback,
+  useState,
+  useEffect,
+  useLayoutEffect,
+} from "react";
 import { TextField, IconButton, Box, Tooltip } from "@mui/material";
 import { alpha } from "@mui/material/styles";
 import { KeyboardArrowUp, KeyboardArrowDown } from "@mui/icons-material";
@@ -88,7 +94,7 @@ export const NumberInput: React.FC<NumberInputProps> = ({
   alert = false,
   atLimit = false,
 }) => {
-  const unit = kind ? display_unit(value, kind) : RAW_UNIT;
+  const unit = kind ? display_unit(value, kind, precision) : RAW_UNIT;
   const format = (v: number) => {
     const mantissa = to_mantissa(v, unit, precision).toString();
     return unit.symbol ? `${mantissa} ${unit.symbol}` : mantissa;
@@ -127,11 +133,22 @@ export const NumberInput: React.FC<NumberInputProps> = ({
   const [localValue, setLocalValue] = useState<string>(format(value));
 
   useEffect(() => {
+    // A field being typed into owns its text; a live-updating `value` (a running simulation's reading, say) must not overwrite it mid-edit — onFocus already primed `localValue` once, and onBlur reads it back through `commitLocalValue`.
+    if (focused) return;
     setLocalValue(format(value));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value, rounding, unit.factor]);
+  }, [value, rounding, unit.factor, focused]);
 
   const inputRef = useRef<HTMLInputElement>(null);
+  // Caret position to restore once a filtered keystroke's reformatted text reaches the DOM.
+  const pendingCaretRef = useRef<number | null>(null);
+
+  useLayoutEffect(() => {
+    if (pendingCaretRef.current !== null) {
+      inputRef.current?.setSelectionRange(pendingCaretRef.current, pendingCaretRef.current);
+      pendingCaretRef.current = null;
+    }
+  }, [localValue]);
 
   // Out of focus the field is a view of the value, never of a leftover edit — except `mixed`, which has no single value to show and starts blank instead.
   const displayed = focused ? localValue : mixed ? "" : format(value);
@@ -220,7 +237,8 @@ export const NumberInput: React.FC<NumberInputProps> = ({
 
   // Leaving the field validates the entry; an unreadable one is dropped and the field goes back to showing the value.
   // Entering what it already showed changes nothing — unless it showed nothing to begin with, `value` then being one element's among several that differ, and typing it the value the others are being given.
-  // Text first, value second: the two say different things. Out and back in without an edit leaves text the field itself wrote, whatever junk the last bits of `value` carry; a unit retyped over an equal value ("15 T/m³" for "15 g/cm³") is a different text for the very same double, and is as much of a non-edit.
+  // Text first, value second: the two say different things.
+  // Out and back in without an edit leaves text the field itself wrote, whatever junk the last bits of `value` carry; a unit retyped over an equal value ("15 T/m³" for "15 g/cm³") is a different text for the very same double, and is as much of a non-edit.
   const commitLocalValue = () => {
     if (!mixed && localValue === format(value)) return;
     if (entered === null) return;
@@ -248,7 +266,13 @@ export const NumberInput: React.FC<NumberInputProps> = ({
           InputLabelProps={mixed ? { shrink: true } : undefined}
           inputProps={{ inputMode: "decimal" }}
           value={displayed}
-          onChange={(e) => setLocalValue(filterInput(e.target.value))}
+          onChange={(e) => {
+            const raw = e.target.value;
+            const cursor = e.target.selectionStart ?? raw.length;
+            // Filtering can reshape the typed text (comma to dot, a stray sign dropped…), so the caret's post-keystroke offset must be recomputed on the filtered prefix rather than reused as-is.
+            pendingCaretRef.current = filterInput(raw.slice(0, cursor)).length;
+            setLocalValue(filterInput(raw));
+          }}
           inputRef={inputRef}
           onFocus={() => {
             setLocalValue(mixed ? "" : format(value));

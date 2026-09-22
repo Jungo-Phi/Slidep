@@ -62,6 +62,12 @@ describe("format_quantity — adaptive kinds", () => {
   it("shows zero in the base unit, not an arbitrary prefix", () => {
     expect(format_quantity(0, FORCE, 0)).toBe("0 N");
   });
+
+  it("shows a value too small for the shown precision in the base unit, not a fractional nano reading", () => {
+    expect(format_quantity(1e-15, FORCE, 1)).toBe("0 N");
+    // Still floors to the smallest prefix when the precision is fine enough to show it there.
+    expect(format_quantity(1e-15, FORCE, 9)).toBe("0.000001 nN");
+  });
 });
 
 describe("format_quantity — MOMENT's compound unit", () => {

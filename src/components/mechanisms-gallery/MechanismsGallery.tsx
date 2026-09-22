@@ -49,6 +49,13 @@ interface MechanismsGalleryProps {
 // Height of the "New mechanism" card when the library is empty, with no existing card to copy the height from.
 const NEW_CARD_FALLBACK_HEIGHT = 300;
 
+/** Lowercased and stripped of diacritics, so the search treats "moteur" and "môteur" alike. */
+const fold = (text: string) =>
+  text
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "");
+
 export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
   open,
   onClose,
@@ -67,6 +74,14 @@ export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
   const [search, setSearch] = useState("");
   const searchInputRef = useRef<HTMLInputElement>(null);
   const searching = search.trim().length > 0;
+
+  // Cleared on every fresh opening rather than on close, which covers every way the dialog closes (button, backdrop, Escape, loading a mechanism) from a single spot.
+  // Adjusted during render rather than in an effect, so the dialog's first paint already shows the cleared search instead of a filtered list that then jumps to the full one.
+  const [wasOpen, setWasOpen] = useState(open);
+  if (open !== wasOpen) {
+    setWasOpen(open);
+    if (open) setSearch("");
+  }
 
   const presentIds = new Set(
     mechanismRecords.map((record) => record.metadata.createdAt),
@@ -104,11 +119,11 @@ export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
   const sortedMechanismRecords = [...mechanismRecords]
     .sort((a, b) => b.metadata.modifiedAt - a.metadata.modifiedAt)
     .filter((record) => {
-      const needle = search.trim().toLowerCase();
+      const needle = fold(search.trim());
       if (!needle) return true;
       return (
-        record.metadata.name.toLowerCase().includes(needle) ||
-        record.metadata.tags.some((tag) => tag.toLowerCase().includes(needle))
+        fold(record.metadata.name).includes(needle) ||
+        record.metadata.tags.some((tag) => fold(tag).includes(needle))
       );
     });
 

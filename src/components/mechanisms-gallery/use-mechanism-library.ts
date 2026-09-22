@@ -1,6 +1,7 @@
 import {
   MutableRefObject,
   RefObject,
+  startTransition,
   useCallback,
   useEffect,
   useRef,
@@ -152,7 +153,9 @@ export function useMechanismLibrary({
       if (touch) setSaveStatus("saved");
 
       if (galleryOpenRef.current) {
-        setSavedMechanisms(await read_all_records(db));
+        // The full library is a lot of cards to mount at once: deprioritized so it doesn't block the rest of the app while it renders.
+        const records = await read_all_records(db);
+        startTransition(() => setSavedMechanisms(records));
       }
     } catch (error) {
       console.error("Erreur lors de la sauvegarde :", error);
@@ -183,15 +186,21 @@ export function useMechanismLibrary({
       const db = await openMechanismsDB();
       const records = await read_all_records(db);
       if (records.length === 0) return;
-      setSavedMechanisms(records);
-      setGalleryOpen(true);
+      // A large library is a lot of cards to mount at once: deprioritized so the app stays responsive while they render, instead of a single blocking frame.
+      startTransition(() => {
+        setSavedMechanisms(records);
+        setGalleryOpen(true);
+      });
     })();
   }, []);
 
   const handleOpenGallery = useCallback(async () => {
     const db = await openMechanismsDB();
-    setSavedMechanisms(await read_all_records(db));
-    setGalleryOpen(true);
+    const records = await read_all_records(db);
+    startTransition(() => {
+      setSavedMechanisms(records);
+      setGalleryOpen(true);
+    });
   }, []);
 
   const closeGallery = useCallback(() => setGalleryOpen(false), []);
@@ -509,7 +518,8 @@ export function useMechanismLibrary({
 
     for (const example of missing) await db.put("mechanisms", example);
 
-    setSavedMechanisms(await read_all_records(db));
+    const records = await read_all_records(db);
+    startTransition(() => setSavedMechanisms(records));
     setSnackbar({
       open: true,
       message: tn("examples_restored", missing.length),

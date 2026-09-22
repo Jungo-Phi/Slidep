@@ -77,7 +77,7 @@ export interface FormattedMetric {
 
 /** A single SI value laid out like a scalar reading, for a quantity no series carries. */
 export function format_scalar(value: number, kind: QuantityKind): FormattedMetric {
-  const unit = display_unit(Math.abs(value), kind);
+  const unit = display_unit(Math.abs(value), kind, PRECISION);
   return { unit, main: to_mantissa(value, unit, PRECISION) };
 }
 

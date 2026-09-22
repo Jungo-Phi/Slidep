@@ -1,4 +1,4 @@
-import { get_language } from "../i18n";
+import { get_language, Lang } from "../i18n";
 import { ID, UnionElement } from "../types";
 import { is_nameable } from "./element-queries";
 
@@ -161,11 +161,23 @@ export function format_sim_time(seconds: number): string {
   return `${Math.floor(whole / 60)}m${s.toString().padStart(2, "0")}.${tenths % 10}s`;
 }
 
+// `Intl.DateTimeFormat` construction resolves locale data and is costly enough that building one per call shows up when many dates format in a row (e.g. one gallery card each).
+// Cached per language instead — there are only a handful of them.
+const dateFormatters = new Map<Lang, Intl.DateTimeFormat>();
+const date_formatter = (lang: Lang): Intl.DateTimeFormat => {
+  let formatter = dateFormatters.get(lang);
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat(lang, {
+      day: "numeric",
+      month: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    dateFormatters.set(lang, formatter);
+  }
+  return formatter;
+};
+
 export function format_date(timestamp: number): string {
-  return new Intl.DateTimeFormat(get_language(), {
-    day: "numeric",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(timestamp));
+  return date_formatter(get_language()).format(new Date(timestamp));
 }

@@ -148,7 +148,7 @@ export const LoadsSection: React.FC<LoadsSectionProps> = ({
                   {load.type === "distributed-force" && (
                     <NumberInput
                       label="F"
-                      title={t("force")}
+                      title={t("resultant_force")}
                       kind={FORCE}
                       value={
                         (((shownDistributed ?? load).magnitudeStart +

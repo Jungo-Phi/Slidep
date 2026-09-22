@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { TextField, Typography, Box } from "@mui/material";
 import { COLORS } from "../../theme/canvas-theme";
 import { value2ratio } from "../../utils";
@@ -71,6 +71,9 @@ export const OnCanvasValueEditor: React.FC<OnCanvasValueEditorProps> = ({
 
   const inputRef1 = useRef<HTMLInputElement>(null);
   const inputRef2 = useRef<HTMLInputElement>(null);
+  // Caret position to restore once a filtered keystroke's reformatted text reaches the DOM.
+  const pendingCaretRef1 = useRef<number | null>(null);
+  const pendingCaretRef2 = useRef<number | null>(null);
 
   useEffect(() => {
     // The unit suffix opens as part of the editable text but should never be swept up by the initial select-all — only the digits the user is actually here to overwrite.
@@ -81,7 +84,7 @@ export const OnCanvasValueEditor: React.FC<OnCanvasValueEditorProps> = ({
       setVal1(n);
       setVal2(d);
     } else {
-      const openedUnit = kind ? display_unit(initialValue, kind) : RAW_UNIT;
+      const openedUnit = kind ? display_unit(initialValue, kind, PRECISION) : RAW_UNIT;
       setUnit(openedUnit);
       const mantissa = to_mantissa(initialValue, openedUnit, PRECISION).toString();
       mantissaLength = mantissa.length;
@@ -160,6 +163,33 @@ export const OnCanvasValueEditor: React.FC<OnCanvasValueEditorProps> = ({
   const filterInput = (val: string) =>
     filter_quantity_input(val, { unit: mode === "single" && !!kind, signed });
 
+  useLayoutEffect(() => {
+    if (pendingCaretRef1.current !== null) {
+      inputRef1.current?.setSelectionRange(pendingCaretRef1.current, pendingCaretRef1.current);
+      pendingCaretRef1.current = null;
+    }
+  }, [val1]);
+  useLayoutEffect(() => {
+    if (pendingCaretRef2.current !== null) {
+      inputRef2.current?.setSelectionRange(pendingCaretRef2.current, pendingCaretRef2.current);
+      pendingCaretRef2.current = null;
+    }
+  }, [val2]);
+
+  // Filtering can reshape the typed text (comma to dot, a stray sign dropped…), so the caret's post-keystroke offset must be recomputed on the filtered prefix rather than reused as-is.
+  const changeVal1 = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value;
+    const cursor = e.target.selectionStart ?? raw.length;
+    pendingCaretRef1.current = filterInput(raw.slice(0, cursor)).length;
+    setVal1(filterInput(raw));
+  };
+  const changeVal2 = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value;
+    const cursor = e.target.selectionStart ?? raw.length;
+    pendingCaretRef2.current = filterInput(raw.slice(0, cursor)).length;
+    setVal2(filterInput(raw));
+  };
+
   const commonInputStyles = {
     "& .MuiOutlinedInput-notchedOutline": {
       border: "none",
@@ -197,7 +227,7 @@ export const OnCanvasValueEditor: React.FC<OnCanvasValueEditorProps> = ({
           <TextField
             size="small"
             value={val1}
-            onChange={(e) => setVal1(filterInput(e.target.value))}
+            onChange={changeVal1}
             onKeyDown={handleKeyDown}
             onBlur={(e) => {
               if (
@@ -228,7 +258,7 @@ export const OnCanvasValueEditor: React.FC<OnCanvasValueEditorProps> = ({
           <TextField
             size="small"
             value={val2}
-            onChange={(e) => setVal2(filterInput(e.target.value))}
+            onChange={changeVal2}
             onKeyDown={handleKeyDown}
             onBlur={(e) => {
               if (

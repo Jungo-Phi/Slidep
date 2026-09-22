@@ -117,7 +117,7 @@ export const LoadInspector: React.FC<LoadInspectorProps> = ({
       return (
         <NumberInput
           label="F"
-          title={t("force")}
+          title={t("resultant_force")}
           kind={FORCE}
           value={((shown.magnitudeStart + shown.magnitudeEnd) / 2) * beamLength}
           onChange={(resultant) => {

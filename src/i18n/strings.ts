@@ -917,6 +917,12 @@ export const STRINGS = {
     es: "Paralelo",
   },
   force: { fr: "Force", en: "Force", de: "Kraft", es: "Fuerza" },
+  resultant_force: {
+    fr: "Force résultante",
+    en: "Resultant force",
+    de: "Resultierende Kraft",
+    es: "Fuerza resultante",
+  },
   moment: { fr: "Moment", en: "Moment", de: "Moment", es: "Momento" },
   linear_force_start: {
     fr: "Force linéique (début)",

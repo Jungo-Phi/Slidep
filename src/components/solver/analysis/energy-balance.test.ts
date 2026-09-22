@@ -66,21 +66,21 @@ describe("bilan énergétique", () => {
     expect(s.kinetic).toEqual([5]);
   });
 
-  it("cinétique, potentielle et mécanique sont les valeurs absolues de la frame, sans décalage", () => {
+  it("cinétique est lue telle quelle, mécanique la suit quand le potentiel est nul", () => {
     const s = compute_energy_balance([frame(0, zeroEnergy(10)), frame(1, zeroEnergy(14))]);
     expect(s.kinetic).toEqual([10, 14]);
     expect(s.mechanical).toEqual([10, 14]);
   });
 
-  it("mécanique est la somme de cinétique et potentielle, chacune en valeur absolue", () => {
-    // A pendulum-like trade-off: total stays at 10 J both frames, but it moves from potential (at rest, top) to kinetic (moving, bottom) — neither is shifted to read 0 at the start, unlike a relative-to-start display would.
+  it("potentielle est décalée pour lire 0 à la première frame enregistrée", () => {
+    // A pendulum-like trade-off: the raw potentialGravity carries an arbitrary coordinate-origin offset (here 10 J at t=0), so shifting it to 0 is what makes mechanical read flat at 0 instead of at whatever the drawing's origin happened to add.
     const s = compute_energy_balance([
       frame(0, { ...zeroEnergy(0), potentialGravity: 10 }),
       frame(1, { ...zeroEnergy(6), potentialGravity: 4 }),
     ]);
     expect(s.kinetic).toEqual([0, 6]);
-    expect(s.potential).toEqual([10, 4]);
-    expect(s.mechanical).toEqual([10, 10]);
+    expect(s.potential).toEqual([0, -6]);
+    expect(s.mechanical).toEqual([0, 0]);
   });
 
   it("un moteur à puissance constante intègre un travail linéaire dans le temps", () => {

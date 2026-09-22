@@ -45,13 +45,8 @@
 
 **Very qwick fix**
 
-- 🚨 Arriver à une valeur invalide dans un NumberInput/onCanvasValueEditor met notre curseur à la fin (après l'unité)
-- 🔨 La recherche dans la gallerie est lente (et devrait se reset quand on la ferme ?)
-- 🔨 Faire commencer les énergies (bilan) à zéro
-- 🔨 force-distribuée : "force totale" -> "force équivalente"
 - 🔨 Corriger les diagrammes d'efforts internes (valeur à zéro)
 - 🔨 Les trais indicatifs des valeurs max dans les diagrammes des efforts (vu dans Mf) s'accumulent
-- 🔨 Afficher "0 N" au lieu de "0 nN" quand une force est nulle ?
 - 🔨 La barre de scroll devrait se cacher, ou au moins se réduire, si on n'a pas scrollé depuis un moment
 - 🔨 Ne pas enregistrer un mécanisme vide
 

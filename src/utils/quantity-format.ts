@@ -210,10 +210,13 @@ function prefixed_factor(symbol: string, factor: string, prefix: string): string
 
 /**
  * `valueSI` split into a mantissa and the unit it is worth showing in: `units[0]` for a fixed kind, or whichever SI-prefixed unit of an adaptive one keeps the mantissa in [1, 1000) — the same bucket `format_graduation` picks a ruler label from, generalised to any base unit instead of just length.
+ *
+ * `precision`, given, guards against a value too small for even the ladder's own floor: solver noise sitting under a nanonewton still floors to "n" and would otherwise print as a fractional mantissa that rounds away to nothing ("0 nN") — indistinguishable from an actual small reading, but not what it is. Read against `precision`, such a value falls back to the base unit instead ("0 N"), the same reading an exact zero gets. Left out by a caller that picks one unit for several values together (a chart's peak, a block of terms compared with each other): rounding each of those against its own value would fall back some but not others, breaking the very comparison the shared unit exists for.
  */
 export function display_unit(
   valueSI: number,
   kind: QuantityKind,
+  precision?: number,
 ): QuantityUnit {
   const base = default_unit(kind);
   if (!kind.adaptive) return base;
@@ -234,21 +237,27 @@ export function display_unit(
     ),
   );
   const rename = kind.renamedFrom;
+  let unit: QuantityUnit;
   if (rename && exp >= rename.exp) {
     const prefix = SI_PREFIXES.find((p) => p.exp === exp - rename.exp)!;
-    return {
+    unit = {
       symbol: `${prefix.symbol}${rename.symbol}`,
       factor: 10 ** exp * base.factor,
     };
+  } else {
+    const prefix = SI_PREFIXES.find((p) => p.exp === exp)!;
+    unit =
+      exp < 0 && kind.submultipleOnSuffix
+        ? {
+            symbol: prefixed_factor(base.symbol, kind.submultipleOnSuffix, prefix.symbol),
+            factor: 10 ** exp * base.factor,
+          }
+        : { symbol: `${prefix.symbol}${base.symbol}`, factor: 10 ** exp * base.factor };
   }
-  const prefix = SI_PREFIXES.find((p) => p.exp === exp)!;
-  if (exp < 0 && kind.submultipleOnSuffix) {
-    return {
-      symbol: prefixed_factor(base.symbol, kind.submultipleOnSuffix, prefix.symbol),
-      factor: 10 ** exp * base.factor,
-    };
+  if (precision !== undefined && to_mantissa(valueSI, unit, precision) === 0) {
+    return { symbol: base.symbol, factor: base.factor };
   }
-  return { symbol: `${prefix.symbol}${base.symbol}`, factor: 10 ** exp * base.factor };
+  return unit;
 }
 
 /** `valueSI` as a mantissa in `unit`, rounded to `precision` decimal places. */
@@ -269,7 +278,7 @@ export function format_quantity(
   kind: QuantityKind,
   precision = 2,
 ): string {
-  const unit = display_unit(valueSI, kind);
+  const unit = display_unit(valueSI, kind, precision);
   return `${to_mantissa(valueSI, unit, precision)} ${unit.symbol}`;
 }
 
@@ -284,8 +293,8 @@ export function same_shown_value(
   kind?: QuantityKind,
   precision = 1,
 ): boolean {
-  const unitA = kind ? display_unit(a, kind) : RAW_UNIT;
-  const unitB = kind ? display_unit(b, kind) : RAW_UNIT;
+  const unitA = kind ? display_unit(a, kind, precision) : RAW_UNIT;
+  const unitB = kind ? display_unit(b, kind, precision) : RAW_UNIT;
   return (
     unitA.symbol === unitB.symbol &&
     to_mantissa(a, unitA, precision) === to_mantissa(b, unitB, precision)
@@ -301,7 +310,7 @@ export function format_mantissa(
   kind: QuantityKind,
   precision = 2,
 ): string {
-  return to_mantissa(valueSI, display_unit(valueSI, kind), precision).toString();
+  return to_mantissa(valueSI, display_unit(valueSI, kind, precision), precision).toString();
 }
 
 /**
