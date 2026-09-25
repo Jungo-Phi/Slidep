@@ -1,0 +1,61 @@
+ratios 0 (0 = old criterion); per ratio: ms/frame sweeps/frame capped% drift(J) jump(N·m) track(%)
+Balance.slidep
+  0        11.1     0 NaN%    0.049      -      -
+CP.slidep
+  0        20.5     0 NaN%    5.685      -      -
+Cantilever simple.slidep
+  0         1.7     0 NaN%    0.000      -      -
+Cantilever.slidep
+  0         3.2     0 NaN%    0.000      -      -
+Core XY - 2 moteurs.slidep
+  0       423.6     0 NaN%    0.000   0.00   8.57
+Core XY.slidep
+  0       328.9     0 NaN% 24400.889   2.00 117.40
+Crankshaft.slidep
+  0         9.0     0 NaN%    0.015   0.01   0.04
+Double Cantilever bis.slidep
+  0         4.5     0 NaN%    0.000      -      -
+Double Cantilever.slidep
+  0         4.8     0 NaN%    0.000      -      -
+Déconnexion courroie.slidep
+  0        44.0     0 NaN%    0.197   0.03   0.08
+Hoist.slidep
+  0        84.6     0 NaN%    0.000      -      -
+Huygen's chain drive.slidep
+  0       112.2     0 NaN%   17.959   2.00   0.00
+Jansen's linkage (upside-down).slidep
+  0        17.8     0 NaN%    0.037   0.00   0.00
+Jansen's linkage.slidep
+  0        59.1     0 NaN%    0.193   2.85   0.96
+Line from rotation.slidep
+  0        23.2     0 NaN%    0.165   0.44   0.17
+Mass-Spring-Dampener.slidep
+  0         0.7     0 NaN%    0.003      -      -
+Masse suspendue.slidep
+  0        16.0     0 NaN%  153.310      -      -
+Masse-slidep-pivot.slidep
+  0         1.0     0 NaN%    0.000      -      -
+Masse-slider.slidep
+  0         4.1     0 NaN%    0.000      -      -
+Petit.slidep
+  0         5.5     0 NaN%    0.015   0.00   0.07
+Poulie bloqueuse.slidep
+  0        60.2     0 NaN%    0.013   1.10   0.05
+Poutre sur joint de courroie.slidep
+  0        19.0     0 NaN%    1.255   0.05   0.03
+Puente.slidep
+  0        68.5     0 NaN%    0.357   0.00 100.00
+Roues isolées.slidep
+  0         0.9     0 NaN%    0.003   0.00   0.00
+Test slider.slidep
+  0        11.3     0 NaN%    5.407      -      -
+Treillis.slidep
+  0        17.5     0 NaN%    0.000      -      -
+Vilbrequin + masse lourde.slidep
+  0        13.9     0 NaN%    0.020   0.70   2.12
+Vilbrequin double slider.slidep
+  0        23.4     0 NaN%    0.030   0.01   0.19
+Vilbrequin.slidep
+  0         5.8     0 NaN%    0.008   0.01   0.09
+trac-comp.slidep
+  0         2.1     0 NaN%    0.000      -      -

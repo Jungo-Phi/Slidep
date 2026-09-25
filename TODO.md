@@ -10,9 +10,14 @@
 
 **Priorités sur le plan général**
 
+- 🚨 Supprimer les pics de couple (ex. "Jansen" ou dans les forces de "Hoist.slidep")
+- Masse suspendue affiche plus de 150 J d’écart ?
+- Pourquoi la non-convergence chronique de CP, Core XY et Puente ?
+- Le choc en butée de glissière, sur Core XY et Test slider. Crée de l'instabilité
+- (Clock, Jansen, Hoist, Huygens, Vilbrequin + masse lourde) : c’est le levier du chantier performance.
+
 - 🔨 Régler problèmes DDL
 - 🔨 Clean les graphiques
-- 🚨 Supprimer les pics de couple (ex. "Jansen")
 - 🤔 Clarifier le grab en dynamique (grab -> force ?)
 - 🤔 Clarifier "qu'est-ce qui est simulé ?" pour **dt**. On affiche des positions interpolées, mais pas les forces, les overlays, ni les valeurs dans le panneau latéral.
 - 🔨 Améliorer les performances en édition
@@ -41,9 +46,11 @@
 
 **Very qwick fix**
 
+- 🔨 Ne plus accepter les raccourcis quand la gallerie est ouverte
 - 🔨 Afficher le point grabbé en simulation
 - 🔨 Afficher les trajectoires anciennes de plus en plus transparentes
 - 🚨 Les trais indicatifs des valeurs max dans les diagrammes des efforts (vu dans Mf) s'accumulent
+- 🚨 En simulation, clicker sur l'icon force, puis esc, puis reprendre la simu nous remet sur l'icon force.
 - 🔨 La barre de scroll devrait se cacher, ou au moins se réduire, si on n'a pas scrollé depuis un moment
 - 🔨 Ne pas enregistrer un mécanisme vide
 

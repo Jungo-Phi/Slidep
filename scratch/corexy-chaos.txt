@@ -1,0 +1,7 @@
+ratio=0 sweeps=190: worst drift 547.13 J at frame 83, max KE 434.34 J
+ratio=0 sweeps=199: worst drift 617.07 J at frame 98, max KE 484.01 J
+ratio=0 sweeps=201: worst drift 675.93 J at frame 156, max KE 528.85 J
+ratio=0 sweeps=210: worst drift 600.89 J at frame 69, max KE 493.58 J
+ratio=0.001 sweeps=199: worst drift 572.34 J at frame 105, max KE 452.73 J
+ratio=0.001 sweeps=201: worst drift 591.20 J at frame 96, max KE 464.60 J
+ratio=0.001 sweeps=400: worst drift 692.46 J at frame 52, max KE 550.00 J

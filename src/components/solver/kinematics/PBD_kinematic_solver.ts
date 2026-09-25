@@ -110,7 +110,7 @@ const DIAGNOSTIC_TOLERANCE_RATIO = 0.001;
  * What one unit of a link's residual is worth in metres.
  *
  * An angle is not a length, and a fixed angular threshold is not comparable to a fixed distance one: 0.01 rad is 4 mm at the end of a 0.4 m arm and 0.1 mm on a 10 mm pinion.
- * So an angular residual is converted to **the arc it sweeps**, through the link's own geometry — the longer of the two edges an angle holds apart, a motor's crank, the radius of a gear that carries nothing but an angle.
+ * So an angular residual is converted to **the arc it sweeps**, through the link's own geometry — the longer of the two edges an angle holds apart, a motor's crank, the arm from a gear's angle to the beam or pin it turns, the radius of a gear that carries nothing but an angle.
  * `GearRatio` answers a dimensionless ratio, which times the second radius is the metres the first one is off by.
  *
  * Everything else already answers in metres — including `GearMeshAngle`, whose residual is an arc length, which is the precedent this generalises.
@@ -138,6 +138,8 @@ function residual_scale(
       );
       break;
     case "MotorBeam":
+    case "BeamFollowsAngle":
+    case "GearPerimeterPin":
       lever = span(slot.pos[0], slot.pos[1]);
       break;
     case "MotorAngle":
@@ -186,10 +188,17 @@ const REMAINING_RATIO = 1e-6;
 const REMAINING_RAD = 1e-6;
 
 /**
- * How the solver decides it has done enough.
+ * Below this speed, as a fraction of the mechanism's extent per second, a dynamics step's worst constraint gap is converged.
+ * A gap left at the end of a step is not caught up by the next one, as it is in kinematics: the velocity reads it back as `gap / dt`, and carries it.
+ * A dynamics step exits only once this holds AS WELL AS the `motion` criterion: `remaining_motion` mistakes a stalled Gauss-Seidel for a converged one, while this velocity bound alone is too loose for the efforts, which are read at the acceleration level (`gap / dt²`).
+ */
+const DYNAMIC_EXIT_SPEED_RATIO = 1e-3;
+
+/**
+ * How the solver decides it has done enough; a dynamics step must in addition meet `DYNAMIC_EXIT_SPEED_RATIO`.
  *
  * `motion` — stop when nothing will move enough to matter.
- * Right in simulation: the frame hands back to a display that is waiting, and the next one resumes from here, so what is given up is caught up.
+ * Right in simulation: the frame hands back to a display that is waiting, and the next one resumes from here, so what is given up in positions is caught up.
  * A mechanism that is blocked stops and reports its blockage, which is the honest answer.
  *
  * `constraints` — stop when nothing is violated.
@@ -442,6 +451,10 @@ export function PBD_solve(
   // See `Compliance`.
   const lambda = new Float64Array(links.length);
   const invDtSq = dynamics && dynamics.dt > 0 ? 1 / (dynamics.dt * dynamics.dt) : 0;
+  // A dynamics step must also close its gap read as a velocity, `gap / dt`: see `DYNAMIC_EXIT_SPEED_RATIO`.
+  const exitGap =
+    dynamics && dynamics.dt > 0 ? DYNAMIC_EXIT_SPEED_RATIO * extent * dynamics.dt : undefined;
+  let worstGap = 0;
 
   for (let i = 0; i < nbIterations; i++) {
     maxError = 0;
@@ -453,6 +466,7 @@ export function PBD_solve(
     const sweepOrder = reversed !== null && i % 2 === 1 ? reversed : null;
     // Ahead of the links, so the geometric constraints have the last word within a sweep; its gap still counts toward convergence, or the sweep could stop with a motor short of its speed.
     maxError = apply_drives(nodes, drives);
+    worstGap = maxError;
     for (let step = 0; step < links.length; step++) {
       const idx = sweepOrder === null ? step : sweepOrder[step];
       const link = links[idx];
@@ -474,9 +488,13 @@ export function PBD_solve(
         }
       }
       let err = 0;
+      // Metres; left undefined where `err` scaled by its lever already says it.
+      let gap: number | undefined;
       let report = true; // surface in diagnostics
       switch (link.type) {
-        case "Distance":
+        case "Distance": {
+          const alphaTilde = link.compliance && invDtSq > 0 ? link.compliance * invDtSq : 0;
+          const lambdaBefore = lambda[idx];
           err = applyDistanceConstraint(
             nodes,
             s.pos[0],
@@ -484,11 +502,15 @@ export function PBD_solve(
             link.distance,
             1.0,
             link.preferredAxis,
-            link.compliance && invDtSq > 0
-              ? { alphaTilde: link.compliance * invDtSq, lambda, index: idx }
-              : undefined,
+            alphaTilde > 0 ? { alphaTilde, lambda, index: idx } : undefined,
           );
+          // A compliant link settles stretched: what it has left to close is `C + α̃·λ`, not `C`.
+          if (alphaTilde > 0) {
+            const w = (s.pos[0] >= 0 ? nodes.w[s.pos[0]] : 0) + (s.pos[1] >= 0 ? nodes.w[s.pos[1]] : 0);
+            gap = Math.abs(lambda[idx] - lambdaBefore) * (w + alphaTilde);
+          }
           break;
+        }
         case "MinDistance":
           err = applyMinDistanceConstraint(
             nodes,
@@ -808,6 +830,7 @@ export function PBD_solve(
       if (report) {
         // `report` and not `owner`: a link with no owner is invisible to the diagnostics panel, but it still has to hold for the figure to be right.
         const residual = err * residual_scale(link, s, nodes, angleLever);
+        if (exitGap !== undefined) worstGap = Math.max(worstGap, gap ?? residual);
         if (trackSeverity) {
           const severity = residual / diagnosticTolerance;
           if (severity > maxSeverity) maxSeverity = severity;
@@ -839,7 +862,11 @@ export function PBD_solve(
     turnedRing[slot] = turned;
 
     // Within-sweep convergence is the same question dynamics or not: the predict step already fixed this frame's/substep's target once, before the loop started (see `frameStart` above), so what is left is Gauss-Seidel creeping toward THAT fixed point — gravity moving the NEXT frame further has no bearing on whether THIS sweep is still correcting anything.
-    // Forcing a dynamics step through its full `nbIterations` regardless of how far it had already converged is what let a heavy mass ratio (a slow-converging chain — `remaining_motion`'s own geometric decay applies just the same) leave a residual proportional to how far short of `nbIterations` it needed, instead of the small one it actually converges to given enough sweeps — see the mass-ratio pivot residual this fixed.
+    // A dynamics step must in addition have closed its gap as a velocity: see `DYNAMIC_EXIT_SPEED_RATIO`.
+    if (exitGap !== undefined && worstGap >= exitGap) continue;
+    // A forward sweep and the backward one after it make a direct solve (see `reversed_sweep_order`): stopping between the two leaves the efforts read off a half-done pair, a whole mass lump short on a plain cantilever.
+    if (reversed !== null && i % 2 === 0) continue;
+
     if (maxError < epsilon) break;
 
     if (i < minSweepsBeforeExit) continue;

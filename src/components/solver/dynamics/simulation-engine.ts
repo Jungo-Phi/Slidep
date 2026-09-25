@@ -1215,8 +1215,8 @@ export function step_simulation(
 }
 
 /**
- * CEILING on the Gauss-Seidel sweeps a dynamic SUBSTEP may run — not a fixed count: dynamics now exits early on the same converged-residual/decayed-motion criteria `PBD_solve` already uses for edition and kinematic simulation, so a substep almost always stops well short of this.
- * What the ceiling has to cover is the substep that DOESN'T converge quickly — a heavy mass hinged onto a comparatively massless member (an extreme mass ratio slows Gauss-Seidel's own convergence rate, regardless of how small the substep's predicted displacement is) — so it is sized like `SIMULATION_SWEEPS`, the same ceiling kinematic mode already trusts for its own worst case, rather than the far smaller budget a well-behaved substep would need on its own.
+ * CEILING on the Gauss-Seidel sweeps a dynamic SUBSTEP may run, not a fixed count: a substep exits once converged in motion and as a velocity (see `DYNAMIC_EXIT_SPEED_RATIO`).
+ * What the ceiling has to cover is the substep that DOES NOT converge quickly — an extreme mass ratio slows Gauss-Seidel whatever the substep's displacement — so it is sized like `SIMULATION_SWEEPS`, the ceiling kinematic mode trusts for its own worst case.
  */
 const DYNAMIC_SWEEPS = 200;
 
@@ -1510,7 +1510,7 @@ export function step_dynamic_simulation(
       undefined,
       angles,
       isLastSubstep && collectDiagnostics,
-      // A dynamics step exits on the same residual as any other: `sweeps` is its ceiling, not its count.
+      // `sweeps` is the ceiling, not the count: see `DYNAMIC_SWEEPS`.
       "motion",
       0,
       dynamics,

@@ -1,0 +1,5 @@
+sub16 tol1: 21.5 ms/frame, max jump 18.44 N·m, speed 2.080..2.883
+sub64 tol1: 24.0 ms/frame, max jump 4.18 N·m, speed 2.421..2.810
+sub64 tol0.25: 22.8 ms/frame, max jump 16.50 N·m, speed 2.473..2.854
+sub16 tol0: 29.3 ms/frame, max jump 3.76 N·m, speed 2.586..2.866
+sub64 tol0: 94.5 ms/frame, max jump 3.95 N·m, speed 2.612..2.843
