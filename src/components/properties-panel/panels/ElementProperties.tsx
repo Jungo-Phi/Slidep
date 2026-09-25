@@ -70,7 +70,7 @@ import {
   gear_inertia,
   surface_mass_for_inertia,
 } from "../../../utils/gear-mass";
-import { get_dynamic_metric_at } from "../../solver/recording/probe-series";
+import { motor_available_power } from "../../solver/dynamics/motor-model";
 import { snapshot_index_at } from "../../solver/dynamics/simulation-engine";
 import { DynamicSnapshot } from "../../../types/runtime-state";
 
@@ -193,16 +193,8 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
   const displayMotorConfig =
     analysedElement?.type === "pivot" ? analysedElement.motor : undefined;
   const motorConfig = element.type === "pivot" ? element.motor : undefined;
-  // The motor's own instantaneous draw — only a dynamic run has real torque/velocity to read it from (kinematic motors just track position, `motor-power` reads empty there).
-  const motorPowerSample =
-    motorConfig && appMode === "dynamic"
-      ? get_dynamic_metric_at(
-          element,
-          "motor-power",
-          runtimeState.simulationSnapshots as DynamicSnapshot[],
-          runtimeState.time,
-        )
-      : undefined;
+  const shownMotor = displayMotorConfig ?? motorConfig;
+  const availablePower = shownMotor ? motor_available_power(shownMotor) : 0;
   // Read off the frame the cursor stands on, like the stall witness: a diagnostic belongs to a state the solver produced.
   const dynamicSnapshots = runtimeState.simulationSnapshots as DynamicSnapshot[];
   const motorSaturated =
@@ -633,10 +625,8 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                 color="text.secondary"
                 sx={{ display: "block", textAlign: "center", mb: -0.5 }}
               >
-                {t("metric_motor_power")} :{" "}
-                {motorPowerSample?.values.length
-                  ? format_quantity(motorPowerSample.values[0].value, POWER)
-                  : "—"}
+                {t("motor_power_available")} :{" "}
+                {availablePower > 0 ? format_quantity(availablePower, POWER) : "—"}
               </Typography>
             </Box>
           )}

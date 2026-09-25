@@ -13,6 +13,12 @@ import {
   COHESION_DIAGRAM_COLOR,
 } from "../../../constants/physics-display-specs";
 import { t } from "../../../i18n";
+import type {
+  AbscissaFrame,
+  HoveredAbscissa,
+  HoveredAbscissaSource,
+} from "../../../types/hovered-part";
+import type { ID } from "../../../types/element";
 
 /**
  * Three stacked N/T/Mf diagrams of one beam — docs/plan-efforts-interieurs.md phase 5bis.
@@ -324,9 +330,12 @@ interface CohesionDiagramsProps {
   /** Shown in place of the diagrams when `field` is undefined (kinematic mode, or dynamic
    * mode with nothing recorded yet). */
   emptyMessage: string;
+  /** The beam these diagrams are of, named in the abscissa handed to `onHoverAbscissa`. */
+  beamID: ID;
   /** Abscissa hovered over any of the three diagrams — `null` off them. Panel → canvas only
-   * (see docs/plan-efforts-interieurs.md phase 5bis: the reverse link was cut, unneeded). */
-  onHoverS?: (s: number | null) => void;
+   * (see docs/plan-efforts-interieurs.md phase 5bis: the reverse link was cut, unneeded).
+   * A resolver, so the canvas places it on the field of the frame it draws. */
+  onHoverAbscissa?: (source: HoveredAbscissaSource | null) => void;
 }
 
 /** How close the cursor must be to a "point particulier" (`field.discontinuities`) to lock
@@ -334,18 +343,80 @@ interface CohesionDiagramsProps {
  * Everywhere else the cursor is fully continuous. */
 const SNAP_TOLERANCE_VIEW = 5;
 
+/**
+ * Where the cursor at `ratio` (0 at the plot's left edge, 1 at its right) lands on `field`: `rawS` under it, `snappedS` after locking onto a "point particulier" within tolerance.
+ * Pure in the field, so it can be asked again when the field changes under a cursor that has not moved.
+ */
+function cursor_position(
+  field: CohesionField,
+  ratio: number,
+): { rawS: number; snappedS: number } {
+  const plotW = VIEW_W - GUTTER - PAD_RIGHT;
+  const rawS = ratio * field.length;
+  const tolerance = (SNAP_TOLERANCE_VIEW / plotW) * field.length;
+  let snappedS = rawS;
+  let nearestDist = tolerance;
+  for (const d of field.discontinuities) {
+    const dist = Math.abs(d - rawS);
+    if (dist < nearestDist) {
+      nearestDist = dist;
+      snappedS = d;
+    }
+  }
+  return { rawS, snappedS };
+}
+
 export const CohesionDiagrams: React.FC<CohesionDiagramsProps> = ({
   field,
   forcePoolMax,
   momentPoolMax,
   emptyMessage,
-  onHoverS,
+  beamID,
+  onHoverAbscissa,
 }) => {
   const { palette } = useTheme();
   // `hoveredS` is where the cursor is DRAWN (snapped when close to a discontinuity); `hoveredValueS` is the raw position, which value readouts always use — see `value_at`.
   const [hoveredS, setHoveredS] = React.useState<number | null>(null);
   const [hoveredValueS, setHoveredValueS] = React.useState<number | null>(null);
   const wrapperRef = React.useRef<HTMLDivElement | null>(null);
+  // The cursor's place on the plot while it rests on it, `null` off it.
+  // The field moves under a resting cursor while a simulation plays, and the cursor must follow the point it had locked onto rather than stay at the abscissa it locked at.
+  const cursorRatioRef = React.useRef<number | null>(null);
+  const fieldRef = React.useRef(field);
+  fieldRef.current = field;
+  // Resolved against the frame the canvas is drawing, whose field is a render fresher than this panel's copy.
+  const hovered_abscissa = React.useCallback(
+    (frame: AbscissaFrame | null): HoveredAbscissa | null => {
+      const ratio = cursorRatioRef.current;
+      const live =
+        frame?.cohesionFields.find((f) => f.beamID === beamID) ??
+        fieldRef.current;
+      if (ratio === null || !live) return null;
+      const { rawS, snappedS } = cursor_position(live, ratio);
+      // Same rule as the drawn dot (`hovered_value`): the side of the jump the raw cursor is on.
+      return {
+        beamID,
+        s: snappedS,
+        side: rawS <= snappedS ? "before" : "after",
+        kind: "cut",
+      };
+    },
+    [beamID],
+  );
+
+  const place_cursor = React.useCallback(
+    (fieldNow: CohesionField, ratio: number) => {
+      const { rawS, snappedS } = cursor_position(fieldNow, ratio);
+      setHoveredS(snappedS);
+      setHoveredValueS(rawS);
+    },
+    [],
+  );
+
+  React.useEffect(() => {
+    if (field && field.length >= 1e-9 && cursorRatioRef.current !== null)
+      place_cursor(field, cursorRatioRef.current);
+  }, [field, place_cursor]);
 
   if (!field || field.length < 1e-9) {
     return (
@@ -376,28 +447,16 @@ export const CohesionDiagrams: React.FC<CohesionDiagramsProps> = ({
     const rect = el.getBoundingClientRect();
     const xView = ((e.clientX - rect.left) / rect.width) * VIEW_W;
     const ratio = Math.max(0, Math.min(1, (xView - GUTTER) / plotW));
-    const rawS = ratio * field.length;
-
-    // Snap the DRAWN position onto the nearest "point particulier" within tolerance — the value readout still uses `rawS` (below), so it keeps reading whichever side of a jump the mouse actually approached from, not an arbitrary pick forced by the snap.
-    const tolerance = (SNAP_TOLERANCE_VIEW / plotW) * field.length;
-    let snappedS = rawS;
-    let nearestDist = tolerance;
-    for (const d of field.discontinuities) {
-      const dist = Math.abs(d - rawS);
-      if (dist < nearestDist) {
-        nearestDist = dist;
-        snappedS = d;
-      }
-    }
-
-    setHoveredS(snappedS);
-    setHoveredValueS(rawS);
-    onHoverS?.(snappedS);
+    cursorRatioRef.current = ratio;
+    // The value readout keeps reading `rawS`, so a snapped cursor still shows whichever side of a jump the mouse actually approached from, not an arbitrary pick forced by the snap.
+    place_cursor(field, ratio);
+    onHoverAbscissa?.(hovered_abscissa);
   };
   const handleLeave = () => {
+    cursorRatioRef.current = null;
+    onHoverAbscissa?.(null);
     setHoveredS(null);
     setHoveredValueS(null);
-    onHoverS?.(null);
   };
 
   return (

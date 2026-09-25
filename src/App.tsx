@@ -107,7 +107,7 @@ import {
   migrate_snap_settings,
   type SnapSettings,
 } from "./utils/snap-corridor";
-import { HoveredAbscissa, HoveredPart } from "./types/hovered-part";
+import { HoveredAbscissaSource, HoveredPart } from "./types/hovered-part";
 import { actionReducer } from "./components/mechanism/action-reducer";
 import { assert_actions_preserve_validity } from "./utils/assert-mechanism";
 import { apply_actions } from "./components/mechanism/apply-actions";
@@ -172,8 +172,14 @@ const App: React.FC = () => {
   });
 
   /** An abscissa hovered on the analysis panel's N/T/Mf diagrams, for the canvas to mark on the beam — see docs/plan-efforts-interieurs.md phase 5bis. */
-  const [hoveredAbscissa, setHoveredAbscissa] =
-    useState<HoveredAbscissa | null>(null);
+  const [hoveredAbscissa, setHoveredAbscissaState] =
+    useState<HoveredAbscissaSource | null>(null);
+  // A resolver is itself a function, which `setState` would call as an updater: it goes in wrapped.
+  const setHoveredAbscissa = useCallback(
+    (source: HoveredAbscissaSource | null) =>
+      setHoveredAbscissaState(() => source),
+    [],
+  );
 
   /** A line of the analysis panel's force balance the cursor rests on, for the canvas to show the vector it stands for — which is what tells a reader which term of the sum is which. */
   const [hoveredBalanceTerm, setHoveredBalanceTerm] =

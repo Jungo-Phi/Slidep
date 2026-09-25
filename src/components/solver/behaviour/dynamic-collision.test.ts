@@ -104,4 +104,38 @@ describe("rebond en mode dynamique", () => {
     }
     expect(maxUpwardVelocityAfterContact).toBeGreaterThan(1);
   });
+
+  it("les pertes de rebond bouclent le bilan d'énergie d'une chute sur le plancher", () => {
+    const MASS = id();
+    const before: Mechanism = {
+      ...mechanism([mass(MASS, new Point2(50, 100))]),
+      simulation: {
+        ...DEFAULT_SIMULATION,
+        floor: { enabled: true, height: 0, angle: 0 },
+      },
+    };
+    const model = compile_simulation_model(before, false, true);
+    let snapshot: DynamicSnapshot | null = null;
+    let mechanical0 = 0;
+    let lost = 0;
+    let worstGap = 0;
+    let lastFrameLoss = 0;
+    const FRAMES = 1500;
+    for (let i = 0; i < FRAMES; i++) {
+      snapshot = step_dynamic_simulation(
+        model, i * RECORD_DT, snapshot, RECORD_DT, GRAVITY,
+        undefined, undefined, undefined, false, true,
+      );
+      const e = snapshot.energy!;
+      const mechanical = e.kinetic + e.potentialGravity + e.potentialSpring;
+      if (i === 0) mechanical0 = mechanical;
+      else lost += e.impactLoss;
+      worstGap = Math.max(worstGap, Math.abs(mechanical - mechanical0 + lost));
+      lastFrameLoss = e.impactLoss;
+    }
+    const released = Math.abs(mechanical0 - (snapshot!.energy!.potentialGravity + snapshot!.energy!.kinetic));
+    expect(worstGap).toBeLessThan(0.05 * released);
+    // Settled on the floor, resting contact must not keep charging losses.
+    expect(lastFrameLoss).toBeLessThan(1e-3 * released);
+  });
 });

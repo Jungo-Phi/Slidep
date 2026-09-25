@@ -19,7 +19,7 @@ import {
   UnionElement,
 } from "../../types";
 import { COLORS } from "../../theme/canvas-theme";
-import { HoveredAbscissa, HoveredPart } from "../../types/hovered-part";
+import { HoveredAbscissaSource, HoveredPart } from "../../types/hovered-part";
 import { CanvasState, selected_ids } from "../../types/canvas-state";
 import { ProjectInfoSection } from "./panels/ProjectInfoSection";
 import ElementProperties from "./panels/ElementProperties";
@@ -83,7 +83,7 @@ export interface PropertiesPanelProps {
   /** Motors standing blocked at the cursor — see `motors_blocked_at`. */
   blockedMotors: ReadonlySet<ID>;
   /** Publishes the abscissa hovered on a beam's N/T/Mf diagrams, for the canvas to mark. */
-  setHoveredAbscissa: (hovered: HoveredAbscissa | null) => void;
+  setHoveredAbscissa: (hovered: HoveredAbscissaSource | null) => void;
   /** See `App`'s own `hoveredBalanceTerm`. */
   setHoveredBalanceTerm: (hovered: HoveredBalanceTerm | null) => void;
   /** See `App`'s own `momentBalanceReference`. */

@@ -11,6 +11,7 @@
 import { ProfileShape } from "../../../types/material";
 import { SECTION_SCHEMA } from "../../../constants/rendering-specs";
 import { LENGTH, format_mantissa } from "../../../utils/quantity-format";
+import { arial_text_width } from "../../../utils/text-width";
 import {
   Annotation,
   DrawnShape,
@@ -93,30 +94,9 @@ function cote_label(a: Annotation): string {
   return `${a.name} = ${format_mantissa(a.value, LENGTH, precision)}`;
 }
 
-/**
- * Advance width of each character a cote label can hold, in ems — the digits and the handful of letters `name = value` is built from.
- * A single average would do to reserve margin, but the dimension line is drawn to this estimate as well, running under the label: a letter as narrow as `t` counted at an average width leaves the line visibly poking out past the text.
- */
-const ADVANCE: Record<string, number> = {
-  " ": 0.278,
-  ".": 0.278,
-  ",": 0.278,
-  "-": 0.333,
-  "=": 0.584,
-  b: 0.556,
-  d: 0.556,
-  e: 0.556,
-  f: 0.278,
-  h: 0.556,
-  t: 0.278,
-  w: 0.722,
-};
-/** What a digit, and anything else a future cote name brings, is counted at. */
-const ADVANCE_DEFAULT = 0.556;
-
+/** Estimated rather than measured: the dimension line is drawn to this width as well, running under the label, so a letter as narrow as `t` counted at an average width would leave the line visibly poking out past the text. */
 export const text_width = (label: string): number =>
-  FONT *
-  [...label].reduce((sum, c) => sum + (ADVANCE[c] ?? ADVANCE_DEFAULT), 0);
+  arial_text_width(label, FONT);
 
 const clamp = (v: number, lo: number, hi: number) =>
   Math.min(hi, Math.max(lo, v));

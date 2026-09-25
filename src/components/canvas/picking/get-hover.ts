@@ -42,6 +42,7 @@ import {
 } from "../../../utils";
 import { belt_pieces, nearest_point_on_piece } from "../../../utils/belt-path";
 import {
+  arrow_hit,
   distributed_screen_geometry,
   force_screen_geometry,
   moment_screen_geometry,
@@ -740,10 +741,7 @@ function get_hovered_part_of_element(
         mechanicalElements,
         viewport,
       );
-      if (
-        mouseScreen.distance_to(tip) <= HIT_TOLERANCE.NODE ||
-        mouseScreen.distance2segment(base, tip) <= HIT_TOLERANCE.EDGE
-      )
+      if (arrow_hit(mouseScreen, base, tip))
         return {
           type: "Force",
           position: screen2world(tip, viewport),
@@ -806,10 +804,7 @@ function get_hovered_part_of_element(
         labelEnd,
       } = distributed_screen_geometry(element, mechanicalElements, viewport);
       // Tip handles + Arrows body
-      if (
-        mouseScreen.distance_to(tipStart) <= HIT_TOLERANCE.NODE ||
-        mouseScreen.distance2segment(start, tipStart) <= HIT_TOLERANCE.EDGE
-      ) {
+      if (arrow_hit(mouseScreen, start, tipStart)) {
         return {
           type: "DistributedForce",
           position: screen2world(tipStart, viewport),
@@ -818,10 +813,7 @@ function get_hovered_part_of_element(
           deleting: state.type === "Erasing",
         };
       }
-      if (
-        mouseScreen.distance_to(tipEnd) <= HIT_TOLERANCE.NODE ||
-        mouseScreen.distance2segment(end, tipEnd) <= HIT_TOLERANCE.EDGE
-      ) {
+      if (arrow_hit(mouseScreen, end, tipEnd)) {
         return {
           type: "DistributedForce",
           position: screen2world(tipEnd, viewport),
@@ -830,14 +822,16 @@ function get_hovered_part_of_element(
           deleting: state.type === "Erasing",
         };
       }
-      // Body + segment between tips
+      // Body + segment between tips.
+      // The body is bounded by the beam itself, which is drawn beneath it: the beam's own band is left to the beam.
       if (
-        mouseScreen.is_in_distributed_force(
+        (mouseScreen.is_in_distributed_force(
           start,
           end,
           vectorStart,
           vectorEnd,
-        ) ||
+        ) &&
+          mouseScreen.distance2segment(start, end) > HIT_TOLERANCE.EDGE) ||
         mouseScreen.distance2segment(tipStart, tipEnd) <= HIT_TOLERANCE.EDGE
       ) {
         return {

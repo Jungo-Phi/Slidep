@@ -10,7 +10,7 @@ import {
   NodeElement,
   Point2,
   ScreenPoint,
-  UP,
+  DOWN,
   ViewportState,
 } from "../../../types";
 import { HoveredPart, is_hovered } from "../../../types/hovered-part";
@@ -318,7 +318,7 @@ export function draw_gesture_preview(
         const end = world2screen(beam.positionEnd, viewport);
         // The beam's world normal, so the preview leans to the same side of the beam whatever the viewport does with it.
         const delta = world2screen_vec(
-          beam.positionEnd.sub(beam.positionStart).perp(),
+          beam.positionStart.sub(beam.positionEnd).perp(),
           viewport,
         ).with_length(force_length);
         draw_distributed_force(ctx, start, end, delta, delta);
@@ -329,7 +329,7 @@ export function draw_gesture_preview(
       draw_force(
         ctx,
         world2screen(hoveredPart.position, viewport),
-        world2screen_vec(UP, viewport).with_length(force_length),
+        world2screen_vec(DOWN, viewport).with_length(force_length),
         LOAD_SCALING.PREVIEW_VALUE,
         false,
         FORCE,

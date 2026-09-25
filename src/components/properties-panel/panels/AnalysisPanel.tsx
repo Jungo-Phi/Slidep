@@ -83,7 +83,11 @@ import {
   resolve_moment_balance_point,
 } from "../../solver/analysis/force-balance";
 import { element_to_hovered_part } from "../../canvas/utils";
-import type { HoveredAbscissa } from "../../../types/hovered-part";
+import type {
+  AbscissaFrame,
+  HoveredAbscissa,
+  HoveredAbscissaSource,
+} from "../../../types/hovered-part";
 import type { FocusedOverlay } from "../../canvas/drawing/drawing-functions";
 
 import { shown_element_name } from "../../../utils";
@@ -110,6 +114,7 @@ import { AnimatedMode, useModeAnimation } from "../useModeAnimation";
 import {
   ANGULAR_VELOCITY,
   display_unit,
+  type QuantityKind,
 } from "../../../utils/quantity-format";
 
 /** The canvas hover a load's own arrow answers to — what a cursor resting on it would set, so pointing at its line in the balance thickens the very same stroke. */
@@ -182,8 +187,8 @@ interface AnalysisPanelProps {
   modePreviewRef: React.MutableRefObject<Mechanism | null>;
   /** See `App`'s own `hoveredBalanceTerm`. */
   setHoveredBalanceTerm: (hovered: HoveredBalanceTerm | null) => void;
-  /** Where along the selected beam a hovered chart's value was found, for the canvas to tick — the same channel the selection inspector's own N/T/Mf diagrams use (`HoveredAbscissa`). */
-  setHoveredAbscissa: (hovered: HoveredAbscissa | null) => void;
+  /** Where along the selected beam a hovered chart's value was found, for the canvas to tick — the same channel the selection inspector's own N/T/Mf diagrams use (`HoveredAbscissaSource`). */
+  setHoveredAbscissa: (hovered: HoveredAbscissaSource | null) => void;
   /** See `App`'s own `momentBalanceReference`. */
   momentBalanceReference: MomentBalanceReference;
   setMomentBalanceReference: (reference: MomentBalanceReference) => void;
@@ -882,19 +887,54 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
   // Withdrawn when the panel goes away: a tick outliving the chart that named it would point at nothing.
   React.useEffect(() => () => setHoveredAbscissa(null), [setHoveredAbscissa]);
 
-  /** `abscissa` at the recorded instant nearest the one on screen — the same nearest-sample rule `get_metric_at` reads a series by.
+  /** `abscissa` and the plotted value at the recorded instant nearest the one on screen — the same nearest-sample rule `get_metric_at` reads a series by.
    * Read at `runtimeState.time` rather than wherever the pointer sits: the canvas is posed at that instant, and an abscissa taken from another one would be marked on a beam that was somewhere else when it was measured. */
   const shown_abscissa = (
     series: ProbeSeries,
     abscissa: number[],
-  ): number | null => {
+    time: number,
+  ): { s: number; value: number | undefined } | null => {
     if (series.t.length === 0) return null;
-    const time = runtimeState.time;
     let best = 0;
     for (let i = 1; i < series.t.length; i++)
       if (Math.abs(series.t[i] - time) < Math.abs(series.t[best] - time)) best = i;
-    return abscissa[best] ?? null;
+    const s = abscissa[best];
+    return s === undefined ? null : { s, value: series.curves[0]?.values[best] };
   };
+
+  // The chart the cursor rests on, as of the latest render — read by `hovered_chart_mark`, which outlives the render that handed it to the canvas.
+  const hoveredChartRef = React.useRef<{
+    key: string;
+    beamID: ID;
+    series: ProbeSeries;
+    abscissa: number[];
+    kind: QuantityKind;
+  } | null>(null);
+  const timeRef = React.useRef(runtimeState.time);
+  timeRef.current = runtimeState.time;
+  /** Handed to the canvas as a resolver: the tick is placed at the instant the canvas is drawing, which React's own copy of the time trails by a render. */
+  const hovered_chart_mark = React.useCallback(
+    (frame: AbscissaFrame | null): HoveredAbscissa | null => {
+      const chart = hoveredChartRef.current;
+      if (!chart) return null;
+      const shown = shown_abscissa(
+        chart.series,
+        chart.abscissa,
+        frame?.time ?? timeRef.current,
+      );
+      if (!shown) return null;
+      return {
+        beamID: chart.beamID,
+        s: shown.s,
+        reading:
+          shown.value === undefined || Number.isNaN(shown.value)
+            ? undefined
+            : { value: shown.value, kind: chart.kind },
+      };
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `shown_abscissa` reads nothing from the render.
+    [],
+  );
 
   const chart_empty_message = (metric: ProbeMetric): string =>
     t(
@@ -1261,6 +1301,13 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
 
               {element.probes.map((probe) => {
                 const { series, abscissa } = probe_readout(element, probe.metric);
+                const chartKey = `${element.id}:${probe.metric}`;
+                if (abscissa && hoveredChartRef.current?.key === chartKey)
+                  hoveredChartRef.current = {
+                    ...hoveredChartRef.current,
+                    series,
+                    abscissa,
+                  };
                 const reference = stress_reference(element, probe.metric);
                 const isVector = is_vector_metric(probe.metric);
                 const curves: ChartCurve[] = series.curves
@@ -1396,11 +1443,17 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
                       onHover={
                         abscissa
                           ? (inside) => {
-                              const s = inside
-                                ? shown_abscissa(series, abscissa)
+                              hoveredChartRef.current = inside
+                                ? {
+                                    key: chartKey,
+                                    beamID: element.id,
+                                    series,
+                                    abscissa,
+                                    kind: quantity_kind_for_metric(probe.metric),
+                                  }
                                 : null;
                               setHoveredAbscissa(
-                                s === null ? null : { beamID: element.id, s },
+                                inside ? hovered_chart_mark : null,
                               );
                             }
                           : undefined

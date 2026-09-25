@@ -6,12 +6,23 @@
  * Lengths are screen px, so a load keeps its size on screen whatever the zoom; callers holding a world length convert it first (see `world2screen_length`).
  */
 
-import { LOAD_SCALING, MOMENT_SCALING } from "../constants/physics-display-specs";
+import {
+  LOAD_SCALING,
+  MOMENT_SCALING,
+  VELOCITY_SCALING,
+} from "../constants/physics-display-specs";
+import { MIN_LENGTH_POOL } from "../constants/physics-specs";
 
 interface LoadRuler {
   FLOOR_VALUE: number;
   MIN_PX: number;
   PX_PER_DECADE: number;
+}
+
+interface VelocityRuler {
+  PX_PER_DIAGONAL_PER_SECOND: number;
+  MIN_PX: number;
+  MAX_PX: number;
 }
 
 // ─── Display scale ──────────────────────────────────────────────────────────
@@ -43,6 +54,21 @@ export function stored2screen_load(value: number): number {
 /** Expand a drawn load length (screen px) to its real magnitude (N or N/m) with an INVERSE LOG scaling. */
 export function screen2stored_load(value: number): number {
   return screen2stored(value, LOAD_SCALING);
+}
+
+/**
+ * Drawn length (screen px) of a velocity of `speed` (m/s) on a mechanism whose bounding-box diagonal is `boundsDiagonal` (m): linear in the speed, clamped to the ruler's own bounds.
+ * A diagonal of zero (nothing to measure against) falls back on the same floor the negligibility pool uses.
+ */
+export function velocity2screen(
+  speed: number,
+  boundsDiagonal: number,
+  ruler: VelocityRuler = VELOCITY_SCALING,
+): number {
+  const diagonal = boundsDiagonal > 0 ? boundsDiagonal : MIN_LENGTH_POOL;
+  const length =
+    (ruler.PX_PER_DIAGONAL_PER_SECOND * Math.abs(speed)) / diagonal;
+  return Math.min(ruler.MAX_PX, Math.max(ruler.MIN_PX, length));
 }
 
 /**

@@ -44,6 +44,8 @@ const zeroEnergy = (kinetic: number): EnergySample => ({
   potentialSpring: 0,
   damperPower: 0,
   frictionPower: 0,
+  loadPower: 0,
+  impactLoss: 0,
 });
 
 describe("bilan énergétique", () => {
@@ -53,7 +55,11 @@ describe("bilan énergétique", () => {
       kinetic: [],
       potential: [],
       mechanical: [],
-      netWorkIn: [],
+      motorWork: [],
+      loadWork: [],
+      damperWork: [],
+      frictionWork: [],
+      impactWork: [],
     });
   });
 
@@ -88,26 +94,7 @@ describe("bilan énergétique", () => {
     const s = compute_energy_balance(
       [0, 1, 2, 3].map((t) => frame(t, zeroEnergy(0), [motor("m", 2)])),
     );
-    expect(s.netWorkIn).toEqual([0, 2, 4, 6]);
-  });
-
-  it("un amortisseur retranche sa puissance dissipée du travail net", () => {
-    const s = compute_energy_balance(
-      [0, 1].map((t) =>
-        frame(t, { ...zeroEnergy(0), damperPower: 3 }, [motor("m", 5)]),
-      ),
-    );
-    // Net power is 5 - 3 = 2 W, held constant: work over 1 s is exactly 2 J.
-    expect(s.netWorkIn).toEqual([0, 2]);
-  });
-
-  it("un joint frottant retranche sa puissance dissipée comme un amortisseur", () => {
-    const s = compute_energy_balance(
-      [0, 1].map((t) =>
-        frame(t, { ...zeroEnergy(0), frictionPower: 3 }, [motor("m", 5)]),
-      ),
-    );
-    expect(s.netWorkIn).toEqual([0, 2]);
+    expect(s.motorWork).toEqual([0, 2, 4, 6]);
   });
 
   it("plusieurs moteurs se somment avant intégration", () => {
@@ -116,6 +103,31 @@ describe("bilan énergétique", () => {
         frame(t, zeroEnergy(0), [motor("a", 2), motor("b", 3)]),
       ),
     );
-    expect(s.netWorkIn).toEqual([0, 5]);
+    expect(s.motorWork).toEqual([0, 5]);
+  });
+
+  it("chaque source a son propre cumul", () => {
+    const s = compute_energy_balance(
+      [0, 1].map((t) =>
+        frame(
+          t,
+          { ...zeroEnergy(0), loadPower: -4, damperPower: 2, frictionPower: 3 },
+          [motor("m", 10)],
+        ),
+      ),
+    );
+    expect(s.motorWork).toEqual([0, 10]);
+    expect(s.loadWork).toEqual([0, -4]);
+    expect(s.damperWork).toEqual([0, 2]);
+    expect(s.frictionWork).toEqual([0, 3]);
+  });
+
+  it("les pertes de choc s'accumulent telles quelles", () => {
+    const s = compute_energy_balance([
+      frame(0, zeroEnergy(0)),
+      frame(1, { ...zeroEnergy(0), impactLoss: 3 }),
+      frame(2, { ...zeroEnergy(0), impactLoss: 2 }),
+    ]);
+    expect(s.impactWork).toEqual([0, 3, 5]);
   });
 });

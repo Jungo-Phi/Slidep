@@ -45,6 +45,19 @@ export const MOMENT_SCALING = {
   PX_PER_DECADE: LOAD_SCALING.PX_PER_DECADE / 2,
 };
 
+/**
+ * The ruler a velocity is drawn on: linear, and relative to the mechanism's own size, so that within one mechanism a drawn length always stands for the same speed.
+ * Velocities span a far narrower range than loads, and it is the ratio between two of them that is read, which a log ruler would flatten.
+ */
+export const VELOCITY_SCALING = {
+  /** Drawn length (screen px) of a velocity that crosses the mechanism's bounding-box diagonal in one second. */
+  PX_PER_DIAGONAL_PER_SECOND: 300,
+  /** Shortest drawn arrow (screen px): just longer than the head, so that a slow reading still shows a shaft. */
+  MIN_PX: 24,
+  /** Longest drawn arrow (screen px): keeps a transient (an impact, a solver spike) from drawing across the whole canvas. */
+  MAX_PX: 250,
+};
+
 /** The physics-overlay quantities drawn on the canvas: a probed velocity, the two flavours of reaction force/moment a constraint can carry, and a body's own weight/inertia force. */
 export const PHYSICS_OVERLAY_KINDS = [
   "velocity",

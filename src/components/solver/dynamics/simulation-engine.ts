@@ -1301,6 +1301,8 @@ export function step_dynamic_simulation(
   // XPBD is implicit Euler: `M·(v⁺ − v⁻)/h` balances the forces at the positions the substep ends on, which are the positions the frame publishes.
   // Averaged over the whole frame instead, the acceleration lags the geometry by half a frame, and on a body turning fast its centripetal part leaks into the moment equations.
   let velocitiesBeforeSolve = new Map(velocities);
+  /** J — kinetic energy the collision bounces removed over this frame's substeps. */
+  let impactLoss = 0;
   // What an anchored node has to restate as a force to reach the reaction fallback below — its OWN weight, the beams' and gears' endpoint shares taken back out.
   // Those shares are the solver's way of carrying a body's mass, not the node's: the body reports its whole `μL` through its own torsor (`statics-frame.ts`'s `nodeMassAt` draws the same line), so restating them here would have the ground hold a beam's end twice.
   const groundedWeights = new Map<string, Point2>();
@@ -1522,7 +1524,7 @@ export function step_dynamic_simulation(
     // substep, instead of leaving them at the plain solve's inelastic (velocity ≈ 0) response.
     // Against the same fixed scale as `collision_links` above. ──
     if (collisionsOn || floorOn)
-      apply_collision_restitution(
+      impactLoss += apply_collision_restitution(
         model.collisionCandidates,
         result.positions,
         model.dynamicMasses.posMasses,
@@ -1562,6 +1564,7 @@ export function step_dynamic_simulation(
     velocities,
     angleVelocities,
     gravity,
+    impactLoss,
   );
 
   // ── Into the snapshot's slots, fused keys decoupled back to one slot per original key ──
@@ -1710,6 +1713,7 @@ function compute_energy_sample(
   velocities: Map<string, Point2>,
   angleVelocities: Map<string, number>,
   gravity: Point2,
+  impactLoss: number,
 ): EnergySample {
   let kinetic = 0;
   let potentialGravity = 0;
@@ -1748,6 +1752,16 @@ function compute_energy_sample(
     }
   }
 
+  let loadPower = 0;
+  const { forces, torques } = resolve_load_forces(model.compiledLoads, positions);
+  for (const [key, force] of forces) {
+    const v = velocities.get(key);
+    if (v) loadPower += force.dot(v);
+  }
+  for (const [key, torque] of torques) {
+    loadPower += torque * (angleVelocities.get(key) ?? 0);
+  }
+
   return {
     kinetic,
     potentialGravity,
@@ -1759,6 +1773,8 @@ function compute_energy_sample(
       velocities,
       angleVelocities,
     ),
+    loadPower,
+    impactLoss,
   };
 }
 

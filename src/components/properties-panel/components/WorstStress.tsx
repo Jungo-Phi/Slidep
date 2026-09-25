@@ -9,7 +9,11 @@ import {
 } from "@mui/material";
 import type { MaterialDef, MechanicalElement, ProfileDef } from "../../../types";
 import type { BeamElement } from "../../../types/element";
-import type { HoveredAbscissa } from "../../../types/hovered-part";
+import type {
+  AbscissaFrame,
+  HoveredAbscissa,
+  HoveredAbscissaSource,
+} from "../../../types/hovered-part";
 import type { StressScaleCache, WorstBeamSeries } from "../../../types/runtime-state";
 import { shear_admissible_stress } from "../../solver/recording/cohesion-field";
 import { beam_strength } from "../../../utils/section-properties";
@@ -116,7 +120,7 @@ export const WorstStress: React.FC<{
   currentTime: number;
   onSeek: (time: number) => void;
   /** Where the worst reading of the instant ON SCREEN was taken, for the canvas to mark while this chart is being read — the same channel the selection inspector's own diagrams use. */
-  setHoveredAbscissa: (hovered: HoveredAbscissa | null) => void;
+  setHoveredAbscissa: (hovered: HoveredAbscissaSource | null) => void;
 }> = ({
   cache,
   elements,
@@ -146,7 +150,31 @@ export const WorstStress: React.FC<{
   );
 
   const worst = cache[MODE_SERIES[mode]];
+
+  // Handed to the canvas as a resolver: the mark is placed at the instant the canvas is drawing, which React's own copy of the time trails by a render.
+  // It reads the latest values from a ref, since it outlives the render that created it.
+  const latestRef = React.useRef({ cache, currentTime, worst, limit: undefined as number | undefined });
+  const worst_mark = React.useCallback(
+    (frame: AbscissaFrame | null): HoveredAbscissa | null => {
+      const { cache, currentTime, worst, limit } = latestRef.current;
+      const at = instant_at(cache, frame?.time ?? currentTime);
+      const id = at < 0 ? null : worst.beamID[at];
+      return at < 0 || id === null || id === undefined || Number.isNaN(worst.ratio[at])
+        ? null
+        : {
+            beamID: id,
+            s: worst.s[at],
+            reading: {
+              value: worst.ratio[at] * (limit ?? 1),
+              kind: limit === undefined ? PERCENT : STRESS,
+            },
+          };
+    },
+    [],
+  );
+
   const limit = shared_limit(beams, mode, materials, profiles);
+  latestRef.current = { cache, currentTime, worst, limit };
   // Pascals need one limit behind the whole comparison; without one, only the fraction of each beam's own limit means anything.
   const curve = mode_curve(worst, cache, limit ?? 1);
   const peak = curve.values.reduce((best, v) => Math.max(best, v), 0);
@@ -225,15 +253,7 @@ export const WorstStress: React.FC<{
         reference={reference}
         emptyMessage={t("chart_waiting")}
         onSeek={onSeek}
-        onHover={(inside) => {
-          const at = inside ? instant_at(cache, currentTime) : -1;
-          const id = at < 0 ? null : worst.beamID[at];
-          setHoveredAbscissa(
-            at < 0 || id === null || id === undefined || Number.isNaN(worst.ratio[at])
-              ? null
-              : { beamID: id, s: worst.s[at] },
-          );
-        }}
+        onHover={(inside) => setHoveredAbscissa(inside ? worst_mark : null)}
       />
     </Box>
   );

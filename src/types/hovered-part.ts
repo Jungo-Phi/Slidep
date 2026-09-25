@@ -1,6 +1,8 @@
 import type { StringKey } from "../i18n";
 import { PhysicsOverlayKind } from "../constants/physics-display-specs";
 import { ID } from "./element";
+import type { QuantityKind } from "../utils/quantity-format";
+import type { CohesionField } from "../components/solver/recording/cohesion-field";
 import { WorldPoint } from "./mechanism";
 
 /**
@@ -135,4 +137,28 @@ export interface HoveredAbscissa {
   beamID: ID;
   /** 0 at the beam's own `positionStart`, `length` at `positionEnd`. */
   s: number;
+  /** Which reading to take where the field jumps at `s`: the one just before it or just after.
+   * Unset reads whichever the field offers first. */
+  side?: "before" | "after";
+  /** `cut` draws the internal forces at `s` in place of the stress mark.
+   * Unset draws the mark. */
+  kind?: "cut";
+  /** The value the hovered chart plots at this instant, for the canvas to write beside the mark. */
+  reading?: { value: number; kind: QuantityKind };
 }
+
+/** What the canvas knows of the frame it is drawing, for a `HoveredAbscissaSource` to resolve against. */
+export interface AbscissaFrame {
+  /** The recorded instant the canvas is posed at. */
+  time: number;
+  cohesionFields: readonly CohesionField[];
+}
+
+/**
+ * A hovered abscissa, or how to find it in the frame being drawn.
+ * A resolver rather than a value where the point moves with the simulation: a value travels through React and reaches the canvas a frame after the pose it was measured on, a resolver is asked at draw time.
+ * `null` frame when nothing is being simulated; the resolver answers from what it last saw.
+ */
+export type HoveredAbscissaSource =
+  | HoveredAbscissa
+  | ((frame: AbscissaFrame | null) => HoveredAbscissa | null);

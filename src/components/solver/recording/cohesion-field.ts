@@ -329,17 +329,31 @@ export function compute_cohesion_field(
 }
 
 /**
- * The field's reading at the sample nearest `s`, in metres from the beam's start.
- * Nearest rather than interpolated: a station's "just before" and "just after" sit at the very same abscissa with different values (`CohesionField.samples`), so averaging across one would invent a reading the beam never has.
+ * Every sample at the station nearest `s`, in metres from the beam's start: one away from a jump, its "just before" then its "just after" at one.
+ * Nearest rather than interpolated: the two sit at the very same abscissa with different values (`CohesionField.samples`), so averaging across them would invent a reading the beam never has.
+ */
+export function cohesion_samples_at(
+  field: CohesionField,
+  s: number,
+): CohesionSample[] {
+  let nearest = Infinity;
+  for (const sample of field.samples)
+    nearest = Math.min(nearest, Math.abs(sample.s - s));
+  return field.samples.filter(
+    (sample) => Math.abs(sample.s - s) < nearest + 1e-9,
+  );
+}
+
+/**
+ * The field's reading at the station nearest `s`; `side` picks between the two readings of a jump, unset the one just before.
  */
 export function cohesion_sample_at(
   field: CohesionField,
   s: number,
+  side: "before" | "after" = "before",
 ): CohesionSample | undefined {
-  let best: CohesionSample | undefined;
-  for (const sample of field.samples)
-    if (!best || Math.abs(sample.s - s) < Math.abs(best.s - s)) best = sample;
-  return best;
+  const samples = cohesion_samples_at(field, s);
+  return side === "after" ? samples[samples.length - 1] : samples[0];
 }
 
 /**

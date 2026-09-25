@@ -85,6 +85,9 @@ export const DIM = {
   ICON_SIZE: 24,
   ARROW_HEAD_LENGTH: 18,
   ARROW_HEAD_WIDTH: 13,
+  /** The open head is shorter for its width than the filled one: a thin chevron reads longer than a solid triangle of the same proportions. */
+  ARROW_HEAD_OPEN_LENGTH: 14,
+  ARROW_HEAD_OPEN_WIDTH: 12,
 
   // Edges
   EDGE_ENDPOINT_RADIUS: 7,
@@ -174,7 +177,10 @@ export const DIM = {
   // Loads
   ARROW_BASE_OFFSET: 5,
   ARROW_HEAD_OFFSET: 3,
-  LOAD_VALUE_OFFSET: 20,
+  /** Semi-height of the superellipse a load's value label sits on around the arrow tip: half the pill's height plus the gap left clear of the head. */
+  LOAD_VALUE_OFFSET: 16,
+  VALUE_PILL_HEIGHT: 22,
+  VALUE_H_SHADOW: 4,
   NB_DISTRIBUTED_FORCE_ARROWS: 5,
 
   // Probe
@@ -238,8 +244,11 @@ export const SECTION_SCHEMA = {
   AXIS_DASH: "6,2,1,2",
 } as const;
 
+const TEXT_FONT_SIZE = 16;
+
 export const TEXT_SPECS = {
-  TEXT_FONT: "16px Arial",
+  TEXT_FONT_SIZE,
+  TEXT_FONT: `${TEXT_FONT_SIZE}px Arial`,
   TEXT_ALIGN: "center",
   TEXT_BASELINE: "middle",
 } as const;
@@ -274,12 +283,19 @@ export const GRADUATION = {
   ],
 } as const;
 
-/** Ordre de dessin des éléments sur le canvas */
-export const DRAWING_ORDER: (
+/** A layer of the canvas: an element type, or a family drawn with the elements without being one (nothing to filter on, so drawing skips these and picking sweeps them whole). */
+export type CanvasLayer =
   | UnionElement["type"]
   | "probe"
   | "geometricBadge"
-)[] = [
+  | "motorArrow"
+  | "overlay";
+
+/**
+ * Bottom to top: the one order the canvas is drawn in and, reversed, picked in (`HOVER_ORDER`), so that what is seen on top is what the cursor reaches first.
+ * Add a layer here and both follow.
+ */
+export const DRAWING_ORDER: CanvasLayer[] = [
   "gear",
   "beam",
   "damper",
@@ -289,52 +305,25 @@ export const DRAWING_ORDER: (
   "slidep",
   "slider",
   "pivot",
-  "mass",
-  "probe",
-  "geometricBadge",
-  "distributed-force",
-  "force",
-  "moment",
-  "dimension-edge-to-node",
-  "dimension-node-to-node",
-  "dimension-edge",
-  "dimension-angle",
-  "dimension-radius",
-  "dimension-belt",
-  "gear-ratio",
-];
-
-/** Ordre de hover des éléments sur le canvas */
-export const HOVER_ORDER: (
-  | UnionElement["type"]
-  | "probe"
-  | "motorArrow"
-  | "geometricBadge"
-  | "overlay"
-)[] = [
-  "geometricBadge",
-  "gear-ratio",
-  "dimension-belt",
-  "dimension-radius",
-  "dimension-angle",
-  "dimension-edge",
-  "dimension-node-to-node",
-  "dimension-edge-to-node",
-  "probe",
+  // Drawn with the pivot it belongs to, so above it and below what comes after.
   "motorArrow",
   "mass",
-  "pivot",
-  "slider",
-  "slidep",
-  "join",
-  "belt",
-  "spring",
-  "damper",
-  "beam",
-  "moment",
-  "force",
+  "geometricBadge",
   "distributed-force",
-  // A measured reading is drawn over everything, but it never steals the hover from a load one can actually take hold of — it is read, not edited.
+  "force",
+  "moment",
+  "dimension-edge-to-node",
+  "dimension-node-to-node",
+  "dimension-edge",
+  "dimension-angle",
+  "dimension-radius",
+  "dimension-belt",
+  "gear-ratio",
+  // A probe badge is a marker to be found, so nothing covers it but the readings.
+  "probe",
+  // The measured readings are drawn over everything else.
   "overlay",
-  "gear",
 ];
+
+/** Top to bottom: `DRAWING_ORDER` reversed. */
+export const HOVER_ORDER: CanvasLayer[] = [...DRAWING_ORDER].reverse();

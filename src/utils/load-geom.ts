@@ -23,7 +23,16 @@ import type {
   WorldPoint,
 } from "../types";
 import { UP } from "../types";
-import { DIM } from "../constants/rendering-specs";
+import { DIM, TEXT_SPECS } from "../constants/rendering-specs";
+import { HIT_TOLERANCE } from "../constants/interaction-specs";
+import {
+  FORCE,
+  LOAD_INTENSITY,
+  MOMENT,
+  QuantityKind,
+  format_quantity,
+} from "./quantity-format";
+import { arial_text_width } from "./text-width";
 import { get_mechanical_element_from_id } from "../components/mechanism/connect-actions";
 import {
   world2screen,
@@ -70,33 +79,73 @@ export function force_base_position(
   return load.anchor === "end" ? edge.positionEnd : edge.positionStart;
 }
 
-// ─── Value labels ───────────────────────────────────────────────────────────
+// ─── Hit testing ────────────────────────────────────────────────────────────
 
 /**
- * Position of the value label of an arrow drawn from `base` along `displayVector`: past the tip, pushed away by a superellipse radius so the text clears the arrowhead by a margin that follows the label's own aspect (wider horizontally than vertically) instead of a constant gap.
+ * Whether `mouseScreen` is on the arrow from `base` to `tip`: its shaft, or its tip handle.
+ * The disc a node claims around `base` is left out: an arrow is planted on a node or a beam end, and is drawn above it, so without this the cursor could never reach what the arrow stands on.
+ */
+export function arrow_hit(
+  mouseScreen: ScreenPoint,
+  base: ScreenPoint,
+  tip: ScreenPoint,
+): boolean {
+  if (mouseScreen.distance_to(base) <= HIT_TOLERANCE.NODE) return false;
+  return (
+    mouseScreen.distance_to(tip) <= HIT_TOLERANCE.NODE ||
+    mouseScreen.distance2segment(base, tip) <= HIT_TOLERANCE.EDGE
+  );
+}
+
+// ─── Value labels ───────────────────────────────────────────────────────────
+
+/** Width of the pill `draw_dimension_text` draws for `value` of `kind`: what `force_label_position_screen` needs to clear it. */
+export function value_label_width(value: number, kind: QuantityKind): number {
+  return arial_text_width(format_quantity(value, kind), TEXT_SPECS.TEXT_FONT_SIZE);
+}
+
+/**
+ * How far the centre of a `labelWidth`-wide pill sits from the point it labels, along the unit vector `unit`: a superellipse radius, so the pill clears that point by the same gap on every side, whatever its width.
+ */
+function label_clearance(unit: ScreenPoint, labelWidth: number): number {
+  const N = 4;
+  const gap = DIM.LOAD_VALUE_OFFSET - DIM.VALUE_PILL_HEIGHT / 2;
+  const width = labelWidth / 2 + gap;
+  const height = DIM.LOAD_VALUE_OFFSET;
+  return Math.pow(
+    Math.pow(unit.x / width, N) + Math.pow(unit.y / height, N),
+    -1 / N,
+  );
+}
+
+/**
+ * Position of the value label of an arrow drawn from `base` along `displayVector`, whose pill is `labelWidth` wide (see `value_label_width`): past the tip.
  */
 export function force_label_position_screen(
   base: ScreenPoint,
   displayVector: ScreenPoint,
+  labelWidth: number,
 ): ScreenPoint {
   if (displayVector.length() < 1e-9) return base;
-  const N = 4;
-  const width = DIM.LOAD_VALUE_OFFSET * 1.66;
-  const height = DIM.LOAD_VALUE_OFFSET;
-  const unit = displayVector.normalize();
-  const radius = Math.pow(
-    Math.pow(unit.x / width, N) + Math.pow(unit.y / height, N),
-    -1 / N,
+  return base.add(
+    displayVector.extend_length(
+      label_clearance(displayVector.normalize(), labelWidth),
+    ),
   );
-  return base.add(displayVector.extend_length(radius));
 }
 
-/** Position of the value label of a moment, above its arc — screen axes, so up is −y. */
+/**
+ * Position of the value label of a moment, whose pill is `labelWidth` wide: outside its arc, along `direction` (screen axes) from `center`.
+ * `direction` is where the arc sits on its circle; left out, the arc is taken to be a full loop and the label goes above it — screen axes, so up is −y.
+ */
 export function moment_value_label_position(
   center: ScreenPoint,
   radius: number,
+  labelWidth: number,
+  direction?: ScreenPoint,
 ): ScreenPoint {
-  return center.sub(UP.mul(radius + DIM.LOAD_VALUE_OFFSET));
+  const unit = direction ? direction.normalize() : UP.mul(-1);
+  return center.add(unit.mul(radius + label_clearance(unit, labelWidth)));
 }
 
 // ─── Screen geometry ────────────────────────────────────────────────────────
@@ -126,7 +175,11 @@ export function force_screen_geometry(
     base,
     vector,
     tip,
-    label: force_label_position_screen(base, vector),
+    label: force_label_position_screen(
+      base,
+      vector,
+      value_label_width(magnitude, FORCE),
+    ),
   };
 }
 
@@ -162,8 +215,16 @@ export function distributed_screen_geometry(
     tipStart: start.add(vectorStart),
     tipEnd: end.add(vectorEnd),
     // Each endpoint arrow is drawn from its own beam end, so its label sits exactly where `draw_force` puts it for that arrow.
-    labelStart: force_label_position_screen(start, vectorStart),
-    labelEnd: force_label_position_screen(end, vectorEnd),
+    labelStart: force_label_position_screen(
+      start,
+      vectorStart,
+      value_label_width(Math.abs(load.magnitudeStart), LOAD_INTENSITY),
+    ),
+    labelEnd: force_label_position_screen(
+      end,
+      vectorEnd,
+      value_label_width(Math.abs(load.magnitudeEnd), LOAD_INTENSITY),
+    ),
   };
 }
 
@@ -179,7 +240,11 @@ export function moment_screen_geometry(
     center,
     worldCenter,
     radius,
-    label: moment_value_label_position(center, radius),
+    label: moment_value_label_position(
+      center,
+      radius,
+      value_label_width(Math.abs(load.value), MOMENT),
+    ),
   };
 }
 

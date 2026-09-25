@@ -7,7 +7,7 @@ import {
   CanvasEvent,
   CanvasState,
   ConstraintElement,
-  HoveredAbscissa,
+  HoveredAbscissaSource,
   HoveredPart,
   HoveredReading,
   ID,
@@ -32,7 +32,8 @@ import { CanvasHighlight, draw_mechanical_canvas } from "./drawing/draw-canvas";
 import { spring_coil_pitch } from "./drawing/coil-pitch";
 import { RedundancySymbol } from "../solver/analysis/redundancy-symbols";
 import type { CohesionField } from "../solver/recording/cohesion-field";
-import { cohesion_sample_at } from "../solver/recording/cohesion-field";
+import { draw_cohesion_cut } from "./drawing/draw-cohesion-cut";
+import { cohesion_sample_at, cohesion_samples_at } from "../solver/recording/cohesion-field";
 import { beam_strength, max_fiber_stress } from "../../utils/section-properties";
 import type {
   HoveredBalanceTerm,
@@ -40,6 +41,9 @@ import type {
 } from "../solver/analysis/force-balance";
 import { mechanism_center_of_mass } from "../solver/analysis/force-balance";
 import { balance_term_color } from "../../constants/physics-display-specs";
+import { DIM } from "../../constants/rendering-specs";
+import { readable_on } from "../../theme/mui-theme";
+import { to_hex } from "../../utils/color-format";
 import type { BeamElement } from "../../types/element";
 import {
   anchored_arrows,
@@ -55,6 +59,7 @@ import MeasureWidget, {
 } from "./MeasureWidget";
 import { get_element_from_id } from "../mechanism/connect-actions";
 import { load_value_anchor } from "../../utils/load-geom";
+import { is_node_element } from "../../utils/element-queries";
 import { is_zero_load } from "../../utils/load-scale";
 import { t } from "../../i18n";
 import { get_hovered_part } from "./picking/get-hover";
@@ -112,6 +117,7 @@ import {
   OverlayMoment,
   TrajectoryDisplay,
   draw_abscissa_marker,
+  draw_dimension_text,
   stress_ramp_color,
 } from "./drawing/drawing-functions";
 import {
@@ -199,7 +205,7 @@ interface MechanicalCanvasProps {
   redundancySymbols: RedundancySymbol[];
   /** An abscissa hovered on the analysis panel's N/T/Mf diagrams, marked on the beam — see docs/plan-efforts-interieurs.md phase 5bis.
    * `null` outside that hover. */
-  hoveredAbscissa: HoveredAbscissa | null;
+  hoveredAbscissa: HoveredAbscissaSource | null;
   /** The line of the force balance the cursor rests on, and which of its two quantities that line reads.
    * Shown whatever calque is on: pointing at a line is asking to see the thing it names.
    * Where a calque already draws it, that arrow is lit rather than drawn over — see `draw_balance_marker` for the rest. */
@@ -226,8 +232,10 @@ interface MechanicalCanvasProps {
 /** The simulated mechanism and probe trajectories at the cursor, for one frame. */
 export interface LiveFrame {
   mechanism: Mechanism;
+  /** The recorded instant this frame is posed at. */
+  time: number;
   trajectories: TrajectoryDisplay[];
-  /** Velocity/reaction arrows for elements with the matching overlay on — dynamic mode only, empty everywhere else. */
+  /** Velocity arrows for elements with the overlay on, and reaction arrows in dynamic mode only — empty outside simulation. */
   overlayArrows: OverlayArrow[];
   /** The moment half of a reaction, wherever a rigid weld's force-couple carries one — same gating as `overlayArrows`. */
   overlayMoments: OverlayMoment[];
@@ -434,14 +442,16 @@ export const MechanicalCanvas = forwardRef<
 
     // Refreshes the revealed constraints from the element (or the badge) under the cursor.
     // Called every frame → the badges stay up for as long as the hover lasts, even with the mouse still.
+    // An element hovered from a panel card reveals nothing: only a constraint designated there is shown.
     const refreshRevealFromHover = useCallback((hovered: HoveredPart) => {
       if (appModeRef.current !== "edition") return;
       const now = performance.now();
       if (
-        hovered.type === "Node" ||
-        hovered.type === "Edge" ||
-        hovered.type === "GearTooth" ||
-        hovered.type === "BeltBody"
+        cursorOnCanvasRef.current &&
+        (hovered.type === "Node" ||
+          hovered.type === "Edge" ||
+          hovered.type === "GearTooth" ||
+          hovered.type === "BeltBody")
       ) {
         for (const id of connected_constraints(
           hovered.id,
@@ -830,7 +840,15 @@ export const MechanicalCanvas = forwardRef<
       // Where along a beam the reading of THIS instant was taken, while a chart of it is being read — its N/T/Mf diagrams in the selection inspector, or the mechanism's own worst-case chart.
       // Always this instant, never the one under the pointer: the beam is drawn in the pose it holds now, so an abscissa from another instant would be marked on a beam that was elsewhere when it was measured.
       // A disc, filled with the colour the utilization lens would paint that very point: naming the abscissa and saying how hard the beam is working there are one answer, and the ramp is the language that answer is already given in elsewhere.
-      const hovered = hoveredAbscissaRef.current;
+      const source = hoveredAbscissaRef.current;
+      const hovered =
+        typeof source === "function"
+          ? source(
+              live
+                ? { time: live.time, cohesionFields: live.cohesionFields ?? [] }
+                : null,
+            )
+          : source;
       if (hovered) {
         const beam = mechanismRef.current.mechanicalElements.find(
           (el): el is BeamElement =>
@@ -839,31 +857,74 @@ export const MechanicalCanvas = forwardRef<
         const length = beam?.positionEnd.distance_to(beam.positionStart);
         if (beam && length && length > 1e-9) {
           const along = Math.max(0, Math.min(1, hovered.s / length));
-          const position = world2screen(
-            beam.positionStart.lerp(beam.positionEnd, along),
-            viewport,
-          );
-          // Neutral wherever the stress cannot be resolved — an unset material, or a frame recorded without the diagnostics the field needs. The disc still marks the place.
-          let fill = COLORS.ELEMENT_STROKE;
-          const field = live?.cohesionFields?.find((f) => f.beamID === beam.id);
-          const strength = beam_strength(
-            beam.materialID,
-            beam.profileID,
-            mechanismRef.current.materials,
-            mechanismRef.current.profiles,
-          );
-          const sample = field && cohesion_sample_at(field, hovered.s);
-          if (sample && strength) {
-            const stress = max_fiber_stress(sample.N, sample.Mf, strength.section);
-            fill = stress_ramp_color(
-              stress / strength.Re,
-              stress,
-              live?.stressScale ?? 0,
+          if (hovered.kind === "cut") {
+            // The torsor at the cut instead of a mark: what the diagrams read there, drawn where it acts.
+            const cutField = live?.cohesionFields?.find(
+              (f) => f.beamID === beam.id,
             );
+            const cut =
+              cutField && cohesion_sample_at(cutField, hovered.s, hovered.side);
+            if (cut)
+              draw_cohesion_cut(
+                ctx,
+                viewport,
+                beam.positionStart.lerp(beam.positionEnd, along),
+                beam.positionEnd.sub(beam.positionStart).normalize(),
+                cut,
+              );
+          } else {
+            const position = world2screen(
+              beam.positionStart.lerp(beam.positionEnd, along),
+              viewport,
+            );
+            // Neutral wherever the stress cannot be resolved — an unset material, or a frame recorded without the diagnostics the field needs. The disc still marks the place.
+            let fill = COLORS.ELEMENT_STROKE;
+            const field = live?.cohesionFields?.find((f) => f.beamID === beam.id);
+            const strength = beam_strength(
+              beam.materialID,
+              beam.profileID,
+              mechanismRef.current.materials,
+              mechanismRef.current.profiles,
+            );
+            if (field && strength) {
+              // Where the hover names no side of a jump, the worse one.
+              const candidates = hovered.side
+                ? [cohesion_sample_at(field, hovered.s, hovered.side)]
+                : cohesion_samples_at(field, hovered.s);
+              let stress = -Infinity;
+              for (const sample of candidates)
+                if (sample)
+                  stress = Math.max(
+                    stress,
+                    max_fiber_stress(sample.N, sample.Mf, strength.section),
+                  );
+              if (stress > -Infinity)
+                fill = stress_ramp_color(
+                  stress / strength.Re,
+                  stress,
+                  live?.stressScale ?? 0,
+                );
+            }
+            ctx.save();
+            draw_abscissa_marker(ctx, position, fill);
+            ctx.restore();
+            if (hovered.reading) {
+              // Above the disc, in its own colour taken to a lightness that reads on the ground.
+              ctx.save();
+              ctx.strokeStyle = readable_on(to_hex(fill), COLORS.BACKGROUND);
+              draw_dimension_text(
+                ctx,
+                new Point2(
+                  position.x,
+                  position.y - DIM.BEAM_WIDTH - DIM.VALUE_PILL_HEIGHT / 2 - 4,
+                ),
+                hovered.reading.value,
+                "",
+                hovered.reading.kind,
+              );
+              ctx.restore();
+            }
           }
-          ctx.save();
-          draw_abscissa_marker(ctx, position, fill);
-          ctx.restore();
         }
       }
     }, [
@@ -1430,6 +1491,13 @@ export const MechanicalCanvas = forwardRef<
 
     // The metric box is an overlay, not a mode: the cursor answers for the state under it.
     const cursorState = state_under_probe_metrics(canvasState);
+    // A grounded node never moves, so it offers no grab.
+    const hoversGroundedNode =
+      hoveredPart.type === "Node" &&
+      mechanism.mechanicalElements.some(
+        (el) =>
+          el.id === hoveredPart.id && is_node_element(el) && el.isGrounded,
+      );
     // A refusal outranks every tool: whatever is armed, this spot takes nothing.
     const cursor =
       hoveredPart.type === "Void" && hoveredPart.rejected
@@ -1439,6 +1507,7 @@ export const MechanicalCanvas = forwardRef<
           : canSimulationGrab &&
               ["Selecting", "SelectedElement"].includes(cursorState.type) &&
               hoveredPart.type !== "Void" &&
+              !hoversGroundedNode &&
               hoveredPart.type !== "Probe" &&
               hoveredPart.type !== "MotorArrow" &&
               hoveredPart.type !== "Force" &&
@@ -1486,6 +1555,23 @@ export const MechanicalCanvas = forwardRef<
             mechanism.loads,
           )
         : null;
+
+    // Loads have no `.position`; their editable label sits at a computed screen anchor next to the drawn value.
+    // Read off the pose that is drawn (the simulated one, when there is one) rather than the resting model, and again every frame by the editor, so the field stays on the value it edits while the body it sits on moves.
+    const loadAnchor =
+      editingElement &&
+      (editingElement.type === "force" ||
+        editingElement.type === "moment" ||
+        editingElement.type === "distributed-force")
+        ? () =>
+            load_value_anchor(
+              editingElement,
+              mechanismRef.current.mechanicalElements,
+              restingRef.current.viewport,
+              // Only a load that exists is re-edited: a `PlacingValue` concerns dimensions alone, which carry no `part`.
+              isEditingValue ? canvasState.part : undefined,
+            )
+        : undefined;
 
     // Commit an edited value for a load (force magnitude, moment value, or a distributed force's start/end magnitude).
     // Returns true if it handled the element, false for non-load elements (dimensions/constraints).
@@ -1621,17 +1707,8 @@ export const MechanicalCanvas = forwardRef<
               )
             }
             position={
-              // Loads have no `.position`; their editable label sits at a computed screen anchor next to the drawn value.
-              editingElement.type === "force" ||
-              editingElement.type === "moment" ||
-              editingElement.type === "distributed-force"
-                ? load_value_anchor(
-                    editingElement,
-                    mechanism.mechanicalElements,
-                    mechanism.viewport,
-                    // Only a load that exists is re-edited: a `PlacingValue` concerns dimensions alone, which carry no `part`.
-                    isEditingValue ? canvasState.part : undefined,
-                  )
+              loadAnchor
+                ? loadAnchor()
                 : world2screen(
                     "position" in editingElement
                       ? editingElement.position
@@ -1639,6 +1716,7 @@ export const MechanicalCanvas = forwardRef<
                     mechanism.viewport,
                   )
             }
+            follow={loadAnchor}
             onCommit={(newValue) => {
               const loadCommitted = commitLoadValue(editingElement, newValue);
 

@@ -16,7 +16,7 @@ import {
   DynamicSnapshot,
   KinematicSnapshot,
 } from "../../../types/runtime-state";
-import { HoveredAbscissa, HoveredPart } from "../../../types/hovered-part";
+import { HoveredAbscissaSource, HoveredPart } from "../../../types/hovered-part";
 import {
   MetricSample,
   get_dynamic_metric_at,
@@ -28,7 +28,8 @@ import { GRAVITY } from "../../../constants/physics-specs";
 import { overlay_shown } from "../../../utils/element-queries";
 import { element_mass } from "../../../utils/element-mass";
 import { measure_belt_length } from "../../../utils/belt-geom";
-import { FORCE, LENGTH, MASS } from "../../../utils/quantity-format";
+import { FORCE, LENGTH, MASS, POWER } from "../../../utils/quantity-format";
+import { motor_available_power } from "../../solver/dynamics/motor-model";
 import { shown_element_name } from "../../../utils";
 import {
   CARD_ICON_BUTTON_SX,
@@ -97,7 +98,7 @@ interface SelectionInspectorProps {
   selectedIds: ID[];
   setCanvasState: (state: CanvasState) => void;
   /** Publishes the abscissa hovered on a beam's own N/T/Mf diagrams, for the canvas to mark. */
-  setHoveredAbscissa: (hovered: HoveredAbscissa | null) => void;
+  setHoveredAbscissa: (hovered: HoveredAbscissaSource | null) => void;
   /** Elements a motion carrying no inertia moves, as the analysis below measured them — their missing mass is what leaves it without one. */
   inertiaFreeElements: ReadonlySet<ID>;
 }
@@ -433,6 +434,24 @@ export const SelectionInspector: React.FC<SelectionInspectorProps> = ({
           }
         />
       );
+    // The instantaneous power sits under what the motor can deliver, to read how much of it is used.
+    if (value === "motor-power" && element.type === "pivot") {
+      const motor = shown_of(element).motor;
+      const available = motor ? motor_available_power(motor) : 0;
+      return (
+        <React.Fragment key={value}>
+          <ValueRow
+            label={t("motor_power_available")}
+            formatted={available > 0 ? format_scalar(available, POWER) : undefined}
+          />
+          <MetricRow
+            metric={value}
+            sample={sample_of(element, value)}
+            label={label ?? t("motor_power_instant")}
+          />
+        </React.Fragment>
+      );
+    }
     return (
       <MetricRow
         key={value}
@@ -578,11 +597,8 @@ export const SelectionInspector: React.FC<SelectionInspectorProps> = ({
             forcePoolMax={runtimeState.negligibilityPool.force}
             momentPoolMax={runtimeState.negligibilityPool.moment}
             emptyMessage={t("chart_waiting")}
-            onHoverS={(s) =>
-              setHoveredAbscissa(
-                s === null ? null : { beamID: diagramBeam.id, s },
-              )
-            }
+            beamID={diagramBeam.id}
+            onHoverAbscissa={setHoveredAbscissa}
           />
         )}
         <HostRow

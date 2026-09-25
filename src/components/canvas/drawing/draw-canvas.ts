@@ -175,12 +175,17 @@ function draw_overlay_readings(
       );
 
   // The labels last, on top of every arrow/moment just drawn: an arrow drawn later in the loops above must not obstruct another one's label.
-  // A selected reading keeps its value on screen for as long as it stands, not just while the cursor is on it: that value is what selecting it was for.
+  // A selected reading keeps its value on screen for as long as it stands, not just while the cursor is on it: that value is what selecting it was for, and hovering another reading adds to it rather than replacing it.
   // Every place the named reading is drawn gets its value, not just the first: both ends of a member's own internal effort read at once, which is the whole point of naming it once.
-  const labelledArrows =
-    hovered.arrows.length > 0 ? hovered.arrows : arrows.filter(names_focused);
-  const labelledMoments =
-    hovered.moments.length > 0 ? hovered.moments : moments.filter(names_focused);
+  // The hovered readings come last, so their values land on top of a selected one they overlap.
+  const labelledArrows = [
+    ...arrows.filter((a) => names_focused(a) && !hovered.arrows.includes(a)),
+    ...hovered.arrows,
+  ];
+  const labelledMoments = [
+    ...moments.filter((m) => names_focused(m) && !hovered.moments.includes(m)),
+    ...hovered.moments,
+  ];
   for (const arrow of labelledArrows)
     draw_overlay_arrow_label(ctx, viewport, arrow, names_focused(arrow));
   for (const moment of labelledMoments)

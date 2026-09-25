@@ -77,6 +77,11 @@ export function compile_motors(
   return motors;
 }
 
+/** What a motor can deliver at its commanded speed, W: its torque limit times that speed, zero for a motor that holds still. */
+export function motor_available_power(motor: { torque: number; speed: number }): number {
+  return motor.torque * Math.abs(motor.speed);
+}
+
 /** Angular velocity of the arm `pivotKey → armKey` about `pivotKey`, positive
  * counter-clockwise — `undefined` where either end is missing or the arm has collapsed. */
 export function arm_angular_velocity(

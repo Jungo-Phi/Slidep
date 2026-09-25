@@ -10,6 +10,7 @@ import {
 } from "../../../types/runtime-state";
 import {
   element_angular_acceleration,
+  element_kinematic_velocity,
   element_reactions,
   get_dynamic_probe_series,
   get_probe_series,
@@ -76,6 +77,18 @@ describe("séries de sonde", () => {
     expect(curve(s, "y")).toEqual([2, 2, 2]);
     expect(curve(s, "norm")).toEqual([Math.sqrt(5), Math.sqrt(5), Math.sqrt(5)]);
     expect(s.unit).toBe("m/s");
+  });
+
+  it("vitesse à un instant : la même différence centrée que la courbe", () => {
+    for (const index of [0, 1, 2]) {
+      const v = element_kinematic_velocity(node("n"), moving, index)!;
+      expect([v.x, v.y]).toEqual([1, 2]);
+    }
+  });
+
+  it("vitesse à un instant : rien quand le point n'a pas de valeur ou qu'un seul instant existe", () => {
+    expect(element_kinematic_velocity(node("absent"), moving, 1)).toBeUndefined();
+    expect(element_kinematic_velocity(node("n"), moving.slice(0, 1), 0)).toBeUndefined();
   });
 
   it("un élément que l'enregistrement ne porte pas ne trace rien", () => {

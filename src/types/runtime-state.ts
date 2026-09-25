@@ -84,6 +84,10 @@ export interface EnergySample {
   damperPower: number;
   /** W — the same reading over every frictional pivot/slider, apart from `damperPower` so a deliberate loss stays legible next to one a joint charges by itself. */
   frictionPower: number;
+  /** W — Σ F·v + Σ τ·ω over every user load: signed, positive when the loads push the mechanism along its motion. */
+  loadPower: number;
+  /** J — kinetic energy the collision and floor bounces removed during this frame: an energy, not a rate, since an impact is an event. */
+  impactLoss: number;
 }
 
 /**

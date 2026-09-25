@@ -16,6 +16,7 @@ import { RECORD_DT, compile_simulation_model, step_dynamic_simulation } from "..
 import {
   bending_stress_stops,
   CohesionField,
+  cohesion_sample_at,
   compute_cohesion_field,
   normal_stress_stops,
   shear_admissible_stress,
@@ -925,5 +926,31 @@ describe("shear_utilization_stops — le taux de cisaillement (phase 9, chantier
   it("stress = ratio·τ_adm — the absolute reading the legend and ramp position themselves on", () => {
     const stops = shear_utilization_stops(field, section, tauAdm);
     for (const stop of stops) expect(stop.stress).toBeCloseTo(stop.ratio * tauAdm, 3);
+  });
+});
+
+describe("cohesion_sample_at", () => {
+  const field = {
+    length: 2,
+    samples: [
+      { s: 0, N: 1, T: 0, Mf: 0 },
+      { s: 1, N: 2, T: 0, Mf: 0 },
+      { s: 1, N: 3, T: 0, Mf: 0 },
+      { s: 2, N: 4, T: 0, Mf: 0 },
+    ],
+  } as CohesionField;
+
+  it("picks the side of a jump it is asked for", () => {
+    expect(cohesion_sample_at(field, 1, "before")?.N).toBe(2);
+    expect(cohesion_sample_at(field, 1, "after")?.N).toBe(3);
+  });
+
+  it("reads the just-before sample by default", () => {
+    expect(cohesion_sample_at(field, 1)?.N).toBe(2);
+  });
+
+  it("ignores the side away from a jump", () => {
+    expect(cohesion_sample_at(field, 1.9, "after")?.N).toBe(4);
+    expect(cohesion_sample_at(field, 0.1, "before")?.N).toBe(1);
   });
 });

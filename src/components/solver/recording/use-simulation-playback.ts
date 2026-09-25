@@ -3,6 +3,7 @@ import {
   AppMode,
   ID,
   Link,
+  MechanicalElement,
   Mechanism,
   DEFAULT_SIMULATION_CONFIG,
   DEFAULT_RUNTIME_STATE,
@@ -25,6 +26,8 @@ import {
   OverlayMoment,
 } from "../../canvas/drawing/drawing-functions";
 import { is_node_element, overlay_shown } from "../../../utils/element-queries";
+import { mechanism_bounds } from "../../../utils/mechanism-bounds";
+import { velocity2screen } from "../../../utils/load-scale";
 import {
   MAX_RECORDING_TIME,
   RECORD_DT,
@@ -54,6 +57,7 @@ import {
   element_acceleration,
   element_angular_acceleration,
   element_reactions,
+  element_kinematic_velocity,
   element_velocity,
   extend_probe_trajectories,
   trajectories_at,
@@ -73,7 +77,11 @@ import {
 } from "./cohesion-field";
 import { GRAVITY } from "../../../constants/physics-specs";
 import { NEGLIGIBLE_STRESS_FRACTION } from "../../../constants/physics-display-specs";
-import { extend_negligibility_pool, is_negligible } from "./negligibility-pool";
+import {
+  extend_negligibility_pool,
+  is_negligible,
+  pool_floors,
+} from "./negligibility-pool";
 import { beam_strength } from "../../../utils/section-properties";
 
 /** How often the simulation clock reaches React. Text and controls, not motion. */
@@ -424,6 +432,20 @@ export function useSimulationPlayback({
     let shownFocusedOverlay: FocusedOverlay | null = null;
     let shownHoveredOverlay: FocusedOverlay | null = null;
     let shownInertiaNamed = false;
+    // The scale velocities are drawn against: the model's own size, which the simulation leaves alone, so it is measured once per model rather than per frame.
+    let measuredMechanism: Mechanism | null = null;
+    let measuredDiagonal = 0;
+    const bounds_diagonal = (model: Mechanism): number => {
+      if (measuredMechanism !== model) {
+        const bounds = mechanism_bounds(
+          model.mechanicalElements,
+          model.constraintElements,
+        );
+        measuredDiagonal = bounds ? bounds.min.distance_to(bounds.max) : 0;
+        measuredMechanism = model;
+      }
+      return measuredDiagonal;
+    };
     const publish = (mode: AppMode) => {
       if (!is_simulating(mode)) {
         liveFrameRef.current = null;
@@ -500,7 +522,7 @@ export function useSimulationPlayback({
         mode === "kinematic"
           ? apply_snapshot_to_mechanism(mech, snapshot as KinematicSnapshot)
           : apply_dynamic_snapshot_to_mechanism(mech, snapshot as DynamicSnapshot);
-      // Velocity/reaction arrows: dynamic mode only, one per element with the matching overlay on, read at the same instant everything else here draws.
+      // Velocity arrows in both modes, reaction arrows in dynamic mode only, one per element with the matching overlay on, read at the same instant everything else here draws.
       // Velocity only means something at a sampled point (node/gear); reactions resolve for those AND edges, one per endpoint — `element_reactions` returns however many apply, each optionally carrying a moment too (a rigid weld's force-couple, reduced).
       const overlayArrows: OverlayArrow[] = [];
       const overlayMoments: OverlayMoment[] = [];
@@ -510,35 +532,42 @@ export function useSimulationPlayback({
       // Floors for the beam-fill lenses' own scales (see `negligible_stress_floors`'s doc) — 0 (a no-op) outside dynamic mode, where there is nothing to scale in the first place.
       let negligibleStress = 0;
       let negligibleShear = 0;
+      // A reading named by the panel or by the cursor stays on screen whatever the overlay settings say: pointing at one would otherwise point at nothing.
+      const namedReadings = [focusedOverlay, hoveredOverlay].filter(
+        (reading): reading is FocusedOverlay => reading !== null,
+      );
+      const is_named_on = (elementID: ID, kind: FocusedOverlay["kind"]) =>
+        namedReadings.some(
+          (reading) =>
+            reading.elementID === elementID && reading.kind === kind,
+        );
+      // `reference` is the speed a reading is judged negligible against (see `is_negligible`).
+      const push_velocity = (
+        el: MechanicalElement,
+        v: Point2 | undefined,
+        reference: number,
+      ) => {
+        // Drawn from `body_centre`, which for an edge is the mid-span the velocity is sampled at.
+        const at = body_centre(el);
+        // A residual velocity next to nothing else moving is noise, not motion — see negligibility-pool.ts.
+        // Hidden rather than drawn tiny: a clamped-to-minimum arrow would still read as "something moves here".
+        if (v && at && !is_negligible(v.length(), reference))
+          overlayArrows.push({
+            at,
+            vector: v,
+            screenLength: velocity2screen(v.length(), bounds_diagonal(mech)),
+            kind: "velocity",
+            elementID: el.id,
+          });
+      };
       if (mode === "dynamic") {
         const dynSnap = snapshot as DynamicSnapshot;
         const gravity = gravityRef.current ? GRAVITY : new Point2(0, 0);
         ({ stress: negligibleStress, shear: negligibleShear } = negligible_stress_floors(mech));
         const pool = rs.negligibilityPool;
-        // A reading named by the panel or by the cursor stays on screen whatever the overlay settings say: pointing at one would otherwise point at nothing.
-        const namedReadings = [focusedOverlay, hoveredOverlay].filter(
-          (reading): reading is FocusedOverlay => reading !== null,
-        );
-        const is_named_on = (elementID: ID, kind: FocusedOverlay["kind"]) =>
-          namedReadings.some(
-            (reading) =>
-              reading.elementID === elementID && reading.kind === kind,
-          );
         for (const el of geometryMechanism.mechanicalElements) {
-          if (overlay_shown(el, "velocity") || is_named_on(el.id, "velocity")) {
-            const v = element_velocity(el, dynSnap);
-            // Drawn from `body_centre`, which for an edge is the mid-span `element_velocity` samples it at.
-            const at = body_centre(el);
-            // A residual velocity next to nothing else moving is noise, not motion — see negligibility-pool.ts.
-            // Hidden rather than drawn tiny: a clamped-to-minimum arrow would still read as "something moves here".
-            if (v && at && !is_negligible(v.length(), pool.linearVelocity))
-              overlayArrows.push({
-                at,
-                vector: v,
-                kind: "velocity",
-                elementID: el.id,
-              });
-          }
+          if (overlay_shown(el, "velocity") || is_named_on(el.id, "velocity"))
+            push_velocity(el, element_velocity(el, dynSnap), pool.linearVelocity);
           // Weight (`m·g`) and inertia (`m·a`) share the same free body the force balance itemises: no weight arrow at all with gravity off, same reasoning as `compute_force_balance`'s own weight row.
           if (element_carries_mass(el)) {
             const centre = body_centre(el);
@@ -680,8 +709,25 @@ export function useSimulationPlayback({
             }
           }
         }
+      } else {
+        // Kinematic mode records positions only, so a velocity here is differentiated from them.
+        // It is the motion of the drive, not of a mechanism with its real masses: the direction and the ratios between points are meaningful, the absolute speeds are as fast as the motors are set.
+        // No running maximum to judge noise against, as the dynamic pool has: the mechanism's own size per second stands in.
+        const index =
+          held && snaps.length > 0
+            ? snaps.length - 1
+            : snapshot_index_at(snaps, rs.time);
+        const reference = pool_floors(bounds_diagonal(mech)).linearVelocity;
+        for (const el of geometryMechanism.mechanicalElements)
+          if (overlay_shown(el, "velocity") || is_named_on(el.id, "velocity"))
+            push_velocity(
+              el,
+              element_kinematic_velocity(el, snaps as KinematicSnapshot[], index),
+              reference,
+            );
       }
       liveFrameRef.current = {
+        time: snapshot.t,
         mechanism: paramSnapshot
           ? apply_parameter_snapshot_to_mechanism(geometryMechanism, paramSnapshot)
           : geometryMechanism,

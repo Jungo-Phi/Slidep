@@ -211,6 +211,28 @@ export function element_velocity(
 }
 
 /**
+ * `element_velocity`'s kinematic-mode counterpart: a kinematic recording carries no velocity, so it is differentiated from the positions on either side of snapshot `index` — the same clamped-end central difference the kinematic velocity curve takes (`get_probe_series`).
+ * Each side is read on its own layout, so an edit between the two snapshots does not misplace a slot.
+ * `undefined` when either side carries no value for the point, or when the two share an instant.
+ */
+export function element_kinematic_velocity(
+  element: MechanicalElement,
+  snapshots: KinematicSnapshot[],
+  index: number,
+): Point2 | undefined {
+  const before = snapshots[Math.max(0, index - 1)];
+  const after = snapshots[Math.min(snapshots.length - 1, index + 1)];
+  if (!before || !after) return undefined;
+  const dt = after.t - before.t;
+  if (!(dt > 0)) return undefined;
+  if (!read_position(before, probe_slots(element, before.layout))) return undefined;
+  const x = sampled[0];
+  const y = sampled[1];
+  if (!read_position(after, probe_slots(element, after.layout))) return undefined;
+  return new Point2((sampled[0] - x) / dt, (sampled[1] - y) / dt);
+}
+
+/**
  * The element's own linear acceleration right now, at the point `probe_slots` samples it — the same anchor `element_velocity` reads, one derivative up.
  * `undefined` when the snapshot carries none for it.
  */

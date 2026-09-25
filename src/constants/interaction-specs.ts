@@ -14,6 +14,8 @@ export const HIT_TOLERANCE = {
 export const INTERACTION_SPECS = {
   SELECTION_HALO_SIZE: 10,
   ICON_HALO_SIZE: 5,
+  /** How many times an arrow's background halo is stacked: a blur spreads a thin stroke's shadow too weak to see at one pass. */
+  ARROW_HALO_PASSES: 3,
   DELETION_OPACITY: 0.3,
   GHOST_PREVIEW_OPACITY: 0.6,
   GEAR_ON_BELT_GROW: 15,

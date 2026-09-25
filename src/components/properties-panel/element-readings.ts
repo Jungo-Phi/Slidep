@@ -238,10 +238,12 @@ export function element_reading_groups(
   dynamic: boolean,
 ): ReadingGroup[] {
   const groups: ReadingGroup[] = [];
-  // A trajectory is the one layer the kinematic solver draws too; every other reading here is a force, a mass or an acceleration, which only dynamic mode has.
+  // The kinematic solver draws a trajectory and, differentiated from its positions, a velocity; every other reading here is a force, a mass or an acceleration, which only dynamic mode has.
   const overlays = dynamic
     ? available_overlays(element)
-    : available_overlays(element).filter((kind) => kind === "trajectory");
+    : available_overlays(element).filter(
+        (kind) => kind === "trajectory" || kind === "velocity",
+      );
   const single = (overlay: OverlayKind, kind: PhysicsOverlayKind) => {
     if (!overlays.includes(overlay)) return;
     groups.push({
@@ -308,7 +310,7 @@ export function is_series_value(value: InspectorValue): value is ProbeMetric {
 /**
  * What `SelectionInspector` shows of one element, decided per element type rather than by what a probe can measure.
  * Everything an element has to say is on screen at once: there is no folded view, and so no line a reader has to go looking for.
- * A value never repeats what a layer already reads, which is why velocity is a value in kinematic mode only.
+ * A value never repeats what a layer already reads, which is why an element with a velocity layer lists no velocity of its own, in either mode.
  */
 export interface InspectorLayout {
   values: InspectorValue[];
@@ -331,11 +333,11 @@ export function inspector_layout(
   // An anchored node does not move, so what it says is what the ground pushes back with.
   const grounded = "isGrounded" in element && element.isGrounded;
 
-  // Kinematic mode draws no force, no mass and no acceleration, so an element is down to its own geometry — and to the trajectory, the one layer this mode does draw.
+  // Kinematic mode draws no force, no mass and no acceleration, so an element is down to its own geometry — and to the trajectory and the velocity, the two layers this mode does draw.
   if (!dynamic)
     switch (element.type) {
       case "beam":
-        return layout(["length", "angle", "angular-velocity"]);
+        return layout(["length", "angle"]);
       case "spring":
         return layout(["length", "elongation", "angle", "angular-velocity"]);
       case "damper":
@@ -348,21 +350,14 @@ export function inspector_layout(
       case "belt":
         return layout(["belt-length"]);
       case "gear":
-        return layout(["angle", "angular-velocity"]);
+        return layout(["angle"]);
       case "slider":
       case "slidep":
-        return layout([
-          "slide-abscissa",
-          "slide-velocity",
-          "position",
-          "velocity",
-        ]);
+        return layout(["slide-abscissa", "slide-velocity", "position"]);
       case "pivot":
       case "join":
       case "mass":
-        return grounded
-          ? layout(["position"])
-          : layout(["position", "velocity"]);
+        return layout(["position"]);
     }
 
   switch (element.type) {

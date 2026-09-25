@@ -16,7 +16,11 @@ const ENERGY_COMPONENTS = [
   "kinetic",
   "potential",
   "mechanical",
-  "netWorkIn",
+  "motorWork",
+  "loadWork",
+  "damperWork",
+  "frictionWork",
+  "impactWork",
 ] as const;
 type EnergyComponent = (typeof ENERGY_COMPONENTS)[number];
 
@@ -24,32 +28,44 @@ const ENERGY_COMPONENT_LABEL_KEYS: Record<EnergyComponent, StringKey> = {
   kinetic: "energy_balance_kinetic",
   potential: "energy_balance_potential",
   mechanical: "energy_balance_mechanical",
-  netWorkIn: "energy_balance_net_work",
+  motorWork: "energy_balance_motor_work",
+  loadWork: "energy_balance_load_work",
+  damperWork: "energy_balance_damper_work",
+  frictionWork: "energy_balance_friction_work",
+  impactWork: "energy_balance_impact_work",
 };
 
 /** What each curve actually is — on its own chip rather than a single header tooltip, since
- * the four are different enough (one is a rate integral, the rest are state) that a shared blurb either says too little about each or grows too long to skim. */
+ * the curves are different enough (states, and cumulative work in or out) that a shared blurb either says too little about each or grows too long to skim. */
 const ENERGY_COMPONENT_HINT_KEYS: Record<EnergyComponent, StringKey> = {
   kinetic: "energy_balance_kinetic_hint",
   potential: "energy_balance_potential_hint",
   mechanical: "energy_balance_mechanical_hint",
-  netWorkIn: "energy_balance_net_work_hint",
+  motorWork: "energy_balance_motor_work_hint",
+  loadWork: "energy_balance_load_work_hint",
+  damperWork: "energy_balance_damper_work_hint",
+  frictionWork: "energy_balance_friction_work_hint",
+  impactWork: "energy_balance_impact_work_hint",
 };
 
-/** "Totale" and "travail net" on: the pair the diagnostic is actually about; kinetic/potential are there to answer "where did it go", opted into like x/y/norm. */
+/** "Totale" on: the overall picture; the other curves answer "where does it come from, where does it go", opted into like x/y/norm. */
 const DEFAULT_COMPONENTS: Record<EnergyComponent, boolean> = {
   kinetic: false,
   potential: false,
   mechanical: true,
-  netWorkIn: true,
+  motorWork: false,
+  loadWork: false,
+  damperWork: false,
+  frictionWork: false,
+  impactWork: false,
 };
 
 /** Which curves are shown is a display preference, kept where the chart's own coming and going cannot lose it: selecting anything at all takes this off screen. */
 const STORAGE_KEY = "energyBalanceComponents";
 
 /**
- * The mechanism's own energy over the whole recording: what it holds, and the net work that should account for it.
- * A diagnostic of the solver's conservation rather than a measurement of the mechanism — which is exactly why it reads alone, with nothing selected: there is no element to hold it against (see `PropertiesPanel`).
+ * The mechanism's own energy over the whole recording: what it holds, and the work that came in or went out through motors, loads, dampers, joint friction and impacts.
+ * It concerns the whole mechanism rather than an element — which is why it reads alone, with nothing selected: there is no element to hold it against (see `PropertiesPanel`).
  * Free to show: the solver never recomputes it (see `EnergySample`).
  */
 export const EnergyBalance: React.FC<{
@@ -76,7 +92,11 @@ export const EnergyBalance: React.FC<{
     kinetic: PROBE_ELEMENT_COLORS[1],
     potential: PROBE_ELEMENT_COLORS[2],
     mechanical: probe_curve_colors(palette.primary.main).value,
-    netWorkIn: PROBE_ELEMENT_COLORS[4],
+    motorWork: PROBE_ELEMENT_COLORS[5],
+    loadWork: PROBE_ELEMENT_COLORS[6],
+    damperWork: PROBE_ELEMENT_COLORS[7],
+    frictionWork: PROBE_ELEMENT_COLORS[0],
+    impactWork: PROBE_ELEMENT_COLORS[3],
   };
   const curves: ChartCurve[] = ENERGY_COMPONENTS.filter(
     (key) => components[key],
@@ -147,7 +167,7 @@ export const EnergyBalance: React.FC<{
         poolMax={0}
         ownFloor={0}
         unitFactor={unit.factor}
-        // Never forced: `potential`/`mechanical` are anchored to the recording's first frame, not to a physical rest state (see `EnergyBalanceSeries`) — same reasoning `netWorkIn` already gets, and the same exceptions as `metric_shows_zero`.
+        // Never forced: `potential`/`mechanical` are anchored to the recording's first frame, not to a physical rest state (see `EnergyBalanceSeries`) — the same exceptions as `metric_shows_zero`.
         showZero={false}
         emptyMessage={
           curves.length === 0 ? t("chart_no_component") : t("chart_waiting")

@@ -10,17 +10,14 @@
 
 **Priorités sur le plan général**
 
-- 🚨 Régler bugs de dessin
 - 🔨 Régler problèmes DDL
 - 🔨 Clean les graphiques
-- 🚨 Supprimer les pics de couple dans "Jansen"
+- 🚨 Supprimer les pics de couple (ex. "Jansen")
 - 🤔 Clarifier le grab en dynamique (grab -> force ?)
 - 🤔 Clarifier "qu'est-ce qui est simulé ?" pour **dt**. On affiche des positions interpolées, mais pas les forces, les overlays, ni les valeurs dans le panneau latéral.
 - 🔨 Améliorer les performances en édition
 - 🔨 Améliorer les performances en simulation
 - 🆕 Ajouter une section qui explique le type de simulation et ses limites (et paramètres ?)
-- 🔨 Clarifier couple moteur (Bloquer moteur si couple demandé suppérieur couple disponible ?)
-  La puissance affichée devrait être celle que le moteur peut fournir (et pas la puissance instantanée), on devrait donc ensuite pouvoir comparer la puissance du moteur à la puissance instantanée. Le calcul devrait aussi être revu pour prendre en compte ce qu'apporte vraiment le moteur et ce qui tient de l'inertie.
 - 🔨 Supprimer poutre sur joint de courroie
 - 🚨 Faire fonctionner les treuils
 - 🆕 Mobile mode
@@ -38,19 +35,18 @@
 ---
 
 - 🚨 Un ctrl+y de remplacement d'élément n'a pas reset la simulation, wtf !?
-- 🚨 Hover des loads sous les edges, wtf !?
 - 🚨 Un snap sur la grille ne se fait pas toujours bien aux valeurs rondes, wtf !?
 
 ### À faire rapidement
 
 **Very qwick fix**
 
-- 🔨 Corriger les diagrammes d'efforts internes (valeur à zéro)
-- 🔨 Les trais indicatifs des valeurs max dans les diagrammes des efforts (vu dans Mf) s'accumulent
+- 🔨 Afficher le point grabbé en simulation
+- 🔨 Afficher les trajectoires anciennes de plus en plus transparentes
+- 🚨 Les trais indicatifs des valeurs max dans les diagrammes des efforts (vu dans Mf) s'accumulent
 - 🔨 La barre de scroll devrait se cacher, ou au moins se réduire, si on n'a pas scrollé depuis un moment
 - 🔨 Ne pas enregistrer un mécanisme vide
 
-- 🔨 Afficher l'inertie rotationelle avec le symbole qui fait tout le tour ?
 - 🔨 N'afficher un moteur qu'une seul fois au maximum dans les DDL
 - 🔨 afficher en priorité les éléments avec une masse (ex. Mass-ressort) dans les DDL
 - 🔨 On devrait afficher T/N au lieu de x/y pour les mesures des forces internes
@@ -59,32 +55,20 @@
 - 🔨 Afficher les graphiques à frame=0 (pas "en attente de données...")
 - 🔨 La distance d'écartement à la séparation d'éléments devrait dépendre du zoom
 
-**Dessin**
-- 🚨 Le hover de la règle sur les joins n'est pas bon. Et hover de règle devrait épaissir les traits
-- 🔨 En dynamique, ne pas mettre le curseur "grab" sur un élément ancré
-- 🔨 Le hover des éléments depuis le panneau latéral ne devrait pas faire apparaitre les contraintes
-- 🔨 Au hover des efforts internes, affichers des charges dans la poutre (à la place du point couleur contrainte)
-- 🔨 Re-positionner le texte des moments (Régler les moments qui se supperposent)
-- 🔨 Dessiner (preview) force et force-distribuée vers le bas
-- 🔨 Donner un contour background aux flèches
-- 🔨 Hover une flèche épaissis sa tête
-- 🔨 Changer le style des flèches de vitesse, accélération, etc.
-- 🔨 Afficher les contraintes dans les joins et l'intérieur des sliders et pivots
-- 🔨 Afficher les "draw_beam_end" en couleur de contrainte et hover matériaux
-- 🔨 Afficher le point grabbé en simulation
-- 🔨 Afficher les trajectoires anciennes de plus en plus transparentes
-
 **Qwick fixes :**
 
 - 🤔 C'est quoi le dossier "scratch/" ?
 - 🤔 Indiquer, quand on click sur un overlay pour la première fois, qu'il n'est visible qu'en simulation (comment ?)
 - 🤔 Afficher le signe des moments
+- 🔨 Ajouter accélération overlay
 
 **UI**
 
 - 🔨 Hover sur les graphs met en évidence les éléments concernés
 - 🔨 Les contraintes ne devrait pas apparaitre au hover quand on est en train de placer un élément. En fait, elle ne devrait apparaitre que dans les états "Idle"
-- Ajouter l'énergie apportée par les charges et par l'utilisateur dans "Travil net" (Bilan énergétique)
+- 🔨 Ajouter l'énergie apportée par l'utilisateur dans le bilan énergétique
+- 🆕 Ajouter des tooltips dans le menu "Afficher"
+- 🆕 Dans SelectionInspector, quand un est overlay sélectionné, on devrait avoir un bouton pour afficher sa métrique dans un graph
 - 🆕 Rendre visible les ctrl+y/z invisibles : clignottement dans l'onglet
 
 **Simulation**

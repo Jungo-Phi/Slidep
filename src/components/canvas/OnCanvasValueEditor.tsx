@@ -32,6 +32,11 @@ interface OnCanvasValueEditorProps {
   initialValue: number;
   /** Screen-space anchor (the editor centers itself on this point). */
   position: ScreenPoint;
+  /**
+   * Where the anchor is now, read every frame while the editor is open.
+   * For a value that sits on something moving without a render to tell the editor so (a load on a simulated body): `position` alone would leave it behind.
+   */
+  follow?: () => ScreenPoint;
   /** Formats and parses the field as a physical quantity instead of a bare number — the same
    * unit `NumberInput`'s `kind` would pick for `initialValue`, fixed for the life of this editor rather than re-picked as the user types, and part of the editable text itself rather than a decoration next to it.
    * "single" mode only. */
@@ -57,6 +62,7 @@ export const OnCanvasValueEditor: React.FC<OnCanvasValueEditorProps> = ({
   mode,
   initialValue,
   position,
+  follow,
   kind,
   signed,
   allowZero,
@@ -64,6 +70,27 @@ export const OnCanvasValueEditor: React.FC<OnCanvasValueEditorProps> = ({
   onCancel,
 }) => {
   const seal = useHistorySeal();
+  const boxRef = useRef<HTMLDivElement>(null);
+  const followRef = useRef(follow);
+  followRef.current = follow;
+  const following = follow !== undefined;
+
+  // Moves the box itself rather than through a render: the frames it follows do not reach React.
+  useEffect(() => {
+    if (!following) return;
+    let frame = 0;
+    const tick = () => {
+      const anchor = followRef.current?.();
+      const box = boxRef.current;
+      if (anchor && box) {
+        box.style.left = `${anchor.x}px`;
+        box.style.top = `${anchor.y}px`;
+      }
+      frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [following]);
   const [val1, setVal1] = useState("");
   const [val2, setVal2] = useState("");
   // The unit `initialValue` opened in, fixed for the editor's lifetime rather than re-picked on every keystroke — an adaptive kind mid-edit would otherwise change what a typed number means as its magnitude crossed a prefix boundary.
@@ -314,6 +341,7 @@ export const OnCanvasValueEditor: React.FC<OnCanvasValueEditorProps> = ({
 
   return (
     <Box
+      ref={boxRef}
       sx={{
         position: "absolute",
         left: position.x,

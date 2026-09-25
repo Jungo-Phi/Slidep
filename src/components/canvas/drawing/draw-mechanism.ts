@@ -53,6 +53,7 @@ import {
   draw_join_bottom,
   draw_join_top,
   draw_force,
+  type ArrowLayer,
   draw_moment,
   draw_distributed_force,
   draw_motor,
@@ -61,10 +62,19 @@ import {
   draw_parallel_leg_bottom,
   draw_parallel_leg_top,
   draw_redundancy_symbol,
+  magnitude_stress_color,
   magnitude_stress_fill_stops,
+  signed_stress_color,
   signed_stress_fill_stops,
+  stress_ramp_color,
   type FocusedOverlay,
 } from "./drawing-functions";
+import {
+  beam_offset,
+  reading_at,
+  worst_reading,
+  type StressReading,
+} from "./node-stress";
 import { RedundancySymbol } from "../../solver/analysis/redundancy-symbols";
 import { offset_ends, parallel_edge_offsets } from "./parallel-edges";
 import {
@@ -121,6 +131,23 @@ const EMPTY_IDS: ReadonlySet<ID> = new Set<ID>();
 const EMPTY_SYMBOLS: RedundancySymbol[] = [];
 const EMPTY_LIBRARY: never[] = [];
 const EMPTY_COHESION_FIELDS: CohesionField[] = [];
+
+/**
+ * Where `edge` really is at `nodeID`: its own end when it is fixed there, else the point of its axis nearest the node (a node on its body).
+ * The node's own position and the edge part when the node is stopped (a collision) while the edge carries on past it.
+ */
+function edge_anchor(
+  edge: EdgeElement,
+  nodeID: ID,
+  nodePosition: NodeElement["position"],
+): NodeElement["position"] {
+  if (edge.fixedNodeStartID === nodeID) return edge.positionStart;
+  if (edge.fixedNodeEndID === nodeID) return edge.positionEnd;
+  return edge.positionStart.lerp(
+    edge.positionEnd,
+    beam_offset(edge.positionStart, edge.positionEnd, nodePosition),
+  );
+}
 
 /**
  * Screen angle of the beam a node rides, 0 when it rides none.
@@ -411,6 +438,7 @@ export function draw_edge_fake_end(
   focused: ReadonlySet<ID>,
   faulty: ReadonlySet<ID>,
   length: number,
+  bodyFill: string = COLORS.FILL_BODY,
 ) {
   if (is_erase_hovered(edge.id, state, constraintElements, doomed))
     return;
@@ -419,7 +447,7 @@ export function draw_edge_fake_end(
   ctx.shadowBlur = 0;
   ctx.globalAlpha = 1;
   ctx.strokeStyle = COLORS.ELEMENT_STROKE;
-  ctx.fillStyle = COLORS.FILL_BODY;
+  ctx.fillStyle = bodyFill;
   ctx.lineWidth = STROKE_WIDTHS.STANDARD;
 
   if (
@@ -433,7 +461,6 @@ export function draw_edge_fake_end(
 
   if (is_selected(edge.id, state)) {
     ctx.strokeStyle = COLORS.SELECTION_STROKE;
-    ctx.fillStyle = COLORS.FILL_BODY;
   }
 
   ctx.translate(position.x, position.y);
@@ -636,7 +663,6 @@ export function draw_mechanism(
       : pointedAtFault.size === 0
         ? blockedMotors
         : new Set([...pointedAtFault, ...blockedMotors]);
-  const rulerOut = ruler_is_out(state);
 
   let allElements: UnionElement[] = mechanicalElements as UnionElement[];
   if (!hideConstraints) allElements = allElements.concat(constraintElements);
@@ -702,8 +728,13 @@ export function draw_mechanism(
         state.hoveredElementIDs.includes(element.id))
     )
       continue;
+    // The bottom disc is the join's contour when it is not hovered, so the ruler's hue has to land here.
+    ctx.strokeStyle = measured.has(element.id)
+      ? COLORS.MEASURE
+      : COLORS.ELEMENT_STROKE;
     draw_join_bottom(ctx, world2screen(element.position, viewport));
   }
+  ctx.strokeStyle = COLORS.ELEMENT_STROKE;
   ctx.fillStyle = COLORS.FILL_BODY;
   for (const element of allElements.filter(
     (element) => element.type === "pivot" && element.motor,
@@ -763,6 +794,11 @@ export function draw_mechanism(
   // Every beam at once, not gated per-element: the lens is mechanism-wide (`BeamStressLens`'s own doc).
   // Skipped for a beam without a resolvable material/profile (a dangling reference mid-edit) or without a field (outside dynamic mode, where there is nothing to color).
   const beamStressStops = new Map<ID, BeamFillStop[]>();
+  // The same field, station by station, for the nodes that sit on a beam and show its worst reading there.
+  const beamStressReadings = new Map<
+    ID,
+    { beam: BeamElement; readings: StressReading[] }
+  >();
   if (beamStressLens !== "none") {
     for (const field of cohesionFields) {
       const beam = mechanicalElements.find(
@@ -778,52 +814,97 @@ export function draw_mechanism(
           { offset: 0, color: STRESS_INDETERMINATE_COLOR },
           { offset: 1, color: STRESS_INDETERMINATE_COLOR },
         ]);
+        // Ranked below every real reading, so a node shared with a determinate beam shows that one.
+        beamStressReadings.set(beam.id, {
+          beam,
+          readings: [0, 1].map((offset) => ({
+            offset,
+            severity: -Infinity,
+            color: STRESS_INDETERMINATE_COLOR,
+          })),
+        });
         continue;
       }
       switch (beamStressLens) {
-        case "utilization":
-          beamStressStops.set(
-            beam.id,
-            beam_fill_stops(
-              stress_utilization_stops(field, strength.section, strength.Re),
-              stressScale,
-            ),
-          );
+        case "utilization": {
+          const raw = stress_utilization_stops(field, strength.section, strength.Re);
+          beamStressStops.set(beam.id, beam_fill_stops(raw, stressScale));
+          beamStressReadings.set(beam.id, {
+            beam,
+            readings: raw.map((stop) => ({
+              offset: stop.offset,
+              severity: stop.ratio,
+              color: stress_ramp_color(stop.ratio, stop.stress, stressScale),
+            })),
+          });
           break;
-        case "normal":
-          beamStressStops.set(
-            beam.id,
-            signed_stress_fill_stops(
-              normal_stress_stops(field, strength.section),
-              normalStressScale,
-            ),
-          );
+        }
+        case "normal": {
+          const raw = normal_stress_stops(field, strength.section);
+          beamStressStops.set(beam.id, signed_stress_fill_stops(raw, normalStressScale));
+          beamStressReadings.set(beam.id, {
+            beam,
+            readings: raw.map((stop) => ({
+              offset: stop.offset,
+              severity: Math.abs(stop.stress),
+              color: signed_stress_color(stop.stress, normalStressScale),
+            })),
+          });
           break;
-        case "bending":
-          beamStressStops.set(
-            beam.id,
-            magnitude_stress_fill_stops(
-              bending_stress_stops(field, strength.section),
-              bendingStressScale,
-            ),
-          );
+        }
+        case "bending": {
+          const raw = bending_stress_stops(field, strength.section);
+          beamStressStops.set(beam.id, magnitude_stress_fill_stops(raw, bendingStressScale));
+          beamStressReadings.set(beam.id, {
+            beam,
+            readings: raw.map((stop) => ({
+              offset: stop.offset,
+              severity: Math.abs(stop.stress),
+              color: magnitude_stress_color(Math.abs(stop.stress), bendingStressScale),
+            })),
+          });
           break;
-        case "shear":
-          beamStressStops.set(
-            beam.id,
-            beam_fill_stops(
-              shear_utilization_stops(
-                field,
-                strength.section,
-                shear_admissible_stress(strength.Re),
-              ),
-              shearStressScale,
-            ),
+        }
+        case "shear": {
+          const raw = shear_utilization_stops(
+            field,
+            strength.section,
+            shear_admissible_stress(strength.Re),
           );
+          beamStressStops.set(beam.id, beam_fill_stops(raw, shearStressScale));
+          beamStressReadings.set(beam.id, {
+            beam,
+            readings: raw.map((stop) => ({
+              offset: stop.offset,
+              severity: stop.ratio,
+              color: stress_ramp_color(stop.ratio, stop.stress, shearStressScale),
+            })),
+          });
           break;
+        }
       }
     }
   }
+
+  // The body-colored part of a node, in the worst reading the given beams have where they meet it.
+  // `undefined` (the node keeps its usual color) when no lens is on, or the library tint is up, which hides the beams' own overlay too.
+  const stress_fill_at = (
+    position: { x: number; y: number },
+    beamIDs: (ID | undefined)[],
+  ): string | undefined => {
+    if (beamStressReadings.size === 0 || beamTintColors.size > 0) return undefined;
+    return worst_reading(
+      beamIDs.map((id) => {
+        const entry = id === undefined ? undefined : beamStressReadings.get(id);
+        if (!entry) return undefined;
+        const { beam } = entry;
+        return reading_at(
+          entry.readings,
+          beam_offset(beam.positionStart, beam.positionEnd, position),
+        );
+      }),
+    )?.color;
+  };
 
   // A gear normally draws under belts, so a belt wrapping it traces right over its rim.
   // Hovering/selecting/erase-hovering it re-draws it once more, after belts, so it comes forward — still under nodes, drawn later in this pass.
@@ -960,12 +1041,8 @@ export function draw_mechanism(
         (dimensionSnapped &&
           state.type === "MovingConstraint" &&
           state.elementID === element.id);
-      // The cursor's hover is silent while the ruler is out: what it points at is already said in the measurement hue, and a thickened stroke over it would say it twice, in the language of a tool that is not the one in hand.
-      // The elevation `isCursorHovered` drives further down is a stacking order, not a mark, and stays.
       const isHovered =
-        focused.has(element.id) ||
-        faulty.has(element.id) ||
-        (isCursorHovered && !rulerOut);
+        focused.has(element.id) || faulty.has(element.id) || isCursorHovered;
 
       ctx.shadowBlur = 0;
       ctx.globalAlpha = 1;
@@ -1054,6 +1131,10 @@ export function draw_mechanism(
             case "slider": {
               if (element.fixedEdgesIDs.length > 0 && !element.parentBeamID) {
                 ctx.fillStyle = COLORS.BACKGROUND;
+              } else if (element.parentBeamID) {
+                ctx.fillStyle =
+                  stress_fill_at(element.position, [element.parentBeamID]) ??
+                  ctx.fillStyle;
               }
               draw_slider(
                 ctx,
@@ -1097,11 +1178,16 @@ export function draw_mechanism(
                     mechanicalElements,
                   );
                   if (!("positionStart" in edge)) return;
+                  const anchor = edge_anchor(
+                    edge as EdgeElement,
+                    element.id,
+                    element.position,
+                  );
                   draw_edge_fake_end(
                     ctx,
                     edge as EdgeElement,
                     element.id,
-                    world2screen(element.position, viewport),
+                    world2screen(anchor, viewport),
                     hoveredPart,
                     state,
                     constraintElements,
@@ -1109,6 +1195,7 @@ export function draw_mechanism(
                     focused,
                     faulty,
                     DIM.MOTOR_RADIUS + DIM.MOTOR_CORNER_RADIUS + 1,
+                    stress_fill_at(anchor, [edgeID]),
                   );
                 });
               }
@@ -1117,6 +1204,7 @@ export function draw_mechanism(
                 world2screen(element.position, viewport),
                 element.rotatingEdgesIDs.length > 0 ||
                   element.fixedGearsIDs.length > 0,
+                stress_fill_at(element.position, element.rotatingEdgesIDs),
               );
               break;
             }
@@ -1133,11 +1221,16 @@ export function draw_mechanism(
                 );
                 // rotatingEdgesIDs may also reference a pinned gear — skip it.
                 if (!("positionStart" in edge)) return;
+                const anchor = edge_anchor(
+                  edge as EdgeElement,
+                  element.id,
+                  element.position,
+                );
                 draw_edge_fake_end(
                   ctx,
                   edge as EdgeElement,
                   element.id,
-                  world2screen(element.position, viewport),
+                  world2screen(anchor, viewport),
                   hoveredPart,
                   state,
                   constraintElements,
@@ -1145,6 +1238,7 @@ export function draw_mechanism(
                   focused,
                   faulty,
                   DIM.SLIDEP_OUTER_WIDTH / 2,
+                  stress_fill_at(anchor, [edgeID]),
                 );
               });
               draw_pivot(
@@ -1153,10 +1247,17 @@ export function draw_mechanism(
                 !!element.parentBeamID ||
                   element.rotatingEdgesIDs.length > 0 ||
                   element.fixedGearsIDs.length > 0,
+                stress_fill_at(element.position, [
+                  element.parentBeamID,
+                  ...element.rotatingEdgesIDs,
+                ]),
               );
               break;
             }
             case "join":
+              ctx.fillStyle =
+                stress_fill_at(element.position, element.fixedEdgesIDs) ??
+                ctx.fillStyle;
               if (isHovered || isSelected || isEraseHovered) {
                 draw_join(ctx, world2screen(element.position, viewport));
               } else {
@@ -1698,6 +1799,42 @@ export function draw_mechanism(
             load_lit(id) || heldBody
               ? loadHoverWidth
               : loadRestWidth;
+          // Every halo goes down before any arrow, so that one arrow's halo never veils its neighbour.
+          const endArrows = [
+            {
+              base: start,
+              vector: vectorStart,
+              magnitude: distributedForce.magnitudeStart,
+              part: "start",
+            },
+            {
+              base: end,
+              vector: vectorEnd,
+              magnitude: distributedForce.magnitudeEnd,
+              part: "end",
+            },
+          ] as const;
+          const draw_end_arrows = (layer: ArrowLayer) => {
+            for (const arrow of endArrows) {
+              draw_force(
+                ctx,
+                arrow.base,
+                arrow.vector,
+                Math.abs(arrow.magnitude),
+                (hideText &&
+                  state.type === "EditingValue" &&
+                  state.part === arrow.part) ||
+                  is_zero_load(arrow.magnitude),
+                LOAD_INTENSITY,
+                is_load_hovered(id, hoveredPart, `${arrow.part}-value`)
+                  ? loadHoverWidth
+                  : loadRestWidth,
+                "filled",
+                layer,
+              );
+            }
+          };
+          draw_end_arrows("halo");
           draw_distributed_force(
             ctx,
             start,
@@ -1708,34 +1845,7 @@ export function draw_mechanism(
               ? loadHoverWidth
               : loadRestWidth,
           );
-          draw_force(
-            ctx,
-            start,
-            vectorStart,
-            Math.abs(distributedForce.magnitudeStart),
-            (hideText &&
-              state.type === "EditingValue" &&
-              state.part === "start") ||
-              is_zero_load(distributedForce.magnitudeStart),
-            LOAD_INTENSITY,
-            is_load_hovered(id, hoveredPart, "start-value")
-              ? loadHoverWidth
-              : loadRestWidth,
-          );
-          draw_force(
-            ctx,
-            end,
-            vectorEnd,
-            Math.abs(distributedForce.magnitudeEnd),
-            (hideText &&
-              state.type === "EditingValue" &&
-              state.part === "end") ||
-              is_zero_load(distributedForce.magnitudeEnd),
-            LOAD_INTENSITY,
-            is_load_hovered(id, hoveredPart, "end-value")
-              ? loadHoverWidth
-              : loadRestWidth,
-          );
+          draw_end_arrows("body");
           if (heldTip) {
             draw_hover_circle(ctx, heldTip === "start" ? tipStart : tipEnd);
           }

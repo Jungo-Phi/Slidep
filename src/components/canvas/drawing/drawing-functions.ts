@@ -55,8 +55,10 @@ import {
   world2screen_vec,
 } from "../../../utils";
 import {
+  arrow_hit,
   force_label_position_screen,
   moment_value_label_position,
+  value_label_width,
 } from "../../../utils/load-geom";
 import {
   stored2screen_load,
@@ -687,6 +689,7 @@ export function draw_pivot(
   ctx: CanvasRenderingContext2D,
   position: ScreenPoint,
   filled: boolean,
+  bodyFill: string = COLORS.FILL_BODY,
 ) {
   ctx.beginPath();
   ctx.arc(position.x, position.y, DIM.PIVOT_OUTER_RADIUS, 0, TAU);
@@ -697,7 +700,7 @@ export function draw_pivot(
   if (filled) {
     ctx.beginPath();
     ctx.arc(position.x, position.y, DIM.PIVOT_INNER_RADIUS, 0, TAU);
-    ctx.fillStyle = COLORS.FILL_BODY;
+    ctx.fillStyle = bodyFill;
     ctx.fill();
   }
 
@@ -1647,24 +1650,56 @@ export function draw_belt_loop(
   ctx.stroke();
 }
 
+/** `"open"` is the same head outlined instead of filled, for arrows that are not forces or moments. */
+export type ArrowHeadStyle = "filled" | "open";
+
+function head_size(style: ArrowHeadStyle): { length: number; width: number } {
+  return style === "open"
+    ? { length: DIM.ARROW_HEAD_OPEN_LENGTH, width: DIM.ARROW_HEAD_OPEN_WIDTH }
+    : { length: DIM.ARROW_HEAD_LENGTH, width: DIM.ARROW_HEAD_WIDTH };
+}
+
+/** How far behind the tip an open head's vertex sits so that the mitred stroke, which overshoots the vertex, ends exactly on the tip. */
+function open_head_inset(lineWidth: number): number {
+  const { length, width } = head_size("open");
+  return lineWidth / 2 / Math.sin(Math.atan2(width / 2, length));
+}
+
+/** The `outline` a filled head takes from the stroke it is drawn with: none at `STROKE_WIDTHS.STANDARD`, growing with whatever hover or selection adds to it. */
+function head_outline(ctx: CanvasRenderingContext2D): number {
+  return Math.max(0, ctx.lineWidth - STROKE_WIDTHS.STANDARD);
+}
+
+/** `outline` thickens a filled head by that many px all round, with round joins so the tip grows as much as the sides; it has no effect on an open head. */
 export function draw_arrow_head(
   ctx: CanvasRenderingContext2D,
   position: ScreenPoint,
   angle: number,
   scale: number = 1,
+  style: ArrowHeadStyle = "filled",
+  outline: number = 0,
 ) {
+  const { length, width } = head_size(style);
   ctx.save();
   ctx.translate(position.x, position.y);
   ctx.rotate(angle);
 
   ctx.beginPath();
-  ctx.moveTo(0, 0);
-  ctx.lineTo(
-    DIM.ARROW_HEAD_LENGTH * scale,
-    (-DIM.ARROW_HEAD_WIDTH / 2) * scale,
-  );
-  ctx.lineTo(DIM.ARROW_HEAD_LENGTH * scale, (DIM.ARROW_HEAD_WIDTH / 2) * scale);
-  ctx.fill();
+  const inset = style === "open" ? open_head_inset(ctx.lineWidth) : 0;
+  ctx.moveTo(length * scale, (-width / 2) * scale);
+  ctx.lineTo(inset, 0);
+  ctx.lineTo(length * scale, (width / 2) * scale);
+  ctx.lineJoin = "miter";
+  if (style === "open") {
+    ctx.stroke();
+  } else {
+    ctx.fill();
+    if (outline > 0) {
+      ctx.lineWidth = outline;
+      ctx.closePath();
+      ctx.stroke();
+    }
+  }
 
   ctx.restore();
 }
@@ -1932,10 +1967,10 @@ export function draw_dimension_text(
   ctx.fillStyle = COLORS.BACKGROUND + COLORS.ICON_TRANSPARENCY;
   ctx.beginPath();
   ctx.roundRect(
-    position.x - metrics.width / 2 - 8 / 2,
-    position.y - 22 / 2 - 1,
-    metrics.width + 8,
-    22,
+    position.x - (metrics.width + DIM.VALUE_H_SHADOW) / 2,
+    position.y - DIM.VALUE_PILL_HEIGHT / 2 - 1,
+    metrics.width + DIM.VALUE_H_SHADOW,
+    DIM.VALUE_PILL_HEIGHT,
     5,
   );
   ctx.fill();
@@ -2056,7 +2091,65 @@ export function draw_text(
 
 // ─── Load element drawing ─────────────────────────────────────────────────────
 
-/** Draws a single force arrow from `base` in direction+magnitude of `vector` (world units). `textLineWidth` lets the value label be emphasized (or not) independently of the arrow, since hovering one part of a load must not light up the other. */
+/**
+ * Runs `draw` in the background colour, with the same halo the value labels sit in, so that what is drawn over it stands clear of whatever lies under.
+ * A halo is a blur, and a thin stroke casts a faint one: `ARROW_HALO_PASSES` stacks it up to a visible weight.
+ */
+function with_halo(ctx: CanvasRenderingContext2D, draw: () => void) {
+  ctx.save();
+  ctx.strokeStyle = COLORS.BACKGROUND;
+  ctx.fillStyle = COLORS.BACKGROUND;
+  ctx.shadowColor = COLORS.BACKGROUND;
+  ctx.shadowBlur = INTERACTION_SPECS.ICON_HALO_SIZE;
+  for (let i = 0; i < INTERACTION_SPECS.ARROW_HALO_PASSES; i++) draw();
+  ctx.restore();
+}
+
+/**
+ * Which part of an arrow a draw call paints: its background halo, the arrow itself, or both.
+ * Loads made of several arrows draw every halo first, so that one arrow's halo never veils its neighbour.
+ */
+export type ArrowLayer = "both" | "halo" | "body";
+
+/**
+ * Head and shaft of one straight arrow from `base` along `vector`, in the current stroke.
+ */
+function draw_arrow_shape(
+  ctx: CanvasRenderingContext2D,
+  base: ScreenPoint,
+  vector: ScreenPoint,
+  headStyle: ArrowHeadStyle,
+  halo: boolean,
+) {
+  const length = vector.length();
+  // Below a pixel there is no direction left to draw.
+  if (length < 1) return;
+  draw_arrow_head(
+    ctx,
+    base.add(vector.extend_length(DIM.ARROW_HEAD_OFFSET)),
+    vector.angle() + TAU / 2,
+    1,
+    headStyle,
+    head_outline(ctx),
+  );
+  if (length <= head_size(headStyle).length) return;
+  // An open head has nothing under it, so the shaft runs on to its vertex.
+  const shaftEnd =
+    headStyle === "open"
+      ? DIM.ARROW_HEAD_OFFSET - open_head_inset(ctx.lineWidth)
+      : DIM.ARROW_HEAD_OFFSET - DIM.ARROW_HEAD_LENGTH;
+  const startOffset =
+    DIM.ARROW_BASE_OFFSET;
+  if (halo && startOffset >= length + shaftEnd) return;
+  const s = base.add(vector.with_length(startOffset));
+  const e = base.add(vector.extend_length(shaftEnd));
+  ctx.beginPath();
+  ctx.moveTo(s.x, s.y);
+  ctx.lineTo(e.x, e.y);
+  ctx.stroke();
+}
+
+/** Draws a single force arrow from `base` in direction+magnitude of `vector` (world units). A stroke wider than `STROKE_WIDTHS.STANDARD` (hover, selection) also thickens a filled head. `textLineWidth` lets the value label be emphasized (or not) independently of the arrow, since hovering one part of a load must not light up the other. */
 export function draw_force(
   ctx: CanvasRenderingContext2D,
   base: ScreenPoint,
@@ -2065,32 +2158,20 @@ export function draw_force(
   hideText: boolean = false,
   kind: QuantityKind,
   textLineWidth?: number,
+  headStyle: ArrowHeadStyle = "filled",
+  layer: ArrowLayer = "both",
 ) {
-  const length = vector.length();
-  if (length >= 1) {
-    draw_arrow_head(
-      ctx,
-      base.add(vector.extend_length(DIM.ARROW_HEAD_OFFSET)),
-      vector.angle() + TAU / 2,
-    );
-    if (length > DIM.ARROW_HEAD_LENGTH) {
-      const s = base.add(vector.with_length(DIM.ARROW_BASE_OFFSET));
-      const e = base.add(
-        vector.extend_length(DIM.ARROW_HEAD_OFFSET - DIM.ARROW_HEAD_LENGTH),
-      );
-      ctx.beginPath();
-      ctx.moveTo(s.x, s.y);
-      ctx.lineTo(e.x, e.y);
-      ctx.stroke();
-    }
-  }
+  if (layer !== "body")
+    with_halo(ctx, () => draw_arrow_shape(ctx, base, vector, headStyle, true));
+  if (layer === "halo") return;
+  draw_arrow_shape(ctx, base, vector, headStyle, false);
 
   if (hideText) return;
   ctx.save();
   if (textLineWidth !== undefined) ctx.lineWidth = textLineWidth;
   draw_dimension_text(
     ctx,
-    force_label_position_screen(base, vector),
+    force_label_position_screen(base, vector, value_label_width(value, kind)),
     value,
     "",
     kind,
@@ -2098,15 +2179,12 @@ export function draw_force(
   ctx.restore();
 }
 
-/** Draws a curved moment arrow (arc with arrowhead) centered at `center`.
- * `value` is signed: positive is clockwise, negative counter-clockwise. */
-export function draw_moment(
+/** The two arcs and heads of a full moment loop, in the current stroke. */
+function draw_moment_glyph(
   ctx: CanvasRenderingContext2D,
   center: ScreenPoint,
   radius: number,
   value: number,
-  hideText: boolean = false,
-  textLineWidth?: number,
 ) {
   const clockwise = value >= 0;
   const C = 1 / 16;
@@ -2123,7 +2201,7 @@ export function draw_moment(
   const tip = center
     .add(Point2.from_polar(radius, endAngle))
     .sub(Point2.from_polar(DIM.ARROW_HEAD_LENGTH, headAngle));
-  draw_arrow_head(ctx, tip, headAngle);
+  draw_arrow_head(ctx, tip, headAngle, 1, "filled", head_outline(ctx));
 
   startAngle += TAU / 2;
   endAngle += TAU / 2;
@@ -2136,14 +2214,32 @@ export function draw_moment(
   const tip2 = center
     .add(Point2.from_polar(radius, endAngle))
     .add(Point2.from_polar(DIM.ARROW_HEAD_LENGTH, headAngle));
-  draw_arrow_head(ctx, tip2, headAngle2);
+  draw_arrow_head(ctx, tip2, headAngle2, 1, "filled", head_outline(ctx));
+}
+
+/** Draws a curved moment arrow (arc with arrowhead) centered at `center`.
+ * `value` is signed: positive is clockwise, negative counter-clockwise. */
+export function draw_moment(
+  ctx: CanvasRenderingContext2D,
+  center: ScreenPoint,
+  radius: number,
+  value: number,
+  hideText: boolean = false,
+  textLineWidth?: number,
+) {
+  with_halo(ctx, () => draw_moment_glyph(ctx, center, radius, value));
+  draw_moment_glyph(ctx, center, radius, value);
 
   if (hideText) return;
   ctx.save();
   if (textLineWidth !== undefined) ctx.lineWidth = textLineWidth;
   draw_dimension_text(
     ctx,
-    moment_value_label_position(center, radius),
+    moment_value_label_position(
+      center,
+      radius,
+      value_label_width(Math.abs(value), MOMENT),
+    ),
     Math.abs(value),
     "",
     MOMENT,
@@ -2163,7 +2259,24 @@ export function draw_distributed_force(
   vectorStart: ScreenPoint,
   vectorEnd: ScreenPoint,
   crestLineWidth?: number,
+  layer: ArrowLayer = "both",
 ) {
+  // A tapered load runs its arrows down to nothing, which `draw_arrow_shape` leaves undrawn.
+  const draw_arrows = (halo: boolean) => {
+    for (let i = 1; i < DIM.NB_DISTRIBUTED_FORCE_ARROWS; i++) {
+      const t = i / DIM.NB_DISTRIBUTED_FORCE_ARROWS;
+      draw_arrow_shape(
+        ctx,
+        start.lerp(end, t),
+        vectorStart.lerp(vectorEnd, t),
+        "filled",
+        halo,
+      );
+    }
+  };
+  if (layer !== "body") with_halo(ctx, () => draw_arrows(true));
+  if (layer === "halo") return;
+
   ctx.save();
   if (crestLineWidth !== undefined) ctx.lineWidth = crestLineWidth;
   ctx.beginPath();
@@ -2174,28 +2287,7 @@ export function draw_distributed_force(
   ctx.stroke();
   ctx.restore();
 
-  for (let i = 1; i < DIM.NB_DISTRIBUTED_FORCE_ARROWS; i++) {
-    const t = i / DIM.NB_DISTRIBUTED_FORCE_ARROWS;
-    const base = start.lerp(end, t);
-    const vector = vectorStart.lerp(vectorEnd, t);
-    // A tapered load runs its arrows down to nothing: below a pixel there is no direction left to draw, and below a head length the shaft would point backwards out of `extend_length`.
-    const length = vector.length();
-    if (length < 1) continue;
-    draw_arrow_head(
-      ctx,
-      base.add(vector.extend_length(DIM.ARROW_HEAD_OFFSET)),
-      vector.angle() + TAU / 2,
-    );
-    if (length <= DIM.ARROW_HEAD_LENGTH) continue;
-    const s = base.add(vector.with_length(DIM.ARROW_BASE_OFFSET));
-    const e = base.add(
-      vector.extend_length(DIM.ARROW_HEAD_OFFSET - DIM.ARROW_HEAD_LENGTH),
-    );
-    ctx.beginPath();
-    ctx.moveTo(s.x, s.y);
-    ctx.lineTo(e.x, e.y);
-    ctx.stroke();
-  }
+  draw_arrows(false);
 }
 
 /** Draws a small probe indicator (circle with crosshair). */
@@ -2292,8 +2384,10 @@ export function draw_trajectory(
 export interface OverlayArrow {
   /** World-space point the arrow is drawn from — the element's own probed point. */
   at: WorldPoint;
-  /** World-space vector. Its direction is drawn as-is; its magnitude is remapped through the same log ruler a user-placed load uses (`stored2screen_load`), so an arrow stays legible whatever the underlying unit's typical scale — not calibrated for velocity (mm/s) specifically, a starting point to retune once both are on screen together. */
+  /** World-space vector. Its direction is drawn as-is; its magnitude is remapped through the same log ruler a user-placed load uses (`stored2screen_load`), so an arrow stays legible whatever the underlying unit's typical scale — unless `screenLength` says otherwise. */
   vector: WorldPoint;
+  /** Drawn length (screen px), for a reading whose quantity has a ruler of its own (`velocity2screen`) — left out, the load ruler applies. */
+  screenLength?: number;
   kind: PhysicsOverlayKind;
   /** What this reading is, where anything else may want to point at the same one — the force balance names its own terms the same way (`BalanceTerm.id`), which is how a hovered line finds the arrow already on screen instead of drawing a second one over it. */
   id?: string;
@@ -2312,6 +2406,10 @@ export interface OverlayArrow {
  */
 export type FocusedOverlay = HoveredReading;
 
+function overlay_arrow_screen_length(arrow: OverlayArrow): number {
+  return arrow.screenLength ?? stored2screen_load(arrow.vector.length());
+}
+
 /**
  * Screen-space base/tip of an overlay arrow — shared by the draw call and the hit test below, so hovering and drawing always agree on where the arrow actually sits.
  * `undefined` for a magnitude too small to draw at all, same guard `draw_overlay_arrow` applies before it.
@@ -2324,7 +2422,7 @@ function overlay_arrow_screen_geometry(
   if (magnitude < 1e-9) return undefined;
   const base = world2screen(arrow.at, viewport);
   const vector = world2screen_vec(arrow.vector, viewport).with_length(
-    stored2screen_load(magnitude),
+    overlay_arrow_screen_length(arrow),
   );
   return { base, vector, tip: base.add(vector) };
 }
@@ -2337,10 +2435,7 @@ export function overlay_arrow_hit(
 ): boolean {
   const geom = overlay_arrow_screen_geometry(viewport, arrow);
   if (!geom) return false;
-  return (
-    mouseScreen.distance_to(geom.tip) <= HIT_TOLERANCE.NODE ||
-    mouseScreen.distance2segment(geom.base, geom.tip) <= HIT_TOLERANCE.EDGE
-  );
+  return arrow_hit(mouseScreen, geom.base, geom.tip);
 }
 
 /**
@@ -2359,7 +2454,7 @@ export function draw_overlay_arrow(
   if (magnitude < 1e-9) return;
   const base = world2screen(arrow.at, viewport);
   const screenVec = world2screen_vec(arrow.vector, viewport).with_length(
-    stored2screen_load(magnitude),
+    overlay_arrow_screen_length(arrow),
   );
   const baseColor = COLORS.OVERLAY[arrow.kind];
   ctx.save();
@@ -2374,7 +2469,16 @@ export function draw_overlay_arrow(
     ctx.shadowColor = baseColor;
     ctx.shadowBlur = INTERACTION_SPECS.SELECTION_HALO_SIZE;
   }
-  draw_force(ctx, base, screenVec, magnitude, true, FORCE);
+  draw_force(
+    ctx,
+    base,
+    screenVec,
+    magnitude,
+    true,
+    FORCE,
+    undefined,
+    arrow.kind === "velocity" ? "open" : "filled",
+  );
   ctx.restore();
 }
 
@@ -2400,12 +2504,18 @@ export function draw_overlay_arrow_label(
     ctx.shadowColor = baseColor;
     ctx.shadowBlur = INTERACTION_SPECS.SELECTION_HALO_SIZE;
   }
+  const value = arrow.vector.length();
+  const kind = arrow.kind === "velocity" ? LINEAR_VELOCITY : FORCE;
   draw_dimension_text(
     ctx,
-    force_label_position_screen(geom.base, geom.vector),
-    arrow.vector.length(),
+    force_label_position_screen(
+      geom.base,
+      geom.vector,
+      value_label_width(value, kind),
+    ),
+    value,
     "",
-    arrow.kind === "velocity" ? LINEAR_VELOCITY : FORCE,
+    kind,
   );
   ctx.restore();
 }
@@ -2468,6 +2578,17 @@ function draw_half_moment(
   value: number,
   direction: ScreenPoint,
 ) {
+  with_halo(ctx, () => draw_half_moment_glyph(ctx, center, radius, value, direction));
+  draw_half_moment_glyph(ctx, center, radius, value, direction);
+}
+
+function draw_half_moment_glyph(
+  ctx: CanvasRenderingContext2D,
+  center: ScreenPoint,
+  radius: number,
+  value: number,
+  direction: ScreenPoint,
+) {
   const clockwise = value >= 0;
   const centerAngle = direction.angle();
   const halfSpan = HALF_MOMENT_SPAN / 2;
@@ -2483,7 +2604,17 @@ function draw_half_moment(
   const tip = center
     .add(Point2.from_polar(radius, endAngle))
     .sub(Point2.from_polar(DIM.ARROW_HEAD_LENGTH, headAngle));
-  draw_arrow_head(ctx, tip, headAngle);
+  draw_arrow_head(ctx, tip, headAngle, 1, "filled", head_outline(ctx));
+}
+
+/** Screen direction a `direction`ed overlay couple's arc is centred on, or `undefined` for the full loop. */
+function overlay_moment_screen_direction(
+  viewport: ViewportState,
+  moment: OverlayMoment,
+): ScreenPoint | undefined {
+  return moment.direction && moment.direction.length() >= 1e-9
+    ? world2screen_vec(moment.direction, viewport)
+    : undefined;
 }
 
 /**
@@ -2515,10 +2646,7 @@ export function draw_overlay_moment(
     ctx.shadowColor = baseColor;
     ctx.shadowBlur = INTERACTION_SPECS.SELECTION_HALO_SIZE;
   }
-  const screenDirection =
-    moment.direction && moment.direction.length() >= 1e-9
-      ? world2screen_vec(moment.direction, viewport)
-      : undefined;
+  const screenDirection = overlay_moment_screen_direction(viewport, moment);
   if (screenDirection)
     draw_half_moment(ctx, center, radius, moment.torque, screenDirection);
   else draw_moment(ctx, center, radius, moment.torque, true);
@@ -2622,10 +2750,16 @@ export function draw_overlay_moment_label(
     ctx.shadowColor = baseColor;
     ctx.shadowBlur = INTERACTION_SPECS.SELECTION_HALO_SIZE;
   }
+  const value = Math.abs(moment.torque);
   draw_dimension_text(
     ctx,
-    moment_value_label_position(center, radius),
-    Math.abs(moment.torque),
+    moment_value_label_position(
+      center,
+      radius,
+      value_label_width(value, MOMENT),
+      overlay_moment_screen_direction(viewport, moment),
+    ),
+    value,
     "",
     MOMENT,
   );

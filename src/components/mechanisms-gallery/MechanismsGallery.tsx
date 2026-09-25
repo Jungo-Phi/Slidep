@@ -208,6 +208,10 @@ export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
       onClose={onClose}
       fullWidth
       maxWidth={false}
+      // Focus once the enter transition is done, after the modal's focus trap has taken its own initial focus.
+      slotProps={{
+        transition: { onEntered: () => searchInputRef.current?.focus() },
+      }}
       PaperProps={{
         sx: {
           height: "85vh",
@@ -243,7 +247,7 @@ export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
               startAdornment: (
                 <Search
                   fontSize="small"
-                  sx={{ mr: 1, ml: -0.5, color: "text.secondary" }}
+                  sx={{ ml: -0.5, mr: 1, my: 1, color: "text.secondary" }}
                 />
               ),
               endAdornment: search.length > 0 && (
