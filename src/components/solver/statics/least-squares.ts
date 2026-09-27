@@ -78,6 +78,28 @@ function reflect(
   for (let i = 0; i < v.length; i++) data[start + i * stride] -= scaled * v[i];
 }
 
+/**
+ * {@link reflect} down a column (stride 1), reading and writing only the rows where `v` is non-zero, listed in `nz`.
+ * The rows it skips would each add or subtract an exact zero, so the result is the same to the bit; an equilibrium matrix has a handful of entries per column, and this is what keeps its QR from costing a dense one.
+ */
+function reflect_sparse(
+  r: Reflector,
+  nz: Int32Array,
+  count: number,
+  data: Float64Array,
+  head: number,
+  start: number,
+): void {
+  if (r.tau === 0) return;
+  const v = r.v;
+  let s = data[head];
+  for (let q = 0; q < count; q++) s += v[nz[q]] * data[start + nz[q]];
+  if (s === 0) return;
+  const scaled = r.tau * s;
+  data[head] -= scaled;
+  for (let q = 0; q < count; q++) data[start + nz[q]] -= scaled * v[nz[q]];
+}
+
 /** Below this fraction of the leading diagonal entry, a pivot is numerical dust — the same
  * `max(m, n) · eps` shape `dense.ts` uses on singular values, so the two agree on where the rank breaks. */
 const RANK_EPSILON = 1e-11;
@@ -112,6 +134,7 @@ export function solve_least_squares(a: Matrix, b: Float64Array): LeastSquares {
   }
 
   const steps = Math.min(m, n);
+  const nz = new Int32Array(m);
   for (let k = 0; k < steps; k++) {
     let best = k;
     for (let j = k + 1; j < n; j++) if (norms[j] > norms[best]) best = j;
@@ -130,8 +153,10 @@ export function solve_least_squares(a: Matrix, b: Float64Array): LeastSquares {
 
     c[k * m + k] = beta;
     for (let i = k + 1; i < m; i++) c[k * m + i] = 0;
-    for (let j = k + 1; j < n; j++) reflect(reflection, c, j * m + k, j * m + k + 1, 1);
-    reflect(reflection, qb, k, k + 1, 1);
+    let count = 0;
+    for (let i = 0; i < reflection.v.length; i++) if (reflection.v[i] !== 0) nz[count++] = i;
+    for (let j = k + 1; j < n; j++) reflect_sparse(reflection, nz, count, c, j * m + k, j * m + k + 1);
+    reflect_sparse(reflection, nz, count, qb, k, k + 1);
 
     for (let j = k + 1; j < n; j++) {
       if (norms[j] === 0) continue;
