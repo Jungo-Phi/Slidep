@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { Link, Point2 } from "../../../types";
 import { solveNodesFromMaps } from "../nodes";
 import { resolve_slots } from "../kinematics/link-slots";
-import { DIRECT_LINK_TYPES, Rows, evaluate_rows } from "./direct-rows";
+import { DIRECT_CONTACT_TYPES, DIRECT_LINK_TYPES, Rows, evaluate_rows } from "./direct-rows";
 
 /** One link of every handled type, over points A–D, gear angles g1/g2. */
 const LINKS: Link[] = [
@@ -24,13 +24,17 @@ const LINKS: Link[] = [
     r1: 0.1, r2: 0.25, theta1_0: 0.2, theta2_0: -0.1, alpha0: 0.3, alpha: 0.5,
   },
   { type: "CoaxialAngle", ddl: 1, angleKey1: "g1", angleKey2: "g2", offset: 0.2 },
+  { type: "MinDistance", ddl: 0, key1: "A", key2: "C", distance: 0.2 },
+  { type: "MinDistanceToSegment", ddl: 0, key1: "A", key2: "B", key3: "C", offset: 0.05, side: -1 },
+  { type: "MinDistanceToSegment", ddl: 0, key1: "A", key2: "B", key3: "D", offset: 0.05, side: 1 },
+  { type: "MinDistanceToLine", ddl: 0, key1: "A", key3: "C", normal: new Point2(0.6, 0.8), offset: 0.05 },
 ];
 
 function nodes_at(seed: number) {
   let s = seed;
   const rand = () => ((s = (s * 1103515245 + 12345) % 2147483648) / 2147483648) * 2 - 1;
   const positions = new Map(["A", "B", "C", "D"].map((k) => [k, new Point2(rand(), rand())]));
-  // D sits past B along A→B, so the second slider meets its end stop.
+  // D sits past B along A→B, so the second slider meets its end stop and its contact meets the corner.
   const a = positions.get("A")!;
   const b = positions.get("B")!;
   positions.set("D", b.add(b.sub(a).mul(0.4)).add(new Point2(0.01, -0.02)));
@@ -41,7 +45,7 @@ function nodes_at(seed: number) {
 
 describe("direct rows", () => {
   it("covers every handled type", () => {
-    for (const type of DIRECT_LINK_TYPES) expect(LINKS.some((l) => l.type === type)).toBe(true);
+    for (const type of [...DIRECT_LINK_TYPES, ...DIRECT_CONTACT_TYPES]) expect(LINKS.some((l) => l.type === type)).toBe(true);
   });
 
   it("gives every row its exact gradient", () => {

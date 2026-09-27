@@ -567,6 +567,18 @@ export function solve_statics(
     add_at(a, rowB + 2, column, -coupling.radiusB);
   }
 
+  // A moment row reads newton-metres where the others read newtons: divided by a length of the mechanism's own, all of them weigh alike in the least squares.
+  // Left as they are, a millimetre-scale mechanism's moments weigh a thousandth of its forces, and a frame not quite in equilibrium puts all its gap on them.
+  let lever = 0;
+  for (const state of states.values()) lever = Math.max(lever, state.length);
+  for (const gear of system.gears) lever = Math.max(lever, gear.radius);
+  if (lever > 0)
+    for (const body of system.bodies) {
+      const row = body.row + 2;
+      for (let j = 0; j < a.cols; j++) a.data[row * a.cols + j] /= lever;
+      b[row] /= lever;
+    }
+
   const solved = solve_least_squares(a, b);
   const split = split_null_space(system, solved.nullSpace);
   const minimum = flexibility

@@ -22,7 +22,11 @@ import {
   get_dynamic_metric_at,
   get_metric_at,
 } from "../../solver/recording/probe-series";
-import { dynamic_snapshot_at } from "../../solver/dynamics/simulation-engine";
+import {
+  apply_dynamic_snapshot_to_mechanism,
+  dynamic_snapshot_at,
+  effort_snapshot_at,
+} from "../../solver/dynamics/simulation-engine";
 import { compute_cohesion_field } from "../../solver/recording/cohesion-field";
 import { GRAVITY } from "../../../constants/physics-specs";
 import { overlay_shown } from "../../../utils/element-queries";
@@ -204,14 +208,24 @@ export const SelectionInspector: React.FC<SelectionInspectorProps> = ({
     subject.element.type === "beam"
       ? subject.element
       : undefined;
-  // Off the same nearest snapshot every reading here uses, rather than the live per-frame ref the canvas draws from.
+  // Read whole at the recorded instant nearest the one on screen, pose included, like every other effort shown here: see `effort_snapshot_at`.
+  const effortSnapshot =
+    (dynamic &&
+      effort_snapshot_at(
+        runtimeState.simulationSnapshots as DynamicSnapshot[],
+        runtimeState.time,
+      )) ||
+    undefined;
   const cohesionField = React.useMemo(() => {
-    const cohesion = snapshot?.beamCohesion?.find(
+    const cohesion = effortSnapshot?.beamCohesion?.find(
       (c) => c.beamID === diagramBeam?.id,
     );
-    if (!diagramBeam || !snapshot || !cohesion) return undefined;
+    if (!diagramBeam || !effortSnapshot || !cohesion) return undefined;
     const shownBeam =
-      analysedMechanism.mechanicalElements.find(
+      apply_dynamic_snapshot_to_mechanism(
+        analysedMechanism,
+        effortSnapshot,
+      ).mechanicalElements.find(
         (el): el is BeamElement =>
           el.type === "beam" && el.id === diagramBeam.id,
       ) ?? diagramBeam;
@@ -221,10 +235,10 @@ export const SelectionInspector: React.FC<SelectionInspectorProps> = ({
       analysedMechanism.profiles,
       cohesion,
       analysedMechanism.loads,
-      snapshot,
+      effortSnapshot,
       analysedMechanism.simulation.gravity ? GRAVITY : ZERO,
     );
-  }, [diagramBeam, snapshot, analysedMechanism]);
+  }, [diagramBeam, effortSnapshot, analysedMechanism]);
   // Clears the canvas's own marker when the diagrams go away — nothing else ever un-sets it once one stops being hovered without the mouse ever leaving it.
   React.useEffect(() => {
     if (!diagramBeam) {

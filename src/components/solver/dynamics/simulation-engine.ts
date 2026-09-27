@@ -9,8 +9,6 @@ import {
   belt_wraps,
 } from "../../../utils/belt-path";
 import {
-  BalanceSample,
-  BeamCohesion,
   DynamicSnapshot,
   EnergySample,
   KinematicSnapshot,
@@ -65,8 +63,8 @@ import {
   build_collision_candidates,
 } from "./collision-candidates";
 import { floor_anchor_and_normal } from "../../../utils/floor-geometry";
-import { collision_links, prune_initial_penetrations } from "./collision-detection";
-import { apply_collision_restitution } from "./collision-restitution";
+import { ContactSet, collision_links, contact_set, prune_initial_penetrations } from "./collision-detection";
+import { apply_collision_restitution, apply_end_stop_restitution } from "./collision-restitution";
 import { MIN_EXTENT_M, positions_extent } from "../nodes";
 import {
   BeltShape,
@@ -82,6 +80,7 @@ import {
   snapshot_point,
 } from "../snapshot";
 import { sort_links } from "../utils";
+import { DIRECT_LINK_TYPES } from "../direct/direct-rows";
 
 /**
  * The step every recorded instant is spaced by, whatever the playback speed and whatever the machine.
@@ -218,7 +217,7 @@ type MotorCheck = {
 export type SimulationModel = {
   /**
    * Solve the dynamics substeps with the direct solver (see `PBD_solve`'s `dynamics.direct`) rather than by sweeps alone.
-   * Off unless set on the compiled model.
+   * Compiled on when the direct solver covers every link the dynamics solves, the grab aside; see `covered_by_direct_solve`.
    */
   directSolve?: boolean;
   /** Initial positions/angles + frozen masses (fused keys for coincident points). */
@@ -639,6 +638,21 @@ function angle_inertia(angleMasses: Map<string, number>, id: string): number {
   return w > 0 ? 1 / w : 0;
 }
 
+/**
+ * The compiled links the dynamics leaves out, each for a counterpart of its own: a spring is applied as a force (see `spring-damper-model.ts`), a motor as a torque-bounded drive (see `Drive`), where the kinematic links would impose position outright.
+ * `BeltLoopClosure` goes too: it corrects angles only, off its law's gradient, so against the strands' own no-slip — which dynamics projects along the full gradient — it does work on the mechanism, enough to blow a closed belt up.
+ */
+const KINEMATIC_ONLY: ReadonlySet<Link["type"]> = new Set<Link["type"]>(["Spring", "MotorBeam", "MotorAngle", "BeltLoopClosure"]);
+
+/**
+ * Whether the direct solver takes every link the dynamics solves: where it does, it is faster and far more accurate than the sweeps.
+ * Where it does not — a belt — the sweeps and the direct solve take turns within each substep, which costs more than the sweeps alone.
+ * The grab is left out of the question: it comes and goes with the user's hand, and the sweep takes it alongside the direct solve while it lasts.
+ */
+function covered_by_direct_solve(links: Link[]): boolean {
+  return links.every((link) => KINEMATIC_ONLY.has(link.type) || DIRECT_LINK_TYPES.has(link.type));
+}
+
 export function compile_simulation_model(
   mechanism: Mechanism,
   dynamicRigidity: boolean = false,
@@ -796,6 +810,7 @@ export function compile_simulation_model(
       slots: Int32Array.from(slotList),
     },
     beamCohesionSpecs,
+    directSolve: covered_by_direct_solve(links),
     staticsSystem: build_statics_system(
       beamCohesionSpecs,
       mechanism.mechanicalElements.flatMap((e) =>
@@ -1237,6 +1252,21 @@ const DYNAMIC_SWEEPS = 200;
  */
 const DYNAMIC_SUBSTEPS = 16;
 
+/** Each model's contact sets, one per combination of the collision and floor switches, which can change from frame to frame. */
+const CONTACT_SETS = new WeakMap<SimulationModel, Map<string, ContactSet>>();
+
+function contact_set_of(model: SimulationModel, collisionsOn: boolean, floorOn: boolean): ContactSet {
+  let sets = CONTACT_SETS.get(model);
+  if (!sets) CONTACT_SETS.set(model, (sets = new Map()));
+  const key = `${collisionsOn}/${floorOn}`;
+  let set = sets.get(key);
+  if (!set) {
+    set = contact_set(model.collisionCandidates, model.extent, collisionsOn, floorOn, model.floorNormal);
+    sets.set(key, set);
+  }
+  return set;
+}
+
 /**
  * Advance a DYNAMIC-mode frame: gravity (today; any other force joins later) integrated in the predict step, XPBD velocity read back from the whole displacement, everything else the same rigid-constraint sweep `step_simulation` runs — split into `substeps` physical substeps (see `DYNAMIC_SUBSTEPS`), each running the full body below in turn.
  *
@@ -1424,35 +1454,19 @@ export function step_dynamic_simulation(
 
     // ── Grab (transient, this substep only) ── belt maps refreshed just above, this
     // substep.
-    // The kinematic `Spring`/`MotorBeam`/`MotorAngle` links are dropped here: dynamic mode applies a spring as a real force (see `spring-damper-model.ts`) and solves a motor as a torque-bounded drive (see `Drive`), where the kinematic links would impose position outright.
-    // `BeltLoopClosure` goes too: it corrects angles only, off its law's gradient, so against the strands' own no-slip — which dynamics projects along the full gradient — it does work on the mechanism, enough to blow a closed belt up.
+    // The links only the kinematic modes use are dropped: see `KINEMATIC_ONLY`.
     const links: Link[] = grab_links(
       model,
       grab,
       positions,
       wrapsByBelt,
       disconnectedByBelt,
-    ).filter(
-      (link) =>
-        link.type !== "Spring" &&
-        link.type !== "MotorBeam" &&
-        link.type !== "MotorAngle" &&
-        link.type !== "BeltLoopClosure",
-    );
+    ).filter((link) => !KINEMATIC_ONLY.has(link.type));
     links.push(...midLinks);
     // Everything from here on is a collision contact, which the sweep may leave out while it is far from touching.
     const contactsFrom = links.length;
-    if (collisionsOn || floorOn)
-      links.push(
-        ...collision_links(
-          model.collisionCandidates,
-          positions,
-          model.extent,
-          collisionsOn,
-          floorOn,
-          model.floorNormal,
-        ),
-      );
+    const contacts = collisionsOn || floorOn ? contact_set_of(model, collisionsOn, floorOn) : undefined;
+    if (contacts) for (const link of contacts.links) links.push(link);
 
     // ── User loads, spring/damper and motor forces, resolved against THIS substep's live
     // positions and pre-predict velocities — all three follow the mechanism as it moves. ──
@@ -1493,6 +1507,7 @@ export function step_dynamic_simulation(
     // Snapshot the incoming velocity first: restitution below needs both what the substep started with and what the plain (inelastic) solve produced, to know how much bounce to add back.
     const subVelocitiesBeforeSolve = new Map(velocities);
     // Diagnostics (reactions, unsatisfied) only collected on the LAST substep — an earlier one reads an intermediate, not-yet-converged state (see `DYNAMIC_SUBSTEPS`), and collecting them costs a per-link bookkeeping step across the whole sweep a caller measuring pure solver performance skips.
+    const restitution = { coefficient: DEFAULT.RESTITUTION, lost: 0 };
     const stepReactions: LinkReaction[] | undefined =
       isLastSubstep && collectDiagnostics ? [] : undefined;
     const dynamics: DynamicsInput = {
@@ -1507,7 +1522,11 @@ export function step_dynamic_simulation(
       reactions: stepReactions,
       drives,
       contactsFrom,
+      contacts,
       direct: model.directSolve === true,
+      // Only a kept frame's accelerations are read, and every one of its substeps feeds them through the links' compliance.
+      settle: collectDiagnostics,
+      restitution,
     };
     result = PBD_kinematic_solver(
       positions,
@@ -1531,8 +1550,10 @@ export function step_dynamic_simulation(
 
     // ── Restitution: bounce whatever collision constraints actually resolved this
     // substep, instead of leaving them at the plain solve's inelastic (velocity ≈ 0) response.
+    // The direct solve has already bounced them through the whole mechanism; the sweeps leave it to the pairs below, which move only the two points in contact.
     // Against the same fixed scale as `collision_links` above. ──
-    if (collisionsOn || floorOn)
+    impactLoss += restitution.lost;
+    if (!model.directSolve && (collisionsOn || floorOn))
       impactLoss += apply_collision_restitution(
         model.collisionCandidates,
         result.positions,
@@ -1544,6 +1565,17 @@ export function step_dynamic_simulation(
         collisionsOn,
         floorOn,
         model.floorNormal,
+        contacts?.near,
+      );
+    if (!model.directSolve)
+      impactLoss += apply_end_stop_restitution(
+        links,
+        result.positions,
+        model.dynamicMasses.posMasses,
+        subVelocitiesBeforeSolve,
+        velocities,
+        DEFAULT.RESTITUTION,
+        model.extent,
       );
   }
 
@@ -1835,8 +1867,11 @@ export function snapshot_at(
 
 /**
  * `snapshot_at`'s dynamic-mode counterpart: same interpolation of position/angle, plus velocity, and the same belt-topology guard, dynamic mode tracking belt contact too (see `same_belt_topology`).
- * Kept separate rather than folded into one generic function: the two snapshot kinds differ in exactly the extra fields this interpolates (velocity, acceleration…), and forcing them through a shared body would cost more in indirection than the ~20 duplicated lines below are worth.
+ * Kept separate rather than folded into one generic function: the two snapshot kinds differ in exactly the extra fields this interpolates, and forcing them through a shared body would cost more in indirection than the duplicated lines below are worth.
  * `snapshot_index_at` is the part that IS shared, being purely a search over `.t`.
+ *
+ * Only the motion is interpolated.
+ * Everything the forces are read from — accelerations, reactions, torsors, balance, belt tensions, motors — is the recorded instant nearest `t` (see `effort_snapshot_at`): a blend of two instants is no state the mechanism was in, and on one that turns between them it balances only to a few percent.
  */
 export function dynamic_snapshot_at(
   snapshots: DynamicSnapshot[],
@@ -1859,79 +1894,44 @@ export function dynamic_snapshot_at(
     for (let i = 0; i < out.length; i++) out[i] = from[i] + (to[i] - from[i]) * u;
     return out;
   };
+  const nearest = u <= 0.5 ? a : b;
   return {
     t,
     layout: a.layout,
     positions: lerp(a.positions, b.positions),
     angles: lerp(a.angles, b.angles),
     velocities: lerp(a.velocities, b.velocities),
-    accelerations: lerp(a.accelerations, b.accelerations),
     angleVelocities: lerp(a.angleVelocities, b.angleVelocities),
-    angleAccelerations: lerp(a.angleAccelerations, b.angleAccelerations),
-    // Diagnostics belong to a state the solver actually produced.
-    unsatisfied: a.unsatisfied,
-    stalledMotors: a.stalledMotors,
-    reactions: a.reactions,
-    motor: a.motor,
-    energy: a.energy,
-    // Except the torsors, which the field along each beam marches from against the accelerations above: held while those are blended, the two describe different instants, and on the frame after an impact the diagram stops closing at a free end.
-    // The field is linear in both, so blending them alike keeps it closed wherever the two recorded frames were.
-    beamCohesion: lerp_cohesion(a.beamCohesion, b.beamCohesion, u),
-    // And the free body's balance, for the same reason read the other way round: its `m·a` faces the support reactions the torsors above carry, so holding one while the other is blended opens a gap as wide as the step `m·a` takes between two frames.
-    balance: lerp_balance(a.balance, b.balance, u),
-    beltStrands: a.beltStrands,
+    accelerations: nearest.accelerations,
+    angleAccelerations: nearest.angleAccelerations,
+    unsatisfied: nearest.unsatisfied,
+    stalledMotors: nearest.stalledMotors,
+    reactions: nearest.reactions,
+    motor: nearest.motor,
+    energy: nearest.energy,
+    beamCohesion: nearest.beamCohesion,
+    balance: nearest.balance,
+    beltStrands: nearest.beltStrands,
   };
 }
 
-/** Blend two frames' free-body balance at `u`, every term of it: each is a sum over the same bodies at both ends, so blending them apart would describe no instant at all. */
-function lerp_balance(
-  a: BalanceSample | undefined,
-  b: BalanceSample | undefined,
-  u: number,
-): BalanceSample | undefined {
-  if (!a || !b) return a;
-  const out = {} as BalanceSample;
-  for (const key of Object.keys(a) as (keyof BalanceSample)[])
-    out[key] = a[key] + (b[key] - a[key]) * u;
-  return out;
-}
-
-/** Blend two frames' beam torsors at `u`, or hold the first where the two do not describe the same beams and attached nodes. */
-function lerp_cohesion(
-  a: BeamCohesion[] | undefined,
-  b: BeamCohesion[] | undefined,
-  u: number,
-): BeamCohesion[] | undefined {
-  if (!a || !b || a.length !== b.length) return a;
-  const mix = (x: number, y: number) => x + (y - x) * u;
-  const torsor = (x: BeamCohesion["start"], y: BeamCohesion["start"]) => ({
-    fx: mix(x.fx, y.fx),
-    fy: mix(x.fy, y.fy),
-    m: mix(x.m, y.m),
-  });
-  const blended: BeamCohesion[] = [];
-  for (let i = 0; i < a.length; i++) {
-    const from = a[i];
-    const to = b[i];
-    if (
-      from.beamID !== to.beamID ||
-      from.attachedNodes.length !== to.attachedNodes.length ||
-      from.attachedNodes.some((node, k) => node.nodeID !== to.attachedNodes[k].nodeID)
-    )
-      return a;
-    blended.push({
-      beamID: from.beamID,
-      start: torsor(from.start, to.start),
-      end: torsor(from.end, to.end),
-      attachedNodes: from.attachedNodes.map((node, k) => ({
-        nodeID: node.nodeID,
-        s: mix(node.s, to.attachedNodes[k].s),
-        ...torsor(node, to.attachedNodes[k]),
-      })),
-      determinate: from.determinate && to.determinate,
-    });
-  }
-  return blended;
+/**
+ * The recorded instant whose efforts are shown at `t`: the nearest one, the earlier of two equally near, and the one `dynamic_snapshot_at` holds wherever it does not interpolate.
+ * A reading that also needs the pose — the field along a beam, a moment balance — is read on this snapshot whole, so every term of it belongs to one instant.
+ */
+export function effort_snapshot_at(
+  snapshots: DynamicSnapshot[],
+  t: number,
+): DynamicSnapshot | null {
+  if (snapshots.length === 0) return null;
+  const i = snapshot_index_at(snapshots, t);
+  if (i >= snapshots.length - 1) return snapshots[snapshots.length - 1];
+  const a = snapshots[i];
+  const b = snapshots[i + 1];
+  const span = b.t - a.t;
+  if (!(span > 0) || t - a.t <= 0) return a;
+  if (a.layout !== b.layout || !same_belt_topology(a, b)) return a;
+  return (t - a.t) / span <= 0.5 ? a : b;
 }
 
 /**

@@ -21,6 +21,16 @@ export const DIRECT_LINK_TYPES: ReadonlySet<Link["type"]> = new Set<Link["type"]
   "CoaxialAngle",
 ]);
 
+/**
+ * The collision contacts the direct solve handles, as unilateral rows `C(x) ≥ 0` whose multiplier may only push.
+ * Which of them join the system is decided at each iteration, in `direct-solve.ts`.
+ */
+export const DIRECT_CONTACT_TYPES: ReadonlySet<Link["type"]> = new Set<Link["type"]>([
+  "MinDistance",
+  "MinDistanceToSegment",
+  "MinDistanceToLine",
+]);
+
 /** Most unknowns one row touches: an `Angle` between two segments. `Rows` stores every row on this stride. */
 export const MAX_WIDTH = 8;
 
@@ -45,10 +55,25 @@ export class Rows {
   /** The link the row belongs to, and its multiplier's slot (`link · ROWS_PER_LINK + sub`). */
   link = new Int32Array(0);
   slot = new Int32Array(0);
+  /** 1 for a contact's row: `C ≥ 0` is enough, and its multiplier stays positive. */
+  unilateral = new Uint8Array(0);
+  /**
+   * The sliders standing at an end stop: `stopRow[i]` is the first of the two rows holding one there, `stopX/Y[i]` the unit axis pointing out past the stop.
+   * What a bounce off the stop reverses is the slider's speed along that axis.
+   */
+  stops = 0;
+  stopRow = new Int32Array(0);
+  stopX = new Float64Array(0);
+  stopY = new Float64Array(0);
 
   reset(capacity: number): void {
     this.count = 0;
+    this.stops = 0;
     if (this.width.length >= capacity) return;
+    this.stopRow = new Int32Array(capacity);
+    this.stopX = new Float64Array(capacity);
+    this.stopY = new Float64Array(capacity);
+    this.unilateral = new Uint8Array(capacity);
     this.width = new Int32Array(capacity);
     this.vars = new Int32Array(capacity * MAX_WIDTH);
     this.grads = new Float64Array(capacity * MAX_WIDTH);
@@ -62,6 +87,7 @@ export class Rows {
   begin(link: number, sub: number, value: number, alphaTilde: number, scale: number): number {
     const r = this.count++;
     this.width[r] = 0;
+    this.unilateral[r] = 0;
     this.value[r] = value;
     this.alphaTilde[r] = alphaTilde;
     this.scale[r] = scale;
@@ -169,6 +195,20 @@ export function evaluate_rows(
     }
   };
 
+  /** `|b − a| − min ≥ 0`, a contact keeping two points apart; coincident points have no direction to part along, and are left to the other links. */
+  const apart_row = (k: number, a: number, b: number, min: number) => {
+    const dx = x[b] - x[a];
+    const dy = y[b] - y[a];
+    const len = Math.sqrt(dx * dx + dy * dy);
+    if (len === 0) return;
+    const r = rows.begin(k, 0, len - min, 0, 1);
+    rows.unilateral[r] = 1;
+    rows.add(r, P(b), dx / len);
+    rows.add(r, P(b) + 1, dy / len);
+    rows.add(r, P(a), -dx / len);
+    rows.add(r, P(a) + 1, -dy / len);
+  };
+
   for (let k = 0; k < links.length; k++) {
     if (!handled[k]) continue;
     const link = links[k];
@@ -207,7 +247,13 @@ export function evaluate_rows(
         const t = (qx * dx + qy * dy) / l2;
         // Past an end, the node is held at that end, as `applySlideOnSegmentConstraint` clamps it.
         if (t <= 0 || t >= 1) {
+          const first = rows.count;
           on_segment_rows(k, start, end, node, t <= 0 ? 0 : 1, link.normalOffset ?? 0);
+          const out = (t <= 0 ? -1 : 1) / Math.sqrt(l2);
+          rows.stopRow[rows.stops] = first;
+          rows.stopX[rows.stops] = dx * out;
+          rows.stopY[rows.stops] = dy * out;
+          rows.stops++;
           break;
         }
         // Inside: only the distance to the line, `n·(node − start)`, with `n` the unit left normal of the segment.
@@ -298,6 +344,55 @@ export function evaluate_rows(
         const r = rows.begin(k, 0, nodes.angle[a1] - nodes.angle[a2] - link.offset, 0, 1);
         rows.add(r, A(a1), 1);
         rows.add(r, A(a2), -1);
+        break;
+      }
+      case "MinDistance": {
+        const [a, b] = [s.pos[0], s.pos[1]];
+        if (a < 0 || b < 0 || a === b) break;
+        apart_row(k, a, b, link.distance);
+        break;
+      }
+      case "MinDistanceToSegment": {
+        const [start, end, node] = [s.pos[0], s.pos[1], s.pos[2]];
+        if (start < 0 || end < 0 || node < 0) break;
+        const dx = x[end] - x[start];
+        const dy = y[end] - y[start];
+        const l2 = dx * dx + dy * dy;
+        if (l2 === 0) break;
+        const qx = x[node] - x[start];
+        const qy = y[node] - y[start];
+        const t = (qx * dx + qy * dy) / l2;
+        // Past an end, the corner is the nearest point, whichever side the node is on, as in `applyPointSegmentContactConstraint`.
+        if (t <= 0 || t >= 1) {
+          apart_row(k, t <= 0 ? start : end, node, link.offset);
+          break;
+        }
+        // Inside: the signed distance to the line on the allowed side, `side·n·(node − start)`.
+        const len = Math.sqrt(l2);
+        const c = (dx * qy - dy * qx) / len;
+        const side = link.side;
+        const r = rows.begin(k, 0, side * c - link.offset, 0, 1);
+        rows.unilateral[r] = 1;
+        const gex = qy / len - (c * dx) / l2;
+        const gey = -qx / len - (c * dy) / l2;
+        rows.add(r, P(node), (side * -dy) / len);
+        rows.add(r, P(node) + 1, (side * dx) / len);
+        rows.add(r, P(end), side * gex);
+        rows.add(r, P(end) + 1, side * gey);
+        rows.add(r, P(start), side * (dy / len - gex));
+        rows.add(r, P(start) + 1, side * (-dx / len - gey));
+        break;
+      }
+      case "MinDistanceToLine": {
+        const [anchor, node] = [s.pos[0], s.pos[1]];
+        if (anchor < 0 || node < 0) break;
+        const n = link.normal;
+        const r = rows.begin(k, 0, (x[node] - x[anchor]) * n.x + (y[node] - y[anchor]) * n.y - link.offset, 0, 1);
+        rows.unilateral[r] = 1;
+        rows.add(r, P(node), n.x);
+        rows.add(r, P(node) + 1, n.y);
+        rows.add(r, P(anchor), -n.x);
+        rows.add(r, P(anchor) + 1, -n.y);
         break;
       }
     }

@@ -38,6 +38,7 @@ import {
   apply_parameter_snapshot_to_mechanism,
   apply_snapshot_to_mechanism,
   dynamic_snapshot_at,
+  effort_snapshot_at,
   parameter_snapshot,
   parameter_snapshot_at,
   snapshot_at,
@@ -682,6 +683,13 @@ export function useSimulationPlayback({
       if (mode === "dynamic") {
         const dynSnap = snapshot as DynamicSnapshot;
         const gravity = gravityRef.current ? GRAVITY : new Point2(0, 0);
+        // The field along a beam is read whole at the recorded instant its torsors belong to, pose included, and drawn along the beam where it stands now.
+        const effortSnap = held ? dynSnap : (effort_snapshot_at(snaps as DynamicSnapshot[], rs.time) ?? dynSnap);
+        let effortMechanism: Mechanism | undefined;
+        const effort_pose = (id: ID) =>
+          (effortMechanism ??= apply_dynamic_snapshot_to_mechanism(mech, effortSnap)).mechanicalElements.find(
+            (e) => e.id === id,
+          );
         ({ stress: negligibleStress, shear: negligibleShear } = negligible_stress_floors(mech));
         const pool = rs.negligibilityPool;
         for (const el of geometryMechanism.mechanicalElements) {
@@ -813,15 +821,16 @@ export function useSimulationPlayback({
             }
           }
           if (el.type === "beam") {
-            const cohesion = dynSnap.beamCohesion?.find((c) => c.beamID === el.id);
+            const cohesion = effortSnap.beamCohesion?.find((c) => c.beamID === el.id);
+            const posed = effort_pose(el.id);
             if (cohesion) {
               const field = compute_cohesion_field(
-                el,
+                posed?.type === "beam" ? posed : el,
                 mech.materials,
                 mech.profiles,
                 cohesion,
                 mech.loads,
-                dynSnap,
+                effortSnap,
                 gravity,
               );
               if (field) cohesionFields.push(field);

@@ -1,4 +1,5 @@
 import { Matrix, add_at, zeros } from "./matrix";
+import { minimum_degree } from "../direct/sparse-ldl";
 
 /**
  * Least squares with a rank, a null space and a residual, by complete orthogonal decomposition — see docs/plan-efforts-interieurs.md phase 10.
@@ -7,14 +8,16 @@ import { Matrix, add_at, zeros } from "./matrix";
  * That rules out a plain normal-equation solve — `AᵀA` squares an already poor condition number (an assembly mixes newtons with newton-metres) and cannot tell a rank-deficient system from a well-conditioned one at all.
  *
  * `A·Π = Q·[T 0; 0 0]·Zᵀ` with `T` upper triangular and non-singular, `r × r`.
- * Two stages: a Householder QR with column pivoting, which reveals the rank, then reflections from the RIGHT that push the remaining `R12` block into `T` — LAPACK's `xTZRZF`.
+ * Two stages: a sparse Householder QR that sets the dependent columns aside as it meets them, then reflections from the RIGHT that push the remaining `R12` block into `T` — LAPACK's `xTZRZF`.
  * Everything the statics pass needs falls out of it:
  *
  * - **rank** from the diagonal of `T`;
  * - **minimum-norm least squares** by one triangular back-substitution;
  * - **the null space**, as the last `n − r` columns of `Π·Z`.
  *
- * Column pivoting is what makes the rank meaningful and not just an artefact of the column order: each step takes the column with the largest remaining norm, so the diagonal of `R` decays and the break in it is where the rank sits.
+ * The QR takes the columns in an order chosen to keep `R` sparse — minimum degree on the pattern of `AᵀA` — and not by largest remaining norm: an equilibrium matrix has a handful of entries per column, and pivoting on the norm fills `R` almost completely, which made this cost a dense QR.
+ * A column is dependent when what is left of it, once the reflections before it are applied, is below the rank tolerance (Heath's rule).
+ * That tells an exact dependency — a redundant support, a hyperstatic loop — from a real column without ambiguity; near a singular pose, where a column is only nearly dependent, the tolerance decides, as it would on a pivoted diagonal.
  */
 
 export interface LeastSquares {
@@ -104,9 +107,24 @@ function reflect_sparse(
  * `max(m, n) · eps` shape `dense.ts` uses on singular values, so the two agree on where the rank breaks. */
 const RANK_EPSILON = 1e-11;
 
-/** Recompute a downdated column norm once it has lost this much of its original size. The
- * cheap downdate loses all its digits when a column nearly collapses, and pivoting on a wrong norm is what makes a rank-revealing QR stop revealing the rank. */
-const DOWNDATE_GUARD = 1e-8;
+/**
+ * The order to take the columns of a matrix in, by minimum degree on the pattern of `AᵀA`: two columns are neighbours when a row holds both.
+ * `rowCols` lists each row's columns.
+ */
+function column_order(rowCols: number[][], n: number): Int32Array {
+  const adjacent = new Uint8Array(n * n);
+  for (const cols of rowCols)
+    for (const j of cols) for (const l of cols) adjacent[j * n + l] = 1;
+  const colStart = new Int32Array(n + 1);
+  for (let j = 0; j < n; j++) {
+    let count = 0;
+    for (let l = 0; l < n; l++) count += adjacent[j * n + l];
+    colStart[j + 1] = colStart[j] + count;
+  }
+  const rowIndex = new Int32Array(colStart[n]);
+  for (let j = 0, at = 0; j < n; j++) for (let l = 0; l < n; l++) if (adjacent[j * n + l]) rowIndex[at++] = l;
+  return minimum_degree({ n, colStart, rowIndex });
+}
 
 /**
  * Works on a column-major copy of `a`: every reflection of the QR stage runs down a column, which then reads contiguous memory.
@@ -120,62 +138,108 @@ export function solve_least_squares(a: Matrix, b: Float64Array): LeastSquares {
   for (let i = 0; i < m; i++)
     for (let j = 0; j < n; j++) c[j * m + i] = a.data[i * n + j];
 
-  const perm = new Int32Array(n);
-  for (let j = 0; j < n; j++) perm[j] = j;
   const qb = Float64Array.from(b);
 
-  const norms = new Float64Array(n);
-  const original = new Float64Array(n);
+  // Per row, the columns that may hold a non-zero in it: a superset, grown as the reflections fill rows in.
+  const rowCols: number[][] = Array.from({ length: m }, () => []);
+  const listed = new Uint8Array(m * n);
+  let leading = 0;
   for (let j = 0; j < n; j++) {
     let s = 0;
-    for (let i = 0; i < m; i++) s += c[j * m + i] * c[j * m + i];
-    norms[j] = Math.sqrt(s);
-    original[j] = norms[j];
-  }
-
-  const steps = Math.min(m, n);
-  const nz = new Int32Array(m);
-  for (let k = 0; k < steps; k++) {
-    let best = k;
-    for (let j = k + 1; j < n; j++) if (norms[j] > norms[best]) best = j;
-    if (best !== k) {
-      for (let i = 0; i < m; i++) {
-        const swap = c[k * m + i];
-        c[k * m + i] = c[best * m + i];
-        c[best * m + i] = swap;
-      }
-      [perm[k], perm[best]] = [perm[best], perm[k]];
-      [norms[k], norms[best]] = [norms[best], norms[k]];
-      [original[k], original[best]] = [original[best], original[k]];
+    for (let i = 0; i < m; i++) {
+      const value = c[j * m + i];
+      if (value === 0) continue;
+      s += value * value;
+      rowCols[i].push(j);
+      listed[i * n + j] = 1;
     }
+    leading = Math.max(leading, Math.sqrt(s));
+  }
+  // The largest column norm is what a norm-pivoted QR puts first on its diagonal, so the tolerance keeps the scale it always had.
+  const tolerance = leading * Math.max(m, n) * RANK_EPSILON;
+  const order = column_order(rowCols, n);
 
-    const { r: reflection, beta } = reflector(c[k * m + k], c, k * m + k + 1, 1, m - k - 1);
+  /** Swap rows `i` and `k` of everything the QR reads by row. */
+  const swap_rows = (i: number, k: number) => {
+    for (let j = 0; j < n; j++) {
+      const value = c[j * m + i];
+      c[j * m + i] = c[j * m + k];
+      c[j * m + k] = value;
+      const flag = listed[i * n + j];
+      listed[i * n + j] = listed[k * n + j];
+      listed[k * n + j] = flag;
+    }
+    [rowCols[i], rowCols[k]] = [rowCols[k], rowCols[i]];
+    [qb[i], qb[k]] = [qb[k], qb[i]];
+  };
 
-    c[k * m + k] = beta;
-    for (let i = k + 1; i < m; i++) c[k * m + i] = 0;
+  // `placed[j]`: 1 once column `j` is a pivot, 2 once it is set aside as dependent.
+  const placed = new Uint8Array(n);
+  const pivots: number[] = [];
+  const dependent: number[] = [];
+  const nz = new Int32Array(m);
+  const mark = new Int32Array(n).fill(-1);
+  const touched = new Int32Array(n);
+  for (const p of order) {
+    const k = pivots.length;
+    if (k === m) break;
+    let s = 0;
+    for (let i = k; i < m; i++) s += c[p * m + i] * c[p * m + i];
+    if (!(Math.sqrt(s) > tolerance)) {
+      placed[p] = 2;
+      dependent.push(p);
+      continue;
+    }
+    // The pivot row is one the column already reaches, the one reaching the fewest other columns: a reflection onto an empty row would fill it with the whole column's pattern.
+    let row = -1;
+    for (let i = k; i < m; i++)
+      if (c[p * m + i] !== 0 && (row < 0 || rowCols[i].length < rowCols[row].length)) row = i;
+    if (row !== k) swap_rows(row, k);
+
+    const { r: reflection, beta } = reflector(c[p * m + k], c, p * m + k + 1, 1, m - k - 1);
+    c[p * m + k] = beta;
+    for (let i = k + 1; i < m; i++) c[p * m + i] = 0;
+    placed[p] = 1;
+    pivots.push(p);
     let count = 0;
     for (let i = 0; i < reflection.v.length; i++) if (reflection.v[i] !== 0) nz[count++] = i;
-    for (let j = k + 1; j < n; j++) reflect_sparse(reflection, nz, count, c, j * m + k, j * m + k + 1);
-    reflect_sparse(reflection, nz, count, qb, k, k + 1);
 
-    for (let j = k + 1; j < n; j++) {
-      if (norms[j] === 0) continue;
-      const ratio = Math.abs(c[j * m + k]) / norms[j];
-      const downdated = 1 - ratio * ratio;
-      norms[j] = downdated > 0 ? norms[j] * Math.sqrt(downdated) : 0;
-      if (norms[j] < DOWNDATE_GUARD * original[j]) {
-        let s = 0;
-        for (let i = k + 1; i < m; i++) s += c[j * m + i] * c[j * m + i];
-        norms[j] = Math.sqrt(s);
-        original[j] = norms[j];
+    // Only the columns with a non-zero on the reflection's rows can change.
+    let hit = 0;
+    const gather = (i: number) => {
+      for (const j of rowCols[i])
+        if (placed[j] !== 1 && mark[j] !== k) {
+          mark[j] = k;
+          touched[hit++] = j;
+        }
+    };
+    gather(k);
+    for (let q = 0; q < count; q++) gather(k + 1 + nz[q]);
+    for (let t = 0; t < hit; t++) {
+      const j = touched[t];
+      reflect_sparse(reflection, nz, count, c, j * m + k, j * m + k + 1);
+      for (let q = -1; q < count; q++) {
+        const i = q < 0 ? k : k + 1 + nz[q];
+        if (c[j * m + i] !== 0 && !listed[i * n + j]) {
+          listed[i * n + j] = 1;
+          rowCols[i].push(j);
+        }
       }
     }
+    reflect_sparse(reflection, nz, count, qb, k, k + 1);
   }
+  const rank = pivots.length;
 
-  const leading = Math.abs(c[0]);
-  const tolerance = leading * Math.max(m, n) * RANK_EPSILON;
-  let rank = 0;
-  while (rank < steps && Math.abs(c[rank * m + rank]) > tolerance) rank++;
+  // The columns in the decomposition's order: the pivots, then the dependent ones and any the rows ran out before.
+  const perm = new Int32Array(n);
+  {
+    let at = 0;
+    for (const j of pivots) perm[at++] = j;
+    for (const j of dependent) perm[at++] = j;
+    for (const j of order) if (placed[j] === 0) perm[at++] = j;
+    const physical = c.slice();
+    for (let j = 0; j < n; j++) c.set(physical.subarray(perm[j] * m, perm[j] * m + m), j * m);
+  }
 
   // ── Push `R12` into `T`, one right reflection per row, bottom up ──
   const rights: { row: number; reflection: Reflector }[] = [];

@@ -18,8 +18,9 @@ export const DEFAULT = {
    * Here the beam's speed decays over ~40 s while the gear is held within ~40 ms, so a gear train wants it turned down.
    */
   ROTATIONAL_FRICTION: 0.001,
-  /** Collision restitution: 0 = fully inelastic (the pre-bounce default — a collision just
-   * stops what it blocks), 1 = elastic (bounces back at the same speed it arrived). */
+  /**
+   * Restitution of every impact — collisions, the floor, sliders reaching an end stop: 0 = fully inelastic, what blocks just stops; 1 = elastic, bounces back at the speed it arrived.
+   */
   RESTITUTION: 0.9,
 } as const;
 

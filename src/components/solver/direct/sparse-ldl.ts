@@ -37,31 +37,44 @@ export interface Analysis {
 }
 
 /**
- * Minimum-degree elimination order on the graph of the pattern.
- * Plain greedy, on explicit neighbour sets: the matrices here have a few hundred rows at most, and the order is computed once per pattern.
+ * Minimum-degree elimination order on the graph of the pattern; among equal degrees, the lowest index goes first.
+ * Plain greedy, on a dense adjacency matrix: the matrices here have a few hundred rows, and the order is computed once per pattern.
  */
-function minimum_degree(pattern: SymmetricPattern): Int32Array {
+export function minimum_degree(pattern: SymmetricPattern): Int32Array {
   const { n, colStart, rowIndex } = pattern;
-  const adjacent: Set<number>[] = [];
-  for (let j = 0; j < n; j++) {
-    const set = new Set<number>();
-    for (let p = colStart[j]; p < colStart[j + 1]; p++) if (rowIndex[p] !== j) set.add(rowIndex[p]);
-    adjacent.push(set);
-  }
+  const adjacent = new Uint8Array(n * n);
+  const degree = new Int32Array(n);
+  for (let j = 0; j < n; j++)
+    for (let p = colStart[j]; p < colStart[j + 1]; p++) {
+      const i = rowIndex[p];
+      if (i === j || adjacent[j * n + i]) continue;
+      adjacent[j * n + i] = 1;
+      degree[j]++;
+    }
   const done = new Uint8Array(n);
   const order = new Int32Array(n);
+  const neighbours = new Int32Array(n);
   for (let k = 0; k < n; k++) {
     let best = -1;
-    for (let j = 0; j < n; j++) if (!done[j] && (best < 0 || adjacent[j].size < adjacent[best].size)) best = j;
+    for (let j = 0; j < n; j++) if (!done[j] && (best < 0 || degree[j] < degree[best])) best = j;
     order[k] = best;
     done[best] = 1;
+    let count = 0;
+    for (let a = 0; a < n; a++) if (adjacent[best * n + a]) neighbours[count++] = a;
     // Eliminating a node joins all its neighbours into a clique: that is the fill-in.
-    const neighbours = [...adjacent[best]];
-    for (const a of neighbours) {
-      adjacent[a].delete(best);
-      for (const b of neighbours) if (a !== b) adjacent[a].add(b);
+    for (let x = 0; x < count; x++) {
+      const a = neighbours[x];
+      adjacent[a * n + best] = 0;
+      degree[a]--;
+      for (let y = 0; y < count; y++) {
+        const b = neighbours[y];
+        if (a === b || adjacent[a * n + b]) continue;
+        adjacent[a * n + b] = 1;
+        degree[a]++;
+      }
     }
-    adjacent[best].clear();
+    adjacent.fill(0, best * n, best * n + n);
+    degree[best] = 0;
   }
   return order;
 }

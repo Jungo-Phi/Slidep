@@ -48,10 +48,13 @@ import { LinkSlots, resolve_slots } from "./link-slots";
 import { applyBeltValidityContacts } from "./belt-validity";
 import { Drive, apply_drives, finish_drives, resolve_drives } from "../dynamics/drive-constraint";
 import { reversed_sweep_order } from "./sweep-order";
+import { ContactSet, segment_side } from "../dynamics/collision-detection";
+import { CONTACT_SLACK_RATIO } from "../dynamics/collision-restitution";
 import { DIRECT_LINK_TYPES } from "../direct/direct-rows";
 import {
   accumulate_reactions,
   create_direct_state,
+  direct_bounce,
   direct_iterate,
   link_residuals,
 } from "../direct/direct-solve";
@@ -107,10 +110,22 @@ export type DynamicsInput = {
    */
   contactsFrom?: number;
   /**
+   * The run's persistent collision contacts, which `links` holds from `contactsFrom` on — see `ContactSet`.
+   * The solve reads each segment contact's side off its nodes before predicting, and reuses the contacts' slots while the node order holds.
+   */
+  contacts?: ContactSet;
+  /**
    * Solve the links `direct-solve.ts` handles all at once, by Newton, instead of one at a time in the sweep.
-   * The sweep keeps the rest — motors, belts, contacts, the grab — and the direct solve has the last word at the end of each sweep.
+   * The motors and the contacts judged close join it; the sweep keeps the rest — belts, the grab — and the direct solve has the last word at the end of each sweep.
    */
   direct?: boolean;
+  /**
+   * The restitution of this step's impacts, and where the kinetic energy (J) they took is added up.
+   * Read by the direct solve, which bounces them through the whole mechanism (see `direct_bounce`); the sweeps leave that to the caller.
+   */
+  restitution?: { coefficient: number; lost: number };
+  /** This step belongs to a frame whose accelerations someone reads: the direct solve closes its rows to that level rather than the velocity's — see `DIRECT_SETTLE_RATIO`. */
+  settle?: boolean;
 };
 
 /**
@@ -217,6 +232,13 @@ const DYNAMIC_EXIT_SPEED_RATIO = 1e-3;
  */
 const DIRECT_TOLERANCE_RATIO = 1e-5;
 
+/**
+ * What the direct solve leaves of a row on a step whose accelerations are read, as a fraction of the mechanism's extent per second squared, times the substep squared — see `DynamicsInput.settle`.
+ * The efforts read an acceleration off the last positions, `(x₂ − 2·x₁ + x₀) / dt²`, so a gap reaches them divided by `dt²`; through a stiff compliant bar, a gap anywhere in the frame also moves the force it carries by `gap / α`.
+ * Closed at the velocity level only, two loaded steel struts at rest read an acceleration heavy enough to turn their load sideways.
+ */
+const DIRECT_SETTLE_RATIO = 1e-6;
+
 /** Newton iterations the direct solve may run per sweep; it usually needs one or two. */
 const DIRECT_ITERATIONS = 8;
 
@@ -268,6 +290,76 @@ function contact_may_engage(
       const dx = nodes.x[a] - nodes.x[b];
       const dy = nodes.y[a] - nodes.y[b];
       return Math.sqrt(dx * dx + dy * dy) - link.distance <= 2 * reach;
+    }
+    default:
+      return true;
+  }
+}
+
+/** What a link moved each of its dofs by over a solve, slot for slot — see the reaction conversion at the end of `PBD_solve`. */
+export interface ReactionAccumulator {
+  dx: Float64Array;
+  dy: Float64Array;
+  dAngle: Float64Array;
+}
+
+/**
+ * Every link's slots, the persistent contacts' kept in `contacts` from one solve to the next while the node order they were resolved against holds.
+ */
+function slots_of(links: Link[], nodes: SolveNodes, contactsFrom?: number, contacts?: ContactSet): LinkSlots[] {
+  if (!contacts || contactsFrom === undefined) return resolve_slots(links, nodes);
+  const layout = contacts.layout;
+  let same = layout !== null && contacts.slots !== null && layout.length === nodes.count;
+  for (let n = 0; same && n < nodes.count; n++) same = layout![n] === nodes.keys[n];
+  if (!same) {
+    contacts.slots = resolve_slots(contacts.links, nodes);
+    contacts.layout = nodes.keys.slice(0, nodes.count);
+    contacts.live = null;
+    contacts.judgedX = null;
+    contacts.judgedY = null;
+  }
+  const slots = resolve_slots(links.slice(0, contactsFrom), nodes);
+  for (const s of contacts.slots!) slots.push(s);
+  return slots;
+}
+
+/**
+ * Whether a collision contact ends the solve within `margin` of its boundary, or past it.
+ * Measured as `apply_collision_restitution` measures it, which needs to look at no other contact.
+ */
+function contact_near(link: Link, slot: LinkSlots, nodes: SolveNodes, margin: number): boolean {
+  const x = nodes.x;
+  const y = nodes.y;
+  switch (link.type) {
+    case "MinDistanceToSegment": {
+      const a = slot.pos[0];
+      const b = slot.pos[1];
+      const p = slot.pos[2];
+      if (a < 0 || b < 0 || p < 0) return false;
+      const dx = x[b] - x[a];
+      const dy = y[b] - y[a];
+      const lenSq = dx * dx + dy * dy;
+      if (lenSq === 0) return false;
+      const t = Math.max(0, Math.min(1, ((x[p] - x[a]) * dx + (y[p] - y[a]) * dy) / lenSq));
+      const ex = x[p] - x[a] - dx * t;
+      const ey = y[p] - y[a] - dy * t;
+      const reach = link.offset + margin;
+      return ex * ex + ey * ey <= reach * reach;
+    }
+    case "MinDistance": {
+      const a = slot.pos[0];
+      const b = slot.pos[1];
+      if (a < 0 || b < 0) return false;
+      const dx = x[a] - x[b];
+      const dy = y[a] - y[b];
+      const reach = link.distance + margin;
+      return dx * dx + dy * dy <= reach * reach;
+    }
+    case "MinDistanceToLine": {
+      const anchor = slot.pos[0];
+      const p = slot.pos[1];
+      if (anchor < 0 || p < 0) return false;
+      return (x[p] - x[anchor]) * link.normal.x + (y[p] - y[anchor]) * link.normal.y <= link.offset + margin;
     }
     default:
       return true;
@@ -374,7 +466,10 @@ export function PBD_kinematic_solver(
       reactions: dynamics.reactions,
       drives: dynamics.drives,
       contactsFrom: dynamics.contactsFrom,
+      contacts: dynamics.contacts,
       direct: dynamics.direct,
+      settle: dynamics.settle,
+      restitution: dynamics.restitution,
     },
     referenceExtent,
   );
@@ -401,7 +496,7 @@ export function PBD_solve(
   exitOn: ExitCriterion = "motion",
   /** Present only for a dynamics step — see `DynamicsInput`. Everything else (edition,
    * kinematic simulation) leaves this out and gets the plain PBD sweep unchanged. */
-  dynamics?: Pick<DynamicsInput, "dt" | "gx" | "gy" | "reactions" | "drives" | "contactsFrom" | "direct">,
+  dynamics?: Pick<DynamicsInput, "dt" | "gx" | "gy" | "reactions" | "drives" | "contactsFrom" | "contacts" | "direct" | "settle" | "restitution">,
   /**
    * The scale every tolerance below is a fraction of.
    * A simulation passes the mechanism's size at t = 0: measured live, a body that has come loose and fallen away would stretch it without bound, and loosen every tolerance with it.
@@ -409,19 +504,20 @@ export function PBD_solve(
    */
   referenceExtent?: number,
 ): ConstraintResidual[] | undefined {
-  const slots = resolve_slots(links, nodes);
+  const slots = slots_of(links, nodes, dynamics?.contactsFrom, dynamics?.contacts);
 
   // ── Reaction bookkeeping: how much each link moved each of its own dofs, summed over the
   // whole sweep — see the conversion to force/torque after the loop, and `LinkReaction`'s own doc for why.
-  // One accumulator array per link (sized to what that link touches, from 2 for a `Distance` to as many as a belt's pulley count) allocated once here, never per sweep — the per-iteration cost is then just a before/after read, not an allocation.
+  // One accumulator array per link (sized to what that link touches, from 2 for a `Distance` to as many as a belt's pulley count), never per sweep — the per-iteration cost is then just a before/after read, not an allocation.
+  // Allocated the first time the link moves something: most collision contacts never do.
   const collectReactions = dynamics?.reactions !== undefined;
-  const reactionAccum = collectReactions
-    ? slots.map((s) => ({
-        dx: new Float64Array(s.pos.length),
-        dy: new Float64Array(s.pos.length),
-        dAngle: new Float64Array(s.ang.length),
-      }))
-    : null;
+  const reactionAccum: (ReactionAccumulator | null)[] | null = collectReactions ? new Array(links.length).fill(null) : null;
+  const accumulator = (k: number): ReactionAccumulator =>
+    (reactionAccum![k] ??= {
+      dx: new Float64Array(slots[k].pos.length),
+      dy: new Float64Array(slots[k].pos.length),
+      dAngle: new Float64Array(slots[k].ang.length),
+    });
   // Reused across every link's before-capture, sized to the largest one — not per-link, per-iteration, to keep this at the same allocation cost as the trace mechanism below.
   let reactionScratchX: Float64Array | null = null;
   let reactionScratchY: Float64Array | null = null;
@@ -443,9 +539,11 @@ export function PBD_solve(
 
   // The grab is the only reason the early exit has a floor at all: a frame must not exit while it is still pulling, nor before what it stretched has relaxed.
   // A frame with no grab owes it nothing — and there, the floor is not needed either, since `remaining_motion` returns Infinity until the decay window has filled.
-  const minSweepsBeforeExit = links.some((l) => l.type === "HandleGrab")
-    ? nbGrabIterations + GRAB_RELEASE_SWEEPS
-    : 0;
+  // Every link from `contactsFrom` on is a collision contact.
+  const contactsFrom = dynamics?.contactsFrom ?? links.length;
+  let grabbed = false;
+  for (let k = 0; k < contactsFrom && !grabbed; k++) grabbed = links[k].type === "HandleGrab";
+  const minSweepsBeforeExit = grabbed ? nbGrabIterations + GRAB_RELEASE_SWEEPS : 0;
 
   // Motors are soft drivers: they must yield to hard geometric constraints (grounding, FixedOnSegment, Distance…) rather than fight them at equal strength.
   // With stiffness < 1 a free motor still converges fully to its target over the iterations, but an over-constrained one (e.g. a grounded body node pinning the driven beam) loses the tug-of-war and is reported blocked instead of tearing the node off the beam.
@@ -483,8 +581,9 @@ export function PBD_solve(
   }
 
   // What each link's residual is worth in metres, read once per solve: the spans it is measured on barely move within one, and reading them at every sweep was a large share of the sweep itself.
-  const levers = new Float64Array(links.length);
-  for (let k = 0; k < links.length; k++)
+  // A contact's residual is already a length.
+  const levers = new Float64Array(links.length).fill(1, contactsFrom);
+  for (let k = 0; k < contactsFrom; k++)
     levers[k] = residual_scale(links[k], slots[k], nodes, angleLever);
 
   // The mechanism's own scale — every tolerance below is a fraction of it rather than an absolute length, so a µm-scale mechanism and a km-scale one are each held to their own precision.
@@ -511,6 +610,10 @@ export function PBD_solve(
   // Bound before the predict step: a drive's commanded rotation is measured from where the substep starts.
   const drives =
     dynamics?.drives && dynamics.dt > 0 ? resolve_drives(nodes, dynamics.drives, dynamics.dt) : [];
+  // The velocities the substep starts from: what the direct solve's bounce reads each impact's approach off.
+  const startVX = dynamics?.direct ? nodes.vx.slice() : null;
+  const startVY = dynamics?.direct ? nodes.vy.slice() : null;
+  const startVA = dynamics?.direct ? nodes.vAngle.slice() : null;
   if (dynamics) {
     frameStartX = nodes.x.slice();
     frameStartY = nodes.y.slice();
@@ -530,32 +633,66 @@ export function PBD_solve(
 
   // Odd sweeps run the non-redundant chains backwards — see `reversed_sweep_order` for why that is a direct solve there and unsafe elsewhere.
   // Dynamics only: it is the only mode carrying real masses, so the only one where a mass ratio can build a residual at all.
-  const reversed = dynamics ? reversed_sweep_order(links, slots, nodes) : null;
+  // Not when the direct solve takes every link but the contacts: it solves those chains outright, and the sweep has nothing left to order.
+  let fullyDirect = dynamics?.direct === true && dynamics.dt > 0;
+  for (let k = 0; fullyDirect && k < (dynamics?.contactsFrom ?? links.length); k++)
+    fullyDirect = DIRECT_LINK_TYPES.has(links[k].type);
+  const reversed = dynamics && !fullyDirect ? reversed_sweep_order(links, slots, nodes) : null;
 
   // ── Collision contacts far from touching sit out of the sweep ──
   // A contact is a self-gating inequality: until its node comes within reach, applying it moves nothing, and on a mechanism with many members the contacts outnumber every other link many times over.
   // The sweep runs over the other links and the contacts that could engage; the rest are judged again once a node has moved `reach` since the last judgement.
-  const contactsFrom = dynamics?.contactsFrom ?? links.length;
+  // A persistent contact set keeps the judgement from one solve to the next, under the same rule: judged again once a node has moved `reach` since.
+  const contacts = dynamics?.contacts;
   const culling = contactsFrom < links.length;
   const reach = CONTACT_REACH_RATIO * extent;
   let forward: Int32Array | null = null;
   let backward: Int32Array | null = null;
+  // The links the direct solve takes over, set below; declared here for `settle`, which hands it the contacts judged close.
+  let directHandled: Uint8Array | null = null;
+  const live = culling ? new Uint8Array(links.length).fill(1, 0, contactsFrom) : null;
   const judgedX = culling ? new Float64Array(nodes.x.length) : null;
   const judgedY = culling ? new Float64Array(nodes.y.length) : null;
+  /**
+   * A persistent segment contact holds its point on the side of the segment it stood on as the solve started, before anything could carry it across — see `applyPointSegmentContactConstraint`.
+   * Read whenever the contact is about to be, from the positions before the predict step.
+   */
+  const read_side = (k: number) => {
+    const link = links[k];
+    if (link.type !== "MinDistanceToSegment" || !frameStartX || !frameStartY) return;
+    const pos = slots[k].pos;
+    const a = pos[0];
+    const b = pos[1];
+    const p = pos[2];
+    if (a < 0 || b < 0 || p < 0) return;
+    const x = frameStartX;
+    const y = frameStartY;
+    link.side = segment_side(x[p], y[p], x[a], y[a], x[b], y[b]);
+  };
+  /** The sweep orders and the direct solve's contacts, from `live`. */
+  const settle = () => {
+    let count = 0;
+    for (let k = 0; k < links.length; k++) count += live![k];
+    forward = new Int32Array(count);
+    for (let k = 0, n = 0; k < links.length; k++) if (live![k]) forward[n++] = k;
+    if (reversed !== null) {
+      backward = new Int32Array(count);
+      for (let k = 0, n = 0; k < reversed.length; k++) if (live![reversed[k]]) backward[n++] = reversed[k];
+    }
+    if (directHandled !== null) directHandled.set(live!.subarray(contactsFrom), contactsFrom);
+  };
   const judge = () => {
     judgedX!.set(nodes.x);
     judgedY!.set(nodes.y);
-    const live = new Uint8Array(links.length);
-    let count = 0;
-    for (let k = 0; k < links.length; k++) {
-      live[k] = k < contactsFrom || contact_may_engage(links[k], slots[k], nodes, reach) ? 1 : 0;
-      count += live[k];
+    for (let k = contactsFrom; k < links.length; k++) {
+      if (contacts) read_side(k);
+      live![k] = contact_may_engage(links[k], slots[k], nodes, reach) ? 1 : 0;
     }
-    forward = new Int32Array(count);
-    for (let k = 0, n = 0; k < links.length; k++) if (live[k]) forward[n++] = k;
-    if (reversed !== null) {
-      backward = new Int32Array(count);
-      for (let k = 0, n = 0; k < reversed.length; k++) if (live[reversed[k]]) backward[n++] = reversed[k];
+    settle();
+    if (contacts) {
+      contacts.live = live!.subarray(contactsFrom);
+      contacts.judgedX = judgedX;
+      contacts.judgedY = judgedY;
     }
   };
   /** Whether a node has moved `reach` or more since the contacts were last judged. */
@@ -580,11 +717,10 @@ export function PBD_solve(
   let worstGap = 0;
 
   // ── The links the direct solve takes over, if asked ──
-  // Contacts stay with the sweep even when their type is handled: they are inequalities, which the direct solve does not know.
-  let directHandled: Uint8Array | null = null;
+  // The collision contacts join it as they are judged able to engage, the others stay out of both.
   if (dynamics?.direct && dynamics.dt > 0) {
     const handled = new Uint8Array(links.length);
-    let any = false;
+    let any = culling;
     for (let k = 0; k < contactsFrom; k++)
       if (DIRECT_LINK_TYPES.has(links[k].type)) {
         handled[k] = 1;
@@ -594,7 +730,19 @@ export function PBD_solve(
   }
   // The motors join the direct solve with the links: left to the sweep, each would turn its crank as if alone, and the two would take turns undoing each other.
   const direct = directHandled ? create_direct_state(nodes, links, drives) : null;
-  const directTolerance = dynamics ? DIRECT_TOLERANCE_RATIO * extent * dynamics.dt : 0;
+  const directTolerance = !dynamics
+    ? 0
+    : dynamics.settle
+      ? DIRECT_SETTLE_RATIO * extent * dynamics.dt * dynamics.dt
+      : DIRECT_TOLERANCE_RATIO * extent * dynamics.dt;
+
+  if (culling && contacts?.live && contacts.judgedX && contacts.judgedY) {
+    judgedX!.set(contacts.judgedX.subarray(0, nodes.count));
+    judgedY!.set(contacts.judgedY.subarray(0, nodes.count));
+    live!.set(contacts.live, contactsFrom);
+    for (let k = contactsFrom; k < links.length; k++) if (live![k]) read_side(k);
+    settle();
+  }
 
   for (let i = 0; i < nbIterations; i++) {
     maxError = 0;
@@ -931,7 +1079,7 @@ export function PBD_solve(
       }
 
       if (reactionAccum && reactionScratchX && reactionScratchY && reactionScratchA) {
-        const acc = reactionAccum[idx];
+        const acc = accumulator(idx);
         for (let k = 0; k < s.pos.length; k++) {
           const slot = s.pos[k];
           if (slot < 0) continue;
@@ -1034,6 +1182,14 @@ export function PBD_solve(
 
   // ── Dynamics: the frame's velocity, from the whole displacement since `frameStart` ──
   // `dt = 0` marks a re-projection step (see `Recorder.advance`'s first instant): no time elapsed, so there is no velocity to derive — dividing by it would give every already-satisfied dof (`Δx = 0`, common on a freshly imported, exactly-constrained mechanism) a `0 × Infinity = NaN` instead of the `0` it actually is.
+  // The contacts restitution has to look at: twice its own slack, so a rounding apart between the two measures cannot leave one out.
+  if (contacts) {
+    if (contacts.near?.length !== contacts.links.length) contacts.near = new Uint8Array(contacts.links.length);
+    const margin = 2 * CONTACT_SLACK_RATIO * extent;
+    for (let k = contactsFrom; k < links.length; k++)
+      contacts.near[k - contactsFrom] = contact_near(links[k], slots[k], nodes, margin) ? 1 : 0;
+  }
+
   if (dynamics && dynamics.dt > 0 && frameStartX && frameStartY && frameStartA) {
     finish_drives(drives, dynamics.dt);
     const invDt = 1 / dynamics.dt;
@@ -1044,11 +1200,13 @@ export function PBD_solve(
     }
     for (let a = 0; a < nodes.angle.length; a++)
       nodes.vAngle[a] = (nodes.angle[a] - frameStartA[a]) * invDt;
+    if (direct && dynamics.restitution && startVX && startVY && startVA)
+      dynamics.restitution.lost += direct_bounce(direct, nodes, startVX, startVY, startVA, dynamics.restitution.coefficient);
   }
 
   if (direct) {
     if (residuals) link_residuals(direct, residuals);
-    if (reactionAccum) accumulate_reactions(direct, nodes, slots, reactionAccum);
+    if (reactionAccum) accumulate_reactions(direct, nodes, slots, accumulator);
   }
 
   // ── Dynamics: each link's own reaction, from the displacement it accumulated ──
@@ -1072,6 +1230,7 @@ export function PBD_solve(
     links.forEach((link, idx) => {
       const s = slots[idx];
       const acc = reactionAccum[idx];
+      if (acc === null) return;
 
       // Two of a link's own slots may resolve to the SAME node — a `join` welding one beam onto the next puts it on both segments of their shared `Angle`.
       // Its displacement was accumulated once per slot, so counting both would report and sum the same impulse twice; only its first slot stands for it.

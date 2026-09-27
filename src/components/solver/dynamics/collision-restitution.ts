@@ -1,4 +1,4 @@
-import { Point2 } from "../../../types";
+import { Link, Point2 } from "../../../types";
 import { CollisionCandidates, FLOOR_ANCHOR_KEY } from "./collision-candidates";
 import { contact_eps } from "./collision-detection";
 import { MIN_EXTENT_M } from "../nodes";
@@ -15,7 +15,7 @@ import { MIN_EXTENT_M } from "../nodes";
  *
  * A ratio of the mechanism's own extent, same reasoning as `CONTACT_EPS_RATIO` in `collision-detection.ts` — 1e-3 is the 1 mm this was tuned at, at the roughly metre-scale mechanisms it was tuned on.
  */
-const CONTACT_SLACK_RATIO = 1e-3;
+export const CONTACT_SLACK_RATIO = 1e-3;
 
 /** J — kinetic energy a contact removes when it turns a closing speed `relBefore` into a rebound at `restitution` times that speed; `denom` is the contact's inverse effective mass. */
 function bounce_loss(denom: number, restitution: number, relBefore: number): number {
@@ -46,7 +46,19 @@ function reflect_point_point(
   const dist = delta.length();
   if (dist > boundary + slack) return 0; // not in contact this frame
   const n = dist > 1e-9 ? delta.mul(1 / dist) : new Point2(0, 1);
+  return bounce_pair(keyA, keyB, n, posMasses, before, after, restitution);
+}
 
+/** The bounce itself between two points in contact along `n`, which points from `keyB` towards `keyA`: reflects their closing speed along it, and returns the energy that took. */
+function bounce_pair(
+  keyA: string,
+  keyB: string,
+  n: Point2,
+  posMasses: Map<string, number>,
+  before: Map<string, Point2>,
+  after: Map<string, Point2>,
+  restitution: number,
+): number {
   const wA = posMasses.get(keyA) ?? 1;
   const wB = posMasses.get(keyB) ?? 1;
   const denom = wA + wB;
@@ -174,30 +186,40 @@ export function apply_collision_restitution(
   collisionsOn: boolean,
   floorOn: boolean,
   floorNormal: Point2,
+  /**
+   * By candidate, in the order `contact_set` builds its links for the same switches, 0 for one known to be clear of its boundary by more than the slack.
+   * Omitted, every candidate is measured.
+   */
+  near?: Uint8Array | null,
 ): number {
   if (restitution <= 0) return 0; // fully inelastic: XPBD's own readback already gives that
   let lost = 0;
+  let at = -1;
+  const skip = () => {
+    at++;
+    return !!near && near[at] === 0;
+  };
   const eps = contact_eps(extent);
   const slack = CONTACT_SLACK_RATIO * (extent || MIN_EXTENT_M);
 
   if (collisionsOn) {
     for (const c of candidates.pointSegment)
-      lost += reflect_point_segment(
+      if (!skip()) lost += reflect_point_segment(
         c.pointKey, c.segKey1, c.segKey2, eps, slack,
         positions, posMasses, before, after, restitution,
       );
     for (const c of candidates.pointCircle)
-      lost += reflect_point_point(
+      if (!skip()) lost += reflect_point_point(
         c.pointKey, c.centerKey, c.radius + eps, slack,
         positions, posMasses, before, after, restitution,
       );
     for (const c of candidates.circleSegment)
-      lost += reflect_point_segment(
+      if (!skip()) lost += reflect_point_segment(
         c.centerKey, c.segKey1, c.segKey2, c.radius + eps, slack,
         positions, posMasses, before, after, restitution,
       );
     for (const c of candidates.circleCircle)
-      lost += reflect_point_point(
+      if (!skip()) lost += reflect_point_point(
         c.key1, c.key2, c.radius1 + c.radius2 + eps, slack,
         positions, posMasses, before, after, restitution,
       );
@@ -205,15 +227,51 @@ export function apply_collision_restitution(
 
   if (floorOn) {
     for (const c of candidates.pointFloor)
-      lost += reflect_point_line(
+      if (!skip()) lost += reflect_point_line(
         c.pointKey, FLOOR_ANCHOR_KEY, floorNormal, eps, slack,
         positions, posMasses, before, after, restitution,
       );
     for (const c of candidates.circleFloor)
-      lost += reflect_point_line(
+      if (!skip()) lost += reflect_point_line(
         c.centerKey, FLOOR_ANCHOR_KEY, floorNormal, c.radius + eps, slack,
         positions, posMasses, before, after, restitution,
       );
+  }
+  return lost;
+}
+
+/**
+ * Restitution at the end stops of every slider: one that reached an end of its segment moving towards it bounces back off it, as a collision does.
+ * The stop is the segment's end node itself, and the contact runs along the segment: at the end, slider and stop are one point, and their gap says nothing of which way they meet.
+ * Returns the kinetic energy (J) the bounces removed; `positions`, `before` and `after` as in `apply_collision_restitution`.
+ */
+export function apply_end_stop_restitution(
+  links: Link[],
+  positions: Map<string, Point2>,
+  posMasses: Map<string, number>,
+  before: Map<string, Point2>,
+  after: Map<string, Point2>,
+  restitution: number,
+  extent: number,
+): number {
+  if (restitution <= 0) return 0;
+  let lost = 0;
+  const slack = CONTACT_SLACK_RATIO * (extent || MIN_EXTENT_M);
+  for (const link of links) {
+    if (link.type !== "SlideOnSegment") continue;
+    const start = positions.get(link.key1);
+    const end = positions.get(link.key2);
+    const node = positions.get(link.key3);
+    if (!start || !end || !node) continue;
+    const d = end.sub(start);
+    const length = d.length();
+    if (length === 0) continue;
+    const along = node.sub(start).dot(d) / length;
+    // Inwards from the stop the slider sits at, towards the rest of its segment.
+    if (along >= length - slack)
+      lost += bounce_pair(link.key3, link.key2, d.mul(-1 / length), posMasses, before, after, restitution);
+    else if (along <= slack)
+      lost += bounce_pair(link.key3, link.key1, d.mul(1 / length), posMasses, before, after, restitution);
   }
   return lost;
 }

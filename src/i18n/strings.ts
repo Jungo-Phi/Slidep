@@ -701,10 +701,10 @@ export const STRINGS = {
     es: "Impactos",
   },
   energy_balance_impact_work_hint: {
-    fr: "Énergie dissipée par les rebonds (collisions et sol)",
-    en: "Energy dissipated by bounces (collisions and floor)",
-    de: "Durch Abprallen dissipierte Energie (Kollisionen und Boden)",
-    es: "Energía disipada por los rebotes (colisiones y suelo)",
+    fr: "Énergie dissipée par les rebonds (collisions, sol et butées)",
+    en: "Energy dissipated by bounces (collisions, floor and end stops)",
+    de: "Durch Abprallen dissipierte Energie (Kollisionen, Boden und Anschläge)",
+    es: "Energía disipada por los rebotes (colisiones, suelo y topes)",
   },
 
   tool_select: {

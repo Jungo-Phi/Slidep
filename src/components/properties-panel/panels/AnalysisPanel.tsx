@@ -49,7 +49,10 @@ import {
   metric_needs_dynamics,
   ProbeSeries,
 } from "../../solver/recording/probe-series";
-import { dynamic_snapshot_at } from "../../solver/dynamics/simulation-engine";
+import {
+  apply_dynamic_snapshot_to_mechanism,
+  effort_snapshot_at,
+} from "../../solver/dynamics/simulation-engine";
 import { shear_admissible_stress } from "../../solver/recording/cohesion-field";
 import { beam_strength } from "../../../utils/section-properties";
 import {
@@ -1109,16 +1112,16 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
       }
     }
   }, [mechanism.mechanicalElements, momentBalanceReference]);
-  // The free body's own balance at the instant on screen, itemised — read off the pose the panel displays, so a moment arm is measured where the body actually is.
+  // The free body's own balance, itemised, at the recorded instant nearest the one on screen — pose included, so a moment arm is measured where the body was when those forces acted (see `effort_snapshot_at`).
   const forceBalance = React.useMemo(() => {
     if (appMode !== "dynamic") return undefined;
-    const dynSnap = dynamic_snapshot_at(
+    const dynSnap = effort_snapshot_at(
       runtimeState.simulationSnapshots as DynamicSnapshot[],
       runtimeState.time,
     );
     if (!dynSnap) return undefined;
     return compute_force_balance(
-      analysedMechanism,
+      apply_dynamic_snapshot_to_mechanism(analysedMechanism, dynSnap),
       dynSnap,
       analysedMechanism.simulation.gravity ? GRAVITY : ZERO,
       momentBalancePoint,

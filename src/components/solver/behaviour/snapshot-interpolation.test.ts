@@ -7,7 +7,6 @@ import poulie from "../../../../test-mechanisms/Poulie bloqueuse.slidep?raw";
 import testSlider from "../../../../test-mechanisms/Test slider.slidep?raw";
 import vilbrequin from "../../../../test-mechanisms/Vilbrequin.slidep?raw";
 import { Mechanism, Point2 } from "../../../types";
-import type { BeamElement } from "../../../types/element";
 import { load_mechanism } from "../../../utils/load-mechanism";
 import {
   RECORD_DT,
@@ -15,12 +14,12 @@ import {
   apply_snapshot_to_mechanism,
   compile_simulation_model,
   dynamic_snapshot_at,
+  effort_snapshot_at,
   snapshot_at,
   snapshot_index_at,
   step_dynamic_simulation,
   step_simulation,
 } from "../dynamics/simulation-engine";
-import { compute_cohesion_field } from "../recording/cohesion-field";
 import { compute_force_balance } from "../analysis/force-balance";
 import { DynamicSnapshot, KinematicSnapshot, LinkReaction } from "../../../types/runtime-state";
 import {
@@ -247,8 +246,9 @@ describe("réactions à travers l'interpolation dynamique", () => {
     reactions,
   });
 
-  it("un instant interpolé garde les réactions du côté gauche, comme les contraintes insatisfaites", () => {
-    // A frame drawn between two recorded ticks is most of what playback shows — if it drops `reactions` (unlike `unsatisfied`, which it already carries over), every overlay arrow reads empty except at an exact tick or the very last frame (what a grab draws).
+  it("un instant interpolé garde les réactions de l'instant enregistré le plus proche", () => {
+    // A frame drawn between two recorded ticks is most of what playback shows — if it drops `reactions`, every overlay arrow reads empty except at an exact tick or the very last frame (what a grab draws).
+    // Half-way, the two are equally near and the earlier one is kept.
     const reactions: LinkReaction[] = [
       { type: "Distance", key: "n", atAnchor: true, kind: "force", fx: 1, fy: 2 },
     ];
@@ -260,39 +260,49 @@ describe("réactions à travers l'interpolation dynamique", () => {
 });
 
 describe("efforts intérieurs à travers l'interpolation dynamique", () => {
-  it("entre deux images, le champ le long d'une poutre se referme encore, y compris juste après un choc", () => {
-    // Test slider's horizontal beam drops onto the end of its rail: the frame of the impact carries a deceleration a hundred times gravity, the next one almost none.
-    // An instant drawn between the two blends those accelerations, so the torsors the field starts from must be blended alike, or the diagram stops closing at the beam's free end.
-    const mechanism = loadFixture(testSlider);
-    const model = compile_simulation_model(mechanism, true);
-    const gravity = new Point2(0, -9.81);
-    const beam = mechanism.mechanicalElements.find(
-      (el): el is BeamElement => el.type === "beam" && el.fixedNodesBodyIDs.length > 0 && !el.fixedNodeStartID,
-    )!;
-    const snaps: DynamicSnapshot[] = [];
-    let snap: DynamicSnapshot | null = null;
-    for (let i = 0; i < 60; i++) {
-      snap = step_dynamic_simulation(model, i * RECORD_DT, snap, RECORD_DT, gravity);
-      snaps.push(snap);
-    }
+  it("entre deux images, les efforts sont ceux de l'instant enregistré le plus proche, et seul le mouvement est interpolé", () => {
+    // Two recorded instants whose efforts differ as much as a frame across an impact can: a blend of the two would be a state the mechanism was never in.
+    const layout = make_snapshot_layout(["n"], []);
+    const recorded = (t: number, x: number, ax: number, fx: number): DynamicSnapshot => ({
+      t,
+      layout,
+      positions: Float64Array.of(x, 0),
+      angles: new Float64Array(0),
+      velocities: Float64Array.of(x, 0),
+      accelerations: Float64Array.of(ax, 0),
+      angleVelocities: new Float64Array(0),
+      angleAccelerations: new Float64Array(0),
+      reactions: [{ type: "Distance", key: "n", atAnchor: true, kind: "force", fx, fy: 0 }],
+      beamCohesion: [
+        {
+          beamID: "00000000-0000-0000-0000-00000000000b",
+          start: { fx, fy: 0, m: 0 },
+          end: { fx: -fx, fy: 0, m: 0 },
+          attachedNodes: [],
+          determinate: true,
+        },
+      ],
+    });
+    const a = recorded(0, 0, -1000, 50);
+    const b = recorded(1, 1, 0, -5);
+    const snaps = [a, b];
 
-    let worst = 0;
-    let peak = 0;
-    for (let i = 0; i < snaps.length - 1; i++) {
-      const mid = dynamic_snapshot_at(snaps, (snaps[i].t + snaps[i + 1].t) / 2)!;
-      const cohesion = mid.beamCohesion!.find((c) => c.beamID === beam.id)!;
-      const field = compute_cohesion_field(beam, mechanism.materials, mechanism.profiles, cohesion, mechanism.loads, mid, gravity)!;
-      const mf = Math.abs(field.extremum.Mf.value);
-      peak = Math.max(peak, mf);
-      worst = Math.max(worst, Math.abs(field.loopResidual.m));
+    for (const [t, nearest] of [[0.25, a], [0.5, a], [0.75, b]] as const) {
+      const shown = dynamic_snapshot_at(snaps, t)!;
+      // The motion follows the cursor.
+      expect(shown.positions[0]).toBeCloseTo(t, 12);
+      expect(shown.velocities[0]).toBeCloseTo(t, 12);
+      // The efforts, and the accelerations they balance, jump from one instant to the next.
+      expect(shown.accelerations).toBe(nearest.accelerations);
+      expect(shown.reactions).toBe(nearest.reactions);
+      expect(shown.beamCohesion).toBe(nearest.beamCohesion);
+      // A reading that needs the pose as well gets the whole of that instant.
+      expect(effort_snapshot_at(snaps, t)).toBe(nearest);
     }
-    // The impact must have been crossed, or the check proves nothing.
-    expect(peak).toBeGreaterThan(10);
-    expect(worst).toBeLessThan(1e-3 * peak);
-  }, 30_000);
+  });
 
   it("entre deux images, le bilan du corps libre se referme encore", () => {
-    // Same impact, read on the whole mechanism this time: `ΣF` is rebuilt from the blended torsors, so the `m·a` it faces has to be blended along with them.
+    // Read the way the panel reads it: at the recorded instant nearest the one on screen, pose included.
     // Judged against the largest action of the instant, never against `ΣF` itself — that total is a small difference between big terms, and on a mechanism at rest it is zero while every term of it is not.
     const mechanism = loadFixture(testSlider);
     const model = compile_simulation_model(mechanism, true);
@@ -307,15 +317,15 @@ describe("efforts intérieurs à travers l'interpolation dynamique", () => {
     let worst = 0;
     let peak = 0;
     for (let i = 0; i < snaps.length - 1; i++) {
-      const mid = dynamic_snapshot_at(snaps, (snaps[i].t + snaps[i + 1].t) / 2)!;
-      const balance = compute_force_balance(apply_dynamic_snapshot_to_mechanism(mechanism, mid), mid, gravity)!;
+      const shown = effort_snapshot_at(snaps, (snaps[i].t + snaps[i + 1].t) / 2)!;
+      const balance = compute_force_balance(apply_dynamic_snapshot_to_mechanism(mechanism, shown), shown, gravity)!;
       let scale = Math.hypot(balance.inertia.x, balance.inertia.y);
       for (const action of balance.actions)
         scale = Math.max(scale, Math.hypot(action.force.x, action.force.y));
       peak = Math.max(peak, scale);
       worst = Math.max(worst, Math.hypot(balance.gap.x, balance.gap.y) / scale);
     }
-    // The impact must have been crossed, or the check proves nothing.
+    // Real actions to balance, or the check proves nothing.
     expect(peak).toBeGreaterThan(10);
     expect(worst).toBeLessThan(1e-2);
   }, 30_000);
