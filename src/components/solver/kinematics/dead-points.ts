@@ -14,6 +14,7 @@
 
 import { ID } from "../../../types";
 import { SimulationSnapshot } from "../../../types/runtime-state";
+import { extends_recording } from "../recording/recording-growth";
 
 /** Frames a block must last to be reported, so one uneven frame is not an event. */
 const MIN_BLOCKED_FRAMES = 2;
@@ -80,28 +81,49 @@ export function motors_blocked_at(
   return held;
 }
 
-/**
- * Every instant a motor stalls along `snapshots`, in time order.
- *
- * Pure, and cheap enough to redo whenever the recording grows: the per-frame work is reading a list that is empty on almost every frame.
- */
+/** Every instant a motor stalls along `snapshots`, in time order. */
 export function dead_points(
   snapshots: SimulationSnapshot[],
   tuning: DeadPointTuning = {},
 ): DeadPoint[] {
+  return extend_dead_points(snapshots, null, tuning).points;
+}
+
+/** A scan with what it takes to resume it — see {@link extend_dead_points}. Its maps grow in place when it is resumed. */
+export interface DeadPointScan {
+  points: DeadPoint[];
+  source: readonly SimulationSnapshot[];
+  count: number;
+  /** Per motor: when the run in progress began, and how long it has lasted. */
+  running: Map<ID, { since: number; frames: number }>;
+  /** Reported instants, per motor and per kind. */
+  times: Map<ID, { blocked: number[]; released: number[] }>;
+}
+
+/**
+ * {@link dead_points}, reading only the frames `scan` has not seen when `snapshots` is the same recording grown since (see `extends_recording`), and from the start otherwise.
+ * What the timeline calls at every mirror tick, where a full pass would cost more the longer the recording runs.
+ * `tuning` must not change between the calls of one scan.
+ */
+export function extend_dead_points(
+  snapshots: SimulationSnapshot[],
+  scan: DeadPointScan | null,
+  tuning: DeadPointTuning = {},
+): DeadPointScan {
   const { minBlockedFrames = MIN_BLOCKED_FRAMES } = tuning;
 
-  /** Per motor: when the run in progress began, and how long it has lasted. */
-  const running = new Map<ID, { since: number; frames: number }>();
-  /** Reported instants, per motor and per kind. */
-  const times = new Map<ID, { blocked: number[]; released: number[] }>();
+  const resumes = scan !== null && extends_recording(snapshots, scan.source, scan.count);
+  if (resumes && snapshots.length === scan.count) return { ...scan, source: snapshots };
+  const running = resumes ? scan.running : new Map<ID, { since: number; frames: number }>();
+  const times = resumes ? scan.times : new Map<ID, { blocked: number[]; released: number[] }>();
   const listOf = (motor: ID) => {
     let held = times.get(motor);
     if (!held) times.set(motor, (held = { blocked: [], released: [] }));
     return held;
   };
 
-  for (const snapshot of snapshots) {
+  for (let i = resumes ? scan.count : 0; i < snapshots.length; i++) {
+    const snapshot = snapshots[i];
     const blocked = blocked_motors(snapshot);
     for (const [motor, run] of running) {
       if (blocked.has(motor)) continue;
@@ -125,7 +147,8 @@ export function dead_points(
     for (const kind of ["blocked", "released"] as const)
       for (const t of kinds[kind]) found.push({ t, motor, kind });
 
-  return found.sort(
+  found.sort(
     (a, b) => a.t - b.t || a.motor.localeCompare(b.motor) || a.kind.localeCompare(b.kind),
   );
+  return { points: found, source: snapshots, count: snapshots.length, running, times };
 }

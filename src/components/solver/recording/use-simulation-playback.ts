@@ -49,7 +49,6 @@ import { RecorderMode } from "./recorder-protocol";
 import {
   set_sim_clock as setRuntimeState,
   sim_clock,
-  useSimClock,
 } from "../dynamics/sim-clock";
 import {
   EMPTY_TRAJECTORY_CACHE,
@@ -84,8 +83,11 @@ import {
 } from "./negligibility-pool";
 import { beam_strength } from "../../../utils/section-properties";
 
-/** How often the simulation clock reaches React. Text and controls, not motion. */
-const CLOCK_MIRROR_MS = 100;
+/**
+ * How often the simulation clock reaches React. Text and controls, not motion.
+ * Read the clock with `useSimClock`/`useSimClockSelector` in the component that shows it, never above: whatever subscribes re-renders at this rate, with its whole subtree.
+ */
+export const CLOCK_MIRROR_MS = 100;
 
 /** Shared so the common case (nothing blocked) keeps one identity across renders, and a consumer may memoise on it. */
 const EMPTY_BLOCKED_MOTORS: ReadonlySet<ID> = new Set<ID>();
@@ -136,7 +138,7 @@ function negligible_stress_floors(mechanism: Mechanism): { stress: number; shear
 export type SimulationLimitReason = "time" | "memory";
 
 /**
- * The `RuntimeState` fields whose shape follows `appMode` — `simulationSnapshots` is a `KinematicSnapshot[]` or a `DynamicSnapshot[]` depending on which, and code that reads both together (`analysedMechanism`) trusts `appMode` to say which shape is in there.
+ * The `RuntimeState` fields whose shape follows `appMode` — `simulationSnapshots` is a `KinematicSnapshot[]` or a `DynamicSnapshot[]` depending on which, and code that reads both together (`analysed_mechanism`) trusts `appMode` to say which shape is in there.
  *
  * `appMode` is plain React state and updates on its own render; `runtimeState` is a throttled mirror of the sim clock (see `sim-clock.ts`) and can still hold the PREVIOUS mode's snapshots for a render or more after `appMode` has already flipped.
  * Anywhere `appMode` is set outside this hook's own effect below, this patch must be applied in the same synchronous update — not left for the effect to catch up on its own render — or that gap is exactly the window where a stale snapshot array gets decoded with the new mode's shape.
@@ -163,6 +165,125 @@ export function simulationResetPatch(
     negligibilityPool: EMPTY_NEGLIGIBILITY_POOL,
     // Same reasoning as the pool above, and one more of its own: every series in it is indexed by position in a recording this reset is throwing away.
     stressScale: EMPTY_STRESS_SCALE_CACHE,
+  };
+}
+
+/**
+ * The mechanism in the pose on screen at the clock's instant, with the parameters in effect then.
+ * `mechanism` itself outside a simulation, or before its first snapshot.
+ */
+export function analysed_mechanism(
+  mechanism: Mechanism,
+  appMode: AppMode,
+  clock: RuntimeState,
+): Mechanism {
+  if (!is_simulating(appMode)) return mechanism;
+  // Only a kinematic or dynamic run ever fills `simulationSnapshots` while its own mode is active, and the concrete shape follows which — the same invariant `Recorder` itself relies on.
+  const snapshot =
+    appMode === "kinematic"
+      ? snapshot_at(clock.simulationSnapshots as KinematicSnapshot[], clock.time)
+      : dynamic_snapshot_at(clock.simulationSnapshots as DynamicSnapshot[], clock.time);
+  if (!snapshot) return mechanism;
+  const geometryMechanism =
+    appMode === "kinematic"
+      ? apply_snapshot_to_mechanism(mechanism, snapshot as KinematicSnapshot)
+      : apply_dynamic_snapshot_to_mechanism(mechanism, snapshot as DynamicSnapshot);
+  const paramSnapshot = parameter_snapshot_at(clock.parameterSnapshots, clock.time);
+  return paramSnapshot
+    ? apply_parameter_snapshot_to_mechanism(geometryMechanism, paramSnapshot)
+    : geometryMechanism;
+}
+
+/** {@link analysed_mechanism}, memoised, for a component that already mirrors the clock. */
+export function useAnalysedMechanism(
+  mechanism: Mechanism,
+  appMode: AppMode,
+  clock: RuntimeState,
+): Mechanism {
+  return useMemo(
+    () => analysed_mechanism(mechanism, appMode, clock),
+    // Geometry and parameters only, not the whole mechanism: a viewport (pan/zoom) change keeps these array refs identical, so it must not re-derive the pose on screen.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [
+      appMode,
+      mechanism.mechanicalElements,
+      mechanism.loads,
+      mechanism.materials,
+      mechanism.profiles,
+      mechanism.simulation,
+      clock.simulationSnapshots,
+      clock.parameterSnapshots,
+      clock.time,
+    ],
+  );
+}
+
+/**
+ * The simulation settings in effect at the clock's instant: what the physics toggles show, and what they flip.
+ * Returns the parameter snapshot they come from, stable while the cursor stays within it, so a selector can compare it by identity; `null` means the edited settings.
+ */
+export function shown_parameters(appMode: AppMode, clock: RuntimeState) {
+  if (!is_simulating(appMode) || clock.simulationSnapshots.length === 0) return null;
+  return parameter_snapshot_at(clock.parameterSnapshots, clock.time);
+}
+
+/**
+ * The motors standing blocked at the cursor, for what React displays.
+ * What the canvas draws does NOT come from here: it is published to `liveFrameRef` every frame, whereas this follows the mirror.
+ * Generic over the mode: `stalledMotors` is a base `SimulationSnapshot` field, which each engine fills by its own criterion.
+ */
+export function blocked_motors(appMode: AppMode, clock: RuntimeState): ReadonlySet<ID> {
+  return is_simulating(appMode) && clock.simulationSnapshots.length > 0
+    ? motors_blocked_at(
+        clock.simulationSnapshots,
+        snapshot_index_at(clock.simulationSnapshots, clock.time),
+      )
+    : EMPTY_BLOCKED_MOTORS;
+}
+
+/** Equality for {@link blocked_motors}, which builds a new set on every call. */
+export function same_members(a: ReadonlySet<ID>, b: ReadonlySet<ID>): boolean {
+  if (a.size !== b.size) return false;
+  for (const id of a) if (!b.has(id)) return false;
+  return true;
+}
+
+export interface TimelineState {
+  /** The total the label announces. */
+  duration: number;
+  recording: boolean;
+  atStart: boolean;
+  atEnd: boolean;
+  hasRecording: boolean;
+}
+
+/**
+ * Timeline state, shared by the top bar and the rail.
+ *
+ * `frontier` is the furthest time already computed.
+ * A cursor short of it means replay; at the frontier and playing means recording.
+ *
+ * The rail is always scaled to the frontier: while recording, the cursor is by definition at the end of known time, so the head stays pinned to the right.
+ * It is forced to 100 % rather than computed as `time / frontier` — both advance together but not at the same rate (time is continuous, snapshots arrive one RECORD_DT apart), and that rounding gap is exactly what makes the head jitter from one frame to the next.
+ *
+ * The head's POSITION does not go through here: it changes every frame and would leave at the mirror's rate, ten times a second for a canvas doing sixty.
+ * The RAF loop writes it into `--playhead`.
+ */
+export function timeline_state(appMode: AppMode, clock: RuntimeState): TimelineState {
+  const { simulationSnapshots: snaps, time } = clock;
+  const frontier = is_simulating(appMode) && snaps.length > 0 ? snaps[snaps.length - 1].t : 0;
+  // Read from the intent, not from a comparison of times: the frontier deliberately runs ahead of the cursor while recording, by an amount that varies from frame to frame (the worker produces in bursts).
+  // Comparing them makes the head flicker between its two appearances at the rhythm of that burstiness.
+  const recording = clock.isPlaying && !clock.scrubbed;
+  return {
+    // The cursor's own time while recording, not the frontier.
+    // The frontier deliberately runs ahead of the cursor by the worker's lead, and pausing deletes exactly that overshoot, so counting it announces a duration the user is about to see disappear.
+    // It also contradicts the head, which is pinned to the end of the rail by construction while recording.
+    duration: recording ? time : frontier,
+    recording,
+    atStart: time <= 0,
+    atEnd: recording || (frontier > 0 && time >= frontier - RETAIN_DT / 2),
+    hasRecording: frontier > 0 || snaps.length > 0,
   };
 }
 
@@ -226,8 +347,6 @@ export function useSimulationPlayback({
   inertiaNamed,
   onRecordingLimitReached,
 }: UseSimulationPlaybackArgs) {
-  const runtimeState = useSimClock(CLOCK_MIRROR_MS);
-
   const mechanismRef = useRef(mechanism);
   mechanismRef.current = mechanism;
 
@@ -1108,64 +1227,9 @@ export function useSimulationPlayback({
     }));
   }, []);
 
-  /** The motors standing blocked at the cursor, for what React displays.
-   * What the canvas draws does NOT come from here: it is published to `liveFrameRef` every frame, whereas this follows the mirror.
-   * Generic over the mode: `stalledMotors` is a base `SimulationSnapshot` field, which each engine fills by its own criterion. */
-  const blockedMotors: ReadonlySet<ID> =
-    is_simulating(appMode) && runtimeState.simulationSnapshots.length > 0
-      ? motors_blocked_at(
-          runtimeState.simulationSnapshots,
-          snapshot_index_at(runtimeState.simulationSnapshots, runtimeState.time),
-        )
-      : EMPTY_BLOCKED_MOTORS;
-
-  // A grab is a live intervention on the mechanism, so it only has a meaning where the recording is being extended.
-  // Somewhere the user scrubbed to, playback re-reads what exists and never consults the grab, so the canvas must not offer one.
-  const canSimulationGrab = is_simulating(appMode) && !runtimeState.scrubbed;
-
-  // ── Timeline state, shared by the top bar and the rail ──
-  //
-  // `frontier` is the furthest time already computed.
-  // A cursor short of it means replay; at the frontier and playing means recording.
-  //
-  // The rail is always scaled to the frontier: while recording, the cursor is by definition at the end of known time, so the head stays pinned to the right.
-  // It is forced to 100 % rather than computed as `time / frontier` — both advance together but not at the same rate (time is continuous, snapshots arrive one RECORD_DT apart), and that rounding gap is exactly what makes the head jitter from one frame to the next.
-  //
-  // The head's POSITION does not go through here: it changes every frame and would leave at the mirror's rate, ten times a second for a canvas doing sixty.
-  // The RAF loop writes it into `--playhead`.
-  const {
-    simulationSnapshots: timelineSnaps,
-    time: timelineTime,
-    isPlaying: timelinePlaying,
-    scrubbed: timelineScrubbed,
-  } = runtimeState;
-  const timeline = useMemo(() => {
-    const frontier =
-      is_simulating(appMode) && timelineSnaps.length > 0
-        ? timelineSnaps[timelineSnaps.length - 1].t
-        : 0;
-    // Read from the intent, not from a comparison of times: the frontier deliberately runs ahead of the cursor while recording, by an amount that varies from frame to frame (the worker produces in bursts).
-    // Comparing them makes the head flicker between its two appearances at the rhythm of that burstiness.
-    const recording = timelinePlaying && !timelineScrubbed;
-    return {
-      // The total the label announces — the cursor's own time while recording, not the frontier.
-      // The frontier deliberately runs ahead of the cursor by the worker's lead, and pausing deletes exactly that overshoot, so counting it announces a duration the user is about to see disappear.
-      // It also contradicts the head, which is pinned to the end of the rail by construction while recording.
-      duration: recording ? timelineTime : frontier,
-      recording,
-      atStart: timelineTime <= 0,
-      atEnd: recording || (frontier > 0 && timelineTime >= frontier - RETAIN_DT / 2),
-      hasRecording: frontier > 0 || timelineSnaps.length > 0,
-    };
-  }, [appMode, timelineSnaps, timelineTime, timelinePlaying, timelineScrubbed]);
-
   return {
-    runtimeState,
     liveFrameRef,
     timelineTrackRef,
-    timeline,
-    blockedMotors,
-    canSimulationGrab,
     handleSpaceKey,
     handleEscapeKey,
     handleSimulationGrab,

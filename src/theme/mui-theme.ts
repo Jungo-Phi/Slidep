@@ -375,7 +375,7 @@ const SPECS = {
     mode: "dark",
     accent: "#e07942",
     accentDark: "#c5612b",
-    onAccent: "#38110e",
+    onAccent: "#2e405a",
     ink: "#eeeeee",
     paper: "#1464b5",
     appBackground: "#216eb1",

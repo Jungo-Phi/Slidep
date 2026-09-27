@@ -1,0 +1,3 @@
+solves 192, sweeps/solve 199.6
+end state: {"Distance gapOk=true motionOk=false":1,"Distance gapOk=false motionOk=false":171,"FixedOnSegment gapOk=false motionOk=false":6,"GearPerimeterPin gapOk=false motionOk=false":14}
+worstGap/exitGap at end: min 0.98 median 1.13 max 730.99

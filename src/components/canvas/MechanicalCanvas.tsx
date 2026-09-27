@@ -1,4 +1,5 @@
 import React, { useRef, useEffect, useCallback, forwardRef } from "react";
+import { useAmbient } from "../common/use-ambient";
 import {
   Action,
   ChangeDimensionActionType,
@@ -262,7 +263,7 @@ export interface LiveFrame {
 }
 
 
-export const MechanicalCanvas = forwardRef<
+const MechanicalCanvasView = forwardRef<
   HTMLCanvasElement,
   MechanicalCanvasProps
 >(
@@ -307,6 +308,7 @@ export const MechanicalCanvas = forwardRef<
     },
     ref,
   ) => {
+    useAmbient();
     // Cached container geometry.
     // Reading it back from the DOM forces a layout, which neither the render loop nor a pointer move can afford to pay for.
     const canvasRectRef = useRef<{
@@ -1876,5 +1878,8 @@ export const MechanicalCanvas = forwardRef<
     );
   },
 );
+
+// Everything the draw loop reads goes through refs, so skipping a render never leaves a stale frame.
+export const MechanicalCanvas = React.memo(MechanicalCanvasView);
 
 export default MechanicalCanvas;

@@ -1,0 +1,16 @@
+frames 120 (1.00 s simulated), counted run 392056 ms
+PBD solves 1920 (16.0/frame), sweeps 383926 (200.0/solve, 3199/frame)
+links per solve by type:
+  MinDistanceToSegment: 2651.0
+  MinDistance: 159.0
+  Distance: 43.0
+  FixedOnSegment: 38.0
+  GearPerimeterPin: 31.0
+  BeamFollowsAngle: 30.0
+  Angle: 1.0
+  GearMeshAngle: 1.0
+  CoaxialAngle: 1.0
+least squares calls 120 (1.00/frame): {"336x297":120}
+with statics 407234 ms / without 189923 ms
+with statics 206845 ms / without 164878 ms
+with statics 235617 ms / without 171130 ms

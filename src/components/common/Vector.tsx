@@ -75,4 +75,54 @@ export const Vector = ({
   </Box>
 );
 
+/**
+ * The styles {@link BareVector} reads, to spread once into the `sx` of an ancestor.
+ * Written from the same constants as {@link Vector}, so the two read alike.
+ */
+export const BARE_VECTOR_SX = {
+  "& .vec": { display: "flex", alignItems: "center", mt: -0.5, mb: -0.3 },
+  "& .vec-bracket": {
+    typography: "caption",
+    lineHeight: 1.2,
+    fontSize: `${BRACKET_SCALE.normal}em`,
+    fontWeight: 200,
+  },
+  "& .vec-dense .vec-bracket": { fontSize: `${BRACKET_SCALE.dense}em` },
+  "& .vec-stack": {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    fontVariantNumeric: "tabular-nums",
+  },
+  "& .vec-component": { typography: "caption", lineHeight: COMPONENT_LEADING.normal },
+  "& .vec-dense .vec-component": { lineHeight: COMPONENT_LEADING.dense },
+} as const;
+
+/**
+ * {@link Vector} as plain elements with no style of their own: the styles live once on an ancestor carrying {@link BARE_VECTOR_SX}.
+ * For a list that shows many vectors and redraws them at every instant: a styled vector costs several style resolutions per render, this one none.
+ */
+export const BareVector = ({
+  value,
+  unit,
+  dense = false,
+}: {
+  value: WorldPoint | null;
+  unit: QuantityUnit;
+  dense?: boolean;
+}) => (
+  <div className={dense ? "vec vec-dense" : "vec"}>
+    <span className="vec-bracket">(</span>
+    <div className="vec-stack">
+      <span className="vec-component">
+        {value ? to_mantissa(value.x, unit, 1) : BLANK}
+      </span>
+      <span className="vec-component">
+        {value ? to_mantissa(value.y, unit, 1) : BLANK}
+      </span>
+    </div>
+    <span className="vec-bracket">)</span>
+  </div>
+);
+
 export default Vector;

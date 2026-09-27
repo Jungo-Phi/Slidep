@@ -32,17 +32,16 @@ import {
   DEFAULT_SIMULATION,
   DEFAULT_SIMULATION_CONFIG,
   ID,
-  KinematicSnapshot,
   Mechanism,
   MechanismMetadata,
   Point2,
   PropertiesPanelTab,
   SimulationConfig,
   ViewportChange,
+  ViewportState,
   ZERO,
   is_simulating,
 } from "./types";
-import { DynamicSnapshot } from "./types/runtime-state";
 import {
   clamp_pan,
   getStorageItem,
@@ -52,13 +51,18 @@ import {
 } from "./utils";
 import { useThemeChoice } from "./theme/use-theme-choice";
 import { get_language, Lang, set_language, t } from "./i18n";
+import { LanguageContext } from "./i18n/language-context";
 import {
   SNACKBAR_DURATION,
   VALUE_EDIT_COALESCE_MS,
 } from "./constants/interaction-specs";
 import { CANVAS_STATE_SIM_EFFECT } from "./constants/canvas-state-sim-effect";
 import { rebased_bundle } from "./components/mechanism/parameter-rebase";
-import { set_sim_clock, sim_clock } from "./components/solver/dynamics/sim-clock";
+import {
+  set_sim_clock,
+  sim_clock,
+  useSimClockSelector,
+} from "./components/solver/dynamics/sim-clock";
 
 /** Remembers, across sessions, that the notice explaining a pause triggered by an edit has been shown. */
 const PAUSED_FOR_EDIT_NOTICE_KEY = "pausedForEditNoticeShown";
@@ -88,15 +92,12 @@ import type {
 import { resolve_moment_balance_point } from "./components/solver/analysis/force-balance";
 import type { FocusedOverlay } from "./components/canvas/drawing/drawing-functions";
 import { set_sim_clock as setRuntimeState } from "./components/solver/dynamics/sim-clock";
+import { parameter_snapshot_at } from "./components/solver/dynamics/simulation-engine";
 import {
-  apply_dynamic_snapshot_to_mechanism,
-  apply_parameter_snapshot_to_mechanism,
-  apply_snapshot_to_mechanism,
-  dynamic_snapshot_at,
-  parameter_snapshot_at,
-  snapshot_at,
-} from "./components/solver/dynamics/simulation-engine";
-import {
+  CLOCK_MIRROR_MS,
+  analysed_mechanism,
+  blocked_motors,
+  same_members,
   useSimulationPlayback,
   SimulationLimitReason,
 } from "./components/solver/recording/use-simulation-playback";
@@ -262,6 +263,13 @@ const App: React.FC = () => {
   const { themeChoice, systemDark, previewLater, changeTheme, currentTheme } =
     useThemeChoice();
 
+  // The chosen language lives in `i18n`, which every module reads through `t`; this state is only what makes React repaint the app around it, `LanguageContext` included.
+  const [language, setLanguageState] = useState<Lang>(get_language);
+  const handleSelectLang = useCallback((newLanguage: Lang) => {
+    set_language(newLanguage);
+    setLanguageState(newLanguage);
+  }, []);
+
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const canvasStateRef = useRef<CanvasState>(canvasState);
   const mechanismRef = useRef<Mechanism>(mechanism);
@@ -356,12 +364,8 @@ const App: React.FC = () => {
   }, [appMode]);
 
   const {
-    runtimeState,
     liveFrameRef,
     timelineTrackRef,
-    timeline,
-    blockedMotors,
-    canSimulationGrab,
     handleSpaceKey: handleSpaceKeyForMode,
     handleEscapeKey,
     handleSimulationGrab,
@@ -403,8 +407,31 @@ const App: React.FC = () => {
     },
   });
 
-  const isPlayingRef = useRef(runtimeState.isPlaying);
-  isPlayingRef.current = runtimeState.isPlaying;
+  // The clock reaches App only through these selectors, each re-rendering it when its own answer changes: a mirror tick that changes none of them must not reconcile the whole application.
+  const blockedMotors = useSimClockSelector(
+    (clock) => blocked_motors(appMode, clock),
+    CLOCK_MIRROR_MS,
+    same_members,
+  );
+  // A grab is a live intervention on the mechanism, so it only has a meaning where the recording is being extended.
+  // Somewhere the user scrubbed to, playback re-reads what exists and never consults the grab, so the canvas must not offer one.
+  const canSimulationGrab = useSimClockSelector(
+    (clock) => is_simulating(appMode) && !clock.scrubbed,
+    CLOCK_MIRROR_MS,
+  );
+  /** `momentBalanceReference` resolved to the pose on screen, the way every other position the panel reads is. */
+  const momentBalancePoint = useSimClockSelector(
+    (clock) =>
+      resolve_moment_balance_point(
+        momentBalanceReference,
+        // A plain point reads nothing from the pose, so it is not worth posing the mechanism for.
+        momentBalanceReference.kind === "point"
+          ? mechanism
+          : analysed_mechanism(mechanism, appMode, clock),
+      ),
+    CLOCK_MIRROR_MS,
+    (a, b) => a.equals(b),
+  );
 
   // Entering a gesture is what pauses or leaves a running simulation, whichever route led to it (see `CANVAS_STATE_SIM_EFFECT`).
   // Keyed on the state alone: entering simulation with a tool still armed must not bounce straight back to edition.
@@ -412,7 +439,7 @@ const App: React.FC = () => {
     if (simulationRef.current.appMode === "edition") return;
     const effect = CANVAS_STATE_SIM_EFFECT[canvasState.type];
     if (effect === "exit") exitToEdition();
-    if (effect !== "pause" || !isPlayingRef.current) return;
+    if (effect !== "pause" || !sim_clock().isPlaying) return;
     pauseSimulation();
     // A pause nobody asked for reads as a bug, but only the first time: the notice is not repeated once seen.
     if (getStorageItem<boolean>(PAUSED_FOR_EDIT_NOTICE_KEY, false)) return;
@@ -428,54 +455,6 @@ const App: React.FC = () => {
   const resetSimulationState = useCallback(
     () => resetSimulationStateFor(setSimulationConfig),
     [resetSimulationStateFor],
-  );
-
-  const analysedMechanism = useMemo(() => {
-    if (!is_simulating(appMode)) return mechanism;
-    // Narrowed by the `is_simulating` check above: only a kinematic or dynamic run ever fills `simulationSnapshots` while its own mode is active, and the concrete shape follows which — the same invariant `Recorder` itself relies on.
-    const snapshot =
-      appMode === "kinematic"
-        ? snapshot_at(
-            runtimeState.simulationSnapshots as KinematicSnapshot[],
-            runtimeState.time,
-          )
-        : dynamic_snapshot_at(
-            runtimeState.simulationSnapshots as DynamicSnapshot[],
-            runtimeState.time,
-          );
-    if (!snapshot) return mechanism;
-    const geometryMechanism =
-      appMode === "kinematic"
-        ? apply_snapshot_to_mechanism(mechanism, snapshot as KinematicSnapshot)
-        : apply_dynamic_snapshot_to_mechanism(
-            mechanism,
-            snapshot as DynamicSnapshot,
-          );
-    const paramSnapshot = parameter_snapshot_at(
-      runtimeState.parameterSnapshots,
-      runtimeState.time,
-    );
-    return paramSnapshot
-      ? apply_parameter_snapshot_to_mechanism(geometryMechanism, paramSnapshot)
-      : geometryMechanism;
-    // Depend on geometry/parameters only, not the whole mechanism: a viewport (pan/zoom) change keeps these array refs identical, so it must not re-derive the pose on screen.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    appMode,
-    mechanism.mechanicalElements,
-    mechanism.loads,
-    mechanism.materials,
-    mechanism.profiles,
-    mechanism.simulation,
-    runtimeState.simulationSnapshots,
-    runtimeState.parameterSnapshots,
-    runtimeState.time,
-  ]);
-
-  /** `momentBalanceReference` resolved to the pose on screen, the way every other position the panel reads is. */
-  const momentBalancePoint = useMemo(
-    () => resolve_moment_balance_point(momentBalanceReference, analysedMechanism),
-    [analysedMechanism, momentBalanceReference],
   );
 
   const {
@@ -525,14 +504,20 @@ const App: React.FC = () => {
       for (const tag of record.metadata.tags) set.add(tag);
     return set;
   }, [savedMechanisms]);
-  const allTags = [
-    ...new Set([
-      t("mode_static"),
-      t("mode_kinematic"),
-      t("mode_dynamic"),
-      ...usedTags,
-    ]),
-  ].sort();
+  const allTags = useMemo(
+    () =>
+      [
+        ...new Set([
+          t("mode_static"),
+          t("mode_kinematic"),
+          t("mode_dynamic"),
+          ...usedTags,
+        ]),
+      ].sort(),
+    // `language` is what `t` answers in.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [usedTags, language],
+  );
 
   const changeViewport = useCallback((change: ViewportChange) => {
     const canvas = canvasRef.current;
@@ -864,12 +849,8 @@ const App: React.FC = () => {
   }, [handleFilesDropped]);
 
   const [infoOpen, setInfoOpen] = useState<boolean>(false);
-  const handleInfoOpen = () => {
-    setInfoOpen(true);
-  };
-  const handleInfoClose = () => {
-    setInfoOpen(false);
-  };
+  const handleInfoOpen = useCallback(() => setInfoOpen(true), []);
+  const handleInfoClose = useCallback(() => setInfoOpen(false), []);
 
   /** Which section is hovered in the library tab — also what tints the canvas for as long as that hover lasts, the same "hover a group to color it" gesture the DDL redundancy audit already uses.
    * `null` the rest of the time. */
@@ -887,12 +868,6 @@ const App: React.FC = () => {
     }
   }, [activeTab]);
 
-  // The chosen language lives in `i18n`, which every module reads through `t`; this state is only what makes React repaint the app around it.
-  const [language, setLanguageState] = useState<Lang>(get_language);
-  const handleSelectLang = (newLanguage: Lang) => {
-    set_language(newLanguage);
-    setLanguageState(newLanguage);
-  };
 
   /**
    * App starts: frame the (still empty) mechanism like "Recentrer" would, which is only measurable once the canvas has been laid out.
@@ -915,12 +890,77 @@ const App: React.FC = () => {
   }, []);
 
   // What "Recentrer" aims for, and what its disabled state compares against.
-  // Computed once here rather than twice inside the button's JSX.
-  const recenterTarget = canvasRef.current
+  // Kept as the same object while its value holds, so the menu below is not rebuilt for a target that did not move.
+  const fitted = canvasRef.current
     ? fit_to_content(mechanism, canvasRef.current)
     : null;
+  const recenterTargetRef = useRef(fitted);
+  const held = recenterTargetRef.current;
+  if (
+    fitted === null ||
+    held === null ||
+    fitted.scale !== held.scale ||
+    !fitted.pan.equals(held.pan)
+  )
+    recenterTargetRef.current = fitted;
+  const recenterTarget = recenterTargetRef.current;
+
+  const recenter = useCallback(
+    (target: ViewportState) =>
+      setMechanism((prev) => ({ ...prev, viewport: target })),
+    [],
+  );
+
+  const toolsMenu = useMemo(
+    () => (
+      <ToolsMenu
+        mechanism={mechanism}
+        recenterTarget={recenterTarget}
+        onRecenter={recenter}
+        undoMechanism={undoMechanism}
+        redoMechanism={redoMechanism}
+        onZoomTo={zoomTo}
+        tight={tight}
+        language={language}
+        onSelectLang={handleSelectLang}
+        showGrid={showGrid}
+        setShowGrid={setShowGrid}
+        snapToGrid={snapToGrid}
+        setSnapToGrid={setSnapToGrid}
+        snapSettings={snapSettings}
+        setSnapSettings={setSnapSettings}
+        isCustomAngleStep={isCustomAngleStep}
+        themeChoice={themeChoice}
+        systemDark={systemDark}
+        changeTheme={changeTheme}
+        previewLater={previewLater}
+        onOpenAbout={handleInfoOpen}
+      />
+    ),
+    [
+      mechanism,
+      recenterTarget,
+      recenter,
+      undoMechanism,
+      redoMechanism,
+      zoomTo,
+      tight,
+      language,
+      handleSelectLang,
+      showGrid,
+      snapToGrid,
+      snapSettings,
+      isCustomAngleStep,
+      themeChoice,
+      systemDark,
+      changeTheme,
+      previewLater,
+      handleInfoOpen,
+    ],
+  );
 
   return (
+    <LanguageContext.Provider value={language}>
     <ThemeProvider theme={currentTheme}>
       <HistorySealContext.Provider value={historySeal}>
         <CssBaseline />
@@ -962,13 +1002,10 @@ const App: React.FC = () => {
                 appMode={appMode}
                 setAppMode={setAppMode}
                 mechanism={mechanism}
-                shownSimulation={analysedMechanism.simulation}
                 updateMetadata={updateMetadata}
                 applyActions={applyActions}
                 condensed={condensed}
                 tight={tight}
-                timeline={timeline}
-                runtimeState={runtimeState}
                 resetToStart={resetToStart}
                 handleSpaceKey={handleSpaceKey}
                 onOpenGallery={handleOpenGallery}
@@ -976,40 +1013,12 @@ const App: React.FC = () => {
                 previewBeamStressLens={previewLensLater}
                 trajectoryDotted={trajectoryDotted}
                 setTrajectoryDotted={setTrajectoryDotted}
-                rightSlot={
-                  <ToolsMenu
-                    mechanism={mechanism}
-                    recenterTarget={recenterTarget}
-                    onRecenter={(target) =>
-                      setMechanism((prev) => ({ ...prev, viewport: target }))
-                    }
-                    undoMechanism={undoMechanism}
-                    redoMechanism={redoMechanism}
-                    onZoomTo={zoomTo}
-                    tight={tight}
-                    language={language}
-                    onSelectLang={handleSelectLang}
-                    showGrid={showGrid}
-                    setShowGrid={setShowGrid}
-                    snapToGrid={snapToGrid}
-                    setSnapToGrid={setSnapToGrid}
-                    snapSettings={snapSettings}
-                    setSnapSettings={setSnapSettings}
-                    isCustomAngleStep={isCustomAngleStep}
-                    themeChoice={themeChoice}
-                    systemDark={systemDark}
-                    changeTheme={changeTheme}
-                    previewLater={previewLater}
-                    onOpenAbout={handleInfoOpen}
-                  />
-                }
+                rightSlot={toolsMenu}
               />
             </Toolbar>
 
             <SimulationTimeline
               appMode={appMode}
-              runtimeState={runtimeState}
-              timeline={timeline}
               timelineTrackRef={timelineTrackRef}
             />
           </AppBar>
@@ -1087,13 +1096,11 @@ const App: React.FC = () => {
               canvasState={canvasState}
               applyActions={applyActions}
               mechanism={mechanism}
-              analysedMechanism={analysedMechanism}
               hoveredPart={hoveredPart}
               setHoveredPart={setHoveredPart}
               updateMetadata={updateMetadata}
               allTags={allTags}
               setRuntimeState={setRuntimeState}
-              runtimeState={runtimeState}
               setSimulationConfig={setSimulationConfig}
               simulationConfig={simulationConfig}
               appMode={appMode}
@@ -1225,6 +1232,7 @@ const App: React.FC = () => {
         </Fade>
       </HistorySealContext.Provider>
     </ThemeProvider>
+    </LanguageContext.Provider>
   );
 };
 

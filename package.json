@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "build:profile": "vite build --mode profile",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --cache --cache-location node_modules/.cache/eslintcache",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "preview": "vite preview",

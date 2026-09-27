@@ -1,0 +1,21 @@
+frame 2: max pos diff 2.59e-5 m, max vel diff 2.36e-3 m/s, cold vs cold reactions 0, reactions 162/162
+   GearPerimeterPin|ef68|ef68b4ad-35b y: cold 121.726 warm 1.006
+   GearPerimeterPin|ef68|445f4ce7-d70 y: cold -121.726 warm -1.006
+   Distance|5476|9725eea8-43c y: cold 104.731 warm 7.234
+   Distance|5476|ef68b4ad-35b y: cold -104.731 warm -7.234
+   Distance|a5ef|6e64e96b-c8c y: cold -209.495 warm -271.181
+   motor cold ["-20.000"] warm ["-20.000"]
+frame 6: max pos diff 6.99e-5 m, max vel diff 6.25e-3 m/s, cold vs cold reactions 0, reactions 162/162
+   GearPerimeterPin|ef68|ef68b4ad-35b y: cold 121.419 warm -7.062
+   GearPerimeterPin|ef68|445f4ce7-d70 y: cold -121.419 warm 7.062
+   Distance|5476|9725eea8-43c y: cold 104.669 warm -18.535
+   Distance|5476|ef68b4ad-35b y: cold -104.669 warm 18.535
+   Distance|a5ef|6e64e96b-c8c y: cold -210.082 warm -270.862
+   motor cold ["-20.000"] warm ["-20.000"]
+frame 10: max pos diff 1.22e-4 m, max vel diff 4.05e-3 m/s, cold vs cold reactions 0, reactions 162/162
+   Distance|5476|9725eea8-43c y: cold 104.614 warm 47.914
+   Distance|5476|ef68b4ad-35b y: cold -104.614 warm -47.914
+   GearPerimeterPin|ef68|ef68b4ad-35b y: cold 120.952 warm 80.260
+   GearPerimeterPin|ef68|445f4ce7-d70 y: cold -120.952 warm -80.260
+   Distance|c3b0|bb1ad55e-67f y: cold -34.661 warm 1.634
+   motor cold ["-20.000"] warm ["-20.000"]

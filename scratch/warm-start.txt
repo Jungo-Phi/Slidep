@@ -1,0 +1,32 @@
+mechanism | sweeps/sub cold→warm (cold400) | time cold→warm ms | WARM vs cold | COLD400 vs cold (the solver's own sensitivity)
+Balance.slidep | 36.7 → 6.7 (36.7) | 457 → 212 | pos 6.8e-4, torsors med 6.9e-2 max 5.7e-1, motor 0.0e+0 | pos 0.0e+0, torsors med 0.0e+0 max 0.0e+0, motor 0.0e+0
+CP.slidep | 199.6 → 199.6 (399.2) | 362 → 458 | pos 2.7e+15, torsors med 6.1e+9 max 6.6e+20, motor 0.0e+0 | pos 2.3e-1, torsors med 1.1e+0 max 5.8e+1, motor 0.0e+0
+Cantilever simple.slidep | 2.0 → 1.0 (2.0) | 22 → 22 | pos 0.0e+0, torsors med 0.0e+0 max 0.0e+0, motor 0.0e+0 | pos 0.0e+0, torsors med 0.0e+0 max 0.0e+0, motor 0.0e+0
+Cantilever.slidep | 2.0 → 1.0 (2.0) | 21 → 25 | pos 0.0e+0, torsors med 0.0e+0 max 0.0e+0, motor 0.0e+0 | pos 0.0e+0, torsors med 0.0e+0 max 0.0e+0, motor 0.0e+0
+Core XY - 2 moteurs.slidep | 200.0 → 198.0 (399.8) | 8538 → 5384 | pos 8.8e-1, torsors med 1.2e+4 max 3.3e+6, motor 2.5e+0 | pos 5.5e-4, torsors med 7.7e-4 max 1.5e-3, motor 2.8e-4
+Core XY.slidep | 200.0 → 199.9 (399.0) | 6334 → 4743 | pos 1.8e+0, torsors med 1.9e+3 max 8.4e+5, motor 7.8e+0 | pos 5.8e-1, torsors med 9.1e-1 max 2.9e+2, motor 9.8e+0
+Crankshaft.slidep | 43.9 → 7.9 (43.9) | 258 → 239 | pos 1.1e-5, torsors med 4.4e-2 max 1.4e-1, motor 9.1e+0 | pos 0.0e+0, torsors med 0.0e+0 max 0.0e+0, motor 0.0e+0
+Double Cantilever bis.slidep | 8.0 → 2.2 (8.0) | 61 → 38 | pos 1.1e-13, torsors med 5.8e-6 max 5.8e-6, motor 0.0e+0 | pos 0.0e+0, torsors med 0.0e+0 max 0.0e+0, motor 0.0e+0
+Double Cantilever.slidep | 8.0 → 2.2 (8.0) | 156 → 110 | pos 9.4e-13, torsors med 5.8e-6 max 5.8e-6, motor 0.0e+0 | pos 0.0e+0, torsors med 0.0e+0 max 0.0e+0, motor 0.0e+0
+Déconnexion courroie.slidep | 57.0 → 105.1 (59.5) | 1281 → 1081 | pos 7.2e-1, torsors med 4.6e+0 max 5.5e+4, motor 2.6e+1 | pos 5.6e-6, torsors med 1.3e-6 max 3.3e-2, motor 4.4e-5
+Hoist.slidep | 200.0 → 116.5 (400.0) | 2003 → 1306 | pos 1.2e-2, torsors med 6.1e-1 max 1.2e+0, motor 0.0e+0 | pos 1.7e-6, torsors med 2.5e-5 max 2.0e-4, motor 0.0e+0
+Huygen's chain drive.slidep | 149.9 → 197.8 (178.9) | 2532 → 20406 | pos 3.0e+7, torsors med 4.1e+5 max 6.1e+11, motor 1.6e+1 | pos 6.1e-7, torsors med 2.6e-4 max 1.1e+0, motor 1.4e+0
+Jansen's linkage (upside-down).slidep | 46.6 → 16.2 (46.6) | 603 → 249 | pos 1.1e-3, torsors med 3.4e-1 max 9.9e-1, motor 0.0e+0 | pos 0.0e+0, torsors med 0.0e+0 max 0.0e+0, motor 0.0e+0
+Jansen's linkage.slidep | 61.4 → 28.9 (97.0) | 920 → 536 | pos 1.8e-3, torsors med 3.1e-1 max 6.9e-1, motor 8.2e-1 | pos 1.6e-4, torsors med 1.6e-7 max 1.6e-3, motor 7.6e-3
+Line from rotation.slidep | 116.6 → 37.9 (116.6) | 564 → 297 | pos 1.2e-4, torsors med 5.6e-1 max 7.5e-1, motor 1.1e+1 | pos 0.0e+0, torsors med 0.0e+0 max 0.0e+0, motor 0.0e+0
+Mass-Spring-Dampener.slidep | 1.0 → 1.0 (1.0) | 15 → 15 | pos 0.0e+0, torsors med - max -, motor 0.0e+0 | pos 0.0e+0, torsors med - max -, motor 0.0e+0
+Masse suspendue.slidep | 199.8 → 199.0 (399.5) | 484 → 315 | pos 9.1e-4, torsors med 1.5e-1 max 3.7e-1, motor 0.0e+0 | pos 1.0e-3, torsors med 1.6e-1 max 3.5e-1, motor 0.0e+0
+Masse-slidep-pivot.slidep | 4.0 → 2.1 (4.0) | 20 → 21 | pos 9.7e-15, torsors med 2.3e-9 max 2.3e-9, motor 0.0e+0 | pos 0.0e+0, torsors med 0.0e+0 max 0.0e+0, motor 0.0e+0
+Masse-slider.slidep | 20.0 → 2.6 (20.0) | 37 → 26 | pos 2.8e-7, torsors med 2.1e-2 max 2.1e-2, motor 0.0e+0 | pos 0.0e+0, torsors med 0.0e+0 max 0.0e+0, motor 0.0e+0
+Pendulum clock.slidep | 199.8 → 168.9 (398.6) | 6833 → 5919 | pos 2.1e-2, torsors med 2.5e+0 max 5.7e+2, motor 0.0e+0 | pos 3.6e-3, torsors med 4.5e-1 max 8.8e+0, motor 0.0e+0
+Petit.slidep | 43.3 → 9.4 (43.3) | 57 → 32 | pos 1.3e-1, torsors med 5.6e-2 max 1.2e-1, motor 1.2e-1 | pos 0.0e+0, torsors med 0.0e+0 max 0.0e+0, motor 0.0e+0
+Poulie bloqueuse.slidep | 97.6 → 26.0 (97.7) | 1868 → 448 | pos 1.8e-3, torsors med 1.4e-1 max 3.9e+0, motor 1.5e+0 | pos 5.2e-8, torsors med 2.2e-7 max 3.5e-5, motor 1.3e-5
+Poutre sur joint de courroie.slidep | 41.2 → 5.2 (41.2) | 782 → 106 | pos 1.9e-1, torsors med 7.5e-2 max 6.6e+1, motor 5.7e+0 | pos 0.0e+0, torsors med 0.0e+0 max 0.0e+0, motor 0.0e+0
+Puente.slidep | 200.0 → 199.7 (399.8) | 1484 → 1256 | pos 3.1e-1, torsors med 2.0e+3 max 1.3e+4, motor 1.2e+3 | pos 2.4e-3, torsors med 1.5e-2 max 6.0e+1, motor 3.1e+0
+Roues isolées.slidep | 2.0 → 1.0 (2.0) | 16 → 17 | pos 1.2e-2, torsors med - max -, motor 0.0e+0 | pos 0.0e+0, torsors med - max -, motor 0.0e+0
+Test slider.slidep | 3.7 → 89.5 (7.0) | 35 → 350 | pos 1.5e+23, torsors med 8.4e+2 max 2.3e+44, motor 0.0e+0 | pos 6.8e-2, torsors med 1.1e-1 max 8.2e+2, motor 0.0e+0
+Treillis.slidep | 192.0 → 17.8 (192.0) | 605 → 139 | pos 6.6e-8, torsors med 1.2e-4 max 1.2e-4, motor 0.0e+0 | pos 0.0e+0, torsors med 0.0e+0 max 0.0e+0, motor 0.0e+0
+Vilbrequin + masse lourde.slidep | 200.0 → 91.7 (385.9) | 515 → 222 | pos 7.9e-6, torsors med 4.1e-1 max 4.8e-1, motor 0.0e+0 | pos 6.0e-6, torsors med 4.1e-5 max 2.6e-3, motor 0.0e+0
+Vilbrequin double slider.slidep | 54.5 → 10.7 (54.5) | 570 → 188 | pos 3.8e-2, torsors med 7.7e-1 max 1.4e+0, motor 1.2e+0 | pos 0.0e+0, torsors med 0.0e+0 max 0.0e+0, motor 0.0e+0
+Vilbrequin.slidep | 32.3 → 8.7 (32.3) | 79 → 46 | pos 2.9e-5, torsors med 1.4e-1 max 2.9e-1, motor 3.2e+0 | pos 0.0e+0, torsors med 0.0e+0 max 0.0e+0, motor 0.0e+0
+trac-comp.slidep | 32.0 → 10.4 (32.0) | 44 → 29 | pos 2.9e-7, torsors med 1.5e-5 max 1.5e-5, motor 0.0e+0 | pos 0.0e+0, torsors med 0.0e+0 max 0.0e+0, motor 0.0e+0

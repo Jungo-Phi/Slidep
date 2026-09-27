@@ -1,4 +1,5 @@
 import { DynamicSnapshot } from "../../../types/runtime-state";
+import { extends_recording } from "../recording/recording-growth";
 
 /**
  * The curves the "Bilan énergétique" chart can show — see `AnalysisPanel.tsx`, toggled the same way a vector probe's x/y/norm are.
@@ -45,30 +46,80 @@ export const EMPTY_ENERGY_BALANCE: EnergyBalanceSeries = {
   impactWork: [],
 };
 
+/** Where a balance stands after its last frame: what the next frame needs to carry on from it. */
+interface EnergyCarry {
+  motorJ: number;
+  loadJ: number;
+  damperJ: number;
+  frictionJ: number;
+  impactJ: number;
+  prevT: number | undefined;
+  prev: { motor: number; load: number; damper: number; friction: number } | undefined;
+  /** `potential`'s raw value at the first frame carrying an energy sample — the offset subtracted from every frame so it reads 0 there. */
+  epOrigin: number | undefined;
+}
+
+/**
+ * A balance together with what it takes to extend it — see {@link extend_energy_balance}.
+ * Its arrays grow in place when it is extended: hold on to the series of the latest run only.
+ */
+export interface EnergyBalanceRun {
+  series: EnergyBalanceSeries;
+  /** The recording it read, and how many of its frames. */
+  source: DynamicSnapshot[];
+  count: number;
+  carry: EnergyCarry;
+}
+
 export function compute_energy_balance(
   snapshots: DynamicSnapshot[],
 ): EnergyBalanceSeries {
-  const t: number[] = [];
-  const kinetic: number[] = [];
-  const potential: number[] = [];
-  const mechanical: number[] = [];
-  const motorWork: number[] = [];
-  const loadWork: number[] = [];
-  const damperWork: number[] = [];
-  const frictionWork: number[] = [];
-  const impactWork: number[] = [];
+  return extend_energy_balance(snapshots, null).series;
+}
 
-  let impactJ = 0;
-  let motorJ = 0;
-  let loadJ = 0;
-  let damperJ = 0;
-  let frictionJ = 0;
-  let prevT: number | undefined;
-  let prev: { motor: number; load: number; damper: number; friction: number } | undefined;
-  /** `potential`'s raw value at the first frame carrying an energy sample — the offset subtracted from every frame so it reads 0 there. */
-  let epOrigin: number | undefined;
+/**
+ * The balance of `snapshots`, reading only the frames `previous` has not seen when `snapshots` is the same recording grown since.
+ * A recording truncated or replaced since (a rewind, a new run) is read again from its start.
+ * What the panel calls at every mirror tick: a whole recording costs a pass over every frame, the new frames alone a few.
+ */
+export function extend_energy_balance(
+  snapshots: DynamicSnapshot[],
+  previous: EnergyBalanceRun | null,
+): EnergyBalanceRun {
+  const continues =
+    previous !== null &&
+    extends_recording(snapshots, previous.source, previous.count);
+  if (continues && snapshots.length === previous.count)
+    return { ...previous, source: snapshots };
 
-  for (const snap of snapshots) {
+  const series: EnergyBalanceSeries = continues
+    ? previous.series
+    : {
+        t: [],
+        kinetic: [],
+        potential: [],
+        mechanical: [],
+        motorWork: [],
+        loadWork: [],
+        damperWork: [],
+        frictionWork: [],
+        impactWork: [],
+      };
+  const carry: EnergyCarry = continues
+    ? { ...previous.carry }
+    : {
+        motorJ: 0,
+        loadJ: 0,
+        damperJ: 0,
+        frictionJ: 0,
+        impactJ: 0,
+        prevT: undefined,
+        prev: undefined,
+        epOrigin: undefined,
+      };
+
+  for (let i = continues ? previous.count : 0; i < snapshots.length; i++) {
+    const snap = snapshots[i];
     if (!snap.energy) continue;
     const {
       kinetic: ec,
@@ -80,8 +131,8 @@ export function compute_energy_balance(
       impactLoss,
     } = snap.energy;
     const epRaw = potentialGravity + potentialSpring;
-    epOrigin ??= epRaw;
-    const ep = epRaw - epOrigin;
+    carry.epOrigin ??= epRaw;
+    const ep = epRaw - carry.epOrigin;
 
     const motorWatts = (snap.motor ?? []).reduce((sum, m) => sum + m.watts, 0);
     const power = {
@@ -90,38 +141,34 @@ export function compute_energy_balance(
       damper: damperPower,
       friction: frictionPower,
     };
-    if (prevT !== undefined && prev !== undefined) {
-      const dt = snap.t - prevT;
-      motorJ += ((power.motor + prev.motor) / 2) * dt;
-      loadJ += ((power.load + prev.load) / 2) * dt;
-      damperJ += ((power.damper + prev.damper) / 2) * dt;
-      frictionJ += ((power.friction + prev.friction) / 2) * dt;
+    if (carry.prevT !== undefined && carry.prev !== undefined) {
+      const dt = snap.t - carry.prevT;
+      carry.motorJ += ((power.motor + carry.prev.motor) / 2) * dt;
+      carry.loadJ += ((power.load + carry.prev.load) / 2) * dt;
+      carry.damperJ += ((power.damper + carry.prev.damper) / 2) * dt;
+      carry.frictionJ += ((power.friction + carry.prev.friction) / 2) * dt;
       // Already an energy per frame, so summed as is rather than integrated; the first frame's is dropped like the powers' first interval.
-      impactJ += impactLoss;
+      carry.impactJ += impactLoss;
     }
-    prevT = snap.t;
-    prev = power;
+    carry.prevT = snap.t;
+    carry.prev = power;
 
-    t.push(snap.t);
-    kinetic.push(ec);
-    potential.push(ep);
-    mechanical.push(ec + ep);
-    motorWork.push(motorJ);
-    loadWork.push(loadJ);
-    damperWork.push(damperJ);
-    frictionWork.push(frictionJ);
-    impactWork.push(impactJ);
+    series.t.push(snap.t);
+    series.kinetic.push(ec);
+    series.potential.push(ep);
+    series.mechanical.push(ec + ep);
+    series.motorWork.push(carry.motorJ);
+    series.loadWork.push(carry.loadJ);
+    series.damperWork.push(carry.damperJ);
+    series.frictionWork.push(carry.frictionJ);
+    series.impactWork.push(carry.impactJ);
   }
 
   return {
-    t,
-    kinetic,
-    potential,
-    mechanical,
-    motorWork,
-    loadWork,
-    damperWork,
-    frictionWork,
-    impactWork,
+    // A new object around the same arrays, so a consumer comparing series by identity sees the change.
+    series: { ...series },
+    source: snapshots,
+    count: snapshots.length,
+    carry,
   };
 }

@@ -2,7 +2,10 @@ import React from "react";
 import { Box, Chip, Tooltip, Typography } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
 import { DynamicSnapshot } from "../../../types/runtime-state";
-import { compute_energy_balance } from "../../solver/analysis/energy-balance";
+import {
+  EnergyBalanceRun,
+  extend_energy_balance,
+} from "../../solver/analysis/energy-balance";
 import { ENERGY, display_unit } from "../../../utils/quantity-format";
 import { getStorageItem, setStorageItem } from "../../../utils/storage";
 import ProbeChart, {
@@ -11,6 +14,7 @@ import ProbeChart, {
   probe_curve_colors,
 } from "./ProbeChart";
 import { StringKey, t } from "../../../i18n";
+import { useAmbient } from "../../common/use-ambient";
 
 const ENERGY_COMPONENTS = [
   "kinetic",
@@ -60,6 +64,63 @@ const DEFAULT_COMPONENTS: Record<EnergyComponent, boolean> = {
   impactWork: false,
 };
 
+/** The curve toggles: they change only when clicked, so they skip the renders the chart takes at every instant. */
+const EnergyChips = React.memo(function EnergyChips({
+  components,
+  colors,
+  setComponents,
+}: {
+  components: Record<EnergyComponent, boolean>;
+  colors: Record<EnergyComponent, string>;
+  setComponents: React.Dispatch<
+    React.SetStateAction<Record<EnergyComponent, boolean>>
+  >;
+}) {
+  useAmbient();
+  return (
+    <Box
+      sx={{
+        display: "flex",
+        flexWrap: "wrap",
+        justifyContent: "center",
+        gap: 0.5,
+        my: 0.5,
+      }}
+    >
+      {ENERGY_COMPONENTS.map((key) => (
+        <Tooltip key={key} title={t(ENERGY_COMPONENT_HINT_KEYS[key])}>
+          <Chip
+            label={t(ENERGY_COMPONENT_LABEL_KEYS[key])}
+            size="small"
+            clickable
+            onClick={() =>
+              setComponents((previous) => ({
+                ...previous,
+                [key]: !previous[key],
+              }))
+            }
+            sx={{
+              height: 20,
+              "& .MuiChip-label": { px: 1 },
+              fontSize: "0.7rem",
+              fontWeight: 600,
+              color: components[key] ? "common.white" : "text.secondary",
+              backgroundColor: components[key]
+                ? colors[key]
+                : "background.sunken",
+              "&:hover": {
+                backgroundColor: components[key]
+                  ? colors[key]
+                  : "action.hover",
+              },
+            }}
+          />
+        </Tooltip>
+      ))}
+    </Box>
+  );
+});
+
 /** Which curves are shown is a display preference, kept where the chart's own coming and going cannot lose it: selecting anything at all takes this off screen. */
 const STORAGE_KEY = "energyBalanceComponents";
 
@@ -84,20 +145,26 @@ export const EnergyBalance: React.FC<{
     setStorageItem(STORAGE_KEY, components);
   }, [components]);
 
-  const balance = React.useMemo(
-    () => compute_energy_balance(snapshots),
-    [snapshots],
+  // Extended by the frames recorded since the last tick rather than recomputed over the whole recording, which would cost more at every tick the longer it runs.
+  const runRef = React.useRef<EnergyBalanceRun | null>(null);
+  const balance = React.useMemo(() => {
+    runRef.current = extend_energy_balance(snapshots, runRef.current);
+    return runRef.current.series;
+  }, [snapshots]);
+  const primary = palette.primary.main;
+  const componentColors: Record<EnergyComponent, string> = React.useMemo(
+    () => ({
+      kinetic: PROBE_ELEMENT_COLORS[1],
+      potential: PROBE_ELEMENT_COLORS[2],
+      mechanical: probe_curve_colors(primary).value,
+      motorWork: PROBE_ELEMENT_COLORS[5],
+      loadWork: PROBE_ELEMENT_COLORS[6],
+      damperWork: PROBE_ELEMENT_COLORS[7],
+      frictionWork: PROBE_ELEMENT_COLORS[0],
+      impactWork: PROBE_ELEMENT_COLORS[3],
+    }),
+    [primary],
   );
-  const componentColors: Record<EnergyComponent, string> = {
-    kinetic: PROBE_ELEMENT_COLORS[1],
-    potential: PROBE_ELEMENT_COLORS[2],
-    mechanical: probe_curve_colors(palette.primary.main).value,
-    motorWork: PROBE_ELEMENT_COLORS[5],
-    loadWork: PROBE_ELEMENT_COLORS[6],
-    damperWork: PROBE_ELEMENT_COLORS[7],
-    frictionWork: PROBE_ELEMENT_COLORS[0],
-    impactWork: PROBE_ELEMENT_COLORS[3],
-  };
   const curves: ChartCurve[] = ENERGY_COMPONENTS.filter(
     (key) => components[key],
   ).map((key) => ({
@@ -121,46 +188,11 @@ export const EnergyBalance: React.FC<{
           {` (${unit.symbol})`}
         </Typography>
       </Typography>
-      <Box
-        sx={{
-          display: "flex",
-          flexWrap: "wrap",
-          justifyContent: "center",
-          gap: 0.5,
-          my: 0.5,
-        }}
-      >
-        {ENERGY_COMPONENTS.map((key) => (
-          <Tooltip key={key} title={t(ENERGY_COMPONENT_HINT_KEYS[key])}>
-            <Chip
-              label={t(ENERGY_COMPONENT_LABEL_KEYS[key])}
-              size="small"
-              clickable
-              onClick={() =>
-                setComponents((previous) => ({
-                  ...previous,
-                  [key]: !previous[key],
-                }))
-              }
-              sx={{
-                height: 20,
-                "& .MuiChip-label": { px: 1 },
-                fontSize: "0.7rem",
-                fontWeight: 600,
-                color: components[key] ? "common.white" : "text.secondary",
-                backgroundColor: components[key]
-                  ? componentColors[key]
-                  : "background.sunken",
-                "&:hover": {
-                  backgroundColor: components[key]
-                    ? componentColors[key]
-                    : "action.hover",
-                },
-              }}
-            />
-          </Tooltip>
-        ))}
-      </Box>
+      <EnergyChips
+        components={components}
+        colors={componentColors}
+        setComponents={setComponents}
+      />
       <ProbeChart
         curves={curves}
         currentTime={currentTime}

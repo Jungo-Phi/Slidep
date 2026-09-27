@@ -1435,6 +1435,8 @@ export function step_dynamic_simulation(
         link.type !== "BeltLoopClosure",
     );
     links.push(...midLinks);
+    // Everything from here on is a collision contact, which the sweep may leave out while it is far from touching.
+    const contactsFrom = links.length;
     if (collisionsOn || floorOn)
       links.push(
         ...collision_links(
@@ -1499,6 +1501,7 @@ export function step_dynamic_simulation(
       angleMasses: model.dynamicMasses.angleMasses,
       reactions: stepReactions,
       drives,
+      contactsFrom,
     };
     result = PBD_kinematic_solver(
       positions,

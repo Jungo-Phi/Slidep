@@ -33,9 +33,9 @@ export type DofAnalysis = {
   /** The model the figures were measured on, or undefined before the first pass. */
   model: AnalysisModel | undefined;
   /**
-   * The pose the model describes — which the debounce lets fall behind the one on screen.
+   * The pose the model describes — which the debounce, and a playing simulation, let fall behind the one on screen.
    *
-   * Handed out so an animation swings the mechanism the model actually knows: swinging the newer pose along an older model moves the chain from where it used to be and leaves everything else where it is, a hybrid pose belonging to no instant.
+   * Handed out so an animation swings the mechanism the model actually knows: swinging the newer pose along an older model moves the chain from its earlier position and leaves everything else where it is, a hybrid pose belonging to no instant.
    */
   mechanism: Mechanism | undefined;
   chains: ChainAnalysis[];
@@ -67,8 +67,12 @@ const CHANGE_DEBOUNCE_MS = 200;
  *
  * Only call it from a component mounted when the figures are on screen: the analysis runs the solver several times.
  * `AnalysisPanel` is mounted by its tab, so mounting is the gate.
+ *
+ * While `frozen`, nothing new is measured and the last figures stay on screen; the pose reached meanwhile is measured once it thaws.
+ * A playing simulation freezes it: the pose changes at every instant, and a measurement landing between two of them blocks the display for hundreds of milliseconds on a large mechanism.
+ * A first display is still measured, frozen or not: the panel must not open blank.
  */
-export function useDofAnalysis(mechanism: Mechanism): DofAnalysis {
+export function useDofAnalysis(mechanism: Mechanism, frozen = false): DofAnalysis {
   const elements = mechanism.mechanicalElements;
   const cached = MEASURED.get(elements);
   const [, redraw] = React.useReducer((n: number) => n + 1, 0);
@@ -85,6 +89,7 @@ export function useDofAnalysis(mechanism: Mechanism): DofAnalysis {
       shown.current = hit;
       return;
     }
+    if (frozen && shown.current !== undefined) return;
     const measure = () => {
       const measured = latest.current;
       const model = build_analysis_model(measured);
@@ -113,7 +118,7 @@ export function useDofAnalysis(mechanism: Mechanism): DofAnalysis {
     }
     const timer = setTimeout(measure, CHANGE_DEBOUNCE_MS);
     return () => clearTimeout(timer);
-  }, [elements]);
+  }, [elements, frozen]);
 
   const measurement = cached ?? shown.current;
   return {

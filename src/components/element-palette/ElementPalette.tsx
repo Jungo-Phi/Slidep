@@ -1,4 +1,5 @@
 import React, { useLayoutEffect, useRef, useState } from "react";
+import { useAmbient } from "../common/use-ambient";
 import {
   Box,
   Paper,
@@ -356,12 +357,13 @@ interface ElementPaletteProps {
   appMode: AppMode;
 }
 
-export const ElementPalette: React.FC<ElementPaletteProps> = ({
+const ElementPaletteView: React.FC<ElementPaletteProps> = ({
   setCanvasState,
   canvasState,
   mechanism,
   appMode,
 }) => {
+  useAmbient();
   // Rebuilt on every render, which is how the icons and highlight colors follow a theme change: both are read from the active canvas palette at call time.
   const palette = edition_palette();
 
@@ -575,5 +577,7 @@ export const ElementPalette: React.FC<ElementPaletteProps> = ({
     </Paper>
   );
 };
+
+export const ElementPalette = React.memo(ElementPaletteView);
 
 export default ElementPalette;

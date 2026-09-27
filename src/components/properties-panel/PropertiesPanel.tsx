@@ -41,6 +41,12 @@ import EnergyBalance from "./components/EnergyBalance";
 import SelectionInspector from "./panels/SelectionInspector";
 import { inspected_subject } from "./selection-subject";
 import { t } from "../../i18n";
+import { useAmbient } from "../common/use-ambient";
+import { useSimClock } from "../solver/dynamics/sim-clock";
+import {
+  CLOCK_MIRROR_MS,
+  useAnalysedMechanism,
+} from "../solver/recording/use-simulation-playback";
 import type {
   HoveredBalanceTerm,
   MomentBalanceReference,
@@ -53,7 +59,7 @@ import type { FocusedOverlay } from "../canvas/drawing/drawing-functions";
  */
 const DEFAULT_SUBJECT_SHARE = 0.45;
 
-export interface PropertiesPanelProps {
+interface PropertiesPanelViewProps {
   /** Names what the canvas should pick out, and why; empty clears the highlight. */
   setHighlight: (highlight: CanvasHighlight) => void;
   /** How a redundant constraint the analysis panel is naming right now would yield. */
@@ -103,7 +109,141 @@ export interface PropertiesPanelProps {
   setHoveredLibraryEntryID: (id: ID | null) => void;
 }
 
-export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
+/** The tab bar: it changes only with the active tab, so it skips the renders the panel takes at every instant of a simulation. */
+const PanelTabs = React.memo(function PanelTabs({
+  activeTab,
+  setActiveTab,
+  clearSelectionKeepTab,
+}: {
+  activeTab: PropertiesPanelTab;
+  setActiveTab: (tab: PropertiesPanelTab) => void;
+  clearSelectionKeepTab: () => void;
+}) {
+  useAmbient();
+  const handleTabChange = (
+    _event: React.SyntheticEvent,
+    newValue: PropertiesPanelTab,
+  ) => {
+    setActiveTab(newValue);
+  };
+
+  const handleTabClick = (
+    _event: React.MouseEvent,
+    tabLabel: PropertiesPanelTab,
+  ) => {
+    if (
+      tabLabel === activeTab &&
+      (activeTab === "elements" ||
+        activeTab === "constraints" ||
+        activeTab === "analysis")
+    )
+      clearSelectionKeepTab();
+  };
+
+  return (
+    <Box
+      sx={{
+        backgroundColor: "primary.main",
+        color: "primary.contrastText",
+      }}
+    >
+      <Tabs
+        value={activeTab}
+        onChange={handleTabChange}
+        textColor="inherit"
+        tabIndex={0}
+        sx={{
+          minHeight: 40,
+          height: 40,
+          "& .MuiTabs-flexContainer": {
+            justifyContent: "space-around",
+          },
+          "& .MuiTab-root": {
+            px: 2,
+            my: -0.5,
+            fontWeight: "bold",
+            "&.Mui-selected": {
+              color: "primary.contrastText",
+            },
+          },
+          "& .MuiTabs-indicator": {
+            backgroundColor: "primary.contrastText",
+            height: 3,
+            borderRadius: "3px 3px 0 0",
+          },
+        }}
+      >
+        {[
+          {
+            id: "project" as PropertiesPanelTab,
+            icon: ProjectIcon,
+            label: t("project"),
+          },
+          {
+            id: "elements" as PropertiesPanelTab,
+            icon: ElementIcon,
+            label: t("elements"),
+          },
+          {
+            id: "constraints" as PropertiesPanelTab,
+            icon: ConstraintsIcon,
+            label: t("constraints"),
+          },
+          {
+            id: "library" as PropertiesPanelTab,
+            icon: LibraryIcon,
+            label: t("materials"),
+          },
+          {
+            id: "analysis" as PropertiesPanelTab,
+            icon: AnalysisIcon,
+            label: t("analysis"),
+          },
+        ].map((tab) => {
+          return (
+            <Tab
+              key={tab.id}
+              value={tab.id}
+              onClick={(e) => handleTabClick(e, tab.id)}
+              icon={
+                <Tooltip title={tab.label}>
+                  <Box
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 0.5,
+                      margin: -1,
+                    }}
+                  >
+                    <tab.icon fontSize="small" />
+                    {activeTab === tab.id && (
+                      <span
+                        style={{
+                          fontSize: "0.75rem",
+                          whiteSpace: "nowrap",
+                          lineHeight: 1.2,
+                        }}
+                      >
+                        {tab.label}
+                      </span>
+                    )}
+                  </Box>
+                </Tooltip>
+              }
+              label=""
+              sx={{
+                minWidth: "auto",
+                justifyContent: "center",
+              }}
+            />
+          );
+        })}
+      </Tabs>
+    </Box>
+  );
+});
+
+const PropertiesPanelView: React.FC<PropertiesPanelViewProps> = ({
   modePreviewRef,
   setHighlight,
   setRedundancySymbols,
@@ -146,31 +286,12 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
     });
   };
 
-  const handleTabChange = (
-    _event: React.SyntheticEvent,
-    newValue: PropertiesPanelTab,
-  ) => {
-    setActiveTab(newValue);
-  };
-
-  const handleTabClick = (
-    _event: React.MouseEvent,
-    tabLabel: PropertiesPanelTab,
-  ) => {
-    if (
-      tabLabel === activeTab &&
-      (activeTab === "elements" ||
-        activeTab === "constraints" ||
-        activeTab === "analysis")
-    )
-      clearSelectionKeepTab();
-  };
-
   const selectedID: ID | undefined = (canvasState as { elementID?: ID })
     .elementID;
   // Every id currently selected — for a plain click, the same singleton as selectedID; for a box selection, the whole group.
   // Threaded down so any ElementDisplay can tell whether it names one of them.
-  const selectedIds = selected_ids(canvasState);
+  // Held across renders: the panel re-renders with the clock, and a fresh array each time would re-render every memoised row it reaches.
+  const selectedIds = React.useMemo(() => selected_ids(canvasState), [canvasState]);
   const panelRef = React.useRef<HTMLDivElement>(null);
   // Scrubbing from a chart: landing on the end of the recording is not scrubbing, since playing from there records on.
   const seekTime = (time: number) =>
@@ -232,105 +353,11 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
           boxShadow: "none",
         }}
       >
-        <Box
-          sx={{
-            backgroundColor: "primary.main",
-            color: "primary.contrastText",
-          }}
-        >
-          <Tabs
-            value={activeTab}
-            onChange={handleTabChange}
-            textColor="inherit"
-            tabIndex={0}
-            sx={{
-              minHeight: 40,
-              height: 40,
-              "& .MuiTabs-flexContainer": {
-                justifyContent: "space-around",
-              },
-              "& .MuiTab-root": {
-                px: 2,
-                my: -0.5,
-                fontWeight: "bold",
-                "&.Mui-selected": {
-                  color: "primary.contrastText",
-                },
-              },
-              "& .MuiTabs-indicator": {
-                backgroundColor: "primary.contrastText",
-                height: 3,
-                borderRadius: "3px 3px 0 0",
-              },
-            }}
-          >
-            {[
-              {
-                id: "project" as PropertiesPanelTab,
-                icon: ProjectIcon,
-                label: t("project"),
-              },
-              {
-                id: "elements" as PropertiesPanelTab,
-                icon: ElementIcon,
-                label: t("elements"),
-              },
-              {
-                id: "constraints" as PropertiesPanelTab,
-                icon: ConstraintsIcon,
-                label: t("constraints"),
-              },
-              {
-                id: "library" as PropertiesPanelTab,
-                icon: LibraryIcon,
-                label: t("materials"),
-              },
-              {
-                id: "analysis" as PropertiesPanelTab,
-                icon: AnalysisIcon,
-                label: t("analysis"),
-              },
-            ].map((tab) => {
-              return (
-                <Tab
-                  key={tab.id}
-                  value={tab.id}
-                  onClick={(e) => handleTabClick(e, tab.id)}
-                  icon={
-                    <Tooltip title={tab.label}>
-                      <Box
-                        sx={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 0.5,
-                          margin: -1,
-                        }}
-                      >
-                        <tab.icon fontSize="small" />
-                        {activeTab === tab.id && (
-                          <span
-                            style={{
-                              fontSize: "0.75rem",
-                              whiteSpace: "nowrap",
-                              lineHeight: 1.2,
-                            }}
-                          >
-                            {tab.label}
-                          </span>
-                        )}
-                      </Box>
-                    </Tooltip>
-                  }
-                  label=""
-                  sx={{
-                    minWidth: "auto",
-                    justifyContent: "center",
-                  }}
-                />
-              );
-            })}
-          </Tabs>
-        </Box>
+        <PanelTabs
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          clearSelectionKeepTab={clearSelectionKeepTab}
+        />
 
         {/* The regions and nothing else: the splitter measures the share against this, so a tab bar inside it would offset every drag by its own height. */}
         <Box
@@ -487,5 +514,30 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
     </SimulationLockContext.Provider>
   );
 };
+
+export type PropertiesPanelProps = Omit<
+  PropertiesPanelViewProps,
+  "analysedMechanism" | "runtimeState"
+>;
+
+/** The panel mirrors the clock itself: its readings follow the instant on screen without making anything above it re-render. */
+export const PropertiesPanel = React.memo(function PropertiesPanel(
+  props: PropertiesPanelProps,
+) {
+  useAmbient();
+  const runtimeState = useSimClock(CLOCK_MIRROR_MS);
+  const analysedMechanism = useAnalysedMechanism(
+    props.mechanism,
+    props.appMode,
+    runtimeState,
+  );
+  return (
+    <PropertiesPanelView
+      {...props}
+      runtimeState={runtimeState}
+      analysedMechanism={analysedMechanism}
+    />
+  );
+});
 
 export default PropertiesPanel;

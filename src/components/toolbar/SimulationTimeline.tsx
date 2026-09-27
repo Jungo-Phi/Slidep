@@ -2,16 +2,27 @@ import React, { useState } from "react";
 import { Box, IconButton, Tooltip, Typography, alpha } from "@mui/material";
 import { Gif } from "@mui/icons-material";
 import { AppMode, is_simulating } from "../../types";
-import { RuntimeState } from "../../types/runtime-state";
+import { useAmbient } from "../common/use-ambient";
 import { format_sim_time } from "../../utils";
 import { t } from "../../i18n";
 import { at_recording_end } from "../solver/dynamics/simulation-engine";
 import {
   set_sim_clock as setRuntimeState,
   sim_clock,
+  useSimClock,
 } from "../solver/dynamics/sim-clock";
-import { belt_events } from "../solver/recording/belt-events";
-import { dead_points } from "../solver/kinematics/dead-points";
+import {
+  BeltEventScan,
+  extend_belt_events,
+} from "../solver/recording/belt-events";
+import {
+  CLOCK_MIRROR_MS,
+  timeline_state,
+} from "../solver/recording/use-simulation-playback";
+import {
+  DeadPointScan,
+  extend_dead_points,
+} from "../solver/kinematics/dead-points";
 
 /** Something worth marking on the rail, whatever found it. */
 type TimelineEvent = {
@@ -41,11 +52,6 @@ const MARK_MERGE_RATIO = 0.012;
 
 interface SimulationTimelineProps {
   appMode: AppMode;
-  runtimeState: RuntimeState;
-  timeline: {
-    duration: number;
-    recording: boolean;
-  };
   timelineTrackRef: React.RefObject<HTMLDivElement | null>;
 }
 
@@ -55,12 +61,16 @@ interface SimulationTimelineProps {
  * Meant as the second row of the top bar, across the whole window, and mounted in every mode so that entering a simulation never shifts the layout.
  * In edition it stays in place but inert: an empty rail, with no head that would read as a recording of zero length.
  */
-export const SimulationTimeline: React.FC<SimulationTimelineProps> = ({
+const SimulationTimelineView: React.FC<SimulationTimelineProps> = ({
   appMode,
-  runtimeState,
-  timeline,
   timelineTrackRef,
 }) => {
+  useAmbient();
+  const runtimeState = useSimClock(CLOCK_MIRROR_MS);
+  const timeline = React.useMemo(
+    () => timeline_state(appMode, runtimeState),
+    [appMode, runtimeState],
+  );
   const disabled = appMode === "edition";
   const [timelineHovered, setTimelineHovered] = useState(false);
   const [timelineDragging, setTimelineDragging] = useState(false);
@@ -74,12 +84,17 @@ export const SimulationTimeline: React.FC<SimulationTimelineProps> = ({
   /**
    * Instants where a belt changed pulleys, grouped by the frame that carries them.
    *
-   * Read off the snapshots, never measured: the simulation decides contact itself and writes it into every frame, so this costs a scan of flags — 0.9 ms over twenty seconds of recording, against 42 ms for a single mobility measurement.
-   * It can therefore be redone whenever the recording grows, which is what puts the marks on the rail while it is still being written.
+   * Read off the snapshots, never measured: the simulation decides contact itself and writes it into every frame, so this costs a scan of flags.
+   * Resumed from the frames already read whenever the recording grows, which is what puts the marks on the rail while it is still being written without a pass over the whole recording at every tick.
    */
+  const beltScanRef = React.useRef<BeltEventScan | null>(null);
+  const deadPointScanRef = React.useRef<DeadPointScan | null>(null);
   const events = React.useMemo((): TimelineEvent[] => {
+    const snapshots = runtimeState.simulationSnapshots;
+    beltScanRef.current = extend_belt_events(snapshots, beltScanRef.current);
+    deadPointScanRef.current = extend_dead_points(snapshots, deadPointScanRef.current);
     // Belt contact and stalled motors are both filed by either engine, so this reads whichever mode is active.
-    const beltMarks = belt_events(runtimeState.simulationSnapshots).map(
+    const beltMarks = beltScanRef.current.events.map(
       (event) => ({
         t: event.t,
         kind: "belt" as const,
@@ -88,7 +103,7 @@ export const SimulationTimeline: React.FC<SimulationTimelineProps> = ({
     );
     return [
       ...beltMarks,
-      ...dead_points(runtimeState.simulationSnapshots).map((point) => ({
+      ...deadPointScanRef.current.points.map((point) => ({
         t: point.t,
         kind: "dead-point" as const,
         label: t(
@@ -369,3 +384,5 @@ export const SimulationTimeline: React.FC<SimulationTimelineProps> = ({
     </Box>
   );
 };
+
+export const SimulationTimeline = React.memo(SimulationTimelineView);

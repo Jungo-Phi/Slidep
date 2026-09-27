@@ -1,4 +1,4 @@
-import { useEffect, useReducer } from "react";
+import { startTransition, useEffect, useReducer, useRef } from "react";
 import { DEFAULT_RUNTIME_STATE, RuntimeState } from "../../../types/runtime-state";
 
 /**
@@ -47,37 +47,60 @@ function subscribe(listener: Listener): () => void {
   };
 }
 
+const identity = (clock: RuntimeState) => clock;
+
 /**
  * Mirrors the clock into the calling component, which re-renders at most every `minIntervalMs` on frame-driven change — and always at once on a change of intent.
  *
  * Call it as low in the tree as the value is actually read: the whole point is that the component which re-renders is a leaf, not the application.
  */
 export function useSimClock(minIntervalMs: number): RuntimeState {
+  return useSimClockSelector(identity, minIntervalMs);
+}
+
+/**
+ * {@link useSimClock} narrowed to what `select` reads: the component re-renders only when that value changes, as judged by `equal`.
+ * `select` runs on every mirror tick, so it must stay cheap; it may close over props, the latest one is always used.
+ *
+ * A change of intent re-renders at once; a frame-driven one renders as a transition, which React slices and interrupts so the canvas keeps its frames while a heavy panel catches up.
+ * Two components may therefore show instants one mirror tick apart, never more.
+ */
+export function useSimClockSelector<T>(
+  select: (clock: RuntimeState) => T,
+  minIntervalMs: number,
+  equal: (a: T, b: T) => boolean = Object.is,
+): T {
   const [, bump] = useReducer((n: number) => n + 1, 0);
+  const selected = select(state);
+  const latest = useRef({ select, selected, equal });
+  latest.current = { select, selected, equal };
   useEffect(() => {
     let last = 0;
     let timer: ReturnType<typeof setTimeout> | null = null;
-    const flush = () => {
+    const flush = (urgent: boolean) => {
       timer = null;
       last = performance.now();
-      bump();
+      const { select, selected, equal } = latest.current;
+      if (equal(select(state), selected)) return;
+      if (urgent) bump();
+      else startTransition(bump);
     };
     const unsubscribe = subscribe((urgent) => {
       if (urgent) {
         if (timer !== null) clearTimeout(timer);
-        flush();
+        flush(true);
         return;
       }
       // A pending timer already carries this change: the mirror reads the store when it renders, so there is nothing per-change to keep.
       if (timer !== null) return;
       const due = minIntervalMs - (performance.now() - last);
-      if (due <= 0) flush();
-      else timer = setTimeout(flush, due);
+      if (due <= 0) flush(false);
+      else timer = setTimeout(() => flush(false), due);
     });
     return () => {
       unsubscribe();
       if (timer !== null) clearTimeout(timer);
     };
   }, [minIntervalMs]);
-  return state;
+  return selected;
 }

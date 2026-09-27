@@ -1,4 +1,5 @@
 import React, { useMemo, useRef, useState } from "react";
+import { useAmbient } from "../common/use-ambient";
 import {
   Dialog,
   DialogTitle,
@@ -56,7 +57,7 @@ const fold = (text: string) =>
     .normalize("NFD")
     .replace(/[̀-ͯ]/g, "");
 
-export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
+const MechanismsGalleryView: React.FC<MechanismsGalleryProps> = ({
   open,
   onClose,
   mechanismRecords,
@@ -71,6 +72,7 @@ export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
   onExportAll,
   onRestoreExamples,
 }) => {
+  useAmbient();
   const [search, setSearch] = useState("");
   const searchInputRef = useRef<HTMLInputElement>(null);
   const searching = search.trim().length > 0;
@@ -275,8 +277,7 @@ export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
           sx={{ ...INLINE_INPUT_SX, px: -0.5, flexGrow: 1, maxWidth: 360 }}
         />
 
-        {/* L'import et l'export global portent sur toute la bibliothèque ;
-            l'export d'*un* mécanisme vit sur sa carte. */}
+        {/* Import and export-all act on the whole library; exporting *one* mechanism lives on its card. */}
         <Box
           sx={{
             display: "flex",
@@ -375,8 +376,8 @@ export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
                   minWidth: 0,
                 }}
               >
-                {/* Carte "Nouveau Mécanisme" : masquée pendant une recherche, elle ne fait
-                    pas partie des résultats. Elle occupe toujours la première colonne. */}
+                {/* The "New mechanism" card: hidden during a search, since it is not one of the results.
+                    It always takes the first column. */}
                 {!searching && columnIndex === 0 && (
                   <Box
                     onClick={onNew}
@@ -444,5 +445,7 @@ export const MechanismsGallery: React.FC<MechanismsGalleryProps> = ({
     </Dialog>
   );
 };
+
+export const MechanismsGallery = React.memo(MechanismsGalleryView);
 
 export default MechanismsGallery;

@@ -16,7 +16,7 @@ interface AboutDialogProps {
   onClose: () => void;
 }
 
-export const AboutDialog: React.FC<AboutDialogProps> = ({ open, onClose }) => (
+const AboutDialogView: React.FC<AboutDialogProps> = ({ open, onClose }) => (
   <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
     <DialogTitle fontSize={"large"}>{t("title")}</DialogTitle>
     <IconButton
@@ -133,3 +133,6 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({ open, onClose }) => (
     </DialogContent>
   </Dialog>
 );
+
+/** Modal, so the language cannot change while it is open, and opening it re-renders it: `memo` needs no `useAmbient` here. */
+export const AboutDialog = React.memo(AboutDialogView);

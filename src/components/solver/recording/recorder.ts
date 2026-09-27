@@ -198,6 +198,9 @@ export class Recorder {
       // The very first step of a fresh load has nothing to warm-start from — `latest` is still `null` here.
       // Stepping it with `dt = 0` instead of `RECORD_DT` makes this instant a plain re-projection of the edition geometry onto the constraints (motors don't advance their target, forces integrate nothing), so `t = 0` is genuinely the edition state rather than one step past it.
       const stepDt = latest === null ? 0 : RECORD_DT;
+      // Every instant is kept while the user is holding the mechanism: the display sits on the frontier then, so an instant dropped there is one the grabbed part is drawn a step behind the mouse at.
+      // A drag is short and the time axis is searched, never divided, so the denser stretch it leaves costs nothing beyond its own bytes.
+      const kept = this.grab !== null || is_retained(t);
       if (this.mode === "kinematic") {
         latest = step_simulation(
           this.model,
@@ -213,6 +216,7 @@ export class Recorder {
         );
       } else {
         const gravity = this.gravityOn ? GRAVITY : ZERO;
+        // The efforts are read only on an instant that is kept: nothing reads those of a step that is dropped, and the statics are a large share of a step.
         let dynamicSnapshot = step_dynamic_simulation(
           this.model,
           t,
@@ -221,7 +225,7 @@ export class Recorder {
           gravity,
           this.grab ?? undefined,
           undefined,
-          undefined,
+          kept,
           this.collisionsOn,
           this.floorOn,
         );
@@ -255,9 +259,7 @@ export class Recorder {
         latest = dynamicSnapshot;
       }
       solved++;
-      // Every instant is kept while the user is holding the mechanism: the display sits on the frontier then, so an instant dropped there is one the grabbed part is drawn a step behind the mouse at.
-      // A drag is short and the time axis is searched, never divided, so the denser stretch it leaves costs nothing beyond its own bytes.
-      if (this.grab !== null || is_retained(t)) snapshots.push(latest);
+      if (kept) snapshots.push(latest);
       if (performance.now() - startedAt >= budgetMs) break;
     }
 

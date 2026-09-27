@@ -1,4 +1,4 @@
-import { Matrix, add_at, zeros } from "./matrix";
+import { Matrix, add_at, zeros } from "../src/components/solver/statics/matrix";
 
 /**
  * Least squares with a rank, a null space and a residual, by complete orthogonal decomposition — see docs/plan-efforts-interieurs.md phase 10.
@@ -37,45 +37,33 @@ interface Reflector {
 }
 
 /**
- * The reflection sending `u` to `(β, 0, …, 0)`, `u` given as its head and as a tail of `len` entries read from `data` at `start`, `stride` apart.
+ * The reflection sending `u` to `(β, 0, …, 0)`, `u` given as its head and tail.
  *
  * `β = −sign(head)·‖u‖` and never `+`: the other root makes `head − β` cancel when `head` is already nearly aligned, which is the common case here since pivoting puts the largest entry first every time.
  */
-function reflector(
-  head: number,
-  data: Float64Array,
-  start: number,
-  stride: number,
-  len: number,
-): { r: Reflector; beta: number } {
+function reflector(head: number, tail: Float64Array): { r: Reflector; beta: number } {
   let tailNorm = 0;
-  for (let i = 0; i < len; i++) {
-    const value = data[start + i * stride];
-    tailNorm += value * value;
-  }
-  if (tailNorm === 0) return { r: { v: new Float64Array(len), tau: 0 }, beta: head };
+  for (let i = 0; i < tail.length; i++) tailNorm += tail[i] * tail[i];
+  if (tailNorm === 0) return { r: { v: new Float64Array(tail.length), tau: 0 }, beta: head };
 
   const beta = -Math.sign(head || 1) * Math.sqrt(head * head + tailNorm);
-  const v = new Float64Array(len);
-  for (let i = 0; i < len; i++) v[i] = data[start + i * stride] / (head - beta);
+  const v = new Float64Array(tail.length);
+  for (let i = 0; i < tail.length; i++) v[i] = tail[i] / (head - beta);
   return { r: { v, tau: (beta - head) / beta }, beta };
 }
 
-/** Apply `I − τ·w·wᵀ` in place to the vector whose head is `data[head]` and whose tail starts at `data[start]`, `stride` apart. */
+/** Apply `I − τ·w·wᵀ` to the vector whose head is `get(-1)` and whose tail is `get(0…)`. */
 function reflect(
   r: Reflector,
-  data: Float64Array,
-  head: number,
-  start: number,
-  stride: number,
+  get: (i: number) => number,
+  set: (i: number, value: number) => void,
 ): void {
   if (r.tau === 0) return;
-  const v = r.v;
-  let s = data[head];
-  for (let i = 0; i < v.length; i++) s += v[i] * data[start + i * stride];
+  let s = get(-1);
+  for (let i = 0; i < r.v.length; i++) s += r.v[i] * get(i);
   const scaled = r.tau * s;
-  data[head] -= scaled;
-  for (let i = 0; i < v.length; i++) data[start + i * stride] -= scaled * v[i];
+  set(-1, get(-1) - scaled);
+  for (let i = 0; i < r.v.length; i++) set(i, get(i) - scaled * r.v[i]);
 }
 
 /** Below this fraction of the leading diagonal entry, a pivot is numerical dust — the same
@@ -86,17 +74,14 @@ const RANK_EPSILON = 1e-11;
  * cheap downdate loses all its digits when a column nearly collapses, and pivoting on a wrong norm is what makes a rank-revealing QR stop revealing the rank. */
 const DOWNDATE_GUARD = 1e-8;
 
-/**
- * Works on a column-major copy of `a`: every reflection of the QR stage runs down a column, which then reads contiguous memory.
- * The statics run this at every recorded instant of a simulation, where the matrix has a few hundred rows.
- */
 export function solve_least_squares(a: Matrix, b: Float64Array): LeastSquares {
   const m = a.rows;
   const n = a.cols;
-  // Column-major `m × n`: entry `(i, j)` at `j * m + i`, overwritten in place.
-  const c = new Float64Array(m * n);
-  for (let i = 0; i < m; i++)
-    for (let j = 0; j < n; j++) c[j * m + i] = a.data[i * n + j];
+  const r = Float64Array.from(a.data); // row-major m × n, overwritten in place
+  const get = (i: number, j: number) => r[i * n + j];
+  const set = (i: number, j: number, value: number) => {
+    r[i * n + j] = value;
+  };
 
   const perm = new Int32Array(n);
   for (let j = 0; j < n; j++) perm[j] = j;
@@ -106,7 +91,7 @@ export function solve_least_squares(a: Matrix, b: Float64Array): LeastSquares {
   const original = new Float64Array(n);
   for (let j = 0; j < n; j++) {
     let s = 0;
-    for (let i = 0; i < m; i++) s += c[j * m + i] * c[j * m + i];
+    for (let i = 0; i < m; i++) s += get(i, j) * get(i, j);
     norms[j] = Math.sqrt(s);
     original[j] = norms[j];
   }
@@ -117,50 +102,70 @@ export function solve_least_squares(a: Matrix, b: Float64Array): LeastSquares {
     for (let j = k + 1; j < n; j++) if (norms[j] > norms[best]) best = j;
     if (best !== k) {
       for (let i = 0; i < m; i++) {
-        const swap = c[k * m + i];
-        c[k * m + i] = c[best * m + i];
-        c[best * m + i] = swap;
+        const swap = get(i, k);
+        set(i, k, get(i, best));
+        set(i, best, swap);
       }
       [perm[k], perm[best]] = [perm[best], perm[k]];
       [norms[k], norms[best]] = [norms[best], norms[k]];
       [original[k], original[best]] = [original[best], original[k]];
     }
 
-    const { r: reflection, beta } = reflector(c[k * m + k], c, k * m + k + 1, 1, m - k - 1);
+    const tail = new Float64Array(m - k - 1);
+    for (let i = k + 1; i < m; i++) tail[i - k - 1] = get(i, k);
+    const { r: reflection, beta } = reflector(get(k, k), tail);
 
-    c[k * m + k] = beta;
-    for (let i = k + 1; i < m; i++) c[k * m + i] = 0;
-    for (let j = k + 1; j < n; j++) reflect(reflection, c, j * m + k, j * m + k + 1, 1);
-    reflect(reflection, qb, k, k + 1, 1);
+    set(k, k, beta);
+    for (let i = k + 1; i < m; i++) set(i, k, 0);
+    for (let j = k + 1; j < n; j++)
+      reflect(
+        reflection,
+        (i) => get(i < 0 ? k : k + 1 + i, j),
+        (i, value) => set(i < 0 ? k : k + 1 + i, j, value),
+      );
+    reflect(
+      reflection,
+      (i) => qb[i < 0 ? k : k + 1 + i],
+      (i, value) => {
+        qb[i < 0 ? k : k + 1 + i] = value;
+      },
+    );
 
     for (let j = k + 1; j < n; j++) {
       if (norms[j] === 0) continue;
-      const ratio = Math.abs(c[j * m + k]) / norms[j];
+      const ratio = Math.abs(get(k, j)) / norms[j];
       const downdated = 1 - ratio * ratio;
       norms[j] = downdated > 0 ? norms[j] * Math.sqrt(downdated) : 0;
       if (norms[j] < DOWNDATE_GUARD * original[j]) {
         let s = 0;
-        for (let i = k + 1; i < m; i++) s += c[j * m + i] * c[j * m + i];
+        for (let i = k + 1; i < m; i++) s += get(i, j) * get(i, j);
         norms[j] = Math.sqrt(s);
         original[j] = norms[j];
       }
     }
   }
 
-  const leading = Math.abs(c[0]);
+  const leading = Math.abs(get(0, 0));
   const tolerance = leading * Math.max(m, n) * RANK_EPSILON;
   let rank = 0;
-  while (rank < steps && Math.abs(c[rank * m + rank]) > tolerance) rank++;
+  while (rank < steps && Math.abs(get(rank, rank)) > tolerance) rank++;
 
   // ── Push `R12` into `T`, one right reflection per row, bottom up ──
   const rights: { row: number; reflection: Reflector }[] = [];
   for (let k = rank - 1; k >= 0; k--) {
-    const { r: reflection, beta } = reflector(c[k * m + k], c, rank * m + k, m, n - rank);
+    const tail = new Float64Array(n - rank);
+    for (let j = rank; j < n; j++) tail[j - rank] = get(k, j);
+    const { r: reflection, beta } = reflector(get(k, k), tail);
     rights.push({ row: k, reflection });
-    c[k * m + k] = beta;
-    for (let j = rank; j < n; j++) c[j * m + k] = 0;
+    set(k, k, beta);
+    for (let j = rank; j < n; j++) set(k, j, 0);
     // The rows above share those columns and have to follow.
-    for (let i = 0; i < k; i++) reflect(reflection, c, k * m + i, rank * m + i, m);
+    for (let i = 0; i < k; i++)
+      reflect(
+        reflection,
+        (j) => get(i, j < 0 ? k : rank + j),
+        (j, value) => set(i, j < 0 ? k : rank + j, value),
+      );
   }
 
   /** `Π·Z·y`, the map from the decomposition's own coordinates back to the unknowns. */
@@ -169,7 +174,13 @@ export function solve_least_squares(a: Matrix, b: Float64Array): LeastSquares {
     // Reflections applied in reverse of how they were built.
     for (let i = rights.length - 1; i >= 0; i--) {
       const { row, reflection } = rights[i];
-      reflect(reflection, z, row, rank, 1);
+      reflect(
+        reflection,
+        (j) => z[j < 0 ? row : rank + j],
+        (j, value) => {
+          z[j < 0 ? row : rank + j] = value;
+        },
+      );
     }
     const x = new Float64Array(n);
     for (let j = 0; j < n; j++) x[perm[j]] = z[j];
@@ -180,8 +191,8 @@ export function solve_least_squares(a: Matrix, b: Float64Array): LeastSquares {
   const y = new Float64Array(n);
   for (let i = rank - 1; i >= 0; i--) {
     let s = qb[i];
-    for (let j = i + 1; j < rank; j++) s -= c[j * m + i] * y[j];
-    y[i] = s / c[i * m + i];
+    for (let j = i + 1; j < rank; j++) s -= get(i, j) * y[j];
+    y[i] = s / get(i, i);
   }
   const x = to_unknowns(y);
 

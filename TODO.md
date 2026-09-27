@@ -10,7 +10,6 @@
 
 **Priorités sur le plan général**
 
-- 🚨 Supprimer les pics de couple (ex. "Jansen" ou dans les forces de "Hoist.slidep")
 - Masse suspendue affiche plus de 150 J d’écart ?
 - Pourquoi la non-convergence chronique de CP, Core XY et Puente ?
 - Le choc en butée de glissière, sur Core XY et Test slider. Crée de l'instabilité
@@ -23,6 +22,7 @@
 - 🔨 Améliorer les performances en édition
 - 🔨 Améliorer les performances en simulation
 - 🆕 Ajouter une section qui explique le type de simulation et ses limites (et paramètres ?)
+- 🆕 Ajouter un paramètre pour inclure/exclure des collisions par élément
 - 🔨 Supprimer poutre sur joint de courroie
 - 🚨 Faire fonctionner les treuils
 - 🆕 Mobile mode
@@ -41,11 +41,15 @@
 
 - 🚨 Un ctrl+y de remplacement d'élément n'a pas reset la simulation, wtf !?
 - 🚨 Un snap sur la grille ne se fait pas toujours bien aux valeurs rondes, wtf !?
+- 🚨 Comment est-ce qu'on peut avoir des réactions d'appuis "moment" sur un pivot, wtf !?
 
 ### À faire rapidement
 
 **Very qwick fix**
 
+- 🔨 Hover le bilan des moments ne doit pas faire apparitre le cg, seulement à la sélection. Et n'afficher la croix que si on n'affiche pas de moment à sa position
+- 🔨 Bords tags en thème blueprint
+- 🔨 Afficher les contraintes d'un élément sélectionné
 - 🔨 Ne plus accepter les raccourcis quand la gallerie est ouverte
 - 🔨 Afficher le point grabbé en simulation
 - 🔨 Afficher les trajectoires anciennes de plus en plus transparentes

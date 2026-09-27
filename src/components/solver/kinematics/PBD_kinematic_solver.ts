@@ -94,6 +94,11 @@ export type DynamicsInput = {
    * Provide an empty array to collect.
    */
   reactions?: LinkReaction[];
+  /**
+   * Index of the first collision contact in `links`: every link from there on is a contact the sweep may leave out while it is far from touching — see `CONTACT_REACH_RATIO`.
+   * Omitted, every link is swept.
+   */
+  contactsFrom?: number;
 };
 
 /**
@@ -195,6 +200,60 @@ const REMAINING_RAD = 1e-6;
 const DYNAMIC_EXIT_SPEED_RATIO = 1e-3;
 
 /**
+ * How far, as a fraction of the mechanism's extent, a node may move before the contacts left out of the sweep are judged again.
+ * Larger keeps more contacts in the sweep, smaller judges them more often; either way none is left out that could engage before the next judgement.
+ */
+const CONTACT_REACH_RATIO = 5e-3;
+
+/**
+ * Whether a collision contact could engage before any node has moved `reach` from where it stands now.
+ * `true` whenever that cannot be ruled out: a contact left out wrongly would let a node pass through a member.
+ */
+function contact_may_engage(
+  link: Link,
+  slot: LinkSlots,
+  nodes: SolveNodes,
+  reach: number,
+): boolean {
+  switch (link.type) {
+    case "MinDistanceToSegment": {
+      const a = slot.pos[0];
+      const b = slot.pos[1];
+      const p = slot.pos[2];
+      // Never engages: `applyPointSegmentContactConstraint` does nothing without its three nodes.
+      if (a < 0 || b < 0 || p < 0) return false;
+      const sx = nodes.x[a];
+      const sy = nodes.y[a];
+      const dx = nodes.x[b] - sx;
+      const dy = nodes.y[b] - sy;
+      const lenSq = dx * dx + dy * dy;
+      if (lenSq === 0) return true;
+      const px = nodes.x[p] - sx;
+      const py = nodes.y[p] - sy;
+      // On the wrong side of the line, even beyond the segment's ends: stepping into its span engages it however far the node is.
+      if ((px * -dy + py * dx) * link.side < 0) return true;
+      const t = Math.max(0, Math.min((px * dx + py * dy) / lenSq, 1));
+      const ex = px - dx * t;
+      const ey = py - dy * t;
+      const distance = Math.sqrt(ex * ex + ey * ey);
+      // Seen from the segment, the node moves by its own displacement, by the segment's, and by the segment's turn over the distance between them.
+      const drift = 4 * reach + (2 * reach * distance) / Math.sqrt(lenSq);
+      return distance - link.offset <= drift;
+    }
+    case "MinDistance": {
+      const a = slot.pos[0];
+      const b = slot.pos[1];
+      if (a < 0 || b < 0) return true;
+      const dx = nodes.x[a] - nodes.x[b];
+      const dy = nodes.y[a] - nodes.y[b];
+      return Math.sqrt(dx * dx + dy * dy) - link.distance <= 2 * reach;
+    }
+    default:
+      return true;
+  }
+}
+
+/**
  * How the solver decides it has done enough; a dynamics step must in addition meet `DYNAMIC_EXIT_SPEED_RATIO`.
  *
  * `motion` — stop when nothing will move enough to matter.
@@ -293,6 +352,7 @@ export function PBD_kinematic_solver(
       gy: dynamics.gy,
       reactions: dynamics.reactions,
       drives: dynamics.drives,
+      contactsFrom: dynamics.contactsFrom,
     },
     referenceExtent,
   );
@@ -319,7 +379,7 @@ export function PBD_solve(
   exitOn: ExitCriterion = "motion",
   /** Present only for a dynamics step — see `DynamicsInput`. Everything else (edition,
    * kinematic simulation) leaves this out and gets the plain PBD sweep unchanged. */
-  dynamics?: Pick<DynamicsInput, "dt" | "gx" | "gy" | "reactions" | "drives">,
+  dynamics?: Pick<DynamicsInput, "dt" | "gx" | "gy" | "reactions" | "drives" | "contactsFrom">,
   /**
    * The scale every tolerance below is a fraction of.
    * A simulation passes the mechanism's size at t = 0: measured live, a body that has come loose and fallen away would stretch it without bound, and loosen every tolerance with it.
@@ -400,6 +460,11 @@ export function PBD_solve(
     angleLever[a] = r !== undefined ? nodes.radius[r] : 1;
   }
 
+  // What each link's residual is worth in metres, read once per solve: the spans it is measured on barely move within one, and reading them at every sweep was a large share of the sweep itself.
+  const levers = new Float64Array(links.length);
+  for (let k = 0; k < links.length; k++)
+    levers[k] = residual_scale(links[k], slots[k], nodes, angleLever);
+
   // The mechanism's own scale — every tolerance below is a fraction of it rather than an absolute length, so a µm-scale mechanism and a km-scale one are each held to their own precision.
   const extent = referenceExtent ?? (nodes_extent(nodes) || MIN_EXTENT_M);
   const diagnosticTolerance = DIAGNOSTIC_TOLERANCE_RATIO * extent;
@@ -445,6 +510,42 @@ export function PBD_solve(
   // Dynamics only: it is the only mode carrying real masses, so the only one where a mass ratio can build a residual at all.
   const reversed = dynamics ? reversed_sweep_order(links, slots, nodes) : null;
 
+  // ── Collision contacts far from touching sit out of the sweep ──
+  // A contact is a self-gating inequality: until its node comes within reach, applying it moves nothing, and on a mechanism with many members the contacts outnumber every other link many times over.
+  // The sweep runs over the other links and the contacts that could engage; the rest are judged again once a node has moved `reach` since the last judgement.
+  const contactsFrom = dynamics?.contactsFrom ?? links.length;
+  const culling = contactsFrom < links.length;
+  const reach = CONTACT_REACH_RATIO * extent;
+  let forward: Int32Array | null = null;
+  let backward: Int32Array | null = null;
+  const judgedX = culling ? new Float64Array(nodes.x.length) : null;
+  const judgedY = culling ? new Float64Array(nodes.y.length) : null;
+  const judge = () => {
+    judgedX!.set(nodes.x);
+    judgedY!.set(nodes.y);
+    const live = new Uint8Array(links.length);
+    let count = 0;
+    for (let k = 0; k < links.length; k++) {
+      live[k] = k < contactsFrom || contact_may_engage(links[k], slots[k], nodes, reach) ? 1 : 0;
+      count += live[k];
+    }
+    forward = new Int32Array(count);
+    for (let k = 0, n = 0; k < links.length; k++) if (live[k]) forward[n++] = k;
+    if (reversed !== null) {
+      backward = new Int32Array(count);
+      for (let k = 0, n = 0; k < reversed.length; k++) if (live[reversed[k]]) backward[n++] = reversed[k];
+    }
+  };
+  /** Whether a node has moved `reach` or more since the contacts were last judged. */
+  const outreached = () => {
+    for (let n = 0; n < nodes.count; n++) {
+      const dx = nodes.x[n] - judgedX![n];
+      const dy = nodes.y[n] - judgedY![n];
+      if (dx * dx + dy * dy >= reach * reach) return true;
+    }
+    return false;
+  };
+
   let maxError: number = 0;
   // XPBD multipliers, one per link, accumulated across the sweeps of THIS solve — which is one substep, the interval `α̃ = α/dt²` is written against.
   // Only a dynamics step has a meaningful `dt`, so a kinematic solve leaves every constraint rigid and never touches this.
@@ -464,11 +565,17 @@ export function PBD_solve(
     prevA.set(nodes.angle);
 
     const sweepOrder = reversed !== null && i % 2 === 1 ? reversed : null;
+    // Judged at the head of every sweep: a node that jumps within one sweep has its contacts back in the next, where the side each contact holds pulls it back (see `applyPointSegmentContactConstraint`).
+    if (culling && (forward === null || outreached())) judge();
+    const order: ArrayLike<number> | null = culling
+      ? sweepOrder === null ? forward! : backward!
+      : sweepOrder;
     // Ahead of the links, so the geometric constraints have the last word within a sweep; its gap still counts toward convergence, or the sweep could stop with a motor short of its speed.
     maxError = apply_drives(nodes, drives);
     worstGap = maxError;
-    for (let step = 0; step < links.length; step++) {
-      const idx = sweepOrder === null ? step : sweepOrder[step];
+    const sweepLength = order === null ? links.length : order.length;
+    for (let step = 0; step < sweepLength; step++) {
+      const idx = order === null ? step : order[step];
       const link = links[idx];
       const s = slots[idx];
       if (traceX && traceY && traceA) {
@@ -829,7 +936,7 @@ export function PBD_solve(
       if (link.type !== "Spring") maxError = Math.max(maxError, err);
       if (report) {
         // `report` and not `owner`: a link with no owner is invisible to the diagnostics panel, but it still has to hold for the figure to be right.
-        const residual = err * residual_scale(link, s, nodes, angleLever);
+        const residual = err * levers[idx];
         if (exitGap !== undefined) worstGap = Math.max(worstGap, gap ?? residual);
         if (trackSeverity) {
           const severity = residual / diagnosticTolerance;

@@ -29,10 +29,22 @@ import {
   MechanismMetadata,
   SimulationSpeed,
 } from "../../types";
-import { RuntimeState } from "../../types/runtime-state";
-import { at_recording_end } from "../solver/dynamics/simulation-engine";
-import { set_sim_clock as setRuntimeState } from "../solver/dynamics/sim-clock";
-import { simulationResetPatch } from "../solver/recording/use-simulation-playback";
+import { useAmbient } from "../common/use-ambient";
+import {
+  apply_parameter_snapshot_to_mechanism,
+  at_recording_end,
+} from "../solver/dynamics/simulation-engine";
+import {
+  set_sim_clock as setRuntimeState,
+  useSimClockSelector,
+} from "../solver/dynamics/sim-clock";
+import {
+  CLOCK_MIRROR_MS,
+  TimelineState,
+  shown_parameters,
+  simulationResetPatch,
+  timeline_state,
+} from "../solver/recording/use-simulation-playback";
 import { OverlaysMenu } from "./OverlaysMenu";
 import { ProjectHeader } from "./ProjectHeader";
 import { SaveStatus } from "../mechanisms-gallery/use-mechanism-library";
@@ -93,14 +105,10 @@ interface PlaybackControlsProps {
   appMode: AppMode;
   setAppMode: (mode: AppMode) => void;
   mechanism: Mechanism;
-  /** The simulation settings in effect at the instant on screen: what the physics toggles show, and what they flip. */
-  shownSimulation: Mechanism["simulation"];
   updateMetadata: (metadata: MechanismMetadata, touch?: boolean) => void;
   applyActions: (actions: Action[]) => void;
   condensed: boolean;
   tight: boolean;
-  timeline: { hasRecording: boolean; atStart: boolean; atEnd: boolean };
-  runtimeState: RuntimeState;
   resetToStart: () => void;
   handleSpaceKey: () => void;
   onOpenGallery: () => void;
@@ -113,18 +121,20 @@ interface PlaybackControlsProps {
   rightSlot?: React.ReactNode;
 }
 
+type ScrubLimits = Pick<TimelineState, "hasRecording" | "atStart" | "atEnd">;
+
+const same_scrub_limits = (a: ScrubLimits, b: ScrubLimits) =>
+  a.hasRecording === b.hasRecording && a.atStart === b.atStart && a.atEnd === b.atEnd;
+
 /** Mode selector, timeline scrub buttons, play/pause, speed, physics toggles, overlays. */
-export const PlaybackControls: React.FC<PlaybackControlsProps> = ({
+const PlaybackControlsView: React.FC<PlaybackControlsProps> = ({
   appMode,
   setAppMode,
   mechanism,
-  shownSimulation,
   updateMetadata,
   applyActions,
   condensed,
   tight,
-  timeline,
-  runtimeState,
   resetToStart,
   handleSpaceKey,
   onOpenGallery,
@@ -133,255 +143,46 @@ export const PlaybackControls: React.FC<PlaybackControlsProps> = ({
   trajectoryDotted,
   setTrajectoryDotted,
   rightSlot,
-}) => (
-  <>
-    <Box
-      sx={{
-        display: "flex",
-        alignItems: "center",
-        gap: TOP_BAR_GROUP_GAP,
-        minWidth: 0,
-      }}
-    >
-      <ProjectHeader
-        tight={tight}
-        onOpenGallery={onOpenGallery}
-        projectName={mechanism.metadata.name}
-        saveStatus={saveStatus}
-      />
-    </Box>
-
-    {/* Centre section — everything that drives or reflects the run: mode, playback, speed, physics settings and layers. */}
-    <Box
-      sx={{
-        display: "flex",
-        alignItems: "center",
-        gap: TOP_BAR_GROUP_GAP,
-      }}
-    >
-      {/* Mode selector */}
-      <ToggleButtonGroup
-        value={appMode}
-        exclusive
-        size="small"
-        onChange={(_e, newMode: AppMode) => {
-          if (!newMode) return;
-          setAppMode(newMode);
-          // Same tick as `setAppMode`, not left to the hook's own effect: switching directly between kinematic and dynamic (no edition in between) otherwise leaves a render where `appMode` already reads the new mode but `runtimeState.simulationSnapshots` still holds the other mode's snapshot shape — see `simulationResetPatch`.
-          setRuntimeState((prev) => ({
-            ...prev,
-            ...simulationResetPatch(newMode, mechanism),
-            isPlaying: false,
-          }));
-          if (newMode !== "edition")
-            // Remembering the last mode is a preference, not a content edit — it must not bump `modifiedAt` and surface the mechanism as "recently modified" in the gallery just for having been tried in simulation.
-            updateMetadata(
-              { ...mechanism.metadata, lastSimulationMode: newMode },
-              false,
-            );
-        }}
+}) => {
+  useAmbient();
+  const isPlaying = useSimClockSelector((clock) => clock.isPlaying, CLOCK_MIRROR_MS);
+  const speed = useSimClockSelector((clock) => clock.speed, CLOCK_MIRROR_MS);
+  const timeline = useSimClockSelector(
+    (clock): ScrubLimits => timeline_state(appMode, clock),
+    CLOCK_MIRROR_MS,
+    same_scrub_limits,
+  );
+  const shownParameters = useSimClockSelector(
+    (clock) => shown_parameters(appMode, clock),
+    CLOCK_MIRROR_MS,
+  );
+  // The settings in effect at the instant on screen: what the physics toggles show, and what they flip.
+  const shownSimulation = React.useMemo(
+    () =>
+      shownParameters
+        ? apply_parameter_snapshot_to_mechanism(mechanism, shownParameters).simulation
+        : mechanism.simulation,
+    [mechanism, shownParameters],
+  );
+  return (
+    <>
+      <Box
         sx={{
-          mr: TOP_BAR_SECTION_GAP,
-          "& .MuiToggleButton-root": {
-            px: 1,
-            py: 0.2,
-            fontSize: "0.72rem",
-            fontWeight: 600,
-            textTransform: "none",
-            color: "text.secondary",
-            borderColor: "dividers.toolbar",
-            "&.Mui-selected": {
-              color: "primary.contrastText",
-              backgroundColor: "primary.main",
-              "&:hover": { backgroundColor: "primary.dark" },
-            },
-          },
+          display: "flex",
+          alignItems: "center",
+          gap: TOP_BAR_GROUP_GAP,
+          minWidth: 0,
         }}
       >
-        <Tooltip title={t("mode_edition_tooltip")}>
-          <ToggleButton value="edition">
-            {t(condensed ? "mode_edition_short" : "mode_edition")}
-          </ToggleButton>
-        </Tooltip>
+        <ProjectHeader
+          tight={tight}
+          onOpenGallery={onOpenGallery}
+          projectName={mechanism.metadata.name}
+          saveStatus={saveStatus}
+        />
+      </Box>
 
-        <Tooltip title={t("mode_static_tooltip")}>
-          <ToggleButton value="static" disabled>
-            {t(condensed ? "mode_static_short" : "mode_static")}
-          </ToggleButton>
-        </Tooltip>
-
-        <Tooltip title={t("mode_kinematic_tooltip")}>
-          <ToggleButton value="kinematic">
-            {t(condensed ? "mode_kinematic_short" : "mode_kinematic")}
-          </ToggleButton>
-        </Tooltip>
-
-        <Tooltip title={t("mode_dynamic_tooltip")}>
-          <ToggleButton value="dynamic">
-            {t(condensed ? "mode_dynamic_short" : "mode_dynamic")}
-          </ToggleButton>
-        </Tooltip>
-      </ToggleButtonGroup>
-
-      {!condensed && <Divider flexItem sx={TOP_BAR_DIVIDER_SX} />}
-
-      <Tooltip title={t("reset")}>
-        <span>
-          <IconButton
-            size="small"
-            color="inherit"
-            disabled={appMode === "edition" || !timeline.hasRecording}
-            onClick={resetToStart}
-            sx={{
-              color: "primary.main",
-              "&:hover": { backgroundColor: "action.hover" },
-            }}
-          >
-            <RestartAlt sx={{ fontSize: 20 }} />
-          </IconButton>
-        </span>
-      </Tooltip>
-
-      {!condensed && <Divider flexItem sx={TOP_BAR_DIVIDER_SX} />}
-
-      {/* Play/Pause stays live; the other buttons go dead in edition mode or at the ends of the recording. */}
-      <Tooltip title={t("go_to_start")}>
-        <span>
-          <IconButton
-            size="small"
-            color="inherit"
-            disabled={appMode === "edition" || timeline.atStart}
-            onClick={() =>
-              setRuntimeState((prev) => ({
-                ...prev,
-                time: 0,
-                isPlaying: false,
-                // Nothing recorded yet ⇒ the start IS the end.
-                scrubbed: !at_recording_end(prev.simulationSnapshots, 0),
-              }))
-            }
-            sx={TOP_BAR_SLIM_BUTTON_SX}
-          >
-            <FirstPage sx={{ fontSize: 20 }} />
-          </IconButton>
-        </span>
-      </Tooltip>
-
-      <Tooltip title={t(runtimeState.isPlaying ? "pause" : "play")}>
-        <IconButton
-          size="small"
-          onClick={handleSpaceKey}
-          sx={{
-            bgcolor: "primary.main",
-            color: "primary.contrastText",
-            "&:hover": { bgcolor: "primary.dark" },
-            flexShrink: 0,
-          }}
-        >
-          {runtimeState.isPlaying ? (
-            <Pause sx={{ fontSize: 20 }} />
-          ) : (
-            <PlayArrow sx={{ fontSize: 20 }} />
-          )}
-        </IconButton>
-      </Tooltip>
-
-      <Tooltip title={t("go_to_end")}>
-        <span>
-          <IconButton
-            size="small"
-            color="inherit"
-            disabled={appMode === "edition" || timeline.atEnd}
-            sx={TOP_BAR_SLIM_BUTTON_SX}
-            onClick={() =>
-              setRuntimeState((prev) => {
-                const snaps = prev.simulationSnapshots;
-                const maxT = snaps.length > 0 ? snaps[snaps.length - 1].t : 0;
-                // The end by construction: playing from here records on.
-                return {
-                  ...prev,
-                  time: maxT,
-                  isPlaying: false,
-                  scrubbed: false,
-                };
-              })
-            }
-          >
-            <LastPage sx={{ fontSize: 20 }} />
-          </IconButton>
-        </span>
-      </Tooltip>
-
-      {!condensed && <Divider flexItem sx={TOP_BAR_DIVIDER_SX} />}
-
-      {/* Simulation speed stepper */}
-      {(() => {
-        const speedIdx = SPEEDS.indexOf(runtimeState.speed);
-        const setSpeed = (s: SimulationSpeed) =>
-          setRuntimeState((prev) => ({ ...prev, speed: s }));
-        return (
-          <Box sx={{ display: "flex", alignItems: "center" }}>
-            <Tooltip title={t("slow_down")}>
-              <span>
-                <IconButton
-                  size="small"
-                  color="inherit"
-                  disabled={speedIdx <= 0}
-                  onClick={() => setSpeed(SPEEDS[speedIdx - 1])}
-                  sx={TOP_BAR_SLIM_BUTTON_SX}
-                >
-                  <ChevronLeft sx={{ fontSize: 20 }} />
-                </IconButton>
-              </span>
-            </Tooltip>
-            <Tooltip title={t("reset_speed")}>
-              <Box
-                component="button"
-                onClick={() => setSpeed(1)}
-                sx={{
-                  all: "unset",
-                  cursor: "pointer",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  minWidth: TOP_BAR_CONTROL_HEIGHT,
-                  minHeight: TOP_BAR_CONTROL_HEIGHT,
-                  fontSize: "0.7rem",
-                  fontWeight: 700,
-                  fontVariantNumeric: "tabular-nums",
-                  lineHeight: 1,
-                  borderRadius: 1,
-                  // Nominal speed is a neutral state: only a setting away from it deserves to catch the eye.
-                  color:
-                    runtimeState.speed === 1
-                      ? "text.secondary"
-                      : "primary.main",
-                  "&:hover": { backgroundColor: "action.hover" },
-                }}
-              >
-                {runtimeState.speed}×
-              </Box>
-            </Tooltip>
-            <Tooltip title={t("speed_up")}>
-              <span>
-                <IconButton
-                  size="small"
-                  color="inherit"
-                  disabled={speedIdx >= SPEEDS.length - 1}
-                  onClick={() => setSpeed(SPEEDS[speedIdx + 1])}
-                  sx={TOP_BAR_SLIM_BUTTON_SX}
-                >
-                  <ChevronRight sx={{ fontSize: 20 }} />
-                </IconButton>
-              </span>
-            </Tooltip>
-          </Box>
-        );
-      })()}
-
-      {!condensed && <Divider flexItem sx={TOP_BAR_DIVIDER_SX} />}
-
-      {/* Gravity / collisions / floor — reachable in edition too: these are settings of the mechanism, not of the run. */}
+      {/* Centre section — everything that drives or reflects the run: mode, playback, speed, physics settings and layers. */}
       <Box
         sx={{
           display: "flex",
@@ -389,88 +190,321 @@ export const PlaybackControls: React.FC<PlaybackControlsProps> = ({
           gap: TOP_BAR_GROUP_GAP,
         }}
       >
-        <PhysicsToggle
-          on={shownSimulation.gravity}
-          Icon={KeyboardDoubleArrowDown}
-          tooltip={t(shownSimulation.gravity ? "gravity_on" : "gravity_off")}
-          onToggle={() =>
-            applyActions([
-              { type: "SetGravity", enabled: !shownSimulation.gravity },
-            ])
-          }
+        {/* Mode selector */}
+        <ToggleButtonGroup
+          value={appMode}
+          exclusive
+          size="small"
+          onChange={(_e, newMode: AppMode) => {
+            if (!newMode) return;
+            setAppMode(newMode);
+            // Same tick as `setAppMode`, not left to the hook's own effect: switching directly between kinematic and dynamic (no edition in between) otherwise leaves a render where `appMode` already reads the new mode but `runtimeState.simulationSnapshots` still holds the other mode's snapshot shape — see `simulationResetPatch`.
+            setRuntimeState((prev) => ({
+              ...prev,
+              ...simulationResetPatch(newMode, mechanism),
+              isPlaying: false,
+            }));
+            if (newMode !== "edition")
+              // Remembering the last mode is a preference, not a content edit — it must not bump `modifiedAt` and surface the mechanism as "recently modified" in the gallery just for having been tried in simulation.
+              updateMetadata(
+                { ...mechanism.metadata, lastSimulationMode: newMode },
+                false,
+              );
+          }}
+          sx={{
+            mr: TOP_BAR_SECTION_GAP,
+            "& .MuiToggleButton-root": {
+              px: 1,
+              py: 0.2,
+              fontSize: "0.72rem",
+              fontWeight: 600,
+              textTransform: "none",
+              color: "text.secondary",
+              borderColor: "dividers.toolbar",
+              "&.Mui-selected": {
+                color: "primary.contrastText",
+                backgroundColor: "primary.main",
+                "&:hover": { backgroundColor: "primary.dark" },
+              },
+            },
+          }}
+        >
+          <Tooltip title={t("mode_edition_tooltip")}>
+            <ToggleButton value="edition">
+              {t(condensed ? "mode_edition_short" : "mode_edition")}
+            </ToggleButton>
+          </Tooltip>
+
+          <Tooltip title={t("mode_static_tooltip")}>
+            <ToggleButton value="static" disabled>
+              {t(condensed ? "mode_static_short" : "mode_static")}
+            </ToggleButton>
+          </Tooltip>
+
+          <Tooltip title={t("mode_kinematic_tooltip")}>
+            <ToggleButton value="kinematic">
+              {t(condensed ? "mode_kinematic_short" : "mode_kinematic")}
+            </ToggleButton>
+          </Tooltip>
+
+          <Tooltip title={t("mode_dynamic_tooltip")}>
+            <ToggleButton value="dynamic">
+              {t(condensed ? "mode_dynamic_short" : "mode_dynamic")}
+            </ToggleButton>
+          </Tooltip>
+        </ToggleButtonGroup>
+
+        {!condensed && <Divider flexItem sx={TOP_BAR_DIVIDER_SX} />}
+
+        <Tooltip title={t("reset")}>
+          <span>
+            <IconButton
+              size="small"
+              color="inherit"
+              disabled={appMode === "edition" || !timeline.hasRecording}
+              onClick={resetToStart}
+              sx={{
+                color: "primary.main",
+                "&:hover": { backgroundColor: "action.hover" },
+              }}
+            >
+              <RestartAlt sx={{ fontSize: 20 }} />
+            </IconButton>
+          </span>
+        </Tooltip>
+
+        {!condensed && <Divider flexItem sx={TOP_BAR_DIVIDER_SX} />}
+
+        {/* Play/Pause stays live; the other buttons go dead in edition mode or at the ends of the recording. */}
+        <Tooltip title={t("go_to_start")}>
+          <span>
+            <IconButton
+              size="small"
+              color="inherit"
+              disabled={appMode === "edition" || timeline.atStart}
+              onClick={() =>
+                setRuntimeState((prev) => ({
+                  ...prev,
+                  time: 0,
+                  isPlaying: false,
+                  // Nothing recorded yet ⇒ the start IS the end.
+                  scrubbed: !at_recording_end(prev.simulationSnapshots, 0),
+                }))
+              }
+              sx={TOP_BAR_SLIM_BUTTON_SX}
+            >
+              <FirstPage sx={{ fontSize: 20 }} />
+            </IconButton>
+          </span>
+        </Tooltip>
+
+        <Tooltip title={t(isPlaying ? "pause" : "play")}>
+          <IconButton
+            size="small"
+            onClick={handleSpaceKey}
+            sx={{
+              bgcolor: "primary.main",
+              color: "primary.contrastText",
+              "&:hover": { bgcolor: "primary.dark" },
+              flexShrink: 0,
+            }}
+          >
+            {isPlaying ? (
+              <Pause sx={{ fontSize: 20 }} />
+            ) : (
+              <PlayArrow sx={{ fontSize: 20 }} />
+            )}
+          </IconButton>
+        </Tooltip>
+
+        <Tooltip title={t("go_to_end")}>
+          <span>
+            <IconButton
+              size="small"
+              color="inherit"
+              disabled={appMode === "edition" || timeline.atEnd}
+              sx={TOP_BAR_SLIM_BUTTON_SX}
+              onClick={() =>
+                setRuntimeState((prev) => {
+                  const snaps = prev.simulationSnapshots;
+                  const maxT = snaps.length > 0 ? snaps[snaps.length - 1].t : 0;
+                  // The end by construction: playing from here records on.
+                  return {
+                    ...prev,
+                    time: maxT,
+                    isPlaying: false,
+                    scrubbed: false,
+                  };
+                })
+              }
+            >
+              <LastPage sx={{ fontSize: 20 }} />
+            </IconButton>
+          </span>
+        </Tooltip>
+
+        {!condensed && <Divider flexItem sx={TOP_BAR_DIVIDER_SX} />}
+
+        {/* Simulation speed stepper */}
+        {(() => {
+          const speedIdx = SPEEDS.indexOf(speed);
+          const setSpeed = (s: SimulationSpeed) =>
+            setRuntimeState((prev) => ({ ...prev, speed: s }));
+          return (
+            <Box sx={{ display: "flex", alignItems: "center" }}>
+              <Tooltip title={t("slow_down")}>
+                <span>
+                  <IconButton
+                    size="small"
+                    color="inherit"
+                    disabled={speedIdx <= 0}
+                    onClick={() => setSpeed(SPEEDS[speedIdx - 1])}
+                    sx={TOP_BAR_SLIM_BUTTON_SX}
+                  >
+                    <ChevronLeft sx={{ fontSize: 20 }} />
+                  </IconButton>
+                </span>
+              </Tooltip>
+              <Tooltip title={t("reset_speed")}>
+                <Box
+                  component="button"
+                  onClick={() => setSpeed(1)}
+                  sx={{
+                    all: "unset",
+                    cursor: "pointer",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    minWidth: TOP_BAR_CONTROL_HEIGHT,
+                    minHeight: TOP_BAR_CONTROL_HEIGHT,
+                    fontSize: "0.7rem",
+                    fontWeight: 700,
+                    fontVariantNumeric: "tabular-nums",
+                    lineHeight: 1,
+                    borderRadius: 1,
+                    // Nominal speed is a neutral state: only a setting away from it deserves to catch the eye.
+                    color:
+                      speed === 1
+                        ? "text.secondary"
+                        : "primary.main",
+                    "&:hover": { backgroundColor: "action.hover" },
+                  }}
+                >
+                  {speed}×
+                </Box>
+              </Tooltip>
+              <Tooltip title={t("speed_up")}>
+                <span>
+                  <IconButton
+                    size="small"
+                    color="inherit"
+                    disabled={speedIdx >= SPEEDS.length - 1}
+                    onClick={() => setSpeed(SPEEDS[speedIdx + 1])}
+                    sx={TOP_BAR_SLIM_BUTTON_SX}
+                  >
+                    <ChevronRight sx={{ fontSize: 20 }} />
+                  </IconButton>
+                </span>
+              </Tooltip>
+            </Box>
+          );
+        })()}
+
+        {!condensed && <Divider flexItem sx={TOP_BAR_DIVIDER_SX} />}
+
+        {/* Gravity / collisions / floor — reachable in edition too: these are settings of the mechanism, not of the run. */}
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            gap: TOP_BAR_GROUP_GAP,
+          }}
+        >
+          <PhysicsToggle
+            on={shownSimulation.gravity}
+            Icon={KeyboardDoubleArrowDown}
+            tooltip={t(shownSimulation.gravity ? "gravity_on" : "gravity_off")}
+            onToggle={() =>
+              applyActions([
+                { type: "SetGravity", enabled: !shownSimulation.gravity },
+              ])
+            }
+          />
+          <PhysicsToggle
+            on={shownSimulation.collisions}
+            Icon={JoinInner}
+            tooltip={t(
+              shownSimulation.collisions ? "collisions_on" : "collisions_off",
+            )}
+            onToggle={() =>
+              applyActions([
+                {
+                  type: "SetCollisions",
+                  enabled: !shownSimulation.collisions,
+                },
+              ])
+            }
+          />
+          <PhysicsToggle
+            on={shownSimulation.floor.enabled}
+            Icon={HorizontalRule}
+            tooltip={t(shownSimulation.floor.enabled ? "floor_on" : "floor_off")}
+            onToggle={() =>
+              applyActions([
+                {
+                  type: "SetFloorEnabled",
+                  enabled: !shownSimulation.floor.enabled,
+                },
+              ])
+            }
+          />
+        </Box>
+
+        <Divider
+          flexItem
+          sx={{
+            ...TOP_BAR_DIVIDER_SX,
+            mx: condensed ? 0.25 : TOP_BAR_DIVIDER_SX.mx,
+          }}
         />
-        <PhysicsToggle
-          on={shownSimulation.collisions}
-          Icon={JoinInner}
-          tooltip={t(
-            shownSimulation.collisions ? "collisions_on" : "collisions_off",
-          )}
-          onToggle={() =>
+
+        {/* Display layers: what gets drawn.
+            Reachable in edition too — picking a layer arms what the run will show, it does not draw anything by itself. */}
+        <OverlaysMenu
+          mechanicalElements={mechanism.mechanicalElements}
+          applyActions={applyActions}
+          beamStressLens={mechanism.simulation.beamStressLens}
+          onChangeBeamStressLens={(lens) =>
             applyActions([
               {
-                type: "SetCollisions",
-                enabled: !shownSimulation.collisions,
+                type: "SetBeamStressLens",
+                newValue: lens,
+                oldValue: mechanism.simulation.beamStressLens,
               },
             ])
           }
-        />
-        <PhysicsToggle
-          on={shownSimulation.floor.enabled}
-          Icon={HorizontalRule}
-          tooltip={t(shownSimulation.floor.enabled ? "floor_on" : "floor_off")}
-          onToggle={() =>
-            applyActions([
-              {
-                type: "SetFloorEnabled",
-                enabled: !shownSimulation.floor.enabled,
-              },
-            ])
+          onPreviewBeamStressLens={previewBeamStressLens}
+          trajectoryDotted={trajectoryDotted}
+          onChangeTrajectoryDotted={setTrajectoryDotted}
+          supportReactions={mechanism.simulation.supportReactions}
+          onChangeSupportReactions={(on) =>
+            applyActions([{ type: "SetSupportReactions", enabled: on }])
           }
+          condensed={condensed}
         />
       </Box>
 
-      <Divider
-        flexItem
+      <Box
         sx={{
-          ...TOP_BAR_DIVIDER_SX,
-          mx: condensed ? 0.25 : TOP_BAR_DIVIDER_SX.mx,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "flex-end",
         }}
-      />
+      >
+        {rightSlot}
+      </Box>
+    </>
+  );
+};
 
-      {/* Display layers: what gets drawn.
-          Reachable in edition too — picking a layer arms what the run will show, it does not draw anything by itself. */}
-      <OverlaysMenu
-        mechanicalElements={mechanism.mechanicalElements}
-        applyActions={applyActions}
-        beamStressLens={mechanism.simulation.beamStressLens}
-        onChangeBeamStressLens={(lens) =>
-          applyActions([
-            {
-              type: "SetBeamStressLens",
-              newValue: lens,
-              oldValue: mechanism.simulation.beamStressLens,
-            },
-          ])
-        }
-        onPreviewBeamStressLens={previewBeamStressLens}
-        trajectoryDotted={trajectoryDotted}
-        onChangeTrajectoryDotted={setTrajectoryDotted}
-        supportReactions={mechanism.simulation.supportReactions}
-        onChangeSupportReactions={(on) =>
-          applyActions([{ type: "SetSupportReactions", enabled: on }])
-        }
-        condensed={condensed}
-      />
-    </Box>
-
-    <Box
-      sx={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "flex-end",
-      }}
-    >
-      {rightSlot}
-    </Box>
-  </>
-);
+export const PlaybackControls = React.memo(PlaybackControlsView);

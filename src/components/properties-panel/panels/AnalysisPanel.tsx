@@ -73,6 +73,7 @@ import ProbeChart, {
 } from "../components/ProbeChart";
 import ForceBalanceTable from "../components/ForceBalanceTable";
 import { useDismissOnShortcut } from "../../common/dismiss-popups";
+import { useAmbient } from "../../common/use-ambient";
 import { is_probes_only_bundle } from "../../mechanism/action-kind";
 import {
   BalanceTerm,
@@ -258,14 +259,11 @@ const fault = (elements: Iterable<ID>): CanvasHighlight => ({
 const EMPTY_SYMBOLS: RedundancySymbol[] = [];
 
 /** The four curves the "Bilan énergétique" chart can show — see `EnergyBalanceSeries`. */
-/** The motor config to *show*, resolved through `analysedElementOf` — the pose on screen, which while scrubbed can hold a different value than the live mechanism. */
-const motor_config_at = (
-  analysedElementOf: (id: ID) => MechanicalElement | undefined,
-  id: ID,
-): MotorConfig | undefined => {
-  const shown = analysedElementOf(id);
-  return shown?.type === "pivot" ? shown.motor : undefined;
-};
+const same_motor_config = (a: MotorConfig, b: MotorConfig | undefined) =>
+  b !== undefined &&
+  a.speed === b.speed &&
+  a.torque === b.torque &&
+  a.parentBeamID === b.parentBeamID;
 
 /**
  * A motor's speed, wherever its row sits — a mode it drives, or none at all.
@@ -305,7 +303,7 @@ const MotorSpeed: React.FC<{
 };
 
 /** One chain's block: its mobility headline, its motors, and its redundancies. */
-const ChainCard: React.FC<{
+const ChainCardView: React.FC<{
   analysis: ChainAnalysis;
   index: number;
   appMode: AppMode;
@@ -320,8 +318,8 @@ const ChainCard: React.FC<{
    * Rare, brief, and not worth blanking the panel over.
    */
   elementOf: (id: ID) => MechanicalElement | undefined;
-  /** Same lookup, in the pose on screen — only for the motor speed shown, never for the action `elementOf`'s result feeds; see `MotorSpeed`. */
-  analysedElementOf: (id: ID) => MechanicalElement | undefined;
+  /** Each motor's config at the instant on screen — only for the speed shown, never for the action `elementOf`'s result feeds; see `MotorSpeed`. */
+  shownMotors: ReadonlyMap<ID, MotorConfig>;
   animated: AnimatedMode;
   setAnimated: (animated: AnimatedMode) => void;
   hoveredPart: HoveredPart;
@@ -336,7 +334,7 @@ const ChainCard: React.FC<{
   /** The redundancy audit's answer for this chain, or undefined until it is asked for. */
   audit: Redundancy | undefined;
   auditing: boolean;
-  onAudit: () => void;
+  onAudit: (analysis: ChainAnalysis) => void;
 }> = ({
   analysis,
   index,
@@ -345,7 +343,7 @@ const ChainCard: React.FC<{
   setRedundancySymbols,
   symbolsFor,
   elementOf,
-  analysedElementOf,
+  shownMotors,
   animated,
   setAnimated,
   hoveredPart,
@@ -359,6 +357,7 @@ const ChainCard: React.FC<{
   auditing,
   onAudit,
 }) => {
+  useAmbient();
   const { chain, mobility, modes, highlight } = analysis;
   const status = ddl_status(mobility.mobility, chain.motors.length, appMode);
   const idleMotors = undriven_motors(chain, modes);
@@ -435,9 +434,7 @@ const ChainCard: React.FC<{
               mode.drivenByMotor && named?.type === "pivot" && named.motor
                 ? named
                 : undefined;
-            const motorDisplayConfig = motor
-              ? motor_config_at(analysedElementOf, motor.id)
-              : undefined;
+            const motorDisplayConfig = motor ? shownMotors.get(motor.id) : undefined;
             const motorBlocked =
               motor !== undefined && blockedMotors.has(motor.id);
             // A freedom nothing weighs: in dynamics whatever speed it takes is the solver's own mass floor talking.
@@ -615,7 +612,7 @@ const ChainCard: React.FC<{
                 </Box>
                 <MotorSpeed
                   element={element}
-                  displayConfig={motor_config_at(analysedElementOf, id)}
+                  displayConfig={shownMotors.get(id)}
                   applyActions={applyActions}
                 />
               </Box>
@@ -681,7 +678,7 @@ const ChainCard: React.FC<{
                 size="small"
                 variant="text"
                 disabled={auditing}
-                onClick={onAudit}
+                onClick={() => onAudit(analysis)}
                 startIcon={
                   auditing ? (
                     <CircularProgress size={14} color="inherit" />
@@ -775,6 +772,9 @@ const ChainCard: React.FC<{
     </Box>
   );
 };
+
+// Its props hold still while a simulation plays, so it skips the renders the rest of the panel takes at every instant.
+const ChainCard = React.memo(ChainCardView);
 
 export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
   mechanism,
@@ -964,7 +964,7 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
   // The superposed view only makes sense with several probed elements; fall back to the per-element view (and its hidden switch) below that.
   const superposed = superpose && probedElements.length >= 2;
 
-  const analysis = useDofAnalysis(analysedMechanism);
+  const analysis = useDofAnalysis(analysedMechanism, runtimeState.isPlaying);
 
   /** The mode being pointed at, if any. */
   const [animated, setAnimated] = React.useState<AnimatedMode>(null);
@@ -1062,11 +1062,20 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
     [mechanism.mechanicalElements],
   );
 
-  /** Same lookup, in the pose on screen — for `MotorSpeed`'s displayed value only. */
-  const analysedElementOf = React.useCallback(
-    (id: ID) => analysedMechanism.mechanicalElements.find((el) => el.id === id),
-    [analysedMechanism.mechanicalElements],
-  );
+  // Each motor's config in the pose on screen, for `MotorSpeed`'s displayed value only.
+  // The pose changes at every instant while the configs almost never do: kept as the same map while they hold, so the chain cards skip those renders.
+  const shownMotorsRef = React.useRef<ReadonlyMap<ID, MotorConfig>>(new Map());
+  const shownMotors = React.useMemo(() => {
+    const next = new Map<ID, MotorConfig>();
+    for (const el of analysedMechanism.mechanicalElements)
+      if (el.type === "pivot" && el.motor) next.set(el.id, el.motor);
+    const held = shownMotorsRef.current;
+    const same =
+      held.size === next.size &&
+      [...next].every(([id, config]) => same_motor_config(config, held.get(id)));
+    return same ? held : next;
+  }, [analysedMechanism.mechanicalElements]);
+  shownMotorsRef.current = shownMotors;
 
   // `momentBalanceReference` resolved to the pose on screen, the way every other position the panel reads is.
   const momentBalancePoint = React.useMemo(
@@ -1217,7 +1226,7 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
               setRedundancySymbols={setRedundancySymbols}
               symbolsFor={symbolsFor}
               elementOf={elementOf}
-              analysedElementOf={analysedElementOf}
+              shownMotors={shownMotors}
               animated={animated}
               setAnimated={setAnimated}
               hoveredPart={hoveredPart}
@@ -1229,7 +1238,7 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
               blockedMotors={blockedMotors}
               audit={audits.get(chainAnalysis.chain.id)}
               auditing={auditing === chainAnalysis.chain.id}
-              onAudit={() => runAudit(chainAnalysis)}
+              onAudit={runAudit}
             />
           ))}
           {/* Only once measured: an empty list before the first pass means "not
@@ -1244,7 +1253,7 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
 
       <Divider />
 
-      {/* Mesures : sondes actives + graphiques */}
+      {/* Measurements: active probes and their charts */}
       <Box sx={{ mx: 2, display: "flex", flexDirection: "column", gap: 1 }}>
         <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
           <Typography variant="subtitle2" fontWeight={600} sx={{ flex: 1 }}>

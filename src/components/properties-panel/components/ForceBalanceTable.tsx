@@ -1,7 +1,7 @@
 import React from "react";
 import { Box, Popover, Tooltip, Typography, useTheme } from "@mui/material";
 import { WorldPoint } from "../../../types";
-import { Vector } from "../../common/Vector";
+import { BARE_VECTOR_SX, BareVector } from "../../common/Vector";
 import VectorInput from "./VectorInput";
 import { useNonModalPopup } from "../../common/use-non-modal-popup";
 import { balance_term_color } from "../../../constants/physics-display-specs";
@@ -53,19 +53,60 @@ function block_unit(values: number[], kind: QuantityKind): QuantityUnit {
   );
 }
 
+/**
+ * Every style the rows below use, declared once on the table rather than on each element.
+ * The terms are redrawn at every instant of a simulation and a mechanism can carry dozens of them: a styled component per figure made this table most of the panel's rendering time.
+ */
+const TABLE_SX = {
+  mx: 2,
+  display: "flex",
+  flexDirection: "column",
+  ...BARE_VECTOR_SX,
+  "& .fb-aside": { typography: "caption", color: "text.secondary", lineHeight: 1.2 },
+  "& .fb-scalar": {
+    typography: "caption",
+    lineHeight: 1.2,
+    px: 0.25,
+    minWidth: 12,
+    textAlign: "center",
+    fontVariantNumeric: "tabular-nums",
+  },
+  "& .fb-pair": { py: 0.15 },
+  // A reading the cursor can rest on: the default arrow, since most of them only answer a hover (it lights the reading on the canvas).
+  "& .fb-reading": {
+    display: "flex",
+    alignItems: "center",
+    minHeight: ROW_HEIGHT,
+    borderRadius: 1,
+    cursor: "default",
+    "&:hover": { backgroundColor: "action.hover" },
+  },
+  "& .fb-clickable": { cursor: "pointer" },
+  "& .fb-member": { display: "flex", alignItems: "center", minHeight: ROW_HEIGHT, pl: 0.25 },
+  "& .fb-terms": {
+    display: "flex",
+    flexWrap: "wrap",
+    alignItems: "center",
+    pl: `${MEMBER_LABEL_WIDTH}px`,
+  },
+  "& .fb-law": {
+    display: "flex",
+    flexWrap: "wrap",
+    alignItems: "center",
+    minHeight: ROW_HEIGHT,
+    columnGap: 0.5,
+  },
+  "& .fb-gap": { color: "error.main" },
+} as const;
+
 /** A word set beside a figure rather than read as one — a member's name, an operator, a unit. */
 const Aside: React.FC<{ children: React.ReactNode; width?: number }> = ({
   children,
   width,
 }) => (
-  <Typography
-    variant="caption"
-    color="text.secondary"
-    lineHeight={1.2}
-    sx={{ minWidth: width }}
-  >
+  <span className="fb-aside" style={width ? { minWidth: width } : undefined}>
     {children}
-  </Typography>
+  </span>
 );
 
 /** A moment, or any other reading that is a plain scalar where it sits. */
@@ -74,13 +115,9 @@ const Scalar: React.FC<{
   unit: QuantityUnit;
   color?: string;
 }> = ({ value, unit, color }) => (
-  <Typography
-    variant="caption"
-    lineHeight={1.2}
-    sx={{ px: 0.25, minWidth: 12, textAlign: "center", color, fontVariantNumeric: "tabular-nums" }}
-  >
+  <span className="fb-scalar" style={color ? { color } : undefined}>
     {to_mantissa(value, unit, 1)}
-  </Typography>
+  </span>
 );
 
 /** A planar reading, stacked between parentheses like every other vector in the interface — `dense`, and against `ROW_HEIGHT`, so a row of the force law stands as tall as one of the moment law and the two blocks read as one thing. */
@@ -89,9 +126,9 @@ const Pair: React.FC<{
   unit: QuantityUnit;
   color?: string;
 }> = ({ value, unit, color }) => (
-  <Box sx={{ color, py: 0.15 }}>
-    <Vector value={value} unit={unit} dense />
-  </Box>
+  <div className="fb-pair" style={color ? { color } : undefined}>
+    <BareVector value={value} unit={unit} dense />
+  </div>
 );
 
 /**
@@ -108,47 +145,29 @@ const Member: React.FC<{
    */
   labelHoversToo?: boolean;
 }> = ({ label, children, onHoverChange, labelHoversToo = true }) => {
-  const { palette } = useTheme();
-  const valueSx = {
-    display: "flex",
-    alignItems: "center",
-    minHeight: ROW_HEIGHT,
-    borderRadius: 1,
-    // The default arrow, not a pointer: this box only ever answers a hover (it lights the reading on the canvas), nothing here is bound to a click.
-    cursor: "default",
-    "&:hover": { backgroundColor: palette.action.hover },
-  } as const;
-
   if (!labelHoversToo)
     return (
-      <Box
-        sx={{
-          display: "flex",
-          alignItems: "center",
-          minHeight: ROW_HEIGHT,
-          pl: 0.25,
-        }}
-      >
+      <div className="fb-member">
         <Aside width={MEMBER_LABEL_WIDTH}>{label}</Aside>
-        <Box
+        <div
+          className="fb-reading"
           onMouseEnter={() => onHoverChange(true)}
           onMouseLeave={() => onHoverChange(false)}
-          sx={valueSx}
         >
           {children}
-        </Box>
-      </Box>
+        </div>
+      </div>
     );
 
   return (
-    <Box
+    <div
+      className="fb-member fb-reading"
       onMouseEnter={() => onHoverChange(true)}
       onMouseLeave={() => onHoverChange(false)}
-      sx={{ ...valueSx, pl: 0.25 }}
     >
       <Aside width={MEMBER_LABEL_WIDTH}>{label}</Aside>
       {children}
-    </Box>
+    </div>
   );
 };
 
@@ -180,38 +199,22 @@ const TermsRow: React.FC<TermsRowProps> = ({
       palette.background.paper,
     );
   return (
-    <Box
-      sx={{
-        display: "flex",
-        flexWrap: "wrap",
-        alignItems: "center",
-        pl: `${MEMBER_LABEL_WIDTH}px`,
-      }}
-    >
+    <div className="fb-terms">
       {terms.map((term, index) => (
         <React.Fragment key={term.id}>
-          {index > 0 && (
-            <Aside>+</Aside>
-          )}
-          <Box
+          {index > 0 && <Aside>+</Aside>}
+          <div
+            // A pointer only where a click actually selects something — `onClickTerm` is optional, and without it this box is exactly as inert as `Member`'s own value.
+            className={onClickTerm ? "fb-reading fb-clickable" : "fb-reading"}
             onMouseEnter={() => onHoverTerm?.(term, quantity)}
             onMouseLeave={() => onHoverTerm?.(null, quantity)}
             onClick={() => onClickTerm?.(term)}
-            sx={{
-              display: "flex",
-              alignItems: "center",
-              minHeight: ROW_HEIGHT,
-              borderRadius: 1,
-              // A pointer only where a click actually selects something — `onClickTerm` is optional, and without it this box is exactly as inert as `Member`'s own value.
-              cursor: onClickTerm ? "pointer" : "default",
-              "&:hover": { backgroundColor: palette.action.hover },
-            }}
           >
             {render(term, color_of(term))}
-          </Box>
+          </div>
         </React.Fragment>
       ))}
-    </Box>
+    </div>
   );
 };
 
@@ -229,15 +232,7 @@ const LawRow: React.FC<{
   gap: React.ReactNode;
   closed: boolean;
 }> = ({ left, right, unit, gap, closed }) => (
-  <Box
-    sx={{
-      display: "flex",
-      flexWrap: "wrap",
-      alignItems: "center",
-      minHeight: ROW_HEIGHT,
-      columnGap: 0.5,
-    }}
-  >
+  <div className="fb-law">
     {left}
     <Aside>=</Aside>
     {right}
@@ -245,25 +240,12 @@ const LawRow: React.FC<{
       <>
         <Aside>+</Aside>
         <Tooltip title={t("balance_gap_meaning")}>
-          <Box
-            sx={{
-              display: "flex",
-              alignItems: "center",
-              minHeight: ROW_HEIGHT,
-              borderRadius: 1,
-              // Same as a member's own reading: nothing here answers a click, only the hover that names it.
-              cursor: "default",
-              color: "error.main",
-              "&:hover": { backgroundColor: "action.hover" },
-            }}
-          >
-            {gap}
-          </Box>
+          <div className="fb-reading fb-gap">{gap}</div>
         </Tooltip>
       </>
     )}
     <Aside>{unit.symbol}</Aside>
-  </Box>
+  </div>
 );
 
 interface ForceBalanceTableProps {
@@ -436,7 +418,7 @@ const ForceBalanceTable: React.FC<ForceBalanceTableProps> = ({
       onHoverTerm?.(hovered ? member : null, quantity);
 
   return (
-    <Box sx={{ mx: 2, display: "flex", flexDirection: "column" }}>
+    <Box sx={TABLE_SX}>
       <Typography variant="subtitle2" fontWeight={600}>
         {t("force_balance")}
       </Typography>

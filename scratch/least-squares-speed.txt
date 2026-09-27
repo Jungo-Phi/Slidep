@@ -1,0 +1,1 @@
+220x240: before min 438.86 ms, after min 180.77 ms

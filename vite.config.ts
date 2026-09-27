@@ -21,7 +21,15 @@ const workerFileNo304 = {
   },
 } as const satisfies Plugin;
 
-export default defineConfig({
+/**
+ * `npm run build:profile` (`vite build --mode profile`) ships the profiling build of React with function names kept, so the React DevTools profiler works on a production bundle and names what it measures.
+ * Nothing else changes: the timings stay those of a production build.
+ */
+export default defineConfig(({ mode }) => ({
+  ...(mode === "profile" && {
+    resolve: { alias: [{ find: /^react-dom$/, replacement: "react-dom/profiling" }] },
+    esbuild: { keepNames: true },
+  }),
   define: { __APP_VERSION__: JSON.stringify(version) },
   plugins: [
     workerFileNo304,
@@ -67,4 +75,4 @@ export default defineConfig({
     }),
   ],
   base: "/",
-});
+}));
