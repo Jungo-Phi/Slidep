@@ -48,6 +48,13 @@ import { LinkSlots, resolve_slots } from "./link-slots";
 import { applyBeltValidityContacts } from "./belt-validity";
 import { Drive, apply_drives, finish_drives, resolve_drives } from "../dynamics/drive-constraint";
 import { reversed_sweep_order } from "./sweep-order";
+import { DIRECT_LINK_TYPES } from "../direct/direct-rows";
+import {
+  accumulate_reactions,
+  create_direct_state,
+  direct_iterate,
+  link_residuals,
+} from "../direct/direct-solve";
 
 export type SolverMaps = {
   positions: Map<string, Point2>;
@@ -99,6 +106,11 @@ export type DynamicsInput = {
    * Omitted, every link is swept.
    */
   contactsFrom?: number;
+  /**
+   * Solve the links `direct-solve.ts` handles all at once, by Newton, instead of one at a time in the sweep.
+   * The sweep keeps the rest — motors, belts, contacts, the grab — and the direct solve has the last word at the end of each sweep.
+   */
+  direct?: boolean;
 };
 
 /**
@@ -198,6 +210,15 @@ const REMAINING_RAD = 1e-6;
  * A dynamics step exits only once this holds AS WELL AS the `motion` criterion: `remaining_motion` mistakes a stalled Gauss-Seidel for a converged one, while this velocity bound alone is too loose for the efforts, which are read at the acceleration level (`gap / dt²`).
  */
 const DYNAMIC_EXIT_SPEED_RATIO = 1e-3;
+
+/**
+ * What the direct solve leaves of a row, as a fraction of the mechanism's extent per second, times the substep.
+ * A hundred times under `DYNAMIC_EXIT_SPEED_RATIO`: a Newton iteration costs the same whatever it has left to close, so closing it well is nearly free.
+ */
+const DIRECT_TOLERANCE_RATIO = 1e-5;
+
+/** Newton iterations the direct solve may run per sweep; it usually needs one or two. */
+const DIRECT_ITERATIONS = 8;
 
 /**
  * How far, as a fraction of the mechanism's extent, a node may move before the contacts left out of the sweep are judged again.
@@ -353,6 +374,7 @@ export function PBD_kinematic_solver(
       reactions: dynamics.reactions,
       drives: dynamics.drives,
       contactsFrom: dynamics.contactsFrom,
+      direct: dynamics.direct,
     },
     referenceExtent,
   );
@@ -379,7 +401,7 @@ export function PBD_solve(
   exitOn: ExitCriterion = "motion",
   /** Present only for a dynamics step — see `DynamicsInput`. Everything else (edition,
    * kinematic simulation) leaves this out and gets the plain PBD sweep unchanged. */
-  dynamics?: Pick<DynamicsInput, "dt" | "gx" | "gy" | "reactions" | "drives" | "contactsFrom">,
+  dynamics?: Pick<DynamicsInput, "dt" | "gx" | "gy" | "reactions" | "drives" | "contactsFrom" | "direct">,
   /**
    * The scale every tolerance below is a fraction of.
    * A simulation passes the mechanism's size at t = 0: measured live, a body that has come loose and fallen away would stretch it without bound, and loosen every tolerance with it.
@@ -557,6 +579,23 @@ export function PBD_solve(
     dynamics && dynamics.dt > 0 ? DYNAMIC_EXIT_SPEED_RATIO * extent * dynamics.dt : undefined;
   let worstGap = 0;
 
+  // ── The links the direct solve takes over, if asked ──
+  // Contacts stay with the sweep even when their type is handled: they are inequalities, which the direct solve does not know.
+  let directHandled: Uint8Array | null = null;
+  if (dynamics?.direct && dynamics.dt > 0) {
+    const handled = new Uint8Array(links.length);
+    let any = false;
+    for (let k = 0; k < contactsFrom; k++)
+      if (DIRECT_LINK_TYPES.has(links[k].type)) {
+        handled[k] = 1;
+        any = true;
+      }
+    if (any) directHandled = handled;
+  }
+  // The motors join the direct solve with the links: left to the sweep, each would turn its crank as if alone, and the two would take turns undoing each other.
+  const direct = directHandled ? create_direct_state(nodes, links, drives) : null;
+  const directTolerance = dynamics ? DIRECT_TOLERANCE_RATIO * extent * dynamics.dt : 0;
+
   for (let i = 0; i < nbIterations; i++) {
     maxError = 0;
     maxSeverity = 0;
@@ -571,11 +610,12 @@ export function PBD_solve(
       ? sweepOrder === null ? forward! : backward!
       : sweepOrder;
     // Ahead of the links, so the geometric constraints have the last word within a sweep; its gap still counts toward convergence, or the sweep could stop with a motor short of its speed.
-    maxError = apply_drives(nodes, drives);
+    maxError = direct ? 0 : apply_drives(nodes, drives);
     worstGap = maxError;
     const sweepLength = order === null ? links.length : order.length;
     for (let step = 0; step < sweepLength; step++) {
       const idx = order === null ? step : order[step];
+      if (directHandled !== null && directHandled[idx]) continue;
       const link = links[idx];
       const s = slots[idx];
       if (traceX && traceY && traceA) {
@@ -945,6 +985,11 @@ export function PBD_solve(
         if (residuals) residuals[idx] = residual;
       }
     }
+    if (direct && directHandled) {
+      const left = direct_iterate(direct, nodes, links, slots, directHandled, invDtSq, directTolerance, DIRECT_ITERATIONS);
+      if (left > maxError) maxError = left;
+      if (exitGap !== undefined && left > worstGap) worstGap = left;
+    }
 
     // ── What this sweep actually moved ────────────────────────────────────────
     // Angles are measured alongside positions, never instead of them: the coupling angle → position runs through later links, so the first sweeps of a frame can be dead in positions (1e-14 px) while a gear turns by 1e-2 rad.
@@ -999,6 +1044,11 @@ export function PBD_solve(
     }
     for (let a = 0; a < nodes.angle.length; a++)
       nodes.vAngle[a] = (nodes.angle[a] - frameStartA[a]) * invDt;
+  }
+
+  if (direct) {
+    if (residuals) link_residuals(direct, residuals);
+    if (reactionAccum) accumulate_reactions(direct, nodes, slots, reactionAccum);
   }
 
   // ── Dynamics: each link's own reaction, from the displacement it accumulated ──

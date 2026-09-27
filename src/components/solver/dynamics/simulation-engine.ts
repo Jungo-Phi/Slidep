@@ -216,6 +216,11 @@ type MotorCheck = {
  * Built once when entering simulation and reused every frame: only the latest positions/angles are fed back in, the masses and links never change until we return to edition.
  */
 export type SimulationModel = {
+  /**
+   * Solve the dynamics substeps with the direct solver (see `PBD_solve`'s `dynamics.direct`) rather than by sweeps alone.
+   * Off unless set on the compiled model.
+   */
+  directSolve?: boolean;
   /** Initial positions/angles + frozen masses (fused keys for coincident points). */
   nodes: KinNodes;
   /** Links: already fused (Coincidence), FixedOnSegment, and sorted. */
@@ -1502,6 +1507,7 @@ export function step_dynamic_simulation(
       reactions: stepReactions,
       drives,
       contactsFrom,
+      direct: model.directSolve === true,
     };
     result = PBD_kinematic_solver(
       positions,

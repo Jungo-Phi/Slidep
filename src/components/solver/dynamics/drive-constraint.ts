@@ -35,7 +35,7 @@ export type Drive = (
 const ABSENT = -1;
 
 /** An arm from one position slot to another: the lever a constraint on its angle pushes through. */
-interface Arm {
+export interface Arm {
   pivot: number;
   tip: number;
   /** The arm's direction at the start of the substep, which its rotation is measured from. */
@@ -44,7 +44,7 @@ interface Arm {
 }
 
 /** One drive resolved against a solve's slots, with its accumulated multiplier. */
-interface ResolvedDrive {
+export interface ResolvedDrive {
   drive: Drive;
   driven: Arm | undefined;
   angle: number;
@@ -64,7 +64,7 @@ interface ResolvedDrive {
  * Rotation of an arm since the start of the substep.
  * Read against its starting direction rather than as an absolute angle, so it never wraps: a substep turns an arm far less than half a turn.
  */
-function arm_rotation(nodes: SimNodes, arm: Arm): number {
+export function arm_rotation(nodes: SimNodes, arm: Arm): number {
   const dx = nodes.x[arm.tip] - nodes.x[arm.pivot];
   const dy = nodes.y[arm.tip] - nodes.y[arm.pivot];
   return Math.atan2(arm.x0 * dy - arm.y0 * dx, arm.x0 * dx + arm.y0 * dy);
@@ -125,7 +125,7 @@ function push_tangent(nodes: SimNodes, slot: number, tx: number, ty: number, sca
 }
 
 /** An arm's rotation gradient at its tip, `perp(r̂)/|r|`, from the live positions. */
-function tangent(nodes: SimNodes, arm: Arm): [number, number] {
+export function tangent(nodes: SimNodes, arm: Arm): [number, number] {
   const dx = nodes.x[arm.tip] - nodes.x[arm.pivot];
   const dy = nodes.y[arm.tip] - nodes.y[arm.pivot];
   const r2 = dx * dx + dy * dy;
